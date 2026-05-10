@@ -1,7 +1,9 @@
 import { withActionDefaults } from "@jskit-ai/kernel/shared/actions";
-import process from "node:process";
 
-import { createService } from "./service.js";
+import {
+  createService,
+  resolveCurrentAppRoot
+} from "./service.js";
 import { featureActions } from "./actions.js";
 import { registerRoutes } from "./registerRoutes.js";
 
@@ -20,12 +22,13 @@ class CurrentAppProvider {
       throw new Error("CurrentAppProvider requires application singleton()/service()/actions().");
     }
 
+    const appRoot = resolveCurrentAppRoot();
 
     app.service(
       "feature.current-app.service",
       () => {
         return createService({
-          appRoot: process.cwd()
+          appRoot
         });
       }
     );

@@ -6,6 +6,7 @@
 - Primary users: the local operator running the Studio process.
 - Success criteria: inspect, run, review, verify, and later deploy the current JSKIT app without a hosted service or project registry.
 - First-run rule: Studio must gate all project functionality behind a mandatory Bootstrap Doctor. If the bootstrap runtime is not fully healthy, the web app shows only bootstrap setup/status screens.
+- Root rule: the controlled project root is the launcher/invocation directory, not necessarily the Studio implementation directory. If the Studio executable has to start the server from the Studio app root, the launcher must preserve the original project root in `JSKIT_STUDIO_TARGET_ROOT`.
 
 ## Platform Choices
 
@@ -33,7 +34,7 @@
 | Entity | Purpose | Ownership | Notes |
 | --- | --- | --- | --- |
 | BootstrapEnvironment | Machine-level runtime readiness for Studio | public | Checks Docker/runtime ability to provide MySQL capability, Node 22, npm, git, GH auth, and Codex auth before project work begins. |
-| CurrentApp | Runtime snapshot of the current working directory | public | Derived from filesystem and git on request; not persisted. |
+| CurrentApp | Runtime snapshot of the target project root | public | Derived from filesystem and git on request; not persisted. The target root comes from the invocation directory or `JSKIT_STUDIO_TARGET_ROOT`, not from a stored project list. |
 
 ## Route And Screen Plan
 

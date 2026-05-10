@@ -17,7 +17,8 @@
       <div class="d-flex ga-2 align-center flex-wrap">
         <v-chip
           v-if="bootstrap"
-          :color="bootstrapReady ? 'success' : 'warning'"
+          :color="bootstrapReady ? 'success' : 'error'"
+          :prepend-icon="bootstrapReady ? mdiCheckCircle : mdiCloseCircle"
           variant="tonal"
         >
           {{ bootstrapReady ? "Bootstrap ready" : "Bootstrap blocked" }}

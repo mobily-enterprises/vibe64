@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import test from "node:test";
 import {
   codexBrowserLoginCommandArgs,
@@ -6,7 +8,8 @@ import {
   codexLoginRepairs,
   isBootstrapReady,
   mysqlCapabilitySql,
-  mysqlRepair
+  mysqlRepair,
+  resolveStudioRoot
 } from "../../packages/bootstrap-doctor/src/server/service.js";
 import {
   terminalInputValidator
@@ -63,4 +66,22 @@ test("Bootstrap Doctor exposes Codex browser login with device-code fallback", (
   assert.deepEqual(codexLoginRepairs(false).map((repair) => repair.actionId), [
     "terminal-codex-device-login"
   ]);
+});
+
+test("Bootstrap Doctor resolves the Studio implementation root separately", () => {
+  const previousStudioRoot = process.env.JSKIT_STUDIO_APP_ROOT;
+  const envRoot = path.join(tmpdir(), "example-studio-root");
+  const explicitRoot = path.join(tmpdir(), "explicit-studio-root");
+  process.env.JSKIT_STUDIO_APP_ROOT = envRoot;
+
+  try {
+    assert.equal(resolveStudioRoot(), envRoot);
+    assert.equal(resolveStudioRoot(explicitRoot), explicitRoot);
+  } finally {
+    if (previousStudioRoot == null) {
+      delete process.env.JSKIT_STUDIO_APP_ROOT;
+    } else {
+      process.env.JSKIT_STUDIO_APP_ROOT = previousStudioRoot;
+    }
+  }
 });

@@ -1,6 +1,9 @@
 import { withActionDefaults } from "@jskit-ai/kernel/shared/actions";
 
-import { createService } from "./service.js";
+import {
+  createService,
+  resolveStudioRoot
+} from "./service.js";
 import { featureActions } from "./actions.js";
 import { registerRoutes } from "./registerRoutes.js";
 
@@ -19,11 +22,14 @@ class BootstrapDoctorProvider {
       throw new Error("BootstrapDoctorProvider requires application singleton()/service()/actions().");
     }
 
+    const studioRoot = resolveStudioRoot();
 
     app.service(
       "feature.bootstrap-doctor.service",
       () => {
-        return createService();
+        return createService({
+          studioRoot
+        });
       }
     );
 

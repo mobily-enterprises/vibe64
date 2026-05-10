@@ -301,8 +301,13 @@ async function inspectGit(appRoot, { includeGit = true } = {}) {
   };
 }
 
+function resolveCurrentAppRoot(appRoot) {
+  const configuredRoot = String(appRoot || process.env.JSKIT_STUDIO_TARGET_ROOT || "").trim();
+  return path.resolve(configuredRoot || process.cwd());
+}
+
 async function inspectCurrentApp(appRoot, { includeGit = true } = {}) {
-  const normalizedAppRoot = path.resolve(String(appRoot || process.cwd()));
+  const normalizedAppRoot = resolveCurrentAppRoot(appRoot);
   const [packageResult, lockResult, markers, directories, localPackages, config, git] = await Promise.all([
     readJsonFile(path.join(normalizedAppRoot, "package.json")),
     readJsonFile(path.join(normalizedAppRoot, ".jskit/lock.json")),
@@ -354,11 +359,13 @@ async function inspectCurrentApp(appRoot, { includeGit = true } = {}) {
   });
 }
 
-function createService({ appRoot = process.cwd() } = {}) {
+function createService({ appRoot = "" } = {}) {
+  const inspectionRoot = resolveCurrentAppRoot(appRoot);
+
   return Object.freeze({
     async inspectCurrentApp(input = {}, options = {}) {
       void options;
-      return inspectCurrentApp(appRoot, {
+      return inspectCurrentApp(inspectionRoot, {
         includeGit: input?.includeGit !== false
       });
     }
@@ -367,5 +374,6 @@ function createService({ appRoot = process.cwd() } = {}) {
 
 export {
   createService,
-  inspectCurrentApp
+  inspectCurrentApp,
+  resolveCurrentAppRoot
 };

@@ -1,3 +1,5 @@
+import path from "node:path";
+import process from "node:process";
 import {
   dockerCommand,
   runDocker
@@ -374,6 +376,11 @@ function codexReauthRepairs(hostNetworkReady) {
 
 function isBootstrapReady(checks) {
   return checks.every((check) => check.required !== true || check.status === "pass");
+}
+
+function resolveStudioRoot(studioRoot) {
+  const configuredRoot = String(studioRoot || process.env.JSKIT_STUDIO_APP_ROOT || "").trim();
+  return path.resolve(configuredRoot || process.cwd());
 }
 
 async function checkDocker() {
@@ -838,7 +845,9 @@ async function repairMysql() {
   };
 }
 
-function createService() {
+function createService({ studioRoot = "" } = {}) {
+  const resolvedStudioRoot = resolveStudioRoot(studioRoot);
+
   return Object.freeze({
     async getStatus() {
       const docker = await checkDocker();
@@ -942,6 +951,7 @@ function createService() {
           TOOLCHAIN_CONTEXT
         ];
         const result = await runDocker(args, {
+          cwd: resolvedStudioRoot,
           timeout: 10 * 60 * 1000
         });
         return {
@@ -973,7 +983,8 @@ function createService() {
         return startTerminalSession({
           args,
           command: "bash",
-          commandPreview: buildToolchainRepair().commandPreview
+          commandPreview: buildToolchainRepair().commandPreview,
+          cwd: resolvedStudioRoot
         });
       }
 
@@ -1078,6 +1089,7 @@ export {
   codexBrowserLoginCommandArgs,
   codexDeviceLoginCommandArgs,
   codexLoginRepairs,
+  resolveStudioRoot,
   mysqlCapabilitySql,
   mysqlRepair,
   isBootstrapReady,

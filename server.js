@@ -3,6 +3,7 @@ import fastifyStatic from "@fastify/static";
 import { resolveRuntimeEnv } from "./server/lib/runtimeEnv.js";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   registerSurfaceRequestConstraint,
   resolveRuntimeProfileFromSurface,
@@ -10,9 +11,14 @@ import {
 } from "@jskit-ai/kernel/server/platform";
 import { matchesPathPrefix, normalizePathname } from "@jskit-ai/kernel/shared/surface/paths";
 import { surfaceRuntime } from "./server/lib/surfaceRuntime.js";
+import {
+  resolveStudioAppRoot,
+  resolveStudioTargetRoot
+} from "./server/lib/studioRoots.js";
 
 const SPA_INDEX_FILE = "index.html";
 const API_BASE_PATH = "/api";
+const MODULE_APP_ROOT = path.dirname(fileURLToPath(import.meta.url));
 const STATIC_GLOBAL_UI_PATHS = Object.freeze([
   "/assets",
   "/favicon.svg",
@@ -82,7 +88,7 @@ function canServeStaticFile(distRoot, relativePath) {
   return existsSync(resolvedPath);
 }
 
-async function createServer() {
+async function createServer(options = {}) {
   const app = Fastify({
     logger: true,
     ajv: {
@@ -99,20 +105,53 @@ async function createServer() {
     };
   });
   const runtimeEnv = resolveRuntimeEnv();
-  const appRoot = path.resolve(process.cwd());
+  const appRoot = resolveStudioAppRoot({
+    env: runtimeEnv,
+    explicitRoot: options.appRoot,
+    fallbackRoot: MODULE_APP_ROOT
+  });
+  const targetRoot = resolveStudioTargetRoot({
+    env: runtimeEnv,
+    explicitRoot: options.targetRoot,
+    cwd: process.cwd(),
+    studioAppRoot: appRoot
+  });
   const distRoot = path.resolve(appRoot, "dist");
   const hasWebBuild = existsSync(path.resolve(distRoot, SPA_INDEX_FILE));
   const spaDocument = hasWebBuild ? readFileSync(path.resolve(distRoot, SPA_INDEX_FILE), "utf8") : "";
-  const runtime = await tryCreateProviderRuntimeFromApp({
-    appRoot,
-    profile: resolveRuntimeProfileFromSurface({
-      surfaceRuntime,
-      serverSurface: runtimeEnv.SERVER_SURFACE
-    }),
-    env: runtimeEnv,
-    logger: app.log,
-    fastify: app
-  });
+  const providerEnv = {
+    ...runtimeEnv,
+    JSKIT_STUDIO_APP_ROOT: appRoot,
+    JSKIT_STUDIO_TARGET_ROOT: targetRoot
+  };
+  const previousStudioAppRoot = process.env.JSKIT_STUDIO_APP_ROOT;
+  const previousStudioTargetRoot = process.env.JSKIT_STUDIO_TARGET_ROOT;
+  process.env.JSKIT_STUDIO_APP_ROOT = appRoot;
+  process.env.JSKIT_STUDIO_TARGET_ROOT = targetRoot;
+  let runtime;
+  try {
+    runtime = await tryCreateProviderRuntimeFromApp({
+      appRoot,
+      profile: resolveRuntimeProfileFromSurface({
+        surfaceRuntime,
+        serverSurface: runtimeEnv.SERVER_SURFACE
+      }),
+      env: providerEnv,
+      logger: app.log,
+      fastify: app
+    });
+  } finally {
+    if (previousStudioAppRoot == null) {
+      delete process.env.JSKIT_STUDIO_APP_ROOT;
+    } else {
+      process.env.JSKIT_STUDIO_APP_ROOT = previousStudioAppRoot;
+    }
+    if (previousStudioTargetRoot == null) {
+      delete process.env.JSKIT_STUDIO_TARGET_ROOT;
+    } else {
+      process.env.JSKIT_STUDIO_TARGET_ROOT = previousStudioTargetRoot;
+    }
+  }
 
   registerSurfaceRequestConstraint({
     fastify: app,
@@ -167,6 +206,7 @@ async function createServer() {
       {
         routeCount: runtime.routeCount,
         surface: surfaceRuntime.normalizeSurfaceMode(runtimeEnv.SERVER_SURFACE),
+        targetRoot,
         providerPackages: runtime.providerPackageOrder,
         packageOrder: runtime.packageOrder
       },
@@ -181,7 +221,10 @@ async function startServer(options = {}) {
   const runtimeEnv = resolveRuntimeEnv();
   const port = Number(options?.port) || runtimeEnv.PORT;
   const host = String(options?.host || "").trim() || runtimeEnv.HOST;
-  const app = await createServer();
+  const app = await createServer({
+    appRoot: options?.appRoot,
+    targetRoot: options?.targetRoot
+  });
   await app.listen({ port, host });
   return app;
 }

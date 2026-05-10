@@ -28,6 +28,7 @@ function normalizeRunResult(result) {
 
 async function runDocker(args, options = {}) {
   const {
+    cwd,
     timeout = 30000,
     input
   } = options;
@@ -35,6 +36,7 @@ async function runDocker(args, options = {}) {
   try {
     const result = await execa("docker", args, {
       all: true,
+      cwd,
       input,
       reject: false,
       timeout
