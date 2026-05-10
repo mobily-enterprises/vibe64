@@ -1,0 +1,14 @@
+{
+  "name": "jskit-ai-studio",
+  "healthchecks": {
+    "web": [
+      {
+        "type": "startup",
+        "name": "web-ready",
+        "description": "Application responds to /api/health",
+        "path": "/api/health",
+        "attempts": 6
+      }
+    ]
+  }
+}

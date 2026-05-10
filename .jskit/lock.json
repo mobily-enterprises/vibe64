@@ -1,0 +1,95 @@
+{
+  "lockVersion": 1,
+  "installedPackages": {
+    "@jskit-ai/shell-web": {
+      "packageId": "@jskit-ai/shell-web",
+      "version": "0.1.68",
+      "source": {
+        "type": "packages-directory"
+      },
+      "managed": {
+        "packageJson": {
+          "dependencies": {},
+          "devDependencies": {},
+          "scripts": {}
+        },
+        "text": {},
+        "vite": {},
+        "files": [],
+        "migrations": []
+      },
+      "options": {},
+      "installedAt": "2026-05-10T00:00:00.000Z"
+    },
+    "@local/main": {
+      "packageId": "@local/main",
+      "version": "0.1.0",
+      "source": {
+        "type": "local-package",
+        "packagePath": "packages/main",
+        "descriptorPath": "packages/main/package.descriptor.mjs"
+      },
+      "managed": {
+        "packageJson": {
+          "dependencies": {
+            "@local/main": {
+              "hadPrevious": false,
+              "previousValue": "",
+              "value": "file:packages/main"
+            }
+          },
+          "devDependencies": {},
+          "scripts": {}
+        },
+        "text": {},
+        "files": []
+      },
+      "options": {},
+      "installedAt": "1970-01-01T00:00:00.000Z"
+    },
+    "@local/current-app": {
+      "packageId": "@local/current-app",
+      "version": "0.1.0",
+      "source": {
+        "type": "app-local-package",
+        "packagePath": "packages/current-app",
+        "descriptorPath": "packages/current-app/package.descriptor.mjs"
+      },
+      "managed": {
+        "packageJson": {
+          "dependencies": {},
+          "devDependencies": {},
+          "scripts": {}
+        },
+        "text": {},
+        "vite": {},
+        "files": [],
+        "migrations": []
+      },
+      "options": {},
+      "installedAt": "2026-05-10T07:17:23.225Z"
+    },
+    "@local/bootstrap-doctor": {
+      "packageId": "@local/bootstrap-doctor",
+      "version": "0.1.0",
+      "source": {
+        "type": "app-local-package",
+        "packagePath": "packages/bootstrap-doctor",
+        "descriptorPath": "packages/bootstrap-doctor/package.descriptor.mjs"
+      },
+      "managed": {
+        "packageJson": {
+          "dependencies": {},
+          "devDependencies": {},
+          "scripts": {}
+        },
+        "text": {},
+        "vite": {},
+        "files": [],
+        "migrations": []
+      },
+      "options": {},
+      "installedAt": "2026-05-10T12:01:12.284Z"
+    }
+  }
+}

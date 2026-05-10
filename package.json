@@ -1,0 +1,62 @@
+{
+  "name": "jskit-ai-studio",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Minimal JSKIT base app (Fastify + Vue)",
+  "engines": {
+    "node": "22.x"
+  },
+  "scripts": {
+    "server": "node ./bin/server.js",
+    "server:all": "node ./bin/server.js",
+    "server:home": "SERVER_SURFACE=home node ./bin/server.js",
+    "start": "node ./bin/server.js",
+    "devlinks": "jskit app link-local-packages",
+    "dev": "vite",
+    "dev:all": "vite",
+    "dev:home": "VITE_SURFACE=home vite",
+    "build": "vite build",
+    "build:all": "vite build",
+    "build:home": "VITE_SURFACE=home vite build",
+    "preview": "vite preview",
+    "lint": "eslint .",
+    "test": "node --test",
+    "test:client": "vitest run tests/client",
+    "test:e2e": "playwright test tests/e2e",
+    "verify": "jskit app verify && npm run --if-present verify:app",
+    "release": "jskit app release",
+    "jskit:update": "jskit app update-packages"
+  },
+  "dependencies": {
+    "@fastify/static": "^9.1.1",
+    "@jskit-ai/http-runtime": "0.x",
+    "@jskit-ai/kernel": "0.x",
+    "@jskit-ai/shell-web": "0.x",
+    "@local/bootstrap-doctor": "file:packages/bootstrap-doctor",
+    "@local/current-app": "file:packages/current-app",
+    "@local/main": "file:packages/main",
+    "@mdi/js": "^7.4.47",
+    "@tanstack/vue-query": "^5.90.5",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "execa": "^9.6.1",
+    "fastify": "^5.7.4",
+    "json-rest-schema": "1.x.x",
+    "node-pty": "^1.1.0",
+    "pinia": "^3.0.4",
+    "vue": "^3.5.13",
+    "vue-router": "^5.0.4",
+    "vuetify": "^4.0.0"
+  },
+  "devDependencies": {
+    "@jskit-ai/agent-docs": "0.x",
+    "@jskit-ai/config-eslint": "0.x",
+    "@jskit-ai/jskit-cli": "0.x",
+    "@playwright/test": "^1.57.0",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "eslint": "^9.39.1",
+    "vite": "^6.1.0",
+    "vitest": "^4.0.18"
+  }
+}
