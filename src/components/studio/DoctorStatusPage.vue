@@ -8,15 +8,15 @@
 
       <div class="d-flex ga-2 align-center flex-wrap">
         <v-chip
-          v-if="status"
-          :color="ready ? 'success' : 'error'"
-          :prepend-icon="ready ? mdiCheckCircle : mdiCloseCircle"
+          v-if="displayStatus"
+          :color="summary.color"
+          :prepend-icon="summaryIcon"
           variant="tonal"
         >
-          {{ ready ? readyLabel : blockedLabel }}
+          {{ summary.label }}
         </v-chip>
         <v-btn
-          v-if="ready && continueTo"
+          v-if="ready && !checking && continueTo"
           color="primary"
           variant="flat"
           :to="continueTo"
@@ -27,10 +27,10 @@
         <v-btn
           variant="tonal"
           color="primary"
-          :loading="loading"
+          :loading="isLoading"
           :prepend-icon="mdiRefresh"
           class="studio-screen__action-button"
-          @click="emit('refresh')"
+          @click="refreshDoctorStatus"
         >
           Refresh
         </v-btn>
@@ -38,17 +38,17 @@
     </header>
 
     <v-alert
-      v-if="error"
+      v-if="displayError"
       type="error"
       variant="tonal"
       border="start"
       class="studio-screen__alert"
     >
-      {{ error }}
+      {{ displayError }}
     </v-alert>
 
     <v-progress-linear
-      v-if="loading && !status"
+      v-if="isLoading && !displayStatus"
       color="primary"
       height="6"
       indeterminate
@@ -56,7 +56,7 @@
     />
 
     <section
-      v-if="status"
+      v-if="displayStatus"
       :class="['bootstrap-doctor', doctorClass, 'd-flex', 'flex-column', 'ga-2']"
     >
       <v-sheet
@@ -64,27 +64,28 @@
         border
         :class="[
           'bootstrap-doctor__summary',
-          ready ? 'bootstrap-doctor__summary--pass' : 'bootstrap-doctor__summary--fail'
+          `bootstrap-doctor__summary--${summary.state}`
         ]"
       >
         <div class="bootstrap-doctor__summary-main">
           <div
             :class="[
               'bootstrap-doctor__summary-icon',
-              ready ? 'bootstrap-doctor__summary-icon--pass' : 'bootstrap-doctor__summary-icon--fail'
+              `bootstrap-doctor__summary-icon--${summary.state}`
             ]"
           >
-            <v-icon :icon="ready ? mdiCheckCircle : mdiCloseCircle" :color="ready ? 'success' : 'error'" size="32" />
+            <v-icon :icon="summaryIcon" :color="summary.color" size="32" />
           </div>
           <div>
-            <h2 class="text-subtitle-1 mb-1">{{ ready ? readyTitle : blockedTitle }}</h2>
+            <h2 class="text-subtitle-1 mb-1">{{ summary.title }}</h2>
             <p class="text-body-2 text-medium-emphasis mb-2">
-              {{ passedCheckCount }} of {{ requiredCheckCount }} required checks are ready.
+              {{ summary.progressText }}
             </p>
             <v-progress-linear
               :model-value="progressValue"
-              :color="ready ? 'success' : 'primary'"
+              :color="summary.color"
               height="8"
+              :indeterminate="summary.progressIndeterminate"
               rounded
             />
           </div>
@@ -250,7 +251,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import {
@@ -259,8 +260,10 @@ import {
   mdiCloseCircle,
   mdiConsoleLine,
   mdiPlayCircleOutline,
+  mdiProgressClock,
   mdiRefresh
 } from "@mdi/js";
+import { resolveDoctorSummaryState } from "@/lib/doctorSummaryState.js";
 import { studioHttpClient } from "@/lib/studioApi.js";
 import "@xterm/xterm/css/xterm.css";
 
@@ -313,6 +316,22 @@ const props = defineProps({
     type: Object,
     default: null
   },
+  statusItemsKey: {
+    type: String,
+    default: "checks"
+  },
+  streamEnabled: {
+    type: Boolean,
+    default: false
+  },
+  streamEndpoint: {
+    type: String,
+    default: ""
+  },
+  streamAutoStart: {
+    type: Boolean,
+    default: true
+  },
   terminalEndpoint: {
     type: String,
     required: true
@@ -323,12 +342,15 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(["refresh"]);
+const emit = defineEmits(["refresh", "status-updated"]);
 
 const actionInFlight = ref("");
 const confirmRepair = ref(null);
+const liveStatus = ref(null);
 const repairFieldValues = ref({});
 const repairRunning = ref(false);
+const streamError = ref("");
+const streamRunning = ref(false);
 const terminalDialogOpen = ref(false);
 const terminalError = ref("");
 const terminalHost = ref(null);
@@ -348,13 +370,30 @@ let terminalPollTimer = null;
 let terminalAutoCopyTimer = null;
 let terminalOutputOffset = 0;
 let terminalAutoCopiedText = "";
+let doctorEventSource = null;
+let doctorStreamEndpoint = "";
+
+const displayStatus = computed(() => {
+  return liveStatus.value || props.status;
+});
+
+const displayError = computed(() => {
+  return props.error || streamError.value;
+});
+
+const isLoading = computed(() => {
+  return props.loading || streamRunning.value;
+});
 
 const ready = computed(() => {
-  return props.status?.ready === true;
+  return displayStatus.value?.ready === true;
 });
 
 const checks = computed(() => {
-  return Array.isArray(props.status?.checks) ? props.status.checks : [];
+  if (Array.isArray(displayStatus.value?.stages)) {
+    return displayStatus.value.stages;
+  }
+  return Array.isArray(displayStatus.value?.checks) ? displayStatus.value.checks : [];
 });
 
 const requiredChecks = computed(() => {
@@ -374,6 +413,33 @@ const progressValue = computed(() => {
     return 0;
   }
   return Math.round((passedCheckCount.value / requiredCheckCount.value) * 100);
+});
+
+const summary = computed(() => {
+  return resolveDoctorSummaryState({
+    blockedLabel: props.blockedLabel,
+    blockedTitle: props.blockedTitle,
+    isLoading: isLoading.value,
+    passedCheckCount: passedCheckCount.value,
+    ready: ready.value,
+    readyLabel: props.readyLabel,
+    readyTitle: props.readyTitle,
+    requiredCheckCount: requiredCheckCount.value
+  });
+});
+
+const checking = computed(() => {
+  return summary.value.state === "checking";
+});
+
+const summaryIcon = computed(() => {
+  if (summary.value.state === "pass") {
+    return mdiCheckCircle;
+  }
+  if (summary.value.state === "checking") {
+    return mdiProgressClock;
+  }
+  return mdiCloseCircle;
 });
 
 const repairDialogOpen = computed({
@@ -426,7 +492,7 @@ function checkRepairs(check) {
 
 function visibleCheckRepairs(check) {
   const repairs = checkRepairs(check);
-  if (check?.status === "fail") {
+  if (["blocked", "fail"].includes(check?.status)) {
     return repairs;
   }
   return props.alwaysRepairCheckIds.includes(check?.id) ? repairs : [];
@@ -462,7 +528,10 @@ function statusColor(status) {
   if (status === "pass") {
     return "success";
   }
-  if (status === "fail") {
+  if (status === "running") {
+    return "primary";
+  }
+  if (["blocked", "fail", "hard-stop"].includes(status)) {
     return "error";
   }
   return "warning";
@@ -472,7 +541,10 @@ function statusIcon(status) {
   if (status === "pass") {
     return mdiCheckCircle;
   }
-  if (status === "fail") {
+  if (status === "running") {
+    return mdiAlertCircleOutline;
+  }
+  if (["blocked", "fail", "hard-stop"].includes(status)) {
     return mdiCloseCircle;
   }
   return mdiAlertCircleOutline;
@@ -482,20 +554,213 @@ function statusLabel(status) {
   if (status === "pass") {
     return "Ready";
   }
-  if (status === "fail") {
+  if (status === "running") {
+    return "Running";
+  }
+  if (status === "hard-stop") {
+    return "Hard stop";
+  }
+  if (["blocked", "fail"].includes(status)) {
     return "Needs attention";
   }
-  return "Unknown";
+  return "Pending";
 }
 
 function statusToneClass(status) {
   if (status === "pass") {
     return "bootstrap-doctor__status-badge--pass";
   }
-  if (status === "fail") {
+  if (status === "running") {
+    return "bootstrap-doctor__status-badge--running";
+  }
+  if (["blocked", "fail", "hard-stop"].includes(status)) {
     return "bootstrap-doctor__status-badge--fail";
   }
   return "bootstrap-doctor__status-badge--unknown";
+}
+
+function statusListKey(status = displayStatus.value) {
+  if (props.statusItemsKey === "stages") {
+    return "stages";
+  }
+  if (props.statusItemsKey === "checks") {
+    return "checks";
+  }
+  return Array.isArray(status?.stages) ? "stages" : "checks";
+}
+
+function cloneStatus(status = displayStatus.value) {
+  if (!status) {
+    const key = statusListKey(null);
+    return {
+      ok: true,
+      ready: false,
+      [key]: []
+    };
+  }
+  return {
+    ...status,
+    checks: Array.isArray(status.checks) ? [...status.checks] : status.checks,
+    stages: Array.isArray(status.stages) ? [...status.stages] : status.stages
+  };
+}
+
+function replaceStatusItem(item) {
+  const nextStatus = cloneStatus();
+  const key = statusListKey(nextStatus);
+  const items = Array.isArray(nextStatus[key]) ? [...nextStatus[key]] : [];
+  const itemIndex = items.findIndex((candidate) => candidate.id === item.id);
+  if (itemIndex >= 0) {
+    items[itemIndex] = {
+      ...items[itemIndex],
+      ...item
+    };
+  } else {
+    items.push(item);
+  }
+  nextStatus[key] = items;
+  if (key === "stages") {
+    nextStatus.checks = items;
+  }
+  nextStatus.ready = false;
+  liveStatus.value = nextStatus;
+}
+
+function parseStreamEvent(event) {
+  try {
+    return JSON.parse(event.data || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function closeDoctorStream(source = doctorEventSource) {
+  if (source) {
+    source.close();
+  }
+  if (!source || source === doctorEventSource) {
+    doctorEventSource = null;
+    doctorStreamEndpoint = "";
+  }
+}
+
+function startDoctorStream({
+  force = false
+} = {}) {
+  if (!props.streamEndpoint || !props.streamEnabled) {
+    return false;
+  }
+  if (typeof EventSource !== "function") {
+    emit("refresh");
+    return false;
+  }
+  if (
+    !force
+    && doctorEventSource
+    && streamRunning.value
+    && doctorStreamEndpoint === props.streamEndpoint
+  ) {
+    return true;
+  }
+
+  closeDoctorStream();
+  streamError.value = "";
+  streamRunning.value = true;
+  liveStatus.value = cloneStatus(props.status);
+  const source = new EventSource(props.streamEndpoint, {
+    withCredentials: true
+  });
+  doctorEventSource = source;
+  doctorStreamEndpoint = props.streamEndpoint;
+
+  const isCurrentStream = () => {
+    return source === doctorEventSource;
+  };
+
+  source.addEventListener("run.started", () => {
+    if (!isCurrentStream()) {
+      return;
+    }
+    streamRunning.value = true;
+    streamError.value = "";
+  });
+  source.addEventListener("check.started", (event) => {
+    if (!isCurrentStream()) {
+      return;
+    }
+    const payload = parseStreamEvent(event);
+    replaceStatusItem({
+      explanation: "Studio is checking this now.",
+      expected: "Check is running.",
+      id: payload.id,
+      label: payload.label || payload.id,
+      observed: "Running...",
+      required: true,
+      status: "running"
+    });
+  });
+  source.addEventListener("check.finished", (event) => {
+    if (!isCurrentStream()) {
+      return;
+    }
+    const payload = parseStreamEvent(event);
+    if (payload.check?.id) {
+      replaceStatusItem(payload.check);
+    }
+  });
+  source.addEventListener("check.error", (event) => {
+    if (!isCurrentStream()) {
+      return;
+    }
+    const payload = parseStreamEvent(event);
+    replaceStatusItem({
+      explanation: "The check raised an unexpected error.",
+      expected: "Check completes without throwing.",
+      id: payload.id,
+      label: payload.label || payload.id,
+      observed: payload.error || "Check failed.",
+      required: true,
+      status: "fail"
+    });
+  });
+  source.addEventListener("run.finished", (event) => {
+    if (!isCurrentStream()) {
+      return;
+    }
+    const payload = parseStreamEvent(event);
+    liveStatus.value = payload.status || liveStatus.value;
+    if (payload.status) {
+      emit("status-updated", payload.status);
+    }
+    streamRunning.value = false;
+    closeDoctorStream(source);
+  });
+  source.addEventListener("run.error", (event) => {
+    if (!isCurrentStream()) {
+      return;
+    }
+    const payload = parseStreamEvent(event);
+    streamError.value = payload.error || "Doctor stream failed.";
+    streamRunning.value = false;
+    closeDoctorStream(source);
+  });
+  source.onerror = () => {
+    if (!isCurrentStream()) {
+      return;
+    }
+    if (streamRunning.value) {
+      streamError.value = "Doctor stream disconnected.";
+      streamRunning.value = false;
+    }
+    closeDoctorStream(source);
+  };
+  return true;
+}
+
+function refreshDoctorStatus() {
+  if (!startDoctorStream({ force: true })) {
+    emit("refresh");
+  }
 }
 
 function confirmRepairAction(check, repair = check?.repair) {
@@ -702,7 +967,7 @@ async function pollTerminal() {
     if (session.status === "exited" && terminalPollTimer) {
       window.clearInterval(terminalPollTimer);
       terminalPollTimer = null;
-      emit("refresh");
+      refreshDoctorStatus();
     }
   } catch (pollError) {
     terminalError.value = String(pollError?.message || pollError || "Terminal polling failed.");
@@ -769,10 +1034,30 @@ async function closeTerminal() {
     await studioHttpClient.delete(terminalUrl(`/${encodeURIComponent(sessionId)}`)).catch(() => null);
   }
   disposeTerminalUi();
-  emit("refresh");
+  refreshDoctorStatus();
 }
 
+watch(() => props.status, (nextStatus) => {
+  if (nextStatus && !streamRunning.value) {
+    liveStatus.value = nextStatus;
+  }
+}, {
+  immediate: true
+});
+
+watch(() => [props.streamEndpoint, props.streamEnabled, props.streamAutoStart], () => {
+  if (props.streamEnabled && props.streamEndpoint && props.streamAutoStart) {
+    startDoctorStream();
+  } else if (!props.streamEnabled || !props.streamEndpoint) {
+    closeDoctorStream();
+    streamRunning.value = false;
+  }
+}, {
+  immediate: true
+});
+
 onBeforeUnmount(() => {
+  closeDoctorStream();
   disposeTerminalUi();
 });
 </script>
@@ -835,6 +1120,10 @@ onBeforeUnmount(() => {
   border-left: 4px solid rgb(var(--v-theme-success));
 }
 
+.bootstrap-doctor__summary--checking {
+  border-left: 4px solid rgb(var(--v-theme-primary));
+}
+
 .bootstrap-doctor__summary--fail {
   border-left: 4px solid rgb(var(--v-theme-error));
 }
@@ -861,6 +1150,10 @@ onBeforeUnmount(() => {
 
 .bootstrap-doctor__summary-icon--pass {
   background: rgba(var(--v-theme-success), 0.12);
+}
+
+.bootstrap-doctor__summary-icon--checking {
+  background: rgba(var(--v-theme-primary), 0.12);
 }
 
 .bootstrap-doctor__summary-icon--fail {
@@ -892,6 +1185,22 @@ onBeforeUnmount(() => {
   border-left-color: rgb(var(--v-theme-error));
 }
 
+.bootstrap-doctor__check--blocked,
+.bootstrap-doctor__check--hard-stop {
+  background: rgba(var(--v-theme-error), 0.04);
+  border-left-color: rgb(var(--v-theme-error));
+}
+
+.bootstrap-doctor__check--running {
+  background: rgba(var(--v-theme-primary), 0.045);
+  border-left-color: rgb(var(--v-theme-primary));
+}
+
+.bootstrap-doctor__check--pending {
+  background: rgba(var(--v-theme-warning), 0.045);
+  border-left-color: rgb(var(--v-theme-warning));
+}
+
 .bootstrap-doctor__status-badge {
   height: 2.5rem;
   width: 2.5rem;
@@ -903,6 +1212,10 @@ onBeforeUnmount(() => {
 
 .bootstrap-doctor__status-badge--fail {
   background: rgba(var(--v-theme-error), 0.13);
+}
+
+.bootstrap-doctor__status-badge--running {
+  background: rgba(var(--v-theme-primary), 0.13);
 }
 
 .bootstrap-doctor__status-badge--unknown {

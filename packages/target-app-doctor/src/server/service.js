@@ -9,11 +9,21 @@ import {
   readTerminalSession,
   startTerminalSession,
   writeTerminalSession
-} from "./terminalSessions.js";
+} from "../../../../server/lib/terminalSessions.js";
+import {
+  runDoctorStep
+} from "../../../../server/lib/doctorStream.js";
+import {
+  createReadyStatusCache
+} from "../../../../server/lib/doctorStatusCache.js";
+import {
+  buildGithubRepoCreateOrLinkScript
+} from "../../../../server/lib/githubRepoSetupScript.js";
 
 const TOOLCHAIN_IMAGE = "jskit-ai-studio-toolchain:0.1.0";
 const TOOL_HOME_VOLUME = "jskit_ai_studio_tool_home";
 const REQUIRED_GH_SCOPES = ["repo", "read:org", "gist", "workflow"];
+const TERMINAL_NAMESPACE = "target-app-doctor";
 
 function shellQuote(value) {
   const stringValue = String(value);
@@ -234,6 +244,22 @@ function repoNameFromTargetRoot(targetRoot) {
     .replace(/^-+|-+$/gu, "") || "jskit-app";
 }
 
+async function runTargetStep(emit, {
+  id,
+  label,
+  run
+}) {
+  if (!emit) {
+    return run();
+  }
+  return runDoctorStep({
+    emit,
+    id,
+    label,
+    run
+  });
+}
+
 function gitInitRepair(targetRoot) {
   const script = [
     "set -e",
@@ -253,18 +279,7 @@ function gitInitRepair(targetRoot) {
 }
 
 function ghRepoCreateScript(repoName) {
-  return [
-    "set -e",
-    "set -x",
-    "git config --global --add safe.directory /workspace || true",
-    "if git rev-parse --verify HEAD >/dev/null 2>&1; then",
-    `  gh repo create ${shellQuote(repoName)} --source=. --remote=origin --private --push`,
-    "else",
-    `  gh repo create ${shellQuote(repoName)} --source=. --remote=origin --private`,
-    "  git remote get-url origin",
-    "  echo \"No commits found; created GitHub repo and linked origin without pushing.\"",
-    "fi"
-  ].join("\n");
+  return buildGithubRepoCreateOrLinkScript(repoName);
 }
 
 function ghRepoCreateRepair(targetRoot) {
@@ -278,7 +293,7 @@ function ghRepoCreateRepair(targetRoot) {
   return createRepair({
     actionId: "terminal-gh-create-repo",
     command: dockerCommand(args),
-    label: "Create GitHub repo"
+    label: "Create/link GitHub repo"
   });
 }
 
@@ -353,18 +368,6 @@ function validateGitIdentityInputs(inputs = {}) {
     name,
     ok: true
   };
-}
-
-function dirtyTreeRepair() {
-  return manualRepair({
-    actionId: "manual-clean-working-tree",
-    command: [
-      "git status --short",
-      "git add . && git commit -m \"Checkpoint\"",
-      "# or: git stash push -u"
-    ].join("\n"),
-    label: "Clean working tree"
-  });
 }
 
 async function checkTargetDirectory(targetRoot) {
@@ -556,29 +559,27 @@ async function checkGitStatus(targetRoot, gitReady) {
     return failCheck({
       id: "git-status",
       label: "Git working tree",
-      expected: "Working tree state is known and clean for V0.",
+      expected: "Working tree state can be read.",
       observed: result.output,
-      explanation: "Studio could not read the working tree state.",
-      repair: dirtyTreeRepair()
+      explanation: "Studio could not read the working tree state."
     });
   }
   if (result.stdout) {
-    return failCheck({
+    return passCheck({
       id: "git-status",
       label: "Git working tree",
-      expected: "Working tree is clean before Studio writes files.",
+      expected: "Working tree state can be read.",
       observed: result.stdout.split(/\r?\n/u).slice(0, 12).join("\n"),
-      explanation: "V0 blocks app edits when there are existing changes until a dirty-tree policy is added.",
-      repair: dirtyTreeRepair()
+      explanation: "The tree is dirty, but that is handled by App Setup or Review. App Bootup only proves Git state is readable."
     });
   }
 
   return passCheck({
     id: "git-status",
     label: "Git working tree",
-    expected: "Working tree is clean before Studio writes files.",
+    expected: "Working tree state can be read.",
     observed: "Clean",
-    explanation: "The target repo is safe for V0 edit workflows."
+    explanation: "The target repo Git state is readable."
   });
 }
 
@@ -724,21 +725,30 @@ async function checkGitHubIssuePrAccess(targetRoot, repoCheck) {
 }
 
 async function inspectTargetApp({
+  emit = null,
   studioRoot,
   targetRoot
 }) {
   const normalizedStudioRoot = normalizeRoot(studioRoot);
   const normalizedTargetRoot = normalizeRoot(targetRoot);
-  const [studioRepoRoot, targetRepoRoot, directory] = await Promise.all([
+  const [studioRepoRoot, targetRepoRoot] = await Promise.all([
     hostGitRoot(normalizedStudioRoot),
-    hostGitRoot(normalizedTargetRoot),
-    checkTargetDirectory(normalizedTargetRoot)
+    hostGitRoot(normalizedTargetRoot)
   ]);
-  const identity = await checkTargetIdentity({
-    studioRoot: normalizedStudioRoot,
-    targetRoot: normalizedTargetRoot,
-    studioRepoRoot,
-    targetRepoRoot
+  const directory = await runTargetStep(emit, {
+    id: "target-directory",
+    label: "Target directory",
+    run: () => checkTargetDirectory(normalizedTargetRoot)
+  });
+  const identity = await runTargetStep(emit, {
+    id: "target-identity",
+    label: "Target identity",
+    run: () => checkTargetIdentity({
+      studioRoot: normalizedStudioRoot,
+      targetRoot: normalizedTargetRoot,
+      studioRepoRoot,
+      targetRepoRoot
+    })
   });
   if (directory.status !== "pass" || identity.status !== "pass") {
     const observed = directory.status !== "pass"
@@ -811,17 +821,47 @@ async function inspectTargetApp({
     };
   }
 
-  const gitRepository = await checkGitRepository(normalizedTargetRoot);
+  const gitRepository = await runTargetStep(emit, {
+    id: "git-repository",
+    label: "Git repository",
+    run: () => checkGitRepository(normalizedTargetRoot)
+  });
   const gitReady = gitRepository.status === "pass";
-  const [gitBranch, gitIdentity, gitStatus, gitRemote, githubAuth] = await Promise.all([
-    checkGitBranch(normalizedTargetRoot, gitReady),
-    checkGitIdentity(normalizedTargetRoot, gitReady),
-    checkGitStatus(normalizedTargetRoot, gitReady),
-    checkGitRemote(normalizedTargetRoot, gitReady),
-    checkGitHubAuth(normalizedTargetRoot)
-  ]);
-  const githubRepository = await checkGitHubRepository(normalizedTargetRoot, gitRemote);
-  const githubIssuesPrs = await checkGitHubIssuePrAccess(normalizedTargetRoot, githubRepository);
+  const gitBranch = await runTargetStep(emit, {
+    id: "git-branch",
+    label: "Git branch",
+    run: () => checkGitBranch(normalizedTargetRoot, gitReady)
+  });
+  const gitIdentity = await runTargetStep(emit, {
+    id: "git-identity",
+    label: "Git identity",
+    run: () => checkGitIdentity(normalizedTargetRoot, gitReady)
+  });
+  const gitStatus = await runTargetStep(emit, {
+    id: "git-status",
+    label: "Git working tree",
+    run: () => checkGitStatus(normalizedTargetRoot, gitReady)
+  });
+  const gitRemote = await runTargetStep(emit, {
+    id: "git-remote",
+    label: "Git remote",
+    run: () => checkGitRemote(normalizedTargetRoot, gitReady)
+  });
+  const githubAuth = await runTargetStep(emit, {
+    id: "github-auth",
+    label: "GitHub CLI auth",
+    run: () => checkGitHubAuth(normalizedTargetRoot)
+  });
+  const githubRepository = await runTargetStep(emit, {
+    id: "github-repository",
+    label: "GitHub repository",
+    run: () => checkGitHubRepository(normalizedTargetRoot, gitRemote)
+  });
+  const githubIssuesPrs = await runTargetStep(emit, {
+    id: "github-issues-prs",
+    label: "GitHub issues and PRs",
+    run: () => checkGitHubIssuePrAccess(normalizedTargetRoot, githubRepository)
+  });
   const checks = [
     directory,
     identity,
@@ -854,13 +894,26 @@ function createService({
 } = {}) {
   const resolvedStudioRoot = normalizeRoot(studioRoot);
   const resolvedTargetRoot = normalizeRoot(targetRoot);
+  const readyStatusCache = createReadyStatusCache();
 
   return Object.freeze({
     async getStatus() {
-      return inspectTargetApp({
+      const cachedStatus = readyStatusCache.read();
+      if (cachedStatus) {
+        return cachedStatus;
+      }
+      return readyStatusCache.remember(await inspectTargetApp({
         studioRoot: resolvedStudioRoot,
         targetRoot: resolvedTargetRoot
-      });
+      }));
+    },
+
+    async streamStatus({ emit } = {}) {
+      return readyStatusCache.remember(await inspectTargetApp({
+        emit,
+        studioRoot: resolvedStudioRoot,
+        targetRoot: resolvedTargetRoot
+      }));
     },
 
     startTerminal(input = {}) {
@@ -881,7 +934,8 @@ function createService({
           args,
           command: "docker",
           commandPreview: repair.commandPreview,
-          cwd: resolvedTargetRoot
+          cwd: resolvedTargetRoot,
+          namespace: TERMINAL_NAMESPACE
         });
       }
 
@@ -897,7 +951,8 @@ function createService({
           args,
           command: "docker",
           commandPreview: repair.commandPreview,
-          cwd: resolvedTargetRoot
+          cwd: resolvedTargetRoot,
+          namespace: TERMINAL_NAMESPACE
         });
       }
 
@@ -931,7 +986,8 @@ function createService({
           args,
           command: "docker",
           commandPreview: dockerCommand(args),
-          cwd: resolvedTargetRoot
+          cwd: resolvedTargetRoot,
+          namespace: TERMINAL_NAMESPACE
         });
       }
 
@@ -955,7 +1011,8 @@ function createService({
           args,
           command: "docker",
           commandPreview: repair.commandPreview,
-          cwd: resolvedTargetRoot
+          cwd: resolvedTargetRoot,
+          namespace: TERMINAL_NAMESPACE
         });
       }
 
@@ -966,15 +1023,15 @@ function createService({
     },
 
     readTerminal(sessionId) {
-      return readTerminalSession(sessionId);
+      return readTerminalSession(sessionId, { namespace: TERMINAL_NAMESPACE });
     },
 
     writeTerminal(sessionId, data) {
-      return writeTerminalSession(sessionId, data);
+      return writeTerminalSession(sessionId, data, { namespace: TERMINAL_NAMESPACE });
     },
 
     closeTerminal(sessionId) {
-      return closeTerminalSession(sessionId);
+      return closeTerminalSession(sessionId, { namespace: TERMINAL_NAMESPACE });
     }
   });
 }

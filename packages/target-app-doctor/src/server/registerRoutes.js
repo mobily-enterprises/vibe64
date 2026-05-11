@@ -1,4 +1,5 @@
 import { resolveScopedApiBasePath, normalizeSurfaceId } from "@jskit-ai/kernel/shared/surface";
+import { sendDoctorEventStream } from "../../../../server/lib/doctorStream.js";
 import {
   statusQueryInputValidator,
   terminalInputValidator,
@@ -50,6 +51,26 @@ function registerRoutes(
       });
 
       reply.code(200).send(response);
+    }
+  );
+
+  router.register(
+    "GET",
+    `${routeBase}/stream`,
+    {
+      auth: "public",
+      surface: normalizedRouteSurface,
+      meta: {
+        tags: ["feature"],
+        summary: "Stream Target App Doctor status progress."
+      }
+    },
+    async function (_request, reply) {
+      await sendDoctorEventStream(reply, ({ emit }) => {
+        return getTargetAppDoctorService(app).streamStatus({
+          emit
+        });
+      });
     }
   );
 

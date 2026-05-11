@@ -2,7 +2,19 @@ import crypto from "node:crypto";
 import { spawn as spawnPty } from "node-pty";
 
 const MAX_BUFFER_LENGTH = 160000;
-const sessions = new Map();
+const stores = new Map();
+
+function normalizeNamespace(namespace = "") {
+  return String(namespace || "default").trim() || "default";
+}
+
+function sessionsForNamespace(namespace) {
+  const normalizedNamespace = normalizeNamespace(namespace);
+  if (!stores.has(normalizedNamespace)) {
+    stores.set(normalizedNamespace, new Map());
+  }
+  return stores.get(normalizedNamespace);
+}
 
 function trimBuffer(output) {
   if (output.length <= MAX_BUFFER_LENGTH) {
@@ -15,8 +27,10 @@ function startTerminalSession({
   args,
   command,
   commandPreview,
-  cwd = process.cwd()
+  cwd = process.cwd(),
+  namespace = "default"
 }) {
+  const sessions = sessionsForNamespace(namespace);
   const id = crypto.randomUUID();
   const terminal = spawnPty(command, args, {
     cols: 100,
@@ -45,10 +59,11 @@ function startTerminalSession({
   });
 
   sessions.set(id, session);
-  return readTerminalSession(id);
+  return readTerminalSession(id, { namespace });
 }
 
-function readTerminalSession(id) {
+function readTerminalSession(id, { namespace = "default" } = {}) {
+  const sessions = sessionsForNamespace(namespace);
   const session = sessions.get(id);
   if (!session) {
     return {
@@ -67,7 +82,8 @@ function readTerminalSession(id) {
   };
 }
 
-function writeTerminalSession(id, data) {
+function writeTerminalSession(id, data, { namespace = "default" } = {}) {
+  const sessions = sessionsForNamespace(namespace);
   const session = sessions.get(id);
   if (!session) {
     return {
@@ -76,14 +92,15 @@ function writeTerminalSession(id, data) {
     };
   }
   if (session.status !== "running") {
-    return readTerminalSession(id);
+    return readTerminalSession(id, { namespace });
   }
 
   session.terminal.write(String(data || ""));
-  return readTerminalSession(id);
+  return readTerminalSession(id, { namespace });
 }
 
-function closeTerminalSession(id) {
+function closeTerminalSession(id, { namespace = "default" } = {}) {
+  const sessions = sessionsForNamespace(namespace);
   const session = sessions.get(id);
   if (!session) {
     return {

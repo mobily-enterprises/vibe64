@@ -11,4 +11,30 @@ const currentAppQueryInputValidator = deepFreeze({
   mode: "patch"
 });
 
-export { currentAppQueryInputValidator };
+const issueSessionStepInputValidator = deepFreeze({
+  schema: createSchema({
+    prompt: {
+      type: "string",
+      required: false
+    },
+    issue: {
+      type: "string",
+      noTrim: true,
+      required: false
+    },
+    userCheck: {
+      type: "string",
+      required: false
+    },
+    codexThreadId: {
+      type: "string",
+      required: false
+    }
+  }),
+  mode: "patch"
+});
+
+export {
+  currentAppQueryInputValidator,
+  issueSessionStepInputValidator
+};

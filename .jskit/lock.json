@@ -112,6 +112,28 @@
       },
       "options": {},
       "installedAt": "2026-05-11T01:48:06.407Z"
+    },
+    "@local/app-setup-doctor": {
+      "packageId": "@local/app-setup-doctor",
+      "version": "0.1.0",
+      "source": {
+        "type": "app-local-package",
+        "packagePath": "packages/app-setup-doctor",
+        "descriptorPath": "packages/app-setup-doctor/package.descriptor.mjs"
+      },
+      "managed": {
+        "packageJson": {
+          "dependencies": {},
+          "devDependencies": {},
+          "scripts": {}
+        },
+        "text": {},
+        "vite": {},
+        "files": [],
+        "migrations": []
+      },
+      "options": {},
+      "installedAt": "2026-05-11T10:00:00.000Z"
     }
   }
 }

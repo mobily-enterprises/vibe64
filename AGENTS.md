@@ -1,11 +1,10 @@
-# App Agent Wrapper
+# JSKIT AI Studio Agent Notes
 
-Read and follow:
+Use `jskit session` for issue-driven work in the current target app.
 
-- `node_modules/@jskit-ai/agent-docs/templates/app/AGENTS.md`
+Important boundaries:
 
-If that file does not exist yet:
-
-- install dependencies so `node_modules/@jskit-ai/agent-docs/` exists
-- inspect the workspace before assuming a JSKIT app already exists
-- if the workspace is empty and the user wants a new app, start with high-level initialize questions only
+- Session truth lives in `<target-root>/.jskit/sessions/active/<session_id>/`.
+- Studio is a UI over the JSKIT session runtime, not a second issue workflow.
+- Do not recreate the retired long AGENTS workflow or loose workboard/blueprint files.
+- Run `jskit session`, `jskit session <id>`, and `jskit session <id> step` to inspect or advance work.
