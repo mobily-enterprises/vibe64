@@ -90,6 +90,28 @@
       },
       "options": {},
       "installedAt": "2026-05-10T12:01:12.284Z"
+    },
+    "@local/target-app-doctor": {
+      "packageId": "@local/target-app-doctor",
+      "version": "0.1.0",
+      "source": {
+        "type": "app-local-package",
+        "packagePath": "packages/target-app-doctor",
+        "descriptorPath": "packages/target-app-doctor/package.descriptor.mjs"
+      },
+      "managed": {
+        "packageJson": {
+          "dependencies": {},
+          "devDependencies": {},
+          "scripts": {}
+        },
+        "text": {},
+        "vite": {},
+        "files": [],
+        "migrations": []
+      },
+      "options": {},
+      "installedAt": "2026-05-11T01:48:06.407Z"
     }
   }
 }

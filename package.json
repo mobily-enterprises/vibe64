@@ -36,6 +36,7 @@
     "@local/bootstrap-doctor": "file:packages/bootstrap-doctor",
     "@local/current-app": "file:packages/current-app",
     "@local/main": "file:packages/main",
+    "@local/target-app-doctor": "file:packages/target-app-doctor",
     "@mdi/js": "^7.4.47",
     "@tanstack/vue-query": "^5.90.5",
     "@xterm/addon-fit": "^0.11.0",

@@ -10,16 +10,40 @@ export default function getPlacements() {
 }
 
 addPlacement({
-  id: "jskit-ai-studio.home.menu.bootstrap",
+  id: "jskit-ai-studio.home.menu.bootup",
+  target: "shell.primary-nav",
+  kind: "link",
+  surfaces: ["home"],
+  order: 40,
+  props: {
+    label: "Bootup",
+    to: "/bootup",
+    exact: true
+  }
+});
+
+addPlacement({
+  id: "jskit-ai-studio.home.menu.app-bootup",
   target: "shell.primary-nav",
   kind: "link",
   surfaces: ["home"],
   order: 50,
   props: {
-    label: "Studio",
-    surface: "home",
-    scopedSuffix: "/",
-    unscopedSuffix: "/",
+    label: "App Bootup",
+    to: "/app-bootup",
+    exact: true
+  }
+});
+
+addPlacement({
+  id: "jskit-ai-studio.home.menu.home",
+  target: "shell.primary-nav",
+  kind: "link",
+  surfaces: ["home"],
+  order: 60,
+  props: {
+    label: "Home",
+    to: "/home",
     exact: true
   }
 });

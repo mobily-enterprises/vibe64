@@ -6,7 +6,7 @@ config.tenancyMode = "none";
 
 config.surfaceModeAll = "all";
 config.surfaceDefaultId = "home";
-config.webRootAllowed = "no";
+config.webRootAllowed = "yes";
 config.surfaceAccessPolicies = surfaceAccessPolicies;
 config.mobile = {
   enabled: false,
