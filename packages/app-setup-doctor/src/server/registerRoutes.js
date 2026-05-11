@@ -1,19 +1,16 @@
 import { resolveScopedApiBasePath, normalizeSurfaceId } from "@jskit-ai/kernel/shared/surface";
 import { sendDoctorEventStream } from "../../../../server/lib/doctorStream.js";
-
 import {
-  ACTION_READ_BOOTSTRAP,
-  ACTION_REPAIR_BOOTSTRAP
-} from "./actions.js";
-import {
-  bootstrapQueryInputValidator,
-  repairInputValidator,
+  statusQueryInputValidator,
   terminalInputValidator,
   terminalStartInputValidator
 } from "./inputSchemas.js";
+import {
+  ACTION_GET_STATUS
+} from "./actions.js";
 
-function getBootstrapService(app) {
-  return app.make("feature.bootstrap-doctor.service");
+function getAppSetupDoctorService(app) {
+  return app.make("feature.app-setup-doctor.service");
 }
 
 function registerRoutes(
@@ -42,14 +39,14 @@ function registerRoutes(
       auth: "public",
       surface: normalizedRouteSurface,
       meta: {
-        tags: ["bootstrap"],
-        summary: "Read Bootstrap Doctor status."
+        tags: ["feature"],
+        summary: "Read App Setup Doctor status."
       },
-      query: bootstrapQueryInputValidator
+      query: statusQueryInputValidator
     },
     async function (request, reply) {
       const response = await request.executeAction({
-        actionId: ACTION_READ_BOOTSTRAP,
+        actionId: ACTION_GET_STATUS,
         input: request.input.query || {}
       });
 
@@ -64,38 +61,16 @@ function registerRoutes(
       auth: "public",
       surface: normalizedRouteSurface,
       meta: {
-        tags: ["bootstrap"],
-        summary: "Stream Bootstrap Doctor status progress."
+        tags: ["feature"],
+        summary: "Stream App Setup Doctor status progress."
       }
     },
     async function (_request, reply) {
       await sendDoctorEventStream(reply, ({ emit }) => {
-        return getBootstrapService(app).streamStatus({
+        return getAppSetupDoctorService(app).streamStatus({
           emit
         });
       });
-    }
-  );
-
-  router.register(
-    "POST",
-    `${routeBase}/repair`,
-    {
-      auth: "public",
-      surface: normalizedRouteSurface,
-      meta: {
-        tags: ["bootstrap"],
-        summary: "Run a Bootstrap Doctor repair action."
-      },
-      body: repairInputValidator
-    },
-    async function (request, reply) {
-      const response = await request.executeAction({
-        actionId: ACTION_REPAIR_BOOTSTRAP,
-        input: request.input.body || {}
-      });
-
-      reply.code(response.ok === false ? 400 : 200).send(response);
     }
   );
 
@@ -106,13 +81,13 @@ function registerRoutes(
       auth: "public",
       surface: normalizedRouteSurface,
       meta: {
-        tags: ["bootstrap"],
-        summary: "Start a Bootstrap Doctor terminal session."
+        tags: ["feature"],
+        summary: "Start an App Setup Doctor terminal session."
       },
       body: terminalStartInputValidator
     },
     async function (request, reply) {
-      const response = getBootstrapService(app).startTerminal(request.input.body || {});
+      const response = getAppSetupDoctorService(app).startTerminal(request.input.body || {});
       reply.code(response.ok === false ? 400 : 200).send(response);
     }
   );
@@ -124,12 +99,12 @@ function registerRoutes(
       auth: "public",
       surface: normalizedRouteSurface,
       meta: {
-        tags: ["bootstrap"],
-        summary: "Read a Bootstrap Doctor terminal session."
+        tags: ["feature"],
+        summary: "Read an App Setup Doctor terminal session."
       }
     },
     async function (request, reply) {
-      const response = getBootstrapService(app).readTerminal(request.params.sessionId);
+      const response = getAppSetupDoctorService(app).readTerminal(request.params.sessionId);
       reply.code(response.ok === false ? 404 : 200).send(response);
     }
   );
@@ -141,13 +116,13 @@ function registerRoutes(
       auth: "public",
       surface: normalizedRouteSurface,
       meta: {
-        tags: ["bootstrap"],
-        summary: "Write to a Bootstrap Doctor terminal session."
+        tags: ["feature"],
+        summary: "Write to an App Setup Doctor terminal session."
       },
       body: terminalInputValidator
     },
     async function (request, reply) {
-      const response = getBootstrapService(app).writeTerminal(
+      const response = getAppSetupDoctorService(app).writeTerminal(
         request.params.sessionId,
         request.input.body?.data || ""
       );
@@ -162,12 +137,12 @@ function registerRoutes(
       auth: "public",
       surface: normalizedRouteSurface,
       meta: {
-        tags: ["bootstrap"],
-        summary: "Close a Bootstrap Doctor terminal session."
+        tags: ["feature"],
+        summary: "Close an App Setup Doctor terminal session."
       }
     },
     async function (request, reply) {
-      const response = getBootstrapService(app).closeTerminal(request.params.sessionId);
+      const response = getAppSetupDoctorService(app).closeTerminal(request.params.sessionId);
       reply.code(200).send(response);
     }
   );

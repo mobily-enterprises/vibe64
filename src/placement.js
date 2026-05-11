@@ -36,6 +36,19 @@ addPlacement({
 });
 
 addPlacement({
+  id: "jskit-ai-studio.home.menu.app-setup",
+  target: "shell.secondary-nav",
+  kind: "link",
+  surfaces: ["home"],
+  order: 60,
+  props: {
+    label: "App Setup",
+    to: "/app-setup",
+    exact: true
+  }
+});
+
+addPlacement({
   id: "jskit-ai-studio.home.menu.home",
   target: "shell.primary-nav",
   kind: "link",

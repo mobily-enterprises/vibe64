@@ -9,7 +9,13 @@ import {
   readTerminalSession,
   startTerminalSession,
   writeTerminalSession
-} from "./terminalSessions.js";
+} from "../../../../server/lib/terminalSessions.js";
+import {
+  runDoctorStep
+} from "../../../../server/lib/doctorStream.js";
+import {
+  createReadyStatusCache
+} from "../../../../server/lib/doctorStatusCache.js";
 
 const TOOLCHAIN_IMAGE = "jskit-ai-studio-toolchain:0.1.0";
 const TOOLCHAIN_DOCKERFILE = "tooling/bootstrap/Dockerfile";
@@ -22,6 +28,7 @@ const MYSQL_VOLUME = "jskit_ai_studio_mysql_data";
 const MYSQL_PROBE_DATABASE = "jskit_ai_studio_bootstrap_probe";
 const MYSQL_PROBE_TABLE = "capability_probe";
 const REQUIRED_GH_SCOPES = ["repo", "read:org", "gist", "workflow"];
+const TERMINAL_NAMESPACE = "bootstrap-doctor";
 
 function buildToolchainArgs(commandArgs, extraArgs = []) {
   return [
@@ -381,6 +388,22 @@ function isBootstrapReady(checks) {
 function resolveStudioRoot(studioRoot) {
   const configuredRoot = String(studioRoot || process.env.JSKIT_STUDIO_APP_ROOT || "").trim();
   return path.resolve(configuredRoot || process.cwd());
+}
+
+async function runBootstrapStep(emit, {
+  id,
+  label,
+  run
+}) {
+  if (!emit) {
+    return run();
+  }
+  return runDoctorStep({
+    emit,
+    id,
+    label,
+    run
+  });
 }
 
 async function checkDocker() {
@@ -845,97 +868,158 @@ async function repairMysql() {
   };
 }
 
+async function inspectBootstrap({
+  emit = null
+} = {}) {
+  const docker = await runBootstrapStep(emit, {
+    id: "docker",
+    label: "Docker engine",
+    run: checkDocker
+  });
+  const dockerReady = docker.status === "pass";
+  const compose = await runBootstrapStep(emit, {
+    id: "docker-compose",
+    label: "Docker Compose plugin",
+    run: () => checkDockerCompose(dockerReady)
+  });
+  const mysql = await runBootstrapStep(emit, {
+    id: "mysql-capability",
+    label: "MySQL capability",
+    run: () => checkMysqlCapability(dockerReady)
+  });
+  const toolchainImage = await runBootstrapStep(emit, {
+    id: "toolchain-image",
+    label: "Managed toolchain image",
+    run: () => checkToolchainImage(dockerReady)
+  });
+  const toolchainReady = toolchainImage.status === "pass";
+  const hostNetwork = await checkHostNetwork(toolchainReady);
+
+  const node = await runBootstrapStep(emit, {
+    id: "node",
+    label: "Node",
+    run: () => toolchainReady
+      ? checkToolchainCommand({
+        id: "node",
+        label: "Node",
+        commandArgs: ["node", "--version"],
+        expected: "Node 22 runs inside the managed toolchain.",
+        explanation: "Studio runs JSKIT commands through the managed Node runtime.",
+        isValid: (output) => /^v22\./.test(output.trim()),
+        repair: buildToolchainRepair()
+      })
+      : missingToolchainCheck("node", "Node")
+  });
+  const npm = await runBootstrapStep(emit, {
+    id: "npm",
+    label: "npm",
+    run: () => toolchainReady
+      ? checkToolchainCommand({
+        id: "npm",
+        label: "npm",
+        commandArgs: ["npm", "--version"],
+        expected: "npm runs inside the managed toolchain.",
+        explanation: "Studio needs npm for installs, scripts, and verification.",
+        isValid: (output) => output.trim().length > 0,
+        repair: buildToolchainRepair()
+      })
+      : missingToolchainCheck("npm", "npm")
+  });
+  const git = await runBootstrapStep(emit, {
+    id: "git",
+    label: "git",
+    run: () => toolchainReady
+      ? checkToolchainCommand({
+        id: "git",
+        label: "git",
+        commandArgs: ["git", "--version"],
+        expected: "git runs inside the managed toolchain.",
+        explanation: "Studio uses git for status, diffs, commits, and deployments.",
+        isValid: (output) => output.includes("git version"),
+        repair: buildToolchainRepair()
+      })
+      : missingToolchainCheck("git", "git")
+  });
+  const gh = await runBootstrapStep(emit, {
+    id: "gh",
+    label: "GitHub CLI",
+    run: () => toolchainReady
+      ? checkToolchainCommand({
+        id: "gh",
+        label: "GitHub CLI",
+        commandArgs: ["gh", "--version"],
+        expected: "gh runs inside the managed toolchain.",
+        explanation: "Studio uses GitHub CLI for repository and deploy-adjacent workflows.",
+        isValid: (output) => output.toLowerCase().includes("gh version"),
+        repair: buildToolchainRepair()
+      })
+      : missingToolchainCheck("gh", "GitHub CLI")
+  });
+  const ghAuth = await runBootstrapStep(emit, {
+    id: "gh-auth",
+    label: "GitHub login",
+    run: () => checkGitHubAuth(toolchainReady)
+  });
+  const codex = await runBootstrapStep(emit, {
+    id: "codex",
+    label: "Codex CLI",
+    run: () => toolchainReady
+      ? checkToolchainCommand({
+        id: "codex",
+        label: "Codex CLI",
+        commandArgs: ["codex", "--version"],
+        expected: "Codex runs inside the managed toolchain.",
+        explanation: "Studio delegates implementation work to local Codex sessions.",
+        isValid: (output) => output.trim().length > 0,
+        repair: buildToolchainRepair()
+      })
+      : missingToolchainCheck("codex", "Codex CLI")
+  });
+  const codexAuth = await runBootstrapStep(emit, {
+    id: "codex-auth",
+    label: "Codex login",
+    run: () => checkCodexAuth(toolchainReady, hostNetwork)
+  });
+  const checks = [
+    docker,
+    compose,
+    mysql,
+    toolchainImage,
+    node,
+    npm,
+    git,
+    gh,
+    ghAuth,
+    codex,
+    codexAuth
+  ];
+
+  return {
+    ok: true,
+    blockedReason: isBootstrapReady(checks) ? "" : "Bootstrap is incomplete.",
+    ready: isBootstrapReady(checks),
+    checks,
+    updatedAt: new Date().toISOString()
+  };
+}
+
 function createService({ studioRoot = "" } = {}) {
   const resolvedStudioRoot = resolveStudioRoot(studioRoot);
+  const readyStatusCache = createReadyStatusCache();
 
   return Object.freeze({
     async getStatus() {
-      const docker = await checkDocker();
-      const dockerReady = docker.status === "pass";
-      const compose = await checkDockerCompose(dockerReady);
-      const mysql = await checkMysqlCapability(dockerReady);
-      const toolchainImage = await checkToolchainImage(dockerReady);
-      const toolchainReady = toolchainImage.status === "pass";
-      const hostNetwork = await checkHostNetwork(toolchainReady);
+      const cachedStatus = readyStatusCache.read();
+      if (cachedStatus) {
+        return cachedStatus;
+      }
+      return readyStatusCache.remember(await inspectBootstrap());
+    },
 
-      const node = toolchainReady
-        ? await checkToolchainCommand({
-          id: "node",
-          label: "Node",
-          commandArgs: ["node", "--version"],
-          expected: "Node 22 runs inside the managed toolchain.",
-          explanation: "Studio runs JSKIT commands through the managed Node runtime.",
-          isValid: (output) => /^v22\./.test(output.trim()),
-          repair: buildToolchainRepair()
-        })
-        : missingToolchainCheck("node", "Node");
-      const npm = toolchainReady
-        ? await checkToolchainCommand({
-          id: "npm",
-          label: "npm",
-          commandArgs: ["npm", "--version"],
-          expected: "npm runs inside the managed toolchain.",
-          explanation: "Studio needs npm for installs, scripts, and verification.",
-          isValid: (output) => output.trim().length > 0,
-          repair: buildToolchainRepair()
-        })
-        : missingToolchainCheck("npm", "npm");
-      const git = toolchainReady
-        ? await checkToolchainCommand({
-          id: "git",
-          label: "git",
-          commandArgs: ["git", "--version"],
-          expected: "git runs inside the managed toolchain.",
-          explanation: "Studio uses git for status, diffs, commits, and deployments.",
-          isValid: (output) => output.includes("git version"),
-          repair: buildToolchainRepair()
-        })
-        : missingToolchainCheck("git", "git");
-      const gh = toolchainReady
-        ? await checkToolchainCommand({
-          id: "gh",
-          label: "GitHub CLI",
-          commandArgs: ["gh", "--version"],
-          expected: "gh runs inside the managed toolchain.",
-          explanation: "Studio uses GitHub CLI for repository and deploy-adjacent workflows.",
-          isValid: (output) => output.toLowerCase().includes("gh version"),
-          repair: buildToolchainRepair()
-        })
-        : missingToolchainCheck("gh", "GitHub CLI");
-      const codex = toolchainReady
-        ? await checkToolchainCommand({
-          id: "codex",
-          label: "Codex CLI",
-          commandArgs: ["codex", "--version"],
-          expected: "Codex runs inside the managed toolchain.",
-          explanation: "Studio delegates implementation work to local Codex sessions.",
-          isValid: (output) => output.trim().length > 0,
-          repair: buildToolchainRepair()
-        })
-        : missingToolchainCheck("codex", "Codex CLI");
-      const ghAuth = await checkGitHubAuth(toolchainReady);
-      const codexAuth = await checkCodexAuth(toolchainReady, hostNetwork);
-      const checks = [
-        docker,
-        compose,
-        mysql,
-        toolchainImage,
-        node,
-        npm,
-        git,
-        gh,
-        ghAuth,
-        codex,
-        codexAuth
-      ];
-
-      return {
-        ok: true,
-        blockedReason: isBootstrapReady(checks) ? "" : "Bootstrap is incomplete.",
-        ready: isBootstrapReady(checks),
-        checks,
-        updatedAt: new Date().toISOString()
-      };
+    async streamStatus({ emit } = {}) {
+      return readyStatusCache.remember(await inspectBootstrap({
+        emit
+      }));
     },
 
     async repair(input = {}) {
@@ -984,7 +1068,8 @@ function createService({ studioRoot = "" } = {}) {
           args,
           command: "bash",
           commandPreview: buildToolchainRepair().commandPreview,
-          cwd: resolvedStudioRoot
+          cwd: resolvedStudioRoot,
+          namespace: TERMINAL_NAMESPACE
         });
       }
 
@@ -994,7 +1079,8 @@ function createService({ studioRoot = "" } = {}) {
         return startTerminalSession({
           args,
           command: "bash",
-          commandPreview: mysqlRepair().commandPreview
+          commandPreview: mysqlRepair().commandPreview,
+          namespace: TERMINAL_NAMESPACE
         });
       }
 
@@ -1003,7 +1089,8 @@ function createService({ studioRoot = "" } = {}) {
         return startTerminalSession({
           args,
           command: "docker",
-          commandPreview: commandPreview(args)
+          commandPreview: commandPreview(args),
+          namespace: TERMINAL_NAMESPACE
         });
       }
 
@@ -1016,7 +1103,8 @@ function createService({ studioRoot = "" } = {}) {
         return startTerminalSession({
           args,
           command: "docker",
-          commandPreview: commandPreview(args)
+          commandPreview: commandPreview(args),
+          namespace: TERMINAL_NAMESPACE
         });
       }
 
@@ -1025,7 +1113,8 @@ function createService({ studioRoot = "" } = {}) {
         return startTerminalSession({
           args,
           command: "docker",
-          commandPreview: commandPreview(args)
+          commandPreview: commandPreview(args),
+          namespace: TERMINAL_NAMESPACE
         });
       }
 
@@ -1034,7 +1123,8 @@ function createService({ studioRoot = "" } = {}) {
         return startTerminalSession({
           args,
           command: "docker",
-          commandPreview: commandPreview(args)
+          commandPreview: commandPreview(args),
+          namespace: TERMINAL_NAMESPACE
         });
       }
 
@@ -1047,7 +1137,8 @@ function createService({ studioRoot = "" } = {}) {
         return startTerminalSession({
           args,
           command: "docker",
-          commandPreview: commandPreview(args)
+          commandPreview: commandPreview(args),
+          namespace: TERMINAL_NAMESPACE
         });
       }
 
@@ -1060,7 +1151,8 @@ function createService({ studioRoot = "" } = {}) {
         return startTerminalSession({
           args,
           command: "docker",
-          commandPreview: commandPreview(args)
+          commandPreview: commandPreview(args),
+          namespace: TERMINAL_NAMESPACE
         });
       }
 
@@ -1071,15 +1163,15 @@ function createService({ studioRoot = "" } = {}) {
     },
 
     readTerminal(sessionId) {
-      return readTerminalSession(sessionId);
+      return readTerminalSession(sessionId, { namespace: TERMINAL_NAMESPACE });
     },
 
     writeTerminal(sessionId, data) {
-      return writeTerminalSession(sessionId, data);
+      return writeTerminalSession(sessionId, data, { namespace: TERMINAL_NAMESPACE });
     },
 
     closeTerminal(sessionId) {
-      return closeTerminalSession(sessionId);
+      return closeTerminalSession(sessionId, { namespace: TERMINAL_NAMESPACE });
     }
   });
 }

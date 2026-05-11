@@ -49,6 +49,8 @@
       rounded
     />
 
+    <IssueSessionPanel v-if="currentApp" :key="issueSessionPanelKey" />
+
     <div v-if="currentApp" class="studio-screen__summary-grid">
       <v-sheet rounded="lg" border class="studio-screen__panel">
         <p class="text-caption text-medium-emphasis mb-1">Root path</p>
@@ -190,17 +192,22 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
-import { mdiRefresh } from "@mdi/js";
 import {
+  mdiRefresh
+} from "@mdi/js";
+import {
+  consumeStudioGate,
   readCurrentApp,
   resolveStudioGate
 } from "@/lib/studioApi.js";
+import IssueSessionPanel from "@/components/studio/IssueSessionPanel.vue";
 
 const router = useRouter();
 const gateLoading = ref(false);
 const currentApp = ref(null);
 const currentAppLoading = ref(false);
 const currentAppError = ref("");
+const issueSessionPanelKey = ref(0);
 
 const appNameLabel = computed(() => {
   return currentApp.value?.packageJson?.name || "loading";
@@ -282,12 +289,14 @@ async function loadHome() {
   gateLoading.value = true;
   currentAppError.value = "";
   try {
-    const gate = await resolveStudioGate();
+    const gate = consumeStudioGate("/home") || await resolveStudioGate();
     if (gate.route !== "/home") {
       await router.replace(gate.route || "/bootup");
       return;
     }
+    consumeStudioGate("/home");
     await loadCurrentApp();
+    issueSessionPanelKey.value += 1;
   } catch (loadError) {
     currentAppError.value = String(loadError?.message || loadError || "Studio readiness check failed.");
   } finally {
@@ -390,5 +399,6 @@ onMounted(() => {
   .studio-screen {
     max-width: 100%;
   }
+
 }
 </style>

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { spawnSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 
@@ -17,6 +18,15 @@ import {
 import {
   terminalInputValidator
 } from "../../packages/target-app-doctor/src/server/inputSchemas.js";
+
+function assertShellScriptSurvivesWhitespaceCollapse(script) {
+  const flattened = script.replace(/\s+/gu, " ");
+  const result = spawnSync("bash", ["-n", "-c", flattened], {
+    encoding: "utf8"
+  });
+
+  assert.equal(result.status, 0, result.stderr || flattened);
+}
 
 test("Target App Doctor readiness requires every required check to pass", () => {
   assert.equal(isTargetAppReady([
@@ -43,20 +53,25 @@ test("Target App Doctor repair commands stay explicit", () => {
   assert.deepEqual(identityRepair.fields.map((field) => field.id), ["name", "email"]);
   assert.match(identityRepair.commandPreview, /git config --global user\.name/u);
   assert.equal(ghRepair.kind, "terminal");
-  assert.equal(ghRepair.label, "Create GitHub repo");
+  assert.equal(ghRepair.label, "Create/link GitHub repo");
   assert.match(ghRepair.commandPreview, /gh repo create/u);
   assert.match(ghRepair.commandPreview, /--private/u);
   assert.match(ghRepair.commandPreview, /git rev-parse --verify HEAD/u);
   assert.equal(repoNameFromTargetRoot(targetRoot), "Example-Target-App");
 });
 
-test("Target App Doctor GitHub repo repair only pushes when commits exist", () => {
+test("Target App Doctor GitHub repo repair links existing repos and only pushes when commits exist", () => {
   const script = ghRepoCreateScript("example-target-app");
 
+  assert.match(script, /owner=\$\(gh api user --jq \.login\)/u);
+  assert.match(script, /gh repo view "\$repo_slug" --json url/u);
+  assert.match(script, /git remote add origin "\$repo_url"/u);
+  assert.match(script, /Linked existing GitHub repository/u);
   assert.match(script, /if git rev-parse --verify HEAD/u);
   assert.match(script, /--push/u);
   assert.match(script, /linked origin without pushing/u);
-  assert.match(script, /gh repo create example-target-app --source=\. --remote=origin --private\n/u);
+  assert.match(script, /gh repo create "\$repo_name" --source=\. --remote=origin --private/u);
+  assertShellScriptSurvivesWhitespaceCollapse(script);
 });
 
 test("Target App Doctor terminal input preserves enter/control characters", () => {

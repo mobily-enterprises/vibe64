@@ -4,6 +4,13 @@ import path from "node:path";
 import process from "node:process";
 import { promisify } from "node:util";
 import { loadAppConfigFromAppRoot } from "@jskit-ai/kernel/server/support";
+import {
+  abandonSession,
+  createSession,
+  inspectSessionDetails,
+  listSessions,
+  runSessionStep
+} from "@jskit-ai/jskit-cli/server";
 
 const execFileAsync = promisify(execFile);
 
@@ -367,6 +374,56 @@ function createService({ appRoot = "" } = {}) {
       void options;
       return inspectCurrentApp(inspectionRoot, {
         includeGit: input?.includeGit !== false
+      });
+    },
+
+    async listIssueSessions() {
+      return listSessions({
+        targetRoot: inspectionRoot
+      });
+    },
+
+    async createIssueSession() {
+      return createSession({
+        targetRoot: inspectionRoot
+      });
+    },
+
+    async inspectIssueSession(sessionId) {
+      return inspectSessionDetails({
+        targetRoot: inspectionRoot,
+        sessionId
+      });
+    },
+
+    async runIssueSessionStep(sessionId, input = {}) {
+      const response = await runSessionStep({
+        targetRoot: inspectionRoot,
+        sessionId,
+        options: {
+          issue: input?.issue,
+          prompt: input?.prompt,
+          userCheck: input?.userCheck
+        }
+      });
+      const details = await inspectSessionDetails({
+        targetRoot: inspectionRoot,
+        sessionId
+      });
+      return {
+        ...details,
+        errors: response.errors || details.errors || [],
+        ok: response.ok,
+        preconditions: response.preconditions || details.preconditions || [],
+        prompt: response.prompt || details.prompt || "",
+        status: response.status || details.status
+      };
+    },
+
+    async abandonIssueSession(sessionId) {
+      return abandonSession({
+        targetRoot: inspectionRoot,
+        sessionId
       });
     }
   });

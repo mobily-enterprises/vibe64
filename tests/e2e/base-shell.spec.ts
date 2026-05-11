@@ -199,7 +199,7 @@ const blockedTargetAppPayload = {
       repair: {
         kind: "terminal",
         actionId: "terminal-gh-create-repo",
-        label: "Create GitHub repo",
+        label: "Create/link GitHub repo",
         commandPreview: "gh repo create example-target-app --source=. --remote=origin --private --push"
       }
     }
@@ -228,6 +228,156 @@ const readyTargetAppPayload = {
       expected: "Target root is inside a git work tree.",
       observed: "true",
       explanation: "Git is available for the target app."
+    }
+  ]
+};
+
+const blockedAppSetupPayload = {
+  ready: false,
+  targetRoot: "/workspace/example-target-app",
+  currentStageId: "scaffold",
+  hardStop: false,
+  stages: [
+    {
+      id: "directory",
+      label: "Directory admissibility",
+      status: "pass",
+      required: true,
+      expected: "Target directory is empty or already a Git repository.",
+      observed: ".git directory exists.",
+      explanation: "Studio can continue with Git safety checks."
+    },
+    {
+      id: "git-ready",
+      label: "Git ready",
+      status: "pass",
+      required: true,
+      expected: "A non-bare Git repository exists with a named branch.",
+      observed: "Branch: main",
+      explanation: "Git has the minimum local shape Studio needs."
+    },
+    {
+      id: "remote-ready",
+      label: "Remote ready",
+      status: "pass",
+      required: true,
+      expected: "origin points at an accessible GitHub repository.",
+      observed: "merc/example-target-app",
+      explanation: "gh can inspect the repository Studio will use for issues and PRs."
+    },
+    {
+      id: "remote-sync",
+      label: "Remote/local sync",
+      status: "pass",
+      required: true,
+      expected: "Local and remote histories are not divergent.",
+      observed: "No local commits and remote has no default branch.",
+      explanation: "This is a fresh repository pair."
+    },
+    {
+      id: "scaffold",
+      label: "Initial JSKIT scaffold",
+      status: "blocked",
+      required: true,
+      expected: "Minimal JSKIT scaffold markers exist.",
+      observed: "No scaffold files are present yet.",
+      explanation: "Create the smallest JSKIT app scaffold before installing dependencies or running doctor.",
+      repair: {
+        kind: "terminal",
+        actionId: "terminal-scaffold-jskit",
+        label: "Create JSKIT scaffold",
+        commandPreview: "npx @jskit-ai/create-app example-target-app --target . --tenancy-mode none"
+      }
+    },
+    {
+      id: "dependencies",
+      label: "Dependencies runnable",
+      status: "pending",
+      required: true,
+      expected: "Node dependencies are installed enough to run JSKIT commands.",
+      observed: "Waiting for previous stage.",
+      explanation: "This stage runs after the previous required stages pass."
+    },
+    {
+      id: "runtime-services",
+      label: "Runtime services",
+      status: "pending",
+      required: true,
+      expected: "Only runtime services required by the target app are reachable.",
+      observed: "Waiting for previous stage.",
+      explanation: "This stage runs after the previous required stages pass."
+    },
+    {
+      id: "jskit-doctor",
+      label: "JSKIT doctor",
+      status: "pending",
+      required: true,
+      expected: "The official JSKIT verification command passes.",
+      observed: "Waiting for previous stage.",
+      explanation: "This stage runs after the previous required stages pass."
+    },
+    {
+      id: "git-checkpoint",
+      label: "Git checkpoint",
+      status: "pending",
+      required: true,
+      expected: "Working tree is clean after setup changes.",
+      observed: "Waiting for previous stage.",
+      explanation: "This stage runs after the previous required stages pass."
+    },
+    {
+      id: "ready",
+      label: "Ready",
+      status: "pending",
+      required: true,
+      expected: "The target app is ready for Studio workflows.",
+      observed: "Waiting for previous stage.",
+      explanation: "This stage runs after the previous required stages pass."
+    }
+  ]
+};
+
+const readyAppSetupPayload = {
+  ready: true,
+  targetRoot: "/workspace/example-target-app",
+  currentStageId: "",
+  hardStop: false,
+  stages: [
+    {
+      id: "directory",
+      label: "Directory admissibility",
+      status: "pass",
+      required: true,
+      expected: "Target directory is empty or already a Git repository.",
+      observed: ".git directory exists.",
+      explanation: "Studio can continue with Git safety checks."
+    },
+    {
+      id: "jskit-doctor",
+      label: "JSKIT doctor",
+      status: "pass",
+      required: true,
+      expected: "Official JSKIT verification passes.",
+      observed: "Verification passed.",
+      explanation: "The target app passes the authoritative JSKIT readiness check."
+    },
+    {
+      id: "git-checkpoint",
+      label: "Git checkpoint",
+      status: "pass",
+      required: true,
+      expected: "Working tree is clean after setup changes.",
+      observed: "Clean",
+      explanation: "Setup changes have been committed or there were no setup changes."
+    },
+    {
+      id: "ready",
+      label: "Ready",
+      status: "pass",
+      required: true,
+      expected: "The target app is ready for Studio workflows.",
+      observed: "All setup stages passed.",
+      explanation: "Studio can now inspect and operate on this app."
     }
   ]
 };
@@ -284,12 +434,66 @@ const currentAppPayload = {
   }
 };
 
+function sseStatusPayload(status, itemsKey = "checks") {
+  const items = Array.isArray(status?.[itemsKey]) ? status[itemsKey] : [];
+  const events = [
+    ["run.started", {}],
+    ...items.flatMap((item) => [
+      ["check.started", {
+        id: item.id,
+        label: item.label
+      }],
+      ["check.finished", {
+        check: item,
+        id: item.id,
+        label: item.label,
+        status: item.status
+      }]
+    ]),
+    ["run.finished", {
+      status
+    }]
+  ];
+
+  return events
+    .map(([event, data]) => `event: ${event}\ndata: ${JSON.stringify(data)}\n`)
+    .join("\n");
+}
+
+async function fulfillSse(route, status, itemsKey = "checks") {
+  await route.fulfill({
+    contentType: "text/event-stream",
+    body: sseStatusPayload(status, itemsKey)
+  });
+}
+
+function trackStudioApiRequests(page) {
+  const requests: string[] = [];
+
+  page.on("request", (request) => {
+    const pathname = new URL(request.url()).pathname;
+    if (pathname.includes("/api/studio/")) {
+      requests.push(pathname);
+    }
+  });
+
+  return {
+    count(pathname: string) {
+      return requests.filter((requestPathname) => requestPathname === pathname).length;
+    },
+    requests
+  };
+}
+
 async function mockBootstrapBlocked(page) {
   await page.route("**/api/studio/bootstrap", async (route) => {
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify(blockedBootstrapPayload)
     });
+  });
+  await page.route("**/api/studio/bootstrap/stream", async (route) => {
+    await fulfillSse(route, blockedBootstrapPayload);
   });
 }
 
@@ -300,11 +504,17 @@ async function mockTargetAppBlocked(page) {
       body: JSON.stringify(readyBootstrapPayload)
     });
   });
+  await page.route("**/api/studio/bootstrap/stream", async (route) => {
+    await fulfillSse(route, readyBootstrapPayload);
+  });
   await page.route("**/api/studio/target-app", async (route) => {
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify(blockedTargetAppPayload)
     });
+  });
+  await page.route("**/api/studio/target-app/stream", async (route) => {
+    await fulfillSse(route, blockedTargetAppPayload);
   });
 }
 
@@ -315,10 +525,25 @@ async function mockStudioReady(page) {
       body: JSON.stringify(readyBootstrapPayload)
     });
   });
+  await page.route("**/api/studio/bootstrap/stream", async (route) => {
+    await fulfillSse(route, readyBootstrapPayload);
+  });
   await page.route("**/api/studio/target-app", async (route) => {
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify(readyTargetAppPayload)
+    });
+  });
+  await page.route("**/api/studio/target-app/stream", async (route) => {
+    await fulfillSse(route, readyTargetAppPayload);
+  });
+  await page.route("**/api/studio/app-setup/stream", async (route) => {
+    await fulfillSse(route, readyAppSetupPayload, "stages");
+  });
+  await page.route("**/api/studio/app-setup", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify(readyAppSetupPayload)
     });
   });
   await page.route("**/api/studio/current-app", async (route) => {
@@ -326,6 +551,36 @@ async function mockStudioReady(page) {
       contentType: "application/json",
       body: JSON.stringify(currentAppPayload)
     });
+  });
+}
+
+async function mockAppSetupBlocked(page) {
+  await page.route("**/api/studio/bootstrap", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify(readyBootstrapPayload)
+    });
+  });
+  await page.route("**/api/studio/bootstrap/stream", async (route) => {
+    await fulfillSse(route, readyBootstrapPayload);
+  });
+  await page.route("**/api/studio/target-app", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify(readyTargetAppPayload)
+    });
+  });
+  await page.route("**/api/studio/target-app/stream", async (route) => {
+    await fulfillSse(route, readyTargetAppPayload);
+  });
+  await page.route("**/api/studio/app-setup", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify(blockedAppSetupPayload)
+    });
+  });
+  await page.route("**/api/studio/app-setup/stream", async (route) => {
+    await fulfillSse(route, blockedAppSetupPayload, "stages");
   });
 }
 
@@ -368,7 +623,7 @@ test.describe("bootstrap doctor responsive smoke", () => {
       await mockBootstrapBlocked(page);
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       await page.goto(`${BASE_URL}/bootup`);
-      await expect(page.getByRole("heading", { name: "Bootup" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Bootup", exact: true })).toBeVisible();
       await expect(page.getByText("Bootup blocked").first()).toBeVisible();
       await expect(page.getByText("MySQL capability").first()).toBeVisible();
       await expect(page.getByText("Managed toolchain image").first()).toBeVisible();
@@ -393,7 +648,7 @@ test.describe("target app doctor responsive smoke", () => {
       await mockTargetAppBlocked(page);
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       await page.goto(`${BASE_URL}/app-bootup`);
-      await expect(page.getByRole("heading", { name: "App Bootup" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "App Bootup", exact: true })).toBeVisible();
       await expect(page.getByText("Target app blocked").first()).toBeVisible();
       await expect(page.getByText("Target directory").first()).toBeVisible();
       await expect(page.getByText("Target identity").first()).toBeVisible();
@@ -402,7 +657,7 @@ test.describe("target app doctor responsive smoke", () => {
       await expect(page.getByText("GitHub repository").first()).toBeVisible();
       await expect(page.getByText("Initialize Git").first()).toBeVisible();
       await expect(page.getByText("Set Git identity").first()).toBeVisible();
-      await expect(page.getByText("Create GitHub repo").first()).toBeVisible();
+      await expect(page.getByText("Create/link GitHub repo").first()).toBeVisible();
       await expect(page.locator(".target-app-doctor .bootstrap-doctor__status-icon")).toHaveCount(
         blockedTargetAppPayload.checks.length
       );
@@ -428,26 +683,101 @@ test.describe("target app doctor responsive smoke", () => {
   }
 });
 
+test.describe("app setup doctor responsive smoke", () => {
+  for (const viewport of viewports) {
+    test(`${viewport.name} app setup gate renders sequential stages`, async ({ page }) => {
+      await mockAppSetupBlocked(page);
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await page.goto(`${BASE_URL}/app-setup`);
+      await expect(page.getByRole("heading", { name: "App Setup", exact: true })).toBeVisible();
+      await expect(page.getByText("App setup blocked").first()).toBeVisible();
+      await expect(page.getByText("Directory admissibility").first()).toBeVisible();
+      await expect(page.getByText("Remote/local sync").first()).toBeVisible();
+      await expect(page.getByText("Initial JSKIT scaffold").first()).toBeVisible();
+      await expect(page.getByText("Dependencies runnable").first()).toBeVisible();
+      await expect(page.getByText("JSKIT doctor").first()).toBeVisible();
+      await expect(page.getByText("Git checkpoint").first()).toBeVisible();
+      await expect(page.getByRole("button", { name: "Create JSKIT scaffold" })).toBeVisible();
+      await expect(page.locator(".app-setup-doctor .bootstrap-doctor__status-icon")).toHaveCount(
+        blockedAppSetupPayload.stages.length
+      );
+      const scaffoldFactLine = page.locator(".app-setup-doctor .bootstrap-doctor__fact-line").nth(4);
+      await expect(scaffoldFactLine).toContainText("Expected:");
+      await expect(scaffoldFactLine).toContainText("Observed:");
+      await expectGeneratedScreenContract(page);
+      await expectVisibleTapTargets(page);
+      await expectNoHorizontalOverflow(page);
+    });
+  }
+});
+
 test.describe("studio gate redirects", () => {
   test("root redirects to bootup when machine bootup is blocked", async ({ page }) => {
+    const apiRequests = trackStudioApiRequests(page);
     await mockBootstrapBlocked(page);
     await page.goto(`${BASE_URL}/`);
     await expect(page).toHaveURL(/\/bootup$/u);
     await expect(page.getByRole("heading", { name: "Bootup", exact: true })).toBeVisible();
+    expect(apiRequests.count("/api/studio/bootstrap")).toBe(1);
+    expect(apiRequests.count("/api/studio/bootstrap/stream")).toBe(0);
   });
 
   test("home redirects to app bootup when target app bootup is blocked", async ({ page }) => {
+    const apiRequests = trackStudioApiRequests(page);
     await mockTargetAppBlocked(page);
     await page.goto(`${BASE_URL}/home`);
     await expect(page).toHaveURL(/\/app-bootup$/u);
-    await expect(page.getByRole("heading", { name: "App Bootup" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "App Bootup", exact: true })).toBeVisible();
+    expect(apiRequests.count("/api/studio/bootstrap")).toBe(1);
+    expect(apiRequests.count("/api/studio/target-app")).toBe(1);
+    expect(apiRequests.count("/api/studio/target-app/stream")).toBe(0);
   });
 
-  test("root redirects to home when both bootup gates are ready", async ({ page }) => {
+  test("home redirects to app setup when setup is blocked", async ({ page }) => {
+    const apiRequests = trackStudioApiRequests(page);
+    await mockAppSetupBlocked(page);
+    await page.goto(`${BASE_URL}/home`);
+    await expect(page).toHaveURL(/\/app-setup$/u);
+    await expect(page.getByRole("heading", { name: "App Setup", exact: true })).toBeVisible();
+    expect(apiRequests.count("/api/studio/bootstrap")).toBe(1);
+    expect(apiRequests.count("/api/studio/target-app")).toBe(1);
+    expect(apiRequests.count("/api/studio/app-setup")).toBe(1);
+    expect(apiRequests.count("/api/studio/app-setup/stream")).toBe(0);
+  });
+
+  test("root redirects to home when every bootup gate is ready", async ({ page }) => {
+    const apiRequests = trackStudioApiRequests(page);
     await mockStudioReady(page);
     await page.goto(`${BASE_URL}/`);
     await expect(page).toHaveURL(/\/home$/u);
     await expect(page.getByRole("heading", { name: "Home" })).toBeVisible();
     await expect(page.getByText("example-target-app").first()).toBeVisible();
+    expect(apiRequests.count("/api/studio/bootstrap")).toBe(1);
+    expect(apiRequests.count("/api/studio/target-app")).toBe(1);
+    expect(apiRequests.count("/api/studio/app-setup")).toBe(1);
+    expect(apiRequests.count("/api/studio/current-app")).toBe(1);
+  });
+
+  test("direct app bootup runs the target app doctor stream once", async ({ page }) => {
+    const apiRequests = trackStudioApiRequests(page);
+    await mockTargetAppBlocked(page);
+    await page.goto(`${BASE_URL}/app-bootup`);
+    await expect(page.getByRole("heading", { name: "App Bootup", exact: true })).toBeVisible();
+    await expect(page.getByText("Target app blocked").first()).toBeVisible();
+    expect(apiRequests.count("/api/studio/bootstrap")).toBe(1);
+    expect(apiRequests.count("/api/studio/target-app")).toBe(0);
+    expect(apiRequests.count("/api/studio/target-app/stream")).toBe(1);
+  });
+
+  test("direct app setup runs the app setup doctor stream once", async ({ page }) => {
+    const apiRequests = trackStudioApiRequests(page);
+    await mockAppSetupBlocked(page);
+    await page.goto(`${BASE_URL}/app-setup`);
+    await expect(page.getByRole("heading", { name: "App Setup", exact: true })).toBeVisible();
+    await expect(page.getByText("App setup blocked").first()).toBeVisible();
+    expect(apiRequests.count("/api/studio/bootstrap")).toBe(1);
+    expect(apiRequests.count("/api/studio/target-app")).toBe(1);
+    expect(apiRequests.count("/api/studio/app-setup")).toBe(0);
+    expect(apiRequests.count("/api/studio/app-setup/stream")).toBe(1);
   });
 });

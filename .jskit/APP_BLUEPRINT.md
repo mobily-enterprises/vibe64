@@ -8,6 +8,7 @@
 - First-run rule: Studio must gate all project functionality behind a mandatory Bootstrap Doctor at `/bootup`. If the bootstrap runtime is not fully healthy, `/` and `/home` redirect to `/bootup`.
 - Root rule: the controlled project root is the launcher/invocation directory, not necessarily the Studio implementation directory. If the Studio executable has to start the server from the Studio app root, the launcher must preserve the original project root in `JSKIT_STUDIO_TARGET_ROOT`.
 - Target-readiness rule: after Bootstrap Doctor passes and before any app inspection, Studio must run Target App Doctor at `/app-bootup` to prove target identity, filesystem access, Git state, and GitHub control capability without reading app metadata.
+- App-setup rule: after Target App Doctor passes and before `/home`, Studio must run App Setup Doctor at `/app-setup` to make the target root a doctor-ready JSKIT app without duplicating `jskit app verify`.
 
 ## Platform Choices
 
@@ -36,11 +37,12 @@
 | --- | --- | --- | --- |
 | BootstrapEnvironment | Machine-level runtime readiness for Studio | public | Checks Docker/runtime ability to provide MySQL capability, Node 22, npm, git, GH auth, and Codex auth before project work begins. |
 | TargetAppReadiness | Pre-inspection Git/GitHub readiness for the target root | public | Derived from target path, Git, and GitHub CLI checks; blocks app inspection and edits until ready or repaired. |
+| AppSetupReadiness | Sequential setup state for the target app | public | Derived from filesystem, Git/GitHub remote state, JSKIT scaffold markers, local dependencies, runtime service needs, and `jskit app verify`. |
 | CurrentApp | Runtime snapshot of the target project root | public | Derived from filesystem and git on request; not persisted. The target root comes from the invocation directory or `JSKIT_STUDIO_TARGET_ROOT`, not from a stored project list. |
 
 ## Route And Screen Plan
 
-- Home/global routes: `/` redirects to the first incomplete gate, `/bootup` shows machine/runtime bootstrap, `/app-bootup` shows target Git/GitHub readiness after machine bootstrap passes, and `/home` shows Current App inspection only after both gates pass.
+- Home/global routes: `/` redirects to the first incomplete gate, `/bootup` shows machine/runtime bootstrap, `/app-bootup` shows target Git/GitHub readiness after machine bootstrap passes, `/app-setup` turns the target into a doctor-ready JSKIT app, and `/home` shows Current App inspection only after all gates pass.
 - Account routes: none.
 - Console routes: none.
 - Workspace app routes: none.
@@ -48,7 +50,7 @@
 
 ## Package Plan
 
-- Baseline runtime packages: `@jskit-ai/shell-web`, `@local/main`, `@local/bootstrap-doctor`, `@local/target-app-doctor`, `@local/current-app`.
+- Baseline runtime packages: `@jskit-ai/shell-web`, `@local/main`, `@local/bootstrap-doctor`, `@local/target-app-doctor`, `@local/app-setup-doctor`, `@local/current-app`.
 - Optional runtime packages: none for V0.
 - Generator packages to use: `feature-server-generator` for Bootstrap Doctor, Target App Doctor, and Current App endpoints.
 - Package-owned workflows to accept as baseline: base JSKIT app runtime.
@@ -58,7 +60,7 @@
 
 - CRUDs to scaffold: none.
 - Non-CRUD pages to scaffold: none; adapt the existing generated home page.
-- Custom code areas: bootstrap runtime checks, target app Git/GitHub readiness checks, current-app server inspection service, and gated home page UI.
+- Custom code areas: bootstrap runtime checks, target app Git/GitHub readiness checks, app setup orchestration checks, current-app server inspection service, and gated home page UI.
 
 ## Bootstrap Runtime Plan
 
@@ -80,6 +82,16 @@
 - Blocking behavior: target root equal to Studio root, target repo equal to Studio repo, dirty working tree, missing Git identity, missing GH auth, and unreachable GitHub remote keep Studio in Target App Doctor mode.
 - Boundary: creating issues/PRs and app-specific DB/table checks belong to later stages, after Target App Doctor and app inspection.
 
+## App Setup Doctor Plan
+
+- Scope: sequential target setup after machine and target-control gates are ready. This stage may read project setup files because it is explicitly about making the current directory app-ready.
+- Authority boundary: Studio does not duplicate JSKIT internals. It only checks the safe outer state needed to run `jskit app verify`; the final JSKIT Doctor stage owns app correctness.
+- Admissible starting states: an empty directory with no `.git`, or an existing coherent Git repository. A directory with files but no `.git` is a hard stop.
+- Hard stops: linked worktrees/submodule-style `.git` files, bare repos, detached/unknown branches, non-GitHub `origin`, inaccessible GitHub repositories, local/remote history divergence, remote content not mirrored locally, malformed `.jskit/lock.json`, and existing non-JSKIT files where the generator would overwrite user-owned work.
+- Sequential stages: Directory admissibility, Git ready, Remote ready, Remote/local sync, Initial JSKIT scaffold, Dependencies runnable, Runtime services, JSKIT doctor, Ready.
+- Repair behavior: offer terminal actions for `git init`, GitHub repo creation/linking, JSKIT scaffold creation, `npm install` followed immediately by `npm run devlinks` when that script exists, app database creation when a database runtime is actually installed, and explicit JSKIT doctor runs.
+- Database boundary: fresh minimal scaffolds do not require a database. Database checks only run when the target app has a JSKIT database runtime installed; Studio itself still has no database.
+
 ## CRUD Planning
 
 | CRUD | Operations | List Fields | View Form Shape | Edit/New Form Shape | Notes |
@@ -92,12 +104,13 @@
 | --- | --- | --- | --- | --- |
 | Bootstrap Doctor | Block Studio behind machine runtime checks for Docker, MySQL capability, Node 22, npm, git, GH, and Codex. | Generated server package plus gated shell-web UI | Base scaffold | `/bootup` shows bootstrap status, all checks return structured pass/fail data, project UI is unavailable until every required check passes, and tests/Playwright verify the blocked bootstrap screen. |
 | Target App Doctor | Block app inspection behind target identity and Git/GitHub readiness. | Generated server package plus gated shell-web UI | Bootstrap Doctor | `/app-bootup` shows target readiness after bootstrap, terminal repair actions are available for missing Git/GitHub setup, and Current App inspection is unavailable until every required check passes. |
+| App Setup Doctor | Sequentially make the target root a doctor-ready JSKIT app. | Generated-style server package plus gated shell-web UI | Target App Doctor | `/app-setup` shows sequential setup stages, hard-stops unsafe Git/filesystem states, repairs safe missing setup through terminal actions, and only passes after JSKIT doctor passes. |
 | Current App inspection | Show current-directory JSKIT metadata on `/home` from a local endpoint. | Generated server package plus UI adaptation | Base scaffold | Endpoint returns filesystem/git metadata, UI displays loading/error/empty states, tests and UI verification pass. |
 
 ## Verification
 
 - Commands to run: `npm run lint`, `npm test`, `npm run test:client`, `npm run build`, targeted Playwright for Current App UI, `npx jskit app verify-ui ...`.
-- Playwright coverage plan: load `/bootup`, `/app-bootup`, and `/home` at compact, medium, and expanded widths where applicable; assert redirects land on the first incomplete gate and no horizontal overflow occurs.
+- Playwright coverage plan: load `/bootup`, `/app-bootup`, `/app-setup`, and `/home` at compact, medium, and expanded widths where applicable; assert redirects land on the first incomplete gate and no horizontal overflow occurs.
 - Test auth strategy: none; V0 has no auth.
 - UI review expectations: dense local operator UI with clear status, scripts, packages, surfaces, runtime needs, and git status.
 - Known open questions: Podman support, ephemeral startup token, command runner, persistent job logs, and ready-state UI verification after a real managed bootstrap are later chunks.

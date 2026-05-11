@@ -34,6 +34,7 @@
     "@jskit-ai/kernel": "0.x",
     "@jskit-ai/shell-web": "0.x",
     "@local/bootstrap-doctor": "file:packages/bootstrap-doctor",
+    "@local/app-setup-doctor": "file:packages/app-setup-doctor",
     "@local/current-app": "file:packages/current-app",
     "@local/main": "file:packages/main",
     "@local/target-app-doctor": "file:packages/target-app-doctor",

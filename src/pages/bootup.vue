@@ -13,13 +13,16 @@ import { computed, onMounted, ref } from "vue";
 import ShellLayout from "@/components/ShellLayout.vue";
 import DoctorStatusPage from "@/components/studio/DoctorStatusPage.vue";
 import {
+  BOOTSTRAP_STREAM_ENDPOINT,
   BOOTSTRAP_TERMINAL_ENDPOINT,
+  consumeStudioGate,
   readBootstrapStatus
 } from "@/lib/studioApi.js";
 
 const bootstrap = ref(null);
 const loading = ref(false);
 const error = ref("");
+const streamAutoStart = ref(false);
 
 const lede = computed(() => {
   if (bootstrap.value?.ready) {
@@ -41,8 +44,15 @@ async function loadBootstrap() {
 }
 
 onMounted(() => {
-  void loadBootstrap();
+  const gate = consumeStudioGate("/bootup");
+  if (gate?.bootstrap) {
+    bootstrap.value = gate.bootstrap;
+    streamAutoStart.value = false;
+    return;
+  }
+  streamAutoStart.value = true;
 });
+
 </script>
 
 <template>
@@ -53,6 +63,9 @@ onMounted(() => {
       :status="bootstrap"
       :loading="loading"
       :error="error"
+      :stream-enabled="true"
+      :stream-endpoint="BOOTSTRAP_STREAM_ENDPOINT"
+      :stream-auto-start="streamAutoStart"
       :terminal-endpoint="BOOTSTRAP_TERMINAL_ENDPOINT"
       blocked-label="Bootup blocked"
       ready-label="Bootup ready"
@@ -62,6 +75,7 @@ onMounted(() => {
       continue-to="/app-bootup"
       :always-repair-check-ids="['gh-auth', 'codex-auth']"
       @refresh="loadBootstrap"
+      @status-updated="bootstrap = $event"
     />
   </ShellLayout>
 </template>
