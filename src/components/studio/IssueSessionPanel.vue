@@ -82,7 +82,10 @@
             </div>
             <div class="studio-issue-sessions__step-copy">
               <div class="studio-issue-sessions__step-title">
-                <span>{{ step.index + 1 }}. {{ step.label }}</span>
+                <span>
+                  {{ step.index + 1 }}.
+                  {{ completedStepIds.has(step.id) ? "Done: " : "Goal: " }}{{ step.label }}
+                </span>
                 <v-chip size="x-small" variant="tonal">{{ step.kind }}</v-chip>
               </div>
 

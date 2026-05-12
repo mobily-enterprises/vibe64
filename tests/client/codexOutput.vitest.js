@@ -5,6 +5,7 @@ import {
   codexTrustPromptLooksActive,
   extractCodexThreadId,
   extractMarkedOutput,
+  isPlaceholderMarkedOutput,
   isCodexThreadId,
   stripTerminalControlSequences
 } from "../../src/lib/codexOutput.js";
@@ -36,6 +37,14 @@ describe("codex output extraction", () => {
 
   it("returns an empty string until the complete marker pair exists", () => {
     expect(extractMarkedOutput("[issue_text]\n# Missing close", "issue_text")).toBe("");
+  });
+
+  it("ignores placeholder-only marked output from injected prompts", () => {
+    expect(isPlaceholderMarkedOutput("<short issue title>")).toBe(true);
+    expect(extractMarkedOutput("[issue_title]\n<short issue title>\n[/issue_title]", "issue_title", {
+      formatHint: "text"
+    })).toBe("");
+    expect(extractMarkedOutput("[issue_text]\n<issue body in Markdown>\n[/issue_text]", "issue_text")).toBe("");
   });
 
   it("cleans Codex terminal chrome from single-line marked output", () => {

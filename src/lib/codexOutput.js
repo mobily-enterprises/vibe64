@@ -38,6 +38,10 @@ function normalizeMarkedOutput(value, options = {}) {
   return output;
 }
 
+function isPlaceholderMarkedOutput(value) {
+  return /^<[^>\r\n]+>$/u.test(String(value || "").trim());
+}
+
 function extractMarkedOutput(value, marker, options = {}) {
   const normalizedMarker = String(marker || "").trim();
   if (!normalizedMarker) {
@@ -52,7 +56,7 @@ function extractMarkedOutput(value, marker, options = {}) {
   let extracted = "";
   for (const match of source.matchAll(pattern)) {
     const nextValue = normalizeMarkedOutput(match[1], options);
-    if (nextValue) {
+    if (nextValue && !isPlaceholderMarkedOutput(nextValue)) {
       extracted = nextValue;
     }
   }
@@ -104,6 +108,7 @@ export {
   codexTrustPromptLooksActive,
   extractCodexThreadId,
   extractMarkedOutput,
+  isPlaceholderMarkedOutput,
   isCodexThreadId,
   stripTerminalControlSequences
 };

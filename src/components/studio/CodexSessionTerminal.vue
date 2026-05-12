@@ -157,6 +157,7 @@ let terminalResizeHandler = null;
 let terminalSocket = null;
 let terminalSocketOpenPromise = null;
 let terminalReconnectTimer = null;
+let terminalOutputEmitTimer = null;
 let terminalSetupPromise = null;
 let terminalOutputOffset = 0;
 let terminalStartPromise = null;
@@ -174,6 +175,8 @@ const CODEX_BOOT_MIN_AGE_MS = 1800;
 const CODEX_BOOT_QUIET_MS = 900;
 const CODEX_BOOT_TIMEOUT_MS = 12000;
 const CODEX_KEY_PAUSE_MS = 180;
+const MAX_TERMINAL_OUTPUT_LENGTH = 160000;
+const TERMINAL_OUTPUT_EMIT_INTERVAL_MS = 120;
 
 const sessionId = computed(() => props.session?.sessionId || "");
 const canUseTerminal = computed(() => Boolean(sessionId.value && props.session?.worktreeReady === true));
@@ -293,7 +296,47 @@ function handleDocumentPointerDown(event) {
   blurTerminal();
 }
 
+function trimTerminalOutput(output) {
+  const terminalOutput = String(output || "");
+  if (terminalOutput.length <= MAX_TERMINAL_OUTPUT_LENGTH) {
+    return terminalOutput;
+  }
+  return terminalOutput.slice(terminalOutput.length - MAX_TERMINAL_OUTPUT_LENGTH);
+}
+
+function clearTerminalOutputEmit() {
+  if (!terminalOutputEmitTimer) {
+    return;
+  }
+  window.clearTimeout(terminalOutputEmitTimer);
+  terminalOutputEmitTimer = null;
+}
+
+function emitTerminalOutputNow(output = terminalLatestOutput) {
+  clearTerminalOutputEmit();
+  emit("output", output);
+}
+
+function flushTerminalOutputEmit() {
+  if (!terminalOutputEmitTimer) {
+    return;
+  }
+  clearTerminalOutputEmit();
+  emit("output", terminalLatestOutput);
+}
+
+function scheduleTerminalOutputEmit() {
+  if (terminalOutputEmitTimer) {
+    return;
+  }
+  terminalOutputEmitTimer = window.setTimeout(() => {
+    terminalOutputEmitTimer = null;
+    emit("output", terminalLatestOutput);
+  }, TERMINAL_OUTPUT_EMIT_INTERVAL_MS);
+}
+
 function disposeTerminalUi() {
+  flushTerminalOutputEmit();
   closeTerminalSocket();
   if (terminalDataDisposable) {
     terminalDataDisposable.dispose();
@@ -410,8 +453,8 @@ async function setupTerminalUi() {
 }
 
 function writeTerminalOutput(output) {
-  const nextOutput = String(output || "");
-  emit("output", nextOutput);
+  const nextOutput = trimTerminalOutput(output);
+  emitTerminalOutputNow(nextOutput);
   if (nextOutput !== terminalLatestOutput) {
     terminalLatestOutput = nextOutput;
     terminalLastOutputAt = Date.now();
@@ -438,16 +481,16 @@ function appendTerminalOutput(chunk) {
   if (!outputChunk) {
     return;
   }
-  const nextOutput = `${terminalLatestOutput}${outputChunk}`;
-  emit("output", nextOutput);
+  const nextOutput = trimTerminalOutput(`${terminalLatestOutput}${outputChunk}`);
   terminalLatestOutput = nextOutput;
   terminalLastOutputAt = Date.now();
-  terminalHasOutput = stripTerminalControlSequences(nextOutput).trim().length > 0;
+  terminalHasOutput = terminalHasOutput || stripTerminalControlSequences(outputChunk).trim().length > 0;
   void captureCodexThreadFromOutput(nextOutput);
   if (terminalInstance) {
     terminalInstance.write(outputChunk);
   }
   terminalOutputOffset = nextOutput.length;
+  scheduleTerminalOutputEmit();
 }
 
 function closeTerminalSocket() {
@@ -934,7 +977,7 @@ async function recoverMissingTerminal() {
     }
     terminalOutputOffset = 0;
     terminalLatestOutput = "";
-    emit("output", "");
+    emitTerminalOutputNow("");
     terminalHasOutput = false;
     terminalStartedAt = 0;
 
