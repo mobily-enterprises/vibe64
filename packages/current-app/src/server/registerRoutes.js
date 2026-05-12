@@ -93,7 +93,7 @@ function registerRoutes(
       if (!requireLocalCurrentAppRequest(request, reply)) {
         return;
       }
-      reply.code(200).send(await getCurrentAppService(app).listIssueSessions());
+      reply.code(200).send(await getCurrentAppService(app).listIssueSessions(request.query || {}));
     }
   );
 

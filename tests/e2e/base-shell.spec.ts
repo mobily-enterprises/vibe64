@@ -490,12 +490,26 @@ const codexPromptSessionPayload = {
     buttonLabel: "Save issue text",
     description: "Codex should create the issue and return the issue URL.",
     input: {
-      extract: "issue_text",
-      formatHint: "markdown",
-      type: "text",
-      name: "issue",
-      label: "Issue URL",
-      required: true
+      fields: [
+        {
+          extract: "issue_title",
+          formatHint: "text",
+          type: "text",
+          name: "issueTitle",
+          label: "Issue title",
+          required: true
+        },
+        {
+          extract: "issue_text",
+          formatHint: "markdown",
+          multiline: true,
+          type: "text",
+          name: "issue",
+          label: "Issue body",
+          required: true
+        }
+      ],
+      type: "object"
     }
   },
   codex: {
@@ -505,15 +519,35 @@ const codexPromptSessionPayload = {
       extract: "issue_text",
       field: "issue",
       formatHint: "markdown"
-    }
+    },
+    expectedOutputs: [
+      {
+        extract: "issue_title",
+        field: "issueTitle",
+        formatHint: "text",
+        label: "Issue title",
+        required: true
+      },
+      {
+        extract: "issue_text",
+        field: "issue",
+        formatHint: "markdown",
+        label: "Issue body",
+        multiline: true,
+        required: true
+      }
+    ]
   },
   prompt: codexPromptText,
   receipts: [],
+  issueTitle: "",
+  issueText: "",
   errors: [],
   issueUrl: "",
   prUrl: "",
   transcriptLog: "",
-  worktree: sessionWorktreePath(codexPromptSessionId)
+  worktree: sessionWorktreePath(codexPromptSessionId),
+  worktreeReady: true
 };
 const secondCodexPromptSessionPayload = {
   ...codexPromptSessionPayload,
@@ -563,22 +597,51 @@ const codexIssueDraftedPayload = {
       type: "none"
     }
   },
-  issueText: "# Add session UI\n\nMake sessions clearer.",
+  issueTitle: "Add session UI",
+  issueText: "Make sessions clearer.",
   prompt: "",
   status: "running"
 };
 const codexIssueCreatedPayload = {
   ...codexIssueDraftedPayload,
   completedSteps: [...codexIssueDraftedPayload.completedSteps, "issue-created"],
-  currentStep: "implementation-prompt",
+  currentStep: "plan_made",
   currentStepAction: {
-    stepId: "implementation-prompt",
-    kind: "codex_prompt",
-    buttonLabel: "Render implementation prompt",
-    description: "Render the implementation prompt.",
+    stepId: "plan_made",
+    kind: "codex_output",
+    buttonLabel: "Create plan",
+    description: "Create and save the implementation plan.",
     input: {
-      type: "none"
+      extract: "plan",
+      formatHint: "markdown",
+      label: "Approved plan",
+      multiline: true,
+      name: "plan",
+      required: true,
+      type: "text"
     }
+  },
+  codex: {
+    expectedOutput: {
+      extract: "plan",
+      field: "plan",
+      formatHint: "markdown",
+      label: "Plan",
+      multiline: true,
+      required: true
+    },
+    expectedOutputs: [
+      {
+        extract: "plan",
+        field: "plan",
+        formatHint: "markdown",
+        label: "Plan",
+        multiline: true,
+        required: true
+      }
+    ],
+    mode: "inject_prompt",
+    promptField: "prompt"
   },
   issueUrl: "https://github.com/merc/example-target-app/issues/123",
   status: "running"
@@ -666,6 +729,7 @@ async function mockCodexTerminalWebSocket(page, {
     const inputsBySessionId: Record<string, string[]> = {};
     const socketsBySessionId: Record<string, any[]> = {};
     const studioWindow = window as unknown as {
+      __studioFailCodexTerminal: (input: { error?: string; sessionId: string }) => void;
       __recordStudioCodexTerminalInput: (input: { data: string; sessionId: string }) => void;
       __studioPushCodexTerminalOutput: (input: { output: string; sessionId: string }) => void;
       WebSocket: typeof WebSocket;
@@ -753,6 +817,15 @@ async function mockCodexTerminalWebSocket(page, {
           chunk: String(output || ""),
           type: "output"
         });
+      }
+    };
+    studioWindow.__studioFailCodexTerminal = ({ sessionId, error }) => {
+      for (const socket of [...socketsBySessionId[sessionId] || []]) {
+        socket.__emit({
+          error: String(error || "Terminal session not found."),
+          type: "error"
+        });
+        socket.close();
       }
     };
     studioWindow.WebSocket = MockStudioWebSocket as unknown as typeof WebSocket;
@@ -855,6 +928,8 @@ async function mockCurrentAppInspection(page) {
 
 async function mockCodexPromptSession(page, { stepPayloads = [], terminalInputs = [] } = {}) {
   let terminalOutput = "Codex ready.";
+  let issueTitle = codexIssueDraftedPayload.issueTitle;
+  let issueText = codexIssueDraftedPayload.issueText;
   let stepRequestCount = 0;
   await mockCodexTerminalWebSocket(page, {
     initialOutputBySessionId: {
@@ -889,11 +964,26 @@ async function mockCodexPromptSession(page, { stepPayloads = [], terminalInputs 
     });
   });
   await page.route(`**/api/studio/current-app/issue-sessions/${codexPromptSessionId}/step`, async (route) => {
-    stepPayloads.push(route.request().postDataJSON());
+    const payload = route.request().postDataJSON();
+    stepPayloads.push(payload);
     stepRequestCount += 1;
+    if (stepRequestCount === 1) {
+      issueTitle = String(payload.issueTitle || "");
+      issueText = String(payload.issue || "");
+    }
+    const draftedPayload = {
+      ...codexIssueDraftedPayload,
+      issueTitle,
+      issueText
+    };
+    const createdPayload = {
+      ...codexIssueCreatedPayload,
+      issueTitle,
+      issueText
+    };
     await route.fulfill({
       contentType: "application/json",
-      body: JSON.stringify(stepRequestCount === 1 ? codexIssueDraftedPayload : codexIssueCreatedPayload)
+      body: JSON.stringify(stepRequestCount === 1 ? draftedPayload : createdPayload)
     });
   });
   await page.route(`**/api/studio/current-app/issue-sessions/${codexPromptSessionId}/codex-terminal`, async (route) => {
@@ -986,6 +1076,7 @@ async function mockCodexPromptSessions(page, sessionPayloads) {
       });
     });
     await page.route(`**/api/studio/current-app/issue-sessions/${sessionId}/abandon`, async (route) => {
+      terminalDeletes[sessionId] += 1;
       payloadsBySessionId[sessionId] = {
         ...payloadsBySessionId[sessionId],
         codex: null,
@@ -1109,6 +1200,11 @@ async function expectGeneratedScreenContract(page) {
   await expect(screen.locator("h1").first()).toBeVisible();
 }
 
+async function expectSessionsRoute(page) {
+  await expect(page.getByRole("link", { name: "Sessions" }).first()).toBeVisible();
+  await expect(page.locator(".studio-issue-sessions").first()).toBeVisible();
+}
+
 async function expectVisibleTapTargets(page) {
   const targetHeights = await page.locator("a[href], button, [role='button'], .v-btn").evaluateAll(
     (elements) => elements
@@ -1226,8 +1322,7 @@ test.describe("studio startup navigation", () => {
     await mockCurrentAppInspection(page);
     await page.goto(`${BASE_URL}/`);
     await expect(page).toHaveURL(/\/home$/u);
-    await expect(page.getByRole("heading", { name: "Sessions" })).toBeVisible();
-    await expect(page.getByText("example-target-app").first()).toBeVisible();
+    await expectSessionsRoute(page);
     expect(apiRequests.count("/api/studio/bootstrap")).toBe(0);
     expect(apiRequests.count("/api/studio/bootstrap/stream")).toBe(0);
     expect(apiRequests.count("/api/studio/target-app")).toBe(0);
@@ -1241,8 +1336,7 @@ test.describe("studio startup navigation", () => {
     await mockCurrentAppInspection(page);
     await page.goto(`${BASE_URL}/home`);
     await expect(page).toHaveURL(/\/home$/u);
-    await expect(page.getByRole("heading", { name: "Sessions" })).toBeVisible();
-    await expect(page.getByText("example-target-app").first()).toBeVisible();
+    await expectSessionsRoute(page);
     expect(apiRequests.count("/api/studio/bootstrap")).toBe(0);
     expect(apiRequests.count("/api/studio/target-app")).toBe(0);
     expect(apiRequests.count("/api/studio/target-app/stream")).toBe(0);
@@ -1256,8 +1350,7 @@ test.describe("studio startup navigation", () => {
     await mockCurrentAppInspection(page);
     await page.goto(`${BASE_URL}/home`);
     await expect(page).toHaveURL(/\/home$/u);
-    await expect(page.getByRole("heading", { name: "Sessions" })).toBeVisible();
-    await expect(page.getByText("example-target-app").first()).toBeVisible();
+    await expectSessionsRoute(page);
     expect(apiRequests.count("/api/studio/bootstrap")).toBe(0);
     expect(apiRequests.count("/api/studio/target-app")).toBe(0);
     expect(apiRequests.count("/api/studio/app-setup")).toBe(0);
@@ -1270,8 +1363,7 @@ test.describe("studio startup navigation", () => {
     await mockStudioReady(page);
     await page.goto(`${BASE_URL}/`);
     await expect(page).toHaveURL(/\/home$/u);
-    await expect(page.getByRole("heading", { name: "Sessions" })).toBeVisible();
-    await expect(page.getByText("example-target-app").first()).toBeVisible();
+    await expectSessionsRoute(page);
     expect(apiRequests.count("/api/studio/bootstrap")).toBe(0);
     expect(apiRequests.count("/api/studio/target-app")).toBe(0);
     expect(apiRequests.count("/api/studio/app-setup")).toBe(0);
@@ -1301,7 +1393,7 @@ test.describe("studio startup navigation", () => {
     expect(apiRequests.count("/api/studio/app-setup/stream")).toBe(1);
   });
 
-  test("codex issue step injects the prompt and waits for marked issue text before Done", async ({ page }) => {
+  test("codex issue step injects the prompt and waits for edited issue text before creating the issue", async ({ page }) => {
     const stepPayloads: unknown[] = [];
     const terminalInputs: string[] = [];
     const codexSession = await mockCodexPromptSession(page, {
@@ -1310,14 +1402,13 @@ test.describe("studio startup navigation", () => {
     });
 
     await page.goto(`${BASE_URL}/home`);
-    await expect(page.getByRole("heading", { name: "Sessions" })).toBeVisible();
-    const doneButton = page.getByRole("button", { name: "Done" });
-    await expect(doneButton).toBeVisible();
-    await expect(doneButton).toBeDisabled();
+    await expectSessionsRoute(page);
+    const createIssueButton = page.getByRole("button", { name: "Create issue" });
+    await expect(createIssueButton).toBeVisible();
+    await expect(createIssueButton).toBeDisabled();
     await expect(page.locator(".xterm-rows").first()).toContainText("Codex ready.");
     const terminalHost = page.locator(".codex-terminal__host").first();
     await terminalHost.click();
-    await expect(page.getByText("focused", { exact: true }).first()).toBeVisible();
     await expect(terminalHost).toHaveCSS("border-color", "rgb(78, 161, 255)");
 
     await expect.poll(() => terminalInputs.length).toBe(7);
@@ -1326,22 +1417,36 @@ test.describe("studio startup navigation", () => {
 
     await codexSession.setTerminalOutput([
       "Codex ready.",
+      "[issue_title]",
+      "Add session UI",
+      "[/issue_title]",
       "[issue_text]",
-      "# Add session UI",
-      "",
       "Make sessions clearer.",
       "[/issue_text]"
     ].join("\n"));
 
-    await expect(doneButton).toBeEnabled();
-    await expect(page.getByLabel("Issue text from Codex")).toHaveValue("# Add session UI\n\nMake sessions clearer.");
-    await doneButton.click();
+    await expect(createIssueButton).toBeEnabled();
+    const issueTitleField = page.getByLabel("Issue title from Codex");
+    const issueBodyField = page.getByLabel("Issue body from Codex");
+    await expect(issueTitleField).toHaveValue("Add session UI");
+    await expect(issueBodyField).toHaveValue("Make sessions clearer.");
+    await issueTitleField.fill("Edited session UI");
+    await issueBodyField.fill("Make the issue sharper.");
+    await createIssueButton.click();
 
     await expect.poll(() => stepPayloads.length).toBe(2);
     expect(stepPayloads[0]).toEqual({
-      issue: "# Add session UI\n\nMake sessions clearer."
+      issue: "Make the issue sharper.",
+      issueTitle: "Edited session UI"
     });
     expect(stepPayloads[1]).toEqual({});
+
+    const issueCard = page.locator(".studio-issue-sessions__fact").filter({
+      hasText: "GitHub Issue"
+    });
+    await expect(issueCard).toContainText("Issue #123");
+    await issueCard.click();
+    await expect(issueCard.locator(".studio-issue-sessions__fact-expanded")).toContainText("Make the issue sharper.");
   });
 
   test("codex thread capture runs even before a Codex workflow step", async ({ page }) => {
@@ -1350,36 +1455,67 @@ test.describe("studio startup navigation", () => {
     ]);
 
     await page.goto(`${BASE_URL}/home`);
-    await expect(page.getByRole("heading", { name: "Sessions" })).toBeVisible();
+    await expectSessionsRoute(page);
 
     await expect.poll(() => codexSessions.terminalStarts[nonCodexStepSessionId]).toBe(1);
     await expect.poll(() => codexSessions.terminalInputs[nonCodexStepSessionId].length).toBe(6);
     expect(codexSessions.terminalInputs[nonCodexStepSessionId]).toEqual(codexShellSubmitSequence);
   });
 
+  test("codex terminal recovers when the server loses the terminal session", async ({ page }) => {
+    const codexSessions = await mockCodexPromptSessions(page, [
+      codexPromptSessionPayload
+    ]);
+
+    await page.goto(`${BASE_URL}/home`);
+    await expectSessionsRoute(page);
+    await expect.poll(() => codexSessions.terminalStarts[codexPromptSessionId]).toBe(1);
+
+    await page.evaluate((sessionId) => {
+      (window as unknown as {
+        __studioFailCodexTerminal: (input: { sessionId: string }) => void;
+      }).__studioFailCodexTerminal({ sessionId });
+    }, codexPromptSessionId);
+
+    await expect.poll(() => codexSessions.terminalStarts[codexPromptSessionId]).toBe(2);
+    await expect(page.getByText("Terminal session not found.")).toHaveCount(0);
+    await expect(page.locator(".xterm-rows").first()).toContainText(`Codex ready for ${codexPromptSessionId}.`);
+
+    await page.locator(".codex-terminal__host").first().click();
+    await page.keyboard.type("after restart");
+    await page.waitForTimeout(500);
+    expect(codexSessions.terminalInputs[codexPromptSessionId].join("")).toContain("after restart");
+  });
+
   test("switching sessions keeps each Codex terminal alive", async ({ page }) => {
     const codexSessions = await mockTwoCodexPromptSessions(page);
 
     await page.goto(`${BASE_URL}/home`);
-    await expect(page.getByRole("heading", { name: "Sessions" })).toBeVisible();
+    await expectSessionsRoute(page);
 
     await expect.poll(() => codexSessions.terminalStarts[codexPromptSessionId]).toBe(1);
     await expect.poll(() => codexSessions.terminalInputs[codexPromptSessionId].length).toBe(7);
     expect(codexSessions.terminalInputs[codexPromptSessionId].slice(0, 6)).toEqual(codexShellSubmitSequence);
     expect(codexSessions.terminalInputs[codexPromptSessionId][6]).toContain(codexPromptText);
 
-    await page.getByRole("button", { name: /01-03-40/u }).click();
-    await expect(page.getByRole("heading", { name: secondCodexPromptSessionId })).toBeVisible();
+    await page.locator(".studio-issue-sessions__tab-chip").filter({ hasText: "01-03-40" }).click();
+    await expect(page.getByText("01-03-40").first()).toBeVisible();
     await expect.poll(() => codexSessions.terminalStarts[secondCodexPromptSessionId]).toBe(1);
     await expect.poll(() => codexSessions.terminalInputs[secondCodexPromptSessionId].length).toBe(7);
     expect(codexSessions.terminalInputs[secondCodexPromptSessionId].slice(0, 6)).toEqual(codexShellSubmitSequence);
     expect(codexSessions.terminalInputs[secondCodexPromptSessionId][6]).toContain(secondCodexPromptText);
 
-    await page.getByRole("button", { name: /01-02-39/u }).click();
-    await expect(page.getByRole("heading", { name: codexPromptSessionId })).toBeVisible();
+    await page.locator(".studio-issue-sessions__tab-chip").filter({ hasText: "01-02-39" }).click();
+    await expect(page.getByText("01-02-39").first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "Restart Codex" })).toHaveCount(0);
+    await page.locator(".codex-terminal__host").first().click();
+    await page.keyboard.type("still alive");
     await page.waitForTimeout(500);
     expect(codexSessions.terminalStarts[codexPromptSessionId]).toBe(1);
     expect(codexSessions.terminalStarts[secondCodexPromptSessionId]).toBe(1);
+    expect(codexSessions.terminalDeletes[codexPromptSessionId]).toBe(0);
+    expect(codexSessions.terminalDeletes[secondCodexPromptSessionId]).toBe(0);
+    expect(codexSessions.terminalInputs[codexPromptSessionId].join("")).toContain("still alive");
   });
 
   test("session creation is disabled after three active sessions", async ({ page }) => {
@@ -1390,21 +1526,21 @@ test.describe("studio startup navigation", () => {
     ]);
 
     await page.goto(`${BASE_URL}/home`);
-    await expect(page.getByRole("heading", { name: "Sessions" })).toBeVisible();
-    await expect(page.getByText("3/3 active")).toBeVisible();
-    await expect(page.getByRole("button", { name: "New Session" })).toBeDisabled();
+    await expectSessionsRoute(page);
+    await expect(page.getByRole("button", { name: "New Session" })).toHaveCount(0);
   });
 
   test("abandoning a session closes its terminal and removes it from the visible list", async ({ page }) => {
     const codexSessions = await mockTwoCodexPromptSessions(page);
 
     await page.goto(`${BASE_URL}/home`);
-    await expect(page.getByRole("heading", { name: "Sessions" })).toBeVisible();
+    await expectSessionsRoute(page);
     await expect.poll(() => codexSessions.terminalStarts[codexPromptSessionId]).toBe(1);
 
-    await page.getByRole("button", { name: "Abandon" }).click();
+    await page.getByRole("button", { name: "Abandon selected session" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Abandon" }).click();
     await expect.poll(() => codexSessions.terminalDeletes[codexPromptSessionId]).toBe(1);
     await expect(page.getByRole("button", { name: /01-02-39/u })).toHaveCount(0);
-    await expect(page.getByRole("heading", { name: secondCodexPromptSessionId })).toBeVisible();
+    await expect(page.getByText("01-03-40").first()).toBeVisible();
   });
 });

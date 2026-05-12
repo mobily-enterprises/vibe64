@@ -6,6 +6,10 @@ import {
   readIssueSession,
   runIssueSessionStep
 } from "@/lib/studioApi.js";
+import {
+  isAbandonedIssueSession,
+  isOpenIssueSession
+} from "@/lib/issueSessionViewModel.js";
 
 function errorMessage(error, fallback) {
   return String(error?.message || error || fallback);
@@ -16,14 +20,8 @@ function firstSessionId(sessions = []) {
 }
 
 const DEFAULT_MAX_OPEN_SESSIONS = 3;
-const CLOSED_SESSION_STATUSES = new Set(["abandoned", "finished"]);
-
-function isOpenIssueSession(session = {}) {
-  return !CLOSED_SESSION_STATUSES.has(String(session?.status || ""));
-}
-
 function visibleIssueSessions(sessions = []) {
-  return sessions.filter((session) => String(session?.status || "") !== "abandoned");
+  return sessions.filter((session) => !isAbandonedIssueSession(session));
 }
 
 function sessionOrderKey(session = {}) {
@@ -107,6 +105,26 @@ function useIssueSessions() {
     if (!selectedSessionId.value) {
       selectedSession.value = null;
     }
+  }
+
+  function patchIssueSession(patch = {}) {
+    const sessionId = patch?.sessionId || selectedSessionId.value;
+    if (!sessionId) {
+      return null;
+    }
+    const mergeSession = (session = {}) => ({
+      ...session,
+      ...patch,
+      sessionId
+    });
+    if (selectedSession.value?.sessionId === sessionId) {
+      selectedSession.value = mergeSession(selectedSession.value);
+      rememberContract(selectedSession.value);
+    }
+    issueSessions.value = issueSessions.value.map((session) => {
+      return session.sessionId === sessionId ? mergeSession(session) : session;
+    });
+    return selectedSession.value?.sessionId === sessionId ? selectedSession.value : null;
   }
 
   async function loadIssueSessions() {
@@ -244,6 +262,7 @@ function useIssueSessions() {
     issueSessionsLoading,
     maxOpenIssueSessions,
     loadIssueSessions,
+    patchIssueSession,
     runSelectedStep,
     selectSession,
     selectedSession,

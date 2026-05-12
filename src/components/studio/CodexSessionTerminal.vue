@@ -36,7 +36,24 @@
           {{ terminalError }}
         </v-alert>
 
-        <div ref="terminalHost" class="codex-terminal__host" @click="focusTerminal" />
+        <div class="codex-terminal__stage">
+          <div ref="terminalHost" class="codex-terminal__host" @click="focusTerminal" />
+          <div v-if="showTerminalStartPanel" class="codex-terminal__restart-panel">
+            <v-sheet class="codex-terminal__restart-card" rounded="lg" elevation="8">
+              <span>{{ terminalExited ? "Codex exited." : "Codex is not running." }}</span>
+              <v-btn
+                color="primary"
+                :loading="terminalStarting"
+                :prepend-icon="mdiRestart"
+                size="small"
+                variant="flat"
+                @click="restartTerminal"
+              >
+                {{ terminalExited ? "Restart Codex" : "Start Codex" }}
+              </v-btn>
+            </v-sheet>
+          </div>
+        </div>
 
         <div class="codex-terminal__footer">
           <span class="codex-terminal__command">{{ terminalCommandPreview }}</span>
@@ -56,17 +73,6 @@
               @click="sendCtrlC"
             >
               Ctrl-C
-            </v-btn>
-            <v-btn
-              v-if="terminalExited"
-              color="primary"
-              :loading="terminalStarting"
-              :prepend-icon="mdiRestart"
-              size="small"
-              variant="tonal"
-              @click="restartTerminal"
-            >
-              Restart
             </v-btn>
             <v-btn
               :disabled="!terminalSessionId"
@@ -102,6 +108,7 @@ import {
   startIssueSessionCodexTerminal
 } from "@/lib/studioApi.js";
 import {
+  codexTrustPromptLooksActive,
   extractCodexThreadId,
   stripTerminalControlSequences
 } from "@/lib/codexOutput.js";
@@ -117,7 +124,7 @@ const props = defineProps({
     default: true
   }
 });
-const emit = defineEmits(["output"]);
+const emit = defineEmits(["output", "session-update"]);
 
 const terminalHost = ref(null);
 const terminalSessionId = ref("");
@@ -149,15 +156,18 @@ let terminalOutsidePointerHandler = null;
 let terminalResizeHandler = null;
 let terminalSocket = null;
 let terminalSocketOpenPromise = null;
+let terminalReconnectTimer = null;
 let terminalSetupPromise = null;
 let terminalOutputOffset = 0;
 let terminalStartPromise = null;
+let terminalRecoveryPromise = null;
 let codexThreadCapturePromise = null;
 let codexThreadSavePromise = null;
 let terminalHasOutput = false;
 let terminalLatestOutput = "";
 let terminalLastOutputAt = 0;
 let terminalStartedAt = 0;
+let codexTrustPromptAnsweredAt = 0;
 
 const DEFAULT_CODEX_THREAD_COMMAND = "echo $CODEX_THREAD_ID";
 const CODEX_BOOT_MIN_AGE_MS = 1800;
@@ -166,7 +176,7 @@ const CODEX_BOOT_TIMEOUT_MS = 12000;
 const CODEX_KEY_PAUSE_MS = 180;
 
 const sessionId = computed(() => props.session?.sessionId || "");
-const canUseTerminal = computed(() => Boolean(sessionId.value && props.session?.worktree));
+const canUseTerminal = computed(() => Boolean(sessionId.value && props.session?.worktreeReady === true));
 const codexMode = computed(() => String(props.session?.codex?.mode || ""));
 const codexPrompt = computed(() => {
   const promptField = String(props.session?.codex?.promptField || "");
@@ -180,6 +190,12 @@ const codexPromptInjectionKey = computed(() => {
 });
 const promptActionLabel = computed(() => autoPromptInjected.value ? "Re-inject Prompt" : "Inject Prompt");
 const terminalExited = computed(() => terminalStatus.value === "exited");
+const showTerminalStartPanel = computed(() => (
+  canUseTerminal.value &&
+  componentMounted.value &&
+  !terminalStarting.value &&
+  (!terminalSessionId.value || terminalExited.value)
+));
 function defaultExpanded() {
   if (typeof window === "undefined" || !window.matchMedia) {
     return true;
@@ -321,6 +337,7 @@ function disposeTerminalUi() {
   terminalLatestOutput = "";
   terminalLastOutputAt = 0;
   terminalStartedAt = 0;
+  codexTrustPromptAnsweredAt = 0;
   terminalFocused.value = false;
   terminalSelectedText.value = "";
 }
@@ -434,12 +451,43 @@ function appendTerminalOutput(chunk) {
 }
 
 function closeTerminalSocket() {
+  clearTerminalReconnect();
   const socket = terminalSocket;
   terminalSocket = null;
   terminalSocketOpenPromise = null;
   if (socket && socket.readyState !== WebSocket.CLOSED && socket.readyState !== WebSocket.CLOSING) {
     socket.close();
   }
+}
+
+function clearTerminalReconnect() {
+  if (!terminalReconnectTimer) {
+    return;
+  }
+  window.clearTimeout(terminalReconnectTimer);
+  terminalReconnectTimer = null;
+}
+
+function scheduleTerminalReconnect() {
+  if (
+    terminalReconnectTimer ||
+    !componentMounted.value ||
+    !canUseTerminal.value ||
+    !terminalSessionId.value ||
+    terminalStatus.value === "exited"
+  ) {
+    return;
+  }
+  terminalReconnectTimer = window.setTimeout(async () => {
+    terminalReconnectTimer = null;
+    if (!terminalSessionId.value || terminalSocket || terminalStatus.value === "exited") {
+      return;
+    }
+    const connected = await connectTerminalSocket();
+    if (!connected && terminalSessionId.value && terminalStatus.value === "disconnected") {
+      scheduleTerminalReconnect();
+    }
+  }, 1200);
 }
 
 function applyTerminalSnapshot(session = {}) {
@@ -474,8 +522,17 @@ function handleTerminalSocketMessage(rawMessage) {
   }
 
   if (message?.type === "error") {
-    terminalError.value = String(message.error || "Terminal stream failed.");
+    const error = String(message.error || "Terminal stream failed.");
+    if (terminalSessionNotFound(error)) {
+      void recoverMissingTerminal();
+      return;
+    }
+    terminalError.value = error;
   }
+}
+
+function terminalSessionNotFound(error = "") {
+  return String(error || "").toLowerCase().includes("terminal session not found");
 }
 
 async function connectTerminalSocket() {
@@ -504,6 +561,7 @@ async function connectTerminalSocket() {
     };
 
     socket.addEventListener("open", () => {
+      clearTerminalReconnect();
       terminalError.value = "";
       settle(true);
     });
@@ -517,14 +575,19 @@ async function connectTerminalSocket() {
       settle(false);
     });
 
-    socket.addEventListener("close", () => {
+    socket.addEventListener("close", (event) => {
       if (terminalSocket === socket) {
         terminalSocket = null;
       }
       terminalSocketOpenPromise = null;
       settle(false);
+      if (terminalSessionNotFound(event.reason)) {
+        void recoverMissingTerminal();
+        return;
+      }
       if (terminalStatus.value !== "exited") {
         terminalStatus.value = terminalSessionId.value ? "disconnected" : "";
+        scheduleTerminalReconnect();
       }
     });
   });
@@ -598,6 +661,10 @@ async function sendTerminalData(data) {
       data: String(data || ""),
       type: "input"
     }));
+    if (String(data || "").includes("\r") && codexTrustPromptLooksActive(terminalLatestOutput)) {
+      codexTrustPromptAnsweredAt = Date.now();
+      copyStatus.value = "";
+    }
     return true;
   } catch (sendError) {
     terminalError.value = String(sendError?.message || sendError || "Terminal input failed.");
@@ -653,6 +720,11 @@ async function captureCodexThreadFromOutput(output) {
     }
     codexThreadId.value = response.codexThreadId || threadId;
     codexThreadCaptureRequired.value = false;
+    emit("session-update", {
+      codexThreadId: codexThreadId.value,
+      needsThreadCapture: false,
+      sessionId: sessionId.value
+    });
     copyStatus.value = "Codex session captured.";
     return true;
   })();
@@ -698,8 +770,35 @@ function canCaptureCodexThread() {
   );
 }
 
+function visibleTerminalText() {
+  const buffer = terminalInstance?.buffer?.active;
+  if (!buffer || !terminalInstance) {
+    return "";
+  }
+  const startLine = Math.max(0, buffer.baseY + buffer.viewportY);
+  const endLine = Math.min(buffer.length, startLine + terminalInstance.rows);
+  const lines = [];
+  for (let lineIndex = startLine; lineIndex < endLine; lineIndex += 1) {
+    lines.push(buffer.getLine(lineIndex)?.translateToString(true) || "");
+  }
+  return lines.join("\n").trim();
+}
+
+function codexTrustPromptIsBlocking() {
+  const visibleText = visibleTerminalText();
+  const trustPromptVisible = visibleText
+    ? codexTrustPromptLooksActive(visibleText)
+    : codexTrustPromptLooksActive(terminalLatestOutput);
+  return trustPromptVisible &&
+    (!codexTrustPromptAnsweredAt || terminalLastOutputAt <= codexTrustPromptAnsweredAt);
+}
+
 function codexBootLooksReady() {
   if (!terminalStartedAt || !terminalHasOutput) {
+    return false;
+  }
+  if (codexTrustPromptIsBlocking()) {
+    copyStatus.value = "Answer the Codex trust prompt in the terminal to continue.";
     return false;
   }
   const now = Date.now();
@@ -713,11 +812,15 @@ async function waitForCodexBootReady() {
   }
 
   return new Promise((resolve) => {
-    const startedAt = Date.now();
+    let startedAt = Date.now();
     const timer = window.setInterval(() => {
       if (codexBootLooksReady()) {
         window.clearInterval(timer);
         resolve(true);
+        return;
+      }
+      if (codexTrustPromptIsBlocking()) {
+        startedAt = Date.now();
         return;
       }
       if (Date.now() - startedAt > CODEX_BOOT_TIMEOUT_MS) {
@@ -802,15 +905,64 @@ async function sendCtrlC() {
 
 async function closeTerminal() {
   const existingTerminalId = terminalSessionId.value;
-  terminalSessionId.value = "";
-  terminalStatus.value = "";
-  terminalCommandPreview.value = "";
-  codexThreadCaptureRequired.value = false;
-  codexThreadCaptureStarted.value = false;
-  disposeTerminalUi();
+  detachTerminal();
   if (existingTerminalId && sessionId.value) {
     await closeIssueSessionCodexTerminal(sessionId.value, existingTerminalId).catch(() => null);
   }
+}
+
+async function recoverMissingTerminal() {
+  if (!canUseTerminal.value) {
+    terminalError.value = "Terminal session not found.";
+    return false;
+  }
+  if (terminalRecoveryPromise) {
+    return terminalRecoveryPromise;
+  }
+
+  terminalRecoveryPromise = (async () => {
+    const recoveredSessionId = sessionId.value;
+    closeTerminalSocket();
+    terminalSessionId.value = "";
+    terminalStatus.value = "";
+    terminalCommandPreview.value = "";
+    codexThreadCaptureStarted.value = false;
+    terminalError.value = "";
+    copyStatus.value = "Studio server restarted; reconnecting Codex.";
+    if (terminalInstance) {
+      terminalInstance.reset();
+    }
+    terminalOutputOffset = 0;
+    terminalLatestOutput = "";
+    emit("output", "");
+    terminalHasOutput = false;
+    terminalStartedAt = 0;
+
+    if (recoveredSessionId !== sessionId.value) {
+      return false;
+    }
+    const ready = await ensureTerminalReady();
+    if (ready) {
+      void injectPromptAutomatically();
+    }
+    return ready;
+  })();
+
+  try {
+    return await terminalRecoveryPromise;
+  } finally {
+    terminalRecoveryPromise = null;
+  }
+}
+
+function detachTerminal() {
+  terminalSessionId.value = "";
+  terminalStatus.value = "";
+  terminalCommandPreview.value = "";
+  codexThreadId.value = "";
+  codexThreadCaptureRequired.value = false;
+  codexThreadCaptureStarted.value = false;
+  disposeTerminalUi();
 }
 
 async function restartTerminal() {
@@ -836,7 +988,7 @@ function startTerminalWhenReady() {
 
 watch(sessionId, async (nextSessionId, previousSessionId) => {
   if (previousSessionId && previousSessionId !== nextSessionId) {
-    await closeTerminal();
+    detachTerminal();
   }
   autoInjectedPromptKey.value = "";
   autoPromptInjected.value = false;
@@ -890,7 +1042,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
-  void closeTerminal();
+  detachTerminal();
 });
 </script>
 
@@ -947,6 +1099,32 @@ onBeforeUnmount(() => {
   transition: border-color 140ms ease, box-shadow 140ms ease;
 }
 
+.codex-terminal__stage {
+  position: relative;
+}
+
+.codex-terminal__restart-panel {
+  align-items: flex-end;
+  display: flex;
+  inset: auto 0 0;
+  justify-content: center;
+  padding: 1rem;
+  pointer-events: none;
+  position: absolute;
+}
+
+.codex-terminal__restart-card {
+  align-items: center;
+  background: rgba(var(--v-theme-surface), 0.96);
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+  max-width: min(28rem, calc(100% - 1rem));
+  min-width: min(22rem, calc(100% - 1rem));
+  padding: 0.55rem 0.65rem 0.55rem 0.85rem;
+  pointer-events: auto;
+}
+
 .codex-terminal__footer {
   padding-top: 0.35rem;
 }
@@ -977,6 +1155,12 @@ onBeforeUnmount(() => {
 
   .codex-terminal__host {
     height: min(70vh, 42rem);
+  }
+
+  .codex-terminal__restart-card {
+    align-items: stretch;
+    flex-direction: column;
+    min-width: min(18rem, calc(100% - 1rem));
   }
 }
 

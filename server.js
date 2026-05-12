@@ -22,6 +22,9 @@ import {
 import {
   isLocalStudioRequest
 } from "./server/lib/localStudioRequest.js";
+import {
+  cleanupStaleStudioTerminals
+} from "./server/lib/studioTerminalCleanup.js";
 
 const SPA_INDEX_FILE = "index.html";
 const API_BASE_PATH = "/api";
@@ -202,6 +205,9 @@ async function createServer(options = {}) {
         allowUnionTypes: true
       }
     }
+  });
+  await cleanupStaleStudioTerminals({
+    logger: app.log
   });
   await app.register(fastifyWebsocket);
 

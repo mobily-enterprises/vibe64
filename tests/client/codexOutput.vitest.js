@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  cleanSingleLineCodexOutput,
+  codexTrustPromptLooksActive,
   extractCodexThreadId,
   extractMarkedOutput,
   isCodexThreadId,
@@ -34,6 +36,40 @@ describe("codex output extraction", () => {
 
   it("returns an empty string until the complete marker pair exists", () => {
     expect(extractMarkedOutput("[issue_text]\n# Missing close", "issue_text")).toBe("");
+  });
+
+  it("cleans Codex terminal chrome from single-line marked output", () => {
+    const contaminatedTitle = "›Improve documentation in @filenamegpt-5.5 default · /home/merc/Development/current/exampleapp/.jskit/sessions/active/2026-05-12_15-00-00/worktree  Add an About Us page";
+    const output = [
+      "[issue_title]",
+      contaminatedTitle,
+      "[/issue_title]",
+      "[issue_text]",
+      "Keep the body untouched.",
+      "[/issue_text]"
+    ].join("\n");
+
+    expect(cleanSingleLineCodexOutput(contaminatedTitle)).toBe("Add an About Us page");
+    expect(extractMarkedOutput(output, "issue_title", {
+      formatHint: "text"
+    })).toBe("Add an About Us page");
+    expect(extractMarkedOutput(output, "issue_text")).toBe("Keep the body untouched.");
+  });
+
+  it("detects the interactive Codex trust prompt", () => {
+    const output = [
+      "> You are in /workspace/.jskit/sessions/active/example/worktree",
+      "",
+      "Do you trust the contents of this directory?",
+      "",
+      "› 1. Yes, continue",
+      "  2. No, quit",
+      "",
+      "Press enter to continue"
+    ].join("\n");
+
+    expect(codexTrustPromptLooksActive(output)).toBe(true);
+    expect(codexTrustPromptLooksActive("> ready")).toBe(false);
   });
 
   it("extracts Codex thread ids only when the echoed environment variable produced a UUID-shaped id", () => {

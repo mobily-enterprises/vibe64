@@ -64,10 +64,18 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       Record<never, never>,
       | '/home/'
+      | '/home/abandoned'
     >,
     '/home/': RouteRecordInfo<
       '/home/',
       '/home',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/home/abandoned': RouteRecordInfo<
+      '/home/abandoned',
+      '/home/abandoned',
       Record<never, never>,
       Record<never, never>,
       | never
@@ -113,12 +121,19 @@ declare module 'vue-router/auto-routes' {
       routes:
         | '/home'
         | '/home/'
+        | '/home/abandoned'
       views:
         | 'default'
     }
     'src/pages/home/index.vue': {
       routes:
         | '/home/'
+      views:
+        | never
+    }
+    'src/pages/home/abandoned.vue': {
+      routes:
+        | '/home/abandoned'
       views:
         | never
     }

@@ -60,3 +60,21 @@ addPlacement({
     exact: true
   }
 });
+// jskit:ui-generator.page.link:home:/abandoned
+{
+  addPlacement({
+    id: "ui-generator.page.home.abandoned.link",
+    target: "shell.primary-nav",
+    kind: "link",
+    surfaces: ["home"],
+    order: 155,
+    props: {
+      label: "Abandoned",
+      icon: "mdi-view-list-outline",
+      surface: "home",
+      scopedSuffix: "/abandoned",
+      unscopedSuffix: "/abandoned",
+      to: "/home/abandoned"
+    }
+  });
+}

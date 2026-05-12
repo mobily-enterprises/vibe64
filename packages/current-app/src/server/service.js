@@ -128,10 +128,6 @@ function isOpenIssueSession(session = {}) {
   return !CLOSED_SESSION_STATUSES.has(String(session.status || ""));
 }
 
-function isVisibleIssueSession(session = {}) {
-  return String(session.status || "") !== "abandoned";
-}
-
 function issueSessionLimits(sessions = []) {
   return {
     maxOpenSessions: MAX_OPEN_ISSUE_SESSIONS,
@@ -139,12 +135,17 @@ function issueSessionLimits(sessions = []) {
   };
 }
 
-function visibleIssueSessionList(response = {}) {
+function normalizeIssueSessionArchive(value = "") {
+  const archive = String(value || "active").trim().toLowerCase() || "active";
+  return ["active", "abandoned", "completed", "all"].includes(archive) ? archive : "active";
+}
+
+function decoratedIssueSessionList(response = {}, activeSessions = []) {
   const sessions = Array.isArray(response.sessions) ? response.sessions : [];
   return {
     ...response,
-    limits: issueSessionLimits(sessions),
-    sessions: sessions.filter(isVisibleIssueSession)
+    limits: issueSessionLimits(activeSessions),
+    sessions
   };
 }
 
@@ -161,9 +162,10 @@ function containerWorkspacePath(targetRoot, absolutePath) {
 
 function codexStartupScript(codexThreadId = "") {
   const normalizedThreadId = normalizeCodexThreadId(codexThreadId);
+  const codexOptions = "--dangerously-bypass-approvals-and-sandbox";
   const codexCommand = normalizedThreadId
-    ? `codex resume ${shellQuote(normalizedThreadId)}`
-    : "codex";
+    ? `codex ${codexOptions} resume ${shellQuote(normalizedThreadId)}`
+    : `codex ${codexOptions}`;
   return [
     "set -e",
     "if [ -n \"${JSKIT_HOST_UID:-}\" ] && [ -n \"${JSKIT_HOST_GID:-}\" ] && command -v setpriv >/dev/null 2>&1; then",
@@ -206,8 +208,10 @@ function codexTerminalArgs({
     ...hostUserIdentityEnvArgs(),
     "-v",
     `${targetRoot}:/workspace`,
+    "-v",
+    `${targetRoot}:${targetRoot}`,
     "-w",
-    containerWorkspacePath(targetRoot, worktree),
+    worktree,
     TOOLCHAIN_IMAGE,
     "bash",
     "-lc",
@@ -608,15 +612,27 @@ function createService({ appRoot = "" } = {}) {
       });
     },
 
-    async listIssueSessions() {
-      return visibleIssueSessionList(await listSessions({
-        targetRoot: inspectionRoot
-      }));
+    async listIssueSessions(input = {}) {
+      const archive = normalizeIssueSessionArchive(input?.archive);
+      const [response, activeResponse] = await Promise.all([
+        listSessions({
+          targetRoot: inspectionRoot,
+          archive
+        }),
+        archive === "active"
+          ? Promise.resolve(null)
+          : listSessions({
+              targetRoot: inspectionRoot,
+              archive: "active"
+            })
+      ]);
+      return decoratedIssueSessionList(response, (activeResponse || response).sessions || []);
     },
 
     async createIssueSession() {
       const existingSessions = await listSessions({
-        targetRoot: inspectionRoot
+        targetRoot: inspectionRoot,
+        archive: "active"
       });
       const limits = issueSessionLimits(existingSessions.sessions || []);
       if (limits.openSessionCount >= limits.maxOpenSessions) {
@@ -630,7 +646,7 @@ function createService({ appRoot = "" } = {}) {
             }
           ],
           limits,
-          sessions: visibleIssueSessionList(existingSessions).sessions,
+          sessions: decoratedIssueSessionList(existingSessions, existingSessions.sessions || []).sessions,
           stepDefinitions: existingSessions.stepDefinitions || []
         };
       }
@@ -656,7 +672,7 @@ function createService({ appRoot = "" } = {}) {
         targetRoot: inspectionRoot,
         sessionId
       });
-      return {
+      const result = {
         ...details,
         codex: response.codex || details.codex || null,
         currentStepAction: response.currentStepAction || details.currentStepAction || null,
@@ -667,14 +683,21 @@ function createService({ appRoot = "" } = {}) {
         stepDefinitions: response.stepDefinitions || details.stepDefinitions || [],
         status: response.status || details.status
       };
+      if (CLOSED_SESSION_STATUSES.has(String(result.status || ""))) {
+        await closeTerminalSessionsForNamespace(terminalNamespace(sessionId));
+      }
+      return result;
     },
 
     async abandonIssueSession(sessionId) {
-      await closeTerminalSessionsForNamespace(terminalNamespace(sessionId));
-      return abandonSession({
+      const response = await abandonSession({
         targetRoot: inspectionRoot,
         sessionId
       });
+      if (String(response?.status || "") === "abandoned") {
+        await closeTerminalSessionsForNamespace(terminalNamespace(sessionId));
+      }
+      return response;
     },
 
     async saveCodexThread(sessionId, input = {}) {
@@ -696,7 +719,7 @@ function createService({ appRoot = "" } = {}) {
       if (session?.ok === false) {
         return session;
       }
-      if (!session?.worktree) {
+      if (!session?.worktree || session.worktreeReady !== true) {
         return {
           ok: false,
           error: "Session worktree is not ready yet."

@@ -73,8 +73,22 @@ async function readCurrentApp() {
   return studioHttpClient.get(CURRENT_APP_ENDPOINT);
 }
 
-async function listIssueSessions() {
-  return studioHttpClient.get(ISSUE_SESSIONS_ENDPOINT);
+function withQuery(endpoint, params = {}) {
+  const searchParams = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    const normalizedValue = String(value || "").trim();
+    if (normalizedValue) {
+      searchParams.set(key, normalizedValue);
+    }
+  }
+  const query = searchParams.toString();
+  return query ? `${endpoint}?${query}` : endpoint;
+}
+
+async function listIssueSessions(options = {}) {
+  return studioHttpClient.get(withQuery(ISSUE_SESSIONS_ENDPOINT, {
+    archive: options.archive
+  }));
 }
 
 async function createIssueSession() {
