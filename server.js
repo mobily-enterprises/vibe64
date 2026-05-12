@@ -1,5 +1,6 @@
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
+import fastifyWebsocket from "@fastify/websocket";
 import { resolveRuntimeEnv } from "./server/lib/runtimeEnv.js";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -18,6 +19,9 @@ import {
 import {
   closeTerminalSessionsForNamespacePrefix
 } from "./server/lib/terminalSessions.js";
+import {
+  isLocalStudioRequest
+} from "./server/lib/localStudioRequest.js";
 
 const SPA_INDEX_FILE = "index.html";
 const API_BASE_PATH = "/api";
@@ -91,6 +95,105 @@ function canServeStaticFile(distRoot, relativePath) {
   return existsSync(resolvedPath);
 }
 
+function sendSocketJson(socket, payload) {
+  if (socket.readyState !== 1) {
+    return;
+  }
+  socket.send(JSON.stringify(payload));
+}
+
+function publicTerminalSnapshot(session = {}) {
+  const {
+    unsubscribe,
+    ...publicSession
+  } = session || {};
+  void unsubscribe;
+  return publicSession;
+}
+
+function registerCodexTerminalWebSocketRoute(app, runtimeApp) {
+  app.get(
+    "/api/studio/current-app/issue-sessions/:sessionId/codex-terminal/:terminalSessionId/ws",
+    { websocket: true },
+    (socket, request) => {
+      let subscription = null;
+      let closed = false;
+
+      const closeSubscription = () => {
+        if (closed) {
+          return;
+        }
+        closed = true;
+        subscription?.unsubscribe?.();
+        subscription = null;
+      };
+
+      const closeWithError = (code, error) => {
+        sendSocketJson(socket, {
+          error,
+          type: "error"
+        });
+        socket.close(code, error);
+      };
+
+      if (!isLocalStudioRequest(request)) {
+        closeWithError(1008, "Open Studio on localhost or 127.0.0.1.");
+        return;
+      }
+
+      let service;
+      try {
+        service = runtimeApp.make("feature.current-app.service");
+      } catch (error) {
+        closeWithError(1011, String(error?.message || error || "Current app service is unavailable."));
+        return;
+      }
+      const sessionId = String(request.params?.sessionId || "");
+      const terminalSessionId = String(request.params?.terminalSessionId || "");
+
+      socket.on("message", async (rawMessage) => {
+        try {
+          const message = JSON.parse(rawMessage.toString());
+          if (message?.type !== "input") {
+            return;
+          }
+          const response = service.writeCodexTerminal(sessionId, terminalSessionId, message.data);
+          if (response?.ok === false) {
+            sendSocketJson(socket, {
+              error: response.error || "Terminal input failed.",
+              type: "error"
+            });
+          }
+        } catch (error) {
+          sendSocketJson(socket, {
+            error: String(error?.message || error || "Terminal input failed."),
+            type: "error"
+          });
+        }
+      });
+
+      socket.on("close", closeSubscription);
+      socket.on("error", closeSubscription);
+
+      void service.subscribeCodexTerminal(sessionId, terminalSessionId, (message) => {
+        sendSocketJson(socket, message);
+      }).then((result) => {
+        if (result?.ok === false) {
+          closeWithError(1008, result.error || "Terminal session not found.");
+          return;
+        }
+        subscription = result;
+        sendSocketJson(socket, {
+          session: publicTerminalSnapshot(result),
+          type: "snapshot"
+        });
+      }).catch((error) => {
+        closeWithError(1011, String(error?.message || error || "Terminal stream failed."));
+      });
+    }
+  );
+}
+
 async function createServer(options = {}) {
   const app = Fastify({
     logger: true,
@@ -100,6 +203,7 @@ async function createServer(options = {}) {
       }
     }
   });
+  await app.register(fastifyWebsocket);
 
   app.addHook("onClose", async () => {
     await closeTerminalSessionsForNamespacePrefix("");
@@ -166,6 +270,10 @@ async function createServer(options = {}) {
     serverSurface: runtimeEnv.SERVER_SURFACE,
     globalUiPaths: resolveGlobalUiPaths(runtime?.globalUiPaths || [])
   });
+
+  if (runtime?.app) {
+    registerCodexTerminalWebSocketRoute(app, runtime.app);
+  }
 
   if (hasWebBuild) {
     await app.register(fastifyStatic, {

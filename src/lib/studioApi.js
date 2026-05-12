@@ -98,18 +98,17 @@ function issueSessionCodexTerminalEndpoint(sessionId, terminalSessionId = "") {
   return terminalSessionId ? `${base}/${encodeURIComponent(terminalSessionId)}` : base;
 }
 
+function resolveWebSocketUrl(pathname) {
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${protocol}//${window.location.host}${pathname}`;
+}
+
+function issueSessionCodexTerminalWebSocketUrl(sessionId, terminalSessionId) {
+  return resolveWebSocketUrl(`${issueSessionCodexTerminalEndpoint(sessionId, terminalSessionId)}/ws`);
+}
+
 async function startIssueSessionCodexTerminal(sessionId) {
   return studioHttpClient.post(issueSessionCodexTerminalEndpoint(sessionId), {});
-}
-
-async function readIssueSessionCodexTerminal(sessionId, terminalSessionId) {
-  return studioHttpClient.get(issueSessionCodexTerminalEndpoint(sessionId, terminalSessionId));
-}
-
-async function writeIssueSessionCodexTerminal(sessionId, terminalSessionId, data) {
-  return studioHttpClient.post(`${issueSessionCodexTerminalEndpoint(sessionId, terminalSessionId)}/input`, {
-    data
-  });
 }
 
 async function closeIssueSessionCodexTerminal(sessionId, terminalSessionId) {
@@ -175,17 +174,16 @@ export {
   createIssueSession,
   consumeStudioGate,
   issueSessionCodexTerminalEndpoint,
+  issueSessionCodexTerminalWebSocketUrl,
   listIssueSessions,
   readAppSetupStatus,
   readBootstrapStatus,
   readCurrentApp,
   readIssueSession,
-  readIssueSessionCodexTerminal,
   readTargetAppStatus,
   resolveStudioGate,
   runIssueSessionStep,
   saveIssueSessionCodexThread,
   startIssueSessionCodexTerminal,
-  studioHttpClient,
-  writeIssueSessionCodexTerminal
+  studioHttpClient
 };

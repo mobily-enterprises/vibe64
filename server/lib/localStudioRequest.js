@@ -32,13 +32,17 @@ function hostFromOrigin(value = "") {
   }
 }
 
-function requireLocalStudioRequest(request, reply, {
-  message = "This Studio route only accepts loopback requests."
-} = {}) {
+function isLocalStudioRequest(request) {
   const remoteAddress = request.ip || request.socket?.remoteAddress || request.raw?.socket?.remoteAddress || "";
   const host = request.hostname || request.headers?.host || "";
   const originHost = hostFromOrigin(request.headers?.origin);
-  if (!isLoopbackAddress(remoteAddress) || !isLoopbackAddress(host) || !isLoopbackAddress(originHost)) {
+  return isLoopbackAddress(remoteAddress) && isLoopbackAddress(host) && isLoopbackAddress(originHost);
+}
+
+function requireLocalStudioRequest(request, reply, {
+  message = "This Studio route only accepts loopback requests."
+} = {}) {
+  if (!isLocalStudioRequest(request)) {
     reply.code(403).send({
       ok: false,
       errors: [
@@ -55,6 +59,7 @@ function requireLocalStudioRequest(request, reply, {
 }
 
 export {
+  isLocalStudioRequest,
   isLoopbackAddress,
   normalizeHostName,
   requireLocalStudioRequest

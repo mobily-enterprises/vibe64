@@ -1,8 +1,7 @@
 import { resolveScopedApiBasePath, normalizeSurfaceId } from "@jskit-ai/kernel/shared/surface";
 import {
   codexThreadInputValidator,
-  currentAppQueryInputValidator,
-  terminalInputValidator
+  currentAppQueryInputValidator
 } from "./inputSchemas.js";
 import { ACTION_READ_CURRENT_APP } from "./actions.js";
 import {
@@ -222,54 +221,6 @@ function registerRoutes(
         request.input.body || {}
       );
       reply.code(response?.ok === false ? 400 : 200).send(response);
-    }
-  );
-
-  router.register(
-    "GET",
-    `${routeBase}/issue-sessions/:sessionId/codex-terminal/:terminalSessionId`,
-    {
-      auth: "public",
-      surface: normalizedRouteSurface,
-      meta: {
-        tags: ["studio", "issue-sessions"],
-        summary: "Read a Codex terminal for a JSKIT issue session."
-      }
-    },
-    async function (request, reply) {
-      if (!requireLocalCurrentAppRequest(request, reply)) {
-        return;
-      }
-      const response = await getCurrentAppService(app).readCodexTerminal(
-        request.params.sessionId,
-        request.params.terminalSessionId
-      );
-      reply.code(response?.ok === false ? 404 : 200).send(response);
-    }
-  );
-
-  router.register(
-    "POST",
-    `${routeBase}/issue-sessions/:sessionId/codex-terminal/:terminalSessionId/input`,
-    {
-      auth: "public",
-      surface: normalizedRouteSurface,
-      meta: {
-        tags: ["studio", "issue-sessions"],
-        summary: "Write input to a Codex terminal for a JSKIT issue session."
-      },
-      body: terminalInputValidator
-    },
-    async function (request, reply) {
-      if (!requireLocalCurrentAppRequest(request, reply)) {
-        return;
-      }
-      const response = getCurrentAppService(app).writeCodexTerminal(
-        request.params.sessionId,
-        request.params.terminalSessionId,
-        request.input.body?.data || ""
-      );
-      reply.code(response?.ok === false ? 404 : 200).send(response);
     }
   );
 

@@ -58,7 +58,8 @@ export default defineConfig({
     proxy: {
       "/api": {
         target: apiProxyTarget,
-        changeOrigin: true
+        changeOrigin: true,
+        ws: true
       },
       ...viteModuleProxyEntries
     }

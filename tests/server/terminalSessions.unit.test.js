@@ -5,7 +5,9 @@ import {
   closeTerminalSession,
   closeTerminalSessionsForNamespacePrefix,
   countRunningTerminalSessions,
-  startTerminalSession
+  startTerminalSession,
+  subscribeTerminalSession,
+  writeTerminalSession
 } from "../../server/lib/terminalSessions.js";
 
 function longRunningNodeArgs() {
@@ -67,3 +69,54 @@ test("terminal sessions reuse one running terminal per namespace and enforce a r
     await closeTerminalSessionsForNamespacePrefix(prefix);
   }
 });
+
+test("terminal sessions stream PTY output to subscribers", async () => {
+  const namespace = `terminal-stream-test-${crypto.randomUUID()}`;
+  const session = startTerminalSession({
+    args: [
+      "-e",
+      "process.stdin.on('data', (chunk) => process.stdout.write(`echo:${chunk}`)); process.stdin.resume();"
+    ],
+    command: process.execPath,
+    commandPreview: "node echo",
+    namespace
+  });
+  const messages = [];
+
+  try {
+    const subscription = subscribeTerminalSession(session.id, (message) => {
+      messages.push(message);
+    }, {
+      namespace
+    });
+    assert.equal(subscription.ok, true);
+
+    writeTerminalSession(session.id, "hello\n", {
+      namespace
+    });
+
+    await assert.doesNotReject(waitFor(() => messages.some((message) =>
+      message.type === "output" && String(message.chunk || "").includes("echo:hello")
+    )));
+    subscription.unsubscribe();
+  } finally {
+    await closeTerminalSessionsForNamespacePrefix(namespace);
+  }
+});
+
+function waitFor(predicate, { timeoutMs = 2000, intervalMs = 25 } = {}) {
+  return new Promise((resolve, reject) => {
+    const startedAt = Date.now();
+    const timer = setInterval(() => {
+      if (predicate()) {
+        clearInterval(timer);
+        resolve();
+        return;
+      }
+      if (Date.now() - startedAt > timeoutMs) {
+        clearInterval(timer);
+        reject(new Error("Timed out waiting for terminal output."));
+      }
+    }, intervalMs);
+  });
+}

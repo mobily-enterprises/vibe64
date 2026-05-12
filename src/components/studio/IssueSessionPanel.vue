@@ -1,81 +1,75 @@
 <template>
   <v-sheet rounded="lg" class="studio-issue-sessions studio-screen__panel">
-    <div class="studio-issue-sessions__header">
-      <div>
-        <h2 class="text-subtitle-1 mb-1">Sessions</h2>
-        <p class="text-body-2 text-medium-emphasis mb-0">
-          JSKIT owns the timeline. Studio renders the current session and advances the next action.
-        </p>
-      </div>
-      <div class="studio-issue-sessions__header-actions">
-        <v-btn
-          color="primary"
-          variant="flat"
-          :loading="issueSessionBusy"
-          :disabled="!canCreateIssueSession"
-          :prepend-icon="mdiPlus"
-          @click="createSession"
-        >
-          New Session
-        </v-btn>
-        <v-chip size="small" variant="tonal">
-          {{ activeIssueSessionCount }}/{{ maxOpenIssueSessions }} active
-        </v-chip>
-        <v-btn
-          variant="tonal"
-          :loading="issueSessionsLoading"
-          :prepend-icon="mdiRefresh"
-          @click="loadIssueSessions"
-        >
-          Refresh
-        </v-btn>
-      </div>
-    </div>
-
     <v-alert v-if="issueSessionsError" type="error" variant="tonal" class="mb-3">
       {{ issueSessionsError }}
     </v-alert>
 
-    <div v-if="issueSessions.length" class="studio-issue-sessions__strip">
-      <v-btn
+    <div v-if="issueSessions.length || canCreateIssueSession" class="studio-issue-sessions__strip">
+      <v-chip
         v-for="session in issueSessions"
         :key="session.sessionId"
         :color="session.sessionId === selectedSessionId ? 'primary' : 'default'"
         :variant="session.sessionId === selectedSessionId ? 'flat' : 'tonal'"
-        class="studio-issue-sessions__tab"
+        class="studio-issue-sessions__tab studio-issue-sessions__tab-chip"
+        size="large"
         @click="selectSession(session.sessionId)"
       >
         <span class="studio-issue-sessions__status-dot" :class="`studio-issue-sessions__status-dot--${session.status}`" />
         <span>{{ shortSessionId(session.sessionId) }}</span>
-      </v-btn>
+        <button
+          v-if="canAbandonSessionFromChip(session)"
+          aria-label="Abandon selected session"
+          class="studio-issue-sessions__tab-close"
+          type="button"
+          @click.stop="requestAbandonSession(session)"
+          @mousedown.stop
+          @pointerdown.stop
+        >
+          <v-icon :icon="mdiClose" size="14" />
+        </button>
+      </v-chip>
+      <v-chip
+        v-if="canCreateIssueSession"
+        color="primary"
+        variant="tonal"
+        :prepend-icon="mdiPlus"
+        :disabled="issueSessionBusy"
+        class="studio-issue-sessions__tab studio-issue-sessions__new-tab"
+        :class="{ 'studio-issue-sessions__new-tab--busy': issueSessionBusy }"
+        size="large"
+        @click="createSession"
+      >
+        New Session
+      </v-chip>
     </div>
 
     <v-sheet v-else-if="!issueSessionsLoading" rounded="lg" border class="studio-issue-sessions__empty">
       <p class="text-body-2 text-medium-emphasis mb-0">No sessions yet.</p>
     </v-sheet>
 
+    <v-dialog v-model="abandonDialogOpen" max-width="30rem">
+      <v-card>
+        <v-card-title>Abandon session?</v-card-title>
+        <v-card-text>
+          This will abandon the selected session and close its Codex terminal.
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" @click="cancelAbandonSession">Cancel</v-btn>
+          <v-btn
+            color="error"
+            variant="flat"
+            :loading="issueSessionBusy"
+            @click="confirmAbandonSession"
+          >
+            Abandon
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
     <div v-if="selectedSession" class="studio-issue-sessions__workspace">
       <section class="studio-issue-sessions__main">
-        <div class="studio-issue-sessions__session-bar">
-          <div>
-            <h3 class="text-subtitle-1 mb-1">{{ selectedSession.sessionId }}</h3>
-            <p class="text-caption text-medium-emphasis mb-0">{{ selectedStepAction?.description || "Session complete." }}</p>
-          </div>
-          <div class="studio-issue-sessions__session-actions">
-            <v-chip size="small" variant="tonal">{{ selectedSession.status }}</v-chip>
-            <v-btn
-              color="error"
-              variant="tonal"
-              size="small"
-              :loading="issueSessionBusy"
-              :disabled="isTerminalSession"
-              @click="abandonCurrentSession"
-            >
-              Abandon
-            </v-btn>
-          </div>
-        </div>
-
         <div class="studio-issue-sessions__timeline">
           <div
             v-for="step in orderedStepDefinitions"
@@ -91,7 +85,6 @@
                 <span>{{ step.index + 1 }}. {{ step.label }}</span>
                 <v-chip size="x-small" variant="tonal">{{ step.kind }}</v-chip>
               </div>
-              <p>{{ step.description }}</p>
 
               <div v-if="step.id === selectedSession.currentStep" class="studio-issue-sessions__step-action">
                 <v-textarea
@@ -213,57 +206,6 @@
             @output="recordCodexTerminalOutput(terminalSession.sessionId, $event)"
           />
         </div>
-
-        <v-sheet rounded="lg" border class="studio-issue-sessions__details">
-          <div class="studio-issue-sessions__field">
-            <span>Issue</span>
-            <a v-if="selectedSession.issueUrl" :href="selectedSession.issueUrl" target="_blank" rel="noreferrer">
-              {{ selectedSession.issueUrl }}
-            </a>
-            <p v-else>not created</p>
-          </div>
-          <div class="studio-issue-sessions__field">
-            <span>PR</span>
-            <a v-if="selectedSession.prUrl" :href="selectedSession.prUrl" target="_blank" rel="noreferrer">
-              {{ selectedSession.prUrl }}
-            </a>
-            <p v-else>not created</p>
-          </div>
-          <div class="studio-issue-sessions__field">
-            <span>Worktree</span>
-            <p>{{ selectedSession.worktree || "not created" }}</p>
-          </div>
-          <div class="studio-issue-sessions__field">
-            <span>Next</span>
-            <code>{{ selectedSession.nextCommand || "none" }}</code>
-          </div>
-        </v-sheet>
-
-        <v-sheet rounded="lg" border class="studio-issue-sessions__details">
-          <h4 class="text-subtitle-2 mb-2">Receipts</h4>
-          <v-list v-if="selectedSession.receipts?.length" density="compact" class="studio-issue-sessions__list">
-            <v-list-item
-              v-for="receipt in selectedSession.receipts"
-              :key="receipt.stepId"
-              :title="receipt.stepId"
-              :subtitle="receipt.receipt"
-            />
-          </v-list>
-          <p v-else class="text-body-2 text-medium-emphasis mb-0">No receipts yet.</p>
-        </v-sheet>
-
-        <v-expansion-panels v-if="selectedSession.issueText || selectedSession.transcriptLog" variant="accordion">
-          <v-expansion-panel v-if="selectedSession.issueText" title="Issue text">
-            <v-expansion-panel-text>
-              <pre class="studio-issue-sessions__pre">{{ selectedSession.issueText }}</pre>
-            </v-expansion-panel-text>
-          </v-expansion-panel>
-          <v-expansion-panel v-if="selectedSession.transcriptLog" title="Transcript">
-            <v-expansion-panel-text>
-              <pre class="studio-issue-sessions__pre">{{ selectedSession.transcriptLog }}</pre>
-            </v-expansion-panel-text>
-          </v-expansion-panel>
-        </v-expansion-panels>
       </aside>
     </div>
   </v-sheet>
@@ -274,12 +216,12 @@ import { computed, onMounted, ref, watch } from "vue";
 import {
   mdiAlertCircle,
   mdiCheckCircle,
+  mdiClose,
   mdiCircleOutline,
   mdiCircleSlice8,
   mdiContentCopy,
   mdiPlay,
-  mdiPlus,
-  mdiRefresh
+  mdiPlus
 } from "@mdi/js";
 import CodexSessionTerminal from "@/components/studio/CodexSessionTerminal.vue";
 import { useIssueSessions } from "@/composables/useIssueSessions.js";
@@ -287,11 +229,12 @@ import { extractMarkedOutput } from "@/lib/codexOutput.js";
 
 const copyStatus = ref("");
 const codexTerminalOutputBySessionId = ref({});
+const abandonDialogOpen = ref(false);
+const abandonSessionId = ref("");
 const terminalSessionById = ref({});
 
 const {
   abandonSelectedSession,
-  activeIssueSessionCount,
   canCreateIssueSession,
   createSession,
   isChoiceStep,
@@ -319,7 +262,7 @@ const orderedStepDefinitions = computed(() => {
 const completedStepIds = computed(() => new Set(selectedSession.value?.completedSteps || []));
 
 const isTerminalSession = computed(() => {
-  return selectedSession.value?.status === "finished" || selectedSession.value?.status === "abandoned";
+  return isClosedSession(selectedSession.value);
 });
 
 const openTerminalSessionCount = computed(() => {
@@ -396,9 +339,16 @@ function isAbandonedSession(session = {}) {
   return String(session?.status || "") === "abandoned";
 }
 
+function isClosedSession(session = {}) {
+  return ["abandoned", "finished"].includes(String(session?.status || ""));
+}
+
 function isOpenSession(session = {}) {
-  const status = String(session?.status || "");
-  return status !== "abandoned" && status !== "finished";
+  return !isClosedSession(session);
+}
+
+function canAbandonSessionFromChip(session = {}) {
+  return session.sessionId === selectedSessionId.value && !isClosedSession(session);
 }
 
 function stepState(step) {
@@ -535,12 +485,27 @@ async function runCodexOutputStep() {
   }
 }
 
-async function abandonCurrentSession() {
-  const abandonedSessionId = selectedSessionId.value;
+function requestAbandonSession(session = {}) {
+  abandonSessionId.value = session.sessionId || "";
+  abandonDialogOpen.value = Boolean(abandonSessionId.value);
+}
+
+function cancelAbandonSession() {
+  abandonDialogOpen.value = false;
+  abandonSessionId.value = "";
+}
+
+async function confirmAbandonSession() {
+  const abandonedSessionId = abandonSessionId.value || selectedSessionId.value;
+  if (!abandonedSessionId || abandonedSessionId !== selectedSessionId.value) {
+    cancelAbandonSession();
+    return;
+  }
   const response = await abandonSelectedSession();
   if (response?.status === "abandoned") {
     forgetTerminalSession(abandonedSessionId);
   }
+  cancelAbandonSession();
 }
 
 function runCurrentAction() {
@@ -564,6 +529,7 @@ watch(issueSessions, () => {
 onMounted(() => {
   void loadIssueSessions();
 });
+
 </script>
 
 <style scoped>
@@ -571,8 +537,6 @@ onMounted(() => {
   padding: 0.75rem;
 }
 
-.studio-issue-sessions__header,
-.studio-issue-sessions__session-bar,
 .studio-issue-sessions__action-title {
   align-items: flex-start;
   display: flex;
@@ -581,12 +545,6 @@ onMounted(() => {
   min-width: 0;
 }
 
-.studio-issue-sessions__header {
-  margin-bottom: 0.75rem;
-}
-
-.studio-issue-sessions__header-actions,
-.studio-issue-sessions__session-actions,
 .studio-issue-sessions__action-buttons,
 .studio-issue-sessions__choice-row {
   align-items: center;
@@ -604,7 +562,44 @@ onMounted(() => {
 }
 
 .studio-issue-sessions__tab {
+  align-items: center;
+  display: flex;
   flex: 0 0 auto;
+}
+
+.studio-issue-sessions__tab-chip {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.studio-issue-sessions__new-tab {
+  border: 1px solid rgba(var(--v-theme-primary), 0.42);
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.studio-issue-sessions__new-tab--busy {
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+.studio-issue-sessions__tab-close {
+  align-items: center;
+  background: rgba(var(--v-theme-on-primary), 0.18);
+  border: 1px solid rgba(var(--v-theme-on-primary), 0.44);
+  border-radius: 999px;
+  color: rgb(var(--v-theme-on-primary));
+  cursor: pointer;
+  display: inline-flex;
+  height: 1.25rem;
+  margin-inline-start: 0.45rem;
+  place-content: center;
+  width: 1.25rem;
+}
+
+.studio-issue-sessions__tab-close:hover,
+.studio-issue-sessions__tab-close:focus-visible {
+  background: rgba(var(--v-theme-on-primary), 0.32);
 }
 
 .studio-issue-sessions__status-dot {
@@ -666,8 +661,7 @@ onMounted(() => {
 .studio-issue-sessions__timeline {
   border: 0;
   border-radius: 0;
-  max-height: 24rem;
-  overflow: auto;
+  overflow: visible;
   padding: 0;
 }
 
@@ -709,23 +703,12 @@ onMounted(() => {
   font-weight: 650;
 }
 
-.studio-issue-sessions__step-copy p {
-  color: rgb(var(--v-theme-on-surface-variant));
-  font-size: 0.78rem;
-  line-height: 1.25;
-  margin: 0.15rem 0 0;
-}
-
 .studio-issue-sessions__step-action {
   border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   display: grid;
   gap: 0.55rem;
   margin-top: 0.65rem;
   padding-top: 0.65rem;
-}
-
-.studio-issue-sessions__details {
-  padding: 0.65rem;
 }
 
 .studio-issue-sessions__action-buttons,
@@ -737,45 +720,8 @@ onMounted(() => {
   color: rgb(var(--v-theme-on-surface-variant));
 }
 
-.studio-issue-sessions__field {
-  margin-bottom: 0.65rem;
-  min-width: 0;
-}
-
-.studio-issue-sessions__field:last-child {
-  margin-bottom: 0;
-}
-
-.studio-issue-sessions__field > span {
-  color: rgb(var(--v-theme-on-surface-variant));
-  display: block;
-  font-size: 0.75rem;
-  margin-bottom: 0.125rem;
-}
-
-.studio-issue-sessions__field p,
-.studio-issue-sessions__field code,
-.studio-issue-sessions__field a,
-.studio-issue-sessions__list :deep(.v-list-item-title),
-.studio-issue-sessions__list :deep(.v-list-item-subtitle) {
-  overflow-wrap: anywhere;
-}
-
-.studio-issue-sessions__monospace :deep(textarea),
-.studio-issue-sessions__pre {
+.studio-issue-sessions__monospace :deep(textarea) {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-}
-
-.studio-issue-sessions__pre {
-  font-size: 0.8125rem;
-  margin: 0;
-  overflow-x: auto;
-  white-space: pre-wrap;
-}
-
-.studio-issue-sessions__list {
-  background: transparent;
-  padding-block: 0;
 }
 
 @media (max-width: 860px) {
@@ -785,16 +731,9 @@ onMounted(() => {
 }
 
 @media (max-width: 620px) {
-  .studio-issue-sessions__header,
-  .studio-issue-sessions__session-bar,
   .studio-issue-sessions__action-title {
     align-items: stretch;
     flex-direction: column;
-  }
-
-  .studio-issue-sessions__header-actions,
-  .studio-issue-sessions__session-actions {
-    justify-content: flex-start;
   }
 }
 </style>

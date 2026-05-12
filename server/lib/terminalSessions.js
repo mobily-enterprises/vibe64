@@ -43,6 +43,19 @@ function terminalSessionResponse(session) {
   };
 }
 
+function sendToSubscribers(session, message) {
+  if (!session?.subscribers?.size) {
+    return;
+  }
+  for (const subscriber of [...session.subscribers]) {
+    try {
+      subscriber(message);
+    } catch {
+      session.subscribers.delete(subscriber);
+    }
+  }
+}
+
 function listStoredSessions({ namespace = "", namespacePrefix = "", runningOnly = false } = {}) {
   const namespaces = namespace
     ? [normalizeNamespace(namespace)]
@@ -143,16 +156,26 @@ function startTerminalSession({
     onClose,
     output: "",
     status: "running",
+    subscribers: new Set(),
     terminal
   };
 
   terminal.onData((data) => {
     session.output = trimBuffer(session.output + data);
+    sendToSubscribers(session, {
+      chunk: data,
+      type: "output"
+    });
   });
 
   terminal.onExit(({ exitCode }) => {
     session.exitCode = exitCode;
     session.status = "exited";
+    sendToSubscribers(session, {
+      exitCode,
+      status: session.status,
+      type: "status"
+    });
     void runCloseHook(session, "exit");
   });
 
@@ -171,6 +194,31 @@ function readTerminalSession(id, { namespace = "default" } = {}) {
   }
 
   return terminalSessionResponse(session);
+}
+
+function subscribeTerminalSession(id, subscriber, { namespace = "default" } = {}) {
+  const sessions = sessionsForNamespace(namespace);
+  const session = sessions.get(id);
+  if (!session) {
+    return {
+      ok: false,
+      error: "Terminal session not found."
+    };
+  }
+  if (typeof subscriber !== "function") {
+    return {
+      ok: false,
+      error: "Terminal subscriber must be a function."
+    };
+  }
+
+  session.subscribers.add(subscriber);
+  return {
+    ...terminalSessionResponse(session),
+    unsubscribe() {
+      session.subscribers.delete(subscriber);
+    }
+  };
 }
 
 function writeTerminalSession(id, data, { namespace = "default" } = {}) {
@@ -249,5 +297,6 @@ export {
   countRunningTerminalSessions,
   readTerminalSession,
   startTerminalSession,
+  subscribeTerminalSession,
   writeTerminalSession
 };

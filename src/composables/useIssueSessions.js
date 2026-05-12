@@ -26,6 +26,16 @@ function visibleIssueSessions(sessions = []) {
   return sessions.filter((session) => String(session?.status || "") !== "abandoned");
 }
 
+function sessionOrderKey(session = {}) {
+  return String(session.createdAt || session.startedAt || session.sessionId || "");
+}
+
+function orderIssueSessions(sessions = []) {
+  return [...sessions].sort((left, right) => {
+    return sessionOrderKey(left).localeCompare(sessionOrderKey(right));
+  });
+}
+
 function useIssueSessions() {
   const issueSessions = ref([]);
   const issueSessionsLoading = ref(false);
@@ -87,7 +97,7 @@ function useIssueSessions() {
   }
 
   function applySessionList(sessions = []) {
-    const displaySessions = visibleIssueSessions(sessions);
+    const displaySessions = orderIssueSessions(visibleIssueSessions(sessions));
     issueSessions.value = displaySessions;
     const selectedStillExists = displaySessions.some((session) => session.sessionId === selectedSessionId.value);
     if (selectedStillExists) {

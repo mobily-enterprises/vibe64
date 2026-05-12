@@ -441,6 +441,8 @@ const secondCodexPromptSessionId = "2026-05-12_01-03-40";
 const thirdCodexPromptText = "Create a third GitHub issue while two terminals keep running.";
 const thirdCodexPromptSessionId = "2026-05-12_01-04-41";
 const nonCodexStepSessionId = "2026-05-12_01-05-42";
+const sessionWorktreePath = (sessionId: string) =>
+  `/workspace/example-target-app/.jskit/sessions/active/${sessionId}/worktree`;
 const codexThreadProbe = "!echo $CODEX_THREAD_ID";
 const codexThreadCommand = "echo $CODEX_THREAD_ID";
 const codexThreadId = "019e1575-2458-7b93-bf9d-e7d7ffd49ad2";
@@ -511,19 +513,19 @@ const codexPromptSessionPayload = {
   issueUrl: "",
   prUrl: "",
   transcriptLog: "",
-  worktree: "/workspace/example-target-app/.jskit/sessions/worktrees/2026-05-12_01-02-39"
+  worktree: sessionWorktreePath(codexPromptSessionId)
 };
 const secondCodexPromptSessionPayload = {
   ...codexPromptSessionPayload,
   sessionId: secondCodexPromptSessionId,
   prompt: secondCodexPromptText,
-  worktree: "/workspace/example-target-app/.jskit/sessions/worktrees/2026-05-12_01-03-40"
+  worktree: sessionWorktreePath(secondCodexPromptSessionId)
 };
 const thirdCodexPromptSessionPayload = {
   ...codexPromptSessionPayload,
   sessionId: thirdCodexPromptSessionId,
   prompt: thirdCodexPromptText,
-  worktree: "/workspace/example-target-app/.jskit/sessions/worktrees/2026-05-12_01-04-41"
+  worktree: sessionWorktreePath(thirdCodexPromptSessionId)
 };
 const nonCodexStepSessionPayload = {
   ...codexPromptSessionPayload,
@@ -545,7 +547,7 @@ const nonCodexStepSessionPayload = {
   },
   codex: null,
   prompt: "",
-  worktree: "/workspace/example-target-app/.jskit/sessions/worktrees/2026-05-12_01-05-42"
+  worktree: sessionWorktreePath(nonCodexStepSessionId)
 };
 const codexIssueDraftedPayload = {
   ...codexPromptSessionPayload,
@@ -641,8 +643,127 @@ function mockCodexThreadIdForSession(sessionId: string) {
   return `019e1575-2458-7b93-bf9d-${suffix}`;
 }
 
-function codexThreadCaptured(inputs: string[]) {
-  return inputs.includes(codexThreadCommand) && inputs.includes("\r");
+async function mockCodexTerminalWebSocket(page, {
+  initialOutputBySessionId,
+  terminalInputs
+}: {
+  initialOutputBySessionId: Record<string, string>;
+  terminalInputs: Record<string, string[]> | string[];
+}) {
+  await page.exposeFunction("__recordStudioCodexTerminalInput", ({ sessionId, data }: {
+    data: string;
+    sessionId: string;
+  }) => {
+    if (Array.isArray(terminalInputs)) {
+      terminalInputs.push(String(data || ""));
+      return;
+    }
+    const terminalInputMap = terminalInputs as Record<string, string[]>;
+    terminalInputMap[sessionId] ||= [];
+    terminalInputMap[sessionId].push(String(data || ""));
+  });
+  await page.addInitScript((options) => {
+    const inputsBySessionId: Record<string, string[]> = {};
+    const socketsBySessionId: Record<string, any[]> = {};
+    const studioWindow = window as unknown as {
+      __recordStudioCodexTerminalInput: (input: { data: string; sessionId: string }) => void;
+      __studioPushCodexTerminalOutput: (input: { output: string; sessionId: string }) => void;
+      WebSocket: typeof WebSocket;
+    };
+    function sessionThreadId(sessionId) {
+      const suffix = String(sessionId || "")
+        .replace(/\D/gu, "")
+        .padEnd(12, "0")
+        .slice(-12);
+      return `019e1575-2458-7b93-bf9d-${suffix}`;
+    }
+    class MockStudioWebSocket extends EventTarget {
+      static CONNECTING = 0;
+      static OPEN = 1;
+      static CLOSING = 2;
+      static CLOSED = 3;
+      readyState: number;
+      sessionId: string;
+      terminalSessionId: string;
+      url: string;
+
+      constructor(url) {
+        super();
+        this.url = String(url || "");
+        this.readyState = MockStudioWebSocket.CONNECTING;
+        const match = /\/issue-sessions\/([^/]+)\/codex-terminal\/([^/]+)\/ws/u.exec(new URL(this.url).pathname);
+        this.sessionId = match ? decodeURIComponent(match[1]) : "";
+        this.terminalSessionId = match ? decodeURIComponent(match[2]) : "";
+        inputsBySessionId[this.sessionId] ||= [];
+        socketsBySessionId[this.sessionId] ||= [];
+        socketsBySessionId[this.sessionId].push(this);
+        window.setTimeout(() => {
+          this.readyState = MockStudioWebSocket.OPEN;
+          this.dispatchEvent(new Event("open"));
+          this.__emit({
+            type: "snapshot",
+            session: {
+              ok: true,
+              id: this.terminalSessionId,
+              status: "running",
+              commandPreview: "codex",
+              output: options.initialOutputBySessionId[this.sessionId] || "Codex ready.",
+              needsThreadCapture: true,
+              threadProbe: options.codexThreadProbe
+            }
+          });
+        }, 0);
+      }
+
+      send(rawMessage) {
+        const message = JSON.parse(String(rawMessage || "{}"));
+        if (message.type !== "input") {
+          return;
+        }
+        const data = String(message.data || "");
+        inputsBySessionId[this.sessionId].push(data);
+        studioWindow.__recordStudioCodexTerminalInput({
+          data,
+          sessionId: this.sessionId
+        });
+        if (data === "\r" && inputsBySessionId[this.sessionId].includes(options.codexThreadCommand)) {
+          this.__emit({
+            chunk: `\n${options.codexThreadProbe}\n${options.codexThreadIdBySessionId[this.sessionId] || sessionThreadId(this.sessionId)}\n`,
+            type: "output"
+          });
+        }
+      }
+
+      close() {
+        this.readyState = MockStudioWebSocket.CLOSED;
+        socketsBySessionId[this.sessionId] = (socketsBySessionId[this.sessionId] || [])
+          .filter((socket) => socket !== this);
+        this.dispatchEvent(new CloseEvent("close"));
+      }
+
+      __emit(message) {
+        this.dispatchEvent(new MessageEvent("message", {
+          data: JSON.stringify(message)
+        }));
+      }
+    }
+    studioWindow.__studioPushCodexTerminalOutput = ({ sessionId, output }) => {
+      for (const socket of socketsBySessionId[sessionId] || []) {
+        socket.__emit({
+          chunk: String(output || ""),
+          type: "output"
+        });
+      }
+    };
+    studioWindow.WebSocket = MockStudioWebSocket as unknown as typeof WebSocket;
+  }, {
+    codexThreadCommand,
+    codexThreadIdBySessionId: {
+      [codexPromptSessionId]: codexThreadId
+    },
+    codexThreadProbe,
+    initialOutputBySessionId
+  });
 }
 
 async function mockBootstrapBlocked(page) {
@@ -735,6 +856,12 @@ async function mockCurrentAppInspection(page) {
 async function mockCodexPromptSession(page, { stepPayloads = [], terminalInputs = [] } = {}) {
   let terminalOutput = "Codex ready.";
   let stepRequestCount = 0;
+  await mockCodexTerminalWebSocket(page, {
+    initialOutputBySessionId: {
+      [codexPromptSessionId]: terminalOutput
+    },
+    terminalInputs
+  });
   await page.route("**/api/studio/current-app", async (route) => {
     await route.fulfill({
       contentType: "application/json",
@@ -792,47 +919,20 @@ async function mockCodexPromptSession(page, { stepPayloads = [], terminalInputs 
       })
     });
   });
-  await page.route(
-    `**/api/studio/current-app/issue-sessions/${codexPromptSessionId}/codex-terminal/term-1`,
-    async (route) => {
-      await route.fulfill({
-        contentType: "application/json",
-        body: JSON.stringify({
-          ok: true,
-          id: "term-1",
-          status: "running",
-          commandPreview: "codex",
-          output: terminalOutput,
-          needsThreadCapture: true,
-          threadProbe: codexThreadProbe
-        })
-      });
-    }
-  );
-  await page.route(
-    `**/api/studio/current-app/issue-sessions/${codexPromptSessionId}/codex-terminal/term-1/input`,
-    async (route) => {
-      const input = route.request().postDataJSON().data;
-      terminalInputs.push(input);
-      if (input === "\r" && terminalInputs.includes(codexThreadCommand)) {
-        terminalOutput = [
-          "Codex ready.",
-          codexThreadProbe,
-          codexThreadId
-        ].join("\n");
-      }
-      await route.fulfill({
-        contentType: "application/json",
-        body: JSON.stringify({
-          ok: true
-        })
-      });
-    }
-  );
-
   return {
-    setTerminalOutput(output) {
+    async setTerminalOutput(output) {
       terminalOutput = String(output || "");
+      await page.evaluate(({ output: nextOutput, sessionId }) => {
+        (window as unknown as {
+          __studioPushCodexTerminalOutput: (input: { output: string; sessionId: string }) => void;
+        }).__studioPushCodexTerminalOutput({
+          output: nextOutput,
+          sessionId
+        });
+      }, {
+        output: terminalOutput,
+        sessionId: codexPromptSessionId
+      });
     },
     stepPayloads,
     terminalInputs
@@ -847,8 +947,15 @@ async function mockCodexPromptSessions(page, sessionPayloads) {
   let visibleSessionPayloads = [...sessionPayloads];
   const terminalStarts = Object.fromEntries(sessionPayloads.map((session) => [session.sessionId, 0]));
   const terminalDeletes = Object.fromEntries(sessionPayloads.map((session) => [session.sessionId, 0]));
-  const terminalInputs = Object.fromEntries(sessionPayloads.map((session) => [session.sessionId, []]));
+  const terminalInputs = Object.fromEntries(sessionPayloads.map((session) => [session.sessionId, []])) as Record<string, string[]>;
   const payloadsBySessionId = Object.fromEntries(sessionPayloads.map((session) => [session.sessionId, session]));
+  await mockCodexTerminalWebSocket(page, {
+    initialOutputBySessionId: Object.fromEntries(sessionPayloads.map((session) => [
+      session.sessionId,
+      `Codex ready for ${session.sessionId}.`
+    ])),
+    terminalInputs
+  });
 
   await page.route("**/api/studio/current-app", async (route) => {
     await route.fulfill({
@@ -931,32 +1038,10 @@ async function mockCodexPromptSessions(page, sessionPayloads) {
         }
         await route.fulfill({
           contentType: "application/json",
+          status: 410,
           body: JSON.stringify({
-            ok: true,
-            id: `term-${sessionId}`,
-            status: "running",
-            commandPreview: "codex",
-            output: codexThreadCaptured(terminalInputs[sessionId])
-              ? [
-                `Codex ready for ${sessionId}.`,
-                codexThreadProbe,
-                mockCodexThreadIdForSession(sessionId)
-              ].join("\n")
-              : `Codex ready for ${sessionId}.`,
-            needsThreadCapture: true,
-            threadProbe: codexThreadProbe
-          })
-        });
-      }
-    );
-    await page.route(
-      `**/api/studio/current-app/issue-sessions/${sessionId}/codex-terminal/term-${sessionId}/input`,
-      async (route) => {
-        terminalInputs[sessionId].push(route.request().postDataJSON().data);
-        await route.fulfill({
-          contentType: "application/json",
-          body: JSON.stringify({
-            ok: true
+            ok: false,
+            error: "HTTP terminal read fallback is not available in tests."
           })
         });
       }
@@ -1229,12 +1314,17 @@ test.describe("studio startup navigation", () => {
     const doneButton = page.getByRole("button", { name: "Done" });
     await expect(doneButton).toBeVisible();
     await expect(doneButton).toBeDisabled();
+    await expect(page.locator(".xterm-rows").first()).toContainText("Codex ready.");
+    const terminalHost = page.locator(".codex-terminal__host").first();
+    await terminalHost.click();
+    await expect(page.getByText("focused", { exact: true }).first()).toBeVisible();
+    await expect(terminalHost).toHaveCSS("border-color", "rgb(78, 161, 255)");
 
     await expect.poll(() => terminalInputs.length).toBe(7);
     expect(terminalInputs.slice(0, 6)).toEqual(codexShellSubmitSequence);
     expect(terminalInputs[6]).toContain(codexPromptText);
 
-    codexSession.setTerminalOutput([
+    await codexSession.setTerminalOutput([
       "Codex ready.",
       "[issue_text]",
       "# Add session UI",
