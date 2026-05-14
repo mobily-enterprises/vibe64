@@ -1,0 +1,3236 @@
+{
+  "schemaVersion": 1,
+  "generatedBy": "jskit helper-map update",
+  "rootPackage": {
+    "name": "jskit-ai-studio",
+    "version": "0.1.0"
+  },
+  "app": {
+    "files": [
+      {
+        "path": "config/public.js",
+        "exports": [
+          {
+            "name": "config",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "config",
+            "kind": "value",
+            "role": "export"
+          }
+        ]
+      },
+      {
+        "path": "config/server.js",
+        "exports": [
+          {
+            "name": "config",
+            "kind": "value",
+            "role": "export"
+          }
+        ]
+      },
+      {
+        "path": "config/surfaceAccessPolicies.js",
+        "exports": [
+          {
+            "name": "surfaceAccessPolicies",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "surfaceAccessPolicies",
+            "kind": "value",
+            "role": "export"
+          }
+        ]
+      },
+      {
+        "path": "packages/app-setup-doctor/package.descriptor.mjs",
+        "exports": [
+          {
+            "name": "default",
+            "kind": "default",
+            "role": "default"
+          }
+        ]
+      },
+      {
+        "path": "packages/app-setup-doctor/src/server/actions.js",
+        "exports": [
+          {
+            "name": "ACTION_GET_STATUS",
+            "kind": "value",
+            "role": "component_or_class"
+          },
+          {
+            "name": "featureActions",
+            "kind": "value",
+            "role": "export"
+          }
+        ]
+      },
+      {
+        "path": "packages/app-setup-doctor/src/server/AppSetupDoctorProvider.js",
+        "exports": [
+          {
+            "name": "AppSetupDoctorProvider",
+            "kind": "class",
+            "role": "component_or_class"
+          }
+        ]
+      },
+      {
+        "path": "packages/app-setup-doctor/src/server/inputSchemas.js",
+        "exports": [
+          {
+            "name": "statusQueryInputValidator",
+            "kind": "value",
+            "role": "export"
+          },
+          {
+            "name": "terminalInputValidator",
+            "kind": "value",
+            "role": "export"
+          },
+          {
+            "name": "terminalStartInputValidator",
+            "kind": "value",
+            "role": "export"
+          }
+        ]
+      },
+      {
+        "path": "packages/app-setup-doctor/src/server/registerRoutes.js",
+        "exports": [
+          {
+            "name": "registerRoutes",
+            "kind": "function",
+            "role": "export"
+          }
+        ]
+      },
+      {
+        "path": "packages/app-setup-doctor/src/server/service.js",
+        "exports": [
+          {
+            "name": "configImportProblems",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "configImportSpecifiersFromText",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "createService",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "directDependencyNames",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "doctorIssueLines",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "ghRepoCreateScript",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "gitCheckpointScript",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "githubBranchRefApiPath",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "inspectAppSetup",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "missingDirectDependencies",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "npmInstallScript",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "onlyUiVerificationDoctorIssues",
+            "kind": "function",
+            "role": "export"
+          }
+        ]
+      },
+      {
+        "path": "packages/bootstrap-doctor/package.descriptor.mjs",
+        "exports": [
+          {
+            "name": "default",
+            "kind": "default",
+            "role": "default"
+          }
+        ]
+      },
+      {
+        "path": "packages/bootstrap-doctor/src/server/actions.js",
+        "exports": [
+          {
+            "name": "ACTION_READ_BOOTSTRAP",
+            "kind": "value",
+            "role": "component_or_class"
+          },
+          {
+            "name": "ACTION_REPAIR_BOOTSTRAP",
+            "kind": "value",
+            "role": "component_or_class"
+          },
+          {
+            "name": "featureActions",
+            "kind": "value",
+            "role": "export"
+          }
+        ]
+      },
+      {
+        "path": "packages/bootstrap-doctor/src/server/BootstrapDoctorProvider.js",
+        "exports": [
+          {
+            "name": "BootstrapDoctorProvider",
+            "kind": "class",
+            "role": "component_or_class"
+          }
+        ]
+      },
+      {
+        "path": "packages/bootstrap-doctor/src/server/containerEngine.js",
+        "exports": [
+          {
+            "name": "dockerCommand",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "runDocker",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "shellQuote",
+            "kind": "function",
+            "role": "export"
+          }
+        ]
+      },
+      {
+        "path": "packages/bootstrap-doctor/src/server/inputSchemas.js",
+        "exports": [
+          {
+            "name": "bootstrapQueryInputValidator",
+            "kind": "value",
+            "role": "export"
+          },
+          {
+            "name": "repairInputValidator",
+            "kind": "value",
+            "role": "export"
+          },
+          {
+            "name": "terminalInputValidator",
+            "kind": "value",
+            "role": "export"
+          },
+          {
+            "name": "terminalStartInputValidator",
+            "kind": "value",
+            "role": "export"
+          }
+        ]
+      },
+      {
+        "path": "packages/bootstrap-doctor/src/server/registerRoutes.js",
+        "exports": [
+          {
+            "name": "registerRoutes",
+            "kind": "function",
+            "role": "export"
+          }
+        ]
+      },
+      {
+        "path": "packages/bootstrap-doctor/src/server/service.js",
+        "exports": [
+          {
+            "name": "codexBrowserLoginCommandArgs",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "codexDeviceLoginCommandArgs",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "codexLoginRepairs",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "createService",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "isBootstrapReady",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "mysqlCapabilitySql",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "mysqlRepair",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "resolveStudioRoot",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "TOOLCHAIN_IMAGE",
+            "kind": "value",
+            "role": "component_or_class"
+          }
+        ]
+      },
+      {
+        "path": "packages/current-app/package.descriptor.mjs",
+        "exports": [
+          {
+            "name": "default",
+            "kind": "default",
+            "role": "default"
+          }
+        ]
+      },
+      {
+        "path": "packages/current-app/src/server/actions.js",
+        "exports": [
+          {
+            "name": "ACTION_READ_CURRENT_APP",
+            "kind": "value",
+            "role": "component_or_class"
+          },
+          {
+            "name": "featureActions",
+            "kind": "value",
+            "role": "export"
+          }
+        ]
+      },
+      {
+        "path": "packages/current-app/src/server/CurrentAppProvider.js",
+        "exports": [
+          {
+            "name": "CurrentAppProvider",
+            "kind": "class",
+            "role": "component_or_class"
+          }
+        ]
+      },
+      {
+        "path": "packages/current-app/src/server/inputSchemas.js",
+        "exports": [
+          {
+            "name": "codexAttachmentInputValidator",
+            "kind": "value",
+            "role": "export"
+          },
+          {
+            "name": "codexThreadInputValidator",
+            "kind": "value",
+            "role": "export"
+          },
+          {
+            "name": "currentAppQueryInputValidator",
+            "kind": "value",
+            "role": "export"
+          },
+          {
+            "name": "terminalInputValidator",
+            "kind": "value",
+            "role": "export"
+          }
+        ]
+      },
+      {
+        "path": "packages/current-app/src/server/registerRoutes.js",
+        "exports": [
+          {
+            "name": "registerRoutes",
+            "kind": "function",
+            "role": "export"
+          }
+        ]
+      },
+      {
+        "path": "packages/current-app/src/server/service.js",
+        "exports": [
+          {
+            "name": "APP_TEST_TESTRUN_COMMAND_CONFIG",
+            "kind": "value",
+            "role": "component_or_class"
+          },
+          {
+            "name": "createService",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "inspectCurrentApp",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "resolveAppTestConfig",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "resolveCurrentAppRoot",
+            "kind": "function",
+            "role": "helper"
+          }
+        ]
+      },
+      {
+        "path": "packages/main/package.descriptor.mjs",
+        "exports": [
+          {
+            "name": "default",
+            "kind": "default",
+            "role": "default"
+          }
+        ]
+      },
+      {
+        "path": "packages/main/src/client/index.js",
+        "exports": [
+          {
+            "name": "MainClientProvider",
+            "kind": "class",
+            "role": "component_or_class"
+          },
+          {
+            "name": "registerMainClientComponent",
+            "kind": "function",
+            "role": "export"
+          }
+        ]
+      },
+      {
+        "path": "packages/main/src/client/providers/MainClientProvider.js",
+        "exports": [
+          {
+            "name": "MainClientProvider",
+            "kind": "class",
+            "role": "component_or_class"
+          },
+          {
+            "name": "registerMainClientComponent",
+            "kind": "function",
+            "role": "export"
+          }
+        ]
+      },
+      {
+        "path": "packages/main/src/server/index.js",
+        "exports": [
+          {
+            "name": "MainServiceProvider",
+            "kind": "class",
+            "role": "component_or_class"
+          }
+        ]
+      },
+      {
+        "path": "packages/main/src/server/loadAppConfig.js",
+        "exports": [
+          {
+            "name": "loadAppConfig",
+            "kind": "function",
+            "role": "helper"
+          }
+        ]
+      },
+      {
+        "path": "packages/main/src/server/MainServiceProvider.js",
+        "exports": [
+          {
+            "name": "MainServiceProvider",
+            "kind": "class",
+            "role": "component_or_class"
+          }
+        ]
+      },
+      {
+        "path": "packages/target-app-doctor/package.descriptor.mjs",
+        "exports": [
+          {
+            "name": "default",
+            "kind": "default",
+            "role": "default"
+          }
+        ]
+      },
+      {
+        "path": "packages/target-app-doctor/src/server/actions.js",
+        "exports": [
+          {
+            "name": "ACTION_GET_STATUS",
+            "kind": "value",
+            "role": "component_or_class"
+          },
+          {
+            "name": "featureActions",
+            "kind": "value",
+            "role": "export"
+          }
+        ]
+      },
+      {
+        "path": "packages/target-app-doctor/src/server/inputSchemas.js",
+        "exports": [
+          {
+            "name": "statusQueryInputValidator",
+            "kind": "value",
+            "role": "export"
+          },
+          {
+            "name": "terminalInputValidator",
+            "kind": "value",
+            "role": "export"
+          },
+          {
+            "name": "terminalStartInputValidator",
+            "kind": "value",
+            "role": "export"
+          }
+        ]
+      },
+      {
+        "path": "packages/target-app-doctor/src/server/registerRoutes.js",
+        "exports": [
+          {
+            "name": "registerRoutes",
+            "kind": "function",
+            "role": "export"
+          }
+        ]
+      },
+      {
+        "path": "packages/target-app-doctor/src/server/service.js",
+        "exports": [
+          {
+            "name": "createService",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "ghRepoCreateRepair",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "ghRepoCreateScript",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "gitIdentityRepair",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "gitInitRepair",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "inspectTargetApp",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "isTargetAppReady",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "repoNameFromTargetRoot",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "validateGitIdentityInputs",
+            "kind": "function",
+            "role": "helper"
+          }
+        ]
+      },
+      {
+        "path": "packages/target-app-doctor/src/server/TargetAppDoctorProvider.js",
+        "exports": [
+          {
+            "name": "TargetAppDoctorProvider",
+            "kind": "class",
+            "role": "component_or_class"
+          }
+        ]
+      },
+      {
+        "path": "server/lib/doctorStatusCache.js",
+        "exports": [
+          {
+            "name": "createReadyStatusCache",
+            "kind": "function",
+            "role": "helper"
+          }
+        ]
+      },
+      {
+        "path": "server/lib/doctorStream.js",
+        "exports": [
+          {
+            "name": "runDoctorStep",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "sendDoctorEventStream",
+            "kind": "function",
+            "role": "export"
+          }
+        ]
+      },
+      {
+        "path": "server/lib/githubRepoSetupScript.js",
+        "exports": [
+          {
+            "name": "buildGithubRepoCreateOrLinkScript",
+            "kind": "function",
+            "role": "helper"
+          }
+        ]
+      },
+      {
+        "path": "server/lib/localhostCheckBypass.js",
+        "exports": [
+          {
+            "name": "hasLocalhostCheckBypassArg",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "isLocalhostCheckBypassEnabled",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "LOCALHOST_CHECK_BYPASS_ENV",
+            "kind": "value",
+            "role": "component_or_class"
+          },
+          {
+            "name": "LOCALHOST_CHECK_BYPASS_FLAG",
+            "kind": "value",
+            "role": "component_or_class"
+          },
+          {
+            "name": "stripLocalhostCheckBypassArgs",
+            "kind": "function",
+            "role": "export"
+          }
+        ]
+      },
+      {
+        "path": "server/lib/localStudioRequest.js",
+        "exports": [
+          {
+            "name": "isLocalStudioRequest",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "isLoopbackAddress",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "normalizeHostName",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "requireLocalStudioRequest",
+            "kind": "function",
+            "role": "export"
+          }
+        ]
+      },
+      {
+        "path": "server/lib/runtimeEnv.js",
+        "exports": [
+          {
+            "name": "resolveRuntimeEnv",
+            "kind": "function",
+            "role": "helper"
+          }
+        ]
+      },
+      {
+        "path": "server/lib/shellScript.js",
+        "exports": [
+          {
+            "name": "shellScript",
+            "kind": "function",
+            "role": "export"
+          }
+        ]
+      },
+      {
+        "path": "server/lib/studioRoots.js",
+        "exports": [
+          {
+            "name": "resolveStudioAppRoot",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "resolveStudioTargetRoot",
+            "kind": "function",
+            "role": "helper"
+          }
+        ]
+      },
+      {
+        "path": "server/lib/studioTerminalCleanup.js",
+        "exports": [
+          {
+            "name": "cleanupStaleStudioTerminals",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "daemonPidFromStudioToolchainCommand",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "isStudioToolchainDockerRun",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "listStudioContainerIds",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "parseDockerContainerRows",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "parseProcessRows",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "selectDescendantProcessIds",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "selectStaleStudioContainerIds",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "selectStaleStudioToolchainProcessIds",
+            "kind": "function",
+            "role": "export"
+          }
+        ]
+      },
+      {
+        "path": "server/lib/studioTerminalLabels.js",
+        "exports": [
+          {
+            "name": "STUDIO_DAEMON_PID_LABEL",
+            "kind": "value",
+            "role": "component_or_class"
+          }
+        ]
+      },
+      {
+        "path": "server/lib/surfaceRuntime.js",
+        "exports": [
+          {
+            "name": "surfaceRuntime",
+            "kind": "value",
+            "role": "export"
+          }
+        ]
+      },
+      {
+        "path": "server/lib/terminalSessions.js",
+        "exports": [
+          {
+            "name": "closeTerminalSession",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "closeTerminalSessionsForNamespace",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "closeTerminalSessionsForNamespacePrefix",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "countRunningTerminalSessions",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "readTerminalSession",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "startTerminalSession",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "subscribeTerminalSession",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "writeTerminalSession",
+            "kind": "function",
+            "role": "helper"
+          }
+        ]
+      },
+      {
+        "path": "src/App.vue",
+        "exports": [
+          {
+            "name": "default",
+            "kind": "default",
+            "role": "default"
+          }
+        ]
+      },
+      {
+        "path": "src/components/menus/MenuLinkItem.vue",
+        "exports": [
+          {
+            "name": "default",
+            "kind": "default",
+            "role": "default"
+          }
+        ]
+      },
+      {
+        "path": "src/components/menus/SurfaceAwareMenuLinkItem.vue",
+        "exports": [
+          {
+            "name": "default",
+            "kind": "default",
+            "role": "default"
+          }
+        ]
+      },
+      {
+        "path": "src/components/menus/TabLinkItem.vue",
+        "exports": [
+          {
+            "name": "default",
+            "kind": "default",
+            "role": "default"
+          }
+        ]
+      },
+      {
+        "path": "src/components/ShellLayout.vue",
+        "exports": [
+          {
+            "name": "default",
+            "kind": "default",
+            "role": "default"
+          }
+        ]
+      },
+      {
+        "path": "src/components/studio/AppTestLauncher.vue",
+        "exports": [
+          {
+            "name": "default",
+            "kind": "default",
+            "role": "default"
+          }
+        ]
+      },
+      {
+        "path": "src/components/studio/AppTestTerminal.vue",
+        "exports": [
+          {
+            "name": "default",
+            "kind": "default",
+            "role": "default"
+          }
+        ]
+      },
+      {
+        "path": "src/components/studio/ArchivedIssueSessions.vue",
+        "exports": [
+          {
+            "name": "default",
+            "kind": "default",
+            "role": "default"
+          }
+        ]
+      },
+      {
+        "path": "src/components/studio/CodexSessionTerminal.vue",
+        "exports": [
+          {
+            "name": "default",
+            "kind": "default",
+            "role": "default"
+          }
+        ]
+      },
+      {
+        "path": "src/components/studio/DoctorStatusPage.vue",
+        "exports": [
+          {
+            "name": "default",
+            "kind": "default",
+            "role": "default"
+          }
+        ]
+      },
+      {
+        "path": "src/components/studio/IssueSessionPanel.vue",
+        "exports": [
+          {
+            "name": "default",
+            "kind": "default",
+            "role": "default"
+          }
+        ]
+      },
+      {
+        "path": "src/components/studio/IssueSessionStepTerminal.vue",
+        "exports": [
+          {
+            "name": "default",
+            "kind": "default",
+            "role": "default"
+          }
+        ]
+      },
+      {
+        "path": "src/composables/useIssueSessions.js",
+        "exports": [
+          {
+            "name": "useIssueSessions",
+            "kind": "function",
+            "role": "composable"
+          }
+        ]
+      },
+      {
+        "path": "src/error.js",
+        "exports": [
+          {
+            "name": "default",
+            "kind": "default",
+            "role": "default"
+          }
+        ]
+      },
+      {
+        "path": "src/lib/codexCompletionWatcher.js",
+        "exports": [
+          {
+            "name": "codexOutputEndsWithConversationInterrupted",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "createCodexCompletionWatcher",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "DEFAULT_CODEX_IDLE_MS",
+            "kind": "value",
+            "role": "component_or_class"
+          }
+        ]
+      },
+      {
+        "path": "src/lib/codexOutput.js",
+        "exports": [
+          {
+            "name": "cleanSingleLineCodexOutput",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "codexTrustPromptLooksActive",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "extractCodexThreadId",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "extractMarkedOutput",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "extractMarkedOutputBlocks",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "extractMarkedOutputDetails",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "isCodexThreadId",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "isPlaceholderMarkedOutput",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "outputAfterPromptStart",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "stripTerminalControlSequences",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "suffixPrefixOverlapLength",
+            "kind": "function",
+            "role": "export"
+          }
+        ]
+      },
+      {
+        "path": "src/lib/deslopResult.js",
+        "exports": [
+          {
+            "name": "AUTO_RESOLVE_PRIORITIES",
+            "kind": "value",
+            "role": "component_or_class"
+          },
+          {
+            "name": "buildResolveDeslopFindingsPrompt",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "deslopFindingsByPriority",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "parseDeslopResult",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "parseDeslopResultBlock",
+            "kind": "function",
+            "role": "helper"
+          }
+        ]
+      },
+      {
+        "path": "src/lib/doctorSummaryState.js",
+        "exports": [
+          {
+            "name": "resolveDoctorSummaryState",
+            "kind": "function",
+            "role": "helper"
+          }
+        ]
+      },
+      {
+        "path": "src/lib/issueSessionPromptAutomation.js",
+        "exports": [
+          {
+            "name": "buildIssueSessionCodexPromptSignature",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "shouldAutoRunCodexPromptHandoff",
+            "kind": "function",
+            "role": "export"
+          }
+        ]
+      },
+      {
+        "path": "src/lib/issueSessionStepControls.js",
+        "exports": [
+          {
+            "name": "buildActiveStepControls",
+            "kind": "function",
+            "role": "helper"
+          }
+        ]
+      },
+      {
+        "path": "src/lib/issueSessionViewModel.js",
+        "exports": [
+          {
+            "name": "canUseIssueSessionTerminal",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "isAbandonedIssueSession",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "isClosedIssueSession",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "isOpenIssueSession",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "issueSessionCodexExpectedOutputs",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "issueSessionCodexPromptActionLabel",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "issueSessionFacts",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "issueSessionStatusColor",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "issueSessionStatusLabel",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "issueSessionTitleFromIssueText",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "parseGithubSessionLink",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "shortIssueSessionId",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "shouldAutoInjectIssueSessionCodexPrompt",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "shouldUseManualIssueSessionCodexPrompt",
+            "kind": "function",
+            "role": "export"
+          }
+        ]
+      },
+      {
+        "path": "src/lib/studioApi.js",
+        "exports": [
+          {
+            "name": "abandonIssueSession",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "APP_SETUP_ENDPOINT",
+            "kind": "value",
+            "role": "component_or_class"
+          },
+          {
+            "name": "APP_SETUP_STREAM_ENDPOINT",
+            "kind": "value",
+            "role": "component_or_class"
+          },
+          {
+            "name": "APP_SETUP_TERMINAL_ENDPOINT",
+            "kind": "value",
+            "role": "component_or_class"
+          },
+          {
+            "name": "BOOTSTRAP_ENDPOINT",
+            "kind": "value",
+            "role": "component_or_class"
+          },
+          {
+            "name": "BOOTSTRAP_STREAM_ENDPOINT",
+            "kind": "value",
+            "role": "component_or_class"
+          },
+          {
+            "name": "BOOTSTRAP_TERMINAL_ENDPOINT",
+            "kind": "value",
+            "role": "component_or_class"
+          },
+          {
+            "name": "closeCurrentAppTestTerminal",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "closeIssueSessionAppTestTerminal",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "closeIssueSessionCodexTerminal",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "closeIssueSessionStepTerminal",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "consumeStudioGate",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "createIssueSession",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "CURRENT_APP_ENDPOINT",
+            "kind": "value",
+            "role": "component_or_class"
+          },
+          {
+            "name": "currentAppTestTerminalEndpoint",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "currentAppTestTerminalWebSocketUrl",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "ISSUE_SESSIONS_ENDPOINT",
+            "kind": "value",
+            "role": "component_or_class"
+          },
+          {
+            "name": "issueSessionAppTestTerminalEndpoint",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "issueSessionAppTestTerminalWebSocketUrl",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "issueSessionCodexTerminalEndpoint",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "issueSessionCodexTerminalWebSocketUrl",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "issueSessionStepTerminalWebSocketUrl",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "listIssueSessions",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "readAppSetupStatus",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "readBootstrapStatus",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "readCurrentApp",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "readIssueSession",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "readIssueSessionCodexTerminal",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "readIssueSessionDiff",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "readTargetAppStatus",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "resolveStudioGate",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "runIssueSessionStep",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
+            "name": "saveIssueSessionCodexThread",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "startCurrentAppTestTerminal",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "startIssueSessionAppTestTerminal",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "startIssueSessionCodexTerminal",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "startIssueSessionStepTerminal",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "studioHttpClient",
+            "kind": "value",
+            "role": "export"
+          },
+          {
+            "name": "TARGET_APP_ENDPOINT",
+            "kind": "value",
+            "role": "component_or_class"
+          },
+          {
+            "name": "TARGET_APP_STREAM_ENDPOINT",
+            "kind": "value",
+            "role": "component_or_class"
+          },
+          {
+            "name": "TARGET_APP_TERMINAL_ENDPOINT",
+            "kind": "value",
+            "role": "component_or_class"
+          },
+          {
+            "name": "uploadIssueSessionCodexAttachment",
+            "kind": "function",
+            "role": "export"
+          }
+        ]
+      },
+      {
+        "path": "src/lib/terminalInput.js",
+        "exports": [
+          {
+            "name": "terminalInputHasUserText",
+            "kind": "function",
+            "role": "export"
+          }
+        ]
+      },
+      {
+        "path": "src/pages/app-bootup.vue",
+        "exports": [
+          {
+            "name": "default",
+            "kind": "default",
+            "role": "default"
+          }
+        ]
+      },
+      {
+        "path": "src/pages/app-setup.vue",
+        "exports": [
+          {
+            "name": "default",
+            "kind": "default",
+            "role": "default"
+          }
+        ]
+      },
+      {
+        "path": "src/pages/bootup.vue",
+        "exports": [
+          {
+            "name": "default",
+            "kind": "default",
+            "role": "default"
+          }
+        ]
+      },
+      {
+        "path": "src/pages/home.vue",
+        "exports": [
+          {
+            "name": "default",
+            "kind": "default",
+            "role": "default"
+          }
+        ]
+      },
+      {
+        "path": "src/pages/home/history.vue",
+        "exports": [
+          {
+            "name": "default",
+            "kind": "default",
+            "role": "default"
+          }
+        ]
+      },
+      {
+        "path": "src/pages/home/index.vue",
+        "exports": [
+          {
+            "name": "default",
+            "kind": "default",
+            "role": "default"
+          }
+        ]
+      },
+      {
+        "path": "src/pages/index.vue",
+        "exports": [
+          {
+            "name": "default",
+            "kind": "default",
+            "role": "default"
+          }
+        ]
+      },
+      {
+        "path": "src/placement.js",
+        "exports": [
+          {
+            "name": "addPlacement",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "default",
+            "kind": "default",
+            "role": "default"
+          }
+        ]
+      },
+      {
+        "path": "src/placementTopology.js",
+        "exports": [
+          {
+            "name": "addPlacementTopology",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "default",
+            "kind": "default",
+            "role": "default"
+          }
+        ]
+      },
+      {
+        "path": "src/views/NotFound.vue",
+        "exports": [
+          {
+            "name": "default",
+            "kind": "default",
+            "role": "default"
+          }
+        ]
+      }
+    ]
+  },
+  "jskitPackages": [
+    {
+      "name": "@jskit-ai/agent-docs",
+      "version": "0.1.36",
+      "installed": true,
+      "exports": []
+    },
+    {
+      "name": "@jskit-ai/config-eslint",
+      "version": "0.1.74",
+      "installed": true,
+      "exports": [
+        {
+          "subpath": ".",
+          "target": "src/index.js",
+          "exports": []
+        },
+        {
+          "subpath": "./base",
+          "target": "base.js",
+          "exports": [
+            {
+              "name": "baseConfig",
+              "kind": "value",
+              "role": "export"
+            }
+          ]
+        },
+        {
+          "subpath": "./client",
+          "target": "src/client/index.js",
+          "exports": []
+        },
+        {
+          "subpath": "./node",
+          "target": "node.js",
+          "exports": [
+            {
+              "name": "nodeConfig",
+              "kind": "value",
+              "role": "export"
+            }
+          ]
+        },
+        {
+          "subpath": "./server",
+          "target": "src/server/index.js",
+          "exports": []
+        },
+        {
+          "subpath": "./vue",
+          "target": "vue.js",
+          "exports": [
+            {
+              "name": "vueConfig",
+              "kind": "value",
+              "role": "export"
+            }
+          ]
+        },
+        {
+          "subpath": "./web",
+          "target": "web.js",
+          "exports": [
+            {
+              "name": "webConfig",
+              "kind": "value",
+              "role": "export"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@jskit-ai/http-runtime",
+      "version": "0.1.74",
+      "installed": true,
+      "exports": [
+        {
+          "subpath": "./client",
+          "target": "src/client/index.js",
+          "exports": []
+        },
+        {
+          "subpath": "./shared",
+          "target": "src/shared/index.js",
+          "exports": []
+        },
+        {
+          "subpath": "./shared/validators/command",
+          "target": "src/shared/validators/command.js",
+          "exports": [
+            {
+              "name": "createCommand",
+              "kind": "function",
+              "role": "helper"
+            }
+          ]
+        },
+        {
+          "subpath": "./shared/validators/errorResponses",
+          "target": "src/shared/validators/errorResponses.js",
+          "exports": [
+            {
+              "name": "apiErrorDetailsSchema",
+              "kind": "value",
+              "role": "export"
+            },
+            {
+              "name": "apiErrorOutputValidator",
+              "kind": "value",
+              "role": "export"
+            },
+            {
+              "name": "apiErrorTransportSchema",
+              "kind": "value",
+              "role": "export"
+            },
+            {
+              "name": "apiValidationErrorDetailsSchema",
+              "kind": "value",
+              "role": "export"
+            },
+            {
+              "name": "apiValidationErrorOutputValidator",
+              "kind": "value",
+              "role": "export"
+            },
+            {
+              "name": "apiValidationErrorTransportSchema",
+              "kind": "value",
+              "role": "export"
+            },
+            {
+              "name": "createTransportResponseSchema",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "enumSchema",
+              "kind": "function",
+              "role": "export"
+            },
+            {
+              "name": "fastifyDefaultErrorTransportSchema",
+              "kind": "value",
+              "role": "export"
+            },
+            {
+              "name": "fieldErrorsFieldDefinition",
+              "kind": "value",
+              "role": "export"
+            },
+            {
+              "name": "passthroughErrorResponses",
+              "kind": "function",
+              "role": "export"
+            },
+            {
+              "name": "STANDARD_ERROR_STATUS_CODES",
+              "kind": "value",
+              "role": "component_or_class"
+            },
+            {
+              "name": "withStandardErrorResponses",
+              "kind": "function",
+              "role": "export"
+            }
+          ]
+        },
+        {
+          "subpath": "./shared/validators/jsonApiResult",
+          "target": "src/shared/validators/jsonApiResult.js",
+          "exports": [
+            {
+              "name": "isJsonApiDataResult",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "isJsonApiDocumentResult",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "isJsonApiMetaResult",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "isJsonApiResult",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "JSON_API_RESULT_MARKER",
+              "kind": "value",
+              "role": "component_or_class"
+            },
+            {
+              "name": "returnJsonApiData",
+              "kind": "function",
+              "role": "export"
+            },
+            {
+              "name": "returnJsonApiDocument",
+              "kind": "function",
+              "role": "export"
+            },
+            {
+              "name": "returnJsonApiMeta",
+              "kind": "function",
+              "role": "export"
+            },
+            {
+              "name": "unwrapJsonApiResult",
+              "kind": "function",
+              "role": "export"
+            }
+          ]
+        },
+        {
+          "subpath": "./shared/validators/jsonApiRouteTransport",
+          "target": "src/shared/validators/jsonApiRouteTransport.js",
+          "exports": [
+            {
+              "name": "createJsonApiResourceObjectTransportSchema",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "createJsonApiResourceRequestBodyTransportSchema",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "createJsonApiResourceRouteContract",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "createJsonApiResourceRouteTransport",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "createJsonApiResourceSuccessTransportSchema",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "JSON_API_ERROR_DOCUMENT_SCHEMA",
+              "kind": "value",
+              "role": "component_or_class"
+            },
+            {
+              "name": "withJsonApiErrorResponses",
+              "kind": "function",
+              "role": "export"
+            }
+          ]
+        },
+        {
+          "subpath": "./shared/validators/operationMessages",
+          "target": "src/shared/validators/operationMessages.js",
+          "exports": [
+            {
+              "name": "mapOperationIssues",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "resolveFieldSchema",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "resolveIssueField",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "resolveIssueMessageFromSchema",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "resolveMissingRequiredFields",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "resolveSchemaMessages",
+              "kind": "function",
+              "role": "helper"
+            }
+          ]
+        },
+        {
+          "subpath": "./shared/validators/operationValidation",
+          "target": "src/shared/validators/operationValidation.js",
+          "exports": [
+            {
+              "name": "validateOperationInput",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "validateOperationSection",
+              "kind": "function",
+              "role": "helper"
+            }
+          ]
+        },
+        {
+          "subpath": "./shared/validators/paginationQuery",
+          "target": "src/shared/validators/paginationQuery.js",
+          "exports": [
+            {
+              "name": "createPaginationQuerySchema",
+              "kind": "function",
+              "role": "helper"
+            }
+          ]
+        },
+        {
+          "subpath": "./shared/validators/resource",
+          "target": "src/shared/validators/resource.js",
+          "exports": [
+            {
+              "name": "createCursorPagedListResponseSchema",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "createResource",
+              "kind": "function",
+              "role": "helper"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@jskit-ai/jskit-cli",
+      "version": "0.2.84",
+      "installed": true,
+      "exports": [
+        {
+          "subpath": ".",
+          "target": "src/index.js",
+          "exports": []
+        },
+        {
+          "subpath": "./client",
+          "target": "src/client/index.js",
+          "exports": []
+        },
+        {
+          "subpath": "./server",
+          "target": "src/server/index.js",
+          "exports": []
+        }
+      ]
+    },
+    {
+      "name": "@jskit-ai/kernel",
+      "version": "0.1.75",
+      "installed": true,
+      "exports": [
+        {
+          "subpath": "./_testable",
+          "target": "_testable/index.js",
+          "exports": []
+        },
+        {
+          "subpath": "./client",
+          "target": "client/index.d.ts",
+          "exports": [
+            {
+              "name": "bootstrapClientShellApp",
+              "kind": "function",
+              "role": "export"
+            },
+            {
+              "name": "ClientLogger",
+              "kind": "type",
+              "role": "component_or_class"
+            },
+            {
+              "name": "createComponentInteractionEmitter",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "createShellRouter",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "getClientAppConfig",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizeIncomingAppUrl",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "registerMobileLaunchRouting",
+              "kind": "function",
+              "role": "export"
+            },
+            {
+              "name": "resolveClientAssetMode",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "resolveClientBootstrapDebugEnabled",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "resolveMobileConfig",
+              "kind": "function",
+              "role": "helper"
+            }
+          ]
+        },
+        {
+          "subpath": "./client",
+          "target": "client/index.js",
+          "exports": []
+        },
+        {
+          "subpath": "./client/moduleBootstrap",
+          "target": "client/moduleBootstrap.js",
+          "exports": [
+            {
+              "name": "bootClientModules",
+              "kind": "function",
+              "role": "export"
+            }
+          ]
+        },
+        {
+          "subpath": "./client/pageRedirects",
+          "target": "client/pageRedirects.d.ts",
+          "exports": [
+            {
+              "name": "redirectToChild",
+              "kind": "function",
+              "role": "export"
+            }
+          ]
+        },
+        {
+          "subpath": "./client/pageRedirects",
+          "target": "client/pageRedirects.js",
+          "exports": [
+            {
+              "name": "redirectToChild",
+              "kind": "function",
+              "role": "export"
+            }
+          ]
+        },
+        {
+          "subpath": "./client/vite",
+          "target": "client/vite/index.js",
+          "exports": []
+        },
+        {
+          "subpath": "./server/actions",
+          "target": "server/actions/index.js",
+          "exports": []
+        },
+        {
+          "subpath": "./server/http",
+          "target": "server/http/index.js",
+          "exports": []
+        },
+        {
+          "subpath": "./server/platform",
+          "target": "server/platform/index.js",
+          "exports": []
+        },
+        {
+          "subpath": "./server/registries",
+          "target": "server/registries/index.js",
+          "exports": []
+        },
+        {
+          "subpath": "./server/runtime",
+          "target": "server/runtime/index.js",
+          "exports": []
+        },
+        {
+          "subpath": "./server/runtime/errors",
+          "target": "server/runtime/errors.js",
+          "exports": [
+            {
+              "name": "AppError",
+              "kind": "class",
+              "role": "component_or_class"
+            },
+            {
+              "name": "ConflictError",
+              "kind": "class",
+              "role": "component_or_class"
+            },
+            {
+              "name": "createValidationError",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "DomainError",
+              "kind": "class",
+              "role": "component_or_class"
+            },
+            {
+              "name": "DomainValidationError",
+              "kind": "class",
+              "role": "component_or_class"
+            },
+            {
+              "name": "isAppError",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "isDomainError",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "NotFoundError",
+              "kind": "class",
+              "role": "component_or_class"
+            }
+          ]
+        },
+        {
+          "subpath": "./server/runtime/requestUrl",
+          "target": "server/runtime/requestUrl.js",
+          "exports": [
+            {
+              "name": "resolveClientIpAddress",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "safePathnameFromRequest",
+              "kind": "function",
+              "role": "export"
+            },
+            {
+              "name": "safeRequestUrl",
+              "kind": "function",
+              "role": "export"
+            }
+          ]
+        },
+        {
+          "subpath": "./server/support",
+          "target": "server/support/index.js",
+          "exports": []
+        },
+        {
+          "subpath": "./shared",
+          "target": "shared/index.js",
+          "exports": []
+        },
+        {
+          "subpath": "./shared/actions",
+          "target": "shared/actions/index.js",
+          "exports": []
+        },
+        {
+          "subpath": "./shared/actions/actionContributorHelpers",
+          "target": "shared/actions/actionContributorHelpers.js",
+          "exports": [
+            {
+              "name": "emptyInputValidator",
+              "kind": "value",
+              "role": "export"
+            },
+            {
+              "name": "requireServiceMethod",
+              "kind": "function",
+              "role": "export"
+            },
+            {
+              "name": "resolveRequest",
+              "kind": "function",
+              "role": "helper"
+            }
+          ]
+        },
+        {
+          "subpath": "./shared/actions/textNormalization",
+          "target": "shared/actions/textNormalization.js",
+          "exports": []
+        },
+        {
+          "subpath": "./shared/support",
+          "target": "shared/support/index.js",
+          "exports": []
+        },
+        {
+          "subpath": "./shared/support/crudFieldContract",
+          "target": "shared/support/crudFieldContract.js",
+          "exports": [
+            {
+              "name": "buildCrudFieldContractMap",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "buildCrudOperationSchemaFields",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "checkCrudLookupFormControl",
+              "kind": "function",
+              "role": "export"
+            },
+            {
+              "name": "CRUD_FIELD_STORAGE_COLUMN",
+              "kind": "value",
+              "role": "component_or_class"
+            },
+            {
+              "name": "CRUD_FIELD_STORAGE_VIRTUAL",
+              "kind": "value",
+              "role": "component_or_class"
+            },
+            {
+              "name": "CRUD_FIELD_WRITE_SERIALIZER_DATETIME_UTC",
+              "kind": "value",
+              "role": "component_or_class"
+            },
+            {
+              "name": "CRUD_LOOKUP_FORM_CONTROL_AUTOCOMPLETE",
+              "kind": "value",
+              "role": "component_or_class"
+            },
+            {
+              "name": "CRUD_LOOKUP_FORM_CONTROL_SELECT",
+              "kind": "value",
+              "role": "component_or_class"
+            },
+            {
+              "name": "normalizeCrudFieldStorageConfig",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "resolveCrudFieldContractEntry",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "resolveCrudFieldSchemaProperties",
+              "kind": "function",
+              "role": "helper"
+            }
+          ]
+        },
+        {
+          "subpath": "./shared/support/crudListFilters",
+          "target": "shared/support/crudListFilters.js",
+          "exports": [
+            {
+              "name": "areCrudListFilterUiValuesEqual",
+              "kind": "function",
+              "role": "export"
+            },
+            {
+              "name": "createCrudListFilterInitialValue",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "CRUD_LIST_FILTER_INVALID_VALUES_DISCARD",
+              "kind": "value",
+              "role": "component_or_class"
+            },
+            {
+              "name": "CRUD_LIST_FILTER_INVALID_VALUES_REJECT",
+              "kind": "value",
+              "role": "component_or_class"
+            },
+            {
+              "name": "CRUD_LIST_FILTER_PRESENCE_MISSING",
+              "kind": "value",
+              "role": "component_or_class"
+            },
+            {
+              "name": "CRUD_LIST_FILTER_PRESENCE_OPTIONS",
+              "kind": "value",
+              "role": "component_or_class"
+            },
+            {
+              "name": "CRUD_LIST_FILTER_PRESENCE_PRESENT",
+              "kind": "value",
+              "role": "component_or_class"
+            },
+            {
+              "name": "CRUD_LIST_FILTER_TYPE_DATE",
+              "kind": "value",
+              "role": "component_or_class"
+            },
+            {
+              "name": "CRUD_LIST_FILTER_TYPE_DATE_RANGE",
+              "kind": "value",
+              "role": "component_or_class"
+            },
+            {
+              "name": "CRUD_LIST_FILTER_TYPE_ENUM",
+              "kind": "value",
+              "role": "component_or_class"
+            },
+            {
+              "name": "CRUD_LIST_FILTER_TYPE_ENUM_MANY",
+              "kind": "value",
+              "role": "component_or_class"
+            },
+            {
+              "name": "CRUD_LIST_FILTER_TYPE_FLAG",
+              "kind": "value",
+              "role": "component_or_class"
+            },
+            {
+              "name": "CRUD_LIST_FILTER_TYPE_NUMBER_RANGE",
+              "kind": "value",
+              "role": "component_or_class"
+            },
+            {
+              "name": "CRUD_LIST_FILTER_TYPE_PRESENCE",
+              "kind": "value",
+              "role": "component_or_class"
+            },
+            {
+              "name": "CRUD_LIST_FILTER_TYPE_RECORD_ID",
+              "kind": "value",
+              "role": "component_or_class"
+            },
+            {
+              "name": "CRUD_LIST_FILTER_TYPE_RECORD_ID_MANY",
+              "kind": "value",
+              "role": "component_or_class"
+            },
+            {
+              "name": "CRUD_LIST_FILTER_TYPES",
+              "kind": "value",
+              "role": "component_or_class"
+            },
+            {
+              "name": "defineCrudListFilters",
+              "kind": "function",
+              "role": "export"
+            },
+            {
+              "name": "formatCrudListFilterDefaultChipLabel",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "formatCrudListFilterQueryValue",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "formatCrudListRangeQueryExpression",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "hasCrudListFilterUiValue",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "INVALID_CRUD_LIST_FILTER_QUERY_VALUE",
+              "kind": "value",
+              "role": "component_or_class"
+            },
+            {
+              "name": "isCrudListFilterMultiValue",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "isCrudListFilterStructuredValue",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "listCrudListFilterChipValues",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizeCrudListFilterInvalidValues",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizeCrudListFilterUiValue",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "parseCrudListFilterQueryValue",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "parseCrudListRangeQueryExpression",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "resolveCrudListFilterOptionLabel",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "resolveCrudListFilterQueryKeys",
+              "kind": "function",
+              "role": "helper"
+            }
+          ]
+        },
+        {
+          "subpath": "./shared/support/crudLookup",
+          "target": "shared/support/crudLookup.js",
+          "exports": [
+            {
+              "name": "DEFAULT_CRUD_LOOKUP_CONTAINER_KEY",
+              "kind": "value",
+              "role": "component_or_class"
+            },
+            {
+              "name": "normalizeCrudLookupApiPath",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizeCrudLookupContainerKey",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizeCrudLookupNamespace",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "resolveCrudLookupApiPathFromNamespace",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "resolveCrudLookupContainerKey",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "resolveCrudLookupFieldKeyFromRouteParam",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "resolveCrudLookupFieldKeys",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "resolveCrudParentFilterFieldKeyFromRouteParam",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "resolveCrudParentFilterKeys",
+              "kind": "function",
+              "role": "helper"
+            }
+          ]
+        },
+        {
+          "subpath": "./shared/support/deepFreeze",
+          "target": "shared/support/deepFreeze.js",
+          "exports": [
+            {
+              "name": "deepFreeze",
+              "kind": "function",
+              "role": "export"
+            }
+          ]
+        },
+        {
+          "subpath": "./shared/support/generatedUiContract",
+          "target": "shared/support/generatedUiContract.js",
+          "exports": [
+            {
+              "name": "assertGeneratedUiSourceContract",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "buildGeneratedUiScreenClassName",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "collectGeneratedUiSourceContractIssues",
+              "kind": "function",
+              "role": "export"
+            },
+            {
+              "name": "GENERATED_UI_FORBIDDEN_CARD_SHELL_PATTERNS",
+              "kind": "value",
+              "role": "component_or_class"
+            },
+            {
+              "name": "GENERATED_UI_FORBIDDEN_LIVE_COPY_PATTERNS",
+              "kind": "value",
+              "role": "component_or_class"
+            },
+            {
+              "name": "GENERATED_UI_NAVIGATION_ROLE_DEFAULT",
+              "kind": "value",
+              "role": "component_or_class"
+            },
+            {
+              "name": "GENERATED_UI_NAVIGATION_ROLE_LINK_PLACEMENTS",
+              "kind": "value",
+              "role": "component_or_class"
+            },
+            {
+              "name": "GENERATED_UI_NAVIGATION_ROLE_OPTION",
+              "kind": "value",
+              "role": "component_or_class"
+            },
+            {
+              "name": "GENERATED_UI_NAVIGATION_ROLE_VALUES",
+              "kind": "value",
+              "role": "component_or_class"
+            },
+            {
+              "name": "GENERATED_UI_NO_LINK_NAVIGATION_ROLES",
+              "kind": "value",
+              "role": "component_or_class"
+            },
+            {
+              "name": "GENERATED_UI_SOURCE_CONTRACT_PROFILES",
+              "kind": "value",
+              "role": "component_or_class"
+            },
+            {
+              "name": "GENERATED_UI_SURFACE_PROFILES",
+              "kind": "value",
+              "role": "component_or_class"
+            },
+            {
+              "name": "inferGeneratedUiNavigationRole",
+              "kind": "function",
+              "role": "export"
+            },
+            {
+              "name": "isGeneratedUiNoLinkNavigationRole",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizeGeneratedUiNavigationRole",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "resolveGeneratedUiNavigationRoleLinkPlacement",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "resolveGeneratedUiSurfaceProfile",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "shouldCreateGeneratedUiNavigationLink",
+              "kind": "function",
+              "role": "export"
+            }
+          ]
+        },
+        {
+          "subpath": "./shared/support/linkPath",
+          "target": "shared/support/linkPath.js",
+          "exports": [
+            {
+              "name": "isExternalLinkTarget",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "resolveLinkPath",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "splitPathQueryHash",
+              "kind": "function",
+              "role": "export"
+            }
+          ]
+        },
+        {
+          "subpath": "./shared/support/listenerSet",
+          "target": "shared/support/listenerSet.js",
+          "exports": [
+            {
+              "name": "createListenerSubscription",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "subscribeListener",
+              "kind": "function",
+              "role": "export"
+            }
+          ]
+        },
+        {
+          "subpath": "./shared/support/normalize",
+          "target": "shared/support/normalize.js",
+          "exports": [
+            {
+              "name": "ensureNonEmptyText",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "hasValue",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "isRecord",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizeArray",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizeBoolean",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizeCanonicalRecordIdText",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizeFiniteInteger",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizeFiniteNumber",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizeIfInSource",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizeIfPresent",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizeInteger",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizeLowerText",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizeMobileAssetMode",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizeMobileCallbackPath",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizeMobileConfig",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizeMobileStrategy",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizeObject",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizeOneOf",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizeOpaqueId",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizeOrNull",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizePositiveInteger",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizeQueryToken",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizeRecordId",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizeText",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizeUniqueTextList",
+              "kind": "function",
+              "role": "helper"
+            }
+          ]
+        },
+        {
+          "subpath": "./shared/support/permissions",
+          "target": "shared/support/permissions.js",
+          "exports": [
+            {
+              "name": "hasPermission",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizePermissionList",
+              "kind": "function",
+              "role": "helper"
+            }
+          ]
+        },
+        {
+          "subpath": "./shared/support/providerLogger",
+          "target": "shared/support/providerLogger.js",
+          "exports": [
+            {
+              "name": "createProviderLogger",
+              "kind": "function",
+              "role": "helper"
+            }
+          ]
+        },
+        {
+          "subpath": "./shared/support/returnToPath",
+          "target": "shared/support/returnToPath.js",
+          "exports": [
+            {
+              "name": "normalizeAllowedOrigins",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizeHttpOrigin",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizeReturnToPath",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "resolveAllowedOriginsFromPlacementContext",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "resolveAllowedOriginsFromSurfaceDefinitions",
+              "kind": "function",
+              "role": "helper"
+            }
+          ]
+        },
+        {
+          "subpath": "./shared/support/shellLayoutTargets",
+          "target": "shared/support/shellLayoutTargets.js",
+          "exports": [
+            {
+              "name": "describeShellOutletTargets",
+              "kind": "function",
+              "role": "export"
+            },
+            {
+              "name": "discoverShellOutletTargetsFromVueSource",
+              "kind": "function",
+              "role": "export"
+            },
+            {
+              "name": "findShellOutletTargetById",
+              "kind": "function",
+              "role": "export"
+            },
+            {
+              "name": "normalizePlacementKind",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizePlacementLayoutClass",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizePlacementOwnerId",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizePlacementSurfaceId",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizePlacementSurfaces",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizePlacementTopologyDefinition",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizePlacementTopologyEntry",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizePlacementTopologyVariant",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizeSemanticPlacementId",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizeShellOutletTargetId",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizeShellOutletTargetRecord",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "PLACEMENT_LAYOUT_CLASSES",
+              "kind": "value",
+              "role": "component_or_class"
+            },
+            {
+              "name": "resolvePlacementTargetReference",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "resolveShellOutletTargetParts",
+              "kind": "function",
+              "role": "helper"
+            }
+          ]
+        },
+        {
+          "subpath": "./shared/support/stringCase",
+          "target": "shared/support/stringCase.js",
+          "exports": [
+            {
+              "name": "toCamelCase",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "toSnakeCase",
+              "kind": "function",
+              "role": "helper"
+            }
+          ]
+        },
+        {
+          "subpath": "./shared/support/tokens",
+          "target": "shared/support/tokens.js",
+          "exports": []
+        },
+        {
+          "subpath": "./shared/support/visibility",
+          "target": "shared/support/visibility.js",
+          "exports": [
+            {
+              "name": "checkRouteVisibility",
+              "kind": "function",
+              "role": "export"
+            },
+            {
+              "name": "isWorkspaceRouteVisibility",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizeRouteVisibility",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizeRouteVisibilityToken",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizeVisibilityContext",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "ROUTE_VISIBILITY_LEVELS",
+              "kind": "value",
+              "role": "component_or_class"
+            },
+            {
+              "name": "ROUTE_VISIBILITY_TOKENS",
+              "kind": "value",
+              "role": "component_or_class"
+            },
+            {
+              "name": "ROUTE_VISIBILITY_WORKSPACE",
+              "kind": "value",
+              "role": "component_or_class"
+            },
+            {
+              "name": "ROUTE_VISIBILITY_WORKSPACE_USER",
+              "kind": "value",
+              "role": "component_or_class"
+            }
+          ]
+        },
+        {
+          "subpath": "./shared/surface",
+          "target": "shared/surface/index.js",
+          "exports": []
+        },
+        {
+          "subpath": "./shared/surface/paths",
+          "target": "shared/surface/paths.js",
+          "exports": [
+            {
+              "name": "createSurfacePathHelpers",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "matchesPathPrefix",
+              "kind": "function",
+              "role": "export"
+            },
+            {
+              "name": "normalizePathname",
+              "kind": "function",
+              "role": "helper"
+            }
+          ]
+        },
+        {
+          "subpath": "./shared/surface/registry",
+          "target": "shared/surface/registry.js",
+          "exports": [
+            {
+              "name": "createSurfaceRegistry",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "deriveSurfaceRouteBaseFromPagesRoot",
+              "kind": "function",
+              "role": "export"
+            },
+            {
+              "name": "normalizeSurfaceId",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "normalizeSurfacePagesRoot",
+              "kind": "function",
+              "role": "helper"
+            }
+          ]
+        },
+        {
+          "subpath": "./shared/surface/runtime",
+          "target": "shared/surface/runtime.js",
+          "exports": [
+            {
+              "name": "createSurfaceRuntime",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "filterRoutesBySurface",
+              "kind": "function",
+              "role": "export"
+            }
+          ]
+        },
+        {
+          "subpath": "./shared/validators",
+          "target": "shared/validators/index.js",
+          "exports": []
+        },
+        {
+          "subpath": "./shared/validators/inputNormalization",
+          "target": "shared/validators/inputNormalization.js",
+          "exports": [
+            {
+              "name": "normalizeObjectInput",
+              "kind": "function",
+              "role": "helper"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@jskit-ai/shell-web",
+      "version": "0.1.74",
+      "installed": true,
+      "exports": [
+        {
+          "subpath": "./client",
+          "target": "src/client/index.js",
+          "exports": [
+            {
+              "name": "clientProviders",
+              "kind": "value",
+              "role": "export"
+            }
+          ]
+        },
+        {
+          "subpath": "./client/bootstrap",
+          "target": "src/client/bootstrap/index.js",
+          "exports": []
+        },
+        {
+          "subpath": "./client/components/ShellErrorHost",
+          "target": "src/client/components/ShellErrorHost.vue",
+          "exports": [
+            {
+              "name": "default",
+              "kind": "default",
+              "role": "default"
+            }
+          ]
+        },
+        {
+          "subpath": "./client/components/ShellLayout",
+          "target": "src/client/components/ShellLayout.vue",
+          "exports": [
+            {
+              "name": "default",
+              "kind": "default",
+              "role": "default"
+            }
+          ]
+        },
+        {
+          "subpath": "./client/components/ShellMenuLinkItem",
+          "target": "src/client/components/ShellMenuLinkItem.vue",
+          "exports": [
+            {
+              "name": "default",
+              "kind": "default",
+              "role": "default"
+            }
+          ]
+        },
+        {
+          "subpath": "./client/components/ShellOutlet",
+          "target": "src/client/components/ShellOutlet.vue",
+          "exports": [
+            {
+              "name": "default",
+              "kind": "default",
+              "role": "default"
+            }
+          ]
+        },
+        {
+          "subpath": "./client/components/ShellOutletMenuWidget",
+          "target": "src/client/components/ShellOutletMenuWidget.vue",
+          "exports": [
+            {
+              "name": "default",
+              "kind": "default",
+              "role": "default"
+            }
+          ]
+        },
+        {
+          "subpath": "./client/components/ShellRouteTransition",
+          "target": "src/client/components/ShellRouteTransition.vue",
+          "exports": [
+            {
+              "name": "default",
+              "kind": "default",
+              "role": "default"
+            }
+          ]
+        },
+        {
+          "subpath": "./client/components/ShellSurfaceAwareMenuLinkItem",
+          "target": "src/client/components/ShellSurfaceAwareMenuLinkItem.vue",
+          "exports": [
+            {
+              "name": "default",
+              "kind": "default",
+              "role": "default"
+            }
+          ]
+        },
+        {
+          "subpath": "./client/components/ShellTabLinkItem",
+          "target": "src/client/components/ShellTabLinkItem.vue",
+          "exports": [
+            {
+              "name": "default",
+              "kind": "default",
+              "role": "default"
+            }
+          ]
+        },
+        {
+          "subpath": "./client/composables/useShellLayoutState",
+          "target": "src/client/composables/useShellLayoutState.js",
+          "exports": [
+            {
+              "name": "useShellLayoutState",
+              "kind": "function",
+              "role": "composable"
+            }
+          ]
+        },
+        {
+          "subpath": "./client/error",
+          "target": "src/client/error/index.js",
+          "exports": []
+        },
+        {
+          "subpath": "./client/navigation/linkResolver",
+          "target": "src/client/navigation/linkResolver.js",
+          "exports": [
+            {
+              "name": "resolveShellLinkPath",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "useShellLinkResolver",
+              "kind": "function",
+              "role": "composable"
+            }
+          ]
+        },
+        {
+          "subpath": "./client/placement",
+          "target": "src/client/placement/index.js",
+          "exports": []
+        },
+        {
+          "subpath": "./client/providers/ShellWebClientProvider",
+          "target": "src/client/providers/ShellWebClientProvider.js",
+          "exports": [
+            {
+              "name": "resolveAppPlacementTopologyExport",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "ShellWebClientProvider",
+              "kind": "class",
+              "role": "component_or_class"
+            }
+          ]
+        },
+        {
+          "subpath": "./server/support/localLinkItemScaffolds",
+          "target": "src/server/support/localLinkItemScaffolds.js",
+          "exports": [
+            {
+              "name": "findLocalLinkItemDefinition",
+              "kind": "function",
+              "role": "export"
+            },
+            {
+              "name": "LOCAL_LINK_ITEM_COMPONENT_DEFINITIONS",
+              "kind": "value",
+              "role": "component_or_class"
+            },
+            {
+              "name": "LOCAL_LINK_ITEM_COMPONENT_TOKENS",
+              "kind": "value",
+              "role": "component_or_class"
+            },
+            {
+              "name": "readLocalLinkItemComponentSource",
+              "kind": "function",
+              "role": "helper"
+            },
+            {
+              "name": "resolveLocalLinkItemTemplateAbsolutePath",
+              "kind": "function",
+              "role": "helper"
+            }
+          ]
+        },
+        {
+          "subpath": "./test/adaptiveShellSmoke",
+          "target": "src/test/adaptiveShellSmoke.js",
+          "exports": [
+            {
+              "name": "DEFAULT_VIEWPORTS",
+              "kind": "value",
+              "role": "component_or_class"
+            },
+            {
+              "name": "runAdaptiveShellSmoke",
+              "kind": "function",
+              "role": "helper"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

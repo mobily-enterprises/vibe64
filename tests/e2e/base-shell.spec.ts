@@ -434,6 +434,25 @@ const currentAppPayload = {
   }
 };
 
+const completedArchiveSession = {
+  sessionId: "2026-05-12_03-10-00",
+  status: "finished",
+  branch: "issue-2-session-history",
+  issueUrl: "https://github.com/merc/example-target-app/issues/2",
+  prUrl: "https://github.com/merc/example-target-app/pull/12",
+  completedSteps: ["issue_created", "plan_made", "plan_executed"],
+  finalReportText: "Completed archive report."
+};
+
+const abandonedArchiveSession = {
+  sessionId: "2026-05-12_03-11-00",
+  status: "abandoned",
+  branch: "issue-2-abandoned-session",
+  issueUrl: "https://github.com/merc/example-target-app/issues/2",
+  completedSteps: ["issue_created", "plan_made"],
+  agentDecisionsLatest: "Abandoned archive decision."
+};
+
 const codexPromptText = "Create the GitHub issue for the requested Studio session UI.";
 const codexPlanPromptText = "Create an implementation plan for the approved GitHub issue.";
 const codexPromptSessionId = "2026-05-12_01-02-39";
@@ -1421,6 +1440,35 @@ async function mockCurrentAppInspection(page) {
   });
 }
 
+async function mockSessionHistoryArchives(page, archiveRequests = []) {
+  await page.route("**/api/studio/current-app", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify(currentAppPayload)
+    });
+  });
+  await page.route("**/api/studio/current-app/issue-sessions**", async (route) => {
+    const url = new URL(route.request().url());
+    const archive = url.searchParams.get("archive") || "active";
+    archiveRequests.push(archive);
+    const sessions = archive === "completed"
+      ? [completedArchiveSession]
+      : archive === "abandoned" ? [abandonedArchiveSession] : [];
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        limits: {
+          maxOpenSessions: 3,
+          openSessionCount: 0
+        },
+        ok: true,
+        sessions,
+        stepDefinitions: []
+      })
+    });
+  });
+}
+
 async function mockCodexPromptSession(page, { stepPayloads = [], terminalInputs = [] } = {}) {
   let terminalOutput = "Codex ready.";
   let issueTitle = codexIssueDraftedPayload.issueTitle;
@@ -1723,6 +1771,69 @@ async function expectVisibleTapTargets(page) {
     expect(height).toBeGreaterThanOrEqual(48);
   }
 }
+
+async function expectSessionHistoryRoute(page, archive) {
+  const tabName = archive === "abandoned" ? "Abandoned" : "Completed";
+
+  await expect(page.getByRole("heading", { name: "Session History", exact: true })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Completed", exact: true })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Abandoned", exact: true })).toBeVisible();
+  await expect(page.getByRole("tab", { name: tabName, exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("heading", { name: "Completed Sessions", exact: true })).toHaveCount(0);
+  await expect(page.getByText("Finished sessions keep their reports, decisions, issue links, and PR outcome."))
+    .toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Abandoned Sessions", exact: true })).toHaveCount(0);
+  await expect(page.getByText("Worktrees are removed; session branches remain recoverable in Git.")).toHaveCount(0);
+}
+
+test.describe("session history navigation", () => {
+  for (const viewport of viewports) {
+    test(`${viewport.name} session history groups archive tabs under secondary navigation`, async ({ page }) => {
+      const archiveRequests = [];
+      await mockSessionHistoryArchives(page, archiveRequests);
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await page.goto(`${BASE_URL}/home/history`);
+
+      await expect(page).toHaveURL(/\/home\/history\?tab=completed$/u);
+      await expectSessionHistoryRoute(page, "completed");
+      await expect(page.getByText("issue-2-session-history")).toBeVisible();
+      await expect(page.getByRole("button", { name: "Refresh" })).toBeVisible();
+      await expect(page.getByRole("link", { name: /^Sessions$/u }).first()).toBeVisible();
+      await expect(page.getByRole("link", { name: /^Session History$/u }).first()).toBeVisible();
+      await expect(page.getByRole("link", { name: /^Completed$/u })).toHaveCount(0);
+      await expect(page.getByRole("link", { name: /^Abandoned$/u })).toHaveCount(0);
+      expect(archiveRequests).toContain("completed");
+
+      await page.getByRole("tab", { name: "Abandoned", exact: true }).click();
+      await expect(page).toHaveURL(/\/home\/history\?tab=abandoned$/u);
+      await expectSessionHistoryRoute(page, "abandoned");
+      await expect(page.getByText("issue-2-abandoned-session")).toBeVisible();
+      await expect.poll(() => archiveRequests.includes("abandoned")).toBe(true);
+
+      await page.getByRole("tab", { name: "Completed", exact: true }).click();
+      await expect(page).toHaveURL(/\/home\/history\?tab=completed$/u);
+      await expectSessionHistoryRoute(page, "completed");
+      await expect.poll(() => archiveRequests.includes("completed")).toBe(true);
+
+      await expectVisibleTapTargets(page);
+      await expectNoHorizontalOverflow(page);
+    });
+  }
+
+  test("old completed and abandoned routes are not preserved as archive views", async ({ page }) => {
+    const archiveRequests = [];
+    await mockSessionHistoryArchives(page, archiveRequests);
+
+    await page.goto(`${BASE_URL}/home/completed`);
+    await expect(page.getByRole("heading", { name: "Completed Sessions", exact: true })).toHaveCount(0);
+    await expect(page.locator(".studio-archived-sessions")).toHaveCount(0);
+
+    await page.goto(`${BASE_URL}/home/abandoned`);
+    await expect(page.getByRole("heading", { name: "Abandoned Sessions", exact: true })).toHaveCount(0);
+    await expect(page.locator(".studio-archived-sessions")).toHaveCount(0);
+    expect(archiveRequests).toEqual([]);
+  });
+});
 
 test.describe("bootstrap doctor responsive smoke", () => {
   for (const viewport of viewports) {

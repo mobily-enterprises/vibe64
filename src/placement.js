@@ -49,6 +49,19 @@ addPlacement({
 });
 
 addPlacement({
+  id: "jskit-ai-studio.home.menu.history",
+  target: "shell.secondary-nav",
+  kind: "link",
+  surfaces: ["home"],
+  order: 70,
+  props: {
+    label: "Session History",
+    to: "/home/history",
+    exact: true
+  }
+});
+
+addPlacement({
   id: "jskit-ai-studio.home.menu.home",
   target: "shell.primary-nav",
   kind: "link",
@@ -60,37 +73,3 @@ addPlacement({
     exact: true
   }
 });
-
-addPlacement({
-  id: "jskit-ai-studio.home.menu.completed",
-  target: "shell.primary-nav",
-  kind: "link",
-  surfaces: ["home"],
-  order: 150,
-  props: {
-    label: "Completed",
-    icon: "mdi-check-circle-outline",
-    surface: "home",
-    scopedSuffix: "/completed",
-    unscopedSuffix: "/completed",
-    to: "/home/completed"
-  }
-});
-// jskit:ui-generator.page.link:home:/abandoned
-{
-  addPlacement({
-    id: "ui-generator.page.home.abandoned.link",
-    target: "shell.primary-nav",
-    kind: "link",
-    surfaces: ["home"],
-    order: 155,
-    props: {
-      label: "Abandoned",
-      icon: "mdi-view-list-outline",
-      surface: "home",
-      scopedSuffix: "/abandoned",
-      unscopedSuffix: "/abandoned",
-      to: "/home/abandoned"
-    }
-  });
-}

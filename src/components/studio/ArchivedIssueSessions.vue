@@ -1,11 +1,17 @@
 <template>
   <section class="studio-archived-sessions d-flex flex-column ga-3">
-    <div class="studio-archived-sessions__header">
-      <div>
-        <h1 class="studio-archived-sessions__title">{{ title }}</h1>
-        <p class="text-body-2 text-medium-emphasis mb-0">{{ description }}</p>
+    <div
+      v-if="title || description || showRefresh"
+      class="studio-archived-sessions__header"
+      :class="{ 'studio-archived-sessions__header--actions-only': !title && !description }"
+    >
+      <div v-if="title || description" class="studio-archived-sessions__copy">
+        <h2 class="studio-archived-sessions__title">{{ title }}</h2>
+        <p v-if="description" class="text-body-2 text-medium-emphasis mb-0">{{ description }}</p>
       </div>
       <v-btn
+        v-if="showRefresh"
+        class="studio-archived-sessions__refresh"
         :loading="loading"
         :prepend-icon="mdiRefresh"
         size="small"
@@ -151,11 +157,17 @@ const props = defineProps({
     default: "No sessions",
     type: String
   },
+  showRefresh: {
+    default: true,
+    type: Boolean
+  },
   title: {
-    required: true,
+    default: "",
     type: String
   }
 });
+
+const emit = defineEmits(["loading-changed"]);
 
 const sessions = ref([]);
 const loading = ref(false);
@@ -191,6 +203,7 @@ function hasDetails(session = {}) {
 
 async function loadSessions() {
   loading.value = true;
+  emit("loading-changed", true);
   error.value = "";
   try {
     const response = await listIssueSessions({
@@ -201,8 +214,13 @@ async function loadSessions() {
     error.value = String(loadError?.message || loadError || "Archived sessions could not be loaded.");
   } finally {
     loading.value = false;
+    emit("loading-changed", false);
   }
 }
+
+defineExpose({
+  refresh: loadSessions
+});
 
 onMounted(() => {
   void loadSessions();
@@ -224,12 +242,24 @@ onMounted(() => {
   min-width: 0;
 }
 
+.studio-archived-sessions__header--actions-only {
+  justify-content: flex-end;
+}
+
+.studio-archived-sessions__copy {
+  min-width: 0;
+}
+
 .studio-archived-sessions__title {
   font-size: clamp(1.2rem, 1.7vw, 1.55rem);
   font-weight: 700;
   letter-spacing: 0;
   line-height: 1.1;
   margin: 0 0 0.1rem;
+}
+
+.studio-archived-sessions__refresh {
+  min-height: 48px;
 }
 
 .studio-archived-sessions__empty {
@@ -310,6 +340,8 @@ onMounted(() => {
 
 .studio-archived-sessions__quick-link {
   color: rgb(var(--v-theme-primary));
+  min-height: 48px;
+  padding-inline: 0.75rem;
 }
 
 .studio-archived-sessions__quick-link:hover,
