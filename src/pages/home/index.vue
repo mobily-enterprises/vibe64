@@ -18,6 +18,8 @@
       rounded
     />
 
+    <AppTestLauncher v-if="currentApp" />
+
     <IssueSessionPanel v-if="currentApp" />
 
     <v-sheet
@@ -39,6 +41,7 @@ import { onMounted, ref } from "vue";
 import {
   readCurrentApp
 } from "@/lib/studioApi.js";
+import AppTestLauncher from "@/components/studio/AppTestLauncher.vue";
 import IssueSessionPanel from "@/components/studio/IssueSessionPanel.vue";
 
 const gateLoading = ref(false);

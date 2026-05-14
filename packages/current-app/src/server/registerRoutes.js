@@ -230,6 +230,48 @@ function registerRoutes(
 
   router.register(
     "POST",
+    `${routeBase}/app-test-terminal`,
+    {
+      auth: "public",
+      surface: normalizedRouteSurface,
+      meta: {
+        tags: ["studio", "current-app"],
+        summary: "Start an app-test terminal for the current target app."
+      }
+    },
+    async function (request, reply) {
+      if (!requireLocalCurrentAppRequest(request, reply)) {
+        return;
+      }
+      const response = await getCurrentAppService(app).startAppTestTerminal();
+      reply.code(response?.ok === false ? 400 : 200).send(response);
+    }
+  );
+
+  router.register(
+    "DELETE",
+    `${routeBase}/app-test-terminal/:terminalSessionId`,
+    {
+      auth: "public",
+      surface: normalizedRouteSurface,
+      meta: {
+        tags: ["studio", "current-app"],
+        summary: "Close an app-test terminal for the current target app."
+      }
+    },
+    async function (request, reply) {
+      if (!requireLocalCurrentAppRequest(request, reply)) {
+        return;
+      }
+      const response = await getCurrentAppService(app).closeAppTestTerminal(
+        request.params.terminalSessionId
+      );
+      reply.code(200).send(response);
+    }
+  );
+
+  router.register(
+    "POST",
     `${routeBase}/issue-sessions/:sessionId/codex-terminal`,
     {
       auth: "public",
@@ -270,6 +312,26 @@ function registerRoutes(
 
   router.register(
     "POST",
+    `${routeBase}/issue-sessions/:sessionId/app-test-terminal`,
+    {
+      auth: "public",
+      surface: normalizedRouteSurface,
+      meta: {
+        tags: ["studio", "issue-sessions"],
+        summary: "Start an app-test terminal for a JSKIT issue session worktree."
+      }
+    },
+    async function (request, reply) {
+      if (!requireLocalCurrentAppRequest(request, reply)) {
+        return;
+      }
+      const response = await getCurrentAppService(app).startIssueSessionAppTestTerminal(request.params.sessionId);
+      reply.code(sessionStatusCode(response, { missingStatus: 404 })).send(response);
+    }
+  );
+
+  router.register(
+    "POST",
     `${routeBase}/issue-sessions/:sessionId/codex-thread`,
     {
       auth: "public",
@@ -289,6 +351,29 @@ function registerRoutes(
         request.input.body || {}
       );
       reply.code(response?.ok === false ? 400 : 200).send(response);
+    }
+  );
+
+  router.register(
+    "DELETE",
+    `${routeBase}/issue-sessions/:sessionId/app-test-terminal/:terminalSessionId`,
+    {
+      auth: "public",
+      surface: normalizedRouteSurface,
+      meta: {
+        tags: ["studio", "issue-sessions"],
+        summary: "Close an app-test terminal for a JSKIT issue session worktree."
+      }
+    },
+    async function (request, reply) {
+      if (!requireLocalCurrentAppRequest(request, reply)) {
+        return;
+      }
+      const response = await getCurrentAppService(app).closeIssueSessionAppTestTerminal(
+        request.params.sessionId,
+        request.params.terminalSessionId
+      );
+      reply.code(200).send(response);
     }
   );
 

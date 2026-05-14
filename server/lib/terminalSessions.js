@@ -38,6 +38,7 @@ function terminalSessionResponse(session) {
     id: session.id,
     commandPreview: session.commandPreview,
     exitCode: session.exitCode,
+    metadata: session.metadata || {},
     output: session.output,
     status: session.status
   };
@@ -110,6 +111,7 @@ function startTerminalSession({
   commandPreview,
   cwd = process.cwd(),
   maxRunning = 0,
+  metadata = null,
   namespace = "default",
   namespaceLimitPrefix = "",
   onClose = null,
@@ -142,6 +144,13 @@ function startTerminalSession({
       namespace
     })
     : commandPreview;
+  const resolvedMetadata = typeof metadata === "function"
+    ? metadata({
+      args: resolvedArgs,
+      id,
+      namespace
+    })
+    : metadata;
   const terminal = spawnPty(command, resolvedArgs, {
     cols: 100,
     cwd,
@@ -154,6 +163,9 @@ function startTerminalSession({
     id,
     commandPreview: resolvedCommandPreview,
     exitCode: null,
+    metadata: resolvedMetadata && typeof resolvedMetadata === "object" && !Array.isArray(resolvedMetadata)
+      ? resolvedMetadata
+      : {},
     onClose,
     output: "",
     status: "running",

@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { execFile } from "node:child_process";
 import { access, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { createServer as createNetServer } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import process from "node:process";
@@ -26,10 +27,15 @@ import {
 const execFileAsync = promisify(execFile);
 const TOOLCHAIN_IMAGE = "jskit-ai-studio-toolchain:0.1.0";
 const TOOL_HOME_VOLUME = "jskit_ai_studio_tool_home";
+const DEFAULT_APP_TEST_BUILD_COMMAND = "npm run build";
+const DEFAULT_APP_TEST_SERVER_COMMAND = "npm run server";
+const DEFAULT_APP_TEST_PORT = 4100;
 const TERMINAL_NAMESPACE = "current-app-codex";
 const TERMINAL_NAMESPACE_PREFIX = `${TERMINAL_NAMESPACE}:`;
 const STEP_TERMINAL_NAMESPACE = "current-app-session-step";
 const STEP_TERMINAL_NAMESPACE_PREFIX = `${STEP_TERMINAL_NAMESPACE}:`;
+const APP_TEST_TERMINAL_NAMESPACE = "current-app-test";
+const APP_TEST_TERMINAL_NAMESPACE_PREFIX = `${APP_TEST_TERMINAL_NAMESPACE}:`;
 const CODEX_THREAD_ID_FILE = "codex_thread_id";
 const CODEX_THREAD_PROBE = "!echo $CODEX_THREAD_ID";
 const CODEX_THREAD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
@@ -112,6 +118,13 @@ function terminalNamespace(sessionId) {
 
 function stepTerminalNamespace(sessionId) {
   return `${STEP_TERMINAL_NAMESPACE}:${String(sessionId || "")}`;
+}
+
+function appTestTerminalNamespace(sessionId = "") {
+  const normalizedSessionId = String(sessionId || "").trim();
+  return normalizedSessionId
+    ? `${APP_TEST_TERMINAL_NAMESPACE}:session:${normalizedSessionId}`
+    : `${APP_TEST_TERMINAL_NAMESPACE}:target`;
 }
 
 function activeSessionDirectory(targetRoot, sessionId) {
@@ -370,6 +383,154 @@ function dependencyInstallTerminalArgs({
     "bash",
     "-lc",
     dependencyInstallScript()
+  ];
+}
+
+function appTestContainerName({ sessionId = "", terminalId }) {
+  const scope = sessionId ? stableHash(sessionId) : "target";
+  return `jskit-ai-studio-app-test-${scope}-${stableHash(terminalId)}`;
+}
+
+async function readOptionalConfigFile(appRoot, relativePath, fallback) {
+  const configPath = path.join(appRoot, relativePath);
+  try {
+    const value = String(await readFile(configPath, "utf8")).trim();
+    return value || fallback;
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return fallback;
+    }
+    throw new Error(`Cannot read ${relativePath}: ${String(error?.message || error)}`);
+  }
+}
+
+function normalizePreferredPort(value) {
+  const port = Number.parseInt(String(value || ""), 10);
+  if (Number.isInteger(port) && port >= 1024 && port <= 65535) {
+    return port;
+  }
+  return DEFAULT_APP_TEST_PORT;
+}
+
+async function resolveAppTestConfig(appRoot) {
+  const [buildCommand, serverCommand, portValue] = await Promise.all([
+    readOptionalConfigFile(appRoot, "config/build_command", DEFAULT_APP_TEST_BUILD_COMMAND),
+    readOptionalConfigFile(appRoot, "config/server_command", DEFAULT_APP_TEST_SERVER_COMMAND),
+    readOptionalConfigFile(appRoot, "config/server_port", String(DEFAULT_APP_TEST_PORT))
+  ]);
+  return {
+    buildCommand,
+    preferredPort: normalizePreferredPort(portValue),
+    serverCommand
+  };
+}
+
+function canListenOnPort(port) {
+  return new Promise((resolve) => {
+    const server = createNetServer();
+    server.once("error", () => {
+      resolve(false);
+    });
+    server.once("listening", () => {
+      server.close(() => {
+        resolve(true);
+      });
+    });
+    server.listen(port, "127.0.0.1");
+  });
+}
+
+async function findAvailablePort(preferredPort) {
+  const startPort = normalizePreferredPort(preferredPort);
+  for (let port = startPort; port <= 65535; port += 1) {
+    if (await canListenOnPort(port)) {
+      return port;
+    }
+  }
+  throw new Error(`No localhost port is available at or after ${startPort}.`);
+}
+
+async function defaultAppPath(appRoot) {
+  try {
+    const appConfig = await loadAppConfigFromAppRoot({
+      appRoot
+    });
+    const surfaceDefaultId = String(appConfig?.surfaceDefaultId || "").trim().replace(/^\/+/u, "");
+    return surfaceDefaultId ? `/${surfaceDefaultId}` : "/";
+  } catch {
+    return "/";
+  }
+}
+
+function appTestScript({
+  buildCommand,
+  port,
+  serverCommand
+}) {
+  const runCommand = [
+    "set -e",
+    "export HOST=0.0.0.0",
+    `export PORT=${shellQuote(String(port))}`,
+    `printf '\\n[studio] $ %s\\n\\n' ${shellQuote(buildCommand)}`,
+    buildCommand,
+    "printf '\\n[studio] Build finished successfully.\\n'",
+    `printf '\\n[studio] $ HOST=%s PORT=%s %s\\n\\n' "$HOST" "$PORT" ${shellQuote(serverCommand)}`,
+    serverCommand
+  ].join("\n");
+  return [
+    "set -e",
+    "mkdir -p /tmp/studio-home /tmp/npm-cache",
+    "if [ -n \"${JSKIT_HOST_UID:-}\" ] && [ -n \"${JSKIT_HOST_GID:-}\" ] && command -v setpriv >/dev/null 2>&1; then",
+    "  chown -R \"$JSKIT_HOST_UID:$JSKIT_HOST_GID\" /tmp/studio-home /tmp/npm-cache",
+    `  exec setpriv --reuid "$JSKIT_HOST_UID" --regid "$JSKIT_HOST_GID" --clear-groups env HOME=/tmp/studio-home npm_config_cache=/tmp/npm-cache bash -lc ${shellQuote(runCommand)}`,
+    "fi",
+    `exec env HOME=/tmp/studio-home npm_config_cache=/tmp/npm-cache bash -lc ${shellQuote(runCommand)}`
+  ].join("\n");
+}
+
+function appTestTerminalArgs({
+  buildCommand,
+  containerName,
+  port,
+  serverCommand,
+  sessionId = "",
+  targetRoot,
+  terminalId,
+  workdir
+}) {
+  return [
+    "run",
+    "--rm",
+    "-it",
+    "--name",
+    containerName,
+    "--label",
+    "jskit-ai-studio.kind=app-test-terminal",
+    "--label",
+    `jskit-ai-studio.daemon=${STUDIO_DAEMON_ID}`,
+    "--label",
+    `jskit-ai-studio.session=${sessionId || "target"}`,
+    "--label",
+    `jskit-ai-studio.terminal=${terminalId}`,
+    "--label",
+    `jskit-ai-studio.target=${stableHash(targetRoot)}`,
+    "-p",
+    `127.0.0.1:${port}:${port}`,
+    "-v",
+    `${targetRoot}:/workspace`,
+    "-v",
+    `${targetRoot}:${targetRoot}`,
+    ...hostUserIdentityEnvArgs(),
+    "-w",
+    workdir,
+    TOOLCHAIN_IMAGE,
+    "bash",
+    "-lc",
+    appTestScript({
+      buildCommand,
+      port,
+      serverCommand
+    })
   ];
 }
 
@@ -755,6 +916,77 @@ async function inspectCurrentApp(appRoot, { includeGit = true } = {}) {
   });
 }
 
+async function startAppTestTerminalForRoot({
+  inspectionRoot,
+  runRoot,
+  sessionId = ""
+}) {
+  const runRootPath = path.resolve(runRoot);
+  const workspacePath = containerWorkspacePath(inspectionRoot, runRootPath);
+  if (!workspacePath) {
+    return {
+      ok: false,
+      error: "The app-test directory is outside the target root."
+    };
+  }
+
+  const config = await resolveAppTestConfig(runRootPath);
+  const port = await findAvailablePort(config.preferredPort);
+  const urlPath = await defaultAppPath(runRootPath);
+  const appUrl = `http://127.0.0.1:${port}${urlPath}`;
+  const namespace = appTestTerminalNamespace(sessionId);
+  const metadata = {
+    appUrl,
+    buildCommand: config.buildCommand,
+    port,
+    runRoot: runRootPath,
+    scope: sessionId ? "session" : "target",
+    serverCommand: config.serverCommand,
+    sessionId: sessionId || "",
+    urlPath
+  };
+
+  const response = startTerminalSession({
+    args: ({ id }) => appTestTerminalArgs({
+      buildCommand: config.buildCommand,
+      containerName: appTestContainerName({
+        sessionId,
+        terminalId: id
+      }),
+      port,
+      serverCommand: config.serverCommand,
+      sessionId,
+      targetRoot: inspectionRoot,
+      terminalId: id,
+      workdir: runRootPath
+    }),
+    command: "docker",
+    commandPreview: ({ args }) => dockerCommand(args),
+    cwd: inspectionRoot,
+    maxRunning: MAX_OPEN_ISSUE_SESSIONS + 1,
+    metadata,
+    namespace,
+    namespaceLimitPrefix: APP_TEST_TERMINAL_NAMESPACE_PREFIX,
+    onClose: async ({ id }) => {
+      await removeDockerContainer(appTestContainerName({
+        sessionId,
+        terminalId: id
+      }));
+    },
+    reuseRunning: true
+  });
+  const responseMetadata = response.metadata || metadata;
+  return {
+    ...response,
+    appUrl: responseMetadata.appUrl || appUrl,
+    buildCommand: responseMetadata.buildCommand || config.buildCommand,
+    port: responseMetadata.port || port,
+    runRoot: responseMetadata.runRoot || runRootPath,
+    serverCommand: responseMetadata.serverCommand || config.serverCommand,
+    urlPath: responseMetadata.urlPath || urlPath
+  };
+}
+
 function createService({ appRoot = "" } = {}) {
   const inspectionRoot = resolveCurrentAppRoot(appRoot);
 
@@ -847,6 +1079,7 @@ function createService({ appRoot = "" } = {}) {
       if (CLOSED_SESSION_STATUSES.has(String(result.status || ""))) {
         await closeTerminalSessionsForNamespace(terminalNamespace(sessionId));
         await closeTerminalSessionsForNamespace(stepTerminalNamespace(sessionId));
+        await closeTerminalSessionsForNamespace(appTestTerminalNamespace(sessionId));
       }
       return result;
     },
@@ -859,8 +1092,37 @@ function createService({ appRoot = "" } = {}) {
       if (String(response?.status || "") === "abandoned") {
         await closeTerminalSessionsForNamespace(terminalNamespace(sessionId));
         await closeTerminalSessionsForNamespace(stepTerminalNamespace(sessionId));
+        await closeTerminalSessionsForNamespace(appTestTerminalNamespace(sessionId));
       }
       return response;
+    },
+
+    async startAppTestTerminal() {
+      return startAppTestTerminalForRoot({
+        inspectionRoot,
+        runRoot: inspectionRoot
+      });
+    },
+
+    async startIssueSessionAppTestTerminal(sessionId) {
+      const session = await inspectSessionDetails({
+        targetRoot: inspectionRoot,
+        sessionId
+      });
+      if (session?.ok === false) {
+        return session;
+      }
+      if (!session?.worktree || session.worktreeReady !== true) {
+        return {
+          ok: false,
+          error: "Session worktree is not ready yet."
+        };
+      }
+      return startAppTestTerminalForRoot({
+        inspectionRoot,
+        runRoot: session.worktree,
+        sessionId
+      });
     },
 
     async saveCodexThread(sessionId, input = {}) {
@@ -1048,6 +1310,18 @@ function createService({ appRoot = "" } = {}) {
       });
     },
 
+    async subscribeAppTestTerminal(terminalSessionId, subscriber) {
+      return subscribeTerminalSession(terminalSessionId, subscriber, {
+        namespace: appTestTerminalNamespace()
+      });
+    },
+
+    async subscribeIssueSessionAppTestTerminal(sessionId, terminalSessionId, subscriber) {
+      return subscribeTerminalSession(terminalSessionId, subscriber, {
+        namespace: appTestTerminalNamespace(sessionId)
+      });
+    },
+
     writeCodexTerminal(sessionId, terminalSessionId, data) {
       return writeTerminalSession(terminalSessionId, data, {
         namespace: terminalNamespace(sessionId)
@@ -1060,6 +1334,18 @@ function createService({ appRoot = "" } = {}) {
       });
     },
 
+    writeAppTestTerminal(terminalSessionId, data) {
+      return writeTerminalSession(terminalSessionId, data, {
+        namespace: appTestTerminalNamespace()
+      });
+    },
+
+    writeIssueSessionAppTestTerminal(sessionId, terminalSessionId, data) {
+      return writeTerminalSession(terminalSessionId, data, {
+        namespace: appTestTerminalNamespace(sessionId)
+      });
+    },
+
     closeCodexTerminal(sessionId, terminalSessionId) {
       return closeTerminalSession(terminalSessionId, {
         namespace: terminalNamespace(sessionId)
@@ -1069,6 +1355,18 @@ function createService({ appRoot = "" } = {}) {
     closeSessionStepTerminal(sessionId, terminalSessionId) {
       return closeTerminalSession(terminalSessionId, {
         namespace: stepTerminalNamespace(sessionId)
+      });
+    },
+
+    closeAppTestTerminal(terminalSessionId) {
+      return closeTerminalSession(terminalSessionId, {
+        namespace: appTestTerminalNamespace()
+      });
+    },
+
+    closeIssueSessionAppTestTerminal(sessionId, terminalSessionId) {
+      return closeTerminalSession(terminalSessionId, {
+        namespace: appTestTerminalNamespace(sessionId)
       });
     }
   });

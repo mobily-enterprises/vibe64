@@ -29,6 +29,11 @@ test("Studio terminal cleanup removes labeled containers and stale toolchain pro
   const execFileImpl = async (command, args) => {
     calls.push([command, args]);
     if (command === "docker" && args[0] === "ps") {
+      if (String(args[3] || "").includes("app-test-terminal")) {
+        return {
+          stdout: "container-c\n"
+        };
+      }
       return {
         stdout: "container-a\ncontainer-b\n"
       };
@@ -66,12 +71,20 @@ test("Studio terminal cleanup removes labeled containers and stale toolchain pro
     }
   });
 
-  assert.deepEqual(result.removedContainers, ["container-a", "container-b"]);
+  assert.deepEqual(result.removedContainers, ["container-a", "container-b", "container-c"]);
   assert.deepEqual(result.terminatedProcesses, [102, 101, 100]);
   assert.deepEqual(killed, [
     [102, "SIGTERM"],
     [101, "SIGTERM"],
     [100, "SIGTERM"]
   ]);
-  assert.deepEqual(calls[1], ["docker", ["rm", "-f", "container-a", "container-b"]]);
+  assert.deepEqual(calls[0], [
+    "docker",
+    ["ps", "-aq", "--filter", "label=jskit-ai-studio.kind=codex-terminal"]
+  ]);
+  assert.deepEqual(calls[1], [
+    "docker",
+    ["ps", "-aq", "--filter", "label=jskit-ai-studio.kind=app-test-terminal"]
+  ]);
+  assert.deepEqual(calls[2], ["docker", ["rm", "-f", "container-a", "container-b", "container-c"]]);
 });

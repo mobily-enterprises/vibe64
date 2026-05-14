@@ -4,6 +4,7 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 const STUDIO_CODEX_CONTAINER_LABEL = "jskit-ai-studio.kind=codex-terminal";
+const STUDIO_APP_TEST_CONTAINER_LABEL = "jskit-ai-studio.kind=app-test-terminal";
 const TOOLCHAIN_IMAGE = "jskit-ai-studio-toolchain:0.1.0";
 const STALE_PROCESS_GRACE_MS = 500;
 
@@ -72,20 +73,26 @@ function selectStaleStudioToolchainProcessIds(processes = [], currentPid = proce
     .filter((pid) => pid !== currentPid);
 }
 
-async function listStudioCodexContainerIds(execFileImpl = execFileAsync) {
-  const result = await execFileImpl("docker", [
-    "ps",
-    "-aq",
-    "--filter",
-    `label=${STUDIO_CODEX_CONTAINER_LABEL}`
-  ], {
-    maxBuffer: 1024 * 1024,
-    timeout: 10000
-  });
-  return String(result.stdout || "")
-    .split(/\s+/u)
-    .map((id) => id.trim())
-    .filter(Boolean);
+async function listStudioContainerIds(execFileImpl = execFileAsync) {
+  const containerIds = new Set();
+  for (const label of [STUDIO_CODEX_CONTAINER_LABEL, STUDIO_APP_TEST_CONTAINER_LABEL]) {
+    const result = await execFileImpl("docker", [
+      "ps",
+      "-aq",
+      "--filter",
+      `label=${label}`
+    ], {
+      maxBuffer: 1024 * 1024,
+      timeout: 10000
+    });
+    for (const id of String(result.stdout || "").split(/\s+/u)) {
+      const trimmedId = id.trim();
+      if (trimmedId) {
+        containerIds.add(trimmedId);
+      }
+    }
+  }
+  return [...containerIds];
 }
 
 async function removeStudioCodexContainers({
@@ -94,11 +101,11 @@ async function removeStudioCodexContainers({
 } = {}) {
   let containerIds = [];
   try {
-    containerIds = await listStudioCodexContainerIds(execFileImpl);
+    containerIds = await listStudioContainerIds(execFileImpl);
   } catch (error) {
     logCleanup(logger, "debug", {
       error: String(error?.message || error)
-    }, "Skipping Studio Codex container startup cleanup.");
+    }, "Skipping Studio terminal container startup cleanup.");
     return [];
   }
 
@@ -209,6 +216,7 @@ async function cleanupStaleStudioTerminals({
 export {
   cleanupStaleStudioTerminals,
   isStudioToolchainDockerRun,
+  listStudioContainerIds,
   parseProcessRows,
   selectDescendantProcessIds,
   selectStaleStudioToolchainProcessIds

@@ -32,6 +32,7 @@ const APP_SETUP_TERMINAL_ENDPOINT = `${APP_SETUP_ENDPOINT}/terminal`;
 const BOOTSTRAP_STREAM_ENDPOINT = `${BOOTSTRAP_ENDPOINT}/stream`;
 const TARGET_APP_STREAM_ENDPOINT = `${TARGET_APP_ENDPOINT}/stream`;
 const APP_SETUP_STREAM_ENDPOINT = `${APP_SETUP_ENDPOINT}/stream`;
+const CURRENT_APP_TEST_TERMINAL_ENDPOINT = `${CURRENT_APP_ENDPOINT}/app-test-terminal`;
 
 const studioHttpClient = createTransientRetryHttpClient({
   credentials: "include",
@@ -121,6 +122,17 @@ function issueSessionStepTerminalEndpoint(sessionId, terminalSessionId = "") {
   return terminalSessionId ? `${base}/${encodeURIComponent(terminalSessionId)}` : base;
 }
 
+function currentAppTestTerminalEndpoint(terminalSessionId = "") {
+  return terminalSessionId
+    ? `${CURRENT_APP_TEST_TERMINAL_ENDPOINT}/${encodeURIComponent(terminalSessionId)}`
+    : CURRENT_APP_TEST_TERMINAL_ENDPOINT;
+}
+
+function issueSessionAppTestTerminalEndpoint(sessionId, terminalSessionId = "") {
+  const base = `${ISSUE_SESSIONS_ENDPOINT}/${encodeURIComponent(sessionId)}/app-test-terminal`;
+  return terminalSessionId ? `${base}/${encodeURIComponent(terminalSessionId)}` : base;
+}
+
 function resolveWebSocketUrl(pathname) {
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   return `${protocol}//${window.location.host}${pathname}`;
@@ -134,6 +146,14 @@ function issueSessionStepTerminalWebSocketUrl(sessionId, terminalSessionId) {
   return resolveWebSocketUrl(`${issueSessionStepTerminalEndpoint(sessionId, terminalSessionId)}/ws`);
 }
 
+function currentAppTestTerminalWebSocketUrl(terminalSessionId) {
+  return resolveWebSocketUrl(`${currentAppTestTerminalEndpoint(terminalSessionId)}/ws`);
+}
+
+function issueSessionAppTestTerminalWebSocketUrl(sessionId, terminalSessionId) {
+  return resolveWebSocketUrl(`${issueSessionAppTestTerminalEndpoint(sessionId, terminalSessionId)}/ws`);
+}
+
 async function startIssueSessionCodexTerminal(sessionId) {
   return studioHttpClient.post(issueSessionCodexTerminalEndpoint(sessionId), {});
 }
@@ -142,12 +162,28 @@ async function startIssueSessionStepTerminal(sessionId) {
   return studioHttpClient.post(issueSessionStepTerminalEndpoint(sessionId), {});
 }
 
+async function startCurrentAppTestTerminal() {
+  return studioHttpClient.post(currentAppTestTerminalEndpoint(), {});
+}
+
+async function startIssueSessionAppTestTerminal(sessionId) {
+  return studioHttpClient.post(issueSessionAppTestTerminalEndpoint(sessionId), {});
+}
+
 async function closeIssueSessionCodexTerminal(sessionId, terminalSessionId) {
   return studioHttpClient.delete(issueSessionCodexTerminalEndpoint(sessionId, terminalSessionId));
 }
 
 async function closeIssueSessionStepTerminal(sessionId, terminalSessionId) {
   return studioHttpClient.delete(issueSessionStepTerminalEndpoint(sessionId, terminalSessionId));
+}
+
+async function closeCurrentAppTestTerminal(terminalSessionId) {
+  return studioHttpClient.delete(currentAppTestTerminalEndpoint(terminalSessionId));
+}
+
+async function closeIssueSessionAppTestTerminal(sessionId, terminalSessionId) {
+  return studioHttpClient.delete(issueSessionAppTestTerminalEndpoint(sessionId, terminalSessionId));
 }
 
 function arrayBufferToBase64(buffer) {
@@ -225,11 +261,17 @@ export {
   TARGET_APP_TERMINAL_ENDPOINT,
   abandonIssueSession,
   closeIssueSessionCodexTerminal,
+  closeCurrentAppTestTerminal,
+  closeIssueSessionAppTestTerminal,
   closeIssueSessionStepTerminal,
   createIssueSession,
   consumeStudioGate,
+  currentAppTestTerminalEndpoint,
+  currentAppTestTerminalWebSocketUrl,
   issueSessionCodexTerminalEndpoint,
   issueSessionCodexTerminalWebSocketUrl,
+  issueSessionAppTestTerminalEndpoint,
+  issueSessionAppTestTerminalWebSocketUrl,
   issueSessionStepTerminalWebSocketUrl,
   listIssueSessions,
   readAppSetupStatus,
@@ -241,6 +283,8 @@ export {
   resolveStudioGate,
   runIssueSessionStep,
   saveIssueSessionCodexThread,
+  startCurrentAppTestTerminal,
+  startIssueSessionAppTestTerminal,
   startIssueSessionCodexTerminal,
   startIssueSessionStepTerminal,
   studioHttpClient,

@@ -310,6 +310,15 @@
 
                 <div v-else-if="isChoiceStep" class="studio-issue-sessions__choice-row">
                   <v-btn
+                    v-if="isUserCheckStep"
+                    color="primary"
+                    variant="tonal"
+                    :prepend-icon="mdiPlayCircleOutline"
+                    @click="launchSessionAppTest"
+                  >
+                    Test app
+                  </v-btn>
+                  <v-btn
                     v-for="option in selectedStepInput.options || []"
                     :key="option.value"
                     color="primary"
@@ -505,6 +514,15 @@
             @prompt-injected="recordCodexPromptInjected(terminalSession.sessionId, $event)"
             @session-update="applyIssueSessionUpdate"
           />
+          <AppTestTerminal
+            v-if="sessionAppTestVisible"
+            ref="sessionAppTestTerminalRef"
+            scope="session"
+            title="Test session app"
+            :session="selectedSession"
+            :visible="sessionAppTestVisible"
+            @closed="sessionAppTestVisible = false"
+          />
         </div>
       </aside>
     </div>
@@ -526,12 +544,14 @@ import {
   mdiContentCopy,
   mdiFileCompare,
   mdiPlay,
+  mdiPlayCircleOutline,
   mdiPlus,
   mdiRepeat,
   mdiRobotOutline,
   mdiSend
 } from "@mdi/js";
 import CodexSessionTerminal from "@/components/studio/CodexSessionTerminal.vue";
+import AppTestTerminal from "@/components/studio/AppTestTerminal.vue";
 import IssueSessionStepTerminal from "@/components/studio/IssueSessionStepTerminal.vue";
 import { useIssueSessions } from "@/composables/useIssueSessions.js";
 import {
@@ -570,6 +590,8 @@ const diffError = ref("");
 const diffLoading = ref(false);
 const diffPayload = ref(null);
 const diffBodyElement = ref(null);
+const sessionAppTestTerminalRef = ref(null);
+const sessionAppTestVisible = ref(false);
 const terminalSessionById = ref({});
 const promptInjectionRequestBySessionId = ref({});
 const promptInjectionSignatureBySessionId = ref({});
@@ -656,6 +678,10 @@ const selectedSessionTerminalBlocked = computed(() => {
 
 const selectedSessionNeedsSetupTerminal = computed(() => {
   return selectedSession.value?.currentStep === "dependencies_installed";
+});
+
+const isUserCheckStep = computed(() => {
+  return selectedSession.value?.currentStep === "user_check_completed";
 });
 
 const displayCurrentStepId = computed(() => {
@@ -1752,6 +1778,18 @@ async function copyText(value, label) {
   }
 }
 
+async function launchSessionAppTest() {
+  if (!selectedSession.value?.sessionId) {
+    return;
+  }
+  const popupWindow = window.open("", "_blank");
+  sessionAppTestVisible.value = true;
+  await nextTick();
+  await sessionAppTestTerminalRef.value?.start?.({
+    popupWindow
+  });
+}
+
 function runChoiceStep(value) {
   const inputName = selectedStepInput.value?.name;
   if (!inputName) {
@@ -2694,6 +2732,14 @@ watch(selectedSession, (session) => {
   immediate: true
 });
 
+watch(selectedSessionId, () => {
+  if (!sessionAppTestVisible.value) {
+    return;
+  }
+  void sessionAppTestTerminalRef.value?.closeTerminal?.();
+  sessionAppTestVisible.value = false;
+});
+
 watch(issueSessionBusy, (busy) => {
   if (!busy) {
     void runAutomaticStepHandlers();
@@ -3012,6 +3058,9 @@ onBeforeUnmount(() => {
 }
 
 .studio-issue-sessions__terminal-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
   min-width: 0;
 }
 

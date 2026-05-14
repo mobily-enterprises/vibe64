@@ -30,6 +30,9 @@ test("terminal sessions reuse one running terminal per namespace and enforce a r
       command: process.execPath,
       commandPreview: ({ id }) => `node ${id}`,
       maxRunning: 3,
+      metadata: {
+        url: "http://127.0.0.1:4100/"
+      },
       namespace,
       namespaceLimitPrefix: prefix,
       onClose: ({ id }) => {
@@ -42,11 +45,13 @@ test("terminal sessions reuse one running terminal per namespace and enforce a r
   try {
     const first = start(`${prefix}one`);
     assert.equal(first.ok, true);
+    assert.equal(first.metadata.url, "http://127.0.0.1:4100/");
     assert.equal(countRunningTerminalSessions({ namespacePrefix: prefix }), 1);
 
     const reused = start(`${prefix}one`);
     assert.equal(reused.ok, true);
     assert.equal(reused.id, first.id);
+    assert.equal(reused.metadata.url, first.metadata.url);
     assert.equal(countRunningTerminalSessions({ namespacePrefix: prefix }), 1);
 
     const second = start(`${prefix}two`);
