@@ -39,10 +39,13 @@
 | TargetAppReadiness | Pre-inspection Git/GitHub readiness for the target root | public | Derived from target path, Git, and GitHub CLI checks; blocks app inspection and edits until ready or repaired. |
 | AppSetupReadiness | Sequential setup state for the target app | public | Derived from filesystem, Git/GitHub remote state, JSKIT scaffold markers, local dependencies, runtime service needs, and `jskit app verify`. |
 | CurrentApp | Runtime snapshot of the target project root | public | Derived from filesystem and git on request; not persisted. The target root comes from the invocation directory or `JSKIT_STUDIO_TARGET_ROOT`, not from a stored project list. |
+| IssueSession | JSKIT issue-session runtime state for the current target app | public | Derived from `.jskit/sessions` and JSKIT session runtime APIs; not a Studio database table. Active sessions stay on `/home`; completed and abandoned archive views are read through Current App APIs. |
 
 ## Route And Screen Plan
 
-- Home/global routes: `/` redirects to the first incomplete gate, `/bootup` shows machine/runtime bootstrap, `/app-bootup` shows target Git/GitHub readiness after machine bootstrap passes, `/app-setup` turns the target into a doctor-ready JSKIT app, and `/home` shows Current App inspection only after all gates pass.
+- Home/global routes: `/` redirects to the first incomplete gate, `/bootup` shows machine/runtime bootstrap, `/app-bootup` shows target Git/GitHub readiness after machine bootstrap passes, `/app-setup` turns the target into a doctor-ready JSKIT app, and `/home` shows active Current App issue-session work only after all gates pass.
+- Session history route: `/home/history` is the single archive screen for issue sessions. It is reached from `shell.secondary-nav` as `Session History`, uses Vuetify tabs for `Completed` and `Abandoned`, stores the selected tab in `?tab=completed|abandoned`, and defaults missing or invalid tab state to `completed`.
+- Removed archive routes: `/home/completed` and `/home/abandoned` are intentionally not compatibility routes, aliases, or redirects. Completed and Abandoned should not appear in `shell.primary-nav`.
 - Account routes: none.
 - Console routes: none.
 - Workspace app routes: none.
@@ -59,8 +62,13 @@
 ## Implementation Notes
 
 - CRUDs to scaffold: none.
-- Non-CRUD pages to scaffold: none; adapt the existing generated home page.
-- Custom code areas: bootstrap runtime checks, target app Git/GitHub readiness checks, app setup orchestration checks, current-app server inspection service, and gated home page UI.
+- Non-CRUD pages to scaffold: use the JSKIT UI generator for new app pages when it fits; `/home/history` is a generated-style Vuetify page customized for Session History tabs.
+- Custom code areas: bootstrap runtime checks, target app Git/GitHub readiness checks, app setup orchestration checks, current-app server inspection service, issue-session UI, and gated home page UI.
+- Issue-session archives: `ArchivedIssueSessions` owns archive list loading, empty, error, refresh, and card-detail states. The Session History page reuses it with `archive=completed|abandoned`, hides archive-specific title/description copy inside tabs, and places one top-level Refresh action in the tab controls so the archive content does not gain an extra action-only header row.
+- Current-app archive API: completed and abandoned archive lists use `GET /api/studio/current-app/issue-sessions?archive=<completed|abandoned>`. This is app runtime data, not CRUD-owned persistence.
+- Local Studio request guard: Current App Studio HTTP and websocket routes are loopback-only by default. Container/host UI testing that cannot satisfy loopback host/origin checks must use the explicit `--bypass-localhost-check` flag or `JSKIT_STUDIO_BYPASS_LOCALHOST_CHECK=1`; `bin/dev.js` forwards the bypass as environment to Vite and the dev proxy rewrites origin only under that explicit bypass.
+- App test run config: `.jskit/config/testrun_command` can provide the combined target test command; for Studio self-testing it may include `npm run server -- --bypass-localhost-check` so the browser-side test runner can reach local-only Current App routes.
+- Studio terminal cleanup: toolchain-backed Codex/app-test terminals are labeled with the Studio daemon PID so startup cleanup can remove stale containers and process trees from dead Studio daemons without touching active sessions.
 
 ## Bootstrap Runtime Plan
 
