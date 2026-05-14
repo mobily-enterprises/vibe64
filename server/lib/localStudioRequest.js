@@ -1,3 +1,7 @@
+import {
+  isLocalhostCheckBypassEnabled
+} from "./localhostCheckBypass.js";
+
 function normalizeHostName(value = "") {
   const host = String(value || "").trim();
   if (!host) {
@@ -33,6 +37,9 @@ function hostFromOrigin(value = "") {
 }
 
 function isLocalStudioRequest(request) {
+  if (isLocalhostCheckBypassEnabled()) {
+    return true;
+  }
   const remoteAddress = request.ip || request.socket?.remoteAddress || request.raw?.socket?.remoteAddress || "";
   const host = request.hostname || request.headers?.host || "";
   const originHost = hostFromOrigin(request.headers?.origin);

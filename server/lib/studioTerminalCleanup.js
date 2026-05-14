@@ -1,12 +1,16 @@
 import { execFile } from "node:child_process";
 import process from "node:process";
 import { promisify } from "node:util";
+import {
+  STUDIO_DAEMON_PID_LABEL
+} from "./studioTerminalLabels.js";
 
 const execFileAsync = promisify(execFile);
 const STUDIO_CODEX_CONTAINER_LABEL = "jskit-ai-studio.kind=codex-terminal";
 const STUDIO_APP_TEST_CONTAINER_LABEL = "jskit-ai-studio.kind=app-test-terminal";
 const TOOLCHAIN_IMAGE = "jskit-ai-studio-toolchain:0.1.0";
 const STALE_PROCESS_GRACE_MS = 500;
+const MISSING_DOCKER_LABEL_VALUE = "<no value>";
 
 function logCleanup(logger, level, data, message) {
   const log = logger?.[level];
@@ -38,6 +42,42 @@ function isStudioToolchainDockerRun(command = "") {
     normalizedCommand.includes(TOOLCHAIN_IMAGE);
 }
 
+function normalizeProcessId(value = "") {
+  const pid = Number.parseInt(String(value || "").trim(), 10);
+  return Number.isInteger(pid) && pid > 0 ? pid : 0;
+}
+
+function escapeRegExp(value = "") {
+  return String(value || "").replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
+
+function daemonPidFromStudioToolchainCommand(command = "") {
+  const labelPattern = escapeRegExp(STUDIO_DAEMON_PID_LABEL);
+  const match = new RegExp(`(?:^|\\s)--label(?:=|\\s+)${labelPattern}=(\\d+)(?:\\s|$)`, "u")
+    .exec(String(command || ""));
+  return normalizeProcessId(match?.[1]);
+}
+
+function processStillExists(pid, killImpl) {
+  try {
+    killImpl(pid, 0);
+    return true;
+  } catch (error) {
+    return error?.code === "EPERM";
+  }
+}
+
+function isStaleDaemonPid(daemonPid, {
+  currentPid = process.pid,
+  killImpl = process.kill
+} = {}) {
+  const normalizedDaemonPid = normalizeProcessId(daemonPid);
+  if (!normalizedDaemonPid || normalizedDaemonPid === currentPid) {
+    return false;
+  }
+  return !processStillExists(normalizedDaemonPid, killImpl);
+}
+
 function selectDescendantProcessIds(processes = [], rootPids = []) {
   const childrenByParent = new Map();
   for (const entry of processes) {
@@ -65,43 +105,91 @@ function selectDescendantProcessIds(processes = [], rootPids = []) {
     .sort((left, right) => right - left);
 }
 
-function selectStaleStudioToolchainProcessIds(processes = [], currentPid = process.pid) {
+function selectStaleStudioToolchainProcessIds(processes = [], {
+  currentPid = process.pid,
+  killImpl = process.kill
+} = {}) {
   const rootPids = processes
-    .filter((entry) => entry.pid !== currentPid && isStudioToolchainDockerRun(entry.command))
+    .filter((entry) =>
+      entry.pid !== currentPid &&
+      isStudioToolchainDockerRun(entry.command) &&
+      isStaleDaemonPid(daemonPidFromStudioToolchainCommand(entry.command), {
+        currentPid,
+        killImpl
+      })
+    )
     .map((entry) => entry.pid);
   return selectDescendantProcessIds(processes, rootPids)
     .filter((pid) => pid !== currentPid);
 }
 
-async function listStudioContainerIds(execFileImpl = execFileAsync) {
-  const containerIds = new Set();
+function parseDockerContainerRows(output = "") {
+  return String(output || "")
+    .split(/\r?\n/u)
+    .map((line) => {
+      const trimmedLine = line.trim();
+      if (!trimmedLine) {
+        return null;
+      }
+      const [id, rawDaemonPid = ""] = trimmedLine.split("\t");
+      return {
+        daemonPid: rawDaemonPid === MISSING_DOCKER_LABEL_VALUE ? 0 : normalizeProcessId(rawDaemonPid),
+        id: String(id || "").trim()
+      };
+    })
+    .filter((entry) => entry?.id);
+}
+
+function selectStaleStudioContainerIds(containers = [], {
+  currentPid = process.pid,
+  killImpl = process.kill
+} = {}) {
+  return containers
+    .filter((container) => isStaleDaemonPid(container.daemonPid, {
+      currentPid,
+      killImpl
+    }))
+    .map((container) => container.id);
+}
+
+async function listStudioContainers(execFileImpl = execFileAsync) {
+  const containers = new Map();
   for (const label of [STUDIO_CODEX_CONTAINER_LABEL, STUDIO_APP_TEST_CONTAINER_LABEL]) {
     const result = await execFileImpl("docker", [
       "ps",
-      "-aq",
+      "-a",
       "--filter",
-      `label=${label}`
+      `label=${label}`,
+      "--format",
+      `{{.ID}}\t{{.Label "${STUDIO_DAEMON_PID_LABEL}"}}`
     ], {
       maxBuffer: 1024 * 1024,
       timeout: 10000
     });
-    for (const id of String(result.stdout || "").split(/\s+/u)) {
-      const trimmedId = id.trim();
-      if (trimmedId) {
-        containerIds.add(trimmedId);
-      }
+    for (const container of parseDockerContainerRows(result.stdout)) {
+      const existing = containers.get(container.id);
+      containers.set(container.id, {
+        ...container,
+        daemonPid: existing?.daemonPid || container.daemonPid
+      });
     }
   }
-  return [...containerIds];
+  return [...containers.values()];
 }
 
-async function removeStudioCodexContainers({
+async function listStudioContainerIds(execFileImpl = execFileAsync) {
+  return (await listStudioContainers(execFileImpl)).map((container) => container.id);
+}
+
+async function removeStaleStudioContainers({
+  currentPid = process.pid,
   execFileImpl = execFileAsync,
+  killImpl = process.kill,
   logger = null
 } = {}) {
-  let containerIds = [];
+  let containers = [];
   try {
-    containerIds = await listStudioContainerIds(execFileImpl);
+    containers = await listStudioContainers(execFileImpl);
   } catch (error) {
     logCleanup(logger, "debug", {
       error: String(error?.message || error)
@@ -109,6 +197,10 @@ async function removeStudioCodexContainers({
     return [];
   }
 
+  const containerIds = selectStaleStudioContainerIds(containers, {
+    currentPid,
+    killImpl
+  });
   if (!containerIds.length) {
     return [];
   }
@@ -118,15 +210,6 @@ async function removeStudioCodexContainers({
     timeout: 30000
   });
   return containerIds;
-}
-
-function processStillExists(pid, killImpl) {
-  try {
-    killImpl(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 function delay(ms) {
@@ -174,8 +257,10 @@ async function cleanupStaleStudioTerminals({
   logger = null,
   platform = process.platform
 } = {}) {
-  const removedContainers = await removeStudioCodexContainers({
+  const removedContainers = await removeStaleStudioContainers({
+    currentPid: process.pid,
     execFileImpl,
+    killImpl,
     logger
   });
 
@@ -187,7 +272,10 @@ async function cleanupStaleStudioTerminals({
         timeout: 10000
       });
       terminatedProcesses = await terminateProcesses(
-        selectStaleStudioToolchainProcessIds(parseProcessRows(result.stdout)),
+        selectStaleStudioToolchainProcessIds(parseProcessRows(result.stdout), {
+          currentPid: process.pid,
+          killImpl
+        }),
         {
           graceMs,
           killImpl
@@ -215,9 +303,12 @@ async function cleanupStaleStudioTerminals({
 
 export {
   cleanupStaleStudioTerminals,
+  daemonPidFromStudioToolchainCommand,
   isStudioToolchainDockerRun,
   listStudioContainerIds,
+  parseDockerContainerRows,
   parseProcessRows,
   selectDescendantProcessIds,
+  selectStaleStudioContainerIds,
   selectStaleStudioToolchainProcessIds
 };

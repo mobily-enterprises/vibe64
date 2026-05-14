@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { spawn as spawnPty } from "node-pty";
 
-const MAX_BUFFER_LENGTH = 160000;
+const MAX_BUFFER_LENGTH = 2 * 1024 * 1024;
 const stores = new Map();
 
 function normalizeNamespace(namespace = "") {

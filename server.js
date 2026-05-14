@@ -23,6 +23,9 @@ import {
   isLocalStudioRequest
 } from "./server/lib/localStudioRequest.js";
 import {
+  isLocalhostCheckBypassEnabled
+} from "./server/lib/localhostCheckBypass.js";
+import {
   cleanupStaleStudioTerminals
 } from "./server/lib/studioTerminalCleanup.js";
 
@@ -404,6 +407,9 @@ async function createServer(options = {}) {
     };
   });
   const runtimeEnv = resolveRuntimeEnv();
+  if (isLocalhostCheckBypassEnabled({ env: runtimeEnv })) {
+    app.log.warn("Studio localhost request checks are bypassed for this process.");
+  }
   const appRoot = resolveStudioAppRoot({
     env: runtimeEnv,
     explicitRoot: options.appRoot,

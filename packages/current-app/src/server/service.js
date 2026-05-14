@@ -24,6 +24,9 @@ import {
   subscribeTerminalSession,
   writeTerminalSession
 } from "../../../../server/lib/terminalSessions.js";
+import {
+  STUDIO_DAEMON_PID_LABEL
+} from "../../../../server/lib/studioTerminalLabels.js";
 
 const execFileAsync = promisify(execFile);
 const TOOLCHAIN_IMAGE = "jskit-ai-studio-toolchain:0.1.0";
@@ -31,6 +34,9 @@ const TOOL_HOME_VOLUME = "jskit_ai_studio_tool_home";
 const DEFAULT_APP_TEST_BUILD_COMMAND = "npm run build";
 const DEFAULT_APP_TEST_SERVER_COMMAND = "npm run server";
 const DEFAULT_APP_TEST_PORT = 4100;
+const APP_TEST_CONFIG_DIR = ".jskit/config";
+const APP_TEST_TESTRUN_COMMAND_CONFIG = `${APP_TEST_CONFIG_DIR}/testrun_command`;
+const APP_TEST_SERVER_PORT_CONFIG = `${APP_TEST_CONFIG_DIR}/server_port`;
 const TERMINAL_NAMESPACE = "current-app-codex";
 const TERMINAL_NAMESPACE_PREFIX = `${TERMINAL_NAMESPACE}:`;
 const STEP_TERMINAL_NAMESPACE = "current-app-session-step";
@@ -40,7 +46,8 @@ const APP_TEST_TERMINAL_NAMESPACE_PREFIX = `${APP_TEST_TERMINAL_NAMESPACE}:`;
 const CODEX_THREAD_ID_FILE = "codex_thread_id";
 const CODEX_THREAD_PROBE = "!echo $CODEX_THREAD_ID";
 const CODEX_THREAD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
-const CODEX_SESSION_MODEL = "gpt-5.3-codex-spark";
+const CODEX_SESSION_MODEL = "gpt-5.5";
+const CODEX_SESSION_REASONING_EFFORT = "xhigh";
 const MAX_OPEN_ISSUE_SESSIONS = 3;
 const CLOSED_SESSION_STATUSES = new Set(["abandoned", "finished"]);
 const STUDIO_DAEMON_ID = crypto.randomUUID();
@@ -273,7 +280,14 @@ function scheduleAttachmentCleanup(targetRoot, sessionId, attachmentId) {
 
 function codexStartupScript(codexThreadId = "") {
   const normalizedThreadId = normalizeCodexThreadId(codexThreadId);
-  const codexOptions = `--model ${shellQuote(CODEX_SESSION_MODEL)} --dangerously-bypass-approvals-and-sandbox`;
+  const codexReasoningConfig = `model_reasoning_effort="${CODEX_SESSION_REASONING_EFFORT}"`;
+  const codexOptions = [
+    "--model",
+    shellQuote(CODEX_SESSION_MODEL),
+    "-c",
+    shellQuote(codexReasoningConfig),
+    "--dangerously-bypass-approvals-and-sandbox"
+  ].join(" ");
   const codexCommand = normalizedThreadId
     ? `codex ${codexOptions} resume ${shellQuote(normalizedThreadId)}`
     : `codex ${codexOptions}`;
@@ -306,6 +320,8 @@ function codexTerminalArgs({
     "jskit-ai-studio.kind=codex-terminal",
     "--label",
     `jskit-ai-studio.daemon=${STUDIO_DAEMON_ID}`,
+    "--label",
+    `${STUDIO_DAEMON_PID_LABEL}=${process.pid}`,
     "--label",
     `jskit-ai-studio.session=${sessionId}`,
     "--label",
@@ -368,6 +384,8 @@ function dependencyInstallTerminalArgs({
     "--label",
     `jskit-ai-studio.daemon=${STUDIO_DAEMON_ID}`,
     "--label",
+    `${STUDIO_DAEMON_PID_LABEL}=${process.pid}`,
+    "--label",
     `jskit-ai-studio.session=${sessionId}`,
     "--label",
     `jskit-ai-studio.terminal=${terminalId}`,
@@ -414,15 +432,34 @@ function normalizePreferredPort(value) {
 }
 
 async function resolveAppTestConfig(appRoot) {
-  const [buildCommand, serverCommand, portValue] = await Promise.all([
+  const [testrunCommandConfig, portValue] = await Promise.all([
+    readOptionalConfigFile(appRoot, APP_TEST_TESTRUN_COMMAND_CONFIG, ""),
+    readOptionalConfigFile(
+      appRoot,
+      APP_TEST_SERVER_PORT_CONFIG,
+      await readOptionalConfigFile(appRoot, "config/server_port", String(DEFAULT_APP_TEST_PORT))
+    )
+  ]);
+  if (testrunCommandConfig) {
+    return {
+      buildCommand: "",
+      commandSource: APP_TEST_TESTRUN_COMMAND_CONFIG,
+      preferredPort: normalizePreferredPort(portValue),
+      serverCommand: "",
+      testrunCommand: testrunCommandConfig
+    };
+  }
+
+  const [buildCommand, serverCommand] = await Promise.all([
     readOptionalConfigFile(appRoot, "config/build_command", DEFAULT_APP_TEST_BUILD_COMMAND),
-    readOptionalConfigFile(appRoot, "config/server_command", DEFAULT_APP_TEST_SERVER_COMMAND),
-    readOptionalConfigFile(appRoot, "config/server_port", String(DEFAULT_APP_TEST_PORT))
+    readOptionalConfigFile(appRoot, "config/server_command", DEFAULT_APP_TEST_SERVER_COMMAND)
   ]);
   return {
     buildCommand,
+    commandSource: "legacy_split_commands",
     preferredPort: normalizePreferredPort(portValue),
-    serverCommand
+    serverCommand,
+    testrunCommand: `${buildCommand};${serverCommand}`
   };
 }
 
@@ -464,19 +501,15 @@ async function defaultAppPath(appRoot) {
 }
 
 function appTestScript({
-  buildCommand,
   port,
-  serverCommand
+  testrunCommand
 }) {
   const runCommand = [
     "set -e",
     "export HOST=0.0.0.0",
     `export PORT=${shellQuote(String(port))}`,
-    `printf '\\n[studio] $ %s\\n\\n' ${shellQuote(buildCommand)}`,
-    buildCommand,
-    "printf '\\n[studio] Build finished successfully.\\n'",
-    `printf '\\n[studio] $ HOST=%s PORT=%s %s\\n\\n' "$HOST" "$PORT" ${shellQuote(serverCommand)}`,
-    serverCommand
+    `printf '\\n[studio] $ HOST=%s PORT=%s %s\\n\\n' "$HOST" "$PORT" ${shellQuote(testrunCommand)}`,
+    testrunCommand
   ].join("\n");
   return [
     "set -e",
@@ -490,13 +523,12 @@ function appTestScript({
 }
 
 function appTestTerminalArgs({
-  buildCommand,
   containerName,
   port,
-  serverCommand,
   sessionId = "",
   targetRoot,
   terminalId,
+  testrunCommand,
   workdir
 }) {
   return [
@@ -509,6 +541,8 @@ function appTestTerminalArgs({
     "jskit-ai-studio.kind=app-test-terminal",
     "--label",
     `jskit-ai-studio.daemon=${STUDIO_DAEMON_ID}`,
+    "--label",
+    `${STUDIO_DAEMON_PID_LABEL}=${process.pid}`,
     "--label",
     `jskit-ai-studio.session=${sessionId || "target"}`,
     "--label",
@@ -528,9 +562,8 @@ function appTestTerminalArgs({
     "bash",
     "-lc",
     appTestScript({
-      buildCommand,
       port,
-      serverCommand
+      testrunCommand
     })
   ];
 }
@@ -939,26 +972,27 @@ async function startAppTestTerminalForRoot({
   const metadata = {
     appUrl,
     buildCommand: config.buildCommand,
+    commandSource: config.commandSource,
     port,
     runRoot: runRootPath,
     scope: sessionId ? "session" : "target",
     serverCommand: config.serverCommand,
     sessionId: sessionId || "",
+    testrunCommand: config.testrunCommand,
     urlPath
   };
 
   const response = startTerminalSession({
     args: ({ id }) => appTestTerminalArgs({
-      buildCommand: config.buildCommand,
       containerName: appTestContainerName({
         sessionId,
         terminalId: id
       }),
       port,
-      serverCommand: config.serverCommand,
       sessionId,
       targetRoot: inspectionRoot,
       terminalId: id,
+      testrunCommand: config.testrunCommand,
       workdir: runRootPath
     }),
     command: "docker",
@@ -981,9 +1015,11 @@ async function startAppTestTerminalForRoot({
     ...response,
     appUrl: responseMetadata.appUrl || appUrl,
     buildCommand: responseMetadata.buildCommand || config.buildCommand,
+    commandSource: responseMetadata.commandSource || config.commandSource,
     port: responseMetadata.port || port,
     runRoot: responseMetadata.runRoot || runRootPath,
     serverCommand: responseMetadata.serverCommand || config.serverCommand,
+    testrunCommand: responseMetadata.testrunCommand || config.testrunCommand,
     urlPath: responseMetadata.urlPath || urlPath
   };
 }
@@ -1381,7 +1417,9 @@ function createService({ appRoot = "" } = {}) {
 }
 
 export {
+  APP_TEST_TESTRUN_COMMAND_CONFIG,
   createService,
   inspectCurrentApp,
+  resolveAppTestConfig,
   resolveCurrentAppRoot
 };
