@@ -2045,7 +2045,7 @@ test.describe("studio startup navigation", () => {
       .toContain("Deep UI quality check prompt for this session.");
   });
 
-  test("requesting another review/deslop pass does not run the next JSKIT step in the same click", async ({ page }) => {
+  test("review/deslop go next does not run the following JSKIT step in the same click", async ({ page }) => {
     let activeSession = reviewDeslopAcceptedPayload;
     let stepRequestCount = 0;
     const terminalInputs: Record<string, string[]> = {
@@ -2118,12 +2118,16 @@ test.describe("studio startup navigation", () => {
 
     await page.goto(`${BASE_URL}/home`);
     await expectSessionsRoute(page);
-    await page.getByRole("button", { name: "Run deslop" }).click();
+    await page.getByRole("button", { name: "Go to next step" }).click();
 
     await expect.poll(() => stepRequestCount).toBe(1);
     await page.waitForTimeout(100);
     expect(stepRequestCount).toBe(1);
-    await expect(page.getByText("Goal: Review/deslop")).toBeVisible();
+    const reviewStep = page.locator(".studio-issue-sessions__step").filter({
+      hasText: "Review/deslop"
+    });
+    await expect(reviewStep).toContainText("Done: Review/deslop");
+    await expect(reviewStep.getByRole("button", { name: "Execute step" })).toBeVisible();
   });
 
   test("failed user check shows rework notes form before returning to plan made", async ({ page }) => {

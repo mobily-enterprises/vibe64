@@ -300,15 +300,15 @@
                 <div v-else class="studio-issue-sessions__action-stack">
                   <div class="studio-issue-sessions__action-buttons">
                     <v-btn
-                      v-if="showReviewDeslopPromptButton"
+                      v-if="showReviewDeslopResolveButton"
                       color="primary"
                       variant="tonal"
-                      :disabled="!canRunReviewDeslopPrompt"
+                      :disabled="!canRunReviewDeslopResolve"
                       :loading="issueSessionBusy"
                       :prepend-icon="mdiRobotOutline"
-                      @click="runReviewDeslopPromptAction"
+                      @click="resolveReviewDeslopFindings"
                     >
-                      {{ reviewDeslopPromptButtonLabel }}
+                      Ask to resolve
                     </v-btn>
                     <v-btn
                       v-if="showCodexPromptResendButton"
@@ -321,7 +321,7 @@
                       {{ codexPromptResendButtonLabel }}
                     </v-btn>
                     <v-btn
-                      v-if="hasManualCodexPromptAction"
+                      v-if="hasManualCodexPromptAction && !activeStepControls.showExecuteStep"
                       color="primary"
                       variant="tonal"
                       :disabled="selectedSessionTerminalBlocked || issueSessionBusy"
@@ -341,15 +341,37 @@
                       {{ diffUtilityAction.label || "Review changes" }}
                     </v-btn>
                     <v-btn
-                      v-if="showCurrentActionButton"
+                      v-if="activeStepControls.showExecuteStep"
+                      color="primary"
+                      variant="tonal"
+                      :loading="issueSessionBusy"
+                      :disabled="!activeStepControls.canExecuteStep"
+                      :prepend-icon="mdiPlay"
+                      @click="executeCurrentStep"
+                    >
+                      {{ executeStepButtonLabel }}
+                    </v-btn>
+                    <v-btn
+                      v-if="activeStepControls.showFormSubmit"
                       color="primary"
                       variant="flat"
                       :loading="issueSessionBusy"
-                      :disabled="isReviewDeslopStep ? !canFinishReviewDeslop : !canRunAction"
+                      :disabled="!activeStepControls.canSubmitForm"
                       :prepend-icon="mdiPlay"
-                      @click="isReviewDeslopStep ? finishReviewDeslop() : runCurrentAction()"
+                      @click="submitCurrentForm"
                     >
-                      {{ isReviewDeslopStep ? "Go to next step" : currentActionButtonLabel }}
+                      {{ currentActionButtonLabel }}
+                    </v-btn>
+                    <v-btn
+                      v-if="activeStepControls.showGoNext"
+                      color="primary"
+                      variant="flat"
+                      :loading="issueSessionBusy"
+                      :disabled="!activeStepControls.canGoNext"
+                      :prepend-icon="mdiPlay"
+                      @click="goToNextStep"
+                    >
+                      Go to next step
                     </v-btn>
                     <v-btn
                       v-if="selectedSession.prompt && !isCodexPromptInjection"
@@ -460,95 +482,6 @@
             @session-update="applyIssueSessionUpdate"
           />
         </div>
-
-        <v-sheet rounded="lg" border class="studio-issue-sessions__facts">
-          <div class="studio-issue-sessions__facts-header">
-            <div>
-              <h2 class="studio-issue-sessions__facts-title">Session Details</h2>
-              <p class="text-caption text-medium-emphasis mb-0">
-                Updates as JSKIT records worktree, Codex, GitHub, and review state.
-              </p>
-            </div>
-            <v-chip
-              :color="issueSessionStatusColor(selectedSession.status)"
-              density="comfortable"
-              size="small"
-              variant="tonal"
-            >
-              {{ issueSessionStatusLabel(selectedSession.status) }}
-            </v-chip>
-          </div>
-
-          <div class="studio-issue-sessions__facts-grid">
-            <div
-              v-for="fact in sessionFactItems"
-              :key="fact.key"
-              class="studio-issue-sessions__fact"
-              :class="{
-                'studio-issue-sessions__fact--expandable': fact.expandable,
-                'studio-issue-sessions__fact--expanded': factIsExpanded(fact)
-              }"
-              :aria-expanded="fact.expandable ? String(factIsExpanded(fact)) : undefined"
-              :role="fact.expandable ? 'button' : undefined"
-              :tabindex="fact.expandable ? 0 : undefined"
-              @click="toggleFact(fact)"
-              @keydown.enter.prevent="toggleFact(fact)"
-              @keydown.space.prevent="toggleFact(fact)"
-            >
-              <div class="studio-issue-sessions__fact-icon">
-                <v-icon :icon="fact.icon" size="20" />
-              </div>
-              <div class="studio-issue-sessions__fact-copy">
-                <div class="studio-issue-sessions__fact-label">{{ fact.label }}</div>
-                <a
-                  v-if="fact.href"
-                  class="studio-issue-sessions__fact-value studio-issue-sessions__fact-link"
-                  :href="fact.href"
-                  target="_blank"
-                  rel="noreferrer"
-                  @click.stop
-                >
-                  {{ fact.value }}
-                </a>
-                <div v-else class="studio-issue-sessions__fact-value">{{ fact.value }}</div>
-                <div v-if="fact.detail" class="studio-issue-sessions__fact-detail">{{ fact.detail }}</div>
-              </div>
-              <div v-if="fact.href || fact.copyValue || fact.expandable" class="studio-issue-sessions__fact-actions">
-                <v-btn
-                  v-if="fact.expandable"
-                  :aria-label="factIsExpanded(fact) ? `Collapse ${fact.label}` : `Expand ${fact.label}`"
-                  :icon="factIsExpanded(fact) ? mdiChevronUp : mdiChevronDown"
-                  size="x-small"
-                  variant="text"
-                  @click.stop="toggleFact(fact)"
-                />
-                <v-btn
-                  v-if="fact.href"
-                  :href="fact.href"
-                  target="_blank"
-                  rel="noreferrer"
-                  :icon="mdiOpenInNew"
-                  size="x-small"
-                  variant="text"
-                  @click.stop
-                />
-                <v-btn
-                  v-if="fact.copyValue"
-                  :icon="mdiContentCopy"
-                  size="x-small"
-                  variant="text"
-                  @click.stop="copyText(fact.copyValue, fact.label)"
-                />
-              </div>
-              <div
-                v-if="fact.expandable && factIsExpanded(fact)"
-                class="studio-issue-sessions__fact-expanded"
-              >
-                <pre>{{ fact.expandedValue }}</pre>
-              </div>
-            </div>
-          </div>
-        </v-sheet>
       </aside>
     </div>
   </v-sheet>
@@ -568,17 +501,11 @@ import {
   mdiCircleSlice8,
   mdiContentCopy,
   mdiFileCompare,
-  mdiFolderOutline,
-  mdiGithub,
-  mdiIdentifier,
-  mdiOpenInNew,
   mdiPlay,
   mdiPlus,
-  mdiProgressCheck,
   mdiRepeat,
   mdiRobotOutline,
-  mdiSend,
-  mdiSourceBranch
+  mdiSend
 } from "@mdi/js";
 import CodexSessionTerminal from "@/components/studio/CodexSessionTerminal.vue";
 import IssueSessionStepTerminal from "@/components/studio/IssueSessionStepTerminal.vue";
@@ -601,19 +528,16 @@ import {
   isOpenIssueSession,
   issueSessionCodexExpectedOutputs,
   issueSessionCodexPromptActionLabel,
-  issueSessionFacts,
-  issueSessionStatusColor,
-  issueSessionStatusLabel,
   shouldAutoInjectIssueSessionCodexPrompt,
   shouldUseManualIssueSessionCodexPrompt,
   shortIssueSessionId
 } from "@/lib/issueSessionViewModel.js";
+import { buildActiveStepControls } from "@/lib/issueSessionStepControls.js";
 
 const copyStatus = ref("");
 const codexTerminalOutputBySessionId = ref({});
 const codexOutputDraftByKey = ref({});
 const codexOutputSourceByKey = ref({});
-const expandedFactKeys = ref({});
 const expandedDoneStepIds = ref({});
 const abandonDialogOpen = ref(false);
 const abandonSessionId = ref("");
@@ -638,6 +562,7 @@ const autoRanImmediateStepKeys = ref({});
 const autoStartedCodexOutputStepKeys = ref({});
 const autoStartedCodexPromptStepKeys = ref({});
 const autoAdvancedCodexPromptBySignature = ref({});
+const autoStepStartSuppressedSessionId = ref("");
 const codexCompletionWatchersBySignature = new Map();
 
 const {
@@ -671,12 +596,14 @@ const AUTO_START_CODEX_PROMPT_STEP_IDS = new Set([
   "plan_executed",
   "deep_ui_check_run",
   "review_prompt_rendered",
-  "automated_checks_run"
+  "automated_checks_run",
+  "blueprint_updated"
 ]);
 const AUTO_ADVANCE_CODEX_PROMPT_STEP_IDS = new Set([
   "plan_executed",
   "deep_ui_check_run",
-  "automated_checks_run"
+  "automated_checks_run",
+  "blueprint_updated"
 ]);
 const REVIEW_DESLOP_MORE_FINDINGS = "Run another review/deslop pass. Ask the user which important findings they want fixed before editing, then fix only the findings the user selects.";
 const ISSUE_DETAILS_CONVERSATION_READY_MARKER = "issue_details_conversation_ready";
@@ -780,41 +707,23 @@ const reviewDeslopNeedsUserDecision = computed(() => {
     selectedDeslopAutomation.value?.status === "awaiting_user";
 });
 
-const reviewDeslopCodexWorking = computed(() => {
+const activeStepCodexWorking = computed(() => {
   return selectedCodexCompletion.value?.status === "waiting";
 });
 
-const showReviewDeslopPromptButton = computed(() => {
-  if (!isReviewDeslopStep.value || reviewDeslopCodexWorking.value) {
+const showReviewDeslopResolveButton = computed(() => {
+  if (!isReviewDeslopStep.value || activeStepCodexWorking.value) {
     return false;
-  }
-  if (selectedSession.value?.currentStep === "review_prompt_rendered") {
-    return true;
   }
   return reviewDeslopNeedsUserDecision.value &&
     reviewDeslopFindings.value.length > 0;
 });
 
-const canRunReviewDeslopPrompt = computed(() => {
-  if (!showReviewDeslopPromptButton.value || issueSessionBusy.value || selectedSessionTerminalBlocked.value) {
+const canRunReviewDeslopResolve = computed(() => {
+  if (!showReviewDeslopResolveButton.value || issueSessionBusy.value || selectedSessionTerminalBlocked.value) {
     return false;
   }
-  if (selectedSession.value?.currentStep === "review_prompt_rendered") {
-    return true;
-  }
   return reviewDeslopNeedsUserDecision.value && reviewDeslopFindings.value.length > 0;
-});
-
-const reviewDeslopPromptButtonLabel = computed(() => {
-  return selectedSession.value?.currentStep === "review_prompt_rendered"
-    ? "Run deslop"
-    : "Ask to resolve";
-});
-
-const canFinishReviewDeslop = computed(() => {
-  return selectedSession.value?.currentStep === "review_changes_accepted" &&
-    !reviewDeslopCodexWorking.value &&
-    !issueSessionBusy.value;
 });
 
 const reviewDeslopStatusMessage = computed(() => {
@@ -822,8 +731,11 @@ const reviewDeslopStatusMessage = computed(() => {
     return "";
   }
   const status = selectedDeslopAutomation.value?.status || "";
-  if (reviewDeslopCodexWorking.value || status === "reviewing") {
+  if (activeStepCodexWorking.value) {
     return "Waiting for Codex deslop findings.";
+  }
+  if (status === "reviewing") {
+    return "Codex is idle. Continue the review/deslop loop or go to the next step.";
   }
   if (status === "resolving_auto") {
     return "Codex is resolving high and medium deslop findings.";
@@ -1016,11 +928,6 @@ const selectedStepNeedsCodexOutputPrompt = computed(() => {
   return isCodexOutputStep.value &&
     !selectedSession.value?.prompt &&
     !hasAnyEditableCodexOutput.value;
-});
-
-const selectedCodexOutputAutoStarts = computed(() => {
-  return sessionNeedsCodexOutputPrompt(selectedSession.value) &&
-    selectedSession.value?.codex?.autoInject === true;
 });
 
 const requiredCodexOutputsFilled = computed(() => {
@@ -1245,33 +1152,27 @@ const canRunAction = computed(() => {
   return true;
 });
 
-const showCurrentActionButton = computed(() => {
-  if (isChoiceStep.value) {
-    return false;
-  }
-  if (isReviewDeslopStep.value) {
-    return selectedSession.value?.currentStep === "review_changes_accepted" &&
-      !reviewDeslopCodexWorking.value;
-  }
-  if (selectedSessionNeedsSetupTerminal.value) {
-    return false;
-  }
-  if (selectedCodexPromptAutoStarts.value) {
-    return false;
-  }
-  if (selectedCodexPromptAutoAdvances.value) {
-    return selectedCodexCompletion.value?.status === "interrupted";
-  }
-  if (selectedCodexOutputAutoStarts.value) {
-    return false;
-  }
-  if (!isCodexOutputStep.value) {
-    return true;
-  }
-  if (selectedStepNeedsCodexOutputPrompt.value) {
-    return true;
-  }
-  return codexOutputFormVisible.value;
+// One place owns active-step controls: forms submit data, prompt/automatic steps execute, finished non-form steps advance.
+const activeStepControls = computed(() => {
+  return buildActiveStepControls({
+    actionKind: selectedStepAction.value?.kind || "",
+    busy: issueSessionBusy.value,
+    canRunAction: canRunAction.value,
+    codexOutputFormVisible: codexOutputFormVisible.value,
+    codexPromptAlreadyRequested: selectedCodexPromptAlreadyRequested.value,
+    codexPromptInjectionReady: isCodexPromptInjection.value,
+    codexWorking: activeStepCodexWorking.value,
+    hasChoiceForm: isChoiceStep.value,
+    hasExclusiveTextAlternateAction: exclusiveTextAlternateActions.value.length > 0,
+    hasTextForm: isTextStep.value,
+    isCodexOutputStep: isCodexOutputStep.value,
+    isTerminalSession: isTerminalSession.value,
+    selectedSessionId: selectedSession.value?.sessionId || "",
+    selectedSessionNeedsSetupTerminal: selectedSessionNeedsSetupTerminal.value,
+    selectedStepInputType: selectedStepInput.value?.type || "none",
+    selectedStepNeedsCodexOutputPrompt: selectedStepNeedsCodexOutputPrompt.value,
+    terminalBlocked: selectedSessionTerminalBlocked.value
+  });
 });
 
 const currentActionButtonLabel = computed(() => {
@@ -1287,27 +1188,15 @@ const currentActionButtonLabel = computed(() => {
   return selectedStepAction.value?.label || selectedStepAction.value?.buttonLabel || "Run Step";
 });
 
-const sessionFactItems = computed(() => {
-  return issueSessionFacts(selectedSession.value || {}, orderedStepDefinitions.value)
-    .map((fact) => ({
-      ...fact,
-      icon: sessionFactIcon(fact.icon)
-    }));
+const executeStepButtonLabel = computed(() => {
+  if (selectedSession.value?.currentStep === "pr_finalized") {
+    return currentActionButtonLabel.value || "Merge PR";
+  }
+  return "Execute step";
 });
 
 function shortSessionId(sessionId) {
   return shortIssueSessionId(sessionId);
-}
-
-function sessionFactIcon(icon) {
-  return {
-    branch: mdiSourceBranch,
-    codex: mdiRobotOutline,
-    github: mdiGithub,
-    session: mdiIdentifier,
-    step: mdiProgressCheck,
-    worktree: mdiFolderOutline
-  }[icon] || mdiIdentifier;
 }
 
 function codexOutputLabel(output = {}) {
@@ -1373,12 +1262,18 @@ function alternateActionTitle(action = {}) {
   if (action.id === "request_another_review_pass") {
     return "Need another review pass?";
   }
+  if (action.id === "close_without_merge") {
+    return "Finish without merging?";
+  }
   return String(action.title || action.label || "Optional path").trim();
 }
 
 function alternateActionHelp(action = {}) {
   if (action.id === "request_another_review_pass") {
     return "Use this only when important review findings remain. Studio will record these notes and loop back to Codex review.";
+  }
+  if (action.id === "close_without_merge") {
+    return "Leave the PR open, record the reason, and remove the session worktree without merging.";
   }
   return String(action.helpText || "Provide the extra context required for this alternate path.").trim();
 }
@@ -1421,34 +1316,6 @@ function clearAlternateActionDraft(action = {}) {
     ...remainingValues
   } = alternateActionInputValues.value;
   alternateActionInputValues.value = remainingValues;
-}
-
-function factExpansionKey(fact = {}) {
-  return selectedSessionId.value && fact.key ? `${selectedSessionId.value}:${fact.key}` : "";
-}
-
-function factIsExpanded(fact = {}) {
-  const key = factExpansionKey(fact);
-  return Boolean(key && expandedFactKeys.value[key]);
-}
-
-function toggleFact(fact = {}) {
-  if (!fact.expandable) {
-    return;
-  }
-  const key = factExpansionKey(fact);
-  if (!key) {
-    return;
-  }
-  const nextExpandedFactKeys = {
-    ...expandedFactKeys.value
-  };
-  if (nextExpandedFactKeys[key]) {
-    delete nextExpandedFactKeys[key];
-  } else {
-    nextExpandedFactKeys[key] = true;
-  }
-  expandedFactKeys.value = nextExpandedFactKeys;
 }
 
 function terminalLimitReachedFor(sessionId) {
@@ -1853,6 +1720,7 @@ function runChoiceStep(value) {
   if (!inputName) {
     return;
   }
+  autoStepStartSuppressedSessionId.value = "";
   void runSelectedStep({
     [inputName]: value
   }).then((response) => handleStepResponse(response));
@@ -2435,7 +2303,8 @@ async function resendCurrentCodexPromptRequest() {
 }
 
 async function handleStepResponse(response, {
-  forcePromptInjection = false
+  forcePromptInjection = false,
+  runAutomaticFollowUps = true
 } = {}) {
   rememberTerminalSession(response);
   if (
@@ -2445,13 +2314,21 @@ async function handleStepResponse(response, {
   ) {
     await requestCodexPromptInjection(response);
   }
-  if (response?.ok !== false) {
-    await autoSkipConditionalStep(response);
-    await autoRunImmediateSessionStep(response);
-    await autoStartCodexOutputStep(response);
-    await autoStartCodexPromptStep(response);
+  if (response?.ok !== false && runAutomaticFollowUps) {
+    await runAutomaticStepHandlers(response);
   }
   return response;
+}
+
+async function runAutomaticStepHandlers(session = selectedSession.value) {
+  if (session?.sessionId && autoStepStartSuppressedSessionId.value === session.sessionId) {
+    return;
+  }
+  await autoSkipConditionalStep(session);
+  await autoRunImmediateSessionStep(session);
+  await autoStartCodexOutputStep(session);
+  await autoStartCodexPromptStep(session);
+  await autoAdvanceFinishedCodexPrompt();
 }
 
 function autoSkipStepKey(session = {}) {
@@ -2571,25 +2448,14 @@ async function runAlternateAction(action = {}) {
   if (alternateActionDisabled(action)) {
     return;
   }
+  autoStepStartSuppressedSessionId.value = "";
   const response = await runSelectedStep(alternateActionPayload(action));
   clearAlternateActionDraft(action);
   await handleStepResponse(response);
 }
 
-async function runReviewDeslopPromptAction() {
-  if (!canRunReviewDeslopPrompt.value) {
-    return;
-  }
-  if (selectedSession.value?.currentStep === "review_prompt_rendered") {
-    const response = await runSelectedStep();
-    await handleStepResponse(response);
-    if (response?.ok !== false) {
-      setDeslopAutomation(response.sessionId || selectedSessionId.value, {
-        findings: [],
-        handledSignature: "",
-        status: "reviewing"
-      });
-    }
+async function resolveReviewDeslopFindings() {
+  if (!canRunReviewDeslopResolve.value) {
     return;
   }
   await askCodexToResolveDeslopFindings(reviewDeslopFindings.value, {
@@ -2597,14 +2463,46 @@ async function runReviewDeslopPromptAction() {
   });
 }
 
-async function finishReviewDeslop() {
-  if (!canFinishReviewDeslop.value) {
+async function goToNextStep() {
+  if (!activeStepControls.value.canGoNext) {
     return;
   }
-  const response = await runSelectedStep({
-    reviewFindingsRemaining: false
+  const payload = selectedSession.value?.currentStep === "review_changes_accepted"
+    ? { reviewFindingsRemaining: false }
+    : {};
+  autoStepStartSuppressedSessionId.value = selectedSession.value?.sessionId || "";
+  const response = await runSelectedStep(payload);
+  if (!response) {
+    autoStepStartSuppressedSessionId.value = "";
+  }
+  await handleStepResponse(response, {
+    runAutomaticFollowUps: false
   });
+}
+
+async function executeCurrentStep() {
+  if (!activeStepControls.value.canExecuteStep) {
+    return;
+  }
+  autoStepStartSuppressedSessionId.value = "";
+  if (isCodexOutputStep.value) {
+    await runCodexOutputStep();
+    return;
+  }
+  if (isCodexPromptInjection.value && !selectedCodexPromptAlreadyRequested.value && selectedSession.value?.prompt) {
+    await requestCodexPromptInjection();
+    return;
+  }
+  const stepId = selectedSession.value?.currentStep || "";
+  const response = await runSelectedStep(stepId === "pr_finalized" ? { mergePr: true } : {});
   await handleStepResponse(response);
+  if (stepId === "review_prompt_rendered" && response?.ok !== false) {
+    setDeslopAutomation(response.sessionId || selectedSessionId.value, {
+      findings: [],
+      handledSignature: "",
+      status: "reviewing"
+    });
+  }
 }
 
 function requestAbandonSession(session = {}) {
@@ -2690,6 +2588,7 @@ function handleDiffBodyClick(event) {
 }
 
 async function acceptReviewedChanges() {
+  autoStepStartSuppressedSessionId.value = "";
   const response = await runSelectedStep();
   await handleStepResponse(response);
   if (response?.ok !== false) {
@@ -2738,7 +2637,8 @@ async function injectCodexPromptText(session, promptText) {
   return true;
 }
 
-function runCurrentAction() {
+function submitCurrentForm() {
+  autoStepStartSuppressedSessionId.value = "";
   if (isCodexOutputStep.value) {
     void runCodexOutputStep();
     return;
@@ -2748,22 +2648,14 @@ function runCurrentAction() {
 
 watch(selectedSession, (session) => {
   rememberTerminalSession(session);
-  void autoSkipConditionalStep(session);
-  void autoRunImmediateSessionStep(session);
-  void autoStartCodexOutputStep(session);
-  void autoStartCodexPromptStep(session);
-  void autoAdvanceFinishedCodexPrompt();
+  void runAutomaticStepHandlers(session);
 }, {
   immediate: true
 });
 
 watch(issueSessionBusy, (busy) => {
   if (!busy) {
-    void autoSkipConditionalStep();
-    void autoRunImmediateSessionStep();
-    void autoStartCodexOutputStep();
-    void autoStartCodexPromptStep();
-    void autoAdvanceFinishedCodexPrompt();
+    void runAutomaticStepHandlers();
   }
 });
 
@@ -3077,145 +2969,6 @@ onBeforeUnmount(() => {
   min-width: 0;
 }
 
-.studio-issue-sessions__facts {
-  display: grid;
-  gap: 0.75rem;
-  padding: 0.75rem;
-}
-
-.studio-issue-sessions__facts-header {
-  align-items: flex-start;
-  display: flex;
-  gap: 0.75rem;
-  justify-content: space-between;
-  min-width: 0;
-}
-
-.studio-issue-sessions__facts-title {
-  font-size: 0.98rem;
-  font-weight: 700;
-  letter-spacing: 0;
-  line-height: 1.2;
-  margin: 0;
-}
-
-.studio-issue-sessions__facts-grid {
-  display: grid;
-  gap: 0.55rem;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.studio-issue-sessions__fact {
-  align-items: flex-start;
-  background: rgb(var(--v-theme-surface));
-  border: 1px solid rgba(var(--v-border-color), 0.26);
-  border-radius: 8px;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
-  display: grid;
-  gap: 0.55rem;
-  grid-template-columns: 1.7rem minmax(0, 1fr) auto;
-  min-width: 0;
-  padding: 0.62rem;
-}
-
-.studio-issue-sessions__fact--expandable {
-  cursor: pointer;
-  transition: background 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
-}
-
-.studio-issue-sessions__fact--expandable:hover,
-.studio-issue-sessions__fact--expandable:focus-visible {
-  background: rgba(var(--v-theme-primary), 0.035);
-  border-color: rgba(var(--v-theme-primary), 0.36);
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
-  outline: none;
-}
-
-.studio-issue-sessions__fact--expanded {
-  border-color: rgba(var(--v-theme-primary), 0.48);
-  grid-column: 1 / -1;
-}
-
-.studio-issue-sessions__fact-icon {
-  align-items: center;
-  background: rgba(var(--v-theme-primary), 0.12);
-  border-radius: 999px;
-  color: rgb(var(--v-theme-primary));
-  display: inline-flex;
-  height: 1.7rem;
-  justify-content: center;
-  width: 1.7rem;
-}
-
-.studio-issue-sessions__fact-copy {
-  min-width: 0;
-}
-
-.studio-issue-sessions__fact-label {
-  color: rgba(var(--v-theme-on-surface), 0.68);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  line-height: 1.2;
-  text-transform: uppercase;
-}
-
-.studio-issue-sessions__fact-value {
-  color: rgb(var(--v-theme-on-surface));
-  font-size: 0.88rem;
-  font-weight: 650;
-  line-height: 1.25;
-  margin-top: 0.12rem;
-  overflow-wrap: anywhere;
-}
-
-.studio-issue-sessions__fact-link {
-  align-items: center;
-  color: rgb(var(--v-theme-primary));
-  display: inline-flex;
-  text-decoration: none;
-}
-
-.studio-issue-sessions__fact-link:hover,
-.studio-issue-sessions__fact-link:focus-visible {
-  text-decoration: underline;
-}
-
-.studio-issue-sessions__fact-detail {
-  color: rgba(var(--v-theme-on-surface), 0.62);
-  font-size: 0.78rem;
-  line-height: 1.25;
-  margin-top: 0.18rem;
-  overflow-wrap: anywhere;
-}
-
-.studio-issue-sessions__fact-actions {
-  align-items: center;
-  display: inline-flex;
-  gap: 0.1rem;
-  margin-top: -0.2rem;
-}
-
-.studio-issue-sessions__fact-expanded {
-  border-top: 1px solid rgba(var(--v-border-color), 0.32);
-  grid-column: 1 / -1;
-  padding-top: 0.62rem;
-}
-
-.studio-issue-sessions__fact-expanded pre {
-  background: rgba(var(--v-theme-surface-variant), 0.52);
-  border-radius: 6px;
-  color: rgb(var(--v-theme-on-surface));
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-  font-size: 0.82rem;
-  line-height: 1.42;
-  margin: 0;
-  max-height: 20rem;
-  overflow: auto;
-  padding: 0.75rem;
-  white-space: pre-wrap;
-}
-
 .studio-issue-sessions__timeline {
   border: 0;
   border-radius: 0;
@@ -3348,13 +3101,12 @@ onBeforeUnmount(() => {
 }
 
 .studio-issue-sessions__waiting {
-  background: rgba(var(--v-theme-primary), 0.08);
-  border: 1px solid rgba(var(--v-theme-primary), 0.2);
-  border-radius: 8px;
-  color: rgb(var(--v-theme-on-surface));
-  font-size: 0.875rem !important;
-  font-weight: 550;
-  padding: 0.45rem 0.65rem;
+  color: rgba(var(--v-theme-on-surface), 0.66);
+  display: inline-flex;
+  font-size: 0.72rem !important;
+  font-weight: 520;
+  line-height: 1.18;
+  padding: 0;
 }
 
 .studio-issue-sessions__monospace :deep(textarea) {
@@ -3365,10 +3117,6 @@ onBeforeUnmount(() => {
   .studio-issue-sessions__workspace {
     grid-template-columns: 1fr;
   }
-
-  .studio-issue-sessions__facts-grid {
-    grid-template-columns: 1fr;
-  }
 }
 
 @media (max-width: 620px) {
@@ -3377,9 +3125,5 @@ onBeforeUnmount(() => {
     flex-direction: column;
   }
 
-  .studio-issue-sessions__facts-header {
-    align-items: stretch;
-    flex-direction: column;
-  }
 }
 </style>
