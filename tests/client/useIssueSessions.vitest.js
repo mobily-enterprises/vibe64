@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { useIssueSessions } from "../../src/composables/useIssueSessions.js";
+import { issueSessionFacts } from "../../src/lib/issueSessionViewModel.js";
 import {
   listIssueSessions,
   readIssueSession
@@ -47,6 +48,9 @@ describe("useIssueSessions", () => {
       .toBe("019e1575-2458-7b93-bf9d-e7d7ffd49ad2");
     expect(issueSessions.selectedSession.value.needsThreadCapture).toBe(false);
     expect(issueSessions.issueSessions.value[0].codexThreadId)
+      .toBe("019e1575-2458-7b93-bf9d-e7d7ffd49ad2");
+    expect(issueSessionFacts(issueSessions.selectedSession.value)
+      .find((fact) => fact.key === "codex")?.value)
       .toBe("019e1575-2458-7b93-bf9d-e7d7ffd49ad2");
   });
 });

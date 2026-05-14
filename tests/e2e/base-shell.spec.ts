@@ -502,6 +502,7 @@ const codexPromptSessionPayload = {
   currentStepAction: {
     stepId: "issue",
     kind: "codex_output",
+    automation: { mode: "codex_output_prompt" },
     buttonLabel: "Finalise issue",
     description: "Codex should create the issue and return the issue URL.",
     input: {
@@ -606,12 +607,13 @@ const codexIssueDraftedPayload = {
   currentStepAction: {
     stepId: "issue-created",
     kind: "automatic",
+    automation: { mode: "immediate" },
     buttonLabel: "Create issue",
     description: "Create the GitHub issue with gh.",
     input: {
       type: "none"
     },
-    requiresExplicitRun: true
+    requiresExplicitRun: false
   },
   issueTitle: "Add session UI",
   issueText: "Make sessions clearer.",
@@ -625,6 +627,7 @@ const codexIssueCreatedPayload = {
   currentStepAction: {
     stepId: "plan_made",
     kind: "codex_output",
+    automation: { mode: "codex_output_prompt" },
     buttonLabel: "Save plan",
     description: "Save the approved implementation plan.",
     input: {
@@ -690,7 +693,7 @@ const deepUiSkipStepDefinitions = [
     id: "automated_checks_run",
     index: 14,
     label: "Automated checks",
-    kind: "automatic",
+    kind: "codex_prompt",
     description: "Run checks after review/deslop."
   }
 ];
@@ -709,6 +712,7 @@ const deepUiSkipSessionPayload = {
       type: "none"
     },
     kind: "codex_prompt",
+    automation: { mode: "codex_prompt" },
     label: "Run Deep UI check",
     requiresExplicitRun: false,
     skipReason: "uiImpact is none.",
@@ -742,6 +746,7 @@ const deepUiSkippedSessionPayload = {
       type: "none"
     },
     kind: "codex_prompt",
+    automation: { mode: "codex_prompt" },
     label: "Run deslop",
     requiresExplicitRun: false,
     stepId: "review_prompt_rendered"
@@ -812,7 +817,7 @@ const reviewDeslopStepDefinitions = [
     id: "automated_checks_run",
     index: 15,
     label: "Automated checks",
-    kind: "automatic",
+    kind: "codex_prompt",
     description: "Run checks after review/deslop."
   }
 ];
@@ -867,6 +872,7 @@ const reviewDeslopNextPromptPayload = {
     description: "Run the review/deslop pass.",
     input: { type: "none" },
     kind: "codex_prompt",
+    automation: { mode: "codex_prompt" },
     label: "Run deslop",
     requiresExplicitRun: false,
     stepId: "review_prompt_rendered"
@@ -886,7 +892,8 @@ const reviewDeslopUnexpectedAdvancedPayload = {
   currentStepAction: {
     buttonLabel: "Run automated checks",
     input: { type: "none" },
-    kind: "automatic",
+    kind: "codex_prompt",
+    automation: { mode: "codex_prompt" },
     label: "Run automated checks",
     stepId: "automated_checks_run"
   }
@@ -1017,6 +1024,7 @@ const reworkStartedSessionPayload = {
       type: "text"
     },
     kind: "codex_output",
+    automation: { mode: "codex_output_prompt" },
     label: "Get Codex to create revised plan",
     stepId: "plan_made"
   },
@@ -1798,7 +1806,7 @@ test.describe("studio startup navigation", () => {
     expect(apiRequests.count("/api/studio/app-setup/stream")).toBe(1);
   });
 
-  test("codex issue step injects the prompt, finalises the draft, then creates the issue explicitly", async ({ page }) => {
+  test("codex issue step injects the prompt, finalises the draft, then creates the issue automatically", async ({ page }) => {
     const stepPayloads: unknown[] = [];
     const terminalInputs: string[] = [];
     const codexSession = await mockCodexPromptSession(page, {
@@ -1859,19 +1867,12 @@ test.describe("studio startup navigation", () => {
       issue: "Make the issue sharper.",
       issueTitle: "Edited session UI"
     });
-    const createIssueButton = page.getByRole("button", { name: "Create issue" });
-    await expect(createIssueButton).toBeVisible();
-    await createIssueButton.click();
-
     await expect.poll(() => stepPayloads.length).toBe(2);
     expect(stepPayloads[1]).toEqual({});
+    await expect(page.getByRole("button", { name: "Create issue" })).toHaveCount(0);
 
-    const issueCard = page.locator(".studio-issue-sessions__fact").filter({
-      hasText: "GitHub Issue"
-    });
-    await expect(issueCard).toContainText("Issue #123");
-    await issueCard.click();
-    await expect(issueCard.locator(".studio-issue-sessions__fact-expanded")).toContainText("Make the issue sharper.");
+    await expect(page.getByText("Done: Issue created")).toBeVisible();
+    await expect(page.getByText("Goal: Plan made")).toBeVisible();
   });
 
   test("codex output editors stay hidden until parsed output exists", async ({ page }) => {
@@ -1911,19 +1912,20 @@ test.describe("studio startup navigation", () => {
     await expect(finaliseIssueButton).toBeEnabled();
     await finaliseIssueButton.click();
 
-    const createIssueButton = page.getByRole("button", { name: "Create issue" });
-    await expect(createIssueButton).toBeVisible();
-    await createIssueButton.click();
+    await expect.poll(() => stepPayloads.length).toBeGreaterThanOrEqual(2);
 
     const planField = page.getByLabel("Plan from Codex");
     const savePlanButton = page.getByRole("button", { name: "Save plan" });
     await expect(planField).toHaveCount(0);
     await expect(savePlanButton).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Get Codex to create plan" })).toBeVisible();
+    const planPromptButton = page.getByRole("button", { name: "Get Codex to create plan" });
+    await expect(planPromptButton).toBeVisible();
 
     await codexSession.setTerminalOutput("Codex ready.\nThinking without tagged plan output.");
     await expect(planField).toHaveCount(0);
     await expect(savePlanButton).toHaveCount(0);
+    await planPromptButton.click();
+    await expect.poll(() => stepPayloads.length).toBe(3);
 
     await codexSession.setTerminalOutput([
       "Codex ready.",
@@ -1960,14 +1962,11 @@ test.describe("studio startup navigation", () => {
 
     await page.getByRole("button", { name: "Finalise issue" }).click();
     await expect.poll(() => stepPayloads.length).toBe(1);
-    await page.getByRole("button", { name: "Create issue" }).click();
     await expect.poll(() => stepPayloads.length).toBe(2);
 
     const planPromptButton = page.getByRole("button", { name: "Get Codex to create plan" });
-    await expect(page.getByText("Codex will create an implementation plan based on the issue.")).toBeVisible();
     await expect(planPromptButton).toBeVisible();
     await planPromptButton.click();
-
     await expect.poll(() => stepPayloads.length).toBe(3);
     expect(stepPayloads[2]).toEqual({});
     await expect(planPromptButton).toHaveCount(0);
@@ -2127,7 +2126,7 @@ test.describe("studio startup navigation", () => {
       hasText: "Review/deslop"
     });
     await expect(reviewStep).toContainText("Done: Review/deslop");
-    await expect(reviewStep.getByRole("button", { name: "Execute step" })).toBeVisible();
+    await expect(reviewStep.getByRole("button", { name: "Run deslop" })).toBeVisible();
   });
 
   test("failed user check shows rework notes form before returning to plan made", async ({ page }) => {
@@ -2256,16 +2255,14 @@ test.describe("studio startup navigation", () => {
     await expectSessionsRoute(page);
 
     await expect.poll(() => codexSessions.terminalStarts[codexPromptSessionId]).toBe(1);
-    await expect.poll(() => codexSessions.terminalInputs[codexPromptSessionId].length).toBe(7);
-    expect(codexSessions.terminalInputs[codexPromptSessionId].slice(0, 6)).toEqual(codexShellSubmitSequence);
-    expect(codexSessions.terminalInputs[codexPromptSessionId][6]).toContain(codexPromptText);
+    await expect.poll(() => codexSessions.terminalInputs[codexPromptSessionId].length).toBe(6);
+    expect(codexSessions.terminalInputs[codexPromptSessionId]).toEqual(codexShellSubmitSequence);
 
     await page.locator(".studio-issue-sessions__tab-chip").filter({ hasText: "01-03-40" }).click();
     await expect(page.getByText("01-03-40").first()).toBeVisible();
     await expect.poll(() => codexSessions.terminalStarts[secondCodexPromptSessionId]).toBe(1);
-    await expect.poll(() => codexSessions.terminalInputs[secondCodexPromptSessionId].length).toBe(7);
-    expect(codexSessions.terminalInputs[secondCodexPromptSessionId].slice(0, 6)).toEqual(codexShellSubmitSequence);
-    expect(codexSessions.terminalInputs[secondCodexPromptSessionId][6]).toContain(secondCodexPromptText);
+    await expect.poll(() => codexSessions.terminalInputs[secondCodexPromptSessionId].length).toBe(6);
+    expect(codexSessions.terminalInputs[secondCodexPromptSessionId]).toEqual(codexShellSubmitSequence);
 
     await page.locator(".studio-issue-sessions__tab-chip").filter({ hasText: "01-02-39" }).click();
     await expect(page.getByText("01-02-39").first()).toBeVisible();

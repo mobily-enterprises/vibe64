@@ -1,5 +1,4 @@
 import { extractMarkedOutput, stripTerminalControlSequences } from "@/lib/codexOutput.js";
-import resolveDeslopFindingsTemplate from "@/prompts/resolve_deslop_findings.md?raw";
 
 const DESLOP_RESULT_MARKER = "deslop_result";
 const AUTO_RESOLVE_PRIORITIES = new Set(["high", "medium"]);
@@ -138,9 +137,13 @@ function formatDeslopFindingForPrompt(finding = {}, index = 0) {
   ].filter(Boolean).join("\n");
 }
 
-function buildResolveDeslopFindingsPrompt(findings = []) {
+function buildResolveDeslopFindingsPrompt(findings = [], template = "") {
   const actionableFindings = findings.filter((finding) => normalizeDeslopPriority(finding.priority));
-  return resolveDeslopFindingsTemplate.replace(
+  const promptTemplate = String(template || "").trim();
+  if (!promptTemplate) {
+    return "";
+  }
+  return promptTemplate.replace(
     "{{findings}}",
     actionableFindings.map(formatDeslopFindingForPrompt).join("\n\n")
   ).trim();

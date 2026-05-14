@@ -1,5 +1,6 @@
 function buildActiveStepControls({
   actionKind = "",
+  automationMode = "manual",
   busy = false,
   codexOutputFormVisible = false,
   codexPromptAlreadyRequested = false,
@@ -31,12 +32,12 @@ function buildActiveStepControls({
   );
   const canClick = !blocked && !busy && !terminalBlocked && !codexWorking;
   const isCodexPromptStep = actionKind === "codex_prompt";
-  const codexPromptPending = isCodexPromptStep && !codexPromptAlreadyRequested;
+  const codexPromptPending = automationMode === "codex_prompt" && !codexPromptAlreadyRequested;
   const codexOutputPromptPending = (
-    selectedStepNeedsCodexOutputPrompt ||
+    (automationMode === "codex_output_prompt" && selectedStepNeedsCodexOutputPrompt) ||
     (isCodexOutputStep && codexPromptInjectionReady && !codexOutputFormVisible)
   ) && !codexPromptAlreadyRequested;
-  const automaticStepPending = actionKind === "automatic";
+  const automaticStepPending = automationMode === "immediate";
   const showExecuteStep = !hasForm &&
     !blocked &&
     (codexPromptPending || codexOutputPromptPending || automaticStepPending);

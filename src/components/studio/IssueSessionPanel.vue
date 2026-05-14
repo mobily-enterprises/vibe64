@@ -527,6 +527,98 @@
             @closed="sessionAppTestVisible = false"
           />
         </div>
+
+        <v-sheet
+          v-if="sessionFactItems.length"
+          rounded="lg"
+          border
+          class="studio-issue-sessions__facts"
+        >
+          <div class="studio-issue-sessions__facts-header">
+            <h2 class="studio-issue-sessions__facts-title">Session details</h2>
+            <v-chip
+              :color="issueSessionStatusColor(selectedSession.status)"
+              density="comfortable"
+              size="small"
+              variant="tonal"
+            >
+              {{ issueSessionStatusLabel(selectedSession.status) }}
+            </v-chip>
+          </div>
+
+          <div class="studio-issue-sessions__facts-grid">
+            <div
+              v-for="fact in sessionFactItems"
+              :key="fact.key"
+              class="studio-issue-sessions__fact"
+              :class="{
+                'studio-issue-sessions__fact--expandable': fact.expandable,
+                'studio-issue-sessions__fact--expanded': factIsExpanded(fact)
+              }"
+              :aria-expanded="fact.expandable ? String(factIsExpanded(fact)) : undefined"
+              :role="fact.expandable ? 'button' : undefined"
+              :tabindex="fact.expandable ? 0 : undefined"
+              @click="toggleFact(fact)"
+              @keydown.enter.prevent="toggleFact(fact)"
+              @keydown.space.prevent="toggleFact(fact)"
+            >
+              <div class="studio-issue-sessions__fact-icon">
+                <v-icon :icon="fact.icon" size="18" />
+              </div>
+              <div class="studio-issue-sessions__fact-copy">
+                <div class="studio-issue-sessions__fact-label">{{ fact.label }}</div>
+                <a
+                  v-if="fact.href"
+                  class="studio-issue-sessions__fact-value studio-issue-sessions__fact-link"
+                  :href="fact.href"
+                  target="_blank"
+                  rel="noreferrer"
+                  @click.stop
+                >
+                  {{ fact.value }}
+                </a>
+                <div v-else class="studio-issue-sessions__fact-value">{{ fact.value }}</div>
+                <div v-if="fact.detail" class="studio-issue-sessions__fact-detail">{{ fact.detail }}</div>
+              </div>
+              <div
+                v-if="fact.href || fact.copyValue || fact.expandable"
+                class="studio-issue-sessions__fact-actions"
+              >
+                <v-btn
+                  v-if="fact.expandable"
+                  :aria-label="factIsExpanded(fact) ? `Collapse ${fact.label}` : `Expand ${fact.label}`"
+                  :icon="factIsExpanded(fact) ? mdiChevronUp : mdiChevronDown"
+                  size="x-small"
+                  variant="text"
+                  @click.stop="toggleFact(fact)"
+                />
+                <v-btn
+                  v-if="fact.href"
+                  :href="fact.href"
+                  target="_blank"
+                  rel="noreferrer"
+                  :icon="mdiOpenInNew"
+                  size="x-small"
+                  variant="text"
+                  @click.stop
+                />
+                <v-btn
+                  v-if="fact.copyValue"
+                  :icon="mdiContentCopy"
+                  size="x-small"
+                  variant="text"
+                  @click.stop="copyText(fact.copyValue, fact.label)"
+                />
+              </div>
+              <div
+                v-if="fact.expandable && factIsExpanded(fact)"
+                class="studio-issue-sessions__fact-expanded"
+              >
+                <pre>{{ fact.expandedValue }}</pre>
+              </div>
+            </div>
+          </div>
+        </v-sheet>
       </aside>
     </div>
   </v-sheet>
@@ -545,13 +637,20 @@ import {
   mdiCircleOutline,
   mdiCircleSlice8,
   mdiContentCopy,
+  mdiFileDocumentOutline,
   mdiFileCompare,
+  mdiFolderOutline,
+  mdiGithub,
+  mdiIdentifier,
+  mdiOpenInNew,
   mdiPlay,
   mdiPlayCircleOutline,
   mdiPlus,
+  mdiProgressCheck,
   mdiRepeat,
   mdiRobotOutline,
-  mdiSend
+  mdiSend,
+  mdiSourceBranch
 } from "@mdi/js";
 import CodexSessionTerminal from "@/components/studio/CodexSessionTerminal.vue";
 import AppTestLauncher from "@/components/studio/AppTestLauncher.vue";
@@ -576,6 +675,9 @@ import {
   isOpenIssueSession,
   issueSessionCodexExpectedOutputs,
   issueSessionCodexPromptActionLabel,
+  issueSessionFacts,
+  issueSessionStatusColor,
+  issueSessionStatusLabel,
   shouldAutoInjectIssueSessionCodexPrompt,
   shouldUseManualIssueSessionCodexPrompt,
   shortIssueSessionId
@@ -587,6 +689,7 @@ const codexTerminalOutputBySessionId = ref({});
 const codexOutputDraftByKey = ref({});
 const codexOutputSourceByKey = ref({});
 const expandedDoneStepIds = ref({});
+const expandedFactKeys = ref({});
 const abandonDialogOpen = ref(false);
 const abandonSessionId = ref("");
 const diffDialogOpen = ref(false);
@@ -648,6 +751,14 @@ const orderedStepDefinitions = computed(() => {
   return groupedStepDefinitions(stepDefinitions.value || []);
 });
 
+const sessionFactItems = computed(() => {
+  return issueSessionFacts(selectedSession.value || {}, orderedStepDefinitions.value)
+    .map((fact) => ({
+      ...fact,
+      icon: sessionFactIcon(fact.icon)
+    }));
+});
+
 const completedStepIds = computed(() => new Set(selectedSession.value?.completedSteps || []));
 
 const displayStepIdBySourceStepId = computed(() => {
@@ -680,8 +791,12 @@ const selectedSessionTerminalBlocked = computed(() => {
   );
 });
 
+const selectedStepAutomationMode = computed(() => {
+  return String(selectedStepAction.value?.automation?.mode || "manual").trim() || "manual";
+});
+
 const selectedSessionNeedsSetupTerminal = computed(() => {
-  return selectedSession.value?.currentStep === "dependencies_installed";
+  return selectedStepAutomationMode.value === "terminal";
 });
 
 const isUserCheckStep = computed(() => {
@@ -741,16 +856,20 @@ const selectedDeslopAutomation = computed(() => {
 });
 
 const selectedDeslopResultMarker = computed(() => {
-  return String(selectedCodexResponseContract.value.marker || "deslop_result").trim();
+  return String(selectedCodexResponseContract.value.marker || "").trim();
 });
 
 const selectedDeslopAutoResolvePriorities = computed(() => {
   const priorities = selectedCodexResponseContract.value.autoResolvePriorities;
   return new Set(
-    (Array.isArray(priorities) ? priorities : ["high", "medium"])
+    (Array.isArray(priorities) ? priorities : [])
       .map((priority) => String(priority || "").trim().toLowerCase())
       .filter(Boolean)
   );
+});
+
+const selectedDeslopResolvePromptTemplate = computed(() => {
+  return String(selectedCodexResponseContract.value.resolvePrompt?.template || "").trim();
 });
 
 const reviewDeslopFindings = computed(() => {
@@ -803,6 +922,9 @@ const reviewDeslopStatusMessage = computed(() => {
   if (status === "waiting_for_summary") {
     return "Codex finished without a parseable deslop summary.";
   }
+  if (status === "resolve_prompt_missing") {
+    return "JSKIT did not provide the deslop resolve prompt.";
+  }
   if (status === "awaiting_user") {
     if (!reviewDeslopFindings.value.length) {
       return "No deslop findings remain.";
@@ -823,7 +945,7 @@ const autoAdvancePromptStepStatusMessage = computed(() => {
     return "Codex finished without the required step completion block.";
   }
   if (selectedCodexCompletion.value?.status === "interrupted") {
-    return "Codex reported Conversation interrupted. Continue in the terminal, or go to the next step manually.";
+    return "Codex reported Conversation interrupted. Continue in the terminal or resend the request.";
   }
   if (selectedCodexPromptAlreadyRequested.value) {
     return "Waiting for Codex to finish.";
@@ -842,7 +964,11 @@ const selectedCodexPromptResult = computed(() => {
 
 const selectedCodexRequiredCompletionMissing = computed(() => {
   return selectedCodexPromptResult.value?.status === "missing_summary" ||
-    selectedDeslopAutomation.value?.status === "waiting_for_summary";
+    selectedDeslopAutomation.value?.status === "waiting_for_summary" ||
+    (
+      selectedCodexCompletion.value?.status === "interrupted" &&
+      Boolean(requiredCompletionMarkerForSession())
+    );
 });
 
 const showCodexPromptResendButton = computed(() => {
@@ -981,8 +1107,7 @@ const selectedCodexPromptAutoAdvances = computed(() => {
 });
 
 const selectedCodexPromptAutoStarts = computed(() => {
-  return selectedStepAction.value?.kind === "codex_prompt" &&
-    selectedSession.value?.codex?.autoInject === true &&
+  return selectedStepAutomationMode.value === "codex_prompt" &&
     !selectedSession.value?.prompt;
 });
 
@@ -1222,6 +1347,7 @@ const canRunAction = computed(() => {
 const activeStepControls = computed(() => {
   return buildActiveStepControls({
     actionKind: selectedStepAction.value?.kind || "",
+    automationMode: selectedStepAutomationMode.value,
     busy: issueSessionBusy.value,
     canRunAction: canRunAction.value,
     codexOutputFormVisible: codexOutputFormVisible.value,
@@ -1259,11 +1385,53 @@ const executeStepButtonLabel = computed(() => {
   if (selectedSession.value?.currentStep === "pr_finalized") {
     return currentActionButtonLabel.value || "Merge PR";
   }
-  return "Execute step";
+  if (isCodexOutputStep.value && isCodexPromptInjection.value && !codexOutputFormVisible.value) {
+    return manualCodexPromptButtonLabel.value;
+  }
+  return currentActionButtonLabel.value || "Execute step";
 });
 
 function shortSessionId(sessionId) {
   return shortIssueSessionId(sessionId);
+}
+
+function sessionFactIcon(icon) {
+  return {
+    blueprint: mdiFileDocumentOutline,
+    branch: mdiSourceBranch,
+    codex: mdiRobotOutline,
+    github: mdiGithub,
+    report: mdiFileDocumentOutline,
+    session: mdiIdentifier,
+    step: mdiProgressCheck,
+    worktree: mdiFolderOutline
+  }[icon] || mdiIdentifier;
+}
+
+function factExpansionKey(fact = {}) {
+  return selectedSessionId.value && fact.key ? `${selectedSessionId.value}:${fact.key}` : "";
+}
+
+function factIsExpanded(fact = {}) {
+  const key = factExpansionKey(fact);
+  return Boolean(key && expandedFactKeys.value[key]);
+}
+
+function toggleFact(fact = {}) {
+  if (!fact.expandable) {
+    return;
+  }
+  const key = factExpansionKey(fact);
+  if (!key) {
+    return;
+  }
+  const nextExpandedFactKeys = { ...expandedFactKeys.value };
+  if (nextExpandedFactKeys[key]) {
+    delete nextExpandedFactKeys[key];
+  } else {
+    nextExpandedFactKeys[key] = true;
+  }
+  expandedFactKeys.value = nextExpandedFactKeys;
 }
 
 function codexOutputLabel(output = {}) {
@@ -2113,6 +2281,15 @@ function activePromptHasRequiredCompletion(sessionId) {
   return marker ? activePromptHasMarkedBlock(sessionId, marker) : true;
 }
 
+function codexPromptStepResultPayload(sessionId = selectedSessionId.value) {
+  if (selectedCodexResponseContract.value.required !== true || !selectedCodexResponseContract.value.marker) {
+    return {};
+  }
+  return {
+    codexResult: activePromptOutputForSession(sessionId)
+  };
+}
+
 function handledPromptSignature(sessionId, signature) {
   const marker = requiredCompletionMarkerForSession();
   if (marker) {
@@ -2126,7 +2303,7 @@ function sessionNeedsCodexOutputPrompt(session = {}) {
   const action = session.currentStepAction || {};
   const expectedOutputs = issueSessionCodexExpectedOutputs(session);
   return Boolean(
-    action.kind === "codex_output" &&
+    action.automation?.mode === "codex_output_prompt" &&
     session.codex?.mode === "inject_prompt" &&
     expectedOutputs.some((output) => output?.field) &&
     !session.prompt
@@ -2142,12 +2319,24 @@ async function askCodexToResolveDeslopFindings(findings, {
   if (!sessionId || !actionableFindings.length) {
     return;
   }
+  const resolvePrompt = buildResolveDeslopFindingsPrompt(
+    actionableFindings,
+    selectedDeslopResolvePromptTemplate.value
+  );
+  if (!resolvePrompt) {
+    setDeslopAutomation(sessionId, {
+      findings: actionableFindings,
+      handledSignature: "",
+      status: "resolve_prompt_missing"
+    });
+    return;
+  }
   setDeslopAutomation(sessionId, {
     findings: actionableFindings,
     handledSignature: "",
     status
   });
-  await injectCodexPromptText(session, buildResolveDeslopFindingsPrompt(actionableFindings));
+  await injectCodexPromptText(session, resolvePrompt);
 }
 
 async function rerunDeslopAfterResolution(sessionId) {
@@ -2196,6 +2385,14 @@ async function handleFinishedDeslopPrompt() {
   }
 
   if (session.currentStep !== "review_changes_accepted") {
+    return;
+  }
+
+  if (!selectedDeslopResultMarker.value) {
+    setDeslopAutomation(sessionId, {
+      findings: [],
+      status: "waiting_for_summary"
+    });
     return;
   }
 
@@ -2251,7 +2448,7 @@ function shouldAutoStartCodexPromptStep(session = selectedSession.value) {
   return Boolean(
     session?.sessionId &&
     session.sessionId === selectedSessionId.value &&
-    action.kind === "codex_prompt" &&
+    action.automation?.mode === "codex_prompt" &&
     session.codex?.autoInject === true &&
     !session.prompt &&
     !selectedSessionTerminalBlocked.value &&
@@ -2348,7 +2545,7 @@ async function autoAdvanceFinishedCodexPrompt() {
     ...autoAdvancedCodexPromptBySignature.value,
     [signature]: true
   };
-  const response = await runSelectedStep();
+  const response = await runSelectedStep(codexPromptStepResultPayload(sessionId));
   if (!response || response.ok === false) {
     const {
       [signature]: _failedAdvance,
@@ -2391,9 +2588,11 @@ async function handleStepResponse(response, {
 } = {}) {
   rememberTerminalSession(response);
   if (
-    response?.ok !== false &&
     response?.prompt &&
-    forcePromptInjection
+    (
+      forcePromptInjection ||
+      (response?.ok === false && response?.codex?.autoInject === true)
+    )
   ) {
     await requestCodexPromptInjection(response);
   }
@@ -2471,10 +2670,9 @@ function shouldAutoRunImmediateSessionStep(session = selectedSession.value) {
     session?.sessionId &&
     session.sessionId === selectedSessionId.value &&
     stepId &&
-    stepId !== "dependencies_installed" &&
     !issueSessionBusy.value &&
     !isClosedIssueSession(session) &&
-    action.kind === "automatic" &&
+    action.automation?.mode === "immediate" &&
     hasNoInput(action) &&
     action.requiresExplicitRun !== true &&
     !session.codex &&
@@ -2498,6 +2696,13 @@ async function autoRunImmediateSessionStep(session = selectedSession.value) {
       ...remainingRuns
     } = autoRanImmediateStepKeys.value;
     autoRanImmediateStepKeys.value = remainingRuns;
+    if (!response) {
+      return;
+    }
+    await handleStepResponse(response, {
+      forcePromptInjection: Boolean(response?.prompt && response?.codex?.autoInject === true),
+      runAutomaticFollowUps: false
+    });
     return;
   }
   await handleStepResponse(response);
@@ -2552,7 +2757,7 @@ async function goToNextStep() {
   }
   const payload = selectedSession.value?.currentStep === "review_changes_accepted"
     ? { reviewFindingsRemaining: false }
-    : {};
+    : codexPromptStepResultPayload(selectedSessionId.value);
   autoStepStartSuppressedSessionId.value = selectedSession.value?.sessionId || "";
   const response = await runSelectedStep(payload);
   if (!response) {
@@ -2568,12 +2773,12 @@ async function executeCurrentStep() {
     return;
   }
   autoStepStartSuppressedSessionId.value = "";
-  if (isCodexOutputStep.value) {
-    await runCodexOutputStep();
-    return;
-  }
   if (isCodexPromptInjection.value && !selectedCodexPromptAlreadyRequested.value && selectedSession.value?.prompt) {
     await requestCodexPromptInjection();
+    return;
+  }
+  if (isCodexOutputStep.value) {
+    await runCodexOutputStep();
     return;
   }
   const stepId = selectedSession.value?.currentStep || "";
@@ -3083,6 +3288,141 @@ onBeforeUnmount(() => {
   min-width: 0;
 }
 
+.studio-issue-sessions__facts {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.7rem;
+}
+
+.studio-issue-sessions__facts-header {
+  align-items: center;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.studio-issue-sessions__facts-title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.studio-issue-sessions__facts-grid {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.studio-issue-sessions__fact {
+  align-items: flex-start;
+  background: rgb(var(--v-theme-surface));
+  border: 1px solid rgba(var(--v-border-color), 0.28);
+  border-radius: 8px;
+  display: grid;
+  gap: 0.48rem;
+  grid-template-columns: 1.55rem minmax(0, 1fr) auto;
+  min-width: 0;
+  padding: 0.56rem;
+}
+
+.studio-issue-sessions__fact--expandable {
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+
+.studio-issue-sessions__fact--expandable:hover,
+.studio-issue-sessions__fact--expandable:focus-visible {
+  background: rgba(var(--v-theme-primary), 0.04);
+  border-color: rgba(var(--v-theme-primary), 0.38);
+  outline: none;
+}
+
+.studio-issue-sessions__fact--expanded {
+  border-color: rgba(var(--v-theme-primary), 0.5);
+  grid-column: 1 / -1;
+}
+
+.studio-issue-sessions__fact-icon {
+  align-items: center;
+  background: rgba(var(--v-theme-primary), 0.1);
+  border-radius: 999px;
+  color: rgb(var(--v-theme-primary));
+  display: inline-flex;
+  height: 1.55rem;
+  justify-content: center;
+  width: 1.55rem;
+}
+
+.studio-issue-sessions__fact-copy {
+  min-width: 0;
+}
+
+.studio-issue-sessions__fact-label {
+  color: rgba(var(--v-theme-on-surface), 0.65);
+  font-size: 0.68rem;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+  line-height: 1.18;
+  text-transform: uppercase;
+}
+
+.studio-issue-sessions__fact-value {
+  color: rgb(var(--v-theme-on-surface));
+  font-size: 0.84rem;
+  font-weight: 650;
+  line-height: 1.25;
+  margin-top: 0.12rem;
+  overflow-wrap: anywhere;
+}
+
+.studio-issue-sessions__fact-link {
+  color: rgb(var(--v-theme-primary));
+  text-decoration: none;
+}
+
+.studio-issue-sessions__fact-link:hover,
+.studio-issue-sessions__fact-link:focus-visible {
+  text-decoration: underline;
+}
+
+.studio-issue-sessions__fact-detail {
+  color: rgba(var(--v-theme-on-surface), 0.6);
+  font-size: 0.74rem;
+  line-height: 1.28;
+  margin-top: 0.16rem;
+  overflow-wrap: anywhere;
+}
+
+.studio-issue-sessions__fact-actions {
+  align-items: center;
+  display: inline-flex;
+  gap: 0.05rem;
+  margin-top: -0.22rem;
+}
+
+.studio-issue-sessions__fact-expanded {
+  border-top: 1px solid rgba(var(--v-border-color), 0.32);
+  grid-column: 1 / -1;
+  padding-top: 0.56rem;
+}
+
+.studio-issue-sessions__fact-expanded pre {
+  background: rgba(var(--v-theme-surface-variant), 0.44);
+  border-radius: 6px;
+  color: rgb(var(--v-theme-on-surface));
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.78rem;
+  line-height: 1.38;
+  margin: 0;
+  max-height: 16rem;
+  overflow: auto;
+  padding: 0.65rem;
+  white-space: pre-wrap;
+}
+
 .studio-issue-sessions__timeline {
   border: 0;
   border-radius: 0;
@@ -3229,6 +3569,10 @@ onBeforeUnmount(() => {
 
 @media (max-width: 860px) {
   .studio-issue-sessions__workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .studio-issue-sessions__facts-grid {
     grid-template-columns: 1fr;
   }
 }

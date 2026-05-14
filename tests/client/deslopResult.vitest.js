@@ -6,6 +6,14 @@ import {
   parseDeslopResult
 } from "../../src/lib/deslopResult.js";
 
+const resolvePromptTemplate = [
+  "Resolve selected findings.",
+  "",
+  "[resolve_deslop_findings]",
+  "{{findings}}",
+  "[/resolve_deslop_findings]"
+].join("\n");
+
 describe("deslop result parsing", () => {
   it("parses the final conversational deslop result block", () => {
     const findings = parseDeslopResult([
@@ -156,7 +164,7 @@ describe("deslop result parsing", () => {
         recommendedAction: "Use the shared nav source.",
         title: "Navigation is inconsistent"
       }
-    ]);
+    ], resolvePromptTemplate);
 
     expect(prompt).toContain("[resolve_deslop_findings]");
     expect(prompt).toContain("id: D001");
