@@ -60,6 +60,22 @@ addPlacement({
     exact: true
   }
 });
+
+addPlacement({
+  id: "jskit-ai-studio.home.menu.completed",
+  target: "shell.primary-nav",
+  kind: "link",
+  surfaces: ["home"],
+  order: 150,
+  props: {
+    label: "Completed",
+    icon: "mdi-check-circle-outline",
+    surface: "home",
+    scopedSuffix: "/completed",
+    unscopedSuffix: "/completed",
+    to: "/home/completed"
+  }
+});
 // jskit:ui-generator.page.link:home:/abandoned
 {
   addPlacement({

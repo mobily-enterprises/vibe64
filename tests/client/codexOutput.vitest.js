@@ -8,6 +8,8 @@ import {
   extractMarkedOutput,
   isPlaceholderMarkedOutput,
   isCodexThreadId,
+  outputAfterPromptStart,
+  suffixPrefixOverlapLength,
   stripTerminalControlSequences
 } from "../../src/lib/codexOutput.js";
 
@@ -86,6 +88,143 @@ describe("codex output extraction", () => {
       formatHint: "text"
     })).toBe("Add an About Us page");
     expect(extractMarkedOutput(output, "issue_text")).toBe("Keep the body untouched.");
+  });
+
+  it("cleans Codex terminal chrome from multiline marked output", () => {
+    const output = [
+      "[plan]",
+      "›Use /skills to list available skillsgpt-5.5 default · /home/merc/Development/current/exampleapp/.jskit/sessions/active/2026-05-13_23-00-00/worktree  Issue category: client",
+      "",
+      "Implementation lane: custom local code.",
+      "",
+      "1. Add four.md.",
+      "[/plan]"
+    ].join("\n");
+
+    expect(extractMarkedOutput(output, "plan")).toBe([
+      "Issue category: client",
+      "",
+      "Implementation lane: custom local code.",
+      "",
+      "1. Add four.md."
+    ].join("\n"));
+  });
+
+  it("ignores Codex terminal repaint fragments on marker lines", () => {
+    const output = [
+      "• [issue_text]",
+      "Create eight.txt at the repository root.",
+      "",
+      "- Content: eight",
+      "[/issue_text]",
+      "",
+      "• [issue_text]›Summarize recent commitsgpt-5.3-codex-spark default · /workspace/.jskit/sessions/active/example/worktree  block.W",
+      "[/issue_text]"
+    ].join("\n");
+
+    expect(extractMarkedOutput(output, "issue_text")).toBe([
+      "Create eight.txt at the repository root.",
+      "",
+      "- Content: eight"
+    ].join("\n"));
+  });
+
+  it("uses the retained terminal snapshot when prompt offset was trimmed away", () => {
+    const snapshot = [
+      "[plan]",
+      "Old plan that must not be reused.",
+      "[/plan]",
+      "shared retained tail"
+    ].join("\n");
+    const retainedOutput = [
+      "shared retained tail",
+      "• [plan]",
+      "Update nine.md to contain nine!!.",
+      "[/plan]"
+    ].join("\n");
+
+    const parseWindow = outputAfterPromptStart({
+      output: retainedOutput,
+      prompt: "Create a revised plan.",
+      promptOutputSnapshot: snapshot,
+      promptStart: retainedOutput.length
+    });
+
+    expect(suffixPrefixOverlapLength(snapshot, retainedOutput)).toBe("shared retained tail".length);
+    expect(extractMarkedOutput(parseWindow, "plan")).toBe("Update nine.md to contain nine!!.");
+  });
+
+  it("does not reuse old marked output while waiting for a new post-prompt answer", () => {
+    const snapshot = [
+      "[plan]",
+      "Old plan.",
+      "[/plan]",
+      "shared retained tail"
+    ].join("\n");
+
+    const parseWindow = outputAfterPromptStart({
+      output: snapshot,
+      prompt: "Create a revised plan.",
+      promptOutputSnapshot: snapshot,
+      promptStart: snapshot.length
+    });
+
+    expect(parseWindow).toBe("");
+    expect(extractMarkedOutput(parseWindow, "plan")).toBe("");
+  });
+
+  it("does not parse result markers from the echoed injected prompt", () => {
+    const prompt = [
+      "Run deslop.",
+      "",
+      "At the very end, include:",
+      "[deslop_result]",
+      "priority: high | medium | low",
+      "title: Short finding title",
+      "[/deslop_result]"
+    ].join("\n");
+    const beforePrompt = "terminal before prompt\n";
+
+    const parseWindow = outputAfterPromptStart({
+      output: `${beforePrompt}${prompt}`,
+      prompt,
+      promptOutputSnapshot: beforePrompt,
+      promptStart: beforePrompt.length
+    });
+
+    expect(extractMarkedOutput(parseWindow, "deslop_result")).toBe("");
+  });
+
+  it("parses result markers after removing the echoed injected prompt", () => {
+    const prompt = [
+      "Run automated checks.",
+      "",
+      "[jskit_step_result]",
+      "status: complete",
+      "step: automated_checks_run",
+      "summary: Placeholder summary.",
+      "[/jskit_step_result]"
+    ].join("\n");
+    const beforePrompt = "terminal before prompt\n";
+    const answer = [
+      "",
+      "Checks passed.",
+      "[jskit_step_result]",
+      "status: complete",
+      "step: automated_checks_run",
+      "summary: npm run verify passed.",
+      "[/jskit_step_result]"
+    ].join("\n");
+
+    const parseWindow = outputAfterPromptStart({
+      output: `${beforePrompt}${prompt}${answer}`,
+      prompt,
+      promptOutputSnapshot: beforePrompt,
+      promptStart: beforePrompt.length
+    });
+
+    expect(extractMarkedOutput(parseWindow, "jskit_step_result")).toContain("npm run verify passed.");
+    expect(extractMarkedOutput(parseWindow, "jskit_step_result")).not.toContain("Placeholder summary.");
   });
 
   it("detects the interactive Codex trust prompt", () => {

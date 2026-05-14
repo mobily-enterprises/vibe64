@@ -33,6 +33,7 @@ const STEP_TERMINAL_NAMESPACE_PREFIX = `${STEP_TERMINAL_NAMESPACE}:`;
 const CODEX_THREAD_ID_FILE = "codex_thread_id";
 const CODEX_THREAD_PROBE = "!echo $CODEX_THREAD_ID";
 const CODEX_THREAD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
+const CODEX_SESSION_MODEL = "gpt-5.3-codex-spark";
 const MAX_OPEN_ISSUE_SESSIONS = 3;
 const CLOSED_SESSION_STATUSES = new Set(["abandoned", "finished"]);
 const STUDIO_DAEMON_ID = crypto.randomUUID();
@@ -258,7 +259,7 @@ function scheduleAttachmentCleanup(targetRoot, sessionId, attachmentId) {
 
 function codexStartupScript(codexThreadId = "") {
   const normalizedThreadId = normalizeCodexThreadId(codexThreadId);
-  const codexOptions = "--dangerously-bypass-approvals-and-sandbox";
+  const codexOptions = `--model ${shellQuote(CODEX_SESSION_MODEL)} --dangerously-bypass-approvals-and-sandbox`;
   const codexCommand = normalizedThreadId
     ? `codex ${codexOptions} resume ${shellQuote(normalizedThreadId)}`
     : `codex ${codexOptions}`;

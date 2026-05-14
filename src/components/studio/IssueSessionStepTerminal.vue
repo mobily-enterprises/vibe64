@@ -79,6 +79,7 @@ const terminalSessionId = ref("");
 const terminalStatus = ref("");
 const terminalCommandPreview = ref("");
 const terminalError = ref("");
+const terminalExitCode = ref(null);
 const terminalStarting = ref(false);
 
 let terminalInstance = null;
@@ -102,7 +103,10 @@ const canRunSetupTerminal = computed(() => (
   props.session?.currentStep === "dependencies_installed"
 ));
 const terminalExited = computed(() => terminalStatus.value === "exited");
-const canRetry = computed(() => canRunSetupTerminal.value && (!terminalSessionId.value || terminalExited.value));
+const canRetry = computed(() => canRunSetupTerminal.value && (
+  Boolean(terminalError.value) ||
+  (terminalExited.value && terminalExitCode.value !== 0)
+));
 
 function trimTerminalOutput(output) {
   const text = String(output || "");
@@ -237,6 +241,7 @@ function handleTerminalSocketMessage(rawMessage) {
   if (message?.type === "snapshot") {
     const session = message.session || {};
     terminalStatus.value = session.status || terminalStatus.value || "";
+    terminalExitCode.value = session.status === "exited" ? session.exitCode ?? null : null;
     terminalCommandPreview.value = session.commandPreview || terminalCommandPreview.value;
     writeTerminalOutput(session.output || "");
     if (session.status === "exited") {
@@ -252,6 +257,7 @@ function handleTerminalSocketMessage(rawMessage) {
 
   if (message?.type === "status") {
     terminalStatus.value = message.status || terminalStatus.value || "";
+    terminalExitCode.value = message.status === "exited" ? message.exitCode ?? null : null;
     if (message.status === "exited") {
       scheduleFinished(message.exitCode);
     }
@@ -329,6 +335,7 @@ async function startTerminal() {
       }
       terminalSessionId.value = session.id || "";
       terminalStatus.value = session.status || "running";
+      terminalExitCode.value = session.status === "exited" ? session.exitCode ?? null : null;
       terminalCommandPreview.value = session.commandPreview || "";
       writeTerminalOutput(session.output || "");
       return connectTerminalSocket();
@@ -370,6 +377,7 @@ async function closeTerminal() {
   const existingTerminalId = terminalSessionId.value;
   terminalSessionId.value = "";
   terminalStatus.value = "";
+  terminalExitCode.value = null;
   closeTerminalSocket();
   if (existingTerminalId && sessionId.value) {
     await closeIssueSessionStepTerminal(sessionId.value, existingTerminalId).catch(() => null);
@@ -396,6 +404,7 @@ watch(canRunSetupTerminal, (ready) => {
 watch(sessionId, () => {
   terminalSessionId.value = "";
   terminalStatus.value = "";
+  terminalExitCode.value = null;
   terminalCommandPreview.value = "";
   terminalError.value = "";
   terminalLatestOutput = "";
@@ -458,7 +467,7 @@ onBeforeUnmount(() => {
   background: #101216;
   border: 2px solid rgba(var(--v-theme-outline), 0.38);
   border-radius: 6px;
-  height: clamp(34rem, 68vh, 52rem);
+  height: clamp(37rem, 72vh, 56rem);
   overflow: hidden;
   padding: 0.35rem;
 }
@@ -482,7 +491,7 @@ onBeforeUnmount(() => {
   }
 
   .session-step-terminal__host {
-    height: min(70vh, 42rem);
+    height: min(74vh, 44rem);
   }
 }
 </style>

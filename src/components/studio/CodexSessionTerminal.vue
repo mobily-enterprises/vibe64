@@ -148,12 +148,16 @@ const props = defineProps({
     type: [String, Number],
     default: ""
   },
+  promptOverride: {
+    type: String,
+    default: ""
+  },
   showPromptAction: {
     type: Boolean,
     default: true
   }
 });
-const emit = defineEmits(["output", "session-update"]);
+const emit = defineEmits(["input", "output", "prompt-injected", "session-update"]);
 
 const terminalHost = ref(null);
 const terminalSessionId = ref("");
@@ -215,6 +219,9 @@ const sessionId = computed(() => props.session?.sessionId || "");
 const canUseTerminal = computed(() => Boolean(sessionId.value && props.session?.worktreeReady === true));
 const codexMode = computed(() => String(props.session?.codex?.mode || ""));
 const codexPrompt = computed(() => {
+  if (props.promptOverride) {
+    return String(props.promptOverride || "");
+  }
   const promptField = String(props.session?.codex?.promptField || "");
   return promptField ? String(props.session?.[promptField] || "") : "";
 });
@@ -453,7 +460,9 @@ async function setupTerminalUi() {
     terminalOutputOffset = 0;
     writeTerminalOutput(terminalLatestOutput);
     terminalDataDisposable = terminalInstance.onData((data) => {
-      void sendTerminalData(data);
+      void sendTerminalData(data, {
+        source: "user"
+      });
     });
     terminalFocusDisposable = terminalInstance.onFocus(() => {
       terminalFocused.value = true;
@@ -728,19 +737,25 @@ async function startTerminalOnce() {
   }
 }
 
-async function sendTerminalData(data) {
+async function sendTerminalData(data, {
+  source = "program"
+} = {}) {
   if (!terminalSessionId.value || terminalStatus.value === "exited") {
     return false;
   }
+  const input = String(data || "");
   try {
     if (!(await connectTerminalSocket()) || terminalSocket?.readyState !== WebSocket.OPEN) {
       throw new Error("Terminal stream is not connected.");
     }
     terminalSocket.send(JSON.stringify({
-      data: String(data || ""),
+      data: input,
       type: "input"
     }));
-    if (String(data || "").includes("\r") && codexTrustPromptLooksActive(terminalLatestOutput)) {
+    if (source === "user") {
+      emit("input", input);
+    }
+    if (input.includes("\r") && codexTrustPromptLooksActive(terminalLatestOutput)) {
       codexTrustPromptAnsweredAt = Date.now();
       copyStatus.value = "";
     }
@@ -1030,6 +1045,10 @@ async function injectPrompt() {
       if (sent) {
         autoPromptInjected.value = true;
         copyStatus.value = "Prompt injected into Codex.";
+        emit("prompt-injected", {
+          prompt: codexPrompt.value,
+          sessionId: sessionId.value
+        });
       }
       return sent;
     }
@@ -1068,7 +1087,9 @@ async function injectPromptForRequest() {
 }
 
 async function sendCtrlC() {
-  await sendTerminalData("\u0003");
+  await sendTerminalData("\u0003", {
+    source: "user"
+  });
 }
 
 async function closeTerminal() {
@@ -1273,7 +1294,7 @@ onBeforeUnmount(() => {
   background: #101216;
   border: 2px solid rgba(var(--v-theme-outline), 0.38);
   border-radius: 6px;
-  height: clamp(34rem, 68vh, 52rem);
+  height: clamp(37rem, 72vh, 56rem);
   overflow: hidden;
   padding: 0.35rem;
   transition: border-color 140ms ease, box-shadow 140ms ease;
@@ -1362,7 +1383,7 @@ onBeforeUnmount(() => {
   }
 
   .codex-terminal__host {
-    height: min(70vh, 42rem);
+    height: min(74vh, 44rem);
   }
 
   .codex-terminal__restart-card {

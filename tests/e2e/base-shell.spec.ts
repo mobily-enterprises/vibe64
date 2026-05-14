@@ -435,6 +435,7 @@ const currentAppPayload = {
 };
 
 const codexPromptText = "Create the GitHub issue for the requested Studio session UI.";
+const codexPlanPromptText = "Create an implementation plan for the approved GitHub issue.";
 const codexPromptSessionId = "2026-05-12_01-02-39";
 const secondCodexPromptText = "Create another GitHub issue while the first terminal keeps running.";
 const secondCodexPromptSessionId = "2026-05-12_01-03-40";
@@ -475,6 +476,20 @@ const codexPromptStepDefinitions = [
     label: "Issue",
     kind: "codex_output",
     description: "Ask Codex to create the GitHub issue."
+  },
+  {
+    id: "issue-created",
+    index: 4,
+    label: "Issue created",
+    kind: "automatic",
+    description: "Create the GitHub issue."
+  },
+  {
+    id: "plan_made",
+    index: 5,
+    label: "Plan made",
+    kind: "codex_output",
+    description: "Ask Codex to create an implementation plan."
   }
 ];
 const codexPromptSessionPayload = {
@@ -487,7 +502,7 @@ const codexPromptSessionPayload = {
   currentStepAction: {
     stepId: "issue",
     kind: "codex_output",
-    buttonLabel: "Save issue draft",
+    buttonLabel: "Finalise issue",
     description: "Codex should create the issue and return the issue URL.",
     input: {
       fields: [
@@ -591,11 +606,12 @@ const codexIssueDraftedPayload = {
   currentStepAction: {
     stepId: "issue-created",
     kind: "automatic",
-    buttonLabel: "Create GitHub issue",
+    buttonLabel: "Create issue",
     description: "Create the GitHub issue with gh.",
     input: {
       type: "none"
-    }
+    },
+    requiresExplicitRun: true
   },
   issueTitle: "Add session UI",
   issueText: "Make sessions clearer.",
@@ -645,6 +661,387 @@ const codexIssueCreatedPayload = {
   },
   issueUrl: "https://github.com/merc/example-target-app/issues/123",
   status: "running"
+};
+const codexPlanPromptPayload = {
+  ...codexIssueCreatedPayload,
+  prompt: codexPlanPromptText,
+  status: "waiting_for_user"
+};
+const deepUiSkipSessionId = "2026-05-12_02-06-43";
+const deepUiPromptSessionId = "2026-05-12_02-06-44";
+const deepUiSkipStepDefinitions = [
+  {
+    id: "deep_ui_check_run",
+    index: 12,
+    label: "Deep UI check run",
+    kind: "codex_prompt",
+    description: "Run or skip the focused UI quality pass before review."
+  },
+  {
+    id: "review_prompt_rendered",
+    index: 13,
+    displayGroupId: "review_deslop",
+    displayGroupLabel: "Review/deslop",
+    label: "Review/deslop",
+    kind: "codex_prompt",
+    description: "Start the review pass."
+  },
+  {
+    id: "automated_checks_run",
+    index: 14,
+    label: "Automated checks",
+    kind: "automatic",
+    description: "Run checks after review/deslop."
+  }
+];
+const deepUiSkipSessionPayload = {
+  ok: true,
+  sessionId: deepUiSkipSessionId,
+  status: "running",
+  currentStep: "deep_ui_check_run",
+  completedSteps: [],
+  stepDefinitions: deepUiSkipStepDefinitions,
+  currentStepAction: {
+    buttonLabel: "Run Deep UI check",
+    conditional: true,
+    description: "Run or skip the focused UI quality pass before review.",
+    input: {
+      type: "none"
+    },
+    kind: "codex_prompt",
+    label: "Run Deep UI check",
+    requiresExplicitRun: false,
+    skipReason: "uiImpact is none.",
+    stepId: "deep_ui_check_run"
+  },
+  codex: null,
+  prompt: "",
+  receipts: [],
+  issueTitle: "Add health endpoint",
+  issueText: "Add a server-only health endpoint.",
+  issueUrl: "https://github.com/merc/example-target-app/issues/124",
+  planText: "Add the endpoint.",
+  errors: [],
+  prUrl: "",
+  transcriptLog: "",
+  uiChecks: [],
+  worktree: sessionWorktreePath(deepUiSkipSessionId),
+  worktreeReady: true
+};
+const deepUiSkippedSessionPayload = {
+  ...deepUiSkipSessionPayload,
+  currentStep: "review_prompt_rendered",
+  completedSteps: [
+    ...deepUiSkipSessionPayload.completedSteps,
+    "deep_ui_check_run"
+  ],
+  currentStepAction: {
+    buttonLabel: "Run deslop",
+    description: "Start the review pass.",
+    input: {
+      type: "none"
+    },
+    kind: "codex_prompt",
+    label: "Run deslop",
+    requiresExplicitRun: false,
+    stepId: "review_prompt_rendered"
+  },
+  uiChecks: [
+    {
+      ok: true,
+      phase: "pre_review",
+      reason: "uiImpact is none.",
+      status: "skipped",
+      stepId: "deep_ui_check_run",
+      uiImpact: "none"
+    }
+  ]
+};
+const deepUiPromptedSessionPayload = {
+  ...deepUiSkipSessionPayload,
+  sessionId: deepUiPromptSessionId,
+  codex: {
+    autoInject: true,
+    expectedOutput: null,
+    expectedOutputs: [],
+    mode: "inject_prompt",
+    promptActionLabel: "Run Deep UI check",
+    promptField: "prompt"
+  },
+  completedSteps: [
+    "session_created",
+    "worktree_created",
+    "dependencies_installed",
+    "issue_prompt_rendered",
+    "issue_drafted",
+    "issue_created",
+    "issue_details_gathered",
+    "plan_made",
+    "plan_executed"
+  ],
+  currentStepAction: {
+    ...deepUiSkipSessionPayload.currentStepAction,
+    buttonLabel: "Go to next step",
+    skipReason: ""
+  },
+  prompt: "Deep UI quality check prompt for this session.",
+  uiImpact: "definite",
+  worktree: sessionWorktreePath(deepUiPromptSessionId)
+};
+const reviewDeslopSessionId = "2026-05-12_02-06-45";
+const reviewDeslopStepDefinitions = [
+  {
+    id: "review_prompt_rendered",
+    index: 13,
+    displayGroupId: "review_deslop",
+    displayGroupLabel: "Review/deslop",
+    label: "Review/deslop",
+    kind: "codex_prompt",
+    description: "Run the review/deslop pass."
+  },
+  {
+    id: "review_changes_accepted",
+    index: 14,
+    displayGroupId: "review_deslop",
+    displayGroupLabel: "Review/deslop",
+    label: "Review/deslop",
+    kind: "user_check",
+    description: "Accept a review/deslop pass or request another one."
+  },
+  {
+    id: "automated_checks_run",
+    index: 15,
+    label: "Automated checks",
+    kind: "automatic",
+    description: "Run checks after review/deslop."
+  }
+];
+const reviewDeslopAcceptedPayload = {
+  ok: true,
+  sessionId: reviewDeslopSessionId,
+  status: "running",
+  currentStep: "review_changes_accepted",
+  completedSteps: ["review_prompt_rendered"],
+  stepDefinitions: reviewDeslopStepDefinitions,
+  currentStepAction: {
+    buttonLabel: "I am done",
+    description: "Accept a review/deslop pass or request another one.",
+    input: { type: "none" },
+    kind: "user_check",
+    label: "I am done",
+    requiresExplicitRun: false,
+    stepId: "review_changes_accepted",
+    utilityActions: [
+      {
+        id: "session_diff",
+        kind: "diff",
+        label: "Review changes"
+      }
+    ]
+  },
+  codex: null,
+  prompt: "",
+  reviewPasses: [
+    {
+      commit: "",
+      maxPasses: 0,
+      pass: "001",
+      status: "accepted"
+    }
+  ],
+  issueTitle: "Clean up UI",
+  issueText: "Run a review/deslop pass.",
+  issueUrl: "https://github.com/merc/example-target-app/issues/126",
+  errors: [],
+  prUrl: "",
+  transcriptLog: "",
+  worktree: sessionWorktreePath(reviewDeslopSessionId),
+  worktreeReady: true
+};
+const reviewDeslopNextPromptPayload = {
+  ...reviewDeslopAcceptedPayload,
+  currentStep: "review_prompt_rendered",
+  completedSteps: ["review_prompt_rendered", "review_changes_accepted"],
+  currentStepAction: {
+    buttonLabel: "Run deslop",
+    description: "Run the review/deslop pass.",
+    input: { type: "none" },
+    kind: "codex_prompt",
+    label: "Run deslop",
+    requiresExplicitRun: false,
+    stepId: "review_prompt_rendered"
+  },
+  reviewPasses: [
+    ...reviewDeslopAcceptedPayload.reviewPasses,
+    {
+      maxPasses: 0,
+      pass: "002",
+      status: "pending"
+    }
+  ]
+};
+const reviewDeslopUnexpectedAdvancedPayload = {
+  ...reviewDeslopNextPromptPayload,
+  currentStep: "automated_checks_run",
+  currentStepAction: {
+    buttonLabel: "Run automated checks",
+    input: { type: "none" },
+    kind: "automatic",
+    label: "Run automated checks",
+    stepId: "automated_checks_run"
+  }
+};
+const userCheckSessionId = "2026-05-12_03-07-44";
+const userCheckStepDefinitions = [
+  {
+    id: "user_check_completed",
+    index: 21,
+    label: "User check",
+    kind: "user_check",
+    description: "Record whether the user's manual check passed."
+  },
+  {
+    id: "plan_made",
+    index: 7,
+    label: "Plan made",
+    kind: "codex_output",
+    description: "Codex writes an implementation plan for the active cycle; cycle 001 plans from the issue, later cycles plan from user rework notes."
+  }
+];
+const userCheckAction = {
+  alternateActions: [],
+  buttonLabel: "Save user check",
+  description: "Record whether the user's manual check passed.",
+  input: {
+    label: "User check result",
+    name: "userCheck",
+    options: [
+      { label: "Passed", value: "passed" },
+      { label: "Failed", value: "failed" }
+    ],
+    required: true,
+    type: "choice"
+  },
+  kind: "user_check",
+  label: "Save user check",
+  requiresExplicitRun: false,
+  stepId: "user_check_completed"
+};
+const userCheckSessionPayload = {
+  ok: true,
+  sessionId: userCheckSessionId,
+  status: "running",
+  currentStep: "user_check_completed",
+  completedSteps: ["session_created"],
+  stepDefinitions: userCheckStepDefinitions,
+  currentStepAction: userCheckAction,
+  codex: null,
+  prompt: "",
+  receipts: [],
+  issueTitle: "Add health endpoint",
+  issueText: "Add a server-only health endpoint.",
+  issueUrl: "https://github.com/merc/example-target-app/issues/125",
+  planText: "Add the endpoint.",
+  errors: [],
+  prUrl: "",
+  transcriptLog: "",
+  worktree: sessionWorktreePath(userCheckSessionId),
+  worktreeReady: false
+};
+const failedUserCheckSessionPayload = {
+  ...userCheckSessionPayload,
+  ok: false,
+  status: "blocked",
+  errors: [
+    {
+      code: "user_check_failed",
+      message: "User check failed. Provide rework notes to start a new plan cycle.",
+      repairCommand: `jskit session ${userCheckSessionId} step --user-check failed --rework-notes -`
+    }
+  ],
+  currentStepAction: {
+    ...userCheckAction,
+    alternateActions: [
+      {
+        id: "return_to_plan_made",
+        input: {
+          formatHint: "markdown",
+          label: "What needs to be reworked?",
+          multiline: true,
+          name: "reworkNotes",
+          required: true,
+          type: "text"
+        },
+        label: "Return to Plan made",
+        presentation: "exclusive",
+        requiredErrorCode: "user_check_failed",
+        submitOptions: {
+          userCheck: "failed"
+        },
+        targetStep: "plan_made"
+      }
+    ]
+  }
+};
+const reworkStartedSessionPayload = {
+  ...userCheckSessionPayload,
+  activeCycle: "002",
+  cycles: [
+    {
+      cycle: "001",
+      label: "cycle_001",
+      status: "failed",
+      userCheckResult: "failed"
+    },
+    {
+      cycle: "002",
+      label: "cycle_002",
+      reworkRequest: "The health endpoint returns the wrong status code.",
+      status: "active",
+      userCheckResult: ""
+    }
+  ],
+  currentStep: "plan_made",
+  planText: "",
+  status: "running",
+  currentStepAction: {
+    buttonLabel: "Get Codex to create revised plan",
+    description: "Codex writes a revised implementation plan from the user's rework notes for this cycle.",
+    input: {
+      extract: "plan",
+      formatHint: "markdown",
+      label: "Approved plan",
+      multiline: true,
+      name: "plan",
+      required: true,
+      type: "text"
+    },
+    kind: "codex_output",
+    label: "Get Codex to create revised plan",
+    stepId: "plan_made"
+  },
+  codex: {
+    expectedOutput: {
+      extract: "plan",
+      field: "plan",
+      formatHint: "markdown",
+      label: "Plan",
+      multiline: true,
+      required: true
+    },
+    expectedOutputs: [
+      {
+        extract: "plan",
+        field: "plan",
+        formatHint: "markdown",
+        label: "Plan",
+        multiline: true,
+        required: true
+      }
+    ],
+    mode: "inject_prompt",
+    promptActionLabel: "Get Codex to create revised plan"
+  }
 };
 
 function sseStatusPayload(status, itemsKey = "checks") {
@@ -981,9 +1378,18 @@ async function mockCodexPromptSession(page, { stepPayloads = [], terminalInputs 
       issueTitle,
       issueText
     };
+    const planPromptPayload = {
+      ...codexPlanPromptPayload,
+      issueTitle,
+      issueText
+    };
     await route.fulfill({
       contentType: "application/json",
-      body: JSON.stringify(stepRequestCount === 1 ? draftedPayload : createdPayload)
+      body: JSON.stringify(
+        stepRequestCount === 1
+          ? draftedPayload
+          : stepRequestCount === 2 ? createdPayload : planPromptPayload
+      )
     });
   });
   await page.route(`**/api/studio/current-app/issue-sessions/${codexPromptSessionId}/codex-terminal`, async (route) => {
@@ -1201,7 +1607,6 @@ async function expectGeneratedScreenContract(page) {
 }
 
 async function expectSessionsRoute(page) {
-  await expect(page.getByRole("link", { name: "Sessions" }).first()).toBeVisible();
   await expect(page.locator(".studio-issue-sessions").first()).toBeVisible();
 }
 
@@ -1393,7 +1798,7 @@ test.describe("studio startup navigation", () => {
     expect(apiRequests.count("/api/studio/app-setup/stream")).toBe(1);
   });
 
-  test("codex issue step injects the prompt and waits for edited issue text before creating the issue", async ({ page }) => {
+  test("codex issue step injects the prompt, finalises the draft, then creates the issue explicitly", async ({ page }) => {
     const stepPayloads: unknown[] = [];
     const terminalInputs: string[] = [];
     const codexSession = await mockCodexPromptSession(page, {
@@ -1403,17 +1808,34 @@ test.describe("studio startup navigation", () => {
 
     await page.goto(`${BASE_URL}/home`);
     await expectSessionsRoute(page);
-    const createIssueButton = page.getByRole("button", { name: "Create issue" });
-    await expect(createIssueButton).toBeVisible();
-    await expect(createIssueButton).toBeDisabled();
+    const submitPromptButton = page.getByRole("button", { name: "Submit prompt to Codex" });
+    await expect(submitPromptButton).toBeVisible();
     await expect(page.locator(".xterm-rows").first()).toContainText("Codex ready.");
     const terminalHost = page.locator(".codex-terminal__host").first();
     await terminalHost.click();
     await expect(terminalHost).toHaveCSS("border-color", "rgb(78, 161, 255)");
+    await submitPromptButton.click();
 
     await expect.poll(() => terminalInputs.length).toBe(7);
     expect(terminalInputs.slice(0, 6)).toEqual(codexShellSubmitSequence);
     expect(terminalInputs[6]).toContain(codexPromptText);
+    await expect(submitPromptButton).toHaveCount(0);
+    await expect(page.getByText("Submit prompt to Codex requested.")).toBeVisible();
+
+    await codexSession.setTerminalOutput([
+      "Codex ready.",
+      "[issue_title]",
+      "Add session UI",
+      "[/issue_title]"
+    ].join("\n"));
+
+    const finaliseIssueButton = page.getByRole("button", { name: "Finalise issue" });
+    await expect(finaliseIssueButton).toBeVisible();
+    await expect(finaliseIssueButton).toBeDisabled();
+    const issueTitleField = page.getByLabel("Issue title from Codex");
+    const issueBodyField = page.getByLabel("Issue body from Codex");
+    await expect(issueTitleField).toHaveValue("Add session UI");
+    await expect(issueBodyField).toHaveValue("");
 
     await codexSession.setTerminalOutput([
       "Codex ready.",
@@ -1425,20 +1847,23 @@ test.describe("studio startup navigation", () => {
       "[/issue_text]"
     ].join("\n"));
 
-    await expect(createIssueButton).toBeEnabled();
-    const issueTitleField = page.getByLabel("Issue title from Codex");
-    const issueBodyField = page.getByLabel("Issue body from Codex");
+    await expect(finaliseIssueButton).toBeEnabled();
     await expect(issueTitleField).toHaveValue("Add session UI");
     await expect(issueBodyField).toHaveValue("Make sessions clearer.");
     await issueTitleField.fill("Edited session UI");
     await issueBodyField.fill("Make the issue sharper.");
-    await createIssueButton.click();
+    await finaliseIssueButton.click();
 
-    await expect.poll(() => stepPayloads.length).toBe(2);
+    await expect.poll(() => stepPayloads.length).toBe(1);
     expect(stepPayloads[0]).toEqual({
       issue: "Make the issue sharper.",
       issueTitle: "Edited session UI"
     });
+    const createIssueButton = page.getByRole("button", { name: "Create issue" });
+    await expect(createIssueButton).toBeVisible();
+    await createIssueButton.click();
+
+    await expect.poll(() => stepPayloads.length).toBe(2);
     expect(stepPayloads[1]).toEqual({});
 
     const issueCard = page.locator(".studio-issue-sessions__fact").filter({
@@ -1447,6 +1872,339 @@ test.describe("studio startup navigation", () => {
     await expect(issueCard).toContainText("Issue #123");
     await issueCard.click();
     await expect(issueCard.locator(".studio-issue-sessions__fact-expanded")).toContainText("Make the issue sharper.");
+  });
+
+  test("codex output editors stay hidden until parsed output exists", async ({ page }) => {
+    const stepPayloads: unknown[] = [];
+    const terminalInputs: string[] = [];
+    const codexSession = await mockCodexPromptSession(page, {
+      stepPayloads,
+      terminalInputs
+    });
+
+    await page.goto(`${BASE_URL}/home`);
+    await expectSessionsRoute(page);
+
+    const issueTitleField = page.getByLabel("Issue title from Codex");
+    const issueBodyField = page.getByLabel("Issue body from Codex");
+    const finaliseIssueButton = page.getByRole("button", { name: "Finalise issue" });
+    await expect(issueTitleField).toHaveCount(0);
+    await expect(issueBodyField).toHaveCount(0);
+    await expect(finaliseIssueButton).toHaveCount(0);
+
+    await codexSession.setTerminalOutput("Codex ready.\nThinking without tagged issue output.");
+    await expect(issueTitleField).toHaveCount(0);
+    await expect(issueBodyField).toHaveCount(0);
+    await expect(finaliseIssueButton).toHaveCount(0);
+
+    await codexSession.setTerminalOutput([
+      "Codex ready.",
+      "[issue_title]",
+      "Add session UI",
+      "[/issue_title]",
+      "[issue_text]",
+      "Make sessions clearer.",
+      "[/issue_text]"
+    ].join("\n"));
+    await expect(issueTitleField).toBeVisible();
+    await expect(issueBodyField).toBeVisible();
+    await expect(finaliseIssueButton).toBeEnabled();
+    await finaliseIssueButton.click();
+
+    const createIssueButton = page.getByRole("button", { name: "Create issue" });
+    await expect(createIssueButton).toBeVisible();
+    await createIssueButton.click();
+
+    const planField = page.getByLabel("Plan from Codex");
+    const savePlanButton = page.getByRole("button", { name: "Save plan" });
+    await expect(planField).toHaveCount(0);
+    await expect(savePlanButton).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Get Codex to create plan" })).toBeVisible();
+
+    await codexSession.setTerminalOutput("Codex ready.\nThinking without tagged plan output.");
+    await expect(planField).toHaveCount(0);
+    await expect(savePlanButton).toHaveCount(0);
+
+    await codexSession.setTerminalOutput([
+      "Codex ready.",
+      "[plan]",
+      "1. Inspect the existing session UI.",
+      "2. Tighten the labels.",
+      "[/plan]"
+    ].join("\n"));
+    await expect(planField).toBeVisible();
+    await expect(planField).toHaveValue("1. Inspect the existing session UI.\n2. Tighten the labels.");
+    await expect(savePlanButton).toBeEnabled();
+  });
+
+  test("plan prompt generation injects the returned prompt on the first click", async ({ page }) => {
+    const stepPayloads: unknown[] = [];
+    const terminalInputs: string[] = [];
+    const codexSession = await mockCodexPromptSession(page, {
+      stepPayloads,
+      terminalInputs
+    });
+
+    await page.goto(`${BASE_URL}/home`);
+    await expectSessionsRoute(page);
+    await expect(page.locator(".xterm-rows").first()).toContainText("Codex ready.");
+    await codexSession.setTerminalOutput([
+      "Codex ready.",
+      "[issue_title]",
+      "Add session UI",
+      "[/issue_title]",
+      "[issue_text]",
+      "Make sessions clearer.",
+      "[/issue_text]"
+    ].join("\n"));
+
+    await page.getByRole("button", { name: "Finalise issue" }).click();
+    await expect.poll(() => stepPayloads.length).toBe(1);
+    await page.getByRole("button", { name: "Create issue" }).click();
+    await expect.poll(() => stepPayloads.length).toBe(2);
+
+    const planPromptButton = page.getByRole("button", { name: "Get Codex to create plan" });
+    await expect(page.getByText("Codex will create an implementation plan based on the issue.")).toBeVisible();
+    await expect(planPromptButton).toBeVisible();
+    await planPromptButton.click();
+
+    await expect.poll(() => stepPayloads.length).toBe(3);
+    expect(stepPayloads[2]).toEqual({});
+    await expect(planPromptButton).toHaveCount(0);
+    await expect(page.getByText("Get Codex to create plan requested.")).toBeVisible();
+    await expect.poll(() => terminalInputs.join("")).toContain(codexPlanPromptText);
+  });
+
+  test("conditional Deep UI checks with a JSKIT skip reason are skipped automatically", async ({ page }) => {
+    let activeSession = deepUiSkipSessionPayload;
+    let stepRequestCount = 0;
+
+    await page.route("**/api/studio/current-app", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify(currentAppPayload)
+      });
+    });
+    await page.route("**/api/studio/current-app/issue-sessions", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          limits: {
+            maxOpenSessions: 3,
+            openSessionCount: 1
+          },
+          ok: true,
+          sessions: [activeSession],
+          stepDefinitions: deepUiSkipStepDefinitions
+        })
+      });
+    });
+    await page.route(`**/api/studio/current-app/issue-sessions/${deepUiSkipSessionId}`, async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify(activeSession)
+      });
+    });
+    await page.route(`**/api/studio/current-app/issue-sessions/${deepUiSkipSessionId}/step`, async (route) => {
+      stepRequestCount += 1;
+      activeSession = deepUiSkippedSessionPayload;
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify(activeSession)
+      });
+    });
+
+    await page.goto(`${BASE_URL}/home`);
+    await expectSessionsRoute(page);
+    await expect.poll(() => stepRequestCount).toBe(1);
+
+    const deepUiStep = page.locator(".studio-issue-sessions__step").filter({
+      hasText: "Deep UI check run"
+    });
+    await expect(deepUiStep).toContainText("Done: Deep UI check run");
+    await expect(deepUiStep).toContainText("Skipped");
+    await expect(page.getByText("JSKIT can skip this conditional step")).toHaveCount(0);
+    await expect(page.getByText("Goal: Review/deslop")).toBeVisible();
+  });
+
+  test("Deep UI prompt is injected without exposing prompt copy UI", async ({ page }) => {
+    const codexSessions = await mockCodexPromptSessions(page, [
+      deepUiPromptedSessionPayload
+    ]);
+
+    await page.goto(`${BASE_URL}/home`);
+    await expectSessionsRoute(page);
+
+    const deepUiStep = page.locator(".studio-issue-sessions__step").filter({
+      hasText: "Deep UI check run"
+    });
+    await expect(deepUiStep).toContainText("Goal: Deep UI check run");
+    await expect(page.getByRole("textbox", { name: "Prompt" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Copy Prompt" })).toHaveCount(0);
+    await expect.poll(() => codexSessions.terminalInputs[deepUiPromptSessionId].join(""))
+      .toContain("Deep UI quality check prompt for this session.");
+  });
+
+  test("requesting another review/deslop pass does not run the next JSKIT step in the same click", async ({ page }) => {
+    let activeSession = reviewDeslopAcceptedPayload;
+    let stepRequestCount = 0;
+    const terminalInputs: Record<string, string[]> = {
+      [reviewDeslopSessionId]: []
+    };
+    await mockCodexTerminalWebSocket(page, {
+      initialOutputBySessionId: {
+        [reviewDeslopSessionId]: "Codex ready."
+      },
+      terminalInputs
+    });
+    await page.route("**/api/studio/current-app", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify(currentAppPayload)
+      });
+    });
+    await page.route("**/api/studio/current-app/issue-sessions", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          limits: {
+            maxOpenSessions: 3,
+            openSessionCount: 1
+          },
+          ok: true,
+          sessions: [activeSession],
+          stepDefinitions: reviewDeslopStepDefinitions
+        })
+      });
+    });
+    await page.route(`**/api/studio/current-app/issue-sessions/${reviewDeslopSessionId}`, async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify(activeSession)
+      });
+    });
+    await page.route(`**/api/studio/current-app/issue-sessions/${reviewDeslopSessionId}/step`, async (route) => {
+      stepRequestCount += 1;
+      activeSession = stepRequestCount === 1
+        ? reviewDeslopNextPromptPayload
+        : reviewDeslopUnexpectedAdvancedPayload;
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify(activeSession)
+      });
+    });
+    await page.route(`**/api/studio/current-app/issue-sessions/${reviewDeslopSessionId}/codex-terminal`, async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          commandPreview: "codex",
+          id: `term-${reviewDeslopSessionId}`,
+          needsThreadCapture: false,
+          ok: true,
+          output: "Codex ready.",
+          status: "running"
+        })
+      });
+    });
+    await page.route(`**/api/studio/current-app/issue-sessions/${reviewDeslopSessionId}/codex-thread`, async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          codexThreadId,
+          ok: true
+        })
+      });
+    });
+
+    await page.goto(`${BASE_URL}/home`);
+    await expectSessionsRoute(page);
+    await page.getByRole("button", { name: "Run deslop" }).click();
+
+    await expect.poll(() => stepRequestCount).toBe(1);
+    await page.waitForTimeout(100);
+    expect(stepRequestCount).toBe(1);
+    await expect(page.getByText("Goal: Review/deslop")).toBeVisible();
+  });
+
+  test("failed user check shows rework notes form before returning to plan made", async ({ page }) => {
+    let activeSession = userCheckSessionPayload;
+    const stepPayloads: unknown[] = [];
+
+    await page.route("**/api/studio/current-app", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify(currentAppPayload)
+      });
+    });
+    await page.route("**/api/studio/current-app/issue-sessions", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          limits: {
+            maxOpenSessions: 3,
+            openSessionCount: 1
+          },
+          ok: true,
+          sessions: [activeSession],
+          stepDefinitions: userCheckStepDefinitions
+        })
+      });
+    });
+    await page.route(`**/api/studio/current-app/issue-sessions/${userCheckSessionId}`, async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify(activeSession)
+      });
+    });
+    await page.route(`**/api/studio/current-app/issue-sessions/${userCheckSessionId}/step`, async (route) => {
+      const payload = route.request().postDataJSON();
+      stepPayloads.push(payload);
+      activeSession = stepPayloads.length === 1
+        ? failedUserCheckSessionPayload
+        : reworkStartedSessionPayload;
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify(activeSession)
+      });
+    });
+
+    await page.goto(`${BASE_URL}/home`);
+    await expectSessionsRoute(page);
+    await page.getByRole("button", { name: "Failed" }).click();
+
+    await expect.poll(() => stepPayloads.length).toBe(1);
+    expect(stepPayloads[0]).toEqual({ userCheck: "failed" });
+    await expect(page.getByText(
+      "User check failed. Provide rework notes to start a new plan cycle.",
+      { exact: true }
+    ).first()).toBeVisible();
+    const reworkField = page.getByLabel("What needs to be reworked?");
+    await expect(reworkField).toBeVisible();
+    await expect(page.getByRole("button", { name: "Return to Plan made" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Failed" })).toHaveCount(0);
+
+    await reworkField.fill("The health endpoint returns the wrong status code.");
+    await page.getByRole("button", { name: "Return to Plan made" }).click();
+
+    await expect.poll(() => stepPayloads.length).toBe(2);
+    expect(stepPayloads[1]).toEqual({
+      reworkNotes: "The health endpoint returns the wrong status code.",
+      userCheck: "failed"
+    });
+    const planMadeStep = page.locator(".studio-issue-sessions__step").filter({
+      hasText: "Plan made"
+    });
+    await expect(planMadeStep).toContainText("Goal: Plan made");
+    await expect(planMadeStep).toContainText("Rework request: The health endpoint returns the wrong status code.");
+    await expect(page.getByLabel("Plan")).toHaveCount(0);
+    await expect(page.getByText(
+      "Codex writes a revised implementation plan from the user's rework notes for this cycle."
+    )).toBeVisible();
+    const userCheckStep = page.locator(".studio-issue-sessions__step").filter({
+      hasText: "User check"
+    });
+    await expect(userCheckStep.locator(".studio-issue-sessions__step-description")).toHaveCount(0);
+    await expect(userCheckStep).toHaveAttribute("title", "Record whether the user's manual check passed.");
   });
 
   test("codex thread capture runs even before a Codex workflow step", async ({ page }) => {

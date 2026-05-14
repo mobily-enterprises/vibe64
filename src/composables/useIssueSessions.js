@@ -190,9 +190,11 @@ function useIssueSessions() {
     }
   }
 
-  function buildStepPayload(override = {}) {
+  function buildStepPayload(override = {}, {
+    includeStepInput = true
+  } = {}) {
     const input = selectedStepInput.value || {};
-    if (!input.name || input.type === "none") {
+    if (!includeStepInput || !input.name || input.type === "none") {
       return override;
     }
     return {
@@ -201,14 +203,14 @@ function useIssueSessions() {
     };
   }
 
-  async function runSelectedStep(override = {}) {
+  async function runSelectedStep(override = {}, options = {}) {
     if (!selectedSessionId.value) {
       return null;
     }
     issueSessionBusy.value = true;
     issueSessionsError.value = "";
     try {
-      const response = await runIssueSessionStep(selectedSessionId.value, buildStepPayload(override));
+      const response = await runIssueSessionStep(selectedSessionId.value, buildStepPayload(override, options));
       selectedSession.value = response;
       rememberContract(response);
       if (response?.ok === false) {

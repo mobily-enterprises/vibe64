@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -48,6 +48,19 @@ async function withTemporaryGitPackageRoot(packageName, callback) {
     runGit(targetRoot, ["commit", "-m", "Initial commit"]);
     await callback(targetRoot);
   });
+}
+
+async function commitMinimalReadyJskitApp(targetRoot) {
+  await mkdir(path.join(targetRoot, ".jskit"), { recursive: true });
+  await mkdir(path.join(targetRoot, "config"), { recursive: true });
+  await mkdir(path.join(targetRoot, "src"), { recursive: true });
+  await mkdir(path.join(targetRoot, "packages"), { recursive: true });
+  await writeFile(path.join(targetRoot, ".jskit", "lock.json"), JSON.stringify({ packages: [] }, null, 2));
+  await writeFile(path.join(targetRoot, "config", "public.js"), "export default {};\n");
+  await writeFile(path.join(targetRoot, "src", ".gitkeep"), "");
+  await writeFile(path.join(targetRoot, "packages", ".gitkeep"), "");
+  runGit(targetRoot, ["add", ".jskit/lock.json", "config/public.js", "src/.gitkeep", "packages/.gitkeep"]);
+  runGit(targetRoot, ["commit", "-m", "Add minimal JSKIT app markers"]);
 }
 
 test("server defaults to loopback host", () => {
@@ -166,6 +179,7 @@ test("GET /api/studio/current-app honors JSKIT_STUDIO_TARGET_ROOT when server cw
 
 test("Studio current-app API exposes JSKIT issue sessions from target filesystem state", async () => {
   await withTemporaryGitPackageRoot("session-target-app", async (targetRoot) => {
+    await commitMinimalReadyJskitApp(targetRoot);
     const previousTargetRoot = process.env.JSKIT_STUDIO_TARGET_ROOT;
     process.env.JSKIT_STUDIO_TARGET_ROOT = targetRoot;
 
