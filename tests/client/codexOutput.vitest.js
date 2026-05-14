@@ -4,6 +4,7 @@ import {
   cleanSingleLineCodexOutput,
   codexTrustPromptLooksActive,
   extractCodexThreadId,
+  extractMarkedOutputBlocks,
   extractMarkedOutputDetails,
   extractMarkedOutput,
   isPlaceholderMarkedOutput,
@@ -53,6 +54,28 @@ describe("codex output extraction", () => {
     expect(first.signature).not.toBe(second.signature);
   });
 
+  it("returns all usable marked output blocks in terminal order", () => {
+    const output = [
+      "[jskit_step_result]",
+      "status: complete",
+      "step: automated_checks_run",
+      "summary: Wrong step marker.",
+      "[/jskit_step_result]",
+      "terminal repaint",
+      "[jskit_step_result]",
+      "status: complete",
+      "step: plan_executed",
+      "summary: Correct step marker.",
+      "[/jskit_step_result]"
+    ].join("\n");
+
+    const blocks = extractMarkedOutputBlocks(output, "jskit_step_result");
+
+    expect(blocks).toHaveLength(2);
+    expect(blocks[0].value).toContain("step: automated_checks_run");
+    expect(blocks[1].value).toContain("step: plan_executed");
+  });
+
   it("ignores terminal control sequences around marked output", () => {
     const output = "\u001b[32m[issue_text]\n# Fix\n[/issue_text]\u001b[0m";
 
@@ -60,8 +83,81 @@ describe("codex output extraction", () => {
     expect(extractMarkedOutput(output, "issue_text")).toBe("# Fix");
   });
 
+  it("normalizes Codex repaint text glued onto marker lines", () => {
+    const output = [
+      "• [plan]›Improve documentation in @filenamegpt-5.3-codex-spark default · /home/merc/app/.jskit/sessions/active/20…\u001b[0 q",
+      "  Issue category: tooling\u001b[0 q",
+      "  UI impact: none\u001b[0 q",
+      "  [/plan]\u001b[0 q"
+    ].join("\r\n");
+
+    expect(extractMarkedOutput(output, "plan")).toBe([
+      "Issue category: tooling",
+      "  UI impact: none"
+    ].join("\n"));
+  });
+
+  it("ignores standalone terminal control bytes after marker lines", () => {
+    const output = [
+      "[jskit_step_result]",
+      "status: complete",
+      "step: plan_executed",
+      "summary: Created thirteen.md and checked git status.›Use /skills to list available skillsgpt-5.3-codex-spark default · /home/merc/Development/current/exampleapp/.jskit/sessions/active/20…",
+      "[/jskit_step_result]\u0007"
+    ].join("\n");
+
+    expect(extractMarkedOutput(output, "jskit_step_result")).toBe([
+      "status: complete",
+      "step: plan_executed",
+      "summary: Created thirteen.md and checked git status."
+    ].join("\n"));
+  });
+
+  it("strips terminal control wrappers without removing response text", () => {
+    const escape = "\u001b";
+    const output = [
+      `${escape}]0;codex title\u0007${escape}[32m[issue_text]${escape}[0m`,
+      `${escape}Pignored terminal payload${escape}\\Keep this text${escape}[?25h`,
+      `Still keep this text${escape}c`,
+      `[/issue_text]\u009b0m`
+    ].join("\n");
+
+    expect(extractMarkedOutput(output, "issue_text")).toBe([
+      "Keep this text",
+      "Still keep this text"
+    ].join("\n"));
+  });
+
   it("returns an empty string until the complete marker pair exists", () => {
     expect(extractMarkedOutput("[issue_text]\n# Missing close", "issue_text")).toBe("");
+  });
+
+  it("discards an incomplete block when the same marker starts again before the close", () => {
+    const output = [
+      "[issue_text]",
+      "First answer started but never closed.",
+      "──────────",
+      "› Repeat respond following required format",
+      "[issue_title]",
+      "Add root file eight.md with exact content eight",
+      "[/issue_title]",
+      "",
+      "[issue_text]",
+      "Second answer is complete.",
+      "",
+      "## Acceptance criteria",
+      "",
+      "- eight.md exists.",
+      "[/issue_text]"
+    ].join("\n");
+
+    expect(extractMarkedOutput(output, "issue_text")).toBe([
+      "Second answer is complete.",
+      "",
+      "## Acceptance criteria",
+      "",
+      "- eight.md exists."
+    ].join("\n"));
   });
 
   it("ignores placeholder-only marked output from injected prompts", () => {
@@ -107,6 +203,26 @@ describe("codex output extraction", () => {
       "Implementation lane: custom local code.",
       "",
       "1. Add four.md."
+    ].join("\n"));
+  });
+
+  it("removes inline Codex status trailers from marked content lines", () => {
+    const output = [
+      "[plan]",
+      "## Implementation lane›Write tests for @filenamegpt-5.3-codex-spark default · /home/merc/Development/current/exampleapp/.jskit/sessions/active/2026-05-14_18-40-39/worktree",
+      "",
+      "- custom local code",
+      "",
+      "Exact text: victory›Improve documentation in @filenamegpt-5.3-codex-spark default · /home/merc/Development/current/exampleapp/.jskit/sessions/active/2026-05-14_18-40-39/worktree",
+      "[/plan]"
+    ].join("\n");
+
+    expect(extractMarkedOutput(output, "plan")).toBe([
+      "## Implementation lane",
+      "",
+      "- custom local code",
+      "",
+      "Exact text: victory"
     ].join("\n"));
   });
 
@@ -246,7 +362,7 @@ describe("codex output extraction", () => {
   it("extracts Codex thread ids only when the echoed environment variable produced a UUID-shaped id", () => {
     expect(extractCodexThreadId([
       "Codex ready.",
-      "!echo $CODEX_THREAD_ID",
+      "! echo $CODEX_THREAD_ID",
       "019e1575-2458-7b93-bf9d-e7d7ffd49ad2"
     ].join("\n"))).toBe("019e1575-2458-7b93-bf9d-e7d7ffd49ad2");
   });
@@ -255,7 +371,7 @@ describe("codex output extraction", () => {
     expect(isCodexThreadId("v0.130.0")).toBe(false);
     expect(extractCodexThreadId([
       "Codex ready.",
-      "!echo $CODEX_THREAD_ID",
+      "! echo $CODEX_THREAD_ID",
       "codex-cli v0.130.0",
       "ready"
     ].join("\n"))).toBe("");

@@ -1,22 +1,52 @@
+import stripAnsi from "strip-ansi";
+
 function escapeRegExp(value) {
   return String(value || "").replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
 const ESCAPE_CHARACTER = String.fromCharCode(27);
 const BELL_CHARACTER = String.fromCharCode(7);
+const STRING_TERMINATOR_CHARACTER = String.fromCharCode(156);
+const C1_CSI_CHARACTER = String.fromCharCode(155);
+const C1_TERMINAL_STRING_START_CHARACTERS = [
+  144,
+  152,
+  157,
+  158,
+  159
+].map((code) => String.fromCharCode(code)).join("");
+const STANDALONE_TERMINAL_CONTROL_CHARACTERS = [
+  `${String.fromCharCode(0)}-${String.fromCharCode(8)}`,
+  String.fromCharCode(11),
+  String.fromCharCode(12),
+  `${String.fromCharCode(14)}-${String.fromCharCode(31)}`,
+  `${String.fromCharCode(127)}-${String.fromCharCode(159)}`
+].join("");
 const OSC_PATTERN = new RegExp(`${ESCAPE_CHARACTER}\\][\\s\\S]*?(?:${BELL_CHARACTER}|${ESCAPE_CHARACTER}\\\\)`, "gu");
+const TERMINAL_STRING_PATTERN = new RegExp(`${ESCAPE_CHARACTER}[PX^_][\\s\\S]*?(?:${BELL_CHARACTER}|${ESCAPE_CHARACTER}\\\\)`, "gu");
 const CSI_PATTERN = new RegExp(`${ESCAPE_CHARACTER}\\[[0-?]*[ -/]*[@-~]`, "gu");
+const C1_TERMINAL_STRING_PATTERN = new RegExp(`[${C1_TERMINAL_STRING_START_CHARACTERS}][\\s\\S]*?(?:${BELL_CHARACTER}|${STRING_TERMINATOR_CHARACTER}|${ESCAPE_CHARACTER}\\\\)`, "gu");
+const C1_CSI_PATTERN = new RegExp(`${C1_CSI_CHARACTER}[0-?]*[ -/]*[@-~]`, "gu");
+const ESCAPE_SEQUENCE_PATTERN = new RegExp(`${ESCAPE_CHARACTER}[ -/]*[@-~]`, "gu");
+const STANDALONE_TERMINAL_CONTROL_PATTERN = new RegExp(`[${STANDALONE_TERMINAL_CONTROL_CHARACTERS}]`, "gu");
 const CODEX_THREAD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 const CODEX_THREAD_ID_TOKEN_PATTERN = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/giu;
 const CODEX_TRUST_PROMPT_PATTERN = /Do you trust the contents of this directory\?/u;
 const CODEX_STATUS_LINE_TEXT_PATTERN = /^(?:[>›]\s*)?.*?(?:gpt-[\w.-]+|o\d(?:-[\w.-]+)?)[^\n]*\s·\s(?:\/|[A-Za-z]:\\)[^\n]*?\s{2,}(.+)$/u;
 const CODEX_WORKTREE_STATUS_TEXT_PATTERN = /^.*?(?:\/|[A-Za-z]:\\)[^\n]*?\.jskit[^\n]*?\s{2,}(.+)$/u;
+const CODEX_INLINE_STATUS_TRAILER_PATTERN = /[>›][^\r\n]*?(?:gpt-[\w.-]+|o\d(?:-[\w.-]+)?)[^\r\n]*\s·\s(?:\/|[A-Za-z]:\\)[^\r\n]*$/u;
 const CODEX_MARKER_LINE_PREFIX_PATTERN = "[^\\S\\r\\n]*(?:[•>›]\\s*)?";
 
 function stripTerminalControlSequences(value) {
-  return String(value || "")
+  const source = String(value || "")
     .replace(OSC_PATTERN, "")
-    .replace(CSI_PATTERN, "");
+    .replace(TERMINAL_STRING_PATTERN, "")
+    .replace(CSI_PATTERN, "")
+    .replace(C1_TERMINAL_STRING_PATTERN, "")
+    .replace(C1_CSI_PATTERN, "")
+    .replace(ESCAPE_SEQUENCE_PATTERN, "");
+  return stripAnsi(source)
+    .replace(STANDALONE_TERMINAL_CONTROL_PATTERN, "");
 }
 
 function cleanSingleLineCodexOutput(value) {
@@ -30,9 +60,14 @@ function cleanSingleLineCodexOutput(value) {
 }
 
 function cleanCodexTerminalChromeLine(value) {
-  return String(value || "")
+  const source = String(value || "");
+  const fullLineCleaned = source
     .replace(CODEX_STATUS_LINE_TEXT_PATTERN, "$1")
     .replace(CODEX_WORKTREE_STATUS_TEXT_PATTERN, "$1");
+  if (fullLineCleaned !== source) {
+    return fullLineCleaned;
+  }
+  return source.replace(CODEX_INLINE_STATUS_TRAILER_PATTERN, "");
 }
 
 function cleanMultilineCodexOutput(value) {
@@ -55,37 +90,82 @@ function isPlaceholderMarkedOutput(value) {
   return /^<[^>\r\n]+>$/u.test(String(value || "").trim());
 }
 
-function markedOutputBlockPattern(marker) {
+function markedOutputLinePattern(marker) {
   const escapedMarker = escapeRegExp(marker);
   return new RegExp(
-    `(^|\\n)${CODEX_MARKER_LINE_PREFIX_PATTERN}\\[${escapedMarker}\\][^\\S\\r\\n]*(?:\\r?\\n)([\\s\\S]*?)(?:\\r?\\n)${CODEX_MARKER_LINE_PREFIX_PATTERN}\\[/${escapedMarker}\\][^\\S\\r\\n]*(?=\\r?\\n|$)`,
+    `(^|\\n)${CODEX_MARKER_LINE_PREFIX_PATTERN}\\[(/?)${escapedMarker}\\][^\\S\\r\\n]*(?=\\r?\\n|$)`,
     "gu"
   );
 }
 
-function extractMarkedOutputDetails(value, marker, options = {}) {
+function normalizeMarkedOutputSource(value, marker) {
+  const escapedMarker = escapeRegExp(marker);
+  const markerLine = new RegExp(
+    `^${CODEX_MARKER_LINE_PREFIX_PATTERN}\\[(/?)${escapedMarker}\\][^\\r\\n]*$`,
+    "u"
+  );
+  return stripTerminalControlSequences(value)
+    .split(/\r?\n/u)
+    .map((line) => line.replace(markerLine, (_match, slash) => `[${slash || ""}${marker}]`))
+    .join("\n");
+}
+
+function nextLineStartIndex(source, markerLineEndIndex) {
+  if (source.slice(markerLineEndIndex, markerLineEndIndex + 2) === "\r\n") {
+    return markerLineEndIndex + 2;
+  }
+  if (source[markerLineEndIndex] === "\n") {
+    return markerLineEndIndex + 1;
+  }
+  return markerLineEndIndex;
+}
+
+function extractMarkedOutputBlocks(value, marker, options = {}) {
   const normalizedMarker = String(marker || "").trim();
   if (!normalizedMarker) {
-    return {
-      signature: "",
-      value: ""
-    };
+    return [];
   }
 
-  const source = stripTerminalControlSequences(value);
-  const pattern = markedOutputBlockPattern(normalizedMarker);
-  let extracted = "";
-  let signature = "";
+  const source = normalizeMarkedOutputSource(value, normalizedMarker);
+  const pattern = markedOutputLinePattern(normalizedMarker);
+  const blocks = [];
+  let currentOpen = null;
   for (const match of source.matchAll(pattern)) {
-    const nextValue = normalizeMarkedOutput(match[2], options);
-    if (nextValue && !isPlaceholderMarkedOutput(nextValue)) {
-      extracted = nextValue;
-      signature = `${match.index}:${match[0].length}`;
+    const markerLineStart = match.index + match[1].length;
+    const markerLineEnd = match.index + match[0].length;
+    const markerIsClosing = match[2] === "/";
+    if (!markerIsClosing) {
+      currentOpen = {
+        contentStart: nextLineStartIndex(source, markerLineEnd),
+        markerStart: markerLineStart
+      };
+      continue;
     }
+    if (!currentOpen) {
+      continue;
+    }
+    const contentEnd = markerLineStart - match[1].length;
+    const nextValue = normalizeMarkedOutput(source.slice(currentOpen.contentStart, contentEnd), options);
+    if (nextValue && !isPlaceholderMarkedOutput(nextValue)) {
+      blocks.push({
+        signature: `${currentOpen.markerStart}:${markerLineEnd - currentOpen.markerStart}`,
+        value: nextValue
+      });
+    }
+    currentOpen = null;
+  }
+  return blocks;
+}
+
+function extractMarkedOutputDetails(value, marker, options = {}) {
+  const blocks = extractMarkedOutputBlocks(value, marker, options);
+  const latestBlock = blocks.at(-1);
+  if (latestBlock) {
+    return latestBlock;
   }
   return {
-    signature,
-    value: extracted
+    signature: "",
+    value: ""
   };
 }
 
@@ -231,6 +311,7 @@ export {
   cleanSingleLineCodexOutput,
   codexTrustPromptLooksActive,
   extractCodexThreadId,
+  extractMarkedOutputBlocks,
   extractMarkedOutputDetails,
   extractMarkedOutput,
   isPlaceholderMarkedOutput,

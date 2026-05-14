@@ -444,10 +444,10 @@ const thirdCodexPromptSessionId = "2026-05-12_01-04-41";
 const nonCodexStepSessionId = "2026-05-12_01-05-42";
 const sessionWorktreePath = (sessionId: string) =>
   `/workspace/example-target-app/.jskit/sessions/active/${sessionId}/worktree`;
-const codexThreadProbe = "!echo $CODEX_THREAD_ID";
+const codexThreadProbe = "! echo $CODEX_THREAD_ID";
 const codexThreadCommand = "echo $CODEX_THREAD_ID";
 const codexThreadId = "019e1575-2458-7b93-bf9d-e7d7ffd49ad2";
-const codexShellSubmitSequence = ["\u001b", "\u0015", "!", codexThreadCommand, "\u001b", "\r"];
+const codexShellSubmitSequence = ["\u001b", "\u0015", "! ", codexThreadCommand, " ", "\u001b", "\r"];
 const codexPromptStepDefinitions = [
   {
     id: "session-created",
@@ -789,6 +789,88 @@ const deepUiPromptedSessionPayload = {
   prompt: "Deep UI quality check prompt for this session.",
   uiImpact: "definite",
   worktree: sessionWorktreePath(deepUiPromptSessionId)
+};
+const planExecutionRejectSessionId = "2026-05-12_02-06-46";
+const planExecutionRejectStepDefinitions = [
+  {
+    id: "plan_made",
+    index: 8,
+    label: "Plan made",
+    kind: "codex_output",
+    description: "Codex writes an implementation plan from the issue."
+  },
+  {
+    id: "plan_executed",
+    index: 9,
+    label: "Plan executed",
+    kind: "codex_prompt",
+    description: "Codex has the execution prompt. Studio advances when Codex finishes."
+  },
+  {
+    id: "deep_ui_check_run",
+    index: 10,
+    label: "Deep UI check run",
+    kind: "codex_prompt",
+    description: "Run or skip the focused UI quality pass before review."
+  }
+];
+const planExecutionRejectPayload = {
+  ok: true,
+  sessionId: planExecutionRejectSessionId,
+  status: "running",
+  currentStep: "plan_executed",
+  completedSteps: [
+    "session_created",
+    "worktree_created",
+    "dependencies_installed",
+    "issue_prompt_rendered",
+    "issue_drafted",
+    "issue_created",
+    "issue_details_gathered",
+    "plan_made"
+  ],
+  stepDefinitions: planExecutionRejectStepDefinitions,
+  currentStepAction: {
+    buttonLabel: "Go to next step",
+    description: "Codex has the execution prompt. Studio advances when Codex finishes.",
+    input: { type: "none" },
+    kind: "codex_prompt",
+    automation: { mode: "codex_prompt" },
+    label: "Go to next step",
+    requiresExplicitRun: false,
+    stepId: "plan_executed"
+  },
+  codex: {
+    autoInject: true,
+    mode: "inject_prompt",
+    promptActionLabel: "Get Codex to execute plan",
+    promptField: "prompt",
+    responseContract: {
+      completionBehavior: "auto_advance",
+      kind: "completion_marker",
+      marker: "jskit_step_result",
+      missingMarkerBehavior: "resend",
+      required: true,
+      stepField: "step"
+    }
+  },
+  prompt: [
+    "Execute the approved implementation plan.",
+    "",
+    "[jskit_step_result]",
+    "status: complete",
+    "step: plan_executed",
+    "summary: Short summary of what changed and what was checked.",
+    "[/jskit_step_result]"
+  ].join("\n"),
+  errors: [],
+  issueTitle: "Add victory file",
+  issueText: "Add a victory file.",
+  issueUrl: "https://github.com/merc/example-target-app/issues/127",
+  prUrl: "",
+  transcriptLog: "",
+  worktree: sessionWorktreePath(planExecutionRejectSessionId),
+  worktreeReady: true
 };
 const reviewDeslopSessionId = "2026-05-12_02-06-45";
 const reviewDeslopStepDefinitions = [
@@ -1982,6 +2064,226 @@ test.describe("studio startup navigation", () => {
     await expect.poll(() => terminalInputs.join("")).toContain(codexPlanPromptText);
   });
 
+  test("next Codex prompt step injects after saving a Codex output step", async ({ page }) => {
+    const executionPrompt = "Execute the approved implementation plan after saving the plan.";
+    let activeSession = codexPlanPromptPayload;
+    const stepPayloads: Record<string, unknown>[] = [];
+    const terminalInputs: Record<string, string[]> = {
+      [codexPromptSessionId]: []
+    };
+    await mockCodexTerminalWebSocket(page, {
+      initialOutputBySessionId: {
+        [codexPromptSessionId]: "Codex ready."
+      },
+      terminalInputs
+    });
+    await mockStudioReady(page);
+    await page.route("**/api/studio/current-app", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify(currentAppPayload)
+      });
+    });
+    await page.route("**/api/studio/current-app/issue-sessions", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          limits: {
+            maxOpenSessions: 3,
+            openSessionCount: 1
+          },
+          ok: true,
+          sessions: [activeSession],
+          stepDefinitions: planExecutionRejectStepDefinitions
+        })
+      });
+    });
+    await page.route(`**/api/studio/current-app/issue-sessions/${codexPromptSessionId}`, async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify(activeSession)
+      });
+    });
+    await page.route(`**/api/studio/current-app/issue-sessions/${codexPromptSessionId}/step`, async (route) => {
+      stepPayloads.push(route.request().postDataJSON());
+      activeSession = {
+        ...planExecutionRejectPayload,
+        sessionId: codexPromptSessionId,
+        prompt: executionPrompt,
+        worktree: sessionWorktreePath(codexPromptSessionId)
+      };
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify(activeSession)
+      });
+    });
+    await page.route(`**/api/studio/current-app/issue-sessions/${codexPromptSessionId}/codex-terminal`, async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          commandPreview: "codex",
+          id: `term-${codexPromptSessionId}`,
+          needsThreadCapture: false,
+          ok: true,
+          output: "Codex ready.",
+          status: "running"
+        })
+      });
+    });
+    await page.route(`**/api/studio/current-app/issue-sessions/${codexPromptSessionId}/codex-thread`, async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          codexThreadId,
+          ok: true
+        })
+      });
+    });
+
+    await page.goto(`${BASE_URL}/home`);
+    await expectSessionsRoute(page);
+    await page.getByRole("button", { name: "Get Codex to create plan" }).click();
+    await expect.poll(() => terminalInputs[codexPromptSessionId].join(""))
+      .toContain(codexPlanPromptText);
+
+    await page.evaluate(({ output, sessionId }) => {
+      (window as unknown as {
+        __studioPushCodexTerminalOutput: (input: { output: string; sessionId: string }) => void;
+      }).__studioPushCodexTerminalOutput({
+        output,
+        sessionId
+      });
+    }, {
+      output: [
+        "Codex ready.",
+        "[plan]",
+        "Implement the issue.",
+        "[/plan]"
+      ].join("\n"),
+      sessionId: codexPromptSessionId
+    });
+
+    await page.getByRole("button", { name: "Save plan" }).click();
+    await expect.poll(() => stepPayloads.length).toBe(1);
+    await expect.poll(() => terminalInputs[codexPromptSessionId].join(""))
+      .toContain(executionPrompt);
+  });
+
+  test("Codex prompt step is not marked requested until terminal confirms injection", async ({ page }) => {
+    let terminalStartCount = 0;
+
+    await mockStudioReady(page);
+    await page.route("**/api/studio/current-app/issue-sessions", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          limits: {
+            maxOpenSessions: 3,
+            openSessionCount: 1
+          },
+          ok: true,
+          sessions: [planExecutionRejectPayload],
+          stepDefinitions: planExecutionRejectStepDefinitions
+        })
+      });
+    });
+    await page.route(`**/api/studio/current-app/issue-sessions/${planExecutionRejectSessionId}`, async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify(planExecutionRejectPayload)
+      });
+    });
+    await page.route(`**/api/studio/current-app/issue-sessions/${planExecutionRejectSessionId}/codex-terminal`, async (route) => {
+      terminalStartCount += 1;
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          error: "Terminal stream failed to connect.",
+          ok: false
+        })
+      });
+    });
+
+    await page.goto(`${BASE_URL}/home`);
+    await expectSessionsRoute(page);
+    await expect.poll(() => terminalStartCount).toBeGreaterThan(0);
+    await expect(page.getByRole("button", { name: "Get Codex to execute plan" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Go to next step" })).toHaveCount(0);
+  });
+
+  test("automatic Codex prompt request retries until the terminal accepts it", async ({ page }) => {
+    let terminalStartCount = 0;
+    const terminalInputs: Record<string, string[]> = {
+      [planExecutionRejectSessionId]: []
+    };
+    await mockCodexTerminalWebSocket(page, {
+      initialOutputBySessionId: {
+        [planExecutionRejectSessionId]: "Codex ready."
+      },
+      terminalInputs
+    });
+    await mockStudioReady(page);
+    await page.route("**/api/studio/current-app/issue-sessions", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          limits: {
+            maxOpenSessions: 3,
+            openSessionCount: 1
+          },
+          ok: true,
+          sessions: [planExecutionRejectPayload],
+          stepDefinitions: planExecutionRejectStepDefinitions
+        })
+      });
+    });
+    await page.route(`**/api/studio/current-app/issue-sessions/${planExecutionRejectSessionId}`, async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify(planExecutionRejectPayload)
+      });
+    });
+    await page.route(`**/api/studio/current-app/issue-sessions/${planExecutionRejectSessionId}/codex-terminal`, async (route) => {
+      terminalStartCount += 1;
+      if (terminalStartCount === 1) {
+        await route.fulfill({
+          contentType: "application/json",
+          body: JSON.stringify({
+            error: "Terminal is still starting.",
+            ok: false
+          })
+        });
+        return;
+      }
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          commandPreview: "codex",
+          id: `term-${planExecutionRejectSessionId}`,
+          needsThreadCapture: false,
+          ok: true,
+          output: "Codex ready.",
+          status: "running"
+        })
+      });
+    });
+    await page.route(`**/api/studio/current-app/issue-sessions/${planExecutionRejectSessionId}/codex-thread`, async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          codexThreadId,
+          ok: true
+        })
+      });
+    });
+
+    await page.goto(`${BASE_URL}/home`);
+    await expectSessionsRoute(page);
+    await expect.poll(() => terminalStartCount).toBeGreaterThan(1);
+    await expect.poll(() => terminalInputs[planExecutionRejectSessionId].join(""))
+      .toContain("Execute the approved implementation plan.");
+  });
+
   test("conditional Deep UI checks with a JSKIT skip reason are skipped automatically", async ({ page }) => {
     let activeSession = deepUiSkipSessionPayload;
     let stepRequestCount = 0;
@@ -2050,6 +2352,158 @@ test.describe("studio startup navigation", () => {
     await expect(page.getByRole("button", { name: "Copy Prompt" })).toHaveCount(0);
     await expect.poll(() => codexSessions.terminalInputs[deepUiPromptSessionId].join(""))
       .toContain("Deep UI quality check prompt for this session.");
+  });
+
+  test("Codex completion output waits for a marker matching the current step", async ({ page }) => {
+    let activeSession = planExecutionRejectPayload;
+    let stepRequestCount = 0;
+    const stepPayloads: Record<string, unknown>[] = [];
+    const terminalInputs: Record<string, string[]> = {
+      [planExecutionRejectSessionId]: []
+    };
+
+    await mockCodexTerminalWebSocket(page, {
+      initialOutputBySessionId: {
+        [planExecutionRejectSessionId]: "Codex ready."
+      },
+      terminalInputs
+    });
+    await page.route("**/api/studio/current-app", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify(currentAppPayload)
+      });
+    });
+    await page.route("**/api/studio/current-app/issue-sessions", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          limits: {
+            maxOpenSessions: 3,
+            openSessionCount: 1
+          },
+          ok: true,
+          sessions: [activeSession],
+          stepDefinitions: planExecutionRejectStepDefinitions
+        })
+      });
+    });
+    await page.route(`**/api/studio/current-app/issue-sessions/${planExecutionRejectSessionId}`, async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify(activeSession)
+      });
+    });
+    await page.route(`**/api/studio/current-app/issue-sessions/${planExecutionRejectSessionId}/step`, async (route) => {
+      stepRequestCount += 1;
+      stepPayloads.push(route.request().postDataJSON());
+      activeSession = {
+        ...planExecutionRejectPayload,
+        currentStep: "deep_ui_check_run",
+        completedSteps: [
+          ...planExecutionRejectPayload.completedSteps,
+          "plan_executed"
+        ],
+        status: "running"
+      };
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify(activeSession)
+      });
+    });
+    await page.route(`**/api/studio/current-app/issue-sessions/${planExecutionRejectSessionId}/codex-terminal`, async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          commandPreview: "codex",
+          id: `term-${planExecutionRejectSessionId}`,
+          needsThreadCapture: false,
+          ok: true,
+          output: "Codex ready.",
+          status: "running"
+        })
+      });
+    });
+    await page.route(`**/api/studio/current-app/issue-sessions/${planExecutionRejectSessionId}/codex-thread`, async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          codexThreadId,
+          ok: true
+        })
+      });
+    });
+
+    await page.goto(`${BASE_URL}/home`);
+    await expectSessionsRoute(page);
+    await expect.poll(() => terminalInputs[planExecutionRejectSessionId].join(""))
+      .toContain("Execute the approved implementation plan.");
+    await page.evaluate(({ output, sessionId }) => {
+      (window as unknown as {
+        __studioPushCodexTerminalOutput: (input: { output: string; sessionId: string }) => void;
+      }).__studioPushCodexTerminalOutput({
+        output,
+        sessionId
+      });
+    }, {
+      output: [
+        "",
+        "\u001b[32m[jskit_step_result]\u001b[0m",
+        "status: complete",
+        "\u001b[33m  step: plan_executed\u001b[0m",
+        "summary: Short summary of what changed and what was checked.",
+        "\u001b[32m[/jskit_step_result]\u001b[0m",
+        "",
+        "\u001b[32m[jskit_step_result]\u001b[0m",
+        "status: complete",
+        "\u001b[33mstep: automated_checks_run\u001b[0m",
+        "summary: Wrong step marker.",
+        "\u001b[32m[/jskit_step_result]\u001b[0m",
+        ""
+      ].join("\n"),
+      sessionId: planExecutionRejectSessionId
+    });
+
+    await page.waitForTimeout(1600);
+    expect(stepRequestCount).toBe(0);
+    await expect(page.getByText("Codex finished without the required step completion block.").first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "Resend execute plan request" })).toBeVisible();
+
+    await page.evaluate(({ output, sessionId }) => {
+      (window as unknown as {
+        __studioPushCodexTerminalOutput: (input: { output: string; sessionId: string }) => void;
+      }).__studioPushCodexTerminalOutput({
+        output,
+        sessionId
+      });
+    }, {
+      output: [
+        "",
+        "\u001b[32m[jskit_step_result]\u001b[0m",
+        "status: complete",
+        "\u001b[33mstep: automated_checks_run\u001b[0m",
+        "summary: Wrong step marker.",
+        "\u001b[32m[/jskit_step_result]\u001b[0m",
+        "",
+        "[jskit_step_result]",
+        "status: complete",
+        "step: plan_executed",
+        "summary: Correct plan execution marker.",
+        "[/jskit_step_result]"
+      ].join("\n"),
+      sessionId: planExecutionRejectSessionId
+    });
+
+    await expect.poll(() => stepRequestCount).toBe(1);
+    expect(String(stepPayloads[0]?.codexResult || "")).not.toContain("\u001b");
+    expect(stepPayloads[0]?.codexResult).toBe([
+      "[jskit_step_result]",
+      "status: complete",
+      "step: plan_executed",
+      "summary: Correct plan execution marker.",
+      "[/jskit_step_result]"
+    ].join("\n"));
+    expect(stepPayloads[0]?.codexResult).not.toContain("Short summary of what changed and what was checked.");
   });
 
   test("review/deslop go next does not run the following JSKIT step in the same click", async ({ page }) => {

@@ -49,6 +49,7 @@
     "json-rest-schema": "1.x.x",
     "node-pty": "^1.1.0",
     "pinia": "^3.0.4",
+    "strip-ansi": "^7.2.0",
     "vue": "^3.5.13",
     "vue-router": "^5.0.4",
     "vuetify": "^4.0.0"

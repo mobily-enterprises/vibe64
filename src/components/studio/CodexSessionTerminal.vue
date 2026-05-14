@@ -140,10 +140,6 @@ const props = defineProps({
     type: Boolean,
     default: true
   },
-  autoInjectPrompt: {
-    type: Boolean,
-    default: true
-  },
   promptInjectionRequestKey: {
     type: [String, Number],
     default: ""
@@ -170,7 +166,6 @@ const terminalSelectedText = ref("");
 const copyStatus = ref("");
 const expanded = ref(true);
 const injectingPrompt = ref(false);
-const autoInjectedPromptKey = ref("");
 const autoPromptInjected = ref(false);
 const componentMounted = ref(false);
 const codexThreadId = ref("");
@@ -201,6 +196,8 @@ let terminalRecoveryPromise = null;
 let codexThreadCapturePromise = null;
 let codexThreadSavePromise = null;
 let handledPromptInjectionRequestKey = "";
+let promptInjectionRetryStartedAt = 0;
+let promptInjectionRetryTimer = null;
 let terminalHasOutput = false;
 let terminalLatestOutput = "";
 let terminalLastOutputAt = 0;
@@ -212,24 +209,19 @@ const CODEX_BOOT_MIN_AGE_MS = 1800;
 const CODEX_BOOT_QUIET_MS = 900;
 const CODEX_BOOT_TIMEOUT_MS = 12000;
 const CODEX_KEY_PAUSE_MS = 180;
+const PROMPT_INJECTION_RETRY_MS = 350;
+const PROMPT_INJECTION_RETRY_TIMEOUT_MS = 15000;
 const MAX_TERMINAL_OUTPUT_LENGTH = 160000;
 const TERMINAL_OUTPUT_EMIT_INTERVAL_MS = 120;
 
 const sessionId = computed(() => props.session?.sessionId || "");
 const canUseTerminal = computed(() => Boolean(sessionId.value && props.session?.worktreeReady === true));
-const codexMode = computed(() => String(props.session?.codex?.mode || ""));
 const codexPrompt = computed(() => {
   if (props.promptOverride) {
     return String(props.promptOverride || "");
   }
   const promptField = String(props.session?.codex?.promptField || "");
   return promptField ? String(props.session?.[promptField] || "") : "";
-});
-const codexPromptInjectionKey = computed(() => {
-  if (codexMode.value !== "inject_prompt" || !codexPrompt.value || !sessionId.value) {
-    return "";
-  }
-  return `${sessionId.value}:${hashText(codexPrompt.value)}`;
 });
 const manualPromptInjectionRequestKey = computed(() => String(props.promptInjectionRequestKey || ""));
 const showPromptButton = computed(() => Boolean(codexPrompt.value && props.showPromptAction));
@@ -260,15 +252,6 @@ function fallbackCopyText(value) {
   const copied = document.execCommand("copy");
   textarea.remove();
   return copied;
-}
-
-function hashText(value) {
-  let hash = 2166136261;
-  for (const character of String(value || "")) {
-    hash ^= character.codePointAt(0) || 0;
-    hash = Math.imul(hash, 16777619);
-  }
-  return (hash >>> 0).toString(36);
 }
 
 function applyCodexThreadState(session = {}) {
@@ -854,8 +837,9 @@ async function sendCodexShellCommand(command) {
   const keySequence = [
     "\u001b",
     "\u0015",
-    "!",
+    "! ",
     normalizedCommand,
+    " ",
     "\u001b",
     "\r"
   ];
@@ -1041,11 +1025,14 @@ async function injectPrompt() {
   injectingPrompt.value = true;
   try {
     if (await ensureTerminalReady() && await ensureCodexThreadReady({ forceRetry: true })) {
+      const promptOutputSnapshot = terminalLatestOutput;
       const sent = await sendTerminalData(`\u001b[200~${codexPrompt.value}\u001b[201~\r`);
       if (sent) {
         autoPromptInjected.value = true;
         copyStatus.value = "Prompt injected into Codex.";
         emit("prompt-injected", {
+          outputSnapshot: promptOutputSnapshot,
+          outputStart: promptOutputSnapshot.length,
           prompt: codexPrompt.value,
           sessionId: sessionId.value
         });
@@ -1058,32 +1045,53 @@ async function injectPrompt() {
   }
 }
 
-async function injectPromptAutomatically() {
-  const injectionKey = codexPromptInjectionKey.value;
-  if (
-    !props.autoInjectPrompt ||
-    !componentMounted.value ||
-    !injectionKey ||
-    autoInjectedPromptKey.value === injectionKey
-  ) {
-    return;
-  }
-  autoInjectedPromptKey.value = injectionKey;
-  autoPromptInjected.value = false;
-  if (!(await injectPrompt()) && autoInjectedPromptKey.value === injectionKey) {
-    autoInjectedPromptKey.value = "";
-  }
-}
-
 async function injectPromptForRequest() {
   const requestKey = manualPromptInjectionRequestKey.value;
   if (!componentMounted.value || !requestKey || handledPromptInjectionRequestKey === requestKey) {
     return;
   }
   handledPromptInjectionRequestKey = requestKey;
-  if (!(await injectPrompt()) && handledPromptInjectionRequestKey === requestKey) {
-    handledPromptInjectionRequestKey = "";
+  if (await injectPrompt()) {
+    clearPromptInjectionRetry();
+    return;
   }
+  if (handledPromptInjectionRequestKey === requestKey) {
+    handledPromptInjectionRequestKey = "";
+    schedulePromptInjectionRetry(requestKey);
+  }
+}
+
+function clearPromptInjectionRetry() {
+  promptInjectionRetryStartedAt = 0;
+  if (promptInjectionRetryTimer) {
+    window.clearTimeout(promptInjectionRetryTimer);
+    promptInjectionRetryTimer = null;
+  }
+}
+
+function schedulePromptInjectionRetry(requestKey) {
+  if (
+    !componentMounted.value ||
+    !requestKey ||
+    manualPromptInjectionRequestKey.value !== requestKey
+  ) {
+    clearPromptInjectionRetry();
+    return;
+  }
+  if (!promptInjectionRetryStartedAt) {
+    promptInjectionRetryStartedAt = Date.now();
+  }
+  if (Date.now() - promptInjectionRetryStartedAt > PROMPT_INJECTION_RETRY_TIMEOUT_MS) {
+    clearPromptInjectionRetry();
+    return;
+  }
+  if (promptInjectionRetryTimer) {
+    return;
+  }
+  promptInjectionRetryTimer = window.setTimeout(() => {
+    promptInjectionRetryTimer = null;
+    void injectPromptForRequest();
+  }, PROMPT_INJECTION_RETRY_MS);
 }
 
 async function sendCtrlC() {
@@ -1131,9 +1139,6 @@ async function recoverMissingTerminal() {
       return false;
     }
     const ready = await ensureTerminalReady();
-    if (ready) {
-      void injectPromptAutomatically();
-    }
     return ready;
   })();
 
@@ -1179,22 +1184,17 @@ watch(sessionId, async (nextSessionId, previousSessionId) => {
   if (previousSessionId && previousSessionId !== nextSessionId) {
     detachTerminal();
   }
-  autoInjectedPromptKey.value = "";
   autoPromptInjected.value = false;
   handledPromptInjectionRequestKey = "";
   attachmentDragDepth.value = 0;
   attachmentStatus.value = "";
   expanded.value = defaultExpanded();
   startTerminalWhenReady();
-  void injectPromptAutomatically();
 });
 
 watch(canUseTerminal, (ready) => {
   if (ready) {
     startTerminalWhenReady();
-  }
-  if (ready) {
-    void injectPromptAutomatically();
   }
 });
 
@@ -1207,18 +1207,20 @@ watch(terminalHost, (host) => {
   flush: "post"
 });
 
-watch(codexPromptInjectionKey, (nextPromptKey) => {
-  if (nextPromptKey) {
-    expanded.value = true;
-    void injectPromptAutomatically();
-  }
-});
-
 watch(manualPromptInjectionRequestKey, (nextRequestKey) => {
+  clearPromptInjectionRetry();
   if (nextRequestKey) {
     expanded.value = true;
     void injectPromptForRequest();
   }
+});
+
+watch(codexPrompt, (nextPrompt, previousPrompt) => {
+  if (nextPrompt === previousPrompt) {
+    return;
+  }
+  autoPromptInjected.value = false;
+  handledPromptInjectionRequestKey = "";
 });
 
 watch(() => props.visible, async (visible) => {
@@ -1235,14 +1237,13 @@ onMounted(() => {
   expanded.value = defaultExpanded();
   void nextTick().then(() => {
     startTerminalWhenReady();
-    void injectPromptAutomatically();
     void injectPromptForRequest();
   });
-  void injectPromptAutomatically();
   void injectPromptForRequest();
 });
 
 onBeforeUnmount(() => {
+  clearPromptInjectionRetry();
   detachTerminal();
 });
 </script>

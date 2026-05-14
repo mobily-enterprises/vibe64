@@ -255,8 +255,8 @@ test("Studio current-app API exposes JSKIT issue sessions from target filesystem
       assert.equal(prompted.json().currentStep, firstSteps[4].id);
       assert.equal(prompted.json().currentStepAction.input.fields[0].name, "issueTitle");
       assert.equal(prompted.json().currentStepAction.input.fields[1].name, "issue");
-      assert.equal(prompted.json().codex.expectedOutputs[0].field, "issueTitle");
-      assert.equal(prompted.json().codex.expectedOutputs[1].field, "issue");
+      assert.equal(prompted.json().codex.responseContract.fields[0].field, "issueTitle");
+      assert.equal(prompted.json().codex.responseContract.fields[1].field, "issue");
       assert.equal(prompted.json().codex.mode, "inject_prompt");
 
       const abandoned = await app.inject({
