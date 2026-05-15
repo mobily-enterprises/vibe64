@@ -37,23 +37,9 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       | never
     >,
-    '/app-bootup': RouteRecordInfo<
-      '/app-bootup',
-      '/app-bootup',
-      Record<never, never>,
-      Record<never, never>,
-      | never
-    >,
-    '/app-setup': RouteRecordInfo<
-      '/app-setup',
-      '/app-setup',
-      Record<never, never>,
-      Record<never, never>,
-      | never
-    >,
-    '/bootup': RouteRecordInfo<
-      '/bootup',
-      '/bootup',
+    '/bootup-setup': RouteRecordInfo<
+      '/bootup-setup',
+      '/bootup-setup',
       Record<never, never>,
       Record<never, never>,
       | never
@@ -107,21 +93,9 @@ declare module 'vue-router/auto-routes' {
       views:
         | never
     }
-    'src/pages/app-bootup.vue': {
+    'src/pages/bootup-setup.vue': {
       routes:
-        | '/app-bootup'
-      views:
-        | never
-    }
-    'src/pages/app-setup.vue': {
-      routes:
-        | '/app-setup'
-      views:
-        | never
-    }
-    'src/pages/bootup.vue': {
-      routes:
-        | '/bootup'
+        | '/bootup-setup'
       views:
         | never
     }

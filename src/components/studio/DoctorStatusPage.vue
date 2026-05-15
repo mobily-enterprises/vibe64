@@ -16,11 +16,12 @@
           {{ summary.label }}
         </v-chip>
         <v-btn
-          v-if="ready && !checking && continueTo"
+          v-if="ready && !checking && showContinue"
           color="primary"
           variant="flat"
-          :to="continueTo"
+          :to="continueTo || undefined"
           class="studio-screen__action-button"
+          @click="handleContinue"
         >
           {{ continueLabel }}
         </v-btn>
@@ -288,6 +289,10 @@ const props = defineProps({
     type: String,
     default: ""
   },
+  continueEmits: {
+    type: Boolean,
+    default: false
+  },
   doctorClass: {
     type: String,
     default: ""
@@ -342,7 +347,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(["refresh", "status-updated"]);
+const emit = defineEmits(["continue", "refresh", "status-updated"]);
 
 const actionInFlight = ref("");
 const confirmRepair = ref(null);
@@ -388,6 +393,16 @@ const isLoading = computed(() => {
 const ready = computed(() => {
   return displayStatus.value?.ready === true;
 });
+
+const showContinue = computed(() => {
+  return Boolean(props.continueTo) || props.continueEmits;
+});
+
+function handleContinue() {
+  if (props.continueEmits) {
+    emit("continue");
+  }
+}
 
 const checks = computed(() => {
   if (Array.isArray(displayStatus.value?.stages)) {

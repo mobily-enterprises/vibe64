@@ -1165,7 +1165,8 @@ function sseStatusPayload(status, itemsKey = "checks") {
 
   return events
     .map(([event, data]) => `event: ${event}\ndata: ${JSON.stringify(data)}\n`)
-    .join("\n");
+    .join("\n")
+    .concat("\n");
 }
 
 async function fulfillSse(route, status, itemsKey = "checks") {
@@ -1724,12 +1725,14 @@ async function expectVisibleTapTargets(page) {
   }
 }
 
-test.describe("bootstrap doctor responsive smoke", () => {
+test.describe("bootup setup tabbed doctor responsive smoke", () => {
   for (const viewport of viewports) {
-    test(`${viewport.name} bootup route renders without horizontal overflow`, async ({ page }) => {
+    test(`${viewport.name} default route renders the bootup tab without horizontal overflow`, async ({ page }) => {
       await mockBootstrapBlocked(page);
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      await page.goto(`${BASE_URL}/bootup`);
+      await page.goto(`${BASE_URL}/bootup-setup`);
+      await expect(page).toHaveURL(/\/bootup-setup\?tab=bootup$/u);
+      await expect(page.getByRole("tab", { name: "Bootup", exact: true })).toHaveAttribute("aria-selected", "true");
       await expect(page.getByRole("heading", { name: "Bootup", exact: true })).toBeVisible();
       await expect(page.getByText("Bootup blocked").first()).toBeVisible();
       await expect(page.getByText("MySQL capability").first()).toBeVisible();
@@ -1746,15 +1749,12 @@ test.describe("bootstrap doctor responsive smoke", () => {
       await expectVisibleTapTargets(page);
       await expectNoHorizontalOverflow(page);
     });
-  }
-});
 
-test.describe("target app doctor responsive smoke", () => {
-  for (const viewport of viewports) {
-    test(`${viewport.name} target gate renders before current app inspection`, async ({ page }) => {
+    test(`${viewport.name} target app tab renders before current app inspection`, async ({ page }) => {
       await mockTargetAppBlocked(page);
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      await page.goto(`${BASE_URL}/app-bootup`);
+      await page.goto(`${BASE_URL}/bootup-setup?tab=app-bootup`);
+      await expect(page.getByRole("tab", { name: "App Bootup", exact: true })).toHaveAttribute("aria-selected", "true");
       await expect(page.getByRole("heading", { name: "App Bootup", exact: true })).toBeVisible();
       await expect(page.getByText("Target app blocked").first()).toBeVisible();
       await expect(page.getByText("Target directory").first()).toBeVisible();
@@ -1787,15 +1787,12 @@ test.describe("target app doctor responsive smoke", () => {
       await expectVisibleTapTargets(page);
       await expectNoHorizontalOverflow(page);
     });
-  }
-});
 
-test.describe("app setup doctor responsive smoke", () => {
-  for (const viewport of viewports) {
-    test(`${viewport.name} app setup gate renders sequential stages`, async ({ page }) => {
+    test(`${viewport.name} app setup tab renders sequential stages`, async ({ page }) => {
       await mockAppSetupBlocked(page);
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      await page.goto(`${BASE_URL}/app-setup`);
+      await page.goto(`${BASE_URL}/bootup-setup?tab=app-setup`);
+      await expect(page.getByRole("tab", { name: "App setup", exact: true })).toHaveAttribute("aria-selected", "true");
       await expect(page.getByRole("heading", { name: "App Setup", exact: true })).toBeVisible();
       await expect(page.getByText("App setup blocked").first()).toBeVisible();
       await expect(page.getByText("Directory admissibility").first()).toBeVisible();
@@ -1840,6 +1837,10 @@ test.describe("studio startup navigation", () => {
     await page.goto(`${BASE_URL}/home`);
     await expect(page).toHaveURL(/\/home$/u);
     await expectSessionsRoute(page);
+    await expect(page.getByRole("link", { name: "Bootup/Setup", exact: true })).toHaveCount(1);
+    await expect(page.getByRole("link", { name: "Bootup", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "App Bootup", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "App Setup", exact: true })).toHaveCount(0);
     expect(apiRequests.count("/api/studio/bootstrap")).toBe(0);
     expect(apiRequests.count("/api/studio/target-app")).toBe(0);
     expect(apiRequests.count("/api/studio/target-app/stream")).toBe(0);
@@ -1873,10 +1874,10 @@ test.describe("studio startup navigation", () => {
     expect(apiRequests.count("/api/studio/current-app")).toBe(1);
   });
 
-  test("direct app bootup runs the target app doctor stream once", async ({ page }) => {
+  test("direct app bootup tab runs the target app doctor stream once", async ({ page }) => {
     const apiRequests = trackStudioApiRequests(page);
     await mockTargetAppBlocked(page);
-    await page.goto(`${BASE_URL}/app-bootup`);
+    await page.goto(`${BASE_URL}/bootup-setup?tab=app-bootup`);
     await expect(page.getByRole("heading", { name: "App Bootup", exact: true })).toBeVisible();
     await expect(page.getByText("Target app blocked").first()).toBeVisible();
     expect(apiRequests.count("/api/studio/bootstrap")).toBe(1);
@@ -1884,16 +1885,61 @@ test.describe("studio startup navigation", () => {
     expect(apiRequests.count("/api/studio/target-app/stream")).toBe(1);
   });
 
-  test("direct app setup runs the app setup doctor stream once", async ({ page }) => {
+  test("direct app setup tab runs the app setup doctor stream once", async ({ page }) => {
     const apiRequests = trackStudioApiRequests(page);
     await mockAppSetupBlocked(page);
-    await page.goto(`${BASE_URL}/app-setup`);
+    await page.goto(`${BASE_URL}/bootup-setup?tab=app-setup`);
     await expect(page.getByRole("heading", { name: "App Setup", exact: true })).toBeVisible();
     await expect(page.getByText("App setup blocked").first()).toBeVisible();
     expect(apiRequests.count("/api/studio/bootstrap")).toBe(1);
     expect(apiRequests.count("/api/studio/target-app")).toBe(1);
     expect(apiRequests.count("/api/studio/app-setup")).toBe(0);
     expect(apiRequests.count("/api/studio/app-setup/stream")).toBe(1);
+  });
+
+  test("bootup setup tab clicks update the URL query", async ({ page }) => {
+    await mockStudioReady(page);
+    await page.goto(`${BASE_URL}/bootup-setup?tab=bootup`);
+    await expect(page.getByRole("tab", { name: "Bootup", exact: true })).toHaveAttribute("aria-selected", "true");
+
+    await page.getByRole("tab", { name: "App Bootup", exact: true }).click();
+    await expect(page).toHaveURL(/\/bootup-setup\?tab=app-bootup$/u);
+    await expect(page.getByRole("tab", { name: "App Bootup", exact: true })).toHaveAttribute("aria-selected", "true");
+
+    await page.getByRole("tab", { name: "App setup", exact: true }).click();
+    await expect(page).toHaveURL(/\/bootup-setup\?tab=app-setup$/u);
+    await expect(page.getByRole("tab", { name: "App setup", exact: true })).toHaveAttribute("aria-selected", "true");
+  });
+
+  test("ready continue moves from bootup to app bootup tab", async ({ page }) => {
+    await mockStudioReady(page);
+    await page.goto(`${BASE_URL}/bootup-setup?tab=bootup`);
+    await page.getByRole("button", { name: "Continue to app bootup" }).click();
+    await expect(page).toHaveURL(/\/bootup-setup\?tab=app-bootup$/u);
+    await expect(page.getByRole("heading", { name: "App Bootup", exact: true })).toBeVisible();
+  });
+
+  test("ready continue moves from app bootup to app setup tab", async ({ page }) => {
+    await mockStudioReady(page);
+    await page.goto(`${BASE_URL}/bootup-setup?tab=app-bootup`);
+    await page.getByRole("button", { name: "Continue to app setup" }).click();
+    await expect(page).toHaveURL(/\/bootup-setup\?tab=app-setup$/u);
+    await expect(page.getByRole("heading", { name: "App Setup", exact: true })).toBeVisible();
+  });
+
+  test("ready continue moves from app setup to home", async ({ page }) => {
+    await mockStudioReady(page);
+    await page.goto(`${BASE_URL}/bootup-setup?tab=app-setup`);
+    await page.getByRole("link", { name: "Continue to home" }).click();
+    await expect(page).toHaveURL(/\/home$/u);
+    await expectSessionsRoute(page);
+  });
+
+  test("old bootup routes do not redirect to the new bootup setup page", async ({ page }) => {
+    for (const oldRoute of ["/bootup", "/app-bootup", "/app-setup"]) {
+      await page.goto(`${BASE_URL}${oldRoute}`);
+      await expect(page).not.toHaveURL(/\/bootup-setup/u);
+    }
   });
 
   test("codex issue step injects the prompt, finalises the draft, then creates the issue automatically", async ({ page }) => {

@@ -220,7 +220,8 @@ async function resolveStudioGate() {
   if (bootstrap?.ready !== true) {
     return rememberStudioGate({
       bootstrap,
-      route: "/bootup"
+      route: "/bootup-setup",
+      tab: "bootup"
     });
   }
 
@@ -228,7 +229,8 @@ async function resolveStudioGate() {
   if (targetApp?.ready !== true) {
     return rememberStudioGate({
       bootstrap,
-      route: "/app-bootup",
+      route: "/bootup-setup",
+      tab: "app-bootup",
       targetApp
     });
   }
@@ -238,7 +240,8 @@ async function resolveStudioGate() {
     return rememberStudioGate({
       appSetup,
       bootstrap,
-      route: "/app-setup",
+      route: "/bootup-setup",
+      tab: "app-setup",
       targetApp
     });
   }
