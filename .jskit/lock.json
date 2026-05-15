@@ -20,7 +20,7 @@
       },
       "options": {},
       "installedAt": "2026-05-10T00:00:00.000Z",
-      "migrationSyncVersion": "0.1.74"
+      "migrationSyncVersion": "0.1.75"
     },
     "@local/main": {
       "packageId": "@local/main",
