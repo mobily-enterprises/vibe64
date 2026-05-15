@@ -51,6 +51,7 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       | '/home/'
       | '/home/history'
+      | '/home/npm-scripts'
     >,
     '/home/': RouteRecordInfo<
       '/home/',
@@ -62,6 +63,13 @@ declare module 'vue-router/auto-routes' {
     '/home/history': RouteRecordInfo<
       '/home/history',
       '/home/history',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/home/npm-scripts': RouteRecordInfo<
+      '/home/npm-scripts',
+      '/home/npm-scripts',
       Record<never, never>,
       Record<never, never>,
       | never
@@ -96,6 +104,7 @@ declare module 'vue-router/auto-routes' {
         | '/home'
         | '/home/'
         | '/home/history'
+        | '/home/npm-scripts'
       views:
         | 'default'
     }
@@ -108,6 +117,12 @@ declare module 'vue-router/auto-routes' {
     'src/pages/home/history.vue': {
       routes:
         | '/home/history'
+      views:
+        | never
+    }
+    'src/pages/home/npm-scripts.vue': {
+      routes:
+        | '/home/npm-scripts'
       views:
         | never
     }

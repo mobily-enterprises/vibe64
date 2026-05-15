@@ -69,9 +69,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { Terminal } from "@xterm/xterm";
-import { FitAddon } from "@xterm/addon-fit";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import {
   mdiOpenInNew,
   mdiPlay
@@ -85,7 +83,7 @@ import {
   startIssueSessionAppTestTerminal
 } from "@/lib/studioApi.js";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
-import "@xterm/xterm/css/xterm.css";
+import { useStudioTerminal } from "@/composables/useStudioTerminal.js";
 
 const props = defineProps({
   session: {
@@ -109,139 +107,54 @@ const props = defineProps({
 
 const emit = defineEmits(["closed", "started"]);
 
-const terminalHost = ref(null);
-const terminalSessionId = ref("");
-const terminalStatus = ref("");
-const terminalCommandPreview = ref("");
-const terminalError = ref("");
-const terminalExitCode = ref(null);
-const terminalStarting = ref(false);
 const appUrl = ref("");
 const startedSessionId = ref("");
-
-let terminalInstance = null;
-let terminalFitAddon = null;
-let terminalSocket = null;
-let terminalSocketOpenPromise = null;
-let terminalDataDisposable = null;
-let terminalResizeHandler = null;
-let terminalLatestOutput = "";
-let terminalOutputOffset = 0;
-let terminalSetupPromise = null;
 let terminalStartPromise = null;
 
 const isSessionScope = computed(() => props.scope === "session");
 const sessionId = computed(() => props.session?.sessionId || "");
+const {
+  applyTerminalSession,
+  closeTerminalSocket,
+  connectTerminalSocket,
+  disposeTerminalUi,
+  resetTerminalDisplay,
+  resetTerminalSessionState,
+  sendCtrlC,
+  setupTerminalUi,
+  terminalCommandPreview,
+  terminalError,
+  terminalExited,
+  terminalExitCode,
+  terminalHost,
+  terminalSessionId,
+  terminalStarting,
+  terminalStatus
+} = useStudioTerminal({
+  onSessionUpdate(session = {}) {
+    const metadata = session.metadata || {};
+    const nextAppUrl = session.appUrl || metadata.appUrl || "";
+    if (nextAppUrl) {
+      appUrl.value = nextAppUrl;
+    }
+  },
+  webSocketUrl() {
+    if (isSessionScope.value) {
+      return sessionId.value
+        ? issueSessionAppTestTerminalWebSocketUrl(sessionId.value, terminalSessionId.value)
+        : "";
+    }
+    return currentAppTestTerminalWebSocketUrl(terminalSessionId.value);
+  }
+});
+
 const canStart = computed(() => props.visible && (!isSessionScope.value || Boolean(sessionId.value)));
-const terminalExited = computed(() => terminalStatus.value === "exited");
 const canRetry = computed(() => terminalExited.value && terminalExitCode.value !== 0);
 
 function delay(ms) {
   return new Promise((resolve) => {
     window.setTimeout(resolve, ms);
   });
-}
-
-function trimTerminalOutput(output) {
-  const text = String(output || "");
-  const maxLength = 160000;
-  return text.length <= maxLength ? text : text.slice(text.length - maxLength);
-}
-
-async function setupTerminalUi() {
-  if (terminalInstance) {
-    await nextTick();
-    terminalFitAddon?.fit();
-    return true;
-  }
-  if (terminalSetupPromise) {
-    return terminalSetupPromise;
-  }
-
-  terminalSetupPromise = (async () => {
-    await nextTick();
-    if (terminalInstance) {
-      terminalFitAddon?.fit();
-      return true;
-    }
-    if (!terminalHost.value) {
-      return false;
-    }
-    terminalHost.value.replaceChildren();
-    terminalInstance = new Terminal({
-      convertEol: true,
-      cursorBlink: false,
-      disableStdin: false,
-      fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-      fontSize: 13,
-      theme: {
-        background: "#101216",
-        foreground: "#f5f7fb"
-      }
-    });
-    terminalFitAddon = new FitAddon();
-    terminalInstance.loadAddon(terminalFitAddon);
-    terminalInstance.open(terminalHost.value);
-    terminalFitAddon.fit();
-    terminalDataDisposable = terminalInstance.onData((data) => {
-      void sendTerminalData(data);
-    });
-    terminalResizeHandler = () => {
-      terminalFitAddon?.fit();
-    };
-    window.addEventListener("resize", terminalResizeHandler);
-    writeTerminalOutput(terminalLatestOutput);
-    return true;
-  })();
-
-  try {
-    return await terminalSetupPromise;
-  } finally {
-    terminalSetupPromise = null;
-  }
-}
-
-function disposeTerminalUi() {
-  closeTerminalSocket();
-  terminalDataDisposable?.dispose?.();
-  terminalDataDisposable = null;
-  if (terminalResizeHandler) {
-    window.removeEventListener("resize", terminalResizeHandler);
-    terminalResizeHandler = null;
-  }
-  terminalInstance?.dispose?.();
-  terminalInstance = null;
-  terminalFitAddon = null;
-  terminalSetupPromise = null;
-  terminalOutputOffset = 0;
-}
-
-function writeTerminalOutput(output) {
-  terminalLatestOutput = trimTerminalOutput(output);
-  if (!terminalInstance) {
-    return;
-  }
-  if (terminalLatestOutput.length < terminalOutputOffset) {
-    terminalOutputOffset = 0;
-    terminalInstance.reset();
-  }
-  const chunk = terminalLatestOutput.slice(terminalOutputOffset);
-  if (chunk) {
-    terminalInstance.write(chunk);
-    terminalOutputOffset = terminalLatestOutput.length;
-  }
-}
-
-function appendTerminalOutput(chunk) {
-  const outputChunk = String(chunk || "");
-  if (!outputChunk) {
-    return;
-  }
-  terminalLatestOutput = trimTerminalOutput(`${terminalLatestOutput}${outputChunk}`);
-  if (terminalInstance) {
-    terminalInstance.write(outputChunk);
-    terminalOutputOffset = terminalLatestOutput.length;
-  }
 }
 
 async function waitForReachableUrl(url, {
@@ -273,112 +186,13 @@ async function openAppWhenReachable(popupWindow, url) {
   }
 }
 
-function closeTerminalSocket() {
-  const socket = terminalSocket;
-  terminalSocket = null;
-  terminalSocketOpenPromise = null;
-  if (socket && socket.readyState !== WebSocket.CLOSED && socket.readyState !== WebSocket.CLOSING) {
-    socket.close();
-  }
-}
-
-function handleTerminalSocketMessage(rawMessage) {
-  let message;
-  try {
-    message = JSON.parse(String(rawMessage || ""));
-  } catch {
-    terminalError.value = "Terminal stream returned an invalid message.";
-    return;
-  }
-
-  if (message?.type === "snapshot") {
-    const session = message.session || {};
-    const metadata = session.metadata || {};
-    terminalStatus.value = session.status || terminalStatus.value || "";
-    terminalExitCode.value = session.status === "exited" ? session.exitCode ?? null : null;
-    terminalCommandPreview.value = session.commandPreview || terminalCommandPreview.value;
-    appUrl.value = metadata.appUrl || appUrl.value;
-    writeTerminalOutput(session.output || "");
-    return;
-  }
-
-  if (message?.type === "output") {
-    appendTerminalOutput(message.chunk);
-    return;
-  }
-
-  if (message?.type === "status") {
-    terminalStatus.value = message.status || terminalStatus.value || "";
-    terminalExitCode.value = message.status === "exited" ? message.exitCode ?? null : null;
-    return;
-  }
-
-  if (message?.type === "error") {
-    terminalError.value = String(message.error || "Terminal stream failed.");
-  }
-}
-
-function terminalWebSocketUrl() {
-  if (isSessionScope.value) {
-    return issueSessionAppTestTerminalWebSocketUrl(sessionId.value, terminalSessionId.value);
-  }
-  return currentAppTestTerminalWebSocketUrl(terminalSessionId.value);
-}
-
-async function connectTerminalSocket() {
-  if (!terminalSessionId.value || (isSessionScope.value && !sessionId.value)) {
-    return false;
-  }
-  if (terminalSocket?.readyState === WebSocket.OPEN) {
-    return true;
-  }
-  if (terminalSocketOpenPromise) {
-    return terminalSocketOpenPromise;
-  }
-
-  terminalSocketOpenPromise = new Promise((resolve) => {
-    let settled = false;
-    const socket = new WebSocket(terminalWebSocketUrl());
-    terminalSocket = socket;
-    const settle = (ready) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      resolve(ready);
-    };
-    socket.addEventListener("open", () => {
-      terminalError.value = "";
-      settle(true);
-    });
-    socket.addEventListener("message", (event) => {
-      handleTerminalSocketMessage(event.data);
-    });
-    socket.addEventListener("error", () => {
-      terminalError.value = "Terminal stream failed.";
-      settle(false);
-    });
-    socket.addEventListener("close", () => {
-      if (terminalSocket === socket) {
-        terminalSocket = null;
-      }
-      terminalSocketOpenPromise = null;
-      settle(false);
-    });
-  });
-
-  return terminalSocketOpenPromise;
-}
-
 function applyStartedTerminal(session = {}, popupWindow = null) {
   const metadata = session.metadata || {};
-  terminalSessionId.value = session.id || "";
   startedSessionId.value = isSessionScope.value ? sessionId.value : "";
-  terminalStatus.value = session.status || "running";
-  terminalExitCode.value = session.status === "exited" ? session.exitCode ?? null : null;
-  terminalCommandPreview.value = session.commandPreview || "";
   appUrl.value = session.appUrl || metadata.appUrl || "";
-  writeTerminalOutput(session.output || "");
+  applyTerminalSession(session, {
+    fallbackStatus: "running"
+  });
   if (popupWindow && appUrl.value) {
     void openAppWhenReachable(popupWindow, appUrl.value);
   }
@@ -428,35 +242,13 @@ async function start({ popupWindow = null } = {}) {
   }
 }
 
-async function sendTerminalData(data) {
-  if (!terminalSessionId.value || terminalStatus.value === "exited") {
-    return false;
-  }
-  if (!(await connectTerminalSocket()) || terminalSocket?.readyState !== WebSocket.OPEN) {
-    terminalError.value = "Terminal stream is not connected.";
-    return false;
-  }
-  terminalSocket.send(JSON.stringify({
-    data: String(data || ""),
-    type: "input"
-  }));
-  return true;
-}
-
-async function sendCtrlC() {
-  await sendTerminalData("\u0003");
-}
-
 async function closeTerminal({
   sessionIdOverride = ""
 } = {}) {
   const existingTerminalId = terminalSessionId.value;
   const closeSessionId = sessionIdOverride || startedSessionId.value || sessionId.value;
-  terminalSessionId.value = "";
+  resetTerminalSessionState();
   startedSessionId.value = "";
-  terminalStatus.value = "";
-  terminalExitCode.value = null;
-  terminalCommandPreview.value = "";
   appUrl.value = "";
   closeTerminalSocket();
   if (existingTerminalId) {
@@ -487,16 +279,10 @@ watch(sessionId, (nextSessionId, previousSessionId) => {
     });
     return;
   }
-  terminalSessionId.value = "";
+  resetTerminalSessionState();
   startedSessionId.value = "";
-  terminalStatus.value = "";
-  terminalExitCode.value = null;
-  terminalCommandPreview.value = "";
-  terminalError.value = "";
   appUrl.value = "";
-  terminalLatestOutput = "";
-  terminalOutputOffset = 0;
-  terminalInstance?.reset?.();
+  resetTerminalDisplay();
   closeTerminalSocket();
 });
 

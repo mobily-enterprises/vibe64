@@ -22,6 +22,31 @@ const terminalInputValidator = deepFreeze({
   mode: "patch"
 });
 
+const npmScriptTerminalInputValidator = deepFreeze({
+  schema: createSchema({
+    scriptName: {
+      type: "string",
+      noTrim: false,
+      required: true
+    }
+  }),
+  mode: "patch"
+});
+
+const starredNpmScriptsInputValidator = deepFreeze({
+  schema: createSchema({
+    scriptNames: {
+      type: "array",
+      items: {
+        type: "string",
+        noTrim: false
+      },
+      required: true
+    }
+  }),
+  mode: "patch"
+});
+
 const codexThreadInputValidator = deepFreeze({
   schema: createSchema({
     threadId: {
@@ -86,6 +111,8 @@ export {
   codexPromptHandoffInputValidator,
   codexThreadInputValidator,
   currentAppQueryInputValidator,
+  npmScriptTerminalInputValidator,
   rewindIssueSessionInputValidator,
+  starredNpmScriptsInputValidator,
   terminalInputValidator
 };

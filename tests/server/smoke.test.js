@@ -177,6 +177,127 @@ test("GET /api/studio/current-app honors JSKIT_STUDIO_TARGET_ROOT when server cw
   });
 });
 
+test("Studio current-app npm script API lists, persists, resets, and validates scripts", async () => {
+  await withTemporaryPackageRoot("npm-script-target-app", async (targetRoot) => {
+    await writeFile(
+      path.join(targetRoot, "package.json"),
+      JSON.stringify({
+        name: "npm-script-target-app",
+        private: true,
+        scripts: {
+          build: "vite build",
+          dev: "vite",
+          devlinks: "jskit app link-local-packages",
+          "jskit:update": "jskit app update-packages",
+          lint: "eslint .",
+          preview: "vite preview",
+          server: "node server.js",
+          test: "node --test",
+          verify: "jskit app verify"
+        }
+      }, null, 2),
+      "utf8"
+    );
+    const previousTargetRoot = process.env.JSKIT_STUDIO_TARGET_ROOT;
+    process.env.JSKIT_STUDIO_TARGET_ROOT = targetRoot;
+
+    let app;
+    try {
+      app = await createServer();
+
+      const blocked = await app.inject({
+        method: "GET",
+        url: "/api/studio/current-app/npm-scripts",
+        headers: {
+          host: "example.com"
+        }
+      });
+      assert.equal(blocked.statusCode, 403);
+      assert.equal(blocked.json().errors[0].code, "studio_local_request_required");
+
+      const listed = await app.inject({
+        method: "GET",
+        url: "/api/studio/current-app/npm-scripts"
+      });
+      assert.equal(listed.statusCode, 200);
+      assert.deepEqual(listed.json().starredScriptNames, ["jskit:update", "devlinks", "build", "server", "verify"]);
+      assert.equal(listed.json().scripts.find((script) => script.name === "preview").command, "vite preview");
+
+      const saved = await app.inject({
+        method: "PUT",
+        url: "/api/studio/current-app/npm-scripts/starred",
+        payload: {
+          scriptNames: ["lint", "dev"]
+        }
+      });
+      assert.equal(saved.statusCode, 200);
+      assert.deepEqual(saved.json().starredScriptNames, ["lint", "dev"]);
+      assert.equal(
+        await readFile(path.join(targetRoot, ".jskit", "config", "starred_npm_scripts"), "utf8"),
+        "lint\ndev\n"
+      );
+
+      const unknownStar = await app.inject({
+        method: "PUT",
+        url: "/api/studio/current-app/npm-scripts/starred",
+        payload: {
+          scriptNames: ["missing"]
+        }
+      });
+      assert.equal(unknownStar.statusCode, 400);
+      assert.equal(unknownStar.json().ok, false);
+      assert.equal(unknownStar.json().errors[0].code, "unknown_npm_script");
+      assert.equal(
+        await readFile(path.join(targetRoot, ".jskit", "config", "starred_npm_scripts"), "utf8"),
+        "lint\ndev\n"
+      );
+
+      const reset = await app.inject({
+        method: "DELETE",
+        url: "/api/studio/current-app/npm-scripts/starred"
+      });
+      assert.equal(reset.statusCode, 200);
+      assert.deepEqual(reset.json().starredScriptNames, ["jskit:update", "devlinks", "build", "server", "verify"]);
+      await assert.rejects(access(path.join(targetRoot, ".jskit", "config", "starred_npm_scripts")), {
+        code: "ENOENT"
+      });
+
+      const unknownRun = await app.inject({
+        method: "POST",
+        url: "/api/studio/current-app/npm-script-terminal",
+        payload: {
+          scriptName: "missing"
+        }
+      });
+      assert.equal(unknownRun.statusCode, 400);
+      assert.equal(unknownRun.json().ok, false);
+      assert.equal(unknownRun.json().errors[0].code, "unknown_npm_script");
+
+      const blockedRun = await app.inject({
+        method: "POST",
+        url: "/api/studio/current-app/npm-script-terminal",
+        headers: {
+          host: "example.com"
+        },
+        payload: {
+          scriptName: "dev"
+        }
+      });
+      assert.equal(blockedRun.statusCode, 403);
+      assert.equal(blockedRun.json().errors[0].code, "studio_local_request_required");
+    } finally {
+      if (app) {
+        await app.close();
+      }
+      if (previousTargetRoot == null) {
+        delete process.env.JSKIT_STUDIO_TARGET_ROOT;
+      } else {
+        process.env.JSKIT_STUDIO_TARGET_ROOT = previousTargetRoot;
+      }
+    }
+  });
+});
+
 test("Studio current-app API exposes JSKIT issue sessions from target filesystem state", async () => {
   await withTemporaryGitPackageRoot("session-target-app", async (targetRoot) => {
     await commitMinimalReadyJskitApp(targetRoot);

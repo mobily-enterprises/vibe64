@@ -97,9 +97,12 @@ Root package: jskit-ai-studio
 
 - packages/current-app/src/server/inputSchemas.js
     - codexAttachmentInputValidator (value, export)
+    - codexPromptHandoffInputValidator (value, export)
     - codexThreadInputValidator (value, export)
     - currentAppQueryInputValidator (value, export)
+    - npmScriptTerminalInputValidator (value, export)
     - rewindIssueSessionInputValidator (value, export)
+    - starredNpmScriptsInputValidator (value, export)
     - terminalInputValidator (value, export)
 
 - packages/current-app/src/server/registerRoutes.js
@@ -110,10 +113,17 @@ Root package: jskit-ai-studio
     - APP_TEST_TESTRUN_COMMAND_CONFIG (value, component_or_class)
     - appTestTerminalArgs (function, export)
     - createService (function, helper)
+    - DEFAULT_STARRED_NPM_SCRIPT_NAMES (value, component_or_class)
     - findAvailablePort (function, export)
     - inspectCurrentApp (function, export)
+    - inspectNpmScripts (function, export)
+    - NPM_SCRIPTS_STARRED_CONFIG (value, component_or_class)
+    - npmScriptCommandPreview (function, export)
+    - npmScriptTerminalArgs (function, export)
+    - resetStarredNpmScripts (function, export)
     - resolveAppTestConfig (function, helper)
     - resolveCurrentAppRoot (function, helper)
+    - saveStarredNpmScripts (function, export)
 
 - packages/main/package.descriptor.mjs
     - default (default, default)
@@ -272,6 +282,9 @@ Root package: jskit-ai-studio
 - src/components/studio/IssueSessionStepTerminal.vue
     - default (default, default)
 
+- src/components/studio/NpmScriptsPanel.vue
+    - default (default, default)
+
 - src/components/studio/StudioErrorNotice.vue
     - default (default, default)
 
@@ -280,6 +293,9 @@ Root package: jskit-ai-studio
 
 - src/composables/useIssueSessions.js
     - useIssueSessions (function, composable)
+
+- src/composables/useStudioTerminal.js
+    - useStudioTerminal (function, composable)
 
 - src/error.js
     - default (default, default)
@@ -348,6 +364,7 @@ Root package: jskit-ai-studio
     - closeIssueSessionAppTestTerminal (function, export)
     - closeIssueSessionCodexTerminal (function, export)
     - closeIssueSessionStepTerminal (function, export)
+    - closeNpmScriptTerminal (function, export)
     - consumeStudioGate (function, export)
     - createIssueSession (function, helper)
     - CURRENT_APP_ENDPOINT (value, component_or_class)
@@ -360,21 +377,30 @@ Root package: jskit-ai-studio
     - issueSessionCodexTerminalWebSocketUrl (function, export)
     - issueSessionStepTerminalWebSocketUrl (function, export)
     - listIssueSessions (function, helper)
+    - NPM_SCRIPT_TERMINAL_ENDPOINT (value, component_or_class)
+    - NPM_SCRIPTS_ENDPOINT (value, component_or_class)
+    - npmScriptTerminalEndpoint (function, export)
+    - npmScriptTerminalWebSocketUrl (function, export)
     - readAppSetupStatus (function, helper)
     - readBootstrapStatus (function, helper)
     - readCurrentApp (function, helper)
     - readIssueSession (function, helper)
     - readIssueSessionCodexTerminal (function, helper)
     - readIssueSessionDiff (function, helper)
+    - readNpmScripts (function, helper)
     - readTargetAppStatus (function, helper)
+    - resetStarredNpmScripts (function, export)
     - resolveStudioGate (function, helper)
     - rewindIssueSession (function, export)
     - runIssueSessionStep (function, helper)
+    - saveIssueSessionCodexPromptHandoff (function, export)
     - saveIssueSessionCodexThread (function, export)
+    - saveStarredNpmScripts (function, export)
     - startCurrentAppTestTerminal (function, export)
     - startIssueSessionAppTestTerminal (function, export)
     - startIssueSessionCodexTerminal (function, export)
     - startIssueSessionStepTerminal (function, export)
+    - startNpmScriptTerminal (function, export)
     - studioHttpClient (value, export)
     - TARGET_APP_ENDPOINT (value, component_or_class)
     - TARGET_APP_STREAM_ENDPOINT (value, component_or_class)
@@ -396,6 +422,9 @@ Root package: jskit-ai-studio
 - src/pages/home/index.vue
     - default (default, default)
 
+- src/pages/home/npm-scripts.vue
+    - default (default, default)
+
 - src/pages/index.vue
     - default (default, default)
 
@@ -412,10 +441,10 @@ Root package: jskit-ai-studio
 
 ## Direct JSKIT package exports
 
-- @jskit-ai/agent-docs@0.1.38
+- @jskit-ai/agent-docs@0.1.39
     - no exported code files detected
 
-- @jskit-ai/config-eslint@0.1.76
+- @jskit-ai/config-eslint@0.1.77
     - . -> src/index.js
     - ./base -> base.js
       - baseConfig (value, export)
@@ -428,7 +457,7 @@ Root package: jskit-ai-studio
     - ./web -> web.js
       - webConfig (value, export)
 
-- @jskit-ai/http-runtime@0.1.76
+- @jskit-ai/http-runtime@0.1.77
     - ./client -> src/client/index.js
     - ./shared -> src/shared/index.js
     - ./shared/validators/command -> src/shared/validators/command.js
@@ -481,12 +510,12 @@ Root package: jskit-ai-studio
       - createCursorPagedListResponseSchema (function, helper)
       - createResource (function, helper)
 
-- @jskit-ai/jskit-cli@0.2.86
+- @jskit-ai/jskit-cli@0.2.87
     - . -> src/index.js
     - ./client -> src/client/index.js
     - ./server -> src/server/index.js
 
-- @jskit-ai/kernel@0.1.77
+- @jskit-ai/kernel@0.1.78
     - ./_testable -> _testable/index.js
     - ./client -> client/index.d.ts
       - bootstrapClientShellApp (function, export)
@@ -705,7 +734,7 @@ Root package: jskit-ai-studio
     - ./shared/validators/inputNormalization -> shared/validators/inputNormalization.js
       - normalizeObjectInput (function, helper)
 
-- @jskit-ai/shell-web@0.1.76
+- @jskit-ai/shell-web@0.1.77
     - ./client -> src/client/index.js
       - clientProviders (value, export)
     - ./client/bootstrap -> src/client/bootstrap/index.js

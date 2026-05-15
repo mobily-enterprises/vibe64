@@ -710,7 +710,8 @@ async function checkGitReady(targetRoot, context) {
     });
   }
 
-  const inside = await runGit(targetRoot, ["rev-parse", "--is-inside-work-tree"]);
+  const runGitCommand = context.runGitCommand || runGit;
+  const inside = await runGitCommand(targetRoot, ["rev-parse", "--is-inside-work-tree"]);
   if (!inside.ok || inside.stdout !== "true") {
     return hardStopStage({
       id: "git-ready",
@@ -722,8 +723,8 @@ async function checkGitReady(targetRoot, context) {
   }
 
   const [bare, branch] = await Promise.all([
-    runGit(targetRoot, ["rev-parse", "--is-bare-repository"]),
-    runGit(targetRoot, ["branch", "--show-current"])
+    runGitCommand(targetRoot, ["rev-parse", "--is-bare-repository"]),
+    runGitCommand(targetRoot, ["branch", "--show-current"])
   ]);
 
   if (bare.stdout === "true") {
@@ -1547,10 +1548,13 @@ function readyStage() {
 
 async function inspectAppSetup({
   emit = null,
+  runGitCommand = null,
   targetRoot
 } = {}) {
   const resolvedTargetRoot = path.resolve(String(targetRoot || process.cwd()));
-  const context = {};
+  const context = {
+    runGitCommand
+  };
   const stages = [];
 
   const checks = [

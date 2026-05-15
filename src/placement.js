@@ -47,3 +47,20 @@ addPlacement({
     exact: true
   }
 });
+// jskit:ui-generator.page.link:home:/npm-scripts
+{
+  addPlacement({
+    id: "ui-generator.page.home.npm-scripts.link",
+    target: "shell.secondary-nav",
+    kind: "link",
+    surfaces: ["home"],
+    order: 60,
+    props: {
+      label: "NPM Scripts",
+      icon: "mdi-view-list-outline",
+      surface: "home",
+      scopedSuffix: "/npm-scripts",
+      unscopedSuffix: "/npm-scripts"
+    }
+  });
+}

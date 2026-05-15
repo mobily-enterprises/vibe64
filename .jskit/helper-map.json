@@ -366,6 +366,11 @@
             "role": "export"
           },
           {
+            "name": "codexPromptHandoffInputValidator",
+            "kind": "value",
+            "role": "export"
+          },
+          {
             "name": "codexThreadInputValidator",
             "kind": "value",
             "role": "export"
@@ -376,7 +381,17 @@
             "role": "export"
           },
           {
+            "name": "npmScriptTerminalInputValidator",
+            "kind": "value",
+            "role": "export"
+          },
+          {
             "name": "rewindIssueSessionInputValidator",
+            "kind": "value",
+            "role": "export"
+          },
+          {
+            "name": "starredNpmScriptsInputValidator",
             "kind": "value",
             "role": "export"
           },
@@ -421,12 +436,42 @@
             "role": "helper"
           },
           {
+            "name": "DEFAULT_STARRED_NPM_SCRIPT_NAMES",
+            "kind": "value",
+            "role": "component_or_class"
+          },
+          {
             "name": "findAvailablePort",
             "kind": "function",
             "role": "export"
           },
           {
             "name": "inspectCurrentApp",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "inspectNpmScripts",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "NPM_SCRIPTS_STARRED_CONFIG",
+            "kind": "value",
+            "role": "component_or_class"
+          },
+          {
+            "name": "npmScriptCommandPreview",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "npmScriptTerminalArgs",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "resetStarredNpmScripts",
             "kind": "function",
             "role": "export"
           },
@@ -439,6 +484,11 @@
             "name": "resolveCurrentAppRoot",
             "kind": "function",
             "role": "helper"
+          },
+          {
+            "name": "saveStarredNpmScripts",
+            "kind": "function",
+            "role": "export"
           }
         ]
       },
@@ -1033,6 +1083,16 @@
         ]
       },
       {
+        "path": "src/components/studio/NpmScriptsPanel.vue",
+        "exports": [
+          {
+            "name": "default",
+            "kind": "default",
+            "role": "default"
+          }
+        ]
+      },
+      {
         "path": "src/components/studio/StudioErrorNotice.vue",
         "exports": [
           {
@@ -1057,6 +1117,16 @@
         "exports": [
           {
             "name": "useIssueSessions",
+            "kind": "function",
+            "role": "composable"
+          }
+        ]
+      },
+      {
+        "path": "src/composables/useStudioTerminal.js",
+        "exports": [
+          {
+            "name": "useStudioTerminal",
             "kind": "function",
             "role": "composable"
           }
@@ -1356,6 +1426,11 @@
             "role": "export"
           },
           {
+            "name": "closeNpmScriptTerminal",
+            "kind": "function",
+            "role": "export"
+          },
+          {
             "name": "consumeStudioGate",
             "kind": "function",
             "role": "export"
@@ -1416,6 +1491,26 @@
             "role": "helper"
           },
           {
+            "name": "NPM_SCRIPT_TERMINAL_ENDPOINT",
+            "kind": "value",
+            "role": "component_or_class"
+          },
+          {
+            "name": "NPM_SCRIPTS_ENDPOINT",
+            "kind": "value",
+            "role": "component_or_class"
+          },
+          {
+            "name": "npmScriptTerminalEndpoint",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "npmScriptTerminalWebSocketUrl",
+            "kind": "function",
+            "role": "export"
+          },
+          {
             "name": "readAppSetupStatus",
             "kind": "function",
             "role": "helper"
@@ -1446,9 +1541,19 @@
             "role": "helper"
           },
           {
+            "name": "readNpmScripts",
+            "kind": "function",
+            "role": "helper"
+          },
+          {
             "name": "readTargetAppStatus",
             "kind": "function",
             "role": "helper"
+          },
+          {
+            "name": "resetStarredNpmScripts",
+            "kind": "function",
+            "role": "export"
           },
           {
             "name": "resolveStudioGate",
@@ -1466,7 +1571,17 @@
             "role": "helper"
           },
           {
+            "name": "saveIssueSessionCodexPromptHandoff",
+            "kind": "function",
+            "role": "export"
+          },
+          {
             "name": "saveIssueSessionCodexThread",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "saveStarredNpmScripts",
             "kind": "function",
             "role": "export"
           },
@@ -1487,6 +1602,11 @@
           },
           {
             "name": "startIssueSessionStepTerminal",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "startNpmScriptTerminal",
             "kind": "function",
             "role": "export"
           },
@@ -1568,6 +1688,16 @@
         ]
       },
       {
+        "path": "src/pages/home/npm-scripts.vue",
+        "exports": [
+          {
+            "name": "default",
+            "kind": "default",
+            "role": "default"
+          }
+        ]
+      },
+      {
         "path": "src/pages/index.vue",
         "exports": [
           {
@@ -1622,13 +1752,13 @@
   "jskitPackages": [
     {
       "name": "@jskit-ai/agent-docs",
-      "version": "0.1.38",
+      "version": "0.1.39",
       "installed": true,
       "exports": []
     },
     {
       "name": "@jskit-ai/config-eslint",
-      "version": "0.1.76",
+      "version": "0.1.77",
       "installed": true,
       "exports": [
         {
@@ -1694,7 +1824,7 @@
     },
     {
       "name": "@jskit-ai/http-runtime",
-      "version": "0.1.76",
+      "version": "0.1.77",
       "installed": true,
       "exports": [
         {
@@ -1964,7 +2094,7 @@
     },
     {
       "name": "@jskit-ai/jskit-cli",
-      "version": "0.2.86",
+      "version": "0.2.87",
       "installed": true,
       "exports": [
         {
@@ -1986,7 +2116,7 @@
     },
     {
       "name": "@jskit-ai/kernel",
-      "version": "0.1.77",
+      "version": "0.1.78",
       "installed": true,
       "exports": [
         {
@@ -3104,7 +3234,7 @@
     },
     {
       "name": "@jskit-ai/shell-web",
-      "version": "0.1.76",
+      "version": "0.1.77",
       "installed": true,
       "exports": [
         {

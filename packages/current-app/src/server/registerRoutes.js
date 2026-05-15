@@ -4,7 +4,9 @@ import {
   codexPromptHandoffInputValidator,
   codexThreadInputValidator,
   currentAppQueryInputValidator,
-  rewindIssueSessionInputValidator
+  npmScriptTerminalInputValidator,
+  rewindIssueSessionInputValidator,
+  starredNpmScriptsInputValidator
 } from "./inputSchemas.js";
 import { ACTION_READ_CURRENT_APP } from "./actions.js";
 import {
@@ -77,6 +79,110 @@ function registerRoutes(
         input: request.input.query || {}
       });
 
+      reply.code(200).send(response);
+    }
+  );
+
+  router.register(
+    "GET",
+    `${routeBase}/npm-scripts`,
+    {
+      auth: "public",
+      surface: normalizedRouteSurface,
+      meta: {
+        tags: ["studio", "current-app"],
+        summary: "List npm scripts for the current target app."
+      }
+    },
+    async function (request, reply) {
+      if (!requireLocalCurrentAppRequest(request, reply)) {
+        return;
+      }
+      const response = await getCurrentAppService(app).listNpmScripts();
+      reply.code(response?.ok === false ? 400 : 200).send(response);
+    }
+  );
+
+  router.register(
+    "PUT",
+    `${routeBase}/npm-scripts/starred`,
+    {
+      auth: "public",
+      surface: normalizedRouteSurface,
+      meta: {
+        tags: ["studio", "current-app"],
+        summary: "Persist starred npm script shortcuts for the current target app."
+      },
+      body: starredNpmScriptsInputValidator
+    },
+    async function (request, reply) {
+      if (!requireLocalCurrentAppRequest(request, reply)) {
+        return;
+      }
+      const response = await getCurrentAppService(app).saveStarredNpmScripts(requestBodyObject(request));
+      reply.code(response?.ok === false ? 400 : 200).send(response);
+    }
+  );
+
+  router.register(
+    "DELETE",
+    `${routeBase}/npm-scripts/starred`,
+    {
+      auth: "public",
+      surface: normalizedRouteSurface,
+      meta: {
+        tags: ["studio", "current-app"],
+        summary: "Reset starred npm script shortcuts to the default set."
+      }
+    },
+    async function (request, reply) {
+      if (!requireLocalCurrentAppRequest(request, reply)) {
+        return;
+      }
+      const response = await getCurrentAppService(app).resetStarredNpmScripts();
+      reply.code(response?.ok === false ? 400 : 200).send(response);
+    }
+  );
+
+  router.register(
+    "POST",
+    `${routeBase}/npm-script-terminal`,
+    {
+      auth: "public",
+      surface: normalizedRouteSurface,
+      meta: {
+        tags: ["studio", "current-app"],
+        summary: "Start an npm script terminal for the current target app."
+      },
+      body: npmScriptTerminalInputValidator
+    },
+    async function (request, reply) {
+      if (!requireLocalCurrentAppRequest(request, reply)) {
+        return;
+      }
+      const response = await getCurrentAppService(app).startNpmScriptTerminal(requestBodyObject(request));
+      reply.code(response?.ok === false ? 400 : 200).send(response);
+    }
+  );
+
+  router.register(
+    "DELETE",
+    `${routeBase}/npm-script-terminal/:terminalSessionId`,
+    {
+      auth: "public",
+      surface: normalizedRouteSurface,
+      meta: {
+        tags: ["studio", "current-app"],
+        summary: "Close an npm script terminal for the current target app."
+      }
+    },
+    async function (request, reply) {
+      if (!requireLocalCurrentAppRequest(request, reply)) {
+        return;
+      }
+      const response = await getCurrentAppService(app).closeNpmScriptTerminal(
+        request.params.terminalSessionId
+      );
       reply.code(200).send(response);
     }
   );

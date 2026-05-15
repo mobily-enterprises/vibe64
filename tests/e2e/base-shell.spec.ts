@@ -435,6 +435,28 @@ const currentAppPayload = {
   }
 };
 
+const npmScriptsPayload = {
+  ok: true,
+  config: {
+    exists: false,
+    path: ".jskit/config/starred_npm_scripts",
+    source: "default"
+  },
+  defaultStarredScriptNames: ["jskit:update", "devlinks", "build", "server", "verify"],
+  starredScriptNames: ["jskit:update", "devlinks", "build", "server", "verify"],
+  scripts: [
+    { name: "build", command: "vite build", starred: true },
+    { name: "dev", command: "vite", starred: false },
+    { name: "devlinks", command: "jskit app link-local-packages", starred: true },
+    { name: "jskit:update", command: "jskit app update-packages", starred: true },
+    { name: "lint", command: "eslint .", starred: false },
+    { name: "preview", command: "vite preview", starred: false },
+    { name: "server", command: "node server.js", starred: true },
+    { name: "test", command: "node --test", starred: false },
+    { name: "verify", command: "jskit app verify", starred: true }
+  ]
+};
+
 const completedArchiveSession = {
   sessionId: "2026-05-12_03-10-00",
   status: "finished",
@@ -1449,6 +1471,147 @@ async function mockCurrentAppInspection(page) {
       })
     });
   });
+  await mockNpmScripts(page);
+}
+
+async function mockNpmScripts(page, {
+  terminalInputs = [],
+  terminalStarts = []
+}: {
+  terminalInputs?: string[];
+  terminalStarts?: string[];
+} = {}) {
+  let currentPayload = JSON.parse(JSON.stringify(npmScriptsPayload));
+
+  await page.exposeFunction("__recordStudioNpmTerminalInput", ({ data }: { data: string }) => {
+    terminalInputs.push(String(data || ""));
+  });
+  await page.addInitScript(() => {
+    const studioWindow = window as unknown as {
+      __recordStudioNpmTerminalInput: (input: { data: string }) => void;
+      WebSocket: typeof WebSocket;
+    };
+    const OriginalWebSocket = studioWindow.WebSocket;
+
+    class MockStudioWebSocket extends EventTarget {
+      static CONNECTING = 0;
+      static OPEN = 1;
+      static CLOSING = 2;
+      static CLOSED = 3;
+      readyState: number;
+      terminalSessionId: string;
+      url: string;
+
+      constructor(url) {
+        super();
+        this.url = String(url || "");
+        const pathname = new URL(this.url).pathname;
+        const match = /\/npm-script-terminal\/([^/]+)\/ws/u.exec(pathname);
+        if (!match) {
+          return new OriginalWebSocket(url);
+        }
+        this.readyState = MockStudioWebSocket.CONNECTING;
+        this.terminalSessionId = decodeURIComponent(match[1]);
+        window.setTimeout(() => {
+          this.readyState = MockStudioWebSocket.OPEN;
+          this.dispatchEvent(new Event("open"));
+          this.__emit({
+            type: "snapshot",
+            session: {
+              ok: true,
+              id: this.terminalSessionId,
+              status: "running",
+              commandPreview: `npm run ${this.terminalSessionId.replace(/^npm-term-/u, "")}`,
+              output: `Started ${this.terminalSessionId}.`
+            }
+          });
+        }, 0);
+      }
+
+      send(rawMessage) {
+        const message = JSON.parse(String(rawMessage || "{}"));
+        if (message.type === "input") {
+          studioWindow.__recordStudioNpmTerminalInput({
+            data: String(message.data || "")
+          });
+        }
+      }
+
+      close() {
+        this.readyState = MockStudioWebSocket.CLOSED;
+        this.dispatchEvent(new CloseEvent("close"));
+      }
+
+      __emit(message) {
+        this.dispatchEvent(new MessageEvent("message", {
+          data: JSON.stringify(message)
+        }));
+      }
+    }
+    studioWindow.WebSocket = MockStudioWebSocket as unknown as typeof WebSocket;
+  });
+
+  function applyStars(scriptNames: string[]) {
+    const stars = new Set(scriptNames);
+    currentPayload = {
+      ...currentPayload,
+      config: {
+        exists: true,
+        path: ".jskit/config/starred_npm_scripts",
+        source: "config"
+      },
+      starredScriptNames: scriptNames,
+      scripts: currentPayload.scripts.map((script) => ({
+        ...script,
+        starred: stars.has(script.name)
+      }))
+    };
+  }
+
+  await page.route("**/api/studio/current-app/npm-scripts", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify(currentPayload)
+    });
+  });
+  await page.route("**/api/studio/current-app/npm-scripts/starred", async (route) => {
+    if (route.request().method() === "DELETE") {
+      currentPayload = JSON.parse(JSON.stringify(npmScriptsPayload));
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify(currentPayload)
+      });
+      return;
+    }
+    applyStars(route.request().postDataJSON().scriptNames || []);
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify(currentPayload)
+    });
+  });
+  await page.route("**/api/studio/current-app/npm-script-terminal", async (route) => {
+    const scriptName = String(route.request().postDataJSON().scriptName || "");
+    terminalStarts.push(scriptName);
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        id: `npm-term-${scriptName}`,
+        status: "running",
+        commandPreview: `npm run ${scriptName}`,
+        output: ""
+      })
+    });
+  });
+  await page.route("**/api/studio/current-app/npm-script-terminal/*", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        closed: true,
+        ok: true
+      })
+    });
+  });
 }
 
 async function mockSessionHistoryArchives(page, archiveRequests = []) {
@@ -1478,6 +1641,7 @@ async function mockSessionHistoryArchives(page, archiveRequests = []) {
       })
     });
   });
+  await mockNpmScripts(page);
 }
 
 async function mockCodexPromptHandoffRoute(page, sessionId: string) {
@@ -1525,6 +1689,7 @@ async function mockCodexPromptSession(page, { stepPayloads = [], terminalInputs 
       })
     });
   });
+  await mockNpmScripts(page);
   await page.route(`**/api/studio/current-app/issue-sessions/${codexPromptSessionId}`, async (route) => {
     await route.fulfill({
       contentType: "application/json",
@@ -1645,6 +1810,7 @@ async function mockCodexPromptSessions(page, sessionPayloads) {
       })
     });
   });
+  await mockNpmScripts(page);
 
   for (const sessionId of Object.keys(payloadsBySessionId)) {
     await page.route(`**/api/studio/current-app/issue-sessions/${sessionId}`, async (route) => {
@@ -1975,14 +2141,99 @@ test.describe("studio startup navigation", () => {
     await expect(page).toHaveURL(/\/home$/u);
     await expectSessionsRoute(page);
     await expect(page.getByRole("link", { name: "Bootup/Setup", exact: true })).toHaveCount(1);
+    await expect(page.getByRole("link", { name: "NPM Scripts", exact: true })).toHaveCount(1);
     await expect(page.getByRole("link", { name: "Bootup", exact: true })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "App Bootup", exact: true })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "App Setup", exact: true })).toHaveCount(0);
+    await expect(page.locator(".npm-scripts-panel")).toHaveCount(0);
     expect(apiRequests.count("/api/studio/bootstrap")).toBe(0);
     expect(apiRequests.count("/api/studio/target-app")).toBe(0);
     expect(apiRequests.count("/api/studio/target-app/stream")).toBe(0);
     expect(apiRequests.count("/api/studio/app-setup")).toBe(0);
     expect(apiRequests.count("/api/studio/current-app")).toBe(1);
+  });
+
+  test("npm scripts page persists stars, resets defaults, and runs one terminal", async ({ page }) => {
+    const terminalInputs: string[] = [];
+    const terminalStarts: string[] = [];
+    await page.route("**/api/studio/current-app", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify(currentAppPayload)
+      });
+    });
+    await page.route("**/api/studio/current-app/issue-sessions", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          limits: {
+            maxOpenSessions: 3,
+            openSessionCount: 0
+          },
+          ok: true,
+          sessions: [],
+          stepDefinitions: []
+        })
+      });
+    });
+    await mockNpmScripts(page, {
+      terminalInputs,
+      terminalStarts
+    });
+
+    await page.goto(`${BASE_URL}/home/npm-scripts`);
+    const panel = page.locator(".npm-scripts-panel");
+    await expect(panel).toBeVisible();
+    await expect(page.getByRole("link", { name: "NPM Scripts", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "NPM Scripts", exact: true })).toHaveCount(0);
+
+    await expect.poll(async () => {
+      return panel.locator(".npm-scripts-panel__starred button[aria-label^='Run ']")
+        .evaluateAll((buttons) => buttons.map((button) =>
+          String(button.getAttribute("aria-label") || "").replace(/^Run /u, "")
+        ));
+    }).toEqual(["jskit:update", "devlinks", "build", "server", "verify"]);
+    await expect(panel.getByText("vite preview")).toBeVisible();
+
+    await panel.getByRole("button", { name: "Unstar jskit:update" }).click();
+    await expect(panel.locator(".npm-scripts-panel__starred").getByRole("button", { name: "Run jskit:update" }))
+      .toHaveCount(0);
+    await panel.getByRole("button", { name: "Star preview" }).click();
+    await expect(panel.locator(".npm-scripts-panel__starred").getByRole("button", { name: "Run preview" }))
+      .toBeVisible();
+    await expect(panel.locator(".npm-scripts-panel__other-scripts").getByRole("button", { name: "Run preview" }))
+      .toHaveCount(0);
+    await panel.getByRole("button", { name: "Reset" }).click();
+    await expect(panel.locator(".npm-scripts-panel__starred").getByRole("button", { name: "Run preview" }))
+      .toHaveCount(0);
+    await expect(panel.locator(".npm-scripts-panel__starred").getByRole("button", { name: "Run jskit:update" }))
+      .toBeVisible();
+
+    await panel.locator(".npm-scripts-panel__starred").getByRole("button", { name: "Run build" }).click();
+    await expect.poll(() => terminalStarts).toEqual(["build"]);
+    const terminal = page.locator(".npm-script-terminal");
+    await expect(terminal).toHaveCount(1);
+    await expect(terminal).toContainText("npm run build");
+    await expect(terminal.locator(".xterm-rows")).toContainText("Started npm-term-build.");
+    const viewport = page.viewportSize();
+    await expect.poll(async () => {
+      const box = await terminal.boundingBox();
+      return Boolean(
+        box &&
+        viewport &&
+        Math.round(box.width) === viewport.width &&
+        Math.round(box.height) === viewport.height
+      );
+    }).toBe(true);
+    await terminal.getByRole("button", { name: "Ctrl-C" }).click();
+    await expect.poll(() => terminalInputs).toContain("\u0003");
+    await terminal.getByRole("button", { name: "Close npm script terminal" }).click();
+    await expect(terminal).toHaveCount(0);
+
+    await panel.locator(".npm-scripts-panel__starred").getByRole("button", { name: "Run server" }).click();
+    await expect.poll(() => terminalStarts).toEqual(["build", "server"]);
+    await expect(terminal).toHaveCount(1);
+    await expect(terminal).toContainText("npm run server");
   });
 
   test("home stays on home even when setup checks would be blocked", async ({ page }) => {
@@ -2641,6 +2892,7 @@ test.describe("studio startup navigation", () => {
         })
       });
     });
+    await mockNpmScripts(page);
     await page.route(`**/api/studio/current-app/issue-sessions/${deepUiSkipSessionId}`, async (route) => {
       await route.fulfill({
         contentType: "application/json",
@@ -2726,6 +2978,7 @@ test.describe("studio startup navigation", () => {
         })
       });
     });
+    await mockNpmScripts(page);
     await page.route(`**/api/studio/current-app/issue-sessions/${planExecutionRejectSessionId}`, async (route) => {
       await route.fulfill({
         contentType: "application/json",
@@ -2882,6 +3135,7 @@ test.describe("studio startup navigation", () => {
         })
       });
     });
+    await mockNpmScripts(page);
     await page.route(`**/api/studio/current-app/issue-sessions/${reviewDeslopSessionId}`, async (route) => {
       await route.fulfill({
         contentType: "application/json",
@@ -2960,6 +3214,7 @@ test.describe("studio startup navigation", () => {
         })
       });
     });
+    await mockNpmScripts(page);
     await page.route(`**/api/studio/current-app/issue-sessions/${userCheckSessionId}`, async (route) => {
       await route.fulfill({
         contentType: "application/json",
@@ -3163,6 +3418,7 @@ test.describe("studio startup navigation", () => {
         })
       });
     });
+    await mockNpmScripts(page);
     await page.route(`**/api/studio/current-app/issue-sessions/${sessionId}`, async (route) => {
       await route.fulfill({ contentType: "application/json", body: JSON.stringify(sessionPayload) });
     });

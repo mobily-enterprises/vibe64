@@ -45,6 +45,22 @@ function runGit(cwd, args) {
   return result.stdout.trim();
 }
 
+async function runGitForDoctor(cwd, args) {
+  const result = spawnSync("git", args, {
+    cwd,
+    encoding: "utf8"
+  });
+  const stdout = String(result.stdout || "").trim();
+  const stderr = String(result.stderr || "").trim();
+  return {
+    exitCode: result.status,
+    ok: result.status === 0,
+    output: [stdout, stderr].filter(Boolean).join("\n"),
+    stderr,
+    stdout
+  };
+}
+
 test("App Setup Doctor hard-stops when a non-git directory already has files", async () => {
   const targetRoot = await mkdtemp(path.join(os.tmpdir(), "jskit-app-setup-files-"));
   await writeFile(path.join(targetRoot, "notes.txt"), "existing work\n", "utf8");
@@ -89,6 +105,7 @@ test("App Setup Doctor admits linked Git worktrees before Git safety checks", as
   runGit(repoRoot, ["worktree", "add", "-b", "studio-test", worktreeRoot]);
 
   const status = await inspectAppSetup({
+    runGitCommand: runGitForDoctor,
     targetRoot: worktreeRoot
   });
 

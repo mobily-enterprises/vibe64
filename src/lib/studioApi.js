@@ -33,6 +33,8 @@ const BOOTSTRAP_STREAM_ENDPOINT = `${BOOTSTRAP_ENDPOINT}/stream`;
 const TARGET_APP_STREAM_ENDPOINT = `${TARGET_APP_ENDPOINT}/stream`;
 const APP_SETUP_STREAM_ENDPOINT = `${APP_SETUP_ENDPOINT}/stream`;
 const CURRENT_APP_TEST_TERMINAL_ENDPOINT = `${CURRENT_APP_ENDPOINT}/app-test-terminal`;
+const NPM_SCRIPTS_ENDPOINT = `${CURRENT_APP_ENDPOINT}/npm-scripts`;
+const NPM_SCRIPT_TERMINAL_ENDPOINT = `${CURRENT_APP_ENDPOINT}/npm-script-terminal`;
 
 const studioHttpClient = createTransientRetryHttpClient({
   credentials: "include",
@@ -72,6 +74,20 @@ async function readAppSetupStatus() {
 
 async function readCurrentApp() {
   return studioHttpClient.get(CURRENT_APP_ENDPOINT);
+}
+
+async function readNpmScripts() {
+  return studioHttpClient.get(NPM_SCRIPTS_ENDPOINT);
+}
+
+async function saveStarredNpmScripts(scriptNames = []) {
+  return studioHttpClient.put(`${NPM_SCRIPTS_ENDPOINT}/starred`, {
+    scriptNames
+  });
+}
+
+async function resetStarredNpmScripts() {
+  return studioHttpClient.delete(`${NPM_SCRIPTS_ENDPOINT}/starred`);
 }
 
 function withQuery(endpoint, params = {}) {
@@ -134,6 +150,12 @@ function currentAppTestTerminalEndpoint(terminalSessionId = "") {
     : CURRENT_APP_TEST_TERMINAL_ENDPOINT;
 }
 
+function npmScriptTerminalEndpoint(terminalSessionId = "") {
+  return terminalSessionId
+    ? `${NPM_SCRIPT_TERMINAL_ENDPOINT}/${encodeURIComponent(terminalSessionId)}`
+    : NPM_SCRIPT_TERMINAL_ENDPOINT;
+}
+
 function issueSessionAppTestTerminalEndpoint(sessionId, terminalSessionId = "") {
   const base = `${ISSUE_SESSIONS_ENDPOINT}/${encodeURIComponent(sessionId)}/app-test-terminal`;
   return terminalSessionId ? `${base}/${encodeURIComponent(terminalSessionId)}` : base;
@@ -156,6 +178,10 @@ function currentAppTestTerminalWebSocketUrl(terminalSessionId) {
   return resolveWebSocketUrl(`${currentAppTestTerminalEndpoint(terminalSessionId)}/ws`);
 }
 
+function npmScriptTerminalWebSocketUrl(terminalSessionId) {
+  return resolveWebSocketUrl(`${npmScriptTerminalEndpoint(terminalSessionId)}/ws`);
+}
+
 function issueSessionAppTestTerminalWebSocketUrl(sessionId, terminalSessionId) {
   return resolveWebSocketUrl(`${issueSessionAppTestTerminalEndpoint(sessionId, terminalSessionId)}/ws`);
 }
@@ -170,6 +196,12 @@ async function startIssueSessionStepTerminal(sessionId) {
 
 async function startCurrentAppTestTerminal() {
   return studioHttpClient.post(currentAppTestTerminalEndpoint(), {});
+}
+
+async function startNpmScriptTerminal(scriptName) {
+  return studioHttpClient.post(npmScriptTerminalEndpoint(), {
+    scriptName
+  });
 }
 
 async function startIssueSessionAppTestTerminal(sessionId) {
@@ -190,6 +222,10 @@ async function closeIssueSessionStepTerminal(sessionId, terminalSessionId) {
 
 async function closeCurrentAppTestTerminal(terminalSessionId) {
   return studioHttpClient.delete(currentAppTestTerminalEndpoint(terminalSessionId));
+}
+
+async function closeNpmScriptTerminal(terminalSessionId) {
+  return studioHttpClient.delete(npmScriptTerminalEndpoint(terminalSessionId));
 }
 
 async function closeIssueSessionAppTestTerminal(sessionId, terminalSessionId) {
@@ -279,6 +315,8 @@ export {
   BOOTSTRAP_TERMINAL_ENDPOINT,
   CURRENT_APP_ENDPOINT,
   ISSUE_SESSIONS_ENDPOINT,
+  NPM_SCRIPT_TERMINAL_ENDPOINT,
+  NPM_SCRIPTS_ENDPOINT,
   TARGET_APP_ENDPOINT,
   TARGET_APP_STREAM_ENDPOINT,
   TARGET_APP_TERMINAL_ENDPOINT,
@@ -287,6 +325,7 @@ export {
   closeCurrentAppTestTerminal,
   closeIssueSessionAppTestTerminal,
   closeIssueSessionStepTerminal,
+  closeNpmScriptTerminal,
   createIssueSession,
   consumeStudioGate,
   currentAppTestTerminalEndpoint,
@@ -297,22 +336,28 @@ export {
   issueSessionAppTestTerminalWebSocketUrl,
   issueSessionStepTerminalWebSocketUrl,
   listIssueSessions,
+  npmScriptTerminalEndpoint,
+  npmScriptTerminalWebSocketUrl,
   readAppSetupStatus,
   readBootstrapStatus,
   readCurrentApp,
   readIssueSession,
   readIssueSessionCodexTerminal,
   readIssueSessionDiff,
+  readNpmScripts,
   readTargetAppStatus,
   resolveStudioGate,
+  resetStarredNpmScripts,
   rewindIssueSession,
   runIssueSessionStep,
   saveIssueSessionCodexPromptHandoff,
   saveIssueSessionCodexThread,
+  saveStarredNpmScripts,
   startCurrentAppTestTerminal,
   startIssueSessionAppTestTerminal,
   startIssueSessionCodexTerminal,
   startIssueSessionStepTerminal,
+  startNpmScriptTerminal,
   studioHttpClient,
   uploadIssueSessionCodexAttachment
 };
