@@ -26,7 +26,8 @@ import {
 import {
   gitSafeDirectoryArgs,
   gitToolchainMountArgs,
-  linkedGitMetadataMountSource
+  linkedGitMetadataMountSource,
+  linkedGitRepositoryMountSource
 } from "../../server/lib/gitToolchainMounts.js";
 
 function assertShellScriptSurvivesWhitespaceCollapse(script) {
@@ -81,9 +82,10 @@ test("Target App Doctor toolchain mounts linked worktree Git metadata", async ()
   await writeFile(path.join(worktreeRoot, ".git"), `gitdir: ${gitDir}\n`, "utf8");
 
   assert.equal(linkedGitMetadataMountSource(worktreeRoot), gitMetadataRoot);
+  assert.equal(linkedGitRepositoryMountSource(worktreeRoot), repoRoot);
   assert.deepEqual(gitToolchainMountArgs(worktreeRoot), [
     "-v",
-    `${gitMetadataRoot}:${gitMetadataRoot}`
+    `${repoRoot}:${repoRoot}`
   ]);
   assert.deepEqual(gitSafeDirectoryArgs(worktreeRoot), [
     "-c",
@@ -91,7 +93,7 @@ test("Target App Doctor toolchain mounts linked worktree Git metadata", async ()
     "-c",
     `safe.directory=${worktreeRoot}`
   ]);
-  assert.match(gitInitRepair(worktreeRoot).commandPreview, new RegExp(`${gitMetadataRoot}:${gitMetadataRoot}`));
+  assert.match(gitInitRepair(worktreeRoot).commandPreview, new RegExp(`${repoRoot}:${repoRoot}`));
 });
 
 test("Target App Doctor GitHub repo repair links existing repos and only pushes when commits exist", () => {

@@ -35,6 +35,16 @@ function assertShellScriptSurvivesWhitespaceCollapse(script) {
   assert.equal(result.status, 0, result.stderr || flattened);
 }
 
+function runGit(cwd, args) {
+  const result = spawnSync("git", args, {
+    cwd,
+    encoding: "utf8"
+  });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  return result.stdout.trim();
+}
+
 test("App Setup Doctor hard-stops when a non-git directory already has files", async () => {
   const targetRoot = await mkdtemp(path.join(os.tmpdir(), "jskit-app-setup-files-"));
   await writeFile(path.join(targetRoot, "notes.txt"), "existing work\n", "utf8");
@@ -64,6 +74,27 @@ test("App Setup Doctor blocks an empty directory at Git initialization", async (
   assert.equal(status.currentStageId, "git-ready");
   assert.equal(status.stages.find((stage) => stage.id === "git-ready")?.status, "blocked");
   assert.equal(status.stages.find((stage) => stage.id === "git-ready")?.repair?.actionId, "terminal-git-init");
+});
+
+test("App Setup Doctor admits linked Git worktrees before Git safety checks", async () => {
+  const repoRoot = await mkdtemp(path.join(os.tmpdir(), "jskit-app-setup-linked-repo-"));
+  const worktreeRoot = await mkdtemp(path.join(os.tmpdir(), "jskit-app-setup-linked-worktree-"));
+
+  runGit(repoRoot, ["init", "-b", "main"]);
+  runGit(repoRoot, ["config", "user.name", "Studio Test"]);
+  runGit(repoRoot, ["config", "user.email", "studio-test@example.com"]);
+  await writeFile(path.join(repoRoot, "README.md"), "# Test\n", "utf8");
+  runGit(repoRoot, ["add", "README.md"]);
+  runGit(repoRoot, ["commit", "-m", "Initial commit"]);
+  runGit(repoRoot, ["worktree", "add", "-b", "studio-test", worktreeRoot]);
+
+  const status = await inspectAppSetup({
+    targetRoot: worktreeRoot
+  });
+
+  assert.equal(status.stages.find((stage) => stage.id === "directory")?.status, "pass");
+  assert.match(status.stages.find((stage) => stage.id === "directory")?.observed || "", /linked Git metadata/u);
+  assert.equal(status.stages.find((stage) => stage.id === "git-ready")?.status, "pass");
 });
 
 test("App Setup Doctor dependency gate catches partial node_modules installs", async () => {

@@ -26,7 +26,8 @@ import {
 } from "../../../../server/lib/githubRepoSetupScript.js";
 import {
   gitSafeDirectoryArgs,
-  gitToolchainMountArgs
+  gitToolchainMountArgs,
+  linkedGitMetadataMountSource
 } from "../../../../server/lib/gitToolchainMounts.js";
 import {
   shellScript
@@ -666,13 +667,24 @@ async function checkDirectory(targetRoot, context) {
     });
   }
 
+  if (!gitStat.isDirectory() && linkedGitMetadataMountSource(targetRoot)) {
+    context.directoryMode = "git-repo";
+    return passStage({
+      id: "directory",
+      label: "Directory admissibility",
+      expected: "Target directory is empty or already a Git work tree.",
+      observed: ".git file points to linked Git metadata.",
+      explanation: "Studio can continue with Git safety checks."
+    });
+  }
+
   if (!gitStat.isDirectory()) {
     return hardStopStage({
       id: "directory",
       label: "Directory admissibility",
-      expected: ".git is a directory in V0.",
+      expected: ".git is a directory or a valid linked worktree metadata file.",
       observed: ".git is not a directory.",
-      explanation: "V0 does not operate on linked worktrees or submodule-style .git files."
+      explanation: "Studio could not resolve the .git file to existing Git metadata."
     });
   }
 

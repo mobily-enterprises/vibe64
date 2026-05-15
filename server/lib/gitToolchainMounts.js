@@ -46,6 +46,13 @@ function metadataMountSourceFromGitDir(gitDir) {
   return normalizedGitDir;
 }
 
+function repositoryMountSourceFromGitDir(gitDir) {
+  const metadataMountSource = metadataMountSourceFromGitDir(gitDir);
+  return path.basename(metadataMountSource) === ".git"
+    ? path.dirname(metadataMountSource)
+    : metadataMountSource;
+}
+
 function linkedGitMetadataMountSource(targetRoot) {
   const gitDir = linkedGitDir(targetRoot);
   if (!gitDir) {
@@ -56,8 +63,18 @@ function linkedGitMetadataMountSource(targetRoot) {
   return existsSync(mountSource) ? mountSource : "";
 }
 
+function linkedGitRepositoryMountSource(targetRoot) {
+  const gitDir = linkedGitDir(targetRoot);
+  if (!gitDir) {
+    return "";
+  }
+
+  const mountSource = repositoryMountSourceFromGitDir(gitDir);
+  return existsSync(mountSource) ? mountSource : "";
+}
+
 function gitToolchainMountArgs(targetRoot) {
-  const mountSource = linkedGitMetadataMountSource(targetRoot);
+  const mountSource = linkedGitRepositoryMountSource(targetRoot);
   return mountSource ? ["-v", `${mountSource}:${mountSource}`] : [];
 }
 
@@ -76,5 +93,6 @@ function gitSafeDirectoryArgs(targetRoot) {
 export {
   gitSafeDirectoryArgs,
   gitToolchainMountArgs,
-  linkedGitMetadataMountSource
+  linkedGitMetadataMountSource,
+  linkedGitRepositoryMountSource
 };
