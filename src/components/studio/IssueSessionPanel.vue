@@ -262,6 +262,8 @@
                   :model-value="selectedSession.prompt"
                   label="Prompt"
                   variant="outlined"
+                  density="compact"
+                  hide-details="auto"
                   readonly
                   auto-grow
                   rows="7"
@@ -281,6 +283,8 @@
                       item-value="value"
                       :label="codexOutputLabel(output)"
                       variant="outlined"
+                      density="compact"
+                      hide-details="auto"
                       @update:model-value="setCodexOutputDraft(output, $event)"
                     />
                     <StudioLongTextReview
@@ -295,13 +299,15 @@
                       :submit-label="currentActionButtonLabel"
                       :submit-loading="issueSessionBusy"
                       @update:model-value="setCodexOutputDraft(output, $event)"
-                      @submit="submitCurrentForm"
+                      @submit="submitCurrentForm($event)"
                     />
                     <v-text-field
                       v-else
                       :model-value="codexOutputDraftValue(output)"
                       :label="codexOutputLabel(output)"
                       variant="outlined"
+                      density="compact"
+                      hide-details="auto"
                       @update:model-value="setCodexOutputDraft(output, $event)"
                     />
                   </template>
@@ -346,7 +352,7 @@
                   :submit-disabled="!activeStepControls.canSubmitForm"
                   :submit-label="currentActionButtonLabel"
                   :submit-loading="issueSessionBusy"
-                  @submit="submitCurrentForm"
+                  @submit="submitCurrentForm($event)"
                 />
 
                 <v-textarea
@@ -355,6 +361,8 @@
                   :label="selectedStepInput.label"
                   :placeholder="selectedStepInput.placeholder || ''"
                   variant="outlined"
+                  density="compact"
+                  hide-details="auto"
                   auto-grow
                   rows="4"
                 />
@@ -365,6 +373,8 @@
                   :label="selectedStepInput.label"
                   :placeholder="selectedStepInput.placeholder || ''"
                   variant="outlined"
+                  density="compact"
+                  hide-details="auto"
                 />
 
                 <div
@@ -380,6 +390,8 @@
                       :model-value="alternateActionDraftValue(alternateAction)"
                       :label="alternateActionLabel(alternateAction)"
                       variant="outlined"
+                      density="compact"
+                      hide-details="auto"
                       auto-grow
                       rows="3"
                       @update:model-value="setAlternateActionDraft(alternateAction, $event)"
@@ -493,7 +505,7 @@
                       :loading="issueSessionBusy"
                       :disabled="!activeStepControls.canSubmitForm"
                       :prepend-icon="mdiPlay"
-                      @click="submitCurrentForm"
+                      @click="submitCurrentForm($event)"
                     >
                       {{ currentActionButtonLabel }}
                     </v-btn>
@@ -546,6 +558,8 @@
                         :label="alternateActionLabel(alternateAction)"
                         :placeholder="alternateActionPlaceholder(alternateAction)"
                         variant="outlined"
+                        density="compact"
+                        hide-details="auto"
                         auto-grow
                         rows="3"
                         @update:model-value="setAlternateActionDraft(alternateAction, $event)"
@@ -3728,7 +3742,10 @@ async function injectCodexPromptText(session, promptText) {
   return true;
 }
 
-function submitCurrentForm() {
+function submitCurrentForm(event = null) {
+  if (event?.isTrusted !== true) {
+    return;
+  }
   clearAutoStepStartSuppression();
   if (isCodexOutputStep.value) {
     void runCodexOutputStep();
@@ -3876,17 +3893,17 @@ onBeforeUnmount(() => {
 
 .studio-issue-sessions__codex-output-wait {
   display: grid;
-  gap: 0.5rem;
+  gap: 0.38rem;
 }
 
 .studio-issue-sessions__action-stack {
   display: grid;
-  gap: 0.55rem;
+  gap: 0.38rem;
 }
 
 .studio-issue-sessions__alternate-actions {
   display: grid;
-  gap: 0.65rem;
+  gap: 0.45rem;
 }
 
 .studio-issue-sessions__alternate-action {
@@ -3894,8 +3911,8 @@ onBeforeUnmount(() => {
   border: 1px solid rgba(var(--v-border-color), 0.34);
   border-radius: 8px;
   display: grid;
-  gap: 0.55rem;
-  padding: 0.65rem;
+  gap: 0.4rem;
+  padding: 0.5rem;
 }
 
 .studio-issue-sessions__alternate-action--secondary {
@@ -4389,14 +4406,14 @@ onBeforeUnmount(() => {
 .studio-issue-sessions__step-action {
   border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   display: grid;
-  gap: 0.45rem;
-  margin-top: 0.42rem;
-  padding-top: 0.5rem;
+  gap: 0.32rem;
+  margin-top: 0.34rem;
+  padding-top: 0.38rem;
 }
 
 .studio-issue-sessions__action-buttons,
 .studio-issue-sessions__choice-row {
-  margin-top: 0.15rem;
+  margin-top: 0.05rem;
 }
 
 .studio-issue-sessions__waiting {

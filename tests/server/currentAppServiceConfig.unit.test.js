@@ -76,6 +76,8 @@ test("app-test config can opt into host Docker passthrough", async () => {
     assert.ok(args.includes("DOCKER_HOST=unix:///var/run/docker.sock"));
     assert.ok(args.includes("JSKIT_STUDIO_SKIP_STALE_TERMINAL_CLEANUP=1"));
     assert.ok(args.includes("/var/run/docker.sock:/var/run/docker.sock"));
+    assert.ok(args.includes("jskit_ai_studio_tool_home:/home/studio"));
+    assert.match(args.at(-1), /GH_CONFIG_DIR=\/home\/studio\/\.config\/gh/);
     assert.ok(args.includes("--user"));
     assert.match(args.at(-1), /docker_group_args="--groups \$docker_sock_gid"/);
     assert.match(args.at(-1), /\$\(id -u\)" = "0"/);
@@ -105,6 +107,7 @@ test("app-test terminal mounts linked worktree owner roots", async () => {
     });
 
     assert.ok(args.includes(`${root}:${root}`));
+    assert.ok(args.includes("jskit_ai_studio_tool_home:/home/studio"));
     assert.ok(args.includes(`${worktreeRoot}:/workspace`));
     assert.ok(args.includes(`${worktreeRoot}:${worktreeRoot}`));
   });

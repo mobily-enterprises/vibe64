@@ -16,11 +16,45 @@ function errorMessage(error, fallback) {
   return String(error?.message || error || fallback);
 }
 
-function firstSessionId(sessions = []) {
-  return sessions[0]?.sessionId || "";
+const DEFAULT_MAX_OPEN_SESSIONS = 3;
+const SELECTED_SESSION_STORAGE_KEY = "jskit-ai-studio:selected-issue-session-id";
+
+function browserSessionStorage() {
+  if (typeof window === "undefined" || !window.sessionStorage) {
+    return null;
+  }
+  return window.sessionStorage;
 }
 
-const DEFAULT_MAX_OPEN_SESSIONS = 3;
+function readRememberedSessionId() {
+  try {
+    return String(browserSessionStorage()?.getItem(SELECTED_SESSION_STORAGE_KEY) || "");
+  } catch {
+    return "";
+  }
+}
+
+function rememberSessionId(sessionId = "") {
+  try {
+    const storage = browserSessionStorage();
+    if (!storage) {
+      return;
+    }
+    const normalizedSessionId = String(sessionId || "").trim();
+    if (normalizedSessionId) {
+      storage.setItem(SELECTED_SESSION_STORAGE_KEY, normalizedSessionId);
+    } else {
+      storage.removeItem(SELECTED_SESSION_STORAGE_KEY);
+    }
+  } catch {
+    // Session selection persistence is a convenience; blocked storage must not break Studio.
+  }
+}
+
+function newestSessionId(sessions = []) {
+  return sessions.at(-1)?.sessionId || "";
+}
+
 function visibleIssueSessions(sessions = []) {
   return sessions.filter((session) => !isAbandonedIssueSession(session));
 }
@@ -45,7 +79,7 @@ function useIssueSessions() {
     openSessionCount: 0
   });
   const issueSessionStepDefinitions = ref([]);
-  const selectedSessionId = ref("");
+  const selectedSessionId = ref(readRememberedSessionId());
   const selectedSession = ref(null);
   const stepInputValues = ref({});
 
@@ -100,9 +134,13 @@ function useIssueSessions() {
     issueSessions.value = displaySessions;
     const selectedStillExists = displaySessions.some((session) => session.sessionId === selectedSessionId.value);
     if (selectedStillExists) {
+      rememberSessionId(selectedSessionId.value);
       return;
     }
-    selectedSessionId.value = firstSessionId(displaySessions);
+    const rememberedSessionId = readRememberedSessionId();
+    const rememberedStillExists = displaySessions.some((session) => session.sessionId === rememberedSessionId);
+    selectedSessionId.value = rememberedStillExists ? rememberedSessionId : newestSessionId(displaySessions);
+    rememberSessionId(selectedSessionId.value);
     if (!selectedSessionId.value) {
       selectedSession.value = null;
     }
@@ -151,6 +189,7 @@ function useIssueSessions() {
     try {
       selectedSession.value = await readIssueSession(sessionId);
       rememberContract(selectedSession.value);
+      rememberSessionId(selectedSession.value?.sessionId || sessionId);
       resetStepInputValues(selectedSession.value);
       if (!preserveList) {
         const response = await listIssueSessions();
@@ -161,6 +200,7 @@ function useIssueSessions() {
     } catch (loadError) {
       selectedSessionId.value = "";
       selectedSession.value = null;
+      rememberSessionId("");
       issueSessionsError.value = errorMessage(loadError, "Issue session could not be loaded.");
       return null;
     }
@@ -183,6 +223,7 @@ function useIssueSessions() {
         return;
       }
       selectedSessionId.value = response.sessionId;
+      rememberSessionId(response.sessionId);
       await loadIssueSessions();
     } catch (createError) {
       issueSessionsError.value = errorMessage(createError, "Session creation failed.");

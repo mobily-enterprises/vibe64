@@ -40,7 +40,7 @@
         <span>{{ copyStatus || footerText }}</span>
         <v-btn
           color="primary"
-          density="comfortable"
+          density="compact"
           size="small"
           variant="tonal"
           @click="openExpandedReview"
@@ -102,7 +102,7 @@
             :disabled="submitDisabled"
             :loading="submitLoading"
             :prepend-icon="mdiCheckCircleOutline"
-            @click="$emit('submit')"
+            @click="$emit('submit', $event)"
           >
             {{ submitLabel }}
           </v-btn>
@@ -464,10 +464,10 @@ const LongTextPreviewBlocks = defineComponent({
 .studio-long-text-review__footer {
   align-items: center;
   display: flex;
-  gap: 0.75rem;
+  gap: 0.55rem;
   justify-content: space-between;
   min-width: 0;
-  padding: 0.58rem 0.7rem;
+  padding: 0.44rem 0.56rem;
 }
 
 .studio-long-text-review__header {
@@ -478,7 +478,7 @@ const LongTextPreviewBlocks = defineComponent({
   background: rgba(var(--v-theme-surface-variant), 0.32);
   border-top: 1px solid rgba(var(--v-border-color), 0.24);
   color: rgba(var(--v-theme-on-surface), 0.68);
-  font-size: 0.76rem;
+  font-size: 0.72rem;
   line-height: 1.25;
 }
 
@@ -488,7 +488,7 @@ const LongTextPreviewBlocks = defineComponent({
 
 .studio-long-text-review__title-block h3 {
   color: rgb(var(--v-theme-on-surface));
-  font-size: 0.92rem;
+  font-size: 0.86rem;
   font-weight: 720;
   letter-spacing: 0;
   line-height: 1.2;
@@ -498,7 +498,7 @@ const LongTextPreviewBlocks = defineComponent({
 .studio-long-text-review__title-block span,
 .studio-long-text-review__dialog-meta {
   color: rgba(var(--v-theme-on-surface), 0.62);
-  font-size: 0.74rem;
+  font-size: 0.7rem;
   font-weight: 560;
   letter-spacing: 0;
   line-height: 1.25;
@@ -518,8 +518,8 @@ const LongTextPreviewBlocks = defineComponent({
 }
 
 .studio-long-text-review__preview--compact {
-  max-height: clamp(10rem, 26vh, 16rem);
-  padding: 0.62rem 0.7rem;
+  max-height: clamp(8rem, 21vh, 13rem);
+  padding: 0.46rem 0.56rem;
 }
 
 .studio-long-text-review__preview--expanded {
@@ -535,13 +535,13 @@ const LongTextPreviewBlocks = defineComponent({
 .studio-long-text-review__preview :deep(.studio-long-text-review__blocks) {
   color: rgb(var(--v-theme-on-surface));
   display: grid;
-  gap: 0.46rem;
+  gap: 0.36rem;
   line-height: 1.4;
 }
 
 .studio-long-text-review__preview :deep(.studio-long-text-review__blocks--compact) {
-  gap: 0.32rem;
-  line-height: 1.34;
+  gap: 0.24rem;
+  line-height: 1.28;
 }
 
 .studio-long-text-review__preview :deep(.studio-long-text-review__heading) {
@@ -564,13 +564,13 @@ const LongTextPreviewBlocks = defineComponent({
 }
 
 .studio-long-text-review__preview :deep(.studio-long-text-review__paragraph) {
-  font-size: 0.92rem;
+  font-size: 0.88rem;
   margin: 0;
   overflow-wrap: anywhere;
 }
 
 .studio-long-text-review__preview :deep(.studio-long-text-review__blocks--compact .studio-long-text-review__paragraph) {
-  font-size: 0.84rem;
+  font-size: 0.8rem;
 }
 
 .studio-long-text-review__preview :deep(.studio-long-text-review__list) {
@@ -587,7 +587,7 @@ const LongTextPreviewBlocks = defineComponent({
 }
 
 .studio-long-text-review__preview :deep(.studio-long-text-review__blocks--compact .studio-long-text-review__list li) {
-  font-size: 0.84rem;
+  font-size: 0.8rem;
 }
 
 .studio-long-text-review__preview :deep(.studio-long-text-review__code) {
@@ -599,7 +599,7 @@ const LongTextPreviewBlocks = defineComponent({
   line-height: 1.36;
   margin: 0;
   overflow: auto;
-  padding: 0.58rem 0.65rem;
+  padding: 0.46rem 0.55rem;
   white-space: pre;
 }
 

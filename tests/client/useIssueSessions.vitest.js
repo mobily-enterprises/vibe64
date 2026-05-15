@@ -8,6 +8,8 @@ import {
   rewindIssueSession
 } from "@/lib/studioApi.js";
 
+const SELECTED_SESSION_STORAGE_KEY = "jskit-ai-studio:selected-issue-session-id";
+
 vi.mock("@/lib/studioApi.js", () => ({
   abandonIssueSession: vi.fn(),
   createIssueSession: vi.fn(),
@@ -20,6 +22,84 @@ vi.mock("@/lib/studioApi.js", () => ({
 describe("useIssueSessions", () => {
   afterEach(() => {
     vi.resetAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  function stubSessionStorage(initialValues = {}) {
+    const values = { ...initialValues };
+    const sessionStorage = {
+      getItem: vi.fn((key) => Object.prototype.hasOwnProperty.call(values, key) ? values[key] : null),
+      removeItem: vi.fn((key) => {
+        delete values[key];
+      }),
+      setItem: vi.fn((key, value) => {
+        values[key] = String(value);
+      })
+    };
+    vi.stubGlobal("window", {
+      sessionStorage
+    });
+    return sessionStorage;
+  }
+
+  it("restores the selected issue session across browser reloads", async () => {
+    const olderSession = {
+      currentStep: "plan_made",
+      createdAt: "2026-05-15T06:38:24.000Z",
+      sessionId: "2026-05-15_14-38-24",
+      status: "running"
+    };
+    const selectedSession = {
+      currentStep: "issue_details_gathered",
+      createdAt: "2026-05-15T07:36:02.000Z",
+      sessionId: "2026-05-15_15-36-02",
+      status: "running"
+    };
+    const sessionStorage = stubSessionStorage({
+      [SELECTED_SESSION_STORAGE_KEY]: selectedSession.sessionId
+    });
+    listIssueSessions.mockResolvedValue({
+      sessions: [olderSession, selectedSession]
+    });
+    readIssueSession.mockImplementation(async (sessionId) => {
+      return sessionId === selectedSession.sessionId ? selectedSession : olderSession;
+    });
+
+    const issueSessions = useIssueSessions();
+    await issueSessions.loadIssueSessions();
+
+    expect(readIssueSession).toHaveBeenCalledWith(selectedSession.sessionId);
+    expect(issueSessions.selectedSession.value.currentStep).toBe("issue_details_gathered");
+    expect(sessionStorage.setItem)
+      .toHaveBeenCalledWith(SELECTED_SESSION_STORAGE_KEY, selectedSession.sessionId);
+  });
+
+  it("defaults to the newest visible session when no remembered selection exists", async () => {
+    const olderSession = {
+      currentStep: "plan_made",
+      createdAt: "2026-05-15T06:38:24.000Z",
+      sessionId: "2026-05-15_14-38-24",
+      status: "running"
+    };
+    const newestSession = {
+      currentStep: "issue_details_gathered",
+      createdAt: "2026-05-15T07:36:02.000Z",
+      sessionId: "2026-05-15_15-36-02",
+      status: "running"
+    };
+    stubSessionStorage();
+    listIssueSessions.mockResolvedValue({
+      sessions: [olderSession, newestSession]
+    });
+    readIssueSession.mockImplementation(async (sessionId) => {
+      return sessionId === newestSession.sessionId ? newestSession : olderSession;
+    });
+
+    const issueSessions = useIssueSessions();
+    await issueSessions.loadIssueSessions();
+
+    expect(readIssueSession).toHaveBeenCalledWith(newestSession.sessionId);
+    expect(issueSessions.selectedSession.value.currentStep).toBe("issue_details_gathered");
   });
 
   it("patches late session fields into the selected session and visible list", async () => {

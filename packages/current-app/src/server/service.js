@@ -600,9 +600,9 @@ function appTestScript({
     "      docker_group_args=\"--groups $docker_sock_gid\"",
     "    fi",
     "  fi",
-    `  exec setpriv --reuid "$JSKIT_HOST_UID" --regid "$JSKIT_HOST_GID" $docker_group_args env HOME=/tmp/studio-home npm_config_cache=/tmp/npm-cache bash -lc ${shellQuote(runCommand)}`,
+    `  exec setpriv --reuid "$JSKIT_HOST_UID" --regid "$JSKIT_HOST_GID" $docker_group_args env HOME=/tmp/studio-home GH_CONFIG_DIR=/home/studio/.config/gh npm_config_cache=/tmp/npm-cache bash -lc ${shellQuote(runCommand)}`,
     "fi",
-    `exec env HOME=/tmp/studio-home npm_config_cache=/tmp/npm-cache bash -lc ${shellQuote(runCommand)}`
+    `exec env HOME=/tmp/studio-home GH_CONFIG_DIR=/home/studio/.config/gh npm_config_cache=/tmp/npm-cache bash -lc ${shellQuote(runCommand)}`
   ].join("\n");
 }
 
@@ -637,6 +637,8 @@ function appTestTerminalArgs({
     "-p",
     `127.0.0.1:${port}:${port}`,
     ...gitToolchainMountArgs(targetRoot),
+    "-v",
+    `${TOOL_HOME_VOLUME}:/home/studio`,
     "-v",
     `${targetRoot}:/workspace`,
     "-v",
