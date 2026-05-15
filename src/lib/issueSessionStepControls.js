@@ -2,7 +2,6 @@ function buildActiveStepControls({
   actionKind = "",
   automationMode = "manual",
   busy = false,
-  codexOutputFormVisible = false,
   codexPromptAlreadyRequested = false,
   codexPromptInjectionReady = false,
   codexWorking = false,
@@ -10,34 +9,26 @@ function buildActiveStepControls({
   hasChoiceForm = false,
   hasExclusiveTextAlternateAction = false,
   hasTextForm = false,
-  isCodexOutputStep = false,
   isTerminalSession = false,
   selectedSessionId = "",
   selectedSessionNeedsSetupTerminal = false,
   selectedStepInputType = "none",
-  selectedStepNeedsCodexOutputPrompt = false,
-  requiredCompletionMissing = false,
   terminalBlocked = false
 } = {}) {
   const hasForm = Boolean(
     hasChoiceForm ||
     hasTextForm ||
-    codexOutputFormVisible ||
     hasExclusiveTextAlternateAction
   );
   const blocked = Boolean(
     !selectedSessionId ||
-    isTerminalSession ||
-    selectedSessionNeedsSetupTerminal
+    isTerminalSession
   );
+  const terminalStepPending = selectedSessionNeedsSetupTerminal || automationMode === "terminal";
   const canClick = !blocked && !busy && !terminalBlocked && !codexWorking;
   const isCodexPromptStep = actionKind === "codex_prompt";
   const codexPromptInjectionPending = codexPromptInjectionReady && !codexPromptAlreadyRequested;
   const codexPromptPending = automationMode === "codex_prompt" && !codexPromptAlreadyRequested;
-  const codexOutputPromptPending = (
-    (automationMode === "codex_output_prompt" && selectedStepNeedsCodexOutputPrompt) ||
-    (isCodexOutputStep && codexPromptInjectionReady && !codexOutputFormVisible)
-  ) && !codexPromptAlreadyRequested;
   const automaticStepPending = automationMode === "immediate";
   const manualNoInputStepPending = Boolean(actionKind) &&
     automationMode === "manual" &&
@@ -48,14 +39,13 @@ function buildActiveStepControls({
     (
       codexPromptInjectionPending ||
       codexPromptPending ||
-      codexOutputPromptPending ||
+      terminalStepPending ||
       automaticStepPending ||
       manualNoInputStepPending
     );
   const showGoNext = !hasForm &&
     !blocked &&
     !showExecuteStep &&
-    !requiredCompletionMissing &&
     (
       isCodexPromptStep ||
       (actionKind === "user_check" && selectedStepInputType === "none")

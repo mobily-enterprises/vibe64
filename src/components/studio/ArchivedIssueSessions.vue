@@ -104,18 +104,6 @@
                 <pre>{{ session.finalReportText }}</pre>
               </v-expansion-panel-text>
             </v-expansion-panel>
-            <v-expansion-panel v-if="session.agentDecisionsLatest">
-              <v-expansion-panel-title>Agent Decisions</v-expansion-panel-title>
-              <v-expansion-panel-text>
-                <pre>{{ session.agentDecisionsLatest }}</pre>
-              </v-expansion-panel-text>
-            </v-expansion-panel>
-            <v-expansion-panel v-if="session.issueDetails">
-              <v-expansion-panel-title>Issue Details</v-expansion-panel-title>
-              <v-expansion-panel-text>
-                <pre>{{ session.issueDetails }}</pre>
-              </v-expansion-panel-text>
-            </v-expansion-panel>
           </v-expansion-panels>
         </v-card-text>
       </v-card>
@@ -198,7 +186,7 @@ function githubLabel(url, fallback) {
 }
 
 function hasDetails(session = {}) {
-  return Boolean(session.finalReportText || session.agentDecisionsLatest || session.issueDetails);
+  return Boolean(session.finalReportText);
 }
 
 async function loadSessions() {

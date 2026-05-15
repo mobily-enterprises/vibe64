@@ -188,6 +188,12 @@ That distinction is important: devlinks are not "use whatever happens to be on
 my laptop" forever. In a session, they become links into controlled sibling
 repos that belong to the session.
 
+If the source checkout has uncommitted changes, provisioning still creates the
+session-owned sibling clone from committed `HEAD`. The uncommitted source edits
+stay in the source checkout. That keeps session setup independent from parallel
+local work, while still making it explicit in the terminal when the session does
+not include those uncommitted edits.
+
 ## Why Sibling Repos Exist
 
 At first glance, pulling sibling repos into a Studio session sounds excessive.

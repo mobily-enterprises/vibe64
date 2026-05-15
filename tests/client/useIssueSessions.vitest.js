@@ -50,7 +50,7 @@ describe("useIssueSessions", () => {
       status: "running"
     };
     const selectedSession = {
-      currentStep: "issue_details_gathered",
+      currentStep: "issue_created",
       createdAt: "2026-05-15T07:36:02.000Z",
       sessionId: "2026-05-15_15-36-02",
       status: "running"
@@ -69,7 +69,7 @@ describe("useIssueSessions", () => {
     await issueSessions.loadIssueSessions();
 
     expect(readIssueSession).toHaveBeenCalledWith(selectedSession.sessionId);
-    expect(issueSessions.selectedSession.value.currentStep).toBe("issue_details_gathered");
+    expect(issueSessions.selectedSession.value.currentStep).toBe("issue_created");
     expect(sessionStorage.setItem)
       .toHaveBeenCalledWith(SELECTED_SESSION_STORAGE_KEY, selectedSession.sessionId);
   });
@@ -82,7 +82,7 @@ describe("useIssueSessions", () => {
       status: "running"
     };
     const newestSession = {
-      currentStep: "issue_details_gathered",
+      currentStep: "issue_created",
       createdAt: "2026-05-15T07:36:02.000Z",
       sessionId: "2026-05-15_15-36-02",
       status: "running"
@@ -99,7 +99,7 @@ describe("useIssueSessions", () => {
     await issueSessions.loadIssueSessions();
 
     expect(readIssueSession).toHaveBeenCalledWith(newestSession.sessionId);
-    expect(issueSessions.selectedSession.value.currentStep).toBe("issue_details_gathered");
+    expect(issueSessions.selectedSession.value.currentStep).toBe("issue_created");
   });
 
   it("patches late session fields into the selected session and visible list", async () => {
@@ -180,7 +180,7 @@ describe("useIssueSessions", () => {
       errors: [
         {
           code: "rewind_step_not_allowed",
-          message: "Only Plan made can be used as a cycle rewind target."
+          message: "Cannot rewind session 2026-05-12_13-07-36 to worktree_created."
         }
       ]
     };
@@ -190,10 +190,10 @@ describe("useIssueSessions", () => {
 
     const issueSessions = useIssueSessions();
     await issueSessions.loadIssueSessions();
-    const response = await issueSessions.rewindSelectedSession("plan_executed");
+    const response = await issueSessions.rewindSelectedSession("worktree_created");
 
     expect(response.ok).toBe(false);
     expect(issueSessions.issueSessionsError.value)
-      .toBe("Only Plan made can be used as a cycle rewind target.");
+      .toBe("Cannot rewind session 2026-05-12_13-07-36 to worktree_created.");
   });
 });

@@ -88,14 +88,6 @@ function issueSessionCodexPrompt(session = {}) {
   return promptField ? String(session?.[promptField] || "") : "";
 }
 
-function issueSessionCodexExpectedOutputs(session = {}) {
-  const contractFields = session?.codex?.responseContract?.fields;
-  if (Array.isArray(contractFields) && contractFields.length > 0) {
-    return contractFields.filter((output) => output?.field && output?.extract);
-  }
-  return [];
-}
-
 function hasIssueSessionCodexPrompt(session = {}) {
   return session?.codex?.mode === "inject_prompt" && Boolean(issueSessionCodexPrompt(session));
 }
@@ -251,7 +243,6 @@ export {
   isAbandonedIssueSession,
   isClosedIssueSession,
   isOpenIssueSession,
-  issueSessionCodexExpectedOutputs,
   issueSessionDisplayTitle,
   issueSessionFacts,
   issueSessionCodexPromptActionLabel,

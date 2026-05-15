@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { buildIssueSessionCodexPromptSignature } from "../../src/lib/issueSessionPromptAutomation.js";
+import { buildIssueSessionCodexPromptSignature } from "../../src/lib/issueSessionPromptIdentity.js";
 
 const BASE_URL = String(process.env.PLAYWRIGHT_BASE_URL || "http://127.0.0.1:5173").replace(/\/+$/u, "");
 
@@ -472,8 +472,7 @@ const abandonedArchiveSession = {
   status: "abandoned",
   branch: "issue-2-abandoned-session",
   issueUrl: "https://github.com/merc/example-target-app/issues/2",
-  completedSteps: ["issue_created", "plan_made"],
-  agentDecisionsLatest: "Abandoned archive decision."
+  completedSteps: ["issue_created", "plan_made"]
 };
 
 const codexPromptText = "Create the GitHub issue for the requested Studio session UI.";
@@ -501,109 +500,75 @@ function codexPromptSignature(session) {
 
 const codexPromptStepDefinitions = [
   {
-    id: "session-created",
+    id: "session_created",
     index: 0,
     label: "Session created",
-    kind: "system",
+    kind: "automatic",
     description: "Create the durable session directory."
   },
   {
-    id: "worktree",
+    id: "worktree_created",
     index: 1,
-    label: "Worktree",
-    kind: "command",
+    label: "Worktree created",
+    kind: "automatic",
     description: "Prepare the isolated session worktree."
   },
   {
-    id: "prompt",
+    id: "dependencies_installed",
     index: 2,
-    label: "Prompt",
-    kind: "input",
+    label: "Dependencies installed",
+    kind: "automatic",
+    description: "Install dependencies in the session worktree."
+  },
+  {
+    id: "issue_prompt_rendered",
+    index: 3,
+    label: "Initial issue prompt",
+    kind: "human_input",
     description: "Capture the developer request."
   },
   {
-    id: "issue",
-    index: 3,
-    label: "Issue",
-    kind: "codex_output",
-    description: "Ask Codex to create the GitHub issue."
+    id: "issue_drafted",
+    index: 4,
+    label: "Issue drafted",
+    kind: "codex_prompt",
+    description: "Ask Codex to draft issue.md."
   },
   {
-    id: "issue-created",
-    index: 4,
+    id: "issue_created",
+    index: 5,
     label: "Issue created",
     kind: "automatic",
     description: "Create the GitHub issue."
   },
   {
     id: "plan_made",
-    index: 5,
+    index: 6,
     label: "Plan made",
-    kind: "codex_output",
-    description: "Ask Codex to create an implementation plan."
+    kind: "codex_prompt",
+    description: "Ask Codex to create an implementation plan in the terminal."
   }
 ];
 const codexPromptSessionPayload = {
   ok: true,
   sessionId: codexPromptSessionId,
   status: "waiting_for_user",
-  currentStep: "issue",
-  completedSteps: ["session-created", "worktree", "dependencies_installed", "prompt"],
+  currentStep: "issue_drafted",
+  completedSteps: ["session_created", "worktree_created", "dependencies_installed", "issue_prompt_rendered"],
   stepDefinitions: codexPromptStepDefinitions,
   currentStepAction: {
-    stepId: "issue",
-    kind: "codex_output",
-    automation: { mode: "codex_output_prompt" },
-    buttonLabel: "Finalise issue",
-    description: "Codex should create the issue and return the issue URL.",
-    input: {
-      fields: [
-        {
-          extract: "issue_title",
-          formatHint: "text",
-          type: "text",
-          name: "issueTitle",
-          label: "Issue title",
-          required: true
-        },
-        {
-          extract: "issue_text",
-          formatHint: "markdown",
-          multiline: true,
-          type: "text",
-          name: "issue",
-          label: "Issue body",
-          required: true
-        }
-      ],
-      type: "object"
-    }
+    stepId: "issue_drafted",
+    kind: "codex_prompt",
+    automation: { mode: "codex_prompt" },
+    buttonLabel: "Record issue draft",
+    description: "Codex writes issue.md and issue_title; continue after review.",
+    input: { type: "none" }
   },
   codex: {
+    autoInject: true,
     mode: "inject_prompt",
     promptField: "prompt",
-    responseContract: {
-      fields: [
-        {
-          extract: "issue_title",
-          field: "issueTitle",
-          formatHint: "text",
-          label: "Issue title",
-          required: true
-        },
-        {
-          extract: "issue_text",
-          field: "issue",
-          formatHint: "markdown",
-          label: "Issue body",
-          multiline: true,
-          required: true
-        }
-      ],
-      kind: "fields",
-      missingMarkerBehavior: "manual_or_resend",
-      required: true
-    }
+    promptActionLabel: "Start issue draft"
   },
   prompt: codexPromptText,
   receipts: [],
@@ -652,11 +617,11 @@ const nonCodexStepSessionPayload = {
 };
 const codexIssueDraftedPayload = {
   ...codexPromptSessionPayload,
-  completedSteps: [...codexPromptSessionPayload.completedSteps, "issue"],
+  completedSteps: [...codexPromptSessionPayload.completedSteps, "issue_drafted"],
   codex: null,
-  currentStep: "issue-created",
+  currentStep: "issue_created",
   currentStepAction: {
-    stepId: "issue-created",
+    stepId: "issue_created",
     kind: "automatic",
     automation: { mode: "immediate" },
     buttonLabel: "Create issue",
@@ -673,44 +638,21 @@ const codexIssueDraftedPayload = {
 };
 const codexIssueCreatedPayload = {
   ...codexIssueDraftedPayload,
-  completedSteps: [...codexIssueDraftedPayload.completedSteps, "issue-created"],
+  completedSteps: [...codexIssueDraftedPayload.completedSteps, "issue_created"],
   currentStep: "plan_made",
   currentStepAction: {
     stepId: "plan_made",
-    kind: "codex_output",
-    automation: { mode: "codex_output_prompt" },
-    buttonLabel: "Save plan",
-    description: "Save the approved implementation plan.",
-    input: {
-      extract: "plan",
-      formatHint: "markdown",
-      label: "Approved plan",
-      multiline: true,
-      name: "plan",
-      required: true,
-      type: "text"
-    }
+    kind: "codex_prompt",
+    automation: { mode: "codex_prompt" },
+    buttonLabel: "Record plan",
+    description: "Codex writes the plan in the terminal; continue after review.",
+    input: { type: "none" }
   },
   codex: {
+    autoInject: true,
     mode: "inject_prompt",
-    promptActionLabel: "Get Codex to create plan",
-    promptIntroText: "Codex will create an implementation plan based on the issue.",
-    promptField: "prompt",
-    responseContract: {
-      fields: [
-        {
-          extract: "plan",
-          field: "plan",
-          formatHint: "markdown",
-          label: "Plan",
-          multiline: true,
-          required: true
-        }
-      ],
-      kind: "fields",
-      missingMarkerBehavior: "manual_or_resend",
-      required: true
-    }
+    promptActionLabel: "Start plan",
+    promptField: "prompt"
   },
   issueUrl: "https://github.com/merc/example-target-app/issues/123",
   status: "running"
@@ -765,7 +707,7 @@ const deepUiSkipSessionPayload = {
     automation: { mode: "codex_prompt" },
     label: "Run Deep UI check",
     requiresExplicitRun: false,
-    skipReason: "uiImpact is none.",
+    skipReason: "User skipped Deep UI check.",
     stepId: "deep_ui_check_run"
   },
   codex: null,
@@ -774,7 +716,6 @@ const deepUiSkipSessionPayload = {
   issueTitle: "Add health endpoint",
   issueText: "Add a server-only health endpoint.",
   issueUrl: "https://github.com/merc/example-target-app/issues/124",
-  planText: "Add the endpoint.",
   errors: [],
   prUrl: "",
   transcriptLog: "",
@@ -805,10 +746,9 @@ const deepUiSkippedSessionPayload = {
     {
       ok: true,
       phase: "pre_review",
-      reason: "uiImpact is none.",
+      reason: "User skipped Deep UI check.",
       status: "skipped",
-      stepId: "deep_ui_check_run",
-      uiImpact: "none"
+      stepId: "deep_ui_check_run"
     }
   ]
 };
@@ -828,7 +768,6 @@ const deepUiPromptedSessionPayload = {
     "issue_prompt_rendered",
     "issue_drafted",
     "issue_created",
-    "issue_details_gathered",
     "plan_made",
     "plan_executed"
   ],
@@ -838,21 +777,20 @@ const deepUiPromptedSessionPayload = {
     skipReason: ""
   },
   prompt: "Deep UI quality check prompt for this session.",
-  uiImpact: "definite",
   worktree: sessionWorktreePath(deepUiPromptSessionId)
 };
 const planExecutionRejectSessionId = "2026-05-12_02-06-46";
 const planExecutionRejectStepDefinitions = [
   {
     id: "plan_made",
-    index: 8,
+    index: 6,
     label: "Plan made",
-    kind: "codex_output",
-    description: "Codex writes an implementation plan from the issue."
+    kind: "codex_prompt",
+    description: "Codex writes an implementation plan in the terminal."
   },
   {
     id: "plan_executed",
-    index: 9,
+    index: 7,
     label: "Plan executed",
     kind: "codex_prompt",
     description: "Codex has the execution prompt. Studio advances when Codex finishes."
@@ -877,7 +815,6 @@ const planExecutionRejectPayload = {
     "issue_prompt_rendered",
     "issue_drafted",
     "issue_created",
-    "issue_details_gathered",
     "plan_made"
   ],
   stepDefinitions: planExecutionRejectStepDefinitions,
@@ -895,24 +832,10 @@ const planExecutionRejectPayload = {
     autoInject: true,
     mode: "inject_prompt",
     promptActionLabel: "Get Codex to execute plan",
-    promptField: "prompt",
-    responseContract: {
-      completionBehavior: "manual_advance",
-      kind: "completion_marker",
-      marker: "jskit_step_result",
-      missingMarkerBehavior: "resend",
-      required: true,
-      stepField: "step"
-    }
+    promptField: "prompt"
   },
   prompt: [
     "Execute the approved implementation plan.",
-    "",
-    "[jskit_step_result]",
-    "status: complete",
-    "step: plan_executed",
-    "summary: Short summary of what changed and what was checked.",
-    "[/jskit_step_result]"
   ].join("\n"),
   errors: [],
   issueTitle: "Add victory file",
@@ -1034,165 +957,6 @@ const reviewDeslopUnexpectedAdvancedPayload = {
     stepId: "automated_checks_run"
   }
 };
-const userCheckSessionId = "2026-05-12_03-07-44";
-const userCheckStepDefinitions = [
-  {
-    id: "user_check_completed",
-    index: 21,
-    label: "User check",
-    kind: "user_check",
-    description: "Record whether the user's manual check passed."
-  },
-  {
-    id: "plan_made",
-    index: 7,
-    label: "Plan made",
-    kind: "codex_output",
-    description: "Codex writes an implementation plan for the active cycle; cycle 001 plans from the issue, later cycles plan from user rework notes."
-  }
-];
-const userCheckAction = {
-  alternateActions: [],
-  buttonLabel: "Save user check",
-  description: "Record whether the user's manual check passed.",
-  input: {
-    label: "User check result",
-    name: "userCheck",
-    options: [
-      { label: "Passed", value: "passed" },
-      { label: "Failed", value: "failed" }
-    ],
-    required: true,
-    type: "choice"
-  },
-  kind: "user_check",
-  label: "Save user check",
-  requiresExplicitRun: false,
-  stepId: "user_check_completed",
-  utilityActions: [
-    {
-      id: "session_app_test",
-      kind: "app_test",
-      label: "Test app"
-    }
-  ]
-};
-const userCheckSessionPayload = {
-  ok: true,
-  sessionId: userCheckSessionId,
-  status: "running",
-  currentStep: "user_check_completed",
-  completedSteps: ["session_created"],
-  stepDefinitions: userCheckStepDefinitions,
-  currentStepAction: userCheckAction,
-  codex: null,
-  prompt: "",
-  receipts: [],
-  issueTitle: "Add health endpoint",
-  issueText: "Add a server-only health endpoint.",
-  issueUrl: "https://github.com/merc/example-target-app/issues/125",
-  planText: "Add the endpoint.",
-  errors: [],
-  prUrl: "",
-  transcriptLog: "",
-  worktree: sessionWorktreePath(userCheckSessionId),
-  worktreeReady: false
-};
-const failedUserCheckSessionPayload = {
-  ...userCheckSessionPayload,
-  ok: false,
-  status: "blocked",
-  errors: [
-    {
-      code: "user_check_failed",
-      message: "User check failed. Provide rework notes to start a new plan cycle.",
-      repairCommand: `jskit session ${userCheckSessionId} step --user-check failed --rework-notes -`
-    }
-  ],
-  currentStepAction: {
-    ...userCheckAction,
-    alternateActions: [
-      {
-        id: "return_to_plan_made",
-        input: {
-          formatHint: "markdown",
-          label: "What needs to be reworked?",
-          multiline: true,
-          name: "reworkNotes",
-          required: true,
-          type: "text"
-        },
-        label: "Return to Plan made",
-        presentation: "exclusive",
-        requiredErrorCode: "user_check_failed",
-        submitOptions: {
-          userCheck: "failed"
-        },
-        targetStep: "plan_made"
-      }
-    ]
-  }
-};
-const reworkStartedSessionPayload = {
-  ...userCheckSessionPayload,
-  activeCycle: "002",
-  cycles: [
-    {
-      cycle: "001",
-      label: "cycle_001",
-      status: "failed",
-      userCheckResult: "failed"
-    },
-    {
-      cycle: "002",
-      label: "cycle_002",
-      reworkRequest: "The health endpoint returns the wrong status code.",
-      status: "active",
-      userCheckResult: ""
-    }
-  ],
-  currentStep: "plan_made",
-  planText: "",
-  status: "running",
-  currentStepAction: {
-    buttonLabel: "Get Codex to create revised plan",
-    description: "Codex writes a revised implementation plan from the user's rework notes for this cycle.",
-    input: {
-      extract: "plan",
-      formatHint: "markdown",
-      label: "Approved plan",
-      multiline: true,
-      name: "plan",
-      required: true,
-      type: "text"
-    },
-    kind: "codex_output",
-    automation: { mode: "codex_output_prompt" },
-    label: "Get Codex to create revised plan",
-    stepId: "plan_made"
-  },
-  codex: {
-    mode: "inject_prompt",
-    promptActionLabel: "Get Codex to create revised plan",
-    promptIntroText: "Codex will create a revised implementation plan based on the rework notes.",
-    responseContract: {
-      fields: [
-        {
-          extract: "plan",
-          field: "plan",
-          formatHint: "markdown",
-          label: "Plan",
-          multiline: true,
-          required: true
-        }
-      ],
-      kind: "fields",
-      missingMarkerBehavior: "manual_or_resend",
-      required: true
-    }
-  }
-};
-
 function sseStatusPayload(status, itemsKey = "checks") {
   const items = Array.isArray(status?.[itemsKey]) ? status[itemsKey] : [];
   const events = [
@@ -2371,309 +2135,6 @@ test.describe("studio startup navigation", () => {
     await page.goto(`${BASE_URL}/home/history`);
     await expect(page.getByRole("heading", { name: "Session History" })).toBeVisible();
     await expect(page.locator(".studio-home-shell-title")).toHaveCount(0);
-  });
-
-  test("active session title updates after accepted Codex issue output", async ({ page }) => {
-    const stepPayloads: unknown[] = [];
-    const codexSession = await mockCodexPromptSession(page, {
-      stepPayloads
-    });
-
-    await page.goto(`${BASE_URL}/home`);
-    await expectSessionsRoute(page);
-    await expect(page.locator(".studio-home-shell-title")).toHaveText("Session 05-12_01-02-39");
-
-    await codexSession.setTerminalOutput([
-      "Codex ready.",
-      "[issue_title]",
-      "Add session UI",
-      "[/issue_title]",
-      "[issue_text]",
-      "Make sessions clearer.",
-      "[/issue_text]"
-    ].join("\n"));
-
-    const finaliseIssueButton = page.getByRole("button", { name: "Finalise issue" });
-    await expect(finaliseIssueButton).toBeEnabled();
-    await page.getByLabel("Issue title from Codex").fill("Edited session UI");
-    await finaliseIssueButton.click();
-
-    await expect.poll(() => stepPayloads.length).toBe(2);
-    await expect(page.locator(".studio-home-shell-title")).toHaveText("Edited session UI");
-  });
-
-  test("codex issue step injects the prompt, finalises the draft, then creates the issue automatically", async ({ page }) => {
-    const stepPayloads: unknown[] = [];
-    const terminalInputs: string[] = [];
-    const codexSession = await mockCodexPromptSession(page, {
-      stepPayloads,
-      terminalInputs
-    });
-
-    await page.goto(`${BASE_URL}/home`);
-    await expectSessionsRoute(page);
-    const submitPromptButton = page.getByRole("button", { name: "Submit prompt to Codex" });
-    await expect(submitPromptButton).toBeVisible();
-    await expect(page.locator(".xterm-rows").first()).toContainText("Codex ready.");
-    const terminalHost = page.locator(".codex-terminal__host").first();
-    await terminalHost.click();
-    await expect(terminalHost).toHaveCSS("border-color", "rgb(78, 161, 255)");
-    await submitPromptButton.click();
-
-    await expect.poll(() => terminalInputs.length).toBe(7);
-    expect(terminalInputs.slice(0, 6)).toEqual(codexShellSubmitSequence);
-    expect(terminalInputs[6]).toContain(codexPromptText);
-    await expect(submitPromptButton).toHaveCount(0);
-    await expect(page.getByText("Submit prompt to Codex requested.")).toBeVisible();
-
-    await codexSession.setTerminalOutput([
-      "Codex ready.",
-      "[issue_title]",
-      "Add session UI",
-      "[/issue_title]"
-    ].join("\n"));
-
-    const finaliseIssueButton = page.getByRole("button", { name: "Finalise issue" });
-    await expect(finaliseIssueButton).toBeVisible();
-    await expect(finaliseIssueButton).toBeDisabled();
-    const issueTitleField = page.getByLabel("Issue title from Codex");
-    const issueBodyField = page.getByLabel("Issue body from Codex");
-    await expect(issueTitleField).toHaveValue("Add session UI");
-    await expect(issueBodyField).toHaveValue("");
-
-    await codexSession.setTerminalOutput([
-      "Codex ready.",
-      "[issue_title]",
-      "Add session UI",
-      "[/issue_title]",
-      "[issue_text]",
-      "Make sessions clearer.",
-      "[/issue_text]"
-    ].join("\n"));
-
-    await expect(finaliseIssueButton).toBeEnabled();
-    await expect(issueTitleField).toHaveValue("Add session UI");
-    await expect(issueBodyField).toHaveValue("Make sessions clearer.");
-    await issueTitleField.fill("Edited session UI");
-    await issueBodyField.fill("Make the issue sharper.");
-    await finaliseIssueButton.click();
-
-    await expect.poll(() => stepPayloads.length).toBe(1);
-    expect(stepPayloads[0]).toEqual({
-      issue: "Make the issue sharper.",
-      issueTitle: "Edited session UI"
-    });
-    await expect.poll(() => stepPayloads.length).toBe(2);
-    expect(stepPayloads[1]).toEqual({});
-    await expect(page.getByRole("button", { name: "Create issue" })).toHaveCount(0);
-
-    await expect(page.getByText("Done: Issue created")).toBeVisible();
-    await expect(page.getByText("Goal: Plan made")).toBeVisible();
-  });
-
-  test("codex output editors stay hidden until parsed output exists", async ({ page }) => {
-    const stepPayloads: unknown[] = [];
-    const terminalInputs: string[] = [];
-    const codexSession = await mockCodexPromptSession(page, {
-      stepPayloads,
-      terminalInputs
-    });
-
-    await page.goto(`${BASE_URL}/home`);
-    await expectSessionsRoute(page);
-
-    const issueTitleField = page.getByLabel("Issue title from Codex");
-    const issueBodyField = page.getByLabel("Issue body from Codex");
-    const finaliseIssueButton = page.getByRole("button", { name: "Finalise issue" });
-    await expect(issueTitleField).toHaveCount(0);
-    await expect(issueBodyField).toHaveCount(0);
-    await expect(finaliseIssueButton).toHaveCount(0);
-
-    await codexSession.setTerminalOutput("Codex ready.\nThinking without tagged issue output.");
-    await expect(issueTitleField).toHaveCount(0);
-    await expect(issueBodyField).toHaveCount(0);
-    await expect(finaliseIssueButton).toHaveCount(0);
-
-    await codexSession.setTerminalOutput([
-      "Codex ready.",
-      "[issue_title]",
-      "Add session UI",
-      "[/issue_title]",
-      "[issue_text]",
-      "Make sessions clearer.",
-      "[/issue_text]"
-    ].join("\n"));
-    await expect(issueTitleField).toBeVisible();
-    await expect(issueBodyField).toBeVisible();
-    await expect(finaliseIssueButton).toBeEnabled();
-    await finaliseIssueButton.click();
-
-    await expect.poll(() => stepPayloads.length).toBeGreaterThanOrEqual(2);
-
-    const planField = page.getByLabel("Plan from Codex");
-    const savePlanButton = page.getByRole("button", { name: "Save plan" });
-    await expect(planField).toHaveCount(0);
-    await expect(savePlanButton).toHaveCount(0);
-    const planPromptButton = page.getByRole("button", { name: "Get Codex to create plan" });
-    await expect(planPromptButton).toBeVisible();
-
-    await codexSession.setTerminalOutput("Codex ready.\nThinking without tagged plan output.");
-    await expect(planField).toHaveCount(0);
-    await expect(savePlanButton).toHaveCount(0);
-    await planPromptButton.click();
-    await expect.poll(() => stepPayloads.length).toBe(3);
-
-    await codexSession.setTerminalOutput([
-      "Codex ready.",
-      "[plan]",
-      "1. Inspect the existing session UI.",
-      "2. Tighten the labels.",
-      "[/plan]"
-    ].join("\n"));
-    await expect(planField).toBeVisible();
-    await expect(planField).toHaveValue("1. Inspect the existing session UI.\n2. Tighten the labels.");
-    await expect(savePlanButton).toBeEnabled();
-  });
-
-  test("plan prompt generation injects the returned prompt on the first click", async ({ page }) => {
-    const stepPayloads: unknown[] = [];
-    const terminalInputs: string[] = [];
-    const codexSession = await mockCodexPromptSession(page, {
-      stepPayloads,
-      terminalInputs
-    });
-
-    await page.goto(`${BASE_URL}/home`);
-    await expectSessionsRoute(page);
-    await expect(page.locator(".xterm-rows").first()).toContainText("Codex ready.");
-    await codexSession.setTerminalOutput([
-      "Codex ready.",
-      "[issue_title]",
-      "Add session UI",
-      "[/issue_title]",
-      "[issue_text]",
-      "Make sessions clearer.",
-      "[/issue_text]"
-    ].join("\n"));
-
-    await page.getByRole("button", { name: "Finalise issue" }).click();
-    await expect.poll(() => stepPayloads.length).toBe(1);
-    await expect.poll(() => stepPayloads.length).toBe(2);
-
-    const planPromptButton = page.getByRole("button", { name: "Get Codex to create plan" });
-    await expect(planPromptButton).toBeVisible();
-    await planPromptButton.click();
-    await expect.poll(() => stepPayloads.length).toBe(3);
-    expect(stepPayloads[2]).toEqual({});
-    await expect(planPromptButton).toHaveCount(0);
-    await expect(page.getByText("Get Codex to create plan requested.")).toBeVisible();
-    await expect.poll(() => terminalInputs.join("")).toContain(codexPlanPromptText);
-  });
-
-  test("next Codex prompt step injects after saving a Codex output step", async ({ page }) => {
-    const executionPrompt = "Execute the approved implementation plan after saving the plan.";
-    let activeSession = codexPlanPromptPayload;
-    const stepPayloads: Record<string, unknown>[] = [];
-    const terminalInputs: Record<string, string[]> = {
-      [codexPromptSessionId]: []
-    };
-    await mockCodexTerminalWebSocket(page, {
-      initialOutputBySessionId: {
-        [codexPromptSessionId]: "Codex ready."
-      },
-      terminalInputs
-    });
-    await mockStudioReady(page);
-    await page.route("**/api/studio/current-app", async (route) => {
-      await route.fulfill({
-        contentType: "application/json",
-        body: JSON.stringify(currentAppPayload)
-      });
-    });
-    await page.route("**/api/studio/current-app/issue-sessions", async (route) => {
-      await route.fulfill({
-        contentType: "application/json",
-        body: JSON.stringify({
-          limits: {
-            maxOpenSessions: 3,
-            openSessionCount: 1
-          },
-          ok: true,
-          sessions: [activeSession],
-          stepDefinitions: planExecutionRejectStepDefinitions
-        })
-      });
-    });
-    await page.route(`**/api/studio/current-app/issue-sessions/${codexPromptSessionId}`, async (route) => {
-      await route.fulfill({
-        contentType: "application/json",
-        body: JSON.stringify(activeSession)
-      });
-    });
-    await page.route(`**/api/studio/current-app/issue-sessions/${codexPromptSessionId}/step`, async (route) => {
-      stepPayloads.push(route.request().postDataJSON());
-      activeSession = {
-        ...planExecutionRejectPayload,
-        sessionId: codexPromptSessionId,
-        prompt: executionPrompt,
-        worktree: sessionWorktreePath(codexPromptSessionId)
-      };
-      await route.fulfill({
-        contentType: "application/json",
-        body: JSON.stringify(activeSession)
-      });
-    });
-    await page.route(`**/api/studio/current-app/issue-sessions/${codexPromptSessionId}/codex-terminal`, async (route) => {
-      await route.fulfill({
-        contentType: "application/json",
-        body: JSON.stringify({
-          commandPreview: "codex",
-          id: `term-${codexPromptSessionId}`,
-          needsThreadCapture: false,
-          ok: true,
-          output: "Codex ready.",
-          status: "running"
-        })
-      });
-    });
-    await page.route(`**/api/studio/current-app/issue-sessions/${codexPromptSessionId}/codex-thread`, async (route) => {
-      await route.fulfill({
-        contentType: "application/json",
-        body: JSON.stringify({
-          codexThreadId,
-          ok: true
-        })
-      });
-    });
-    await mockCodexPromptHandoffRoute(page, codexPromptSessionId);
-
-    await page.goto(`${BASE_URL}/home`);
-    await expectSessionsRoute(page);
-    await page.getByRole("button", { name: "Get Codex to create plan" }).click();
-    await expect.poll(() => terminalInputs[codexPromptSessionId].join(""))
-      .toContain(codexPlanPromptText);
-
-    await page.evaluate(({ output, sessionId }) => {
-      (window as unknown as {
-        __studioPushCodexTerminalOutput: (input: { output: string; sessionId: string }) => void;
-      }).__studioPushCodexTerminalOutput({
-        output,
-        sessionId
-      });
-    }, {
-      output: [
-        "Codex ready.",
-        "[plan]",
-        "Implement the issue.",
-        "[/plan]"
-      ].join("\n"),
-      sessionId: codexPromptSessionId
-    });
-
-    await page.getByRole("button", { name: "Save plan" }).click();
-    await expect.poll(() => stepPayloads.length).toBe(1);
-    await expect.poll(() => terminalInputs[codexPromptSessionId].join(""))
-      .toContain(executionPrompt);
   });
 
   test("Codex prompt step is not marked requested until terminal confirms injection", async ({ page }) => {

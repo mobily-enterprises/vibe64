@@ -51,7 +51,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import {
@@ -401,14 +401,6 @@ async function restartTerminal() {
   await startTerminal();
 }
 
-watch(canRunSetupTerminal, (ready) => {
-  if (ready) {
-    void startTerminal();
-  }
-}, {
-  immediate: true
-});
-
 watch(sessionId, () => {
   terminalSessionId.value = "";
   terminalStatus.value = "";
@@ -423,10 +415,8 @@ watch(sessionId, () => {
   closeTerminalSocket();
 });
 
-onMounted(() => {
-  void setupTerminalUi().then(() => {
-    void startTerminal();
-  });
+defineExpose({
+  start: startTerminal
 });
 
 onBeforeUnmount(() => {

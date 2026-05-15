@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   canUseIssueSessionTerminal,
   isClosedIssueSession,
-  issueSessionCodexExpectedOutputs,
   issueSessionDisplayTitle,
   issueSessionFacts,
   issueSessionCodexPromptActionLabel,
@@ -43,17 +42,11 @@ describe("issue session view model", () => {
   });
 
   it("only auto-injects Codex prompts explicitly marked for auto injection", () => {
-    const structuredHandoff = {
+    const manualHandoff = {
       prompt: "Draft the issue.",
       codex: {
         mode: "inject_prompt",
-        promptField: "prompt",
-        responseContract: {
-          fields: [
-            { field: "issue", extract: "issue_text" },
-            { field: "", extract: "ignored" }
-          ]
-        }
+        promptField: "prompt"
       }
     };
     const sideEffectHandoff = {
@@ -66,9 +59,8 @@ describe("issue session view model", () => {
       }
     };
 
-    expect(issueSessionCodexExpectedOutputs(structuredHandoff)).toEqual([{ field: "issue", extract: "issue_text" }]);
-    expect(shouldAutoInjectIssueSessionCodexPrompt(structuredHandoff)).toBe(false);
-    expect(shouldUseManualIssueSessionCodexPrompt(structuredHandoff)).toBe(true);
+    expect(shouldAutoInjectIssueSessionCodexPrompt(manualHandoff)).toBe(false);
+    expect(shouldUseManualIssueSessionCodexPrompt(manualHandoff)).toBe(true);
     expect(shouldAutoInjectIssueSessionCodexPrompt(sideEffectHandoff)).toBe(true);
     expect(shouldUseManualIssueSessionCodexPrompt(sideEffectHandoff)).toBe(false);
     expect(issueSessionCodexPromptActionLabel(sideEffectHandoff)).toBe("Execute plan");
@@ -77,21 +69,6 @@ describe("issue session view model", () => {
       ...sideEffectHandoff,
       prompt: ""
     })).toBe(false);
-  });
-
-  it("uses JSKIT response contract fields as the only Codex output contract", () => {
-    expect(issueSessionCodexExpectedOutputs({
-      codex: {
-        responseContract: {
-          fields: [
-            { field: "issueTitle", extract: "issue_title", options: [{ label: "Bug", value: "bug" }] },
-            { field: "", extract: "ignored" }
-          ]
-        }
-      }
-    })).toEqual([
-      { field: "issueTitle", extract: "issue_title", options: [{ label: "Bug", value: "bug" }] }
-    ]);
   });
 
   it("derives display labels from session fields", () => {
@@ -125,7 +102,6 @@ describe("issue session view model", () => {
 
   it("builds compact live session facts without noisy rollup cards", () => {
     const facts = issueSessionFacts({
-      agentDecisionsLatest: "Decision text",
       bluePrintNoise: "ignored",
       blueprintExists: true,
       blueprintPath: "/workspace/.jskit/APP_BLUEPRINT.md",
@@ -134,7 +110,7 @@ describe("issue session view model", () => {
       codexThreadId: "019e1575-2458-7b93-bf9d-e7d7ffd49ad2",
       completedSteps: ["session_created", "worktree_created"],
       currentStep: "plan_made",
-      githubComments: { issue_details: "commented" },
+      githubComments: {},
       issueText: "# Add reports\n\nBody",
       issueTitle: "Add reports",
       issueUrl: "https://github.com/example/app/issues/12",

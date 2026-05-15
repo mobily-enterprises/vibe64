@@ -335,7 +335,7 @@ test("Studio current-app API exposes JSKIT issue sessions from target filesystem
         url: `/api/studio/current-app/issue-sessions/${createdPayload.sessionId}`
       });
       assert.equal(detail.statusCode, 200);
-      assert.equal(detail.json().receipts[0].stepId, firstSteps[0].id);
+      assert.equal(detail.json().currentStep, firstSteps[1].id);
 
       const worktreeCreated = await app.inject({
         method: "POST",
@@ -374,11 +374,9 @@ test("Studio current-app API exposes JSKIT issue sessions from target filesystem
       });
       assert.equal(prompted.statusCode, 200);
       assert.equal(prompted.json().currentStep, firstSteps[4].id);
-      assert.equal(prompted.json().currentStepAction.input.fields[0].name, "issueTitle");
-      assert.equal(prompted.json().currentStepAction.input.fields[1].name, "issue");
-      assert.equal(prompted.json().codex.responseContract.fields[0].field, "issueTitle");
-      assert.equal(prompted.json().codex.responseContract.fields[1].field, "issue");
+      assert.equal(prompted.json().currentStepAction.input.type, "none");
       assert.equal(prompted.json().codex.mode, "inject_prompt");
+      assert.equal(prompted.json().codex.autoInject, true);
 
       const rewound = await app.inject({
         method: "POST",

@@ -1,18 +1,3 @@
-function shouldAutoRunCodexPromptHandoff({
-  alreadyStarted = false,
-  baseReady = false,
-  hasPrompt = false,
-  hasPromptToInject = false
-} = {}) {
-  if (!baseReady) {
-    return false;
-  }
-  if (hasPromptToInject) {
-    return true;
-  }
-  return !hasPrompt && !alreadyStarted;
-}
-
 function promptTextHash(value = "") {
   let hash = 2166136261;
   for (const character of String(value || "")) {
@@ -23,7 +8,6 @@ function promptTextHash(value = "") {
 }
 
 function buildIssueSessionCodexPromptSignature({
-  activeCycle = "",
   currentReviewPass = "",
   prompt = "",
   sessionId = ""
@@ -34,7 +18,6 @@ function buildIssueSessionCodexPromptSignature({
   }
   return [
     sessionId,
-    activeCycle || "",
     currentReviewPass || "",
     promptTextHash(promptText),
     promptText.length
@@ -42,6 +25,5 @@ function buildIssueSessionCodexPromptSignature({
 }
 
 export {
-  buildIssueSessionCodexPromptSignature,
-  shouldAutoRunCodexPromptHandoff
+  buildIssueSessionCodexPromptSignature
 };

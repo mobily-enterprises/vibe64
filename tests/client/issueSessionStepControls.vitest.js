@@ -41,19 +41,6 @@ describe("issue session step controls", () => {
     });
   });
 
-  it("hides go next when a required Codex completion marker is missing", () => {
-    expect(buildActiveStepControls({
-      actionKind: "codex_prompt",
-      automationMode: "codex_prompt",
-      codexPromptAlreadyRequested: true,
-      requiredCompletionMissing: true,
-      selectedSessionId: "session-1"
-    })).toMatchObject({
-      canGoNext: false,
-      showGoNext: false
-    });
-  });
-
   it("hides go next while Codex is working", () => {
     expect(buildActiveStepControls({
       actionKind: "codex_prompt",
@@ -92,11 +79,11 @@ describe("issue session step controls", () => {
     });
   });
 
-  it("uses form submit controls instead of go next for form steps", () => {
+  it("uses form submit controls instead of go next for text form steps", () => {
     expect(buildActiveStepControls({
-      actionKind: "codex_output",
+      actionKind: "human_input",
       canRunAction: true,
-      codexOutputFormVisible: true,
+      hasTextForm: true,
       selectedSessionId: "session-1"
     })).toMatchObject({
       canSubmitForm: true,
