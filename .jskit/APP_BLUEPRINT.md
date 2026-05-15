@@ -44,7 +44,9 @@
 ## Route And Screen Plan
 
 - Home/global routes: `/bootup-setup` is the single Bootup/Setup route and renders three query-addressable tabs: `?tab=bootup`, `?tab=app-bootup`, and `?tab=app-setup`. `/home` shows Current App inspection. The legacy `/bootup`, `/app-bootup`, and `/app-setup` file routes are intentionally removed and are not compatibility redirects.
+- Active session title behavior: `/home` shows the selected active `IssueSession` title in the shell app bar top-left area so it does not consume page content height. The title is unboxed and is not duplicated as a Session details fact. When no active title is available, the shell falls back to the normal `Sessions` label.
 - Session history route: `/home/history` is the single archive screen for issue sessions. It is reached from `shell.secondary-nav` as `Session History`, uses Vuetify tabs for `Completed` and `Abandoned`, stores the selected tab in `?tab=completed|abandoned`, and defaults missing or invalid tab state to `completed`.
+- Session history title rule: `/home/history` keeps its in-page Session History heading and must not inherit the active `/home` session title.
 - Removed archive routes: `/home/completed` and `/home/abandoned` are intentionally not compatibility routes, aliases, or redirects. Completed and Abandoned should not appear in `shell.primary-nav`.
 - Account routes: none.
 - Console routes: none.
@@ -67,6 +69,7 @@
 - Bootup/Setup UI ownership: `src/pages/bootup-setup.vue` owns the single `ShellLayout` wrapper and lazy-mounts one active doctor screen at a time. The reusable doctor screens live under `src/components/studio/` and must not include their own `ShellLayout`.
 - Gate route state: `resolveStudioGate()` stores the shared route `/bootup-setup` plus a `tab` value (`bootup`, `app-bootup`, or `app-setup`) instead of storing old route strings.
 - Issue-session archives: `ArchivedIssueSessions` owns archive list loading, empty, error, refresh, and card-detail states. The Session History page reuses it with `archive=completed|abandoned`, hides archive-specific title/description copy inside tabs, and places one top-level Refresh action in the tab controls so the archive content does not gain an extra action-only header row.
+- Active issue-session naming: derive display titles through `issueSessionDisplayTitle(session)` using trimmed `session.issueTitle`, then the first meaningful line from `session.issueText`, then `Session <shortIssueSessionId(session.sessionId)>`. `IssueSessionPanel` emits the selected title upward; `/home/index.vue` forwards it; `/home.vue` owns shell app-bar rendering and clears it when leaving `/home` or when the current app/session is unavailable.
 - Current-app archive API: completed and abandoned archive lists use `GET /api/studio/current-app/issue-sessions?archive=<completed|abandoned>`. This is app runtime data, not CRUD-owned persistence.
 - Local Studio request guard: Current App Studio HTTP and websocket routes are loopback-only by default. Container/host UI testing that cannot satisfy loopback host/origin checks must use the explicit `--bypass-localhost-check` flag or `JSKIT_STUDIO_BYPASS_LOCALHOST_CHECK=1`; `bin/dev.js` forwards the bypass as environment to Vite and the dev proxy rewrites origin only under that explicit bypass.
 - App test run config: `.jskit/config/testrun_command` can provide the combined target test command; for Studio self-testing it may include `npm run server -- --bypass-localhost-check` so the browser-side test runner can reach local-only Current App routes.
