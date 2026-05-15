@@ -143,7 +143,7 @@ const props = defineProps({
     default: ""
   }
 });
-const emit = defineEmits(["input", "output", "prompt-injected", "session-update"]);
+const emit = defineEmits(["input", "output", "prompt-injected", "prompt-injection-failed", "session-update"]);
 
 const terminalHost = ref(null);
 const terminalSessionId = ref("");
@@ -1089,6 +1089,11 @@ function schedulePromptInjectionRetry(requestKey) {
     promptInjectionRetryStartedAt = Date.now();
   }
   if (Date.now() - promptInjectionRetryStartedAt > PROMPT_INJECTION_RETRY_TIMEOUT_MS) {
+    emit("prompt-injection-failed", {
+      error: "Prompt injection timed out before the Codex terminal accepted the request.",
+      requestKey,
+      sessionId: sessionId.value
+    });
     clearPromptInjectionRetry();
     return;
   }

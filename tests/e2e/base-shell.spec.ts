@@ -851,7 +851,7 @@ const planExecutionRejectPayload = {
   stepDefinitions: planExecutionRejectStepDefinitions,
   currentStepAction: {
     buttonLabel: "Go to next step",
-    description: "Codex has the execution prompt. Studio advances when Codex finishes.",
+    description: "Codex has the execution prompt. Review the result, then use Go to next step when ready.",
     input: { type: "none" },
     kind: "codex_prompt",
     automation: { mode: "codex_prompt" },
@@ -865,7 +865,7 @@ const planExecutionRejectPayload = {
     promptActionLabel: "Get Codex to execute plan",
     promptField: "prompt",
     responseContract: {
-      completionBehavior: "auto_advance",
+      completionBehavior: "manual_advance",
       kind: "completion_marker",
       marker: "jskit_step_result",
       missingMarkerBehavior: "resend",
@@ -2441,6 +2441,8 @@ test.describe("studio startup navigation", () => {
     expect(terminalInputs[planExecutionRejectSessionId].join(""))
       .not.toContain("Execute the approved implementation plan.");
     await page.getByRole("button", { name: "Start task" }).click();
+    await expect(page.getByRole("button", { name: "Start task" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Go to next step" })).toBeDisabled();
     await expect.poll(() => terminalStartCount).toBeGreaterThan(1);
     await expect.poll(() => terminalInputs[planExecutionRejectSessionId].join(""))
       .toContain("Execute the approved implementation plan.");
@@ -2634,8 +2636,9 @@ test.describe("studio startup navigation", () => {
 
     await page.waitForTimeout(1600);
     expect(stepRequestCount).toBe(0);
-    await expect(page.getByText("Codex finished without the required step completion block.").first()).toBeVisible();
-    await expect(page.getByRole("button", { name: "Resend execute plan request" })).toBeVisible();
+    await expect(page.getByText("Codex finished without the required step completion block.").first()).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Resend execute plan request" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Go to next step" })).toBeVisible();
 
     await page.evaluate(({ output, sessionId }) => {
       (window as unknown as {
@@ -2661,6 +2664,9 @@ test.describe("studio startup navigation", () => {
       ].join("\n"),
       sessionId: planExecutionRejectSessionId
     });
+
+    await page.waitForTimeout(100);
+    await page.getByRole("button", { name: "Go to next step" }).click();
 
     await expect.poll(() => stepRequestCount).toBe(1);
     expect(String(stepPayloads[0]?.codexResult || "")).not.toContain("\u001b");

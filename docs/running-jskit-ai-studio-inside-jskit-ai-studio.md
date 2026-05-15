@@ -23,27 +23,32 @@ That is where devlinks and sibling repos come in.
 
 ## The Short Version
 
-To run JSKIT-AI Studio inside JSKIT-AI Studio, we need three things to line up:
+To run JSKIT-AI Studio inside JSKIT-AI Studio, we need four things to line up:
 
 1. The Studio worktree must be fully provisioned, not just a bare Git checkout.
 2. Its JSKIT package dependencies must point at editable local package source
    when requested.
 3. Docker containers launched from nested Studio instances must see the same
    filesystem graph that Git and Node symlinks refer to.
+4. Nested toolchain processes must inherit the right credentials and daemon
+   access without inheriting the whole parent home directory.
 
-The third point is where most of the "how is this even failing?" moments live.
-Git worktrees use `.git` files that point outside the worktree. Devlinks use
-`node_modules` symlinks that point outside the worktree. Docker, by default,
-only sees what we mount into it. If Docker cannot see the paths Git and Node are
-following, the failure looks random:
+The last two points are where most of the "how is this even failing?" moments
+live. Git worktrees use `.git` files that point outside the worktree. Devlinks
+use `node_modules` symlinks that point outside the worktree. Docker, by
+default, only sees what we mount into it, and nested tools only see the
+credentials we deliberately expose. If those contexts are incomplete, the
+failure looks random:
 
 - Git says the worktree is not a repository.
 - Node says `@jskit-ai/kernel` cannot be found.
 - Docker says port `4100` is already allocated even though the nested process
   thought it was free.
+- GitHub CLI says it is not authenticated, even though the parent Studio is
+  happily creating issues and comments.
 
-All three are true. None are the real story. The real story is: containers need
-the correct host-side context.
+All of these are true. None are the real story. The real story is: containers
+need the correct host-side context.
 
 ## Devlinks: Local Packages Without The Publish Tax
 
@@ -361,6 +366,53 @@ containers. Then the next nested Studio can do the same, and so on until either
 engineering curiosity is satisfied or the machine starts making reasonable
 objections.
 
+## The Tool Home Trap
+
+Another recursive failure looks less like Docker and more like amnesia:
+
+```text
+GitHub CLI is not authenticated.
+```
+
+This is confusing because the parent Studio can be authenticated just fine. It
+can create the GitHub issue, list PRs, and comment on issues. Then the child
+Studio starts inside an app-test container, tries the exact same thing, and
+`gh` looks around with empty pockets.
+
+The reason is that app-test intentionally runs with an isolated home:
+
+```text
+HOME=/tmp/studio-home
+```
+
+That is good. It keeps npm cache, shell state, and other runtime scraps out of
+the managed tool home. But `gh` stores its login under the home config
+directory, usually:
+
+```text
+~/.config/gh
+```
+
+So the child Studio was not missing the `gh` binary. It was missing the `gh`
+memory.
+
+The fix is deliberately narrow. App-test containers mount Studio's managed
+tool-home volume:
+
+```text
+jskit_ai_studio_tool_home:/home/studio
+```
+
+and expose only the GitHub CLI config location:
+
+```text
+GH_CONFIG_DIR=/home/studio/.config/gh
+```
+
+The child keeps `HOME=/tmp/studio-home`, but `gh` reads the same authenticated
+config as the parent managed toolchain. This is the useful kind of sharing:
+the credentials cross the boundary, the random home-directory clutter does not.
+
 ## The Port Trap
 
 One failure only appears once recursion gets far enough:
@@ -386,6 +438,29 @@ The fix is to check both places:
 
 Only then is the port considered available.
 
+## The Auto-Retry Trap
+
+The GitHub auth failure exposed one more problem. When a nested session reached
+the automatic `issue_created` step, the step failed because `gh` was not
+authenticated. Studio then did something very earnest and very annoying: it
+tried again. And again. And again.
+
+The screen flickered because the UI had an automatic-step guard, but cleared
+that guard after a failed immediate step. The sequence was:
+
+1. `issue_created` is an immediate no-input step.
+2. Studio auto-runs it.
+3. `gh issue create` fails.
+4. Studio clears the "already auto-ran this step" marker.
+5. The busy-state watcher sees the same step again.
+6. Back to step 2. Tiny treadmill, large irritation.
+
+The fix is that automatic immediate steps are one-shot for the current
+session-step key. If the automatic attempt fails, the error stays visible and
+the user can explicitly retry after fixing the cause. Manual retry still works;
+the UI just stops volunteering to run face-first into the same wall every few
+milliseconds.
+
 ## What This Gives Us
 
 The final development shape is:
@@ -407,7 +482,11 @@ contracts.
 - Provisioning decides how a session receives local development context.
 - Sibling repos decide who owns cross-repo changes.
 - Docker mounts decide what filesystem truth containers can actually see.
+- Tool-home mounts and `GH_CONFIG_DIR` decide which credentials nested tools
+  can use.
 - Port selection checks the namespace that will really bind the port.
+- Immediate-step guards decide when Studio should stop helping and wait for a
+  human to repair the underlying failure.
 
 Once those contracts are in place, JSKIT-AI Studio can develop JSKIT-AI Studio
 using JSKIT-AI Studio. It is recursive, but not mysterious. The stack stops
