@@ -12,6 +12,15 @@ function issueSessionTitleFromIssueText(issueText) {
   return (firstMeaningfulLine || "").slice(0, 120);
 }
 
+function issueSessionDisplayTitle(session = {}) {
+  const issueTitle = firstText(session?.issueTitle, issueSessionTitleFromIssueText(session?.issueText));
+  if (issueTitle) {
+    return issueTitle;
+  }
+  const shortSessionId = shortIssueSessionId(session?.sessionId);
+  return shortSessionId ? `Session ${shortSessionId}` : "";
+}
+
 function parseGithubSessionLink(value, kind) {
   const fallbackLabel = kind === "pr" ? "Pull request" : "Issue";
   try {
@@ -243,6 +252,7 @@ export {
   isClosedIssueSession,
   isOpenIssueSession,
   issueSessionCodexExpectedOutputs,
+  issueSessionDisplayTitle,
   issueSessionFacts,
   issueSessionCodexPromptActionLabel,
   issueSessionStatusColor,

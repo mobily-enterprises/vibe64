@@ -18,7 +18,7 @@
       rounded
     />
 
-    <IssueSessionPanel v-if="currentApp" />
+    <IssueSessionPanel v-if="currentApp" @title-change="emitPageTitle" />
 
     <v-sheet
       v-if="!gateLoading && !currentAppLoading && !currentApp && !currentAppError"
@@ -35,7 +35,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from "vue";
+import { onBeforeUnmount, onMounted, ref } from "vue";
 import {
   readCurrentApp
 } from "@/lib/studioApi.js";
@@ -45,14 +45,25 @@ const gateLoading = ref(false);
 const currentApp = ref(null);
 const currentAppLoading = ref(false);
 const currentAppError = ref("");
+const emit = defineEmits(["page-title-change"]);
+
+function emitPageTitle(title = "") {
+  emit("page-title-change", String(title || "").trim());
+}
 
 async function loadCurrentApp() {
   currentAppLoading.value = true;
   currentAppError.value = "";
+  emitPageTitle();
   try {
     currentApp.value = await readCurrentApp();
+    if (!currentApp.value) {
+      emitPageTitle();
+    }
   } catch (loadError) {
+    currentApp.value = null;
     currentAppError.value = String(loadError?.message || loadError || "Current app inspection failed.");
+    emitPageTitle();
   } finally {
     currentAppLoading.value = false;
   }
@@ -72,6 +83,10 @@ async function loadHome() {
 
 onMounted(() => {
   void loadHome();
+});
+
+onBeforeUnmount(() => {
+  emitPageTitle();
 });
 </script>
 

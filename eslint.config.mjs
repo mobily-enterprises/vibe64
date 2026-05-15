@@ -2,7 +2,7 @@ import { baseConfig, nodeConfig, vueConfig, webConfig } from "@jskit-ai/config-e
 
 export default [
   {
-    ignores: ["dist/**", "node_modules/**", "coverage/**"]
+    ignores: ["dist/**", "node_modules/**", "coverage/**", ".jskit/sessions/**", ".jskit/verification/**"]
   },
   {
     files: ["src/pages/**/*.vue"],

@@ -856,6 +856,7 @@ import {
   isOpenIssueSession,
   issueSessionCodexExpectedOutputs,
   issueSessionCodexPromptActionLabel,
+  issueSessionDisplayTitle,
   issueSessionFacts,
   issueSessionStatusColor,
   issueSessionStatusLabel,
@@ -867,6 +868,8 @@ import {
   buildIssueSessionCodexPromptSignature,
   shouldAutoRunCodexPromptHandoff
 } from "@/lib/issueSessionPromptAutomation.js";
+
+const emit = defineEmits(["title-change"]);
 
 const copyStatus = ref("");
 const codexTerminalOutputBySessionId = ref({});
@@ -976,6 +979,10 @@ const sessionFactItems = computed(() => {
       ...fact,
       icon: sessionFactIcon(fact.icon)
     }));
+});
+
+const selectedSessionTitle = computed(() => {
+  return issueSessionDisplayTitle(selectedSession.value || {});
 });
 
 const completedStepIds = computed(() => new Set(selectedSession.value?.completedSteps || []));
@@ -3932,6 +3939,12 @@ watch(selectedSession, (session) => {
   immediate: true
 });
 
+watch(selectedSessionTitle, (title) => {
+  emit("title-change", title);
+}, {
+  immediate: true
+});
+
 watch(selectedSessionId, () => {
   if (!sessionAppTestVisible.value) {
     activeSessionTerminalView.value = "codex";
@@ -4017,6 +4030,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  emit("title-change", "");
   clearTerminalSnapshotSyncTimer();
   for (const watcher of codexCompletionWatchersBySignature.values()) {
     watcher.dispose();

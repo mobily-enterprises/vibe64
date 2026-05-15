@@ -99,14 +99,18 @@ Root package: jskit-ai-studio
     - codexAttachmentInputValidator (value, export)
     - codexThreadInputValidator (value, export)
     - currentAppQueryInputValidator (value, export)
+    - rewindIssueSessionInputValidator (value, export)
     - terminalInputValidator (value, export)
 
 - packages/current-app/src/server/registerRoutes.js
     - registerRoutes (function, export)
 
 - packages/current-app/src/server/service.js
+    - APP_TEST_HOST_DOCKER_CONFIG (value, component_or_class)
     - APP_TEST_TESTRUN_COMMAND_CONFIG (value, component_or_class)
+    - appTestTerminalArgs (function, export)
     - createService (function, helper)
+    - findAvailablePort (function, export)
     - inspectCurrentApp (function, export)
     - resolveAppTestConfig (function, helper)
     - resolveCurrentAppRoot (function, helper)
@@ -169,6 +173,12 @@ Root package: jskit-ai-studio
 
 - server/lib/githubRepoSetupScript.js
     - buildGithubRepoCreateOrLinkScript (function, helper)
+
+- server/lib/gitToolchainMounts.js
+    - gitSafeDirectoryArgs (function, export)
+    - gitToolchainMountArgs (function, export)
+    - linkedGitMetadataMountSource (function, export)
+    - linkedGitRepositoryMountSource (function, export)
 
 - server/lib/localhostCheckBypass.js
     - hasLocalhostCheckBypassArg (function, helper)
@@ -241,9 +251,6 @@ Root package: jskit-ai-studio
 - src/components/studio/AppSetupDoctorScreen.vue
     - default (default, default)
 
-- src/components/studio/AppTestLauncher.vue
-    - default (default, default)
-
 - src/components/studio/AppTestTerminal.vue
     - default (default, default)
 
@@ -263,6 +270,12 @@ Root package: jskit-ai-studio
     - default (default, default)
 
 - src/components/studio/IssueSessionStepTerminal.vue
+    - default (default, default)
+
+- src/components/studio/StudioErrorNotice.vue
+    - default (default, default)
+
+- src/components/studio/StudioLongTextReview.vue
     - default (default, default)
 
 - src/composables/useIssueSessions.js
@@ -313,6 +326,7 @@ Root package: jskit-ai-studio
     - isOpenIssueSession (function, helper)
     - issueSessionCodexExpectedOutputs (function, export)
     - issueSessionCodexPromptActionLabel (function, export)
+    - issueSessionDisplayTitle (function, export)
     - issueSessionFacts (function, export)
     - issueSessionStatusColor (function, export)
     - issueSessionStatusLabel (function, export)
@@ -354,6 +368,7 @@ Root package: jskit-ai-studio
     - readIssueSessionDiff (function, helper)
     - readTargetAppStatus (function, helper)
     - resolveStudioGate (function, helper)
+    - rewindIssueSession (function, export)
     - runIssueSessionStep (function, helper)
     - saveIssueSessionCodexThread (function, export)
     - startCurrentAppTestTerminal (function, export)
@@ -397,10 +412,10 @@ Root package: jskit-ai-studio
 
 ## Direct JSKIT package exports
 
-- @jskit-ai/agent-docs@0.1.36
+- @jskit-ai/agent-docs@0.1.38
     - no exported code files detected
 
-- @jskit-ai/config-eslint@0.1.74
+- @jskit-ai/config-eslint@0.1.76
     - . -> src/index.js
     - ./base -> base.js
       - baseConfig (value, export)
@@ -413,7 +428,7 @@ Root package: jskit-ai-studio
     - ./web -> web.js
       - webConfig (value, export)
 
-- @jskit-ai/http-runtime@0.1.74
+- @jskit-ai/http-runtime@0.1.76
     - ./client -> src/client/index.js
     - ./shared -> src/shared/index.js
     - ./shared/validators/command -> src/shared/validators/command.js
@@ -466,12 +481,12 @@ Root package: jskit-ai-studio
       - createCursorPagedListResponseSchema (function, helper)
       - createResource (function, helper)
 
-- @jskit-ai/jskit-cli@0.2.84
+- @jskit-ai/jskit-cli@0.2.86
     - . -> src/index.js
     - ./client -> src/client/index.js
     - ./server -> src/server/index.js
 
-- @jskit-ai/kernel@0.1.75
+- @jskit-ai/kernel@0.1.77
     - ./_testable -> _testable/index.js
     - ./client -> client/index.d.ts
       - bootstrapClientShellApp (function, export)
@@ -686,10 +701,11 @@ Root package: jskit-ai-studio
       - createSurfaceRuntime (function, helper)
       - filterRoutesBySurface (function, export)
     - ./shared/validators -> shared/validators/index.js
+      - createSchema (value, helper)
     - ./shared/validators/inputNormalization -> shared/validators/inputNormalization.js
       - normalizeObjectInput (function, helper)
 
-- @jskit-ai/shell-web@0.1.74
+- @jskit-ai/shell-web@0.1.76
     - ./client -> src/client/index.js
       - clientProviders (value, export)
     - ./client/bootstrap -> src/client/bootstrap/index.js

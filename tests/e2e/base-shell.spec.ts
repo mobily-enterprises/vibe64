@@ -2053,6 +2053,78 @@ test.describe("studio startup navigation", () => {
     }
   });
 
+  test("active session title follows the selected session without adding a details fact", async ({ page }) => {
+    await mockCodexPromptSessions(page, [
+      {
+        ...codexPromptSessionPayload,
+        issueText: "First active session body.",
+        issueTitle: "First active session"
+      },
+      {
+        ...secondCodexPromptSessionPayload,
+        issueText: "Second active session body.",
+        issueTitle: "Second active session"
+      }
+    ]);
+
+    await page.goto(`${BASE_URL}/home`);
+    await expectSessionsRoute(page);
+    await expect(page.locator(".studio-home-shell-title")).toHaveText("Second active session");
+    await expect(
+      page.locator(".studio-issue-sessions__facts .studio-issue-sessions__fact-label").filter({ hasText: /^Title$/u })
+    ).toHaveCount(0);
+
+    await page.locator(".studio-issue-sessions__tab-chip").filter({ hasText: "01-02-39" }).click();
+    await expect(page.locator(".studio-home-shell-title")).toHaveText("First active session");
+
+    await page.route(/\/api\/studio\/current-app\/issue-sessions\?archive=/u, async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          limits: {
+            maxOpenSessions: 3,
+            openSessionCount: 2
+          },
+          ok: true,
+          sessions: [],
+          stepDefinitions: []
+        })
+      });
+    });
+    await page.goto(`${BASE_URL}/home/history`);
+    await expect(page.getByRole("heading", { name: "Session History" })).toBeVisible();
+    await expect(page.locator(".studio-home-shell-title")).toHaveCount(0);
+  });
+
+  test("active session title updates after accepted Codex issue output", async ({ page }) => {
+    const stepPayloads: unknown[] = [];
+    const codexSession = await mockCodexPromptSession(page, {
+      stepPayloads
+    });
+
+    await page.goto(`${BASE_URL}/home`);
+    await expectSessionsRoute(page);
+    await expect(page.locator(".studio-home-shell-title")).toHaveText("Session 05-12_01-02-39");
+
+    await codexSession.setTerminalOutput([
+      "Codex ready.",
+      "[issue_title]",
+      "Add session UI",
+      "[/issue_title]",
+      "[issue_text]",
+      "Make sessions clearer.",
+      "[/issue_text]"
+    ].join("\n"));
+
+    const finaliseIssueButton = page.getByRole("button", { name: "Finalise issue" });
+    await expect(finaliseIssueButton).toBeEnabled();
+    await page.getByLabel("Issue title from Codex").fill("Edited session UI");
+    await finaliseIssueButton.click();
+
+    await expect.poll(() => stepPayloads.length).toBe(2);
+    await expect(page.locator(".studio-home-shell-title")).toHaveText("Edited session UI");
+  });
+
   test("codex issue step injects the prompt, finalises the draft, then creates the issue automatically", async ({ page }) => {
     const stepPayloads: unknown[] = [];
     const terminalInputs: string[] = [];

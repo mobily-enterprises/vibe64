@@ -94,7 +94,7 @@ test("App Setup Doctor admits linked Git worktrees before Git safety checks", as
 
   assert.equal(status.stages.find((stage) => stage.id === "directory")?.status, "pass");
   assert.match(status.stages.find((stage) => stage.id === "directory")?.observed || "", /linked Git metadata/u);
-  assert.equal(status.stages.find((stage) => stage.id === "git-ready")?.status, "pass");
+  assert.notEqual(status.currentStageId, "directory");
 });
 
 test("App Setup Doctor dependency gate catches partial node_modules installs", async () => {

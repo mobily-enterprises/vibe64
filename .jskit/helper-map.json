@@ -376,6 +376,11 @@
             "role": "export"
           },
           {
+            "name": "rewindIssueSessionInputValidator",
+            "kind": "value",
+            "role": "export"
+          },
+          {
             "name": "terminalInputValidator",
             "kind": "value",
             "role": "export"
@@ -396,14 +401,29 @@
         "path": "packages/current-app/src/server/service.js",
         "exports": [
           {
+            "name": "APP_TEST_HOST_DOCKER_CONFIG",
+            "kind": "value",
+            "role": "component_or_class"
+          },
+          {
             "name": "APP_TEST_TESTRUN_COMMAND_CONFIG",
             "kind": "value",
             "role": "component_or_class"
           },
           {
+            "name": "appTestTerminalArgs",
+            "kind": "function",
+            "role": "export"
+          },
+          {
             "name": "createService",
             "kind": "function",
             "role": "helper"
+          },
+          {
+            "name": "findAvailablePort",
+            "kind": "function",
+            "role": "export"
           },
           {
             "name": "inspectCurrentApp",
@@ -639,6 +659,31 @@
             "name": "buildGithubRepoCreateOrLinkScript",
             "kind": "function",
             "role": "helper"
+          }
+        ]
+      },
+      {
+        "path": "server/lib/gitToolchainMounts.js",
+        "exports": [
+          {
+            "name": "gitSafeDirectoryArgs",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "gitToolchainMountArgs",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "linkedGitMetadataMountSource",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "linkedGitRepositoryMountSource",
+            "kind": "function",
+            "role": "export"
           }
         ]
       },
@@ -918,16 +963,6 @@
         ]
       },
       {
-        "path": "src/components/studio/AppTestLauncher.vue",
-        "exports": [
-          {
-            "name": "default",
-            "kind": "default",
-            "role": "default"
-          }
-        ]
-      },
-      {
         "path": "src/components/studio/AppTestTerminal.vue",
         "exports": [
           {
@@ -989,6 +1024,26 @@
       },
       {
         "path": "src/components/studio/IssueSessionStepTerminal.vue",
+        "exports": [
+          {
+            "name": "default",
+            "kind": "default",
+            "role": "default"
+          }
+        ]
+      },
+      {
+        "path": "src/components/studio/StudioErrorNotice.vue",
+        "exports": [
+          {
+            "name": "default",
+            "kind": "default",
+            "role": "default"
+          }
+        ]
+      },
+      {
+        "path": "src/components/studio/StudioLongTextReview.vue",
         "exports": [
           {
             "name": "default",
@@ -1196,6 +1251,11 @@
             "role": "export"
           },
           {
+            "name": "issueSessionDisplayTitle",
+            "kind": "function",
+            "role": "export"
+          },
+          {
             "name": "issueSessionFacts",
             "kind": "function",
             "role": "export"
@@ -1396,6 +1456,11 @@
             "role": "helper"
           },
           {
+            "name": "rewindIssueSession",
+            "kind": "function",
+            "role": "export"
+          },
+          {
             "name": "runIssueSessionStep",
             "kind": "function",
             "role": "helper"
@@ -1557,13 +1622,13 @@
   "jskitPackages": [
     {
       "name": "@jskit-ai/agent-docs",
-      "version": "0.1.36",
+      "version": "0.1.38",
       "installed": true,
       "exports": []
     },
     {
       "name": "@jskit-ai/config-eslint",
-      "version": "0.1.74",
+      "version": "0.1.76",
       "installed": true,
       "exports": [
         {
@@ -1629,7 +1694,7 @@
     },
     {
       "name": "@jskit-ai/http-runtime",
-      "version": "0.1.74",
+      "version": "0.1.76",
       "installed": true,
       "exports": [
         {
@@ -1899,7 +1964,7 @@
     },
     {
       "name": "@jskit-ai/jskit-cli",
-      "version": "0.2.84",
+      "version": "0.2.86",
       "installed": true,
       "exports": [
         {
@@ -1921,7 +1986,7 @@
     },
     {
       "name": "@jskit-ai/kernel",
-      "version": "0.1.75",
+      "version": "0.1.77",
       "installed": true,
       "exports": [
         {
@@ -3016,7 +3081,13 @@
         {
           "subpath": "./shared/validators",
           "target": "shared/validators/index.js",
-          "exports": []
+          "exports": [
+            {
+              "name": "createSchema",
+              "kind": "value",
+              "role": "helper"
+            }
+          ]
         },
         {
           "subpath": "./shared/validators/inputNormalization",
@@ -3033,7 +3104,7 @@
     },
     {
       "name": "@jskit-ai/shell-web",
-      "version": "0.1.74",
+      "version": "0.1.76",
       "installed": true,
       "exports": [
         {

@@ -4,6 +4,7 @@ import {
   canUseIssueSessionTerminal,
   isClosedIssueSession,
   issueSessionCodexExpectedOutputs,
+  issueSessionDisplayTitle,
   issueSessionFacts,
   issueSessionCodexPromptActionLabel,
   issueSessionStatusColor,
@@ -104,6 +105,22 @@ describe("issue session view model", () => {
       label: "PR #34",
       repo: "example/app"
     });
+  });
+
+  it("derives active session page titles from issue fields with a stable fallback", () => {
+    expect(issueSessionDisplayTitle({
+      issueText: "# Ignored fallback",
+      issueTitle: "  Add reports dashboard  ",
+      sessionId: "2026-05-12_13-07-36"
+    })).toBe("Add reports dashboard");
+    expect(issueSessionDisplayTitle({
+      issueText: "\n# Add reports from markdown\n\nBody",
+      sessionId: "2026-05-12_13-07-36"
+    })).toBe("Add reports from markdown");
+    expect(issueSessionDisplayTitle({
+      sessionId: "2026-05-12_13-07-36"
+    })).toBe("Session 05-12_13-07-36");
+    expect(issueSessionDisplayTitle({})).toBe("");
   });
 
   it("builds compact live session facts without noisy rollup cards", () => {
