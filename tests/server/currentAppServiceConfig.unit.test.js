@@ -7,6 +7,7 @@ import {
   APP_TEST_HOST_DOCKER_CONFIG,
   APP_TEST_TESTRUN_COMMAND_CONFIG,
   appTestTerminalArgs,
+  findAvailablePort,
   resolveAppTestConfig
 } from "../../packages/current-app/src/server/service.js";
 
@@ -107,6 +108,20 @@ test("app-test terminal mounts linked worktree owner roots", async () => {
     assert.ok(args.includes(`${worktreeRoot}:/workspace`));
     assert.ok(args.includes(`${worktreeRoot}:${worktreeRoot}`));
   });
+});
+
+test("app-test port selection skips ports already published by Docker", async () => {
+  const checkedPorts = [];
+  const port = await findAvailablePort(4100, {
+    hasDockerPublishedPort: async (candidate) => [4100, 4101].includes(candidate),
+    isLocalPortAvailable: async (candidate) => {
+      checkedPorts.push(candidate);
+      return true;
+    }
+  });
+
+  assert.equal(port, 4102);
+  assert.deepEqual(checkedPorts, [4100, 4101, 4102]);
 });
 
 test("app-test config keeps legacy split command files as fallback", async () => {

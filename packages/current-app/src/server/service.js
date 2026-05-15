@@ -519,10 +519,39 @@ function canListenOnPort(port) {
   });
 }
 
-async function findAvailablePort(preferredPort) {
+async function dockerHasPublishedPort(port) {
+  try {
+    const result = await execFileAsync("docker", [
+      "ps",
+      "--filter",
+      `publish=${port}`,
+      "--format",
+      "{{.ID}}"
+    ], {
+      timeout: 3000,
+      maxBuffer: 1024 * 1024
+    });
+    return Boolean(String(result.stdout || "").trim());
+  } catch {
+    return false;
+  }
+}
+
+async function appTestPortIsAvailable(port, {
+  hasDockerPublishedPort = dockerHasPublishedPort,
+  isLocalPortAvailable = canListenOnPort
+} = {}) {
+  const [localAvailable, dockerPublished] = await Promise.all([
+    isLocalPortAvailable(port),
+    hasDockerPublishedPort(port)
+  ]);
+  return localAvailable && !dockerPublished;
+}
+
+async function findAvailablePort(preferredPort, checks = {}) {
   const startPort = normalizePreferredPort(preferredPort);
   for (let port = startPort; port <= 65535; port += 1) {
-    if (await canListenOnPort(port)) {
+    if (await appTestPortIsAvailable(port, checks)) {
       return port;
     }
   }
@@ -1489,6 +1518,7 @@ export {
   APP_TEST_TESTRUN_COMMAND_CONFIG,
   appTestTerminalArgs,
   createService,
+  findAvailablePort,
   inspectCurrentApp,
   resolveAppTestConfig,
   resolveCurrentAppRoot
