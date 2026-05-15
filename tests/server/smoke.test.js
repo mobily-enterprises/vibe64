@@ -406,6 +406,75 @@ test("Studio issue sessions persist Codex thread ids in session state", async ()
   });
 });
 
+test("Studio issue sessions persist Codex prompt handoff as plain session values", async () => {
+  await withTemporaryGitPackageRoot("session-codex-prompt-handoff-target-app", async (targetRoot) => {
+    const previousTargetRoot = process.env.JSKIT_STUDIO_TARGET_ROOT;
+    process.env.JSKIT_STUDIO_TARGET_ROOT = targetRoot;
+
+    let app;
+    try {
+      app = await createServer();
+      const created = await app.inject({
+        method: "POST",
+        url: "/api/studio/current-app/issue-sessions",
+        payload: {}
+      });
+      assert.equal(created.statusCode, 200);
+      const sessionId = created.json().sessionId;
+      const signature = `${sessionId}:::abc123:42`;
+
+      const saved = await app.inject({
+        method: "POST",
+        url: `/api/studio/current-app/issue-sessions/${sessionId}/codex-prompt-handoff`,
+        payload: {
+          outputStart: "17",
+          signature
+        }
+      });
+      assert.equal(saved.statusCode, 200);
+      assert.equal(saved.json().codexPromptHandoffOutputStart, 17);
+      assert.equal(saved.json().codexPromptHandoffSignature, signature);
+
+      assert.equal(
+        await readFile(path.join(targetRoot, ".jskit", "sessions", "active", sessionId, "codex_prompt_handoff_signature"), "utf8"),
+        `${signature}\n`
+      );
+      assert.equal(
+        await readFile(path.join(targetRoot, ".jskit", "sessions", "active", sessionId, "codex_prompt_handoff_output_start"), "utf8"),
+        "17\n"
+      );
+
+      const inspected = await app.inject({
+        method: "GET",
+        url: `/api/studio/current-app/issue-sessions/${sessionId}`
+      });
+      assert.equal(inspected.statusCode, 200);
+      assert.equal(inspected.json().codexPromptHandoffOutputStart, 17);
+      assert.equal(inspected.json().codexPromptHandoffSignature, signature);
+
+      const rejected = await app.inject({
+        method: "POST",
+        url: `/api/studio/current-app/issue-sessions/${sessionId}/codex-prompt-handoff`,
+        payload: {
+          outputStart: "1",
+          signature: "other-session:::abc123:42"
+        }
+      });
+      assert.equal(rejected.statusCode, 400);
+      assert.equal(rejected.json().ok, false);
+    } finally {
+      if (app) {
+        await app.close();
+      }
+      if (previousTargetRoot == null) {
+        delete process.env.JSKIT_STUDIO_TARGET_ROOT;
+      } else {
+        process.env.JSKIT_STUDIO_TARGET_ROOT = previousTargetRoot;
+      }
+    }
+  });
+});
+
 test("Studio issue sessions upload temporary Codex attachments outside the target app", async () => {
   await withTemporaryGitPackageRoot("session-attachment-target-app", async (targetRoot) => {
     const previousTargetRoot = process.env.JSKIT_STUDIO_TARGET_ROOT;

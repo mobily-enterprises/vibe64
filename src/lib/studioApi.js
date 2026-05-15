@@ -221,6 +221,16 @@ async function saveIssueSessionCodexThread(sessionId, threadId) {
   });
 }
 
+async function saveIssueSessionCodexPromptHandoff(sessionId, {
+  outputStart = 0,
+  signature = ""
+} = {}) {
+  return studioHttpClient.post(`${ISSUE_SESSIONS_ENDPOINT}/${encodeURIComponent(sessionId)}/codex-prompt-handoff`, {
+    outputStart: String(Math.max(0, Number(outputStart || 0))),
+    signature
+  });
+}
+
 async function resolveStudioGate() {
   const bootstrap = await readBootstrapStatus();
   if (bootstrap?.ready !== true) {
@@ -297,6 +307,7 @@ export {
   resolveStudioGate,
   rewindIssueSession,
   runIssueSessionStep,
+  saveIssueSessionCodexPromptHandoff,
   saveIssueSessionCodexThread,
   startCurrentAppTestTerminal,
   startIssueSessionAppTestTerminal,

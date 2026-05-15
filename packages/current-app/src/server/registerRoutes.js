@@ -1,6 +1,7 @@
 import { resolveScopedApiBasePath, normalizeSurfaceId } from "@jskit-ai/kernel/shared/surface";
 import {
   codexAttachmentInputValidator,
+  codexPromptHandoffInputValidator,
   codexThreadInputValidator,
   currentAppQueryInputValidator,
   rewindIssueSessionInputValidator
@@ -372,6 +373,30 @@ function registerRoutes(
         return;
       }
       const response = await getCurrentAppService(app).saveCodexThread(
+        request.params.sessionId,
+        request.input.body || {}
+      );
+      reply.code(response?.ok === false ? 400 : 200).send(response);
+    }
+  );
+
+  router.register(
+    "POST",
+    `${routeBase}/issue-sessions/:sessionId/codex-prompt-handoff`,
+    {
+      auth: "public",
+      surface: normalizedRouteSurface,
+      meta: {
+        tags: ["studio", "issue-sessions"],
+        summary: "Persist the active Codex prompt handoff for a JSKIT issue session."
+      },
+      body: codexPromptHandoffInputValidator
+    },
+    async function (request, reply) {
+      if (!requireLocalCurrentAppRequest(request, reply)) {
+        return;
+      }
+      const response = await getCurrentAppService(app).saveCodexPromptHandoff(
         request.params.sessionId,
         request.input.body || {}
       );

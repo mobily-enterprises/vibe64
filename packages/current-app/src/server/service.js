@@ -50,6 +50,8 @@ const STEP_TERMINAL_NAMESPACE_PREFIX = `${STEP_TERMINAL_NAMESPACE}:`;
 const APP_TEST_TERMINAL_NAMESPACE = "current-app-test";
 const APP_TEST_TERMINAL_NAMESPACE_PREFIX = `${APP_TEST_TERMINAL_NAMESPACE}:`;
 const CODEX_THREAD_ID_FILE = "codex_thread_id";
+const CODEX_PROMPT_HANDOFF_SIGNATURE_FILE = "codex_prompt_handoff_signature";
+const CODEX_PROMPT_HANDOFF_OUTPUT_START_FILE = "codex_prompt_handoff_output_start";
 const CODEX_THREAD_PROBE = "!echo $CODEX_THREAD_ID";
 const CODEX_THREAD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 const CODEX_SESSION_MODEL = "gpt-5.5";
@@ -200,6 +202,16 @@ function activeSessionDirectory(targetRoot, sessionId) {
 function codexThreadIdPath(targetRoot, sessionId) {
   const sessionPath = activeSessionDirectory(targetRoot, sessionId);
   return sessionPath ? path.join(sessionPath, CODEX_THREAD_ID_FILE) : "";
+}
+
+function codexPromptHandoffSignaturePath(targetRoot, sessionId) {
+  const sessionPath = activeSessionDirectory(targetRoot, sessionId);
+  return sessionPath ? path.join(sessionPath, CODEX_PROMPT_HANDOFF_SIGNATURE_FILE) : "";
+}
+
+function codexPromptHandoffOutputStartPath(targetRoot, sessionId) {
+  const sessionPath = activeSessionDirectory(targetRoot, sessionId);
+  return sessionPath ? path.join(sessionPath, CODEX_PROMPT_HANDOFF_OUTPUT_START_FILE) : "";
 }
 
 function isOpenIssueSession(session = {}) {
@@ -697,6 +709,86 @@ async function saveCodexThreadId(targetRoot, sessionId, threadId) {
   };
 }
 
+function normalizeCodexPromptHandoffSignature(sessionId, signature) {
+  const normalizedSessionId = String(sessionId || "").trim();
+  const normalizedSignature = String(signature || "").trim();
+  if (
+    !normalizedSessionId ||
+    !normalizedSignature ||
+    normalizedSignature.length > 512 ||
+    normalizedSignature.includes("\n") ||
+    normalizedSignature.includes("\r") ||
+    !normalizedSignature.startsWith(`${normalizedSessionId}:`)
+  ) {
+    return "";
+  }
+  return normalizedSignature;
+}
+
+function normalizeCodexPromptHandoffOutputStart(value) {
+  const normalizedValue = String(value ?? "").trim();
+  if (!/^\d+$/u.test(normalizedValue)) {
+    return 0;
+  }
+  const outputStart = Number(normalizedValue);
+  return Number.isSafeInteger(outputStart) && outputStart >= 0 ? outputStart : 0;
+}
+
+async function readCodexPromptHandoffState(targetRoot, sessionId) {
+  const signatureFile = codexPromptHandoffSignaturePath(targetRoot, sessionId);
+  const outputStartFile = codexPromptHandoffOutputStartPath(targetRoot, sessionId);
+  if (!signatureFile || !outputStartFile) {
+    return {
+      codexPromptHandoffOutputStart: 0,
+      codexPromptHandoffSignature: ""
+    };
+  }
+
+  const [signature, outputStart] = await Promise.all([
+    readFile(signatureFile, "utf8").catch(() => ""),
+    readFile(outputStartFile, "utf8").catch(() => "")
+  ]);
+  return {
+    codexPromptHandoffOutputStart: normalizeCodexPromptHandoffOutputStart(outputStart),
+    codexPromptHandoffSignature: normalizeCodexPromptHandoffSignature(sessionId, signature)
+  };
+}
+
+async function decorateIssueSessionDetails(targetRoot, session = {}) {
+  if (!session || session.ok === false || !session.sessionId) {
+    return session;
+  }
+  const handoff = await readCodexPromptHandoffState(targetRoot, session.sessionId);
+  return {
+    ...session,
+    ...handoff
+  };
+}
+
+async function saveCodexPromptHandoffState(targetRoot, sessionId, input = {}) {
+  const normalizedSignature = normalizeCodexPromptHandoffSignature(sessionId, input?.signature);
+  const sessionPath = activeSessionDirectory(targetRoot, sessionId);
+  const signatureFile = codexPromptHandoffSignaturePath(targetRoot, sessionId);
+  const outputStartFile = codexPromptHandoffOutputStartPath(targetRoot, sessionId);
+  if (!normalizedSignature || !sessionPath || !signatureFile || !outputStartFile || !(await pathExists(sessionPath))) {
+    return {
+      ok: false,
+      error: "Invalid Codex prompt handoff."
+    };
+  }
+
+  const outputStart = normalizeCodexPromptHandoffOutputStart(input?.outputStart);
+  await Promise.all([
+    writeFile(signatureFile, `${normalizedSignature}\n`, "utf8"),
+    writeFile(outputStartFile, `${outputStart}\n`, "utf8")
+  ]);
+  return {
+    ok: true,
+    codexPromptHandoffOutputStart: outputStart,
+    codexPromptHandoffSignature: normalizedSignature
+  };
+}
+
 function withCodexThreadState(response = {}, codexThreadId = "") {
   return {
     ...response,
@@ -1171,10 +1263,10 @@ function createService({ appRoot = "" } = {}) {
     },
 
     async inspectIssueSession(sessionId) {
-      return inspectSessionDetails({
+      return decorateIssueSessionDetails(inspectionRoot, await inspectSessionDetails({
         targetRoot: inspectionRoot,
         sessionId
-      });
+      }));
     },
 
     async inspectIssueSessionDiff(sessionId) {
@@ -1190,10 +1282,10 @@ function createService({ appRoot = "" } = {}) {
         sessionId,
         options: input || {}
       });
-      const details = await inspectSessionDetails({
+      const details = await decorateIssueSessionDetails(inspectionRoot, await inspectSessionDetails({
         targetRoot: inspectionRoot,
         sessionId
-      });
+      }));
       const result = {
         ...details,
         codex: response.codex || details.codex || null,
@@ -1278,6 +1370,17 @@ function createService({ appRoot = "" } = {}) {
         return session;
       }
       return saveCodexThreadId(inspectionRoot, sessionId, input?.threadId);
+    },
+
+    async saveCodexPromptHandoff(sessionId, input = {}) {
+      const session = await inspectSessionDetails({
+        targetRoot: inspectionRoot,
+        sessionId
+      });
+      if (session?.ok === false) {
+        return session;
+      }
+      return saveCodexPromptHandoffState(inspectionRoot, sessionId, input);
     },
 
     async startCodexTerminal(sessionId) {

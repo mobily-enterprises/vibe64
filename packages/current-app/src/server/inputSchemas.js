@@ -33,6 +33,22 @@ const codexThreadInputValidator = deepFreeze({
   mode: "patch"
 });
 
+const codexPromptHandoffInputValidator = deepFreeze({
+  schema: createSchema({
+    outputStart: {
+      type: "string",
+      noTrim: false,
+      required: false
+    },
+    signature: {
+      type: "string",
+      noTrim: false,
+      required: true
+    }
+  }),
+  mode: "patch"
+});
+
 const codexAttachmentInputValidator = deepFreeze({
   schema: createSchema({
     contentType: {
@@ -67,6 +83,7 @@ const rewindIssueSessionInputValidator = deepFreeze({
 
 export {
   codexAttachmentInputValidator,
+  codexPromptHandoffInputValidator,
   codexThreadInputValidator,
   currentAppQueryInputValidator,
   rewindIssueSessionInputValidator,

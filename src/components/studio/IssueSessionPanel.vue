@@ -847,7 +847,8 @@ import {
 } from "@/lib/deslopResult.js";
 import {
   readIssueSessionCodexTerminal,
-  readIssueSessionDiff
+  readIssueSessionDiff,
+  saveIssueSessionCodexPromptHandoff
 } from "@/lib/studioApi.js";
 import {
   canUseIssueSessionTerminal,
@@ -1104,7 +1105,9 @@ const reviewDeslopNeedsUserDecision = computed(() => {
 });
 
 const activeStepCodexWorking = computed(() => {
-  return sessionPromptInjectionPending(selectedSession.value || {}) ||
+  const session = selectedSession.value || {};
+  return sessionPromptInjectionPending(session) ||
+    sessionPromptHandoffWaiting(session) ||
     selectedCodexCompletion.value?.status === "waiting";
 });
 
@@ -1361,13 +1364,25 @@ const selectedCodexPromptRequestSignature = computed(() => {
   return codexPromptRequestSignature(selectedSession.value || {});
 });
 
+function persistedPromptHandoffSignature(session = {}) {
+  return String(session.codexPromptHandoffSignature || "").trim();
+}
+
+function sessionHasPersistedPromptHandoff(session = {}) {
+  const signature = codexPromptRequestSignature(session);
+  return Boolean(signature && persistedPromptHandoffSignature(session) === signature);
+}
+
 function sessionPromptAlreadyInjected(session = {}) {
   const sessionId = session.sessionId || "";
   const signature = codexPromptRequestSignature(session);
   return Boolean(
     sessionId &&
     signature &&
-    promptInjectionSignatureBySessionId.value[sessionId] === signature
+    (
+      promptInjectionSignatureBySessionId.value[sessionId] === signature ||
+      persistedPromptHandoffSignature(session) === signature
+    )
   );
 }
 
@@ -1384,6 +1399,15 @@ function sessionPromptInjectionPending(session = {}) {
 
 function sessionPromptAlreadyRequested(session = {}) {
   return sessionPromptAlreadyInjected(session) || sessionPromptInjectionPending(session);
+}
+
+function sessionPromptHandoffWaiting(session = {}) {
+  const signature = codexPromptRequestSignature(session);
+  if (!signature || !sessionPromptAlreadyRequested(session)) {
+    return false;
+  }
+  const completion = codexCompletionBySignature.value[signature] || null;
+  return !["finished", "interrupted"].includes(String(completion?.status || ""));
 }
 
 function promptInjectionSignatureForSession(session = {}) {
@@ -2085,22 +2109,11 @@ function ensureReviewDeslopTerminalWatch(sessionId, {
   return signature;
 }
 
-function startCodexCompletionWatch(session = {}) {
-  const signature = codexPromptRequestSignature(session);
-  if (!signature) {
-    return;
-  }
-  codexCompletionWatcherFor(signature)?.start({
-    output: codexTerminalOutputBySessionId.value[session.sessionId] || "",
-    watchKey: signature
-  });
-}
-
 function trackCodexPromptInjection(session = {}, event = {}) {
   const sessionId = session.sessionId || "";
   const signature = codexPromptRequestSignature(session);
   if (!sessionId || !signature) {
-    return;
+    return "";
   }
   const currentOutput = String(codexTerminalOutputBySessionId.value[sessionId] || "");
   const eventHasSnapshot = Object.prototype.hasOwnProperty.call(event, "outputSnapshot");
@@ -2125,7 +2138,73 @@ function trackCodexPromptInjection(session = {}, event = {}) {
     ...promptInjectionTextBySignature.value,
     [signature]: codexPromptTextForSession(session)
   };
-  startCodexCompletionWatch(session);
+  if (currentOutput) {
+    codexCompletionWatcherFor(signature)?.start({
+      output: currentOutput,
+      watchKey: signature
+    });
+  }
+  return signature;
+}
+
+function hydratePersistedCodexPromptInjection(session = {}, {
+  output = null
+} = {}) {
+  const sessionId = session.sessionId || "";
+  const signature = codexPromptRequestSignature(session);
+  const currentOutput = String(output ?? codexTerminalOutputBySessionId.value[sessionId] ?? "");
+  if (
+    sessionId &&
+    signature &&
+    promptInjectionSignatureBySessionId.value[sessionId] === signature &&
+    sessionHasPersistedPromptHandoff(session) &&
+    currentOutput &&
+    !codexCompletionWatchersBySignature.has(signature)
+  ) {
+    codexCompletionWatcherFor(signature)?.start({
+      output: currentOutput,
+      watchKey: signature
+    });
+    return signature;
+  }
+  if (
+    !sessionId ||
+    !signature ||
+    promptInjectionSignatureBySessionId.value[sessionId] === signature ||
+    !sessionHasPersistedPromptHandoff(session)
+  ) {
+    return "";
+  }
+
+  const persistedOutputStart = Number(session.codexPromptHandoffOutputStart);
+  const outputStart = Number.isSafeInteger(persistedOutputStart) &&
+    persistedOutputStart >= 0 &&
+    persistedOutputStart <= currentOutput.length
+    ? persistedOutputStart
+    : 0;
+  promptInjectionSignatureBySessionId.value = {
+    ...promptInjectionSignatureBySessionId.value,
+    [sessionId]: signature
+  };
+  promptInjectionOutputStartBySignature.value = {
+    ...promptInjectionOutputStartBySignature.value,
+    [signature]: outputStart
+  };
+  promptInjectionOutputSnapshotBySignature.value = {
+    ...promptInjectionOutputSnapshotBySignature.value,
+    [signature]: currentOutput.slice(0, outputStart)
+  };
+  promptInjectionTextBySignature.value = {
+    ...promptInjectionTextBySignature.value,
+    [signature]: codexPromptTextForSession(session)
+  };
+  if (currentOutput) {
+    codexCompletionWatcherFor(signature)?.start({
+      output: currentOutput,
+      watchKey: signature
+    });
+  }
+  return signature;
 }
 
 function promptEchoRangeForSessionOutput(session = {}, output = "") {
@@ -2171,6 +2250,39 @@ function recoverCodexPromptInjectionFromOutput(sessionId, output = "") {
     sessionId
   });
   clearPromptInjectionRequest(sessionId);
+}
+
+function inferCodexPromptHandoffFromTerminalActivity(sessionId, {
+  nextOutput = "",
+  previousOutput = ""
+} = {}) {
+  if (!sessionId || promptInjectionSignatureBySessionId.value[sessionId]) {
+    return "";
+  }
+  const session = promptSignatureSessionForId(sessionId);
+  const action = session.currentStepAction || {};
+  if (
+    sessionId !== selectedSessionId.value ||
+    session.sessionId !== sessionId ||
+    action.kind !== "codex_prompt" ||
+    action.automation?.mode !== "codex_prompt" ||
+    !session.codexThreadId ||
+    !codexPromptTextForSession(session) ||
+    !String(previousOutput || "").trim() ||
+    String(nextOutput || "") === String(previousOutput || "")
+  ) {
+    return "";
+  }
+  const signature = trackCodexPromptInjection(session, {
+    outputSnapshot: "",
+    outputStart: 0,
+    prompt: codexPromptTextForSession(session),
+    sessionId
+  });
+  if (signature) {
+    clearPromptInjectionRequest(sessionId);
+  }
+  return signature;
 }
 
 function disposeCodexCompletionWatchersForSession(sessionId) {
@@ -2726,6 +2838,9 @@ function reconcileCodexTerminalOutputForParsing(sessionId, output) {
   if (!sessionId) {
     return;
   }
+  hydratePersistedCodexPromptInjection(promptSignatureSessionForId(sessionId), {
+    output: nextOutput
+  });
   recoverCodexPromptInjectionFromOutput(sessionId, nextOutput);
   recoverCodexPromptCompletionFromOutput(sessionId, nextOutput);
   const session = promptSignatureSessionForId(sessionId);
@@ -2751,6 +2866,10 @@ function applyCodexTerminalSnapshot(sessionId, snapshot = {}) {
       ...codexTerminalOutputBySessionId.value,
       [sessionId]: nextOutput
     };
+    inferCodexPromptHandoffFromTerminalActivity(sessionId, {
+      nextOutput,
+      previousOutput
+    });
   }
   reconcileCodexTerminalOutputForParsing(sessionId, nextOutput);
   return true;
@@ -2814,6 +2933,10 @@ function recordCodexTerminalOutput(sessionId, output) {
     ...codexTerminalOutputBySessionId.value,
     [sessionId]: nextOutput
   };
+  inferCodexPromptHandoffFromTerminalActivity(sessionId, {
+    nextOutput,
+    previousOutput
+  });
   reconcileCodexTerminalOutputForParsing(sessionId, nextOutput);
 }
 
@@ -2845,19 +2968,39 @@ function recordCodexPromptInjected(sessionId, event = {}) {
   const existingSession = sessionId === selectedSessionId.value && selectedSession.value?.sessionId === sessionId
     ? selectedSession.value
     : terminalSessionById.value[sessionId] || {};
-  trackCodexPromptInjection({
+  const eventPrompt = String(event?.prompt || "");
+  const currentSessionPrompt = codexPromptTextForSession(existingSession);
+  const trackedSession = {
     ...existingSession,
     sessionId,
-    ...(event?.prompt
+    ...(eventPrompt
       ? {
         codex: {
           ...(existingSession.codex || {}),
           promptField: "prompt"
         },
-        prompt: event.prompt
-          }
-        : {})
-  }, event);
+        prompt: eventPrompt
+      }
+      : {})
+  };
+  const signature = trackCodexPromptInjection(trackedSession, event);
+  if (signature && (!eventPrompt || eventPrompt === currentSessionPrompt)) {
+    void saveIssueSessionCodexPromptHandoff(sessionId, {
+      outputStart: promptInjectionOutputStartBySignature.value[signature] || 0,
+      signature
+    }).then((response) => {
+      if (response?.ok === false) {
+        copyStatus.value = response.error || "Codex prompt handoff could not be saved for reload recovery.";
+      }
+    }).catch((error) => {
+      copyStatus.value = String(error?.message || error || "Codex prompt handoff could not be saved for reload recovery.");
+    });
+    applyIssueSessionUpdate({
+      codexPromptHandoffOutputStart: promptInjectionOutputStartBySignature.value[signature] || 0,
+      codexPromptHandoffSignature: signature,
+      sessionId
+    });
+  }
   clearPromptInjectionRequest(sessionId);
   if (codexPromptOverrideBySessionId.value[sessionId]) {
     const {
@@ -3934,6 +4077,7 @@ function submitCurrentForm(event = null) {
 
 watch(selectedSession, (session) => {
   rememberTerminalSession(session);
+  hydratePersistedCodexPromptInjection(session || {});
   void runAutomaticStepHandlers(session);
 }, {
   immediate: true

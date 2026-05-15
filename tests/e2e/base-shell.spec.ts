@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { buildIssueSessionCodexPromptSignature } from "../../src/lib/issueSessionPromptAutomation.js";
 
 const BASE_URL = String(process.env.PLAYWRIGHT_BASE_URL || "http://127.0.0.1:5173").replace(/\/+$/u, "");
 
@@ -467,6 +468,15 @@ const codexThreadProbe = "! echo $CODEX_THREAD_ID";
 const codexThreadCommand = "echo $CODEX_THREAD_ID";
 const codexThreadId = "019e1575-2458-7b93-bf9d-e7d7ffd49ad2";
 const codexShellSubmitSequence = ["\u001b", "\u0015", "! ", codexThreadCommand, " ", "\u001b", "\r"];
+function codexPromptSignature(session) {
+  return buildIssueSessionCodexPromptSignature({
+    activeCycle: session?.activeCycle || "",
+    currentReviewPass: session?.currentReviewPass || "",
+    prompt: session?.prompt || "",
+    sessionId: session?.sessionId || ""
+  });
+}
+
 const codexPromptStepDefinitions = [
   {
     id: "session-created",
@@ -1470,6 +1480,20 @@ async function mockSessionHistoryArchives(page, archiveRequests = []) {
   });
 }
 
+async function mockCodexPromptHandoffRoute(page, sessionId: string) {
+  await page.route(`**/api/studio/current-app/issue-sessions/${sessionId}/codex-prompt-handoff`, async (route) => {
+    const payload = route.request().postDataJSON();
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        codexPromptHandoffOutputStart: Number(payload.outputStart || 0),
+        codexPromptHandoffSignature: payload.signature || "",
+        ok: true
+      })
+    });
+  });
+}
+
 async function mockCodexPromptSession(page, { stepPayloads = [], terminalInputs = [] } = {}) {
   let terminalOutput = "Codex ready.";
   let issueTitle = codexIssueDraftedPayload.issueTitle;
@@ -1562,6 +1586,7 @@ async function mockCodexPromptSession(page, { stepPayloads = [], terminalInputs 
       })
     });
   });
+  await mockCodexPromptHandoffRoute(page, codexPromptSessionId);
   return {
     async setTerminalOutput(output) {
       terminalOutput = String(output || "");
@@ -1666,6 +1691,7 @@ async function mockCodexPromptSessions(page, sessionPayloads) {
         })
       });
     });
+    await mockCodexPromptHandoffRoute(page, sessionId);
     await page.route(
       `**/api/studio/current-app/issue-sessions/${sessionId}/codex-terminal/term-${sessionId}`,
       async (route) => {
@@ -2368,6 +2394,7 @@ test.describe("studio startup navigation", () => {
         })
       });
     });
+    await mockCodexPromptHandoffRoute(page, codexPromptSessionId);
 
     await page.goto(`${BASE_URL}/home`);
     await expectSessionsRoute(page);
@@ -2505,6 +2532,7 @@ test.describe("studio startup navigation", () => {
         })
       });
     });
+    await mockCodexPromptHandoffRoute(page, planExecutionRejectSessionId);
 
     await page.goto(`${BASE_URL}/home`);
     await expectSessionsRoute(page);
@@ -2518,6 +2546,75 @@ test.describe("studio startup navigation", () => {
     await expect.poll(() => terminalStartCount).toBeGreaterThan(1);
     await expect.poll(() => terminalInputs[planExecutionRejectSessionId].join(""))
       .toContain("Execute the approved implementation plan.");
+  });
+
+  test("persisted Codex prompt handoff survives reload without showing Start task", async ({ page }) => {
+    const terminalInputs: Record<string, string[]> = {
+      [planExecutionRejectSessionId]: []
+    };
+    const activeSession = {
+      ...planExecutionRejectPayload,
+      codexPromptHandoffOutputStart: "Codex ready.".length,
+      codexPromptHandoffSignature: codexPromptSignature(planExecutionRejectPayload),
+      codexThreadId,
+      status: "waiting_for_user"
+    };
+
+    await mockCodexTerminalWebSocket(page, {
+      initialOutputBySessionId: {
+        [planExecutionRejectSessionId]: "Codex ready.\nRunning checks..."
+      },
+      terminalInputs
+    });
+    await mockStudioReady(page);
+    await page.route("**/api/studio/current-app", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify(currentAppPayload)
+      });
+    });
+    await page.route("**/api/studio/current-app/issue-sessions", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          limits: {
+            maxOpenSessions: 3,
+            openSessionCount: 1
+          },
+          ok: true,
+          sessions: [activeSession],
+          stepDefinitions: planExecutionRejectStepDefinitions
+        })
+      });
+    });
+    await page.route(`**/api/studio/current-app/issue-sessions/${planExecutionRejectSessionId}`, async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify(activeSession)
+      });
+    });
+    await page.route(`**/api/studio/current-app/issue-sessions/${planExecutionRejectSessionId}/codex-terminal`, async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          commandPreview: "codex",
+          id: `term-${planExecutionRejectSessionId}`,
+          needsThreadCapture: false,
+          ok: true,
+          output: "Codex ready.\nRunning checks...",
+          status: "running"
+        })
+      });
+    });
+    await mockCodexPromptHandoffRoute(page, planExecutionRejectSessionId);
+
+    await page.goto(`${BASE_URL}/home`);
+    await expectSessionsRoute(page);
+    await expect(page.getByRole("button", { name: "Start task" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Go to next step" })).toBeVisible();
+    await page.waitForTimeout(500);
+    expect(terminalInputs[planExecutionRejectSessionId].join(""))
+      .not.toContain("Execute the approved implementation plan.");
   });
 
   test("conditional Deep UI checks with a JSKIT skip reason are skipped automatically", async ({ page }) => {
@@ -2674,6 +2771,7 @@ test.describe("studio startup navigation", () => {
         })
       });
     });
+    await mockCodexPromptHandoffRoute(page, planExecutionRejectSessionId);
 
     await page.goto(`${BASE_URL}/home`);
     await expectSessionsRoute(page);
@@ -2822,6 +2920,7 @@ test.describe("studio startup navigation", () => {
         })
       });
     });
+    await mockCodexPromptHandoffRoute(page, reviewDeslopSessionId);
 
     await page.goto(`${BASE_URL}/home`);
     await expectSessionsRoute(page);
