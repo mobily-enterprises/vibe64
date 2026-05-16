@@ -120,6 +120,9 @@ function issueSessionCanCreateGithubPullRequest(session = {}) {
 }
 
 function canUseIssueSessionTerminal(session = {}) {
+  if (session.workflowId && session.targetRoot) {
+    return isOpenIssueSession(session);
+  }
   return isOpenIssueSession(session) &&
     session.worktreeReady === true &&
     Array.isArray(session.completedSteps) &&

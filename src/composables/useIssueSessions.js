@@ -1,11 +1,11 @@
 import { computed, ref } from "vue";
 import {
-  abandonIssueSession,
-  createIssueSession,
-  listIssueSessions,
-  readIssueSession,
-  rewindIssueSession,
-  runIssueSessionStep
+  abandonAiStudioSession,
+  advanceAiStudioSession,
+  createAiStudioSession,
+  listAiStudioSessions,
+  readAiStudioSession,
+  runAiStudioSessionAction
 } from "@/lib/studioApi.js";
 import {
   isAbandonedIssueSession,
@@ -170,7 +170,7 @@ function useIssueSessions() {
     issueSessionsLoading.value = true;
     issueSessionsError.value = "";
     try {
-      const response = await listIssueSessions();
+      const response = await listAiStudioSessions();
       rememberContract(response);
       applySessionList(response?.sessions || []);
       if (selectedSessionId.value) {
@@ -187,12 +187,12 @@ function useIssueSessions() {
     selectedSessionId.value = sessionId;
     issueSessionsError.value = "";
     try {
-      selectedSession.value = await readIssueSession(sessionId);
+      selectedSession.value = await readAiStudioSession(sessionId);
       rememberContract(selectedSession.value);
       rememberSessionId(selectedSession.value?.sessionId || sessionId);
       resetStepInputValues(selectedSession.value);
       if (!preserveList) {
-        const response = await listIssueSessions();
+        const response = await listAiStudioSessions();
         rememberContract(response);
         applySessionList(response?.sessions || []);
       }
@@ -214,7 +214,7 @@ function useIssueSessions() {
     issueSessionBusy.value = true;
     issueSessionsError.value = "";
     try {
-      const response = await createIssueSession();
+      const response = await createAiStudioSession();
       if (response?.ok === false) {
         selectedSession.value = response;
         rememberContract(response);
@@ -245,31 +245,71 @@ function useIssueSessions() {
     };
   }
 
-  async function runSelectedStep(override = {}, options = {}) {
+  async function refreshSessionList() {
+    const response = await listAiStudioSessions();
+    rememberContract(response);
+    applySessionList(response?.sessions || []);
+  }
+
+  async function applySessionResponse(response, fallbackError) {
+    selectedSession.value = response;
+    rememberContract(response);
+    if (response?.ok === false) {
+      issueSessionsError.value = response.errors?.[0]?.message || fallbackError;
+    } else {
+      resetStepInputValues(response);
+    }
+    await refreshSessionList();
+    return response;
+  }
+
+  async function runSelectedAction(actionId, input = {}) {
+    if (!selectedSessionId.value || !actionId) {
+      return null;
+    }
+    issueSessionBusy.value = true;
+    issueSessionsError.value = "";
+    try {
+      const response = await runAiStudioSessionAction(selectedSessionId.value, actionId, input);
+      return await applySessionResponse(response, "Session action failed.");
+    } catch (stepError) {
+      issueSessionsError.value = errorMessage(stepError, "Session action failed.");
+      return null;
+    } finally {
+      issueSessionBusy.value = false;
+    }
+  }
+
+  async function advanceSelectedSession() {
     if (!selectedSessionId.value) {
       return null;
     }
     issueSessionBusy.value = true;
     issueSessionsError.value = "";
     try {
-      const response = await runIssueSessionStep(selectedSessionId.value, buildStepPayload(override, options));
-      selectedSession.value = response;
-      rememberContract(response);
-      if (response?.ok === false) {
-        issueSessionsError.value = response.errors?.[0]?.message || "Session step failed.";
-      } else {
-        resetStepInputValues(response);
-      }
-      const listResponse = await listIssueSessions();
-      rememberContract(listResponse);
-      applySessionList(listResponse?.sessions || []);
-      return response;
+      const response = await advanceAiStudioSession(selectedSessionId.value);
+      return await applySessionResponse(response, "Session advance failed.");
     } catch (stepError) {
-      issueSessionsError.value = errorMessage(stepError, "Session step failed.");
+      issueSessionsError.value = errorMessage(stepError, "Session advance failed.");
       return null;
     } finally {
       issueSessionBusy.value = false;
     }
+  }
+
+  async function runSelectedStep(override = {}, options = {}) {
+    if (!selectedSessionId.value) {
+      return null;
+    }
+    if (override?.advance === true) {
+      return advanceSelectedSession();
+    }
+    const actionId = String(override?.actionId || override?.actionCommand || override?.sessionAction || "").trim();
+    if (!actionId) {
+      issueSessionsError.value = "No AI Studio action was selected.";
+      return null;
+    }
+    return runSelectedAction(actionId, buildStepPayload(override, options));
   }
 
   async function abandonSelectedSession() {
@@ -279,7 +319,7 @@ function useIssueSessions() {
     issueSessionBusy.value = true;
     issueSessionsError.value = "";
     try {
-      const abandonedSession = await abandonIssueSession(selectedSessionId.value);
+      const abandonedSession = await abandonAiStudioSession(selectedSessionId.value);
       selectedSession.value = abandonedSession;
       rememberContract(selectedSession.value);
       resetStepInputValues(selectedSession.value);
@@ -297,31 +337,22 @@ function useIssueSessions() {
     if (!selectedSessionId.value) {
       return null;
     }
-    issueSessionBusy.value = true;
-    issueSessionsError.value = "";
-    try {
-      const response = await rewindIssueSession(selectedSessionId.value, stepId);
-      selectedSession.value = response;
-      rememberContract(response);
-      if (response?.ok === false) {
-        issueSessionsError.value = response.errors?.[0]?.message || "Session rewind failed.";
-      } else {
-        resetStepInputValues(response);
-      }
-      const listResponse = await listIssueSessions();
-      rememberContract(listResponse);
-      applySessionList(listResponse?.sessions || []);
-      return response;
-    } catch (rewindError) {
-      issueSessionsError.value = errorMessage(rewindError, "Session rewind failed.");
-      return null;
-    } finally {
-      issueSessionBusy.value = false;
-    }
+    void stepId;
+    issueSessionsError.value = "AI Studio runtime rewind is not wired yet.";
+    return {
+      errors: [
+        {
+          code: "ai_studio_rewind_not_wired",
+          message: issueSessionsError.value
+        }
+      ],
+      ok: false
+    };
   }
 
   return {
     abandonSelectedSession,
+    advanceSelectedSession,
     activeIssueSessionCount,
     canCreateIssueSession,
     createSession,
@@ -334,6 +365,7 @@ function useIssueSessions() {
     maxOpenIssueSessions,
     loadIssueSessions,
     patchIssueSession,
+    runSelectedAction,
     runSelectedStep,
     rewindSelectedSession,
     selectSession,

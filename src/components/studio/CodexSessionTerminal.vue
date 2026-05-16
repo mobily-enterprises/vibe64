@@ -211,15 +211,41 @@ const MAX_TERMINAL_OUTPUT_LENGTH = 16 * 1024 * 1024;
 const TERMINAL_OUTPUT_EMIT_INTERVAL_MS = 120;
 
 const sessionId = computed(() => props.session?.sessionId || "");
-const canUseTerminal = computed(() => Boolean(sessionId.value && props.session?.worktreeReady === true));
+
+function runtimeCodexPromptHandoff(session = {}) {
+  const actionResultHandoff = session?.actionResult?.codexPromptHandoff;
+  if (actionResultHandoff && typeof actionResultHandoff === "object") {
+    return actionResultHandoff;
+  }
+  const sessionHandoff = session?.codexPromptHandoff;
+  return sessionHandoff && typeof sessionHandoff === "object" ? sessionHandoff : null;
+}
+
+const canUseTerminal = computed(() => {
+  return Boolean(
+    sessionId.value &&
+    (
+      props.session?.worktreeReady === true ||
+      (props.session?.workflowId && props.session?.targetRoot)
+    )
+  );
+});
 const codexPrompt = computed(() => {
   if (props.promptOverride) {
     return String(props.promptOverride || "");
+  }
+  const handoff = runtimeCodexPromptHandoff(props.session);
+  if (handoff?.prompt) {
+    return String(handoff.prompt || "");
   }
   const promptField = String(props.session?.codex?.promptField || "");
   return promptField ? String(props.session?.[promptField] || "") : "";
 });
 const visibleCodexPrompt = computed(() => {
+  const handoff = runtimeCodexPromptHandoff(props.session);
+  if (handoff?.visiblePrompt) {
+    return String(handoff.visiblePrompt || "");
+  }
   return String(props.session?.codex?.promptActionLabel || "").trim() || "Run Codex prompt.";
 });
 const manualPromptInjectionRequestKey = computed(() => String(props.promptInjectionRequestKey || ""));

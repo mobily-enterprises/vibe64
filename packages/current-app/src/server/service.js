@@ -11,14 +11,13 @@ import { loadAppConfigFromAppRoot } from "@jskit-ai/kernel/server/support";
 import {
   abandonSession,
   adoptDependenciesInstalled,
-  advanceSessionStep,
+  buildSessionErrorResponse,
   createSession,
   inspectSessionDiff,
   inspectSessionDetails,
   listSessions,
   rewindSession,
-  runSessionStep,
-  runSessionStepAction
+  runSessionStep
 } from "@jskit-ai/jskit-cli/server";
 import {
   closeTerminalSession,
@@ -34,6 +33,11 @@ import {
 import {
   gitToolchainMountArgs
 } from "../../../../server/lib/gitToolchainMounts.js";
+import {
+  AI_STUDIO_SESSION_STATUS,
+  AiStudioSessionRuntime,
+  JskitTargetAdapter
+} from "../../../../server/lib/aiStudio/index.js";
 
 const execFileAsync = promisify(execFile);
 const TOOLCHAIN_IMAGE = "jskit-ai-studio-toolchain:0.1.0";
@@ -123,6 +127,26 @@ function responseErrorMessage(response = {}, fallback = "Request failed.") {
   const message = String(error?.message || response.error || fallback);
   const repairCommand = String(error?.repairCommand || "");
   return repairCommand ? `${message}\nRepair: ${repairCommand}` : message;
+}
+
+function aiStudioErrorResponse(error, fallback = "AI Studio request failed.") {
+  return {
+    errors: [
+      {
+        code: String(error?.code || "ai_studio_request_failed"),
+        message: String(error?.message || error || fallback)
+      }
+    ],
+    ok: false
+  };
+}
+
+async function aiStudioResult(operation) {
+  try {
+    return await operation();
+  } catch (error) {
+    return aiStudioErrorResponse(error);
+  }
 }
 
 function codexContainerName({ sessionId, terminalId }) {
@@ -253,6 +277,14 @@ function decoratedIssueSessionList(response = {}, activeSessions = []) {
   return {
     ...response,
     limits: issueSessionLimits(activeSessions),
+    sessions
+  };
+}
+
+function aiStudioSessionListResponse(sessions = []) {
+  return {
+    limits: issueSessionLimits(sessions),
+    ok: true,
     sessions
   };
 }
@@ -1565,6 +1597,10 @@ async function startNpmScriptTerminalForRoot({
 
 function createService({ appRoot = "" } = {}) {
   const inspectionRoot = resolveCurrentAppRoot(appRoot);
+  const aiStudioRuntime = new AiStudioSessionRuntime({
+    adapter: new JskitTargetAdapter(),
+    targetRoot: inspectionRoot
+  });
 
   return Object.freeze({
     async inspectCurrentApp(input = {}, options = {}) {
@@ -1590,6 +1626,58 @@ function createService({ appRoot = "" } = {}) {
       return startNpmScriptTerminalForRoot({
         inspectionRoot,
         scriptName: input?.scriptName
+      });
+    },
+
+    async listAiStudioSessions() {
+      return aiStudioResult(async () => {
+        return aiStudioSessionListResponse(await aiStudioRuntime.listSessions());
+      });
+    },
+
+    async createAiStudioSession() {
+      return aiStudioResult(async () => {
+        const existingSessions = await aiStudioRuntime.listSessions();
+        const limits = issueSessionLimits(existingSessions);
+        if (limits.openSessionCount >= limits.maxOpenSessions) {
+          return {
+            errors: [
+              {
+                code: "open_session_limit",
+                message: `Studio allows up to ${limits.maxOpenSessions} active sessions at once. Finish or abandon one before creating another.`
+              }
+            ],
+            limits,
+            ok: false,
+            sessions: existingSessions,
+            status: "blocked"
+          };
+        }
+        return aiStudioRuntime.createSession();
+      });
+    },
+
+    async inspectAiStudioSession(sessionId) {
+      return aiStudioResult(async () => aiStudioRuntime.getSession(sessionId));
+    },
+
+    async runAiStudioSessionAction(sessionId, actionId, input = {}) {
+      return aiStudioResult(async () => {
+        return aiStudioRuntime.runAction(sessionId, actionId, input);
+      });
+    },
+
+    async advanceAiStudioSession(sessionId) {
+      return aiStudioResult(async () => aiStudioRuntime.advance(sessionId));
+    },
+
+    async abandonAiStudioSession(sessionId) {
+      return aiStudioResult(async () => {
+        await aiStudioRuntime.store.writeStatus(sessionId, AI_STUDIO_SESSION_STATUS.ABANDONED);
+        await closeTerminalSessionsForNamespace(terminalNamespace(sessionId));
+        await closeTerminalSessionsForNamespace(stepTerminalNamespace(sessionId));
+        await closeTerminalSessionsForNamespace(appTestTerminalNamespace(sessionId));
+        return aiStudioRuntime.getSession(sessionId);
       });
     },
 
@@ -1962,23 +2050,22 @@ function createService({ appRoot = "" } = {}) {
 
     async runIssueSessionStep(sessionId, input = {}) {
       const action = String(input?.sessionAction || input?.actionCommand || "").trim();
-      const response = input?.advance === true
-        ? await advanceSessionStep({
-            targetRoot: inspectionRoot,
-            sessionId
-          })
-        : action
-          ? await runSessionStepAction({
-              action,
-              targetRoot: inspectionRoot,
-              sessionId,
-              options: input || {}
-            })
-          : await runSessionStep({
-              targetRoot: inspectionRoot,
-              sessionId,
-              options: input || {}
-            });
+      if (input?.advance === true || action) {
+        return buildSessionErrorResponse({
+          code: "issue_session_step_mode_unsupported",
+          message: action
+            ? `The installed JSKIT CLI does not expose a session action runner for "${action}".`
+            : "The installed JSKIT CLI does not expose a session advance runner.",
+          repairCommand: `jskit session ${sessionId} step`,
+          sessionId,
+          targetRoot: inspectionRoot
+        });
+      }
+      const response = await runSessionStep({
+        targetRoot: inspectionRoot,
+        sessionId,
+        options: input || {}
+      });
       if (CLOSED_SESSION_STATUSES.has(String(response?.status || ""))) {
         await closeTerminalSessionsForNamespace(terminalNamespace(sessionId));
         await closeTerminalSessionsForNamespace(stepTerminalNamespace(sessionId));

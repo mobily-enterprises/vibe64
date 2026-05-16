@@ -37,6 +37,7 @@
     "@jskit-ai/http-runtime": "0.1.79",
     "@jskit-ai/kernel": "0.1.80",
     "@jskit-ai/shell-web": "0.1.79",
+    "@jskit-ai/users-web": "^0.1.95",
     "@local/app-setup-doctor": "file:packages/app-setup-doctor",
     "@local/bootstrap-doctor": "file:packages/bootstrap-doctor",
     "@local/current-app": "file:packages/current-app",

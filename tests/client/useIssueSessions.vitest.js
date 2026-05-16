@@ -3,20 +3,20 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { useIssueSessions } from "../../src/composables/useIssueSessions.js";
 import { issueSessionFacts } from "../../src/lib/issueSessionViewModel.js";
 import {
-  listIssueSessions,
-  readIssueSession,
-  rewindIssueSession
+  listAiStudioSessions,
+  readAiStudioSession,
+  runAiStudioSessionAction
 } from "@/lib/studioApi.js";
 
 const SELECTED_SESSION_STORAGE_KEY = "jskit-ai-studio:selected-issue-session-id";
 
 vi.mock("@/lib/studioApi.js", () => ({
-  abandonIssueSession: vi.fn(),
-  createIssueSession: vi.fn(),
-  listIssueSessions: vi.fn(),
-  readIssueSession: vi.fn(),
-  rewindIssueSession: vi.fn(),
-  runIssueSessionStep: vi.fn()
+  abandonAiStudioSession: vi.fn(),
+  advanceAiStudioSession: vi.fn(),
+  createAiStudioSession: vi.fn(),
+  listAiStudioSessions: vi.fn(),
+  readAiStudioSession: vi.fn(),
+  runAiStudioSessionAction: vi.fn()
 }));
 
 describe("useIssueSessions", () => {
@@ -58,17 +58,17 @@ describe("useIssueSessions", () => {
     const sessionStorage = stubSessionStorage({
       [SELECTED_SESSION_STORAGE_KEY]: selectedSession.sessionId
     });
-    listIssueSessions.mockResolvedValue({
+    listAiStudioSessions.mockResolvedValue({
       sessions: [olderSession, selectedSession]
     });
-    readIssueSession.mockImplementation(async (sessionId) => {
+    readAiStudioSession.mockImplementation(async (sessionId) => {
       return sessionId === selectedSession.sessionId ? selectedSession : olderSession;
     });
 
     const issueSessions = useIssueSessions();
     await issueSessions.loadIssueSessions();
 
-    expect(readIssueSession).toHaveBeenCalledWith(selectedSession.sessionId);
+    expect(readAiStudioSession).toHaveBeenCalledWith(selectedSession.sessionId);
     expect(issueSessions.selectedSession.value.currentStep).toBe("issue_created");
     expect(sessionStorage.setItem)
       .toHaveBeenCalledWith(SELECTED_SESSION_STORAGE_KEY, selectedSession.sessionId);
@@ -88,17 +88,17 @@ describe("useIssueSessions", () => {
       status: "running"
     };
     stubSessionStorage();
-    listIssueSessions.mockResolvedValue({
+    listAiStudioSessions.mockResolvedValue({
       sessions: [olderSession, newestSession]
     });
-    readIssueSession.mockImplementation(async (sessionId) => {
+    readAiStudioSession.mockImplementation(async (sessionId) => {
       return sessionId === newestSession.sessionId ? newestSession : olderSession;
     });
 
     const issueSessions = useIssueSessions();
     await issueSessions.loadIssueSessions();
 
-    expect(readIssueSession).toHaveBeenCalledWith(newestSession.sessionId);
+    expect(readAiStudioSession).toHaveBeenCalledWith(newestSession.sessionId);
     expect(issueSessions.selectedSession.value.currentStep).toBe("issue_created");
   });
 
@@ -109,10 +109,10 @@ describe("useIssueSessions", () => {
       status: "running",
       worktreeReady: true
     };
-    listIssueSessions.mockResolvedValue({
+    listAiStudioSessions.mockResolvedValue({
       sessions: [session]
     });
-    readIssueSession.mockResolvedValue({
+    readAiStudioSession.mockResolvedValue({
       ...session,
       needsThreadCapture: true
     });
@@ -136,57 +136,45 @@ describe("useIssueSessions", () => {
       .toBe("019e1575-2458-7b93-bf9d-e7d7ffd49ad2");
   });
 
-  it("rewinds the selected session and refreshes the visible list", async () => {
+  it("runs the selected runtime action and refreshes the visible list", async () => {
     const session = {
-      currentStep: "issue_drafted",
+      currentStep: "plan_made",
       sessionId: "2026-05-12_13-07-36",
+      workflowId: "default",
       status: "running"
     };
-    const rewoundSession = {
+    const actionResponse = {
       ...session,
-      currentStep: "dependencies_installed",
-      completedSteps: ["session_created", "worktree_created"],
-      currentStepAction: {
-        input: { type: "none" },
-        stepId: "dependencies_installed"
+      actionResult: {
+        actionId: "make_plan",
+        status: "prompt_ready"
       }
     };
-    listIssueSessions
+    listAiStudioSessions
       .mockResolvedValueOnce({ sessions: [session] })
-      .mockResolvedValueOnce({ sessions: [rewoundSession] });
-    readIssueSession.mockResolvedValue(session);
-    rewindIssueSession.mockResolvedValue(rewoundSession);
+      .mockResolvedValueOnce({ sessions: [actionResponse] });
+    readAiStudioSession.mockResolvedValue(session);
+    runAiStudioSessionAction.mockResolvedValue(actionResponse);
 
     const issueSessions = useIssueSessions();
     await issueSessions.loadIssueSessions();
-    const response = await issueSessions.rewindSelectedSession("dependencies_installed");
+    const response = await issueSessions.runSelectedAction("make_plan");
 
-    expect(rewindIssueSession).toHaveBeenCalledWith(session.sessionId, "dependencies_installed");
-    expect(response.currentStep).toBe("dependencies_installed");
-    expect(issueSessions.selectedSession.value.currentStep).toBe("dependencies_installed");
-    expect(issueSessions.issueSessions.value[0].currentStep).toBe("dependencies_installed");
+    expect(runAiStudioSessionAction).toHaveBeenCalledWith(session.sessionId, "make_plan", {});
+    expect(response.actionResult.actionId).toBe("make_plan");
+    expect(issueSessions.selectedSession.value.actionResult.actionId).toBe("make_plan");
+    expect(issueSessions.issueSessions.value[0].actionResult.actionId).toBe("make_plan");
     expect(issueSessions.issueSessionsError.value).toBe("");
   });
 
-  it("surfaces structured rewind failures", async () => {
+  it("reports that runtime rewind is not wired yet", async () => {
     const session = {
       currentStep: "plan_executed",
       sessionId: "2026-05-12_13-07-36",
       status: "running"
     };
-    const failure = {
-      ...session,
-      ok: false,
-      errors: [
-        {
-          code: "rewind_step_not_allowed",
-          message: "Cannot rewind session 2026-05-12_13-07-36 to worktree_created."
-        }
-      ]
-    };
-    listIssueSessions.mockResolvedValue({ sessions: [session] });
-    readIssueSession.mockResolvedValue(session);
-    rewindIssueSession.mockResolvedValue(failure);
+    listAiStudioSessions.mockResolvedValue({ sessions: [session] });
+    readAiStudioSession.mockResolvedValue(session);
 
     const issueSessions = useIssueSessions();
     await issueSessions.loadIssueSessions();
@@ -194,6 +182,6 @@ describe("useIssueSessions", () => {
 
     expect(response.ok).toBe(false);
     expect(issueSessions.issueSessionsError.value)
-      .toBe("Cannot rewind session 2026-05-12_13-07-36 to worktree_created.");
+      .toBe("AI Studio runtime rewind is not wired yet.");
   });
 });

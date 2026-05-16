@@ -1160,6 +1160,15 @@ Acceptance:
 
 Goal: Make Studio a thin renderer over the new runtime session view.
 
+Hard-cutover rule for slices 9-13:
+
+- Do not build old/new compatibility bridges.
+- Do not normalize new runtime data into legacy issue-session shapes.
+- Do not preserve old UI contracts just to keep the workflow usable mid-slice.
+- The app must still compile and boot.
+- The Studio workflow may be incomplete until Slice 13 is finished.
+- Each slice should move the real UI/API boundary toward the new runtime directly.
+
 Instructions:
 
 - Replace UI-specific workflow inference with runtime-provided session view fields.
@@ -1171,14 +1180,14 @@ Instructions:
 
 Checklist:
 
-- [ ] Studio reads new runtime session view.
-- [ ] Checklist renders from runtime data.
-- [ ] Current step renders from runtime data.
-- [ ] Buttons render from runtime actions.
-- [ ] Disabled buttons remain visible.
-- [ ] Disabled reasons are available to display.
-- [ ] `Next` renders from runtime data.
-- [ ] Prompt injection uses runtime prompt payloads.
+- [x] Studio reads new runtime session view.
+- [x] Checklist renders from runtime data.
+- [x] Current step renders from runtime data.
+- [x] Buttons render from runtime actions.
+- [x] Disabled buttons remain visible.
+- [x] Disabled reasons are available to display.
+- [x] `Next` renders from runtime data.
+- [x] Prompt injection uses runtime prompt payloads.
 - [ ] Artifact editors use runtime artifact descriptors.
 - [ ] Fast component-level tests cover view-model mapping without browser e2e.
 

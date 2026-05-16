@@ -25,6 +25,7 @@ const CURRENT_APP_ENDPOINT = resolveScopedApiBasePath({
   strictParams: false
 });
 
+const AI_STUDIO_SESSIONS_ENDPOINT = `${CURRENT_APP_ENDPOINT}/ai-studio/sessions`;
 const ISSUE_SESSIONS_ENDPOINT = `${CURRENT_APP_ENDPOINT}/issue-sessions`;
 const BOOTSTRAP_TERMINAL_ENDPOINT = `${BOOTSTRAP_ENDPOINT}/terminal`;
 const TARGET_APP_TERMINAL_ENDPOINT = `${TARGET_APP_ENDPOINT}/terminal`;
@@ -248,6 +249,33 @@ async function closeNpmScriptTerminal(terminalSessionId) {
   return studioHttpClient.delete(npmScriptTerminalEndpoint(terminalSessionId));
 }
 
+async function listAiStudioSessions() {
+  return studioHttpClient.get(AI_STUDIO_SESSIONS_ENDPOINT);
+}
+
+async function createAiStudioSession() {
+  return studioHttpClient.post(AI_STUDIO_SESSIONS_ENDPOINT, {});
+}
+
+async function readAiStudioSession(sessionId) {
+  return studioHttpClient.get(`${AI_STUDIO_SESSIONS_ENDPOINT}/${encodeURIComponent(sessionId)}`);
+}
+
+async function runAiStudioSessionAction(sessionId, actionId, input = {}) {
+  return studioHttpClient.post(
+    `${AI_STUDIO_SESSIONS_ENDPOINT}/${encodeURIComponent(sessionId)}/actions/${encodeURIComponent(actionId)}`,
+    input
+  );
+}
+
+async function advanceAiStudioSession(sessionId) {
+  return studioHttpClient.post(`${AI_STUDIO_SESSIONS_ENDPOINT}/${encodeURIComponent(sessionId)}/advance`, {});
+}
+
+async function abandonAiStudioSession(sessionId) {
+  return studioHttpClient.post(`${AI_STUDIO_SESSIONS_ENDPOINT}/${encodeURIComponent(sessionId)}/abandon`, {});
+}
+
 async function closeIssueSessionAppTestTerminal(sessionId, terminalSessionId) {
   return studioHttpClient.delete(issueSessionAppTestTerminalEndpoint(sessionId, terminalSessionId));
 }
@@ -330,6 +358,7 @@ export {
   APP_SETUP_ENDPOINT,
   APP_SETUP_STREAM_ENDPOINT,
   APP_SETUP_TERMINAL_ENDPOINT,
+  AI_STUDIO_SESSIONS_ENDPOINT,
   BOOTSTRAP_ENDPOINT,
   BOOTSTRAP_STREAM_ENDPOINT,
   BOOTSTRAP_TERMINAL_ENDPOINT,
@@ -340,12 +369,15 @@ export {
   TARGET_APP_ENDPOINT,
   TARGET_APP_STREAM_ENDPOINT,
   TARGET_APP_TERMINAL_ENDPOINT,
+  abandonAiStudioSession,
   abandonIssueSession,
+  advanceAiStudioSession,
   closeIssueSessionCodexTerminal,
   closeCurrentAppTestTerminal,
   closeIssueSessionAppTestTerminal,
   closeIssueSessionStepTerminal,
   closeNpmScriptTerminal,
+  createAiStudioSession,
   createIssueSession,
   consumeStudioGate,
   currentAppTestTerminalEndpoint,
@@ -355,12 +387,14 @@ export {
   issueSessionAppTestTerminalEndpoint,
   issueSessionAppTestTerminalWebSocketUrl,
   issueSessionStepTerminalWebSocketUrl,
+  listAiStudioSessions,
   listIssueSessions,
   npmScriptTerminalEndpoint,
   npmScriptTerminalWebSocketUrl,
   readAppSetupStatus,
   readBootstrapStatus,
   readCurrentApp,
+  readAiStudioSession,
   readIssueSession,
   readIssueSessionBlueprint,
   readIssueSessionCodexTerminal,
@@ -371,6 +405,7 @@ export {
   resolveStudioGate,
   resetStarredNpmScripts,
   rewindIssueSession,
+  runAiStudioSessionAction,
   runIssueSessionStep,
   saveIssueSessionBlueprint,
   saveIssueSessionIssueDraft,
