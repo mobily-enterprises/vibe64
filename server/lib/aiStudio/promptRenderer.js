@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import {
   aiStudioError,
+  isMissingPathError,
   normalizeText
 } from "./core.js";
 
@@ -51,16 +52,12 @@ function assertPromptPackRoot(promptPackRoot) {
   return path.resolve(normalizedPromptPackRoot);
 }
 
-function fileWasMissing(error) {
-  return error?.code === "ENOENT";
-}
-
 async function readPromptTemplate(promptPackRoot, promptId) {
   const requestedPromptId = assertPromptId(promptId || DEFAULT_PROMPT_ID);
   try {
     return await readFile(promptTemplatePath(promptPackRoot, requestedPromptId), "utf8");
   } catch (error) {
-    if (!fileWasMissing(error) || requestedPromptId === DEFAULT_PROMPT_ID) {
+    if (!isMissingPathError(error) || requestedPromptId === DEFAULT_PROMPT_ID) {
       throw error;
     }
     return readPromptTemplate(promptPackRoot, DEFAULT_PROMPT_ID);
@@ -72,7 +69,7 @@ function promptContextForAction({
   input = {},
   session = {}
 } = {}) {
-  return completePromptContext({
+  return normalizePromptContext({
     action,
     adapter: session.adapter,
     input,
@@ -80,7 +77,7 @@ function promptContextForAction({
   });
 }
 
-function completePromptContext(context = {}) {
+function normalizePromptContext(context = {}) {
   return {
     action: {
       id: normalizeText(context.action?.id),
@@ -120,8 +117,8 @@ function sessionPromptContext(session = {}) {
   };
 }
 
-function promptTemplateTokens(rawContext) {
-  const context = completePromptContext(rawContext);
+function promptTemplateTokens(contextInput) {
+  const context = normalizePromptContext(contextInput);
   return {
     "action.id": context.action.id,
     "action.label": context.action.label,

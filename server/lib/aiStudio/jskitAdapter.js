@@ -1,4 +1,4 @@
-import { access, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -9,10 +9,16 @@ import {
   adapterDetection,
   adapterProjectFacts
 } from "./adapter.js";
-import { normalizeText } from "./core.js";
+import {
+  aiStudioError,
+  isMissingPathError,
+  normalizeText,
+  pathExists
+} from "./core.js";
+import { deepFreeze } from "./deepFreeze.js";
 import { PromptRenderer } from "./promptRenderer.js";
 
-const JSKIT_MARKERS = Object.freeze([
+const JSKIT_MARKERS = deepFreeze([
   {
     id: "package_json",
     label: "package.json",
@@ -43,7 +49,7 @@ const JSKIT_MARKERS = Object.freeze([
 const JSKIT_BLUEPRINT_RELATIVE_PATH = ".jskit/APP_BLUEPRINT.md";
 const JSKIT_PROMPT_PACK_ROOT = fileURLToPath(new URL("./adapters/jskit/prompts", import.meta.url));
 
-const JSKIT_BASE_CAPABILITIES = Object.freeze({
+const JSKIT_BASE_CAPABILITIES = deepFreeze({
   accept_changes: true,
   commit_changes: true,
   create_issue_file: true,
@@ -51,8 +57,8 @@ const JSKIT_BASE_CAPABILITIES = Object.freeze({
   create_pr_file: true,
   create_pr_on_gh: true,
   create_worktree: true,
-  edit_pr: true,
   edit_issue: true,
+  edit_pr: true,
   finish_session: true,
   install_dependencies: true,
   merge_pr: true,
@@ -63,16 +69,16 @@ const JSKIT_BASE_CAPABILITIES = Object.freeze({
   sync_main_checkout: true
 });
 
-const JSKIT_BLUEPRINT_CAPABILITIES = Object.freeze({
+const JSKIT_BLUEPRINT_CAPABILITIES = deepFreeze({
   update_project_knowledge: true
 });
 
-const JSKIT_CAPABILITIES = Object.freeze({
+const JSKIT_CAPABILITIES = deepFreeze({
   ...JSKIT_BASE_CAPABILITIES,
   ...JSKIT_BLUEPRINT_CAPABILITIES
 });
 
-const JSKIT_COMMANDS = Object.freeze([
+const JSKIT_COMMANDS = deepFreeze([
   {
     id: "create_worktree",
     label: "Create worktree"
@@ -115,23 +121,24 @@ const JSKIT_COMMANDS = Object.freeze([
   }
 ]);
 
-async function pathExists(filePath) {
-  try {
-    await access(filePath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 async function readJsonIfExists(filePath) {
-  if (!await pathExists(filePath)) {
+  let text = "";
+  try {
+    text = await readFile(filePath, "utf8");
+  } catch (error) {
+    if (!isMissingPathError(error)) {
+      throw error;
+    }
     return {};
   }
+
   try {
-    return JSON.parse(await readFile(filePath, "utf8"));
+    return JSON.parse(text);
   } catch {
-    return {};
+    throw aiStudioError(
+      `Invalid JSON in JSKIT project file: ${filePath}`,
+      "ai_studio_invalid_jskit_json"
+    );
   }
 }
 
@@ -263,11 +270,12 @@ class JskitTargetAdapter extends TargetAdapter {
   }
 
   async detect({ targetRoot } = {}) {
-    const inspection = await this.projectInspection(targetRoot || process.cwd());
-    const detected = allMarkersExist(inspection.markers);
+    const resolvedTargetRoot = path.resolve(targetRoot || process.cwd());
+    const markers = await inspectMarkers(resolvedTargetRoot);
+    const detected = allMarkersExist(markers);
     return adapterDetection({
       detected,
-      reason: detected ? "" : setupSummary(inspection.markers)
+      reason: detected ? "" : setupSummary(markers)
     });
   }
 

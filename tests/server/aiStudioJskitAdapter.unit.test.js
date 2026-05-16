@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 
@@ -9,18 +8,7 @@ import {
   AiStudioSessionRuntime,
   JskitTargetAdapter
 } from "../../server/lib/aiStudio/index.js";
-
-async function withTemporaryRoot(callback) {
-  const root = await mkdtemp(path.join(tmpdir(), "ai-studio-jskit-"));
-  try {
-    return await callback(root);
-  } finally {
-    await rm(root, {
-      force: true,
-      recursive: true
-    });
-  }
-}
+import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
 
 async function writeProjectFile(root, relativePath, text = "") {
   const filePath = path.join(root, relativePath);
@@ -120,6 +108,28 @@ test("jskit adapter leaves capabilities empty when target markers are missing", 
     assert.match(detection.reason, /Missing JSKIT markers/u);
     assert.deepEqual(facts.capabilities, {});
     assert.deepEqual(facts.commands, []);
+  });
+});
+
+test("jskit adapter reports malformed package.json instead of hiding it", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createJskitProject(targetRoot);
+    await writeProjectFile(targetRoot, "package.json", "{ not json\n");
+    const adapter = new JskitTargetAdapter();
+
+    const detection = await adapter.detect({
+      targetRoot
+    });
+    assert.equal(detection.detected, true);
+
+    await assert.rejects(
+      () => adapter.inspect({
+        targetRoot
+      }),
+      {
+        code: "ai_studio_invalid_jskit_json"
+      }
+    );
   });
 });
 

@@ -1,7 +1,5 @@
 import assert from "node:assert/strict";
-import { access, mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
+import { access, readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
@@ -12,18 +10,7 @@ import {
   isValidAiStudioSessionId,
   resolveAiStudioSessionPaths
 } from "../../server/lib/aiStudio/index.js";
-
-async function withTemporaryRoot(callback) {
-  const root = await mkdtemp(path.join(tmpdir(), "ai-studio-slice-1-"));
-  try {
-    return await callback(root);
-  } finally {
-    await rm(root, {
-      force: true,
-      recursive: true
-    });
-  }
-}
+import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
 
 async function assertPathExists(filePath) {
   await assert.doesNotReject(access(filePath));
@@ -40,15 +27,15 @@ test("ai-studio session store creates inspectable session state under .ai-studio
       metadata: {
         adapter: "fake"
       },
-      sessionId: "slice_1"
+      sessionId: "store_session"
     });
 
     const paths = resolveAiStudioSessionPaths({
-      sessionId: "slice_1",
+      sessionId: "store_session",
       targetRoot
     });
 
-    assert.equal(session.sessionId, "slice_1");
+    assert.equal(session.sessionId, "store_session");
     assert.equal(session.targetRoot, targetRoot);
     assert.equal(session.currentStep, AI_STUDIO_INITIAL_STEP);
     assert.equal(session.status, AI_STUDIO_SESSION_STATUS.ACTIVE);
@@ -61,7 +48,6 @@ test("ai-studio session store creates inspectable session state under .ai-studio
     await assertPathExists(paths.statusPath);
     await assertPathExists(paths.metadataRoot);
     await assertPathExists(paths.artifactsRoot);
-    await assertPathExists(paths.promptsRoot);
 
     assert.equal(await readFile(paths.currentStepPath, "utf8"), "session_created\n");
     assert.equal(await readFile(paths.statusPath, "utf8"), "active\n");
@@ -127,7 +113,7 @@ test("ai-studio session store allocates deterministic available ids and lists se
   });
 });
 
-test("ai-studio runtime delegates Slice 1 session operations to the store", async () => {
+test("ai-studio runtime delegates session operations to the store", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = new AiStudioSessionRuntime({
       clock: () => new Date("2026-05-16T01:02:03.000Z"),

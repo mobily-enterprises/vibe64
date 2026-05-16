@@ -1,9 +1,11 @@
-import { access, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import {
   aiStudioError,
-  normalizeText
+  isMissingPathError,
+  normalizeText,
+  pathExists
 } from "./core.js";
 import { deepFreeze } from "./deepFreeze.js";
 
@@ -99,20 +101,11 @@ function resolveSafeChildPath(root, relativePath, {
   return resolvedPath;
 }
 
-async function fileExists(filePath) {
-  try {
-    await access(filePath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 async function readTextIfExists(filePath) {
   try {
     return await readFile(filePath, "utf8");
   } catch (error) {
-    if (error?.code === "ENOENT") {
+    if (isMissingPathError(error)) {
       return "";
     }
     throw error;
@@ -136,7 +129,7 @@ async function readDirectoryEntries(directoryPath) {
       withFileTypes: true
     });
   } catch (error) {
-    if (error?.code === "ENOENT") {
+    if (isMissingPathError(error)) {
       return [];
     }
     throw error;
@@ -191,7 +184,6 @@ function resolveAiStudioSessionPaths({
     currentStepPath: sessionRoot ? path.join(sessionRoot, "current_step") : "",
     manifestPath: sessionRoot ? path.join(sessionRoot, "session.json") : "",
     metadataRoot: sessionRoot ? path.join(sessionRoot, "metadata") : "",
-    promptsRoot: sessionRoot ? path.join(sessionRoot, "prompts") : "",
     sessionId: normalizedSessionId,
     sessionRoot,
     sessionsRoot,
@@ -213,11 +205,30 @@ async function createAvailableSessionId(rootPaths, now) {
   const baseSessionId = timestampForSessionId(now);
   for (let index = 0; index < 1000; index += 1) {
     const sessionId = index === 0 ? baseSessionId : `${baseSessionId}_${index + 1}`;
-    if (!await fileExists(path.join(rootPaths.activeSessionsRoot, sessionId))) {
+    if (!await pathExists(path.join(rootPaths.activeSessionsRoot, sessionId))) {
       return sessionId;
     }
   }
   throw aiStudioError("Unable to allocate an ai-studio session id.", "ai_studio_session_id_exhausted");
+}
+
+function metadataFilePath(sessionPaths, name) {
+  return path.join(sessionPaths.metadataRoot, assertSafeMetadataName(name));
+}
+
+function artifactFilePath(sessionPaths, relativePath) {
+  return resolveSafeChildPath(sessionPaths.artifactsRoot, relativePath, {
+    code: "ai_studio_invalid_artifact_path",
+    label: "artifact path"
+  });
+}
+
+function actionResultFilePath(sessionPaths, actionId) {
+  return path.join(sessionPaths.actionsRoot, assertSafeActionId(actionId));
+}
+
+function completedStepFilePath(sessionPaths, stepId) {
+  return path.join(sessionPaths.stepsRoot, assertSafeStepId(stepId));
 }
 
 function createAiStudioSessionStore({
@@ -236,7 +247,7 @@ function createAiStudioSessionStore({
 
   async function ensureSessionRoot(sessionId) {
     const sessionPaths = paths(sessionId);
-    if (!await fileExists(sessionPaths.manifestPath)) {
+    if (!await pathExists(sessionPaths.manifestPath)) {
       throw aiStudioError(`Unknown ai-studio session: ${sessionPaths.sessionId}`, "ai_studio_session_not_found");
     }
     return sessionPaths;
@@ -264,13 +275,12 @@ function createAiStudioSessionStore({
 
   async function writeMetadataValue(sessionId, name, value) {
     const sessionPaths = await ensureSessionRoot(sessionId);
-    const metadataName = assertSafeMetadataName(name);
-    await writeTextFile(path.join(sessionPaths.metadataRoot, metadataName), `${normalizeText(value)}\n`);
+    await writeTextFile(metadataFilePath(sessionPaths, name), `${normalizeText(value)}\n`);
   }
 
   async function readMetadataValue(sessionId, name) {
     const sessionPaths = await ensureSessionRoot(sessionId);
-    return normalizeText(await readTextIfExists(path.join(sessionPaths.metadataRoot, assertSafeMetadataName(name))));
+    return normalizeText(await readTextIfExists(metadataFilePath(sessionPaths, name)));
   }
 
   async function readMetadata(sessionId) {
@@ -283,7 +293,7 @@ function createAiStudioSessionStore({
       names.map(async (name) => {
         return [
           name,
-          normalizeText(await readTextIfExists(path.join(sessionPaths.metadataRoot, name)))
+          normalizeText(await readTextIfExists(metadataFilePath(sessionPaths, name)))
         ];
       })
     );
@@ -292,28 +302,19 @@ function createAiStudioSessionStore({
 
   async function writeArtifact(sessionId, relativePath, text) {
     const sessionPaths = await ensureSessionRoot(sessionId);
-    const artifactPath = resolveSafeChildPath(sessionPaths.artifactsRoot, relativePath, {
-      code: "ai_studio_invalid_artifact_path",
-      label: "artifact path"
-    });
+    const artifactPath = artifactFilePath(sessionPaths, relativePath);
     await writeTextFile(artifactPath, text);
     return artifactPath;
   }
 
   async function readArtifact(sessionId, relativePath) {
     const sessionPaths = await ensureSessionRoot(sessionId);
-    return await readTextIfExists(resolveSafeChildPath(sessionPaths.artifactsRoot, relativePath, {
-      code: "ai_studio_invalid_artifact_path",
-      label: "artifact path"
-    }));
+    return await readTextIfExists(artifactFilePath(sessionPaths, relativePath));
   }
 
   async function artifactExists(sessionId, relativePath) {
     const sessionPaths = await ensureSessionRoot(sessionId);
-    return fileExists(resolveSafeChildPath(sessionPaths.artifactsRoot, relativePath, {
-      code: "ai_studio_invalid_artifact_path",
-      label: "artifact path"
-    }));
+    return pathExists(artifactFilePath(sessionPaths, relativePath));
   }
 
   async function appendCommandLogEntry(sessionId, entry = {}) {
@@ -348,20 +349,21 @@ function createAiStudioSessionStore({
       actionId: normalizedActionId,
       at: normalizeText(result.at) || now().toISOString()
     };
-    await writeJsonFile(path.join(sessionPaths.actionsRoot, normalizedActionId), record);
+    await writeJsonFile(actionResultFilePath(sessionPaths, normalizedActionId), record);
     return record;
   }
 
   async function readActionResult(sessionId, actionId) {
     const sessionPaths = await ensureSessionRoot(sessionId);
-    const actionText = await readTextIfExists(path.join(sessionPaths.actionsRoot, assertSafeActionId(actionId)));
+    const normalizedActionId = assertSafeActionId(actionId);
+    const actionText = await readTextIfExists(actionResultFilePath(sessionPaths, normalizedActionId));
     if (!actionText) {
       return null;
     }
     try {
       return JSON.parse(actionText);
     } catch {
-      throw aiStudioError(`Invalid ai-studio action result: ${actionId}`, "ai_studio_invalid_action_result");
+      throw aiStudioError(`Invalid ai-studio action result: ${normalizedActionId}`, "ai_studio_invalid_action_result");
     }
   }
 
@@ -382,7 +384,7 @@ function createAiStudioSessionStore({
       message: normalizeText(message),
       stepId: normalizedStepId
     };
-    await writeJsonFile(path.join(sessionPaths.stepsRoot, normalizedStepId), record);
+    await writeJsonFile(completedStepFilePath(sessionPaths, normalizedStepId), record);
     return record;
   }
 
@@ -421,7 +423,6 @@ function createAiStudioSessionStore({
       manifest,
       metadata,
       metadataRoot: sessionPaths.metadataRoot,
-      promptsRoot: sessionPaths.promptsRoot,
       sessionId: sessionPaths.sessionId,
       sessionRoot: sessionPaths.sessionRoot,
       stateRoot: sessionPaths.stateRoot,
@@ -468,9 +469,6 @@ function createAiStudioSessionStore({
       mkdir(sessionPaths.metadataRoot, {
         recursive: true
       }),
-      mkdir(sessionPaths.promptsRoot, {
-        recursive: true
-      }),
       mkdir(sessionPaths.stepsRoot, {
         recursive: true
       })
@@ -488,7 +486,7 @@ function createAiStudioSessionStore({
       writeTextFile(sessionPaths.currentStepPath, `${normalizeText(initialStep) || AI_STUDIO_INITIAL_STEP}\n`),
       writeTextFile(sessionPaths.statusPath, `${normalizedStatus}\n`),
       ...Object.entries(normalizedMetadata).map(([name, value]) => {
-        return writeTextFile(path.join(sessionPaths.metadataRoot, name), `${value}\n`);
+        return writeTextFile(metadataFilePath(sessionPaths, name), `${value}\n`);
       })
     ]);
     return readSession(resolvedSessionId);

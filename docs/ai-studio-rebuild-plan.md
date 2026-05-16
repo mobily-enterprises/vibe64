@@ -260,7 +260,6 @@ Recommended session layout:
         status
         metadata/
         artifacts/
-        prompts/
         command-log.jsonl
 ```
 

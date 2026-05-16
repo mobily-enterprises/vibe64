@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 
@@ -8,24 +7,10 @@ import {
   PromptRenderer,
   renderPromptTemplate
 } from "../../server/lib/aiStudio/index.js";
-
-async function withTemporaryPromptPack(callback) {
-  const root = await mkdtemp(path.join(tmpdir(), "ai-studio-prompts-"));
-  try {
-    await mkdir(root, {
-      recursive: true
-    });
-    return await callback(root);
-  } finally {
-    await rm(root, {
-      force: true,
-      recursive: true
-    });
-  }
-}
+import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
 
 test("ai-studio prompt renderer renders explicit session context into prompt templates", async () => {
-  await withTemporaryPromptPack(async (promptPackRoot) => {
+  await withTemporaryRoot(async (promptPackRoot) => {
     await writeFile(
       path.join(promptPackRoot, "make_plan.txt"),
       [
@@ -71,7 +56,7 @@ test("ai-studio prompt renderer renders explicit session context into prompt tem
 });
 
 test("ai-studio prompt renderer falls back to the generic prompt", async () => {
-  await withTemporaryPromptPack(async (promptPackRoot) => {
+  await withTemporaryRoot(async (promptPackRoot) => {
     await writeFile(path.join(promptPackRoot, "generic.txt"), "Generic {{action.label}} for {{session.currentStep}}.", "utf8");
     const renderer = new PromptRenderer({
       promptPackRoot

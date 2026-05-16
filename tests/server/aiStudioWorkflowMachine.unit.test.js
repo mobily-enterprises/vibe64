@@ -1,7 +1,4 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
 import test from "node:test";
 
 import {
@@ -10,18 +7,7 @@ import {
   FakeTargetAdapter,
   WorkflowMachine
 } from "../../server/lib/aiStudio/index.js";
-
-async function withTemporaryRoot(callback) {
-  const root = await mkdtemp(path.join(tmpdir(), "ai-studio-slice-2-"));
-  try {
-    return await callback(root);
-  } finally {
-    await rm(root, {
-      force: true,
-      recursive: true
-    });
-  }
-}
+import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
 
 test("ai-studio runtime session view exposes workflow steps, current actions, and next state", async () => {
   await withTemporaryRoot(async (targetRoot) => {

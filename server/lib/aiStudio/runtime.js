@@ -203,7 +203,8 @@ class AiStudioSessionRuntime {
   }
 
   async listSessions() {
-    return Promise.all((await this.store.listSessions()).map((session) => this.sessionView(session)));
+    const sessions = await this.store.listSessions();
+    return Promise.all(sessions.map((session) => this.sessionView(session)));
   }
 
   actionHandler(actionId) {
@@ -365,9 +366,10 @@ class AiStudioSessionRuntime {
   async advance(sessionId) {
     const session = await this.getSession(sessionId);
     if (!session.next.visible || !session.next.enabled || !session.next.stepId) {
-      const error = new Error(session.next.disabledReason || "Current AI Studio step cannot advance.");
-      error.code = "ai_studio_step_not_ready";
-      throw error;
+      throw aiStudioError(
+        session.next.disabledReason || "Current AI Studio step cannot advance.",
+        "ai_studio_step_not_ready"
+      );
     }
     await this.store.writeCompletedStep(session.sessionId, session.currentStep, {
       message: `Advanced from ${session.currentStep} to ${session.next.stepId}.`

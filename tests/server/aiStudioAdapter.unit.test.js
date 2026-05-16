@@ -1,25 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
 import test from "node:test";
 
 import {
   AiStudioSessionRuntime,
   FakeTargetAdapter
 } from "../../server/lib/aiStudio/index.js";
-
-async function withTemporaryRoot(callback) {
-  const root = await mkdtemp(path.join(tmpdir(), "ai-studio-adapter-"));
-  try {
-    return await callback(root);
-  } finally {
-    await rm(root, {
-      force: true,
-      recursive: true
-    });
-  }
-}
+import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
 
 function toyWorkflow() {
   return {

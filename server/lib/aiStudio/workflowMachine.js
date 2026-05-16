@@ -80,14 +80,14 @@ function normalizeStep(step = {}, index = 0, seenStepIds = new Set()) {
 }
 
 function normalizeWorkflow(workflow = DEFAULT_AI_STUDIO_WORKFLOW) {
-  const rawSteps = Array.isArray(workflow.steps) ? workflow.steps : [];
-  if (rawSteps.length === 0) {
+  const workflowSteps = Array.isArray(workflow.steps) ? workflow.steps : [];
+  if (workflowSteps.length === 0) {
     throw aiStudioError("AI Studio workflow must contain at least one step.", "ai_studio_empty_workflow");
   }
   const seenStepIds = new Set();
   return deepFreeze({
     id: normalizeText(workflow.id || "default"),
-    steps: rawSteps.map((step, index) => normalizeStep(step, index, seenStepIds))
+    steps: workflowSteps.map((step, index) => normalizeStep(step, index, seenStepIds))
   });
 }
 
@@ -100,6 +100,16 @@ function publicStepDefinition(step, status) {
     label: step.label,
     status
   };
+}
+
+function stepStatusForSession(step, currentStep, completedSteps) {
+  if (completedSteps.has(step.id)) {
+    return "done";
+  }
+  if (step.id === currentStep?.id) {
+    return "current";
+  }
+  return "pending";
 }
 
 function publicAction(action, state) {
@@ -212,50 +222,50 @@ class WorkflowMachine {
     return step ? this.steps[step.index + 1] || null : null;
   }
 
-  completedStepIds(rawSession = {}) {
-    const completed = new Set((Array.isArray(rawSession.completedSteps) ? rawSession.completedSteps : []).map(normalizeText));
+  completedStepIds(session = {}) {
+    const completed = new Set((Array.isArray(session.completedSteps) ? session.completedSteps : []).map(normalizeText));
     return this.steps
       .filter((step) => completed.has(step.id))
       .map((step) => step.id);
   }
 
-  currentStepForSession(rawSession = {}) {
-    const completed = new Set(this.completedStepIds(rawSession));
-    const storedStepId = normalizeText(rawSession.currentStep);
+  currentStepForSession(session = {}) {
+    const completed = new Set(this.completedStepIds(session));
+    const storedStepId = normalizeText(session.currentStep);
     if (this.stepById.has(storedStepId) && !completed.has(storedStepId)) {
       return this.stepById.get(storedStepId);
     }
     return this.steps.find((step) => !completed.has(step.id)) || null;
   }
 
-  checkCondition(condition, rawSession = {}) {
+  checkCondition(condition, session = {}) {
     const name = normalizeText(condition);
     if (!name || name === "always") {
       return conditionMet();
     }
     if (name === "session:active") {
-      return rawSession.status === AI_STUDIO_SESSION_STATUS.ACTIVE
+      return session.status === AI_STUDIO_SESSION_STATUS.ACTIVE
         ? conditionMet()
         : conditionMissing("Session is not active.");
     }
     if (name.startsWith("metadata:")) {
       const metadataName = name.slice("metadata:".length);
-      return normalizeText(rawSession.metadata?.[metadataName])
+      return normalizeText(session.metadata?.[metadataName])
         ? conditionMet()
         : conditionMissing(`Waiting for metadata: ${metadataName}.`);
     }
     if (name.startsWith("completed:")) {
       const stepId = name.slice("completed:".length);
-      return this.completedStepIds(rawSession).includes(stepId)
+      return this.completedStepIds(session).includes(stepId)
         ? conditionMet()
         : conditionMissing(`Waiting for step completion: ${stepId}.`);
     }
     return conditionMissing(`Unknown condition: ${name}.`);
   }
 
-  checkRequirements(requirements = [], rawSession = {}, disabledReasonOverride = "") {
+  checkRequirements(requirements = [], session = {}, disabledReasonOverride = "") {
     for (const requirement of requirements) {
-      const result = this.checkCondition(requirement, rawSession);
+      const result = this.checkCondition(requirement, session);
       if (!result.met) {
         return disabledState(disabledReasonOverride || result.reason);
       }
@@ -263,14 +273,14 @@ class WorkflowMachine {
     return enabledState();
   }
 
-  actionStateForSession(step, action, rawSession = {}) {
-    const workflowState = this.checkRequirements(action.enabledWhen, rawSession, action.disabledReason);
+  actionStateForSession(step, action, session = {}) {
+    const workflowState = this.checkRequirements(action.enabledWhen, session, action.disabledReason);
     if (!workflowState.enabled) {
       return workflowState;
     }
     const runtimeState = this.actionReadiness({
       action,
-      session: rawSession,
+      session,
       step
     }) || {};
     if (runtimeState.enabled === false) {
@@ -279,13 +289,13 @@ class WorkflowMachine {
     return enabledState();
   }
 
-  visibleActionsForStep(step, rawSession = {}) {
+  visibleActionsForStep(step, session = {}) {
     return step.actions
       .filter((action) => action.visible)
-      .map((action) => publicAction(action, this.actionStateForSession(step, action, rawSession)));
+      .map((action) => publicAction(action, this.actionStateForSession(step, action, session)));
   }
 
-  nextStateForStep(currentStep, rawSession = {}) {
+  nextStateForStep(currentStep, session = {}) {
     if (!currentStep) {
       return hiddenNext("Next", "No current step.");
     }
@@ -297,7 +307,7 @@ class WorkflowMachine {
       return hiddenNext(currentStep.next.label, "");
     }
 
-    const state = this.checkRequirements(currentStep.next.enabledWhen, rawSession, currentStep.next.disabledReason);
+    const state = this.checkRequirements(currentStep.next.enabledWhen, session, currentStep.next.disabledReason);
     return {
       disabledReason: state.disabledReason,
       enabled: state.enabled,
@@ -310,23 +320,21 @@ class WorkflowMachine {
   stepDefinitionsForSession(currentStep, completedSteps) {
     const completed = new Set(completedSteps);
     return this.steps.map((step) => {
-      const status = completed.has(step.id)
-        ? "done"
-        : step.id === currentStep?.id ? "current" : "pending";
+      const status = stepStatusForSession(step, currentStep, completed);
       return publicStepDefinition(step, status);
     });
   }
 
-  buildSessionView(rawSession = {}) {
-    const completedSteps = this.completedStepIds(rawSession);
-    const currentStep = this.currentStepForSession(rawSession);
+  buildSessionView(session = {}) {
+    const completedSteps = this.completedStepIds(session);
+    const currentStep = this.currentStepForSession(session);
     return {
-      ...rawSession,
-      actions: currentStep ? this.visibleActionsForStep(currentStep, rawSession) : [],
+      ...session,
+      actions: currentStep ? this.visibleActionsForStep(currentStep, session) : [],
       completedSteps,
       currentStep: currentStep?.id || "",
       currentStepDefinition: currentStep ? publicCurrentStepDefinition(currentStep) : null,
-      next: this.nextStateForStep(currentStep, rawSession),
+      next: this.nextStateForStep(currentStep, session),
       stepDefinitions: this.stepDefinitionsForSession(currentStep, completedSteps),
       workflowId: this.workflow.id
     };
