@@ -95,6 +95,59 @@ function adapterProjectFacts(input = {}) {
   };
 }
 
+function promptIdForAction(action = {}) {
+  return normalizeText(action.promptId || action.id);
+}
+
+function visiblePromptForAction(action = {}, promptId = "") {
+  return normalizeText(action.label || promptId);
+}
+
+function promptJson(value = {}) {
+  return JSON.stringify(value ?? {}, null, 2);
+}
+
+function defaultPromptText(action = {}, input = {}) {
+  return [
+    `Run the AI Studio prompt action: ${normalizeText(action.label || promptIdForAction(action))}.`,
+    "",
+    "Action input:",
+    promptJson(input)
+  ].join("\n");
+}
+
+function fakePromptContext({
+  action = {},
+  input = {},
+  session = {}
+} = {}) {
+  return {
+    action,
+    adapter: session.adapter || {},
+    input,
+    session
+  };
+}
+
+function fakePromptText({
+  input = {},
+  promptId = "",
+  session = {}
+} = {}) {
+  return [
+    `Fake adapter prompt for ${promptId}.`,
+    "",
+    "Adapter facts:",
+    promptJson(session.adapter?.facts || {}),
+    "",
+    "Adapter prompt context:",
+    promptJson(session.adapter?.promptContext || {}),
+    "",
+    "Action input:",
+    promptJson(input)
+  ].join("\n");
+}
+
 function adapterView({
   adapter,
   commands = [],
@@ -150,16 +203,11 @@ class TargetAdapter {
     action = {},
     input = {}
   } = {}) {
-    const promptId = normalizeText(action.promptId || action.id);
+    const promptId = promptIdForAction(action);
     return adapterPromptResult({
-      prompt: [
-        `Run the AI Studio prompt action: ${normalizeText(action.label || promptId)}.`,
-        "",
-        "Action input:",
-        JSON.stringify(input, null, 2)
-      ].join("\n"),
+      prompt: defaultPromptText(action, input),
       promptId,
-      visiblePrompt: action.label || promptId
+      visiblePrompt: visiblePromptForAction(action, promptId)
     });
   }
 
@@ -226,37 +274,30 @@ class FakeTargetAdapter extends TargetAdapter {
     input = {},
     session = {}
   } = {}) {
-    const promptId = normalizeText(action.promptId || action.id);
+    const promptId = promptIdForAction(action);
+    const visiblePrompt = visiblePromptForAction(action, promptId);
     const promptResult = this.promptResults[promptId];
     if (promptResult) {
       return adapterPromptResult({
         promptId,
-        visiblePrompt: action.label || promptId,
+        visiblePrompt,
         ...promptResult
       });
     }
-    const context = {
+    const context = fakePromptContext({
       action,
-      adapter: session.adapter || {},
       input,
       session
-    };
+    });
     return adapterPromptResult({
       context,
-      prompt: [
-        `Fake adapter prompt for ${promptId}.`,
-        "",
-        "Adapter facts:",
-        JSON.stringify(session.adapter?.facts || {}, null, 2),
-        "",
-        "Adapter prompt context:",
-        JSON.stringify(session.adapter?.promptContext || {}, null, 2),
-        "",
-        "Action input:",
-        JSON.stringify(input, null, 2)
-      ].join("\n"),
+      prompt: fakePromptText({
+        input,
+        promptId,
+        session
+      }),
       promptId,
-      visiblePrompt: action.label || promptId
+      visiblePrompt
     });
   }
 }
