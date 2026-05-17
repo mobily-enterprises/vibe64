@@ -6,31 +6,20 @@ import {
   createAiStudioAdapterRegistry,
   createAiStudioProjectTypeStore
 } from "../../../../server/lib/aiStudio/index.js";
+import {
+  aiStudioResult
+} from "../../../../server/lib/aiStudio/serverResponses.js";
 
 function resolveAiStudioTargetRoot(targetRoot) {
   const configuredRoot = String(targetRoot || process.env.JSKIT_STUDIO_TARGET_ROOT || "").trim();
   return path.resolve(configuredRoot || process.cwd());
 }
 
-function aiStudioErrorResponse(error, fallback = "AI Studio project request failed.") {
-  return {
-    errors: [
-      {
-        code: String(error?.code || "ai_studio_project_request_failed"),
-        message: String(error?.message || error || fallback)
-      }
-    ],
-    ok: false,
-    projectType: error?.projectType || null
-  };
-}
-
-async function aiStudioResult(operation) {
-  try {
-    return await operation();
-  } catch (error) {
-    return aiStudioErrorResponse(error);
-  }
+function projectResult(operation) {
+  return aiStudioResult(operation, {
+    fallbackCode: "ai_studio_project_request_failed",
+    fallbackMessage: "AI Studio project request failed."
+  });
 }
 
 function projectTypeErrorCode(status = "") {
@@ -122,7 +111,7 @@ function createService({ targetRoot = "" } = {}) {
     },
 
     async readProjectType() {
-      return aiStudioResult(async () => {
+      return projectResult(async () => {
         return {
           ok: true,
           projectType: await readProjectTypeState()
@@ -135,7 +124,7 @@ function createService({ targetRoot = "" } = {}) {
     },
 
     async saveProjectType(input = {}) {
-      return aiStudioResult(async () => {
+      return projectResult(async () => {
         return {
           ok: true,
           projectType: await saveProjectTypeState(input)

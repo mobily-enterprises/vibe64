@@ -1,8 +1,6 @@
 import crypto from "node:crypto";
-import { execFile } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
-import { promisify } from "node:util";
 
 import {
   closeTerminalSession,
@@ -22,6 +20,13 @@ import {
   studioDockerLabel
 } from "../../../../server/lib/studioRuntimeIdentity.js";
 import {
+  hostUserIdentityEnvArgs
+} from "../../../../server/lib/shellCommands.js";
+import {
+  containerWorkspacePath,
+  removeDockerContainer
+} from "../../../../server/lib/containerRuntime.js";
+import {
   CODEX_TERMINAL_NAMESPACE_PREFIX,
   aiStudioResult,
   codexTerminalNamespace,
@@ -36,8 +41,6 @@ import {
   prepareCodexAttachmentRoot,
   storeCodexAttachment
 } from "./codexAttachments.js";
-
-const execFileAsync = promisify(execFile);
 
 const CODEX_THREAD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 const CODEX_THREAD_PROBE = "!echo $CODEX_THREAD_ID";
@@ -105,29 +108,6 @@ function withCodexState(response = {}, session = {}) {
     ...response,
     ...codexState(session)
   };
-}
-
-function containerWorkspacePath(targetRoot, absolutePath) {
-  const relativePath = path.relative(targetRoot, absolutePath);
-  if (!relativePath || relativePath === ".") {
-    return "/workspace";
-  }
-  if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
-    return "";
-  }
-  return path.posix.join("/workspace", ...relativePath.split(path.sep));
-}
-
-function hostUserIdentityEnvArgs() {
-  if (typeof process.getuid !== "function" || typeof process.getgid !== "function") {
-    return [];
-  }
-  return [
-    "-e",
-    `${STUDIO_HOST_UID_ENV}=${process.getuid()}`,
-    "-e",
-    `${STUDIO_HOST_GID_ENV}=${process.getgid()}`
-  ];
 }
 
 function codexStartupScript(codexThreadId = "") {
@@ -202,16 +182,6 @@ function codexTerminalArgs({
 
 function codexContainerName({ sessionId, terminalId }) {
   return `${STUDIO_CODEX_CONTAINER_PREFIX}-${stableHash(sessionId)}-${stableHash(terminalId)}`;
-}
-
-async function removeDockerContainer(containerName) {
-  if (!containerName) {
-    return;
-  }
-  await execFileAsync("docker", ["rm", "-f", containerName], {
-    timeout: 10000,
-    maxBuffer: 1024 * 1024
-  }).catch(() => null);
 }
 
 function createCodexTerminalController({ projectService } = {}) {

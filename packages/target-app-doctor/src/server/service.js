@@ -2,7 +2,6 @@ import { constants as fsConstants } from "node:fs";
 import { access } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
-import { execa } from "execa";
 
 import {
   closeTerminalSession,
@@ -20,98 +19,28 @@ import {
   buildGithubRepoCreateOrLinkScript
 } from "../../../../server/lib/githubRepoSetupScript.js";
 import {
-  gitSafeDirectoryArgs,
-  gitToolchainMountArgs
+  gitSafeDirectoryArgs
 } from "../../../../server/lib/gitToolchainMounts.js";
 import {
-  STUDIO_TOOLCHAIN_IMAGE as TOOLCHAIN_IMAGE,
-  STUDIO_TOOL_HOME_VOLUME as TOOL_HOME_VOLUME
-} from "../../../../server/lib/studioRuntimeIdentity.js";
+  createDoctorRepair as createRepair,
+  doctorCheckItem as checkItem,
+  failDoctorCheck as failCheck,
+  manualDoctorRepair as manualRepair,
+  passDoctorCheck as passCheck
+} from "../../../../server/lib/doctorCheckItems.js";
+import {
+  buildDoctorTerminalArgs,
+  buildDoctorToolchainArgs
+} from "../../../../server/lib/doctorToolchain.js";
+import {
+  dockerCommand,
+  hostUserDockerArgs,
+  runHostCommand,
+  shellQuote
+} from "../../../../server/lib/shellCommands.js";
 
 const REQUIRED_GH_SCOPES = ["repo", "read:org", "gist", "workflow"];
 const TERMINAL_NAMESPACE = "target-app-doctor";
-
-function shellQuote(value) {
-  const stringValue = String(value);
-  if (/^[A-Za-z0-9_./:=@,+-]+$/.test(stringValue)) {
-    return stringValue;
-  }
-  return `'${stringValue.replaceAll("'", "'\\''")}'`;
-}
-
-function dockerCommand(args) {
-  return ["docker", ...args].map(shellQuote).join(" ");
-}
-
-function normalizeRunResult(result) {
-  const stdout = String(result.stdout || "");
-  const stderr = String(result.stderr || "");
-  const output = String(result.all || [stdout, stderr].filter(Boolean).join("\n")).trim();
-
-  return {
-    ok: result.exitCode === 0,
-    exitCode: result.exitCode,
-    stdout: stdout.trim(),
-    stderr: stderr.trim(),
-    output
-  };
-}
-
-async function runHostCommand(command, args, { cwd, timeout = 15000 } = {}) {
-  try {
-    const result = await execa(command, args, {
-      all: true,
-      cwd,
-      reject: false,
-      timeout
-    });
-    return normalizeRunResult(result);
-  } catch (error) {
-    return {
-      ok: false,
-      exitCode: typeof error.exitCode === "number" ? error.exitCode : 1,
-      stdout: String(error.stdout || "").trim(),
-      stderr: String(error.stderr || "").trim(),
-      output: String(error.all || error.message || "").trim()
-    };
-  }
-}
-
-function hostUserDockerArgs() {
-  if (typeof process.getuid !== "function" || typeof process.getgid !== "function") {
-    return [];
-  }
-  return ["-u", `${process.getuid()}:${process.getgid()}`];
-}
-
-function buildToolchainArgs(commandArgs, {
-  targetRoot,
-  extraArgs = []
-} = {}) {
-  return [
-    "run",
-    "--rm",
-    "-v",
-    `${TOOL_HOME_VOLUME}:/home/studio`,
-    "-e",
-    "HOME=/home/studio",
-    "-v",
-    `${targetRoot}:/workspace`,
-    ...gitToolchainMountArgs(targetRoot),
-    "-w",
-    "/workspace",
-    ...extraArgs,
-    TOOLCHAIN_IMAGE,
-    ...commandArgs
-  ];
-}
-
-function buildTerminalArgs(commandArgs, options = {}) {
-  return buildToolchainArgs(commandArgs, {
-    ...options,
-    extraArgs: ["-it", ...(options.extraArgs || [])]
-  });
-}
 
 function gitArgs(targetRoot, args) {
   return ["git", ...gitSafeDirectoryArgs(targetRoot), ...args];
@@ -121,7 +50,7 @@ async function runToolchain(commandArgs, {
   targetRoot,
   timeout = 20000
 } = {}) {
-  return runHostCommand("docker", buildToolchainArgs(commandArgs, {
+  return runHostCommand("docker", buildDoctorToolchainArgs(commandArgs, {
     targetRoot
   }), {
     timeout
@@ -139,71 +68,6 @@ async function runGh(targetRoot, args, options = {}) {
   return runToolchain(["gh", ...args], {
     targetRoot,
     ...options
-  });
-}
-
-function createRepair({
-  actionId,
-  command,
-  fields = [],
-  kind = "terminal",
-  label
-}) {
-  return {
-    actionId,
-    commandPreview: command,
-    fields,
-    kind,
-    label
-  };
-}
-
-function manualRepair({
-  actionId,
-  command,
-  label
-}) {
-  return createRepair({
-    actionId,
-    command,
-    kind: "manual",
-    label
-  });
-}
-
-function checkItem({
-  id,
-  label,
-  status,
-  expected,
-  observed,
-  explanation,
-  repair = null
-}) {
-  return {
-    id,
-    label,
-    status,
-    required: true,
-    expected,
-    observed: String(observed || "").trim() || "not available",
-    explanation,
-    repair,
-    repairs: [repair].filter(Boolean)
-  };
-}
-
-function passCheck(details) {
-  return checkItem({
-    ...details,
-    status: "pass"
-  });
-}
-
-function failCheck(details) {
-  return checkItem({
-    ...details,
-    status: "fail"
   });
 }
 
@@ -273,7 +137,7 @@ function gitInitRepair(targetRoot) {
     "git -c safe.directory=/workspace init",
     "git -c safe.directory=/workspace branch -M main"
   ].join("\n");
-  const args = buildTerminalArgs(["bash", "-lc", script], {
+  const args = buildDoctorTerminalArgs(["bash", "-lc", script], {
     targetRoot,
     extraArgs: hostUserDockerArgs()
   });
@@ -292,7 +156,7 @@ function ghRepoCreateScript(repoName) {
 function ghRepoCreateRepair(targetRoot) {
   const repoName = repoNameFromTargetRoot(targetRoot);
   const script = ghRepoCreateScript(repoName);
-  const args = buildTerminalArgs(["bash", "-lc", script], {
+  const args = buildDoctorTerminalArgs(["bash", "-lc", script], {
     targetRoot,
     extraArgs: ["-e", "GH_PROMPT_DISABLED=1"]
   });
@@ -304,8 +168,8 @@ function ghRepoCreateRepair(targetRoot) {
   });
 }
 
-function ghLoginRepair(targetRoot) {
-  const args = buildTerminalArgs([
+function ghLoginCommandArgs() {
+  return [
     "gh",
     "auth",
     "login",
@@ -316,7 +180,11 @@ function ghLoginRepair(targetRoot) {
     "--web",
     "--scopes",
     REQUIRED_GH_SCOPES.join(",")
-  ], {
+  ];
+}
+
+function ghLoginRepair(targetRoot) {
+  const args = buildDoctorTerminalArgs(ghLoginCommandArgs(), {
     targetRoot
   });
 
@@ -423,7 +291,7 @@ async function checkTargetIdentity({
       label: "Target identity",
       expected: "Target root is Studio's own repository root or a separate app root.",
       observed,
-      explanation: "Studio is targeting itself in self-development mode. JSKIT issue sessions will make changes in managed session worktrees."
+      explanation: "Studio is targeting itself in self-development mode. AI Studio sessions will make changes in managed session worktrees."
     });
   }
 
@@ -497,7 +365,7 @@ async function checkGitBranch(targetRoot, gitReady) {
       label: "Git branch",
       expected: "Current branch is known.",
       observed: result.output,
-      explanation: "Detached or unknown branches are blocked for V0."
+      explanation: "Detached or unknown branches are blocked for Studio workflows."
     });
   }
 
@@ -554,7 +422,7 @@ async function checkGitStatus(targetRoot, gitReady) {
     return failCheck({
       id: "git-status",
       label: "Git working tree",
-      expected: "Working tree state is known and clean for V0.",
+      expected: "Working tree state can be read.",
       observed: "Git repository is not ready.",
       explanation: "Studio needs a known git state before editing.",
       repair: gitInitRepair(targetRoot)
@@ -670,7 +538,7 @@ async function checkGitHubRepository(targetRoot, remoteCheck) {
       label: "GitHub repository",
       expected: "origin remote is hosted on GitHub.",
       observed: remoteUrl,
-      explanation: "V0 issue and PR flows require a GitHub remote."
+      explanation: "Studio issue and PR flows require a GitHub remote."
     });
   }
 
@@ -731,6 +599,97 @@ async function checkGitHubIssuePrAccess(targetRoot, repoCheck) {
   });
 }
 
+function startDockerTerminal({
+  args,
+  commandPreview,
+  targetRoot
+}) {
+  return startTerminalSession({
+    args,
+    command: "docker",
+    commandPreview,
+    cwd: targetRoot,
+    namespace: TERMINAL_NAMESPACE
+  });
+}
+
+function startGitInitTerminal(targetRoot) {
+  const repair = gitInitRepair(targetRoot);
+  const script = [
+    "set -e",
+    "git -c safe.directory=/workspace init",
+    "git -c safe.directory=/workspace branch -M main"
+  ].join("\n");
+  const args = buildDoctorTerminalArgs(["bash", "-lc", script], {
+    extraArgs: hostUserDockerArgs(),
+    targetRoot
+  });
+  return startDockerTerminal({
+    args,
+    commandPreview: repair.commandPreview,
+    targetRoot
+  });
+}
+
+function startGhCreateRepoTerminal(targetRoot) {
+  const repair = ghRepoCreateRepair(targetRoot);
+  const repoName = repoNameFromTargetRoot(targetRoot);
+  const args = buildDoctorTerminalArgs(["bash", "-lc", ghRepoCreateScript(repoName)], {
+    extraArgs: ["-e", "GH_PROMPT_DISABLED=1"],
+    targetRoot
+  });
+  return startDockerTerminal({
+    args,
+    commandPreview: repair.commandPreview,
+    targetRoot
+  });
+}
+
+function startGitIdentityTerminal(targetRoot, inputs = {}) {
+  const inputValidation = validateGitIdentityInputs(inputs);
+  if (!inputValidation.ok) {
+    return {
+      error: inputValidation.error,
+      ok: false
+    };
+  }
+
+  const script = [
+    "set -e",
+    "set -x",
+    "git config --global user.name \"$JSKIT_GIT_USER_NAME\"",
+    "git config --global user.email \"$JSKIT_GIT_USER_EMAIL\"",
+    "git config --global --get user.name",
+    "git config --global --get user.email"
+  ].join("\n");
+  const args = buildDoctorTerminalArgs(["bash", "-lc", script], {
+    extraArgs: [
+      "-e",
+      `JSKIT_GIT_USER_NAME=${inputValidation.name}`,
+      "-e",
+      `JSKIT_GIT_USER_EMAIL=${inputValidation.email}`
+    ],
+    targetRoot
+  });
+  return startDockerTerminal({
+    args,
+    commandPreview: dockerCommand(args),
+    targetRoot
+  });
+}
+
+function startGhLoginTerminal(targetRoot) {
+  const repair = ghLoginRepair(targetRoot);
+  const args = buildDoctorTerminalArgs(ghLoginCommandArgs(), {
+    targetRoot
+  });
+  return startDockerTerminal({
+    args,
+    commandPreview: repair.commandPreview,
+    targetRoot
+  });
+}
+
 async function inspectTargetApp({
   emit = null,
   studioRoot,
@@ -786,7 +745,7 @@ async function inspectTargetApp({
       blockedCheck({
         id: "git-status",
         label: "Git working tree",
-        expected: "Working tree state is known and clean for V0.",
+        expected: "Working tree state can be read.",
         observed
       }),
       blockedCheck({
@@ -927,100 +886,19 @@ function createService({
       const actionId = String(input.actionId || "");
 
       if (actionId === "terminal-git-init") {
-        const repair = gitInitRepair(resolvedTargetRoot);
-        const script = [
-          "set -e",
-          "git -c safe.directory=/workspace init",
-          "git -c safe.directory=/workspace branch -M main"
-        ].join("\n");
-        const args = buildTerminalArgs(["bash", "-lc", script], {
-          targetRoot: resolvedTargetRoot,
-          extraArgs: hostUserDockerArgs()
-        });
-        return startTerminalSession({
-          args,
-          command: "docker",
-          commandPreview: repair.commandPreview,
-          cwd: resolvedTargetRoot,
-          namespace: TERMINAL_NAMESPACE
-        });
+        return startGitInitTerminal(resolvedTargetRoot);
       }
 
       if (actionId === "terminal-gh-create-repo") {
-        const repair = ghRepoCreateRepair(resolvedTargetRoot);
-        const repoName = repoNameFromTargetRoot(resolvedTargetRoot);
-        const script = ghRepoCreateScript(repoName);
-        const args = buildTerminalArgs(["bash", "-lc", script], {
-          targetRoot: resolvedTargetRoot,
-          extraArgs: ["-e", "GH_PROMPT_DISABLED=1"]
-        });
-        return startTerminalSession({
-          args,
-          command: "docker",
-          commandPreview: repair.commandPreview,
-          cwd: resolvedTargetRoot,
-          namespace: TERMINAL_NAMESPACE
-        });
+        return startGhCreateRepoTerminal(resolvedTargetRoot);
       }
 
       if (actionId === "terminal-git-identity") {
-        const inputValidation = validateGitIdentityInputs(input.inputs || {});
-        if (!inputValidation.ok) {
-          return {
-            ok: false,
-            error: inputValidation.error
-          };
-        }
-
-        const script = [
-          "set -e",
-          "set -x",
-          "git config --global user.name \"$JSKIT_GIT_USER_NAME\"",
-          "git config --global user.email \"$JSKIT_GIT_USER_EMAIL\"",
-          "git config --global --get user.name",
-          "git config --global --get user.email"
-        ].join("\n");
-        const args = buildTerminalArgs(["bash", "-lc", script], {
-          targetRoot: resolvedTargetRoot,
-          extraArgs: [
-            "-e",
-            `JSKIT_GIT_USER_NAME=${inputValidation.name}`,
-            "-e",
-            `JSKIT_GIT_USER_EMAIL=${inputValidation.email}`
-          ]
-        });
-        return startTerminalSession({
-          args,
-          command: "docker",
-          commandPreview: dockerCommand(args),
-          cwd: resolvedTargetRoot,
-          namespace: TERMINAL_NAMESPACE
-        });
+        return startGitIdentityTerminal(resolvedTargetRoot, input.inputs || {});
       }
 
       if (actionId === "terminal-gh-login") {
-        const repair = ghLoginRepair(resolvedTargetRoot);
-        const args = buildTerminalArgs([
-          "gh",
-          "auth",
-          "login",
-          "--hostname",
-          "github.com",
-          "--git-protocol",
-          "https",
-          "--web",
-          "--scopes",
-          REQUIRED_GH_SCOPES.join(",")
-        ], {
-          targetRoot: resolvedTargetRoot
-        });
-        return startTerminalSession({
-          args,
-          command: "docker",
-          commandPreview: repair.commandPreview,
-          cwd: resolvedTargetRoot,
-          namespace: TERMINAL_NAMESPACE
-        });
+        return startGhLoginTerminal(resolvedTargetRoot);
       }
 
       return {

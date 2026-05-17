@@ -112,7 +112,9 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, watch } from "vue";
+import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
+import { useList } from "@jskit-ai/users-web/client/composables/useList";
 import {
   mdiArchiveCancelOutline,
   mdiCheckCircle,
@@ -120,13 +122,20 @@ import {
   mdiRefresh,
   mdiSourceBranch
 } from "@mdi/js";
-import { listIssueSessions } from "@/lib/studioApi.js";
 import {
-  issueSessionStatusColor,
-  issueSessionStatusLabel,
+  AI_STUDIO_SESSIONS_API_SUFFIX,
+  AI_STUDIO_SURFACE_ID,
+  aiStudioSessionsQueryKey
+} from "@/lib/aiStudioSessionRequestConfig.js";
+import {
+  enrichAiStudioSessionForDisplay
+} from "@/lib/aiStudioSessionPanelModel.js";
+import {
+  aiStudioSessionStatusColor,
+  aiStudioSessionStatusLabel,
   parseGithubSessionLink,
-  shortIssueSessionId
-} from "@/lib/issueSessionViewModel.js";
+  shortAiStudioSessionId
+} from "@/lib/aiStudioSessionViewModel.js";
 
 const props = defineProps({
   archive: {
@@ -157,9 +166,24 @@ const props = defineProps({
 
 const emit = defineEmits(["loading-changed"]);
 
-const sessions = ref([]);
-const loading = ref(false);
-const error = ref("");
+const sessionList = useList({
+  access: "never",
+  apiSuffix: AI_STUDIO_SESSIONS_API_SUFFIX,
+  fallbackLoadError: "Archived sessions could not be loaded.",
+  ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
+  placementSource: "ai-studio.sessions.archive",
+  queryKeyFactory: aiStudioSessionsQueryKey,
+  selectItems: (payload) => Array.isArray(payload?.sessions) ? payload.sessions : [],
+  surfaceId: AI_STUDIO_SURFACE_ID
+});
+
+const loading = computed(() => Boolean(sessionList.isLoading));
+const error = computed(() => String(sessionList.loadError || ""));
+const sessions = computed(() => {
+  return (Array.isArray(sessionList.items) ? sessionList.items : [])
+    .map(enrichAiStudioSessionForDisplay)
+    .filter(sessionIsInArchive);
+});
 
 const archiveIcon = computed(() => {
   return props.archive === "completed" ? mdiCheckCircle : mdiArchiveCancelOutline;
@@ -170,15 +194,15 @@ function completedStepCount(session = {}) {
 }
 
 function shortSessionId(sessionId) {
-  return shortIssueSessionId(sessionId);
+  return shortAiStudioSessionId(sessionId);
 }
 
 function statusLabel(status) {
-  return issueSessionStatusLabel(status);
+  return aiStudioSessionStatusLabel(status);
 }
 
 function statusColor(status) {
-  return issueSessionStatusColor(status);
+  return aiStudioSessionStatusColor(status);
 }
 
 function githubLabel(url, fallback) {
@@ -189,29 +213,26 @@ function hasDetails(session = {}) {
   return Boolean(session.finalReportText);
 }
 
-async function loadSessions() {
-  loading.value = true;
-  emit("loading-changed", true);
-  error.value = "";
-  try {
-    const response = await listIssueSessions({
-      archive: props.archive
-    });
-    sessions.value = Array.isArray(response?.sessions) ? response.sessions : [];
-  } catch (loadError) {
-    error.value = String(loadError?.message || loadError || "Archived sessions could not be loaded.");
-  } finally {
-    loading.value = false;
-    emit("loading-changed", false);
+function sessionIsInArchive(session = {}) {
+  const status = String(session.status || "");
+  if (props.archive === "abandoned") {
+    return status === "abandoned";
   }
+  return status === "finished" || status === "completed";
+}
+
+async function loadSessions() {
+  await sessionList.reload();
 }
 
 defineExpose({
   refresh: loadSessions
 });
 
-onMounted(() => {
-  void loadSessions();
+watch(loading, (isLoading) => {
+  emit("loading-changed", isLoading);
+}, {
+  immediate: true
 });
 </script>
 

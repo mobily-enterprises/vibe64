@@ -3,16 +3,18 @@ export default Object.freeze({
   packageId: "@local/current-app",
   version: "0.1.0",
   kind: "runtime",
-  description: "Inspect the current JSKIT app from the local filesystem and git.",
+  description: "Inspect the current target app through the active AI Studio adapter.",
   dependsOn: [
-    "@jskit-ai/kernel"
+    "@jskit-ai/kernel",
+    "@local/ai-studio-project"
   ],
   capabilities: {
     provides: [
       "feature.current-app"
     ],
     requires: [
-      "runtime.actions"
+      "runtime.actions",
+      "feature.ai-studio-project"
     ]
   },
   runtime: {

@@ -17,6 +17,13 @@ import {
 } from "../../core.js";
 import { deepFreeze } from "../../deepFreeze.js";
 import { PromptRenderer } from "../../promptRenderer.js";
+import {
+  createJskitTargetScriptTerminalSpec,
+  inspectJskitCurrentApp,
+  inspectJskitTargetScripts,
+  resetJskitStarredTargetScripts,
+  saveJskitStarredTargetScripts
+} from "./currentApp.js";
 
 const JSKIT_MARKERS = deepFreeze([
   {
@@ -164,17 +171,9 @@ function jskitFacts({
   });
 }
 
-function notConfiguredCommandRunner({ commandId }) {
-  return adapterActionResult({
-    message: `JSKIT command ${commandId} needs a command runner before it can execute.`,
-    status: "blocked"
-  });
-}
-
 class JskitTargetAdapter extends TargetAdapter {
   constructor({
     commandTerminalSpecFactory = null,
-    commandRunner = notConfiguredCommandRunner,
     commands = [],
     promptRenderer = new PromptRenderer({
       promptPackRoot: JSKIT_PROMPT_PACK_ROOT
@@ -187,7 +186,6 @@ class JskitTargetAdapter extends TargetAdapter {
     this.commandTerminalSpecFactory = typeof commandTerminalSpecFactory === "function"
       ? commandTerminalSpecFactory
       : null;
-    this.commandRunner = commandRunner;
     this.commands = normalizeJskitCommands(commands);
     this.promptRenderer = promptRenderer;
   }
@@ -235,15 +233,6 @@ class JskitTargetAdapter extends TargetAdapter {
     return (facts.commands || this.commands).map(adapterCommand);
   }
 
-  async runCommand(commandId, context = {}) {
-    const result = await this.commandRunner({
-      commandId,
-      context,
-      targetRoot: context.session?.targetRoot || context.targetRoot || ""
-    });
-    return adapterActionResult(result);
-  }
-
   async createCommandTerminalSpec(commandId, context = {}) {
     if (!this.commandTerminalSpecFactory) {
       return {
@@ -268,6 +257,51 @@ class JskitTargetAdapter extends TargetAdapter {
       input,
       session
     });
+  }
+
+  async finishSession() {
+    return adapterActionResult({
+      message: "Finished AI Studio session.",
+      metadata: {
+        session_finished: "yes"
+      },
+      status: "completed"
+    });
+  }
+
+  async inspectCurrentApp({
+    includeGit = true,
+    targetRoot = ""
+  } = {}) {
+    return inspectJskitCurrentApp(targetRoot || process.cwd(), {
+      includeGit
+    });
+  }
+
+  async listCurrentAppTargetScripts({
+    targetRoot = ""
+  } = {}) {
+    return inspectJskitTargetScripts(targetRoot || process.cwd());
+  }
+
+  async saveCurrentAppTargetScriptShortcuts({
+    input = {},
+    targetRoot = ""
+  } = {}) {
+    return saveJskitStarredTargetScripts(targetRoot || process.cwd(), input);
+  }
+
+  async resetCurrentAppTargetScriptShortcuts({
+    targetRoot = ""
+  } = {}) {
+    return resetJskitStarredTargetScripts(targetRoot || process.cwd());
+  }
+
+  async createCurrentAppTargetScriptTerminalSpec({
+    input = {},
+    targetRoot = ""
+  } = {}) {
+    return createJskitTargetScriptTerminalSpec(targetRoot || process.cwd(), input);
   }
 }
 

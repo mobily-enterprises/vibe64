@@ -286,15 +286,18 @@ class AiStudioSessionRuntime {
     };
   }
 
-  async runAdapterFinishAction({
+  async runAdapterFinishSession({
     action,
     input = {},
     session
   } = {}) {
     if (action?.type !== "finish") {
-      throw commandActionRequiresTerminalError(action);
+      throw aiStudioError(
+        `Action ${action?.label || action?.id || "(unknown)"} is not a finish action.`,
+        "ai_studio_action_not_finish"
+      );
     }
-    return this.adapter.runCommand(action.id, {
+    return this.adapter.finishSession({
       action,
       input,
       runtime: this,
@@ -308,7 +311,7 @@ class AiStudioSessionRuntime {
     input = {},
     session
   } = {}) {
-    const result = await this.runAdapterFinishAction({
+    const result = await this.runAdapterFinishSession({
       action,
       input,
       session

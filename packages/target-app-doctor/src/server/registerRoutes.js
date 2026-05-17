@@ -8,9 +8,21 @@ import {
 import {
   ACTION_GET_STATUS
 } from "./actions.js";
+import {
+  requireLocalStudioRequest
+} from "../../../../server/lib/localStudioRequest.js";
+import {
+  requestBodyObject
+} from "../../../../server/lib/aiStudio/serverResponses.js";
 
 function getTargetAppDoctorService(app) {
   return app.make("feature.target-app-doctor.service");
+}
+
+function requireLocalDoctorRequest(request, reply) {
+  return requireLocalStudioRequest(request, reply, {
+    message: "Target App Doctor routes only accept loopback Studio requests."
+  });
 }
 
 function registerRoutes(
@@ -39,12 +51,15 @@ function registerRoutes(
       auth: "public",
       surface: normalizedRouteSurface,
       meta: {
-        tags: ["feature"],
+        tags: ["studio", "target-app-doctor"],
         summary: "Read Target App Doctor status."
       },
       query: statusQueryInputValidator
     },
     async function (request, reply) {
+      if (!requireLocalDoctorRequest(request, reply)) {
+        return;
+      }
       const response = await request.executeAction({
         actionId: ACTION_GET_STATUS,
         input: request.input.query || {}
@@ -61,11 +76,14 @@ function registerRoutes(
       auth: "public",
       surface: normalizedRouteSurface,
       meta: {
-        tags: ["feature"],
+        tags: ["studio", "target-app-doctor"],
         summary: "Stream Target App Doctor status progress."
       }
     },
-    async function (_request, reply) {
+    async function (request, reply) {
+      if (!requireLocalDoctorRequest(request, reply)) {
+        return;
+      }
       await sendDoctorEventStream(reply, ({ emit }) => {
         return getTargetAppDoctorService(app).streamStatus({
           emit
@@ -81,13 +99,16 @@ function registerRoutes(
       auth: "public",
       surface: normalizedRouteSurface,
       meta: {
-        tags: ["feature"],
+        tags: ["studio", "target-app-doctor"],
         summary: "Start a Target App Doctor terminal session."
       },
       body: terminalStartInputValidator
     },
     async function (request, reply) {
-      const response = getTargetAppDoctorService(app).startTerminal(request.input.body || {});
+      if (!requireLocalDoctorRequest(request, reply)) {
+        return;
+      }
+      const response = getTargetAppDoctorService(app).startTerminal(requestBodyObject(request));
       reply.code(response.ok === false ? 400 : 200).send(response);
     }
   );
@@ -99,11 +120,14 @@ function registerRoutes(
       auth: "public",
       surface: normalizedRouteSurface,
       meta: {
-        tags: ["feature"],
+        tags: ["studio", "target-app-doctor"],
         summary: "Read a Target App Doctor terminal session."
       }
     },
     async function (request, reply) {
+      if (!requireLocalDoctorRequest(request, reply)) {
+        return;
+      }
       const response = getTargetAppDoctorService(app).readTerminal(request.params.sessionId);
       reply.code(response.ok === false ? 404 : 200).send(response);
     }
@@ -116,15 +140,18 @@ function registerRoutes(
       auth: "public",
       surface: normalizedRouteSurface,
       meta: {
-        tags: ["feature"],
+        tags: ["studio", "target-app-doctor"],
         summary: "Write to a Target App Doctor terminal session."
       },
       body: terminalInputValidator
     },
     async function (request, reply) {
+      if (!requireLocalDoctorRequest(request, reply)) {
+        return;
+      }
       const response = getTargetAppDoctorService(app).writeTerminal(
         request.params.sessionId,
-        request.input.body?.data || ""
+        requestBodyObject(request).data || ""
       );
       reply.code(response.ok === false ? 404 : 200).send(response);
     }
@@ -137,11 +164,14 @@ function registerRoutes(
       auth: "public",
       surface: normalizedRouteSurface,
       meta: {
-        tags: ["feature"],
+        tags: ["studio", "target-app-doctor"],
         summary: "Close a Target App Doctor terminal session."
       }
     },
     async function (request, reply) {
+      if (!requireLocalDoctorRequest(request, reply)) {
+        return;
+      }
       const response = await getTargetAppDoctorService(app).closeTerminal(request.params.sessionId);
       reply.code(200).send(response);
     }

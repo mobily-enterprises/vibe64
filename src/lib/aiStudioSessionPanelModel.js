@@ -13,11 +13,11 @@ import {
   mdiSync
 } from "@mdi/js";
 import {
-  isAbandonedIssueSession,
-  isOpenIssueSession,
-  issueSessionFacts,
-  shortIssueSessionId
-} from "@/lib/issueSessionViewModel.js";
+  buildAiStudioSessionFacts,
+  isAbandonedAiStudioSession,
+  isOpenAiStudioSession,
+  shortAiStudioSessionId as formatShortAiStudioSessionId
+} from "@/lib/aiStudioSessionViewModel.js";
 import {
   DEFAULT_MAX_OPEN_SESSIONS
 } from "@/lib/aiStudioSessionRequestConfig.js";
@@ -28,7 +28,7 @@ function sessionOrderKey(session = {}) {
 
 function visibleAiStudioSessions(sessions = []) {
   return sessions
-    .filter((session) => !isAbandonedIssueSession(session))
+    .filter((session) => !isAbandonedAiStudioSession(session))
     .sort((left, right) => sessionOrderKey(left).localeCompare(sessionOrderKey(right)));
 }
 
@@ -38,7 +38,7 @@ function aiStudioSessionLimits({
 } = {}) {
   return {
     maxOpenSessions: Number(payloadLimits.maxOpenSessions || DEFAULT_MAX_OPEN_SESSIONS),
-    openSessionCount: Number(payloadLimits.openSessionCount || sessions.filter(isOpenIssueSession).length)
+    openSessionCount: Number(payloadLimits.openSessionCount || sessions.filter(isOpenAiStudioSession).length)
   };
 }
 
@@ -106,7 +106,7 @@ function aiStudioSessionFactIcon(icon) {
 }
 
 function aiStudioSessionFacts(session = {}) {
-  return issueSessionFacts(session, session?.stepDefinitions || [])
+  return buildAiStudioSessionFacts(session, session?.stepDefinitions || [])
     .map((fact) => ({
       ...fact,
       icon: aiStudioSessionFactIcon(fact.icon)
@@ -151,7 +151,7 @@ function commandMessage(command, type) {
 }
 
 function shortAiStudioSessionId(sessionId = "") {
-  return shortIssueSessionId(sessionId);
+  return formatShortAiStudioSessionId(sessionId);
 }
 
 export {

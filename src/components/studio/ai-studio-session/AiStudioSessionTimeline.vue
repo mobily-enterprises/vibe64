@@ -1,17 +1,17 @@
 <template>
-  <div class="studio-issue-session-timeline">
+  <div class="studio-ai-session-timeline">
     <div
       v-for="step in steps"
       :key="step.id"
-      class="studio-issue-session-timeline__step"
-      :class="`studio-issue-session-timeline__step--${step.state}`"
+      class="studio-ai-session-timeline__step"
+      :class="`studio-ai-session-timeline__step--${step.state}`"
       :title="step.title || undefined"
     >
-      <div class="studio-issue-session-timeline__step-icon">
+      <div class="studio-ai-session-timeline__step-icon">
         <v-icon :icon="stepIcon(step)" size="18" />
       </div>
-      <div class="studio-issue-session-timeline__step-copy">
-        <div class="studio-issue-session-timeline__step-title">
+      <div class="studio-ai-session-timeline__step-copy">
+        <div class="studio-ai-session-timeline__step-title">
           <span>
             {{ step.index + 1 }}.
             {{ step.label }}
@@ -21,7 +21,7 @@
             :icon="stepIsExpanded(step) ? mdiChevronUp : mdiChevronDown"
             :title="stepIsExpanded(step) ? 'Collapse step details' : 'Expand step details'"
             aria-label="Toggle completed step details"
-            class="studio-issue-session-timeline__done-toggle"
+            class="studio-ai-session-timeline__done-toggle"
             density="compact"
             size="x-small"
             variant="text"
@@ -41,13 +41,13 @@
         </div>
         <p
           v-if="descriptionVisible(step)"
-          class="studio-issue-session-timeline__step-description"
+          class="studio-ai-session-timeline__step-description"
         >
           {{ step.description }}
         </p>
         <div
           v-if="stepIsExpanded(step) && step.canRewind"
-          class="studio-issue-session-timeline__done-actions"
+          class="studio-ai-session-timeline__done-actions"
         >
           <v-btn
             color="error"
@@ -64,7 +64,7 @@
           </v-btn>
         </div>
 
-        <div v-if="step.current" class="studio-issue-session-timeline__step-action">
+        <div v-if="step.current" class="studio-ai-session-timeline__step-action">
           <slot name="current-step" :step="step" />
         </div>
       </div>
@@ -131,14 +131,14 @@ function stepIcon(step = {}) {
 </script>
 
 <style scoped>
-.studio-issue-session-timeline {
+.studio-ai-session-timeline {
   border: 0;
   border-radius: 0;
   overflow: visible;
   padding: 0;
 }
 
-.studio-issue-session-timeline__step {
+.studio-ai-session-timeline__step {
   align-items: flex-start;
   border-radius: 6px;
   display: grid;
@@ -148,7 +148,7 @@ function stepIcon(step = {}) {
   position: relative;
 }
 
-.studio-issue-session-timeline__step-icon {
+.studio-ai-session-timeline__step-icon {
   align-items: center;
   display: flex;
   height: 1.25rem;
@@ -156,27 +156,27 @@ function stepIcon(step = {}) {
   padding-top: 0.02rem;
 }
 
-.studio-issue-session-timeline__step--current {
+.studio-ai-session-timeline__step--current {
   background: rgba(var(--v-theme-primary), 0.1);
 }
 
-.studio-issue-session-timeline__step--done .studio-issue-session-timeline__step-icon {
+.studio-ai-session-timeline__step--done .studio-ai-session-timeline__step-icon {
   color: rgb(var(--v-theme-success));
 }
 
-.studio-issue-session-timeline__step--skipped .studio-issue-session-timeline__step-icon {
+.studio-ai-session-timeline__step--skipped .studio-ai-session-timeline__step-icon {
   color: rgb(var(--v-theme-info));
 }
 
-.studio-issue-session-timeline__step--current .studio-issue-session-timeline__step-icon {
+.studio-ai-session-timeline__step--current .studio-ai-session-timeline__step-icon {
   color: rgb(var(--v-theme-primary));
 }
 
-.studio-issue-session-timeline__step--blocked .studio-issue-session-timeline__step-icon {
+.studio-ai-session-timeline__step--blocked .studio-ai-session-timeline__step-icon {
   color: rgb(var(--v-theme-error));
 }
 
-.studio-issue-session-timeline__step-title {
+.studio-ai-session-timeline__step-title {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
@@ -184,38 +184,38 @@ function stepIcon(step = {}) {
   line-height: 1.12;
 }
 
-.studio-issue-session-timeline__step-title span {
+.studio-ai-session-timeline__step-title span {
   font-size: 0.84rem;
   font-weight: 650;
 }
 
-.studio-issue-session-timeline__done-toggle {
+.studio-ai-session-timeline__done-toggle {
   color: rgba(var(--v-theme-on-surface), 0.62);
   margin-left: 0.05rem;
 }
 
-.studio-issue-session-timeline__done-toggle:hover {
+.studio-ai-session-timeline__done-toggle:hover {
   color: rgb(var(--v-theme-primary));
 }
 
-.studio-issue-session-timeline__step-title :deep(.v-chip) {
+.studio-ai-session-timeline__step-title :deep(.v-chip) {
   font-size: 0.64rem;
   height: 1.15rem;
   padding-inline: 0.32rem;
 }
 
-.studio-issue-session-timeline__step-description {
+.studio-ai-session-timeline__step-description {
   color: rgba(var(--v-theme-on-surface), 0.72);
   font-size: 0.74rem;
   line-height: 1.32;
   margin: 0.14rem 0 0;
 }
 
-.studio-issue-session-timeline__step--current .studio-issue-session-timeline__step-description {
+.studio-ai-session-timeline__step--current .studio-ai-session-timeline__step-description {
   color: rgba(var(--v-theme-on-surface), 0.82);
 }
 
-.studio-issue-session-timeline__done-actions {
+.studio-ai-session-timeline__done-actions {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
@@ -223,7 +223,7 @@ function stepIcon(step = {}) {
   margin-top: 0.34rem;
 }
 
-.studio-issue-session-timeline__step-action {
+.studio-ai-session-timeline__step-action {
   border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   display: grid;
   gap: 0.32rem;

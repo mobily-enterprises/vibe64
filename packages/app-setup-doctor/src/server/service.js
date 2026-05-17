@@ -7,7 +7,6 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
-import { execa } from "execa";
 
 import {
   closeTerminalSession,
@@ -26,28 +25,40 @@ import {
 } from "../../../../server/lib/githubRepoSetupScript.js";
 import {
   gitSafeDirectoryArgs,
-  gitToolchainMountArgs,
   linkedGitMetadataMountSource
 } from "../../../../server/lib/gitToolchainMounts.js";
 import {
   shellScript
 } from "../../../../server/lib/shellScript.js";
 import {
-  STUDIO_HOST_GID_ENV,
-  STUDIO_HOST_UID_ENV,
-  STUDIO_TOOLCHAIN_IMAGE as TOOLCHAIN_IMAGE,
-  STUDIO_TOOL_HOME_VOLUME as TOOL_HOME_VOLUME
-} from "../../../../server/lib/studioRuntimeIdentity.js";
+  createDoctorRepair as createRepair
+} from "../../../../server/lib/doctorCheckItems.js";
+import {
+  buildDoctorTerminalArgs,
+  buildDoctorToolchainArgs
+} from "../../../../server/lib/doctorToolchain.js";
+import {
+  dockerCommand,
+  hostUserDockerArgs,
+  hostUserIdentityEnvArgs,
+  runHostCommand,
+  shellQuote
+} from "../../../../server/lib/shellCommands.js";
+import {
+  fileExists,
+  readJsonFile
+} from "./appSetupFiles.js";
+import {
+  configImportProblems,
+  configImportSpecifiersFromText,
+  directDependencyNames,
+  missingDirectDependencies,
+  readPackageJson
+} from "./appSetupDependencyChecks.js";
 
 const MYSQL_CONTAINER = "ai-studio-bootstrap-mysql";
 const MYSQL_ROOT_PASSWORD = "ai_studio_bootstrap_root";
 const TERMINAL_NAMESPACE = "app-setup-doctor";
-const CONFIG_IMPORT_FILES = [
-  "eslint.config.mjs",
-  "playwright.config.mjs",
-  "vite.config.mjs",
-  "vitest.config.mjs"
-];
 
 const STAGE_DEFINITIONS = [
   ["directory", "Directory admissibility", "Target directory is empty or already a Git repository."],
@@ -62,71 +73,6 @@ const STAGE_DEFINITIONS = [
   ["ready", "Ready", "The target app is ready for Studio workflows."]
 ];
 
-function shellQuote(value) {
-  const stringValue = String(value);
-  if (/^[A-Za-z0-9_./:=@,+-]+$/.test(stringValue)) {
-    return stringValue;
-  }
-  return `'${stringValue.replaceAll("'", "'\\''")}'`;
-}
-
-function dockerCommand(args) {
-  return ["docker", ...args].map(shellQuote).join(" ");
-}
-
-function normalizeRunResult(result) {
-  const stdout = String(result.stdout || "");
-  const stderr = String(result.stderr || "");
-  const output = String(result.all || [stdout, stderr].filter(Boolean).join("\n")).trim();
-
-  return {
-    exitCode: result.exitCode,
-    ok: result.exitCode === 0,
-    output,
-    stderr: stderr.trim(),
-    stdout: stdout.trim()
-  };
-}
-
-async function runHostCommand(command, args, { cwd, timeout = 15000 } = {}) {
-  try {
-    const result = await execa(command, args, {
-      all: true,
-      cwd,
-      reject: false,
-      timeout
-    });
-    return normalizeRunResult(result);
-  } catch (error) {
-    return {
-      exitCode: typeof error.exitCode === "number" ? error.exitCode : 1,
-      ok: false,
-      output: String(error.all || error.message || "").trim(),
-      stderr: String(error.stderr || "").trim(),
-      stdout: String(error.stdout || "").trim()
-    };
-  }
-}
-
-function hostUserDockerArgs() {
-  if (typeof process.getuid !== "function" || typeof process.getgid !== "function") {
-    return [];
-  }
-  return ["-u", `${process.getuid()}:${process.getgid()}`];
-}
-
-function hostUserIdentityEnvArgs() {
-  if (typeof process.getuid !== "function" || typeof process.getgid !== "function") {
-    return [];
-  }
-  return [
-    "-e",
-    `${STUDIO_HOST_UID_ENV}=${process.getuid()}`,
-    "-e",
-    `${STUDIO_HOST_GID_ENV}=${process.getgid()}`
-  ];
-}
-
 function writableHostUserDockerArgs() {
   return [
     ...hostUserDockerArgs(),
@@ -135,35 +81,6 @@ function writableHostUserDockerArgs() {
     "-e",
     "npm_config_cache=/tmp/npm-cache"
   ];
-}
-
-function buildToolchainArgs(commandArgs, {
-  extraArgs = [],
-  targetRoot
-} = {}) {
-  return [
-    "run",
-    "--rm",
-    "-v",
-    `${TOOL_HOME_VOLUME}:/home/studio`,
-    "-e",
-    "HOME=/home/studio",
-    "-v",
-    `${targetRoot}:/workspace`,
-    ...gitToolchainMountArgs(targetRoot),
-    "-w",
-    "/workspace",
-    ...extraArgs,
-    TOOLCHAIN_IMAGE,
-    ...commandArgs
-  ];
-}
-
-function buildTerminalArgs(commandArgs, options = {}) {
-  return buildToolchainArgs(commandArgs, {
-    ...options,
-    extraArgs: ["-it", ...(options.extraArgs || [])]
-  });
 }
 
 function gitArgs(targetRoot, args) {
@@ -175,7 +92,7 @@ async function runToolchain(commandArgs, {
   targetRoot,
   timeout = 20000
 } = {}) {
-  return runHostCommand("docker", buildToolchainArgs(commandArgs, {
+  return runHostCommand("docker", buildDoctorToolchainArgs(commandArgs, {
     extraArgs,
     targetRoot
   }), {
@@ -199,22 +116,6 @@ async function runGh(targetRoot, args, options = {}) {
     targetRoot,
     ...options
   });
-}
-
-function createRepair({
-  actionId,
-  command,
-  fields = [],
-  kind = "terminal",
-  label
-}) {
-  return {
-    actionId,
-    commandPreview: command,
-    fields,
-    kind,
-    label
-  };
 }
 
 function stage({
@@ -338,31 +239,6 @@ function titleFromRepoName(repoName) {
     .join(" ") || "JSKIT App";
 }
 
-async function fileExists(filePath) {
-  try {
-    await access(filePath, fsConstants.F_OK);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function readJsonFile(filePath) {
-  try {
-    const text = await readFile(filePath, "utf8");
-    return {
-      ok: true,
-      value: JSON.parse(text)
-    };
-  } catch (error) {
-    return {
-      error: String(error?.message || error),
-      ok: false,
-      value: null
-    };
-  }
-}
-
 function formatList(items, limit = 12) {
   const values = items.filter(Boolean);
   if (!values.length) {
@@ -391,7 +267,7 @@ function gitInitRepair(targetRoot) {
     "git -c safe.directory=/workspace init",
     "git -c safe.directory=/workspace branch -M main"
   ]);
-  const args = buildTerminalArgs(["bash", "-lc", script], {
+  const args = buildDoctorTerminalArgs(["bash", "-lc", script], {
     extraArgs: writableHostUserDockerArgs(),
     targetRoot
   });
@@ -409,7 +285,7 @@ function ghRepoCreateScript(repoName) {
 
 function ghRepoCreateRepair(targetRoot) {
   const repoName = repoNameFromTargetRoot(targetRoot);
-  const args = buildTerminalArgs(["bash", "-lc", ghRepoCreateScript(repoName)], {
+  const args = buildDoctorTerminalArgs(["bash", "-lc", ghRepoCreateScript(repoName)], {
     extraArgs: ["-e", "GH_PROMPT_DISABLED=1"],
     targetRoot
   });
@@ -446,7 +322,7 @@ function scaffoldRepair(targetRoot) {
     "set -x",
     "npx @jskit-ai/create-app \"$JSKIT_APP_NAME\" --target . --force --tenancy-mode none --title \"$JSKIT_APP_TITLE\" --initial-bundles none"
   ]);
-  const args = buildTerminalArgs(["bash", "-lc", script], {
+  const args = buildDoctorTerminalArgs(["bash", "-lc", script], {
     extraArgs: [
       ...writableHostUserDockerArgs(),
       "-e",
@@ -476,7 +352,7 @@ function npmInstallScript() {
 
 function npmInstallRepair(targetRoot) {
   const script = npmInstallScript();
-  const args = buildTerminalArgs(["bash", "-lc", script], {
+  const args = buildDoctorTerminalArgs(["bash", "-lc", script], {
     extraArgs: writableHostUserDockerArgs(),
     targetRoot
   });
@@ -497,7 +373,7 @@ function jskitDoctorScript() {
 }
 
 function jskitDoctorRepair(targetRoot) {
-  const args = buildTerminalArgs(["bash", "-lc", jskitDoctorScript()], {
+  const args = buildDoctorTerminalArgs(["bash", "-lc", jskitDoctorScript()], {
     extraArgs: writableHostUserDockerArgs(),
     targetRoot
   });
@@ -656,7 +532,7 @@ async function checkDirectory(targetRoot, context) {
       label: "Directory admissibility",
       expected: "A directory without .git is empty.",
       observed: `No .git directory, but files exist:\n${formatList(nonGitEntries)}`,
-      explanation: "V0 will not initialize Git over existing files because it cannot know their ownership."
+      explanation: "Studio will not initialize Git over existing files because it cannot know their ownership."
     });
   }
 
@@ -737,7 +613,7 @@ async function checkGitReady(targetRoot, context) {
       label: "Git ready",
       expected: "Repository is a non-bare work tree.",
       observed: "Bare repository.",
-      explanation: "V0 only operates inside normal working trees."
+      explanation: "Studio only operates inside normal working trees."
     });
   }
 
@@ -783,7 +659,7 @@ async function checkRemoteReady(targetRoot, context) {
       label: "Remote ready",
       expected: "origin is a GitHub remote.",
       observed: result.stdout,
-      explanation: "V0 relies on gh for issues and PRs, so the primary remote must be GitHub."
+      explanation: "Studio relies on gh for issues and PRs, so the primary remote must be GitHub."
     });
   }
 
@@ -857,7 +733,7 @@ async function checkRemoteSync(targetRoot, context) {
       label: "Remote/local sync",
       expected: "Remote content is mirrored locally before Studio writes files.",
       observed: `Remote default branch exists: ${remoteBranch}; local has no commits.`,
-      explanation: "Clone the existing repository into this target directory. V0 will not overlay remote files into an empty local repo."
+      explanation: "Clone the existing repository into this target directory. Studio will not overlay remote files into an empty local repo."
     });
   }
 
@@ -892,7 +768,7 @@ async function checkRemoteSync(targetRoot, context) {
       label: "Remote/local sync",
       expected: "Local HEAD equals origin default branch HEAD.",
       observed: `Local HEAD: ${localHead.stdout}\norigin/${remoteBranch}: ${remoteSha}`,
-      explanation: "V0 hard-stops on divergent histories. Pull, clone, or reconcile manually before continuing."
+      explanation: "Studio hard-stops on divergent histories. Pull, clone, or reconcile manually before continuing."
     });
   }
 
@@ -944,7 +820,7 @@ async function checkScaffold(targetRoot, context) {
       label: "Initial JSKIT scaffold",
       expected: "Existing files are already a recognizable JSKIT scaffold.",
       observed: `Missing markers: ${Object.entries(markers).filter(([, present]) => !present).map(([name]) => name).join(", ")}\nFiles: ${formatList(nonGitEntries)}`,
-      explanation: "V0 will not run the JSKIT app generator over an existing non-JSKIT file tree."
+      explanation: "Studio will not run the JSKIT app generator over an existing non-JSKIT file tree."
     });
   }
 
@@ -956,156 +832,6 @@ async function checkScaffold(targetRoot, context) {
     explanation: "Create the smallest JSKIT app scaffold before installing dependencies or running doctor.",
     repair: scaffoldRepair(targetRoot)
   });
-}
-
-async function readPackageJson(targetRoot) {
-  const result = await readJsonFile(path.join(targetRoot, "package.json"));
-  return result.ok ? result.value : null;
-}
-
-function directDependencyNames(packageJson) {
-  const names = new Set();
-  for (const bucket of ["dependencies", "devDependencies"]) {
-    for (const name of Object.keys(packageJson?.[bucket] || {})) {
-      names.add(name);
-    }
-  }
-  return [...names].sort((left, right) => left.localeCompare(right));
-}
-
-function nodeModulePackageJsonPath(targetRoot, packageName) {
-  return path.join(targetRoot, "node_modules", ...String(packageName || "").split("/"), "package.json");
-}
-
-async function missingDirectDependencies(targetRoot, packageJson) {
-  const missing = [];
-  for (const packageName of directDependencyNames(packageJson)) {
-    if (!await fileExists(nodeModulePackageJsonPath(targetRoot, packageName))) {
-      missing.push(packageName);
-    }
-  }
-  return missing;
-}
-
-function packageSpecifierInfo(specifier) {
-  const normalized = String(specifier || "").trim();
-  if (!normalized || normalized.startsWith(".") || normalized.startsWith("/") || normalized.startsWith("node:")) {
-    return null;
-  }
-
-  const parts = normalized.split("/");
-  if (normalized.startsWith("@")) {
-    if (parts.length < 2) {
-      return null;
-    }
-    return {
-      packageName: parts.slice(0, 2).join("/"),
-      subpath: parts.slice(2).join("/")
-    };
-  }
-
-  return {
-    packageName: parts[0],
-    subpath: parts.slice(1).join("/")
-  };
-}
-
-function configImportSpecifiersFromText(text) {
-  const specifiers = new Set();
-  const importPattern = /\bfrom\s*["']([^"']+)["']|\bimport\s*\(\s*["']([^"']+)["']\s*\)|^\s*import\s+["']([^"']+)["']/gmu;
-  for (const match of String(text || "").matchAll(importPattern)) {
-    const specifier = match[1] || match[2] || match[3] || "";
-    if (packageSpecifierInfo(specifier)) {
-      specifiers.add(specifier);
-    }
-  }
-  return [...specifiers].sort((left, right) => left.localeCompare(right));
-}
-
-function exportMapHasSubpath(exportsMap, subpathKey) {
-  if (!exportsMap) {
-    return false;
-  }
-  if (typeof exportsMap === "string") {
-    return subpathKey === ".";
-  }
-  if (Array.isArray(exportsMap)) {
-    return subpathKey === ".";
-  }
-  if (typeof exportsMap !== "object") {
-    return false;
-  }
-  if (Object.prototype.hasOwnProperty.call(exportsMap, subpathKey)) {
-    return true;
-  }
-  for (const key of Object.keys(exportsMap)) {
-    if (!key.includes("*")) {
-      continue;
-    }
-    const [prefix, suffix] = key.split("*");
-    if (subpathKey.startsWith(prefix) && subpathKey.endsWith(suffix || "")) {
-      return true;
-    }
-  }
-  return false;
-}
-
-async function legacySubpathExists(packageRoot, subpath) {
-  const basePath = path.join(packageRoot, ...subpath.split("/"));
-  for (const candidate of [
-    basePath,
-    `${basePath}.js`,
-    `${basePath}.mjs`,
-    `${basePath}.cjs`,
-    path.join(basePath, "index.js"),
-    path.join(basePath, "index.mjs"),
-    path.join(basePath, "index.cjs")
-  ]) {
-    if (await fileExists(candidate)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-async function configImportProblems(targetRoot) {
-  const problems = [];
-  for (const fileName of CONFIG_IMPORT_FILES) {
-    let text = "";
-    try {
-      text = await readFile(path.join(targetRoot, fileName), "utf8");
-    } catch {
-      continue;
-    }
-
-    for (const specifier of configImportSpecifiersFromText(text)) {
-      const info = packageSpecifierInfo(specifier);
-      if (!info?.subpath) {
-        continue;
-      }
-
-      const packageRoot = path.join(targetRoot, "node_modules", ...info.packageName.split("/"));
-      const packageJsonPath = path.join(packageRoot, "package.json");
-      const packageJson = await readJsonFile(packageJsonPath);
-      if (!packageJson.ok) {
-        problems.push(`${fileName}: ${specifier} package metadata is missing.`);
-        continue;
-      }
-
-      const subpathKey = `./${info.subpath}`;
-      if (packageJson.value.exports) {
-        if (!exportMapHasSubpath(packageJson.value.exports, subpathKey)) {
-          problems.push(`${fileName}: ${specifier} is not exported by ${info.packageName}@${packageJson.value.version || "unknown"} (${subpathKey}).`);
-        }
-        continue;
-      }
-
-      if (!await legacySubpathExists(packageRoot, info.subpath)) {
-        problems.push(`${fileName}: ${specifier} is not present in ${info.packageName}@${packageJson.value.version || "unknown"}.`);
-      }
-    }
-  }
-  return problems.sort((left, right) => left.localeCompare(right));
 }
 
 async function checkDependencies(targetRoot, context) {
@@ -1291,9 +1017,9 @@ async function checkRuntimeServices(targetRoot, context) {
     return hardStopStage({
       id: "runtime-services",
       label: "Runtime services",
-      expected: "V0 supports managed MySQL checks only.",
+      expected: "This setup flow supports managed MySQL checks only.",
       observed: "Postgres runtime package detected.",
-      explanation: "Postgres service orchestration is outside this V0 slice."
+      explanation: "Postgres service orchestration is outside this setup flow."
     });
   }
 
@@ -1651,7 +1377,7 @@ function startGitInitTerminal(targetRoot) {
     "git -c safe.directory=/workspace init",
     "git -c safe.directory=/workspace branch -M main"
   ]);
-  const args = buildTerminalArgs(["bash", "-lc", script], {
+  const args = buildDoctorTerminalArgs(["bash", "-lc", script], {
     extraArgs: writableHostUserDockerArgs(),
     targetRoot
   });
@@ -1664,7 +1390,7 @@ function startGitInitTerminal(targetRoot) {
 
 function startGhCreateRepoTerminal(targetRoot) {
   const repair = ghRepoCreateRepair(targetRoot);
-  const args = buildTerminalArgs(["bash", "-lc", ghRepoCreateScript(repoNameFromTargetRoot(targetRoot))], {
+  const args = buildDoctorTerminalArgs(["bash", "-lc", ghRepoCreateScript(repoNameFromTargetRoot(targetRoot))], {
     extraArgs: ["-e", "GH_PROMPT_DISABLED=1"],
     targetRoot
   });
@@ -1689,7 +1415,7 @@ function startLinkRemoteTerminal(targetRoot, inputs) {
     "git -c safe.directory=/workspace remote add origin \"$JSKIT_REMOTE_URL\"",
     "git -c safe.directory=/workspace remote get-url origin"
   ]);
-  const args = buildTerminalArgs(["bash", "-lc", script], {
+  const args = buildDoctorTerminalArgs(["bash", "-lc", script], {
     extraArgs: [
       ...writableHostUserDockerArgs(),
       "-e",
@@ -1712,7 +1438,7 @@ function startScaffoldTerminal(targetRoot) {
     "set -x",
     "npx @jskit-ai/create-app \"$JSKIT_APP_NAME\" --target . --force --tenancy-mode none --title \"$JSKIT_APP_TITLE\" --initial-bundles none"
   ]);
-  const args = buildTerminalArgs(["bash", "-lc", script], {
+  const args = buildDoctorTerminalArgs(["bash", "-lc", script], {
     extraArgs: [
       ...writableHostUserDockerArgs(),
       "-e",
@@ -1731,7 +1457,7 @@ function startScaffoldTerminal(targetRoot) {
 
 function startNpmInstallTerminal(targetRoot) {
   const repair = npmInstallRepair(targetRoot);
-  const args = buildTerminalArgs(["bash", "-lc", npmInstallScript()], {
+  const args = buildDoctorTerminalArgs(["bash", "-lc", npmInstallScript()], {
     extraArgs: writableHostUserDockerArgs(),
     targetRoot
   });
@@ -1771,7 +1497,7 @@ function startCreateDatabaseTerminal(targetRoot, inputs = {}) {
 
 function startJskitDoctorTerminal(targetRoot) {
   const repair = jskitDoctorRepair(targetRoot);
-  const args = buildTerminalArgs(["bash", "-lc", jskitDoctorScript()], {
+  const args = buildDoctorTerminalArgs(["bash", "-lc", jskitDoctorScript()], {
     extraArgs: writableHostUserDockerArgs(),
     targetRoot
   });
@@ -1792,7 +1518,7 @@ function startGitCheckpointTerminal(targetRoot, inputs = {}) {
   }
   const repair = gitCheckpointRepair();
   const script = gitCheckpointScript();
-  const args = buildTerminalArgs(["bash", "-lc", script], {
+  const args = buildDoctorTerminalArgs(["bash", "-lc", script], {
     extraArgs: [
       ...hostUserIdentityEnvArgs(),
       "-e",

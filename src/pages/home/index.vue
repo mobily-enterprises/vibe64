@@ -1,5 +1,5 @@
 <template>
-  <section class="generated-ui-screen generated-ui-screen--app studio-screen d-flex flex-column ga-3">
+  <section class="generated-ui-screen generated-ui-screen--studio studio-screen d-flex flex-column ga-3">
     <v-alert
       v-if="pageError"
       type="error"
@@ -16,7 +16,7 @@
       @ready="handleProjectTypeReady"
     >
       <template #default>
-        <IssueSessionPanel @title-change="emitPageTitle" />
+        <AiStudioSessionPanel @title-change="emitPageTitle" />
       </template>
     </ProjectTypeGate>
   </section>
@@ -24,7 +24,7 @@
 
 <script setup>
 import { onBeforeUnmount, ref } from "vue";
-import IssueSessionPanel from "@/components/studio/IssueSessionPanel.vue";
+import AiStudioSessionPanel from "@/components/studio/AiStudioSessionPanel.vue";
 import ProjectTypeGate from "@/components/studio/ProjectTypeGate.vue";
 
 const pageError = ref("");

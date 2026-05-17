@@ -17,47 +17,40 @@ import {
   createReadyStatusCache
 } from "../../../../server/lib/doctorStatusCache.js";
 import {
-  STUDIO_TOOLCHAIN_IMAGE as TOOLCHAIN_IMAGE,
-  STUDIO_TOOL_HOME_VOLUME as TOOL_HOME_VOLUME
+  STUDIO_TOOLCHAIN_IMAGE as TOOLCHAIN_IMAGE
 } from "../../../../server/lib/studioRuntimeIdentity.js";
+import {
+  createDoctorRepair,
+  doctorCheckItem as checkItem,
+  failDoctorCheck as failCheck,
+  passDoctorCheck as passCheck
+} from "../../../../server/lib/doctorCheckItems.js";
+import {
+  buildDoctorTerminalArgs,
+  buildDoctorToolchainArgs
+} from "../../../../server/lib/doctorToolchain.js";
+import {
+  buildMysqlRepairScript,
+  checkMysqlCapability,
+  mysqlCapabilitySql,
+  mysqlRepair,
+  repairMysql
+} from "./mysqlCapability.js";
 
 const TOOLCHAIN_DOCKERFILE = "tooling/bootstrap/Dockerfile";
 const TOOLCHAIN_CONTEXT = "tooling/bootstrap";
-const MYSQL_CONTAINER = "ai-studio-bootstrap-mysql";
-const MYSQL_IMAGE = "mysql:8.4";
-const MYSQL_ROOT_PASSWORD = "ai_studio_bootstrap_root";
-const MYSQL_VOLUME = "ai_studio_bootstrap_mysql_data";
-const MYSQL_PROBE_DATABASE = "ai_studio_bootstrap_probe";
-const MYSQL_PROBE_TABLE = "capability_probe";
 const REQUIRED_GH_SCOPES = ["repo", "read:org", "gist", "workflow"];
 const TERMINAL_NAMESPACE = "bootstrap-doctor";
-
-function buildToolchainArgs(commandArgs, extraArgs = []) {
-  return [
-    "run",
-    "--rm",
-    "-v",
-    `${TOOL_HOME_VOLUME}:/home/studio`,
-    "-e",
-    "HOME=/home/studio",
-    "-w",
-    "/workspace",
-    ...extraArgs,
-    TOOLCHAIN_IMAGE,
-    ...commandArgs
-  ];
-}
-
-function buildTerminalArgs(commandArgs, extraArgs = []) {
-  return buildToolchainArgs(commandArgs, ["-it", ...extraArgs]);
-}
 
 function commandPreview(args) {
   return dockerCommand(args);
 }
 
-function mysqlCommandPreview(args) {
-  return commandPreview(args.map((arg) => String(arg).replaceAll(MYSQL_ROOT_PASSWORD, "*****")));
+function createRepair(options = {}) {
+  return createDoctorRepair({
+    kind: "command",
+    ...options
+  });
 }
 
 function buildToolchainScript() {
@@ -77,131 +70,29 @@ function buildToolchainScript() {
   ].join("\n");
 }
 
-function mysqlCapabilitySql() {
-  return [
-    `CREATE DATABASE IF NOT EXISTS \`${MYSQL_PROBE_DATABASE}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
-    `CREATE TABLE IF NOT EXISTS \`${MYSQL_PROBE_DATABASE}\`.\`${MYSQL_PROBE_TABLE}\` (id INT NOT NULL PRIMARY KEY)`,
-    `DROP TABLE \`${MYSQL_PROBE_DATABASE}\`.\`${MYSQL_PROBE_TABLE}\``,
-    `DROP DATABASE \`${MYSQL_PROBE_DATABASE}\``
-  ].join("; ");
-}
-
-function maskedMysqlExecPreview(sql) {
-  return `docker exec ${MYSQL_CONTAINER} mysql -uroot -p***** -e ${JSON.stringify(sql)}`;
-}
-
-function buildMysqlRepairScript() {
-  const runArgs = [
-    "run",
-    "-d",
-    "--name",
-    MYSQL_CONTAINER,
-    "-e",
-    "MYSQL_ROOT_PASSWORD=*****",
-    "-v",
-    `${MYSQL_VOLUME}:/var/lib/mysql`,
-    "--health-cmd",
-    "mysqladmin ping -uroot -p***** --silent",
-    "--health-interval",
-    "5s",
-    "--health-timeout",
-    "3s",
-    "--health-retries",
-    "20",
-    MYSQL_IMAGE
-  ];
-  const probeSql = mysqlCapabilitySql();
-
-  return [
-    "set -e",
-    `MYSQL_ROOT_PASSWORD='${MYSQL_ROOT_PASSWORD}'`,
-    `MYSQL_CONTAINER='${MYSQL_CONTAINER}'`,
-    `MYSQL_VOLUME='${MYSQL_VOLUME}'`,
-    `MYSQL_IMAGE='${MYSQL_IMAGE}'`,
-    `echo '$ ${commandPreview(["volume", "create", MYSQL_VOLUME])}'`,
-    `docker volume create '${MYSQL_VOLUME}'`,
-    `if ! docker inspect '${MYSQL_CONTAINER}' >/dev/null 2>&1; then`,
-    `  echo '$ ${commandPreview(runArgs)}'`,
-    `  docker run -d --name '${MYSQL_CONTAINER}' -e MYSQL_ROOT_PASSWORD="$MYSQL_ROOT_PASSWORD" -v '${MYSQL_VOLUME}:/var/lib/mysql' --health-cmd "mysqladmin ping -uroot -p$MYSQL_ROOT_PASSWORD --silent" --health-interval 5s --health-timeout 3s --health-retries 20 '${MYSQL_IMAGE}'`,
-    "else",
-    `  RUNNING=$(docker inspect '${MYSQL_CONTAINER}' --format '{{.State.Running}}')`,
-    "  if [ \"$RUNNING\" != \"true\" ]; then",
-    `    echo '$ ${commandPreview(["start", MYSQL_CONTAINER])}'`,
-    `    docker start '${MYSQL_CONTAINER}'`,
-    "  else",
-    `    echo '${MYSQL_CONTAINER} is already running.'`,
-    "  fi",
-    "fi",
-    "for attempt in $(seq 1 40); do",
-    `  echo '$ docker exec ${MYSQL_CONTAINER} mysqladmin ping -uroot -p***** --silent'`,
-    `  if docker exec '${MYSQL_CONTAINER}' mysqladmin ping -uroot -p"$MYSQL_ROOT_PASSWORD" --silent; then`,
-    "    break",
-    "  fi",
-    "  if [ \"$attempt\" = \"40\" ]; then",
-    "    echo 'Timed out waiting for MySQL to accept connections.'",
-    "    exit 1",
-    "  fi",
-    "  sleep 1.5",
-    "done",
-    `echo '$ ${maskedMysqlExecPreview(probeSql)}'`,
-    `docker exec '${MYSQL_CONTAINER}' mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e '${probeSql}'`
-  ].join("\n");
-}
-
-function createRepair({
-  actionId,
-  command,
-  input,
-  kind = "command",
-  label
+function startBashTerminal({
+  commandPreview,
+  cwd = "",
+  script
 }) {
-  return {
-    actionId,
-    commandPreview: command,
-    input,
-    kind,
-    label
-  };
-}
-
-function checkItem({
-  id,
-  label,
-  status,
-  expected,
-  observed,
-  explanation,
-  repair = null,
-  repairs = null
-}) {
-  const repairList = Array.isArray(repairs)
-    ? repairs.filter(Boolean)
-    : [repair].filter(Boolean);
-
-  return {
-    id,
-    label,
-    status,
-    required: true,
-    expected,
-    observed: String(observed || "").trim() || "not available",
-    explanation,
-    repair: repair || repairList[0] || null,
-    repairs: repairList
-  };
-}
-
-function passCheck(details) {
-  return checkItem({
-    ...details,
-    status: "pass"
+  return startTerminalSession({
+    args: ["-lc", script],
+    command: "bash",
+    commandPreview,
+    cwd,
+    namespace: TERMINAL_NAMESPACE
   });
 }
 
-function failCheck(details) {
-  return checkItem({
-    ...details,
-    status: "fail"
+function startDockerTerminal({
+  args,
+  commandPreview
+}) {
+  return startTerminalSession({
+    args,
+    command: "docker",
+    commandPreview,
+    namespace: TERMINAL_NAMESPACE
   });
 }
 
@@ -229,39 +120,6 @@ function buildToolchainRepair() {
   });
 }
 
-function mysqlRepair() {
-  const probeSql = mysqlCapabilitySql();
-  const runArgs = [
-    "run",
-    "-d",
-    "--name",
-    MYSQL_CONTAINER,
-    "-e",
-    `MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}`,
-    "-v",
-    `${MYSQL_VOLUME}:/var/lib/mysql`,
-    "--health-cmd",
-    `mysqladmin ping -uroot -p${MYSQL_ROOT_PASSWORD} --silent`,
-    "--health-interval",
-    "5s",
-    "--health-timeout",
-    "3s",
-    "--health-retries",
-    "20",
-    MYSQL_IMAGE
-  ];
-
-  return createRepair({
-    actionId: "repair-mysql",
-    command: [
-      commandPreview(["volume", "create", MYSQL_VOLUME]),
-      mysqlCommandPreview(runArgs),
-      maskedMysqlExecPreview(probeSql)
-    ].join("\n"),
-    label: "Start MySQL and verify DDL"
-  });
-}
-
 function ghLoginCommandArgs() {
   return [
     "gh",
@@ -278,7 +136,7 @@ function ghLoginCommandArgs() {
 }
 
 function ghLoginRepair() {
-  const args = buildTerminalArgs(ghLoginCommandArgs());
+  const args = buildDoctorTerminalArgs(ghLoginCommandArgs());
   return createRepair({
     actionId: "terminal-gh-login",
     command: commandPreview(args),
@@ -287,12 +145,15 @@ function ghLoginRepair() {
   });
 }
 
-function ghReauthRepair() {
-  const script = [
+function ghReauthScript() {
+  return [
     "gh auth logout --hostname github.com",
     `exec ${commandPreview(ghLoginCommandArgs())}`
   ].join("\n");
-  const args = buildTerminalArgs(["bash", "-lc", script]);
+}
+
+function ghReauthRepair() {
+  const args = buildDoctorTerminalArgs(["bash", "-lc", ghReauthScript()]);
 
   return createRepair({
     actionId: "terminal-gh-reauth",
@@ -317,8 +178,15 @@ function codexDeviceLoginCommandArgs() {
   ];
 }
 
+function codexReauthScript(commandArgs) {
+  return [
+    "codex logout || true",
+    `exec ${commandPreview(commandArgs)}`
+  ].join("\n");
+}
+
 function codexLoginRepair() {
-  const args = buildTerminalArgs(codexBrowserLoginCommandArgs(), ["--network", "host"]);
+  const args = buildDoctorTerminalArgs(codexBrowserLoginCommandArgs(), ["--network", "host"]);
 
   return createRepair({
     actionId: "terminal-codex-login",
@@ -329,7 +197,7 @@ function codexLoginRepair() {
 }
 
 function codexDeviceLoginRepair() {
-  const args = buildTerminalArgs(codexDeviceLoginCommandArgs());
+  const args = buildDoctorTerminalArgs(codexDeviceLoginCommandArgs());
 
   return createRepair({
     actionId: "terminal-codex-device-login",
@@ -340,11 +208,8 @@ function codexDeviceLoginRepair() {
 }
 
 function codexReauthRepair() {
-  const script = [
-    "codex logout || true",
-    `exec ${commandPreview(codexBrowserLoginCommandArgs())}`
-  ].join("\n");
-  const args = buildTerminalArgs(["bash", "-lc", script], ["--network", "host"]);
+  const script = codexReauthScript(codexBrowserLoginCommandArgs());
+  const args = buildDoctorTerminalArgs(["bash", "-lc", script], ["--network", "host"]);
 
   return createRepair({
     actionId: "terminal-codex-reauth",
@@ -355,11 +220,8 @@ function codexReauthRepair() {
 }
 
 function codexDeviceReauthRepair() {
-  const script = [
-    "codex logout || true",
-    `exec ${commandPreview(codexDeviceLoginCommandArgs())}`
-  ].join("\n");
-  const args = buildTerminalArgs(["bash", "-lc", script]);
+  const script = codexReauthScript(codexDeviceLoginCommandArgs());
+  const args = buildDoctorTerminalArgs(["bash", "-lc", script]);
 
   return createRepair({
     actionId: "terminal-codex-device-reauth",
@@ -530,7 +392,7 @@ async function checkToolchainCommand({
   isValid,
   repair
 }) {
-  const result = await runDocker(buildToolchainArgs(commandArgs), {
+  const result = await runDocker(buildDoctorToolchainArgs(commandArgs), {
     timeout: 20000
   });
 
@@ -562,7 +424,7 @@ async function checkHostNetwork(toolchainReady) {
     };
   }
 
-  const result = await runDocker(buildToolchainArgs([
+  const result = await runDocker(buildDoctorToolchainArgs([
     "node",
     "-e",
     "process.exit(0)"
@@ -581,7 +443,7 @@ async function checkGitHubAuth(toolchainReady) {
     return missingToolchainCheck("gh-auth", "GitHub login");
   }
 
-  const result = await runDocker(buildToolchainArgs([
+  const result = await runDocker(buildDoctorToolchainArgs([
     "gh",
     "auth",
     "status",
@@ -619,7 +481,7 @@ async function checkCodexAuth(toolchainReady, hostNetwork) {
     return missingToolchainCheck("codex-auth", "Codex login");
   }
 
-  const result = await runDocker(buildToolchainArgs(["codex", "login", "status"]), {
+  const result = await runDocker(buildDoctorToolchainArgs(["codex", "login", "status"]), {
     timeout: 20000
   });
 
@@ -656,220 +518,6 @@ async function checkCodexAuth(toolchainReady, hostNetwork) {
   });
 }
 
-async function waitForMysqlReady() {
-  for (let attempt = 0; attempt < 40; attempt += 1) {
-    const result = await runDocker([
-      "exec",
-      MYSQL_CONTAINER,
-      "mysqladmin",
-      "ping",
-      "-uroot",
-      `-p${MYSQL_ROOT_PASSWORD}`,
-      "--silent"
-    ], {
-      timeout: 5000
-    });
-
-    if (result.ok) {
-      return result;
-    }
-
-    await new Promise((resolve) => {
-      setTimeout(resolve, 1500);
-    });
-  }
-
-  return {
-    ok: false,
-    output: "Timed out waiting for MySQL to accept connections."
-  };
-}
-
-async function runMysqlProbe() {
-  return runDocker([
-    "exec",
-    MYSQL_CONTAINER,
-    "mysql",
-    "-uroot",
-    `-p${MYSQL_ROOT_PASSWORD}`,
-    "-e",
-    mysqlCapabilitySql()
-  ], {
-    timeout: 15000
-  });
-}
-
-async function checkMysqlCapability(dockerReady) {
-  if (!dockerReady) {
-    return failCheck({
-      id: "mysql-capability",
-      label: "MySQL capability",
-      expected: "Managed MySQL starts and can create/drop a temporary probe table.",
-      observed: "Docker is not ready.",
-      explanation: "Studio needs a working managed MySQL runtime before it can later prepare an app-specific database.",
-      repair: manualDockerRepair()
-    });
-  }
-
-  const inspectResult = await runDocker([
-    "inspect",
-    MYSQL_CONTAINER,
-    "--format",
-    "{{.State.Running}} {{if .State.Health}}{{.State.Health.Status}}{{else}}no-health{{end}}"
-  ], {
-    timeout: 12000
-  });
-
-  if (!inspectResult.ok) {
-    return failCheck({
-      id: "mysql-capability",
-      label: "MySQL capability",
-      expected: "Managed MySQL starts and can create/drop a temporary probe table.",
-      observed: inspectResult.output,
-      explanation: "Start the managed MySQL container, then Studio will smoke-test DDL rights with a temporary probe database.",
-      repair: mysqlRepair()
-    });
-  }
-
-  const observed = inspectResult.output.trim();
-  const ready = observed.startsWith("true") && !observed.includes("unhealthy") && !observed.includes("starting");
-  if (!ready) {
-    return failCheck({
-      id: "mysql-capability",
-      label: "MySQL capability",
-      expected: "Managed MySQL is running and healthy.",
-      observed,
-      explanation: "The managed MySQL container exists but is not ready for SQL checks yet.",
-      repair: mysqlRepair()
-    });
-  }
-
-  const probeResult = await runMysqlProbe();
-  if (!probeResult.ok) {
-    return failCheck({
-      id: "mysql-capability",
-      label: "MySQL capability",
-      expected: "Managed MySQL can create/drop a temporary probe database and table.",
-      observed: probeResult.output,
-      explanation: "The MySQL runtime is reachable, but Studio could not prove DDL rights for future app setup.",
-      repair: mysqlRepair()
-    });
-  }
-
-  return passCheck({
-    id: "mysql-capability",
-    label: "MySQL capability",
-    expected: "Managed MySQL can create/drop a temporary probe database and table.",
-    observed: "Probe database and table created and dropped successfully.",
-    explanation: "The managed MySQL runtime is ready for later app-specific database setup."
-  });
-}
-
-async function repairMysql() {
-  const logs = [];
-  const appendResult = (label, result) => {
-    logs.push(`$ ${label}`);
-    if (result.output) {
-      logs.push(result.output);
-    }
-  };
-
-  const volumeResult = await runDocker(["volume", "create", MYSQL_VOLUME], {
-    timeout: 15000
-  });
-  appendResult(commandPreview(["volume", "create", MYSQL_VOLUME]), volumeResult);
-  if (!volumeResult.ok) {
-    return {
-      ok: false,
-      actionId: "repair-mysql",
-      output: logs.join("\n"),
-      status: "failed"
-    };
-  }
-
-  const inspectResult = await runDocker(["inspect", MYSQL_CONTAINER, "--format", "{{.Id}}"], {
-    timeout: 12000
-  });
-
-  if (!inspectResult.ok) {
-    const runArgs = [
-      "run",
-      "-d",
-      "--name",
-      MYSQL_CONTAINER,
-      "-e",
-      `MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}`,
-      "-v",
-      `${MYSQL_VOLUME}:/var/lib/mysql`,
-      "--health-cmd",
-      `mysqladmin ping -uroot -p${MYSQL_ROOT_PASSWORD} --silent`,
-      "--health-interval",
-      "5s",
-      "--health-timeout",
-      "3s",
-      "--health-retries",
-      "20",
-      MYSQL_IMAGE
-    ];
-    const runResult = await runDocker(runArgs, {
-      timeout: 60000
-    });
-    appendResult(mysqlCommandPreview(runArgs), runResult);
-    if (!runResult.ok) {
-      return {
-        ok: false,
-        actionId: "repair-mysql",
-        output: logs.join("\n"),
-        status: "failed"
-      };
-    }
-  } else {
-    const runningResult = await runDocker([
-      "inspect",
-      MYSQL_CONTAINER,
-      "--format",
-      "{{.State.Running}}"
-    ], {
-      timeout: 12000
-    });
-    if (runningResult.output !== "true") {
-      const startResult = await runDocker(["start", MYSQL_CONTAINER], {
-        timeout: 30000
-      });
-      appendResult(commandPreview(["start", MYSQL_CONTAINER]), startResult);
-      if (!startResult.ok) {
-        return {
-          ok: false,
-          actionId: "repair-mysql",
-          output: logs.join("\n"),
-          status: "failed"
-        };
-      }
-    }
-  }
-
-  const readyResult = await waitForMysqlReady();
-  appendResult(`wait for ${MYSQL_CONTAINER}`, readyResult);
-  if (!readyResult.ok) {
-    return {
-      ok: false,
-      actionId: "repair-mysql",
-      output: logs.join("\n"),
-      status: "failed"
-    };
-  }
-
-  const probeResult = await runMysqlProbe();
-  appendResult(maskedMysqlExecPreview(mysqlCapabilitySql()), probeResult);
-
-  return {
-    ok: probeResult.ok,
-    actionId: "repair-mysql",
-    output: logs.join("\n"),
-    status: probeResult.ok ? "completed" : "failed"
-  };
-}
-
 async function inspectBootstrap({
   emit = null
 } = {}) {
@@ -887,7 +535,10 @@ async function inspectBootstrap({
   const mysql = await runBootstrapStep(emit, {
     id: "mysql-capability",
     label: "MySQL capability",
-    run: () => checkMysqlCapability(dockerReady)
+    run: () => checkMysqlCapability({
+      dockerReady,
+      dockerUnavailableRepair: manualDockerRepair()
+    })
   });
   const toolchainImage = await runBootstrapStep(emit, {
     id: "toolchain-image",
@@ -1120,97 +771,67 @@ function createService({ studioRoot = "" } = {}) {
     startTerminal(input = {}) {
       const actionId = String(input.actionId || "");
       if (actionId === "build-toolchain") {
-        const script = buildToolchainScript();
-        const args = ["-lc", script];
-        return startTerminalSession({
-          args,
-          command: "bash",
+        return startBashTerminal({
           commandPreview: buildToolchainRepair().commandPreview,
           cwd: resolvedStudioRoot,
-          namespace: TERMINAL_NAMESPACE
+          script: buildToolchainScript()
         });
       }
 
       if (actionId === "repair-mysql") {
-        const script = buildMysqlRepairScript();
-        const args = ["-lc", script];
-        return startTerminalSession({
-          args,
-          command: "bash",
+        return startBashTerminal({
           commandPreview: mysqlRepair().commandPreview,
-          namespace: TERMINAL_NAMESPACE
+          script: buildMysqlRepairScript()
         });
       }
 
       if (actionId === "terminal-gh-login") {
-        const args = buildTerminalArgs(ghLoginCommandArgs());
-        return startTerminalSession({
+        const args = buildDoctorTerminalArgs(ghLoginCommandArgs());
+        return startDockerTerminal({
           args,
-          command: "docker",
-          commandPreview: commandPreview(args),
-          namespace: TERMINAL_NAMESPACE
+          commandPreview: commandPreview(args)
         });
       }
 
       if (actionId === "terminal-gh-reauth") {
-        const script = [
-          "gh auth logout --hostname github.com",
-          `exec ${commandPreview(ghLoginCommandArgs())}`
-        ].join("\n");
-        const args = buildTerminalArgs(["bash", "-lc", script]);
-        return startTerminalSession({
+        const args = buildDoctorTerminalArgs(["bash", "-lc", ghReauthScript()]);
+        return startDockerTerminal({
           args,
-          command: "docker",
-          commandPreview: commandPreview(args),
-          namespace: TERMINAL_NAMESPACE
+          commandPreview: commandPreview(args)
         });
       }
 
       if (actionId === "terminal-codex-login") {
-        const args = buildTerminalArgs(codexBrowserLoginCommandArgs(), ["--network", "host"]);
-        return startTerminalSession({
+        const args = buildDoctorTerminalArgs(codexBrowserLoginCommandArgs(), ["--network", "host"]);
+        return startDockerTerminal({
           args,
-          command: "docker",
-          commandPreview: commandPreview(args),
-          namespace: TERMINAL_NAMESPACE
+          commandPreview: commandPreview(args)
         });
       }
 
       if (actionId === "terminal-codex-device-login") {
-        const args = buildTerminalArgs(codexDeviceLoginCommandArgs());
-        return startTerminalSession({
+        const args = buildDoctorTerminalArgs(codexDeviceLoginCommandArgs());
+        return startDockerTerminal({
           args,
-          command: "docker",
-          commandPreview: commandPreview(args),
-          namespace: TERMINAL_NAMESPACE
+          commandPreview: commandPreview(args)
         });
       }
 
       if (actionId === "terminal-codex-reauth") {
-        const script = [
-          "codex logout || true",
-          `exec ${commandPreview(codexBrowserLoginCommandArgs())}`
-        ].join("\n");
-        const args = buildTerminalArgs(["bash", "-lc", script], ["--network", "host"]);
-        return startTerminalSession({
+        const script = codexReauthScript(codexBrowserLoginCommandArgs());
+        const args = buildDoctorTerminalArgs(["bash", "-lc", script], ["--network", "host"]);
+        return startDockerTerminal({
           args,
-          command: "docker",
-          commandPreview: commandPreview(args),
-          namespace: TERMINAL_NAMESPACE
+          commandPreview: commandPreview(args)
         });
       }
 
       if (actionId === "terminal-codex-device-reauth") {
-        const script = [
-          "codex logout || true",
-          `exec ${commandPreview(codexDeviceLoginCommandArgs())}`
-        ].join("\n");
-        const args = buildTerminalArgs(["bash", "-lc", script]);
-        return startTerminalSession({
+        const script = codexReauthScript(codexDeviceLoginCommandArgs());
+        const args = buildDoctorTerminalArgs(["bash", "-lc", script]);
+        return startDockerTerminal({
           args,
-          command: "docker",
-          commandPreview: commandPreview(args),
-          namespace: TERMINAL_NAMESPACE
+          commandPreview: commandPreview(args)
         });
       }
 

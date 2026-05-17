@@ -1,5 +1,5 @@
 <template>
-  <section class="generated-ui-screen generated-ui-screen--app studio-screen d-flex flex-column ga-3">
+  <section class="generated-ui-screen generated-ui-screen--studio studio-screen d-flex flex-column ga-3">
     <header class="studio-screen__header d-flex flex-column flex-md-row ga-3 align-md-end justify-space-between">
       <div>
         <h1 class="studio-screen__title">{{ title }}</h1>
@@ -58,21 +58,21 @@
 
     <section
       v-if="displayStatus"
-      :class="['bootstrap-doctor', doctorClass, 'd-flex', 'flex-column', 'ga-2']"
+      :class="['doctor-status', doctorClass, 'd-flex', 'flex-column', 'ga-2']"
     >
       <v-sheet
         rounded="lg"
         border
         :class="[
-          'bootstrap-doctor__summary',
-          `bootstrap-doctor__summary--${summary.state}`
+          'doctor-status__summary',
+          `doctor-status__summary--${summary.state}`
         ]"
       >
-        <div class="bootstrap-doctor__summary-main">
+        <div class="doctor-status__summary-main">
           <div
             :class="[
-              'bootstrap-doctor__summary-icon',
-              `bootstrap-doctor__summary-icon--${summary.state}`
+              'doctor-status__summary-icon',
+              `doctor-status__summary-icon--${summary.state}`
             ]"
           >
             <v-icon :icon="summaryIcon" :color="summary.color" size="32" />
@@ -93,7 +93,7 @@
         </div>
       </v-sheet>
 
-      <div class="bootstrap-doctor__checks">
+      <div class="doctor-status__checks">
         <v-sheet
           v-for="check in checks"
           :key="check.id"
@@ -101,13 +101,13 @@
           border
           :class="[
             'studio-screen__panel',
-            'bootstrap-doctor__check',
-            `bootstrap-doctor__check--${check.status}`
+            'doctor-status__check',
+            `doctor-status__check--${check.status}`
           ]"
         >
-          <div :class="['bootstrap-doctor__status-badge', statusToneClass(check.status)]">
+          <div :class="['doctor-status__status-badge', statusToneClass(check.status)]">
             <v-icon
-              class="bootstrap-doctor__status-icon"
+              class="doctor-status__status-icon"
               :icon="statusIcon(check.status)"
               :color="statusColor(check.status)"
               :aria-label="statusLabel(check.status)"
@@ -115,36 +115,36 @@
             />
           </div>
 
-          <div class="bootstrap-doctor__check-body">
-            <div class="bootstrap-doctor__check-header">
+          <div class="doctor-status__check-body">
+            <div class="doctor-status__check-header">
               <div>
                 <h3 class="text-subtitle-2 mb-1">{{ check.label }}</h3>
                 <p class="text-body-2 text-medium-emphasis mb-0">{{ check.explanation }}</p>
               </div>
             </div>
 
-            <div class="bootstrap-doctor__facts">
-              <p class="text-caption text-medium-emphasis mb-0 bootstrap-doctor__fact-line">
-                <span class="bootstrap-doctor__fact">
+            <div class="doctor-status__facts">
+              <p class="text-caption text-medium-emphasis mb-0 doctor-status__fact-line">
+                <span class="doctor-status__fact">
                   <strong class="text-high-emphasis">Expected:</strong>
                   {{ check.expected }}
                 </span>
-                <span class="bootstrap-doctor__fact bootstrap-doctor__observed">
+                <span class="doctor-status__fact doctor-status__observed">
                   <strong class="text-high-emphasis">Observed:</strong>
                   {{ check.observed }}
                 </span>
               </p>
             </div>
 
-            <pre v-if="visibleCheckRepairs(check).length" class="bootstrap-doctor__command">{{ repairCommandPreview(check) }}</pre>
+            <pre v-if="visibleCheckRepairs(check).length" class="doctor-status__command">{{ repairCommandPreview(check) }}</pre>
           </div>
 
-          <div v-if="visibleCheckRepairs(check).length" class="bootstrap-doctor__actions">
+          <div v-if="visibleCheckRepairs(check).length" class="doctor-status__actions">
             <template v-for="repair in visibleCheckRepairs(check)" :key="repair.actionId">
               <v-btn
                 v-if="repair.kind === 'command'"
                 color="primary"
-                class="bootstrap-doctor__repair-button"
+                class="doctor-status__repair-button"
                 variant="flat"
                 :prepend-icon="mdiPlayCircleOutline"
                 :disabled="Boolean(actionInFlight)"
@@ -155,7 +155,7 @@
               <v-btn
                 v-else-if="repair.kind === 'terminal'"
                 color="primary"
-                class="bootstrap-doctor__repair-button"
+                class="doctor-status__repair-button"
                 variant="flat"
                 :prepend-icon="mdiConsoleLine"
                 :disabled="Boolean(actionInFlight)"
@@ -165,7 +165,7 @@
               </v-btn>
               <v-btn
                 v-else
-                class="bootstrap-doctor__repair-button"
+                class="doctor-status__repair-button"
                 variant="tonal"
                 color="warning"
                 disabled
@@ -198,7 +198,7 @@
             variant="outlined"
           />
         </div>
-        <pre class="bootstrap-doctor__command mb-3">{{ confirmRepairCommandPreview }}</pre>
+        <pre class="doctor-status__command mb-3">{{ confirmRepairCommandPreview }}</pre>
         <div class="d-flex justify-end ga-2">
           <v-btn variant="text" :disabled="repairRunning" @click="closeRepairDialog">Close</v-btn>
           <v-btn
@@ -252,9 +252,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
-import { Terminal } from "@xterm/xterm";
-import { FitAddon } from "@xterm/addon-fit";
+import { computed, ref } from "vue";
 import {
   mdiAlertCircleOutline,
   mdiCheckCircle,
@@ -264,9 +262,9 @@ import {
   mdiProgressClock,
   mdiRefresh
 } from "@mdi/js";
+import { useDoctorStream } from "@/composables/useDoctorStream.js";
+import { useDoctorTerminal } from "@/composables/useDoctorTerminal.js";
 import { resolveDoctorSummaryState } from "@/lib/doctorSummaryState.js";
-import { studioHttpClient } from "@/lib/studioApi.js";
-import "@xterm/xterm/css/xterm.css";
 
 const props = defineProps({
   alwaysRepairCheckIds: {
@@ -351,32 +349,48 @@ const emit = defineEmits(["continue", "refresh", "status-updated"]);
 
 const actionInFlight = ref("");
 const confirmRepair = ref(null);
-const liveStatus = ref(null);
 const repairFieldValues = ref({});
 const repairRunning = ref(false);
-const streamError = ref("");
-const streamRunning = ref(false);
-const terminalDialogOpen = ref(false);
-const terminalError = ref("");
-const terminalHost = ref(null);
-const terminalSessionId = ref("");
-const terminalStatus = ref("");
-const terminalTitle = ref("Terminal");
-const terminalCommandPreview = ref("");
-const terminalSelectedText = ref("");
-const terminalCopyStatus = ref("");
 
-let terminalInstance = null;
-let terminalFitAddon = null;
-let terminalDataDisposable = null;
-let terminalSelectionDisposable = null;
-let terminalResizeHandler = null;
-let terminalPollTimer = null;
-let terminalAutoCopyTimer = null;
-let terminalOutputOffset = 0;
-let terminalAutoCopiedText = "";
-let doctorEventSource = null;
-let doctorStreamEndpoint = "";
+const {
+  liveStatus,
+  refreshDoctorStatus,
+  streamError,
+  streamRunning
+} = useDoctorStream({
+  onRefresh() {
+    emit("refresh");
+  },
+  onStatusUpdated(status) {
+    emit("status-updated", status);
+  },
+  status: () => props.status,
+  statusItemsKey: () => props.statusItemsKey,
+  streamAutoStart: () => props.streamAutoStart,
+  streamEnabled: () => props.streamEnabled,
+  streamEndpoint: () => props.streamEndpoint
+});
+
+const {
+  closeTerminal,
+  copyTerminalSelection,
+  openTerminal,
+  sendCtrlC,
+  terminalCommandPreview,
+  terminalCopyStatus,
+  terminalDialogOpen,
+  terminalError,
+  terminalHost,
+  terminalSelectedText,
+  terminalSessionId,
+  terminalStatus,
+  terminalTitle
+} = useDoctorTerminal({
+  onTerminalSettled() {
+    refreshDoctorStatus();
+  },
+  terminalEndpoint: () => props.terminalEndpoint
+});
 
 const displayStatus = computed(() => {
   return liveStatus.value || props.status;
@@ -583,199 +597,15 @@ function statusLabel(status) {
 
 function statusToneClass(status) {
   if (status === "pass") {
-    return "bootstrap-doctor__status-badge--pass";
+    return "doctor-status__status-badge--pass";
   }
   if (status === "running") {
-    return "bootstrap-doctor__status-badge--running";
+    return "doctor-status__status-badge--running";
   }
   if (["blocked", "fail", "hard-stop"].includes(status)) {
-    return "bootstrap-doctor__status-badge--fail";
+    return "doctor-status__status-badge--fail";
   }
-  return "bootstrap-doctor__status-badge--unknown";
-}
-
-function statusListKey(status = displayStatus.value) {
-  if (props.statusItemsKey === "stages") {
-    return "stages";
-  }
-  if (props.statusItemsKey === "checks") {
-    return "checks";
-  }
-  return Array.isArray(status?.stages) ? "stages" : "checks";
-}
-
-function cloneStatus(status = displayStatus.value) {
-  if (!status) {
-    const key = statusListKey(null);
-    return {
-      ok: true,
-      ready: false,
-      [key]: []
-    };
-  }
-  return {
-    ...status,
-    checks: Array.isArray(status.checks) ? [...status.checks] : status.checks,
-    stages: Array.isArray(status.stages) ? [...status.stages] : status.stages
-  };
-}
-
-function replaceStatusItem(item) {
-  const nextStatus = cloneStatus();
-  const key = statusListKey(nextStatus);
-  const items = Array.isArray(nextStatus[key]) ? [...nextStatus[key]] : [];
-  const itemIndex = items.findIndex((candidate) => candidate.id === item.id);
-  if (itemIndex >= 0) {
-    items[itemIndex] = {
-      ...items[itemIndex],
-      ...item
-    };
-  } else {
-    items.push(item);
-  }
-  nextStatus[key] = items;
-  if (key === "stages") {
-    nextStatus.checks = items;
-  }
-  nextStatus.ready = false;
-  liveStatus.value = nextStatus;
-}
-
-function parseStreamEvent(event) {
-  try {
-    return JSON.parse(event.data || "{}");
-  } catch {
-    return {};
-  }
-}
-
-function closeDoctorStream(source = doctorEventSource) {
-  if (source) {
-    source.close();
-  }
-  if (!source || source === doctorEventSource) {
-    doctorEventSource = null;
-    doctorStreamEndpoint = "";
-  }
-}
-
-function startDoctorStream({
-  force = false
-} = {}) {
-  if (!props.streamEndpoint || !props.streamEnabled) {
-    return false;
-  }
-  if (typeof EventSource !== "function") {
-    emit("refresh");
-    return false;
-  }
-  if (
-    !force
-    && doctorEventSource
-    && streamRunning.value
-    && doctorStreamEndpoint === props.streamEndpoint
-  ) {
-    return true;
-  }
-
-  closeDoctorStream();
-  streamError.value = "";
-  streamRunning.value = true;
-  liveStatus.value = cloneStatus(props.status);
-  const source = new EventSource(props.streamEndpoint, {
-    withCredentials: true
-  });
-  doctorEventSource = source;
-  doctorStreamEndpoint = props.streamEndpoint;
-
-  const isCurrentStream = () => {
-    return source === doctorEventSource;
-  };
-
-  source.addEventListener("run.started", () => {
-    if (!isCurrentStream()) {
-      return;
-    }
-    streamRunning.value = true;
-    streamError.value = "";
-  });
-  source.addEventListener("check.started", (event) => {
-    if (!isCurrentStream()) {
-      return;
-    }
-    const payload = parseStreamEvent(event);
-    replaceStatusItem({
-      explanation: "Studio is checking this now.",
-      expected: "Check is running.",
-      id: payload.id,
-      label: payload.label || payload.id,
-      observed: "Running...",
-      required: true,
-      status: "running"
-    });
-  });
-  source.addEventListener("check.finished", (event) => {
-    if (!isCurrentStream()) {
-      return;
-    }
-    const payload = parseStreamEvent(event);
-    if (payload.check?.id) {
-      replaceStatusItem(payload.check);
-    }
-  });
-  source.addEventListener("check.error", (event) => {
-    if (!isCurrentStream()) {
-      return;
-    }
-    const payload = parseStreamEvent(event);
-    replaceStatusItem({
-      explanation: "The check raised an unexpected error.",
-      expected: "Check completes without throwing.",
-      id: payload.id,
-      label: payload.label || payload.id,
-      observed: payload.error || "Check failed.",
-      required: true,
-      status: "fail"
-    });
-  });
-  source.addEventListener("run.finished", (event) => {
-    if (!isCurrentStream()) {
-      return;
-    }
-    const payload = parseStreamEvent(event);
-    liveStatus.value = payload.status || liveStatus.value;
-    if (payload.status) {
-      emit("status-updated", payload.status);
-    }
-    streamRunning.value = false;
-    closeDoctorStream(source);
-  });
-  source.addEventListener("run.error", (event) => {
-    if (!isCurrentStream()) {
-      return;
-    }
-    const payload = parseStreamEvent(event);
-    streamError.value = payload.error || "Doctor stream failed.";
-    streamRunning.value = false;
-    closeDoctorStream(source);
-  });
-  source.onerror = () => {
-    if (!isCurrentStream()) {
-      return;
-    }
-    if (streamRunning.value) {
-      streamError.value = "Doctor stream disconnected.";
-      streamRunning.value = false;
-    }
-    closeDoctorStream(source);
-  };
-  return true;
-}
-
-function refreshDoctorStatus() {
-  if (!startDoctorStream({ force: true })) {
-    emit("refresh");
-  }
+  return "doctor-status__status-badge--unknown";
 }
 
 function confirmRepairAction(check, repair = check?.repair) {
@@ -821,260 +651,6 @@ async function executeConfirmedRepair() {
   }
 }
 
-function terminalUrl(path = "") {
-  return `${props.terminalEndpoint}${path}`;
-}
-
-function fallbackCopyText(value) {
-  const textarea = document.createElement("textarea");
-  textarea.value = value;
-  textarea.setAttribute("readonly", "readonly");
-  textarea.style.position = "fixed";
-  textarea.style.left = "-9999px";
-  document.body.append(textarea);
-  textarea.select();
-  const copied = document.execCommand("copy");
-  textarea.remove();
-  return copied;
-}
-
-async function copyTerminalText(value, label) {
-  const text = String(value || "");
-  if (!text) {
-    return false;
-  }
-
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-    } else if (!fallbackCopyText(text)) {
-      throw new Error("Clipboard API is unavailable.");
-    }
-    terminalCopyStatus.value = `${label} copied.`;
-    return true;
-  } catch (copyError) {
-    terminalCopyStatus.value = String(copyError?.message || copyError || "Copy failed.");
-    return false;
-  }
-}
-
-function updateTerminalSelection() {
-  terminalSelectedText.value = terminalInstance?.hasSelection?.()
-    ? terminalInstance.getSelection()
-    : "";
-  return terminalSelectedText.value;
-}
-
-function scheduleAutoCopyTerminalSelection() {
-  const selectedText = updateTerminalSelection();
-  if (terminalAutoCopyTimer) {
-    window.clearTimeout(terminalAutoCopyTimer);
-    terminalAutoCopyTimer = null;
-  }
-  if (!selectedText || selectedText === terminalAutoCopiedText) {
-    return;
-  }
-
-  terminalAutoCopyTimer = window.setTimeout(async () => {
-    const nextSelectedText = updateTerminalSelection();
-    if (!nextSelectedText || nextSelectedText === terminalAutoCopiedText) {
-      return;
-    }
-    if (await copyTerminalText(nextSelectedText, "Selection")) {
-      terminalAutoCopiedText = nextSelectedText;
-    }
-  }, 250);
-}
-
-async function copyTerminalSelection() {
-  const selectedText = updateTerminalSelection();
-  if (await copyTerminalText(selectedText, "Selection")) {
-    terminalAutoCopiedText = selectedText;
-  }
-}
-
-function disposeTerminalUi() {
-  if (terminalPollTimer) {
-    window.clearInterval(terminalPollTimer);
-    terminalPollTimer = null;
-  }
-  if (terminalAutoCopyTimer) {
-    window.clearTimeout(terminalAutoCopyTimer);
-    terminalAutoCopyTimer = null;
-  }
-  if (terminalDataDisposable) {
-    terminalDataDisposable.dispose();
-    terminalDataDisposable = null;
-  }
-  if (terminalSelectionDisposable) {
-    terminalSelectionDisposable.dispose();
-    terminalSelectionDisposable = null;
-  }
-  if (terminalResizeHandler) {
-    window.removeEventListener("resize", terminalResizeHandler);
-    terminalResizeHandler = null;
-  }
-  if (terminalInstance) {
-    terminalInstance.dispose();
-    terminalInstance = null;
-  }
-  terminalFitAddon = null;
-  terminalSelectedText.value = "";
-  terminalOutputOffset = 0;
-  terminalAutoCopiedText = "";
-}
-
-async function setupTerminalUi() {
-  await nextTick();
-  disposeTerminalUi();
-  terminalInstance = new Terminal({
-    convertEol: true,
-    cursorBlink: true,
-    fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-    fontSize: 13,
-    theme: {
-      background: "#111318",
-      foreground: "#f4f6fb"
-    }
-  });
-  terminalFitAddon = new FitAddon();
-  terminalInstance.loadAddon(terminalFitAddon);
-  terminalInstance.open(terminalHost.value);
-  terminalFitAddon.fit();
-  terminalDataDisposable = terminalInstance.onData((data) => {
-    void sendTerminalData(data);
-  });
-  terminalSelectionDisposable = terminalInstance.onSelectionChange(() => {
-    scheduleAutoCopyTerminalSelection();
-  });
-  terminalResizeHandler = () => {
-    terminalFitAddon?.fit();
-  };
-  window.addEventListener("resize", terminalResizeHandler);
-}
-
-function writeTerminalOutput(output) {
-  if (!terminalInstance) {
-    return;
-  }
-  const nextOutput = String(output || "");
-  if (nextOutput.length < terminalOutputOffset) {
-    terminalOutputOffset = 0;
-    terminalInstance.reset();
-  }
-  const chunk = nextOutput.slice(terminalOutputOffset);
-  if (chunk) {
-    terminalInstance.write(chunk);
-    terminalOutputOffset = nextOutput.length;
-  }
-}
-
-async function pollTerminal() {
-  if (!terminalSessionId.value) {
-    return;
-  }
-
-  try {
-    const session = await studioHttpClient.get(terminalUrl(`/${encodeURIComponent(terminalSessionId.value)}`));
-    terminalStatus.value = session.status || "";
-    terminalCommandPreview.value = session.commandPreview || terminalCommandPreview.value;
-    writeTerminalOutput(session.output);
-    if (session.status === "exited" && terminalPollTimer) {
-      window.clearInterval(terminalPollTimer);
-      terminalPollTimer = null;
-      refreshDoctorStatus();
-    }
-  } catch (pollError) {
-    terminalError.value = String(pollError?.message || pollError || "Terminal polling failed.");
-  }
-}
-
-async function sendTerminalData(data) {
-  if (!terminalSessionId.value || terminalStatus.value === "exited") {
-    return;
-  }
-
-  try {
-    await studioHttpClient.post(terminalUrl(`/${encodeURIComponent(terminalSessionId.value)}/input`), {
-      data
-    });
-  } catch (sendError) {
-    terminalError.value = String(sendError?.message || sendError || "Terminal input failed.");
-  }
-}
-
-async function sendCtrlC() {
-  await sendTerminalData("\u0003");
-}
-
-async function openTerminal({
-  inputs = {},
-  repair
-}) {
-  terminalDialogOpen.value = true;
-  terminalError.value = "";
-  terminalCopyStatus.value = "";
-  terminalSelectedText.value = "";
-  terminalAutoCopiedText = "";
-  terminalTitle.value = repair?.label || "Terminal";
-  terminalCommandPreview.value = repair?.commandPreview || "";
-  terminalSessionId.value = "";
-  terminalStatus.value = "starting";
-  await setupTerminalUi();
-
-  try {
-    const session = await studioHttpClient.post(props.terminalEndpoint, {
-      actionId: repair.actionId,
-      inputs
-    });
-    terminalSessionId.value = session.id || "";
-    terminalStatus.value = session.status || "running";
-    terminalCommandPreview.value = session.commandPreview || terminalCommandPreview.value;
-    writeTerminalOutput(session.output);
-    terminalPollTimer = window.setInterval(() => {
-      void pollTerminal();
-    }, 750);
-    await pollTerminal();
-  } catch (openError) {
-    terminalError.value = String(openError?.message || openError || "Terminal start failed.");
-  }
-}
-
-async function closeTerminal() {
-  const sessionId = terminalSessionId.value;
-  terminalDialogOpen.value = false;
-  terminalSessionId.value = "";
-  terminalStatus.value = "";
-  if (sessionId) {
-    await studioHttpClient.delete(terminalUrl(`/${encodeURIComponent(sessionId)}`)).catch(() => null);
-  }
-  disposeTerminalUi();
-  refreshDoctorStatus();
-}
-
-watch(() => props.status, (nextStatus) => {
-  if (nextStatus && !streamRunning.value) {
-    liveStatus.value = nextStatus;
-  }
-}, {
-  immediate: true
-});
-
-watch(() => [props.streamEndpoint, props.streamEnabled, props.streamAutoStart], () => {
-  if (props.streamEnabled && props.streamEndpoint && props.streamAutoStart) {
-    startDoctorStream();
-  } else if (!props.streamEnabled || !props.streamEndpoint) {
-    closeDoctorStream();
-    streamRunning.value = false;
-  }
-}, {
-  immediate: true
-});
-
-onBeforeUnmount(() => {
-  closeDoctorStream();
-  disposeTerminalUi();
-});
 </script>
 
 <style scoped>
@@ -1097,8 +673,8 @@ onBeforeUnmount(() => {
 }
 
 .studio-screen__lede,
-.bootstrap-doctor__fact,
-.bootstrap-doctor__observed,
+.doctor-status__fact,
+.doctor-status__observed,
 .terminal-dialog__command {
   overflow-wrap: anywhere;
 }
@@ -1127,60 +703,60 @@ onBeforeUnmount(() => {
   min-height: 48px;
 }
 
-.bootstrap-doctor__summary {
+.doctor-status__summary {
   padding: 0.85rem 1rem;
 }
 
-.bootstrap-doctor__summary--pass {
+.doctor-status__summary--pass {
   border-left: 4px solid rgb(var(--v-theme-success));
 }
 
-.bootstrap-doctor__summary--checking {
+.doctor-status__summary--checking {
   border-left: 4px solid rgb(var(--v-theme-primary));
 }
 
-.bootstrap-doctor__summary--fail {
+.doctor-status__summary--fail {
   border-left: 4px solid rgb(var(--v-theme-error));
 }
 
-.bootstrap-doctor__summary-main {
+.doctor-status__summary-main {
   align-items: center;
   display: grid;
   gap: 0.85rem;
   grid-template-columns: auto minmax(0, 1fr);
 }
 
-.bootstrap-doctor__summary-icon,
-.bootstrap-doctor__status-badge {
+.doctor-status__summary-icon,
+.doctor-status__status-badge {
   align-items: center;
   border-radius: 999px;
   display: inline-flex;
   justify-content: center;
 }
 
-.bootstrap-doctor__summary-icon {
+.doctor-status__summary-icon {
   height: 3rem;
   width: 3rem;
 }
 
-.bootstrap-doctor__summary-icon--pass {
+.doctor-status__summary-icon--pass {
   background: rgba(var(--v-theme-success), 0.12);
 }
 
-.bootstrap-doctor__summary-icon--checking {
+.doctor-status__summary-icon--checking {
   background: rgba(var(--v-theme-primary), 0.12);
 }
 
-.bootstrap-doctor__summary-icon--fail {
+.doctor-status__summary-icon--fail {
   background: rgba(var(--v-theme-error), 0.12);
 }
 
-.bootstrap-doctor__checks {
+.doctor-status__checks {
   display: grid;
   gap: 0.625rem;
 }
 
-.bootstrap-doctor__check {
+.doctor-status__check {
   align-items: start;
   border-left: 4px solid transparent;
   display: grid;
@@ -1190,87 +766,87 @@ onBeforeUnmount(() => {
   padding-block: 0.7rem;
 }
 
-.bootstrap-doctor__check--pass {
+.doctor-status__check--pass {
   background: rgba(var(--v-theme-success), 0.04);
   border-left-color: rgb(var(--v-theme-success));
 }
 
-.bootstrap-doctor__check--fail {
+.doctor-status__check--fail {
   background: rgba(var(--v-theme-error), 0.04);
   border-left-color: rgb(var(--v-theme-error));
 }
 
-.bootstrap-doctor__check--blocked,
-.bootstrap-doctor__check--hard-stop {
+.doctor-status__check--blocked,
+.doctor-status__check--hard-stop {
   background: rgba(var(--v-theme-error), 0.04);
   border-left-color: rgb(var(--v-theme-error));
 }
 
-.bootstrap-doctor__check--running {
+.doctor-status__check--running {
   background: rgba(var(--v-theme-primary), 0.045);
   border-left-color: rgb(var(--v-theme-primary));
 }
 
-.bootstrap-doctor__check--pending {
+.doctor-status__check--pending {
   background: rgba(var(--v-theme-warning), 0.045);
   border-left-color: rgb(var(--v-theme-warning));
 }
 
-.bootstrap-doctor__status-badge {
+.doctor-status__status-badge {
   height: 2.5rem;
   width: 2.5rem;
 }
 
-.bootstrap-doctor__status-badge--pass {
+.doctor-status__status-badge--pass {
   background: rgba(var(--v-theme-success), 0.13);
 }
 
-.bootstrap-doctor__status-badge--fail {
+.doctor-status__status-badge--fail {
   background: rgba(var(--v-theme-error), 0.13);
 }
 
-.bootstrap-doctor__status-badge--running {
+.doctor-status__status-badge--running {
   background: rgba(var(--v-theme-primary), 0.13);
 }
 
-.bootstrap-doctor__status-badge--unknown {
+.doctor-status__status-badge--unknown {
   background: rgba(var(--v-theme-warning), 0.14);
 }
 
-.bootstrap-doctor__check-body {
+.doctor-status__check-body {
   min-width: 0;
 }
 
-.bootstrap-doctor__check-header {
+.doctor-status__check-header {
   align-items: start;
   display: flex;
   gap: 0.5rem;
   justify-content: space-between;
 }
 
-.bootstrap-doctor__check-header h3 {
+.doctor-status__check-header h3 {
   line-height: 1.15;
 }
 
-.bootstrap-doctor__check-header p {
+.doctor-status__check-header p {
   font-size: 0.8125rem;
   line-height: 1.25;
 }
 
-.bootstrap-doctor__facts {
+.doctor-status__facts {
   margin-top: 0.25rem;
 }
 
-.bootstrap-doctor__fact-line {
+.doctor-status__fact-line {
   line-height: 1.25;
 }
 
-.bootstrap-doctor__fact {
+.doctor-status__fact {
   margin-inline-end: 0.75rem;
 }
 
-.bootstrap-doctor__command,
-.bootstrap-doctor__output {
+.doctor-status__command,
+.doctor-status__output {
   background: rgb(var(--v-theme-surface-variant));
   border-radius: 8px;
   color: rgb(var(--v-theme-on-surface-variant));
@@ -1286,7 +862,7 @@ onBeforeUnmount(() => {
   width: 100%;
 }
 
-.bootstrap-doctor__actions {
+.doctor-status__actions {
   align-items: center;
   align-self: center;
   display: flex;
@@ -1296,7 +872,7 @@ onBeforeUnmount(() => {
   min-width: min(16rem, 100%);
 }
 
-.bootstrap-doctor__repair-button {
+.doctor-status__repair-button {
   min-height: 48px;
 }
 
@@ -1325,11 +901,11 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 720px) {
-  .bootstrap-doctor__check {
+  .doctor-status__check {
     grid-template-columns: auto minmax(0, 1fr);
   }
 
-  .bootstrap-doctor__actions {
+  .doctor-status__actions {
     grid-column: 2;
     justify-content: flex-start;
   }
@@ -1340,25 +916,25 @@ onBeforeUnmount(() => {
     max-width: 100%;
   }
 
-  .bootstrap-doctor__summary {
+  .doctor-status__summary {
     padding: 0.75rem;
   }
 
-  .bootstrap-doctor__summary-main {
+  .doctor-status__summary-main {
     align-items: start;
     gap: 0.65rem;
   }
 
-  .bootstrap-doctor__check {
+  .doctor-status__check {
     gap: 0.6rem;
     padding: 0.65rem;
   }
 
-  .bootstrap-doctor__actions {
+  .doctor-status__actions {
     grid-column: 1 / -1;
   }
 
-  .bootstrap-doctor__actions .v-btn {
+  .doctor-status__actions .v-btn {
     flex: 1 1 100%;
   }
 }

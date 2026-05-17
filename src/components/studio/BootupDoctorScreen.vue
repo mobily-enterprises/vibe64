@@ -13,10 +13,10 @@
     ready-label="Bootup ready"
     blocked-title="Bootup blocked"
     ready-title="Bootup ready"
-    continue-label="Continue to app bootup"
+    continue-label="Continue to target bootup"
     continue-emits
     :always-repair-check-ids="['gh-auth', 'codex-auth']"
-    @continue="emit('select-tab', 'app-bootup')"
+    @continue="emit('select-tab', 'target-bootup')"
     @refresh="loadBootstrap"
     @status-updated="handleBootstrapUpdated"
   />
@@ -31,7 +31,7 @@ import {
   BOOTSTRAP_TERMINAL_ENDPOINT,
   consumeStudioGate,
   readBootstrapStatus
-} from "../../lib/studioApi";
+} from "../../lib/studioGateApi.js";
 
 const props = defineProps({
   gate: {
@@ -51,7 +51,7 @@ const lede = computed(() => {
   if (bootstrap.value?.ready) {
     return "Machine runtime is ready. You can rerun checks or re-authenticate managed tools here.";
   }
-  return "Machine runtime must be ready before Studio can operate on the target app.";
+  return "Machine runtime must be ready before Studio can operate on the target project.";
 });
 
 async function loadBootstrap() {

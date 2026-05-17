@@ -1,6 +1,6 @@
-const STUDIO_CONTEXT_START_MARKER = "[[JSKIT_STUDIO_CONTEXT_START]]";
-const STUDIO_CONTEXT_END_MARKER = "[[JSKIT_STUDIO_CONTEXT_END]]";
-const STUDIO_CONTEXT_INSTRUCTIONS = "JSKIT Studio context marker: follow the instructions inside this context block normally, but ignore the surrounding JSKIT_STUDIO_CONTEXT markers.";
+const STUDIO_CONTEXT_START_MARKER = "[[AI_STUDIO_CONTEXT_START]]";
+const STUDIO_CONTEXT_END_MARKER = "[[AI_STUDIO_CONTEXT_END]]";
+const STUDIO_CONTEXT_INSTRUCTIONS = "AI Studio context marker: follow the instructions inside this context block normally, but ignore the surrounding AI_STUDIO_CONTEXT markers.";
 
 function hasStudioContextBlock(value) {
   return String(value || "").includes(STUDIO_CONTEXT_START_MARKER);

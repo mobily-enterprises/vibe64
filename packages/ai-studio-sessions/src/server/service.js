@@ -1,29 +1,18 @@
 import {
   AI_STUDIO_SESSION_STATUS
 } from "../../../../server/lib/aiStudio/index.js";
+import {
+  aiStudioResult
+} from "../../../../server/lib/aiStudio/serverResponses.js";
 
 const MAX_OPEN_AI_STUDIO_SESSIONS = 3;
 const CLOSED_SESSION_STATUSES = new Set(["abandoned", "finished"]);
 
-function aiStudioErrorResponse(error, fallback = "AI Studio session request failed.") {
-  return {
-    errors: [
-      {
-        code: String(error?.code || "ai_studio_session_request_failed"),
-        message: String(error?.message || error || fallback)
-      }
-    ],
-    ok: false,
-    projectType: error?.projectType || null
-  };
-}
-
-async function aiStudioResult(operation) {
-  try {
-    return await operation();
-  } catch (error) {
-    return aiStudioErrorResponse(error);
-  }
+function sessionResult(operation) {
+  return aiStudioResult(operation, {
+    fallbackCode: "ai_studio_session_request_failed",
+    fallbackMessage: "AI Studio session request failed."
+  });
 }
 
 function isOpenAiStudioSession(session = {}) {
@@ -55,14 +44,14 @@ function createService({
 
   return Object.freeze({
     async advanceSession(sessionId) {
-      return aiStudioResult(async () => {
+      return sessionResult(async () => {
         const runtime = await projectService.createRuntime();
         return runtime.advance(sessionId);
       });
     },
 
     async abandonSession(sessionId) {
-      return aiStudioResult(async () => {
+      return sessionResult(async () => {
         const runtime = await projectService.createRuntime();
         await runtime.store.writeStatus(sessionId, AI_STUDIO_SESSION_STATUS.ABANDONED);
         await terminalService?.closeSessionTerminals?.(sessionId);
@@ -71,7 +60,7 @@ function createService({
     },
 
     async createSession() {
-      return aiStudioResult(async () => {
+      return sessionResult(async () => {
         const projectType = await projectService.requireProjectType();
         const runtime = await projectService.createRuntime();
         const existingSessions = await runtime.listSessions();
@@ -100,21 +89,21 @@ function createService({
     },
 
     async inspectSession(sessionId) {
-      return aiStudioResult(async () => {
+      return sessionResult(async () => {
         const runtime = await projectService.createRuntime();
         return runtime.getSession(sessionId);
       });
     },
 
     async listSessions() {
-      return aiStudioResult(async () => {
+      return sessionResult(async () => {
         const runtime = await projectService.createRuntime();
         return sessionListResponse(await runtime.listSessions());
       });
     },
 
     async runSessionAction(sessionId, actionId, input = {}) {
-      return aiStudioResult(async () => {
+      return sessionResult(async () => {
         const runtime = await projectService.createRuntime();
         return runtime.runAction(sessionId, actionId, input);
       });

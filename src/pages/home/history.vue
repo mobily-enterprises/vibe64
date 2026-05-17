@@ -1,5 +1,5 @@
 <template>
-  <section class="generated-ui-screen generated-ui-screen--app studio-session-history d-flex flex-column ga-4">
+  <section class="generated-ui-screen generated-ui-screen--studio studio-session-history d-flex flex-column ga-4">
     <header class="studio-session-history__header">
       <div>
         <p class="studio-session-history__eyebrow text-caption text-medium-emphasis mb-1">
@@ -7,7 +7,7 @@
         </p>
         <h1 class="studio-session-history__title">Session History</h1>
         <p class="text-body-2 text-medium-emphasis mb-0">
-          Review completed and abandoned issue sessions without crowding the active session workspace.
+          Review completed and abandoned AI Studio sessions without crowding the active session workspace.
         </p>
       </div>
     </header>
@@ -44,7 +44,7 @@
           </v-btn>
         </div>
 
-        <ArchivedIssueSessions
+        <ArchivedAiStudioSessions
           ref="archiveSessions"
           :key="selectedArchive"
           :archive="selectedArchiveConfig.archive"
@@ -62,7 +62,7 @@
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { mdiRefresh } from "@mdi/js";
-import ArchivedIssueSessions from "@/components/studio/ArchivedIssueSessions.vue";
+import ArchivedAiStudioSessions from "@/components/studio/ArchivedAiStudioSessions.vue";
 import ProjectTypeGate from "@/components/studio/ProjectTypeGate.vue";
 
 const archiveTabs = [

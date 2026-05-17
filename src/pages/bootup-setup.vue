@@ -51,13 +51,13 @@
               :gate="initialGate"
               @select-tab="selectTab"
             />
-            <AppBootupDoctorScreen
-              v-else-if="activeTab === 'app-bootup'"
+            <TargetBootupDoctorScreen
+              v-else-if="activeTab === 'target-bootup'"
               :gate="initialGate"
               @select-tab="selectTab"
             />
-            <AppSetupDoctorScreen
-              v-else-if="activeTab === 'app-setup'"
+            <TargetSetupDoctorScreen
+              v-else-if="activeTab === 'target-setup'"
               :gate="initialGate"
               @select-tab="selectTab"
             />
@@ -74,15 +74,15 @@ import { useRoute, useRouter } from "vue-router";
 import ShellLayout from "@/components/ShellLayout.vue";
 import ProjectTypeGate from "@/components/studio/ProjectTypeGate.vue";
 
-import AppBootupDoctorScreen from "../components/studio/AppBootupDoctorScreen.vue";
-import AppSetupDoctorScreen from "../components/studio/AppSetupDoctorScreen.vue";
+import TargetBootupDoctorScreen from "../components/studio/TargetBootupDoctorScreen.vue";
+import TargetSetupDoctorScreen from "../components/studio/TargetSetupDoctorScreen.vue";
 import BootupDoctorScreen from "../components/studio/BootupDoctorScreen.vue";
-import { consumeStudioGate } from "../lib/studioApi";
+import { consumeStudioGate } from "../lib/studioGateApi.js";
 
 const tabs = [
   { label: "Bootup", value: "bootup" },
-  { label: "App Bootup", value: "app-bootup" },
-  { label: "App setup", value: "app-setup" }
+  { label: "Target bootup", value: "target-bootup" },
+  { label: "Target setup", value: "target-setup" }
 ];
 
 const tabValues = new Set(tabs.map((tab) => tab.value));

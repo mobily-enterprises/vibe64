@@ -16,6 +16,7 @@ function resolveCallback(callback, fallback) {
 
 function useStudioTerminal({
   onSessionUpdate = null,
+  onStatusUpdate = null,
   webSocketUrl = null
 } = {}) {
   const terminalHost = ref(null);
@@ -37,6 +38,7 @@ function useStudioTerminal({
   let terminalSetupPromise = null;
 
   const notifySessionUpdate = resolveCallback(onSessionUpdate, () => null);
+  const notifyStatusUpdate = resolveCallback(onStatusUpdate, () => null);
   const resolveWebSocketUrl = resolveCallback(webSocketUrl, () => "");
   const terminalExited = computed(() => terminalStatus.value === "exited");
 
@@ -169,6 +171,12 @@ function useStudioTerminal({
     terminalCommandPreview.value = String(terminalSession.commandPreview || "");
     writeTerminalOutput(terminalSession.output || "");
     notifySessionUpdate(terminalSession);
+    notifyStatusUpdate({
+      closeError: String(terminalSession.closeError || ""),
+      exitCode: terminalExitCode.value,
+      id: terminalSessionId.value,
+      status: terminalStatus.value
+    });
   }
 
   function handleTerminalSocketMessage(rawMessage) {
@@ -193,6 +201,12 @@ function useStudioTerminal({
     if (message?.type === "status") {
       terminalStatus.value = String(message.status || terminalStatus.value || "");
       terminalExitCode.value = message.status === "exited" ? message.exitCode ?? null : null;
+      notifyStatusUpdate({
+        closeError: String(message.closeError || ""),
+        exitCode: terminalExitCode.value,
+        id: terminalSessionId.value,
+        status: terminalStatus.value
+      });
       return;
     }
 

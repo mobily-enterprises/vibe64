@@ -95,6 +95,20 @@ function adapterProjectFacts(input = {}) {
   };
 }
 
+function emptyTargetScripts() {
+  return {
+    config: {
+      exists: false,
+      path: ""
+    },
+    ok: true,
+    packageJsonPath: "",
+    scriptCount: 0,
+    scripts: [],
+    starredScriptNames: []
+  };
+}
+
 function promptIdForAction(action = {}) {
   return normalizeText(action.promptId || action.id);
 }
@@ -110,38 +124,6 @@ function promptJson(value = {}) {
 function defaultPromptText(action = {}, input = {}) {
   return [
     `Run the AI Studio prompt action: ${normalizeText(action.label || promptIdForAction(action))}.`,
-    "",
-    "Action input:",
-    promptJson(input)
-  ].join("\n");
-}
-
-function fakePromptContext({
-  action = {},
-  input = {},
-  session = {}
-} = {}) {
-  return {
-    action,
-    adapter: session.adapter || {},
-    input,
-    session
-  };
-}
-
-function fakePromptText({
-  input = {},
-  promptId = "",
-  session = {}
-} = {}) {
-  return [
-    `Fake adapter prompt for ${promptId}.`,
-    "",
-    "Adapter facts:",
-    promptJson(session.adapter?.facts || {}),
-    "",
-    "Adapter prompt context:",
-    promptJson(session.adapter?.promptContext || {}),
     "",
     "Action input:",
     promptJson(input)
@@ -193,17 +175,17 @@ class TargetAdapter {
     return [];
   }
 
-  async runCommand(commandId) {
-    return adapterActionResult({
-      message: `Recorded adapter command ${assertCommandId(commandId)}.`
-    });
-  }
-
   async createCommandTerminalSpec(commandId) {
     return {
       ok: false,
       message: `Command ${assertCommandId(commandId)} does not have a terminal runner.`
     };
+  }
+
+  async finishSession() {
+    return adapterActionResult({
+      message: "Finished AI Studio session."
+    });
   }
 
   async renderPrompt({
@@ -221,96 +203,49 @@ class TargetAdapter {
   async getEditableArtifacts() {
     return [];
   }
-}
 
-class FakeTargetAdapter extends TargetAdapter {
-  constructor({
-    actionResults = {},
-    capabilities = {},
-    commands = [],
-    detection = {},
-    facts = {},
-    id = "fake",
-    label = "Fake adapter",
-    promptContext = {},
-    promptResults = {}
-  } = {}) {
-    super({
-      id,
-      label
-    });
-    this.actionResults = actionResults;
-    this.capabilities = capabilities;
-    this.commands = commands;
-    this.detection = detection;
-    this.facts = facts;
-    this.promptContext = promptContext;
-    this.promptResults = promptResults;
+  async inspectCurrentApp({ targetRoot = "" } = {}) {
+    return {
+      adapter: this.id,
+      appPath: "/",
+      config: {},
+      directories: [],
+      git: {
+        enabled: false
+      },
+      localPackages: {
+        appPackageName: "",
+        packages: []
+      },
+      markers: [],
+      ok: true,
+      ready: true,
+      root: normalizeText(targetRoot),
+      targetScripts: emptyTargetScripts()
+    };
   }
 
-  async detect() {
-    return adapterDetection(this.detection);
+  async listCurrentAppTargetScripts() {
+    return emptyTargetScripts();
   }
 
-  async inspect() {
-    return adapterProjectFacts({
-      ...this.facts,
-      capabilities: this.capabilities,
-      commands: this.commands,
-      promptContext: this.promptContext
-    });
+  async saveCurrentAppTargetScriptShortcuts() {
+    return emptyTargetScripts();
   }
 
-  async getPromptContext() {
-    return normalizeStringMap(this.promptContext);
+  async resetCurrentAppTargetScriptShortcuts() {
+    return emptyTargetScripts();
   }
 
-  async listCommands() {
-    return this.commands.map(adapterCommand);
-  }
-
-  async runCommand(commandId) {
-    const normalizedCommandId = assertCommandId(commandId);
-    return adapterActionResult(this.actionResults[normalizedCommandId] || {
-      message: `Fake adapter ran ${normalizedCommandId}.`
-    });
-  }
-
-  async renderPrompt({
-    action = {},
-    input = {},
-    session = {}
-  } = {}) {
-    const promptId = promptIdForAction(action);
-    const visiblePrompt = visiblePromptForAction(action, promptId);
-    const promptResult = this.promptResults[promptId];
-    if (promptResult) {
-      return adapterPromptResult({
-        promptId,
-        visiblePrompt,
-        ...promptResult
-      });
-    }
-    const context = fakePromptContext({
-      action,
-      input,
-      session
-    });
-    return adapterPromptResult({
-      context,
-      prompt: fakePromptText({
-        input,
-        promptId,
-        session
-      }),
-      promptId,
-      visiblePrompt
-    });
+  async createCurrentAppTargetScriptTerminalSpec() {
+    return {
+      message: `${this.label} does not provide target script terminals.`,
+      ok: false
+    };
   }
 }
 
 export {
-  FakeTargetAdapter,
   TargetAdapter,
   adapterActionResult,
   adapterCommand,

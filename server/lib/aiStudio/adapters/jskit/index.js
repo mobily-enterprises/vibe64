@@ -7,9 +7,20 @@ import {
   deepFreeze
 } from "../../deepFreeze.js";
 import {
-  createJskitAiStudioCommandRunner,
   createJskitAiStudioCommandTerminalSpec
-} from "./commandRunner.js";
+} from "./commandTerminalSpecs.js";
+export {
+  DEFAULT_TARGET_SCRIPT_NAMES,
+  TARGET_SCRIPT_SHORTCUTS_CONFIG,
+  TARGET_TERMINAL_HOST_DOCKER_CONFIG,
+  createJskitTargetScriptTerminalSpec,
+  inspectJskitCurrentApp,
+  inspectJskitTargetScripts,
+  resetJskitStarredTargetScripts,
+  saveJskitStarredTargetScripts,
+  targetScriptCommandPreview,
+  targetScriptTerminalArgs
+} from "./currentApp.js";
 
 const JSKIT_AI_STUDIO_COMMANDS = deepFreeze([
   {
@@ -55,19 +66,16 @@ const JSKIT_AI_STUDIO_COMMANDS = deepFreeze([
 ]);
 
 function createJskitTargetAdapter({
-  commandTerminalSpecFactory = createJskitAiStudioCommandTerminalSpec,
-  commandRunner = createJskitAiStudioCommandRunner()
+  commandTerminalSpecFactory = createJskitAiStudioCommandTerminalSpec
 } = {}) {
   return new JskitTargetAdapter({
     commandTerminalSpecFactory,
-    commandRunner,
     commands: JSKIT_AI_STUDIO_COMMANDS
   });
 }
 
 export {
   createJskitTargetAdapter,
-  createJskitAiStudioCommandRunner,
   createJskitAiStudioCommandTerminalSpec,
   JSKIT_MARKERS,
   JSKIT_PROMPT_PACK_ROOT,

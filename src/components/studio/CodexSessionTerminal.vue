@@ -113,15 +113,11 @@ import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
 import {
   aiStudioCodexTerminalWebSocketUrl,
   closeAiStudioCodexTerminal,
-  closeIssueSessionCodexTerminal,
-  issueSessionCodexTerminalWebSocketUrl,
   saveAiStudioCodexThread,
-  saveIssueSessionCodexThread,
   startAiStudioCodexTerminal,
-  startIssueSessionCodexTerminal,
-  uploadAiStudioCodexAttachment,
-  uploadIssueSessionCodexAttachment
-} from "@/lib/studioApi.js";
+  uploadAiStudioCodexAttachment
+} from "@/lib/aiStudioSessionApi.js";
+import { writeClipboardText } from "@/lib/clipboard.js";
 import {
   codexTrustPromptLooksActive,
   extractCodexThreadId,
@@ -129,6 +125,7 @@ import {
   stripTerminalControlSequences,
   wrapPromptWithStudioContext
 } from "@/lib/codexOutput.js";
+import { createCodexPromptEchoFilters } from "@/lib/codexPromptEchoFilters.js";
 import { terminalInputHasUserText } from "@/lib/terminalInput.js";
 import "@xterm/xterm/css/xterm.css";
 
@@ -201,8 +198,7 @@ let terminalLatestOutput = "";
 let terminalLastOutputAt = 0;
 let terminalStartedAt = 0;
 let codexTrustPromptAnsweredAt = 0;
-let promptEchoFilterId = 0;
-let promptEchoFilters = [];
+const promptEchoFilters = createCodexPromptEchoFilters();
 
 const DEFAULT_CODEX_THREAD_COMMAND = "echo $CODEX_THREAD_ID";
 const CODEX_BOOT_MIN_AGE_MS = 1800;
@@ -216,8 +212,6 @@ const MAX_TERMINAL_OUTPUT_LENGTH = 16 * 1024 * 1024;
 const TERMINAL_OUTPUT_EMIT_INTERVAL_MS = 120;
 
 const sessionId = computed(() => props.session?.sessionId || "");
-const usesAiStudioEndpoints = computed(() => Boolean(props.session?.workflowId));
-
 function runtimeCodexPromptHandoff(session = {}) {
   const actionResultHandoff = session?.actionResult?.codexPromptHandoff;
   if (actionResultHandoff && typeof actionResultHandoff === "object") {
@@ -270,19 +264,6 @@ function defaultExpanded() {
   return !window.matchMedia("(max-width: 700px)").matches;
 }
 
-function fallbackCopyText(value) {
-  const textarea = document.createElement("textarea");
-  textarea.value = value;
-  textarea.setAttribute("readonly", "readonly");
-  textarea.style.position = "fixed";
-  textarea.style.left = "-9999px";
-  document.body.append(textarea);
-  textarea.select();
-  const copied = document.execCommand("copy");
-  textarea.remove();
-  return copied;
-}
-
 function applyCodexThreadState(session = {}) {
   if (session.codexThreadId) {
     codexThreadId.value = String(session.codexThreadId || "");
@@ -301,11 +282,7 @@ async function copyText(value, label) {
     return false;
   }
   try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-    } else if (!fallbackCopyText(text)) {
-      throw new Error("Clipboard API is unavailable.");
-    }
+    await writeClipboardText(text);
     copyStatus.value = `${label} copied.`;
     return true;
   } catch (copyError) {
@@ -359,119 +336,8 @@ function trimTerminalOutput(output) {
   return terminalOutput.slice(terminalOutput.length - MAX_TERMINAL_OUTPUT_LENGTH);
 }
 
-function promptEchoCandidates(prompt) {
-  const source = String(prompt || "");
-  return [...new Set([
-    source,
-    source.replace(/\r?\n/gu, "\r\n"),
-    source.replace(/\r?\n/gu, "\n"),
-    source.replace(/\r?\n/gu, "\r")
-  ])].filter(Boolean);
-}
-
-function promptEchoReplacement(prompt) {
-  const compactSource = stripStudioContextBlocksForDisplay(prompt).replace(/\s+/gu, " ").trim();
-  if (!compactSource) {
-    return "JSKIT prompt sent.";
-  }
-  if (compactSource.length <= 220) {
-    return compactSource;
-  }
-  return "JSKIT prompt sent.";
-}
-
-function addPromptEchoFilter({
-  outputStart = 0,
-  prompt = ""
-} = {}) {
-  const candidates = promptEchoCandidates(prompt);
-  if (!candidates.length) {
-    return 0;
-  }
-  const replacement = promptEchoReplacement(prompt);
-  promptEchoFilterId += 1;
-  promptEchoFilters = [
-    ...promptEchoFilters.filter((filter) => (
-      filter.outputStart !== outputStart ||
-      filter.replacement !== replacement
-    )),
-    {
-      candidates,
-      id: promptEchoFilterId,
-      outputStart,
-      replacement
-    }
-  ].sort((left, right) => left.outputStart - right.outputStart);
-  return promptEchoFilterId;
-}
-
-function removePromptEchoFilter(filterId) {
-  if (!filterId) {
-    return;
-  }
-  promptEchoFilters = promptEchoFilters.filter((filter) => filter.id !== filterId);
-}
-
-function promptEchoMatchForFilter(output, filter) {
-  const start = Math.max(0, filter.outputStart);
-  if (start > output.length) {
-    return null;
-  }
-  const tail = output.slice(start);
-  for (const candidate of filter.candidates) {
-    if (output.startsWith(candidate, start)) {
-      return {
-        end: start + candidate.length,
-        partial: false,
-        start
-      };
-    }
-    if (candidate.startsWith(tail)) {
-      return {
-        end: output.length,
-        partial: true,
-        start
-      };
-    }
-  }
-  for (const candidate of filter.candidates) {
-    const matchStart = output.indexOf(candidate, start);
-    if (matchStart >= start && matchStart - start <= 1024) {
-      return {
-        end: matchStart + candidate.length,
-        partial: false,
-        start: matchStart
-      };
-    }
-  }
-  return null;
-}
-
-function outputWithPromptEchoFilters(output) {
-  const source = String(output || "");
-  if (!promptEchoFilters.length) {
-    return source;
-  }
-
-  let displayOutput = "";
-  let cursor = 0;
-  for (const filter of promptEchoFilters) {
-    const match = promptEchoMatchForFilter(source, filter);
-    if (!match || match.start < cursor) {
-      continue;
-    }
-    displayOutput += source.slice(cursor, match.start);
-    if (!match.partial) {
-      displayOutput += filter.replacement;
-    }
-    cursor = match.end;
-  }
-  displayOutput += source.slice(cursor);
-  return displayOutput;
-}
-
 function displayTerminalOutput(output) {
-  return stripStudioContextBlocksForDisplay(outputWithPromptEchoFilters(output));
+  return stripStudioContextBlocksForDisplay(promptEchoFilters.apply(output));
 }
 
 function writeTerminalDisplay(output) {
@@ -569,7 +435,7 @@ function disposeTerminalUi() {
   terminalFitAddon = null;
   terminalOutputOffset = 0;
   terminalDisplayOutput = "";
-  promptEchoFilters = [];
+  promptEchoFilters.clear();
   terminalHasOutput = false;
   terminalLatestOutput = "";
   terminalLastOutputAt = 0;
@@ -688,33 +554,23 @@ function closeTerminalSocket() {
 }
 
 function codexTerminalWebSocketUrl(sessionIdValue, terminalSessionIdValue) {
-  return usesAiStudioEndpoints.value
-    ? aiStudioCodexTerminalWebSocketUrl(sessionIdValue, terminalSessionIdValue)
-    : issueSessionCodexTerminalWebSocketUrl(sessionIdValue, terminalSessionIdValue);
+  return aiStudioCodexTerminalWebSocketUrl(sessionIdValue, terminalSessionIdValue);
 }
 
 function startCodexTerminal(sessionIdValue) {
-  return usesAiStudioEndpoints.value
-    ? startAiStudioCodexTerminal(sessionIdValue)
-    : startIssueSessionCodexTerminal(sessionIdValue);
+  return startAiStudioCodexTerminal(sessionIdValue);
 }
 
 function closeCodexTerminal(sessionIdValue, terminalSessionIdValue) {
-  return usesAiStudioEndpoints.value
-    ? closeAiStudioCodexTerminal(sessionIdValue, terminalSessionIdValue)
-    : closeIssueSessionCodexTerminal(sessionIdValue, terminalSessionIdValue);
+  return closeAiStudioCodexTerminal(sessionIdValue, terminalSessionIdValue);
 }
 
 function uploadCodexAttachment(sessionIdValue, file) {
-  return usesAiStudioEndpoints.value
-    ? uploadAiStudioCodexAttachment(sessionIdValue, file)
-    : uploadIssueSessionCodexAttachment(sessionIdValue, file);
+  return uploadAiStudioCodexAttachment(sessionIdValue, file);
 }
 
 function saveCodexThread(sessionIdValue, threadId) {
-  return usesAiStudioEndpoints.value
-    ? saveAiStudioCodexThread(sessionIdValue, threadId)
-    : saveIssueSessionCodexThread(sessionIdValue, threadId);
+  return saveAiStudioCodexThread(sessionIdValue, threadId);
 }
 
 function clearTerminalReconnect() {
@@ -1239,7 +1095,7 @@ async function injectPrompt() {
     if (await ensureTerminalReady() && await ensureCodexThreadReady({ forceRetry: true })) {
       const promptOutputSnapshot = terminalLatestOutput;
       const promptToSend = wrapPromptWithStudioContext(codexPrompt.value, visibleCodexPrompt.value);
-      const promptEchoFilter = addPromptEchoFilter({
+      const promptEchoFilter = promptEchoFilters.add({
         outputStart: promptOutputSnapshot.length,
         prompt: promptToSend
       });
@@ -1255,7 +1111,7 @@ async function injectPrompt() {
         });
       }
       if (!sent) {
-        removePromptEchoFilter(promptEchoFilter);
+        promptEchoFilters.remove(promptEchoFilter);
       }
       return sent;
     }
@@ -1356,7 +1212,7 @@ async function recoverMissingTerminal() {
     }
     terminalOutputOffset = 0;
     terminalDisplayOutput = "";
-    promptEchoFilters = [];
+    promptEchoFilters.clear();
     terminalLatestOutput = "";
     emitTerminalOutputNow("");
     terminalHasOutput = false;

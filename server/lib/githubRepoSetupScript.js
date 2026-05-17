@@ -1,14 +1,9 @@
 import {
   shellScript
 } from "./shellScript.js";
-
-function shellQuote(value) {
-  const stringValue = String(value);
-  if (/^[A-Za-z0-9_./:=@,+-]+$/.test(stringValue)) {
-    return stringValue;
-  }
-  return `'${stringValue.replaceAll("'", "'\\''")}'`;
-}
+import {
+  shellQuote
+} from "./shellCommands.js";
 
 function buildGithubRepoCreateOrLinkScript(repoName) {
   return shellScript([

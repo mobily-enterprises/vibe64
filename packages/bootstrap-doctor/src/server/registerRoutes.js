@@ -11,9 +11,21 @@ import {
   terminalInputValidator,
   terminalStartInputValidator
 } from "./inputSchemas.js";
+import {
+  requireLocalStudioRequest
+} from "../../../../server/lib/localStudioRequest.js";
+import {
+  requestBodyObject
+} from "../../../../server/lib/aiStudio/serverResponses.js";
 
 function getBootstrapService(app) {
   return app.make("feature.bootstrap-doctor.service");
+}
+
+function requireLocalDoctorRequest(request, reply) {
+  return requireLocalStudioRequest(request, reply, {
+    message: "Bootstrap Doctor routes only accept loopback Studio requests."
+  });
 }
 
 function registerRoutes(
@@ -48,6 +60,9 @@ function registerRoutes(
       query: bootstrapQueryInputValidator
     },
     async function (request, reply) {
+      if (!requireLocalDoctorRequest(request, reply)) {
+        return;
+      }
       const response = await request.executeAction({
         actionId: ACTION_READ_BOOTSTRAP,
         input: request.input.query || {}
@@ -68,7 +83,10 @@ function registerRoutes(
         summary: "Stream Bootstrap Doctor status progress."
       }
     },
-    async function (_request, reply) {
+    async function (request, reply) {
+      if (!requireLocalDoctorRequest(request, reply)) {
+        return;
+      }
       await sendDoctorEventStream(reply, ({ emit }) => {
         return getBootstrapService(app).streamStatus({
           emit
@@ -90,9 +108,12 @@ function registerRoutes(
       body: repairInputValidator
     },
     async function (request, reply) {
+      if (!requireLocalDoctorRequest(request, reply)) {
+        return;
+      }
       const response = await request.executeAction({
         actionId: ACTION_REPAIR_BOOTSTRAP,
-        input: request.input.body || {}
+        input: requestBodyObject(request)
       });
 
       reply.code(response.ok === false ? 400 : 200).send(response);
@@ -112,7 +133,10 @@ function registerRoutes(
       body: terminalStartInputValidator
     },
     async function (request, reply) {
-      const response = getBootstrapService(app).startTerminal(request.input.body || {});
+      if (!requireLocalDoctorRequest(request, reply)) {
+        return;
+      }
+      const response = getBootstrapService(app).startTerminal(requestBodyObject(request));
       reply.code(response.ok === false ? 400 : 200).send(response);
     }
   );
@@ -129,6 +153,9 @@ function registerRoutes(
       }
     },
     async function (request, reply) {
+      if (!requireLocalDoctorRequest(request, reply)) {
+        return;
+      }
       const response = getBootstrapService(app).readTerminal(request.params.sessionId);
       reply.code(response.ok === false ? 404 : 200).send(response);
     }
@@ -147,9 +174,12 @@ function registerRoutes(
       body: terminalInputValidator
     },
     async function (request, reply) {
+      if (!requireLocalDoctorRequest(request, reply)) {
+        return;
+      }
       const response = getBootstrapService(app).writeTerminal(
         request.params.sessionId,
-        request.input.body?.data || ""
+        requestBodyObject(request).data || ""
       );
       reply.code(response.ok === false ? 404 : 200).send(response);
     }
@@ -167,6 +197,9 @@ function registerRoutes(
       }
     },
     async function (request, reply) {
+      if (!requireLocalDoctorRequest(request, reply)) {
+        return;
+      }
       const response = await getBootstrapService(app).closeTerminal(request.params.sessionId);
       reply.code(200).send(response);
     }

@@ -1,10 +1,10 @@
 const CLOSED_SESSION_STATUSES = new Set(["abandoned", "finished"]);
 
-function shortIssueSessionId(sessionId) {
+function shortAiStudioSessionId(sessionId) {
   return String(sessionId || "").replace(/^\d{4}-/u, "");
 }
 
-function issueSessionTitleFromIssueText(issueText) {
+function aiStudioIssueTitleFromText(issueText) {
   const firstMeaningfulLine = String(issueText || "")
     .split(/\r?\n/u)
     .map((line) => line.replace(/^#+\s*/u, "").trim())
@@ -12,12 +12,12 @@ function issueSessionTitleFromIssueText(issueText) {
   return (firstMeaningfulLine || "").slice(0, 120);
 }
 
-function issueSessionDisplayTitle(session = {}) {
-  const issueTitle = firstText(session?.issueTitle, issueSessionTitleFromIssueText(session?.issueText));
+function aiStudioSessionDisplayTitle(session = {}) {
+  const issueTitle = firstText(session?.issueTitle, aiStudioIssueTitleFromText(session?.issueText));
   if (issueTitle) {
     return issueTitle;
   }
-  const shortSessionId = shortIssueSessionId(session?.sessionId);
+  const shortSessionId = shortAiStudioSessionId(session?.sessionId);
   return shortSessionId ? `Session ${shortSessionId}` : "";
 }
 
@@ -55,11 +55,11 @@ function parseGithubSessionLink(value, kind) {
   };
 }
 
-function issueSessionStatusLabel(status) {
+function aiStudioSessionStatusLabel(status) {
   return String(status || "pending").replaceAll("_", " ");
 }
 
-function issueSessionStatusColor(status) {
+function aiStudioSessionStatusColor(status) {
   const normalizedStatus = String(status || "");
   if (normalizedStatus === "finished") {
     return "success";
@@ -73,121 +73,16 @@ function issueSessionStatusColor(status) {
   return "primary";
 }
 
-function isAbandonedIssueSession(session = {}) {
+function isAbandonedAiStudioSession(session = {}) {
   return String(session?.status || "") === "abandoned";
 }
 
-function isClosedIssueSession(session = {}) {
+function isClosedAiStudioSession(session = {}) {
   return CLOSED_SESSION_STATUSES.has(String(session?.status || ""));
 }
 
-function isOpenIssueSession(session = {}) {
-  return !isClosedIssueSession(session);
-}
-
-function issueSessionHasIssueDraft(session = {}) {
-  return Boolean(normalizedText(session.issueText) && normalizedText(session.issueTitle));
-}
-
-function issueSessionIssueParts(session = {}) {
-  return githubSessionLinkParts(session.issueUrl, "issue");
-}
-
-function issueSessionHasGithubIssue(session = {}) {
-  return Boolean(issueSessionIssueParts(session));
-}
-
-function issueSessionIssueNumber(session = {}) {
-  return normalizedText(session.issueNumber) || issueSessionIssueParts(session)?.number || "";
-}
-
-function issueSessionCanCreateGithubIssue(session = {}) {
-  return isOpenIssueSession(session) &&
-    normalizedText(session.currentStep) === "issue_submitted" &&
-    issueSessionHasIssueDraft(session) &&
-    !issueSessionHasGithubIssue(session);
-}
-
-function issueSessionHasPullRequestDraft(session = {}) {
-  return Boolean(normalizedText(session.pullRequestText));
-}
-
-function issueSessionCanCreateGithubPullRequest(session = {}) {
-  return isOpenIssueSession(session) &&
-    normalizedText(session.currentStep) === "pr_created" &&
-    issueSessionHasPullRequestDraft(session) &&
-    !normalizedText(session.prUrl);
-}
-
-function canUseIssueSessionTerminal(session = {}) {
-  if (session.workflowId && session.targetRoot) {
-    return isOpenIssueSession(session);
-  }
-  return isOpenIssueSession(session) &&
-    session.worktreeReady === true &&
-    Array.isArray(session.completedSteps) &&
-    session.completedSteps.includes("dependencies_installed");
-}
-
-function issueSessionCodexPrompt(session = {}) {
-  const promptField = String(session?.codex?.promptField || "");
-  return promptField ? String(session?.[promptField] || "") : "";
-}
-
-function hasIssueSessionCodexPrompt(session = {}) {
-  return session?.codex?.mode === "inject_prompt" && Boolean(issueSessionCodexPrompt(session));
-}
-
-function issueSessionCodexPromptShouldSend(session = {}) {
-  return session?.codex?.sendPrompt === true || session?.codex?.autoInject === true;
-}
-
-function shouldSendIssueSessionCodexPrompt(session = {}) {
-  return hasIssueSessionCodexPrompt(session) && issueSessionCodexPromptShouldSend(session);
-}
-
-function shouldAutoInjectIssueSessionCodexPrompt(session = {}) {
-  return shouldSendIssueSessionCodexPrompt(session);
-}
-
-function shouldUseManualIssueSessionCodexPrompt(session = {}) {
-  return hasIssueSessionCodexPrompt(session) && !issueSessionCodexPromptShouldSend(session);
-}
-
-function issueSessionCodexPromptActionLabel(session = {}) {
-  return String(session?.codex?.promptActionLabel || "").trim() || "Submit prompt to Codex";
-}
-
-function issueSessionActionSubmitsCodexPrompt(session = {}, action = {}) {
-  const currentStep = normalizedText(session.currentStep);
-  const actionKind = normalizedText(action.kind);
-  const actionCommand = normalizedText(action.actionCommand || action.sessionAction || action.id || action.command);
-  const automationMode = normalizedText(action.automation?.mode);
-  if (actionKind === "codex_prompt" || automationMode === "codex_prompt") {
-    return true;
-  }
-  if (currentStep === "issue_prompt_rendered" && (!actionCommand || actionCommand === "define_issue")) {
-    return true;
-  }
-  if (
-    currentStep === "issue_created" &&
-    (!actionCommand || actionCommand === "create_issue_file")
-  ) {
-    return true;
-  }
-  if (
-    currentStep === "final_report_created" &&
-    (!actionCommand || actionCommand === "create_pull_request_file")
-  ) {
-    return true;
-  }
-  if (
-    currentStep === "pr_merge_prepared" &&
-    actionCommand === "prepare_for_merge"
-  ) {
-    return true;
-  }
-  return false;
+function isOpenAiStudioSession(session = {}) {
+  return !isClosedAiStudioSession(session);
 }
 
 function normalizedText(value) {
@@ -198,7 +93,7 @@ function firstText(...values) {
   return values.map(normalizedText).find(Boolean) || "";
 }
 
-function issueSessionCurrentStepLabel(session = {}, stepDefinitions = []) {
+function aiStudioSessionCurrentStepLabel(session = {}, stepDefinitions = []) {
   const stepId = normalizedText(session?.currentStep);
   const step = stepDefinitions.find((definition) => {
     if (definition.id === stepId) {
@@ -217,13 +112,13 @@ function fileHref(filePath) {
   return `file://${path.split("/").map((segment) => encodeURIComponent(segment)).join("/")}`;
 }
 
-function issueSessionFacts(session = {}, stepDefinitions = []) {
+function buildAiStudioSessionFacts(session = {}, stepDefinitions = []) {
   const issueText = String(session.issueText || "");
-  const issueTitle = firstText(session.issueTitle, issueSessionTitleFromIssueText(issueText));
+  const issueTitle = firstText(session.issueTitle, aiStudioIssueTitleFromText(issueText));
   const issueLink = parseGithubSessionLink(session.issueUrl, "issue");
   const prLink = parseGithubSessionLink(session.prUrl, "pr");
   const completedStepCount = Array.isArray(session.completedSteps) ? session.completedSteps.length : 0;
-  const currentStepLabel = issueSessionCurrentStepLabel(session, stepDefinitions);
+  const currentStepLabel = aiStudioSessionCurrentStepLabel(session, stepDefinitions);
   const nextCommand = firstText(session.nextCommand);
   const actionCommands = Array.isArray(session.actionCommands)
     ? session.actionCommands.map((command) => firstText(command?.command)).filter(Boolean)
@@ -248,7 +143,7 @@ function issueSessionFacts(session = {}, stepDefinitions = []) {
       key: "next-command",
       label: "Next CLI Step",
       value: nextCommand,
-      visible: Boolean(nextCommand && isOpenIssueSession(session))
+      visible: Boolean(nextCommand && isOpenAiStudioSession(session))
     },
     {
       copyValue: actionCommands.join("\n"),
@@ -267,7 +162,7 @@ function issueSessionFacts(session = {}, stepDefinitions = []) {
       icon: "session",
       key: "session",
       label: "Session",
-      value: shortIssueSessionId(session.sessionId),
+      value: shortAiStudioSessionId(session.sessionId),
       visible: Boolean(session.sessionId)
     },
     {
@@ -335,41 +230,28 @@ function issueSessionFacts(session = {}, stepDefinitions = []) {
       key: "pull-request-draft",
       label: "PR Draft",
       value: "pull_request.md",
-      visible: Boolean(pullRequestPath && issueSessionHasPullRequestDraft(session))
+      visible: Boolean(pullRequestPath)
     },
     {
       detail: firstText(prOutcome?.reason, prOutcome?.mergedAt),
       icon: "github",
       key: "pr-outcome",
       label: "PR Outcome",
-      value: issueSessionStatusLabel(prOutcome?.outcome || ""),
+      value: aiStudioSessionStatusLabel(prOutcome?.outcome || ""),
       visible: Boolean(prOutcome?.outcome)
     }
   ].filter((fact) => fact.visible);
 }
 
 export {
-  canUseIssueSessionTerminal,
-  isAbandonedIssueSession,
-  isClosedIssueSession,
-  isOpenIssueSession,
-  issueSessionActionSubmitsCodexPrompt,
-  issueSessionCanCreateGithubPullRequest,
-  issueSessionCanCreateGithubIssue,
-  issueSessionDisplayTitle,
-  issueSessionFacts,
-  issueSessionCodexPromptActionLabel,
-  issueSessionHasGithubIssue,
-  issueSessionHasIssueDraft,
-  issueSessionHasPullRequestDraft,
-  issueSessionIssueNumber,
-  issueSessionIssueParts,
-  issueSessionStatusColor,
-  issueSessionStatusLabel,
-  issueSessionTitleFromIssueText,
+  isAbandonedAiStudioSession,
+  isClosedAiStudioSession,
+  isOpenAiStudioSession,
+  aiStudioSessionDisplayTitle,
+  buildAiStudioSessionFacts,
+  aiStudioSessionStatusColor,
+  aiStudioSessionStatusLabel,
+  aiStudioIssueTitleFromText,
   parseGithubSessionLink,
-  shouldAutoInjectIssueSessionCodexPrompt,
-  shouldSendIssueSessionCodexPrompt,
-  shouldUseManualIssueSessionCodexPrompt,
-  shortIssueSessionId
+  shortAiStudioSessionId
 };

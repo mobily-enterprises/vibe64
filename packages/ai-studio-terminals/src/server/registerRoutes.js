@@ -6,19 +6,17 @@ import {
   codexThreadInputValidator
 } from "./inputSchemas.js";
 import {
+  ACTION_SAVE_CODEX_PROMPT_HANDOFF,
+  ACTION_SAVE_CODEX_THREAD,
+  ACTION_UPLOAD_CODEX_ATTACHMENT
+} from "./actions.js";
+import {
   requireLocalStudioRequest
 } from "../../../../server/lib/localStudioRequest.js";
-
-function aiStudioStatusCode(response, { missingStatus = 404 } = {}) {
-  const code = response?.errors?.[0]?.code || "";
-  if (code === "ai_studio_session_not_found") {
-    return missingStatus;
-  }
-  if (code.startsWith("ai_studio_invalid") || code === "ai_studio_project_type_missing") {
-    return 400;
-  }
-  return response?.ok === false ? 400 : 200;
-}
+import {
+  aiStudioStatusCode,
+  requestBodyObject
+} from "../../../../server/lib/aiStudio/serverResponses.js";
 
 function getTerminalService(app) {
   return app.make("feature.ai-studio-terminals.service");
@@ -28,11 +26,6 @@ function requireLocalAiStudioRequest(request, reply) {
   return requireLocalStudioRequest(request, reply, {
     message: "AI Studio terminal routes only accept loopback Studio requests."
   });
-}
-
-function requestBodyObject(request) {
-  const body = request.input?.body || request.body || {};
-  return body && typeof body === "object" && !Array.isArray(body) ? body : {};
 }
 
 function registerRoutes(
@@ -113,11 +106,14 @@ function registerRoutes(
       if (!requireLocalAiStudioRequest(request, reply)) {
         return;
       }
-      const response = await getTerminalService(app).uploadCodexAttachment(
-        request.params.sessionId,
-        requestBodyObject(request)
-      );
-      reply.code(response?.ok === false ? 400 : 200).send(response);
+      const response = await request.executeAction({
+        actionId: ACTION_UPLOAD_CODEX_ATTACHMENT,
+        input: {
+          ...requestBodyObject(request),
+          sessionId: request.params.sessionId
+        }
+      });
+      reply.code(aiStudioStatusCode(response)).send(response);
     }
   );
 
@@ -137,11 +133,14 @@ function registerRoutes(
       if (!requireLocalAiStudioRequest(request, reply)) {
         return;
       }
-      const response = await getTerminalService(app).saveCodexThread(
-        request.params.sessionId,
-        requestBodyObject(request)
-      );
-      reply.code(response?.ok === false ? 400 : 200).send(response);
+      const response = await request.executeAction({
+        actionId: ACTION_SAVE_CODEX_THREAD,
+        input: {
+          ...requestBodyObject(request),
+          sessionId: request.params.sessionId
+        }
+      });
+      reply.code(aiStudioStatusCode(response)).send(response);
     }
   );
 
@@ -161,11 +160,14 @@ function registerRoutes(
       if (!requireLocalAiStudioRequest(request, reply)) {
         return;
       }
-      const response = await getTerminalService(app).saveCodexPromptHandoff(
-        request.params.sessionId,
-        requestBodyObject(request)
-      );
-      reply.code(response?.ok === false ? 400 : 200).send(response);
+      const response = await request.executeAction({
+        actionId: ACTION_SAVE_CODEX_PROMPT_HANDOFF,
+        input: {
+          ...requestBodyObject(request),
+          sessionId: request.params.sessionId
+        }
+      });
+      reply.code(aiStudioStatusCode(response)).send(response);
     }
   );
 

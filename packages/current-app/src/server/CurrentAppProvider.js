@@ -10,7 +10,10 @@ import { registerRoutes } from "./registerRoutes.js";
 class CurrentAppProvider {
   static id = "feature.current-app";
 
-  static dependsOn = ["runtime.actions"];
+  static dependsOn = [
+    "runtime.actions",
+    "feature.ai-studio-project"
+  ];
 
   register(app) {
     if (
@@ -28,7 +31,8 @@ class CurrentAppProvider {
       "feature.current-app.service",
       () => {
         return createService({
-          appRoot
+          appRoot,
+          projectService: app.make("feature.ai-studio-project.service")
         });
       }
     );

@@ -20,7 +20,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <section class="generated-ui-screen generated-ui-screen--app studio-redirect">
+  <section class="generated-ui-screen generated-ui-screen--studio studio-redirect">
     <v-progress-linear color="primary" height="6" indeterminate rounded />
   </section>
 </template>

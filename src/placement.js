@@ -47,20 +47,20 @@ addPlacement({
     exact: true
   }
 });
-// jskit:ui-generator.page.link:home:/npm-scripts
+// jskit:ui-generator.page.link:home:/target-scripts
 {
   addPlacement({
-    id: "ui-generator.page.home.npm-scripts.link",
+    id: "ui-generator.page.home.target-scripts.link",
     target: "shell.secondary-nav",
     kind: "link",
     surfaces: ["home"],
     order: 60,
     props: {
-      label: "NPM Scripts",
+      label: "Target Scripts",
       icon: "mdi-view-list-outline",
       surface: "home",
-      scopedSuffix: "/npm-scripts",
-      unscopedSuffix: "/npm-scripts"
+      scopedSuffix: "/target-scripts",
+      unscopedSuffix: "/target-scripts"
     }
   });
 }

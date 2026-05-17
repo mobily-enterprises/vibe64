@@ -1,25 +1,25 @@
 <template>
   <DoctorStatusPage
-    title="App Setup"
+    title="Target setup"
     :lede="lede"
-    :status="appSetup"
+    :status="targetSetup"
     status-items-key="stages"
     :loading="loading"
     :error="errorMessage"
     :stream-enabled="streamEnabled"
     :stream-auto-start="streamAutoStart"
-    :stream-endpoint="APP_SETUP_STREAM_ENDPOINT"
-    :terminal-endpoint="APP_SETUP_TERMINAL_ENDPOINT"
+    :stream-endpoint="TARGET_SETUP_STREAM_ENDPOINT"
+    :terminal-endpoint="TARGET_SETUP_TERMINAL_ENDPOINT"
     blocked-label="Setup blocked"
     ready-label="Setup ready"
-    blocked-title="App setup blocked"
-    ready-title="App setup ready"
+    blocked-title="Target setup blocked"
+    ready-title="Target setup ready"
     continue-label="Continue to home"
     continue-to="/home"
-    doctor-class="app-setup-doctor"
+    doctor-class="target-setup-doctor"
     :always-repair-check-ids="['dependencies']"
-    @refresh="loadAppSetup"
-    @status-updated="handleAppSetupUpdated"
+    @refresh="loadTargetSetup"
+    @status-updated="handleTargetSetupUpdated"
   />
 </template>
 
@@ -28,12 +28,12 @@ import { computed, onMounted, ref } from "vue";
 
 import DoctorStatusPage from "./DoctorStatusPage.vue";
 import {
-  APP_SETUP_STREAM_ENDPOINT,
-  APP_SETUP_TERMINAL_ENDPOINT,
+  TARGET_SETUP_STREAM_ENDPOINT,
+  TARGET_SETUP_TERMINAL_ENDPOINT,
   consumeStudioGate,
   readBootstrapStatus,
-  readTargetAppStatus
-} from "../../lib/studioApi";
+  readTargetBootupStatus
+} from "../../lib/studioGateApi.js";
 
 const props = defineProps({
   gate: {
@@ -44,7 +44,7 @@ const props = defineProps({
 
 const emit = defineEmits(["select-tab"]);
 
-const appSetup = ref(null);
+const targetSetup = ref(null);
 const loading = ref(false);
 const errorMessage = ref("");
 const streamEnabled = ref(false);
@@ -52,15 +52,15 @@ const streamAutoStart = ref(true);
 
 const lede = computed(() => {
   if (loading.value && !streamEnabled.value) {
-    return "Checking Bootup and App Bootup before App Setup runs.";
+    return "Checking Bootup and Target bootup before Target setup runs.";
   }
-  if (appSetup.value?.ready) {
-    return `Target app is setup-ready: ${appSetup.value.targetRoot || "current directory"}`;
+  if (targetSetup.value?.ready) {
+    return `Target project is setup-ready: ${targetSetup.value.targetRoot || "current directory"}`;
   }
-  return `Target app setup runs sequentially for: ${appSetup.value?.targetRoot || "checking"}`;
+  return `Target setup runs sequentially for: ${targetSetup.value?.targetRoot || "checking"}`;
 });
 
-async function loadAppSetup({ autoStart = true } = {}) {
+async function loadTargetSetup({ autoStart = true } = {}) {
   loading.value = true;
   errorMessage.value = "";
   streamEnabled.value = false;
@@ -74,39 +74,39 @@ async function loadAppSetup({ autoStart = true } = {}) {
       return;
     }
 
-    const target = await readTargetAppStatus();
+    const target = await readTargetBootupStatus();
 
     if (target?.ready !== true) {
-      emit("select-tab", "app-bootup");
+      emit("select-tab", "target-bootup");
       return;
     }
 
     streamEnabled.value = true;
   } catch (error) {
-    errorMessage.value = String(error?.message || error || "App setup check failed.");
+    errorMessage.value = String(error?.message || error || "Target setup check failed.");
   } finally {
     loading.value = false;
   }
 }
 
-function handleAppSetupUpdated(status) {
-  appSetup.value = status;
+function handleTargetSetupUpdated(status) {
+  targetSetup.value = status;
 }
 
 onMounted(() => {
   const gate = props.gate ?? consumeStudioGate("/bootup-setup");
 
-  if (gate?.bootstrap?.ready === true && gate?.targetApp?.ready === true && gate?.appSetup) {
-    appSetup.value = gate.appSetup;
+  if (gate?.bootstrap?.ready === true && gate?.targetBootup?.ready === true && gate?.targetSetup) {
+    targetSetup.value = gate.targetSetup;
     streamEnabled.value = true;
     streamAutoStart.value = false;
     return;
   }
 
-  if (gate?.appSetup && gate.appSetup.ready !== true) {
-    appSetup.value = gate.appSetup;
+  if (gate?.targetSetup && gate.targetSetup.ready !== true) {
+    targetSetup.value = gate.targetSetup;
   }
 
-  void loadAppSetup();
+  void loadTargetSetup();
 });
 </script>

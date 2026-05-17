@@ -8,24 +8,15 @@ import {
 import {
   requireLocalStudioRequest
 } from "../../../../server/lib/localStudioRequest.js";
-
-function aiStudioStatusCode(response) {
-  const code = response?.errors?.[0]?.code || "";
-  if (code.startsWith("ai_studio_invalid") || code === "ai_studio_project_type_missing") {
-    return 400;
-  }
-  return response?.ok === false ? 400 : 200;
-}
+import {
+  aiStudioStatusCode,
+  requestBodyObject
+} from "../../../../server/lib/aiStudio/serverResponses.js";
 
 function requireLocalAiStudioRequest(request, reply) {
   return requireLocalStudioRequest(request, reply, {
     message: "AI Studio project routes only accept loopback Studio requests."
   });
-}
-
-function requestBodyObject(request) {
-  const body = request.input?.body || request.body || {};
-  return body && typeof body === "object" && !Array.isArray(body) ? body : {};
 }
 
 function registerRoutes(

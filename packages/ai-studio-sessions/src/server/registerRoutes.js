@@ -11,34 +11,15 @@ import {
 import {
   requireLocalStudioRequest
 } from "../../../../server/lib/localStudioRequest.js";
-
-function aiStudioStatusCode(response, { missingStatus = 404 } = {}) {
-  const code = response?.errors?.[0]?.code || "";
-  if (code === "ai_studio_session_not_found") {
-    return missingStatus;
-  }
-  if (code.startsWith("ai_studio_invalid") || code === "ai_studio_project_type_missing") {
-    return 400;
-  }
-  if (
-    code === "ai_studio_action_disabled" ||
-    code === "ai_studio_command_requires_terminal" ||
-    code === "ai_studio_step_not_ready"
-  ) {
-    return 409;
-  }
-  return response?.ok === false ? 400 : 200;
-}
+import {
+  aiStudioStatusCode,
+  requestBodyObject
+} from "../../../../server/lib/aiStudio/serverResponses.js";
 
 function requireLocalAiStudioRequest(request, reply) {
   return requireLocalStudioRequest(request, reply, {
     message: "AI Studio session routes only accept loopback Studio requests."
   });
-}
-
-function requestBodyObject(request) {
-  const body = request.input?.body || request.body || {};
-  return body && typeof body === "object" && !Array.isArray(body) ? body : {};
 }
 
 function registerRoutes(

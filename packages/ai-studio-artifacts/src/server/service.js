@@ -1,4 +1,8 @@
 import path from "node:path";
+import {
+  aiStudioResult,
+  normalizePlainObject
+} from "../../../../server/lib/aiStudio/serverResponses.js";
 
 const EDITABLE_ARTIFACTS = Object.freeze({
   "issue.md": Object.freeze({
@@ -22,29 +26,11 @@ const EDITABLE_ARTIFACTS = Object.freeze({
   })
 });
 
-function aiStudioErrorResponse(error, fallback = "AI Studio artifact request failed.") {
-  return {
-    errors: [
-      {
-        code: String(error?.code || "ai_studio_artifact_request_failed"),
-        message: String(error?.message || error || fallback)
-      }
-    ],
-    ok: false,
-    projectType: error?.projectType || null
-  };
-}
-
-async function aiStudioResult(operation) {
-  try {
-    return await operation();
-  } catch (error) {
-    return aiStudioErrorResponse(error);
-  }
-}
-
-function normalizePlainObject(value) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+function artifactResult(operation) {
+  return aiStudioResult(operation, {
+    fallbackCode: "ai_studio_artifact_request_failed",
+    fallbackMessage: "AI Studio artifact request failed."
+  });
 }
 
 function artifactNames() {
@@ -155,7 +141,7 @@ function createService({ projectService } = {}) {
 
   return Object.freeze({
     async readArtifacts(sessionId) {
-      return aiStudioResult(async () => {
+      return artifactResult(async () => {
         const runtime = await projectService.createRuntime();
         const session = await runtime.getSession(sessionId);
         return artifactsResponse(
@@ -166,7 +152,7 @@ function createService({ projectService } = {}) {
     },
 
     async saveArtifacts(sessionId, input = {}) {
-      return aiStudioResult(async () => {
+      return artifactResult(async () => {
         const runtime = await projectService.createRuntime();
         const session = await runtime.getSession(sessionId);
         const artifacts = normalizeArtifactInput(input);

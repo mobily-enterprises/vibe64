@@ -9,7 +9,7 @@ import {
 
 const execFileAsync = promisify(execFile);
 const STUDIO_CODEX_CONTAINER_LABEL = studioDockerLabel("kind", "codex-terminal");
-const STUDIO_APP_TEST_CONTAINER_LABEL = studioDockerLabel("kind", "app-test-terminal");
+const STUDIO_TARGET_SCRIPT_CONTAINER_LABEL = studioDockerLabel("kind", "target-script-terminal");
 const STALE_PROCESS_GRACE_MS = 500;
 const MISSING_DOCKER_LABEL_VALUE = "<no value>";
 
@@ -155,7 +155,7 @@ function selectStaleStudioContainerIds(containers = [], {
 
 async function listStudioContainers(execFileImpl = execFileAsync) {
   const containers = new Map();
-  for (const label of [STUDIO_CODEX_CONTAINER_LABEL, STUDIO_APP_TEST_CONTAINER_LABEL]) {
+  for (const label of [STUDIO_CODEX_CONTAINER_LABEL, STUDIO_TARGET_SCRIPT_CONTAINER_LABEL]) {
     const result = await execFileImpl("docker", [
       "ps",
       "-a",

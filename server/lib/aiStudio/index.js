@@ -1,6 +1,6 @@
 export { AiStudioSessionRuntime } from "./runtime.js";
+export { FakeTargetAdapter } from "./fakeAdapter.js";
 export {
-  FakeTargetAdapter,
   TargetAdapter,
   adapterActionResult,
   adapterCommand,
