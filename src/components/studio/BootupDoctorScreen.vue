@@ -29,16 +29,8 @@ import DoctorStatusPage from "./DoctorStatusPage.vue";
 import {
   BOOTSTRAP_STREAM_ENDPOINT,
   BOOTSTRAP_TERMINAL_ENDPOINT,
-  consumeStudioGate,
   readBootstrapStatus
 } from "../../lib/studioGateApi.js";
-
-const props = defineProps({
-  gate: {
-    type: Object,
-    default: null
-  }
-});
 
 const emit = defineEmits(["select-tab"]);
 
@@ -72,14 +64,6 @@ function handleBootstrapUpdated(status) {
 }
 
 onMounted(() => {
-  const gate = props.gate ?? consumeStudioGate("/bootup-setup");
-
-  if (gate?.bootstrap) {
-    bootstrap.value = gate.bootstrap;
-    streamAutoStart.value = false;
-    return;
-  }
-
   streamAutoStart.value = true;
 });
 </script>

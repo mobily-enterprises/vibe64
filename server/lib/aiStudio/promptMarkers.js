@@ -11,7 +11,7 @@ function wrapPromptWithStudioContext(prompt, visiblePrompt = "") {
   if (!source || hasStudioContextBlock(source)) {
     return source;
   }
-  const visible = String(visiblePrompt || "Run Codex prompt.").trim() || "Run Codex prompt.";
+  const visible = String(visiblePrompt || "Continue in Codex.").trim() || "Continue in Codex.";
   return [
     visible,
     "",

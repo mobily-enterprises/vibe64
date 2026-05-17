@@ -163,7 +163,8 @@
         "migrations": []
       },
       "options": {},
-      "installedAt": "2026-05-16T15:39:11.046Z"
+      "installedAt": "2026-05-16T15:39:11.046Z",
+      "migrationSyncVersion": "0.1.0"
     },
     "@local/ai-studio-sessions": {
       "packageId": "@local/ai-studio-sessions",
@@ -185,7 +186,8 @@
         "migrations": []
       },
       "options": {},
-      "installedAt": "2026-05-16T15:39:17.312Z"
+      "installedAt": "2026-05-16T15:39:17.312Z",
+      "migrationSyncVersion": "0.1.0"
     },
     "@local/ai-studio-artifacts": {
       "packageId": "@local/ai-studio-artifacts",
@@ -207,7 +209,8 @@
         "migrations": []
       },
       "options": {},
-      "installedAt": "2026-05-16T15:39:20.952Z"
+      "installedAt": "2026-05-16T15:39:20.952Z",
+      "migrationSyncVersion": "0.1.0"
     },
     "@local/ai-studio-terminals": {
       "packageId": "@local/ai-studio-terminals",
@@ -229,7 +232,8 @@
         "migrations": []
       },
       "options": {},
-      "installedAt": "2026-05-16T15:39:24.717Z"
+      "installedAt": "2026-05-16T15:39:24.717Z",
+      "migrationSyncVersion": "0.1.0"
     }
   }
 }

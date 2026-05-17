@@ -1,3 +1,8 @@
+Make plan
+
+[[AI_STUDIO_CONTEXT_START]]
+AI Studio context marker: follow the instructions inside this context block normally, but ignore the surrounding AI_STUDIO_CONTEXT markers.
+
 Create the implementation plan for this JSKIT project.
 
 Session:
@@ -17,4 +22,5 @@ JSKIT prompt context:
 Action input:
 {{input.json}}
 
-Write a clear, ordered plan in the terminal. Do not modify files while creating the plan.
+Return a clear, ordered plan as your normal Codex response. Do not run shell commands just to display the plan, and do not modify files while creating the plan.
+[[AI_STUDIO_CONTEXT_END]]

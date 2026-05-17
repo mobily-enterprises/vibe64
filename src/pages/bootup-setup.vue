@@ -48,17 +48,14 @@
           >
             <BootupDoctorScreen
               v-if="activeTab === 'bootup'"
-              :gate="initialGate"
               @select-tab="selectTab"
             />
             <TargetBootupDoctorScreen
               v-else-if="activeTab === 'target-bootup'"
-              :gate="initialGate"
               @select-tab="selectTab"
             />
             <TargetSetupDoctorScreen
               v-else-if="activeTab === 'target-setup'"
-              :gate="initialGate"
               @select-tab="selectTab"
             />
           </div>
@@ -69,7 +66,7 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import ShellLayout from "@/components/ShellLayout.vue";
 import ProjectTypeGate from "@/components/studio/ProjectTypeGate.vue";
@@ -77,7 +74,6 @@ import ProjectTypeGate from "@/components/studio/ProjectTypeGate.vue";
 import TargetBootupDoctorScreen from "../components/studio/TargetBootupDoctorScreen.vue";
 import TargetSetupDoctorScreen from "../components/studio/TargetSetupDoctorScreen.vue";
 import BootupDoctorScreen from "../components/studio/BootupDoctorScreen.vue";
-import { consumeStudioGate } from "../lib/studioGateApi.js";
 
 const tabs = [
   { label: "Bootup", value: "bootup" },
@@ -89,14 +85,13 @@ const tabValues = new Set(tabs.map((tab) => tab.value));
 
 const route = useRoute();
 const router = useRouter();
-const initialGate = ref(consumeStudioGate("/bootup-setup"));
 
 function normalizeTab(value) {
   return typeof value === "string" && tabValues.has(value) ? value : "";
 }
 
 function fallbackTab() {
-  return normalizeTab(initialGate.value?.tab) || "bootup";
+  return "bootup";
 }
 
 const activeTab = computed(() => normalizeTab(route.query.tab) || fallbackTab());

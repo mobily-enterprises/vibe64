@@ -50,6 +50,9 @@ function resolveResponseErrorMessage(response = {}, fallback = "AI Studio reques
   return String(response?.errors?.[0]?.message || response?.error || fallback);
 }
 
+const CREATE_PULL_REQUEST_FILE_ACTION_ID = "create_pr_file";
+const PULL_REQUEST_FILE_STEP_ID = "pr_file_created";
+
 function useAiStudioSessions({
   onTitleChange = null
 } = {}) {
@@ -80,6 +83,7 @@ function useAiStudioSessions({
   const draftEditorSaving = ref(false);
   const pendingCommandAdvanceOnSuccess = ref(false);
   const pendingCommandStartedAt = ref(0);
+  let artifactReadinessRefreshInFlight = false;
   const codexCommands = useAiStudioCodexCommands();
   const sessionArtifacts = useAiStudioSessionArtifacts();
 
@@ -138,7 +142,7 @@ function useAiStudioSessions({
     onRunSuccess: async (response, { context } = {}) => {
       const promptHandoff = aiStudioPromptHandoffFromSession(response);
       if (promptHandoff?.prompt) {
-        codexPromptOverride.value = promptHandoff.prompt;
+        codexPromptOverride.value = promptHandoff.terminalInput || promptHandoff.prompt;
         codexTerminalBusy.value = true;
         codexPromptInjectionKey.value = `${context.sessionId}:${context.actionId}:${Date.now()}`;
         await refreshSessionData();
@@ -304,6 +308,27 @@ function useAiStudioSessions({
 
   async function refreshSessionData() {
     await sessionList.reload();
+  }
+
+  const waitingForPullRequestFile = computed(() => {
+    return selectedSession.value?.currentStep === PULL_REQUEST_FILE_STEP_ID &&
+      Boolean(latestAiStudioActionResult(selectedSession.value, CREATE_PULL_REQUEST_FILE_ACTION_ID)) &&
+      selectedSession.value?.artifactReadiness?.[PULL_REQUEST_ARTIFACT]?.nonEmpty !== true;
+  });
+  const waitingForPromptedArtifact = computed(() => {
+    return issueFileStep.waitingForFiles.value || waitingForPullRequestFile.value;
+  });
+
+  async function refreshPromptedArtifactReadiness() {
+    if (!waitingForPromptedArtifact.value || artifactReadinessRefreshInFlight) {
+      return;
+    }
+    artifactReadinessRefreshInFlight = true;
+    try {
+      await refreshSessionData();
+    } finally {
+      artifactReadinessRefreshInFlight = false;
+    }
   }
 
   function clearCommandTerminal() {
@@ -533,11 +558,22 @@ function useAiStudioSessions({
     copyStatus.value = String(event.error || "Prompt injection failed.");
   }
 
-  function handleCodexTerminalBusyChanged(event = {}) {
+  async function handleCodexTerminalBusyChanged(event = {}) {
     if (event.sessionId && event.sessionId !== selectedSessionId.value) {
       return;
     }
-    codexTerminalBusy.value = event.busy === true;
+    const wasBusy = codexTerminalBusy.value;
+    const isBusy = event.busy === true;
+    if (!wasBusy || isBusy || !waitingForPromptedArtifact.value) {
+      codexTerminalBusy.value = isBusy;
+      return;
+    }
+
+    try {
+      await refreshPromptedArtifactReadiness();
+    } finally {
+      codexTerminalBusy.value = false;
+    }
   }
 
   async function handleCodexSessionUpdate(event = {}) {

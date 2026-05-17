@@ -29,16 +29,8 @@ import DoctorStatusPage from "./DoctorStatusPage.vue";
 import {
   TARGET_BOOTUP_STREAM_ENDPOINT,
   TARGET_BOOTUP_TERMINAL_ENDPOINT,
-  consumeStudioGate,
   readBootstrapStatus
 } from "../../lib/studioGateApi.js";
-
-const props = defineProps({
-  gate: {
-    type: Object,
-    default: null
-  }
-});
 
 const emit = defineEmits(["select-tab"]);
 
@@ -86,20 +78,6 @@ function handleTargetBootupUpdated(status) {
 }
 
 onMounted(() => {
-  const gate = props.gate ?? consumeStudioGate("/bootup-setup");
-
-  if (gate?.bootstrap?.ready === true && gate?.targetBootup) {
-    bootstrap.value = gate.bootstrap;
-    targetBootup.value = gate.targetBootup;
-    streamEnabled.value = true;
-    streamAutoStart.value = false;
-    return;
-  }
-
-  if (gate?.targetBootup && gate.targetBootup.ready !== true) {
-    targetBootup.value = gate.targetBootup;
-  }
-
   void loadTargetBootup();
 });
 </script>

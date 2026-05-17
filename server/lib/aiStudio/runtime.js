@@ -148,7 +148,7 @@ async function writeActionResultEffects(store, sessionId, result = {}) {
 }
 
 function buildCodexPromptHandoff(action, renderedPrompt) {
-  const visiblePrompt = renderedPrompt.visiblePrompt || action.label || "Run Codex prompt.";
+  const visiblePrompt = renderedPrompt.visiblePrompt || action.label || "Continue in Codex.";
   return {
     codex: {
       mode: "inject_prompt",

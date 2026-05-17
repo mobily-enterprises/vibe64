@@ -259,7 +259,7 @@ const visibleCodexPrompt = computed(() => {
   if (handoff?.visiblePrompt) {
     return String(handoff.visiblePrompt || "");
   }
-  return String(props.session?.codex?.promptActionLabel || "").trim() || "Run Codex prompt.";
+  return String(props.session?.codex?.promptActionLabel || "").trim() || "Continue in Codex.";
 });
 const manualPromptInjectionRequestKey = computed(() => String(props.promptInjectionRequestKey || ""));
 const terminalExited = computed(() => terminalStatus.value === "exited");

@@ -21,9 +21,6 @@ import {
   createShellRouter
 } from "@jskit-ai/kernel/client";
 import { config } from "../config/public.js";
-import {
-  resolveStudioGate
-} from "./lib/studioGateApi.js";
 
 const surfaceRuntime = createSurfaceRuntime({
   allMode: config.surfaceModeAll,
@@ -68,33 +65,6 @@ const queryClient = new QueryClient({
       retryDelay: transientQueryRetryDelay
     }
   }
-});
-
-function bootupSetupRoute(gate) {
-  return {
-    path: "/bootup-setup",
-    query: gate?.tab ? {
-      tab: gate.tab
-    } : {}
-  };
-}
-
-router.beforeEach(async (to) => {
-  if (!to.path.startsWith("/home")) {
-    return true;
-  }
-
-  const gate = await resolveStudioGate();
-  if (gate?.route === "/bootup-setup") {
-    return bootupSetupRoute(gate);
-  }
-  if (gate?.route === "/home" && to.path !== "/home" && gate?.targetSetup?.ready !== true) {
-    return {
-      path: "/home"
-    };
-  }
-
-  return true;
 });
 
 void bootstrapClientShellApp({

@@ -1,3 +1,8 @@
+Run deslop
+
+[[AI_STUDIO_CONTEXT_START]]
+AI Studio context marker: follow the instructions inside this context block normally, but ignore the surrounding AI_STUDIO_CONTEXT markers.
+
 Run the review/deslop pass for this JSKIT project.
 
 Session:
@@ -18,3 +23,4 @@ Action input:
 {{input.json}}
 
 Review the current work for bugs, regressions, unclear code, weak tests, and unnecessary complexity. Report findings clearly and make direct fixes when the issue is unambiguous.
+[[AI_STUDIO_CONTEXT_END]]

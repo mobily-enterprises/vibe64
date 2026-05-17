@@ -1,3 +1,8 @@
+Create issue file
+
+[[AI_STUDIO_CONTEXT_START]]
+AI Studio context marker: follow the instructions inside this context block normally, but ignore the surrounding AI_STUDIO_CONTEXT markers.
+
 Create the local issue files for this JSKIT project.
 
 Session:
@@ -5,11 +10,7 @@ Session:
 - current step: {{session.currentStep}}
 - target root: {{session.targetRoot}}
 - worktree path: {{session.worktreePath}}
-- AI Studio session root: {{session.sessionRoot}}
 - artifacts root: {{session.artifactsRoot}}
-
-Known session metadata:
-{{session.metadata.json}}
 
 JSKIT project facts:
 {{adapter.facts.json}}
@@ -20,7 +21,7 @@ JSKIT prompt context:
 Action input:
 {{input.json}}
 
-Use npx jskit ... if JSKIT project inspection is useful. Inspect this AI Studio session through the AI Studio session root above.
+Use npx jskit ... if JSKIT project inspection is useful. Use the current Codex conversation and Action input as the source of truth for the issue. Do not inspect AI Studio session internals, session files, or existing artifact files.
 
 Write the reviewed issue title to:
 {{session.artifactsRoot}}/issue_title
@@ -29,3 +30,4 @@ Write the reviewed issue body to:
 {{session.artifactsRoot}}/issue.md
 
 Keep the issue focused on the scoped work.
+[[AI_STUDIO_CONTEXT_END]]

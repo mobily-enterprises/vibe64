@@ -1,3 +1,8 @@
+Create PR file
+
+[[AI_STUDIO_CONTEXT_START]]
+AI Studio context marker: follow the instructions inside this context block normally, but ignore the surrounding AI_STUDIO_CONTEXT markers.
+
 Create the local pull request file for this JSKIT project.
 
 Session:
@@ -22,3 +27,4 @@ Write the reviewed pull request body to:
 {{session.artifactsRoot}}/pull_request.md
 
 Keep it focused on the accepted issue, implementation summary, checks run, and any remaining risk.
+[[AI_STUDIO_CONTEXT_END]]

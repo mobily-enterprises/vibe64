@@ -1,3 +1,8 @@
+Run {{action.label}}
+
+[[AI_STUDIO_CONTEXT_START]]
+AI Studio context marker: follow the instructions inside this context block normally, but ignore the surrounding AI_STUDIO_CONTEXT markers.
+
 You are working in a JSKIT project through AI Studio.
 
 Run this JSKIT workflow prompt.
@@ -25,4 +30,5 @@ JSKIT prompt context:
 Action input:
 {{input.json}}
 
-Respond in the terminal with the work completed, files modified, checks run, and remaining blockers.
+In your normal Codex response, report the work completed, files modified, checks run, and remaining blockers. Do not run shell commands just to display this response.
+[[AI_STUDIO_CONTEXT_END]]

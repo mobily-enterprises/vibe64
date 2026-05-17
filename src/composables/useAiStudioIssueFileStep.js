@@ -47,10 +47,19 @@ function useAiStudioIssueFileStep({
 
   const sendIssuePromptAction = computed(() => actionById(selectedSession.value, SEND_ISSUE_PROMPT_ACTION_ID));
   const sentIssueRequest = computed(() => issueRequestFromSession(selectedSession.value));
+  const createIssueFilePromptRendered = computed(() => {
+    return Boolean(latestAiStudioActionResult(selectedSession.value, CREATE_ISSUE_FILE_ACTION_ID));
+  });
+  const filesReady = computed(() => issueFilesAreReady(selectedSession.value));
   const formVisible = computed(() => {
     return isIssueFileStep(selectedSession.value) &&
-      !issueFilesAreReady(selectedSession.value) &&
+      !filesReady.value &&
       !sentIssueRequest.value;
+  });
+  const waitingForFiles = computed(() => {
+    return isIssueFileStep(selectedSession.value) &&
+      createIssueFilePromptRendered.value &&
+      !filesReady.value;
   });
   const canSubmit = computed(() => {
     return formVisible.value &&
@@ -135,7 +144,8 @@ function useAiStudioIssueFileStep({
     sendPrompt,
     submitting,
     submitTitle,
-    visibleActions
+    visibleActions,
+    waitingForFiles
   };
 }
 
