@@ -1,7 +1,17 @@
 import { access } from "node:fs/promises";
+import path from "node:path";
+import process from "node:process";
 
 function normalizeText(value) {
   return String(value ?? "").trim();
+}
+
+function isPlainObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value);
+}
+
+function normalizeTargetRoot(targetRoot = process.cwd()) {
+  return path.resolve(normalizeText(targetRoot) || process.cwd());
 }
 
 function aiStudioError(message, code) {
@@ -28,7 +38,9 @@ async function pathExists(filePath) {
 
 export {
   aiStudioError,
+  isPlainObject,
   isMissingPathError,
   normalizeText,
+  normalizeTargetRoot,
   pathExists
 };

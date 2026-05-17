@@ -86,6 +86,7 @@ function createDoctorPluginToolkit({
   startTerminalSession = null,
   studioRoot = "",
   targetRoot = "",
+  terminalEnv = {},
   terminalNamespace = ""
 } = {}) {
   // Root helpers: adapters can work with the Studio checkout and the target app without rebuilding paths.
@@ -316,6 +317,7 @@ function createDoctorPluginToolkit({
     command = "bash",
     commandPreview = "",
     cwd = "",
+    env = {},
     fields = [],
     input,
     label = "",
@@ -356,6 +358,10 @@ function createDoctorPluginToolkit({
           command: textValue(resolveOption(command, context)),
           commandPreview: preview(context),
           cwd: textValue(resolveOption(cwd, context) || targetRootFor(context)),
+          env: {
+            ...(resolveOption(terminalEnv, context) || {}),
+            ...(resolveOption(env, context) || {})
+          },
           namespace: terminalNamespace
         });
       }

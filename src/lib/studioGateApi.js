@@ -4,6 +4,7 @@ import {
 } from "@/lib/studioHttp.js";
 
 const TARGET_PROJECT_API_SUFFIX = "/studio/current-app";
+const AI_STUDIO_PROJECT_CONFIG_API_SUFFIX = "/ai-studio/project-config";
 const AI_STUDIO_PROJECT_TYPE_API_SUFFIX = "/ai-studio/project-type";
 
 const BOOTSTRAP_ENDPOINT = studioApiPath("studio/bootstrap");
@@ -11,6 +12,7 @@ const TARGET_BOOTUP_ENDPOINT = studioApiPath("studio/target-app");
 const TARGET_SETUP_ENDPOINT = studioApiPath("studio/app-setup");
 const TARGET_PROJECT_ENDPOINT = studioApiPath("studio/current-app");
 const AI_STUDIO_ENDPOINT = studioApiPath("ai-studio");
+const PROJECT_CONFIG_ENDPOINT = `${AI_STUDIO_ENDPOINT}/project-config`;
 const PROJECT_TYPE_ENDPOINT = `${AI_STUDIO_ENDPOINT}/project-type`;
 
 const BOOTSTRAP_TERMINAL_ENDPOINT = `${BOOTSTRAP_ENDPOINT}/terminal`;
@@ -24,6 +26,10 @@ let lastResolvedStudioGate = null;
 
 function projectTypeQueryKey(surfaceId, ownershipFilter) {
   return ["ai-studio", surfaceId, ownershipFilter, "project-type"];
+}
+
+function projectConfigQueryKey(surfaceId, ownershipFilter) {
+  return ["ai-studio", surfaceId, ownershipFilter, "project-config"];
 }
 
 function targetProjectQueryKey(surfaceId, ownershipFilter) {
@@ -65,6 +71,10 @@ async function readAiStudioProjectType() {
   return studioHttpClient.get(PROJECT_TYPE_ENDPOINT);
 }
 
+async function readAiStudioProjectConfig() {
+  return studioHttpClient.get(PROJECT_CONFIG_ENDPOINT);
+}
+
 async function resolveStudioGate() {
   const bootstrap = await readBootstrapStatus();
   if (bootstrap?.ready !== true) {
@@ -102,6 +112,22 @@ async function resolveStudioGate() {
     });
   }
 
+  const projectConfigResponse = await readAiStudioProjectConfig();
+  const projectConfig = projectConfigResponse?.config || {};
+  if (projectConfig.ready !== true) {
+    return rememberStudioGate({
+      bootstrap,
+      projectConfig,
+      targetProject: {
+        ...targetProject,
+        projectType,
+        projectConfig
+      },
+      route: "/home",
+      targetBootup
+    });
+  }
+
   const targetSetup = await readTargetSetupStatus();
   if (targetSetup?.ready !== true) {
     return rememberStudioGate({
@@ -122,6 +148,7 @@ async function resolveStudioGate() {
 }
 
 export {
+  AI_STUDIO_PROJECT_CONFIG_API_SUFFIX,
   AI_STUDIO_PROJECT_TYPE_API_SUFFIX,
   TARGET_SETUP_STREAM_ENDPOINT,
   TARGET_SETUP_TERMINAL_ENDPOINT,
@@ -131,7 +158,9 @@ export {
   TARGET_BOOTUP_STREAM_ENDPOINT,
   TARGET_BOOTUP_TERMINAL_ENDPOINT,
   consumeStudioGate,
+  projectConfigQueryKey,
   projectTypeQueryKey,
+  readAiStudioProjectConfig,
   readTargetSetupStatus,
   readAiStudioProjectType,
   readBootstrapStatus,

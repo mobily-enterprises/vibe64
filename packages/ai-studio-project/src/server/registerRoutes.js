@@ -1,8 +1,14 @@
 import { resolveScopedApiBasePath, normalizeSurfaceId } from "@jskit-ai/kernel/shared/surface";
 
-import { projectTypeInputValidator } from "./inputSchemas.js";
 import {
+  projectConfigInputValidator,
+  projectTypeInputValidator
+} from "./inputSchemas.js";
+import {
+  ACTION_READ_PROJECT_CONFIG,
+  ACTION_READ_PROJECT_CONFIG_DEFAULTS,
   ACTION_READ_PROJECT_TYPE,
+  ACTION_SAVE_PROJECT_CONFIG,
   ACTION_SAVE_PROJECT_TYPE
 } from "./actions.js";
 import {
@@ -79,6 +85,76 @@ function registerRoutes(
       }
       const response = await request.executeAction({
         actionId: ACTION_SAVE_PROJECT_TYPE,
+        input: requestBodyObject(request)
+      });
+      reply.code(aiStudioStatusCode(response)).send(response);
+    }
+  );
+
+  router.register(
+    "GET",
+    `${routeBase}/project-config`,
+    {
+      auth: "public",
+      surface: normalizedRouteSurface,
+      meta: {
+        tags: ["studio", "ai-studio-project"],
+        summary: "Read the AI Studio project configuration."
+      }
+    },
+    async function (request, reply) {
+      if (!requireLocalAiStudioRequest(request, reply)) {
+        return;
+      }
+      const response = await request.executeAction({
+        actionId: ACTION_READ_PROJECT_CONFIG,
+        input: {}
+      });
+      reply.code(aiStudioStatusCode(response)).send(response);
+    }
+  );
+
+  router.register(
+    "GET",
+    `${routeBase}/project-config/defaults`,
+    {
+      auth: "public",
+      surface: normalizedRouteSurface,
+      meta: {
+        tags: ["studio", "ai-studio-project"],
+        summary: "Read default AI Studio project configuration values."
+      }
+    },
+    async function (request, reply) {
+      if (!requireLocalAiStudioRequest(request, reply)) {
+        return;
+      }
+      const response = await request.executeAction({
+        actionId: ACTION_READ_PROJECT_CONFIG_DEFAULTS,
+        input: {}
+      });
+      reply.code(aiStudioStatusCode(response)).send(response);
+    }
+  );
+
+  router.register(
+    "PUT",
+    `${routeBase}/project-config`,
+    {
+      auth: "public",
+      surface: normalizedRouteSurface,
+      meta: {
+        tags: ["studio", "ai-studio-project"],
+        summary: "Save the AI Studio project configuration."
+      },
+      body: projectConfigInputValidator
+    },
+    async function (request, reply) {
+      if (!requireLocalAiStudioRequest(request, reply)) {
+        return;
+      }
+      const response = await request.executeAction({
+        actionId: ACTION_SAVE_PROJECT_CONFIG,
         input: requestBodyObject(request)
       });
       reply.code(aiStudioStatusCode(response)).send(response);

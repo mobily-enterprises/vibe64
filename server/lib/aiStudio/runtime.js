@@ -173,6 +173,7 @@ class AiStudioSessionRuntime {
     adapter = new TargetAdapter(),
     clock = undefined,
     defaultHandler = defaultActionHandler,
+    projectConfig = {},
     store = undefined,
     targetRoot = process.cwd(),
     workflow = DEFAULT_AI_STUDIO_WORKFLOW
@@ -184,6 +185,9 @@ class AiStudioSessionRuntime {
       ? defaultHandler
       : defaultActionHandler;
     this.adapter = adapter;
+    this.projectConfig = projectConfig && typeof projectConfig === "object"
+      ? projectConfig
+      : {};
     this.workflowMachine = new WorkflowMachine({
       actionReadiness: composeActionReadiness(defaultActionReadiness, actionReadiness),
       workflow
@@ -219,14 +223,17 @@ class AiStudioSessionRuntime {
   }
 
   async sessionView(session) {
-    return this.workflowMachine.buildSessionView({
+    const sessionWithConfig = {
       ...session,
+      config: this.projectConfig,
       adapter: await this.adapterViewForSession(session)
-    });
+    };
+    return this.workflowMachine.buildSessionView(sessionWithConfig);
   }
 
   async adapterViewForSession(session) {
     const context = {
+      config: this.projectConfig,
       runtime: this,
       session,
       store: this.store,
@@ -271,6 +278,7 @@ class AiStudioSessionRuntime {
   } = {}) {
     const renderedPrompt = await this.adapter.renderPrompt({
       action,
+      config: this.projectConfig,
       input,
       runtime: this,
       session,

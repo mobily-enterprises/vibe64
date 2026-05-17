@@ -4,6 +4,7 @@ import process from "node:process";
 import {
   aiStudioError,
   isMissingPathError,
+  normalizeTargetRoot,
   normalizeText
 } from "./core.js";
 import {
@@ -11,10 +12,6 @@ import {
 } from "./sessionStore.js";
 
 const AI_STUDIO_PROJECT_TYPE_FILE = "project_type";
-
-function normalizeTargetRoot(targetRoot = process.cwd()) {
-  return path.resolve(normalizeText(targetRoot) || process.cwd());
-}
 
 function projectTypePath(targetRoot = process.cwd()) {
   return path.join(normalizeTargetRoot(targetRoot), AI_STUDIO_STATE_DIR, AI_STUDIO_PROJECT_TYPE_FILE);

@@ -122,6 +122,7 @@ function startTerminalSession({
   command,
   commandPreview,
   cwd = process.cwd(),
+  env = {},
   maxRunning = 0,
   metadata = null,
   namespace = "default",
@@ -163,10 +164,20 @@ function startTerminalSession({
       namespace
     })
     : metadata;
+  const resolvedEnv = typeof env === "function"
+    ? env({
+      args: resolvedArgs,
+      id,
+      namespace
+    })
+    : env;
   const terminal = spawnPty(command, resolvedArgs, {
     cols: 100,
     cwd,
-    env: process.env,
+    env: {
+      ...process.env,
+      ...(resolvedEnv && typeof resolvedEnv === "object" && !Array.isArray(resolvedEnv) ? resolvedEnv : {})
+    },
     name: "xterm-color",
     rows: 28
   });

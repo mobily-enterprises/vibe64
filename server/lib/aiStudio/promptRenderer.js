@@ -3,16 +3,13 @@ import path from "node:path";
 import {
   aiStudioError,
   isMissingPathError,
+  isPlainObject,
   normalizeText
 } from "./core.js";
 
 const DEFAULT_PROMPT_ID = "generic";
 const PROMPT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
 const TEMPLATE_TOKEN_PATTERN = /\{\{([A-Za-z0-9_.-]+)\}\}/gu;
-
-function isPlainObject(value) {
-  return value && typeof value === "object" && !Array.isArray(value);
-}
 
 function assertPromptId(promptId) {
   const normalizedPromptId = normalizeText(promptId);
@@ -66,12 +63,14 @@ async function readPromptTemplate(promptPackRoot, promptId) {
 
 function promptContextForAction({
   action = {},
+  config = {},
   input = {},
   session = {}
 } = {}) {
   return normalizePromptContext({
     action,
     adapter: session.adapter,
+    config: config || session.config,
     input,
     session: sessionPromptContext(session)
   });
@@ -93,6 +92,7 @@ function normalizePromptContext(context = {}) {
       label: normalizeText(context.adapter?.label),
       promptContext: isPlainObject(context.adapter?.promptContext) ? context.adapter.promptContext : {}
     },
+    config: isPlainObject(context.config) ? context.config : {},
     input: context.input ?? {},
     product: normalizeText(context.product || "ai-studio"),
     session: {
@@ -137,6 +137,7 @@ function promptTemplateTokens(contextInput) {
     "adapter.id": context.adapter.id,
     "adapter.label": context.adapter.label,
     "adapter.promptContext.json": stableJson(context.adapter.promptContext),
+    "config.json": stableJson(context.config),
     "context.json": stableJson(context),
     "input.json": stableJson(context.input),
     "product": context.product,
@@ -172,11 +173,13 @@ class PromptRenderer {
 
   async renderPrompt({
     action,
+    config = {},
     input = {},
     session
   } = {}) {
     const context = promptContextForAction({
       action,
+      config,
       input,
       session
     });

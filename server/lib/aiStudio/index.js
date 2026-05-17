@@ -32,6 +32,15 @@ export {
   projectTypePath
 } from "./projectType.js";
 export {
+  AI_STUDIO_CONFIG_DIR,
+  AI_STUDIO_CONFIG_HELPER_FILE,
+  AI_STUDIO_GENERAL_CONFIG_FIELDS,
+  AI_STUDIO_RUNTIME_DIR,
+  createAiStudioProjectConfigStore,
+  normalizeConfigDefinition,
+  resolveAiStudioConfigPaths
+} from "./configStore.js";
+export {
   WorkflowMachine,
   normalizeWorkflow
 } from "./workflowMachine.js";

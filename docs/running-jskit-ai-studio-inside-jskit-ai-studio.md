@@ -172,15 +172,15 @@ resolution trick. Sibling repos provide the session ownership boundary.
 In this repo, the development hook is intentionally opt-in. The important pieces
 are:
 
-- `JSKIT_DEVLINKS=/path/to/jskit-ai`
-- `JSKIT_AI_ROOT=/path/to/jskit-ai`
-- `.jskit/config/devel_jskit_ai_root`
+- `.ai-studio/config/enable_recursive_ai_studio_opening`
+- `.ai-studio/config/recursive_ai_studio_local_jskit_ai_root`
 - `scripts/devel-link-local-packages-postinstall.sh`
 - `scripts/devel-provision-jskit-ai-studio-session.sh`
 
 The postinstall hook does not force devlinks on normal users. A clean checkout
-with no development config installs normal npm packages. If development config
-is present, the hook can link local JSKIT packages. Inside JSKIT issue sessions,
+with recursive opening disabled installs normal npm packages. If the Studio
+config screen enables recursive opening and points at a companion `jskit-ai`
+checkout, the hook can link local JSKIT packages. Inside JSKIT issue sessions,
 the provisioning script takes over and turns that local source into
 session-owned sibling clones.
 
@@ -266,11 +266,11 @@ The solution is a development-only provisioning hook:
 The JSKIT session runtime invokes that hook after the session worktree exists
 and dependencies are installed or adopted. The script then:
 
-1. Copies `.jskit/config` from the target root into the session worktree.
-2. Reads development sibling configuration.
+1. Reads Studio's recursive-opening config.
+2. Uses the configured companion `jskit-ai` checkout as the sibling source.
 3. Clones configured sibling repos into the session.
 4. Creates session branches in those siblings.
-5. Writes session-local config such as `devel_jskit_ai_root`.
+5. Writes session-local companion config for those sibling repos.
 6. Runs `jskit app link-local-packages` so `node_modules` points at the
    session-owned package sources.
 
@@ -347,10 +347,10 @@ needs access to the host Docker daemon.
 For development, this is enabled with:
 
 ```text
-.jskit/config/devel_app_test_host_docker
+.ai-studio/config/enable_recursive_ai_studio_opening
 ```
 
-When that config is enabled, app-test containers get:
+When that Studio config value is enabled, nested target-script containers get:
 
 - `DOCKER_HOST=unix:///var/run/docker.sock`
 - `/var/run/docker.sock:/var/run/docker.sock`
@@ -465,8 +465,8 @@ milliseconds.
 
 The final development shape is:
 
-1. Start Studio with local development config, such as `JSKIT_DEVLINKS` or
-   `.jskit/config/devel_jskit_ai_root`.
+1. Start Studio, choose the JSKIT project type, and enable recursive opening in
+   the Studio config screen when dogfooding `jskit-ai-studio`.
 2. Create a JSKIT issue session for `jskit-ai-studio`.
 3. The session worktree is provisioned with copied config and sibling repos.
 4. The worktree links JSKIT packages from session-owned sibling clones.

@@ -10,9 +10,6 @@ import { promisify } from "node:util";
 import { loadAppConfigFromAppRoot } from "@jskit-ai/kernel/server/support";
 
 import {
-  AI_STUDIO_STATE_DIR
-} from "../../sessionStore.js";
-import {
   pathExists
 } from "../../core.js";
 import {
@@ -38,10 +35,12 @@ import {
   containerWorkspacePath,
   removeDockerContainer
 } from "../../../containerRuntime.js";
+import {
+  ENABLE_RECURSIVE_AI_STUDIO_OPENING_CONFIG,
+  recursiveAiStudioOpeningEnabled
+} from "./sessionHooks.js";
 
 const execFileAsync = promisify(execFile);
-const TARGET_TERMINAL_CONFIG_DIR = `${AI_STUDIO_STATE_DIR}/config`;
-const TARGET_TERMINAL_HOST_DOCKER_CONFIG = `${TARGET_TERMINAL_CONFIG_DIR}/target_terminal_host_docker`;
 const DEFAULT_TARGET_SCRIPT_NAMES = Object.freeze([
   "jskit:update",
   "devlinks",
@@ -69,11 +68,6 @@ const JSKIT_PROJECT_DIRECTORIES = Object.freeze([
   { id: "tests", label: "tests", relativePath: "tests" }
 ]);
 
-function isEnabledConfigValue(value) {
-  const normalized = String(value || "").trim().toLowerCase();
-  return Boolean(normalized) && !["0", "false", "no", "off"].includes(normalized);
-}
-
 function targetTerminalHostDockerArgs(enabled = false) {
   if (!enabled) {
     return [];
@@ -99,25 +93,11 @@ function targetTerminalHostDockerArgs(enabled = false) {
   return args;
 }
 
-async function readOptionalConfigFile(appRoot, relativePath, fallback) {
-  const configPath = path.join(appRoot, relativePath);
-  try {
-    const value = String(await readFile(configPath, "utf8")).trim();
-    return value || fallback;
-  } catch (error) {
-    if (error?.code === "ENOENT") {
-      return fallback;
-    }
-    throw new Error(`Cannot read ${relativePath}: ${String(error?.message || error)}`);
-  }
-}
-
-async function resolveTargetTerminalConfig(appRoot) {
-  const hostDockerValue = await readOptionalConfigFile(appRoot, TARGET_TERMINAL_HOST_DOCKER_CONFIG, "");
-  const hostDocker = isEnabledConfigValue(hostDockerValue);
+function resolveTargetTerminalConfig(config = {}) {
+  const hostDocker = recursiveAiStudioOpeningEnabled(config);
   return {
     hostDocker,
-    hostDockerSource: hostDocker ? TARGET_TERMINAL_HOST_DOCKER_CONFIG : ""
+    hostDockerSource: hostDocker ? ENABLE_RECURSIVE_AI_STUDIO_OPENING_CONFIG : ""
   };
 }
 
@@ -517,7 +497,9 @@ async function inspectJskitCurrentApp(targetRoot, {
   };
 }
 
-async function createJskitTargetScriptTerminalSpec(targetRoot, input = {}) {
+async function createJskitTargetScriptTerminalSpec(targetRoot, input = {}, {
+  config = {}
+} = {}) {
   const normalizedTargetRoot = path.resolve(targetRoot || process.cwd());
   const normalizedScriptName = adapterScriptNameFromInput(input);
   if (!normalizedScriptName) {
@@ -543,14 +525,14 @@ async function createJskitTargetScriptTerminalSpec(targetRoot, input = {}) {
     };
   }
 
-  const config = await resolveTargetTerminalConfig(normalizedTargetRoot);
+  const targetTerminalConfig = resolveTargetTerminalConfig(config);
   const commandPreview = targetScriptCommandPreview(validatedScriptName);
   return {
     args: ({ id }) => targetScriptTerminalArgs({
       containerName: targetScriptContainerName({
         terminalId: id
       }),
-      hostDocker: config.hostDocker,
+      hostDocker: targetTerminalConfig.hostDocker,
       scriptName: validatedScriptName,
       targetRoot: normalizedTargetRoot,
       terminalId: id,
@@ -564,8 +546,8 @@ async function createJskitTargetScriptTerminalSpec(targetRoot, input = {}) {
     metadata: {
       command: commandPreview,
       commandPreview,
-      hostDocker: config.hostDocker,
-      hostDockerSource: config.hostDockerSource,
+      hostDocker: targetTerminalConfig.hostDocker,
+      hostDockerSource: targetTerminalConfig.hostDockerSource,
       runRoot: normalizedTargetRoot,
       scope: "target",
       scriptName: validatedScriptName
@@ -582,7 +564,6 @@ async function createJskitTargetScriptTerminalSpec(targetRoot, input = {}) {
 
 export {
   DEFAULT_TARGET_SCRIPT_NAMES,
-  TARGET_TERMINAL_HOST_DOCKER_CONFIG,
   createJskitTargetScriptTerminalSpec,
   inspectJskitCurrentApp,
   inspectJskitTargetScripts,

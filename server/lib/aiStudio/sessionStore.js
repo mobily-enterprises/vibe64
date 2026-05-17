@@ -4,6 +4,7 @@ import process from "node:process";
 import {
   aiStudioError,
   isMissingPathError,
+  normalizeTargetRoot,
   normalizeText,
   pathExists
 } from "./core.js";
@@ -24,10 +25,6 @@ const ARTIFACT_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/u;
 const METADATA_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/u;
 const SESSION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
 const STEP_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
-
-function normalizeTargetRoot(targetRoot = process.cwd()) {
-  return path.resolve(normalizeText(targetRoot) || process.cwd());
-}
 
 function isValidAiStudioSessionId(sessionId) {
   const normalizedSessionId = normalizeText(sessionId);

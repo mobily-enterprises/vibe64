@@ -175,6 +175,7 @@ async function checkJskitMysqlCapability(targetRoot = "", toolkit) {
 }
 
 function createJskitSetupDoctorPlugin({
+  configEnvironment = {},
   startTerminalSession,
   studioRoot = "",
   targetRoot = "",
@@ -184,12 +185,14 @@ function createJskitSetupDoctorPlugin({
     startTerminalSession,
     studioRoot,
     targetRoot,
+    terminalEnv: configEnvironment,
     terminalNamespace
   });
   const buildToolchainTerminal = toolkit.shellTerminalAction({
     actionId: "build-jskit-toolchain",
     commandPreview: () => buildJskitToolchainRepair().commandPreview,
     cwd: ({ targetRoot = "" } = {}) => studioRoot || targetRoot,
+    env: configEnvironment,
     label: "Build JSKIT toolchain",
     script: buildJskitToolchainScript
   });
@@ -197,6 +200,7 @@ function createJskitSetupDoctorPlugin({
     actionId: "start-jskit-mysql",
     commandPreview: () => startJskitMysqlRepair().commandPreview,
     cwd: ({ targetRoot = "" } = {}) => studioRoot || targetRoot,
+    env: configEnvironment,
     label: "Start JSKIT MySQL",
     script: startJskitMysqlScript
   });

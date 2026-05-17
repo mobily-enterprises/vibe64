@@ -4,7 +4,9 @@ import process from "node:process";
 import {
   AiStudioSessionRuntime,
   createAiStudioAdapterRegistry,
-  createAiStudioProjectTypeStore
+  createAiStudioProjectConfigStore,
+  createAiStudioProjectTypeStore,
+  normalizeConfigDefinition
 } from "../../../../server/lib/aiStudio/index.js";
 import {
   aiStudioResult
@@ -49,6 +51,9 @@ function projectTypeMessage(status = "", projectType = "") {
 function createService({ targetRoot = "" } = {}) {
   const resolvedTargetRoot = resolveAiStudioTargetRoot(targetRoot);
   const adapterRegistry = createAiStudioAdapterRegistry();
+  const projectConfigStore = createAiStudioProjectConfigStore({
+    targetRoot: resolvedTargetRoot
+  });
   const projectTypeStore = createAiStudioProjectTypeStore({
     targetRoot: resolvedTargetRoot
   });
@@ -99,11 +104,100 @@ function createService({ targetRoot = "" } = {}) {
     return readProjectTypeState();
   }
 
-  async function createRuntime() {
+  async function createProjectAdapter() {
     const projectType = await requireProjectType();
     const adapter = await adapterRegistry.createAdapter(projectType.projectType);
+    return {
+      adapter,
+      projectType
+    };
+  }
+
+  async function projectConfigDefinition(adapter, projectType) {
+    const configContext = {
+      adapter,
+      projectType,
+      targetRoot: resolvedTargetRoot
+    };
+    const [adapterFields, adapterDefaults] = await Promise.all([
+      adapter.getConfigFields(configContext),
+      adapter.getDefaultConfig(configContext)
+    ]);
+    return {
+      adapterFields,
+      adapterLabel: adapter.label,
+      defaultValues: adapterDefaults
+    };
+  }
+
+  function configResponse({
+    adapter,
+    config,
+    projectType
+  } = {}) {
+    return {
+      ...config,
+      adapter: {
+        id: adapter.id,
+        label: adapter.label
+      },
+      projectType: projectType.projectType
+    };
+  }
+
+  async function readProjectConfigForAdapter(adapter, projectType) {
+    const config = await projectConfigStore.readConfig(
+      await projectConfigDefinition(adapter, projectType)
+    );
+    return configResponse({
+      adapter,
+      config,
+      projectType
+    });
+  }
+
+  async function readProjectConfigState() {
+    const { adapter, projectType } = await createProjectAdapter();
+    return readProjectConfigForAdapter(adapter, projectType);
+  }
+
+  async function readProjectConfigDefaultsState() {
+    const { adapter, projectType } = await createProjectAdapter();
+    const config = normalizeConfigDefinition(await projectConfigDefinition(adapter, projectType));
+    return {
+      adapter: {
+        id: adapter.id,
+        label: adapter.label
+      },
+      configRoot: projectConfigStore.configRoot,
+      defaults: config.defaults,
+      fields: config.fields,
+      helperPath: projectConfigStore.helperPath,
+      projectType: projectType.projectType,
+      runtimeRoot: projectConfigStore.runtimeRoot,
+      sections: config.sections
+    };
+  }
+
+  async function saveProjectConfigState(input = {}) {
+    const { adapter, projectType } = await createProjectAdapter();
+    const config = await projectConfigStore.saveConfig({
+      definition: await projectConfigDefinition(adapter, projectType),
+      values: input?.values || {}
+    });
+    return configResponse({
+      adapter,
+      config,
+      projectType
+    });
+  }
+
+  async function createRuntime() {
+    const { adapter, projectType } = await createProjectAdapter();
+    const projectConfig = await readProjectConfigForAdapter(adapter, projectType);
     return new AiStudioSessionRuntime({
       adapter,
+      projectConfig,
       targetRoot: resolvedTargetRoot
     });
   }
@@ -122,8 +216,30 @@ function createService({ targetRoot = "" } = {}) {
       });
     },
 
+    async readProjectConfig() {
+      return projectResult(async () => {
+        return {
+          config: await readProjectConfigState(),
+          ok: true
+        };
+      });
+    },
+
+    async readProjectConfigDefaults() {
+      return projectResult(async () => {
+        return {
+          defaults: await readProjectConfigDefaultsState(),
+          ok: true
+        };
+      });
+    },
+
     async requireProjectType() {
       return requireProjectType();
+    },
+
+    async projectConfigEnvironment() {
+      return projectConfigStore.environment();
     },
 
     async saveProjectType(input = {}) {
@@ -131,6 +247,15 @@ function createService({ targetRoot = "" } = {}) {
         return {
           ok: true,
           projectType: await saveProjectTypeState(input)
+        };
+      });
+    },
+
+    async saveProjectConfig(input = {}) {
+      return projectResult(async () => {
+        return {
+          config: await saveProjectConfigState(input),
+          ok: true
         };
       });
     },

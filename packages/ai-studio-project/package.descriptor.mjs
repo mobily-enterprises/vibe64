@@ -33,11 +33,11 @@ export default Object.freeze({
       surfaces: [
         {
           subpath: "./server/registerRoutes",
-          summary: "Registers AI Studio project type read/write routes."
+          summary: "Registers AI Studio project type and project config read/write routes."
         },
         {
           subpath: "./server/service",
-          summary: "Provides project type state and adapter-backed session runtime creation."
+          summary: "Provides project type state, project config state, and adapter-backed session runtime creation."
         }
       ],
       containerTokens: {

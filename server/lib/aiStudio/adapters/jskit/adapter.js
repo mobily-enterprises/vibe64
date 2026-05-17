@@ -25,6 +25,10 @@ import {
 import {
   createJskitSetupDoctorPlugin
 } from "./setupDoctorPlugin.js";
+import {
+  ENABLE_RECURSIVE_AI_STUDIO_OPENING_CONFIG,
+  RECURSIVE_AI_STUDIO_COMPANION_ROOT_CONFIG
+} from "./sessionHooks.js";
 
 const JSKIT_MARKERS = deepFreeze([
   {
@@ -56,6 +60,65 @@ const JSKIT_MARKERS = deepFreeze([
 
 const JSKIT_BLUEPRINT_RELATIVE_PATH = ".jskit/APP_BLUEPRINT.md";
 const JSKIT_PROMPT_PACK_ROOT = fileURLToPath(new URL("./prompts", import.meta.url));
+const JSKIT_CONFIG_FIELDS = deepFreeze([
+  {
+    defaultValue: false,
+    description: "Allow this Studio checkout to open and provision a local jskit-ai companion checkout.",
+    id: ENABLE_RECURSIVE_AI_STUDIO_OPENING_CONFIG,
+    label: "Enable recursive AI Studio opening",
+    type: "boolean"
+  },
+  {
+    defaultValue: "",
+    description: "Optional local companion jskit-ai checkout used only when recursive opening is enabled.",
+    id: RECURSIVE_AI_STUDIO_COMPANION_ROOT_CONFIG,
+    label: "Companion jskit-ai root",
+    required: false,
+    type: "path"
+  },
+  {
+    defaultValue: "none",
+    description: "Future JSKIT database runtime preference.",
+    id: "jskit_database_runtime",
+    label: "Database runtime",
+    options: [
+      {
+        label: "None",
+        value: "none"
+      },
+      {
+        label: "MySQL",
+        value: "mysql"
+      },
+      {
+        label: "Postgres",
+        value: "postgres"
+      }
+    ],
+    type: "select"
+  },
+  {
+    defaultValue: "none",
+    description: "Future JSKIT tenancy preference.",
+    id: "jskit_tenancy_mode",
+    label: "Tenancy mode",
+    options: [
+      {
+        label: "None",
+        value: "none"
+      },
+      {
+        label: "Single tenant",
+        value: "single"
+      },
+      {
+        label: "Multi tenant",
+        value: "multi"
+      }
+    ],
+    type: "select"
+  }
+]);
 
 function commandCapabilities(commands = []) {
   return Object.fromEntries(commands.map((command) => [command.id, true]));
@@ -111,6 +174,14 @@ function missingMarkerLabels(markers) {
 function packageScripts(packageJson = {}) {
   return Object.keys(packageJson.scripts || {})
     .sort((left, right) => left.localeCompare(right));
+}
+
+function defaultRecursiveCompanionRoot() {
+  const devlinks = normalizeText(process.env.JSKIT_DEVLINKS);
+  if (devlinks && !["1", "true", "yes", "on", "auto"].includes(devlinks.toLowerCase())) {
+    return devlinks;
+  }
+  return normalizeText(process.env.JSKIT_AI_ROOT || process.env.JSKIT_REPO_ROOT);
 }
 
 function setupSummary(markers) {
@@ -240,6 +311,19 @@ class JskitTargetAdapter extends TargetAdapter {
     ];
   }
 
+  async getConfigFields() {
+    return JSKIT_CONFIG_FIELDS;
+  }
+
+  async getDefaultConfig() {
+    return {
+      [ENABLE_RECURSIVE_AI_STUDIO_OPENING_CONFIG]: false,
+      [RECURSIVE_AI_STUDIO_COMPANION_ROOT_CONFIG]: defaultRecursiveCompanionRoot(),
+      jskit_database_runtime: "none",
+      jskit_tenancy_mode: "none"
+    };
+  }
+
   async createCommandTerminalSpec(commandId, context = {}) {
     if (!this.commandTerminalSpecFactory) {
       return {
@@ -256,11 +340,13 @@ class JskitTargetAdapter extends TargetAdapter {
 
   async renderPrompt({
     action,
+    config = {},
     input = {},
     session
   } = {}) {
     return this.promptRenderer.renderPrompt({
       action,
+      config,
       input,
       session
     });
@@ -277,30 +363,38 @@ class JskitTargetAdapter extends TargetAdapter {
   }
 
   async inspectCurrentApp({
+    config = {},
     includeGit = true,
     targetRoot = ""
   } = {}) {
+    void config;
     return inspectJskitCurrentApp(targetRoot || process.cwd(), {
       includeGit
     });
   }
 
   async listCurrentAppTargetScripts({
+    config = {},
     targetRoot = ""
   } = {}) {
+    void config;
     return inspectJskitTargetScripts(targetRoot || process.cwd());
   }
 
   async createCurrentAppTargetScriptTerminalSpec({
+    config = {},
     input = {},
     targetRoot = ""
   } = {}) {
-    return createJskitTargetScriptTerminalSpec(targetRoot || process.cwd(), input);
+    return createJskitTargetScriptTerminalSpec(targetRoot || process.cwd(), input, {
+      config
+    });
   }
 }
 
 export {
   JSKIT_MARKERS,
+  JSKIT_CONFIG_FIELDS,
   JSKIT_PROMPT_PACK_ROOT,
   JskitTargetAdapter
 };

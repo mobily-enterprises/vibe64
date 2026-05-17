@@ -777,6 +777,8 @@ async function setupCheckChain({
 }
 
 async function runCoreSetupChecks({
+  config = {},
+  configEnvironment = {},
   emit = null,
   runGitCommand = null,
   setupPlugins = [],
@@ -785,6 +787,8 @@ async function runCoreSetupChecks({
 } = {}) {
   const resolvedTargetRoot = path.resolve(String(targetRoot || process.cwd()));
   const context = {
+    config,
+    configEnvironment,
     runGitCommand,
     studioRoot,
     targetRoot: resolvedTargetRoot
@@ -826,6 +830,7 @@ async function inspectAppSetup(options = {}) {
 function startDockerTerminal({
   args,
   commandPreview,
+  env = {},
   targetRoot
 }) {
   return startTerminalSession({
@@ -833,27 +838,30 @@ function startDockerTerminal({
     command: "docker",
     commandPreview,
     cwd: targetRoot,
+    env,
     namespace: TERMINAL_NAMESPACE
   });
 }
 
-function startGitInitTerminal(targetRoot) {
+function startGitInitTerminal(targetRoot, env = {}) {
   return startDockerTerminal({
     args: gitInitTerminalArgs(targetRoot),
     commandPreview: gitInitRepair(targetRoot).commandPreview,
+    env,
     targetRoot
   });
 }
 
-function startGhCreateRepoTerminal(targetRoot) {
+function startGhCreateRepoTerminal(targetRoot, env = {}) {
   return startDockerTerminal({
     args: ghRepoCreateTerminalArgs(targetRoot),
     commandPreview: ghRepoCreateRepair(targetRoot).commandPreview,
+    env,
     targetRoot
   });
 }
 
-function startLinkRemoteTerminal(targetRoot, input = {}) {
+function startLinkRemoteTerminal(targetRoot, input = {}, env = {}) {
   const validation = validateGithubRemoteInput(input);
   if (!validation.ok) {
     return {
@@ -878,11 +886,12 @@ function startLinkRemoteTerminal(targetRoot, input = {}) {
   return startDockerTerminal({
     args,
     commandPreview: `git remote add origin ${shellQuote(validation.url)}`,
+    env,
     targetRoot
   });
 }
 
-function startGitCheckpointTerminal(targetRoot, input = {}) {
+function startGitCheckpointTerminal(targetRoot, input = {}, env = {}) {
   const validation = validateCommitMessage(input.commitMessage);
   if (!validation.ok) {
     return {
@@ -903,6 +912,7 @@ function startGitCheckpointTerminal(targetRoot, input = {}) {
   return startDockerTerminal({
     args,
     commandPreview: gitCheckpointRepair().commandPreview.replace("<commitMessage>", validation.commitMessage),
+    env,
     targetRoot
   });
 }
@@ -916,20 +926,37 @@ function createService({
   const resolvedStudioRoot = path.resolve(String(studioRoot || process.cwd()));
   const readyStatusCache = createReadyStatusCache();
 
-  async function loadSetupPlugins() {
+  async function loadAdapterSetupRuntime() {
     if (!projectService || typeof projectService.createRuntime !== "function") {
-      return [];
+      return {
+        config: {},
+        configEnvironment: {},
+        setupPlugins: []
+      };
     }
     const runtime = await projectService.createRuntime();
     if (typeof runtime.adapter?.getSetupDoctorPlugins !== "function") {
-      return [];
+      return {
+        config: runtime.projectConfig || {},
+        configEnvironment: {},
+        setupPlugins: []
+      };
     }
-    return runtime.adapter.getSetupDoctorPlugins({
-      startTerminalSession,
-      studioRoot: resolvedStudioRoot,
-      targetRoot: resolvedTargetRoot,
-      terminalNamespace: TERMINAL_NAMESPACE
-    });
+    const configEnvironment = typeof projectService.projectConfigEnvironment === "function"
+      ? await projectService.projectConfigEnvironment()
+      : {};
+    return {
+      config: runtime.projectConfig || {},
+      configEnvironment,
+      setupPlugins: await runtime.adapter.getSetupDoctorPlugins({
+        config: runtime.projectConfig || {},
+        configEnvironment,
+        startTerminalSession,
+        studioRoot: resolvedStudioRoot,
+        targetRoot: resolvedTargetRoot,
+        terminalNamespace: TERMINAL_NAMESPACE
+      })
+    };
   }
 
   return Object.freeze({
@@ -938,17 +965,23 @@ function createService({
       if (cachedStatus) {
         return cachedStatus;
       }
+      const setupRuntime = await loadAdapterSetupRuntime();
       return readyStatusCache.remember(await inspectAppSetup({
-        setupPlugins: await loadSetupPlugins(),
+        config: setupRuntime.config,
+        configEnvironment: setupRuntime.configEnvironment,
+        setupPlugins: setupRuntime.setupPlugins,
         studioRoot: resolvedStudioRoot,
         targetRoot: resolvedTargetRoot
       }));
     },
 
     async streamStatus({ emit } = {}) {
+      const setupRuntime = await loadAdapterSetupRuntime();
       return readyStatusCache.remember(await inspectAppSetup({
+        config: setupRuntime.config,
+        configEnvironment: setupRuntime.configEnvironment,
         emit,
-        setupPlugins: await loadSetupPlugins(),
+        setupPlugins: setupRuntime.setupPlugins,
         studioRoot: resolvedStudioRoot,
         targetRoot: resolvedTargetRoot
       }));
@@ -958,27 +991,30 @@ function createService({
       actionId,
       inputs = {}
     } = {}) {
+      const setupRuntime = await loadAdapterSetupRuntime();
       if (actionId === "terminal-git-init") {
-        return startGitInitTerminal(resolvedTargetRoot);
+        return startGitInitTerminal(resolvedTargetRoot, setupRuntime.configEnvironment);
       }
       if (actionId === "terminal-gh-create-repo") {
-        return startGhCreateRepoTerminal(resolvedTargetRoot);
+        return startGhCreateRepoTerminal(resolvedTargetRoot, setupRuntime.configEnvironment);
       }
       if (actionId === "terminal-link-github-remote") {
-        return startLinkRemoteTerminal(resolvedTargetRoot, inputs);
+        return startLinkRemoteTerminal(resolvedTargetRoot, inputs, setupRuntime.configEnvironment);
       }
       if (actionId === "terminal-git-checkpoint") {
-        return startGitCheckpointTerminal(resolvedTargetRoot, inputs);
+        return startGitCheckpointTerminal(resolvedTargetRoot, inputs, setupRuntime.configEnvironment);
       }
 
       const pluginTerminal = await startDoctorPluginTerminal({
         actionId,
         context: {
+          config: setupRuntime.config,
+          configEnvironment: setupRuntime.configEnvironment,
           studioRoot: resolvedStudioRoot,
           targetRoot: resolvedTargetRoot
         },
         input: inputs,
-        plugins: await loadSetupPlugins()
+        plugins: setupRuntime.setupPlugins
       });
       if (pluginTerminal) {
         return pluginTerminal;

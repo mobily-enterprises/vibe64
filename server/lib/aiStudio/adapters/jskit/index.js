@@ -1,4 +1,5 @@
 import {
+  JSKIT_CONFIG_FIELDS,
   JSKIT_MARKERS,
   JSKIT_PROMPT_PACK_ROOT,
   JskitTargetAdapter
@@ -11,7 +12,6 @@ import {
 } from "./commandTerminalSpecs.js";
 export {
   DEFAULT_TARGET_SCRIPT_NAMES,
-  TARGET_TERMINAL_HOST_DOCKER_CONFIG,
   createJskitTargetScriptTerminalSpec,
   inspectJskitCurrentApp,
   inspectJskitTargetScripts,
@@ -74,6 +74,7 @@ function createJskitTargetAdapter({
 export {
   createJskitTargetAdapter,
   createJskitAiStudioCommandTerminalSpec,
+  JSKIT_CONFIG_FIELDS,
   JSKIT_MARKERS,
   JSKIT_PROMPT_PACK_ROOT,
   JSKIT_AI_STUDIO_COMMANDS,

@@ -1,14 +1,11 @@
 import {
   aiStudioError,
+  isPlainObject,
   normalizeText
 } from "./core.js";
 
 const ADAPTER_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
 const COMMAND_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
-
-function isPlainObject(value) {
-  return value && typeof value === "object" && !Array.isArray(value);
-}
 
 function sortedEntries(value = {}) {
   return Object.entries(isPlainObject(value) ? value : {})
@@ -174,6 +171,14 @@ class TargetAdapter {
     return [];
   }
 
+  async getConfigFields() {
+    return [];
+  }
+
+  async getDefaultConfig() {
+    return {};
+  }
+
   async createCommandTerminalSpec(commandId) {
     return {
       ok: false,
@@ -189,8 +194,10 @@ class TargetAdapter {
 
   async renderPrompt({
     action = {},
+    config = {},
     input = {}
   } = {}) {
+    void config;
     const promptId = promptIdForAction(action);
     return adapterPromptResult({
       prompt: defaultPromptText(action, input),

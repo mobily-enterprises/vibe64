@@ -123,6 +123,7 @@ async function createWorktreeTerminalSpec({
 }
 
 async function installDependenciesTerminalSpec({
+  context = {},
   session = {},
   targetRoot = ""
 } = {}) {
@@ -141,6 +142,7 @@ async function installDependenciesTerminalSpec({
   }
   const resolvedTargetRoot = path.resolve(targetRoot || session.targetRoot || process.cwd());
   const developmentRepoRoot = await resolveJskitDevelopmentRepoRoot({
+    config: context.config || session.config,
     targetRoot: resolvedTargetRoot
   });
   return {

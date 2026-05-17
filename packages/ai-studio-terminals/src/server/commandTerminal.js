@@ -116,6 +116,7 @@ function createCommandTerminalController({ projectService } = {}) {
         const commandInput = normalizePlainObject(input?.input);
         const spec = await runtime.adapter.createCommandTerminalSpec(action.id, {
           action,
+          config: runtime.projectConfig,
           input: commandInput,
           runtime,
           session,
@@ -129,11 +130,18 @@ function createCommandTerminalController({ projectService } = {}) {
         }
 
         const namespace = commandTerminalNamespace(sessionId);
+        const projectConfigEnv = typeof projectService.projectConfigEnvironment === "function"
+          ? await projectService.projectConfigEnvironment()
+          : {};
         return startTerminalSession({
           args: spec.args || [],
           command: spec.command,
           commandPreview: spec.commandPreview,
           cwd: spec.cwd || cwd,
+          env: {
+            ...projectConfigEnv,
+            ...(spec.env || {})
+          },
           maxRunning: 1,
           metadata: {
             actionId: action.id,

@@ -341,6 +341,12 @@ function createService({
     return projectService.createRuntime();
   }
 
+  async function projectConfigEnvironment() {
+    return typeof projectService.projectConfigEnvironment === "function"
+      ? projectService.projectConfigEnvironment()
+      : {};
+  }
+
   async function adapter() {
     return (await createRuntime()).adapter;
   }
@@ -354,8 +360,10 @@ function createService({
   }
 
   async function listAdapterScripts() {
+    const runtime = await createRuntime();
     const listTargetScripts = await requireAdapterMethod("listCurrentAppTargetScripts");
     const response = await listTargetScripts({
+      config: runtime.projectConfig,
       targetRoot
     });
     if (response?.ok === false) {
@@ -386,8 +394,10 @@ function createService({
       return projectScriptTerminalSpec(script, targetRoot);
     }
 
+    const runtime = await createRuntime();
     const createTerminalSpec = await requireAdapterMethod("createCurrentAppTargetScriptTerminalSpec");
     return createTerminalSpec({
+      config: runtime.projectConfig,
       input: {
         scriptId: script.id
       },
@@ -403,9 +413,11 @@ function createService({
         if (projectType.ready !== true) {
           return currentAppBeforeProjectType(targetRoot, projectType);
         }
+        const runtime = await createRuntime();
         const inspectCurrentApp = await requireAdapterMethod("inspectCurrentApp");
         const [currentApp, availableScripts, scriptConfig] = await Promise.all([
           inspectCurrentApp({
+            config: runtime.projectConfig,
             includeGit: input?.includeGit !== false,
             targetRoot
           }),
@@ -502,11 +514,16 @@ function createService({
         if (spec.closeExisting !== false) {
           await closeTerminalSessionsForNamespace(namespace);
         }
+        const configEnv = await projectConfigEnvironment();
         return startTerminalSession({
           args: spec.args,
           command: spec.command,
           commandPreview: spec.commandPreview,
           cwd: spec.cwd || targetRoot,
+          env: {
+            ...configEnv,
+            ...(spec.env || {})
+          },
           maxRunning: spec.maxRunning || 1,
           metadata: spec.metadata || {},
           namespace,
