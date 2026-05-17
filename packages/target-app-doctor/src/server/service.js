@@ -23,6 +23,10 @@ import {
   buildGithubRepoCreateOrLinkScript
 } from "../../../../server/lib/githubRepoSetupScript.js";
 import {
+  isGithubRemoteUrl,
+  repoSlugFromRemoteUrl
+} from "../../../../server/lib/githubRemote.js";
+import {
   gitSafeDirectoryArgs
 } from "../../../../server/lib/gitToolchainMounts.js";
 import {
@@ -520,12 +524,8 @@ async function checkGitHubAuth(targetRoot) {
   });
 }
 
-function remoteLooksLikeGitHub(remoteUrl) {
-  return /(^git@github\.com:|github\.com[:/])/iu.test(String(remoteUrl || ""));
-}
-
 async function checkGitHubRepository(targetRoot, remoteCheck) {
-  const remoteUrl = remoteCheck.status === "pass" ? remoteCheck.observed : "";
+  const remoteUrl = remoteCheck.status === "pass" ? String(remoteCheck.observed || "").trim() : "";
   if (!remoteUrl) {
     return failCheck({
       id: "github-repository",
@@ -536,7 +536,9 @@ async function checkGitHubRepository(targetRoot, remoteCheck) {
       repair: ghRepoCreateRepair(targetRoot)
     });
   }
-  if (!remoteLooksLikeGitHub(remoteUrl)) {
+
+  const repoSlug = repoSlugFromRemoteUrl(remoteUrl);
+  if (!isGithubRemoteUrl(remoteUrl) || !repoSlug) {
     return failCheck({
       id: "github-repository",
       label: "GitHub repository",
@@ -546,7 +548,7 @@ async function checkGitHubRepository(targetRoot, remoteCheck) {
     });
   }
 
-  const result = await runGh(targetRoot, ["repo", "view", "--json", "nameWithOwner,url", "--jq", ".nameWithOwner + \" \" + .url"]);
+  const result = await runGh(targetRoot, ["repo", "view", repoSlug, "--json", "nameWithOwner,url", "--jq", ".nameWithOwner + \" \" + .url"]);
   if (!result.ok) {
     return failCheck({
       id: "github-repository",
@@ -567,7 +569,7 @@ async function checkGitHubRepository(targetRoot, remoteCheck) {
   });
 }
 
-async function checkGitHubIssuePrAccess(targetRoot, repoCheck) {
+async function checkGitHubIssuePrAccess(targetRoot, repoCheck, remoteCheck) {
   if (repoCheck.status !== "pass") {
     return failCheck({
       id: "github-issues-prs",
@@ -579,9 +581,21 @@ async function checkGitHubIssuePrAccess(targetRoot, repoCheck) {
     });
   }
 
+  const repoSlug = repoSlugFromRemoteUrl(remoteCheck.status === "pass" ? remoteCheck.observed : "");
+  if (!repoSlug) {
+    return failCheck({
+      id: "github-issues-prs",
+      label: "GitHub issues and PRs",
+      expected: "gh can list issues and pull requests for the target repo.",
+      observed: "Target GitHub repository is unknown.",
+      explanation: "Studio needs issue and PR API access for the next workflow stage.",
+      repair: ghRepoCreateRepair(targetRoot)
+    });
+  }
+
   const [issueResult, prResult] = await Promise.all([
-    runGh(targetRoot, ["issue", "list", "--limit", "1"]),
-    runGh(targetRoot, ["pr", "list", "--limit", "1"])
+    runGh(targetRoot, ["issue", "list", "--repo", repoSlug, "--limit", "1"]),
+    runGh(targetRoot, ["pr", "list", "--repo", repoSlug, "--limit", "1"])
   ]);
   if (!issueResult.ok || !prResult.ok) {
     return failCheck({
@@ -830,7 +844,7 @@ async function inspectTargetApp({
   const githubIssuesPrs = await runTargetStep(emit, {
     id: "github-issues-prs",
     label: "GitHub issues and PRs",
-    run: () => checkGitHubIssuePrAccess(normalizedTargetRoot, githubRepository)
+    run: () => checkGitHubIssuePrAccess(normalizedTargetRoot, githubRepository, gitRemote)
   });
   const checks = [
     directory,

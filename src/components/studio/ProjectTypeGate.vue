@@ -38,10 +38,10 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed, proxyRefs, ref, watch } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
-import { useView } from "@jskit-ai/users-web/client/composables/useView";
+import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
 import ProjectConfigSetup from "@/components/studio/ProjectConfigSetup.vue";
 import ProjectTypeSetup from "@/components/studio/ProjectTypeSetup.vue";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
@@ -52,46 +52,67 @@ import {
 import {
   AI_STUDIO_PROJECT_CONFIG_API_SUFFIX,
   AI_STUDIO_PROJECT_TYPE_API_SUFFIX,
-  TARGET_PROJECT_API_SUFFIX,
+  PROJECT_CONFIG_ENDPOINT,
+  PROJECT_TYPE_ENDPOINT,
+  TARGET_PROJECT_ENDPOINT,
   projectConfigQueryKey,
   projectTypeQueryKey,
   targetProjectQueryKey
 } from "@/lib/studioGateApi.js";
+import {
+  studioHttpClient
+} from "@/lib/studioHttp.js";
 
 const emit = defineEmits(["ready", "missing", "error"]);
 
 const savingConfig = ref(false);
 const savingType = ref("");
 
-const targetProjectView = useView({
-  access: "never",
-  apiSuffix: TARGET_PROJECT_API_SUFFIX,
+function projectQueryKey(queryKeyFactory) {
+  return computed(() => queryKeyFactory(AI_STUDIO_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC));
+}
+
+function useStudioEndpointView({
+  enabled = true,
+  fallbackLoadError = "Request failed.",
+  path,
+  queryKeyFactory
+}) {
+  const resource = useEndpointResource({
+    client: studioHttpClient,
+    enabled,
+    fallbackLoadError,
+    path,
+    queryKey: projectQueryKey(queryKeyFactory),
+    refreshOnPull: true
+  });
+
+  return proxyRefs({
+    isLoading: resource.isLoading,
+    loadError: resource.loadError,
+    record: resource.data,
+    refresh: resource.reload,
+    resource
+  });
+}
+
+const targetProjectView = useStudioEndpointView({
   fallbackLoadError: "Target project inspection failed.",
-  ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-  placementSource: "ai-studio.target-project.view",
-  queryKeyFactory: targetProjectQueryKey,
-  surfaceId: AI_STUDIO_SURFACE_ID
+  path: TARGET_PROJECT_ENDPOINT,
+  queryKeyFactory: targetProjectQueryKey
 });
 
-const projectTypeView = useView({
-  access: "never",
-  apiSuffix: AI_STUDIO_PROJECT_TYPE_API_SUFFIX,
+const projectTypeView = useStudioEndpointView({
   fallbackLoadError: "Project type could not load.",
-  ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-  placementSource: "ai-studio.project-type.view",
-  queryKeyFactory: projectTypeQueryKey,
-  surfaceId: AI_STUDIO_SURFACE_ID
+  path: PROJECT_TYPE_ENDPOINT,
+  queryKeyFactory: projectTypeQueryKey
 });
 
-const projectConfigView = useView({
-  access: "never",
-  apiSuffix: AI_STUDIO_PROJECT_CONFIG_API_SUFFIX,
+const projectConfigView = useStudioEndpointView({
+  enabled: computed(() => projectTypeView.record?.projectType?.ready === true),
   fallbackLoadError: "Project config could not load.",
-  ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-  placementSource: "ai-studio.project-config.view",
-  queryKeyFactory: projectConfigQueryKey,
-  readEnabled: computed(() => projectTypeView.record?.projectType?.ready === true),
-  surfaceId: AI_STUDIO_SURFACE_ID
+  path: PROJECT_CONFIG_ENDPOINT,
+  queryKeyFactory: projectConfigQueryKey
 });
 
 const saveProjectTypeCommand = useCommand({

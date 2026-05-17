@@ -1,8 +1,8 @@
 import { computed, nextTick, ref } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
+import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
 import { usePaths } from "@jskit-ai/users-web/client/composables/usePaths";
-import { useView } from "@jskit-ai/users-web/client/composables/useView";
 import {
   AI_STUDIO_SESSIONS_API_SUFFIX,
   AI_STUDIO_SURFACE_ID,
@@ -26,19 +26,17 @@ function useAiStudioSessionArtifacts() {
     surface: AI_STUDIO_SURFACE_ID
   }));
 
-  const artifactsView = useView({
-    access: "never",
-    apiSuffix: computed(() => artifactSessionId.value
-      ? aiStudioArtifactsPath(AI_STUDIO_SESSIONS_API_SUFFIX, artifactSessionId.value)
-      : ""),
+  const artifactsResource = useEndpointResource({
+    enabled: false,
     fallbackLoadError: "Draft could not be loaded.",
-    ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "ai-studio.session-artifacts.view",
-    queryKeyFactory: (surfaceId, ownershipFilter) => {
-      return aiStudioArtifactsQueryKey(surfaceId, ownershipFilter, artifactSessionId.value);
-    },
-    readEnabled: false,
-    surfaceId: AI_STUDIO_SURFACE_ID
+    path: computed(() => artifactSessionId.value
+      ? aiStudioArtifactsPath(sessionsApiPath.value, artifactSessionId.value)
+      : ""),
+    queryKey: computed(() => aiStudioArtifactsQueryKey(
+      AI_STUDIO_SURFACE_ID,
+      ROUTE_VISIBILITY_PUBLIC,
+      artifactSessionId.value
+    ))
   });
 
   const saveArtifactsCommand = useCommand({
@@ -75,8 +73,8 @@ function useAiStudioSessionArtifacts() {
     }
 
     await nextTick();
-    const result = await artifactsView.refresh();
-    return result?.data || artifactsView.record || {};
+    const result = await artifactsResource.reload();
+    return result?.data || artifactsResource.data.value || {};
   }
 
   async function saveArtifacts(sessionId = "", artifacts = {}) {
@@ -93,14 +91,14 @@ function useAiStudioSessionArtifacts() {
       sessionId: normalizedSessionId
     });
     if (artifactSessionId.value === normalizedSessionId) {
-      await artifactsView.refresh().catch(() => null);
+      await artifactsResource.reload().catch(() => null);
     }
     return response;
   }
 
   return {
-    artifactsLoadError: artifactsView.loadError,
-    artifactsLoading: artifactsView.isLoading,
+    artifactsLoadError: artifactsResource.loadError,
+    artifactsLoading: artifactsResource.isLoading,
     readArtifacts,
     saveArtifacts,
     saveArtifactsCommand

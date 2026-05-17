@@ -115,41 +115,16 @@ function npmInstallRepair(targetRoot, toolkit) {
   });
 }
 
-function jskitDoctorScript() {
-  return shellScript([
-    "set -e",
-    "set -x",
-    "if node -e \"const p=require('./package.json'); process.exit(p.scripts && p.scripts.verify ? 0 : 1)\"; then npm run verify; else npx jskit app verify; fi"
-  ]);
+function packageScript(packageJson, scriptName) {
+  const value = packageJson?.scripts?.[scriptName];
+  return typeof value === "string" ? value.trim() : "";
 }
 
-function jskitDoctorTerminalAction(targetRoot, toolkit) {
-  return toolkit.toolchainTerminalAction({
-    actionId: "terminal-jskit-doctor",
-    commandArgs: ["bash", "-lc", jskitDoctorScript()],
-    extraArgs: writableHostUserDockerArgs(),
-    image: JSKIT_TOOLCHAIN_IMAGE,
-    label: "Run JSKIT doctor",
+async function localJskitCliCommandExists(targetRoot, toolkit) {
+  const cliPackage = await toolkit.readTargetJson("node_modules/@jskit-ai/jskit-cli/package.json", {
     targetRoot
   });
-}
-
-function jskitDoctorRepair(targetRoot, toolkit) {
-  return jskitDoctorTerminalAction(targetRoot, toolkit).repair({
-    targetRoot
-  });
-}
-
-function doctorIssueLines(output) {
-  return String(output || "")
-    .split(/\r?\n/u)
-    .map((line) => line.trim())
-    .filter((line) => /^-\s+\[[^\]]+\]/u.test(line));
-}
-
-function onlyUiVerificationDoctorIssues(output) {
-  const issues = doctorIssueLines(output);
-  return issues.length > 0 && issues.every((line) => /^-\s+\[ui:verification\]/u.test(line));
+  return Boolean(cliPackage.ok && cliPackage.value?.bin?.jskit);
 }
 
 function dependencyNames(packageJson, jskitLock) {
@@ -254,7 +229,7 @@ async function checkScaffold(targetRoot, context, toolkit) {
     label: "Initial JSKIT scaffold",
     expected: "Minimal JSKIT scaffold markers exist.",
     observed: "No scaffold files are present yet.",
-    explanation: "Create the smallest JSKIT app scaffold before installing dependencies or running doctor.",
+    explanation: "Create the smallest JSKIT app scaffold before installing dependencies or checking runtime readiness.",
     repair: scaffoldRepair(targetRoot, toolkit)
   });
 }
@@ -279,7 +254,7 @@ async function checkDependencies(targetRoot, context, toolkit) {
       label: "Dependencies runnable",
       expected: "All direct non-optional package.json dependencies are installed.",
       observed: `Missing node_modules packages:\n${formatList(missingDependencies)}`,
-      explanation: "Install dependencies before running the official JSKIT doctor.",
+      explanation: "Install dependencies before checking runtime readiness or later workflow commands.",
       repair: npmInstallRepair(targetRoot, toolkit)
     });
   }
@@ -314,7 +289,7 @@ async function checkDependencies(targetRoot, context, toolkit) {
     label: "Dependencies runnable",
     expected: "Local dependencies are installed.",
     observed: "node_modules does not contain JSKIT CLI tooling.",
-    explanation: "Install dependencies before running the official JSKIT doctor.",
+    explanation: "Install dependencies before checking runtime readiness or later workflow commands.",
     repair: npmInstallRepair(targetRoot, toolkit)
   });
 }
@@ -401,7 +376,7 @@ async function checkRuntimeServices(targetRoot, context, toolkit) {
       label: "Runtime services",
       expected: `${validation.databaseName} exists in managed JSKIT MySQL.`,
       observed: schema.output || "Database not found.",
-      explanation: "Create the app database before running JSKIT doctor.",
+      explanation: "Create the app database before Studio starts workflow sessions for this target.",
       repair: createAppDatabaseRepair(validation.databaseName)
     });
   }
@@ -442,44 +417,47 @@ async function checkRuntimeServices(targetRoot, context, toolkit) {
   });
 }
 
-async function checkJskitDoctor(targetRoot, toolkit) {
-  const result = await toolkit.runToolchain(["bash", "-lc", jskitDoctorScript()], {
-    extraArgs: writableHostUserDockerArgs(),
-    image: JSKIT_TOOLCHAIN_IMAGE,
-    targetRoot,
-    timeout: 180_000
-  });
-
-  if (!result.ok) {
-    if (onlyUiVerificationDoctorIssues(result.output)) {
-      return passCheck({
-        id: "jskit-doctor",
-        label: "JSKIT doctor",
-        expected: "Official JSKIT verification passes, or only the fresh scaffold UI receipt gate remains before the setup checkpoint.",
-        observed: [
-          "JSKIT doctor reported only UI verification receipt issue(s).",
-          formatList(doctorIssueLines(result.output), 4)
-        ].join("\n"),
-        explanation: "Fresh scaffold UI files are the setup baseline, not Studio feature work yet. App Setup continues to the Git checkpoint so later UI changes still require real verification receipts."
-      });
-    }
-
+async function checkJskitVerificationCommand(targetRoot, toolkit) {
+  const packageJson = await readPackageJson(targetRoot, toolkit);
+  if (!packageJson) {
     return blockedCheck({
-      id: "jskit-doctor",
-      label: "JSKIT doctor",
-      expected: "Official JSKIT verification passes.",
-      observed: result.output.split(/\r?\n/u).slice(-24).join("\n"),
-      explanation: "Studio does not duplicate JSKIT internals; fix the reported doctor issues and refresh.",
-      repair: jskitDoctorRepair(targetRoot, toolkit)
+      id: "jskit-verification-command",
+      label: "JSKIT verification command",
+      expected: "package.json declares a verify script or the local JSKIT CLI is installed.",
+      observed: "package.json could not be read.",
+      explanation: "Studio only checks that verification is available for the later workflow stage; it does not run verification during App Setup.",
+      repair: scaffoldRepair(targetRoot, toolkit)
     });
   }
 
-  return passCheck({
-    id: "jskit-doctor",
-    label: "JSKIT doctor",
-    expected: "Official JSKIT verification passes.",
-    observed: result.output.split(/\r?\n/u).slice(-12).join("\n") || "Verification passed.",
-    explanation: "The target app passes the authoritative JSKIT readiness check."
+  const verifyScript = packageScript(packageJson, "verify");
+  if (verifyScript) {
+    return passCheck({
+      id: "jskit-verification-command",
+      label: "JSKIT verification command",
+      expected: "package.json declares a verify script or the local JSKIT CLI is installed.",
+      observed: `npm run verify\n${verifyScript}`,
+      explanation: "The workflow can run the target verification command later without blocking App Setup on current lint, test, or policy failures."
+    });
+  }
+
+  if (await localJskitCliCommandExists(targetRoot, toolkit)) {
+    return passCheck({
+      id: "jskit-verification-command",
+      label: "JSKIT verification command",
+      expected: "package.json declares a verify script or the local JSKIT CLI is installed.",
+      observed: "npx jskit app verify",
+      explanation: "The local JSKIT CLI is installed, so the workflow can run JSKIT verification later."
+    });
+  }
+
+  return blockedCheck({
+    id: "jskit-verification-command",
+    label: "JSKIT verification command",
+    expected: "package.json declares a verify script or the local JSKIT CLI is installed.",
+    observed: "No package.json verify script and no installed @jskit-ai/jskit-cli bin were found.",
+    explanation: "Install dependencies or add a package verify script so the later workflow has a concrete verification command.",
+    repair: npmInstallRepair(targetRoot, toolkit)
   });
 }
 
@@ -491,11 +469,11 @@ function createJskitTargetSetupChecks(toolkit) {
       label: "Dependencies runnable",
       run: (context = {}) => checkDependencies(context.targetRoot || "", context, toolkit)
     },
-    doctor: {
-      expected: "The official JSKIT verification command passes.",
-      id: "jskit-doctor",
-      label: "JSKIT doctor",
-      run: ({ targetRoot = "" } = {}) => checkJskitDoctor(targetRoot, toolkit)
+    verificationCommand: {
+      expected: "A JSKIT verification command is available for later workflow checks.",
+      id: "jskit-verification-command",
+      label: "JSKIT verification command",
+      run: ({ targetRoot = "" } = {}) => checkJskitVerificationCommand(targetRoot, toolkit)
     },
     runtimeServices: {
       expected: "Only runtime services required by the target app are reachable.",
@@ -545,16 +523,12 @@ function createJskitTargetSetupTerminalActions({
   return [
     scaffoldTerminalAction(targetRoot, toolkit),
     npmInstallTerminalAction(targetRoot, toolkit),
-    createDatabaseTerminalAction(targetRoot, toolkit),
-    jskitDoctorTerminalAction(targetRoot, toolkit)
+    createDatabaseTerminalAction(targetRoot, toolkit)
   ];
 }
 
 export {
   createJskitTargetSetupChecks,
   createJskitTargetSetupTerminalActions,
-  doctorIssueLines,
-  jskitDoctorScript,
-  npmInstallScript,
-  onlyUiVerificationDoctorIssues
+  npmInstallScript
 };

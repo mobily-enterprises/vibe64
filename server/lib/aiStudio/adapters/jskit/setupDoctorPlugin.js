@@ -282,7 +282,7 @@ function createJskitSetupDoctorPlugin({
           }
         },
         targetSetupChecks.runtimeServices,
-        targetSetupChecks.doctor
+        targetSetupChecks.verificationCommand
       ];
     },
     terminalActions(context = {}) {
