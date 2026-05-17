@@ -48,7 +48,9 @@ test("ai-studio runtime advance records completed steps and moves to the next wo
     assert.equal(afterFirstAdvance.stepDefinitions[0].status, "done");
     assert.equal(afterFirstAdvance.stepDefinitions[1].status, "current");
     assert.equal(afterFirstAdvance.next.stepId, "dependencies_installed");
+    assert.equal(afterFirstAdvance.next.enabled, false);
 
+    await runtime.store.writeMetadataValue("advance_flow", "worktree_path", targetRoot);
     const afterSecondAdvance = await runtime.advance("advance_flow");
     assert.equal(afterSecondAdvance.currentStep, "dependencies_installed");
     assert.deepEqual(afterSecondAdvance.completedSteps, [
@@ -88,74 +90,86 @@ test("ai-studio runtime shows current-step actions from the workflow", async () 
   });
 });
 
-test("ai-studio runtime runAction records the action result without advancing", async () => {
+test("ai-studio runtime runAction records non-command action results without advancing", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const calls = [];
     const runtime = new AiStudioSessionRuntime({
-      actionHandlers: {
-        create_worktree: async ({ action, input, session }) => {
-          calls.push({
-            actionId: action.id,
-            input,
-            stepId: session.currentStep
-          });
-          return {
-            message: "Created unit-test worktree.",
-            status: "completed"
-          };
-        }
+      clock: () => new Date("2026-05-16T01:02:03.000Z"),
+      targetRoot,
+      workflow: {
+        id: "unit-action",
+        steps: [
+          {
+            actions: [
+              {
+                id: "record_review",
+                label: "Record review",
+                type: "record"
+              }
+            ],
+            id: "review",
+            label: "Review"
+          }
+        ]
+      }
+    });
+    await runtime.createSession({
+      sessionId: "run_action"
+    });
+
+    const afterAction = await runtime.runAction("run_action", "record_review", {
+      dryRun: true
+    });
+
+    assert.equal(afterAction.currentStep, "review");
+    assert.deepEqual(afterAction.completedSteps, []);
+    assert.deepEqual(afterAction.actionResult, {
+      actionId: "record_review",
+      actionLabel: "Record review",
+      actionType: "record",
+      at: "2026-05-16T01:02:03.000Z",
+      input: {
+        dryRun: true
       },
+      message: "Recorded Record review.",
+      status: "completed",
+      stepId: "review"
+    });
+    assert.deepEqual(await runtime.store.readCommandLog("run_action"), [
+      {
+        actionId: "record_review",
+        actionLabel: "Record review",
+        actionType: "record",
+        at: "2026-05-16T01:02:03.000Z",
+        kind: "action",
+        status: "completed",
+        stepId: "review"
+      }
+    ]);
+  });
+});
+
+test("ai-studio runtime rejects command actions because terminals own command execution", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new AiStudioSessionRuntime({
       adapter: new FakeTargetAdapter({
         capabilities: {
           create_worktree: true
         }
       }),
-      clock: () => new Date("2026-05-16T01:02:03.000Z"),
       targetRoot
     });
     await runtime.createSession({
       initialStep: "worktree_created",
-      sessionId: "run_action"
+      sessionId: "command_action"
     });
 
-    const afterAction = await runtime.runAction("run_action", "create_worktree", {
-      dryRun: true
-    });
-
-    assert.equal(afterAction.currentStep, "worktree_created");
-    assert.deepEqual(afterAction.completedSteps, []);
-    assert.deepEqual(calls, [
+    await assert.rejects(
+      () => runtime.runAction("command_action", "create_worktree"),
       {
-        actionId: "create_worktree",
-        input: {
-          dryRun: true
-        },
-        stepId: "worktree_created"
+        code: "ai_studio_command_requires_terminal",
+        message: "Command action Create worktree must run in the command terminal."
       }
-    ]);
-    assert.deepEqual(afterAction.actionResult, {
-      actionId: "create_worktree",
-      actionLabel: "Create worktree",
-      actionType: "command",
-      at: "2026-05-16T01:02:03.000Z",
-      input: {
-        dryRun: true
-      },
-      message: "Created unit-test worktree.",
-      status: "completed",
-      stepId: "worktree_created"
-    });
-    assert.deepEqual(await runtime.store.readCommandLog("run_action"), [
-      {
-        actionId: "create_worktree",
-        actionLabel: "Create worktree",
-        actionType: "command",
-        at: "2026-05-16T01:02:03.000Z",
-        kind: "action",
-        status: "completed",
-        stepId: "worktree_created"
-      }
-    ]);
+    );
   });
 });
 
@@ -184,7 +198,7 @@ test("ai-studio runtime prompt actions render Codex handoff data without advanci
     assert.equal(afterAction.actionResult.codexPromptHandoff.codex.mode, "inject_prompt");
     assert.equal(afterAction.actionResult.codexPromptHandoff.prompt, afterAction.actionResult.prompt);
     assert.match(afterAction.actionResult.codexPromptHandoff.terminalInput, /Make plan/u);
-    assert.match(afterAction.actionResult.codexPromptHandoff.terminalInput, /\[\[JSKIT_STUDIO_CONTEXT_START\]\]/u);
+    assert.match(afterAction.actionResult.codexPromptHandoff.terminalInput, /\[\[AI_STUDIO_CONTEXT_START\]\]/u);
   });
 });
 

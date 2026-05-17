@@ -14,7 +14,9 @@ function aiStudioErrorResponse(error, {
       }
     ],
     ok: false,
-    projectType: error?.projectType || null
+    projectConfig: error?.projectConfig || null,
+    projectType: error?.projectType || null,
+    setup: error?.setup || null
   };
 }
 
@@ -37,6 +39,8 @@ function aiStudioStatusCode(response, { missingStatus = 404 } = {}) {
   if (
     code === "ai_studio_action_disabled" ||
     code === "ai_studio_command_requires_terminal" ||
+    code === "ai_studio_project_config_missing" ||
+    code === "ai_studio_setup_not_ready" ||
     code === "ai_studio_step_not_ready"
   ) {
     return 409;

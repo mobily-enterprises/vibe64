@@ -29,6 +29,27 @@
       @save="saveProjectConfig"
     />
 
+    <v-sheet
+      v-else-if="needsSetup"
+      rounded="lg"
+      border
+      class="project-type-gate__setup-needed"
+    >
+      <div>
+        <h2 class="project-type-gate__setup-title">Setup needed</h2>
+        <p class="project-type-gate__setup-message">
+          {{ setupGate.message || "Finish setup before using project tools." }}
+        </p>
+      </div>
+      <v-btn
+        color="primary"
+        variant="flat"
+        :to="setupRoute"
+      >
+        Open setup
+      </v-btn>
+    </v-sheet>
+
     <slot
       v-else-if="targetProject"
       :target-project="targetProject"
@@ -57,6 +78,9 @@ import {
   TARGET_PROJECT_ENDPOINT,
   projectConfigQueryKey,
   projectTypeQueryKey,
+  readAdapterSetupStatus,
+  readProjectSetupStatus,
+  readStudioSetupStatus,
   targetProjectQueryKey
 } from "@/lib/studioGateApi.js";
 import {
@@ -68,11 +92,40 @@ const props = defineProps({
   configureProject: {
     default: false,
     type: Boolean
+  },
+  requireSetup: {
+    default: false,
+    type: Boolean
   }
 });
 
 const savingConfig = ref(false);
 const savingType = ref("");
+const setupGate = ref({
+  message: "",
+  ready: false,
+  tab: "studio-setup"
+});
+const setupLoading = ref(false);
+const setupError = ref("");
+
+const setupChecks = [
+  {
+    label: "Studio Setup",
+    read: readStudioSetupStatus,
+    tab: "studio-setup"
+  },
+  {
+    label: "Adapter Setup",
+    read: readAdapterSetupStatus,
+    tab: "adapter-setup"
+  },
+  {
+    label: "Project Setup",
+    read: readProjectSetupStatus,
+    tab: "project-setup"
+  }
+];
 
 function projectQueryKey(queryKeyFactory) {
   return computed(() => queryKeyFactory(AI_STUDIO_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC));
@@ -188,10 +241,25 @@ const needsProjectConfig = computed(() => {
     projectType.value?.ready === true &&
     (props.configureProject || projectConfig.value?.ready !== true);
 });
+const projectReady = computed(() => {
+  return targetProject.value &&
+    projectType.value?.ready === true &&
+    projectConfig.value?.ready === true;
+});
+const setupSatisfied = computed(() => {
+  return props.requireSetup !== true || setupGate.value.ready === true;
+});
+const needsSetup = computed(() => {
+  return projectReady.value &&
+    props.configureProject !== true &&
+    props.requireSetup === true &&
+    setupGate.value.ready !== true;
+});
 const loading = computed(() => Boolean(
   targetProjectView.isLoading ||
   projectTypeView.isLoading ||
-  projectConfigView.isLoading
+  projectConfigView.isLoading ||
+  setupLoading.value
 ));
 const waitingForProjectConfig = computed(() => {
   return targetProject.value &&
@@ -215,9 +283,16 @@ const errorMessage = computed(() => String(
   targetProjectView.loadError ||
   projectTypeView.loadError ||
   projectConfigView.loadError ||
+  setupError.value ||
   saveError.value ||
   ""
 ));
+const setupRoute = computed(() => ({
+  path: "/setup",
+  query: {
+    tab: setupGate.value.tab || "studio-setup"
+  }
+}));
 
 async function loadTargetProject() {
   await Promise.all([
@@ -226,6 +301,49 @@ async function loadTargetProject() {
   ]);
   if (projectTypeView.record?.projectType?.ready === true) {
     await projectConfigView.refresh();
+  }
+}
+
+async function loadSetupGate() {
+  if (props.requireSetup !== true || !projectReady.value) {
+    setupGate.value = {
+      message: "",
+      ready: props.requireSetup !== true,
+      tab: "studio-setup"
+    };
+    return;
+  }
+
+  setupLoading.value = true;
+  setupError.value = "";
+
+  try {
+    for (const check of setupChecks) {
+      const status = await check.read();
+      if (status?.ready !== true) {
+        setupGate.value = {
+          message: status?.blockedReason || `${check.label} is incomplete.`,
+          ready: false,
+          tab: check.tab
+        };
+        return;
+      }
+    }
+
+    setupGate.value = {
+      message: "",
+      ready: true,
+      tab: ""
+    };
+  } catch (error) {
+    setupError.value = String(error?.message || error || "Setup readiness could not load.");
+    setupGate.value = {
+      message: "Setup readiness could not load.",
+      ready: false,
+      tab: "studio-setup"
+    };
+  } finally {
+    setupLoading.value = false;
   }
 }
 
@@ -251,13 +369,19 @@ async function saveProjectConfig(values) {
   }
 }
 
-watch([targetProject, () => props.configureProject], ([project, configureProject]) => {
+watch([projectReady, () => props.requireSetup], () => {
+  void loadSetupGate();
+}, {
+  immediate: true
+});
+
+watch([targetProject, () => props.configureProject, setupSatisfied], ([project, configureProject]) => {
   if (!project) {
     return;
   }
   if (
-    project.projectType?.ready === true &&
-    project.projectConfig?.ready === true &&
+    projectReady.value &&
+    setupSatisfied.value &&
     configureProject !== true
   ) {
     emit("ready", project);
@@ -280,5 +404,36 @@ watch(errorMessage, (message) => {
   display: grid;
   gap: 0.85rem;
   min-width: 0;
+}
+
+.project-type-gate__setup-needed {
+  align-items: center;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  min-width: 0;
+  padding: 1rem;
+}
+
+.project-type-gate__setup-title {
+  font-size: 1.1rem;
+  font-weight: 720;
+  letter-spacing: 0;
+  line-height: 1.2;
+  margin: 0 0 0.25rem;
+}
+
+.project-type-gate__setup-message {
+  color: rgba(var(--v-theme-on-surface), 0.68);
+  font-size: 0.9rem;
+  line-height: 1.35;
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .project-type-gate__setup-needed {
+    align-items: stretch;
+    flex-direction: column;
+  }
 }
 </style>

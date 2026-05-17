@@ -123,7 +123,6 @@ function finalizeStatus({
   const ready = stages.every((item) => item.required === false || item.status === "pass");
 
   return {
-    checks: stages,
     currentStageId: currentStage?.id || "",
     hardStop: stages.some((item) => item.status === "hard-stop"),
     ok: true,
@@ -392,8 +391,7 @@ async function checkGitReady(targetRoot, context) {
     });
   }
 
-  const runGitCommand = context.runGitCommand || runGit;
-  const inside = await runGitCommand(targetRoot, ["rev-parse", "--is-inside-work-tree"]);
+  const inside = await runGit(targetRoot, ["rev-parse", "--is-inside-work-tree"]);
   if (!inside.ok || inside.stdout !== "true") {
     return hardStopCheck({
       id: "git-ready",
@@ -405,8 +403,8 @@ async function checkGitReady(targetRoot, context) {
   }
 
   const [bare, branch] = await Promise.all([
-    runGitCommand(targetRoot, ["rev-parse", "--is-bare-repository"]),
-    runGitCommand(targetRoot, ["branch", "--show-current"])
+    runGit(targetRoot, ["rev-parse", "--is-bare-repository"]),
+    runGit(targetRoot, ["branch", "--show-current"])
   ]);
 
   if (bare.stdout === "true") {
@@ -763,7 +761,6 @@ async function runCoreSetupChecks({
   config = {},
   configEnvironment = {},
   emit = null,
-  runGitCommand = null,
   setupPlugins = [],
   studioRoot = "",
   targetRoot
@@ -772,7 +769,6 @@ async function runCoreSetupChecks({
   const context = {
     config,
     configEnvironment,
-    runGitCommand,
     studioRoot,
     targetRoot: resolvedTargetRoot
   };

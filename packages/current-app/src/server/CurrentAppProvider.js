@@ -12,7 +12,10 @@ class CurrentAppProvider {
 
   static dependsOn = [
     "runtime.actions",
-    "feature.ai-studio-project"
+    "feature.ai-studio-project",
+    "feature.studio-setup-doctor",
+    "feature.adapter-setup-doctor",
+    "feature.project-setup-doctor"
   ];
 
   register(app) {
@@ -32,7 +35,12 @@ class CurrentAppProvider {
       () => {
         return createService({
           appRoot,
-          projectService: app.make("feature.ai-studio-project.service")
+          projectService: app.make("feature.ai-studio-project.service"),
+          setupServices: {
+            adapterSetupService: app.make("feature.adapter-setup-doctor.service"),
+            projectSetupService: app.make("feature.project-setup-doctor.service"),
+            studioSetupService: app.make("feature.studio-setup-doctor.service")
+          }
         });
       }
     );

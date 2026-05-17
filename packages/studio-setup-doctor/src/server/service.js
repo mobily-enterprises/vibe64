@@ -15,7 +15,6 @@ import {
 } from "../../../../server/lib/doctorStatusCache.js";
 import {
   areDoctorChecksReady,
-  runDoctorPluginRepair,
   runDoctorPlugins,
   startDoctorPluginTerminal
 } from "../../../../server/lib/doctorPlugins.js";
@@ -46,7 +45,6 @@ function commandPreview(args) {
 
 function createRepair(options = {}) {
   return createDoctorRepair({
-    kind: "command",
     ...options
   });
 }
@@ -683,33 +681,6 @@ function createStudioRuntimeDoctorPlugin({
       ];
     },
 
-    async repair({
-      actionId = ""
-    } = {}) {
-      if (actionId !== "build-toolchain") {
-        return null;
-      }
-      const args = [
-        "build",
-        "-t",
-        TOOLCHAIN_IMAGE,
-        "-f",
-        TOOLCHAIN_DOCKERFILE,
-        TOOLCHAIN_CONTEXT
-      ];
-      const result = await runDocker(args, {
-        cwd: studioRoot,
-        timeout: 10 * 60 * 1000
-      });
-      return {
-        ok: result.ok,
-        actionId,
-        commandPreview: commandPreview(args),
-        output: result.output,
-        status: result.ok ? "completed" : "failed"
-      };
-    },
-
     startTerminal({
       actionId = ""
     } = {}) {
@@ -801,28 +772,6 @@ function createService({ studioRoot = "" } = {}) {
         emit,
         plugins
       }));
-    },
-
-    async repair(input = {}) {
-      const actionId = String(input.actionId || "");
-      const result = await runDoctorPluginRepair({
-        actionId,
-        context: {
-          studioRoot: resolvedStudioRoot
-        },
-        input,
-        plugins
-      });
-      if (result) {
-        return result;
-      }
-
-      return {
-        ok: false,
-        actionId,
-        error: "Unknown repair action.",
-        status: "failed"
-      };
     },
 
     async startTerminal(input = {}) {

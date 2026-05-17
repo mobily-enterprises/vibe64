@@ -315,6 +315,10 @@ class JskitTargetAdapter extends TargetAdapter {
     ];
   }
 
+  async allowsStudioSelfTarget({ config = {} } = {}) {
+    return recursiveAiStudioOpeningEnabled(config);
+  }
+
   async getConfigFields() {
     return JSKIT_CONFIG_FIELDS;
   }

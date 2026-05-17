@@ -2,12 +2,10 @@ import { resolveScopedApiBasePath, normalizeSurfaceId } from "@jskit-ai/kernel/s
 import { sendDoctorEventStream } from "../../../../server/lib/doctorStream.js";
 
 import {
-  ACTION_READ_STUDIO_SETUP,
-  ACTION_REPAIR_STUDIO_SETUP
+  ACTION_READ_STUDIO_SETUP
 } from "./actions.js";
 import {
   studioSetupQueryInputValidator,
-  repairInputValidator,
   terminalInputValidator,
   terminalStartInputValidator
 } from "./inputSchemas.js";
@@ -92,31 +90,6 @@ function registerRoutes(
           emit
         });
       });
-    }
-  );
-
-  router.register(
-    "POST",
-    `${routeBase}/repair`,
-    {
-      auth: "public",
-      surface: normalizedRouteSurface,
-      meta: {
-        tags: ["studio-setup"],
-        summary: "Run a Studio Setup Doctor repair action."
-      },
-      body: repairInputValidator
-    },
-    async function (request, reply) {
-      if (!requireLocalDoctorRequest(request, reply)) {
-        return;
-      }
-      const response = await request.executeAction({
-        actionId: ACTION_REPAIR_STUDIO_SETUP,
-        input: requestBodyObject(request)
-      });
-
-      reply.code(response.ok === false ? 400 : 200).send(response);
     }
   );
 

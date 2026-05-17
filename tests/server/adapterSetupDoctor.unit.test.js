@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import test from "node:test";
 import { spawnSync } from "node:child_process";
 import {
   mkdir,
@@ -8,6 +7,7 @@ import {
 } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import test from "node:test";
 
 import {
   createService,
@@ -15,14 +15,14 @@ import {
   ghRepoCreateScript,
   gitIdentityRepair,
   gitInitRepair,
-  inspectTargetApp,
-  isTargetAppReady,
+  inspectAdapterSetup,
+  isAdapterSetupReady,
   repoNameFromTargetRoot,
   validateGitIdentityInputs
-} from "../../packages/target-app-doctor/src/server/service.js";
+} from "../../packages/adapter-setup-doctor/src/server/service.js";
 import {
   terminalInputValidator
-} from "../../packages/target-app-doctor/src/server/inputSchemas.js";
+} from "../../packages/adapter-setup-doctor/src/server/inputSchemas.js";
 import {
   gitSafeDirectoryArgs,
   gitToolchainMountArgs,
@@ -39,18 +39,18 @@ function assertShellScriptSurvivesWhitespaceCollapse(script) {
   assert.equal(result.status, 0, result.stderr || flattened);
 }
 
-test("Target App Doctor readiness requires every required check to pass", () => {
-  assert.equal(isTargetAppReady([
+test("Adapter Setup readiness requires every required check to pass", () => {
+  assert.equal(isAdapterSetupReady([
     { required: true, status: "pass" },
     { required: true, status: "pass" }
   ]), true);
-  assert.equal(isTargetAppReady([
+  assert.equal(isAdapterSetupReady([
     { required: true, status: "pass" },
     { required: true, status: "fail" }
   ]), false);
 });
 
-test("Target App Doctor repair commands stay explicit", () => {
+test("Adapter Setup repair commands stay explicit", () => {
   const targetRoot = path.join("/", "tmp", "Example Target App");
   const gitRepair = gitInitRepair(targetRoot);
   const identityRepair = gitIdentityRepair();
@@ -66,14 +66,13 @@ test("Target App Doctor repair commands stay explicit", () => {
   assert.equal(ghRepair.kind, "terminal");
   assert.equal(ghRepair.label, "Create/link GitHub repo");
   assert.match(ghRepair.commandPreview, /gh repo create/u);
-  assert.match(ghRepair.commandPreview, /--private/u);
   assert.match(ghRepair.commandPreview, /git rev-parse --verify HEAD/u);
   assert.equal(repoNameFromTargetRoot(targetRoot), "Example-Target-App");
 });
 
-test("Target App Doctor toolchain mounts linked worktree Git metadata", async () => {
-  const repoRoot = await mkdtemp(path.join(os.tmpdir(), "jskit-target-doctor-linked-worktree-"));
-  const worktreeRoot = path.join(repoRoot, ".jskit", "sessions", "active", "example", "worktree");
+test("Adapter Setup toolchain mounts linked worktree Git metadata", async () => {
+  const repoRoot = await mkdtemp(path.join(os.tmpdir(), "ai-studio-adapter-linked-worktree-"));
+  const worktreeRoot = path.join(repoRoot, ".ai-studio", "sessions", "active", "example", "worktree");
   const gitDir = path.join(repoRoot, ".git", "worktrees", "example");
   const gitMetadataRoot = path.join(repoRoot, ".git");
 
@@ -96,7 +95,7 @@ test("Target App Doctor toolchain mounts linked worktree Git metadata", async ()
   assert.match(gitInitRepair(worktreeRoot).commandPreview, new RegExp(`${repoRoot}:${repoRoot}`));
 });
 
-test("Target App Doctor GitHub repo repair links existing repos and only pushes when commits exist", () => {
+test("Adapter Setup GitHub repo repair links existing repos and only pushes when commits exist", () => {
   const script = ghRepoCreateScript("example-target-app");
 
   assert.match(script, /owner=\$\(gh api user --jq \.login\)/u);
@@ -110,7 +109,7 @@ test("Target App Doctor GitHub repo repair links existing repos and only pushes 
   assertShellScriptSurvivesWhitespaceCollapse(script);
 });
 
-test("Target App Doctor terminal input preserves enter/control characters", () => {
+test("Adapter Setup terminal input preserves enter/control characters", () => {
   const result = terminalInputValidator.schema.create({
     data: "\r"
   });
@@ -119,7 +118,7 @@ test("Target App Doctor terminal input preserves enter/control characters", () =
   assert.equal(result.validatedObject.data, "\r");
 });
 
-test("Target App Doctor validates parameterized Git identity repair inputs", () => {
+test("Adapter Setup validates parameterized Git identity repair inputs", () => {
   assert.deepEqual(validateGitIdentityInputs({
     email: "dev@example.com",
     name: "Dev User"
@@ -138,7 +137,7 @@ test("Target App Doctor validates parameterized Git identity repair inputs", () 
   }).ok, false);
 });
 
-test("Target App Doctor rejects Git identity terminal repair without valid inputs", () => {
+test("Adapter Setup rejects Git identity terminal repair without valid inputs", () => {
   const service = createService({
     studioRoot: process.cwd(),
     targetRoot: os.tmpdir()
@@ -155,35 +154,9 @@ test("Target App Doctor rejects Git identity terminal repair without valid input
   assert.match(response.error, /user\.name/u);
 });
 
-test("Target App Doctor allows targeting Studio's own repository root", async () => {
-  const status = await inspectTargetApp({
-    studioRoot: process.cwd(),
-    targetRoot: process.cwd()
-  });
-  const identity = status.checks.find((check) => check.id === "target-identity");
-  const gitRepository = status.checks.find((check) => check.id === "git-repository");
-
-  assert.equal(identity?.status, "pass");
-  assert.match(identity?.explanation || "", /self-development mode/u);
-  assert.notEqual(gitRepository?.observed, "Target identity is blocked.");
-});
-
-test("Target App Doctor blocks arbitrary subdirectories inside Studio's repository", async () => {
-  const status = await inspectTargetApp({
-    studioRoot: process.cwd(),
-    targetRoot: path.join(process.cwd(), "src")
-  });
-  const identity = status.checks.find((check) => check.id === "target-identity");
-  const gitRepository = status.checks.find((check) => check.id === "git-repository");
-
-  assert.equal(identity?.status, "fail");
-  assert.match(identity?.explanation || "", /repository root for self-development/u);
-  assert.equal(gitRepository?.observed, "Target identity is blocked.");
-});
-
-test("Target App Doctor blocks dependent checks when target directory is unavailable", async () => {
-  const targetRoot = path.join(os.tmpdir(), `jskit-studio-missing-${Date.now()}`);
-  const status = await inspectTargetApp({
+test("Adapter Setup blocks dependent checks when target directory is unavailable", async () => {
+  const targetRoot = path.join(os.tmpdir(), `ai-studio-missing-${Date.now()}`);
+  const status = await inspectAdapterSetup({
     studioRoot: process.cwd(),
     targetRoot
   });

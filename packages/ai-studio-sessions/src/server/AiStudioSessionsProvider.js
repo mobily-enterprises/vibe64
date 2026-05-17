@@ -10,7 +10,10 @@ class AiStudioSessionsProvider {
   static dependsOn = [
     "runtime.actions",
     "feature.ai-studio-project",
-    "feature.ai-studio-terminals"
+    "feature.ai-studio-terminals",
+    "feature.studio-setup-doctor",
+    "feature.adapter-setup-doctor",
+    "feature.project-setup-doctor"
   ];
 
   register(app) {
@@ -26,6 +29,11 @@ class AiStudioSessionsProvider {
       "feature.ai-studio-sessions.service",
       (scope) => {
         return createService({
+          setupServices: {
+            adapterSetupService: scope.make("feature.adapter-setup-doctor.service"),
+            projectSetupService: scope.make("feature.project-setup-doctor.service"),
+            studioSetupService: scope.make("feature.studio-setup-doctor.service")
+          },
           projectService: scope.make("feature.ai-studio-project.service"),
           terminalService: scope.make("feature.ai-studio-terminals.service")
         });

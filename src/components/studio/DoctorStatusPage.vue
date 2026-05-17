@@ -142,18 +142,7 @@
           <div v-if="visibleCheckRepairs(check).length" class="doctor-status__actions">
             <template v-for="repair in visibleCheckRepairs(check)" :key="repair.actionId">
               <v-btn
-                v-if="repair.kind === 'command'"
-                color="primary"
-                class="doctor-status__repair-button"
-                variant="flat"
-                :prepend-icon="mdiPlayCircleOutline"
-                :disabled="Boolean(actionInFlight)"
-                @click="confirmRepairAction(check, repair)"
-              >
-                {{ repair.label || "Repair" }}
-              </v-btn>
-              <v-btn
-                v-else-if="repair.kind === 'terminal'"
+                v-if="repair.kind === 'terminal'"
                 color="primary"
                 class="doctor-status__repair-button"
                 variant="flat"
@@ -258,7 +247,6 @@ import {
   mdiCheckCircle,
   mdiCloseCircle,
   mdiConsoleLine,
-  mdiPlayCircleOutline,
   mdiProgressClock,
   mdiRefresh
 } from "@mdi/js";
@@ -419,8 +407,9 @@ function handleContinue() {
 }
 
 const checks = computed(() => {
-  if (Array.isArray(displayStatus.value?.stages)) {
-    return displayStatus.value.stages;
+  const preferredItems = displayStatus.value?.[props.statusItemsKey];
+  if (Array.isArray(preferredItems)) {
+    return preferredItems;
   }
   return Array.isArray(displayStatus.value?.checks) ? displayStatus.value.checks : [];
 });

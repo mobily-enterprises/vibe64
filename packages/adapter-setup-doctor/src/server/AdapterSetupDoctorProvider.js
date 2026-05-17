@@ -11,7 +11,7 @@ import {
 class AdapterSetupDoctorProvider {
   static id = "feature.adapter-setup-doctor";
 
-  static dependsOn = ["runtime.actions"];
+  static dependsOn = ["runtime.actions", "feature.ai-studio-project"];
 
   register(app) {
     if (
@@ -32,6 +32,7 @@ class AdapterSetupDoctorProvider {
       "feature.adapter-setup-doctor.service",
       () => {
         return createService({
+          projectService: app.make("feature.ai-studio-project.service"),
           studioRoot,
           targetRoot
         });

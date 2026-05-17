@@ -6,7 +6,10 @@ export default Object.freeze({
   description: "Inspect the current target app through the active AI Studio adapter.",
   dependsOn: [
     "@jskit-ai/kernel",
-    "@local/ai-studio-project"
+    "@local/ai-studio-project",
+    "@local/studio-setup-doctor",
+    "@local/adapter-setup-doctor",
+    "@local/project-setup-doctor"
   ],
   capabilities: {
     provides: [
@@ -14,7 +17,10 @@ export default Object.freeze({
     ],
     requires: [
       "runtime.actions",
-      "feature.ai-studio-project"
+      "feature.ai-studio-project",
+      "feature.studio-setup-doctor",
+      "feature.adapter-setup-doctor",
+      "feature.project-setup-doctor"
     ]
   },
   runtime: {

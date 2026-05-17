@@ -281,6 +281,7 @@ async function checkTargetDirectory(targetRoot) {
 }
 
 async function checkTargetIdentity({
+  selfTargetAllowed = false,
   studioRoot,
   targetRoot,
   studioRepoRoot,
@@ -293,13 +294,26 @@ async function checkTargetIdentity({
     targetRepoRoot ? `Target repo: ${targetRepoRoot}` : ""
   ].filter(Boolean).join("\n");
 
-  if (studioRoot === targetRoot || (studioRepoRoot && targetRepoRoot && studioRepoRoot === targetRepoRoot && targetRoot === targetRepoRoot)) {
+  const targetIsStudioRoot = studioRoot === targetRoot ||
+    (studioRepoRoot && targetRepoRoot && studioRepoRoot === targetRepoRoot && targetRoot === targetRepoRoot);
+
+  if (targetIsStudioRoot && selfTargetAllowed) {
     return passCheck({
       id: "target-identity",
       label: "Target identity",
       expected: "Target root is Studio's own repository root or a separate app root.",
       observed,
       explanation: "Studio is targeting itself in self-development mode. AI Studio sessions will make changes in managed session worktrees."
+    });
+  }
+
+  if (targetIsStudioRoot) {
+    return failCheck({
+      id: "target-identity",
+      label: "Target identity",
+      expected: "Target root is separate from Studio unless the selected adapter explicitly allows self-targeting.",
+      observed,
+      explanation: "Studio is targeting itself, but the selected adapter configuration has not enabled that mode."
     });
   }
 
@@ -708,8 +722,31 @@ function startGhLoginTerminal(targetRoot) {
   });
 }
 
+async function adapterAllowsSelfTarget({
+  projectService = null,
+  studioRoot = "",
+  targetRoot = ""
+} = {}) {
+  if (!projectService || typeof projectService.createRuntime !== "function") {
+    return false;
+  }
+
+  try {
+    const runtime = await projectService.createRuntime();
+    return typeof runtime.adapter?.allowsStudioSelfTarget === "function" &&
+      await runtime.adapter.allowsStudioSelfTarget({
+        config: runtime.projectConfig,
+        studioRoot,
+        targetRoot
+      }) === true;
+  } catch {
+    return false;
+  }
+}
+
 async function inspectAdapterSetup({
   emit = null,
+  projectService = null,
   studioRoot,
   targetRoot
 }) {
@@ -719,6 +756,11 @@ async function inspectAdapterSetup({
     hostGitRoot(normalizedStudioRoot),
     hostGitRoot(normalizedTargetRoot)
   ]);
+  const selfTargetAllowed = await adapterAllowsSelfTarget({
+    projectService,
+    studioRoot: normalizedStudioRoot,
+    targetRoot: normalizedTargetRoot
+  });
   const directory = await runTargetStep(emit, {
     id: "target-directory",
     label: "Target directory",
@@ -730,6 +772,7 @@ async function inspectAdapterSetup({
     run: () => checkTargetIdentity({
       studioRoot: normalizedStudioRoot,
       targetRoot: normalizedTargetRoot,
+      selfTargetAllowed,
       studioRepoRoot,
       targetRepoRoot
     })
@@ -873,6 +916,7 @@ async function inspectAdapterSetup({
 }
 
 function createService({
+  projectService = null,
   studioRoot = process.env[AI_STUDIO_APP_ROOT_ENV] || process.cwd(),
   targetRoot = process.env[AI_STUDIO_TARGET_ROOT_ENV] || process.cwd()
 } = {}) {
@@ -887,6 +931,7 @@ function createService({
         return cachedStatus;
       }
       return readyStatusCache.remember(await inspectAdapterSetup({
+        projectService,
         studioRoot: resolvedStudioRoot,
         targetRoot: resolvedTargetRoot
       }));
@@ -895,6 +940,7 @@ function createService({
     async streamStatus({ emit } = {}) {
       return readyStatusCache.remember(await inspectAdapterSetup({
         emit,
+        projectService,
         studioRoot: resolvedStudioRoot,
         targetRoot: resolvedTargetRoot
       }));

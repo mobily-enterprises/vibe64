@@ -6,7 +6,7 @@ const studioSetupQueryInputValidator = deepFreeze({
   mode: "patch"
 });
 
-const repairInputValidator = deepFreeze({
+const terminalStartInputValidator = deepFreeze({
   schema: createSchema({
     actionId: {
       type: "string",
@@ -22,8 +22,6 @@ const repairInputValidator = deepFreeze({
   mode: "patch"
 });
 
-const terminalStartInputValidator = repairInputValidator;
-
 const terminalInputValidator = deepFreeze({
   schema: createSchema({
     data: {
@@ -37,7 +35,6 @@ const terminalInputValidator = deepFreeze({
 
 export {
   studioSetupQueryInputValidator,
-  repairInputValidator,
   terminalInputValidator,
   terminalStartInputValidator
 };

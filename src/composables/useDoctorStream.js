@@ -81,9 +81,6 @@ function useDoctorStream({
       items.push(item);
     }
     nextStatus[key] = items;
-    if (key === "stages") {
-      nextStatus.checks = items;
-    }
     nextStatus.ready = false;
     liveStatus.value = nextStatus;
   }

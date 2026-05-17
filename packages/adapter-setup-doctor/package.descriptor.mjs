@@ -5,14 +5,16 @@ export default Object.freeze({
   kind: "runtime",
   description: "Target adapter readiness checks and repairs for Studio.",
   dependsOn: [
-    "@jskit-ai/kernel"
+    "@jskit-ai/kernel",
+    "@local/ai-studio-project"
   ],
   capabilities: {
     provides: [
       "feature.adapter-setup-doctor"
     ],
     requires: [
-      "runtime.actions"
+      "runtime.actions",
+      "feature.ai-studio-project"
     ]
   },
   runtime: {

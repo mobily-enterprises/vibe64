@@ -19,6 +19,10 @@ import {
   aiStudioResult
 } from "../../../../server/lib/aiStudio/serverResponses.js";
 import {
+  assertAiStudioSetupReady,
+  readAiStudioSetupReadiness
+} from "../../../../server/lib/aiStudio/setupReadiness.js";
+import {
   AI_STUDIO_TARGET_ROOT_ENV
 } from "../../../../server/lib/studioRuntimeIdentity.js";
 import {
@@ -75,6 +79,22 @@ function currentAppBeforeProjectType(targetRoot, projectType = {}) {
     ready: false,
     root: targetRoot,
     targetScripts: emptyTargetScripts()
+  };
+}
+
+function currentAppBeforeSetup(targetRoot, projectType = {}, setup = {}) {
+  return {
+    ...currentAppBeforeProjectType(targetRoot, projectType),
+    projectType,
+    setup
+  };
+}
+
+function currentAppBeforeProjectConfig(targetRoot, projectType = {}, projectConfig = {}) {
+  return {
+    ...currentAppBeforeProjectType(targetRoot, projectType),
+    projectConfig,
+    projectType
   };
 }
 
@@ -322,7 +342,8 @@ function projectScriptTerminalSpec(script = {}, targetRoot = "") {
 
 function createService({
   appRoot = "",
-  projectService
+  projectService,
+  setupServices = {}
 } = {}) {
   if (!projectService || typeof projectService.createRuntime !== "function") {
     throw new TypeError("createService requires feature.ai-studio-project.service.");
@@ -337,8 +358,23 @@ function createService({
     return response?.projectType || {};
   }
 
+  async function readProjectConfigState() {
+    const response = typeof projectService.readProjectConfig === "function"
+      ? await projectService.readProjectConfig()
+      : null;
+    return response?.config || {};
+  }
+
   async function createRuntime() {
     return projectService.createRuntime();
+  }
+
+  async function setupReadiness() {
+    return readAiStudioSetupReadiness(setupServices);
+  }
+
+  async function requireSetupReady() {
+    return assertAiStudioSetupReady(setupServices);
   }
 
   async function projectConfigEnvironment() {
@@ -413,6 +449,14 @@ function createService({
         if (projectType.ready !== true) {
           return currentAppBeforeProjectType(targetRoot, projectType);
         }
+        const projectConfig = await readProjectConfigState();
+        if (projectConfig.ready !== true) {
+          return currentAppBeforeProjectConfig(targetRoot, projectType, projectConfig);
+        }
+        const setup = await setupReadiness();
+        if (setup.ready !== true) {
+          return currentAppBeforeSetup(targetRoot, projectType, setup);
+        }
         const runtime = await createRuntime();
         const inspectCurrentApp = await requireAdapterMethod("inspectCurrentApp");
         const [currentApp, availableScripts, scriptConfig] = await Promise.all([
@@ -438,6 +482,7 @@ function createService({
 
     async listTargetScripts() {
       return currentAppResult(async () => {
+        await requireSetupReady();
         const [availableScripts, config] = await Promise.all([
           listAvailableTargetScripts(),
           readStarredScriptConfig(targetRoot)
@@ -454,6 +499,7 @@ function createService({
 
     async saveStarredTargetScripts(input = {}) {
       return currentAppResult(async () => {
+        await requireSetupReady();
         const availableScripts = await listAvailableTargetScripts();
         if (availableScripts.ok === false) {
           return availableScripts;
@@ -472,6 +518,7 @@ function createService({
 
     async resetStarredTargetScripts() {
       return currentAppResult(async () => {
+        await requireSetupReady();
         const availableScripts = await listAvailableTargetScripts();
         if (availableScripts.ok === false) {
           return availableScripts;
@@ -486,6 +533,7 @@ function createService({
 
     async startTargetScriptTerminal(input = {}) {
       return currentAppResult(async () => {
+        await requireSetupReady();
         const scriptId = normalizeScriptId(input?.scriptId);
         if (!scriptId) {
           return targetScriptError("missing_target_script", "scriptId must identify a target script.");

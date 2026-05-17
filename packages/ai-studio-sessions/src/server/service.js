@@ -4,6 +4,9 @@ import {
 import {
   aiStudioResult
 } from "../../../../server/lib/aiStudio/serverResponses.js";
+import {
+  assertAiStudioSetupReady
+} from "../../../../server/lib/aiStudio/setupReadiness.js";
 import { inspectSessionDiff } from "./sessionDiff.js";
 
 const MAX_OPEN_AI_STUDIO_SESSIONS = 3;
@@ -37,6 +40,7 @@ function sessionListResponse(sessions = []) {
 
 function createService({
   projectService,
+  setupServices = {},
   terminalService
 } = {}) {
   if (!projectService) {
@@ -46,6 +50,7 @@ function createService({
   return Object.freeze({
     async advanceSession(sessionId) {
       return sessionResult(async () => {
+        await assertAiStudioSetupReady(setupServices);
         const runtime = await projectService.createRuntime();
         return runtime.advance(sessionId);
       });
@@ -63,6 +68,7 @@ function createService({
     async createSession() {
       return sessionResult(async () => {
         const projectType = await projectService.requireProjectType();
+        await assertAiStudioSetupReady(setupServices);
         const runtime = await projectService.createRuntime();
         const existingSessions = await runtime.listSessions();
         const limits = sessionLimits(existingSessions);
@@ -113,6 +119,7 @@ function createService({
 
     async runSessionAction(sessionId, actionId, input = {}) {
       return sessionResult(async () => {
+        await assertAiStudioSetupReady(setupServices);
         const runtime = await projectService.createRuntime();
         return runtime.runAction(sessionId, actionId, input);
       });
@@ -120,6 +127,7 @@ function createService({
 
     async rewindSession(sessionId, stepId) {
       return sessionResult(async () => {
+        await assertAiStudioSetupReady(setupServices);
         const runtime = await projectService.createRuntime();
         const session = await runtime.rewind(sessionId, stepId);
         await terminalService?.closeSessionNonCodexTerminals?.(sessionId);

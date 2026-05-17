@@ -7,7 +7,10 @@ export default Object.freeze({
   dependsOn: [
     "@jskit-ai/kernel",
     "@local/ai-studio-project",
-    "@local/ai-studio-terminals"
+    "@local/ai-studio-terminals",
+    "@local/studio-setup-doctor",
+    "@local/adapter-setup-doctor",
+    "@local/project-setup-doctor"
   ],
   capabilities: {
     provides: [
@@ -16,6 +19,9 @@ export default Object.freeze({
     requires: [
       "feature.ai-studio-project",
       "feature.ai-studio-terminals",
+      "feature.studio-setup-doctor",
+      "feature.adapter-setup-doctor",
+      "feature.project-setup-doctor",
       "runtime.actions"
     ]
   },

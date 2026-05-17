@@ -144,23 +144,6 @@ async function firstPluginResult({
   return null;
 }
 
-async function runDoctorPluginRepair({
-  actionId = "",
-  context = {},
-  input = {},
-  plugins = []
-} = {}) {
-  return firstPluginResult({
-    context: {
-      ...context,
-      actionId,
-      input
-    },
-    methodName: "repair",
-    plugins
-  });
-}
-
 async function startDoctorPluginTerminal({
   actionId = "",
   context = {},
@@ -182,7 +165,6 @@ export {
   areDoctorChecksReady,
   listDoctorPluginChecks,
   runDoctorCheck,
-  runDoctorPluginRepair,
   runDoctorPlugins,
   startDoctorPluginTerminal
 };

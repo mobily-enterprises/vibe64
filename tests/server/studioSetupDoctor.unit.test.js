@@ -2,42 +2,35 @@ import assert from "node:assert/strict";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
+
 import {
+  TOOLCHAIN_IMAGE,
   codexBrowserLoginCommandArgs,
   codexDeviceLoginCommandArgs,
   codexLoginRepairs,
-  isBootstrapReady,
-  mysqlCapabilitySql,
-  mysqlRepair,
+  isStudioSetupReady,
   resolveStudioRoot
-} from "../../packages/bootstrap-doctor/src/server/service.js";
+} from "../../packages/studio-setup-doctor/src/server/service.js";
 import {
   terminalInputValidator
-} from "../../packages/bootstrap-doctor/src/server/inputSchemas.js";
+} from "../../packages/studio-setup-doctor/src/server/inputSchemas.js";
 
-test("Bootstrap Doctor probes MySQL without asking for an app database name", () => {
-  const repair = mysqlRepair();
-
-  assert.equal(repair.input, undefined);
-  assert.equal(repair.label, "Start MySQL and verify DDL");
-  assert.match(repair.commandPreview, /CREATE DATABASE IF NOT EXISTS `jskit_ai_studio_bootstrap_probe`/u);
-  assert.match(mysqlCapabilitySql(), /CREATE TABLE IF NOT EXISTS `jskit_ai_studio_bootstrap_probe`\.`capability_probe`/u);
-  assert.match(mysqlCapabilitySql(), /DROP DATABASE `jskit_ai_studio_bootstrap_probe`/u);
-  assert.doesNotMatch(repair.commandPreview, /<database_name>|Database name/u);
-});
-
-test("Bootstrap Doctor readiness requires every required check to pass", () => {
-  assert.equal(isBootstrapReady([
+test("Studio Setup readiness requires every required check to pass", () => {
+  assert.equal(isStudioSetupReady([
     { required: true, status: "pass" },
     { required: true, status: "pass" }
   ]), true);
-  assert.equal(isBootstrapReady([
+  assert.equal(isStudioSetupReady([
     { required: true, status: "pass" },
     { required: true, status: "fail" }
   ]), false);
+  assert.equal(isStudioSetupReady([
+    { required: false, status: "fail" },
+    { required: true, status: "pass" }
+  ]), true);
 });
 
-test("Bootstrap Doctor terminal input preserves enter/control characters", () => {
+test("Studio Setup terminal input preserves enter/control characters", () => {
   const result = terminalInputValidator.schema.create({
     data: "\r"
   });
@@ -46,7 +39,7 @@ test("Bootstrap Doctor terminal input preserves enter/control characters", () =>
   assert.equal(result.validatedObject.data, "\r");
 });
 
-test("Bootstrap Doctor exposes Codex browser login with device-code fallback", () => {
+test("Studio Setup exposes Codex browser login with device-code fallback", () => {
   assert.deepEqual(codexBrowserLoginCommandArgs(), [
     "codex",
     "login"
@@ -68,20 +61,21 @@ test("Bootstrap Doctor exposes Codex browser login with device-code fallback", (
   ]);
 });
 
-test("Bootstrap Doctor resolves the Studio implementation root separately", () => {
-  const previousStudioRoot = process.env.JSKIT_STUDIO_APP_ROOT;
+test("Studio Setup resolves the Studio implementation root separately", () => {
+  const previousStudioRoot = process.env.AI_STUDIO_APP_ROOT;
   const envRoot = path.join(tmpdir(), "example-studio-root");
   const explicitRoot = path.join(tmpdir(), "explicit-studio-root");
-  process.env.JSKIT_STUDIO_APP_ROOT = envRoot;
+  process.env.AI_STUDIO_APP_ROOT = envRoot;
 
   try {
     assert.equal(resolveStudioRoot(), envRoot);
     assert.equal(resolveStudioRoot(explicitRoot), explicitRoot);
+    assert.match(TOOLCHAIN_IMAGE, /^ai-studio-base-toolchain:/u);
   } finally {
     if (previousStudioRoot == null) {
-      delete process.env.JSKIT_STUDIO_APP_ROOT;
+      delete process.env.AI_STUDIO_APP_ROOT;
     } else {
-      process.env.JSKIT_STUDIO_APP_ROOT = previousStudioRoot;
+      process.env.AI_STUDIO_APP_ROOT = previousStudioRoot;
     }
   }
 });

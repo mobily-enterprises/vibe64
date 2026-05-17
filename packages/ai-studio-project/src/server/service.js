@@ -156,6 +156,17 @@ function createService({ targetRoot = "" } = {}) {
     });
   }
 
+  async function requireProjectConfigForAdapter(adapter, projectType) {
+    const config = await readProjectConfigForAdapter(adapter, projectType);
+    if (config.ready !== true) {
+      const error = new Error("Save AI Studio project configuration before using project tools.");
+      error.code = "ai_studio_project_config_missing";
+      error.projectConfig = config;
+      throw error;
+    }
+    return config;
+  }
+
   async function readProjectConfigState() {
     const { adapter, projectType } = await createProjectAdapter();
     return readProjectConfigForAdapter(adapter, projectType);
@@ -194,7 +205,7 @@ function createService({ targetRoot = "" } = {}) {
 
   async function createRuntime() {
     const { adapter, projectType } = await createProjectAdapter();
-    const projectConfig = await readProjectConfigForAdapter(adapter, projectType);
+    const projectConfig = await requireProjectConfigForAdapter(adapter, projectType);
     return new AiStudioSessionRuntime({
       adapter,
       projectConfig,

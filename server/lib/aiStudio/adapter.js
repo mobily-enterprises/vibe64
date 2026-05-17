@@ -215,6 +215,10 @@ class TargetAdapter {
     return [];
   }
 
+  async allowsStudioSelfTarget() {
+    return false;
+  }
+
   async inspectCurrentApp({ targetRoot = "" } = {}) {
     return {
       adapter: this.id,

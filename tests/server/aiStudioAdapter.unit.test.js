@@ -91,11 +91,13 @@ test("ai-studio runtime exposes fake adapter facts, commands, and enabled action
       }
     ]);
 
-    const afterAction = await runtime.runAction("toy_session", "toy_command");
-    assert.equal(afterAction.currentStep, "toy_step");
-    assert.deepEqual(afterAction.completedSteps, []);
-    assert.equal(afterAction.actionResult.message, "Toy command completed.");
-    assert.equal(afterAction.actionResult.status, "completed");
+    await assert.rejects(
+      () => runtime.runAction("toy_session", "toy_command"),
+      {
+        code: "ai_studio_command_requires_terminal",
+        message: "Command action Toy command must run in the command terminal."
+      }
+    );
   });
 });
 

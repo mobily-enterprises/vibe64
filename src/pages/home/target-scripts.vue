@@ -1,6 +1,6 @@
 <template>
   <section class="generated-ui-screen generated-ui-screen--studio studio-target-scripts">
-    <ProjectTypeGate>
+    <ProjectTypeGate require-setup>
       <template #default>
         <TargetScriptsPanel />
       </template>

@@ -12,6 +12,7 @@
 
     <ProjectTypeGate
       :configure-project="configureProject"
+      require-setup
       @error="handleProjectTypeError"
       @missing="handleProjectTypeMissing"
       @ready="handleProjectTypeReady"

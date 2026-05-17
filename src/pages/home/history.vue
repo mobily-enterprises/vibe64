@@ -12,7 +12,7 @@
       </div>
     </header>
 
-    <ProjectTypeGate>
+    <ProjectTypeGate require-setup>
       <template #default>
         <div class="studio-session-history__controls">
           <v-sheet class="studio-session-history__tabs" rounded="lg" border>

@@ -39,7 +39,7 @@ describe("codexOutput terminal utilities", () => {
       "Create the issue file."
     );
 
-    expect(terminalInput).toContain("[[JSKIT_STUDIO_CONTEXT_START]]");
-    expect(stripStudioContextBlocksForDisplay(terminalInput)).toBe("Create the issue file.\n\n");
+    expect(terminalInput).toContain("[[AI_STUDIO_CONTEXT_START]]");
+    expect(stripStudioContextBlocksForDisplay(terminalInput)).toBe("Continue in Codex.\n\n");
   });
 });
