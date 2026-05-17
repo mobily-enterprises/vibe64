@@ -78,8 +78,7 @@ function adapterPromptResult(input = {}) {
   return {
     context: isPlainObject(input.context) ? input.context : {},
     prompt: normalizeText(input.prompt),
-    promptId: normalizeText(input.promptId),
-    visiblePrompt: normalizeText(input.visiblePrompt)
+    promptId: normalizeText(input.promptId)
   };
 }
 
@@ -107,10 +106,6 @@ function emptyTargetScripts() {
 
 function promptIdForAction(action = {}) {
   return normalizeText(action.promptId || action.id);
-}
-
-function visiblePromptForAction(action = {}, promptId = "") {
-  return normalizeText(action.label || promptId);
 }
 
 function promptJson(value = {}) {
@@ -201,8 +196,7 @@ class TargetAdapter {
     const promptId = promptIdForAction(action);
     return adapterPromptResult({
       prompt: defaultPromptText(action, input),
-      promptId,
-      visiblePrompt: visiblePromptForAction(action, promptId)
+      promptId
     });
   }
 
@@ -256,6 +250,5 @@ export {
   adapterView,
   normalizeStringMap,
   promptIdForAction,
-  promptJson,
-  visiblePromptForAction
+  promptJson
 };

@@ -147,8 +147,7 @@ async function writeActionResultEffects(store, sessionId, result = {}) {
   }
 }
 
-function buildCodexPromptHandoff(action, renderedPrompt) {
-  const visiblePrompt = renderedPrompt.visiblePrompt || action.label || "Continue in Codex.";
+function buildCodexPromptHandoff(renderedPrompt) {
   return {
     codex: {
       mode: "inject_prompt",
@@ -161,8 +160,7 @@ function buildCodexPromptHandoff(action, renderedPrompt) {
     },
     prompt: renderedPrompt.prompt,
     promptId: renderedPrompt.promptId,
-    terminalInput: wrapPromptWithStudioContext(renderedPrompt.prompt, visiblePrompt),
-    visiblePrompt
+    terminalInput: wrapPromptWithStudioContext(renderedPrompt.prompt)
   };
 }
 
@@ -285,7 +283,7 @@ class AiStudioSessionRuntime {
       store: this.store
     });
     return {
-      codexPromptHandoff: buildCodexPromptHandoff(action, renderedPrompt),
+      codexPromptHandoff: buildCodexPromptHandoff(renderedPrompt),
       message: `Rendered ${action.label}.`,
       prompt: renderedPrompt.prompt,
       promptContext: renderedPrompt.context,

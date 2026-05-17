@@ -10,8 +10,7 @@ import {
   adapterPromptResult,
   normalizeStringMap,
   promptIdForAction,
-  promptJson,
-  visiblePromptForAction
+  promptJson
 } from "./adapter.js";
 
 function fakePromptContext({
@@ -107,12 +106,10 @@ class FakeTargetAdapter extends TargetAdapter {
     session = {}
   } = {}) {
     const promptId = promptIdForAction(action);
-    const visiblePrompt = visiblePromptForAction(action, promptId);
     const promptResult = this.promptResults[promptId];
     if (promptResult) {
       return adapterPromptResult({
         promptId,
-        visiblePrompt,
         ...promptResult
       });
     }
@@ -127,8 +124,7 @@ class FakeTargetAdapter extends TargetAdapter {
         promptId,
         session
       }),
-      promptId,
-      visiblePrompt
+      promptId
     });
   }
 }

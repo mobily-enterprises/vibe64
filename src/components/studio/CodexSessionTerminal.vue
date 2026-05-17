@@ -254,13 +254,6 @@ const codexPrompt = computed(() => {
   const promptField = String(props.session?.codex?.promptField || "");
   return promptField ? String(props.session?.[promptField] || "") : "";
 });
-const visibleCodexPrompt = computed(() => {
-  const handoff = runtimeCodexPromptHandoff(props.session);
-  if (handoff?.visiblePrompt) {
-    return String(handoff.visiblePrompt || "");
-  }
-  return String(props.session?.codex?.promptActionLabel || "").trim() || "Continue in Codex.";
-});
 const manualPromptInjectionRequestKey = computed(() => String(props.promptInjectionRequestKey || ""));
 const terminalExited = computed(() => terminalStatus.value === "exited");
 const attachmentDragActive = computed(() => attachmentDragDepth.value > 0);
@@ -1165,7 +1158,7 @@ async function injectPrompt() {
   try {
     if (await ensureTerminalReady() && await ensureCodexThreadReady({ forceRetry: true })) {
       const promptOutputSnapshot = terminalLatestOutput;
-      const promptToSend = wrapPromptWithStudioContext(codexPrompt.value, visibleCodexPrompt.value);
+      const promptToSend = wrapPromptWithStudioContext(codexPrompt.value);
       const promptEchoFilter = promptEchoFilters.add({
         outputStart: promptOutputSnapshot.length,
         prompt: promptToSend

@@ -6,14 +6,13 @@ function hasStudioContextBlock(value) {
   return String(value || "").includes(STUDIO_CONTEXT_START_MARKER);
 }
 
-function wrapPromptWithStudioContext(prompt, visiblePrompt = "") {
+function wrapPromptWithStudioContext(prompt) {
   const source = String(prompt || "");
   if (!source || hasStudioContextBlock(source)) {
     return source;
   }
-  const visible = String(visiblePrompt || "Continue in Codex.").trim() || "Continue in Codex.";
   return [
-    visible,
+    "Continue in Codex.",
     "",
     STUDIO_CONTEXT_START_MARKER,
     STUDIO_CONTEXT_INSTRUCTIONS,
