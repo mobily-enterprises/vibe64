@@ -12,8 +12,7 @@ import {
   AI_STUDIO_RUNTIME_HOST_ALIAS,
   createRuntimeContainerRepair,
   runtimeContainerName,
-  runtimeContainerNetworkDockerArgs,
-  runtimeContainerStartScript
+  runtimeContainerNetworkDockerArgs
 } from "../../runtimeContainers.js";
 
 const JSKIT_MARIADB_CONTAINER_ID = "jskit-mariadb";
@@ -154,13 +153,6 @@ function startJskitMariaDbRepair(targetRoot = "") {
   });
 }
 
-function startJskitMariaDbScript(targetRoot = "") {
-  return runtimeContainerStartScript(createJskitMariaDbRuntimeContainer(), {
-    adapterId: "jskit",
-    targetRoot
-  });
-}
-
 function escapeMariaDbIdentifier(value) {
   return String(value).replaceAll("`", "``");
 }
@@ -280,7 +272,6 @@ export {
   mariaDbCapabilitySql,
   readDatabaseHostFromDotEnv,
   startJskitMariaDbRepair,
-  startJskitMariaDbScript,
   targetWantsJskitMariaDb,
   validateDatabaseName
 };
