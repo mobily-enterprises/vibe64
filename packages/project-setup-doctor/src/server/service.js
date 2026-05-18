@@ -117,6 +117,36 @@ function finalizeStatus({
   };
 }
 
+function repairsForStage(stage = {}) {
+  return [
+    stage.repair,
+    ...(Array.isArray(stage.repairs) ? stage.repairs : [])
+  ].filter(Boolean);
+}
+
+function terminalRepairActionIds(status = {}) {
+  return new Set((Array.isArray(status.stages) ? status.stages : [])
+    .flatMap(repairsForStage)
+    .filter((repair) => repair.kind === "terminal" && repair.actionId)
+    .map((repair) => repair.actionId));
+}
+
+async function pluginTerminalActionIsAvailable({
+  actionId = "",
+  setupRuntime = {},
+  studioRoot = "",
+  targetRoot = ""
+} = {}) {
+  const status = await inspectProjectSetup({
+    config: setupRuntime.config,
+    configEnvironment: setupRuntime.configEnvironment,
+    setupPlugins: setupRuntime.setupPlugins,
+    studioRoot,
+    targetRoot
+  });
+  return terminalRepairActionIds(status).has(actionId);
+}
+
 function repoNameFromTargetRoot(targetRoot) {
   return String(path.basename(targetRoot) || "ai-studio-target")
     .replace(/[^A-Za-z0-9_.-]+/gu, "-")
@@ -1023,6 +1053,18 @@ function createService({
         return startGitCheckpointTerminal(resolvedTargetRoot, inputs, setupRuntime.configEnvironment, {
           allowCreate: false
         });
+      }
+
+      if (!await pluginTerminalActionIsAvailable({
+        actionId,
+        setupRuntime,
+        studioRoot: resolvedStudioRoot,
+        targetRoot: resolvedTargetRoot
+      })) {
+        return {
+          error: "This terminal action is not available in the current project setup state.",
+          ok: false
+        };
       }
 
       const pluginTerminal = await startDoctorPluginTerminal({

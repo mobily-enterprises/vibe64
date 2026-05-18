@@ -5,8 +5,6 @@ import { createRouter, createWebHistory } from "vue-router/auto";
 import { routes } from "vue-router/auto-routes";
 import "vuetify/styles";
 import { createVuetify } from "vuetify";
-import * as components from "vuetify/components";
-import * as directives from "vuetify/directives";
 import { aliases as mdiAliases, mdi } from "vuetify/iconsets/mdi-svg";
 import App from "./App.vue";
 import NotFoundView from "./views/NotFound.vue";
@@ -44,8 +42,6 @@ const { router, fallbackRoute } = createShellRouter({
 });
 
 const vuetify = createVuetify({
-  components,
-  directives,
   theme: {
     defaultTheme: "light"
   },

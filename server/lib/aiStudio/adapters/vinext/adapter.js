@@ -29,16 +29,20 @@ import {
 } from "./setupDoctorPlugin.js";
 import {
   dependencyNames,
-  detectPackageManager,
   hasDependency,
   hasVinextScript,
   packageScript,
   packageBinCommand,
-  readPackageJson,
-  installCommand,
   scriptNames,
   scriptUsesVinext
 } from "./packageManager.js";
+import {
+  commandLineScript,
+  nodeInstallWorkflowHook,
+  nodePackageManagerInspectionExtra,
+  projectMarkerExists,
+  projectRouterMode
+} from "../../nodeWebProject.js";
 
 const VINEXT_PROMPT_PACK_ROOT = fileURLToPath(new URL("./prompts", import.meta.url));
 
@@ -120,35 +124,20 @@ const VINEXT_CONFIG_FIELDS = deepFreeze([
   }
 ]);
 
-function markerExists(markers = [], markerId = "") {
-  return markers.some((marker) => marker.id === markerId && marker.exists);
-}
-
 function routerMode(markers = []) {
-  const hasApp = markerExists(markers, "app_router") || markerExists(markers, "src_app_router");
-  const hasPages = markerExists(markers, "pages_router") || markerExists(markers, "src_pages_router");
-  if (hasApp && hasPages) {
-    return "app+pages";
-  }
-  if (hasApp) {
-    return "app";
-  }
-  if (hasPages) {
-    return "pages";
-  }
-  return "unknown";
+  return projectRouterMode(markers);
 }
 
 function viteConfigExists(markers = []) {
-  return markerExists(markers, "vite_config_ts") || markerExists(markers, "vite_config_js");
+  return projectMarkerExists(markers, "vite_config_ts") || projectMarkerExists(markers, "vite_config_js");
 }
 
 function nextConfigExists(markers = []) {
-  return markerExists(markers, "next_config_ts") || markerExists(markers, "next_config_js");
+  return projectMarkerExists(markers, "next_config_ts") || projectMarkerExists(markers, "next_config_js");
 }
 
 function cloudflareConfigExists(markers = []) {
-  return markerExists(markers, "wrangler_config") || markerExists(markers, "worker_entry");
+  return projectMarkerExists(markers, "wrangler_config") || projectMarkerExists(markers, "worker_entry");
 }
 
 function packageHasVinext(packageJson = {}) {
@@ -310,12 +299,7 @@ function vinextFacts({
 
 async function inspectVinextProject(targetRoot) {
   return inspectDescribedProject(targetRoot, {
-    extra: async ({ packageJson, targetRoot: resolvedTargetRoot }) => ({
-      packageManager: await detectPackageManager(
-        resolvedTargetRoot,
-        packageJson || await readPackageJson(resolvedTargetRoot)
-      )
-    }),
+    extra: nodePackageManagerInspectionExtra,
     markers: VINEXT_MARKERS,
     packageJson: {
       invalidJsonCode: "ai_studio_invalid_vinext_json",
@@ -324,29 +308,10 @@ async function inspectVinextProject(targetRoot) {
   });
 }
 
-function commandLineScript(lines = []) {
-  return [
-    "set -e",
-    ...lines
-  ].join("\n");
-}
-
-async function vinextInstallHook({ worktreePath = "" } = {}) {
-  const packageJson = await readPackageJson(worktreePath);
-  const packageManager = await detectPackageManager(worktreePath, packageJson || {});
-  const command = installCommand(packageManager.name);
-  return {
-    command,
-    commandPreview: command,
-    metadata: {
-      dependencies_package_manager: packageManager.name
-    }
-  };
-}
-
 async function vinextAutomatedChecksHook({ worktreePath = "" } = {}) {
-  const packageJson = await readPackageJson(worktreePath);
-  const packageManager = await detectPackageManager(worktreePath, packageJson || {});
+  const { packageManager } = await nodePackageManagerInspectionExtra({
+    targetRoot: worktreePath
+  });
   const checkCommand = packageBinCommand(packageManager.name, "vinext", ["check"]);
   const buildCommand = packageBinCommand(packageManager.name, "vinext", ["build"]);
   return {
@@ -393,7 +358,7 @@ class VinextTargetAdapter extends AiStudioDescribedWorkflowTargetAdapter {
       targetScriptsInspector: inspectVinextTargetScripts,
       workflowCommandHooks: {
         automatedChecks: vinextAutomatedChecksHook,
-        installDependencies: vinextInstallHook
+        installDependencies: nodeInstallWorkflowHook
       }
     });
   }

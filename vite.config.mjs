@@ -1,6 +1,7 @@
 import { fileURLToPath, URL } from "node:url";
 import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
+import vuetify from "vite-plugin-vuetify";
 import VueRouter from "vue-router/vite";
 import { createJskitClientBootstrapPlugin } from "@jskit-ai/kernel/client/vite";
 import { loadViteDevProxyEntries, toPositiveInt } from "./vite.shared.mjs";
@@ -50,6 +51,9 @@ export default defineConfig({
       // beforeWriteFiles: reparentNestedChildrenToIndexOwners
     }),
     vue(),
+    vuetify({
+      autoImport: true
+    }),
     {
       name: "jskit-client-entry",
       transformIndexHtml(source) {

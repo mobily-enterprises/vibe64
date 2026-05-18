@@ -1,9 +1,9 @@
 <template>
   <v-sheet rounded="lg" class="studio-ai-sessions studio-screen__panel">
     <StudioErrorNotice
-      v-if="pageError"
+      v-if="page.error"
       title="AI Studio sessions could not load"
-      :error="pageError"
+      :error="page.error"
       compact
       class="mb-3"
     />
@@ -11,42 +11,42 @@
     <div class="studio-ai-sessions__toolbar">
       <div class="studio-ai-sessions__tabs">
         <v-chip
-          v-for="session in sessions"
+          v-for="session in toolbar.sessions"
           :key="session.sessionId"
-          :color="session.sessionId === selectedSessionId ? 'primary' : 'default'"
-          :variant="session.sessionId === selectedSessionId ? 'flat' : 'tonal'"
+          :color="session.sessionId === selection.selectedSessionId ? 'primary' : 'default'"
+          :variant="session.sessionId === selection.selectedSessionId ? 'flat' : 'tonal'"
           class="studio-ai-sessions__tab"
           size="large"
-          @click="selectSession(session.sessionId)"
+          @click="toolbar.selectSession(session.sessionId)"
         >
           <span
             class="studio-ai-sessions__status-dot"
             :class="`studio-ai-sessions__status-dot--${session.status}`"
           />
-          <span>{{ shortSessionId(session.sessionId) }}</span>
+          <span>{{ toolbar.shortSessionId(session.sessionId) }}</span>
           <v-btn
-            v-if="session.sessionId === selectedSessionId"
+            v-if="session.sessionId === selection.selectedSessionId"
             class="studio-ai-sessions__tab-abandon"
             density="compact"
-            :disabled="commandBusy || isSelectedSessionClosed"
+            :disabled="page.busy || selection.isClosed"
             :icon="mdiClose"
-            :loading="abandonCommand.isRunning"
+            :loading="dialogs.abandon.command.isRunning"
             size="x-small"
             title="Abandon session"
             variant="text"
             aria-label="Abandon session"
-            @click.stop="requestAbandonSelectedSession"
+            @click.stop="dialogs.abandon.request"
           />
         </v-chip>
 
         <v-btn
           color="primary"
           variant="tonal"
-          :disabled="!canCreateSession || commandBusy"
-          :loading="createSessionCommand.isRunning"
+          :disabled="!toolbar.canCreateSession || page.busy"
+          :loading="toolbar.createSessionCommand.isRunning"
           :prepend-icon="mdiPlus"
-          :title="createSessionTitle"
-          @click="createSessionCommand.run()"
+          :title="toolbar.createSessionTitle"
+          @click="toolbar.createSessionCommand.run()"
         >
           New Session
         </v-btn>
@@ -54,7 +54,7 @@
     </div>
 
     <v-progress-linear
-      v-if="pageLoading && !selectedSession"
+      v-if="page.loading && !selection.selectedSession"
       color="primary"
       height="6"
       indeterminate
@@ -62,7 +62,7 @@
     />
 
     <v-sheet
-      v-else-if="!selectedSession"
+      v-else-if="!selection.selectedSession"
       rounded="lg"
       border
       class="studio-ai-sessions__empty"
@@ -75,33 +75,33 @@
         <div class="studio-ai-sessions__heading">
           <div>
             <p class="studio-ai-sessions__eyebrow">AI Studio session</p>
-            <h2 class="studio-ai-sessions__title">{{ selectedSessionTitle }}</h2>
+            <h2 class="studio-ai-sessions__title">{{ selection.selectedSessionTitle }}</h2>
           </div>
           <v-chip
-            :color="aiStudioSessionStatusColor(selectedSession.status)"
+            :color="selection.statusColor(selection.selectedSession.status)"
             variant="tonal"
           >
-            {{ aiStudioSessionStatusLabel(selectedSession.status) }}
+            {{ selection.statusLabel(selection.selectedSession.status) }}
           </v-chip>
         </div>
 
         <AiStudioSessionTimeline
-          :busy="commandBusy"
-          :steps="timelineSteps"
-          @rewind="rewindToStep"
+          :busy="page.busy"
+          :steps="timeline.steps"
+          @rewind="timeline.rewindToStep"
         >
           <template #current-step>
             <form
-              v-if="issueRequestFormVisible"
+              v-if="issueRequest.formVisible"
               class="studio-ai-sessions__issue-request"
-              @submit.prevent="sendIssueRequestPrompt"
+              @submit.prevent="issueRequest.sendPrompt"
             >
               <v-textarea
-                v-model="issueRequestText"
+                v-model="issueRequest.text"
                 auto-grow
                 class="studio-ai-sessions__issue-request-input"
-                :disabled="commandBusy"
-                :error-messages="issueRequestError ? [issueRequestError] : []"
+                :disabled="page.busy"
+                :error-messages="issueRequest.error ? [issueRequest.error] : []"
                 label="Issue request"
                 rows="5"
                 variant="outlined"
@@ -111,25 +111,25 @@
                 <v-btn
                   color="primary"
                   variant="flat"
-                  :disabled="!issueRequestCanSubmit"
-                  :loading="issueRequestSubmitting"
+                  :disabled="!issueRequest.canSubmit"
+                  :loading="issueRequest.submitting"
                   :prepend-icon="mdiSend"
-                  :title="issueRequestSubmitTitle"
+                  :title="issueRequest.submitTitle"
                   type="submit"
                 >
                   Send prompt
                 </v-btn>
 
                 <v-btn
-                  v-for="action in currentActions"
+                  v-for="action in actions.currentActions"
                   :key="action.id"
                   color="primary"
                   variant="tonal"
-                  :disabled="commandBusy || action.enabled !== true"
-                  :loading="runActionCommand.isRunning && activeActionId === action.id"
-                  :prepend-icon="actionIcon(action)"
+                  :disabled="page.busy || action.enabled !== true"
+                  :loading="actions.runActionCommand.isRunning && actions.activeActionId === action.id"
+                  :prepend-icon="actions.actionIcon(action)"
                   :title="action.disabledReason || action.label"
-                  @click="runAction(action)"
+                  @click="actions.runAction(action)"
                 >
                   {{ action.label }}
                 </v-btn>
@@ -137,15 +137,15 @@
             </form>
 
             <div v-else class="studio-ai-sessions__actions">
-              <template v-if="acceptChangesUtilitiesVisible">
+              <template v-if="review.acceptChangesUtilitiesVisible">
                 <v-btn
                   color="primary"
                   variant="flat"
-                  :disabled="reviewDiffDisabled"
-                  :loading="diffLoading"
+                  :disabled="review.diffDisabled"
+                  :loading="dialogs.diff.loading"
                   :prepend-icon="mdiFileCompare"
-                  :title="reviewDiffTitle"
-                  @click="openDiffDialog"
+                  :title="review.diffTitle"
+                  @click="dialogs.diff.openDialog"
                 >
                   Review diff
                 </v-btn>
@@ -153,10 +153,10 @@
                 <v-btn
                   color="primary"
                   variant="flat"
-                  :disabled="runAppReviewDisabled"
+                  :disabled="appReview.disabled"
                   :prepend-icon="mdiPlayCircleOutline"
-                  :title="runAppReviewTitle"
-                  @click="runAppReview"
+                  :title="appReview.title"
+                  @click="appReview.run"
                 >
                   Run app
                 </v-btn>
@@ -164,153 +164,153 @@
                 <v-btn
                   color="primary"
                   variant="tonal"
-                  :disabled="openAppReviewDisabled"
+                  :disabled="appReview.openDisabled"
                   :prepend-icon="mdiOpenInNew"
-                  :title="openAppReviewTitle"
-                  @click="openAppReview"
+                  :title="appReview.openTitle"
+                  @click="appReview.open"
                 >
                   Open app
                 </v-btn>
               </template>
 
               <v-btn
-                v-for="action in currentActions"
+                v-for="action in actions.currentActions"
                 :key="action.id"
                 color="primary"
                 variant="flat"
-                :disabled="commandBusy || action.enabled !== true"
-                :loading="runActionCommand.isRunning && activeActionId === action.id"
-                :prepend-icon="actionIcon(action)"
+                :disabled="page.busy || action.enabled !== true"
+                :loading="actions.runActionCommand.isRunning && actions.activeActionId === action.id"
+                :prepend-icon="actions.actionIcon(action)"
                 :title="action.disabledReason || action.label"
-                @click="runAction(action)"
+                @click="actions.runAction(action)"
               >
                 {{ action.label }}
               </v-btn>
 
               <v-btn
-                v-if="currentNext?.visible"
+                v-if="actions.currentNext?.visible"
                 color="primary"
                 variant="tonal"
-                :disabled="commandBusy || currentNext.enabled !== true"
-                :loading="advanceCommand.isRunning"
+                :disabled="page.busy || actions.currentNext.enabled !== true"
+                :loading="actions.advanceCommand.isRunning"
                 :prepend-icon="mdiArrowRight"
-                :title="currentNext.disabledReason || currentNext.label || 'Next'"
-                @click="goNext"
+                :title="actions.currentNext.disabledReason || actions.currentNext.label || 'Next'"
+                @click="actions.goNext"
               >
-                {{ currentNext.label || "Next" }}
+                {{ actions.currentNext.label || "Next" }}
               </v-btn>
             </div>
 
             <v-alert
-              v-if="actionResultMessage"
-              :type="actionResultType"
+              v-if="actions.actionResultMessage"
+              :type="actions.actionResultType"
               variant="tonal"
               density="compact"
               class="studio-ai-sessions__notice"
             >
-              {{ actionResultMessage }}
+              {{ actions.actionResultMessage }}
             </v-alert>
 
             <v-alert
-              v-if="currentStepDisabledReason"
+              v-if="actions.currentStepDisabledReason"
               type="info"
               variant="tonal"
               density="compact"
               class="studio-ai-sessions__notice"
             >
-              {{ currentStepDisabledReason }}
+              {{ actions.currentStepDisabledReason }}
             </v-alert>
 
-            <p v-if="copyStatus" class="text-caption text-medium-emphasis mb-0">
-              {{ copyStatus }}
+            <p v-if="page.copyStatus" class="text-caption text-medium-emphasis mb-0">
+              {{ page.copyStatus }}
             </p>
           </template>
         </AiStudioSessionTimeline>
 
         <AiStudioSessionFacts
           class="studio-ai-sessions__facts"
-          :facts="sessionFacts"
-          :status-color="aiStudioSessionStatusColor(selectedSession.status)"
-          :status-label="aiStudioSessionStatusLabel(selectedSession.status)"
-          @copy="copyText"
+          :facts="selection.facts"
+          :status-color="selection.statusColor(selection.selectedSession.status)"
+          :status-label="selection.statusLabel(selection.selectedSession.status)"
+          @copy="page.copyText"
         />
       </section>
 
       <section class="studio-ai-sessions__terminals">
         <CodexSessionTerminal
-          :prompt-injection-request-key="codexPromptInjectionKey"
-          :prompt-override="codexPromptOverride"
-          :session="selectedSession"
-          @busy-changed="handleCodexTerminalBusyChanged"
-          @prompt-injected="handleCodexPromptInjected"
-          @prompt-injection-failed="handleCodexPromptInjectionFailed"
-          @session-update="handleCodexSessionUpdate"
+          :prompt-injection-request-key="codexTerminal.promptInjectionKey"
+          :prompt-override="codexTerminal.promptOverride"
+          :session="selection.selectedSession"
+          @busy-changed="codexTerminal.busyChanged"
+          @prompt-injected="codexTerminal.promptInjected"
+          @prompt-injection-failed="codexTerminal.promptInjectionFailed"
+          @session-update="codexTerminal.sessionUpdate"
         />
 
         <div
-          v-if="commandTerminalVisible"
+          v-if="commandTerminal.visible"
           class="studio-ai-sessions__command-overlay"
         >
           <AiStudioCommandTerminal
             class="studio-ai-sessions__command-terminal"
-            :action="commandTerminalAction"
-            :action-input="commandTerminalInput"
-            :session="selectedSession"
-            :start-request-key="commandTerminalStartKey"
-            @closed="handleCommandTerminalClosed"
-            @finished="handleCommandTerminalFinished"
-            @running-changed="handleCommandTerminalRunningChanged"
+            :action="commandTerminal.action"
+            :action-input="commandTerminal.input"
+            :session="selection.selectedSession"
+            :start-request-key="commandTerminal.startKey"
+            @closed="commandTerminal.closed"
+            @finished="commandTerminal.finished"
+            @running-changed="commandTerminal.runningChanged"
           />
         </div>
 
         <div
-          v-if="appReviewTerminalVisible"
+          v-if="appReview.visible"
           class="studio-ai-sessions__command-overlay"
         >
           <AiStudioCommandTerminal
             class="studio-ai-sessions__command-terminal"
             terminal-kind="app-review"
             title="App review terminal"
-            :session="selectedSession"
-            :start-request-key="appReviewTerminalStartKey"
-            @closed="handleAppReviewTerminalClosed"
-            @started="handleAppReviewTerminalStarted"
+            :session="selection.selectedSession"
+            :start-request-key="appReview.startKey"
+            @closed="appReview.close"
+            @started="appReview.started"
           />
         </div>
       </section>
     </div>
 
     <AiStudioDraftEditorDialog
-      v-model="draftEditorOpen"
-      v-model:values="draftEditorValues"
-      :error="draftEditorError"
-      :fields="draftEditorFields"
-      :loading="draftEditorLoading"
-      :saving="draftEditorSaving"
-      :title="draftEditorTitle"
-      @save="saveDraftEditor"
+      v-model="dialogs.draftEditor.open"
+      v-model:values="dialogs.draftEditor.values"
+      :error="dialogs.draftEditor.error"
+      :fields="dialogs.draftEditor.fields"
+      :loading="dialogs.draftEditor.loading"
+      :saving="dialogs.draftEditor.saving"
+      :title="dialogs.draftEditor.title"
+      @save="dialogs.draftEditor.save"
     />
 
     <v-dialog
-      v-model="inputDialogOpen"
+      v-model="dialogs.input.open"
       max-width="520"
       persistent
     >
       <v-card>
-        <v-card-title>{{ inputDialogTitle }}</v-card-title>
+        <v-card-title>{{ dialogs.input.title }}</v-card-title>
         <v-card-text class="studio-ai-sessions__input-dialog-body">
           <StudioErrorNotice
-            v-if="inputDialogError"
+            v-if="dialogs.input.error"
             title="Action needs attention"
-            :error="inputDialogError"
+            :error="dialogs.input.error"
             compact
           />
 
           <v-text-field
-            v-for="field in inputDialogFields"
+            v-for="field in dialogs.input.fields"
             :key="field.name"
-            v-model="inputDialogValues[field.name]"
-            :disabled="inputDialogSubmitting"
+            v-model="dialogs.input.values[field.name]"
+            :disabled="dialogs.input.submitting"
             :label="field.label"
             :placeholder="field.placeholder || undefined"
             variant="outlined"
@@ -319,17 +319,17 @@
         <v-card-actions class="studio-ai-sessions__input-dialog-actions">
           <v-btn
             variant="text"
-            :disabled="inputDialogSubmitting"
-            @click="closeInputDialog"
+            :disabled="dialogs.input.submitting"
+            @click="dialogs.input.close"
           >
             Cancel
           </v-btn>
           <v-btn
             color="primary"
             variant="flat"
-            :disabled="inputDialogSaveDisabled"
-            :loading="inputDialogSubmitting"
-            @click="submitInputDialog"
+            :disabled="dialogs.input.saveDisabled"
+            :loading="dialogs.input.submitting"
+            @click="dialogs.input.submit"
           >
             Continue
           </v-btn>
@@ -337,17 +337,17 @@
       </v-card>
     </v-dialog>
 
-    <v-dialog v-model="diffDialogOpen" max-width="min(94vw, 72rem)">
+    <v-dialog v-model="dialogs.diff.open" max-width="min(94vw, 72rem)">
       <v-card class="studio-ai-sessions__diff-dialog">
         <v-card-title class="studio-ai-sessions__diff-title">
           <span>Review changes</span>
           <v-chip
-            v-if="diffPayload"
-            :color="diffPayload.hasChanges ? 'primary' : 'default'"
+            v-if="dialogs.diff.payload"
+            :color="dialogs.diff.payload.hasChanges ? 'primary' : 'default'"
             size="small"
             variant="tonal"
           >
-            {{ diffPayload.hasChanges ? "Changes found" : "No changes" }}
+            {{ dialogs.diff.payload.hasChanges ? "Changes found" : "No changes" }}
           </v-chip>
         </v-card-title>
 
@@ -357,24 +357,24 @@
           @click="handleDiffBodyClick"
         >
           <StudioErrorNotice
-            v-if="diffError"
+            v-if="dialogs.diff.error"
             title="Diff could not load"
-            :error="diffError"
+            :error="dialogs.diff.error"
             compact
             class="mb-3"
           />
 
           <v-progress-linear
-            v-if="diffLoading"
+            v-if="dialogs.diff.loading"
             color="primary"
             indeterminate
             class="mb-3"
           />
 
           <pre
-            v-if="diffPayload?.gitStatus"
+            v-if="dialogs.diff.payload?.gitStatus"
             class="studio-ai-sessions__diff-status"
-          >{{ diffPayload.gitStatus }}</pre>
+          >{{ dialogs.diff.payload.gitStatus }}</pre>
 
           <!-- eslint-disable vue/no-v-html -- Diff2Html escapes git diff content before rendering. -->
           <div
@@ -385,7 +385,7 @@
           <!-- eslint-enable vue/no-v-html -->
 
           <v-alert
-            v-else-if="!diffLoading && !diffError"
+            v-else-if="!dialogs.diff.loading && !dialogs.diff.error"
             type="info"
             variant="tonal"
           >
@@ -395,13 +395,13 @@
 
         <v-card-actions>
           <v-spacer />
-          <v-btn variant="text" @click="closeDiffDialog">Close</v-btn>
+          <v-btn variant="text" @click="dialogs.diff.close">Close</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
 
     <v-dialog
-      v-model="abandonDialogOpen"
+      v-model="dialogs.abandon.open"
       max-width="520"
       persistent
     >
@@ -415,22 +415,22 @@
             This will mark the session as abandoned and close its terminals.
           </p>
           <p class="text-body-2 text-medium-emphasis mb-0">
-            Session: <strong>{{ abandonDialogSessionTitle || shortSessionId(abandonDialogSessionId) }}</strong>
+            Session: <strong>{{ dialogs.abandon.sessionTitle || toolbar.shortSessionId(dialogs.abandon.sessionId) }}</strong>
           </p>
         </v-card-text>
         <v-card-actions class="studio-ai-sessions__abandon-actions">
           <v-btn
             variant="text"
-            :disabled="abandonCommand.isRunning"
-            @click="cancelAbandonSession"
+            :disabled="dialogs.abandon.command.isRunning"
+            @click="dialogs.abandon.cancel"
           >
             Cancel
           </v-btn>
           <v-btn
             color="warning"
             variant="flat"
-            :loading="abandonCommand.isRunning"
-            @click="confirmAbandonSession"
+            :loading="dialogs.abandon.command.isRunning"
+            @click="dialogs.abandon.confirm"
           >
             Abandon session
           </v-btn>
@@ -441,7 +441,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from "vue";
+import { computed, proxyRefs, ref } from "vue";
 import { html as renderDiffHtml } from "diff2html";
 import "diff2html/bundles/css/diff2html.min.css";
 import {
@@ -466,111 +466,32 @@ import {
 
 const emit = defineEmits(["title-change"]);
 
-const {
-  abandonCommand,
-  abandonDialogOpen,
-  abandonDialogSessionId,
-  abandonDialogSessionTitle,
-  actionIcon,
-  actionResultMessage,
-  actionResultType,
-  activeActionId,
-  advanceCommand,
-  aiStudioSessionStatusColor,
-  aiStudioSessionStatusLabel,
-  acceptChangesUtilitiesVisible,
-  appReviewTerminalStartKey,
-  appReviewTerminalVisible,
-  canCreateSession,
-  cancelAbandonSession,
-  closeDiffDialog,
-  codexPromptInjectionKey,
-  codexPromptOverride,
-  commandBusy,
-  commandTerminalAction,
-  commandTerminalInput,
-  commandTerminalStartKey,
-  commandTerminalVisible,
-  confirmAbandonSession,
-  copyStatus,
-  copyText,
-  createSessionCommand,
-  createSessionTitle,
-  currentActions,
-  currentNext,
-  currentStepDisabledReason,
-  diffDialogOpen,
-  diffError,
-  diffLoading,
-  diffPayload,
-  draftEditorError,
-  draftEditorFields,
-  draftEditorLoading,
-  draftEditorOpen,
-  draftEditorSaving,
-  draftEditorTitle,
-  draftEditorValues,
-  goNext,
-  handleCodexPromptInjected,
-  handleCodexPromptInjectionFailed,
-  handleCodexTerminalBusyChanged,
-  handleCodexSessionUpdate,
-  handleCommandTerminalClosed,
-  handleCommandTerminalFinished,
-  handleCommandTerminalRunningChanged,
-  handleAppReviewTerminalClosed,
-  handleAppReviewTerminalStarted,
-  issueRequestCanSubmit,
-  issueRequestError,
-  issueRequestFormVisible,
-  issueRequestSubmitting,
-  issueRequestSubmitTitle,
-  issueRequestText,
-  closeInputDialog,
-  inputDialogError,
-  inputDialogFields,
-  inputDialogOpen,
-  inputDialogSaveDisabled,
-  inputDialogSubmitting,
-  inputDialogTitle,
-  inputDialogValues,
-  isSelectedSessionClosed,
-  openAppReview,
-  openAppReviewDisabled,
-  openAppReviewTitle,
-  openDiffDialog,
-  pageError,
-  pageLoading,
-  requestAbandonSelectedSession,
-  reviewDiffDisabled,
-  reviewDiffTitle,
-  rewindToStep,
-  runAppReview,
-  runAppReviewDisabled,
-  runAppReviewTitle,
-  runAction,
-  runActionCommand,
-  saveDraftEditor,
-  sendIssueRequestPrompt,
-  selectSession,
-  selectedSession,
-  selectedSessionId,
-  selectedSessionTitle,
-  sessionFacts,
-  sessions,
-  shortSessionId,
-  submitInputDialog,
-  timelineSteps
-} = useAiStudioSessions({
+const sessionsModel = useAiStudioSessions({
   onTitleChange(title) {
     emit("title-change", title);
   }
 });
+const actions = proxyRefs(sessionsModel.actions);
+const appReview = proxyRefs(sessionsModel.appReview);
+const codexTerminal = proxyRefs(sessionsModel.codexTerminal);
+const commandTerminal = proxyRefs(sessionsModel.commandTerminal);
+const dialogs = {
+  abandon: proxyRefs(sessionsModel.dialogs.abandon),
+  diff: proxyRefs(sessionsModel.dialogs.diff),
+  draftEditor: proxyRefs(sessionsModel.dialogs.draftEditor),
+  input: proxyRefs(sessionsModel.dialogs.input)
+};
+const issueRequest = proxyRefs(sessionsModel.issueRequest);
+const page = proxyRefs(sessionsModel.page);
+const review = proxyRefs(sessionsModel.review);
+const selection = proxyRefs(sessionsModel.selection);
+const timeline = proxyRefs(sessionsModel.timeline);
+const toolbar = proxyRefs(sessionsModel.toolbar);
 
 const diffBodyElement = ref(null);
 
 const combinedDiff = computed(() => {
-  const payload = diffPayload.value || {};
+  const payload = dialogs.diff.payload || {};
   return [payload.stagedDiff, payload.unstagedDiff, payload.untrackedDiff]
     .map((entry) => String(entry || "").trim())
     .filter(Boolean)

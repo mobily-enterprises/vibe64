@@ -17,14 +17,18 @@ import {
 import { deepFreeze } from "../../deepFreeze.js";
 import {
   dependencyNames,
-  detectPackageManager,
   hasDependency,
-  installCommand,
   packageBinCommand,
   packageScript,
-  readPackageJson,
   scriptNames
 } from "../../nodePackage.js";
+import {
+  commandLineScript,
+  nodeInstallWorkflowHook,
+  nodePackageManagerInspectionExtra,
+  projectMarkerExists,
+  projectRouterMode
+} from "../../nodeWebProject.js";
 import {
   NEXTJS_DATABASE_RUNTIME_CONFIG,
   NEXTJS_PACKAGE_MANAGER_CONFIG,
@@ -156,29 +160,14 @@ const NEXTJS_CONFIG_FIELDS = deepFreeze([
   }
 ]);
 
-function markerExists(markers = [], markerId = "") {
-  return markers.some((marker) => marker.id === markerId && marker.exists);
-}
-
 function routerMode(markers = []) {
-  const hasApp = markerExists(markers, "app_router") || markerExists(markers, "src_app_router");
-  const hasPages = markerExists(markers, "pages_router") || markerExists(markers, "src_pages_router");
-  if (hasApp && hasPages) {
-    return "app+pages";
-  }
-  if (hasApp) {
-    return "app";
-  }
-  if (hasPages) {
-    return "pages";
-  }
-  return "unknown";
+  return projectRouterMode(markers);
 }
 
 function nextConfigExists(markers = []) {
-  return markerExists(markers, "next_config_ts") ||
-    markerExists(markers, "next_config_js") ||
-    markerExists(markers, "next_config_mjs");
+  return projectMarkerExists(markers, "next_config_ts") ||
+    projectMarkerExists(markers, "next_config_js") ||
+    projectMarkerExists(markers, "next_config_mjs");
 }
 
 function packageHasNext(packageJson = {}) {
@@ -309,12 +298,7 @@ function nextjsFacts({
 
 async function inspectNextjsProject(targetRoot) {
   return inspectDescribedProject(targetRoot, {
-    extra: async ({ packageJson, targetRoot: resolvedTargetRoot }) => ({
-      packageManager: await detectPackageManager(
-        resolvedTargetRoot,
-        packageJson || await readPackageJson(resolvedTargetRoot)
-      )
-    }),
+    extra: nodePackageManagerInspectionExtra,
     markers: NEXTJS_MARKERS,
     packageJson: {
       invalidJsonCode: "ai_studio_invalid_nextjs_json",
@@ -323,29 +307,10 @@ async function inspectNextjsProject(targetRoot) {
   });
 }
 
-function commandLineScript(lines = []) {
-  return [
-    "set -e",
-    ...lines
-  ].join("\n");
-}
-
-async function nextjsInstallHook({ worktreePath = "" } = {}) {
-  const packageJson = await readPackageJson(worktreePath);
-  const packageManager = await detectPackageManager(worktreePath, packageJson || {});
-  const command = installCommand(packageManager.name);
-  return {
-    command,
-    commandPreview: command,
-    metadata: {
-      dependencies_package_manager: packageManager.name
-    }
-  };
-}
-
 async function nextjsAutomatedChecksHook({ worktreePath = "" } = {}) {
-  const packageJson = await readPackageJson(worktreePath);
-  const packageManager = await detectPackageManager(worktreePath, packageJson || {});
+  const { packageManager } = await nodePackageManagerInspectionExtra({
+    targetRoot: worktreePath
+  });
   const buildCommand = packageBinCommand(packageManager.name, "next", ["build"]);
   return {
     commandPreview: buildCommand,
@@ -390,7 +355,7 @@ class NextjsTargetAdapter extends AiStudioDescribedWorkflowTargetAdapter {
       targetScriptsInspector: inspectNextjsTargetScripts,
       workflowCommandHooks: {
         automatedChecks: nextjsAutomatedChecksHook,
-        installDependencies: nextjsInstallHook
+        installDependencies: nodeInstallWorkflowHook
       }
     });
   }
