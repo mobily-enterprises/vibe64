@@ -66,7 +66,15 @@ const JSKIT_MARKERS = deepFreeze([
 
 const JSKIT_BLUEPRINT_RELATIVE_PATH = ".jskit/APP_BLUEPRINT.md";
 const JSKIT_PROMPT_PACK_ROOT = fileURLToPath(new URL("./prompts", import.meta.url));
+const JSKIT_ALLOW_SELF_TARGET_CONFIG = "jskit_allow_self_target";
 const JSKIT_CONFIG_FIELDS = deepFreeze([
+  {
+    defaultValue: false,
+    description: "Allow AI Studio to target this Studio checkout for self-development.",
+    id: JSKIT_ALLOW_SELF_TARGET_CONFIG,
+    label: "Allow Studio self-targeting",
+    type: "boolean"
+  },
   {
     defaultValue: "none",
     description: "Future JSKIT database runtime preference.",
@@ -110,6 +118,10 @@ const JSKIT_CONFIG_FIELDS = deepFreeze([
     type: "select"
   }
 ]);
+const JSKIT_DEFAULT_CONFIG = deepFreeze(Object.fromEntries(JSKIT_CONFIG_FIELDS.map((field) => [
+  field.id,
+  field.defaultValue
+])));
 
 function allMarkersExist(markers) {
   return markers.every((marker) => marker.exists);
@@ -138,6 +150,10 @@ function jskitAdapterCapabilities({
   adapter = null
 } = {}) {
   return adapter?.workflowCapabilities() || {};
+}
+
+function jskitConfigAllowsStudioSelfTarget(config = {}) {
+  return config?.values?.[JSKIT_ALLOW_SELF_TARGET_CONFIG] === true;
 }
 
 function jskitPromptContext({
@@ -274,10 +290,7 @@ class JskitTargetAdapter extends AiStudioDescribedWorkflowTargetAdapter {
       commands,
       configFields: JSKIT_CONFIG_FIELDS,
       currentAppInspector: inspectJskitCurrentApp,
-      defaultConfig: {
-        jskit_database_runtime: "none",
-        jskit_tenancy_mode: "none"
-      },
+      defaultConfig: JSKIT_DEFAULT_CONFIG,
       id: "jskit",
       label: "JSKIT target adapter",
       projectFacts: jskitFacts,
@@ -298,14 +311,23 @@ class JskitTargetAdapter extends AiStudioDescribedWorkflowTargetAdapter {
       }
     });
   }
+
+  async allowsStudioSelfTarget({
+    config = {}
+  } = {}) {
+    return jskitConfigAllowsStudioSelfTarget(config);
+  }
 }
 
 export {
+  JSKIT_ALLOW_SELF_TARGET_CONFIG,
+  JSKIT_DEFAULT_CONFIG,
   JSKIT_MARKERS,
   JSKIT_CONFIG_FIELDS,
   JSKIT_PROMPT_PACK_ROOT,
   JskitTargetAdapter,
   jskitCodeIndexHook,
+  jskitConfigAllowsStudioSelfTarget,
   jskitAutomatedChecksHook,
   inspectJskitProject
 };

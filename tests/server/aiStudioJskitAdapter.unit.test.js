@@ -9,6 +9,8 @@ import {
 } from "../../server/lib/aiStudio/index.js";
 import {
   JSKIT_AI_STUDIO_COMMANDS,
+  JSKIT_ALLOW_SELF_TARGET_CONFIG,
+  JSKIT_CONFIG_FIELDS,
   createJskitTargetAdapter
 } from "../../server/lib/aiStudio/adapters/jskit/index.js";
 import {
@@ -87,6 +89,28 @@ test("jskit adapter exposes selected-project facts, commands, and prompt context
     assert.equal(facts.capabilities.update_code_index, true);
     assert.deepEqual(facts.commands.map((command) => command.id), commandIds());
   });
+});
+
+test("jskit adapter exposes explicit self-target config policy", async () => {
+  const adapter = createJskitTargetAdapter();
+  const selfTargetField = JSKIT_CONFIG_FIELDS.find((field) => field.id === JSKIT_ALLOW_SELF_TARGET_CONFIG);
+
+  assert.equal(selfTargetField.type, "boolean");
+  assert.equal(selfTargetField.defaultValue, false);
+  assert.equal(await adapter.allowsStudioSelfTarget({
+    config: {
+      values: {
+        [JSKIT_ALLOW_SELF_TARGET_CONFIG]: false
+      }
+    }
+  }), false);
+  assert.equal(await adapter.allowsStudioSelfTarget({
+    config: {
+      values: {
+        [JSKIT_ALLOW_SELF_TARGET_CONFIG]: true
+      }
+    }
+  }), true);
 });
 
 test("jskit adapter reports missing markers without pretending project type selection failed", async () => {

@@ -1,8 +1,11 @@
 import {
+  JSKIT_ALLOW_SELF_TARGET_CONFIG,
   JSKIT_CONFIG_FIELDS,
+  JSKIT_DEFAULT_CONFIG,
   JSKIT_MARKERS,
   JSKIT_PROMPT_PACK_ROOT,
-  JskitTargetAdapter
+  JskitTargetAdapter,
+  jskitConfigAllowsStudioSelfTarget
 } from "./adapter.js";
 import {
   deepFreeze
@@ -44,9 +47,12 @@ export {
   createJskitAiStudioCommandTerminalSpec,
   createJskitLaunchTargetTerminalSpec,
   listJskitLaunchTargets,
+  JSKIT_ALLOW_SELF_TARGET_CONFIG,
   JSKIT_CONFIG_FIELDS,
+  JSKIT_DEFAULT_CONFIG,
   JSKIT_MARKERS,
   JSKIT_PROMPT_PACK_ROOT,
   JSKIT_AI_STUDIO_COMMANDS,
-  JskitTargetAdapter
+  JskitTargetAdapter,
+  jskitConfigAllowsStudioSelfTarget
 };

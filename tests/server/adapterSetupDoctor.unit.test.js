@@ -24,11 +24,18 @@ import {
   terminalInputValidator
 } from "../../packages/adapter-setup-doctor/src/server/inputSchemas.js";
 import {
+  createService as createProjectService
+} from "../../packages/ai-studio-project/src/server/service.js";
+import {
+  JSKIT_ALLOW_SELF_TARGET_CONFIG
+} from "../../server/lib/aiStudio/adapters/jskit/index.js";
+import {
   gitSafeDirectoryArgs,
   gitToolchainMountArgs,
   linkedGitMetadataMountSource,
   linkedGitRepositoryMountSource
 } from "../../server/lib/gitToolchainMounts.js";
+import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
 
 function assertShellScriptSurvivesWhitespaceCollapse(script) {
   const flattened = script.replace(/\s+/gu, " ");
@@ -165,4 +172,48 @@ test("Adapter Setup blocks dependent checks when target directory is unavailable
   assert.equal(status.checks.find((check) => check.id === "target-directory")?.status, "fail");
   assert.equal(status.checks.find((check) => check.id === "git-repository")?.observed, "Target directory is not ready.");
   assert.equal(status.checks.find((check) => check.id === "github-issues-prs")?.observed, "Target directory is not ready.");
+});
+
+test("Adapter Setup allows JSKIT self-targeting only when adapter config opts in", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const projectService = createProjectService({
+      targetRoot
+    });
+    await projectService.saveProjectType({
+      projectType: "jskit"
+    });
+    await projectService.saveProjectConfig({
+      values: {
+        github_pr_merge_method: "merge",
+        [JSKIT_ALLOW_SELF_TARGET_CONFIG]: false,
+        jskit_database_runtime: "none",
+        jskit_tenancy_mode: "none"
+      }
+    });
+
+    const blocked = await inspectAdapterSetup({
+      projectService,
+      studioRoot: targetRoot,
+      targetRoot
+    });
+    assert.equal(blocked.checks.find((check) => check.id === "target-identity")?.status, "fail");
+
+    await projectService.saveProjectConfig({
+      values: {
+        github_pr_merge_method: "merge",
+        [JSKIT_ALLOW_SELF_TARGET_CONFIG]: true,
+        jskit_database_runtime: "none",
+        jskit_tenancy_mode: "none"
+      }
+    });
+
+    const allowed = await inspectAdapterSetup({
+      projectService,
+      studioRoot: targetRoot,
+      targetRoot
+    });
+    const identity = allowed.checks.find((check) => check.id === "target-identity");
+    assert.equal(identity?.status, "pass");
+    assert.match(identity?.explanation || "", /self-development mode/u);
+  });
 });

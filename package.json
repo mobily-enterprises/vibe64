@@ -1,6 +1,6 @@
 {
   "name": "@vibe-armor/run",
-  "version": "0.1.5",
+  "version": "0.1.8",
   "private": false,
   "type": "module",
   "description": "Run AI Studio against the current project.",
@@ -52,10 +52,10 @@
   "dependencies": {
     "@fastify/static": "^9.1.1",
     "@fastify/websocket": "^11.2.0",
-    "@jskit-ai/http-runtime": "0.1.81",
-    "@jskit-ai/kernel": "0.1.82",
-    "@jskit-ai/shell-web": "0.1.81",
-    "@jskit-ai/users-web": "0.1.97",
+    "@jskit-ai/http-runtime": "0.1.82",
+    "@jskit-ai/kernel": "0.1.83",
+    "@jskit-ai/shell-web": "0.1.82",
+    "@jskit-ai/users-web": "0.1.98",
     "@local/adapter-setup-doctor": "file:packages/adapter-setup-doctor",
     "@local/ai-studio-accounts": "file:packages/ai-studio-accounts",
     "@local/ai-studio-artifacts": "file:packages/ai-studio-artifacts",
@@ -84,9 +84,9 @@
     "vuetify": "^4.0.0"
   },
   "devDependencies": {
-    "@jskit-ai/agent-docs": "0.1.43",
-    "@jskit-ai/config-eslint": "0.1.81",
-    "@jskit-ai/jskit-cli": "0.2.91",
+    "@jskit-ai/agent-docs": "0.1.44",
+    "@jskit-ai/config-eslint": "0.1.82",
+    "@jskit-ai/jskit-cli": "0.2.92",
     "@playwright/test": "^1.57.0",
     "@vitejs/plugin-vue": "^5.2.1",
     "eslint": "^9.39.1",

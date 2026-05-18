@@ -6,6 +6,9 @@ import test from "node:test";
 import {
   createService
 } from "../../packages/ai-studio-project/src/server/service.js";
+import {
+  JSKIT_ALLOW_SELF_TARGET_CONFIG
+} from "../../server/lib/aiStudio/adapters/jskit/index.js";
 import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
 
 test("AI Studio project service saves project type and plain-file configuration", async () => {
@@ -42,11 +45,13 @@ test("AI Studio project service saves project type and plain-file configuration"
     const defaults = await service.readProjectConfigDefaults();
     assert.equal(defaults.ok, true);
     assert.equal(defaults.defaults.defaults.github_pr_merge_method, "merge");
+    assert.equal(defaults.defaults.defaults[JSKIT_ALLOW_SELF_TARGET_CONFIG], false);
     assert.equal(defaults.defaults.defaults.jskit_database_runtime, "none");
 
     const savedConfig = await service.saveProjectConfig({
       values: {
         github_pr_merge_method: "rebase",
+        [JSKIT_ALLOW_SELF_TARGET_CONFIG]: true,
         jskit_database_runtime: "postgres",
         jskit_tenancy_mode: "workspaces"
       }
@@ -54,6 +59,7 @@ test("AI Studio project service saves project type and plain-file configuration"
     assert.equal(savedConfig.ok, true);
     assert.equal(savedConfig.config.ready, true);
     assert.equal(savedConfig.config.values.github_pr_merge_method, "rebase");
+    assert.equal(savedConfig.config.values[JSKIT_ALLOW_SELF_TARGET_CONFIG], true);
     assert.equal(
       await readFile(path.join(targetRoot, ".ai-studio", "config", "jskit_database_runtime"), "utf8"),
       "postgres\n"
@@ -65,6 +71,7 @@ test("AI Studio project service saves project type and plain-file configuration"
 
     const runtime = await service.createRuntime();
     assert.equal(runtime.adapter.id, "jskit");
+    assert.equal(runtime.projectConfig.values[JSKIT_ALLOW_SELF_TARGET_CONFIG], true);
     assert.equal(runtime.projectConfig.values.jskit_tenancy_mode, "workspaces");
   });
 });
@@ -102,6 +109,7 @@ test("AI Studio project service loads invalid saved config as editable not ready
       recursive: true
     });
     await writeFile(path.join(targetRoot, ".ai-studio", "config", "github_pr_merge_method"), "merge\n", "utf8");
+    await writeFile(path.join(targetRoot, ".ai-studio", "config", JSKIT_ALLOW_SELF_TARGET_CONFIG), "false\n", "utf8");
     await writeFile(path.join(targetRoot, ".ai-studio", "config", "jskit_database_runtime"), "mysql\n", "utf8");
     await writeFile(path.join(targetRoot, ".ai-studio", "config", "jskit_tenancy_mode"), "single\n", "utf8");
 
