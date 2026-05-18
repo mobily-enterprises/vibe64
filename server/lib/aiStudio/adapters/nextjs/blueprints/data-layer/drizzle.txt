@@ -1,0 +1,16 @@
+Data layer: Drizzle
+
+Use Drizzle as the app's database abstraction when durable storage is needed.
+Read the connection string from DATABASE_URL in .env.local and keep all Drizzle access server-side only.
+Expected shape:
+- schema lives in a predictable TypeScript module, commonly src/db/schema.ts or db/schema.ts.
+- database client access goes through one shared server-only module, commonly src/db/index.ts or db/index.ts.
+- drizzle.config.ts points at the schema, migrations output directory, SQL dialect, and DATABASE_URL.
+- generated SQL migrations live in a stable migrations directory such as drizzle/.
+- package scripts should expose generate, migrate, and studio commands, commonly db:generate, db:migrate, and db:studio.
+
+When Drizzle is not installed yet, add dependencies deliberately for the selected database provider.
+For PostgreSQL, use drizzle-orm with the Postgres driver and drizzle-kit.
+For MySQL, use drizzle-orm with the MySQL driver and drizzle-kit.
+Never import Drizzle client code into Client Components.
+Use route handlers, Server Actions, or Server Components for queries and mutations.

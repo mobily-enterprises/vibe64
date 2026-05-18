@@ -46,6 +46,14 @@ const codexThreadFields = {
   }
 };
 
+const launchTargetFields = {
+  launchTargetId: {
+    type: "string",
+    noTrim: false,
+    required: true
+  }
+};
+
 const codexAttachmentInputValidator = deepFreeze({
   schema: createSchema(codexAttachmentFields),
   mode: "patch"
@@ -85,11 +93,34 @@ const codexThreadActionInputValidator = deepFreeze({
   mode: "patch"
 });
 
+const launchTargetInputValidator = deepFreeze({
+  schema: createSchema(launchTargetFields),
+  mode: "patch"
+});
+
+const launchTargetActionInputValidator = deepFreeze({
+  schema: createSchema({
+    ...launchTargetFields,
+    sessionId: sessionIdField
+  }),
+  mode: "patch"
+});
+
+const openLaunchTargetActionInputValidator = deepFreeze({
+  schema: createSchema({
+    sessionId: sessionIdField
+  }),
+  mode: "patch"
+});
+
 export {
   codexAttachmentActionInputValidator,
   codexAttachmentInputValidator,
   codexPromptHandoffActionInputValidator,
   codexPromptHandoffInputValidator,
   codexThreadActionInputValidator,
-  codexThreadInputValidator
+  codexThreadInputValidator,
+  launchTargetActionInputValidator,
+  launchTargetInputValidator,
+  openLaunchTargetActionInputValidator
 };

@@ -13,7 +13,9 @@ import {
 } from "../../workflowAdapter.js";
 import {
   createVinextAppReviewTerminalSpec,
-  createVinextReviewDescriptor
+  createVinextLaunchTargetTerminalSpec,
+  createVinextReviewDescriptor,
+  listVinextLaunchTargets
 } from "./appReviewTerminal.js";
 
 export {
@@ -32,11 +34,15 @@ const createVinextAiStudioCommandTerminalSpec = createAiStudioWorkflowCommandTer
 
 function createVinextTargetAdapter({
   appReviewTerminalSpecFactory = createVinextAppReviewTerminalSpec,
-  commandTerminalSpecFactory = null
+  commandTerminalSpecFactory = null,
+  launchTargetTerminalSpecFactory = createVinextLaunchTargetTerminalSpec,
+  launchTargets = listVinextLaunchTargets
 } = {}) {
   return new VinextTargetAdapter({
     appReviewTerminalSpecFactory,
     commandTerminalSpecFactory,
+    launchTargetTerminalSpecFactory,
+    launchTargets,
     commands: VINEXT_AI_STUDIO_COMMANDS
   });
 }
@@ -44,8 +50,10 @@ function createVinextTargetAdapter({
 export {
   createVinextAiStudioCommandTerminalSpec,
   createVinextAppReviewTerminalSpec,
+  createVinextLaunchTargetTerminalSpec,
   createVinextReviewDescriptor,
   createVinextTargetAdapter,
+  listVinextLaunchTargets,
   VINEXT_AI_STUDIO_COMMANDS,
   VINEXT_CONFIG_FIELDS,
   VINEXT_MARKERS,

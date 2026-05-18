@@ -97,11 +97,45 @@ test("nextjs adapter exposes project facts, commands, and prompt context", async
     assert.equal(facts.promptContext.package_name, "example-nextjs-app");
     assert.equal(facts.promptContext.router_mode, "app");
     assert.equal(facts.promptContext.package_manager, "npm");
+    assert.equal(facts.promptContext.database_runtime, "postgres");
+    assert.equal(facts.promptContext.data_layer, "prisma");
+    assert.match(facts.promptContext.data_layer_blueprint, /Data layer: Prisma/u);
     assert.equal(facts.promptContext.next_dependency, "true");
+    assert.equal(facts.promptContext.seed_language, "typescript");
+    assert.equal(facts.promptContext.seed_source_layout, "src");
     assert.equal(facts.promptContext.valid_nextjs_markers, "true");
     assert.deepEqual(facts.commands.map((command) => command.id), commandIds());
     assert.equal(facts.capabilities.create_worktree, true);
     assert.equal(facts.capabilities.run_automated_checks, true);
+
+    const defaults = await adapter.getDefaultConfig();
+    assert.equal(defaults.nextjs_database_runtime, "postgres");
+    assert.equal(defaults.nextjs_data_layer, "prisma");
+    assert.equal(defaults.nextjs_seed_language, "typescript");
+    assert.equal(defaults.nextjs_seed_source_layout, "src");
+    assert.equal(defaults.nextjs_seed_styling, "tailwind");
+  });
+});
+
+test("nextjs adapter loads the selected data-layer blueprint into prompt context", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createNextjsProject(targetRoot);
+    const adapter = createNextjsTargetAdapter();
+
+    const facts = await adapter.inspect({
+      config: {
+        values: {
+          nextjs_data_layer: "drizzle",
+          nextjs_database_runtime: "mysql"
+        }
+      },
+      targetRoot
+    });
+
+    assert.equal(facts.promptContext.database_runtime, "mysql");
+    assert.equal(facts.promptContext.data_layer, "drizzle");
+    assert.match(facts.promptContext.data_layer_blueprint, /Data layer: Drizzle/u);
+    assert.match(facts.promptContext.data_layer_blueprint, /drizzle\.config\.ts/u);
   });
 });
 
@@ -110,6 +144,11 @@ test("nextjs prompt actions use the Next.js prompt pack", async () => {
     await createNextjsProject(targetRoot);
     const runtime = new AiStudioSessionRuntime({
       adapter: createNextjsTargetAdapter(),
+      projectConfig: {
+        values: {
+          nextjs_database_runtime: "postgres"
+        }
+      },
       targetRoot
     });
     await runtime.createSession({
@@ -121,7 +160,13 @@ test("nextjs prompt actions use the Next.js prompt pack", async () => {
 
     assert.equal(afterPrompt.actionResult.status, "prompt_ready");
     assert.equal(afterPrompt.actionResult.promptContext.adapter.id, "nextjs");
+    assert.equal(afterPrompt.actionResult.promptContext.adapter.promptContext.database_runtime, "postgres");
+    assert.equal(afterPrompt.actionResult.promptContext.adapter.promptContext.data_layer, "prisma");
     assert.match(afterPrompt.actionResult.prompt, /Create the implementation plan for this Next\.js project/u);
+    assert.match(afterPrompt.actionResult.prompt, /nextjs_database_runtime/u);
+    assert.match(afterPrompt.actionResult.prompt, /DATABASE_URL/u);
+    assert.match(afterPrompt.actionResult.prompt, /Next\.js data layer blueprint:\nData layer: Prisma/u);
+    assert.doesNotMatch(afterPrompt.actionResult.prompt, /adapter\.promptContext\.data_layer_blueprint/u);
     assert.match(afterPrompt.actionResult.prompt, /example-nextjs-app/u);
   });
 });
@@ -169,8 +214,8 @@ test("nextjs app review describes Next.js commands and uses the shared review te
     });
 
     assert.deepEqual(descriptor.commands.map((command) => command.command), [
-      "npx --no-install next build",
-      "npx --no-install next start -H 0.0.0.0 -p 4199"
+      "npm run build",
+      "npm run start -- -H 0.0.0.0 -p 4199"
     ]);
     assert.equal(descriptor.metadata.mode, "production");
 
@@ -249,8 +294,45 @@ test("nextjs create-next-app setup script expands the generated app directory va
 
   assert.match(command, /npx --yes create-next-app@latest "\$app_dir"/u);
   assert.doesNotMatch(command, /'\$app_dir'/u);
+  assert.match(command, /--reset-preferences/u);
+  assert.match(command, /--typescript/u);
+  assert.match(command, /--tailwind/u);
+  assert.match(command, /--eslint/u);
+  assert.match(command, /--src-dir/u);
+  assert.match(command, /--turbopack/u);
   assert.match(script, /app_dir="\$tmp_dir\/app"/u);
   assert.match(script, /cp -a "\$app_dir\/\." \./u);
+});
+
+test("nextjs create-next-app setup script reflects seed options and selected database", () => {
+  const config = {
+    values: {
+      nextjs_database_runtime: "postgres",
+      nextjs_package_manager: "bun",
+      nextjs_seed_bundler: "webpack",
+      nextjs_seed_import_alias: "~/*",
+      nextjs_seed_language: "javascript",
+      nextjs_seed_linter: "biome",
+      nextjs_seed_source_layout: "root",
+      nextjs_seed_styling: "none"
+    }
+  };
+  const command = createNextAppCommand({
+    config
+  });
+  const script = createNextAppScript(config, {
+    targetRoot: "/tmp/example-next-app"
+  });
+
+  assert.match(command, /bunx create-next-app@latest "\$app_dir"/u);
+  assert.match(command, /--javascript/u);
+  assert.match(command, /--no-tailwind/u);
+  assert.match(command, /--biome/u);
+  assert.match(command, /--no-src-dir/u);
+  assert.match(command, /--webpack/u);
+  assert.match(command, /'~\/\*'/u);
+  assert.match(command, /--use-bun/u);
+  assert.match(script, /DATABASE_URL=postgresql:\/\/nextjs:nextjs_password@nextjs-postgres:5432\/example_next_app/u);
 });
 
 test("nextjs adapter declares optional managed database runtime without owning orchestration", async () => {

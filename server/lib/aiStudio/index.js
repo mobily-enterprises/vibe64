@@ -59,6 +59,11 @@ export {
   findAvailableReviewPort
 } from "./appReviewTerminal.js";
 export {
+  DEFAULT_LAUNCH_TARGET_PORT,
+  createAiStudioLaunchTargetTerminalSpec,
+  findAvailableLaunchTargetPort
+} from "./launchTargetTerminal.js";
+export {
   adapterScriptNameFromInput,
   createAiStudioTargetScriptTerminalSpec,
   targetScriptError

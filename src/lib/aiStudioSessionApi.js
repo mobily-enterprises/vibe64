@@ -21,8 +21,8 @@ function aiStudioCommandTerminalEndpoint(sessionId, terminalSessionId = "") {
   return terminalSessionId ? `${base}/${encodeURIComponent(terminalSessionId)}` : base;
 }
 
-function aiStudioAppReviewTerminalEndpoint(sessionId, terminalSessionId = "") {
-  const base = aiStudioSessionEndpoint(sessionId, "/app-review-terminal");
+function aiStudioLaunchTerminalEndpoint(sessionId, terminalSessionId = "") {
+  const base = aiStudioSessionEndpoint(sessionId, "/launch-terminal");
   return terminalSessionId ? `${base}/${encodeURIComponent(terminalSessionId)}` : base;
 }
 
@@ -34,8 +34,8 @@ function aiStudioCommandTerminalWebSocketUrl(sessionId, terminalSessionId) {
   return resolveWebSocketUrl(`${aiStudioCommandTerminalEndpoint(sessionId, terminalSessionId)}/ws`);
 }
 
-function aiStudioAppReviewTerminalWebSocketUrl(sessionId, terminalSessionId) {
-  return resolveWebSocketUrl(`${aiStudioAppReviewTerminalEndpoint(sessionId, terminalSessionId)}/ws`);
+function aiStudioLaunchTerminalWebSocketUrl(sessionId, terminalSessionId) {
+  return resolveWebSocketUrl(`${aiStudioLaunchTerminalEndpoint(sessionId, terminalSessionId)}/ws`);
 }
 
 async function readAiStudioSessionDiff(sessionId) {
@@ -50,34 +50,11 @@ async function closeAiStudioCodexTerminal(sessionId, terminalSessionId) {
   return studioHttpClient.delete(aiStudioCodexTerminalEndpoint(sessionId, terminalSessionId));
 }
 
-async function startAiStudioCommandTerminal(sessionId, actionId, input = {}) {
-  return studioHttpClient.post(aiStudioCommandTerminalEndpoint(sessionId), {
-    actionId,
-    input
-  });
-}
-
-async function startAiStudioAppReviewTerminal(sessionId) {
-  return studioHttpClient.post(aiStudioAppReviewTerminalEndpoint(sessionId), {});
-}
-
-async function closeAiStudioCommandTerminal(sessionId, terminalSessionId) {
-  return studioHttpClient.delete(aiStudioCommandTerminalEndpoint(sessionId, terminalSessionId));
-}
-
-async function closeAiStudioAppReviewTerminal(sessionId, terminalSessionId) {
-  return studioHttpClient.delete(aiStudioAppReviewTerminalEndpoint(sessionId, terminalSessionId));
-}
-
 export {
-  aiStudioAppReviewTerminalWebSocketUrl,
   aiStudioCodexTerminalWebSocketUrl,
   aiStudioCommandTerminalWebSocketUrl,
-  closeAiStudioAppReviewTerminal,
+  aiStudioLaunchTerminalWebSocketUrl,
   closeAiStudioCodexTerminal,
-  closeAiStudioCommandTerminal,
   readAiStudioSessionDiff,
-  startAiStudioAppReviewTerminal,
-  startAiStudioCodexTerminal,
-  startAiStudioCommandTerminal
+  startAiStudioCodexTerminal
 };

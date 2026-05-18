@@ -2,9 +2,14 @@ import {
   createAiStudioAppReviewTerminalSpec
 } from "../../appReviewTerminal.js";
 import {
+  createAiStudioLaunchTargetTerminalSpec
+} from "../../launchTargetTerminal.js";
+import {
   detectPackageManager,
   packageBinCommand,
-  readPackageJson
+  packageScript,
+  readPackageJson,
+  runScriptCommand
 } from "../../nodePackage.js";
 import {
   NEXTJS_REVIEW_MODE_CONFIG
@@ -22,6 +27,43 @@ function reviewMode(config = {}) {
   return mode === "development" ? "development" : "production";
 }
 
+function nextCommandOrPackageScript(packageJson = {}, packageManagerName = "npm", {
+  args = [],
+  binArgs = [],
+  scriptName = ""
+} = {}) {
+  return packageScript(packageJson, scriptName)
+    ? runScriptCommand(packageManagerName, scriptName, args)
+    : packageBinCommand(packageManagerName, "next", binArgs.length ? binArgs : [scriptName, ...args]);
+}
+
+function nextjsLaunchTarget(id, label) {
+  return {
+    id,
+    label
+  };
+}
+
+async function listNextjsLaunchTargets({
+  session = {}
+} = {}) {
+  const worktreePath = String(session.metadata?.worktree_path || "").trim();
+  if (!worktreePath || !await readPackageJson(worktreePath)) {
+    return [];
+  }
+  return [
+    nextjsLaunchTarget("built", "Build and run built version"),
+    nextjsLaunchTarget("dev", "Run dev version")
+  ];
+}
+
+function configForLaunchTarget(config = {}, launchTargetId = "") {
+  return {
+    ...configValues(config),
+    [NEXTJS_REVIEW_MODE_CONFIG]: launchTargetId === "dev" ? "development" : "production"
+  };
+}
+
 async function createNextjsReviewDescriptor({
   config = {},
   port,
@@ -31,10 +73,19 @@ async function createNextjsReviewDescriptor({
   const packageJson = await readPackageJson(worktreePath);
   const packageManager = await detectPackageManager(worktreePath, packageJson || {});
   const mode = reviewMode(config);
-  const buildCommand = packageBinCommand(packageManager.name, "next", ["build"]);
+  const buildCommand = nextCommandOrPackageScript(packageJson || {}, packageManager.name, {
+    scriptName: "build"
+  });
+  const serverArgs = ["-H", "0.0.0.0", "-p", String(port)];
   const serverCommand = mode === "development"
-    ? packageBinCommand(packageManager.name, "next", ["dev", "-H", "0.0.0.0", "-p", String(port)])
-    : packageBinCommand(packageManager.name, "next", ["start", "-H", "0.0.0.0", "-p", String(port)]);
+    ? nextCommandOrPackageScript(packageJson || {}, packageManager.name, {
+        args: serverArgs,
+        scriptName: "dev"
+      })
+    : nextCommandOrPackageScript(packageJson || {}, packageManager.name, {
+        args: serverArgs,
+        scriptName: "start"
+      });
 
   return {
     commands: [
@@ -66,6 +117,33 @@ async function createNextjsReviewDescriptor({
   };
 }
 
+function createNextjsLaunchTargetTerminalSpec({
+  context = {},
+  launchTargetId = "",
+  session = {},
+  targetRoot = ""
+} = {}) {
+  if (!["built", "dev"].includes(launchTargetId)) {
+    return {
+      ok: false,
+      message: `Unknown Next.js launch target: ${launchTargetId || "(empty)"}.`
+    };
+  }
+  const reviewTargetRoot = targetRoot || session.targetRoot || "";
+  return createAiStudioLaunchTargetTerminalSpec({
+    adapterId: "nextjs",
+    launchTarget: context.launchTarget || nextjsLaunchTarget(launchTargetId, launchTargetId),
+    resolveLaunch: ({ port, worktreePath }) => createNextjsReviewDescriptor({
+      config: configForLaunchTarget(context.config || session.config || {}, launchTargetId),
+      port,
+      targetRoot: reviewTargetRoot,
+      worktreePath
+    }),
+    session,
+    targetRoot: reviewTargetRoot
+  });
+}
+
 function createNextjsAppReviewTerminalSpec({
   context = {},
   session = {},
@@ -87,5 +165,7 @@ function createNextjsAppReviewTerminalSpec({
 
 export {
   createNextjsAppReviewTerminalSpec,
-  createNextjsReviewDescriptor
+  createNextjsLaunchTargetTerminalSpec,
+  createNextjsReviewDescriptor,
+  listNextjsLaunchTargets
 };

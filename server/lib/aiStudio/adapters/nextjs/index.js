@@ -13,7 +13,9 @@ import {
 } from "../../workflowAdapter.js";
 import {
   createNextjsAppReviewTerminalSpec,
-  createNextjsReviewDescriptor
+  createNextjsLaunchTargetTerminalSpec,
+  createNextjsReviewDescriptor,
+  listNextjsLaunchTargets
 } from "./appReviewTerminal.js";
 
 export {
@@ -24,9 +26,16 @@ export {
 } from "./currentApp.js";
 export {
   NEXTJS_DATABASE_RUNTIME_CONFIG,
+  NEXTJS_DATA_LAYER_CONFIG,
   NEXTJS_PACKAGE_MANAGER_CONFIG,
   NEXTJS_PROJECT_KNOWLEDGE_RELATIVE_PATH,
-  NEXTJS_REVIEW_MODE_CONFIG
+  NEXTJS_REVIEW_MODE_CONFIG,
+  NEXTJS_SEED_BUNDLER_CONFIG,
+  NEXTJS_SEED_IMPORT_ALIAS_CONFIG,
+  NEXTJS_SEED_LANGUAGE_CONFIG,
+  NEXTJS_SEED_LINTER_CONFIG,
+  NEXTJS_SEED_SOURCE_LAYOUT_CONFIG,
+  NEXTJS_SEED_STYLING_CONFIG
 } from "./constants.js";
 
 const NEXTJS_AI_STUDIO_COMMANDS = deepFreeze(AI_STUDIO_WORKFLOW_COMMANDS);
@@ -34,11 +43,15 @@ const createNextjsAiStudioCommandTerminalSpec = createAiStudioWorkflowCommandTer
 
 function createNextjsTargetAdapter({
   appReviewTerminalSpecFactory = createNextjsAppReviewTerminalSpec,
-  commandTerminalSpecFactory = null
+  commandTerminalSpecFactory = null,
+  launchTargetTerminalSpecFactory = createNextjsLaunchTargetTerminalSpec,
+  launchTargets = listNextjsLaunchTargets
 } = {}) {
   return new NextjsTargetAdapter({
     appReviewTerminalSpecFactory,
     commandTerminalSpecFactory,
+    launchTargetTerminalSpecFactory,
+    launchTargets,
     commands: NEXTJS_AI_STUDIO_COMMANDS
   });
 }
@@ -46,8 +59,10 @@ function createNextjsTargetAdapter({
 export {
   createNextjsAiStudioCommandTerminalSpec,
   createNextjsAppReviewTerminalSpec,
+  createNextjsLaunchTargetTerminalSpec,
   createNextjsReviewDescriptor,
   createNextjsTargetAdapter,
+  listNextjsLaunchTargets,
   NEXTJS_AI_STUDIO_COMMANDS,
   NEXTJS_CONFIG_FIELDS,
   NEXTJS_MARKERS,

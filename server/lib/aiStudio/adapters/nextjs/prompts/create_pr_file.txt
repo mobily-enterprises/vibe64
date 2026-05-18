@@ -20,6 +20,12 @@ Next.js project facts:
 Next.js prompt context:
 {{adapter.promptContext.json}}
 
+Next.js project config:
+{{config.json}}
+
+Next.js data layer blueprint:
+{{adapter.promptContext.data_layer_blueprint}}
+
 Action input:
 {{input.json}}
 

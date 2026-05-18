@@ -3,11 +3,14 @@ import { resolveScopedApiBasePath, normalizeSurfaceId } from "@jskit-ai/kernel/s
 import {
   codexAttachmentInputValidator,
   codexPromptHandoffInputValidator,
-  codexThreadInputValidator
+  codexThreadInputValidator,
+  launchTargetInputValidator
 } from "./inputSchemas.js";
 import {
+  ACTION_OPEN_LAUNCH_TARGET,
   ACTION_SAVE_CODEX_PROMPT_HANDOFF,
   ACTION_SAVE_CODEX_THREAD,
+  ACTION_START_LAUNCH_TARGET_TERMINAL,
   ACTION_UPLOAD_CODEX_ATTACHMENT
 } from "./actions.js";
 import {
@@ -48,22 +51,74 @@ function registerRoutes(
   });
 
   router.register(
-    "POST",
-    `${routeBase}/sessions/:sessionId/app-review-terminal`,
+    "GET",
+    `${routeBase}/sessions/:sessionId/launch-targets`,
     {
       auth: "public",
       surface: normalizedRouteSurface,
       meta: {
         tags: ["studio", "ai-studio-terminals"],
-        summary: "Start an AI Studio app review terminal."
+        summary: "Read AI Studio launch target status."
       }
     },
     async function (request, reply) {
       if (!requireLocalAiStudioRequest(request, reply)) {
         return;
       }
-      const response = await getTerminalService(app).startAppReviewTerminal(request.params.sessionId);
-      reply.code(response?.ok === false ? 400 : 200).send(response);
+      const response = await getTerminalService(app).launchTargetStatus(request.params.sessionId);
+      reply.code(aiStudioStatusCode(response)).send(response);
+    }
+  );
+
+  router.register(
+    "POST",
+    `${routeBase}/sessions/:sessionId/launch-terminal`,
+    {
+      auth: "public",
+      surface: normalizedRouteSurface,
+      meta: {
+        tags: ["studio", "ai-studio-terminals"],
+        summary: "Start an AI Studio launch target terminal."
+      },
+      body: launchTargetInputValidator
+    },
+    async function (request, reply) {
+      if (!requireLocalAiStudioRequest(request, reply)) {
+        return;
+      }
+      const response = await request.executeAction({
+        actionId: ACTION_START_LAUNCH_TARGET_TERMINAL,
+        input: {
+          ...requestBodyObject(request),
+          sessionId: request.params.sessionId
+        }
+      });
+      reply.code(aiStudioStatusCode(response)).send(response);
+    }
+  );
+
+  router.register(
+    "POST",
+    `${routeBase}/sessions/:sessionId/launch-target/open`,
+    {
+      auth: "public",
+      surface: normalizedRouteSurface,
+      meta: {
+        tags: ["studio", "ai-studio-terminals"],
+        summary: "Open the latest AI Studio launch target."
+      }
+    },
+    async function (request, reply) {
+      if (!requireLocalAiStudioRequest(request, reply)) {
+        return;
+      }
+      const response = await request.executeAction({
+        actionId: ACTION_OPEN_LAUNCH_TARGET,
+        input: {
+          sessionId: request.params.sessionId
+        }
+      });
+      reply.code(aiStudioStatusCode(response)).send(response);
     }
   );
 
@@ -193,20 +248,20 @@ function registerRoutes(
 
   router.register(
     "GET",
-    `${routeBase}/sessions/:sessionId/app-review-terminal/:terminalSessionId`,
+    `${routeBase}/sessions/:sessionId/launch-terminal/:terminalSessionId`,
     {
       auth: "public",
       surface: normalizedRouteSurface,
       meta: {
         tags: ["studio", "ai-studio-terminals"],
-        summary: "Read an AI Studio app review terminal snapshot."
+        summary: "Read an AI Studio launch target terminal snapshot."
       }
     },
     async function (request, reply) {
       if (!requireLocalAiStudioRequest(request, reply)) {
         return;
       }
-      const response = await getTerminalService(app).readAppReviewTerminal(
+      const response = await getTerminalService(app).readLaunchTargetTerminal(
         request.params.sessionId,
         request.params.terminalSessionId
       );
@@ -216,20 +271,20 @@ function registerRoutes(
 
   router.register(
     "DELETE",
-    `${routeBase}/sessions/:sessionId/app-review-terminal/:terminalSessionId`,
+    `${routeBase}/sessions/:sessionId/launch-terminal/:terminalSessionId`,
     {
       auth: "public",
       surface: normalizedRouteSurface,
       meta: {
         tags: ["studio", "ai-studio-terminals"],
-        summary: "Close an AI Studio app review terminal."
+        summary: "Close an AI Studio launch target terminal."
       }
     },
     async function (request, reply) {
       if (!requireLocalAiStudioRequest(request, reply)) {
         return;
       }
-      const response = await getTerminalService(app).closeAppReviewTerminal(
+      const response = await getTerminalService(app).closeLaunchTargetTerminal(
         request.params.sessionId,
         request.params.terminalSessionId
       );

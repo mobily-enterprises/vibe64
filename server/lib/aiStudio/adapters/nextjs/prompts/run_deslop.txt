@@ -19,8 +19,14 @@ Next.js project facts:
 Next.js prompt context:
 {{adapter.promptContext.json}}
 
+Next.js project config:
+{{config.json}}
+
+Next.js data layer blueprint:
+{{adapter.promptContext.data_layer_blueprint}}
+
 Action input:
 {{input.json}}
 
-Review the current work for bugs, regressions, unclear code, weak tests, unnecessary complexity, and Next.js routing or runtime risk. Report findings clearly and make direct fixes when the issue is unambiguous.
+Review the current work for bugs, regressions, unclear code, weak tests, unnecessary complexity, and Next.js routing or runtime risk. Check Server Component vs Client Component boundaries, route handler behavior, package scripts, and selected database runtime assumptions. Report findings clearly and make direct fixes when the issue is unambiguous.
 [[AI_STUDIO_CONTEXT_END]]

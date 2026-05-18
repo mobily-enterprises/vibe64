@@ -19,8 +19,14 @@ Next.js project facts:
 Next.js prompt context:
 {{adapter.promptContext.json}}
 
+Next.js project config:
+{{config.json}}
+
+Next.js data layer blueprint:
+{{adapter.promptContext.data_layer_blueprint}}
+
 Action input:
 {{input.json}}
 
-Make the requested code edits directly in the workspace. Preserve Next.js routing conventions, prefer existing package scripts and dependencies, and keep the work scoped to the session goal.
+Make the requested code edits directly in the workspace. Preserve Next.js routing conventions, prefer existing package scripts and dependencies, and keep the work scoped to the session goal. If a managed database is selected, use DATABASE_URL from .env.local, install any needed database client or ORM deliberately, and keep secrets and database calls out of Client Components.
 [[AI_STUDIO_CONTEXT_END]]

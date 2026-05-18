@@ -191,12 +191,12 @@ async function inspectJskitProject(targetRoot) {
 
 class JskitTargetAdapter extends AiStudioDescribedWorkflowTargetAdapter {
   constructor({
-    appReviewTerminalSpecFactory = null,
     commandTerminalSpecFactory = null,
-    commands = []
+    commands = [],
+    launchTargetTerminalSpecFactory = null,
+    launchTargets = () => []
   } = {}) {
     super({
-      appReviewTerminalSpecFactory,
       commandTerminalSpecFactory,
       commands,
       configFields: JSKIT_CONFIG_FIELDS,
@@ -214,6 +214,8 @@ class JskitTargetAdapter extends AiStudioDescribedWorkflowTargetAdapter {
       setupDoctorPlugins: (context) => [
         createJskitSetupDoctorPlugin(context)
       ],
+      launchTargetTerminalSpecFactory,
+      launchTargets,
       targetScriptTerminalSpecFactory: createJskitTargetScriptTerminalSpec,
       targetScriptsInspector: inspectJskitTargetScripts
     });

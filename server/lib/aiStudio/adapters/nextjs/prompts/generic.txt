@@ -27,8 +27,16 @@ Next.js project facts:
 Next.js prompt context:
 {{adapter.promptContext.json}}
 
+Next.js project config:
+{{config.json}}
+
+Next.js data layer blueprint:
+{{adapter.promptContext.data_layer_blueprint}}
+
 Action input:
 {{input.json}}
+
+Respect the selected Next.js config values when they apply. If a managed database is selected, use DATABASE_URL from .env.local and keep database work server-side.
 
 In your normal Codex response, report the work completed, files modified, checks run, and remaining blockers. Do not run shell commands just to display this response.
 [[AI_STUDIO_CONTEXT_END]]

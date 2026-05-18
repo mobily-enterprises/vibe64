@@ -19,8 +19,14 @@ Next.js project facts:
 Next.js prompt context:
 {{adapter.promptContext.json}}
 
+Next.js project config:
+{{config.json}}
+
+Next.js data layer blueprint:
+{{adapter.promptContext.data_layer_blueprint}}
+
 Action input:
 {{input.json}}
 
-Inspect the user-facing Next.js app behavior carefully. Fix clear UI defects directly when the project supports it, preserve routing conventions, and report what you modified or why no edit was needed.
+Inspect the user-facing Next.js app behavior carefully. Fix clear UI defects directly when the project supports it, preserve routing conventions and Server/Client Component boundaries, and report what you modified or why no edit was needed.
 [[AI_STUDIO_CONTEXT_END]]

@@ -6,7 +6,8 @@ import {
   TargetAdapter,
   adapterActionResult,
   adapterCommand,
-  adapterDetection
+  adapterDetection,
+  adapterLaunchTarget
 } from "./adapter.js";
 import {
   aiStudioError,
@@ -74,6 +75,12 @@ const AI_STUDIO_WORKFLOW_SESSION_ACTION_CAPABILITIES = deepFreeze([
 function normalizeWorkflowCommands(commands = []) {
   return commands
     .map(adapterCommand)
+    .sort((left, right) => left.id.localeCompare(right.id));
+}
+
+function normalizeLaunchTargets(targets = []) {
+  return targets
+    .map(adapterLaunchTarget)
     .sort((left, right) => left.id.localeCompare(right.id));
 }
 
@@ -245,7 +252,6 @@ async function inspectDescribedProject(targetRoot, {
 
 class AiStudioDescribedWorkflowTargetAdapter extends AiStudioWorkflowTargetAdapter {
   constructor({
-    appReviewTerminalSpecFactory = null,
     commandTerminalSpecFactory = null,
     commands = AI_STUDIO_WORKFLOW_COMMANDS,
     configFields = [],
@@ -259,6 +265,8 @@ class AiStudioDescribedWorkflowTargetAdapter extends AiStudioWorkflowTargetAdapt
     promptPackRoot = "",
     promptRenderer = null,
     setupDoctorPlugins = () => [],
+    launchTargetTerminalSpecFactory = null,
+    launchTargets = () => [],
     targetScriptTerminalSpecFactory = null,
     targetScriptsInspector = null,
     workflowCommandHooks = () => ({})
@@ -269,9 +277,6 @@ class AiStudioDescribedWorkflowTargetAdapter extends AiStudioWorkflowTargetAdapt
       id,
       label
     });
-    this.appReviewTerminalSpecFactory = typeof appReviewTerminalSpecFactory === "function"
-      ? appReviewTerminalSpecFactory
-      : null;
     this.configFields = configFields;
     this.currentAppInspector = currentAppInspector;
     this.defaultConfig = defaultConfig;
@@ -283,14 +288,19 @@ class AiStudioDescribedWorkflowTargetAdapter extends AiStudioWorkflowTargetAdapt
       promptRenderer
     });
     this.setupDoctorPluginsFactory = setupDoctorPlugins;
+    this.launchTargetTerminalSpecFactory = typeof launchTargetTerminalSpecFactory === "function"
+      ? launchTargetTerminalSpecFactory
+      : null;
+    this.launchTargetsFactory = launchTargets;
     this.targetScriptTerminalSpecFactory = targetScriptTerminalSpecFactory;
     this.targetScriptsInspector = targetScriptsInspector;
     this.workflowCommandHooksFactory = workflowCommandHooks;
   }
 
-  async projectInspection(targetRoot) {
+  async projectInspection(targetRoot, context = {}) {
     return this.projectInspectionFactory(targetRoot || process.cwd(), {
-      adapter: this
+      adapter: this,
+      ...context
     });
   }
 
@@ -302,19 +312,23 @@ class AiStudioDescribedWorkflowTargetAdapter extends AiStudioWorkflowTargetAdapt
     });
   }
 
-  async inspect({ targetRoot } = {}) {
+  async inspect({ targetRoot, ...context } = {}) {
     return this.projectFactsFactory({
       adapter: this,
-      ...await this.projectInspection(targetRoot || process.cwd()),
-      commands: this.commands
+      ...await this.projectInspection(targetRoot || process.cwd(), context),
+      commands: this.commands,
+      config: context.config || {}
     });
   }
 
-  async getPromptContext({ facts = {}, targetRoot } = {}) {
+  async getPromptContext({ facts = {}, targetRoot, ...context } = {}) {
     if (facts.promptContext) {
       return facts.promptContext;
     }
-    return this.promptContextFactory(await this.projectInspection(targetRoot || process.cwd()));
+    return this.promptContextFactory({
+      ...await this.projectInspection(targetRoot || process.cwd(), context),
+      config: context.config || {}
+    });
   }
 
   async getSetupDoctorPlugins(context = {}) {
@@ -333,15 +347,22 @@ class AiStudioDescribedWorkflowTargetAdapter extends AiStudioWorkflowTargetAdapt
     return resolveValue(this.workflowCommandHooksFactory, context) || {};
   }
 
-  async createAppReviewTerminalSpec(context = {}) {
-    if (!this.appReviewTerminalSpecFactory) {
-      return {
-        ok: false,
-        message: `${this.label} app review terminal is not available.`
-      };
+  async listLaunchTargets(context = {}) {
+    return normalizeLaunchTargets(await resolveValue(this.launchTargetsFactory, context) || []);
+  }
+
+  async createLaunchTargetTerminalSpec({
+    context = {},
+    launchTargetId = ""
+  } = {}) {
+    if (!this.launchTargetTerminalSpecFactory) {
+      return super.createLaunchTargetTerminalSpec({
+        launchTargetId
+      });
     }
-    return this.appReviewTerminalSpecFactory({
+    return this.launchTargetTerminalSpecFactory({
       context,
+      launchTargetId,
       session: context.session || {},
       targetRoot: context.session?.targetRoot || context.targetRoot || ""
     });

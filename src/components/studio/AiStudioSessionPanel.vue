@@ -51,6 +51,11 @@
           New Session
         </v-btn>
       </div>
+
+      <AiStudioLaunchControls
+        :busy="page.busy"
+        :session="selection.selectedSession"
+      />
     </div>
 
     <v-progress-linear
@@ -150,27 +155,6 @@
                   Review diff
                 </v-btn>
 
-                <v-btn
-                  color="primary"
-                  variant="flat"
-                  :disabled="appReview.disabled"
-                  :prepend-icon="mdiPlayCircleOutline"
-                  :title="appReview.title"
-                  @click="appReview.run"
-                >
-                  Run app
-                </v-btn>
-
-                <v-btn
-                  color="primary"
-                  variant="tonal"
-                  :disabled="appReview.openDisabled"
-                  :prepend-icon="mdiOpenInNew"
-                  :title="appReview.openTitle"
-                  @click="appReview.open"
-                >
-                  Open app
-                </v-btn>
               </template>
 
               <v-btn
@@ -263,20 +247,6 @@
           />
         </div>
 
-        <div
-          v-if="appReview.visible"
-          class="studio-ai-sessions__command-overlay"
-        >
-          <AiStudioCommandTerminal
-            class="studio-ai-sessions__command-terminal"
-            terminal-kind="app-review"
-            title="App review terminal"
-            :session="selection.selectedSession"
-            :start-request-key="appReview.startKey"
-            @closed="appReview.close"
-            @started="appReview.started"
-          />
-        </div>
       </section>
     </div>
 
@@ -449,13 +419,12 @@ import {
   mdiArrowRight,
   mdiClose,
   mdiFileCompare,
-  mdiOpenInNew,
-  mdiPlayCircleOutline,
   mdiPlus,
   mdiSend
 } from "@mdi/js";
 import AiStudioCommandTerminal from "@/components/studio/AiStudioCommandTerminal.vue";
 import AiStudioDraftEditorDialog from "@/components/studio/AiStudioDraftEditorDialog.vue";
+import AiStudioLaunchControls from "@/components/studio/AiStudioLaunchControls.vue";
 import CodexSessionTerminal from "@/components/studio/CodexSessionTerminal.vue";
 import AiStudioSessionFacts from "@/components/studio/ai-studio-session/AiStudioSessionFacts.vue";
 import AiStudioSessionTimeline from "@/components/studio/ai-studio-session/AiStudioSessionTimeline.vue";
@@ -479,7 +448,6 @@ const sessionWorkflow = useAiStudioSessionWorkflow({
 });
 
 const actions = proxyRefs(sessionWorkflow.actions);
-const appReview = proxyRefs(sessionWorkflow.appReview);
 const codexTerminal = proxyRefs(sessionWorkflow.codexTerminal);
 const commandTerminal = proxyRefs(sessionWorkflow.commandTerminal);
 const dialogs = {

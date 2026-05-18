@@ -1,52 +1,12 @@
-import { computed, nextTick, ref } from "vue";
-import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
-import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
-import { useAiStudioCodexCommands } from "@/composables/useAiStudioCodexCommands.js";
+import { computed } from "vue";
+import { useAiStudioSessionActions } from "@/composables/useAiStudioSessionActions.js";
+import { useAiStudioSessionClipboard } from "@/composables/useAiStudioSessionClipboard.js";
+import { useAiStudioSessionCodexHandoff } from "@/composables/useAiStudioSessionCodexHandoff.js";
+import { useAiStudioSessionCommandTerminal } from "@/composables/useAiStudioSessionCommandTerminal.js";
+import { useAiStudioSessionDialogs } from "@/composables/useAiStudioSessionDialogs.js";
 import {
-  useAiStudioDiffDialog
-} from "@/composables/useAiStudioDiffDialog.js";
-import {
-  useAiStudioDraftEditor
-} from "@/composables/useAiStudioDraftEditor.js";
-import {
-  useAiStudioIssueFileStep
-} from "@/composables/useAiStudioIssueFileStep.js";
-import { useAiStudioSessionArtifacts } from "@/composables/useAiStudioSessionArtifacts.js";
-import {
-  latestAiStudioActionResult
-} from "@/lib/aiStudioActionResults.js";
-import {
-  PULL_REQUEST_ARTIFACT
-} from "@/lib/aiStudioArtifactNames.js";
-import {
-  emptyActionInputValues,
-  normalizeActionInputFields,
-  requiredActionInputMissing
-} from "@/lib/aiStudioActionInputModel.js";
-import {
-  aiStudioActionIcon as actionIcon,
-  aiStudioPromptHandoffFromSession,
-  commandMessage,
-  currentStepDisabledReason as resolveCurrentStepDisabledReason
+  commandMessage
 } from "@/lib/aiStudioSessionPanelModel.js";
-import {
-  AI_STUDIO_SESSIONS_API_SUFFIX,
-  AI_STUDIO_SURFACE_ID,
-  LOCAL_STUDIO_COMMAND_OPTIONS,
-  aiStudioActionPath,
-  aiStudioSessionPath,
-  commandInputFromContext
-} from "@/lib/aiStudioSessionRequestConfig.js";
-import { writeClipboardText } from "@/lib/clipboard.js";
-
-const ACCEPT_CHANGES_STEP_ID = "changes_accepted";
-const CREATE_PULL_REQUEST_FILE_ACTION_ID = "create_pr_file";
-const PULL_REQUEST_FILE_STEP_ID = "pr_file_created";
-
-function displayableActionResultMessage(result = {}) {
-  const message = String(result?.message || "");
-  return /^Rendered\b/u.test(message) ? "" : message;
-}
 
 function useAiStudioSessionWorkflow({
   sessionData
@@ -65,734 +25,172 @@ function useAiStudioSessionWorkflow({
     sessionsApiPath
   } = sessionData;
 
-  const activeActionId = ref("");
-  const abandonDialogOpen = ref(false);
-  const abandonDialogSessionId = ref("");
-  const abandonDialogSessionTitle = ref("");
-  const appReviewTerminalStartKey = ref("");
-  const appReviewTerminalVisible = ref(false);
-  const appReviewUrl = ref("");
-  const codexPromptInjectionKey = ref("");
-  const codexPromptOverride = ref("");
-  const codexTerminalBusy = ref(false);
-  const commandTerminalAction = ref(null);
-  const commandTerminalInput = ref({});
-  const commandTerminalRunning = ref(false);
-  const commandTerminalStartKey = ref("");
-  const copyStatus = ref("");
-  const inputDialogAction = ref(null);
-  const inputDialogError = ref("");
-  const inputDialogOpen = ref(false);
-  const inputDialogSubmitting = ref(false);
-  const inputDialogValues = ref({});
-  const pendingCommandAdvanceOnSuccess = ref(false);
-  const pendingCommandStartedAt = ref(0);
-  let artifactReadinessRefreshInFlight = false;
+  const clipboard = useAiStudioSessionClipboard();
+  const workflow = {
+    actions: null,
+    codexHandoff: null,
+    commandTerminal: null,
+    dialogs: null
+  };
 
-  const codexCommands = useAiStudioCodexCommands();
-  const sessionArtifacts = useAiStudioSessionArtifacts();
-
-  const {
-    clear: clearDraftEditor,
-    draftEditorError,
-    draftEditorFields,
-    draftEditorLoading,
-    draftEditorOpen,
-    draftEditorSaving,
-    draftEditorTitle,
-    draftEditorValues,
-    openDraftEditor,
-    saveDraftEditor
-  } = useAiStudioDraftEditor({
-    onSaved() {
-      copyStatus.value = "Draft saved.";
-    },
-    refreshSessionData,
-    selectedSessionId,
-    sessionArtifacts
-  });
-
-  const runActionCommand = useCommand({
-    access: "never",
-    apiSuffix: AI_STUDIO_SESSIONS_API_SUFFIX,
-    buildRawPayload: (_model, { context }) => commandInputFromContext(context),
-    buildCommandOptions: (_payload, { context }) => ({
-      method: "POST",
-      options: LOCAL_STUDIO_COMMAND_OPTIONS,
-      path: aiStudioActionPath(sessionsApiPath.value, context?.sessionId, context?.actionId)
-    }),
-    fallbackRunError: "AI Studio action could not run.",
-    messages: {
-      error: "AI Studio action could not run.",
-      success: "AI Studio action completed."
-    },
-    onRunSuccess: async (response, { context } = {}) => {
-      const promptHandoff = aiStudioPromptHandoffFromSession(response);
-      if (promptHandoff?.prompt) {
-        codexPromptOverride.value = promptHandoff.terminalInput || promptHandoff.prompt;
-        codexTerminalBusy.value = true;
-        codexPromptInjectionKey.value = `${context.sessionId}:${context.actionId}:${Date.now()}`;
-        await refreshSessionData();
-        return;
-      }
-      if (actionShouldAdvance(response, context)) {
-        await advanceCommand.run({
-          sessionId: context.sessionId
-        });
-        return;
-      }
-      await refreshSessionData();
-    },
-    ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "ai-studio.sessions.action",
-    surfaceId: AI_STUDIO_SURFACE_ID,
-    writeMethod: "POST"
-  });
-
-  const advanceCommand = useCommand({
-    access: "never",
-    apiSuffix: AI_STUDIO_SESSIONS_API_SUFFIX,
-    buildCommandOptions: (_payload, { context }) => ({
-      method: "POST",
-      options: LOCAL_STUDIO_COMMAND_OPTIONS,
-      path: aiStudioSessionPath(sessionsApiPath.value, context?.sessionId, "/advance")
-    }),
-    fallbackRunError: "AI Studio session could not advance.",
-    messages: {
-      error: "AI Studio session could not advance.",
-      success: "AI Studio session advanced."
-    },
-    onRunSuccess: async () => {
-      codexPromptOverride.value = "";
-      await refreshSessionData();
-    },
-    ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "ai-studio.sessions.advance",
-    surfaceId: AI_STUDIO_SURFACE_ID,
-    writeMethod: "POST"
-  });
-
-  const rewindCommand = useCommand({
-    access: "never",
-    apiSuffix: AI_STUDIO_SESSIONS_API_SUFFIX,
-    buildRawPayload: (_model, { context }) => ({
-      stepId: String(context?.stepId || "")
-    }),
-    buildCommandOptions: (_payload, { context }) => ({
-      method: "POST",
-      options: LOCAL_STUDIO_COMMAND_OPTIONS,
-      path: aiStudioSessionPath(sessionsApiPath.value, context?.sessionId, "/rewind")
-    }),
-    fallbackRunError: "AI Studio session could not rewind.",
-    messages: {
-      error: "AI Studio session could not rewind.",
-      success: "AI Studio session rewound."
-    },
-    onRunSuccess: async () => {
-      clearSessionTransientState();
-      await refreshSessionData();
-    },
-    ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "ai-studio.sessions.rewind",
-    surfaceId: AI_STUDIO_SURFACE_ID,
-    writeMethod: "POST"
-  });
-
-  const abandonCommand = useCommand({
-    access: "never",
-    apiSuffix: AI_STUDIO_SESSIONS_API_SUFFIX,
-    buildCommandOptions: (_payload, { context }) => ({
-      method: "POST",
-      options: LOCAL_STUDIO_COMMAND_OPTIONS,
-      path: aiStudioSessionPath(sessionsApiPath.value, context?.sessionId, "/abandon")
-    }),
-    fallbackRunError: "AI Studio session could not be abandoned.",
-    messages: {
-      error: "AI Studio session could not be abandoned.",
-      success: "AI Studio session abandoned."
-    },
-    onRunSuccess: async (_response, { context } = {}) => {
-      if (!context?.sessionId || context.sessionId === selectedSessionId.value) {
-        clearSelectedSession();
-      }
-      abandonDialogOpen.value = false;
-      abandonDialogSessionId.value = "";
-      abandonDialogSessionTitle.value = "";
-      codexPromptOverride.value = "";
-      await refreshSessionData();
-    },
-    ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "ai-studio.sessions.abandon",
-    surfaceId: AI_STUDIO_SURFACE_ID,
-    writeMethod: "POST"
-  });
-
-  const baseCurrentActions = computed(() => {
-    return Array.isArray(selectedSession.value?.actions)
-      ? selectedSession.value.actions.filter((action) => action.visible !== false)
-      : [];
-  });
-  const currentNext = computed(() => selectedSession.value?.next || null);
   const commandBusy = computed(() => Boolean(
     createSessionCommand.isRunning ||
-    runActionCommand.isRunning ||
-    advanceCommand.isRunning ||
-    rewindCommand.isRunning ||
-    abandonCommand.isRunning ||
-    codexTerminalBusy.value ||
-    commandTerminalRunning.value ||
-    draftEditorLoading.value ||
-    draftEditorSaving.value ||
-    inputDialogSubmitting.value
+    workflow.actions?.busy.value ||
+    workflow.codexHandoff?.busy.value ||
+    workflow.commandTerminal?.running.value ||
+    workflow.dialogs?.busy.value
   ));
-  const issueFileStep = useAiStudioIssueFileStep({
-    activeActionId,
-    clearCopyStatus() {
-      copyStatus.value = "";
-    },
-    commandBusy,
-    runActionCommand,
-    selectedSession,
-    selectedSessionId
+
+  const reviewDiffDisabled = computed(() => {
+    return commandBusy.value ||
+      workflow.dialogs?.diff.loading.value ||
+      !workflow.actions?.worktreeReady.value;
   });
-  const currentActions = computed(() => {
-    return issueFileStep.visibleActions(baseCurrentActions.value);
-  });
-  const worktreeReady = computed(() => Boolean(selectedSession.value?.metadata?.worktree_path));
-  const {
-    clearDiffDialog,
-    closeDiffDialog,
-    diffDialogOpen,
-    diffError,
-    diffLoading,
-    diffPayload,
-    openDiffDialog
-  } = useAiStudioDiffDialog({
-    canOpen: () => !reviewDiffDisabled.value,
-    selectedSessionId
-  });
-  const acceptChangesUtilitiesVisible = computed(() => {
-    return selectedSession.value?.currentStep === ACCEPT_CHANGES_STEP_ID && !issueFileStep.formVisible.value;
-  });
-  const reviewDiffDisabled = computed(() => commandBusy.value || diffLoading.value || !worktreeReady.value);
   const reviewDiffTitle = computed(() => {
-    if (!worktreeReady.value) {
+    if (!workflow.actions?.worktreeReady.value) {
       return "Create the worktree before reviewing changes.";
     }
     return "Review changes in the session worktree.";
   });
-  const runAppReviewDisabled = computed(() => {
-    return commandBusy.value || appReviewTerminalVisible.value || !worktreeReady.value;
+
+  function clearSessionTransientState() {
+    workflow.actions?.clear();
+    workflow.codexHandoff?.clear();
+    workflow.commandTerminal?.clear();
+    workflow.dialogs?.clear();
+  }
+
+  workflow.codexHandoff = useAiStudioSessionCodexHandoff({
+    refreshSessionData,
+    selectedSessionId,
+    setCopyStatus: clipboard.setCopyStatus,
+    waitingForPromptedArtifact: () => workflow.actions?.waitingForPromptedArtifact.value
   });
-  const runAppReviewTitle = computed(() => {
-    if (!worktreeReady.value) {
-      return "Create the worktree before running the app.";
-    }
-    if (appReviewTerminalVisible.value) {
-      return "The app review terminal is already open.";
-    }
-    return "Run the session worktree for user review.";
+
+  workflow.commandTerminal = useAiStudioSessionCommandTerminal({
+    currentNext: () => workflow.actions?.currentNext.value,
+    goNext: () => workflow.actions?.goNext(),
+    refreshSessionData,
+    selectedSession,
+    selectedSessionId
   });
-  const openAppReviewDisabled = computed(() => !appReviewUrl.value);
-  const openAppReviewTitle = computed(() => {
-    return appReviewUrl.value || "Run the app before opening it.";
+
+  workflow.actions = useAiStudioSessionActions({
+    clearCopyStatus: clipboard.clearCopyStatus,
+    codexHandoff: workflow.codexHandoff,
+    commandBusy: () => commandBusy.value,
+    commandTerminal: workflow.commandTerminal,
+    onRewindSuccess: clearSessionTransientState,
+    openDraftEditor: (action) => workflow.dialogs?.draftEditor.openDialog(action),
+    openInputDialog: (action) => workflow.dialogs?.input.openDialog(action),
+    refreshSessionData,
+    selectedSession,
+    selectedSessionId,
+    sessionsApiPath
   });
-  const commandTerminalVisible = computed(() => Boolean(commandTerminalAction.value || commandTerminalRunning.value));
+
+  workflow.dialogs = useAiStudioSessionDialogs({
+    activeActionId: workflow.actions.activeActionId,
+    canOpenDiff: () => !reviewDiffDisabled.value,
+    clearSelectedSession,
+    commandBusy: () => commandBusy.value,
+    isSelectedSessionClosed,
+    onAbandoned: clearSessionTransientState,
+    refreshSessionData,
+    runActionCommand: workflow.actions.runActionCommand,
+    selectedSessionId,
+    selectedSessionTitle,
+    sessionsApiPath,
+    setCopyStatus: clipboard.setCopyStatus
+  });
+
   const pageError = computed(() => {
     return sessionList.loadError ||
       commandMessage(createSessionCommand, "error") ||
-      commandMessage(runActionCommand, "error") ||
-      commandMessage(advanceCommand, "error") ||
-      commandMessage(rewindCommand, "error") ||
-      commandMessage(abandonCommand, "error") ||
+      workflow.actions.error.value ||
+      commandMessage(workflow.dialogs.abandon.command, "error") ||
       "";
   });
-  const latestActionResult = computed(() => {
-    if (selectedSession.value?.actionResult) {
-      return selectedSession.value.actionResult;
-    }
-    const actionResults = Array.isArray(selectedSession.value?.actionResults)
-      ? selectedSession.value.actionResults
-      : [];
-    return actionResults
-      .filter((result) => result.stepId === selectedSession.value?.currentStep)
-      .slice()
-      .sort((left, right) => String(left.at || "").localeCompare(String(right.at || "")))
-      .at(-1) || null;
-  });
-  const actionResultMessage = computed(() => displayableActionResultMessage(latestActionResult.value));
-  const actionResultType = computed(() => {
-    const status = String(latestActionResult.value?.status || "");
-    if (status === "completed") {
-      return "success";
-    }
-    if (status === "blocked" || status === "failed") {
-      return "warning";
-    }
-    return "info";
-  });
-  const currentStepDisabledReason = computed(() => {
-    if (issueFileStep.formVisible.value) {
-      return "";
-    }
-    return resolveCurrentStepDisabledReason(currentActions.value, currentNext.value);
-  });
-  const waitingForPullRequestFile = computed(() => {
-    return selectedSession.value?.currentStep === PULL_REQUEST_FILE_STEP_ID &&
-      Boolean(latestAiStudioActionResult(selectedSession.value, CREATE_PULL_REQUEST_FILE_ACTION_ID)) &&
-      selectedSession.value?.artifactReadiness?.[PULL_REQUEST_ARTIFACT]?.nonEmpty !== true;
-  });
-  const waitingForPromptedArtifact = computed(() => {
-    return issueFileStep.waitingForFiles.value || waitingForPullRequestFile.value;
-  });
-  const inputDialogFields = computed(() => normalizeActionInputFields(inputDialogAction.value?.inputFields));
-  const inputDialogTitle = computed(() => String(inputDialogAction.value?.label || "Provide details"));
-  const inputDialogSaveDisabled = computed(() => {
-    if (inputDialogSubmitting.value || commandBusy.value || inputDialogFields.value.length < 1) {
-      return true;
-    }
-    return requiredActionInputMissing(inputDialogFields.value, inputDialogValues.value);
-  });
-
-  async function refreshPromptedArtifactReadiness() {
-    if (!waitingForPromptedArtifact.value || artifactReadinessRefreshInFlight) {
-      return;
-    }
-    artifactReadinessRefreshInFlight = true;
-    try {
-      await refreshSessionData();
-    } finally {
-      artifactReadinessRefreshInFlight = false;
-    }
-  }
-
-  function clearCommandTerminal() {
-    commandTerminalAction.value = null;
-    commandTerminalInput.value = {};
-    commandTerminalRunning.value = false;
-    commandTerminalStartKey.value = "";
-  }
-
-  function clearSessionTransientState() {
-    activeActionId.value = "";
-    appReviewTerminalStartKey.value = "";
-    appReviewTerminalVisible.value = false;
-    appReviewUrl.value = "";
-    codexPromptInjectionKey.value = "";
-    codexPromptOverride.value = "";
-    codexTerminalBusy.value = false;
-    clearCommandTerminal();
-    clearDiffDialog();
-    clearDraftEditor();
-    inputDialogAction.value = null;
-    inputDialogError.value = "";
-    inputDialogOpen.value = false;
-    inputDialogSubmitting.value = false;
-    inputDialogValues.value = {};
-    pendingCommandAdvanceOnSuccess.value = false;
-    pendingCommandStartedAt.value = 0;
-  }
-
-  function actionShouldAdvance(response = {}, context = {}) {
-    return context.advanceOnSuccess === true &&
-      response.actionResult?.status === "completed" &&
-      response.next?.visible === true &&
-      response.next?.enabled === true;
-  }
-
-  async function refreshAfterCommandTerminalSettled({
-    actionId = "",
-    exitCode = null
-  } = {}) {
-    commandTerminalRunning.value = false;
-    activeActionId.value = "";
-    await refreshSessionData();
-    await nextTick();
-
-    const result = latestAiStudioActionResult(selectedSession.value, actionId, {
-      since: pendingCommandStartedAt.value
-    });
-    const commandSucceeded = Number(exitCode) === 0 || result?.status === "completed";
-    if (
-      commandSucceeded &&
-      pendingCommandAdvanceOnSuccess.value &&
-      currentNext.value?.visible === true &&
-      currentNext.value?.enabled === true
-    ) {
-      pendingCommandAdvanceOnSuccess.value = false;
-      pendingCommandStartedAt.value = 0;
-      clearCommandTerminal();
-      await goNext();
-      return;
-    }
-
-    pendingCommandAdvanceOnSuccess.value = false;
-    pendingCommandStartedAt.value = 0;
-  }
 
   function selectSession(sessionId = "") {
-    abandonDialogOpen.value = false;
-    abandonDialogSessionId.value = "";
-    abandonDialogSessionTitle.value = "";
     clearSessionTransientState();
     selectSessionId(sessionId);
   }
 
-  async function runAction(action = {}) {
-    if (!selectedSessionId.value || !action.id || commandBusy.value || action.enabled !== true) {
-      return;
-    }
-    copyStatus.value = "";
-    if (normalizeActionInputFields(action.inputFields).length > 0) {
-      openInputDialog(action);
-      return;
-    }
-    if (action.type === "link") {
-      openActionLink(action);
-      return;
-    }
-    if (action.type === "command") {
-      const commandStartedAt = Date.now();
-      commandTerminalAction.value = action;
-      commandTerminalInput.value = {};
-      pendingCommandAdvanceOnSuccess.value = action.advanceOnSuccess === true;
-      pendingCommandStartedAt.value = commandStartedAt;
-      commandTerminalStartKey.value = `${selectedSessionId.value}:${action.id}:${commandStartedAt}`;
-      return;
-    }
-    if (action.type === "editor") {
-      await openDraftEditor(action);
-      return;
-    }
-    activeActionId.value = action.id;
-    try {
-      await runActionCommand.run({
-        actionId: action.id,
-        advanceOnSuccess: action.advanceOnSuccess === true,
-        input: issueFileStep.inputForAction(action),
-        sessionId: selectedSessionId.value
-      });
-    } finally {
-      activeActionId.value = "";
-    }
-  }
-
-  function openActionLink(action = {}) {
-    const metadataName = String(action.hrefMetadata || "").trim();
-    const href = metadataName ? String(selectedSession.value?.metadata?.[metadataName] || "") : "";
-    if (href && typeof window !== "undefined") {
-      window.open(href, "_blank", "noopener");
-    }
-  }
-
-  function openInputDialog(action = {}) {
-    const fields = normalizeActionInputFields(action.inputFields);
-    inputDialogAction.value = action;
-    inputDialogError.value = "";
-    inputDialogValues.value = emptyActionInputValues(fields);
-    inputDialogOpen.value = true;
-  }
-
-  function closeInputDialog() {
-    if (inputDialogSubmitting.value) {
-      return;
-    }
-    inputDialogAction.value = null;
-    inputDialogError.value = "";
-    inputDialogOpen.value = false;
-    inputDialogValues.value = {};
-  }
-
-  async function submitInputDialog() {
-    const action = inputDialogAction.value;
-    if (!selectedSessionId.value || !action?.id || inputDialogSaveDisabled.value) {
-      return;
-    }
-    inputDialogError.value = "";
-    inputDialogSubmitting.value = true;
-    activeActionId.value = action.id;
-    try {
-      await runActionCommand.run({
-        actionId: action.id,
-        advanceOnSuccess: action.advanceOnSuccess === true,
-        input: {
-          ...inputDialogValues.value
-        },
-        sessionId: selectedSessionId.value
-      });
-      inputDialogOpen.value = false;
-      inputDialogAction.value = null;
-      inputDialogValues.value = {};
-    } catch (error) {
-      inputDialogError.value = String(error?.message || error || "Action failed.");
-    } finally {
-      inputDialogSubmitting.value = false;
-      activeActionId.value = "";
-    }
-  }
-
-  function runAppReview() {
-    if (!selectedSessionId.value || runAppReviewDisabled.value) {
-      return;
-    }
-    appReviewTerminalVisible.value = true;
-    appReviewTerminalStartKey.value = `${selectedSessionId.value}:app-review:${Date.now()}`;
-  }
-
-  function openAppReview() {
-    if (!appReviewUrl.value || typeof window === "undefined") {
-      return;
-    }
-    window.open(appReviewUrl.value, "_blank", "noopener");
-  }
-
-  async function goNext() {
-    if (!selectedSessionId.value || commandBusy.value || currentNext.value?.enabled !== true) {
-      return;
-    }
-    await advanceCommand.run({
-      sessionId: selectedSessionId.value
-    });
-    clearCommandTerminal();
-  }
-
-  async function rewindToStep(step = {}) {
-    const stepId = String(step.rewindStepId || step.id || "");
-    if (!selectedSessionId.value || commandBusy.value || step.canRewind !== true || !stepId) {
-      return;
-    }
-    await rewindCommand.run({
-      sessionId: selectedSessionId.value,
-      stepId
-    });
-  }
-
-  function handleCommandTerminalClosed() {
-    clearCommandTerminal();
-  }
-
-  function handleAppReviewTerminalClosed() {
-    appReviewTerminalStartKey.value = "";
-    appReviewTerminalVisible.value = false;
-    appReviewUrl.value = "";
-  }
-
-  function requestAbandonSelectedSession() {
-    if (!selectedSessionId.value || commandBusy.value || isSelectedSessionClosed.value) {
-      return;
-    }
-    abandonDialogSessionId.value = selectedSessionId.value;
-    abandonDialogSessionTitle.value = selectedSessionTitle.value;
-    abandonDialogOpen.value = true;
-  }
-
-  function cancelAbandonSession() {
-    if (abandonCommand.isRunning) {
-      return;
-    }
-    abandonDialogOpen.value = false;
-    abandonDialogSessionId.value = "";
-    abandonDialogSessionTitle.value = "";
-  }
-
-  async function confirmAbandonSession() {
-    if (!abandonDialogSessionId.value || commandBusy.value || abandonCommand.isRunning) {
-      return;
-    }
-    await abandonCommand.run({
-      sessionId: abandonDialogSessionId.value
-    });
-  }
-
-  async function copyText(value, label = "Value") {
-    try {
-      await writeClipboardText(value);
-      copyStatus.value = `${label} copied.`;
-    } catch (error) {
-      copyStatus.value = String(error?.message || error || "Copy failed.");
-    }
-  }
-
-  async function handleCommandTerminalFinished(event = {}) {
-    if (event.sessionId && event.sessionId !== selectedSessionId.value) {
-      return;
-    }
-    await refreshAfterCommandTerminalSettled({
-      actionId: event.actionId,
-      exitCode: event.exitCode
-    });
-  }
-
-  async function handleCommandTerminalRunningChanged(running) {
-    const wasRunning = commandTerminalRunning.value;
-    commandTerminalRunning.value = Boolean(running);
-    if (commandTerminalRunning.value || !wasRunning) {
-      return;
-    }
-    await refreshAfterCommandTerminalSettled({
-      actionId: commandTerminalAction.value?.id || ""
-    });
-  }
-
-  function handleAppReviewTerminalStarted(event = {}) {
-    appReviewUrl.value = String(event.appUrl || event.metadata?.appUrl || "");
-  }
-
-  async function handleCodexPromptInjected(event = {}) {
-    const sessionId = String(event.sessionId || selectedSessionId.value || "");
-    codexTerminalBusy.value = true;
-    if (sessionId) {
-      await codexCommands.savePromptHandoff(sessionId, {
-        outputStart: Number(event.outputStart || 0),
-        signature: `${sessionId}:${Date.now()}`
-      }).catch(() => null);
-    }
-    copyStatus.value = "Prompt sent to Codex.";
-  }
-
-  function handleCodexPromptInjectionFailed(event = {}) {
-    codexTerminalBusy.value = false;
-    copyStatus.value = String(event.error || "Prompt injection failed.");
-  }
-
-  async function handleCodexTerminalBusyChanged(event = {}) {
-    if (event.sessionId && event.sessionId !== selectedSessionId.value) {
-      return;
-    }
-    const wasBusy = codexTerminalBusy.value;
-    const isBusy = event.busy === true;
-    if (!wasBusy || isBusy || !waitingForPromptedArtifact.value) {
-      codexTerminalBusy.value = isBusy;
-      return;
-    }
-
-    try {
-      await refreshPromptedArtifactReadiness();
-    } finally {
-      codexTerminalBusy.value = false;
-    }
-  }
-
-  async function handleCodexSessionUpdate(event = {}) {
-    if (event.sessionId && event.sessionId !== selectedSessionId.value) {
-      return;
-    }
-    if (event.codexTerminalStatus === "exited") {
-      codexTerminalBusy.value = false;
-    }
-    await refreshSessionData();
-  }
-
   return {
     actions: {
-      actionIcon,
-      actionResultMessage,
-      actionResultType,
-      activeActionId,
-      advanceCommand,
-      currentActions,
-      currentNext,
-      currentStepDisabledReason,
-      goNext,
-      runAction,
-      runActionCommand
-    },
-    appReview: {
-      close: handleAppReviewTerminalClosed,
-      disabled: runAppReviewDisabled,
-      open: openAppReview,
-      openDisabled: openAppReviewDisabled,
-      openTitle: openAppReviewTitle,
-      run: runAppReview,
-      startKey: appReviewTerminalStartKey,
-      started: handleAppReviewTerminalStarted,
-      title: runAppReviewTitle,
-      url: appReviewUrl,
-      visible: appReviewTerminalVisible
+      actionIcon: workflow.actions.actionIcon,
+      actionResultMessage: workflow.actions.actionResultMessage,
+      actionResultType: workflow.actions.actionResultType,
+      activeActionId: workflow.actions.activeActionId,
+      advanceCommand: workflow.actions.advanceCommand,
+      currentActions: workflow.actions.currentActions,
+      currentNext: workflow.actions.currentNext,
+      currentStepDisabledReason: workflow.actions.currentStepDisabledReason,
+      goNext: workflow.actions.goNext,
+      runAction: workflow.actions.runAction,
+      runActionCommand: workflow.actions.runActionCommand
     },
     codexTerminal: {
-      busyChanged: handleCodexTerminalBusyChanged,
-      promptInjected: handleCodexPromptInjected,
-      promptInjectionFailed: handleCodexPromptInjectionFailed,
-      promptInjectionKey: codexPromptInjectionKey,
-      promptOverride: codexPromptOverride,
-      sessionUpdate: handleCodexSessionUpdate
+      busyChanged: workflow.codexHandoff.busyChanged,
+      promptInjected: workflow.codexHandoff.promptInjected,
+      promptInjectionFailed: workflow.codexHandoff.promptInjectionFailed,
+      promptInjectionKey: workflow.codexHandoff.promptInjectionKey,
+      promptOverride: workflow.codexHandoff.promptOverride,
+      sessionUpdate: workflow.codexHandoff.sessionUpdate
     },
     commandTerminal: {
-      action: commandTerminalAction,
-      closed: handleCommandTerminalClosed,
-      finished: handleCommandTerminalFinished,
-      input: commandTerminalInput,
-      running: commandTerminalRunning,
-      runningChanged: handleCommandTerminalRunningChanged,
-      startKey: commandTerminalStartKey,
-      visible: commandTerminalVisible
+      action: workflow.commandTerminal.action,
+      closed: workflow.commandTerminal.closed,
+      finished: workflow.commandTerminal.finished,
+      input: workflow.commandTerminal.input,
+      running: workflow.commandTerminal.running,
+      runningChanged: workflow.commandTerminal.runningChanged,
+      startKey: workflow.commandTerminal.startKey,
+      visible: workflow.commandTerminal.visible
     },
     dialogs: {
-      abandon: {
-        cancel: cancelAbandonSession,
-        command: abandonCommand,
-        confirm: confirmAbandonSession,
-        open: abandonDialogOpen,
-        request: requestAbandonSelectedSession,
-        sessionId: abandonDialogSessionId,
-        sessionTitle: abandonDialogSessionTitle
-      },
-      diff: {
-        close: closeDiffDialog,
-        error: diffError,
-        loading: diffLoading,
-        open: diffDialogOpen,
-        openDialog: openDiffDialog,
-        payload: diffPayload
-      },
+      abandon: workflow.dialogs.abandon,
+      diff: workflow.dialogs.diff,
       draftEditor: {
-        error: draftEditorError,
-        fields: draftEditorFields,
-        loading: draftEditorLoading,
-        open: draftEditorOpen,
-        save: saveDraftEditor,
-        saving: draftEditorSaving,
-        title: draftEditorTitle,
-        values: draftEditorValues
+        error: workflow.dialogs.draftEditor.error,
+        fields: workflow.dialogs.draftEditor.fields,
+        loading: workflow.dialogs.draftEditor.loading,
+        open: workflow.dialogs.draftEditor.open,
+        save: workflow.dialogs.draftEditor.save,
+        saving: workflow.dialogs.draftEditor.saving,
+        title: workflow.dialogs.draftEditor.title,
+        values: workflow.dialogs.draftEditor.values
       },
       input: {
-        close: closeInputDialog,
-        error: inputDialogError,
-        fields: inputDialogFields,
-        open: inputDialogOpen,
-        saveDisabled: inputDialogSaveDisabled,
-        submit: submitInputDialog,
-        submitting: inputDialogSubmitting,
-        title: inputDialogTitle,
-        values: inputDialogValues
+        close: workflow.dialogs.input.close,
+        error: workflow.dialogs.input.error,
+        fields: workflow.dialogs.input.fields,
+        open: workflow.dialogs.input.open,
+        saveDisabled: workflow.dialogs.input.saveDisabled,
+        submit: workflow.dialogs.input.submit,
+        submitting: workflow.dialogs.input.submitting,
+        title: workflow.dialogs.input.title,
+        values: workflow.dialogs.input.values
       }
     },
-    issueRequest: {
-      canSubmit: issueFileStep.canSubmit,
-      error: issueFileStep.requestError,
-      formVisible: issueFileStep.formVisible,
-      sendPrompt: issueFileStep.sendPrompt,
-      submitting: issueFileStep.submitting,
-      submitTitle: issueFileStep.submitTitle,
-      text: issueFileStep.requestText
-    },
+    issueRequest: workflow.actions.issueRequest,
     page: {
       busy: commandBusy,
-      copyStatus,
-      copyText,
+      copyStatus: clipboard.copyStatus,
+      copyText: clipboard.copyText,
       error: pageError,
       loading: pageLoading
     },
     review: {
-      acceptChangesUtilitiesVisible,
+      acceptChangesUtilitiesVisible: workflow.actions.acceptChangesUtilitiesVisible,
       diffDisabled: reviewDiffDisabled,
       diffTitle: reviewDiffTitle
     },
     selectSession,
     timeline: {
-      rewindCommand,
-      rewindToStep
+      rewindCommand: workflow.actions.rewindCommand,
+      rewindToStep: workflow.actions.rewindToStep
     }
   };
 }

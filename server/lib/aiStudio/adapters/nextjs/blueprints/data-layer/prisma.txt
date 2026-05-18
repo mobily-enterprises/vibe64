@@ -1,0 +1,16 @@
+Data layer: Prisma
+
+Use Prisma as the app's database abstraction when durable storage is needed.
+Read the connection string from DATABASE_URL in .env.local and keep all Prisma access server-side only.
+Expected shape:
+- schema lives in prisma/schema.prisma.
+- migrations live under prisma/migrations.
+- Prisma client access goes through one shared server-only module, commonly src/lib/prisma.ts or lib/prisma.ts.
+- generated client output and imports must match the Prisma version and schema configuration already in the app.
+- package scripts should expose generation and migration commands, commonly db:generate, db:migrate, db:studio, and db:seed when seed data exists.
+
+When Prisma is not installed yet, add dependencies deliberately for the selected database provider.
+For PostgreSQL, use the PostgreSQL provider and driver/adapter packages Prisma expects.
+For MySQL, use the MySQL provider and matching driver/adapter packages.
+Never import Prisma client code into Client Components.
+Use route handlers, Server Actions, or Server Components for queries and mutations.

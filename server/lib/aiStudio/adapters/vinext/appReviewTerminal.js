@@ -2,6 +2,9 @@ import {
   createAiStudioAppReviewTerminalSpec
 } from "../../appReviewTerminal.js";
 import {
+  createAiStudioLaunchTargetTerminalSpec
+} from "../../launchTargetTerminal.js";
+import {
   VINEXT_REVIEW_MODE_CONFIG
 } from "./constants.js";
 import {
@@ -17,6 +20,33 @@ function configValues(config = {}) {
 function reviewMode(config = {}) {
   const mode = String(configValues(config)[VINEXT_REVIEW_MODE_CONFIG] || "production").trim();
   return mode === "development" ? "development" : "production";
+}
+
+function vinextLaunchTarget(id, label) {
+  return {
+    id,
+    label
+  };
+}
+
+async function listVinextLaunchTargets({
+  session = {}
+} = {}) {
+  const worktreePath = String(session.metadata?.worktree_path || "").trim();
+  if (!worktreePath || !await readPackageJson(worktreePath)) {
+    return [];
+  }
+  return [
+    vinextLaunchTarget("built", "Build and run built version"),
+    vinextLaunchTarget("dev", "Run dev version")
+  ];
+}
+
+function configForLaunchTarget(config = {}, launchTargetId = "") {
+  return {
+    ...configValues(config),
+    [VINEXT_REVIEW_MODE_CONFIG]: launchTargetId === "dev" ? "development" : "production"
+  };
 }
 
 async function createVinextReviewDescriptor({
@@ -58,6 +88,31 @@ async function createVinextReviewDescriptor({
   };
 }
 
+function createVinextLaunchTargetTerminalSpec({
+  context = {},
+  launchTargetId = "",
+  session = {},
+  targetRoot = ""
+} = {}) {
+  if (!["built", "dev"].includes(launchTargetId)) {
+    return {
+      ok: false,
+      message: `Unknown Vinext launch target: ${launchTargetId || "(empty)"}.`
+    };
+  }
+  return createAiStudioLaunchTargetTerminalSpec({
+    adapterId: "vinext",
+    launchTarget: context.launchTarget || vinextLaunchTarget(launchTargetId, launchTargetId),
+    resolveLaunch: ({ port, worktreePath }) => createVinextReviewDescriptor({
+      config: configForLaunchTarget(context.config || session.config || {}, launchTargetId),
+      port,
+      worktreePath
+    }),
+    session,
+    targetRoot
+  });
+}
+
 function createVinextAppReviewTerminalSpec({
   context = {},
   session = {},
@@ -77,5 +132,7 @@ function createVinextAppReviewTerminalSpec({
 
 export {
   createVinextAppReviewTerminalSpec,
-  createVinextReviewDescriptor
+  createVinextLaunchTargetTerminalSpec,
+  createVinextReviewDescriptor,
+  listVinextLaunchTargets
 };

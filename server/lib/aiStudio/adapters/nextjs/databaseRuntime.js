@@ -30,8 +30,8 @@ function configValues(config = {}) {
 }
 
 function selectedNextjsDatabaseRuntime(config = {}) {
-  const runtime = String(configValues(config)[NEXTJS_DATABASE_RUNTIME_CONFIG] || "none").trim();
-  return NEXTJS_DATABASE_RUNTIMES.has(runtime) ? runtime : "none";
+  const runtime = String(configValues(config)[NEXTJS_DATABASE_RUNTIME_CONFIG] || "postgres").trim();
+  return NEXTJS_DATABASE_RUNTIMES.has(runtime) ? runtime : "postgres";
 }
 
 function databaseNameFromTargetRoot(targetRoot = "") {

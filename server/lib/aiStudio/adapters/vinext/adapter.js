@@ -287,12 +287,12 @@ async function vinextAutomatedChecksHook({ worktreePath = "" } = {}) {
 
 class VinextTargetAdapter extends AiStudioDescribedWorkflowTargetAdapter {
   constructor({
-    appReviewTerminalSpecFactory = null,
     commandTerminalSpecFactory = null,
-    commands = []
+    commands = [],
+    launchTargetTerminalSpecFactory = null,
+    launchTargets = () => []
   } = {}) {
     super({
-      appReviewTerminalSpecFactory,
       commandTerminalSpecFactory,
       commands,
       configFields: VINEXT_CONFIG_FIELDS,
@@ -309,6 +309,8 @@ class VinextTargetAdapter extends AiStudioDescribedWorkflowTargetAdapter {
       setupDoctorPlugins: (context) => [
         createVinextSetupDoctorPlugin(context)
       ],
+      launchTargetTerminalSpecFactory,
+      launchTargets,
       targetScriptTerminalSpecFactory: createVinextTargetScriptTerminalSpec,
       targetScriptsInspector: inspectVinextTargetScripts,
       workflowCommandHooks: {

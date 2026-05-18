@@ -39,6 +39,30 @@ function aiStudioCodexThreadPath(sessionsApiPath = "", sessionId = "") {
   return aiStudioSessionPath(sessionsApiPath, sessionId, "/codex-thread");
 }
 
+function aiStudioCommandTerminalPath(sessionsApiPath = "", sessionId = "", terminalSessionId = "") {
+  return aiStudioSessionPath(
+    sessionsApiPath,
+    sessionId,
+    terminalSessionId ? `/command-terminal/${encodePathSegment(terminalSessionId)}` : "/command-terminal"
+  );
+}
+
+function aiStudioLaunchTargetOpenPath(sessionsApiPath = "", sessionId = "") {
+  return aiStudioSessionPath(sessionsApiPath, sessionId, "/launch-target/open");
+}
+
+function aiStudioLaunchTargetsPath(sessionsApiPath = "", sessionId = "") {
+  return aiStudioSessionPath(sessionsApiPath, sessionId, "/launch-targets");
+}
+
+function aiStudioLaunchTerminalPath(sessionsApiPath = "", sessionId = "", terminalSessionId = "") {
+  return aiStudioSessionPath(
+    sessionsApiPath,
+    sessionId,
+    terminalSessionId ? `/launch-terminal/${encodePathSegment(terminalSessionId)}` : "/launch-terminal"
+  );
+}
+
 function aiStudioArtifactsQueryKey(surfaceId, ownershipFilter, sessionId = "", actionId = "") {
   const key = [
     "ai-studio",
@@ -52,6 +76,16 @@ function aiStudioArtifactsQueryKey(surfaceId, ownershipFilter, sessionId = "", a
     key.push(encodedActionId);
   }
   return key;
+}
+
+function aiStudioLaunchTargetsQueryKey(surfaceId, ownershipFilter, sessionId = "") {
+  return [
+    "ai-studio",
+    surfaceId,
+    ownershipFilter,
+    "launch-targets",
+    encodePathSegment(sessionId)
+  ];
 }
 
 function commandInputFromContext(context = {}) {
@@ -72,6 +106,11 @@ export {
   aiStudioCodexAttachmentPath,
   aiStudioCodexPromptHandoffPath,
   aiStudioCodexThreadPath,
+  aiStudioCommandTerminalPath,
+  aiStudioLaunchTargetOpenPath,
+  aiStudioLaunchTargetsPath,
+  aiStudioLaunchTargetsQueryKey,
+  aiStudioLaunchTerminalPath,
   aiStudioSessionPath,
   aiStudioSessionsQueryKey,
   commandInputFromContext

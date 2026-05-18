@@ -206,9 +206,18 @@ function promptOverrideTokens(originalPrompt = "") {
   };
 }
 
+function scalarPromptContextTokens(promptContext = {}) {
+  const entries = Object.entries(isPlainObject(promptContext) ? promptContext : {})
+    .filter(([, value]) => ["boolean", "number", "string"].includes(typeof value))
+    .map(([key, value]) => [`adapter.promptContext.${key}`, String(value)]);
+  return Object.fromEntries(entries);
+}
+
 function renderPromptTemplate(template, context, extraTokens = {}) {
+  const normalizedContext = normalizePromptContext(context);
   const tokens = {
-    ...promptTemplateTokens(context),
+    ...scalarPromptContextTokens(normalizedContext.adapter.promptContext),
+    ...promptTemplateTokens(normalizedContext),
     ...extraTokens
   };
   return String(template || "").replace(TEMPLATE_TOKEN_PATTERN, (match, tokenName) => {

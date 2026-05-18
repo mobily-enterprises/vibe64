@@ -1,0 +1,7 @@
+Data layer: none
+
+Use the seeded Next.js app as a frontend/full-stack shell without assuming persistence.
+Do not add an ORM, database client, schema files, migrations, or database scripts unless the issue explicitly asks for durable storage.
+If a managed database runtime is selected, DATABASE_URL may exist in .env.local, but it is only available for tasks that actually need persistence.
+Keep secrets and any future database calls server-side only: route handlers, Server Actions, Server Components, or server-only modules.
+Prefer simple local state, URL state, files, or mocked data for features that do not require a real database.

@@ -184,3 +184,20 @@ test("ai-studio prompt templates reject unknown tokens", () => {
     /Unknown AI Studio prompt token/u
   );
 });
+
+test("ai-studio prompt templates can render scalar adapter prompt context tokens", () => {
+  assert.equal(
+    renderPromptTemplate("Blueprint:\n{{adapter.promptContext.blueprint}}", {
+      adapter: {
+        promptContext: {
+          blueprint: "Use Prisma server-side."
+        }
+      },
+      action: {},
+      input: {},
+      product: "ai-studio",
+      session: {}
+    }),
+    "Blueprint:\nUse Prisma server-side."
+  );
+});

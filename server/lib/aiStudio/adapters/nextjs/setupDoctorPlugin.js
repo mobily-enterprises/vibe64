@@ -23,7 +23,13 @@ import {
   hasDependency
 } from "../../nodePackage.js";
 import {
-  NEXTJS_PACKAGE_MANAGER_CONFIG
+  NEXTJS_PACKAGE_MANAGER_CONFIG,
+  NEXTJS_SEED_BUNDLER_CONFIG,
+  NEXTJS_SEED_IMPORT_ALIAS_CONFIG,
+  NEXTJS_SEED_LANGUAGE_CONFIG,
+  NEXTJS_SEED_LINTER_CONFIG,
+  NEXTJS_SEED_SOURCE_LAYOUT_CONFIG,
+  NEXTJS_SEED_STYLING_CONFIG
 } from "./constants.js";
 import {
   createNextjsRuntimeContainers,
@@ -41,6 +47,11 @@ const ROUTER_MARKERS = Object.freeze([
 ]);
 
 const PACKAGE_MANAGERS = new Set(["npm", "pnpm", "yarn", "bun"]);
+const SEED_BUNDLERS = new Set(["turbopack", "webpack"]);
+const SEED_LANGUAGES = new Set(["typescript", "javascript"]);
+const SEED_LINTERS = new Set(["eslint", "biome", "none"]);
+const SEED_SOURCE_LAYOUTS = new Set(["src", "root"]);
+const SEED_STYLING = new Set(["tailwind", "none"]);
 
 function configValues(config = {}) {
   return config?.values && typeof config.values === "object" ? config.values : config;
@@ -49,6 +60,15 @@ function configValues(config = {}) {
 function selectedPackageManager(config = {}) {
   const packageManager = String(configValues(config)[NEXTJS_PACKAGE_MANAGER_CONFIG] || "npm").trim();
   return PACKAGE_MANAGERS.has(packageManager) ? packageManager : "npm";
+}
+
+function selectedSeedValue(config = {}, fieldId = "", allowedValues = new Set(), fallback = "") {
+  const value = String(configValues(config)[fieldId] || fallback).trim();
+  return allowedValues.has(value) ? value : fallback;
+}
+
+function selectedSeedImportAlias(config = {}) {
+  return String(configValues(config)[NEXTJS_SEED_IMPORT_ALIAS_CONFIG] || "@/*").trim() || "@/*";
 }
 
 function createNextAppUseFlag(packageManager = "npm") {
@@ -60,6 +80,32 @@ function createNextAppUseFlag(packageManager = "npm") {
   }[packageManager] || "--use-npm";
 }
 
+function createNextAppSeedFlags(config = {}) {
+  const language = selectedSeedValue(config, NEXTJS_SEED_LANGUAGE_CONFIG, SEED_LANGUAGES, "typescript");
+  const styling = selectedSeedValue(config, NEXTJS_SEED_STYLING_CONFIG, SEED_STYLING, "tailwind");
+  const linter = selectedSeedValue(config, NEXTJS_SEED_LINTER_CONFIG, SEED_LINTERS, "eslint");
+  const sourceLayout = selectedSeedValue(config, NEXTJS_SEED_SOURCE_LAYOUT_CONFIG, SEED_SOURCE_LAYOUTS, "src");
+  const bundler = selectedSeedValue(config, NEXTJS_SEED_BUNDLER_CONFIG, SEED_BUNDLERS, "turbopack");
+  const linterFlag = {
+    biome: "--biome",
+    eslint: "--eslint",
+    none: "--no-linter"
+  }[linter];
+  return [
+    "--yes",
+    "--reset-preferences",
+    language === "javascript" ? "--javascript" : "--typescript",
+    styling === "none" ? "--no-tailwind" : "--tailwind",
+    linterFlag,
+    "--app",
+    sourceLayout === "root" ? "--no-src-dir" : "--src-dir",
+    bundler === "webpack" ? "--webpack" : "--turbopack",
+    "--import-alias",
+    selectedSeedImportAlias(config),
+    "--disable-git"
+  ];
+}
+
 function createNextAppCommand({
   appDir = "$app_dir",
   config = {}
@@ -67,15 +113,7 @@ function createNextAppCommand({
   const packageManager = selectedPackageManager(config);
   const appDirArg = appDir === "$app_dir" ? "\"$app_dir\"" : shellQuote(appDir);
   const flags = [
-    "--yes",
-    "--typescript",
-    "--tailwind",
-    "--eslint",
-    "--app",
-    "--src-dir",
-    "--import-alias",
-    "@/*",
-    "--disable-git",
+    ...createNextAppSeedFlags(config),
     createNextAppUseFlag(packageManager)
   ].map(shellQuote).join(" ");
   if (packageManager === "pnpm") {
@@ -90,7 +128,15 @@ function createNextAppCommand({
   return `npx --yes create-next-app@latest ${appDirArg} ${flags}`;
 }
 
-function createNextAppScript(config = {}) {
+function createNextAppScript(config = {}, {
+  targetRoot = ""
+} = {}) {
+  const databaseEnvScript = selectedNextjsDatabaseRuntime(config) === "none"
+    ? ""
+    : nextjsDatabaseEnvWriteScript({
+        config,
+        targetRoot
+      });
   return [
     "set -e",
     "set -x",
@@ -101,7 +147,8 @@ function createNextAppScript(config = {}) {
     createNextAppCommand({
       config
     }),
-    "cp -a \"$app_dir/.\" ."
+    "cp -a \"$app_dir/.\" .",
+    databaseEnvScript
   ].join("\n");
 }
 
@@ -353,7 +400,9 @@ function createNextjsSetupDoctorPlugin({
   const createNextAppTerminal = toolkit.toolchainTerminalAction({
     actionId: "terminal-create-next-app",
     autoRun: true,
-    commandArgs: (context = {}) => ["bash", "-lc", createNextAppScript(context.config)],
+    commandArgs: (context = {}) => ["bash", "-lc", createNextAppScript(context.config, {
+      targetRoot: context.targetRoot || targetRoot
+    })],
     commandPreview: (context = {}) => createNextAppRepair(context.config).commandPreview,
     extraArgs: writableHostUserDockerArgs(),
     image: STUDIO_BASE_TOOLCHAIN_IMAGE,

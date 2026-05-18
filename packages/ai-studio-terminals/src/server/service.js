@@ -1,6 +1,6 @@
-import { createAppReviewTerminalController } from "./appReviewTerminal.js";
 import { createCodexTerminalController } from "./codexTerminal.js";
 import { createCommandTerminalController } from "./commandTerminal.js";
+import { createLaunchTargetTerminalController } from "./launchTargetTerminal.js";
 
 function createService({ projectService } = {}) {
   if (!projectService) {
@@ -13,14 +13,14 @@ function createService({ projectService } = {}) {
   const command = createCommandTerminalController({
     projectService
   });
-  const appReview = createAppReviewTerminalController({
+  const launchTarget = createLaunchTargetTerminalController({
     projectService
   });
 
   return Object.freeze({
     async closeSessionTerminals(sessionId) {
       await Promise.all([
-        appReview.closeAllForSession(sessionId),
+        launchTarget.closeAllForSession(sessionId),
         codex.closeAllForSession(sessionId),
         command.closeAllForSession(sessionId)
       ]);
@@ -31,7 +31,7 @@ function createService({ projectService } = {}) {
 
     async closeSessionNonCodexTerminals(sessionId) {
       await Promise.all([
-        appReview.closeAllForSession(sessionId),
+        launchTarget.closeAllForSession(sessionId),
         command.closeAllForSession(sessionId)
       ]);
       return {
@@ -47,8 +47,8 @@ function createService({ projectService } = {}) {
       return command.closeTerminal(sessionId, terminalSessionId);
     },
 
-    closeAppReviewTerminal(sessionId, terminalSessionId) {
-      return appReview.closeTerminal(sessionId, terminalSessionId);
+    closeLaunchTargetTerminal(sessionId, terminalSessionId) {
+      return launchTarget.closeTerminal(sessionId, terminalSessionId);
     },
 
     readCodexTerminal(sessionId, terminalSessionId) {
@@ -59,8 +59,16 @@ function createService({ projectService } = {}) {
       return command.readTerminal(sessionId, terminalSessionId);
     },
 
-    readAppReviewTerminal(sessionId, terminalSessionId) {
-      return appReview.readTerminal(sessionId, terminalSessionId);
+    readLaunchTargetTerminal(sessionId, terminalSessionId) {
+      return launchTarget.readTerminal(sessionId, terminalSessionId);
+    },
+
+    launchTargetStatus(sessionId) {
+      return launchTarget.launchStatus(sessionId);
+    },
+
+    openLaunchTarget(sessionId) {
+      return launchTarget.openLaunchTarget(sessionId);
     },
 
     saveCodexPromptHandoff(sessionId, input = {}) {
@@ -79,8 +87,8 @@ function createService({ projectService } = {}) {
       return command.startTerminal(sessionId, input);
     },
 
-    startAppReviewTerminal(sessionId) {
-      return appReview.startTerminal(sessionId);
+    startLaunchTargetTerminal(sessionId, input = {}) {
+      return launchTarget.startTerminal(sessionId, input);
     },
 
     subscribeCodexTerminal(sessionId, terminalSessionId, subscriber) {
@@ -91,8 +99,8 @@ function createService({ projectService } = {}) {
       return command.subscribeTerminal(sessionId, terminalSessionId, subscriber);
     },
 
-    subscribeAppReviewTerminal(sessionId, terminalSessionId, subscriber) {
-      return appReview.subscribeTerminal(sessionId, terminalSessionId, subscriber);
+    subscribeLaunchTargetTerminal(sessionId, terminalSessionId, subscriber) {
+      return launchTarget.subscribeTerminal(sessionId, terminalSessionId, subscriber);
     },
 
     uploadCodexAttachment(sessionId, input = {}) {
@@ -107,8 +115,8 @@ function createService({ projectService } = {}) {
       return command.writeTerminal(sessionId, terminalSessionId, data);
     },
 
-    writeAppReviewTerminal(sessionId, terminalSessionId, data) {
-      return appReview.writeTerminal(sessionId, terminalSessionId, data);
+    writeLaunchTargetTerminal(sessionId, terminalSessionId, data) {
+      return launchTarget.writeTerminal(sessionId, terminalSessionId, data);
     }
   });
 }

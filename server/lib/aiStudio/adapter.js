@@ -10,6 +10,7 @@ import {
 
 const ADAPTER_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
 const COMMAND_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
+const LAUNCH_TARGET_ID_PATTERN = COMMAND_ID_PATTERN;
 
 function sortedEntries(value = {}) {
   return Object.entries(isPlainObject(value) ? value : {})
@@ -30,6 +31,14 @@ function assertCommandId(commandId) {
     throw aiStudioError(`Invalid AI Studio adapter command id: ${normalizedCommandId || "(empty)"}`, "ai_studio_invalid_adapter_command_id");
   }
   return normalizedCommandId;
+}
+
+function assertLaunchTargetId(launchTargetId) {
+  const normalizedLaunchTargetId = normalizeText(launchTargetId);
+  if (!LAUNCH_TARGET_ID_PATTERN.test(normalizedLaunchTargetId)) {
+    throw aiStudioError(`Invalid AI Studio launch target id: ${normalizedLaunchTargetId || "(empty)"}`, "ai_studio_invalid_launch_target_id");
+  }
+  return normalizedLaunchTargetId;
 }
 
 function normalizeCapabilityMap(capabilities = {}) {
@@ -65,6 +74,15 @@ function adapterCommand(input = {}) {
     available: input.available !== false,
     disabledReason: normalizeText(input.disabledReason),
     id: assertCommandId(input.id),
+    label: normalizeText(input.label || input.id)
+  };
+}
+
+function adapterLaunchTarget(input = {}) {
+  return {
+    available: input.available !== false,
+    disabledReason: normalizeText(input.disabledReason),
+    id: assertLaunchTargetId(input.id),
     label: normalizeText(input.label || input.id)
   };
 }
@@ -187,10 +205,16 @@ class TargetAdapter {
     };
   }
 
-  async createAppReviewTerminalSpec() {
+  async listLaunchTargets() {
+    return [];
+  }
+
+  async createLaunchTargetTerminalSpec({
+    launchTargetId = ""
+  } = {}) {
     return {
       ok: false,
-      message: `${this.label} does not provide an app review terminal.`
+      message: `${this.label} does not provide launch target ${assertLaunchTargetId(launchTargetId)}.`
     };
   }
 
@@ -281,6 +305,7 @@ export {
   adapterActionResult,
   adapterCommand,
   adapterDetection,
+  adapterLaunchTarget,
   adapterPromptResult,
   adapterProjectFacts,
   adapterView,
