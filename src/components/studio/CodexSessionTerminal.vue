@@ -100,9 +100,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { Terminal } from "@xterm/xterm";
-import { FitAddon } from "@xterm/addon-fit";
+import { computed, ref, watch } from "vue";
 import {
   mdiChevronDown,
   mdiChevronUp,
@@ -117,18 +115,12 @@ import {
 } from "@/lib/aiStudioSessionApi.js";
 import { useAiStudioCodexCommands } from "@/composables/useAiStudioCodexCommands.js";
 import { useCodexTerminalAttachments } from "@/composables/useCodexTerminalAttachments.js";
-import { useCodexTerminalSocket } from "@/composables/useCodexTerminalSocket.js";
+import { useCodexPromptHandoff } from "@/composables/useCodexPromptHandoff.js";
+import { useCodexTerminalOutput } from "@/composables/useCodexTerminalOutput.js";
+import { useCodexTerminalSessionLifecycle } from "@/composables/useCodexTerminalSessionLifecycle.js";
+import { useCodexTerminalViewport } from "@/composables/useCodexTerminalViewport.js";
 import { writeClipboardText } from "@/lib/clipboard.js";
-import {
-  codexTrustPromptLooksActive,
-  extractCodexThreadId,
-  stripStudioContextBlocksForDisplay,
-  stripTerminalControlSequences,
-  wrapPromptWithStudioContext
-} from "@/lib/codexOutput.js";
-import { createCodexPromptEchoFilters } from "@/lib/codexPromptEchoFilters.js";
 import { terminalInputHasUserText } from "@/lib/terminalInput.js";
-import "@xterm/xterm/css/xterm.css";
 
 const props = defineProps({
   session: {
@@ -158,65 +150,15 @@ const emit = defineEmits([
 ]);
 const codexCommands = useAiStudioCodexCommands();
 
-const terminalHost = ref(null);
 const terminalSessionId = ref("");
 const terminalStatus = ref("");
 const terminalCommandPreview = ref("");
 const terminalError = ref("");
-const codexBusy = ref(false);
-const terminalFocused = ref(false);
 const terminalStarting = ref(false);
-const terminalSelectedText = ref("");
 const copyStatus = ref("");
 const expanded = ref(true);
-const injectingPrompt = ref(false);
-const autoPromptInjected = ref(false);
 const componentMounted = ref(false);
-const codexThreadId = ref("");
-const codexThreadCaptureRequired = ref(false);
-const codexThreadCaptureStarted = ref(false);
-
-let terminalInstance = null;
-let terminalFitAddon = null;
-let terminalDataDisposable = null;
-let terminalSelectionDisposable = null;
-let terminalFocusInHandler = null;
-let terminalFocusOutHandler = null;
-let terminalDocumentFocusInHandler = null;
-let terminalOutsidePointerHandler = null;
-let terminalWindowBlurHandler = null;
-let terminalResizeHandler = null;
-let terminalOutputEmitTimer = null;
-let codexIdleTimer = null;
-let terminalSetupPromise = null;
-let terminalOutputOffset = 0;
-let terminalDisplayOutput = "";
-let codexBusyDisplayLength = 0;
-let terminalStartPromise = null;
-let terminalRecoveryPromise = null;
-let codexThreadCapturePromise = null;
-let codexThreadSavePromise = null;
-let handledPromptInjectionRequestKey = "";
-let promptInjectionRetryStartedAt = 0;
-let promptInjectionRetryTimer = null;
-let terminalHasOutput = false;
-let terminalLatestOutput = "";
-let terminalLastOutputAt = 0;
-let terminalStartedAt = 0;
-let codexTrustPromptAnsweredAt = 0;
-const promptEchoFilters = createCodexPromptEchoFilters();
-
-const DEFAULT_CODEX_THREAD_COMMAND = "echo $CODEX_THREAD_ID";
-const CODEX_BOOT_MIN_AGE_MS = 1800;
-const CODEX_BOOT_QUIET_MS = 900;
-const CODEX_BOOT_TIMEOUT_MS = 12000;
-const CODEX_KEY_PAUSE_MS = 180;
-const PROMPT_INJECTION_RETRY_MS = 350;
-const PROMPT_INJECTION_RETRY_TIMEOUT_MS = 15000;
-const CODEX_ACTIVITY_QUIET_MS = 2200;
-const CODEX_TERMINAL_SCROLLBACK_LINES = 50000;
-const MAX_TERMINAL_OUTPUT_LENGTH = 16 * 1024 * 1024;
-const TERMINAL_OUTPUT_EMIT_INTERVAL_MS = 120;
+let terminalLifecycle = null;
 
 const sessionId = computed(() => props.session?.sessionId || "");
 const sessionWorktree = computed(() => {
@@ -251,31 +193,85 @@ const codexPrompt = computed(() => {
   return promptField ? String(props.session?.[promptField] || "") : "";
 });
 const manualPromptInjectionRequestKey = computed(() => String(props.promptInjectionRequestKey || ""));
-const terminalExited = computed(() => terminalStatus.value === "exited");
-const showTerminalStartPanel = computed(() => (
-  canUseTerminal.value &&
-  componentMounted.value &&
-  !terminalStarting.value &&
-  (!terminalSessionId.value || terminalExited.value)
-));
-const terminalSocket = useCodexTerminalSocket({
-  canUseTerminal,
-  componentMounted,
-  isTerminalSessionNotFound: terminalSessionNotFound,
-  onConnected() {
-    terminalError.value = "";
+const {
+  clearTerminalDisplay,
+  disposeTerminalUi: disposeTerminalViewport,
+  fitTerminal,
+  focusTerminal,
+  resetTerminal,
+  setupTerminalUi,
+  terminalFocused,
+  terminalHost,
+  terminalSelectedText,
+  visibleTerminalText,
+  writeTerminalDisplay
+} = useCodexTerminalViewport({
+  expanded,
+  onData(data) {
+    void sendTerminalData(data, {
+      source: "user"
+    });
   },
-  onError(error) {
-    terminalError.value = error;
+  visible: computed(() => props.visible)
+});
+let promptHandoff = null;
+const {
+  addPromptEchoFilter,
+  appendTerminalOutput,
+  clearCodexBusy,
+  clearPromptEchoFilters,
+  flushTerminalOutputEmit,
+  getTerminalOutput,
+  hasTerminalOutput,
+  lastTerminalOutputAt,
+  markCodexBusy,
+  removePromptEchoFilter,
+  resetTerminalOutput,
+  writeTerminalOutput
+} = useCodexTerminalOutput({
+  emitBusyChanged(payload) {
+    emit("busy-changed", payload);
   },
-  onMessage: handleTerminalSocketMessage,
-  onMissingTerminal() {
-    void recoverMissingTerminal();
+  emitOutput(output) {
+    emit("output", output);
+  },
+  onOutputChanged(output) {
+    void promptHandoff?.captureCodexThreadFromOutput(output);
   },
   sessionId,
+  writeDisplay: writeTerminalDisplay
+});
+promptHandoff = useCodexPromptHandoff({
+  addPromptEchoFilter,
+  clearCodexBusy,
+  clearPromptEchoFilters,
+  codexPrompt,
+  componentMounted,
+  copyStatus,
+  emitPromptInjected(payload) {
+    emit("prompt-injected", payload);
+  },
+  emitPromptInjectionFailed(payload) {
+    emit("prompt-injection-failed", payload);
+  },
+  emitSessionUpdate(payload) {
+    emit("session-update", payload);
+  },
+  ensureTerminalReady,
+  expanded,
+  getTerminalOutput,
+  hasTerminalOutput,
+  lastTerminalOutputAt,
+  manualPromptInjectionRequestKey,
+  markCodexBusy,
+  removePromptEchoFilter,
+  saveThread: (currentSessionId, threadId) => codexCommands.saveThread(currentSessionId, threadId),
+  sendTerminalData,
+  sessionId,
+  terminalError,
   terminalSessionId,
   terminalStatus,
-  webSocketUrl: aiStudioCodexTerminalWebSocketUrl
+  visibleTerminalText
 });
 const {
   attachmentDragActive,
@@ -294,24 +290,82 @@ const {
   sessionId,
   uploadAttachment: (currentSessionId, file) => codexCommands.uploadAttachment(currentSessionId, file)
 });
+terminalLifecycle = useCodexTerminalSessionLifecycle({
+  appendTerminalOutput,
+  canUseTerminal,
+  clearCodexBusy,
+  clearPromptEchoFilters,
+  clearTerminalDisplay,
+  clearTerminalOutput() {
+    resetTerminalOutput();
+  },
+  closeTerminalSession: closeAiStudioCodexTerminal,
+  componentMounted,
+  defaultExpanded,
+  disposeTerminalViewport,
+  emitSessionState(payload) {
+    emit("session-update", payload);
+  },
+  expanded,
+  fitTerminal,
+  onBeforeDispose() {
+    flushTerminalOutputEmit();
+  },
+  onBeforeDetach() {
+    promptHandoff?.detach();
+  },
+  onMountedReady() {
+    void promptHandoff?.injectPromptForRequest();
+  },
+  onSessionChanged() {
+    promptHandoff?.resetPromptRequestState();
+    resetAttachmentDragState();
+    clearAttachmentStatus();
+  },
+  onTerminalRecovered() {
+    copyStatus.value = "Studio server restarted; reconnecting Codex.";
+    promptHandoff?.resetTerminalRecoveryState();
+    resetTerminalOutput({
+      emit: true
+    });
+  },
+  onTerminalSnapshot(session) {
+    promptHandoff?.applyTerminalSnapshot(session);
+  },
+  onTerminalStarted(session) {
+    promptHandoff?.applyCodexThreadState(session);
+    promptHandoff?.noteTerminalStarted();
+    void promptHandoff?.ensureCodexThreadReady({ forceRetry: true });
+  },
+  refreshTerminalOutput() {
+    writeTerminalOutput(getTerminalOutput());
+  },
+  resetTerminal,
+  sessionId,
+  setupTerminalUi,
+  startTerminalSession: startAiStudioCodexTerminal,
+  terminalCommandPreview,
+  terminalError,
+  terminalHost,
+  terminalSessionId,
+  terminalStarting,
+  terminalStatus,
+  visible: computed(() => props.visible),
+  webSocketUrl: aiStudioCodexTerminalWebSocketUrl,
+  writeTerminalOutput
+});
+const {
+  closeTerminal,
+  restartTerminal,
+  showTerminalStartPanel,
+  terminalExited
+} = terminalLifecycle;
 
 function defaultExpanded() {
   if (typeof window === "undefined" || !window.matchMedia) {
     return true;
   }
   return !window.matchMedia("(max-width: 700px)").matches;
-}
-
-function applyCodexThreadState(session = {}) {
-  if (session.codexThreadId) {
-    codexThreadId.value = String(session.codexThreadId || "");
-    codexThreadCaptureRequired.value = false;
-    codexThreadCaptureStarted.value = false;
-    return;
-  }
-  if (session.needsThreadCapture === true) {
-    codexThreadCaptureRequired.value = true;
-  }
 }
 
 async function copyText(value, label) {
@@ -329,445 +383,22 @@ async function copyText(value, label) {
   }
 }
 
-function updateTerminalSelection() {
-  terminalSelectedText.value = terminalInstance?.hasSelection?.()
-    ? terminalInstance.getSelection()
-    : "";
-  return terminalSelectedText.value;
-}
-
 async function copyTerminalSelection() {
-  await copyText(updateTerminalSelection(), "Selection");
+  await copyText(terminalSelectedText.value, "Selection");
 }
 
-function focusTerminal() {
-  terminalInstance?.focus?.();
-  terminalFocused.value = true;
-  window.setTimeout(syncTerminalFocus, 0);
-}
-
-function syncTerminalFocus() {
-  const host = terminalHost.value;
-  const activeElement = document.activeElement;
-  terminalFocused.value = Boolean(host && activeElement && host.contains(activeElement));
-}
-
-function blurTerminal() {
-  terminalInstance?.blur?.();
-  terminalFocused.value = false;
-}
-
-function handleDocumentPointerDown(event) {
-  const host = terminalHost.value;
-  const target = event.target;
-  if (!host || !(target instanceof Node) || host.contains(target)) {
-    return;
-  }
-  blurTerminal();
-}
-
-function trimTerminalOutput(output) {
-  const terminalOutput = String(output || "");
-  if (terminalOutput.length <= MAX_TERMINAL_OUTPUT_LENGTH) {
-    return terminalOutput;
-  }
-  return terminalOutput.slice(terminalOutput.length - MAX_TERMINAL_OUTPUT_LENGTH);
-}
-
-function displayTerminalOutput(output) {
-  return stripStudioContextBlocksForDisplay(promptEchoFilters.apply(output));
-}
-
-function displayedTerminalOutputLength() {
-  return displayTerminalOutput(terminalLatestOutput).length;
-}
-
-function clearCodexIdleTimer() {
-  if (!codexIdleTimer) {
-    return;
-  }
-  window.clearTimeout(codexIdleTimer);
-  codexIdleTimer = null;
-}
-
-function setCodexBusy(nextBusy) {
-  const busy = Boolean(nextBusy);
-  if (codexBusy.value === busy) {
-    return;
-  }
-  codexBusy.value = busy;
-  emit("busy-changed", {
-    busy,
-    sessionId: sessionId.value
-  });
-}
-
-function markCodexBusy() {
-  clearCodexIdleTimer();
-  codexBusyDisplayLength = displayedTerminalOutputLength();
-  setCodexBusy(true);
-}
-
-function clearCodexBusy() {
-  clearCodexIdleTimer();
-  codexBusyDisplayLength = displayedTerminalOutputLength();
-  setCodexBusy(false);
-}
-
-function scheduleCodexIdleWhenQuiet() {
-  if (!codexBusy.value || displayedTerminalOutputLength() <= codexBusyDisplayLength) {
-    return;
-  }
-  clearCodexIdleTimer();
-  codexIdleTimer = window.setTimeout(() => {
-    codexIdleTimer = null;
-    clearCodexBusy();
-  }, CODEX_ACTIVITY_QUIET_MS);
-}
-
-function writeTerminalDisplay(output) {
-  const displayOutput = displayTerminalOutput(output);
-  if (!terminalInstance) {
-    terminalDisplayOutput = displayOutput;
-    terminalOutputOffset = displayOutput.length;
-    return;
-  }
-  if (
-    displayOutput.length < terminalOutputOffset ||
-    !displayOutput.startsWith(terminalDisplayOutput.slice(0, terminalOutputOffset))
-  ) {
-    terminalOutputOffset = 0;
-    terminalInstance.reset();
-  }
-  const chunk = displayOutput.slice(terminalOutputOffset);
-  if (chunk) {
-    terminalInstance.write(chunk);
-  }
-  terminalDisplayOutput = displayOutput;
-  terminalOutputOffset = displayOutput.length;
-}
-
-function clearTerminalOutputEmit() {
-  if (!terminalOutputEmitTimer) {
-    return;
-  }
-  window.clearTimeout(terminalOutputEmitTimer);
-  terminalOutputEmitTimer = null;
-}
-
-function emitTerminalOutputNow(output = terminalLatestOutput) {
-  clearTerminalOutputEmit();
-  emit("output", output);
-}
-
-function flushTerminalOutputEmit() {
-  if (!terminalOutputEmitTimer) {
-    return;
-  }
-  clearTerminalOutputEmit();
-  emit("output", terminalLatestOutput);
-}
-
-function scheduleTerminalOutputEmit() {
-  if (terminalOutputEmitTimer) {
-    return;
-  }
-  terminalOutputEmitTimer = window.setTimeout(() => {
-    terminalOutputEmitTimer = null;
-    emit("output", terminalLatestOutput);
-  }, TERMINAL_OUTPUT_EMIT_INTERVAL_MS);
-}
-
-function disposeTerminalUi() {
-  flushTerminalOutputEmit();
-  clearCodexBusy();
-  terminalSocket.closeSocket();
-  if (terminalDataDisposable) {
-    terminalDataDisposable.dispose();
-    terminalDataDisposable = null;
-  }
-  if (terminalSelectionDisposable) {
-    terminalSelectionDisposable.dispose();
-    terminalSelectionDisposable = null;
-  }
-  if (terminalFocusInHandler) {
-    terminalHost.value?.removeEventListener("focusin", terminalFocusInHandler);
-    terminalFocusInHandler = null;
-  }
-  if (terminalFocusOutHandler) {
-    terminalHost.value?.removeEventListener("focusout", terminalFocusOutHandler);
-    terminalFocusOutHandler = null;
-  }
-  if (terminalDocumentFocusInHandler) {
-    document.removeEventListener("focusin", terminalDocumentFocusInHandler, true);
-    terminalDocumentFocusInHandler = null;
-  }
-  if (terminalOutsidePointerHandler) {
-    document.removeEventListener("pointerdown", terminalOutsidePointerHandler, true);
-    terminalOutsidePointerHandler = null;
-  }
-  if (terminalWindowBlurHandler) {
-    window.removeEventListener("blur", terminalWindowBlurHandler);
-    terminalWindowBlurHandler = null;
-  }
-  if (terminalResizeHandler) {
-    window.removeEventListener("resize", terminalResizeHandler);
-    terminalResizeHandler = null;
-  }
-  if (terminalInstance) {
-    terminalInstance.dispose();
-    terminalInstance = null;
-  }
-  terminalFitAddon = null;
-  terminalOutputOffset = 0;
-  terminalDisplayOutput = "";
-  promptEchoFilters.clear();
-  terminalHasOutput = false;
-  terminalLatestOutput = "";
-  terminalLastOutputAt = 0;
-  terminalStartedAt = 0;
-  codexTrustPromptAnsweredAt = 0;
-  terminalFocused.value = false;
-  terminalSelectedText.value = "";
-}
-
-async function setupTerminalUi() {
-  if (terminalInstance) {
-    return true;
-  }
-  if (terminalSetupPromise) {
-    return terminalSetupPromise;
-  }
-
-  terminalSetupPromise = (async () => {
-    await nextTick();
-    if (!terminalHost.value) {
-      return false;
-    }
-    terminalInstance = new Terminal({
-      convertEol: true,
-      cursorBlink: true,
-      fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-      fontSize: 13,
-      scrollback: CODEX_TERMINAL_SCROLLBACK_LINES,
-      theme: {
-        background: "#101216",
-        foreground: "#f5f7fb"
-      }
-    });
-    terminalFitAddon = new FitAddon();
-    terminalInstance.loadAddon(terminalFitAddon);
-    terminalInstance.open(terminalHost.value);
-    if (expanded.value && props.visible) {
-      terminalFitAddon.fit();
-    }
-    terminalOutputOffset = 0;
-    writeTerminalOutput(terminalLatestOutput);
-    terminalDataDisposable = terminalInstance.onData((data) => {
-      void sendTerminalData(data, {
-        source: "user"
-      });
-    });
-    terminalFocusInHandler = () => {
-      terminalFocused.value = true;
-    };
-    terminalFocusOutHandler = () => {
-      window.setTimeout(syncTerminalFocus, 0);
-    };
-    terminalDocumentFocusInHandler = () => {
-      window.setTimeout(syncTerminalFocus, 0);
-    };
-    terminalOutsidePointerHandler = handleDocumentPointerDown;
-    terminalWindowBlurHandler = () => {
-      terminalFocused.value = false;
-    };
-    terminalHost.value.addEventListener("focusin", terminalFocusInHandler);
-    terminalHost.value.addEventListener("focusout", terminalFocusOutHandler);
-    document.addEventListener("focusin", terminalDocumentFocusInHandler, true);
-    document.addEventListener("pointerdown", terminalOutsidePointerHandler, true);
-    window.addEventListener("blur", terminalWindowBlurHandler);
-    terminalSelectionDisposable = terminalInstance.onSelectionChange(() => {
-      updateTerminalSelection();
-    });
-    terminalResizeHandler = () => {
-      terminalFitAddon?.fit();
-    };
-    window.addEventListener("resize", terminalResizeHandler);
-    return true;
-  })();
-
-  try {
-    return await terminalSetupPromise;
-  } finally {
-    terminalSetupPromise = null;
-  }
-}
-
-function writeTerminalOutput(output) {
-  const nextOutput = trimTerminalOutput(output);
-  emitTerminalOutputNow(nextOutput);
-  if (nextOutput !== terminalLatestOutput) {
-    terminalLatestOutput = nextOutput;
-    terminalLastOutputAt = Date.now();
-    terminalHasOutput = stripTerminalControlSequences(nextOutput).trim().length > 0;
-  }
-  void captureCodexThreadFromOutput(nextOutput);
-  writeTerminalDisplay(nextOutput);
-  scheduleCodexIdleWhenQuiet();
-}
-
-function appendTerminalOutput(chunk) {
-  const outputChunk = String(chunk || "");
-  if (!outputChunk) {
-    return;
-  }
-  const nextOutput = trimTerminalOutput(`${terminalLatestOutput}${outputChunk}`);
-  terminalLatestOutput = nextOutput;
-  terminalLastOutputAt = Date.now();
-  terminalHasOutput = terminalHasOutput || stripTerminalControlSequences(outputChunk).trim().length > 0;
-  void captureCodexThreadFromOutput(nextOutput);
-  writeTerminalDisplay(nextOutput);
-  scheduleCodexIdleWhenQuiet();
-  scheduleTerminalOutputEmit();
-}
-
-function applyTerminalSnapshot(session = {}) {
-  applyCodexThreadState(session);
-  const persistedOutputStart = Number(session.codexPromptHandoffOutputStart);
-  if (
-    Number.isSafeInteger(persistedOutputStart) &&
-    persistedOutputStart >= 0 &&
-    codexPrompt.value
-  ) {
-    promptEchoFilters.add({
-      outputStart: persistedOutputStart,
-      prompt: wrapPromptWithStudioContext(codexPrompt.value)
-    });
-  }
-  terminalStatus.value = session.status || terminalStatus.value || "";
-  terminalCommandPreview.value = session.commandPreview || terminalCommandPreview.value;
-  writeTerminalOutput(session.output);
-  emitTerminalSessionState();
-}
-
-function handleTerminalSocketMessage(rawMessage) {
-  let message;
-  try {
-    message = JSON.parse(String(rawMessage || ""));
-  } catch {
-    terminalError.value = "Terminal stream returned an invalid message.";
-    return;
-  }
-
-  if (message?.type === "snapshot") {
-    applyTerminalSnapshot(message.session || {});
-    return;
-  }
-
-  if (message?.type === "output") {
-    appendTerminalOutput(message.chunk);
-    return;
-  }
-
-  if (message?.type === "status") {
-    terminalStatus.value = message.status || terminalStatus.value || "";
-    if (terminalStatus.value === "exited") {
-      clearCodexBusy();
-    }
-    return;
-  }
-
-  if (message?.type === "error") {
-    const error = String(message.error || "Terminal stream failed.");
-    if (terminalSessionNotFound(error)) {
-      void recoverMissingTerminal();
-      return;
-    }
-    terminalError.value = error;
-  }
-}
-
-function terminalSessionNotFound(error = "") {
-  return String(error || "").toLowerCase().includes("terminal session not found");
-}
-
-async function ensureTerminalReady() {
-  if (!canUseTerminal.value) {
-    terminalError.value = "Create the session worktree before starting Codex.";
-    return false;
-  }
-  if (terminalStartPromise) {
-    return terminalStartPromise;
-  }
-  terminalStartPromise = startTerminalOnce();
-  try {
-    return await terminalStartPromise;
-  } finally {
-    terminalStartPromise = null;
-  }
-}
-
-async function startTerminalOnce() {
-  void setupTerminalUi();
-  if (terminalSessionId.value) {
-    terminalFitAddon?.fit();
-    return true;
-  }
-
-  terminalStarting.value = true;
-  terminalError.value = "";
-  try {
-    const session = await startAiStudioCodexTerminal(sessionId.value);
-    if (session?.ok === false) {
-      throw new Error(session.error || session.errors?.[0]?.message || "Codex terminal failed to start.");
-    }
-    applyCodexThreadState(session);
-    terminalSessionId.value = session.id || "";
-    terminalStartedAt = Date.now();
-    terminalStatus.value = session.status || "running";
-    terminalCommandPreview.value = session.commandPreview || "";
-    emitTerminalSessionState();
-    void setupTerminalUi().then((ready) => {
-      if (ready) {
-        terminalFitAddon?.fit();
-        writeTerminalOutput(terminalLatestOutput);
-      }
-    });
-    if (!(await terminalSocket.connect())) {
-      throw new Error("Terminal stream failed to connect.");
-    }
-    void ensureCodexThreadReady({ forceRetry: true });
-    return true;
-  } catch (startError) {
-    terminalError.value = String(startError?.message || startError || "Codex terminal failed to start.");
-    return false;
-  } finally {
-    terminalStarting.value = false;
-  }
-}
-
-function emitTerminalSessionState(extra = {}) {
-  if (!sessionId.value || !terminalSessionId.value) {
-    return;
-  }
-  emit("session-update", {
-    codexTerminalCommandPreview: terminalCommandPreview.value,
-    codexTerminalSessionId: terminalSessionId.value,
-    codexTerminalStatus: terminalStatus.value,
-    sessionId: sessionId.value,
-    ...extra
-  });
+function ensureTerminalReady() {
+  return terminalLifecycle?.ensureTerminalReady() || Promise.resolve(false);
 }
 
 async function sendTerminalData(data, {
   source = "program"
 } = {}) {
-  if (!terminalSessionId.value || terminalStatus.value === "exited") {
-    return false;
-  }
   const input = String(data || "");
   try {
-    await terminalSocket.send(input);
+    if (!(await terminalLifecycle?.sendTerminalInput(input))) {
+      return false;
+    }
     if (source === "user" && input.includes("\u0003")) {
       clearCodexBusy();
     } else if (source === "user" && input.includes("\r")) {
@@ -776,10 +407,7 @@ async function sendTerminalData(data, {
     if (source === "user" && terminalInputHasUserText(input)) {
       emit("input", input);
     }
-    if (input.includes("\r") && codexTrustPromptLooksActive(terminalLatestOutput)) {
-      codexTrustPromptAnsweredAt = Date.now();
-      copyStatus.value = "";
-    }
+    promptHandoff?.noteTerminalInput(input);
     return true;
   } catch (sendError) {
     terminalError.value = String(sendError?.message || sendError || "Terminal input failed.");
@@ -787,366 +415,10 @@ async function sendTerminalData(data, {
   }
 }
 
-function delay(ms) {
-  return new Promise((resolve) => {
-    window.setTimeout(resolve, ms);
-  });
-}
-
-async function sendCodexShellCommand(command) {
-  const normalizedCommand = String(command || "").trim();
-  if (!normalizedCommand) {
-    return false;
-  }
-
-  const keySequence = [
-    "\u001b",
-    "\u0015",
-    "! ",
-    normalizedCommand,
-    " ",
-    "\u001b",
-    "\r"
-  ];
-  for (const keyInput of keySequence) {
-    if (!(await sendTerminalData(keyInput))) {
-      return false;
-    }
-    await delay(CODEX_KEY_PAUSE_MS);
-  }
-  return true;
-}
-
-async function captureCodexThreadFromOutput(output) {
-  if (!codexThreadCaptureRequired.value || codexThreadId.value || !sessionId.value) {
-    return false;
-  }
-  if (codexThreadSavePromise) {
-    return codexThreadSavePromise;
-  }
-  const threadId = extractCodexThreadId(output);
-  if (!threadId) {
-    return false;
-  }
-
-  codexThreadSavePromise = (async () => {
-    const response = await codexCommands.saveThread(sessionId.value, threadId);
-    if (response?.ok === false) {
-      throw new Error(response.error || response.errors?.[0]?.message || "Codex thread id could not be saved.");
-    }
-    codexThreadId.value = response.codexThreadId || threadId;
-    codexThreadCaptureRequired.value = false;
-    emit("session-update", {
-      codexThreadId: codexThreadId.value,
-      needsThreadCapture: false,
-      sessionId: sessionId.value
-    });
-    copyStatus.value = "Codex session captured.";
-    return true;
-  })();
-
-  try {
-    return await codexThreadSavePromise;
-  } catch (saveError) {
-    terminalError.value = String(saveError?.message || saveError || "Codex thread id could not be saved.");
-    return false;
-  } finally {
-    codexThreadSavePromise = null;
-  }
-}
-
-function waitForCodexThreadId() {
-  if (codexThreadId.value || !codexThreadCaptureRequired.value) {
-    return Promise.resolve(true);
-  }
-
-  return new Promise((resolve) => {
-    const startedAt = Date.now();
-    const timer = window.setInterval(() => {
-      if (codexThreadId.value || !codexThreadCaptureRequired.value) {
-        window.clearInterval(timer);
-        resolve(true);
-        return;
-      }
-      if (Date.now() - startedAt > 12000) {
-        window.clearInterval(timer);
-        resolve(false);
-      }
-    }, 250);
-  });
-}
-
-function canCaptureCodexThread() {
-  return Boolean(
-    terminalSessionId.value &&
-    sessionId.value &&
-    codexThreadCaptureRequired.value &&
-    !codexThreadId.value &&
-    terminalStatus.value !== "exited"
-  );
-}
-
-function visibleTerminalText() {
-  const buffer = terminalInstance?.buffer?.active;
-  if (!buffer || !terminalInstance) {
-    return "";
-  }
-  const startLine = Math.max(0, buffer.baseY + buffer.viewportY);
-  const endLine = Math.min(buffer.length, startLine + terminalInstance.rows);
-  const lines = [];
-  for (let lineIndex = startLine; lineIndex < endLine; lineIndex += 1) {
-    lines.push(buffer.getLine(lineIndex)?.translateToString(true) || "");
-  }
-  return lines.join("\n").trim();
-}
-
-function codexTrustPromptIsBlocking() {
-  const visibleText = visibleTerminalText();
-  const trustPromptVisible = visibleText
-    ? codexTrustPromptLooksActive(visibleText)
-    : codexTrustPromptLooksActive(terminalLatestOutput);
-  return trustPromptVisible &&
-    (!codexTrustPromptAnsweredAt || terminalLastOutputAt <= codexTrustPromptAnsweredAt);
-}
-
-function codexBootLooksReady() {
-  if (!terminalStartedAt || !terminalHasOutput) {
-    return false;
-  }
-  if (codexTrustPromptIsBlocking()) {
-    copyStatus.value = "Answer the Codex trust prompt in the terminal to continue.";
-    return false;
-  }
-  const now = Date.now();
-  return now - terminalStartedAt >= CODEX_BOOT_MIN_AGE_MS &&
-    now - terminalLastOutputAt >= CODEX_BOOT_QUIET_MS;
-}
-
-async function waitForCodexBootReady() {
-  if (codexBootLooksReady()) {
-    return true;
-  }
-
-  return new Promise((resolve) => {
-    let startedAt = Date.now();
-    const timer = window.setInterval(() => {
-      if (codexBootLooksReady()) {
-        window.clearInterval(timer);
-        resolve(true);
-        return;
-      }
-      if (codexTrustPromptIsBlocking()) {
-        startedAt = Date.now();
-        return;
-      }
-      if (Date.now() - startedAt > CODEX_BOOT_TIMEOUT_MS) {
-        window.clearInterval(timer);
-        resolve(false);
-      }
-    }, 250);
-  });
-}
-
-async function ensureCodexThreadReady({ forceRetry = false } = {}) {
-  if (codexThreadId.value || !codexThreadCaptureRequired.value) {
-    return true;
-  }
-  if (codexThreadCapturePromise) {
-    return codexThreadCapturePromise;
-  }
-
-  codexThreadCapturePromise = (async () => {
-    if (!canCaptureCodexThread()) {
-      return false;
-    }
-    if (!codexThreadCaptureStarted.value || forceRetry) {
-      await waitForCodexBootReady();
-      codexThreadCaptureStarted.value = true;
-      const sent = await sendCodexShellCommand(DEFAULT_CODEX_THREAD_COMMAND);
-      if (!sent) {
-        codexThreadCaptureStarted.value = false;
-        return false;
-      }
-    }
-    const ready = await waitForCodexThreadId();
-    if (!ready) {
-      terminalError.value = "Waiting for Codex thread id before injecting prompt.";
-    }
-    return ready;
-  })();
-
-  try {
-    return await codexThreadCapturePromise;
-  } finally {
-    codexThreadCapturePromise = null;
-  }
-}
-
-async function injectPrompt() {
-  if (!codexPrompt.value) {
-    return false;
-  }
-  expanded.value = true;
-  injectingPrompt.value = true;
-  try {
-    if (await ensureTerminalReady() && await ensureCodexThreadReady({ forceRetry: true })) {
-      const promptOutputSnapshot = terminalLatestOutput;
-      const promptToSend = wrapPromptWithStudioContext(codexPrompt.value);
-      const promptEchoFilter = promptEchoFilters.add({
-        outputStart: promptOutputSnapshot.length,
-        prompt: promptToSend
-      });
-      markCodexBusy();
-      const sent = await sendTerminalData(`\u001b[200~${promptToSend}\u001b[201~\r`);
-      if (sent) {
-        autoPromptInjected.value = true;
-        copyStatus.value = "Prompt injected into Codex.";
-        emit("prompt-injected", {
-          outputSnapshot: promptOutputSnapshot,
-          outputStart: promptOutputSnapshot.length,
-          prompt: codexPrompt.value,
-          sessionId: sessionId.value
-        });
-      }
-      if (!sent) {
-        promptEchoFilters.remove(promptEchoFilter);
-        clearCodexBusy();
-      }
-      return sent;
-    }
-    return false;
-  } finally {
-    injectingPrompt.value = false;
-  }
-}
-
-async function injectPromptForRequest() {
-  const requestKey = manualPromptInjectionRequestKey.value;
-  if (!componentMounted.value || !requestKey || handledPromptInjectionRequestKey === requestKey) {
-    return;
-  }
-  handledPromptInjectionRequestKey = requestKey;
-  if (await injectPrompt()) {
-    clearPromptInjectionRetry();
-    return;
-  }
-  if (handledPromptInjectionRequestKey === requestKey) {
-    handledPromptInjectionRequestKey = "";
-    schedulePromptInjectionRetry(requestKey);
-  }
-}
-
-function clearPromptInjectionRetry() {
-  promptInjectionRetryStartedAt = 0;
-  if (promptInjectionRetryTimer) {
-    window.clearTimeout(promptInjectionRetryTimer);
-    promptInjectionRetryTimer = null;
-  }
-}
-
-function schedulePromptInjectionRetry(requestKey) {
-  if (
-    !componentMounted.value ||
-    !requestKey ||
-    manualPromptInjectionRequestKey.value !== requestKey
-  ) {
-    clearPromptInjectionRetry();
-    return;
-  }
-  if (!promptInjectionRetryStartedAt) {
-    promptInjectionRetryStartedAt = Date.now();
-  }
-  if (Date.now() - promptInjectionRetryStartedAt > PROMPT_INJECTION_RETRY_TIMEOUT_MS) {
-    clearCodexBusy();
-    emit("prompt-injection-failed", {
-      error: "Prompt injection timed out before the Codex terminal accepted the request.",
-      requestKey,
-      sessionId: sessionId.value
-    });
-    clearPromptInjectionRetry();
-    return;
-  }
-  if (promptInjectionRetryTimer) {
-    return;
-  }
-  promptInjectionRetryTimer = window.setTimeout(() => {
-    promptInjectionRetryTimer = null;
-    void injectPromptForRequest();
-  }, PROMPT_INJECTION_RETRY_MS);
-}
-
 async function sendCtrlC() {
   await sendTerminalData("\u0003", {
     source: "user"
   });
-}
-
-async function closeTerminal() {
-  const existingTerminalId = terminalSessionId.value;
-  detachTerminal();
-  if (existingTerminalId && sessionId.value) {
-    await closeAiStudioCodexTerminal(sessionId.value, existingTerminalId).catch(() => null);
-  }
-}
-
-async function recoverMissingTerminal() {
-  if (!canUseTerminal.value) {
-    terminalError.value = "Terminal session not found.";
-    return false;
-  }
-  if (terminalRecoveryPromise) {
-    return terminalRecoveryPromise;
-  }
-
-  terminalRecoveryPromise = (async () => {
-    const recoveredSessionId = sessionId.value;
-    terminalSocket.closeSocket();
-    terminalSessionId.value = "";
-    terminalStatus.value = "";
-    terminalCommandPreview.value = "";
-    codexThreadCaptureStarted.value = false;
-    terminalError.value = "";
-    copyStatus.value = "Studio server restarted; reconnecting Codex.";
-    if (terminalInstance) {
-      terminalInstance.reset();
-    }
-    terminalOutputOffset = 0;
-    terminalDisplayOutput = "";
-    promptEchoFilters.clear();
-    terminalLatestOutput = "";
-    emitTerminalOutputNow("");
-    terminalHasOutput = false;
-    terminalStartedAt = 0;
-
-    if (recoveredSessionId !== sessionId.value) {
-      return false;
-    }
-    const ready = await ensureTerminalReady();
-    return ready;
-  })();
-
-  try {
-    return await terminalRecoveryPromise;
-  } finally {
-    terminalRecoveryPromise = null;
-  }
-}
-
-function detachTerminal() {
-  terminalSessionId.value = "";
-  terminalStatus.value = "";
-  terminalCommandPreview.value = "";
-  codexThreadId.value = "";
-  codexThreadCaptureRequired.value = false;
-  codexThreadCaptureStarted.value = false;
-  disposeTerminalUi();
-}
-
-async function restartTerminal() {
-  terminalError.value = "";
-  expanded.value = true;
-  await closeTerminal();
-  await ensureTerminalReady();
 }
 
 function toggleExpanded() {
@@ -1156,88 +428,26 @@ function toggleExpanded() {
   }
 }
 
-function startTerminalWhenReady() {
-  if (!canUseTerminal.value) {
-    return;
-  }
-  void ensureTerminalReady();
-}
-
-watch(sessionId, async (nextSessionId, previousSessionId) => {
-  if (previousSessionId && previousSessionId !== nextSessionId) {
-    detachTerminal();
-  }
-  autoPromptInjected.value = false;
-  handledPromptInjectionRequestKey = "";
-  resetAttachmentDragState();
-  clearAttachmentStatus();
-  expanded.value = defaultExpanded();
-  startTerminalWhenReady();
-});
-
-watch(canUseTerminal, (ready) => {
-  if (ready) {
-    startTerminalWhenReady();
-  }
-});
-
-watch(terminalHost, (host) => {
-  if (host) {
-    void setupTerminalUi();
-    startTerminalWhenReady();
-  }
-}, {
-  flush: "post"
-});
-
 watch(manualPromptInjectionRequestKey, (nextRequestKey) => {
-  clearPromptInjectionRetry();
-  if (nextRequestKey) {
-    expanded.value = true;
-    void injectPromptForRequest();
-  }
+  promptHandoff?.requestPromptInjection(nextRequestKey);
 });
 
 watch(codexPrompt, (nextPrompt, previousPrompt) => {
   if (nextPrompt === previousPrompt) {
     return;
   }
-  autoPromptInjected.value = false;
-  handledPromptInjectionRequestKey = "";
+  promptHandoff?.resetPromptRequestState();
 });
 
 watch(() => [
   props.session?.codexThreadId || "",
   props.session?.needsThreadCapture === true
 ], () => {
-  applyCodexThreadState(props.session || {});
+  promptHandoff?.applyCodexThreadState(props.session || {});
 }, {
   immediate: true
 });
 
-watch(() => props.visible, async (visible) => {
-  if (!visible) {
-    return;
-  }
-  await nextTick();
-  terminalFitAddon?.fit();
-  startTerminalWhenReady();
-});
-
-onMounted(() => {
-  componentMounted.value = true;
-  expanded.value = defaultExpanded();
-  void nextTick().then(() => {
-    startTerminalWhenReady();
-    void injectPromptForRequest();
-  });
-  void injectPromptForRequest();
-});
-
-onBeforeUnmount(() => {
-  clearPromptInjectionRetry();
-  detachTerminal();
-});
 </script>
 
 <style scoped>

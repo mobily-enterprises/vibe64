@@ -63,14 +63,12 @@ async function writeActionTerminalResult({
     }
   );
   if (completed) {
-    await Promise.all([
-      ...resultEffects.deleteMetadata.map((name) => {
-        return runtime.store.deleteMetadataValue(session.sessionId, name);
-      }),
-      ...Object.entries(metadata).map(([name, value]) => {
-        return runtime.store.writeMetadataValue(session.sessionId, name, value);
-      })
-    ]);
+    await Promise.all(resultEffects.deleteMetadata.map((name) => {
+      return runtime.store.deleteMetadataValue(session.sessionId, name);
+    }));
+    await Promise.all(Object.entries(metadata).map(([name, value]) => {
+      return runtime.store.writeMetadataValue(session.sessionId, name, value);
+    }));
   }
   await runtime.store.appendCommandLogEntry(session.sessionId, {
     actionId: action.id,
