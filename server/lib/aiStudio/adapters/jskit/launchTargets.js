@@ -3,7 +3,7 @@ import path from "node:path";
 import { loadAppConfigFromAppRoot } from "@jskit-ai/kernel/server/support";
 
 import {
-  createAiStudioLaunchTargetTerminalSpec
+  createAiStudioWebLaunchTargetTerminalSpec
 } from "../../launchTargetTerminal.js";
 import {
   JSKIT_TOOLCHAIN_IMAGE
@@ -251,7 +251,7 @@ async function createJskitLaunchTargetTerminalSpec({
     ? createJskitDevLaunchDescriptor
     : createJskitBuiltLaunchDescriptor;
 
-  return createAiStudioLaunchTargetTerminalSpec({
+  return createAiStudioWebLaunchTargetTerminalSpec({
     adapterId: "jskit",
     image: JSKIT_TOOLCHAIN_IMAGE,
     launchTarget,

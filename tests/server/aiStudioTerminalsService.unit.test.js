@@ -57,10 +57,17 @@ class UnitCommandAdapter extends TargetAdapter {
         "-lc",
         [
           "set -e",
-          "printf 'metadata:set\\t%s\\t%s\\n' dynamic_done \"$(printf '%s' from-result-file | base64 | tr -d '\\n')\" >> \"$AI_STUDIO_COMMAND_RESULT_FILE\"",
-          "printf 'metadata:delete\\t%s\\n' stale_value >> \"$AI_STUDIO_COMMAND_RESULT_FILE\""
+          "printf 'fact:set\\t%s\\t%s\\n' dynamic_done \"$(printf '%s' from-result-file | base64 | tr -d '\\n')\" >> \"$AI_STUDIO_COMMAND_RESULT_FILE\""
         ].join("\n")
       ],
+      applySuccessFacts({ facts }) {
+        return {
+          deleteMetadata: ["stale_value"],
+          metadata: {
+            dynamic_done: facts.dynamic_done
+          }
+        };
+      },
       command: "bash",
       commandPreview: "bash command result",
       cwd: context.session?.targetRoot,

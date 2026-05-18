@@ -46,6 +46,19 @@ const codexThreadFields = {
   }
 };
 
+const commandTerminalFields = {
+  actionId: {
+    type: "string",
+    noTrim: false,
+    required: true
+  },
+  input: {
+    type: "object",
+    additionalProperties: true,
+    required: false
+  }
+};
+
 const launchTargetFields = {
   launchTargetId: {
     type: "string",
@@ -93,6 +106,19 @@ const codexThreadActionInputValidator = deepFreeze({
   mode: "patch"
 });
 
+const commandTerminalInputValidator = deepFreeze({
+  schema: createSchema(commandTerminalFields),
+  mode: "patch"
+});
+
+const commandTerminalActionInputValidator = deepFreeze({
+  schema: createSchema({
+    ...commandTerminalFields,
+    sessionId: sessionIdField
+  }),
+  mode: "patch"
+});
+
 const launchTargetInputValidator = deepFreeze({
   schema: createSchema(launchTargetFields),
   mode: "patch"
@@ -120,6 +146,8 @@ export {
   codexPromptHandoffInputValidator,
   codexThreadActionInputValidator,
   codexThreadInputValidator,
+  commandTerminalActionInputValidator,
+  commandTerminalInputValidator,
   launchTargetActionInputValidator,
   launchTargetInputValidator,
   openLaunchTargetActionInputValidator

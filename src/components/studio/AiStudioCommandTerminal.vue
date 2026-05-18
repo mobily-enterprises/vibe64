@@ -47,7 +47,7 @@
       <div v-show="expanded" class="ai-command-terminal__body">
         <StudioErrorNotice
           v-if="terminalError"
-          title="Command terminal needs attention"
+          title="Terminal needs attention"
           :error="terminalError"
           compact
           class="mb-2"
@@ -210,7 +210,7 @@ const startTerminalCommand = useCommand({
     error: "Terminal failed to start."
   },
   ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-  placementSource: "ai-studio.command-terminal.start",
+  placementSource: "ai-studio.terminal.start",
   suppressSuccessMessage: true,
   surfaceId: AI_STUDIO_SURFACE_ID,
   writeMethod: "POST"
@@ -229,7 +229,7 @@ const closeTerminalCommand = useCommand({
     error: "Terminal could not close."
   },
   ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-  placementSource: "ai-studio.command-terminal.close",
+  placementSource: "ai-studio.terminal.close",
   suppressSuccessMessage: true,
   surfaceId: AI_STUDIO_SURFACE_ID,
   writeMethod: "DELETE"

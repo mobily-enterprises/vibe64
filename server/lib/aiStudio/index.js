@@ -54,9 +54,9 @@ export {
   normalizeWorkflowCommands
 } from "./workflowAdapter.js";
 export {
-  DEFAULT_LAUNCH_TARGET_PORT,
-  createAiStudioLaunchTargetTerminalSpec,
-  findAvailableLaunchTargetPort
+  DEFAULT_WEB_LAUNCH_TARGET_PORT,
+  createAiStudioWebLaunchTargetTerminalSpec,
+  findAvailableWebLaunchTargetPort
 } from "./launchTargetTerminal.js";
 export {
   adapterScriptNameFromInput,

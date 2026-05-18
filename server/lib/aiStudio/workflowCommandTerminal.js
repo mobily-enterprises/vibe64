@@ -8,11 +8,10 @@ import {
 } from "../shellCommands.js";
 import {
   artifactFilePath,
-  deleteMetadataScript,
   metadataFilePath,
-  recordMetadataScript,
+  recordCommandFactScript,
   requiredArtifactScript,
-} from "./workflowCommandEffects.js";
+} from "./workflowCommandFacts.js";
 import {
   normalizeText,
   pathExists
@@ -86,6 +85,7 @@ async function isGitWorktree(worktreePath) {
 }
 
 function completedMetadataSpec({
+  applySuccessFacts = null,
   commandPreview = "",
   cwd = "",
   label = "",
@@ -98,12 +98,14 @@ function completedMetadataSpec({
     commandPreview,
     cwd,
     ok: true,
+    ...(typeof applySuccessFacts === "function" ? { applySuccessFacts } : {}),
     successMessage: `${label} completed.`,
     successMetadata: metadata
   };
 }
 
 async function worktreeCommandSpec({
+  applySuccessFacts = null,
   commandPreview = "",
   label = "",
   metadata = {},
@@ -128,8 +130,25 @@ async function worktreeCommandSpec({
     cwd: worktreePath,
     label,
     metadata,
+    applySuccessFacts,
     script
   });
+}
+
+function commandMetadataResult({
+  deleteMetadata = [],
+  metadata = {}
+} = {}) {
+  return {
+    deleteMetadata,
+    metadata
+  };
+}
+
+function metadataFromFacts(facts = {}, names = []) {
+  return Object.fromEntries(names
+    .map((name) => [name, normalizeText(facts[name])])
+    .filter(([, value]) => Boolean(value)));
 }
 
 function worktreeMetadata({
@@ -144,6 +163,73 @@ function worktreeMetadata({
     branch,
     worktree_path: worktreePath
   };
+}
+
+function createWorktreeSuccessMetadataFromFacts({ facts = {}, session = {} } = {}) {
+  if (normalizeText(session.metadata?.work_source) !== "existing_pr") {
+    return commandMetadataResult();
+  }
+
+  const updateMode = normalizeText(facts.source_pr_update_mode);
+  if (updateMode === "direct") {
+    return commandMetadataResult({
+      metadata: {
+        pr_source: "existing",
+        pr_url: normalizeText(facts.pr_url) || normalizeText(session.metadata?.source_pr_url),
+        source_pr_update_mode: "direct"
+      }
+    });
+  }
+
+  if (updateMode === "replacement") {
+    return commandMetadataResult({
+      deleteMetadata: ["pr_url"],
+      metadata: {
+        source_pr_update_mode: "replacement"
+      }
+    });
+  }
+
+  return commandMetadataResult();
+}
+
+function commitChangesSuccessMetadataFromFacts({ facts = {} } = {}) {
+  return commandMetadataResult({
+    metadata: metadataFromFacts(facts, [
+      "accepted_commit",
+      "branch_pushed"
+    ])
+  });
+}
+
+function createIssueSuccessMetadataFromFacts({ facts = {} } = {}) {
+  const metadata = metadataFromFacts(facts, [
+    "issue_number",
+    "issue_title",
+    "issue_url"
+  ]);
+  if (!metadata.issue_url) {
+    return commandMetadataResult();
+  }
+  return commandMetadataResult({
+    metadata: {
+      issue_source: "created",
+      ...metadata
+    }
+  });
+}
+
+function createPrSuccessMetadataFromFacts({ facts = {}, session = {} } = {}) {
+  const metadata = metadataFromFacts(facts, ["pr_url"]);
+  if (!metadata.pr_url) {
+    return commandMetadataResult();
+  }
+  return commandMetadataResult({
+    metadata: {
+      ...metadata,
+      pr_source: normalizeText(session.metadata?.source_pr_url) ? "replacement" : "created"
+    }
+  });
 }
 
 function createWorktreePath(session = {}) {
@@ -207,8 +293,7 @@ function createWorktreeScript({
       "if [ \"$REQUESTED_UPDATE_MODE\" = \"direct\" ]; then",
       "  if [ -z \"$SOURCE_PR_HEAD_REF\" ] || [ -z \"$SOURCE_PR_HEAD_REPO\" ]; then",
       "    printf '[studio] Existing PR push target is incomplete; this session will create a replacement PR.\\n'",
-      `    ${recordMetadataScript("source_pr_update_mode", "replacement")}`,
-      `    ${deleteMetadataScript("pr_url")}`,
+      `    ${recordCommandFactScript("source_pr_update_mode", "replacement")}`,
       "    exit 0",
       "  fi",
       "  PR_HEAD_REMOTE=\"ai-studio-pr-head\"",
@@ -216,13 +301,11 @@ function createWorktreeScript({
       `  git -C ${quotedWorktreePath} remote add "$PR_HEAD_REMOTE" "https://github.com/$SOURCE_PR_HEAD_REPO.git"`,
       `  if git -C ${quotedWorktreePath} push --dry-run "$PR_HEAD_REMOTE" "HEAD:refs/heads/$SOURCE_PR_HEAD_REF"; then`,
       "    printf '[studio] Existing PR can be updated directly.\\n'",
-      `    ${recordMetadataScript("source_pr_update_mode", "direct")}`,
-      `    ${recordMetadataScript("pr_source", "existing")}`,
-      `    ${recordMetadataScript("pr_url", "\"$SOURCE_PR_URL\"")}`,
+      `    ${recordCommandFactScript("source_pr_update_mode", "direct")}`,
+      `    ${recordCommandFactScript("pr_url", "\"$SOURCE_PR_URL\"")}`,
       "  else",
       "    printf '[studio] Existing PR cannot be pushed directly; this session will create a replacement PR.\\n'",
-      `    ${recordMetadataScript("source_pr_update_mode", "replacement")}`,
-      `    ${deleteMetadataScript("pr_url")}`,
+      `    ${recordCommandFactScript("source_pr_update_mode", "replacement")}`,
       "  fi",
       "fi",
       "exit 0"
@@ -270,6 +353,7 @@ async function createWorktreeTerminalSpec({
     commandPreview: `git worktree add ${worktreePath}`,
     cwd: resolvedTargetRoot,
     ok: true,
+    applySuccessFacts: createWorktreeSuccessMetadataFromFacts,
     successMessage: `Created worktree ${worktreePath} on branch ${branch}.`,
     successMetadata: worktreeMetadata({
       baseBranch: metadataBaseBranch,
@@ -432,19 +516,20 @@ function commitChangesScript(session = {}) {
       "git remote add \"$PR_HEAD_REMOTE\" \"https://github.com/$SOURCE_PR_HEAD_REPO.git\"",
       "printf '[studio] Pushing changes to existing PR branch %s/%s\\n' \"$SOURCE_PR_HEAD_REPO\" \"$SOURCE_PR_HEAD_REF\"",
       "git push \"$PR_HEAD_REMOTE\" \"HEAD:refs/heads/$SOURCE_PR_HEAD_REF\"",
-      recordMetadataScript("branch_pushed", "\"$SOURCE_PR_HEAD_REF\"")
+      recordCommandFactScript("branch_pushed", "\"$SOURCE_PR_HEAD_REF\"")
     ] : [
       "printf '[studio] Pushing branch %s\\n' \"$CURRENT_BRANCH\"",
       "git push -u origin \"$CURRENT_BRANCH\"",
-      recordMetadataScript("branch_pushed", "\"$CURRENT_BRANCH\"")
+      recordCommandFactScript("branch_pushed", "\"$CURRENT_BRANCH\"")
     ]),
-    recordMetadataScript("accepted_commit", "\"$ACCEPTED_COMMIT\""),
+    recordCommandFactScript("accepted_commit", "\"$ACCEPTED_COMMIT\""),
     "printf '[studio] Committed %s\\n' \"$ACCEPTED_COMMIT\""
   ].join("\n");
 }
 
 async function commitChangesTerminalSpec({ session = {} } = {}) {
   return worktreeCommandSpec({
+    applySuccessFacts: commitChangesSuccessMetadataFromFacts,
     commandPreview: "git add -A && git commit && git push",
     label: "Commit and push changes",
     script: commitChangesScript(session),
@@ -504,12 +589,11 @@ function createIssueOnGhScript(session = {}) {
     "printf '[studio] Creating GitHub issue: %s\\n' \"$ISSUE_TITLE\"",
     `ISSUE_URL="$(gh issue create --title "$ISSUE_TITLE" --body-file ${shellQuote(issueBodyPath)})"`,
     "printf '%s\\n' \"$ISSUE_URL\"",
-    recordMetadataScript("issue_url", "\"$ISSUE_URL\""),
-    recordMetadataScript("issue_source", "created"),
-    recordMetadataScript("issue_title", "\"$ISSUE_TITLE\""),
+    recordCommandFactScript("issue_url", "\"$ISSUE_URL\""),
+    recordCommandFactScript("issue_title", "\"$ISSUE_TITLE\""),
     "ISSUE_NUMBER=\"$(printf '%s\\n' \"$ISSUE_URL\" | sed -n 's#.*/issues/\\([0-9][0-9]*\\).*#\\1#p' | head -n 1)\"",
     "if [ -n \"$ISSUE_NUMBER\" ]; then",
-    `  ${recordMetadataScript("issue_number", "\"$ISSUE_NUMBER\"")}`,
+    `  ${recordCommandFactScript("issue_number", "\"$ISSUE_NUMBER\"")}`,
     "fi"
   ].join("\n");
 }
@@ -564,8 +648,7 @@ function createPrOnGhScript(session = {}) {
     "printf '[studio] Creating GitHub pull request: %s\\n' \"$PR_TITLE\"",
     `PR_URL="$(gh pr create --base ${quotedBaseBranch} --head ${quotedBranch} --title "$PR_TITLE" --body-file "$PR_BODY_FILE")"`,
     "printf '%s\\n' \"$PR_URL\"",
-    recordMetadataScript("pr_url", "\"$PR_URL\""),
-    recordMetadataScript("pr_source", sourcePrUrl ? "replacement" : "created")
+    recordCommandFactScript("pr_url", "\"$PR_URL\"")
   ].join("\n");
 }
 
@@ -584,8 +667,7 @@ function mergePrScript({
     "set -e",
     beforeMergeScript,
     `printf '[studio] Merging pull request %s\\n' ${shellQuote(prUrl)}`,
-    `gh pr merge ${shellQuote(prUrl)} ${mergeFlag}`,
-    recordMetadataScript("pr_merged", "yes")
+    `gh pr merge ${shellQuote(prUrl)} ${mergeFlag}`
   ].filter(Boolean).join("\n");
 }
 
@@ -596,13 +678,13 @@ function syncMainCheckoutScript(session = {}, targetRoot = "") {
     `printf '[studio] Syncing main checkout %s to %s\\n' ${shellQuote(targetRoot)} ${shellQuote(baseBranch)}`,
     `git -C ${shellQuote(targetRoot)} fetch origin ${shellQuote(baseBranch)}`,
     `git -C ${shellQuote(targetRoot)} checkout ${shellQuote(baseBranch)}`,
-    `git -C ${shellQuote(targetRoot)} pull --ff-only origin ${shellQuote(baseBranch)}`,
-    recordMetadataScript("main_checkout_synced", "yes")
+    `git -C ${shellQuote(targetRoot)} pull --ff-only origin ${shellQuote(baseBranch)}`
   ].join("\n");
 }
 
 async function createIssueOnGhTerminalSpec({ session = {} } = {}) {
   return completedMetadataSpec({
+    applySuccessFacts: createIssueSuccessMetadataFromFacts,
     commandPreview: "gh issue create",
     cwd: normalizeText(session.metadata?.worktree_path) || session.targetRoot || process.cwd(),
     label: "Create issue on GH",
@@ -619,6 +701,7 @@ async function createPrOnGhTerminalSpec({ session = {} } = {}) {
     };
   }
   return worktreeCommandSpec({
+    applySuccessFacts: createPrSuccessMetadataFromFacts,
     commandPreview: "gh pr create",
     label: "Create PR on GH",
     script: createPrOnGhScript(session),
@@ -653,6 +736,9 @@ async function mergePrTerminalSpec({
   return worktreeCommandSpec({
     commandPreview: "gh pr merge",
     label: "Merge PR",
+    metadata: {
+      pr_merged: "yes"
+    },
     script: mergePrScript({
       beforeMergeScript,
       mergeMethod: configValues.github_pr_merge_method,
@@ -677,6 +763,9 @@ async function syncMainCheckoutTerminalSpec({
     commandPreview: "git fetch && git pull --ff-only",
     cwd: syncRoot,
     label: "Sync main checkout",
+    metadata: {
+      main_checkout_synced: "yes"
+    },
     script: syncMainCheckoutScript(session, syncRoot)
   });
 }

@@ -1,5 +1,5 @@
 import {
-  createAiStudioLaunchTargetTerminalSpec
+  createAiStudioWebLaunchTargetTerminalSpec
 } from "../../launchTargetTerminal.js";
 import {
   detectPackageManager,
@@ -81,7 +81,7 @@ function createVinextLaunchTargetTerminalSpec({
       message: `Unknown Vinext launch target: ${launchTargetId || "(empty)"}.`
     };
   }
-  return createAiStudioLaunchTargetTerminalSpec({
+  return createAiStudioWebLaunchTargetTerminalSpec({
     adapterId: "vinext",
     launchTarget: context.launchTarget || vinextLaunchTarget(launchTargetId, launchTargetId),
     resolveLaunch: ({ port, worktreePath }) => createVinextLaunchDescriptor({

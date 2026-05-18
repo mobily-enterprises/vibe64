@@ -1,5 +1,5 @@
 import {
-  createAiStudioLaunchTargetTerminalSpec
+  createAiStudioWebLaunchTargetTerminalSpec
 } from "../../launchTargetTerminal.js";
 import {
   detectPackageManager,
@@ -112,7 +112,7 @@ function createNextjsLaunchTargetTerminalSpec({
     };
   }
   const launchTargetRoot = targetRoot || session.targetRoot || "";
-  return createAiStudioLaunchTargetTerminalSpec({
+  return createAiStudioWebLaunchTargetTerminalSpec({
     adapterId: "nextjs",
     launchTarget: context.launchTarget || nextjsLaunchTarget(launchTargetId, launchTargetId),
     resolveLaunch: ({ port, worktreePath }) => createNextjsLaunchDescriptor({

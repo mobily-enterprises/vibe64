@@ -37,14 +37,21 @@ async function writeActionTerminalResult({
   spec = {}
 } = {}) {
   const completed = exitCode === 0;
-  const resultEffects = completed ? await readCommandResultFile(resultFile.path) : {
+  const commandResult = completed ? await readCommandResultFile(resultFile.path) : {
+    facts: {}
+  };
+  const resultApplication = completed ? await applySuccessFacts({
+    action,
+    facts: commandResult.facts || {},
+    input,
+    runtime,
+    session,
+    spec
+  }) : {
     deleteMetadata: [],
     metadata: {}
   };
-  const metadata = completed ? {
-    ...(spec.successMetadata || {}),
-    ...resultEffects.metadata
-  } : {};
+  const metadata = completed ? resultApplication.metadata : {};
   const message = completed
     ? spec.successMessage || `${action.label || action.id} completed.`
     : spec.failureMessage || `${action.label || action.id} failed with exit code ${exitCode}.`;
@@ -63,7 +70,7 @@ async function writeActionTerminalResult({
     }
   );
   if (completed) {
-    await Promise.all(resultEffects.deleteMetadata.map((name) => {
+    await Promise.all(resultApplication.deleteMetadata.map((name) => {
       return runtime.store.deleteMetadataValue(session.sessionId, name);
     }));
     await Promise.all(Object.entries(metadata).map(([name, value]) => {
@@ -78,6 +85,45 @@ async function writeActionTerminalResult({
     status: actionResult.status,
     stepId: session.currentStep
   });
+}
+
+function normalizeMetadataMap(metadata = {}) {
+  return Object.fromEntries(Object.entries(metadata || {}).map(([name, value]) => [
+    String(name || "").trim(),
+    String(value || "").trim()
+  ]).filter(([name]) => Boolean(name)));
+}
+
+function normalizeDeleteMetadata(names = []) {
+  return Array.from(new Set((Array.isArray(names) ? names : [])
+    .map((name) => String(name || "").trim())
+    .filter(Boolean)));
+}
+
+async function applySuccessFacts({
+  action = {},
+  facts = {},
+  input = {},
+  runtime,
+  session = {},
+  spec = {}
+} = {}) {
+  const factApplication = typeof spec.applySuccessFacts === "function"
+    ? await spec.applySuccessFacts({
+        action,
+        facts,
+        input,
+        runtime,
+        session
+      })
+    : {};
+  return {
+    deleteMetadata: normalizeDeleteMetadata(factApplication.deleteMetadata),
+    metadata: {
+      ...normalizeMetadataMap(spec.successMetadata),
+      ...normalizeMetadataMap(factApplication.metadata)
+    }
+  };
 }
 
 function createCommandTerminalController({ projectService } = {}) {

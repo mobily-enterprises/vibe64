@@ -18,17 +18,11 @@ function decodeResultValue(encodedValue = "") {
 
 function parseCommandResultLine(line = "") {
   const [operation, name, encodedValue = ""] = String(line || "").split("\t");
-  if (operation === "metadata:set" && name) {
+  if (operation === "fact:set" && name) {
     return {
       name,
       operation,
       value: decodeResultValue(encodedValue)
-    };
-  }
-  if (operation === "metadata:delete" && name) {
-    return {
-      name,
-      operation
     };
   }
   return null;
@@ -37,8 +31,7 @@ function parseCommandResultLine(line = "") {
 async function readCommandResultFile(filePath = "") {
   if (!filePath) {
     return {
-      deleteMetadata: [],
-      metadata: {}
+      facts: {}
     };
   }
 
@@ -48,8 +41,7 @@ async function readCommandResultFile(filePath = "") {
   } catch (error) {
     if (error?.code === "ENOENT") {
       return {
-        deleteMetadata: [],
-        metadata: {}
+        facts: {}
       };
     }
     throw error;
@@ -60,11 +52,8 @@ async function readCommandResultFile(filePath = "") {
     .map(parseCommandResultLine)
     .filter(Boolean);
   return {
-    deleteMetadata: effects
-      .filter((effect) => effect.operation === "metadata:delete")
-      .map((effect) => effect.name),
-    metadata: Object.fromEntries(effects
-      .filter((effect) => effect.operation === "metadata:set")
+    facts: Object.fromEntries(effects
+      .filter((effect) => effect.operation === "fact:set")
       .map((effect) => [effect.name, effect.value]))
   };
 }

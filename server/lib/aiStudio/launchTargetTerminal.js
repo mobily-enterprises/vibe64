@@ -29,9 +29,9 @@ import {
 } from "./core.js";
 
 const execFileAsync = promisify(execFile);
-const DEFAULT_LAUNCH_TARGET_PORT = 4100;
+const DEFAULT_WEB_LAUNCH_TARGET_PORT = 4100;
 
-function normalizePort(value, fallback = DEFAULT_LAUNCH_TARGET_PORT) {
+function normalizePort(value, fallback = DEFAULT_WEB_LAUNCH_TARGET_PORT) {
   const port = Number.parseInt(String(value || ""), 10);
   return Number.isInteger(port) && port >= 1024 && port <= 65535
     ? port
@@ -75,7 +75,7 @@ async function launchTargetPortIsAvailable(port) {
   return localAvailable && !dockerPublished;
 }
 
-async function findAvailableLaunchTargetPort(preferredPort = DEFAULT_LAUNCH_TARGET_PORT) {
+async function findAvailableWebLaunchTargetPort(preferredPort = DEFAULT_WEB_LAUNCH_TARGET_PORT) {
   const startPort = normalizePort(preferredPort);
   for (let port = startPort; port <= 65535; port += 1) {
     if (await launchTargetPortIsAvailable(port)) {
@@ -128,7 +128,7 @@ function launchCommandLines(commands = []) {
   ].filter(Boolean));
 }
 
-function launchTargetStartupScript({
+function webLaunchTargetStartupScript({
   commands = [],
   port
 } = {}) {
@@ -234,7 +234,7 @@ function launchTargetTerminalArgs({
     image,
     "bash",
     "-lc",
-    launchTargetStartupScript({
+    webLaunchTargetStartupScript({
       commands: startupCommands,
       port
     })
@@ -253,11 +253,11 @@ function normalizeOpenTarget({
   };
 }
 
-async function createAiStudioLaunchTargetTerminalSpec({
+async function createAiStudioWebLaunchTargetTerminalSpec({
   adapterId = "generic",
   image = STUDIO_BASE_TOOLCHAIN_IMAGE,
   launchTarget = {},
-  preferredPort = DEFAULT_LAUNCH_TARGET_PORT,
+  preferredPort = DEFAULT_WEB_LAUNCH_TARGET_PORT,
   resolveLaunch = async () => ({}),
   session = {},
   targetRoot = ""
@@ -278,7 +278,7 @@ async function createAiStudioLaunchTargetTerminalSpec({
     };
   }
 
-  const port = await findAvailableLaunchTargetPort(preferredPort);
+  const port = await findAvailableWebLaunchTargetPort(preferredPort);
   const launch = await resolveLaunch({
     launchTarget,
     port,
@@ -354,8 +354,8 @@ async function createAiStudioLaunchTargetTerminalSpec({
 }
 
 export {
-  DEFAULT_LAUNCH_TARGET_PORT,
-  createAiStudioLaunchTargetTerminalSpec,
-  findAvailableLaunchTargetPort,
-  launchTargetStartupScript
+  DEFAULT_WEB_LAUNCH_TARGET_PORT,
+  createAiStudioWebLaunchTargetTerminalSpec,
+  findAvailableWebLaunchTargetPort,
+  webLaunchTargetStartupScript
 };

@@ -4,12 +4,14 @@ import {
   codexAttachmentInputValidator,
   codexPromptHandoffInputValidator,
   codexThreadInputValidator,
+  commandTerminalInputValidator,
   launchTargetInputValidator
 } from "./inputSchemas.js";
 import {
   ACTION_OPEN_LAUNCH_TARGET,
   ACTION_SAVE_CODEX_PROMPT_HANDOFF,
   ACTION_SAVE_CODEX_THREAD,
+  ACTION_START_COMMAND_TERMINAL,
   ACTION_START_LAUNCH_TARGET_TERMINAL,
   ACTION_UPLOAD_CODEX_ATTACHMENT
 } from "./actions.js";
@@ -131,17 +133,21 @@ function registerRoutes(
       meta: {
         tags: ["studio", "ai-studio-terminals"],
         summary: "Start an AI Studio command terminal."
-      }
+      },
+      body: commandTerminalInputValidator
     },
     async function (request, reply) {
       if (!requireLocalAiStudioRequest(request, reply)) {
         return;
       }
-      const response = await getTerminalService(app).startCommandTerminal(
-        request.params.sessionId,
-        requestBodyObject(request)
-      );
-      reply.code(response?.ok === false ? 400 : 200).send(response);
+      const response = await request.executeAction({
+        actionId: ACTION_START_COMMAND_TERMINAL,
+        input: {
+          ...requestBodyObject(request),
+          sessionId: request.params.sessionId
+        }
+      });
+      reply.code(aiStudioStatusCode(response)).send(response);
     }
   );
 

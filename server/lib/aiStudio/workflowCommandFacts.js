@@ -28,28 +28,19 @@ function requiredArtifactScript(session = {}, name = "", label = "artifact") {
   return requiredCommandFileScript(artifactFilePath(session, name), label);
 }
 
-function deleteMetadataScript(name = "") {
+function recordCommandFactScript(name = "", valueExpression = "") {
   return [
+    `AI_STUDIO_COMMAND_FACT_VALUE=${valueExpression}`,
     `if [ -n "\${${COMMAND_RESULT_ENV}:-}" ]; then`,
-    `  printf 'metadata:delete\\t%s\\n' ${shellQuote(name)} >> "$${COMMAND_RESULT_ENV}"`,
-    "fi"
-  ].join("\n");
-}
-
-function recordMetadataScript(name = "", valueExpression = "") {
-  return [
-    `AI_STUDIO_COMMAND_METADATA_VALUE=${valueExpression}`,
-    `if [ -n "\${${COMMAND_RESULT_ENV}:-}" ]; then`,
-    `  printf 'metadata:set\\t%s\\t%s\\n' ${shellQuote(name)} "$(printf '%s' "$AI_STUDIO_COMMAND_METADATA_VALUE" | base64 | tr -d '\\n')" >> "$${COMMAND_RESULT_ENV}"`,
+    `  printf 'fact:set\\t%s\\t%s\\n' ${shellQuote(name)} "$(printf '%s' "$AI_STUDIO_COMMAND_FACT_VALUE" | base64 | tr -d '\\n')" >> "$${COMMAND_RESULT_ENV}"`,
     "fi"
   ].join("\n");
 }
 
 export {
   artifactFilePath,
-  deleteMetadataScript,
   metadataFilePath,
-  recordMetadataScript,
+  recordCommandFactScript,
   requiredArtifactScript,
   requiredCommandFileScript
 };
