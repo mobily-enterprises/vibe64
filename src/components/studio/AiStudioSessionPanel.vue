@@ -461,32 +461,58 @@ import AiStudioSessionFacts from "@/components/studio/ai-studio-session/AiStudio
 import AiStudioSessionTimeline from "@/components/studio/ai-studio-session/AiStudioSessionTimeline.vue";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
 import {
-  useAiStudioSessions
-} from "@/composables/useAiStudioSessions.js";
+  useAiStudioSessionData
+} from "@/composables/useAiStudioSessionData.js";
+import {
+  useAiStudioSessionWorkflow
+} from "@/composables/useAiStudioSessionWorkflow.js";
 
 const emit = defineEmits(["title-change"]);
 
-const sessionsModel = useAiStudioSessions({
+const sessionData = useAiStudioSessionData({
   onTitleChange(title) {
     emit("title-change", title);
   }
 });
-const actions = proxyRefs(sessionsModel.actions);
-const appReview = proxyRefs(sessionsModel.appReview);
-const codexTerminal = proxyRefs(sessionsModel.codexTerminal);
-const commandTerminal = proxyRefs(sessionsModel.commandTerminal);
+const sessionWorkflow = useAiStudioSessionWorkflow({
+  sessionData
+});
+
+const actions = proxyRefs(sessionWorkflow.actions);
+const appReview = proxyRefs(sessionWorkflow.appReview);
+const codexTerminal = proxyRefs(sessionWorkflow.codexTerminal);
+const commandTerminal = proxyRefs(sessionWorkflow.commandTerminal);
 const dialogs = {
-  abandon: proxyRefs(sessionsModel.dialogs.abandon),
-  diff: proxyRefs(sessionsModel.dialogs.diff),
-  draftEditor: proxyRefs(sessionsModel.dialogs.draftEditor),
-  input: proxyRefs(sessionsModel.dialogs.input)
+  abandon: proxyRefs(sessionWorkflow.dialogs.abandon),
+  diff: proxyRefs(sessionWorkflow.dialogs.diff),
+  draftEditor: proxyRefs(sessionWorkflow.dialogs.draftEditor),
+  input: proxyRefs(sessionWorkflow.dialogs.input)
 };
-const issueRequest = proxyRefs(sessionsModel.issueRequest);
-const page = proxyRefs(sessionsModel.page);
-const review = proxyRefs(sessionsModel.review);
-const selection = proxyRefs(sessionsModel.selection);
-const timeline = proxyRefs(sessionsModel.timeline);
-const toolbar = proxyRefs(sessionsModel.toolbar);
+const issueRequest = proxyRefs(sessionWorkflow.issueRequest);
+const page = proxyRefs(sessionWorkflow.page);
+const review = proxyRefs(sessionWorkflow.review);
+const selection = proxyRefs({
+  facts: sessionData.sessionFacts,
+  isClosed: sessionData.isSelectedSessionClosed,
+  selectedSession: sessionData.selectedSession,
+  selectedSessionId: sessionData.selectedSessionId,
+  selectedSessionTitle: sessionData.selectedSessionTitle,
+  statusColor: sessionData.statusColor,
+  statusLabel: sessionData.statusLabel
+});
+const timeline = proxyRefs({
+  rewindCommand: sessionWorkflow.timeline.rewindCommand,
+  rewindToStep: sessionWorkflow.timeline.rewindToStep,
+  steps: sessionData.timelineSteps
+});
+const toolbar = proxyRefs({
+  canCreateSession: sessionData.canCreateSession,
+  createSessionCommand: sessionData.createSessionCommand,
+  createSessionTitle: sessionData.createSessionTitle,
+  selectSession: sessionWorkflow.selectSession,
+  sessions: sessionData.sessions,
+  shortSessionId: sessionData.shortSessionId
+});
 
 const diffBodyElement = ref(null);
 

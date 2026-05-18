@@ -2,18 +2,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
-  adapterProjectFacts
-} from "../../adapter.js";
-import {
   shellQuote
 } from "../../../shellCommands.js";
 import {
   AiStudioDescribedWorkflowTargetAdapter,
   inspectDescribedProject
 } from "../../workflowAdapter.js";
-import {
-  normalizeText
-} from "../../core.js";
 import { deepFreeze } from "../../deepFreeze.js";
 import {
   dependencyNames,
@@ -24,10 +18,12 @@ import {
 } from "../../nodePackage.js";
 import {
   commandLineScript,
+  createNodeWebProjectReadiness,
+  nodeWebAdapterFacts,
+  nodeWebPromptContextBase,
   nodeInstallWorkflowHook,
   nodePackageManagerInspectionExtra,
-  projectMarkerExists,
-  projectRouterMode
+  projectMarkerExists
 } from "../../nodeWebProject.js";
 import {
   NEXTJS_DATABASE_RUNTIME_CONFIG,
@@ -160,10 +156,6 @@ const NEXTJS_CONFIG_FIELDS = deepFreeze([
   }
 ]);
 
-function routerMode(markers = []) {
-  return projectRouterMode(markers);
-}
-
 function nextConfigExists(markers = []) {
   return projectMarkerExists(markers, "next_config_ts") ||
     projectMarkerExists(markers, "next_config_js") ||
@@ -175,62 +167,18 @@ function packageHasNext(packageJson = {}) {
     Object.values(packageJson?.scripts || {}).some((script) => /\bnext\b/u.test(String(script || "")));
 }
 
-function projectMode({
-  markers = [],
-  packageJson = null
-} = {}) {
-  if (!packageJson) {
-    return "unseeded";
-  }
-  if (packageHasNext(packageJson) && routerMode(markers) !== "unknown") {
-    return "nextjs";
-  }
-  if (packageHasNext(packageJson)) {
-    return "nextjs-missing-router";
-  }
-  return "unrecognized";
-}
+const NEXTJS_PROJECT_READINESS = createNodeWebProjectReadiness({
+  label: "Next.js",
+  packageLabel: "next dependency or script",
+  packageReady: packageHasNext,
+  readyMode: "nextjs"
+});
 
-function allNextjsMarkersReady({
-  markers = [],
-  packageJson = null
-} = {}) {
-  return Boolean(packageJson) &&
-    routerMode(markers) !== "unknown" &&
-    packageHasNext(packageJson);
-}
-
-function missingMarkerLabels({
-  markers = [],
-  packageJson = null
-} = {}) {
-  const missing = [];
-  if (!packageJson) {
-    missing.push("package.json");
-  }
-  if (routerMode(markers) === "unknown") {
-    missing.push("app/ or pages/");
-  }
-  if (packageJson && !packageHasNext(packageJson)) {
-    missing.push("next dependency or script");
-  }
-  return missing.sort((left, right) => left.localeCompare(right));
-}
+const routerMode = NEXTJS_PROJECT_READINESS.routerMode;
+const projectMode = NEXTJS_PROJECT_READINESS.projectMode;
 
 function setupSummary(inspection = {}) {
-  if (allNextjsMarkersReady(inspection)) {
-    return "Next.js project type selected.";
-  }
-  const missingLabels = missingMarkerLabels(inspection);
-  return missingLabels.length
-    ? `Next.js project type selected. Missing markers: ${missingLabels.join(", ")}`
-    : "Next.js project type selected.";
-}
-
-function nextjsAdapterCapabilities({
-  adapter = null
-} = {}) {
-  return adapter?.workflowCapabilities() || {};
+  return NEXTJS_PROJECT_READINESS.setupSummary(inspection);
 }
 
 function nextjsPromptContext({
@@ -243,30 +191,31 @@ function nextjsPromptContext({
     ? path.join(targetRoot, NEXTJS_PROJECT_KNOWLEDGE_RELATIVE_PATH)
     : NEXTJS_PROJECT_KNOWLEDGE_RELATIVE_PATH;
   return {
-    adapter: "nextjs",
-    automated_check_command: "next build",
+    ...nodeWebPromptContextBase({
+      adapterId: "nextjs",
+      automatedCheckCommand: "next build",
+      dependencyNames: dependencyNames(packageJson || {}).join(", "),
+      packageJson,
+      packageManager,
+      projectKnowledgePath: knowledgePath,
+      projectKnowledgeRelativePath: NEXTJS_PROJECT_KNOWLEDGE_RELATIVE_PATH,
+      projectMode: projectMode({
+        markers,
+        packageJson
+      }),
+      routerMode: routerMode(markers),
+      scriptNames: scriptNames(packageJson || {}).join(", "),
+      targetRoot,
+      validMarkers: NEXTJS_PROJECT_READINESS.allMarkersReady({
+        markers,
+        packageJson
+      })
+    }),
     build_script: packageScript(packageJson || {}, "build"),
-    dependency_names: dependencyNames(packageJson || {}).join(", "),
     dev_script: packageScript(packageJson || {}, "dev"),
     next_config_exists: String(nextConfigExists(markers)),
     next_dependency: String(hasDependency(packageJson || {}, "next")),
-    package_manager: normalizeText(packageManager.name || "npm"),
-    package_manager_source: normalizeText(packageManager.source || "default"),
-    package_name: normalizeText(packageJson?.name),
-    project_knowledge_path: normalizeText(knowledgePath),
-    project_knowledge_relative_path: NEXTJS_PROJECT_KNOWLEDGE_RELATIVE_PATH,
-    project_mode: projectMode({
-      markers,
-      packageJson
-    }),
-    router_mode: routerMode(markers),
-    scripts: scriptNames(packageJson || {}).join(", "),
-    start_script: packageScript(packageJson || {}, "start"),
-    target_root: normalizeText(targetRoot),
-    valid_nextjs_markers: String(allNextjsMarkersReady({
-      markers,
-      packageJson
-    }))
+    start_script: packageScript(packageJson || {}, "start")
   };
 }
 
@@ -278,10 +227,8 @@ function nextjsFacts({
   packageManager = {},
   targetRoot = ""
 } = {}) {
-  return adapterProjectFacts({
-    capabilities: nextjsAdapterCapabilities({
-      adapter
-    }),
+  return nodeWebAdapterFacts({
+    adapter,
     commands,
     promptContext: nextjsPromptContext({
       markers,

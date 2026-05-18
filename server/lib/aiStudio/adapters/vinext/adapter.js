@@ -2,18 +2,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
-  adapterProjectFacts
-} from "../../adapter.js";
-import {
   shellQuote
 } from "../../../shellCommands.js";
 import {
   AiStudioDescribedWorkflowTargetAdapter,
   inspectDescribedProject
 } from "../../workflowAdapter.js";
-import {
-  normalizeText
-} from "../../core.js";
 import { deepFreeze } from "../../deepFreeze.js";
 import {
   VINEXT_PROJECT_KNOWLEDGE_RELATIVE_PATH,
@@ -38,10 +32,13 @@ import {
 } from "./packageManager.js";
 import {
   commandLineScript,
+  createNodeWebProjectReadiness,
+  nodeWebAdapterFacts,
+  nodeWebPromptContextBase,
   nodeInstallWorkflowHook,
   nodePackageManagerInspectionExtra,
   projectMarkerExists,
-  projectRouterMode
+  projectRouterIsPresent
 } from "../../nodeWebProject.js";
 
 const VINEXT_PROMPT_PACK_ROOT = fileURLToPath(new URL("./prompts", import.meta.url));
@@ -124,10 +121,6 @@ const VINEXT_CONFIG_FIELDS = deepFreeze([
   }
 ]);
 
-function routerMode(markers = []) {
-  return projectRouterMode(markers);
-}
-
 function viteConfigExists(markers = []) {
   return projectMarkerExists(markers, "vite_config_ts") || projectMarkerExists(markers, "vite_config_js");
 }
@@ -148,65 +141,28 @@ function packageHasNext(packageJson = {}) {
   return hasDependency(packageJson, "next") || Object.values(packageJson?.scripts || {}).some((script) => /\bnext\b/u.test(script));
 }
 
-function projectMode({
-  markers = [],
-  packageJson = null
-} = {}) {
-  if (!packageJson) {
-    return "unseeded";
-  }
-  if (packageHasVinext(packageJson)) {
-    return "vinext";
-  }
-  if (packageHasNext(packageJson) && routerMode(markers) !== "unknown") {
-    return "next-migration-candidate";
-  }
-  return "unrecognized";
-}
+const VINEXT_PROJECT_READINESS = createNodeWebProjectReadiness({
+  label: "Vinext",
+  packageLabel: "vinext dependency or script",
+  packageReady: packageHasVinext,
+  packageReadyMode: () => "vinext",
+  readyMode: "vinext",
+  secondaryModes: [
+    {
+      id: "next-migration-candidate",
+      summary: "Vinext project type selected. Next.js migration candidate; run vinext init.",
+      when({ markers = [], packageJson = null } = {}) {
+        return packageHasNext(packageJson || {}) && projectRouterIsPresent(markers);
+      }
+    }
+  ]
+});
 
-function allVinextMarkersReady({
-  markers = [],
-  packageJson = null
-} = {}) {
-  return Boolean(packageJson) &&
-    routerMode(markers) !== "unknown" &&
-    packageHasVinext(packageJson);
-}
-
-function missingMarkerLabels({
-  markers = [],
-  packageJson = null
-} = {}) {
-  const missing = [];
-  if (!packageJson) {
-    missing.push("package.json");
-  }
-  if (routerMode(markers) === "unknown") {
-    missing.push("app/ or pages/");
-  }
-  if (packageJson && !packageHasVinext(packageJson)) {
-    missing.push("vinext dependency or script");
-  }
-  return missing.sort((left, right) => left.localeCompare(right));
-}
+const routerMode = VINEXT_PROJECT_READINESS.routerMode;
+const projectMode = VINEXT_PROJECT_READINESS.projectMode;
 
 function setupSummary(inspection = {}) {
-  if (allVinextMarkersReady(inspection)) {
-    return "Vinext project type selected.";
-  }
-  if (projectMode(inspection) === "next-migration-candidate") {
-    return "Vinext project type selected. Next.js migration candidate; run vinext init.";
-  }
-  const missingLabels = missingMarkerLabels(inspection);
-  return missingLabels.length
-    ? `Vinext project type selected. Missing markers: ${missingLabels.join(", ")}`
-    : "Vinext project type selected.";
-}
-
-function vinextAdapterCapabilities({
-  adapter = null
-} = {}) {
-  return adapter?.workflowCapabilities() || {};
+  return VINEXT_PROJECT_READINESS.setupSummary(inspection);
 }
 
 function preferredBuildScript(packageJson = {}) {
@@ -240,31 +196,32 @@ function vinextPromptContext({
     ? path.join(targetRoot, VINEXT_PROJECT_KNOWLEDGE_RELATIVE_PATH)
     : VINEXT_PROJECT_KNOWLEDGE_RELATIVE_PATH;
   return {
-    adapter: "vinext",
-    automated_check_command: "vinext check && vinext build",
+    ...nodeWebPromptContextBase({
+      adapterId: "vinext",
+      automatedCheckCommand: "vinext check && vinext build",
+      dependencyNames: dependencyNames(packageJson || {}).join(", "),
+      packageJson,
+      packageManager,
+      projectKnowledgePath: knowledgePath,
+      projectKnowledgeRelativePath: VINEXT_PROJECT_KNOWLEDGE_RELATIVE_PATH,
+      projectMode: projectMode({
+        markers,
+        packageJson
+      }),
+      routerMode: routerMode(markers),
+      scriptNames: scriptNames(packageJson || {}).join(", "),
+      targetRoot,
+      validMarkers: VINEXT_PROJECT_READINESS.allMarkersReady({
+        markers,
+        packageJson
+      })
+    }),
     build_script: preferredBuildScript(packageJson || {}),
     cloudflare_config_exists: String(cloudflareConfigExists(markers)),
-    dependency_names: dependencyNames(packageJson || {}).join(", "),
     dev_script: preferredDevScript(packageJson || {}),
     next_config_exists: String(nextConfigExists(markers)),
     next_dependency: String(packageHasNext(packageJson || {})),
-    package_manager: normalizeText(packageManager.name || "npm"),
-    package_manager_source: normalizeText(packageManager.source || "default"),
-    package_name: normalizeText(packageJson?.name),
-    project_knowledge_path: normalizeText(knowledgePath),
-    project_knowledge_relative_path: VINEXT_PROJECT_KNOWLEDGE_RELATIVE_PATH,
-    project_mode: projectMode({
-      markers,
-      packageJson
-    }),
-    router_mode: routerMode(markers),
-    scripts: scriptNames(packageJson || {}).join(", "),
     start_script: preferredStartScript(packageJson || {}),
-    target_root: normalizeText(targetRoot),
-    valid_vinext_markers: String(allVinextMarkersReady({
-      markers,
-      packageJson
-    })),
     vinext_dependency: String(hasDependency(packageJson || {}, "vinext")),
     vinext_script: String(hasVinextScript(packageJson || {})),
     vite_config_exists: String(viteConfigExists(markers))
@@ -279,10 +236,8 @@ function vinextFacts({
   packageManager = {},
   targetRoot = ""
 } = {}) {
-  return adapterProjectFacts({
-    capabilities: vinextAdapterCapabilities({
-      adapter
-    }),
+  return nodeWebAdapterFacts({
+    adapter,
     commands,
     promptContext: vinextPromptContext({
       markers,

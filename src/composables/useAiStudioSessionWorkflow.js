@@ -1,43 +1,23 @@
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, ref } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
-import { useList } from "@jskit-ai/users-web/client/composables/useList";
-import { usePaths } from "@jskit-ai/users-web/client/composables/usePaths";
 import { useAiStudioCodexCommands } from "@/composables/useAiStudioCodexCommands.js";
-import {
-  PULL_REQUEST_ARTIFACT
-} from "@/lib/aiStudioArtifactNames.js";
-import {
-  useAiStudioIssueFileStep
-} from "@/composables/useAiStudioIssueFileStep.js";
 import {
   useAiStudioDiffDialog
 } from "@/composables/useAiStudioDiffDialog.js";
 import {
   useAiStudioDraftEditor
 } from "@/composables/useAiStudioDraftEditor.js";
+import {
+  useAiStudioIssueFileStep
+} from "@/composables/useAiStudioIssueFileStep.js";
 import { useAiStudioSessionArtifacts } from "@/composables/useAiStudioSessionArtifacts.js";
-import { useStoredSelection } from "@/composables/useStoredSelection.js";
 import {
   latestAiStudioActionResult
 } from "@/lib/aiStudioActionResults.js";
-import { writeClipboardText } from "@/lib/clipboard.js";
 import {
-  isClosedAiStudioSession,
-  aiStudioSessionDisplayTitle,
-  aiStudioSessionStatusColor,
-  aiStudioSessionStatusLabel
-} from "@/lib/aiStudioSessionViewModel.js";
-import {
-  AI_STUDIO_SESSIONS_API_SUFFIX,
-  AI_STUDIO_SURFACE_ID,
-  LOCAL_STUDIO_COMMAND_OPTIONS,
-  SELECTED_SESSION_STORAGE_KEY,
-  aiStudioActionPath,
-  aiStudioSessionPath,
-  aiStudioSessionsQueryKey,
-  commandInputFromContext
-} from "@/lib/aiStudioSessionRequestConfig.js";
+  PULL_REQUEST_ARTIFACT
+} from "@/lib/aiStudioArtifactNames.js";
 import {
   emptyActionInputValues,
   normalizeActionInputFields,
@@ -46,49 +26,60 @@ import {
 import {
   aiStudioActionIcon as actionIcon,
   aiStudioPromptHandoffFromSession,
-  aiStudioSessionFacts,
-  aiStudioSessionLimits,
-  buildAiStudioTimelineSteps,
   commandMessage,
-  currentStepDisabledReason as resolveCurrentStepDisabledReason,
-  enrichAiStudioSessionForDisplay,
-  shortAiStudioSessionId as shortSessionId,
-  visibleAiStudioSessions
+  currentStepDisabledReason as resolveCurrentStepDisabledReason
 } from "@/lib/aiStudioSessionPanelModel.js";
+import {
+  AI_STUDIO_SESSIONS_API_SUFFIX,
+  AI_STUDIO_SURFACE_ID,
+  LOCAL_STUDIO_COMMAND_OPTIONS,
+  aiStudioActionPath,
+  aiStudioSessionPath,
+  commandInputFromContext
+} from "@/lib/aiStudioSessionRequestConfig.js";
+import { writeClipboardText } from "@/lib/clipboard.js";
+
+const ACCEPT_CHANGES_STEP_ID = "changes_accepted";
+const CREATE_PULL_REQUEST_FILE_ACTION_ID = "create_pr_file";
+const PULL_REQUEST_FILE_STEP_ID = "pr_file_created";
+
 function displayableActionResultMessage(result = {}) {
   const message = String(result?.message || "");
   return /^Rendered\b/u.test(message) ? "" : message;
 }
 
-const CREATE_PULL_REQUEST_FILE_ACTION_ID = "create_pr_file";
-const ACCEPT_CHANGES_STEP_ID = "changes_accepted";
-const PULL_REQUEST_FILE_STEP_ID = "pr_file_created";
-
-function useAiStudioSessions({
-  onTitleChange = null
+function useAiStudioSessionWorkflow({
+  sessionData
 } = {}) {
-  const notifyTitleChange = typeof onTitleChange === "function" ? onTitleChange : () => null;
-  const paths = usePaths();
-  const sessionSelection = useStoredSelection({
-    storageKey: SELECTED_SESSION_STORAGE_KEY
-  });
+  const {
+    clearSelectedSession,
+    createSessionCommand,
+    isSelectedSessionClosed,
+    pageLoading,
+    refreshSessionData,
+    selectedSession,
+    selectedSessionId,
+    selectedSessionTitle,
+    selectSessionId,
+    sessionList,
+    sessionsApiPath
+  } = sessionData;
 
-  const selectedSessionId = sessionSelection.selectedId;
   const activeActionId = ref("");
   const abandonDialogOpen = ref(false);
   const abandonDialogSessionId = ref("");
   const abandonDialogSessionTitle = ref("");
-  const copyStatus = ref("");
-  const codexPromptInjectionKey = ref("");
-  const codexPromptOverride = ref("");
-  const codexTerminalBusy = ref(false);
   const appReviewTerminalStartKey = ref("");
   const appReviewTerminalVisible = ref(false);
   const appReviewUrl = ref("");
+  const codexPromptInjectionKey = ref("");
+  const codexPromptOverride = ref("");
+  const codexTerminalBusy = ref(false);
   const commandTerminalAction = ref(null);
   const commandTerminalInput = ref({});
   const commandTerminalRunning = ref(false);
   const commandTerminalStartKey = ref("");
+  const copyStatus = ref("");
   const inputDialogAction = ref(null);
   const inputDialogError = ref("");
   const inputDialogOpen = ref(false);
@@ -97,8 +88,10 @@ function useAiStudioSessions({
   const pendingCommandAdvanceOnSuccess = ref(false);
   const pendingCommandStartedAt = ref(0);
   let artifactReadinessRefreshInFlight = false;
+
   const codexCommands = useAiStudioCodexCommands();
   const sessionArtifacts = useAiStudioSessionArtifacts();
+
   const {
     clear: clearDraftEditor,
     draftEditorError,
@@ -117,44 +110,6 @@ function useAiStudioSessions({
     refreshSessionData,
     selectedSessionId,
     sessionArtifacts
-  });
-
-  const sessionsApiPath = computed(() => paths.api(AI_STUDIO_SESSIONS_API_SUFFIX, {
-    surface: AI_STUDIO_SURFACE_ID
-  }));
-
-  const sessionList = useList({
-    access: "never",
-    apiSuffix: AI_STUDIO_SESSIONS_API_SUFFIX,
-    fallbackLoadError: "AI Studio sessions could not be loaded.",
-    ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "ai-studio.sessions.list",
-    queryKeyFactory: aiStudioSessionsQueryKey,
-    selectItems: (payload) => Array.isArray(payload?.sessions) ? payload.sessions : [],
-    surfaceId: AI_STUDIO_SURFACE_ID
-  });
-
-  const createSessionCommand = useCommand({
-    access: "never",
-    apiSuffix: AI_STUDIO_SESSIONS_API_SUFFIX,
-    buildCommandOptions: () => ({
-      options: LOCAL_STUDIO_COMMAND_OPTIONS
-    }),
-    fallbackRunError: "AI Studio session could not be created.",
-    messages: {
-      error: "AI Studio session could not be created.",
-      success: "AI Studio session created."
-    },
-    onRunSuccess: async (response) => {
-      if (response?.sessionId) {
-        sessionSelection.select(response.sessionId);
-      }
-      await refreshSessionData();
-    },
-    ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "ai-studio.sessions.create",
-    surfaceId: AI_STUDIO_SURFACE_ID,
-    writeMethod: "POST"
   });
 
   const runActionCommand = useCommand({
@@ -258,13 +213,13 @@ function useAiStudioSessions({
     },
     onRunSuccess: async (_response, { context } = {}) => {
       if (!context?.sessionId || context.sessionId === selectedSessionId.value) {
-        sessionSelection.clear();
+        clearSelectedSession();
       }
       abandonDialogOpen.value = false;
       abandonDialogSessionId.value = "";
       abandonDialogSessionTitle.value = "";
       codexPromptOverride.value = "";
-      await sessionList.reload();
+      await refreshSessionData();
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
     placementSource: "ai-studio.sessions.abandon",
@@ -272,18 +227,12 @@ function useAiStudioSessions({
     writeMethod: "POST"
   });
 
-  const sessions = computed(() => visibleAiStudioSessions(sessionList.items || []));
-  const selectedListSession = computed(() => {
-    return sessions.value.find((session) => session.sessionId === selectedSessionId.value) || null;
-  });
-  const selectedSession = computed(() => enrichAiStudioSessionForDisplay(selectedListSession.value));
   const baseCurrentActions = computed(() => {
     return Array.isArray(selectedSession.value?.actions)
       ? selectedSession.value.actions.filter((action) => action.visible !== false)
       : [];
   });
   const currentNext = computed(() => selectedSession.value?.next || null);
-  const isSelectedSessionClosed = computed(() => isClosedAiStudioSession(selectedSession.value || {}));
   const commandBusy = computed(() => Boolean(
     createSessionCommand.isRunning ||
     runActionCommand.isRunning ||
@@ -349,7 +298,6 @@ function useAiStudioSessions({
     return appReviewUrl.value || "Run the app before opening it.";
   });
   const commandTerminalVisible = computed(() => Boolean(commandTerminalAction.value || commandTerminalRunning.value));
-  const pageLoading = computed(() => Boolean(sessionList.isLoading));
   const pageError = computed(() => {
     return sessionList.loadError ||
       commandMessage(createSessionCommand, "error") ||
@@ -359,22 +307,6 @@ function useAiStudioSessions({
       commandMessage(abandonCommand, "error") ||
       "";
   });
-  const limits = computed(() => aiStudioSessionLimits({
-    payloadLimits: sessionList.pages?.[0]?.limits || {},
-    sessions: sessions.value
-  }));
-  const canCreateSession = computed(() => limits.value.openSessionCount < limits.value.maxOpenSessions);
-  const createSessionTitle = computed(() => {
-    return canCreateSession.value
-      ? "Create a new AI Studio session"
-      : `Studio allows up to ${limits.value.maxOpenSessions} active sessions.`;
-  });
-  const selectedSessionTitle = computed(() => {
-    return aiStudioSessionDisplayTitle(selectedSession.value || {}) ||
-      `Session ${shortSessionId(selectedSessionId.value)}`;
-  });
-  const timelineSteps = computed(() => buildAiStudioTimelineSteps(selectedSession.value));
-  const sessionFacts = computed(() => aiStudioSessionFacts(selectedSession.value || {}));
   const latestActionResult = computed(() => {
     if (selectedSession.value?.actionResult) {
       return selectedSession.value.actionResult;
@@ -405,11 +337,6 @@ function useAiStudioSessions({
     }
     return resolveCurrentStepDisabledReason(currentActions.value, currentNext.value);
   });
-
-  async function refreshSessionData() {
-    await sessionList.reload();
-  }
-
   const waitingForPullRequestFile = computed(() => {
     return selectedSession.value?.currentStep === PULL_REQUEST_FILE_STEP_ID &&
       Boolean(latestAiStudioActionResult(selectedSession.value, CREATE_PULL_REQUEST_FILE_ACTION_ID)) &&
@@ -417,6 +344,14 @@ function useAiStudioSessions({
   });
   const waitingForPromptedArtifact = computed(() => {
     return issueFileStep.waitingForFiles.value || waitingForPullRequestFile.value;
+  });
+  const inputDialogFields = computed(() => normalizeActionInputFields(inputDialogAction.value?.inputFields));
+  const inputDialogTitle = computed(() => String(inputDialogAction.value?.label || "Provide details"));
+  const inputDialogSaveDisabled = computed(() => {
+    if (inputDialogSubmitting.value || commandBusy.value || inputDialogFields.value.length < 1) {
+      return true;
+    }
+    return requiredActionInputMissing(inputDialogFields.value, inputDialogValues.value);
   });
 
   async function refreshPromptedArtifactReadiness() {
@@ -437,15 +372,6 @@ function useAiStudioSessions({
     commandTerminalRunning.value = false;
     commandTerminalStartKey.value = "";
   }
-
-  const inputDialogFields = computed(() => normalizeActionInputFields(inputDialogAction.value?.inputFields));
-  const inputDialogTitle = computed(() => String(inputDialogAction.value?.label || "Provide details"));
-  const inputDialogSaveDisabled = computed(() => {
-    if (inputDialogSubmitting.value || commandBusy.value || inputDialogFields.value.length < 1) {
-      return true;
-    }
-    return requiredActionInputMissing(inputDialogFields.value, inputDialogValues.value);
-  });
 
   function clearSessionTransientState() {
     activeActionId.value = "";
@@ -509,7 +435,7 @@ function useAiStudioSessions({
     abandonDialogSessionId.value = "";
     abandonDialogSessionTitle.value = "";
     clearSessionTransientState();
-    sessionSelection.select(sessionId);
+    selectSessionId(sessionId);
   }
 
   async function runAction(action = {}) {
@@ -757,24 +683,6 @@ function useAiStudioSessions({
     await refreshSessionData();
   }
 
-  watch(sessions, (nextSessions) => {
-    if (sessionList.isInitialLoading) {
-      return;
-    }
-    sessionSelection.selectAvailableId(nextSessions, {
-      fallbackId: nextSessions.at(-1)?.sessionId || "",
-      getId: (session) => session.sessionId
-    });
-  }, {
-    immediate: true
-  });
-
-  watch(selectedSessionTitle, (title) => {
-    notifyTitleChange(title || "");
-  }, {
-    immediate: true
-  });
-
   return {
     actions: {
       actionIcon,
@@ -881,29 +789,14 @@ function useAiStudioSessions({
       diffDisabled: reviewDiffDisabled,
       diffTitle: reviewDiffTitle
     },
-    selection: {
-      facts: sessionFacts,
-      isClosed: isSelectedSessionClosed,
-      selectedSession,
-      selectedSessionId,
-      selectedSessionTitle,
-      statusColor: aiStudioSessionStatusColor,
-      statusLabel: aiStudioSessionStatusLabel
-    },
+    selectSession,
     timeline: {
       rewindCommand,
-      rewindToStep,
-      steps: timelineSteps
-    },
-    toolbar: {
-      canCreateSession,
-      createSessionCommand,
-      createSessionTitle,
-      selectSession,
-      sessions,
-      shortSessionId
+      rewindToStep
     }
   };
 }
 
-export { useAiStudioSessions };
+export {
+  useAiStudioSessionWorkflow
+};

@@ -106,166 +106,58 @@
         </div>
       </v-sheet>
 
-      <div class="doctor-status__checks">
-        <v-sheet
-          v-for="check in displayChecks"
-          :key="check.id"
-          rounded="lg"
-          border
-          :class="[
-            'studio-screen__panel',
-            'doctor-status__check',
-            `doctor-status__check--${check.status}`
-          ]"
-        >
-          <div :class="['doctor-status__status-badge', statusToneClass(check.status)]">
-            <v-icon
-              class="doctor-status__status-icon"
-              :icon="statusIcon(check.status)"
-              :color="statusColor(check.status)"
-              :aria-label="statusLabel(check.status)"
-              size="30"
-            />
-          </div>
-
-          <div class="doctor-status__check-body">
-            <div class="doctor-status__check-header">
-              <div>
-                <h3 class="text-subtitle-2 mb-1">{{ check.label }}</h3>
-                <p class="text-body-2 text-medium-emphasis mb-0">{{ check.explanation }}</p>
-              </div>
-            </div>
-
-            <div class="doctor-status__facts">
-              <p class="text-caption text-medium-emphasis mb-0 doctor-status__fact-line">
-                <span class="doctor-status__fact">
-                  <strong class="text-high-emphasis">Expected:</strong>
-                  {{ check.expected }}
-                </span>
-                <span class="doctor-status__fact doctor-status__observed">
-                  <strong class="text-high-emphasis">Observed:</strong>
-                  {{ check.observed }}
-                </span>
-              </p>
-            </div>
-
-            <pre v-if="visibleCheckRepairs(check).length" class="doctor-status__command">{{ repairCommandPreview(check) }}</pre>
-          </div>
-
-          <div v-if="visibleCheckRepairs(check).length" class="doctor-status__actions">
-            <template v-for="repair in visibleCheckRepairs(check)" :key="repair.actionId">
-              <v-btn
-                v-if="repair.kind === 'terminal'"
-                color="primary"
-                class="doctor-status__repair-button"
-                variant="flat"
-                :prepend-icon="mdiConsoleLine"
-                :disabled="Boolean(actionInFlight)"
-                @click="repairRequiresInput(repair) ? confirmRepairAction(check, repair) : runRepair(repair)"
-              >
-                {{ repair.label || "Open terminal" }}
-              </v-btn>
-              <v-btn
-                v-else
-                class="doctor-status__repair-button"
-                variant="tonal"
-                color="warning"
-                disabled
-              >
-                {{ repair.label || "Manual repair required" }}
-              </v-btn>
-            </template>
-          </div>
-        </v-sheet>
-      </div>
+      <DoctorCheckList
+        :action-in-flight="actionInFlight"
+        :checks="displayChecks"
+        :repair-command-preview="repairCommandPreview"
+        :repair-requires-input="repairRequiresInput"
+        :visible-check-repairs="visibleCheckRepairs"
+        @confirm-repair="confirmRepairAction($event.check, $event.repair)"
+        @run-repair="runRepair"
+      />
     </section>
 
-    <v-dialog v-model="repairDialogOpen" max-width="760">
-      <v-sheet rounded="lg" class="studio-screen__dialog">
-        <h2 class="text-subtitle-1 mb-2">Confirm repair</h2>
-        <p class="text-body-2 text-medium-emphasis mb-3">
-          Studio will run this command locally after confirmation.
-        </p>
-        <div v-if="confirmRepairFields.length" class="studio-screen__field-grid mb-3">
-          <v-text-field
-            v-for="field in confirmRepairFields"
-            :key="field.id"
-            v-model="repairFieldValues[field.id]"
-            :autocomplete="field.autocomplete || undefined"
-            density="compact"
-            hide-details="auto"
-            :label="field.label"
-            :placeholder="field.placeholder || ''"
-            :type="field.type || 'text'"
-            variant="outlined"
-          />
-        </div>
-        <pre class="doctor-status__command mb-3">{{ confirmRepairCommandPreview }}</pre>
-        <div class="d-flex justify-end ga-2">
-          <v-btn variant="text" :disabled="repairRunning" @click="closeRepairDialog">Close</v-btn>
-          <v-btn
-            color="primary"
-            :disabled="!canRunConfirmedRepair"
-            :loading="repairRunning"
-            @click="executeConfirmedRepair"
-          >
-            Run repair
-          </v-btn>
-        </div>
-      </v-sheet>
-    </v-dialog>
+    <DoctorRepairDialog
+      v-model="repairDialogOpen"
+      v-model:values="repairFieldValues"
+      :can-run="canRunConfirmedRepair"
+      :command-preview="confirmRepairCommandPreview"
+      :fields="confirmRepairFields"
+      :running="repairRunning"
+      @run="executeConfirmedRepair"
+    />
 
-    <v-dialog v-model="terminalDialogOpen" max-width="980" persistent>
-      <v-sheet rounded="lg" class="studio-screen__dialog terminal-dialog">
-        <div class="d-flex align-center justify-space-between ga-3 mb-3">
-          <div>
-            <h2 class="text-subtitle-1 mb-1">{{ terminalTitle }}</h2>
-            <p class="text-caption text-medium-emphasis mb-0 terminal-dialog__command">
-              {{ terminalCommandPreview }}
-            </p>
-          </div>
-          <v-chip :color="terminalStatus === 'running' ? 'primary' : 'default'" size="small" variant="tonal">
-            {{ terminalStatus || "starting" }}
-          </v-chip>
-        </div>
-        <v-alert v-if="terminalError" type="error" variant="tonal" class="mb-3">
-          {{ terminalError }}
-        </v-alert>
-        <div class="terminal-dialog__copy-bar mb-2">
-          <v-btn
-            variant="tonal"
-            :disabled="!terminalSelectedText"
-            @click="copyTerminalSelection"
-          >
-            Copy selection
-          </v-btn>
-          <p v-if="terminalCopyStatus" class="text-caption text-medium-emphasis mb-0">
-            {{ terminalCopyStatus }}
-          </p>
-        </div>
-        <div ref="terminalHost" class="terminal-dialog__host" />
-        <div class="d-flex justify-end ga-2 mt-3">
-          <v-btn variant="tonal" :disabled="!terminalSessionId" @click="sendCtrlC">Send Ctrl-C</v-btn>
-          <v-btn color="primary" variant="flat" @click="closeTerminal">Close</v-btn>
-        </div>
-      </v-sheet>
-    </v-dialog>
+    <DoctorTerminalDialog
+      v-model="terminalDialogOpen"
+      :command-preview="terminalCommandPreview"
+      :copy-status="terminalCopyStatus"
+      :error="terminalError"
+      :selected-text="terminalSelectedText"
+      :session-id="terminalSessionId"
+      :set-host="setTerminalHost"
+      :status="terminalStatus"
+      :title="terminalTitle"
+      @close="closeTerminal"
+      @copy-selection="copyTerminalSelection"
+      @send-ctrl-c="sendCtrlC"
+    />
   </section>
 </template>
 
 <script setup>
 import { computed } from "vue";
 import {
-  mdiAlertCircleOutline,
-  mdiCheckCircle,
-  mdiCloseCircle,
-  mdiConsoleLine,
-  mdiProgressClock,
   mdiRefresh
 } from "@mdi/js";
+import DoctorCheckList from "@/components/studio/doctor/DoctorCheckList.vue";
+import DoctorRepairDialog from "@/components/studio/doctor/DoctorRepairDialog.vue";
+import DoctorTerminalDialog from "@/components/studio/doctor/DoctorTerminalDialog.vue";
 import { useDoctorStream } from "@/composables/useDoctorStream.js";
 import { useDoctorRepairs } from "@/composables/useDoctorRepairs.js";
 import { useDoctorTerminal } from "@/composables/useDoctorTerminal.js";
+import {
+  doctorSummaryIcon
+} from "@/lib/doctorStatusDisplay.js";
 import { resolveDoctorSummaryState } from "@/lib/doctorSummaryState.js";
 
 const props = defineProps({
@@ -440,7 +332,6 @@ const {
   automaticRepairRunning,
   canRunConfirmedRepair,
   clearRepairMessages,
-  closeRepairDialog,
   confirmRepairAction,
   confirmRepairCommandPreview,
   confirmRepairFields,
@@ -523,70 +414,12 @@ const checking = computed(() => {
 });
 
 const summaryIcon = computed(() => {
-  if (summary.value.state === "pass") {
-    return mdiCheckCircle;
-  }
-  if (summary.value.state === "checking") {
-    return mdiProgressClock;
-  }
-  return mdiCloseCircle;
+  return doctorSummaryIcon(summary.value.state);
 });
 
-function statusColor(status) {
-  if (status === "pass") {
-    return "success";
-  }
-  if (status === "running") {
-    return "primary";
-  }
-  if (["blocked", "fail", "hard-stop"].includes(status)) {
-    return "error";
-  }
-  return "warning";
+function setTerminalHost(element) {
+  terminalHost.value = element;
 }
-
-function statusIcon(status) {
-  if (status === "pass") {
-    return mdiCheckCircle;
-  }
-  if (status === "running") {
-    return mdiProgressClock;
-  }
-  if (["blocked", "fail", "hard-stop"].includes(status)) {
-    return mdiCloseCircle;
-  }
-  return mdiAlertCircleOutline;
-}
-
-function statusLabel(status) {
-  if (status === "pass") {
-    return "Ready";
-  }
-  if (status === "running") {
-    return "Running";
-  }
-  if (status === "hard-stop") {
-    return "Hard stop";
-  }
-  if (["blocked", "fail"].includes(status)) {
-    return "Needs attention";
-  }
-  return "Pending";
-}
-
-function statusToneClass(status) {
-  if (status === "pass") {
-    return "doctor-status__status-badge--pass";
-  }
-  if (status === "running") {
-    return "doctor-status__status-badge--running";
-  }
-  if (["blocked", "fail", "hard-stop"].includes(status)) {
-    return "doctor-status__status-badge--fail";
-  }
-  return "doctor-status__status-badge--unknown";
-}
-
 </script>
 
 <style scoped>
@@ -609,33 +442,11 @@ function statusToneClass(status) {
 }
 
 .studio-screen__lede,
-.doctor-status__fact,
-.doctor-status__observed,
-.terminal-dialog__command {
+.doctor-status__command {
   overflow-wrap: anywhere;
 }
 
-.studio-screen__panel,
-.studio-screen__dialog {
-  padding: var(--generated-ui-screen-panel-padding);
-}
-
 .studio-screen__action-button {
-  min-height: 48px;
-}
-
-.studio-screen__field-grid {
-  display: grid;
-  gap: 0.375rem;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
-}
-
-.studio-screen__field-grid :deep(.v-field),
-.studio-screen__field-grid :deep(.v-field__input) {
-  min-height: 48px;
-}
-
-.studio-screen__dialog :deep(.v-btn) {
   min-height: 48px;
 }
 
@@ -662,15 +473,11 @@ function statusToneClass(status) {
   grid-template-columns: auto minmax(0, 1fr);
 }
 
-.doctor-status__summary-icon,
-.doctor-status__status-badge {
+.doctor-status__summary-icon {
   align-items: center;
   border-radius: 999px;
   display: inline-flex;
   justify-content: center;
-}
-
-.doctor-status__summary-icon {
   height: 3rem;
   width: 3rem;
 }
@@ -687,102 +494,7 @@ function statusToneClass(status) {
   background: rgba(var(--v-theme-error), 0.12);
 }
 
-.doctor-status__checks {
-  display: grid;
-  gap: 0.625rem;
-}
-
-.doctor-status__check {
-  align-items: start;
-  border-left: 4px solid transparent;
-  display: grid;
-  gap: 0.75rem;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  min-width: 0;
-  padding-block: 0.7rem;
-}
-
-.doctor-status__check--pass {
-  background: rgba(var(--v-theme-success), 0.04);
-  border-left-color: rgb(var(--v-theme-success));
-}
-
-.doctor-status__check--fail {
-  background: rgba(var(--v-theme-error), 0.04);
-  border-left-color: rgb(var(--v-theme-error));
-}
-
-.doctor-status__check--blocked,
-.doctor-status__check--hard-stop {
-  background: rgba(var(--v-theme-error), 0.04);
-  border-left-color: rgb(var(--v-theme-error));
-}
-
-.doctor-status__check--running {
-  background: rgba(var(--v-theme-primary), 0.045);
-  border-left-color: rgb(var(--v-theme-primary));
-}
-
-.doctor-status__check--pending {
-  background: rgba(var(--v-theme-warning), 0.045);
-  border-left-color: rgb(var(--v-theme-warning));
-}
-
-.doctor-status__status-badge {
-  height: 2.5rem;
-  width: 2.5rem;
-}
-
-.doctor-status__status-badge--pass {
-  background: rgba(var(--v-theme-success), 0.13);
-}
-
-.doctor-status__status-badge--fail {
-  background: rgba(var(--v-theme-error), 0.13);
-}
-
-.doctor-status__status-badge--running {
-  background: rgba(var(--v-theme-primary), 0.13);
-}
-
-.doctor-status__status-badge--unknown {
-  background: rgba(var(--v-theme-warning), 0.14);
-}
-
-.doctor-status__check-body {
-  min-width: 0;
-}
-
-.doctor-status__check-header {
-  align-items: start;
-  display: flex;
-  gap: 0.5rem;
-  justify-content: space-between;
-}
-
-.doctor-status__check-header h3 {
-  line-height: 1.15;
-}
-
-.doctor-status__check-header p {
-  font-size: 0.8125rem;
-  line-height: 1.25;
-}
-
-.doctor-status__facts {
-  margin-top: 0.25rem;
-}
-
-.doctor-status__fact-line {
-  line-height: 1.25;
-}
-
-.doctor-status__fact {
-  margin-inline-end: 0.75rem;
-}
-
-.doctor-status__command,
-.doctor-status__output {
+.doctor-status__command {
   background: rgb(var(--v-theme-surface-variant));
   border-radius: 8px;
   color: rgb(var(--v-theme-on-surface-variant));
@@ -798,55 +510,6 @@ function statusToneClass(status) {
   width: 100%;
 }
 
-.doctor-status__actions {
-  align-items: center;
-  align-self: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  justify-content: flex-end;
-  min-width: min(16rem, 100%);
-}
-
-.doctor-status__repair-button {
-  min-height: 48px;
-}
-
-.terminal-dialog__copy-bar {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.terminal-dialog__copy-bar .v-btn {
-  min-height: 48px;
-}
-
-.terminal-dialog__host {
-  background: #111318;
-  border-radius: 8px;
-  height: min(44vh, 20rem);
-  min-height: 13rem;
-  overflow: hidden;
-  padding: 0.5rem;
-}
-
-.terminal-dialog__host :deep(.xterm) {
-  height: 100%;
-}
-
-@media (max-width: 720px) {
-  .doctor-status__check {
-    grid-template-columns: auto minmax(0, 1fr);
-  }
-
-  .doctor-status__actions {
-    grid-column: 2;
-    justify-content: flex-start;
-  }
-}
-
 @media (max-width: 520px) {
   .studio-screen {
     max-width: 100%;
@@ -859,19 +522,6 @@ function statusToneClass(status) {
   .doctor-status__summary-main {
     align-items: start;
     gap: 0.65rem;
-  }
-
-  .doctor-status__check {
-    gap: 0.6rem;
-    padding: 0.65rem;
-  }
-
-  .doctor-status__actions {
-    grid-column: 1 / -1;
-  }
-
-  .doctor-status__actions .v-btn {
-    flex: 1 1 100%;
   }
 }
 </style>

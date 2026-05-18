@@ -3,6 +3,12 @@ import {
   installCommand,
   readPackageJson
 } from "./nodePackage.js";
+import {
+  adapterProjectFacts
+} from "./adapter.js";
+import {
+  normalizeText
+} from "./core.js";
 
 const DEFAULT_APP_ROUTER_MARKER_IDS = Object.freeze([
   "app_router",
@@ -34,6 +40,138 @@ function projectRouterMode(markers = [], {
     return "pages";
   }
   return "unknown";
+}
+
+function projectRouterIsPresent(markers = [], options = {}) {
+  return projectRouterMode(markers, options) !== "unknown";
+}
+
+function sortedMissingLabels(labels = []) {
+  return labels
+    .filter(Boolean)
+    .sort((left, right) => left.localeCompare(right));
+}
+
+function createNodeWebProjectReadiness({
+  label = "Node web",
+  packageLabel = "framework dependency or script",
+  packageReady = () => false,
+  packageReadyMode = null,
+  readyMode = "ready",
+  readySummary = "",
+  routerLabel = "app/ or pages/",
+  secondaryModes = []
+} = {}) {
+  const readyText = readySummary || `${label} project type selected.`;
+
+  function allMarkersReady({
+    markers = [],
+    packageJson = null
+  } = {}) {
+    return Boolean(packageJson) &&
+      projectRouterIsPresent(markers) &&
+      packageReady(packageJson);
+  }
+
+  function modeForPackageReady(context = {}) {
+    if (typeof packageReadyMode === "function") {
+      return packageReadyMode(context);
+    }
+    return projectRouterIsPresent(context.markers) ? readyMode : `${readyMode}-missing-router`;
+  }
+
+  function projectMode(context = {}) {
+    const {
+      packageJson = null
+    } = context;
+    if (!packageJson) {
+      return "unseeded";
+    }
+    if (packageReady(packageJson)) {
+      return modeForPackageReady(context);
+    }
+    const secondaryMode = secondaryModes.find((mode) => mode?.when?.(context));
+    return secondaryMode?.id || "unrecognized";
+  }
+
+  function missingMarkerLabels({
+    markers = [],
+    packageJson = null
+  } = {}) {
+    return sortedMissingLabels([
+      packageJson ? "" : "package.json",
+      projectRouterIsPresent(markers) ? "" : routerLabel,
+      packageJson && !packageReady(packageJson) ? packageLabel : ""
+    ]);
+  }
+
+  function setupSummary(context = {}) {
+    if (allMarkersReady(context)) {
+      return readyText;
+    }
+    const mode = projectMode(context);
+    const secondaryMode = secondaryModes.find((candidate) => candidate.id === mode);
+    if (secondaryMode?.summary) {
+      return secondaryMode.summary;
+    }
+    const missingLabels = missingMarkerLabels(context);
+    return missingLabels.length
+      ? `${readyText} Missing markers: ${missingLabels.join(", ")}`
+      : readyText;
+  }
+
+  return Object.freeze({
+    allMarkersReady,
+    missingMarkerLabels,
+    projectMode,
+    routerMode: projectRouterMode,
+    setupSummary
+  });
+}
+
+function nodeWebPromptContextBase({
+  adapterId = "",
+  automatedCheckCommand = "",
+  dependencyNames = "",
+  packageJson = null,
+  packageManager = {},
+  projectKnowledgePath = "",
+  projectKnowledgeRelativePath = "",
+  projectMode = "",
+  routerMode = "",
+  scriptNames = "",
+  targetRoot = "",
+  validMarkers = false
+} = {}) {
+  return {
+    adapter: adapterId,
+    automated_check_command: automatedCheckCommand,
+    dependency_names: dependencyNames,
+    package_manager: normalizeText(packageManager.name || "npm"),
+    package_manager_source: normalizeText(packageManager.source || "default"),
+    package_name: normalizeText(packageJson?.name),
+    project_knowledge_path: normalizeText(projectKnowledgePath || projectKnowledgeRelativePath),
+    project_knowledge_relative_path: projectKnowledgeRelativePath,
+    project_mode: projectMode,
+    router_mode: routerMode,
+    scripts: scriptNames,
+    target_root: normalizeText(targetRoot),
+    [`valid_${adapterId}_markers`]: String(validMarkers)
+  };
+}
+
+function nodeWebAdapterFacts({
+  adapter = null,
+  commands = [],
+  promptContext = {},
+  summary = ""
+} = {}) {
+  return adapterProjectFacts({
+    capabilities: adapter?.workflowCapabilities() || {},
+    commands,
+    promptContext,
+    summary
+  });
 }
 
 async function nodePackageManagerInspectionExtra({
@@ -70,8 +208,12 @@ async function nodeInstallWorkflowHook({ worktreePath = "" } = {}) {
 
 export {
   commandLineScript,
+  createNodeWebProjectReadiness,
+  nodeWebAdapterFacts,
+  nodeWebPromptContextBase,
   nodeInstallWorkflowHook,
   nodePackageManagerInspectionExtra,
   projectMarkerExists,
+  projectRouterIsPresent,
   projectRouterMode
 };
