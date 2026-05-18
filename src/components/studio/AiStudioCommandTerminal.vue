@@ -1,5 +1,5 @@
 <template>
-  <v-sheet rounded="lg" class="ai-command-terminal">
+  <v-sheet rounded="lg" color="surface" class="ai-command-terminal">
     <div class="ai-command-terminal__bar">
       <div>
         <div class="ai-command-terminal__title">{{ terminalTitle }}</div>
@@ -8,6 +8,7 @@
         </div>
       </div>
       <div class="ai-command-terminal__actions">
+        <slot name="header-actions" />
         <v-btn
           :icon="expanded ? mdiChevronDown : mdiChevronUp"
           size="small"
@@ -135,6 +136,7 @@ defineExpose({
 
 <style scoped>
 .ai-command-terminal {
+  color: rgb(var(--v-theme-on-surface));
   min-width: 0;
   padding: 0.75rem;
 }
@@ -159,7 +161,7 @@ defineExpose({
 
 .ai-command-terminal__subtitle,
 .ai-command-terminal__footer {
-  color: rgb(var(--v-theme-on-surface-variant));
+  color: rgba(var(--v-theme-on-surface), 0.72);
   font-size: 0.75rem;
 }
 

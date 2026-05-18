@@ -52,7 +52,22 @@
         @closed="closeTerminal"
         @running-changed="handleRunningChanged"
         @started="handleStarted"
-      />
+      >
+        <template #header-actions>
+          <v-btn
+            color="primary"
+            :disabled="openDisabled"
+            :loading="openTargetCommand.isRunning"
+            :prepend-icon="mdiOpenInNew"
+            size="small"
+            :title="openTitle"
+            variant="tonal"
+            @click="open"
+          >
+            {{ openTarget.label || "Open browser" }}
+          </v-btn>
+        </template>
+      </AiStudioCommandTerminal>
     </v-dialog>
   </div>
 </template>

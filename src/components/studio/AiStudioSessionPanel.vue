@@ -159,6 +159,8 @@ const toolbar = proxyRefs({
   .studio-ai-sessions__layout {
     align-items: stretch;
     height: 100%;
+    min-height: 0;
+    overflow: hidden;
   }
 }
 </style>

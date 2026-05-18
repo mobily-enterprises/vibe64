@@ -610,11 +610,13 @@ watch(() => [
     flex: 1 1 auto;
     flex-direction: column;
     min-height: 0;
+    overflow: hidden;
   }
 
   .codex-terminal__stage {
     flex: 1 1 auto;
     min-height: 0;
+    overflow: hidden;
   }
 
   .codex-terminal__host {

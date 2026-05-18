@@ -108,9 +108,11 @@ onBeforeUnmount(() => {
   }
 
   .studio-screen__gate-scroll {
+    display: flex;
+    flex-direction: column;
     flex: 1 1 auto;
     min-height: 0;
-    overflow-y: auto;
+    overflow: hidden;
   }
 
   .studio-screen__gate-scroll :deep(.project-type-gate) {
@@ -121,11 +123,22 @@ onBeforeUnmount(() => {
   }
 
   .studio-screen__gate-scroll :deep(.project-type-gate > .setup-readiness-gate) {
+    display: flex;
     flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
   }
 
   .studio-screen__gate-scroll :deep(.project-type-gate .studio-ai-sessions) {
     flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .studio-screen__gate-scroll :deep(.project-type-setup),
+  .studio-screen__gate-scroll :deep(.project-config-setup) {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
   }
 }
 </style>
