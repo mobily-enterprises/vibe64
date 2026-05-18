@@ -24,6 +24,42 @@ function normalizeRewindCleanup(cleanup = {}) {
   };
 }
 
+function normalizeArtifactField(field = {}, actionId = "") {
+  const name = normalizeText(field.name);
+  if (!name) {
+    throw aiStudioError(
+      `AI Studio editor action ${actionId} has an artifact field without a name.`,
+      "ai_studio_workflow_artifact_field_name_missing"
+    );
+  }
+  const kind = normalizeText(field.kind || "textarea");
+  return {
+    kind: kind === "text" ? "text" : "textarea",
+    label: normalizeText(field.label || name),
+    metadataName: normalizeText(field.metadataName),
+    name,
+    required: field.required !== false,
+    requiredMessage: normalizeText(field.requiredMessage)
+  };
+}
+
+function normalizeArtifactFields(fields = [], actionId = "") {
+  const seenFieldNames = new Set();
+  const normalizedFields = [];
+  for (const field of Array.isArray(fields) ? fields : []) {
+    const normalizedField = normalizeArtifactField(field, actionId);
+    if (seenFieldNames.has(normalizedField.name)) {
+      throw aiStudioError(
+        `Duplicate AI Studio artifact field in action ${actionId}: ${normalizedField.name}`,
+        "ai_studio_duplicate_workflow_artifact_field"
+      );
+    }
+    seenFieldNames.add(normalizedField.name);
+    normalizedFields.push(normalizedField);
+  }
+  return normalizedFields;
+}
+
 function normalizeAction(action = {}, stepId = "") {
   const id = normalizeText(action.id);
   if (!id) {
@@ -33,6 +69,7 @@ function normalizeAction(action = {}, stepId = "") {
   return {
     adapterCapability: normalizeText(action.adapterCapability),
     advanceOnSuccess: action.advanceOnSuccess === true,
+    artifactFields: type === "editor" ? normalizeArtifactFields(action.artifactFields, id) : [],
     disabledReason: normalizeText(action.disabledReason),
     disabledWhenReason: normalizeText(action.disabledWhenReason || action.disabledReason),
     disabledWhen: normalizeConditionList(action.disabledWhen),
@@ -151,6 +188,11 @@ function publicActionDefinition(action) {
   }
   if (action.promptId) {
     definition.promptId = action.promptId;
+  }
+  if (action.artifactFields.length > 0) {
+    definition.artifactFields = action.artifactFields.map((field) => ({
+      ...field
+    }));
   }
   return definition;
 }

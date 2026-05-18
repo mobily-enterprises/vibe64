@@ -39,6 +39,10 @@ import {
   ENABLE_RECURSIVE_AI_STUDIO_OPENING_CONFIG,
   recursiveAiStudioOpeningEnabled
 } from "./sessionHooks.js";
+import {
+  jskitDatabaseDockerArgs,
+  readDatabaseHostFromDotEnv
+} from "./setupMariaDbRuntime.js";
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_TARGET_SCRIPT_NAMES = Object.freeze([
@@ -151,7 +155,8 @@ function targetScriptTerminalArgs({
   scriptName,
   targetRoot,
   terminalId,
-  workdir
+  workdir,
+  databaseHost = ""
 }) {
   return [
     "run",
@@ -174,6 +179,7 @@ function targetScriptTerminalArgs({
     `${targetRoot}:/workspace`,
     "-v",
     `${targetRoot}:${targetRoot}`,
+    ...jskitDatabaseDockerArgs(databaseHost),
     ...targetTerminalHostDockerArgs(hostDocker),
     ...hostUserIdentityEnvArgs(),
     "-w",
@@ -526,12 +532,14 @@ async function createJskitTargetScriptTerminalSpec(targetRoot, input = {}, {
   }
 
   const targetTerminalConfig = resolveTargetTerminalConfig(config);
+  const databaseHost = await readDatabaseHostFromDotEnv(normalizedTargetRoot);
   const commandPreview = targetScriptCommandPreview(validatedScriptName);
   return {
     args: ({ id }) => targetScriptTerminalArgs({
       containerName: targetScriptContainerName({
         terminalId: id
       }),
+      databaseHost,
       hostDocker: targetTerminalConfig.hostDocker,
       scriptName: validatedScriptName,
       targetRoot: normalizedTargetRoot,
@@ -546,6 +554,7 @@ async function createJskitTargetScriptTerminalSpec(targetRoot, input = {}, {
     metadata: {
       command: commandPreview,
       commandPreview,
+      databaseHost,
       hostDocker: targetTerminalConfig.hostDocker,
       hostDockerSource: targetTerminalConfig.hostDockerSource,
       runRoot: normalizedTargetRoot,

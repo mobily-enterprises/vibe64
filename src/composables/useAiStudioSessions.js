@@ -5,8 +5,6 @@ import { useList } from "@jskit-ai/users-web/client/composables/useList";
 import { usePaths } from "@jskit-ai/users-web/client/composables/usePaths";
 import { useAiStudioCodexCommands } from "@/composables/useAiStudioCodexCommands.js";
 import {
-  ISSUE_BODY_ARTIFACT,
-  ISSUE_TITLE_ARTIFACT,
   PULL_REQUEST_ARTIFACT
 } from "@/lib/aiStudioArtifactNames.js";
 import {
@@ -58,6 +56,41 @@ function displayableActionResultMessage(result = {}) {
   return /^Rendered\b/u.test(message) ? "" : message;
 }
 
+function normalizeDraftEditorField(field = {}) {
+  const name = String(field?.name || "").trim();
+  if (!name) {
+    return null;
+  }
+  const kind = String(field.kind || "textarea").trim();
+  return {
+    kind: kind === "text" ? "text" : "textarea",
+    label: String(field.label || name).trim(),
+    name,
+    required: field.required !== false,
+    requiredMessage: String(field.requiredMessage || "").trim()
+  };
+}
+
+function normalizeDraftEditorFields(fields = []) {
+  return (Array.isArray(fields) ? fields : [])
+    .map(normalizeDraftEditorField)
+    .filter(Boolean);
+}
+
+function draftEditorValuesFromArtifacts(fields = [], artifacts = {}) {
+  return Object.fromEntries(fields.map((field) => [
+    field.name,
+    String(artifacts?.[field.name] || "")
+  ]));
+}
+
+function artifactsFromDraftEditorValues(fields = [], values = {}) {
+  return Object.fromEntries(fields.map((field) => [
+    field.name,
+    String(values?.[field.name] || "")
+  ]));
+}
+
 const CREATE_PULL_REQUEST_FILE_ACTION_ID = "create_pr_file";
 const ACCEPT_CHANGES_STEP_ID = "changes_accepted";
 const PULL_REQUEST_FILE_STEP_ID = "pr_file_created";
@@ -90,13 +123,14 @@ function useAiStudioSessions({
   const diffError = ref("");
   const diffLoading = ref(false);
   const diffPayload = ref(null);
-  const draftEditorBody = ref("");
+  const draftEditorAction = ref(null);
   const draftEditorError = ref("");
-  const draftEditorIssueTitle = ref("");
-  const draftEditorKind = ref("issue");
+  const draftEditorFields = ref([]);
   const draftEditorLoading = ref(false);
   const draftEditorOpen = ref(false);
   const draftEditorSaving = ref(false);
+  const draftEditorTitle = ref("Edit draft");
+  const draftEditorValues = ref({});
   const pendingCommandAdvanceOnSuccess = ref(false);
   const pendingCommandStartedAt = ref(0);
   let artifactReadinessRefreshInFlight = false;
@@ -420,7 +454,11 @@ function useAiStudioSessions({
     diffDialogOpen.value = false;
     diffError.value = "";
     diffPayload.value = null;
+    draftEditorAction.value = null;
+    draftEditorFields.value = [];
     draftEditorOpen.value = false;
+    draftEditorTitle.value = "Edit draft";
+    draftEditorValues.value = {};
     pendingCommandAdvanceOnSuccess.value = false;
     pendingCommandStartedAt.value = 0;
   }
@@ -541,21 +579,26 @@ function useAiStudioSessions({
   }
 
   async function openDraftEditor(action = {}) {
-    draftEditorKind.value = action.id === "edit_pr" ? "pull-request" : "issue";
+    const actionId = String(action.id || "").trim();
+    draftEditorAction.value = action;
+    draftEditorFields.value = normalizeDraftEditorFields(action.artifactFields);
+    draftEditorTitle.value = String(action.label || "Edit draft");
+    draftEditorValues.value = {};
     draftEditorError.value = "";
     draftEditorOpen.value = true;
     draftEditorLoading.value = true;
     try {
-      const response = await sessionArtifacts.readArtifacts(selectedSessionId.value);
+      const response = await sessionArtifacts.readArtifacts(selectedSessionId.value, actionId);
       if (response?.ok === false) {
         draftEditorError.value = resolveResponseErrorMessage(response, "Draft could not be loaded.");
         return;
       }
-      const draftArtifacts = response.artifacts || {};
-      draftEditorIssueTitle.value = String(draftArtifacts[ISSUE_TITLE_ARTIFACT] || "");
-      draftEditorBody.value = draftEditorKind.value === "issue"
-        ? String(draftArtifacts[ISSUE_BODY_ARTIFACT] || "")
-        : String(draftArtifacts[PULL_REQUEST_ARTIFACT] || "");
+      const fields = normalizeDraftEditorFields(response.artifactFields);
+      draftEditorFields.value = fields.length ? fields : draftEditorFields.value;
+      draftEditorValues.value = draftEditorValuesFromArtifacts(
+        draftEditorFields.value,
+        response.artifacts || {}
+      );
     } catch (error) {
       draftEditorError.value = String(error?.message || error || "Draft could not be loaded.");
     } finally {
@@ -570,14 +613,11 @@ function useAiStudioSessions({
     draftEditorError.value = "";
     draftEditorSaving.value = true;
     try {
-      const response = draftEditorKind.value === "issue"
-        ? await sessionArtifacts.saveArtifacts(selectedSessionId.value, {
-            [ISSUE_BODY_ARTIFACT]: draftEditorBody.value,
-            [ISSUE_TITLE_ARTIFACT]: draftEditorIssueTitle.value
-          })
-        : await sessionArtifacts.saveArtifacts(selectedSessionId.value, {
-            [PULL_REQUEST_ARTIFACT]: draftEditorBody.value
-          });
+      const response = await sessionArtifacts.saveArtifacts(
+        selectedSessionId.value,
+        draftEditorAction.value?.id || "",
+        artifactsFromDraftEditorValues(draftEditorFields.value, draftEditorValues.value)
+      );
       if (response?.ok === false) {
         draftEditorError.value = resolveResponseErrorMessage(response, "Draft could not be saved.");
         return;
@@ -783,13 +823,13 @@ function useAiStudioSessions({
     diffError,
     diffLoading,
     diffPayload,
-    draftEditorBody,
+    draftEditorFields,
     draftEditorError,
-    draftEditorIssueTitle,
-    draftEditorKind,
     draftEditorLoading,
     draftEditorOpen,
     draftEditorSaving,
+    draftEditorTitle,
+    draftEditorValues,
     goNext,
     handleCodexPromptInjected,
     handleCodexPromptInjectionFailed,

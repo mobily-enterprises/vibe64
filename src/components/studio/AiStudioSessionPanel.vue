@@ -267,12 +267,12 @@
 
     <AiStudioDraftEditorDialog
       v-model="draftEditorOpen"
-      v-model:body-text="draftEditorBody"
-      v-model:issue-title="draftEditorIssueTitle"
+      v-model:values="draftEditorValues"
       :error="draftEditorError"
-      :kind="draftEditorKind"
+      :fields="draftEditorFields"
       :loading="draftEditorLoading"
       :saving="draftEditorSaving"
+      :title="draftEditorTitle"
       @save="saveDraftEditor"
     />
 
@@ -440,13 +440,13 @@ const {
   diffError,
   diffLoading,
   diffPayload,
-  draftEditorBody,
   draftEditorError,
-  draftEditorIssueTitle,
-  draftEditorKind,
+  draftEditorFields,
   draftEditorLoading,
   draftEditorOpen,
   draftEditorSaving,
+  draftEditorTitle,
+  draftEditorValues,
   goNext,
   handleCodexPromptInjected,
   handleCodexPromptInjectionFailed,

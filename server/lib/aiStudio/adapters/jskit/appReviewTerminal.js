@@ -21,6 +21,10 @@ import {
   stableHash
 } from "../../../shellCommands.js";
 import { JSKIT_TOOLCHAIN_IMAGE } from "./toolchainIdentity.js";
+import {
+  jskitDatabaseDockerArgs,
+  readDatabaseHostFromDotEnv
+} from "./setupMariaDbRuntime.js";
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_REVIEW_BUILD_COMMAND = "npm run build";
@@ -216,7 +220,8 @@ function reviewTerminalArgs({
   targetRoot = "",
   terminalId = "",
   testrunCommand = "",
-  workdir = ""
+  workdir = "",
+  databaseHost = ""
 } = {}) {
   return [
     "run",
@@ -241,6 +246,7 @@ function reviewTerminalArgs({
     `${targetRoot}:/workspace`,
     "-v",
     `${targetRoot}:${targetRoot}`,
+    ...jskitDatabaseDockerArgs(databaseHost),
     ...targetDockerArgs(hostDocker),
     ...hostUserIdentityEnvArgs(),
     "-w",
@@ -276,12 +282,16 @@ async function createJskitAppReviewTerminalSpec({
 
   const config = await resolveReviewConfig(worktreePath);
   const port = await findAvailableReviewPort(config.preferredPort);
-  const urlPath = await defaultAppPath(worktreePath);
+  const [urlPath, databaseHost] = await Promise.all([
+    defaultAppPath(worktreePath),
+    readDatabaseHostFromDotEnv(worktreePath)
+  ]);
   const appUrl = `http://127.0.0.1:${port}${urlPath}`;
   const metadata = {
     appUrl,
     buildCommand: config.buildCommand,
     commandSource: config.commandSource,
+    databaseHost,
     hostDocker: config.hostDocker,
     hostDockerSource: config.hostDockerSource,
     port,
@@ -305,7 +315,8 @@ async function createJskitAppReviewTerminalSpec({
       targetRoot: resolvedTargetRoot,
       terminalId: id,
       testrunCommand: config.testrunCommand,
-      workdir: worktreePath
+      workdir: worktreePath,
+      databaseHost
     }),
     command: "docker",
     commandPreview: ({ args }) => dockerCommand(args),

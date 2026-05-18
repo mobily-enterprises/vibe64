@@ -41,7 +41,7 @@ test("AI Studio project service saves project type and plain-file configuration"
         enable_recursive_ai_studio_opening: true,
         github_pr_merge_method: "rebase",
         jskit_database_runtime: "postgres",
-        jskit_tenancy_mode: "multi",
+        jskit_tenancy_mode: "workspaces",
         recursive_ai_studio_local_jskit_ai_root: ""
       }
     });
@@ -59,7 +59,7 @@ test("AI Studio project service saves project type and plain-file configuration"
 
     const runtime = await service.createRuntime();
     assert.equal(runtime.adapter.id, "jskit");
-    assert.equal(runtime.projectConfig.values.jskit_tenancy_mode, "multi");
+    assert.equal(runtime.projectConfig.values.jskit_tenancy_mode, "workspaces");
   });
 });
 

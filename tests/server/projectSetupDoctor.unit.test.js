@@ -80,6 +80,25 @@ test("Project Setup blocks an empty directory at Git initialization", async () =
   assert.equal(status.stages.find((stage) => stage.id === "git-ready")?.repair?.actionId, "terminal-git-init");
 });
 
+test("Project Setup treats .ai-studio as bootstrap state in an otherwise empty directory", async () => {
+  const targetRoot = await mkdtemp(path.join(os.tmpdir(), "ai-studio-project-configured-empty-"));
+  await mkdir(path.join(targetRoot, ".ai-studio", "config"), {
+    recursive: true
+  });
+  await writeFile(path.join(targetRoot, ".ai-studio", "project_type"), "jskit\n", "utf8");
+
+  const status = await inspectProjectSetup({
+    targetRoot
+  });
+
+  assert.equal(status.ready, false);
+  assert.equal(status.hardStop, false);
+  assert.equal(status.stages[0].status, "pass");
+  assert.match(status.stages[0].observed, /\.ai-studio/u);
+  assert.equal(status.currentStageId, "git-ready");
+  assert.equal(status.stages.find((stage) => stage.id === "git-ready")?.repair?.actionId, "terminal-git-init");
+});
+
 test("Project Setup admits linked Git worktrees before Git safety checks", async () => {
   const worktreeRoot = await createLinkedWorktree();
 

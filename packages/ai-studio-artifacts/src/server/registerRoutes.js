@@ -56,6 +56,7 @@ function registerRoutes(
       const response = await request.executeAction({
         actionId: ACTION_READ_ARTIFACTS,
         input: {
+          actionId: request.query?.actionId,
           sessionId: request.params.sessionId
         }
       });

@@ -3,6 +3,11 @@ import { deepFreeze } from "@jskit-ai/kernel/shared/support/deepFreeze";
 
 const artifactReadInputValidator = deepFreeze({
   schema: createSchema({
+    actionId: {
+      type: "string",
+      noTrim: false,
+      required: true
+    },
     sessionId: {
       type: "string",
       noTrim: false,
@@ -14,6 +19,11 @@ const artifactReadInputValidator = deepFreeze({
 
 const artifactsInputValidator = deepFreeze({
   schema: createSchema({
+    actionId: {
+      type: "string",
+      noTrim: false,
+      required: true
+    },
     artifacts: {
       type: "object",
       additionalProperties: true,
@@ -25,6 +35,11 @@ const artifactsInputValidator = deepFreeze({
 
 const artifactSaveInputValidator = deepFreeze({
   schema: createSchema({
+    actionId: {
+      type: "string",
+      noTrim: false,
+      required: true
+    },
     artifacts: {
       type: "object",
       additionalProperties: true,

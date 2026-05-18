@@ -39,8 +39,19 @@ function aiStudioCodexThreadPath(sessionsApiPath = "", sessionId = "") {
   return aiStudioSessionPath(sessionsApiPath, sessionId, "/codex-thread");
 }
 
-function aiStudioArtifactsQueryKey(surfaceId, ownershipFilter, sessionId = "") {
-  return ["ai-studio", surfaceId, ownershipFilter, "session-artifacts", encodePathSegment(sessionId)];
+function aiStudioArtifactsQueryKey(surfaceId, ownershipFilter, sessionId = "", actionId = "") {
+  const key = [
+    "ai-studio",
+    surfaceId,
+    ownershipFilter,
+    "session-artifacts",
+    encodePathSegment(sessionId)
+  ];
+  const encodedActionId = encodePathSegment(actionId);
+  if (encodedActionId) {
+    key.push(encodedActionId);
+  }
+  return key;
 }
 
 function commandInputFromContext(context = {}) {

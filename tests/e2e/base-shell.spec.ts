@@ -276,17 +276,17 @@ const blockedAppSetupPayload = {
     },
     {
       id: "scaffold",
-      label: "Initial JSKIT scaffold",
+      label: "Seed JSKIT app",
       status: "blocked",
       required: true,
       expected: "Minimal JSKIT scaffold markers exist.",
       observed: "No scaffold files are present yet.",
-      explanation: "Create the smallest JSKIT app scaffold before installing dependencies or running doctor.",
+      explanation: "Seed this target with the selected JSKIT configuration before installing dependencies or checking runtime readiness.",
       repair: {
         kind: "terminal",
         actionId: "terminal-scaffold-jskit",
-        label: "Create JSKIT scaffold",
-        commandPreview: "npx @jskit-ai/create-app example-target-app --target . --tenancy-mode none"
+        label: "Seed this project",
+        commandPreview: "npx @jskit-ai/create-app example-target-app --target . --force --tenancy-mode none --title \"Example Target App\" --initial-bundles none"
       }
     },
     {
@@ -1863,11 +1863,11 @@ test.describe("setup tabbed doctor responsive smoke", () => {
       await expect(page.getByText("Project Setup blocked").first()).toBeVisible();
       await expect(page.getByText("Directory admissibility").first()).toBeVisible();
       await expect(page.getByText("Remote/local sync").first()).toBeVisible();
-      await expect(page.getByText("Initial JSKIT scaffold").first()).toBeVisible();
+      await expect(page.getByText("Seed JSKIT app").first()).toBeVisible();
       await expect(page.getByText("Dependencies runnable").first()).toBeVisible();
       await expect(page.getByText("JSKIT doctor").first()).toBeVisible();
       await expect(page.getByText("Git checkpoint").first()).toBeVisible();
-      await expect(page.getByRole("button", { name: "Create JSKIT scaffold" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Seed this project" })).toBeVisible();
       await expect(page.locator(".project-setup-doctor .doctor-status__status-icon")).toHaveCount(
         blockedAppSetupPayload.stages.length
       );

@@ -22,7 +22,9 @@ const featureActions = Object.freeze([
     observability: {},
     async execute(input, context, deps) {
       void context;
-      return deps.featureService.readArtifacts(input.sessionId);
+      return deps.featureService.readArtifacts(input.sessionId, {
+        actionId: input.actionId
+      });
     }
   },
   {
@@ -41,6 +43,7 @@ const featureActions = Object.freeze([
     async execute(input, context, deps) {
       void context;
       return deps.featureService.saveArtifacts(input.sessionId, {
+        actionId: input.actionId,
         artifacts: input.artifacts || {}
       });
     }

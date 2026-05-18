@@ -4,8 +4,9 @@ This note records planned behavior for JSKIT adapter configuration that already
 exists in AI Studio.
 
 The current config screen can save these values and pass them into prompt and
-adapter context. The remaining work is to make JSKIT-specific setup, scaffold,
-doctor, and prompt behavior actively use the selected values.
+adapter context. JSKIT seeding already uses the selected tenancy value. The
+remaining work is to make JSKIT-specific database setup, doctor, and prompt
+behavior actively use the selected values.
 
 ## Adapter Config Values
 
@@ -28,7 +29,7 @@ postgres
 Meaning:
 
 - `none`: the JSKIT target should not use a managed database runtime.
-- `mysql`: the JSKIT target should use the JSKIT MySQL runtime.
+- `mysql`: the JSKIT target should use JSKIT's MySQL-compatible runtime backed by MariaDB in Studio.
 - `postgres`: the JSKIT target should use the JSKIT Postgres runtime.
 
 ### `jskit_tenancy_mode`
@@ -39,23 +40,23 @@ Current expected values:
 
 ```text
 none
-single
-multi
+personal
+workspaces
 ```
 
 Meaning:
 
 - `none`: no tenant model should be introduced.
-- `single`: the app uses a single-tenant model if JSKIT supports that exact mode.
-- `multi`: the app uses a multi-tenant model if JSKIT supports that exact mode.
+- `personal`: the app uses JSKIT's personal tenancy mode.
+- `workspaces`: the app uses JSKIT's workspace tenancy mode.
 
-Before implementation, confirm the exact JSKIT generator/runtime terms and use those terms verbatim.
+These values match the current `@jskit-ai/create-app --tenancy-mode` vocabulary.
 
 ## What These Values Will Affect
 
-### Scaffold
+### Seed
 
-The JSKIT scaffold command should eventually use these values when creating an app from an empty directory.
+The JSKIT seed command uses these values when creating an app from an empty directory.
 
 Affected area:
 
@@ -63,9 +64,12 @@ Affected area:
 server/lib/aiStudio/adapters/jskit/setupProjectChecks.js
 ```
 
-Expected future behavior:
+Current behavior:
 
 - `jskit_tenancy_mode` drives the JSKIT app generator tenancy flag.
+
+Expected future behavior:
+
 - `jskit_database_runtime` drives the database/runtime package choice if JSKIT exposes that as a generator option.
 - If JSKIT does not expose a direct generator option, the adapter should not invent one. It should call official JSKIT commands only.
 
@@ -78,13 +82,13 @@ Affected areas:
 ```text
 server/lib/aiStudio/adapters/jskit/setupDoctorPlugin.js
 server/lib/aiStudio/adapters/jskit/setupProjectChecks.js
-server/lib/aiStudio/adapters/jskit/setupMysqlRuntime.js
+server/lib/aiStudio/adapters/jskit/setupMariaDbRuntime.js
 ```
 
 Expected future behavior:
 
 - For `jskit_database_runtime=none`, fail or warn if database runtime packages/config are present unexpectedly.
-- For `jskit_database_runtime=mysql`, require the expected JSKIT MySQL runtime package/config and managed MySQL readiness.
+- For `jskit_database_runtime=mysql`, require the expected JSKIT MySQL-compatible runtime package/config and managed MariaDB readiness.
 - For `jskit_database_runtime=postgres`, require the expected JSKIT Postgres runtime package/config and managed Postgres readiness.
 - For `jskit_tenancy_mode`, verify the target metadata/config indicates the selected tenancy mode.
 
@@ -132,7 +136,7 @@ Expected future behavior:
 
 ### Runtime Services
 
-Runtime service checks should eventually support both MySQL and Postgres.
+Runtime service checks should eventually support both MariaDB-compatible JSKIT runtimes and Postgres.
 
 Affected area:
 
@@ -142,14 +146,13 @@ server/lib/aiStudio/adapters/jskit/setupProjectChecks.js
 
 Current status:
 
-- The JSKIT setup path has MySQL-specific code.
-- Postgres should not be added by copying MySQL code blindly.
-- The adapter should first define a small runtime-service boundary, then add MySQL/Postgres implementations behind it.
+- The JSKIT setup path currently supports the MySQL-compatible runtime through MariaDB.
+- Postgres should not be added by copying MariaDB code blindly.
+- The adapter should first define a small runtime-service boundary, then add MariaDB/Postgres implementations behind it.
 
 ## Explicit Non-Goals For Now
 
-- Leave scaffold behavior untouched for now.
-- Leave setup doctor behavior untouched for now.
+- Leave Postgres setup doctor behavior untouched for now.
 - Do not add Postgres support yet.
 - Do not make JSKIT prompts enforce database or tenancy choices until the
   matching setup checks are also implemented.

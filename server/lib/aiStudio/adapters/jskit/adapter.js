@@ -88,7 +88,7 @@ const JSKIT_CONFIG_FIELDS = deepFreeze([
         value: "none"
       },
       {
-        label: "MySQL",
+        label: "MariaDB",
         value: "mysql"
       },
       {
@@ -100,7 +100,7 @@ const JSKIT_CONFIG_FIELDS = deepFreeze([
   },
   {
     defaultValue: "none",
-    description: "Future JSKIT tenancy preference.",
+    description: "JSKIT create-app tenancy mode used when Studio seeds a new target.",
     id: "jskit_tenancy_mode",
     label: "Tenancy mode",
     options: [
@@ -109,12 +109,12 @@ const JSKIT_CONFIG_FIELDS = deepFreeze([
         value: "none"
       },
       {
-        label: "Single tenant",
-        value: "single"
+        label: "Personal",
+        value: "personal"
       },
       {
-        label: "Multi tenant",
-        value: "multi"
+        label: "Workspaces",
+        value: "workspaces"
       }
     ],
     type: "select"

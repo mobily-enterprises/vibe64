@@ -51,24 +51,30 @@
         />
 
         <div class="ai-studio-draft-editor__fields">
-          <v-text-field
-            v-if="isIssue"
-            :model-value="issueTitle"
-            label="Issue title"
-            variant="outlined"
-            :disabled="loading || saving"
-            @update:model-value="$emit('update:issueTitle', $event)"
-          />
+          <template
+            v-for="field in normalizedFields"
+            :key="field.name"
+          >
+            <v-text-field
+              v-if="field.kind === 'text'"
+              :model-value="fieldValue(field.name)"
+              :label="field.label"
+              variant="outlined"
+              :disabled="loading || saving"
+              @update:model-value="updateFieldValue(field.name, $event)"
+            />
 
-          <v-textarea
-            :model-value="bodyText"
-            :label="bodyLabel"
-            variant="outlined"
-            auto-grow
-            rows="22"
-            :disabled="loading || saving"
-            @update:model-value="$emit('update:bodyText', $event)"
-          />
+            <v-textarea
+              v-else
+              :model-value="fieldValue(field.name)"
+              :label="field.label"
+              variant="outlined"
+              auto-grow
+              rows="22"
+              :disabled="loading || saving"
+              @update:model-value="updateFieldValue(field.name, $event)"
+            />
+          </template>
         </div>
       </v-card-text>
     </v-card>
@@ -84,21 +90,13 @@ import {
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
 
 const props = defineProps({
-  bodyText: {
-    type: String,
-    default: ""
-  },
   error: {
     type: String,
     default: ""
   },
-  issueTitle: {
-    type: String,
-    default: ""
-  },
-  kind: {
-    type: String,
-    default: "issue"
+  fields: {
+    type: Array,
+    default: () => []
   },
   loading: {
     type: Boolean,
@@ -111,32 +109,69 @@ const props = defineProps({
   saving: {
     type: Boolean,
     default: false
+  },
+  title: {
+    type: String,
+    default: "Edit draft"
+  },
+  values: {
+    type: Object,
+    default: () => ({})
   }
 });
 
 const emit = defineEmits([
   "save",
-  "update:bodyText",
-  "update:issueTitle",
-  "update:modelValue"
+  "update:modelValue",
+  "update:values"
 ]);
 
-const isIssue = computed(() => props.kind === "issue");
-const editorTitle = computed(() => isIssue.value ? "Edit issue" : "Edit pull request");
-const bodyLabel = computed(() => isIssue.value ? "Issue body" : "Pull request body");
+function normalizeField(field = {}) {
+  const name = String(field?.name || "").trim();
+  if (!name) {
+    return null;
+  }
+  const kind = String(field.kind || "textarea").trim();
+  return {
+    kind: kind === "text" ? "text" : "textarea",
+    label: String(field.label || name).trim(),
+    name,
+    required: field.required !== false
+  };
+}
+
+const normalizedFields = computed(() => {
+  return (Array.isArray(props.fields) ? props.fields : [])
+    .map(normalizeField)
+    .filter(Boolean);
+});
+const editorTitle = computed(() => String(props.title || "Edit draft"));
 const closeLabel = computed(() => `Close ${editorTitle.value.toLowerCase()}`);
 const saveDisabled = computed(() => {
   if (props.loading || props.saving) {
     return true;
   }
-  if (!String(props.bodyText || "").trim()) {
+  if (normalizedFields.value.length < 1) {
     return true;
   }
-  return isIssue.value && !String(props.issueTitle || "").trim();
+  return normalizedFields.value.some((field) => {
+    return field.required && !String(props.values?.[field.name] || "").trim();
+  });
 });
 
 function updateOpen(open) {
   emit("update:modelValue", open === true);
+}
+
+function fieldValue(name) {
+  return String(props.values?.[name] || "");
+}
+
+function updateFieldValue(name, value) {
+  emit("update:values", {
+    ...(props.values || {}),
+    [name]: String(value || "")
+  });
 }
 </script>
 

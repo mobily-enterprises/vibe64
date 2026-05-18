@@ -29,6 +29,14 @@ describe("AI Studio session request config", () => {
       "session-artifacts",
       "2026-05-16_01%3Atwo"
     ]);
+    expect(aiStudioArtifactsQueryKey("home", "public", "2026-05-16_01:two", "edit issue")).toEqual([
+      "ai-studio",
+      "home",
+      "public",
+      "session-artifacts",
+      "2026-05-16_01%3Atwo",
+      "edit%20issue"
+    ]);
   });
 
   it("builds encoded session action and terminal support paths", () => {

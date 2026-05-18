@@ -147,7 +147,7 @@ test("AI Studio project routes persist project type and plain-file config", asyn
             enable_recursive_ai_studio_opening: true,
             github_pr_merge_method: "squash",
             jskit_database_runtime: "mysql",
-            jskit_tenancy_mode: "single",
+            jskit_tenancy_mode: "personal",
             recursive_ai_studio_local_jskit_ai_root: ""
           }
         },

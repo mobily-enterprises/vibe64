@@ -49,6 +49,9 @@ import {
   buildDoctorToolchainArgs
 } from "../../../../server/lib/doctorToolchain.js";
 import {
+  AI_STUDIO_STATE_DIR
+} from "../../../../server/lib/aiStudio/sessionStore.js";
+import {
   dockerCommand,
   hostUserDockerArgs,
   hostUserIdentityEnvArgs,
@@ -60,6 +63,9 @@ const TERMINAL_NAMESPACE = "project-setup-doctor";
 const CREATE_GIT_CHECKPOINT_ACTION = "terminal-git-checkpoint";
 const PUSH_GIT_CHECKPOINT_ACTION = "terminal-git-push-checkpoint";
 const DEFAULT_CHECKPOINT_COMMIT_MESSAGE = "Initial project setup";
+const STUDIO_OWNED_BOOTSTRAP_ENTRIES = new Set([
+  AI_STUDIO_STATE_DIR
+]);
 
 function workspaceWriteDockerArgs() {
   return [
@@ -333,9 +339,12 @@ async function checkDirectory(targetRoot, context) {
   }
 
   const entries = await listMeaningfulEntries(targetRoot);
-  const nonGitEntries = entries.filter((entry) => entry !== ".git");
+  const nonGitEntries = entries.filter((entry) => {
+    return entry !== ".git" && !STUDIO_OWNED_BOOTSTRAP_ENTRIES.has(entry);
+  });
   context.entries = entries;
   context.nonGitEntries = nonGitEntries;
+  context.studioOwnedEntries = entries.filter((entry) => STUDIO_OWNED_BOOTSTRAP_ENTRIES.has(entry));
 
   let gitStat = null;
   try {
@@ -360,8 +369,10 @@ async function checkDirectory(targetRoot, context) {
       id: "directory",
       label: "Directory admissibility",
       expected: "Target directory is empty or already a Git repository.",
-      observed: "Empty directory with no .git.",
-      explanation: "Studio can safely initialize this directory."
+      observed: context.studioOwnedEntries.length
+        ? `No project files yet. Studio-owned state exists:\n${formatList(context.studioOwnedEntries)}`
+        : "Empty directory with no .git.",
+      explanation: "Studio can safely initialize this directory because only Studio bootstrap state is present."
     });
   }
 

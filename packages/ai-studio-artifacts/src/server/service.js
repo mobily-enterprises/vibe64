@@ -7,34 +7,12 @@ import {
   deepFreeze
 } from "../../../../server/lib/aiStudio/deepFreeze.js";
 
-const EDIT_ISSUE_ACTION_ID = "edit_issue";
-const EDIT_PULL_REQUEST_ACTION_ID = "edit_pr";
-const ISSUE_BODY_ARTIFACT = "issue.md";
-const ISSUE_TITLE_ARTIFACT = "issue_title";
-const ISSUE_URL_METADATA = "issue_url";
-const PULL_REQUEST_ARTIFACT = "pull_request.md";
-const PULL_REQUEST_URL_METADATA = "pr_url";
-
-const EDITABLE_ARTIFACTS = deepFreeze({
-  [ISSUE_BODY_ARTIFACT]: {
-    blockedMetadata: ISSUE_URL_METADATA,
-    blockedMessage: "The GitHub issue already exists; edit it on GitHub instead.",
-    editorActionId: EDIT_ISSUE_ACTION_ID,
-    requiredMessage: "Issue body is required."
-  },
-  [ISSUE_TITLE_ARTIFACT]: {
-    blockedMetadata: ISSUE_URL_METADATA,
-    blockedMessage: "The GitHub issue already exists; edit it on GitHub instead.",
-    editorActionId: EDIT_ISSUE_ACTION_ID,
-    metadataName: ISSUE_TITLE_ARTIFACT,
-    requiredMessage: "Issue title is required."
-  },
-  [PULL_REQUEST_ARTIFACT]: {
-    blockedMetadata: PULL_REQUEST_URL_METADATA,
-    blockedMessage: "The GitHub pull request already exists; edit it on GitHub instead.",
-    editorActionId: EDIT_PULL_REQUEST_ACTION_ID,
-    requiredMessage: "Pull request body is required."
-  }
+const EMPTY_EDITOR_ACTION = deepFreeze({
+  action: null,
+  code: "ai_studio_editor_action_required",
+  fields: [],
+  message: "Editor action id is required.",
+  ok: false
 });
 
 function artifactResult(operation) {
@@ -44,15 +22,6 @@ function artifactResult(operation) {
   });
 }
 
-function artifactNames() {
-  return Object.keys(EDITABLE_ARTIFACTS)
-    .sort((left, right) => left.localeCompare(right));
-}
-
-function artifactPolicy(artifactName = "") {
-  return EDITABLE_ARTIFACTS[String(artifactName || "").trim()] || null;
-}
-
 function actionById(session = {}, actionId = "") {
   return (Array.isArray(session.actions) ? session.actions : [])
     .find((action) => action.id === actionId) || null;
@@ -60,41 +29,6 @@ function actionById(session = {}, actionId = "") {
 
 function artifactPath(session = {}, artifactName = "") {
   return session.artifactsRoot && artifactName ? path.join(session.artifactsRoot, artifactName) : "";
-}
-
-function artifactState(session = {}, artifactName = "") {
-  const policy = artifactPolicy(artifactName);
-  if (!policy) {
-    return {
-      disabledReason: `Artifact is not editable: ${artifactName}`,
-      editable: false
-    };
-  }
-
-  const action = actionById(session, policy.editorActionId);
-  if (!action || action.type !== "editor") {
-    return {
-      disabledReason: `Editor action ${policy.editorActionId} is not available on this AI Studio step.`,
-      editable: false
-    };
-  }
-  if (policy.blockedMetadata && session.metadata?.[policy.blockedMetadata]) {
-    return {
-      disabledReason: policy.blockedMessage,
-      editable: false
-    };
-  }
-  if (action.enabled !== true) {
-    return {
-      disabledReason: action.disabledReason || `Editor action ${policy.editorActionId} is disabled.`,
-      editable: false
-    };
-  }
-
-  return {
-    disabledReason: "",
-    editable: true
-  };
 }
 
 function artifactErrorResponse(session = {}, code = "", message = "") {
@@ -110,6 +44,28 @@ function artifactErrorResponse(session = {}, code = "", message = "") {
   };
 }
 
+function normalizeArtifactField(field = {}) {
+  const name = String(field?.name || "").trim();
+  if (!name) {
+    return null;
+  }
+  const kind = String(field.kind || "textarea").trim();
+  return {
+    kind: kind === "text" ? "text" : "textarea",
+    label: String(field.label || name).trim(),
+    metadataName: String(field.metadataName || "").trim(),
+    name,
+    required: field.required !== false,
+    requiredMessage: String(field.requiredMessage || "").trim()
+  };
+}
+
+function normalizeArtifactFields(fields = []) {
+  return (Array.isArray(fields) ? fields : [])
+    .map(normalizeArtifactField)
+    .filter(Boolean);
+}
+
 function normalizeArtifactInput(input = {}) {
   const artifactEntries = Object.entries(normalizePlainObject(input.artifacts))
     .map(([name, value]) => [
@@ -120,29 +76,114 @@ function normalizeArtifactInput(input = {}) {
   return Object.fromEntries(artifactEntries);
 }
 
-function artifactsResponse(session = {}, artifacts = {}) {
-  const editableArtifacts = artifactNames();
+function editorActionState(session = {}, actionId = "") {
+  const normalizedActionId = String(actionId || "").trim();
+  if (!normalizedActionId) {
+    return EMPTY_EDITOR_ACTION;
+  }
+
+  const action = actionById(session, normalizedActionId);
+  if (!action) {
+    return {
+      action: null,
+      code: "ai_studio_editor_action_not_available",
+      fields: [],
+      message: `Editor action ${normalizedActionId} is not available on this AI Studio step.`,
+      ok: false
+    };
+  }
+  if (action.type !== "editor") {
+    return {
+      action,
+      code: "ai_studio_action_not_editor",
+      fields: [],
+      message: `Action ${normalizedActionId} is not an editor action.`,
+      ok: false
+    };
+  }
+  if (action.enabled !== true) {
+    return {
+      action,
+      code: "ai_studio_artifact_edit_not_available",
+      fields: normalizeArtifactFields(action.artifactFields),
+      message: action.disabledReason || `Editor action ${normalizedActionId} is disabled.`,
+      ok: false
+    };
+  }
+
+  const fields = normalizeArtifactFields(action.artifactFields);
+  if (fields.length < 1) {
+    return {
+      action,
+      code: "ai_studio_editor_artifacts_missing",
+      fields: [],
+      message: `Editor action ${normalizedActionId} does not declare editable artifacts.`,
+      ok: false
+    };
+  }
+
+  return {
+    action,
+    code: "",
+    fields,
+    message: "",
+    ok: true
+  };
+}
+
+function artifactStatesForFields(fields = []) {
+  return Object.fromEntries(fields.map((field) => [
+    field.name,
+    {
+      disabledReason: "",
+      editable: true
+    }
+  ]));
+}
+
+function artifactNamesForFields(fields = []) {
+  return fields
+    .map((field) => field.name)
+    .filter(Boolean);
+}
+
+function artifactFieldByName(fields = []) {
+  return new Map(fields.map((field) => [field.name, field]));
+}
+
+function artifactsResponse(session = {}, editor = {}, artifacts = {}) {
+  const artifactFields = editor.fields || [];
+  const editableArtifacts = artifactNamesForFields(artifactFields);
   const artifactPaths = Object.fromEntries(editableArtifacts.map((artifactName) => {
     return [artifactName, artifactPath(session, artifactName)];
   }));
-  const artifactStates = Object.fromEntries(editableArtifacts.map((artifactName) => {
-    return [artifactName, artifactState(session, artifactName)];
-  }));
   return {
     ...session,
+    actionId: editor.action?.id || "",
+    artifactFields,
     artifactPaths,
     artifacts,
-    artifactStates,
+    artifactStates: artifactStatesForFields(artifactFields),
     editableArtifacts,
     ok: true
   };
 }
 
-async function readEditableArtifacts(runtime, session = {}) {
-  const artifactEntries = await Promise.all(artifactNames().map(async (artifactName) => {
+async function readEditableArtifacts(runtime, session = {}, fields = []) {
+  const artifactEntries = await Promise.all(artifactNamesForFields(fields).map(async (artifactName) => {
     return [artifactName, await runtime.store.readArtifact(session.sessionId, artifactName)];
   }));
   return Object.fromEntries(artifactEntries);
+}
+
+function unknownArtifactName(artifacts = {}, fieldsByName = new Map()) {
+  return Object.keys(artifacts).find((artifactName) => !fieldsByName.has(artifactName)) || "";
+}
+
+function missingRequiredField(artifacts = {}, fields = []) {
+  return fields.find((field) => {
+    return field.required && !String(artifacts[field.name] || "").trim();
+  }) || null;
 }
 
 function createService({ projectService } = {}) {
@@ -151,13 +192,18 @@ function createService({ projectService } = {}) {
   }
 
   return Object.freeze({
-    async readArtifacts(sessionId) {
+    async readArtifacts(sessionId, input = {}) {
       return artifactResult(async () => {
         const runtime = await projectService.createRuntime();
         const session = await runtime.getSession(sessionId);
+        const editor = editorActionState(session, input.actionId);
+        if (!editor.ok) {
+          return artifactErrorResponse(session, editor.code, editor.message);
+        }
         return artifactsResponse(
           session,
-          await readEditableArtifacts(runtime, session)
+          editor,
+          await readEditableArtifacts(runtime, session, editor.fields)
         );
       });
     },
@@ -166,6 +212,11 @@ function createService({ projectService } = {}) {
       return artifactResult(async () => {
         const runtime = await projectService.createRuntime();
         const session = await runtime.getSession(sessionId);
+        const editor = editorActionState(session, input.actionId);
+        if (!editor.ok) {
+          return artifactErrorResponse(session, editor.code, editor.message);
+        }
+
         const artifacts = normalizeArtifactInput(input);
         if (Object.keys(artifacts).length < 1) {
           return artifactErrorResponse(
@@ -175,47 +226,42 @@ function createService({ projectService } = {}) {
           );
         }
 
-        for (const [artifactName, artifactText] of Object.entries(artifacts)) {
-          const policy = artifactPolicy(artifactName);
-          if (!policy) {
-            return artifactErrorResponse(
-              session,
-              "ai_studio_artifact_not_editable",
-              `Artifact is not editable: ${artifactName}`
-            );
-          }
-          const state = artifactState(session, artifactName);
-          if (!state.editable) {
-            return artifactErrorResponse(
-              session,
-              "ai_studio_artifact_edit_not_available",
-              state.disabledReason
-            );
-          }
-          if (!artifactText) {
-            return artifactErrorResponse(
-              session,
-              "ai_studio_artifact_required",
-              policy.requiredMessage || `Artifact text is required: ${artifactName}`
-            );
-          }
+        const fieldsByName = artifactFieldByName(editor.fields);
+        const unknownArtifact = unknownArtifactName(artifacts, fieldsByName);
+        if (unknownArtifact) {
+          return artifactErrorResponse(
+            session,
+            "ai_studio_artifact_not_editable",
+            `Artifact is not editable by ${editor.action.id}: ${unknownArtifact}`
+          );
+        }
+
+        const missingField = missingRequiredField(artifacts, editor.fields);
+        if (missingField) {
+          return artifactErrorResponse(
+            session,
+            "ai_studio_artifact_required",
+            missingField.requiredMessage || `Artifact text is required: ${missingField.name}`
+          );
         }
 
         await Promise.all(Object.entries(artifacts).flatMap(([artifactName, artifactText]) => {
+          const field = fieldsByName.get(artifactName);
           const writes = [
             runtime.store.writeArtifact(sessionId, artifactName, `${artifactText}\n`)
           ];
-          const metadataName = artifactPolicy(artifactName)?.metadataName;
-          if (metadataName) {
-            writes.push(runtime.store.writeMetadataValue(sessionId, metadataName, artifactText));
+          if (field?.metadataName) {
+            writes.push(runtime.store.writeMetadataValue(sessionId, field.metadataName, artifactText));
           }
           return writes;
         }));
 
         const updatedSession = await runtime.getSession(sessionId);
+        const updatedEditor = editorActionState(updatedSession, input.actionId);
         return artifactsResponse(
           updatedSession,
-          await readEditableArtifacts(runtime, updatedSession)
+          updatedEditor.ok ? updatedEditor : editor,
+          await readEditableArtifacts(runtime, updatedSession, editor.fields)
         );
       });
     }

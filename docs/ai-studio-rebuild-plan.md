@@ -1184,7 +1184,7 @@ Checklist:
 - [x] Disabled reasons are available to display.
 - [x] `Next` renders from runtime data.
 - [x] Prompt injection uses runtime prompt payloads.
-- [ ] Artifact editors use runtime artifact descriptors.
+- [x] Artifact editors use runtime artifact descriptors.
 - [ ] Fast component-level tests cover view-model mapping without browser e2e.
 
 Acceptance:

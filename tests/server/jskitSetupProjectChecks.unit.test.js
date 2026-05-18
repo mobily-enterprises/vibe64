@@ -16,7 +16,9 @@ import {
   missingDirectDependencies
 } from "../../server/lib/aiStudio/adapters/jskit/setupDependencyChecks.js";
 import {
-  npmInstallScript
+  npmInstallScript,
+  scaffoldCommandPreview,
+  scaffoldScript
 } from "../../server/lib/aiStudio/adapters/jskit/setupProjectChecks.js";
 import {
   createDoctorPluginToolkit
@@ -81,6 +83,23 @@ test("JSKIT setup dependency repair never runs devlinks", () => {
   assert.doesNotMatch(script, /--save-exact/u);
   assert.doesNotMatch(script, /devlinks/u);
   assert.doesNotMatch(script, /JSKIT_REPO_ROOT/u);
+  assertShellScriptSurvivesWhitespaceCollapse(script);
+});
+
+test("JSKIT seed command uses the selected create-app tenancy mode", () => {
+  const config = {
+    values: {
+      jskit_tenancy_mode: "workspaces"
+    }
+  };
+  const preview = scaffoldCommandPreview(config);
+  const script = scaffoldScript(config);
+
+  assert.match(preview, /npx @jskit-ai\/create-app/u);
+  assert.match(preview, /--tenancy-mode workspaces/u);
+  assert.match(script, /--tenancy-mode workspaces/u);
+  assert.doesNotMatch(script, /--tenancy-mode single/u);
+  assert.doesNotMatch(script, /--tenancy-mode multi/u);
   assertShellScriptSurvivesWhitespaceCollapse(script);
 });
 

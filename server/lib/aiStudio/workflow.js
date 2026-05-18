@@ -97,6 +97,23 @@ const DEFAULT_AI_STUDIO_WORKFLOW = deepFreeze({
     {
       actions: [
         {
+          artifactFields: [
+            {
+              kind: "text",
+              label: "Issue title",
+              metadataName: ISSUE_TITLE_ARTIFACT,
+              name: ISSUE_TITLE_ARTIFACT,
+              required: true,
+              requiredMessage: "Issue title is required."
+            },
+            {
+              kind: "textarea",
+              label: "Issue body",
+              name: ISSUE_BODY_ARTIFACT,
+              required: true,
+              requiredMessage: "Issue body is required."
+            }
+          ],
           disabledReason: "The GitHub issue already exists; edit it on GitHub instead.",
           disabledWhen: ["metadata:issue_url"],
           enabledWhen: [ISSUE_TITLE_READY_CONDITION, ISSUE_BODY_READY_CONDITION],
@@ -286,6 +303,15 @@ const DEFAULT_AI_STUDIO_WORKFLOW = deepFreeze({
     {
       actions: [
         {
+          artifactFields: [
+            {
+              kind: "textarea",
+              label: "Pull request body",
+              name: PULL_REQUEST_ARTIFACT,
+              required: true,
+              requiredMessage: "Pull request body is required."
+            }
+          ],
           disabledReason: "The GitHub pull request already exists; edit it on GitHub instead.",
           disabledWhen: ["metadata:pr_url"],
           enabledWhen: ["artifact:pull_request.md"],

@@ -7,18 +7,24 @@ import {
   passDoctorCheck as passCheck
 } from "../../../doctorCheckItems.js";
 import {
-  hostUserDockerArgs
+  hostUserDockerArgs,
+  shellQuote
 } from "../../../shellCommands.js";
 import {
   shellScript
 } from "../../../shellScript.js";
 import {
-  createAppDatabaseDockerArgs,
-  createAppDatabaseRepair,
-  JSKIT_MYSQL_CONTAINER,
-  JSKIT_MYSQL_ROOT_PASSWORD,
+  createManagedDatabaseDockerArgs,
+  createManagedDatabaseRepair,
+  jskitDatabaseDockerArgs,
+  JSKIT_HOST_DATABASE_HOST,
+  JSKIT_MARIADB_CONTAINER,
+  JSKIT_MARIADB_HOST,
+  JSKIT_MARIADB_ROOT_PASSWORD,
+  managedMariaDbAccessInstructions,
+  startJskitMariaDbRepair,
   validateDatabaseName
-} from "./setupMysqlRuntime.js";
+} from "./setupMariaDbRuntime.js";
 import {
   configImportProblems,
   missingDirectDependencies,
@@ -27,6 +33,32 @@ import {
 import {
   JSKIT_TOOLCHAIN_IMAGE
 } from "./toolchainIdentity.js";
+
+const JSKIT_TENANCY_MODE_CONFIG = "jskit_tenancy_mode";
+const JSKIT_CREATE_APP_TENANCY_MODES = new Set([
+  "none",
+  "personal",
+  "workspaces"
+]);
+
+const DATABASE_ENV_KEYS = Object.freeze([
+  "DATABASE_URL",
+  "DB_CLIENT",
+  "DB_HOST",
+  "DB_PORT",
+  "DB_NAME",
+  "DB_USER",
+  "DB_PASSWORD"
+]);
+
+function configValues(config = {}) {
+  return config?.values && typeof config.values === "object" ? config.values : config;
+}
+
+function selectedJskitTenancyMode(config = {}) {
+  const mode = String(configValues(config)[JSKIT_TENANCY_MODE_CONFIG] || "none").trim();
+  return JSKIT_CREATE_APP_TENANCY_MODES.has(mode) ? mode : "none";
+}
 
 function repoNameFromTargetRoot(targetRoot) {
   return String(path.basename(targetRoot) || "jskit-app")
@@ -52,11 +84,15 @@ function writableHostUserDockerArgs() {
   ];
 }
 
-function scaffoldScript() {
+function scaffoldCommandPreview(config = {}) {
+  return `npx @jskit-ai/create-app "$JSKIT_APP_NAME" --target . --force --tenancy-mode ${shellQuote(selectedJskitTenancyMode(config))} --title "$JSKIT_APP_TITLE" --initial-bundles none`;
+}
+
+function scaffoldScript(config = {}) {
   return shellScript([
     "set -e",
     "set -x",
-    "npx @jskit-ai/create-app \"$JSKIT_APP_NAME\" --target . --force --tenancy-mode none --title \"$JSKIT_APP_TITLE\" --initial-bundles none"
+    scaffoldCommandPreview(config)
   ]);
 }
 
@@ -74,16 +110,18 @@ function scaffoldEnvArgs(targetRoot) {
 function scaffoldTerminalAction(targetRoot, toolkit) {
   return toolkit.toolchainTerminalAction({
     actionId: "terminal-scaffold-jskit",
-    commandArgs: ["bash", "-lc", scaffoldScript()],
-    extraArgs: () => scaffoldEnvArgs(targetRoot),
+    commandArgs: (context = {}) => ["bash", "-lc", scaffoldScript(context.config)],
+    commandPreview: (context = {}) => scaffoldCommandPreview(context.config),
+    extraArgs: (context = {}) => scaffoldEnvArgs(context.targetRoot || targetRoot),
     image: JSKIT_TOOLCHAIN_IMAGE,
-    label: "Create JSKIT scaffold",
+    label: "Seed this project",
     targetRoot
   });
 }
 
-function scaffoldRepair(targetRoot, toolkit) {
+function scaffoldRepair(targetRoot, context, toolkit) {
   return scaffoldTerminalAction(targetRoot, toolkit).repair({
+    config: context.config,
     targetRoot
   });
 }
@@ -111,6 +149,72 @@ function npmInstallTerminalAction(targetRoot, toolkit) {
 
 function npmInstallRepair(targetRoot, toolkit) {
   return npmInstallTerminalAction(targetRoot, toolkit).repair({
+    targetRoot
+  });
+}
+
+function databaseEnvWriteScript(targetRoot, {
+  replaceExisting = false
+} = {}) {
+  const defaults = defaultDatabaseEnv(targetRoot);
+  const lines = Object.entries(defaults).map(([key, value]) => `${key}=${value}`);
+  const script = [
+    "set -e",
+    "env_file=.env",
+    "touch \"$env_file\""
+  ];
+  if (replaceExisting) {
+    script.push(
+      "tmp_file=\"$(mktemp)\"",
+      `grep -Ev '^(${DATABASE_ENV_KEYS.join("|")})=' "$env_file" > "$tmp_file" || true`,
+      "mv \"$tmp_file\" \"$env_file\""
+    );
+  } else {
+    script.push(
+      `if grep -Eq '^(${DATABASE_ENV_KEYS.join("|")})=' "$env_file"; then`,
+      "  echo '.env already contains database settings; edit it manually instead of seeding defaults.' >&2",
+      "  exit 1",
+      "fi"
+    );
+  }
+  script.push(
+    "printf '\\n# AI Studio managed MariaDB defaults\\n' >> \"$env_file\"",
+    ...lines.map((line) => `printf '%s\\n' ${shellQuote(line)} >> "$env_file"`),
+    "echo 'Wrote .env database settings for Studio-managed MariaDB.'"
+  );
+  return script.join("\n");
+}
+
+function seedDatabaseEnvTerminalAction(targetRoot, toolkit) {
+  return toolkit.shellTerminalAction({
+    actionId: "terminal-seed-jskit-db-env",
+    commandPreview: "seed JSKIT database .env defaults",
+    cwd: targetRoot,
+    label: "Seed database .env",
+    script: () => databaseEnvWriteScript(targetRoot)
+  });
+}
+
+function seedDatabaseEnvRepair(targetRoot, toolkit) {
+  return seedDatabaseEnvTerminalAction(targetRoot, toolkit).repair({
+    targetRoot
+  });
+}
+
+function managedDatabaseEnvTerminalAction(targetRoot, toolkit) {
+  return toolkit.shellTerminalAction({
+    actionId: "terminal-use-managed-jskit-db-env",
+    commandPreview: "write Studio-managed MariaDB .env defaults",
+    cwd: targetRoot,
+    label: "Use Studio-managed MariaDB .env",
+    script: () => databaseEnvWriteScript(targetRoot, {
+      replaceExisting: true
+    })
+  });
+}
+
+function managedDatabaseEnvRepair(targetRoot, toolkit) {
+  return managedDatabaseEnvTerminalAction(targetRoot, toolkit).repair({
     targetRoot
   });
 }
@@ -160,26 +264,89 @@ function parseEnvText(text) {
   return values;
 }
 
-async function readEnv(targetRoot, toolkit) {
-  const env = {};
-  for (const fileName of [".env", ".env.local"]) {
-    const envFile = await toolkit.readTargetFile(fileName, {
-      targetRoot
-    });
-    if (envFile.ok) {
-      Object.assign(env, parseEnvText(envFile.value));
-    }
-  }
-  return env;
+async function readDotEnv(targetRoot, toolkit) {
+  const envFile = await toolkit.readTargetFile(".env", {
+    targetRoot
+  });
+  return envFile.ok ? parseEnvText(envFile.value) : {};
 }
 
-function databaseNameFromUrl(url) {
+function databaseUrlSettings(url) {
   try {
     const parsed = new URL(url);
-    return parsed.pathname.replace(/^\/+/u, "").split("/")[0] || "";
+    return {
+      databaseName: parsed.pathname.replace(/^\/+/u, "").split("/")[0] || "",
+      host: parsed.hostname || "",
+      password: decodeURIComponent(parsed.password || ""),
+      port: parsed.port || "",
+      user: decodeURIComponent(parsed.username || "")
+    };
   } catch {
-    return "";
+    return {
+      databaseName: "",
+      host: "",
+      password: "",
+      port: "",
+      user: ""
+    };
   }
+}
+
+function databaseEnvIsEmpty(env = {}) {
+  return !DATABASE_ENV_KEYS.some((key) => String(env[key] || "").trim());
+}
+
+function databaseNameFromTargetRoot(targetRoot = "") {
+  return repoNameFromTargetRoot(targetRoot)
+    .replace(/[^A-Za-z0-9_]+/gu, "_")
+    .replace(/^_+|_+$/gu, "") || "jskit_app";
+}
+
+function defaultDatabaseEnv(targetRoot = "") {
+  return {
+    DB_CLIENT: "mysql2",
+    DB_HOST: JSKIT_MARIADB_HOST,
+    DB_NAME: databaseNameFromTargetRoot(targetRoot),
+    DB_PASSWORD: JSKIT_MARIADB_ROOT_PASSWORD,
+    DB_PORT: "3306",
+    DB_USER: "root"
+  };
+}
+
+function managedDatabaseEnvMismatches(env = {}, targetRoot = "") {
+  return Object.entries(defaultDatabaseEnv(targetRoot))
+    .filter(([key, expectedValue]) => String(env[key] || "").trim() !== expectedValue)
+    .map(([key, expectedValue]) => ({
+      actual: key === "DB_PASSWORD" && env[key] ? "<redacted>" : String(env[key] || "").trim() || "(missing)",
+      expected: key === "DB_PASSWORD" ? "<managed password>" : expectedValue,
+      key
+    }));
+}
+
+function formatManagedDatabaseEnvMismatches(mismatches = []) {
+  return mismatches
+    .map((item) => `${item.key}: expected ${item.expected}, observed ${item.actual}`)
+    .join("\n");
+}
+
+function resolvedDatabaseEnv(env = {}) {
+  const fromUrl = databaseUrlSettings(env.DATABASE_URL);
+  return {
+    databaseName: String(env.DB_NAME || fromUrl.databaseName || "").trim(),
+    host: String(env.DB_HOST || fromUrl.host || "").trim(),
+    password: String(env.DB_PASSWORD ?? fromUrl.password ?? ""),
+    port: String(env.DB_PORT || fromUrl.port || "3306").trim(),
+    user: String(env.DB_USER || fromUrl.user || "").trim()
+  };
+}
+
+function loopbackDatabaseHost(host = "") {
+  const normalized = String(host || "").trim().toLowerCase();
+  return normalized === "localhost" || normalized === "127.0.0.1" || normalized === "::1";
+}
+
+function formatDatabaseEndpoint(database = {}) {
+  return `${database.host || "(missing host)"}:${database.port || "(missing port)"}`;
 }
 
 async function checkScaffold(targetRoot, context, toolkit) {
@@ -194,7 +361,7 @@ async function checkScaffold(targetRoot, context, toolkit) {
     if (!lock.ok) {
       return hardStopCheck({
         id: "scaffold",
-        label: "Initial JSKIT scaffold",
+        label: "Seed JSKIT app",
         expected: ".jskit/lock.json is valid JSON.",
         observed: lock.error,
         explanation: "Malformed JSKIT metadata needs manual recovery before Studio can reason about the app."
@@ -206,7 +373,7 @@ async function checkScaffold(targetRoot, context, toolkit) {
   if (markers.packageJson && markers.lock && markers.configPublic) {
     return passCheck({
       id: "scaffold",
-      label: "Initial JSKIT scaffold",
+      label: "Seed JSKIT app",
       expected: "package.json, .jskit/lock.json, and config/public.js exist.",
       observed: "Minimal JSKIT scaffold markers are present.",
       explanation: "Studio can now use official JSKIT tooling for deeper checks."
@@ -217,7 +384,7 @@ async function checkScaffold(targetRoot, context, toolkit) {
   if (nonGitEntries.length) {
     return hardStopCheck({
       id: "scaffold",
-      label: "Initial JSKIT scaffold",
+      label: "Seed JSKIT app",
       expected: "Existing files are already a recognizable JSKIT scaffold.",
       observed: `Missing markers: ${Object.entries(markers).filter(([, present]) => !present).map(([name]) => name).join(", ")}\nFiles: ${formatList(nonGitEntries)}`,
       explanation: "Studio will not run the JSKIT app generator over an existing non-JSKIT file tree."
@@ -226,11 +393,11 @@ async function checkScaffold(targetRoot, context, toolkit) {
 
   return blockedCheck({
     id: "scaffold",
-    label: "Initial JSKIT scaffold",
+    label: "Seed JSKIT app",
     expected: "Minimal JSKIT scaffold markers exist.",
     observed: "No scaffold files are present yet.",
-    explanation: "Create the smallest JSKIT app scaffold before installing dependencies or checking runtime readiness.",
-    repair: scaffoldRepair(targetRoot, toolkit)
+    explanation: "Seed this target with the selected JSKIT configuration before installing dependencies or checking runtime readiness.",
+    repair: scaffoldRepair(targetRoot, context, toolkit)
   });
 }
 
@@ -298,7 +465,7 @@ async function checkRuntimeServices(targetRoot, context, toolkit) {
   const packageJson = context.packageJson || await readPackageJson(targetRoot, toolkit);
   const names = dependencyNames(packageJson, context.jskitLock);
   const hasDatabase = [...names].some((name) => name.includes("database-runtime"));
-  const wantsMysql = [...names].some((name) => name.includes("database-runtime-mysql"));
+  const wantsMariaDb = [...names].some((name) => name.includes("database-runtime-mysql"));
   const wantsPostgres = [...names].some((name) => name.includes("database-runtime-postgres"));
 
   if (!hasDatabase) {
@@ -311,36 +478,90 @@ async function checkRuntimeServices(targetRoot, context, toolkit) {
     });
   }
 
-  if (wantsPostgres && !wantsMysql) {
+  if (wantsPostgres && !wantsMariaDb) {
     return hardStopCheck({
       id: "runtime-services",
       label: "Runtime services",
-      expected: "This JSKIT setup plugin supports managed MySQL checks only.",
+      expected: "This JSKIT setup plugin supports the MariaDB-compatible JSKIT runtime.",
       observed: "Postgres runtime package detected.",
       explanation: "Postgres service orchestration belongs in the JSKIT adapter before this target can be set up automatically."
     });
   }
 
-  const env = await readEnv(targetRoot, toolkit);
-  const databaseName = env.DB_NAME || databaseNameFromUrl(env.DATABASE_URL);
-  const validation = validateDatabaseName(databaseName);
+  const env = await readDotEnv(targetRoot, toolkit);
+  if (databaseEnvIsEmpty(env)) {
+    const seedRepair = seedDatabaseEnvRepair(targetRoot, toolkit);
+    return blockedCheck({
+      id: "runtime-services",
+      label: "Runtime services",
+      expected: ".env declares the database connection that Studio containers should use.",
+      observed: "No database settings were found in .env.",
+      explanation: "The JSKIT adapter uses .env as the database source of truth. Seed defaults to use Studio-managed MariaDB, or create .env manually for an existing database.",
+      repair: seedRepair,
+      repairs: [
+        seedRepair,
+        startJskitMariaDbRepair()
+      ]
+    });
+  }
+
+  const database = resolvedDatabaseEnv(env);
+  const validation = validateDatabaseName(database.databaseName);
   if (!validation.ok) {
     return hardStopCheck({
       id: "runtime-services",
       label: "Runtime services",
-      expected: "Database apps declare a valid DB_NAME or DATABASE_URL.",
-      observed: databaseName || "No database name found in .env or .env.local.",
+      expected: "Database apps declare a valid DB_NAME or DATABASE_URL in .env.",
+      observed: database.databaseName || "No database name found in .env.",
       explanation: "Studio cannot create or verify an app database without an explicit database name."
+    });
+  }
+
+  if (!database.host) {
+    return hardStopCheck({
+      id: "runtime-services",
+      label: "Runtime services",
+      expected: ".env declares DB_HOST or DATABASE_URL.",
+      observed: "No database host found in .env.",
+      explanation: "Studio runs JSKIT commands in containers, so the adapter needs an explicit database host that those containers can resolve."
+    });
+  }
+
+  if (loopbackDatabaseHost(database.host)) {
+    return hardStopCheck({
+      id: "runtime-services",
+      label: "Runtime services",
+      expected: ".env DB_HOST is reachable from Studio command containers.",
+      observed: `DB_HOST=${database.host} resolves inside each container, not to the host machine.`,
+      explanation: `Use DB_HOST=${JSKIT_HOST_DATABASE_HOST} for a host-machine database, DB_HOST=${JSKIT_MARIADB_HOST} for Studio-managed MariaDB, or a real network hostname for an external database.`
+    });
+  }
+
+  return database.host === JSKIT_MARIADB_HOST
+    ? checkManagedMariaDb(env, database, targetRoot, toolkit)
+    : checkExternalDatabase(database, targetRoot, toolkit);
+}
+
+async function checkManagedMariaDb(env, database, targetRoot, toolkit) {
+  const envMismatches = managedDatabaseEnvMismatches(env, targetRoot);
+  if (envMismatches.length) {
+    return hardStopCheck({
+      id: "runtime-services",
+      label: "Runtime services",
+      expected: `When DB_HOST=${JSKIT_MARIADB_HOST}, all DB_* values match the Studio-managed MariaDB defaults.`,
+      observed: formatManagedDatabaseEnvMismatches(envMismatches),
+      explanation: "The managed MariaDB container is intentionally local development infrastructure. Keep the managed DB values together in .env when the target uses the managed database.",
+      repair: managedDatabaseEnvRepair(targetRoot, toolkit)
     });
   }
 
   const ping = await toolkit.runDocker([
     "exec",
-    JSKIT_MYSQL_CONTAINER,
-    "mysqladmin",
+    JSKIT_MARIADB_CONTAINER,
+    "mariadb-admin",
     "ping",
     "-uroot",
-    `-p${JSKIT_MYSQL_ROOT_PASSWORD}`,
+    `-p${JSKIT_MARIADB_ROOT_PASSWORD}`,
     "--silent"
   ], {
     timeout: 12_000
@@ -350,45 +571,46 @@ async function checkRuntimeServices(targetRoot, context, toolkit) {
     return blockedCheck({
       id: "runtime-services",
       label: "Runtime services",
-      expected: "Managed JSKIT MySQL is reachable.",
+      expected: "Studio-managed JSKIT MariaDB is reachable.",
       observed: ping.output,
-      explanation: "Start the JSKIT managed MySQL runtime before database apps can proceed."
+      explanation: "Start the JSKIT managed MariaDB runtime before database apps can proceed.",
+      repair: startJskitMariaDbRepair()
     });
   }
 
   const schema = await toolkit.runDocker([
     "exec",
-    JSKIT_MYSQL_CONTAINER,
-    "mysql",
+    JSKIT_MARIADB_CONTAINER,
+    "mariadb",
     "-uroot",
-    `-p${JSKIT_MYSQL_ROOT_PASSWORD}`,
+    `-p${JSKIT_MARIADB_ROOT_PASSWORD}`,
     "-N",
     "-B",
     "-e",
-    `SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = '${validation.databaseName}';`
+    `SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = '${database.databaseName}';`
   ], {
     timeout: 15_000
   });
 
-  if (!schema.ok || !schema.stdout.split(/\s+/u).includes(validation.databaseName)) {
+  if (!schema.ok || !schema.stdout.split(/\s+/u).includes(database.databaseName)) {
     return blockedCheck({
       id: "runtime-services",
       label: "Runtime services",
-      expected: `${validation.databaseName} exists in managed JSKIT MySQL.`,
+      expected: `${database.databaseName} exists in Studio-managed JSKIT MariaDB.`,
       observed: schema.output || "Database not found.",
       explanation: "Create the app database before Studio starts workflow sessions for this target.",
-      repair: createAppDatabaseRepair(validation.databaseName)
+      repair: createManagedDatabaseRepair(database.databaseName)
     });
   }
 
-  if (env.DB_USER) {
+  if (database.user) {
     const appLogin = await toolkit.runDocker([
       "exec",
-      JSKIT_MYSQL_CONTAINER,
-      "mysql",
-      `-u${env.DB_USER}`,
-      env.DB_PASSWORD ? `-p${env.DB_PASSWORD}` : "",
-      validation.databaseName,
+      JSKIT_MARIADB_CONTAINER,
+      "mariadb",
+      `-u${database.user}`,
+      database.password ? `-p${database.password}` : "",
+      database.databaseName,
       "-e",
       "SELECT 1;"
     ].filter(Boolean), {
@@ -410,9 +632,52 @@ async function checkRuntimeServices(targetRoot, context, toolkit) {
     id: "runtime-services",
     label: "Runtime services",
     expected: "Required runtime services are reachable.",
-    observed: env.DB_USER
-      ? `${validation.databaseName} exists and ${env.DB_USER} can connect.`
-      : `${validation.databaseName} exists in managed JSKIT MySQL.`,
+    observed: [
+      database.user
+        ? `${database.databaseName} exists and ${database.user} can connect.`
+        : `${database.databaseName} exists in Studio-managed JSKIT MariaDB.`,
+      managedMariaDbAccessInstructions(database.databaseName)
+    ].join("\n"),
+    explanation: "The target project's database dependency has a reachable database."
+  });
+}
+
+async function checkExternalDatabase(database, targetRoot, toolkit) {
+  const result = await toolkit.toolchainCommandResult({
+    commandArgs: [
+      "mariadb",
+      "--protocol=TCP",
+      "-h",
+      database.host,
+      "-P",
+      database.port || "3306",
+      ...(database.user ? [`-u${database.user}`] : []),
+      ...(database.password ? [`-p${database.password}`] : []),
+      database.databaseName,
+      "-e",
+      "SELECT 1;"
+    ],
+    extraArgs: jskitDatabaseDockerArgs(database.host),
+    image: JSKIT_TOOLCHAIN_IMAGE,
+    targetRoot,
+    timeout: 15_000
+  });
+
+  if (!result.ok) {
+    return hardStopCheck({
+      id: "runtime-services",
+      label: "Runtime services",
+      expected: `${formatDatabaseEndpoint(database)} is reachable from Studio command containers using .env credentials.`,
+      observed: result.output,
+      explanation: `Fix .env or the database grants. Use DB_HOST=${JSKIT_HOST_DATABASE_HOST} when the database is running on the host machine.`
+    });
+  }
+
+  return passCheck({
+    id: "runtime-services",
+    label: "Runtime services",
+    expected: "Required runtime services are reachable.",
+    observed: `${database.databaseName} is reachable at ${formatDatabaseEndpoint(database)}${database.user ? ` as ${database.user}` : ""}.`,
     explanation: "The target project's database dependency has a reachable database."
   });
 }
@@ -426,7 +691,7 @@ async function checkJskitVerificationCommand(targetRoot, toolkit) {
       expected: "package.json declares a verify script or the local JSKIT CLI is installed.",
       observed: "package.json could not be read.",
       explanation: "Studio only checks that verification is available for the later workflow stage; it does not run verification during Project Setup.",
-      repair: scaffoldRepair(targetRoot, toolkit)
+      repair: scaffoldRepair(targetRoot, {}, toolkit)
     });
   }
 
@@ -484,7 +749,7 @@ function createJskitProjectSetupChecks(toolkit) {
     scaffold: {
       expected: "Minimal JSKIT scaffold markers exist.",
       id: "scaffold",
-      label: "Initial JSKIT scaffold",
+      label: "Seed JSKIT app",
       run: (context = {}) => checkScaffold(context.targetRoot || "", context, toolkit)
     }
   };
@@ -495,13 +760,13 @@ function createDatabaseTerminalAction(targetRoot, toolkit) {
     actionId: "terminal-create-app-db",
     args: ({ input = {} } = {}) => {
       const validation = validateDatabaseName(input.databaseName);
-      return createAppDatabaseDockerArgs(validation.databaseName);
+      return createManagedDatabaseDockerArgs(validation.databaseName);
     },
     commandPreview: ({ input = {} } = {}) => {
       const validation = validateDatabaseName(input.databaseName);
       return validation.ok
-        ? createAppDatabaseRepair(validation.databaseName).commandPreview
-        : "docker exec <mysql-container> mysql -e <create database>";
+        ? createManagedDatabaseRepair(validation.databaseName).commandPreview
+        : "docker exec <mariadb-container> mariadb -e <create database>";
     },
     cwd: targetRoot,
     label: "Create app database",
@@ -523,6 +788,8 @@ function createJskitProjectSetupTerminalActions({
   return [
     scaffoldTerminalAction(targetRoot, toolkit),
     npmInstallTerminalAction(targetRoot, toolkit),
+    seedDatabaseEnvTerminalAction(targetRoot, toolkit),
+    managedDatabaseEnvTerminalAction(targetRoot, toolkit),
     createDatabaseTerminalAction(targetRoot, toolkit)
   ];
 }
@@ -530,5 +797,8 @@ function createJskitProjectSetupTerminalActions({
 export {
   createJskitProjectSetupChecks,
   createJskitProjectSetupTerminalActions,
-  npmInstallScript
+  npmInstallScript,
+  scaffoldCommandPreview,
+  scaffoldScript,
+  selectedJskitTenancyMode
 };

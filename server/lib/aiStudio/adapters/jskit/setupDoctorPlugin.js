@@ -13,13 +13,15 @@ import {
   dockerCommand
 } from "../../../shellCommands.js";
 import {
-  JSKIT_MYSQL_CONTAINER,
-  JSKIT_MYSQL_ROOT_PASSWORD,
-  mysqlCapabilitySql,
-  startJskitMysqlRepair,
-  startJskitMysqlScript,
-  targetWantsJskitMysql
-} from "./setupMysqlRuntime.js";
+  JSKIT_MARIADB_CONTAINER,
+  JSKIT_MARIADB_HOST,
+  JSKIT_MARIADB_ROOT_PASSWORD,
+  mariaDbCapabilitySql,
+  readDatabaseHostFromDotEnv,
+  startJskitMariaDbRepair,
+  startJskitMariaDbScript,
+  targetWantsJskitMariaDb
+} from "./setupMariaDbRuntime.js";
 import {
   createJskitProjectSetupTerminalActions,
   createJskitProjectSetupChecks
@@ -108,24 +110,37 @@ function missingJskitToolchainCheck({
   });
 }
 
-async function checkJskitMysqlCapability(targetRoot = "", toolkit) {
-  if (!await targetWantsJskitMysql(targetRoot, toolkit)) {
+async function checkJskitMariaDbCapability(targetRoot = "", toolkit) {
+  if (!await targetWantsJskitMariaDb(targetRoot, toolkit)) {
     return passCheck({
-      id: "jskit-mysql",
-      label: "JSKIT MySQL",
-      expected: "Managed MySQL is required only when the JSKIT target declares a MySQL runtime.",
-      observed: "No JSKIT MySQL runtime package detected.",
-      explanation: "This target does not currently need the JSKIT managed MySQL runtime."
+      id: "jskit-mariadb",
+      label: "JSKIT MariaDB",
+      expected: "Managed MariaDB is required only when the JSKIT target declares a MySQL-compatible runtime.",
+      observed: "No JSKIT MySQL-compatible runtime package detected.",
+      explanation: "This target does not currently need the JSKIT managed MariaDB runtime."
+    });
+  }
+
+  const databaseHost = await readDatabaseHostFromDotEnv(targetRoot);
+  if (databaseHost !== JSKIT_MARIADB_HOST) {
+    return passCheck({
+      id: "jskit-mariadb",
+      label: "JSKIT MariaDB",
+      expected: `Managed MariaDB is required only when .env declares DB_HOST=${JSKIT_MARIADB_HOST}.`,
+      observed: databaseHost
+        ? `.env declares DB_HOST=${databaseHost}.`
+        : ".env does not declare DB_HOST yet.",
+      explanation: "The Runtime services check validates whichever database endpoint .env selects."
     });
   }
 
   const ping = await toolkit.runDocker([
     "exec",
-    JSKIT_MYSQL_CONTAINER,
-    "mysqladmin",
+    JSKIT_MARIADB_CONTAINER,
+    "mariadb-admin",
     "ping",
     "-uroot",
-    `-p${JSKIT_MYSQL_ROOT_PASSWORD}`,
+    `-p${JSKIT_MARIADB_ROOT_PASSWORD}`,
     "--silent"
   ], {
     timeout: 12_000
@@ -133,44 +148,44 @@ async function checkJskitMysqlCapability(targetRoot = "", toolkit) {
 
   if (!ping.ok) {
     return failCheck({
-      id: "jskit-mysql",
-      label: "JSKIT MySQL",
-      expected: "Managed JSKIT MySQL is reachable.",
+      id: "jskit-mariadb",
+      label: "JSKIT MariaDB",
+      expected: "Managed JSKIT MariaDB is reachable.",
       observed: ping.output,
-      explanation: "Start the JSKIT managed MySQL container before database setup checks run.",
-      repair: startJskitMysqlRepair()
+      explanation: "Start the JSKIT managed MariaDB container before database setup checks run.",
+      repair: startJskitMariaDbRepair()
     });
   }
 
   const probe = await toolkit.runDocker([
     "exec",
-    JSKIT_MYSQL_CONTAINER,
-    "mysql",
+    JSKIT_MARIADB_CONTAINER,
+    "mariadb",
     "-uroot",
-    `-p${JSKIT_MYSQL_ROOT_PASSWORD}`,
+    `-p${JSKIT_MARIADB_ROOT_PASSWORD}`,
     "-e",
-    mysqlCapabilitySql()
+    mariaDbCapabilitySql()
   ], {
     timeout: 15_000
   });
 
   if (!probe.ok) {
     return failCheck({
-      id: "jskit-mysql",
-      label: "JSKIT MySQL",
-      expected: "Managed JSKIT MySQL can create/drop a temporary probe database.",
+      id: "jskit-mariadb",
+      label: "JSKIT MariaDB",
+      expected: "Managed JSKIT MariaDB can create/drop a temporary probe database.",
       observed: probe.output,
-      explanation: "The JSKIT MySQL container is reachable, but Studio could not prove DDL rights.",
-      repair: startJskitMysqlRepair()
+      explanation: "The JSKIT MariaDB container is reachable, but Studio could not prove DDL rights.",
+      repair: startJskitMariaDbRepair()
     });
   }
 
   return passCheck({
-    id: "jskit-mysql",
-    label: "JSKIT MySQL",
-    expected: "Managed JSKIT MySQL can create/drop a temporary probe database.",
+    id: "jskit-mariadb",
+    label: "JSKIT MariaDB",
+    expected: "Managed JSKIT MariaDB can create/drop a temporary probe database.",
     observed: "Probe database and table created and dropped successfully.",
-    explanation: "The JSKIT managed MySQL runtime is ready for target database setup."
+    explanation: "The JSKIT managed MariaDB runtime is ready for target database setup."
   });
 }
 
@@ -196,13 +211,13 @@ function createJskitSetupDoctorPlugin({
     label: "Build JSKIT toolchain",
     script: buildJskitToolchainScript
   });
-  const startMysqlTerminal = toolkit.shellTerminalAction({
-    actionId: "start-jskit-mysql",
-    commandPreview: () => startJskitMysqlRepair().commandPreview,
+  const startMariaDbTerminal = toolkit.shellTerminalAction({
+    actionId: "start-jskit-mariadb",
+    commandPreview: () => startJskitMariaDbRepair().commandPreview,
     cwd: ({ targetRoot = "" } = {}) => studioRoot || targetRoot,
     env: configEnvironment,
-    label: "Start JSKIT MySQL",
-    script: startJskitMysqlScript
+    label: "Start JSKIT MariaDB",
+    script: startJskitMariaDbScript
   });
 
   return toolkit.plugin({
@@ -230,6 +245,16 @@ function createJskitSetupDoctorPlugin({
         explanation: "JSKIT Project Setup uses npm for installs and package scripts.",
         image: JSKIT_TOOLCHAIN_IMAGE,
         repair: buildJskitToolchainRepair()
+      });
+      const mariaDbClientCheck = toolkit.toolchainCommandCheck({
+        id: "mariadb-client",
+        label: "MariaDB client",
+        commandArgs: ["mariadb", "--version"],
+        expected: "MariaDB CLI runs inside the JSKIT adapter toolchain.",
+        explanation: "JSKIT Project Setup uses the MariaDB CLI to validate whichever database endpoint .env selects.",
+        image: JSKIT_TOOLCHAIN_IMAGE,
+        repair: buildJskitToolchainRepair(),
+        validate: (output) => /mariadb/iu.test(output)
       });
 
       return [
@@ -271,14 +296,28 @@ function createJskitSetupDoctorPlugin({
               });
           }
         },
+        {
+          expected: "MariaDB CLI runs inside the JSKIT adapter toolchain.",
+          id: "mariadb-client",
+          label: "MariaDB client",
+          run() {
+            return jskitToolchainReady
+              ? mariaDbClientCheck.run()
+              : missingJskitToolchainCheck({
+                id: "mariadb-client",
+                label: "MariaDB client",
+                expected: "MariaDB CLI runs inside the JSKIT adapter toolchain."
+              });
+          }
+        },
         projectSetupChecks.scaffold,
         projectSetupChecks.dependencies,
         {
-          expected: "Managed JSKIT MySQL is ready when the target declares a MySQL runtime.",
-          id: "jskit-mysql",
-          label: "JSKIT MySQL",
+          expected: "Managed JSKIT MariaDB is ready when the target declares a MySQL-compatible runtime.",
+          id: "jskit-mariadb",
+          label: "JSKIT MariaDB",
           run({ targetRoot = "" } = {}) {
-            return checkJskitMysqlCapability(targetRoot, toolkit);
+            return checkJskitMariaDbCapability(targetRoot, toolkit);
           }
         },
         projectSetupChecks.runtimeServices,
@@ -287,7 +326,7 @@ function createJskitSetupDoctorPlugin({
     },
     terminalActions(context = {}) {
       return [
-        startMysqlTerminal,
+        startMariaDbTerminal,
         buildToolchainTerminal,
         ...createJskitProjectSetupTerminalActions({
           targetRoot: context.targetRoot || targetRoot,
