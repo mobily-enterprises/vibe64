@@ -1,6 +1,7 @@
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
 import fastifyWebsocket from "@fastify/websocket";
+import getPort, { portNumbers } from "get-port";
 import { resolveRuntimeEnv } from "./server/lib/runtimeEnv.js";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -37,6 +38,7 @@ import {
 const SPA_INDEX_FILE = "index.html";
 const API_BASE_PATH = "/api";
 const MODULE_APP_ROOT = path.dirname(fileURLToPath(import.meta.url));
+const DEFAULT_PORT_SEARCH_LIMIT = 50;
 const STATIC_GLOBAL_UI_PATHS = Object.freeze([
   "/assets",
   "/favicon.svg",
@@ -125,6 +127,22 @@ function publicTerminalSnapshot(session = {}) {
   } = session || {};
   void unsubscribe;
   return publicSession;
+}
+
+function preferredPortRange(port) {
+  const requestedPort = Number(port) || 0;
+  if (requestedPort < 1024 || requestedPort >= 65535) {
+    return requestedPort;
+  }
+  return portNumbers(requestedPort, Math.min(65535, requestedPort + DEFAULT_PORT_SEARCH_LIMIT - 1));
+}
+
+function browserUrlForListenAddress(address = "") {
+  const url = new URL(address);
+  if (["0.0.0.0", "[::]"].includes(url.hostname)) {
+    url.hostname = "127.0.0.1";
+  }
+  return `${url.origin}/`;
 }
 
 function registerTerminalWebSocketRoute(
@@ -439,6 +457,7 @@ async function startServer(options = {}) {
   const runtimeEnv = resolveRuntimeEnv();
   const port = Number(options?.port) || runtimeEnv.PORT;
   const host = String(options?.host || "").trim() || runtimeEnv.HOST;
+  const strictPort = options?.strictPort ?? Boolean(options?.port || String(process.env.PORT || "").trim());
   const app = await createServer({
     appRoot: options?.appRoot,
     targetRoot: options?.targetRoot
@@ -464,7 +483,14 @@ async function startServer(options = {}) {
     process.off("SIGINT", closeAndExit);
     process.off("SIGTERM", closeAndExit);
   });
-  await app.listen({ port, host });
+  const selectedPort = strictPort ? port : await getPort({
+    port: preferredPortRange(port)
+  });
+  const listenAddress = await app.listen({
+    host,
+    port: selectedPort
+  });
+  app.aiStudioUrl = browserUrlForListenAddress(listenAddress);
   return app;
 }
 

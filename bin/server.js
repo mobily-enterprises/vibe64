@@ -1,7 +1,34 @@
+#!/usr/bin/env node
+import open from "open";
+import process from "node:process";
 import { startServer } from "../server.js";
 
+function shouldOpenBrowser(args = process.argv.slice(2)) {
+  return !args.some((arg) => {
+    const normalized = String(arg || "").trim().toLowerCase();
+    return normalized === "--no-open" || normalized === "--open=false";
+  });
+}
+
+async function openBrowser(url) {
+  try {
+    await open(url);
+  } catch (error) {
+    console.warn(`Could not open browser automatically: ${error.message}`);
+  }
+}
+
 try {
-  await startServer();
+  const app = await startServer({
+    strictPort: Boolean(String(process.env.PORT || "").trim())
+  });
+  const url = app.aiStudioUrl;
+  if (url) {
+    console.log(`AI Studio is running at ${url}`);
+    if (shouldOpenBrowser()) {
+      await openBrowser(url);
+    }
+  }
 } catch (error) {
   console.error("Failed to start AI Studio server:", error);
   process.exitCode = 1;

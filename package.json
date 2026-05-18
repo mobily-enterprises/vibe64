@@ -1,13 +1,30 @@
 {
-  "name": "ai-studio",
-  "version": "0.1.0",
-  "private": true,
+  "name": "@vibe-armor/run",
+  "version": "0.1.5",
+  "private": false,
   "type": "module",
-  "description": "AI Studio local workflow app",
+  "description": "Run AI Studio against the current project.",
+  "bin": {
+    "ai-studio": "bin/server.js"
+  },
+  "files": [
+    ".jskit/lock.json",
+    "bin/",
+    "config/",
+    "dist/",
+    "packages/",
+    "server.js",
+    "server/",
+    "tooling/"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": "22.x"
   },
   "scripts": {
+    "prepack": "npm run build",
     "server": "node ./bin/server.js",
     "server:all": "node ./bin/server.js",
     "server:home": "SERVER_SURFACE=home node ./bin/server.js",
@@ -56,8 +73,10 @@
     "diff2html": "^3.4.56",
     "execa": "^9.6.1",
     "fastify": "^5.7.4",
+    "get-port": "^7.2.0",
     "json-rest-schema": "1.x.x",
     "node-pty": "^1.1.0",
+    "open": "^11.0.0",
     "pinia": "^3.0.4",
     "strip-ansi": "^7.2.0",
     "vue": "^3.5.13",
