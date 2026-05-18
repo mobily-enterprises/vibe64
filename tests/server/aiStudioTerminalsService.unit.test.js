@@ -54,11 +54,15 @@ class UnitCommandAdapter extends TargetAdapter {
   async createCommandTerminalSpec(_commandId, context = {}) {
     return {
       args: [
-        "-e",
-        "process.exit(0)"
+        "-lc",
+        [
+          "set -e",
+          "printf 'metadata:set\\t%s\\t%s\\n' dynamic_done \"$(printf '%s' from-result-file | base64 | tr -d '\\n')\" >> \"$AI_STUDIO_COMMAND_RESULT_FILE\"",
+          "printf 'metadata:delete\\t%s\\n' stale_value >> \"$AI_STUDIO_COMMAND_RESULT_FILE\""
+        ].join("\n")
       ],
-      command: process.execPath,
-      commandPreview: "node -e process.exit(0)",
+      command: "bash",
+      commandPreview: "bash command result",
       cwd: context.session?.targetRoot,
       ok: true,
       successMessage: "Unit command completed.",
@@ -94,6 +98,9 @@ test("AI Studio command terminal records action results and metadata after succe
       }
     });
     await runtime.createSession({
+      metadata: {
+        stale_value: "delete me"
+      },
       sessionId: "terminal_success"
     });
 
@@ -125,6 +132,8 @@ test("AI Studio command terminal records action results and metadata after succe
 
     const updatedSession = await runtime.getSession("terminal_success");
     assert.equal(updatedSession.metadata.terminal_done, "yes");
+    assert.equal(updatedSession.metadata.dynamic_done, "from-result-file");
+    assert.equal(updatedSession.metadata.stale_value, undefined);
     assert.deepEqual(updatedSession.actionResult, undefined);
     assert.deepEqual(updatedSession.actionResults.map((result) => ({
       actionId: result.actionId,
@@ -140,6 +149,7 @@ test("AI Studio command terminal records action results and metadata after succe
         },
         message: "Unit command completed.",
         metadata: {
+          dynamic_done: "from-result-file",
           terminal_done: "yes"
         },
         status: "completed"

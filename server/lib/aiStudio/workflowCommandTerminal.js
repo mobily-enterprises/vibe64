@@ -8,10 +8,10 @@ import {
 } from "../shellCommands.js";
 import {
   artifactFilePath,
+  deleteMetadataScript,
   metadataFilePath,
-  removeMetadataScript,
+  recordMetadataScript,
   requiredArtifactScript,
-  writeMetadataScript
 } from "./workflowCommandEffects.js";
 import {
   normalizeText,
@@ -207,8 +207,8 @@ function createWorktreeScript({
       "if [ \"$REQUESTED_UPDATE_MODE\" = \"direct\" ]; then",
       "  if [ -z \"$SOURCE_PR_HEAD_REF\" ] || [ -z \"$SOURCE_PR_HEAD_REPO\" ]; then",
       "    printf '[studio] Existing PR push target is incomplete; this session will create a replacement PR.\\n'",
-      `    ${writeMetadataScript(session, "source_pr_update_mode", "replacement")}`,
-      `    ${removeMetadataScript(session, "pr_url")}`,
+      `    ${recordMetadataScript("source_pr_update_mode", "replacement")}`,
+      `    ${deleteMetadataScript("pr_url")}`,
       "    exit 0",
       "  fi",
       "  PR_HEAD_REMOTE=\"ai-studio-pr-head\"",
@@ -216,13 +216,13 @@ function createWorktreeScript({
       `  git -C ${quotedWorktreePath} remote add "$PR_HEAD_REMOTE" "https://github.com/$SOURCE_PR_HEAD_REPO.git"`,
       `  if git -C ${quotedWorktreePath} push --dry-run "$PR_HEAD_REMOTE" "HEAD:refs/heads/$SOURCE_PR_HEAD_REF"; then`,
       "    printf '[studio] Existing PR can be updated directly.\\n'",
-      `    ${writeMetadataScript(session, "source_pr_update_mode", "direct")}`,
-      `    ${writeMetadataScript(session, "pr_source", "existing")}`,
-      `    ${writeMetadataScript(session, "pr_url", "\"$SOURCE_PR_URL\"")}`,
+      `    ${recordMetadataScript("source_pr_update_mode", "direct")}`,
+      `    ${recordMetadataScript("pr_source", "existing")}`,
+      `    ${recordMetadataScript("pr_url", "\"$SOURCE_PR_URL\"")}`,
       "  else",
       "    printf '[studio] Existing PR cannot be pushed directly; this session will create a replacement PR.\\n'",
-      `    ${writeMetadataScript(session, "source_pr_update_mode", "replacement")}`,
-      `    ${removeMetadataScript(session, "pr_url")}`,
+      `    ${recordMetadataScript("source_pr_update_mode", "replacement")}`,
+      `    ${deleteMetadataScript("pr_url")}`,
       "  fi",
       "fi",
       "exit 0"
@@ -432,13 +432,13 @@ function commitChangesScript(session = {}) {
       "git remote add \"$PR_HEAD_REMOTE\" \"https://github.com/$SOURCE_PR_HEAD_REPO.git\"",
       "printf '[studio] Pushing changes to existing PR branch %s/%s\\n' \"$SOURCE_PR_HEAD_REPO\" \"$SOURCE_PR_HEAD_REF\"",
       "git push \"$PR_HEAD_REMOTE\" \"HEAD:refs/heads/$SOURCE_PR_HEAD_REF\"",
-      writeMetadataScript(session, "branch_pushed", "\"$SOURCE_PR_HEAD_REF\"")
+      recordMetadataScript("branch_pushed", "\"$SOURCE_PR_HEAD_REF\"")
     ] : [
       "printf '[studio] Pushing branch %s\\n' \"$CURRENT_BRANCH\"",
       "git push -u origin \"$CURRENT_BRANCH\"",
-      writeMetadataScript(session, "branch_pushed", "\"$CURRENT_BRANCH\"")
+      recordMetadataScript("branch_pushed", "\"$CURRENT_BRANCH\"")
     ]),
-    writeMetadataScript(session, "accepted_commit", "\"$ACCEPTED_COMMIT\""),
+    recordMetadataScript("accepted_commit", "\"$ACCEPTED_COMMIT\""),
     "printf '[studio] Committed %s\\n' \"$ACCEPTED_COMMIT\""
   ].join("\n");
 }
@@ -504,12 +504,12 @@ function createIssueOnGhScript(session = {}) {
     "printf '[studio] Creating GitHub issue: %s\\n' \"$ISSUE_TITLE\"",
     `ISSUE_URL="$(gh issue create --title "$ISSUE_TITLE" --body-file ${shellQuote(issueBodyPath)})"`,
     "printf '%s\\n' \"$ISSUE_URL\"",
-    writeMetadataScript(session, "issue_url", "\"$ISSUE_URL\""),
-    writeMetadataScript(session, "issue_source", "created"),
-    writeMetadataScript(session, "issue_title", "\"$ISSUE_TITLE\""),
+    recordMetadataScript("issue_url", "\"$ISSUE_URL\""),
+    recordMetadataScript("issue_source", "created"),
+    recordMetadataScript("issue_title", "\"$ISSUE_TITLE\""),
     "ISSUE_NUMBER=\"$(printf '%s\\n' \"$ISSUE_URL\" | sed -n 's#.*/issues/\\([0-9][0-9]*\\).*#\\1#p' | head -n 1)\"",
     "if [ -n \"$ISSUE_NUMBER\" ]; then",
-    `  ${writeMetadataScript(session, "issue_number", "\"$ISSUE_NUMBER\"")}`,
+    `  ${recordMetadataScript("issue_number", "\"$ISSUE_NUMBER\"")}`,
     "fi"
   ].join("\n");
 }
@@ -564,8 +564,8 @@ function createPrOnGhScript(session = {}) {
     "printf '[studio] Creating GitHub pull request: %s\\n' \"$PR_TITLE\"",
     `PR_URL="$(gh pr create --base ${quotedBaseBranch} --head ${quotedBranch} --title "$PR_TITLE" --body-file "$PR_BODY_FILE")"`,
     "printf '%s\\n' \"$PR_URL\"",
-    writeMetadataScript(session, "pr_url", "\"$PR_URL\""),
-    writeMetadataScript(session, "pr_source", sourcePrUrl ? "replacement" : "created")
+    recordMetadataScript("pr_url", "\"$PR_URL\""),
+    recordMetadataScript("pr_source", sourcePrUrl ? "replacement" : "created")
   ].join("\n");
 }
 
@@ -585,7 +585,7 @@ function mergePrScript({
     beforeMergeScript,
     `printf '[studio] Merging pull request %s\\n' ${shellQuote(prUrl)}`,
     `gh pr merge ${shellQuote(prUrl)} ${mergeFlag}`,
-    writeMetadataScript(session, "pr_merged", "yes")
+    recordMetadataScript("pr_merged", "yes")
   ].filter(Boolean).join("\n");
 }
 
@@ -597,7 +597,7 @@ function syncMainCheckoutScript(session = {}, targetRoot = "") {
     `git -C ${shellQuote(targetRoot)} fetch origin ${shellQuote(baseBranch)}`,
     `git -C ${shellQuote(targetRoot)} checkout ${shellQuote(baseBranch)}`,
     `git -C ${shellQuote(targetRoot)} pull --ff-only origin ${shellQuote(baseBranch)}`,
-    writeMetadataScript(session, "main_checkout_synced", "yes")
+    recordMetadataScript("main_checkout_synced", "yes")
   ].join("\n");
 }
 

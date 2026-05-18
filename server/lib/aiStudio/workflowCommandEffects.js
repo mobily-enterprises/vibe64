@@ -4,6 +4,8 @@ import {
   shellQuote
 } from "../shellCommands.js";
 
+const COMMAND_RESULT_ENV = "AI_STUDIO_COMMAND_RESULT_FILE";
+
 function metadataFilePath(session = {}, name = "") {
   return session.metadataRoot && name ? path.join(session.metadataRoot, name) : "";
 }
@@ -26,19 +28,28 @@ function requiredArtifactScript(session = {}, name = "", label = "artifact") {
   return requiredCommandFileScript(artifactFilePath(session, name), label);
 }
 
-function removeMetadataScript(session = {}, name = "") {
-  return `rm -f ${shellQuote(metadataFilePath(session, name))}`;
+function deleteMetadataScript(name = "") {
+  return [
+    `if [ -n "\${${COMMAND_RESULT_ENV}:-}" ]; then`,
+    `  printf 'metadata:delete\\t%s\\n' ${shellQuote(name)} >> "$${COMMAND_RESULT_ENV}"`,
+    "fi"
+  ].join("\n");
 }
 
-function writeMetadataScript(session = {}, name = "", valueExpression = "") {
-  return `printf '%s\\n' ${valueExpression} > ${shellQuote(metadataFilePath(session, name))}`;
+function recordMetadataScript(name = "", valueExpression = "") {
+  return [
+    `AI_STUDIO_COMMAND_METADATA_VALUE=${valueExpression}`,
+    `if [ -n "\${${COMMAND_RESULT_ENV}:-}" ]; then`,
+    `  printf 'metadata:set\\t%s\\t%s\\n' ${shellQuote(name)} "$(printf '%s' "$AI_STUDIO_COMMAND_METADATA_VALUE" | base64 | tr -d '\\n')" >> "$${COMMAND_RESULT_ENV}"`,
+    "fi"
+  ].join("\n");
 }
 
 export {
   artifactFilePath,
+  deleteMetadataScript,
   metadataFilePath,
-  removeMetadataScript,
+  recordMetadataScript,
   requiredArtifactScript,
-  requiredCommandFileScript,
-  writeMetadataScript
+  requiredCommandFileScript
 };

@@ -11,6 +11,12 @@ import {
   commandTerminalNamespace,
   normalizePlainObject
 } from "./terminalShared.js";
+import {
+  COMMAND_RESULT_ENV,
+  createCommandResultFile,
+  readCommandResultFile,
+  removeCommandResultFile
+} from "./commandTerminalResults.js";
 
 function actionById(session = {}, actionId = "") {
   return (Array.isArray(session.actions) ? session.actions : [])
@@ -25,12 +31,20 @@ async function writeActionTerminalResult({
   action = {},
   exitCode,
   input = {},
+  resultFile = {},
   runtime,
   session = {},
   spec = {}
 } = {}) {
   const completed = exitCode === 0;
-  const metadata = completed ? spec.successMetadata || {} : {};
+  const resultEffects = completed ? await readCommandResultFile(resultFile.path) : {
+    deleteMetadata: [],
+    metadata: {}
+  };
+  const metadata = completed ? {
+    ...(spec.successMetadata || {}),
+    ...resultEffects.metadata
+  } : {};
   const message = completed
     ? spec.successMessage || `${action.label || action.id} completed.`
     : spec.failureMessage || `${action.label || action.id} failed with exit code ${exitCode}.`;
@@ -49,9 +63,14 @@ async function writeActionTerminalResult({
     }
   );
   if (completed) {
-    await Promise.all(Object.entries(metadata).map(([name, value]) => {
-      return runtime.store.writeMetadataValue(session.sessionId, name, value);
-    }));
+    await Promise.all([
+      ...resultEffects.deleteMetadata.map((name) => {
+        return runtime.store.deleteMetadataValue(session.sessionId, name);
+      }),
+      ...Object.entries(metadata).map(([name, value]) => {
+        return runtime.store.writeMetadataValue(session.sessionId, name, value);
+      })
+    ]);
   }
   await runtime.store.appendCommandLogEntry(session.sessionId, {
     actionId: action.id,
@@ -133,15 +152,17 @@ function createCommandTerminalController({ projectService } = {}) {
         const projectConfigEnv = typeof projectService.projectConfigEnvironment === "function"
           ? await projectService.projectConfigEnvironment()
           : {};
+        const resultFile = await createCommandResultFile();
         return startTerminalSession({
           args: spec.args || [],
           command: spec.command,
           commandPreview: spec.commandPreview,
           cwd: spec.cwd || cwd,
-          env: {
+          env: (terminalContext) => ({
             ...projectConfigEnv,
-            ...(spec.env || {})
-          },
+            ...(typeof spec.env === "function" ? spec.env(terminalContext) : spec.env || {}),
+            [COMMAND_RESULT_ENV]: resultFile.path
+          }),
           maxRunning: 1,
           metadata: {
             actionId: action.id,
@@ -151,14 +172,19 @@ function createCommandTerminalController({ projectService } = {}) {
           namespace,
           namespaceLimitPrefix: namespace,
           onClose: async ({ exitCode }) => {
-            await writeActionTerminalResult({
-              action,
-              exitCode,
-              input: commandInput,
-              runtime,
-              session,
-              spec
-            });
+            try {
+              await writeActionTerminalResult({
+                action,
+                exitCode,
+                input: commandInput,
+                resultFile,
+                runtime,
+                session,
+                spec
+              });
+            } finally {
+              await removeCommandResultFile(resultFile);
+            }
           },
           reuseRunning: true
         });
