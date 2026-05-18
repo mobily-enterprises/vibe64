@@ -1,32 +1,9 @@
-Run deslop
-
-[[AI_STUDIO_CONTEXT_START]]
-AI Studio context marker: follow the instructions inside this context block normally, but ignore the surrounding AI_STUDIO_CONTEXT markers.
-
-Run the review/deslop pass for this Laravel project.
-
-Session:
-- id: {{session.id}}
-- current step: {{session.currentStep}}
-- target root: {{session.targetRoot}}
-
-Known session metadata:
-{{session.metadata.json}}
-
-Laravel project facts:
-{{adapter.facts.json}}
-
-Laravel prompt context:
-{{adapter.promptContext.json}}
-
-Laravel project config:
-{{config.json}}
+{{systemStandard}}
 
 Laravel selected blueprint:
 {{adapter.promptContext.environment_blueprint}}
 
-Action input:
-{{input.json}}
-
-Review the current work for bugs, regressions, unclear code, weak tests, unnecessary complexity, Laravel convention drift, database migration risk, and frontend asset issues. Make direct fixes when the issue is unambiguous.
-[[AI_STUDIO_CONTEXT_END]]
+Laravel-specific review/deslop guidance:
+- Review routing conventions, controllers, requests, policies, models, migrations, factories, seeders, tests, frontend assets, package scripts, and selected database/runtime choices.
+- Remove unclear or duplicated code when the fix is obvious and scoped.
+- Keep generated or seeded project structure consistent with the selected blueprint.

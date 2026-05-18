@@ -1,36 +1,9 @@
-Create PR file
-
-[[AI_STUDIO_CONTEXT_START]]
-AI Studio context marker: follow the instructions inside this context block normally, but ignore the surrounding AI_STUDIO_CONTEXT markers.
-
-Create the local pull request file for this Laravel project.
-
-Session:
-- id: {{session.id}}
-- current step: {{session.currentStep}}
-- target root: {{session.targetRoot}}
-- artifacts root: {{session.artifactsRoot}}
-
-Known session metadata:
-{{session.metadata.json}}
-
-Laravel project facts:
-{{adapter.facts.json}}
-
-Laravel prompt context:
-{{adapter.promptContext.json}}
-
-Laravel project config:
-{{config.json}}
+{{systemStandard}}
 
 Laravel selected blueprint:
 {{adapter.promptContext.environment_blueprint}}
 
-Action input:
-{{input.json}}
-
-Write the reviewed pull request body to:
-{{session.artifactsRoot}}/pull_request.md
-
-Keep it focused on the accepted issue, implementation summary, checks run, Laravel routing/database/runtime behavior, and any remaining risk.
-[[AI_STUDIO_CONTEXT_END]]
+Laravel-specific pull-request-file guidance:
+- Summarize the accepted issue, implementation, routes/controllers/models/migrations/assets touched, selected blueprint impact, and verification performed.
+- Call out database runtime changes, `.env` expectations, migrations, queues, auth/authorization changes, package scripts, and remaining Laravel risks when relevant.
+- Keep the pull request body focused on what a reviewer needs to merge safely.

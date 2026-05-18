@@ -1,5 +1,4 @@
 import path from "node:path";
-import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -14,6 +13,9 @@ import {
   configValues,
   selectedConfigValue
 } from "../../configValues.js";
+import {
+  createAdapterBlueprintReader
+} from "../../adapterBlueprints.js";
 import { deepFreeze } from "../../deepFreeze.js";
 import {
   dependencyNames,
@@ -65,7 +67,7 @@ const NEXTJS_SEED_LANGUAGES = new Set(["typescript", "javascript"]);
 const NEXTJS_SEED_LINTERS = new Set(["eslint", "biome", "none"]);
 const NEXTJS_SEED_SOURCE_LAYOUTS = new Set(["src", "root"]);
 const NEXTJS_SEED_STYLING = new Set(["tailwind", "none"]);
-const blueprintCache = new Map();
+const blueprintFile = createAdapterBlueprintReader(NEXTJS_BLUEPRINT_ROOT);
 
 const NEXTJS_MARKERS = deepFreeze([
   {
@@ -307,17 +309,6 @@ function selectedSeedStyling(config = {}) {
 
 function selectedSeedImportAlias(config = {}) {
   return configTextValue(config, NEXTJS_SEED_IMPORT_ALIAS_CONFIG, "@/*") || "@/*";
-}
-
-async function blueprintFile(section = "", value = "") {
-  const cacheKey = `${section}/${value}`;
-  if (!blueprintCache.has(cacheKey)) {
-    blueprintCache.set(
-      cacheKey,
-      readFile(path.join(NEXTJS_BLUEPRINT_ROOT, section, `${value}.txt`), "utf8")
-    );
-  }
-  return blueprintCache.get(cacheKey);
 }
 
 async function nextjsBlueprintSections(config = {}) {

@@ -12,13 +12,14 @@
 
     <ProjectTypeGate
       :configure-project="configureProject"
-      require-setup
       @error="handleProjectTypeError"
       @missing="handleProjectTypeMissing"
       @ready="handleProjectTypeReady"
     >
       <template #default>
-        <AiStudioSessionPanel @title-change="emitPageTitle" />
+        <SetupReadinessGate>
+          <AiStudioSessionPanel @title-change="emitPageTitle" />
+        </SetupReadinessGate>
       </template>
     </ProjectTypeGate>
   </section>
@@ -29,6 +30,7 @@ import { computed, onBeforeUnmount, ref } from "vue";
 import { useRoute } from "vue-router";
 import AiStudioSessionPanel from "@/components/studio/AiStudioSessionPanel.vue";
 import ProjectTypeGate from "@/components/studio/ProjectTypeGate.vue";
+import SetupReadinessGate from "@/components/studio/SetupReadinessGate.vue";
 
 const pageError = ref("");
 const emit = defineEmits(["page-title-change"]);
@@ -110,7 +112,11 @@ onBeforeUnmount(() => {
     min-height: 0;
   }
 
-  .studio-screen :deep(.project-type-gate > .studio-ai-sessions) {
+  .studio-screen :deep(.project-type-gate > .setup-readiness-gate) {
+    flex: 1 1 auto;
+  }
+
+  .studio-screen :deep(.project-type-gate .studio-ai-sessions) {
     flex: 1 1 auto;
   }
 }

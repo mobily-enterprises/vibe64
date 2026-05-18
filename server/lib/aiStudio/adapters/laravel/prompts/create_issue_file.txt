@@ -1,39 +1,9 @@
-Create issue file
-
-[[AI_STUDIO_CONTEXT_START]]
-AI Studio context marker: follow the instructions inside this context block normally, but ignore the surrounding AI_STUDIO_CONTEXT markers.
-
-Create the local issue files for this Laravel project.
-
-Session:
-- id: {{session.id}}
-- current step: {{session.currentStep}}
-- target root: {{session.targetRoot}}
-- worktree path: {{session.worktreePath}}
-- artifacts root: {{session.artifactsRoot}}
-
-Laravel project facts:
-{{adapter.facts.json}}
-
-Laravel prompt context:
-{{adapter.promptContext.json}}
-
-Laravel project config:
-{{config.json}}
+{{systemStandard}}
 
 Laravel selected blueprint:
 {{adapter.promptContext.environment_blueprint}}
 
-Action input:
-{{input.json}}
-
-Use composer.json, package.json, routes, migrations, tests, and Laravel project files if inspection is useful. Use the current Codex conversation and Action input as the source of truth for the issue. Do not inspect AI Studio session internals, session files, or existing artifact files.
-
-Write the reviewed issue title to:
-{{session.artifactsRoot}}/issue_title
-
-Write the reviewed issue body to:
-{{session.artifactsRoot}}/issue.md
-
-Keep the issue focused on the scoped work and call out Laravel routing, database, queue, auth, or asset risk when relevant.
-[[AI_STUDIO_CONTEXT_END]]
+Laravel-specific issue-file guidance:
+- Write the issue around the selected Laravel blueprint, including starter kit, database runtime, package manager, testing framework, and Boost setting when relevant.
+- Mention routing, controllers, models, migrations, queues, auth, validation, policies, frontend assets, and environment/runtime risk when they affect the scoped work.
+- Keep acceptance criteria clear enough for a focused Laravel implementation.

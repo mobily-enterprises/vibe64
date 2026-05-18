@@ -9,7 +9,6 @@ import {
   createDoctorPluginToolkit
 } from "../../../doctorPluginToolkit.js";
 import {
-  hostUserDockerArgs,
   shellQuote
 } from "../../../shellCommands.js";
 import {
@@ -25,6 +24,12 @@ import {
   configTextValue,
   selectedConfigValue
 } from "../../configValues.js";
+import {
+  writableHostUserDockerArgs
+} from "../../dockerRuntime.js";
+import {
+  parseEnvText
+} from "../../envFiles.js";
 import {
   createRuntimeContainerDoctorEntries
 } from "../../runtimeContainers.js";
@@ -71,6 +76,10 @@ const LARAVEL_MARKERS = Object.freeze([
   "public/index.php",
   "routes/web.php"
 ]);
+const LARAVEL_WRITABLE_DOCKER_ENV = Object.freeze({
+  COMPOSER_CACHE_DIR: "/tmp/composer-cache",
+  npm_config_cache: "/tmp/npm-cache"
+});
 
 function selectedPackageManager(config = {}) {
   return selectedConfigValue(config, LARAVEL_PACKAGE_MANAGER_CONFIG, PACKAGE_MANAGERS, "npm");
@@ -90,6 +99,13 @@ function selectedBoostOption(config = {}) {
 
 function selectedCustomStarter(config = {}) {
   return configTextValue(config, LARAVEL_CUSTOM_STARTER_CONFIG);
+}
+
+function laravelSeedConfigError(config = {}) {
+  if (selectedStarterKit(config) === "custom" && !selectedCustomStarter(config)) {
+    return "laravel_custom_starter must be set when the Laravel starter kit is custom.";
+  }
+  return "";
 }
 
 function buildLaravelToolchainRepair() {
@@ -150,6 +166,10 @@ function laravelNewCommand({
   appDir = "$app_dir",
   config = {}
 } = {}) {
+  const seedConfigError = laravelSeedConfigError(config);
+  if (seedConfigError) {
+    return `printf '%s\\n' ${shellQuote(seedConfigError)} >&2; exit 2`;
+  }
   const appDirArg = appDir === "$app_dir" ? "\"$app_dir\"" : shellQuote(appDir);
   const flags = laravelNewFlags(config).map(shellQuote).join(" ");
   return `laravel new ${appDirArg} ${flags}`;
@@ -187,18 +207,6 @@ function createLaravelAppRepair(config = {}) {
     kind: "terminal",
     label: "Create Laravel app"
   });
-}
-
-function writableHostUserDockerArgs() {
-  return [
-    ...hostUserDockerArgs(),
-    "-e",
-    "HOME=/tmp/studio-home",
-    "-e",
-    "COMPOSER_CACHE_DIR=/tmp/composer-cache",
-    "-e",
-    "npm_config_cache=/tmp/npm-cache"
-  ];
 }
 
 async function readTargetComposerJson(toolkit, targetRoot) {
@@ -247,6 +255,35 @@ async function checkPackageManagerToolchain(toolkit, targetRoot, config = {}) {
     label: "Package manager command",
     packageManager: await setupPackageManager(toolkit, targetRoot, config),
     targetRoot
+  });
+}
+
+function checkCustomStarterConfig(config = {}) {
+  if (selectedStarterKit(config) !== "custom") {
+    return passCheck({
+      id: "laravel-custom-starter",
+      label: "Custom starter",
+      expected: "A custom starter package is required only when the custom starter kit is selected.",
+      observed: "Official Laravel starter kit or no starter kit selected.",
+      explanation: "Laravel seeding can use the selected starter kit without extra package input."
+    });
+  }
+  const customStarter = selectedCustomStarter(config);
+  if (customStarter) {
+    return passCheck({
+      id: "laravel-custom-starter",
+      label: "Custom starter",
+      expected: "A Packagist package or repository is configured for laravel new --using.",
+      observed: customStarter,
+      explanation: "Laravel seeding can pass the custom starter package to the installer."
+    });
+  }
+  return failCheck({
+    id: "laravel-custom-starter",
+    label: "Custom starter",
+    expected: "laravel_custom_starter contains the package or repository for laravel new --using.",
+    observed: "laravel_starter_kit is custom, but laravel_custom_starter is blank.",
+    explanation: "Studio will not silently seed a plain Laravel app when the selected configuration asks for a custom starter."
   });
 }
 
@@ -332,22 +369,6 @@ async function checkLaravelDependency(toolkit, targetRoot) {
   });
 }
 
-function parseEnvText(text = "") {
-  const values = {};
-  for (const line of String(text || "").split(/\r?\n/u)) {
-    const match = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/u.exec(line.trim());
-    if (!match) {
-      continue;
-    }
-    let value = match[2].trim();
-    if ((value.startsWith("\"") && value.endsWith("\"")) || (value.startsWith("'") && value.endsWith("'"))) {
-      value = value.slice(1, -1);
-    }
-    values[match[1]] = value;
-  }
-  return values;
-}
-
 async function readDotEnv(toolkit, targetRoot) {
   const envFile = await toolkit.readTargetFile(".env", {
     targetRoot
@@ -427,10 +448,12 @@ function migrationRepair(targetRoot, config, toolkit) {
   return toolkit.toolchainTerminalAction({
     actionId: "terminal-laravel-migrate",
     autoRun: true,
-    commandArgs: ["bash", "-lc", "php artisan migrate --force --no-interaction"],
-    commandPreview: "php artisan migrate --force --no-interaction",
+    commandArgs: ["bash", "-lc", "php artisan migrate --force --no-interaction --no-ansi"],
+    commandPreview: "php artisan migrate --force --no-interaction --no-ansi",
     extraArgs: [
-      ...writableHostUserDockerArgs(),
+      ...writableHostUserDockerArgs({
+        env: LARAVEL_WRITABLE_DOCKER_ENV
+      }),
       ...laravelRuntimeDockerArgs({
         config,
         targetRoot
@@ -447,23 +470,40 @@ function migrationRepair(targetRoot, config, toolkit) {
 
 async function checkMigrations(toolkit, targetRoot, config = {}) {
   if (selectedLaravelDatabaseRuntime(config) === "sqlite") {
+    if (!await toolkit.targetFileExists("database/database.sqlite", {
+      targetRoot
+    })) {
+      return blockedCheck({
+        id: "laravel-database-migrations",
+        label: "Database migrations",
+        expected: "database/database.sqlite exists for the selected SQLite runtime.",
+        observed: "database/database.sqlite is missing.",
+        explanation: "Laravel's SQLite setup needs the database file before migrations, tests, and launch targets can use local persistence.",
+        repair: seedDatabaseEnvRepair(targetRoot, config, toolkit)
+      });
+    }
     return passCheck({
       id: "laravel-database-migrations",
       label: "Database migrations",
-      expected: "SQLite database file exists; migrations can run locally.",
-      observed: "SQLite setup does not require a managed service.",
+      expected: "database/database.sqlite exists for the selected SQLite runtime.",
+      observed: "database/database.sqlite exists.",
       explanation: "Laravel's installer creates and migrates SQLite by default."
     });
   }
   const result = await toolkit.runToolchain([
     "bash",
     "-lc",
-    "php artisan migrate:status --no-interaction"
+    "php artisan migrate:status --no-interaction --no-ansi"
   ], {
-    extraArgs: laravelRuntimeDockerArgs({
-      config,
-      targetRoot
-    }),
+    extraArgs: [
+      ...writableHostUserDockerArgs({
+        env: LARAVEL_WRITABLE_DOCKER_ENV
+      }),
+      ...laravelRuntimeDockerArgs({
+        config,
+        targetRoot
+      })
+    ],
     image: LARAVEL_TOOLCHAIN_IMAGE,
     targetRoot,
     timeout: 30_000
@@ -519,7 +559,9 @@ function createLaravelSetupDoctorPlugin({
     })],
     commandPreview: (context = {}) => createLaravelAppRepair(context.config).commandPreview,
     extraArgs: (context = {}) => [
-      ...writableHostUserDockerArgs(),
+      ...writableHostUserDockerArgs({
+        env: LARAVEL_WRITABLE_DOCKER_ENV
+      }),
       ...laravelRuntimeDockerArgs({
         config: context.config || {},
         targetRoot: context.targetRoot || targetRoot
@@ -558,8 +600,14 @@ function createLaravelSetupDoctorPlugin({
                 buildRepair: buildLaravelToolchainRepair(),
                 expected: "The selected package manager runs inside the Laravel toolchain.",
                 id: "laravel-package-manager-toolchain",
-                label: "Laravel toolchain image"
+                label: "Package manager command"
               })
+        },
+        {
+          expected: "The custom starter package is set when the custom starter kit is selected.",
+          id: "laravel-custom-starter",
+          label: "Custom starter",
+          run: () => checkCustomStarterConfig(context.config || {})
         },
         ...containers.checks,
         {
@@ -613,10 +661,12 @@ function createLaravelSetupDoctorPlugin({
         toolkit.toolchainTerminalAction({
           actionId: "terminal-laravel-migrate",
           autoRun: true,
-          commandArgs: ["bash", "-lc", "php artisan migrate --force --no-interaction"],
-          commandPreview: "php artisan migrate --force --no-interaction",
+          commandArgs: ["bash", "-lc", "php artisan migrate --force --no-interaction --no-ansi"],
+          commandPreview: "php artisan migrate --force --no-interaction --no-ansi",
           extraArgs: [
-            ...writableHostUserDockerArgs(),
+            ...writableHostUserDockerArgs({
+              env: LARAVEL_WRITABLE_DOCKER_ENV
+            }),
             ...laravelRuntimeDockerArgs({
               config: context.config || {},
               targetRoot: context.targetRoot || targetRoot

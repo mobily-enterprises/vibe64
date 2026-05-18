@@ -5,6 +5,7 @@ import {
 } from "./inputSchemas.js";
 
 const ACTION_READ_CURRENT_APP = "feature.current-app.read";
+const ACTION_READ_SETUP_READINESS = "feature.current-app.setup-readiness.read";
 const ACTION_LIST_TARGET_SCRIPTS = "feature.current-app.target-scripts.list";
 const ACTION_RESET_STARRED_TARGET_SCRIPTS = "feature.current-app.target-scripts.starred.reset";
 const ACTION_SAVE_STARRED_TARGET_SCRIPTS = "feature.current-app.target-scripts.starred.save";
@@ -27,6 +28,24 @@ const featureActions = Object.freeze([
       return deps.featureService.inspectCurrentApp(input, {
         context
       });
+    }
+  },
+  {
+    id: ACTION_READ_SETUP_READINESS,
+    version: 1,
+    kind: "query",
+    channels: ["api", "automation", "internal"],
+    surfaces: ["home"],
+    input: emptyInputValidator,
+    output: null,
+    idempotency: "none",
+    audit: {
+      actionName: ACTION_READ_SETUP_READINESS
+    },
+    observability: {},
+    async execute(_input, context, deps) {
+      void context;
+      return deps.featureService.inspectSetupReadiness();
     }
   },
   {
@@ -88,6 +107,7 @@ const featureActions = Object.freeze([
 export {
   ACTION_LIST_TARGET_SCRIPTS,
   ACTION_READ_CURRENT_APP,
+  ACTION_READ_SETUP_READINESS,
   ACTION_RESET_STARRED_TARGET_SCRIPTS,
   ACTION_SAVE_STARRED_TARGET_SCRIPTS,
   featureActions

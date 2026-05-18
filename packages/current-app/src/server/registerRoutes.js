@@ -6,6 +6,7 @@ import {
 import {
   ACTION_LIST_TARGET_SCRIPTS,
   ACTION_READ_CURRENT_APP,
+  ACTION_READ_SETUP_READINESS,
   ACTION_RESET_STARRED_TARGET_SCRIPTS,
   ACTION_SAVE_STARRED_TARGET_SCRIPTS
 } from "./actions.js";
@@ -39,6 +40,11 @@ function registerRoutes(
   routes.actionRoute("GET", "/target-scripts", {
     actionId: ACTION_LIST_TARGET_SCRIPTS,
     summary: "List target scripts for the current app."
+  });
+
+  routes.actionRoute("GET", "/setup-readiness", {
+    actionId: ACTION_READ_SETUP_READINESS,
+    summary: "Read AI Studio setup readiness for protected current-app routes."
   });
 
   routes.actionRoute("PUT", "/target-scripts/starred", {

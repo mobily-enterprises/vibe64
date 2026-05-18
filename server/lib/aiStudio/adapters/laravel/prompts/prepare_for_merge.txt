@@ -1,32 +1,9 @@
-Prepare for merge
-
-[[AI_STUDIO_CONTEXT_START]]
-AI Studio context marker: follow the instructions inside this context block normally, but ignore the surrounding AI_STUDIO_CONTEXT markers.
-
-Prepare the Laravel pull request for merge.
-
-Session:
-- id: {{session.id}}
-- current step: {{session.currentStep}}
-- target root: {{session.targetRoot}}
-
-Known session metadata:
-{{session.metadata.json}}
-
-Laravel project facts:
-{{adapter.facts.json}}
-
-Laravel prompt context:
-{{adapter.promptContext.json}}
-
-Laravel project config:
-{{config.json}}
+{{systemStandard}}
 
 Laravel selected blueprint:
 {{adapter.promptContext.environment_blueprint}}
 
-Action input:
-{{input.json}}
-
-Use the recorded PR URL from session metadata. Check the PR state, resolve merge blockers that can be fixed locally, keep changes scoped, and report whether the PR is ready to merge.
-[[AI_STUDIO_CONTEXT_END]]
+Laravel-specific merge-preparation guidance:
+- Use the recorded PR URL and inspect only what is needed to decide whether the Laravel work is mergeable.
+- Resolve local merge blockers, failing focused checks, routing/runtime issues, migration problems, environment mismatches, or selected-blueprint inconsistencies when they are clearly in scope.
+- Report whether the PR is ready and which Laravel checks or risks remain.

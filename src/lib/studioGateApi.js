@@ -13,6 +13,7 @@ const STUDIO_SETUP_ENDPOINT = studioApiPath("studio/studio-setup");
 const ADAPTER_SETUP_ENDPOINT = studioApiPath("studio/adapter-setup");
 const PROJECT_SETUP_ENDPOINT = studioApiPath("studio/project-setup");
 const TARGET_PROJECT_ENDPOINT = studioApiPath("studio/current-app");
+const SETUP_READINESS_ENDPOINT = `${TARGET_PROJECT_ENDPOINT}/setup-readiness`;
 const AI_STUDIO_ENDPOINT = studioApiPath("ai-studio");
 const PROJECT_CONFIG_ENDPOINT = `${AI_STUDIO_ENDPOINT}/project-config`;
 const PROJECT_TYPE_ENDPOINT = `${AI_STUDIO_ENDPOINT}/project-type`;
@@ -58,6 +59,10 @@ async function readProjectSetupStatus() {
   return studioHttpClient.get(PROJECT_SETUP_ENDPOINT);
 }
 
+async function readSetupReadinessStatus() {
+  return studioHttpClient.get(SETUP_READINESS_ENDPOINT);
+}
+
 export {
   ACCOUNTS_AUTH_ENDPOINT,
   ACCOUNTS_ENDPOINT,
@@ -69,6 +74,7 @@ export {
   PROJECT_TYPE_ENDPOINT,
   PROJECT_SETUP_STREAM_ENDPOINT,
   PROJECT_SETUP_TERMINAL_ENDPOINT,
+  SETUP_READINESS_ENDPOINT,
   STUDIO_SETUP_STREAM_ENDPOINT,
   STUDIO_SETUP_TERMINAL_ENDPOINT,
   TARGET_PROJECT_API_SUFFIX,
@@ -80,6 +86,7 @@ export {
   projectTypeQueryKey,
   readAccountsStatus,
   readProjectSetupStatus,
+  readSetupReadinessStatus,
   readStudioSetupStatus,
   readAdapterSetupStatus,
   targetProjectQueryKey

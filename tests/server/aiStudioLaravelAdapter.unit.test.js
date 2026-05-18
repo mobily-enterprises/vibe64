@@ -16,6 +16,10 @@ import {
   createLaravelTargetAdapter
 } from "../../server/lib/aiStudio/adapters/laravel/index.js";
 import {
+  LARAVEL_MARIADB_HOST_PORT,
+  LARAVEL_MYSQL_HOST_PORT,
+  LARAVEL_POSTGRES_HOST_PORT,
+  createLaravelRuntimeContainers,
   laravelDatabaseEnvLines,
   laravelDatabaseEnvWriteScript
 } from "../../server/lib/aiStudio/adapters/laravel/databaseRuntime.js";
@@ -174,6 +178,7 @@ test("laravel prompt actions use the Laravel prompt pack", async () => {
 
     assert.equal(afterPrompt.actionResult.status, "prompt_ready");
     assert.equal(afterPrompt.actionResult.promptContext.adapter.id, "laravel");
+    assert.match(afterPrompt.actionResult.prompt, /AI Studio standard planning instructions/u);
     assert.match(afterPrompt.actionResult.prompt, /Create the implementation plan for this Laravel project/u);
     assert.match(afterPrompt.actionResult.prompt, /Database runtime: MariaDB/u);
     assert.match(afterPrompt.actionResult.prompt, /Starter kit: Livewire/u);
@@ -318,6 +323,21 @@ test("laravel setup seeds empty targets and selected database environment", asyn
     assert.match(command, /--pnpm/u);
     assert.match(command, /--no-boost/u);
     assert.match(command, /--react/u);
+    assert.match(laravelNewCommand({
+      config: {
+        values: {
+          laravel_custom_starter: "acme/laravel-starter",
+          laravel_starter_kit: "custom"
+        }
+      }
+    }), /--using acme\/laravel-starter/u);
+    assert.match(laravelNewCommand({
+      config: {
+        values: {
+          laravel_starter_kit: "custom"
+        }
+      }
+    }), /laravel_custom_starter must be set/u);
     assert.deepEqual(laravelDatabaseEnvLines({
       config,
       targetRoot
@@ -329,6 +349,31 @@ test("laravel setup seeds empty targets and selected database environment", asyn
       "DB_USERNAME=laravel",
       "DB_PASSWORD=laravel_password"
     ]);
+  });
+});
+
+test("laravel setup validates custom starter before seeding", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const plugin = createLaravelSetupDoctorPlugin({
+      targetRoot
+    });
+    const config = {
+      values: {
+        laravel_starter_kit: "custom"
+      }
+    };
+    const customStarterCheck = plugin.checks({
+      config,
+      targetRoot
+    }).find((check) => check.id === "laravel-custom-starter");
+
+    const result = await customStarterCheck.run({
+      config,
+      targetRoot
+    });
+
+    assert.equal(result.status, "fail");
+    assert.match(result.observed, /laravel_custom_starter is blank/u);
   });
 });
 
@@ -351,6 +396,44 @@ test("laravel setup provisions the selected managed database runtime", async () 
     assert.ok(mariadbChecks.some((check) => check.id === "laravel-mariadb"));
     assert.ok(!mariadbChecks.some((check) => check.id === "laravel-postgres"));
     assert.ok(!mariadbChecks.some((check) => check.id === "laravel-mysql"));
+    assert.deepEqual(createLaravelRuntimeContainers({
+      config: mariadbConfig,
+      targetRoot
+    })[0].ports, [
+      {
+        container: 3306,
+        host: "127.0.0.1",
+        hostPort: LARAVEL_MARIADB_HOST_PORT
+      }
+    ]);
+    assert.deepEqual(createLaravelRuntimeContainers({
+      config: {
+        values: {
+          laravel_database_runtime: "postgres"
+        }
+      },
+      targetRoot
+    })[0].ports, [
+      {
+        container: 5432,
+        host: "127.0.0.1",
+        hostPort: LARAVEL_POSTGRES_HOST_PORT
+      }
+    ]);
+    assert.deepEqual(createLaravelRuntimeContainers({
+      config: {
+        values: {
+          laravel_database_runtime: "mysql"
+        }
+      },
+      targetRoot
+    })[0].ports, [
+      {
+        container: 3306,
+        host: "127.0.0.1",
+        hostPort: LARAVEL_MYSQL_HOST_PORT
+      }
+    ]);
 
     const envCheck = mariadbChecks.find((check) => check.id === "laravel-database-env");
     const envResult = await envCheck.run({
@@ -376,5 +459,20 @@ test("laravel setup provisions the selected managed database runtime", async () 
       config: sqliteConfig,
       targetRoot
     }), /touch database\/database\.sqlite/u);
+
+    const sqliteMigrationCheck = sqliteChecks.find((check) => check.id === "laravel-database-migrations");
+    const missingSqliteResult = await sqliteMigrationCheck.run({
+      config: sqliteConfig,
+      targetRoot
+    });
+    assert.equal(missingSqliteResult.status, "blocked");
+    assert.equal(missingSqliteResult.repair.actionId, "terminal-seed-laravel-db-env");
+
+    await writeProjectFile(targetRoot, "database/database.sqlite", "");
+    const readySqliteResult = await sqliteMigrationCheck.run({
+      config: sqliteConfig,
+      targetRoot
+    });
+    assert.equal(readySqliteResult.status, "pass");
   });
 });

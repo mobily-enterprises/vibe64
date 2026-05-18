@@ -480,6 +480,10 @@ function createService({
       });
     },
 
+    async inspectSetupReadiness() {
+      return currentAppResult(setupReadiness);
+    },
+
     async listTargetScripts() {
       return currentAppResult(async () => {
         await requireSetupReady();

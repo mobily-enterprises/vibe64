@@ -1,32 +1,9 @@
-Resolve deslop
-
-[[AI_STUDIO_CONTEXT_START]]
-AI Studio context marker: follow the instructions inside this context block normally, but ignore the surrounding AI_STUDIO_CONTEXT markers.
-
-Resolve the remaining review/deslop findings for this Laravel project.
-
-Session:
-- id: {{session.id}}
-- current step: {{session.currentStep}}
-- target root: {{session.targetRoot}}
-
-Known session metadata:
-{{session.metadata.json}}
-
-Laravel project facts:
-{{adapter.facts.json}}
-
-Laravel prompt context:
-{{adapter.promptContext.json}}
-
-Laravel project config:
-{{config.json}}
+{{systemStandard}}
 
 Laravel selected blueprint:
 {{adapter.promptContext.environment_blueprint}}
 
-Action input:
-{{input.json}}
-
-Address the outstanding review findings directly. Keep the fix focused, rerun only fast relevant checks, and report what remains unresolved.
-[[AI_STUDIO_CONTEXT_END]]
+Laravel-specific deslop-resolution guidance:
+- Resolve outstanding findings while preserving the selected Laravel blueprint.
+- Keep routing, validation, authorization, persistence, migrations, frontend assets, package scripts, and environment handling internally consistent.
+- Re-run only the focused fast checks that prove the resolved findings.

@@ -20,11 +20,14 @@ import {
 
 const LARAVEL_DATABASE_RUNTIMES = new Set(["sqlite", "postgres", "mysql", "mariadb"]);
 const LARAVEL_POSTGRES_HOST = "laravel-postgres";
+const LARAVEL_POSTGRES_HOST_PORT = "15433";
 const LARAVEL_POSTGRES_PASSWORD = "laravel_password";
 const LARAVEL_POSTGRES_USER = "laravel";
 const LARAVEL_MYSQL_HOST = "laravel-mysql";
+const LARAVEL_MYSQL_HOST_PORT = "13308";
 const LARAVEL_MYSQL_ROOT_PASSWORD = "laravel_root_password";
 const LARAVEL_MARIADB_HOST = "laravel-mariadb";
+const LARAVEL_MARIADB_HOST_PORT = "13309";
 const LARAVEL_MARIADB_ROOT_PASSWORD = "laravel_root_password";
 
 function selectedLaravelDatabaseRuntime(config = {}) {
@@ -88,6 +91,7 @@ function createLaravelRuntimeContainers({
         checkId: "laravel-postgres",
         databaseNameFallback: "laravel_app",
         host: LARAVEL_POSTGRES_HOST,
+        hostPort: LARAVEL_POSTGRES_HOST_PORT,
         label: "Laravel PostgreSQL",
         password: LARAVEL_POSTGRES_PASSWORD,
         runtime,
@@ -103,6 +107,7 @@ function createLaravelRuntimeContainers({
         checkId: "laravel-mysql",
         databaseNameFallback: "laravel_app",
         host: LARAVEL_MYSQL_HOST,
+        hostPort: LARAVEL_MYSQL_HOST_PORT,
         label: "Laravel MySQL",
         rootPassword: LARAVEL_MYSQL_ROOT_PASSWORD,
         runtime,
@@ -117,6 +122,7 @@ function createLaravelRuntimeContainers({
         checkId: "laravel-mariadb",
         databaseNameFallback: "laravel_app",
         host: LARAVEL_MARIADB_HOST,
+        hostPort: LARAVEL_MARIADB_HOST_PORT,
         label: "Laravel MariaDB",
         rootPassword: LARAVEL_MARIADB_ROOT_PASSWORD,
         runtime,
@@ -217,8 +223,11 @@ function laravelDatabaseEnvWriteScript({
 export {
   LARAVEL_DATABASE_RUNTIMES,
   LARAVEL_MARIADB_HOST,
+  LARAVEL_MARIADB_HOST_PORT,
   LARAVEL_MYSQL_HOST,
+  LARAVEL_MYSQL_HOST_PORT,
   LARAVEL_POSTGRES_HOST,
+  LARAVEL_POSTGRES_HOST_PORT,
   createLaravelRuntimeContainers,
   laravelDatabaseConnection,
   laravelDatabaseEnvLines,

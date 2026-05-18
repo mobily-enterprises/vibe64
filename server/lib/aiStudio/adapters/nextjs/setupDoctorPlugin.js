@@ -9,7 +9,6 @@ import {
   createDoctorPluginToolkit
 } from "../../../doctorPluginToolkit.js";
 import {
-  hostUserDockerArgs,
   shellQuote
 } from "../../../shellCommands.js";
 import {
@@ -18,6 +17,12 @@ import {
 import {
   createRuntimeContainerDoctorEntries
 } from "../../runtimeContainers.js";
+import {
+  writableHostUserDockerArgs
+} from "../../dockerRuntime.js";
+import {
+  parseEnvText
+} from "../../envFiles.js";
 import {
   configTextValue,
   selectedConfigValue
@@ -162,16 +167,6 @@ function createNextAppRepair(config = {}) {
   });
 }
 
-function writableHostUserDockerArgs() {
-  return [
-    ...hostUserDockerArgs(),
-    "-e",
-    "HOME=/tmp/studio-home",
-    "-e",
-    "npm_config_cache=/tmp/npm-cache"
-  ];
-}
-
 async function readTargetPackageJson(toolkit, targetRoot) {
   const result = await toolkit.readTargetJson("package.json", {
     targetRoot
@@ -306,22 +301,6 @@ async function checkPackageManagerToolchain(toolkit, targetRoot, config = {}) {
   });
 }
 
-function parseEnvText(text = "") {
-  const values = {};
-  for (const line of String(text || "").split(/\r?\n/u)) {
-    const match = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/u.exec(line.trim());
-    if (!match) {
-      continue;
-    }
-    let value = match[2].trim();
-    if ((value.startsWith("\"") && value.endsWith("\"")) || (value.startsWith("'") && value.endsWith("'"))) {
-      value = value.slice(1, -1);
-    }
-    values[match[1]] = value;
-  }
-  return values;
-}
-
 async function readDotEnvLocal(toolkit, targetRoot) {
   const envFile = await toolkit.readTargetFile(".env.local", {
     targetRoot
@@ -420,7 +399,11 @@ function createNextjsSetupDoctorPlugin({
       targetRoot: context.targetRoot || targetRoot
     })],
     commandPreview: (context = {}) => createNextAppRepair(context.config).commandPreview,
-    extraArgs: writableHostUserDockerArgs(),
+    extraArgs: writableHostUserDockerArgs({
+      env: {
+        npm_config_cache: "/tmp/npm-cache"
+      }
+    }),
     image: STUDIO_BASE_TOOLCHAIN_IMAGE,
     label: "Create Next.js app",
     targetRoot: ({ targetRoot: contextTargetRoot = "" } = {}) => contextTargetRoot || targetRoot

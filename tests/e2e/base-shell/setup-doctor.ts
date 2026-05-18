@@ -68,7 +68,7 @@ test.describe("setup tabbed doctor responsive smoke", () => {
       await page.getByLabel("Git user.name").fill("Ada Lovelace");
       await page.getByLabel("Git user.email").fill("ada@example.com");
       await expect(page.getByRole("button", { name: "Run repair" })).toBeEnabled();
-      await expect(page.locator(".studio-screen__dialog .doctor-status__command")).toContainText("Ada Lovelace");
+      await expect(page.locator(".doctor-repair-dialog__command")).toContainText("Ada Lovelace");
       const repairDialog = page.getByRole("dialog");
       await repairDialog.getByRole("button", { name: "Close" }).click();
       await expect(repairDialog).toBeHidden();

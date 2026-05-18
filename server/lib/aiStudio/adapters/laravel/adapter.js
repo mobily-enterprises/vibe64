@@ -1,5 +1,4 @@
 import path from "node:path";
-import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -14,6 +13,9 @@ import {
   configValues,
   selectedConfigValue
 } from "../../configValues.js";
+import {
+  createAdapterBlueprintReader
+} from "../../adapterBlueprints.js";
 import { deepFreeze } from "../../deepFreeze.js";
 import {
   AiStudioDescribedWorkflowTargetAdapter,
@@ -74,7 +76,7 @@ const LARAVEL_PACKAGE_MANAGERS = new Set(["npm", "pnpm", "yarn", "bun"]);
 const LARAVEL_STARTER_KITS = new Set(["none", "react", "vue", "svelte", "livewire", "custom"]);
 const LARAVEL_TESTING_FRAMEWORKS = new Set(["pest", "phpunit"]);
 const LARAVEL_BOOST_OPTIONS = new Set(["none", "boost"]);
-const blueprintCache = new Map();
+const blueprintFile = createAdapterBlueprintReader(LARAVEL_BLUEPRINT_ROOT);
 
 const LARAVEL_MARKERS = deepFreeze([
   {
@@ -266,17 +268,6 @@ function selectedCustomStarter(config = {}) {
   return normalizeText(configValues(config)[LARAVEL_CUSTOM_STARTER_CONFIG]);
 }
 
-async function blueprintFile(section = "", value = "") {
-  const cacheKey = `${section}/${value}`;
-  if (!blueprintCache.has(cacheKey)) {
-    blueprintCache.set(
-      cacheKey,
-      readFile(path.join(LARAVEL_BLUEPRINT_ROOT, section, `${value}.txt`), "utf8")
-    );
-  }
-  return blueprintCache.get(cacheKey);
-}
-
 async function laravelBlueprintSections(config = {}) {
   const starterKit = selectedStarterKit(config);
   const customStarter = selectedCustomStarter(config);
@@ -456,7 +447,7 @@ async function laravelInstallWorkflowHook({ worktreePath = "" } = {}) {
   const packageManager = await detectPackageManager(worktreePath, packageJson || {});
   const nodeInstall = packageJson ? installCommand(packageManager.name) : "";
   const command = [
-    "composer install --no-interaction",
+    "composer install --no-interaction --no-ansi",
     nodeInstall
   ].filter(Boolean).join(" && ");
   return {

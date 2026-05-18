@@ -1,42 +1,9 @@
-Run {{action.label}}
-
-[[AI_STUDIO_CONTEXT_START]]
-AI Studio context marker: follow the instructions inside this context block normally, but ignore the surrounding AI_STUDIO_CONTEXT markers.
-
-You are working in a Laravel project through AI Studio.
-
-Run this Laravel workflow prompt.
-
-Action:
-- id: {{action.id}}
-- label: {{action.label}}
-- prompt: {{action.promptId}}
-
-Session:
-- id: {{session.id}}
-- current step: {{session.currentStep}}
-- status: {{session.status}}
-- target root: {{session.targetRoot}}
-
-Session metadata:
-{{session.metadata.json}}
-
-Laravel project facts:
-{{adapter.facts.json}}
-
-Laravel prompt context:
-{{adapter.promptContext.json}}
-
-Laravel project config:
-{{config.json}}
+{{systemStandard}}
 
 Laravel selected blueprint:
 {{adapter.promptContext.environment_blueprint}}
 
-Action input:
-{{input.json}}
-
-Respect Laravel conventions: routes in routes/, controllers in app/Http/Controllers, models in app/Models, migrations in database/migrations, views in resources/views, frontend assets in resources/js or resources/css, and config through .env/config files. Keep database access server-side through Eloquent, query builder, jobs, commands, or services.
-
-In your normal Codex response, report the work completed, files modified, checks run, and remaining blockers. Do not run shell commands just to display this response.
-[[AI_STUDIO_CONTEXT_END]]
+Laravel-specific guidance:
+- Treat this as a Laravel project using the selected blueprint above.
+- Respect Laravel routes, controllers, models, migrations, seeders, factories, policies, requests, jobs, events, views, Vite assets, Composer scripts, and package-manager conventions.
+- Keep database access server-side through Eloquent, query builder, jobs, commands, or services, and keep `.env` aligned with the selected database runtime.

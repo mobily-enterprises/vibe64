@@ -1,32 +1,9 @@
-Run deep UI check
-
-[[AI_STUDIO_CONTEXT_START]]
-AI Studio context marker: follow the instructions inside this context block normally, but ignore the surrounding AI_STUDIO_CONTEXT markers.
-
-Run a focused deep UI check for this Laravel project.
-
-Session:
-- id: {{session.id}}
-- current step: {{session.currentStep}}
-- target root: {{session.targetRoot}}
-
-Known session metadata:
-{{session.metadata.json}}
-
-Laravel project facts:
-{{adapter.facts.json}}
-
-Laravel prompt context:
-{{adapter.promptContext.json}}
-
-Laravel project config:
-{{config.json}}
+{{systemStandard}}
 
 Laravel selected blueprint:
 {{adapter.promptContext.environment_blueprint}}
 
-Action input:
-{{input.json}}
-
-Inspect the user-facing Laravel app behavior carefully. Fix clear Blade, Livewire, Inertia, routing, validation, state, or asset defects directly when the project supports it, and report what you modified or why no edit was needed.
-[[AI_STUDIO_CONTEXT_END]]
+Laravel-specific deep UI guidance:
+- Inspect the user-facing Laravel behavior affected by the change.
+- Check Blade, Livewire, Inertia, React, Vue, Svelte, routing, loading/error states, responsive layout, validation feedback, state, and asset behavior according to the selected starter kit.
+- Fix clear UI defects directly when they are in scope and report anything blocked by runtime or environment setup.

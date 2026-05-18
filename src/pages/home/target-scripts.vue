@@ -1,8 +1,10 @@
 <template>
   <section class="generated-ui-screen generated-ui-screen--studio studio-target-scripts">
-    <ProjectTypeGate require-setup>
+    <ProjectTypeGate>
       <template #default>
-        <TargetScriptsPanel />
+        <SetupReadinessGate>
+          <TargetScriptsPanel />
+        </SetupReadinessGate>
       </template>
     </ProjectTypeGate>
   </section>
@@ -11,6 +13,7 @@
 <script setup>
 import TargetScriptsPanel from "@/components/studio/TargetScriptsPanel.vue";
 import ProjectTypeGate from "@/components/studio/ProjectTypeGate.vue";
+import SetupReadinessGate from "@/components/studio/SetupReadinessGate.vue";
 </script>
 
 <style scoped>

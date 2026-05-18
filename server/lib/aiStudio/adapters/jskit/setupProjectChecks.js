@@ -7,7 +7,6 @@ import {
   passDoctorCheck as passCheck
 } from "../../../doctorCheckItems.js";
 import {
-  hostUserDockerArgs,
   shellQuote
 } from "../../../shellCommands.js";
 import {
@@ -16,6 +15,12 @@ import {
 import {
   selectedConfigValue
 } from "../../configValues.js";
+import {
+  writableHostUserDockerArgs
+} from "../../dockerRuntime.js";
+import {
+  parseEnvText
+} from "../../envFiles.js";
 import {
   createManagedDatabaseDockerArgs,
   createManagedDatabaseRepair,
@@ -72,16 +77,6 @@ function titleFromRepoName(repoName) {
     .join(" ") || "JSKIT App";
 }
 
-function writableHostUserDockerArgs() {
-  return [
-    ...hostUserDockerArgs(),
-    "-e",
-    "HOME=/tmp/studio-home",
-    "-e",
-    "npm_config_cache=/tmp/npm-cache"
-  ];
-}
-
 function scaffoldCommandPreview(config = {}) {
   return `npx @jskit-ai/create-app "$JSKIT_APP_NAME" --target . --force --tenancy-mode ${shellQuote(selectedJskitTenancyMode(config))} --title "$JSKIT_APP_TITLE" --initial-bundles none`;
 }
@@ -97,7 +92,11 @@ function scaffoldScript(config = {}) {
 function scaffoldEnvArgs(targetRoot) {
   const repoName = repoNameFromTargetRoot(targetRoot);
   return [
-    ...writableHostUserDockerArgs(),
+    ...writableHostUserDockerArgs({
+      env: {
+        npm_config_cache: "/tmp/npm-cache"
+      }
+    }),
     "-e",
     `JSKIT_APP_NAME=${repoName}`,
     "-e",
@@ -140,7 +139,11 @@ function npmInstallTerminalAction(targetRoot, toolkit) {
     actionId: "terminal-npm-install",
     autoRun: true,
     commandArgs: ["bash", "-lc", npmInstallScript()],
-    extraArgs: writableHostUserDockerArgs(),
+    extraArgs: writableHostUserDockerArgs({
+      env: {
+        npm_config_cache: "/tmp/npm-cache"
+      }
+    }),
     image: JSKIT_TOOLCHAIN_IMAGE,
     label: "Install dependencies",
     targetRoot
@@ -244,26 +247,6 @@ function dependencyNames(packageJson, jskitLock) {
     names.add(name);
   }
   return names;
-}
-
-function parseEnvText(text) {
-  const values = {};
-  for (const line of String(text || "").split(/\r?\n/u)) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) {
-      continue;
-    }
-    const match = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/u.exec(trimmed);
-    if (!match) {
-      continue;
-    }
-    let value = match[2].trim();
-    if ((value.startsWith("\"") && value.endsWith("\"")) || (value.startsWith("'") && value.endsWith("'"))) {
-      value = value.slice(1, -1);
-    }
-    values[match[1]] = value;
-  }
-  return values;
 }
 
 async function readDotEnv(targetRoot, toolkit) {

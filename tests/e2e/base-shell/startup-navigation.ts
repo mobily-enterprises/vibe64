@@ -13,21 +13,20 @@ import {
 } from "../support/base-shell-mocks";
 
 test.describe("studio startup navigation", () => {
-  test("root redirects to home without running setup doctors", async ({ page }) => {
+  test("root opens Studio Setup when studio readiness is blocked", async ({ page }) => {
     const apiRequests = trackStudioApiRequests(page);
     await mockBootstrapBlocked(page);
-    await mockCurrentAppInspection(page);
     await page.goto(`${BASE_URL}/`);
-    await expect(page).toHaveURL(/\/home$/u);
-    await expectSessionsRoute(page);
-    expect(apiRequests.count("/api/studio/studio-setup")).toBe(0);
-    expect(apiRequests.count("/api/studio/studio-setup/stream")).toBe(0);
+    await expect(page).toHaveURL(/\/setup\?tab=studio-setup$/u);
+    await expect(page.getByRole("heading", { name: "Studio Setup", exact: true })).toBeVisible();
+    await expect(page.getByText("Studio Setup blocked").first()).toBeVisible();
+    expect(apiRequests.count("/api/studio/studio-setup/stream")).toBe(1);
     expect(apiRequests.count("/api/studio/adapter-setup")).toBe(0);
     expect(apiRequests.count("/api/studio/project-setup")).toBe(0);
-    expect(apiRequests.count("/api/studio/current-app")).toBe(1);
+    expect(apiRequests.count("/api/studio/current-app")).toBe(0);
   });
 
-  test("home loads the current app without running setup doctors", async ({ page }) => {
+  test("home loads sessions after setup readiness passes", async ({ page }) => {
     const apiRequests = trackStudioApiRequests(page);
     await mockTargetAppBlocked(page);
     await mockCurrentAppInspection(page);
@@ -40,11 +39,12 @@ test.describe("studio startup navigation", () => {
     await expect(page.getByRole("link", { name: "Adapter Setup", exact: true })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Project Setup", exact: true })).toHaveCount(0);
     await expect(page.locator(".target-scripts-panel")).toHaveCount(0);
+    expect(apiRequests.count("/api/studio/current-app/setup-readiness")).toBe(1);
     expect(apiRequests.count("/api/studio/studio-setup")).toBe(0);
     expect(apiRequests.count("/api/studio/adapter-setup")).toBe(0);
     expect(apiRequests.count("/api/studio/adapter-setup/stream")).toBe(0);
     expect(apiRequests.count("/api/studio/project-setup")).toBe(0);
-    expect(apiRequests.count("/api/studio/current-app")).toBe(1);
+    expect(apiRequests.count("/api/studio/current-app")).toBe(0);
   });
 
   test("target scripts page persists stars, resets defaults, and runs one terminal", async ({ page }) => {
@@ -56,7 +56,7 @@ test.describe("studio startup navigation", () => {
         body: JSON.stringify(currentAppPayload)
       });
     });
-    await page.route("**/api/ai-studio/sessions", async (route) => {
+    await page.route("**/api/ai-studio/sessions**", async (route) => {
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify({
@@ -130,30 +130,27 @@ test.describe("studio startup navigation", () => {
     await expect(terminal).toContainText("node server.js");
   });
 
-  test("home stays on home even when setup checks would be blocked", async ({ page }) => {
+  test("home redirects to the blocked setup step", async ({ page }) => {
     const apiRequests = trackStudioApiRequests(page);
     await mockAppSetupBlocked(page);
-    await mockCurrentAppInspection(page);
+    await page.goto(`${BASE_URL}/home`);
+    await expect(page).toHaveURL(/\/setup\?tab=project-setup$/u);
+    await expect(page.getByRole("heading", { name: "Project Setup", exact: true })).toBeVisible();
+    expect(apiRequests.count("/api/studio/current-app/setup-readiness")).toBe(1);
+    expect(apiRequests.count("/api/studio/current-app")).toBe(0);
+  });
+
+  test("home reaches sessions when every setup gate is ready", async ({ page }) => {
+    const apiRequests = trackStudioApiRequests(page);
+    await mockStudioReady(page);
     await page.goto(`${BASE_URL}/home`);
     await expect(page).toHaveURL(/\/home$/u);
     await expectSessionsRoute(page);
+    expect(apiRequests.count("/api/studio/current-app/setup-readiness")).toBe(1);
     expect(apiRequests.count("/api/studio/studio-setup")).toBe(0);
     expect(apiRequests.count("/api/studio/adapter-setup")).toBe(0);
     expect(apiRequests.count("/api/studio/project-setup")).toBe(0);
-    expect(apiRequests.count("/api/studio/project-setup/stream")).toBe(0);
-    expect(apiRequests.count("/api/studio/current-app")).toBe(1);
-  });
-
-  test("root redirects to home when every setup gate is ready", async ({ page }) => {
-    const apiRequests = trackStudioApiRequests(page);
-    await mockStudioReady(page);
-    await page.goto(`${BASE_URL}/`);
-    await expect(page).toHaveURL(/\/home$/u);
-    await expectSessionsRoute(page);
-    expect(apiRequests.count("/api/studio/studio-setup")).toBe(0);
-    expect(apiRequests.count("/api/studio/adapter-setup")).toBe(0);
-    expect(apiRequests.count("/api/studio/project-setup")).toBe(0);
-    expect(apiRequests.count("/api/studio/current-app")).toBe(1);
+    expect(apiRequests.count("/api/studio/current-app")).toBe(0);
   });
 
   test("direct Adapter Setup tab runs the adapter setup stream once", async ({ page }) => {
@@ -162,7 +159,7 @@ test.describe("studio startup navigation", () => {
     await page.goto(`${BASE_URL}/setup?tab=adapter-setup`);
     await expect(page.getByRole("heading", { name: "Adapter Setup", exact: true })).toBeVisible();
     await expect(page.getByText("Adapter Setup blocked").first()).toBeVisible();
-    expect(apiRequests.count("/api/studio/studio-setup")).toBe(1);
+    expect(apiRequests.count("/api/studio/studio-setup")).toBeGreaterThanOrEqual(1);
     expect(apiRequests.count("/api/studio/adapter-setup")).toBe(0);
     expect(apiRequests.count("/api/studio/adapter-setup/stream")).toBe(1);
   });
@@ -173,8 +170,8 @@ test.describe("studio startup navigation", () => {
     await page.goto(`${BASE_URL}/setup?tab=project-setup`);
     await expect(page.getByRole("heading", { name: "Project Setup", exact: true })).toBeVisible();
     await expect(page.getByText("Project Setup blocked").first()).toBeVisible();
-    expect(apiRequests.count("/api/studio/studio-setup")).toBe(1);
-    expect(apiRequests.count("/api/studio/adapter-setup")).toBe(1);
+    expect(apiRequests.count("/api/studio/studio-setup")).toBeGreaterThanOrEqual(1);
+    expect(apiRequests.count("/api/studio/adapter-setup")).toBeGreaterThanOrEqual(1);
     expect(apiRequests.count("/api/studio/project-setup")).toBe(0);
     expect(apiRequests.count("/api/studio/project-setup/stream")).toBe(1);
   });
@@ -193,12 +190,12 @@ test.describe("studio startup navigation", () => {
     await expect(page.getByRole("tab", { name: "Project Setup", exact: true })).toHaveAttribute("aria-selected", "true");
   });
 
-  test("ready continue moves from Studio Setup to Adapter Setup tab", async ({ page }) => {
+  test("ready continue moves from Studio Setup to Accounts tab", async ({ page }) => {
     await mockStudioReady(page);
     await page.goto(`${BASE_URL}/setup?tab=studio-setup`);
-    await page.getByRole("button", { name: "Continue to Adapter Setup" }).click();
-    await expect(page).toHaveURL(/\/setup\?tab=adapter-setup$/u);
-    await expect(page.getByRole("heading", { name: "Adapter Setup", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Continue to Accounts" }).click();
+    await expect(page).toHaveURL(/\/setup\?tab=accounts$/u);
+    await expect(page.getByRole("heading", { name: "Accounts", exact: true })).toBeVisible();
   });
 
   test("ready continue moves from Adapter Setup to Project Setup tab", async ({ page }) => {

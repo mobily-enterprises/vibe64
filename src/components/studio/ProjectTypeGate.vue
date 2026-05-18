@@ -2,13 +2,13 @@
   <div class="project-type-gate">
     <StudioErrorNotice
       v-if="errorMessage"
-      title="Setup could not load"
+      title="Project setup could not load"
       :error="errorMessage"
       compact
     />
 
     <v-progress-linear
-      v-if="showLoadingBar || redirectingToSetup"
+      v-if="showLoadingBar"
       color="primary"
       height="6"
       indeterminate
@@ -29,38 +29,16 @@
       @save="saveProjectConfig"
     />
 
-    <v-sheet
-      v-else-if="needsSetup"
-      rounded="lg"
-      border
-      class="project-type-gate__setup-needed"
-    >
-      <div>
-        <h2 class="project-type-gate__setup-title">Setup needed</h2>
-        <p class="project-type-gate__setup-message">
-          {{ setupGate.message || "Finish setup before using project tools." }}
-        </p>
-      </div>
-      <v-btn
-        color="primary"
-        variant="flat"
-        :to="setupRoute"
-      >
-        Open setup
-      </v-btn>
-    </v-sheet>
-
     <slot
-      v-else-if="targetProject"
-      :target-project="targetProject"
-      :reload="loadTargetProject"
+      v-else-if="projectReady"
+      :target-project="projectState"
+      :reload="loadProjectState"
     />
   </div>
 </template>
 
 <script setup>
 import { computed, proxyRefs, ref, watch } from "vue";
-import { useRoute, useRouter } from "vue-router";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
 import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
@@ -76,14 +54,8 @@ import {
   AI_STUDIO_PROJECT_TYPE_API_SUFFIX,
   PROJECT_CONFIG_ENDPOINT,
   PROJECT_TYPE_ENDPOINT,
-  TARGET_PROJECT_ENDPOINT,
   projectConfigQueryKey,
-  projectTypeQueryKey,
-  readAdapterSetupStatus,
-  readAccountsStatus,
-  readProjectSetupStatus,
-  readStudioSetupStatus,
-  targetProjectQueryKey
+  projectTypeQueryKey
 } from "@/lib/studioGateApi.js";
 import {
   studioHttpClient
@@ -94,48 +66,11 @@ const props = defineProps({
   configureProject: {
     default: false,
     type: Boolean
-  },
-  requireSetup: {
-    default: false,
-    type: Boolean
   }
 });
 
 const savingConfig = ref(false);
 const savingType = ref("");
-const setupGateChecked = ref(false);
-const setupGate = ref({
-  message: "",
-  ready: false,
-  tab: "studio-setup"
-});
-const setupLoading = ref(false);
-const setupError = ref("");
-const route = useRoute();
-const router = useRouter();
-
-const setupChecks = [
-  {
-    label: "Studio Setup",
-    read: readStudioSetupStatus,
-    tab: "studio-setup"
-  },
-  {
-    label: "Accounts",
-    read: readAccountsStatus,
-    tab: "accounts"
-  },
-  {
-    label: "Adapter Setup",
-    read: readAdapterSetupStatus,
-    tab: "adapter-setup"
-  },
-  {
-    label: "Project Setup",
-    read: readProjectSetupStatus,
-    tab: "project-setup"
-  }
-];
 
 function projectQueryKey(queryKeyFactory) {
   return computed(() => queryKeyFactory(AI_STUDIO_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC));
@@ -165,20 +100,15 @@ function useStudioEndpointView({
   });
 }
 
-const targetProjectView = useStudioEndpointView({
-  fallbackLoadError: "Target project inspection failed.",
-  path: TARGET_PROJECT_ENDPOINT,
-  queryKeyFactory: targetProjectQueryKey
-});
-
 const projectTypeView = useStudioEndpointView({
   fallbackLoadError: "Project type could not load.",
   path: PROJECT_TYPE_ENDPOINT,
   queryKeyFactory: projectTypeQueryKey
 });
+const projectType = computed(() => projectTypeView.record?.projectType || {});
 
 const projectConfigView = useStudioEndpointView({
-  enabled: computed(() => projectTypeView.record?.projectType?.ready === true),
+  enabled: computed(() => projectType.value.ready === true),
   fallbackLoadError: "Project config could not load.",
   path: PROJECT_CONFIG_ENDPOINT,
   queryKeyFactory: projectConfigQueryKey
@@ -199,9 +129,7 @@ const saveProjectTypeCommand = useCommand({
     error: "Project type could not be saved.",
     success: "Project type saved."
   },
-  onRunSuccess: async () => {
-    await loadTargetProject();
-  },
+  onRunSuccess: loadProjectState,
   ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
   placementSource: "ai-studio.project-type.save",
   surfaceId: AI_STUDIO_SURFACE_ID,
@@ -223,83 +151,40 @@ const saveProjectConfigCommand = useCommand({
     error: "Project config could not be saved.",
     success: "Project config saved."
   },
-  onRunSuccess: async () => {
-    await loadTargetProject();
-  },
+  onRunSuccess: loadProjectState,
   ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
   placementSource: "ai-studio.project-config.save",
   surfaceId: AI_STUDIO_SURFACE_ID,
   writeMethod: "PUT"
 });
 
-const targetProject = computed(() => {
-  if (!targetProjectView.record) {
-    return null;
-  }
-  return {
-    ...targetProjectView.record,
-    projectConfig: projectConfigView.record?.config || {},
-    projectType: projectTypeView.record?.projectType || {}
-  };
-});
-const projectType = computed(() => targetProject.value?.projectType || {});
-const projectConfig = computed(() => targetProject.value?.projectConfig || {});
+const projectConfig = computed(() => projectConfigView.record?.config || {});
+const projectTypeLoaded = computed(() => Boolean(projectTypeView.record?.projectType));
 const projectConfigLoaded = computed(() => Boolean(projectConfigView.record?.config));
-const needsProjectType = computed(() => targetProject.value && projectType.value?.ready !== true);
+const projectReady = computed(() => projectType.value.ready === true && projectConfig.value.ready === true);
+const projectState = computed(() => ({
+  projectConfig: projectConfig.value,
+  projectType: projectType.value
+}));
+
+const needsProjectType = computed(() => {
+  return projectTypeLoaded.value && projectType.value.ready !== true;
+});
 const needsProjectConfig = computed(() => {
-  return targetProject.value &&
-    projectType.value?.ready === true &&
-    (props.configureProject || projectConfig.value?.ready !== true);
+  return projectType.value.ready === true &&
+    projectConfigLoaded.value &&
+    (props.configureProject || projectConfig.value.ready !== true);
 });
-const projectReady = computed(() => {
-  return targetProject.value &&
-    projectType.value?.ready === true &&
-    projectConfig.value?.ready === true;
-});
-const setupSatisfied = computed(() => {
-  return props.requireSetup !== true || setupGate.value.ready === true;
-});
-const needsSetup = computed(() => {
-  return projectReady.value &&
-    props.configureProject !== true &&
-    props.requireSetup === true &&
-    setupGate.value.ready !== true;
-});
-const protectedRouteNeedsProjectSetup = computed(() => {
-  return targetProject.value &&
-    props.requireSetup === true &&
-    (
-      projectType.value?.ready !== true ||
-      projectConfig.value?.ready !== true
-    );
-});
-const onSetupRoute = computed(() => route.path === "/setup");
-const redirectingToSetup = computed(() => {
-  if (onSetupRoute.value || props.requireSetup !== true) {
-    return false;
-  }
-  if (protectedRouteNeedsProjectSetup.value) {
-    return true;
-  }
-  if (props.configureProject === true) {
-    return false;
-  }
-  return setupGateChecked.value && needsSetup.value && !setupError.value;
-});
-const loading = computed(() => Boolean(
-  targetProjectView.isLoading ||
-  projectTypeView.isLoading ||
-  projectConfigView.isLoading ||
-  setupLoading.value
-));
 const waitingForProjectConfig = computed(() => {
-  return targetProject.value &&
-    projectType.value?.ready === true &&
+  return projectType.value.ready === true &&
     !projectConfigLoaded.value &&
     projectConfigView.isLoading;
 });
 const showLoadingBar = computed(() => {
-  return loading.value && (!targetProject.value || waitingForProjectConfig.value);
+  return Boolean(
+    projectTypeView.isLoading ||
+    waitingForProjectConfig.value
+  );
 });
 const saveError = computed(() => {
   if (saveProjectTypeCommand.messageType === "error") {
@@ -311,85 +196,17 @@ const saveError = computed(() => {
   return "";
 });
 const errorMessage = computed(() => String(
-  targetProjectView.loadError ||
   projectTypeView.loadError ||
   projectConfigView.loadError ||
-  setupError.value ||
   saveError.value ||
   ""
 ));
-const setupRoute = computed(() => ({
-  path: "/setup",
-  query: {
-    tab: setupGate.value.tab || "studio-setup"
-  }
-}));
 
-async function loadTargetProject() {
-  await Promise.all([
-    targetProjectView.refresh(),
-    projectTypeView.refresh()
-  ]);
-  if (projectTypeView.record?.projectType?.ready === true) {
+async function loadProjectState() {
+  await projectTypeView.refresh();
+  if (projectType.value.ready === true) {
     await projectConfigView.refresh();
   }
-}
-
-async function loadSetupGate() {
-  if (props.requireSetup !== true || !projectReady.value) {
-    setupError.value = "";
-    setupGateChecked.value = false;
-    setupLoading.value = false;
-    setupGate.value = {
-      message: "",
-      ready: props.requireSetup !== true,
-      tab: "studio-setup"
-    };
-    return;
-  }
-
-  setupLoading.value = true;
-  setupGateChecked.value = false;
-  setupError.value = "";
-
-  try {
-    for (const check of setupChecks) {
-      const status = await check.read();
-      if (status?.ready !== true) {
-        setupGate.value = {
-          message: status?.blockedReason || `${check.label} is incomplete.`,
-          ready: false,
-          tab: check.tab
-        };
-        setupGateChecked.value = true;
-        return;
-      }
-    }
-
-    setupGate.value = {
-      message: "",
-      ready: true,
-      tab: ""
-    };
-    setupGateChecked.value = true;
-  } catch (error) {
-    setupError.value = String(error?.message || error || "Setup readiness could not load.");
-    setupGate.value = {
-      message: "Setup readiness could not load.",
-      ready: false,
-      tab: "studio-setup"
-    };
-    setupGateChecked.value = true;
-  } finally {
-    setupLoading.value = false;
-  }
-}
-
-function redirectToSetup() {
-  if (!redirectingToSetup.value) {
-    return;
-  }
-  void router.replace(setupRoute.value);
 }
 
 async function saveProjectType(projectTypeId) {
@@ -414,34 +231,23 @@ async function saveProjectConfig(values) {
   }
 }
 
-watch([projectReady, () => props.requireSetup], () => {
-  void loadSetupGate();
-}, {
-  immediate: true
-});
-
-watch(
-  () => [
-    redirectingToSetup.value,
-    setupRoute.value.query.tab
-  ],
-  redirectToSetup,
-  { immediate: true }
-);
-
-watch([targetProject, () => props.configureProject, setupSatisfied], ([project, configureProject]) => {
-  if (!project) {
+watch([projectState, () => props.configureProject], ([project, configureProject]) => {
+  if (!projectTypeLoaded.value) {
     return;
   }
-  if (
-    projectReady.value &&
-    setupSatisfied.value &&
-    configureProject !== true
-  ) {
+  if (projectReady.value && configureProject !== true) {
     emit("ready", project);
     return;
   }
   emit("missing", project);
+}, {
+  immediate: true
+});
+
+watch(() => projectType.value.ready, (ready) => {
+  if (ready === true && !projectConfigLoaded.value) {
+    void projectConfigView.refresh();
+  }
 }, {
   immediate: true
 });
@@ -458,36 +264,5 @@ watch(errorMessage, (message) => {
   display: grid;
   gap: 0.85rem;
   min-width: 0;
-}
-
-.project-type-gate__setup-needed {
-  align-items: center;
-  display: flex;
-  gap: 1rem;
-  justify-content: space-between;
-  min-width: 0;
-  padding: 1rem;
-}
-
-.project-type-gate__setup-title {
-  font-size: 1.1rem;
-  font-weight: 720;
-  letter-spacing: 0;
-  line-height: 1.2;
-  margin: 0 0 0.25rem;
-}
-
-.project-type-gate__setup-message {
-  color: rgba(var(--v-theme-on-surface), 0.68);
-  font-size: 0.9rem;
-  line-height: 1.35;
-  margin: 0;
-}
-
-@media (max-width: 640px) {
-  .project-type-gate__setup-needed {
-    align-items: stretch;
-    flex-direction: column;
-  }
 }
 </style>

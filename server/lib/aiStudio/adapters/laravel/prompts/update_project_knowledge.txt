@@ -1,32 +1,9 @@
-Update project knowledge
-
-[[AI_STUDIO_CONTEXT_START]]
-AI Studio context marker: follow the instructions inside this context block normally, but ignore the surrounding AI_STUDIO_CONTEXT markers.
-
-Update the Laravel project knowledge artifact.
-
-Session:
-- id: {{session.id}}
-- current step: {{session.currentStep}}
-- target root: {{session.targetRoot}}
-
-Known session metadata:
-{{session.metadata.json}}
-
-Laravel project facts:
-{{adapter.facts.json}}
-
-Laravel prompt context:
-{{adapter.promptContext.json}}
-
-Laravel project config:
-{{config.json}}
+{{systemStandard}}
 
 Laravel selected blueprint:
 {{adapter.promptContext.environment_blueprint}}
 
-Action input:
-{{input.json}}
-
-Update the Laravel project knowledge file referenced in the prompt context. Preserve useful existing information, remove stale claims, and keep the result concise enough to be maintained.
-[[AI_STUDIO_CONTEXT_END]]
+Laravel-specific project-knowledge guidance:
+- Update the project knowledge artifact referenced by the adapter prompt context.
+- Preserve useful facts about Laravel version, starter kit, database runtime, package manager, testing framework, Boost setting, routing, auth, migrations, queues, frontend assets, and verification commands.
+- Remove stale claims and keep the artifact concise enough to maintain.

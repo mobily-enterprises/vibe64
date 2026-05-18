@@ -13,7 +13,7 @@ async function expectGeneratedScreenContract(page) {
   const screen = page.locator(".generated-ui-screen").first();
 
   await expect(screen).toBeVisible();
-  await expect(screen).toHaveClass(/generated-ui-screen--app/u);
+  await expect(screen).toHaveClass(/generated-ui-screen--(?:app|studio)/u);
   await expect(screen.locator("h1").first()).toBeVisible();
 }
 
