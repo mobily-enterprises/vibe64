@@ -1,11 +1,6 @@
 import process from "node:process";
 
 import {
-  optionalSessionPackageHookScript,
-  resolveJskitDevelopmentRepoRoot,
-  SESSION_FINALIZATION_GUARD_PACKAGE_SCRIPT
-} from "../sessionHooks.js";
-import {
   artifactPath,
   completedMetadataSpec,
   metadataPath,
@@ -103,11 +98,8 @@ function createPrOnGhScript(session = {}) {
 }
 
 function mergePrScript({
-  developmentRepoRoot = "",
   mergeMethod = "merge",
-  session = {},
-  targetRoot = "",
-  worktreePath = ""
+  session = {}
 } = {}) {
   const prUrl = normalizeText(session.metadata?.pr_url);
   const prMergedPath = metadataPath(session, "pr_merged");
@@ -118,13 +110,6 @@ function mergePrScript({
   }[normalizeText(mergeMethod)] || "--merge";
   return [
     "set -e",
-    optionalSessionPackageHookScript({
-      developmentRepoRoot,
-      scriptName: SESSION_FINALIZATION_GUARD_PACKAGE_SCRIPT,
-      session,
-      targetRoot,
-      worktreePath
-    }),
     `printf '[studio] Merging pull request %s\\n' ${shellQuote(prUrl)}`,
     `gh pr merge ${shellQuote(prUrl)} ${mergeFlag}`,
     writeMetadataLineScript(prMergedPath, "yes")
@@ -179,23 +164,14 @@ async function mergePrTerminalSpec({
       message: "Create the pull request before merging."
     };
   }
-  const targetRoot = session.targetRoot || process.cwd();
-  const worktreePath = normalizeText(session.metadata?.worktree_path);
   const config = context.config || session.config || {};
   const configValues = config.values || config;
-  const developmentRepoRoot = await resolveJskitDevelopmentRepoRoot({
-    config,
-    targetRoot
-  });
   return worktreeCommandSpec({
     commandPreview: "gh pr merge",
     label: "Merge PR",
     script: mergePrScript({
-      developmentRepoRoot,
       mergeMethod: configValues.github_pr_merge_method,
-      session,
-      targetRoot,
-      worktreePath
+      session
     }),
     session
   });

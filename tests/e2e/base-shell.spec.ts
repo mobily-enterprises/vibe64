@@ -440,11 +440,10 @@ const targetScriptsPayload = {
     exists: false,
     path: ".ai-studio/config/starred_scripts"
   },
-  starredScriptIds: ["jskit:update", "devlinks", "build", "server", "verify"],
+  starredScriptIds: ["jskit:update", "build", "server", "verify"],
   scripts: [
     { id: "build", name: "build", label: "build", command: "vite build", source: "project", starred: true },
     { id: "dev", name: "dev", label: "dev", command: "vite", source: "project", starred: false },
-    { id: "devlinks", name: "devlinks", label: "devlinks", command: "jskit app link-local-packages", source: "project", starred: true },
     { id: "jskit:update", name: "jskit:update", label: "jskit:update", command: "jskit app update-packages", source: "project", starred: true },
     { id: "lint", name: "lint", label: "lint", command: "eslint .", source: "project", starred: false },
     { id: "preview", name: "preview", label: "preview", command: "vite preview", source: "project", starred: false },
@@ -1955,7 +1954,7 @@ test.describe("studio startup navigation", () => {
         .evaluateAll((buttons) => buttons.map((button) =>
           String(button.getAttribute("aria-label") || "").replace(/^Run /u, "")
         ));
-    }).toEqual(["jskit:update", "devlinks", "build", "server", "verify"]);
+    }).toEqual(["jskit:update", "build", "server", "verify"]);
     await expect(panel.getByText("vite preview")).toBeVisible();
 
     await panel.getByRole("button", { name: "Unstar jskit:update" }).click();

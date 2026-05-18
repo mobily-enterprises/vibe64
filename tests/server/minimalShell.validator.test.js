@@ -9,7 +9,6 @@ const __dirname = path.dirname(__filename);
 const APP_ROOT = path.resolve(__dirname, "../..");
 
 const EXPECTED_MANAGED_SCRIPTS = Object.freeze({
-  devlinks: "jskit app link-local-packages",
   verify: "jskit app verify && npm run --if-present verify:app",
   release: "jskit app release",
   "jskit:update": "jskit app update-packages"

@@ -74,15 +74,14 @@ test("JSKIT setup dependency gate catches partial node_modules installs", async 
   ]);
 });
 
-test("JSKIT setup dependency repair never runs devlinks", () => {
+test("JSKIT setup dependency repair uses package-manager commands only", () => {
   const script = npmInstallScript();
 
   assert.match(script, /npm install/u);
   assert.match(script, /npm update \$jskit_deps/u);
   assert.doesNotMatch(script, /@latest/u);
   assert.doesNotMatch(script, /--save-exact/u);
-  assert.doesNotMatch(script, /devlinks/u);
-  assert.doesNotMatch(script, /JSKIT_REPO_ROOT/u);
+  assert.doesNotMatch(script, /jskit app/u);
   assertShellScriptSurvivesWhitespaceCollapse(script);
 });
 

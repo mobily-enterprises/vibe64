@@ -33,16 +33,13 @@ test("AI Studio project service saves project type and plain-file configuration"
     const defaults = await service.readProjectConfigDefaults();
     assert.equal(defaults.ok, true);
     assert.equal(defaults.defaults.defaults.github_pr_merge_method, "merge");
-    assert.equal(defaults.defaults.defaults.enable_recursive_ai_studio_opening, false);
     assert.equal(defaults.defaults.defaults.jskit_database_runtime, "none");
 
     const savedConfig = await service.saveProjectConfig({
       values: {
-        enable_recursive_ai_studio_opening: true,
         github_pr_merge_method: "rebase",
         jskit_database_runtime: "postgres",
-        jskit_tenancy_mode: "workspaces",
-        recursive_ai_studio_local_jskit_ai_root: ""
+        jskit_tenancy_mode: "workspaces"
       }
     });
     assert.equal(savedConfig.ok, true);
@@ -96,8 +93,6 @@ test("AI Studio project service loads invalid saved config as editable not ready
       recursive: true
     });
     await writeFile(path.join(targetRoot, ".ai-studio", "config", "github_pr_merge_method"), "merge\n", "utf8");
-    await writeFile(path.join(targetRoot, ".ai-studio", "config", "enable_recursive_ai_studio_opening"), "false\n", "utf8");
-    await writeFile(path.join(targetRoot, ".ai-studio", "config", "recursive_ai_studio_local_jskit_ai_root"), "\n", "utf8");
     await writeFile(path.join(targetRoot, ".ai-studio", "config", "jskit_database_runtime"), "mysql\n", "utf8");
     await writeFile(path.join(targetRoot, ".ai-studio", "config", "jskit_tenancy_mode"), "single\n", "utf8");
 

@@ -138,17 +138,14 @@ test("AI Studio project routes persist project type and plain-file config", asyn
       assert.equal(defaults.statusCode, 200);
       assert.equal(defaults.json().defaults.projectType, "jskit");
       assert.equal(defaults.json().defaults.defaults.github_pr_merge_method, "merge");
-      assert.equal(defaults.json().defaults.defaults.enable_recursive_ai_studio_opening, false);
 
       const savedConfig = await app.inject({
         method: "PUT",
         payload: {
           values: {
-            enable_recursive_ai_studio_opening: true,
             github_pr_merge_method: "squash",
             jskit_database_runtime: "mysql",
-            jskit_tenancy_mode: "personal",
-            recursive_ai_studio_local_jskit_ai_root: ""
+            jskit_tenancy_mode: "personal"
           }
         },
         url: "/api/ai-studio/project-config"
@@ -158,10 +155,6 @@ test("AI Studio project routes persist project type and plain-file config", asyn
       assert.equal(
         await readFile(path.join(targetRoot, ".ai-studio", "config", "github_pr_merge_method"), "utf8"),
         "squash\n"
-      );
-      assert.equal(
-        await readFile(path.join(targetRoot, ".ai-studio", "config", "enable_recursive_ai_studio_opening"), "utf8"),
-        "true\n"
       );
     });
   });

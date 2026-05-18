@@ -809,6 +809,7 @@ async function deleteRemoteBranch(branch: string) {
 }
 
 async function gotoSessions(page: Page) {
+  await waitForCurrentAppReady(page);
   await page.goto(`${baseUrl}/home`, {
     waitUntil: "networkidle"
   });
@@ -818,6 +819,41 @@ async function gotoSessions(page: Page) {
   })).toBeVisible({
     timeout: 60_000
   });
+}
+
+async function waitForCurrentAppReady(page: Page) {
+  let lastReadiness: Record<string, unknown> = {};
+  try {
+    await expect.poll(async () => {
+      lastReadiness = await readCurrentAppReadiness(page);
+      return lastReadiness.ready === true;
+    }, {
+      timeout: 180_000
+    }).toBe(true);
+  } catch (error) {
+    throw new Error([
+      "AI Studio current app did not become ready before opening Sessions.",
+      JSON.stringify(lastReadiness, null, 2),
+      String((error as Error)?.message || error)
+    ].join("\n"));
+  }
+}
+
+async function readCurrentAppReadiness(page: Page) {
+  const response = await page.request.get(`${baseUrl}/api/studio/current-app`);
+  if (!response.ok()) {
+    return {
+      ready: false,
+      status: response.status(),
+      error: await response.text()
+    };
+  }
+  const payload = await response.json();
+  return {
+    ready: payload?.ready === true,
+    setup: payload?.setup || null,
+    error: payload?.errors?.[0]?.message || payload?.error || ""
+  };
 }
 
 async function createSession(page: Page) {

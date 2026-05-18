@@ -1,5 +1,4 @@
 import { execFile } from "node:child_process";
-import { statSync } from "node:fs";
 import {
   readdir,
   readFile
@@ -16,7 +15,6 @@ import {
   normalizePlainObject
 } from "../../serverResponses.js";
 import {
-  AI_STUDIO_SKIP_STALE_TERMINAL_CLEANUP_ENV,
   STUDIO_DAEMON_PID_LABEL
 } from "../../../studioRuntimeIdentity.js";
 import {
@@ -26,7 +24,6 @@ import {
   gitToolchainMountArgs
 } from "../../../gitToolchainMounts.js";
 import {
-  hostUserDockerArgs,
   hostUserIdentityEnvArgs,
   shellQuote,
   stableHash
@@ -36,10 +33,6 @@ import {
   removeDockerContainer
 } from "../../../containerRuntime.js";
 import {
-  ENABLE_RECURSIVE_AI_STUDIO_OPENING_CONFIG,
-  recursiveAiStudioOpeningEnabled
-} from "./sessionHooks.js";
-import {
   jskitDatabaseDockerArgs,
   readDatabaseHostFromDotEnv
 } from "./setupMariaDbRuntime.js";
@@ -47,7 +40,6 @@ import {
 const execFileAsync = promisify(execFile);
 const DEFAULT_TARGET_SCRIPT_NAMES = Object.freeze([
   "jskit:update",
-  "devlinks",
   "build",
   "server",
   "verify"
@@ -71,39 +63,6 @@ const JSKIT_PROJECT_DIRECTORIES = Object.freeze([
   { id: "packages", label: "packages", relativePath: "packages" },
   { id: "tests", label: "tests", relativePath: "tests" }
 ]);
-
-function targetTerminalHostDockerArgs(enabled = false) {
-  if (!enabled) {
-    return [];
-  }
-  const args = [
-    "-e",
-    "DOCKER_HOST=unix:///var/run/docker.sock",
-    "-e",
-    `${AI_STUDIO_SKIP_STALE_TERMINAL_CLEANUP_ENV}=1`,
-    "-v",
-    "/var/run/docker.sock:/var/run/docker.sock"
-  ];
-  const userArgs = hostUserDockerArgs();
-  if (userArgs.length === 2) {
-    args.push("--user", userArgs[1]);
-  }
-  try {
-    const socketStats = statSync("/var/run/docker.sock");
-    args.push("--group-add", String(socketStats.gid));
-  } catch {
-    // Docker readiness is reported by the terminal command itself.
-  }
-  return args;
-}
-
-function resolveTargetTerminalConfig(config = {}) {
-  const hostDocker = recursiveAiStudioOpeningEnabled(config);
-  return {
-    hostDocker,
-    hostDockerSource: hostDocker ? ENABLE_RECURSIVE_AI_STUDIO_OPENING_CONFIG : ""
-  };
-}
 
 async function defaultAppPath(appRoot) {
   try {
@@ -151,7 +110,6 @@ function targetScriptStartupScript(scriptName = "") {
 
 function targetScriptTerminalArgs({
   containerName,
-  hostDocker = false,
   scriptName,
   targetRoot,
   terminalId,
@@ -180,7 +138,6 @@ function targetScriptTerminalArgs({
     "-v",
     `${targetRoot}:${targetRoot}`,
     ...jskitDatabaseDockerArgs(databaseHost),
-    ...targetTerminalHostDockerArgs(hostDocker),
     ...hostUserIdentityEnvArgs(),
     "-w",
     workdir,
@@ -503,9 +460,7 @@ async function inspectJskitCurrentApp(targetRoot, {
   };
 }
 
-async function createJskitTargetScriptTerminalSpec(targetRoot, input = {}, {
-  config = {}
-} = {}) {
+async function createJskitTargetScriptTerminalSpec(targetRoot, input = {}) {
   const normalizedTargetRoot = path.resolve(targetRoot || process.cwd());
   const normalizedScriptName = adapterScriptNameFromInput(input);
   if (!normalizedScriptName) {
@@ -531,7 +486,6 @@ async function createJskitTargetScriptTerminalSpec(targetRoot, input = {}, {
     };
   }
 
-  const targetTerminalConfig = resolveTargetTerminalConfig(config);
   const databaseHost = await readDatabaseHostFromDotEnv(normalizedTargetRoot);
   const commandPreview = targetScriptCommandPreview(validatedScriptName);
   return {
@@ -540,7 +494,6 @@ async function createJskitTargetScriptTerminalSpec(targetRoot, input = {}, {
         terminalId: id
       }),
       databaseHost,
-      hostDocker: targetTerminalConfig.hostDocker,
       scriptName: validatedScriptName,
       targetRoot: normalizedTargetRoot,
       terminalId: id,
@@ -555,8 +508,6 @@ async function createJskitTargetScriptTerminalSpec(targetRoot, input = {}, {
       command: commandPreview,
       commandPreview,
       databaseHost,
-      hostDocker: targetTerminalConfig.hostDocker,
-      hostDockerSource: targetTerminalConfig.hostDockerSource,
       runRoot: normalizedTargetRoot,
       scope: "target",
       scriptName: validatedScriptName

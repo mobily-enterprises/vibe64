@@ -28,7 +28,7 @@
         <v-btn
           variant="tonal"
           color="primary"
-          :loading="isLoading"
+          :loading="isLoading || automaticRepairRunning"
           :prepend-icon="mdiRefresh"
           class="studio-screen__action-button"
           @click="refreshDoctorStatusForUser"
@@ -108,7 +108,7 @@
 
       <div class="doctor-status__checks">
         <v-sheet
-          v-for="check in checks"
+          v-for="check in displayChecks"
           :key="check.id"
           rounded="lg"
           border
@@ -353,6 +353,7 @@ const props = defineProps({
 const emit = defineEmits(["continue", "refresh", "status-updated"]);
 
 const actionInFlight = ref("");
+const automaticRepair = ref(null);
 const automaticRepairError = ref("");
 const automaticRepairMessage = ref("");
 const automaticRepairRunning = ref(false);
@@ -409,6 +410,9 @@ const displayStatus = computed(() => {
 });
 
 const displayError = computed(() => {
+  if (automaticRepairRunning.value && !automaticRepairError.value) {
+    return "";
+  }
   return props.error || streamError.value;
 });
 
@@ -444,8 +448,29 @@ const checks = computed(() => {
   return Array.isArray(displayStatus.value?.checks) ? displayStatus.value.checks : [];
 });
 
+const displayChecks = computed(() => {
+  if (!automaticRepairRunning.value || !automaticRepair.value?.checkId) {
+    return checks.value;
+  }
+
+  return checks.value.map((check) => {
+    if (check.id !== automaticRepair.value.checkId) {
+      return check;
+    }
+    return {
+      ...check,
+      explanation: `Studio is running ${automaticRepair.value.label}. This can take a few minutes.`,
+      expected: "The automatic repair completes successfully.",
+      observed: "Running in the setup terminal.",
+      repair: null,
+      repairs: [],
+      status: "running"
+    };
+  });
+});
+
 const requiredChecks = computed(() => {
-  return checks.value.filter((check) => check.required !== false);
+  return displayChecks.value.filter((check) => check.required !== false);
 });
 
 const requiredCheckCount = computed(() => {
@@ -464,6 +489,17 @@ const progressValue = computed(() => {
 });
 
 const summary = computed(() => {
+  if (automaticRepairRunning.value && automaticRepair.value) {
+    return {
+      color: "primary",
+      label: "Repairing setup",
+      progressIndeterminate: true,
+      progressText: `Studio is running ${automaticRepair.value.label}. This can take a few minutes.`,
+      state: "checking",
+      title: automaticRepair.value.label
+    };
+  }
+
   return resolveDoctorSummaryState({
     blockedLabel: props.blockedLabel,
     blockedTitle: props.blockedTitle,
@@ -655,7 +691,7 @@ function statusIcon(status) {
     return mdiCheckCircle;
   }
   if (status === "running") {
-    return mdiAlertCircleOutline;
+    return mdiProgressClock;
   }
   if (["blocked", "fail", "hard-stop"].includes(status)) {
     return mdiCloseCircle;
@@ -762,6 +798,11 @@ async function runAutomaticRepair() {
   }
 
   attemptedAutomaticRepairs.add(candidate.key);
+  automaticRepair.value = {
+    actionId: candidate.repair.actionId,
+    checkId: candidate.check.id,
+    label: candidate.repair.label || candidate.repair.actionId
+  };
   actionInFlight.value = candidate.repair.actionId;
   automaticRepairRunning.value = true;
   automaticRepairError.value = "";
@@ -784,6 +825,7 @@ async function runAutomaticRepair() {
       return;
     }
   } finally {
+    automaticRepair.value = null;
     actionInFlight.value = "";
     automaticRepairRunning.value = false;
   }

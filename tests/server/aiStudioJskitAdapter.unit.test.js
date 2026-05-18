@@ -44,6 +44,18 @@ function commandIds() {
     .sort((left, right) => left.localeCompare(right));
 }
 
+function capabilityIds() {
+  return [
+    ...commandIds(),
+    "use_existing_issue",
+    "use_existing_pr"
+  ].sort((left, right) => left.localeCompare(right));
+}
+
+function enabledByActionId(actions = []) {
+  return Object.fromEntries(actions.map((action) => [action.id, action.enabled]));
+}
+
 test("jskit adapter exposes selected-project facts, commands, and prompt context", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createJskitProject(targetRoot);
@@ -67,7 +79,7 @@ test("jskit adapter exposes selected-project facts, commands, and prompt context
     assert.equal(facts.promptContext.blueprint_relative_path, ".jskit/APP_BLUEPRINT.md");
     assert.equal(facts.promptContext.blueprint_path, path.join(targetRoot, ".jskit/APP_BLUEPRINT.md"));
     assert.equal(facts.promptContext.valid_jskit_markers, "true");
-    assert.deepEqual(Object.keys(facts.capabilities), commandIds());
+    assert.deepEqual(Object.keys(facts.capabilities).sort(), capabilityIds());
     assert.deepEqual(facts.commands.map((command) => command.id), commandIds());
   });
 });
@@ -87,7 +99,7 @@ test("jskit adapter reports missing markers without pretending project type sele
     assert.equal(detection.detected, true);
     assert.match(facts.summary, /Missing markers/u);
     assert.equal(facts.promptContext.valid_jskit_markers, "false");
-    assert.deepEqual(Object.keys(facts.capabilities), commandIds());
+    assert.deepEqual(Object.keys(facts.capabilities).sort(), capabilityIds());
   });
 });
 
@@ -200,20 +212,26 @@ test("jskit issue and pull-request steps are gated by artifacts and metadata", a
       sessionId: "jskit_pr"
     });
     const prBeforeFile = await runtime.getSession("jskit_pr");
+    const prBeforeFileActions = enabledByActionId(prBeforeFile.actions);
     assert.equal(prBeforeFile.next.enabled, false);
-    assert.equal(prBeforeFile.actions[0].enabled, false);
-    assert.equal(prBeforeFile.actions[1].enabled, false);
+    assert.equal(prBeforeFileActions.open_pr, false);
+    assert.equal(prBeforeFileActions.edit_pr, false);
+    assert.equal(prBeforeFileActions.create_pr_on_gh, false);
 
     await runtime.store.writeArtifact("jskit_pr", "pull_request.md", "PR body\n");
     const prReady = await runtime.getSession("jskit_pr");
-    assert.equal(prReady.actions[0].enabled, true);
-    assert.equal(prReady.actions[1].enabled, true);
+    const prReadyActions = enabledByActionId(prReady.actions);
+    assert.equal(prReadyActions.open_pr, false);
+    assert.equal(prReadyActions.edit_pr, true);
+    assert.equal(prReadyActions.create_pr_on_gh, true);
 
     await runtime.store.writeMetadataValue("jskit_pr", "pr_url", "https://github.com/example/repo/pull/24");
     const prSubmitted = await runtime.getSession("jskit_pr");
+    const prSubmittedActions = enabledByActionId(prSubmitted.actions);
     assert.equal(prSubmitted.next.enabled, true);
-    assert.equal(prSubmitted.actions[0].enabled, false);
-    assert.equal(prSubmitted.actions[1].enabled, false);
+    assert.equal(prSubmittedActions.open_pr, true);
+    assert.equal(prSubmittedActions.edit_pr, false);
+    assert.equal(prSubmittedActions.create_pr_on_gh, false);
   });
 });
 
