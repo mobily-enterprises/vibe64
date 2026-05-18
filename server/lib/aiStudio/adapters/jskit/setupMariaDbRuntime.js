@@ -222,14 +222,24 @@ function parseDotEnvValue(line = "", key = "") {
   return rawValue;
 }
 
+function databaseHostFromUrl(url = "") {
+  try {
+    return new URL(url).hostname || "";
+  } catch {
+    return "";
+  }
+}
+
 function databaseHostFromEnvText(text = "") {
+  let databaseUrl = "";
   for (const line of String(text || "").split(/\r?\n/u)) {
     const host = parseDotEnvValue(line, "DB_HOST");
     if (host) {
       return host;
     }
+    databaseUrl ||= parseDotEnvValue(line, "DATABASE_URL");
   }
-  return "";
+  return databaseHostFromUrl(databaseUrl);
 }
 
 async function readDatabaseHostFromDotEnv(targetRoot = "") {
