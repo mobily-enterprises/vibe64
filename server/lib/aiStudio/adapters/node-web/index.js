@@ -2,6 +2,7 @@ import {
   GENERIC_NODE_WEB_CONFIG_FIELDS,
   GENERIC_NODE_WEB_MARKERS,
   GENERIC_NODE_WEB_PROMPT_PACK_ROOT,
+  GENERIC_NODE_WEB_PREPARE_WORKTREE_SCRIPT_PATH,
   GenericNodeWebTargetAdapter
 } from "./adapter.js";
 import {
@@ -49,6 +50,7 @@ export {
   GENERIC_NODE_WEB_CONFIG_FIELDS,
   GENERIC_NODE_WEB_MARKERS,
   GENERIC_NODE_WEB_PROMPT_PACK_ROOT,
+  GENERIC_NODE_WEB_PREPARE_WORKTREE_SCRIPT_PATH,
   GenericNodeWebTargetAdapter,
   createGenericNodeWebAiStudioCommandTerminalSpec,
   createGenericNodeWebLaunchDescriptor,

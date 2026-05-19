@@ -2,6 +2,7 @@ import {
   VINEXT_CONFIG_FIELDS,
   VINEXT_MARKERS,
   VINEXT_PROMPT_PACK_ROOT,
+  VINEXT_PREPARE_WORKTREE_SCRIPT_PATH,
   VinextTargetAdapter
 } from "./adapter.js";
 import {
@@ -58,5 +59,6 @@ export {
   VINEXT_CONFIG_FIELDS,
   VINEXT_MARKERS,
   VINEXT_PROMPT_PACK_ROOT,
+  VINEXT_PREPARE_WORKTREE_SCRIPT_PATH,
   VinextTargetAdapter
 };

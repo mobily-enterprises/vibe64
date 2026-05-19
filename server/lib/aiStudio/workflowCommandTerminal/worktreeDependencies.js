@@ -32,12 +32,14 @@ function createWorktreeBranch(session = {}) {
 
 function createWorktreeScript({
   branch = "",
+  prepareWorktreeScriptPath = "",
   session = {},
   targetRoot = "",
   worktreePath = ""
 } = {}) {
   const quotedBranch = shellQuote(branch);
   const quotedBranchRef = shellQuote(`refs/heads/${branch}`);
+  const quotedPrepareWorktreeScriptPath = shellQuote(normalizeText(prepareWorktreeScriptPath));
   const quotedTargetRoot = shellQuote(targetRoot);
   const quotedWorktreePath = shellQuote(worktreePath);
   const workSource = normalizeText(session.metadata?.work_source) || "new_branch";
@@ -48,11 +50,20 @@ function createWorktreeScript({
   const requestedUpdateMode = normalizeText(session.metadata?.source_pr_update_mode);
   return [
     "set -e",
+    `export AI_STUDIO_TARGET_ROOT=${quotedTargetRoot}`,
+    `export AI_STUDIO_WORKTREE_PATH=${quotedWorktreePath}`,
+    `AI_STUDIO_PREPARE_WORKTREE_SCRIPT=${quotedPrepareWorktreeScriptPath}`,
+    "prepare_ai_studio_worktree() {",
+    "  if [ -n \"$AI_STUDIO_PREPARE_WORKTREE_SCRIPT\" ]; then",
+    "    \"$AI_STUDIO_PREPARE_WORKTREE_SCRIPT\"",
+    "  fi",
+    "}",
     `printf '[studio] Preparing worktree %s\\n' ${quotedWorktreePath}`,
     `mkdir -p "$(dirname ${quotedWorktreePath})"`,
     `if [ -e ${quotedWorktreePath} ]; then`,
     `  if git -C ${quotedWorktreePath} rev-parse --is-inside-work-tree >/dev/null 2>&1; then`,
     "    printf '[studio] Reusing existing worktree.\\n'",
+    "    prepare_ai_studio_worktree",
     "    exit 0",
     "  fi",
     `  if [ -d ${quotedWorktreePath} ] && [ -z "$(find ${quotedWorktreePath} -mindepth 1 -maxdepth 1 -print -quit)" ]; then`,
@@ -80,6 +91,7 @@ function createWorktreeScript({
       "else",
       `  git -C ${quotedTargetRoot} worktree add -b ${quotedBranch} ${quotedWorktreePath} "$PR_FETCH_REF"`,
       "fi",
+      "prepare_ai_studio_worktree",
       "if [ \"$REQUESTED_UPDATE_MODE\" = \"direct\" ]; then",
       "  if [ -z \"$SOURCE_PR_HEAD_REF\" ] || [ -z \"$SOURCE_PR_HEAD_REPO\" ]; then",
       "    printf '[studio] Existing PR push target is incomplete; this session will create a replacement PR.\\n'",
@@ -104,11 +116,13 @@ function createWorktreeScript({
     `  git -C ${quotedTargetRoot} worktree add ${quotedWorktreePath} ${quotedBranch}`,
     "else",
     `  git -C ${quotedTargetRoot} worktree add -b ${quotedBranch} ${quotedWorktreePath} HEAD`,
-    "fi"
+    "fi",
+    "prepare_ai_studio_worktree"
   ].join("\n");
 }
 
 async function createWorktreeTerminalSpec({
+  prepareWorktreeScriptPath = "",
   session = {},
   targetRoot = ""
 } = {}) {
@@ -135,6 +149,7 @@ async function createWorktreeTerminalSpec({
   return {
     args: ["-lc", createWorktreeScript({
       branch,
+      prepareWorktreeScriptPath,
       session,
       targetRoot: resolvedTargetRoot,
       worktreePath

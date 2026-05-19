@@ -4,6 +4,7 @@ import {
   JSKIT_DEFAULT_CONFIG,
   JSKIT_MARKERS,
   JSKIT_PROMPT_PACK_ROOT,
+  JSKIT_PREPARE_WORKTREE_SCRIPT_PATH,
   JskitTargetAdapter,
   jskitConfigAllowsStudioSelfTarget
 } from "./adapter.js";
@@ -52,6 +53,7 @@ export {
   JSKIT_DEFAULT_CONFIG,
   JSKIT_MARKERS,
   JSKIT_PROMPT_PACK_ROOT,
+  JSKIT_PREPARE_WORKTREE_SCRIPT_PATH,
   JSKIT_AI_STUDIO_COMMANDS,
   JskitTargetAdapter,
   jskitConfigAllowsStudioSelfTarget

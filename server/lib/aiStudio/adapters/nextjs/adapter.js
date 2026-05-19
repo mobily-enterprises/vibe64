@@ -60,6 +60,7 @@ import {
 
 const NEXTJS_BLUEPRINT_ROOT = fileURLToPath(new URL("./blueprints", import.meta.url));
 const NEXTJS_PROMPT_PACK_ROOT = fileURLToPath(new URL("./prompts", import.meta.url));
+const NEXTJS_PREPARE_WORKTREE_SCRIPT_PATH = fileURLToPath(new URL("./prepareWorktree.sh", import.meta.url));
 const blueprintFile = createAdapterBlueprintReader(NEXTJS_BLUEPRINT_ROOT);
 
 const NEXTJS_MARKERS = deepFreeze([
@@ -312,6 +313,7 @@ class NextjsTargetAdapter extends AiStudioDescribedWorkflowTargetAdapter {
       defaultConfig: () => ({ ...NEXTJS_DEFAULT_CONFIG }),
       id: "nextjs",
       label: "Next.js target adapter",
+      prepareWorktreeScriptPath: NEXTJS_PREPARE_WORKTREE_SCRIPT_PATH,
       projectFacts: nextjsFacts,
       projectInspection: inspectNextjsProject,
       promptContext: nextjsPromptContext,
@@ -337,6 +339,7 @@ export {
   NEXTJS_MARKERS,
   NEXTJS_PROJECT_KNOWLEDGE_RELATIVE_PATH,
   NEXTJS_PROMPT_PACK_ROOT,
+  NEXTJS_PREPARE_WORKTREE_SCRIPT_PATH,
   NextjsTargetAdapter,
   inspectNextjsProject,
   routerMode,

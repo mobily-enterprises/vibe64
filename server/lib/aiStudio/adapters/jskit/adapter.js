@@ -66,6 +66,7 @@ const JSKIT_MARKERS = deepFreeze([
 
 const JSKIT_BLUEPRINT_RELATIVE_PATH = ".jskit/APP_BLUEPRINT.md";
 const JSKIT_PROMPT_PACK_ROOT = fileURLToPath(new URL("./prompts", import.meta.url));
+const JSKIT_PREPARE_WORKTREE_SCRIPT_PATH = fileURLToPath(new URL("./prepareWorktree.sh", import.meta.url));
 const JSKIT_ALLOW_SELF_TARGET_CONFIG = "jskit_allow_self_target";
 const JSKIT_CONFIG_FIELDS = deepFreeze([
   {
@@ -293,6 +294,7 @@ class JskitTargetAdapter extends AiStudioDescribedWorkflowTargetAdapter {
       defaultConfig: JSKIT_DEFAULT_CONFIG,
       id: "jskit",
       label: "JSKIT target adapter",
+      prepareWorktreeScriptPath: JSKIT_PREPARE_WORKTREE_SCRIPT_PATH,
       projectFacts: jskitFacts,
       projectInspection: inspectJskitProject,
       promptContext: jskitPromptContext,
@@ -325,6 +327,7 @@ export {
   JSKIT_MARKERS,
   JSKIT_CONFIG_FIELDS,
   JSKIT_PROMPT_PACK_ROOT,
+  JSKIT_PREPARE_WORKTREE_SCRIPT_PATH,
   JskitTargetAdapter,
   jskitCodeIndexHook,
   jskitConfigAllowsStudioSelfTarget,

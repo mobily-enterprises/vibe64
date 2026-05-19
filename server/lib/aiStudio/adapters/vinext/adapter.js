@@ -48,6 +48,7 @@ import {
 } from "../../codeIndexCommands.js";
 
 const VINEXT_PROMPT_PACK_ROOT = fileURLToPath(new URL("./prompts", import.meta.url));
+const VINEXT_PREPARE_WORKTREE_SCRIPT_PATH = fileURLToPath(new URL("./prepareWorktree.sh", import.meta.url));
 
 const VINEXT_MARKERS = deepFreeze([
   {
@@ -326,6 +327,7 @@ class VinextTargetAdapter extends AiStudioDescribedWorkflowTargetAdapter {
       defaultConfig: {},
       id: "vinext",
       label: "Vinext target adapter",
+      prepareWorktreeScriptPath: VINEXT_PREPARE_WORKTREE_SCRIPT_PATH,
       projectFacts: vinextFacts,
       projectInspection: inspectVinextProject,
       promptContext: vinextPromptContext,
@@ -351,6 +353,7 @@ export {
   VINEXT_MARKERS,
   VINEXT_PROJECT_KNOWLEDGE_RELATIVE_PATH,
   VINEXT_PROMPT_PACK_ROOT,
+  VINEXT_PREPARE_WORKTREE_SCRIPT_PATH,
   VinextTargetAdapter,
   inspectVinextProject,
   routerMode,

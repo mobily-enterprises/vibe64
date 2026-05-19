@@ -80,6 +80,7 @@ import {
 
 const LARAVEL_BLUEPRINT_ROOT = fileURLToPath(new URL("./blueprints", import.meta.url));
 const LARAVEL_PROMPT_PACK_ROOT = fileURLToPath(new URL("./prompts", import.meta.url));
+const LARAVEL_PREPARE_WORKTREE_SCRIPT_PATH = fileURLToPath(new URL("./prepareWorktree.sh", import.meta.url));
 const blueprintFile = createAdapterBlueprintReader(LARAVEL_BLUEPRINT_ROOT);
 
 const LARAVEL_MARKERS = deepFreeze([
@@ -421,6 +422,7 @@ class LaravelTargetAdapter extends AiStudioDescribedWorkflowTargetAdapter {
       defaultConfig: () => ({ ...LARAVEL_DEFAULT_CONFIG }),
       id: "laravel",
       label: "Laravel target adapter",
+      prepareWorktreeScriptPath: LARAVEL_PREPARE_WORKTREE_SCRIPT_PATH,
       projectFacts: laravelFacts,
       projectInspection: inspectLaravelProject,
       promptContext: laravelPromptContext,
@@ -446,6 +448,7 @@ export {
   LARAVEL_MARKERS,
   LARAVEL_PROJECT_KNOWLEDGE_RELATIVE_PATH,
   LARAVEL_PROMPT_PACK_ROOT,
+  LARAVEL_PREPARE_WORKTREE_SCRIPT_PATH,
   LaravelTargetAdapter,
   inspectLaravelProject,
   laravelPromptContext,

@@ -63,6 +63,7 @@ import {
 } from "./projectDetection.js";
 
 const GENERIC_NODE_WEB_PROMPT_PACK_ROOT = fileURLToPath(new URL("./prompts", import.meta.url));
+const GENERIC_NODE_WEB_PREPARE_WORKTREE_SCRIPT_PATH = fileURLToPath(new URL("./prepareWorktree.sh", import.meta.url));
 const GENERIC_NODE_WEB_MARKERS = Object.freeze(genericNodeWebMarkers());
 
 function setupSummary({
@@ -316,6 +317,7 @@ class GenericNodeWebTargetAdapter extends AiStudioDescribedWorkflowTargetAdapter
       defaultConfig: () => ({ ...GENERIC_NODE_WEB_DEFAULT_CONFIG }),
       id: "node-web",
       label: "Generic Node web app adapter",
+      prepareWorktreeScriptPath: GENERIC_NODE_WEB_PREPARE_WORKTREE_SCRIPT_PATH,
       projectFacts: genericNodeWebFacts,
       projectInspection: inspectGenericNodeWebProject,
       promptContext: genericNodeWebPromptContext,
@@ -340,6 +342,7 @@ export {
   GENERIC_NODE_WEB_CONFIG_FIELDS,
   GENERIC_NODE_WEB_MARKERS,
   GENERIC_NODE_WEB_PROMPT_PACK_ROOT,
+  GENERIC_NODE_WEB_PREPARE_WORKTREE_SCRIPT_PATH,
   GenericNodeWebTargetAdapter,
   genericNodeWebPromptContext,
   inspectGenericNodeWebProject,

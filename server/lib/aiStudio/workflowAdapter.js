@@ -104,7 +104,8 @@ class AiStudioWorkflowTargetAdapter extends TargetAdapter {
     commandTerminalSpecFactory = null,
     commands = [],
     id = "generic",
-    label = "Generic target"
+    label = "Generic target",
+    prepareWorktreeScriptPath = ""
   } = {}) {
     super({
       id,
@@ -114,6 +115,7 @@ class AiStudioWorkflowTargetAdapter extends TargetAdapter {
       ? commandTerminalSpecFactory
       : null;
     this.commands = normalizeWorkflowCommands(commands);
+    this.prepareWorktreeScriptPath = prepareWorktreeScriptPath;
   }
 
   workflowCapabilities(extra = {}) {
@@ -131,6 +133,10 @@ class AiStudioWorkflowTargetAdapter extends TargetAdapter {
     return {};
   }
 
+  async getPrepareWorktreeScriptPath(context = {}) {
+    return normalizeText(await resolveValue(this.prepareWorktreeScriptPath, context));
+  }
+
   async createCommandTerminalSpec(commandId, context = {}) {
     if (this.commandTerminalSpecFactory) {
       return this.commandTerminalSpecFactory({
@@ -143,6 +149,7 @@ class AiStudioWorkflowTargetAdapter extends TargetAdapter {
       commandId,
       context,
       hooks: await this.getWorkflowCommandHooks(context),
+      prepareWorktreeScriptPath: await this.getPrepareWorktreeScriptPath(context),
       targetRoot: context.session?.targetRoot || context.targetRoot || ""
     });
   }
@@ -268,6 +275,7 @@ class AiStudioDescribedWorkflowTargetAdapter extends AiStudioWorkflowTargetAdapt
     promptContext = () => ({}),
     promptPackRoot = "",
     promptRenderer = null,
+    prepareWorktreeScriptPath = "",
     setupDoctorPlugins = () => [],
     launchTargetTerminalSpecFactory = null,
     launchTargets = () => [],
@@ -279,7 +287,8 @@ class AiStudioDescribedWorkflowTargetAdapter extends AiStudioWorkflowTargetAdapt
       commandTerminalSpecFactory,
       commands,
       id,
-      label
+      label,
+      prepareWorktreeScriptPath
     });
     this.configFields = configFields;
     this.currentAppInspector = currentAppInspector;

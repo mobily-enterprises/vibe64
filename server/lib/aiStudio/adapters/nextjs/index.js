@@ -2,6 +2,7 @@ import {
   NEXTJS_CONFIG_FIELDS,
   NEXTJS_MARKERS,
   NEXTJS_PROMPT_PACK_ROOT,
+  NEXTJS_PREPARE_WORKTREE_SCRIPT_PATH,
   NextjsTargetAdapter
 } from "./adapter.js";
 import {
@@ -62,5 +63,6 @@ export {
   NEXTJS_CONFIG_FIELDS,
   NEXTJS_MARKERS,
   NEXTJS_PROMPT_PACK_ROOT,
+  NEXTJS_PREPARE_WORKTREE_SCRIPT_PATH,
   NextjsTargetAdapter
 };

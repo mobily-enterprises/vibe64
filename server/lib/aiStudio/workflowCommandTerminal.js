@@ -37,6 +37,7 @@ async function createAiStudioWorkflowCommandTerminalSpec({
   commandId = "",
   context = {},
   hooks = {},
+  prepareWorktreeScriptPath = "",
   targetRoot = ""
 } = {}) {
   const createSpec = COMMAND_TERMINAL_SPECS[normalizeText(commandId)];
@@ -49,6 +50,7 @@ async function createAiStudioWorkflowCommandTerminalSpec({
   return createSpec({
     context,
     hooks,
+    prepareWorktreeScriptPath,
     session: context.session || {},
     targetRoot
   });
