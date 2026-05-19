@@ -229,5 +229,8 @@ test("runtime container start script safely displays shell-quoted commands", asy
     assert.match(script, /printf '%s\\n'/u);
     assert.doesNotMatch(script, /echo '\\$ docker run/u);
     assert.doesNotMatch(script, /127\.0\.0\.1:13306:3306/u);
+    assert.match(script, /if ! docker start ai-studio-jskit-jskit-mariadb-/u);
+    assert.match(script, /container could not start\. Recreating the container while keeping managed volumes\./u);
+    assert.match(script, /docker rm -f ai-studio-jskit-jskit-mariadb-/u);
   });
 });

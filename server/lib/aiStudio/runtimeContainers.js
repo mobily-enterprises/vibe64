@@ -336,6 +336,17 @@ function networkConnectLines(spec) {
   ];
 }
 
+function runtimeContainerCreateLines(spec) {
+  return [
+    displayCommandLine(dockerCommand(runtimeContainerRunArgs(spec, {
+      maskSecrets: true
+    })), {
+      indent: "  "
+    }),
+    `  ${dockerCommand(runtimeContainerRunArgs(spec))}`
+  ];
+}
+
 function waitForRuntimeContainerLines(spec) {
   const retries = spec.health?.retries || DEFAULT_HEALTH_RETRIES;
   const sleepSeconds = spec.health?.sleepSeconds || DEFAULT_HEALTH_SLEEP_SECONDS;
@@ -371,18 +382,17 @@ function runtimeContainerStartScript(descriptor = {}, {
     `${dockerCommand(["network", "create", runtimeNetworkName(spec.targetRoot)])} >/dev/null 2>&1 || true`,
     ...volumeCreateLines(spec),
     `if ! docker inspect ${shellQuote(spec.containerName)} >/dev/null 2>&1; then`,
-    displayCommandLine(dockerCommand(runtimeContainerRunArgs(spec, {
-      maskSecrets: true
-    })), {
-      indent: "  "
-    }),
-    `  ${dockerCommand(runtimeContainerRunArgs(spec))}`,
+    ...runtimeContainerCreateLines(spec),
     "else",
     `  if [ "$(docker inspect ${shellQuote(spec.containerName)} --format '{{.State.Running}}')" != "true" ]; then`,
     displayCommandLine(dockerCommand(["start", spec.containerName]), {
       indent: "    "
     }),
-    `    docker start ${shellQuote(spec.containerName)}`,
+    `    if ! docker start ${shellQuote(spec.containerName)}; then`,
+    `      echo ${shellQuote(`${spec.label} container could not start. Recreating the container while keeping managed volumes.`)} >&2`,
+    `      docker rm -f ${shellQuote(spec.containerName)} >/dev/null`,
+    ...runtimeContainerCreateLines(spec).map((line) => `      ${line.trimStart()}`),
+    "    fi",
     "  fi",
     ...networkConnectLines(spec),
     "fi",
