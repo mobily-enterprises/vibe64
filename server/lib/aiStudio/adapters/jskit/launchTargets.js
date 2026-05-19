@@ -166,7 +166,7 @@ async function listJskitLaunchTargets({
 
   const launchTargets = [];
   if (hasTestrunCommand || (hasBuildCommandConfig && hasServerCommandConfig) || (scripts.build && scripts.server)) {
-    launchTargets.push(jskitLaunchTarget("built", "Build and run built version"));
+    launchTargets.push(jskitLaunchTarget("built", "Run built version"));
   }
   if (hasDevCommandConfig || scripts.dev) {
     launchTargets.push(jskitLaunchTarget("dev", "Run dev version"));

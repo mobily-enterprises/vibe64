@@ -37,7 +37,7 @@ async function listNextjsLaunchTargets({
     return [];
   }
   return [
-    nextjsLaunchTarget("built", "Build and run built version"),
+    nextjsLaunchTarget("built", "Run built version"),
     nextjsLaunchTarget("dev", "Run dev version")
   ];
 }

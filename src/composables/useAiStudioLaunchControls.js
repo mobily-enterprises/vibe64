@@ -141,7 +141,7 @@ function useAiStudioLaunchControls({
   });
   const visible = computed(() => Boolean(
     canLoadLaunchTargets.value &&
-      (launchTargets.value.length > 0 || showOpenTarget.value || launchTargetsResource.loadError.value)
+      (launchTargets.value.length > 0 || launchTargetsResource.loadError.value || terminalVisible.value)
   ));
   const launchButtonsDisabled = computed(() => Boolean(readRefOrGetterValue(busy) || terminalRunning.value));
   const openDisabled = computed(() => {

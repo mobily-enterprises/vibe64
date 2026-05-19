@@ -35,7 +35,7 @@ function launchTargetIdForMode(mode = "production") {
 function reviewLaunchTarget(mode = "production") {
   return mode === "development"
     ? vinextLaunchTarget("dev", "Run dev version")
-    : vinextLaunchTarget("built", "Build and run built version");
+    : vinextLaunchTarget("built", "Run built version");
 }
 
 async function listVinextLaunchTargets({
@@ -46,7 +46,7 @@ async function listVinextLaunchTargets({
     return [];
   }
   return [
-    vinextLaunchTarget("built", "Build and run built version"),
+    vinextLaunchTarget("built", "Run built version"),
     vinextLaunchTarget("dev", "Run dev version")
   ];
 }

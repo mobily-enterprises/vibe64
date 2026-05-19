@@ -14,20 +14,6 @@
       {{ launchTarget.label }}
     </v-btn>
 
-    <v-btn
-      v-if="showOpenTarget"
-      color="primary"
-      :disabled="openDisabled"
-      :loading="openTargetCommand.isRunning"
-      :prepend-icon="mdiOpenInNew"
-      size="small"
-      :title="openTitle"
-      variant="tonal"
-      @click="open"
-    >
-      {{ openTarget.label || "Open browser" }}
-    </v-btn>
-
     <v-chip
       v-if="loadError"
       color="warning"
