@@ -40,6 +40,10 @@ function readPackageJson() {
   return JSON.parse(readFileSync(path.join(ROOT, "package.json"), "utf8"));
 }
 
+function readPackageLock() {
+  return JSON.parse(readFileSync(path.join(ROOT, "package-lock.json"), "utf8"));
+}
+
 function packageSpec(packageJson) {
   return `${packageJson.name}@${packageJson.version}`;
 }
@@ -181,13 +185,17 @@ function createNpmUserConfig({ packageName, registry, token }) {
   };
 }
 
+function npmToken() {
+  return String(process.env.VIBE_ARMOR_NPM_TOKEN || process.env.NPM_TOKEN || "").trim();
+}
+
 function authHelp(registry) {
   return [
-    `NPM_TOKEN is required to publish to ${registry}.`,
+    `VIBE_ARMOR_NPM_TOKEN or NPM_TOKEN is required to publish to ${registry}.`,
     "Create a granular npm token with read/write access to this package.",
     "Enable the token's Bypass 2FA option so npm publish cannot prompt for OTP.",
     "Then run:",
-    "  export NPM_TOKEN=npm_xxx",
+    "  export VIBE_ARMOR_NPM_TOKEN=npm_xxx",
     "  npm run release"
   ].join("\n");
 }
@@ -203,9 +211,10 @@ function printHelp() {
     "  npm run release -- --bump minor",
     "",
     "Auth:",
-    "  Requires NPM_TOKEN.",
+    "  Requires VIBE_ARMOR_NPM_TOKEN or NPM_TOKEN.",
     "  Create a granular npm token with read/write package access.",
     "  Enable the token's Bypass 2FA option to avoid npm's interactive publish prompt.",
+    "  VIBE_ARMOR_NPM_TOKEN is preferred when both variables are set.",
     "",
     "Notes:",
     "  Stock npm does not support `npm release`; use `npm run release`.",
@@ -215,21 +224,102 @@ function printHelp() {
   process.stdout.write("\n");
 }
 
-function assertCleanWorktree() {
+function stableJson(value) {
+  if (Array.isArray(value)) {
+    return value.map(stableJson);
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.keys(value)
+        .sort((left, right) => left.localeCompare(right))
+        .map((key) => [key, stableJson(value[key])])
+    );
+  }
+  return value;
+}
+
+function readJsonFromGit(refPath) {
+  const result = run("git", ["show", `HEAD:${refPath}`], {
+    check: false,
+    quiet: true
+  });
+  return result.status === 0 ? JSON.parse(result.stdout) : null;
+}
+
+function changedFiles() {
+  const status = run("git", ["status", "--porcelain"], {
+    quiet: true
+  });
+  return String(status.stdout || "")
+    .split(/\r?\n/u)
+    .map((line) => line.slice(3).trim())
+    .filter(Boolean)
+    .map((line) => line.replace(/^"|"$/gu, ""));
+}
+
+function normalizePackageJsonForVersionCompare(value) {
+  return {
+    ...value,
+    version: ""
+  };
+}
+
+function normalizePackageLockForVersionCompare(value) {
+  return {
+    ...value,
+    packages: {
+      ...value.packages,
+      "": {
+        ...value.packages?.[""],
+        version: ""
+      }
+    },
+    version: ""
+  };
+}
+
+function onlyVersionFilesChanged(files) {
+  const allowed = new Set(["package.json", "package-lock.json"]);
+  return files.length > 0 && files.every((file) => allowed.has(file));
+}
+
+function onlyVersionValuesChanged() {
+  const headPackageJson = readJsonFromGit("package.json");
+  const headPackageLock = readJsonFromGit("package-lock.json");
+  if (!headPackageJson || !headPackageLock) {
+    return false;
+  }
+  return JSON.stringify(stableJson(normalizePackageJsonForVersionCompare(headPackageJson))) ===
+      JSON.stringify(stableJson(normalizePackageJsonForVersionCompare(readPackageJson()))) &&
+    JSON.stringify(stableJson(normalizePackageLockForVersionCompare(headPackageLock))) ===
+      JSON.stringify(stableJson(normalizePackageLockForVersionCompare(readPackageLock())));
+}
+
+function releaseWorktreeState() {
   const gitRoot = run("git", ["rev-parse", "--show-toplevel"], {
     check: false,
     quiet: true
   });
   if (gitRoot.status !== 0) {
-    return;
+    return {
+      shouldBump: true
+    };
   }
 
-  const status = run("git", ["status", "--porcelain"], {
-    quiet: true
-  });
-  if (String(status.stdout || "").trim()) {
-    fail("worktree is not clean. Commit or stash changes before releasing; release creates the version bump itself.");
+  const dirtyFiles = changedFiles();
+  if (dirtyFiles.length === 0) {
+    return {
+      shouldBump: true
+    };
   }
+
+  if (onlyVersionFilesChanged(dirtyFiles) && onlyVersionValuesChanged()) {
+    return {
+      shouldBump: false
+    };
+  }
+
+  fail("worktree is not clean. Commit or stash changes before releasing; only a pending package version bump may be retried.");
 }
 
 function bumpPackageVersion(bump) {
@@ -262,16 +352,20 @@ if (options.dryRun) {
   process.exit(0);
 }
 
-assertCleanWorktree();
+const worktreeState = releaseWorktreeState();
 
 const npmConfig = createNpmUserConfig({
   packageName: packageJson.name,
   registry: options.registry,
-  token: process.env.NPM_TOKEN
+  token: npmToken()
 });
 
 try {
-  packageJson = bumpPackageVersion(options.bump);
+  if (worktreeState.shouldBump) {
+    packageJson = bumpPackageVersion(options.bump);
+  } else {
+    log("continuing with existing local package version bump.");
+  }
   run("npm", [
     "publish",
     "--access",
