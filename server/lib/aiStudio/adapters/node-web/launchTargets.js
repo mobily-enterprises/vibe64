@@ -40,14 +40,18 @@ async function listGenericNodeWebLaunchTargets({
 }
 
 function knownCliNetworkArgs(command = "", port = "") {
+  const normalizedPort = String(port || "").trim();
+  if (!normalizedPort) {
+    return [];
+  }
   if (/\bnext\b/u.test(command)) {
-    return ["-H", "0.0.0.0", "-p", String(port)];
+    return ["-H", "0.0.0.0", "-p", normalizedPort];
   }
   if (/\bvinext\b/u.test(command)) {
-    return ["--hostname", "0.0.0.0", "--port", String(port)];
+    return ["--hostname", "0.0.0.0", "--port", normalizedPort];
   }
   if (/\b(astro|ng|nuxt|svelte-kit|vite)\b/u.test(command)) {
-    return ["--host", "0.0.0.0", "--port", String(port)];
+    return ["--host", "0.0.0.0", "--port", normalizedPort];
   }
   return [];
 }

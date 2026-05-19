@@ -522,43 +522,74 @@ function preferredLaunchScriptNames(packageJson = {}) {
   };
 }
 
-async function readWorkspacePackageName(packageRoot = "") {
+function workspacePatternIsSafe(pattern = "") {
+  return Boolean(pattern) && !path.isAbsolute(pattern) && !pattern.includes("..") && !pattern.startsWith("!");
+}
+
+async function readWorkspacePackageEntry(packageRoot = "", relativePath = "") {
   try {
-    return String((await readPackageJson(packageRoot))?.name || "");
+    const packageJson = await readPackageJson(packageRoot);
+    if (!packageJson) {
+      return null;
+    }
+    return {
+      name: String(packageJson.name || ""),
+      path: packageRoot,
+      relativePath
+    };
   } catch {
-    return "";
+    return {
+      name: "",
+      path: packageRoot,
+      relativePath
+    };
   }
+}
+
+async function readWorkspaceGlobPackages(targetRoot = "", pattern = "") {
+  if (!pattern.endsWith("/*")) {
+    return [];
+  }
+  const parentRelativePath = pattern.slice(0, -2);
+  const parentPath = path.join(targetRoot, parentRelativePath);
+  let entries = [];
+  try {
+    entries = await readdir(parentPath, {
+      withFileTypes: true
+    });
+  } catch {
+    return [];
+  }
+
+  const packageEntries = await Promise.all(entries
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => {
+      const packageRoot = path.join(parentPath, entry.name);
+      const relativePath = path.join(parentRelativePath, entry.name);
+      return readWorkspacePackageEntry(packageRoot, relativePath);
+    }));
+  return packageEntries.filter(Boolean);
+}
+
+async function readDirectWorkspacePackage(targetRoot = "", pattern = "") {
+  if (pattern.includes("*")) {
+    return [];
+  }
+  const entry = await readWorkspacePackageEntry(path.join(targetRoot, pattern), pattern);
+  return entry ? [entry] : [];
 }
 
 async function readWorkspacePackages(targetRoot = "", patterns = []) {
   const packageEntries = [];
   for (const pattern of patterns) {
     const normalizedPattern = String(pattern || "");
-    if (!normalizedPattern.endsWith("/*") || normalizedPattern.includes("..")) {
+    if (!workspacePatternIsSafe(normalizedPattern)) {
       continue;
     }
-    const parentRelativePath = normalizedPattern.slice(0, -2);
-    const parentPath = path.join(targetRoot, parentRelativePath);
-    let entries = [];
-    try {
-      entries = await readdir(parentPath, {
-        withFileTypes: true
-      });
-    } catch {
-      continue;
-    }
-    for (const entry of entries) {
-      if (!entry.isDirectory()) {
-        continue;
-      }
-      const packageRoot = path.join(parentPath, entry.name);
-      const relativePath = path.join(parentRelativePath, entry.name);
-      packageEntries.push({
-        name: await readWorkspacePackageName(packageRoot),
-        path: packageRoot,
-        relativePath
-      });
-    }
+    packageEntries.push(
+      ...await readWorkspaceGlobPackages(targetRoot, normalizedPattern),
+      ...await readDirectWorkspacePackage(targetRoot, normalizedPattern)
+    );
   }
   return packageEntries.sort((left, right) => left.relativePath.localeCompare(right.relativePath));
 }

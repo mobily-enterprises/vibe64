@@ -239,10 +239,17 @@ test("generic Node web current-app inspection tolerates malformed workspace pack
   await withTemporaryRoot(async (targetRoot) => {
     await createGenericNodeWebProject(targetRoot, {
       workspaces: [
+        "apps/web",
         "packages/*"
       ]
     });
     await writeProjectFile(targetRoot, "packages/bad/package.json", "{ not json\n");
+    await mkdir(path.join(targetRoot, "packages/not-a-package"), {
+      recursive: true
+    });
+    await writeProjectFile(targetRoot, "apps/web/package.json", JSON.stringify({
+      name: "web-app"
+    }, null, 2));
     const adapter = createGenericNodeWebTargetAdapter();
 
     const app = await adapter.inspectCurrentApp({
@@ -252,8 +259,19 @@ test("generic Node web current-app inspection tolerates malformed workspace pack
 
     assert.equal(app.ok, true);
     assert.equal(app.localPackages.appPackageName, "example-node-web-app");
-    assert.equal(app.localPackages.packages[0].relativePath, "packages/bad");
-    assert.equal(app.localPackages.packages[0].name, "");
+    assert.deepEqual(app.localPackages.packages.map((packageEntry) => ({
+      name: packageEntry.name,
+      relativePath: packageEntry.relativePath
+    })), [
+      {
+        name: "web-app",
+        relativePath: "apps/web"
+      },
+      {
+        name: "",
+        relativePath: "packages/bad"
+      }
+    ]);
   });
 });
 
@@ -278,6 +296,14 @@ test("generic Node web launch descriptor uses build and start package scripts", 
     assert.equal(descriptor.metadata.commandSource, "package-script");
     assert.equal(descriptor.metadata.packageManager, "npm");
     assert.equal(descriptor.metadata.serverScript, "start");
+
+    const descriptorWithoutPort = await createGenericNodeWebLaunchDescriptor({
+      launchTargetId: "dev",
+      worktreePath: targetRoot
+    });
+    assert.deepEqual(descriptorWithoutPort.commands.map((command) => command.command), [
+      "npm run dev"
+    ]);
   });
 });
 
