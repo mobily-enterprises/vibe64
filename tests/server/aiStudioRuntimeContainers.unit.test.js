@@ -14,6 +14,7 @@ import {
   JSKIT_MARIADB_HOST,
   createJskitMariaDbRuntimeContainer,
   jskitDatabaseDockerArgsForTarget,
+  managedMariaDbAccessInstructions,
   startJskitMariaDbRepair
 } from "../../server/lib/aiStudio/adapters/jskit/setupMariaDbRuntime.js";
 import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
@@ -143,6 +144,11 @@ test("jskit declares MariaDB through the generic runtime container layer", async
     assert.match(repair.commandPreview, /mariadb:12\.0\.2/u);
     assert.match(repair.commandPreview, /MARIADB_ROOT_PASSWORD=\*\*\*\*\*/u);
     assert.doesNotMatch(repair.commandPreview, /ai_studio_jskit_root/u);
+    assert.doesNotMatch(repair.commandPreview, /127\.0\.0\.1:13306:3306/u);
+    assert.doesNotMatch(
+      managedMariaDbAccessInstructions("app_db", targetRoot),
+      /Host:/u
+    );
     assert.deepEqual(
       jskitDatabaseDockerArgsForTarget(JSKIT_MARIADB_HOST, targetRoot),
       runtimeContainerNetworkDockerArgs(targetRoot)
@@ -168,5 +174,6 @@ test("runtime container start script safely displays shell-quoted commands", asy
     assert.equal(syntax.status, 0, syntax.stderr);
     assert.match(script, /printf '%s\\n'/u);
     assert.doesNotMatch(script, /echo '\\$ docker run/u);
+    assert.doesNotMatch(script, /127\.0\.0\.1:13306:3306/u);
   });
 });
