@@ -18,11 +18,11 @@
         <v-btn
           v-if="sessionItem.sessionId === selectedSessionId"
           class="studio-ai-sessions__tab-abandon"
-          density="compact"
+          density="comfortable"
           :disabled="busy || selectionClosed"
           :icon="mdiClose"
           :loading="abandon.command.isRunning"
-          size="x-small"
+          size="small"
           title="Abandon session"
           variant="text"
           aria-label="Abandon session"
@@ -109,6 +109,17 @@ defineProps({
 
 .studio-ai-sessions__tab-abandon {
   margin-left: 0.3rem;
+  min-height: 1.75rem;
+  min-width: 1.75rem;
+}
+
+.studio-ai-sessions__tab-abandon:hover,
+.studio-ai-sessions__tab-abandon:focus-visible {
+  background: rgba(var(--v-theme-on-primary), 0.16);
+}
+
+.studio-ai-sessions__tab-abandon :deep(.v-icon) {
+  font-size: 1.15rem;
 }
 
 .studio-ai-sessions__status-dot {
