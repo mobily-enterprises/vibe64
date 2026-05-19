@@ -16,9 +16,9 @@ function studioApiPath(relativePath) {
   });
 }
 
-function resolveWebSocketUrl(pathname) {
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${protocol}//${window.location.host}${pathname}`;
+function resolveWebSocketUrl(pathname, browserWindow = window) {
+  const protocol = browserWindow.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${protocol}//${browserWindow.location.host}${pathname}`;
 }
 
 export {

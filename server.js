@@ -30,6 +30,10 @@ import {
   cleanupStaleStudioTerminals
 } from "./server/lib/studioTerminalCleanup.js";
 import {
+  createBrowserLifecycleMonitor,
+  registerBrowserLifecycleWebSocketRoute
+} from "./server/lib/browserLifecycle.js";
+import {
   AI_STUDIO_APP_ROOT_ENV,
   AI_STUDIO_SKIP_STALE_TERMINAL_CLEANUP_ENV,
   AI_STUDIO_TARGET_ROOT_ENV
@@ -320,9 +324,18 @@ async function createServer(options = {}) {
   }
   await app.register(fastifyWebsocket);
 
+  const browserLifecycleMonitor = createBrowserLifecycleMonitor({
+    logger: app.log,
+    shutdownDelayMs: options.browserLifecycleShutdownDelayMs
+  });
+  app.browserLifecycleMonitor = browserLifecycleMonitor;
+
   app.addHook("onClose", async () => {
+    browserLifecycleMonitor.stop();
     await closeTerminalSessionsForNamespacePrefix("");
   });
+
+  registerBrowserLifecycleWebSocketRoute(app, browserLifecycleMonitor);
 
   app.get("/api/health", async () => {
     return {
@@ -460,6 +473,7 @@ async function startServer(options = {}) {
   const strictPort = options?.strictPort ?? Boolean(options?.port || String(process.env.PORT || "").trim());
   const app = await createServer({
     appRoot: options?.appRoot,
+    browserLifecycleShutdownDelayMs: options?.browserLifecycleShutdownDelayMs,
     targetRoot: options?.targetRoot
   });
   let closing = false;
@@ -483,6 +497,9 @@ async function startServer(options = {}) {
     process.off("SIGINT", closeAndExit);
     process.off("SIGTERM", closeAndExit);
   });
+  if (options?.browserLifecycleShutdown === true) {
+    app.browserLifecycleMonitor?.enableShutdown(closeAndExit);
+  }
   const selectedPort = strictPort ? port : await getPort({
     port: preferredPortRange(port)
   });

@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Run AI Studio against the current project.",
   "bin": {
-    "ai-studio": "bin/server.js"
+    "ai-studio": "bin/run.js"
   },
   "files": [
     ".jskit/lock.json",

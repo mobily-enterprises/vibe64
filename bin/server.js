@@ -31,13 +31,15 @@ async function openBrowser(url) {
 }
 
 try {
+  const openOnStart = shouldOpenBrowser();
   const app = await startServer({
+    browserLifecycleShutdown: openOnStart,
     strictPort: Boolean(String(process.env.PORT || "").trim())
   });
   const url = app.aiStudioUrl;
   if (url) {
     console.log(`AI Studio is running at ${url}`);
-    if (shouldOpenBrowser()) {
+    if (openOnStart) {
       await openBrowser(url);
     }
   }
