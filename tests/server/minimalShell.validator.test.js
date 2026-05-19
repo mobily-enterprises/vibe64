@@ -10,7 +10,7 @@ const APP_ROOT = path.resolve(__dirname, "../..");
 
 const EXPECTED_MANAGED_SCRIPTS = Object.freeze({
   verify: "jskit app verify && npm run --if-present verify:app",
-  release: "jskit app release",
+  "jskit:release": "jskit app release",
   "jskit:update": "jskit app update-packages"
 });
 
@@ -91,6 +91,11 @@ test("latest JSKIT app keeps managed wrapper scripts and JSKIT dependency specif
   for (const [scriptName, expectedValue] of Object.entries(EXPECTED_MANAGED_SCRIPTS)) {
     assert.equal(packageJson.scripts?.[scriptName], expectedValue, `Unexpected ${scriptName} script.`);
   }
+});
+
+test("package release script publishes through the npm release helper", async () => {
+  const packageJson = await readPackageJson();
+  assert.equal(packageJson.scripts?.release, "node ./scripts/npm-release.js");
 });
 
 test("latest JSKIT scaffold files are present at the app root", async () => {

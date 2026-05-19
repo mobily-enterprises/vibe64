@@ -46,7 +46,8 @@
     "test:e2e:legacy": "playwright test --config playwright.config.ts tests/e2e/base-shell.spec.ts",
     "test:e2e:live": "npm run build && AI_STUDIO_LIVE_E2E=1 playwright test --config playwright.config.ts tests/e2e/live-ai-studio-workflow.spec.ts",
     "verify": "jskit app verify && npm run --if-present verify:app",
-    "release": "jskit app release",
+    "release": "node ./scripts/npm-release.js",
+    "jskit:release": "jskit app release",
     "jskit:update": "jskit app update-packages"
   },
   "dependencies": {
