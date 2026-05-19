@@ -24,7 +24,7 @@ Project config:
 Action input:
 {{input.json}}
 
-Use the current Codex conversation and Action input as the source of truth for the issue. Do not inspect AI Studio session internals, session files, or existing artifact files.
+Use the current Codex conversation and Action input as the source of truth for the issue. Only write the issue files after the conversation contains a confirmed scoped issue. If the issue has not been discussed enough, or the user has not confirmed the proposed scope, ask the user to confirm or correct the scope instead of writing files. Do not inspect AI Studio session internals, session files, or existing artifact files.
 
 Write the reviewed issue title to:
 {{session.artifactsRoot}}/issue_title

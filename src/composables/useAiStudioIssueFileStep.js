@@ -81,7 +81,7 @@ function useAiStudioIssueFileStep({
     if (commandBusy.value) {
       return "Wait for the current Studio action to finish.";
     }
-    return sendIssuePromptAction.value?.disabledReason || "Send prompt";
+    return sendIssuePromptAction.value?.disabledReason || "Discuss issue";
   });
 
   function inputForAction(action = {}) {
@@ -103,7 +103,10 @@ function useAiStudioIssueFileStep({
     if (existingIssueSelected.value) {
       return actions;
     }
-    return actions.filter((action) => action.id !== SEND_ISSUE_PROMPT_ACTION_ID);
+    return actions.filter((action) => {
+      return action.id !== SEND_ISSUE_PROMPT_ACTION_ID &&
+        action.id !== USE_EXISTING_ISSUE_ACTION_ID;
+    });
   }
 
   async function sendPrompt() {

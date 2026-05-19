@@ -97,6 +97,8 @@ test.describe("live AI Studio session workflow", () => {
 
     await goNextToStep(page, "issue_file_created");
     await expect(page.getByLabel("Issue request")).toBeVisible();
+    await expect(page.getByText("Discuss issue and define scope")).toBeVisible();
+    await expectButtonDisabled(page, "Discuss issue");
     await expectButtonEnabled(page, "Use existing issue");
     await expectButtonHidden(page, "Create issue file");
     await expectButtonHidden(page, "Next");
@@ -105,6 +107,8 @@ test.describe("live AI Studio session workflow", () => {
   test("switches from issue request form to create-file controls after the issue prompt is recorded", async ({ page }) => {
     await createNewBranchSessionAtIssueStep(page);
     await expect(page.getByLabel("Issue request")).toBeVisible();
+    await expect(page.getByText("Discuss issue and define scope")).toBeVisible();
+    await expectButtonDisabled(page, "Discuss issue");
     await expectButtonEnabled(page, "Use existing issue");
     await expectButtonHidden(page, "Create issue file");
     await expectButtonHidden(page, "Next");
@@ -113,7 +117,7 @@ test.describe("live AI Studio session workflow", () => {
 
     await expect(page.getByLabel("Issue request")).toHaveCount(0);
     await expectButtonEnabled(page, "Create issue file");
-    await expectButtonEnabled(page, "Use existing issue");
+    await expectButtonHidden(page, "Use existing issue");
     await expectButtonDisabled(page, "Next");
   });
 
@@ -122,13 +126,14 @@ test.describe("live AI Studio session workflow", () => {
 
     await createNewBranchSessionAtIssueStep(page);
     await assertChecklistControls(page, "issue_file_created", {
+      disabled: ["Discuss issue"],
       enabled: ["Use existing issue"],
       hidden: ["Create issue file", "Next"]
     });
 
     await useExistingIssue(page, issue.url);
     await assertChecklistControls(page, "issue_file_created", {
-      disabled: ["Send prompt", "Create issue file", "Use existing issue"],
+      disabled: ["Discuss issue", "Create issue file", "Use existing issue"],
       enabled: ["Next"]
     });
 
@@ -254,7 +259,7 @@ test.describe("live AI Studio session workflow", () => {
     expect(session.metadata?.issue_source).toBe("existing");
     expect(session.metadata?.issue_number).toBe(issue.number);
 
-    await expectButtonDisabled(page, "Send prompt");
+    await expectButtonDisabled(page, "Discuss issue");
     await expectButtonDisabled(page, "Create issue file");
     await expectButtonDisabled(page, "Use existing issue");
     await expectButtonEnabled(page, "Next");

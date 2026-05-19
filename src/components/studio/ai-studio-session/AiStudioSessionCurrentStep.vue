@@ -10,7 +10,9 @@
       class="studio-ai-sessions__issue-request-input"
       :disabled="page.busy"
       :error-messages="issueRequest.error ? [issueRequest.error] : []"
+      hint="Discuss issue and define scope"
       label="Issue request"
+      persistent-hint
       rows="5"
       variant="outlined"
       @update:model-value="emit('update-issue-request-text', $event)"
@@ -26,7 +28,7 @@
         :title="issueRequest.submitTitle"
         type="submit"
       >
-        Send prompt
+        Discuss issue
       </v-btn>
 
       <AiStudioSessionActionButton

@@ -108,7 +108,7 @@ const DEFAULT_AI_STUDIO_WORKFLOW = deepFreeze({
           disabledReason: "An existing issue is already selected.",
           disabledWhen: ["metadata:issue_url"],
           id: SEND_ISSUE_PROMPT_ACTION_ID,
-          label: "Send prompt",
+          label: "Discuss issue",
           promptId: SEND_ISSUE_PROMPT_ACTION_ID,
           type: "prompt"
         },
@@ -116,7 +116,7 @@ const DEFAULT_AI_STUDIO_WORKFLOW = deepFreeze({
           disabledReason: "Issue is already selected or issue files already exist.",
           disabledWhen: ["metadata:issue_url", ISSUE_FILES_READY_CONDITION],
           enabledWhen: [ISSUE_PROMPT_HAS_REQUEST_CONDITION],
-          enabledWhenReason: "Send the issue prompt before creating the issue file.",
+          enabledWhenReason: "Discuss the issue before creating the issue file.",
           id: CREATE_ISSUE_FILE_ACTION_ID,
           label: "Create issue file",
           promptId: CREATE_ISSUE_FILE_ACTION_ID,

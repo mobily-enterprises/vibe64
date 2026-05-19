@@ -11,8 +11,12 @@ import {
   JSKIT_AI_STUDIO_COMMANDS,
   JSKIT_ALLOW_SELF_TARGET_CONFIG,
   JSKIT_CONFIG_FIELDS,
+  createJskitLaunchTargetTerminalSpec,
   createJskitTargetAdapter
 } from "../../server/lib/aiStudio/adapters/jskit/index.js";
+import {
+  RECURSIVE_AI_STUDIO_OPENING_CONFIG
+} from "../../server/lib/aiStudio/adapters/jskit/launchTargets.js";
 import {
   jskitAutomatedChecksHook,
   jskitCodeIndexHook
@@ -111,6 +115,40 @@ test("jskit adapter exposes explicit self-target config policy", async () => {
       }
     }
   }), true);
+});
+
+test("jskit launch target enables host Docker for recursive Studio opening", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await Promise.all([
+      writeProjectFile(targetRoot, "package.json", JSON.stringify({
+        scripts: {
+          dev: "node server.js"
+        }
+      }, null, 2)),
+      writeProjectFile(targetRoot, RECURSIVE_AI_STUDIO_OPENING_CONFIG, "true\n")
+    ]);
+
+    const spec = await createJskitLaunchTargetTerminalSpec({
+      launchTargetId: "dev",
+      session: {
+        metadata: {
+          worktree_path: targetRoot
+        },
+        sessionId: "recursive_studio_launch",
+        targetRoot
+      },
+      targetRoot
+    });
+
+    assert.equal(spec.ok, true);
+    assert.equal(spec.metadata.hostDocker, true);
+    assert.equal(spec.metadata.hostDockerSource, RECURSIVE_AI_STUDIO_OPENING_CONFIG);
+    const args = spec.args({
+      id: "unit-terminal"
+    });
+    assert.ok(args.includes("DOCKER_HOST=unix:///var/run/docker.sock"));
+    assert.ok(args.includes("/var/run/docker.sock:/var/run/docker.sock"));
+  });
 });
 
 test("jskit adapter reports missing markers without pretending project type selection failed", async () => {

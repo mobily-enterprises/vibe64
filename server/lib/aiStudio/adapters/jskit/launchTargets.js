@@ -21,6 +21,7 @@ const BUILT_LAUNCH_COMMAND_CONFIG = ".jskit/config/testrun_command";
 const BUILT_LAUNCH_PORT_CONFIG = ".jskit/config/server_port_for_user_review";
 const DEV_SERVER_COMMAND_CONFIG = "config/dev_server_command";
 const LAUNCH_HOST_DOCKER_CONFIG = ".jskit/config/devel_app_test_host_docker";
+const RECURSIVE_AI_STUDIO_OPENING_CONFIG = ".ai-studio/config/enable_recursive_ai_studio_opening";
 
 function enabledConfigValue(value) {
   const normalized = String(value || "").trim().toLowerCase();
@@ -57,6 +58,21 @@ async function configFileHasValue(root, relativePath) {
   return Boolean(await readOptionalConfigFile(root, relativePath, ""));
 }
 
+async function resolveHostDockerConfig(root) {
+  const [launchHostDockerValue, recursiveAiStudioOpeningValue] = await Promise.all([
+    readOptionalConfigFile(root, LAUNCH_HOST_DOCKER_CONFIG, ""),
+    readOptionalConfigFile(root, RECURSIVE_AI_STUDIO_OPENING_CONFIG, "")
+  ]);
+  const sources = [
+    enabledConfigValue(launchHostDockerValue) ? LAUNCH_HOST_DOCKER_CONFIG : "",
+    enabledConfigValue(recursiveAiStudioOpeningValue) ? RECURSIVE_AI_STUDIO_OPENING_CONFIG : ""
+  ].filter(Boolean);
+  return {
+    enabled: sources.length > 0,
+    source: sources.join(", ")
+  };
+}
+
 function normalizePort(value) {
   const port = Number.parseInt(String(value || ""), 10);
   return Number.isInteger(port) && port >= 1024 && port <= 65535
@@ -65,18 +81,17 @@ function normalizePort(value) {
 }
 
 async function resolveBuiltLaunchConfig(worktreePath) {
-  const [configuredBuiltCommand, hostDockerValue, portValue] = await Promise.all([
+  const [configuredBuiltCommand, hostDocker, portValue] = await Promise.all([
     readOptionalConfigFile(worktreePath, BUILT_LAUNCH_COMMAND_CONFIG, ""),
-    readOptionalConfigFile(worktreePath, LAUNCH_HOST_DOCKER_CONFIG, ""),
+    resolveHostDockerConfig(worktreePath),
     readOptionalConfigFile(worktreePath, BUILT_LAUNCH_PORT_CONFIG, String(DEFAULT_LAUNCH_PORT))
   ]);
-  const hostDocker = enabledConfigValue(hostDockerValue);
   if (configuredBuiltCommand) {
     return {
       buildCommand: "",
       commandSource: BUILT_LAUNCH_COMMAND_CONFIG,
-      hostDocker,
-      hostDockerSource: hostDocker ? LAUNCH_HOST_DOCKER_CONFIG : "",
+      hostDocker: hostDocker.enabled,
+      hostDockerSource: hostDocker.source,
       preferredPort: normalizePort(portValue),
       serverCommand: "",
       testrunCommand: configuredBuiltCommand
@@ -90,8 +105,8 @@ async function resolveBuiltLaunchConfig(worktreePath) {
   return {
     buildCommand,
     commandSource: "default_build_and_server_commands",
-    hostDocker,
-    hostDockerSource: hostDocker ? LAUNCH_HOST_DOCKER_CONFIG : "",
+    hostDocker: hostDocker.enabled,
+    hostDockerSource: hostDocker.source,
     preferredPort: normalizePort(portValue),
     serverCommand,
     testrunCommand: `${buildCommand};${serverCommand}`
@@ -99,17 +114,16 @@ async function resolveBuiltLaunchConfig(worktreePath) {
 }
 
 async function resolveDevLaunchConfig(worktreePath) {
-  const [devCommand, hostDockerValue, portValue] = await Promise.all([
+  const [devCommand, hostDocker, portValue] = await Promise.all([
     readOptionalConfigFile(worktreePath, DEV_SERVER_COMMAND_CONFIG, ""),
-    readOptionalConfigFile(worktreePath, LAUNCH_HOST_DOCKER_CONFIG, ""),
+    resolveHostDockerConfig(worktreePath),
     readOptionalConfigFile(worktreePath, BUILT_LAUNCH_PORT_CONFIG, String(DEFAULT_LAUNCH_PORT))
   ]);
-  const hostDocker = enabledConfigValue(hostDockerValue);
   return {
     commandSource: devCommand ? DEV_SERVER_COMMAND_CONFIG : "package_json_dev_script",
     devCommand: devCommand || DEFAULT_DEV_SERVER_COMMAND,
-    hostDocker,
-    hostDockerSource: hostDocker ? LAUNCH_HOST_DOCKER_CONFIG : "",
+    hostDocker: hostDocker.enabled,
+    hostDockerSource: hostDocker.source,
     preferredPort: normalizePort(portValue)
   };
 }
@@ -275,5 +289,6 @@ export {
   BUILT_LAUNCH_COMMAND_CONFIG,
   BUILT_LAUNCH_PORT_CONFIG,
   DEV_SERVER_COMMAND_CONFIG,
-  LAUNCH_HOST_DOCKER_CONFIG
+  LAUNCH_HOST_DOCKER_CONFIG,
+  RECURSIVE_AI_STUDIO_OPENING_CONFIG
 };
