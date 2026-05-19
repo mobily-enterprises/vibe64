@@ -1,6 +1,6 @@
 {
   "name": "@vibe-armor/run",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "private": false,
   "type": "module",
   "description": "Run AI Studio against the current project.",
@@ -75,7 +75,7 @@
     "execa": "^9.6.1",
     "fastify": "^5.7.4",
     "get-port": "^7.2.0",
-    "json-rest-schema": "1.x.x",
+    "json-rest-schema": "^1.0.16",
     "node-pty": "^1.1.0",
     "open": "^11.0.0",
     "pinia": "^3.0.4",
