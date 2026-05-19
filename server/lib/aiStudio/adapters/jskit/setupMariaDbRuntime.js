@@ -90,8 +90,15 @@ function createJskitMariaDbRuntimeContainer({
     readyExplanation: "The JSKIT managed MariaDB runtime is ready for target database setup.",
     required,
     secretEnv: [
-      "MARIADB_ROOT_PASSWORD"
+      "MARIADB_ROOT_PASSWORD",
+      "MYSQL_PWD"
     ],
+    terminalEnv: {
+      AI_STUDIO_MYSQL_USER: "root",
+      MYSQL_HOST: JSKIT_MARIADB_HOST,
+      MYSQL_PWD: JSKIT_MARIADB_ROOT_PASSWORD,
+      MYSQL_TCP_PORT: "3306"
+    },
     volumes: [
       {
         id: "data",

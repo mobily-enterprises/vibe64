@@ -277,6 +277,7 @@ class AiStudioDescribedWorkflowTargetAdapter extends AiStudioWorkflowTargetAdapt
     promptPackRoot = "",
     promptRenderer = null,
     prepareWorktreeScriptPath = "",
+    runtimeContainers = () => [],
     setupDoctorPlugins = () => [],
     terminalToolchain = null,
     launchTargetTerminalSpecFactory = null,
@@ -302,6 +303,7 @@ class AiStudioDescribedWorkflowTargetAdapter extends AiStudioWorkflowTargetAdapt
       promptPackRoot,
       promptRenderer
     });
+    this.runtimeContainersFactory = runtimeContainers;
     this.setupDoctorPluginsFactory = setupDoctorPlugins;
     this.terminalToolchainFactory = terminalToolchain;
     this.launchTargetTerminalSpecFactory = typeof launchTargetTerminalSpecFactory === "function"
@@ -361,6 +363,11 @@ class AiStudioDescribedWorkflowTargetAdapter extends AiStudioWorkflowTargetAdapt
 
   async getTerminalToolchainSpec(context = {}) {
     return adapterTerminalToolchainSpec(await resolveValue(this.terminalToolchainFactory, context) || {});
+  }
+
+  async listRuntimeContainers(context = {}) {
+    const descriptors = await resolveValue(this.runtimeContainersFactory, context);
+    return Array.isArray(descriptors) ? descriptors.filter(Boolean) : [];
   }
 
   async getWorkflowCommandHooks(context = {}) {

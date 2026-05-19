@@ -36,6 +36,11 @@ import {
   createJskitSetupDoctorPlugin
 } from "./setupDoctorPlugin.js";
 import {
+  createJskitMariaDbRuntimeContainer,
+  JSKIT_MARIADB_HOST,
+  readDatabaseHostFromDotEnv
+} from "./setupMariaDbRuntime.js";
+import {
   JSKIT_TOOLCHAIN_IMAGE
 } from "./toolchainIdentity.js";
 
@@ -282,6 +287,16 @@ async function inspectJskitProject(targetRoot) {
   });
 }
 
+function createJskitRuntimeContainers() {
+  return [
+    createJskitMariaDbRuntimeContainer({
+      required: async ({ targetRoot = "" } = {}) => {
+        return Boolean(targetRoot) && await readDatabaseHostFromDotEnv(targetRoot) === JSKIT_MARIADB_HOST;
+      }
+    })
+  ];
+}
+
 class JskitTargetAdapter extends AiStudioDescribedWorkflowTargetAdapter {
   constructor({
     commandTerminalSpecFactory = null,
@@ -307,6 +322,7 @@ class JskitTargetAdapter extends AiStudioDescribedWorkflowTargetAdapter {
       projectInspection: inspectJskitProject,
       promptContext: jskitPromptContext,
       promptPackRoot: JSKIT_PROMPT_PACK_ROOT,
+      runtimeContainers: createJskitRuntimeContainers,
       setupDoctorPlugins: (context) => [
         createJskitSetupDoctorPlugin(context)
       ],

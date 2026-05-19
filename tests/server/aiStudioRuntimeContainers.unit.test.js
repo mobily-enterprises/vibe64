@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import path from "node:path";
 import test from "node:test";
 
 import {
@@ -9,6 +10,8 @@ import {
   runtimeContainerName,
   runtimeContainerNetworkDockerArgs,
   runtimeContainerStartScript,
+  runtimeContainerTerminalEnv,
+  runtimeContainersTerminalEnv,
   runtimeNetworkName,
   targetRuntimeNetworkDockerArgs,
   targetRuntimeNetworkEnsureCommand
@@ -18,6 +21,9 @@ import {
   managedMariaDbAccessInstructions,
   startJskitMariaDbRepair
 } from "../../server/lib/aiStudio/adapters/jskit/setupMariaDbRuntime.js";
+import {
+  createManagedDatabaseRuntimeContainer
+} from "../../server/lib/aiStudio/managedDatabases.js";
 import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
 
 test("runtime container descriptors describe arbitrary containers without service catalog coupling", async () => {
@@ -140,6 +146,10 @@ test("runtime container checks run generic inspect, health, and ready commands",
 test("jskit declares MariaDB through the generic runtime container layer", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const repair = startJskitMariaDbRepair(targetRoot);
+    const terminalEnv = await runtimeContainerTerminalEnv(createJskitMariaDbRuntimeContainer(), {
+      adapterId: "jskit",
+      targetRoot
+    });
 
     assert.equal(repair.actionId, "start-runtime-container-jskit-mariadb");
     assert.match(repair.commandPreview, /mariadb:12\.0\.2/u);
@@ -158,6 +168,83 @@ test("jskit declares MariaDB through the generic runtime container layer", async
       runtimeContainerNetworkDockerArgs(targetRoot)[1],
       runtimeNetworkName(targetRoot)
     );
+    assert.deepEqual(terminalEnv, {
+      AI_STUDIO_MYSQL_USER: "root",
+      MYSQL_HOST: "ai-studio-mariadb",
+      MYSQL_PWD: "ai_studio_jskit_root",
+      MYSQL_TCP_PORT: "3306"
+    });
+  });
+});
+
+test("runtime container terminal env is emitted only for required descriptors", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const terminalEnv = await runtimeContainersTerminalEnv([
+      {
+        id: "required-db",
+        image: "example/db:1",
+        required: true,
+        terminalEnv: {
+          DB_HOST: "required-db"
+        }
+      },
+      {
+        id: "unused-db",
+        image: "example/db:1",
+        required: false,
+        terminalEnv: {
+          DB_HOST: "unused-db"
+        }
+      }
+    ], {
+      adapterId: "unit",
+      targetRoot
+    });
+
+    assert.deepEqual(terminalEnv, {
+      DB_HOST: "required-db"
+    });
+  });
+});
+
+test("managed database descriptors expose client terminal environment", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const mysqlEnv = await runtimeContainerTerminalEnv(createManagedDatabaseRuntimeContainer({
+      adapterId: "nextjs",
+      host: "nextjs-mysql",
+      rootPassword: "nextjs_root_password",
+      runtime: "mysql",
+      targetRoot
+    }), {
+      adapterId: "nextjs",
+      targetRoot
+    });
+    const postgresEnv = await runtimeContainerTerminalEnv(createManagedDatabaseRuntimeContainer({
+      adapterId: "laravel",
+      host: "laravel-postgres",
+      password: "laravel_password",
+      runtime: "postgres",
+      targetRoot,
+      username: "laravel"
+    }), {
+      adapterId: "laravel",
+      targetRoot
+    });
+
+    assert.deepEqual(mysqlEnv, {
+      AI_STUDIO_MYSQL_USER: "root",
+      MYSQL_DATABASE: path.basename(targetRoot).replace(/[^A-Za-z0-9_]+/gu, "_"),
+      MYSQL_HOST: "nextjs-mysql",
+      MYSQL_PWD: "nextjs_root_password",
+      MYSQL_TCP_PORT: "3306"
+    });
+    assert.deepEqual(postgresEnv, {
+      PGDATABASE: path.basename(targetRoot).replace(/[^A-Za-z0-9_]+/gu, "_"),
+      PGHOST: "laravel-postgres",
+      PGPASSWORD: "laravel_password",
+      PGPORT: "5432",
+      PGUSER: "laravel"
+    });
   });
 });
 

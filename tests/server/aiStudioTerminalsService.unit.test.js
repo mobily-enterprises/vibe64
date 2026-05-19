@@ -23,6 +23,10 @@ import {
   resolveTerminalToolchainImage
 } from "../../packages/ai-studio-terminals/src/server/terminalToolchainImage.js";
 import {
+  maskedTerminalDockerArgs,
+  projectTerminalEnvironment
+} from "../../packages/ai-studio-terminals/src/server/terminalEnvironment.js";
+import {
   CppTargetAdapter
 } from "../../server/lib/aiStudio/adapters/cpp/adapter.js";
 import {
@@ -35,6 +39,10 @@ import {
   JSKIT_TOOLCHAIN_IMAGE
 } from "../../server/lib/aiStudio/adapters/jskit/toolchainIdentity.js";
 import {
+  JSKIT_MARIADB_HOST,
+  JSKIT_MARIADB_ROOT_PASSWORD
+} from "../../server/lib/aiStudio/adapters/jskit/setupMariaDbRuntime.js";
+import {
   LaravelTargetAdapter
 } from "../../server/lib/aiStudio/adapters/laravel/adapter.js";
 import {
@@ -46,6 +54,9 @@ import {
   STUDIO_TOOL_HOME_NPM_PREFIX,
   STUDIO_TOOL_HOME_PATH
 } from "../../server/lib/studioRuntimeIdentity.js";
+import {
+  STUDIO_MYSQL_CLIENT_CONFIG_DIR
+} from "../../server/lib/studioToolHome.js";
 import {
   runtimeNetworkName
 } from "../../server/lib/aiStudio/runtimeContainers.js";
@@ -144,6 +155,10 @@ test("AI Studio Codex terminal joins the target runtime network before the image
   const adapterImageArgs = codexTerminalArgs({
     codexThreadId: "",
     containerName: "ai-studio-codex-adapter",
+    env: {
+      MYSQL_HOST: JSKIT_MARIADB_HOST,
+      MYSQL_PWD: JSKIT_MARIADB_ROOT_PASSWORD
+    },
     image: "adapter-toolchain:1.0.0",
     sessionId: "unit-session",
     targetRoot,
@@ -151,6 +166,9 @@ test("AI Studio Codex terminal joins the target runtime network before the image
     worktree: "/workspace/project/.ai-studio/sessions/active/unit/worktree"
   });
   assert.ok(adapterImageArgs.indexOf("--network") < adapterImageArgs.indexOf("adapter-toolchain:1.0.0"));
+  assert.ok(adapterImageArgs.includes(`MYSQL_PWD=${JSKIT_MARIADB_ROOT_PASSWORD}`));
+  assert.ok(maskedTerminalDockerArgs(adapterImageArgs).includes("MYSQL_PWD=*****"));
+  assert.ok(!maskedTerminalDockerArgs(adapterImageArgs).includes(`MYSQL_PWD=${JSKIT_MARIADB_ROOT_PASSWORD}`));
 });
 
 test("AI Studio Codex terminal mounts linked git metadata for worktree roots", async () => {
@@ -180,7 +198,11 @@ test("AI Studio shell terminal joins the target runtime network before the image
   const args = shellTerminalArgs({
     containerName: "ai-studio-shell-unit",
     env: {
-      AI_STUDIO_CONFIG_DIR: "/workspace/project/.ai-studio/config"
+      AI_STUDIO_MYSQL_USER: "root",
+      AI_STUDIO_CONFIG_DIR: "/workspace/project/.ai-studio/config",
+      MYSQL_HOST: JSKIT_MARIADB_HOST,
+      MYSQL_PWD: JSKIT_MARIADB_ROOT_PASSWORD,
+      MYSQL_TCP_PORT: "3306"
     },
     sessionId: "unit-session",
     target: "worktree",
@@ -199,6 +221,10 @@ test("AI Studio shell terminal joins the target runtime network before the image
     "ai-studio-worktree"
   ]);
   assert.ok(args.includes("AI_STUDIO_CONFIG_DIR=/workspace/project/.ai-studio/config"));
+  assert.ok(args.includes(`MYSQL_HOST=${JSKIT_MARIADB_HOST}`));
+  assert.ok(args.includes(`MYSQL_PWD=${JSKIT_MARIADB_ROOT_PASSWORD}`));
+  assert.ok(args.includes("MYSQL_TCP_PORT=3306"));
+  assert.ok(args.includes("AI_STUDIO_MYSQL_USER=root"));
   assert.ok(args.includes("TERM=xterm-256color"));
   assert.ok(args.includes("COLORTERM=truecolor"));
   assert.ok(args.includes("FORCE_COLOR=1"));
@@ -212,6 +238,9 @@ test("AI Studio shell terminal joins the target runtime network before the image
   assert.ok(startupScript.includes(`export HOME=${STUDIO_TOOL_HOME_PATH}`));
   assert.ok(startupScript.includes(`export NPM_CONFIG_PREFIX=${STUDIO_TOOL_HOME_NPM_PREFIX}`));
   assert.ok(startupScript.includes(`export PATH=${STUDIO_TOOL_HOME_BIN_PATH}:$PATH`));
+  assert.ok(startupScript.includes(`export MYSQL_HOME=${STUDIO_MYSQL_CLIENT_CONFIG_DIR}`));
+  assert.ok(startupScript.includes("printf 'user=%s\\n' \"$AI_STUDIO_MYSQL_USER\""));
+  assert.ok(startupScript.includes("printf 'database=%s\\n' \"$MYSQL_DATABASE\""));
   assert.ok(startupScript.includes("PROMPT_DIRTRIM=4"));
   assert.ok(startupScript.includes("alias ls='ls --color=auto'"));
   assert.ok(startupScript.includes("PS1=\"${AI_STUDIO_SHELL_PROMPT:-\\w \\$ }\""));
@@ -282,6 +311,57 @@ test("adapters with managed toolchains declare their terminal toolchain image", 
   assert.equal((await new JskitTargetAdapter().getTerminalToolchainSpec()).image, JSKIT_TOOLCHAIN_IMAGE);
   assert.equal((await new LaravelTargetAdapter().getTerminalToolchainSpec()).image, LARAVEL_TOOLCHAIN_IMAGE);
   assert.equal((await new CppTargetAdapter().getTerminalToolchainSpec()).image, CPP_TOOLCHAIN_IMAGE);
+});
+
+test("AI Studio terminal env includes JSKIT managed MariaDB client defaults when selected", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await writeFile(path.join(targetRoot, ".env"), `DB_HOST=${JSKIT_MARIADB_HOST}\n`, "utf8");
+    const configDir = path.join(targetRoot, ".ai-studio", "config");
+    const env = await projectTerminalEnvironment({
+      projectService: {
+        async projectConfigEnvironment() {
+          return {
+            AI_STUDIO_CONFIG_DIR: configDir
+          };
+        }
+      },
+      runtime: {
+        adapter: new JskitTargetAdapter(),
+        projectConfig: {}
+      },
+      session: {
+        targetRoot
+      },
+      target: "shell",
+      targetRoot
+    });
+
+    assert.equal(env.AI_STUDIO_CONFIG_DIR, configDir);
+    assert.equal(env.MYSQL_HOST, JSKIT_MARIADB_HOST);
+    assert.equal(env.MYSQL_PWD, JSKIT_MARIADB_ROOT_PASSWORD);
+    assert.equal(env.MYSQL_TCP_PORT, "3306");
+    assert.equal(env.AI_STUDIO_MYSQL_USER, "root");
+  });
+});
+
+test("AI Studio terminal env skips JSKIT MariaDB client defaults when unmanaged", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await writeFile(path.join(targetRoot, ".env"), "DB_HOST=localhost\n", "utf8");
+    const env = await projectTerminalEnvironment({
+      runtime: {
+        adapter: new JskitTargetAdapter(),
+        projectConfig: {}
+      },
+      session: {
+        targetRoot
+      },
+      target: "shell",
+      targetRoot
+    });
+
+    assert.equal(env.MYSQL_HOST, undefined);
+    assert.equal(env.MYSQL_PWD, undefined);
+  });
 });
 
 test("AI Studio command terminal records action results and metadata after success", async () => {

@@ -71,6 +71,7 @@ import {
   inspectLaravelTargetScripts
 } from "./currentApp.js";
 import {
+  createLaravelRuntimeContainers,
   selectedLaravelDatabaseRuntime
 } from "./databaseRuntime.js";
 import {
@@ -432,6 +433,10 @@ class LaravelTargetAdapter extends AiStudioDescribedWorkflowTargetAdapter {
       projectInspection: inspectLaravelProject,
       promptContext: laravelPromptContext,
       promptPackRoot: LARAVEL_PROMPT_PACK_ROOT,
+      runtimeContainers: ({ config = {}, targetRoot = "" } = {}) => createLaravelRuntimeContainers({
+        config,
+        targetRoot
+      }),
       setupDoctorPlugins: (context) => [
         createLaravelSetupDoctorPlugin(context)
       ],

@@ -55,6 +55,7 @@ import {
   createNextjsSetupDoctorPlugin
 } from "./setupDoctorPlugin.js";
 import {
+  createNextjsRuntimeContainers,
   selectedNextjsDatabaseRuntime
 } from "./databaseRuntime.js";
 
@@ -318,6 +319,10 @@ class NextjsTargetAdapter extends AiStudioDescribedWorkflowTargetAdapter {
       projectInspection: inspectNextjsProject,
       promptContext: nextjsPromptContext,
       promptPackRoot: NEXTJS_PROMPT_PACK_ROOT,
+      runtimeContainers: ({ config = {}, targetRoot = "" } = {}) => createNextjsRuntimeContainers({
+        config,
+        targetRoot
+      }),
       setupDoctorPlugins: (context) => [
         createNextjsSetupDoctorPlugin(context)
       ],

@@ -54,6 +54,12 @@ import {
 import {
   resolveTerminalToolchainImage
 } from "./terminalToolchainImage.js";
+import {
+  maskedTerminalDockerArgs,
+  projectTerminalEnvironment,
+  terminalEnvironmentDockerArgs,
+  terminalEnvironmentFingerprint
+} from "./terminalEnvironment.js";
 
 const CODEX_THREAD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 const CODEX_THREAD_PROBE = "!echo $CODEX_THREAD_ID";
@@ -167,6 +173,7 @@ function codexStartupScript(codexThreadId = "") {
 function codexTerminalArgs({
   codexThreadId,
   containerName,
+  env = {},
   image = STUDIO_BASE_TOOLCHAIN_IMAGE,
   sessionId,
   targetRoot,
@@ -192,6 +199,7 @@ function codexTerminalArgs({
     "--label",
     studioDockerLabel("target", stableHash(targetRoot)),
     ...studioToolHomeDockerArgs(),
+    ...terminalEnvironmentDockerArgs(env),
     ...hostUserIdentityEnvArgs(),
     ...gitToolchainMountArgs(targetRoot),
     "-v",
@@ -347,6 +355,14 @@ function createCodexTerminalController({ projectService } = {}) {
 
         await prepareCodexAttachmentRoot();
         await ensureTargetRuntimeNetwork(targetRoot);
+        const terminalEnv = await projectTerminalEnvironment({
+          projectService,
+          runtime,
+          session,
+          target: "codex",
+          targetRoot
+        });
+        const terminalEnvHash = terminalEnvironmentFingerprint(terminalEnv);
         const namespace = codexTerminalNamespace(sessionId);
         return withCodexState(startTerminalSession({
           args: ({ id }) => codexTerminalArgs({
@@ -355,6 +371,7 @@ function createCodexTerminalController({ projectService } = {}) {
               sessionId,
               terminalId: id
             }),
+            env: terminalEnv,
             image: imageResult.image,
             sessionId,
             targetRoot,
@@ -362,10 +379,11 @@ function createCodexTerminalController({ projectService } = {}) {
             worktree: workdir
           }),
           command: "docker",
-          commandPreview: ({ args }) => dockerCommand(args),
+          commandPreview: ({ args }) => dockerCommand(maskedTerminalDockerArgs(args)),
           cwd: targetRoot,
           maxRunning: MAX_OPEN_CODEX_TERMINALS,
           metadata: {
+            envHash: terminalEnvHash,
             image: imageResult.image,
             imageLabel: imageResult.label,
             sessionId,
@@ -383,6 +401,7 @@ function createCodexTerminalController({ projectService } = {}) {
           },
           reuseRunning: (terminalSession) => {
             return terminalSession.metadata?.targetRoot === targetRoot &&
+              terminalSession.metadata?.envHash === terminalEnvHash &&
               terminalSession.metadata?.image === imageResult.image &&
               terminalSession.metadata?.workdir === workdir;
           }

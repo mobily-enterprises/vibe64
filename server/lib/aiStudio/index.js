@@ -78,6 +78,8 @@ export {
   runtimeContainerName,
   runtimeContainerNetworkDockerArgs,
   runtimeContainerRunArgs,
+  runtimeContainerTerminalEnv,
+  runtimeContainersTerminalEnv,
   runtimeContainerStartScript,
   runtimeNetworkName,
   targetRuntimeNetworkDockerArgs,

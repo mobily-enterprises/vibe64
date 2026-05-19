@@ -42,6 +42,11 @@ import {
 import {
   resolveTerminalToolchainImage
 } from "./terminalToolchainImage.js";
+import {
+  projectTerminalEnvironment,
+  terminalEnvironmentDockerArgs,
+  terminalEnvironmentFingerprint
+} from "./terminalEnvironment.js";
 
 const MAX_OPEN_SHELL_TERMINALS = 2;
 const SHELL_TARGET_MAIN = "main";
@@ -140,19 +145,6 @@ function shellContainerHostname(target = "") {
   return `ai-studio-${shellPromptLabel(target)}`;
 }
 
-function environmentDockerArgs(env = {}) {
-  return Object.entries(env || {}).flatMap(([key, value]) => {
-    const envName = String(key || "").trim();
-    if (!envName) {
-      return [];
-    }
-    return [
-      "-e",
-      `${envName}=${String(value ?? "")}`
-    ];
-  });
-}
-
 function shellStartupScript() {
   return studioUserStartupScript([
     SHELL_CONTAINER_COMMAND,
@@ -195,7 +187,7 @@ function shellTerminalArgs({
     "--label",
     studioDockerLabel("target", stableHash(targetRoot)),
     ...studioToolHomeDockerArgs(),
-    ...environmentDockerArgs(shellTerminalEnv({
+    ...terminalEnvironmentDockerArgs(shellTerminalEnv({
       env,
       target,
       targetRoot,
@@ -319,9 +311,14 @@ function createShellTerminalController({ projectService } = {}) {
 
         await ensureTargetRuntimeNetwork(targetRoot);
         const shellCommand = defaultShellCommand();
-        const projectConfigEnv = typeof projectService.projectConfigEnvironment === "function"
-          ? await projectService.projectConfigEnvironment()
-          : {};
+        const terminalEnv = await projectTerminalEnvironment({
+          projectService,
+          runtime,
+          session,
+          target,
+          targetRoot
+        });
+        const terminalEnvHash = terminalEnvironmentFingerprint(terminalEnv);
         const namespace = shellTerminalNamespace(sessionId);
         return startTerminalSession({
           args: ({ id }) => shellTerminalArgs({
@@ -330,7 +327,7 @@ function createShellTerminalController({ projectService } = {}) {
               target,
               terminalId: id
             }),
-            env: projectConfigEnv,
+            env: terminalEnv,
             image: imageResult.image,
             sessionId,
             target,
@@ -344,6 +341,7 @@ function createShellTerminalController({ projectService } = {}) {
           maxRunning: MAX_OPEN_SHELL_TERMINALS,
           metadata: {
             cwd: cwdResult.cwd,
+            envHash: terminalEnvHash,
             image: imageResult.image,
             imageLabel: imageResult.label,
             sessionId,
@@ -362,6 +360,7 @@ function createShellTerminalController({ projectService } = {}) {
           },
           reuseRunning: (runningSession) => {
             return runningSession.metadata?.target === target &&
+              runningSession.metadata?.envHash === terminalEnvHash &&
               runningSession.metadata?.image === imageResult.image &&
               runningSession.metadata?.cwd === cwdResult.cwd;
           }

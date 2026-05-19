@@ -18,6 +18,9 @@ import {
   readCommandResultFile,
   removeCommandResultFile
 } from "./commandTerminalResults.js";
+import {
+  projectTerminalEnvironment
+} from "./terminalEnvironment.js";
 
 function actionById(session = {}, actionId = "") {
   return (Array.isArray(session.actions) ? session.actions : [])
@@ -190,9 +193,13 @@ function createCommandTerminalController({ projectService } = {}) {
         }
 
         const namespace = commandTerminalNamespace(sessionId);
-        const projectConfigEnv = typeof projectService.projectConfigEnvironment === "function"
-          ? await projectService.projectConfigEnvironment()
-          : {};
+        const terminalEnv = await projectTerminalEnvironment({
+          projectService,
+          runtime,
+          session,
+          target: "command",
+          targetRoot: cwd
+        });
         const resultFile = await createCommandResultFile();
         return startTerminalSession({
           args: spec.args || [],
@@ -200,7 +207,7 @@ function createCommandTerminalController({ projectService } = {}) {
           commandPreview: spec.commandPreview,
           cwd: spec.cwd || cwd,
           env: (terminalContext) => ({
-            ...projectConfigEnv,
+            ...terminalEnv,
             ...(typeof spec.env === "function" ? spec.env(terminalContext) : spec.env || {}),
             [COMMAND_RESULT_ENV]: resultFile.path
           }),

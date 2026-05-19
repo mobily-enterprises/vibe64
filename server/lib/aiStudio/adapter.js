@@ -211,6 +211,10 @@ class TargetAdapter {
     return adapterTerminalToolchainSpec();
   }
 
+  async listRuntimeContainers() {
+    return [];
+  }
+
   async createCommandTerminalSpec(commandId) {
     return {
       ok: false,

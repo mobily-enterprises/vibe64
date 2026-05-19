@@ -14,6 +14,10 @@ import {
   launchTargetTerminalNamespace,
   sessionTerminalCwd
 } from "./terminalShared.js";
+import {
+  projectTerminalEnvironment,
+  terminalEnvironmentFingerprint
+} from "./terminalEnvironment.js";
 
 const LAUNCH_METADATA = Object.freeze({
   href: "launch_target_open_href",
@@ -215,21 +219,28 @@ function createLaunchTargetTerminalController({ projectService } = {}) {
 
         await ensureTargetRuntimeNetwork(context.targetRoot);
         const namespace = launchTargetTerminalNamespace(sessionId);
-        const projectConfigEnv = typeof projectService.projectConfigEnvironment === "function"
-          ? await projectService.projectConfigEnvironment()
-          : {};
+        const terminalEnv = await projectTerminalEnvironment({
+          projectService,
+          runtime: context.runtime,
+          session: context.session,
+          target: "launch-target",
+          targetRoot: context.targetRoot
+        });
+        const launchEnv = {
+          ...terminalEnv,
+          ...(spec.env || {})
+        };
+        const launchEnvHash = terminalEnvironmentFingerprint(launchEnv);
         const terminalSession = startTerminalSession({
           args: spec.args || [],
           command: spec.command,
           commandPreview: spec.commandPreview,
           cwd: spec.cwd || cwd,
-          env: {
-            ...projectConfigEnv,
-            ...(spec.env || {})
-          },
+          env: launchEnv,
           maxRunning: 1,
           metadata: {
             ...(spec.metadata || {}),
+            envHash: launchEnvHash,
             launchTargetId: launchTarget.id,
             launchTargetLabel: launchTarget.label,
             sessionId
@@ -239,6 +250,7 @@ function createLaunchTargetTerminalController({ projectService } = {}) {
           onClose: spec.onClose,
           reuseRunning: (runningSession) => {
             return spec.reuseRunning !== false &&
+              runningSession.metadata?.envHash === launchEnvHash &&
               runningSession.metadata?.launchTargetId === launchTarget.id;
           }
         });

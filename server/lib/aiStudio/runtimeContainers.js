@@ -181,6 +181,9 @@ function normalizeRuntimeContainerDescriptor(descriptor = {}, {
     readyCheck: normalizeRuntimeContainerReadyCheck(descriptor.readyCheck),
     required: descriptor.required,
     secretEnv: new Set(normalizeStringArray(descriptor.secretEnv || descriptor.secretEnvKeys)),
+    terminalEnv: typeof descriptor.terminalEnv === "function"
+      ? descriptor.terminalEnv
+      : normalizeEnv(descriptor.terminalEnv),
     targetRoot: resolvedTargetRoot,
     volumes: (Array.isArray(descriptor.volumes) ? descriptor.volumes : [])
       .map(normalizeRuntimeContainerVolume)
@@ -193,6 +196,49 @@ function runtimeContainerIsRequired(descriptor = {}, context = {}) {
     return descriptor.required(context);
   }
   return descriptor.required !== false;
+}
+
+async function runtimeContainerTerminalEnv(descriptor = {}, {
+  adapterId = "generic",
+  context = {},
+  targetRoot = ""
+} = {}) {
+  const resolvedTargetRoot = context.targetRoot || targetRoot;
+  const resolvedContext = {
+    ...context,
+    targetRoot: resolvedTargetRoot
+  };
+  if (!await runtimeContainerIsRequired(descriptor, resolvedContext)) {
+    return {};
+  }
+
+  const spec = normalizeRuntimeContainerDescriptor(descriptor, {
+    adapterId,
+    targetRoot: resolvedTargetRoot
+  });
+  const terminalEnv = typeof spec.terminalEnv === "function"
+    ? await spec.terminalEnv({
+        ...resolvedContext,
+        runtimeContainer: spec
+      })
+    : spec.terminalEnv;
+  return normalizeEnv(terminalEnv);
+}
+
+async function runtimeContainersTerminalEnv(descriptors = [], {
+  adapterId = "generic",
+  context = {},
+  targetRoot = ""
+} = {}) {
+  const containers = Array.isArray(descriptors) ? descriptors : [];
+  const envEntries = await Promise.all(containers.map((descriptor) => {
+    return runtimeContainerTerminalEnv(descriptor, {
+      adapterId,
+      context,
+      targetRoot
+    });
+  }));
+  return Object.assign({}, ...envEntries);
 }
 
 function shouldMaskEnvKey(spec, key) {
@@ -653,10 +699,12 @@ export {
   createRuntimeContainerTerminalAction,
   ensureTargetRuntimeNetwork,
   normalizeRuntimeContainerDescriptor,
+  runtimeContainerTerminalEnv,
   runtimeContainerCommandPreview,
   runtimeContainerName,
   runtimeContainerNetworkDockerArgs,
   runtimeContainerRunArgs,
+  runtimeContainersTerminalEnv,
   runtimeContainerStartScript,
   runtimeNetworkName,
   targetRuntimeNetworkDockerArgs,

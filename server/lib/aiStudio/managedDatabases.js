@@ -82,6 +82,26 @@ function managedDatabaseConnection({
   };
 }
 
+function managedPostgresTerminalEnv(connection = {}) {
+  return {
+    PGDATABASE: connection.database,
+    PGHOST: connection.host,
+    PGPASSWORD: connection.password,
+    PGPORT: connection.port,
+    PGUSER: connection.username
+  };
+}
+
+function managedMysqlTerminalEnv(connection = {}) {
+  return {
+    AI_STUDIO_MYSQL_USER: connection.username,
+    MYSQL_DATABASE: connection.database,
+    MYSQL_HOST: connection.host,
+    MYSQL_PWD: connection.password,
+    MYSQL_TCP_PORT: connection.port
+  };
+}
+
 function managedPostgresContainer({
   adapterId = "app",
   checkId = "",
@@ -143,6 +163,7 @@ function managedPostgresContainer({
     secretEnv: [
       "POSTGRES_PASSWORD"
     ],
+    terminalEnv: managedPostgresTerminalEnv(connection),
     volumes: [
       {
         id: "data",
@@ -214,6 +235,7 @@ function managedMysqlContainer({
     secretEnv: [
       passwordEnvKey
     ],
+    terminalEnv: managedMysqlTerminalEnv(connection),
     volumes: [
       {
         id: "data",
