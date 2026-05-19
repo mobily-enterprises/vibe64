@@ -130,7 +130,7 @@ describe("AI Studio session panel model", () => {
         { status: "active" }
       ]
     })).toEqual({
-      maxOpenSessions: 3,
+      maxOpenSessions: 5,
       openSessionCount: 2
     });
   });

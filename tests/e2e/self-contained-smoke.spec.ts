@@ -77,7 +77,8 @@ async function mockReadyStudioShell(page: Page) {
           path: `${targetRoot}/.ai-studio/project_type`,
           projectType: "jskit",
           ready: true,
-          status: "ready"
+          status: "ready",
+          targetRoot
         }
       }
     ],
@@ -227,7 +228,7 @@ async function mockReadyStudioShell(page: Page) {
       "/api/ai-studio/sessions",
       {
         limits: {
-          maxOpenSessions: 3,
+          maxOpenSessions: 5,
           openSessionCount: 0
         },
         ok: true,

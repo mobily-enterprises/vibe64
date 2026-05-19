@@ -138,7 +138,7 @@ async function mockCurrentAppInspection(page) {
   await page.route("**/api/ai-studio/sessions**", async (route) => {
     await fulfillJson(route, {
       limits: {
-        maxOpenSessions: 3,
+        maxOpenSessions: 5,
         openSessionCount: 0
       },
       ok: true,
@@ -287,7 +287,7 @@ async function mockSessionHistoryArchives(page, archiveRequests = []) {
     archiveRequests.push(new URL(route.request().url()).pathname);
     await fulfillJson(route, {
       limits: {
-        maxOpenSessions: 3,
+        maxOpenSessions: 5,
         openSessionCount: 0
       },
       ok: true,

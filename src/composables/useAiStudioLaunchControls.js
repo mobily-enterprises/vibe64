@@ -15,8 +15,53 @@ import {
   readRefOrGetterValue
 } from "@/lib/vueRefOrGetterValue.js";
 
+const LAUNCH_BROWSER_WINDOW_FEATURES = "popup,width=1400,height=900,left=80,top=60";
+
 function browserCanOpenTarget(target = {}) {
   return String(target.kind || "url") === "url" && Boolean(String(target.href || "").trim());
+}
+
+function stableLaunchBrowserTargetHash(value = "") {
+  const text = String(value || "");
+  let hash = 0;
+  for (let index = 0; index < text.length; index += 1) {
+    hash = (Math.imul(hash, 31) + text.charCodeAt(index)) >>> 0;
+  }
+  return hash.toString(36);
+}
+
+function launchBrowserTargetName(session = {}) {
+  const source = session?.targetRoot || session?.worktree || session?.sessionRoot || session?.sessionId || "target";
+  return `ai-studio-launch-${stableLaunchBrowserTargetHash(source)}`;
+}
+
+function openLaunchBrowserTarget(target = {}, session = {}, browserWindow = null) {
+  if (!browserCanOpenTarget(target)) {
+    return null;
+  }
+  const activeWindow = browserWindow || (typeof window !== "undefined" ? window : null);
+  if (!activeWindow?.open) {
+    return null;
+  }
+
+  const openedWindow = activeWindow.open(
+    target.href,
+    launchBrowserTargetName(session),
+    LAUNCH_BROWSER_WINDOW_FEATURES
+  );
+  if (!openedWindow) {
+    return null;
+  }
+
+  try {
+    openedWindow.opener = null;
+  } catch {
+    // Browser window proxies can reject writes after cross-origin navigation.
+  }
+  if (typeof openedWindow.focus === "function") {
+    openedWindow.focus();
+  }
+  return openedWindow;
 }
 
 function useAiStudioLaunchControls({
@@ -121,9 +166,7 @@ function useAiStudioLaunchControls({
         sessionId: sessionId.value
       });
       const target = response?.target || {};
-      if (browserCanOpenTarget(target) && typeof window !== "undefined") {
-        window.open(target.href, "_blank", "noopener");
-      }
+      openLaunchBrowserTarget(target, selectedSession.value);
     } catch {
       // useCommand owns the user-visible error message.
     }
@@ -179,5 +222,8 @@ function useAiStudioLaunchControls({
 }
 
 export {
+  browserCanOpenTarget,
+  launchBrowserTargetName,
+  openLaunchBrowserTarget,
   useAiStudioLaunchControls
 };

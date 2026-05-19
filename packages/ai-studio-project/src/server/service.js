@@ -80,7 +80,8 @@ function createService({ targetRoot = "" } = {}) {
       path: projectTypeStore.path,
       projectType,
       ready,
-      status
+      status,
+      targetRoot: resolvedTargetRoot
     };
   }
 

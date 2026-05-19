@@ -56,7 +56,8 @@ const readyProjectTypePayload = {
     path: `${targetRoot}/.ai-studio/project_type`,
     projectType: "jskit",
     ready: true,
-    status: "ready"
+    status: "ready",
+    targetRoot
   }
 };
 

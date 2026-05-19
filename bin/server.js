@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import open from "open";
+import open, { apps } from "open";
 import process from "node:process";
 import { startServer } from "../server.js";
 
@@ -15,9 +15,18 @@ function shouldOpenBrowser(args = process.argv.slice(2)) {
 
 async function openBrowser(url) {
   try {
-    await open(url);
-  } catch (error) {
-    console.warn(`Could not open browser automatically: ${error.message}`);
+    await open(url, {
+      app: {
+        name: apps.browser,
+        arguments: ["--new-window"]
+      }
+    });
+  } catch {
+    try {
+      await open(url);
+    } catch (error) {
+      console.warn(`Could not open browser automatically: ${error.message}`);
+    }
   }
 }
 

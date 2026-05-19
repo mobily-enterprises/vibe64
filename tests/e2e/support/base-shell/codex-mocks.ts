@@ -187,7 +187,7 @@ async function mockCodexPromptSession(page, { stepPayloads = [], terminalInputs 
   await page.route("**/api/ai-studio/sessions**", async (route) => {
     await fulfillJson(route, {
       limits: {
-        maxOpenSessions: 3,
+        maxOpenSessions: 5,
         openSessionCount: 1
       },
       ok: true,
@@ -292,7 +292,7 @@ async function mockCodexPromptSessions(page, sessionPayloads) {
   await page.route("**/api/ai-studio/sessions**", async (route) => {
     await fulfillJson(route, {
       limits: {
-        maxOpenSessions: 3,
+        maxOpenSessions: 5,
         openSessionCount: visibleSessionPayloads.filter(isOpenMockSession).length
       },
       ok: true,

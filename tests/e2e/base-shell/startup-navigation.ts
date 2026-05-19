@@ -75,7 +75,7 @@ test.describe("studio startup navigation", () => {
         contentType: "application/json",
         body: JSON.stringify({
           limits: {
-            maxOpenSessions: 3,
+            maxOpenSessions: 5,
             openSessionCount: 0
           },
           ok: true,

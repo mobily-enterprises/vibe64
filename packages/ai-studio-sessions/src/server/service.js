@@ -9,7 +9,7 @@ import {
 } from "../../../../server/lib/aiStudio/setupReadiness.js";
 import { inspectSessionDiff } from "./sessionDiff.js";
 
-const MAX_OPEN_AI_STUDIO_SESSIONS = 3;
+const MAX_OPEN_AI_STUDIO_SESSIONS = 5;
 const CLOSED_SESSION_STATUSES = new Set(["abandoned", "finished"]);
 
 function sessionResult(operation) {

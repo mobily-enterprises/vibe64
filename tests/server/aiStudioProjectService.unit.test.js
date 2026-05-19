@@ -21,6 +21,7 @@ test("AI Studio project service saves project type and plain-file configuration"
     assert.equal(missingType.ok, true);
     assert.equal(missingType.projectType.ready, false);
     assert.equal(missingType.projectType.status, "missing");
+    assert.equal(missingType.projectType.targetRoot, targetRoot);
     const projectTypes = missingType.projectType.availableProjectTypes;
     const jskitProjectType = projectTypes.find((type) => type.id === "jskit");
     const nextjsProjectType = projectTypes.find((type) => type.id === "nextjs");
@@ -37,6 +38,7 @@ test("AI Studio project service saves project type and plain-file configuration"
     assert.equal(savedType.ok, true);
     assert.equal(savedType.projectType.ready, true);
     assert.equal(savedType.projectType.adapter.id, "jskit");
+    assert.equal(savedType.projectType.targetRoot, targetRoot);
     assert.equal(
       await readFile(path.join(targetRoot, ".ai-studio", "project_type"), "utf8"),
       "jskit\n"
