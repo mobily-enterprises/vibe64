@@ -4,10 +4,13 @@ import process from "node:process";
 import { startServer } from "../server.js";
 
 function shouldOpenBrowser(args = process.argv.slice(2)) {
-  return !args.some((arg) => {
+  for (const arg of args) {
     const normalized = String(arg || "").trim().toLowerCase();
-    return normalized === "--no-open" || normalized === "--open=false";
-  });
+    if (normalized === "--no-open" || normalized === "--open=false" || normalized === "--open=0") {
+      return false;
+    }
+  }
+  return true;
 }
 
 async function openBrowser(url) {
