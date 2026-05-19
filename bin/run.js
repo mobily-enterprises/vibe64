@@ -43,6 +43,11 @@ function isDirectCliExecution({
   return realCliPath(cliPath, realpath) === realCliPath(entrypointPath, realpath);
 }
 
+function targetNameFromCwd(cwd = process.cwd(), platform = process.platform) {
+  const targetName = platform === "win32" ? path.win32.basename(cwd) : path.basename(cwd);
+  return targetName || "target";
+}
+
 function serverShellCommand({
   nodePath = process.execPath,
   serverPath = SERVER_ENTRYPOINT,
@@ -61,14 +66,18 @@ function serverWindowsCommand({
   serverPath = SERVER_ENTRYPOINT,
   serverArgs = []
 } = {}) {
+  const command = [
+    quoteWindowsArg(nodePath),
+    quoteWindowsArg(serverPath),
+    ...serverArgs.map((arg) => quoteWindowsArg(arg))
+  ].join(" ");
   return [
     `cd /d ${quoteWindowsArg(cwd)}`,
-    [
-      quoteWindowsArg(nodePath),
-      quoteWindowsArg(serverPath),
-      ...serverArgs.map((arg) => quoteWindowsArg(arg))
-    ].join(" ")
-  ].join(" && ");
+    "if errorlevel 1 (set AI_STUDIO_STATUS=!ERRORLEVEL! & echo. & echo AI Studio could not enter the target directory. Exit status !AI_STUDIO_STATUS!. & set /p AI_STUDIO_PAUSE=Press Enter to close this terminal... & exit /b !AI_STUDIO_STATUS!)",
+    command,
+    "if errorlevel 1 (set AI_STUDIO_STATUS=!ERRORLEVEL! & echo. & echo AI Studio server exited with status !AI_STUDIO_STATUS!. & set /p AI_STUDIO_PAUSE=Press Enter to close this terminal... & exit /b !AI_STUDIO_STATUS!)",
+    "exit /b 0"
+  ].join("\r\n");
 }
 
 function terminalShellScript({
@@ -79,10 +88,24 @@ function terminalShellScript({
   title = `AI Studio - ${path.basename(process.cwd()) || "target"}`
 } = {}) {
   return [
+    "finish_ai_studio_terminal() {",
+    "  status=\"$1\"",
+    "  message=\"$2\"",
+    "  if [ \"$status\" -ne 0 ]; then",
+    "    printf '\\n%s Exit status %s. Press Enter to close this terminal...' \"$message\" \"$status\"",
+    "    IFS= read -r _",
+    "  fi",
+    "  exit \"$status\"",
+    "}",
     `cd ${quoteShellArg(cwd)}`,
+    "status=$?",
+    "if [ \"$status\" -ne 0 ]; then",
+    "  finish_ai_studio_terminal \"$status\" \"AI Studio could not enter the target directory.\"",
+    "fi",
     `printf '\\033]0;%s\\007' ${quoteShellArg(title)}`,
-    `exec ${serverShellCommand({ nodePath, serverArgs, serverPath })}`
-  ].join(" && ");
+    serverShellCommand({ nodePath, serverArgs, serverPath }),
+    "finish_ai_studio_terminal \"$?\" \"AI Studio server exited.\""
+  ].join("\n");
 }
 
 function terminalLaunchCandidates({
@@ -93,7 +116,7 @@ function terminalLaunchCandidates({
   serverArgs = [],
   serverPath = SERVER_ENTRYPOINT
 } = {}) {
-  const title = `AI Studio - ${path.basename(cwd) || "target"}`;
+  const title = `AI Studio - ${targetNameFromCwd(cwd, platform)}`;
   const shellScript = terminalShellScript({
     cwd,
     nodePath,
@@ -126,6 +149,7 @@ function terminalLaunchCandidates({
           "start",
           title,
           "cmd.exe",
+          "/v:on",
           "/c",
           serverWindowsCommand({
             cwd,
@@ -289,6 +313,8 @@ export {
   quoteShellArg,
   runLauncher,
   serverShellCommand,
+  serverWindowsCommand,
+  targetNameFromCwd,
   terminalLaunchCandidates,
   terminalShellScript
 };

@@ -15,6 +15,7 @@
     </v-btn>
 
     <v-btn
+      v-if="showOpenTarget"
       color="primary"
       :disabled="openDisabled"
       :loading="openTargetCommand.isRunning"
@@ -55,6 +56,7 @@
       >
         <template #header-actions>
           <v-btn
+            v-if="showOpenTarget"
             color="primary"
             :disabled="openDisabled"
             :loading="openTargetCommand.isRunning"
@@ -107,6 +109,7 @@ const {
   openTargetCommand,
   openTitle,
   run,
+  showOpenTarget,
   startKey,
   terminalVisible,
   visible

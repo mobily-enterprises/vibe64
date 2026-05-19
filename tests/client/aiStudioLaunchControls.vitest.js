@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   browserCanOpenTarget,
   launchBrowserTargetName,
+  launchTargetWorktreePath,
   openLaunchBrowserTarget
 } from "../../src/composables/useAiStudioLaunchControls.js";
 
@@ -54,6 +55,22 @@ describe("AI Studio launch controls", () => {
     expect(openLaunchBrowserTarget({ href: "mailto:test@example.com", kind: "mailto" }, {}, browserWindow))
       .toBeNull();
     expect(browserWindow.open).not.toHaveBeenCalled();
+  });
+
+  it("detects when a session has the worktree needed to load launch targets", () => {
+    expect(launchTargetWorktreePath({
+      currentStep: "worktree_created",
+      sessionId: "session-1",
+      status: "active"
+    })).toBe("");
+
+    expect(launchTargetWorktreePath({
+      metadata: {
+        worktree_path: "/workspace/.ai-studio/sessions/session-1/worktree"
+      },
+      sessionId: "session-1",
+      worktreeReady: true
+    })).toBe("/workspace/.ai-studio/sessions/session-1/worktree");
   });
 });
 

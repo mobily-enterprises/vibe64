@@ -64,6 +64,11 @@ function openLaunchBrowserTarget(target = {}, session = {}, browserWindow = null
   return openedWindow;
 }
 
+function launchTargetWorktreePath(session = {}) {
+  const metadata = session.metadata || {};
+  return String(metadata.worktree_path || metadata.worktree || session.worktree || "").trim();
+}
+
 function useAiStudioLaunchControls({
   busy = () => false,
   session = null
@@ -76,6 +81,10 @@ function useAiStudioLaunchControls({
 
   const selectedSession = computed(() => readRefOrGetterValue(session) || null);
   const sessionId = computed(() => String(selectedSession.value?.sessionId || ""));
+  const canLoadLaunchTargets = computed(() => Boolean(
+    sessionId.value &&
+    launchTargetWorktreePath(selectedSession.value || {})
+  ));
   const sessionsApiPath = computed(() => paths.api(AI_STUDIO_SESSIONS_API_SUFFIX, {
     surface: AI_STUDIO_SURFACE_ID
   }));
@@ -84,7 +93,7 @@ function useAiStudioLaunchControls({
   });
 
   const launchTargetsResource = useEndpointResource({
-    enabled: computed(() => Boolean(sessionId.value)),
+    enabled: canLoadLaunchTargets,
     fallbackLoadError: "Launch targets could not be loaded.",
     path: launchTargetsPath,
     queryKey: computed(() => aiStudioLaunchTargetsQueryKey(
@@ -125,9 +134,12 @@ function useAiStudioLaunchControls({
     kind: "url",
     label: "Open browser"
   });
+  const showOpenTarget = computed(() => {
+    return Boolean(openTarget.value.available && browserCanOpenTarget(openTarget.value));
+  });
   const visible = computed(() => Boolean(
-    sessionId.value &&
-      (launchTargets.value.length > 0 || openTarget.value.available || launchTargetsResource.loadError.value)
+    canLoadLaunchTargets.value &&
+      (launchTargets.value.length > 0 || showOpenTarget.value || launchTargetsResource.loadError.value)
   ));
   const launchButtonsDisabled = computed(() => Boolean(readRefOrGetterValue(busy) || terminalRunning.value));
   const openDisabled = computed(() => {
@@ -214,6 +226,7 @@ function useAiStudioLaunchControls({
     openTitle,
     refresh,
     run,
+    showOpenTarget,
     startKey,
     terminalRunning,
     terminalVisible,
@@ -223,6 +236,7 @@ function useAiStudioLaunchControls({
 
 export {
   browserCanOpenTarget,
+  launchTargetWorktreePath,
   launchBrowserTargetName,
   openLaunchBrowserTarget,
   useAiStudioLaunchControls
