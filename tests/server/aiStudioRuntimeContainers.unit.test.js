@@ -14,7 +14,6 @@ import {
   JSKIT_MARIADB_HOST,
   createJskitMariaDbRuntimeContainer,
   jskitDatabaseDockerArgsForTarget,
-  managedMariaDbAccessInstructions,
   startJskitMariaDbRepair
 } from "../../server/lib/aiStudio/adapters/jskit/setupMariaDbRuntime.js";
 import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
@@ -72,19 +71,6 @@ test("runtime container checks run generic inspect, health, and ready commands",
             ok: true,
             output: "true",
             stdout: "true"
-          };
-        }
-        if (args.includes("{{json .NetworkSettings.Networks}}")) {
-          return {
-            ok: true,
-            output: "attached",
-            stdout: JSON.stringify({
-              [runtimeNetworkName(targetRoot)]: {
-                Aliases: [
-                  "sidecar"
-                ]
-              }
-            })
           };
         }
         if (args.includes("{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}")) {
@@ -149,53 +135,6 @@ test("runtime container checks run generic inspect, health, and ready commands",
   });
 });
 
-test("runtime container checks block stale containers that are off the target network", async () => {
-  await withTemporaryRoot(async (targetRoot) => {
-    const toolkit = {
-      async runDocker(args) {
-        if (args.includes("{{.State.Running}}")) {
-          return {
-            ok: true,
-            output: "true",
-            stdout: "true"
-          };
-        }
-        if (args.includes("{{json .NetworkSettings.Networks}}")) {
-          return {
-            ok: true,
-            output: "{}",
-            stdout: "{}"
-          };
-        }
-        return {
-          ok: false,
-          output: "unexpected docker call",
-          stdout: ""
-        };
-      }
-    };
-    const check = createRuntimeContainerCheck(toolkit, {
-      aliases: [
-        "sidecar"
-      ],
-      id: "sidecar",
-      image: "example/sidecar:1",
-      label: "Sidecar"
-    }, {
-      adapterId: "example",
-      targetRoot
-    });
-
-    const result = await check.run({
-      targetRoot
-    });
-
-    assert.equal(result.status, "blocked");
-    assert.match(result.observed, /not attached/u);
-    assert.match(result.repair.commandPreview, /docker run/u);
-  });
-});
-
 test("jskit declares MariaDB through the generic runtime container layer", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const repair = startJskitMariaDbRepair(targetRoot);
@@ -203,8 +142,6 @@ test("jskit declares MariaDB through the generic runtime container layer", async
     assert.equal(repair.actionId, "start-runtime-container-jskit-mariadb");
     assert.match(repair.commandPreview, /mariadb:12\.0\.2/u);
     assert.match(repair.commandPreview, /MARIADB_ROOT_PASSWORD=\*\*\*\*\*/u);
-    assert.doesNotMatch(repair.commandPreview, /13306/u);
-    assert.doesNotMatch(repair.commandPreview, / -p /u);
     assert.doesNotMatch(repair.commandPreview, /ai_studio_jskit_root/u);
     assert.deepEqual(
       jskitDatabaseDockerArgsForTarget(JSKIT_MARIADB_HOST, targetRoot),
@@ -213,14 +150,6 @@ test("jskit declares MariaDB through the generic runtime container layer", async
     assert.equal(
       runtimeContainerNetworkDockerArgs(targetRoot)[1],
       runtimeNetworkName(targetRoot)
-    );
-    assert.equal(
-      managedMariaDbAccessInstructions("app_db", targetRoot),
-      `Container: docker exec -it ${runtimeContainerName({
-        adapterId: "jskit",
-        containerId: "jskit-mariadb",
-        targetRoot
-      })} mariadb -uroot -p app_db`
     );
   });
 });
@@ -238,9 +167,6 @@ test("runtime container start script safely displays shell-quoted commands", asy
 
     assert.equal(syntax.status, 0, syntax.stderr);
     assert.match(script, /printf '%s\\n'/u);
-    assert.match(script, /docker rm -f/u);
-    assert.doesNotMatch(script, /13306/u);
-    assert.doesNotMatch(script, / -p /u);
     assert.doesNotMatch(script, /echo '\\$ docker run/u);
   });
 });

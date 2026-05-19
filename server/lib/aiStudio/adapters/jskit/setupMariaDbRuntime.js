@@ -22,6 +22,7 @@ import {
 
 const JSKIT_MARIADB_CONTAINER_ID = "jskit-mariadb";
 const JSKIT_MARIADB_HOST = "ai-studio-mariadb";
+const JSKIT_MARIADB_HOST_PORT = "13306";
 const JSKIT_MARIADB_IMAGE = "mariadb:12.0.2";
 const JSKIT_MARIADB_ROOT_PASSWORD = "ai_studio_jskit_root";
 const JSKIT_MARIADB_PROBE_DATABASE = "ai_studio_jskit_probe";
@@ -89,6 +90,13 @@ function createJskitMariaDbRuntimeContainer({
     image: JSKIT_MARIADB_IMAGE,
     label: "JSKIT MariaDB",
     notRequiredExplanation: "Managed MariaDB starts only when the JSKIT target selects the Studio-managed database endpoint.",
+    ports: [
+      {
+        container: 3306,
+        host: "127.0.0.1",
+        hostPort: JSKIT_MARIADB_HOST_PORT
+      }
+    ],
     readyCheck: {
       command: [
         "mariadb",
@@ -149,7 +157,10 @@ function createManagedDatabaseRepair(databaseName, targetRoot = "") {
 function managedMariaDbAccessInstructions(databaseName = "", targetRoot = "") {
   const database = String(databaseName || "").trim();
   const databaseArg = database ? ` ${shellQuote(database)}` : "";
-  return `Container: docker exec -it ${jskitMariaDbContainerName(targetRoot)} mariadb -uroot -p${databaseArg}`;
+  return [
+    `Container: docker exec -it ${jskitMariaDbContainerName(targetRoot)} mariadb -uroot -p${databaseArg}`,
+    `Host: mariadb -h 127.0.0.1 -P ${JSKIT_MARIADB_HOST_PORT} -uroot -p${databaseArg}`
+  ].join("\n");
 }
 
 async function readDatabaseHostFromDotEnv(targetRoot = "") {
@@ -168,6 +179,7 @@ export {
   JSKIT_HOST_DATABASE_HOST,
   JSKIT_MARIADB_CONTAINER_ID,
   JSKIT_MARIADB_HOST,
+  JSKIT_MARIADB_HOST_PORT,
   JSKIT_MARIADB_ROOT_PASSWORD,
   managedMariaDbAccessInstructions,
   mariaDbCapabilitySql,

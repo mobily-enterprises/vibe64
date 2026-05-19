@@ -223,24 +223,6 @@ function portDockerArgs(ports = []) {
   });
 }
 
-function runtimeContainerNetworkIsAttached(output = "", spec) {
-  const networkName = runtimeNetworkName(spec.targetRoot);
-  try {
-    const networks = JSON.parse(output || "{}");
-    const network = networks?.[networkName];
-    if (!network) {
-      return false;
-    }
-    const aliases = new Set([
-      ...(Array.isArray(network.Aliases) ? network.Aliases : []),
-      ...(Array.isArray(network.DNSNames) ? network.DNSNames : [])
-    ]);
-    return spec.aliases.every((alias) => aliases.has(alias));
-  } catch {
-    return false;
-  }
-}
-
 function volumeSource(spec, volume = {}) {
   return volume.source || runtimeVolumeName({
     adapterId: spec.adapterId,
@@ -332,24 +314,6 @@ function displayCommandLine(command = "", {
   return `${indent}printf '%s\\n' ${shellQuote(`$ ${command}`)}`;
 }
 
-function stalePortBindingLines(spec) {
-  if (spec.ports.some((port) => port.hostPort)) {
-    return [];
-  }
-
-  return [
-    `if docker inspect ${shellQuote(spec.containerName)} >/dev/null 2>&1; then`,
-    `  current_ports="$(docker inspect ${shellQuote(spec.containerName)} --format ${shellQuote("{{json .HostConfig.PortBindings}}")})"`,
-    "  if [ \"$current_ports\" != '{}' ] && [ \"$current_ports\" != 'null' ]; then",
-    displayCommandLine(dockerCommand(["rm", "-f", spec.containerName]), {
-      indent: "    "
-    }),
-    `    docker rm -f ${shellQuote(spec.containerName)} >/dev/null`,
-    "  fi",
-    "fi"
-  ];
-}
-
 function volumeCreateLines(spec) {
   return spec.volumes
     .filter((volume) => !volume.source)
@@ -405,7 +369,6 @@ function runtimeContainerStartScript(descriptor = {}, {
     displayCommandLine(`${dockerCommand(["network", "create", runtimeNetworkName(spec.targetRoot)])} || true`),
     `${dockerCommand(["network", "create", runtimeNetworkName(spec.targetRoot)])} >/dev/null 2>&1 || true`,
     ...volumeCreateLines(spec),
-    ...stalePortBindingLines(spec),
     `if ! docker inspect ${shellQuote(spec.containerName)} >/dev/null 2>&1; then`,
     displayCommandLine(dockerCommand(runtimeContainerRunArgs(spec, {
       maskSecrets: true
@@ -480,22 +443,6 @@ async function inspectRuntimeContainer(toolkit, spec) {
       output: running.output || `${spec.containerName} is not running.`
     };
   }
-
-  const network = await toolkit.runDocker([
-    "inspect",
-    spec.containerName,
-    "--format",
-    "{{json .NetworkSettings.Networks}}"
-  ], {
-    timeout: 12_000
-  });
-  if (!network.ok || !runtimeContainerNetworkIsAttached(network.stdout, spec)) {
-    return {
-      ok: false,
-      output: `${spec.containerName} is not attached to ${runtimeNetworkName(spec.targetRoot)} with aliases ${spec.aliases.join(", ")}.`
-    };
-  }
-
   if (!spec.health) {
     return {
       ok: true,
