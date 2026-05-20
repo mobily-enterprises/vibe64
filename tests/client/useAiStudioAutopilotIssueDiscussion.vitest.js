@@ -209,6 +209,22 @@ describe("useAiStudioAutopilotIssueDiscussion", () => {
     expect(context.controller.requestText.value).toBe("Create p.txt");
   });
 
+  it("does not let stored issue waiting block later workflow steps", () => {
+    window.localStorage.setItem("ai-studio:autopilot:issue-discussion:session-1", JSON.stringify({
+      activeRequestId: "request-1",
+      rejectedRequestIds: [],
+      requestText: "Create p.txt"
+    }));
+
+    const context = createIssueDiscussionContext({
+      currentStep: "changes_accepted"
+    });
+
+    expect(context.controller.waiting.value).toBe(false);
+    expect(context.controller.inputVisible.value).toBe(false);
+    expect(context.controller.statusText.value).toBe("What would you like to do?");
+  });
+
   it("uses the active request id to recover an answer after terminal output is trimmed", async () => {
     const ignoredOutput = "old terminal output\n";
     window.localStorage.setItem("ai-studio:autopilot:issue-discussion:session-1", JSON.stringify({
@@ -357,10 +373,12 @@ describe("useAiStudioAutopilotIssueDiscussion", () => {
   });
 });
 
-function createIssueDiscussionContext() {
+function createIssueDiscussionContext({
+  currentStep = "issue_file_created"
+} = {}) {
   const session = ref({
     artifactReadiness: {},
-    currentStep: "issue_file_created",
+    currentStep,
     metadata: {},
     sessionId: "session-1"
   });

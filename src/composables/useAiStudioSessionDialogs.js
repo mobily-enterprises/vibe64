@@ -128,7 +128,7 @@ function useAiStudioSessionDialogs({
   }
 
   function requestAbandonSelectedSession() {
-    if (!unref(selectedSessionId) || readRefOrGetterBoolean(commandBusy) || unref(isSelectedSessionClosed)) {
+    if (!unref(selectedSessionId) || abandonCommand.isRunning || unref(isSelectedSessionClosed)) {
       return;
     }
     abandonDialogSessionId.value = unref(selectedSessionId);
@@ -144,7 +144,7 @@ function useAiStudioSessionDialogs({
   }
 
   async function confirmAbandonSession() {
-    if (!abandonDialogSessionId.value || readRefOrGetterBoolean(commandBusy) || abandonCommand.isRunning) {
+    if (!abandonDialogSessionId.value || abandonCommand.isRunning) {
       return;
     }
     await abandonCommand.run({

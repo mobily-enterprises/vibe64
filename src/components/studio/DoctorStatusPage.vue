@@ -301,6 +301,7 @@ const {
   liveStatus,
   refreshDoctorStatus,
   streamError,
+  streamOperation,
   streamRunning
 } = useDoctorStream({
   onRefresh(options = {}) {
@@ -419,6 +420,13 @@ const displayError = computed(() => {
   return props.error || streamError.value;
 });
 
+const currentOperation = computed(() => {
+  if (automaticRepairRunning.value && automaticRepair.value?.label) {
+    return `Running automatic repair: ${automaticRepair.value.label}.`;
+  }
+  return streamOperation.value || "";
+});
+
 const requiredChecks = computed(() => {
   return displayChecks.value.filter((check) => check.required !== false);
 });
@@ -444,9 +452,20 @@ const summary = computed(() => {
       color: "primary",
       label: "Repairing setup",
       progressIndeterminate: true,
-      progressText: `Studio is running ${automaticRepair.value.label}. This can take a few minutes.`,
+      progressText: currentOperation.value || `Studio is running ${automaticRepair.value.label}. This can take a few minutes.`,
       state: "checking",
       title: automaticRepair.value.label
+    };
+  }
+
+  if (isLoading.value && currentOperation.value) {
+    return {
+      color: "primary",
+      label: "Preparing setup",
+      progressIndeterminate: true,
+      progressText: currentOperation.value,
+      state: "checking",
+      title: "Preparing setup"
     };
   }
 
@@ -528,6 +547,9 @@ const quietStatusTitle = computed(() => {
   if (automaticRepairRunning.value) {
     return "Preparing automatically";
   }
+  if (currentOperation.value) {
+    return "Preparing setup";
+  }
   if (isLoading.value) {
     return "Checking setup";
   }
@@ -543,6 +565,9 @@ const quietStatusMessage = computed(() => {
   }
   if (automaticRepairRunning.value && automaticRepair.value?.label) {
     return `AI Studio is running ${automaticRepair.value.label}.`;
+  }
+  if (currentOperation.value) {
+    return currentOperation.value;
   }
   if (automaticRepairRunning.value || automaticRepairAvailable.value) {
     return "AI Studio is handling this setup step automatically.";

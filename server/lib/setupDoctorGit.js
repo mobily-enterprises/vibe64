@@ -38,6 +38,7 @@ const GH_CREATE_REPO_ACTION_ID = "terminal-gh-create-repo";
 const LINK_GITHUB_REMOTE_ACTION_ID = "terminal-link-github-remote";
 const GIT_IDENTITY_ACTION_ID = "terminal-git-identity";
 const ADD_AI_STUDIO_GITIGNORE_RULES_ACTION_ID = "terminal-add-ai-studio-gitignore-rules";
+const MIRROR_REMOTE_BRANCH_ACTION_ID = "terminal-mirror-remote-branch";
 const CREATE_GIT_CHECKPOINT_ACTION_ID = "terminal-git-checkpoint";
 const PUSH_GIT_CHECKPOINT_ACTION_ID = "terminal-git-push-checkpoint";
 const DEFAULT_CHECKPOINT_COMMIT_MESSAGE = "Initial project setup";
@@ -148,6 +149,55 @@ function validateGithubRemoteInput(input = {}) {
     ok: true,
     url
   };
+}
+
+function mirrorRemoteBranchCommandPreview(branch = "<branch>") {
+  const branchName = String(branch || "<branch>");
+  const remoteRef = `refs/remotes/origin/${branchName}`;
+  return [
+    `git fetch origin refs/heads/${branchName}:${remoteRef}`,
+    "rm -f .gitignore",
+    `git reset --hard ${remoteRef}`
+  ].join("\n");
+}
+
+function mirrorRemoteBranchScript() {
+  return shellScript([
+    "set -e",
+    "set -x",
+    ": \"${AI_STUDIO_REMOTE_BRANCH:?AI_STUDIO_REMOTE_BRANCH is required}\"",
+    "set +x",
+    "export GIT_PASSWORD=\"$(gh auth token)\"",
+    "printf '%s\\n' '#!/bin/sh' 'case \"$1\" in' '*Username*) printf \"%s\\\\n\" \"x-access-token\" ;;' '*) printf \"%s\\\\n\" \"$GIT_PASSWORD\" ;;' 'esac' > /tmp/ai-studio-git-askpass",
+    "chmod 700 /tmp/ai-studio-git-askpass",
+    "export GIT_ASKPASS=/tmp/ai-studio-git-askpass",
+    "export GIT_TERMINAL_PROMPT=0",
+    "set -x",
+    "git -c safe.directory=/workspace check-ref-format --branch \"$AI_STUDIO_REMOTE_BRANCH\" >/dev/null",
+    "if git -c safe.directory=/workspace rev-parse --verify HEAD >/dev/null 2>&1; then echo 'Local commits exist; refusing to mirror remote into a non-empty local history.'; exit 1; fi",
+    "unexpected_entries=\"\"",
+    "for entry in .[!.]* ..?* *; do [ -e \"$entry\" ] || continue; case \"$entry\" in .git|.gitignore|.ai-studio) ;; *) unexpected_entries=\"$unexpected_entries${unexpected_entries:+ }$entry\" ;; esac; done",
+    "if [ -n \"$unexpected_entries\" ]; then printf 'Refusing to mirror remote over existing local files:\\n%s\\n' \"$unexpected_entries\"; exit 1; fi",
+    "remote_ref=\"refs/remotes/origin/$AI_STUDIO_REMOTE_BRANCH\"",
+    "timeout 120s git -c safe.directory=/workspace -c credential.helper= fetch origin \"refs/heads/$AI_STUDIO_REMOTE_BRANCH:$remote_ref\"",
+    "git -c safe.directory=/workspace rev-parse --verify \"$remote_ref^{commit}\"",
+    "rm -f .gitignore",
+    "git -c safe.directory=/workspace reset --hard \"$remote_ref\"",
+    "git -c safe.directory=/workspace branch -M \"$AI_STUDIO_REMOTE_BRANCH\"",
+    "git -c safe.directory=/workspace status --short"
+  ]);
+}
+
+function mirrorRemoteBranchRepair(branch = "") {
+  return createRepair({
+    actionId: MIRROR_REMOTE_BRANCH_ACTION_ID,
+    autoRun: true,
+    command: mirrorRemoteBranchCommandPreview(branch),
+    input: {
+      branch
+    },
+    label: "Mirror existing remote"
+  });
 }
 
 function gitIdentityRepair() {
@@ -466,6 +516,37 @@ function startAddAiStudioGitignoreRulesTerminal({
   });
 }
 
+function startMirrorRemoteBranchTerminal({
+  env = {},
+  extraArgs = ["-e", "GH_PROMPT_DISABLED=1"],
+  input = {},
+  namespace,
+  targetRoot
+} = {}) {
+  const branch = String(input.branch || "").trim();
+  if (!branch) {
+    return {
+      error: "Remote branch is required.",
+      ok: false
+    };
+  }
+  const args = setupDoctorTerminalArgs(["bash", "-lc", mirrorRemoteBranchScript()], {
+    extraArgs: [
+      ...extraArgs,
+      "-e",
+      `AI_STUDIO_REMOTE_BRANCH=${branch}`
+    ],
+    targetRoot
+  });
+  return startSetupDoctorDockerTerminal({
+    args,
+    commandPreview: mirrorRemoteBranchCommandPreview(branch),
+    env,
+    namespace,
+    targetRoot
+  });
+}
+
 function startGitCheckpointTerminal({
   allowCreate = true,
   env = {},
@@ -691,6 +772,7 @@ export {
   GIT_IDENTITY_ACTION_ID,
   GIT_INIT_ACTION_ID,
   LINK_GITHUB_REMOTE_ACTION_ID,
+  MIRROR_REMOTE_BRANCH_ACTION_ID,
   PUSH_GIT_CHECKPOINT_ACTION_ID,
   addAiStudioGitignoreRulesCommandPreview,
   addAiStudioGitignoreRulesRepair,
@@ -708,6 +790,9 @@ export {
   githubIssueAndPrAccess,
   hostWritableWorkspaceDockerArgs,
   linkGithubRemoteRepair,
+  mirrorRemoteBranchCommandPreview,
+  mirrorRemoteBranchRepair,
+  mirrorRemoteBranchScript,
   readGitBranch,
   readGitIdentity,
   readGitInsideWorkTree,
@@ -728,6 +813,7 @@ export {
   startGitIdentityTerminal,
   startGitInitTerminal,
   startLinkGithubRemoteTerminal,
+  startMirrorRemoteBranchTerminal,
   validateCommitMessage,
   validateGitIdentityInputs,
   validateGithubRemoteInput

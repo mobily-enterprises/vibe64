@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
   mkdir,
+  readFile,
   writeFile
 } from "node:fs/promises";
 import path from "node:path";
@@ -9,9 +10,16 @@ import test from "node:test";
 
 import {
   ADD_AI_STUDIO_GITIGNORE_RULES_ACTION_ID,
-  AI_STUDIO_LOCAL_STATE_GITIGNORE_PATTERNS
+  AI_STUDIO_LOCAL_STATE_GITIGNORE_PATTERNS,
+  MIRROR_REMOTE_BRANCH_ACTION_ID,
+  mirrorRemoteBranchScript
 } from "../../server/lib/setupDoctorGit.js";
 import {
+  createRepositoryReadyStatusCache
+} from "../../server/lib/doctorStatusCache.js";
+import {
+  checkRemoteSync,
+  createService,
   ghRepoCreateScript,
   gitCheckpointScript,
   githubBranchRefApiPath,
@@ -55,6 +63,18 @@ async function withLinkedWorktree(callback) {
 
 async function createGitRepository(root) {
   runGit(root, ["init", "-b", "main"]);
+}
+
+function projectSetupCacheConfigKey({
+  adapterId = "",
+  projectType = "",
+  values = {}
+} = {}) {
+  return JSON.stringify({
+    adapterId,
+    projectType,
+    values
+  });
 }
 
 test("Project Setup hard-stops when a non-git directory already has files", async () => {
@@ -191,6 +211,220 @@ test("Project Setup retries automatic repairs when the same check reports a new 
   });
 });
 
+test("Project Setup status reads are passive so setup gates do not auto-repair", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createGitRepository(targetRoot);
+
+    const status = await createService({
+      studioRoot: targetRoot,
+      targetRoot
+    }).getStatus({
+      refresh: true
+    });
+
+    assert.equal(status.currentStageId, "ai-studio-gitignore");
+    assert.equal(status.stages.find((stage) => stage.id === "ai-studio-gitignore")?.status, "blocked");
+    assert.equal(status.stages.find((stage) => stage.id === "remote-ready")?.status, "pending");
+    await assert.rejects(readFile(path.join(targetRoot, ".gitignore"), "utf8"), {
+      code: "ENOENT"
+    });
+  });
+});
+
+test("Project Setup rechecks the target instead of trusting stale ready cache", async () => {
+  await withTemporaryRoot(async (cacheRoot) => {
+    await withTemporaryRoot(async (targetRoot) => {
+      const previousCacheRoot = process.env.AI_STUDIO_DOCTOR_STATUS_ROOT;
+      process.env.AI_STUDIO_DOCTOR_STATUS_ROOT = cacheRoot;
+      try {
+        await createRepositoryReadyStatusCache({
+          doctorId: "project-setup",
+          studioRoot: targetRoot,
+          targetRoot
+        }).remember({
+          currentStageId: "",
+          ok: true,
+          ready: true,
+          summary: {
+            originUrl: "git@github.com:example/test.git",
+            projectSetupCacheConfigKey: projectSetupCacheConfigKey(),
+            remoteDefaultBranch: "main"
+          },
+          stages: [],
+          targetRoot
+        });
+
+        const status = await createService({
+          studioRoot: targetRoot,
+          targetRoot
+        }).getStatus();
+
+        assert.equal(status.ready, false);
+        assert.equal(status.currentStageId, "git-ready");
+      } finally {
+        if (previousCacheRoot == null) {
+          delete process.env.AI_STUDIO_DOCTOR_STATUS_ROOT;
+        } else {
+          process.env.AI_STUDIO_DOCTOR_STATUS_ROOT = previousCacheRoot;
+        }
+      }
+    });
+  });
+});
+
+test("Project Setup reuses a validated ready cache until refresh is requested", async () => {
+  await withTemporaryRoot(async (cacheRoot) => {
+    await withTemporaryRoot(async (targetRoot) => {
+      const previousCacheRoot = process.env.AI_STUDIO_DOCTOR_STATUS_ROOT;
+      process.env.AI_STUDIO_DOCTOR_STATUS_ROOT = cacheRoot;
+      try {
+        await createGitRepository(targetRoot);
+        runGit(targetRoot, ["config", "user.name", "Studio Test"]);
+        runGit(targetRoot, ["config", "user.email", "studio-test@example.com"]);
+        await writeFile(path.join(targetRoot, "README.md"), "# Cached ready\n", "utf8");
+        runGit(targetRoot, ["add", "README.md"]);
+        runGit(targetRoot, ["commit", "-m", "Initial commit"]);
+        runGit(targetRoot, ["remote", "add", "origin", "git@github.com:example/test.git"]);
+
+        await createRepositoryReadyStatusCache({
+          doctorId: "project-setup",
+          studioRoot: targetRoot,
+          targetRoot
+        }).remember({
+          currentStageId: "",
+          hardStop: false,
+          ok: true,
+          ready: true,
+          summary: {
+            originUrl: "git@github.com:example/test.git",
+            projectSetupCacheConfigKey: projectSetupCacheConfigKey(),
+            remoteDefaultBranch: "main"
+          },
+          stages: [
+            {
+              id: "ready",
+              label: "Ready",
+              status: "pass"
+            }
+          ],
+          targetRoot
+        });
+
+        const service = createService({
+          studioRoot: targetRoot,
+          targetRoot
+        });
+        const cached = await service.getStatus();
+        assert.equal(cached.ready, true);
+        assert.equal(cached.currentStageId, "");
+
+        const refreshed = await service.getStatus({
+          refresh: true
+        });
+        assert.equal(refreshed.ready, false);
+        assert.equal(refreshed.currentStageId, "ai-studio-gitignore");
+
+        const afterRefresh = await service.getStatus();
+        assert.equal(afterRefresh.ready, false);
+        assert.equal(afterRefresh.currentStageId, "ai-studio-gitignore");
+      } finally {
+        if (previousCacheRoot == null) {
+          delete process.env.AI_STUDIO_DOCTOR_STATUS_ROOT;
+        } else {
+          process.env.AI_STUDIO_DOCTOR_STATUS_ROOT = previousCacheRoot;
+        }
+      }
+    });
+  });
+});
+
+test("Project Setup ready cache reuse does not require Docker or setup plugins", async () => {
+  await withTemporaryRoot(async (cacheRoot) => {
+    await withTemporaryRoot(async (targetRoot) => {
+      const previousCacheRoot = process.env.AI_STUDIO_DOCTOR_STATUS_ROOT;
+      const previousDockerHost = process.env.DOCKER_HOST;
+      process.env.AI_STUDIO_DOCTOR_STATUS_ROOT = cacheRoot;
+      process.env.DOCKER_HOST = "unix:///tmp/ai-studio-docker-should-not-be-used.sock";
+      try {
+        await createGitRepository(targetRoot);
+        runGit(targetRoot, ["config", "user.name", "Studio Test"]);
+        runGit(targetRoot, ["config", "user.email", "studio-test@example.com"]);
+        await writeFile(path.join(targetRoot, "README.md"), "# Cached ready\n", "utf8");
+        runGit(targetRoot, ["add", "README.md"]);
+        runGit(targetRoot, ["commit", "-m", "Initial commit"]);
+        runGit(targetRoot, ["remote", "add", "origin", "git@github.com:example/test.git"]);
+
+        await createRepositoryReadyStatusCache({
+          doctorId: "project-setup",
+          studioRoot: targetRoot,
+          targetRoot
+        }).remember({
+          currentStageId: "",
+          hardStop: false,
+          ok: true,
+          ready: true,
+          summary: {
+            originUrl: "git@github.com:example/test.git",
+            projectSetupCacheConfigKey: projectSetupCacheConfigKey({
+              adapterId: "jskit",
+              projectType: "jskit"
+            }),
+            remoteDefaultBranch: "main"
+          },
+          stages: [
+            {
+              id: "ready",
+              label: "Ready",
+              status: "pass"
+            }
+          ],
+          targetRoot
+        });
+
+        let createRuntimeCalls = 0;
+        let readProjectConfigCalls = 0;
+        const status = await createService({
+          projectService: {
+            async createRuntime() {
+              createRuntimeCalls += 1;
+              throw new Error("Runtime should not load for cached readiness.");
+            },
+            async readProjectConfig() {
+              readProjectConfigCalls += 1;
+              return {
+                config: {
+                  adapter: {
+                    id: "jskit"
+                  },
+                  projectType: "jskit",
+                  values: {}
+                }
+              };
+            }
+          },
+          studioRoot: targetRoot,
+          targetRoot
+        }).getStatus();
+
+        assert.equal(status.ready, true);
+        assert.equal(readProjectConfigCalls, 1);
+        assert.equal(createRuntimeCalls, 0);
+      } finally {
+        if (previousCacheRoot == null) {
+          delete process.env.AI_STUDIO_DOCTOR_STATUS_ROOT;
+        } else {
+          process.env.AI_STUDIO_DOCTOR_STATUS_ROOT = previousCacheRoot;
+        }
+        if (previousDockerHost == null) {
+          delete process.env.DOCKER_HOST;
+        } else {
+          process.env.DOCKER_HOST = previousDockerHost;
+        }
+      }
+    });
+  });
+});
+
 test("Project Setup continues to remote setup when AI Studio ignore rules are present", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createGitRepository(targetRoot);
@@ -208,6 +442,106 @@ test("Project Setup continues to remote setup when AI Studio ignore rules are pr
     assert.equal(status.currentStageId, "remote-ready");
     assert.equal(status.stages.find((stage) => stage.id === "remote-ready")?.status, "blocked");
   });
+});
+
+test("Project Setup treats a named remote default branch without a ref as empty", async () => {
+  await withTemporaryRoot(async (root) => {
+    const targetRoot = path.join(root, "target");
+    const remoteRoot = path.join(targetRoot, "remote.git");
+    await mkdir(targetRoot);
+    await createGitRepository(targetRoot);
+    runGit(targetRoot, ["init", "--bare", "-b", "main", "remote.git"]);
+    runGit(targetRoot, ["remote", "add", "origin", "remote.git"]);
+
+    const status = await checkRemoteSync(targetRoot, {
+      remoteDefaultBranch: "main"
+    });
+
+    assert.equal(status.status, "pass");
+    assert.match(status.observed, /refs\/heads\/main has no commits/u);
+  });
+});
+
+test("Project Setup offers remote mirroring when a bootstrap-only target links an existing remote", async () => {
+  await withTemporaryRoot(async (root) => {
+    const targetRoot = path.join(root, "target");
+    const remoteRoot = path.join(targetRoot, "remote.git");
+    const sourceRoot = path.join(root, "source");
+    await mkdir(targetRoot);
+    await createGitRepository(targetRoot);
+    await writeFile(path.join(targetRoot, ".gitignore"), ".ai-studio/sessions/\n.ai-studio/runtime/\n", "utf8");
+    runGit(targetRoot, ["init", "--bare", "-b", "main", "remote.git"]);
+
+    await mkdir(sourceRoot, {
+      recursive: true
+    });
+    runGit(sourceRoot, ["init", "-b", "main"]);
+    runGit(sourceRoot, ["config", "user.name", "Studio Test"]);
+    runGit(sourceRoot, ["config", "user.email", "studio-test@example.com"]);
+    await writeFile(path.join(sourceRoot, "README.md"), "# Remote\n", "utf8");
+    runGit(sourceRoot, ["add", "README.md"]);
+    runGit(sourceRoot, ["commit", "-m", "Initial remote commit"]);
+    runGit(sourceRoot, ["remote", "add", "origin", remoteRoot]);
+    runGit(sourceRoot, ["push", "origin", "main"]);
+    runGit(targetRoot, ["remote", "add", "origin", "remote.git"]);
+
+    const status = await checkRemoteSync(targetRoot, {
+      nonGitEntries: [".gitignore"],
+      remoteDefaultBranch: "main"
+    });
+
+    assert.equal(status.status, "blocked");
+    assert.equal(status.repair?.actionId, MIRROR_REMOTE_BRANCH_ACTION_ID);
+    assert.equal(status.repair?.autoRun, true);
+    assert.deepEqual(status.repair?.input, {
+      branch: "main"
+    });
+  });
+});
+
+test("Project Setup hard-stops when remote has commits and local app files exist without commits", async () => {
+  await withTemporaryRoot(async (root) => {
+    const targetRoot = path.join(root, "target");
+    const remoteRoot = path.join(targetRoot, "remote.git");
+    const sourceRoot = path.join(root, "source");
+    await mkdir(targetRoot);
+    await createGitRepository(targetRoot);
+    await writeFile(path.join(targetRoot, "package.json"), "{}\n", "utf8");
+    runGit(targetRoot, ["init", "--bare", "-b", "main", "remote.git"]);
+
+    await mkdir(sourceRoot, {
+      recursive: true
+    });
+    runGit(sourceRoot, ["init", "-b", "main"]);
+    runGit(sourceRoot, ["config", "user.name", "Studio Test"]);
+    runGit(sourceRoot, ["config", "user.email", "studio-test@example.com"]);
+    await writeFile(path.join(sourceRoot, "README.md"), "# Remote\n", "utf8");
+    runGit(sourceRoot, ["add", "README.md"]);
+    runGit(sourceRoot, ["commit", "-m", "Initial remote commit"]);
+    runGit(sourceRoot, ["remote", "add", "origin", remoteRoot]);
+    runGit(sourceRoot, ["push", "origin", "main"]);
+    runGit(targetRoot, ["remote", "add", "origin", "remote.git"]);
+
+    const status = await checkRemoteSync(targetRoot, {
+      nonGitEntries: ["package.json"],
+      remoteDefaultBranch: "main"
+    });
+
+    assert.equal(status.status, "hard-stop");
+    assert.match(status.observed, /local has no commits/u);
+    assert.match(status.observed, /package\.json/u);
+  });
+});
+
+test("Project Setup remote mirror repair script is valid shell", () => {
+  assert.match(mirrorRemoteBranchScript(), /AI_STUDIO_REMOTE_BRANCH is required/u);
+  assert.match(mirrorRemoteBranchScript(), /gh auth token/u);
+  assert.match(mirrorRemoteBranchScript(), /GIT_ASKPASS=\/tmp\/ai-studio-git-askpass/u);
+  assert.match(mirrorRemoteBranchScript(), /GIT_TERMINAL_PROMPT=0/u);
+  assert.match(mirrorRemoteBranchScript(), /timeout 120s git -c safe\.directory=\/workspace -c credential\.helper= fetch/u);
+  assert.match(mirrorRemoteBranchScript(), /Refusing to mirror remote over existing local files/u);
+  assert.match(mirrorRemoteBranchScript(), /git -c safe\.directory=\/workspace reset --hard "\$remote_ref"/u);
+  assertShellScriptSurvivesWhitespaceCollapse(mirrorRemoteBranchScript());
 });
 
 test("Project Setup GitHub repo repair links existing repos and only pushes when commits exist", () => {

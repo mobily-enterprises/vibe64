@@ -31,7 +31,7 @@
             size="small"
             type="button"
             variant="tonal"
-            @click="stop"
+            @click="stopAutopilot"
           >
             Stop Autopilot
           </v-btn>
@@ -694,10 +694,11 @@ const displayStatusText = computed(() => readyForIssue.value
   : statusText.value);
 const displayRunning = computed(() => Boolean(
   running.value ||
-  issueDiscussion.saving
+  (readyForIssue.value && issueDiscussion.saving)
 ));
+const issueDiscussionWaiting = computed(() => Boolean(readyForIssue.value && issueDiscussion.waiting));
 const codexWaiting = computed(() => Boolean(
-  issueDiscussion.waiting ||
+  issueDiscussionWaiting.value ||
   waitingForCodex.value
 ));
 const codexPromptFailed = computed(() => failure.value?.source === "codex");
@@ -739,10 +740,10 @@ const canRequestCommandAiFix = computed(() => Boolean(
   typeof props.codexTerminal.fixCommandFailure === "function" &&
   commandTerminalFailureEvidence.value
 ));
-const codexOverlayTitle = computed(() => issueDiscussion.waiting
+const codexOverlayTitle = computed(() => issueDiscussionWaiting.value
   ? "Codex is working..."
   : "Autopilot is waiting for Codex.");
-const codexOverlayText = computed(() => issueDiscussion.waiting
+const codexOverlayText = computed(() => issueDiscussionWaiting.value
   ? "Asking Codex to define the issue..."
   : displayStatusText.value);
 const commandTerminalText = computed(() => {
@@ -753,10 +754,10 @@ const commandTerminalText = computed(() => {
 });
 const autopilotBusy = computed(() => Boolean(
   running.value ||
-  issueDiscussion.waiting ||
-  issueDiscussion.saving
+  issueDiscussionWaiting.value ||
+  (readyForIssue.value && issueDiscussion.saving)
 ));
-const reviewControlsBusy = computed(() => Boolean(props.page?.busy || running.value));
+const reviewControlsBusy = computed(() => Boolean(running.value));
 const reviewDiffDisabled = computed(() => Boolean(reviewControlsBusy.value || props.review?.diffDisabled));
 const reviewDiffLoading = computed(() => Boolean(props.diff?.loading));
 const reviewDiffTitle = computed(() => String(props.review?.diffTitle || "Review changes in the session worktree."));
@@ -803,6 +804,14 @@ function requestCommandAiFix() {
     terminalStatus: commandStatus.value,
     userMessage: commandFailureNote.value
   }));
+}
+
+function stopAutopilot() {
+  if (issueDiscussionWaiting.value) {
+    issueDiscussion.cancelWaiting();
+    return;
+  }
+  stop();
 }
 
 function toggleReviewCodexChat() {
@@ -1071,6 +1080,10 @@ watch(readyForReview, (ready) => {
 
 .studio-autopilot__review-actions {
   align-items: stretch;
+}
+
+.studio-autopilot__review {
+  order: -1;
 }
 
 .studio-autopilot__review-feedback {

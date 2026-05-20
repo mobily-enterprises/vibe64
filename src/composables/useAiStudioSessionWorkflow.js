@@ -42,8 +42,7 @@ function useAiStudioSessionWorkflow({
   ));
 
   const reviewDiffDisabled = computed(() => {
-    return commandBusy.value ||
-      workflow.dialogs?.diff.loading.value ||
+    return workflow.dialogs?.diff.loading.value ||
       !workflow.actions?.worktreeReady.value;
   });
   const reviewDiffTitle = computed(() => {

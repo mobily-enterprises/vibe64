@@ -141,10 +141,10 @@ function useAiStudioAutopilotIssueDiscussion({
   const codexOutput = computed(() => String(readRefOrGetterValue(codexTerminal.output) || ""));
   const promptInjectionError = computed(() => String(readRefOrGetterValue(codexTerminal.promptInjectionError) || ""));
   const ready = computed(() => Boolean(readRefOrGetterValue(readyForIssue)));
-  const waiting = computed(() => state.value === ISSUE_DISCUSSION_STATE.WAITING);
-  const questioning = computed(() => state.value === ISSUE_DISCUSSION_STATE.QUESTIONS);
-  const reviewing = computed(() => state.value === ISSUE_DISCUSSION_STATE.REVIEW);
-  const inputVisible = computed(() => state.value === ISSUE_DISCUSSION_STATE.INPUT);
+  const waiting = computed(() => ready.value && state.value === ISSUE_DISCUSSION_STATE.WAITING);
+  const questioning = computed(() => ready.value && state.value === ISSUE_DISCUSSION_STATE.QUESTIONS);
+  const reviewing = computed(() => ready.value && state.value === ISSUE_DISCUSSION_STATE.REVIEW);
+  const inputVisible = computed(() => ready.value && state.value === ISSUE_DISCUSSION_STATE.INPUT);
   const canSubmit = computed(() => {
     return ready.value &&
       inputVisible.value &&
@@ -228,6 +228,15 @@ function useAiStudioAutopilotIssueDiscussion({
 
   function cancelQuestions() {
     if (!questioning.value) {
+      return;
+    }
+
+    failure.value = "";
+    returnToInputIgnoringCurrentCodexAnswer();
+  }
+
+  function cancelWaiting() {
+    if (!waiting.value) {
       return;
     }
 
@@ -471,6 +480,7 @@ function useAiStudioAutopilotIssueDiscussion({
 
   return {
     acceptIssueDraft,
+    cancelWaiting,
     cancelQuestions,
     canAccept,
     canSubmit,

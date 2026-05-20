@@ -30,6 +30,9 @@ import {
   linkedGitMetadataMountSource
 } from "../../../../server/lib/gitToolchainMounts.js";
 import {
+  runHostCommand
+} from "../../../../server/lib/shellCommands.js";
+import {
   blockedDoctorCheck as blockedCheck,
   doctorCheckPassed as checkPassed,
   formatDoctorList as formatList,
@@ -44,6 +47,7 @@ import {
   ADD_AI_STUDIO_GITIGNORE_RULES_ACTION_ID,
   AI_STUDIO_LOCAL_STATE_GITIGNORE_PATTERNS,
   CREATE_GIT_CHECKPOINT_ACTION_ID,
+  MIRROR_REMOTE_BRANCH_ACTION_ID,
   PUSH_GIT_CHECKPOINT_ACTION_ID,
   addAiStudioGitignoreRulesRepair,
   ghRepoCreateRepair,
@@ -54,6 +58,7 @@ import {
   githubBranchRefApiPath,
   hostWritableWorkspaceDockerArgs,
   linkGithubRemoteRepair,
+  mirrorRemoteBranchRepair,
   readGitLocalHead,
   readGitOriginRemote,
   readGitRepositoryShape,
@@ -66,7 +71,8 @@ import {
   startGhCreateRepoTerminal as startSharedGhCreateRepoTerminal,
   startGitCheckpointTerminal as startSharedGitCheckpointTerminal,
   startGitInitTerminal as startSharedGitInitTerminal,
-  startLinkGithubRemoteTerminal as startSharedLinkGithubRemoteTerminal
+  startLinkGithubRemoteTerminal as startSharedLinkGithubRemoteTerminal,
+  startMirrorRemoteBranchTerminal as startSharedMirrorRemoteBranchTerminal
 } from "../../../../server/lib/setupDoctorGit.js";
 
 const TERMINAL_NAMESPACE = "project-setup-doctor";
@@ -76,6 +82,14 @@ const AUTOMATIC_REPAIR_POLL_MS = 250;
 const REPAIRABLE_STATUSES = Object.freeze(["blocked", "fail", "hard-stop"]);
 const STUDIO_OWNED_BOOTSTRAP_ENTRIES = new Set([
   AI_STUDIO_STATE_DIR
+]);
+const REMOTE_MIRROR_ALLOWED_BOOTSTRAP_ENTRIES = new Set([
+  ".gitignore"
+]);
+const READY_CACHE_NON_PROJECT_ENTRIES = new Set([
+  ".git",
+  AI_STUDIO_STATE_DIR,
+  "node_modules"
 ]);
 
 function appendPendingChecks(stages, checks, startIndex) {
@@ -99,6 +113,14 @@ function refreshRequested(input = {}) {
   return input?.refresh === true || input?.refresh === "true" || input?.refresh === "1";
 }
 
+function projectSetupCacheConfigKey(config = {}) {
+  return stableJson({
+    adapterId: config?.adapter?.id || "",
+    projectType: config?.projectType || "",
+    values: config?.values || {}
+  });
+}
+
 function finalizeStatus({
   context,
   stages,
@@ -118,6 +140,7 @@ function finalizeStatus({
     summary: {
       nonGitEntries: context.nonGitEntries || [],
       originUrl: context.originUrl || "",
+      projectSetupCacheConfigKey: context.projectSetupCacheConfigKey || "",
       remoteDefaultBranch: context.remoteDefaultBranch || ""
     }
   };
@@ -146,6 +169,27 @@ function stableJson(value) {
     ordered[key] = value[key];
   }
   return JSON.stringify(ordered);
+}
+
+function hasProjectEntryForReadyCache(entries = []) {
+  return entries.some((entry) => !READY_CACHE_NON_PROJECT_ENTRIES.has(entry));
+}
+
+function hostGitArgs(targetRoot, args = []) {
+  const resolvedTargetRoot = path.resolve(String(targetRoot || process.cwd()));
+  return [
+    "-C",
+    resolvedTargetRoot,
+    "-c",
+    `safe.directory=${resolvedTargetRoot}`,
+    ...args
+  ];
+}
+
+async function readHostGit(targetRoot, args = []) {
+  return runHostCommand("git", hostGitArgs(targetRoot, args), {
+    timeout: 1_500
+  });
 }
 
 function automaticRepairInputs(repair = {}) {
@@ -317,6 +361,71 @@ function missingAiStudioGitignorePatterns(gitignoreText = "") {
     .map((line) => line.trim())
     .filter(Boolean));
   return AI_STUDIO_LOCAL_STATE_GITIGNORE_PATTERNS.filter((pattern) => !lines.has(pattern));
+}
+
+function nonBootstrapRemoteMirrorEntries(context = {}) {
+  return (Array.isArray(context.nonGitEntries) ? context.nonGitEntries : [])
+    .filter((entry) => !REMOTE_MIRROR_ALLOWED_BOOTSTRAP_ENTRIES.has(entry));
+}
+
+async function projectSetupReadyCacheApplies(status = {}, {
+  readConfig = null,
+  targetRoot
+} = {}) {
+  if (status?.ready !== true) {
+    return true;
+  }
+
+  const cachedConfigKey = String(status?.summary?.projectSetupCacheConfigKey || "");
+  if (!cachedConfigKey) {
+    return false;
+  }
+
+  const entries = await listMeaningfulEntries(targetRoot);
+  if (!hasProjectEntryForReadyCache(entries)) {
+    return false;
+  }
+
+  const localHead = await readHostGit(targetRoot, ["rev-parse", "--verify", "HEAD"]);
+  if (!localHead.ok || !localHead.stdout) {
+    return false;
+  }
+
+  const cachedOriginUrl = String(status?.summary?.originUrl || "").trim();
+  if (!cachedOriginUrl) {
+    return false;
+  }
+
+  const origin = await readHostGit(targetRoot, ["remote", "get-url", "origin"]);
+  if (!origin.ok || origin.stdout !== cachedOriginUrl) {
+    return false;
+  }
+
+  let config = {};
+  try {
+    config = typeof readConfig === "function" ? await readConfig() : {};
+  } catch {
+    return false;
+  }
+  return cachedConfigKey === projectSetupCacheConfigKey(config);
+}
+
+async function readReusableProjectSetupStatus(cache, {
+  readConfig = null,
+  targetRoot
+} = {}) {
+  const cachedStatus = await cache.read();
+  if (!cachedStatus) {
+    return null;
+  }
+  if (await projectSetupReadyCacheApplies(cachedStatus, {
+    readConfig,
+    targetRoot
+  })) {
+    return cachedStatus;
+  }
+  await cache.remember(null);
+  return null;
 }
 
 async function pluginTerminalActionIsAvailable({
@@ -582,46 +691,69 @@ async function checkRemoteSync(targetRoot, context) {
   const hasLocalHead = localHead.ok && Boolean(localHead.stdout);
   const remoteBranch = context.remoteDefaultBranch;
 
-  if (!hasLocalHead && !remoteBranch) {
+  if (!remoteBranch) {
     return passCheck({
       id: "remote-sync",
       label: "Remote/local sync",
       expected: "Local and remote histories are not divergent.",
-      observed: "No local commits and remote has no default branch.",
-      explanation: "This is a fresh repository pair."
-    });
-  }
-
-  if (!hasLocalHead && remoteBranch) {
-    return hardStopCheck({
-      id: "remote-sync",
-      label: "Remote/local sync",
-      expected: "Remote content is mirrored locally before Studio writes files.",
-      observed: `Remote default branch exists: ${remoteBranch}; local has no commits.`,
-      explanation: "Clone the existing repository into this target directory. Studio will not overlay remote files into an empty local repo."
-    });
-  }
-
-  if (hasLocalHead && !remoteBranch) {
-    return passCheck({
-      id: "remote-sync",
-      label: "Remote/local sync",
-      expected: "Local and remote histories are not divergent.",
-      observed: `Local HEAD: ${localHead.stdout}\nRemote has no default branch.`,
-      explanation: "The remote is empty, so there is no remote history to reconcile."
+      observed: hasLocalHead
+        ? `Local HEAD: ${localHead.stdout}\nRemote has no default branch.`
+        : "No local commits and remote has no default branch.",
+      explanation: hasLocalHead
+        ? "The remote is empty, so there is no remote history to reconcile."
+        : "This is a fresh repository pair."
     });
   }
 
   const remoteHead = await readRemoteBranchShaWithGit(targetRoot, remoteBranch);
   const remoteSha = remoteHead.sha;
 
-  if (!remoteHead.ok || !remoteSha) {
+  if (!remoteHead.ok) {
     return hardStopCheck({
       id: "remote-sync",
       label: "Remote/local sync",
       expected: "Remote default branch SHA can be read.",
       observed: remoteHead.output,
       explanation: "Studio cannot prove local and remote histories agree."
+    });
+  }
+
+  if (!remoteSha) {
+    return passCheck({
+      id: "remote-sync",
+      label: "Remote/local sync",
+      expected: "Local and remote histories are not divergent.",
+      observed: hasLocalHead
+        ? `Local HEAD: ${localHead.stdout}\nRemote default branch ${remoteBranch} has no commit ref.`
+        : `Remote default branch is named ${remoteBranch}, but refs/heads/${remoteBranch} has no commits; local has no commits.`,
+      explanation: hasLocalHead
+        ? "The remote default branch has no commit ref yet. The later Git checkpoint stage will publish the local HEAD."
+        : "This is a fresh repository pair. GitHub may report a default branch name before the remote branch has any commits."
+    });
+  }
+
+  if (!hasLocalHead) {
+    const unsafeLocalEntries = nonBootstrapRemoteMirrorEntries(context);
+    if (!unsafeLocalEntries.length) {
+      return blockedCheck({
+        id: "remote-sync",
+        label: "Remote/local sync",
+        expected: "Remote content is mirrored locally before Studio writes project files.",
+        observed: `Remote default branch exists: ${remoteBranch} (${remoteSha}); local has no commits and only setup bootstrap files.`,
+        explanation: "Mirror the existing remote branch into this bootstrap-only target before running adapter setup.",
+        repair: mirrorRemoteBranchRepair(remoteBranch)
+      });
+    }
+
+    return hardStopCheck({
+      id: "remote-sync",
+      label: "Remote/local sync",
+      expected: "Remote content is mirrored locally before Studio writes files.",
+      observed: [
+        `Remote default branch exists: ${remoteBranch} (${remoteSha}); local has no commits.`,
+        `Local files prevent automatic mirroring:\n${formatList(unsafeLocalEntries)}`
+      ].join("\n"),
+      explanation: "Clone the existing repository into this target directory. Studio will not overlay remote files into an empty local repo."
     });
   }
 
@@ -839,6 +971,7 @@ async function runCoreSetupChecksOnce({
   const context = {
     config,
     configEnvironment,
+    projectSetupCacheConfigKey: projectSetupCacheConfigKey(config),
     studioRoot,
     targetRoot: resolvedTargetRoot
   };
@@ -913,6 +1046,9 @@ async function startProjectSetupTerminalAction({
   if (actionId === ADD_AI_STUDIO_GITIGNORE_RULES_ACTION_ID) {
     return startAiStudioGitignoreTerminal(targetRoot, setupRuntime.configEnvironment);
   }
+  if (actionId === MIRROR_REMOTE_BRANCH_ACTION_ID) {
+    return startMirrorRemoteBranchTerminal(targetRoot, inputs, setupRuntime.configEnvironment);
+  }
   if (actionId === CREATE_GIT_CHECKPOINT_ACTION_ID) {
     return startGitCheckpointTerminal(targetRoot, inputs, setupRuntime.configEnvironment, {
       allowCreate: true
@@ -962,6 +1098,7 @@ async function runAutomaticProjectSetupRepair(candidate, {
   emit?.("repair.started", {
     actionId: candidate.repair.actionId,
     checkId: candidate.stage.id,
+    checkLabel: candidate.stage.label || candidate.stage.id,
     label: candidate.repair.label || candidate.repair.actionId
   });
 
@@ -988,7 +1125,9 @@ async function runAutomaticProjectSetupRepair(candidate, {
   emit?.("repair.finished", {
     actionId: candidate.repair.actionId,
     checkId: candidate.stage.id,
+    checkLabel: candidate.stage.label || candidate.stage.id,
     exitCode: result?.exitCode,
+    label: candidate.repair.label || candidate.repair.actionId,
     ok: !repairResultFailure(result),
     status: result?.status || ""
   });
@@ -1072,6 +1211,15 @@ function startAiStudioGitignoreTerminal(targetRoot, env = {}) {
   });
 }
 
+function startMirrorRemoteBranchTerminal(targetRoot, input = {}, env = {}) {
+  return startSharedMirrorRemoteBranchTerminal({
+    env,
+    input,
+    namespace: TERMINAL_NAMESPACE,
+    targetRoot
+  });
+}
+
 function startGitCheckpointTerminal(targetRoot, input = {}, env = {}, {
   allowCreate = true
 } = {}) {
@@ -1097,7 +1245,9 @@ function createService({
     targetRoot: resolvedTargetRoot
   });
 
-  async function loadAdapterSetupRuntime() {
+  async function loadAdapterSetupRuntime({
+    includeSetupPlugins = true
+  } = {}) {
     if (!projectService || typeof projectService.createRuntime !== "function") {
       return {
         config: {},
@@ -1106,7 +1256,7 @@ function createService({
       };
     }
     const runtime = await projectService.createRuntime();
-    if (typeof runtime.adapter?.getSetupDoctorPlugins !== "function") {
+    if (!includeSetupPlugins || typeof runtime.adapter?.getSetupDoctorPlugins !== "function") {
       return {
         config: runtime.projectConfig || {},
         configEnvironment: {},
@@ -1130,20 +1280,34 @@ function createService({
     };
   }
 
+  async function loadProjectSetupConfig() {
+    if (projectService && typeof projectService.readProjectConfig === "function") {
+      const response = await projectService.readProjectConfig();
+      return response?.config || {};
+    }
+    const runtime = await loadAdapterSetupRuntime({
+      includeSetupPlugins: false
+    });
+    return runtime.config || {};
+  }
+
   return Object.freeze({
     async getStatus(input = {}) {
-      if (!refreshRequested(input)) {
-        const cachedStatus = await readyStatusCache.read();
+      const useCache = !refreshRequested(input);
+      if (useCache) {
+        const cachedStatus = await readReusableProjectSetupStatus(readyStatusCache, {
+          readConfig: loadProjectSetupConfig,
+          targetRoot: resolvedTargetRoot
+        });
         if (cachedStatus) {
           return cachedStatus;
         }
       }
-      const setupRuntime = await loadAdapterSetupRuntime();
+      const fullSetupRuntime = await loadAdapterSetupRuntime();
       return readyStatusCache.remember(await inspectProjectSetup({
-        autoRepair: true,
-        config: setupRuntime.config,
-        configEnvironment: setupRuntime.configEnvironment,
-        setupPlugins: setupRuntime.setupPlugins,
+        config: fullSetupRuntime.config,
+        configEnvironment: fullSetupRuntime.configEnvironment,
+        setupPlugins: fullSetupRuntime.setupPlugins,
         studioRoot: resolvedStudioRoot,
         targetRoot: resolvedTargetRoot
       }));
@@ -1153,19 +1317,23 @@ function createService({
       emit,
       refresh = false
     } = {}) {
-      if (!refreshRequested({ refresh })) {
-        const cachedStatus = await readyStatusCache.read();
+      const useCache = !refreshRequested({ refresh });
+      if (useCache) {
+        const cachedStatus = await readReusableProjectSetupStatus(readyStatusCache, {
+          readConfig: loadProjectSetupConfig,
+          targetRoot: resolvedTargetRoot
+        });
         if (cachedStatus) {
           return cachedStatus;
         }
       }
-      const setupRuntime = await loadAdapterSetupRuntime();
+      const fullSetupRuntime = await loadAdapterSetupRuntime();
       return readyStatusCache.remember(await inspectProjectSetup({
         autoRepair: true,
-        config: setupRuntime.config,
-        configEnvironment: setupRuntime.configEnvironment,
+        config: fullSetupRuntime.config,
+        configEnvironment: fullSetupRuntime.configEnvironment,
         emit,
-        setupPlugins: setupRuntime.setupPlugins,
+        setupPlugins: fullSetupRuntime.setupPlugins,
         studioRoot: resolvedStudioRoot,
         targetRoot: resolvedTargetRoot
       }));
@@ -1181,6 +1349,7 @@ function createService({
         "terminal-gh-create-repo",
         "terminal-link-github-remote",
         ADD_AI_STUDIO_GITIGNORE_RULES_ACTION_ID,
+        MIRROR_REMOTE_BRANCH_ACTION_ID,
         CREATE_GIT_CHECKPOINT_ACTION_ID,
         PUSH_GIT_CHECKPOINT_ACTION_ID
       ]);
@@ -1220,6 +1389,7 @@ function createService({
 }
 
 export {
+  checkRemoteSync,
   createService,
   ghRepoCreateScript,
   gitCheckpointScript,

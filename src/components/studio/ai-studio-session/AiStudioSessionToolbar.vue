@@ -19,7 +19,7 @@
           v-if="sessionItem.sessionId === selectedSessionId"
           class="studio-ai-sessions__tab-abandon"
           density="comfortable"
-          :disabled="busy || selectionClosed"
+          :disabled="selectionClosed || abandon.command.isRunning"
           :icon="mdiClose"
           :loading="abandon.command.isRunning"
           size="small"

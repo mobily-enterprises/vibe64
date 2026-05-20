@@ -45,6 +45,7 @@ function useDoctorStream({
 } = {}) {
   const liveStatus = ref(null);
   const streamError = ref("");
+  const streamOperation = ref("");
   const streamRunning = ref(false);
 
   let eventSource = null;
@@ -103,6 +104,7 @@ function useDoctorStream({
 
     closeDoctorStream();
     streamError.value = "";
+    streamOperation.value = "";
     streamRunning.value = true;
     liveStatus.value = cloneStatus(status(), statusItemsKey());
 
@@ -120,17 +122,20 @@ function useDoctorStream({
       }
       streamRunning.value = true;
       streamError.value = "";
+      streamOperation.value = "Starting setup checks.";
     });
     source.addEventListener("check.started", (event) => {
       if (!isCurrentStream()) {
         return;
       }
       const payload = parseJsonStreamEvent(event);
+      const label = payload.label || payload.id;
+      streamOperation.value = `Checking ${label}.`;
       replaceStatusItem({
         explanation: "Studio is checking this now.",
         expected: "Check is running.",
         id: payload.id,
-        label: payload.label || payload.id,
+        label,
         observed: "Running...",
         required: true,
         status: "running"
@@ -145,11 +150,41 @@ function useDoctorStream({
         replaceStatusItem(payload.check);
       }
     });
+    source.addEventListener("repair.started", (event) => {
+      if (!isCurrentStream()) {
+        return;
+      }
+      const payload = parseJsonStreamEvent(event);
+      const label = payload.label || payload.actionId || "automatic repair";
+      streamOperation.value = `Running automatic repair: ${label}.`;
+      if (payload.checkId) {
+        replaceStatusItem({
+          explanation: `Studio is running ${label}.`,
+          expected: "Automatic repair completes successfully.",
+          id: payload.checkId,
+          label: payload.checkLabel || payload.checkId,
+          observed: streamOperation.value,
+          required: true,
+          status: "running"
+        });
+      }
+    });
+    source.addEventListener("repair.finished", (event) => {
+      if (!isCurrentStream()) {
+        return;
+      }
+      const payload = parseJsonStreamEvent(event);
+      const label = payload.label || payload.actionId || "automatic repair";
+      streamOperation.value = payload.ok === false
+        ? `Automatic repair failed: ${label}.`
+        : `Finished automatic repair: ${label}.`;
+    });
     source.addEventListener("check.error", (event) => {
       if (!isCurrentStream()) {
         return;
       }
       const payload = parseJsonStreamEvent(event);
+      streamOperation.value = `Check failed: ${payload.label || payload.id}.`;
       replaceStatusItem({
         explanation: "The check raised an unexpected error.",
         expected: "Check completes without throwing.",
@@ -169,6 +204,7 @@ function useDoctorStream({
       if (payload.status) {
         notifyStatusUpdated(payload.status);
       }
+      streamOperation.value = "";
       streamRunning.value = false;
       closeDoctorStream(source);
     });
@@ -178,6 +214,7 @@ function useDoctorStream({
       }
       const payload = parseJsonStreamEvent(event);
       streamError.value = payload.error || "Doctor stream failed.";
+      streamOperation.value = "";
       streamRunning.value = false;
       closeDoctorStream(source);
     });
@@ -187,6 +224,7 @@ function useDoctorStream({
       }
       if (streamRunning.value) {
         streamError.value = "Doctor stream disconnected.";
+        streamOperation.value = "";
         streamRunning.value = false;
       }
       closeDoctorStream(source);
@@ -231,6 +269,7 @@ function useDoctorStream({
     refreshDoctorStatus,
     startDoctorStream,
     streamError,
+    streamOperation,
     streamRunning
   };
 }
