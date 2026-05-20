@@ -1,4 +1,4 @@
-import { computed, onBeforeUnmount, ref } from "vue";
+import { computed, onBeforeUnmount, ref, unref } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
 import { useList } from "@jskit-ai/users-web/client/composables/useList";
@@ -19,7 +19,9 @@ function commandErrorMessage(command) {
   return command.messageType === "error" ? String(command.message || "") : "";
 }
 
-function useTargetScripts() {
+function useTargetScripts({
+  showAllScripts = true
+} = {}) {
   const paths = usePaths();
   const starBusyId = ref("");
   const runBusyId = ref("");
@@ -144,6 +146,7 @@ function useTargetScripts() {
   });
   const scripts = computed(() => Array.isArray(scriptList.items) ? scriptList.items : []);
   const scriptById = computed(() => new Map(scripts.value.map((script) => [script.id, script])));
+  const fullScriptListVisible = computed(() => unref(showAllScripts) !== false);
   const starredScriptIds = computed(() => {
     return Array.isArray(latestScriptsPayload.value?.starredScriptIds)
       ? latestScriptsPayload.value.starredScriptIds
@@ -158,22 +161,30 @@ function useTargetScripts() {
   const otherScripts = computed(() => {
     return scripts.value.filter((script) => !starredSet.value.has(script.id));
   });
-  const scriptSections = computed(() => [
-    {
+  const scriptSections = computed(() => {
+    const sections = [{
       ariaLabel: "Starred target scripts",
       id: "starred",
       label: "Starred",
-      showLabel: otherScripts.value.length > 0,
+      showLabel: fullScriptListVisible.value && otherScripts.value.length > 0,
       scripts: starredScripts.value
-    },
-    {
-      ariaLabel: "Other target scripts",
-      id: "other-scripts",
-      label: "Other scripts",
-      showLabel: true,
-      scripts: otherScripts.value
+    }];
+
+    if (fullScriptListVisible.value) {
+      sections.push({
+        ariaLabel: "Other target scripts",
+        id: "other-scripts",
+        label: "Other scripts",
+        showLabel: true,
+        scripts: otherScripts.value
+      });
     }
-  ].filter((section) => section.scripts.length > 0));
+
+    return sections.filter((section) => section.scripts.length > 0);
+  });
+  const visibleScripts = computed(() => {
+    return fullScriptListVisible.value ? scripts.value : starredScripts.value;
+  });
 
   const canRetry = computed(() => {
     return terminal.terminalExited.value &&
@@ -331,7 +342,8 @@ function useTargetScripts() {
     terminalStarting: terminal.terminalStarting,
     terminalStatus: terminal.terminalStatus,
     terminalVisible,
-    toggleStar
+    toggleStar,
+    visibleScripts
   };
 }
 

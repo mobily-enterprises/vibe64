@@ -11,8 +11,10 @@
         :codex-terminal="codexTerminal"
         :codex-terminal-host-id="codexTerminalHostId"
         :command-runner="autopilotCommandRunner"
+        :diff="dialogs.diff"
         :page="guardedPage"
         :refresh-session-data="sessionData.refreshSessionData"
+        :review="review"
         :session="selection.selectedSession"
         @busy-change="setAutopilotBusy"
         @codex-waiting-change="setAutopilotCodexWaiting"
@@ -47,7 +49,7 @@
 
     <AiStudioSessionDialogs
       :dialogs="dialogs"
-      :short-session-id="sessionData.shortSessionId(sessionId)"
+      :short-session-id="sessionData.shortSessionId"
       @update-draft-open="dialogs.draftEditor.open = $event"
       @update-draft-values="dialogs.draftEditor.values = $event"
       @update-input-values="dialogs.input.values = $event"
@@ -173,15 +175,19 @@ const timeline = proxyRefs({
   steps: timelineSteps
 });
 const headlessCommandTerminal = proxyRefs({
+  actionId: computed(() => String(autopilotCommandRunner.lastResult.value?.actionId || "")),
+  actionLabel: computed(() => String(autopilotCommandRunner.lastResult.value?.actionLabel || "")),
   commandPreview: autopilotCommandRunner.commandPreview,
   error: computed(() => {
     const result = autopilotCommandRunner.lastResult.value;
     return result?.ok === false ? String(result.error || "") : "";
   }),
+  exitCode: computed(() => autopilotCommandRunner.lastResult.value?.exitCode ?? null),
   failed: computed(() => autopilotCommandRunner.lastResult.value?.ok === false),
   output: autopilotCommandRunner.output,
   running: autopilotCommandRunner.running,
   status: autopilotCommandRunner.status,
+  terminalSessionId: computed(() => String(autopilotCommandRunner.lastResult.value?.terminalSessionId || "")),
   visible: computed(() => Boolean(
     autopilotCommandRunner.running.value ||
     autopilotCommandRunner.lastResult.value?.ok === false
@@ -237,7 +243,8 @@ function emitPageError() {
 function emitToolbarControls() {
   emit("toolbar-controls-ready", {
     controls: {
-      abandon: dialogs.abandon
+      abandon: dialogs.abandon,
+      fixCommandFailure: codexTerminal.fixCommandFailure
     },
     sessionId: props.sessionId
   });

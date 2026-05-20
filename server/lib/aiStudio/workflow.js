@@ -490,11 +490,11 @@ const DEFAULT_AI_STUDIO_WORKFLOW = deepFreeze({
           disabledReason: "Create the pull request before finishing the session.",
           enabledWhen: ["metadata:pr_url"],
           id: "finish_session",
-          label: "Finish",
+          label: "Archive",
           type: "finish"
         }
       ],
-      description: "Congratulations. Finish the session.",
+      description: "Congratulations. Archive the session.",
       id: "session_finished",
       label: "Congratulations!",
       next: {

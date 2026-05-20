@@ -85,4 +85,28 @@ describe("aiStudioAutopilotStepMarkers", () => {
 
     expect(latestStepDoneMarker(stepDoneMarkerInstruction(pending), pending)).toEqual(pending);
   });
+
+  it("parses marker ids wrapped by terminal line breaks", () => {
+    const output = [
+      AUTOPILOT_STEP_DONE_MARKER_START,
+      "{",
+      '"actionId": "update_project_knowledge",',
+      '"requestId": "request-',
+      '123",',
+      '"stepId": "project_knowledge_',
+      'updated"',
+      "}",
+      AUTOPILOT_STEP_DONE_MARKER_END
+    ].join("\n");
+
+    expect(latestStepDoneMarker(output, {
+      actionId: "update_project_knowledge",
+      requestId: "request-123",
+      stepId: "project_knowledge_updated"
+    })).toEqual({
+      actionId: "update_project_knowledge",
+      requestId: "request-123",
+      stepId: "project_knowledge_updated"
+    });
+  });
 });

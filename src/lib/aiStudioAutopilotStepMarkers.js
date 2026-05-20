@@ -6,15 +6,19 @@ const AUTOPILOT_STEP_DONE_MARKER_START = "[[AI_STUDIO_AUTOPILOT_STEP_DONE_V1]]";
 const AUTOPILOT_STEP_DONE_MARKER_END = "[[/AI_STUDIO_AUTOPILOT_STEP_DONE_V1]]";
 const STEP_MARKER_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{2,127}$/u;
 
+function normalizeMarkerId(value = "") {
+  return String(value || "").replace(/\s+/gu, "").trim();
+}
+
 function normalizeStepMarkerText(value = "") {
   return stripTerminalControlSequences(value)
     .replace(/\r\n?/gu, "\n");
 }
 
 function normalizeStepDonePayload(value = {}) {
-  const actionId = String(value.actionId || "").trim();
-  const requestId = String(value.requestId || "").trim();
-  const stepId = String(value.stepId || "").trim();
+  const actionId = normalizeMarkerId(value.actionId);
+  const requestId = normalizeMarkerId(value.requestId);
+  const stepId = normalizeMarkerId(value.stepId);
   if (
     !STEP_MARKER_ID_PATTERN.test(actionId) ||
     !STEP_MARKER_ID_PATTERN.test(requestId) ||

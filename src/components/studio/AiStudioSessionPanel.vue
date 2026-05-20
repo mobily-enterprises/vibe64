@@ -38,10 +38,12 @@
         <template v-if="sessionMode === 'inspect'">
           <AiStudioLaunchControls
             :busy="interactionBusy"
+            :fix-command-failure="selectedFixCommandFailure"
             :session="selection.selectedSession"
           />
           <AiStudioShellControls
             :busy="interactionBusy"
+            :fix-command-failure="selectedFixCommandFailure"
             :session="selection.selectedSession"
           />
         </template>
@@ -136,6 +138,7 @@ const pageLoading = sessionData.pageLoading;
 const selectedRuntimeState = computed(() => runtimeStateBySessionId[selection.selectedSessionId] || null);
 const selectedRuntimeReady = computed(() => Boolean(selectedRuntimeState.value?.toolbarControls));
 const selectedAbandon = computed(() => selectedRuntimeState.value?.toolbarControls?.abandon || fallbackAbandon);
+const selectedFixCommandFailure = computed(() => selectedRuntimeState.value?.toolbarControls?.fixCommandFailure || null);
 const interactionBusy = computed(() => Boolean(
   selection.selectedSession && !selectedRuntimeReady.value
 ) || Boolean(selectedRuntimeState.value?.busy));

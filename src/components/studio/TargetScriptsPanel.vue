@@ -11,6 +11,7 @@
         @click="refreshScripts()"
       />
       <v-btn
+        v-if="showScriptManagement"
         :disabled="loading || resetBusy || starBusy"
         :loading="resetBusy"
         :prepend-icon="mdiRestore"
@@ -53,16 +54,16 @@
     </div>
 
     <v-alert
-      v-else-if="!loading && scripts.length === 0"
+      v-else-if="!loading && visibleScripts.length === 0"
       type="info"
       variant="tonal"
       density="compact"
       class="mb-0"
     >
-      No target scripts are available.
+      {{ emptyScriptsMessage }}
     </v-alert>
 
-    <div v-else-if="scripts.length > 0" class="target-scripts-panel__body">
+    <div v-else-if="visibleScripts.length > 0" class="target-scripts-panel__body">
       <section
         v-for="section in scriptSections"
         :key="section.id"
@@ -108,6 +109,7 @@
                 </v-chip>
               </div>
               <v-btn
+                v-if="showScriptManagement"
                 :aria-label="isStarred(script.id) ? `Unstar ${script.id}` : `Star ${script.id}`"
                 :disabled="starBusy || resetBusy"
                 :icon="isStarred(script.id) ? mdiStar : mdiStarOutline"
@@ -222,6 +224,7 @@
 </template>
 
 <script setup>
+import { computed } from "vue";
 import {
   mdiClose,
   mdiPlay,
@@ -234,6 +237,21 @@ import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
 import {
   useTargetScripts
 } from "@/composables/useTargetScripts.js";
+
+const props = defineProps({
+  mode: {
+    type: String,
+    default: "autopilot",
+    validator: (value) => ["autopilot", "inspect"].includes(value)
+  }
+});
+
+const showScriptManagement = computed(() => props.mode === "inspect");
+const emptyScriptsMessage = computed(() => {
+  return showScriptManagement.value
+    ? "No target scripts are available."
+    : "No starred target scripts are available.";
+});
 
 const {
   canRetry,
@@ -250,7 +268,6 @@ const {
   runBusyId,
   runScript,
   scriptSections,
-  scripts,
   sendCtrlC,
   starBusy,
   terminalCommandPreview,
@@ -261,8 +278,11 @@ const {
   terminalStarting,
   terminalStatus,
   terminalVisible,
-  toggleStar
-} = useTargetScripts();
+  toggleStar,
+  visibleScripts
+} = useTargetScripts({
+  showAllScripts: showScriptManagement
+});
 </script>
 
 <style scoped>

@@ -28,22 +28,31 @@
         class="studio-ai-sessions__command-terminal"
         :action="commandTerminal.action"
         :action-input="commandTerminal.input"
+        :ai-fix-available="Boolean(codexTerminal.fixCommandFailure)"
         :session="session"
         :start-request-key="commandTerminal.startKey"
         @closed="commandTerminal.closed"
         @finished="commandTerminal.finished"
+        @fix-requested="codexTerminal.fixCommandFailure"
         @running-changed="commandTerminal.runningChanged"
       />
       <AiStudioHeadlessCommandOutput
         v-else
         class="studio-ai-sessions__command-terminal"
+        :action-id="headlessCommandTerminal.actionId"
+        :action-label="headlessCommandTerminal.actionLabel"
+        :ai-fix-available="Boolean(codexTerminal.fixCommandFailure)"
         :command-preview="headlessCommandTerminal.commandPreview"
         :error="headlessCommandTerminal.error"
+        :exit-code="headlessCommandTerminal.exitCode"
         :failed="headlessCommandTerminal.failed"
         :output="headlessCommandTerminal.output"
         :running="headlessCommandTerminal.running"
+        :session-id="session?.sessionId || ''"
         :status="headlessCommandTerminal.status"
+        :terminal-session-id="headlessCommandTerminal.terminalSessionId"
         title="Autopilot command output"
+        @fix-requested="codexTerminal.fixCommandFailure"
       />
     </div>
   </section>

@@ -2,15 +2,18 @@
   <section class="studio-autopilot">
     <div class="studio-autopilot__stage">
       <div
-        v-show="codexWaiting"
+        v-show="codexTerminalVisible"
         class="studio-autopilot__codex-terminal-stage"
       >
         <div
           :id="codexTerminalHostId"
           class="studio-autopilot__codex-terminal-host"
         />
-        <div class="studio-autopilot__codex-terminal-overlay">
-          <strong>Prompt injected into Codex.</strong>
+        <div
+          v-if="codexWaiting"
+          class="studio-autopilot__codex-terminal-overlay"
+        >
+          <strong>{{ codexOverlayTitle }}</strong>
           <span>{{ codexOverlayText }}</span>
           <v-btn
             class="studio-autopilot__stop-button"
@@ -43,11 +46,22 @@
         <div class="studio-autopilot__command-terminal-overlay">
           <strong>{{ commandOverlayTitle }}</strong>
           <span>{{ displayStatusText }}</span>
+          <v-btn
+            v-if="canRequestCommandAiFix"
+            color="primary"
+            :prepend-icon="mdiRobotOutline"
+            size="small"
+            type="button"
+            variant="tonal"
+            @click="requestCommandAiFix"
+          >
+            Get AI to fix it
+          </v-btn>
         </div>
       </div>
 
       <v-progress-circular
-        v-if="!codexWaiting && !commandTerminalVisible && displayRunning"
+        v-if="!codexTerminalVisible && !commandTerminalVisible && displayRunning"
         class="studio-autopilot__cog"
         color="primary"
         indeterminate
@@ -58,14 +72,14 @@
       </v-progress-circular>
 
       <v-icon
-        v-else-if="!codexWaiting && !commandTerminalVisible && failure"
+        v-else-if="!codexTerminalVisible && !commandTerminalVisible && failure"
         color="warning"
         :icon="mdiAlertCircleOutline"
         size="72"
       />
 
       <v-icon
-        v-else-if="!codexWaiting && !commandTerminalVisible"
+        v-else-if="!codexTerminalVisible && !commandTerminalVisible"
         color="primary"
         :icon="mdiCog"
         size="72"
@@ -266,6 +280,184 @@
         </div>
       </div>
 
+      <div
+        v-else-if="readyForReview"
+        class="studio-autopilot__review"
+      >
+        <v-alert
+          type="info"
+          variant="tonal"
+          density="compact"
+        >
+          Review what changed before Autopilot continues.
+        </v-alert>
+
+        <div class="studio-autopilot__actions studio-autopilot__review-actions">
+          <AiStudioLaunchControls
+            button-label="Try it!"
+            button-size="default"
+            button-variant="flat"
+            :busy="reviewControlsBusy"
+            :fix-command-failure="codexTerminal.fixCommandFailure"
+            :session="session"
+          />
+
+          <v-btn
+            :disabled="reviewDiffDisabled"
+            :loading="reviewDiffLoading"
+            :prepend-icon="mdiFileCompare"
+            :title="reviewDiffTitle"
+            type="button"
+            variant="tonal"
+            @click="diff.openDialog"
+          >
+            Review diff
+          </v-btn>
+
+          <v-btn
+            color="primary"
+            :disabled="!canAcceptReview || reviewControlsBusy"
+            :loading="running"
+            :prepend-icon="mdiCheck"
+            type="button"
+            variant="flat"
+            @click="acceptChanges"
+          >
+            Accept and finalize
+          </v-btn>
+
+          <v-btn
+            :disabled="reviewControlsBusy"
+            :prepend-icon="mdiRefresh"
+            type="button"
+            variant="tonal"
+            @click="showReviewFeedback"
+          >
+            Reject, give more instructions
+          </v-btn>
+        </div>
+
+        <form
+          v-if="reviewFeedbackVisible"
+          class="studio-autopilot__review-feedback"
+          @submit.prevent="submitReviewFeedback"
+        >
+          <v-textarea
+            v-model="reviewFeedback"
+            auto-grow
+            class="studio-autopilot__issue-input"
+            :disabled="reviewControlsBusy"
+            label="What should change?"
+            rows="4"
+            variant="outlined"
+          />
+
+          <div class="studio-autopilot__actions">
+            <v-btn
+              color="primary"
+              :disabled="!canSubmitReviewFeedback"
+              :loading="running"
+              :prepend-icon="mdiSend"
+              type="submit"
+              variant="flat"
+            >
+              Send to Codex
+            </v-btn>
+
+            <v-btn
+              :disabled="reviewControlsBusy"
+              :prepend-icon="mdiClose"
+              type="button"
+              variant="tonal"
+              @click="cancelReviewFeedback"
+            >
+              Cancel
+            </v-btn>
+          </div>
+        </form>
+      </div>
+
+      <div
+        v-else-if="readyForMerge"
+        class="studio-autopilot__merge"
+      >
+        <v-alert
+          v-if="failure"
+          type="warning"
+          variant="tonal"
+          density="compact"
+        >
+          {{ failure.error }}
+        </v-alert>
+
+        <v-alert
+          v-else
+          type="info"
+          variant="tonal"
+          density="compact"
+        >
+          The pull request is ready. Merge it and update the main checkout, or finish without merging.
+        </v-alert>
+
+        <div class="studio-autopilot__actions">
+          <v-btn
+            color="primary"
+            :loading="running"
+            :prepend-icon="mdiSourceMerge"
+            type="button"
+            variant="flat"
+            @click="mergeAndSyncMainCheckout"
+          >
+            Merge and update main checkout
+          </v-btn>
+
+          <v-btn
+            :disabled="running"
+            :prepend-icon="mdiArrowRight"
+            type="button"
+            variant="tonal"
+            @click="skipMerge"
+          >
+            Do not merge
+          </v-btn>
+
+          <v-btn
+            v-if="failure"
+            :disabled="running"
+            :prepend-icon="mdiClose"
+            type="button"
+            variant="tonal"
+            @click="cancelMergeFailure"
+          >
+            Cancel merge
+          </v-btn>
+        </div>
+      </div>
+
+      <div
+        v-else-if="readyForFinished"
+        class="studio-autopilot__finished"
+      >
+        <v-icon
+          color="success"
+          :icon="mdiCheckCircleOutline"
+          size="72"
+        />
+        <p>The session is complete.</p>
+
+        <v-btn
+          color="primary"
+          :disabled="!canArchiveSession"
+          :loading="running"
+          :prepend-icon="mdiArchiveOutline"
+          type="button"
+          variant="flat"
+          @click="archiveSession"
+        >
+          Archive
+        </v-btn>
+      </div>
+
       <div v-else-if="failure" class="studio-autopilot__failure">
         <v-alert
           type="warning"
@@ -290,10 +482,9 @@
 
       <div v-else class="studio-autopilot__actions">
         <v-btn
-          v-if="!running && !readyForIssue && !readyForDeepUiCheck && !readyForReview"
+          v-if="canStart"
           class="studio-autopilot__start-button"
           color="primary"
-          :disabled="!canStart"
           :prepend-icon="mdiPlay"
           variant="flat"
           @click="start"
@@ -306,17 +497,23 @@
 </template>
 
 <script setup>
-import { computed, onMounted, proxyRefs, watch } from "vue";
+import { computed, onMounted, proxyRefs, ref, watch } from "vue";
 import {
   mdiAlertCircleOutline,
+  mdiArchiveOutline,
   mdiArrowRight,
   mdiCheck,
+  mdiCheckCircleOutline,
   mdiClose,
   mdiCog,
+  mdiFileCompare,
   mdiPlay,
   mdiRefresh,
-  mdiSend
+  mdiRobotOutline,
+  mdiSend,
+  mdiSourceMerge
 } from "@mdi/js";
+import AiStudioLaunchControls from "@/components/studio/AiStudioLaunchControls.vue";
 import AiStudioHeadlessCommandOutput from "@/components/studio/ai-studio-session/AiStudioHeadlessCommandOutput.vue";
 import {
   useAiStudioAutopilotController
@@ -327,6 +524,9 @@ import {
 import {
   stripTerminalControlSequences
 } from "@/lib/codexOutput.js";
+import {
+  terminalFailureFixRequest
+} from "@/lib/aiStudioTerminalFailurePrompt.js";
 
 const emit = defineEmits(["busy-change", "codex-waiting-change"]);
 
@@ -351,7 +551,15 @@ const props = defineProps({
     default: null,
     type: Object
   },
+  diff: {
+    default: () => ({}),
+    type: Object
+  },
   page: {
+    default: () => ({}),
+    type: Object
+  },
+  review: {
     default: () => ({}),
     type: Object
   },
@@ -366,6 +574,11 @@ const props = defineProps({
 });
 
 const {
+  acceptChanges,
+  archiveSession,
+  cancelMergeFailure,
+  canAcceptReview,
+  canArchiveSession,
   canStart,
   canResume,
   commandOutput,
@@ -373,14 +586,19 @@ const {
   commandResult,
   commandRunning,
   failure,
+  mergeAndSyncMainCheckout,
   readyForDeepUiCheck,
+  readyForFinished,
   readyForIssue,
+  readyForMerge,
   readyForReview,
+  rejectChanges,
   retry,
   resume,
   runDeepUiCheck,
   running,
   skipDeepUiCheck,
+  skipMerge,
   start,
   stop,
   statusText,
@@ -392,6 +610,8 @@ const {
   refreshSessionData: () => props.refreshSessionData(),
   session: computed(() => props.session)
 });
+const reviewFeedback = ref("");
+const reviewFeedbackVisible = ref(false);
 
 const issueDiscussion = proxyRefs(useAiStudioAutopilotIssueDiscussion({
   actions: props.actions,
@@ -411,9 +631,14 @@ const codexWaiting = computed(() => Boolean(
   issueDiscussion.waiting ||
   waitingForCodex.value
 ));
+const codexPromptFailed = computed(() => failure.value?.source === "codex");
+const codexTerminalVisible = computed(() => Boolean(
+  codexWaiting.value ||
+  codexPromptFailed.value
+));
 const commandTerminalFailed = computed(() => commandResult.value?.ok === false);
 const commandTerminalVisible = computed(() => Boolean(
-  !codexWaiting.value &&
+  !codexTerminalVisible.value &&
   (
     commandRunning.value ||
     commandTerminalFailed.value
@@ -429,6 +654,20 @@ const commandTerminalError = computed(() => {
 const commandOverlayTitle = computed(() => commandTerminalFailed.value
   ? "Command needs attention."
   : "Command running.");
+const commandTerminalFailureEvidence = computed(() => (
+  commandOutput.value ||
+  commandResult.value?.output ||
+  commandPreview.value ||
+  commandTerminalError.value
+));
+const canRequestCommandAiFix = computed(() => Boolean(
+  commandTerminalFailed.value &&
+  typeof props.codexTerminal.fixCommandFailure === "function" &&
+  commandTerminalFailureEvidence.value
+));
+const codexOverlayTitle = computed(() => issueDiscussion.waiting
+  ? "Codex is working..."
+  : "Autopilot is waiting for Codex.");
 const codexOverlayText = computed(() => issueDiscussion.waiting
   ? "Asking Codex to define the issue..."
   : displayStatusText.value);
@@ -443,9 +682,16 @@ const autopilotBusy = computed(() => Boolean(
   issueDiscussion.waiting ||
   issueDiscussion.saving
 ));
+const reviewControlsBusy = computed(() => Boolean(props.page?.busy || running.value));
+const reviewDiffDisabled = computed(() => Boolean(reviewControlsBusy.value || props.review?.diffDisabled));
+const reviewDiffLoading = computed(() => Boolean(props.diff?.loading));
+const reviewDiffTitle = computed(() => String(props.review?.diffTitle || "Review changes in the session worktree."));
+const canSubmitReviewFeedback = computed(() => Boolean(
+  reviewFeedback.value.trim() && !reviewControlsBusy.value
+));
 
 function emitCodexWaitingState() {
-  emit("codex-waiting-change", codexWaiting.value);
+  emit("codex-waiting-change", codexTerminalVisible.value);
 }
 
 function emitBusyState() {
@@ -459,6 +705,44 @@ function tailCommandText(value = "") {
     return text;
   }
   return text.slice(text.length - maxLength);
+}
+
+function requestCommandAiFix() {
+  if (!canRequestCommandAiFix.value) {
+    return;
+  }
+  const result = commandResult.value || {};
+  props.codexTerminal.fixCommandFailure(terminalFailureFixRequest({
+    actionId: result.actionId,
+    actionLabel: result.actionLabel,
+    closeError: commandTerminalError.value,
+    commandPreview: commandPreview.value || result.commandPreview,
+    exitCode: result.exitCode,
+    output: commandTerminalFailureEvidence.value || commandTerminalText.value,
+    sessionId: props.session?.sessionId || "",
+    terminalKind: "command",
+    terminalSessionId: result.terminalSessionId,
+    terminalStatus: commandStatus.value
+  }));
+}
+
+function showReviewFeedback() {
+  reviewFeedbackVisible.value = true;
+}
+
+function cancelReviewFeedback() {
+  reviewFeedback.value = "";
+  reviewFeedbackVisible.value = false;
+}
+
+async function submitReviewFeedback() {
+  if (!canSubmitReviewFeedback.value) {
+    return;
+  }
+  const accepted = await rejectChanges(reviewFeedback.value);
+  if (accepted) {
+    cancelReviewFeedback();
+  }
 }
 
 function emitAutopilotState() {
@@ -476,7 +760,7 @@ onMounted(emitAutopilotState);
 
 onMounted(resumeWhenActive);
 
-watch(codexWaiting, () => {
+watch(codexTerminalVisible, () => {
   emitCodexWaitingState();
 }, {
   flush: "post"
@@ -629,7 +913,7 @@ watch(() => props.session?.currentStep || "", () => {
 }
 
 .studio-autopilot__command-terminal-overlay {
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .studio-autopilot__codex-terminal-overlay strong,
@@ -659,11 +943,32 @@ watch(() => props.session?.currentStep || "", () => {
 
 .studio-autopilot__issue-form,
 .studio-autopilot__decision,
+.studio-autopilot__review,
+.studio-autopilot__merge,
+.studio-autopilot__finished,
 .studio-autopilot__failure {
   display: grid;
   gap: 0.75rem;
   max-width: 44rem;
   width: 100%;
+}
+
+.studio-autopilot__finished {
+  justify-items: center;
+}
+
+.studio-autopilot__finished p {
+  color: rgb(var(--v-theme-on-surface-variant));
+  margin: 0;
+}
+
+.studio-autopilot__review-actions {
+  align-items: stretch;
+}
+
+.studio-autopilot__review-feedback {
+  display: grid;
+  gap: 0.65rem;
 }
 
 .studio-autopilot__issue-input {

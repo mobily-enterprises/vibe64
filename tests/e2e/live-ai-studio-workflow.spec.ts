@@ -244,7 +244,7 @@ test.describe("live AI Studio session workflow", () => {
 
     await goNextToStep(page, "session_finished");
     await assertChecklistControls(page, "session_finished", {
-      enabled: ["Finish"],
+      enabled: ["Archive"],
       hidden: ["Next"]
     });
   });
@@ -341,7 +341,7 @@ test.describe("live AI Studio session workflow", () => {
     await runCommandAndWaitForMetadata(page, "Sync main checkout", "main_checkout_synced", UI_COMMAND_TIMEOUT_MS);
 
     await goNextToStep(page, "session_finished");
-    await clickButton(page, "Finish");
+    await clickButton(page, "Archive");
     await expect.poll(async () => (await latestSession(page)).status, {
       timeout: 30_000
     }).toBe("finished");

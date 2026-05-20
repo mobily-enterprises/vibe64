@@ -48,7 +48,7 @@ const AI_STUDIO_WORKFLOW_COMMANDS = deepFreeze([
   },
   {
     id: "finish_session",
-    label: "Finish session"
+    label: "Archive session"
   },
   {
     id: "install_dependencies",

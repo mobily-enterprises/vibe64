@@ -8,11 +8,11 @@
           :disabled="runMenuDisabled"
           :loading="loading"
           :prepend-icon="mdiPlayCircleOutline"
-          size="small"
+          :size="buttonSize"
           title="Run target"
-          variant="tonal"
+          :variant="buttonVariant"
         >
-          Run
+          {{ buttonLabel }}
         </v-btn>
       </template>
 
@@ -46,12 +46,14 @@
     >
       <AiStudioCommandTerminal
         class="ai-studio-launch-controls__terminal"
+        :ai-fix-available="Boolean(fixCommandFailure)"
         terminal-kind="launch"
         title="Launch terminal"
         :launch-target="activeLaunchTarget"
         :session="session"
         :start-request-key="startKey"
         @closed="closeTerminal"
+        @fix-requested="handleFixRequested"
         @running-changed="handleRunningChanged"
         @started="handleStarted"
       >
@@ -87,9 +89,25 @@ import {
 } from "@/composables/useAiStudioLaunchControls.js";
 
 const props = defineProps({
+  buttonLabel: {
+    default: "Run",
+    type: String
+  },
+  buttonSize: {
+    default: "small",
+    type: String
+  },
+  buttonVariant: {
+    default: "tonal",
+    type: String
+  },
   busy: {
     type: Boolean,
     default: false
+  },
+  fixCommandFailure: {
+    type: Function,
+    default: null
   },
   session: {
     type: Object,
@@ -125,6 +143,10 @@ const runMenuDisabled = computed(() => Boolean(
   loading.value ||
   launchTargets.value.length < 1
 ));
+
+function handleFixRequested(payload) {
+  return props.fixCommandFailure?.(payload);
+}
 </script>
 
 <style scoped>

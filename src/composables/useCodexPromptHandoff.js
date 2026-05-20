@@ -303,7 +303,7 @@ function useCodexPromptHandoff({
         const sent = await sendTerminalData?.(`\u001b[200~${promptToSend}\u001b[201~\r`);
         if (sent) {
           if (copyStatus && typeof copyStatus === "object" && "value" in copyStatus) {
-            copyStatus.value = "Prompt injected into Codex.";
+            copyStatus.value = "Codex is working...";
           }
           emitPromptInjected?.({
             outputSnapshot: promptOutputSnapshot,

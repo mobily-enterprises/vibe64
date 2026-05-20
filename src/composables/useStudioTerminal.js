@@ -25,6 +25,7 @@ function useStudioTerminal({
   const terminalCommandPreview = ref("");
   const terminalError = ref("");
   const terminalExitCode = ref(null);
+  const terminalOutput = ref("");
   const terminalStarting = ref(false);
 
   let terminalInstance = null;
@@ -121,6 +122,7 @@ function useStudioTerminal({
 
   function resetTerminalDisplay() {
     terminalLatestOutput = "";
+    terminalOutput.value = "";
     terminalOutputOffset = 0;
     terminalInstance?.reset?.();
   }
@@ -135,6 +137,7 @@ function useStudioTerminal({
 
   function writeTerminalOutput(output) {
     terminalLatestOutput = trimTerminalOutput(output);
+    terminalOutput.value = terminalLatestOutput;
     if (!terminalInstance) {
       return;
     }
@@ -155,6 +158,7 @@ function useStudioTerminal({
       return;
     }
     terminalLatestOutput = trimTerminalOutput(`${terminalLatestOutput}${outputChunk}`);
+    terminalOutput.value = terminalLatestOutput;
     if (terminalInstance) {
       terminalInstance.write(outputChunk);
       terminalOutputOffset = terminalLatestOutput.length;
@@ -299,6 +303,7 @@ function useStudioTerminal({
     terminalExited,
     terminalExitCode,
     terminalHost,
+    terminalOutput,
     terminalSessionId,
     terminalStarting,
     terminalStatus

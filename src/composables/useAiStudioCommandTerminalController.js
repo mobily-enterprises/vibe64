@@ -16,6 +16,9 @@ import {
   aiStudioLaunchTerminalPath,
   aiStudioShellTerminalPath
 } from "@/lib/aiStudioSessionRequestConfig.js";
+import {
+  terminalFailureFixRequest
+} from "@/lib/aiStudioTerminalFailurePrompt.js";
 
 const FINISHED_TERMINAL_HOLD_MS = 500;
 
@@ -175,6 +178,7 @@ function useAiStudioCommandTerminalController(props, emit) {
     terminalExited,
     terminalExitCode,
     terminalHost,
+    terminalOutput,
     terminalSessionId,
     terminalStarting,
     terminalStatus
@@ -186,6 +190,19 @@ function useAiStudioCommandTerminalController(props, emit) {
       terminalError.value ||
       terminalClosedByUser.value ||
       (terminalExited.value && terminalExitCode.value !== 0)
+    )
+  ));
+  const canRequestAiFix = computed(() => Boolean(
+    props.aiFixAvailable &&
+    sessionId.value &&
+    (
+      terminalError.value ||
+      (terminalExited.value && terminalExitCode.value !== 0)
+    ) &&
+    (
+      terminalOutput.value ||
+      terminalCommandPreview.value ||
+      terminalError.value
     )
   ));
 
@@ -332,6 +349,27 @@ function useAiStudioCommandTerminalController(props, emit) {
     await startTerminal();
   }
 
+  function requestAiFix() {
+    if (!canRequestAiFix.value) {
+      return;
+    }
+    emit("fix-requested", terminalFailureFixRequest({
+      actionId: actionId.value,
+      actionLabel: activeActionLabel.value,
+      closeError: terminalError.value,
+      commandPreview: terminalCommandPreview.value,
+      exitCode: terminalExitCode.value,
+      launchTargetId: launchTargetId.value,
+      launchTargetLabel: launchTargetLabel.value,
+      output: terminalOutput.value,
+      sessionId: sessionId.value,
+      shellTarget: shellTarget.value,
+      terminalKind: props.terminalKind,
+      terminalSessionId: terminalSessionId.value,
+      terminalStatus: terminalStatus.value
+    }));
+  }
+
   function closeCurrentServerTerminalSession(selectedSessionId = sessionId.value) {
     const existingTerminalId = terminalSessionId.value;
     resetTerminalSessionState();
@@ -391,10 +429,12 @@ function useAiStudioCommandTerminalController(props, emit) {
   });
 
   return {
+    canRequestAiFix,
     canRetry,
     closeTerminal,
     expanded,
     restartTerminal,
+    requestAiFix,
     sendCtrlC,
     startTerminal,
     terminalCommandPreview,

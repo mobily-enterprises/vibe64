@@ -1,3 +1,5 @@
+import path from "node:path";
+
 import {
   closeTerminalSession,
   closeTerminalSessionsForNamespace,
@@ -7,24 +9,94 @@ import {
   writeTerminalSession
 } from "../../../../server/lib/terminalSessions.js";
 import {
+  removeDockerContainer
+} from "../../../../server/lib/containerRuntime.js";
+import {
+  ensureTargetRuntimeNetwork
+} from "../../../../server/lib/aiStudio/runtimeContainers.js";
+import {
+  studioUserStartupScript
+} from "../../../../server/lib/studioToolHome.js";
+import {
   aiStudioResult,
   commandTerminalNamespace,
   normalizePlainObject,
-  sessionTerminalCwd
+  pathInsideOrEqual,
+  stableHash,
+  terminalTargetRoot
 } from "./terminalShared.js";
 import {
   COMMAND_RESULT_ENV,
-  createCommandResultFile,
+  createCommandResultFileSync,
   readCommandResultFile,
   removeCommandResultFile
 } from "./commandTerminalResults.js";
 import {
-  projectTerminalEnvironment
+  projectTerminalEnvironment,
+  terminalEnvironmentFingerprint
 } from "./terminalEnvironment.js";
+import {
+  resolveTerminalToolchainImage
+} from "./terminalToolchainImage.js";
+import {
+  targetToolchainTerminalArgs
+} from "./targetToolchainTerminal.js";
 
 function actionById(session = {}, actionId = "") {
   return (Array.isArray(session.actions) ? session.actions : [])
     .find((action) => action.id === actionId) || null;
+}
+
+function commandTerminalContainerName({
+  sessionId = "",
+  terminalId = ""
+} = {}) {
+  return `ai-studio-command-${stableHash(sessionId)}-${stableHash(terminalId)}`;
+}
+
+function resolveCommandWorkdir(targetRoot = "", cwd = "") {
+  const normalizedCwd = String(cwd || "").trim();
+  if (!normalizedCwd) {
+    return targetRoot;
+  }
+  return path.isAbsolute(normalizedCwd)
+    ? path.resolve(normalizedCwd)
+    : path.resolve(targetRoot, normalizedCwd);
+}
+
+function commandTerminalArgs({
+  args = [],
+  command = "",
+  containerName = "",
+  env = {},
+  image,
+  resultFile = {},
+  sessionId = "",
+  targetRoot = "",
+  terminalId = "",
+  workdir = ""
+} = {}) {
+  return targetToolchainTerminalArgs({
+    commandArgs: [
+      "bash",
+      "-lc",
+      studioUserStartupScript([command, ...args])
+    ],
+    containerName,
+    env,
+    image,
+    kind: "command-terminal",
+    mounts: [
+      {
+        source: resultFile.directory,
+        target: resultFile.directory
+      }
+    ],
+    sessionId,
+    targetRoot,
+    terminalId,
+    workdir
+  });
 }
 
 async function writeActionTerminalResult({
@@ -126,7 +198,13 @@ async function applySuccessFacts({
   };
 }
 
-function createCommandTerminalController({ projectService } = {}) {
+function createCommandTerminalController({
+  ensureRuntimeNetwork = ensureTargetRuntimeNetwork,
+  projectService,
+  removeContainer = removeDockerContainer,
+  resolveToolchainImage = resolveTerminalToolchainImage,
+  startTerminal = startTerminalSession
+} = {}) {
   return Object.freeze({
     closeAllForSession(sessionId) {
       return closeTerminalSessionsForNamespace(commandTerminalNamespace(sessionId));
@@ -168,8 +246,8 @@ function createCommandTerminalController({ projectService } = {}) {
             error: action.disabledReason || `Action ${action.label || action.id} is disabled.`
           };
         }
-        const cwd = sessionTerminalCwd(session, projectService);
-        if (!cwd) {
+        const targetRoot = terminalTargetRoot(session, projectService);
+        if (!targetRoot) {
           return {
             ok: false,
             error: "AI Studio command target root is not available."
@@ -192,46 +270,100 @@ function createCommandTerminalController({ projectService } = {}) {
           };
         }
 
-        const namespace = commandTerminalNamespace(sessionId);
+        const workdir = resolveCommandWorkdir(targetRoot, spec.cwd);
+        if (!pathInsideOrEqual(targetRoot, workdir)) {
+          return {
+            ok: false,
+            error: "AI Studio command workdir is outside the target root."
+          };
+        }
+
+        const imageResult = await resolveToolchainImage({
+          runtime,
+          session,
+          target: "command",
+          targetRoot
+        });
+        if (imageResult.ok === false) {
+          return imageResult;
+        }
+
+        await ensureRuntimeNetwork(targetRoot);
         const terminalEnv = await projectTerminalEnvironment({
           projectService,
           runtime,
           session,
           target: "command",
-          targetRoot: cwd
+          targetRoot
         });
-        const resultFile = await createCommandResultFile();
-        return startTerminalSession({
-          args: spec.args || [],
-          command: spec.command,
+        const terminalEnvHash = terminalEnvironmentFingerprint(terminalEnv);
+        const namespace = commandTerminalNamespace(sessionId);
+        let resultFile = null;
+        const commandResultFile = () => {
+          if (!resultFile) {
+            resultFile = createCommandResultFileSync();
+          }
+          return resultFile;
+        };
+        return startTerminal({
+          args: (terminalContext) => {
+            const activeResultFile = commandResultFile();
+            const specEnv = typeof spec.env === "function" ? spec.env(terminalContext) : spec.env || {};
+            return commandTerminalArgs({
+              args: spec.args || [],
+              command: spec.command,
+              containerName: commandTerminalContainerName({
+                sessionId,
+                terminalId: terminalContext.id
+              }),
+              env: {
+                ...terminalEnv,
+                ...specEnv,
+                [COMMAND_RESULT_ENV]: activeResultFile.path
+              },
+              image: imageResult.image,
+              resultFile: activeResultFile,
+              sessionId,
+              targetRoot,
+              terminalId: terminalContext.id,
+              workdir
+            });
+          },
+          command: "docker",
           commandPreview: spec.commandPreview,
-          cwd: spec.cwd || cwd,
-          env: (terminalContext) => ({
-            ...terminalEnv,
-            ...(typeof spec.env === "function" ? spec.env(terminalContext) : spec.env || {}),
-            [COMMAND_RESULT_ENV]: resultFile.path
-          }),
+          cwd: workdir,
           maxRunning: 1,
           metadata: {
             actionId: action.id,
             actionLabel: action.label,
+            cwd: workdir,
+            envHash: terminalEnvHash,
+            image: imageResult.image,
+            imageLabel: imageResult.label,
             sessionId
           },
           namespace,
           namespaceLimitPrefix: namespace,
-          onClose: async ({ exitCode }) => {
+          onClose: async ({ exitCode, id }) => {
+            const activeResultFile = resultFile || {};
             try {
               await writeActionTerminalResult({
                 action,
                 exitCode,
                 input: commandInput,
-                resultFile,
+                resultFile: activeResultFile,
                 runtime,
                 session,
                 spec
               });
             } finally {
-              await removeCommandResultFile(resultFile);
+              await Promise.all([
+                removeCommandResultFile(activeResultFile),
+                removeContainer(commandTerminalContainerName({
+                  sessionId,
+                  terminalId: id
+                }))
+              ]);
             }
           },
           reuseRunning: true
@@ -253,4 +385,8 @@ function createCommandTerminalController({ projectService } = {}) {
   });
 }
 
-export { createCommandTerminalController };
+export {
+  commandTerminalArgs,
+  commandTerminalContainerName,
+  createCommandTerminalController
+};

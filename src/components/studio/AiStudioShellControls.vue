@@ -38,12 +38,14 @@
     >
       <AiStudioCommandTerminal
         class="ai-studio-shell-controls__terminal"
+        :ai-fix-available="Boolean(fixCommandFailure)"
         terminal-kind="shell"
         :session="activeSession"
         :shell-target="activeTarget"
         :start-request-key="startKey"
         :title="terminalTitle"
         @closed="closeShell"
+        @fix-requested="handleFixRequested"
         @running-changed="handleRunningChanged"
       />
     </v-dialog>
@@ -66,6 +68,10 @@ const props = defineProps({
   busy: {
     type: Boolean,
     default: false
+  },
+  fixCommandFailure: {
+    type: Function,
+    default: null
   },
   session: {
     type: Object,
@@ -114,6 +120,10 @@ function closeShell() {
 
 function handleRunningChanged(nextRunning) {
   terminalRunning.value = Boolean(nextRunning);
+}
+
+function handleFixRequested(payload) {
+  return props.fixCommandFailure?.(payload);
 }
 
 watch(sessionId, () => {

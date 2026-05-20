@@ -18,6 +18,16 @@
       >
         {{ statusLabel }}
       </v-chip>
+      <v-btn
+        v-if="canRequestAiFix"
+        color="primary"
+        :prepend-icon="mdiRobotOutline"
+        size="small"
+        variant="tonal"
+        @click="requestAiFix"
+      >
+        Get AI to fix it
+      </v-btn>
     </div>
 
     <pre ref="outputElement" class="studio-headless-command-output__text">{{ terminalText }}</pre>
@@ -27,10 +37,28 @@
 <script setup>
 import { computed, nextTick, ref, watch } from "vue";
 import {
+  mdiRobotOutline
+} from "@mdi/js";
+import {
   stripTerminalControlSequences
 } from "@/lib/codexOutput.js";
+import {
+  terminalFailureFixRequest
+} from "@/lib/aiStudioTerminalFailurePrompt.js";
 
 const props = defineProps({
+  actionId: {
+    default: "",
+    type: String
+  },
+  actionLabel: {
+    default: "",
+    type: String
+  },
+  aiFixAvailable: {
+    default: false,
+    type: Boolean
+  },
   commandPreview: {
     default: "",
     type: String
@@ -42,6 +70,10 @@ const props = defineProps({
   error: {
     default: "",
     type: String
+  },
+  exitCode: {
+    default: null,
+    type: [Number, String]
   },
   failed: {
     default: false,
@@ -59,11 +91,20 @@ const props = defineProps({
     default: "",
     type: String
   },
+  sessionId: {
+    default: "",
+    type: String
+  },
+  terminalSessionId: {
+    default: "",
+    type: String
+  },
   title: {
     default: "Command output",
     type: String
   }
 });
+const emit = defineEmits(["fix-requested"]);
 
 const outputElement = ref(null);
 const terminalText = computed(() => {
@@ -82,6 +123,11 @@ const statusLabel = computed(() => {
   }
   return props.status || "finished";
 });
+const canRequestAiFix = computed(() => Boolean(
+  props.aiFixAvailable &&
+  props.failed &&
+  (props.output || props.error || props.commandPreview)
+));
 
 function tailText(value = "") {
   const text = String(value || "");
@@ -90,6 +136,24 @@ function tailText(value = "") {
     return text;
   }
   return text.slice(text.length - maxLength);
+}
+
+function requestAiFix() {
+  if (!canRequestAiFix.value) {
+    return;
+  }
+  emit("fix-requested", terminalFailureFixRequest({
+    actionId: props.actionId,
+    actionLabel: props.actionLabel,
+    closeError: props.error,
+    commandPreview: props.commandPreview,
+    exitCode: props.exitCode,
+    output: props.output || props.error || props.commandPreview,
+    sessionId: props.sessionId,
+    terminalKind: "command",
+    terminalSessionId: props.terminalSessionId,
+    terminalStatus: props.status
+  }));
 }
 
 watch(terminalText, async () => {

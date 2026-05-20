@@ -1,5 +1,3 @@
-import process from "node:process";
-
 import {
   closeTerminalSession,
   closeTerminalSessionsForNamespace,
@@ -12,22 +10,13 @@ import {
   removeDockerContainer
 } from "../../../../server/lib/containerRuntime.js";
 import {
-  gitToolchainMountArgs
-} from "../../../../server/lib/gitToolchainMounts.js";
-import {
-  ensureTargetRuntimeNetwork,
-  targetRuntimeNetworkDockerArgs
+  ensureTargetRuntimeNetwork
 } from "../../../../server/lib/aiStudio/runtimeContainers.js";
 import {
-  hostUserIdentityEnvArgs
-} from "../../../../server/lib/shellCommands.js";
-import {
   STUDIO_BASE_TOOLCHAIN_IMAGE,
-  STUDIO_DAEMON_PID_LABEL,
   studioDockerLabel
 } from "../../../../server/lib/studioRuntimeIdentity.js";
 import {
-  studioToolHomeDockerArgs,
   studioUserStartupScript
 } from "../../../../server/lib/studioToolHome.js";
 import {
@@ -44,9 +33,11 @@ import {
 } from "./terminalToolchainImage.js";
 import {
   projectTerminalEnvironment,
-  terminalEnvironmentDockerArgs,
   terminalEnvironmentFingerprint
 } from "./terminalEnvironment.js";
+import {
+  targetToolchainTerminalArgs
+} from "./targetToolchainTerminal.js";
 
 const MAX_OPEN_SHELL_TERMINALS = 2;
 const SHELL_TARGET_MAIN = "main";
@@ -166,47 +157,33 @@ function shellTerminalArgs({
   terminalId = "",
   workdir = ""
 } = {}) {
-  return [
-    "run",
-    "--rm",
-    "-it",
-    "--name",
+  return targetToolchainTerminalArgs({
+    commandArgs: [
+      "bash",
+      "-lc",
+      shellStartupScript()
+    ],
     containerName,
-    "--hostname",
-    shellContainerHostname(target),
-    "--label",
-    studioDockerLabel("kind", "shell-terminal"),
-    "--label",
-    `${STUDIO_DAEMON_PID_LABEL}=${process.pid}`,
-    "--label",
-    studioDockerLabel("session", sessionId),
-    "--label",
-    studioDockerLabel("terminal", terminalId),
-    "--label",
-    studioDockerLabel("shell-target", target),
-    "--label",
-    studioDockerLabel("target", stableHash(targetRoot)),
-    ...studioToolHomeDockerArgs(),
-    ...terminalEnvironmentDockerArgs(shellTerminalEnv({
+    dockerRunArgs: [
+      "--hostname",
+      shellContainerHostname(target)
+    ],
+    env: shellTerminalEnv({
       env,
       target,
       targetRoot,
       workdir
-    })),
-    ...hostUserIdentityEnvArgs(),
-    ...gitToolchainMountArgs(targetRoot),
-    "-v",
-    `${targetRoot}:/workspace`,
-    "-v",
-    `${targetRoot}:${targetRoot}`,
-    ...targetRuntimeNetworkDockerArgs(targetRoot),
-    "-w",
-    workdir,
+    }),
+    extraLabels: [
+      studioDockerLabel("shell-target", target)
+    ],
     image,
-    "bash",
-    "-lc",
-    shellStartupScript()
-  ];
+    kind: "shell-terminal",
+    sessionId,
+    targetRoot,
+    terminalId,
+    workdir
+  });
 }
 
 async function resolveShellTerminalCwd({

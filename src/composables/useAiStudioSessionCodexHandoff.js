@@ -64,6 +64,17 @@ function useAiStudioSessionCodexHandoff({
     return true;
   }
 
+  function fixCommandFailure(request = {}) {
+    const prompt = String(request.prompt || "").trim();
+    if (!prompt) {
+      return false;
+    }
+    return injectPrompt(prompt, {
+      requestId: `fix-terminal:${request.terminalSessionId || request.actionId || request.terminalKind || "command"}`,
+      sessionId: request.sessionId
+    });
+  }
+
   async function refreshPromptedArtifactReadiness() {
     if (!readRefOrGetterBoolean(waitingForPromptedArtifact) || readinessRefreshInFlight.value) {
       return;
@@ -146,6 +157,7 @@ function useAiStudioSessionCodexHandoff({
     busyChanged: handleBusyChanged,
     clear,
     clearPromptOverride,
+    fixCommandFailure,
     injectPrompt,
     output,
     outputReceived: handleOutput,

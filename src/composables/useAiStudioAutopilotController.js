@@ -12,8 +12,13 @@ import {
 
 const ISSUE_STEP_ID = "issue_file_created";
 const DEEP_UI_CHECK_STEP_ID = "deep_ui_check_run";
+const FINISHED_STEP_ID = "session_finished";
+const FINISH_SESSION_ACTION_ID = "finish_session";
+const MAIN_CHECKOUT_SYNCED_STEP_ID = "main_checkout_synced";
+const MERGE_PR_STEP_ID = "pr_merged";
 const REVIEW_CHANGES_STEP_ID = "changes_accepted";
 const SESSION_CREATED_STEP_ID = "session_created";
+const REPLAN_STEP_ID = "plan_made";
 const MAX_AUTOPILOT_OPERATIONS = 40;
 const PROMPT_IDLE_WITHOUT_OUTPUT_GRACE_MS = 3000;
 const PROMPT_MARKER_POLL_MS = 250;
@@ -34,9 +39,33 @@ const AUTOPILOT_STEP_ACTIONS = Object.freeze({
     complete: (session) => metadataValue(session, "issue_url"),
     label: "Edit and submit issue"
   },
+  changes_committed: {
+    actionId: "commit_changes",
+    complete: (session) => metadataValue(session, "accepted_commit") && metadataValue(session, "branch_pushed"),
+    label: "Commit and push changes"
+  },
+  main_checkout_synced: {
+    actionId: "sync_main_checkout",
+    complete: (session) => metadataValue(session, "main_checkout_synced"),
+    label: "Sync main checkout"
+  },
   plan_executed: {
     actionId: "execute_plan",
     label: "Execute plan"
+  },
+  pr_created: {
+    actionId: "create_pr_on_gh",
+    complete: (session) => metadataValue(session, "pr_url"),
+    label: "Create PR on GH"
+  },
+  pr_file_created: {
+    actionId: "create_pr_file",
+    complete: (session) => metadataValue(session, "pr_url") || artifactReady(session, "pull_request.md"),
+    label: "Create PR file"
+  },
+  project_knowledge_updated: {
+    actionId: "update_project_knowledge",
+    label: "Update project knowledge"
   },
   plan_made: {
     actionId: "make_plan",
@@ -91,6 +120,10 @@ function metadataValue(session = {}, name = "") {
   return String(session?.metadata?.[name] || "").trim();
 }
 
+function artifactReady(session = {}, name = "") {
+  return session?.artifactReadiness?.[name]?.nonEmpty === true;
+}
+
 function stepLabel(session = {}) {
   return String(session?.currentStepDefinition?.label || session?.currentStep || "Current step");
 }
@@ -105,11 +138,21 @@ function nextIsReady(next = {}) {
 }
 
 function currentStepIsStopPoint(stepId = "") {
-  return stepId === ISSUE_STEP_ID || stepId === REVIEW_CHANGES_STEP_ID;
+  return stepId === ISSUE_STEP_ID ||
+    stepId === REVIEW_CHANGES_STEP_ID ||
+    stepId === MERGE_PR_STEP_ID ||
+    stepId === FINISHED_STEP_ID;
 }
 
 function currentStepNeedsUserDecision(stepId = "") {
   return stepId === DEEP_UI_CHECK_STEP_ID;
+}
+
+function currentStepCanRunAutopilot(session = {}) {
+  const stepId = String(session?.currentStep || "");
+  return stepId === SESSION_CREATED_STEP_ID ||
+    currentStepNeedsUserDecision(stepId) ||
+    Boolean(stageForSession(session));
 }
 
 function browserLocalStorage() {
@@ -220,7 +263,8 @@ function promptNotCompletedFailure(stage = {}) {
     error: `The ${stage.label} step did not complete properly, so Autopilot could not safely continue.`,
     exitCode: null,
     ok: false,
-    output: ""
+    output: "",
+    source: "codex"
   };
 }
 
@@ -271,10 +315,28 @@ function actionLabelForId(actionId = "") {
 function missingPromptMarkerError(pending = {}, activeLabel = "", output = "") {
   const expectedLabel = activeLabel || actionLabelForId(pending.actionId);
   const latestMarker = latestStepDoneMarker(output);
-  const latestMarkerText = latestMarker
-    ? ` The last completion Autopilot saw was for ${actionLabelForId(latestMarker.actionId)}, not ${expectedLabel}.`
-    : "";
+  const latestMarkerText = promptMarkerMismatchText(pending, latestMarker, expectedLabel);
   return `The ${expectedLabel} step did not complete properly, so Autopilot could not safely continue.${latestMarkerText} Retry will run it again, or switch to Inspect to continue manually.`;
+}
+
+function promptMarkerMismatchText(pending = {}, latestMarker = null, expectedLabel = "") {
+  if (!latestMarker) {
+    return "";
+  }
+  if (
+    latestMarker.actionId === pending.actionId &&
+    latestMarker.stepId === pending.stepId &&
+    latestMarker.requestId !== pending.requestId
+  ) {
+    return " Codex printed a completion marker for this same step, but it belonged to a different Autopilot request.";
+  }
+  if (
+    latestMarker.actionId === pending.actionId &&
+    latestMarker.stepId !== pending.stepId
+  ) {
+    return ` The last completion Autopilot saw was for ${expectedLabel}, but on a different workflow step.`;
+  }
+  return ` The last completion Autopilot saw was for ${actionLabelForId(latestMarker.actionId)}, not ${expectedLabel}.`;
 }
 
 function pendingPromptMatchesSession(pending = {}, session = {}) {
@@ -296,6 +358,7 @@ function useAiStudioAutopilotController({
   const deepUiCheckDecision = ref("");
   const failure = ref(null);
   const lastCommandResult = ref(null);
+  const replanFeedback = ref("");
 
   let autopilotPromise = null;
   let stopRequested = false;
@@ -310,12 +373,15 @@ function useAiStudioAutopilotController({
   const readyForDeepUiCheck = computed(() => {
     return currentStep.value === DEEP_UI_CHECK_STEP_ID && !running.value && !failure.value;
   });
+  const readyForFinished = computed(() => currentStep.value === FINISHED_STEP_ID);
+  const readyForMerge = computed(() => currentStep.value === MERGE_PR_STEP_ID);
   const readyForReview = computed(() => currentStep.value === REVIEW_CHANGES_STEP_ID);
   const waitingForCodex = computed(() => Boolean(activePrompt.value));
   const canStart = computed(() => Boolean(
     readSession(session)?.sessionId &&
     !running.value &&
-    !currentStepIsStopPoint(currentStep.value)
+    !currentStepIsStopPoint(currentStep.value) &&
+    currentStepCanRunAutopilot(readSession(session))
   ));
   const canResume = computed(() => {
     const currentSession = readSession(session);
@@ -324,9 +390,18 @@ function useAiStudioAutopilotController({
       currentSession.currentStep &&
       currentSession.currentStep !== SESSION_CREATED_STEP_ID &&
       !currentStepIsStopPoint(currentSession.currentStep) &&
+      currentStepCanRunAutopilot(currentSession) &&
       !running.value &&
       !failure.value
     );
+  });
+  const canAcceptReview = computed(() => {
+    const next = readNext(actions);
+    return Boolean(readyForReview.value && !running.value && nextIsReady(next));
+  });
+  const canArchiveSession = computed(() => {
+    const archiveAction = actionById(readActions(actions), FINISH_SESSION_ACTION_ID);
+    return Boolean(readyForFinished.value && !running.value && archiveAction?.enabled === true);
   });
   const statusText = computed(() => {
     if (failure.value) {
@@ -344,8 +419,48 @@ function useAiStudioAutopilotController({
     if (readyForReview.value) {
       return "Review changes";
     }
+    if (readyForMerge.value) {
+      return "Merge pull request?";
+    }
+    if (readyForFinished.value) {
+      return "Congratulations!";
+    }
+    const currentSession = readSession(session);
+    if (
+      currentSession?.currentStep &&
+      currentSession.currentStep !== SESSION_CREATED_STEP_ID &&
+      !currentStepCanRunAutopilot(currentSession)
+    ) {
+      return stepLabel(currentSession);
+    }
     return "Let's get started";
   });
+
+  async function acceptChanges() {
+    if (!canAcceptReview.value) {
+      return;
+    }
+    stopRequested = false;
+    failure.value = null;
+    activeStage.value = "Accept changes";
+    try {
+      await actions.goNext?.();
+      await refreshSessionData();
+      await nextTick();
+      await runUntilStopPoint();
+    } catch (error) {
+      stopWithFailure({
+        actionId: "",
+        actionLabel: "Accept changes",
+        error: String(error?.message || error || "Could not accept the reviewed changes."),
+        exitCode: null,
+        ok: false,
+        output: ""
+      });
+    } finally {
+      activeStage.value = "";
+    }
+  }
 
   async function start() {
     if (!canStart.value) {
@@ -403,6 +518,218 @@ function useAiStudioAutopilotController({
     failure.value = null;
     deepUiCheckDecision.value = "skip";
     await runUntilStopPoint();
+  }
+
+  async function rejectChanges(feedback = "") {
+    const normalizedFeedback = String(feedback || "").trim();
+    if (currentStep.value !== REVIEW_CHANGES_STEP_ID || running.value) {
+      return false;
+    }
+    if (!normalizedFeedback) {
+      stopWithFailure({
+        actionId: "",
+        actionLabel: "Reject changes",
+        error: "Describe what should change before sending the work back to Codex.",
+        exitCode: null,
+        ok: false,
+        output: ""
+      });
+      return false;
+    }
+
+    stopRequested = false;
+    failure.value = null;
+    replanFeedback.value = normalizedFeedback;
+    activeStage.value = "Reopen plan";
+    try {
+      await actions.rewindToStep?.({
+        canRewind: true,
+        id: REPLAN_STEP_ID,
+        rewindStepId: REPLAN_STEP_ID
+      });
+      await refreshSessionData();
+      await nextTick();
+      await runUntilStopPoint();
+      return !failure.value;
+    } catch (error) {
+      stopWithFailure({
+        actionId: "",
+        actionLabel: "Reject changes",
+        error: String(error?.message || error || "Could not send the changes back to Codex."),
+        exitCode: null,
+        ok: false,
+        output: ""
+      });
+      return false;
+    } finally {
+      activeStage.value = "";
+    }
+  }
+
+  function cancelMergeFailure() {
+    if (currentStep.value === MERGE_PR_STEP_ID) {
+      failure.value = null;
+    }
+  }
+
+  async function mergeAndSyncMainCheckout() {
+    if (currentStep.value !== MERGE_PR_STEP_ID || running.value) {
+      return false;
+    }
+    stopRequested = false;
+    failure.value = null;
+    active.value = true;
+    try {
+      const mergeSession = readSession(session);
+      const prepareAction = actionById(readActions(actions), "prepare_for_merge");
+      if (!prepareAction) {
+        stopWithFailure(missingActionFailure({
+          actionId: "prepare_for_merge",
+          label: "Prepare for merge"
+        }));
+        return false;
+      }
+      if (prepareAction.enabled !== true) {
+        stopWithFailure(disabledActionFailure(prepareAction, {
+          actionId: "prepare_for_merge",
+          label: "Prepare for merge"
+        }));
+        return false;
+      }
+      await runPromptAction(mergeSession, prepareAction, {
+        actionId: prepareAction.id,
+        label: prepareAction.label || "Prepare for merge"
+      }, {
+        advanceAfterCompletion: false
+      });
+      if (failure.value) {
+        return false;
+      }
+
+      const currentSession = readSession(session);
+      const mergeAction = actionById(readActions(actions), "merge_pr");
+      if (!mergeAction) {
+        stopWithFailure(missingActionFailure({
+          actionId: "merge_pr",
+          label: "Merge"
+        }));
+        return false;
+      }
+      if (mergeAction.enabled !== true) {
+        stopWithFailure(disabledActionFailure(mergeAction, {
+          actionId: "merge_pr",
+          label: "Merge"
+        }));
+        return false;
+      }
+
+      activeStage.value = "Merge";
+      await runTerminalAction(currentSession, mergeAction);
+      if (failure.value) {
+        return false;
+      }
+      if (!await advanceCurrentStepIfReady()) {
+        stopWithFailure({
+          actionId: "merge_pr",
+          actionLabel: "Merge",
+          error: "The pull request merged, but Autopilot could not continue to main checkout sync.",
+          exitCode: null,
+          ok: false,
+          output: ""
+        });
+        return false;
+      }
+      await runUntilStopPoint();
+      return !failure.value;
+    } finally {
+      active.value = false;
+      activeStage.value = "";
+    }
+  }
+
+  async function skipMerge() {
+    if (currentStep.value !== MERGE_PR_STEP_ID || running.value) {
+      return false;
+    }
+    stopRequested = false;
+    failure.value = null;
+    active.value = true;
+    activeStage.value = "Skip merge";
+    try {
+      if (!await advanceCurrentStepIfReady()) {
+        stopWithFailure({
+          actionId: "",
+          actionLabel: "Skip merge",
+          error: "Autopilot could not skip the merge because the workflow cannot continue from Merge PR.",
+          exitCode: null,
+          ok: false,
+          output: ""
+        });
+        return false;
+      }
+      if (currentStep.value === MAIN_CHECKOUT_SYNCED_STEP_ID) {
+        if (!await advanceCurrentStepIfReady()) {
+          stopWithFailure({
+            actionId: "",
+            actionLabel: "Skip merge",
+            error: "Autopilot skipped the merge, but could not move to Congratulations.",
+            exitCode: null,
+            ok: false,
+            output: ""
+          });
+          return false;
+        }
+      }
+      return currentStep.value === FINISHED_STEP_ID;
+    } finally {
+      active.value = false;
+      activeStage.value = "";
+    }
+  }
+
+  async function archiveSession() {
+    if (currentStep.value !== FINISHED_STEP_ID || running.value) {
+      return false;
+    }
+    const archiveAction = actionById(readActions(actions), FINISH_SESSION_ACTION_ID);
+    if (!archiveAction) {
+      stopWithFailure(missingActionFailure({
+        actionId: FINISH_SESSION_ACTION_ID,
+        label: "Archive"
+      }));
+      return false;
+    }
+    if (archiveAction.enabled !== true) {
+      stopWithFailure(disabledActionFailure(archiveAction, {
+        actionId: FINISH_SESSION_ACTION_ID,
+        label: "Archive"
+      }));
+      return false;
+    }
+
+    stopRequested = false;
+    failure.value = null;
+    active.value = true;
+    activeStage.value = "Archive";
+    try {
+      await actions.runAction?.(archiveAction);
+      await refreshSessionData();
+      await nextTick();
+      return true;
+    } catch (error) {
+      stopWithFailure({
+        actionId: archiveAction.id,
+        actionLabel: archiveAction.label || "Archive",
+        error: String(error?.message || error || "Could not archive the session."),
+        exitCode: null,
+        ok: false,
+        output: ""
+      });
+      return false;
+    } finally {
+      active.value = false;
+      activeStage.value = "";
+    }
   }
 
   async function runUntilStopPoint() {
@@ -498,13 +825,13 @@ function useAiStudioAutopilotController({
 
     activePrompt.value = pending;
     activeStage.value = String(actionById(readActions(actions), pending.actionId)?.label || stepLabel(currentSession));
-      if (!await waitForPromptCompletion(pending)) {
-        clearPendingPrompt(pending.sessionId);
-        if (stopRequested) {
-          return;
-        }
-        if (!failure.value) {
-          stopWithFailure(promptNotCompletedFailure({
+    if (!await waitForPromptCompletion(pending)) {
+      clearPendingPrompt(pending.sessionId);
+      if (stopRequested) {
+        return;
+      }
+      if (!failure.value) {
+        stopWithFailure(promptNotCompletedFailure({
           actionId: pending.actionId,
           label: activeStage.value
         }));
@@ -562,12 +889,15 @@ function useAiStudioAutopilotController({
         error: String(error?.message || error || `${action.label || action.id} failed.`),
         exitCode: null,
         ok: false,
-        output: ""
+        output: "",
+        source: action.type === "prompt" ? "codex" : ""
       });
     }
   }
 
-  async function runPromptAction(currentSession = {}, action = {}, stage = {}) {
+  async function runPromptAction(currentSession = {}, action = {}, stage = {}, {
+    advanceAfterCompletion = true
+  } = {}) {
     const pending = {
       actionId: action.id,
       outputCursor: readCodexOutput(codexTerminal).length,
@@ -580,6 +910,7 @@ function useAiStudioAutopilotController({
     writeStoredPendingPrompt(pending);
     try {
       await actions.runAction?.(action, {
+        input: promptActionInput(action),
         promptSuffix: stepDoneMarkerInstruction(pending)
       });
       await refreshSessionData();
@@ -595,7 +926,10 @@ function useAiStudioAutopilotController({
         return;
       }
       clearPendingPrompt(pending.sessionId);
-      await advanceCurrentStepIfReady();
+      clearReplanFeedback(action);
+      if (advanceAfterCompletion) {
+        await advanceCurrentStepIfReady();
+      }
     } catch (error) {
       clearPendingPrompt(pending.sessionId);
       stopWithFailure({
@@ -604,8 +938,25 @@ function useAiStudioAutopilotController({
         error: String(error?.message || error || `${action.label || action.id} failed.`),
         exitCode: null,
         ok: false,
-        output: ""
+        output: "",
+        source: "codex"
       });
+    }
+  }
+
+  function promptActionInput(action = {}) {
+    if (action.id !== "make_plan" || !replanFeedback.value) {
+      return {};
+    }
+    return {
+      autopilotFeedback: replanFeedback.value,
+      autopilotReason: "changes_rejected"
+    };
+  }
+
+  function clearReplanFeedback(action = {}) {
+    if (action.id === "make_plan") {
+      replanFeedback.value = "";
     }
   }
 
@@ -655,7 +1006,8 @@ function useAiStudioAutopilotController({
       error: promptError,
       exitCode: null,
       ok: false,
-      output: ""
+      output: "",
+      source: "codex"
     });
   }
 
@@ -679,7 +1031,8 @@ function useAiStudioAutopilotController({
       error: missingPromptMarkerError(pending, activeStage.value, output),
       exitCode: null,
       ok: false,
-      output
+      output,
+      source: "codex"
     });
   }
 
@@ -689,7 +1042,10 @@ function useAiStudioAutopilotController({
     if (!Number.isSafeInteger(cursor) || cursor <= 0) {
       return output;
     }
-    if (cursor >= output.length) {
+    if (cursor === output.length) {
+      return "";
+    }
+    if (cursor > output.length) {
       return output;
     }
     return output.slice(cursor);
@@ -722,11 +1078,17 @@ function useAiStudioAutopilotController({
       commandPreview: String(result.commandPreview || ""),
       error: String(result.error || "Autopilot action failed."),
       exitCode: result.exitCode ?? null,
-      output: String(result.output || "")
+      output: String(result.output || ""),
+      source: String(result.source || "")
     };
   }
 
   return {
+    acceptChanges,
+    archiveSession,
+    cancelMergeFailure,
+    canAcceptReview,
+    canArchiveSession,
     canStart,
     canResume,
     commandOutput,
@@ -734,14 +1096,19 @@ function useAiStudioAutopilotController({
     commandResult,
     commandRunning,
     failure,
+    mergeAndSyncMainCheckout,
+    readyForFinished,
     readyForDeepUiCheck,
     readyForIssue,
+    readyForMerge,
     readyForReview,
+    rejectChanges,
     retry,
     resume,
     runDeepUiCheck,
     running,
     skipDeepUiCheck,
+    skipMerge,
     start,
     stop,
     statusText,
@@ -751,7 +1118,9 @@ function useAiStudioAutopilotController({
 
 export {
   DEEP_UI_CHECK_STEP_ID,
+  FINISHED_STEP_ID,
   ISSUE_STEP_ID,
+  MERGE_PR_STEP_ID,
   REVIEW_CHANGES_STEP_ID,
   useAiStudioAutopilotController
 };

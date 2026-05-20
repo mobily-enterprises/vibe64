@@ -1,15 +1,25 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import {
+  mkdtempSync
+} from "node:fs";
+import { readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
 const COMMAND_RESULT_ENV = "AI_STUDIO_COMMAND_RESULT_FILE";
 
-async function createCommandResultFile() {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "ai-studio-command-"));
+function commandResultFileFromDirectory(directory = "") {
   return {
     directory,
     path: path.join(directory, "result.tsv")
   };
+}
+
+function createCommandResultFileSync() {
+  return commandResultFileFromDirectory(mkdtempSync(path.join(os.tmpdir(), "ai-studio-command-")));
+}
+
+async function createCommandResultFile() {
+  return createCommandResultFileSync();
 }
 
 function decodeResultValue(encodedValue = "") {
@@ -71,6 +81,7 @@ async function removeCommandResultFile(resultFile = {}) {
 export {
   COMMAND_RESULT_ENV,
   createCommandResultFile,
+  createCommandResultFileSync,
   readCommandResultFile,
   removeCommandResultFile
 };

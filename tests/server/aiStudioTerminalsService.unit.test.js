@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { mkdir, writeFile } from "node:fs/promises";
-import { setTimeout as delay } from "node:timers/promises";
 import path from "node:path";
 import test from "node:test";
 
@@ -15,6 +14,13 @@ import {
 import {
   codexTerminalArgs
 } from "../../packages/ai-studio-terminals/src/server/codexTerminal.js";
+import {
+  COMMAND_RESULT_ENV
+} from "../../packages/ai-studio-terminals/src/server/commandTerminalResults.js";
+import {
+  commandTerminalArgs,
+  createCommandTerminalController
+} from "../../packages/ai-studio-terminals/src/server/commandTerminal.js";
 import {
   resolveShellTerminalCwd,
   shellTerminalArgs
@@ -61,17 +67,6 @@ import {
   runtimeNetworkName
 } from "../../server/lib/aiStudio/runtimeContainers.js";
 import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
-
-async function waitForExitedTerminal(service, sessionId, terminalSessionId) {
-  for (let attempt = 0; attempt < 60; attempt += 1) {
-    const snapshot = service.readCommandTerminal(sessionId, terminalSessionId);
-    if (snapshot.status === "exited") {
-      return snapshot;
-    }
-    await delay(25);
-  }
-  return service.readCommandTerminal(sessionId, terminalSessionId);
-}
 
 class UnitCommandAdapter extends TargetAdapter {
   constructor() {
@@ -127,6 +122,16 @@ class UnitCommandAdapter extends TargetAdapter {
       }
     };
   }
+}
+
+function dockerEnvValue(args = [], key = "") {
+  const prefix = `${key}=`;
+  for (let index = 0; index < args.length - 1; index += 1) {
+    if (args[index] === "-e" && String(args[index + 1]).startsWith(prefix)) {
+      return String(args[index + 1]).slice(prefix.length);
+    }
+  }
+  return "";
 }
 
 test("AI Studio Codex terminal joins the target runtime network before the image", () => {
@@ -246,6 +251,50 @@ test("AI Studio shell terminal joins the target runtime network before the image
   assert.ok(startupScript.includes("PS1=\"${AI_STUDIO_SHELL_PROMPT:-\\w \\$ }\""));
   assert.match(startupScript, /chown -R "\$AI_STUDIO_HOST_UID:\$AI_STUDIO_HOST_GID" "\$HOME"/u);
   assert.match(startupScript, /setpriv .* bash --rcfile \/tmp\/ai-studio-shell\.bashrc -i/u);
+});
+
+test("AI Studio command terminal joins the target runtime network before the image", () => {
+  const targetRoot = "/workspace/project";
+  const worktree = "/workspace/project/.ai-studio/sessions/active/unit/worktree";
+  const resultDirectory = "/tmp/ai-studio-command-unit";
+  const args = commandTerminalArgs({
+    args: [
+      "-lc",
+      "npm test"
+    ],
+    command: "bash",
+    containerName: "ai-studio-command-unit",
+    env: {
+      [COMMAND_RESULT_ENV]: `${resultDirectory}/result.tsv`,
+      MYSQL_HOST: JSKIT_MARIADB_HOST,
+      MYSQL_PWD: JSKIT_MARIADB_ROOT_PASSWORD
+    },
+    image: "adapter-toolchain:1.0.0",
+    resultFile: {
+      directory: resultDirectory,
+      path: `${resultDirectory}/result.tsv`
+    },
+    sessionId: "unit-session",
+    targetRoot,
+    terminalId: "unit-terminal",
+    workdir: worktree
+  });
+
+  const networkIndex = args.indexOf("--network");
+  assert.notEqual(networkIndex, -1);
+  assert.deepEqual(args.slice(networkIndex, networkIndex + 2), ["--network", runtimeNetworkName(targetRoot)]);
+  assert.ok(networkIndex < args.indexOf("adapter-toolchain:1.0.0"));
+  assert.ok(args.includes(`${targetRoot}:/workspace`));
+  assert.ok(args.includes(`${targetRoot}:${targetRoot}`));
+  assert.ok(args.includes(`${resultDirectory}:${resultDirectory}`));
+  assert.ok(args.includes(`MYSQL_HOST=${JSKIT_MARIADB_HOST}`));
+  assert.ok(args.includes(`MYSQL_PWD=${JSKIT_MARIADB_ROOT_PASSWORD}`));
+  assert.equal(dockerEnvValue(args, COMMAND_RESULT_ENV), `${resultDirectory}/result.tsv`);
+
+  const startupScript = args.at(-1);
+  assert.ok(startupScript.includes(`export HOME=${STUDIO_TOOL_HOME_PATH}`));
+  assert.ok(startupScript.includes(`export NPM_CONFIG_PREFIX=${STUDIO_TOOL_HOME_NPM_PREFIX}`));
+  assert.match(startupScript, /setpriv .* bash -lc 'npm test'/u);
 });
 
 test("AI Studio terminals use the base image when the adapter does not declare one", async () => {
@@ -395,7 +444,15 @@ test("AI Studio command terminal records action results and metadata after succe
       sessionId: "terminal_success"
     });
 
-    const service = createService({
+    let ensuredTargetRoot = "";
+    let removedContainerName = "";
+    let closePromise = Promise.resolve();
+    let startedCommand = "";
+    let startedDockerArgs = [];
+    const command = createCommandTerminalController({
+      ensureRuntimeNetwork: async (root) => {
+        ensuredTargetRoot = root;
+      },
       projectService: {
         targetRoot,
         async createRuntime() {
@@ -406,20 +463,60 @@ test("AI Studio command terminal records action results and metadata after succe
             AI_STUDIO_CONFIG_DIR: path.join(targetRoot, ".ai-studio", "config")
           };
         }
+      },
+      removeContainer: async (containerName) => {
+        removedContainerName = containerName;
+      },
+      resolveToolchainImage: async () => ({
+        image: "unit-command-toolchain:1.0.0",
+        label: "Unit command toolchain",
+        ok: true
+      }),
+      startTerminal: (options) => {
+        const id = "unit-command-terminal";
+        startedCommand = options.command;
+        startedDockerArgs = options.args({
+          id,
+          namespace: options.namespace
+        });
+        const resultFilePath = dockerEnvValue(startedDockerArgs, COMMAND_RESULT_ENV);
+        assert.ok(resultFilePath);
+        closePromise = (async () => {
+          await writeFile(
+            resultFilePath,
+            "fact:set\tdynamic_done\tZnJvbS1yZXN1bHQtZmlsZQ==\n",
+            "utf8"
+          );
+          await options.onClose({
+            exitCode: 0,
+            id
+          });
+        })();
+        return {
+          id,
+          ok: true,
+          status: "running"
+        };
       }
     });
 
-    const terminal = await service.startCommandTerminal("terminal_success", {
+    const terminal = await command.startTerminal("terminal_success", {
       actionId: "unit_command",
       input: {
         dryRun: true
       }
     });
     assert.equal(terminal.ok, true);
-
-    const exited = await waitForExitedTerminal(service, "terminal_success", terminal.id);
-    assert.equal(exited.status, "exited");
-    assert.equal(exited.exitCode, 0);
+    await closePromise;
+    assert.equal(startedCommand, "docker");
+    assert.equal(ensuredTargetRoot, targetRoot);
+    assert.ok(startedDockerArgs.includes("--network"));
+    assert.deepEqual(startedDockerArgs.slice(startedDockerArgs.indexOf("--network"), startedDockerArgs.indexOf("--network") + 2), [
+      "--network",
+      runtimeNetworkName(targetRoot)
+    ]);
+    assert.ok(startedDockerArgs.indexOf("--network") < startedDockerArgs.indexOf("unit-command-toolchain:1.0.0"));
+    assert.match(removedContainerName, /^ai-studio-command-/u);
 
     const updatedSession = await runtime.getSession("terminal_success");
     assert.equal(updatedSession.metadata.terminal_done, "yes");

@@ -3,7 +3,7 @@
     <ProjectTypeGate>
       <template #default>
         <SetupReadinessGate>
-          <TargetScriptsPanel />
+          <TargetScriptsPanel :mode="targetScriptsMode" />
         </SetupReadinessGate>
       </template>
     </ProjectTypeGate>
@@ -11,9 +11,14 @@
 </template>
 
 <script setup>
+import { computed } from "vue";
+import { useRoute } from "vue-router";
 import TargetScriptsPanel from "@/components/studio/TargetScriptsPanel.vue";
 import ProjectTypeGate from "@/components/studio/ProjectTypeGate.vue";
 import SetupReadinessGate from "@/components/studio/SetupReadinessGate.vue";
+
+const route = useRoute();
+const targetScriptsMode = computed(() => route.query.mode === "inspect" ? "inspect" : "autopilot");
 </script>
 
 <style scoped>

@@ -128,12 +128,14 @@ function useAiStudioSessionWorkflow({
       currentNext: workflow.actions.currentNext,
       currentStepDisabledReason: workflow.actions.currentStepDisabledReason,
       goNext: workflow.actions.goNext,
+      rewindToStep: workflow.actions.rewindToStep,
       runAction: workflow.actions.runAction,
       runActionCommand: workflow.actions.runActionCommand
     },
     codexTerminal: {
       busy: workflow.codexHandoff.busy,
       busyChanged: workflow.codexHandoff.busyChanged,
+      fixCommandFailure: workflow.codexHandoff.fixCommandFailure,
       injectPrompt: workflow.codexHandoff.injectPrompt,
       output: workflow.codexHandoff.output,
       outputReceived: workflow.codexHandoff.outputReceived,

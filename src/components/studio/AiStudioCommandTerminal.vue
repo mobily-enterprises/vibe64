@@ -16,6 +16,16 @@
           @click="toggleExpanded"
         />
         <v-btn
+          v-if="canRequestAiFix"
+          color="primary"
+          :prepend-icon="mdiRobotOutline"
+          size="small"
+          variant="tonal"
+          @click="requestAiFix"
+        >
+          Get AI to fix it
+        </v-btn>
+        <v-btn
           v-if="canRetry"
           color="primary"
           :loading="terminalStarting"
@@ -70,7 +80,8 @@
 <script setup>
 import {
   mdiChevronDown,
-  mdiChevronUp
+  mdiChevronUp,
+  mdiRobotOutline
 } from "@mdi/js";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
 import {
@@ -85,6 +96,10 @@ const props = defineProps({
   actionInput: {
     type: Object,
     default: () => ({})
+  },
+  aiFixAvailable: {
+    type: Boolean,
+    default: false
   },
   launchTarget: {
     type: Object,
@@ -112,12 +127,14 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(["closed", "finished", "running-changed", "started"]);
+const emit = defineEmits(["closed", "finished", "fix-requested", "running-changed", "started"]);
 
 const {
+  canRequestAiFix,
   canRetry,
   closeTerminal,
   expanded,
+  requestAiFix,
   restartTerminal,
   sendCtrlC,
   startTerminal,

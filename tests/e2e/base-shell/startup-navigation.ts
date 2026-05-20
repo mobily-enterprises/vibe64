@@ -89,6 +89,10 @@ test.describe("studio startup navigation", () => {
       terminalStarts
     });
 
+    await page.goto(`${BASE_URL}/home?mode=inspect`);
+    await page.getByRole("link", { name: "Target Scripts", exact: true }).click();
+    await expect(page).toHaveURL(/\/home\/target-scripts\?mode=inspect$/u);
+
     await page.goto(`${BASE_URL}/home/target-scripts`);
     const panel = page.locator(".target-scripts-panel");
     await expect(panel).toBeVisible();
@@ -101,6 +105,11 @@ test.describe("studio startup navigation", () => {
           String(button.getAttribute("aria-label") || "").replace(/^Run /u, "")
         ));
     }).toEqual(["jskit:update", "build", "server", "verify"]);
+    await expect(panel.getByText("vite preview")).toHaveCount(0);
+    await expect(panel.getByRole("button", { name: "Reset" })).toHaveCount(0);
+    await expect(panel.getByRole("button", { name: /^Star /u })).toHaveCount(0);
+
+    await page.goto(`${BASE_URL}/home/target-scripts?mode=inspect`);
     await expect(panel.getByText("vite preview")).toBeVisible();
 
     await panel.getByRole("button", { name: "Unstar jskit:update" }).click();

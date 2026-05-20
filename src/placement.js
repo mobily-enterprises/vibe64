@@ -60,20 +60,12 @@ addPlacement({
     exact: true
   }
 });
-// jskit:ui-generator.page.link:home:/target-scripts
-{
-  addPlacement({
-    id: "ui-generator.page.home.target-scripts.link",
-    target: "shell.secondary-nav",
-    kind: "link",
-    surfaces: ["home"],
-    order: 60,
-    props: {
-      label: "Target Scripts",
-      icon: "mdi-view-list-outline",
-      surface: "home",
-      scopedSuffix: "/target-scripts",
-      unscopedSuffix: "/target-scripts"
-    }
-  });
-}
+
+addPlacement({
+  id: "ui-generator.page.home.target-scripts.link",
+  target: "shell.secondary-nav",
+  kind: "component",
+  surfaces: ["home"],
+  order: 60,
+  componentToken: "local.main.ui.ai-studio-target-scripts-nav-link"
+});

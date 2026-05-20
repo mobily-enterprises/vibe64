@@ -1,6 +1,5 @@
 import crypto from "node:crypto";
 import path from "node:path";
-import process from "node:process";
 
 import {
   closeTerminalSession,
@@ -13,26 +12,17 @@ import {
 import {
   STUDIO_BASE_TOOLCHAIN_IMAGE,
   STUDIO_CODEX_CONTAINER_PREFIX,
-  STUDIO_DAEMON_PID_LABEL,
   studioDockerLabel
 } from "../../../../server/lib/studioRuntimeIdentity.js";
 import {
-  studioToolHomeDockerArgs,
   studioUserStartupScript
 } from "../../../../server/lib/studioToolHome.js";
-import {
-  gitToolchainMountArgs
-} from "../../../../server/lib/gitToolchainMounts.js";
-import {
-  hostUserIdentityEnvArgs
-} from "../../../../server/lib/shellCommands.js";
 import {
   containerWorkspacePath,
   removeDockerContainer
 } from "../../../../server/lib/containerRuntime.js";
 import {
-  ensureTargetRuntimeNetwork,
-  targetRuntimeNetworkDockerArgs
+  ensureTargetRuntimeNetwork
 } from "../../../../server/lib/aiStudio/runtimeContainers.js";
 import {
   CODEX_TERMINAL_NAMESPACE_PREFIX,
@@ -57,9 +47,11 @@ import {
 import {
   maskedTerminalDockerArgs,
   projectTerminalEnvironment,
-  terminalEnvironmentDockerArgs,
   terminalEnvironmentFingerprint
 } from "./terminalEnvironment.js";
+import {
+  targetToolchainTerminalArgs
+} from "./targetToolchainTerminal.js";
 
 const CODEX_THREAD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 const CODEX_THREAD_PROBE = "!echo $CODEX_THREAD_ID";
@@ -180,42 +172,31 @@ function codexTerminalArgs({
   terminalId,
   worktree
 }) {
-  return [
-    "run",
-    "--rm",
-    "-it",
-    "--name",
+  return targetToolchainTerminalArgs({
+    commandArgs: [
+      "bash",
+      "-lc",
+      codexStartupScript(codexThreadId)
+    ],
     containerName,
-    "--label",
-    studioDockerLabel("kind", "codex-terminal"),
-    "--label",
-    studioDockerLabel("daemon", STUDIO_DAEMON_ID),
-    "--label",
-    `${STUDIO_DAEMON_PID_LABEL}=${process.pid}`,
-    "--label",
-    studioDockerLabel("session", sessionId),
-    "--label",
-    studioDockerLabel("terminal", terminalId),
-    "--label",
-    studioDockerLabel("target", stableHash(targetRoot)),
-    ...studioToolHomeDockerArgs(),
-    ...terminalEnvironmentDockerArgs(env),
-    ...hostUserIdentityEnvArgs(),
-    ...gitToolchainMountArgs(targetRoot),
-    "-v",
-    `${targetRoot}:/workspace`,
-    "-v",
-    `${targetRoot}:${targetRoot}`,
-    "-v",
-    `${CODEX_ATTACHMENT_HOST_ROOT}:${CODEX_ATTACHMENT_CONTAINER_ROOT}:ro`,
-    ...targetRuntimeNetworkDockerArgs(targetRoot),
-    "-w",
-    worktree,
+    env,
+    extraLabels: [
+      studioDockerLabel("daemon", STUDIO_DAEMON_ID)
+    ],
     image,
-    "bash",
-    "-lc",
-    codexStartupScript(codexThreadId)
-  ];
+    kind: "codex-terminal",
+    mounts: [
+      {
+        readOnly: true,
+        source: CODEX_ATTACHMENT_HOST_ROOT,
+        target: CODEX_ATTACHMENT_CONTAINER_ROOT
+      }
+    ],
+    sessionId,
+    targetRoot,
+    terminalId,
+    workdir: worktree
+  });
 }
 
 function codexContainerName({ sessionId, terminalId }) {
