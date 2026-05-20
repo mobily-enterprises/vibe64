@@ -2,10 +2,20 @@ import {
   deepFreeze
 } from "../../deepFreeze.js";
 import {
+  AI_STUDIO_APPLICATION_TYPE_WEB
+} from "../../applicationTypes.js";
+import {
   createVinextTargetAdapter
 } from "./index.js";
 
 const VINEXT_ADAPTER_MANIFEST = deepFreeze({
+  applicationTypes: [
+    {
+      explanation: "Next.js-compatible React web apps that should target Cloudflare with Vite-powered Vinext workflows.",
+      id: AI_STUDIO_APPLICATION_TYPE_WEB,
+      priority: 65
+    }
+  ],
   bestFor: "Next.js-style apps that want Cloudflare-oriented deployment, Vite ergonomics, and a migration path that keeps the existing app shape understandable.",
   createAdapter: createVinextTargetAdapter,
   description: "Vinext is Cloudflare's Vite-powered framework for Next.js-compatible applications. The adapter understands Vinext commands, migration state, runtime launch modes, and compatibility checks.",

@@ -20,7 +20,7 @@ test.describe("studio startup navigation", () => {
     await expect(page).toHaveURL(/\/setup\?tab=studio-setup$/u);
     await expect(page.getByRole("heading", { name: "Studio Setup", exact: true })).toBeVisible();
     await expect(page.getByText("Studio Setup blocked").first()).toBeVisible();
-    expect(apiRequests.count("/api/studio/current-app/setup-readiness")).toBe(1);
+    expect(apiRequests.count("/api/studio/current-app/setup-readiness/stream")).toBe(1);
     expect(apiRequests.count("/api/studio/studio-setup/stream")).toBe(1);
     expect(apiRequests.count("/api/studio/adapter-setup")).toBe(0);
     expect(apiRequests.count("/api/studio/project-setup")).toBe(0);
@@ -33,7 +33,7 @@ test.describe("studio startup navigation", () => {
     await page.goto(`${BASE_URL}/`);
     await expect(page).toHaveURL(/\/home$/u);
     await expectSessionsRoute(page);
-    expect(apiRequests.count("/api/studio/current-app/setup-readiness")).toBe(1);
+    expect(apiRequests.count("/api/studio/current-app/setup-readiness/stream")).toBe(1);
     expect(apiRequests.count("/api/studio/studio-setup")).toBe(0);
     expect(apiRequests.count("/api/studio/adapter-setup")).toBe(0);
     expect(apiRequests.count("/api/studio/project-setup")).toBe(0);
@@ -53,7 +53,7 @@ test.describe("studio startup navigation", () => {
     await expect(page.getByRole("link", { name: "Adapter Setup", exact: true })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Project Setup", exact: true })).toHaveCount(0);
     await expect(page.locator(".target-scripts-panel")).toHaveCount(0);
-    expect(apiRequests.count("/api/studio/current-app/setup-readiness")).toBe(1);
+    expect(apiRequests.count("/api/studio/current-app/setup-readiness/stream")).toBe(1);
     expect(apiRequests.count("/api/studio/studio-setup")).toBe(0);
     expect(apiRequests.count("/api/studio/adapter-setup")).toBe(0);
     expect(apiRequests.count("/api/studio/adapter-setup/stream")).toBe(0);
@@ -159,7 +159,7 @@ test.describe("studio startup navigation", () => {
     await page.goto(`${BASE_URL}/home`);
     await expect(page).toHaveURL(/\/setup\?tab=project-setup$/u);
     await expect(page.getByRole("heading", { name: "Project Setup", exact: true })).toBeVisible();
-    expect(apiRequests.count("/api/studio/current-app/setup-readiness")).toBe(1);
+    expect(apiRequests.count("/api/studio/current-app/setup-readiness/stream")).toBe(1);
     expect(apiRequests.count("/api/studio/current-app")).toBe(0);
   });
 
@@ -169,7 +169,7 @@ test.describe("studio startup navigation", () => {
     await page.goto(`${BASE_URL}/home`);
     await expect(page).toHaveURL(/\/home$/u);
     await expectSessionsRoute(page);
-    expect(apiRequests.count("/api/studio/current-app/setup-readiness")).toBe(1);
+    expect(apiRequests.count("/api/studio/current-app/setup-readiness/stream")).toBe(1);
     expect(apiRequests.count("/api/studio/studio-setup")).toBe(0);
     expect(apiRequests.count("/api/studio/adapter-setup")).toBe(0);
     expect(apiRequests.count("/api/studio/project-setup")).toBe(0);

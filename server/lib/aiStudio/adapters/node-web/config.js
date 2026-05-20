@@ -12,38 +12,47 @@ import {
 
 const GENERIC_NODE_WEB_CLIENT_LIBRARY_OPTIONS = deepFreeze([
   {
+    description: "Let Studio inspect package metadata and source files before deciding what prompt guidance to use.",
     label: "Auto-detect",
     value: "auto"
   },
   {
+    description: "Use React-oriented prompt guidance for components, hooks, and app structure.",
     label: "React",
     value: "react"
   },
   {
+    description: "Use Vue-oriented prompt guidance for components, composables, and app structure.",
     label: "Vue",
     value: "vue"
   },
   {
+    description: "Use Svelte-oriented prompt guidance for components and app structure.",
     label: "Svelte",
     value: "svelte"
   },
   {
+    description: "Use Lit-oriented prompt guidance for web components.",
     label: "Lit",
     value: "lit"
   },
   {
+    description: "Use Preact-oriented prompt guidance for lightweight React-compatible projects.",
     label: "Preact",
     value: "preact"
   },
   {
+    description: "Use Solid-oriented prompt guidance for signals and Solid components.",
     label: "Solid",
     value: "solid"
   },
   {
+    description: "Use Angular-oriented prompt guidance for modules, services, and components.",
     label: "Angular",
     value: "angular"
   },
   {
+    description: "Use framework-neutral Node/web guidance.",
     label: "None or unknown",
     value: "none"
   }

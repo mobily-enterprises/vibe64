@@ -30,7 +30,8 @@ describe("AI Studio terminal failure prompt", () => {
       sessionId: "session-1",
       terminalKind: "command",
       terminalSessionId: "terminal-1",
-      terminalStatus: "exited"
+      terminalStatus: "exited",
+      userMessage: "This looked stuck before I stopped it."
     });
 
     expect(request.outputTail).toBe("older\nlatest failure");
@@ -39,6 +40,7 @@ describe("AI Studio terminal failure prompt", () => {
     expect(request.prompt).toContain("- Session: session-1");
     expect(request.prompt).toContain("- Subject: Build app");
     expect(request.prompt).toContain("- Command: npm run build");
+    expect(request.prompt).toContain("This looked stuck before I stopped it.");
     expect(request.prompt).toContain("latest failure");
   });
 });

@@ -38,17 +38,24 @@ async function mockProjectGateReady(page) {
   });
 }
 
-async function mockSetupGateReady(page) {
+async function mockSetupReadiness(page, payload) {
   await page.route("**/api/studio/current-app/setup-readiness", async (route) => {
-    await fulfillJson(route, setupReadinessPayload({
-      stages: [
-        readyBootstrapPayload,
-        readyAccountsPayload,
-        readyTargetAppPayload,
-        readyAppSetupPayload
-      ]
-    }));
+    await fulfillJson(route, payload);
   });
+  await page.route("**/api/studio/current-app/setup-readiness/stream", async (route) => {
+    await fulfillSse(route, payload, "stages");
+  });
+}
+
+async function mockSetupGateReady(page) {
+  await mockSetupReadiness(page, setupReadinessPayload({
+    stages: [
+      readyBootstrapPayload,
+      readyAccountsPayload,
+      readyTargetAppPayload,
+      readyAppSetupPayload
+    ]
+  }));
   await page.route("**/api/studio/studio-setup", async (route) => {
     await fulfillJson(route, readyBootstrapPayload);
   });
@@ -67,22 +74,20 @@ async function mockProtectedRouteReady(page) {
 
 async function mockBootstrapBlocked(page) {
   await mockProjectGateReady(page);
-  await page.route("**/api/studio/current-app/setup-readiness", async (route) => {
-    await fulfillJson(route, setupReadinessPayload({
-      currentStage: {
-        id: "studio-setup",
-        label: "Studio Setup"
-      },
-      message: "Studio Setup is not ready.",
-      ready: false,
-      stages: [
-        blockedBootstrapPayload,
-        readyAccountsPayload,
-        readyTargetAppPayload,
-        readyAppSetupPayload
-      ]
-    }));
-  });
+  await mockSetupReadiness(page, setupReadinessPayload({
+    currentStage: {
+      id: "studio-setup",
+      label: "Studio Setup"
+    },
+    message: "Studio Setup is not ready.",
+    ready: false,
+    stages: [
+      blockedBootstrapPayload,
+      readyAccountsPayload,
+      readyTargetAppPayload,
+      readyAppSetupPayload
+    ]
+  }));
   await page.route("**/api/studio/studio-setup", async (route) => {
     await fulfillJson(route, blockedBootstrapPayload);
   });
@@ -300,22 +305,20 @@ async function mockSessionHistoryArchives(page, archiveRequests = []) {
 
 async function mockAppSetupBlocked(page) {
   await mockProjectGateReady(page);
-  await page.route("**/api/studio/current-app/setup-readiness", async (route) => {
-    await fulfillJson(route, setupReadinessPayload({
-      currentStage: {
-        id: "project-setup",
-        label: "Project Setup"
-      },
-      message: "Project Setup is not ready.",
-      ready: false,
-      stages: [
-        readyBootstrapPayload,
-        readyAccountsPayload,
-        readyTargetAppPayload,
-        blockedAppSetupPayload
-      ]
-    }));
-  });
+  await mockSetupReadiness(page, setupReadinessPayload({
+    currentStage: {
+      id: "project-setup",
+      label: "Project Setup"
+    },
+    message: "Project Setup is not ready.",
+    ready: false,
+    stages: [
+      readyBootstrapPayload,
+      readyAccountsPayload,
+      readyTargetAppPayload,
+      blockedAppSetupPayload
+    ]
+  }));
   await page.route("**/api/studio/studio-setup", async (route) => {
     await fulfillJson(route, readyBootstrapPayload);
   });

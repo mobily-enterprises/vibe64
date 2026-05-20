@@ -14,6 +14,8 @@
     ready-label="Studio Setup ready"
     blocked-title="Studio Setup blocked"
     ready-title="Studio Setup ready"
+    quiet-title="Checking your machine"
+    quiet-lede="AI Studio is checking Docker and local tools before it starts."
     continue-label="Continue to Accounts"
     continue-emits
     @continue="emit('select-tab', 'accounts')"

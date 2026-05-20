@@ -1,6 +1,10 @@
 import {
   deepFreeze
 } from "../../deepFreeze.js";
+import {
+  AI_STUDIO_APPLICATION_TYPE_PHONE,
+  AI_STUDIO_APPLICATION_TYPE_WEB
+} from "../../applicationTypes.js";
 
 async function createJskitAdapter() {
   const adapterModule = await import("./index.js");
@@ -8,6 +12,18 @@ async function createJskitAdapter() {
 }
 
 const JSKIT_ADAPTER_MANIFEST = deepFreeze({
+  applicationTypes: [
+    {
+      explanation: "Web apps written in Vue and Node.js, using JSKIT conventions that are deliberately structured for AI-assisted product work.",
+      id: AI_STUDIO_APPLICATION_TYPE_WEB,
+      priority: 100
+    },
+    {
+      explanation: "Mobile-first web apps that can be packaged with Capacitor while keeping the JSKIT provider and Vue app structure.",
+      id: AI_STUDIO_APPLICATION_TYPE_PHONE,
+      priority: 90
+    }
+  ],
   bestFor: "Production CRUD and operations apps where AI Studio can lean on JSKIT conventions, providers, commands, generated surfaces, and built-in setup checks.",
   createAdapter: createJskitAdapter,
   description: "JSKIT AI is the full-stack application framework behind JSKIT projects: a structured Node/Vue platform with provider modules, generated CRUD flows, command actions, shared runtime services, and framework-aware project setup.",

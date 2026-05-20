@@ -74,6 +74,7 @@ function createService({ targetRoot = "" } = {}) {
             label: definition.label
           }
         : null,
+      availableApplicationTypes: adapterRegistry.availableApplicationTypes(),
       availableProjectTypes: adapterRegistry.availableProjectTypes(),
       errorCode: ready ? "" : projectTypeErrorCode(status),
       message: ready ? "" : (definition?.disabledReason || projectTypeMessage(status, projectType)),

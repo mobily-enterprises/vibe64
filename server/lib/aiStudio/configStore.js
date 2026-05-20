@@ -26,18 +26,22 @@ const CONFIG_FIELD_TYPES = new Set(["boolean", "path", "select", "string"]);
 const AI_STUDIO_GENERAL_CONFIG_FIELDS = deepFreeze([
   {
     defaultValue: "merge",
+    description: "How Studio should merge completed pull requests when you choose to merge at the end of Autopilot.",
     id: "github_pr_merge_method",
     label: "GitHub PR merge method",
     options: [
       {
+        description: "Keep every commit from the session branch and add one merge commit on the main branch.",
         label: "Merge commit",
         value: "merge"
       },
       {
+        description: "Combine the session branch into one clean commit on the main branch.",
         label: "Squash",
         value: "squash"
       },
       {
+        description: "Replay the session commits on top of the main branch without a merge commit.",
         label: "Rebase",
         value: "rebase"
       }
@@ -74,6 +78,7 @@ function normalizeConfigOption(option = {}) {
     throw aiStudioError("AI Studio select config option is missing a value.", "ai_studio_invalid_config_option");
   }
   return {
+    description: normalizeText(option.description),
     label: normalizeText(option.label || value),
     value
   };

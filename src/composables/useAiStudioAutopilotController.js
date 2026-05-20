@@ -436,12 +436,17 @@ function useAiStudioAutopilotController({
     return "Let's get started";
   });
 
+  function clearFailure() {
+    failure.value = null;
+    lastCommandResult.value = null;
+  }
+
   async function acceptChanges() {
     if (!canAcceptReview.value) {
       return;
     }
     stopRequested = false;
-    failure.value = null;
+    clearFailure();
     activeStage.value = "Accept changes";
     try {
       await actions.goNext?.();
@@ -467,7 +472,7 @@ function useAiStudioAutopilotController({
       return;
     }
     stopRequested = false;
-    failure.value = null;
+    clearFailure();
     await runUntilStopPoint();
   }
 
@@ -476,7 +481,7 @@ function useAiStudioAutopilotController({
       return;
     }
     stopRequested = false;
-    failure.value = null;
+    clearFailure();
     await runUntilStopPoint();
   }
 
@@ -491,6 +496,10 @@ function useAiStudioAutopilotController({
   function stop() {
     const currentSession = readSession(session);
     stopRequested = true;
+    if (commandRunning.value && typeof commandRunner.stopCommandAction === "function") {
+      commandRunner.stopCommandAction();
+      return;
+    }
     if (currentSession?.sessionId) {
       clearPendingPrompt(currentSession.sessionId);
     } else {
@@ -500,12 +509,20 @@ function useAiStudioAutopilotController({
     stopWithFailure(autopilotStoppedFailure());
   }
 
+  function stopCommandAction() {
+    if (!commandRunning.value || typeof commandRunner.stopCommandAction !== "function") {
+      return false;
+    }
+    stopRequested = true;
+    return commandRunner.stopCommandAction();
+  }
+
   async function runDeepUiCheck() {
     if (currentStep.value !== DEEP_UI_CHECK_STEP_ID || running.value) {
       return;
     }
     stopRequested = false;
-    failure.value = null;
+    clearFailure();
     deepUiCheckDecision.value = "run";
     await runUntilStopPoint();
   }
@@ -515,7 +532,7 @@ function useAiStudioAutopilotController({
       return;
     }
     stopRequested = false;
-    failure.value = null;
+    clearFailure();
     deepUiCheckDecision.value = "skip";
     await runUntilStopPoint();
   }
@@ -538,7 +555,7 @@ function useAiStudioAutopilotController({
     }
 
     stopRequested = false;
-    failure.value = null;
+    clearFailure();
     replanFeedback.value = normalizedFeedback;
     activeStage.value = "Reopen plan";
     try {
@@ -568,7 +585,7 @@ function useAiStudioAutopilotController({
 
   function cancelMergeFailure() {
     if (currentStep.value === MERGE_PR_STEP_ID) {
-      failure.value = null;
+      clearFailure();
     }
   }
 
@@ -577,7 +594,7 @@ function useAiStudioAutopilotController({
       return false;
     }
     stopRequested = false;
-    failure.value = null;
+    clearFailure();
     active.value = true;
     try {
       const mergeSession = readSession(session);
@@ -652,7 +669,7 @@ function useAiStudioAutopilotController({
       return false;
     }
     stopRequested = false;
-    failure.value = null;
+    clearFailure();
     active.value = true;
     activeStage.value = "Skip merge";
     try {
@@ -708,7 +725,7 @@ function useAiStudioAutopilotController({
     }
 
     stopRequested = false;
-    failure.value = null;
+    clearFailure();
     active.value = true;
     activeStage.value = "Archive";
     try {
@@ -1091,6 +1108,7 @@ function useAiStudioAutopilotController({
     canArchiveSession,
     canStart,
     canResume,
+    clearFailure,
     commandOutput,
     commandPreview,
     commandResult,
@@ -1111,6 +1129,7 @@ function useAiStudioAutopilotController({
     skipMerge,
     start,
     stop,
+    stopCommandAction,
     statusText,
     waitingForCodex
   };

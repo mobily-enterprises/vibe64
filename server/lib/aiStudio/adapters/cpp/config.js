@@ -14,14 +14,17 @@ import {
 
 const CPP_BUILD_SYSTEM_OPTIONS = deepFreeze([
   {
+    description: "Use CMake project files, targets, and CTest conventions.",
     label: "CMake",
     value: "cmake"
   },
   {
+    description: "Use Makefile-based build and test commands.",
     label: "Make",
     value: "make"
   },
   {
+    description: "Use Meson setup, compile, and test commands.",
     label: "Meson",
     value: "meson"
   }
@@ -29,14 +32,17 @@ const CPP_BUILD_SYSTEM_OPTIONS = deepFreeze([
 
 const CPP_CXX_STANDARD_OPTIONS = deepFreeze([
   {
+    description: "Use C++17 language settings in generated project files.",
     label: "C++17",
     value: "cpp17"
   },
   {
+    description: "Use C++20 language settings in generated project files.",
     label: "C++20",
     value: "cpp20"
   },
   {
+    description: "Use C++23 language settings in generated project files.",
     label: "C++23",
     value: "cpp23"
   }
@@ -44,14 +50,17 @@ const CPP_CXX_STANDARD_OPTIONS = deepFreeze([
 
 const CPP_BUILD_TYPE_OPTIONS = deepFreeze([
   {
+    description: "Build with debug symbols and no release optimization.",
     label: "Debug",
     value: "debug"
   },
   {
+    description: "Build with release optimization while keeping debug information.",
     label: "RelWithDebInfo",
     value: "relwithdebinfo"
   },
   {
+    description: "Build with release optimization.",
     label: "Release",
     value: "release"
   }
@@ -59,10 +68,12 @@ const CPP_BUILD_TYPE_OPTIONS = deepFreeze([
 
 const CPP_PROJECT_KIND_OPTIONS = deepFreeze([
   {
+    description: "Seed and prompt for an application that produces a runnable binary.",
     label: "Executable",
     value: "executable"
   },
   {
+    description: "Seed and prompt for reusable library code.",
     label: "Library",
     value: "library"
   }
@@ -70,10 +81,12 @@ const CPP_PROJECT_KIND_OPTIONS = deepFreeze([
 
 const CPP_TESTING_OPTIONS = deepFreeze([
   {
+    description: "Use the selected build system's native test command.",
     label: "Build-system tests",
     value: "enabled"
   },
   {
+    description: "Do not add test runner assumptions to seeded projects.",
     label: "None",
     value: "none"
   }

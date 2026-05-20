@@ -33,18 +33,22 @@ function configField(fields = [], id = "") {
 test("node package manager vocabulary exposes shared values, labels, and normalization", () => {
   assert.deepEqual(NODE_PACKAGE_MANAGER_OPTIONS, [
     {
+      description: "Use npm, the default Node package manager included with Node.js.",
       label: "npm",
       value: "npm"
     },
     {
+      description: "Use pnpm when the project expects pnpm workspaces or a pnpm lockfile.",
       label: "pnpm",
       value: "pnpm"
     },
     {
+      description: "Use Yarn when the project is built around Yarn commands or a yarn.lock file.",
       label: "Yarn",
       value: "yarn"
     },
     {
+      description: "Use Bun when the project already uses Bun lockfiles or scripts.",
       label: "Bun",
       value: "bun"
     }

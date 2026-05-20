@@ -1,6 +1,9 @@
 import {
   aiStudioError
 } from "./core.js";
+import {
+  runDoctorStep
+} from "../doctorStream.js";
 
 const SETUP_STAGES = Object.freeze([
   {
@@ -33,29 +36,42 @@ function missingServiceMessage(stage) {
   return `${stage.label} service is not available.`;
 }
 
-async function readSetupStageStatus(stage, services = {}) {
+async function readSetupStageStatus(stage, services = {}, {
+  emit = null
+} = {}) {
   const service = services[stage.serviceName];
-  if (!service || typeof service.getStatus !== "function") {
+  const readStatus = async () => {
+    if (!service || typeof service.getStatus !== "function") {
+      return {
+        id: stage.id,
+        label: stage.label,
+        ready: false,
+        blockedReason: missingServiceMessage(stage)
+      };
+    }
+
     return {
       id: stage.id,
       label: stage.label,
-      ready: false,
-      blockedReason: missingServiceMessage(stage)
+      ...await service.getStatus()
     };
-  }
-
-  return {
-    id: stage.id,
-    label: stage.label,
-    ...await service.getStatus()
   };
+
+  return emit
+    ? runDoctorStep({
+      emit,
+      id: stage.id,
+      label: stage.label,
+      run: readStatus
+    })
+    : readStatus();
 }
 
-async function readAiStudioSetupReadiness(services = {}) {
+async function readAiStudioSetupReadiness(services = {}, options = {}) {
   const stages = [];
 
   for (const stage of SETUP_STAGES) {
-    const status = await readSetupStageStatus(stage, services);
+    const status = await readSetupStageStatus(stage, services, options);
     stages.push(status);
     if (status.ready !== true) {
       return {

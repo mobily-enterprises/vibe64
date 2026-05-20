@@ -10,6 +10,7 @@ import {
   aiStudioActionIcon,
   aiStudioPromptHandoffFromSession,
   aiStudioSessionLimits,
+  buildAiStudioAutopilotNavigationSteps,
   buildAiStudioTimelineSteps,
   currentStepDisabledReason,
   enrichAiStudioSessionForDisplay,
@@ -66,6 +67,70 @@ describe("AI Studio session panel model", () => {
       { canRewind: false, id: "session_created", state: "done" },
       { canRewind: true, id: "worktree_created", state: "done" },
       { canRewind: false, id: "plan_made", state: "current" }
+    ]);
+  });
+
+  it("builds the filtered autopilot navigation stops", () => {
+    const rows = buildAiStudioAutopilotNavigationSteps({
+      currentStep: "plan_made",
+      status: "active",
+      stepDefinitions: [
+        {
+          done: true,
+          id: "session_created",
+          index: 0,
+          label: "Create session",
+          rewindable: false,
+          status: "done"
+        },
+        {
+          done: true,
+          id: "issue_file_created",
+          index: 4,
+          label: "Define or select issue",
+          status: "done"
+        },
+        {
+          id: "plan_made",
+          index: 6,
+          label: "Make plan",
+          status: "current"
+        },
+        {
+          id: "deep_ui_check_run",
+          index: 8,
+          label: "Run deep UI check"
+        },
+        {
+          id: "changes_accepted",
+          index: 11,
+          label: "Review changes"
+        },
+        {
+          id: "pr_merged",
+          index: 16,
+          label: "Merge PR"
+        },
+        {
+          id: "session_finished",
+          index: 18,
+          label: "Congratulations!"
+        }
+      ]
+    });
+
+    expect(rows.map((row) => ({
+      canRewind: row.canRewind,
+      id: row.id,
+      label: row.label,
+      state: row.state
+    }))).toEqual([
+      { canRewind: false, id: "session_created", label: "Start", state: "done" },
+      { canRewind: true, id: "issue_file_created", label: "Issue", state: "done" },
+      { canRewind: false, id: "deep_ui_check_run", label: "Deep UI", state: "current" },
+      { canRewind: false, id: "changes_accepted", label: "Review", state: "pending" },
+      { canRewind: false, id: "pr_merged", label: "Merge", state: "pending" },
+      { canRewind: false, id: "session_finished", label: "Done", state: "pending" }
     ]);
   });
 

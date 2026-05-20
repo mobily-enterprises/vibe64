@@ -64,7 +64,7 @@ function useDoctorRepairs({
   const confirmRepair = ref(null);
   const repairFieldValues = ref({});
   const repairRunning = ref(false);
-  const attemptedAutomaticRepairs = new Set();
+  const attemptedAutomaticRepairKeys = ref([]);
 
   const repairDialogOpen = computed({
     get() {
@@ -75,6 +75,10 @@ function useDoctorRepairs({
         closeRepairDialog();
       }
     }
+  });
+
+  const automaticRepairAvailable = computed(() => {
+    return Boolean(firstAutomaticRepair());
   });
 
   const confirmRepairFields = computed(() => {
@@ -159,6 +163,16 @@ function useDoctorRepairs({
       .join("\n\n");
   }
 
+  function automaticRepairWasAttempted(key) {
+    return attemptedAutomaticRepairKeys.value.includes(key);
+  }
+
+  function rememberAutomaticRepairAttempt(key) {
+    if (!automaticRepairWasAttempted(key)) {
+      attemptedAutomaticRepairKeys.value = [...attemptedAutomaticRepairKeys.value, key];
+    }
+  }
+
   function automaticRepairCandidate(check, repair) {
     if (repair?.autoRun !== true || repair?.kind !== "terminal" || !repair?.actionId) {
       return null;
@@ -168,7 +182,7 @@ function useDoctorRepairs({
       return null;
     }
     const key = automaticRepairKey(check, repair, inputs);
-    if (attemptedAutomaticRepairs.has(key)) {
+    if (automaticRepairWasAttempted(key)) {
       return null;
     }
     return {
@@ -287,7 +301,7 @@ function useDoctorRepairs({
       return;
     }
 
-    attemptedAutomaticRepairs.add(candidate.key);
+    rememberAutomaticRepairAttempt(candidate.key);
     automaticRepair.value = {
       actionId: candidate.repair.actionId,
       checkId: candidate.check.id,
@@ -342,6 +356,7 @@ function useDoctorRepairs({
     actionInFlight,
     automaticRepair,
     automaticRepairError,
+    automaticRepairAvailable,
     automaticRepairLog,
     automaticRepairMessage,
     automaticRepairRunning,

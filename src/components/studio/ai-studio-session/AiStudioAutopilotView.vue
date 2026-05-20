@@ -1,9 +1,19 @@
 <template>
   <section class="studio-autopilot">
+    <AiStudioAutopilotNavigation
+      :busy="navigationBusy"
+      :steps="autopilotSteps"
+      @rewind="rewindToAutopilotStep"
+    />
+
     <div class="studio-autopilot__stage">
       <div
         v-show="codexTerminalVisible"
         class="studio-autopilot__codex-terminal-stage"
+        :class="{
+          'studio-autopilot__codex-terminal-stage--ambient': codexTerminalAmbient,
+          'studio-autopilot__codex-terminal-stage--review': reviewCodexChatVisible
+        }"
       >
         <div
           :id="codexTerminalHostId"
@@ -46,6 +56,17 @@
         <div class="studio-autopilot__command-terminal-overlay">
           <strong>{{ commandOverlayTitle }}</strong>
           <span>{{ displayStatusText }}</span>
+          <v-btn
+            v-if="commandRunning"
+            class="studio-autopilot__stop-button"
+            :prepend-icon="mdiStopCircleOutline"
+            size="small"
+            type="button"
+            variant="tonal"
+            @click="stopCommandAction"
+          >
+            Stop command
+          </v-btn>
           <v-btn
             v-if="canRequestCommandAiFix"
             color="primary"
@@ -303,6 +324,16 @@
           />
 
           <v-btn
+            :color="reviewCodexChatVisible ? 'primary' : undefined"
+            :prepend-icon="mdiRobotOutline"
+            type="button"
+            variant="tonal"
+            @click="toggleReviewCodexChat"
+          >
+            {{ reviewCodexChatVisible ? "Hide Codex chat" : "Chat with Codex" }}
+          </v-btn>
+
+          <v-btn
             :disabled="reviewDiffDisabled"
             :loading="reviewDiffLoading"
             :prepend-icon="mdiFileCompare"
@@ -467,7 +498,27 @@
           {{ failure.error }}
         </v-alert>
 
+        <v-textarea
+          v-if="canRequestCommandAiFix"
+          v-model="commandFailureNote"
+          auto-grow
+          class="studio-autopilot__issue-input"
+          label="Optional note for Codex"
+          rows="3"
+          variant="outlined"
+        />
+
         <div class="studio-autopilot__actions">
+          <v-btn
+            v-if="canRequestCommandAiFix"
+            color="primary"
+            :prepend-icon="mdiRobotOutline"
+            variant="tonal"
+            @click="requestCommandAiFix"
+          >
+            Get AI to fix it
+          </v-btn>
+
           <v-btn
             color="primary"
             :loading="running"
@@ -511,9 +562,11 @@ import {
   mdiRefresh,
   mdiRobotOutline,
   mdiSend,
-  mdiSourceMerge
+  mdiSourceMerge,
+  mdiStopCircleOutline
 } from "@mdi/js";
 import AiStudioLaunchControls from "@/components/studio/AiStudioLaunchControls.vue";
+import AiStudioAutopilotNavigation from "@/components/studio/ai-studio-session/AiStudioAutopilotNavigation.vue";
 import AiStudioHeadlessCommandOutput from "@/components/studio/ai-studio-session/AiStudioHeadlessCommandOutput.vue";
 import {
   useAiStudioAutopilotController
@@ -528,7 +581,7 @@ import {
   terminalFailureFixRequest
 } from "@/lib/aiStudioTerminalFailurePrompt.js";
 
-const emit = defineEmits(["busy-change", "codex-waiting-change"]);
+const emit = defineEmits(["busy-change", "codex-terminal-dock-change"]);
 
 const props = defineProps({
   actions: {
@@ -538,6 +591,10 @@ const props = defineProps({
   active: {
     default: true,
     type: Boolean
+  },
+  autopilotSteps: {
+    default: () => [],
+    type: Array
   },
   codexTerminal: {
     default: () => ({}),
@@ -567,6 +624,14 @@ const props = defineProps({
     default: async () => null,
     type: Function
   },
+  rewindBusy: {
+    default: false,
+    type: Boolean
+  },
+  rewindToStep: {
+    default: null,
+    type: Function
+  },
   session: {
     default: null,
     type: Object
@@ -581,6 +646,7 @@ const {
   canArchiveSession,
   canStart,
   canResume,
+  clearFailure,
   commandOutput,
   commandPreview,
   commandResult,
@@ -601,6 +667,7 @@ const {
   skipMerge,
   start,
   stop,
+  stopCommandAction,
   statusText,
   waitingForCodex
 } = useAiStudioAutopilotController({
@@ -612,6 +679,8 @@ const {
 });
 const reviewFeedback = ref("");
 const reviewFeedbackVisible = ref(false);
+const reviewCodexChatVisible = ref(false);
+const commandFailureNote = ref("");
 
 const issueDiscussion = proxyRefs(useAiStudioAutopilotIssueDiscussion({
   actions: props.actions,
@@ -634,8 +703,13 @@ const codexWaiting = computed(() => Boolean(
 const codexPromptFailed = computed(() => failure.value?.source === "codex");
 const codexTerminalVisible = computed(() => Boolean(
   codexWaiting.value ||
-  codexPromptFailed.value
+  codexPromptFailed.value ||
+  (readyForReview.value && reviewCodexChatVisible.value)
 ));
+const codexTerminalDisplayMode = computed(() => readyForReview.value && reviewCodexChatVisible.value
+  ? "full"
+  : "compact");
+const codexTerminalAmbient = computed(() => codexTerminalDisplayMode.value === "compact");
 const commandTerminalFailed = computed(() => commandResult.value?.ok === false);
 const commandTerminalVisible = computed(() => Boolean(
   !codexTerminalVisible.value &&
@@ -689,9 +763,13 @@ const reviewDiffTitle = computed(() => String(props.review?.diffTitle || "Review
 const canSubmitReviewFeedback = computed(() => Boolean(
   reviewFeedback.value.trim() && !reviewControlsBusy.value
 ));
+const navigationBusy = computed(() => Boolean(props.page?.busy || autopilotBusy.value || props.rewindBusy));
 
-function emitCodexWaitingState() {
-  emit("codex-waiting-change", codexTerminalVisible.value);
+function emitCodexDockState() {
+  emit("codex-terminal-dock-change", {
+    displayMode: codexTerminalDisplayMode.value,
+    docked: codexTerminalVisible.value
+  });
 }
 
 function emitBusyState() {
@@ -722,8 +800,25 @@ function requestCommandAiFix() {
     sessionId: props.session?.sessionId || "",
     terminalKind: "command",
     terminalSessionId: result.terminalSessionId,
-    terminalStatus: commandStatus.value
+    terminalStatus: commandStatus.value,
+    userMessage: commandFailureNote.value
   }));
+}
+
+function toggleReviewCodexChat() {
+  reviewCodexChatVisible.value = !reviewCodexChatVisible.value;
+}
+
+async function rewindToAutopilotStep(step = {}) {
+  if (navigationBusy.value || step.canRewind !== true || typeof props.rewindToStep !== "function") {
+    return;
+  }
+  clearFailure();
+  commandFailureNote.value = "";
+  reviewCodexChatVisible.value = false;
+  reviewFeedback.value = "";
+  reviewFeedbackVisible.value = false;
+  await props.rewindToStep(step);
 }
 
 function showReviewFeedback() {
@@ -746,7 +841,7 @@ async function submitReviewFeedback() {
 }
 
 function emitAutopilotState() {
-  emitCodexWaitingState();
+  emitCodexDockState();
   emitBusyState();
 }
 
@@ -760,8 +855,8 @@ onMounted(emitAutopilotState);
 
 onMounted(resumeWhenActive);
 
-watch(codexTerminalVisible, () => {
-  emitCodexWaitingState();
+watch([codexTerminalVisible, codexTerminalDisplayMode], () => {
+  emitCodexDockState();
 }, {
   flush: "post"
 });
@@ -778,6 +873,14 @@ watch(() => props.active, resumeWhenActive, {
 
 watch(() => props.session?.currentStep || "", () => {
   resumeWhenActive();
+}, {
+  flush: "post"
+});
+
+watch(readyForReview, (ready) => {
+  if (!ready) {
+    reviewCodexChatVisible.value = false;
+  }
 }, {
   flush: "post"
 });
@@ -855,11 +958,15 @@ watch(() => props.session?.currentStep || "", () => {
   text-align: left;
 }
 
-.studio-autopilot__codex-terminal-host :deep(.studio-ai-sessions__terminals) {
+.studio-autopilot__codex-terminal-stage--ambient .studio-autopilot__codex-terminal-host :deep(.studio-ai-sessions__terminals) {
   opacity: 0.3;
   text-align: left;
   transform: scale(0.5);
   transform-origin: center center;
+}
+
+.studio-autopilot__codex-terminal-stage--review {
+  max-width: min(76rem, 100%);
 }
 
 .studio-autopilot__codex-terminal-host :deep(.codex-terminal),

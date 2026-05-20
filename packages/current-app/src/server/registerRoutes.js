@@ -11,6 +11,7 @@ import {
   ACTION_SAVE_STARRED_TARGET_SCRIPTS
 } from "./actions.js";
 import { createAiStudioFeatureRoutes } from "../../../../server/lib/aiStudio/featureRoutes.js";
+import { sendDoctorEventStream } from "../../../../server/lib/doctorStream.js";
 
 function getCurrentAppService(app) {
   return app.make("feature.current-app.service");
@@ -45,6 +46,16 @@ function registerRoutes(
   routes.actionRoute("GET", "/setup-readiness", {
     actionId: ACTION_READ_SETUP_READINESS,
     summary: "Read AI Studio setup readiness for protected current-app routes."
+  });
+
+  routes.serviceRoute("GET", "/setup-readiness/stream", {
+    summary: "Stream AI Studio setup readiness for protected current-app routes."
+  }, async (_request, reply) => {
+    await sendDoctorEventStream(reply, ({ emit }) => {
+      return getCurrentAppService(app).streamSetupReadiness({
+        emit
+      });
+    });
   });
 
   routes.actionRoute("PUT", "/target-scripts/starred", {

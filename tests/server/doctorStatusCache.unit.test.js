@@ -104,3 +104,45 @@ test("repository ready status cache persists ready statuses per doctor and targe
     });
   }
 });
+
+test("repository ready status cache keeps blocked statuses briefly in memory only", async () => {
+  const originalNow = Date.now;
+  const stateRoot = await mkdtemp(path.join(tmpdir(), "ai-studio-doctor-cache-"));
+  let now = 1_000;
+  Date.now = () => now;
+
+  try {
+    const targetRoot = path.join(stateRoot, "target");
+    const blockedStatus = {
+      checks: [],
+      ok: true,
+      ready: false
+    };
+    const cache = createRepositoryReadyStatusCache({
+      doctorId: "project-setup",
+      recentNotReadyTtlMs: 25,
+      stateRoot,
+      targetRoot
+    });
+
+    assert.equal(await cache.remember(blockedStatus), blockedStatus);
+    assert.equal(await cache.read(), blockedStatus);
+
+    const restored = createRepositoryReadyStatusCache({
+      doctorId: "project-setup",
+      recentNotReadyTtlMs: 25,
+      stateRoot,
+      targetRoot
+    });
+    assert.equal(await restored.read(), null);
+
+    now = 1_026;
+    assert.equal(await cache.read(), null);
+  } finally {
+    Date.now = originalNow;
+    await rm(stateRoot, {
+      force: true,
+      recursive: true
+    });
+  }
+});

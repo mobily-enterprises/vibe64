@@ -49,9 +49,11 @@ function terminalFailureFixPrompt({
   shellTarget = "",
   terminalKind = "",
   terminalSessionId = "",
-  terminalStatus = ""
+  terminalStatus = "",
+  userMessage = ""
 } = {}) {
   const outputTail = terminalFailureOutputTail(output);
+  const normalizedUserMessage = String(userMessage || "").trim();
   const subject = describeTerminalFailureSubject({
     actionId,
     actionLabel,
@@ -86,6 +88,9 @@ function terminalFailureFixPrompt({
     "",
     "Terminal context:",
     contextLines || "- No terminal metadata was available.",
+    "",
+    "User note:",
+    normalizedUserMessage || "(No extra note was provided.)",
     "",
     `Last ${DEFAULT_TERMINAL_FAILURE_TAIL_LINES} terminal lines:`,
     "~~~text",

@@ -16,37 +16,64 @@
       >
         <h3 class="project-config-setup__section-title">{{ section.label }}</h3>
         <div class="project-config-setup__fields">
-          <template v-for="field in section.fields" :key="field.id">
-            <v-switch
-              v-if="field.type === 'boolean'"
-              v-model="formValues[field.id]"
-              color="primary"
-              density="compact"
-              hide-details="auto"
-              :error-messages="fieldErrorMessages(field)"
-              :label="field.label"
-            />
-            <v-select
-              v-else-if="field.type === 'select'"
-              v-model="formValues[field.id]"
-              density="compact"
-              :error-messages="fieldErrorMessages(field)"
-              item-title="label"
-              item-value="value"
-              :items="field.options"
-              :label="field.label"
-              variant="outlined"
-            />
-            <v-text-field
-              v-else
-              v-model="formValues[field.id]"
-              density="compact"
-              :error-messages="fieldErrorMessages(field)"
-              :label="field.label"
-              :type="textFieldInputType(field)"
-              variant="outlined"
-            />
-          </template>
+          <div
+            v-for="field in section.fields"
+            :key="field.id"
+            class="project-config-setup__field"
+          >
+            <div class="project-config-setup__field-copy">
+              <h4>{{ field.label }}</h4>
+              <p>{{ fieldDescription(field) }}</p>
+              <span class="project-config-setup__field-id">{{ field.id }}</span>
+            </div>
+
+            <div class="project-config-setup__field-control">
+              <v-switch
+                v-if="field.type === 'boolean'"
+                v-model="formValues[field.id]"
+                color="primary"
+                density="compact"
+                hide-details="auto"
+                :error-messages="fieldErrorMessages(field)"
+                :label="booleanChoiceLabel(field)"
+              />
+              <v-select
+                v-else-if="field.type === 'select'"
+                v-model="formValues[field.id]"
+                density="compact"
+                :error-messages="fieldErrorMessages(field)"
+                item-title="label"
+                item-value="value"
+                :items="field.options"
+                label="Selected option"
+                variant="outlined"
+              >
+                <template #item="{ props: itemProps, item }">
+                  <v-list-item v-bind="itemProps">
+                    <template #subtitle>
+                      <span v-if="item.raw?.description">{{ item.raw.description }}</span>
+                    </template>
+                  </v-list-item>
+                </template>
+              </v-select>
+              <v-text-field
+                v-else
+                v-model="formValues[field.id]"
+                density="compact"
+                :error-messages="fieldErrorMessages(field)"
+                label="Value"
+                :type="textFieldInputType(field)"
+                variant="outlined"
+              />
+
+              <p
+                v-if="selectedOptionDescription(field)"
+                class="project-config-setup__selected-option"
+              >
+                {{ selectedOptionDescription(field) }}
+              </p>
+            </div>
+          </div>
         </div>
       </section>
     </div>
@@ -109,6 +136,27 @@ function valueForField(field = {}) {
 
 function textFieldInputType(field = {}) {
   return field.type === "string" || field.type === "path" ? "text" : field.type;
+}
+
+function fieldDescription(field = {}) {
+  return String(field.description || "This setting is provided by the selected project adapter.");
+}
+
+function booleanChoiceLabel(field = {}) {
+  return formValues[field.id] ? "Enabled" : "Disabled";
+}
+
+function selectedOption(field = {}) {
+  if (field.type !== "select") {
+    return null;
+  }
+  const selectedValue = String(formValues[field.id] ?? "");
+  return (Array.isArray(field.options) ? field.options : [])
+    .find((option) => String(option.value || "") === selectedValue) || null;
+}
+
+function selectedOptionDescription(field = {}) {
+  return String(selectedOption(field)?.description || "");
 }
 
 function fieldErrorMessages(field = {}) {
@@ -195,12 +243,66 @@ watch(
 
 .project-config-setup__fields {
   display: grid;
-  gap: 0.65rem;
-  grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr));
+  gap: 0;
+}
+
+.project-config-setup__field {
+  border-top: 1px solid rgba(var(--v-theme-outline), 0.18);
+  display: grid;
+  gap: 0.85rem;
+  grid-template-columns: minmax(0, 1fr) minmax(min(20rem, 100%), 0.9fr);
+  padding-block: 0.9rem;
+}
+
+.project-config-setup__field:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.project-config-setup__field-copy {
+  align-content: start;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.project-config-setup__field-copy h4 {
+  font-size: 0.98rem;
+  font-weight: 720;
+  letter-spacing: 0;
+  line-height: 1.25;
+  margin: 0;
+}
+
+.project-config-setup__field-copy p,
+.project-config-setup__selected-option {
+  color: rgba(var(--v-theme-on-surface), 0.68);
+  font-size: 0.86rem;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.project-config-setup__field-id {
+  color: rgba(var(--v-theme-on-surface), 0.5);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.72rem;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.project-config-setup__field-control {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
 }
 
 .project-config-setup__actions {
   display: flex;
   justify-content: flex-end;
+}
+
+@media (max-width: 720px) {
+  .project-config-setup__field {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

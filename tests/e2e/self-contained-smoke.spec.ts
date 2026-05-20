@@ -31,6 +31,46 @@ async function mockReadyStudioShell(page: Page) {
       resolve();
     };
   });
+  const setupReadinessReadyPayload = {
+    currentStage: null,
+    message: "",
+    ready: true,
+    stages: [
+      {
+        checks: [],
+        ok: true,
+        ready: true
+      },
+      {
+        accounts: [
+          {
+            connected: true,
+            id: "codex",
+            label: "Codex",
+            status: "connected"
+          },
+          {
+            connected: true,
+            id: "github",
+            label: "GitHub",
+            status: "connected"
+          }
+        ],
+        ok: true,
+        ready: true
+      },
+      {
+        checks: [],
+        ok: true,
+        ready: true
+      },
+      {
+        ok: true,
+        ready: true,
+        stages: []
+      }
+    ]
+  };
   const apiPayloads = new Map<string, unknown>([
     [
       "/api/bootstrap",
@@ -165,46 +205,11 @@ async function mockReadyStudioShell(page: Page) {
     ],
     [
       "/api/studio/current-app/setup-readiness",
-      {
-        currentStage: null,
-        message: "",
-        ready: true,
-        stages: [
-          {
-            checks: [],
-            ok: true,
-            ready: true
-          },
-          {
-            accounts: [
-              {
-                connected: true,
-                id: "codex",
-                label: "Codex",
-                status: "connected"
-              },
-              {
-                connected: true,
-                id: "github",
-                label: "GitHub",
-                status: "connected"
-              }
-            ],
-            ok: true,
-            ready: true
-          },
-          {
-            checks: [],
-            ok: true,
-            ready: true
-          },
-          {
-            ok: true,
-            ready: true,
-            stages: []
-          }
-        ]
-      }
+      setupReadinessReadyPayload
+    ],
+    [
+      "/api/studio/current-app/setup-readiness/stream",
+      setupReadinessReadyPayload
     ],
     [
       "/api/studio/current-app",
@@ -251,7 +256,11 @@ async function mockReadyStudioShell(page: Page) {
       await projectConfigReady;
     }
 
-    await fulfillJson(route, apiPayloads.get(url.pathname));
+    if (url.pathname.endsWith("/stream")) {
+      await fulfillSse(route, apiPayloads.get(url.pathname));
+    } else {
+      await fulfillJson(route, apiPayloads.get(url.pathname));
+    }
 
     if (url.pathname === "/api/ai-studio/project-config") {
       markProjectConfigResolved();
@@ -263,5 +272,14 @@ async function fulfillJson(route: Route, payload: unknown) {
   await route.fulfill({
     body: JSON.stringify(payload),
     contentType: "application/json"
+  });
+}
+
+async function fulfillSse(route: Route, payload: unknown) {
+  await route.fulfill({
+    body: `event: run.finished\ndata: ${JSON.stringify({
+      status: payload
+    })}\n\n`,
+    contentType: "text/event-stream"
   });
 }

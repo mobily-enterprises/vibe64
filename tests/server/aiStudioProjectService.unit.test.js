@@ -31,6 +31,29 @@ test("AI Studio project service saves project type and plain-file configuration"
     assert.equal(jskitProjectType.projectUrl, "https://www.npmjs.com/package/@jskit-ai/jskit-cli");
     assert.equal(nextjsProjectType.projectUrl, "https://nextjs.org");
     assert.equal(vinextProjectType.projectUrl, "https://github.com/cloudflare/vinext");
+    assert.deepEqual(jskitProjectType.applicationTypes.map((applicationType) => applicationType.id), [
+      "web_application",
+      "phone_app"
+    ]);
+
+    const applicationTypes = missingType.projectType.availableApplicationTypes;
+    const webApplicationType = applicationTypes.find((applicationType) => applicationType.id === "web_application");
+    const phoneApplicationType = applicationTypes.find((applicationType) => applicationType.id === "phone_app");
+    const systemProgramType = applicationTypes.find((applicationType) => applicationType.id === "system_program");
+    assert.equal(webApplicationType.label, "Web application");
+    assert.deepEqual(webApplicationType.adapters.slice(0, 3).map((adapter) => adapter.id), [
+      "jskit",
+      "nextjs",
+      "laravel"
+    ]);
+    assert.match(webApplicationType.adapters[0].explanation, /Vue and Node\.js/u);
+    assert.deepEqual(phoneApplicationType.adapters.map((adapter) => adapter.id), [
+      "jskit",
+      "nextjs"
+    ]);
+    assert.deepEqual(systemProgramType.adapters.map((adapter) => adapter.id), [
+      "cpp"
+    ]);
 
     const savedType = await service.saveProjectType({
       projectType: "jskit"
@@ -49,6 +72,12 @@ test("AI Studio project service saves project type and plain-file configuration"
     assert.equal(defaults.defaults.defaults.github_pr_merge_method, "merge");
     assert.equal(defaults.defaults.defaults[JSKIT_ALLOW_SELF_TARGET_CONFIG], false);
     assert.equal(defaults.defaults.defaults.jskit_database_runtime, "none");
+    const mergeMethodField = defaults.defaults.fields.find((field) => field.id === "github_pr_merge_method");
+    const databaseRuntimeField = defaults.defaults.fields.find((field) => field.id === "jskit_database_runtime");
+    assert.match(mergeMethodField.description, /merge completed pull requests/u);
+    assert.match(mergeMethodField.options.find((option) => option.value === "squash").description, /one clean commit/u);
+    assert.match(databaseRuntimeField.description, /Database service Studio should prepare/u);
+    assert.match(databaseRuntimeField.options.find((option) => option.value === "mysql").description, /MariaDB/u);
 
     const savedConfig = await service.saveProjectConfig({
       values: {

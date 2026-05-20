@@ -25,68 +25,82 @@ import {
 const NEXTJS_PACKAGE_MANAGER_OPTIONS = NODE_PACKAGE_MANAGER_OPTIONS;
 const NEXTJS_SEED_LANGUAGE_OPTIONS = deepFreeze([
   {
+    description: "Seed TypeScript files and prompt Codex to preserve typed code.",
     label: "TypeScript",
     value: "typescript"
   },
   {
+    description: "Seed JavaScript files for projects that do not want TypeScript.",
     label: "JavaScript",
     value: "javascript"
   }
 ]);
 const NEXTJS_SEED_STYLING_OPTIONS = deepFreeze([
   {
+    description: "Include Tailwind CSS when Studio seeds a new Next.js app.",
     label: "Tailwind CSS",
     value: "tailwind"
   },
   {
+    description: "Do not add a styling framework during seeding.",
     label: "None",
     value: "none"
   }
 ]);
 const NEXTJS_SEED_LINTER_OPTIONS = deepFreeze([
   {
+    description: "Include ESLint when Studio seeds a new Next.js app.",
     label: "ESLint",
     value: "eslint"
   },
   {
+    description: "Include Biome instead of ESLint for formatting and linting.",
     label: "Biome",
     value: "biome"
   },
   {
+    description: "Do not add a linter during seeding.",
     label: "None",
     value: "none"
   }
 ]);
 const NEXTJS_SEED_SOURCE_LAYOUT_OPTIONS = deepFreeze([
   {
+    description: "Put app source under a src directory.",
     label: "src/app",
     value: "src"
   },
   {
+    description: "Put the app directory at the project root.",
     label: "app at root",
     value: "root"
   }
 ]);
 const NEXTJS_SEED_BUNDLER_OPTIONS = deepFreeze([
   {
+    description: "Use Turbopack for local Next.js development when seeded.",
     label: "Turbopack",
     value: "turbopack"
   },
   {
+    description: "Use the Webpack bundler path for projects that prefer the older default.",
     label: "Webpack",
     value: "webpack"
   }
 ]);
 const NEXTJS_DATA_LAYER_OPTIONS = deepFreeze([
   {
+    description: "Do not assume a database access library in prompts.",
     label: "None",
     value: "none"
   },
   {
+    description: "Use Prisma conventions when Codex plans and edits data access.",
     label: "Prisma",
     value: "prisma"
   },
   {
+    description: "Use Drizzle conventions when Codex plans and edits data access.",
     label: "Drizzle",
     value: "drizzle"
   }
@@ -162,14 +176,17 @@ const NEXTJS_CONFIG_FIELDS = deepFreeze([
     label: "Database runtime",
     options: [
       {
+        description: "Do not start a managed database service for this target.",
         label: "None",
         value: "none"
       },
       {
+        description: "Use a managed PostgreSQL service on the Studio runtime network.",
         label: "PostgreSQL",
         value: "postgres"
       },
       {
+        description: "Use a managed MySQL-compatible service on the Studio runtime network.",
         label: "MySQL",
         value: "mysql"
       }

@@ -16,10 +16,13 @@ import {
   missingDirectDependencies
 } from "../../server/lib/aiStudio/adapters/jskit/setupDependencyChecks.js";
 import {
-  npmInstallScript,
+  npmInstallScript
+} from "../../server/lib/aiStudio/adapters/jskit/setupProjectChecks.js";
+import {
+  checkJskitScaffold,
   scaffoldCommandPreview,
   scaffoldScript
-} from "../../server/lib/aiStudio/adapters/jskit/setupProjectChecks.js";
+} from "../../server/lib/aiStudio/adapters/jskit/setupScaffold.js";
 import {
   createDoctorPluginToolkit
 } from "../../server/lib/doctorPluginToolkit.js";
@@ -100,6 +103,24 @@ test("JSKIT seed command uses the selected create-app tenancy mode", () => {
   assert.doesNotMatch(script, /--tenancy-mode single/u);
   assert.doesNotMatch(script, /--tenancy-mode multi/u);
   assertShellScriptSurvivesWhitespaceCollapse(script);
+});
+
+test("JSKIT scaffold check treats root .gitignore as bootstrap metadata", async () => {
+  const targetRoot = await mkdtemp(path.join(os.tmpdir(), "ai-studio-jskit-gitignore-"));
+  const toolkit = createDoctorPluginToolkit({
+    targetRoot
+  });
+  await writeFile(path.join(targetRoot, ".gitignore"), ".ai-studio/\n", "utf8");
+
+  const result = await checkJskitScaffold(targetRoot, {
+    nonGitEntries: [
+      ".gitignore"
+    ]
+  }, toolkit);
+
+  assert.equal(result.status, "blocked");
+  assert.equal(result.repair.actionId, "terminal-scaffold-jskit");
+  assert.match(result.observed, /No scaffold files/u);
 });
 
 test("JSKIT setup parses config package imports", () => {

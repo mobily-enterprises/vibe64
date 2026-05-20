@@ -11,7 +11,14 @@ const NODE_PACKAGE_MANAGER_LABELS = deepFreeze({
   pnpm: "pnpm",
   yarn: "Yarn"
 });
+const NODE_PACKAGE_MANAGER_DESCRIPTIONS = deepFreeze({
+  bun: "Use Bun when the project already uses Bun lockfiles or scripts.",
+  npm: "Use npm, the default Node package manager included with Node.js.",
+  pnpm: "Use pnpm when the project expects pnpm workspaces or a pnpm lockfile.",
+  yarn: "Use Yarn when the project is built around Yarn commands or a yarn.lock file."
+});
 const NODE_PACKAGE_MANAGER_OPTIONS = deepFreeze(NODE_PACKAGE_MANAGER_VALUES.map((value) => ({
+  description: NODE_PACKAGE_MANAGER_DESCRIPTIONS[value],
   label: NODE_PACKAGE_MANAGER_LABELS[value],
   value
 })));

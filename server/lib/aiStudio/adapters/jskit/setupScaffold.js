@@ -28,6 +28,10 @@ const JSKIT_CREATE_APP_TENANCY_MODES = new Set([
   "personal",
   "workspaces"
 ]);
+const JSKIT_SCAFFOLD_ALLOWED_BOOTSTRAP_ENTRIES = new Set([
+  ".gitignore",
+  "node_modules"
+]);
 
 function selectedJskitTenancyMode(config = {}) {
   return selectedConfigValue(config, JSKIT_TENANCY_MODE_CONFIG, JSKIT_CREATE_APP_TENANCY_MODES, "none");
@@ -125,7 +129,8 @@ async function checkJskitScaffold(targetRoot, context, toolkit) {
     });
   }
 
-  const nonGitEntries = (context.nonGitEntries || []).filter((entry) => entry !== "node_modules");
+  const nonGitEntries = (context.nonGitEntries || [])
+    .filter((entry) => !JSKIT_SCAFFOLD_ALLOWED_BOOTSTRAP_ENTRIES.has(entry));
   if (nonGitEntries.length) {
     const missingMarkers = Object.entries(markers)
       .filter(([, present]) => !present)

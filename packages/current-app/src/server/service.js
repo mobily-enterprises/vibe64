@@ -372,8 +372,8 @@ function createService({
     return projectService.createRuntime();
   }
 
-  async function setupReadiness() {
-    return readAiStudioSetupReadiness(setupServices);
+  async function setupReadiness(options = {}) {
+    return readAiStudioSetupReadiness(setupServices, options);
   }
 
   async function requireSetupReady() {
@@ -485,6 +485,10 @@ function createService({
 
     async inspectSetupReadiness() {
       return currentAppResult(setupReadiness);
+    },
+
+    async streamSetupReadiness(options = {}) {
+      return currentAppResult(() => setupReadiness(options));
     },
 
     async listTargetScripts() {

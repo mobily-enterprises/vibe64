@@ -2,10 +2,20 @@ import {
   deepFreeze
 } from "../../deepFreeze.js";
 import {
+  AI_STUDIO_APPLICATION_TYPE_SYSTEM
+} from "../../applicationTypes.js";
+import {
   createCppTargetAdapter
 } from "./index.js";
 
 const CPP_ADAPTER_MANIFEST = deepFreeze({
+  applicationTypes: [
+    {
+      explanation: "Native command-line tools, libraries, and systems programs built with CMake, Make, or Meson.",
+      id: AI_STUDIO_APPLICATION_TYPE_SYSTEM,
+      priority: 100
+    }
+  ],
   bestFor: "Native libraries, command-line tools, systems software, and existing CMake or Make based C++ codebases.",
   createAdapter: createCppTargetAdapter,
   description: "C++ projects are native codebases built around compilers, build manifests, source/header organization, and local test binaries. The adapter understands CMake, Make, Meson, generated starter projects, target scripts, and C++-specific workflow prompts.",

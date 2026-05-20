@@ -2,13 +2,13 @@
   <section class="generated-ui-screen generated-ui-screen--studio studio-screen d-flex flex-column ga-3">
     <header class="studio-screen__header d-flex flex-column flex-md-row ga-3 align-md-end justify-space-between">
       <div>
-        <h1 class="studio-screen__title">{{ title }}</h1>
-        <p class="text-body-2 text-medium-emphasis mb-0 studio-screen__lede">{{ lede }}</p>
+        <h1 class="studio-screen__title">{{ pageTitle }}</h1>
+        <p class="text-body-2 text-medium-emphasis mb-0 studio-screen__lede">{{ pageLede }}</p>
       </div>
 
       <div class="d-flex ga-2 align-center flex-wrap">
         <v-chip
-          v-if="displayStatus"
+          v-if="displayStatus && detailsAreVisible"
           :color="summary.color"
           :prepend-icon="summaryIcon"
           variant="tonal"
@@ -24,6 +24,16 @@
           @click="handleContinue"
         >
           {{ continueLabel }}
+        </v-btn>
+        <v-btn
+          v-if="canToggleDetails"
+          color="primary"
+          variant="tonal"
+          :prepend-icon="detailsOpen ? mdiEyeOffOutline : mdiEyeOutline"
+          class="studio-screen__action-button"
+          @click="toggleDetails"
+        >
+          {{ detailsOpen ? "Hide details" : "Show details" }}
         </v-btn>
         <v-btn
           variant="tonal"
@@ -49,7 +59,7 @@
     </v-alert>
 
     <v-alert
-      v-if="automaticRepairMessage || automaticRepairError"
+      v-if="showAutomaticRepairNotice"
       :type="automaticRepairError ? 'error' : 'info'"
       variant="tonal"
       border="start"
@@ -61,8 +71,35 @@
       </div>
     </v-alert>
 
+    <v-sheet
+      v-if="showQuietStatus"
+      rounded="lg"
+      border
+      class="doctor-status__quiet"
+    >
+      <div
+        :class="[
+          'doctor-status__quiet-icon',
+          `doctor-status__quiet-icon--${quietSummary.state}`
+        ]"
+      >
+        <v-icon :icon="quietSummaryIcon" :color="quietSummary.color" size="40" />
+      </div>
+      <div class="doctor-status__quiet-copy">
+        <h2 class="doctor-status__quiet-title">{{ quietStatusTitle }}</h2>
+        <p class="doctor-status__quiet-message">{{ quietStatusMessage }}</p>
+      </div>
+      <v-progress-linear
+        :model-value="progressValue"
+        :color="quietSummary.color"
+        height="8"
+        :indeterminate="quietProgressIndeterminate"
+        rounded
+      />
+    </v-sheet>
+
     <v-progress-linear
-      v-if="isLoading && !displayStatus"
+      v-if="detailsAreVisible && isLoading && !displayStatus"
       color="primary"
       height="6"
       indeterminate
@@ -70,7 +107,7 @@
     />
 
     <section
-      v-if="displayStatus"
+      v-if="displayStatus && detailsAreVisible"
       :class="['doctor-status', doctorClass, 'd-flex', 'flex-column', 'ga-2']"
     >
       <v-sheet
@@ -145,8 +182,10 @@
 </template>
 
 <script setup>
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import {
+  mdiEyeOffOutline,
+  mdiEyeOutline,
   mdiRefresh
 } from "@mdi/js";
 import DoctorCheckList from "@/components/studio/doctor/DoctorCheckList.vue";
@@ -213,6 +252,18 @@ const props = defineProps({
     type: String,
     default: "Ready"
   },
+  quiet: {
+    type: Boolean,
+    default: true
+  },
+  quietLede: {
+    type: String,
+    default: "AI Studio is checking the project and preparing anything it can handle automatically."
+  },
+  quietTitle: {
+    type: String,
+    default: "Getting things ready"
+  },
   status: {
     type: Object,
     default: null
@@ -244,6 +295,7 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["continue", "refresh", "status-updated"]);
+const detailsOpen = ref(false);
 
 const {
   liveStatus,
@@ -327,6 +379,7 @@ const {
   actionInFlight,
   automaticRepair,
   automaticRepairError,
+  automaticRepairAvailable,
   automaticRepairLog,
   automaticRepairMessage,
   automaticRepairRunning,
@@ -409,6 +462,97 @@ const summary = computed(() => {
   });
 });
 
+const blockedWithoutAutomaticRepair = computed(() => {
+  return Boolean(
+    displayStatus.value &&
+    ready.value !== true &&
+    summary.value.state === "fail" &&
+    !isLoading.value &&
+    !automaticRepairRunning.value &&
+    !automaticRepairAvailable.value
+  );
+});
+
+const detailsMustStayVisible = computed(() => {
+  return Boolean(displayError.value || automaticRepairError.value || blockedWithoutAutomaticRepair.value);
+});
+
+const detailsAreVisible = computed(() => {
+  return props.quiet !== true || detailsOpen.value || detailsMustStayVisible.value;
+});
+
+const showQuietStatus = computed(() => {
+  return props.quiet === true && !detailsAreVisible.value;
+});
+
+const canToggleDetails = computed(() => {
+  return props.quiet === true && !detailsMustStayVisible.value;
+});
+
+const showAutomaticRepairNotice = computed(() => {
+  return Boolean(automaticRepairError.value || (detailsAreVisible.value && automaticRepairMessage.value));
+});
+
+const pageTitle = computed(() => {
+  return showQuietStatus.value ? props.quietTitle : props.title;
+});
+
+const pageLede = computed(() => {
+  return showQuietStatus.value ? props.quietLede : props.lede;
+});
+
+const quietSummary = computed(() => {
+  if (!displayStatus.value && !detailsMustStayVisible.value) {
+    return {
+      color: "primary",
+      progressIndeterminate: true,
+      state: "checking"
+    };
+  }
+  return summary.value;
+});
+
+const quietProgressIndeterminate = computed(() => {
+  return Boolean(
+    isLoading.value ||
+    automaticRepairRunning.value ||
+    automaticRepairAvailable.value ||
+    quietSummary.value.progressIndeterminate
+  );
+});
+
+const quietStatusTitle = computed(() => {
+  if (ready.value) {
+    return "Ready";
+  }
+  if (automaticRepairRunning.value) {
+    return "Preparing automatically";
+  }
+  if (isLoading.value) {
+    return "Checking setup";
+  }
+  if (automaticRepairAvailable.value) {
+    return "Preparing automatically";
+  }
+  return "Getting things ready";
+});
+
+const quietStatusMessage = computed(() => {
+  if (ready.value) {
+    return "Everything needed for this step is ready.";
+  }
+  if (automaticRepairRunning.value && automaticRepair.value?.label) {
+    return `AI Studio is running ${automaticRepair.value.label}.`;
+  }
+  if (automaticRepairRunning.value || automaticRepairAvailable.value) {
+    return "AI Studio is handling this setup step automatically.";
+  }
+  if (isLoading.value) {
+    return "AI Studio is checking what this project needs.";
+  }
+  return "AI Studio is getting the project ready.";
+});
+
 const checking = computed(() => {
   return summary.value.state === "checking";
 });
@@ -417,8 +561,16 @@ const summaryIcon = computed(() => {
   return doctorSummaryIcon(summary.value.state);
 });
 
+const quietSummaryIcon = computed(() => {
+  return doctorSummaryIcon(quietSummary.value.state);
+});
+
 function setTerminalHost(element) {
   terminalHost.value = element;
+}
+
+function toggleDetails() {
+  detailsOpen.value = !detailsOpen.value;
 }
 </script>
 
@@ -471,6 +623,57 @@ function setTerminalHost(element) {
   display: grid;
   gap: 0.85rem;
   grid-template-columns: auto minmax(0, 1fr);
+}
+
+.doctor-status__quiet {
+  align-items: center;
+  display: grid;
+  gap: 1rem;
+  justify-items: center;
+  padding: clamp(1.5rem, 4vw, 2.5rem);
+  text-align: center;
+}
+
+.doctor-status__quiet-copy {
+  display: grid;
+  gap: 0.35rem;
+  max-width: 36rem;
+}
+
+.doctor-status__quiet-title {
+  font-size: clamp(1.15rem, 2vw, 1.45rem);
+  font-weight: 720;
+  letter-spacing: 0;
+  line-height: 1.15;
+  margin: 0;
+}
+
+.doctor-status__quiet-message {
+  color: rgba(var(--v-theme-on-surface), 0.68);
+  font-size: 0.94rem;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.doctor-status__quiet-icon {
+  align-items: center;
+  border-radius: 999px;
+  display: inline-flex;
+  height: 4rem;
+  justify-content: center;
+  width: 4rem;
+}
+
+.doctor-status__quiet-icon--pass {
+  background: rgba(var(--v-theme-success), 0.12);
+}
+
+.doctor-status__quiet-icon--checking {
+  background: rgba(var(--v-theme-primary), 0.12);
+}
+
+.doctor-status__quiet-icon--fail {
+  background: rgba(var(--v-theme-error), 0.12);
 }
 
 .doctor-status__summary-icon {

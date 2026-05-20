@@ -11,9 +11,16 @@ export {
   adapterView
 } from "./adapter.js";
 export {
+  AI_STUDIO_APPLICATION_TYPE_GROUPS,
   AI_STUDIO_PROJECT_TYPES,
   createAiStudioAdapterRegistry
 } from "./adapters/registry.js";
+export {
+  AI_STUDIO_APPLICATION_TYPES,
+  AI_STUDIO_APPLICATION_TYPE_PHONE,
+  AI_STUDIO_APPLICATION_TYPE_SYSTEM,
+  AI_STUDIO_APPLICATION_TYPE_WEB
+} from "./applicationTypes.js";
 export {
   STUDIO_CONTEXT_END_MARKER,
   STUDIO_CONTEXT_INSTRUCTIONS,

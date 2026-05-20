@@ -125,6 +125,52 @@ describe("useAiStudioHeadlessCommandRunner", () => {
       output: "starting\nfatal: branch exists\n"
     });
   });
+
+  it("can stop a running command and preserve its output as a failure", async () => {
+    const closeCommandTerminal = vi.fn(async () => ({
+      ok: true
+    }));
+    const runner = useAiStudioHeadlessCommandRunner({
+      closeCommandTerminal,
+      startCommandTerminal: vi.fn(async () => ({
+        commandPreview: "npx --no-install jskit helper-map update",
+        id: "terminal-3",
+        ok: true,
+        output: "indexing\n",
+        status: "running"
+      })),
+      webSocketUrl: () => "ws://studio/session-1/terminal-3"
+    });
+
+    const resultPromise = runner.runCommandAction({
+      action: {
+        id: "update_code_index",
+        label: "Update code index"
+      },
+      sessionId: "session-1"
+    });
+
+    await vi.waitFor(() => {
+      expect(FakeWebSocket.instances).toHaveLength(1);
+    });
+
+    FakeWebSocket.instances[0].sendMessage({
+      chunk: "still indexing\n",
+      type: "output"
+    });
+
+    expect(runner.stopCommandAction()).toBe(true);
+
+    await expect(resultPromise).resolves.toMatchObject({
+      actionId: "update_code_index",
+      error: "Update code index was stopped before it finished.",
+      exitCode: null,
+      ok: false,
+      output: "indexing\nstill indexing\n"
+    });
+    expect(closeCommandTerminal).toHaveBeenCalledWith("session-1", "terminal-3");
+    expect(runner.running.value).toBe(false);
+  });
 });
 
 class FakeWebSocket {

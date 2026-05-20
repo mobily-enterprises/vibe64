@@ -79,26 +79,29 @@ const JSKIT_ALLOW_SELF_TARGET_CONFIG = "jskit_allow_self_target";
 const JSKIT_CONFIG_FIELDS = deepFreeze([
   {
     defaultValue: false,
-    description: "Allow AI Studio to target this Studio checkout for self-development.",
+    description: "Only turn this on when developing AI Studio itself. It lets a Studio instance open another Studio session against this checkout.",
     id: JSKIT_ALLOW_SELF_TARGET_CONFIG,
     label: "Allow Studio self-targeting",
     type: "boolean"
   },
   {
     defaultValue: "none",
-    description: "Future JSKIT database runtime preference.",
+    description: "Database service Studio should prepare for local JSKIT runs. Choose None when the app does not need a database.",
     id: "jskit_database_runtime",
     label: "Database runtime",
     options: [
       {
+        description: "Do not start a managed database service for this target.",
         label: "None",
         value: "none"
       },
       {
+        description: "Use a managed MariaDB/MySQL-compatible service on the Studio runtime network.",
         label: "MariaDB",
         value: "mysql"
       },
       {
+        description: "Reserve PostgreSQL as the database preference for JSKIT project setup.",
         label: "Postgres",
         value: "postgres"
       }
@@ -107,19 +110,22 @@ const JSKIT_CONFIG_FIELDS = deepFreeze([
   },
   {
     defaultValue: "none",
-    description: "JSKIT create-app tenancy mode used when Studio seeds a new target.",
+    description: "User/account model Studio should request when it seeds a new JSKIT app.",
     id: "jskit_tenancy_mode",
     label: "Tenancy mode",
     options: [
       {
+        description: "No tenancy scaffold. Use this for simple single-context apps.",
         label: "None",
         value: "none"
       },
       {
+        description: "Add personal user-owned data areas without shared workspaces.",
         label: "Personal",
         value: "personal"
       },
       {
+        description: "Add workspace/team-style ownership so users can collaborate in shared spaces.",
         label: "Workspaces",
         value: "workspaces"
       }

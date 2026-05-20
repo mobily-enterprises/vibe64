@@ -25,80 +25,97 @@ import {
 const LARAVEL_PACKAGE_MANAGER_OPTIONS = NODE_PACKAGE_MANAGER_OPTIONS;
 const LARAVEL_STARTER_KIT_OPTIONS = deepFreeze([
   {
+    description: "Seed a plain Laravel app without an official starter kit.",
     label: "None",
     value: "none"
   },
   {
+    description: "Seed Laravel's React starter kit.",
     label: "React",
     value: "react"
   },
   {
+    description: "Seed Laravel's Vue starter kit.",
     label: "Vue",
     value: "vue"
   },
   {
+    description: "Seed Laravel's Svelte starter kit.",
     label: "Svelte",
     value: "svelte"
   },
   {
+    description: "Seed Laravel's Livewire starter kit.",
     label: "Livewire",
     value: "livewire"
   },
   {
+    description: "Seed from a custom starter package configured below.",
     label: "Custom package",
     value: "custom"
   }
 ]);
 const LARAVEL_AUTHENTICATION_OPTIONS = deepFreeze([
   {
+    description: "Use Laravel's built-in authentication scaffolding.",
     label: "Laravel built-in",
     value: "laravel"
   },
   {
+    description: "Use WorkOS AuthKit authentication scaffolding.",
     label: "WorkOS AuthKit",
     value: "workos"
   },
   {
+    description: "Do not add authentication scaffolding.",
     label: "None",
     value: "none"
   }
 ]);
 const LARAVEL_TEAMS_OPTIONS = deepFreeze([
   {
+    description: "Do not add team support.",
     label: "No teams",
     value: "none"
   },
   {
+    description: "Ask the Laravel installer to add team support.",
     label: "Teams",
     value: "teams"
   }
 ]);
 const LARAVEL_LIVEWIRE_COMPONENT_OPTIONS = deepFreeze([
   {
+    description: "Generate Livewire components as single files.",
     label: "Single-file",
     value: "single_file"
   },
   {
+    description: "Generate Livewire components with separate class files.",
     label: "Class components",
     value: "class"
   }
 ]);
 const LARAVEL_TESTING_FRAMEWORK_OPTIONS = deepFreeze([
   {
+    description: "Use Pest for generated test guidance.",
     label: "Pest",
     value: "pest"
   },
   {
+    description: "Use PHPUnit for generated test guidance.",
     label: "PHPUnit",
     value: "phpunit"
   }
 ]);
 const LARAVEL_BOOST_OPTIONS = deepFreeze([
   {
+    description: "Do not install Laravel Boost.",
     label: "None",
     value: "none"
   },
   {
+    description: "Ask the Laravel installer to include Laravel Boost.",
     label: "Install Boost",
     value: "boost"
   }
@@ -127,18 +144,22 @@ const LARAVEL_CONFIG_FIELDS = deepFreeze([
     label: "Database runtime",
     options: [
       {
+        description: "Use local SQLite files for the simplest seeded Laravel setup.",
         label: "SQLite",
         value: "sqlite"
       },
       {
+        description: "Use a managed PostgreSQL service on the Studio runtime network.",
         label: "PostgreSQL",
         value: "postgres"
       },
       {
+        description: "Use a managed MySQL-compatible service on the Studio runtime network.",
         label: "MySQL",
         value: "mysql"
       },
       {
+        description: "Use a managed MariaDB service on the Studio runtime network.",
         label: "MariaDB",
         value: "mariadb"
       }

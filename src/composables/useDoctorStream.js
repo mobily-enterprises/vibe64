@@ -1,12 +1,5 @@
 import { onBeforeUnmount, ref, watch } from "vue";
-
-function parseStreamEvent(event) {
-  try {
-    return JSON.parse(event.data || "{}");
-  } catch {
-    return {};
-  }
-}
+import { parseJsonStreamEvent } from "@/lib/streamEvents.js";
 
 function statusListKey(statusItemsKey = "checks", status = null) {
   if (statusItemsKey === "stages") {
@@ -132,7 +125,7 @@ function useDoctorStream({
       if (!isCurrentStream()) {
         return;
       }
-      const payload = parseStreamEvent(event);
+      const payload = parseJsonStreamEvent(event);
       replaceStatusItem({
         explanation: "Studio is checking this now.",
         expected: "Check is running.",
@@ -147,7 +140,7 @@ function useDoctorStream({
       if (!isCurrentStream()) {
         return;
       }
-      const payload = parseStreamEvent(event);
+      const payload = parseJsonStreamEvent(event);
       if (payload.check?.id) {
         replaceStatusItem(payload.check);
       }
@@ -156,7 +149,7 @@ function useDoctorStream({
       if (!isCurrentStream()) {
         return;
       }
-      const payload = parseStreamEvent(event);
+      const payload = parseJsonStreamEvent(event);
       replaceStatusItem({
         explanation: "The check raised an unexpected error.",
         expected: "Check completes without throwing.",
@@ -171,7 +164,7 @@ function useDoctorStream({
       if (!isCurrentStream()) {
         return;
       }
-      const payload = parseStreamEvent(event);
+      const payload = parseJsonStreamEvent(event);
       liveStatus.value = payload.status || liveStatus.value;
       if (payload.status) {
         notifyStatusUpdated(payload.status);
@@ -183,7 +176,7 @@ function useDoctorStream({
       if (!isCurrentStream()) {
         return;
       }
-      const payload = parseStreamEvent(event);
+      const payload = parseJsonStreamEvent(event);
       streamError.value = payload.error || "Doctor stream failed.";
       streamRunning.value = false;
       closeDoctorStream(source);

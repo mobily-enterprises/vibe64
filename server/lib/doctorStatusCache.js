@@ -5,6 +5,7 @@ import path from "node:path";
 import process from "node:process";
 
 const DEFAULT_READY_STATUS_CACHE_TTL_MS = 120_000;
+const DEFAULT_RECENT_NOT_READY_STATUS_CACHE_TTL_MS = 10_000;
 const READY_STATUS_RECORD_SCHEMA_VERSION = 1;
 
 function createReadyStatusCache({
@@ -161,11 +162,12 @@ async function writeReadyStatusRecord(filePath, record) {
 
 function createRepositoryReadyStatusCache({
   doctorId = "",
+  recentNotReadyTtlMs = DEFAULT_RECENT_NOT_READY_STATUS_CACHE_TTL_MS,
   stateRoot = "",
   studioRoot = "",
   targetRoot = ""
 } = {}) {
-  let cached = null;
+  let memoryRecord = null;
   const {
     cacheKey,
     filePath,
@@ -177,21 +179,53 @@ function createRepositoryReadyStatusCache({
     targetRoot
   });
 
+  function readMemoryStatus() {
+    if (!memoryRecord) {
+      return null;
+    }
+    if (memoryRecord.expiresAt && memoryRecord.expiresAt <= Date.now()) {
+      memoryRecord = null;
+      return null;
+    }
+    return memoryRecord.status;
+  }
+
+  function rememberMemoryStatus(status) {
+    if (status?.ready === true) {
+      memoryRecord = {
+        expiresAt: 0,
+        status
+      };
+      return;
+    }
+
+    if (status?.ready === false && status?.ok !== false && recentNotReadyTtlMs > 0) {
+      memoryRecord = {
+        expiresAt: Date.now() + recentNotReadyTtlMs,
+        status
+      };
+      return;
+    }
+
+    memoryRecord = null;
+  }
+
   async function read() {
-    if (cached?.ready === true) {
-      return cached;
+    const memoryStatus = readMemoryStatus();
+    if (memoryStatus) {
+      return memoryStatus;
     }
 
     const status = recordReadyStatus(await readReadyStatusRecord(filePath), cacheKey);
     if (status) {
-      cached = status;
+      rememberMemoryStatus(status);
     }
     return status;
   }
 
   async function remember(status) {
     if (status?.ready === true) {
-      cached = status;
+      rememberMemoryStatus(status);
       try {
         await writeReadyStatusRecord(filePath, {
           cacheKey,
@@ -206,7 +240,7 @@ function createRepositoryReadyStatusCache({
       return status;
     }
 
-    cached = null;
+    rememberMemoryStatus(status);
     try {
       await rm(filePath, {
         force: true

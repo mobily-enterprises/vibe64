@@ -4,6 +4,11 @@ import {
 } from "../core.js";
 import { deepFreeze } from "../deepFreeze.js";
 import {
+  AI_STUDIO_APPLICATION_TYPES,
+  normalizeApplicationTypeCoverageList,
+  publicApplicationType
+} from "../applicationTypes.js";
+import {
   JSKIT_ADAPTER_MANIFEST
 } from "./jskit/manifest.js";
 import {
@@ -45,7 +50,11 @@ function publicProjectType(definition = {}) {
   const techStack = Array.isArray(definition.techStack)
     ? definition.techStack.map(normalizeText).filter(Boolean)
     : [];
+  const applicationTypes = normalizeApplicationTypeCoverageList(definition.applicationTypes, {
+    adapterId: definition.id
+  });
   return {
+    applicationTypes,
     bestFor: normalizeText(definition.bestFor),
     description: normalizeText(definition.description),
     disabledReason: normalizeText(definition.disabledReason),
@@ -65,6 +74,37 @@ function normalizeAdapterManifest(manifest = {}) {
   return {
     ...definition,
     createAdapter: typeof manifest.createAdapter === "function" ? manifest.createAdapter : null
+  };
+}
+
+function publicApplicationTypeAdapter(definition = {}, coverage = {}) {
+  return {
+    ...publicProjectType(definition),
+    applicationTypeId: coverage.id,
+    explanation: coverage.explanation,
+    priority: coverage.priority
+  };
+}
+
+function sortApplicationTypeAdapters(left, right) {
+  return right.priority - left.priority ||
+    left.label.localeCompare(right.label) ||
+    left.id.localeCompare(right.id);
+}
+
+function applicationTypeAdapters(definitions = [], applicationTypeId = "") {
+  return definitions
+    .filter((definition) => definition.enabled === true)
+    .flatMap((definition) => definition.applicationTypes
+      .filter((coverage) => coverage.id === applicationTypeId)
+      .map((coverage) => publicApplicationTypeAdapter(definition, coverage)))
+    .sort(sortApplicationTypeAdapters);
+}
+
+function publicApplicationTypeGroup(applicationType = {}, definitions = []) {
+  return {
+    ...publicApplicationType(applicationType),
+    adapters: applicationTypeAdapters(definitions, applicationType.id)
   };
 }
 
@@ -93,6 +133,12 @@ function createAiStudioAdapterRegistry({
     return definitions
       .filter((definition) => definition.enabled === true)
       .map(publicProjectType);
+  }
+
+  function availableApplicationTypes() {
+    return AI_STUDIO_APPLICATION_TYPES
+      .map((applicationType) => publicApplicationTypeGroup(applicationType, definitions))
+      .filter((applicationType) => applicationType.adapters.length > 0);
   }
 
   function projectTypeDefinition(projectType) {
@@ -133,6 +179,7 @@ function createAiStudioAdapterRegistry({
   }
 
   return Object.freeze({
+    availableApplicationTypes,
     availableProjectTypes,
     createAdapter,
     projectTypeDefinition,
@@ -140,9 +187,19 @@ function createAiStudioAdapterRegistry({
   });
 }
 
-const AI_STUDIO_PROJECT_TYPES = deepFreeze(DEFAULT_ADAPTER_MANIFESTS.map(publicProjectType));
+const DEFAULT_ADAPTER_DEFINITIONS = deepFreeze(DEFAULT_ADAPTER_MANIFESTS.map(normalizeAdapterManifest));
+const AI_STUDIO_PROJECT_TYPES = deepFreeze(DEFAULT_ADAPTER_DEFINITIONS.map(publicProjectType));
+const AI_STUDIO_APPLICATION_TYPE_GROUPS = deepFreeze(
+  AI_STUDIO_APPLICATION_TYPES
+    .map((applicationType) => publicApplicationTypeGroup(
+      applicationType,
+      DEFAULT_ADAPTER_DEFINITIONS
+    ))
+    .filter((applicationType) => applicationType.adapters.length > 0)
+);
 
 export {
+  AI_STUDIO_APPLICATION_TYPE_GROUPS,
   AI_STUDIO_PROJECT_TYPES,
   createAiStudioAdapterRegistry,
   DEFAULT_ADAPTER_MANIFESTS

@@ -88,6 +88,23 @@ function commandSuccess({
   };
 }
 
+function commandStopped({
+  action = {},
+  commandPreview = "",
+  output = "",
+  terminalSessionId = ""
+} = {}) {
+  const label = terminalActionLabel(action);
+  return commandFailure({
+    action,
+    commandPreview,
+    error: `${label} was stopped before it finished.`,
+    exitCode: null,
+    output,
+    terminalSessionId
+  });
+}
+
 function useAiStudioHeadlessCommandRunner({
   closeCommandTerminal = closeAiStudioCommandTerminal,
   startCommandTerminal = startAiStudioCommandTerminal,
@@ -101,6 +118,7 @@ function useAiStudioHeadlessCommandRunner({
 
   let activeSocket = null;
   let activeTerminal = null;
+  let stopActiveCommand = null;
 
   async function runCommandAction({
     action = {},
@@ -155,6 +173,7 @@ function useAiStudioHeadlessCommandRunner({
       await closeActiveTerminal();
       running.value = false;
       status.value = "";
+      stopActiveCommand = null;
     }
   }
 
@@ -185,6 +204,7 @@ function useAiStudioHeadlessCommandRunner({
           return;
         }
         settled = true;
+        stopActiveCommand = null;
         closeSocket(activeSocket);
         activeSocket = null;
         resolve(result);
@@ -247,6 +267,17 @@ function useAiStudioHeadlessCommandRunner({
         }
       }
 
+      stopActiveCommand = () => {
+        status.value = "stopping";
+        settle(commandStopped({
+          action,
+          commandPreview,
+          output,
+          terminalSessionId
+        }));
+        return true;
+      };
+
       if (terminalHasExited(initialSession)) {
         settle(resultForExit(initialSession.exitCode ?? null, String(initialSession.closeError || "")));
         return;
@@ -287,6 +318,10 @@ function useAiStudioHeadlessCommandRunner({
     });
   }
 
+  function stopCommandAction() {
+    return typeof stopActiveCommand === "function" ? stopActiveCommand() : false;
+  }
+
   async function closeActiveTerminal() {
     closeSocket(activeSocket);
     activeSocket = null;
@@ -309,7 +344,8 @@ function useAiStudioHeadlessCommandRunner({
     output,
     runCommandAction,
     running,
-    status
+    status,
+    stopCommandAction
   };
 }
 
