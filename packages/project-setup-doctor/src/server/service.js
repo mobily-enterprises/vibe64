@@ -70,6 +70,10 @@ import {
 } from "../../../../server/lib/setupDoctorGit.js";
 
 const TERMINAL_NAMESPACE = "project-setup-doctor";
+const AUTOMATIC_REPAIR_MAX_ATTEMPTS = 12;
+const AUTOMATIC_REPAIR_TIMEOUT_MS = 30 * 60 * 1000;
+const AUTOMATIC_REPAIR_POLL_MS = 250;
+const REPAIRABLE_STATUSES = Object.freeze(["blocked", "fail", "hard-stop"]);
 const STUDIO_OWNED_BOOTSTRAP_ENTRIES = new Set([
   AI_STUDIO_STATE_DIR
 ]);
@@ -131,6 +135,174 @@ function terminalRepairActionIds(status = {}) {
     .flatMap(repairsForStage)
     .filter((repair) => repair.kind === "terminal" && repair.actionId)
     .map((repair) => repair.actionId));
+}
+
+function stableJson(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return JSON.stringify(value || {});
+  }
+  const ordered = {};
+  for (const key of Object.keys(value).sort((left, right) => left.localeCompare(right))) {
+    ordered[key] = value[key];
+  }
+  return JSON.stringify(ordered);
+}
+
+function automaticRepairInputs(repair = {}) {
+  const inputs = repair.input && typeof repair.input === "object" && !Array.isArray(repair.input)
+    ? { ...repair.input }
+    : {};
+  for (const field of Array.isArray(repair.fields) ? repair.fields : []) {
+    const value = String(field.defaultValue || "").trim();
+    if (field.required && !value) {
+      return null;
+    }
+    inputs[field.id] = value;
+  }
+  return inputs;
+}
+
+function automaticRepairKey(stage = {}, repair = {}, inputs = {}) {
+  return [
+    stage.id || "",
+    stage.status || "",
+    stage.observed || "",
+    repair.actionId || "",
+    repair.commandPreview || "",
+    stableJson(inputs)
+  ].join("\n---\n");
+}
+
+function automaticRepairCandidate(stage = {}, repair = {}, attemptedKeys = new Set()) {
+  if (!REPAIRABLE_STATUSES.includes(stage.status) ||
+    repair.autoRun !== true ||
+    repair.kind !== "terminal" ||
+    !repair.actionId) {
+    return null;
+  }
+  const inputs = automaticRepairInputs(repair);
+  if (inputs === null) {
+    return null;
+  }
+  const key = automaticRepairKey(stage, repair, inputs);
+  if (attemptedKeys.has(key)) {
+    return null;
+  }
+  return {
+    inputs,
+    key,
+    repair,
+    stage
+  };
+}
+
+function findAutomaticRepairCandidate(status = {}, attemptedKeys = new Set()) {
+  for (const stage of Array.isArray(status.stages) ? status.stages : []) {
+    if (!REPAIRABLE_STATUSES.includes(stage?.status)) {
+      continue;
+    }
+    for (const repair of repairsForStage(stage)) {
+      const candidate = automaticRepairCandidate(stage, repair, attemptedKeys);
+      if (candidate) {
+        return candidate;
+      }
+    }
+  }
+  return null;
+}
+
+function findAttemptedAutomaticRepairCandidate(status = {}, attemptedKeys = new Set()) {
+  for (const stage of Array.isArray(status.stages) ? status.stages : []) {
+    if (!REPAIRABLE_STATUSES.includes(stage?.status)) {
+      continue;
+    }
+    for (const repair of repairsForStage(stage)) {
+      const inputs = automaticRepairInputs(repair);
+      if (inputs === null ||
+        repair.autoRun !== true ||
+        repair.kind !== "terminal" ||
+        !repair.actionId) {
+        continue;
+      }
+      const key = automaticRepairKey(stage, repair, inputs);
+      if (attemptedKeys.has(key)) {
+        return {
+          inputs,
+          key,
+          repair,
+          stage
+        };
+      }
+    }
+  }
+  return null;
+}
+
+function tailText(text = "", limit = 4000) {
+  const value = String(text || "").trim();
+  if (value.length <= limit) {
+    return value;
+  }
+  return value.slice(value.length - limit);
+}
+
+function repairResultFailure(result = {}) {
+  if (!result || result.ok === false) {
+    return result?.error || "Terminal repair did not start.";
+  }
+  if (result.closeError) {
+    return result.closeError;
+  }
+  if (Number.isInteger(result.exitCode) && result.exitCode !== 0) {
+    return `Exit code ${result.exitCode}.`;
+  }
+  return "";
+}
+
+function annotateAutomaticRepairStatus(status = {}, candidate = {}, message = "") {
+  const stageId = candidate.stage?.id || "";
+  return {
+    ...status,
+    stages: (Array.isArray(status.stages) ? status.stages : []).map((stage) => {
+      if (stage.id !== stageId) {
+        return stage;
+      }
+      return {
+        ...stage,
+        observed: [
+          stage.observed,
+          String(message || "").trim()
+        ].filter(Boolean).join("\n\n")
+      };
+    }),
+    updatedAt: new Date().toISOString()
+  };
+}
+
+function automaticRepairFailureStatus(status, candidate, result = {}) {
+  const label = candidate.repair?.label || candidate.repair?.actionId || "automatic repair";
+  const failure = repairResultFailure(result);
+  const output = tailText(result.output || result.stderr || result.stdout || "");
+  return annotateAutomaticRepairStatus(status, candidate, [
+    `Automatic repair failed: ${label}`,
+    failure,
+    output
+  ].filter(Boolean).join("\n"));
+}
+
+function automaticRepairStillBlockedStatus(status, candidate) {
+  const label = candidate.repair?.label || candidate.repair?.actionId || "automatic repair";
+  return annotateAutomaticRepairStatus(
+    status,
+    candidate,
+    `Automatic repair completed but this stage is still blocked: ${label}`
+  );
+}
+
+function delay(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 function projectGitInitRepair(targetRoot) {
@@ -655,7 +827,7 @@ async function setupCheckChain({
   return checks;
 }
 
-async function runCoreSetupChecks({
+async function runCoreSetupChecksOnce({
   config = {},
   configEnvironment = {},
   emit = null,
@@ -698,6 +870,168 @@ async function runCoreSetupChecks({
     stages,
     targetRoot: resolvedTargetRoot
   });
+}
+
+async function waitForProjectSetupTerminalExit(sessionId, {
+  timeoutMs = AUTOMATIC_REPAIR_TIMEOUT_MS
+} = {}) {
+  const deadline = Date.now() + timeoutMs;
+  while (true) {
+    const session = readTerminalSession(sessionId, {
+      namespace: TERMINAL_NAMESPACE
+    });
+    if (session?.ok === false || session?.status === "exited") {
+      return session;
+    }
+    if (Date.now() >= deadline) {
+      return {
+        ...session,
+        error: `Automatic repair timed out after ${Math.round(timeoutMs / 1000)} seconds.`,
+        ok: false
+      };
+    }
+    await delay(AUTOMATIC_REPAIR_POLL_MS);
+  }
+}
+
+async function startProjectSetupTerminalAction({
+  actionId,
+  inputs = {},
+  setupRuntime = {},
+  studioRoot = "",
+  targetRoot
+} = {}) {
+  if (actionId === "terminal-git-init") {
+    return startGitInitTerminal(targetRoot, setupRuntime.configEnvironment);
+  }
+  if (actionId === "terminal-gh-create-repo") {
+    return startGhCreateRepoTerminal(targetRoot, setupRuntime.configEnvironment);
+  }
+  if (actionId === "terminal-link-github-remote") {
+    return startLinkRemoteTerminal(targetRoot, inputs, setupRuntime.configEnvironment);
+  }
+  if (actionId === ADD_AI_STUDIO_GITIGNORE_RULES_ACTION_ID) {
+    return startAiStudioGitignoreTerminal(targetRoot, setupRuntime.configEnvironment);
+  }
+  if (actionId === CREATE_GIT_CHECKPOINT_ACTION_ID) {
+    return startGitCheckpointTerminal(targetRoot, inputs, setupRuntime.configEnvironment, {
+      allowCreate: true
+    });
+  }
+  if (actionId === PUSH_GIT_CHECKPOINT_ACTION_ID) {
+    return startGitCheckpointTerminal(targetRoot, inputs, setupRuntime.configEnvironment, {
+      allowCreate: false
+    });
+  }
+
+  const pluginTerminal = await startDoctorPluginTerminal({
+    actionId,
+    context: {
+      config: setupRuntime.config || {},
+      configEnvironment: setupRuntime.configEnvironment || {},
+      studioRoot,
+      targetRoot
+    },
+    input: inputs,
+    plugins: setupRuntime.setupPlugins || []
+  });
+  if (pluginTerminal) {
+    return pluginTerminal;
+  }
+  return {
+    error: "Unknown terminal action.",
+    ok: false
+  };
+}
+
+async function runAutomaticProjectSetupRepair(candidate, {
+  config = {},
+  configEnvironment = {},
+  emit = null,
+  setupPlugins = [],
+  startAutomaticRepair = null,
+  studioRoot = "",
+  targetRoot
+} = {}) {
+  const payload = {
+    check: candidate.stage,
+    inputs: candidate.inputs,
+    repair: candidate.repair,
+    targetRoot
+  };
+  emit?.("repair.started", {
+    actionId: candidate.repair.actionId,
+    checkId: candidate.stage.id,
+    label: candidate.repair.label || candidate.repair.actionId
+  });
+
+  const result = typeof startAutomaticRepair === "function"
+    ? await startAutomaticRepair(payload)
+    : await (async () => {
+        const terminal = await startProjectSetupTerminalAction({
+          actionId: candidate.repair.actionId,
+          inputs: candidate.inputs,
+          setupRuntime: {
+            config,
+            configEnvironment,
+            setupPlugins
+          },
+          studioRoot,
+          targetRoot
+        });
+        if (terminal?.ok === false || !terminal?.id) {
+          return terminal;
+        }
+        return waitForProjectSetupTerminalExit(terminal.id);
+      })();
+
+  emit?.("repair.finished", {
+    actionId: candidate.repair.actionId,
+    checkId: candidate.stage.id,
+    exitCode: result?.exitCode,
+    ok: !repairResultFailure(result),
+    status: result?.status || ""
+  });
+  return result;
+}
+
+async function runCoreSetupChecks(options = {}) {
+  const attemptedAutomaticRepairKeys = new Set();
+  let latestStatus = null;
+  let repairsAttempted = 0;
+
+  while (true) {
+    latestStatus = await runCoreSetupChecksOnce(options);
+    if (options.autoRepair !== true || latestStatus.ready) {
+      return latestStatus;
+    }
+
+    const candidate = findAutomaticRepairCandidate(latestStatus, attemptedAutomaticRepairKeys);
+    if (!candidate) {
+      const attemptedCandidate = findAttemptedAutomaticRepairCandidate(latestStatus, attemptedAutomaticRepairKeys);
+      return attemptedCandidate
+        ? automaticRepairStillBlockedStatus(latestStatus, attemptedCandidate)
+        : latestStatus;
+    }
+
+    if (repairsAttempted >= AUTOMATIC_REPAIR_MAX_ATTEMPTS) {
+      return annotateAutomaticRepairStatus(
+        latestStatus,
+        candidate,
+        `Automatic repair stopped after ${AUTOMATIC_REPAIR_MAX_ATTEMPTS} attempts.`
+      );
+    }
+
+    attemptedAutomaticRepairKeys.add(candidate.key);
+    repairsAttempted += 1;
+    const repairResult = await runAutomaticProjectSetupRepair(candidate, {
+      ...options,
+      targetRoot: latestStatus.targetRoot
+    });
+    if (repairResultFailure(repairResult)) {
+      return automaticRepairFailureStatus(latestStatus, candidate, repairResult);
+    }
+  }
 }
 
 async function inspectProjectSetup(options = {}) {
@@ -806,6 +1140,7 @@ function createService({
       }
       const setupRuntime = await loadAdapterSetupRuntime();
       return readyStatusCache.remember(await inspectProjectSetup({
+        autoRepair: true,
         config: setupRuntime.config,
         configEnvironment: setupRuntime.configEnvironment,
         setupPlugins: setupRuntime.setupPlugins,
@@ -826,6 +1161,7 @@ function createService({
       }
       const setupRuntime = await loadAdapterSetupRuntime();
       return readyStatusCache.remember(await inspectProjectSetup({
+        autoRepair: true,
         config: setupRuntime.config,
         configEnvironment: setupRuntime.configEnvironment,
         emit,
@@ -840,30 +1176,15 @@ function createService({
       inputs = {}
     } = {}) {
       const setupRuntime = await loadAdapterSetupRuntime();
-      if (actionId === "terminal-git-init") {
-        return startGitInitTerminal(resolvedTargetRoot, setupRuntime.configEnvironment);
-      }
-      if (actionId === "terminal-gh-create-repo") {
-        return startGhCreateRepoTerminal(resolvedTargetRoot, setupRuntime.configEnvironment);
-      }
-      if (actionId === "terminal-link-github-remote") {
-        return startLinkRemoteTerminal(resolvedTargetRoot, inputs, setupRuntime.configEnvironment);
-      }
-      if (actionId === ADD_AI_STUDIO_GITIGNORE_RULES_ACTION_ID) {
-        return startAiStudioGitignoreTerminal(resolvedTargetRoot, setupRuntime.configEnvironment);
-      }
-      if (actionId === CREATE_GIT_CHECKPOINT_ACTION_ID) {
-        return startGitCheckpointTerminal(resolvedTargetRoot, inputs, setupRuntime.configEnvironment, {
-          allowCreate: true
-        });
-      }
-      if (actionId === PUSH_GIT_CHECKPOINT_ACTION_ID) {
-        return startGitCheckpointTerminal(resolvedTargetRoot, inputs, setupRuntime.configEnvironment, {
-          allowCreate: false
-        });
-      }
-
-      if (!await pluginTerminalActionIsAvailable({
+      const coreActionIds = new Set([
+        "terminal-git-init",
+        "terminal-gh-create-repo",
+        "terminal-link-github-remote",
+        ADD_AI_STUDIO_GITIGNORE_RULES_ACTION_ID,
+        CREATE_GIT_CHECKPOINT_ACTION_ID,
+        PUSH_GIT_CHECKPOINT_ACTION_ID
+      ]);
+      if (!coreActionIds.has(actionId) && !await pluginTerminalActionIsAvailable({
         actionId,
         setupRuntime,
         studioRoot: resolvedStudioRoot,
@@ -875,24 +1196,13 @@ function createService({
         };
       }
 
-      const pluginTerminal = await startDoctorPluginTerminal({
+      return startProjectSetupTerminalAction({
         actionId,
-        context: {
-          config: setupRuntime.config,
-          configEnvironment: setupRuntime.configEnvironment,
-          studioRoot: resolvedStudioRoot,
-          targetRoot: resolvedTargetRoot
-        },
-        input: inputs,
-        plugins: setupRuntime.setupPlugins
+        inputs,
+        setupRuntime,
+        studioRoot: resolvedStudioRoot,
+        targetRoot: resolvedTargetRoot
       });
-      if (pluginTerminal) {
-        return pluginTerminal;
-      }
-      return {
-        error: "Unknown terminal action.",
-        ok: false
-      };
     },
 
     readTerminal(sessionId) {

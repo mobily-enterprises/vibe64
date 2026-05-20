@@ -101,6 +101,43 @@ test("adapters own the worktree preparation script", async () => {
   assert.equal(await createCppTargetAdapter().getPrepareWorktreeScriptPath(), "");
 });
 
+test("create worktree terminal specs mount adapter preparation scripts", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createGitTarget(targetRoot);
+    const adapters = [
+      [createGenericNodeWebTargetAdapter(), GENERIC_NODE_WEB_PREPARE_WORKTREE_SCRIPT_PATH],
+      [createJskitTargetAdapter(), JSKIT_PREPARE_WORKTREE_SCRIPT_PATH],
+      [createLaravelTargetAdapter(), LARAVEL_PREPARE_WORKTREE_SCRIPT_PATH],
+      [createNextjsTargetAdapter(), NEXTJS_PREPARE_WORKTREE_SCRIPT_PATH],
+      [createVinextTargetAdapter(), VINEXT_PREPARE_WORKTREE_SCRIPT_PATH],
+      [createCppTargetAdapter(), ""]
+    ];
+
+    for (const [adapter, scriptPath] of adapters) {
+      const session = {
+        metadata: {},
+        sessionId: `prepare-mount-${adapter.id}`,
+        sessionRoot: path.join(targetRoot, ".ai-studio", "sessions", "active", `prepare-mount-${adapter.id}`),
+        targetRoot
+      };
+      const spec = await adapter.createCommandTerminalSpec("create_worktree", {
+        session,
+        targetRoot
+      });
+      assert.equal(spec.ok, true);
+      assert.deepEqual(spec.mounts || [], scriptPath
+        ? [
+            {
+              readOnly: true,
+              source: path.dirname(scriptPath),
+              target: path.dirname(scriptPath)
+            }
+          ]
+        : []);
+    }
+  });
+});
+
 test("create worktree runs the adapter preparation script without overwriting session edits", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createGitTarget(targetRoot);
@@ -119,6 +156,13 @@ test("create worktree runs the adapter preparation script without overwriting se
       targetRoot
     });
     assert.equal(firstSpec.ok, true);
+    assert.deepEqual(firstSpec.mounts, [
+      {
+        readOnly: true,
+        source: path.dirname(JSKIT_PREPARE_WORKTREE_SCRIPT_PATH),
+        target: path.dirname(JSKIT_PREPARE_WORKTREE_SCRIPT_PATH)
+      }
+    ]);
     runCommand(firstSpec.command, firstSpec.args, {
       cwd: firstSpec.cwd
     });

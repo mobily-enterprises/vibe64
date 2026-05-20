@@ -70,6 +70,7 @@ function commandTerminalArgs({
   containerName = "",
   env = {},
   image,
+  mounts = [],
   resultFile = {},
   sessionId = "",
   targetRoot = "",
@@ -90,7 +91,8 @@ function commandTerminalArgs({
       {
         source: resultFile.directory,
         target: resultFile.directory
-      }
+      },
+      ...mounts
     ],
     sessionId,
     targetRoot,
@@ -322,6 +324,7 @@ function createCommandTerminalController({
                 [COMMAND_RESULT_ENV]: activeResultFile.path
               },
               image: imageResult.image,
+              mounts: Array.isArray(spec.mounts) ? spec.mounts : [],
               resultFile: activeResultFile,
               sessionId,
               targetRoot,

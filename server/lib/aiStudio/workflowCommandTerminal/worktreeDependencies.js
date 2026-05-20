@@ -30,6 +30,21 @@ function createWorktreeBranch(session = {}) {
   return `ai-studio/${session.sessionId}`;
 }
 
+function prepareWorktreeScriptMount(prepareWorktreeScriptPath = "") {
+  const scriptPath = normalizeText(prepareWorktreeScriptPath);
+  if (!scriptPath) {
+    return [];
+  }
+  const scriptDirectory = path.dirname(scriptPath);
+  return [
+    {
+      readOnly: true,
+      source: scriptDirectory,
+      target: scriptDirectory
+    }
+  ];
+}
+
 function createWorktreeScript({
   branch = "",
   prepareWorktreeScriptPath = "",
@@ -157,6 +172,7 @@ async function createWorktreeTerminalSpec({
     command: "bash",
     commandPreview: `git worktree add ${worktreePath}`,
     cwd: resolvedTargetRoot,
+    mounts: prepareWorktreeScriptMount(prepareWorktreeScriptPath),
     ok: true,
     applySuccessFacts: createWorktreeSuccessMetadataFromFacts,
     successMessage: `Created worktree ${worktreePath} on branch ${branch}.`,
@@ -289,6 +305,7 @@ async function updateCodeIndexTerminalSpec({
 export {
   createWorktreeBranch,
   createWorktreePath,
+  prepareWorktreeScriptMount,
   createWorktreeTerminalSpec,
   installDependenciesTerminalSpec,
   runAutomatedChecksTerminalSpec,

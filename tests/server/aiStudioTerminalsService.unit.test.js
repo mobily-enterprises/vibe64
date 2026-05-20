@@ -257,6 +257,7 @@ test("AI Studio command terminal joins the target runtime network before the ima
   const targetRoot = "/workspace/project";
   const worktree = "/workspace/project/.ai-studio/sessions/active/unit/worktree";
   const resultDirectory = "/tmp/ai-studio-command-unit";
+  const supportDirectory = "/opt/ai-studio-support";
   const args = commandTerminalArgs({
     args: [
       "-lc",
@@ -270,6 +271,13 @@ test("AI Studio command terminal joins the target runtime network before the ima
       MYSQL_PWD: JSKIT_MARIADB_ROOT_PASSWORD
     },
     image: "adapter-toolchain:1.0.0",
+    mounts: [
+      {
+        readOnly: true,
+        source: supportDirectory,
+        target: supportDirectory
+      }
+    ],
     resultFile: {
       directory: resultDirectory,
       path: `${resultDirectory}/result.tsv`
@@ -287,6 +295,7 @@ test("AI Studio command terminal joins the target runtime network before the ima
   assert.ok(args.includes(`${targetRoot}:/workspace`));
   assert.ok(args.includes(`${targetRoot}:${targetRoot}`));
   assert.ok(args.includes(`${resultDirectory}:${resultDirectory}`));
+  assert.ok(args.includes(`${supportDirectory}:${supportDirectory}:ro`));
   assert.ok(args.includes(`MYSQL_HOST=${JSKIT_MARIADB_HOST}`));
   assert.ok(args.includes(`MYSQL_PWD=${JSKIT_MARIADB_ROOT_PASSWORD}`));
   assert.equal(dockerEnvValue(args, COMMAND_RESULT_ENV), `${resultDirectory}/result.tsv`);

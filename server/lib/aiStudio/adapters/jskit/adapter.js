@@ -115,17 +115,17 @@ const JSKIT_CONFIG_FIELDS = deepFreeze([
     label: "Tenancy mode",
     options: [
       {
-        description: "No tenancy scaffold. Use this for simple single-context apps.",
+        description: "Create a normal app with no tenancy or workspace scaffold.",
         label: "None",
         value: "none"
       },
       {
-        description: "Add personal user-owned data areas without shared workspaces.",
+        description: "Give each user exactly one workspace automatically, with invitations into that workspace.",
         label: "Personal",
         value: "personal"
       },
       {
-        description: "Add workspace/team-style ownership so users can collaborate in shared spaces.",
+        description: "Let users own and be invited to multiple workspaces, without creating a default workspace automatically.",
         label: "Workspaces",
         value: "workspaces"
       }

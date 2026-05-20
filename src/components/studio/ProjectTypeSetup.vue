@@ -8,59 +8,75 @@
       </p>
     </div>
 
-    <div
+    <section
       v-if="hasApplicationTypes"
-      class="project-type-setup__application-grid"
-      aria-label="Application types"
+      class="project-type-setup__application-section"
+      :aria-labelledby="applicationHeadingId"
     >
-      <button
-        v-for="applicationType in applicationTypes"
-        :key="applicationType.id"
-        :aria-pressed="applicationType.id === selectedApplicationTypeId"
-        :class="[
-          'project-type-setup__application-card',
-          { 'project-type-setup__application-card--selected': applicationType.id === selectedApplicationTypeId }
-        ]"
-        type="button"
-        @click="selectApplicationType(applicationType.id)"
-      >
-        <svg
-          class="project-type-setup__application-icon"
-          :viewBox="applicationType.iconViewBox"
-          aria-hidden="true"
-          fill="none"
-          stroke="currentColor"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="4"
-        >
-          <path
-            v-for="iconPath in applicationType.iconPaths"
-            :key="iconPath"
-            :d="iconPath"
-          />
-        </svg>
-        <span class="project-type-setup__application-label">{{ applicationType.label }}</span>
-        <span class="project-type-setup__application-summary">{{ applicationType.summary }}</span>
-        <v-chip
-          class="project-type-setup__application-count"
-          density="comfortable"
-          size="small"
-          variant="tonal"
-        >
-          {{ applicationType.adapters.length }} {{ applicationType.adapters.length === 1 ? "option" : "options" }}
-        </v-chip>
-      </button>
-    </div>
+      <div class="project-type-setup__application-heading">
+        <p class="project-type-setup__section-kicker">Step 1</p>
+        <h3 :id="applicationHeadingId">Choose app type</h3>
+      </div>
 
-    <section class="project-type-setup__technology-section">
+      <div class="project-type-setup__application-grid">
+        <button
+          v-for="applicationType in applicationTypes"
+          :key="applicationType.id"
+          :aria-pressed="applicationType.id === selectedApplicationTypeId"
+          :class="[
+            'project-type-setup__application-card',
+            { 'project-type-setup__application-card--selected': applicationType.id === selectedApplicationTypeId }
+          ]"
+          type="button"
+          @click="selectApplicationType(applicationType.id)"
+        >
+          <svg
+            class="project-type-setup__application-icon"
+            :viewBox="applicationType.iconViewBox"
+            aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="4"
+          >
+            <path
+              v-for="iconPath in applicationType.iconPaths"
+              :key="iconPath"
+              :d="iconPath"
+            />
+          </svg>
+          <span class="project-type-setup__application-label">{{ applicationType.label }}</span>
+          <span class="project-type-setup__application-summary">{{ applicationType.summary }}</span>
+          <v-chip
+            class="project-type-setup__application-count"
+            density="comfortable"
+            size="small"
+            variant="tonal"
+          >
+            {{ applicationType.adapters.length }} {{ applicationType.adapters.length === 1 ? "option" : "options" }}
+          </v-chip>
+        </button>
+      </div>
+    </section>
+
+    <section
+      class="project-type-setup__technology-section"
+      :aria-labelledby="selectedApplicationType ? technologyHeadingId : undefined"
+    >
       <div
         v-if="selectedApplicationType"
         class="project-type-setup__technology-heading"
       >
-        <p class="project-type-setup__section-kicker">Choose technology</p>
-        <h3>{{ selectedApplicationType.label }}</h3>
-        <p>{{ selectedApplicationType.description }}</p>
+        <div class="project-type-setup__technology-copy">
+          <p class="project-type-setup__section-kicker">Step 2</p>
+          <h3 :id="technologyHeadingId">Choose technology for {{ selectedApplicationType.label }}</h3>
+          <p class="project-type-setup__technology-description">{{ selectedApplicationType.description }}</p>
+        </div>
+        <div class="project-type-setup__selected-type">
+          <span class="project-type-setup__selected-type-label">Selected app type</span>
+          <span class="project-type-setup__selected-type-name">{{ selectedApplicationType.label }}</span>
+        </div>
       </div>
 
       <div class="project-type-setup__options">
@@ -167,6 +183,8 @@ const props = defineProps({
 
 const emit = defineEmits(["select"]);
 const selectedApplicationTypeId = ref("");
+const applicationHeadingId = "project-type-setup-application-heading";
+const technologyHeadingId = "project-type-setup-technology-heading";
 
 const saving = computed(() => Boolean(props.savingType));
 const headingMessage = computed(() => {
@@ -281,10 +299,28 @@ watch(applicationTypes, (nextApplicationTypes) => {
 }
 
 .project-type-setup__message,
-.project-type-setup__technology-heading p {
+.project-type-setup__technology-description {
   color: rgba(var(--v-theme-on-surface), 0.68);
   font-size: 0.98rem;
   line-height: 1.45;
+  margin: 0;
+}
+
+.project-type-setup__application-section {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.project-type-setup__application-heading {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.project-type-setup__application-heading h3 {
+  font-size: 1.1rem;
+  font-weight: 760;
+  letter-spacing: 0;
+  line-height: 1.12;
   margin: 0;
 }
 
@@ -341,14 +377,19 @@ watch(applicationTypes, (nextApplicationTypes) => {
 }
 
 .project-type-setup__technology-section {
+  background: rgba(var(--v-theme-primary), 0.035);
+  border-top: 3px solid rgba(var(--v-theme-primary), 0.34);
   display: grid;
-  gap: 0.75rem;
+  gap: 0.9rem;
+  margin-top: 0.35rem;
+  padding: 1rem 0 0;
 }
 
 .project-type-setup__technology-heading {
-  display: grid;
-  gap: 0.2rem;
-  max-width: 54rem;
+  align-items: start;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
 }
 
 .project-type-setup__technology-heading h3 {
@@ -357,6 +398,38 @@ watch(applicationTypes, (nextApplicationTypes) => {
   letter-spacing: 0;
   line-height: 1.12;
   margin: 0;
+}
+
+.project-type-setup__technology-copy {
+  display: grid;
+  gap: 0.2rem;
+  max-width: 54rem;
+}
+
+.project-type-setup__selected-type {
+  background: rgb(var(--v-theme-surface));
+  border: 1px solid rgba(var(--v-theme-primary), 0.32);
+  border-radius: 8px;
+  display: grid;
+  gap: 0.18rem;
+  min-width: 13rem;
+  padding: 0.7rem 0.85rem;
+}
+
+.project-type-setup__selected-type-label {
+  color: rgba(var(--v-theme-on-surface), 0.56);
+  font-size: 0.72rem;
+  font-weight: 760;
+  letter-spacing: 0.04em;
+  line-height: 1.15;
+  text-transform: uppercase;
+}
+
+.project-type-setup__selected-type-name {
+  color: rgb(var(--v-theme-primary));
+  font-size: 1rem;
+  font-weight: 780;
+  line-height: 1.2;
 }
 
 .project-type-setup__options {
@@ -457,6 +530,14 @@ watch(applicationTypes, (nextApplicationTypes) => {
 }
 
 @media (max-width: 700px) {
+  .project-type-setup__technology-heading {
+    display: grid;
+  }
+
+  .project-type-setup__selected-type {
+    min-width: 0;
+  }
+
   .project-type-setup__option-actions {
     align-items: stretch;
     flex-direction: column;

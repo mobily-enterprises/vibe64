@@ -141,6 +141,56 @@ test("Project Setup blocks before remote setup when AI Studio ignore rules are m
   });
 });
 
+test("Project Setup retries automatic repairs when the same check reports a new blocker", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createGitRepository(targetRoot);
+    const attempts = [];
+    let ignoreRuleRepairAttempts = 0;
+
+    const status = await inspectProjectSetup({
+      autoRepair: true,
+      startAutomaticRepair: async ({
+        repair
+      }) => {
+        attempts.push(repair.actionId);
+        if (repair.actionId === ADD_AI_STUDIO_GITIGNORE_RULES_ACTION_ID) {
+          ignoreRuleRepairAttempts += 1;
+          await writeFile(
+            path.join(targetRoot, ".gitignore"),
+            `${AI_STUDIO_LOCAL_STATE_GITIGNORE_PATTERNS.slice(0, ignoreRuleRepairAttempts).join("\n")}\n`,
+            "utf8"
+          );
+          return {
+            exitCode: 0,
+            ok: true,
+            output: "updated .gitignore",
+            status: "exited"
+          };
+        }
+        return {
+          error: "gh unavailable",
+          exitCode: 1,
+          ok: false,
+          output: "gh unavailable",
+          status: "exited"
+        };
+      },
+      targetRoot
+    });
+
+    assert.deepEqual(attempts, [
+      ADD_AI_STUDIO_GITIGNORE_RULES_ACTION_ID,
+      ADD_AI_STUDIO_GITIGNORE_RULES_ACTION_ID,
+      "terminal-gh-create-repo"
+    ]);
+    assert.equal(status.stages.find((stage) => stage.id === "ai-studio-gitignore")?.status, "pass");
+    assert.equal(status.currentStageId, "remote-ready");
+    assert.equal(status.stages.find((stage) => stage.id === "remote-ready")?.status, "blocked");
+    assert.match(status.stages.find((stage) => stage.id === "remote-ready")?.observed || "", /Automatic repair failed/u);
+    assert.match(status.stages.find((stage) => stage.id === "remote-ready")?.observed || "", /gh unavailable/u);
+  });
+});
+
 test("Project Setup continues to remote setup when AI Studio ignore rules are present", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createGitRepository(targetRoot);
@@ -176,7 +226,9 @@ test("Project Setup checkpoint repair commits and pushes the baseline", () => {
 
   assert.match(script, /gh auth token/u);
   assert.match(script, /GIT_ASKPASS=\/tmp\/ai-studio-git-askpass/u);
+  assert.match(script, /if \[ "\$\(id -u\)" = "0" \] && command -v setpriv/u);
   assert.match(script, /setpriv --reuid "\$AI_STUDIO_HOST_UID" --regid "\$AI_STUDIO_HOST_GID"/u);
+  assert.match(script, /if \[ "\$\(id -u\)" = "0" \]; then chown "\$AI_STUDIO_HOST_UID:\$AI_STUDIO_HOST_GID"/u);
   assert.match(script, /as_host git -c safe\.directory=\/workspace commit -m "\$AI_STUDIO_COMMIT_MESSAGE"/u);
   assert.match(script, /remote_ref="refs\/heads\/\$branch"/u);
   assert.match(script, /as_host git -c safe\.directory=\/workspace -c credential\.helper= push -u origin "HEAD:\$remote_ref"/u);
