@@ -178,7 +178,9 @@ function useCodexTerminalViewport({
     return lines.join("\n").trim();
   }
 
-  function disposeTerminalUi() {
+  function disposeTerminalUi({
+    preserveDisplay = false
+  } = {}) {
     terminalDataDisposable?.dispose?.();
     terminalDataDisposable = null;
     terminalSelectionDisposable?.dispose?.();
@@ -211,7 +213,9 @@ function useCodexTerminalViewport({
     terminalInstance = null;
     terminalFitAddon = null;
     terminalOutputOffset = 0;
-    terminalDisplayOutput = "";
+    if (!preserveDisplay) {
+      terminalDisplayOutput = "";
+    }
     terminalFocused.value = false;
     terminalSelectedText.value = "";
   }

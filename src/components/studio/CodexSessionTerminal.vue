@@ -4,98 +4,102 @@
     class="codex-terminal"
     :class="{
       'codex-terminal--desktop-actionless': true,
-      'codex-terminal--focused': terminalFocused
+      'codex-terminal--focused': terminalFocused,
+      'codex-terminal--headless': displayMode === 'headless'
     }"
+    :aria-hidden="displayMode === 'headless' ? 'true' : undefined"
   >
-    <div class="codex-terminal__bar">
-      <div class="codex-terminal__actions">
-        <v-btn
-          :icon="expanded ? mdiChevronDown : mdiChevronUp"
-          class="codex-terminal__collapse"
-          size="small"
-          variant="text"
-          @click="toggleExpanded"
-        />
+    <template v-if="displayMode !== 'headless'">
+      <div class="codex-terminal__bar">
+        <div class="codex-terminal__actions">
+          <v-btn
+            :icon="expanded ? mdiChevronDown : mdiChevronUp"
+            class="codex-terminal__collapse"
+            size="small"
+            variant="text"
+            @click="toggleExpanded"
+          />
+        </div>
       </div>
-    </div>
 
-    <v-expand-transition>
-      <div v-show="expanded" class="codex-terminal__body">
-        <StudioErrorNotice
-          v-if="terminalError"
-          title="Codex terminal needs attention"
-          :error="terminalError"
-          compact
-          class="mb-2"
-        />
+      <v-expand-transition>
+        <div v-show="expanded" class="codex-terminal__body">
+          <StudioErrorNotice
+            v-if="terminalError"
+            title="Codex terminal needs attention"
+            :error="terminalError"
+            compact
+            class="mb-2"
+          />
 
-        <div
-          class="codex-terminal__stage"
-          :class="{ 'codex-terminal__stage--dragging': attachmentDragActive }"
-          @dragenter.prevent="handleAttachmentDragEnter"
-          @dragover.prevent="handleAttachmentDragOver"
-          @dragleave.prevent="handleAttachmentDragLeave"
-          @drop.prevent="handleAttachmentDrop"
-        >
-          <div ref="terminalHost" class="codex-terminal__host" @click="focusTerminal" />
-          <div v-if="attachmentDragActive || attachmentUploading" class="codex-terminal__drop-overlay">
-            <v-sheet class="codex-terminal__drop-card" rounded="lg" elevation="10">
-              <v-icon :icon="mdiPaperclip" size="28" />
-              <span>{{ attachmentUploading ? "Uploading temporary file..." : "Drop temporary files for Codex" }}</span>
-            </v-sheet>
+          <div
+            class="codex-terminal__stage"
+            :class="{ 'codex-terminal__stage--dragging': attachmentDragActive }"
+            @dragenter.prevent="handleAttachmentDragEnter"
+            @dragover.prevent="handleAttachmentDragOver"
+            @dragleave.prevent="handleAttachmentDragLeave"
+            @drop.prevent="handleAttachmentDrop"
+          >
+            <div ref="terminalHost" class="codex-terminal__host" @click="focusTerminal" />
+            <div v-if="attachmentDragActive || attachmentUploading" class="codex-terminal__drop-overlay">
+              <v-sheet class="codex-terminal__drop-card" rounded="lg" elevation="10">
+                <v-icon :icon="mdiPaperclip" size="28" />
+                <span>{{ attachmentUploading ? "Uploading temporary file..." : "Drop temporary files for Codex" }}</span>
+              </v-sheet>
+            </div>
+            <div v-if="showTerminalStartPanel" class="codex-terminal__restart-panel">
+              <v-sheet class="codex-terminal__restart-card" rounded="lg" elevation="8">
+                <span>{{ terminalExited ? "Codex exited." : "Codex is not running." }}</span>
+                <v-btn
+                  color="primary"
+                  :loading="terminalStarting"
+                  :prepend-icon="mdiRestart"
+                  size="small"
+                  variant="flat"
+                  @click="restartTerminal"
+                >
+                  {{ terminalExited ? "Restart Codex" : "Start Codex" }}
+                </v-btn>
+              </v-sheet>
+            </div>
           </div>
-          <div v-if="showTerminalStartPanel" class="codex-terminal__restart-panel">
-            <v-sheet class="codex-terminal__restart-card" rounded="lg" elevation="8">
-              <span>{{ terminalExited ? "Codex exited." : "Codex is not running." }}</span>
+
+          <div class="codex-terminal__footer">
+            <span class="codex-terminal__command">{{ terminalCommandPreview }}</span>
+            <div class="codex-terminal__footer-actions">
               <v-btn
-                color="primary"
-                :loading="terminalStarting"
-                :prepend-icon="mdiRestart"
+                :disabled="!terminalSelectedText"
                 size="small"
-                variant="flat"
-                @click="restartTerminal"
+                variant="text"
+                @click="copyTerminalSelection"
               >
-                {{ terminalExited ? "Restart Codex" : "Start Codex" }}
+                Copy
               </v-btn>
-            </v-sheet>
+              <v-btn
+                :disabled="!terminalSessionId || terminalExited"
+                size="small"
+                variant="text"
+                @click="sendCtrlC"
+              >
+                Ctrl-C
+              </v-btn>
+              <v-btn
+                :disabled="!terminalSessionId"
+                size="small"
+                variant="text"
+                @click="closeTerminal"
+              >
+                Close
+              </v-btn>
+            </div>
           </div>
-        </div>
 
-        <div class="codex-terminal__footer">
-          <span class="codex-terminal__command">{{ terminalCommandPreview }}</span>
-          <div class="codex-terminal__footer-actions">
-            <v-btn
-              :disabled="!terminalSelectedText"
-              size="small"
-              variant="text"
-              @click="copyTerminalSelection"
-            >
-              Copy
-            </v-btn>
-            <v-btn
-              :disabled="!terminalSessionId || terminalExited"
-              size="small"
-              variant="text"
-              @click="sendCtrlC"
-            >
-              Ctrl-C
-            </v-btn>
-            <v-btn
-              :disabled="!terminalSessionId"
-              size="small"
-              variant="text"
-              @click="closeTerminal"
-            >
-              Close
-            </v-btn>
-          </div>
+          <p v-if="copyStatus || attachmentStatus" class="text-caption text-medium-emphasis mb-0">
+            {{ attachmentStatus || copyStatus }}
+          </p>
         </div>
-
-        <p v-if="copyStatus || attachmentStatus" class="text-caption text-medium-emphasis mb-0">
-          {{ attachmentStatus || copyStatus }}
-        </p>
-      </div>
-    </v-expand-transition>
+      </v-expand-transition>
+    </template>
   </v-sheet>
 </template>
 
@@ -141,6 +145,10 @@ const props = defineProps({
   promptOverride: {
     type: String,
     default: ""
+  },
+  displayMode: {
+    type: String,
+    default: "full"
   }
 });
 const emit = defineEmits([
@@ -451,6 +459,17 @@ watch(() => [
 .codex-terminal {
   min-width: 0;
   padding: 0.25rem 0 0;
+}
+
+.codex-terminal--headless {
+  height: 0;
+  min-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  padding: 0;
+  pointer-events: none;
+  position: absolute;
+  width: 0;
 }
 
 .codex-terminal--focused .codex-terminal__host {

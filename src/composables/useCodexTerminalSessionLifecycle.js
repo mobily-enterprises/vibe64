@@ -301,10 +301,17 @@ function useCodexTerminalSessionLifecycle({
 
   watch(visible, async (isVisible) => {
     if (!isVisible) {
+      disposeTerminalViewport?.({
+        preserveDisplay: true
+      });
       return;
     }
     await nextTick();
-    fitTerminal?.();
+    const ready = await setupTerminalUi?.();
+    if (ready) {
+      fitTerminal?.();
+      refreshTerminalOutput?.();
+    }
     startTerminalWhenReady();
   });
 

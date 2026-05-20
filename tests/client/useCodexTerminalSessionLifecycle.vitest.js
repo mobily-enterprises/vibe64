@@ -58,6 +58,43 @@ describe("useCodexTerminalSessionLifecycle", () => {
     expect(options.startTerminalSession).toHaveBeenCalledWith("session-1");
     expect(options.onMountedReady).toHaveBeenCalledTimes(1);
   });
+
+  it("disposes only the visual terminal viewport when hidden", async () => {
+    const { useCodexTerminalSessionLifecycle } = await import("../../src/composables/useCodexTerminalSessionLifecycle.js");
+    const options = createLifecycleOptions({
+      visible: ref(true)
+    });
+
+    useCodexTerminalSessionLifecycle(options);
+
+    options.visible.value = false;
+    await nextTick();
+
+    expect(options.disposeTerminalViewport).toHaveBeenCalledTimes(1);
+    expect(options.disposeTerminalViewport).toHaveBeenCalledWith({
+      preserveDisplay: true
+    });
+    expect(terminalSocket.closeSocket).not.toHaveBeenCalled();
+    expect(options.clearTerminalOutput).not.toHaveBeenCalled();
+  });
+
+  it("recreates the visual terminal viewport and replays output when shown again", async () => {
+    const { useCodexTerminalSessionLifecycle } = await import("../../src/composables/useCodexTerminalSessionLifecycle.js");
+    const options = createLifecycleOptions({
+      terminalSessionId: ref("terminal-1"),
+      visible: ref(false)
+    });
+
+    useCodexTerminalSessionLifecycle(options);
+
+    options.visible.value = true;
+
+    await vi.waitFor(() => {
+      expect(options.setupTerminalUi).toHaveBeenCalled();
+      expect(options.fitTerminal).toHaveBeenCalled();
+      expect(options.refreshTerminalOutput).toHaveBeenCalled();
+    });
+  });
 });
 
 function createLifecycleOptions(overrides = {}) {

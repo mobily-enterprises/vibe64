@@ -1,21 +1,47 @@
 <template>
   <v-sheet rounded="lg" class="studio-ai-sessions studio-screen__panel">
-    <StudioErrorNotice
-      v-if="page.error"
-      title="AI Studio sessions could not load"
-      :error="page.error"
-      compact
-      class="mb-3"
-    />
+    <div class="studio-ai-sessions__header">
+      <StudioErrorNotice
+        v-if="page.error"
+        title="AI Studio sessions could not load"
+        :error="page.error"
+        compact
+      />
 
-    <AiStudioSessionToolbar
-      :abandon="dialogs.abandon"
-      :busy="page.busy"
-      :selected-session-id="selection.selectedSessionId"
-      :selection-closed="selection.isClosed"
-      :session="selection.selectedSession"
-      :toolbar="toolbar"
-    />
+      <AiStudioSessionToolbar
+        :abandon="dialogs.abandon"
+        :busy="page.busy"
+        :selected-session-id="selection.selectedSessionId"
+        :selection-closed="selection.isClosed"
+        :session="selection.selectedSession"
+        :toolbar="toolbar"
+      />
+
+      <v-btn-toggle
+        v-if="selection.selectedSession"
+        :model-value="sessionMode"
+        mandatory
+        density="compact"
+        variant="tonal"
+        class="studio-ai-sessions__mode-actions"
+        @update:model-value="setSessionMode"
+      >
+        <v-btn
+          :prepend-icon="mdiCog"
+          size="small"
+          value="autopilot"
+        >
+          Autopilot
+        </v-btn>
+        <v-btn
+          :prepend-icon="mdiTune"
+          size="small"
+          value="inspect"
+        >
+          Inspect
+        </v-btn>
+      </v-btn-toggle>
+    </div>
 
     <v-progress-linear
       v-if="page.loading && !selection.selectedSession"
@@ -34,8 +60,19 @@
       <p class="text-body-2 text-medium-emphasis mb-0">No sessions yet.</p>
     </v-sheet>
 
-    <div v-else class="studio-ai-sessions__layout">
+    <div
+      v-else
+      class="studio-ai-sessions__layout"
+      :class="`studio-ai-sessions__layout--${sessionMode}`"
+    >
+      <AiStudioAutopilotView
+        v-if="sessionMode === 'autopilot'"
+        :session="selection.selectedSession"
+        @inspect="setSessionMode('inspect')"
+      />
+
       <AiStudioSessionWorkspace
+        v-else
         :actions="actions"
         :dialogs="dialogs"
         :issue-request="issueRequest"
@@ -49,6 +86,7 @@
       <AiStudioSessionTerminals
         :codex-terminal="codexTerminal"
         :command-terminal="commandTerminal"
+        :display-mode="sessionMode === 'inspect' ? 'full' : 'headless'"
         :session="selection.selectedSession"
       />
     </div>
@@ -64,7 +102,13 @@
 </template>
 
 <script setup>
-import { proxyRefs } from "vue";
+import { computed, proxyRefs } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import {
+  mdiCog,
+  mdiTune
+} from "@mdi/js";
+import AiStudioAutopilotView from "@/components/studio/ai-studio-session/AiStudioAutopilotView.vue";
 import AiStudioSessionDialogs from "@/components/studio/ai-studio-session/AiStudioSessionDialogs.vue";
 import AiStudioSessionTerminals from "@/components/studio/ai-studio-session/AiStudioSessionTerminals.vue";
 import AiStudioSessionToolbar from "@/components/studio/ai-studio-session/AiStudioSessionToolbar.vue";
@@ -78,6 +122,8 @@ import {
 } from "@/composables/useAiStudioSessionWorkflow.js";
 
 const emit = defineEmits(["title-change"]);
+const route = useRoute();
+const router = useRouter();
 
 const sessionData = useAiStudioSessionData({
   onTitleChange(title) {
@@ -122,6 +168,22 @@ const toolbar = proxyRefs({
   sessions: sessionData.sessions,
   shortSessionId: sessionData.shortSessionId
 });
+
+const sessionMode = computed(() => route.query.mode === "inspect" ? "inspect" : "autopilot");
+
+function setSessionMode(mode = "autopilot") {
+  const query = {
+    ...route.query
+  };
+  if (mode === "inspect") {
+    query.mode = "inspect";
+  } else {
+    delete query.mode;
+  }
+  void router.replace({
+    query
+  });
+}
 </script>
 
 <style scoped>
@@ -135,12 +197,30 @@ const toolbar = proxyRefs({
   padding: 0.9rem;
 }
 
+.studio-ai-sessions__header {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.studio-ai-sessions__mode-actions {
+  align-items: center;
+  display: flex;
+  gap: 0.45rem;
+}
+
 .studio-ai-sessions__layout {
   align-items: flex-start;
   display: grid;
   gap: 0.9rem;
-  grid-template-columns: minmax(18rem, 0.7fr) minmax(30rem, 1.3fr);
   min-height: 0;
+}
+
+.studio-ai-sessions__layout--autopilot {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.studio-ai-sessions__layout--inspect {
+  grid-template-columns: minmax(18rem, 0.7fr) minmax(30rem, 1.3fr);
 }
 
 @media (max-width: 980px) {

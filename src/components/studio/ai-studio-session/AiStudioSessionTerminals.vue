@@ -1,9 +1,14 @@
 <template>
-  <section class="studio-ai-sessions__terminals">
+  <section
+    class="studio-ai-sessions__terminals"
+    :class="{ 'studio-ai-sessions__terminals--headless': displayMode === 'headless' }"
+  >
     <CodexSessionTerminal
+      :display-mode="displayMode"
       :prompt-injection-request-key="codexTerminal.promptInjectionKey"
       :prompt-override="codexTerminal.promptOverride"
       :session="session"
+      :visible="displayMode !== 'headless'"
       @busy-changed="codexTerminal.busyChanged"
       @prompt-injected="codexTerminal.promptInjected"
       @prompt-injection-failed="codexTerminal.promptInjectionFailed"
@@ -11,7 +16,7 @@
     />
 
     <div
-      v-if="commandTerminal.visible"
+      v-if="displayMode !== 'headless' && commandTerminal.visible"
       class="studio-ai-sessions__command-overlay"
     >
       <AiStudioCommandTerminal
@@ -37,6 +42,10 @@ defineProps({
     default: () => ({}),
     type: Object
   },
+  displayMode: {
+    default: "full",
+    type: String
+  },
   commandTerminal: {
     default: () => ({}),
     type: Object
@@ -53,6 +62,15 @@ defineProps({
   min-height: 0;
   min-width: 0;
   position: relative;
+}
+
+.studio-ai-sessions__terminals--headless {
+  height: 0;
+  min-height: 0;
+  overflow: hidden;
+  pointer-events: none;
+  position: absolute;
+  width: 0;
 }
 
 .studio-ai-sessions__command-overlay {
