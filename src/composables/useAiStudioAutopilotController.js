@@ -295,6 +295,7 @@ function useAiStudioAutopilotController({
   const activePrompt = ref(null);
   const deepUiCheckDecision = ref("");
   const failure = ref(null);
+  const lastCommandResult = ref(null);
 
   let autopilotPromise = null;
   let stopRequested = false;
@@ -302,6 +303,7 @@ function useAiStudioAutopilotController({
   const currentStep = computed(() => readSession(session)?.currentStep || "");
   const commandOutput = computed(() => String(readRefOrGetterValue(commandRunner.output) || ""));
   const commandPreview = computed(() => String(readRefOrGetterValue(commandRunner.commandPreview) || ""));
+  const commandResult = computed(() => readRefOrGetterValue(commandRunner.lastResult) || lastCommandResult.value || null);
   const commandRunning = computed(() => readRefOrGetterValue(commandRunner.running) === true);
   const running = computed(() => active.value || commandRunning.value);
   const readyForIssue = computed(() => currentStep.value === ISSUE_STEP_ID);
@@ -699,11 +701,13 @@ function useAiStudioAutopilotController({
   }
 
   async function runTerminalAction(currentSession = {}, action = {}) {
+    lastCommandResult.value = null;
     const result = await commandRunner.runCommandAction({
       action,
       input: {},
       sessionId: currentSession.sessionId
     });
+    lastCommandResult.value = result;
     await refreshSessionData();
     await nextTick();
     if (result.ok !== true) {
@@ -727,6 +731,7 @@ function useAiStudioAutopilotController({
     canResume,
     commandOutput,
     commandPreview,
+    commandResult,
     commandRunning,
     failure,
     readyForDeepUiCheck,

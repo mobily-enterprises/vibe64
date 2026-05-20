@@ -6,7 +6,7 @@
         class="studio-autopilot__codex-terminal-stage"
       >
         <div
-          id="studio-autopilot-codex-terminal-host"
+          :id="codexTerminalHostId"
           class="studio-autopilot__codex-terminal-host"
         />
         <div class="studio-autopilot__codex-terminal-overlay">
@@ -26,18 +26,28 @@
       </div>
 
       <div
-        v-if="commandWaiting"
+        v-if="commandTerminalVisible"
         class="studio-autopilot__command-terminal-stage"
       >
-        <pre class="studio-autopilot__command-terminal-output">{{ commandTerminalText }}</pre>
+        <AiStudioHeadlessCommandOutput
+          class="studio-autopilot__command-terminal-output"
+          :command-preview="commandPreview"
+          compact
+          :error="commandTerminalError"
+          :failed="commandTerminalFailed"
+          :output="commandTerminalText"
+          :running="commandRunning"
+          :status="commandStatus"
+          title="Autopilot command"
+        />
         <div class="studio-autopilot__command-terminal-overlay">
-          <strong>Command running.</strong>
+          <strong>{{ commandOverlayTitle }}</strong>
           <span>{{ displayStatusText }}</span>
         </div>
       </div>
 
       <v-progress-circular
-        v-if="!codexWaiting && !commandWaiting && displayRunning"
+        v-if="!codexWaiting && !commandTerminalVisible && displayRunning"
         class="studio-autopilot__cog"
         color="primary"
         indeterminate
@@ -48,14 +58,14 @@
       </v-progress-circular>
 
       <v-icon
-        v-else-if="!codexWaiting && !commandWaiting && failure"
+        v-else-if="!codexWaiting && !commandTerminalVisible && failure"
         color="warning"
         :icon="mdiAlertCircleOutline"
         size="72"
       />
 
       <v-icon
-        v-else-if="!codexWaiting && !commandWaiting"
+        v-else-if="!codexWaiting && !commandTerminalVisible"
         color="primary"
         :icon="mdiCog"
         size="72"
@@ -307,6 +317,7 @@ import {
   mdiRefresh,
   mdiSend
 } from "@mdi/js";
+import AiStudioHeadlessCommandOutput from "@/components/studio/ai-studio-session/AiStudioHeadlessCommandOutput.vue";
 import {
   useAiStudioAutopilotController
 } from "@/composables/useAiStudioAutopilotController.js";
@@ -324,8 +335,20 @@ const props = defineProps({
     default: () => ({}),
     type: Object
   },
+  active: {
+    default: true,
+    type: Boolean
+  },
   codexTerminal: {
     default: () => ({}),
+    type: Object
+  },
+  codexTerminalHostId: {
+    default: "studio-autopilot-codex-terminal-host",
+    type: String
+  },
+  commandRunner: {
+    default: null,
     type: Object
   },
   page: {
@@ -347,6 +370,7 @@ const {
   canResume,
   commandOutput,
   commandPreview,
+  commandResult,
   commandRunning,
   failure,
   readyForDeepUiCheck,
@@ -364,6 +388,7 @@ const {
 } = useAiStudioAutopilotController({
   actions: props.actions,
   codexTerminal: props.codexTerminal,
+  commandRunner: props.commandRunner || undefined,
   refreshSessionData: () => props.refreshSessionData(),
   session: computed(() => props.session)
 });
@@ -386,14 +411,32 @@ const codexWaiting = computed(() => Boolean(
   issueDiscussion.waiting ||
   waitingForCodex.value
 ));
-const commandWaiting = computed(() => Boolean(commandRunning.value && !codexWaiting.value));
+const commandTerminalFailed = computed(() => commandResult.value?.ok === false);
+const commandTerminalVisible = computed(() => Boolean(
+  !codexWaiting.value &&
+  (
+    commandRunning.value ||
+    commandTerminalFailed.value
+  )
+));
+const commandStatus = computed(() => commandRunning.value ? "running" : "");
+const commandTerminalError = computed(() => {
+  if (commandResult.value?.ok === false) {
+    return String(commandResult.value.error || "");
+  }
+  return "";
+});
+const commandOverlayTitle = computed(() => commandTerminalFailed.value
+  ? "Command needs attention."
+  : "Command running.");
 const codexOverlayText = computed(() => issueDiscussion.waiting
   ? "Asking Codex to define the issue..."
   : displayStatusText.value);
 const commandTerminalText = computed(() => {
   const output = stripTerminalControlSequences(commandOutput.value);
+  const resultOutput = stripTerminalControlSequences(commandResult.value?.output || "");
   const preview = stripTerminalControlSequences(commandPreview.value);
-  return tailCommandText(output || preview || "Starting command...");
+  return tailCommandText(output || resultOutput || preview || "Starting command...");
 });
 const autopilotBusy = computed(() => Boolean(
   running.value ||
@@ -423,11 +466,15 @@ function emitAutopilotState() {
   emitBusyState();
 }
 
+function resumeWhenActive() {
+  if (props.active && canResume.value) {
+    void resume();
+  }
+}
+
 onMounted(emitAutopilotState);
 
-onMounted(() => {
-  void resume();
-});
+onMounted(resumeWhenActive);
 
 watch(codexWaiting, () => {
   emitCodexWaitingState();
@@ -441,10 +488,12 @@ watch(autopilotBusy, () => {
   flush: "post"
 });
 
+watch(() => props.active, resumeWhenActive, {
+  flush: "post"
+});
+
 watch(() => props.session?.currentStep || "", () => {
-  if (canResume.value) {
-    void resume();
-  }
+  resumeWhenActive();
 }, {
   flush: "post"
 });
@@ -566,20 +615,17 @@ watch(() => props.session?.currentStep || "", () => {
 }
 
 .studio-autopilot__command-terminal-output {
-  align-content: end;
-  background: #101216;
+  height: 100%;
+  opacity: 0.34;
+  text-align: left;
+}
+
+.studio-autopilot__command-terminal-output :deep(.studio-headless-command-output__text) {
+  border: 0;
   border-radius: 8px;
-  color: #f4f7fb;
-  display: grid;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.78rem;
   line-height: 1.42;
-  margin: 0;
-  opacity: 0.34;
-  overflow: hidden;
   padding: 0.85rem;
-  text-align: left;
-  white-space: pre-wrap;
 }
 
 .studio-autopilot__command-terminal-overlay {

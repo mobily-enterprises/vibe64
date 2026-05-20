@@ -107,6 +107,11 @@ describe("useAiStudioAutopilotController", () => {
       error: "Create worktree failed with exit code 1.",
       output: "fatal: branch exists"
     });
+    expect(context.controller.commandResult.value).toMatchObject({
+      actionId: "create_worktree",
+      ok: false,
+      output: "fatal: branch exists"
+    });
 
     context.commandResults.create_worktree = {
       exitCode: 0,

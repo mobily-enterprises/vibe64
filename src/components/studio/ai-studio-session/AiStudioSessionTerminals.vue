@@ -20,10 +20,11 @@
     />
 
     <div
-      v-if="displayMode !== 'headless' && commandTerminal.visible"
+      v-if="displayMode !== 'headless' && commandOutputVisible"
       class="studio-ai-sessions__command-overlay"
     >
       <AiStudioCommandTerminal
+        v-if="commandTerminal.visible"
         class="studio-ai-sessions__command-terminal"
         :action="commandTerminal.action"
         :action-input="commandTerminal.input"
@@ -33,15 +34,28 @@
         @finished="commandTerminal.finished"
         @running-changed="commandTerminal.runningChanged"
       />
+      <AiStudioHeadlessCommandOutput
+        v-else
+        class="studio-ai-sessions__command-terminal"
+        :command-preview="headlessCommandTerminal.commandPreview"
+        :error="headlessCommandTerminal.error"
+        :failed="headlessCommandTerminal.failed"
+        :output="headlessCommandTerminal.output"
+        :running="headlessCommandTerminal.running"
+        :status="headlessCommandTerminal.status"
+        title="Autopilot command output"
+      />
     </div>
   </section>
 </template>
 
 <script setup>
+import { computed } from "vue";
 import AiStudioCommandTerminal from "@/components/studio/AiStudioCommandTerminal.vue";
+import AiStudioHeadlessCommandOutput from "@/components/studio/ai-studio-session/AiStudioHeadlessCommandOutput.vue";
 import CodexSessionTerminal from "@/components/studio/CodexSessionTerminal.vue";
 
-defineProps({
+const props = defineProps({
   codexTerminal: {
     default: () => ({}),
     type: Object
@@ -54,11 +68,20 @@ defineProps({
     default: () => ({}),
     type: Object
   },
+  headlessCommandTerminal: {
+    default: () => ({}),
+    type: Object
+  },
   session: {
     default: null,
     type: Object
   }
 });
+
+const commandOutputVisible = computed(() => Boolean(
+  props.commandTerminal.visible ||
+  props.headlessCommandTerminal.visible
+));
 </script>
 
 <style scoped>
