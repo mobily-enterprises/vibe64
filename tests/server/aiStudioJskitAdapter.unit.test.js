@@ -89,10 +89,60 @@ test("jskit adapter exposes selected-project facts, commands, and prompt context
     assert.equal(facts.promptContext.blueprint_exists, "true");
     assert.equal(facts.promptContext.blueprint_relative_path, ".jskit/APP_BLUEPRINT.md");
     assert.equal(facts.promptContext.blueprint_path, path.join(targetRoot, ".jskit/APP_BLUEPRINT.md"));
+    assert.match(facts.promptContext.agent_guide_contract, /guide\/agent\/index\.md/u);
+    assert.match(facts.promptContext.agent_guide_contract, /app-setup\/database-layer\.md/u);
+    assert.match(facts.promptContext.agent_guide_contract, /Use individual `npx jskit generate \.\.\. help` commands only/u);
+    assert.match(facts.promptContext.tooling_contract, /npx jskit helper-map update/u);
+    assert.match(facts.promptContext.tooling_contract, /New JSKIT-owned files must be created/u);
+    assert.match(facts.promptContext.generator_discovery_commands, /npx jskit list-placements --json/u);
+    assert.doesNotMatch(facts.promptContext.generator_discovery_commands, /generate .* help/u);
+    assert.match(facts.promptContext.placement_contract, /agent-friendly placement docs/u);
+    assert.match(facts.promptContext.placement_contract, /node_modules\/@jskit-ai\/agent-docs\/patterns\/placements\.md/u);
+    assert.match(facts.promptContext.database_contract, /Configured database runtime: none/u);
+    assert.match(facts.promptContext.environment_blueprint, /Use `npx jskit \.\.\.`/u);
     assert.equal(facts.promptContext.valid_jskit_markers, "true");
     assert.deepEqual(Object.keys(facts.capabilities).sort(), capabilityIds());
     assert.equal(facts.capabilities.update_code_index, true);
     assert.deepEqual(facts.commands.map((command) => command.id), commandIds());
+  });
+});
+
+test("jskit adapter reflects configured database runtime in prompt context", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createJskitProject(targetRoot);
+    const adapter = createJskitTargetAdapter();
+
+    const facts = await adapter.inspect({
+      config: {
+        values: {
+          jskit_database_runtime: "mysql",
+          jskit_tenancy_mode: "personal"
+        }
+      },
+      targetRoot
+    });
+
+    assert.equal(facts.promptContext.database_runtime, "mysql");
+    assert.equal(facts.promptContext.tenancy_mode, "personal");
+    assert.match(facts.promptContext.database_contract, /Configured database runtime: mysql/u);
+    assert.match(facts.promptContext.database_contract, /Never create migration files directly/u);
+    assert.match(facts.promptContext.database_contract, /Every table added for application data must have `npx jskit generate crud-server-generator scaffold \.\.\.` run for it/u);
+    assert.match(facts.promptContext.database_contract, /json-rest-api/u);
+    assert.match(facts.promptContext.database_contract, /not direct Knex queries/u);
+    assert.match(facts.promptContext.database_contract, /Do not store durable application data in JSON files/u);
+
+    const invalidConfigFacts = await adapter.inspect({
+      config: {
+        values: {
+          jskit_database_runtime: "sqlite",
+          jskit_tenancy_mode: "invalid"
+        }
+      },
+      targetRoot
+    });
+
+    assert.equal(invalidConfigFacts.promptContext.database_runtime, "none");
+    assert.equal(invalidConfigFacts.promptContext.tenancy_mode, "none");
   });
 });
 
@@ -314,6 +364,67 @@ test("jskit prompt actions include JSKIT prompt context", async () => {
     assert.equal(afterPrompt.actionResult.promptContext.adapter.id, "jskit");
     assert.equal(afterPrompt.actionResult.promptContext.adapter.promptContext.package_name, "example-jskit-app");
     assert.match(afterPrompt.actionResult.prompt, /example-jskit-app/u);
+    assert.match(afterPrompt.actionResult.prompt, /Managed services/u);
+    assert.match(afterPrompt.actionResult.prompt, /Use the Managed services section as the only source/u);
+    assert.doesNotMatch(afterPrompt.actionResult.prompt, /Managed runtime containers/u);
+    assert.match(afterPrompt.actionResult.prompt, /JSKIT generated-file contract/u);
+    assert.match(afterPrompt.actionResult.prompt, /JSKIT guide-first contract/u);
+    assert.match(afterPrompt.actionResult.prompt, /guide\/agent\/generators\/crud-generators\.md/u);
+    assert.match(afterPrompt.actionResult.prompt, /Use individual `npx jskit generate \.\.\. help` commands only/u);
+    assert.doesNotMatch(afterPrompt.actionResult.prompt, /npx jskit generate crud-server-generator scaffold help/u);
+    assert.match(afterPrompt.actionResult.prompt, /Do not plan hand-created packages/u);
+    assert.match(afterPrompt.actionResult.prompt, /JSKIT placement contract/u);
+    assert.match(afterPrompt.actionResult.prompt, /npx jskit list-placements --json/u);
+  });
+});
+
+test("jskit execute-plan prompt requires generators, placements, and database modules before hand-built files", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createJskitProject(targetRoot);
+    const runtime = new AiStudioSessionRuntime({
+      adapter: createJskitTargetAdapter(),
+      projectConfig: {
+        values: {
+          jskit_database_runtime: "mysql"
+        }
+      },
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "plan_executed",
+      sessionId: "jskit_execute_prompt"
+    });
+
+    const afterPrompt = await runtime.runAction("jskit_execute_prompt", "execute_plan");
+
+    assert.equal(afterPrompt.actionResult.status, "prompt_ready");
+    assert.equal(afterPrompt.actionResult.promptContext.adapter.managedServices[0].label, "JSKIT MariaDB");
+    assert.equal(afterPrompt.actionResult.promptContext.adapter.managedServices[0].client, "mysql");
+    assert.equal(afterPrompt.actionResult.promptContext.adapter.managedServices[0].alternateClient, "mariadb");
+    assert.equal(afterPrompt.actionResult.promptContext.adapter.managedServices[0].generatorTokenHints.host, "$MYSQL_HOST");
+    assert.equal(afterPrompt.actionResult.promptContext.adapter.managedServices[0].generatorTokenHints.password, "$MYSQL_PWD");
+    assert.equal(afterPrompt.actionResult.promptContext.adapter.managedServices[0].generatorTokenHints.database, "$MYSQL_DATABASE");
+    assert.match(afterPrompt.actionResult.prompt, /Read the JSKIT agent guide and run the baseline discovery commands before adding new app files/u);
+    assert.match(afterPrompt.actionResult.prompt, /Do not hand-create packages, package descriptors, provider entrypoints/u);
+    assert.match(afterPrompt.actionResult.prompt, /Managed services/u);
+    assert.match(afterPrompt.actionResult.prompt, /JSKIT MariaDB/u);
+    assert.match(afterPrompt.actionResult.prompt, /mysql --host/u);
+    assert.match(afterPrompt.actionResult.prompt, /--execute/u);
+    assert.match(afterPrompt.actionResult.prompt, /<SQL>/u);
+    assert.match(afterPrompt.actionResult.prompt, /AI_STUDIO_MYSQL_USER/u);
+    assert.match(afterPrompt.actionResult.prompt, /MYSQL_DATABASE/u);
+    assert.match(afterPrompt.actionResult.prompt, /database host reachable from the terminal/u);
+    assert.match(afterPrompt.actionResult.prompt, /database password used by mysql and mariadb clients/u);
+    assert.match(afterPrompt.actionResult.prompt, /generatorTokenHints/u);
+    assert.match(afterPrompt.actionResult.prompt, /Do not inspect Docker/u);
+    assert.match(afterPrompt.actionResult.prompt, /read the agent-friendly placement docs before implementation/u);
+    assert.match(afterPrompt.actionResult.prompt, /node_modules\/@jskit-ai\/agent-docs\/patterns\/placements\.md/u);
+    assert.match(afterPrompt.actionResult.prompt, /Configured database runtime: mysql/u);
+    assert.match(afterPrompt.actionResult.prompt, /Never create migration files directly/u);
+    assert.match(afterPrompt.actionResult.prompt, /run the server-side CRUD generator for every added table/u);
+    assert.match(afterPrompt.actionResult.prompt, /do not use direct Knex access from feature code/u);
+    assert.match(afterPrompt.actionResult.prompt, /Do not store durable application data in JSON files/u);
+    assert.match(afterPrompt.actionResult.prompt, /crud-ui-generator crud/u);
   });
 });
 

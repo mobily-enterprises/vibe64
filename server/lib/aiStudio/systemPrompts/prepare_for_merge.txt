@@ -17,10 +17,19 @@ Adapter project facts:
 Adapter prompt context:
 {{adapter.promptContext.json}}
 
+Managed services:
+{{adapter.managedServices.json}}
+
+Managed service policy:
+{{prompt.managedServicePolicy}}
+
 Project config:
 {{config.json}}
 
 Action input:
 {{input.json}}
+
+Missing information policy:
+{{prompt.missingInformationPolicy}}
 
 Use the recorded PR URL from session metadata. Check the PR state, identify merge blockers, resolve blockers that can be fixed locally, and keep changes scoped to making the PR mergeable. Report whether the PR is ready to merge and what remains blocked.

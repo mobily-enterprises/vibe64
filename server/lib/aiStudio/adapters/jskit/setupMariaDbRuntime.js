@@ -2,6 +2,9 @@ import {
   shellQuote
 } from "../../../shellCommands.js";
 import {
+  managedDatabaseNameFromTargetRoot
+} from "../../managedDatabases.js";
+import {
   AI_STUDIO_RUNTIME_HOST_ALIAS,
   createRuntimeContainerRepair,
   runtimeContainerName
@@ -37,8 +40,20 @@ async function targetWantsJskitMariaDb(targetRoot = "", toolkit) {
   return [...names].some((name) => name.includes("database-runtime-mysql"));
 }
 
-function mariaDbCapabilitySql() {
+function mariaDbIdentifier(value = "") {
+  return String(value || "").replaceAll("`", "``");
+}
+
+function mariaDbCapabilitySql({
+  appDatabaseName = ""
+} = {}) {
+  const database = String(appDatabaseName || "").trim();
   return [
+    ...(database
+      ? [
+          `CREATE DATABASE IF NOT EXISTS \`${mariaDbIdentifier(database)}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`
+        ]
+      : []),
     `CREATE DATABASE IF NOT EXISTS \`${JSKIT_MARIADB_PROBE_DATABASE}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
     `CREATE TABLE IF NOT EXISTS \`${JSKIT_MARIADB_PROBE_DATABASE}\`.\`${JSKIT_MARIADB_PROBE_TABLE}\` (id INT NOT NULL PRIMARY KEY)`,
     `DROP TABLE \`${JSKIT_MARIADB_PROBE_DATABASE}\`.\`${JSKIT_MARIADB_PROBE_TABLE}\``,
@@ -46,16 +61,31 @@ function mariaDbCapabilitySql() {
   ].join("; ");
 }
 
+function jskitMariaDbDatabaseName(targetRoot = "") {
+  return managedDatabaseNameFromTargetRoot(targetRoot, {
+    fallback: "jskit_app"
+  });
+}
+
 function createJskitMariaDbRuntimeContainer({
-  required = true
+  databaseName = "",
+  required = true,
+  targetRoot = ""
 } = {}) {
+  const configuredDatabaseName = String(databaseName || "").trim();
+  const terminalDatabaseName = (contextTargetRoot = "") => {
+    return configuredDatabaseName || jskitMariaDbDatabaseName(targetRoot || contextTargetRoot);
+  };
   return {
     aliases: [
       JSKIT_MARIADB_HOST
     ],
     checkId: "jskit-mariadb",
-    env: {
-      MARIADB_ROOT_PASSWORD: JSKIT_MARIADB_ROOT_PASSWORD
+    env: ({ targetRoot: contextTargetRoot = "" } = {}) => {
+      return {
+        MARIADB_DATABASE: terminalDatabaseName(contextTargetRoot),
+        MARIADB_ROOT_PASSWORD: JSKIT_MARIADB_ROOT_PASSWORD
+      };
     },
     expected: "Managed JSKIT MariaDB is ready when the target declares a MySQL-compatible runtime.",
     health: {
@@ -81,11 +111,13 @@ function createJskitMariaDbRuntimeContainer({
         "-uroot",
         `-p${JSKIT_MARIADB_ROOT_PASSWORD}`,
         "-e",
-        mariaDbCapabilitySql()
+        mariaDbCapabilitySql({
+          appDatabaseName: terminalDatabaseName()
+        })
       ],
-      expected: "Managed JSKIT MariaDB can create/drop a temporary probe database.",
+      expected: "Managed JSKIT MariaDB can create the app database and create/drop a temporary probe database.",
       explanation: "The MariaDB container is reachable, but Studio could not prove DDL rights.",
-      observed: "Probe database and table created and dropped successfully."
+      observed: "App database is present. Probe database and table created and dropped successfully."
     },
     readyExplanation: "The JSKIT managed MariaDB runtime is ready for target database setup.",
     required,
@@ -93,11 +125,14 @@ function createJskitMariaDbRuntimeContainer({
       "MARIADB_ROOT_PASSWORD",
       "MYSQL_PWD"
     ],
-    terminalEnv: {
-      AI_STUDIO_MYSQL_USER: "root",
-      MYSQL_HOST: JSKIT_MARIADB_HOST,
-      MYSQL_PWD: JSKIT_MARIADB_ROOT_PASSWORD,
-      MYSQL_TCP_PORT: "3306"
+    terminalEnv: ({ targetRoot: contextTargetRoot = "" } = {}) => {
+      return {
+        AI_STUDIO_MYSQL_USER: "root",
+        MYSQL_DATABASE: terminalDatabaseName(contextTargetRoot),
+        MYSQL_HOST: JSKIT_MARIADB_HOST,
+        MYSQL_PWD: JSKIT_MARIADB_ROOT_PASSWORD,
+        MYSQL_TCP_PORT: "3306"
+      };
     },
     volumes: [
       {
@@ -117,7 +152,9 @@ function jskitMariaDbContainerName(targetRoot = "") {
 }
 
 function startJskitMariaDbRepair(targetRoot = "") {
-  return createRuntimeContainerRepair(createJskitMariaDbRuntimeContainer(), {
+  return createRuntimeContainerRepair(createJskitMariaDbRuntimeContainer({
+    targetRoot
+  }), {
     adapterId: "jskit",
     targetRoot
   });
@@ -155,6 +192,7 @@ export {
   createJskitMariaDbRuntimeContainer,
   createManagedDatabaseDockerArgs,
   createManagedDatabaseRepair,
+  jskitMariaDbDatabaseName,
   jskitMariaDbContainerName,
   JSKIT_HOST_DATABASE_HOST,
   JSKIT_MARIADB_CONTAINER_ID,

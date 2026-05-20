@@ -313,3 +313,44 @@ test("ai-studio prompt templates can render scalar adapter prompt context tokens
     "Blueprint:\nUse Prisma server-side."
   );
 });
+
+test("ai-studio prompt templates can render managed services without container internals", () => {
+  const rendered = renderPromptTemplate("Services:\n{{adapter.managedServices.json}}\nPolicy:\n{{prompt.managedServicePolicy}}\nContext:\n{{context.json}}", {
+    adapter: {
+      managedServices: [
+        {
+          client: "psql",
+          id: "postgres",
+          label: "PostgreSQL",
+          generatorTokenHints: {
+            host: "$PGHOST",
+            password: "$PGPASSWORD"
+          }
+        }
+      ],
+      runtimeContainers: [
+        {
+          containerName: "ai-studio-postgres-secret",
+          id: "postgres",
+          label: "PostgreSQL",
+          terminalEnv: {
+            DATABASE_URL: "postgresql://example"
+          }
+        }
+      ]
+    },
+    action: {},
+    input: {},
+    product: "ai-studio",
+    session: {}
+  });
+
+  assert.match(rendered, /"id": "postgres"/u);
+  assert.match(rendered, /"label": "PostgreSQL"/u);
+  assert.match(rendered, /"managedServices": \[/u);
+  assert.match(rendered, /npx jskit/u);
+  assert.match(rendered, /bare interactive database client/u);
+  assert.doesNotMatch(rendered, /runtimeContainers/u);
+  assert.doesNotMatch(rendered, /ai-studio-postgres-secret/u);
+  assert.doesNotMatch(rendered, /postgresql:\/\/example/u);
+});

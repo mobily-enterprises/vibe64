@@ -36,6 +36,9 @@ import {
   terminalEnvironmentFingerprint
 } from "./terminalEnvironment.js";
 import {
+  ensureAdapterRuntimeContainers
+} from "./terminalRuntimeContainers.js";
+import {
   targetToolchainTerminalArgs
 } from "./targetToolchainTerminal.js";
 
@@ -287,6 +290,12 @@ function createShellTerminalController({ projectService } = {}) {
         }
 
         await ensureTargetRuntimeNetwork(targetRoot);
+        await ensureAdapterRuntimeContainers({
+          runtime,
+          session,
+          target,
+          targetRoot
+        });
         const shellCommand = defaultShellCommand();
         const terminalEnv = await projectTerminalEnvironment({
           projectService,

@@ -36,6 +36,9 @@ import {
   terminalEnvironmentFingerprint
 } from "./terminalEnvironment.js";
 import {
+  ensureAdapterRuntimeContainers
+} from "./terminalRuntimeContainers.js";
+import {
   resolveTerminalToolchainImage
 } from "./terminalToolchainImage.js";
 import {
@@ -291,6 +294,12 @@ function createCommandTerminalController({
         }
 
         await ensureRuntimeNetwork(targetRoot);
+        await ensureAdapterRuntimeContainers({
+          runtime,
+          session,
+          target: "command",
+          targetRoot
+        });
         const terminalEnv = await projectTerminalEnvironment({
           projectService,
           runtime,

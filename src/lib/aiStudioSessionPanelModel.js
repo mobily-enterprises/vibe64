@@ -75,7 +75,7 @@ const AI_STUDIO_AUTOPILOT_INTERACTION_STEPS = Object.freeze([
   },
   {
     id: "issue_file_created",
-    label: "Issue"
+    label: "Briefing"
   },
   {
     id: "deep_ui_check_run",
@@ -83,7 +83,7 @@ const AI_STUDIO_AUTOPILOT_INTERACTION_STEPS = Object.freeze([
   },
   {
     id: "changes_accepted",
-    label: "Code deslop"
+    label: "Human review"
   },
   {
     id: "pr_merged",

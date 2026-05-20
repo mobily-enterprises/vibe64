@@ -17,10 +17,19 @@ Adapter project facts:
 Adapter prompt context:
 {{adapter.promptContext.json}}
 
+Managed services:
+{{adapter.managedServices.json}}
+
+Managed service policy:
+{{prompt.managedServicePolicy}}
+
 Project config:
 {{config.json}}
 
 Action input:
 {{input.json}}
+
+Missing information policy:
+{{prompt.missingInformationPolicy}}
 
 Execute the accepted plan directly in the target project workspace. Keep the work scoped to the session goal, preserve existing project conventions, and avoid unrelated refactors. Run only relevant checks for the work you changed. When finished, report what changed, which checks ran, and what remains blocked or unverified.

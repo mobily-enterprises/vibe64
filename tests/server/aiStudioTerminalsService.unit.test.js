@@ -399,6 +399,33 @@ test("AI Studio terminal env includes JSKIT managed MariaDB client defaults when
     assert.equal(env.MYSQL_PWD, JSKIT_MARIADB_ROOT_PASSWORD);
     assert.equal(env.MYSQL_TCP_PORT, "3306");
     assert.equal(env.AI_STUDIO_MYSQL_USER, "root");
+    assert.equal(env.MYSQL_DATABASE, path.basename(targetRoot).replace(/[^A-Za-z0-9_]+/gu, "_"));
+  });
+});
+
+test("AI Studio terminal env includes JSKIT managed MariaDB client defaults when config selects MySQL", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const env = await projectTerminalEnvironment({
+      runtime: {
+        adapter: new JskitTargetAdapter(),
+        projectConfig: {
+          values: {
+            jskit_database_runtime: "mysql"
+          }
+        }
+      },
+      session: {
+        targetRoot
+      },
+      target: "shell",
+      targetRoot
+    });
+
+    assert.equal(env.MYSQL_HOST, JSKIT_MARIADB_HOST);
+    assert.equal(env.MYSQL_PWD, JSKIT_MARIADB_ROOT_PASSWORD);
+    assert.equal(env.MYSQL_TCP_PORT, "3306");
+    assert.equal(env.AI_STUDIO_MYSQL_USER, "root");
+    assert.equal(env.MYSQL_DATABASE, path.basename(targetRoot).replace(/[^A-Za-z0-9_]+/gu, "_"));
   });
 });
 

@@ -1,6 +1,34 @@
 import path from "node:path";
 
 const MANAGED_DATABASE_RUNTIMES = new Set(["none", "sqlite", "postgres", "mysql", "mariadb"]);
+const MYSQL_GENERATOR_TOKEN_HINTS = Object.freeze({
+  database: "$MYSQL_DATABASE",
+  host: "$MYSQL_HOST",
+  password: "$MYSQL_PWD",
+  port: "$MYSQL_TCP_PORT",
+  username: "$AI_STUDIO_MYSQL_USER"
+});
+const MYSQL_ENVIRONMENT_VARIABLES = Object.freeze({
+  AI_STUDIO_MYSQL_USER: "database username",
+  MYSQL_DATABASE: "database name",
+  MYSQL_HOST: "database host reachable from the terminal",
+  MYSQL_PWD: "database password used by mysql and mariadb clients",
+  MYSQL_TCP_PORT: "database TCP port"
+});
+const POSTGRES_GENERATOR_TOKEN_HINTS = Object.freeze({
+  database: "$PGDATABASE",
+  host: "$PGHOST",
+  password: "$PGPASSWORD",
+  port: "$PGPORT",
+  username: "$PGUSER"
+});
+const POSTGRES_ENVIRONMENT_VARIABLES = Object.freeze({
+  PGDATABASE: "database name",
+  PGHOST: "database host reachable from the terminal",
+  PGPASSWORD: "database password used by psql",
+  PGPORT: "database TCP port",
+  PGUSER: "database username"
+});
 
 function managedDatabaseNameFromTargetRoot(targetRoot = "", {
   fallback = "app"
@@ -100,6 +128,92 @@ function managedMysqlTerminalEnv(connection = {}) {
     MYSQL_PWD: connection.password,
     MYSQL_TCP_PORT: connection.port
   };
+}
+
+function terminalEnvHasKeys(terminalEnv = {}, keys = []) {
+  return keys.every((key) => String(terminalEnv[key] || "").trim());
+}
+
+function mysqlCompatibleClient() {
+  return "mysql";
+}
+
+function mysqlCompatibleAlternateClient() {
+  return "mariadb";
+}
+
+function managedMysqlServicePromptFacts({
+  id = "",
+  label = "",
+  runtime = "mysql"
+} = {}) {
+  const client = mysqlCompatibleClient();
+  const alternateClient = mysqlCompatibleAlternateClient();
+  return {
+    client,
+    checkCommand: `${client} --host="$MYSQL_HOST" --port="\${MYSQL_TCP_PORT:-3306}" --user="\${AI_STUDIO_MYSQL_USER:-root}" --password="$MYSQL_PWD" "$MYSQL_DATABASE" --execute="SELECT 1"`,
+    command: `${client} --host="$MYSQL_HOST" --port="\${MYSQL_TCP_PORT:-3306}" --user="\${AI_STUDIO_MYSQL_USER:-root}" --password="$MYSQL_PWD" "$MYSQL_DATABASE" --execute="<SQL>"`,
+    environment: MYSQL_ENVIRONMENT_VARIABLES,
+    generatorTokenHints: MYSQL_GENERATOR_TOKEN_HINTS,
+    id,
+    interactiveCommand: `${client} --host="$MYSQL_HOST" --port="\${MYSQL_TCP_PORT:-3306}" --user="\${AI_STUDIO_MYSQL_USER:-root}" --password="$MYSQL_PWD" "$MYSQL_DATABASE"`,
+    kind: "database",
+    label,
+    notes: [
+      `Run ${client} directly from the terminal. If ${client} is not installed but ${alternateClient} is available, use the alternate command with the same environment variables.`,
+      "In non-interactive command runners, pass SQL with --execute or pipe SQL to the client; do not start a bare interactive client and wait for input.",
+      "The terminal environment already contains the connection values. Use those environment variables when passing database tokens or flags to framework generators."
+    ],
+    runtime,
+    alternateClient,
+    alternateCheckCommand: `${alternateClient} --host="$MYSQL_HOST" --port="\${MYSQL_TCP_PORT:-3306}" --user="\${AI_STUDIO_MYSQL_USER:-root}" --password="$MYSQL_PWD" "$MYSQL_DATABASE" --execute="SELECT 1"`,
+    alternateCommand: `${alternateClient} --host="$MYSQL_HOST" --port="\${MYSQL_TCP_PORT:-3306}" --user="\${AI_STUDIO_MYSQL_USER:-root}" --password="$MYSQL_PWD" "$MYSQL_DATABASE" --execute="<SQL>"`
+  };
+}
+
+function managedPostgresServicePromptFacts({
+  id = "",
+  label = ""
+} = {}) {
+  return {
+    checkCommand: 'psql --host="$PGHOST" --port="${PGPORT:-5432}" --username="$PGUSER" --dbname="$PGDATABASE" --command="SELECT 1"',
+    client: "psql",
+    command: 'psql --host="$PGHOST" --port="${PGPORT:-5432}" --username="$PGUSER" --dbname="$PGDATABASE" --command="<SQL>"',
+    environment: POSTGRES_ENVIRONMENT_VARIABLES,
+    generatorTokenHints: POSTGRES_GENERATOR_TOKEN_HINTS,
+    id,
+    interactiveCommand: 'psql --host="$PGHOST" --port="${PGPORT:-5432}" --username="$PGUSER" --dbname="$PGDATABASE"',
+    kind: "database",
+    label,
+    notes: [
+      "Run psql directly from the terminal.",
+      "In non-interactive command runners, pass SQL with --command or pipe SQL to psql; do not start a bare interactive client and wait for input.",
+      "The terminal environment already contains the connection values. Use those environment variables when passing database tokens or flags to framework generators."
+    ],
+    runtime: "postgres"
+  };
+}
+
+function managedDatabasePromptServiceFacts({
+  id = "",
+  label = "",
+  runtime = "",
+  terminalEnv = {}
+} = {}) {
+  if (terminalEnvHasKeys(terminalEnv, ["PGDATABASE", "PGHOST", "PGPASSWORD", "PGPORT", "PGUSER"])) {
+    return managedPostgresServicePromptFacts({
+      id,
+      label
+    });
+  }
+  if (terminalEnvHasKeys(terminalEnv, ["AI_STUDIO_MYSQL_USER", "MYSQL_DATABASE", "MYSQL_HOST", "MYSQL_PWD", "MYSQL_TCP_PORT"])) {
+    return managedMysqlServicePromptFacts({
+      id,
+      label,
+      runtime: runtime === "mariadb" ? "mariadb" : "mysql"
+    });
+  }
+  return null;
 }
 
 function managedPostgresContainer({
@@ -310,5 +424,6 @@ export {
   createManagedDatabaseRuntimeContainer,
   managedDatabaseConnection,
   managedDatabaseNameFromTargetRoot,
+  managedDatabasePromptServiceFacts,
   managedDatabaseRuntime
 };

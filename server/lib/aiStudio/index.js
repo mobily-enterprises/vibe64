@@ -84,6 +84,8 @@ export {
   runtimeContainerCommandPreview,
   runtimeContainerName,
   runtimeContainerNetworkDockerArgs,
+  runtimeContainerManagedServicesPromptFacts,
+  runtimeContainerPromptFacts,
   runtimeContainerRunArgs,
   runtimeContainerTerminalEnv,
   runtimeContainersTerminalEnv,

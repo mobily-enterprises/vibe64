@@ -16,6 +16,15 @@ const DEFAULT_SYSTEM_PROMPT_PACK_ROOT = fileURLToPath(new URL("./systemPrompts",
 const PROMPT_OVERRIDES_DIR = "prompts";
 const PROMPT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
 const TEMPLATE_TOKEN_PATTERN = /\{\{([A-Za-z0-9_.-]+)\}\}/gu;
+const MISSING_INFORMATION_POLICY = "If required external service details, credentials, project URLs, API keys, provider choices, production-vs-local decisions, or runtime configuration are missing, ask concise questions before planning or implementing work that depends on them. Do not invent placeholder credentials, silently choose unrelated local substitutes, or proceed with fake integrations.";
+const MANAGED_SERVICE_POLICY = [
+  "Use the Managed services section as the only source for AI Studio-managed database access.",
+  "Run the listed non-interactive client command directly from the worktree terminal: mysql or mariadb for MySQL-compatible services, and psql for PostgreSQL services.",
+  "When checking connectivity or inspecting schema from Codex, use `checkCommand`, use `command` with a real SQL statement, or pipe SQL to the client; do not run a bare interactive database client that waits for input.",
+  "When framework generators or CLIs ask for database connection tokens or flags, including commands such as `npx jskit ...`, pass the environment-variable references from `generatorTokenHints` instead of discovering replacement values.",
+  "Do not inspect Docker, Docker Compose, container names, runtime networks, localhost sockets, getent, mysqladmin, mariadb-admin, pg_isready, or host port probes for normal managed-service work.",
+  "If the listed client command cannot connect, report that the managed service is not ready or ask for the missing external detail; do not invent alternate credentials or infrastructure."
+].join(" ");
 
 function assertPromptId(promptId) {
   const normalizedPromptId = normalizeText(promptId);
@@ -144,6 +153,7 @@ function normalizePromptContext(context = {}) {
       facts: isPlainObject(context.adapter?.facts) ? context.adapter.facts : {},
       id: normalizeText(context.adapter?.id),
       label: normalizeText(context.adapter?.label),
+      managedServices: Array.isArray(context.adapter?.managedServices) ? context.adapter.managedServices : [],
       promptContext: isPlainObject(context.adapter?.promptContext) ? context.adapter.promptContext : {}
     },
     config: isPlainObject(context.config) ? context.config : {},
@@ -190,10 +200,14 @@ function promptTemplateTokens(contextInput) {
     "adapter.facts.json": stableJson(context.adapter.facts),
     "adapter.id": context.adapter.id,
     "adapter.label": context.adapter.label,
+    "adapter.managedServices.json": stableJson(context.adapter.managedServices),
     "adapter.promptContext.json": stableJson(context.adapter.promptContext),
+    "adapter.runtimeContainers.json": stableJson([]),
     "config.json": stableJson(context.config),
     "context.json": stableJson(context),
+    "prompt.managedServicePolicy": MANAGED_SERVICE_POLICY,
     "input.json": stableJson(context.input),
+    "prompt.missingInformationPolicy": MISSING_INFORMATION_POLICY,
     "product": context.product,
     "session.artifactsRoot": context.session.artifactsRoot,
     "session.completedSteps.json": stableJson(context.session.completedSteps),

@@ -244,6 +244,21 @@ function useAiStudioAutopilotIssueDiscussion({
     returnToInputIgnoringCurrentCodexAnswer();
   }
 
+  function updateQuestionAnswer(questionId = "", answer = "") {
+    if (!questioning.value) {
+      return;
+    }
+    questions.value = questions.value.map((question) => {
+      if (question.id !== questionId) {
+        return question;
+      }
+      return {
+        ...question,
+        answer: String(answer || "")
+      };
+    });
+  }
+
   async function submitQuestionAnswers() {
     if (!questioning.value) {
       return;
@@ -499,6 +514,7 @@ function useAiStudioAutopilotIssueDiscussion({
     statusText,
     submitInitialRequest,
     submitQuestionAnswers,
+    updateQuestionAnswer,
     waiting
   };
 }

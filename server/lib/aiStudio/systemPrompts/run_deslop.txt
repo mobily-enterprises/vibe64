@@ -17,10 +17,19 @@ Adapter project facts:
 Adapter prompt context:
 {{adapter.promptContext.json}}
 
+Managed services:
+{{adapter.managedServices.json}}
+
+Managed service policy:
+{{prompt.managedServicePolicy}}
+
 Project config:
 {{config.json}}
 
 Action input:
 {{input.json}}
+
+Missing information policy:
+{{prompt.missingInformationPolicy}}
 
 Review the current work for bugs, behavioral regressions, unclear code, weak tests, unnecessary complexity, repeated helpers, ownership leaks, and mismatches with the session goal. Lead with concrete findings. Mark findings as [high], [medium] or [low]. Run one subagent per discovered problem, getting it to make targeted changes to fix it. Repeat the whole process (discovery, subagents run), and stop when only [low] issues are reported. At the end, report what you changed, which checks ran, and what remains unresolved.

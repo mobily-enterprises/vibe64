@@ -154,6 +154,12 @@ function stripStudioContextBlocksForDisplay(value) {
   if (!source) {
     return "";
   }
+  if (
+    !source.includes(STUDIO_CONTEXT_START_MARKER) &&
+    !source.includes(STUDIO_CONTEXT_END_MARKER)
+  ) {
+    return source;
+  }
 
   const { rawIndexes, text } = terminalVisibleTextMap(source);
   let output = "";

@@ -17,10 +17,19 @@ Adapter project facts:
 Adapter prompt context:
 {{adapter.promptContext.json}}
 
+Managed services:
+{{adapter.managedServices.json}}
+
+Managed service policy:
+{{prompt.managedServicePolicy}}
+
 Project config:
 {{config.json}}
 
 Action input:
 {{input.json}}
+
+Missing information policy:
+{{prompt.missingInformationPolicy}}
 
 Create a clear, ordered implementation plan as your normal Codex response. Use the current Codex conversation, Action input, adapter facts, and project files as context. Do not modify files while creating the plan. Do not run shell commands just to display the plan.

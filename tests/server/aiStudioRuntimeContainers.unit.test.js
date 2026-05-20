@@ -5,10 +5,13 @@ import test from "node:test";
 
 import {
   createRuntimeContainerCheck,
+  ensureRuntimeContainers,
   ensureTargetRuntimeNetwork,
   runtimeContainerCommandPreview,
+  runtimeContainerManagedServicesPromptFacts,
   runtimeContainerName,
   runtimeContainerNetworkDockerArgs,
+  runtimeContainerPromptFacts,
   runtimeContainerStartScript,
   runtimeContainerTerminalEnv,
   runtimeContainersTerminalEnv,
@@ -153,6 +156,8 @@ test("jskit declares MariaDB through the generic runtime container layer", async
 
     assert.equal(repair.actionId, "start-runtime-container-jskit-mariadb");
     assert.match(repair.commandPreview, /mariadb:12\.0\.2/u);
+    assert.match(repair.commandPreview, /MARIADB_DATABASE=/u);
+    assert.match(repair.commandPreview, new RegExp(path.basename(targetRoot).replace(/[^A-Za-z0-9_]+/gu, "_"), "u"));
     assert.match(repair.commandPreview, /MARIADB_ROOT_PASSWORD=\*\*\*\*\*/u);
     assert.doesNotMatch(repair.commandPreview, /ai_studio_jskit_root/u);
     assert.doesNotMatch(repair.commandPreview, /127\.0\.0\.1:13306:3306/u);
@@ -170,6 +175,7 @@ test("jskit declares MariaDB through the generic runtime container layer", async
     );
     assert.deepEqual(terminalEnv, {
       AI_STUDIO_MYSQL_USER: "root",
+      MYSQL_DATABASE: path.basename(targetRoot).replace(/[^A-Za-z0-9_]+/gu, "_"),
       MYSQL_HOST: "ai-studio-mariadb",
       MYSQL_PWD: "ai_studio_jskit_root",
       MYSQL_TCP_PORT: "3306"
@@ -204,6 +210,207 @@ test("runtime container terminal env is emitted only for required descriptors", 
     assert.deepEqual(terminalEnv, {
       DB_HOST: "required-db"
     });
+  });
+});
+
+test("required runtime containers are started before managed-service terminals launch", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const calls = [];
+    const results = await ensureRuntimeContainers([
+      {
+        aliases: ["required-db"],
+        health: {
+          command: ["db", "ready"]
+        },
+        id: "required-db",
+        image: "example/db:1",
+        required: true
+      },
+      {
+        id: "unused-db",
+        image: "example/db:1",
+        required: false
+      }
+    ], {
+      adapterId: "unit",
+      runCommand: async (command, args, options) => {
+        calls.push({
+          args,
+          command,
+          options
+        });
+        return {
+          ok: true,
+          output: "started"
+        };
+      },
+      targetRoot
+    });
+
+    assert.equal(results.length, 1);
+    assert.equal(results[0].id, "required-db");
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].command, "bash");
+    assert.deepEqual(calls[0].args.slice(0, 1), ["-lc"]);
+    assert.equal(calls[0].options.cwd, targetRoot);
+    assert.match(calls[0].args[1], /docker network create/u);
+    assert.match(calls[0].args[1], /--network-alias required-db/u);
+    assert.doesNotMatch(calls[0].args[1], /unused-db/u);
+  });
+});
+
+test("runtime container startup failures block terminal launch with context", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await assert.rejects(
+      ensureRuntimeContainers([
+        {
+          id: "required-db",
+          image: "example/db:1",
+          label: "Required DB"
+        }
+      ], {
+        adapterId: "unit",
+        runCommand: async () => ({
+          ok: false,
+          output: "docker failed"
+        }),
+        targetRoot
+      }),
+      /Required DB could not start before launching the terminal: docker failed/u
+    );
+  });
+});
+
+test("runtime container prompt facts expose connection details with secrets masked", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const [facts] = await runtimeContainerPromptFacts([
+      createManagedDatabaseRuntimeContainer({
+        adapterId: "nextjs",
+        host: "nextjs-postgres",
+        password: "nextjs_password",
+        runtime: "postgres",
+        targetRoot,
+        username: "nextjs"
+      })
+    ], {
+      adapterId: "nextjs",
+      targetRoot
+    });
+
+    assert.equal(facts.id, "nextjs-postgres");
+    assert.equal(facts.label, "nextjs PostgreSQL");
+    assert.equal(facts.aliases.includes("nextjs-postgres"), true);
+    assert.match(facts.expected, /Managed PostgreSQL is running/u);
+    assert.equal(facts.required, true);
+    assert.match(facts.readyExplanation, /managed PostgreSQL runtime is ready/u);
+    assert.equal(facts.terminalEnv.PGHOST, "nextjs-postgres");
+    assert.equal(facts.terminalEnv.PGPASSWORD, "*****");
+    assert.equal(facts.env.POSTGRES_PASSWORD, "*****");
+    assert.notEqual(facts.terminalEnv.PGPASSWORD, "nextjs_password");
+  });
+});
+
+test("managed service prompt facts expose database client commands without container internals", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const [mysqlFacts, postgresFacts] = await runtimeContainerManagedServicesPromptFacts([
+      createManagedDatabaseRuntimeContainer({
+        adapterId: "nextjs",
+        host: "nextjs-mysql",
+        rootPassword: "nextjs_root_password",
+        runtime: "mysql",
+        targetRoot
+      }),
+      createManagedDatabaseRuntimeContainer({
+        adapterId: "laravel",
+        host: "laravel-postgres",
+        password: "laravel_password",
+        runtime: "postgres",
+        targetRoot,
+        username: "laravel"
+      })
+    ], {
+      adapterId: "unit",
+      targetRoot
+    });
+
+    assert.equal(mysqlFacts.kind, "database");
+    assert.equal(mysqlFacts.client, "mysql");
+    assert.equal(mysqlFacts.alternateClient, "mariadb");
+    assert.match(mysqlFacts.command, /^mysql /u);
+    assert.match(mysqlFacts.command, /--execute="<SQL>"/u);
+    assert.match(mysqlFacts.checkCommand, /--execute="SELECT 1"/u);
+    assert.match(mysqlFacts.interactiveCommand, /^mysql /u);
+    assert.doesNotMatch(mysqlFacts.interactiveCommand, /--execute/u);
+    assert.match(mysqlFacts.environment.MYSQL_HOST, /host/u);
+    assert.match(mysqlFacts.environment.MYSQL_PWD, /password/u);
+    assert.equal(mysqlFacts.generatorTokenHints.host, "$MYSQL_HOST");
+    assert.equal(mysqlFacts.generatorTokenHints.password, "$MYSQL_PWD");
+    assert.equal(mysqlFacts.generatorTokenHints.database, "$MYSQL_DATABASE");
+    assert.equal(postgresFacts.client, "psql");
+    assert.match(postgresFacts.command, /^psql /u);
+    assert.match(postgresFacts.command, /--command="<SQL>"/u);
+    assert.match(postgresFacts.checkCommand, /--command="SELECT 1"/u);
+    assert.match(postgresFacts.interactiveCommand, /^psql /u);
+    assert.doesNotMatch(postgresFacts.interactiveCommand, /--command/u);
+    assert.match(postgresFacts.environment.PGHOST, /host/u);
+    assert.match(postgresFacts.environment.PGPASSWORD, /password/u);
+    assert.equal(postgresFacts.generatorTokenHints.host, "$PGHOST");
+    assert.equal(postgresFacts.generatorTokenHints.password, "$PGPASSWORD");
+    for (const service of [mysqlFacts, postgresFacts]) {
+      assert.equal(Object.hasOwn(service, "containerName"), false);
+      assert.equal(Object.hasOwn(service, "network"), false);
+      assert.equal(Object.hasOwn(service, "image"), false);
+      assert.equal(Object.hasOwn(service, "readyCheck"), false);
+    }
+  });
+});
+
+test("managed service prompt facts only include services whose env is injected", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const facts = await runtimeContainerManagedServicesPromptFacts([
+      createManagedDatabaseRuntimeContainer({
+        adapterId: "nextjs",
+        host: "nextjs-mysql",
+        rootPassword: "nextjs_root_password",
+        runtime: "mysql",
+        targetRoot
+      }),
+      {
+        ...createManagedDatabaseRuntimeContainer({
+          adapterId: "nextjs",
+          host: "nextjs-postgres",
+          password: "nextjs_password",
+          runtime: "postgres",
+          targetRoot,
+          username: "nextjs"
+        }),
+        required: false
+      }
+    ], {
+      adapterId: "nextjs",
+      targetRoot
+    });
+
+    assert.deepEqual(facts.map((fact) => fact.runtime), ["mysql"]);
+  });
+});
+
+test("runtime container prompt facts mask database URLs", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const [facts] = await runtimeContainerPromptFacts([
+      {
+        id: "app-db",
+        image: "example/db:1",
+        terminalEnv: {
+          DATABASE_URL: "postgresql://user:secret@app-db:5432/app"
+        }
+      }
+    ], {
+      adapterId: "unit",
+      targetRoot
+    });
+
+    assert.equal(facts.terminalEnv.DATABASE_URL, "*****");
   });
 });
 
@@ -303,7 +510,10 @@ test("target runtime network shell command tolerates concurrent network creation
 
 test("runtime container start script safely displays shell-quoted commands", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const script = runtimeContainerStartScript(createJskitMariaDbRuntimeContainer(), {
+    const databaseName = path.basename(targetRoot).replace(/[^A-Za-z0-9_]+/gu, "_");
+    const script = runtimeContainerStartScript(createJskitMariaDbRuntimeContainer({
+      targetRoot
+    }), {
       adapterId: "jskit",
       targetRoot
     });
@@ -316,6 +526,9 @@ test("runtime container start script safely displays shell-quoted commands", asy
     assert.match(script, /printf '%s\\n'/u);
     assert.doesNotMatch(script, /echo '\\$ docker run/u);
     assert.doesNotMatch(script, /127\.0\.0\.1:13306:3306/u);
+    assert.match(script, new RegExp(`MARIADB_DATABASE=${databaseName}`, "u"));
+    assert.match(script, new RegExp(`CREATE DATABASE IF NOT EXISTS .${databaseName}.`, "u"));
+    assert.match(script, /timeout 15s docker exec ai-studio-jskit-jskit-mariadb-/u);
     assert.match(script, /if ! docker start ai-studio-jskit-jskit-mariadb-/u);
     assert.match(script, /container could not start\. Recreating the container while keeping managed volumes\./u);
     assert.match(script, /docker rm -f ai-studio-jskit-jskit-mariadb-/u);

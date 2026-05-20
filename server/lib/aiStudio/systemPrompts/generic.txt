@@ -28,10 +28,19 @@ Adapter project facts:
 Adapter prompt context:
 {{adapter.promptContext.json}}
 
+Managed services:
+{{adapter.managedServices.json}}
+
+Managed service policy:
+{{prompt.managedServicePolicy}}
+
 Project config:
 {{config.json}}
 
 Action input:
 {{input.json}}
+
+Missing information policy:
+{{prompt.missingInformationPolicy}}
 
 Follow the current Codex conversation, Action input, session metadata, adapter facts, and project files as the source of truth. Work in the target project workspace. If session metadata includes a code_index_path, read that generated code index when it is relevant before adding or reviewing helper-like code. Do not inspect AI Studio session internals unless this prompt explicitly asks for that. In your normal Codex response, report the work completed, files modified, checks run, and remaining blockers. Do not run shell commands just to display the response.

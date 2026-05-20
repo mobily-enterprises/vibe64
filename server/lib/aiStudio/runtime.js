@@ -16,6 +16,10 @@ import {
   STUDIO_CONTEXT_START_MARKER,
   wrapPromptWithStudioContext
 } from "./promptMarkers.js";
+import {
+  runtimeContainerManagedServicesPromptFacts,
+  runtimeContainerPromptFacts
+} from "./runtimeContainers.js";
 import { DEFAULT_AI_STUDIO_WORKFLOW } from "./workflow.js";
 import { WorkflowMachine } from "./workflowMachine.js";
 
@@ -257,6 +261,32 @@ class AiStudioSessionRuntime {
       detection,
       facts
     });
+    const runtimeContainerDescriptors = await this.adapter.listRuntimeContainers({
+      ...context,
+      commands,
+      detection,
+      facts
+    });
+    const runtimeContainers = await runtimeContainerPromptFacts(runtimeContainerDescriptors, {
+      adapterId: this.adapter.id,
+      context: {
+        ...context,
+        commands,
+        detection,
+        facts
+      },
+      targetRoot: session.targetRoot
+    });
+    const managedServices = await runtimeContainerManagedServicesPromptFacts(runtimeContainerDescriptors, {
+      adapterId: this.adapter.id,
+      context: {
+        ...context,
+        commands,
+        detection,
+        facts
+      },
+      targetRoot: session.targetRoot
+    });
     const promptContext = await this.adapter.getPromptContext({
       ...context,
       commands,
@@ -268,7 +298,9 @@ class AiStudioSessionRuntime {
       commands,
       detection,
       facts,
-      promptContext
+      managedServices,
+      promptContext,
+      runtimeContainers
     });
   }
 

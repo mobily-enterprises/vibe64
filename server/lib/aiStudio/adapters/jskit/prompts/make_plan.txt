@@ -4,5 +4,24 @@ Create the implementation plan for this JSKIT project.
 
 JSKIT-specific planning guidance:
 - Account for provider ownership, command actions, CRUD/resource modules, generated screens, package scripts, app blueprint expectations, and existing framework conventions.
-- Prefer `npx jskit ...` for JSKIT inspection or framework maintenance commands when useful.
+- Include the JSKIT guide pages and baseline discovery commands needed before implementation.
+- Plan new JSKIT-owned files through `npx jskit generate ...`, `npx jskit add ...`, or another documented JSKIT CLI command first.
+- Do not plan hand-created packages, package descriptors, provider entrypoints, route files, resource modules, database modules, migrations, generated client surfaces, page trees, or package glue unless the plan first explains why no JSKIT command can create the needed ownership skeleton.
+- For navigation links, menus, tabs, outlets, or placement targets, plan to read the agent-friendly placement docs and use JSKIT generator/link-placement conventions instead of hand-editing `src/placement.js`.
+- For persistence, follow the configured JSKIT database contract: create/update tables before generation, run the server-side CRUD generator for every added table, do not hand-write migrations, and do not plan direct Knex access from feature code.
 - Include the focused verification path needed for the planned change.
+
+JSKIT guide-first contract:
+{{adapter.promptContext.agent_guide_contract}}
+
+JSKIT generated-file contract:
+{{adapter.promptContext.tooling_contract}}
+
+JSKIT placement contract:
+{{adapter.promptContext.placement_contract}}
+
+JSKIT database contract:
+{{adapter.promptContext.database_contract}}
+
+JSKIT baseline discovery commands:
+{{adapter.promptContext.generator_discovery_commands}}

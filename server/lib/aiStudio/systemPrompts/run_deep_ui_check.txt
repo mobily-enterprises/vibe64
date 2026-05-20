@@ -17,10 +17,19 @@ Adapter project facts:
 Adapter prompt context:
 {{adapter.promptContext.json}}
 
+Managed services:
+{{adapter.managedServices.json}}
+
+Managed service policy:
+{{prompt.managedServicePolicy}}
+
 Project config:
 {{config.json}}
 
 Action input:
 {{input.json}}
+
+Missing information policy:
+{{prompt.missingInformationPolicy}}
 
 Inspect the user-facing application behavior carefully. Focus on real UI defects, broken flows, layout issues, state mistakes, and mismatches with the requested work. Fix clear defects directly when the project supports it. Report what you changed, which checks ran, and why no edit was needed if the UI is already sound.

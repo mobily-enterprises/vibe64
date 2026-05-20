@@ -1,112 +1,76 @@
 import { describe, expect, it } from "vitest";
 import {
-  AUTOPILOT_STEP_DONE_MARKER_END,
-  AUTOPILOT_STEP_DONE_MARKER_START,
-  latestStepDoneMarker,
-  stepDoneMarkerInstruction
+  AUTOPILOT_COMPLETION_TOKEN_PREFIX,
+  AUTOPILOT_QUESTIONS_MARKER_END,
+  AUTOPILOT_QUESTIONS_MARKER_START,
+  createStepCompletionToken,
+  latestAutopilotQuestionsMarker,
+  outputHasStepCompletionToken,
+  stepCompletionTokenInstruction
 } from "../../src/lib/aiStudioAutopilotStepMarkers.js";
 
-function stepMarker(payload) {
-  return [
-    AUTOPILOT_STEP_DONE_MARKER_START,
-    JSON.stringify(payload),
-    AUTOPILOT_STEP_DONE_MARKER_END
-  ].join("\n");
-}
-
 describe("aiStudioAutopilotStepMarkers", () => {
-  it("extracts the latest matching completion marker", () => {
-    const output = [
-      stepMarker({
-        actionId: "make_plan",
-        requestId: "old-request",
-        stepId: "plan_made"
-      }),
-      "\nterminal output\n",
-      stepMarker({
-        actionId: "make_plan",
-        requestId: "new-request",
-        stepId: "plan_made"
-      })
-    ].join("");
-
-    expect(latestStepDoneMarker(output, {
-      actionId: "make_plan",
-      stepId: "plan_made"
-    })).toEqual({
-      actionId: "make_plan",
-      requestId: "new-request",
-      stepId: "plan_made"
-    });
+  it("creates a stable-looking completion token", () => {
+    expect(createStepCompletionToken()).toMatch(/^AI_STUDIO_AUTOPILOT_DONE_[a-f0-9]{32}$/u);
   });
 
-  it("ignores ansi controls, invalid json, incomplete blocks, and unrelated requests", () => {
+  it("detects the completion token in terminal output", () => {
+    const token = `${AUTOPILOT_COMPLETION_TOKEN_PREFIX}1234567890abcdef1234567890abcdef`;
+    const output = `Still working...\n\u001b[32m${token}\u001b[0m\n`;
+
+    expect(outputHasStepCompletionToken(output, token)).toBe(true);
+  });
+
+  it("does not put the full token in the prompt instruction", () => {
+    const token = `${AUTOPILOT_COMPLETION_TOKEN_PREFIX}1234567890abcdef1234567890abcdef`;
+    const instruction = stepCompletionTokenInstruction({
+      requestId: "request-123",
+      token
+    });
+
+    expect(instruction).not.toContain(token);
+    expect(instruction).toContain(AUTOPILOT_COMPLETION_TOKEN_PREFIX);
+    expect(instruction).toContain("1234567890abcdef1234567890abcdef");
+    expect(outputHasStepCompletionToken(instruction, token)).toBe(false);
+  });
+
+  it("extracts Autopilot question markers for the active request", () => {
     const output = [
-      "\u001b[32m",
-      stepMarker({
-        actionId: "make_plan",
-        requestId: "other-request",
-        stepId: "plan_made"
-      }),
-      "\u001b[0m",
-      AUTOPILOT_STEP_DONE_MARKER_START,
-      "{not json}",
-      AUTOPILOT_STEP_DONE_MARKER_END,
-      AUTOPILOT_STEP_DONE_MARKER_START,
+      "I need one detail before continuing:",
+      "1. Which database should Codex use?",
+      "",
+      AUTOPILOT_QUESTIONS_MARKER_START,
       JSON.stringify({
-        actionId: "make_plan",
-        requestId: "partial-request",
-        stepId: "plan_made"
+        requestId: "request-123",
+        questions: [
+          "Which database should Codex use?"
+        ]
       }),
-      stepMarker({
-        actionId: "make_plan",
-        requestId: "wanted-request",
-        stepId: "plan_made"
-      })
+      AUTOPILOT_QUESTIONS_MARKER_END
     ].join("\n");
 
-    expect(latestStepDoneMarker(output, {
-      actionId: "make_plan",
-      requestId: "wanted-request",
-      stepId: "plan_made"
+    expect(latestAutopilotQuestionsMarker(output, {
+      requestId: "request-123"
     })).toEqual({
-      actionId: "make_plan",
-      requestId: "wanted-request",
-      stepId: "plan_made"
+      requestId: "request-123",
+      questions: [
+        {
+          answer: "",
+          id: "q1",
+          text: "Which database should Codex use?"
+        }
+      ]
     });
   });
 
-  it("emits an instruction whose marker can be parsed back", () => {
-    const pending = {
-      actionId: "run_deslop",
+  it("does not parse the prompt question example as an active question", () => {
+    const instruction = stepCompletionTokenInstruction({
       requestId: "request-123",
-      stepId: "review_run"
-    };
-
-    expect(latestStepDoneMarker(stepDoneMarkerInstruction(pending), pending)).toEqual(pending);
-  });
-
-  it("parses marker ids wrapped by terminal line breaks", () => {
-    const output = [
-      AUTOPILOT_STEP_DONE_MARKER_START,
-      "{",
-      '"actionId": "update_project_knowledge",',
-      '"requestId": "request-',
-      '123",',
-      '"stepId": "project_knowledge_',
-      'updated"',
-      "}",
-      AUTOPILOT_STEP_DONE_MARKER_END
-    ].join("\n");
-
-    expect(latestStepDoneMarker(output, {
-      actionId: "update_project_knowledge",
-      requestId: "request-123",
-      stepId: "project_knowledge_updated"
-    })).toEqual({
-      actionId: "update_project_knowledge",
-      requestId: "request-123",
-      stepId: "project_knowledge_updated"
+      token: `${AUTOPILOT_COMPLETION_TOKEN_PREFIX}1234567890abcdef1234567890abcdef`
     });
+
+    expect(latestAutopilotQuestionsMarker(instruction, {
+      requestId: "request-123"
+    })).toBeNull();
   });
 });

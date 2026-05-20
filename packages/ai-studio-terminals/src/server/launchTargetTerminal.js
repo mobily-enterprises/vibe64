@@ -18,6 +18,9 @@ import {
   projectTerminalEnvironment,
   terminalEnvironmentFingerprint
 } from "./terminalEnvironment.js";
+import {
+  ensureAdapterRuntimeContainers
+} from "./terminalRuntimeContainers.js";
 
 const LAUNCH_METADATA = Object.freeze({
   href: "launch_target_open_href",
@@ -254,6 +257,12 @@ function createLaunchTargetTerminalController({ projectService } = {}) {
         }
 
         await ensureTargetRuntimeNetwork(context.targetRoot);
+        await ensureAdapterRuntimeContainers({
+          runtime: context.runtime,
+          session: context.session,
+          target: "launch-target",
+          targetRoot: context.targetRoot
+        });
         const namespace = launchTargetTerminalNamespace(sessionId);
         const terminalEnv = await projectTerminalEnvironment({
           projectService,

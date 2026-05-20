@@ -102,6 +102,11 @@ function useAiStudioCodexCommands() {
       path: aiStudioCodexPromptHandoffPath(sessionsApiPath.value, context.sessionId)
     }),
     buildRawPayload: (_model, { context }) => ({
+      completionActionId: String(context.completionActionId || ""),
+      completionRequestId: String(context.completionRequestId || ""),
+      completionStartedAt: String(context.completionStartedAt || ""),
+      completionStepId: String(context.completionStepId || ""),
+      completionToken: String(context.completionToken || ""),
       outputStart: String(Math.max(0, Number(context.outputStart || 0))),
       signature: String(context.signature || "")
     }),

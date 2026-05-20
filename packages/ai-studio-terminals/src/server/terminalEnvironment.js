@@ -1,9 +1,9 @@
 import {
-  runtimeContainersTerminalEnv
-} from "../../../../server/lib/aiStudio/runtimeContainers.js";
-import {
   stableHash
 } from "../../../../server/lib/shellCommands.js";
+import {
+  adapterRuntimeContainersTerminalEnv
+} from "./terminalRuntimeContainers.js";
 
 const SECRET_TERMINAL_ENV_PATTERN = /(PASSWORD|PASS|TOKEN|SECRET|KEY|CREDENTIAL|PWD)/iu;
 
@@ -59,20 +59,10 @@ async function adapterRuntimeTerminalEnv({
   target = "",
   targetRoot = ""
 } = {}) {
-  if (typeof runtime?.adapter?.listRuntimeContainers !== "function") {
-    return {};
-  }
-  const context = {
-    config: runtime.projectConfig || {},
+  return adapterRuntimeContainersTerminalEnv({
     runtime,
     session,
     target,
-    targetRoot
-  };
-  const descriptors = await runtime.adapter.listRuntimeContainers(context);
-  return runtimeContainersTerminalEnv(descriptors, {
-    adapterId: runtime.adapter.id,
-    context,
     targetRoot
   });
 }

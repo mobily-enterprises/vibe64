@@ -50,10 +50,22 @@ import {
   terminalEnvironmentFingerprint
 } from "./terminalEnvironment.js";
 import {
+  ensureAdapterRuntimeContainers
+} from "./terminalRuntimeContainers.js";
+import {
   targetToolchainTerminalArgs
 } from "./targetToolchainTerminal.js";
 
 const CODEX_THREAD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
+const AUTOPILOT_COMPLETION_TOKEN_PATTERN = /^AI_STUDIO_AUTOPILOT_DONE_[a-f0-9]{32}$/u;
+const AUTOPILOT_COMPLETION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{2,127}$/u;
+const AUTOPILOT_COMPLETION_METADATA_NAMES = Object.freeze([
+  "codex_prompt_completion_action_id",
+  "codex_prompt_completion_request_id",
+  "codex_prompt_completion_started_at",
+  "codex_prompt_completion_step_id",
+  "codex_prompt_completion_token"
+]);
 const CODEX_THREAD_PROBE = "!echo $CODEX_THREAD_ID";
 const CODEX_SESSION_MODEL = "gpt-5.5";
 const CODEX_SESSION_REASONING_EFFORT = "xhigh";
@@ -106,6 +118,54 @@ function normalizeCodexPromptHandoffOutputStart(value) {
   }
   const outputStart = Number(normalizedValue);
   return Number.isSafeInteger(outputStart) && outputStart >= 0 ? outputStart : 0;
+}
+
+function normalizeAutopilotCompletionToken(value) {
+  const token = String(value || "").trim();
+  return AUTOPILOT_COMPLETION_TOKEN_PATTERN.test(token) ? token : "";
+}
+
+function normalizeAutopilotCompletionId(value) {
+  const id = String(value || "").trim();
+  return AUTOPILOT_COMPLETION_ID_PATTERN.test(id) ? id : "";
+}
+
+function normalizeAutopilotCompletionStartedAt(value) {
+  const timestamp = Number(String(value || "").trim());
+  return Number.isSafeInteger(timestamp) && timestamp > 0 ? String(timestamp) : "";
+}
+
+function autopilotCompletionMetadata(input = {}) {
+  const tokenInput = String(input?.completionToken || "").trim();
+  if (!tokenInput) {
+    return {};
+  }
+
+  const token = normalizeAutopilotCompletionToken(tokenInput);
+  const actionId = normalizeAutopilotCompletionId(input?.completionActionId);
+  const stepId = normalizeAutopilotCompletionId(input?.completionStepId);
+  if (!token || !actionId || !stepId) {
+    return null;
+  }
+
+  return {
+    codex_prompt_completion_action_id: actionId,
+    codex_prompt_completion_request_id: normalizeAutopilotCompletionId(input?.completionRequestId) || token,
+    codex_prompt_completion_started_at: normalizeAutopilotCompletionStartedAt(input?.completionStartedAt),
+    codex_prompt_completion_step_id: stepId,
+    codex_prompt_completion_token: token
+  };
+}
+
+function promptCompletionMetadataWrites(store, sessionId, input = {}) {
+  const metadata = autopilotCompletionMetadata(input);
+  if (!metadata) {
+    return null;
+  }
+  if (!metadata.codex_prompt_completion_token) {
+    return AUTOPILOT_COMPLETION_METADATA_NAMES.map((name) => store.deleteMetadataValue(sessionId, name));
+  }
+  return Object.entries(metadata).map(([name, value]) => store.writeMetadataValue(sessionId, name, value));
 }
 
 function codexState(session = {}) {
@@ -241,9 +301,17 @@ function createCodexTerminalController({ projectService } = {}) {
         const runtime = await projectService.createRuntime();
         await runtime.getSession(sessionId);
         const outputStart = normalizeCodexPromptHandoffOutputStart(input?.outputStart);
+        const completionWrites = promptCompletionMetadataWrites(runtime.store, sessionId, input);
+        if (!completionWrites) {
+          return {
+            ok: false,
+            error: "Invalid Autopilot completion token."
+          };
+        }
         await Promise.all([
           runtime.store.writeMetadataValue(sessionId, "codex_prompt_handoff_signature", signature),
-          runtime.store.writeMetadataValue(sessionId, "codex_prompt_handoff_output_start", String(outputStart))
+          runtime.store.writeMetadataValue(sessionId, "codex_prompt_handoff_output_start", String(outputStart)),
+          ...completionWrites
         ]);
         return {
           ok: true,
@@ -336,6 +404,12 @@ function createCodexTerminalController({ projectService } = {}) {
 
         await prepareCodexAttachmentRoot();
         await ensureTargetRuntimeNetwork(targetRoot);
+        await ensureAdapterRuntimeContainers({
+          runtime,
+          session,
+          target: "codex",
+          targetRoot
+        });
         const terminalEnv = await projectTerminalEnvironment({
           projectService,
           runtime,

@@ -101,7 +101,8 @@ function createJskitSetupDoctorPlugin({
       const checkTargetRoot = context.targetRoot || targetRoot;
       return await targetWantsJskitMariaDb(checkTargetRoot, toolkit) &&
         await readDatabaseHostFromDotEnv(checkTargetRoot) === JSKIT_MARIADB_HOST;
-    }
+    },
+    targetRoot
   });
   const runtimeContainers = createRuntimeContainerDoctorEntries(toolkit, [
     mariaDbContainer

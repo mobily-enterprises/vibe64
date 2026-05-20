@@ -249,6 +249,11 @@ function useAiStudioSessionActions({
       return await runActionCommand.run({
         actionId: action.id,
         advanceOnSuccess: action.advanceOnSuccess === true,
+        completionActionId: String(options.completionActionId || ""),
+        completionRequestId: String(options.completionRequestId || ""),
+        completionStartedAt: String(options.completionStartedAt || ""),
+        completionStepId: String(options.completionStepId || ""),
+        completionToken: String(options.completionToken || ""),
         input,
         promptSuffix: String(options.promptSuffix || ""),
         sessionId: unref(selectedSessionId)

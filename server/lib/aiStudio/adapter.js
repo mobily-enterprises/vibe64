@@ -159,7 +159,9 @@ function adapterView({
   commands = [],
   detection = {},
   facts = {},
-  promptContext = {}
+  managedServices = [],
+  promptContext = {},
+  runtimeContainers = []
 } = {}) {
   const normalizedFacts = adapterProjectFacts(facts);
   return {
@@ -168,7 +170,9 @@ function adapterView({
     facts: normalizedFacts,
     id: adapter.id,
     label: adapter.label,
-    promptContext: normalizeStringMap(promptContext)
+    managedServices: Array.isArray(managedServices) ? managedServices : [],
+    promptContext: normalizeStringMap(promptContext),
+    runtimeContainers: Array.isArray(runtimeContainers) ? runtimeContainers : []
   };
 }
 

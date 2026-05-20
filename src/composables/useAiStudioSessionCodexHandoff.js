@@ -20,6 +20,7 @@ function useAiStudioSessionCodexHandoff({
   const promptOverride = ref("");
   const readinessRefreshInFlight = ref(false);
   const codexCommands = useAiStudioCodexCommands();
+  let pendingCompletionToken = null;
 
   async function startFromActionResponse(response = {}, context = {}) {
     const promptHandoff = aiStudioPromptHandoffFromSession(response);
@@ -31,6 +32,7 @@ function useAiStudioSessionCodexHandoff({
       promptHandoff.terminalInput || promptHandoff.prompt,
       context.promptSuffix
     );
+    pendingCompletionToken = completionTokenFromActionContext(context);
     busy.value = true;
     promptInjectionError.value = "";
     promptInjectionKey.value = `${context.sessionId}:${context.actionId}:${Date.now()}`;
@@ -46,16 +48,16 @@ function useAiStudioSessionCodexHandoff({
       : normalizedPrompt;
   }
 
-  async function injectPrompt(prompt, {
-    requestId = "prompt",
-    sessionId = ""
-  } = {}) {
+  async function injectPrompt(prompt, context = {}) {
+    const requestId = String(context.requestId || "prompt");
+    const sessionId = String(context.sessionId || "");
     const normalizedPrompt = String(prompt || "").trim();
     if (!normalizedPrompt) {
       return false;
     }
 
     const targetSessionId = String(sessionId || unref(selectedSessionId) || "").trim();
+    pendingCompletionToken = completionTokenFromActionContext(context);
     promptOverride.value = normalizedPrompt;
     busy.value = true;
     promptInjectionError.value = "";
@@ -91,6 +93,7 @@ function useAiStudioSessionCodexHandoff({
   function clear() {
     busy.value = false;
     output.value = "";
+    pendingCompletionToken = null;
     promptInjectionError.value = "";
     promptInjectionKey.value = "";
     promptOverride.value = "";
@@ -101,11 +104,26 @@ function useAiStudioSessionCodexHandoff({
     promptOverride.value = "";
   }
 
+  function completionTokenFromActionContext(context = {}) {
+    const token = String(context.completionToken || "").trim();
+    if (!token) {
+      return null;
+    }
+    return {
+      completionActionId: String(context.completionActionId || context.actionId || "").trim(),
+      completionRequestId: String(context.completionRequestId || token).trim(),
+      completionStartedAt: String(context.completionStartedAt || "").trim(),
+      completionStepId: String(context.completionStepId || "").trim(),
+      completionToken: token
+    };
+  }
+
   async function handlePromptInjected(event = {}) {
     const sessionId = String(event.sessionId || unref(selectedSessionId) || "");
     busy.value = true;
     if (sessionId) {
       await codexCommands.savePromptHandoff(sessionId, {
+        ...(pendingCompletionToken || {}),
         outputStart: Number(event.outputStart || 0),
         signature: `${sessionId}:${Date.now()}`
       }).catch(() => null);

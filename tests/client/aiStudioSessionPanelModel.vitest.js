@@ -126,9 +126,9 @@ describe("AI Studio session panel model", () => {
       state: row.state
     }))).toEqual([
       { canRewind: false, id: "session_created", label: "Start", state: "done" },
-      { canRewind: true, id: "issue_file_created", label: "Issue", state: "done" },
+      { canRewind: true, id: "issue_file_created", label: "Briefing", state: "done" },
       { canRewind: false, id: "deep_ui_check_run", label: "UI improvements", state: "current" },
-      { canRewind: false, id: "changes_accepted", label: "Code deslop", state: "pending" },
+      { canRewind: false, id: "changes_accepted", label: "Human review", state: "pending" },
       { canRewind: false, id: "pr_merged", label: "Merge", state: "pending" },
       { canRewind: false, id: "session_finished", label: "Done", state: "pending" }
     ]);

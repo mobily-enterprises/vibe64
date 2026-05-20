@@ -8,8 +8,9 @@ import {
   useAiStudioAutopilotController
 } from "../../src/composables/useAiStudioAutopilotController.js";
 import {
-  AUTOPILOT_STEP_DONE_MARKER_END,
-  AUTOPILOT_STEP_DONE_MARKER_START
+  AUTOPILOT_COMPLETION_TOKEN_PREFIX,
+  AUTOPILOT_QUESTIONS_MARKER_END,
+  AUTOPILOT_QUESTIONS_MARKER_START
 } from "../../src/lib/aiStudioAutopilotStepMarkers.js";
 
 const STEP_LABELS = Object.freeze({
@@ -115,6 +116,7 @@ describe("useAiStudioAutopilotController", () => {
 
     expect(context.session.value.currentStep).toBe(ISSUE_STEP_ID);
     expect(context.actions.runAction).toHaveBeenCalledWith(expect.objectContaining({
+      advanceOnSuccess: true,
       id: "use_new_branch"
     }));
     expect(context.commandRunner.runCommandAction.mock.calls.map(([input]) => input.action.id)).toEqual([
@@ -122,6 +124,33 @@ describe("useAiStudioAutopilotController", () => {
       "install_dependencies"
     ]);
     expect(context.controller.readyForIssue.value).toBe(true);
+    expect(context.controller.failure.value).toBeNull();
+  });
+
+  it("does not auto-resume from the first work source choice", () => {
+    context.moveToStep("work_source_selected");
+
+    expect(context.controller.canStart.value).toBe(true);
+    expect(context.controller.canResume.value).toBe(false);
+  });
+
+  it("continues a started work source step without selecting the source again", async () => {
+    context.moveToStep("work_source_selected", {
+      work_source: "new_branch"
+    });
+
+    expect(context.controller.canStart.value).toBe(true);
+
+    await context.controller.start();
+
+    expect(context.actions.runAction).not.toHaveBeenCalledWith(expect.objectContaining({
+      id: "use_new_branch"
+    }));
+    expect(context.commandRunner.runCommandAction.mock.calls.map(([input]) => input.action.id)).toEqual([
+      "create_worktree",
+      "install_dependencies"
+    ]);
+    expect(context.session.value.currentStep).toBe(ISSUE_STEP_ID);
     expect(context.controller.failure.value).toBeNull();
   });
 
@@ -195,7 +224,9 @@ describe("useAiStudioAutopilotController", () => {
     ]);
     expect(context.actions.runAction.mock.calls.every(([, options]) => {
       return typeof options?.promptSuffix === "string" &&
-        options.promptSuffix.includes(AUTOPILOT_STEP_DONE_MARKER_START);
+        options.promptSuffix.includes("Completion token part 1:") &&
+        options.promptSuffix.includes("Completion token part 2:") &&
+        !options.promptSuffix.includes(options.completionToken);
     })).toBe(true);
     expect(context.controller.readyForReview.value).toBe(true);
     expect(context.controller.failure.value).toBeNull();
@@ -347,20 +378,20 @@ describe("useAiStudioAutopilotController", () => {
     expect(context.controller.running.value).toBe(false);
     expect(context.controller.failure.value).toMatchObject({
       actionId: "run_deslop",
-      error: "The Run deslop step did not complete properly, so Autopilot could not safely continue. Retry will run it again, or switch to Inspect to continue manually.",
+      error: "The Run deslop step did not complete properly, so Autopilot could not safely continue. Codex did not print the expected completion token. Retry will run it again, or switch to Inspect to continue manually.",
       output: expect.stringContaining("Review completed without marker.")
     });
   });
 
-  it("explains when Codex emits a marker for the same step but a different request", async () => {
+  it("does not treat the echoed prompt instruction as completion", async () => {
     context.moveToStep("review_run");
-    context.actions.runAction.mockImplementation(async (action) => {
+    context.actions.runAction.mockImplementation(async (action, options = {}) => {
       if (action.id === "run_deslop") {
-        context.codexOutput.value = `${context.codexOutput.value}\n${stepMarker({
-          actionId: "run_deslop",
-          requestId: "different-request",
-          stepId: "review_run"
-        })}`;
+        context.codexOutput.value = [
+          context.codexOutput.value,
+          options.promptSuffix,
+          "Codex stopped without printing the completion token."
+        ].join("\n");
       }
     });
 
@@ -368,9 +399,66 @@ describe("useAiStudioAutopilotController", () => {
 
     expect(context.controller.failure.value).toMatchObject({
       actionId: "run_deslop",
-      error: "The Run deslop step did not complete properly, so Autopilot could not safely continue. Codex printed a completion marker for this same step, but it belonged to a different Autopilot request. Retry will run it again, or switch to Inspect to continue manually.",
+      error: "The Run deslop step did not complete properly, so Autopilot could not safely continue. Codex did not print the expected completion token. Retry will run it again, or switch to Inspect to continue manually.",
       source: "codex"
     });
+  });
+
+  it("pauses for Autopilot questions from any Codex prompt action", async () => {
+    context.moveToStep("plan_executed");
+    context.actions.runAction.mockImplementation(async (action, options = {}) => {
+      if (action.id === "execute_plan") {
+        context.codexOutput.value = [
+          context.codexOutput.value,
+          "I need one detail before continuing:",
+          "1. Which database should Codex use?",
+          autopilotQuestionsMarker({
+            questions: ["Which database should Codex use?"],
+            requestId: options.completionRequestId
+          })
+        ].join("\n");
+      }
+    });
+
+    await context.controller.resume();
+
+    expect(context.session.value.currentStep).toBe("plan_executed");
+    expect(context.controller.autopilotQuestioning.value).toBe(true);
+    expect(context.controller.waitingForCodex.value).toBe(false);
+    expect(context.controller.autopilotQuestions.value.map((question) => question.text)).toEqual([
+      "Which database should Codex use?"
+    ]);
+    expect(context.controller.failure.value).toBeNull();
+  });
+
+  it("sends Autopilot question answers back to Codex and continues the same action", async () => {
+    context.moveToStep("plan_executed");
+    context.actions.runAction.mockImplementation(async (action, options = {}) => {
+      if (action.id === "execute_plan") {
+        context.codexOutput.value = `${context.codexOutput.value}\n${autopilotQuestionsMarker({
+          questions: ["Which database should Codex use?"],
+          requestId: options.completionRequestId
+        })}`;
+      }
+    });
+
+    await context.controller.resume();
+    context.controller.updateAutopilotQuestionAnswer("q1", "Use the managed MariaDB runtime.");
+
+    expect(context.controller.canSubmitAutopilotQuestionAnswers.value).toBe(true);
+
+    await context.controller.submitAutopilotQuestionAnswers();
+
+    expect(context.codexTerminal.injectPrompt).toHaveBeenCalledWith(
+      expect.stringContaining("Use the managed MariaDB runtime."),
+      expect.objectContaining({
+        sessionId: "session-1"
+      })
+    );
+    expect(context.session.value.currentStep).toBe("deep_ui_check_run");
+    expect(context.controller.readyForDeepUiCheck.value).toBe(true);
+    expect(context.controller.autopilotQuestioning.value).toBe(false);
+    expect(context.controller.failure.value).toBeNull();
   });
 
   it("lets the user stop Autopilot while a Codex prompt is pending", async () => {
@@ -396,6 +484,58 @@ describe("useAiStudioAutopilotController", () => {
     });
   });
 
+  it("clears a pending Codex wait when the workflow has already moved on", async () => {
+    context.moveToStep("plan_executed");
+
+    let finishPromptAction = null;
+    context.actions.runAction.mockImplementation(async (action) => {
+      if (action.id !== "execute_plan") {
+        return;
+      }
+      context.codexBusy.value = true;
+      context.codexOutput.value = `${context.codexOutput.value}\nCodex is still reporting.`;
+      await new Promise((resolve) => {
+        finishPromptAction = resolve;
+      });
+    });
+
+    const resumePromise = context.controller.resume();
+    await vi.waitFor(() => {
+      expect(context.controller.waitingForCodex.value).toBe(true);
+    });
+
+    context.moveToStep(REVIEW_CHANGES_STEP_ID);
+    finishPromptAction();
+    await resumePromise;
+
+    expect(context.controller.waitingForCodex.value).toBe(false);
+    expect(context.controller.running.value).toBe(false);
+    expect(context.controller.readyForReview.value).toBe(true);
+    expect(context.controller.failure.value).toBeNull();
+  });
+
+  it("resumes a pending Codex prompt from persisted session metadata", async () => {
+    const completionToken = `${AUTOPILOT_COMPLETION_TOKEN_PREFIX}1234567890abcdef1234567890abcdef`;
+    context.moveToStep("review_run", {
+      codex_prompt_completion_action_id: "run_deslop",
+      codex_prompt_completion_request_id: "request-123",
+      codex_prompt_completion_started_at: String(Date.now()),
+      codex_prompt_completion_step_id: "review_run",
+      codex_prompt_completion_token: completionToken,
+      codex_prompt_handoff_output_start: "0"
+    });
+    context.codexOutput.value = `Review completed.\n${completionToken}\n`;
+
+    await context.controller.resume();
+
+    expect(context.session.value.currentStep).toBe(REVIEW_CHANGES_STEP_ID);
+    expect(context.commandRunner.runCommandAction.mock.calls.map(([input]) => input.action.id)).toEqual([
+      "update_code_index",
+      "run_automated_checks"
+    ]);
+    expect(context.controller.failure.value).toBeNull();
+  });
+
   it("waits for Codex to become idle before sending the next prompt", async () => {
     context.moveToStep("plan_made");
 
@@ -404,7 +544,7 @@ describe("useAiStudioAutopilotController", () => {
       if (!PROMPT_ACTION_IDS.has(action.id)) {
         return;
       }
-      context.codexOutput.value = `${context.codexOutput.value}\n${stepDoneMarkerFromPromptSuffix(options.promptSuffix)}`;
+      context.codexOutput.value = `${context.codexOutput.value}\n${completionTokenFromPromptSuffix(options.promptSuffix)}`;
       if (firstPrompt) {
         firstPrompt = false;
         context.codexBusy.value = true;
@@ -433,7 +573,15 @@ function createAutopilotContext() {
   const session = ref(sessionForStep("session_created"));
   const codexBusy = ref(false);
   const codexOutput = ref("");
-  const promptInjectionError = ref("");
+  const codexTerminal = {
+    busy: codexBusy,
+    injectPrompt: vi.fn(async (prompt = "") => {
+      codexOutput.value = `${codexOutput.value}\n${completionTokenFromPromptSuffix(prompt)}`;
+      return true;
+    }),
+    output: codexOutput,
+    promptInjectionError: ref("")
+  };
   const commandResults = {
     create_issue_on_gh: {
       exitCode: 0,
@@ -500,14 +648,19 @@ function createAutopilotContext() {
     }),
     runAction: vi.fn(async (action, options = {}) => {
       if (action.id === "use_new_branch") {
-        moveToStep(session.value.currentStep, {
+        const metadata = {
+          ...session.value.metadata,
           work_source: "new_branch"
-        });
+        };
+        const stepId = action.advanceOnSuccess === true
+          ? session.value.next.stepId
+          : session.value.currentStep;
+        session.value = sessionForStep(stepId, metadata);
         return;
       }
 
       if (PROMPT_ACTION_IDS.has(action.id)) {
-        codexOutput.value = `${codexOutput.value}\n${stepDoneMarkerFromPromptSuffix(options.promptSuffix)}`;
+        codexOutput.value = `${codexOutput.value}\n${completionTokenFromPromptSuffix(options.promptSuffix)}`;
         if (action.id === "create_pr_file") {
           moveToStep(session.value.currentStep, {
             pull_request_ready: "1"
@@ -543,11 +696,7 @@ function createAutopilotContext() {
   };
   const controller = useAiStudioAutopilotController({
     actions,
-    codexTerminal: {
-      busy: codexBusy,
-      output: codexOutput,
-      promptInjectionError
-    },
+    codexTerminal,
     commandRunner,
     refreshSessionData: async () => null,
     session
@@ -556,6 +705,7 @@ function createAutopilotContext() {
   return {
     actions,
     codexBusy,
+    codexTerminal,
     codexOutput,
     commandResults,
     commandRunner,
@@ -757,20 +907,27 @@ function artifactReadinessForMetadata(metadata = {}) {
   };
 }
 
-function stepDoneMarkerFromPromptSuffix(promptSuffix = "") {
+function completionTokenFromPromptSuffix(promptSuffix = "") {
   const source = String(promptSuffix || "");
-  const start = source.indexOf(AUTOPILOT_STEP_DONE_MARKER_START);
-  const end = source.indexOf(AUTOPILOT_STEP_DONE_MARKER_END, start);
-  if (start < 0 || end < 0) {
-    throw new Error("Autopilot prompt suffix did not contain a completion marker.");
+  const prefix = source.match(/Completion token part 1: ([^\n]+)/u)?.[1]?.trim() || "";
+  const suffix = source.match(/Completion token part 2: ([^\n]+)/u)?.[1]?.trim() || "";
+  const token = `${prefix}${suffix}`;
+  if (!token.startsWith(AUTOPILOT_COMPLETION_TOKEN_PREFIX)) {
+    throw new Error("Autopilot prompt suffix did not contain a completion token.");
   }
-  return source.slice(start, end + AUTOPILOT_STEP_DONE_MARKER_END.length);
+  return token;
 }
 
-function stepMarker(payload = {}) {
+function autopilotQuestionsMarker({
+  questions = [],
+  requestId = ""
+} = {}) {
   return [
-    AUTOPILOT_STEP_DONE_MARKER_START,
-    JSON.stringify(payload),
-    AUTOPILOT_STEP_DONE_MARKER_END
+    AUTOPILOT_QUESTIONS_MARKER_START,
+    JSON.stringify({
+      questions,
+      requestId
+    }),
+    AUTOPILOT_QUESTIONS_MARKER_END
   ].join("\n");
 }

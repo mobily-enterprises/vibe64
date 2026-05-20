@@ -140,8 +140,19 @@ function useCodexTerminalSessionLifecycle({
     clearTerminalOutput?.();
   }
 
+  function forgetExitedTerminal() {
+    terminalSocket.closeSocket();
+    terminalSessionId.value = "";
+    terminalStatus.value = "";
+    terminalCommandPreview.value = "";
+    terminalError.value = "";
+  }
+
   async function startTerminalOnce() {
     void setupTerminalUi?.();
+    if (terminalExited.value) {
+      forgetExitedTerminal();
+    }
     if (terminalSessionId.value) {
       fitTerminal?.();
       return true;

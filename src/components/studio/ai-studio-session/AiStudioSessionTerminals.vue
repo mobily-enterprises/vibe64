@@ -81,6 +81,10 @@ const props = defineProps({
     default: () => ({}),
     type: Object
   },
+  showCommandOutput: {
+    default: true,
+    type: Boolean
+  },
   session: {
     default: null,
     type: Object
@@ -88,8 +92,8 @@ const props = defineProps({
 });
 
 const commandOutputVisible = computed(() => Boolean(
-  props.commandTerminal.visible ||
-  props.headlessCommandTerminal.visible
+  props.showCommandOutput &&
+  (props.commandTerminal.visible || props.headlessCommandTerminal.visible)
 ));
 </script>
 
@@ -110,8 +114,8 @@ const commandOutputVisible = computed(() => Boolean(
 }
 
 .studio-ai-sessions__terminals--compact {
-  height: 30rem;
-  max-width: 64rem;
+  height: 36rem;
+  max-width: 72rem;
   width: 100%;
 }
 

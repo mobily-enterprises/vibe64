@@ -20,6 +20,9 @@ import {
   normalizeText
 } from "./core.js";
 import {
+  managedDatabasePromptServiceFacts
+} from "./managedDatabases.js";
+import {
   normalizePlainObject
 } from "./serverResponses.js";
 
@@ -28,7 +31,7 @@ const RUNTIME_CONTAINER_KIND = "runtime-container";
 const RUNTIME_CONTAINER_KIND_LABEL = studioDockerLabel("kind", RUNTIME_CONTAINER_KIND);
 const DEFAULT_HEALTH_RETRIES = 40;
 const DEFAULT_HEALTH_SLEEP_SECONDS = "1.5";
-const SECRET_ENV_PATTERN = /(PASSWORD|PASS|TOKEN|SECRET|KEY|CREDENTIAL)/iu;
+const SECRET_ENV_PATTERN = /(PASSWORD|PASS|TOKEN|SECRET|KEY|CREDENTIAL|DATABASE_URL|DSN)/iu;
 
 function dockerNamePart(value = "runtime") {
   const normalized = normalizeText(value)
@@ -156,6 +159,11 @@ function normalizeRuntimeContainerDescriptor(descriptor = {}, {
 } = {}) {
   const id = dockerNamePart(descriptor.id || descriptor.name);
   const resolvedTargetRoot = path.resolve(targetRoot || process.cwd());
+  const descriptorEnv = typeof descriptor.env === "function"
+    ? descriptor.env({
+        targetRoot: resolvedTargetRoot
+      })
+    : descriptor.env;
   const aliases = [
     id,
     ...normalizeStringArray(descriptor.aliases || descriptor.alias)
@@ -169,16 +177,19 @@ function normalizeRuntimeContainerDescriptor(descriptor = {}, {
       containerId: id,
       targetRoot: resolvedTargetRoot
     }),
-    env: normalizeEnv(descriptor.env),
+    env: normalizeEnv(descriptorEnv),
+    expected: normalizeText(descriptor.expected),
     extraDockerArgs: normalizeStringArray(descriptor.extraDockerArgs),
     health: normalizeRuntimeContainerHealth(descriptor.health),
     id,
     image: normalizeText(descriptor.image),
     label: normalizeText(descriptor.label || id),
+    notRequiredExplanation: normalizeText(descriptor.notRequiredExplanation),
     ports: (Array.isArray(descriptor.ports) ? descriptor.ports : [])
       .map(normalizeRuntimeContainerPort)
       .filter(Boolean),
     readyCheck: normalizeRuntimeContainerReadyCheck(descriptor.readyCheck),
+    readyExplanation: normalizeText(descriptor.readyExplanation),
     required: descriptor.required,
     secretEnv: new Set(normalizeStringArray(descriptor.secretEnv || descriptor.secretEnvKeys)),
     terminalEnv: typeof descriptor.terminalEnv === "function"
@@ -198,31 +209,39 @@ function runtimeContainerIsRequired(descriptor = {}, context = {}) {
   return descriptor.required !== false;
 }
 
+function resolvedRuntimeContainerContext(context = {}, targetRoot = "") {
+  const resolvedTargetRoot = context.targetRoot || targetRoot;
+  return {
+    ...context,
+    targetRoot: resolvedTargetRoot
+  };
+}
+
+async function terminalEnvForRuntimeContainerSpec(spec = {}, context = {}) {
+  const terminalEnv = typeof spec.terminalEnv === "function"
+    ? await spec.terminalEnv({
+        ...context,
+        runtimeContainer: spec
+      })
+    : spec.terminalEnv;
+  return normalizeEnv(terminalEnv);
+}
+
 async function runtimeContainerTerminalEnv(descriptor = {}, {
   adapterId = "generic",
   context = {},
   targetRoot = ""
 } = {}) {
-  const resolvedTargetRoot = context.targetRoot || targetRoot;
-  const resolvedContext = {
-    ...context,
-    targetRoot: resolvedTargetRoot
-  };
+  const resolvedContext = resolvedRuntimeContainerContext(context, targetRoot);
   if (!await runtimeContainerIsRequired(descriptor, resolvedContext)) {
     return {};
   }
 
   const spec = normalizeRuntimeContainerDescriptor(descriptor, {
     adapterId,
-    targetRoot: resolvedTargetRoot
+    targetRoot: resolvedContext.targetRoot
   });
-  const terminalEnv = typeof spec.terminalEnv === "function"
-    ? await spec.terminalEnv({
-        ...resolvedContext,
-        runtimeContainer: spec
-      })
-    : spec.terminalEnv;
-  return normalizeEnv(terminalEnv);
+  return terminalEnvForRuntimeContainerSpec(spec, resolvedContext);
 }
 
 async function runtimeContainersTerminalEnv(descriptors = [], {
@@ -241,8 +260,137 @@ async function runtimeContainersTerminalEnv(descriptors = [], {
   return Object.assign({}, ...envEntries);
 }
 
+async function ensureRuntimeContainers(descriptors = [], {
+  adapterId = "generic",
+  context = {},
+  runCommand = runHostCommand,
+  targetRoot = ""
+} = {}) {
+  const containers = Array.isArray(descriptors) ? descriptors : [];
+  const resolvedContext = resolvedRuntimeContainerContext(context, targetRoot);
+  const results = [];
+  for (const descriptor of containers) {
+    if (!await runtimeContainerIsRequired(descriptor, resolvedContext)) {
+      continue;
+    }
+    const spec = normalizeRuntimeContainerDescriptor(descriptor, {
+      adapterId,
+      targetRoot: resolvedContext.targetRoot
+    });
+    const script = runtimeContainerStartScript(descriptor, {
+      adapterId,
+      targetRoot: spec.targetRoot
+    });
+    const result = await runCommand("bash", ["-lc", script], {
+      cwd: spec.targetRoot,
+      timeout: 180_000
+    });
+    results.push({
+      id: spec.id,
+      label: spec.label,
+      result
+    });
+    if (!result.ok) {
+      throw new Error(`${spec.label} could not start before launching the terminal: ${result.output || "no output"}`);
+    }
+  }
+  return results;
+}
+
 function shouldMaskEnvKey(spec, key) {
   return spec.secretEnv.has(key) || SECRET_ENV_PATTERN.test(key);
+}
+
+function maskedRuntimeContainerEnv(spec, env = {}) {
+  return Object.fromEntries(Object.entries(normalizeEnv(env))
+    .map(([key, value]) => [key, shouldMaskEnvKey(spec, key) ? "*****" : value]));
+}
+
+async function runtimeContainerPromptFacts(descriptors = [], {
+  adapterId = "generic",
+  context = {},
+  targetRoot = ""
+} = {}) {
+  const containers = Array.isArray(descriptors) ? descriptors : [];
+  const resolvedContext = resolvedRuntimeContainerContext(context, targetRoot);
+
+  return Promise.all(containers.map(async (descriptor) => {
+    const spec = normalizeRuntimeContainerDescriptor(descriptor, {
+      adapterId,
+      targetRoot: resolvedContext.targetRoot
+    });
+    const terminalEnv = await terminalEnvForRuntimeContainerSpec(spec, resolvedContext);
+    return {
+      aliases: spec.aliases,
+      containerName: spec.containerName,
+      env: maskedRuntimeContainerEnv(spec, spec.env),
+      expected: spec.expected,
+      id: spec.id,
+      image: spec.image,
+      label: spec.label,
+      network: runtimeNetworkName(spec.targetRoot),
+      notRequiredExplanation: spec.notRequiredExplanation,
+      ports: spec.ports,
+      readyCheck: spec.readyCheck
+        ? {
+            expected: spec.readyCheck.expected,
+            explanation: spec.readyCheck.explanation
+          }
+        : null,
+      required: await runtimeContainerIsRequired(descriptor, resolvedContext),
+      readyExplanation: spec.readyExplanation,
+      terminalEnv: maskedRuntimeContainerEnv(spec, terminalEnv),
+      volumes: spec.volumes.map((volume) => ({
+        readOnly: volume.readOnly,
+        target: volume.target
+      }))
+    };
+  }));
+}
+
+function runtimeContainerManagedDatabaseRuntime(spec = {}) {
+  const searchable = [
+    spec.id,
+    spec.label,
+    spec.image,
+    ...Object.keys(spec.env || {})
+  ].join(" ").toLowerCase();
+  if (searchable.includes("postgres")) {
+    return "postgres";
+  }
+  if (searchable.includes("mariadb")) {
+    return "mariadb";
+  }
+  if (searchable.includes("mysql")) {
+    return "mysql";
+  }
+  return "";
+}
+
+async function runtimeContainerManagedServicesPromptFacts(descriptors = [], {
+  adapterId = "generic",
+  context = {},
+  targetRoot = ""
+} = {}) {
+  const containers = Array.isArray(descriptors) ? descriptors : [];
+  const resolvedContext = resolvedRuntimeContainerContext(context, targetRoot);
+  const facts = await Promise.all(containers.map(async (descriptor) => {
+    const spec = normalizeRuntimeContainerDescriptor(descriptor, {
+      adapterId,
+      targetRoot: resolvedContext.targetRoot
+    });
+    if (!await runtimeContainerIsRequired(spec, resolvedContext)) {
+      return null;
+    }
+    const terminalEnv = await terminalEnvForRuntimeContainerSpec(spec, resolvedContext);
+    return managedDatabasePromptServiceFacts({
+      id: spec.id,
+      label: spec.label,
+      runtime: runtimeContainerManagedDatabaseRuntime(spec),
+      terminalEnv
+    });
+  }));
+  return facts.filter(Boolean);
 }
 
 function envDockerArgs(spec, {
@@ -401,16 +549,41 @@ function waitForRuntimeContainerLines(spec) {
     : "{{.State.Running}}";
   const readyStatus = spec.health ? "healthy" : "true";
   return [
+    "runtime_ready=0",
     `for attempt in $(seq 1 ${Number(retries)}); do`,
     `  status="$(docker inspect ${shellQuote(spec.containerName)} --format ${shellQuote(statusTemplate)} 2>/dev/null || true)"`,
     `  if [ "$status" = ${shellQuote(readyStatus)} ]; then`,
-    "    exit 0",
+    "    runtime_ready=1",
+    "    break",
     "  fi",
     `  sleep "\${AI_STUDIO_RUNTIME_CONTAINER_WAIT_SECONDS:-${sleepSeconds}}"`,
     "done",
+    "if [ \"$runtime_ready\" != \"1\" ]; then",
     `echo ${shellQuote(`${spec.label} did not become ready in time.`)} >&2`,
     `docker inspect ${shellQuote(spec.containerName)} --format ${shellQuote("{{json .State}}")} || true`,
-    "exit 1"
+    "exit 1",
+    "fi"
+  ];
+}
+
+function runtimeContainerReadyCheckLines(spec) {
+  if (!spec.readyCheck) {
+    return [];
+  }
+  const timeoutSeconds = Math.max(1, Math.ceil(spec.readyCheck.timeout / 1000));
+  const command = dockerCommand([
+    "exec",
+    spec.containerName,
+    ...spec.readyCheck.command
+  ]);
+  const timedCommand = `timeout ${Number(timeoutSeconds)}s ${command}`;
+  return [
+    displayCommandLine(command),
+    `if ! ${timedCommand}; then`,
+    `  echo ${shellQuote(spec.readyCheck.explanation || `${spec.label} readiness check failed.`)} >&2`,
+    `  echo ${shellQuote(spec.readyCheck.expected || `${spec.label} should be ready.`)} >&2`,
+    "  exit 1",
+    "fi"
   ];
 }
 
@@ -442,7 +615,8 @@ function runtimeContainerStartScript(descriptor = {}, {
     "  fi",
     ...networkConnectLines(spec),
     "fi",
-    ...waitForRuntimeContainerLines(spec)
+    ...waitForRuntimeContainerLines(spec),
+    ...runtimeContainerReadyCheckLines(spec)
   ].join("\n");
 }
 
@@ -698,7 +872,10 @@ export {
   createRuntimeContainerRepair,
   createRuntimeContainerTerminalAction,
   ensureTargetRuntimeNetwork,
+  ensureRuntimeContainers,
   normalizeRuntimeContainerDescriptor,
+  runtimeContainerManagedServicesPromptFacts,
+  runtimeContainerPromptFacts,
   runtimeContainerTerminalEnv,
   runtimeContainerCommandPreview,
   runtimeContainerName,

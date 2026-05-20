@@ -17,10 +17,19 @@ Adapter project facts:
 Adapter prompt context:
 {{adapter.promptContext.json}}
 
+Managed services:
+{{adapter.managedServices.json}}
+
+Managed service policy:
+{{prompt.managedServicePolicy}}
+
 Project config:
 {{config.json}}
 
 Action input:
 {{input.json}}
+
+Missing information policy:
+{{prompt.missingInformationPolicy}}
 
 Update the project knowledge artifact referenced by the adapter prompt context. Preserve useful existing information, remove stale claims, and keep the result concise enough to maintain. If the adapter does not provide a project knowledge location, report that clearly instead of inventing one.

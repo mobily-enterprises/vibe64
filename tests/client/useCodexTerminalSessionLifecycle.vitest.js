@@ -95,6 +95,24 @@ describe("useCodexTerminalSessionLifecycle", () => {
       expect(options.refreshTerminalOutput).toHaveBeenCalled();
     });
   });
+
+  it("starts a fresh terminal when the existing Codex terminal has exited", async () => {
+    const { useCodexTerminalSessionLifecycle } = await import("../../src/composables/useCodexTerminalSessionLifecycle.js");
+    const options = createLifecycleOptions({
+      terminalSessionId: ref("terminal-old"),
+      terminalStatus: ref("exited")
+    });
+
+    const lifecycle = useCodexTerminalSessionLifecycle(options);
+
+    const ready = await lifecycle.ensureTerminalReady();
+
+    expect(ready).toBe(true);
+    expect(terminalSocket.closeSocket).toHaveBeenCalledTimes(1);
+    expect(options.startTerminalSession).toHaveBeenCalledTimes(1);
+    expect(options.terminalSessionId.value).toBe("terminal-1");
+    expect(options.terminalStatus.value).toBe("running");
+  });
 });
 
 function createLifecycleOptions(overrides = {}) {

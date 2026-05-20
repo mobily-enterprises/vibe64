@@ -17,10 +17,19 @@ Adapter project facts:
 Adapter prompt context:
 {{adapter.promptContext.json}}
 
+Managed services:
+{{adapter.managedServices.json}}
+
+Managed service policy:
+{{prompt.managedServicePolicy}}
+
 Project config:
 {{config.json}}
 
 Action input:
 {{input.json}}
+
+Missing information policy:
+{{prompt.missingInformationPolicy}}
 
 The user's issue request is the issueRequest value in Action input. Treat it as an initial idea to discuss and shape with the user, not as a final issue statement. Use the current Codex conversation and Action input as the source of truth. Clarify the requested issue until the problem, scope, constraints, and expected outcome are clear enough to create a concise issue title and useful issue body. If important details are missing, ask focused follow-up questions instead of assuming the answer. When the scope appears clear, restate the proposed issue in concise terms and ask the user to confirm or correct it before issue-file creation. Do not modify files. Do not inspect AI Studio session internals, session files, or artifact files.

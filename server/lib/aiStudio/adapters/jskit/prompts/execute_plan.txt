@@ -3,4 +3,24 @@
 JSKIT-specific implementation guidance:
 - Preserve existing JSKIT provider boundaries, command/action contracts, CRUD/resource conventions, generated-client patterns, and package ownership.
 - Use established JSKIT helpers and generated structures before adding new abstractions.
+- Read the JSKIT agent guide and run the baseline discovery commands before adding new app files.
+- Create new JSKIT-owned files through `npx jskit generate ...`, `npx jskit add ...`, or another documented JSKIT CLI command first; hand-edit generated output only for focused custom behavior.
+- Do not hand-create packages, package descriptors, provider entrypoints, route files, resource modules, database modules, migrations, generated client surfaces, page trees, or package glue unless the JSKIT command path has been checked and is explicitly unsuitable for this request.
+- For navigation links, menus, tabs, outlets, or placement targets, read the agent-friendly placement docs before implementation and use JSKIT generator/link-placement conventions instead of hand-editing `src/placement.js`.
+- For persistence, follow the configured JSKIT database contract: create/update tables before generation, run the server-side CRUD generator for every added table, do not hand-write migrations, and do not use direct Knex access from feature code.
 - Keep metadata, capabilities, setup checks, and UI behavior aligned with the implementation.
+
+JSKIT guide-first contract:
+{{adapter.promptContext.agent_guide_contract}}
+
+JSKIT generated-file contract:
+{{adapter.promptContext.tooling_contract}}
+
+JSKIT placement contract:
+{{adapter.promptContext.placement_contract}}
+
+JSKIT database contract:
+{{adapter.promptContext.database_contract}}
+
+JSKIT baseline discovery commands:
+{{adapter.promptContext.generator_discovery_commands}}

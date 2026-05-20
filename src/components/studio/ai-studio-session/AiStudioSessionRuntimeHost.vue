@@ -46,6 +46,7 @@
           :display-mode="codexTerminalDisplayMode"
           :headless-command-terminal="headlessCommandTerminal"
           :session="selection.selectedSession"
+          :show-command-output="sessionMode === 'inspect'"
         />
       </Teleport>
     </div>
