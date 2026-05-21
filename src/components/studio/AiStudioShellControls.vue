@@ -138,6 +138,10 @@ import {
   aiStudioSessionWorktreePath
 } from "@/lib/aiStudioSessionPaths.js";
 import {
+  consumeShellShortcutEvent,
+  shellShortcutAction
+} from "@/lib/aiStudioShellShortcuts.js";
+import {
   stableLocalStorageKeyPart
 } from "@/lib/browserLocalStorage.js";
 
@@ -334,23 +338,20 @@ function handleShellShortcut(event) {
     return;
   }
 
-  const key = String(event.key || "").toLowerCase();
-  if (event.ctrlKey && event.shiftKey && !event.altKey && !event.metaKey && key === "t") {
-    event.preventDefault();
+  const shortcut = shellShortcutAction(event);
+  if (!shortcut) {
+    return;
+  }
+  if (shortcut.type === "new-tab") {
+    consumeShellShortcutEvent(event);
     openNewShellTab();
     return;
   }
 
-  if (event.altKey && !event.ctrlKey && !event.shiftKey && !event.metaKey && key === "n") {
-    event.preventDefault();
-    openNewShellTab();
-    return;
-  }
-
-  if (event.altKey && !event.ctrlKey && !event.shiftKey && !event.metaKey && /^[1-9]$/u.test(key)) {
-    const tab = shellTabs.value[Number(key) - 1];
+  if (shortcut.type === "select-tab") {
+    const tab = shellTabs.value[shortcut.tabIndex];
     if (tab) {
-      event.preventDefault();
+      consumeShellShortcutEvent(event);
       selectShellTab(tab.id);
     }
   }
