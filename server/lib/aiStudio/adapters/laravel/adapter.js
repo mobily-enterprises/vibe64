@@ -8,9 +8,6 @@ import {
 import {
   normalizeText
 } from "../../core.js";
-import {
-  createAdapterBlueprintReader
-} from "../../adapterBlueprints.js";
 import { deepFreeze } from "../../deepFreeze.js";
 import {
   AiStudioDescribedWorkflowTargetAdapter,
@@ -56,14 +53,7 @@ import {
 import {
   LARAVEL_CONFIG_FIELDS,
   LARAVEL_DEFAULT_CONFIG,
-  selectedLaravelAuthentication as selectedAuthentication,
-  selectedLaravelBoostOption as selectedBoostOption,
-  selectedLaravelCustomStarter as selectedCustomStarter,
-  selectedLaravelLivewireComponents as selectedLivewireComponents,
-  selectedLaravelPackageManager as selectedPackageManager,
-  selectedLaravelStarterKit as selectedStarterKit,
-  selectedLaravelTeams as selectedTeams,
-  selectedLaravelTestingFramework as selectedTestingFramework
+  selectedLaravelPackageManager as selectedPackageManager
 } from "./config.js";
 import {
   createLaravelTargetScriptTerminalSpec,
@@ -81,10 +71,8 @@ import {
   LARAVEL_TOOLCHAIN_IMAGE
 } from "./toolchainIdentity.js";
 
-const LARAVEL_BLUEPRINT_ROOT = fileURLToPath(new URL("./blueprints", import.meta.url));
 const LARAVEL_PROMPT_PACK_ROOT = fileURLToPath(new URL("./prompts", import.meta.url));
 const LARAVEL_PREPARE_WORKTREE_SCRIPT_PATH = fileURLToPath(new URL("./prepareWorktree.sh", import.meta.url));
-const blueprintFile = createAdapterBlueprintReader(LARAVEL_BLUEPRINT_ROOT);
 
 const LARAVEL_MARKERS = deepFreeze([
   {
@@ -129,34 +117,19 @@ const LARAVEL_MARKERS = deepFreeze([
   }
 ]);
 
-async function laravelBlueprintSections(config = {}) {
-  const starterKit = selectedStarterKit(config);
-  const customStarter = selectedCustomStarter(config);
+function laravelEnvironmentBlueprint(config = {}) {
+  const databaseRuntime = selectedLaravelDatabaseRuntime(config);
+  const databaseLabel = {
+    mariadb: "MariaDB",
+    mysql: "MySQL",
+    postgres: "PostgreSQL",
+    sqlite: "SQLite"
+  }[databaseRuntime] || databaseRuntime;
   return [
-    await blueprintFile("database-runtime", selectedLaravelDatabaseRuntime(config)),
-    await blueprintFile("starter-kit", starterKit),
-    await blueprintFile("authentication", selectedAuthentication(config)),
-    await blueprintFile("teams", selectedTeams(config)),
-    await blueprintFile("livewire-components", selectedLivewireComponents(config)),
-    await blueprintFile("testing", selectedTestingFramework(config)),
-    await blueprintFile("boost", selectedBoostOption(config)),
-    [
-      "Frontend package manager",
-      "",
-      `Use ${selectedPackageManager(config)} for JavaScript dependency install, Vite scripts, and Laravel installer frontend setup.`,
-      "Keep Composer dependencies and Node dependencies in their own manifests.",
-      starterKit === "custom" && customStarter
-        ? `Custom starter package: ${customStarter}`
-        : ""
-    ].filter(Boolean).join("\n")
-  ];
-}
-
-async function laravelEnvironmentBlueprint(config = {}) {
-  return (await laravelBlueprintSections(config))
-    .map((section) => String(section || "").trim())
-    .filter(Boolean)
-    .join("\n\n---\n\n");
+    `Database runtime: ${databaseLabel}.`,
+    "Laravel starter kit, authentication, teams, testing, Boost, frontend stack, and local development keys are chosen in the seed workflow.",
+    "Do not infer missing seed choices from setup config. Ask the user during seed issue definition."
+  ].join("\n");
 }
 
 function packageHasLaravel(composerJson = {}) {
@@ -227,28 +200,26 @@ async function laravelPromptContext({
     adapter: "laravel",
     artisan_exists: String(markerExists(markers, "artisan")),
     automated_check_command: "php artisan test",
-    authentication: selectedAuthentication(config),
-    boost: selectedBoostOption(config),
     composer_dependencies: composerDependencyNames(composerJson || {}).join(", "),
     composer_name: composerProjectName(composerJson || {}),
     composer_scripts: composerScriptNames(composerJson || {}).join(", "),
     database_env_file: ".env",
     database_runtime: databaseRuntime,
-    environment_blueprint: await laravelEnvironmentBlueprint(config),
+    environment_blueprint: laravelEnvironmentBlueprint(config),
     frontend_package_manager: normalizeText(packageManager.name || selectedPackageManager(config)),
     laravel_dependency: String(hasComposerDependency(composerJson || {}, "laravel/framework")),
     package_name: composerProjectName(composerJson || {}) || normalizeText(packageJson?.name),
     project_knowledge_path: knowledgePath,
     project_knowledge_relative_path: LARAVEL_PROJECT_KNOWLEDGE_RELATIVE_PATH,
-    seed_authentication: selectedAuthentication(config),
-    seed_boost: selectedBoostOption(config),
-    seed_custom_starter: selectedCustomStarter(config),
     seed_database_runtime: databaseRuntime,
-    seed_livewire_components: selectedLivewireComponents(config),
-    seed_package_manager: selectedPackageManager(config),
-    seed_starter_kit: selectedStarterKit(config),
-    seed_teams: selectedTeams(config),
-    seed_testing: selectedTestingFramework(config),
+    seed_issue_guidance: [
+      "Seed a Laravel application by discovering the installer flags, starter kit, framework packages, and local development environment values needed before product feature work starts.",
+      "Ask about Laravel setup choices, not business entities or detailed CRUD screens yet.",
+      "Questions should cover: official starter kit or custom starter, frontend stack, authentication provider, teams/workspaces, database runtime, queues/cache/mail/storage, broadcasting/realtime, Laravel Boost, testing framework, API-only needs, and any fake local dev service keys.",
+      "Development secrets are allowed in this conversation because they are local fake values for ignored .env files. Ask for them when a selected package needs them.",
+      "Create a seed issue whose acceptance criteria include the exact `laravel new ...` command or Composer/Artisan commands Codex should run, followed by dependency install, .env writes, key generation, migrations, and verification.",
+      "The seed issue should produce a runnable Laravel foundation app with local .env values, installed dependencies, and a clear project knowledge note."
+    ].join("\n"),
     target_root: normalizeText(targetRoot),
     test_script: composerScript(composerJson || {}, "test"),
     valid_laravel_markers: String(allMarkersReady({
@@ -283,7 +254,13 @@ async function laravelFacts({
     summary: setupSummary({
       composerJson,
       markers
-    })
+    }),
+    workflow: {
+      seedRequired: !allMarkersReady({
+        composerJson,
+        markers
+      })
+    }
   };
 }
 

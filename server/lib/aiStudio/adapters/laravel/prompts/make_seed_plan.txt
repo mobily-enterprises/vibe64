@@ -1,0 +1,17 @@
+{{systemStandard}}
+
+Create the implementation plan for seeding this Laravel app.
+
+Laravel seed guidance:
+{{adapter.promptContext.seed_issue_guidance}}
+
+The plan must be command-first and framework-owned:
+- inspect the seed issue files
+- run the Laravel installer command needed for the selected choices
+- add selected Composer or frontend packages with standard Laravel tooling
+- write local fake development secrets only to ignored .env files
+- run Composer and package-manager installs after the scaffold exists
+- generate APP_KEY, prepare database files or managed DB .env values, run migrations when appropriate
+- verify the app can start and tests or health checks have a clear path
+
+Do not plan product feature implementation, CRUD entities, or detailed screens beyond the foundation required by selected packages.

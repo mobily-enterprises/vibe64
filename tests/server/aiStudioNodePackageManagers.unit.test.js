@@ -2,9 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  LARAVEL_PACKAGE_MANAGER_CONFIG
-} from "../../server/lib/aiStudio/adapters/laravel/constants.js";
-import {
   LARAVEL_CONFIG_FIELDS,
   selectedLaravelPackageManager
 } from "../../server/lib/aiStudio/adapters/laravel/config.js";
@@ -73,10 +70,7 @@ test("adapter package manager config fields derive from shared node package mana
     configField(NEXTJS_CONFIG_FIELDS, NEXTJS_PACKAGE_MANAGER_CONFIG).options,
     NODE_PACKAGE_MANAGER_OPTIONS
   );
-  assert.strictEqual(
-    configField(LARAVEL_CONFIG_FIELDS, LARAVEL_PACKAGE_MANAGER_CONFIG).options,
-    NODE_PACKAGE_MANAGER_OPTIONS
-  );
+  assert.equal(configField(LARAVEL_CONFIG_FIELDS, "laravel_package_manager"), undefined);
   assert.equal(selectedNextjsPackageManager({
     values: {
       [NEXTJS_PACKAGE_MANAGER_CONFIG]: "bun"
@@ -84,9 +78,9 @@ test("adapter package manager config fields derive from shared node package mana
   }), "bun");
   assert.equal(selectedLaravelPackageManager({
     values: {
-      [LARAVEL_PACKAGE_MANAGER_CONFIG]: "pnpm"
+      laravel_package_manager: "pnpm"
     }
-  }), "pnpm");
+  }), "npm");
   assert.equal(selectedNextjsPackageManager({
     values: {
       [NEXTJS_PACKAGE_MANAGER_CONFIG]: "bun@1.2.3"

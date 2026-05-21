@@ -1,5 +1,6 @@
 import {
-  AI_STUDIO_SESSION_STATUS
+  AI_STUDIO_SESSION_STATUS,
+  workflowProfileCreationOptions
 } from "../../../../server/lib/aiStudio/index.js";
 import {
   aiStudioResult
@@ -23,9 +24,11 @@ function isOpenAiStudioSession(session = {}) {
   return !CLOSED_SESSION_STATUSES.has(String(session.status || ""));
 }
 
-function sessionLimits(sessions = []) {
+function sessionLimits(sessions = [], {
+  maxOpenSessions = MAX_OPEN_AI_STUDIO_SESSIONS
+} = {}) {
   return {
-    maxOpenSessions: MAX_OPEN_AI_STUDIO_SESSIONS,
+    maxOpenSessions,
     openSessionCount: sessions.filter(isOpenAiStudioSession).length
   };
 }
@@ -42,11 +45,73 @@ function mainCheckoutSyncBlocker(sessions = []) {
   return sessions.find(sessionNeedsMainCheckoutSync) || null;
 }
 
-function sessionListResponse(sessions = []) {
+function sessionListResponse(sessions = [], {
+  creation = null,
+  limits = sessionLimits(sessions)
+} = {}) {
   return {
-    limits: sessionLimits(sessions),
+    creation,
+    limits,
     ok: true,
     sessions
+  };
+}
+
+async function workflowCreationOptions(runtime) {
+  if (typeof runtime?.workflowProfileCreationOptions === "function") {
+    return runtime.workflowProfileCreationOptions();
+  }
+  return workflowProfileCreationOptions();
+}
+
+async function sessionCreationState(runtime, sessions = []) {
+  const workflow = await workflowCreationOptions(runtime);
+  const limits = sessionLimits(sessions, {
+    maxOpenSessions: workflow.seedRequired ? 1 : MAX_OPEN_AI_STUDIO_SESSIONS
+  });
+  return {
+    creation: {
+      ...workflow,
+      canCreate: limits.openSessionCount < limits.maxOpenSessions,
+      disabledReason: limits.openSessionCount >= limits.maxOpenSessions
+        ? sessionLimitMessage(limits, workflow)
+        : ""
+    },
+    limits
+  };
+}
+
+function sessionLimitMessage(limits = {}, workflow = {}) {
+  if (workflow.seedRequired) {
+    return "The first AI Studio session must seed the application. Finish or abandon the current seed session before creating another session.";
+  }
+  return `Studio allows up to ${limits.maxOpenSessions} active sessions at once. Finish or abandon one before creating another.`;
+}
+
+function selectableWorkflowProfileIds(creation = {}) {
+  if (creation.seedRequired) {
+    return [creation.defaultWorkflowProfile].filter(Boolean);
+  }
+  return (Array.isArray(creation.workflowProfiles) ? creation.workflowProfiles : [])
+    .map((profile) => String(profile.id || "").trim())
+    .filter(Boolean);
+}
+
+function selectedWorkflowProfile(input = {}, creation = {}) {
+  const requestedProfile = String(input.workflowProfile || "").trim();
+  const profile = requestedProfile || String(creation.defaultWorkflowProfile || "").trim();
+  const allowedProfileIds = new Set(selectableWorkflowProfileIds(creation));
+  if (!profile || !allowedProfileIds.has(profile)) {
+    return {
+      error: creation.seedRequired
+        ? "The first AI Studio session must seed the application, so no other workflow profile can be selected yet."
+        : "Choose one of the available workflow profiles before creating a session.",
+      profile: ""
+    };
+  }
+  return {
+    error: "",
+    profile
   };
 }
 
@@ -76,21 +141,22 @@ function createService({
       });
     },
 
-    async createSession() {
+    async createSession(input = {}) {
       return sessionResult(async () => {
         const projectType = await projectService.requireProjectType();
         await assertAiStudioSetupReady(setupServices);
         const runtime = await projectService.createRuntime();
         const existingSessions = await runtime.listSessions();
-        const limits = sessionLimits(existingSessions);
+        const { creation, limits } = await sessionCreationState(runtime, existingSessions);
         if (limits.openSessionCount >= limits.maxOpenSessions) {
           return {
             errors: [
               {
                 code: "open_session_limit",
-                message: `Studio allows up to ${limits.maxOpenSessions} active sessions at once. Finish or abandon one before creating another.`
+                message: sessionLimitMessage(limits, creation)
               }
             ],
+            creation,
             limits,
             ok: false,
             sessions: existingSessions,
@@ -106,6 +172,27 @@ function createService({
                 message: `Session ${syncBlocker.sessionId} has merged a pull request but has not synced the main checkout. Run Sync main checkout there before starting another session.`
               }
             ],
+            creation: {
+              ...creation,
+              canCreate: false,
+              disabledReason: `Session ${syncBlocker.sessionId} has merged a pull request but has not synced the main checkout. Run Sync main checkout there before starting another session.`
+            },
+            limits,
+            ok: false,
+            sessions: existingSessions,
+            status: "blocked"
+          };
+        }
+        const profileSelection = selectedWorkflowProfile(input, creation);
+        if (profileSelection.error) {
+          return {
+            creation,
+            errors: [
+              {
+                code: "workflow_profile_not_available",
+                message: profileSelection.error
+              }
+            ],
             limits,
             ok: false,
             sessions: existingSessions,
@@ -116,7 +203,8 @@ function createService({
           metadata: {
             adapter_id: projectType.adapter?.id || projectType.projectType,
             project_type: projectType.projectType
-          }
+          },
+          workflowProfile: profileSelection.profile
         });
         return runtime.advance(session.sessionId);
       });
@@ -139,7 +227,8 @@ function createService({
     async listSessions() {
       return sessionResult(async () => {
         const runtime = await projectService.createRuntime();
-        return sessionListResponse(await runtime.listSessions());
+        const sessions = await runtime.listSessions();
+        return sessionListResponse(sessions, await sessionCreationState(runtime, sessions));
       });
     },
 

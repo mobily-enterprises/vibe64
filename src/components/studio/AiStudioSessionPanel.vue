@@ -128,11 +128,14 @@ const selection = proxyRefs({
 });
 const toolbar = proxyRefs({
   canCreateSession: sessionData.canCreateSession,
+  createSession: sessionData.createSession,
   createSessionCommand: sessionData.createSessionCommand,
+  createSessionMode: sessionData.createSessionMode,
   createSessionTitle: sessionData.createSessionTitle,
   selectSession: sessionData.selectSessionId,
   sessions: sessionData.sessions,
-  shortSessionId: sessionData.shortSessionId
+  shortSessionId: sessionData.shortSessionId,
+  workflowProfiles: sessionData.workflowProfiles
 });
 
 const sessionMode = computed(() => route.query.mode === "inspect" ? "inspect" : "autopilot");

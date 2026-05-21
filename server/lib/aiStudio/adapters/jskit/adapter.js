@@ -78,7 +78,6 @@ const JSKIT_PROMPT_PACK_ROOT = fileURLToPath(new URL("./prompts", import.meta.ur
 const JSKIT_PREPARE_WORKTREE_SCRIPT_PATH = fileURLToPath(new URL("./prepareWorktree.sh", import.meta.url));
 const JSKIT_ALLOW_SELF_TARGET_CONFIG = "jskit_allow_self_target";
 const JSKIT_DATABASE_RUNTIME_CONFIG = "jskit_database_runtime";
-const JSKIT_TENANCY_MODE_CONFIG = "jskit_tenancy_mode";
 const JSKIT_TOOLING_CONTRACT = [
   "Use `npx jskit ...` from the repository root for JSKIT inspection, modules, generators, helper maps, and verification.",
   "New JSKIT-owned files must be created by `npx jskit generate ...`, `npx jskit add ...`, or another documented JSKIT CLI command before manual edits.",
@@ -136,30 +135,6 @@ const JSKIT_CONFIG_FIELDS = deepFreeze([
         description: "Reserve PostgreSQL as the database preference for JSKIT project setup.",
         label: "Postgres",
         value: "postgres"
-      }
-    ],
-    type: "select"
-  },
-  {
-    defaultValue: "none",
-    description: "User/account model Studio should request when it seeds a new JSKIT app.",
-    id: JSKIT_TENANCY_MODE_CONFIG,
-    label: "Tenancy mode",
-    options: [
-      {
-        description: "Create a normal app with no tenancy or workspace scaffold.",
-        label: "None",
-        value: "none"
-      },
-      {
-        description: "Give each user exactly one workspace automatically, with invitations into that workspace.",
-        label: "Personal",
-        value: "personal"
-      },
-      {
-        description: "Let users own and be invited to multiple workspaces, without creating a default workspace automatically.",
-        label: "Workspaces",
-        value: "workspaces"
       }
     ],
     type: "select"
@@ -245,7 +220,6 @@ function jskitPromptContext({
     ? path.join(targetRoot, JSKIT_BLUEPRINT_RELATIVE_PATH)
     : JSKIT_BLUEPRINT_RELATIVE_PATH);
   const databaseRuntime = selectedJskitConfigValue(config, JSKIT_DATABASE_RUNTIME_CONFIG);
-  const tenancyMode = selectedJskitConfigValue(config, JSKIT_TENANCY_MODE_CONFIG);
   return {
     adapter: "jskit",
     blueprint_exists: String(Boolean(blueprintExists)),
@@ -257,16 +231,22 @@ function jskitPromptContext({
       JSKIT_AGENT_GUIDE_CONTRACT,
       JSKIT_TOOLING_CONTRACT,
       JSKIT_PLACEMENT_CONTRACT,
-      jskitDatabaseContract(databaseRuntime),
-      `Configured tenancy mode: ${tenancyMode}.`
+      jskitDatabaseContract(databaseRuntime)
     ].join("\n\n"),
     agent_guide_contract: JSKIT_AGENT_GUIDE_CONTRACT,
     generator_discovery_commands: JSKIT_GENERATOR_DISCOVERY_COMMANDS,
     package_name: normalizeText(packageJson.name),
     placement_contract: JSKIT_PLACEMENT_CONTRACT,
     scripts: packageScripts(packageJson).join(", "),
+    seed_issue_guidance: [
+      "Seed a JSKIT application by discovering the framework modules and local development settings needed before product feature work starts.",
+      "Ask about JSKIT setup choices, not business entities or detailed screens yet.",
+      "Questions should cover: app name/title, auth/users, tenancy/workspaces, database package, assistant/OpenAI usage, file uploads/storage, realtime, email/dev mail, payments, mobile/Capacitor, demo data, and any fake local dev API keys needed by those modules.",
+      "Development secrets are allowed in this conversation because they are local fake values for ignored .env files. Ask for them when a selected module needs them.",
+      "Create a seed issue whose acceptance criteria include the exact JSKIT commands Codex should run, especially `npx @jskit-ai/create-app ...`, `npx jskit list`, `npx jskit show <package>`, and the `npx jskit add ...` or generator commands needed for the selected modules.",
+      "The seed issue should produce a runnable foundation app, .env local development values, installed dependencies, and generated JSKIT metadata."
+    ].join("\n"),
     target_root: normalizeText(targetRoot),
-    tenancy_mode: tenancyMode,
     tooling_contract: JSKIT_TOOLING_CONTRACT,
     valid_jskit_markers: String(allMarkersExist(markers))
   };
@@ -295,7 +275,10 @@ function jskitFacts({
       packageJson,
       targetRoot
     }),
-    summary: setupSummary(markers)
+    summary: setupSummary(markers),
+    workflow: {
+      seedRequired: !allMarkersExist(markers)
+    }
   });
 }
 

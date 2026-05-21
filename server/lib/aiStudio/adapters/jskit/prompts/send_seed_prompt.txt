@@ -1,0 +1,25 @@
+{{systemStandard}}
+
+JSKIT seed-discussion guidance:
+{{adapter.promptContext.seed_issue_guidance}}
+
+The user is not defining a feature yet. Help them define the initial JSKIT application foundation.
+
+Use the user's seed request from the action input:
+{{input.json}}
+
+Ask only for setup choices that affect the first runnable scaffold:
+- app name and human title if the repository name is not enough
+- auth/users module
+- tenancy mode: none, personal workspace, or multi-workspace
+- database runtime/package choice
+- assistant/OpenAI integration and local fake API key
+- file storage/uploads
+- realtime or notifications
+- email/dev mail
+- payments
+- mobile/Capacitor
+- demo data
+- any fake local development secrets needed by selected modules
+
+Do not ask for business entities, CRUD screens, workflows, or detailed product behavior yet. Those come after the app foundation exists.

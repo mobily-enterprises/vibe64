@@ -117,26 +117,20 @@ test("laravel adapter exposes project facts, commands, defaults, and prompt cont
     assert.equal(facts.promptContext.laravel_dependency, "true");
     assert.equal(facts.promptContext.valid_laravel_markers, "true");
     assert.match(facts.promptContext.environment_blueprint, /Database runtime: SQLite/u);
-    assert.match(facts.promptContext.environment_blueprint, /Starter kit: none/u);
-    assert.match(facts.promptContext.environment_blueprint, /Authentication: Laravel built-in/u);
-    assert.match(facts.promptContext.environment_blueprint, /Testing: Pest/u);
+    assert.match(facts.promptContext.environment_blueprint, /chosen in the seed workflow/u);
+    assert.match(facts.promptContext.seed_issue_guidance, /starter kit/u);
     assert.deepEqual(facts.commands.map((command) => command.id), commandIds());
     assert.equal(facts.capabilities.create_worktree, true);
     assert.equal(facts.capabilities.update_code_index, true);
     assert.equal(facts.capabilities.run_automated_checks, true);
 
     const defaults = await adapter.getDefaultConfig();
-    assert.equal(defaults.laravel_authentication, "laravel");
     assert.equal(defaults.laravel_database_runtime, "sqlite");
-    assert.equal(defaults.laravel_livewire_components, "single_file");
-    assert.equal(defaults.laravel_package_manager, "npm");
-    assert.equal(defaults.laravel_starter_kit, "none");
-    assert.equal(defaults.laravel_teams, "none");
-    assert.equal(defaults.laravel_testing, "pest");
+    assert.deepEqual(Object.keys(defaults), ["laravel_database_runtime"]);
   });
 });
 
-test("laravel adapter composes prompt blueprints from independent config choices", async () => {
+test("laravel adapter keeps seed choices in prompt guidance instead of setup config", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createLaravelProject(targetRoot);
     const adapter = createLaravelTargetAdapter();
@@ -144,30 +138,17 @@ test("laravel adapter composes prompt blueprints from independent config choices
     const facts = await adapter.inspect({
       config: {
         values: {
-          laravel_boost: "boost",
-          laravel_authentication: "workos",
-          laravel_database_runtime: "postgres",
-          laravel_livewire_components: "single_file",
-          laravel_package_manager: "bun",
-          laravel_starter_kit: "react",
-          laravel_teams: "teams",
-          laravel_testing: "phpunit"
+          laravel_database_runtime: "postgres"
         }
       },
       targetRoot
     });
 
     assert.equal(facts.promptContext.database_runtime, "postgres");
-    assert.equal(facts.promptContext.seed_authentication, "workos");
-    assert.equal(facts.promptContext.seed_package_manager, "bun");
-    assert.equal(facts.promptContext.seed_starter_kit, "react");
-    assert.equal(facts.promptContext.seed_teams, "teams");
     assert.match(facts.promptContext.environment_blueprint, /Database runtime: PostgreSQL/u);
-    assert.match(facts.promptContext.environment_blueprint, /Starter kit: React/u);
-    assert.match(facts.promptContext.environment_blueprint, /Authentication: WorkOS AuthKit/u);
-    assert.match(facts.promptContext.environment_blueprint, /Teams: enabled/u);
-    assert.match(facts.promptContext.environment_blueprint, /Testing: PHPUnit/u);
-    assert.match(facts.promptContext.environment_blueprint, /Laravel Boost: installed/u);
+    assert.match(facts.promptContext.environment_blueprint, /Ask the user during seed issue definition/u);
+    assert.match(facts.promptContext.seed_issue_guidance, /authentication provider/u);
+    assert.match(facts.promptContext.seed_issue_guidance, /fake local dev service keys/u);
   });
 });
 
@@ -208,8 +189,7 @@ test("laravel prompt actions use the Laravel prompt pack", async () => {
       adapter: createLaravelTargetAdapter(),
       projectConfig: {
         values: {
-          laravel_database_runtime: "mariadb",
-          laravel_starter_kit: "livewire"
+          laravel_database_runtime: "mariadb"
         }
       },
       targetRoot
@@ -226,7 +206,7 @@ test("laravel prompt actions use the Laravel prompt pack", async () => {
     assert.match(afterPrompt.actionResult.prompt, /AI Studio standard planning instructions/u);
     assert.match(afterPrompt.actionResult.prompt, /Create the implementation plan for this Laravel project/u);
     assert.match(afterPrompt.actionResult.prompt, /Database runtime: MariaDB/u);
-    assert.match(afterPrompt.actionResult.prompt, /Starter kit: Livewire/u);
+    assert.match(afterPrompt.actionResult.prompt, /chosen in the seed workflow/u);
     assert.doesNotMatch(afterPrompt.actionResult.prompt, /\{\{adapter\.promptContext\.environment_blueprint\}\}/u);
     assert.match(afterPrompt.actionResult.prompt, /example\/laravel-app/u);
   });
@@ -327,13 +307,11 @@ test("laravel launch target passes AI Studio port through Composer serve scripts
   });
 });
 
-test("laravel setup checks selected package manager inside the Laravel toolchain", async () => {
+test("laravel setup checks npm inside the Laravel toolchain", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const dockerCalls = [];
     const config = {
-      values: {
-        laravel_package_manager: "bun"
-      }
+      values: {}
     };
     const plugin = createLaravelSetupDoctorPlugin({
       runCommand: async (command, args) => {
@@ -391,7 +369,7 @@ test("laravel setup checks selected package manager inside the Laravel toolchain
     assert.equal(composerResult.status, "pass");
     assert.equal(installerResult.status, "pass");
     assert.equal(dockerCalls[1].command, "docker");
-    assert.match(dockerCalls[1].args.join(" "), /bun --version/u);
+    assert.match(dockerCalls[1].args.join(" "), /npm --version/u);
     assert.ok(dockerCalls[1].args.includes(LARAVEL_TOOLCHAIN_IMAGE));
     assert.match(dockerCalls[2].args.join(" "), /php --version/u);
     assert.match(dockerCalls[3].args.join(" "), /composer --version/u);
@@ -399,18 +377,11 @@ test("laravel setup checks selected package manager inside the Laravel toolchain
   });
 });
 
-test("laravel setup seeds empty targets and selected database environment", async () => {
+test("laravel setup leaves empty targets for the seed workflow and can still describe a basic installer command", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const config = {
       values: {
-        laravel_boost: "none",
-        laravel_authentication: "workos",
-        laravel_database_runtime: "postgres",
-        laravel_livewire_components: "single_file",
-        laravel_package_manager: "pnpm",
-        laravel_starter_kit: "react",
-        laravel_teams: "teams",
-        laravel_testing: "phpunit"
+        laravel_database_runtime: "postgres"
       }
     };
     const command = laravelNewCommand({
@@ -420,36 +391,9 @@ test("laravel setup seeds empty targets and selected database environment", asyn
     assert.match(command, /laravel new "\$app_dir"/u);
     assert.match(command, /--no-ansi/u);
     assert.match(command, /--database=sqlite/u);
-    assert.match(command, /--phpunit/u);
-    assert.match(command, /--pnpm/u);
+    assert.match(command, /--pest/u);
+    assert.match(command, /--npm/u);
     assert.match(command, /--no-boost/u);
-    assert.match(command, /--react/u);
-    assert.match(command, /--workos/u);
-    assert.match(command, /--teams/u);
-    assert.match(laravelNewCommand({
-      config: {
-        values: {
-          laravel_authentication: "laravel",
-          laravel_livewire_components: "class",
-          laravel_starter_kit: "livewire"
-        }
-      }
-    }), /--livewire-class-components/u);
-    assert.match(laravelNewCommand({
-      config: {
-        values: {
-          laravel_custom_starter: "acme/laravel-starter",
-          laravel_starter_kit: "custom"
-        }
-      }
-    }), /--using acme\/laravel-starter/u);
-    assert.match(laravelNewCommand({
-      config: {
-        values: {
-          laravel_starter_kit: "custom"
-        }
-      }
-    }), /laravel_custom_starter must be set/u);
     assert.deepEqual(laravelDatabaseEnvLines({
       config,
       targetRoot
@@ -461,60 +405,6 @@ test("laravel setup seeds empty targets and selected database environment", asyn
       "DB_USERNAME=laravel",
       "DB_PASSWORD=laravel_password"
     ]);
-  });
-});
-
-test("laravel setup validates custom starter before seeding", async () => {
-  await withTemporaryRoot(async (targetRoot) => {
-    const plugin = createLaravelSetupDoctorPlugin({
-      targetRoot
-    });
-    const config = {
-      values: {
-        laravel_starter_kit: "custom"
-      }
-    };
-    const customStarterCheck = plugin.checks({
-      config,
-      targetRoot
-    }).find((check) => check.id === "laravel-custom-starter");
-
-    const result = await customStarterCheck.run({
-      config,
-      targetRoot
-    });
-
-    assert.equal(result.status, "fail");
-    assert.match(result.observed, /laravel_custom_starter is blank/u);
-  });
-});
-
-test("laravel setup rejects incompatible starter option config", async () => {
-  await withTemporaryRoot(async (targetRoot) => {
-    const plugin = createLaravelSetupDoctorPlugin({
-      targetRoot
-    });
-    const config = {
-      values: {
-        laravel_authentication: "none",
-        laravel_starter_kit: "none",
-        laravel_teams: "teams"
-      }
-    };
-    const starterOptionsCheck = plugin.checks({
-      config,
-      targetRoot
-    }).find((check) => check.id === "laravel-starter-options");
-
-    const result = await starterOptionsCheck.run({
-      config,
-      targetRoot
-    });
-
-    assert.equal(result.status, "fail");
-    assert.match(result.observed, /Authentication provider selection requires an official/u);
-    assert.match(result.observed, /Team support requires an official/u);
-    assert.match(result.observed, /Team support requires authentication scaffolding/u);
   });
 });
 

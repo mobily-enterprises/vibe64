@@ -60,7 +60,18 @@ export {
   promptSessionBriefing,
   renderPromptTemplate
 } from "./promptRenderer.js";
-export { DEFAULT_AI_STUDIO_WORKFLOW } from "./workflow.js";
+export {
+  AI_STUDIO_WORKFLOW_PROFILE_IDS,
+  AI_STUDIO_WORKFLOW_PROFILES,
+  DEFAULT_AI_STUDIO_WORKFLOW,
+  DEFAULT_AI_STUDIO_WORKFLOW_PROFILE_ID,
+  ISSUE_FILE_STEP_ID,
+  SEED_APPLICATION_STEP_ID,
+  normalizeWorkflowProfileId,
+  workflowForProfile,
+  workflowProfileCreationOptions,
+  workflowProfileDefinition
+} from "./workflow.js";
 export {
   AI_STUDIO_PROJECT_TYPE_FILE,
   createAiStudioProjectTypeStore,

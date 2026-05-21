@@ -4,11 +4,14 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  AI_STUDIO_WORKFLOW_PROFILE_IDS,
   AiStudioSessionRuntime,
   DEFAULT_AI_STUDIO_WORKFLOW,
+  DEFAULT_AI_STUDIO_WORKFLOW_PROFILE_ID,
   FakeTargetAdapter,
   PromptRenderer,
-  WorkflowMachine
+  WorkflowMachine,
+  workflowForProfile
 } from "../../server/lib/aiStudio/index.js";
 import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
 
@@ -39,6 +42,17 @@ class PromptRendererFakeAdapter extends FakeTargetAdapter {
   }
 }
 
+class SeedRequiredFakeAdapter extends FakeTargetAdapter {
+  async inspect(context = {}) {
+    return {
+      ...await super.inspect(context),
+      workflow: {
+        seedRequired: true
+      }
+    };
+  }
+}
+
 test("ai-studio runtime session view exposes workflow steps, current actions, and next state", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = new AiStudioSessionRuntime({
@@ -59,6 +73,114 @@ test("ai-studio runtime session view exposes workflow steps, current actions, an
     assert.equal(session.stepDefinitions[0].status, "current");
     assert.equal(session.stepDefinitions[1].label, "Choose work source");
     assert.deepEqual(session.actions, []);
+  });
+});
+
+test("ai-studio workflow profiles are ordered step lists with self-contained step metadata", () => {
+  const bigFeature = workflowForProfile(AI_STUDIO_WORKFLOW_PROFILE_IDS.BIG_FEATURE);
+  const seedApplication = workflowForProfile(AI_STUDIO_WORKFLOW_PROFILE_IDS.SEED_APPLICATION);
+  const nonCommitMaintenance = workflowForProfile(AI_STUDIO_WORKFLOW_PROFILE_IDS.NON_COMMIT_MAINTENANCE);
+
+  assert.equal(bigFeature.id, DEFAULT_AI_STUDIO_WORKFLOW_PROFILE_ID);
+  assert.ok(bigFeature.steps.find((step) => step.id === "issue_file_created")?.autopilot.stop);
+  assert.ok(seedApplication.steps.find((step) => step.id === "seed_application_defined")?.autopilot.stop);
+  assert.deepEqual(seedApplication.steps.map((step) => step.id).slice(0, 6), [
+    "session_created",
+    "work_source_selected",
+    "worktree_created",
+    "seed_application_defined",
+    "seed_plan_made",
+    "seed_plan_executed"
+  ]);
+  assert.equal(
+    seedApplication.steps.findIndex((step) => step.id === "dependencies_installed") >
+      seedApplication.steps.findIndex((step) => step.id === "seed_plan_executed"),
+    true
+  );
+  assert.equal(nonCommitMaintenance.steps.at(-1).id, "local_session_finished");
+});
+
+test("ai-studio runtime persists the selected workflow profile per session", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new AiStudioSessionRuntime({
+      targetRoot
+    });
+
+    const session = await runtime.createSession({
+      sessionId: "maintenance_profile",
+      workflowProfile: AI_STUDIO_WORKFLOW_PROFILE_IDS.NON_COMMIT_MAINTENANCE
+    });
+
+    assert.equal(session.workflowId, AI_STUDIO_WORKFLOW_PROFILE_IDS.NON_COMMIT_MAINTENANCE);
+    assert.equal(session.workflowProfile.id, AI_STUDIO_WORKFLOW_PROFILE_IDS.NON_COMMIT_MAINTENANCE);
+    assert.equal(session.metadata.workflow_profile, AI_STUDIO_WORKFLOW_PROFILE_IDS.NON_COMMIT_MAINTENANCE);
+    assert.equal(session.stepDefinitions.at(-1).id, "local_session_finished");
+
+    await assert.rejects(
+      () => runtime.createSession({
+        sessionId: "bad_profile",
+        workflowProfile: "unknown_profile"
+      }),
+      /Unknown AI Studio workflow profile/u
+    );
+  });
+});
+
+test("ai-studio runtime selects the seed profile when the adapter says seeding is required", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new AiStudioSessionRuntime({
+      adapter: new SeedRequiredFakeAdapter(),
+      targetRoot
+    });
+
+    const session = await runtime.createSession({
+      sessionId: "seed_profile"
+    });
+
+    assert.equal(session.workflowId, AI_STUDIO_WORKFLOW_PROFILE_IDS.SEED_APPLICATION);
+    assert.equal(session.metadata.workflow_profile, AI_STUDIO_WORKFLOW_PROFILE_IDS.SEED_APPLICATION);
+    assert.equal(session.sessionName, "seeding");
+    assert.equal(await runtime.store.readArtifact("seed_profile", "issue_word"), "seeding\n");
+    assert.equal(await runtime.store.readMetadataValue("seed_profile", "issue_word"), "");
+    assert.ok(session.stepDefinitions.some((step) => step.id === "seed_application_defined"));
+    assert.equal(session.stepDefinitions.some((step) => step.id === "issue_file_created"), false);
+  });
+});
+
+test("ai-studio runtime rejects non-seed profiles while seeding is required", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new AiStudioSessionRuntime({
+      adapter: new SeedRequiredFakeAdapter(),
+      targetRoot
+    });
+
+    await assert.rejects(
+      () => runtime.createSession({
+        sessionId: "bad_seed_profile",
+        workflowProfile: AI_STUDIO_WORKFLOW_PROFILE_IDS.BIG_FEATURE
+      }),
+      {
+        code: "ai_studio_seed_workflow_required"
+      }
+    );
+  });
+});
+
+test("ai-studio runtime rejects the seed profile after seeding is no longer required", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new AiStudioSessionRuntime({
+      targetRoot
+    });
+
+    await assert.rejects(
+      () => runtime.createSession({
+        sessionId: "late_seed_profile",
+        workflowProfile: AI_STUDIO_WORKFLOW_PROFILE_IDS.SEED_APPLICATION
+      }),
+      {
+        code: "ai_studio_seed_workflow_not_available"
+      }
+    );
   });
 });
 

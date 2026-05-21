@@ -62,6 +62,13 @@ function normalizeStringMap(value = {}) {
   );
 }
 
+function normalizeWorkflowFacts(value = {}) {
+  const facts = isPlainObject(value) ? value : {};
+  return {
+    seedRequired: facts.seedRequired === true
+  };
+}
+
 function adapterDetection(input = {}) {
   return {
     detected: input.detected !== false,
@@ -111,7 +118,8 @@ function adapterProjectFacts(input = {}) {
     capabilities: normalizeCapabilityMap(input.capabilities),
     commands: Array.isArray(input.commands) ? input.commands.map(adapterCommand) : [],
     promptContext: normalizeStringMap(input.promptContext),
-    summary: normalizeText(input.summary)
+    summary: normalizeText(input.summary),
+    workflow: normalizeWorkflowFacts(input.workflow)
   };
 }
 

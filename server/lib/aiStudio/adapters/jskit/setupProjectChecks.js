@@ -29,10 +29,7 @@ import {
 import {
   checkJskitScaffold,
   scaffoldCommandPreview,
-  scaffoldRepair,
-  scaffoldScript,
-  scaffoldTerminalAction,
-  selectedJskitTenancyMode
+  scaffoldScript
 } from "./setupScaffold.js";
 import {
   JSKIT_TOOLCHAIN_IMAGE
@@ -89,6 +86,15 @@ async function targetHasJskitCliTooling(targetRoot, toolkit) {
 async function checkDependencies(targetRoot, context, toolkit) {
   const packageJson = await readTargetPackageJson(targetRoot, toolkit);
   context.packageJson = packageJson;
+  if (!packageJson) {
+    return passCheck({
+      id: "dependencies",
+      label: "Dependencies runnable",
+      expected: "Dependencies are installed once a JSKIT app exists.",
+      observed: "package.json is not present yet.",
+      explanation: "The seed workflow creates the JSKIT app before the session installs dependencies."
+    });
+  }
 
   const dependencyResult = await checkNodeDependencies(toolkit, {
     expected: "All direct non-optional package.json dependencies are installed.",
@@ -138,6 +144,15 @@ async function checkDependencies(targetRoot, context, toolkit) {
 
 async function checkRuntimeServices(targetRoot, context, toolkit) {
   const packageJson = context.packageJson || await readTargetPackageJson(targetRoot, toolkit);
+  if (!packageJson) {
+    return passCheck({
+      id: "runtime-services",
+      label: "Runtime services",
+      expected: "Runtime services are checked once the JSKIT app declares them.",
+      observed: "package.json is not present yet.",
+      explanation: "The seed workflow creates the app and selects JSKIT database/runtime modules before runtime service checks apply."
+    });
+  }
   if (!targetUsesJskitDatabase(packageJson, context.jskitLock)) {
     return passCheck({
       id: "runtime-services",
@@ -164,12 +179,22 @@ async function checkRuntimeServices(targetRoot, context, toolkit) {
 }
 
 async function checkJskitVerificationCommand(targetRoot, toolkit) {
+  const packageJson = await readTargetPackageJson(targetRoot, toolkit);
+  if (!packageJson) {
+    return passCheck({
+      id: "jskit-verification-command",
+      label: "JSKIT verification command",
+      expected: "A verification command is available once the JSKIT app exists.",
+      observed: "package.json is not present yet.",
+      explanation: "The seed workflow creates the app before later workflow validation runs JSKIT verification."
+    });
+  }
   return checkPackageVerificationCommand(toolkit, {
     binObserved: "npx jskit app verify",
     expected: "package.json declares a verify script or the local JSKIT CLI is installed.",
     id: "jskit-verification-command",
     label: "JSKIT verification command",
-    missingPackageRepair: scaffoldRepair(targetRoot, {}, toolkit),
+    missingPackageRepair: npmInstallRepair(targetRoot, toolkit),
     missingRepair: npmInstallRepair(targetRoot, toolkit),
     missingScriptObserved: "No package.json verify script and no installed @jskit-ai/jskit-cli bin were found.",
     packageBin: {
@@ -221,7 +246,6 @@ function createJskitProjectSetupTerminalActions({
   }
 
   return [
-    scaffoldTerminalAction(targetRoot, toolkit),
     npmInstallTerminalAction(targetRoot, toolkit),
     seedDatabaseEnvTerminalAction(targetRoot, toolkit),
     managedDatabaseEnvTerminalAction(targetRoot, toolkit),
@@ -234,6 +258,5 @@ export {
   createJskitProjectSetupTerminalActions,
   npmInstallScript,
   scaffoldCommandPreview,
-  scaffoldScript,
-  selectedJskitTenancyMode
+  scaffoldScript
 };

@@ -41,14 +41,7 @@ import {
   hasComposerDependency
 } from "./composerPackage.js";
 import {
-  selectedLaravelAuthentication as selectedAuthentication,
-  selectedLaravelBoostOption as selectedBoostOption,
-  selectedLaravelCustomStarter as selectedCustomStarter,
-  selectedLaravelLivewireComponents as selectedLivewireComponents,
-  selectedLaravelPackageManager as selectedPackageManager,
-  selectedLaravelStarterKit as selectedStarterKit,
-  selectedLaravelTeams as selectedTeams,
-  selectedLaravelTestingFramework as selectedTestingFramework
+  selectedLaravelPackageManager as selectedPackageManager
 } from "./config.js";
 import {
   createLaravelRuntimeContainers,
@@ -74,21 +67,6 @@ const LARAVEL_WRITABLE_DOCKER_ENV = Object.freeze({
   COMPOSER_CACHE_DIR: "/tmp/composer-cache",
   npm_config_cache: "/tmp/npm-cache"
 });
-
-function officialLaravelStarterKit(config = {}) {
-  return !["none", "custom"].includes(selectedStarterKit(config));
-}
-
-function laravelSeedConfigError(config = {}) {
-  if (selectedStarterKit(config) === "custom" && !selectedCustomStarter(config)) {
-    return "laravel_custom_starter must be set when the Laravel starter kit is custom.";
-  }
-  const [starterOptionProblem = ""] = starterOptionProblems(config);
-  if (starterOptionProblem) {
-    return starterOptionProblem;
-  }
-  return "";
-}
 
 function buildLaravelToolchainRepair() {
   return adapterToolchainBuildRepair({
@@ -119,45 +97,14 @@ function laravelNewPackageManagerFlag(packageManager = "npm") {
   }[packageManager] || "--npm";
 }
 
-function laravelNewStarterFlags(config = {}) {
-  const starter = selectedStarterKit(config);
-  if (starter === "custom") {
-    const customStarter = selectedCustomStarter(config);
-    return customStarter ? ["--using", customStarter] : [];
-  }
-  if (starter === "none") {
-    return [];
-  }
-  return [`--${starter}`];
-}
-
-function laravelNewStarterOptionFlags(config = {}) {
-  if (!officialLaravelStarterKit(config)) {
-    return [];
-  }
-
-  const authentication = selectedAuthentication(config);
-  return [
-    authentication === "workos" ? "--workos" : "",
-    authentication === "none" ? "--no-authentication" : "",
-    selectedTeams(config) === "teams" ? "--teams" : "",
-    selectedStarterKit(config) === "livewire" && selectedLivewireComponents(config) === "class"
-      ? "--livewire-class-components"
-      : ""
-  ].filter(Boolean);
-}
-
 function laravelNewFlags(config = {}) {
-  const testing = selectedTestingFramework(config);
   return [
     "--no-interaction",
     "--no-ansi",
     "--database=sqlite",
-    testing === "phpunit" ? "--phpunit" : "--pest",
+    "--pest",
     laravelNewPackageManagerFlag(selectedPackageManager(config)),
-    selectedBoostOption(config) === "boost" ? "--boost" : "--no-boost",
-    ...laravelNewStarterFlags(config),
-    ...laravelNewStarterOptionFlags(config)
+    "--no-boost"
   ];
 }
 
@@ -165,10 +112,6 @@ function laravelNewCommand({
   appDir = "$app_dir",
   config = {}
 } = {}) {
-  const seedConfigError = laravelSeedConfigError(config);
-  if (seedConfigError) {
-    return `printf '%s\\n' ${shellQuote(seedConfigError)} >&2; exit 2`;
-  }
   const appDirArg = appDir === "$app_dir" ? "\"$app_dir\"" : shellQuote(appDir);
   const flags = laravelNewFlags(config).map(shellQuote).join(" ");
   return `laravel new ${appDirArg} ${flags}`;
@@ -268,80 +211,6 @@ function missingLaravelToolchainCheck({
   });
 }
 
-function checkCustomStarterConfig(config = {}) {
-  if (selectedStarterKit(config) !== "custom") {
-    return passCheck({
-      id: "laravel-custom-starter",
-      label: "Custom starter",
-      expected: "A custom starter package is required only when the custom starter kit is selected.",
-      observed: "Official Laravel starter kit or no starter kit selected.",
-      explanation: "Laravel seeding can use the selected starter kit without extra package input."
-    });
-  }
-  const customStarter = selectedCustomStarter(config);
-  if (customStarter) {
-    return passCheck({
-      id: "laravel-custom-starter",
-      label: "Custom starter",
-      expected: "A Packagist package or repository is configured for laravel new --using.",
-      observed: customStarter,
-      explanation: "Laravel seeding can pass the custom starter package to the installer."
-    });
-  }
-  return failCheck({
-    id: "laravel-custom-starter",
-    label: "Custom starter",
-    expected: "laravel_custom_starter contains the package or repository for laravel new --using.",
-    observed: "laravel_starter_kit is custom, but laravel_custom_starter is blank.",
-    explanation: "Studio will not silently seed a plain Laravel app when the selected configuration asks for a custom starter."
-  });
-}
-
-function starterOptionProblems(config = {}) {
-  const starter = selectedStarterKit(config);
-  const authentication = selectedAuthentication(config);
-  const livewireComponents = selectedLivewireComponents(config);
-  const teams = selectedTeams(config);
-  const officialStarter = officialLaravelStarterKit(config);
-  return [
-    authentication !== "laravel" && !officialStarter
-      ? "Authentication provider selection requires an official React, Vue, Svelte, or Livewire starter kit."
-      : "",
-    teams === "teams" && !officialStarter
-      ? "Team support requires an official React, Vue, Svelte, or Livewire starter kit."
-      : "",
-    teams === "teams" && authentication === "none"
-      ? "Team support requires authentication scaffolding."
-      : "",
-    livewireComponents === "class" && starter !== "livewire"
-      ? "Livewire class components require the Livewire starter kit."
-      : "",
-    livewireComponents === "class" && authentication !== "laravel"
-      ? "Livewire class components require Laravel built-in authentication."
-      : ""
-  ].filter(Boolean);
-}
-
-function checkStarterOptionsConfig(config = {}) {
-  const problems = starterOptionProblems(config);
-  if (problems.length) {
-    return failCheck({
-      id: "laravel-starter-options",
-      label: "Starter options",
-      expected: "Starter option config is compatible with the selected Laravel starter kit.",
-      observed: problems.join("\n"),
-      explanation: "Studio will not pass Laravel installer flags that the selected starter kit cannot apply cleanly."
-    });
-  }
-  return passCheck({
-    id: "laravel-starter-options",
-    label: "Starter options",
-    expected: "Starter option config is compatible with the selected Laravel starter kit.",
-    observed: "Starter option config is compatible.",
-    explanation: "Laravel seeding can pass the selected authentication, teams, and Livewire component options."
-  });
-}
-
 async function checkComposerJson(toolkit, targetRoot, context = {}) {
   const result = await toolkit.readTargetJson("composer.json", {
     targetRoot
@@ -357,13 +226,12 @@ async function checkComposerJson(toolkit, targetRoot, context = {}) {
         explanation: "Studio will not run laravel new over existing app files because it cannot know their ownership."
       });
     }
-    return blockedCheck({
+    return passCheck({
       id: "laravel-composer-json",
       label: "composer.json",
-      expected: "A readable composer.json exists in the target project.",
+      expected: "A readable composer.json exists, or this empty target can be seeded by the first AI Studio session.",
       observed: result.missing ? "composer.json is missing." : result.error,
-      explanation: "Seed a Laravel app before installing dependencies or running workflow commands.",
-      repair: createLaravelAppRepair(context.config)
+      explanation: "The seed workflow will ask the user which Laravel starter kit, modules, and local dev values to use before creating the app."
     });
   }
   return passCheck({
@@ -376,6 +244,17 @@ async function checkComposerJson(toolkit, targetRoot, context = {}) {
 }
 
 async function checkLaravelMarkers(toolkit, targetRoot) {
+  if (!await toolkit.targetFileExists("composer.json", {
+    targetRoot
+  })) {
+    return passCheck({
+      id: "laravel-markers",
+      label: "Laravel files",
+      expected: "Laravel markers exist once the seed workflow creates the app.",
+      observed: "composer.json is not present yet.",
+      explanation: "The seed workflow creates Laravel project files before marker checks apply."
+    });
+  }
   const markers = await existingLaravelMarkers(toolkit, targetRoot);
   if (!markers.includes("artisan") || !markers.includes("bootstrap/app.php")) {
     return failCheck({
@@ -398,12 +277,12 @@ async function checkLaravelMarkers(toolkit, targetRoot) {
 async function checkLaravelDependency(toolkit, targetRoot) {
   const composerJson = await readTargetComposerJson(toolkit, targetRoot);
   if (!composerJson) {
-    return failCheck({
+    return passCheck({
       id: "laravel-dependency",
       label: "Laravel dependency",
-      expected: "composer.json declares laravel/framework or an Artisan script.",
+      expected: "composer.json declares laravel/framework or an Artisan script once the seed workflow creates the app.",
       observed: "composer.json is missing.",
-      explanation: "Seed or restore composer.json before Laravel dependency checks run."
+      explanation: "The seed workflow creates Composer metadata before Laravel dependency checks apply."
     });
   }
   if (composerUsesLaravel(composerJson)) {
@@ -442,6 +321,17 @@ function seedDatabaseEnvRepair(targetRoot, config, toolkit) {
 }
 
 async function checkDatabaseEnv(toolkit, targetRoot, config = {}) {
+  if (!await toolkit.targetFileExists("composer.json", {
+    targetRoot
+  })) {
+    return passCheck({
+      id: "laravel-database-env",
+      label: "Database environment",
+      expected: "Laravel .env database values are checked once the app exists.",
+      observed: "composer.json is not present yet.",
+      explanation: "The seed workflow creates the Laravel app and writes local .env values."
+    });
+  }
   const expectedLines = laravelDatabaseEnvLines({
     config,
     targetRoot
@@ -499,6 +389,17 @@ function migrationRepair(targetRoot, config, toolkit) {
 }
 
 async function checkMigrations(toolkit, targetRoot, config = {}) {
+  if (!await toolkit.targetFileExists("artisan", {
+    targetRoot
+  })) {
+    return passCheck({
+      id: "laravel-database-migrations",
+      label: "Database migrations",
+      expected: "Laravel migrations are checked once Artisan exists.",
+      observed: "artisan is not present yet.",
+      explanation: "The seed workflow creates the app before migration checks apply."
+    });
+  }
   if (selectedLaravelDatabaseRuntime(config) === "sqlite") {
     if (!await toolkit.targetFileExists("database/database.sqlite", {
       targetRoot
@@ -577,23 +478,6 @@ function createLaravelSetupDoctorPlugin({
     label: "Build Laravel toolchain",
     script: buildLaravelToolchainScript
   });
-  const createLaravelAppTerminal = toolkit.toolchainTerminalAction({
-    actionId: "terminal-create-laravel-app",
-    autoRun: true,
-    commandArgs: (context = {}) => ["bash", "-lc", createLaravelAppScript(context.config, {
-      targetRoot: context.targetRoot || targetRoot
-    })],
-    commandPreview: (context = {}) => createLaravelAppRepair(context.config).commandPreview,
-    extraArgs: () => [
-      ...writableHostUserDockerArgs({
-        env: LARAVEL_WRITABLE_DOCKER_ENV
-      })
-    ],
-    image: LARAVEL_TOOLCHAIN_IMAGE,
-    label: "Create Laravel app",
-    targetRoot: ({ targetRoot: contextTargetRoot = "" } = {}) => contextTargetRoot || targetRoot
-  });
-
   return toolkit.plugin({
     id: "laravel-target-runtime",
     label: "Laravel target runtime",
@@ -687,18 +571,6 @@ function createLaravelSetupDoctorPlugin({
                 label: "Laravel installer"
               })
         },
-        {
-          expected: "The custom starter package is set when the custom starter kit is selected.",
-          id: "laravel-custom-starter",
-          label: "Custom starter",
-          run: () => checkCustomStarterConfig(context.config || {})
-        },
-        {
-          expected: "Starter option config is compatible with the selected Laravel starter kit.",
-          id: "laravel-starter-options",
-          label: "Starter options",
-          run: () => checkStarterOptionsConfig(context.config || {})
-        },
         ...containers.checks,
         {
           expected: "A readable composer.json exists in the target project.",
@@ -735,7 +607,6 @@ function createLaravelSetupDoctorPlugin({
     terminalActions(context = {}) {
       return [
         buildToolchainTerminal,
-        createLaravelAppTerminal,
         toolkit.shellTerminalAction({
           actionId: "terminal-seed-laravel-db-env",
           autoRun: true,

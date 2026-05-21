@@ -1,0 +1,19 @@
+{{systemStandard}}
+
+Create the seed issue files for the JSKIT application foundation.
+
+JSKIT seed guidance:
+{{adapter.promptContext.seed_issue_guidance}}
+
+Use the seed request and any discussion so far to write a focused issue for creating the initial runnable JSKIT app.
+
+The issue must include:
+- the chosen JSKIT app name/title when known
+- the selected auth/users and tenancy choice
+- the selected database/runtime package choice
+- selected optional modules such as assistant, storage, realtime, email, payments, mobile, and demo data
+- local fake development secrets that should be written to ignored .env files
+- exact JSKIT command guidance, including `npx @jskit-ai/create-app ...`, `npx jskit list`, `npx jskit show <package>`, and the relevant `npx jskit add ...` or generator commands
+- acceptance criteria proving the app is runnable, dependencies are installed, .env values exist, and JSKIT metadata is generated
+
+Do not include detailed product feature work. The issue is only for seeding the application foundation.

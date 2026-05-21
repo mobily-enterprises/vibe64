@@ -7,7 +7,13 @@ const sessionListInputValidator = deepFreeze({
 });
 
 const sessionCreateInputValidator = deepFreeze({
-  schema: createSchema({}),
+  schema: createSchema({
+    workflowProfile: {
+      type: "string",
+      noTrim: false,
+      required: false
+    }
+  }),
   mode: "patch"
 });
 

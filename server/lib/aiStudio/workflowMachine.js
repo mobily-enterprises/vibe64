@@ -156,6 +156,31 @@ function normalizeNext(next = {}) {
   };
 }
 
+function normalizeAutopilotAction(action = {}) {
+  return {
+    actionId: normalizeText(action.actionId),
+    advanceOnSuccess: action.advanceOnSuccess === true,
+    completeWhen: normalizeConditionList(action.completeWhen),
+    label: normalizeText(action.label || action.actionId)
+  };
+}
+
+function normalizeAutopilot(autopilot = {}) {
+  const actionSequence = Array.isArray(autopilot.actionSequence)
+    ? autopilot.actionSequence.map(normalizeAutopilotAction).filter((action) => action.actionId)
+    : [];
+  return {
+    actionId: normalizeText(autopilot.actionId),
+    actionSequence,
+    advanceOnSuccess: autopilot.advanceOnSuccess === true,
+    completeWhen: normalizeConditionList(autopilot.completeWhen),
+    kind: normalizeText(autopilot.kind),
+    label: normalizeText(autopilot.label || autopilot.actionId),
+    stop: autopilot.stop === true,
+    userDecision: autopilot.userDecision === true
+  };
+}
+
 function normalizeActions(actions = [], stepId = "") {
   const seenActionIds = new Set();
   const normalizedActions = [];
@@ -184,6 +209,7 @@ function normalizeStep(step = {}, index = 0, seenStepIds = new Set()) {
   seenStepIds.add(id);
   return {
     actions: normalizeActions(step.actions, id),
+    autopilot: normalizeAutopilot(step.autopilot),
     description: normalizeText(step.description),
     id,
     index,
@@ -216,6 +242,28 @@ function publicStepDefinition(step, status) {
     rewindable: step.rewindable,
     status
   };
+}
+
+function publicAutopilotDefinition(autopilot = {}) {
+  const definition = {
+    actionSequence: autopilot.actionSequence.map((action) => ({
+      ...action
+    })),
+    completeWhen: [...autopilot.completeWhen],
+    kind: autopilot.kind,
+    stop: autopilot.stop,
+    userDecision: autopilot.userDecision
+  };
+  if (autopilot.actionId) {
+    definition.actionId = autopilot.actionId;
+  }
+  if (autopilot.advanceOnSuccess) {
+    definition.advanceOnSuccess = true;
+  }
+  if (autopilot.label) {
+    definition.label = autopilot.label;
+  }
+  return definition;
 }
 
 function stepStatusForSession(step, currentStep, completedSteps) {
@@ -274,6 +322,7 @@ function publicActionDefinition(action) {
 function publicCurrentStepDefinition(step) {
   return {
     actions: step.actions.map(publicActionDefinition),
+    autopilot: publicAutopilotDefinition(step.autopilot),
     description: step.description,
     id: step.id,
     index: step.index,

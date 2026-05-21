@@ -1,0 +1,18 @@
+{{systemStandard}}
+
+Create the seed issue files for the Laravel application foundation.
+
+Laravel seed guidance:
+{{adapter.promptContext.seed_issue_guidance}}
+
+Use the seed request and any discussion so far to write a focused issue for creating the initial runnable Laravel app.
+
+The issue must include:
+- the selected Laravel starter kit or custom starter package
+- selected authentication, teams, frontend, testing, Boost, API, queue, cache, mail, storage, and broadcasting choices
+- selected database runtime and local .env values
+- fake local development secrets that should be written to ignored .env files
+- exact command guidance for `laravel new ...`, Composer, Artisan, package-manager install/build commands, key generation, migrations, and verification
+- acceptance criteria proving the app is runnable, dependencies are installed, .env values exist, and tests or health checks have a clear command
+
+Do not include detailed product feature work. The issue is only for seeding the application foundation.

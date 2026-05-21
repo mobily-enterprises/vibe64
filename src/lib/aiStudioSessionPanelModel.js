@@ -78,6 +78,10 @@ const AI_STUDIO_AUTOPILOT_INTERACTION_STEPS = Object.freeze([
     label: "Briefing"
   },
   {
+    id: "seed_application_defined",
+    label: "Seed app"
+  },
+  {
     id: "implementation_reviewed",
     label: "Human review"
   },

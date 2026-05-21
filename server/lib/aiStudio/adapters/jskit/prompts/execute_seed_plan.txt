@@ -1,0 +1,10 @@
+{{systemStandard}}
+
+Execute the JSKIT seed plan.
+
+JSKIT seed guidance:
+{{adapter.promptContext.seed_issue_guidance}}
+
+Use official JSKIT commands for JSKIT-owned files and package/module wiring. Write local fake development secrets only to ignored .env files. After the scaffold exists, install dependencies and run the JSKIT metadata/helper-map or verification commands available in the generated app.
+
+Keep the result to a runnable foundation app. Do not start unrelated product feature work.

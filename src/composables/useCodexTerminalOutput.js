@@ -17,7 +17,6 @@ const TERMINAL_OUTPUT_TAIL_LENGTH = 256 * 1024;
 const TERMINAL_DISPLAY_UPDATE_INTERVAL_MS = 80;
 const TERMINAL_OUTPUT_OBSERVER_INTERVAL_MS = 120;
 const TERMINAL_CURSOR_POSITION_PATTERN = new RegExp(`${TERMINAL_ESCAPE_CHARACTER}\\[\\d+;\\d+H`, "u");
-const TERMINAL_CONTROL_CHARACTER_PATTERN = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/u;
 const CODEX_WORKING_TEXT_MARKERS = Object.freeze([
   "Working (",
   "Waiting for background terminal",
@@ -65,7 +64,20 @@ function codexWorkingStateFromText(value = "") {
 }
 
 function terminalChunkHasControlSequences(value = "") {
-  return TERMINAL_CONTROL_CHARACTER_PATTERN.test(String(value || ""));
+  const source = String(value || "");
+  for (let index = 0; index < source.length; index += 1) {
+    const code = source.charCodeAt(index);
+    if (
+      (code >= 0 && code <= 8) ||
+      code === 11 ||
+      code === 12 ||
+      (code >= 14 && code <= 31) ||
+      (code >= 127 && code <= 159)
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function terminalOutputVisibleText(value = "") {

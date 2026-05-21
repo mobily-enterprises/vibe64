@@ -88,24 +88,19 @@ test("JSKIT setup dependency repair uses package-manager commands only", () => {
   assertShellScriptSurvivesWhitespaceCollapse(script);
 });
 
-test("JSKIT seed command uses the selected create-app tenancy mode", () => {
-  const config = {
-    values: {
-      jskit_tenancy_mode: "workspaces"
-    }
-  };
-  const preview = scaffoldCommandPreview(config);
-  const script = scaffoldScript(config);
+test("JSKIT seed command defaults tenancy because seed workflow now chooses it", () => {
+  const preview = scaffoldCommandPreview();
+  const script = scaffoldScript();
 
   assert.match(preview, /npx @jskit-ai\/create-app/u);
-  assert.match(preview, /--tenancy-mode workspaces/u);
-  assert.match(script, /--tenancy-mode workspaces/u);
+  assert.match(preview, /--tenancy-mode none/u);
+  assert.match(script, /--tenancy-mode none/u);
   assert.doesNotMatch(script, /--tenancy-mode single/u);
   assert.doesNotMatch(script, /--tenancy-mode multi/u);
   assertShellScriptSurvivesWhitespaceCollapse(script);
 });
 
-test("JSKIT scaffold check treats root .gitignore as bootstrap metadata", async () => {
+test("JSKIT scaffold check lets an empty target with root .gitignore reach the seed workflow", async () => {
   const targetRoot = await mkdtemp(path.join(os.tmpdir(), "ai-studio-jskit-gitignore-"));
   const toolkit = createDoctorPluginToolkit({
     targetRoot
@@ -118,9 +113,9 @@ test("JSKIT scaffold check treats root .gitignore as bootstrap metadata", async 
     ]
   }, toolkit);
 
-  assert.equal(result.status, "blocked");
-  assert.equal(result.repair.actionId, "terminal-scaffold-jskit");
+  assert.equal(result.status, "pass");
   assert.match(result.observed, /No scaffold files/u);
+  assert.match(result.explanation, /seed workflow/u);
 });
 
 test("JSKIT setup parses config package imports", () => {

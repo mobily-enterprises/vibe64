@@ -27,9 +27,14 @@ const EMPTY_EDITOR_ACTION = deepFreeze({
 });
 const ISSUE_BODY_ARTIFACT = "issue.md";
 const ISSUE_FILE_STEP_ID = "issue_file_created";
+const SEED_APPLICATION_STEP_ID = "seed_application_defined";
 const ISSUE_TITLE_ARTIFACT = "issue_title";
 const ISSUE_WORD_ARTIFACT = "issue_word";
 const AUTOPILOT_FILE_NAMES = new Set(AUTOPILOT_FILE_ARTIFACTS);
+const ISSUE_ARTIFACT_WRITE_STEPS = new Set([
+  ISSUE_FILE_STEP_ID,
+  SEED_APPLICATION_STEP_ID
+]);
 
 function artifactResult(operation) {
   return aiStudioResult(operation, {
@@ -73,10 +78,10 @@ function issueArtifactInput(input = {}) {
 }
 
 function issueArtifactsWriteState(session = {}) {
-  if (String(session.currentStep || "") !== ISSUE_FILE_STEP_ID) {
+  if (!ISSUE_ARTIFACT_WRITE_STEPS.has(String(session.currentStep || ""))) {
     return {
       code: "ai_studio_issue_artifacts_step_required",
-      message: "Issue artifacts can only be saved while defining the issue.",
+      message: "Issue artifacts can only be saved while defining the issue or seed issue.",
       ok: false
     };
   }

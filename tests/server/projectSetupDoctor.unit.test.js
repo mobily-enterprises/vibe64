@@ -447,7 +447,6 @@ test("Project Setup continues to remote setup when AI Studio ignore rules are pr
 test("Project Setup treats a named remote default branch without a ref as empty", async () => {
   await withTemporaryRoot(async (root) => {
     const targetRoot = path.join(root, "target");
-    const remoteRoot = path.join(targetRoot, "remote.git");
     await mkdir(targetRoot);
     await createGitRepository(targetRoot);
     runGit(targetRoot, ["init", "--bare", "-b", "main", "remote.git"]);

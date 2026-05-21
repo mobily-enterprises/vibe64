@@ -18,12 +18,26 @@ function visibleIssueDraftPrompt() {
 
 function issueDraftPromptHeader({
   artifactsRoot = "",
-  requestId = ""
+  requestId = "",
+  seedGuidance = "",
+  seedMode = false
 } = {}) {
   const questionsFile = autopilotFilePath(artifactsRoot, AUTOPILOT_QUESTIONS_ARTIFACT);
   const issueDraftFile = autopilotFilePath(artifactsRoot, AUTOPILOT_ISSUE_DRAFT_ARTIFACT);
+  const modeLines = seedMode
+    ? [
+      "AI Studio is defining the application seed issue.",
+      "The seed issue is only for the initial runnable framework foundation.",
+      "Ask about setup modules, framework packages, installer flags, local dev services, and fake development secrets.",
+      "Do not ask about business records, product workflows, detailed CRUD screens, or feature implementation yet.",
+      seedGuidance ? `Adapter seed guidance:\n${String(seedGuidance || "").trim()}` : ""
+    ]
+    : [
+      "AI Studio is defining the issue scope.",
+      "Only ask questions whose answers would change the issue scope, acceptance criteria, or implementation direction."
+    ];
   return [
-    "AI Studio is defining the issue scope.",
+    ...modeLines.filter(Boolean),
     "Do not modify files.",
     "Only write the specific AI Studio JSON file requested below.",
     "First decide whether the request is clear enough to create a useful issue.",
@@ -32,7 +46,7 @@ function issueDraftPromptHeader({
     `2. Write the same question set as JSON to: ${questionsFile}`,
     "This applies to every user question, not only Autopilot and not only blockers.",
     "If essential scope details are missing, ask concise self-contained questions for a non-technical user.",
-    "Only ask questions whose answers would change the issue scope, acceptance criteria, or implementation direction.",
+    seedMode ? "Only ask questions whose answers would change the initial scaffold, selected modules, local environment, or seed commands." : "",
     "If clarification is needed, ask the minimum useful number of questions, up to three.",
     "If the user explicitly asks to be asked questions, honor that request before producing the issue.",
     "When honoring an explicit question request, ask the requested number of questions, capped at three.",
@@ -56,39 +70,56 @@ function issueDraftPromptHeader({
 function buildInitialIssueDraftPrompt({
   artifactsRoot = "",
   requestId = "",
-  requestText = ""
+  requestText = "",
+  seedGuidance = "",
+  seedMode = false
 } = {}) {
   const hiddenPrompt = [
     issueDraftPromptHeader({
       artifactsRoot,
-      requestId
+      requestId,
+      seedGuidance,
+      seedMode
     }),
     "",
-    "Initial user request:",
+    seedMode ? "Initial seed request:" : "Initial user request:",
     String(requestText || "").trim()
   ].join("\n");
   return wrapPromptWithStudioContext(hiddenPrompt, visibleIssueDraftPrompt());
+}
+
+function buildInitialSeedIssueDraftPrompt(options = {}) {
+  return buildInitialIssueDraftPrompt({
+    ...options,
+    seedMode: true
+  });
 }
 
 function buildAnsweredIssueDraftPrompt({
   artifactsRoot = "",
   questions = [],
   requestId = "",
-  requestText = ""
+  requestText = "",
+  seedGuidance = "",
+  seedMode = false
 } = {}) {
   const hiddenPrompt = [
     issueDraftPromptHeader({
       artifactsRoot,
-      requestId
+      requestId,
+      seedGuidance,
+      seedMode
     }),
     "",
-    "Original user request:",
+    seedMode ? "Original seed request:" : "Original user request:",
     String(requestText || "").trim(),
     "",
     autopilotQuestionAnswersPrompt({
-      contextLabel: "Issue definition",
+      contextLabel: seedMode ? "Seed issue definition" : "Issue definition",
       continuationLines: [
-        "Use the original request and these answers to continue defining the issue.",
+        seedMode
+          ? "Use the original seed request and these answers to continue defining the seed issue."
+          : "Use the original request and these answers to continue defining the issue.",
         "If you ask any more questions, ask them in normal text and write questions.json using the format above.",
         "Otherwise write issue-draft.json."
       ],
@@ -98,7 +129,16 @@ function buildAnsweredIssueDraftPrompt({
   return wrapPromptWithStudioContext(hiddenPrompt, visibleIssueDraftPrompt());
 }
 
+function buildAnsweredSeedIssueDraftPrompt(options = {}) {
+  return buildAnsweredIssueDraftPrompt({
+    ...options,
+    seedMode: true
+  });
+}
+
 export {
+  buildAnsweredSeedIssueDraftPrompt,
   buildAnsweredIssueDraftPrompt,
+  buildInitialSeedIssueDraftPrompt,
   buildInitialIssueDraftPrompt
 };

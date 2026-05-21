@@ -11,8 +11,7 @@ const viewports = [
 const targetRoot = "/workspace/example-target-app";
 const savedProjectConfigValues = {
   github_pr_merge_method: "merge",
-  jskit_database_runtime: "none",
-  jskit_tenancy_mode: "none"
+  jskit_database_runtime: "none"
 };
 
 const bootstrapPayload = {

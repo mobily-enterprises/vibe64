@@ -3,7 +3,9 @@ import {
   useAiStudioCodexQuestionExchange
 } from "@/composables/useAiStudioCodexQuestionExchange.js";
 import {
+  buildAnsweredSeedIssueDraftPrompt,
   buildAnsweredIssueDraftPrompt,
+  buildInitialSeedIssueDraftPrompt,
   buildInitialIssueDraftPrompt
 } from "@/lib/aiStudioAutopilotIssuePrompt.js";
 import {
@@ -22,6 +24,7 @@ const ISSUE_BODY_ARTIFACT = "issue.md";
 const ISSUE_TITLE_ARTIFACT = "issue_title";
 const ISSUE_WORD_ARTIFACT = "issue_word";
 const ISSUE_PROMPT_ACTION_ID = "send_issue_prompt";
+const SEED_PROMPT_ACTION_ID = "send_seed_prompt";
 const STORAGE_KEY_PREFIX = "ai-studio:autopilot:issue-discussion:";
 
 const ISSUE_DISCUSSION_STATE = Object.freeze({
@@ -126,7 +129,23 @@ function issueQuestionOwnerId(sessionId = "") {
 }
 
 function issueRequestFromSession(session = {}) {
-  return String(latestAiStudioActionResult(session, ISSUE_PROMPT_ACTION_ID)?.input?.issueRequest || "").trim();
+  return String(
+    latestAiStudioActionResult(session, ISSUE_PROMPT_ACTION_ID)?.input?.issueRequest ||
+    latestAiStudioActionResult(session, SEED_PROMPT_ACTION_ID)?.input?.seedRequest ||
+    ""
+  ).trim();
+}
+
+function stepAutopilotKind(session = {}) {
+  return String(session?.currentStepDefinition?.autopilot?.kind || "");
+}
+
+function seedModeForSession(session = {}) {
+  return stepAutopilotKind(session) === "seed_issue_discussion";
+}
+
+function seedGuidanceForSession(session = {}) {
+  return String(session?.adapter?.promptContext?.seed_issue_guidance || "");
 }
 
 function requestIsAllowed(requestId = "", {
@@ -171,6 +190,8 @@ function useAiStudioAutopilotIssueDiscussion({
   const sessionId = computed(() => String(currentSession.value?.sessionId || ""));
   const artifactsRoot = computed(() => String(currentSession.value?.artifactsRoot || ""));
   const currentAutopilotArtifacts = computed(() => readRefOrGetterValue(autopilotArtifacts) || null);
+  const seedMode = computed(() => seedModeForSession(currentSession.value));
+  const seedGuidance = computed(() => seedGuidanceForSession(currentSession.value));
   const codexBusy = computed(() => readRefOrGetterValue(codexTerminal.busy) === true);
   const promptInjectionError = computed(() => String(readRefOrGetterValue(codexTerminal.promptInjectionError) || ""));
   const discussionEnabled = computed(() => readRefOrGetterValue(enabled) !== false);
@@ -203,10 +224,10 @@ function useAiStudioAutopilotIssueDiscussion({
       return failure.value || questionFailure.value;
     }
     if (saving.value || state.value === ISSUE_DISCUSSION_STATE.SAVING) {
-      return "Saving issue file...";
+      return seedMode.value ? "Saving seed issue file..." : "Saving issue file...";
     }
     if (waiting.value) {
-      return "Asking Codex to define the issue...";
+      return seedMode.value ? "Asking Codex to define the app seed..." : "Asking Codex to define the issue...";
     }
     if (issueQuestionActive.value) {
       return "A few questions first";
@@ -214,8 +235,12 @@ function useAiStudioAutopilotIssueDiscussion({
     if (reviewing.value) {
       return "Does this sound right?";
     }
-    return "What would you like to do?";
+    return seedMode.value ? "What should the app start with?" : "What would you like to do?";
   });
+  const inputHint = computed(() => seedMode.value ? "Discuss app foundation and setup choices" : "Discuss issue and define scope");
+  const inputLabel = computed(() => seedMode.value ? "Describe the app foundation you want" : "Describe what you would like to do");
+  const submitLabel = computed(() => seedMode.value ? "Discuss seed app" : "Discuss issue");
+  const submitTitle = computed(() => seedMode.value ? "Ask Codex to define the seed issue." : "Ask Codex to define the issue.");
 
   async function submitInitialRequest() {
     const normalizedRequest = requestText.value.trim();
@@ -230,10 +255,12 @@ function useAiStudioAutopilotIssueDiscussion({
     failure.value = "";
     persistDiscussion();
     await clearAutopilotArtifacts(sessionId.value);
-    await injectIssuePrompt(buildInitialIssueDraftPrompt({
+    const buildPrompt = seedMode.value ? buildInitialSeedIssueDraftPrompt : buildInitialIssueDraftPrompt;
+    await injectIssuePrompt(buildPrompt({
       artifactsRoot: artifactsRoot.value,
       requestId,
-      requestText: normalizedRequest
+      requestText: normalizedRequest,
+      seedGuidance: seedGuidance.value
     }), requestId);
   }
 
@@ -435,7 +462,7 @@ function useAiStudioAutopilotIssueDiscussion({
 
   function startQuestionExchange(questionFile = {}) {
     codexQuestions.start({
-      contextLabel: "Issue definition",
+      contextLabel: seedMode.value ? "Seed issue definition" : "Issue definition",
       onAnswerChange: (nextQuestions = []) => {
         storedQuestionAnswers.value = nextQuestions.map((question) => String(question.answer || ""));
         persistDiscussion();
@@ -461,17 +488,19 @@ function useAiStudioAutopilotIssueDiscussion({
       prepareSubmit: async ({ questions: answeredQuestions = [] } = {}) => {
         const requestId = createRequestId();
         await clearAutopilotArtifacts(sessionId.value);
+        const buildPrompt = seedMode.value ? buildAnsweredSeedIssueDraftPrompt : buildAnsweredIssueDraftPrompt;
         return {
           answeredRequestId: activeRequestId.value,
           injectionContext: {
             requestId,
             sessionId: sessionId.value
           },
-          prompt: buildAnsweredIssueDraftPrompt({
+          prompt: buildPrompt({
             artifactsRoot: artifactsRoot.value,
             requestId,
             requestText: requestText.value || issueRequestFromSession(currentSession.value),
-            questions: answeredQuestions
+            questions: answeredQuestions,
+            seedGuidance: seedGuidance.value
           }),
           requestId
         };
@@ -520,13 +549,18 @@ function useAiStudioAutopilotIssueDiscussion({
     draftWord,
     failure,
     inputVisible,
+    inputHint,
+    inputLabel,
     requestText,
     reviewing,
     rejectIssueDraft,
     saving,
+    seedMode,
     state,
     statusText,
+    submitLabel,
     submitInitialRequest,
+    submitTitle,
     waiting
   };
 }

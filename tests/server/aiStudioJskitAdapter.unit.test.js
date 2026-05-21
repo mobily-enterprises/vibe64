@@ -125,15 +125,13 @@ test("jskit adapter reflects configured database runtime in prompt context", asy
     const facts = await adapter.inspect({
       config: {
         values: {
-          jskit_database_runtime: "mysql",
-          jskit_tenancy_mode: "personal"
+          jskit_database_runtime: "mysql"
         }
       },
       targetRoot
     });
 
     assert.equal(facts.promptContext.database_runtime, "mysql");
-    assert.equal(facts.promptContext.tenancy_mode, "personal");
     assert.match(facts.promptContext.database_contract, /Configured database runtime: mysql/u);
     assert.match(facts.promptContext.database_contract, /Never create migration files directly/u);
     assert.match(facts.promptContext.database_contract, /Every table added for application data must have `npx jskit generate crud-server-generator scaffold \.\.\.` run for it/u);
@@ -144,15 +142,14 @@ test("jskit adapter reflects configured database runtime in prompt context", asy
     const invalidConfigFacts = await adapter.inspect({
       config: {
         values: {
-          jskit_database_runtime: "sqlite",
-          jskit_tenancy_mode: "invalid"
+          jskit_database_runtime: "sqlite"
         }
       },
       targetRoot
     });
 
     assert.equal(invalidConfigFacts.promptContext.database_runtime, "none");
-    assert.equal(invalidConfigFacts.promptContext.tenancy_mode, "none");
+    assert.match(invalidConfigFacts.promptContext.seed_issue_guidance, /tenancy\/workspaces/u);
   });
 });
 

@@ -1,7 +1,6 @@
 import path from "node:path";
 
 import {
-  blockedDoctorCheck as blockedCheck,
   formatDoctorList as formatList,
   hardStopDoctorCheck as hardStopCheck,
   passDoctorCheck as passCheck
@@ -12,30 +11,11 @@ import {
 import {
   shellScript
 } from "../../../shellScript.js";
-import {
-  selectedConfigValue
-} from "../../configValues.js";
-import {
-  writableHostUserDockerArgs
-} from "../../dockerRuntime.js";
-import {
-  JSKIT_TOOLCHAIN_IMAGE
-} from "./toolchainIdentity.js";
 
-const JSKIT_TENANCY_MODE_CONFIG = "jskit_tenancy_mode";
-const JSKIT_CREATE_APP_TENANCY_MODES = new Set([
-  "none",
-  "personal",
-  "workspaces"
-]);
 const JSKIT_SCAFFOLD_ALLOWED_BOOTSTRAP_ENTRIES = new Set([
   ".gitignore",
   "node_modules"
 ]);
-
-function selectedJskitTenancyMode(config = {}) {
-  return selectedConfigValue(config, JSKIT_TENANCY_MODE_CONFIG, JSKIT_CREATE_APP_TENANCY_MODES, "none");
-}
 
 function repoNameFromTargetRoot(targetRoot) {
   return String(path.basename(targetRoot) || "jskit-app")
@@ -43,59 +23,16 @@ function repoNameFromTargetRoot(targetRoot) {
     .replace(/^-+|-+$/gu, "") || "jskit-app";
 }
 
-function titleFromRepoName(repoName) {
-  return repoName
-    .split(/[-_.\s]+/u)
-    .filter(Boolean)
-    .map((part) => part.slice(0, 1).toUpperCase() + part.slice(1))
-    .join(" ") || "JSKIT App";
+function scaffoldCommandPreview() {
+  return `npx @jskit-ai/create-app "$JSKIT_APP_NAME" --target . --force --tenancy-mode ${shellQuote("none")} --title "$JSKIT_APP_TITLE" --initial-bundles none`;
 }
 
-function scaffoldCommandPreview(config = {}) {
-  return `npx @jskit-ai/create-app "$JSKIT_APP_NAME" --target . --force --tenancy-mode ${shellQuote(selectedJskitTenancyMode(config))} --title "$JSKIT_APP_TITLE" --initial-bundles none`;
-}
-
-function scaffoldScript(config = {}) {
+function scaffoldScript() {
   return shellScript([
     "set -e",
     "set -x",
-    scaffoldCommandPreview(config)
+    scaffoldCommandPreview()
   ]);
-}
-
-function scaffoldEnvArgs(targetRoot) {
-  const repoName = repoNameFromTargetRoot(targetRoot);
-  return [
-    ...writableHostUserDockerArgs({
-      env: {
-        npm_config_cache: "/tmp/npm-cache"
-      }
-    }),
-    "-e",
-    `JSKIT_APP_NAME=${repoName}`,
-    "-e",
-    `JSKIT_APP_TITLE=${titleFromRepoName(repoName)}`
-  ];
-}
-
-function scaffoldTerminalAction(targetRoot, toolkit) {
-  return toolkit.toolchainTerminalAction({
-    actionId: "terminal-scaffold-jskit",
-    autoRun: true,
-    commandArgs: (context = {}) => ["bash", "-lc", scaffoldScript(context.config)],
-    commandPreview: (context = {}) => scaffoldCommandPreview(context.config),
-    extraArgs: (context = {}) => scaffoldEnvArgs(context.targetRoot || targetRoot),
-    image: JSKIT_TOOLCHAIN_IMAGE,
-    label: "Seed this project",
-    targetRoot
-  });
-}
-
-function scaffoldRepair(targetRoot, context, toolkit) {
-  return scaffoldTerminalAction(targetRoot, toolkit).repair({
-    config: context.config,
-    targetRoot
-  });
 }
 
 async function checkJskitScaffold(targetRoot, context, toolkit) {
@@ -145,13 +82,12 @@ async function checkJskitScaffold(targetRoot, context, toolkit) {
     });
   }
 
-  return blockedCheck({
+  return passCheck({
     id: "scaffold",
     label: "Seed JSKIT app",
-    expected: "Minimal JSKIT scaffold markers exist.",
+    expected: "Minimal JSKIT scaffold markers exist, or this empty target can be seeded by the first AI Studio session.",
     observed: "No scaffold files are present yet.",
-    explanation: "Seed this target with the selected JSKIT configuration before installing dependencies or checking runtime readiness.",
-    repair: scaffoldRepair(targetRoot, context, toolkit)
+    explanation: "The seed workflow will ask the user which JSKIT modules to install and then create the app. Setup should only prepare Studio infrastructure."
   });
 }
 
@@ -159,8 +95,5 @@ export {
   checkJskitScaffold,
   repoNameFromTargetRoot,
   scaffoldCommandPreview,
-  scaffoldRepair,
-  scaffoldScript,
-  scaffoldTerminalAction,
-  selectedJskitTenancyMode
+  scaffoldScript
 };

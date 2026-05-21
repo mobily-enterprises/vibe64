@@ -159,8 +159,7 @@ test("AI Studio project routes persist project type and plain-file config", asyn
         payload: {
           values: {
             github_pr_merge_method: "squash",
-            jskit_database_runtime: "mysql",
-            jskit_tenancy_mode: "personal"
+            jskit_database_runtime: "mysql"
           }
         },
         url: "/api/ai-studio/project-config"

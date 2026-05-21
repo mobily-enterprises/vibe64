@@ -105,6 +105,110 @@ const PROMPT_ACTION_IDS = new Set([
   "write_report"
 ]);
 const FINISH_SESSION_ACTION_ID = "finish_session";
+const STEP_AUTOPILOT = Object.freeze({
+  changes_accepted: {
+    kind: "final_review",
+    stop: true
+  },
+  changes_committed: {
+    actionId: "commit_changes",
+    completeWhen: ["metadata:accepted_commit", "metadata:branch_pushed"],
+    label: "Commit and push changes"
+  },
+  deep_ui_check_run: {
+    actionId: "run_deep_ui_check",
+    label: "Run deep UI check",
+    userDecision: true
+  },
+  dependencies_installed: {
+    actionId: "install_dependencies",
+    completeWhen: ["metadata:dependencies_installed"],
+    label: "Install dependencies"
+  },
+  issue_file_created: {
+    kind: "issue_discussion",
+    stop: true
+  },
+  issue_submitted: {
+    actionId: "create_issue_on_gh",
+    completeWhen: ["metadata:issue_url"],
+    label: "Edit and submit issue"
+  },
+  implementation_reviewed: {
+    kind: "implementation_review",
+    stop: true
+  },
+  main_checkout_synced: {
+    actionId: "sync_main_checkout",
+    completeWhen: ["metadata:main_checkout_synced"],
+    label: "Sync main checkout"
+  },
+  plan_executed: {
+    actionId: "execute_plan",
+    label: "Execute plan"
+  },
+  plan_made: {
+    actionId: "make_plan",
+    label: "Make plan"
+  },
+  pr_created: {
+    actionId: "create_pr_on_gh",
+    completeWhen: ["metadata:pr_url"],
+    label: "Create PR on GH"
+  },
+  pr_file_created: {
+    actionId: "create_pr_file",
+    completeWhen: ["any:metadata:pr_url;artifact:pull_request.md"],
+    label: "Create PR file"
+  },
+  pr_merged: {
+    kind: "merge_review",
+    stop: true
+  },
+  project_knowledge_updated: {
+    actionId: "update_project_knowledge",
+    label: "Update project knowledge"
+  },
+  project_validated: {
+    actionSequence: [
+      {
+        actionId: "update_code_index",
+        completeWhen: ["metadata:code_index_updated"],
+        label: "Update code index"
+      },
+      {
+        actionId: "run_automated_checks",
+        completeWhen: ["metadata:automated_checks_passed"],
+        label: "Run automated checks"
+      }
+    ],
+    label: "Validate project"
+  },
+  report_created: {
+    actionId: "write_report",
+    completeWhen: ["artifact:report.md"],
+    label: "Write report"
+  },
+  review_run: {
+    actionId: "run_deslop",
+    label: "Run deslop"
+  },
+  session_finished: {
+    kind: "finished",
+    stop: true
+  },
+  work_source_selected: {
+    actionId: "use_new_branch",
+    advanceOnSuccess: true,
+    completeWhen: ["metadata:work_source"],
+    label: "Choose work source"
+  },
+  worktree_created: {
+    actionId: "create_worktree",
+    completeWhen: ["metadata:worktree_path"],
+    label: "Create worktree"
+  }
+});
 
 describe("useAiStudioAutopilotController", () => {
   let context;
@@ -1129,11 +1233,14 @@ function createAutopilotContext({
 }
 
 function sessionForStep(stepId, metadata = {}, promptRun = null) {
+  const actions = actionsForStep(stepId, metadata);
   return {
-    actions: actionsForStep(stepId, metadata),
+    actions,
     artifactReadiness: artifactReadinessForMetadata(metadata),
     currentStep: stepId,
     currentStepDefinition: {
+      actions: actions.map(actionDefinitionForStep),
+      autopilot: STEP_AUTOPILOT[stepId] || {},
       label: STEP_LABELS[stepId]
     },
     metadata,
@@ -1144,6 +1251,14 @@ function sessionForStep(stepId, metadata = {}, promptRun = null) {
       id,
       label
     }))
+  };
+}
+
+function actionDefinitionForStep(action = {}) {
+  return {
+    id: action.id,
+    label: action.label,
+    type: action.type
   };
 }
 

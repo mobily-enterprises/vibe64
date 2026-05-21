@@ -3,8 +3,7 @@ import { expect, test, type Page, type Route } from "@playwright/test";
 const targetRoot = "/workspace/example-target-app";
 const savedProjectConfigValues = {
   github_pr_merge_method: "merge",
-  jskit_database_runtime: "none",
-  jskit_tenancy_mode: "none"
+  jskit_database_runtime: "none"
 };
 
 test("home loads through a self-contained mocked Studio shell", async ({ page }) => {
@@ -16,6 +15,11 @@ test("home loads through a self-contained mocked Studio shell", async ({ page })
   await expect(page.getByRole("link", { name: "Setup", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Target Scripts", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "New Session" })).toBeVisible();
+  await page.getByRole("button", { name: "New Session" }).click();
+  await expect(page.getByText("Session type")).toBeVisible();
+  await expect(page.getByText("Big feature", { exact: true })).toBeVisible();
+  await expect(page.getByText("Non-code maintenance", { exact: true })).toBeVisible();
+  await expect(page.getByText("Non-commit maintenance", { exact: true })).toBeVisible();
   await expect(page).toHaveURL(/\/home$/u);
 });
 
@@ -232,6 +236,31 @@ async function mockReadyStudioShell(page: Page) {
     [
       "/api/ai-studio/sessions",
       {
+        creation: {
+          canCreate: true,
+          defaultWorkflowProfile: "big_feature",
+          disabledReason: "",
+          mode: "select",
+          requiredWorkflowProfile: null,
+          seedRequired: false,
+          workflowProfiles: [
+            {
+              description: "Plan, implement, review, validate, commit, create a PR, and optionally merge.",
+              id: "big_feature",
+              label: "Big feature"
+            },
+            {
+              description: "Run a non-code maintenance task with planning, validation, commit, and PR handling.",
+              id: "non_code_maintenance",
+              label: "Non-code maintenance"
+            },
+            {
+              description: "Run a local maintenance task without commit, pull request, or merge steps.",
+              id: "non_commit_maintenance",
+              label: "Non-commit maintenance"
+            }
+          ]
+        },
         limits: {
           maxOpenSessions: 5,
           openSessionCount: 0

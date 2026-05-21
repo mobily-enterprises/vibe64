@@ -1,0 +1,10 @@
+{{systemStandard}}
+
+Execute the Laravel seed plan.
+
+Laravel seed guidance:
+{{adapter.promptContext.seed_issue_guidance}}
+
+Use the Laravel installer, Composer, Artisan, and package-manager commands for framework-owned setup. Write local fake development secrets only to ignored .env files. After the scaffold exists, install dependencies, generate APP_KEY, prepare database settings, run migrations when appropriate, and verify the app can start.
+
+Keep the result to a runnable foundation app. Do not start unrelated product feature work.

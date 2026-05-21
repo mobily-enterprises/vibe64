@@ -54,6 +54,10 @@ function useAiStudioSessionData({
   const createSessionCommand = useCommand({
     access: "never",
     apiSuffix: AI_STUDIO_SESSIONS_API_SUFFIX,
+    buildRawPayload: (_model, { context }) => {
+      const workflowProfile = String(context?.workflowProfile || "").trim();
+      return workflowProfile ? { workflowProfile } : {};
+    },
     buildCommandOptions: () => ({
       options: LOCAL_STUDIO_COMMAND_OPTIONS
     }),
@@ -75,6 +79,16 @@ function useAiStudioSessionData({
   });
 
   const sessions = computed(() => visibleAiStudioSessions(sessionList.items || []));
+  const creationOptions = computed(() => sessionList.pages?.[0]?.creation || {});
+  const workflowProfiles = computed(() => {
+    const profiles = creationOptions.value.workflowProfiles;
+    return Array.isArray(profiles) ? profiles : [];
+  });
+  const createSessionMode = computed(() => {
+    return creationOptions.value.mode === "select" && workflowProfiles.value.length > 0
+      ? "select"
+      : "direct";
+  });
   const mainCheckoutSyncBlocker = computed(() => {
     return sessions.value.find(sessionNeedsMainCheckoutSync) || null;
   });
@@ -89,11 +103,20 @@ function useAiStudioSessionData({
     sessions: sessions.value
   }));
   const canCreateSession = computed(() => {
-    return !mainCheckoutSyncBlocker.value && limits.value.openSessionCount < limits.value.maxOpenSessions;
+    if (mainCheckoutSyncBlocker.value) {
+      return false;
+    }
+    if (typeof creationOptions.value.canCreate === "boolean") {
+      return creationOptions.value.canCreate;
+    }
+    return limits.value.openSessionCount < limits.value.maxOpenSessions;
   });
   const createSessionTitle = computed(() => {
     if (mainCheckoutSyncBlocker.value) {
       return `Sync the main checkout in session ${shortSessionId(mainCheckoutSyncBlocker.value.sessionId)} before creating another session.`;
+    }
+    if (creationOptions.value.disabledReason) {
+      return String(creationOptions.value.disabledReason);
     }
     if (limits.value.openSessionCount >= limits.value.maxOpenSessions) {
       return `Studio allows up to ${limits.value.maxOpenSessions} active sessions.`;
@@ -119,6 +142,12 @@ function useAiStudioSessionData({
     sessionSelection.clear();
   }
 
+  async function createSession(workflowProfile = "") {
+    return createSessionCommand.run({
+      workflowProfile
+    });
+  }
+
   watch(sessions, (nextSessions) => {
     if (sessionList.isInitialLoading) {
       return;
@@ -140,7 +169,9 @@ function useAiStudioSessionData({
   return {
     canCreateSession,
     clearSelectedSession,
+    createSession,
     createSessionCommand,
+    createSessionMode,
     createSessionTitle,
     isSelectedSessionClosed,
     pageLoading,
@@ -156,7 +187,8 @@ function useAiStudioSessionData({
     shortSessionId,
     statusColor: aiStudioSessionStatusColor,
     statusLabel: aiStudioSessionStatusLabel,
-    timelineSteps
+    timelineSteps,
+    workflowProfiles
   };
 }
 

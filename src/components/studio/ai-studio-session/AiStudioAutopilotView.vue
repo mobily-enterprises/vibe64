@@ -149,8 +149,8 @@
           class="studio-autopilot__issue-input"
           :disabled="page.busy"
           :error-messages="issueDiscussion.failure ? [issueDiscussion.failure] : []"
-          hint="Discuss issue and define scope"
-          label="Describe what you would like to do"
+          :hint="issueDiscussion.inputHint"
+          :label="issueDiscussion.inputLabel"
           persistent-hint
           rows="5"
           variant="outlined"
@@ -163,10 +163,10 @@
             :disabled="!issueDiscussion.canSubmit"
             :loading="issueDiscussion.waiting"
             :prepend-icon="mdiSend"
-            title="Ask Codex to define the issue."
+            :title="issueDiscussion.submitTitle"
             type="submit"
           >
-            Discuss issue
+            {{ issueDiscussion.submitLabel }}
           </v-btn>
         </div>
       </form>

@@ -1,0 +1,23 @@
+{{systemStandard}}
+
+Laravel seed-discussion guidance:
+{{adapter.promptContext.seed_issue_guidance}}
+
+The user is not defining a feature yet. Help them define the initial Laravel application foundation.
+
+Use the user's seed request from the action input:
+{{input.json}}
+
+Ask only for setup choices that affect the first runnable scaffold:
+- official starter kit or custom starter package
+- frontend stack and package manager if relevant
+- authentication provider
+- teams/workspaces
+- database runtime and local .env values
+- queues, cache, mail, storage, broadcasting/realtime
+- Laravel Boost
+- testing framework
+- API-only needs
+- fake local development service keys needed by selected packages
+
+Do not ask for business entities, CRUD screens, workflows, or detailed product behavior yet. Those come after the app foundation exists.

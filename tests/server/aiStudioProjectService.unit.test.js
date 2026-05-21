@@ -83,8 +83,7 @@ test("AI Studio project service saves project type and plain-file configuration"
       values: {
         github_pr_merge_method: "rebase",
         [JSKIT_ALLOW_SELF_TARGET_CONFIG]: true,
-        jskit_database_runtime: "postgres",
-        jskit_tenancy_mode: "workspaces"
+        jskit_database_runtime: "postgres"
       }
     });
     assert.equal(savedConfig.ok, true);
@@ -103,7 +102,7 @@ test("AI Studio project service saves project type and plain-file configuration"
     const runtime = await service.createRuntime();
     assert.equal(runtime.adapter.id, "jskit");
     assert.equal(runtime.projectConfig.values[JSKIT_ALLOW_SELF_TARGET_CONFIG], true);
-    assert.equal(runtime.projectConfig.values.jskit_tenancy_mode, "workspaces");
+    assert.equal(runtime.projectConfig.values.jskit_database_runtime, "postgres");
   });
 });
 
@@ -142,19 +141,11 @@ test("AI Studio project service loads invalid saved config as editable not ready
     await writeFile(path.join(targetRoot, ".ai-studio", "config", "github_pr_merge_method"), "merge\n", "utf8");
     await writeFile(path.join(targetRoot, ".ai-studio", "config", JSKIT_ALLOW_SELF_TARGET_CONFIG), "false\n", "utf8");
     await writeFile(path.join(targetRoot, ".ai-studio", "config", "jskit_database_runtime"), "mysql\n", "utf8");
-    await writeFile(path.join(targetRoot, ".ai-studio", "config", "jskit_tenancy_mode"), "single\n", "utf8");
 
     const config = await service.readProjectConfig();
     assert.equal(config.ok, true);
-    assert.equal(config.config.ready, false);
-    assert.match(config.config.message, /no longer valid/u);
-    assert.equal(config.config.values.jskit_tenancy_mode, "none");
-    assert.deepEqual(config.config.invalid.map((field) => field.fieldId), [
-      "jskit_tenancy_mode"
-    ]);
-    assert.match(
-      config.config.fieldValues.jskit_tenancy_mode.invalid.message,
-      /none, personal, workspaces/u
-    );
+    assert.equal(config.config.ready, true);
+    assert.equal(config.config.values.jskit_database_runtime, "mysql");
+    assert.deepEqual(config.config.invalid, []);
   });
 });

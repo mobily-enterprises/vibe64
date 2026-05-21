@@ -33,7 +33,14 @@ import {
   runtimeContainerManagedServicesPromptFacts,
   runtimeContainerPromptFacts
 } from "./runtimeContainers.js";
-import { DEFAULT_AI_STUDIO_WORKFLOW } from "./workflow.js";
+import {
+  AI_STUDIO_WORKFLOW_PROFILE_IDS,
+  DEFAULT_AI_STUDIO_WORKFLOW_PROFILE_ID,
+  normalizeWorkflowProfileId,
+  workflowForProfile,
+  workflowProfileCreationOptions,
+  workflowProfileDefinition
+} from "./workflow.js";
 import { WorkflowMachine } from "./workflowMachine.js";
 
 function metadataFlagIsOn(value) {
@@ -267,7 +274,7 @@ class AiStudioSessionRuntime {
     projectConfig = {},
     store = undefined,
     targetRoot = process.cwd(),
-    workflow = DEFAULT_AI_STUDIO_WORKFLOW
+    workflow = null
   } = {}) {
     this.actionHandlers = {
       ...actionHandlers
@@ -279,10 +286,15 @@ class AiStudioSessionRuntime {
     this.projectConfig = projectConfig && typeof projectConfig === "object"
       ? projectConfig
       : {};
-    this.workflowMachine = new WorkflowMachine({
-      actionReadiness: composeActionReadiness(defaultActionReadiness, actionReadiness),
-      workflow
-    });
+    this.actionReadiness = composeActionReadiness(defaultActionReadiness, actionReadiness);
+    this.workflowMachine = workflow
+      ? new WorkflowMachine({
+          actionReadiness: this.actionReadiness,
+          workflow
+        })
+      : null;
+    this.workflowMachines = new Map();
+    this.targetRoot = targetRoot;
     this.store = store || createAiStudioSessionStore({
       clock,
       targetRoot
@@ -291,14 +303,18 @@ class AiStudioSessionRuntime {
   }
 
   async createSession(input = {}) {
+    const workflowProfileId = await this.workflowProfileIdForNewSession(input);
+    const workflowMachine = this.workflowMachineForProfile(workflowProfileId);
     const initialStep = input.initialStep
-      ? this.workflowMachine.assertStepId(input.initialStep)
-      : this.workflowMachine.firstStepId();
+      ? workflowMachine.assertStepId(input.initialStep)
+      : workflowMachine.firstStepId();
     const session = await this.store.createSession({
       ...input,
+      metadata: this.sessionMetadataWithWorkflowProfile(input.metadata, workflowProfileId),
       initialStep
     });
-    return this.sessionView(session);
+    await this.writeInitialSessionArtifacts(session.sessionId, workflowProfileId);
+    return this.getSession(session.sessionId);
   }
 
   async getSession(sessionId) {
@@ -322,7 +338,111 @@ class AiStudioSessionRuntime {
       config: this.projectConfig,
       adapter: sessionAdapter || await this.adapterViewForSession(session)
     };
-    return this.workflowMachine.buildSessionView(sessionWithConfig);
+    const workflowProfileId = this.workflowProfileIdForSession(sessionWithConfig);
+    const workflowMachine = this.workflowMachineForProfile(workflowProfileId);
+    return {
+      ...workflowMachine.buildSessionView(sessionWithConfig),
+      workflowProfile: workflowProfileDefinition(workflowProfileId)
+    };
+  }
+
+  workflowProfileIdForSession(session = {}) {
+    if (this.workflowMachine) {
+      return DEFAULT_AI_STUDIO_WORKFLOW_PROFILE_ID;
+    }
+    return normalizeWorkflowProfileId(session.metadata?.workflow_profile);
+  }
+
+  workflowMachineForProfile(profileId = DEFAULT_AI_STUDIO_WORKFLOW_PROFILE_ID) {
+    if (this.workflowMachine) {
+      return this.workflowMachine;
+    }
+    const normalizedProfileId = normalizeWorkflowProfileId(profileId);
+    if (!this.workflowMachines.has(normalizedProfileId)) {
+      this.workflowMachines.set(normalizedProfileId, new WorkflowMachine({
+        actionReadiness: this.actionReadiness,
+        workflow: workflowForProfile(normalizedProfileId)
+      }));
+    }
+    return this.workflowMachines.get(normalizedProfileId);
+  }
+
+  workflowMachineForSession(session = {}) {
+    return this.workflowMachineForProfile(this.workflowProfileIdForSession(session));
+  }
+
+  sessionMetadataWithWorkflowProfile(metadata = {}, workflowProfileId = "") {
+    if (this.workflowMachine) {
+      return metadata;
+    }
+    return {
+      ...metadata,
+      workflow_profile: normalizeWorkflowProfileId(workflowProfileId)
+    };
+  }
+
+  async workflowProfileIdForNewSession(input = {}) {
+    if (this.workflowMachine) {
+      return DEFAULT_AI_STUDIO_WORKFLOW_PROFILE_ID;
+    }
+    const requestedProfileId = normalizeText(input.workflowProfile || input.metadata?.workflow_profile);
+    const recommendedProfileId = await this.recommendedWorkflowProfileId();
+    const seedRequired = recommendedProfileId === AI_STUDIO_WORKFLOW_PROFILE_IDS.SEED_APPLICATION;
+    if (seedRequired) {
+      if (requestedProfileId && requestedProfileId !== AI_STUDIO_WORKFLOW_PROFILE_IDS.SEED_APPLICATION) {
+        throw aiStudioError(
+          "The first AI Studio session must seed the application before other workflow profiles can be selected.",
+          "ai_studio_seed_workflow_required"
+        );
+      }
+      return AI_STUDIO_WORKFLOW_PROFILE_IDS.SEED_APPLICATION;
+    }
+    if (requestedProfileId === AI_STUDIO_WORKFLOW_PROFILE_IDS.SEED_APPLICATION) {
+      throw aiStudioError(
+        "The seed workflow is only available before the application has been seeded.",
+        "ai_studio_seed_workflow_not_available"
+      );
+    }
+    if (requestedProfileId) {
+      return normalizeWorkflowProfileId(requestedProfileId);
+    }
+    return recommendedProfileId;
+  }
+
+  async recommendedWorkflowProfileId() {
+    const context = {
+      config: this.projectConfig,
+      runtime: this,
+      session: null,
+      store: this.store,
+      targetRoot: this.targetRoot
+    };
+    const detection = await this.adapter.detect(context);
+    if (detection.detected === false) {
+      return DEFAULT_AI_STUDIO_WORKFLOW_PROFILE_ID;
+    }
+    const facts = await this.adapter.inspect({
+      ...context,
+      detection
+    });
+    return facts?.workflow?.seedRequired === true
+      ? AI_STUDIO_WORKFLOW_PROFILE_IDS.SEED_APPLICATION
+      : DEFAULT_AI_STUDIO_WORKFLOW_PROFILE_ID;
+  }
+
+  async workflowProfileCreationOptions() {
+    const recommendedProfileId = await this.recommendedWorkflowProfileId();
+    return workflowProfileCreationOptions({
+      seedRequired: recommendedProfileId === AI_STUDIO_WORKFLOW_PROFILE_IDS.SEED_APPLICATION
+    });
+  }
+
+  async writeInitialSessionArtifacts(sessionId = "", workflowProfileId = "") {
+    const sessionWord = normalizeText(workflowProfileDefinition(workflowProfileId).sessionWord);
+    if (!sessionWord) {
+      return;
+    }
+    await this.store.writeArtifact(sessionId, "issue_word", `${sessionWord}\n`);
   }
 
   async promptContextSnapshotForSession(session) {
@@ -589,7 +709,7 @@ class AiStudioSessionRuntime {
       throw aiStudioError("Closed AI Studio sessions cannot be rewound.", "ai_studio_closed_session_rewind");
     }
 
-    const plan = this.workflowMachine.rewindPlanForSession(session, stepId);
+    const plan = this.workflowMachineForSession(session).rewindPlanForSession(session, stepId);
     await Promise.all([
       this.store.deleteActionResults(session.sessionId, plan.actionResultIds),
       this.store.deleteArtifacts(session.sessionId, plan.artifactNames),
