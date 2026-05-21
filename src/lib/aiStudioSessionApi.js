@@ -25,6 +25,14 @@ function aiStudioIssueArtifactsEndpoint(sessionId) {
   return aiStudioSessionEndpoint(sessionId, "/issue-artifacts");
 }
 
+function aiStudioAutopilotArtifactsEndpoint(sessionId) {
+  return aiStudioSessionEndpoint(sessionId, "/autopilot-artifacts");
+}
+
+function aiStudioAutopilotArtifactsStreamEndpoint(sessionId) {
+  return aiStudioSessionEndpoint(sessionId, "/autopilot-artifacts/stream");
+}
+
 function aiStudioLaunchTerminalEndpoint(sessionId, terminalSessionId = "") {
   const base = aiStudioSessionEndpoint(sessionId, "/launch-terminal");
   return terminalSessionId ? `${base}/${encodeURIComponent(terminalSessionId)}` : base;
@@ -79,14 +87,25 @@ async function clearAiStudioIssueArtifacts(sessionId) {
   return studioHttpClient.delete(aiStudioIssueArtifactsEndpoint(sessionId));
 }
 
+async function readAiStudioAutopilotArtifacts(sessionId) {
+  return studioHttpClient.get(aiStudioAutopilotArtifactsEndpoint(sessionId));
+}
+
+async function clearAiStudioAutopilotArtifacts(sessionId) {
+  return studioHttpClient.delete(aiStudioAutopilotArtifactsEndpoint(sessionId));
+}
+
 export {
   aiStudioCodexTerminalWebSocketUrl,
   aiStudioCommandTerminalWebSocketUrl,
+  aiStudioAutopilotArtifactsStreamEndpoint,
   aiStudioLaunchTerminalWebSocketUrl,
   aiStudioShellTerminalWebSocketUrl,
   clearAiStudioIssueArtifacts,
+  clearAiStudioAutopilotArtifacts,
   closeAiStudioCodexTerminal,
   closeAiStudioCommandTerminal,
+  readAiStudioAutopilotArtifacts,
   readAiStudioSessionDiff,
   saveAiStudioIssueArtifacts,
   startAiStudioCodexTerminal,

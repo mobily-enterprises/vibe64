@@ -30,12 +30,22 @@ export {
 } from "./promptMarkers.js";
 export {
   AUTOPILOT_COMPLETION_TOKEN_PREFIX,
-  AUTOPILOT_QUESTIONS_MARKER_END,
-  AUTOPILOT_QUESTIONS_MARKER_START,
   createStepCompletionToken,
   normalizeStepCompletionToken,
   stepCompletionTokenInstruction
 } from "./autopilotPromptContract.js";
+export {
+  AUTOPILOT_FILE_ARTIFACTS,
+  AUTOPILOT_ISSUE_DRAFT_ARTIFACT,
+  AUTOPILOT_PROMPT_DONE_ARTIFACT,
+  AUTOPILOT_QUESTIONS_ARTIFACT,
+  autopilotFilePath,
+  normalizeAutopilotIssueDraftFile,
+  normalizeAutopilotPromptDoneFile,
+  normalizeAutopilotQuestions,
+  normalizeAutopilotQuestionsFile,
+  normalizeAutopilotRequestId
+} from "./autopilotFiles.js";
 export {
   PROMPT_RUN_STATUS,
   appendPromptRunInstruction,

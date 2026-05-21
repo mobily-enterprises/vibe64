@@ -1,3 +1,5 @@
+import { watch } from "node:fs";
+import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import {
   aiStudioResult,
@@ -6,6 +8,15 @@ import {
 import {
   deepFreeze
 } from "../../../../server/lib/aiStudio/deepFreeze.js";
+import {
+  AUTOPILOT_FILE_ARTIFACTS,
+  AUTOPILOT_ISSUE_DRAFT_ARTIFACT,
+  AUTOPILOT_PROMPT_DONE_ARTIFACT,
+  AUTOPILOT_QUESTIONS_ARTIFACT,
+  normalizeAutopilotIssueDraftFile,
+  normalizeAutopilotPromptDoneFile,
+  normalizeAutopilotQuestionsFile
+} from "../../../../server/lib/aiStudio/autopilotFiles.js";
 
 const EMPTY_EDITOR_ACTION = deepFreeze({
   action: null,
@@ -17,6 +28,7 @@ const EMPTY_EDITOR_ACTION = deepFreeze({
 const ISSUE_BODY_ARTIFACT = "issue.md";
 const ISSUE_FILE_STEP_ID = "issue_file_created";
 const ISSUE_TITLE_ARTIFACT = "issue_title";
+const AUTOPILOT_FILE_NAMES = new Set(AUTOPILOT_FILE_ARTIFACTS);
 
 function artifactResult(operation) {
   return aiStudioResult(operation, {
@@ -231,6 +243,51 @@ function issueArtifactsResponse(session = {}, artifacts = {}) {
   };
 }
 
+function parseAutopilotJson(text = "") {
+  const source = String(text || "").trim();
+  if (!source) {
+    return null;
+  }
+  try {
+    return JSON.parse(source);
+  } catch {
+    return null;
+  }
+}
+
+async function readAutopilotJson(runtime, sessionId = "", artifactName = "", normalize = () => null) {
+  return normalize(parseAutopilotJson(await runtime.store.readArtifact(sessionId, artifactName)));
+}
+
+async function readAutopilotFiles(runtime, sessionId = "") {
+  const [
+    issueDraft,
+    promptDone,
+    questions
+  ] = await Promise.all([
+    readAutopilotJson(runtime, sessionId, AUTOPILOT_ISSUE_DRAFT_ARTIFACT, normalizeAutopilotIssueDraftFile),
+    readAutopilotJson(runtime, sessionId, AUTOPILOT_PROMPT_DONE_ARTIFACT, normalizeAutopilotPromptDoneFile),
+    readAutopilotJson(runtime, sessionId, AUTOPILOT_QUESTIONS_ARTIFACT, normalizeAutopilotQuestionsFile)
+  ]);
+  return {
+    issueDraft,
+    promptDone,
+    questions
+  };
+}
+
+function isAutopilotArtifactChange(filename = "") {
+  return AUTOPILOT_FILE_NAMES.has(path.basename(String(filename || "")));
+}
+
+function closeWatcher(watcher = null) {
+  try {
+    watcher?.close?.();
+  } catch {
+    // Closing a filesystem watcher is best-effort during stream shutdown.
+  }
+}
+
 async function readEditableArtifacts(runtime, session = {}, fields = []) {
   const artifactEntries = await Promise.all(artifactNamesForFields(fields).map(async (artifactName) => {
     return [artifactName, await runtime.store.readArtifact(session.sessionId, artifactName)];
@@ -387,6 +444,104 @@ function createService({ projectService } = {}) {
         return issueArtifactsResponse(await runtime.getSession(sessionId), {
           [ISSUE_BODY_ARTIFACT]: "",
           [ISSUE_TITLE_ARTIFACT]: ""
+        });
+      });
+    },
+
+    async readAutopilotArtifacts(sessionId) {
+      return artifactResult(async () => {
+        const runtime = await projectService.createRuntime();
+        const session = await runtime.getSession(sessionId);
+        return {
+          ...session,
+          ...(await readAutopilotFiles(runtime, sessionId)),
+          ok: true
+        };
+      });
+    },
+
+    async clearAutopilotArtifacts(sessionId) {
+      return artifactResult(async () => {
+        const runtime = await projectService.createRuntime();
+        await runtime.store.deleteArtifacts(sessionId, AUTOPILOT_FILE_ARTIFACTS);
+        const session = await runtime.getSession(sessionId);
+        return {
+          ...session,
+          issueDraft: null,
+          ok: true,
+          promptDone: null,
+          questions: null
+        };
+      });
+    },
+
+    async streamAutopilotArtifacts(sessionId, {
+      emit = () => null,
+      isClosed = () => false,
+      onClose = () => null
+    } = {}) {
+      const runtime = await projectService.createRuntime();
+      const session = await runtime.getSession(sessionId);
+      await mkdir(session.artifactsRoot, {
+        recursive: true
+      });
+
+      let emitInFlight = false;
+      let emitQueued = false;
+      let watcher = null;
+
+      async function emitCurrentArtifacts() {
+        if (isClosed()) {
+          return;
+        }
+        if (emitInFlight) {
+          emitQueued = true;
+          return;
+        }
+
+        emitInFlight = true;
+        try {
+          const currentSession = await runtime.getSession(sessionId);
+          emit("autopilot-artifacts.updated", {
+            artifactReadiness: currentSession.artifactReadiness,
+            sessionId,
+            ...(await readAutopilotFiles(runtime, sessionId)),
+            ok: true
+          });
+        } finally {
+          emitInFlight = false;
+          if (emitQueued && !isClosed()) {
+            emitQueued = false;
+            await emitCurrentArtifacts();
+          }
+        }
+      }
+
+      function scheduleArtifactUpdate(filename = "") {
+        if (!isAutopilotArtifactChange(filename)) {
+          return;
+        }
+        void emitCurrentArtifacts().catch((error) => {
+          emit("autopilot-artifacts.error", {
+            error: String(error?.message || error || "Autopilot artifacts could not be read."),
+            sessionId
+          });
+        });
+      }
+
+      await emitCurrentArtifacts();
+      watcher = watch(session.artifactsRoot, {
+        persistent: false
+      }, (_eventType, filename) => {
+        scheduleArtifactUpdate(filename);
+      });
+
+      return await new Promise((resolve) => {
+        onClose(() => {
+          closeWatcher(watcher);
+          resolve({
+            ok: true
+          });
         });
       });
     }

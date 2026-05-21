@@ -558,6 +558,9 @@ import {
   useAiStudioAutopilotController
 } from "@/composables/useAiStudioAutopilotController.js";
 import {
+  useAiStudioAutopilotArtifacts
+} from "@/composables/useAiStudioAutopilotArtifacts.js";
+import {
   useAiStudioAutopilotIssueDiscussion
 } from "@/composables/useAiStudioAutopilotIssueDiscussion.js";
 import {
@@ -630,6 +633,9 @@ const props = defineProps({
 const codexQuestionExchange = useAiStudioCodexQuestionExchange({
   codexTerminal: props.codexTerminal
 });
+const autopilotArtifacts = useAiStudioAutopilotArtifacts({
+  sessionId: computed(() => props.session?.sessionId || "")
+});
 const {
   acceptChanges,
   cancelMergeFailure,
@@ -658,13 +664,15 @@ const {
   skipDeepUiCheck,
   skipMerge,
   start,
-  syncFromCurrentCodexOutput,
+  syncFromAutopilotArtifacts,
   stop,
   stopCommandAction,
   statusText,
   waitingForCodex
 } = useAiStudioAutopilotController({
   actions: props.actions,
+  autopilotArtifacts: autopilotArtifacts.artifacts,
+  clearAutopilotArtifacts: autopilotArtifacts.clear,
   codexTerminal: props.codexTerminal,
   commandRunner: props.commandRunner || undefined,
   enabled: computed(() => props.active),
@@ -687,6 +695,8 @@ const archiveAction = computed(() => {
 
 const issueDiscussion = proxyRefs(useAiStudioAutopilotIssueDiscussion({
   actions: props.actions,
+  autopilotArtifacts: autopilotArtifacts.artifacts,
+  clearAutopilotArtifacts: autopilotArtifacts.clear,
   codexTerminal: props.codexTerminal,
   enabled: computed(() => props.active),
   questionExchange: codexQuestionExchange,
@@ -880,7 +890,7 @@ onMounted(emitBusyState);
 
 onMounted(() => {
   if (props.active) {
-    syncFromCurrentCodexOutput();
+    void syncFromAutopilotArtifacts();
   }
 });
 
@@ -892,7 +902,7 @@ watch(autopilotBusy, () => {
 
 watch(() => props.active, (active) => {
   if (active) {
-    syncFromCurrentCodexOutput();
+    void syncFromAutopilotArtifacts();
   }
   emitBusyState();
 }, {
@@ -901,7 +911,7 @@ watch(() => props.active, (active) => {
 
 watch(() => props.session?.currentStep || "", () => {
   if (props.active) {
-    syncFromCurrentCodexOutput();
+    void syncFromAutopilotArtifacts();
   }
 }, {
   flush: "post"

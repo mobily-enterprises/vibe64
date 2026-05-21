@@ -1,7 +1,7 @@
 import { computed, ref } from "vue";
 import {
   autopilotQuestionAnswersPrompt
-} from "@/lib/aiStudioAutopilotStepMarkers.js";
+} from "@/lib/aiStudioAutopilotPromptFiles.js";
 
 function normalizeQuestion(value = {}, index = 0) {
   const text = String(typeof value === "string" ? value : value.text || value.question || "").trim();

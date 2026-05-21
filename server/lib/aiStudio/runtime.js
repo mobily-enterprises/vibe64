@@ -18,6 +18,7 @@ import {
 import {
   STUDIO_CONTEXT_END_MARKER,
   STUDIO_CONTEXT_START_MARKER,
+  visibleStudioPromptTitle,
   wrapPromptWithStudioContext
 } from "./promptMarkers.js";
 import {
@@ -25,6 +26,9 @@ import {
   createPromptRun,
   promptRunBlocksAction
 } from "./promptRun.js";
+import {
+  AUTOPILOT_FILE_ARTIFACTS
+} from "./autopilotFiles.js";
 import {
   runtimeContainerManagedServicesPromptFacts,
   runtimeContainerPromptFacts
@@ -171,6 +175,7 @@ async function writeActionResultEffects(store, sessionId, result = {}) {
 }
 
 function buildCodexPromptHandoff(renderedPrompt) {
+  const visiblePrompt = visibleStudioPromptTitle(renderedPrompt.prompt, renderedPrompt.visiblePrompt);
   return {
     codex: {
       mode: "inject_prompt",
@@ -183,7 +188,7 @@ function buildCodexPromptHandoff(renderedPrompt) {
     },
     prompt: renderedPrompt.prompt,
     promptId: renderedPrompt.promptId,
-    terminalInput: wrapPromptWithStudioContext(renderedPrompt.prompt, renderedPrompt.visiblePrompt)
+    terminalInput: wrapPromptWithStudioContext(renderedPrompt.prompt, visiblePrompt)
   };
 }
 
@@ -444,12 +449,15 @@ class AiStudioSessionRuntime {
       sessionBriefingIncluded,
       session: promptSession
     }));
-    const prompt = appendPromptRunInstruction(promptWithBriefing, promptRun);
+    await this.store.deleteArtifacts(promptSession.sessionId, AUTOPILOT_FILE_ARTIFACTS);
+    const prompt = appendPromptRunInstruction(promptWithBriefing, promptRun, {
+      artifactsRoot: promptSession.artifactsRoot
+    });
     return {
       codexPromptHandoff: buildCodexPromptHandoff({
         ...renderedPrompt,
         prompt,
-        visiblePrompt: action.label || renderedPrompt.promptId
+        visiblePrompt: visibleStudioPromptTitle(renderedPrompt.prompt)
       }),
       prompt,
       promptContext: renderedPrompt.context,

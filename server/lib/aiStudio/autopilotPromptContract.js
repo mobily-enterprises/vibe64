@@ -1,8 +1,15 @@
+import {
+  AUTOPILOT_PROMPT_DONE_ARTIFACT,
+  AUTOPILOT_QUESTIONS_ARTIFACT,
+  autopilotFilePath,
+  autopilotPromptDoneFileExample,
+  autopilotQuestionFileExample,
+  normalizeAutopilotQuestions,
+  normalizeAutopilotRequestId
+} from "./autopilotFiles.js";
+
 const AUTOPILOT_COMPLETION_TOKEN_PREFIX = "AI_STUDIO_AUTOPILOT_DONE_";
 const AUTOPILOT_COMPLETION_TOKEN_PATTERN = /^AI_STUDIO_AUTOPILOT_DONE_[a-f0-9]{32}$/u;
-const AUTOPILOT_QUESTIONS_MARKER_START = "[[AI_STUDIO_AUTOPILOT_QUESTIONS_V1]]";
-const AUTOPILOT_QUESTIONS_MARKER_END = "[[/AI_STUDIO_AUTOPILOT_QUESTIONS_V1]]";
-const AUTOPILOT_REQUEST_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{2,127}$/u;
 
 function randomHexToken() {
   if (typeof globalThis.crypto?.randomUUID === "function") {
@@ -20,67 +27,79 @@ function normalizeStepCompletionToken(value = "") {
   return AUTOPILOT_COMPLETION_TOKEN_PATTERN.test(token) ? token : "";
 }
 
-function autopilotQuestionsMarkerExample(requestId = "request-id") {
+function questionInstruction({
+  artifactsRoot = "",
+  requestId = ""
+} = {}) {
+  const questionsFile = autopilotFilePath(artifactsRoot, AUTOPILOT_QUESTIONS_ARTIFACT);
   return [
-    AUTOPILOT_QUESTIONS_MARKER_START,
-    JSON.stringify({
-      requestId,
-      questions: [
-        "What should Codex know before continuing this workflow action?"
-      ]
-    }, null, 2),
-    AUTOPILOT_QUESTIONS_MARKER_END
-  ].join("\n");
-}
-
-function questionInstruction(requestId = "") {
-  return [
-    "If this workflow action is blocked only because essential user input is missing, ask the user instead of giving up.",
+    "AI Studio question contract:",
+    "Every time you ask the user any question, you must do both of these things in the same response:",
+    "1. Ask the question in normal plain text so Inspect users can answer naturally.",
+    `2. Write the same question set as JSON to: ${questionsFile}`,
+    "This applies to every user question, not only Autopilot and not only blockers.",
     "Ask concise self-contained questions for a non-technical user.",
-    "Ask the minimum useful number of questions, up to three.",
-    "First write a short plain-text sentence and the numbered questions so Inspect users can read them naturally.",
-    "Then append the same questions as this machine-readable block for Autopilot.",
-    "Do not print the completion token when asking questions.",
-    `Use this exact requestId in the JSON: ${String(requestId || "").trim()}`,
-    autopilotQuestionsMarkerExample("<requestId>")
+    "Ask the minimum useful number of questions, up to three, unless the user explicitly requested a different number.",
+    "Do not write the done file when asking questions.",
+    `Use this exact requestId in questions.json: ${String(requestId || "").trim()}`,
+    autopilotQuestionFileExample("<requestId>")
   ].join("\n");
 }
 
-function completionInstruction(token = "") {
+function completionInstruction({
+  actionId = "",
+  artifactsRoot = "",
+  requestId = "",
+  stepId = "",
+  token = ""
+} = {}) {
   const completionToken = normalizeStepCompletionToken(token);
   if (!completionToken) {
     return "";
   }
-  const tokenSuffix = completionToken.slice(AUTOPILOT_COMPLETION_TOKEN_PREFIX.length);
+  const doneFile = autopilotFilePath(artifactsRoot, AUTOPILOT_PROMPT_DONE_ARTIFACT);
   return [
-    "AI Studio Autopilot completion contract:",
-    "When this workflow action is fully complete, print one final line containing the completion token.",
-    "Do not print the completion token until all work, checks, and final reporting for this action are complete.",
-    "Do not write any prose after the completion token.",
-    "Build the completion token by joining these two parts with no spaces:",
-    `Completion token part 1: ${AUTOPILOT_COMPLETION_TOKEN_PREFIX}`,
-    `Completion token part 2: ${tokenSuffix}`
+    "AI Studio prompt completion file contract:",
+    "When this workflow action is fully complete, write this JSON to the done file.",
+    "Write the done file only after all work, checks, and final reporting for this action are complete.",
+    `Done file path: ${doneFile}`,
+    autopilotPromptDoneFileExample({
+      actionId,
+      completionToken,
+      requestId,
+      stepId
+    })
   ].join("\n");
 }
 
 function stepCompletionTokenInstruction({
+  actionId = "",
+  artifactsRoot = "",
   requestId = "",
+  stepId = "",
   token = ""
 } = {}) {
   return [
-    completionInstruction(token),
+    completionInstruction({
+      actionId,
+      artifactsRoot,
+      requestId,
+      stepId,
+      token
+    }),
     "",
-    questionInstruction(requestId)
+    questionInstruction({
+      artifactsRoot,
+      requestId
+    })
   ].filter(Boolean).join("\n");
 }
 
 export {
   AUTOPILOT_COMPLETION_TOKEN_PREFIX,
-  AUTOPILOT_QUESTIONS_MARKER_END,
-  AUTOPILOT_QUESTIONS_MARKER_START,
-  AUTOPILOT_REQUEST_ID_PATTERN,
-  autopilotQuestionsMarkerExample,
   createStepCompletionToken,
+  normalizeAutopilotQuestions,
+  normalizeAutopilotRequestId,
   normalizeStepCompletionToken,
   stepCompletionTokenInstruction
 };

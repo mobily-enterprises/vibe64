@@ -4,8 +4,10 @@
       v-if="visible"
       class="ai-floating-terminal-window"
       :class="{
+        'ai-floating-terminal-window--hidden': !displayed,
         'ai-floating-terminal-window--minimized': minimized
       }"
+      :aria-hidden="displayed ? undefined : 'true'"
     >
       <div
         ref="floatingWindow"
@@ -37,6 +39,10 @@ const props = defineProps({
     type: Boolean,
     default: false
   },
+  displayed: {
+    type: Boolean,
+    default: true
+  },
   storageKey: {
     type: String,
     default: ""
@@ -56,7 +62,7 @@ const floatingWindowDimensions = ref({
   height: 0,
   width: 0
 });
-const minimizedDockActive = computed(() => props.visible && props.minimized);
+const minimizedDockActive = computed(() => props.visible && props.displayed && props.minimized);
 const {
   rightOffset: minimizedDockRightOffset,
   updateWidth: updateMinimizedDockWidth
@@ -158,7 +164,7 @@ function restoreFloatingWindowState() {
 }
 
 function saveFloatingWindowState() {
-  if (!props.storageKey || !props.visible || props.minimized) {
+  if (!props.storageKey || !props.visible || !props.displayed || props.minimized) {
     return;
   }
 
@@ -172,7 +178,7 @@ function saveFloatingWindowState() {
 }
 
 function placeFloatingWindow() {
-  if (!props.visible || props.minimized) {
+  if (!props.visible || !props.displayed || props.minimized) {
     return;
   }
   if (restoreFloatingWindowState()) {
@@ -233,6 +239,9 @@ function stopDrag() {
 }
 
 function clampCurrentPosition() {
+  if (!props.displayed) {
+    return;
+  }
   if (props.visible && props.minimized) {
     updateMinimizedDockMeasurement();
     return;
@@ -262,7 +271,7 @@ function stopViewportTracking() {
 }
 
 function updateMinimizedDockMeasurement() {
-  if (!props.visible || !props.minimized) {
+  if (!props.visible || !props.displayed || !props.minimized) {
     return;
   }
   updateMinimizedDockWidth(floatingWindow.value?.offsetWidth || 0);
@@ -294,13 +303,16 @@ function observePanelSize() {
 }
 
 watch(
-  () => [props.visible, props.minimized],
-  async ([visible, minimized]) => {
+  () => [props.visible, props.minimized, props.displayed],
+  async ([visible, minimized, displayed]) => {
     stopDrag();
     if (!visible) {
       resizeObserver?.disconnect?.();
       resizeObserver = null;
       stopViewportTracking();
+      return;
+    }
+    if (!displayed) {
       return;
     }
 
@@ -330,6 +342,10 @@ onBeforeUnmount(() => {
   pointer-events: none;
   position: fixed;
   z-index: 2400;
+}
+
+.ai-floating-terminal-window--hidden {
+  visibility: hidden;
 }
 
 .ai-floating-terminal-window__panel {

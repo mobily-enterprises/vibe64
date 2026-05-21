@@ -3,22 +3,24 @@ import {
   useAiStudioCodexQuestionExchange
 } from "@/composables/useAiStudioCodexQuestionExchange.js";
 import {
-  clearAiStudioIssueArtifacts,
-  saveAiStudioIssueArtifacts
-} from "@/lib/aiStudioSessionApi.js";
-import {
   buildAnsweredIssueDraftPrompt,
   buildInitialIssueDraftPrompt
 } from "@/lib/aiStudioAutopilotIssuePrompt.js";
 import {
-  latestIssueDefinitionMarker
-} from "@/lib/aiStudioAutopilotIssueMarkers.js";
+  latestAiStudioActionResult
+} from "@/lib/aiStudioActionResults.js";
+import {
+  clearAiStudioAutopilotArtifacts,
+  clearAiStudioIssueArtifacts,
+  saveAiStudioIssueArtifacts
+} from "@/lib/aiStudioSessionApi.js";
 import {
   readRefOrGetterValue
 } from "@/lib/vueRefOrGetterValue.js";
 
 const ISSUE_BODY_ARTIFACT = "issue.md";
 const ISSUE_TITLE_ARTIFACT = "issue_title";
+const ISSUE_PROMPT_ACTION_ID = "send_issue_prompt";
 const STORAGE_KEY_PREFIX = "ai-studio:autopilot:issue-discussion:";
 
 const ISSUE_DISCUSSION_STATE = Object.freeze({
@@ -42,12 +44,11 @@ function localStorageKey(sessionId = "") {
 
 function readStoredDiscussion(sessionId = "") {
   const storage = browserLocalStorage();
-  const key = localStorageKey(sessionId);
   if (!storage || !sessionId) {
     return {};
   }
   try {
-    const value = JSON.parse(storage.getItem(key) || "{}");
+    const value = JSON.parse(storage.getItem(localStorageKey(sessionId)) || "{}");
     return value && typeof value === "object" && !Array.isArray(value) ? value : {};
   } catch {
     return {};
@@ -62,7 +63,6 @@ function writeStoredDiscussion(sessionId = "", value = {}) {
   storage.setItem(localStorageKey(sessionId), JSON.stringify({
     activeRequestId: String(value.activeRequestId || ""),
     ignoredRequestIds: Array.isArray(value.ignoredRequestIds) ? value.ignoredRequestIds : [],
-    outputCursor: Number.isSafeInteger(value.outputCursor) ? value.outputCursor : 0,
     questionAnswers: Array.isArray(value.questionAnswers) ? value.questionAnswers : [],
     requestText: String(value.requestText || "")
   }));
@@ -122,8 +122,25 @@ function issueQuestionOwnerId(sessionId = "") {
   return `issue:${String(sessionId || "").trim()}`;
 }
 
+function issueRequestFromSession(session = {}) {
+  return String(latestAiStudioActionResult(session, ISSUE_PROMPT_ACTION_ID)?.input?.issueRequest || "").trim();
+}
+
+function requestIsAllowed(requestId = "", {
+  activeRequestId = "",
+  ignoredRequestIds = new Set()
+} = {}) {
+  const normalizedRequestId = String(requestId || "").trim();
+  if (!normalizedRequestId || ignoredRequestIds.has(normalizedRequestId)) {
+    return false;
+  }
+  return !activeRequestId || normalizedRequestId === activeRequestId;
+}
+
 function useAiStudioAutopilotIssueDiscussion({
   actions = {},
+  autopilotArtifacts = null,
+  clearAutopilotArtifacts = clearAiStudioAutopilotArtifacts,
   clearIssueArtifacts = clearAiStudioIssueArtifacts,
   codexTerminal = {},
   enabled = true,
@@ -137,7 +154,6 @@ function useAiStudioAutopilotIssueDiscussion({
   const requestText = ref("");
   const activeRequestId = ref("");
   const ignoredRequestIds = ref(new Set());
-  const outputCursor = ref(0);
   const draftBody = ref("");
   const draftTitle = ref("");
   const failure = ref("");
@@ -149,7 +165,9 @@ function useAiStudioAutopilotIssueDiscussion({
 
   const currentSession = computed(() => readRefOrGetterValue(session) || null);
   const sessionId = computed(() => String(currentSession.value?.sessionId || ""));
-  const codexOutput = computed(() => String(readRefOrGetterValue(codexTerminal.output) || ""));
+  const artifactsRoot = computed(() => String(currentSession.value?.artifactsRoot || ""));
+  const currentAutopilotArtifacts = computed(() => readRefOrGetterValue(autopilotArtifacts) || null);
+  const codexBusy = computed(() => readRefOrGetterValue(codexTerminal.busy) === true);
   const promptInjectionError = computed(() => String(readRefOrGetterValue(codexTerminal.promptInjectionError) || ""));
   const discussionEnabled = computed(() => readRefOrGetterValue(enabled) !== false);
   const ready = computed(() => Boolean(discussionEnabled.value && readRefOrGetterValue(readyForIssue)));
@@ -204,10 +222,11 @@ function useAiStudioAutopilotIssueDiscussion({
     const requestId = createRequestId();
     requestText.value = normalizedRequest;
     activeRequestId.value = requestId;
-    outputCursor.value = codexOutput.value.length;
     failure.value = "";
     persistDiscussion();
+    await clearAutopilotArtifacts(sessionId.value);
     await injectIssuePrompt(buildInitialIssueDraftPrompt({
+      artifactsRoot: artifactsRoot.value,
       requestId,
       requestText: normalizedRequest
     }), requestId);
@@ -226,7 +245,7 @@ function useAiStudioAutopilotIssueDiscussion({
         throw new Error(response.error || response.errors?.[0]?.message || "Issue file could not be cleared.");
       }
 
-      returnToInputIgnoringCurrentCodexAnswer();
+      await returnToInputIgnoringCurrentCodexAnswer();
       await refreshSessionData();
     } catch (error) {
       failure.value = String(error?.message || error || "Issue file could not be cleared.");
@@ -236,13 +255,13 @@ function useAiStudioAutopilotIssueDiscussion({
     }
   }
 
-  function cancelWaiting() {
+  async function cancelWaiting() {
     if (!waiting.value) {
       return;
     }
 
     failure.value = "";
-    returnToInputIgnoringCurrentCodexAnswer();
+    await returnToInputIgnoringCurrentCodexAnswer();
   }
 
   async function acceptIssueDraft() {
@@ -263,6 +282,7 @@ function useAiStudioAutopilotIssueDiscussion({
         throw new Error(response.error || response.errors?.[0]?.message || "Issue file could not be saved.");
       }
 
+      await clearAutopilotArtifacts(sessionId.value);
       await refreshSessionData();
       await nextTick();
       if (!await advanceIfReady()) {
@@ -319,13 +339,12 @@ function useAiStudioAutopilotIssueDiscussion({
     writeStoredDiscussion(sessionId.value, {
       activeRequestId: activeRequestId.value,
       ignoredRequestIds: [...ignoredRequestIds.value],
-      outputCursor: outputCursor.value,
       questionAnswers: questions.value.map((question) => String(question.answer || "")),
       requestText: requestText.value
     });
   }
 
-  function returnToInputIgnoringCurrentCodexAnswer() {
+  async function returnToInputIgnoringCurrentCodexAnswer() {
     const requestIdToIgnore = activeRequestId.value;
     if (requestIdToIgnore) {
       ignoredRequestIds.value = new Set([
@@ -339,7 +358,7 @@ function useAiStudioAutopilotIssueDiscussion({
     draftTitle.value = "";
     storedQuestionAnswers.value = [];
     codexQuestions.clearForOwner(questionOwnerId.value);
-    outputCursor.value = codexOutput.value.length;
+    await clearAutopilotArtifacts(sessionId.value);
     state.value = ISSUE_DISCUSSION_STATE.INPUT;
     persistDiscussion();
   }
@@ -349,9 +368,6 @@ function useAiStudioAutopilotIssueDiscussion({
     requestText.value = String(stored.requestText || "");
     activeRequestId.value = String(stored.activeRequestId || "");
     ignoredRequestIds.value = new Set(storedIgnoredRequestIds(stored));
-    outputCursor.value = Number.isSafeInteger(stored.outputCursor) && stored.outputCursor >= 0
-      ? stored.outputCursor
-      : 0;
     storedQuestionAnswers.value = Array.isArray(stored.questionAnswers)
       ? stored.questionAnswers.map(String)
       : [];
@@ -359,65 +375,53 @@ function useAiStudioAutopilotIssueDiscussion({
     draftTitle.value = "";
     failure.value = "";
     state.value = loadedDiscussionState(activeRequestId.value);
-    applyLatestMarker();
+    applyLatestIssueFile();
   }
 
-  function latestAcceptableDefinitionMarker() {
-    const output = codexOutputAfterCursor();
-    if (activeRequestId.value) {
-      return latestIssueDefinitionMarker(output, {
-        ignoredRequestIds: ignoredRequestIds.value,
-        requestId: activeRequestId.value
-      });
+  function applyLatestIssueFile(autopilotFiles = currentAutopilotArtifacts.value) {
+    if (!ready.value || issueArtifactsAreReady(currentSession.value) || issueIsSelected(currentSession.value) || !sessionId.value) {
+      return false;
+    }
+    if (!autopilotFiles || autopilotFiles.sessionId !== sessionId.value) {
+      return false;
+    }
+    if (autopilotFiles.ok === false) {
+      failure.value = autopilotFiles.error || "Autopilot issue files could not be read.";
+      return false;
     }
 
-    return latestIssueDefinitionMarker(output, {
+    const issueDraft = autopilotFiles.issueDraft;
+    if (requestIsAllowed(issueDraft?.requestId, {
+      activeRequestId: activeRequestId.value,
       ignoredRequestIds: ignoredRequestIds.value
-    });
-  }
-
-  function codexOutputAfterCursor() {
-    const output = codexOutput.value;
-    const cursor = Number(outputCursor.value || 0);
-    if (!Number.isSafeInteger(cursor) || cursor <= 0) {
-      return output;
-    }
-    if (cursor >= output.length) {
-      return activeRequestId.value ? output : "";
-    }
-    return output.slice(cursor);
-  }
-
-  function applyLatestMarker() {
-    if (!ready.value || issueArtifactsAreReady(currentSession.value) || issueIsSelected(currentSession.value)) {
-      return;
+    })) {
+      activeRequestId.value = issueDraft.requestId;
+      draftBody.value = issueDraft.body;
+      draftTitle.value = issueDraft.title;
+      codexQuestions.clearForOwner(questionOwnerId.value);
+      state.value = ISSUE_DISCUSSION_STATE.REVIEW;
+      persistDiscussion();
+      return true;
     }
 
-    const marker = latestAcceptableDefinitionMarker();
-    if (!marker) {
-      return;
-    }
-    if (issueQuestionActive.value && marker.kind === "questions" && marker.requestId === activeRequestId.value) {
-      return;
-    }
-
-    activeRequestId.value = marker.requestId;
-    failure.value = "";
-    if (marker.kind === "questions") {
+    const questionFile = autopilotFiles.questions;
+    if (requestIsAllowed(questionFile?.requestId, {
+      activeRequestId: activeRequestId.value,
+      ignoredRequestIds: ignoredRequestIds.value
+    })) {
+      activeRequestId.value = questionFile.requestId;
       draftBody.value = "";
       draftTitle.value = "";
       state.value = ISSUE_DISCUSSION_STATE.QUESTIONS;
-      startQuestionExchange(marker);
-    } else {
-      draftBody.value = marker.body;
-      draftTitle.value = marker.title;
-      codexQuestions.clearForOwner(questionOwnerId.value);
-      state.value = ISSUE_DISCUSSION_STATE.REVIEW;
+      startQuestionExchange(questionFile);
+      persistDiscussion();
+      return true;
     }
-    persistDiscussion();
+
+    return false;
   }
 
-  function startQuestionExchange(marker = {}) {
+  function startQuestionExchange(questionFile = {}) {
     codexQuestions.start({
       contextLabel: "Issue definition",
       onAnswerChange: (nextQuestions = []) => {
@@ -426,7 +430,7 @@ function useAiStudioAutopilotIssueDiscussion({
       },
       onCancel: () => {
         failure.value = "";
-        returnToInputIgnoringCurrentCodexAnswer();
+        void returnToInputIgnoringCurrentCodexAnswer();
       },
       onSubmitted: ({ prepared = {} } = {}) => {
         if (prepared.answeredRequestId) {
@@ -436,31 +440,31 @@ function useAiStudioAutopilotIssueDiscussion({
           ]);
         }
         activeRequestId.value = prepared.requestId;
-        outputCursor.value = prepared.outputCursor;
         failure.value = "";
         storedQuestionAnswers.value = [];
         state.value = ISSUE_DISCUSSION_STATE.WAITING;
         persistDiscussion();
       },
       ownerId: questionOwnerId.value,
-      prepareSubmit: ({ questions: answeredQuestions = [] } = {}) => {
+      prepareSubmit: async ({ questions: answeredQuestions = [] } = {}) => {
         const requestId = createRequestId();
+        await clearAutopilotArtifacts(sessionId.value);
         return {
           answeredRequestId: activeRequestId.value,
           injectionContext: {
             requestId,
             sessionId: sessionId.value
           },
-          outputCursor: codexOutput.value.length,
           prompt: buildAnsweredIssueDraftPrompt({
+            artifactsRoot: artifactsRoot.value,
             requestId,
-            requestText: requestText.value,
+            requestText: requestText.value || issueRequestFromSession(currentSession.value),
             questions: answeredQuestions
           }),
           requestId
         };
       },
-      questions: withQuestionAnswers(marker.questions, storedQuestionAnswers.value)
+      questions: withQuestionAnswers(questionFile.questions || [], storedQuestionAnswers.value)
     });
   }
 
@@ -468,11 +472,23 @@ function useAiStudioAutopilotIssueDiscussion({
     immediate: true
   });
 
-  watch([codexOutput, ready], () => {
-    if (!discussionEnabled.value || state.value === ISSUE_DISCUSSION_STATE.SAVING) {
+  watch(currentAutopilotArtifacts, (nextArtifacts) => {
+    applyLatestIssueFile(nextArtifacts);
+  }, {
+    flush: "post"
+  });
+
+  watch(codexBusy, (busy, wasBusy) => {
+    if (!busy || wasBusy || !sessionId.value) {
       return;
     }
-    applyLatestMarker();
+    if (issueQuestionActive.value || currentAutopilotArtifacts.value?.questions) {
+      codexQuestions.clearForOwner(questionOwnerId.value);
+      state.value = ISSUE_DISCUSSION_STATE.WAITING;
+      void clearAutopilotArtifacts(sessionId.value).catch(() => null);
+    }
+  }, {
+    flush: "post"
   });
 
   watch(promptInjectionError, (error) => {

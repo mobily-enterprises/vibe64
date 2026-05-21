@@ -28,10 +28,12 @@ import {
   promptSessionBriefing
 } from "../../../../server/lib/aiStudio/promptRenderer.js";
 import {
+  wrapPromptWithStudioContext
+} from "../../../../server/lib/aiStudio/promptMarkers.js";
+import {
   PROMPT_RUN_STATUS
 } from "../../../../server/lib/aiStudio/promptRun.js";
 import {
-  CODEX_TERMINAL_NAMESPACE_PREFIX,
   aiStudioResult,
   codexTerminalNamespace,
   directoryExists,
@@ -172,12 +174,13 @@ function codexStartupSessionBriefingPrompt(session = {}) {
     config: session.config,
     session
   });
-  return [
+  const prompt = [
     briefing,
     "",
     "Startup instruction:",
     "Keep this AI Studio briefing as the source of truth for this Codex session. Do not start project work from this briefing alone. Reply exactly: AI Studio session briefing loaded."
   ].join("\n").trim();
+  return wrapPromptWithStudioContext(prompt, "Load AI Studio session briefing.");
 }
 
 function codexStartupScript(codexThreadId = "", startupPrompt = "") {
@@ -446,7 +449,6 @@ function createCodexTerminalController({ projectService } = {}) {
             workdir
           },
           namespace,
-          namespaceLimitPrefix: CODEX_TERMINAL_NAMESPACE_PREFIX,
           onClose: async ({ id }) => {
             await removeDockerContainer(codexContainerName({
               sessionId,

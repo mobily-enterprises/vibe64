@@ -73,6 +73,12 @@ import {
 import {
   runtimeNetworkName
 } from "../../server/lib/aiStudio/runtimeContainers.js";
+import {
+  STUDIO_CONTEXT_START_MARKER
+} from "../../server/lib/aiStudio/promptMarkers.js";
+import {
+  stripStudioContextBlocksForDisplay
+} from "../../src/lib/codexOutput.js";
 import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
 import {
   assertDockerEnv,
@@ -218,6 +224,8 @@ test("AI Studio Codex terminal passes the session briefing as the startup prompt
   assert.match(startupPrompt, /Unit MariaDB/u);
   assert.match(startupPrompt, /\.ai-studio\/code-index\.md/u);
   assert.match(startupPrompt, /Reply exactly: AI Studio session briefing loaded/u);
+  assert.equal(startupPrompt.startsWith(`Load AI Studio session briefing.\n\n${STUDIO_CONTEXT_START_MARKER}`), true);
+  assert.equal(stripStudioContextBlocksForDisplay(startupPrompt), "Load AI Studio session briefing.\n\n");
   assert.equal(codexStartupSessionBriefingPrompt({
     metadata: {
       codex_session_briefing_delivered: "yes"

@@ -32,6 +32,14 @@ function normalizePromptRunOutputStart(value) {
   return Number.isSafeInteger(outputStart) && outputStart >= 0 ? outputStart : 0;
 }
 
+function normalizePromptRunOutputCursor(value, outputStart = 0) {
+  const outputCursor = Number(value);
+  if (!Number.isSafeInteger(outputCursor) || outputCursor < 0) {
+    return normalizePromptRunOutputStart(outputStart);
+  }
+  return Math.max(normalizePromptRunOutputStart(outputStart), outputCursor);
+}
+
 function normalizePromptRunStatus(value = "") {
   const status = normalizeText(value);
   return PROMPT_RUN_STATUSES.has(status) ? status : PROMPT_RUN_STATUS.READY;
@@ -49,13 +57,15 @@ function normalizePromptRun(record = {}) {
     return null;
   }
 
+  const outputStart = normalizePromptRunOutputStart(record.outputStart);
   return {
     actionId,
     actionLabel: normalizeText(record.actionLabel),
     completionToken,
     createdAt: normalizeText(record.createdAt),
     injectedAt: normalizeText(record.injectedAt),
-    outputStart: normalizePromptRunOutputStart(record.outputStart),
+    outputCursor: normalizePromptRunOutputCursor(record.outputCursor, outputStart),
+    outputStart,
     promptId: normalizeText(record.promptId),
     requestId: normalizePromptRunId(record.requestId) || completionToken,
     sessionBriefingIncluded: record.sessionBriefingIncluded === true,
@@ -85,10 +95,15 @@ function createPromptRun({
   });
 }
 
-function appendPromptRunInstruction(prompt = "", promptRun = {}) {
+function appendPromptRunInstruction(prompt = "", promptRun = {}, {
+  artifactsRoot = ""
+} = {}) {
   const normalizedPrompt = String(prompt || "").trim();
   const instruction = stepCompletionTokenInstruction({
+    actionId: promptRun.actionId,
+    artifactsRoot,
     requestId: promptRun.requestId,
+    stepId: promptRun.stepId,
     token: promptRun.completionToken
   });
   return [normalizedPrompt, instruction]

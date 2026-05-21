@@ -76,6 +76,39 @@ test("terminal sessions reuse one running terminal per namespace and enforce a r
   }
 });
 
+test("terminal session running cap defaults to the current namespace", async () => {
+  const prefix = `terminal-namespace-cap-test-${crypto.randomUUID()}:`;
+  const namespaceOne = `${prefix}one`;
+  const namespaceTwo = `${prefix}two`;
+
+  function start(namespace) {
+    return startTerminalSession({
+      args: longRunningNodeArgs(),
+      command: process.execPath,
+      commandPreview: "node long-running",
+      maxRunning: 3,
+      namespace
+    });
+  }
+
+  try {
+    assert.equal(start(namespaceOne).ok, true);
+    assert.equal(start(namespaceOne).ok, true);
+    assert.equal(start(namespaceOne).ok, true);
+    assert.equal(countRunningTerminalSessions({ namespacePrefix: namespaceOne }), 3);
+
+    const blockedInSameNamespace = start(namespaceOne);
+    assert.equal(blockedInSameNamespace.ok, false);
+    assert.equal(blockedInSameNamespace.code, "terminal_limit");
+
+    const allowedInAnotherNamespace = start(namespaceTwo);
+    assert.equal(allowedInAnotherNamespace.ok, true);
+    assert.equal(countRunningTerminalSessions({ namespacePrefix: namespaceTwo }), 1);
+  } finally {
+    await closeTerminalSessionsForNamespacePrefix(prefix);
+  }
+});
+
 test("terminal sessions stream PTY output to subscribers", async () => {
   const namespace = `terminal-stream-test-${crypto.randomUUID()}`;
   const session = startTerminalSession({

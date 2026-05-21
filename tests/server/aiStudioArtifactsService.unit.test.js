@@ -6,6 +6,11 @@ import {
   FakeTargetAdapter
 } from "../../server/lib/aiStudio/index.js";
 import {
+  AUTOPILOT_ISSUE_DRAFT_ARTIFACT,
+  AUTOPILOT_PROMPT_DONE_ARTIFACT,
+  AUTOPILOT_QUESTIONS_ARTIFACT
+} from "../../server/lib/aiStudio/autopilotFiles.js";
+import {
   createService
 } from "../../packages/ai-studio-artifacts/src/server/service.js";
 import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
@@ -164,6 +169,83 @@ test("AI Studio artifacts service only saves autopilot issue artifacts at the is
 
     assert.equal(saved.ok, false);
     assert.equal(saved.errors[0].code, "ai_studio_issue_artifacts_step_required");
+  });
+});
+
+test("AI Studio artifacts service reads and clears Autopilot control files", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new AiStudioSessionRuntime({
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "plan_executed",
+      sessionId: "artifact_autopilot_files"
+    });
+    await Promise.all([
+      runtime.store.writeArtifact("artifact_autopilot_files", AUTOPILOT_QUESTIONS_ARTIFACT, JSON.stringify({
+        requestId: "request-123",
+        questions: [
+          "Which table should this use?",
+          {
+            id: "auth",
+            text: "Should this require authentication?"
+          }
+        ]
+      })),
+      runtime.store.writeArtifact("artifact_autopilot_files", AUTOPILOT_ISSUE_DRAFT_ARTIFACT, JSON.stringify({
+        body: "Issue body",
+        requestId: "request-123",
+        title: "Issue title"
+      })),
+      runtime.store.writeArtifact("artifact_autopilot_files", AUTOPILOT_PROMPT_DONE_ARTIFACT, JSON.stringify({
+        actionId: "execute_plan",
+        completionToken: "AI_STUDIO_AUTOPILOT_DONE_1234567890abcdef1234567890abcdef",
+        requestId: "request-123",
+        stepId: "plan_executed"
+      }))
+    ]);
+
+    const service = createService({
+      projectService: projectServiceForRuntime(runtime)
+    });
+
+    const files = await service.readAutopilotArtifacts("artifact_autopilot_files");
+    assert.equal(files.ok, true);
+    assert.deepEqual(files.questions, {
+      requestId: "request-123",
+      questions: [
+        {
+          answer: "",
+          id: "q1",
+          text: "Which table should this use?"
+        },
+        {
+          answer: "",
+          id: "auth",
+          text: "Should this require authentication?"
+        }
+      ]
+    });
+    assert.deepEqual(files.issueDraft, {
+      body: "Issue body",
+      requestId: "request-123",
+      title: "Issue title"
+    });
+    assert.deepEqual(files.promptDone, {
+      actionId: "execute_plan",
+      completionToken: "AI_STUDIO_AUTOPILOT_DONE_1234567890abcdef1234567890abcdef",
+      requestId: "request-123",
+      stepId: "plan_executed"
+    });
+
+    const cleared = await service.clearAutopilotArtifacts("artifact_autopilot_files");
+    assert.equal(cleared.ok, true);
+    assert.equal(cleared.questions, null);
+    assert.equal(cleared.issueDraft, null);
+    assert.equal(cleared.promptDone, null);
+    assert.equal(await runtime.store.readArtifact("artifact_autopilot_files", AUTOPILOT_QUESTIONS_ARTIFACT), "");
+    assert.equal(await runtime.store.readArtifact("artifact_autopilot_files", AUTOPILOT_ISSUE_DRAFT_ARTIFACT), "");
+    assert.equal(await runtime.store.readArtifact("artifact_autopilot_files", AUTOPILOT_PROMPT_DONE_ARTIFACT), "");
   });
 });
 

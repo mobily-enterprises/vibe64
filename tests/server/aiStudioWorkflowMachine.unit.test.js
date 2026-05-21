@@ -229,7 +229,9 @@ test("ai-studio runtime prompt actions render Codex handoff data without advanci
     assert.equal(afterAction.actionResult.promptId, "make_plan");
     assert.match(afterAction.actionResult.prompt, /Run the AI Studio prompt action: Make plan/u);
     assert.match(afterAction.actionResult.prompt, /"scope": "unit test"/u);
-    assert.match(afterAction.actionResult.prompt, /AI Studio Autopilot completion contract:/u);
+    assert.match(afterAction.actionResult.prompt, /AI Studio prompt completion file contract:/u);
+    assert.match(afterAction.actionResult.prompt, /prompt-done\.json/u);
+    assert.match(afterAction.actionResult.prompt, /questions\.json/u);
     assert.match(afterAction.actionResult.promptRun.completionToken, /^AI_STUDIO_AUTOPILOT_DONE_[a-f0-9]{32}$/u);
     assert.equal(afterAction.actionResult.promptRun.actionId, "make_plan");
     assert.equal(afterAction.actionResult.promptRun.stepId, "plan_made");
@@ -247,6 +249,50 @@ test("ai-studio runtime prompt actions render Codex handoff data without advanci
     const afterAdvance = await runtime.advance("prompt_action");
     assert.equal(afterAdvance.currentStep, "plan_executed");
     assert.equal(afterAdvance.promptRun, null);
+  });
+});
+
+test("ai-studio runtime prompt handoff uses the rendered prompt title as visible terminal text", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const promptPackRoot = path.join(targetRoot, "prompt-pack");
+    await mkdir(promptPackRoot, {
+      recursive: true
+    });
+    await writeFile(
+      path.join(promptPackRoot, "send_issue_prompt.txt"),
+      [
+        "Discuss and define issue",
+        "",
+        "Action input:",
+        "{{input.json}}"
+      ].join("\n"),
+      "utf8"
+    );
+
+    const runtime = new AiStudioSessionRuntime({
+      adapter: new PromptRendererFakeAdapter({
+        promptPackRoot
+      }),
+      clock: () => new Date("2026-05-16T01:02:03.000Z"),
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "issue_file_created",
+      sessionId: "issue_prompt_visible_title"
+    });
+
+    const afterAction = await runtime.runAction("issue_prompt_visible_title", "send_issue_prompt", {
+      issueRequest: "Add booking reports"
+    });
+
+    assert.equal(afterAction.actionResult.status, "prompt_ready");
+    assert.equal(afterAction.actionResult.promptId, "send_issue_prompt");
+    assert.match(afterAction.actionResult.prompt, /"issueRequest": "Add booking reports"/u);
+    assert.match(
+      afterAction.actionResult.codexPromptHandoff.terminalInput,
+      /^Discuss and define issue\n\n\[\[AI_STUDIO_CONTEXT_START\]\]/u
+    );
+    assert.doesNotMatch(afterAction.actionResult.codexPromptHandoff.terminalInput, /^Discuss issue/u);
   });
 });
 

@@ -32,6 +32,7 @@
     </v-menu>
 
     <AiStudioFloatingTerminalWindow
+      :displayed="terminalDisplayed"
       minimized-width="min(24rem, calc(100vw - 1.5rem))"
       :minimized="terminalMinimized"
       :storage-key="shellWindowStorageKey"
@@ -168,6 +169,10 @@ const props = defineProps({
   showActivator: {
     type: Boolean,
     default: true
+  },
+  windowDisplayed: {
+    type: Boolean,
+    default: true
   }
 });
 
@@ -184,6 +189,8 @@ const menuDisabled = computed(() => !sessionId.value);
 const canOpenMainShell = computed(() => Boolean(sessionId.value && !menuDisabled.value));
 const canOpenWorktreeShell = computed(() => Boolean(canOpenMainShell.value && worktreePath.value));
 const terminalVisible = computed(() => shellTabs.value.length > 0);
+const terminalDisplayed = computed(() => props.windowDisplayed !== false);
+const shellShortcutsActive = computed(() => terminalVisible.value && terminalDisplayed.value);
 const activeShellTab = computed(() => shellTabs.value.find((tab) => tab.id === activeShellTabId.value) || null);
 const shellTabLimitReached = computed(() => shellTabs.value.length >= MAX_SHELL_TABS);
 const shellTabLimitMessage = `Shell tabs are limited to ${MAX_SHELL_TABS}.`;
@@ -384,7 +391,7 @@ watch(sessionId, () => {
   closeShell();
 });
 
-watch(terminalVisible, (visible) => {
+watch(shellShortcutsActive, (visible) => {
   if (visible) {
     startShellShortcuts();
   } else {

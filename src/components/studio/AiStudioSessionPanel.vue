@@ -46,6 +46,7 @@
           :fix-command-failure="selectedFixCommandFailure"
           :session="selection.selectedSession"
           :show-activator="sessionMode === 'inspect'"
+          :window-displayed="sessionMode === 'inspect'"
         />
       </div>
     </Teleport>

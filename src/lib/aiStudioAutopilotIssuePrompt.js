@@ -1,28 +1,36 @@
 import {
-  AUTOPILOT_ISSUE_MARKER_END,
-  AUTOPILOT_ISSUE_MARKER_START,
-  issueMarkerExample
-} from "@/lib/aiStudioAutopilotIssueMarkers.js";
-import {
-  AUTOPILOT_QUESTIONS_MARKER_END,
-  AUTOPILOT_QUESTIONS_MARKER_START,
-  autopilotQuestionAnswersPrompt,
-  autopilotQuestionsMarkerExample
-} from "@/lib/aiStudioAutopilotStepMarkers.js";
+  autopilotQuestionAnswersPrompt
+} from "@/lib/aiStudioAutopilotPromptFiles.js";
 import {
   wrapPromptWithStudioContext
 } from "@/lib/codexOutput.js";
+import {
+  AUTOPILOT_ISSUE_DRAFT_ARTIFACT,
+  AUTOPILOT_QUESTIONS_ARTIFACT,
+  autopilotFilePath,
+  autopilotIssueDraftFileExample,
+  autopilotQuestionFileExample
+} from "../../server/lib/aiStudio/autopilotFiles.js";
 
 function visibleIssueDraftPrompt() {
-  return `Return ${AUTOPILOT_QUESTIONS_MARKER_START} or ${AUTOPILOT_ISSUE_MARKER_START}.`;
+  return "Write questions.json or issue-draft.json.";
 }
 
-function issueDraftPromptHeader(requestId = "") {
+function issueDraftPromptHeader({
+  artifactsRoot = "",
+  requestId = ""
+} = {}) {
+  const questionsFile = autopilotFilePath(artifactsRoot, AUTOPILOT_QUESTIONS_ARTIFACT);
+  const issueDraftFile = autopilotFilePath(artifactsRoot, AUTOPILOT_ISSUE_DRAFT_ARTIFACT);
   return [
-    "AI Studio Autopilot is defining the issue scope.",
+    "AI Studio is defining the issue scope.",
     "Do not modify files.",
-    "Do not inspect AI Studio session internals, session files, or artifact files.",
+    "Only write the specific AI Studio JSON file requested below.",
     "First decide whether the request is clear enough to create a useful issue.",
+    "Every time you ask the user any question, you must do both of these things in the same response:",
+    "1. Ask the question in normal plain text so Inspect users can answer naturally.",
+    `2. Write the same question set as JSON to: ${questionsFile}`,
+    "This applies to every user question, not only Autopilot and not only blockers.",
     "If essential scope details are missing, ask concise self-contained questions for a non-technical user.",
     "Only ask questions whose answers would change the issue scope, acceptance criteria, or implementation direction.",
     "If clarification is needed, ask the minimum useful number of questions, up to three.",
@@ -30,32 +38,30 @@ function issueDraftPromptHeader(requestId = "") {
     "When honoring an explicit question request, ask the requested number of questions, capped at three.",
     "Do not dismiss an explicit question request as test noise or as unrelated to issue scope.",
     "If no essential questions are needed, produce a concise issue title and a useful Markdown issue body.",
-    `Use this exact requestId in the JSON: ${String(requestId || "").trim()}`,
+    `Use this exact requestId in every JSON file: ${String(requestId || "").trim()}`,
     "",
-    "If you need clarification, use this format:",
-    "First write a short plain-text sentence and the numbered questions so Inspect users can read them naturally.",
-    "Then append the same questions as this machine-readable block for Autopilot:",
-    autopilotQuestionsMarkerExample("<requestId>"),
+    "Question file format:",
+    autopilotQuestionFileExample("<requestId>"),
     "",
-    `The questions closing marker must be exactly: ${AUTOPILOT_QUESTIONS_MARKER_END}`,
+    "If no clarification is needed:",
+    "Write the issue draft to this JSON file.",
+    `Issue draft file path: ${issueDraftFile}`,
+    autopilotIssueDraftFileExample("<requestId>"),
     "",
-    "If no clarification is needed, use this format:",
-    issueMarkerExample("<requestId>"),
-    "",
-    `The issue closing marker must be exactly: ${AUTOPILOT_ISSUE_MARKER_END}`,
-    "",
-    "Return no prose with the issue block.",
-    "",
-    `Do not return both ${AUTOPILOT_QUESTIONS_MARKER_START} and ${AUTOPILOT_ISSUE_MARKER_START}.`
+    "Do not write both questions.json and issue-draft.json for the same response."
   ].join("\n");
 }
 
 function buildInitialIssueDraftPrompt({
+  artifactsRoot = "",
   requestId = "",
   requestText = ""
 } = {}) {
   const hiddenPrompt = [
-    issueDraftPromptHeader(requestId),
+    issueDraftPromptHeader({
+      artifactsRoot,
+      requestId
+    }),
     "",
     "Initial user request:",
     String(requestText || "").trim()
@@ -64,12 +70,16 @@ function buildInitialIssueDraftPrompt({
 }
 
 function buildAnsweredIssueDraftPrompt({
+  artifactsRoot = "",
   questions = [],
   requestId = "",
   requestText = ""
 } = {}) {
   const hiddenPrompt = [
-    issueDraftPromptHeader(requestId),
+    issueDraftPromptHeader({
+      artifactsRoot,
+      requestId
+    }),
     "",
     "Original user request:",
     String(requestText || "").trim(),
@@ -78,8 +88,8 @@ function buildAnsweredIssueDraftPrompt({
       contextLabel: "Issue definition",
       continuationLines: [
         "Use the original request and these answers to continue defining the issue.",
-        "If essential scope is still missing, return another questions block using the format above.",
-        "Otherwise return the issue title and body block."
+        "If you ask any more questions, ask them in normal text and write questions.json using the format above.",
+        "Otherwise write issue-draft.json."
       ],
       questions
     })
