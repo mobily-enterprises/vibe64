@@ -179,7 +179,7 @@ function normalizePromptContext(context = {}) {
       artifactsRoot: normalizeText(context.session?.artifactsRoot),
       completedSteps: Array.isArray(context.session?.completedSteps) ? context.session.completedSteps : [],
       currentStep: normalizeText(context.session?.currentStep),
-      id: normalizeText(context.session?.id),
+      id: normalizeText(context.session?.id || context.session?.sessionId),
       metadataRoot: normalizeText(context.session?.metadataRoot),
       metadata: isPlainObject(context.session?.metadata) ? context.session.metadata : {},
       sessionRoot: normalizeText(context.session?.sessionRoot),

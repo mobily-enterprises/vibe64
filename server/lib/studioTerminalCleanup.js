@@ -8,6 +8,9 @@ import {
 import {
   STUDIO_TOOLCHAIN_CONTAINER_LABEL
 } from "./doctorToolchain.js";
+import {
+  RUNTIME_NETWORK_KIND
+} from "./aiStudio/runtimeContainers.js";
 
 const execFileAsync = promisify(execFile);
 const STUDIO_CODEX_CONTAINER_LABEL = studioDockerLabel("kind", "codex-terminal");
@@ -156,6 +159,130 @@ function selectStaleStudioContainerIds(containers = [], {
     .map((container) => container.id);
 }
 
+function parseDockerNetworkRows(output = "") {
+  return String(output || "")
+    .split(/\r?\n/u)
+    .map((line) => {
+      const trimmedLine = line.trim();
+      if (!trimmedLine) {
+        return null;
+      }
+      const [id = "", name = "", kind = "", rawDaemonPid = ""] = trimmedLine.split("\t");
+      return {
+        daemonPid: rawDaemonPid === MISSING_DOCKER_LABEL_VALUE ? 0 : normalizeProcessId(rawDaemonPid),
+        id: id.trim(),
+        kind: kind === MISSING_DOCKER_LABEL_VALUE ? "" : kind.trim(),
+        name: name.trim()
+      };
+    })
+    .filter((entry) => entry?.id && entry?.name);
+}
+
+function isStudioRuntimeNetwork(network = {}) {
+  return network.kind === RUNTIME_NETWORK_KIND;
+}
+
+function shouldRemoveStudioRuntimeNetwork(network = {}, {
+  currentPid = process.pid,
+  killImpl = process.kill
+} = {}) {
+  return network.kind === RUNTIME_NETWORK_KIND &&
+    isStaleDaemonPid(network.daemonPid, {
+      currentPid,
+      killImpl
+    });
+}
+
+function networkContainersFromInspect(output = "") {
+  try {
+    const containers = JSON.parse(String(output || "{}"));
+    return containers && typeof containers === "object" ? Object.keys(containers) : [];
+  } catch {
+    return ["unknown"];
+  }
+}
+
+async function listStudioRuntimeNetworks(execFileImpl = execFileAsync) {
+  const result = await execFileImpl("docker", [
+    "network",
+    "ls",
+    "--format",
+    `{{.ID}}\t{{.Name}}\t{{.Label "${studioDockerLabel("kind")}"}}\t{{.Label "${STUDIO_DAEMON_PID_LABEL}"}}`
+  ], {
+    maxBuffer: 1024 * 1024,
+    timeout: 10000
+  });
+  return parseDockerNetworkRows(result.stdout)
+    .filter(isStudioRuntimeNetwork);
+}
+
+async function networkIsUnused(networkId, execFileImpl = execFileAsync) {
+  const result = await execFileImpl("docker", [
+    "network",
+    "inspect",
+    networkId,
+    "--format",
+    "{{json .Containers}}"
+  ], {
+    maxBuffer: 1024 * 1024,
+    timeout: 10000
+  });
+  return networkContainersFromInspect(result.stdout).length === 0;
+}
+
+async function removeUnusedStudioRuntimeNetworks({
+  currentPid = process.pid,
+  execFileImpl = execFileAsync,
+  killImpl = process.kill,
+  logger = null
+} = {}) {
+  let networks = [];
+  try {
+    networks = await listStudioRuntimeNetworks(execFileImpl);
+  } catch (error) {
+    logCleanup(logger, "debug", {
+      error: String(error?.message || error)
+    }, "Skipping Studio runtime network startup cleanup.");
+    return [];
+  }
+
+  const removedNetworks = [];
+  for (const network of networks) {
+    if (!shouldRemoveStudioRuntimeNetwork(network, {
+      currentPid,
+      killImpl
+    })) {
+      continue;
+    }
+    let unused = false;
+    try {
+      unused = await networkIsUnused(network.id, execFileImpl);
+    } catch (error) {
+      logCleanup(logger, "debug", {
+        error: String(error?.message || error),
+        network: network.name
+      }, "Skipping Studio runtime network because it could not be inspected.");
+      continue;
+    }
+    if (!unused) {
+      continue;
+    }
+    try {
+      await execFileImpl("docker", ["network", "rm", network.id], {
+        maxBuffer: 1024 * 1024,
+        timeout: 10000
+      });
+      removedNetworks.push(network.name);
+    } catch (error) {
+      logCleanup(logger, "debug", {
+        error: String(error?.message || error),
+        network: network.name
+      }, "Skipping Studio runtime network because Docker refused to remove it.");
+    }
+  }
+  return removedNetworks;
+}
+
 async function listStudioContainers(execFileImpl = execFileAsync) {
   const containers = new Map();
   for (const label of [STUDIO_CODEX_CONTAINER_LABEL, STUDIO_TARGET_SCRIPT_CONTAINER_LABEL, STUDIO_TOOLCHAIN_CONTAINER_LABEL]) {
@@ -267,6 +394,12 @@ async function cleanupStaleStudioTerminals({
     killImpl,
     logger
   });
+  const removedRuntimeNetworks = await removeUnusedStudioRuntimeNetworks({
+    currentPid: process.pid,
+    execFileImpl,
+    killImpl,
+    logger
+  });
 
   let terminatedProcesses = [];
   if (platform !== "win32") {
@@ -292,15 +425,17 @@ async function cleanupStaleStudioTerminals({
     }
   }
 
-  if (removedContainers.length || terminatedProcesses.length) {
+  if (removedContainers.length || removedRuntimeNetworks.length || terminatedProcesses.length) {
     logCleanup(logger, "warn", {
       removedContainers,
+      removedRuntimeNetworks,
       terminatedProcesses
-    }, "Cleaned up stale Studio terminal processes on startup.");
+    }, "Cleaned up stale Studio runtime resources on startup.");
   }
 
   return {
     removedContainers,
+    removedRuntimeNetworks,
     terminatedProcesses
   };
 }
@@ -310,8 +445,10 @@ export {
   daemonPidFromStudioToolchainCommand,
   isStudioToolchainDockerRun,
   listStudioContainerIds,
+  parseDockerNetworkRows,
   parseDockerContainerRows,
   parseProcessRows,
+  removeUnusedStudioRuntimeNetworks,
   selectDescendantProcessIds,
   selectStaleStudioContainerIds,
   selectStaleStudioToolchainProcessIds

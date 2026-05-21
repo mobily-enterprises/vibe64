@@ -3,8 +3,10 @@ import test from "node:test";
 import {
   cleanupStaleStudioTerminals,
   isStudioToolchainDockerRun,
+  parseDockerNetworkRows,
   parseDockerContainerRows,
   parseProcessRows,
+  removeUnusedStudioRuntimeNetworks,
   selectStaleStudioContainerIds,
   selectStaleStudioToolchainProcessIds
 } from "../../server/lib/studioTerminalCleanup.js";
@@ -56,6 +58,69 @@ test("Studio terminal cleanup only selects containers owned by dead daemons", ()
     currentPid: 777,
     killImpl: aliveDaemonKill
   }), ["container-dead"]);
+});
+
+test("Studio runtime network cleanup removes only unused Studio networks", async () => {
+  const calls = [];
+  const execFileImpl = async (command, args) => {
+    calls.push([command, args]);
+    if (command === "docker" && args[0] === "network" && args[1] === "ls") {
+      return {
+        stdout: [
+          "network-unused\tai-studio-runtime-aaaaaaaaaaaa\truntime-network\t999",
+          "network-active\tai-studio-runtime-cccccccccccc\truntime-network\t999",
+          "network-current\tai-studio-runtime-dddddddddddd\truntime-network\t123",
+          "network-other\tordinary-network\t<no value>\t<no value>"
+        ].join("\n")
+      };
+    }
+    if (command === "docker" && args[0] === "network" && args[1] === "inspect") {
+      return {
+        stdout: args[2] === "network-active"
+          ? "{\"container-id\":{}}"
+          : "{}"
+      };
+    }
+    if (command === "docker" && args[0] === "network" && args[1] === "rm") {
+      return {
+        stdout: ""
+      };
+    }
+    throw new Error(`Unexpected command: ${command} ${args.join(" ")}`);
+  };
+
+  assert.deepEqual(parseDockerNetworkRows([
+    "network-id\tai-studio-runtime-aaaaaaaaaaaa\truntime-network\t999",
+    "ordinary-id\tordinary-network\t<no value>\t<no value>"
+  ].join("\n")), [
+    {
+      daemonPid: 999,
+      id: "network-id",
+      kind: "runtime-network",
+      name: "ai-studio-runtime-aaaaaaaaaaaa"
+    },
+    {
+      daemonPid: 0,
+      id: "ordinary-id",
+      kind: "",
+      name: "ordinary-network"
+    }
+  ]);
+
+  const removed = await removeUnusedStudioRuntimeNetworks({
+    execFileImpl,
+    killImpl: aliveDaemonKill,
+    logger: {
+      debug() {}
+    }
+  });
+
+  assert.deepEqual(removed, [
+    "ai-studio-runtime-aaaaaaaaaaaa"
+  ]);
+  assert.deepEqual(calls.filter(([, args]) => args[0] === "network" && args[1] === "rm"), [
+    ["docker", ["network", "rm", "network-unused"]]
+  ]);
 });
 
 test("Studio terminal cleanup removes only dead-daemon containers and processes", async () => {

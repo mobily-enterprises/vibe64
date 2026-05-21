@@ -29,6 +29,8 @@ import {
 const AI_STUDIO_RUNTIME_HOST_ALIAS = "ai-studio-host";
 const RUNTIME_CONTAINER_KIND = "runtime-container";
 const RUNTIME_CONTAINER_KIND_LABEL = studioDockerLabel("kind", RUNTIME_CONTAINER_KIND);
+const RUNTIME_NETWORK_KIND = "runtime-network";
+const RUNTIME_NETWORK_KIND_LABEL = studioDockerLabel("kind", RUNTIME_NETWORK_KIND);
 const DEFAULT_HEALTH_RETRIES = 40;
 const DEFAULT_HEALTH_SLEEP_SECONDS = "1.5";
 const SECRET_ENV_PATTERN = /(PASSWORD|PASS|TOKEN|SECRET|KEY|CREDENTIAL|DATABASE_URL|DSN)/iu;
@@ -43,6 +45,24 @@ function dockerNamePart(value = "runtime") {
 
 function runtimeNetworkName(targetRoot = "") {
   return `ai-studio-runtime-${stableHash(path.resolve(targetRoot || process.cwd()))}`;
+}
+
+function runtimeNetworkTargetHash(targetRoot = "") {
+  return stableHash(path.resolve(targetRoot || process.cwd()));
+}
+
+function runtimeNetworkCreateArgs(targetRoot = "") {
+  return [
+    "network",
+    "create",
+    "--label",
+    RUNTIME_NETWORK_KIND_LABEL,
+    "--label",
+    `${STUDIO_DAEMON_PID_LABEL}=${process.pid}`,
+    "--label",
+    studioDockerLabel("target", runtimeNetworkTargetHash(targetRoot)),
+    runtimeNetworkName(targetRoot)
+  ];
 }
 
 function runtimeContainerName({
@@ -597,8 +617,8 @@ function runtimeContainerStartScript(descriptor = {}, {
   });
   return [
     "set -e",
-    displayCommandLine(`${dockerCommand(["network", "create", runtimeNetworkName(spec.targetRoot)])} || true`),
-    `${dockerCommand(["network", "create", runtimeNetworkName(spec.targetRoot)])} >/dev/null 2>&1 || true`,
+    displayCommandLine(`${dockerCommand(runtimeNetworkCreateArgs(spec.targetRoot))} || true`),
+    `${dockerCommand(runtimeNetworkCreateArgs(spec.targetRoot))} >/dev/null 2>&1 || true`,
     ...volumeCreateLines(spec),
     `if ! docker inspect ${shellQuote(spec.containerName)} >/dev/null 2>&1; then`,
     ...runtimeContainerCreateLines(spec),
@@ -629,7 +649,7 @@ function runtimeContainerCommandPreview(descriptor = {}, {
     targetRoot
   });
   return [
-    `${dockerCommand(["network", "create", runtimeNetworkName(spec.targetRoot)])} || true`,
+    `${dockerCommand(runtimeNetworkCreateArgs(spec.targetRoot))} || true`,
     ...spec.volumes
       .filter((volume) => !volume.source)
       .map((volume) => dockerCommand(["volume", "create", volumeSource(spec, volume)])),
@@ -837,7 +857,7 @@ function targetRuntimeNetworkEnsureCommand(targetRoot = "") {
   const inspectCommand = `${dockerCommand(["network", "inspect", networkName])} >/dev/null 2>&1`;
   return [
     inspectCommand,
-    `${dockerCommand(["network", "create", networkName])} >/dev/null`,
+    `${dockerCommand(runtimeNetworkCreateArgs(targetRoot))} >/dev/null`,
     inspectCommand
   ].join(" || ");
 }
@@ -853,7 +873,7 @@ async function ensureTargetRuntimeNetwork(targetRoot = "", {
     return networkName;
   }
 
-  const create = await runCommand("docker", ["network", "create", networkName], {
+  const create = await runCommand("docker", runtimeNetworkCreateArgs(targetRoot), {
     timeout: 10_000
   });
   if (create.ok || /already exists/iu.test(create.output)) {
@@ -867,6 +887,8 @@ export {
   AI_STUDIO_RUNTIME_HOST_ALIAS,
   RUNTIME_CONTAINER_KIND,
   RUNTIME_CONTAINER_KIND_LABEL,
+  RUNTIME_NETWORK_KIND,
+  RUNTIME_NETWORK_KIND_LABEL,
   createRuntimeContainerCheck,
   createRuntimeContainerDoctorEntries,
   createRuntimeContainerRepair,
@@ -883,6 +905,7 @@ export {
   runtimeContainerRunArgs,
   runtimeContainersTerminalEnv,
   runtimeContainerStartScript,
+  runtimeNetworkCreateArgs,
   runtimeNetworkName,
   targetRuntimeNetworkDockerArgs,
   targetRuntimeNetworkEnsureCommand

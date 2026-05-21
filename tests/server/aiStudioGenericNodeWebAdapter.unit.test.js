@@ -200,8 +200,10 @@ test("generic Node web prompt actions use the prompt pack", async () => {
     assert.equal(afterPrompt.actionResult.status, "prompt_ready");
     assert.equal(afterPrompt.actionResult.promptContext.adapter.id, "node-web");
     assert.match(afterPrompt.actionResult.prompt, /Create the implementation plan for this generic Node web app/u);
-    assert.match(afterPrompt.actionResult.prompt, /Client library: React/u);
-    assert.match(afterPrompt.actionResult.prompt, /Framework hints: Vite/u);
+    assert.match(afterPrompt.actionResult.prompt, /AI Studio session briefing[\s\S]*"client_library_label": "React"/u);
+    assert.match(afterPrompt.actionResult.prompt, /AI Studio session briefing[\s\S]*"framework_hints": "Vite"/u);
+    assert.match(afterPrompt.actionResult.prompt, /Client library: See the AI Studio session briefing/u);
+    assert.match(afterPrompt.actionResult.prompt, /Framework hints: See the AI Studio session briefing/u);
     assert.match(afterPrompt.actionResult.prompt, /example-node-web-app/u);
   });
 });

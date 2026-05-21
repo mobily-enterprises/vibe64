@@ -213,21 +213,8 @@ function shellTargetTitle(target = "") {
   return target === "main" ? "Main repo shell" : "Worktree shell";
 }
 
-function pathBasename(path = "") {
-  return String(path || "").replace(/[\\/]+$/u, "").split(/[\\/]/u).filter(Boolean).pop() || "";
-}
-
-function shellTargetPath(target = "") {
-  if (target === "worktree") {
-    return worktreePath.value;
-  }
-  return props.session?.targetRoot || "";
-}
-
-function nextShellTabLabel(target = "") {
-  const cwdName = pathBasename(shellTargetPath(target));
-  const terminalLabel = `Terminal ${shellTabSequence + 1}`;
-  return cwdName ? `${terminalLabel} · ${cwdName}` : terminalLabel;
+function nextShellTabLabel() {
+  return `terminal ${shellTabSequence + 1}`;
 }
 
 function newShellTabId(target = "") {
@@ -257,7 +244,7 @@ function createShellTab(target) {
   if (!targetCanOpen(target)) {
     return;
   }
-  const tabLabel = nextShellTabLabel(target);
+  const tabLabel = nextShellTabLabel();
   const tabId = newShellTabId(target);
   shellTabs.value = [
     ...shellTabs.value,

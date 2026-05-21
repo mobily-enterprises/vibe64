@@ -478,7 +478,20 @@ test("target runtime network preparation creates the shared network only when mi
     assert.equal(result, networkName);
     assert.deepEqual(calls, [
       ["docker", ["network", "inspect", networkName]],
-      ["docker", ["network", "create", networkName]]
+      [
+        "docker",
+        [
+          "network",
+          "create",
+          "--label",
+          "ai-studio.kind=runtime-network",
+          "--label",
+          `ai-studio.daemon-pid=${process.pid}`,
+          "--label",
+          `ai-studio.target=${networkName.replace("ai-studio-runtime-", "")}`,
+          networkName
+        ]
+      ]
     ]);
 
     calls.length = 0;
@@ -504,7 +517,9 @@ test("target runtime network shell command tolerates concurrent network creation
     const inspectCommand = `docker network inspect ${networkName} >/dev/null 2>&1`;
 
     assert.equal(command.split(" || ").filter((part) => part === inspectCommand).length, 2);
-    assert.ok(command.includes(`docker network create ${networkName} >/dev/null`));
+    assert.ok(command.includes(`docker network create --label ai-studio.kind=runtime-network`));
+    assert.ok(command.includes(`--label ai-studio.target=${networkName.replace("ai-studio-runtime-", "")}`));
+    assert.ok(command.includes(`${networkName} >/dev/null`));
   });
 });
 
