@@ -120,7 +120,11 @@ function createService({
       return sessionResult(async () => {
         await assertAiStudioSetupReady(setupServices);
         const runtime = await projectService.createRuntime();
-        return runtime.runAction(sessionId, actionId, input);
+        const session = await runtime.runAction(sessionId, actionId, input);
+        if (!isOpenAiStudioSession(session)) {
+          await terminalService?.closeSessionTerminals?.(sessionId);
+        }
+        return session;
       });
     },
 

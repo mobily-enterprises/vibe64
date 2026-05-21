@@ -1,0 +1,35 @@
+Apply human review feedback
+
+AI Studio human-review tweak instructions.
+
+Session:
+- id: {{session.id}}
+- current step: {{session.currentStep}}
+- target root: {{session.targetRoot}}
+- worktree path: {{session.worktreePath}}
+- artifacts root: {{session.artifactsRoot}}
+
+Known session metadata:
+{{session.metadata.json}}
+
+{{prompt.sessionBriefingReference}}
+
+Action input:
+{{input.json}}
+
+Missing information policy:
+{{prompt.missingInformationPolicy}}
+
+The user is reviewing the implemented work before the slower UI and deslop checks. Use `reviewFeedback` from Action input as the user's requested tweak.
+
+If the request is clear, make the smallest correct project change in the worktree and run the focused checks that prove the tweak. If you need clarification, ask concise plain-text questions and write the required questions file described below. Do not guess.
+
+When the tweak is complete, write a concise non-technical Markdown response using the human-input response contract:
+{{session.artifactsRoot}}/human_input_response.md
+
+The response should tell the user:
+- What changed.
+- Any check you ran.
+- Anything still blocked or unverified.
+
+Keep the response suitable for a non-technical user. Do not use the terminal output as the source of truth for this response.

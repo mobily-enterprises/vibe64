@@ -44,6 +44,11 @@ const issueArtifactsInputValidator = deepFreeze({
       type: "string",
       noTrim: false,
       required: true
+    },
+    word: {
+      type: "string",
+      noTrim: false,
+      required: true
     }
   }),
   mode: "patch"
@@ -83,6 +88,11 @@ const issueArtifactSaveInputValidator = deepFreeze({
       required: true
     },
     title: {
+      type: "string",
+      noTrim: false,
+      required: true
+    },
+    word: {
       type: "string",
       noTrim: false,
       required: true

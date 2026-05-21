@@ -98,14 +98,19 @@ describe("AI Studio session panel model", () => {
           status: "current"
         },
         {
-          id: "deep_ui_check_run",
+          id: "implementation_reviewed",
           index: 8,
+          label: "Human review"
+        },
+        {
+          id: "deep_ui_check_run",
+          index: 9,
           label: "Run deep UI check"
         },
         {
           id: "changes_accepted",
-          index: 11,
-          label: "Review changes"
+          index: 12,
+          label: "Final review"
         },
         {
           id: "pr_merged",
@@ -128,8 +133,9 @@ describe("AI Studio session panel model", () => {
     }))).toEqual([
       { canRewind: false, id: "session_created", label: "Start", state: "done" },
       { canRewind: true, id: "issue_file_created", label: "Briefing", state: "done" },
-      { canRewind: false, id: "deep_ui_check_run", label: "UI improvements", state: "current" },
-      { canRewind: false, id: "changes_accepted", label: "Human review", state: "pending" },
+      { canRewind: false, id: "implementation_reviewed", label: "Human review", state: "current" },
+      { canRewind: false, id: "deep_ui_check_run", label: "UI improvements", state: "pending" },
+      { canRewind: false, id: "changes_accepted", label: "Final review", state: "pending" },
       { canRewind: false, id: "pr_merged", label: "Merge", state: "pending" },
       { canRewind: false, id: "session_finished", label: "Done", state: "pending" }
     ]);
@@ -162,6 +168,7 @@ describe("AI Studio session panel model", () => {
       metadata: {
         branch: "ai-studio/example",
         issue_title: "Add reports",
+        issue_word: "Reports",
         issue_url: "https://github.com/example/app/issues/12",
         pr_url: "https://github.com/example/app/pull/34",
         worktree_path: "/workspace/.ai-studio/session/worktree"
@@ -172,6 +179,7 @@ describe("AI Studio session panel model", () => {
       issueTitle: "Add reports",
       issueUrl: "https://github.com/example/app/issues/12",
       prUrl: "https://github.com/example/app/pull/34",
+      sessionName: "Reports",
       worktree: "/workspace/.ai-studio/session/worktree",
       worktreeReady: true
     });

@@ -1,0 +1,34 @@
+Write report
+
+AI Studio standard session-report instructions.
+
+Session:
+- id: {{session.id}}
+- current step: {{session.currentStep}}
+- target root: {{session.targetRoot}}
+- worktree path: {{session.worktreePath}}
+- artifacts root: {{session.artifactsRoot}}
+
+Known session metadata:
+{{session.metadata.json}}
+
+{{prompt.sessionBriefingReference}}
+
+Action input:
+{{input.json}}
+
+Missing information policy:
+{{prompt.missingInformationPolicy}}
+
+Write a concise Markdown report to:
+{{session.artifactsRoot}}/report.md
+
+This step runs after human review. The report is for the user and for later issue or pull request context. Include:
+- The requested outcome.
+- What changed.
+- Why the implementation was done that way.
+- Important files or areas touched.
+- Checks and reviews run.
+- Remaining risks, follow-ups, or unverified items.
+
+Use the current Codex conversation, session metadata, issue, plan, worktree changes, and verification output as context. Keep the report factual and useful. Do not modify project files while writing the report.

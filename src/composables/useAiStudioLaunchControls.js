@@ -133,7 +133,8 @@ function launchTargetWorktreePath(session = {}) {
 
 function useAiStudioLaunchControls({
   busy = () => false,
-  session = null
+  session = null,
+  windowDisplayed = () => true
 } = {}) {
   const paths = usePaths();
   const activeLaunchTarget = ref(null);
@@ -157,6 +158,7 @@ function useAiStudioLaunchControls({
     return sessionId.value ? aiStudioLaunchTargetsPath(sessionsApiPath.value, sessionId.value) : "";
   });
   const terminalWindowStorageKey = computed(() => launchTerminalStorageKey(selectedSession.value || {}));
+  const terminalDisplayed = computed(() => readRefOrGetterValue(windowDisplayed) !== false);
 
   const launchTargetsResource = useEndpointResource({
     enabled: canLoadLaunchTargets,
@@ -323,6 +325,7 @@ function useAiStudioLaunchControls({
     run,
     showOpenTarget,
     startKey,
+    terminalDisplayed,
     terminalMinimized,
     terminalRunning,
     terminalWindowStorageKey,

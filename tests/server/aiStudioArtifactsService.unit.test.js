@@ -50,23 +50,29 @@ test("AI Studio artifacts service reads and saves editable issue artifacts", asy
     assert.equal(initial.ok, true);
     assert.deepEqual(initial.artifactFields.map((field) => field.name), [
       "issue_title",
+      "issue_word",
       "issue.md"
     ]);
     assert.equal(initial.artifactStates["issue.md"].editable, true);
     assert.equal(initial.artifactStates.issue_title.editable, true);
+    assert.equal(initial.artifactStates.issue_word.editable, true);
     assert.equal(initial.artifacts.issue_title, "Original title\n");
+    assert.equal(initial.artifacts.issue_word, "");
 
     const saved = await service.saveArtifacts("artifact_issue", {
       actionId: "edit_issue",
       artifacts: {
         "issue.md": "Updated body",
-        issue_title: "Updated title"
+        issue_title: "Updated title",
+        issue_word: "Updated"
       }
     });
     assert.equal(saved.ok, true);
     assert.equal(saved.artifacts["issue.md"], "Updated body\n");
     assert.equal(saved.artifacts.issue_title, "Updated title\n");
+    assert.equal(saved.artifacts.issue_word, "Updated\n");
     assert.equal(await runtime.store.readMetadataValue("artifact_issue", "issue_title"), "Updated title");
+    assert.equal(await runtime.store.readMetadataValue("artifact_issue", "issue_word"), "Updated");
 
     await runtime.store.writeMetadataValue("artifact_issue", "issue_url", "https://github.com/example/repo/issues/1");
     const blocked = await service.saveArtifacts("artifact_issue", {
@@ -102,17 +108,22 @@ test("AI Studio artifacts service saves autopilot issue artifacts before issue s
 
     const saved = await service.saveIssueArtifacts("artifact_autopilot_issue", {
       body: "Create a booking dashboard.",
-      title: "Add booking dashboard"
+      title: "Add booking dashboard",
+      word: "Booking"
     });
 
     assert.equal(saved.ok, true);
     assert.equal(saved.artifacts.issue_title, "Add booking dashboard\n");
+    assert.equal(saved.artifacts.issue_word, "Booking\n");
     assert.equal(saved.artifacts["issue.md"], "Create a booking dashboard.\n");
     assert.equal(await runtime.store.readArtifact("artifact_autopilot_issue", "issue_title"), "Add booking dashboard\n");
+    assert.equal(await runtime.store.readArtifact("artifact_autopilot_issue", "issue_word"), "Booking\n");
     assert.equal(await runtime.store.readArtifact("artifact_autopilot_issue", "issue.md"), "Create a booking dashboard.\n");
     assert.equal(await runtime.store.readMetadataValue("artifact_autopilot_issue", "issue_title"), "Add booking dashboard");
+    assert.equal(await runtime.store.readMetadataValue("artifact_autopilot_issue", "issue_word"), "Booking");
 
     const updatedSession = await runtime.getSession("artifact_autopilot_issue");
+    assert.equal(updatedSession.sessionName, "Booking");
     assert.equal(updatedSession.next.enabled, true);
     assert.equal(updatedSession.next.stepId, "issue_submitted");
   });
@@ -133,8 +144,10 @@ test("AI Studio artifacts service clears autopilot issue artifacts before issue 
       sessionId: "artifact_autopilot_issue_clear"
     });
     await runtime.store.writeArtifact("artifact_autopilot_issue_clear", "issue_title", "Draft title\n");
+    await runtime.store.writeArtifact("artifact_autopilot_issue_clear", "issue_word", "Draft\n");
     await runtime.store.writeArtifact("artifact_autopilot_issue_clear", "issue.md", "Draft body\n");
     await runtime.store.writeMetadataValue("artifact_autopilot_issue_clear", "issue_title", "Draft title");
+    await runtime.store.writeIssueWordMetadata("artifact_autopilot_issue_clear", "Draft");
 
     const service = createService({
       projectService: projectServiceForRuntime(runtime)
@@ -144,8 +157,10 @@ test("AI Studio artifacts service clears autopilot issue artifacts before issue 
 
     assert.equal(cleared.ok, true);
     assert.equal(await runtime.store.readArtifact("artifact_autopilot_issue_clear", "issue_title"), "");
+    assert.equal(await runtime.store.readArtifact("artifact_autopilot_issue_clear", "issue_word"), "");
     assert.equal(await runtime.store.readArtifact("artifact_autopilot_issue_clear", "issue.md"), "");
     assert.equal(await runtime.store.readMetadataValue("artifact_autopilot_issue_clear", "issue_title"), "");
+    assert.equal(await runtime.store.readMetadataValue("artifact_autopilot_issue_clear", "issue_word"), "");
   });
 });
 
@@ -195,7 +210,8 @@ test("AI Studio artifacts service reads and clears Autopilot control files", asy
       runtime.store.writeArtifact("artifact_autopilot_files", AUTOPILOT_ISSUE_DRAFT_ARTIFACT, JSON.stringify({
         body: "Issue body",
         requestId: "request-123",
-        title: "Issue title"
+        title: "Issue title",
+        word: "Issue"
       })),
       runtime.store.writeArtifact("artifact_autopilot_files", AUTOPILOT_PROMPT_DONE_ARTIFACT, JSON.stringify({
         actionId: "execute_plan",
@@ -229,7 +245,8 @@ test("AI Studio artifacts service reads and clears Autopilot control files", asy
     assert.deepEqual(files.issueDraft, {
       body: "Issue body",
       requestId: "request-123",
-      title: "Issue title"
+      title: "Issue title",
+      word: "Issue"
     });
     assert.deepEqual(files.promptDone, {
       actionId: "execute_plan",
@@ -259,6 +276,7 @@ test("AI Studio artifacts service rejects unknown or empty artifact saves", asyn
       sessionId: "artifact_invalid"
     });
     await runtime.store.writeArtifact("artifact_invalid", "issue_title", "Title\n");
+    await runtime.store.writeArtifact("artifact_invalid", "issue_word", "Title\n");
     await runtime.store.writeArtifact("artifact_invalid", "issue.md", "Body\n");
     const service = createService({
       projectService: projectServiceForRuntime(runtime)

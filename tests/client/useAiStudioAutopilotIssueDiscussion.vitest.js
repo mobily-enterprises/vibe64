@@ -48,7 +48,8 @@ describe("useAiStudioAutopilotIssueDiscussion", () => {
       issueDraft: {
         body: "Build a report screen.",
         requestId: "request-1",
-        title: "Add booking reports"
+        title: "Add booking reports",
+        word: "Reports"
       },
       ok: true,
       promptDone: null,
@@ -60,6 +61,7 @@ describe("useAiStudioAutopilotIssueDiscussion", () => {
     expect(context.controller.reviewing.value).toBe(true);
     expect(context.controller.statusText.value).toBe("Does this sound right?");
     expect(context.controller.draftTitle.value).toBe("Add booking reports");
+    expect(context.controller.draftWord.value).toBe("Reports");
     expect(context.controller.draftBody.value).toBe("Build a report screen.");
   });
 
@@ -125,7 +127,8 @@ describe("useAiStudioAutopilotIssueDiscussion", () => {
       issueDraft: {
         body: "Build admin-only booking reports.",
         requestId: "request-2",
-        title: "Add booking reports"
+        title: "Add booking reports",
+        word: "Reports"
       },
       ok: true,
       promptDone: null,
@@ -135,6 +138,7 @@ describe("useAiStudioAutopilotIssueDiscussion", () => {
     await nextTick();
 
     expect(context.controller.reviewing.value).toBe(true);
+    expect(context.controller.draftWord.value).toBe("Reports");
     expect(context.controller.draftBody.value).toBe("Build admin-only booking reports.");
   });
 
@@ -175,7 +179,8 @@ describe("useAiStudioAutopilotIssueDiscussion", () => {
       issueDraft: {
         body: "Stale answer.",
         requestId: "request-1",
-        title: "Stale"
+        title: "Stale",
+        word: "Stale"
       },
       ok: true,
       promptDone: null,
@@ -194,7 +199,8 @@ describe("useAiStudioAutopilotIssueDiscussion", () => {
         issueDraft: {
           body: "Build a report screen.",
           requestId: "request-from-file",
-          title: "Add booking reports"
+          title: "Add booking reports",
+          word: "Reports"
         },
         ok: true,
         promptDone: null,
@@ -204,11 +210,12 @@ describe("useAiStudioAutopilotIssueDiscussion", () => {
     });
     await nextTick();
 
-    await context.controller.acceptIssueDraft();
+    await expect(context.controller.acceptIssueDraft()).resolves.toBe(true);
 
     expect(context.saveIssueArtifacts).toHaveBeenCalledWith("session-1", {
       body: "Build a report screen.",
-      title: "Add booking reports"
+      title: "Add booking reports",
+      word: "Reports"
     });
     expect(context.clearAutopilotArtifacts).toHaveBeenCalledWith("session-1");
     expect(context.actions.goNext).toHaveBeenCalledOnce();

@@ -2,6 +2,7 @@ import { computed, ref } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   FINISHED_STEP_ID,
+  IMPLEMENTATION_REVIEW_STEP_ID,
   ISSUE_STEP_ID,
   MERGE_PR_STEP_ID,
   REVIEW_CHANGES_STEP_ID,
@@ -15,12 +16,13 @@ import {
 } from "../../src/lib/aiStudioAutopilotPromptFiles.js";
 
 const STEP_LABELS = Object.freeze({
-  changes_accepted: "Review changes",
+  changes_accepted: "Final review",
   changes_committed: "Commit and push changes",
   deep_ui_check_run: "Run deep UI check",
   dependencies_installed: "Install dependencies",
   issue_file_created: "Define or select issue",
   issue_submitted: "Edit and submit issue",
+  implementation_reviewed: "Human review",
   main_checkout_synced: "Sync main checkout",
   plan_executed: "Execute plan",
   plan_made: "Make plan",
@@ -29,6 +31,7 @@ const STEP_LABELS = Object.freeze({
   pr_merged: "Merge PR",
   project_knowledge_updated: "Update project knowledge",
   project_validated: "Validate project",
+  report_created: "Write report",
   review_run: "Run review/deslop",
   session_finished: "Congratulations!",
   session_created: "Create session",
@@ -37,19 +40,21 @@ const STEP_LABELS = Object.freeze({
 });
 
 const NEXT_STEP = Object.freeze({
-  changes_accepted: "project_knowledge_updated",
+  changes_accepted: "report_created",
   changes_committed: "pr_file_created",
   deep_ui_check_run: "review_run",
   dependencies_installed: ISSUE_STEP_ID,
   issue_submitted: "plan_made",
   main_checkout_synced: FINISHED_STEP_ID,
-  plan_executed: "deep_ui_check_run",
+  implementation_reviewed: "deep_ui_check_run",
+  plan_executed: IMPLEMENTATION_REVIEW_STEP_ID,
   plan_made: "plan_executed",
   pr_created: MERGE_PR_STEP_ID,
   pr_file_created: "pr_created",
   pr_merged: "main_checkout_synced",
   project_knowledge_updated: "changes_committed",
   project_validated: REVIEW_CHANGES_STEP_ID,
+  report_created: "project_knowledge_updated",
   review_run: "project_validated",
   session_created: "work_source_selected",
   work_source_selected: "worktree_created",
@@ -90,12 +95,14 @@ const COMMAND_METADATA = Object.freeze({
 
 const PROMPT_ACTION_IDS = new Set([
   "create_pr_file",
+  "apply_review_feedback",
   "execute_plan",
   "make_plan",
   "prepare_for_merge",
   "run_deep_ui_check",
   "run_deslop",
-  "update_project_knowledge"
+  "update_project_knowledge",
+  "write_report"
 ]);
 const FINISH_SESSION_ACTION_ID = "finish_session";
 
@@ -194,7 +201,7 @@ describe("useAiStudioAutopilotController", () => {
     expect(context.controller.failure.value).toBeNull();
   });
 
-  it("continues from submitted issue through prompts and validation, then stops at review changes", async () => {
+  it("continues from submitted issue through prompts, then stops at human review", async () => {
     context.moveToStep("issue_submitted", {
       issue_body: "## Request\nMake the change.",
       issue_title: "Make the change"
@@ -202,12 +209,18 @@ describe("useAiStudioAutopilotController", () => {
 
     await context.controller.resume();
 
-    expect(context.session.value.currentStep).toBe("deep_ui_check_run");
-    expect(context.controller.readyForDeepUiCheck.value).toBe(true);
+    expect(context.session.value.currentStep).toBe(IMPLEMENTATION_REVIEW_STEP_ID);
+    expect(context.controller.readyForImplementationReview.value).toBe(true);
+    expect(context.controller.readyForReview.value).toBe(true);
     expect(context.actions.runAction.mock.calls.map(([action]) => action.id)).toEqual([
       "make_plan",
       "execute_plan"
     ]);
+
+    await context.controller.acceptChanges();
+
+    expect(context.session.value.currentStep).toBe("deep_ui_check_run");
+    expect(context.controller.readyForDeepUiCheck.value).toBe(true);
 
     await context.controller.runDeepUiCheck();
 
@@ -228,6 +241,7 @@ describe("useAiStudioAutopilotController", () => {
         !Object.hasOwn(options || {}, "completionToken");
     })).toBe(true);
     expect(context.controller.readyForReview.value).toBe(true);
+    expect(context.controller.readyForFinalReview.value).toBe(true);
     expect(context.controller.failure.value).toBeNull();
   });
 
@@ -260,6 +274,7 @@ describe("useAiStudioAutopilotController", () => {
     expect(context.session.value.currentStep).toBe(MERGE_PR_STEP_ID);
     expect(context.controller.readyForMerge.value).toBe(true);
     expect(context.actions.runAction.mock.calls.map(([action]) => action.id)).toEqual([
+      "write_report",
       "update_project_knowledge",
       "create_pr_file"
     ]);
@@ -268,6 +283,22 @@ describe("useAiStudioAutopilotController", () => {
       "create_pr_on_gh"
     ]);
     expect(context.controller.canResume.value).toBe(false);
+    expect(context.controller.failure.value).toBeNull();
+  });
+
+  it("runs first-review tweak feedback without leaving human review", async () => {
+    context.moveToStep(IMPLEMENTATION_REVIEW_STEP_ID);
+
+    await context.controller.requestReviewTweak("Move the button copy closer to booking language.");
+
+    const tweakCall = context.actions.runAction.mock.calls.find(([action]) => action.id === "apply_review_feedback");
+    expect(tweakCall?.[1]?.input).toEqual({
+      reviewFeedback: "Move the button copy closer to booking language."
+    });
+    expect(context.session.value.currentStep).toBe(IMPLEMENTATION_REVIEW_STEP_ID);
+    expect(context.session.value.artifactReadiness["human_input_response.md"].nonEmpty).toBe(true);
+    expect(context.controller.readyForImplementationReview.value).toBe(true);
+    expect(context.controller.promptRunReadyToAdvance.value).toBe(false);
     expect(context.controller.failure.value).toBeNull();
   });
 
@@ -358,8 +389,8 @@ describe("useAiStudioAutopilotController", () => {
       autopilotFeedback: "Keep the public booking page out of scope.",
       autopilotReason: "changes_rejected"
     });
-    expect(context.session.value.currentStep).toBe("deep_ui_check_run");
-    expect(context.controller.readyForDeepUiCheck.value).toBe(true);
+    expect(context.session.value.currentStep).toBe(IMPLEMENTATION_REVIEW_STEP_ID);
+    expect(context.controller.readyForImplementationReview.value).toBe(true);
     expect(context.controller.failure.value).toBeNull();
   });
 
@@ -377,7 +408,31 @@ describe("useAiStudioAutopilotController", () => {
     expect(context.session.value.currentStep).toBe("review_run");
     expect(context.controller.running.value).toBe(false);
     expect(context.controller.promptRunNeedsContinuation.value).toBe(true);
+    expect(context.controller.screenState.value).toMatchObject({
+      kind: "prompt_waiting",
+      title: "Codex is waiting to continue"
+    });
     expect(context.controller.failure.value).toBeNull();
+  });
+
+  it("keeps Continue available when a stale failure exists for an unfinished prompt run", async () => {
+    context.moveToStep("review_run");
+    const promptRun = context.agePromptRun(context.createPromptRun({
+      id: "run_deslop",
+      label: "Run deslop"
+    }));
+
+    context.controller.stop();
+
+    expect(context.session.value.promptRun).toMatchObject({
+      requestId: promptRun.requestId
+    });
+    expect(context.controller.failure.value).toMatchObject({
+      actionLabel: "Autopilot"
+    });
+    expect(context.controller.promptRunNeedsContinuation.value).toBe(true);
+    expect(context.controller.statusText.value).toBe("Codex is waiting to continue");
+    expect(context.controller.screenState.value.kind).toBe("prompt_waiting");
   });
 
   it("pauses for Autopilot questions from any Codex prompt action", async () => {
@@ -425,8 +480,8 @@ describe("useAiStudioAutopilotController", () => {
         sessionId: "session-1"
       })
     );
-    expect(context.session.value.currentStep).toBe("deep_ui_check_run");
-    expect(context.controller.readyForDeepUiCheck.value).toBe(true);
+    expect(context.session.value.currentStep).toBe(IMPLEMENTATION_REVIEW_STEP_ID);
+    expect(context.controller.readyForImplementationReview.value).toBe(true);
     expect(context.questionExchange.hasQuestions.value).toBe(false);
     expect(context.controller.failure.value).toBeNull();
   });
@@ -498,10 +553,8 @@ describe("useAiStudioAutopilotController", () => {
 
     expect(context.session.value.currentStep).toBe("review_run");
     expect(context.controller.running.value).toBe(false);
-    expect(context.controller.failure.value).toMatchObject({
-      actionLabel: "Autopilot",
-      error: "Autopilot stopped. Use Inspect to continue manually, or Retry to resume Autopilot."
-    });
+    expect(context.controller.waitingForCodex.value).toBe(true);
+    expect(context.controller.failure.value).toBeNull();
   });
 
   it("clears stale workflow questions when Codex becomes active again", async () => {
@@ -583,6 +636,11 @@ describe("useAiStudioAutopilotController", () => {
       expect(context.controller.waitingForCodex.value).toBe(true);
     });
     expect(context.controller.statusText.value).toBe("Executing: Execute plan");
+    expect(context.controller.canResume.value).toBe(false);
+    expect(context.controller.screenState.value).toMatchObject({
+      kind: "codex_running",
+      showProgress: true
+    });
     expect(context.controller.failure.value).toBeNull();
   });
 
@@ -664,6 +722,19 @@ describe("useAiStudioAutopilotController", () => {
       }
     };
 
+    expect(context.controller.promptRunReadyToAdvance.value).toBe(true);
+    expect(context.controller.statusText.value).toBe("Ready to continue");
+    expect(context.controller.promptRunAdvanceMessage.value).toBe(
+      "Codex finished Run deslop. Continue to move to Validate project."
+    );
+    expect(context.controller.resumeButtonText.value).toBe("Continue to Validate project");
+    expect(context.controller.screenState.value).toMatchObject({
+      buttonLabel: "Continue to Validate project",
+      kind: "prompt_done",
+      message: "Codex finished Run deslop. Continue to move to Validate project.",
+      title: "Ready to continue"
+    });
+
     await context.controller.resume();
 
     expect(context.session.value.currentStep).toBe(REVIEW_CHANGES_STEP_ID);
@@ -672,6 +743,39 @@ describe("useAiStudioAutopilotController", () => {
       "run_automated_checks"
     ]);
     expect(context.controller.failure.value).toBeNull();
+  });
+
+  it("does not offer prompt advancement while Codex background work is still running", () => {
+    const completionToken = `${AUTOPILOT_COMPLETION_TOKEN_PREFIX}1234567890abcdef1234567890abcdef`;
+    context.moveToStep("plan_executed", {}, {
+      actionId: "execute_plan",
+      actionLabel: "Execute plan",
+      completionToken,
+      createdAt: new Date().toISOString(),
+      outputStart: 0,
+      promptId: "execute_plan",
+      requestId: "request-123",
+      sessionId: "session-1",
+      status: "injected",
+      stepId: "plan_executed"
+    });
+    context.autopilotArtifacts.value = {
+      ...emptyAutopilotArtifacts(),
+      promptDone: {
+        actionId: "execute_plan",
+        completionToken,
+        requestId: "request-123",
+        stepId: "plan_executed"
+      }
+    };
+    context.codexWorking.value = true;
+
+    expect(context.controller.promptRunReadyToAdvance.value).toBe(false);
+    expect(context.controller.waitingForCodex.value).toBe(true);
+    expect(context.controller.screenState.value).toMatchObject({
+      kind: "codex_running",
+      title: "Executing: Execute plan"
+    });
   });
 
   it("does not send the next prompt while Codex is still active", async () => {
@@ -764,6 +868,7 @@ function createAutopilotContext({
   const autopilotArtifacts = ref(emptyAutopilotArtifacts());
   const codexBusy = ref(false);
   const codexOutput = ref("");
+  const codexWorking = ref(false);
   let promptRunIndex = 0;
   const codexTerminal = {
     busy: codexBusy,
@@ -775,7 +880,8 @@ function createAutopilotContext({
       return true;
     }),
     output: codexOutput,
-    promptInjectionError: ref("")
+    promptInjectionError: ref(""),
+    working: codexWorking
   };
   const commandResults = {
     create_issue_on_gh: {
@@ -926,6 +1032,16 @@ function createAutopilotContext({
       if (PROMPT_ACTION_IDS.has(action.id)) {
         const promptRun = createPromptRun(action);
         completePromptRun(promptRun);
+        if (action.id === "apply_review_feedback") {
+          moveToStep(session.value.currentStep, {
+            human_input_response_ready: "1"
+          }, promptRun);
+        }
+        if (action.id === "write_report") {
+          moveToStep(session.value.currentStep, {
+            report_ready: "1"
+          }, promptRun);
+        }
         if (action.id === "create_pr_file") {
           moveToStep(session.value.currentStep, {
             pull_request_ready: "1"
@@ -988,6 +1104,7 @@ function createAutopilotContext({
     codexBusy,
     codexTerminal,
     codexOutput,
+    codexWorking,
     commandResults,
     commandRunner,
     controller,
@@ -1054,6 +1171,14 @@ function actionsForStep(stepId, metadata = {}) {
       promptAction("execute_plan", "Execute plan")
     ];
   }
+  if (stepId === IMPLEMENTATION_REVIEW_STEP_ID) {
+    return [
+      {
+        ...promptAction("apply_review_feedback", "Ask AI for tweaks"),
+        allowRepeatedPromptRuns: true
+      }
+    ];
+  }
   if (stepId === "deep_ui_check_run") {
     return [
       promptAction("run_deep_ui_check", "Run deep UI check")
@@ -1068,6 +1193,11 @@ function actionsForStep(stepId, metadata = {}) {
     return [
       commandAction("update_code_index", "Update code index"),
       commandAction("run_automated_checks", "Run automated checks", Boolean(metadata.code_index_updated))
+    ];
+  }
+  if (stepId === "report_created") {
+    return [
+      promptAction("write_report", "Write report")
     ];
   }
   if (stepId === "project_knowledge_updated") {
@@ -1166,6 +1296,9 @@ function nextStepReady(stepId, metadata = {}) {
   if (stepId === "project_validated") {
     return Boolean(metadata.code_index_updated && metadata.automated_checks_passed);
   }
+  if (stepId === "report_created") {
+    return Boolean(metadata.report_ready);
+  }
   if (stepId === "changes_committed") {
     return Boolean(metadata.accepted_commit);
   }
@@ -1182,13 +1315,28 @@ function nextStepReady(stepId, metadata = {}) {
 }
 
 function artifactReadinessForMetadata(metadata = {}) {
-  if (!metadata.pull_request_ready) {
-    return {};
-  }
   return {
-    "pull_request.md": {
-      nonEmpty: true
-    }
+    ...(metadata.human_input_response_ready
+      ? {
+        "human_input_response.md": {
+          nonEmpty: true
+        }
+      }
+      : {}),
+    ...(metadata.pull_request_ready
+      ? {
+        "pull_request.md": {
+          nonEmpty: true
+        }
+      }
+      : {}),
+    ...(metadata.report_ready
+      ? {
+        "report.md": {
+          nonEmpty: true
+        }
+      }
+      : {})
   };
 }
 

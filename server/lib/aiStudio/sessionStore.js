@@ -18,6 +18,8 @@ const AI_STUDIO_STATE_DIR = ".ai-studio";
 const AI_STUDIO_SESSION_SCHEMA_VERSION = 1;
 const AI_STUDIO_PROMPT_CONTEXT_SNAPSHOT_SCHEMA_VERSION = 1;
 const AI_STUDIO_INITIAL_STEP = "session_created";
+const ISSUE_WORD_ARTIFACT = "issue_word";
+const ISSUE_WORD_MAX_LENGTH = 24;
 const AI_STUDIO_SESSION_STATUS = deepFreeze({
   ABANDONED: "abandoned",
   ACTIVE: "active",
@@ -218,6 +220,13 @@ function metadataFilePath(sessionPaths, name) {
   return path.join(sessionPaths.metadataRoot, assertSafeMetadataName(name));
 }
 
+function sessionNameFromIssueWord(issueWord = "") {
+  return normalizeText(issueWord)
+    .split(/\s+/u)
+    .map((word) => word.replaceAll(/[^A-Za-z0-9_-]/gu, "").slice(0, ISSUE_WORD_MAX_LENGTH))
+    .find(Boolean) || "";
+}
+
 function assertSafeArtifactName(name) {
   const normalizedName = normalizeText(name);
   if (!ARTIFACT_NAME_PATTERN.test(normalizedName)) {
@@ -285,6 +294,19 @@ function createAiStudioSessionStore({
     await writeTextFile(metadataFilePath(sessionPaths, name), `${normalizeText(value)}\n`);
   }
 
+  async function writeIssueWordMetadata(sessionId, issueWord) {
+    const sessionPaths = await ensureSessionRoot(sessionId);
+    const sessionName = sessionNameFromIssueWord(issueWord);
+    if (!sessionName) {
+      await rm(metadataFilePath(sessionPaths, ISSUE_WORD_ARTIFACT), {
+        force: true
+      });
+      return "";
+    }
+    await writeTextFile(metadataFilePath(sessionPaths, ISSUE_WORD_ARTIFACT), `${sessionName}\n`);
+    return sessionName;
+  }
+
   async function readMetadataValue(sessionId, name) {
     const sessionPaths = await ensureSessionRoot(sessionId);
     return normalizeText(await readTextIfExists(metadataFilePath(sessionPaths, name)));
@@ -316,6 +338,15 @@ function createAiStudioSessionStore({
       })
     );
     return Object.fromEntries(metadataEntries);
+  }
+
+  async function sessionNameForSession(sessionPaths, metadata = {}) {
+    const existingSessionName = sessionNameFromIssueWord(metadata[ISSUE_WORD_ARTIFACT]);
+    if (existingSessionName) {
+      return existingSessionName;
+    }
+
+    return sessionNameFromIssueWord(await readTextIfExists(artifactFilePath(sessionPaths, ISSUE_WORD_ARTIFACT)));
   }
 
   async function writeArtifact(sessionId, relativePath, text) {
@@ -584,6 +615,7 @@ function createAiStudioSessionStore({
       readPromptRun(sessionPaths.sessionId),
       readPromptContextSnapshot(sessionPaths.sessionId)
     ]);
+    const sessionName = await sessionNameForSession(sessionPaths, metadata);
     return {
       actionResults,
       actionsRoot: sessionPaths.actionsRoot,
@@ -600,6 +632,7 @@ function createAiStudioSessionStore({
       promptRun,
       promptRunPath: sessionPaths.promptRunPath,
       sessionId: sessionPaths.sessionId,
+      sessionName,
       sessionRoot: sessionPaths.sessionRoot,
       stateRoot: sessionPaths.stateRoot,
       status,
@@ -712,6 +745,7 @@ function createAiStudioSessionStore({
     writeActionResult,
     writeCompletedStep,
     writeCurrentStep,
+    writeIssueWordMetadata,
     writeMetadataValue,
     writePromptContextSnapshot,
     writePromptRun,

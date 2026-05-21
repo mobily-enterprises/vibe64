@@ -14,7 +14,7 @@
           class="studio-ai-sessions__status-dot"
           :class="`studio-ai-sessions__status-dot--${sessionItem.status}`"
         />
-        <span>{{ toolbar.shortSessionId(sessionItem.sessionId) }}</span>
+        <span>{{ sessionTabLabel(sessionItem) }}</span>
         <v-btn
           v-if="sessionItem.sessionId === selectedSessionId"
           class="studio-ai-sessions__tab-abandon"
@@ -33,7 +33,7 @@
       <v-btn
         color="primary"
         variant="tonal"
-        :disabled="!toolbar.canCreateSession || busy"
+        :disabled="!toolbar.canCreateSession"
         :loading="toolbar.createSessionCommand.isRunning"
         :prepend-icon="mdiPlus"
         :title="toolbar.createSessionTitle"
@@ -51,14 +51,10 @@ import {
   mdiPlus
 } from "@mdi/js";
 
-defineProps({
+const props = defineProps({
   abandon: {
     default: () => ({}),
     type: Object
-  },
-  busy: {
-    default: false,
-    type: Boolean
   },
   selectedSessionId: {
     default: "",
@@ -73,6 +69,14 @@ defineProps({
     type: Object
   }
 });
+
+function sessionTabLabel(sessionItem = {}) {
+  const sessionName = String(sessionItem.sessionName || sessionItem.metadata?.issue_word || "").trim();
+  if (sessionName) {
+    return sessionName;
+  }
+  return props.toolbar.shortSessionId?.(sessionItem.sessionId) || String(sessionItem.sessionId || "");
+}
 </script>
 
 <style scoped>

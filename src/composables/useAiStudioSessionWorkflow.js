@@ -143,7 +143,8 @@ function useAiStudioSessionWorkflow({
       promptInjectionFailed: workflow.codexHandoff.promptInjectionFailed,
       promptInjectionKey: workflow.codexHandoff.promptInjectionKey,
       promptOverride: workflow.codexHandoff.promptOverride,
-      sessionUpdate: workflow.codexHandoff.sessionUpdate
+      sessionUpdate: workflow.codexHandoff.sessionUpdate,
+      working: workflow.codexHandoff.working
     },
     commandTerminal: {
       action: workflow.commandTerminal.action,

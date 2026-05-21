@@ -14,7 +14,9 @@
         :diff="dialogs.diff"
         :page="guardedPage"
         :refresh-session-data="sessionData.refreshSessionData"
+        :report-preview="reportPreview"
         :review="review"
+        :human-input-response-preview="humanInputResponsePreview"
         :rewind-busy="Boolean(timeline.rewindCommand?.isRunning)"
         :rewind-to-step="timeline.rewindToStep"
         :session="selection.selectedSession"
@@ -27,13 +29,18 @@
         :dialogs="dialogs"
         :issue-request="issueRequest"
         :page="guardedPage"
+        :report-preview="reportPreview"
         :review="review"
+        :human-input-response-preview="humanInputResponsePreview"
         :selection="selection"
         :timeline="timeline"
         @update-issue-request-text="issueRequest.text = $event"
       />
 
       <AiStudioSessionTerminals
+        :class="{
+          'studio-ai-sessions__terminals--autopilot-preview': codexTerminalPreviewVisible
+        }"
         :codex-terminal="codexTerminal"
         :command-terminal="commandTerminal"
         :display-mode="codexTerminalDisplayMode"
@@ -63,8 +70,14 @@ import {
   useAiStudioHeadlessCommandRunner
 } from "@/composables/useAiStudioHeadlessCommandRunner.js";
 import {
+  useAiStudioHumanInputResponsePreview
+} from "@/composables/useAiStudioHumanInputResponsePreview.js";
+import {
   useAiStudioSessionWorkflow
 } from "@/composables/useAiStudioSessionWorkflow.js";
+import {
+  useAiStudioReportPreview
+} from "@/composables/useAiStudioReportPreview.js";
 import {
   aiStudioSessionFacts,
   buildAiStudioAutopilotNavigationSteps,
@@ -154,6 +167,16 @@ const dialogs = {
 };
 const issueRequest = proxyRefs(sessionWorkflow.issueRequest);
 const page = proxyRefs(sessionWorkflow.page);
+const reportPreview = proxyRefs(useAiStudioReportPreview({
+  active: computed(() => props.active),
+  currentActions: computed(() => actions.currentActions),
+  session: selectedSession
+}));
+const humanInputResponsePreview = proxyRefs(useAiStudioHumanInputResponsePreview({
+  active: computed(() => props.active),
+  currentActions: computed(() => actions.currentActions),
+  session: selectedSession
+}));
 const review = proxyRefs(sessionWorkflow.review);
 const selection = proxyRefs({
   facts: sessionFacts,
@@ -191,12 +214,23 @@ const headlessCommandTerminal = proxyRefs({
 
 const autopilotBusy = ref(false);
 const autopilotModeActive = computed(() => Boolean(props.active && props.sessionMode === "autopilot"));
+const codexTerminalPreviewVisible = computed(() => Boolean(
+  props.active &&
+  props.sessionMode === "autopilot" &&
+  codexTerminal.busy
+));
 const codexTerminalDisplayMode = computed(() => {
   // Inactive hosts stay mounted headless so Codex output capture remains session-owned.
-  if (!props.active || props.sessionMode !== "inspect") {
+  if (!props.active) {
     return "headless";
   }
-  return "full";
+  if (props.sessionMode === "inspect") {
+    return "full";
+  }
+  if (codexTerminalPreviewVisible.value) {
+    return "compact";
+  }
+  return "headless";
 });
 const interactionBusy = computed(() => Boolean(page.busy || autopilotBusy.value));
 const guardedPage = computed(() => ({
@@ -265,10 +299,29 @@ watch(() => page.error, emitPageError, {
 
 .studio-ai-sessions__layout--autopilot {
   grid-template-columns: minmax(0, 1fr);
+  position: relative;
 }
 
 .studio-ai-sessions__layout--inspect {
   grid-template-columns: minmax(18rem, 0.78fr) minmax(30rem, 1.22fr);
+}
+
+.studio-ai-sessions__layout--autopilot > .studio-autopilot {
+  position: relative;
+  z-index: 2;
+}
+
+.studio-ai-sessions__layout--autopilot > .studio-ai-sessions__terminals--autopilot-preview {
+  align-self: center;
+  height: min(18rem, 38vh);
+  justify-self: center;
+  max-width: min(58rem, calc(100% - 2rem));
+  opacity: 0.24;
+  pointer-events: none;
+  position: absolute;
+  top: clamp(7rem, 28vh, 14rem);
+  width: min(58rem, calc(100% - 2rem));
+  z-index: 1;
 }
 
 @media (max-width: 980px) {

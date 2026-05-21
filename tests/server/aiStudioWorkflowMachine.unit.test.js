@@ -613,6 +613,22 @@ test("ai-studio project validation requires code index and automated checks", as
     await runtime.store.writeMetadataValue("project_validated", "automated_checks_passed", "yes");
     const afterChecks = await runtime.getSession("project_validated");
     assert.equal(afterChecks.next.enabled, true);
+    assert.equal(afterChecks.next.stepId, "changes_accepted");
+
+    const afterHumanReview = await runtime.advance("project_validated");
+    assert.equal(afterHumanReview.currentStep, "changes_accepted");
+    assert.equal(afterHumanReview.currentStepDefinition.label, "Final review");
+    assert.equal(afterHumanReview.next.stepId, "report_created");
+
+    const reportStep = await runtime.advance("project_validated");
+    assert.equal(reportStep.currentStep, "report_created");
+    assert.equal(reportStep.next.enabled, false);
+    assert.equal(reportStep.next.disabledReason, "Write the session report before updating project knowledge.");
+
+    await runtime.store.writeArtifact("project_validated", "report.md", "# Report\n");
+    const afterReport = await runtime.getSession("project_validated");
+    assert.equal(afterReport.next.enabled, true);
+    assert.equal(afterReport.next.stepId, "project_knowledge_updated");
   });
 });
 

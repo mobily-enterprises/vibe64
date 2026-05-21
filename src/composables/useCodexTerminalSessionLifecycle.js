@@ -10,6 +10,7 @@ function useCodexTerminalSessionLifecycle({
   appendTerminalOutput,
   canUseTerminal,
   clearCodexBusy,
+  clearCodexWorking,
   clearPromptEchoFilters,
   clearTerminalDisplay,
   clearTerminalOutput,
@@ -97,6 +98,7 @@ function useCodexTerminalSessionLifecycle({
       terminalStatus.value = message.status || terminalStatus.value || "";
       if (terminalStatus.value === "exited") {
         clearCodexBusy?.();
+        clearCodexWorking?.();
       }
       return;
     }
@@ -134,6 +136,7 @@ function useCodexTerminalSessionLifecycle({
   function disposeTerminalUi() {
     onBeforeDispose?.();
     clearCodexBusy?.();
+    clearCodexWorking?.();
     terminalSocket.closeSocket();
     disposeTerminalViewport?.();
     clearPromptEchoFilters?.();

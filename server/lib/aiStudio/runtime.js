@@ -164,6 +164,10 @@ function actionLogEntry(action, session, actionResult) {
 
 async function writeActionResultEffects(store, sessionId, result = {}) {
   for (const [name, value] of Object.entries(result.metadata || {})) {
+    if (name === "issue_word" && typeof store.writeIssueWordMetadata === "function") {
+      await store.writeIssueWordMetadata(sessionId, value);
+      continue;
+    }
     await store.writeMetadataValue(sessionId, name, value);
   }
   for (const [relativePath, text] of Object.entries(result.artifacts || {})) {

@@ -48,6 +48,7 @@ import {
   useExistingIssue,
   writeIssueArtifacts,
   writePullRequestArtifact,
+  writeReportArtifact,
   writeWorktreeFile,
   type AiStudioSession
 } from "./live/support/workflow";
@@ -153,6 +154,12 @@ test.describe("live AI Studio session workflow", () => {
       enabled: ["Execute plan", "Next"]
     });
 
+    await goNextToStep(page, "implementation_reviewed");
+    await assertChecklistControls(page, "implementation_reviewed", {
+      disabled: ["Edit AI response", "Open app"],
+      enabled: ["Review diff", "Run app", "Ask AI for tweaks", "Next"]
+    });
+
     await goNextToStep(page, "deep_ui_check_run");
     await assertChecklistControls(page, "deep_ui_check_run", {
       enabled: ["Run deep UI check", "Next"]
@@ -181,8 +188,18 @@ test.describe("live AI Studio session workflow", () => {
 
     await goNextToStep(page, "changes_accepted");
     await assertChecklistControls(page, "changes_accepted", {
-      disabled: ["Open app"],
+      disabled: ["Edit report", "Open app"],
       enabled: ["Review diff", "Run app", "Next"]
+    });
+
+    await goNextToStep(page, "report_created");
+    await assertChecklistControls(page, "report_created", {
+      disabled: ["Edit report", "Next"],
+      enabled: ["Write report"]
+    });
+    await writeReportArtifact(page, `# Report\n\nChecklist report for ${runId}.\n`);
+    await assertChecklistControls(page, "report_created", {
+      enabled: ["Edit report", "Write report", "Next"]
     });
 
     await goNextToStep(page, "project_knowledge_updated");
@@ -301,6 +318,7 @@ test.describe("live AI Studio session workflow", () => {
     await goNextToStep(page, "issue_submitted");
     await goNextToStep(page, "plan_made");
     await goNextToStep(page, "plan_executed");
+    await goNextToStep(page, "implementation_reviewed");
     await goNextToStep(page, "deep_ui_check_run");
     await goNextToStep(page, "review_run");
     await goNextToStep(page, "project_validated");
@@ -310,6 +328,8 @@ test.describe("live AI Studio session workflow", () => {
     await runCommandAndWaitForMetadata(page, "Run automated checks", "automated_checks_passed", UI_COMMAND_TIMEOUT_MS);
     await goNextToStep(page, "changes_accepted");
     await reviewDiff(page, `${runId}-new-pr.txt`);
+    await goNextToStep(page, "report_created");
+    await writeReportArtifact(page, `# Report\n\nNew PR path ${runId}.\n`);
     await goNextToStep(page, "project_knowledge_updated");
     await goNextToStep(page, "changes_committed");
     await runCommandAndWaitForMetadata(page, "Commit and push changes", "accepted_commit", UI_COMMAND_TIMEOUT_MS);
@@ -373,6 +393,7 @@ test.describe("live AI Studio session workflow", () => {
     await goNextToStep(page, "issue_submitted");
     await goNextToStep(page, "plan_made");
     await goNextToStep(page, "plan_executed");
+    await goNextToStep(page, "implementation_reviewed");
     await goNextToStep(page, "deep_ui_check_run");
     await goNextToStep(page, "review_run");
     await goNextToStep(page, "project_validated");
@@ -383,6 +404,8 @@ test.describe("live AI Studio session workflow", () => {
     });
     await goNextToStep(page, "changes_accepted");
     await writeWorktreeFile(page, `e2e-fixtures/${runId}-existing-direct-pr.txt`, `Existing direct PR path ${runId}\n`);
+    await goNextToStep(page, "report_created");
+    await writeReportArtifact(page, `# Report\n\nExisting PR path ${runId}.\n`);
     await goNextToStep(page, "project_knowledge_updated");
     await goNextToStep(page, "changes_committed");
     await runCommandAndWaitForMetadata(page, "Commit and push changes", "accepted_commit", UI_COMMAND_TIMEOUT_MS);

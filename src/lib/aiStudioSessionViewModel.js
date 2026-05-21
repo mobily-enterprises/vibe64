@@ -1,3 +1,7 @@
+import {
+  REPORT_ARTIFACT
+} from "@/lib/aiStudioArtifactNames.js";
+
 const CLOSED_SESSION_STATUSES = new Set(["abandoned", "finished"]);
 
 function shortAiStudioSessionId(sessionId) {
@@ -5,6 +9,10 @@ function shortAiStudioSessionId(sessionId) {
 }
 
 function aiStudioSessionDisplayTitle(session = {}) {
+  const sessionName = firstText(session?.sessionName) || firstText(session?.metadata?.issue_word);
+  if (sessionName) {
+    return sessionName;
+  }
   const issueTitle = firstText(session?.issueTitle);
   if (issueTitle) {
     return issueTitle;
@@ -110,6 +118,12 @@ function buildAiStudioSessionFacts(session = {}, stepDefinitions = []) {
   const blueprintPath = firstText(session.blueprintPath);
   const pullRequestPath = firstText(session.pullRequestPath);
   const prOutcome = session.prOutcome && typeof session.prOutcome === "object" ? session.prOutcome : null;
+  const reportPath = firstText(
+    session.reportPath,
+    session.artifactReadiness?.[REPORT_ARTIFACT]?.nonEmpty && session.artifactsRoot
+      ? `${session.artifactsRoot}/${REPORT_ARTIFACT}`
+      : ""
+  );
   const workSource = firstText(session.workSource);
   const sourcePrLink = parseGithubSessionLink(session.sourcePrUrl, "pr");
 
@@ -194,6 +208,16 @@ function buildAiStudioSessionFacts(session = {}, stepDefinitions = []) {
       label: "Blueprint",
       value: "APP_BLUEPRINT.md",
       visible: Boolean(session.blueprintExists && blueprintPath)
+    },
+    {
+      copyValue: reportPath,
+      detail: reportPath,
+      href: fileHref(reportPath),
+      icon: "report",
+      key: "session-report",
+      label: "Report",
+      value: REPORT_ARTIFACT,
+      visible: Boolean(reportPath)
     },
     {
       copyValue: pullRequestPath,

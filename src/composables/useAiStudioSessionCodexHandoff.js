@@ -19,6 +19,7 @@ function useAiStudioSessionCodexHandoff({
   const promptInjectionKey = ref("");
   const promptOverride = ref("");
   const readinessRefreshInFlight = ref(false);
+  const working = ref(false);
   const codexCommands = useAiStudioCodexCommands();
 
   async function startFromActionResponse(response = {}, context = {}) {
@@ -83,6 +84,7 @@ function useAiStudioSessionCodexHandoff({
     promptInjectionKey.value = "";
     promptOverride.value = "";
     readinessRefreshInFlight.value = false;
+    working.value = false;
   }
 
   function clearPromptOverride() {
@@ -119,6 +121,7 @@ function useAiStudioSessionCodexHandoff({
 
     const wasBusy = busy.value;
     const isBusy = event.busy === true;
+    working.value = event.working === true;
     if (!wasBusy || isBusy || !readRefOrGetterBoolean(waitingForPromptedArtifact)) {
       busy.value = isBusy;
       return;
@@ -137,6 +140,7 @@ function useAiStudioSessionCodexHandoff({
     }
     if (event.codexTerminalStatus === "exited") {
       busy.value = false;
+      working.value = false;
     }
     await refreshSessionData();
   }
@@ -156,7 +160,8 @@ function useAiStudioSessionCodexHandoff({
     promptInjectionKey,
     promptOverride,
     sessionUpdate: handleSessionUpdate,
-    startFromActionResponse
+    startFromActionResponse,
+    working
   };
 }
 

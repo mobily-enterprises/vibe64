@@ -58,6 +58,7 @@ function enrichAiStudioSessionForDisplay(session = null) {
     issueUrl: session.issueUrl || metadata.issue_url || "",
     prUrl: session.prUrl || metadata.pr_url || "",
     pullRequestPath: session.pullRequestPath || metadata.pull_request_path || "",
+    sessionName: session.sessionName || metadata.issue_word || "",
     sourcePrTitle: metadata.source_pr_title || "",
     sourcePrUpdateMode: metadata.source_pr_update_mode || "",
     sourcePrUrl: metadata.source_pr_url || "",
@@ -77,12 +78,16 @@ const AI_STUDIO_AUTOPILOT_INTERACTION_STEPS = Object.freeze([
     label: "Briefing"
   },
   {
+    id: "implementation_reviewed",
+    label: "Human review"
+  },
+  {
     id: "deep_ui_check_run",
     label: "UI improvements"
   },
   {
     id: "changes_accepted",
-    label: "Human review"
+    label: "Final review"
   },
   {
     id: "pr_merged",

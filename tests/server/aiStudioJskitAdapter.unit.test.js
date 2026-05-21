@@ -67,6 +67,14 @@ function enabledByActionId(actions = []) {
   return Object.fromEntries(actions.map((action) => [action.id, action.enabled]));
 }
 
+function assertJskitHelperGuardBeforeContract(prompt = "") {
+  const helperGuardIndex = prompt.indexOf("generic helpers for JSON:API documents");
+  const guideContractIndex = prompt.indexOf("JSKIT guide-first contract");
+  assert.notEqual(helperGuardIndex, -1);
+  assert.notEqual(guideContractIndex, -1);
+  assert.ok(helperGuardIndex < guideContractIndex);
+}
+
 test("jskit adapter exposes selected-project facts, commands, and prompt context", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createJskitProject(targetRoot);
@@ -94,6 +102,8 @@ test("jskit adapter exposes selected-project facts, commands, and prompt context
     assert.match(facts.promptContext.agent_guide_contract, /Use individual `npx jskit generate \.\.\. help` commands only/u);
     assert.match(facts.promptContext.tooling_contract, /npx jskit helper-map update/u);
     assert.match(facts.promptContext.tooling_contract, /New JSKIT-owned files must be created/u);
+    assert.match(facts.promptContext.tooling_contract, /Before writing generic helpers for JSON:API documents/u);
+    assert.match(facts.promptContext.tooling_contract, /search JSKIT package exports and agent-doc references first/u);
     assert.match(facts.promptContext.generator_discovery_commands, /npx jskit list-placements --json/u);
     assert.doesNotMatch(facts.promptContext.generator_discovery_commands, /generate .* help/u);
     assert.match(facts.promptContext.placement_contract, /agent-friendly placement docs/u);
@@ -406,6 +416,11 @@ test("jskit execute-plan prompt requires generators, placements, and database mo
     assert.equal(afterPrompt.actionResult.promptContext.adapter.managedServices[0].generatorTokenHints.database, "$MYSQL_DATABASE");
     assert.match(afterPrompt.actionResult.prompt, /Read the JSKIT agent guide and run the baseline discovery commands before adding new app files/u);
     assert.match(afterPrompt.actionResult.prompt, /Do not hand-create packages, package descriptors, provider entrypoints/u);
+    assert.match(afterPrompt.actionResult.prompt, /Before writing generic helpers for JSON:API documents/u);
+    assert.match(afterPrompt.actionResult.prompt, /Do not implement framework-shaped helpers locally/u);
+    assert.match(afterPrompt.actionResult.prompt, /In the final response, for every hand-written helper/u);
+    assert.match(afterPrompt.actionResult.prompt, /why it belongs locally instead of in an existing shared\/global JSKIT location/u);
+    assertJskitHelperGuardBeforeContract(afterPrompt.actionResult.prompt);
     assert.match(afterPrompt.actionResult.prompt, /Managed services/u);
     assert.match(afterPrompt.actionResult.prompt, /JSKIT MariaDB/u);
     assert.match(afterPrompt.actionResult.prompt, /mysql --host/u);
@@ -425,6 +440,29 @@ test("jskit execute-plan prompt requires generators, placements, and database mo
     assert.match(afterPrompt.actionResult.prompt, /do not use direct Knex access from feature code/u);
     assert.match(afterPrompt.actionResult.prompt, /Do not store durable application data in JSON files/u);
     assert.match(afterPrompt.actionResult.prompt, /crud-ui-generator crud/u);
+  });
+});
+
+test("jskit deslop prompt checks framework-shaped helpers before accepting them", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createJskitProject(targetRoot);
+    const runtime = new AiStudioSessionRuntime({
+      adapter: createJskitTargetAdapter(),
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "review_run",
+      sessionId: "jskit_deslop_prompt"
+    });
+
+    const afterPrompt = await runtime.runAction("jskit_deslop_prompt", "run_deslop");
+
+    assert.equal(afterPrompt.actionResult.status, "prompt_ready");
+    assert.match(afterPrompt.actionResult.prompt, /Before accepting, preserving, or writing generic helpers for JSON:API documents/u);
+    assert.match(afterPrompt.actionResult.prompt, /Treat local framework-shaped helpers as findings/u);
+    assert.match(afterPrompt.actionResult.prompt, /Treat any new hand-written helper, shared utility, composable/u);
+    assert.match(afterPrompt.actionResult.prompt, /local-vs-shared placement as a deslop finding/u);
+    assertJskitHelperGuardBeforeContract(afterPrompt.actionResult.prompt);
   });
 });
 
@@ -457,6 +495,7 @@ test("jskit issue and pull-request steps are gated by artifacts and metadata", a
     ]);
 
     await runtime.store.writeArtifact("jskit_issue", "issue_title", "Add reports\n");
+    await runtime.store.writeArtifact("jskit_issue", "issue_word", "Reports\n");
     await runtime.store.writeArtifact("jskit_issue", "issue.md", "Body\n");
     const issueReady = await runtime.getSession("jskit_issue");
     assert.deepEqual(issueReady.actions.map((action) => ({
@@ -535,24 +574,20 @@ test("jskit merge, sync, and finish steps follow current metadata gates", async 
       sessionId: "jskit_merge"
     });
     const mergeWithoutPr = await runtime.getSession("jskit_merge");
-    assert.deepEqual(mergeWithoutPr.actions.map((action) => ({
-      enabled: action.enabled,
-      id: action.id
-    })), [
-      {
-        enabled: false,
-        id: "prepare_for_merge"
-      },
-      {
-        enabled: false,
-        id: "merge_pr"
-      }
-    ]);
+    assert.deepEqual(enabledByActionId(mergeWithoutPr.actions), {
+      edit_report: false,
+      merge_pr: false,
+      prepare_for_merge: false
+    });
 
+    await runtime.store.writeArtifact("jskit_merge", "report.md", "# Report\n");
     await runtime.store.writeMetadataValue("jskit_merge", "pr_url", "https://github.com/example/repo/pull/24");
     const mergeReady = await runtime.getSession("jskit_merge");
-    assert.equal(mergeReady.actions[0].enabled, true);
-    assert.equal(mergeReady.actions[1].enabled, true);
+    assert.deepEqual(enabledByActionId(mergeReady.actions), {
+      edit_report: true,
+      merge_pr: true,
+      prepare_for_merge: true
+    });
 
     const afterPrepare = await runtime.runAction("jskit_merge", "prepare_for_merge");
     assert.equal(afterPrepare.actionResult.promptId, "prepare_for_merge");

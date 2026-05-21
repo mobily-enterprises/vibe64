@@ -121,6 +121,9 @@ function promptRunForCurrentStep(session = {}) {
 }
 
 function promptRunBlocksAction(action = {}, session = {}) {
+  if (action.allowRepeatedPromptRuns === true) {
+    return false;
+  }
   const promptRun = promptRunForCurrentStep(session);
   return Boolean(promptRun && promptRun.actionId === action.id);
 }

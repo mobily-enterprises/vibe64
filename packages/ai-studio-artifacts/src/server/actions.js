@@ -125,7 +125,8 @@ const featureActions = Object.freeze([
       void context;
       return deps.featureService.saveIssueArtifacts(input.sessionId, {
         body: input.body,
-        title: input.title
+        title: input.title,
+        word: input.word
       });
     }
   }

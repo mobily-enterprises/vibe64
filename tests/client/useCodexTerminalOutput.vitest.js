@@ -101,4 +101,48 @@ describe("useCodexTerminalOutput", () => {
     expect(onOutputChanged).toHaveBeenCalledTimes(1);
     expect(onOutputChanged).toHaveBeenLastCalledWith("first second");
   });
+
+  it("reports Codex background work separately from recent output activity", () => {
+    const activityEvents = [];
+    const terminalOutput = useCodexTerminalOutput({
+      emitBusyChanged: (event) => activityEvents.push(event),
+      writeDisplay: vi.fn()
+    });
+
+    terminalOutput.appendTerminalOutput("Waiting for background terminal (4s) - 1 background terminal running");
+
+    expect(terminalOutput.codexBusy.value).toBe(true);
+    expect(terminalOutput.codexWorking.value).toBe(true);
+    expect(activityEvents.at(-1)).toMatchObject({
+      busy: true,
+      working: true
+    });
+
+    vi.advanceTimersByTime(2200);
+
+    expect(terminalOutput.codexBusy.value).toBe(false);
+    expect(terminalOutput.codexWorking.value).toBe(true);
+
+    terminalOutput.writeTerminalOutput("tab to queue message");
+
+    expect(terminalOutput.codexWorking.value).toBe(false);
+    expect(activityEvents.at(-1)).toMatchObject({
+      busy: false,
+      working: false
+    });
+  });
+
+  it("marks live terminal output busy even when the chunk is only terminal control data", () => {
+    const terminalOutput = useCodexTerminalOutput({
+      writeDisplay: vi.fn()
+    });
+
+    terminalOutput.appendTerminalOutput("\u001b[?25h");
+
+    expect(terminalOutput.codexBusy.value).toBe(true);
+
+    vi.advanceTimersByTime(2200);
+
+    expect(terminalOutput.codexBusy.value).toBe(false);
+  });
 });

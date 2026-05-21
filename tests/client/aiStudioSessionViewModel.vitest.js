@@ -25,6 +25,17 @@ describe("AI Studio session view model", () => {
   it("derives stable display titles and GitHub link labels", () => {
     expect(shortAiStudioSessionId("2026-05-12_13-07-36")).toBe("05-12_13-07-36");
     expect(aiStudioSessionDisplayTitle({
+      issueTitle: "Add reports dashboard",
+      sessionId: "2026-05-12_13-07-36",
+      sessionName: "Reports"
+    })).toBe("Reports");
+    expect(aiStudioSessionDisplayTitle({
+      metadata: {
+        issue_word: "Billing"
+      },
+      sessionId: "2026-05-12_13-07-36"
+    })).toBe("Billing");
+    expect(aiStudioSessionDisplayTitle({
       issueTitle: "  Add reports dashboard  ",
       sessionId: "2026-05-12_13-07-36"
     })).toBe("Add reports dashboard");
@@ -56,6 +67,12 @@ describe("AI Studio session view model", () => {
         outcome: "merged"
       },
       prUrl: "https://github.com/example/app/pull/34",
+      artifactReadiness: {
+        "report.md": {
+          nonEmpty: true
+        }
+      },
+      artifactsRoot: "/workspace/.ai-studio/sessions/active/session/artifacts",
       pullRequestPath: "/workspace/.ai-studio/sessions/active/session/artifacts/pull_request.md",
       sessionId: "2026-05-12_13-07-36",
       sessionRoot: "/workspace/.ai-studio/sessions/active/2026-05-12_13-07-36",
@@ -76,6 +93,7 @@ describe("AI Studio session view model", () => {
       "issue",
       "pr",
       "blueprint",
+      "session-report",
       "pull-request-draft",
       "pr-outcome"
     ]);
@@ -84,6 +102,8 @@ describe("AI Studio session view model", () => {
     expect(facts.find((fact) => fact.key === "pr")?.value).toBe("PR #34");
     expect(facts.find((fact) => fact.key === "blueprint")?.href)
       .toBe("file:///workspace/.jskit/APP_BLUEPRINT.md");
+    expect(facts.find((fact) => fact.key === "session-report")?.href)
+      .toBe("file:///workspace/.ai-studio/sessions/active/session/artifacts/report.md");
     expect(facts.find((fact) => fact.key === "pr-outcome")?.value).toBe("merged");
   });
 });

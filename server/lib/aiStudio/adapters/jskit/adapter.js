@@ -84,6 +84,7 @@ const JSKIT_TOOLING_CONTRACT = [
   "New JSKIT-owned files must be created by `npx jskit generate ...`, `npx jskit add ...`, or another documented JSKIT CLI command before manual edits.",
   "Do not hand-create packages, package descriptors, provider entrypoints, route files, resource modules, database modules, migrations, generated client surfaces, page trees, or package glue.",
   "Before adding helpers, composables, service functions, maps, package glue, or provider wiring, run `npx jskit helper-map update` and inspect `.jskit/helper-map.md` or `npx jskit helper-map --json`.",
+  "Before writing generic helpers for JSON:API documents, route ownership, workspace params, CRUD repositories, dates, normalization, transport, or generated resource data, search JSKIT package exports and agent-doc references first. Do not implement framework-shaped helpers locally unless no exported JSKIT helper exists and the decision is called out.",
   "For application features, read the agent-friendly JSKIT guide first, then inspect the JSKIT catalog with `npx jskit list`, `npx jskit list generators`, and `npx jskit show <package>`.",
   "After generator output exists, make only narrow manual edits on top of generated files when the generator cannot express the requested behavior."
 ].join("\n");

@@ -227,6 +227,7 @@ const {
   addPromptEchoFilter,
   appendTerminalOutput,
   clearCodexBusy,
+  clearCodexWorking,
   clearPromptEchoFilters,
   flushTerminalOutputEmit,
   getTerminalOutput,
@@ -304,6 +305,7 @@ terminalLifecycle = useCodexTerminalSessionLifecycle({
   appendTerminalOutput,
   canUseTerminal,
   clearCodexBusy,
+  clearCodexWorking,
   clearPromptEchoFilters,
   clearTerminalDisplay,
   clearTerminalOutput() {
@@ -411,6 +413,7 @@ async function sendTerminalData(data, {
     }
     if (source === "user" && input.includes("\u0003")) {
       clearCodexBusy();
+      clearCodexWorking();
     } else if (source === "user" && input.includes("\r")) {
       markCodexBusy();
     }

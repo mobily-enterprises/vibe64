@@ -25,6 +25,5 @@ describe("aiStudioAutopilotPromptFiles", () => {
     expect(instruction).toContain('"requestId": "request-123"');
     expect(instruction).toContain('"actionId": "execute_plan"');
     expect(instruction).toContain('"stepId": "plan_executed"');
-    expect(instruction).not.toContain("[[AI_STUDIO_AUTOPILOT_QUESTIONS_V1]]");
   });
 });

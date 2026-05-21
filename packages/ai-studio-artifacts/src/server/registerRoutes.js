@@ -167,7 +167,7 @@ function registerRoutes(
         sessionId: request.params.sessionId
       };
     },
-    summary: "Save AI Studio issue title and body artifacts."
+    summary: "Save AI Studio issue title, word, and body artifacts."
   });
 
   routes.actionRoute("DELETE", "/sessions/:sessionId/issue-artifacts", {
@@ -177,7 +177,7 @@ function registerRoutes(
         sessionId: request.params.sessionId
       };
     },
-    summary: "Clear AI Studio issue title and body artifacts."
+    summary: "Clear AI Studio issue title, word, and body artifacts."
   });
 }
 

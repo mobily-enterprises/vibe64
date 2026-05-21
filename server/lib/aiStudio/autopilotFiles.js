@@ -52,13 +52,15 @@ function normalizeAutopilotIssueDraftFile(value = {}) {
   const requestId = normalizeAutopilotRequestId(value?.requestId);
   const title = normalizeAutopilotText(value?.title);
   const body = normalizeAutopilotText(value?.body);
-  if (!requestId || !title || !body) {
+  const word = normalizeAutopilotText(value?.word || value?.issueWord);
+  if (!requestId || !title || !body || !word) {
     return null;
   }
   return {
     body,
     requestId,
-    title
+    title,
+    word
   };
 }
 
@@ -95,6 +97,7 @@ function autopilotIssueDraftFileExample(requestId = "request-id") {
   return JSON.stringify({
     requestId,
     title: "Concise issue title",
+    word: "Label",
     body: "Markdown issue body"
   }, null, 2);
 }

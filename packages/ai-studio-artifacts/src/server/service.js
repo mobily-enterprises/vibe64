@@ -28,6 +28,7 @@ const EMPTY_EDITOR_ACTION = deepFreeze({
 const ISSUE_BODY_ARTIFACT = "issue.md";
 const ISSUE_FILE_STEP_ID = "issue_file_created";
 const ISSUE_TITLE_ARTIFACT = "issue_title";
+const ISSUE_WORD_ARTIFACT = "issue_word";
 const AUTOPILOT_FILE_NAMES = new Set(AUTOPILOT_FILE_ARTIFACTS);
 
 function artifactResult(operation) {
@@ -66,7 +67,8 @@ function artifactText(value = "") {
 function issueArtifactInput(input = {}) {
   return {
     body: String(input.body || "").trim(),
-    title: String(input.title || "").trim()
+    title: String(input.title || "").trim(),
+    word: String(input.word || input.issueWord || "").trim()
   };
 }
 
@@ -230,6 +232,14 @@ function issueArtifactsResponse(session = {}, artifacts = {}) {
         requiredMessage: "Issue title is required."
       },
       {
+        kind: "text",
+        label: "Session label",
+        metadataName: ISSUE_WORD_ARTIFACT,
+        name: ISSUE_WORD_ARTIFACT,
+        required: true,
+        requiredMessage: "Session label is required."
+      },
+      {
         kind: "textarea",
         label: "Issue body",
         metadataName: "",
@@ -369,7 +379,9 @@ function createService({ projectService } = {}) {
           const writes = [
             runtime.store.writeArtifact(sessionId, artifactName, `${artifactText}\n`)
           ];
-          if (field?.metadataName) {
+          if (field?.metadataName === ISSUE_WORD_ARTIFACT) {
+            writes.push(runtime.store.writeIssueWordMetadata(sessionId, artifactText));
+          } else if (field?.metadataName) {
             writes.push(runtime.store.writeMetadataValue(sessionId, field.metadataName, artifactText));
           }
           return writes;
@@ -409,17 +421,27 @@ function createService({ projectService } = {}) {
             "Issue body is required."
           );
         }
+        if (!artifacts.word) {
+          return artifactErrorResponse(
+            session,
+            "ai_studio_issue_word_required",
+            "Session label is required."
+          );
+        }
 
         await Promise.all([
           runtime.store.writeArtifact(sessionId, ISSUE_TITLE_ARTIFACT, artifactText(artifacts.title)),
           runtime.store.writeArtifact(sessionId, ISSUE_BODY_ARTIFACT, artifactText(artifacts.body)),
-          runtime.store.writeMetadataValue(sessionId, ISSUE_TITLE_ARTIFACT, artifacts.title)
+          runtime.store.writeArtifact(sessionId, ISSUE_WORD_ARTIFACT, artifactText(artifacts.word)),
+          runtime.store.writeMetadataValue(sessionId, ISSUE_TITLE_ARTIFACT, artifacts.title),
+          runtime.store.writeIssueWordMetadata(sessionId, artifacts.word)
         ]);
 
         const updatedSession = await runtime.getSession(sessionId);
         return issueArtifactsResponse(updatedSession, {
           [ISSUE_BODY_ARTIFACT]: artifactText(artifacts.body),
-          [ISSUE_TITLE_ARTIFACT]: artifactText(artifacts.title)
+          [ISSUE_TITLE_ARTIFACT]: artifactText(artifacts.title),
+          [ISSUE_WORD_ARTIFACT]: artifactText(artifacts.word)
         });
       });
     },
@@ -436,14 +458,19 @@ function createService({ projectService } = {}) {
         await Promise.all([
           runtime.store.deleteArtifacts(sessionId, [
             ISSUE_BODY_ARTIFACT,
-            ISSUE_TITLE_ARTIFACT
+            ISSUE_TITLE_ARTIFACT,
+            ISSUE_WORD_ARTIFACT
           ]),
-          runtime.store.deleteMetadataValue(sessionId, ISSUE_TITLE_ARTIFACT)
+          runtime.store.deleteMetadataValues(sessionId, [
+            ISSUE_TITLE_ARTIFACT,
+            ISSUE_WORD_ARTIFACT
+          ])
         ]);
 
         return issueArtifactsResponse(await runtime.getSession(sessionId), {
           [ISSUE_BODY_ARTIFACT]: "",
-          [ISSUE_TITLE_ARTIFACT]: ""
+          [ISSUE_TITLE_ARTIFACT]: "",
+          [ISSUE_WORD_ARTIFACT]: ""
         });
       });
     },

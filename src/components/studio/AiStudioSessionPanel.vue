@@ -10,7 +10,6 @@
 
       <AiStudioSessionToolbar
         :abandon="selectedAbandon"
-        :busy="interactionBusy"
         :selected-session-id="selection.selectedSessionId"
         :selection-closed="selection.isClosed"
         :toolbar="toolbar"
@@ -36,9 +35,13 @@
         </v-btn>
 
         <AiStudioLaunchControls
+          v-for="sessionItem in toolbar.sessions"
+          v-show="sessionItem.sessionId === selection.selectedSessionId"
+          :key="`launch:${sessionItem.sessionId}`"
           :busy="false"
-          :fix-command-failure="selectedFixCommandFailure"
-          :session="selection.selectedSession"
+          :fix-command-failure="fixCommandFailureForSession(sessionItem.sessionId)"
+          :session="sessionItem"
+          :window-displayed="sessionItem.sessionId === selection.selectedSessionId"
         />
 
         <AiStudioShellControls
@@ -188,6 +191,10 @@ function setRuntimePageError({
   if (state) {
     state.pageError = String(error || "");
   }
+}
+
+function fixCommandFailureForSession(sessionId = "") {
+  return runtimeStateBySessionId[String(sessionId || "")]?.toolbarControls?.fixCommandFailure || null;
 }
 
 function setSessionMode(mode = "autopilot") {

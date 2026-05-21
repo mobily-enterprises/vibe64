@@ -9,9 +9,22 @@ import {
 import { createCodexPromptEchoFilters } from "@/lib/codexPromptEchoFilters.js";
 
 const CODEX_ACTIVITY_QUIET_MS = 2200;
+const CODEX_ACTIVITY_BUFFER_LENGTH = 8192;
 const MAX_TERMINAL_OUTPUT_LENGTH = 4 * 1024 * 1024;
 const TERMINAL_DISPLAY_UPDATE_INTERVAL_MS = 80;
 const TERMINAL_OUTPUT_EMIT_INTERVAL_MS = 120;
+const CODEX_WORKING_TEXT_MARKERS = Object.freeze([
+  "Working (",
+  "Waiting for background terminal",
+  "background terminal running"
+]);
+const CODEX_IDLE_TEXT_MARKERS = Object.freeze([
+  "tab to queue message"
+]);
+const CODEX_ACTIVITY_TEXT_MARKERS = Object.freeze([
+  ...CODEX_WORKING_TEXT_MARKERS,
+  ...CODEX_IDLE_TEXT_MARKERS
+]);
 
 function trimTerminalOutput(output) {
   const terminalOutput = String(output || "");
@@ -19,6 +32,31 @@ function trimTerminalOutput(output) {
     return terminalOutput;
   }
   return terminalOutput.slice(terminalOutput.length - MAX_TERMINAL_OUTPUT_LENGTH);
+}
+
+function textIncludesAny(value = "", markers = []) {
+  const source = String(value || "");
+  return markers.some((marker) => source.includes(marker));
+}
+
+function codexWorkingStateFromText(value = "") {
+  const source = String(value || "");
+  if (source.includes("background terminal running")) {
+    return true;
+  }
+  const latestWorkingMarker = Math.max(
+    ...CODEX_WORKING_TEXT_MARKERS.map((marker) => source.lastIndexOf(marker))
+  );
+  const latestIdleMarker = Math.max(
+    ...CODEX_IDLE_TEXT_MARKERS.map((marker) => source.lastIndexOf(marker))
+  );
+  if (latestIdleMarker >= 0 && latestIdleMarker > latestWorkingMarker) {
+    return false;
+  }
+  if (latestWorkingMarker >= 0) {
+    return true;
+  }
+  return null;
 }
 
 function useCodexTerminalOutput({
@@ -31,11 +69,13 @@ function useCodexTerminalOutput({
   writeDisplay
 } = {}) {
   const codexBusy = ref(false);
+  const codexWorking = ref(false);
   const promptEchoFilters = createCodexPromptEchoFilters();
 
   let terminalDisplayTimer = null;
   let terminalOutputEmitTimer = null;
   let terminalOutputChangedTimer = null;
+  let codexActivityBuffer = "";
   let codexIdleTimer = null;
   let codexBusyOutputVersion = 0;
   let terminalHasOutput = false;
@@ -61,16 +101,53 @@ function useCodexTerminalOutput({
     codexIdleTimer = null;
   }
 
+  function emitCodexActivityChanged() {
+    emitBusyChanged?.({
+      busy: codexBusy.value,
+      sessionId: unref(sessionId),
+      working: codexWorking.value
+    });
+  }
+
   function setCodexBusy(nextBusy) {
     const busy = Boolean(nextBusy);
     if (codexBusy.value === busy) {
       return;
     }
     codexBusy.value = busy;
-    emitBusyChanged?.({
-      busy,
-      sessionId: unref(sessionId)
-    });
+    emitCodexActivityChanged();
+  }
+
+  function setCodexWorking(nextWorking) {
+    const working = Boolean(nextWorking);
+    if (codexWorking.value === working) {
+      return;
+    }
+    codexWorking.value = working;
+    emitCodexActivityChanged();
+  }
+
+  function clearCodexWorking() {
+    setCodexWorking(false);
+  }
+
+  function updateCodexWorkingFromOutput(output = "", {
+    replace = false
+  } = {}) {
+    const nextBuffer = replace
+      ? String(output || "")
+      : `${codexActivityBuffer}${String(output || "")}`;
+    codexActivityBuffer = nextBuffer.slice(-CODEX_ACTIVITY_BUFFER_LENGTH);
+    if (!textIncludesAny(codexActivityBuffer, CODEX_ACTIVITY_TEXT_MARKERS)) {
+      return;
+    }
+
+    const visibleActivityText = stripTerminalControlSequences(codexActivityBuffer);
+    const nextWorking = codexWorkingStateFromText(visibleActivityText);
+    if (nextWorking === null) {
+      return;
+    }
+    setCodexWorking(nextWorking);
   }
 
   function markCodexBusy() {
@@ -242,6 +319,9 @@ function useCodexTerminalOutput({
       terminalHasOutput = outputChunk
         ? terminalHasOutput || stripTerminalControlSequences(outputChunk).trim().length > 0
         : stripTerminalControlSequences(terminalLatestOutput).trim().length > 0;
+      updateCodexWorkingFromOutput(outputChunk || terminalLatestOutput, {
+        replace: !outputChunk
+      });
     }
     if (!emitImmediately) {
       scheduleTerminalOutputChanged();
@@ -267,6 +347,7 @@ function useCodexTerminalOutput({
     if (!outputChunk) {
       return;
     }
+    markCodexBusy();
     updateTerminalOutput(`${terminalLatestOutput}${outputChunk}`, {
       outputChunk
     });
@@ -281,6 +362,8 @@ function useCodexTerminalOutput({
     clearTerminalOutputChanged();
     clearPendingDisplay();
     clearCodexBusy();
+    clearCodexWorking();
+    codexActivityBuffer = "";
     terminalHasOutput = false;
     terminalLatestOutput = "";
     terminalLastOutputAt = 0;
@@ -297,8 +380,10 @@ function useCodexTerminalOutput({
     addPromptEchoFilter: promptEchoFilters.add,
     appendTerminalOutput,
     clearCodexBusy,
+    clearCodexWorking,
     clearPromptEchoFilters: promptEchoFilters.clear,
     codexBusy,
+    codexWorking,
     flushTerminalOutputEmit,
     getTerminalOutput: () => terminalLatestOutput,
     hasTerminalOutput: () => terminalHasOutput,

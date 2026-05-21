@@ -3,6 +3,8 @@
 JSKIT-specific implementation guidance:
 - Preserve existing JSKIT provider boundaries, command/action contracts, CRUD/resource conventions, generated-client patterns, and package ownership.
 - Use established JSKIT helpers and generated structures before adding new abstractions.
+- Before writing generic helpers for JSON:API documents, route ownership, workspace params, CRUD repositories, dates, normalization, transport, or generated resource data, search JSKIT package exports and agent-doc references first. Do not implement framework-shaped helpers locally unless no exported JSKIT helper exists and the decision is called out.
+- In the final response, for every hand-written helper, shared utility, composable, service function, mapper, normalizer, repository wrapper, transport helper, or framework-shaped function you added, explain which JSKIT exports, generated code, helper-map entries, or agent-doc references you checked; why the new code is not a duplicate; and why it belongs locally instead of in an existing shared/global JSKIT location.
 - Read the JSKIT agent guide and run the baseline discovery commands before adding new app files.
 - Create new JSKIT-owned files through `npx jskit generate ...`, `npx jskit add ...`, or another documented JSKIT CLI command first; hand-edit generated output only for focused custom behavior.
 - Do not hand-create packages, package descriptors, provider entrypoints, route files, resource modules, database modules, migrations, generated client surfaces, page trees, or package glue unless the JSKIT command path has been checked and is explicitly unsuitable for this request.

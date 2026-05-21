@@ -1,17 +1,61 @@
 import { deepFreeze } from "./deepFreeze.js";
 
 const CREATE_ISSUE_FILE_ACTION_ID = "create_issue_file";
+const APPLY_REVIEW_FEEDBACK_ACTION_ID = "apply_review_feedback";
+const HUMAN_INPUT_RESPONSE_ARTIFACT = "human_input_response.md";
 const ISSUE_BODY_ARTIFACT = "issue.md";
 const ISSUE_FILE_STEP_ID = "issue_file_created";
 const ISSUE_TITLE_ARTIFACT = "issue_title";
+const ISSUE_WORD_ARTIFACT = "issue_word";
 const PULL_REQUEST_ARTIFACT = "pull_request.md";
+const REPORT_ARTIFACT = "report.md";
 const SEND_ISSUE_PROMPT_ACTION_ID = "send_issue_prompt";
-const ISSUE_FILES_READY_CONDITION = `artifacts:${ISSUE_TITLE_ARTIFACT},${ISSUE_BODY_ARTIFACT}`;
+const ISSUE_FILES_READY_CONDITION = `artifacts:${ISSUE_TITLE_ARTIFACT},${ISSUE_BODY_ARTIFACT},${ISSUE_WORD_ARTIFACT}`;
 const ISSUE_PROMPT_HAS_REQUEST_CONDITION = `action-input:${SEND_ISSUE_PROMPT_ACTION_ID}.issueRequest`;
 const ISSUE_TITLE_READY_CONDITION = `artifact:${ISSUE_TITLE_ARTIFACT}`;
 const ISSUE_BODY_READY_CONDITION = `artifact:${ISSUE_BODY_ARTIFACT}`;
+const ISSUE_WORD_READY_CONDITION = `artifact:${ISSUE_WORD_ARTIFACT}`;
 const ISSUE_READY_CONDITION = `any:metadata:issue_url;${ISSUE_FILES_READY_CONDITION}`;
 const PR_READY_CONDITION = `any:metadata:pr_url;artifact:${PULL_REQUEST_ARTIFACT}`;
+const REPORT_READY_CONDITION = `artifact:${REPORT_ARTIFACT}`;
+const HUMAN_INPUT_RESPONSE_READY_CONDITION = `artifact:${HUMAN_INPUT_RESPONSE_ARTIFACT}`;
+
+function reportEditorAction() {
+  return {
+    artifactFields: [
+      {
+        kind: "textarea",
+        label: "Session report",
+        name: REPORT_ARTIFACT,
+        required: true,
+        requiredMessage: "Session report is required."
+      }
+    ],
+    enabledWhen: [REPORT_READY_CONDITION],
+    enabledWhenReason: "Write the report before editing it.",
+    id: "edit_report",
+    label: "Edit report",
+    type: "editor"
+  };
+}
+
+function humanInputResponseEditorAction() {
+  return {
+    artifactFields: [
+      {
+        kind: "textarea",
+        label: "AI response",
+        name: HUMAN_INPUT_RESPONSE_ARTIFACT,
+        required: false
+      }
+    ],
+    enabledWhen: [HUMAN_INPUT_RESPONSE_READY_CONDITION],
+    enabledWhenReason: "Ask Codex for a response before editing it.",
+    id: "edit_human_input_response",
+    label: "Edit AI response",
+    type: "editor"
+  };
+}
 
 const DEFAULT_AI_STUDIO_WORKFLOW = deepFreeze({
   id: "default",
@@ -148,8 +192,8 @@ const DEFAULT_AI_STUDIO_WORKFLOW = deepFreeze({
       },
       rewindCleanup: {
         actionResults: [SEND_ISSUE_PROMPT_ACTION_ID, CREATE_ISSUE_FILE_ACTION_ID, "use_existing_issue"],
-        artifacts: [ISSUE_TITLE_ARTIFACT, ISSUE_BODY_ARTIFACT],
-        metadata: ["issue_url", "issue_number", "issue_title", "issue_source"]
+        artifacts: [ISSUE_TITLE_ARTIFACT, ISSUE_BODY_ARTIFACT, ISSUE_WORD_ARTIFACT],
+        metadata: ["issue_url", "issue_number", "issue_title", "issue_source", ISSUE_WORD_ARTIFACT]
       }
     },
     {
@@ -163,6 +207,14 @@ const DEFAULT_AI_STUDIO_WORKFLOW = deepFreeze({
               name: ISSUE_TITLE_ARTIFACT,
               required: true,
               requiredMessage: "Issue title is required."
+            },
+            {
+              kind: "text",
+              label: "Session label",
+              metadataName: ISSUE_WORD_ARTIFACT,
+              name: ISSUE_WORD_ARTIFACT,
+              required: true,
+              requiredMessage: "Session label is required."
             },
             {
               kind: "textarea",
@@ -185,7 +237,7 @@ const DEFAULT_AI_STUDIO_WORKFLOW = deepFreeze({
           disabledReason: "Create the issue file before submitting it to GitHub.",
           disabledWhen: ["metadata:issue_url"],
           disabledWhenReason: "The GitHub issue already exists.",
-          enabledWhen: [ISSUE_TITLE_READY_CONDITION, ISSUE_BODY_READY_CONDITION],
+          enabledWhen: [ISSUE_TITLE_READY_CONDITION, ISSUE_WORD_READY_CONDITION, ISSUE_BODY_READY_CONDITION],
           enabledWhenReason: "Create the issue file before submitting it to GitHub.",
           id: "create_issue_on_gh",
           label: "Create issue on GH",
@@ -233,6 +285,33 @@ const DEFAULT_AI_STUDIO_WORKFLOW = deepFreeze({
       label: "Execute plan",
       rewindCleanup: {
         actionResults: ["execute_plan"]
+      }
+    },
+    {
+      actions: [
+        {
+          allowRepeatedPromptRuns: true,
+          id: APPLY_REVIEW_FEEDBACK_ACTION_ID,
+          inputFields: [
+            {
+              label: "What should Codex change?",
+              name: "reviewFeedback",
+              placeholder: "Describe the tweak in plain language.",
+              requiredMessage: "Describe what should change before sending this to Codex."
+            }
+          ],
+          label: "Ask AI for tweaks",
+          promptId: APPLY_REVIEW_FEEDBACK_ACTION_ID,
+          type: "prompt"
+        },
+        humanInputResponseEditorAction()
+      ],
+      description: "Try the implemented work and request small tweaks before slower review steps.",
+      id: "implementation_reviewed",
+      label: "Human review",
+      rewindCleanup: {
+        actionResults: [APPLY_REVIEW_FEEDBACK_ACTION_ID],
+        artifacts: [HUMAN_INPUT_RESPONSE_ARTIFACT]
       }
     },
     {
@@ -304,10 +383,34 @@ const DEFAULT_AI_STUDIO_WORKFLOW = deepFreeze({
       }
     },
     {
-      actions: [],
-      description: "Review the finished work before commit.",
+      actions: [
+        reportEditorAction()
+      ],
+      description: "Review the validated work before the report, commit, and pull request.",
       id: "changes_accepted",
-      label: "Review changes"
+      label: "Final review"
+    },
+    {
+      actions: [
+        {
+          id: "write_report",
+          label: "Write report",
+          promptId: "write_report",
+          type: "prompt"
+        },
+        reportEditorAction()
+      ],
+      description: "Write the local report explaining what changed and why.",
+      id: "report_created",
+      label: "Write report",
+      next: {
+        disabledReason: "Write the session report before updating project knowledge.",
+        enabledWhen: [REPORT_READY_CONDITION]
+      },
+      rewindCleanup: {
+        actionResults: ["write_report"],
+        artifacts: [REPORT_ARTIFACT]
+      }
     },
     {
       actions: [
@@ -439,6 +542,7 @@ const DEFAULT_AI_STUDIO_WORKFLOW = deepFreeze({
     },
     {
       actions: [
+        reportEditorAction(),
         {
           disabledReason: "Create the pull request before preparing for merge.",
           enabledWhen: ["metadata:pr_url"],
@@ -485,6 +589,7 @@ const DEFAULT_AI_STUDIO_WORKFLOW = deepFreeze({
     },
     {
       actions: [
+        reportEditorAction(),
         {
           adapterCapability: "finish_session",
           disabledReason: "Create the pull request before finishing the session.",

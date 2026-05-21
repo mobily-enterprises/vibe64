@@ -20,6 +20,7 @@ import {
 
 const ISSUE_BODY_ARTIFACT = "issue.md";
 const ISSUE_TITLE_ARTIFACT = "issue_title";
+const ISSUE_WORD_ARTIFACT = "issue_word";
 const ISSUE_PROMPT_ACTION_ID = "send_issue_prompt";
 const STORAGE_KEY_PREFIX = "ai-studio:autopilot:issue-discussion:";
 
@@ -84,7 +85,9 @@ function artifactIsReady(session = {}, artifactName = "") {
 }
 
 function issueArtifactsAreReady(session = {}) {
-  return artifactIsReady(session, ISSUE_TITLE_ARTIFACT) && artifactIsReady(session, ISSUE_BODY_ARTIFACT);
+  return artifactIsReady(session, ISSUE_TITLE_ARTIFACT) &&
+    artifactIsReady(session, ISSUE_BODY_ARTIFACT) &&
+    artifactIsReady(session, ISSUE_WORD_ARTIFACT);
 }
 
 function issueIsSelected(session = {}) {
@@ -156,6 +159,7 @@ function useAiStudioAutopilotIssueDiscussion({
   const ignoredRequestIds = ref(new Set());
   const draftBody = ref("");
   const draftTitle = ref("");
+  const draftWord = ref("");
   const failure = ref("");
   const saving = ref(false);
   const storedQuestionAnswers = ref([]);
@@ -190,6 +194,7 @@ function useAiStudioAutopilotIssueDiscussion({
       reviewing.value &&
       Boolean(draftTitle.value.trim()) &&
       Boolean(draftBody.value.trim()) &&
+      Boolean(draftWord.value.trim()) &&
       !saving.value;
   });
   const questionFailure = computed(() => issueQuestionActive.value ? codexQuestions.failure.value : "");
@@ -266,8 +271,8 @@ function useAiStudioAutopilotIssueDiscussion({
 
   async function acceptIssueDraft() {
     if (!canAccept.value) {
-      failure.value = "Issue title and body are required.";
-      return;
+      failure.value = "Issue title, session label, and body are required.";
+      return false;
     }
 
     saving.value = true;
@@ -276,7 +281,8 @@ function useAiStudioAutopilotIssueDiscussion({
     try {
       const response = await saveIssueArtifacts(sessionId.value, {
         body: draftBody.value,
-        title: draftTitle.value
+        title: draftTitle.value,
+        word: draftWord.value
       });
       if (response?.ok === false) {
         throw new Error(response.error || response.errors?.[0]?.message || "Issue file could not be saved.");
@@ -289,9 +295,11 @@ function useAiStudioAutopilotIssueDiscussion({
         throw new Error("Issue file was saved, but the next workflow step is not ready.");
       }
       clearStoredDiscussion(sessionId.value);
+      return true;
     } catch (error) {
       failure.value = String(error?.message || error || "Issue file could not be saved.");
       state.value = ISSUE_DISCUSSION_STATE.REVIEW;
+      return false;
     } finally {
       saving.value = false;
     }
@@ -356,6 +364,7 @@ function useAiStudioAutopilotIssueDiscussion({
     activeRequestId.value = "";
     draftBody.value = "";
     draftTitle.value = "";
+    draftWord.value = "";
     storedQuestionAnswers.value = [];
     codexQuestions.clearForOwner(questionOwnerId.value);
     await clearAutopilotArtifacts(sessionId.value);
@@ -373,6 +382,7 @@ function useAiStudioAutopilotIssueDiscussion({
       : [];
     draftBody.value = "";
     draftTitle.value = "";
+    draftWord.value = "";
     failure.value = "";
     state.value = loadedDiscussionState(activeRequestId.value);
     applyLatestIssueFile();
@@ -398,6 +408,7 @@ function useAiStudioAutopilotIssueDiscussion({
       activeRequestId.value = issueDraft.requestId;
       draftBody.value = issueDraft.body;
       draftTitle.value = issueDraft.title;
+      draftWord.value = issueDraft.word;
       codexQuestions.clearForOwner(questionOwnerId.value);
       state.value = ISSUE_DISCUSSION_STATE.REVIEW;
       persistDiscussion();
@@ -412,6 +423,7 @@ function useAiStudioAutopilotIssueDiscussion({
       activeRequestId.value = questionFile.requestId;
       draftBody.value = "";
       draftTitle.value = "";
+      draftWord.value = "";
       state.value = ISSUE_DISCUSSION_STATE.QUESTIONS;
       startQuestionExchange(questionFile);
       persistDiscussion();
@@ -505,6 +517,7 @@ function useAiStudioAutopilotIssueDiscussion({
     canSubmit,
     draftBody,
     draftTitle,
+    draftWord,
     failure,
     inputVisible,
     requestText,

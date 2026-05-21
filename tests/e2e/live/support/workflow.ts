@@ -329,6 +329,19 @@ async function writePullRequestArtifact(page: Page, body: string) {
   }).toBe(true);
 }
 
+async function writeReportArtifact(page: Page, body: string) {
+  const session = await latestSession(page);
+  await writeArtifact(session, "report.md", body.endsWith("\n") ? body : `${body}\n`);
+  await page.reload({
+    waitUntil: "networkidle"
+  });
+  await expect.poll(async () => {
+    return (await latestSession(page)).artifactReadiness?.["report.md"]?.nonEmpty === true;
+  }, {
+    timeout: 30_000
+  }).toBe(true);
+}
+
 async function writeArtifact(session: AiStudioSession, artifactName: string, contents: string) {
   await mkdir(session.artifactsRoot, {
     recursive: true
@@ -442,6 +455,7 @@ export {
   useExistingIssue,
   writeIssueArtifacts,
   writePullRequestArtifact,
+  writeReportArtifact,
   writeWorktreeFile
 };
 

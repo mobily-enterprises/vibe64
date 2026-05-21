@@ -93,6 +93,30 @@ test("ai-studio session store reads and writes metadata, artifacts, status, curr
   });
 });
 
+test("ai-studio session store exposes the explicit issue word as the session name", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const store = createAiStudioSessionStore({
+      targetRoot
+    });
+    await store.createSession({
+      sessionId: "named_session"
+    });
+
+    await store.writeArtifact("named_session", "issue_word", "#Booking\n");
+
+    const namedFromArtifact = await store.readSession("named_session");
+    assert.equal(namedFromArtifact.sessionName, "Booking");
+    assert.equal(namedFromArtifact.metadata.issue_word, undefined);
+    assert.equal(await store.readMetadataValue("named_session", "issue_word"), "");
+
+    await store.writeIssueWordMetadata("named_session", "API Auth");
+
+    const namedFromMetadata = await store.readSession("named_session");
+    assert.equal(namedFromMetadata.sessionName, "API");
+    assert.equal(namedFromMetadata.metadata.issue_word, "API");
+  });
+});
+
 test("ai-studio session store persists a prompt context snapshot", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const store = createAiStudioSessionStore({

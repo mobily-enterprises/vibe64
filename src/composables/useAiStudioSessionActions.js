@@ -34,6 +34,8 @@ import {
 } from "@/lib/vueRefOrGetterValue.js";
 
 const CREATE_PULL_REQUEST_FILE_ACTION_ID = "create_pr_file";
+const FINAL_REVIEW_STEP_ID = "changes_accepted";
+const IMPLEMENTATION_REVIEW_STEP_ID = "implementation_reviewed";
 const PULL_REQUEST_FILE_STEP_ID = "pr_file_created";
 
 function displayableActionResultMessage(result = {}) {
@@ -194,7 +196,8 @@ function useAiStudioSessionActions({
     return issueFileStep.waitingForFiles.value || waitingForPullRequestFile.value;
   });
   const acceptChangesUtilitiesVisible = computed(() => {
-    return selectedSession.value?.currentStep === "changes_accepted" && !issueFileStep.formVisible.value;
+    return [IMPLEMENTATION_REVIEW_STEP_ID, FINAL_REVIEW_STEP_ID].includes(selectedSession.value?.currentStep) &&
+      !issueFileStep.formVisible.value;
   });
   const busy = computed(() => Boolean(
     runActionCommand.isRunning ||

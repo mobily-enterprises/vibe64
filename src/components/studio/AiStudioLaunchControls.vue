@@ -40,6 +40,7 @@
     </v-chip>
 
     <AiStudioFloatingTerminalWindow
+      :displayed="terminalDisplayed"
       minimized-width="min(28rem, calc(100vw - 1.5rem))"
       :minimized="terminalMinimized"
       :storage-key="terminalWindowStorageKey"
@@ -121,6 +122,10 @@ const props = defineProps({
   session: {
     type: Object,
     default: null
+  },
+  windowDisplayed: {
+    type: Boolean,
+    default: true
   }
 });
 
@@ -144,10 +149,12 @@ const {
   showOpenTarget,
   startKey,
   terminalMinimized,
+  terminalDisplayed,
   terminalWindowStorageKey,
   terminalVisible,
   visible
 } = useAiStudioLaunchControls({
+  windowDisplayed: () => props.windowDisplayed,
   busy: () => props.busy,
   session: () => props.session
 });

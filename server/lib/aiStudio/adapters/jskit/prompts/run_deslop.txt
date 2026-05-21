@@ -2,6 +2,8 @@
 
 JSKIT-specific review/deslop guidance:
 - Review provider boundaries, command/action wiring, CRUD/resource contracts, generated client usage, setup/check metadata, and app blueprint updates.
+- Before accepting, preserving, or writing generic helpers for JSON:API documents, route ownership, workspace params, CRUD repositories, dates, normalization, transport, or generated resource data, search JSKIT package exports and agent-doc references first. Treat local framework-shaped helpers as findings unless no exported JSKIT helper exists and the decision is called out.
+- Treat any new hand-written helper, shared utility, composable, service function, mapper, normalizer, repository wrapper, transport helper, or framework-shaped function without a final justification of checked JSKIT exports, generated code, helper-map entries, or agent-doc references, duplicate risk, and local-vs-shared placement as a deslop finding.
 - Treat hand-built packages, package descriptors, provider entrypoints, routes, stores, resource modules, database modules, migrations, generated client surfaces, page trees, or package glue as findings when JSKIT generators/modules should have created them.
 - Treat hand-edited `src/placement.js` link/menu/tab placement as a finding when JSKIT generator placement options or semantic placement conventions should have owned it.
 - Treat JSON-file, in-memory, or ad hoc filesystem persistence as a finding when the feature requires durable data and JSKIT database runtime/modules should have owned it.

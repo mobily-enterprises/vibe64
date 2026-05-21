@@ -110,7 +110,7 @@
       </v-progress-circular>
 
       <v-icon
-        v-else-if="!commandTerminalVisible && failure"
+        v-else-if="!commandTerminalVisible && screenState.icon === 'warning'"
         color="warning"
         :icon="mdiAlertCircleOutline"
         size="72"
@@ -126,20 +126,20 @@
       <div v-if="mainStatusVisible" class="studio-autopilot__status">
         <h2>{{ displayStatusText }}</h2>
         <v-btn
-          v-if="codexWaiting"
+          v-if="screenStopAction"
           class="studio-autopilot__stop-button"
           :prepend-icon="mdiClose"
           size="small"
           type="button"
           variant="tonal"
-          @click="issueDiscussionWaiting ? issueDiscussion.cancelWaiting() : stop()"
+          @click="stopScreenAction"
         >
           Stop Autopilot
         </v-btn>
       </div>
 
       <form
-        v-if="readyForIssue && issueDiscussion.inputVisible"
+        v-if="screenKind === 'issue' && issueDiscussion.inputVisible"
         class="studio-autopilot__issue-form"
         @submit.prevent="issueDiscussion.submitInitialRequest"
       >
@@ -172,7 +172,7 @@
       </form>
 
       <AiStudioAutopilotQuestionForm
-        v-else-if="codexQuestionsVisible"
+        v-else-if="screenKind === 'questions'"
         :can-submit="codexQuestionCanSubmit"
         :disabled="page.busy || codexQuestionSubmitting"
         :failure="codexQuestionFailure"
@@ -185,15 +185,23 @@
       />
 
       <form
-        v-else-if="readyForIssue && issueDiscussion.reviewing"
+        v-else-if="screenKind === 'issue' && issueDiscussion.reviewing"
         class="studio-autopilot__issue-form"
-        @submit.prevent="issueDiscussion.acceptIssueDraft"
+        @submit.prevent="acceptIssueDraftAndContinue"
       >
         <v-text-field
           v-model="issueDiscussion.draftTitle"
           class="studio-autopilot__issue-input"
           :disabled="issueDiscussion.saving"
           label="Issue title"
+          variant="outlined"
+        />
+
+        <v-text-field
+          v-model="issueDiscussion.draftWord"
+          class="studio-autopilot__issue-input"
+          :disabled="issueDiscussion.saving"
+          label="Session label"
           variant="outlined"
         />
 
@@ -241,7 +249,7 @@
       </form>
 
       <v-alert
-        v-else-if="readyForIssue && issueDiscussion.failure"
+        v-else-if="screenKind === 'issue' && issueDiscussion.failure"
         class="studio-autopilot__issue-form"
         type="warning"
         variant="tonal"
@@ -251,7 +259,7 @@
       </v-alert>
 
       <div
-        v-else-if="promptRunNeedsContinuation"
+        v-else-if="screenKind === 'prompt_done'"
         class="studio-autopilot__decision"
       >
         <v-alert
@@ -259,7 +267,32 @@
           variant="tonal"
           density="compact"
         >
-          Codex paused before this step was confirmed complete. Continue the existing Codex session instead of starting over.
+          {{ screenMessage }}
+        </v-alert>
+
+        <div class="studio-autopilot__actions">
+          <v-btn
+            class="studio-autopilot__start-button"
+            color="primary"
+            :prepend-icon="mdiPlay"
+            variant="flat"
+            @click="resume"
+          >
+            {{ screenButtonLabel }}
+          </v-btn>
+        </div>
+      </div>
+
+      <div
+        v-else-if="screenKind === 'prompt_waiting'"
+        class="studio-autopilot__decision"
+      >
+        <v-alert
+          type="info"
+          variant="tonal"
+          density="compact"
+        >
+          {{ screenMessage }}
         </v-alert>
 
         <div class="studio-autopilot__actions">
@@ -275,7 +308,7 @@
       </div>
 
       <div
-        v-else-if="readyForDeepUiCheck"
+        v-else-if="screenKind === 'deep_ui_decision'"
         class="studio-autopilot__decision"
       >
         <v-alert
@@ -283,7 +316,7 @@
           variant="tonal"
           density="compact"
         >
-          The deep UI check can take a long time. Run it now, or skip it and continue to review/deslop.
+          {{ screenMessage }}
         </v-alert>
 
         <div class="studio-autopilot__actions">
@@ -310,7 +343,7 @@
       </div>
 
       <div
-        v-else-if="readyForReview"
+        v-else-if="screenKind === 'review'"
         class="studio-autopilot__review"
       >
         <v-alert
@@ -318,18 +351,34 @@
           variant="tonal"
           density="compact"
         >
-          Review what changed before Autopilot continues.
+          {{ screenMessage }}
         </v-alert>
+
+        <AiStudioReportPreview
+          v-if="reportPreviewVisible"
+          :error="reportPreview.error"
+          :loading="reportPreview.loading"
+          :text="reportPreview.text"
+        />
+
+        <AiStudioReportPreview
+          v-if="humanInputResponsePreviewVisible"
+          empty-text="AI response is not ready yet."
+          :error="humanInputResponsePreview.error"
+          :loading="humanInputResponsePreview.loading"
+          :text="humanInputResponsePreview.text"
+          title="AI response"
+        />
 
         <div class="studio-autopilot__actions studio-autopilot__review-actions">
           <AiStudioLaunchControls
-            :active="active"
             button-label="Try it!"
             button-size="default"
             button-variant="flat"
             :busy="reviewControlsBusy"
             :fix-command-failure="codexTerminal.fixCommandFailure"
             :session="session"
+            :window-displayed="active"
           />
 
           <v-btn
@@ -353,17 +402,18 @@
             variant="flat"
             @click="acceptChanges"
           >
-            Accept and finalize
+            {{ reviewAcceptLabel }}
           </v-btn>
 
           <v-btn
-            :disabled="reviewControlsBusy"
+            v-if="implementationReviewVisible || finalReviewVisible"
+            :disabled="reviewControlsBusy || (implementationReviewVisible && !canRequestReviewTweak)"
             :prepend-icon="mdiRefresh"
             type="button"
             variant="tonal"
             @click="showReviewFeedback"
           >
-            Reject, give more instructions
+            {{ reviewFeedbackButtonLabel }}
           </v-btn>
         </div>
 
@@ -377,7 +427,7 @@
             auto-grow
             class="studio-autopilot__issue-input"
             :disabled="reviewControlsBusy"
-            label="What should change?"
+            :label="reviewFeedbackInputLabel"
             rows="4"
             variant="outlined"
           />
@@ -391,7 +441,7 @@
               type="submit"
               variant="flat"
             >
-              Send to Codex
+              {{ reviewFeedbackSubmitLabel }}
             </v-btn>
 
             <v-btn
@@ -408,7 +458,7 @@
       </div>
 
       <div
-        v-else-if="readyForMerge"
+        v-else-if="screenKind === 'merge'"
         class="studio-autopilot__merge"
       >
         <v-alert
@@ -426,8 +476,15 @@
           variant="tonal"
           density="compact"
         >
-          The pull request is ready. Merge it and update the main checkout, or finish without merging.
+          {{ screenMessage }}
         </v-alert>
+
+        <AiStudioReportPreview
+          v-if="reportPreviewVisible"
+          :error="reportPreview.error"
+          :loading="reportPreview.loading"
+          :text="reportPreview.text"
+        />
 
         <div class="studio-autopilot__actions">
           <v-btn
@@ -465,7 +522,7 @@
       </div>
 
       <div
-        v-else-if="readyForFinished"
+        v-else-if="screenKind === 'finished'"
         class="studio-autopilot__finished"
       >
         <v-icon
@@ -473,7 +530,14 @@
           :icon="mdiCheckCircleOutline"
           size="72"
         />
-        <p>The session is complete.</p>
+        <p>{{ screenMessage }}</p>
+
+        <AiStudioReportPreview
+          v-if="reportPreviewVisible"
+          :error="reportPreview.error"
+          :loading="reportPreview.loading"
+          :text="reportPreview.text"
+        />
 
         <AiStudioSessionActionButton
           v-if="archiveAction"
@@ -490,42 +554,30 @@
           variant="tonal"
           density="compact"
         >
-          {{ failureErrorText }}
+          {{ screenMessage }}
         </v-alert>
-
-        <div class="studio-autopilot__actions">
-          <v-btn
-            color="primary"
-            :loading="running"
-            :prepend-icon="mdiRefresh"
-            variant="flat"
-            @click="retry"
-          >
-            Retry
-          </v-btn>
-        </div>
       </div>
 
       <div v-else class="studio-autopilot__actions">
         <v-btn
-          v-if="canStart"
+          v-if="screenKind === 'start'"
           class="studio-autopilot__start-button"
           color="primary"
           :prepend-icon="mdiPlay"
           variant="flat"
           @click="start"
         >
-          Let's start
+          {{ screenButtonLabel }}
         </v-btn>
         <v-btn
-          v-else-if="canResume"
+          v-else-if="screenKind === 'resume'"
           class="studio-autopilot__start-button"
           color="primary"
           :prepend-icon="mdiPlay"
           variant="flat"
           @click="resume"
         >
-          Continue Autopilot
+          {{ screenButtonLabel }}
         </v-btn>
       </div>
     </div>
@@ -533,7 +585,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, proxyRefs, ref, watch } from "vue";
+import { computed, nextTick, onMounted, proxyRefs, ref, watch } from "vue";
 import {
   mdiAlertCircleOutline,
   mdiArrowRight,
@@ -553,6 +605,7 @@ import AiStudioLaunchControls from "@/components/studio/AiStudioLaunchControls.v
 import AiStudioAutopilotNavigation from "@/components/studio/ai-studio-session/AiStudioAutopilotNavigation.vue";
 import AiStudioAutopilotQuestionForm from "@/components/studio/ai-studio-session/AiStudioAutopilotQuestionForm.vue";
 import AiStudioHeadlessCommandOutput from "@/components/studio/ai-studio-session/AiStudioHeadlessCommandOutput.vue";
+import AiStudioReportPreview from "@/components/studio/ai-studio-session/AiStudioReportPreview.vue";
 import AiStudioSessionActionButton from "@/components/studio/ai-studio-session/AiStudioSessionActionButton.vue";
 import {
   useAiStudioAutopilotController
@@ -608,7 +661,15 @@ const props = defineProps({
     default: () => ({}),
     type: Object
   },
+  reportPreview: {
+    default: () => ({}),
+    type: Object
+  },
   review: {
+    default: () => ({}),
+    type: Object
+  },
+  humanInputResponsePreview: {
     default: () => ({}),
     type: Object
   },
@@ -640,8 +701,7 @@ const {
   acceptChanges,
   cancelMergeFailure,
   canAcceptReview,
-  canStart,
-  canResume,
+  canRequestReviewTweak,
   clearFailure,
   commandOutput,
   commandPreview,
@@ -650,24 +710,20 @@ const {
   continuePromptRun,
   failure,
   mergeAndSyncMainCheckout,
-  promptRunNeedsContinuation,
-  readyForDeepUiCheck,
-  readyForFinished,
   readyForIssue,
-  readyForMerge,
-  readyForReview,
   rejectChanges,
+  requestReviewTweak,
   retry,
   resume,
   runDeepUiCheck,
   running,
+  screenState,
   skipDeepUiCheck,
   skipMerge,
   start,
   syncFromAutopilotArtifacts,
   stop,
   stopCommandAction,
-  statusText,
   waitingForCodex
 } = useAiStudioAutopilotController({
   actions: props.actions,
@@ -704,33 +760,34 @@ const issueDiscussion = proxyRefs(useAiStudioAutopilotIssueDiscussion({
   refreshSessionData: () => props.refreshSessionData(),
   session: computed(() => props.session)
 }));
-const codexQuestionsVisible = computed(() => codexQuestionExchange.hasQuestions.value);
 const codexQuestionCanSubmit = computed(() => codexQuestionExchange.canSubmit.value);
 const codexQuestionFailure = computed(() => codexQuestionExchange.failure.value);
 const codexQuestionList = computed(() => codexQuestionExchange.questions.value);
 const codexQuestionSubmitting = computed(() => codexQuestionExchange.submitting.value);
+const screenKind = computed(() => screenState.value.kind);
+const screenMessage = computed(() => String(screenState.value.message || ""));
+const screenButtonLabel = computed(() => String(screenState.value.buttonLabel || ""));
+const reportScreenVisible = computed(() => ["review", "merge", "finished"].includes(screenKind.value));
+const reviewKind = computed(() => String(screenState.value.reviewKind || ""));
+const implementationReviewVisible = computed(() => screenKind.value === "review" && reviewKind.value === "implementation");
+const finalReviewVisible = computed(() => screenKind.value === "review" && reviewKind.value === "final");
 const displayStatusText = computed(() => {
-  if (codexQuestionsVisible.value) {
-    return "A few questions first";
-  }
-  return readyForIssue.value
+  return screenKind.value === "issue"
     ? issueDiscussion.statusText
-    : statusText.value;
+    : screenState.value.title;
 });
-const displayRunning = computed(() => Boolean(
-  running.value ||
-  (readyForIssue.value && issueDiscussion.saving)
-));
 const issueDiscussionWaiting = computed(() => Boolean(readyForIssue.value && issueDiscussion.waiting));
 const codexWaiting = computed(() => Boolean(
   issueDiscussionWaiting.value ||
   waitingForCodex.value
 ));
-const commandTerminalFailed = computed(() => commandResult.value?.ok === false);
-const commandTerminalVisible = computed(() => Boolean(
-  commandRunning.value ||
-  commandTerminalFailed.value
+const displayRunning = computed(() => Boolean(
+  screenState.value.showProgress ||
+  issueDiscussionWaiting.value ||
+  (readyForIssue.value && issueDiscussion.saving)
 ));
+const commandTerminalFailed = computed(() => commandResult.value?.ok === false);
+const commandTerminalVisible = computed(() => screenKind.value === "command");
 const commandStatus = computed(() => commandRunning.value ? "running" : "");
 const commandTerminalError = computed(() => {
   if (commandResult.value?.ok === false) {
@@ -788,16 +845,39 @@ const reviewDiffDisabled = computed(() => Boolean(reviewControlsBusy.value || pr
 const reviewDiffLoading = computed(() => Boolean(props.diff?.loading));
 const reviewDiffTitle = computed(() => String(props.review?.diffTitle || "Review changes in the session worktree."));
 const canSubmitReviewFeedback = computed(() => Boolean(
-  reviewFeedback.value.trim() && !reviewControlsBusy.value
+  reviewFeedback.value.trim() &&
+  !reviewControlsBusy.value &&
+  (!implementationReviewVisible.value || canRequestReviewTweak.value)
 ));
+const reviewFeedbackButtonLabel = computed(() => implementationReviewVisible.value
+  ? "Ask AI for tweaks"
+  : "Reject, give more instructions");
+const reviewFeedbackInputLabel = computed(() => implementationReviewVisible.value
+  ? "What would you like changed?"
+  : "What should change?");
+const reviewFeedbackSubmitLabel = computed(() => implementationReviewVisible.value
+  ? "Ask AI for tweaks"
+  : "Send to Codex");
+const reviewAcceptLabel = computed(() => implementationReviewVisible.value
+  ? "Looks good, continue"
+  : "Accept and finalize");
 const navigationBusy = computed(() => Boolean(props.page?.busy || autopilotBusy.value || props.rewindBusy));
 const mainStatusVisible = computed(() => !commandTerminalVisible.value);
-const standaloneFailureVisible = computed(() => Boolean(
-  failure.value &&
-  !commandTerminalVisible.value &&
-  !commandFixActive.value
+const standaloneFailureVisible = computed(() => screenKind.value === "failure");
+const reportPreviewVisible = computed(() => Boolean(
+  reportScreenVisible.value &&
+  props.reportPreview?.visible
 ));
-const failureErrorText = computed(() => String(failure.value?.error || ""));
+const humanInputResponsePreviewVisible = computed(() => Boolean(
+  implementationReviewVisible.value &&
+  props.humanInputResponsePreview?.visible
+));
+const screenStopAction = computed(() => {
+  if (issueDiscussionWaiting.value) {
+    return "issue";
+  }
+  return String(screenState.value.stopAction || "");
+});
 
 function emitBusyState() {
   emit("busy-change", autopilotBusy.value);
@@ -855,6 +935,14 @@ function retryFromCommandFailure() {
   void retry();
 }
 
+function stopScreenAction() {
+  if (screenStopAction.value === "issue") {
+    issueDiscussion.cancelWaiting();
+    return;
+  }
+  stop();
+}
+
 async function rewindToAutopilotStep(step = {}) {
   if (navigationBusy.value || step.canRewind !== true || typeof props.rewindToStep !== "function") {
     return;
@@ -880,9 +968,19 @@ async function submitReviewFeedback() {
   if (!canSubmitReviewFeedback.value) {
     return;
   }
-  const accepted = await rejectChanges(reviewFeedback.value);
+  const accepted = implementationReviewVisible.value
+    ? await requestReviewTweak(reviewFeedback.value)
+    : await rejectChanges(reviewFeedback.value);
   if (accepted) {
     cancelReviewFeedback();
+  }
+}
+
+async function acceptIssueDraftAndContinue() {
+  const accepted = await issueDiscussion.acceptIssueDraft();
+  if (accepted && props.active) {
+    await nextTick();
+    await resume();
   }
 }
 
@@ -924,6 +1022,7 @@ watch(commandTerminalFailed, (failed) => {
 }, {
   flush: "post"
 });
+
 </script>
 
 <style scoped>
