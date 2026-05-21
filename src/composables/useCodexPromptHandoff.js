@@ -13,6 +13,7 @@ const CODEX_BOOT_TIMEOUT_MS = 12000;
 const CODEX_KEY_PAUSE_MS = 180;
 const PROMPT_INJECTION_RETRY_MS = 350;
 const PROMPT_INJECTION_RETRY_TIMEOUT_MS = 15000;
+const CODEX_THREAD_CAPTURE_WAITING_ERROR = "Waiting for Codex thread id before injecting prompt.";
 
 function delay(ms) {
   return new Promise((resolve) => {
@@ -25,6 +26,7 @@ function useCodexPromptHandoff({
   clearCodexBusy,
   clearPromptEchoFilters,
   codexPrompt,
+  codexTerminalInput,
   componentMounted,
   copyStatus,
   emitPromptInjected,
@@ -59,11 +61,29 @@ function useCodexPromptHandoff({
   let terminalStartedAt = 0;
   let codexTrustPromptAnsweredAt = 0;
 
+  function clearThreadCaptureWaitingError() {
+    if (
+      terminalError &&
+      typeof terminalError === "object" &&
+      "value" in terminalError &&
+      terminalError.value === CODEX_THREAD_CAPTURE_WAITING_ERROR
+    ) {
+      terminalError.value = "";
+    }
+  }
+
+  function showThreadCaptureWaitingError() {
+    if (terminalError && typeof terminalError === "object" && "value" in terminalError) {
+      terminalError.value = CODEX_THREAD_CAPTURE_WAITING_ERROR;
+    }
+  }
+
   function applyCodexThreadState(session = {}) {
     if (session.codexThreadId) {
       codexThreadId.value = String(session.codexThreadId || "");
       codexThreadCaptureRequired.value = false;
       codexThreadCaptureStarted.value = false;
+      clearThreadCaptureWaitingError();
       return;
     }
     if (session.needsThreadCapture === true) {
@@ -81,9 +101,19 @@ function useCodexPromptHandoff({
     ) {
       addPromptEchoFilter?.({
         outputStart: persistedOutputStart,
-        prompt: wrapPromptWithStudioContext(unref(codexPrompt))
+        prompt: wrappedCodexPrompt()
       });
     }
+  }
+
+  function wrappedCodexPrompt() {
+    const terminalInput = String(unref(codexTerminalInput) || "");
+    if (terminalInput) {
+      return terminalInput;
+    }
+    return wrapPromptWithStudioContext(
+      unref(codexPrompt)
+    );
   }
 
   function noteTerminalStarted() {
@@ -142,6 +172,7 @@ function useCodexPromptHandoff({
       }
       codexThreadId.value = response?.codexThreadId || threadId;
       codexThreadCaptureRequired.value = false;
+      clearThreadCaptureWaitingError();
       emitSessionUpdate?.({
         codexThreadId: codexThreadId.value,
         needsThreadCapture: false,
@@ -273,8 +304,8 @@ function useCodexPromptHandoff({
         }
       }
       const ready = await waitForCodexThreadId();
-      if (!ready && terminalError && typeof terminalError === "object" && "value" in terminalError) {
-        terminalError.value = "Waiting for Codex thread id before injecting prompt.";
+      if (!ready) {
+        showThreadCaptureWaitingError();
       }
       return ready;
     })();
@@ -298,7 +329,7 @@ function useCodexPromptHandoff({
     try {
       if (await ensureTerminalReady?.() && await ensureCodexThreadReady({ forceRetry: true })) {
         const promptOutputSnapshot = getTerminalOutput?.() || "";
-        const promptToSend = wrapPromptWithStudioContext(prompt);
+        const promptToSend = wrappedCodexPrompt();
         const promptEchoFilter = addPromptEchoFilter?.({
           outputStart: promptOutputSnapshot.length,
           prompt: promptToSend

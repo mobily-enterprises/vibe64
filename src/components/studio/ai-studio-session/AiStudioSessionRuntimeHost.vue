@@ -8,6 +8,7 @@
         v-show="sessionMode === 'autopilot'"
         :actions="actions"
         :active="autopilotModeActive"
+        :autopilot-artifacts="autopilotArtifacts"
         :autopilot-steps="autopilotNavigationSteps"
         :codex-terminal="codexTerminal"
         :command-runner="autopilotCommandRunner"
@@ -69,6 +70,9 @@ import AiStudioSessionWorkspace from "@/components/studio/ai-studio-session/AiSt
 import {
   useAiStudioHeadlessCommandRunner
 } from "@/composables/useAiStudioHeadlessCommandRunner.js";
+import {
+  useAiStudioAutopilotArtifacts
+} from "@/composables/useAiStudioAutopilotArtifacts.js";
 import {
   useAiStudioHumanInputResponsePreview
 } from "@/composables/useAiStudioHumanInputResponsePreview.js";
@@ -155,6 +159,14 @@ const sessionWorkflow = useAiStudioSessionWorkflow({
   sessionData: sessionScopedData
 });
 const autopilotCommandRunner = useAiStudioHeadlessCommandRunner();
+const autopilotArtifacts = useAiStudioAutopilotArtifacts({
+  sessionId: selectedSessionId
+});
+const liveArtifactReadiness = computed(() => {
+  const readiness = autopilotArtifacts.artifacts.value?.artifactReadiness;
+  return readiness && typeof readiness === "object" ? readiness : {};
+});
+const liveArtifactReadinessVersion = computed(() => artifactReadinessVersion(liveArtifactReadiness.value));
 
 const actions = proxyRefs(sessionWorkflow.actions);
 const codexTerminal = proxyRefs(sessionWorkflow.codexTerminal);
@@ -169,11 +181,13 @@ const issueRequest = proxyRefs(sessionWorkflow.issueRequest);
 const page = proxyRefs(sessionWorkflow.page);
 const reportPreview = proxyRefs(useAiStudioReportPreview({
   active: computed(() => props.active),
+  artifactReadiness: liveArtifactReadiness,
   currentActions: computed(() => actions.currentActions),
   session: selectedSession
 }));
 const humanInputResponsePreview = proxyRefs(useAiStudioHumanInputResponsePreview({
   active: computed(() => props.active),
+  artifactReadiness: liveArtifactReadiness,
   currentActions: computed(() => actions.currentActions),
   session: selectedSession
 }));
@@ -269,6 +283,17 @@ function emitToolbarControls() {
   });
 }
 
+function artifactReadinessVersion(readiness = {}) {
+  return Object.entries(readiness)
+    .sort(([leftName], [rightName]) => leftName.localeCompare(rightName))
+    .map(([name, state]) => [
+      name,
+      state?.nonEmpty === true ? "ready" : "missing",
+      String(state?.fingerprint || "")
+    ].join(":"))
+    .join("|");
+}
+
 onMounted(() => {
   emitToolbarControls();
   emitBusy();
@@ -276,6 +301,14 @@ onMounted(() => {
 });
 
 watch(interactionBusy, emitBusy, {
+  flush: "post"
+});
+
+watch(liveArtifactReadinessVersion, (version, previousVersion) => {
+  if (version && version !== previousVersion) {
+    void props.sessionData.refreshSessionData();
+  }
+}, {
   flush: "post"
 });
 

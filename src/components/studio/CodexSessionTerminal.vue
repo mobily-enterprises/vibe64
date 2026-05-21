@@ -197,6 +197,13 @@ const codexPrompt = computed(() => {
   const promptField = String(props.session?.codex?.promptField || "");
   return promptField ? String(props.session?.[promptField] || "") : "";
 });
+const codexTerminalInput = computed(() => {
+  if (props.promptOverride) {
+    return "";
+  }
+  const handoff = runtimeCodexPromptHandoff(props.session);
+  return String(handoff?.terminalInput || "");
+});
 const manualPromptInjectionRequestKey = computed(() => String(props.promptInjectionRequestKey || ""));
 const terminalDisplayActive = computed(() => props.visible && props.displayMode !== "headless");
 const {
@@ -262,6 +269,7 @@ promptHandoff = useCodexPromptHandoff({
   clearCodexBusy,
   clearPromptEchoFilters,
   codexPrompt,
+  codexTerminalInput,
   componentMounted,
   copyStatus,
   emitPromptInjected(payload) {

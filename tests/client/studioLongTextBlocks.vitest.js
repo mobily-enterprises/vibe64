@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { parseLongTextReviewBlocks } from "../../src/lib/studioLongTextBlocks.js";
+import {
+  parseLongTextInlineParts,
+  parseLongTextReviewBlocks
+} from "../../src/lib/studioLongTextBlocks.js";
 
 describe("Studio long text review blocks", () => {
   it("parses headings, paragraphs, lists, and code blocks", () => {
@@ -72,6 +75,31 @@ describe("Studio long text review blocks", () => {
           { text: "Ordered" }
         ],
         type: "ol"
+      }
+    ]);
+  });
+
+  it("parses safe inline strong and code spans", () => {
+    expect(parseLongTextInlineParts("For **6163** run `weather`.")).toEqual([
+      {
+        text: "For ",
+        type: "text"
+      },
+      {
+        text: "6163",
+        type: "strong"
+      },
+      {
+        text: " run ",
+        type: "text"
+      },
+      {
+        text: "weather",
+        type: "code"
+      },
+      {
+        text: ".",
+        type: "text"
       }
     ]);
   });

@@ -15,16 +15,31 @@
           compact
         />
 
-        <v-text-field
+        <template
           v-for="field in input.fields"
           :key="field.name"
-          :model-value="input.values[field.name]"
-          :disabled="input.submitting"
-          :label="field.label"
-          :placeholder="field.placeholder || undefined"
-          variant="outlined"
-          @update:model-value="updateField(field.name, $event)"
-        />
+        >
+          <v-textarea
+            v-if="field.kind === 'textarea'"
+            :model-value="input.values[field.name]"
+            auto-grow
+            :disabled="input.submitting"
+            :label="field.label"
+            :placeholder="field.placeholder || undefined"
+            rows="5"
+            variant="outlined"
+            @update:model-value="updateField(field.name, $event)"
+          />
+          <v-text-field
+            v-else
+            :model-value="input.values[field.name]"
+            :disabled="input.submitting"
+            :label="field.label"
+            :placeholder="field.placeholder || undefined"
+            variant="outlined"
+            @update:model-value="updateField(field.name, $event)"
+          />
+        </template>
       </v-card-text>
       <v-card-actions class="studio-ai-session-input-dialog__actions">
         <v-btn

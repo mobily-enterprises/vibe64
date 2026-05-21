@@ -18,7 +18,7 @@ import {
 import {
   STUDIO_CONTEXT_END_MARKER,
   STUDIO_CONTEXT_START_MARKER,
-  visibleStudioPromptTitle,
+  visibleStudioPromptText,
   wrapPromptWithStudioContext
 } from "./promptMarkers.js";
 import {
@@ -186,7 +186,7 @@ async function writeActionResultEffects(store, sessionId, result = {}) {
 }
 
 function buildCodexPromptHandoff(renderedPrompt) {
-  const visiblePrompt = visibleStudioPromptTitle(renderedPrompt.prompt, renderedPrompt.visiblePrompt);
+  const visiblePrompt = visibleStudioPromptText(renderedPrompt.prompt, renderedPrompt.visiblePrompt);
   return {
     codex: {
       mode: "inject_prompt",
@@ -261,6 +261,55 @@ function promptWithSessionBriefing({
   ]
     .map((part) => String(part || "").trim())
     .filter(Boolean)
+    .join("\n\n");
+}
+
+function actionInputFieldLabel(action = {}, fieldName = "") {
+  return (Array.isArray(action.inputFields) ? action.inputFields : [])
+    .find((field) => normalizeText(field.name) === fieldName)?.label ||
+    fieldName;
+}
+
+function inputFieldEntries(action = {}, input = {}) {
+  const fields = Array.isArray(action.inputFields) ? action.inputFields : [];
+  return fields
+    .map((field) => {
+      const name = normalizeText(field.name);
+      return {
+        label: actionInputFieldLabel(action, name),
+        name,
+        value: normalizeText(input?.[name])
+      };
+    })
+    .filter((entry) => entry.name && entry.value);
+}
+
+function scalarInputEntries(input = {}) {
+  const source = input && typeof input === "object" && !Array.isArray(input) ? input : {};
+  return Object.keys(source)
+    .sort((left, right) => left.localeCompare(right))
+    .map((name) => [name, source[name]])
+    .map(([name, value]) => ({
+      label: normalizeText(name),
+      name: normalizeText(name),
+      value: typeof value === "string" || typeof value === "number" || typeof value === "boolean"
+        ? normalizeText(value)
+        : ""
+    }))
+    .filter((entry) => entry.name && entry.value);
+}
+
+function visiblePromptFromActionInput(action = {}, input = {}) {
+  const entries = inputFieldEntries(action, input);
+  const visibleEntries = entries.length ? entries : scalarInputEntries(input);
+  if (!visibleEntries.length) {
+    return "";
+  }
+  if (visibleEntries.length === 1) {
+    return visibleEntries[0].value;
+  }
+  return visibleEntries
+    .map((entry) => `${entry.label}:\n${entry.value}`)
     .join("\n\n");
 }
 
@@ -375,7 +424,9 @@ class AiStudioSessionRuntime {
     if (this.workflowMachine) {
       return metadata;
     }
+    const profile = workflowProfileDefinition(workflowProfileId);
     return {
+      ...(profile.initialMetadata || {}),
       ...metadata,
       workflow_profile: normalizeWorkflowProfileId(workflowProfileId)
     };
@@ -581,7 +632,7 @@ class AiStudioSessionRuntime {
       codexPromptHandoff: buildCodexPromptHandoff({
         ...renderedPrompt,
         prompt,
-        visiblePrompt: visibleStudioPromptTitle(renderedPrompt.prompt)
+        visiblePrompt: visiblePromptFromActionInput(action, input)
       }),
       prompt,
       promptContext: renderedPrompt.context,

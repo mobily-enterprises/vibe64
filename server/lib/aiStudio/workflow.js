@@ -6,7 +6,10 @@ import { deepFreeze } from "./deepFreeze.js";
 
 const CREATE_ISSUE_FILE_ACTION_ID = "create_issue_file";
 const APPLY_REVIEW_FEEDBACK_ACTION_ID = "apply_review_feedback";
+const TALK_TO_AGENT_ACTION_ID = "talk_to_agent";
 const HUMAN_INPUT_RESPONSE_ARTIFACT = "human_input_response.md";
+const AGENT_RESPONSE_STEP_ID = "agent_response_created";
+const CHECKLIST_ITEMS_STEP_ID = "checklist_items_installed";
 const ISSUE_BODY_ARTIFACT = "issue.md";
 const ISSUE_FILE_STEP_ID = "issue_file_created";
 const ISSUE_TITLE_ARTIFACT = "issue_title";
@@ -78,6 +81,25 @@ function humanInputResponseEditorAction() {
     id: "edit_human_input_response",
     label: "Edit AI response",
     type: "editor"
+  };
+}
+
+function talkToAgentAction() {
+  return {
+    allowRepeatedPromptRuns: true,
+    id: TALK_TO_AGENT_ACTION_ID,
+    inputFields: [
+      {
+        kind: "textarea",
+        label: "What do you want to ask Codex?",
+        name: "agentRequest",
+        placeholder: "Describe what you want help with.",
+        requiredMessage: "Describe what you want Codex to help with."
+      }
+    ],
+    label: "Talk to agent",
+    promptId: TALK_TO_AGENT_ACTION_ID,
+    type: "prompt"
   };
 }
 
@@ -228,6 +250,34 @@ const AI_STUDIO_WORKFLOW_STEP_CATALOG = deepFreeze({
     label: "Install dependencies",
     next: {
       disabledReason: "Install dependencies before continuing.",
+      enabledWhen: ["metadata:dependencies_installed"]
+    },
+    rewindCleanup: {
+      actionResults: ["install_dependencies"],
+      metadata: ["dependencies_installed", "dependencies_path"]
+    }
+  },
+  [CHECKLIST_ITEMS_STEP_ID]: {
+    actions: [
+      {
+        adapterCapability: "install_dependencies",
+        disabledReason: "Checklist items are already installed.",
+        disabledWhen: ["metadata:dependencies_installed"],
+        id: "install_dependencies",
+        label: "Install checklist items",
+        type: "command"
+      }
+    ],
+    autopilot: {
+      actionId: "install_dependencies",
+      completeWhen: ["metadata:dependencies_installed"],
+      label: "Install checklist items"
+    },
+    description: "Install the adapter-provided local checklist items needed before talking to Codex.",
+    id: CHECKLIST_ITEMS_STEP_ID,
+    label: "Install checklist items",
+    next: {
+      disabledReason: "Install checklist items before continuing.",
       enabledWhen: ["metadata:dependencies_installed"]
     },
     rewindCleanup: {
@@ -464,6 +514,27 @@ const AI_STUDIO_WORKFLOW_STEP_CATALOG = deepFreeze({
     label: "Human review",
     rewindCleanup: {
       actionResults: [APPLY_REVIEW_FEEDBACK_ACTION_ID],
+      artifacts: [HUMAN_INPUT_RESPONSE_ARTIFACT]
+    }
+  },
+  [AGENT_RESPONSE_STEP_ID]: {
+    actions: [
+      talkToAgentAction(),
+      humanInputResponseEditorAction()
+    ],
+    autopilot: {
+      kind: "agent_conversation",
+      stop: true
+    },
+    description: "Ask Codex for local maintenance help and save the answer as an editable AI response artifact.",
+    id: AGENT_RESPONSE_STEP_ID,
+    label: "Talk to agent",
+    next: {
+      disabledReason: "Ask Codex and save an AI response before finishing.",
+      enabledWhen: [HUMAN_INPUT_RESPONSE_READY_CONDITION]
+    },
+    rewindCleanup: {
+      actionResults: [TALK_TO_AGENT_ACTION_ID],
       artifacts: [HUMAN_INPUT_RESPONSE_ARTIFACT]
     }
   },
@@ -958,19 +1029,15 @@ const AI_STUDIO_WORKFLOW_PROFILES = deepFreeze({
     description: "Run a local maintenance task without commit, pull request, or merge steps.",
     id: AI_STUDIO_WORKFLOW_PROFILE_IDS.NON_COMMIT_MAINTENANCE,
     label: "Non-commit maintenance",
+    initialMetadata: {
+      work_source: "new_branch"
+    },
+    sessionWord: "maintenance",
     stepIds: [
       "session_created",
-      "work_source_selected",
       "worktree_created",
-      "dependencies_installed",
-      ISSUE_FILE_STEP_ID,
-      "plan_made",
-      "plan_executed",
-      "review_run",
-      "project_validated",
-      "changes_accepted",
-      "report_created",
-      "project_knowledge_updated",
+      CHECKLIST_ITEMS_STEP_ID,
+      AGENT_RESPONSE_STEP_ID,
       "local_session_finished"
     ]
   }

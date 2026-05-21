@@ -218,6 +218,12 @@ function toggleInspectMode() {
   setSessionMode(sessionMode.value === "inspect" ? "autopilot" : "inspect");
 }
 
+watch(sessionMode, () => {
+  if (selection.selectedSessionId) {
+    void sessionData.refreshSessionData();
+  }
+});
+
 watch(sessionData.sessions, (sessions = []) => {
   const visibleSessionIds = new Set(sessions.map((session) => session.sessionId));
   for (const sessionId of Object.keys(runtimeStateBySessionId)) {

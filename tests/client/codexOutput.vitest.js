@@ -55,6 +55,25 @@ describe("codexOutput terminal utilities", () => {
     expect(stripStudioContextBlocksForDisplay(terminalInput)).toBe("Create the issue file.\n\n");
   });
 
+  it("keeps a multiline user prompt visible outside the hidden Studio prompt context", () => {
+    const terminalInput = wrapPromptWithStudioContext(
+      "This is the long hidden prompt body.",
+      [
+        "What do you want to ask Codex?",
+        "",
+        "Explain this codebase."
+      ].join("\n")
+    );
+
+    expect(stripStudioContextBlocksForDisplay(terminalInput)).toBe([
+      "What do you want to ask Codex?",
+      "",
+      "Explain this codebase.",
+      "",
+      ""
+    ].join("\n"));
+  });
+
   it("uses the rendered prompt title as the visible Studio prompt text", () => {
     const terminalInput = wrapPromptWithStudioContext([
       "Make plan",

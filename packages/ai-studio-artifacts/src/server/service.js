@@ -30,7 +30,6 @@ const ISSUE_FILE_STEP_ID = "issue_file_created";
 const SEED_APPLICATION_STEP_ID = "seed_application_defined";
 const ISSUE_TITLE_ARTIFACT = "issue_title";
 const ISSUE_WORD_ARTIFACT = "issue_word";
-const AUTOPILOT_FILE_NAMES = new Set(AUTOPILOT_FILE_ARTIFACTS);
 const ISSUE_ARTIFACT_WRITE_STEPS = new Set([
   ISSUE_FILE_STEP_ID,
   SEED_APPLICATION_STEP_ID
@@ -291,8 +290,8 @@ async function readAutopilotFiles(runtime, sessionId = "") {
   };
 }
 
-function isAutopilotArtifactChange(filename = "") {
-  return AUTOPILOT_FILE_NAMES.has(path.basename(String(filename || "")));
+function isSessionArtifactChange(filename = "") {
+  return Boolean(path.basename(String(filename || "")).trim());
 }
 
 function closeWatcher(watcher = null) {
@@ -550,7 +549,7 @@ function createService({ projectService } = {}) {
       }
 
       function scheduleArtifactUpdate(filename = "") {
-        if (!isAutopilotArtifactChange(filename)) {
+        if (!isSessionArtifactChange(filename)) {
           return;
         }
         void emitCurrentArtifacts().catch((error) => {

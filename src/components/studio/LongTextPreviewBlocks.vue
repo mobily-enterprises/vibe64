@@ -12,7 +12,7 @@
         v-if="block.type === 'heading'"
         class="studio-long-text-review__heading"
       >
-        {{ block.text }}
+        <LongTextInlineParts :text="block.text" />
       </component>
       <component
         :is="block.type"
@@ -23,7 +23,7 @@
           v-for="(item, itemIndex) in block.items"
           :key="`item:${blockIndex}:${itemIndex}`"
         >
-          {{ item.text }}
+          <LongTextInlineParts :text="item.text" />
         </li>
       </component>
       <pre
@@ -34,13 +34,15 @@
         v-else
         class="studio-long-text-review__paragraph"
       >
-        {{ block.text }}
+        <LongTextInlineParts :text="block.text" />
       </p>
     </template>
   </div>
 </template>
 
 <script setup>
+import LongTextInlineParts from "@/components/studio/LongTextInlineParts.vue";
+
 defineProps({
   blocks: {
     type: Array,

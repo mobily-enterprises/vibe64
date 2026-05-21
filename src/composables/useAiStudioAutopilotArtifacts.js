@@ -8,6 +8,7 @@ import { parseJsonStreamEvent } from "@/lib/streamEvents.js";
 
 function emptyAutopilotArtifacts(sessionId = "") {
   return {
+    artifactReadiness: {},
     issueDraft: null,
     ok: true,
     promptDone: null,

@@ -17,8 +17,11 @@ import {
 
 const ISSUE_STEP_ID = "issue_file_created";
 const APPLY_REVIEW_FEEDBACK_ACTION_ID = "apply_review_feedback";
+const TALK_TO_AGENT_ACTION_ID = "talk_to_agent";
+const AGENT_CONVERSATION_STEP_ID = "agent_response_created";
 const DEEP_UI_CHECK_STEP_ID = "deep_ui_check_run";
 const FINISHED_STEP_ID = "session_finished";
+const HUMAN_INPUT_RESPONSE_ARTIFACT = "human_input_response.md";
 const LOCAL_FINISHED_STEP_ID = "local_session_finished";
 const FINISH_SESSION_ACTION_ID = "finish_session";
 const IMPLEMENTATION_REVIEW_STEP_ID = "implementation_reviewed";
@@ -166,7 +169,8 @@ function currentStepCanRunAutopilot(session = {}) {
 function currentStepCanStartAutopilot(session = {}) {
   const stepId = String(session?.currentStep || "");
   if (!currentStepIsStartBoundary(stepId)) {
-    return false;
+    const completedSteps = Array.isArray(session?.completedSteps) ? session.completedSteps : [];
+    return completedSteps.length <= 1 && currentStepCanRunAutopilot(session);
   }
   return currentStepCanRunAutopilot(session) || nextIsReady(session.next);
 }
@@ -323,9 +327,14 @@ function promptDoneMatchesRun(promptDone = null, promptRun = {}) {
     promptDone?.completionToken === promptRun.completionToken;
 }
 
+function promptActionAdvancesByDefault(actionId = "") {
+  return actionId !== APPLY_REVIEW_FEEDBACK_ACTION_ID &&
+    actionId !== TALK_TO_AGENT_ACTION_ID;
+}
+
 function promptRunAdvancesWorkflow(promptRun = {}) {
   return promptRun?.advanceAfterCompletion !== false &&
-    promptRun?.actionId !== APPLY_REVIEW_FEEDBACK_ACTION_ID;
+    promptActionAdvancesByDefault(promptRun?.actionId);
 }
 
 function useAiStudioAutopilotController({
@@ -342,6 +351,7 @@ function useAiStudioAutopilotController({
   const active = ref(false);
   const activeStage = ref("");
   const activePromptRun = ref(null);
+  const agentRequest = ref("");
   const deepUiCheckDecision = ref("");
   const failure = ref(null);
   const lastCommandResult = ref(null);
@@ -380,6 +390,18 @@ function useAiStudioAutopilotController({
   const readyForMerge = computed(() => stepAutopilot(readSession(session)).kind === "merge_review" || currentStep.value === MERGE_PR_STEP_ID);
   const readyForImplementationReview = computed(() => {
     return stepAutopilot(readSession(session)).kind === "implementation_review" || currentStep.value === IMPLEMENTATION_REVIEW_STEP_ID;
+  });
+  const readyForAgentConversation = computed(() => {
+    return stepAutopilot(readSession(session)).kind === "agent_conversation" || currentStep.value === AGENT_CONVERSATION_STEP_ID;
+  });
+  const agentResponseReady = computed(() => artifactReady(readSession(session), HUMAN_INPUT_RESPONSE_ARTIFACT));
+  const canSubmitAgentRequest = computed(() => {
+    const action = actionById(readActions(actions), TALK_TO_AGENT_ACTION_ID);
+    return Boolean(readyForAgentConversation.value && !running.value && action?.enabled === true);
+  });
+  const canFinishAgentConversation = computed(() => {
+    const next = readNext(actions);
+    return Boolean(readyForAgentConversation.value && agentResponseReady.value && !running.value && nextIsReady(next));
   });
   const readyForFinalReview = computed(() => {
     return stepAutopilot(readSession(session)).kind === "final_review" || currentStep.value === REVIEW_CHANGES_STEP_ID;
@@ -522,6 +544,17 @@ function useAiStudioAutopilotController({
         showProgress: false,
         stopAction: active.value ? "issue" : "",
         title: "What would you like to do?"
+      };
+    }
+    if (readyForAgentConversation.value) {
+      return {
+        icon: failure.value ? "warning" : "cog",
+        kind: "agent_conversation",
+        message: failure.value?.error || (agentResponseReady.value
+          ? "Codex saved an answer for this maintenance session."
+          : "Ask Codex what you need help with."),
+        showProgress: false,
+        title: agentResponseReady.value ? "AI response" : "Talk to agent"
       };
     }
     if (promptRunNeedsContinuation.value) {
@@ -699,6 +732,76 @@ function useAiStudioAutopilotController({
       await refreshSessionData();
       await nextTick();
       return !failure.value;
+    } finally {
+      active.value = false;
+      activeStage.value = "";
+    }
+  }
+
+  async function submitAgentRequest(message = "") {
+    const normalizedMessage = String(message || "").trim();
+    if (!autopilotEnabled.value || !canSubmitAgentRequest.value) {
+      return false;
+    }
+    if (!normalizedMessage) {
+      stopWithFailure({
+        actionId: TALK_TO_AGENT_ACTION_ID,
+        actionLabel: "Talk to agent",
+        error: "Describe what you want Codex to help with before sending the request.",
+        exitCode: null,
+        ok: false,
+        output: "",
+        source: "codex"
+      });
+      return false;
+    }
+
+    const action = actionById(readActions(actions), TALK_TO_AGENT_ACTION_ID);
+    stopRequested = false;
+    clearFailure();
+    agentRequest.value = normalizedMessage;
+    active.value = true;
+    activeStage.value = action?.label || "Talk to agent";
+    try {
+      await runPromptAction(action, {
+        actionId: TALK_TO_AGENT_ACTION_ID,
+        label: activeStage.value
+      }, {
+        advanceAfterCompletion: false
+      });
+      await refreshSessionData();
+      await nextTick();
+      return !failure.value;
+    } finally {
+      active.value = false;
+      activeStage.value = "";
+    }
+  }
+
+  async function finishAgentConversation() {
+    if (!autopilotEnabled.value || !canFinishAgentConversation.value) {
+      return false;
+    }
+
+    stopRequested = false;
+    clearFailure();
+    active.value = true;
+    activeStage.value = "Finish local session";
+    try {
+      await actions.goNext?.();
+      await refreshSessionData();
+      await nextTick();
+      return true;
+    } catch (error) {
+      stopWithFailure({
+        actionId: "",
+        actionLabel: "Finish local session",
+        error: String(error?.message || error || "Could not finish the local session."),
+        exitCode: null,
+        ok: false,
+        output: ""
+      });
+      return false;
     } finally {
       active.value = false;
       activeStage.value = "";
@@ -1022,7 +1125,11 @@ function useAiStudioAutopilotController({
   }
 
   async function archiveSession() {
-    if (!autopilotEnabled.value || currentStep.value !== FINISHED_STEP_ID || running.value) {
+    if (
+      !autopilotEnabled.value ||
+      ![FINISHED_STEP_ID, LOCAL_FINISHED_STEP_ID].includes(currentStep.value) ||
+      running.value
+    ) {
       return false;
     }
     const archiveAction = actionById(readActions(actions), FINISH_SESSION_ACTION_ID);
@@ -1353,6 +1460,11 @@ function useAiStudioAutopilotController({
         reviewFeedback: reviewTweakFeedback.value
       };
     }
+    if (action.id === TALK_TO_AGENT_ACTION_ID && agentRequest.value) {
+      return {
+        agentRequest: agentRequest.value
+      };
+    }
     return {};
   }
 
@@ -1362,6 +1474,9 @@ function useAiStudioAutopilotController({
     }
     if (action.id === APPLY_REVIEW_FEEDBACK_ACTION_ID) {
       reviewTweakFeedback.value = "";
+    }
+    if (action.id === TALK_TO_AGENT_ACTION_ID) {
+      agentRequest.value = "";
     }
   }
 
@@ -1382,6 +1497,8 @@ function useAiStudioAutopilotController({
       const currentPromptRun = activePromptRunForSession(readSession(session)) || promptRun;
       const autopilotFiles = readPromptAutopilotFiles(currentPromptRun);
       if (promptDoneMatchesRun(autopilotFiles.promptDone, currentPromptRun)) {
+        await refreshSessionData();
+        await nextTick();
         return PROMPT_WAIT_RESULT.COMPLETED;
       }
       if (promptQuestionsMatchRun(autopilotFiles.questions, currentPromptRun)) {
@@ -1534,13 +1651,13 @@ function useAiStudioAutopilotController({
     if (!promptRunsAreSame(activePromptRun.value, serverPromptRun)) {
       return {
         ...serverPromptRun,
-        advanceAfterCompletion: serverPromptRun.actionId === APPLY_REVIEW_FEEDBACK_ACTION_ID ? false : undefined
+        advanceAfterCompletion: promptActionAdvancesByDefault(serverPromptRun.actionId) ? undefined : false
       };
     }
     return {
       ...serverPromptRun,
       advanceAfterCompletion: activePromptRun.value.advanceAfterCompletion === false ||
-        serverPromptRun.actionId === APPLY_REVIEW_FEEDBACK_ACTION_ID
+        !promptActionAdvancesByDefault(serverPromptRun.actionId)
         ? false
         : undefined
     };
@@ -1711,7 +1828,9 @@ function useAiStudioAutopilotController({
     cancelMergeFailure,
     canAcceptReview,
     canArchiveSession,
+    canFinishAgentConversation,
     canRequestReviewTweak,
+    canSubmitAgentRequest,
     canStart,
     canResume,
     clearFailure,
@@ -1721,10 +1840,12 @@ function useAiStudioAutopilotController({
     commandRunning,
     continuePromptRun,
     failure,
+    finishAgentConversation,
     mergeAndSyncMainCheckout,
     promptRunAdvanceMessage,
     promptRunNeedsContinuation,
     promptRunReadyToAdvance,
+    readyForAgentConversation,
     readyForFinished,
     readyForDeepUiCheck,
     readyForFinalReview,
@@ -1742,6 +1863,7 @@ function useAiStudioAutopilotController({
     skipDeepUiCheck,
     skipMerge,
     start,
+    submitAgentRequest,
     syncFromAutopilotArtifacts,
     stop,
     stopCommandAction,
@@ -1752,6 +1874,7 @@ function useAiStudioAutopilotController({
 }
 
 export {
+  AGENT_CONVERSATION_STEP_ID,
   DEEP_UI_CHECK_STEP_ID,
   FINISHED_STEP_ID,
   IMPLEMENTATION_REVIEW_STEP_ID,

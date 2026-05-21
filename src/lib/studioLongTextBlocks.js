@@ -99,4 +99,36 @@ function parseLongTextReviewBlocks(value) {
   return blocks;
 }
 
-export { parseLongTextReviewBlocks };
+function parseLongTextInlineParts(value = "") {
+  const text = String(value || "");
+  const parts = [];
+  const pattern = /(`([^`]+)`)|(\*\*([^*]+)\*\*)/gu;
+  let cursor = 0;
+  let match = pattern.exec(text);
+  while (match) {
+    if (match.index > cursor) {
+      parts.push({
+        text: text.slice(cursor, match.index),
+        type: "text"
+      });
+    }
+    parts.push({
+      text: match[2] || match[4] || "",
+      type: match[2] ? "code" : "strong"
+    });
+    cursor = match.index + match[0].length;
+    match = pattern.exec(text);
+  }
+  if (cursor < text.length) {
+    parts.push({
+      text: text.slice(cursor),
+      type: "text"
+    });
+  }
+  return parts.length ? parts : [{ text, type: "text" }];
+}
+
+export {
+  parseLongTextInlineParts,
+  parseLongTextReviewBlocks
+};

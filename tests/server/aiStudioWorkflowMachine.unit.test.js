@@ -97,7 +97,18 @@ test("ai-studio workflow profiles are ordered step lists with self-contained ste
       seedApplication.steps.findIndex((step) => step.id === "seed_plan_executed"),
     true
   );
-  assert.equal(nonCommitMaintenance.steps.at(-1).id, "local_session_finished");
+  assert.deepEqual(nonCommitMaintenance.profile.initialMetadata, {
+    work_source: "new_branch"
+  });
+  assert.equal(nonCommitMaintenance.profile.sessionWord, "maintenance");
+  assert.deepEqual(nonCommitMaintenance.steps.map((step) => step.id), [
+    "session_created",
+    "worktree_created",
+    "checklist_items_installed",
+    "agent_response_created",
+    "local_session_finished"
+  ]);
+  assert.equal(nonCommitMaintenance.steps.at(-2).autopilot.kind, "agent_conversation");
 });
 
 test("ai-studio runtime persists the selected workflow profile per session", async () => {
@@ -114,7 +125,10 @@ test("ai-studio runtime persists the selected workflow profile per session", asy
     assert.equal(session.workflowId, AI_STUDIO_WORKFLOW_PROFILE_IDS.NON_COMMIT_MAINTENANCE);
     assert.equal(session.workflowProfile.id, AI_STUDIO_WORKFLOW_PROFILE_IDS.NON_COMMIT_MAINTENANCE);
     assert.equal(session.metadata.workflow_profile, AI_STUDIO_WORKFLOW_PROFILE_IDS.NON_COMMIT_MAINTENANCE);
+    assert.equal(session.metadata.work_source, "new_branch");
+    assert.equal(session.sessionName, "maintenance");
     assert.equal(session.stepDefinitions.at(-1).id, "local_session_finished");
+    assert.equal(await runtime.store.readArtifact("maintenance_profile", "issue_word"), "maintenance\n");
 
     await assert.rejects(
       () => runtime.createSession({
@@ -374,7 +388,7 @@ test("ai-studio runtime prompt actions render Codex handoff data without advanci
   });
 });
 
-test("ai-studio runtime prompt handoff uses the rendered prompt title as visible terminal text", async () => {
+test("ai-studio runtime prompt handoff shows submitted action input as visible terminal text", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const promptPackRoot = path.join(targetRoot, "prompt-pack");
     await mkdir(promptPackRoot, {
@@ -412,9 +426,53 @@ test("ai-studio runtime prompt handoff uses the rendered prompt title as visible
     assert.match(afterAction.actionResult.prompt, /"issueRequest": "Add booking reports"/u);
     assert.match(
       afterAction.actionResult.codexPromptHandoff.terminalInput,
-      /^Discuss and define issue\n\n\[\[AI_STUDIO_CONTEXT_START\]\]/u
+      /^Add booking reports\n\n\[\[AI_STUDIO_CONTEXT_START\]\]/u
     );
-    assert.doesNotMatch(afterAction.actionResult.codexPromptHandoff.terminalInput, /^Discuss issue/u);
+    assert.doesNotMatch(afterAction.actionResult.codexPromptHandoff.terminalInput, /^Discuss and define issue/u);
+  });
+});
+
+test("ai-studio runtime prompt handoff shows the action input outside hidden terminal context", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const promptPackRoot = path.join(targetRoot, "prompt-pack");
+    await mkdir(promptPackRoot, {
+      recursive: true
+    });
+    await writeFile(
+      path.join(promptPackRoot, "talk_to_agent.txt"),
+      [
+        "Talk to agent",
+        "",
+        "Action input:",
+        "{{input.json}}"
+      ].join("\n"),
+      "utf8"
+    );
+
+    const runtime = new AiStudioSessionRuntime({
+      adapter: new PromptRendererFakeAdapter({
+        promptPackRoot
+      }),
+      clock: () => new Date("2026-05-16T01:02:03.000Z"),
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "agent_response_created",
+      sessionId: "agent_prompt_visible_input",
+      workflowProfile: AI_STUDIO_WORKFLOW_PROFILE_IDS.NON_COMMIT_MAINTENANCE
+    });
+
+    const afterAction = await runtime.runAction("agent_prompt_visible_input", "talk_to_agent", {
+      agentRequest: "Explain this codebase."
+    });
+
+    assert.equal(afterAction.actionResult.status, "prompt_ready");
+    assert.equal(afterAction.actionResult.promptId, "talk_to_agent");
+    assert.match(
+      afterAction.actionResult.codexPromptHandoff.terminalInput,
+      /^Explain this codebase\.\n\n\[\[AI_STUDIO_CONTEXT_START\]\]/u
+    );
+    assert.match(afterAction.actionResult.codexPromptHandoff.prompt, /"agentRequest": "Explain this codebase\."/u);
   });
 });
 

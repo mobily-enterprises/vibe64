@@ -9,8 +9,16 @@ import {
   readRefOrGetterValue
 } from "@/lib/vueRefOrGetterValue.js";
 
-function artifactIsReady(session = {}, artifactName = "") {
-  return session?.artifactReadiness?.[artifactName]?.nonEmpty === true;
+function artifactReadinessState(readiness = {}, artifactName = "") {
+  const state = readiness?.[artifactName];
+  return state && typeof state === "object" && !Array.isArray(state) ? state : {};
+}
+
+function mergedArtifactReadiness(session = {}, liveReadiness = {}, artifactName = "") {
+  return {
+    ...artifactReadinessState(session?.artifactReadiness, artifactName),
+    ...artifactReadinessState(liveReadiness, artifactName)
+  };
 }
 
 function actionById(actions = [], actionId = "") {
@@ -21,6 +29,7 @@ function actionById(actions = [], actionId = "") {
 function useAiStudioArtifactPreview({
   actionId = "",
   active = true,
+  artifactReadiness = null,
   artifactName = "",
   currentActions,
   loadErrorMessage = "Artifact could not be loaded.",
@@ -32,9 +41,16 @@ function useAiStudioArtifactPreview({
   let requestId = 0;
 
   const currentSession = computed(() => readRefOrGetterValue(session) || null);
+  const currentLiveReadiness = computed(() => readRefOrGetterValue(artifactReadiness) || {});
+  const currentArtifactReadiness = computed(() => mergedArtifactReadiness(
+    currentSession.value,
+    currentLiveReadiness.value,
+    artifactName
+  ));
   const editorAction = computed(() => actionById(readRefOrGetterValue(currentActions), actionId));
   const loading = computed(() => artifacts.artifactsLoading.value);
-  const ready = computed(() => artifactIsReady(currentSession.value, artifactName));
+  const ready = computed(() => currentArtifactReadiness.value.nonEmpty === true);
+  const fingerprint = computed(() => String(currentArtifactReadiness.value.fingerprint || ""));
   const canLoad = computed(() => Boolean(
     readRefOrGetterValue(active) !== false &&
     currentSession.value?.sessionId &&
@@ -51,6 +67,7 @@ function useAiStudioArtifactPreview({
     currentSession.value?.sessionId || "",
     currentSession.value?.currentStep || "",
     ready.value ? "ready" : "missing",
+    fingerprint.value,
     editorAction.value?.enabled === true ? "enabled" : "disabled"
   ].join(":"));
 

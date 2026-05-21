@@ -1,12 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { LOCALHOST_CHECK_BYPASS_ENV } from "../../server/lib/localhostCheckBypass.js";
 import { createAiStudioFeatureRoutes } from "../../server/lib/aiStudio/featureRoutes.js";
+import {
+  testReply,
+  testRouteApp,
+  withLocalRequestBypass
+} from "./aiStudioRouteTestHelpers.js";
 
 test("AI Studio feature routes centralize route metadata and action dispatch", async () => {
   await withLocalRequestBypass(async () => {
-    const app = testApp();
+    const app = testRouteApp();
     const routes = createAiStudioFeatureRoutes(app, {
       localRequestMessage: "Local only.",
       routeRelativePath: "ai-studio",
@@ -76,7 +80,7 @@ test("AI Studio feature routes centralize route metadata and action dispatch", a
 
 test("AI Studio feature routes support service response status overrides", async () => {
   await withLocalRequestBypass(async () => {
-    const app = testApp();
+    const app = testRouteApp();
     const routes = createAiStudioFeatureRoutes(app, {
       routeRelativePath: "ai-studio",
       routeSurface: "home",
@@ -110,52 +114,3 @@ test("AI Studio feature routes support service response status overrides", async
     assert.equal(closeReply.statusCode, 200);
   });
 });
-
-function testApp() {
-  const registeredRoutes = [];
-  return {
-    registeredRoutes,
-    make(token) {
-      assert.equal(token, "jskit.http.router");
-      return {
-        register(method, path, options, handler) {
-          registeredRoutes.push({
-            handler,
-            method,
-            options,
-            path
-          });
-        }
-      };
-    }
-  };
-}
-
-function testReply() {
-  return {
-    payload: null,
-    statusCode: null,
-    code(statusCode) {
-      this.statusCode = statusCode;
-      return this;
-    },
-    send(payload) {
-      this.payload = payload;
-      return this;
-    }
-  };
-}
-
-async function withLocalRequestBypass(operation) {
-  const previousValue = process.env[LOCALHOST_CHECK_BYPASS_ENV];
-  process.env[LOCALHOST_CHECK_BYPASS_ENV] = "1";
-  try {
-    await operation();
-  } finally {
-    if (previousValue == null) {
-      delete process.env[LOCALHOST_CHECK_BYPASS_ENV];
-    } else {
-      process.env[LOCALHOST_CHECK_BYPASS_ENV] = previousValue;
-    }
-  }
-}

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
@@ -36,6 +37,10 @@ const STEP_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
 function isValidAiStudioSessionId(sessionId) {
   const normalizedSessionId = normalizeText(sessionId);
   return SESSION_ID_PATTERN.test(normalizedSessionId);
+}
+
+function artifactFingerprint(text = "") {
+  return createHash("sha256").update(String(text || "")).digest("hex");
 }
 
 function isSafeStepId(stepId) {
@@ -384,6 +389,7 @@ function createAiStudioSessionStore({
         name,
         {
           exists: true,
+          fingerprint: artifactFingerprint(text),
           nonEmpty: Boolean(normalizeText(text))
         }
       ];

@@ -94,7 +94,9 @@ function normalizeInputField(field = {}, actionId = "") {
       "ai_studio_workflow_input_field_name_missing"
     );
   }
+  const kind = normalizeText(field.kind || "text");
   return {
+    kind: kind === "textarea" ? "textarea" : "text",
     label: normalizeText(field.label || name),
     name,
     placeholder: normalizeText(field.placeholder),

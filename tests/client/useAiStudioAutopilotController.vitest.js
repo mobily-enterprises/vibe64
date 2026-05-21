@@ -580,6 +580,7 @@ describe("useAiStudioAutopilotController", () => {
     context.questionExchange.setAnswer("q1", "Use the managed MariaDB runtime.");
 
     expect(context.questionExchange.canSubmit.value).toBe(true);
+    context.refreshSessionData.mockClear();
 
     await context.questionExchange.submitAnswers();
 
@@ -589,6 +590,7 @@ describe("useAiStudioAutopilotController", () => {
         sessionId: "session-1"
       })
     );
+    expect(context.refreshSessionData).toHaveBeenCalled();
     expect(context.session.value.currentStep).toBe(IMPLEMENTATION_REVIEW_STEP_ID);
     expect(context.controller.readyForImplementationReview.value).toBe(true);
     expect(context.questionExchange.hasQuestions.value).toBe(false);
@@ -1194,6 +1196,7 @@ function createAutopilotContext({
   const questionExchange = useAiStudioCodexQuestionExchange({
     codexTerminal
   });
+  const refreshSessionData = vi.fn(async () => null);
   const controller = useAiStudioAutopilotController({
     actions,
     autopilotArtifacts,
@@ -1208,7 +1211,7 @@ function createAutopilotContext({
     commandRunner,
     enabled,
     questionExchange,
-    refreshSessionData: async () => null,
+    refreshSessionData,
     session
   });
 
@@ -1228,6 +1231,7 @@ function createAutopilotContext({
     completePromptRun,
     moveToStep,
     questionExchange,
+    refreshSessionData,
     session
   };
 }

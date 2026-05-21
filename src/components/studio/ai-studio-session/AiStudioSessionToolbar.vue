@@ -32,6 +32,7 @@
 
       <v-menu
         v-if="showWorkflowProfileMenu"
+        v-model="workflowProfileMenuOpen"
         location="bottom end"
         transition="scale-transition"
       >
@@ -63,7 +64,7 @@
             :disabled="toolbar.createSessionCommand.isRunning"
             :subtitle="profile.description"
             :title="profile.label"
-            @click="toolbar.createSession(profile.id)"
+            @click="createSessionFromProfile(profile.id)"
           />
         </v-list>
       </v-menu>
@@ -85,7 +86,7 @@
 </template>
 
 <script setup>
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import {
   mdiChevronDown,
   mdiClose,
@@ -125,6 +126,12 @@ const workflowProfiles = computed(() => {
 const showWorkflowProfileMenu = computed(() => {
   return props.toolbar.createSessionMode === "select" && workflowProfiles.value.length > 0;
 });
+const workflowProfileMenuOpen = ref(false);
+
+function createSessionFromProfile(profileId = "") {
+  workflowProfileMenuOpen.value = false;
+  props.toolbar.createSession?.(profileId);
+}
 </script>
 
 <style scoped>

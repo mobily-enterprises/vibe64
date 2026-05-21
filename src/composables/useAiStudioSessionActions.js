@@ -227,7 +227,10 @@ function useAiStudioSessionActions({
       return;
     }
     clearCopyStatus();
-    if (normalizeActionInputFields(action.inputFields).length > 0) {
+    const providedInput = options.input && typeof options.input === "object" && !Array.isArray(options.input)
+      ? options.input
+      : null;
+    if (!providedInput && normalizeActionInputFields(action.inputFields).length > 0) {
       openInputDialog(action);
       return;
     }
@@ -246,9 +249,7 @@ function useAiStudioSessionActions({
 
     activeActionId.value = action.id;
     try {
-      const input = options.input && typeof options.input === "object" && !Array.isArray(options.input)
-        ? options.input
-        : issueFileStep.inputForAction(action);
+      const input = providedInput || issueFileStep.inputForAction(action);
       return await runActionCommand.run({
         actionId: action.id,
         advanceOnSuccess: action.advanceOnSuccess === true,

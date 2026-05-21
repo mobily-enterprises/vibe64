@@ -3,7 +3,9 @@ function normalizeActionInputField(field = {}) {
   if (!name) {
     return null;
   }
+  const kind = String(field.kind || "text").trim();
   return {
+    kind: kind === "textarea" ? "textarea" : "text",
     label: String(field.label || name).trim(),
     name,
     placeholder: String(field.placeholder || "").trim(),

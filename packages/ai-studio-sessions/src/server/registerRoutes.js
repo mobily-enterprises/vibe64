@@ -31,6 +31,7 @@ function registerRoutes(
 
   routes.actionRoute("POST", "/sessions", {
     actionId: ACTION_CREATE_SESSION,
+    buildInput: routes.requestBody,
     summary: "Create an AI Studio session."
   });
 

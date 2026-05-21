@@ -103,24 +103,24 @@
         class="studio-autopilot__cog"
         color="primary"
         indeterminate
-        :size="148"
-        :width="8"
+        :size="116"
+        :width="7"
       >
-        <v-icon :icon="mdiCog" size="64" />
+        <v-icon :icon="mdiCog" size="50" />
       </v-progress-circular>
 
       <v-icon
         v-else-if="!commandTerminalVisible && screenState.icon === 'warning'"
         color="warning"
         :icon="mdiAlertCircleOutline"
-        size="72"
+        size="58"
       />
 
       <v-icon
         v-else-if="!commandTerminalVisible"
         color="primary"
         :icon="mdiCog"
-        size="72"
+        size="58"
       />
 
       <div v-if="mainStatusVisible" class="studio-autopilot__status">
@@ -305,6 +305,68 @@
             Continue
           </v-btn>
         </div>
+      </div>
+
+      <div
+        v-else-if="screenKind === 'agent_conversation'"
+        class="studio-autopilot__agent-conversation"
+      >
+        <v-alert
+          type="info"
+          variant="tonal"
+          density="compact"
+        >
+          {{ screenMessage }}
+        </v-alert>
+
+        <AiStudioReportPreview
+          v-if="humanInputResponsePreviewVisible"
+          empty-text="AI response is not ready yet."
+          :error="humanInputResponsePreview.error"
+          :loading="humanInputResponsePreview.loading"
+          :text="humanInputResponsePreview.text"
+          title="AI response"
+        />
+
+        <form
+          class="studio-autopilot__agent-form"
+          @submit.prevent="submitAgentConversation"
+        >
+          <v-textarea
+            v-model="agentConversationRequest"
+            auto-grow
+            class="studio-autopilot__issue-input"
+            :disabled="running"
+            label="What do you want to ask Codex?"
+            rows="5"
+            variant="outlined"
+          />
+
+          <div class="studio-autopilot__actions">
+            <v-btn
+              color="primary"
+              :disabled="!canSubmitAgentConversation"
+              :loading="running"
+              :prepend-icon="mdiSend"
+              type="submit"
+              variant="flat"
+            >
+              Ask Codex
+            </v-btn>
+
+            <v-btn
+              v-if="canFinishAgentConversation"
+              color="primary"
+              :disabled="running"
+              :prepend-icon="mdiCheck"
+              type="button"
+              variant="tonal"
+              @click="finishAgentConversation"
+            >
+              Finish
+            </v-btn>
+          </div>
+        </form>
       </div>
 
       <div
@@ -611,9 +673,6 @@ import {
   useAiStudioAutopilotController
 } from "@/composables/useAiStudioAutopilotController.js";
 import {
-  useAiStudioAutopilotArtifacts
-} from "@/composables/useAiStudioAutopilotArtifacts.js";
-import {
   useAiStudioAutopilotIssueDiscussion
 } from "@/composables/useAiStudioAutopilotIssueDiscussion.js";
 import {
@@ -640,6 +699,10 @@ const props = defineProps({
   active: {
     default: true,
     type: Boolean
+  },
+  autopilotArtifacts: {
+    default: () => ({}),
+    type: Object
   },
   autopilotSteps: {
     default: () => [],
@@ -694,14 +757,15 @@ const props = defineProps({
 const codexQuestionExchange = useAiStudioCodexQuestionExchange({
   codexTerminal: props.codexTerminal
 });
-const autopilotArtifacts = useAiStudioAutopilotArtifacts({
-  sessionId: computed(() => props.session?.sessionId || "")
-});
+const autopilotArtifactState = computed(() => readRefOrGetterValue(props.autopilotArtifacts?.artifacts) || null);
+const clearAutopilotArtifacts = async () => props.autopilotArtifacts?.clear?.() || null;
 const {
   acceptChanges,
   cancelMergeFailure,
   canAcceptReview,
+  canFinishAgentConversation,
   canRequestReviewTweak,
+  canSubmitAgentRequest,
   clearFailure,
   commandOutput,
   commandPreview,
@@ -709,7 +773,9 @@ const {
   commandRunning,
   continuePromptRun,
   failure,
+  finishAgentConversation,
   mergeAndSyncMainCheckout,
+  readyForAgentConversation,
   readyForIssue,
   rejectChanges,
   requestReviewTweak,
@@ -721,14 +787,15 @@ const {
   skipDeepUiCheck,
   skipMerge,
   start,
+  submitAgentRequest,
   syncFromAutopilotArtifacts,
   stop,
   stopCommandAction,
   waitingForCodex
 } = useAiStudioAutopilotController({
   actions: props.actions,
-  autopilotArtifacts: autopilotArtifacts.artifacts,
-  clearAutopilotArtifacts: autopilotArtifacts.clear,
+  autopilotArtifacts: autopilotArtifactState,
+  clearAutopilotArtifacts,
   codexTerminal: props.codexTerminal,
   commandRunner: props.commandRunner || undefined,
   enabled: computed(() => props.active),
@@ -737,6 +804,7 @@ const {
   session: computed(() => props.session)
 });
 const reviewFeedback = ref("");
+const agentConversationRequest = ref("");
 const reviewFeedbackVisible = ref(false);
 const commandFixActive = ref(false);
 const commandFixInjectionError = ref("");
@@ -751,8 +819,8 @@ const archiveAction = computed(() => {
 
 const issueDiscussion = proxyRefs(useAiStudioAutopilotIssueDiscussion({
   actions: props.actions,
-  autopilotArtifacts: autopilotArtifacts.artifacts,
-  clearAutopilotArtifacts: autopilotArtifacts.clear,
+  autopilotArtifacts: autopilotArtifactState,
+  clearAutopilotArtifacts,
   codexTerminal: props.codexTerminal,
   enabled: computed(() => props.active),
   questionExchange: codexQuestionExchange,
@@ -869,8 +937,12 @@ const reportPreviewVisible = computed(() => Boolean(
   props.reportPreview?.visible
 ));
 const humanInputResponsePreviewVisible = computed(() => Boolean(
-  implementationReviewVisible.value &&
+  (implementationReviewVisible.value || readyForAgentConversation.value) &&
   props.humanInputResponsePreview?.visible
+));
+const canSubmitAgentConversation = computed(() => Boolean(
+  canSubmitAgentRequest.value &&
+  agentConversationRequest.value.trim()
 ));
 const screenStopAction = computed(() => {
   if (issueDiscussionWaiting.value) {
@@ -976,6 +1048,16 @@ async function submitReviewFeedback() {
   }
 }
 
+async function submitAgentConversation() {
+  if (!canSubmitAgentConversation.value) {
+    return;
+  }
+  const accepted = await submitAgentRequest(agentConversationRequest.value);
+  if (accepted) {
+    agentConversationRequest.value = "";
+  }
+}
+
 async function acceptIssueDraftAndContinue() {
   const accepted = await issueDiscussion.acceptIssueDraft();
   if (accepted && props.active) {
@@ -1035,14 +1117,15 @@ watch(commandTerminalFailed, (failed) => {
 }
 
 .studio-autopilot__stage {
-  align-items: center;
+  align-content: start;
+  align-items: start;
   border: 1px solid rgba(var(--v-theme-outline), 0.24);
   border-radius: 8px;
   display: grid;
-  gap: 1rem;
+  gap: 0.65rem;
   justify-items: center;
-  min-height: 22rem;
-  padding: 1.25rem;
+  min-height: 18rem;
+  padding: 0.85rem 1rem 1rem;
   text-align: center;
 }
 
@@ -1057,7 +1140,7 @@ watch(commandTerminalFailed, (failed) => {
 
 .studio-autopilot__status {
   display: grid;
-  gap: 0.25rem;
+  gap: 0.15rem;
 }
 
 .studio-autopilot__status h2 {
@@ -1158,13 +1241,14 @@ watch(commandTerminalFailed, (failed) => {
 }
 
 .studio-autopilot__issue-form,
+.studio-autopilot__agent-conversation,
 .studio-autopilot__decision,
 .studio-autopilot__review,
 .studio-autopilot__merge,
 .studio-autopilot__finished,
 .studio-autopilot__failure {
   display: grid;
-  gap: 0.75rem;
+  gap: 0.6rem;
   max-width: 44rem;
   width: 100%;
 }
@@ -1189,6 +1273,11 @@ watch(commandTerminalFailed, (failed) => {
 .studio-autopilot__review-feedback {
   display: grid;
   gap: 0.65rem;
+}
+
+.studio-autopilot__agent-form {
+  display: grid;
+  gap: 0.5rem;
 }
 
 .studio-autopilot__issue-input {

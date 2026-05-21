@@ -81,6 +81,15 @@ test("ai-studio session store reads and writes metadata, artifacts, status, curr
     assert.equal(await store.readArtifact("state_contract", "summary.txt"), "hello\n");
     assert.equal(await store.artifactExists("state_contract", "summary.txt"), true);
     assert.match(artifactPath, /\.ai-studio\/sessions\/active\/state_contract\/artifacts\/summary\.txt$/u);
+    assert.equal(typeof session.artifactReadiness["summary.txt"].fingerprint, "string");
+    assert.equal(session.artifactReadiness["summary.txt"].fingerprint.length, 64);
+
+    await store.writeArtifact("state_contract", "summary.txt", "updated\n");
+    const updatedSession = await store.readSession("state_contract");
+    assert.notEqual(
+      updatedSession.artifactReadiness["summary.txt"].fingerprint,
+      session.artifactReadiness["summary.txt"].fingerprint
+    );
 
     const commandLog = await store.readCommandLog("state_contract");
     assert.deepEqual(commandLog, [
