@@ -1,6 +1,8 @@
 import {
   STUDIO_HOST_GID_ENV,
   STUDIO_HOST_UID_ENV,
+  STUDIO_PLAYWRIGHT_BROWSERS_PATH,
+  STUDIO_PLAYWRIGHT_BROWSERS_VOLUME,
   STUDIO_TOOL_HOME_BIN_PATH,
   STUDIO_TOOL_HOME_NPM_PREFIX,
   STUDIO_TOOL_HOME_PATH,
@@ -11,6 +13,15 @@ import {
 } from "./shellCommands.js";
 
 const STUDIO_MYSQL_CLIENT_CONFIG_DIR = "/tmp/ai-studio-mysql-client";
+
+function studioPlaywrightBrowsersDockerArgs() {
+  return [
+    "-v",
+    `${STUDIO_PLAYWRIGHT_BROWSERS_VOLUME}:${STUDIO_PLAYWRIGHT_BROWSERS_PATH}`,
+    "-e",
+    `PLAYWRIGHT_BROWSERS_PATH=${STUDIO_PLAYWRIGHT_BROWSERS_PATH}`
+  ];
+}
 
 function studioToolHomeDockerArgs() {
   return [
@@ -87,6 +98,7 @@ function studioUserStartupScript(commandArgs = ["bash"], {
 export {
   STUDIO_MYSQL_CLIENT_CONFIG_DIR,
   studioMysqlClientConfigSetupLines,
+  studioPlaywrightBrowsersDockerArgs,
   studioUserCommand,
   studioToolHomeDockerArgs,
   studioToolHomeSetupLines,

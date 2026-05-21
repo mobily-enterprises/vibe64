@@ -40,7 +40,7 @@
     </v-chip>
 
     <AiStudioFloatingTerminalWindow
-      minimized-width="min(36rem, calc(100vw - 1.5rem))"
+      minimized-width="min(28rem, calc(100vw - 1.5rem))"
       :minimized="terminalMinimized"
       :storage-key="terminalWindowStorageKey"
       :visible="terminalVisible"

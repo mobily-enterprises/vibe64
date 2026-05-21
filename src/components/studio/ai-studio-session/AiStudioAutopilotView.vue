@@ -318,6 +318,7 @@
 
         <div class="studio-autopilot__actions studio-autopilot__review-actions">
           <AiStudioLaunchControls
+            :active="active"
             button-label="Try it!"
             button-size="default"
             button-variant="flat"

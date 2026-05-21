@@ -15,6 +15,7 @@ import {
   studioDockerLabel
 } from "../../../../server/lib/studioRuntimeIdentity.js";
 import {
+  studioPlaywrightBrowsersDockerArgs,
   studioToolHomeDockerArgs
 } from "../../../../server/lib/studioToolHome.js";
 import {
@@ -75,6 +76,7 @@ function targetToolchainTerminalArgs({
     ]),
     ...studioToolHomeDockerArgs(),
     ...terminalEnvironmentDockerArgs(env),
+    ...studioPlaywrightBrowsersDockerArgs(),
     ...hostUserIdentityEnvArgs(),
     ...gitToolchainMountArgs(targetRoot),
     "-v",

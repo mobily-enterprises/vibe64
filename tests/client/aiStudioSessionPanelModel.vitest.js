@@ -175,6 +175,16 @@ describe("AI Studio session panel model", () => {
       worktreeReady: true
     });
 
+    expect(enrichAiStudioSessionForDisplay({
+      completedSteps: ["session_created", "worktree_created"],
+      metadata: {},
+      sessionId: "session-2",
+      sessionRoot: "/workspace/.ai-studio/session-2"
+    })).toMatchObject({
+      worktree: "/workspace/.ai-studio/session-2/worktree",
+      worktreeReady: true
+    });
+
     expect(aiStudioPromptHandoffFromSession({
       actionResult: {
         codexPromptHandoff: {

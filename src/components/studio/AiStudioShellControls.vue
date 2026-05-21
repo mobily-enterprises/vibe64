@@ -32,7 +32,7 @@
     </v-menu>
 
     <AiStudioFloatingTerminalWindow
-      minimized-width="min(28rem, calc(100vw - 1.5rem))"
+      minimized-width="min(24rem, calc(100vw - 1.5rem))"
       :minimized="terminalMinimized"
       :storage-key="shellWindowStorageKey"
       :visible="terminalVisible"

@@ -14,6 +14,9 @@ import {
   stableHash
 } from "../shellCommands.js";
 import {
+  studioPlaywrightBrowsersDockerArgs
+} from "../studioToolHome.js";
+import {
   STUDIO_BASE_TOOLCHAIN_IMAGE,
   STUDIO_DAEMON_PID_LABEL
 } from "../studioRuntimeIdentity.js";
@@ -116,6 +119,7 @@ function targetScriptTerminalArgs({
     `${targetRoot}:${targetRoot}`,
     ...targetRuntimeNetworkDockerArgs(targetRoot),
     ...extraDockerArgs,
+    ...studioPlaywrightBrowsersDockerArgs(),
     ...hostUserIdentityEnvArgs(),
     "-w",
     workdir,

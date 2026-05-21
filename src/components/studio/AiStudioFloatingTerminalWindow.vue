@@ -21,6 +21,9 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import {
+  useFloatingTerminalMinimizedDock
+} from "@/composables/useFloatingTerminalMinimizedDock.js";
+import {
   readLocalStorageJson,
   writeLocalStorageJson
 } from "@/lib/browserLocalStorage.js";
@@ -28,7 +31,7 @@ import {
 const props = defineProps({
   minimizedWidth: {
     type: String,
-    default: "min(44rem, calc(100vw - 1.5rem))"
+    default: "min(28rem, calc(100vw - 1.5rem))"
   },
   minimized: {
     type: Boolean,
@@ -53,6 +56,11 @@ const floatingWindowDimensions = ref({
   height: 0,
   width: 0
 });
+const minimizedDockActive = computed(() => props.visible && props.minimized);
+const {
+  rightOffset: minimizedDockRightOffset,
+  updateWidth: updateMinimizedDockWidth
+} = useFloatingTerminalMinimizedDock(minimizedDockActive);
 let activeDrag = null;
 let resizeObserver = null;
 let trackingViewport = false;
@@ -60,6 +68,7 @@ let trackingViewport = false;
 const floatingWindowStyle = computed(() => {
   if (props.minimized) {
     return {
+      "--ai-floating-terminal-minimized-right-offset": `${Math.round(minimizedDockRightOffset.value)}px`,
       "--ai-floating-terminal-minimized-width": props.minimizedWidth
     };
   }
@@ -224,6 +233,10 @@ function stopDrag() {
 }
 
 function clampCurrentPosition() {
+  if (props.visible && props.minimized) {
+    updateMinimizedDockMeasurement();
+    return;
+  }
   if (props.visible && !props.minimized) {
     floatingWindowPosition.value = clampFloatingWindowPosition(floatingWindowPosition.value);
     saveFloatingWindowState();
@@ -248,22 +261,34 @@ function stopViewportTracking() {
   window.removeEventListener("resize", clampCurrentPosition);
 }
 
+function updateMinimizedDockMeasurement() {
+  if (!props.visible || !props.minimized) {
+    return;
+  }
+  updateMinimizedDockWidth(floatingWindow.value?.offsetWidth || 0);
+}
+
 function observePanelSize() {
   resizeObserver?.disconnect?.();
   resizeObserver = null;
-  if (typeof ResizeObserver === "undefined" || !floatingWindow.value || props.minimized) {
+  if (typeof ResizeObserver === "undefined" || !floatingWindow.value) {
     return;
   }
 
   resizeObserver = new ResizeObserver(() => {
     const element = floatingWindow.value;
-    if (element) {
+    if (!element) {
+      return;
+    }
+    if (props.minimized) {
+      updateMinimizedDockMeasurement();
+    } else {
       floatingWindowDimensions.value = {
         height: element.offsetHeight,
         width: element.offsetWidth
       };
+      clampCurrentPosition();
     }
-    clampCurrentPosition();
   });
   resizeObserver.observe(floatingWindow.value);
 }
@@ -283,6 +308,8 @@ watch(
     await nextTick();
     if (!minimized) {
       placeFloatingWindow();
+    } else {
+      updateMinimizedDockMeasurement();
     }
     observePanelSize();
   },
@@ -334,9 +361,9 @@ onBeforeUnmount(() => {
   min-height: 0;
   min-width: 0;
   position: fixed;
-  right: 0.75rem;
   resize: none;
-  width: var(--ai-floating-terminal-minimized-width, min(44rem, calc(100vw - 1.5rem)));
+  right: calc(0.75rem + var(--ai-floating-terminal-minimized-right-offset, 0px));
+  width: var(--ai-floating-terminal-minimized-width, min(28rem, calc(100vw - 1.5rem)));
 }
 
 .ai-floating-terminal-window--minimized .ai-floating-terminal-window__panel :deep(.ai-command-terminal) {

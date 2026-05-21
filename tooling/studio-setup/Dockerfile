@@ -1,6 +1,7 @@
 FROM node:22-bookworm
 
 ARG BUN_VERSION=1.3.14
+ARG PLAYWRIGHT_VERSION=1.60.0
 ARG PNPM_VERSION=11.1.2
 ARG YARN_VERSION=1.22.22
 
@@ -41,7 +42,7 @@ RUN corepack enable \
   && corepack prepare "pnpm@${PNPM_VERSION}" --activate \
   && corepack prepare "yarn@${YARN_VERSION}" --activate
 
-RUN npm install -g "bun@${BUN_VERSION}" @openai/codex @playwright/test@1.59.1 \
+RUN npm install -g "bun@${BUN_VERSION}" @openai/codex "@playwright/test@${PLAYWRIGHT_VERSION}" \
   && playwright install --with-deps chromium \
   && node --version \
   && npm --version \

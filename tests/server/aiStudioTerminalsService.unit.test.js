@@ -60,6 +60,8 @@ import {
 } from "../../server/lib/aiStudio/adapters/laravel/toolchainIdentity.js";
 import {
   STUDIO_BASE_TOOLCHAIN_IMAGE,
+  STUDIO_PLAYWRIGHT_BROWSERS_PATH,
+  STUDIO_PLAYWRIGHT_BROWSERS_VOLUME,
   STUDIO_TOOL_HOME_BIN_PATH,
   STUDIO_TOOL_HOME_NPM_PREFIX,
   STUDIO_TOOL_HOME_PATH
@@ -71,6 +73,11 @@ import {
   runtimeNetworkName
 } from "../../server/lib/aiStudio/runtimeContainers.js";
 import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
+import {
+  assertDockerEnv,
+  assertDockerVolumeMount,
+  dockerEnvValue
+} from "./dockerArgsTestHelpers.js";
 
 class UnitCommandAdapter extends TargetAdapter {
   constructor() {
@@ -128,14 +135,9 @@ class UnitCommandAdapter extends TargetAdapter {
   }
 }
 
-function dockerEnvValue(args = [], key = "") {
-  const prefix = `${key}=`;
-  for (let index = 0; index < args.length - 1; index += 1) {
-    if (args[index] === "-e" && String(args[index + 1]).startsWith(prefix)) {
-      return String(args[index + 1]).slice(prefix.length);
-    }
-  }
-  return "";
+function assertPlaywrightBrowserCache(args) {
+  assertDockerVolumeMount(args, STUDIO_PLAYWRIGHT_BROWSERS_VOLUME, STUDIO_PLAYWRIGHT_BROWSERS_PATH);
+  assertDockerEnv(args, "PLAYWRIGHT_BROWSERS_PATH", STUDIO_PLAYWRIGHT_BROWSERS_PATH);
 }
 
 test("AI Studio Codex terminal joins the target runtime network before the image", () => {
@@ -149,6 +151,7 @@ test("AI Studio Codex terminal joins the target runtime network before the image
     worktree: "/workspace/project/.ai-studio/sessions/active/unit/worktree"
   });
 
+  assertPlaywrightBrowserCache(args);
   const networkIndex = args.indexOf("--network");
   assert.notEqual(networkIndex, -1);
   assert.deepEqual(args.slice(networkIndex, networkIndex + 2), ["--network", runtimeNetworkName(targetRoot)]);
@@ -166,7 +169,8 @@ test("AI Studio Codex terminal joins the target runtime network before the image
     containerName: "ai-studio-codex-adapter",
     env: {
       MYSQL_HOST: JSKIT_MARIADB_HOST,
-      MYSQL_PWD: JSKIT_MARIADB_ROOT_PASSWORD
+      MYSQL_PWD: JSKIT_MARIADB_ROOT_PASSWORD,
+      PLAYWRIGHT_BROWSERS_PATH: "/tmp/project-playwright"
     },
     image: "adapter-toolchain:1.0.0",
     sessionId: "unit-session",
@@ -174,6 +178,7 @@ test("AI Studio Codex terminal joins the target runtime network before the image
     terminalId: "adapter-terminal",
     worktree: "/workspace/project/.ai-studio/sessions/active/unit/worktree"
   });
+  assertPlaywrightBrowserCache(adapterImageArgs);
   assert.ok(adapterImageArgs.indexOf("--network") < adapterImageArgs.indexOf("adapter-toolchain:1.0.0"));
   assert.ok(adapterImageArgs.includes(`MYSQL_PWD=${JSKIT_MARIADB_ROOT_PASSWORD}`));
   assert.ok(maskedTerminalDockerArgs(adapterImageArgs).includes("MYSQL_PWD=*****"));
@@ -220,6 +225,7 @@ test("AI Studio shell terminal joins the target runtime network before the image
     workdir: worktree
   });
 
+  assertPlaywrightBrowserCache(args);
   const networkIndex = args.indexOf("--network");
   assert.notEqual(networkIndex, -1);
   assert.deepEqual(args.slice(networkIndex, networkIndex + 2), ["--network", runtimeNetworkName(targetRoot)]);
@@ -292,6 +298,7 @@ test("AI Studio command terminal joins the target runtime network before the ima
     workdir: worktree
   });
 
+  assertPlaywrightBrowserCache(args);
   const networkIndex = args.indexOf("--network");
   assert.notEqual(networkIndex, -1);
   assert.deepEqual(args.slice(networkIndex, networkIndex + 2), ["--network", runtimeNetworkName(targetRoot)]);
@@ -683,6 +690,25 @@ test("AI Studio shell terminal resolves only declared session targets", async ()
     });
     assert.equal(main.ok, true);
     assert.equal(main.cwd, path.resolve(targetRoot));
+
+    const canonicalWorktreePath = path.join(targetRoot, ".ai-studio", "sessions", "active", "canonical_shell", "worktree");
+    await mkdir(canonicalWorktreePath, {
+      recursive: true
+    });
+    const canonicalWorktree = await resolveShellTerminalCwd({
+      projectService: {
+        targetRoot
+      },
+      session: {
+        completedSteps: ["session_created", "worktree_created"],
+        metadata: {},
+        sessionRoot: path.dirname(canonicalWorktreePath),
+        targetRoot
+      },
+      target: "worktree"
+    });
+    assert.equal(canonicalWorktree.ok, true);
+    assert.equal(canonicalWorktree.cwd, canonicalWorktreePath);
 
     const outside = await resolveShellTerminalCwd({
       projectService: {

@@ -72,8 +72,25 @@ function terminalTargetRoot(session = {}, projectService = {}) {
   return normalizedTerminalPath(session.targetRoot || projectService.targetRoot);
 }
 
+function sessionHasCreatedWorktree(session = {}) {
+  return session?.worktreeReady === true ||
+    (Array.isArray(session?.completedSteps) && session.completedSteps.includes("worktree_created"));
+}
+
 function terminalWorktreePath(session = {}) {
-  return normalizedTerminalPath(session.metadata?.worktree_path || session.metadata?.worktree || session.worktree);
+  const explicitPath = normalizedTerminalPath(
+    session.metadata?.worktree_path ||
+    session.metadata?.worktree ||
+    session.worktree ||
+    session.worktreePath
+  );
+  if (explicitPath) {
+    return explicitPath;
+  }
+  const sessionRoot = normalizedTerminalPath(session.sessionRoot);
+  return sessionRoot && sessionHasCreatedWorktree(session)
+    ? normalizedTerminalPath(path.join(sessionRoot, "worktree"))
+    : "";
 }
 
 export {

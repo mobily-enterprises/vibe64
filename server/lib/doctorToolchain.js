@@ -12,6 +12,7 @@ import {
   studioDockerLabel
 } from "./studioRuntimeIdentity.js";
 import {
+  studioPlaywrightBrowsersDockerArgs,
   studioToolHomeDockerArgs,
   studioUserCommand,
   studioUserStartupScript
@@ -75,7 +76,10 @@ function toolchainHomeDockerArgs(extraArgs = []) {
   }
   return dockerEnvValue(extraArgs, "HOME")
     ? []
-    : ["-e", `HOME=${HOST_USER_TOOLCHAIN_HOME}`];
+    : [
+        "-e",
+        `HOME=${HOST_USER_TOOLCHAIN_HOME}`
+      ];
 }
 
 function toolchainStartupScript(commandArgs, extraArgs = []) {
@@ -113,6 +117,7 @@ function buildDoctorToolchainArgs(commandArgs, options = {}) {
     "-w",
     "/workspace",
     ...extraArgs,
+    ...studioPlaywrightBrowsersDockerArgs(),
     image,
     "bash",
     "-lc",
