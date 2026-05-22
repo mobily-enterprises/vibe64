@@ -81,7 +81,7 @@ test.describe("non-commit maintenance agent chat", () => {
     await expect(page.getByRole("heading", { name: "Let's get started" })).toBeVisible();
     await page.getByRole("button", { name: "Let's start" }).click();
 
-    await expect(page.getByRole("heading", { name: "Talk to agent" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Talk to Codex" })).toBeVisible();
     await page.getByLabel("What do you want to ask Codex?").fill("Tell me what maintenance is needed.");
     await page.getByRole("button", { name: "Ask Codex" }).click();
 
@@ -94,7 +94,7 @@ test.describe("non-commit maintenance agent chat", () => {
     await createNonCommitMaintenanceSession(page);
 
     await page.getByRole("button", { name: "Let's start" }).click();
-    await expect(page.getByRole("heading", { name: "Talk to agent" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Talk to Codex" })).toBeVisible();
 
     await page.getByLabel("What do you want to ask Codex?").fill("Really?");
     await page.getByRole("button", { name: "Ask Codex" }).click();
@@ -126,9 +126,9 @@ test.describe("non-commit maintenance agent chat", () => {
     await expect(page.getByText("Install checklist items finished.")).toBeVisible();
     await page.getByRole("button", { name: "Next" }).click();
 
-    await page.getByRole("button", { name: "Talk to agent" }).click();
+    await page.getByRole("button", { name: "Ask Codex" }).click();
     const inputDialog = page.getByRole("dialog").filter({
-      hasText: "Talk to agent"
+      hasText: "Ask Codex"
     });
     await expect(inputDialog).toBeVisible();
     await inputDialog.getByLabel("What do you want to ask Codex?").fill("Explain this local maintenance task.");
@@ -174,7 +174,7 @@ async function mockAgentChatRoutes(page: Page, runtime: AiStudioSessionRuntime) 
     }
 
     const session = await runtime.getSession(normalizedSessionId);
-    if (session.promptRun?.actionId !== "talk_to_agent") {
+    if (session.promptRun?.actionId !== "agent_conversation") {
       return null;
     }
 
@@ -225,7 +225,7 @@ async function mockAgentChatRoutes(page: Page, runtime: AiStudioSessionRuntime) 
     if (method === "POST" && tail[0] === "actions") {
       const actionInput = request.postDataJSON() || {};
       const response = await runtime.runAction(sessionId, tail[1], actionInput);
-      if (tail[1] === "talk_to_agent") {
+      if (tail[1] === "agent_conversation") {
         if (String(actionInput.agentRequest || "").toLowerCase().includes("three random questions")) {
           autopilotPayload = await writeAgentQuestions(runtime, sessionId, response.actionResult?.promptRun);
         } else {
@@ -385,7 +385,7 @@ async function writeAgentResponse(
     issueDraft: null,
     ok: true,
     promptDone: {
-      actionId: "talk_to_agent",
+      actionId: "agent_conversation",
       completionToken: String(promptRun?.completionToken || ""),
       requestId: String(promptRun?.requestId || ""),
       stepId: "agent_response_created"

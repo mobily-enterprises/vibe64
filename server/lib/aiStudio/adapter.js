@@ -41,6 +41,11 @@ function assertLaunchTargetId(launchTargetId) {
   return normalizedLaunchTargetId;
 }
 
+function normalizeLaunchTargetDisplay(value = "") {
+  const display = normalizeText(value);
+  return display === "minimized" || display === "expanded" ? display : "";
+}
+
 function normalizeCapabilityMap(capabilities = {}) {
   if (Array.isArray(capabilities)) {
     return Object.fromEntries(
@@ -88,6 +93,7 @@ function adapterCommand(input = {}) {
 function adapterLaunchTarget(input = {}) {
   return {
     available: input.available !== false,
+    defaultDisplay: normalizeLaunchTargetDisplay(input.defaultDisplay),
     disabledReason: normalizeText(input.disabledReason),
     id: assertLaunchTargetId(input.id),
     label: normalizeText(input.label || input.id)

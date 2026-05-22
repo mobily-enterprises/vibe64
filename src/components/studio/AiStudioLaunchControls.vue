@@ -1,6 +1,57 @@
 <template>
   <div v-if="visible" class="ai-studio-launch-controls">
-    <v-menu location="bottom end">
+    <div
+      v-if="terminalDockVisible"
+      class="ai-studio-launch-controls__dock"
+      :title="terminalTitle"
+    >
+      <span
+        class="ai-studio-launch-controls__status-dot"
+        :class="`ai-studio-launch-controls__status-dot--${terminalIndicatorState}`"
+        :aria-label="terminalIndicatorLabel"
+        :title="terminalIndicatorLabel"
+      />
+
+      <v-btn
+        v-for="action in launchActions"
+        :key="action.id || action.href"
+        :icon="mdiOpenInNew"
+        size="small"
+        :title="action.label || action.href"
+        variant="text"
+        @click="openAction(action)"
+      />
+
+      <v-btn
+        v-if="terminalCanRetry"
+        :disabled="operationBusy"
+        :icon="mdiRefresh"
+        size="small"
+        title="Retry"
+        variant="text"
+        @click="retryTerminal"
+      />
+
+      <v-btn
+        v-if="terminalCanRestart"
+        :disabled="operationBusy"
+        :icon="mdiRestart"
+        size="small"
+        title="Restart"
+        variant="text"
+        @click="restartTerminal"
+      />
+
+      <v-btn
+        :icon="mdiConsoleLine"
+        size="small"
+        title="Show launch terminal"
+        variant="text"
+        @click="expandTerminal"
+      />
+    </div>
+
+    <v-menu v-else-if="!terminalVisible && launchTargets.length > 0" location="bottom end">
       <template #activator="{ props: menuProps }">
         <v-btn
           v-bind="menuProps"
@@ -41,46 +92,111 @@
 
     <AiStudioFloatingTerminalWindow
       :displayed="terminalDisplayed"
-      minimized-width="min(28rem, calc(100vw - 1.5rem))"
-      :minimized="terminalMinimized"
+      :minimized="false"
       :storage-key="terminalWindowStorageKey"
-      :visible="terminalVisible"
+      :visible="terminalWindowVisible"
     >
       <template #default="{ startDrag }">
-        <AiStudioCommandTerminal
+        <AiStudioTerminalFrame
           class="ai-studio-launch-controls__terminal"
-          :ai-fix-available="workflowAiFixAvailable"
+          :command-preview="terminalCommandPreview"
           draggable
-          :initial-expanded="!terminalMinimized"
-          terminal-kind="launch"
-          title="Launch terminal"
-          :launch-target="activeLaunchTarget"
-          :session="session"
-          :start-request-key="startKey"
-          @closed="closeTerminal"
+          :error="terminalError"
+          :status="terminalStatus"
+          :subtitle="terminalSubtitle"
+          :terminal-host-ref="setTerminalHost"
+          :title="terminalTitle"
           @drag-start="startDrag"
-          @expanded-changed="handleTerminalExpandedChanged"
-          @fix-requested="handleFixRequested"
-          @ready="handleReady"
-          @running-changed="handleRunningChanged"
-          @started="handleStarted"
         >
-          <template #header-actions>
+          <template #actions>
             <v-btn
-              v-if="showOpenTarget"
+              :icon="mdiChevronDown"
+              size="small"
+              title="Minimize terminal"
+              variant="text"
+              @click="minimizeTerminal"
+            />
+
+            <v-btn
+              v-for="action in launchActions"
+              :key="`window:${action.id || action.href}`"
               color="primary"
-              :disabled="openDisabled"
-              :loading="openTargetCommand.isRunning"
               :prepend-icon="mdiOpenInNew"
               size="small"
-              :title="openTitle"
+              :title="action.href"
               variant="tonal"
-              @click="open"
+              @click="openAction(action)"
             >
-              {{ openTarget.label || "Open browser" }}
+              {{ action.label || "Open" }}
+            </v-btn>
+
+            <v-btn
+              v-if="terminalCanRestart"
+              color="primary"
+              :disabled="operationBusy"
+              :prepend-icon="mdiRestart"
+              size="small"
+              variant="tonal"
+              @click="restartTerminal"
+            >
+              Restart
+            </v-btn>
+
+            <v-btn
+              v-if="terminalCanStop"
+              :disabled="operationBusy"
+              :prepend-icon="mdiStop"
+              size="small"
+              variant="tonal"
+              @click="stopTerminal"
+            >
+              Stop
+            </v-btn>
+
+            <v-btn
+              v-if="terminalCanRetry"
+              color="primary"
+              :disabled="operationBusy"
+              :prepend-icon="mdiRefresh"
+              size="small"
+              variant="flat"
+              @click="retryTerminal"
+            >
+              Retry
+            </v-btn>
+
+            <v-btn
+              v-if="workflowAiFixVisible"
+              color="primary"
+              :prepend-icon="mdiRobotOutline"
+              size="small"
+              variant="tonal"
+              @click="requestAiFix"
+            >
+              Get AI to fix it
+            </v-btn>
+
+            <v-btn
+              v-if="terminalCanCopyLog"
+              :icon="mdiContentCopy"
+              size="small"
+              title="Copy log"
+              variant="text"
+              @click="copyLog"
+            />
+
+            <v-btn
+              v-if="terminalCanClose"
+              :disabled="operationBusy"
+              :prepend-icon="mdiClose"
+              size="small"
+              variant="text"
+              @click="closeTerminal"
+            >
+              Close
             </v-btn>
           </template>
-        </AiStudioCommandTerminal>
+        </AiStudioTerminalFrame>
       </template>
     </AiStudioFloatingTerminalWindow>
   </div>
@@ -89,15 +205,26 @@
 <script setup>
 import { computed } from "vue";
 import {
+  mdiChevronDown,
+  mdiClose,
+  mdiConsoleLine,
+  mdiContentCopy,
   mdiOpenInNew,
-  mdiPlayCircleOutline
+  mdiPlayCircleOutline,
+  mdiRefresh,
+  mdiRobotOutline,
+  mdiRestart,
+  mdiStop
 } from "@mdi/js";
-import AiStudioCommandTerminal from "@/components/studio/AiStudioCommandTerminal.vue";
 import AiStudioFloatingTerminalWindow from "@/components/studio/AiStudioFloatingTerminalWindow.vue";
+import AiStudioTerminalFrame from "@/components/studio/AiStudioTerminalFrame.vue";
 import {
   launchTerminalAiFixAvailable,
   useAiStudioLaunchControls
 } from "@/composables/useAiStudioLaunchControls.js";
+import {
+  terminalFailureFixRequest
+} from "@/lib/aiStudioTerminalFailurePrompt.js";
 
 const props = defineProps({
   buttonLabel: {
@@ -134,53 +261,96 @@ const props = defineProps({
   }
 });
 
-const workflowAiFixAvailable = computed(() => (
-  launchTerminalAiFixAvailable({
-    fixCommandFailure: props.fixCommandFailure,
-    workflowCommand: props.workflowCommand
-  })
-));
-
 const {
   activeLaunchTarget,
+  activeLaunchTargetId,
   closeTerminal,
-  handleRunningChanged,
-  handleReady,
-  handleTerminalExpandedChanged,
-  handleStarted,
-  loading,
+  copyLog,
+  expandTerminal,
+  launchActions,
   launchButtonsDisabled,
   launchTargets,
+  loading,
   loadError,
-  open,
-  openDisabled,
-  openTarget,
-  openTargetCommand,
-  openTitle,
+  minimizeTerminal,
+  openAction,
+  operationBusy,
+  restartTerminal,
+  retryTerminal,
   run,
-  showOpenTarget,
-  startKey,
-  terminalMinimized,
+  setTerminalHost,
+  stopTerminal,
+  terminalCanClose,
+  terminalCanCopyLog,
+  terminalCanRestart,
+  terminalCanRetry,
+  terminalCanStop,
+  terminalCommandPreview,
   terminalDisplayed,
-  terminalWindowStorageKey,
+  terminalDockVisible,
+  terminalError,
+  terminalExitCode,
+  terminalIndicatorLabel,
+  terminalIndicatorState,
+  terminalIsRunning,
+  terminalOutput,
+  terminalSessionId,
+  terminalStatus,
+  terminalSubtitle,
+  terminalTitle,
   terminalVisible,
+  terminalWindowVisible,
+  terminalWindowStorageKey,
   visible
 } = useAiStudioLaunchControls({
   windowDisplayed: () => props.windowDisplayed,
   busy: () => props.busy,
   session: () => props.session
 });
+
 const runMenuDisabled = computed(() => Boolean(
   launchButtonsDisabled.value ||
   loading.value ||
   launchTargets.value.length < 1
 ));
+const launchTerminalFailed = computed(() => Boolean(
+  terminalError.value ||
+  (
+    terminalStatus.value === "exited" &&
+    terminalExitCode.value !== 0
+  )
+));
+const workflowAiFixVisible = computed(() => Boolean(
+  launchTerminalAiFixAvailable({
+    fixCommandFailure: props.fixCommandFailure,
+    workflowCommand: props.workflowCommand
+  }) &&
+  !terminalIsRunning.value &&
+  launchTerminalFailed.value &&
+  (
+    terminalOutput.value ||
+    terminalCommandPreview.value ||
+    terminalError.value
+  )
+));
 
-function handleFixRequested(payload) {
-  if (!workflowAiFixAvailable.value) {
+function requestAiFix() {
+  if (!workflowAiFixVisible.value) {
     return null;
   }
-  return props.fixCommandFailure?.(payload);
+  minimizeTerminal();
+  return props.fixCommandFailure?.(terminalFailureFixRequest({
+    closeError: terminalError.value,
+    commandPreview: terminalCommandPreview.value,
+    exitCode: terminalExitCode.value,
+    launchTargetId: activeLaunchTargetId.value,
+    launchTargetLabel: activeLaunchTarget.value?.label || activeLaunchTargetId.value,
+    output: terminalOutput.value,
+    sessionId: props.session?.sessionId || "",
+    terminalKind: "launch",
+    terminalSessionId: terminalSessionId.value,
+    terminalStatus: terminalStatus.value
+  }));
 }
 </script>
 
@@ -193,12 +363,72 @@ function handleFixRequested(payload) {
   min-width: 0;
 }
 
+.ai-studio-launch-controls__dock {
+  align-items: center;
+  background: rgba(var(--v-theme-primary), 0.08);
+  border: 1px solid rgba(var(--v-theme-primary), 0.18);
+  border-radius: 999px;
+  display: flex;
+  gap: 0.12rem;
+  min-height: 2.25rem;
+  padding: 0 0.25rem;
+}
+
+.ai-studio-launch-controls__status-dot {
+  border-radius: 999px;
+  display: inline-block;
+  flex: 0 0 auto;
+  height: 0.55rem;
+  margin: 0 0.35rem;
+  width: 0.55rem;
+}
+
+.ai-studio-launch-controls__status-dot--stopped {
+  background: rgba(var(--v-theme-on-surface), 0.38);
+  box-shadow: 0 0 0 0.2rem rgba(var(--v-theme-on-surface), 0.08);
+}
+
+.ai-studio-launch-controls__status-dot--starting {
+  animation: ai-studio-launch-status-pulse 0.9s ease-in-out infinite;
+  background: rgb(var(--v-theme-error));
+  box-shadow: 0 0 0 0.2rem rgba(var(--v-theme-error), 0.14);
+}
+
+.ai-studio-launch-controls__status-dot--running {
+  background: rgb(var(--v-theme-success));
+  box-shadow: 0 0 0 0.2rem rgba(var(--v-theme-success), 0.16);
+}
+
+.ai-studio-launch-controls__status-dot--failed {
+  background: rgb(var(--v-theme-error));
+  box-shadow: 0 0 0 0.2rem rgba(var(--v-theme-error), 0.14);
+}
+
 .ai-studio-launch-controls__menu {
   max-width: min(20rem, 92vw);
   min-width: min(14rem, 92vw);
 }
 
 .ai-studio-launch-controls__terminal {
+  box-shadow: 0 1rem 3rem rgba(13, 24, 42, 0.24);
   height: 100%;
 }
+
+.ai-studio-launch-controls__terminal :deep(.ai-studio-terminal-frame__host) {
+  height: calc(100% - 5rem);
+}
+
+@keyframes ai-studio-launch-status-pulse {
+  0%,
+  100% {
+    opacity: 0.32;
+    transform: scale(0.84);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 </style>

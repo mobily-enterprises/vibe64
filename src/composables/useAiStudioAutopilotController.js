@@ -17,11 +17,10 @@ import {
 
 const ISSUE_STEP_ID = "issue_file_created";
 const APPLY_REVIEW_FEEDBACK_ACTION_ID = "apply_review_feedback";
-const TALK_TO_AGENT_ACTION_ID = "talk_to_agent";
-const AGENT_CONVERSATION_STEP_ID = "agent_response_created";
+const AGENT_CONVERSATION_ACTION_ID = "agent_conversation";
+const AGENT_CONVERSATION_STEP_ID = "agent_conversation";
 const DEEP_UI_CHECK_STEP_ID = "deep_ui_check_run";
 const FINISHED_STEP_ID = "session_finished";
-const HUMAN_INPUT_RESPONSE_ARTIFACT = "human_input_response.md";
 const LOCAL_FINISHED_STEP_ID = "local_session_finished";
 const FINISH_SESSION_ACTION_ID = "finish_session";
 const IMPLEMENTATION_REVIEW_STEP_ID = "implementation_reviewed";
@@ -329,7 +328,7 @@ function promptDoneMatchesRun(promptDone = null, promptRun = {}) {
 
 function promptActionAdvancesByDefault(actionId = "") {
   return actionId !== APPLY_REVIEW_FEEDBACK_ACTION_ID &&
-    actionId !== TALK_TO_AGENT_ACTION_ID;
+    actionId !== AGENT_CONVERSATION_ACTION_ID;
 }
 
 function promptRunAdvancesWorkflow(promptRun = {}) {
@@ -394,14 +393,33 @@ function useAiStudioAutopilotController({
   const readyForAgentConversation = computed(() => {
     return stepAutopilot(readSession(session)).kind === "agent_conversation" || currentStep.value === AGENT_CONVERSATION_STEP_ID;
   });
-  const agentResponseReady = computed(() => artifactReady(readSession(session), HUMAN_INPUT_RESPONSE_ARTIFACT));
+  const agentConversationResponseArtifact = computed(() => {
+    return String(stepAutopilot(readSession(session)).responseArtifact || "");
+  });
+  const agentConversationShowsResponseArtifact = computed(() => Boolean(agentConversationResponseArtifact.value));
+  const agentResponseReady = computed(() => Boolean(
+    agentConversationResponseArtifact.value &&
+    artifactReady(readSession(session), agentConversationResponseArtifact.value)
+  ));
   const canSubmitAgentRequest = computed(() => {
-    const action = actionById(readActions(actions), TALK_TO_AGENT_ACTION_ID);
+    const action = actionById(readActions(actions), AGENT_CONVERSATION_ACTION_ID);
     return Boolean(readyForAgentConversation.value && !running.value && !codexActive.value && action?.enabled === true);
   });
   const canFinishAgentConversation = computed(() => {
     const next = readNext(actions);
-    return Boolean(readyForAgentConversation.value && agentResponseReady.value && !running.value && !codexActive.value && nextIsReady(next));
+    return Boolean(readyForAgentConversation.value && !running.value && !codexActive.value && nextIsReady(next));
+  });
+  const agentConversationContinueLabel = computed(() => {
+    const currentSession = readSession(session);
+    const next = readNext(actions);
+    const nextLabel = sessionStepLabel(currentSession, next?.stepId) || String(next?.label || "");
+    if (!nextLabel) {
+      return "Continue";
+    }
+    if (next?.stepId === LOCAL_FINISHED_STEP_ID) {
+      return "Finish";
+    }
+    return `Continue to ${nextLabel}`;
   });
   const readyForFinalReview = computed(() => {
     return stepAutopilot(readSession(session)).kind === "final_review" || currentStep.value === REVIEW_CHANGES_STEP_ID;
@@ -544,14 +562,17 @@ function useAiStudioAutopilotController({
       };
     }
     if (readyForAgentConversation.value) {
+      const expectsResponseArtifact = agentConversationShowsResponseArtifact.value;
       return {
         icon: failure.value ? "warning" : "cog",
         kind: "agent_conversation",
-        message: failure.value?.error || (agentResponseReady.value
-          ? "Codex saved an answer for this maintenance session."
-          : "Ask Codex what you need help with."),
+        message: failure.value?.error || (expectsResponseArtifact
+          ? (agentResponseReady.value
+              ? "Codex saved an answer for this session."
+              : "Ask Codex what you need help with.")
+          : "Ask Codex for changes. Continue when the work is ready for checks."),
         showProgress: false,
-        title: agentResponseReady.value ? "AI response" : "Talk to agent"
+        title: expectsResponseArtifact && agentResponseReady.value ? "AI response" : stepLabel(readSession(session))
       };
     }
     if (promptRunNeedsContinuation.value) {
@@ -742,9 +763,9 @@ function useAiStudioAutopilotController({
     }
     if (!normalizedMessage) {
       stopWithFailure({
-        actionId: TALK_TO_AGENT_ACTION_ID,
-        actionLabel: "Talk to agent",
-        error: "Describe what you want Codex to help with before sending the request.",
+        actionId: AGENT_CONVERSATION_ACTION_ID,
+        actionLabel: "Talk to Codex",
+        error: "Describe what you want Codex to do before sending the request.",
         exitCode: null,
         ok: false,
         output: "",
@@ -753,15 +774,15 @@ function useAiStudioAutopilotController({
       return false;
     }
 
-    const action = actionById(readActions(actions), TALK_TO_AGENT_ACTION_ID);
+    const action = actionById(readActions(actions), AGENT_CONVERSATION_ACTION_ID);
     stopRequested = false;
     clearFailure();
     agentRequest.value = normalizedMessage;
     active.value = true;
-    activeStage.value = action?.label || "Talk to agent";
+    activeStage.value = action?.label || "Talk to Codex";
     try {
       await runPromptAction(action, {
-        actionId: TALK_TO_AGENT_ACTION_ID,
+        actionId: AGENT_CONVERSATION_ACTION_ID,
         label: activeStage.value
       }, {
         advanceAfterCompletion: false
@@ -783,7 +804,7 @@ function useAiStudioAutopilotController({
     stopRequested = false;
     clearFailure();
     active.value = true;
-    activeStage.value = "Finish local session";
+    activeStage.value = readNext(actions)?.label || "Continue";
     try {
       await actions.goNext?.();
       await refreshSessionData();
@@ -792,8 +813,8 @@ function useAiStudioAutopilotController({
     } catch (error) {
       stopWithFailure({
         actionId: "",
-        actionLabel: "Finish local session",
-        error: String(error?.message || error || "Could not finish the local session."),
+        actionLabel: activeStage.value,
+        error: String(error?.message || error || "Could not continue from the Codex conversation."),
         exitCode: null,
         ok: false,
         output: ""
@@ -1458,7 +1479,7 @@ function useAiStudioAutopilotController({
         reviewFeedback: reviewTweakFeedback.value
       };
     }
-    if (action.id === TALK_TO_AGENT_ACTION_ID && agentRequest.value) {
+    if (action.id === AGENT_CONVERSATION_ACTION_ID && agentRequest.value) {
       return {
         agentRequest: agentRequest.value
       };
@@ -1473,7 +1494,7 @@ function useAiStudioAutopilotController({
     if (action.id === APPLY_REVIEW_FEEDBACK_ACTION_ID) {
       reviewTweakFeedback.value = "";
     }
-    if (action.id === TALK_TO_AGENT_ACTION_ID) {
+    if (action.id === AGENT_CONVERSATION_ACTION_ID) {
       agentRequest.value = "";
     }
   }
@@ -1836,6 +1857,8 @@ function useAiStudioAutopilotController({
     acceptChanges,
     archiveSession,
     cancelMergeFailure,
+    agentConversationContinueLabel,
+    agentConversationShowsResponseArtifact,
     canAcceptReview,
     canArchiveSession,
     canFinishAgentConversation,

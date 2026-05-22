@@ -363,7 +363,7 @@
               variant="tonal"
               @click="finishAgentConversation"
             >
-              Finish
+              {{ agentConversationContinueLabel }}
             </v-btn>
           </div>
         </form>
@@ -764,6 +764,8 @@ const clearAutopilotArtifacts = async () => props.autopilotArtifacts?.clear?.() 
 const {
   acceptChanges,
   cancelMergeFailure,
+  agentConversationContinueLabel,
+  agentConversationShowsResponseArtifact,
   canAcceptReview,
   canFinishAgentConversation,
   canRequestReviewTweak,
@@ -943,7 +945,7 @@ const reportPreviewVisible = computed(() => Boolean(
   props.reportPreview?.visible
 ));
 const humanInputResponsePreviewVisible = computed(() => Boolean(
-  (implementationReviewVisible.value || readyForAgentConversation.value) &&
+  (implementationReviewVisible.value || (readyForAgentConversation.value && agentConversationShowsResponseArtifact.value)) &&
   props.humanInputResponsePreview?.visible
 ));
 const canSubmitAgentConversation = computed(() => Boolean(

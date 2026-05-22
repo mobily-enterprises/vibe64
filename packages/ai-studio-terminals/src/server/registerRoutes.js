@@ -108,6 +108,14 @@ function registerRoutes(
     closeSummary: "Close an AI Studio launch target terminal."
   });
 
+  routes.serviceRoute("POST", "/sessions/:sessionId/launch-terminal/:terminalSessionId/stop", {
+    statusCode: 200,
+    summary: "Stop an AI Studio launch target terminal without deleting its log."
+  }, (request) => {
+    const input = terminalRouteInput(request);
+    return terminalService().stopLaunchTargetTerminal(input.sessionId, input.terminalSessionId);
+  });
+
   registerTerminalSnapshotRoutes(routes, {
     close: (sessionId, terminalSessionId) => terminalService().closeCodexTerminal(sessionId, terminalSessionId),
     path: "/sessions/:sessionId/codex-terminal/:terminalSessionId",

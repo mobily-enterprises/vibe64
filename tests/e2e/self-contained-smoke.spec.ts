@@ -18,6 +18,7 @@ test("home loads through a self-contained mocked Studio shell", async ({ page })
   await page.getByRole("button", { name: "New Session" }).click();
   await expect(page.getByText("Session type")).toBeVisible();
   await expect(page.getByText("Big feature", { exact: true })).toBeVisible();
+  await expect(page.getByText("General coding", { exact: true })).toBeVisible();
   await expect(page.getByText("Documentation/non code maintenance", { exact: true })).toBeVisible();
   await expect(page.getByText("Non-commit maintenance", { exact: true })).toBeVisible();
   await expect(page).toHaveURL(/\/home$/u);
@@ -248,6 +249,11 @@ async function mockReadyStudioShell(page: Page) {
               description: "Plan, implement, review, validate, commit, create a PR, and optionally merge.",
               id: "big_feature",
               label: "Big feature"
+            },
+            {
+              description: "Make focused code changes with Codex, review, validate, commit, create a PR, and optionally merge.",
+              id: "general_coding",
+              label: "General coding"
             },
             {
               description: "Update documentation or other non-code project files, validate, commit, create a PR, and optionally merge.",

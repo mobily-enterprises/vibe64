@@ -349,7 +349,7 @@ test("execute and deslop standard prompts explicitly point Codex at the generate
   assert.doesNotMatch(makePlan.prompt, /Code index policy:/u);
 });
 
-test("talk-to-agent prompt keeps simple conversation out of project preflight work", async () => {
+test("agent conversation prompt keeps simple conversation out of project preflight work", async () => {
   const renderer = new PromptRenderer({
     promptPackRoot: SYSTEM_PROMPT_PACK_ROOT,
     systemPromptPackRoot: false
@@ -357,9 +357,9 @@ test("talk-to-agent prompt keeps simple conversation out of project preflight wo
 
   const rendered = await renderer.renderPrompt({
     action: {
-      id: "talk_to_agent",
-      label: "Talk to agent",
-      promptId: "talk_to_agent",
+      id: "agent_conversation",
+      label: "Talk to Codex",
+      promptId: "agent_conversation",
       type: "prompt"
     },
     input: {
@@ -375,11 +375,9 @@ test("talk-to-agent prompt keeps simple conversation out of project preflight wo
     }
   });
 
-  assert.match(rendered.prompt, /For direct conversational requests:/u);
   assert.match(rendered.prompt, /do not read repository files, list directories, or inspect existing artifact files first/u);
-  assert.match(rendered.prompt, /Do not run shell commands unless they are needed to answer the user/u);
-  assert.match(rendered.prompt, /For project work:/u);
-  assert.match(rendered.prompt, /Inspect files only when needed to understand, perform, or verify the requested change/u);
+  assert.match(rendered.prompt, /This is an interactive conversation step/u);
+  assert.match(rendered.prompt, /If `session.currentStep` is `agent_conversation`, this is the General coding change-making step/u);
 });
 
 test("ai-studio prompt renderer can mask static context after the session briefing", () => {

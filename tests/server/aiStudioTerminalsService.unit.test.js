@@ -27,6 +27,9 @@ import {
   createCommandTerminalController
 } from "../../packages/ai-studio-terminals/src/server/commandTerminal.js";
 import {
+  launchActionsFromOutput
+} from "../../packages/ai-studio-terminals/src/server/launchTargetTerminal.js";
+import {
   resolveShellTerminalCwd,
   shellTerminalArgs
 } from "../../packages/ai-studio-terminals/src/server/shellTerminal.js";
@@ -141,6 +144,30 @@ class UnitCommandAdapter extends TargetAdapter {
     };
   }
 }
+
+test("launch terminal actions are parsed only from the first output lines", () => {
+  const output = [
+    "\u001b[32m[studio] action:http://127.0.0.1:4100/home\u001b[0m",
+    "[studio] action:url:http://127.0.0.1:4100/home",
+    "plain log",
+    "plain log",
+    "plain log",
+    "plain log",
+    "plain log",
+    "plain log",
+    "plain log",
+    "plain log",
+    "[studio] action:http://127.0.0.1:9999/too-late"
+  ].join("\n");
+
+  const actions = launchActionsFromOutput(output);
+
+  assert.equal(actions.length, 1);
+  assert.equal(actions[0].href, "http://127.0.0.1:4100/home");
+  assert.match(actions[0].id, /^url-/u);
+  assert.equal(actions[0].kind, "url");
+  assert.equal(actions[0].label, "127.0.0.1:4100");
+});
 
 function assertPlaywrightBrowserCache(args) {
   assertDockerVolumeMount(args, STUDIO_PLAYWRIGHT_BROWSERS_VOLUME, STUDIO_PLAYWRIGHT_BROWSERS_PATH);

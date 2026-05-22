@@ -247,14 +247,25 @@ function launchCommandLines(commands = []) {
   ].filter(Boolean));
 }
 
+function launchActionLines(actions = []) {
+  return actions.map((action) => {
+    if (action?.kind !== "url" || !normalizeText(action.href)) {
+      return "";
+    }
+    return `printf '\\n[studio] action:%s\\n' ${shellQuote(action.href)}`;
+  }).filter(Boolean);
+}
+
 function webLaunchTargetStartupScript({
   commands = [],
+  launchActions = [],
   port
 } = {}) {
   const runCommand = [
     "set -e",
     "export HOST=0.0.0.0",
     `export PORT=${shellQuote(String(port))}`,
+    ...launchActionLines(launchActions),
     ...launchCommandLines(commands)
   ].join("\n");
 
@@ -309,6 +320,18 @@ function launchContainerName({
   return `ai-studio-${adapterId}-launch-${stableHash(sessionId)}-${stableHash(terminalId)}`;
 }
 
+function removeLaunchContainer({
+  adapterId = "generic",
+  sessionId = "",
+  terminalId = ""
+} = {}) {
+  return removeDockerContainer(launchContainerName({
+    adapterId,
+    sessionId,
+    terminalId
+  }));
+}
+
 function launchTargetTerminalArgs({
   adapterId = "generic",
   containerName = "",
@@ -317,6 +340,7 @@ function launchTargetTerminalArgs({
   port,
   sessionId = "",
   startupCommands = [],
+  launchActions = [],
   targetRoot = "",
   terminalId = "",
   workdir = ""
@@ -356,6 +380,7 @@ function launchTargetTerminalArgs({
     "-lc",
     webLaunchTargetStartupScript({
       commands: startupCommands,
+      launchActions,
       port
     })
   ];
@@ -440,6 +465,7 @@ async function createAiStudioWebLaunchTargetTerminalSpec({
   ];
   const metadata = {
     adapterId,
+    defaultDisplay: normalizeText(launch.defaultDisplay || launchTarget.defaultDisplay),
     launchTargetId: normalizeText(launchTarget.id),
     launchTargetLabel: normalizeText(launchTarget.label),
     openTarget,
@@ -464,6 +490,15 @@ async function createAiStudioWebLaunchTargetTerminalSpec({
       }),
       extraDockerArgs,
       image,
+      launchActions: openTarget.href
+        ? [
+            {
+              href: openTarget.href,
+              kind: "url",
+              label: openTarget.label
+            }
+          ]
+        : [],
       port,
       sessionId: session.sessionId,
       startupCommands,
@@ -478,11 +513,18 @@ async function createAiStudioWebLaunchTargetTerminalSpec({
     ok: true,
     readinessMarker: readiness.readinessMarker,
     onClose: async ({ id }) => {
-      await removeDockerContainer(launchContainerName({
+      await removeLaunchContainer({
         adapterId,
         sessionId: session.sessionId,
         terminalId: id
-      }));
+      });
+    },
+    onStop: async ({ id }) => {
+      await removeLaunchContainer({
+        adapterId,
+        sessionId: session.sessionId,
+        terminalId: id
+      });
     },
     reuseRunning: true
   };

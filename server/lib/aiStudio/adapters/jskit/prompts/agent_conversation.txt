@@ -1,0 +1,26 @@
+{{systemStandard}}
+
+JSKIT-specific conversation guidance:
+- Treat code-changing requests as JSKIT implementation work, even when this is an interactive conversation rather than a formal plan/execute step.
+- Use `npx jskit ...` from the repository root for JSKIT inspection, generators, helper maps, package/module discovery, and verification.
+- Read the JSKIT agent guide and run the baseline discovery commands before adding new app files or framework-owned structures.
+- Before writing generic helpers for JSON:API documents, route ownership, workspace params, CRUD repositories, dates, normalization, transport, or generated resource data, search JSKIT package exports and agent-doc references first. Do not implement framework-shaped helpers locally unless no exported JSKIT helper exists and the decision is called out.
+- Create new JSKIT-owned files through `npx jskit generate ...`, `npx jskit add ...`, or another documented JSKIT CLI command first; hand-edit generated output only for focused custom behavior.
+- For navigation links, menus, tabs, outlets, or placement targets, read the agent-friendly placement docs before implementation and use JSKIT generator/link-placement conventions instead of hand-editing `src/placement.js`.
+- For persistence, follow the configured JSKIT database contract: create/update tables before generation, run the server-side CRUD generator for every added table, do not hand-write migrations, and do not use direct Knex access from feature code.
+- In your response, for every hand-written helper, shared utility, composable, service function, mapper, normalizer, repository wrapper, transport helper, or framework-shaped function you added, explain which JSKIT exports, generated code, helper-map entries, or agent-doc references you checked; why the new code is not a duplicate; and why it belongs locally instead of in an existing shared/global JSKIT location.
+
+JSKIT guide-first contract:
+{{adapter.promptContext.agent_guide_contract}}
+
+JSKIT generated-file contract:
+{{adapter.promptContext.tooling_contract}}
+
+JSKIT placement contract:
+{{adapter.promptContext.placement_contract}}
+
+JSKIT database contract:
+{{adapter.promptContext.database_contract}}
+
+JSKIT baseline discovery commands:
+{{adapter.promptContext.generator_discovery_commands}}

@@ -231,10 +231,12 @@ test("jskit launch targets expose app and built app actions", async () => {
 
     assert.deepEqual(launchTargets, [
       {
+        defaultDisplay: "minimized",
         id: "built",
         label: "Run built app"
       },
       {
+        defaultDisplay: "minimized",
         id: "dev",
         label: "Run app"
       }
@@ -266,6 +268,7 @@ test("jskit built launch waits for the server readiness marker before opening", 
     assert.equal(spec.ok, true);
     assert.match(spec.metadata.readinessMarker, /^\[\[AI_STUDIO_LAUNCH_READY_V1:/u);
     assert.equal(spec.metadata.launchReady, false);
+    assert.equal(spec.metadata.defaultDisplay, "minimized");
     assert.equal(spec.metadata.buildCommand, "npm run build");
     assert.equal(spec.metadata.serverCommand, "npm run server");
 
@@ -275,6 +278,7 @@ test("jskit built launch waits for the server readiness marker before opening", 
     const startupScript = args.at(-1);
     assert.match(startupScript, /npm run build/u);
     assert.match(startupScript, /npm run server/u);
+    assert.match(startupScript, /action:%s/u);
     assert.match(startupScript, /AI_STUDIO_LAUNCH_READY_V1/u);
   });
 });
@@ -303,6 +307,7 @@ test("jskit dev launch starts backend and Vite together", async () => {
     assert.equal(spec.ok, true);
     assert.equal(spec.metadata.backendCommand, "npm run server");
     assert.equal(spec.metadata.backendPort, 3000);
+    assert.equal(spec.metadata.defaultDisplay, "minimized");
     assert.equal(spec.metadata.frontendCommand, "npm run dev -- --host 0.0.0.0 --port \"$PORT\"");
     assert.match(spec.metadata.readinessMarker, /^\[\[AI_STUDIO_LAUNCH_READY_V1:/u);
 

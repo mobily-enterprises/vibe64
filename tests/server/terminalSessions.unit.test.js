@@ -5,9 +5,11 @@ import {
   closeTerminalSession,
   closeTerminalSessionsForNamespacePrefix,
   countRunningTerminalSessions,
+  listTerminalSessions,
   readTerminalSession,
   resizeTerminalSession,
   startTerminalSession,
+  stopTerminalSession,
   subscribeTerminalSession,
   writeTerminalSession
 } from "../../server/lib/terminalSessions.js";
@@ -261,6 +263,57 @@ test("terminal sessions report exited after close hooks finish", async () => {
     ));
     assert.equal(readTerminalSession(session.id, { namespace }).status, "exited");
     subscription.unsubscribe();
+  } finally {
+    await closeTerminalSessionsForNamespacePrefix(namespace);
+  }
+});
+
+test("terminal sessions can stop a process without deleting its log", async () => {
+  const namespace = `terminal-stop-test-${crypto.randomUUID()}`;
+  const messages = [];
+  const stopReasons = [];
+
+  const session = startTerminalSession({
+    args: [
+      "-e",
+      "console.log('terminal log kept'); process.stdin.resume(); setInterval(() => {}, 1000);"
+    ],
+    command: process.execPath,
+    commandPreview: "node stoppable",
+    namespace,
+    onStop: async ({ reason }) => {
+      stopReasons.push(reason);
+    }
+  });
+
+  try {
+    const subscription = subscribeTerminalSession(session.id, (message) => {
+      messages.push(message);
+    }, {
+      namespace
+    });
+    assert.equal(subscription.ok, true);
+
+    await waitFor(() => readTerminalSession(session.id, { namespace }).output.includes("terminal log kept"));
+
+    const stopped = stopTerminalSession(session.id, { namespace });
+    assert.equal(stopped.ok, true);
+    assert.equal(stopped.status, "closing");
+    assert.equal(listTerminalSessions({ namespace }).some((item) => item.id === session.id), true);
+
+    await waitFor(() => stopReasons.includes("stop"));
+    await waitFor(() => messages.some((message) =>
+      message.type === "status" && message.status === "exited"
+    ));
+
+    const snapshot = readTerminalSession(session.id, { namespace });
+    assert.equal(snapshot.status, "exited");
+    assert.match(snapshot.output, /terminal log kept/u);
+    subscription.unsubscribe();
+
+    const closed = await closeTerminalSession(session.id, { namespace });
+    assert.equal(closed.closed, true);
+    assert.equal(readTerminalSession(session.id, { namespace }).ok, false);
   } finally {
     await closeTerminalSessionsForNamespacePrefix(namespace);
   }

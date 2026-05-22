@@ -36,7 +36,9 @@ function useStudioTerminal({
   let terminalInstance = null;
   let terminalFitAddon = null;
   let terminalSocket = null;
+  let terminalSocketSessionId = "";
   let terminalSocketOpenPromise = null;
+  let terminalSocketOpenSessionId = "";
   let terminalDataDisposable = null;
   let terminalResizeHandler = null;
   let terminalResizeObserver = null;
@@ -138,15 +140,16 @@ function useStudioTerminal({
   function closeTerminalSocket() {
     const socket = terminalSocket;
     terminalSocket = null;
+    terminalSocketSessionId = "";
     terminalSocketOpenPromise = null;
+    terminalSocketOpenSessionId = "";
     resetReportedTerminalSize();
     if (socket && socket.readyState !== WebSocket.CLOSED && socket.readyState !== WebSocket.CLOSING) {
       socket.close();
     }
   }
 
-  function disposeTerminalUi() {
-    closeTerminalSocket();
+  function disposeTerminalDisplay() {
     terminalDataDisposable?.dispose?.();
     terminalDataDisposable = null;
     if (terminalResizeHandler) {
@@ -161,6 +164,11 @@ function useStudioTerminal({
     terminalSetupPromise = null;
     terminalOutputOffset = 0;
     resetReportedTerminalSize();
+  }
+
+  function disposeTerminalUi() {
+    closeTerminalSocket();
+    disposeTerminalDisplay();
   }
 
   function resetTerminalDisplay() {
@@ -214,7 +222,17 @@ function useStudioTerminal({
     fallbackStatus = ""
   } = {}) {
     const terminalSession = session && typeof session === "object" && !Array.isArray(session) ? session : {};
-    terminalSessionId.value = String(terminalSession.id || "");
+    const nextTerminalSessionId = String(terminalSession.id || "");
+    const terminalSessionChanged = Boolean(
+      nextTerminalSessionId &&
+      terminalSessionId.value &&
+      nextTerminalSessionId !== terminalSessionId.value
+    );
+    if (terminalSessionChanged) {
+      closeTerminalSocket();
+      resetTerminalDisplay();
+    }
+    terminalSessionId.value = nextTerminalSessionId;
     terminalStatus.value = String(terminalSession.status || fallbackStatus || "");
     terminalExitCode.value = terminalStatus.value === "exited" ? terminalSession.exitCode ?? null : null;
     terminalCommandPreview.value = String(terminalSession.commandPreview || "");
@@ -296,11 +314,17 @@ function useStudioTerminal({
     if (!terminalSessionId.value) {
       return false;
     }
-    if (terminalSocket?.readyState === WebSocket.OPEN) {
+    if (terminalSocketSessionId && terminalSocketSessionId !== terminalSessionId.value) {
+      closeTerminalSocket();
+    }
+    if (terminalSocket?.readyState === WebSocket.OPEN && terminalSocketSessionId === terminalSessionId.value) {
       return true;
     }
-    if (terminalSocketOpenPromise) {
+    if (terminalSocketOpenPromise && terminalSocketOpenSessionId === terminalSessionId.value) {
       return terminalSocketOpenPromise;
+    }
+    if (terminalSocketOpenPromise) {
+      closeTerminalSocket();
     }
 
     const socketUrl = String(resolveWebSocketUrl(terminalSessionId.value) || "");
@@ -308,10 +332,13 @@ function useStudioTerminal({
       return false;
     }
 
+    const socketSessionId = terminalSessionId.value;
     terminalSocketOpenPromise = new Promise((resolve) => {
       let settled = false;
       const socket = new WebSocket(socketUrl);
       terminalSocket = socket;
+      terminalSocketSessionId = socketSessionId;
+      terminalSocketOpenSessionId = socketSessionId;
       const settle = (ready) => {
         if (settled) {
           return;
@@ -333,8 +360,12 @@ function useStudioTerminal({
       socket.addEventListener("close", () => {
         if (terminalSocket === socket) {
           terminalSocket = null;
+          terminalSocketSessionId = "";
         }
-        terminalSocketOpenPromise = null;
+        if (terminalSocketOpenSessionId === socketSessionId) {
+          terminalSocketOpenPromise = null;
+          terminalSocketOpenSessionId = "";
+        }
         settle(false);
       });
     });
@@ -394,6 +425,7 @@ function useStudioTerminal({
     applyTerminalSession,
     closeTerminalSocket,
     connectTerminalSocket,
+    disposeTerminalDisplay,
     disposeTerminalUi,
     focusTerminal,
     resetTerminalDisplay,

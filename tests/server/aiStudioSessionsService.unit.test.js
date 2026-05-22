@@ -158,6 +158,7 @@ test("session list exposes selectable workflow profiles after seeding", async ()
     result.creation.workflowProfiles.map((profile) => profile.id),
     [
       AI_STUDIO_WORKFLOW_PROFILE_IDS.BIG_FEATURE,
+      AI_STUDIO_WORKFLOW_PROFILE_IDS.GENERAL_CODING,
       AI_STUDIO_WORKFLOW_PROFILE_IDS.NON_CODE_MAINTENANCE,
       AI_STUDIO_WORKFLOW_PROFILE_IDS.NON_COMMIT_MAINTENANCE
     ]

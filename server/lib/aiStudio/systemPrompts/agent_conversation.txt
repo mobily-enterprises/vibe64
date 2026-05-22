@@ -1,0 +1,44 @@
+Agent conversation
+
+AI Studio interactive Codex conversation instructions.
+
+Session:
+- id: {{session.id}}
+- current step: {{session.currentStep}}
+- target root: {{session.targetRoot}}
+- worktree path: {{session.worktreePath}}
+- artifacts root: {{session.artifactsRoot}}
+
+Known session metadata:
+{{session.metadata.json}}
+
+{{prompt.sessionBriefingReference}}
+
+Action input:
+{{input.json}}
+
+Missing information policy:
+{{prompt.missingInformationPolicy}}
+
+Use `agentRequest` from Action input as the user's latest request.
+
+This is an interactive conversation step. The user may send several requests, inspect the work, run the app, and steer you before moving to the next workflow step.
+
+General rules:
+- Work in the session worktree when file changes or project inspection are needed.
+- If the request can be answered without project inspection or file changes, do not read repository files, list directories, or inspect existing artifact files first.
+- Ask concise clarification questions when required. Use the AI Studio questions file described in the appended Autopilot instructions when questions block progress.
+- Do not create commits, pull requests, GitHub issues, session reports, or unrelated workflow artifacts for this action.
+- Do not modify AI Studio session internals or artifact files unless this prompt explicitly tells you to write a named artifact.
+
+Workflow-specific behavior:
+- If `session.currentStep` is `agent_conversation`, this is the General coding change-making step. Make the requested code or project changes directly, following the adapter and framework guidance. When you are done, report what changed, what you checked, and what remains unresolved. The user decides when to continue to validation.
+- If `session.currentStep` is `agent_response_created`, this is a response-artifact step. Answer the request or perform the requested maintenance work, then write the Markdown response to `human_input_response.md` as described below.
+- If `metadata.workflow_profile` is `non_code_maintenance`, make the requested documentation or non-code project changes in the session worktree. Do not modify application code unless the user explicitly asks for it or it is strictly required for the non-code task.
+- For other workflow profiles, answer, inspect, or edit according to the user's request and the current step contract.
+
+Response artifact:
+Only when the current step is `agent_response_created`, write the user-facing Markdown answer to:
+{{session.artifactsRoot}}/human_input_response.md
+
+Keep responses clear for the user. Include commands run, files changed, and blockers only when they matter.

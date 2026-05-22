@@ -78,6 +78,7 @@ test("ai-studio runtime session view exposes workflow steps, current actions, an
 
 test("ai-studio workflow profiles are ordered step lists with self-contained step metadata", () => {
   const bigFeature = workflowForProfile(AI_STUDIO_WORKFLOW_PROFILE_IDS.BIG_FEATURE);
+  const generalCoding = workflowForProfile(AI_STUDIO_WORKFLOW_PROFILE_IDS.GENERAL_CODING);
   const nonCodeMaintenance = workflowForProfile(AI_STUDIO_WORKFLOW_PROFILE_IDS.NON_CODE_MAINTENANCE);
   const seedApplication = workflowForProfile(AI_STUDIO_WORKFLOW_PROFILE_IDS.SEED_APPLICATION);
   const nonCommitMaintenance = workflowForProfile(AI_STUDIO_WORKFLOW_PROFILE_IDS.NON_COMMIT_MAINTENANCE);
@@ -98,6 +99,32 @@ test("ai-studio workflow profiles are ordered step lists with self-contained ste
       seedApplication.steps.findIndex((step) => step.id === "seed_plan_executed"),
     true
   );
+  assert.equal(generalCoding.profile.label, "General coding");
+  assert.equal(generalCoding.profile.sessionWord, "coding");
+  assert.deepEqual(generalCoding.steps.map((step) => step.id), [
+    "session_created",
+    "work_source_selected",
+    "worktree_created",
+    "dependencies_installed",
+    "agent_conversation",
+    "deep_ui_check_run",
+    "review_run",
+    "project_validated",
+    "changes_accepted",
+    "report_created",
+    "project_knowledge_updated",
+    "changes_committed",
+    "pr_file_created",
+    "pr_created",
+    "pr_merged",
+    "main_checkout_synced",
+    "session_finished"
+  ]);
+  assert.equal(generalCoding.steps.find((step) => step.id === "agent_conversation").label, "Make changes");
+  assert.equal(generalCoding.steps.find((step) => step.id === "agent_conversation").autopilot.kind, "agent_conversation");
+  assert.equal(generalCoding.steps.some((step) => step.id === "issue_file_created"), false);
+  assert.equal(generalCoding.steps.some((step) => step.id === "plan_made"), false);
+  assert.equal(generalCoding.steps.some((step) => step.id === "plan_executed"), false);
   assert.equal(nonCodeMaintenance.profile.label, "Documentation/non code maintenance");
   assert.equal(nonCodeMaintenance.profile.sessionWord, "documentation");
   assert.deepEqual(nonCodeMaintenance.steps.map((step) => step.id), [
@@ -119,6 +146,7 @@ test("ai-studio workflow profiles are ordered step lists with self-contained ste
   assert.equal(nonCodeMaintenance.steps.some((step) => step.id === "review_run"), false);
   assert.equal(nonCodeMaintenance.steps.some((step) => step.id === "changes_accepted"), false);
   assert.equal(nonCodeMaintenance.steps.find((step) => step.id === "agent_response_created").autopilot.kind, "agent_conversation");
+  assert.equal(nonCodeMaintenance.steps.find((step) => step.id === "agent_response_created").label, "Talk to Codex");
   assert.deepEqual(nonCommitMaintenance.profile.initialMetadata, {
     work_source: "new_branch"
   });
@@ -493,9 +521,9 @@ test("ai-studio runtime prompt handoff shows the action input outside hidden ter
       recursive: true
     });
     await writeFile(
-      path.join(promptPackRoot, "talk_to_agent.txt"),
+      path.join(promptPackRoot, "agent_conversation.txt"),
       [
-        "Talk to agent",
+        "Agent conversation",
         "",
         "Action input:",
         "{{input.json}}"
@@ -516,12 +544,12 @@ test("ai-studio runtime prompt handoff shows the action input outside hidden ter
       workflowProfile: AI_STUDIO_WORKFLOW_PROFILE_IDS.NON_COMMIT_MAINTENANCE
     });
 
-    const afterAction = await runtime.runAction("agent_prompt_visible_input", "talk_to_agent", {
+    const afterAction = await runtime.runAction("agent_prompt_visible_input", "agent_conversation", {
       agentRequest: "Explain this codebase."
     });
 
     assert.equal(afterAction.actionResult.status, "prompt_ready");
-    assert.equal(afterAction.actionResult.promptId, "talk_to_agent");
+    assert.equal(afterAction.actionResult.promptId, "agent_conversation");
     assert.match(
       afterAction.actionResult.codexPromptHandoff.terminalInput,
       /^Explain this codebase\.\n\n\[\[AI_STUDIO_CONTEXT_START\]\]/u

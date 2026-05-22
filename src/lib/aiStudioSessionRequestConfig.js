@@ -63,6 +63,10 @@ function aiStudioLaunchTerminalPath(sessionsApiPath = "", sessionId = "", termin
   );
 }
 
+function aiStudioLaunchTerminalStopPath(sessionsApiPath = "", sessionId = "", terminalSessionId = "") {
+  return `${aiStudioLaunchTerminalPath(sessionsApiPath, sessionId, terminalSessionId)}/stop`;
+}
+
 function aiStudioShellTerminalPath(sessionsApiPath = "", sessionId = "", terminalSessionId = "") {
   return aiStudioSessionPath(
     sessionsApiPath,
@@ -119,6 +123,7 @@ export {
   aiStudioLaunchTargetsPath,
   aiStudioLaunchTargetsQueryKey,
   aiStudioLaunchTerminalPath,
+  aiStudioLaunchTerminalStopPath,
   aiStudioSessionPath,
   aiStudioShellTerminalPath,
   aiStudioSessionsQueryKey,

@@ -178,6 +178,7 @@ function normalizeAutopilot(autopilot = {}) {
     completeWhen: normalizeConditionList(autopilot.completeWhen),
     kind: normalizeText(autopilot.kind),
     label: normalizeText(autopilot.label || autopilot.actionId),
+    responseArtifact: normalizeText(autopilot.responseArtifact),
     stop: autopilot.stop === true,
     userDecision: autopilot.userDecision === true
   };
@@ -264,6 +265,9 @@ function publicAutopilotDefinition(autopilot = {}) {
   }
   if (autopilot.label) {
     definition.label = autopilot.label;
+  }
+  if (autopilot.responseArtifact) {
+    definition.responseArtifact = autopilot.responseArtifact;
   }
   return definition;
 }

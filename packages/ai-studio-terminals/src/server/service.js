@@ -105,6 +105,10 @@ function createService({ projectService } = {}) {
       return launchTarget.startTerminal(sessionId, input);
     },
 
+    stopLaunchTargetTerminal(sessionId, terminalSessionId) {
+      return launchTarget.stopTerminal(sessionId, terminalSessionId);
+    },
+
     startShellTerminal(sessionId, input = {}) {
       return shell.startTerminal(sessionId, input);
     },

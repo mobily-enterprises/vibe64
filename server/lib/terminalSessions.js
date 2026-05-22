@@ -43,6 +43,7 @@ function terminalSessionResponse(session) {
     ok: true,
     closeError: session.closeError || "",
     cols: session.cols || DEFAULT_TERMINAL_COLS,
+    createdAt: session.createdAt || "",
     id: session.id,
     commandPreview: session.commandPreview,
     exitCode: session.exitCode,
@@ -140,6 +141,21 @@ function countRunningTerminalSessions({ namespacePrefix = "" } = {}) {
   }).length;
 }
 
+function listTerminalSessions({
+  namespace = "",
+  namespacePrefix = "",
+  runningOnly = false
+} = {}) {
+  return listStoredSessions({
+    namespace,
+    namespacePrefix,
+    runningOnly
+  }).map((entry) => ({
+    namespace: entry.namespace,
+    ...terminalSessionResponse(entry.session)
+  }));
+}
+
 async function runCloseHook(session, reason) {
   if (!session || session.closeHookStarted) {
     return;
@@ -172,6 +188,37 @@ async function runCloseHook(session, reason) {
   }
 }
 
+async function runStopHook(session, reason) {
+  if (!session || session.stopHookStarted) {
+    return;
+  }
+  session.stopHookStarted = true;
+  if (typeof session.onStop !== "function") {
+    return;
+  }
+  try {
+    await session.onStop({
+      id: session.id,
+      output: session.output,
+      reason,
+      status: session.status
+    });
+  } catch (error) {
+    const message = String(error?.message || error || "Terminal stop failed.");
+    const chunk = `\r\n[studio] Terminal stop failed: ${message}\r\n`;
+    session.closeError = message;
+    session.output = trimBuffer(`${session.output}${chunk}`);
+    sendToSubscribers(session, {
+      chunk,
+      type: "output"
+    });
+    sendToSubscribers(session, {
+      error: message,
+      type: "error"
+    });
+  }
+}
+
 function startTerminalSession({
   args,
   command,
@@ -184,6 +231,7 @@ function startTerminalSession({
   namespaceLimitPrefix = "",
   onClose = null,
   onOutput = null,
+  onStop = null,
   reuseRunning = false
 }) {
   const sessions = sessionsForNamespace(namespace);
@@ -245,11 +293,13 @@ function startTerminalSession({
     id,
     commandPreview: resolvedCommandPreview,
     cols: DEFAULT_TERMINAL_COLS,
+    createdAt: new Date().toISOString(),
     exitCode: null,
     metadata: resolvedMetadata && typeof resolvedMetadata === "object" && !Array.isArray(resolvedMetadata)
       ? resolvedMetadata
       : {},
     onClose,
+    onStop,
     output: "",
     rows: DEFAULT_TERMINAL_ROWS,
     status: "running",
@@ -399,6 +449,34 @@ function resizeTerminalSession(id, size = {}, { namespace = "default" } = {}) {
   return terminalSessionResponse(session);
 }
 
+function stopTerminalSession(id, { namespace = "default" } = {}) {
+  const sessions = sessionsForNamespace(namespace);
+  const session = sessions.get(id);
+  if (!session) {
+    return {
+      ok: false,
+      error: "Terminal session not found."
+    };
+  }
+
+  if (session.status === "running") {
+    session.status = "closing";
+    sendToSubscribers(session, {
+      exitCode: session.exitCode,
+      status: session.status,
+      type: "status"
+    });
+    void (async () => {
+      await runStopHook(session, "stop");
+      if (session.status === "closing") {
+        session.terminal.kill();
+      }
+    })();
+  }
+
+  return terminalSessionResponse(session);
+}
+
 async function closeTerminalSession(id, { namespace = "default" } = {}) {
   const sessions = sessionsForNamespace(namespace);
   const session = sessions.get(id);
@@ -411,6 +489,7 @@ async function closeTerminalSession(id, { namespace = "default" } = {}) {
 
   if (session.status === "running") {
     session.status = "closing";
+    await runStopHook(session, "close");
     session.terminal.kill();
   }
   await runCloseHook(session, "close");
@@ -456,9 +535,11 @@ export {
   closeTerminalSessionsForNamespace,
   closeTerminalSessionsForNamespacePrefix,
   countRunningTerminalSessions,
+  listTerminalSessions,
   readTerminalSession,
   resizeTerminalSession,
   startTerminalSession,
+  stopTerminalSession,
   subscribeTerminalSession,
   writeTerminalSession
 };

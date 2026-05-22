@@ -1,9 +1,13 @@
+import stripAnsi from "strip-ansi";
+
 import {
   closeTerminalSession,
   closeTerminalSessionsForNamespace,
+  listTerminalSessions,
   readTerminalSession,
   resizeTerminalSession,
   startTerminalSession,
+  stopTerminalSession,
   subscribeTerminalSession,
   writeTerminalSession
 } from "../../../../server/lib/terminalSessions.js";
@@ -13,7 +17,8 @@ import {
 import {
   aiStudioResult,
   launchTargetTerminalNamespace,
-  sessionTerminalCwd
+  sessionTerminalCwd,
+  stableHash
 } from "./terminalShared.js";
 import {
   projectTerminalEnvironment,
@@ -31,6 +36,7 @@ const LAUNCH_METADATA = Object.freeze({
   openLabel: "launch_target_open_label",
   startedAt: "launch_target_started_at"
 });
+const MAX_LAUNCH_ACTION_SCAN_LINES = 10;
 
 function normalizeLaunchTargetId(value = "") {
   return String(value || "").trim();
@@ -113,12 +119,14 @@ function findLaunchTarget(targets = [], launchTargetId = "") {
 
 function launchStatusResponse({
   launchTargets = [],
-  session = {}
+  session = {},
+  terminal = null
 } = {}) {
   const lastLaunchTarget = launchTargetFromMetadata(session.metadata || {});
   const openTarget = lastLaunchTarget?.openTarget || null;
   return {
     ok: true,
+    activeTerminal: terminal ? launchTerminalStatus(terminal) : null,
     launchTargets,
     lastLaunchTarget,
     openTarget: openTarget
@@ -135,6 +143,95 @@ function launchStatusResponse({
           label: "Open browser"
         }
   };
+}
+
+function launchTerminalIsRunning(terminal = {}) {
+  return terminal.status === "running" || terminal.status === "closing";
+}
+
+function launchTerminalStatus(terminal = {}) {
+  const metadata = terminal.metadata && typeof terminal.metadata === "object" && !Array.isArray(terminal.metadata)
+    ? terminal.metadata
+    : {};
+  return {
+    closeError: String(terminal.closeError || ""),
+    commandPreview: String(terminal.commandPreview || ""),
+    createdAt: String(terminal.createdAt || ""),
+    exitCode: terminal.exitCode ?? null,
+    id: String(terminal.id || ""),
+    metadata,
+    output: String(terminal.output || ""),
+    running: launchTerminalIsRunning(terminal),
+    status: String(terminal.status || "")
+  };
+}
+
+function latestLaunchTerminal(sessionId = "") {
+  const terminals = listTerminalSessions({
+    namespace: launchTargetTerminalNamespace(sessionId)
+  });
+  return terminals.sort((left, right) => {
+    return String(left.createdAt || "").localeCompare(String(right.createdAt || ""));
+  }).at(-1) || null;
+}
+
+function firstLaunchOutputLines(output = "") {
+  return stripAnsi(String(output || ""))
+    .replace(/\r\n/gu, "\n")
+    .replace(/\r/gu, "\n")
+    .split("\n")
+    .slice(0, MAX_LAUNCH_ACTION_SCAN_LINES)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function launchActionFromLine(line = "") {
+  const match = String(line || "").match(/(?:^|\s)action:(?:url:)?(https?:\/\/\S+)/u);
+  if (!match) {
+    return null;
+  }
+
+  const href = match[1].replace(/[),.;]+$/u, "");
+  let label = "Open";
+  try {
+    const url = new URL(href);
+    label = url.host || label;
+  } catch {
+    return null;
+  }
+
+  return {
+    href,
+    id: `url-${stableHash(href)}`,
+    kind: "url",
+    label
+  };
+}
+
+function launchActionsFromOutput(output = "") {
+  const actionMap = new Map();
+  for (const line of firstLaunchOutputLines(output)) {
+    const action = launchActionFromLine(line);
+    if (action) {
+      actionMap.set(action.id, action);
+    }
+  }
+  return [...actionMap.values()];
+}
+
+function launchActionsChanged(currentActions = [], nextActions = []) {
+  return JSON.stringify(currentActions || []) !== JSON.stringify(nextActions || []);
+}
+
+async function closeStoppedLaunchTerminals(sessionId = "") {
+  const namespace = launchTargetTerminalNamespace(sessionId);
+  await Promise.all(listTerminalSessions({
+    namespace
+  }).filter((terminal) => !launchTerminalIsRunning(terminal)).map((terminal) => {
+    return closeTerminalSession(terminal.id, {
+      namespace
+    });
+  }));
 }
 
 function readinessMarkerFromSpec(spec = {}) {
@@ -186,7 +283,8 @@ function createLaunchTargetTerminalController({ projectService } = {}) {
         const context = await createLaunchContext(projectService, sessionId);
         return launchStatusResponse({
           launchTargets: await listLaunchTargets(context),
-          session: context.session
+          session: context.session,
+          terminal: latestLaunchTerminal(sessionId)
         });
       });
     },
@@ -279,6 +377,7 @@ function createLaunchTargetTerminalController({ projectService } = {}) {
         const launchEnvHash = terminalEnvironmentFingerprint(launchEnv);
         const readinessMarker = readinessMarkerFromSpec(spec);
         let launchReadyWritten = false;
+        await closeStoppedLaunchTerminals(sessionId);
         const terminalSession = startTerminalSession({
           args: spec.args || [],
           command: spec.command,
@@ -296,20 +395,25 @@ function createLaunchTargetTerminalController({ projectService } = {}) {
           namespace,
           namespaceLimitPrefix: namespace,
           onClose: spec.onClose,
-          onOutput: readinessMarker
-            ? ({ output, session: runningTerminalSession, updateMetadata }) => {
-                if (launchReadyWritten || !String(output || "").includes(readinessMarker)) {
-                  return;
-                }
-                launchReadyWritten = true;
-                void markLaunchTerminalReady({
-                  store: context.store,
-                  sessionId,
-                  terminalSession: runningTerminalSession,
-                  updateMetadata
-                });
-              }
-            : null,
+          onStop: spec.onStop,
+          onOutput: ({ output, session: runningTerminalSession, updateMetadata }) => {
+            const actions = launchActionsFromOutput(output);
+            if (actions.length > 0 && launchActionsChanged(runningTerminalSession.metadata?.actions, actions)) {
+              updateMetadata({
+                actions
+              });
+            }
+            if (!readinessMarker || launchReadyWritten || !String(output || "").includes(readinessMarker)) {
+              return;
+            }
+            launchReadyWritten = true;
+            void markLaunchTerminalReady({
+              store: context.store,
+              sessionId,
+              terminalSession: runningTerminalSession,
+              updateMetadata
+            });
+          },
           reuseRunning: (runningSession) => {
             return spec.reuseRunning !== false &&
               runningSession.metadata?.envHash === launchEnvHash &&
@@ -320,6 +424,12 @@ function createLaunchTargetTerminalController({ projectService } = {}) {
           await writeLaunchMetadata(context.store, sessionId, terminalSession);
         }
         return terminalSession;
+      });
+    },
+
+    stopTerminal(sessionId, terminalSessionId) {
+      return stopTerminalSession(terminalSessionId, {
+        namespace: launchTargetTerminalNamespace(sessionId)
       });
     },
 
@@ -345,5 +455,6 @@ function createLaunchTargetTerminalController({ projectService } = {}) {
 
 export {
   LAUNCH_METADATA,
+  launchActionsFromOutput,
   createLaunchTargetTerminalController
 };

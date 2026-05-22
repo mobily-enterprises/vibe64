@@ -16,6 +16,7 @@ import {
 } from "../../src/lib/aiStudioAutopilotPromptFiles.js";
 
 const STEP_LABELS = Object.freeze({
+  agent_conversation: "Make changes",
   changes_accepted: "Final review",
   changes_committed: "Commit and push changes",
   deep_ui_check_run: "Run deep UI check",
@@ -40,6 +41,7 @@ const STEP_LABELS = Object.freeze({
 });
 
 const NEXT_STEP = Object.freeze({
+  agent_conversation: "deep_ui_check_run",
   changes_accepted: "report_created",
   changes_committed: "pr_file_created",
   deep_ui_check_run: "review_run",
@@ -94,6 +96,7 @@ const COMMAND_METADATA = Object.freeze({
 });
 
 const PROMPT_ACTION_IDS = new Set([
+  "agent_conversation",
   "create_pr_file",
   "apply_review_feedback",
   "execute_plan",
@@ -106,6 +109,11 @@ const PROMPT_ACTION_IDS = new Set([
 ]);
 const FINISH_SESSION_ACTION_ID = "finish_session";
 const STEP_AUTOPILOT = Object.freeze({
+  agent_conversation: {
+    actionId: "agent_conversation",
+    kind: "agent_conversation",
+    stop: true
+  },
   changes_accepted: {
     kind: "final_review",
     stop: true
@@ -404,6 +412,31 @@ describe("useAiStudioAutopilotController", () => {
     expect(context.controller.readyForImplementationReview.value).toBe(true);
     expect(context.controller.promptRunReadyToAdvance.value).toBe(false);
     expect(context.controller.failure.value).toBeNull();
+  });
+
+  it("uses a reusable agent conversation step with a workflow-specific visible label", async () => {
+    context.moveToStep("agent_conversation");
+
+    expect(context.controller.screenState.value).toMatchObject({
+      kind: "agent_conversation",
+      title: "Make changes"
+    });
+    expect(context.controller.agentConversationShowsResponseArtifact.value).toBe(false);
+
+    await context.controller.submitAgentRequest("Tighten the settings form spacing.");
+
+    const conversationCall = context.actions.runAction.mock.calls.find(([action]) => action.id === "agent_conversation");
+    expect(conversationCall?.[1]?.input).toEqual({
+      agentRequest: "Tighten the settings form spacing."
+    });
+    expect(context.session.value.currentStep).toBe("agent_conversation");
+    expect(context.controller.canFinishAgentConversation.value).toBe(true);
+    expect(context.controller.agentConversationContinueLabel.value).toBe("Continue to Run deep UI check");
+
+    await context.controller.finishAgentConversation();
+
+    expect(context.session.value.currentStep).toBe("deep_ui_check_run");
+    expect(context.controller.readyForDeepUiCheck.value).toBe(true);
   });
 
   it("can finish without merging the pull request", async () => {
@@ -1322,6 +1355,14 @@ function actionsForStep(stepId, metadata = {}) {
     return [
       {
         ...promptAction("apply_review_feedback", "Ask AI for tweaks"),
+        allowRepeatedPromptRuns: true
+      }
+    ];
+  }
+  if (stepId === "agent_conversation") {
+    return [
+      {
+        ...promptAction("agent_conversation", "Ask Codex for changes"),
         allowRepeatedPromptRuns: true
       }
     ];

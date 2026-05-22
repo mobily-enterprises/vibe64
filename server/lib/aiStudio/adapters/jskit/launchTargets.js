@@ -143,6 +143,7 @@ async function defaultAppPath(worktreePath) {
 
 function jskitLaunchTarget(id, label) {
   return {
+    defaultDisplay: "minimized",
     id,
     label
   };

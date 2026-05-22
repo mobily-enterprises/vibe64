@@ -92,6 +92,14 @@ const AI_STUDIO_AUTOPILOT_INTERACTION_STEPS = Object.freeze([
     label: "Seed app"
   },
   {
+    id: "agent_conversation",
+    label: "Make changes"
+  },
+  {
+    id: "agent_response_created",
+    label: "Talk"
+  },
+  {
     id: "implementation_reviewed",
     label: "Human review"
   },
