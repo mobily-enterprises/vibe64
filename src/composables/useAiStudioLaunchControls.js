@@ -131,6 +131,13 @@ function launchTargetWorktreePath(session = {}) {
   return aiStudioSessionWorktreePath(session);
 }
 
+function launchTerminalAiFixAvailable({
+  fixCommandFailure = null,
+  workflowCommand = false
+} = {}) {
+  return Boolean(workflowCommand && typeof fixCommandFailure === "function");
+}
+
 function useAiStudioLaunchControls({
   busy = () => false,
   session = null,
@@ -336,8 +343,9 @@ function useAiStudioLaunchControls({
 
 export {
   browserCanOpenTarget,
-  launchTargetWorktreePath,
   launchBrowserTargetName,
+  launchTargetWorktreePath,
+  launchTerminalAiFixAvailable,
   openLaunchBrowserTarget,
   openPendingLaunchBrowserWindow,
   openReadyLaunchBrowserTarget,

@@ -19,13 +19,13 @@
         class="studio-autopilot__question"
       >
         <p>{{ question.text }}</p>
-        <v-textarea
+        <AiStudioAutopilotPromptTextarea
           :model-value="question.answer"
-          auto-grow
           class="studio-autopilot__issue-input"
           :disabled="disabled"
           label="Your answer"
           rows="2"
+          :session-id="sessionId"
           variant="outlined"
           @update:model-value="$emit('answer-change', question.id, $event)"
         />
@@ -71,6 +71,7 @@ import {
   mdiClose,
   mdiSend
 } from "@mdi/js";
+import AiStudioAutopilotPromptTextarea from "@/components/studio/ai-studio-session/AiStudioAutopilotPromptTextarea.vue";
 
 defineEmits(["answer-change", "cancel", "submit"]);
 
@@ -102,6 +103,10 @@ defineProps({
   questions: {
     default: () => [],
     type: Array
+  },
+  sessionId: {
+    default: "",
+    type: String
   },
   submitIcon: {
     default: mdiSend,

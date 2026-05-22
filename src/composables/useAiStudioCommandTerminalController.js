@@ -22,6 +22,32 @@ import {
 
 const FINISHED_TERMINAL_HOLD_MS = 500;
 
+function commandTerminalCanRequestAiFix({
+  aiFixAvailable = false,
+  sessionId = "",
+  terminalCommandPreview = "",
+  terminalError = "",
+  terminalExited = false,
+  terminalExitCode = null,
+  terminalOutput = "",
+  terminalRunning = false
+} = {}) {
+  return Boolean(
+    aiFixAvailable &&
+    sessionId &&
+    !terminalRunning &&
+    (
+      terminalError ||
+      (terminalExited && terminalExitCode !== 0)
+    ) &&
+    (
+      terminalOutput ||
+      terminalCommandPreview ||
+      terminalError
+    )
+  );
+}
+
 function useAiStudioCommandTerminalController(props, emit) {
   const terminalClosedByUser = ref(false);
   const expanded = ref(props.initialExpanded !== false);
@@ -197,19 +223,16 @@ function useAiStudioCommandTerminalController(props, emit) {
       (terminalExited.value && terminalExitCode.value !== 0)
     )
   ));
-  const canRequestAiFix = computed(() => Boolean(
-    props.aiFixAvailable &&
-    sessionId.value &&
-    (
-      terminalError.value ||
-      (terminalExited.value && terminalExitCode.value !== 0)
-    ) &&
-    (
-      terminalOutput.value ||
-      terminalCommandPreview.value ||
-      terminalError.value
-    )
-  ));
+  const canRequestAiFix = computed(() => commandTerminalCanRequestAiFix({
+    aiFixAvailable: props.aiFixAvailable,
+    sessionId: sessionId.value,
+    terminalCommandPreview: terminalCommandPreview.value,
+    terminalError: terminalError.value,
+    terminalExited: terminalExited.value,
+    terminalExitCode: terminalExitCode.value,
+    terminalOutput: terminalOutput.value,
+    terminalRunning: terminalIsRunning()
+  }));
 
   function terminalIsRunning(status = terminalStatus.value) {
     return status === "running" || status === "closing" || terminalStarting.value;
@@ -505,5 +528,6 @@ function useAiStudioCommandTerminalController(props, emit) {
 }
 
 export {
+  commandTerminalCanRequestAiFix,
   useAiStudioCommandTerminalController
 };

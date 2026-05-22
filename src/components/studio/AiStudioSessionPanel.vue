@@ -25,6 +25,21 @@
         class="studio-ai-sessions__app-bar-actions"
       >
         <v-btn
+          v-if="inspectDiffVisible"
+          class="studio-ai-sessions__inspect-button"
+          :disabled="selectedReview.diffDisabled"
+          :loading="selectedDiff.loading"
+          :prepend-icon="mdiFileCompare"
+          size="small"
+          :title="selectedReview.diffTitle"
+          type="button"
+          variant="tonal"
+          @click="selectedDiff.openDialog"
+        >
+          Review diff
+        </v-btn>
+
+        <v-btn
           class="studio-ai-sessions__inspect-button"
           :prepend-icon="inspectButtonIcon"
           size="small"
@@ -39,14 +54,12 @@
           v-show="sessionItem.sessionId === selection.selectedSessionId"
           :key="`launch:${sessionItem.sessionId}`"
           :busy="false"
-          :fix-command-failure="fixCommandFailureForSession(sessionItem.sessionId)"
           :session="sessionItem"
           :window-displayed="sessionItem.sessionId === selection.selectedSessionId"
         />
 
         <AiStudioShellControls
           :busy="interactionBusy"
-          :fix-command-failure="selectedFixCommandFailure"
           :session="selection.selectedSession"
           :show-activator="sessionMode === 'inspect'"
           :window-displayed="sessionMode === 'inspect'"
@@ -93,6 +106,7 @@ import { computed, proxyRefs, reactive, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
   mdiClose,
+  mdiFileCompare,
   mdiTune
 } from "@mdi/js";
 import AiStudioLaunchControls from "@/components/studio/AiStudioLaunchControls.vue";
@@ -100,6 +114,9 @@ import AiStudioSessionRuntimeHost from "@/components/studio/ai-studio-session/Ai
 import AiStudioSessionToolbar from "@/components/studio/ai-studio-session/AiStudioSessionToolbar.vue";
 import AiStudioShellControls from "@/components/studio/AiStudioShellControls.vue";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
+import {
+  inspectDiffButtonVisible
+} from "@/lib/aiStudioSessionPanelModel.js";
 import {
   useAiStudioSessionData
 } from "@/composables/useAiStudioSessionData.js";
@@ -145,7 +162,15 @@ const pageLoading = sessionData.pageLoading;
 const selectedRuntimeState = computed(() => runtimeStateBySessionId[selection.selectedSessionId] || null);
 const selectedRuntimeReady = computed(() => Boolean(selectedRuntimeState.value?.toolbarControls));
 const selectedAbandon = computed(() => selectedRuntimeState.value?.toolbarControls?.abandon || fallbackAbandon);
-const selectedFixCommandFailure = computed(() => selectedRuntimeState.value?.toolbarControls?.fixCommandFailure || null);
+const selectedDiff = computed(() => selectedRuntimeState.value?.toolbarControls?.diff || {});
+const selectedReview = computed(() => selectedRuntimeState.value?.toolbarControls?.review || {});
+const inspectDiffVisible = computed(() => {
+  return inspectDiffButtonVisible({
+    diff: selectedDiff.value,
+    selectedSession: selection.selectedSession,
+    sessionMode: sessionMode.value
+  });
+});
 const interactionBusy = computed(() => Boolean(
   selection.selectedSession && !selectedRuntimeReady.value
 ) || Boolean(selectedRuntimeState.value?.busy));
@@ -194,10 +219,6 @@ function setRuntimePageError({
   if (state) {
     state.pageError = String(error || "");
   }
-}
-
-function fixCommandFailureForSession(sessionId = "") {
-  return runtimeStateBySessionId[String(sessionId || "")]?.toolbarControls?.fixCommandFailure || null;
 }
 
 function setSessionMode(mode = "autopilot") {

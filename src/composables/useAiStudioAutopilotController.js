@@ -379,7 +379,7 @@ function useAiStudioAutopilotController({
     return kind === "issue_discussion" || kind === "seed_issue_discussion" || currentStep.value === ISSUE_STEP_ID;
   });
   const readyForDeepUiCheck = computed(() => {
-    return currentStepNeedsUserDecision(readSession(session)) && !running.value && !failure.value;
+    return currentStepNeedsUserDecision(readSession(session)) && !running.value && !codexActive.value && !failure.value;
   });
   const readyForFinished = computed(() => {
     const currentSession = readSession(session);
@@ -397,11 +397,11 @@ function useAiStudioAutopilotController({
   const agentResponseReady = computed(() => artifactReady(readSession(session), HUMAN_INPUT_RESPONSE_ARTIFACT));
   const canSubmitAgentRequest = computed(() => {
     const action = actionById(readActions(actions), TALK_TO_AGENT_ACTION_ID);
-    return Boolean(readyForAgentConversation.value && !running.value && action?.enabled === true);
+    return Boolean(readyForAgentConversation.value && !running.value && !codexActive.value && action?.enabled === true);
   });
   const canFinishAgentConversation = computed(() => {
     const next = readNext(actions);
-    return Boolean(readyForAgentConversation.value && agentResponseReady.value && !running.value && nextIsReady(next));
+    return Boolean(readyForAgentConversation.value && agentResponseReady.value && !running.value && !codexActive.value && nextIsReady(next));
   });
   const readyForFinalReview = computed(() => {
     return stepAutopilot(readSession(session)).kind === "final_review" || currentStep.value === REVIEW_CHANGES_STEP_ID;
@@ -461,17 +461,13 @@ function useAiStudioAutopilotController({
       : "Continue Autopilot"
   ));
   const waitingForCodex = computed(() => Boolean(
-    (
-      promptRunMatchesSession(activePromptRun.value || currentPromptRun.value, readSession(session)) &&
-      codexActive.value &&
-      !workflowQuestionActive.value
-    ) ||
-    codexIsActiveForCurrentStep()
+    currentSessionHasActiveCodex() && !workflowQuestionActive.value
   ));
   const canStart = computed(() => Boolean(
     autopilotEnabled.value &&
     readSession(session)?.sessionId &&
     !running.value &&
+    !codexActive.value &&
     !currentStepIsStopPoint(readSession(session)) &&
     currentStepCanStartAutopilot(readSession(session))
   ));
@@ -485,22 +481,23 @@ function useAiStudioAutopilotController({
       !currentStepIsStopPoint(currentSession) &&
       currentStepCanRunAutopilot(currentSession) &&
       !running.value &&
+      !codexActive.value &&
       !waitingForCodex.value &&
       !promptRunNeedsContinuation.value &&
-      (!failure.value || promptRunReadyToAdvance.value || codexIsActiveForCurrentStep())
+      (!failure.value || promptRunReadyToAdvance.value)
     );
   });
   const canAcceptReview = computed(() => {
     const next = readNext(actions);
-    return Boolean(readyForReview.value && !running.value && nextIsReady(next));
+    return Boolean(readyForReview.value && !running.value && !codexActive.value && nextIsReady(next));
   });
   const canRequestReviewTweak = computed(() => {
     const action = actionById(readActions(actions), APPLY_REVIEW_FEEDBACK_ACTION_ID);
-    return Boolean(readyForImplementationReview.value && !running.value && action?.enabled === true);
+    return Boolean(readyForImplementationReview.value && !running.value && !codexActive.value && action?.enabled === true);
   });
   const canArchiveSession = computed(() => {
     const archiveAction = actionById(readActions(actions), FINISH_SESSION_ACTION_ID);
-    return Boolean(readyForFinished.value && !running.value && archiveAction?.enabled === true);
+    return Boolean(readyForFinished.value && !running.value && !codexActive.value && archiveAction?.enabled === true);
   });
 
   const screenState = computed(() => {
@@ -520,13 +517,13 @@ function useAiStudioAutopilotController({
         title: "A few questions first"
       };
     }
-    if (codexIsActiveForCurrentStep()) {
+    if (currentSessionHasActiveCodex()) {
       return {
         icon: "progress",
         kind: "codex_running",
         showProgress: true,
         stopAction: "autopilot",
-        title: `Executing: ${activeStage.value || stepLabel(readSession(session))}`
+        title: activeCodexTitle()
       };
     }
     if (running.value) {
@@ -673,7 +670,7 @@ function useAiStudioAutopilotController({
   }
 
   async function acceptChanges() {
-    if (!autopilotEnabled.value || !canAcceptReview.value) {
+    if (!autopilotEnabled.value || codexActive.value || !canAcceptReview.value) {
       return;
     }
     stopRequested = false;
@@ -700,7 +697,7 @@ function useAiStudioAutopilotController({
 
   async function requestReviewTweak(feedback = "") {
     const normalizedFeedback = String(feedback || "").trim();
-    if (!autopilotEnabled.value || !canRequestReviewTweak.value) {
+    if (!autopilotEnabled.value || codexActive.value || !canRequestReviewTweak.value) {
       return false;
     }
     if (!normalizedFeedback) {
@@ -740,7 +737,7 @@ function useAiStudioAutopilotController({
 
   async function submitAgentRequest(message = "") {
     const normalizedMessage = String(message || "").trim();
-    if (!autopilotEnabled.value || !canSubmitAgentRequest.value) {
+    if (!autopilotEnabled.value || codexActive.value || !canSubmitAgentRequest.value) {
       return false;
     }
     if (!normalizedMessage) {
@@ -779,7 +776,7 @@ function useAiStudioAutopilotController({
   }
 
   async function finishAgentConversation() {
-    if (!autopilotEnabled.value || !canFinishAgentConversation.value) {
+    if (!autopilotEnabled.value || codexActive.value || !canFinishAgentConversation.value) {
       return false;
     }
 
@@ -809,7 +806,7 @@ function useAiStudioAutopilotController({
   }
 
   async function start() {
-    if (!autopilotEnabled.value || !canStart.value) {
+    if (!autopilotEnabled.value || codexActive.value || !canStart.value) {
       return;
     }
     stopRequested = false;
@@ -818,7 +815,7 @@ function useAiStudioAutopilotController({
   }
 
   async function retry() {
-    if (!autopilotEnabled.value || running.value) {
+    if (!autopilotEnabled.value || running.value || codexActive.value) {
       return;
     }
     stopRequested = false;
@@ -827,7 +824,7 @@ function useAiStudioAutopilotController({
   }
 
   async function resume() {
-    if (!autopilotEnabled.value || !canResume.value) {
+    if (!autopilotEnabled.value || codexActive.value || !canResume.value) {
       return;
     }
     stopRequested = false;
@@ -919,7 +916,7 @@ function useAiStudioAutopilotController({
   }
 
   async function runDeepUiCheck() {
-    if (!autopilotEnabled.value || !currentStepNeedsUserDecision(readSession(session)) || running.value) {
+    if (!autopilotEnabled.value || !currentStepNeedsUserDecision(readSession(session)) || running.value || codexActive.value) {
       return;
     }
     stopRequested = false;
@@ -929,7 +926,7 @@ function useAiStudioAutopilotController({
   }
 
   async function skipDeepUiCheck() {
-    if (!autopilotEnabled.value || !currentStepNeedsUserDecision(readSession(session)) || running.value) {
+    if (!autopilotEnabled.value || !currentStepNeedsUserDecision(readSession(session)) || running.value || codexActive.value) {
       return;
     }
     stopRequested = false;
@@ -940,7 +937,7 @@ function useAiStudioAutopilotController({
 
   async function rejectChanges(feedback = "") {
     const normalizedFeedback = String(feedback || "").trim();
-    if (!autopilotEnabled.value || !readyForFinalReview.value || running.value) {
+    if (!autopilotEnabled.value || !readyForFinalReview.value || running.value || codexActive.value) {
       return false;
     }
     if (!normalizedFeedback) {
@@ -992,7 +989,7 @@ function useAiStudioAutopilotController({
   }
 
   async function mergeAndSyncMainCheckout() {
-    if (!autopilotEnabled.value || currentStep.value !== MERGE_PR_STEP_ID || running.value) {
+    if (!autopilotEnabled.value || currentStep.value !== MERGE_PR_STEP_ID || running.value || codexActive.value) {
       return false;
     }
     stopRequested = false;
@@ -1066,7 +1063,7 @@ function useAiStudioAutopilotController({
   }
 
   async function skipMerge() {
-    if (!autopilotEnabled.value || currentStep.value !== MERGE_PR_STEP_ID || running.value) {
+    if (!autopilotEnabled.value || currentStep.value !== MERGE_PR_STEP_ID || running.value || codexActive.value) {
       return false;
     }
     stopRequested = false;
@@ -1128,7 +1125,8 @@ function useAiStudioAutopilotController({
     if (
       !autopilotEnabled.value ||
       ![FINISHED_STEP_ID, LOCAL_FINISHED_STEP_ID].includes(currentStep.value) ||
-      running.value
+      running.value ||
+      codexActive.value
     ) {
       return false;
     }
@@ -1218,7 +1216,7 @@ function useAiStudioAutopilotController({
         if (promptRunForSession(currentSession)) {
           return;
         }
-        if (codexIsActiveForCurrentStep()) {
+        if (currentSessionHasActiveCodex()) {
           return;
         }
 
@@ -1691,13 +1689,25 @@ function useAiStudioAutopilotController({
     };
   }
 
-  function codexIsActiveForCurrentStep() {
+  function activeCodexStageLabel(currentSession = readSession(session)) {
+    const promptRun = activePromptRunForSession(currentSession);
+    if (promptRunMatchesSession(promptRun, currentSession)) {
+      return actionLabelForId(promptRun.actionId, currentSession);
+    }
+    return currentPromptStage(currentSession)?.label || "";
+  }
+
+  function activeCodexTitle() {
+    const label = activeStage.value || activeCodexStageLabel();
+    return label ? `Executing: ${label}` : "Codex is working...";
+  }
+
+  function currentSessionHasActiveCodex() {
     const currentSession = readSession(session);
     if (!autopilotEnabled.value || !codexActive.value || !currentSession?.sessionId) {
       return false;
     }
-    return promptRunMatchesSession(activePromptRunForSession(currentSession), currentSession) ||
-      Boolean(currentPromptStage(currentSession));
+    return true;
   }
 
   async function captureQuestionsFromAutopilotFiles() {
@@ -1736,7 +1746,7 @@ function useAiStudioAutopilotController({
 
   async function reattachToActiveCodexStep() {
     const currentSession = readSession(session);
-    if (!autopilotEnabled.value || active.value || !codexIsActiveForCurrentStep()) {
+    if (!autopilotEnabled.value || active.value || !currentSessionHasActiveCodex()) {
       return;
     }
     stopRequested = false;
@@ -1786,7 +1796,7 @@ function useAiStudioAutopilotController({
 
   watch(codexActive, (activeNow, wasActive) => {
     if (autopilotEnabled.value && activeNow) {
-      if (codexIsActiveForCurrentStep()) {
+      if (currentSessionHasActiveCodex()) {
         clearFailure();
       }
       if (!wasActive) {

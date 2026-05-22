@@ -76,7 +76,7 @@ const errorMessage = computed(() => fallbackError.value);
 const checking = computed(() => !checked.value && !errorMessage.value);
 const needsSetup = computed(() => checked.value && !ready.value && !errorMessage.value);
 const setupPageActive = computed(() => route.path === "/setup");
-const redirecting = computed(() => !setupPageActive.value && (checking.value || needsSetup.value));
+const redirecting = computed(() => !setupPageActive.value && needsSetup.value);
 const setupRoute = computed(() => ({
   path: "/setup",
   query: {

@@ -227,7 +227,7 @@ function registerTerminalWebSocketRoute(
             if (response?.ok === false) {
               sendSocketJson(socket, {
                 error: response.error || "Terminal resize failed.",
-                type: "error"
+                type: "resize.error"
               });
             }
             return;

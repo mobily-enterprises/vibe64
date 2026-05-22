@@ -7,6 +7,8 @@ import {
   readRefOrGetterBoolean
 } from "@/lib/vueRefOrGetterValue.js";
 
+const CODEX_ALREADY_WORKING_ERROR = "Codex is already working in this session. Wait for it to finish before sending another prompt.";
+
 function useAiStudioSessionCodexHandoff({
   refreshSessionData,
   selectedSessionId,
@@ -21,10 +23,23 @@ function useAiStudioSessionCodexHandoff({
   const working = ref(false);
   const codexCommands = useAiStudioCodexCommands();
 
+  function codexCanAcceptPrompt() {
+    return !busy.value && !working.value;
+  }
+
+  function rejectOverlappingPrompt() {
+    promptInjectionError.value = CODEX_ALREADY_WORKING_ERROR;
+    setCopyStatus(promptInjectionError.value);
+    return false;
+  }
+
   async function startFromActionResponse(response = {}, context = {}) {
     const promptHandoff = aiStudioPromptHandoffFromSession(response);
     if (!promptHandoff?.prompt) {
       return false;
+    }
+    if (!codexCanAcceptPrompt()) {
+      return rejectOverlappingPrompt();
     }
 
     promptOverride.value = String(promptHandoff.terminalInput || promptHandoff.prompt || "").trim();
@@ -41,6 +56,9 @@ function useAiStudioSessionCodexHandoff({
     const normalizedPrompt = String(prompt || "").trim();
     if (!normalizedPrompt) {
       return false;
+    }
+    if (!codexCanAcceptPrompt()) {
+      return rejectOverlappingPrompt();
     }
 
     const targetSessionId = String(sessionId || unref(selectedSessionId) || "").trim();

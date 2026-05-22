@@ -49,7 +49,7 @@
       <template #default="{ startDrag }">
         <AiStudioCommandTerminal
           class="ai-studio-launch-controls__terminal"
-          :ai-fix-available="Boolean(fixCommandFailure)"
+          :ai-fix-available="workflowAiFixAvailable"
           draggable
           :initial-expanded="!terminalMinimized"
           terminal-kind="launch"
@@ -95,6 +95,7 @@ import {
 import AiStudioCommandTerminal from "@/components/studio/AiStudioCommandTerminal.vue";
 import AiStudioFloatingTerminalWindow from "@/components/studio/AiStudioFloatingTerminalWindow.vue";
 import {
+  launchTerminalAiFixAvailable,
   useAiStudioLaunchControls
 } from "@/composables/useAiStudioLaunchControls.js";
 
@@ -126,8 +127,19 @@ const props = defineProps({
   windowDisplayed: {
     type: Boolean,
     default: true
+  },
+  workflowCommand: {
+    type: Boolean,
+    default: false
   }
 });
+
+const workflowAiFixAvailable = computed(() => (
+  launchTerminalAiFixAvailable({
+    fixCommandFailure: props.fixCommandFailure,
+    workflowCommand: props.workflowCommand
+  })
+));
 
 const {
   activeLaunchTarget,
@@ -165,6 +177,9 @@ const runMenuDisabled = computed(() => Boolean(
 ));
 
 function handleFixRequested(payload) {
+  if (!workflowAiFixAvailable.value) {
+    return null;
+  }
   return props.fixCommandFailure?.(payload);
 }
 </script>

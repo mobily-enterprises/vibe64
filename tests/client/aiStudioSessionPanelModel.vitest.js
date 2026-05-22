@@ -14,6 +14,7 @@ import {
   buildAiStudioTimelineSteps,
   currentStepDisabledReason,
   enrichAiStudioSessionForDisplay,
+  inspectDiffButtonVisible,
   visibleAiStudioSessions
 } from "../../src/lib/aiStudioSessionPanelModel.js";
 
@@ -28,6 +29,48 @@ describe("AI Studio session panel model", () => {
       "2026-05-16_00",
       "2026-05-16_02"
     ]);
+  });
+
+  it("shows the inspect diff button only for inspect sessions with a ready worktree and diff action", () => {
+    const openDialog = () => null;
+
+    expect(inspectDiffButtonVisible({
+      diff: {
+        openDialog
+      },
+      selectedSession: {
+        worktreeReady: true
+      },
+      sessionMode: "inspect"
+    })).toBe(true);
+
+    expect(inspectDiffButtonVisible({
+      diff: {
+        openDialog
+      },
+      selectedSession: {
+        worktreeReady: true
+      },
+      sessionMode: "autopilot"
+    })).toBe(false);
+
+    expect(inspectDiffButtonVisible({
+      diff: {
+        openDialog
+      },
+      selectedSession: {
+        worktreeReady: false
+      },
+      sessionMode: "inspect"
+    })).toBe(false);
+
+    expect(inspectDiffButtonVisible({
+      diff: {},
+      selectedSession: {
+        worktreeReady: true
+      },
+      sessionMode: "inspect"
+    })).toBe(false);
   });
 
   it("builds timeline rows with current, pending, done, and rewind state", () => {

@@ -192,7 +192,8 @@ function useAiStudioAutopilotIssueDiscussion({
   const currentAutopilotArtifacts = computed(() => readRefOrGetterValue(autopilotArtifacts) || null);
   const seedMode = computed(() => seedModeForSession(currentSession.value));
   const seedGuidance = computed(() => seedGuidanceForSession(currentSession.value));
-  const codexBusy = computed(() => readRefOrGetterValue(codexTerminal.busy) === true);
+  const codexActive = computed(() => readRefOrGetterValue(codexTerminal.busy) === true ||
+    readRefOrGetterValue(codexTerminal.working) === true);
   const promptInjectionError = computed(() => String(readRefOrGetterValue(codexTerminal.promptInjectionError) || ""));
   const discussionEnabled = computed(() => readRefOrGetterValue(enabled) !== false);
   const ready = computed(() => Boolean(discussionEnabled.value && readRefOrGetterValue(readyForIssue)));
@@ -208,6 +209,7 @@ function useAiStudioAutopilotIssueDiscussion({
     return ready.value &&
       inputVisible.value &&
       Boolean(requestText.value.trim()) &&
+      !codexActive.value &&
       !saving.value;
   });
   const canAccept = computed(() => {
@@ -246,6 +248,10 @@ function useAiStudioAutopilotIssueDiscussion({
     const normalizedRequest = requestText.value.trim();
     if (!normalizedRequest || !ready.value) {
       failure.value = normalizedRequest ? "Issue discussion is not available yet." : "Describe what you would like to do.";
+      return;
+    }
+    if (codexActive.value) {
+      failure.value = "Codex is already working in this session. Switch to Inspect to continue the current conversation, or wait for it to finish.";
       return;
     }
 
@@ -519,7 +525,7 @@ function useAiStudioAutopilotIssueDiscussion({
     flush: "post"
   });
 
-  watch(codexBusy, (busy, wasBusy) => {
+  watch(codexActive, (busy, wasBusy) => {
     if (!busy || wasBusy || !sessionId.value) {
       return;
     }
@@ -544,6 +550,7 @@ function useAiStudioAutopilotIssueDiscussion({
     cancelWaiting,
     canAccept,
     canSubmit,
+    codexActive,
     draftBody,
     draftTitle,
     draftWord,

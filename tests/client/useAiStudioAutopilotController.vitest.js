@@ -755,6 +755,21 @@ describe("useAiStudioAutopilotController", () => {
     expect(context.controller.failure.value).toBeNull();
   });
 
+  it("blocks issue prompt entry while an Inspect Codex prompt is still running", async () => {
+    context.moveToStep(ISSUE_STEP_ID);
+    context.codexBusy.value = true;
+
+    await vi.waitFor(() => {
+      expect(context.controller.waitingForCodex.value).toBe(true);
+    });
+    expect(context.controller.readyForIssue.value).toBe(true);
+    expect(context.controller.screenState.value).toMatchObject({
+      kind: "codex_running",
+      showProgress: true,
+      title: "Codex is working..."
+    });
+  });
+
   it("leaves active Codex questions alone when no prompt run exists", async () => {
     context.moveToStep("plan_executed");
     context.controller.stop();
@@ -800,6 +815,7 @@ describe("useAiStudioAutopilotController", () => {
     });
 
     context.moveToStep(REVIEW_CHANGES_STEP_ID);
+    context.codexBusy.value = false;
     finishPromptAction();
     await resumePromise;
 

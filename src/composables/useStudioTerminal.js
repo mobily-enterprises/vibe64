@@ -1,6 +1,10 @@
 import { computed, nextTick, ref } from "vue";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
+import {
+  reportableTerminalSize,
+  terminalResizeErrorMessage
+} from "@/lib/studioTerminalSize.js";
 import "@xterm/xterm/css/xterm.css";
 
 const MAX_TERMINAL_OUTPUT_LENGTH = 160000;
@@ -53,15 +57,10 @@ function useStudioTerminal({
   }
 
   function terminalCurrentSize() {
-    const cols = Number(terminalInstance?.cols || 0);
-    const rows = Number(terminalInstance?.rows || 0);
-    if (!cols || !rows) {
-      return null;
-    }
-    return {
-      cols,
-      rows
-    };
+    return reportableTerminalSize({
+      cols: terminalInstance?.cols,
+      rows: terminalInstance?.rows
+    });
   }
 
   function terminalSizeAlreadyReported(size = {}) {
@@ -280,8 +279,16 @@ function useStudioTerminal({
       return;
     }
 
+    if (message?.type === "resize.error") {
+      return;
+    }
+
     if (message?.type === "error") {
-      terminalError.value = String(message.error || "Terminal stream failed.");
+      const error = String(message.error || "Terminal stream failed.");
+      if (terminalResizeErrorMessage(error)) {
+        return;
+      }
+      terminalError.value = error;
     }
   }
 

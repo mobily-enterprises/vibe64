@@ -44,15 +44,14 @@
           </template>
           <template v-else-if="commandTerminalFailed">
             <span>{{ commandFailureSummary }}</span>
-            <v-textarea
+            <AiStudioAutopilotPromptTextarea
               v-if="canRequestCommandAiFix"
               v-model="commandFailureNote"
-              auto-grow
               class="studio-autopilot__command-fix-note"
-              density="compact"
-              hide-details
+              :disabled="commandFixSubmitting"
               label="Optional note for Codex"
               rows="3"
+              :session-id="sessionId"
               variant="outlined"
             />
             <div class="studio-autopilot__actions">
@@ -143,9 +142,8 @@
         class="studio-autopilot__issue-form"
         @submit.prevent="issueDiscussion.submitInitialRequest"
       >
-        <v-textarea
+        <AiStudioAutopilotPromptTextarea
           v-model="issueDiscussion.requestText"
-          auto-grow
           class="studio-autopilot__issue-input"
           :disabled="page.busy"
           :error-messages="issueDiscussion.failure ? [issueDiscussion.failure] : []"
@@ -153,6 +151,7 @@
           :label="issueDiscussion.inputLabel"
           persistent-hint
           rows="5"
+          :session-id="sessionId"
           variant="outlined"
         />
 
@@ -160,7 +159,7 @@
           <v-btn
             color="primary"
             variant="flat"
-            :disabled="!issueDiscussion.canSubmit"
+            :disabled="page.busy || !issueDiscussion.canSubmit"
             :loading="issueDiscussion.waiting"
             :prepend-icon="mdiSend"
             :title="issueDiscussion.submitTitle"
@@ -179,6 +178,7 @@
         intro="Codex needs a few answers before it can continue."
         :loading="codexQuestionSubmitting"
         :questions="codexQuestionList"
+        :session-id="sessionId"
         @answer-change="codexQuestionExchange.setAnswer"
         @cancel="codexQuestionExchange.cancel"
         @submit="codexQuestionExchange.submitAnswers"
@@ -332,13 +332,13 @@
           class="studio-autopilot__agent-form"
           @submit.prevent="submitAgentConversation"
         >
-          <v-textarea
+          <AiStudioAutopilotPromptTextarea
             v-model="agentConversationRequest"
-            auto-grow
             class="studio-autopilot__issue-input"
             :disabled="running"
             label="What do you want to ask Codex?"
             rows="5"
+            :session-id="sessionId"
             variant="outlined"
           />
 
@@ -441,6 +441,7 @@
             :fix-command-failure="codexTerminal.fixCommandFailure"
             :session="session"
             :window-displayed="active"
+            workflow-command
           />
 
           <v-btn
@@ -484,13 +485,13 @@
           class="studio-autopilot__review-feedback"
           @submit.prevent="submitReviewFeedback"
         >
-          <v-textarea
+          <AiStudioAutopilotPromptTextarea
             v-model="reviewFeedback"
-            auto-grow
             class="studio-autopilot__issue-input"
             :disabled="reviewControlsBusy"
             :label="reviewFeedbackInputLabel"
             rows="4"
+            :session-id="sessionId"
             variant="outlined"
           />
 
@@ -665,6 +666,7 @@ import {
 } from "@mdi/js";
 import AiStudioLaunchControls from "@/components/studio/AiStudioLaunchControls.vue";
 import AiStudioAutopilotNavigation from "@/components/studio/ai-studio-session/AiStudioAutopilotNavigation.vue";
+import AiStudioAutopilotPromptTextarea from "@/components/studio/ai-studio-session/AiStudioAutopilotPromptTextarea.vue";
 import AiStudioAutopilotQuestionForm from "@/components/studio/ai-studio-session/AiStudioAutopilotQuestionForm.vue";
 import AiStudioHeadlessCommandOutput from "@/components/studio/ai-studio-session/AiStudioHeadlessCommandOutput.vue";
 import AiStudioReportPreview from "@/components/studio/ai-studio-session/AiStudioReportPreview.vue";
@@ -833,6 +835,7 @@ const codexQuestionFailure = computed(() => codexQuestionExchange.failure.value)
 const codexQuestionList = computed(() => codexQuestionExchange.questions.value);
 const codexQuestionSubmitting = computed(() => codexQuestionExchange.submitting.value);
 const screenKind = computed(() => screenState.value.kind);
+const sessionId = computed(() => String(props.session?.sessionId || ""));
 const screenMessage = computed(() => String(screenState.value.message || ""));
 const screenButtonLabel = computed(() => String(screenState.value.buttonLabel || ""));
 const reportScreenVisible = computed(() => ["review", "merge", "finished"].includes(screenKind.value));
@@ -840,6 +843,9 @@ const reviewKind = computed(() => String(screenState.value.reviewKind || ""));
 const implementationReviewVisible = computed(() => screenKind.value === "review" && reviewKind.value === "implementation");
 const finalReviewVisible = computed(() => screenKind.value === "review" && reviewKind.value === "final");
 const displayStatusText = computed(() => {
+  if (issueDiscussionWaiting.value) {
+    return issueDiscussion.statusText;
+  }
   return screenKind.value === "issue"
     ? issueDiscussion.statusText
     : screenState.value.title;

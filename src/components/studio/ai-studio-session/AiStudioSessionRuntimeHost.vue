@@ -277,6 +277,8 @@ function emitToolbarControls() {
   emit("toolbar-controls-ready", {
     controls: {
       abandon: dialogs.abandon,
+      diff: dialogs.diff,
+      review,
       fixCommandFailure: codexTerminal.fixCommandFailure
     },
     sessionId: props.sessionId

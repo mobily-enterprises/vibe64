@@ -45,6 +45,16 @@ function aiStudioSessionLimits({
   };
 }
 
+function inspectDiffButtonVisible({
+  diff = {},
+  selectedSession = null,
+  sessionMode = ""
+} = {}) {
+  return sessionMode === "inspect" &&
+    selectedSession?.worktreeReady === true &&
+    typeof diff.openDialog === "function";
+}
+
 function enrichAiStudioSessionForDisplay(session = null) {
   if (!session) {
     return null;
@@ -254,6 +264,7 @@ export {
   commandMessage,
   currentStepDisabledReason,
   enrichAiStudioSessionForDisplay,
+  inspectDiffButtonVisible,
   shortAiStudioSessionId,
   visibleAiStudioSessions
 };

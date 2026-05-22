@@ -4,6 +4,7 @@ import {
   browserCanOpenTarget,
   launchBrowserTargetName,
   launchTargetWorktreePath,
+  launchTerminalAiFixAvailable,
   openLaunchBrowserTarget,
   openPendingLaunchBrowserWindow,
   openReadyLaunchBrowserTarget
@@ -96,6 +97,23 @@ describe("AI Studio launch controls", () => {
       sessionId: "session-1",
       worktreeReady: true
     })).toBe("/workspace/.ai-studio/sessions/session-1/worktree");
+  });
+
+  it("only offers AI repair for workflow-owned launch commands", () => {
+    const fixCommandFailure = vi.fn();
+
+    expect(launchTerminalAiFixAvailable({
+      fixCommandFailure,
+      workflowCommand: false
+    })).toBe(false);
+    expect(launchTerminalAiFixAvailable({
+      fixCommandFailure,
+      workflowCommand: true
+    })).toBe(true);
+    expect(launchTerminalAiFixAvailable({
+      fixCommandFailure: "not a handler",
+      workflowCommand: true
+    })).toBe(false);
   });
 });
 

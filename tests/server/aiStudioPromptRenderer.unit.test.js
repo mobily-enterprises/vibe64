@@ -339,6 +339,9 @@ test("execute and deslop standard prompts explicitly point Codex at the generate
 
   assert.match(executePlan.prompt, /Code index policy:/u);
   assert.match(executePlan.prompt, /If session metadata includes `code_index_path`, read that generated code index before adding helpers/u);
+  assert.match(executePlan.prompt, /Fast check policy:/u);
+  assert.match(executePlan.prompt, /Do not run the full test suite/u);
+  assert.match(executePlan.prompt, /Run only the narrow fast check or checks that directly prove the implementation/u);
   assert.match(executePlan.prompt, /\.jskit\/helper-map\.md/u);
   assert.match(runDeslop.prompt, /Code index policy:/u);
   assert.match(runDeslop.prompt, /If session metadata includes `code_index_path`, read that generated code index before reviewing helper-like code/u);

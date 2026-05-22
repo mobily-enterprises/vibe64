@@ -1,6 +1,9 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, watch } from "vue";
 
 import { useCodexTerminalSocket } from "@/composables/useCodexTerminalSocket.js";
+import {
+  terminalResizeErrorMessage
+} from "@/lib/studioTerminalSize.js";
 
 function terminalSessionNotFound(error = "") {
   return String(error || "").toLowerCase().includes("terminal session not found");
@@ -103,8 +106,15 @@ function useCodexTerminalSessionLifecycle({
       return;
     }
 
+    if (message?.type === "resize.error") {
+      return;
+    }
+
     if (message?.type === "error") {
       const error = String(message.error || "Terminal stream failed.");
+      if (terminalResizeErrorMessage(error)) {
+        return;
+      }
       if (terminalSessionNotFound(error)) {
         void recoverMissingTerminal();
         return;

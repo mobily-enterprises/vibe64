@@ -22,4 +22,7 @@ Missing information policy:
 Code index policy:
 If session metadata includes `code_index_path`, read that generated code index before adding helpers, shared methods, service functions, provider wiring, or other reusable project code. Prefer existing helpers and structures from that index over redefining them.
 
-Execute the accepted plan directly in the target project workspace. Keep the work scoped to the session goal, preserve existing project conventions, and avoid unrelated refactors. Run only relevant checks for the work you changed. When finished, report what changed, which checks ran, and what remains blocked or unverified.
+Fast check policy:
+Do not run the full test suite, full project verification, slow end-to-end checks, or broad UI review in this step. Run only the narrow fast check or checks that directly prove the implementation you changed. Leave broad validation to the dedicated validation and review steps.
+
+Execute the accepted plan directly in the target project workspace. Keep the work scoped to the session goal, preserve existing project conventions, and avoid unrelated refactors. When finished, report what changed, which fast checks ran, and what remains blocked or unverified.

@@ -65,6 +65,22 @@ describe("useAiStudioAutopilotIssueDiscussion", () => {
     expect(context.controller.draftBody.value).toBe("Build a report screen.");
   });
 
+  it("does not submit a new issue prompt while Codex is already active", async () => {
+    const context = createIssueDiscussionContext({
+      codexBusy: true
+    });
+    context.controller.requestText.value = "Add booking reports";
+
+    expect(context.controller.canSubmit.value).toBe(false);
+
+    await context.controller.submitInitialRequest();
+
+    expect(context.codexTerminal.injectPrompt).not.toHaveBeenCalled();
+    expect(context.controller.failure.value).toBe(
+      "Codex is already working in this session. Switch to Inspect to continue the current conversation, or wait for it to finish."
+    );
+  });
+
   it("renders questions.json and submits answers back to Codex", async () => {
     const context = createIssueDiscussionContext();
     context.controller.requestText.value = "Add booking reports";
@@ -140,6 +156,36 @@ describe("useAiStudioAutopilotIssueDiscussion", () => {
     expect(context.controller.reviewing.value).toBe(true);
     expect(context.controller.draftWord.value).toBe("Reports");
     expect(context.controller.draftBody.value).toBe("Build admin-only booking reports.");
+  });
+
+  it("does not submit clarification answers while Codex is already active", async () => {
+    const codexTerminal = {
+      busy: ref(true),
+      injectPrompt: vi.fn(async () => true),
+      working: ref(false)
+    };
+    const questionExchange = useAiStudioCodexQuestionExchange({
+      codexTerminal
+    });
+
+    questionExchange.start({
+      questions: [
+        {
+          id: "q1",
+          text: "Should cancelled bookings be included?"
+        }
+      ]
+    });
+    questionExchange.setAnswer("q1", "No.");
+
+    expect(questionExchange.canSubmit.value).toBe(false);
+
+    await questionExchange.submitAnswers();
+
+    expect(codexTerminal.injectPrompt).not.toHaveBeenCalled();
+    expect(questionExchange.failure.value).toBe(
+      "Codex is already working in this session. Wait for it to finish before sending answers."
+    );
   });
 
   it("cancels clarification questions and ignores that request id", async () => {
@@ -224,6 +270,7 @@ describe("useAiStudioAutopilotIssueDiscussion", () => {
 });
 
 function createIssueDiscussionContext({
+  codexBusy = false,
   currentStep = "issue_file_created",
   initialAutopilotArtifacts = {
     issueDraft: null,
@@ -256,8 +303,10 @@ function createIssueDiscussionContext({
   };
   const autopilotArtifacts = ref(initialAutopilotArtifacts);
   const codexTerminal = {
+    busy: ref(codexBusy),
     injectPrompt: vi.fn(async () => true),
-    promptInjectionError: ref("")
+    promptInjectionError: ref(""),
+    working: ref(false)
   };
   const questionExchange = useAiStudioCodexQuestionExchange({
     codexTerminal

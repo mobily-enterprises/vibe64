@@ -54,7 +54,6 @@
               :class="{
                 'ai-studio-shell-controls__terminal--active': tab.id === activeShellTabId
               }"
-              :ai-fix-available="Boolean(fixCommandFailure)"
               draggable
               :reuse-running="false"
               terminal-kind="shell"
@@ -65,7 +64,6 @@
               @closed="closeShellTab(tab.id)"
               @drag-start="startDrag"
               @expanded-changed="handleTerminalExpandedChanged(tab.id, $event)"
-              @fix-requested="handleFixRequested"
               @running-changed="handleRunningChanged(tab.id, $event)"
             >
               <template #heading>
@@ -157,10 +155,6 @@ const props = defineProps({
   busy: {
     type: Boolean,
     default: false
-  },
-  fixCommandFailure: {
-    type: Function,
-    default: null
   },
   session: {
     type: Object,
@@ -341,10 +335,6 @@ function handleTerminalExpandedChanged(tabId = "", expanded = true) {
   if (terminalMinimized.value && typeof document !== "undefined") {
     document.activeElement?.blur?.();
   }
-}
-
-function handleFixRequested(payload) {
-  return props.fixCommandFailure?.(payload);
 }
 
 function handleShellShortcut(event) {

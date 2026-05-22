@@ -2,6 +2,9 @@ import { computed, ref } from "vue";
 import {
   autopilotQuestionAnswersPrompt
 } from "@/lib/aiStudioAutopilotPromptFiles.js";
+import {
+  readRefOrGetterValue
+} from "@/lib/vueRefOrGetterValue.js";
 
 function normalizeQuestion(value = {}, index = 0) {
   const text = String(typeof value === "string" ? value : value.text || value.question || "").trim();
@@ -36,11 +39,14 @@ function useAiStudioCodexQuestionExchange({
   const failure = ref("");
   const submitting = ref(false);
 
+  const codexActive = computed(() => readRefOrGetterValue(codexTerminal?.busy) === true ||
+    readRefOrGetterValue(codexTerminal?.working) === true);
   const ownerId = computed(() => String(activeExchange.value?.ownerId || ""));
   const questions = computed(() => activeExchange.value?.questions || []);
   const hasQuestions = computed(() => questions.value.length > 0);
   const canSubmit = computed(() => Boolean(
     hasQuestions.value &&
+    !codexActive.value &&
     !submitting.value &&
     questions.value.every((question) => String(question.answer || "").trim())
   ));
@@ -132,10 +138,12 @@ function useAiStudioCodexQuestionExchange({
       };
     }
     if (!canSubmit.value) {
-      failure.value = "Answer each question before continuing.";
+      failure.value = codexActive.value
+        ? "Codex is already working in this session. Wait for it to finish before sending answers."
+        : "Answer each question before continuing.";
       return {
         ok: false,
-        reason: "incomplete"
+        reason: codexActive.value ? "codex_active" : "incomplete"
       };
     }
 
