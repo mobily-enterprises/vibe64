@@ -426,6 +426,8 @@ function currentStepHelperInstruction({
       stepStatus
     }),
     `- Meaning of need_input: ${needsInputMeaning}`,
+    "- Before calling the helper for need_input, write the same question or blocker in normal Codex response text so Inspect users can read it directly in the terminal.",
+    "- Keep the visible question text and the helper `message` equivalent; do not make the UI-only helper message more complete than the terminal-visible response.",
     "",
     "After the helper reports success, stop. Do not write workflow artifacts directly for this step."
   ].join("\n");
