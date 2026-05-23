@@ -1,6 +1,0 @@
-{{systemStandard}}
-
-Generic Node web app deslop-resolution guidance:
-- Resolve outstanding findings while preserving the existing package manager, source layout, client library, and script contract.
-- Avoid broad framework migrations unless the issue or PR explicitly requires them.
-- Re-run only the focused package scripts that prove the resolved findings.

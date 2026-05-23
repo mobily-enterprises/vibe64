@@ -14,6 +14,9 @@ function aiStudioErrorResponse(error, {
       }
     ],
     ok: false,
+    currentStep: error?.currentStep || "",
+    expectedInput: error?.expectedInput || null,
+    stepStatus: error?.stepStatus || "",
     projectConfig: error?.projectConfig || null,
     projectType: error?.projectType || null,
     setup: error?.setup || null
@@ -41,6 +44,7 @@ function aiStudioStatusCode(response, { missingStatus = 404 } = {}) {
     code === "ai_studio_command_requires_terminal" ||
     code === "ai_studio_project_config_missing" ||
     code === "ai_studio_setup_not_ready" ||
+    code === "ai_studio_step_input_state_changed" ||
     code === "ai_studio_step_not_ready"
   ) {
     return 409;

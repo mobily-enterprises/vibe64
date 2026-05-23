@@ -67,13 +67,7 @@ describe("AI Studio session view model", () => {
         outcome: "merged"
       },
       prUrl: "https://github.com/example/app/pull/34",
-      artifactReadiness: {
-        "report.md": {
-          nonEmpty: true
-        }
-      },
-      artifactsRoot: "/workspace/.ai-studio/sessions/active/session/artifacts",
-      pullRequestPath: "/workspace/.ai-studio/sessions/active/session/artifacts/pull_request.md",
+      reportPath: "/workspace/.ai-studio/sessions/active/session/artifacts/report.md",
       sessionId: "2026-05-12_13-07-36",
       sessionRoot: "/workspace/.ai-studio/sessions/active/2026-05-12_13-07-36",
       worktree: "/workspace/.ai-studio/sessions/active/2026-05-12_13-07-36/worktree",
@@ -94,7 +88,6 @@ describe("AI Studio session view model", () => {
       "pr",
       "blueprint",
       "session-report",
-      "pull-request-draft",
       "pr-outcome"
     ]);
     expect(facts.find((fact) => fact.key === "step")?.value).toBe("Make plan");

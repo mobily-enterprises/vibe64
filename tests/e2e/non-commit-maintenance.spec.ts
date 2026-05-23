@@ -78,9 +78,6 @@ test.describe("non-commit maintenance agent chat", () => {
     await page.goto(`${BASE_URL}/home`);
     await createNonCommitMaintenanceSession(page);
 
-    await expect(page.getByRole("heading", { name: "Let's get started" })).toBeVisible();
-    await page.getByRole("button", { name: "Let's start" }).click();
-
     await expect(page.getByRole("heading", { name: "Talk to Codex" })).toBeVisible();
     await page.getByLabel("What do you want to ask Codex?").fill("Tell me what maintenance is needed.");
     await page.getByRole("button", { name: "Ask Codex" }).click();
@@ -93,7 +90,6 @@ test.describe("non-commit maintenance agent chat", () => {
     await page.goto(`${BASE_URL}/home`);
     await createNonCommitMaintenanceSession(page);
 
-    await page.getByRole("button", { name: "Let's start" }).click();
     await expect(page.getByRole("heading", { name: "Talk to Codex" })).toBeVisible();
 
     await page.getByLabel("What do you want to ask Codex?").fill("Really?");
@@ -103,12 +99,14 @@ test.describe("non-commit maintenance agent chat", () => {
     await page.getByLabel("What do you want to ask Codex?").fill("Ask me three random questions.");
     await page.getByRole("button", { name: "Ask Codex" }).click();
 
-    await expect(page.getByText(RANDOM_QUESTIONS[0])).toBeVisible();
-    const answerFields = page.getByLabel("Your answer");
-    await answerFields.nth(0).fill("not much");
-    await answerFields.nth(1).fill("Pescara");
-    await answerFields.nth(2).fill("guitar");
-    await page.getByRole("button", { name: "Continue" }).click();
+    const autopilot = page.locator(".studio-autopilot");
+    await expect(autopilot.getByText("Answer these before continuing.")).toBeVisible();
+    await autopilot.getByRole("textbox", { name: "Response" }).fill([
+      "Q1: not much",
+      "Q2: Pescara",
+      "Q3: guitar"
+    ].join("\n"));
+    await autopilot.getByRole("button", { name: "Save response" }).click();
 
     const responseRegion = await expectMarkdownResponsePreview(page, QUESTION_RESPONSE_TEXT);
     await expect(responseRegion).not.toContainText(REALLY_RESPONSE_TEXT);
@@ -135,7 +133,6 @@ test.describe("non-commit maintenance agent chat", () => {
     await inputDialog.getByRole("button", { name: "Continue" }).click();
 
     await expectMarkdownResponsePreview(page);
-    await expect(page.getByRole("button", { name: "Edit AI response" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Next" })).toBeEnabled();
 
     await page.getByRole("button", { name: "Quit inspect" }).click();
@@ -165,28 +162,13 @@ async function createNonCommitMaintenanceSession(page: Page) {
 }
 
 async function mockAgentChatRoutes(page: Page, runtime: AiStudioSessionRuntime) {
-  let autopilotPayload = emptyAutopilotPayload("");
-
-  await page.exposeFunction("__studioHandleCodexInput", async ({ data, sessionId }: { data?: string; sessionId?: string } = {}) => {
-    const normalizedSessionId = String(sessionId || SESSION_ID);
-    if (!String(data || "").includes("Pescara")) {
-      return null;
-    }
-
-    autopilotPayload = await writeAgentResponse(
-      runtime,
-      normalizedSessionId,
-      QUESTION_RESPONSE_MARKDOWN
-    );
-    return autopilotPayloadForSession(autopilotPayload, normalizedSessionId);
-  });
-
-  async function pushAutopilotArtifacts(sessionId: string) {
+  async function pushArtifactReadiness(sessionId: string) {
+    const payload = await artifactReadinessPayload(runtime, sessionId);
     await page.evaluate((payload) => {
       (window as unknown as {
-        __studioPushAutopilotArtifacts: (payload: unknown) => void;
-      }).__studioPushAutopilotArtifacts(payload);
-    }, autopilotPayloadForSession(autopilotPayload, sessionId)).catch(() => null);
+        __studioPushArtifactReadiness: (payload: unknown) => void;
+      }).__studioPushArtifactReadiness(payload);
+    }, payload).catch(() => null);
   }
 
   await page.route("**/api/ai-studio/sessions**", async (route) => {
@@ -220,10 +202,18 @@ async function mockAgentChatRoutes(page: Page, runtime: AiStudioSessionRuntime) 
       const actionInput = request.postDataJSON() || {};
       const response = await runtime.runAction(sessionId, tail[1], actionInput);
       if (tail[1] === "agent_conversation") {
-        if (String(actionInput.conversationRequest || "").toLowerCase().includes("three random questions")) {
-          autopilotPayload = await writeAgentQuestions(runtime, sessionId);
+        const session = await runtime.getSession(sessionId);
+        const priorResponse = String(session.stepMachine?.response || "");
+        if (priorResponse.includes("Pescara")) {
+          await writeAgentResponse(
+            runtime,
+            sessionId,
+            QUESTION_RESPONSE_MARKDOWN
+          );
+        } else if (String(actionInput.conversationRequest || "").toLowerCase().includes("three random questions")) {
+          await writeAgentQuestions(runtime, sessionId);
         } else {
-          autopilotPayload = await writeAgentResponse(
+          await writeAgentResponse(
             runtime,
             sessionId,
             responseMarkdownForRequest(actionInput.conversationRequest)
@@ -233,15 +223,21 @@ async function mockAgentChatRoutes(page: Page, runtime: AiStudioSessionRuntime) 
           ...await runtime.getSession(sessionId),
           actionResult: response.actionResult
         });
-        await pushAutopilotArtifacts(sessionId);
+        await pushArtifactReadiness(sessionId);
         return;
       }
       await fulfillJson(route, response);
       return;
     }
 
-    if (method === "GET" && tail[0] === "artifacts") {
-      await fulfillJson(route, await artifactPayload(runtime, sessionId, String(url.searchParams.get("actionId") || "")));
+    if (method === "POST" && tail[0] === "current-step" && tail[1] === "input") {
+      await fulfillJson(route, await runtime.submitCurrentStepInput(sessionId, request.postDataJSON() || {}));
+      await pushArtifactReadiness(sessionId);
+      return;
+    }
+
+    if (method === "GET" && tail[0] === "artifact-preview") {
+      await fulfillJson(route, await artifactPreviewPayload(runtime, sessionId, String(url.searchParams.get("previewId") || "")));
       return;
     }
 
@@ -261,30 +257,23 @@ async function mockAgentChatRoutes(page: Page, runtime: AiStudioSessionRuntime) 
       return;
     }
 
-    if (method === "GET" && tail[0] === "autopilot-artifacts") {
-      await fulfillJson(route, autopilotPayloadForSession(autopilotPayload, sessionId));
+    if (method === "GET" && tail[0] === "artifact-readiness") {
+      await fulfillJson(route, await artifactReadinessPayload(runtime, sessionId));
       return;
     }
 
-    if (method === "DELETE" && tail[0] === "autopilot-artifacts") {
-      await runtime.store.deleteArtifacts(sessionId, [
-        "input_format.json",
-        "response.md"
-      ]);
-      autopilotPayload = emptyAutopilotPayload(sessionId);
-      await fulfillJson(route, autopilotPayload);
-      await pushAutopilotArtifacts(sessionId);
-      return;
-    }
-
-    if (method === "GET" && tail[0] === "autopilot-artifacts" && tail[1] === "stream") {
-      await fulfillJson(route, autopilotPayloadForSession(autopilotPayload, sessionId));
+    if (method === "GET" && tail[0] === "artifact-readiness" && tail[1] === "stream") {
+      await fulfillJson(route, await artifactReadinessPayload(runtime, sessionId));
       return;
     }
 
     if (method === "POST" && tail[0] === "command-terminal") {
-      const actionId = String(request.postDataJSON()?.actionId || "");
+      const input = request.postDataJSON() || {};
+      const actionId = String(input.actionId || "");
       await applyCommandResult(runtime, sessionId, actionId);
+      if (input.advanceOnSuccess === true) {
+        await advanceSessionIfReady(runtime, sessionId);
+      }
       await fulfillJson(route, {
         commandPreview: actionId,
         id: `cmd-${actionId}`,
@@ -365,76 +354,43 @@ async function applyCommandResult(runtime: AiStudioSessionRuntime, sessionId: st
   }
 }
 
+async function advanceSessionIfReady(runtime: AiStudioSessionRuntime, sessionId: string) {
+  const session = await runtime.getSession(sessionId);
+  if (session.next?.visible === true && session.next.enabled === true && session.next.stepId) {
+    await runtime.advance(sessionId);
+  }
+}
+
 async function writeAgentResponse(
   runtime: AiStudioSessionRuntime,
   sessionId: string,
   markdown = RESPONSE_MARKDOWN
 ) {
-  await runtime.store.writeArtifact(sessionId, RESPONSE_ARTIFACT, markdown);
-  const inputFormat = {
-    inputKind: "none",
-    message: "Codex response is ready.",
-    questions: [],
-    status: "done"
-  };
-  await runtime.store.writeArtifact(sessionId, "input_format.json", `${JSON.stringify(inputFormat, null, 2)}\n`);
-  const updatedSession = await runtime.getSession(sessionId);
-  const payload = {
-    artifactReadiness: updatedSession.artifactReadiness,
-    conversation: {
-      history: [
-        {
-          inputFormat,
-          response: markdown.trim()
-        }
-      ],
-      inputFormat,
+  const session = await runtime.getSession(sessionId);
+  await runtime.submitCurrentStepInput(sessionId, {
+    fields: {
       response: markdown
     },
-    inputFormat,
-    issueDraft: null,
-    ok: true,
-    promptDone: null,
-    questions: null,
-    response: markdown,
-    sessionId
-  };
-  return payload;
+    kind: "ready",
+    source: "codex",
+    stepId: session.currentStep,
+    stepStatus: session.stepMachine?.status || ""
+  });
 }
 
 async function writeAgentQuestions(runtime: AiStudioSessionRuntime, sessionId: string) {
-  const inputFormat = {
-    inputKind: "questions",
-    message: "Answer these before continuing.",
-    questions: RANDOM_QUESTIONS.map((text, index) => ({
-      id: `q${index + 1}`,
-      text
-    })),
-    status: "awaiting_input"
-  };
-  await runtime.store.writeArtifact(sessionId, RESPONSE_ARTIFACT, "Answer these before continuing.\n");
-  await runtime.store.writeArtifact(sessionId, "input_format.json", `${JSON.stringify(inputFormat, null, 2)}\n`);
-  const updatedSession = await runtime.getSession(sessionId);
-  return {
-    artifactReadiness: updatedSession.artifactReadiness,
-    conversation: {
-      history: [
-        {
-          inputFormat,
-          response: "Answer these before continuing."
-        }
-      ],
-      inputFormat,
-      response: "Answer these before continuing.\n"
-    },
-    inputFormat,
-    issueDraft: null,
-    ok: true,
-    promptDone: null,
-    questions: null,
-    response: "Answer these before continuing.\n",
-    sessionId
-  };
+  const session = await runtime.getSession(sessionId);
+  await runtime.submitCurrentStepInput(sessionId, {
+    kind: "need_input",
+    message: [
+      "Answer these before continuing.",
+      "",
+      ...RANDOM_QUESTIONS.map((question, index) => `[Q${index + 1}] ${question}`)
+    ].join("\n"),
+    source: "codex",
+    stepId: session.currentStep,
+    stepStatus: session.stepMachine?.status || ""
+  });
 }
 
 function responseMarkdownForRequest(conversationRequest = "") {
@@ -443,29 +399,25 @@ function responseMarkdownForRequest(conversationRequest = "") {
     : RESPONSE_MARKDOWN;
 }
 
-async function artifactPayload(runtime: AiStudioSessionRuntime, sessionId: string, actionId: string) {
+async function artifactPreviewPayload(runtime: AiStudioSessionRuntime, sessionId: string, previewId: string) {
   const session = await runtime.getSession(sessionId);
-  const action = session.actions.find((candidate) => candidate.id === actionId);
-  const artifacts = {
-    [RESPONSE_ARTIFACT]: await runtime.store.readArtifact(sessionId, RESPONSE_ARTIFACT)
-  };
-  const artifactFields = action?.artifactFields || [];
+  const text = previewId === "ai_response"
+    ? await runtime.store.readArtifact(sessionId, RESPONSE_ARTIFACT)
+    : "";
   return {
     ...session,
-    actionId,
-    artifactFields,
-    artifactPaths: {
-      [RESPONSE_ARTIFACT]: path.join(session.artifactsRoot, RESPONSE_ARTIFACT)
-    },
-    artifactStates: {
-      [RESPONSE_ARTIFACT]: {
-        disabledReason: "",
-        editable: true
-      }
-    },
-    artifacts,
-    editableArtifacts: artifactFields.map((field) => field.name),
+    previewId,
+    text: text.trim(),
     ok: true
+  };
+}
+
+async function artifactReadinessPayload(runtime: AiStudioSessionRuntime, sessionId: string) {
+  const session = await runtime.getSession(sessionId);
+  return {
+    artifactReadiness: session.artifactReadiness,
+    ok: true,
+    sessionId
   };
 }
 
@@ -487,7 +439,7 @@ async function mockAgentChatBrowserPrimitives(page: Page) {
         super();
         this.url = String(url || "");
         const pathname = new URL(this.url, window.location.href).pathname;
-        const match = /\/sessions\/([^/]+)\/autopilot-artifacts\/stream/u.exec(pathname);
+        const match = /\/sessions\/([^/]+)\/artifact-readiness\/stream/u.exec(pathname);
         if (!match) {
           return new OriginalEventSource(url);
         }
@@ -588,22 +540,6 @@ async function mockAgentChatBrowserPrimitives(page: Page) {
             chunk: "\nCodex received the prompt.\n",
             type: "output"
           });
-          const data = String(message.data || "");
-          if (data.includes("AI Studio Autopilot clarification answers:")) {
-            void Promise.resolve((window as unknown as {
-              __studioHandleCodexInput?: (input: { data: string; sessionId: string }) => Promise<unknown>;
-              __studioPushAutopilotArtifacts?: (payload: unknown) => void;
-            }).__studioHandleCodexInput?.({
-              data,
-              sessionId: this.sessionId
-            })).then((payload) => {
-              if (payload) {
-                (window as unknown as {
-                  __studioPushAutopilotArtifacts?: (payload: unknown) => void;
-                }).__studioPushAutopilotArtifacts?.(payload);
-              }
-            });
-          }
         }
       }
 
@@ -620,11 +556,11 @@ async function mockAgentChatBrowserPrimitives(page: Page) {
     }
 
     (window as unknown as {
-      __studioPushAutopilotArtifacts: (payload: any) => void;
-    }).__studioPushAutopilotArtifacts = (payload) => {
+      __studioPushArtifactReadiness: (payload: any) => void;
+    }).__studioPushArtifactReadiness = (payload) => {
       const sessionId = String(payload?.sessionId || "");
       for (const source of eventSourcesBySessionId[sessionId] || []) {
-        source.dispatchEvent(new MessageEvent("autopilot-artifacts.updated", {
+        source.dispatchEvent(new MessageEvent("artifact-readiness.updated", {
           data: JSON.stringify(payload)
         }));
       }
@@ -633,32 +569,6 @@ async function mockAgentChatBrowserPrimitives(page: Page) {
     window.EventSource = MockEventSource as unknown as typeof EventSource;
     window.WebSocket = MockWebSocket as unknown as typeof WebSocket;
   });
-}
-
-function autopilotPayloadForSession(payload = emptyAutopilotPayload(""), sessionId: string) {
-  return {
-    ...emptyAutopilotPayload(sessionId),
-    ...payload,
-    sessionId
-  };
-}
-
-function emptyAutopilotPayload(sessionId: string) {
-  return {
-    artifactReadiness: {},
-    conversation: {
-      history: [],
-      inputFormat: null,
-      response: ""
-    },
-    inputFormat: null,
-    issueDraft: null,
-    ok: true,
-    promptDone: null,
-    questions: null,
-    response: "",
-    sessionId
-  };
 }
 
 function actionLabel(actionId: string) {

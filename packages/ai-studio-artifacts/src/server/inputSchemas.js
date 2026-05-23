@@ -1,9 +1,9 @@
 import { createSchema } from "json-rest-schema";
 import { deepFreeze } from "@jskit-ai/kernel/shared/support/deepFreeze";
 
-const artifactReadInputValidator = deepFreeze({
+const artifactPreviewReadInputValidator = deepFreeze({
   schema: createSchema({
-    actionId: {
+    previewId: {
       type: "string",
       noTrim: false,
       required: true
@@ -17,91 +17,84 @@ const artifactReadInputValidator = deepFreeze({
   mode: "patch"
 });
 
-const artifactsInputValidator = deepFreeze({
+const currentStepInputValidator = deepFreeze({
   schema: createSchema({
-    actionId: {
-      type: "string",
-      noTrim: false,
-      required: true
-    },
-    artifacts: {
+    fields: {
       type: "object",
-      additionalProperties: true,
+      additionalProperties: true
+    },
+    kind: {
+      type: "string",
+      noTrim: false
+    },
+    message: {
+      type: "string",
+      noTrim: false
+    },
+    source: {
+      type: "string",
+      noTrim: false
+    },
+    stepId: {
+      type: "string",
+      noTrim: false,
       required: true
+    },
+    stepStatus: {
+      type: "string",
+      noTrim: false,
+      required: true
+    },
+    text: {
+      type: "string",
+      noTrim: false
     }
   }),
   mode: "patch"
 });
 
-const issueArtifactsInputValidator = deepFreeze({
+const currentStepInputSaveValidator = deepFreeze({
   schema: createSchema({
-    body: {
-      type: "string",
-      noTrim: false,
-      required: true
-    },
-    title: {
-      type: "string",
-      noTrim: false,
-      required: true
-    },
-    word: {
-      type: "string",
-      noTrim: false,
-      required: true
-    }
-  }),
-  mode: "patch"
-});
-
-const artifactSaveInputValidator = deepFreeze({
-  schema: createSchema({
-    actionId: {
-      type: "string",
-      noTrim: false,
-      required: true
-    },
-    artifacts: {
+    fields: {
       type: "object",
-      additionalProperties: true,
-      required: true
+      additionalProperties: true
     },
-    sessionId: {
+    kind: {
       type: "string",
-      noTrim: false,
-      required: true
-    }
-  }),
-  mode: "patch"
-});
-
-const issueArtifactSaveInputValidator = deepFreeze({
-  schema: createSchema({
-    body: {
+      noTrim: false
+    },
+    message: {
       type: "string",
-      noTrim: false,
-      required: true
+      noTrim: false
     },
     sessionId: {
       type: "string",
       noTrim: false,
       required: true
     },
-    title: {
+    source: {
+      type: "string",
+      noTrim: false
+    },
+    stepId: {
       type: "string",
       noTrim: false,
       required: true
     },
-    word: {
+    stepStatus: {
       type: "string",
       noTrim: false,
       required: true
+    },
+    text: {
+      type: "string",
+      noTrim: false
     }
   }),
   mode: "patch"
 });
 
-const issueArtifactClearInputValidator = deepFreeze({
+const sessionIdInputValidator = deepFreeze({
   schema: createSchema({
     sessionId: {
       type: "string",
@@ -113,10 +106,8 @@ const issueArtifactClearInputValidator = deepFreeze({
 });
 
 export {
-  artifactReadInputValidator,
-  artifactsInputValidator,
-  artifactSaveInputValidator,
-  issueArtifactClearInputValidator,
-  issueArtifactsInputValidator,
-  issueArtifactSaveInputValidator
+  artifactPreviewReadInputValidator,
+  currentStepInputSaveValidator,
+  currentStepInputValidator,
+  sessionIdInputValidator
 };

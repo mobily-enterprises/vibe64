@@ -1,6 +1,0 @@
-{{systemStandard}}
-
-JSKIT-specific pull-request-file guidance:
-- Summarize the accepted issue, implementation, JSKIT provider/command/CRUD or UI surfaces changed, and verification performed.
-- Call out package scripts, app blueprint changes, setup checks, and remaining framework risks when relevant.
-- Keep the pull request body focused on what a reviewer needs to merge safely.

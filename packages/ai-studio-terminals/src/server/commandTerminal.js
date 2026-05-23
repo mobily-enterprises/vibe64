@@ -106,6 +106,7 @@ function commandTerminalArgs({
 }
 
 async function writeActionTerminalResult({
+  advanceOnSuccess = false,
   action = {},
   exitCode,
   input = {},
@@ -163,6 +164,36 @@ async function writeActionTerminalResult({
     status: actionResult.status,
     stepId: session.currentStep
   });
+  if (typeof runtime.recordCommandActionFinished === "function") {
+    await runtime.recordCommandActionFinished(session, action.id, actionResult);
+  }
+  await advanceSessionAfterSuccessfulCommand({
+    advanceOnSuccess,
+    completed,
+    runtime,
+    session
+  });
+}
+
+async function advanceSessionAfterSuccessfulCommand({
+  advanceOnSuccess = false,
+  completed = false,
+  runtime,
+  session = {}
+} = {}) {
+  if (!advanceOnSuccess || !completed || typeof runtime?.advance !== "function") {
+    return null;
+  }
+
+  const refreshedSession = await runtime.getSession(session.sessionId);
+  if (
+    refreshedSession?.next?.visible === true &&
+    refreshedSession.next.enabled === true &&
+    refreshedSession.next.stepId
+  ) {
+    return runtime.advance(session.sessionId);
+  }
+  return refreshedSession;
 }
 
 function normalizeMetadataMap(metadata = {}) {
@@ -260,6 +291,7 @@ function createCommandTerminalController({
           };
         }
 
+        const advanceOnSuccess = input?.advanceOnSuccess === true;
         const commandInput = normalizePlainObject(input?.input);
         const spec = await runtime.adapter.createCommandTerminalSpec(action.id, {
           action,
@@ -317,70 +349,84 @@ function createCommandTerminalController({
           }
           return resultFile;
         };
-        return startTerminal({
-          args: (terminalContext) => {
-            const activeResultFile = commandResultFile();
-            const specEnv = typeof spec.env === "function" ? spec.env(terminalContext) : spec.env || {};
-            return commandTerminalArgs({
-              args: spec.args || [],
-              command: spec.command,
-              containerName: commandTerminalContainerName({
-                sessionId,
-                terminalId: terminalContext.id
-              }),
-              env: {
-                ...terminalEnv,
-                ...specEnv,
-                [COMMAND_RESULT_ENV]: activeResultFile.path
-              },
-              image: imageResult.image,
-              mounts: Array.isArray(spec.mounts) ? spec.mounts : [],
-              resultFile: activeResultFile,
-              sessionId,
-              targetRoot,
-              terminalId: terminalContext.id,
-              workdir
-            });
-          },
-          command: "docker",
-          commandPreview: spec.commandPreview,
-          cwd: workdir,
-          maxRunning: 1,
-          metadata: {
-            actionId: action.id,
-            actionLabel: action.label,
-            cwd: workdir,
-            envHash: terminalEnvHash,
-            image: imageResult.image,
-            imageLabel: imageResult.label,
-            sessionId
-          },
-          namespace,
-          namespaceLimitPrefix: namespace,
-          onClose: async ({ exitCode, id }) => {
-            const activeResultFile = resultFile || {};
-            try {
-              await writeActionTerminalResult({
-                action,
-                exitCode,
-                input: commandInput,
-                resultFile: activeResultFile,
-                runtime,
-                session,
-                spec
-              });
-            } finally {
-              await Promise.all([
-                removeCommandResultFile(activeResultFile),
-                removeContainer(commandTerminalContainerName({
+        if (typeof runtime.recordCommandActionStarted === "function") {
+          await runtime.recordCommandActionStarted(sessionId, action.id);
+        }
+        try {
+          return await startTerminal({
+            args: (terminalContext) => {
+              const activeResultFile = commandResultFile();
+              const specEnv = typeof spec.env === "function" ? spec.env(terminalContext) : spec.env || {};
+              return commandTerminalArgs({
+                args: spec.args || [],
+                command: spec.command,
+                containerName: commandTerminalContainerName({
                   sessionId,
-                  terminalId: id
-                }))
-              ]);
-            }
-          },
-          reuseRunning: true
-        });
+                  terminalId: terminalContext.id
+                }),
+                env: {
+                  ...terminalEnv,
+                  ...specEnv,
+                  [COMMAND_RESULT_ENV]: activeResultFile.path
+                },
+                image: imageResult.image,
+                mounts: Array.isArray(spec.mounts) ? spec.mounts : [],
+                resultFile: activeResultFile,
+                sessionId,
+                targetRoot,
+                terminalId: terminalContext.id,
+                workdir
+              });
+            },
+            command: "docker",
+            commandPreview: spec.commandPreview,
+            cwd: workdir,
+            maxRunning: 1,
+            metadata: {
+              actionId: action.id,
+              actionLabel: action.label,
+              cwd: workdir,
+              envHash: terminalEnvHash,
+              image: imageResult.image,
+              imageLabel: imageResult.label,
+              sessionId
+            },
+            namespace,
+            namespaceLimitPrefix: namespace,
+            onClose: async ({ exitCode, id }) => {
+              const activeResultFile = resultFile || {};
+              try {
+                await writeActionTerminalResult({
+                  advanceOnSuccess,
+                  action,
+                  exitCode,
+                  input: commandInput,
+                  resultFile: activeResultFile,
+                  runtime,
+                  session,
+                  spec
+                });
+              } finally {
+                await Promise.all([
+                  removeCommandResultFile(activeResultFile),
+                  removeContainer(commandTerminalContainerName({
+                    sessionId,
+                    terminalId: id
+                  }))
+                ]);
+              }
+            },
+            reuseRunning: true
+          });
+        } catch (error) {
+          if (typeof runtime.recordCommandActionFinished === "function") {
+            await runtime.recordCommandActionFinished(session, action.id, {
+              message: String(error?.message || error || "Command terminal could not start."),
+              status: "blocked"
+            });
+          }
+          throw error;
+        }
       });
     },
 

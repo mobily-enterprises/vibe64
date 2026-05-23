@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   SELECTED_SESSION_STORAGE_KEY,
   aiStudioActionPath,
-  aiStudioArtifactsPath,
-  aiStudioArtifactsQueryKey,
+  aiStudioArtifactPreviewPath,
+  aiStudioArtifactPreviewQueryKey,
   aiStudioCodexAttachmentPath,
   aiStudioCodexPromptHandoffPath,
   aiStudioCodexThreadPath,
@@ -22,20 +22,20 @@ describe("AI Studio session request config", () => {
       "public",
       "sessions"
     ]);
-    expect(aiStudioArtifactsQueryKey("home", "public", "2026-05-16_01:two")).toEqual([
+    expect(aiStudioArtifactPreviewQueryKey("home", "public", "2026-05-16_01:two")).toEqual([
       "ai-studio",
       "home",
       "public",
-      "session-artifacts",
+      "artifact-preview",
       "2026-05-16_01%3Atwo"
     ]);
-    expect(aiStudioArtifactsQueryKey("home", "public", "2026-05-16_01:two", "edit issue")).toEqual([
+    expect(aiStudioArtifactPreviewQueryKey("home", "public", "2026-05-16_01:two", "issue report")).toEqual([
       "ai-studio",
       "home",
       "public",
-      "session-artifacts",
+      "artifact-preview",
       "2026-05-16_01%3Atwo",
-      "edit%20issue"
+      "issue%20report"
     ]);
   });
 
@@ -45,7 +45,7 @@ describe("AI Studio session request config", () => {
 
     expect(aiStudioSessionPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo`);
     expect(aiStudioActionPath(apiPath, sessionId, "make plan")).toBe(`${apiPath}/2026-05-16_01%3Atwo/actions/make%20plan`);
-    expect(aiStudioArtifactsPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/artifacts`);
+    expect(aiStudioArtifactPreviewPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/artifact-preview`);
     expect(aiStudioCodexPromptHandoffPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/codex-prompt-handoff`);
     expect(aiStudioCodexAttachmentPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/codex-attachments`);
     expect(aiStudioCodexThreadPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/codex-thread`);

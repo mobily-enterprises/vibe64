@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   mdiGithub,
-  mdiPencilOutline,
   mdiRobotOutline,
   mdiSync
 } from "@mdi/js";
@@ -187,7 +186,6 @@ describe("AI Studio session panel model", () => {
 
   it("maps runtime actions and disabled reasons for UI controls", () => {
     expect(aiStudioActionIcon({ type: "prompt" })).toBe(mdiRobotOutline);
-    expect(aiStudioActionIcon({ type: "editor" })).toBe(mdiPencilOutline);
     expect(aiStudioActionIcon({ id: "create_issue_on_gh", type: "command" })).toBe(mdiGithub);
     expect(aiStudioActionIcon({ id: "create_worktree", type: "command" })).toBe(mdiSync);
     expect(currentStepDisabledReason([

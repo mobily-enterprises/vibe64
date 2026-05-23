@@ -1,9 +1,0 @@
-{{systemStandard}}
-
-Next.js selected blueprint:
-{{adapter.promptContext.environment_blueprint}}
-
-Next.js-specific issue-definition guidance:
-- Scope the issue around the selected routing, language, styling, data-layer, and database choices.
-- Inspect package.json, router files, and configuration only when useful.
-- Call out server/client boundary, environment variable, deployment, or database risks before implementation begins.

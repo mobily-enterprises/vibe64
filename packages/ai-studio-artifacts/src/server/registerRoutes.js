@@ -1,14 +1,10 @@
 import {
-  artifactsInputValidator,
-  issueArtifactsInputValidator
+  currentStepInputValidator
 } from "./inputSchemas.js";
 import {
-  ACTION_CLEAR_AUTOPILOT_ARTIFACTS,
-  ACTION_CLEAR_ISSUE_ARTIFACTS,
-  ACTION_READ_ARTIFACTS,
-  ACTION_READ_AUTOPILOT_ARTIFACTS,
-  ACTION_SAVE_ARTIFACTS,
-  ACTION_SAVE_ISSUE_ARTIFACTS
+  ACTION_READ_ARTIFACT_PREVIEW,
+  ACTION_READ_ARTIFACT_READINESS,
+  ACTION_SUBMIT_CURRENT_STEP_INPUT
 } from "./actions.js";
 import { createAiStudioFeatureRoutes } from "../../../../server/lib/aiStudio/featureRoutes.js";
 
@@ -16,9 +12,9 @@ function getArtifactsService(app) {
   return app.make("feature.ai-studio-artifacts.service");
 }
 
-async function sendAutopilotArtifactsEventStream(reply, run) {
+async function sendArtifactReadinessEventStream(reply, run) {
   if (!reply?.raw) {
-    throw new Error("Autopilot artifact streams require a Fastify reply with raw stream access.");
+    throw new Error("Artifact readiness streams require a Fastify reply with raw stream access.");
   }
 
   reply.hijack?.();
@@ -76,8 +72,8 @@ async function sendAutopilotArtifactsEventStream(reply, run) {
       }
     });
   } catch (error) {
-    emit("autopilot-artifacts.error", {
-      error: String(error?.message || error || "Autopilot artifact stream failed.")
+    emit("artifact-readiness.error", {
+      error: String(error?.message || error || "Artifact readiness stream failed.")
     });
   } finally {
     clearInterval(heartbeat);
@@ -103,81 +99,49 @@ function registerRoutes(
     tags: ["studio", "ai-studio-artifacts"]
   });
 
-  routes.actionRoute("GET", "/sessions/:sessionId/artifacts", {
-    actionId: ACTION_READ_ARTIFACTS,
+  routes.actionRoute("GET", "/sessions/:sessionId/artifact-preview", {
+    actionId: ACTION_READ_ARTIFACT_PREVIEW,
     buildInput(request) {
       return {
-        actionId: request.query?.actionId,
+        previewId: request.query?.previewId,
         sessionId: request.params.sessionId
       };
     },
-    summary: "Read editable AI Studio artifacts."
+    summary: "Read a server-owned AI Studio artifact preview."
   });
 
-  routes.actionRoute("PUT", "/sessions/:sessionId/artifacts", {
-    actionId: ACTION_SAVE_ARTIFACTS,
-    body: artifactsInputValidator,
+  routes.actionRoute("GET", "/sessions/:sessionId/artifact-readiness", {
+    actionId: ACTION_READ_ARTIFACT_READINESS,
+    buildInput(request) {
+      return {
+        sessionId: request.params.sessionId
+      };
+    },
+    summary: "Read AI Studio artifact readiness."
+  });
+
+  routes.actionRoute("POST", "/sessions/:sessionId/current-step/input", {
+    actionId: ACTION_SUBMIT_CURRENT_STEP_INPUT,
+    body: currentStepInputValidator,
     buildInput(request) {
       return {
         ...routes.requestBody(request),
         sessionId: request.params.sessionId
       };
     },
-    summary: "Save editable AI Studio artifacts."
+    summary: "Submit input for the current AI Studio workflow step."
   });
 
-  routes.actionRoute("GET", "/sessions/:sessionId/autopilot-artifacts", {
-    actionId: ACTION_READ_AUTOPILOT_ARTIFACTS,
-    buildInput(request) {
-      return {
-        sessionId: request.params.sessionId
-      };
-    },
-    summary: "Read AI Studio Autopilot files."
-  });
-
-  routes.actionRoute("DELETE", "/sessions/:sessionId/autopilot-artifacts", {
-    actionId: ACTION_CLEAR_AUTOPILOT_ARTIFACTS,
-    buildInput(request) {
-      return {
-        sessionId: request.params.sessionId
-      };
-    },
-    summary: "Clear AI Studio Autopilot files."
-  });
-
-  routes.serviceRoute("GET", "/sessions/:sessionId/autopilot-artifacts/stream", {
-    summary: "Stream AI Studio Autopilot file updates."
+  routes.serviceRoute("GET", "/sessions/:sessionId/artifact-readiness/stream", {
+    summary: "Stream AI Studio artifact readiness updates."
   }, async (request, reply) => {
-    await sendAutopilotArtifactsEventStream(reply, ({ emit, isClosed, onClose }) => {
-      return getArtifactsService(app).streamAutopilotArtifacts(request.params.sessionId, {
+    await sendArtifactReadinessEventStream(reply, ({ emit, isClosed, onClose }) => {
+      return getArtifactsService(app).streamArtifactReadiness(request.params.sessionId, {
         emit,
         isClosed,
         onClose
       });
     });
-  });
-
-  routes.actionRoute("PUT", "/sessions/:sessionId/issue-artifacts", {
-    actionId: ACTION_SAVE_ISSUE_ARTIFACTS,
-    body: issueArtifactsInputValidator,
-    buildInput(request) {
-      return {
-        ...routes.requestBody(request),
-        sessionId: request.params.sessionId
-      };
-    },
-    summary: "Save AI Studio issue title, word, and body artifacts."
-  });
-
-  routes.actionRoute("DELETE", "/sessions/:sessionId/issue-artifacts", {
-    actionId: ACTION_CLEAR_ISSUE_ARTIFACTS,
-    buildInput(request) {
-      return {
-        sessionId: request.params.sessionId
-      };
-    },
-    summary: "Clear AI Studio issue title, word, and body artifacts."
   });
 }
 

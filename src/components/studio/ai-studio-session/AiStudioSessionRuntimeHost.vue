@@ -8,11 +8,11 @@
         v-show="sessionMode === 'autopilot'"
         :actions="actions"
         :active="autopilotModeActive"
-        :autopilot-artifacts="autopilotArtifacts"
         :autopilot-steps="autopilotNavigationSteps"
         :codex-terminal="codexTerminal"
         :command-runner="autopilotCommandRunner"
         :diff="dialogs.diff"
+        :human-input-response-preview="humanInputResponsePreview"
         :page="guardedPage"
         :refresh-session-data="sessionData.refreshSessionData"
         :report-preview="reportPreview"
@@ -31,14 +31,13 @@
           class="studio-ai-sessions__inspect-workspace"
           :actions="actions"
           :dialogs="dialogs"
-          :issue-request="issueRequest"
           :page="guardedPage"
           :report-preview="reportPreview"
           :review="review"
           :human-input-response-preview="humanInputResponsePreview"
           :selection="selection"
+          :step-input="stepInput"
           :timeline="timeline"
-          @update-issue-request-text="issueRequest.text = $event"
         />
 
         <div
@@ -63,8 +62,6 @@
     <AiStudioSessionDialogs
       :dialogs="dialogs"
       :short-session-id="sessionData.shortSessionId"
-      @update-draft-open="dialogs.draftEditor.open = $event"
-      @update-draft-values="dialogs.draftEditor.values = $event"
       @update-input-values="dialogs.input.values = $event"
     />
   </section>
@@ -80,8 +77,8 @@ import {
   useAiStudioHeadlessCommandRunner
 } from "@/composables/useAiStudioHeadlessCommandRunner.js";
 import {
-  useAiStudioAutopilotArtifacts
-} from "@/composables/useAiStudioAutopilotArtifacts.js";
+  useAiStudioArtifactReadiness
+} from "@/composables/useAiStudioArtifactReadiness.js";
 import {
   useAiStudioHumanInputResponsePreview
 } from "@/composables/useAiStudioHumanInputResponsePreview.js";
@@ -172,11 +169,11 @@ const sessionWorkflow = useAiStudioSessionWorkflow({
   sessionData: sessionScopedData
 });
 const autopilotCommandRunner = useAiStudioHeadlessCommandRunner();
-const autopilotArtifacts = useAiStudioAutopilotArtifacts({
+const artifactReadiness = useAiStudioArtifactReadiness({
   sessionId: selectedSessionId
 });
 const liveArtifactReadiness = computed(() => {
-  const readiness = autopilotArtifacts.artifacts.value?.artifactReadiness;
+  const readiness = artifactReadiness.readiness.value?.artifactReadiness;
   return readiness && typeof readiness === "object" ? readiness : {};
 });
 const liveArtifactReadinessVersion = computed(() => artifactReadinessVersion(liveArtifactReadiness.value));
@@ -187,24 +184,21 @@ const commandTerminal = proxyRefs(sessionWorkflow.commandTerminal);
 const dialogs = {
   abandon: proxyRefs(sessionWorkflow.dialogs.abandon),
   diff: proxyRefs(sessionWorkflow.dialogs.diff),
-  draftEditor: proxyRefs(sessionWorkflow.dialogs.draftEditor),
   input: proxyRefs(sessionWorkflow.dialogs.input)
 };
-const issueRequest = proxyRefs(sessionWorkflow.issueRequest);
 const page = proxyRefs(sessionWorkflow.page);
 const reportPreview = proxyRefs(useAiStudioReportPreview({
   active: computed(() => props.active),
   artifactReadiness: liveArtifactReadiness,
-  currentActions: computed(() => actions.currentActions),
   session: selectedSession
 }));
 const humanInputResponsePreview = proxyRefs(useAiStudioHumanInputResponsePreview({
   active: computed(() => props.active),
   artifactReadiness: liveArtifactReadiness,
-  currentActions: computed(() => actions.currentActions),
   session: selectedSession
 }));
 const review = proxyRefs(sessionWorkflow.review);
+const stepInput = proxyRefs(sessionWorkflow.stepInput);
 const selection = proxyRefs({
   facts: sessionFacts,
   isClosed: isSelectedSessionClosed,
@@ -244,7 +238,7 @@ const autopilotModeActive = computed(() => Boolean(props.active && props.session
 const codexTerminalPreviewVisible = computed(() => Boolean(
   props.active &&
   props.sessionMode === "autopilot" &&
-  codexTerminal.busy
+  (codexTerminal.busy || codexTerminal.working)
 ));
 const codexTerminalDisplayMode = computed(() => {
   // Inactive hosts stay mounted headless so Codex output capture remains session-owned.

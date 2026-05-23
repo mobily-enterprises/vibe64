@@ -1,15 +1,18 @@
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import test from "node:test";
 
 import {
   AiStudioSessionRuntime,
-  CONVERSATION_INPUT_FORMAT_ARTIFACT,
-  CONVERSATION_RESPONSE_ARTIFACT,
   FakeTargetAdapter
 } from "../../server/lib/aiStudio/index.js";
 import {
   createService
 } from "../../packages/ai-studio-artifacts/src/server/service.js";
+import {
+  helperSocketHostPath,
+  prepareCurrentStepInputHelper
+} from "../../server/lib/aiStudio/currentStepInputHelperServer.js";
 import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
 
 function projectServiceForRuntime(runtime) {
@@ -20,71 +23,44 @@ function projectServiceForRuntime(runtime) {
   };
 }
 
-test("AI Studio artifacts service reads and saves editable issue artifacts", async () => {
-  await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
-      adapter: new FakeTargetAdapter({
-        capabilities: {
-          create_issue_on_gh: true
-        }
-      }),
-      targetRoot
+function runNodeScript(scriptPath = "", args = [], env = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [
+      scriptPath,
+      ...args
+    ], {
+      env: {
+        ...process.env,
+        ...env
+      },
+      stdio: [
+        "ignore",
+        "pipe",
+        "pipe"
+      ]
     });
-    await runtime.createSession({
-      initialStep: "issue_submitted",
-      sessionId: "artifact_issue"
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
     });
-    await runtime.store.writeArtifact("artifact_issue", "issue_title", "Original title\n");
-    await runtime.store.writeArtifact("artifact_issue", "issue.md", "Original body\n");
-
-    const service = createService({
-      projectService: projectServiceForRuntime(runtime)
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
     });
-
-    const initial = await service.readArtifacts("artifact_issue", {
-      actionId: "edit_issue"
+    child.once("error", reject);
+    child.once("exit", (code) => {
+      resolve({
+        code,
+        stderr,
+        stdout
+      });
     });
-    assert.equal(initial.ok, true);
-    assert.deepEqual(initial.artifactFields.map((field) => field.name), [
-      "issue_title",
-      "issue_word",
-      "issue.md"
-    ]);
-    assert.equal(initial.artifactStates["issue.md"].editable, true);
-    assert.equal(initial.artifactStates.issue_title.editable, true);
-    assert.equal(initial.artifactStates.issue_word.editable, true);
-    assert.equal(initial.artifacts.issue_title, "Original title\n");
-    assert.equal(initial.artifacts.issue_word, "");
-
-    const saved = await service.saveArtifacts("artifact_issue", {
-      actionId: "edit_issue",
-      artifacts: {
-        "issue.md": "Updated body",
-        issue_title: "Updated title",
-        issue_word: "Updated"
-      }
-    });
-    assert.equal(saved.ok, true);
-    assert.equal(saved.artifacts["issue.md"], "Updated body\n");
-    assert.equal(saved.artifacts.issue_title, "Updated title\n");
-    assert.equal(saved.artifacts.issue_word, "Updated\n");
-    assert.equal(await runtime.store.readMetadataValue("artifact_issue", "issue_title"), "Updated title");
-    assert.equal(await runtime.store.readMetadataValue("artifact_issue", "issue_word"), "Updated");
-
-    await runtime.store.writeMetadataValue("artifact_issue", "issue_url", "https://github.com/example/repo/issues/1");
-    const blocked = await service.saveArtifacts("artifact_issue", {
-      actionId: "edit_issue",
-      artifacts: {
-        "issue.md": "Changed after submit"
-      }
-    });
-    assert.equal(blocked.ok, false);
-    assert.equal(blocked.errors[0].code, "ai_studio_artifact_edit_not_available");
-    assert.match(blocked.errors[0].message, /already exists/u);
   });
-});
+}
 
-test("AI Studio artifacts service saves autopilot issue artifacts before issue submission", async () => {
+test("AI Studio artifacts service saves semantic issue step input", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = new AiStudioSessionRuntime({
       adapter: new FakeTargetAdapter({
@@ -96,192 +72,40 @@ test("AI Studio artifacts service saves autopilot issue artifacts before issue s
     });
     await runtime.createSession({
       initialStep: "issue_file_created",
-      sessionId: "artifact_autopilot_issue"
+      sessionId: "step_input_issue"
     });
 
     const service = createService({
       projectService: projectServiceForRuntime(runtime)
     });
 
-    const saved = await service.saveIssueArtifacts("artifact_autopilot_issue", {
-      body: "Create a booking dashboard.",
-      title: "Add booking dashboard",
-      word: "Booking"
+    const saved = await service.submitCurrentStepInput("step_input_issue", {
+      kind: "ready",
+      stepId: "issue_file_created",
+      stepStatus: "need_input",
+      fields: {
+        body: "Create a booking dashboard.",
+        title: "Add booking dashboard",
+        word: "Booking"
+      }
     });
 
     assert.equal(saved.ok, true);
-    assert.equal(saved.artifacts.issue_title, "Add booking dashboard\n");
-    assert.equal(saved.artifacts.issue_word, "Booking\n");
-    assert.equal(saved.artifacts["issue.md"], "Create a booking dashboard.\n");
-    assert.equal(await runtime.store.readArtifact("artifact_autopilot_issue", "issue_title"), "Add booking dashboard\n");
-    assert.equal(await runtime.store.readArtifact("artifact_autopilot_issue", "issue_word"), "Booking\n");
-    assert.equal(await runtime.store.readArtifact("artifact_autopilot_issue", "issue.md"), "Create a booking dashboard.\n");
-    assert.equal(await runtime.store.readMetadataValue("artifact_autopilot_issue", "issue_title"), "Add booking dashboard");
-    assert.equal(await runtime.store.readMetadataValue("artifact_autopilot_issue", "issue_word"), "Booking");
+    assert.equal(await runtime.store.readArtifact("step_input_issue", "issue_title"), "Add booking dashboard\n");
+    assert.equal(await runtime.store.readArtifact("step_input_issue", "issue_word"), "Booking\n");
+    assert.equal(await runtime.store.readArtifact("step_input_issue", "issue.md"), "Create a booking dashboard.\n");
+    assert.equal(await runtime.store.readMetadataValue("step_input_issue", "issue_title"), "Add booking dashboard");
+    assert.equal(await runtime.store.readMetadataValue("step_input_issue", "issue_word"), "Booking");
 
-    const updatedSession = await runtime.getSession("artifact_autopilot_issue");
+    const updatedSession = await runtime.getSession("step_input_issue");
     assert.equal(updatedSession.sessionName, "Booking");
+    assert.equal(updatedSession.stepMachine.status, "confirm_files");
     assert.equal(updatedSession.next.enabled, true);
     assert.equal(updatedSession.next.stepId, "issue_submitted");
   });
 });
 
-test("AI Studio artifacts service clears autopilot issue artifacts before issue submission", async () => {
-  await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
-      adapter: new FakeTargetAdapter({
-        capabilities: {
-          create_issue_on_gh: true
-        }
-      }),
-      targetRoot
-    });
-    await runtime.createSession({
-      initialStep: "issue_file_created",
-      sessionId: "artifact_autopilot_issue_clear"
-    });
-    await runtime.store.writeArtifact("artifact_autopilot_issue_clear", "issue_title", "Draft title\n");
-    await runtime.store.writeArtifact("artifact_autopilot_issue_clear", "issue_word", "Draft\n");
-    await runtime.store.writeArtifact("artifact_autopilot_issue_clear", "issue.md", "Draft body\n");
-    await runtime.store.writeMetadataValue("artifact_autopilot_issue_clear", "issue_title", "Draft title");
-    await runtime.store.writeIssueWordMetadata("artifact_autopilot_issue_clear", "Draft");
-
-    const service = createService({
-      projectService: projectServiceForRuntime(runtime)
-    });
-
-    const cleared = await service.clearIssueArtifacts("artifact_autopilot_issue_clear");
-
-    assert.equal(cleared.ok, true);
-    assert.equal(await runtime.store.readArtifact("artifact_autopilot_issue_clear", "issue_title"), "");
-    assert.equal(await runtime.store.readArtifact("artifact_autopilot_issue_clear", "issue_word"), "");
-    assert.equal(await runtime.store.readArtifact("artifact_autopilot_issue_clear", "issue.md"), "");
-    assert.equal(await runtime.store.readMetadataValue("artifact_autopilot_issue_clear", "issue_title"), "");
-    assert.equal(await runtime.store.readMetadataValue("artifact_autopilot_issue_clear", "issue_word"), "");
-  });
-});
-
-test("AI Studio artifacts service only saves autopilot issue artifacts at the issue definition step", async () => {
-  await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
-      targetRoot
-    });
-    await runtime.createSession({
-      initialStep: "issue_submitted",
-      sessionId: "artifact_autopilot_wrong_step"
-    });
-    const service = createService({
-      projectService: projectServiceForRuntime(runtime)
-    });
-
-    const saved = await service.saveIssueArtifacts("artifact_autopilot_wrong_step", {
-      body: "Body",
-      title: "Title"
-    });
-
-    assert.equal(saved.ok, false);
-    assert.equal(saved.errors[0].code, "ai_studio_issue_artifacts_step_required");
-  });
-});
-
-test("AI Studio artifacts service reads and clears conversation files", async () => {
-  await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
-      targetRoot
-    });
-    await runtime.createSession({
-      initialStep: "plan_executed",
-      sessionId: "artifact_autopilot_files"
-    });
-    await Promise.all([
-      runtime.store.writeArtifact("artifact_autopilot_files", CONVERSATION_RESPONSE_ARTIFACT, "I need two details before continuing.\n"),
-      runtime.store.writeArtifact("artifact_autopilot_files", CONVERSATION_INPUT_FORMAT_ARTIFACT, JSON.stringify({
-        inputKind: "questions",
-        message: "I need two details before continuing.",
-        questions: [
-          "Which table should this use?",
-          {
-            id: "auth",
-            text: "Should this require authentication?"
-          }
-        ],
-        status: "awaiting_input"
-      }))
-    ]);
-
-    const service = createService({
-      projectService: projectServiceForRuntime(runtime)
-    });
-
-    const files = await service.readAutopilotArtifacts("artifact_autopilot_files");
-    assert.equal(files.ok, true);
-    assert.equal(files.response, "I need two details before continuing.\n");
-    assert.deepEqual(files.inputFormat, {
-      inputKind: "questions",
-      issueDraft: null,
-      message: "I need two details before continuing.",
-      questions: [
-        {
-          answer: "",
-          id: "q1",
-          text: "Which table should this use?"
-        },
-        {
-          answer: "",
-          id: "auth",
-          text: "Should this require authentication?"
-        }
-      ],
-      status: "awaiting_input"
-    });
-    assert.equal(files.conversation.history.length, 1);
-    assert.equal(files.conversation.history[0].response, "I need two details before continuing.");
-
-    const cleared = await service.clearAutopilotArtifacts("artifact_autopilot_files");
-    assert.equal(cleared.ok, true);
-    assert.equal(cleared.inputFormat, null);
-    assert.equal(cleared.response, "");
-    assert.equal(cleared.conversation.history.length, 1);
-    assert.equal(await runtime.store.readArtifact("artifact_autopilot_files", CONVERSATION_RESPONSE_ARTIFACT), "");
-    assert.equal(await runtime.store.readArtifact("artifact_autopilot_files", CONVERSATION_INPUT_FORMAT_ARTIFACT), "");
-  });
-});
-
-test("AI Studio artifacts service rejects unknown or empty artifact saves", async () => {
-  await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
-      targetRoot
-    });
-    await runtime.createSession({
-      initialStep: "issue_submitted",
-      sessionId: "artifact_invalid"
-    });
-    await runtime.store.writeArtifact("artifact_invalid", "issue_title", "Title\n");
-    await runtime.store.writeArtifact("artifact_invalid", "issue_word", "Title\n");
-    await runtime.store.writeArtifact("artifact_invalid", "issue.md", "Body\n");
-    const service = createService({
-      projectService: projectServiceForRuntime(runtime)
-    });
-
-    const empty = await service.saveArtifacts("artifact_invalid", {
-      actionId: "edit_issue",
-      artifacts: {}
-    });
-    assert.equal(empty.ok, false);
-    assert.equal(empty.errors[0].code, "ai_studio_artifacts_required");
-
-    const unknown = await service.saveArtifacts("artifact_invalid", {
-      actionId: "edit_issue",
-      artifacts: {
-        "notes.txt": "No"
-      }
-    });
-    assert.equal(unknown.ok, false);
-    assert.equal(unknown.errors[0].code, "ai_studio_artifact_not_editable");
-  });
-});
-
-test("AI Studio artifacts service uses pull-request editor descriptors", async () => {
+test("AI Studio artifacts service saves semantic pull request step input", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = new AiStudioSessionRuntime({
       adapter: new FakeTargetAdapter({
@@ -292,31 +116,413 @@ test("AI Studio artifacts service uses pull-request editor descriptors", async (
       targetRoot
     });
     await runtime.createSession({
-      initialStep: "pr_created",
-      sessionId: "artifact_pr"
+      initialStep: "create_pull_request",
+      sessionId: "step_input_pr"
     });
-    await runtime.store.writeArtifact("artifact_pr", "pull_request.md", "Original PR body\n");
 
     const service = createService({
       projectService: projectServiceForRuntime(runtime)
     });
 
-    const initial = await service.readArtifacts("artifact_pr", {
-      actionId: "edit_pr"
-    });
-    assert.equal(initial.ok, true);
-    assert.deepEqual(initial.artifactFields.map((field) => field.name), [
-      "pull_request.md"
-    ]);
-    assert.equal(initial.artifacts["pull_request.md"], "Original PR body\n");
-
-    const saved = await service.saveArtifacts("artifact_pr", {
-      actionId: "edit_pr",
-      artifacts: {
-        "pull_request.md": "Updated PR body"
+    const saved = await service.submitCurrentStepInput("step_input_pr", {
+      kind: "ready",
+      source: "codex",
+      stepId: "create_pull_request",
+      stepStatus: "awaiting_agent_result",
+      fields: {
+        title: "Add booking dashboard",
+        body: "## Summary\nCreate the booking dashboard.\n"
       }
     });
+
     assert.equal(saved.ok, true);
-    assert.equal(saved.artifacts["pull_request.md"], "Updated PR body\n");
+    assert.equal(
+      await runtime.store.readArtifact("step_input_pr", "tmp/create_pull_request.title.txt"),
+      "Add booking dashboard\n"
+    );
+    assert.equal(
+      await runtime.store.readArtifact("step_input_pr", "tmp/create_pull_request.body.md"),
+      "## Summary\nCreate the booking dashboard.\n"
+    );
+    const updatedSession = await runtime.getSession("step_input_pr");
+    assert.equal(updatedSession.stepMachine.status, "confirm_files");
+  });
+});
+
+test("AI Studio artifacts service rejects UI input while a step waits for Codex", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new AiStudioSessionRuntime({
+      adapter: new FakeTargetAdapter({
+        capabilities: {
+          create_pr_on_gh: true
+        }
+      }),
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "create_pull_request",
+      sessionId: "step_input_pr_ui_waiting"
+    });
+
+    const service = createService({
+      projectService: projectServiceForRuntime(runtime)
+    });
+
+    const saved = await service.submitCurrentStepInput("step_input_pr_ui_waiting", {
+      fields: {
+        body: "## Summary\nCreate the booking dashboard.\n",
+        title: "Add booking dashboard"
+      },
+      kind: "ready",
+      source: "ui",
+      stepId: "create_pull_request",
+      stepStatus: "awaiting_agent_result"
+    });
+
+    assert.equal(saved.ok, false);
+    assert.equal(saved.errors[0].code, "ai_studio_step_input_state_changed");
+    assert.match(saved.errors[0].message, /waiting for Codex/u);
+  });
+});
+
+test("AI Studio artifacts service rejects semantic step input on steps without an input contract", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new AiStudioSessionRuntime({
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "session_created",
+      sessionId: "step_input_wrong_step"
+    });
+    const service = createService({
+      projectService: projectServiceForRuntime(runtime)
+    });
+
+    const saved = await service.submitCurrentStepInput("step_input_wrong_step", {
+      kind: "ready",
+      stepId: "session_created",
+      stepStatus: "",
+      fields: {
+        body: "Body",
+        title: "Title"
+      }
+    });
+
+    assert.equal(saved.ok, false);
+    assert.equal(saved.errors[0].code, "ai_studio_step_input_not_available");
+  });
+});
+
+test("AI Studio artifacts service rejects stale current-step input", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new AiStudioSessionRuntime({
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "issue_file_created",
+      sessionId: "step_input_stale"
+    });
+    const service = createService({
+      projectService: projectServiceForRuntime(runtime)
+    });
+
+    const saved = await service.submitCurrentStepInput("step_input_stale", {
+      kind: "ready",
+      stepId: "issue_file_created",
+      stepStatus: "confirm_files",
+      fields: {
+        body: "Body",
+        title: "Title",
+        word: "Title"
+      }
+    });
+
+    assert.equal(saved.ok, false);
+    assert.equal(saved.errors[0].code, "ai_studio_step_input_state_changed");
+    assert.match(saved.errors[0].message, /Reload state/u);
+    assert.equal(saved.currentStep, "issue_file_created");
+    assert.equal(saved.stepStatus, "need_input");
+    assert.equal(saved.expectedInput.title, "Define issue");
+    assert.equal(saved.expectedInput.fields[0].name, "title");
+  });
+});
+
+test("AI Studio current-step helper submits through the same server path", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new AiStudioSessionRuntime({
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "issue_file_created",
+      sessionId: "step_input_helper"
+    });
+    const projectService = projectServiceForRuntime(runtime);
+    const session = await runtime.getSession("step_input_helper");
+    const helper = await prepareCurrentStepInputHelper({
+      projectService,
+      session,
+      targetRoot
+    });
+
+    const result = await runNodeScript(helper.env.AI_STUDIO_CURRENT_STEP_INPUT_HELPER, [
+      "--json",
+      JSON.stringify({
+        fields: {
+          body: "Create a booking dashboard.",
+          title: "Add booking dashboard",
+          word: "Booking"
+        },
+        kind: "ready",
+        stepId: "issue_file_created",
+        stepStatus: "need_input"
+      })
+    ], {
+      ...helper.env,
+      AI_STUDIO_CURRENT_STEP_INPUT_SOCKET: helperSocketHostPath(targetRoot)
+    });
+
+    assert.equal(result.code, 0, result.stderr || result.stdout);
+    const response = JSON.parse(result.stdout);
+    assert.equal(response.ok, true);
+    assert.equal(response.stepMachine.status, "confirm_files");
+    assert.equal(await runtime.store.readArtifact("step_input_helper", "issue_title"), "Add booking dashboard\n");
+  });
+});
+
+test("AI Studio current-step helper rejects stale state", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new AiStudioSessionRuntime({
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "issue_file_created",
+      sessionId: "step_input_helper_stale"
+    });
+    const projectService = projectServiceForRuntime(runtime);
+    const session = await runtime.getSession("step_input_helper_stale");
+    const helper = await prepareCurrentStepInputHelper({
+      projectService,
+      session,
+      targetRoot
+    });
+
+    const result = await runNodeScript(helper.env.AI_STUDIO_CURRENT_STEP_INPUT_HELPER, [
+      "--json",
+      JSON.stringify({
+        fields: {
+          body: "Body",
+          title: "Title",
+          word: "Title"
+        },
+        kind: "ready",
+        stepId: "issue_file_created",
+        stepStatus: "confirm_files"
+      })
+    ], {
+      ...helper.env,
+      AI_STUDIO_CURRENT_STEP_INPUT_SOCKET: helperSocketHostPath(targetRoot)
+    });
+
+    assert.equal(result.code, 1);
+    const response = JSON.parse(result.stdout);
+    assert.equal(response.ok, false);
+    assert.equal(response.errors[0].code, "ai_studio_step_input_state_changed");
+    assert.match(response.errors[0].message, /Reload state/u);
+  });
+});
+
+test("AI Studio artifacts service lets issue command failures return to retry state", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new AiStudioSessionRuntime({
+      adapter: new FakeTargetAdapter({
+        capabilities: {
+          create_issue_on_gh: true
+        }
+      }),
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "issue_submitted",
+      sessionId: "step_input_issue_failure"
+    });
+    await Promise.all([
+      runtime.store.writeArtifact("step_input_issue_failure", "issue_title", "Title\n"),
+      runtime.store.writeArtifact("step_input_issue_failure", "issue_word", "Title\n"),
+      runtime.store.writeArtifact("step_input_issue_failure", "issue.md", "Body\n")
+    ]);
+    await runtime.getSession("step_input_issue_failure");
+    await runtime.recordCommandActionStarted("step_input_issue_failure", "create_issue_on_gh");
+    await runtime.recordCommandActionFinished(
+      await runtime.getSession("step_input_issue_failure"),
+      "create_issue_on_gh",
+      {
+        message: "GitHub refused the issue.",
+        status: "failed"
+      }
+    );
+    const failedSession = await runtime.getSession("step_input_issue_failure");
+    assert.equal(failedSession.stepMachine.status, "need_input");
+    assert.equal(failedSession.actions.find((action) => action.id === "create_issue_on_gh").enabled, false);
+
+    const service = createService({
+      projectService: projectServiceForRuntime(runtime)
+    });
+    const saved = await service.submitCurrentStepInput("step_input_issue_failure", {
+      kind: "user_response",
+      source: "ui",
+      stepId: "issue_submitted",
+      stepStatus: "need_input",
+      text: "The GitHub CLI is authenticated now."
+    });
+
+    assert.equal(saved.ok, true);
+    assert.equal(saved.stepMachine.status, "ready");
+    assert.equal(saved.actions.find((action) => action.id === "create_issue_on_gh").enabled, true);
+  });
+});
+
+test("AI Studio artifacts service lets setup command failures return to retry state", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new AiStudioSessionRuntime({
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "dependencies_installed",
+      sessionId: "step_input_setup_failure"
+    });
+    await runtime.recordCommandActionStarted("step_input_setup_failure", "install_dependencies");
+    await runtime.recordCommandActionFinished(
+      await runtime.getSession("step_input_setup_failure"),
+      "install_dependencies",
+      {
+        message: "npm install failed.",
+        output: "EACCES",
+        status: "failed"
+      }
+    );
+    const failedSession = await runtime.getSession("step_input_setup_failure");
+    assert.equal(failedSession.stepMachine.status, "need_input");
+    assert.equal(failedSession.stepMachine.output, "EACCES");
+
+    const service = createService({
+      projectService: projectServiceForRuntime(runtime)
+    });
+    const saved = await service.submitCurrentStepInput("step_input_setup_failure", {
+      kind: "user_response",
+      source: "ui",
+      stepId: "dependencies_installed",
+      stepStatus: "need_input",
+      text: "Permissions are fixed."
+    });
+
+    assert.equal(saved.ok, true);
+    assert.equal(saved.stepMachine.status, "ready");
+  });
+});
+
+test("AI Studio artifacts service keeps pull request command failures inside the pull request machine", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new AiStudioSessionRuntime({
+      adapter: new FakeTargetAdapter({
+        capabilities: {
+          create_pr_on_gh: true
+        }
+      }),
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "create_pull_request",
+      metadata: {
+        branch_pushed: "ai-studio/test-pr"
+      },
+      sessionId: "step_input_pr_failure"
+    });
+    const service = createService({
+      projectService: projectServiceForRuntime(runtime)
+    });
+    await service.submitCurrentStepInput("step_input_pr_failure", {
+      fields: {
+        body: "## Summary\nBody.\n",
+        title: "Add feature"
+      },
+      kind: "ready",
+      source: "codex",
+      stepId: "create_pull_request",
+      stepStatus: "awaiting_agent_result"
+    });
+    await runtime.recordCommandActionStarted("step_input_pr_failure", "create_pr_on_gh");
+    await runtime.recordCommandActionFinished(
+      await runtime.getSession("step_input_pr_failure"),
+      "create_pr_on_gh",
+      {
+        message: "Branch was not pushed.",
+        status: "failed"
+      }
+    );
+    const failedSession = await runtime.getSession("step_input_pr_failure");
+    assert.equal(failedSession.stepMachine.status, "need_input");
+    assert.equal(failedSession.actions.find((action) => action.id === "create_pr_on_gh").enabled, false);
+
+    const saved = await service.submitCurrentStepInput("step_input_pr_failure", {
+      kind: "user_response",
+      source: "ui",
+      stepId: "create_pull_request",
+      stepStatus: "need_input",
+      text: "The branch has been pushed."
+    });
+
+    assert.equal(saved.ok, true);
+    assert.equal(saved.stepMachine.status, "confirm_files");
+    assert.equal(saved.actions.find((action) => action.id === "create_pr_on_gh").enabled, true);
+  });
+});
+
+test("AI Studio artifacts service reads live artifact readiness", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new AiStudioSessionRuntime({
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "plan_executed",
+      sessionId: "artifact_readiness"
+    });
+    await runtime.store.writeArtifact("artifact_readiness", "response.md", "Saved response.\n");
+
+    const service = createService({
+      projectService: projectServiceForRuntime(runtime)
+    });
+
+    const response = await service.readArtifactReadiness("artifact_readiness");
+    assert.equal(response.ok, true);
+    assert.equal(response.artifactReadiness["response.md"].nonEmpty, true);
+  });
+});
+
+test("AI Studio artifacts service reads server-owned artifact previews by semantic id", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new AiStudioSessionRuntime({
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "report_created",
+      sessionId: "artifact_invalid"
+    });
+    await runtime.store.writeArtifact("artifact_invalid", "report.md", "Report\n");
+    const service = createService({
+      projectService: projectServiceForRuntime(runtime)
+    });
+
+    const report = await service.readArtifactPreview("artifact_invalid", {
+      previewId: "report"
+    });
+    assert.equal(report.ok, true);
+    assert.equal(report.text, "Report");
+    assert.equal(report.previewId, "report");
+
+    const unknown = await service.readArtifactPreview("artifact_invalid", {
+      previewId: "unknown"
+    });
+    assert.equal(unknown.ok, false);
+    assert.equal(unknown.errors[0].code, "ai_studio_artifact_preview_not_available");
   });
 });

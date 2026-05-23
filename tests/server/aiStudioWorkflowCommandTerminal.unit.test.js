@@ -49,7 +49,14 @@ test("create PR command treats an existing branch pull request as success", asyn
     assert.ok(lookupIndex < createIndex);
     assert.match(script, /gh pr list --head "\$EXPECTED_BRANCH" --base "\$BASE_BRANCH" --state open/u);
     assert.match(script, /GitHub pull request already exists/u);
+    assert.match(script, /\.ai-studio\/artifacts\/tmp\/create_pull_request\.title\.txt/u);
+    assert.match(script, /\.ai-studio\/artifacts\/tmp\/create_pull_request\.body\.md/u);
+    assert.match(script, /ai_studio_require_tmp_artifact title\.txt 'pull request title artifact'/u);
+    assert.match(script, /ai_studio_require_tmp_artifact body\.md 'pull request body artifact'/u);
+    assert.match(script, /rm -f "\$\(ai_studio_tmp_artifact_path title\.txt\)"/u);
+    assert.match(script, /rm -f "\$\(ai_studio_tmp_artifact_path body\.md\)"/u);
     assert.match(script, /fact:set\\t%s\\t%s\\n' pr_url/u);
+    assert.match(script, /fact:set\\t%s\\t%s\\n' pr_title/u);
     assert.match(script, /if ! PR_URL="\$\(gh pr create/u);
   });
 });

@@ -1,9 +1,0 @@
-{{systemStandard}}
-
-C++ selected blueprint:
-{{adapter.promptContext.environment_blueprint}}
-
-C++-specific issue-definition guidance:
-- Scope the issue around the selected build system, standard, project kind, testing convention, and existing target layout.
-- Inspect build manifests, public headers, source files, and tests only when useful.
-- Call out API/ABI, ownership/lifetime, threading, portability, and verification risks before implementation begins.

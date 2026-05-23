@@ -792,6 +792,92 @@ test("AI Studio command terminal refuses prompt actions and disabled command act
   });
 });
 
+test("AI Studio command terminal advances workflow when requested after success", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new AiStudioSessionRuntime({
+      adapter: new UnitCommandAdapter(),
+      targetRoot,
+      workflow: {
+        id: "unit-terminal-advance",
+        steps: [
+          {
+            actions: [
+              {
+                adapterCapability: "unit_command",
+                id: "unit_command",
+                label: "Unit command",
+                type: "command"
+              }
+            ],
+            id: "unit_step",
+            label: "Unit step"
+          },
+          {
+            id: "next_step",
+            label: "Next step"
+          }
+        ]
+      }
+    });
+    await runtime.createSession({
+      sessionId: "terminal_advance"
+    });
+
+    let closePromise = Promise.resolve();
+    const command = createCommandTerminalController({
+      ensureRuntimeNetwork: async () => null,
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return runtime;
+        },
+        async projectConfigEnvironment() {
+          return {
+            AI_STUDIO_CONFIG_DIR: path.join(targetRoot, ".ai-studio", "config")
+          };
+        }
+      },
+      removeContainer: async () => null,
+      resolveToolchainImage: async () => ({
+        image: "unit-command-toolchain:1.0.0",
+        label: "Unit command toolchain",
+        ok: true
+      }),
+      startTerminal: (options) => {
+        const id = "unit-command-advance-terminal";
+        const dockerArgs = options.args({
+          id,
+          namespace: options.namespace
+        });
+        const resultFilePath = dockerEnvValue(dockerArgs, COMMAND_RESULT_ENV);
+        closePromise = (async () => {
+          await writeFile(resultFilePath, "", "utf8");
+          await options.onClose({
+            exitCode: 0,
+            id
+          });
+        })();
+        return {
+          id,
+          ok: true,
+          status: "running"
+        };
+      }
+    });
+
+    const terminal = await command.startTerminal("terminal_advance", {
+      actionId: "unit_command",
+      advanceOnSuccess: true
+    });
+    assert.equal(terminal.ok, true);
+    await closePromise;
+
+    const session = await runtime.getSession("terminal_advance");
+    assert.equal(session.currentStep, "next_step");
+    assert.deepEqual(session.completedSteps, ["unit_step"]);
+  });
+});
+
 test("AI Studio shell terminal resolves only declared session targets", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const worktreePath = path.join(targetRoot, ".ai-studio", "sessions", "active", "shell_success", "worktree");

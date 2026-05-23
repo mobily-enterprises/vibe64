@@ -10,7 +10,8 @@ import {
   artifactFilePath,
   metadataFilePath,
   recordCommandFactScript,
-  requiredArtifactScript
+  requiredArtifactScript,
+  stepArtifactShellLibrary
 } from "../workflowCommandFacts.js";
 import {
   createIssueSuccessMetadataFromFacts,
@@ -46,8 +47,9 @@ function createIssueOnGhScript(session = {}) {
 }
 
 function createPrOnGhScript(session = {}) {
-  const prBodyPath = artifactFilePath(session, "pull_request.md");
-  const issueTitlePath = metadataFilePath(session, "issue_title");
+  const stepId = "create_pull_request";
+  const prBodyPath = artifactFilePath(session, `tmp/${stepId}.body.md`);
+  const prTitlePath = artifactFilePath(session, `tmp/${stepId}.title.txt`);
   const sourcePrUrl = normalizeText(session.metadata?.source_pr_url);
   const branch = normalizeText(session.metadata?.branch);
   const baseBranch = normalizeText(session.metadata?.base_branch) || "main";
@@ -55,13 +57,13 @@ function createPrOnGhScript(session = {}) {
   const quotedBranch = shellQuote(branch);
   return [
     "set -e",
-    requiredArtifactScript(session, "pull_request.md", "pull request artifact"),
-    `PR_TITLE="$(cat ${shellQuote(issueTitlePath)} 2>/dev/null | head -n 1 | sed 's/[[:space:]]*$//')"`,
+    stepArtifactShellLibrary(session, stepId),
+    "ai_studio_require_tmp_artifact title.txt 'pull request title artifact'",
+    "ai_studio_require_tmp_artifact body.md 'pull request body artifact'",
+    `PR_TITLE="$(head -n 1 ${shellQuote(prTitlePath)} | sed 's/[[:space:]]*$//')"`,
     "if [ -z \"$PR_TITLE\" ]; then",
-    `  PR_TITLE="$(grep -m 1 -v '^[[:space:]]*$' ${shellQuote(prBodyPath)} | sed 's/^#*[[:space:]]*//' | sed 's/[[:space:]]*$//')"`,
-    "fi",
-    "if [ -z \"$PR_TITLE\" ]; then",
-    `  PR_TITLE="AI Studio session ${session.sessionId}"`,
+    "  printf '[studio] Pull request title is empty.\\n' >&2",
+    "  exit 1",
     "fi",
     `EXPECTED_BRANCH=${quotedBranch}`,
     `BASE_BRANCH=${quotedBaseBranch}`,
@@ -86,6 +88,11 @@ function createPrOnGhScript(session = {}) {
     "  exit 1",
     "fi",
     `SOURCE_PR_URL=${shellQuote(sourcePrUrl)}`,
+    "if [ -n \"$SOURCE_PR_URL\" ]; then",
+    "  PR_SOURCE=replacement",
+    "else",
+    "  PR_SOURCE=created",
+    "fi",
     "PR_BODY_FILE=" + shellQuote(prBodyPath),
     "if [ -n \"$SOURCE_PR_URL\" ]; then",
     "  PR_BODY_FILE=\"$(mktemp)\"",
@@ -99,7 +106,13 @@ function createPrOnGhScript(session = {}) {
     "if [ -n \"$PR_URL\" ]; then",
     "  printf '[studio] GitHub pull request already exists: %s\\n' \"$PR_URL\"",
     "  printf '%s\\n' \"$PR_URL\"",
+    "  ai_studio_write_artifact url.txt \"$PR_URL\"",
+    "  ai_studio_write_artifact source.txt \"$PR_SOURCE\"",
     `  ${recordCommandFactScript("pr_url", "\"$PR_URL\"")}`,
+    `  ${recordCommandFactScript("pr_title", "\"$PR_TITLE\"")}`,
+    `  ${recordCommandFactScript("pr_source", "\"$PR_SOURCE\"")}`,
+    "  rm -f \"$(ai_studio_tmp_artifact_path body.md)\"",
+    "  rm -f \"$(ai_studio_tmp_artifact_path title.txt)\"",
     "  exit 0",
     "fi",
     "printf '[studio] Creating GitHub pull request: %s\\n' \"$PR_TITLE\"",
@@ -111,7 +124,18 @@ function createPrOnGhScript(session = {}) {
     "  printf '[studio] GitHub pull request already exists: %s\\n' \"$PR_URL\"",
     "fi",
     "printf '%s\\n' \"$PR_URL\"",
-    recordCommandFactScript("pr_url", "\"$PR_URL\"")
+    "ai_studio_write_artifact url.txt \"$PR_URL\"",
+    "ai_studio_write_artifact source.txt \"$PR_SOURCE\"",
+    recordCommandFactScript("pr_url", "\"$PR_URL\""),
+    recordCommandFactScript("pr_title", "\"$PR_TITLE\""),
+    recordCommandFactScript("pr_source", "\"$PR_SOURCE\""),
+    "PR_NUMBER=\"$(printf '%s\\n' \"$PR_URL\" | sed -n 's#.*/pull/\\([0-9][0-9]*\\).*#\\1#p' | head -n 1)\"",
+    "if [ -n \"$PR_NUMBER\" ]; then",
+    "  ai_studio_write_artifact number.txt \"$PR_NUMBER\"",
+    `  ${recordCommandFactScript("pr_number", "\"$PR_NUMBER\"")}`,
+    "fi",
+    "rm -f \"$(ai_studio_tmp_artifact_path body.md)\"",
+    "rm -f \"$(ai_studio_tmp_artifact_path title.txt)\""
   ].join("\n");
 }
 

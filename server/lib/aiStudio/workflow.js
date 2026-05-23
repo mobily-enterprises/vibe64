@@ -3,50 +3,28 @@ import {
   normalizeText
 } from "./core.js";
 import { deepFreeze } from "./deepFreeze.js";
-import {
-  CONVERSATION_RESPONSE_ARTIFACT
-} from "./conversationFiles.js";
 
-function artifactReadyCondition(artifactName = "") {
-  return `artifact:${artifactName}`;
-}
-
-function editorActionIdForArtifact(artifactName = "") {
-  const safeName = normalizeText(artifactName)
-    .replace(/[^A-Za-z0-9]+/gu, "_")
-    .replace(/^_+|_+$/gu, "");
-  return `edit_${safeName || "response_artifact"}`;
-}
-
-const CREATE_ISSUE_FILE_ACTION_ID = "create_issue_file";
 const AGENT_CONVERSATION_ACTION_ID = "agent_conversation";
 const AGENT_CONVERSATION_STEP_ID = "agent_conversation";
 const FINAL_REVIEW_CONVERSATION_ACTION_ID = "final_review_conversation";
 const HUMAN_REVIEW_CONVERSATION_ACTION_ID = "human_review_conversation";
-const HUMAN_INPUT_RESPONSE_ARTIFACT = CONVERSATION_RESPONSE_ARTIFACT;
-const AI_RESPONSE_EDITOR_ACTION_ID = "edit_ai_response";
+const HUMAN_INPUT_RESPONSE_ARTIFACT = "response.md";
 const MAINTENANCE_CONVERSATION_STEP_ID = "maintenance_conversation";
 const CHECKLIST_ITEMS_STEP_ID = "checklist_items_installed";
 const ISSUE_BODY_ARTIFACT = "issue.md";
 const ISSUE_FILE_STEP_ID = "issue_file_created";
 const ISSUE_TITLE_ARTIFACT = "issue_title";
 const ISSUE_WORD_ARTIFACT = "issue_word";
-const PULL_REQUEST_ARTIFACT = "pull_request.md";
 const REPORT_ARTIFACT = "report.md";
 const SEED_APPLICATION_STEP_ID = "seed_application_defined";
-const SEND_ISSUE_PROMPT_ACTION_ID = "send_issue_prompt";
-const SEND_SEED_PROMPT_ACTION_ID = "send_seed_prompt";
-const CREATE_SEED_ISSUE_FILE_ACTION_ID = "create_seed_issue_file";
+const CREATE_PULL_REQUEST_STEP_ID = "create_pull_request";
 const ISSUE_FILES_READY_CONDITION = `artifacts:${ISSUE_TITLE_ARTIFACT},${ISSUE_BODY_ARTIFACT},${ISSUE_WORD_ARTIFACT}`;
-const ISSUE_PROMPT_HAS_REQUEST_CONDITION = `action-input:${SEND_ISSUE_PROMPT_ACTION_ID}.issueRequest`;
-const SEED_PROMPT_HAS_REQUEST_CONDITION = `action-input:${SEND_SEED_PROMPT_ACTION_ID}.seedRequest`;
 const ISSUE_TITLE_READY_CONDITION = `artifact:${ISSUE_TITLE_ARTIFACT}`;
 const ISSUE_BODY_READY_CONDITION = `artifact:${ISSUE_BODY_ARTIFACT}`;
 const ISSUE_WORD_READY_CONDITION = `artifact:${ISSUE_WORD_ARTIFACT}`;
 const ISSUE_READY_CONDITION = `any:metadata:issue_url;${ISSUE_FILES_READY_CONDITION}`;
-const PR_READY_CONDITION = `any:metadata:pr_url;artifact:${PULL_REQUEST_ARTIFACT}`;
 const REPORT_READY_CONDITION = `artifact:${REPORT_ARTIFACT}`;
-const HUMAN_INPUT_RESPONSE_READY_CONDITION = artifactReadyCondition(HUMAN_INPUT_RESPONSE_ARTIFACT);
+const HUMAN_INPUT_RESPONSE_READY_CONDITION = `artifact:${HUMAN_INPUT_RESPONSE_ARTIFACT}`;
 const MERGE_DECISION_READY_CONDITION = "any:metadata:pr_merged;metadata:merge_skipped";
 const SESSION_CAN_FINISH_CONDITION = "any:metadata:main_checkout_synced;metadata:merge_skipped";
 
@@ -65,55 +43,6 @@ const USER_SELECTABLE_WORKFLOW_PROFILE_IDS = deepFreeze([
   AI_STUDIO_WORKFLOW_PROFILE_IDS.NON_CODE_MAINTENANCE,
   AI_STUDIO_WORKFLOW_PROFILE_IDS.NON_COMMIT_MAINTENANCE
 ]);
-
-function reportEditorAction() {
-  return {
-    artifactFields: [
-      {
-        kind: "textarea",
-        label: "Session report",
-        name: REPORT_ARTIFACT,
-        required: true,
-        requiredMessage: "Session report is required."
-      }
-    ],
-    enabledWhen: [REPORT_READY_CONDITION],
-    enabledWhenReason: "Write the report before editing it.",
-    id: "edit_report",
-    label: "Edit report",
-    type: "editor"
-  };
-}
-
-function responseArtifactEditorAction({
-  artifactName = "",
-  fieldLabel = "AI response",
-  id = "edit_response_artifact",
-  label = "Edit AI response"
-} = {}) {
-  return {
-    artifactFields: [
-      {
-        kind: "textarea",
-        label: fieldLabel,
-        name: artifactName,
-        required: false
-      }
-    ],
-    enabledWhen: [artifactReadyCondition(artifactName)],
-    enabledWhenReason: "Ask Codex for a response before editing it.",
-    id,
-    label,
-    type: "editor"
-  };
-}
-
-function aiResponseEditorAction() {
-  return responseArtifactEditorAction({
-    artifactName: HUMAN_INPUT_RESPONSE_ARTIFACT,
-    id: AI_RESPONSE_EDITOR_ACTION_ID
-  });
-}
 
 function agentConversationAction({
   id = AGENT_CONVERSATION_ACTION_ID,
@@ -146,10 +75,7 @@ function agentConversationStep({
   inputPlaceholder = "Describe what you want help with.",
   label = "Talk to Codex",
   next = null,
-  responseArtifact = "",
-  responseEditorActionId = "",
-  responseEditorFieldLabel = "AI response",
-  responseEditorLabel = "Edit AI response"
+  responseArtifact = ""
 } = {}) {
   const artifactsToClean = responseArtifact ? [responseArtifact] : [];
   const conversationAction = agentConversationAction({
@@ -159,18 +85,11 @@ function agentConversationStep({
   });
   return {
     actions: [
-      conversationAction,
-      ...(responseArtifact ? [responseArtifactEditorAction({
-        artifactName: responseArtifact,
-        fieldLabel: responseEditorFieldLabel,
-        id: responseEditorActionId || editorActionIdForArtifact(responseArtifact),
-        label: responseEditorLabel
-      })] : [])
+      conversationAction
     ],
     autopilot: {
       actionId: conversationAction.id,
       kind: "agent_conversation",
-      responseArtifact,
       stop: true
     },
     description,
@@ -181,43 +100,6 @@ function agentConversationStep({
       actionResults: [AGENT_CONVERSATION_ACTION_ID],
       artifacts: artifactsToClean
     }
-  };
-}
-
-function issueEditorAction() {
-  return {
-    artifactFields: [
-      {
-        kind: "text",
-        label: "Issue title",
-        metadataName: ISSUE_TITLE_ARTIFACT,
-        name: ISSUE_TITLE_ARTIFACT,
-        required: true,
-        requiredMessage: "Issue title is required."
-      },
-      {
-        kind: "text",
-        label: "Session label",
-        metadataName: ISSUE_WORD_ARTIFACT,
-        name: ISSUE_WORD_ARTIFACT,
-        required: true,
-        requiredMessage: "Session label is required."
-      },
-      {
-        kind: "textarea",
-        label: "Issue body",
-        name: ISSUE_BODY_ARTIFACT,
-        required: true,
-        requiredMessage: "Issue body is required."
-      }
-    ],
-    disabledReason: "The GitHub issue already exists; edit it on GitHub instead.",
-    disabledWhen: ["metadata:issue_url"],
-    enabledWhen: [ISSUE_TITLE_READY_CONDITION, ISSUE_BODY_READY_CONDITION],
-    enabledWhenReason: "Create the issue file before editing.",
-    id: "edit_issue",
-    label: "Edit issue",
-    type: "editor"
   };
 }
 
@@ -276,6 +158,11 @@ const AI_STUDIO_WORKFLOW_STEP_CATALOG = deepFreeze({
     },
     description: "Choose whether this session starts from a new branch or an existing pull request.",
     id: "work_source_selected",
+    interaction: {
+      kind: "run_action",
+      primaryActionLabel: "Use new branch",
+      title: "Choose work source"
+    },
     label: "Choose work source",
     next: {
       disabledReason: "Choose a work source before continuing.",
@@ -303,6 +190,11 @@ const AI_STUDIO_WORKFLOW_STEP_CATALOG = deepFreeze({
     },
     description: "Create the isolated worktree or target-specific working area.",
     id: "worktree_created",
+    interaction: {
+      kind: "run_action",
+      primaryActionLabel: "Create worktree",
+      title: "Create worktree"
+    },
     label: "Create worktree",
     next: {
       disabledReason: "Create the worktree before continuing.",
@@ -328,6 +220,11 @@ const AI_STUDIO_WORKFLOW_STEP_CATALOG = deepFreeze({
     },
     description: "Install target dependencies when the adapter requires them.",
     id: "dependencies_installed",
+    interaction: {
+      kind: "run_action",
+      primaryActionLabel: "Install dependencies",
+      title: "Install dependencies"
+    },
     label: "Install dependencies",
     next: {
       disabledReason: "Install dependencies before continuing.",
@@ -367,39 +264,12 @@ const AI_STUDIO_WORKFLOW_STEP_CATALOG = deepFreeze({
     }
   },
   [SEED_APPLICATION_STEP_ID]: {
-    actions: [
-      {
-        disabledReason: "The seed issue file already exists.",
-        disabledWhen: [ISSUE_FILES_READY_CONDITION],
-        id: SEND_SEED_PROMPT_ACTION_ID,
-        inputFields: [
-          {
-            label: "What kind of app foundation should Studio seed?",
-            name: "seedRequest",
-            placeholder: "Describe the app foundation, modules, integrations, and local dev services you want.",
-            requiredMessage: "Describe the application foundation before discussing the seed issue."
-          }
-        ],
-        label: "Discuss seed app",
-        promptId: SEND_SEED_PROMPT_ACTION_ID,
-        type: "prompt"
-      },
-      {
-        disabledReason: "The seed issue files already exist.",
-        disabledWhen: [ISSUE_FILES_READY_CONDITION],
-        enabledWhen: [SEED_PROMPT_HAS_REQUEST_CONDITION],
-        enabledWhenReason: "Discuss the seed app before creating the seed issue file.",
-        id: CREATE_SEED_ISSUE_FILE_ACTION_ID,
-        label: "Create seed issue file",
-        promptId: CREATE_SEED_ISSUE_FILE_ACTION_ID,
-        type: "prompt"
-      }
-    ],
+    actions: [],
     autopilot: {
-      kind: "seed_issue_discussion",
+      kind: "issue_discussion",
       stop: true
     },
-    description: "Define the initial application foundation and create the seed issue files.",
+    description: "Define the initial application foundation as an issue.",
     id: SEED_APPLICATION_STEP_ID,
     label: "Seed application",
     next: {
@@ -407,31 +277,13 @@ const AI_STUDIO_WORKFLOW_STEP_CATALOG = deepFreeze({
       enabledWhen: [ISSUE_FILES_READY_CONDITION]
     },
     rewindCleanup: {
-      actionResults: [SEND_SEED_PROMPT_ACTION_ID, CREATE_SEED_ISSUE_FILE_ACTION_ID],
+      actionResults: [],
       artifacts: [ISSUE_TITLE_ARTIFACT, ISSUE_BODY_ARTIFACT, ISSUE_WORD_ARTIFACT],
       metadata: ["issue_title", ISSUE_WORD_ARTIFACT]
     }
   },
   [ISSUE_FILE_STEP_ID]: {
     actions: [
-      {
-        disabledReason: "An existing issue is already selected.",
-        disabledWhen: ["metadata:issue_url"],
-        id: SEND_ISSUE_PROMPT_ACTION_ID,
-        label: "Discuss issue",
-        promptId: SEND_ISSUE_PROMPT_ACTION_ID,
-        type: "prompt"
-      },
-      {
-        disabledReason: "Issue is already selected or issue files already exist.",
-        disabledWhen: ["metadata:issue_url", ISSUE_FILES_READY_CONDITION],
-        enabledWhen: [ISSUE_PROMPT_HAS_REQUEST_CONDITION],
-        enabledWhenReason: "Discuss the issue before creating the issue file.",
-        id: CREATE_ISSUE_FILE_ACTION_ID,
-        label: "Create issue file",
-        promptId: CREATE_ISSUE_FILE_ACTION_ID,
-        type: "prompt"
-      },
       {
         adapterCapability: "use_existing_issue",
         disabledReason: "An existing issue is already selected.",
@@ -461,14 +313,13 @@ const AI_STUDIO_WORKFLOW_STEP_CATALOG = deepFreeze({
       enabledWhen: [ISSUE_READY_CONDITION]
     },
     rewindCleanup: {
-      actionResults: [SEND_ISSUE_PROMPT_ACTION_ID, CREATE_ISSUE_FILE_ACTION_ID, "use_existing_issue"],
+      actionResults: ["use_existing_issue"],
       artifacts: [ISSUE_TITLE_ARTIFACT, ISSUE_BODY_ARTIFACT, ISSUE_WORD_ARTIFACT],
       metadata: ["issue_url", "issue_number", "issue_title", "issue_source", ISSUE_WORD_ARTIFACT]
     }
   },
   issue_submitted: {
     actions: [
-      issueEditorAction(),
       createIssueOnGithubAction()
     ],
     autopilot: {
@@ -574,13 +425,11 @@ const AI_STUDIO_WORKFLOW_STEP_CATALOG = deepFreeze({
         label: "Ask AI for tweaks",
         inputLabel: "What would you like changed?",
         inputPlaceholder: "Describe the tweak in plain language."
-      }),
-      aiResponseEditorAction()
+      })
     ],
     autopilot: {
       actionId: HUMAN_REVIEW_CONVERSATION_ACTION_ID,
       kind: "implementation_review",
-      responseArtifact: HUMAN_INPUT_RESPONSE_ARTIFACT,
       stop: true
     },
     description: "Try the implemented work and request small tweaks before slower review steps.",
@@ -598,8 +447,7 @@ const AI_STUDIO_WORKFLOW_STEP_CATALOG = deepFreeze({
     inputLabel: "What should Codex change?",
     inputPlaceholder: "Describe the code change, cleanup, bug fix, or follow-up request.",
     label: "Make changes",
-    responseArtifact: HUMAN_INPUT_RESPONSE_ARTIFACT,
-    responseEditorActionId: AI_RESPONSE_EDITOR_ACTION_ID
+    responseArtifact: HUMAN_INPUT_RESPONSE_ARTIFACT
   }),
   [MAINTENANCE_CONVERSATION_STEP_ID]: agentConversationStep({
     actionLabel: "Ask Codex",
@@ -610,8 +458,7 @@ const AI_STUDIO_WORKFLOW_STEP_CATALOG = deepFreeze({
       disabledReason: "Ask Codex and save an AI response before finishing.",
       enabledWhen: [HUMAN_INPUT_RESPONSE_READY_CONDITION]
     },
-    responseArtifact: HUMAN_INPUT_RESPONSE_ARTIFACT,
-    responseEditorActionId: AI_RESPONSE_EDITOR_ACTION_ID
+    responseArtifact: HUMAN_INPUT_RESPONSE_ARTIFACT
   }),
   deep_ui_check_run: {
     actions: [
@@ -712,8 +559,7 @@ const AI_STUDIO_WORKFLOW_STEP_CATALOG = deepFreeze({
         label: "Ask AI for tweaks",
         inputLabel: "What should Codex adjust before finalizing?",
         inputPlaceholder: "Describe the final tweak. Studio will rerun review and validation afterwards."
-      }),
-      reportEditorAction()
+      })
     ],
     autopilot: {
       actionId: FINAL_REVIEW_CONVERSATION_ACTION_ID,
@@ -734,8 +580,7 @@ const AI_STUDIO_WORKFLOW_STEP_CATALOG = deepFreeze({
         label: "Write report",
         promptId: "write_report",
         type: "prompt"
-      },
-      reportEditorAction()
+      }
     ],
     autopilot: {
       actionId: "write_report",
@@ -800,35 +645,7 @@ const AI_STUDIO_WORKFLOW_STEP_CATALOG = deepFreeze({
       metadata: ["accepted_commit", "branch_pushed"]
     }
   },
-  pr_file_created: {
-    actions: [
-      {
-        disabledReason: "The GitHub pull request already exists.",
-        disabledWhen: ["metadata:pr_url"],
-        id: "create_pr_file",
-        label: "Create PR file",
-        promptId: "create_pr_file",
-        type: "prompt"
-      }
-    ],
-    autopilot: {
-      actionId: "create_pr_file",
-      completeWhen: [PR_READY_CONDITION],
-      label: "Create PR file"
-    },
-    description: "Create the local pull request file.",
-    id: "pr_file_created",
-    label: "Create PR file",
-    next: {
-      disabledReason: "Create the pull request file before continuing.",
-      enabledWhen: [PR_READY_CONDITION]
-    },
-    rewindCleanup: {
-      actionResults: ["create_pr_file"],
-      artifacts: [PULL_REQUEST_ARTIFACT]
-    }
-  },
-  pr_created: {
+  [CREATE_PULL_REQUEST_STEP_ID]: {
     actions: [
       {
         enabledWhen: ["metadata:pr_url"],
@@ -838,49 +655,64 @@ const AI_STUDIO_WORKFLOW_STEP_CATALOG = deepFreeze({
         type: "link"
       },
       {
-        artifactFields: [
-          {
-            kind: "textarea",
-            label: "Pull request body",
-            name: PULL_REQUEST_ARTIFACT,
-            required: true,
-            requiredMessage: "Pull request body is required."
-          }
+        disabledReason: "Pull request details are already ready for review.",
+        disabledWhen: [
+          "artifacts:tmp/create_pull_request.title.txt,tmp/create_pull_request.body.md"
         ],
-        disabledReason: "The GitHub pull request already exists; edit it on GitHub instead.",
-        disabledWhen: ["metadata:pr_url"],
-        enabledWhen: ["artifact:pull_request.md"],
-        enabledWhenReason: "Create the pull request file before editing.",
-        id: "edit_pr",
-        label: "Edit PR",
-        type: "editor"
+        id: "resolve_pull_request",
+        label: "Draft PR",
+        promptId: "resolve_pull_request",
+        type: "prompt"
       },
       {
         adapterCapability: "create_pr_on_gh",
         disabledReason: "Commit and push changes before creating the GitHub pull request.",
         disabledWhen: ["metadata:pr_url"],
         disabledWhenReason: "The GitHub pull request already exists.",
-        enabledWhen: ["artifact:pull_request.md", "metadata:branch_pushed"],
-        enabledWhenReason: "Commit and push changes before creating the GitHub pull request.",
+        enabledWhen: [
+          "artifact:tmp/create_pull_request.title.txt",
+          "artifact:tmp/create_pull_request.body.md",
+          "metadata:branch_pushed"
+        ],
+        enabledWhenReason: "Save the pull request title/body and push the branch before creating the GitHub pull request.",
         id: "create_pr_on_gh",
         label: "Create PR on GH",
         type: "command"
       }
     ],
     autopilot: {
-      actionId: "create_pr_on_gh",
-      completeWhen: ["metadata:pr_url"],
-      label: "Create PR on GH"
+      actionSequence: [
+        {
+          actionId: "resolve_pull_request",
+          completeWhen: [
+            "artifacts:tmp/create_pull_request.title.txt,tmp/create_pull_request.body.md"
+          ],
+          label: "Draft PR"
+        },
+        {
+          actionId: "create_pr_on_gh",
+          completeWhen: ["metadata:pr_url"],
+          label: "Create PR on GH"
+        }
+      ],
+      label: "Create pull request"
     },
-    description: "Review and create the GitHub pull request.",
-    id: "pr_created",
-    label: "Edit and create PR",
+    description: "Submit the pull request body and create the GitHub pull request.",
+    id: CREATE_PULL_REQUEST_STEP_ID,
+    label: "Create pull request",
     next: {
       disabledReason: "Create the pull request before continuing.",
       enabledWhen: ["metadata:pr_url"]
     },
     rewindCleanup: {
       actionResults: ["create_pr_on_gh"],
+      artifacts: [
+        "tmp/create_pull_request.body.md",
+        "tmp/create_pull_request.title.txt",
+        "create_pull_request.url.txt",
+        "create_pull_request.number.txt",
+        "create_pull_request.source.txt"
+      ],
       metadata: [
         {
           name: "pr_url",
@@ -903,7 +735,6 @@ const AI_STUDIO_WORKFLOW_STEP_CATALOG = deepFreeze({
   },
   pr_merged: {
     actions: [
-      reportEditorAction(),
       {
         disabledReason: "Create the pull request before preparing for merge.",
         disabledWhen: ["metadata:pr_merged", "metadata:merge_skipped"],
@@ -980,7 +811,6 @@ const AI_STUDIO_WORKFLOW_STEP_CATALOG = deepFreeze({
   },
   session_finished: {
     actions: [
-      reportEditorAction(),
       {
         adapterCapability: "finish_session",
         disabledReason: "Merge and sync the main checkout, or choose not to merge, before archiving.",
@@ -1006,7 +836,6 @@ const AI_STUDIO_WORKFLOW_STEP_CATALOG = deepFreeze({
   },
   local_session_finished: {
     actions: [
-      reportEditorAction(),
       {
         adapterCapability: "finish_session",
         id: "finish_session",
@@ -1049,8 +878,7 @@ const AI_STUDIO_WORKFLOW_PROFILES = deepFreeze({
       "report_created",
       "project_knowledge_updated",
       "changes_committed",
-      "pr_file_created",
-      "pr_created",
+      CREATE_PULL_REQUEST_STEP_ID,
       "pr_merged",
       "main_checkout_synced",
       "session_finished"
@@ -1077,8 +905,7 @@ const AI_STUDIO_WORKFLOW_PROFILES = deepFreeze({
       "report_created",
       "project_knowledge_updated",
       "changes_committed",
-      "pr_file_created",
-      "pr_created",
+      CREATE_PULL_REQUEST_STEP_ID,
       "pr_merged",
       "main_checkout_synced",
       "session_finished"
@@ -1102,8 +929,7 @@ const AI_STUDIO_WORKFLOW_PROFILES = deepFreeze({
       "report_created",
       "project_knowledge_updated",
       "changes_committed",
-      "pr_file_created",
-      "pr_created",
+      CREATE_PULL_REQUEST_STEP_ID,
       "pr_merged",
       "main_checkout_synced",
       "session_finished"
@@ -1122,8 +948,7 @@ const AI_STUDIO_WORKFLOW_PROFILES = deepFreeze({
       MAINTENANCE_CONVERSATION_STEP_ID,
       "project_validated",
       "changes_committed",
-      "pr_file_created",
-      "pr_created",
+      CREATE_PULL_REQUEST_STEP_ID,
       "pr_merged",
       "main_checkout_synced",
       "session_finished"

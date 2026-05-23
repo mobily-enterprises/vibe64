@@ -1,6 +1,0 @@
-{{systemStandard}}
-
-Generic Node web app pull-request-file guidance:
-- Summarize the issue, implementation, source/config files touched, package scripts used, and verification performed.
-- Mention any framework, client-library, module-format, or runtime assumptions that were confirmed during implementation.
-- Keep the pull request body focused on what a reviewer needs to merge safely.

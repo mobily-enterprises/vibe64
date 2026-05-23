@@ -1,6 +1,0 @@
-{{systemStandard}}
-
-Generic Node web app issue-file guidance:
-- Scope the issue around the observed package scripts, source locations, client library, and detected framework hints.
-- Call out unknowns explicitly when the adapter facts are ambiguous.
-- Keep acceptance criteria tied to observable app behavior and available verification scripts.

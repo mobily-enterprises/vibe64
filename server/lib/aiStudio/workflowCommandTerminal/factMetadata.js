@@ -87,14 +87,19 @@ function createIssueSuccessMetadataFromFacts({ facts = {} } = {}) {
 }
 
 function createPrSuccessMetadataFromFacts({ facts = {}, session = {} } = {}) {
-  const metadata = metadataFromFacts(facts, ["pr_url"]);
+  const metadata = metadataFromFacts(facts, [
+    "pr_number",
+    "pr_source",
+    "pr_title",
+    "pr_url"
+  ]);
   if (!metadata.pr_url) {
     return commandMetadataResult();
   }
   return commandMetadataResult({
     metadata: {
       ...metadata,
-      pr_source: normalizeText(session.metadata?.source_pr_url) ? "replacement" : "created"
+      pr_source: normalizeText(metadata.pr_source) || (normalizeText(session.metadata?.source_pr_url) ? "replacement" : "created")
     }
   });
 }

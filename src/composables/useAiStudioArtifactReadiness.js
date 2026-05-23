@@ -1,35 +1,23 @@
 import { onBeforeUnmount, ref, unref, watch } from "vue";
 import {
-  aiStudioAutopilotArtifactsStreamEndpoint,
-  clearAiStudioAutopilotArtifacts,
-  readAiStudioAutopilotArtifacts
+  aiStudioArtifactReadinessStreamEndpoint,
+  readAiStudioArtifactReadiness
 } from "@/lib/aiStudioSessionApi.js";
 import { parseJsonStreamEvent } from "@/lib/streamEvents.js";
 
-function emptyAutopilotArtifacts(sessionId = "") {
+function emptyArtifactReadiness(sessionId = "") {
   return {
     artifactReadiness: {},
-    conversation: {
-      history: [],
-      inputFormat: null,
-      response: ""
-    },
-    inputFormat: null,
-    issueDraft: null,
     ok: true,
-    promptDone: null,
-    questions: null,
-    response: "",
     sessionId: String(sessionId || "")
   };
 }
 
-function useAiStudioAutopilotArtifacts({
-  clearArtifacts = clearAiStudioAutopilotArtifacts,
-  readArtifacts = readAiStudioAutopilotArtifacts,
+function useAiStudioArtifactReadiness({
+  readReadiness = readAiStudioArtifactReadiness,
   sessionId = () => ""
 } = {}) {
-  const artifacts = ref(emptyAutopilotArtifacts());
+  const readiness = ref(emptyArtifactReadiness());
   const streamError = ref("");
 
   let eventSource = null;
@@ -45,13 +33,13 @@ function useAiStudioAutopilotArtifacts({
     eventSourceSessionId = "";
   }
 
-  function applyArtifacts(payload = {}) {
+  function applyReadiness(payload = {}) {
     const payloadSessionId = String(payload.sessionId || currentSessionId());
     if (payloadSessionId !== currentSessionId()) {
       return;
     }
-    artifacts.value = {
-      ...emptyAutopilotArtifacts(payloadSessionId),
+    readiness.value = {
+      ...emptyArtifactReadiness(payloadSessionId),
       ...payload,
       sessionId: payloadSessionId
     };
@@ -60,22 +48,11 @@ function useAiStudioAutopilotArtifacts({
   async function refresh() {
     const nextSessionId = currentSessionId();
     if (!nextSessionId) {
-      artifacts.value = emptyAutopilotArtifacts();
-      return artifacts.value;
+      readiness.value = emptyArtifactReadiness();
+      return readiness.value;
     }
-    const response = await readArtifacts(nextSessionId);
-    applyArtifacts(response);
-    return response;
-  }
-
-  async function clear() {
-    const nextSessionId = currentSessionId();
-    if (!nextSessionId) {
-      artifacts.value = emptyAutopilotArtifacts();
-      return artifacts.value;
-    }
-    const response = await clearArtifacts(nextSessionId);
-    applyArtifacts(response?.ok === false ? emptyAutopilotArtifacts(nextSessionId) : response);
+    const response = await readReadiness(nextSessionId);
+    applyReadiness(response);
     return response;
   }
 
@@ -83,7 +60,7 @@ function useAiStudioAutopilotArtifacts({
     const nextSessionId = currentSessionId();
     if (!nextSessionId) {
       closeStream();
-      artifacts.value = emptyAutopilotArtifacts();
+      readiness.value = emptyArtifactReadiness();
       return false;
     }
     if (eventSource && eventSourceSessionId === nextSessionId) {
@@ -92,38 +69,38 @@ function useAiStudioAutopilotArtifacts({
 
     closeStream();
     streamError.value = "";
-    artifacts.value = emptyAutopilotArtifacts(nextSessionId);
+    readiness.value = emptyArtifactReadiness(nextSessionId);
 
     if (typeof EventSource !== "function") {
       void refresh().catch((error) => {
-        streamError.value = String(error?.message || error || "Autopilot files could not be read.");
+        streamError.value = String(error?.message || error || "Artifact readiness could not be read.");
       });
       return false;
     }
 
-    const source = new EventSource(aiStudioAutopilotArtifactsStreamEndpoint(nextSessionId), {
+    const source = new EventSource(aiStudioArtifactReadinessStreamEndpoint(nextSessionId), {
       withCredentials: true
     });
     eventSource = source;
     eventSourceSessionId = nextSessionId;
 
     const isCurrentStream = () => source === eventSource;
-    source.addEventListener("autopilot-artifacts.updated", (event) => {
+    source.addEventListener("artifact-readiness.updated", (event) => {
       if (!isCurrentStream()) {
         return;
       }
       streamError.value = "";
-      applyArtifacts(parseJsonStreamEvent(event));
+      applyReadiness(parseJsonStreamEvent(event));
     });
-    source.addEventListener("autopilot-artifacts.error", (event) => {
+    source.addEventListener("artifact-readiness.error", (event) => {
       if (!isCurrentStream()) {
         return;
       }
-      streamError.value = parseJsonStreamEvent(event).error || "Autopilot file stream failed.";
+      streamError.value = parseJsonStreamEvent(event).error || "Artifact readiness stream failed.";
     });
     source.onerror = () => {
       if (isCurrentStream()) {
-        streamError.value = "Autopilot file stream disconnected.";
+        streamError.value = "Artifact readiness stream disconnected.";
       }
     };
     return true;
@@ -136,9 +113,8 @@ function useAiStudioAutopilotArtifacts({
   onBeforeUnmount(closeStream);
 
   return {
-    artifacts,
-    clear,
     closeStream,
+    readiness,
     refresh,
     startStream,
     streamError
@@ -146,5 +122,5 @@ function useAiStudioAutopilotArtifacts({
 }
 
 export {
-  useAiStudioAutopilotArtifacts
+  useAiStudioArtifactReadiness
 };

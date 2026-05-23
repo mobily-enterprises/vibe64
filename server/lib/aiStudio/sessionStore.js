@@ -17,6 +17,7 @@ const AI_STUDIO_SESSION_SCHEMA_VERSION = 1;
 const AI_STUDIO_PROMPT_CONTEXT_SNAPSHOT_SCHEMA_VERSION = 1;
 const AI_STUDIO_INITIAL_STEP = "session_created";
 const ISSUE_WORD_ARTIFACT = "issue_word";
+const REPORT_ARTIFACT = "report.md";
 const ISSUE_WORD_MAX_LENGTH = 24;
 const AI_STUDIO_SESSION_STATUS = deepFreeze({
   ABANDONED: "abandoned",
@@ -26,7 +27,7 @@ const AI_STUDIO_SESSION_STATUS = deepFreeze({
 });
 const AI_STUDIO_SESSION_STATUSES = new Set(Object.values(AI_STUDIO_SESSION_STATUS));
 const ACTION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
-const ARTIFACT_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/u;
+const ARTIFACT_PATH_SEGMENT_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/u;
 const METADATA_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/u;
 const SESSION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
 const STEP_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
@@ -154,6 +155,22 @@ function sortedDirectoryNames(entries, isAllowedName) {
     .sort((left, right) => left.localeCompare(right));
 }
 
+async function sortedArtifactPaths(rootPath, relativeDirectory = "") {
+  const directoryPath = relativeDirectory ? path.join(rootPath, ...relativeDirectory.split("/")) : rootPath;
+  const entries = await readDirectoryEntries(directoryPath);
+  const files = sortedFileNames(entries, (name) => ARTIFACT_PATH_SEGMENT_PATTERN.test(name))
+    .map((name) => relativeDirectory ? `${relativeDirectory}/${name}` : name);
+  const directories = sortedDirectoryNames(entries, (name) => ARTIFACT_PATH_SEGMENT_PATTERN.test(name));
+  const nestedFiles = await Promise.all(directories.map((directoryName) => {
+    const nestedDirectory = relativeDirectory ? `${relativeDirectory}/${directoryName}` : directoryName;
+    return sortedArtifactPaths(rootPath, nestedDirectory);
+  }));
+  return [
+    ...files,
+    ...nestedFiles.flat()
+  ].sort((left, right) => left.localeCompare(right));
+}
+
 function toDate(value) {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -194,6 +211,7 @@ function resolveAiStudioSessionPaths({
     sessionsRoot,
     stateRoot,
     statusPath: sessionRoot ? path.join(sessionRoot, "status") : "",
+    stepStatesRoot: sessionRoot ? path.join(sessionRoot, "step-state") : "",
     stepsRoot: sessionRoot ? path.join(sessionRoot, "steps") : "",
     targetRoot: normalizedTargetRoot
   };
@@ -228,16 +246,28 @@ function sessionNameFromIssueWord(issueWord = "") {
     .find(Boolean) || "";
 }
 
-function assertSafeArtifactName(name) {
-  const normalizedName = normalizeText(name);
-  if (!ARTIFACT_NAME_PATTERN.test(normalizedName)) {
-    throw aiStudioError(`Invalid ai-studio artifact name: ${normalizedName || "(empty)"}`, "ai_studio_invalid_artifact_path");
+function assertSafeArtifactPath(relativePath) {
+  const normalizedPath = normalizeText(relativePath);
+  const segments = normalizedPath.split("/");
+  if (
+    !normalizedPath
+    || normalizedPath.includes("\\")
+    || segments.some((segment) => !ARTIFACT_PATH_SEGMENT_PATTERN.test(segment))
+  ) {
+    throw aiStudioError(`Invalid ai-studio artifact path: ${normalizedPath || "(empty)"}`, "ai_studio_invalid_artifact_path");
   }
-  return normalizedName;
+  return segments.join("/");
 }
 
-function artifactFilePath(sessionPaths, name) {
-  return path.join(sessionPaths.artifactsRoot, assertSafeArtifactName(name));
+function artifactFilePath(sessionPaths, relativePath) {
+  const safeRelativePath = assertSafeArtifactPath(relativePath);
+  const artifactsRoot = path.resolve(sessionPaths.artifactsRoot);
+  const artifactPath = path.resolve(artifactsRoot, ...safeRelativePath.split("/"));
+  const pathFromRoot = path.relative(artifactsRoot, artifactPath);
+  if (pathFromRoot.startsWith("..") || path.isAbsolute(pathFromRoot)) {
+    throw aiStudioError(`Invalid ai-studio artifact path: ${safeRelativePath}`, "ai_studio_invalid_artifact_path");
+  }
+  return artifactPath;
 }
 
 function actionResultFilePath(sessionPaths, actionId) {
@@ -246,6 +276,10 @@ function actionResultFilePath(sessionPaths, actionId) {
 
 function completedStepFilePath(sessionPaths, stepId) {
   return path.join(sessionPaths.stepsRoot, assertSafeStepId(stepId));
+}
+
+function stepStateFilePath(sessionPaths, stepId) {
+  return path.join(sessionPaths.stepStatesRoot, assertSafeStepId(stepId));
 }
 
 function createAiStudioSessionStore({
@@ -375,10 +409,7 @@ function createAiStudioSessionStore({
 
   async function readArtifactReadiness(sessionId) {
     const sessionPaths = await ensureSessionRoot(sessionId);
-    const names = sortedFileNames(
-      await readDirectoryEntries(sessionPaths.artifactsRoot),
-      (name) => ARTIFACT_NAME_PATTERN.test(name)
-    );
+    const names = await sortedArtifactPaths(sessionPaths.artifactsRoot);
     const entries = await Promise.all(names.map(async (name) => {
       const text = await readTextIfExists(artifactFilePath(sessionPaths, name));
       return [
@@ -536,6 +567,43 @@ function createAiStudioSessionStore({
     await Promise.all(stepIds.map((stepId) => deleteCompletedStep(sessionId, stepId)));
   }
 
+  async function readStepState(sessionId, stepId) {
+    const sessionPaths = await ensureSessionRoot(sessionId);
+    const stateText = await readTextIfExists(stepStateFilePath(sessionPaths, stepId));
+    if (!stateText) {
+      return null;
+    }
+    try {
+      const state = JSON.parse(stateText);
+      return isPlainObject(state) ? state : null;
+    } catch {
+      throw aiStudioError(`Invalid ai-studio step state: ${assertSafeStepId(stepId)}`, "ai_studio_invalid_step_state");
+    }
+  }
+
+  async function writeStepState(sessionId, stepId, state = {}) {
+    const sessionPaths = await ensureSessionRoot(sessionId);
+    const normalizedStepId = assertSafeStepId(stepId);
+    const record = {
+      ...state,
+      at: normalizeText(state.at) || now().toISOString(),
+      stepId: normalizedStepId
+    };
+    await writeJsonFile(stepStateFilePath(sessionPaths, normalizedStepId), record);
+    return record;
+  }
+
+  async function deleteStepState(sessionId, stepId) {
+    const sessionPaths = await ensureSessionRoot(sessionId);
+    await rm(stepStateFilePath(sessionPaths, stepId), {
+      force: true
+    });
+  }
+
+  async function deleteStepStates(sessionId, stepIds = []) {
+    await Promise.all(stepIds.map((stepId) => deleteStepState(sessionId, stepId)));
+  }
+
   async function readManifest(sessionId) {
     const sessionPaths = await ensureSessionRoot(sessionId);
     const manifestText = await readTextIfExists(sessionPaths.manifestPath);
@@ -568,6 +636,7 @@ function createAiStudioSessionStore({
       readPromptContextSnapshot(sessionPaths.sessionId)
     ]);
     const sessionName = await sessionNameForSession(sessionPaths, metadata);
+    const reportReady = artifactReadiness[REPORT_ARTIFACT]?.nonEmpty === true;
     return {
       actionResults,
       actionsRoot: sessionPaths.actionsRoot,
@@ -581,11 +650,13 @@ function createAiStudioSessionStore({
       metadataRoot: sessionPaths.metadataRoot,
       promptContextSnapshot,
       promptContextSnapshotPath: sessionPaths.promptContextSnapshotPath,
+      reportPath: reportReady ? artifactFilePath(sessionPaths, REPORT_ARTIFACT) : "",
       sessionId: sessionPaths.sessionId,
       sessionName,
       sessionRoot: sessionPaths.sessionRoot,
       stateRoot: sessionPaths.stateRoot,
       status,
+      stepStatesRoot: sessionPaths.stepStatesRoot,
       stepsRoot: sessionPaths.stepsRoot,
       targetRoot: sessionPaths.targetRoot
     };
@@ -626,6 +697,9 @@ function createAiStudioSessionStore({
         recursive: true
       }),
       mkdir(sessionPaths.metadataRoot, {
+        recursive: true
+      }),
+      mkdir(sessionPaths.stepStatesRoot, {
         recursive: true
       }),
       mkdir(sessionPaths.stepsRoot, {
@@ -673,6 +747,8 @@ function createAiStudioSessionStore({
     deleteMetadataValue,
     deleteMetadataValues,
     deletePromptContextSnapshot,
+    deleteStepState,
+    deleteStepStates,
     listSessions,
     paths,
     readArtifact,
@@ -688,6 +764,7 @@ function createAiStudioSessionStore({
     readPromptContextSnapshot,
     readSession,
     readStatus,
+    readStepState,
     writeArtifact,
     writeActionResult,
     writeCompletedStep,
@@ -695,6 +772,7 @@ function createAiStudioSessionStore({
     writeIssueWordMetadata,
     writeMetadataValue,
     writePromptContextSnapshot,
+    writeStepState,
     writeStatus
   };
 }

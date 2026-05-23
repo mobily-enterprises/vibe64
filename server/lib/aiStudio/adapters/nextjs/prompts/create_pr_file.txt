@@ -1,9 +1,0 @@
-{{systemStandard}}
-
-Next.js selected blueprint:
-{{adapter.promptContext.environment_blueprint}}
-
-Next.js-specific pull-request-file guidance:
-- Summarize the accepted issue, implementation, routes/components/config touched, selected blueprint impact, and verification performed.
-- Call out server/client boundary changes, environment variables, database/runtime changes, package scripts, and remaining Next.js risks when relevant.
-- Keep the pull request body focused on what a reviewer needs to merge safely.

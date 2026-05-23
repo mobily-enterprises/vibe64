@@ -1,34 +1,50 @@
 <template>
   <form
-    v-if="issueRequest.formVisible"
-    class="studio-ai-sessions__issue-request"
-    @submit.prevent="issueRequest.sendPrompt"
+    v-if="stepInput.visible"
+    class="studio-ai-sessions__step-input"
+    @submit.prevent="stepInput.submit"
   >
-    <v-textarea
-      :model-value="issueRequest.text"
+    <p
+      v-if="stepInput.interaction?.prompt"
+      class="text-body-2 text-medium-emphasis mb-0"
+    >
+      {{ stepInput.interaction.prompt }}
+    </p>
+
+    <component
+      :is="field.kind === 'textarea' ? 'v-textarea' : 'v-text-field'"
+      v-for="field in stepInput.fields"
+      :key="field.name"
       auto-grow
       class="studio-ai-sessions__issue-request-input"
-      :disabled="page.busy"
-      :error-messages="issueRequest.error ? [issueRequest.error] : []"
-      hint="Discuss issue and define scope"
-      label="Issue request"
-      persistent-hint
-      rows="5"
+      :disabled="page.busy || stepInput.saving"
+      :label="field.label"
+      :model-value="stepInput.values[field.name] || ''"
+      :placeholder="field.placeholder"
+      :rows="field.kind === 'textarea' ? 8 : undefined"
       variant="outlined"
-      @update:model-value="emit('update-issue-request-text', $event)"
+      @update:model-value="stepInput.updateValue(field.name, $event)"
     />
+
+    <v-alert
+      v-if="stepInput.error"
+      type="warning"
+      variant="tonal"
+      density="compact"
+    >
+      {{ stepInput.error }}
+    </v-alert>
 
     <div class="studio-ai-sessions__actions">
       <v-btn
         color="primary"
         variant="flat"
-        :disabled="!issueRequest.canSubmit"
-        :loading="issueRequest.submitting"
-        :prepend-icon="mdiSend"
-        :title="issueRequest.submitTitle"
+        :disabled="page.busy || !stepInput.canSubmit"
+        :loading="stepInput.saving"
+        :prepend-icon="mdiCheck"
         type="submit"
       >
-        Discuss issue
+        {{ stepInput.interaction?.submitLabel || "Submit" }}
       </v-btn>
 
       <AiStudioSessionActionButton
@@ -39,6 +55,19 @@
         :busy="page.busy"
         variant="tonal"
       />
+
+      <v-btn
+        v-if="actions.currentNext?.visible"
+        color="primary"
+        variant="tonal"
+        :disabled="page.busy || actions.currentNext.enabled !== true"
+        :loading="actions.advanceCommand.isRunning"
+        :prepend-icon="mdiArrowRight"
+        :title="actions.currentNext.disabledReason || actions.currentNext.label || 'Next'"
+        @click="actions.goNext"
+      >
+        {{ actions.currentNext.label || "Next" }}
+      </v-btn>
     </div>
   </form>
 
@@ -107,8 +136,8 @@
 <script setup>
 import {
   mdiArrowRight,
-  mdiFileCompare,
-  mdiSend
+  mdiCheck,
+  mdiFileCompare
 } from "@mdi/js";
 import AiStudioSessionActionButton from "@/components/studio/ai-studio-session/AiStudioSessionActionButton.vue";
 
@@ -121,10 +150,6 @@ defineProps({
     default: () => ({}),
     type: Object
   },
-  issueRequest: {
-    default: () => ({}),
-    type: Object
-  },
   page: {
     default: () => ({}),
     type: Object
@@ -132,10 +157,12 @@ defineProps({
   review: {
     default: () => ({}),
     type: Object
+  },
+  stepInput: {
+    default: () => ({}),
+    type: Object
   }
 });
-
-const emit = defineEmits(["update-issue-request-text"]);
 </script>
 
 <style scoped>
@@ -146,9 +173,9 @@ const emit = defineEmits(["update-issue-request-text"]);
   gap: 0.45rem;
 }
 
-.studio-ai-sessions__issue-request {
+.studio-ai-sessions__step-input {
   display: grid;
-  gap: 0.45rem;
+  gap: 0.65rem;
 }
 
 .studio-ai-sessions__issue-request-input {

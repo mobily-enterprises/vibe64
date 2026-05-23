@@ -9,66 +9,52 @@ import {
   readRefOrGetterValue
 } from "@/lib/vueRefOrGetterValue.js";
 
-function artifactReadinessState(readiness = {}, artifactName = "") {
-  const state = readiness?.[artifactName];
-  return state && typeof state === "object" && !Array.isArray(state) ? state : {};
-}
-
-function mergedArtifactReadiness(session = {}, liveReadiness = {}, artifactName = "") {
-  return {
-    ...artifactReadinessState(session?.artifactReadiness, artifactName),
-    ...artifactReadinessState(liveReadiness, artifactName)
-  };
-}
-
-function actionById(actions = [], actionId = "") {
-  return (Array.isArray(actions) ? actions : [])
-    .find((action) => action.id === actionId) || null;
+function artifactReadinessVersion(readiness = {}) {
+  return Object.entries(readiness || {})
+    .sort(([leftName], [rightName]) => leftName.localeCompare(rightName))
+    .map(([name, state]) => [
+      name,
+      state?.nonEmpty === true ? "ready" : "missing",
+      String(state?.fingerprint || "")
+    ].join(":"))
+    .join("|");
 }
 
 function useAiStudioArtifactPreview({
-  actionId = "",
   active = true,
   artifactReadiness = null,
-  artifactName = "",
-  currentActions,
   loadErrorMessage = "Artifact could not be loaded.",
+  previewId = "",
   session
 } = {}) {
-  const artifacts = useAiStudioSessionArtifacts();
+  const artifactPreview = useAiStudioSessionArtifacts();
   const error = ref("");
   const text = ref("");
   let requestId = 0;
 
   const currentSession = computed(() => readRefOrGetterValue(session) || null);
   const currentLiveReadiness = computed(() => readRefOrGetterValue(artifactReadiness) || {});
-  const currentArtifactReadiness = computed(() => mergedArtifactReadiness(
-    currentSession.value,
-    currentLiveReadiness.value,
-    artifactName
-  ));
-  const editorAction = computed(() => actionById(readRefOrGetterValue(currentActions), actionId));
-  const loading = computed(() => artifacts.artifactsLoading.value);
-  const ready = computed(() => currentArtifactReadiness.value.nonEmpty === true);
-  const fingerprint = computed(() => String(currentArtifactReadiness.value.fingerprint || ""));
+  const currentReadinessVersion = computed(() => artifactReadinessVersion({
+    ...currentSession.value?.artifactReadiness,
+    ...currentLiveReadiness.value
+  }));
+  const loading = computed(() => artifactPreview.artifactsLoading.value);
   const canLoad = computed(() => Boolean(
     readRefOrGetterValue(active) !== false &&
     currentSession.value?.sessionId &&
-    editorAction.value?.enabled === true
+    previewId
   ));
   const visible = computed(() => Boolean(
     loading.value ||
     error.value ||
-    text.value ||
-    editorAction.value?.enabled === true
+    text.value
   ));
   const loadKey = computed(() => [
     readRefOrGetterValue(active) === false ? "inactive" : "active",
     currentSession.value?.sessionId || "",
     currentSession.value?.currentStep || "",
-    ready.value ? "ready" : "missing",
-    fingerprint.value,
-    editorAction.value?.enabled === true ? "enabled" : "disabled"
+    previewId,
+    currentReadinessVersion.value
   ].join(":"));
 
   async function load() {
@@ -82,7 +68,7 @@ function useAiStudioArtifactPreview({
     }
 
     try {
-      const response = await artifacts.readArtifacts(currentSession.value.sessionId, actionId);
+      const response = await artifactPreview.readArtifactPreview(currentSession.value.sessionId, previewId);
       if (nextRequestId !== requestId) {
         return;
       }
@@ -90,7 +76,7 @@ function useAiStudioArtifactPreview({
         error.value = resolveResponseErrorMessage(response, loadErrorMessage);
         return;
       }
-      text.value = String(response?.artifacts?.[artifactName] || "").trim();
+      text.value = String(response?.text || "").trim();
     } catch (loadError) {
       if (nextRequestId === requestId) {
         error.value = String(loadError?.message || loadError || loadErrorMessage);

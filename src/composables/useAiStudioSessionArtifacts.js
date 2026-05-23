@@ -1,123 +1,70 @@
 import { computed, nextTick, ref } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
-import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
 import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
 import { usePaths } from "@jskit-ai/users-web/client/composables/usePaths";
 import {
   AI_STUDIO_SESSIONS_API_SUFFIX,
   AI_STUDIO_SURFACE_ID,
-  LOCAL_STUDIO_COMMAND_OPTIONS,
-  aiStudioArtifactsPath,
-  aiStudioArtifactsQueryKey
+  aiStudioArtifactPreviewPath,
+  aiStudioArtifactPreviewQueryKey
 } from "@/lib/aiStudioSessionRequestConfig.js";
 
 function normalizeSessionId(sessionId = "") {
   return String(sessionId || "").trim();
 }
 
-function normalizeArtifacts(value = {}) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+function normalizePreviewId(previewId = "") {
+  return String(previewId || "").trim();
 }
 
-function normalizeActionId(actionId = "") {
-  return String(actionId || "").trim();
-}
-
-function artifactsReadPath(sessionsApiPath = "", sessionId = "", actionId = "") {
-  const basePath = aiStudioArtifactsPath(sessionsApiPath, sessionId);
-  return actionId ? `${basePath}?actionId=${encodeURIComponent(actionId)}` : basePath;
+function artifactPreviewReadPath(sessionsApiPath = "", sessionId = "", previewId = "") {
+  const basePath = aiStudioArtifactPreviewPath(sessionsApiPath, sessionId);
+  return previewId ? `${basePath}?previewId=${encodeURIComponent(previewId)}` : basePath;
 }
 
 function useAiStudioSessionArtifacts() {
   const paths = usePaths();
-  const artifactActionId = ref("");
-  const artifactSessionId = ref("");
+  const previewId = ref("");
+  const previewSessionId = ref("");
   const sessionsApiPath = computed(() => paths.api(AI_STUDIO_SESSIONS_API_SUFFIX, {
     surface: AI_STUDIO_SURFACE_ID
   }));
 
-  const artifactsResource = useEndpointResource({
+  const previewResource = useEndpointResource({
     enabled: false,
-    fallbackLoadError: "Draft could not be loaded.",
-    path: computed(() => artifactSessionId.value
-      ? artifactsReadPath(sessionsApiPath.value, artifactSessionId.value, artifactActionId.value)
+    fallbackLoadError: "Artifact preview could not be loaded.",
+    path: computed(() => previewSessionId.value
+      ? artifactPreviewReadPath(sessionsApiPath.value, previewSessionId.value, previewId.value)
       : ""),
-    queryKey: computed(() => aiStudioArtifactsQueryKey(
+    queryKey: computed(() => aiStudioArtifactPreviewQueryKey(
       AI_STUDIO_SURFACE_ID,
       ROUTE_VISIBILITY_PUBLIC,
-      artifactSessionId.value,
-      artifactActionId.value
+      previewSessionId.value,
+      previewId.value
     ))
   });
 
-  const saveArtifactsCommand = useCommand({
-    access: "never",
-    apiSuffix: AI_STUDIO_SESSIONS_API_SUFFIX,
-    buildCommandOptions: (_payload, { context }) => ({
-      method: "PUT",
-      options: LOCAL_STUDIO_COMMAND_OPTIONS,
-      path: aiStudioArtifactsPath(sessionsApiPath.value, context.sessionId)
-    }),
-    buildRawPayload: (_model, { context }) => ({
-      actionId: normalizeActionId(context.actionId),
-      artifacts: normalizeArtifacts(context.artifacts)
-    }),
-    fallbackRunError: "Draft could not be saved.",
-    messages: {
-      error: "Draft could not be saved.",
-      success: "Draft saved."
-    },
-    ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "ai-studio.session-artifacts.save",
-    suppressSuccessMessage: true,
-    surfaceId: AI_STUDIO_SURFACE_ID,
-    writeMethod: "PUT"
-  });
-
-  async function readArtifacts(sessionId = "", actionId = "") {
+  async function readArtifactPreview(sessionId = "", nextPreviewId = "") {
     const normalizedSessionId = normalizeSessionId(sessionId);
-    const normalizedActionId = normalizeActionId(actionId);
-    artifactSessionId.value = normalizedSessionId;
-    artifactActionId.value = normalizedActionId;
-    if (!artifactSessionId.value || !artifactActionId.value) {
+    const normalizedPreviewId = normalizePreviewId(nextPreviewId);
+    previewSessionId.value = normalizedSessionId;
+    previewId.value = normalizedPreviewId;
+    if (!previewSessionId.value || !previewId.value) {
       return {
-        error: "AI Studio session id and editor action id are required.",
+        error: "AI Studio session id and artifact preview id are required.",
         ok: false
       };
     }
 
     await nextTick();
-    const result = await artifactsResource.reload();
-    return result?.data || artifactsResource.data.value || {};
-  }
-
-  async function saveArtifacts(sessionId = "", actionId = "", artifacts = {}) {
-    const normalizedSessionId = normalizeSessionId(sessionId);
-    const normalizedActionId = normalizeActionId(actionId);
-    if (!normalizedSessionId || !normalizedActionId) {
-      return {
-        error: "AI Studio session id and editor action id are required.",
-        ok: false
-      };
-    }
-
-    const response = await saveArtifactsCommand.run({
-      actionId: normalizedActionId,
-      artifacts,
-      sessionId: normalizedSessionId
-    });
-    if (artifactSessionId.value === normalizedSessionId && artifactActionId.value === normalizedActionId) {
-      await artifactsResource.reload().catch(() => null);
-    }
-    return response;
+    const result = await previewResource.reload();
+    return result?.data || previewResource.data.value || {};
   }
 
   return {
-    artifactsLoadError: artifactsResource.loadError,
-    artifactsLoading: artifactsResource.isLoading,
-    readArtifacts,
-    saveArtifacts,
-    saveArtifactsCommand
+    artifactsLoadError: previewResource.loadError,
+    artifactsLoading: previewResource.isLoading,
+    readArtifactPreview
   };
 }
 

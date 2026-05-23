@@ -5,7 +5,6 @@ import {
   mdiFolderOutline,
   mdiGithub,
   mdiIdentifier,
-  mdiPencilOutline,
   mdiPlay,
   mdiProgressCheck,
   mdiRobotOutline,
@@ -142,9 +141,6 @@ function aiStudioSessionFacts(session = {}) {
 function aiStudioActionIcon(action = {}) {
   if (action.type === "prompt") {
     return mdiRobotOutline;
-  }
-  if (action.type === "editor") {
-    return mdiPencilOutline;
   }
   if (["create_issue_on_gh", "create_pr_on_gh", "merge_pr", "open_pr"].includes(action.id)) {
     return mdiGithub;

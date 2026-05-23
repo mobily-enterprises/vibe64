@@ -1,9 +1,0 @@
-{{systemStandard}}
-
-Next.js selected blueprint:
-{{adapter.promptContext.environment_blueprint}}
-
-Next.js-specific issue-file guidance:
-- Write the issue around the selected Next.js blueprint, including routing, language, styling, data layer, database runtime, and package scripts when relevant.
-- Mention `DATABASE_URL` and server-only database access if the selected database runtime is not `none`.
-- Keep acceptance criteria clear enough for a focused Next.js implementation.

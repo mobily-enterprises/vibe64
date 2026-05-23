@@ -26,6 +26,9 @@ import {
   ensureTargetRuntimeNetwork
 } from "../../../../server/lib/aiStudio/runtimeContainers.js";
 import {
+  prepareCurrentStepInputHelper
+} from "../../../../server/lib/aiStudio/currentStepInputHelperServer.js";
+import {
   promptSessionBriefing
 } from "../../../../server/lib/aiStudio/promptRenderer.js";
 import {
@@ -202,6 +205,7 @@ function codexTerminalArgs({
   codexThreadId,
   containerName,
   env = {},
+  helperMount = null,
   image = STUDIO_BASE_TOOLCHAIN_IMAGE,
   sessionId,
   startupPrompt = "",
@@ -227,7 +231,8 @@ function codexTerminalArgs({
         readOnly: true,
         source: CODEX_ATTACHMENT_HOST_ROOT,
         target: CODEX_ATTACHMENT_CONTAINER_ROOT
-      }
+      },
+      ...[helperMount].filter(Boolean)
     ],
     sessionId,
     targetRoot,
@@ -392,13 +397,22 @@ function createCodexTerminalController({ projectService } = {}) {
           target: "codex",
           targetRoot
         });
-        const terminalEnv = await projectTerminalEnvironment({
+        const baseTerminalEnv = await projectTerminalEnvironment({
           projectService,
           runtime,
           session,
           target: "codex",
           targetRoot
         });
+        const currentStepInputHelper = await prepareCurrentStepInputHelper({
+          projectService,
+          session,
+          targetRoot
+        });
+        const terminalEnv = {
+          ...baseTerminalEnv,
+          ...currentStepInputHelper.env
+        };
         const terminalEnvHash = terminalEnvironmentFingerprint(terminalEnv);
         const namespace = codexTerminalNamespace(sessionId);
         const promptSession = await runtime.promptSessionForAction(session);
@@ -411,6 +425,7 @@ function createCodexTerminalController({ projectService } = {}) {
               terminalId: id
             }),
             env: terminalEnv,
+            helperMount: currentStepInputHelper.mount,
             image: imageResult.image,
             sessionId,
             startupPrompt,

@@ -3,12 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 import {
   useAiStudioAutopilotController
 } from "../../src/composables/useAiStudioAutopilotController.js";
-import {
-  useAiStudioCodexQuestionExchange
-} from "../../src/composables/useAiStudioCodexQuestionExchange.js";
 
 const STEP_LABELS = Object.freeze({
   agent_conversation: "Make changes",
+  checklist_items_installed: "Install checklist items",
   changes_accepted: "Final review",
   changes_committed: "Commit and push changes",
   deep_ui_check_run: "Run deep UI check",
@@ -16,11 +14,12 @@ const STEP_LABELS = Object.freeze({
   implementation_reviewed: "Human review",
   issue_file_created: "Define or select issue",
   issue_submitted: "Edit and submit issue",
+  local_session_finished: "Finish local session",
   main_checkout_synced: "Sync main checkout",
+  maintenance_conversation: "Talk to Codex",
   plan_executed: "Execute plan",
   plan_made: "Make plan",
-  pr_created: "Edit and create PR",
-  pr_file_created: "Create PR file",
+  create_pull_request: "Create pull request",
   pr_merged: "Merge PR",
   project_knowledge_updated: "Update project knowledge",
   project_validated: "Validate project",
@@ -34,18 +33,20 @@ const STEP_LABELS = Object.freeze({
 
 const NEXT_STEP = Object.freeze({
   agent_conversation: "deep_ui_check_run",
+  checklist_items_installed: "maintenance_conversation",
   changes_accepted: "report_created",
-  changes_committed: "pr_file_created",
+  changes_committed: "create_pull_request",
   deep_ui_check_run: "review_run",
   dependencies_installed: "issue_file_created",
   implementation_reviewed: "deep_ui_check_run",
   issue_file_created: "issue_submitted",
   issue_submitted: "plan_made",
+  local_session_finished: "",
   main_checkout_synced: "session_finished",
+  maintenance_conversation: "local_session_finished",
   plan_executed: "implementation_reviewed",
   plan_made: "plan_executed",
-  pr_created: "pr_merged",
-  pr_file_created: "pr_created",
+  create_pull_request: "pr_merged",
   pr_merged: "main_checkout_synced",
   project_knowledge_updated: "changes_committed",
   project_validated: "changes_accepted",
@@ -56,23 +57,51 @@ const NEXT_STEP = Object.freeze({
   worktree_created: "dependencies_installed"
 });
 
+const BIG_FEATURE_WORKFLOW_STEPS = Object.freeze([
+  "session_created",
+  "work_source_selected",
+  "worktree_created",
+  "dependencies_installed",
+  "issue_file_created",
+  "issue_submitted",
+  "plan_made",
+  "plan_executed",
+  "implementation_reviewed",
+  "deep_ui_check_run",
+  "review_run",
+  "project_validated",
+  "changes_accepted",
+  "report_created",
+  "project_knowledge_updated",
+  "changes_committed",
+  "create_pull_request",
+  "pr_merged",
+  "main_checkout_synced",
+  "session_finished"
+]);
+
 const STEP_AUTOPILOT = Object.freeze({
   agent_conversation: {
     actionId: "agent_conversation",
     kind: "agent_conversation",
-    responseArtifact: "response.md",
     stop: true
+  },
+  checklist_items_installed: {
+    stage: {
+      actionId: "install_dependencies",
+      label: "Install checklist items"
+    }
   },
   changes_accepted: {
     actionId: "final_review_conversation",
     kind: "final_review",
-    responseArtifact: "response.md",
     stop: true
   },
   changes_committed: {
-    actionId: "commit_changes",
-    completeWhen: ["metadata:accepted_commit", "metadata:branch_pushed"],
-    label: "Commit and push changes"
+    stage: {
+      actionId: "commit_changes",
+      label: "Commit and push changes"
+    }
   },
   deep_ui_check_run: {
     actionId: "run_deep_ui_check",
@@ -80,14 +109,14 @@ const STEP_AUTOPILOT = Object.freeze({
     userDecision: true
   },
   dependencies_installed: {
-    actionId: "install_dependencies",
-    completeWhen: ["metadata:dependencies_installed"],
-    label: "Install dependencies"
+    stage: {
+      actionId: "install_dependencies",
+      label: "Install dependencies"
+    }
   },
   implementation_reviewed: {
     actionId: "human_review_conversation",
     kind: "implementation_review",
-    responseArtifact: "response.md",
     stop: true
   },
   issue_file_created: {
@@ -95,14 +124,16 @@ const STEP_AUTOPILOT = Object.freeze({
     stop: true
   },
   issue_submitted: {
-    actionId: "create_issue_on_gh",
-    completeWhen: ["metadata:issue_url"],
-    label: "Edit and submit issue"
+    stage: {
+      actionId: "create_issue_on_gh",
+      label: "Edit and submit issue"
+    }
   },
   main_checkout_synced: {
-    actionId: "sync_main_checkout",
-    completeWhen: ["metadata:main_checkout_synced"],
-    label: "Sync main checkout"
+    stage: {
+      actionId: "sync_main_checkout",
+      label: "Sync main checkout"
+    }
   },
   plan_executed: {
     actionId: "execute_plan",
@@ -112,15 +143,20 @@ const STEP_AUTOPILOT = Object.freeze({
     actionId: "make_plan",
     label: "Make plan"
   },
-  pr_created: {
-    actionId: "create_pr_on_gh",
-    completeWhen: ["metadata:pr_url"],
-    label: "Create PR on GH"
-  },
-  pr_file_created: {
-    actionId: "create_pr_file",
-    completeWhen: ["any:metadata:pr_url;artifact:pull_request.md"],
-    label: "Create PR file"
+  create_pull_request: {
+    stages: [
+      {
+        actionId: "resolve_pull_request",
+        complete: (metadata) => Boolean(metadata.pr_draft_ready),
+        label: "Draft PR"
+      },
+      {
+        actionId: "create_pr_on_gh",
+        complete: (metadata) => Boolean(metadata.pr_url),
+        label: "Create PR on GH"
+      }
+    ],
+    label: "Create pull request"
   },
   pr_merged: {
     kind: "merge_review",
@@ -131,15 +167,15 @@ const STEP_AUTOPILOT = Object.freeze({
     label: "Update project knowledge"
   },
   project_validated: {
-    actionSequence: [
+    stages: [
       {
         actionId: "update_code_index",
-        completeWhen: ["metadata:code_index_updated"],
+        complete: (metadata) => Boolean(metadata.code_index_updated),
         label: "Update code index"
       },
       {
         actionId: "run_automated_checks",
-        completeWhen: ["metadata:automated_checks_passed"],
+        complete: (metadata) => Boolean(metadata.automated_checks_passed),
         label: "Run automated checks"
       }
     ],
@@ -147,7 +183,6 @@ const STEP_AUTOPILOT = Object.freeze({
   },
   report_created: {
     actionId: "write_report",
-    completeWhen: ["artifact:report.md"],
     label: "Write report"
   },
   review_run: {
@@ -158,16 +193,27 @@ const STEP_AUTOPILOT = Object.freeze({
     kind: "finished",
     stop: true
   },
+  local_session_finished: {
+    kind: "finished",
+    stop: true
+  },
+  maintenance_conversation: {
+    actionId: "agent_conversation",
+    kind: "agent_conversation",
+    stop: true
+  },
   work_source_selected: {
-    actionId: "use_new_branch",
-    advanceOnSuccess: true,
-    completeWhen: ["metadata:work_source"],
-    label: "Choose work source"
+    stage: {
+      actionId: "use_new_branch",
+      advanceOnSuccess: true,
+      label: "Choose work source"
+    }
   },
   worktree_created: {
-    actionId: "create_worktree",
-    completeWhen: ["metadata:worktree_path"],
-    label: "Create worktree"
+    stage: {
+      actionId: "create_worktree",
+      label: "Create worktree"
+    }
   }
 });
 
@@ -208,12 +254,12 @@ const COMMAND_METADATA = Object.freeze({
 
 const PROMPT_ACTION_IDS = new Set([
   "agent_conversation",
-  "create_pr_file",
   "execute_plan",
   "final_review_conversation",
   "human_review_conversation",
   "make_plan",
   "prepare_for_merge",
+  "resolve_pull_request",
   "run_deep_ui_check",
   "run_deslop",
   "update_project_knowledge",
@@ -235,6 +281,60 @@ describe("useAiStudioAutopilotController", () => {
     }));
   });
 
+  it("continues non-commit maintenance through server-advanced command steps", async () => {
+    const context = createControllerContext({
+      stepId: "worktree_created",
+      workflowSteps: [
+        "session_created",
+        "worktree_created",
+        "checklist_items_installed",
+        "maintenance_conversation",
+        "local_session_finished"
+      ]
+    });
+
+    await context.controller.start();
+
+    expect(context.session.value.currentStep).toBe("maintenance_conversation");
+    expect(context.controller.failure.value).toBe(null);
+    expect(context.commandRunner.runCommandAction).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      action: expect.objectContaining({ id: "create_worktree" }),
+      advanceOnSuccess: true
+    }));
+    expect(context.commandRunner.runCommandAction).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      action: expect.objectContaining({ id: "install_dependencies" }),
+      advanceOnSuccess: true
+    }));
+  });
+
+  it("shows a completed conversation even if Codex terminal activity is stale", () => {
+    const context = createControllerContext({
+      metadata: {
+        response_ready: "1"
+      },
+      stepId: "maintenance_conversation",
+      stepMachineStatuses: {
+        maintenance_conversation: {
+          status: "done",
+          stepId: "maintenance_conversation"
+        }
+      },
+      workflowSteps: [
+        "session_created",
+        "worktree_created",
+        "checklist_items_installed",
+        "maintenance_conversation",
+        "local_session_finished"
+      ]
+    });
+
+    context.codexTerminal.working.value = true;
+
+    expect(context.controller.waitingForCodex.value).toBe(false);
+    expect(context.controller.screenState.value.kind).toBe("agent_conversation");
+    expect(context.controller.canFinishAgentConversation.value).toBe(true);
+  });
+
   it("continues the big-feature workflow to the implementation review stop", async () => {
     const context = createControllerContext({
       metadata: {
@@ -253,11 +353,13 @@ describe("useAiStudioAutopilotController", () => {
     ]);
   });
 
-  it("continues from existing done conversation files without resending the prompt", async () => {
+  it("continues from an already completed prompt step without resending the prompt", async () => {
     const context = createControllerContext({
+      stepMachineStatuses: {
+        plan_executed: "done"
+      },
       stepId: "plan_executed"
     });
-    context.writeConversationDone("Execute plan complete.");
 
     await context.controller.resume();
 
@@ -265,27 +367,50 @@ describe("useAiStudioAutopilotController", () => {
     expect(context.actions.runAction).not.toHaveBeenCalled();
   });
 
-  it("pauses for Codex questions and resumes after plain-text answers", async () => {
+  it("pauses when Codex asks for input through the step machine", async () => {
     const context = createControllerContext({
       stepId: "plan_executed"
     });
     context.promptBehavior.execute_plan = () => {
-      context.writeConversationQuestions([
-        "Which database should Codex use?"
-      ]);
+      context.setStepMachineStatus("plan_executed", "need_input");
     };
 
     await context.controller.resume();
 
-    expect(context.controller.screenState.value.kind).toBe("questions");
-    context.questionExchange.setAnswer("q1", "Use the managed MariaDB service.");
-    await context.questionExchange.submitAnswers();
+    expect(context.session.value.currentStep).toBe("plan_executed");
+    expect(context.session.value.stepMachine.status).toBe("need_input");
+    expect(context.controller.failure.value).toBe(null);
+  });
 
-    expect(context.codexTerminal.injectPrompt).toHaveBeenCalledWith(
-      expect.stringContaining("Use the managed MariaDB service."),
-      expect.any(Object)
-    );
+  it("reruns a prompt step after user input resolves a Codex question", async () => {
+    const context = createControllerContext({
+      stepMachineStatuses: {
+        plan_executed: "need_input"
+      },
+      stepId: "plan_executed"
+    });
+
+    context.setStepMachineStatus("plan_executed", "awaiting_agent_result");
+    await context.controller.resume();
+
     expect(context.session.value.currentStep).toBe("implementation_reviewed");
+  });
+
+  it("reruns a prompt step in awaiting_agent_result even when an older artifact is ready", async () => {
+    const context = createControllerContext({
+      metadata: {
+        response_ready: "1"
+      },
+      stepMachineStatuses: {
+        agent_conversation: "awaiting_agent_result"
+      },
+      stepId: "agent_conversation"
+    });
+
+    await context.controller.resume();
+
+    expect(context.promptActions()).toEqual(["agent_conversation"]);
+    expect(context.session.value.stepMachine.status).toBe("done");
   });
 
   it("keeps interactive agent conversation on the same step until the user continues", async () => {
@@ -310,7 +435,7 @@ describe("useAiStudioAutopilotController", () => {
     await context.controller.submitAgentConversationRequest("Add a small readme note.");
 
     expect(context.session.value.currentStep).toBe("agent_conversation");
-    expect(context.controller.conversationResponse.value).toContain("agent_conversation complete");
+    expect(context.session.value.stepMachine.status).toBe("done");
 
     await context.controller.finishAgentConversation();
 
@@ -350,18 +475,47 @@ describe("useAiStudioAutopilotController", () => {
 
     expect(context.session.value.currentStep).toBe("changes_accepted");
   });
+
+  it("drafts pull request content through Codex before running the PR command", async () => {
+    const context = createControllerContext({
+      metadata: {
+        accepted_commit: "abc123",
+        branch_pushed: "origin/ai-studio/test-session"
+      },
+      stepId: "create_pull_request"
+    });
+
+    await context.controller.resume();
+
+    expect(context.promptActions()).toEqual(["resolve_pull_request"]);
+    expect(context.commandRunner.runCommandAction).not.toHaveBeenCalled();
+    expect(context.session.value.currentStep).toBe("create_pull_request");
+    expect(context.session.value.stepMachine.status).toBe("confirm_files");
+
+    await context.controller.resume();
+
+    expect(context.commandRunner.runCommandAction).toHaveBeenCalledWith(expect.objectContaining({
+      action: expect.objectContaining({
+        id: "create_pr_on_gh"
+      })
+    }));
+    expect(context.session.value.currentStep).toBe("pr_merged");
+  });
 });
 
 function createControllerContext({
   enabled = true,
   metadata = {},
+  stepMachineStatuses = {},
   stepId = "session_created",
-  workflowSteps = Object.keys(STEP_LABELS)
+  workflowSteps = BIG_FEATURE_WORKFLOW_STEPS
 } = {}) {
   const commandFailures = new Set();
   const enabledRef = ref(enabled);
   const session = ref(null);
-  const autopilotArtifacts = ref(emptyConversationFiles());
+  const stepStates = {
+    ...stepMachineStatuses
+  };
   const codexBusy = ref(false);
   const codexWorking = ref(false);
   const commandRunning = ref(false);
@@ -372,10 +526,10 @@ function createControllerContext({
   const promptBehavior = {};
 
   function syncSession(nextStepId = session.value?.currentStep || stepId) {
-    const currentStepDefinition = stepDefinition(nextStepId, workflowSteps);
+    const currentStepDefinition = stepDefinition(nextStepId, metadata, workflowSteps);
     session.value = {
       actions: actionsForStep(nextStepId),
-      artifactReadiness: artifactReadinessForMetadata(metadata),
+      artifactReadiness: {},
       artifactsRoot: "/tmp/session/artifacts",
       completedSteps: workflowSteps.slice(0, Math.max(0, workflowSteps.indexOf(nextStepId))),
       currentStep: nextStepId,
@@ -383,9 +537,10 @@ function createControllerContext({
       metadata: {
         ...metadata
       },
-      next: nextForStep(nextStepId, metadata, workflowSteps),
+      next: nextForStep(nextStepId, metadata, workflowSteps, stepStates),
       sessionId: "session-1",
-      stepDefinitions: workflowSteps.map((id) => stepDefinition(id, workflowSteps))
+      stepMachine: stepMachineForTest(nextStepId, metadata, stepStates),
+      stepDefinitions: workflowSteps.map((id) => stepDefinition(id, metadata, workflowSteps))
     };
   }
 
@@ -394,53 +549,34 @@ function createControllerContext({
     syncSession();
   }
 
-  function writeConversation(inputFormat, response = "") {
-    autopilotArtifacts.value = {
-      conversation: {
-        history: response && inputFormat
-          ? [
-            {
-              inputFormat,
-              response: String(response || "").trim()
-            }
-          ]
-          : [],
-        inputFormat,
-        response
-      },
-      inputFormat,
-      ok: true,
-      response,
-      sessionId: "session-1"
+  function setStepMachineStatus(nextStepId = session.value?.currentStep || "", status = "done", details = {}) {
+    stepStates[nextStepId] = {
+      ...details,
+      status,
+      stepId: nextStepId
     };
+    syncSession();
   }
 
-  function clearConversation() {
-    autopilotArtifacts.value = emptyConversationFiles();
-  }
-
-  function writeConversationDone(response = "Done.") {
-    writeConversation({
-      inputKind: "none",
-      issueDraft: null,
-      message: "Done.",
-      questions: [],
-      status: "done"
-    }, response);
-  }
-
-  function writeConversationQuestions(questions = []) {
-    writeConversation({
-      inputKind: "questions",
-      issueDraft: null,
-      message: "Codex needs answers.",
-      questions: questions.map((text, index) => ({
-        answer: "",
-        id: `q${index + 1}`,
-        text
-      })),
-      status: "awaiting_input"
-    }, "Codex needs answers.");
+  function completePromptAction(actionId = "") {
+    if (actionId === "resolve_pull_request") {
+      setMetadata({
+        pr_draft_ready: "1"
+      });
+      setStepMachineStatus(session.value.currentStep, "confirm_files");
+      return;
+    }
+    if (actionId === "agent_conversation" || actionId === "human_review_conversation" || actionId === "final_review_conversation") {
+      setMetadata({
+        response_ready: "1"
+      });
+    }
+    if (actionId === "write_report") {
+      setMetadata({
+        report_ready: "1"
+      });
+    }
+    setStepMachineStatus(session.value.currentStep, "done");
   }
 
   const actions = {
@@ -451,11 +587,9 @@ function createControllerContext({
       if (!nextStepId || session.value?.next?.enabled !== true) {
         throw new Error("Next step is not ready.");
       }
-      clearConversation();
       syncSession(nextStepId);
     }),
     rewindToStep: vi.fn(async (step = {}) => {
-      clearConversation();
       syncSession(step.rewindStepId || step.id);
     }),
     runAction: vi.fn(async (action = {}, { input = {} } = {}) => {
@@ -475,8 +609,7 @@ function createControllerContext({
         if (typeof behavior === "function") {
           behavior(action, input);
         } else {
-          setMetadata(promptSideEffects(action.id));
-          writeConversationDone(`${action.id} complete.`);
+          completePromptAction(action.id);
         }
       }
     })
@@ -488,7 +621,7 @@ function createControllerContext({
     output: commandOutput,
     running: commandRunning,
     status: ref(""),
-    runCommandAction: vi.fn(async ({ action = {} } = {}) => {
+    runCommandAction: vi.fn(async ({ action = {}, advanceOnSuccess = false } = {}) => {
       commandRunning.value = true;
       commandPreview.value = action.label || action.id;
       commandOutput.value = `${action.id} output`;
@@ -505,6 +638,9 @@ function createControllerContext({
         return commandResult.value;
       }
       setMetadata(COMMAND_METADATA[action.id] || {});
+      if (advanceOnSuccess === true && session.value?.next?.enabled === true) {
+        await actions.goNext();
+      }
       commandResult.value = {
         actionId: action.id,
         actionLabel: action.label,
@@ -521,24 +657,17 @@ function createControllerContext({
     busy: codexBusy,
     injectPrompt: vi.fn(async () => {
       codexBusy.value = true;
-      writeConversationDone("Answers accepted.");
       codexBusy.value = false;
       return true;
     }),
     promptInjectionError: ref(""),
     working: codexWorking
   };
-  const questionExchange = useAiStudioCodexQuestionExchange({
-    codexTerminal
-  });
   const controller = useAiStudioAutopilotController({
     actions,
-    autopilotArtifacts,
-    clearAutopilotArtifacts: async () => clearConversation(),
     codexTerminal,
     commandRunner,
     enabled: enabledRef,
-    questionExchange,
     refreshSessionData: async () => {
       syncSession();
     },
@@ -549,7 +678,6 @@ function createControllerContext({
 
   return {
     actions,
-    autopilotArtifacts,
     codexTerminal,
     commandFailures,
     commandRunner,
@@ -559,35 +687,19 @@ function createControllerContext({
       .filter((call) => PROMPT_ACTION_IDS.has(call.actionId))
       .map((call) => call.actionId),
     promptBehavior,
-    questionExchange,
+    setStepMachineStatus,
     session,
-    writeConversationDone,
-    writeConversationQuestions
   };
 }
 
-function emptyConversationFiles() {
-  return {
-    conversation: {
-      history: [],
-      inputFormat: null,
-      response: ""
-    },
-    inputFormat: null,
-    ok: true,
-    response: "",
-    sessionId: "session-1"
-  };
-}
-
-function stepDefinition(stepId = "", workflowSteps = []) {
+function stepDefinition(stepId = "", metadata = {}, workflowSteps = []) {
   return {
     actions: actionsForStep(stepId),
-    autopilot: STEP_AUTOPILOT[stepId] || {},
+    autopilot: autopilotForTest(stepId, metadata),
     id: stepId,
     label: STEP_LABELS[stepId] || stepId,
     next: {
-      stepId: NEXT_STEP[stepId] || ""
+      stepId: nextStepIdForWorkflow(stepId, workflowSteps)
     },
     status: workflowSteps.includes(stepId) ? "pending" : ""
   };
@@ -599,8 +711,11 @@ function actionsForStep(stepId = "") {
   if (autopilot.actionId) {
     actions.push(actionForId(autopilot.actionId, autopilot.label || STEP_LABELS[stepId]));
   }
-  if (Array.isArray(autopilot.actionSequence)) {
-    for (const actionStage of autopilot.actionSequence) {
+  if (autopilot.stage) {
+    actions.push(actionForId(autopilot.stage.actionId, autopilot.stage.label));
+  }
+  if (Array.isArray(autopilot.stages)) {
+    for (const actionStage of autopilot.stages) {
       actions.push(actionForId(actionStage.actionId, actionStage.label));
     }
   }
@@ -625,6 +740,43 @@ function actionsForStep(stepId = "") {
   return actions;
 }
 
+function autopilotForTest(stepId = "", metadata = {}) {
+  const autopilot = STEP_AUTOPILOT[stepId] || {};
+  return {
+    kind: autopilot.kind || "",
+    label: autopilot.label || "",
+    stage: autopilotStageForTest(stepId, autopilot, metadata),
+    stop: autopilot.stop === true,
+    userDecision: autopilot.userDecision === true
+  };
+}
+
+function autopilotStageForTest(stepId = "", autopilot = {}, metadata = {}) {
+  if (Array.isArray(autopilot.stages) && autopilot.stages.length > 0) {
+    return autopilot.stages.find((stage) => {
+      return typeof stage.complete === "function" ? !stage.complete(metadata) : true;
+    }) || null;
+  }
+  if (autopilot.stage) {
+    if (stepCompletionFacts(stepId, metadata)) {
+      return null;
+    }
+    return {
+      actionId: autopilot.stage.actionId,
+      advanceOnSuccess: autopilot.stage.advanceOnSuccess === true,
+      label: autopilot.stage.label || autopilot.stage.actionId
+    };
+  }
+  if (!autopilot.actionId) {
+    return null;
+  }
+  return {
+    actionId: autopilot.actionId,
+    advanceOnSuccess: autopilot.advanceOnSuccess === true,
+    label: autopilot.label || autopilot.actionId
+  };
+}
+
 function actionForId(actionId = "", label = "") {
   const promptAction = PROMPT_ACTION_IDS.has(actionId);
   return {
@@ -636,8 +788,8 @@ function actionForId(actionId = "", label = "") {
   };
 }
 
-function nextForStep(stepId = "", metadata = {}, workflowSteps = []) {
-  const nextStepId = NEXT_STEP[stepId] || "";
+function nextForStep(stepId = "", metadata = {}, workflowSteps = [], stepStates = {}) {
+  const nextStepId = nextStepIdForWorkflow(stepId, workflowSteps);
   if (!nextStepId || !workflowSteps.includes(nextStepId)) {
     return {
       enabled: false,
@@ -646,71 +798,95 @@ function nextForStep(stepId = "", metadata = {}, workflowSteps = []) {
     };
   }
   return {
-    enabled: stepIsComplete(stepId, metadata),
+    enabled: stepIsComplete(stepId, metadata, stepStates),
     stepId: nextStepId,
     visible: true
   };
 }
 
-function stepIsComplete(stepId = "", metadata = {}) {
-  const autopilot = STEP_AUTOPILOT[stepId] || {};
-  if (Array.isArray(autopilot.actionSequence)) {
-    return autopilot.actionSequence.every((stage) => conditionsAreMet(stage.completeWhen, metadata));
+function nextStepIdForWorkflow(stepId = "", workflowSteps = []) {
+  const stepIndex = workflowSteps.indexOf(stepId);
+  if (stepIndex >= 0) {
+    return workflowSteps[stepIndex + 1] || "";
   }
-  if (Array.isArray(autopilot.completeWhen)) {
-    return conditionsAreMet(autopilot.completeWhen, metadata);
-  }
-  if (stepId === "issue_file_created") {
-    return Boolean(metadata.issue_title);
-  }
-  return true;
+  return NEXT_STEP[stepId] || "";
 }
 
-function conditionsAreMet(conditions = [], metadata = {}) {
-  return (Array.isArray(conditions) ? conditions : []).every((condition) => {
-    if (condition.startsWith("metadata:")) {
-      return Boolean(metadata[condition.slice("metadata:".length)]);
-    }
-    if (condition === "artifact:report.md") {
-      return Boolean(metadata.report_ready);
-    }
-    if (condition === "artifact:pull_request.md") {
-      return Boolean(metadata.pull_request_ready);
-    }
-    if (condition.startsWith("any:")) {
-      return condition
-        .slice("any:".length)
-        .split(";")
-        .some((candidate) => conditionsAreMet([candidate], metadata));
-    }
-    return false;
-  });
+function stepIsComplete(stepId = "", metadata = {}, stepStates = {}) {
+  const stepState = stepStates[stepId];
+  const stepStateStatus = typeof stepState === "string" ? stepState : stepState?.status;
+  if (stepStateStatus === "done") {
+    return true;
+  }
+  return Boolean(stepCompletionFacts(stepId, metadata));
 }
 
-function artifactReadinessForMetadata(metadata = {}) {
+function stepCompletionFacts(stepId = "", metadata = {}) {
+  switch (stepId) {
+    case "agent_conversation":
+    case "changes_accepted":
+    case "implementation_reviewed":
+    case "maintenance_conversation":
+      return metadata.response_ready;
+    case "changes_committed":
+      return metadata.accepted_commit && metadata.branch_pushed;
+    case "checklist_items_installed":
+    case "dependencies_installed":
+      return metadata.dependencies_installed;
+    case "issue_file_created":
+      return metadata.issue_title;
+    case "issue_submitted":
+      return metadata.issue_url;
+    case "main_checkout_synced":
+      return metadata.main_checkout_synced;
+    case "create_pull_request":
+      return metadata.pr_url;
+    case "project_validated":
+      return metadata.code_index_updated && metadata.automated_checks_passed;
+    case "report_created":
+      return metadata.report_ready;
+    case "work_source_selected":
+      return metadata.work_source;
+    case "worktree_created":
+      return metadata.worktree_path;
+    default:
+      return true;
+  }
+}
+
+function stepMachineForTest(stepId = "", metadata = {}, stepStates = {}) {
+  if (stepStates[stepId]) {
+    if (typeof stepStates[stepId] === "string") {
+      return {
+        status: stepStates[stepId],
+        stepId
+      };
+    }
+    return stepStates[stepId];
+  }
+  if (!STEP_AUTOPILOT[stepId]?.actionId && !STEP_AUTOPILOT[stepId]?.stage && !Array.isArray(STEP_AUTOPILOT[stepId]?.stages)) {
+    return null;
+  }
+  if (stepId !== "create_pull_request") {
+    return {
+      status: "ready",
+      stepId
+    };
+  }
+  if (metadata.pr_url) {
+    return {
+      status: "done",
+      stepId
+    };
+  }
+  if (metadata.pr_draft_ready) {
+    return {
+      status: "confirm_files",
+      stepId
+    };
+  }
   return {
-    "pull_request.md": {
-      nonEmpty: Boolean(metadata.pull_request_ready)
-    },
-    "report.md": {
-      nonEmpty: Boolean(metadata.report_ready)
-    },
-    "response.md": {
-      nonEmpty: Boolean(metadata.response_ready)
-    }
+    status: "awaiting_agent_result",
+    stepId
   };
-}
-
-function promptSideEffects(actionId = "") {
-  if (actionId === "write_report") {
-    return {
-      report_ready: "1"
-    };
-  }
-  if (actionId === "create_pr_file") {
-    return {
-      pull_request_ready: "1"
-    };
-  }
-  return {};
 }

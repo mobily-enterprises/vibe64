@@ -1,53 +1,28 @@
-import { createHash } from "node:crypto";
 import { watch } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import {
-  aiStudioResult,
-  normalizePlainObject
+  aiStudioResult
 } from "../../../../server/lib/aiStudio/serverResponses.js";
-import {
-  deepFreeze
-} from "../../../../server/lib/aiStudio/deepFreeze.js";
-import {
-  CONVERSATION_FILE_ARTIFACTS,
-  CONVERSATION_HISTORY_ARTIFACT,
-  CONVERSATION_INPUT_FORMAT_ARTIFACT,
-  CONVERSATION_RESPONSE_ARTIFACT,
-  normalizeConversationInputFormat
-} from "../../../../server/lib/aiStudio/conversationFiles.js";
 
-const EMPTY_EDITOR_ACTION = deepFreeze({
-  action: null,
-  code: "ai_studio_editor_action_required",
-  fields: [],
-  message: "Editor action id is required.",
-  ok: false
+const ARTIFACT_PREVIEWS = Object.freeze({
+  ai_response: {
+    artifactName: "response.md",
+    label: "AI response",
+    previewId: "ai_response"
+  },
+  report: {
+    artifactName: "report.md",
+    label: "Session report",
+    previewId: "report"
+  }
 });
-const ISSUE_BODY_ARTIFACT = "issue.md";
-const ISSUE_FILE_STEP_ID = "issue_file_created";
-const SEED_APPLICATION_STEP_ID = "seed_application_defined";
-const ISSUE_TITLE_ARTIFACT = "issue_title";
-const ISSUE_WORD_ARTIFACT = "issue_word";
-const ISSUE_ARTIFACT_WRITE_STEPS = new Set([
-  ISSUE_FILE_STEP_ID,
-  SEED_APPLICATION_STEP_ID
-]);
 
 function artifactResult(operation) {
   return aiStudioResult(operation, {
     fallbackCode: "ai_studio_artifact_request_failed",
     fallbackMessage: "AI Studio artifact request failed."
   });
-}
-
-function actionById(session = {}, actionId = "") {
-  return (Array.isArray(session.actions) ? session.actions : [])
-    .find((action) => action.id === actionId) || null;
-}
-
-function artifactPath(session = {}, artifactName = "") {
-  return session.artifactsRoot && artifactName ? path.join(session.artifactsRoot, artifactName) : "";
 }
 
 function artifactErrorResponse(session = {}, code = "", message = "") {
@@ -63,289 +38,6 @@ function artifactErrorResponse(session = {}, code = "", message = "") {
   };
 }
 
-function artifactText(value = "") {
-  return `${String(value || "").trim()}\n`;
-}
-
-function issueArtifactInput(input = {}) {
-  return {
-    body: String(input.body || "").trim(),
-    title: String(input.title || "").trim(),
-    word: String(input.word || input.issueWord || "").trim()
-  };
-}
-
-function issueArtifactsWriteState(session = {}) {
-  if (!ISSUE_ARTIFACT_WRITE_STEPS.has(String(session.currentStep || ""))) {
-    return {
-      code: "ai_studio_issue_artifacts_step_required",
-      message: "Issue artifacts can only be saved while defining the issue or seed issue.",
-      ok: false
-    };
-  }
-  if (String(session.metadata?.issue_url || "").trim()) {
-    return {
-      code: "ai_studio_issue_already_selected",
-      message: "An existing GitHub issue is already selected.",
-      ok: false
-    };
-  }
-  return {
-    code: "",
-    message: "",
-    ok: true
-  };
-}
-
-function normalizeArtifactField(field = {}) {
-  const name = String(field?.name || "").trim();
-  if (!name) {
-    return null;
-  }
-  const kind = String(field.kind || "textarea").trim();
-  return {
-    kind: kind === "text" ? "text" : "textarea",
-    label: String(field.label || name).trim(),
-    metadataName: String(field.metadataName || "").trim(),
-    name,
-    required: field.required !== false,
-    requiredMessage: String(field.requiredMessage || "").trim()
-  };
-}
-
-function normalizeArtifactFields(fields = []) {
-  return (Array.isArray(fields) ? fields : [])
-    .map(normalizeArtifactField)
-    .filter(Boolean);
-}
-
-function normalizeArtifactInput(input = {}) {
-  const artifactEntries = Object.entries(normalizePlainObject(input.artifacts))
-    .map(([name, value]) => [
-      String(name || "").trim(),
-      String(value || "").trim()
-    ])
-    .filter(([name]) => Boolean(name));
-  return Object.fromEntries(artifactEntries);
-}
-
-function editorActionState(session = {}, actionId = "") {
-  const normalizedActionId = String(actionId || "").trim();
-  if (!normalizedActionId) {
-    return EMPTY_EDITOR_ACTION;
-  }
-
-  const action = actionById(session, normalizedActionId);
-  if (!action) {
-    return {
-      action: null,
-      code: "ai_studio_editor_action_not_available",
-      fields: [],
-      message: `Editor action ${normalizedActionId} is not available on this AI Studio step.`,
-      ok: false
-    };
-  }
-  if (action.type !== "editor") {
-    return {
-      action,
-      code: "ai_studio_action_not_editor",
-      fields: [],
-      message: `Action ${normalizedActionId} is not an editor action.`,
-      ok: false
-    };
-  }
-  if (action.enabled !== true) {
-    return {
-      action,
-      code: "ai_studio_artifact_edit_not_available",
-      fields: normalizeArtifactFields(action.artifactFields),
-      message: action.disabledReason || `Editor action ${normalizedActionId} is disabled.`,
-      ok: false
-    };
-  }
-
-  const fields = normalizeArtifactFields(action.artifactFields);
-  if (fields.length < 1) {
-    return {
-      action,
-      code: "ai_studio_editor_artifacts_missing",
-      fields: [],
-      message: `Editor action ${normalizedActionId} does not declare editable artifacts.`,
-      ok: false
-    };
-  }
-
-  return {
-    action,
-    code: "",
-    fields,
-    message: "",
-    ok: true
-  };
-}
-
-function artifactStatesForFields(fields = []) {
-  return Object.fromEntries(fields.map((field) => [
-    field.name,
-    {
-      disabledReason: "",
-      editable: true
-    }
-  ]));
-}
-
-function artifactNamesForFields(fields = []) {
-  return fields
-    .map((field) => field.name)
-    .filter(Boolean);
-}
-
-function artifactFieldByName(fields = []) {
-  return new Map(fields.map((field) => [field.name, field]));
-}
-
-function artifactsResponse(session = {}, editor = {}, artifacts = {}) {
-  const artifactFields = editor.fields || [];
-  const editableArtifacts = artifactNamesForFields(artifactFields);
-  const artifactPaths = Object.fromEntries(editableArtifacts.map((artifactName) => {
-    return [artifactName, artifactPath(session, artifactName)];
-  }));
-  return {
-    ...session,
-    actionId: editor.action?.id || "",
-    artifactFields,
-    artifactPaths,
-    artifacts,
-    artifactStates: artifactStatesForFields(artifactFields),
-    editableArtifacts,
-    ok: true
-  };
-}
-
-function issueArtifactsResponse(session = {}, artifacts = {}) {
-  return {
-    ...session,
-    artifactFields: [
-      {
-        kind: "text",
-        label: "Issue title",
-        metadataName: ISSUE_TITLE_ARTIFACT,
-        name: ISSUE_TITLE_ARTIFACT,
-        required: true,
-        requiredMessage: "Issue title is required."
-      },
-      {
-        kind: "text",
-        label: "Session label",
-        metadataName: ISSUE_WORD_ARTIFACT,
-        name: ISSUE_WORD_ARTIFACT,
-        required: true,
-        requiredMessage: "Session label is required."
-      },
-      {
-        kind: "textarea",
-        label: "Issue body",
-        metadataName: "",
-        name: ISSUE_BODY_ARTIFACT,
-        required: true,
-        requiredMessage: "Issue body is required."
-      }
-    ],
-    artifacts,
-    ok: true
-  };
-}
-
-function parseArtifactJson(text = "") {
-  const source = String(text || "").trim();
-  if (!source) {
-    return null;
-  }
-  try {
-    return JSON.parse(source);
-  } catch {
-    return null;
-  }
-}
-
-async function readConversationJson(runtime, sessionId = "", artifactName = "", normalize = () => null) {
-  return normalize(parseArtifactJson(await runtime.store.readArtifact(sessionId, artifactName)));
-}
-
-function conversationFingerprint(response = "", inputFormat = null) {
-  return createHash("sha256")
-    .update(String(response || ""))
-    .update("\0")
-    .update(JSON.stringify(inputFormat || null))
-    .digest("hex");
-}
-
-function parseConversationHistory(text = "") {
-  try {
-    const value = JSON.parse(String(text || "").trim() || "[]");
-    return Array.isArray(value) ? value.filter((entry) => entry && typeof entry === "object") : [];
-  } catch {
-    return [];
-  }
-}
-
-async function readConversationHistory(runtime, sessionId = "") {
-  return parseConversationHistory(await runtime.store.readArtifact(sessionId, CONVERSATION_HISTORY_ARTIFACT));
-}
-
-async function recordConversationHistory(runtime, sessionId = "", {
-  inputFormat = null,
-  response = ""
-} = {}) {
-  const normalizedResponse = String(response || "").trim();
-  if (!normalizedResponse || !inputFormat) {
-    return readConversationHistory(runtime, sessionId);
-  }
-  const history = await readConversationHistory(runtime, sessionId);
-  const fingerprint = conversationFingerprint(normalizedResponse, inputFormat);
-  if (history.at(-1)?.fingerprint === fingerprint) {
-    return history;
-  }
-  const nextHistory = [
-    ...history,
-    {
-      at: new Date().toISOString(),
-      fingerprint,
-      inputFormat,
-      response: normalizedResponse
-    }
-  ].slice(-50);
-  await runtime.store.writeArtifact(
-    sessionId,
-    CONVERSATION_HISTORY_ARTIFACT,
-    `${JSON.stringify(nextHistory, null, 2)}\n`
-  );
-  return nextHistory;
-}
-
-async function readConversationFiles(runtime, sessionId = "") {
-  const [
-    inputFormat,
-    response
-  ] = await Promise.all([
-    readConversationJson(runtime, sessionId, CONVERSATION_INPUT_FORMAT_ARTIFACT, normalizeConversationInputFormat),
-    runtime.store.readArtifact(sessionId, CONVERSATION_RESPONSE_ARTIFACT)
-  ]);
-  const history = await recordConversationHistory(runtime, sessionId, {
-    inputFormat,
-    response
-  });
-  return {
-    conversation: {
-      history,
-      inputFormat,
-      response: String(response || "")
-    },
-    inputFormat,
-    response: String(response || "")
-  };
-}
-
 function isSessionArtifactChange(filename = "") {
   return Boolean(path.basename(String(filename || "")).trim());
 }
@@ -358,21 +50,18 @@ function closeWatcher(watcher = null) {
   }
 }
 
-async function readEditableArtifacts(runtime, session = {}, fields = []) {
-  const artifactEntries = await Promise.all(artifactNamesForFields(fields).map(async (artifactName) => {
-    return [artifactName, await runtime.store.readArtifact(session.sessionId, artifactName)];
-  }));
-  return Object.fromEntries(artifactEntries);
+function artifactPreviewById(previewId = "") {
+  return ARTIFACT_PREVIEWS[String(previewId || "").trim()] || null;
 }
 
-function unknownArtifactName(artifacts = {}, fieldsByName = new Map()) {
-  return Object.keys(artifacts).find((artifactName) => !fieldsByName.has(artifactName)) || "";
-}
-
-function missingRequiredField(artifacts = {}, fields = []) {
-  return fields.find((field) => {
-    return field.required && !String(artifacts[field.name] || "").trim();
-  }) || null;
+async function artifactPreviewResponse(runtime, session = {}, preview = {}) {
+  return {
+    ...session,
+    label: preview.label,
+    ok: true,
+    previewId: preview.previewId,
+    text: String(await runtime.store.readArtifact(session.sessionId, preview.artifactName) || "").trim()
+  };
 }
 
 function createService({ projectService } = {}) {
@@ -381,196 +70,44 @@ function createService({ projectService } = {}) {
   }
 
   return Object.freeze({
-    async readArtifacts(sessionId, input = {}) {
+    async readArtifactPreview(sessionId, input = {}) {
       return artifactResult(async () => {
         const runtime = await projectService.createRuntime();
         const session = await runtime.getSession(sessionId);
-        const editor = editorActionState(session, input.actionId);
-        if (!editor.ok) {
-          return artifactErrorResponse(session, editor.code, editor.message);
+        const preview = artifactPreviewById(input.previewId);
+        if (!preview) {
+          return artifactErrorResponse(
+            session,
+            "ai_studio_artifact_preview_not_available",
+            `Artifact preview is not available: ${input.previewId || "(empty)"}`
+          );
         }
-        return artifactsResponse(
-          session,
-          editor,
-          await readEditableArtifacts(runtime, session, editor.fields)
-        );
+        return artifactPreviewResponse(runtime, session, preview);
       });
     },
 
-    async saveArtifacts(sessionId, input = {}) {
-      return artifactResult(async () => {
-        const runtime = await projectService.createRuntime();
-        const session = await runtime.getSession(sessionId);
-        const editor = editorActionState(session, input.actionId);
-        if (!editor.ok) {
-          return artifactErrorResponse(session, editor.code, editor.message);
-        }
-
-        const artifacts = normalizeArtifactInput(input);
-        if (Object.keys(artifacts).length < 1) {
-          return artifactErrorResponse(
-            session,
-            "ai_studio_artifacts_required",
-            "At least one editable artifact is required."
-          );
-        }
-
-        const fieldsByName = artifactFieldByName(editor.fields);
-        const unknownArtifact = unknownArtifactName(artifacts, fieldsByName);
-        if (unknownArtifact) {
-          return artifactErrorResponse(
-            session,
-            "ai_studio_artifact_not_editable",
-            `Artifact is not editable by ${editor.action.id}: ${unknownArtifact}`
-          );
-        }
-
-        const missingField = missingRequiredField(artifacts, editor.fields);
-        if (missingField) {
-          return artifactErrorResponse(
-            session,
-            "ai_studio_artifact_required",
-            missingField.requiredMessage || `Artifact text is required: ${missingField.name}`
-          );
-        }
-
-        await Promise.all(Object.entries(artifacts).flatMap(([artifactName, artifactText]) => {
-          const field = fieldsByName.get(artifactName);
-          const writes = [
-            runtime.store.writeArtifact(sessionId, artifactName, `${artifactText}\n`)
-          ];
-          if (field?.metadataName === ISSUE_WORD_ARTIFACT) {
-            writes.push(runtime.store.writeIssueWordMetadata(sessionId, artifactText));
-          } else if (field?.metadataName) {
-            writes.push(runtime.store.writeMetadataValue(sessionId, field.metadataName, artifactText));
-          }
-          return writes;
-        }));
-
-        const updatedSession = await runtime.getSession(sessionId);
-        const updatedEditor = editorActionState(updatedSession, input.actionId);
-        return artifactsResponse(
-          updatedSession,
-          updatedEditor.ok ? updatedEditor : editor,
-          await readEditableArtifacts(runtime, updatedSession, editor.fields)
-        );
-      });
-    },
-
-    async saveIssueArtifacts(sessionId, input = {}) {
-      return artifactResult(async () => {
-        const runtime = await projectService.createRuntime();
-        const session = await runtime.getSession(sessionId);
-        const writeState = issueArtifactsWriteState(session);
-        if (!writeState.ok) {
-          return artifactErrorResponse(session, writeState.code, writeState.message);
-        }
-
-        const artifacts = issueArtifactInput(input);
-        if (!artifacts.title) {
-          return artifactErrorResponse(
-            session,
-            "ai_studio_issue_title_required",
-            "Issue title is required."
-          );
-        }
-        if (!artifacts.body) {
-          return artifactErrorResponse(
-            session,
-            "ai_studio_issue_body_required",
-            "Issue body is required."
-          );
-        }
-        if (!artifacts.word) {
-          return artifactErrorResponse(
-            session,
-            "ai_studio_issue_word_required",
-            "Session label is required."
-          );
-        }
-
-        await Promise.all([
-          runtime.store.writeArtifact(sessionId, ISSUE_TITLE_ARTIFACT, artifactText(artifacts.title)),
-          runtime.store.writeArtifact(sessionId, ISSUE_BODY_ARTIFACT, artifactText(artifacts.body)),
-          runtime.store.writeArtifact(sessionId, ISSUE_WORD_ARTIFACT, artifactText(artifacts.word)),
-          runtime.store.writeMetadataValue(sessionId, ISSUE_TITLE_ARTIFACT, artifacts.title),
-          runtime.store.writeIssueWordMetadata(sessionId, artifacts.word)
-        ]);
-
-        const updatedSession = await runtime.getSession(sessionId);
-        return issueArtifactsResponse(updatedSession, {
-          [ISSUE_BODY_ARTIFACT]: artifactText(artifacts.body),
-          [ISSUE_TITLE_ARTIFACT]: artifactText(artifacts.title),
-          [ISSUE_WORD_ARTIFACT]: artifactText(artifacts.word)
-        });
-      });
-    },
-
-    async clearIssueArtifacts(sessionId) {
-      return artifactResult(async () => {
-        const runtime = await projectService.createRuntime();
-        const session = await runtime.getSession(sessionId);
-        const writeState = issueArtifactsWriteState(session);
-        if (!writeState.ok) {
-          return artifactErrorResponse(session, writeState.code, writeState.message);
-        }
-
-        await Promise.all([
-          runtime.store.deleteArtifacts(sessionId, [
-            ISSUE_BODY_ARTIFACT,
-            ISSUE_TITLE_ARTIFACT,
-            ISSUE_WORD_ARTIFACT
-          ]),
-          runtime.store.deleteMetadataValues(sessionId, [
-            ISSUE_TITLE_ARTIFACT,
-            ISSUE_WORD_ARTIFACT
-          ])
-        ]);
-
-        return issueArtifactsResponse(await runtime.getSession(sessionId), {
-          [ISSUE_BODY_ARTIFACT]: "",
-          [ISSUE_TITLE_ARTIFACT]: "",
-          [ISSUE_WORD_ARTIFACT]: ""
-        });
-      });
-    },
-
-    async readAutopilotArtifacts(sessionId) {
+    async readArtifactReadiness(sessionId) {
       return artifactResult(async () => {
         const runtime = await projectService.createRuntime();
         const session = await runtime.getSession(sessionId);
         return {
           ...session,
-          ...(await readConversationFiles(runtime, sessionId)),
-          issueDraft: null,
           ok: true
         };
       });
     },
 
-    async clearAutopilotArtifacts(sessionId) {
+    async submitCurrentStepInput(sessionId, input = {}) {
       return artifactResult(async () => {
         const runtime = await projectService.createRuntime();
-        await runtime.store.deleteArtifacts(sessionId, CONVERSATION_FILE_ARTIFACTS);
-        const session = await runtime.getSession(sessionId);
         return {
-          ...session,
-          conversation: {
-            history: await readConversationHistory(runtime, sessionId),
-            inputFormat: null,
-            response: ""
-          },
-          inputFormat: null,
-          issueDraft: null,
-          ok: true,
-          promptDone: null,
-          questions: null,
-          response: ""
+          ...await runtime.submitCurrentStepInput(sessionId, input),
+          ok: true
         };
       });
     },
 
-    async streamAutopilotArtifacts(sessionId, {
+    async streamArtifactReadiness(sessionId, {
       emit = () => null,
       isClosed = () => false,
       onClose = () => null
@@ -597,10 +134,9 @@ function createService({ projectService } = {}) {
         emitInFlight = true;
         try {
           const currentSession = await runtime.getSession(sessionId);
-          emit("autopilot-artifacts.updated", {
+          emit("artifact-readiness.updated", {
             artifactReadiness: currentSession.artifactReadiness,
             sessionId,
-            ...(await readConversationFiles(runtime, sessionId)),
             ok: true
           });
         } finally {
@@ -617,8 +153,8 @@ function createService({ projectService } = {}) {
           return;
         }
         void emitCurrentArtifacts().catch((error) => {
-          emit("autopilot-artifacts.error", {
-            error: String(error?.message || error || "Autopilot artifacts could not be read."),
+          emit("artifact-readiness.error", {
+            error: String(error?.message || error || "Artifact readiness could not be read."),
             sessionId
           });
         });

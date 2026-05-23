@@ -149,12 +149,6 @@ function promptContextForAction({
 
 function normalizePromptContext(context = {}) {
   const adapterContext = context.adapter || context.session?.adapter;
-  const currentStepDefinition = isPlainObject(context.session?.currentStepDefinition)
-    ? context.session.currentStepDefinition
-    : {};
-  const currentStepAutopilot = isPlainObject(currentStepDefinition.autopilot)
-    ? currentStepDefinition.autopilot
-    : {};
   const promptStaticContextMode = staticContextMode(
     context.prompt?.staticContextMode ||
     context.session?.promptStaticContextMode
@@ -188,8 +182,8 @@ function normalizePromptContext(context = {}) {
       id: normalizeText(context.session?.id || context.session?.sessionId),
       metadataRoot: normalizeText(context.session?.metadataRoot),
       metadata: isPlainObject(context.session?.metadata) ? context.session.metadata : {},
-      responseArtifact: normalizeText(currentStepAutopilot.responseArtifact || context.session?.responseArtifact),
       sessionRoot: normalizeText(context.session?.sessionRoot),
+      stepMachine: isPlainObject(context.session?.stepMachine) ? context.session.stepMachine : null,
       status: normalizeText(context.session?.status),
       targetRoot: normalizeText(context.session?.targetRoot),
       worktreePath: normalizeText(context.session?.metadata?.worktree_path || context.session?.worktree)
@@ -208,6 +202,7 @@ function sessionPromptContext(session = {}) {
     metadata: session.metadata,
     promptStaticContextMode: session.promptStaticContextMode,
     sessionRoot: session.sessionRoot,
+    stepMachine: session.stepMachine,
     status: session.status,
     targetRoot: session.targetRoot,
     worktree: session.worktree
@@ -246,18 +241,16 @@ function promptSessionBriefingReference() {
   ].join("\n");
 }
 
-function promptResponseArtifactInstruction(session = {}) {
-  const responseArtifact = normalizeText(session.responseArtifact);
-  if (!responseArtifact) {
-    return "This step does not require a response artifact. Do not write response artifacts unless another instruction explicitly names one.";
-  }
-  const responseArtifactPath = [
-    normalizeText(session.artifactsRoot),
-    responseArtifact
-  ].filter(Boolean).join("/");
+function currentStepInputHelperBriefing() {
   return [
-    "This step requires a user-facing response artifact. Write it to:",
-    responseArtifactPath
+    "AI Studio current-step input helper:",
+    "- When you need to update AI Studio workflow state, call the helper command instead of writing AI Studio artifacts directly.",
+    "- Command: node \"$AI_STUDIO_CURRENT_STEP_INPUT_HELPER\"",
+    "- Pass one JSON object on stdin or with --json.",
+    "- Include `kind`, `stepId`, and `stepStatus` exactly for the current workflow state.",
+    "- The current values are in Action context as `session.currentStep` and `session.stepMachine.status`.",
+    "- Use `fields` for structured form values, `message` for questions to the user, and `text` for plain user responses.",
+    "- If the helper reports Reload state or a state mismatch, stop and ask the user to reload the current step."
   ].join("\n");
 }
 
@@ -301,7 +294,9 @@ function promptSessionBriefing(contextInput = {}) {
     stableJson(context.config),
     "",
     "Code index policy:",
-    codeIndexPolicy
+    codeIndexPolicy,
+    "",
+    currentStepInputHelperBriefing()
   ].join("\n").trim();
 }
 
@@ -336,6 +331,7 @@ function promptTemplateTokens(contextInput) {
     "prompt.managedServicePolicy": referenceStaticContext
       ? "Use the managed service policy from the AI Studio session briefing."
       : MANAGED_SERVICE_POLICY,
+    "prompt.currentStepInputHelperBriefing": currentStepInputHelperBriefing(),
     "input.json": stableJson(context.input),
     "prompt.missingInformationPolicy": MISSING_INFORMATION_POLICY,
     "prompt.sessionBriefingReference": promptSessionBriefingReference(),
@@ -346,8 +342,9 @@ function promptTemplateTokens(contextInput) {
     "session.id": context.session.id,
     "session.metadataRoot": context.session.metadataRoot,
     "session.metadata.json": stableJson(context.session.metadata),
-    "session.responseArtifactInstruction": promptResponseArtifactInstruction(context.session),
     "session.sessionRoot": context.session.sessionRoot,
+    "session.stepMachine.json": stableJson(context.session.stepMachine),
+    "session.stepMachine.status": normalizeText(context.session.stepMachine?.status),
     "session.status": context.session.status,
     "session.targetRoot": context.session.targetRoot,
     "session.worktreePath": context.session.worktreePath

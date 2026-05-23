@@ -1,9 +1,0 @@
-{{systemStandard}}
-
-Next.js selected blueprint:
-{{adapter.promptContext.environment_blueprint}}
-
-Next.js-specific deslop-resolution guidance:
-- Resolve outstanding findings while preserving the selected Next.js blueprint.
-- Keep routing, runtime boundaries, package scripts, database access, and environment handling internally consistent.
-- Re-run only the focused fast checks that prove the resolved findings.

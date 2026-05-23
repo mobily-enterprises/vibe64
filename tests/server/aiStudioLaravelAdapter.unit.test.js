@@ -213,7 +213,7 @@ test("laravel prompt actions use the Laravel prompt pack", async () => {
   });
 });
 
-test("laravel seed prompts require seed readiness before issue creation", async () => {
+test("laravel seed issue definition uses the current-step input contract before issue creation", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = new AiStudioSessionRuntime({
       adapter: createLaravelTargetAdapter(),
@@ -225,17 +225,28 @@ test("laravel seed prompts require seed readiness before issue creation", async 
       workflowProfile: AI_STUDIO_WORKFLOW_PROFILE_IDS.SEED_APPLICATION
     });
 
-    const afterDiscussionPrompt = await runtime.runAction("laravel_seed_prompt", "send_seed_prompt", {
-      seedRequest: "Seed the app foundation."
-    });
-    const afterFilePrompt = await runtime.runAction("laravel_seed_prompt", "create_seed_issue_file");
+    const initialSession = await runtime.getSession("laravel_seed_prompt");
 
-    assert.match(afterDiscussionPrompt.actionResult.prompt, /Seed readiness gate:/u);
-    assert.match(afterDiscussionPrompt.actionResult.prompt, /every Laravel setup choice that affects the scaffold/u);
-    assert.match(afterDiscussionPrompt.actionResult.prompt, /answered, explicitly declined, or assigned a clear default/u);
-    assert.match(afterDiscussionPrompt.actionResult.prompt, /It is acceptable to ask more questions/u);
-    assert.match(afterFilePrompt.actionResult.prompt, /Before writing files, confirm the conversation has satisfied the seed readiness gate/u);
-    assert.match(afterFilePrompt.actionResult.prompt, /If anything is still unresolved, ask concise follow-up questions instead of writing/u);
+    assert.equal(initialSession.currentStep, "seed_application_defined");
+    assert.equal(initialSession.stepMachine.status, "need_input");
+    assert.equal(initialSession.currentStepDefinition.interaction.submitKind, "ready");
+
+    const afterInput = await runtime.submitCurrentStepInput("laravel_seed_prompt", {
+      fields: {
+        body: "Seed the Laravel app foundation.",
+        title: "Seed Laravel application foundation",
+        word: "seed"
+      },
+      kind: "ready",
+      stepId: "seed_application_defined",
+      stepStatus: "need_input"
+    });
+
+    assert.equal(afterInput.stepMachine.status, "confirm_files");
+    assert.equal(afterInput.next.enabled, true);
+    assert.equal(await runtime.store.readArtifact("laravel_seed_prompt", "issue_title"), "Seed Laravel application foundation\n");
+    assert.equal(await runtime.store.readArtifact("laravel_seed_prompt", "issue_word"), "seed\n");
+    assert.equal(await runtime.store.readArtifact("laravel_seed_prompt", "issue.md"), "Seed the Laravel app foundation.\n");
   });
 });
 

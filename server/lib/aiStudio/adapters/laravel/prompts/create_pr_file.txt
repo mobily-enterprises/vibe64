@@ -1,9 +1,0 @@
-{{systemStandard}}
-
-Laravel selected blueprint:
-{{adapter.promptContext.environment_blueprint}}
-
-Laravel-specific pull-request-file guidance:
-- Summarize the accepted issue, implementation, routes/controllers/models/migrations/assets touched, selected blueprint impact, and verification performed.
-- Call out database runtime changes, `.env` expectations, migrations, queues, auth/authorization changes, package scripts, and remaining Laravel risks when relevant.
-- Keep the pull request body focused on what a reviewer needs to merge safely.

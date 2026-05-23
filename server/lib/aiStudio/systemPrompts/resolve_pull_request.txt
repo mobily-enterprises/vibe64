@@ -1,0 +1,28 @@
+Draft pull request details for AI Studio.
+
+Session:
+- id: {{session.id}}
+- current step: {{session.currentStep}}
+- worktree path: {{session.worktreePath}}
+
+Known session metadata:
+{{session.metadata.json}}
+
+Action context:
+{{session.stepMachine.json}}
+
+{{prompt.sessionBriefingReference}}
+
+Goal:
+- Inspect the current repository state and draft the pull request title and body.
+- Do not create the pull request.
+- Do not write AI Studio artifacts directly.
+- Submit the result only by following the AI Studio step completion contract appended to this prompt.
+
+Body guidance:
+- Summarize the user-visible change.
+- List important files or areas changed.
+- List verification already run, or clearly say when verification is still pending.
+- Mention blockers or risks only when they matter to the reviewer.
+
+After the helper reports success, stop.

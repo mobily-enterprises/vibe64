@@ -1,143 +1,83 @@
 import {
-  artifactReadInputValidator,
-  artifactSaveInputValidator,
-  issueArtifactClearInputValidator,
-  issueArtifactSaveInputValidator
+  artifactPreviewReadInputValidator,
+  currentStepInputSaveValidator,
+  sessionIdInputValidator,
 } from "./inputSchemas.js";
 
-const ACTION_READ_ARTIFACTS = "feature.ai-studio-artifacts.read";
-const ACTION_SAVE_ARTIFACTS = "feature.ai-studio-artifacts.save";
-const ACTION_CLEAR_ISSUE_ARTIFACTS = "feature.ai-studio-artifacts.issue.clear";
-const ACTION_CLEAR_AUTOPILOT_ARTIFACTS = "feature.ai-studio-artifacts.autopilot.clear";
-const ACTION_READ_AUTOPILOT_ARTIFACTS = "feature.ai-studio-artifacts.autopilot.read";
-const ACTION_SAVE_ISSUE_ARTIFACTS = "feature.ai-studio-artifacts.issue.save";
+const ACTION_READ_ARTIFACT_PREVIEW = "feature.ai-studio-artifacts.preview.read";
+const ACTION_READ_ARTIFACT_READINESS = "feature.ai-studio-artifacts.readiness.read";
+const ACTION_SUBMIT_CURRENT_STEP_INPUT = "feature.ai-studio-artifacts.current-step-input.submit";
 
 const featureActions = Object.freeze([
   {
-    id: ACTION_READ_ARTIFACTS,
+    id: ACTION_READ_ARTIFACT_PREVIEW,
     version: 1,
     kind: "query",
     channels: ["api", "automation", "internal"],
     surfaces: ["home"],
-    input: artifactReadInputValidator,
+    input: artifactPreviewReadInputValidator,
     output: null,
     idempotency: "none",
     audit: {
-      actionName: ACTION_READ_ARTIFACTS
+      actionName: ACTION_READ_ARTIFACT_PREVIEW
     },
     observability: {},
     async execute(input, context, deps) {
       void context;
-      return deps.featureService.readArtifacts(input.sessionId, {
-        actionId: input.actionId
+      return deps.featureService.readArtifactPreview(input.sessionId, {
+        previewId: input.previewId
       });
     }
   },
   {
-    id: ACTION_SAVE_ARTIFACTS,
-    version: 1,
-    kind: "command",
-    channels: ["api", "automation", "internal"],
-    surfaces: ["home"],
-    input: artifactSaveInputValidator,
-    output: null,
-    idempotency: "optional",
-    audit: {
-      actionName: ACTION_SAVE_ARTIFACTS
-    },
-    observability: {},
-    async execute(input, context, deps) {
-      void context;
-      return deps.featureService.saveArtifacts(input.sessionId, {
-        actionId: input.actionId,
-        artifacts: input.artifacts || {}
-      });
-    }
-  },
-  {
-    id: ACTION_CLEAR_ISSUE_ARTIFACTS,
-    version: 1,
-    kind: "command",
-    channels: ["api", "automation", "internal"],
-    surfaces: ["home"],
-    input: issueArtifactClearInputValidator,
-    output: null,
-    idempotency: "optional",
-    audit: {
-      actionName: ACTION_CLEAR_ISSUE_ARTIFACTS
-    },
-    observability: {},
-    async execute(input, context, deps) {
-      void context;
-      return deps.featureService.clearIssueArtifacts(input.sessionId);
-    }
-  },
-  {
-    id: ACTION_READ_AUTOPILOT_ARTIFACTS,
+    id: ACTION_READ_ARTIFACT_READINESS,
     version: 1,
     kind: "query",
     channels: ["api", "automation", "internal"],
     surfaces: ["home"],
-    input: issueArtifactClearInputValidator,
+    input: sessionIdInputValidator,
     output: null,
     idempotency: "none",
     audit: {
-      actionName: ACTION_READ_AUTOPILOT_ARTIFACTS
+      actionName: ACTION_READ_ARTIFACT_READINESS
     },
     observability: {},
     async execute(input, context, deps) {
       void context;
-      return deps.featureService.readAutopilotArtifacts(input.sessionId);
+      return deps.featureService.readArtifactReadiness(input.sessionId);
     }
   },
   {
-    id: ACTION_CLEAR_AUTOPILOT_ARTIFACTS,
+    id: ACTION_SUBMIT_CURRENT_STEP_INPUT,
     version: 1,
     kind: "command",
     channels: ["api", "automation", "internal"],
     surfaces: ["home"],
-    input: issueArtifactClearInputValidator,
+    input: currentStepInputSaveValidator,
     output: null,
     idempotency: "optional",
     audit: {
-      actionName: ACTION_CLEAR_AUTOPILOT_ARTIFACTS
+      actionName: ACTION_SUBMIT_CURRENT_STEP_INPUT
     },
     observability: {},
     async execute(input, context, deps) {
       void context;
-      return deps.featureService.clearAutopilotArtifacts(input.sessionId);
-    }
-  },
-  {
-    id: ACTION_SAVE_ISSUE_ARTIFACTS,
-    version: 1,
-    kind: "command",
-    channels: ["api", "automation", "internal"],
-    surfaces: ["home"],
-    input: issueArtifactSaveInputValidator,
-    output: null,
-    idempotency: "optional",
-    audit: {
-      actionName: ACTION_SAVE_ISSUE_ARTIFACTS
-    },
-    observability: {},
-    async execute(input, context, deps) {
-      void context;
-      return deps.featureService.saveIssueArtifacts(input.sessionId, {
-        body: input.body,
-        title: input.title,
-        word: input.word
+      return deps.featureService.submitCurrentStepInput(input.sessionId, {
+        fields: input.fields || {},
+        kind: input.kind,
+        message: input.message,
+        source: input.source,
+        stepId: input.stepId,
+        stepStatus: input.stepStatus,
+        text: input.text
       });
     }
   }
 ]);
 
 export {
-  ACTION_CLEAR_AUTOPILOT_ARTIFACTS,
-  ACTION_CLEAR_ISSUE_ARTIFACTS,
-  ACTION_READ_ARTIFACTS,
-  ACTION_READ_AUTOPILOT_ARTIFACTS,
-  ACTION_SAVE_ARTIFACTS,
-  ACTION_SAVE_ISSUE_ARTIFACTS,
+  ACTION_READ_ARTIFACT_PREVIEW,
+  ACTION_READ_ARTIFACT_READINESS,
+  ACTION_SUBMIT_CURRENT_STEP_INPUT,
   featureActions
 };

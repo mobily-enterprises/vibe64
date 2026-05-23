@@ -1,6 +1,0 @@
-{{systemStandard}}
-
-Vinext-specific issue-file guidance:
-- Write the issue in Vinext terms: migration state, compatibility risk, Next-compatible routing, package scripts, Vite behavior, and Cloudflare runtime expectations as appropriate.
-- Include clear acceptance criteria and relevant Vinext verification notes.
-- Keep the issue narrow enough for a focused Vinext or migration implementation.

@@ -1,9 +1,10 @@
-import { computed } from "vue";
+import { computed, watch } from "vue";
 import { useAiStudioSessionActions } from "@/composables/useAiStudioSessionActions.js";
 import { useAiStudioSessionClipboard } from "@/composables/useAiStudioSessionClipboard.js";
 import { useAiStudioSessionCodexHandoff } from "@/composables/useAiStudioSessionCodexHandoff.js";
 import { useAiStudioSessionCommandTerminal } from "@/composables/useAiStudioSessionCommandTerminal.js";
 import { useAiStudioSessionDialogs } from "@/composables/useAiStudioSessionDialogs.js";
+import { useAiStudioStepInputForm } from "@/composables/useAiStudioStepInputForm.js";
 import {
   commandMessage
 } from "@/lib/aiStudioSessionPanelModel.js";
@@ -80,12 +81,23 @@ function useAiStudioSessionWorkflow({
     commandBusy: () => commandBusy.value,
     commandTerminal: workflow.commandTerminal,
     onRewindSuccess: clearSessionTransientState,
-    openDraftEditor: (action) => workflow.dialogs?.draftEditor.openDialog(action),
     openInputDialog: (action) => workflow.dialogs?.input.openDialog(action),
     refreshSessionData,
     selectedSession,
     selectedSessionId,
     sessionsApiPath
+  });
+
+  workflow.stepInput = useAiStudioStepInputForm({
+    onSaved: refreshSessionData,
+    session: selectedSession
+  });
+
+  watch(selectedSession, (session) => {
+    workflow.codexHandoff?.syncWithSession(session || {});
+  }, {
+    immediate: true,
+    flush: "post"
   });
 
   workflow.dialogs = useAiStudioSessionDialogs({
@@ -99,8 +111,7 @@ function useAiStudioSessionWorkflow({
     runActionCommand: workflow.actions.runActionCommand,
     selectedSessionId,
     selectedSessionTitle,
-    sessionsApiPath,
-    setCopyStatus: clipboard.setCopyStatus
+    sessionsApiPath
   });
 
   const pageError = computed(() => {
@@ -157,16 +168,6 @@ function useAiStudioSessionWorkflow({
     dialogs: {
       abandon: workflow.dialogs.abandon,
       diff: workflow.dialogs.diff,
-      draftEditor: {
-        error: workflow.dialogs.draftEditor.error,
-        fields: workflow.dialogs.draftEditor.fields,
-        loading: workflow.dialogs.draftEditor.loading,
-        open: workflow.dialogs.draftEditor.open,
-        save: workflow.dialogs.draftEditor.save,
-        saving: workflow.dialogs.draftEditor.saving,
-        title: workflow.dialogs.draftEditor.title,
-        values: workflow.dialogs.draftEditor.values
-      },
       input: {
         close: workflow.dialogs.input.close,
         error: workflow.dialogs.input.error,
@@ -179,7 +180,6 @@ function useAiStudioSessionWorkflow({
         values: workflow.dialogs.input.values
       }
     },
-    issueRequest: workflow.actions.issueRequest,
     page: {
       busy: commandBusy,
       copyStatus: clipboard.copyStatus,
@@ -192,6 +192,7 @@ function useAiStudioSessionWorkflow({
       diffDisabled: reviewDiffDisabled,
       diffTitle: reviewDiffTitle
     },
+    stepInput: workflow.stepInput,
     selectSession,
     timeline: {
       rewindCommand: workflow.actions.rewindCommand,

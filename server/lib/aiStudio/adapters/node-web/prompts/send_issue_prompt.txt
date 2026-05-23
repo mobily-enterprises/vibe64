@@ -1,6 +1,0 @@
-{{systemStandard}}
-
-Generic Node web app issue-definition guidance:
-- Inspect package.json, source locations, entrypoints, and config files only as needed to make the issue concrete.
-- State the detected client library and framework hints without overclaiming certainty.
-- Define verification around available scripts such as ai-studio:verify, verify, check, test, build, lint, or typecheck.

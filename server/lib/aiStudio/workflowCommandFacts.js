@@ -14,6 +14,49 @@ function artifactFilePath(session = {}, name = "") {
   return session.artifactsRoot && name ? path.join(session.artifactsRoot, name) : "";
 }
 
+function stepArtifactShellLibrary(session = {}, stepId = "") {
+  const quotedArtifactsRoot = shellQuote(session.artifactsRoot || "");
+  const quotedStepId = shellQuote(stepId);
+  return [
+    `AI_STUDIO_STEP_ARTIFACTS_ROOT=${quotedArtifactsRoot}`,
+    `AI_STUDIO_STEP_ID=${quotedStepId}`,
+    "ai_studio_artifact_path() {",
+    "  printf '%s/%s.%s\\n' \"$AI_STUDIO_STEP_ARTIFACTS_ROOT\" \"$AI_STUDIO_STEP_ID\" \"$1\"",
+    "}",
+    "ai_studio_tmp_artifact_path() {",
+    "  printf '%s/tmp/%s.%s\\n' \"$AI_STUDIO_STEP_ARTIFACTS_ROOT\" \"$AI_STUDIO_STEP_ID\" \"$1\"",
+    "}",
+    "ai_studio_read_artifact() {",
+    "  cat \"$(ai_studio_artifact_path \"$1\")\"",
+    "}",
+    "ai_studio_read_tmp_artifact() {",
+    "  cat \"$(ai_studio_tmp_artifact_path \"$1\")\"",
+    "}",
+    "ai_studio_write_artifact() {",
+    "  mkdir -p \"$AI_STUDIO_STEP_ARTIFACTS_ROOT\"",
+    "  printf '%s\\n' \"$2\" > \"$(ai_studio_artifact_path \"$1\")\"",
+    "}",
+    "ai_studio_write_tmp_artifact() {",
+    "  mkdir -p \"$AI_STUDIO_STEP_ARTIFACTS_ROOT/tmp\"",
+    "  printf '%s\\n' \"$2\" > \"$(ai_studio_tmp_artifact_path \"$1\")\"",
+    "}",
+    "ai_studio_require_artifact() {",
+    "  AI_STUDIO_REQUIRED_ARTIFACT_PATH=\"$(ai_studio_artifact_path \"$1\")\"",
+    "  if [ ! -s \"$AI_STUDIO_REQUIRED_ARTIFACT_PATH\" ]; then",
+    "    printf '[studio] Missing %s: %s\\n' \"${2:-artifact}\" \"$AI_STUDIO_REQUIRED_ARTIFACT_PATH\" >&2",
+    "    exit 1",
+    "  fi",
+    "}",
+    "ai_studio_require_tmp_artifact() {",
+    "  AI_STUDIO_REQUIRED_ARTIFACT_PATH=\"$(ai_studio_tmp_artifact_path \"$1\")\"",
+    "  if [ ! -s \"$AI_STUDIO_REQUIRED_ARTIFACT_PATH\" ]; then",
+    "    printf '[studio] Missing %s: %s\\n' \"${2:-temporary artifact}\" \"$AI_STUDIO_REQUIRED_ARTIFACT_PATH\" >&2",
+    "    exit 1",
+    "  fi",
+    "}"
+  ].join("\n");
+}
+
 function requiredCommandFileScript(filePath = "", label = "file") {
   const quotedFilePath = shellQuote(filePath);
   return [
@@ -42,5 +85,6 @@ export {
   metadataFilePath,
   recordCommandFactScript,
   requiredArtifactScript,
-  requiredCommandFileScript
+  requiredCommandFileScript,
+  stepArtifactShellLibrary
 };

@@ -13,17 +13,21 @@ import {
   WorkflowMachine,
   workflowForProfile
 } from "../../server/lib/aiStudio/index.js";
+import {
+  stepMachineForStep
+} from "../../server/lib/aiStudio/workflowStepMachines.js";
 import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
 
 class PromptRendererFakeAdapter extends FakeTargetAdapter {
   constructor({
     promptPackRoot,
+    systemPromptPackRoot,
     ...options
   } = {}) {
     super(options);
     this.renderer = new PromptRenderer({
       promptPackRoot,
-      systemPromptPackRoot: false
+      ...(systemPromptPackRoot === undefined ? {} : { systemPromptPackRoot })
     });
   }
 
@@ -76,6 +80,39 @@ test("ai-studio runtime session view exposes workflow steps, current actions, an
   });
 });
 
+test("ai-studio runtime exposes the evaluated Autopilot stage without workflow conditions", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new AiStudioSessionRuntime({
+      targetRoot
+    });
+
+    const session = await runtime.createSession({
+      initialStep: "project_validated",
+      sessionId: "autopilot_stage_view"
+    });
+
+    assert.deepEqual(session.currentStepDefinition.autopilot.stage, {
+      actionId: "update_code_index",
+      advanceOnSuccess: false,
+      label: "Update code index"
+    });
+    assert.equal("actionSequence" in session.currentStepDefinition.autopilot, false);
+    assert.equal("completeWhen" in session.currentStepDefinition.autopilot, false);
+
+    await runtime.store.writeMetadataValue("autopilot_stage_view", "code_index_updated", "yes");
+    const afterCodeIndex = await runtime.getSession("autopilot_stage_view");
+    assert.deepEqual(afterCodeIndex.currentStepDefinition.autopilot.stage, {
+      actionId: "run_automated_checks",
+      advanceOnSuccess: false,
+      label: "Run automated checks"
+    });
+
+    await runtime.store.writeMetadataValue("autopilot_stage_view", "automated_checks_passed", "yes");
+    const afterValidation = await runtime.getSession("autopilot_stage_view");
+    assert.equal(afterValidation.currentStepDefinition.autopilot.stage, null);
+  });
+});
+
 test("ai-studio workflow profiles are ordered step lists with self-contained step metadata", () => {
   const bigFeature = workflowForProfile(AI_STUDIO_WORKFLOW_PROFILE_IDS.BIG_FEATURE);
   const generalCoding = workflowForProfile(AI_STUDIO_WORKFLOW_PROFILE_IDS.GENERAL_CODING);
@@ -114,18 +151,31 @@ test("ai-studio workflow profiles are ordered step lists with self-contained ste
     "report_created",
     "project_knowledge_updated",
     "changes_committed",
-    "pr_file_created",
-    "pr_created",
+    "create_pull_request",
     "pr_merged",
     "main_checkout_synced",
     "session_finished"
   ]);
   assert.equal(generalCoding.steps.find((step) => step.id === "agent_conversation").label, "Make changes");
   assert.equal(generalCoding.steps.find((step) => step.id === "agent_conversation").autopilot.kind, "agent_conversation");
-  assert.equal(
-    generalCoding.steps.find((step) => step.id === "agent_conversation").autopilot.responseArtifact,
-    "response.md"
-  );
+  const createPullRequestStep = generalCoding.steps.find((step) => step.id === "create_pull_request");
+  assert.deepEqual(createPullRequestStep.actions.map((action) => action.id), [
+    "open_pr",
+    "resolve_pull_request",
+    "create_pr_on_gh"
+  ]);
+  assert.deepEqual(createPullRequestStep.autopilot.actionSequence.map((action) => action.actionId), [
+    "resolve_pull_request",
+    "create_pr_on_gh"
+  ]);
+  assert.equal(createPullRequestStep.interaction, undefined);
+  assert.deepEqual(createPullRequestStep.rewindCleanup.artifacts, [
+    "tmp/create_pull_request.body.md",
+    "tmp/create_pull_request.title.txt",
+    "create_pull_request.url.txt",
+    "create_pull_request.number.txt",
+    "create_pull_request.source.txt"
+  ]);
   assert.equal(generalCoding.steps.some((step) => step.id === "issue_file_created"), false);
   assert.equal(generalCoding.steps.some((step) => step.id === "plan_made"), false);
   assert.equal(generalCoding.steps.some((step) => step.id === "plan_executed"), false);
@@ -139,8 +189,7 @@ test("ai-studio workflow profiles are ordered step lists with self-contained ste
     "maintenance_conversation",
     "project_validated",
     "changes_committed",
-    "pr_file_created",
-    "pr_created",
+    "create_pull_request",
     "pr_merged",
     "main_checkout_synced",
     "session_finished"
@@ -163,6 +212,17 @@ test("ai-studio workflow profiles are ordered step lists with self-contained ste
     "local_session_finished"
   ]);
   assert.equal(nonCommitMaintenance.steps.at(-2).autopilot.kind, "agent_conversation");
+});
+
+test("ai-studio workflow profiles have an explicit state machine for every step", () => {
+  for (const profileId of Object.values(AI_STUDIO_WORKFLOW_PROFILE_IDS)) {
+    const workflow = workflowForProfile(profileId);
+    assert.deepEqual(
+      workflow.steps.map((step) => step.id).filter((stepId) => !stepMachineForStep(stepId)),
+      [],
+      `${profileId} has workflow steps without state machines`
+    );
+  }
 });
 
 test("ai-studio runtime persists the selected workflow profile per session", async () => {
@@ -451,9 +511,10 @@ test("ai-studio runtime prompt actions render Codex handoff data without advanci
     assert.equal(afterAction.actionResult.promptId, "make_plan");
     assert.match(afterAction.actionResult.prompt, /Run the AI Studio prompt action: Make plan/u);
     assert.match(afterAction.actionResult.prompt, /"scope": "unit test"/u);
-    assert.match(afterAction.actionResult.prompt, /AI Studio conversation contract:/u);
-    assert.match(afterAction.actionResult.prompt, /response\.md/u);
-    assert.match(afterAction.actionResult.prompt, /input_format\.json/u);
+    assert.match(afterAction.actionResult.prompt, /AI Studio step completion contract:/u);
+    assert.match(afterAction.actionResult.prompt, /"kind": "ready"/u);
+    assert.match(afterAction.actionResult.prompt, /"stepStatus": "awaiting_agent_result"/u);
+    assert.match(afterAction.actionResult.prompt, /Do not write workflow artifacts directly/u);
     assert.doesNotMatch(afterAction.actionResult.prompt, /AI_STUDIO_AUTOPILOT_DONE/u);
     assert.equal(afterAction.actionResult.codexPromptHandoff.kind, "codex_prompt_handoff");
     assert.equal(afterAction.actionResult.codexPromptHandoff.codex.mode, "inject_prompt");
@@ -461,28 +522,28 @@ test("ai-studio runtime prompt actions render Codex handoff data without advanci
     assert.match(afterAction.actionResult.codexPromptHandoff.terminalInput, /Make plan/u);
     assert.match(afterAction.actionResult.codexPromptHandoff.terminalInput, /\[\[AI_STUDIO_CONTEXT_START\]\]/u);
 
+    await runtime.submitCurrentStepInput("prompt_action", {
+      kind: "ready",
+      source: "codex",
+      stepId: "plan_made",
+      stepStatus: "awaiting_agent_result"
+    });
     const afterAdvance = await runtime.advance("prompt_action");
     assert.equal(afterAdvance.currentStep, "plan_executed");
   });
 });
 
-test("ai-studio runtime prompt handoff shows submitted action input as visible terminal text", async () => {
+test("ai-studio pull request resolution prompt uses the current-step helper contract", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const promptPackRoot = path.join(targetRoot, "prompt-pack");
     await mkdir(promptPackRoot, {
       recursive: true
     });
     await writeFile(
-      path.join(promptPackRoot, "send_issue_prompt.txt"),
-      [
-        "Discuss and define issue",
-        "",
-        "Action input:",
-        "{{input.json}}"
-      ].join("\n"),
+      path.join(promptPackRoot, "generic.txt"),
+      "{{systemStandard}}",
       "utf8"
     );
-
     const runtime = new AiStudioSessionRuntime({
       adapter: new PromptRendererFakeAdapter({
         promptPackRoot
@@ -491,22 +552,23 @@ test("ai-studio runtime prompt handoff shows submitted action input as visible t
       targetRoot
     });
     await runtime.createSession({
-      initialStep: "issue_file_created",
-      sessionId: "issue_prompt_visible_title"
+      initialStep: "create_pull_request",
+      metadata: {
+        branch_pushed: "origin/ai-studio/test-session"
+      },
+      sessionId: "pull_request_resolution_prompt"
     });
 
-    const afterAction = await runtime.runAction("issue_prompt_visible_title", "send_issue_prompt", {
-      issueRequest: "Add booking reports"
-    });
+    const afterAction = await runtime.runAction("pull_request_resolution_prompt", "resolve_pull_request");
 
+    assert.equal(afterAction.currentStep, "create_pull_request");
     assert.equal(afterAction.actionResult.status, "prompt_ready");
-    assert.equal(afterAction.actionResult.promptId, "send_issue_prompt");
-    assert.match(afterAction.actionResult.prompt, /"issueRequest": "Add booking reports"/u);
-    assert.match(
-      afterAction.actionResult.codexPromptHandoff.terminalInput,
-      /^Add booking reports\n\n\[\[AI_STUDIO_CONTEXT_START\]\]/u
-    );
-    assert.doesNotMatch(afterAction.actionResult.codexPromptHandoff.terminalInput, /^Discuss and define issue/u);
+    assert.equal(afterAction.actionResult.promptId, "resolve_pull_request");
+    assert.match(afterAction.actionResult.prompt, /AI Studio current-step input helper/u);
+    assert.match(afterAction.actionResult.prompt, /"kind": "ready"/u);
+    assert.match(afterAction.actionResult.prompt, /"stepId": "create_pull_request"/u);
+    assert.match(afterAction.actionResult.prompt, /"stepStatus": "awaiting_agent_result"/u);
+    assert.match(afterAction.actionResult.prompt, /Do not write workflow artifacts directly/u);
   });
 });
 
@@ -555,6 +617,51 @@ test("ai-studio runtime prompt handoff shows the action input outside hidden ter
   });
 });
 
+test("ai-studio runtime preserves user responses when a prompt step resumes", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new AiStudioSessionRuntime({
+      clock: () => new Date("2026-05-16T01:02:03.000Z"),
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "maintenance_conversation",
+      sessionId: "prompt_response_resume",
+      workflowProfile: AI_STUDIO_WORKFLOW_PROFILE_IDS.NON_COMMIT_MAINTENANCE
+    });
+
+    await runtime.runAction("prompt_response_resume", "agent_conversation", {
+      conversationRequest: "Ask the user what to do."
+    });
+    await runtime.submitCurrentStepInput("prompt_response_resume", {
+      kind: "need_input",
+      message: "What food should I use?",
+      source: "codex",
+      stepId: "maintenance_conversation",
+      stepStatus: "awaiting_agent_result"
+    });
+    await runtime.submitCurrentStepInput("prompt_response_resume", {
+      fields: {
+        response: "Use Pescara."
+      },
+      kind: "user_response",
+      stepId: "maintenance_conversation",
+      stepStatus: "need_input"
+    });
+
+    const beforeResume = await runtime.getSession("prompt_response_resume");
+    assert.equal(beforeResume.stepMachine.status, "awaiting_agent_result");
+    assert.equal(beforeResume.stepMachine.response, "Use Pescara.");
+
+    await runtime.runAction("prompt_response_resume", "agent_conversation", {
+      conversationRequest: "Continue."
+    });
+
+    const afterResume = await runtime.getSession("prompt_response_resume");
+    assert.equal(afterResume.stepMachine.status, "awaiting_agent_result");
+    assert.equal(afterResume.stepMachine.response, "Use Pescara.");
+  });
+});
+
 test("ai-studio runtime reuses the persisted prompt context snapshot for later prompt actions", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = new AiStudioSessionRuntime({
@@ -578,6 +685,12 @@ test("ai-studio runtime reuses the persisted prompt context snapshot for later p
     const snapshot = await runtime.store.readPromptContextSnapshot("prompt_context_snapshot");
     assert.equal(snapshot.adapter.promptContext.helper_map, ".jskit/helper-map.md");
     assert.equal(snapshot.adapter.promptContext.marker, "first");
+    await runtime.submitCurrentStepInput("prompt_context_snapshot", {
+      kind: "ready",
+      source: "codex",
+      stepId: "plan_made",
+      stepStatus: "awaiting_agent_result"
+    });
     await runtime.advance("prompt_context_snapshot");
 
     class ThrowingInspectionAdapter extends FakeTargetAdapter {
@@ -666,6 +779,12 @@ test("ai-studio runtime sends static adapter context once and references it late
     assert.match(firstPrompt.actionResult.prompt, /large-static-config/u);
 
     await runtime.store.writeMetadataValue("session_briefing_once", "codex_session_briefing_delivered", "yes");
+    await runtime.submitCurrentStepInput("session_briefing_once", {
+      kind: "ready",
+      source: "codex",
+      stepId: "plan_made",
+      stepStatus: "awaiting_agent_result"
+    });
     await runtime.advance("session_briefing_once");
     const secondPrompt = await runtime.runAction("session_briefing_once", "execute_plan");
 

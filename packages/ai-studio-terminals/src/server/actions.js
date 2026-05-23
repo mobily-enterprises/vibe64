@@ -33,6 +33,7 @@ const featureActions = Object.freeze([
     async execute(input, context, deps) {
       void context;
       return deps.featureService.startCommandTerminal(input.sessionId, {
+        advanceOnSuccess: input.advanceOnSuccess === true,
         actionId: input.actionId,
         input: input.input
       });

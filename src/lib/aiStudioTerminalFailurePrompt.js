@@ -1,9 +1,6 @@
 import {
   stripTerminalControlSequences
 } from "@/lib/codexOutput.js";
-import {
-  conversationPromptInstruction
-} from "../../server/lib/aiStudio/conversationPromptContract.js";
 
 const DEFAULT_TERMINAL_FAILURE_TAIL_LINES = 200;
 
@@ -42,15 +39,16 @@ function optionalContextLine(label, value) {
 function terminalFailureFixPrompt({
   actionId = "",
   actionLabel = "",
-  artifactsRoot = "",
   closeError = "",
   commandPreview = "",
+  currentStep = "",
   exitCode = null,
   launchTargetId = "",
   launchTargetLabel = "",
   output = "",
   sessionId = "",
   shellTarget = "",
+  stepStatus = "",
   terminalKind = "",
   terminalSessionId = "",
   terminalStatus = "",
@@ -83,15 +81,21 @@ function terminalFailureFixPrompt({
   return [
     "A terminal script failed in AI Studio. Diagnose the failure from the repository and the terminal output, then attempt to fix the underlying cause in the current worktree.",
     "",
-    conversationPromptInstruction({
-      action: {
-        id: "fix_command_failure"
-      },
-      artifactsRoot,
-      session: {
-        artifactsRoot
-      }
-    }),
+    "When you believe the failed command should be retried, call the AI Studio current-step input helper with:",
+    JSON.stringify({
+      kind: "consider_resolved",
+      stepId: currentStep || "{{session.currentStep}}",
+      stepStatus: stepStatus || "{{session.stepMachine.status}}",
+      text: "Briefly describe what you fixed or why retrying is now reasonable."
+    }, null, 2),
+    "",
+    "If you need user input before the command can be retried, call the helper with:",
+    JSON.stringify({
+      kind: "need_input",
+      stepId: currentStep || "{{session.currentStep}}",
+      stepStatus: stepStatus || "{{session.stepMachine.status}}",
+      message: "The question or blocker for the user"
+    }, null, 2),
     "",
     "Terminal context:",
     contextLines || "- No terminal metadata was available.",

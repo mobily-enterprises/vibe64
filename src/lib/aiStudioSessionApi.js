@@ -21,16 +21,16 @@ function aiStudioCommandTerminalEndpoint(sessionId, terminalSessionId = "") {
   return terminalSessionId ? `${base}/${encodeURIComponent(terminalSessionId)}` : base;
 }
 
-function aiStudioIssueArtifactsEndpoint(sessionId) {
-  return aiStudioSessionEndpoint(sessionId, "/issue-artifacts");
+function aiStudioArtifactReadinessEndpoint(sessionId) {
+  return aiStudioSessionEndpoint(sessionId, "/artifact-readiness");
 }
 
-function aiStudioAutopilotArtifactsEndpoint(sessionId) {
-  return aiStudioSessionEndpoint(sessionId, "/autopilot-artifacts");
+function aiStudioCurrentStepInputEndpoint(sessionId) {
+  return aiStudioSessionEndpoint(sessionId, "/current-step/input");
 }
 
-function aiStudioAutopilotArtifactsStreamEndpoint(sessionId) {
-  return aiStudioSessionEndpoint(sessionId, "/autopilot-artifacts/stream");
+function aiStudioArtifactReadinessStreamEndpoint(sessionId) {
+  return aiStudioSessionEndpoint(sessionId, "/artifact-readiness/stream");
 }
 
 function aiStudioLaunchTerminalEndpoint(sessionId, terminalSessionId = "") {
@@ -79,35 +79,31 @@ async function closeAiStudioCommandTerminal(sessionId, terminalSessionId) {
   return studioHttpClient.delete(aiStudioCommandTerminalEndpoint(sessionId, terminalSessionId));
 }
 
-async function saveAiStudioIssueArtifacts(sessionId, input = {}) {
-  return studioHttpClient.put(aiStudioIssueArtifactsEndpoint(sessionId), input);
+async function readAiStudioArtifactReadiness(sessionId) {
+  return studioHttpClient.get(aiStudioArtifactReadinessEndpoint(sessionId));
 }
 
-async function clearAiStudioIssueArtifacts(sessionId) {
-  return studioHttpClient.delete(aiStudioIssueArtifactsEndpoint(sessionId));
-}
-
-async function readAiStudioAutopilotArtifacts(sessionId) {
-  return studioHttpClient.get(aiStudioAutopilotArtifactsEndpoint(sessionId));
-}
-
-async function clearAiStudioAutopilotArtifacts(sessionId) {
-  return studioHttpClient.delete(aiStudioAutopilotArtifactsEndpoint(sessionId));
+async function submitAiStudioCurrentStepInput(sessionId, input = {}) {
+  const payload = input && typeof input === "object" && !Array.isArray(input)
+    ? input
+    : {};
+  return studioHttpClient.post(aiStudioCurrentStepInputEndpoint(sessionId), {
+    ...payload,
+    kind: payload.kind || "ready"
+  });
 }
 
 export {
   aiStudioCodexTerminalWebSocketUrl,
   aiStudioCommandTerminalWebSocketUrl,
-  aiStudioAutopilotArtifactsStreamEndpoint,
+  aiStudioArtifactReadinessStreamEndpoint,
   aiStudioLaunchTerminalWebSocketUrl,
   aiStudioShellTerminalWebSocketUrl,
-  clearAiStudioIssueArtifacts,
-  clearAiStudioAutopilotArtifacts,
   closeAiStudioCodexTerminal,
   closeAiStudioCommandTerminal,
-  readAiStudioAutopilotArtifacts,
+  readAiStudioArtifactReadiness,
   readAiStudioSessionDiff,
-  saveAiStudioIssueArtifacts,
+  submitAiStudioCurrentStepInput,
   startAiStudioCodexTerminal,
   startAiStudioCommandTerminal
 };

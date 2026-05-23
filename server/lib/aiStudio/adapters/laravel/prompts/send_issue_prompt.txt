@@ -1,9 +1,0 @@
-{{systemStandard}}
-
-Laravel selected blueprint:
-{{adapter.promptContext.environment_blueprint}}
-
-Laravel-specific issue-definition guidance:
-- Scope the issue around the selected starter kit, database runtime, package manager, testing framework, and Boost setting.
-- Inspect composer.json, package.json, routes, migrations, tests, frontend assets, and configuration only when useful.
-- Call out routing, validation, authorization, database, queue, auth, asset, or environment risks before implementation begins.

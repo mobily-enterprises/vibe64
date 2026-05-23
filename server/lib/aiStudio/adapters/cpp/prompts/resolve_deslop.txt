@@ -1,9 +1,0 @@
-{{systemStandard}}
-
-C++ selected blueprint:
-{{adapter.promptContext.environment_blueprint}}
-
-C++-specific deslop-resolution guidance:
-- Resolve outstanding findings while preserving the selected C++ blueprint and existing build style.
-- Simplify unclear code, duplicated build logic, unsafe ownership/lifetime handling, and brittle tests when the fix is obvious and scoped.
-- Re-run only the focused fast checks that prove the resolved findings.

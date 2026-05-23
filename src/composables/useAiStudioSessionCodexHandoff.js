@@ -103,6 +103,14 @@ function useAiStudioSessionCodexHandoff({
     working.value = false;
   }
 
+  function syncWithSession(session = {}) {
+    const stepStatus = String(session?.stepMachine?.status || "");
+    if (["confirm_files", "done", "need_input", "ready"].includes(stepStatus)) {
+      busy.value = false;
+      working.value = false;
+    }
+  }
+
   function clearPromptOverride() {
     promptOverride.value = "";
   }
@@ -171,6 +179,7 @@ function useAiStudioSessionCodexHandoff({
     promptOverride,
     sessionUpdate: handleSessionUpdate,
     startFromActionResponse,
+    syncWithSession,
     working
   };
 }

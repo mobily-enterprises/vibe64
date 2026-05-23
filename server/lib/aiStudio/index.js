@@ -29,17 +29,6 @@ export {
   wrapPromptWithStudioContext
 } from "./promptMarkers.js";
 export {
-  CONVERSATION_FILE_ARTIFACTS,
-  CONVERSATION_HISTORY_ARTIFACT,
-  CONVERSATION_INPUT_FORMAT_ARTIFACT,
-  CONVERSATION_INPUT_KIND,
-  CONVERSATION_RESPONSE_ARTIFACT,
-  CONVERSATION_STATUS,
-  normalizeConversationInputFormat,
-  normalizeConversationIssueDraft,
-  normalizeConversationQuestions
-} from "./conversationFiles.js";
-export {
   PromptRenderer,
   promptContextForAction,
   promptSessionBriefing,

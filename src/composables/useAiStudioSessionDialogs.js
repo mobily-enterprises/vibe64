@@ -5,10 +5,6 @@ import {
   useAiStudioDiffDialog
 } from "@/composables/useAiStudioDiffDialog.js";
 import {
-  useAiStudioDraftEditor
-} from "@/composables/useAiStudioDraftEditor.js";
-import { useAiStudioSessionArtifacts } from "@/composables/useAiStudioSessionArtifacts.js";
-import {
   emptyActionInputValues,
   normalizeActionInputFields,
   requiredActionInputMissing
@@ -34,8 +30,7 @@ function useAiStudioSessionDialogs({
   runActionCommand,
   selectedSessionId,
   selectedSessionTitle,
-  sessionsApiPath,
-  setCopyStatus = () => null
+  sessionsApiPath
 } = {}) {
   const abandonDialogOpen = ref(false);
   const abandonDialogSessionId = ref("");
@@ -45,7 +40,6 @@ function useAiStudioSessionDialogs({
   const inputDialogOpen = ref(false);
   const inputDialogSubmitting = ref(false);
   const inputDialogValues = ref({});
-  const sessionArtifacts = useAiStudioSessionArtifacts();
 
   const {
     clearDiffDialog,
@@ -58,26 +52,6 @@ function useAiStudioSessionDialogs({
   } = useAiStudioDiffDialog({
     canOpen: canOpenDiff,
     selectedSessionId
-  });
-
-  const {
-    clear: clearDraftEditor,
-    draftEditorError,
-    draftEditorFields,
-    draftEditorLoading,
-    draftEditorOpen,
-    draftEditorSaving,
-    draftEditorTitle,
-    draftEditorValues,
-    openDraftEditor,
-    saveDraftEditor
-  } = useAiStudioDraftEditor({
-    onSaved() {
-      setCopyStatus("Draft saved.");
-    },
-    refreshSessionData,
-    selectedSessionId,
-    sessionArtifacts
   });
 
   const abandonCommand = useCommand({
@@ -116,8 +90,6 @@ function useAiStudioSessionDialogs({
   });
   const busy = computed(() => Boolean(
     abandonCommand.isRunning ||
-    draftEditorLoading.value ||
-    draftEditorSaving.value ||
     inputDialogSubmitting.value
   ));
 
@@ -209,7 +181,6 @@ function useAiStudioSessionDialogs({
   function clear() {
     clearAbandonDialog();
     clearDiffDialog();
-    clearDraftEditor();
     clearInputDialog();
   }
 
@@ -232,17 +203,6 @@ function useAiStudioSessionDialogs({
       open: diffDialogOpen,
       openDialog: openDiffDialog,
       payload: diffPayload
-    },
-    draftEditor: {
-      error: draftEditorError,
-      fields: draftEditorFields,
-      loading: draftEditorLoading,
-      open: draftEditorOpen,
-      openDialog: openDraftEditor,
-      save: saveDraftEditor,
-      saving: draftEditorSaving,
-      title: draftEditorTitle,
-      values: draftEditorValues
     },
     input: {
       close: closeInputDialog,

@@ -18,6 +18,9 @@ type AiStudioSession = {
   metadataRoot: string;
   sessionId: string;
   status: string;
+  stepMachine?: {
+    status?: string;
+  };
 };
 
 async function gotoSessions(page: Page) {
@@ -228,24 +231,6 @@ async function runSessionAction(page: Page, actionId: string, input: Record<stri
   return payload as AiStudioSession;
 }
 
-async function recordIssuePromptRequest(page: Page, issueRequest: string) {
-  await runSessionAction(page, "send_issue_prompt", {
-    issueRequest
-  });
-  await page.reload({
-    waitUntil: "networkidle"
-  });
-  await expect.poll(async () => {
-    const session = await latestSession(page);
-    return Boolean((session.actionResults || []).find((result) => {
-      return result.actionId === "send_issue_prompt" &&
-        (result.input as { issueRequest?: string } | undefined)?.issueRequest === issueRequest;
-    }));
-  }, {
-    timeout: 30_000
-  }).toBe(true);
-}
-
 async function onlyActiveSession(page: Page): Promise<AiStudioSession> {
   await expect.poll(async () => {
     const payload = await awaitSessions(page);
@@ -302,20 +287,25 @@ async function expectSessionMetadataContains(
 
 async function writeIssueArtifacts(page: Page, {
   body,
-  title
+  title,
+  word = title
 }: {
   body: string;
   title: string;
+  word?: string;
 }) {
-  const session = await latestSession(page);
-  await writeArtifact(session, "issue_title", `${title}\n`);
-  await writeArtifact(session, "issue.md", `${body}\n`);
+  await submitCurrentStepInput(page, {
+    body,
+    title,
+    word
+  });
   await page.reload({
     waitUntil: "networkidle"
   });
   await expect.poll(async () => {
     const updatedSession = await latestSession(page);
     return updatedSession.artifactReadiness?.issue_title?.nonEmpty === true &&
+      updatedSession.artifactReadiness?.issue_word?.nonEmpty === true &&
       updatedSession.artifactReadiness?.["issue.md"]?.nonEmpty === true;
   }, {
     timeout: 30_000
@@ -323,16 +313,46 @@ async function writeIssueArtifacts(page: Page, {
 }
 
 async function writePullRequestArtifact(page: Page, body: string) {
-  const session = await latestSession(page);
-  await writeArtifact(session, "pull_request.md", body.endsWith("\n") ? body : `${body}\n`);
+  await submitCurrentStepInput(page, {
+    title: firstMarkdownHeading(body) || "AI Studio pull request",
+    body
+  });
   await page.reload({
     waitUntil: "networkidle"
   });
   await expect.poll(async () => {
-    return (await latestSession(page)).artifactReadiness?.["pull_request.md"]?.nonEmpty === true;
+    const session = await latestSession(page);
+    return session.artifactReadiness?.["tmp/create_pull_request.title.txt"]?.nonEmpty === true &&
+      session.artifactReadiness?.["tmp/create_pull_request.body.md"]?.nonEmpty === true;
   }, {
     timeout: 30_000
   }).toBe(true);
+}
+
+function firstMarkdownHeading(markdown: string) {
+  return String(markdown || "")
+    .split("\n")
+    .map((line) => line.replace(/^#+\s*/u, "").trim())
+    .find(Boolean) || "";
+}
+
+async function submitCurrentStepInput(page: Page, fields: Record<string, string>) {
+  const session = await latestSession(page);
+  const stepStatus = String(session.stepMachine?.status || "");
+  const response = await page.request.post(
+    `${getLiveBaseUrl()}/api/ai-studio/sessions/${encodeURIComponent(session.sessionId)}/current-step/input`,
+    {
+      data: {
+        fields,
+        kind: "ready",
+        source: stepStatus === "awaiting_agent_result" ? "codex" : "ui",
+        stepId: session.currentStep,
+        stepStatus
+      }
+    }
+  );
+  expect(response.ok()).toBe(true);
+  return response.json();
 }
 
 async function writeReportArtifact(page: Page, body: string) {
@@ -384,41 +404,6 @@ async function writeWorktreeFile(page: Page, relativePath: string, contents: str
   await writeFile(absolutePath, contents, "utf8");
 }
 
-async function editIssueDraft(page: Page, {
-  body,
-  title
-}: {
-  body: string;
-  title: string;
-}) {
-  await clickButton(page, "Edit issue");
-  await page.getByLabel("Issue title").fill(title);
-  await page.getByLabel("Issue body").fill(body);
-  await clickButton(page, "Save");
-  await expect(page.getByText("Draft saved.")).toBeVisible({
-    timeout: 30_000
-  });
-  await closeDraftEditor(page, "Close edit issue");
-}
-
-async function editPullRequestDraft(page: Page, body: string) {
-  await clickButton(page, "Edit PR");
-  await page.getByLabel("Pull request body").fill(body);
-  await clickButton(page, "Save");
-  await expect(page.getByText("Draft saved.")).toBeVisible({
-    timeout: 30_000
-  });
-  await closeDraftEditor(page, "Close edit pr");
-}
-
-async function closeDraftEditor(page: Page, title: string) {
-  const closeButton = page.locator(`button[title="${title}"]`).first();
-  await expect(closeButton).toBeVisible({
-    timeout: 30_000
-  });
-  await closeButton.click();
-}
-
 async function reviewDiff(page: Page, expectedFileName: string) {
   await clickButton(page, "Review diff");
   const dialog = page.getByRole("dialog");
@@ -444,8 +429,6 @@ export {
   clickButton,
   createNewBranchSessionAtIssueStep,
   createSession,
-  editIssueDraft,
-  editPullRequestDraft,
   expectButtonDisabled,
   expectButtonEnabled,
   expectButtonHidden,
@@ -455,10 +438,10 @@ export {
   latestSession,
   markMetadata,
   markMetadataAndReload,
-  recordIssuePromptRequest,
   reviewDiff,
   runCommandAndWaitForMetadata,
   useExistingIssue,
+  submitCurrentStepInput,
   writeIssueArtifacts,
   writePullRequestArtifact,
   writeReportArtifact,

@@ -2,15 +2,6 @@ import { computed, ref, unref } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
 import {
-  useAiStudioIssueFileStep
-} from "@/composables/useAiStudioIssueFileStep.js";
-import {
-  latestAiStudioActionResult
-} from "@/lib/aiStudioActionResults.js";
-import {
-  PULL_REQUEST_ARTIFACT
-} from "@/lib/aiStudioArtifactNames.js";
-import {
   normalizeActionInputFields
 } from "@/lib/aiStudioActionInputModel.js";
 import {
@@ -33,10 +24,8 @@ import {
   readRefOrGetterBoolean
 } from "@/lib/vueRefOrGetterValue.js";
 
-const CREATE_PULL_REQUEST_FILE_ACTION_ID = "create_pr_file";
 const FINAL_REVIEW_STEP_ID = "changes_accepted";
 const IMPLEMENTATION_REVIEW_STEP_ID = "implementation_reviewed";
-const PULL_REQUEST_FILE_STEP_ID = "pr_file_created";
 
 function displayableActionResultMessage(result = {}) {
   const message = String(result?.message || "");
@@ -49,7 +38,6 @@ function useAiStudioSessionActions({
   commandBusy = () => false,
   commandTerminal,
   onRewindSuccess = () => null,
-  openDraftEditor = async () => null,
   openInputDialog = () => null,
   refreshSessionData,
   selectedSession,
@@ -145,16 +133,8 @@ function useAiStudioSessionActions({
       : [];
   });
   const currentNext = computed(() => selectedSession.value?.next || null);
-  const issueFileStep = useAiStudioIssueFileStep({
-    activeActionId,
-    clearCopyStatus,
-    commandBusy,
-    runActionCommand,
-    selectedSession,
-    selectedSessionId
-  });
   const currentActions = computed(() => {
-    return issueFileStep.visibleActions(baseCurrentActions.value);
+    return baseCurrentActions.value;
   });
   const worktreeReady = computed(() => Boolean(aiStudioSessionWorktreePath(selectedSession.value || {})));
   const latestActionResult = computed(() => {
@@ -182,22 +162,13 @@ function useAiStudioSessionActions({
     return "info";
   });
   const currentStepDisabledReason = computed(() => {
-    if (issueFileStep.formVisible.value) {
-      return "";
-    }
     return resolveCurrentStepDisabledReason(currentActions.value, currentNext.value);
   });
-  const waitingForPullRequestFile = computed(() => {
-    return selectedSession.value?.currentStep === PULL_REQUEST_FILE_STEP_ID &&
-      Boolean(latestAiStudioActionResult(selectedSession.value, CREATE_PULL_REQUEST_FILE_ACTION_ID)) &&
-      selectedSession.value?.artifactReadiness?.[PULL_REQUEST_ARTIFACT]?.nonEmpty !== true;
-  });
   const waitingForPromptedArtifact = computed(() => {
-    return issueFileStep.waitingForFiles.value || waitingForPullRequestFile.value;
+    return false;
   });
   const acceptChangesUtilitiesVisible = computed(() => {
-    return [IMPLEMENTATION_REVIEW_STEP_ID, FINAL_REVIEW_STEP_ID].includes(selectedSession.value?.currentStep) &&
-      !issueFileStep.formVisible.value;
+    return [IMPLEMENTATION_REVIEW_STEP_ID, FINAL_REVIEW_STEP_ID].includes(selectedSession.value?.currentStep);
   });
   const busy = computed(() => Boolean(
     runActionCommand.isRunning ||
@@ -242,14 +213,9 @@ function useAiStudioSessionActions({
       commandTerminal.start(action);
       return;
     }
-    if (action.type === "editor") {
-      await openDraftEditor(action);
-      return;
-    }
-
     activeActionId.value = action.id;
     try {
-      const input = providedInput || issueFileStep.inputForAction(action);
+      const input = providedInput || {};
       return await runActionCommand.run({
         actionId: action.id,
         advanceOnSuccess: action.advanceOnSuccess === true,
@@ -304,15 +270,6 @@ function useAiStudioSessionActions({
     currentStepDisabledReason,
     error,
     goNext,
-    issueRequest: {
-      canSubmit: issueFileStep.canSubmit,
-      error: issueFileStep.requestError,
-      formVisible: issueFileStep.formVisible,
-      sendPrompt: issueFileStep.sendPrompt,
-      submitting: issueFileStep.submitting,
-      submitTitle: issueFileStep.submitTitle,
-      text: issueFileStep.requestText
-    },
     rewindCommand,
     rewindToStep,
     runAction,

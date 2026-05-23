@@ -1,6 +1,0 @@
-{{systemStandard}}
-
-JSKIT-specific issue-definition guidance:
-- Frame the issue around JSKIT provider boundaries, command actions, CRUD/resource contracts, generated UI surfaces, setup checks, or app blueprint changes when those areas are relevant.
-- Use `npx jskit ...` only when project inspection would clarify the scope.
-- Call out JSKIT verification or setup implications early so the issue can be scoped before implementation begins.

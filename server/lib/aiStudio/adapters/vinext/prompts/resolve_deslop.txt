@@ -1,6 +1,0 @@
-{{systemStandard}}
-
-Vinext-specific deslop-resolution guidance:
-- Resolve outstanding findings while preserving Vinext compatibility and the current migration state.
-- Keep routing, package scripts, Vite behavior, Cloudflare runtime boundaries, and adapter metadata internally consistent.
-- Re-run only the focused fast checks that prove the resolved findings.

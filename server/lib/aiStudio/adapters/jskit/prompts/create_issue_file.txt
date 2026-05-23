@@ -1,6 +1,0 @@
-{{systemStandard}}
-
-JSKIT-specific issue-file guidance:
-- Write the issue in JSKIT terms: providers, commands, CRUD/resource flows, generated surfaces, setup checks, package scripts, or app blueprint updates as appropriate.
-- Include clear acceptance criteria and relevant JSKIT verification notes.
-- Keep the issue narrow enough that a later implementation can preserve JSKIT framework conventions.

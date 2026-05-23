@@ -1,9 +1,0 @@
-{{systemStandard}}
-
-C++ selected blueprint:
-{{adapter.promptContext.environment_blueprint}}
-
-C++-specific issue-file guidance:
-- Write the issue around the selected C++ build system, standard, project kind, and testing convention.
-- Include acceptance criteria that can be verified with focused configure/build/test commands.
-- Call out API/ABI impact, ownership/lifetime risks, threading/concurrency risks, and portability constraints when relevant.

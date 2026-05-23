@@ -1,9 +1,0 @@
-{{systemStandard}}
-
-C++ selected blueprint:
-{{adapter.promptContext.environment_blueprint}}
-
-C++-specific pull-request-file guidance:
-- Summarize the accepted issue, implementation, build manifest changes, source/header changes, tests, and verification performed.
-- Mention public API/ABI changes, compiler/build-system assumptions, portability risks, and any intentionally deferred checks.
-- Keep the pull request body focused on what a native-code reviewer needs to merge safely.

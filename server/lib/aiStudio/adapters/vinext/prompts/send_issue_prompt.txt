@@ -1,6 +1,0 @@
-{{systemStandard}}
-
-Vinext-specific issue-definition guidance:
-- Scope the issue around Vinext compatibility, migration state, package scripts, Next-compatible routing, Vite behavior, or Cloudflare runtime concerns when relevant.
-- Inspect package.json, Vinext scripts, router files, and config only when useful.
-- Call out migration or compatibility risks before implementation begins.

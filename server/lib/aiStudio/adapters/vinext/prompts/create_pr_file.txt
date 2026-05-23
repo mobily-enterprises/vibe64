@@ -1,6 +1,0 @@
-{{systemStandard}}
-
-Vinext-specific pull-request-file guidance:
-- Summarize the accepted issue, implementation, routing/config/scripts touched, Vinext migration or compatibility impact, and verification performed.
-- Call out Vite behavior, Cloudflare runtime assumptions, package scripts, and remaining Vinext risks when relevant.
-- Keep the pull request body focused on what a reviewer needs to merge safely.

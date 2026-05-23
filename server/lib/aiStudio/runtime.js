@@ -22,12 +22,6 @@ import {
   wrapPromptWithStudioContext
 } from "./promptMarkers.js";
 import {
-  CONVERSATION_FILE_ARTIFACTS
-} from "./conversationFiles.js";
-import {
-  conversationPromptInstruction
-} from "./conversationPromptContract.js";
-import {
   runtimeContainerManagedServicesPromptFacts,
   runtimeContainerPromptFacts
 } from "./runtimeContainers.js";
@@ -40,6 +34,13 @@ import {
   workflowProfileDefinition
 } from "./workflow.js";
 import { WorkflowMachine } from "./workflowMachine.js";
+import {
+  applyStepMachineView,
+  currentStepPromptInputInstruction,
+  recordStepMachineActionFinished,
+  recordStepMachineActionStarted,
+  saveStepMachineInput
+} from "./workflowStepMachines.js";
 
 function metadataFlagIsOn(value) {
   return ["1", "true", "yes", "on"].includes(normalizeText(value).toLowerCase());
@@ -264,18 +265,15 @@ function promptWithSessionBriefing({
     .join("\n\n");
 }
 
-function promptWithConversationContract({
+function promptWithCurrentStepInputContract({
   action = {},
   prompt = "",
   session = {}
 } = {}) {
+  const stepInputInstruction = currentStepPromptInputInstruction(session, action);
   return [
     String(prompt || "").trim(),
-    conversationPromptInstruction({
-      action,
-      artifactsRoot: session.artifactsRoot,
-      session
-    })
+    stepInputInstruction
   ]
     .map((part) => String(part || "").trim())
     .filter(Boolean)
@@ -407,10 +405,11 @@ class AiStudioSessionRuntime {
     };
     const workflowProfileId = this.workflowProfileIdForSession(sessionWithConfig);
     const workflowMachine = this.workflowMachineForProfile(workflowProfileId);
-    return {
+    const sessionView = {
       ...workflowMachine.buildSessionView(sessionWithConfig),
       workflowProfile: workflowProfileDefinition(workflowProfileId)
     };
+    return applyStepMachineView(this, sessionView);
   }
 
   workflowProfileIdForSession(session = {}) {
@@ -635,8 +634,7 @@ class AiStudioSessionRuntime {
       session: promptSession,
       sessionBriefingIncluded
     });
-    await this.store.deleteArtifacts(promptSession.sessionId, CONVERSATION_FILE_ARTIFACTS);
-    const prompt = promptWithConversationContract({
+    const prompt = promptWithCurrentStepInputContract({
       action,
       prompt: promptWithBriefing,
       session: promptSession
@@ -726,26 +724,31 @@ class AiStudioSessionRuntime {
       throw commandActionRequiresTerminalError(action);
     }
 
-    const handlerResult = await this.actionHandler(action.id)({
-      action,
+    await recordStepMachineActionStarted(this, session, action.id);
+    const actionSession = await this.runActionSessionView(session.sessionId);
+    const actionAfterStart = currentAction(actionSession, normalizedActionId) || action;
+
+    const handlerResult = await this.actionHandler(actionAfterStart.id)({
+      action: actionAfterStart,
       input,
       runtime: this,
-      session,
+      session: actionSession,
       store: this.store
     });
     const actionResult = await this.store.writeActionResult(
-      session.sessionId,
-      action.id,
-      actionResultRecord(action, session, input, handlerResult)
+      actionSession.sessionId,
+      actionAfterStart.id,
+      actionResultRecord(actionAfterStart, actionSession, input, handlerResult)
     );
-    await writeActionResultEffects(this.store, session.sessionId, handlerResult);
+    await writeActionResultEffects(this.store, actionSession.sessionId, handlerResult);
     await this.store.appendCommandLogEntry(
-      session.sessionId,
-      actionLogEntry(action, session, actionResult)
+      actionSession.sessionId,
+      actionLogEntry(actionAfterStart, actionSession, actionResult)
     );
+    await recordStepMachineActionFinished(this, actionSession, actionAfterStart.id, actionResult);
 
     return {
-      ...await this.runActionSessionView(session.sessionId),
+      ...await this.runActionSessionView(actionSession.sessionId),
       actionResult
     };
   }
@@ -776,7 +779,12 @@ class AiStudioSessionRuntime {
       this.store.deleteActionResults(session.sessionId, plan.actionResultIds),
       this.store.deleteArtifacts(session.sessionId, plan.artifactNames),
       this.store.deleteCompletedSteps(session.sessionId, plan.completedStepIds),
-      this.store.deleteMetadataValues(session.sessionId, plan.metadataNames)
+      this.store.deleteMetadataValues(session.sessionId, plan.metadataNames),
+      this.store.deleteStepStates(session.sessionId, [
+        plan.targetStepId,
+        session.currentStep,
+        ...plan.completedStepIds
+      ])
     ]);
     await this.store.writeCurrentStep(session.sessionId, plan.targetStepId);
     await this.store.appendCommandLogEntry(session.sessionId, {
@@ -785,6 +793,19 @@ class AiStudioSessionRuntime {
       toStepId: plan.targetStepId
     });
     return this.getSession(session.sessionId);
+  }
+
+  async submitCurrentStepInput(sessionId, input = {}) {
+    return saveStepMachineInput(this, sessionId, input);
+  }
+
+  async recordCommandActionStarted(sessionId, actionId) {
+    const session = await this.getSession(sessionId);
+    await recordStepMachineActionStarted(this, session, actionId);
+  }
+
+  async recordCommandActionFinished(session, actionId, actionResult = {}) {
+    await recordStepMachineActionFinished(this, session, actionId, actionResult);
   }
 }
 

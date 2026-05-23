@@ -121,6 +121,7 @@ function useAiStudioHeadlessCommandRunner({
   let stopActiveCommand = null;
 
   async function runCommandAction({
+    advanceOnSuccess = false,
     action = {},
     input = {},
     sessionId = ""
@@ -141,6 +142,7 @@ function useAiStudioHeadlessCommandRunner({
     status.value = "";
     try {
       const terminalSession = await startCommandTerminal(normalizedSessionId, {
+        advanceOnSuccess: advanceOnSuccess === true,
         actionId,
         input: normalizePlainObject(input)
       });

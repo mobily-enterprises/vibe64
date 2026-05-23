@@ -1,9 +1,0 @@
-{{systemStandard}}
-
-Laravel selected blueprint:
-{{adapter.promptContext.environment_blueprint}}
-
-Laravel-specific deslop-resolution guidance:
-- Resolve outstanding findings while preserving the selected Laravel blueprint.
-- Keep routing, validation, authorization, persistence, migrations, frontend assets, package scripts, and environment handling internally consistent.
-- Re-run only the focused fast checks that prove the resolved findings.

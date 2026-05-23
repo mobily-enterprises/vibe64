@@ -50,42 +50,6 @@ function metadataCleanupApplies(entry = {}, session = {}) {
   return normalizeText(session.metadata?.[entry.unlessMetadataName]) !== entry.unlessMetadataValue;
 }
 
-function normalizeArtifactField(field = {}, actionId = "") {
-  const name = normalizeText(field.name);
-  if (!name) {
-    throw aiStudioError(
-      `AI Studio editor action ${actionId} has an artifact field without a name.`,
-      "ai_studio_workflow_artifact_field_name_missing"
-    );
-  }
-  const kind = normalizeText(field.kind || "textarea");
-  return {
-    kind: kind === "text" ? "text" : "textarea",
-    label: normalizeText(field.label || name),
-    metadataName: normalizeText(field.metadataName),
-    name,
-    required: field.required !== false,
-    requiredMessage: normalizeText(field.requiredMessage)
-  };
-}
-
-function normalizeArtifactFields(fields = [], actionId = "") {
-  const seenFieldNames = new Set();
-  const normalizedFields = [];
-  for (const field of Array.isArray(fields) ? fields : []) {
-    const normalizedField = normalizeArtifactField(field, actionId);
-    if (seenFieldNames.has(normalizedField.name)) {
-      throw aiStudioError(
-        `Duplicate AI Studio artifact field in action ${actionId}: ${normalizedField.name}`,
-        "ai_studio_duplicate_workflow_artifact_field"
-      );
-    }
-    seenFieldNames.add(normalizedField.name);
-    normalizedFields.push(normalizedField);
-  }
-  return normalizedFields;
-}
-
 function normalizeInputField(field = {}, actionId = "") {
   const name = normalizeText(field.name);
   if (!name) {
@@ -131,7 +95,6 @@ function normalizeAction(action = {}, stepId = "") {
   return {
     adapterCapability: normalizeText(action.adapterCapability),
     advanceOnSuccess: action.advanceOnSuccess === true,
-    artifactFields: type === "editor" ? normalizeArtifactFields(action.artifactFields, id) : [],
     disabledReason: normalizeText(action.disabledReason),
     disabledWhenReason: normalizeText(action.disabledWhenReason || action.disabledReason),
     disabledWhen: normalizeConditionList(action.disabledWhen),
@@ -177,9 +140,42 @@ function normalizeAutopilot(autopilot = {}) {
     completeWhen: normalizeConditionList(autopilot.completeWhen),
     kind: normalizeText(autopilot.kind),
     label: normalizeText(autopilot.label || autopilot.actionId),
-    responseArtifact: normalizeText(autopilot.responseArtifact),
     stop: autopilot.stop === true,
     userDecision: autopilot.userDecision === true
+  };
+}
+
+function normalizeInteractionField(field = {}) {
+  const name = normalizeText(field.name);
+  if (!name) {
+    throw aiStudioError(
+      "AI Studio step interaction field is missing a name.",
+      "ai_studio_workflow_interaction_field_name_missing"
+    );
+  }
+  const kind = normalizeText(field.kind || "text");
+  return {
+    kind: kind === "textarea" ? "textarea" : "text",
+    label: normalizeText(field.label || name),
+    name,
+    placeholder: normalizeText(field.placeholder),
+    required: field.required !== false,
+    requiredMessage: normalizeText(field.requiredMessage || `${field.label || name} is required.`)
+  };
+}
+
+function normalizeInteraction(interaction = {}) {
+  const kind = normalizeText(interaction.kind);
+  if (!kind) {
+    return null;
+  }
+  return {
+    fields: (Array.isArray(interaction.fields) ? interaction.fields : []).map(normalizeInteractionField),
+    kind,
+    primaryActionLabel: normalizeText(interaction.primaryActionLabel || "Continue"),
+    prompt: normalizeText(interaction.prompt),
+    submitLabel: normalizeText(interaction.submitLabel || "Submit"),
+    title: normalizeText(interaction.title)
   };
 }
 
@@ -215,6 +211,7 @@ function normalizeStep(step = {}, index = 0, seenStepIds = new Set()) {
     description: normalizeText(step.description),
     id,
     index,
+    interaction: normalizeInteraction(step.interaction),
     label: normalizeText(step.label || id),
     next: normalizeNext(step.next),
     rewindCleanup: normalizeRewindCleanup(step.rewindCleanup),
@@ -246,27 +243,26 @@ function publicStepDefinition(step, status) {
   };
 }
 
-function publicAutopilotDefinition(autopilot = {}) {
+function publicAutopilotStage(action = null) {
+  if (!action?.actionId) {
+    return null;
+  }
+  return {
+    actionId: action.actionId,
+    advanceOnSuccess: action.advanceOnSuccess === true,
+    label: action.label || action.actionId
+  };
+}
+
+function publicAutopilotDefinition(autopilot = {}, currentStage = null) {
   const definition = {
-    actionSequence: autopilot.actionSequence.map((action) => ({
-      ...action
-    })),
-    completeWhen: [...autopilot.completeWhen],
     kind: autopilot.kind,
+    stage: currentStage,
     stop: autopilot.stop,
     userDecision: autopilot.userDecision
   };
-  if (autopilot.actionId) {
-    definition.actionId = autopilot.actionId;
-  }
-  if (autopilot.advanceOnSuccess) {
-    definition.advanceOnSuccess = true;
-  }
   if (autopilot.label) {
     definition.label = autopilot.label;
-  }
-  if (autopilot.responseArtifact) {
-    definition.responseArtifact = autopilot.responseArtifact;
   }
   return definition;
 }
@@ -308,11 +304,6 @@ function publicActionDefinition(action) {
   if (action.hrefMetadata) {
     definition.hrefMetadata = action.hrefMetadata;
   }
-  if (action.artifactFields.length > 0) {
-    definition.artifactFields = action.artifactFields.map((field) => ({
-      ...field
-    }));
-  }
   if (action.inputFields.length > 0) {
     definition.inputFields = action.inputFields.map((field) => ({
       ...field
@@ -321,10 +312,10 @@ function publicActionDefinition(action) {
   return definition;
 }
 
-function publicCurrentStepDefinition(step) {
-  return {
+function publicCurrentStepDefinition(step, autopilotStage = null) {
+  const definition = {
     actions: step.actions.map(publicActionDefinition),
-    autopilot: publicAutopilotDefinition(step.autopilot),
+    autopilot: publicAutopilotDefinition(step.autopilot, autopilotStage),
     description: step.description,
     id: step.id,
     index: step.index,
@@ -334,6 +325,15 @@ function publicCurrentStepDefinition(step) {
       visible: step.next.visible
     }
   };
+  if (step.interaction) {
+    definition.interaction = {
+      ...step.interaction,
+      fields: step.interaction.fields.map((field) => ({
+        ...field
+      }))
+    };
+  }
+  return definition;
 }
 
 function conditionMet() {
@@ -571,6 +571,26 @@ class WorkflowMachine {
       .map((action) => publicAction(action, this.actionStateForSession(step, action, session)));
   }
 
+  autopilotStageForSession(step, session = {}) {
+    const autopilot = step?.autopilot;
+    if (!autopilot) {
+      return null;
+    }
+    if (autopilot.actionSequence.length > 0) {
+      const nextAction = autopilot.actionSequence.find((action) => {
+        return !this.checkRequirements(action.completeWhen, session).enabled;
+      });
+      return publicAutopilotStage(nextAction);
+    }
+    if (!autopilot.actionId) {
+      return null;
+    }
+    if (autopilot.completeWhen.length > 0 && this.checkRequirements(autopilot.completeWhen, session).enabled) {
+      return null;
+    }
+    return publicAutopilotStage(autopilot);
+  }
+
   nextStateForStep(currentStep, session = {}) {
     if (!currentStep) {
       return hiddenNext("Next", "No current step.");
@@ -614,7 +634,10 @@ class WorkflowMachine {
       actions: currentStep ? this.visibleActionsForStep(currentStep, session) : [],
       completedSteps,
       currentStep: currentStep?.id || "",
-      currentStepDefinition: currentStep ? publicCurrentStepDefinition(currentStep) : null,
+      currentStepDefinition: currentStep ? publicCurrentStepDefinition(
+        currentStep,
+        this.autopilotStageForSession(currentStep, session)
+      ) : null,
       next: this.nextStateForStep(currentStep, session),
       stepDefinitions: this.stepDefinitionsForSession(currentStep, completedSteps),
       workflowId: this.workflow.id

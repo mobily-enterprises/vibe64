@@ -9,10 +9,9 @@
         <AiStudioSessionCurrentStep
           :actions="actions"
           :diff="dialogs.diff"
-          :issue-request="issueRequest"
           :page="page"
           :review="review"
-          @update-issue-request-text="emit('update-issue-request-text', $event)"
+          :step-input="stepInput"
         />
       </template>
     </AiStudioSessionTimeline>
@@ -60,10 +59,6 @@ defineProps({
     default: () => ({}),
     type: Object
   },
-  issueRequest: {
-    default: () => ({}),
-    type: Object
-  },
   page: {
     default: () => ({}),
     type: Object
@@ -84,13 +79,15 @@ defineProps({
     default: () => ({}),
     type: Object
   },
+  stepInput: {
+    default: () => ({}),
+    type: Object
+  },
   timeline: {
     default: () => ({}),
     type: Object
   }
 });
-
-const emit = defineEmits(["update-issue-request-text"]);
 </script>
 
 <style scoped>

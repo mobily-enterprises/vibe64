@@ -66,6 +66,9 @@ test("ai-studio session store reads and writes metadata, artifacts, status, curr
 
     await store.writeStatus("state_contract", "blocked");
     await store.writeCurrentStep("state_contract", "install_dependencies");
+    await store.writeStepState("state_contract", "install_dependencies", {
+      status: "attempting_execution"
+    });
     await store.writeMetadataValue("state_contract", "adapter", "cpp-cmake");
     const artifactPath = await store.writeArtifact("state_contract", "summary.txt", "hello\n");
     await store.appendCommandLogEntry("state_contract", {
@@ -76,7 +79,13 @@ test("ai-studio session store reads and writes metadata, artifacts, status, curr
     const session = await store.readSession("state_contract");
     assert.equal(session.status, "blocked");
     assert.equal(session.currentStep, "install_dependencies");
+    assert.equal(session.stepStatesRoot.endsWith("/step-state"), true);
     assert.equal(session.metadata.adapter, "cpp-cmake");
+    assert.deepEqual(await store.readStepState("state_contract", "install_dependencies"), {
+      at: "2026-05-16T01:02:03.000Z",
+      status: "attempting_execution",
+      stepId: "install_dependencies"
+    });
     assert.equal(await store.readMetadataValue("state_contract", "adapter"), "cpp-cmake");
     assert.equal(await store.readArtifact("state_contract", "summary.txt"), "hello\n");
     assert.equal(await store.artifactExists("state_contract", "summary.txt"), true);
@@ -90,6 +99,9 @@ test("ai-studio session store reads and writes metadata, artifacts, status, curr
       updatedSession.artifactReadiness["summary.txt"].fingerprint,
       session.artifactReadiness["summary.txt"].fingerprint
     );
+
+    await store.deleteStepState("state_contract", "install_dependencies");
+    assert.equal(await store.readStepState("state_contract", "install_dependencies"), null);
 
     const commandLog = await store.readCommandLog("state_contract");
     assert.deepEqual(commandLog, [
@@ -205,7 +217,7 @@ test("ai-studio runtime delegates session operations to the store", async () => 
   });
 });
 
-test("ai-studio session ids, artifact names, and metadata names reject unsafe values", async () => {
+test("ai-studio session ids, artifact paths, and metadata names reject unsafe values", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const store = createAiStudioSessionStore({
       targetRoot
@@ -225,12 +237,23 @@ test("ai-studio session ids, artifact names, and metadata names reject unsafe va
     });
     await assert.rejects(
       () => store.writeArtifact("safe_123", "../outside.txt", "bad"),
-      /Invalid ai-studio artifact name/u
+      /Invalid ai-studio artifact path/u
     );
     await assert.rejects(
-      () => store.writeArtifact("safe_123", "nested/issue.md", "bad"),
-      /Invalid ai-studio artifact name/u
+      () => store.writeArtifact("safe_123", "tmp/../outside.txt", "bad"),
+      /Invalid ai-studio artifact path/u
     );
+    await assert.rejects(
+      () => store.writeArtifact("safe_123", "tmp//issue.md", "bad"),
+      /Invalid ai-studio artifact path/u
+    );
+
+    const nestedPath = await store.writeArtifact("safe_123", "tmp/create_issue.title.txt", "Title\n");
+    const session = await store.readSession("safe_123");
+    assert.match(nestedPath, /\.ai-studio\/sessions\/active\/safe_123\/artifacts\/tmp\/create_issue\.title\.txt$/u);
+    assert.equal(await store.readArtifact("safe_123", "tmp/create_issue.title.txt"), "Title\n");
+    assert.equal(session.artifactReadiness["tmp/create_issue.title.txt"].nonEmpty, true);
+
     await assert.rejects(
       () => store.writeMetadataValue("safe_123", "../outside", "bad"),
       /Invalid ai-studio metadata name/u

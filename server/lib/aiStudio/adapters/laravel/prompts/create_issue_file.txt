@@ -1,9 +1,0 @@
-{{systemStandard}}
-
-Laravel selected blueprint:
-{{adapter.promptContext.environment_blueprint}}
-
-Laravel-specific issue-file guidance:
-- Write the issue around the selected Laravel blueprint, including starter kit, database runtime, package manager, testing framework, and Boost setting when relevant.
-- Mention routing, controllers, models, migrations, queues, auth, validation, policies, frontend assets, and environment/runtime risk when they affect the scoped work.
-- Keep acceptance criteria clear enough for a focused Laravel implementation.

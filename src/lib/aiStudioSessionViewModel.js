@@ -1,8 +1,5 @@
-import {
-  REPORT_ARTIFACT
-} from "@/lib/aiStudioArtifactNames.js";
-
 const CLOSED_SESSION_STATUSES = new Set(["abandoned", "finished"]);
+const REPORT_LABEL = "Report";
 
 function shortAiStudioSessionId(sessionId) {
   return String(sessionId || "").replace(/^\d{4}-/u, "");
@@ -116,14 +113,8 @@ function buildAiStudioSessionFacts(session = {}, stepDefinitions = []) {
   const completedStepCount = Array.isArray(session.completedSteps) ? session.completedSteps.length : 0;
   const currentStepLabel = aiStudioSessionCurrentStepLabel(session, stepDefinitions);
   const blueprintPath = firstText(session.blueprintPath);
-  const pullRequestPath = firstText(session.pullRequestPath);
   const prOutcome = session.prOutcome && typeof session.prOutcome === "object" ? session.prOutcome : null;
-  const reportPath = firstText(
-    session.reportPath,
-    session.artifactReadiness?.[REPORT_ARTIFACT]?.nonEmpty && session.artifactsRoot
-      ? `${session.artifactsRoot}/${REPORT_ARTIFACT}`
-      : ""
-  );
+  const reportPath = firstText(session.reportPath);
   const workSource = firstText(session.workSource);
   const sourcePrLink = parseGithubSessionLink(session.sourcePrUrl, "pr");
 
@@ -216,18 +207,8 @@ function buildAiStudioSessionFacts(session = {}, stepDefinitions = []) {
       icon: "report",
       key: "session-report",
       label: "Report",
-      value: REPORT_ARTIFACT,
+      value: REPORT_LABEL,
       visible: Boolean(reportPath)
-    },
-    {
-      copyValue: pullRequestPath,
-      detail: pullRequestPath,
-      href: fileHref(pullRequestPath),
-      icon: "report",
-      key: "pull-request-draft",
-      label: "PR Draft",
-      value: "pull_request.md",
-      visible: Boolean(pullRequestPath)
     },
     {
       detail: firstText(prOutcome?.reason, prOutcome?.mergedAt),

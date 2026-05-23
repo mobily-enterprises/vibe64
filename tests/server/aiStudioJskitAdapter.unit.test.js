@@ -391,7 +391,7 @@ test("jskit prompt actions include JSKIT prompt context", async () => {
   });
 });
 
-test("jskit seed prompts require seed readiness before issue creation", async () => {
+test("jskit seed issue definition uses the current-step input contract before issue creation", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = new AiStudioSessionRuntime({
       adapter: createJskitTargetAdapter(),
@@ -403,17 +403,28 @@ test("jskit seed prompts require seed readiness before issue creation", async ()
       workflowProfile: AI_STUDIO_WORKFLOW_PROFILE_IDS.SEED_APPLICATION
     });
 
-    const afterDiscussionPrompt = await runtime.runAction("jskit_seed_prompt", "send_seed_prompt", {
-      seedRequest: "Seed the app foundation."
-    });
-    const afterFilePrompt = await runtime.runAction("jskit_seed_prompt", "create_seed_issue_file");
+    const initialSession = await runtime.getSession("jskit_seed_prompt");
 
-    assert.match(afterDiscussionPrompt.actionResult.prompt, /Seed readiness gate:/u);
-    assert.match(afterDiscussionPrompt.actionResult.prompt, /every JSKIT setup choice that affects the scaffold/u);
-    assert.match(afterDiscussionPrompt.actionResult.prompt, /answered, explicitly declined, or assigned a clear default/u);
-    assert.match(afterDiscussionPrompt.actionResult.prompt, /It is acceptable to ask more questions/u);
-    assert.match(afterFilePrompt.actionResult.prompt, /Before writing files, confirm the conversation has satisfied the seed readiness gate/u);
-    assert.match(afterFilePrompt.actionResult.prompt, /If anything is still unresolved, ask concise follow-up questions instead of writing/u);
+    assert.equal(initialSession.currentStep, "seed_application_defined");
+    assert.equal(initialSession.stepMachine.status, "need_input");
+    assert.equal(initialSession.currentStepDefinition.interaction.submitKind, "ready");
+
+    const afterInput = await runtime.submitCurrentStepInput("jskit_seed_prompt", {
+      fields: {
+        body: "Seed the JSKIT app foundation.",
+        title: "Seed JSKIT application foundation",
+        word: "seed"
+      },
+      kind: "ready",
+      stepId: "seed_application_defined",
+      stepStatus: "need_input"
+    });
+
+    assert.equal(afterInput.stepMachine.status, "confirm_files");
+    assert.equal(afterInput.next.enabled, true);
+    assert.equal(await runtime.store.readArtifact("jskit_seed_prompt", "issue_title"), "Seed JSKIT application foundation\n");
+    assert.equal(await runtime.store.readArtifact("jskit_seed_prompt", "issue_word"), "seed\n");
+    assert.equal(await runtime.store.readArtifact("jskit_seed_prompt", "issue.md"), "Seed the JSKIT app foundation.\n");
   });
 });
 
@@ -515,10 +526,6 @@ test("jskit issue and pull-request steps are gated by artifacts and metadata", a
     })), [
       {
         enabled: false,
-        id: "edit_issue"
-      },
-      {
-        enabled: false,
         id: "create_issue_on_gh"
       }
     ]);
@@ -531,10 +538,6 @@ test("jskit issue and pull-request steps are gated by artifacts and metadata", a
       enabled: action.enabled,
       id: action.id
     })), [
-      {
-        enabled: true,
-        id: "edit_issue"
-      },
       {
         enabled: true,
         id: "create_issue_on_gh"
@@ -551,16 +554,12 @@ test("jskit issue and pull-request steps are gated by artifacts and metadata", a
     })), [
       {
         enabled: false,
-        id: "edit_issue"
-      },
-      {
-        enabled: false,
         id: "create_issue_on_gh"
       }
     ]);
 
     await runtime.createSession({
-      initialStep: "pr_created",
+      initialStep: "create_pull_request",
       metadata: {
         branch_pushed: "ai-studio/jskit_pr"
       },
@@ -570,14 +569,13 @@ test("jskit issue and pull-request steps are gated by artifacts and metadata", a
     const prBeforeFileActions = enabledByActionId(prBeforeFile.actions);
     assert.equal(prBeforeFile.next.enabled, false);
     assert.equal(prBeforeFileActions.open_pr, false);
-    assert.equal(prBeforeFileActions.edit_pr, false);
     assert.equal(prBeforeFileActions.create_pr_on_gh, false);
 
-    await runtime.store.writeArtifact("jskit_pr", "pull_request.md", "PR body\n");
+    await runtime.store.writeArtifact("jskit_pr", "tmp/create_pull_request.title.txt", "PR title\n");
+    await runtime.store.writeArtifact("jskit_pr", "tmp/create_pull_request.body.md", "PR body\n");
     const prReady = await runtime.getSession("jskit_pr");
     const prReadyActions = enabledByActionId(prReady.actions);
     assert.equal(prReadyActions.open_pr, false);
-    assert.equal(prReadyActions.edit_pr, true);
     assert.equal(prReadyActions.create_pr_on_gh, true);
 
     await runtime.store.writeMetadataValue("jskit_pr", "pr_url", "https://github.com/example/repo/pull/24");
@@ -585,7 +583,6 @@ test("jskit issue and pull-request steps are gated by artifacts and metadata", a
     const prSubmittedActions = enabledByActionId(prSubmitted.actions);
     assert.equal(prSubmitted.next.enabled, true);
     assert.equal(prSubmittedActions.open_pr, true);
-    assert.equal(prSubmittedActions.edit_pr, false);
     assert.equal(prSubmittedActions.create_pr_on_gh, false);
   });
 });
@@ -604,7 +601,6 @@ test("jskit merge, sync, and finish steps follow current metadata gates", async 
     });
     const mergeWithoutPr = await runtime.getSession("jskit_merge");
     assert.deepEqual(enabledByActionId(mergeWithoutPr.actions), {
-      edit_report: false,
       merge_pr: false,
       prepare_for_merge: false,
       skip_merge: false
@@ -614,7 +610,6 @@ test("jskit merge, sync, and finish steps follow current metadata gates", async 
     await runtime.store.writeMetadataValue("jskit_merge", "pr_url", "https://github.com/example/repo/pull/24");
     const mergeReady = await runtime.getSession("jskit_merge");
     assert.deepEqual(enabledByActionId(mergeReady.actions), {
-      edit_report: true,
       merge_pr: true,
       prepare_for_merge: true,
       skip_merge: true

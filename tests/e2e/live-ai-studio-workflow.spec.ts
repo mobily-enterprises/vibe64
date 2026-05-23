@@ -31,8 +31,6 @@ import {
   clickButton,
   createNewBranchSessionAtIssueStep,
   createSession,
-  editIssueDraft,
-  editPullRequestDraft,
   expectButtonDisabled,
   expectButtonEnabled,
   expectButtonHidden,
@@ -42,9 +40,9 @@ import {
   latestSession,
   markMetadata,
   markMetadataAndReload,
-  recordIssuePromptRequest,
   reviewDiff,
   runCommandAndWaitForMetadata,
+  submitCurrentStepInput,
   useExistingIssue,
   writeIssueArtifacts,
   writePullRequestArtifact,
@@ -97,29 +95,26 @@ test.describe("live AI Studio session workflow", () => {
     await expectButtonEnabled(page, "Next");
 
     await goNextToStep(page, "issue_file_created");
-    await expect(page.getByLabel("Issue request")).toBeVisible();
-    await expect(page.getByText("Discuss issue and define scope")).toBeVisible();
-    await expectButtonDisabled(page, "Discuss issue");
+    await expect(page.getByLabel("Issue title")).toBeVisible();
+    await expect(page.getByLabel("Session label")).toBeVisible();
+    await expect(page.getByLabel("Issue body")).toBeVisible();
+    await expectButtonDisabled(page, "Save issue");
     await expectButtonEnabled(page, "Use existing issue");
-    await expectButtonHidden(page, "Create issue file");
-    await expectButtonHidden(page, "Next");
+    await expectButtonDisabled(page, "Next");
   });
 
-  test("switches from issue request form to create-file controls after the issue prompt is recorded", async ({ page }) => {
+  test("saves issue step input and enables the next step", async ({ page }) => {
     await createNewBranchSessionAtIssueStep(page);
-    await expect(page.getByLabel("Issue request")).toBeVisible();
-    await expect(page.getByText("Discuss issue and define scope")).toBeVisible();
-    await expectButtonDisabled(page, "Discuss issue");
-    await expectButtonEnabled(page, "Use existing issue");
-    await expectButtonHidden(page, "Create issue file");
-    await expectButtonHidden(page, "Next");
+    await submitCurrentStepInput(page, {
+      body: `Define a tiny issue for ${runId}.`,
+      title: fixtureTitle("step-input-issue"),
+      word: "Step input"
+    });
+    await page.reload({
+      waitUntil: "networkidle"
+    });
 
-    await recordIssuePromptRequest(page, `Define a tiny issue for ${runId}.`);
-
-    await expect(page.getByLabel("Issue request")).toHaveCount(0);
-    await expectButtonEnabled(page, "Create issue file");
-    await expectButtonHidden(page, "Use existing issue");
-    await expectButtonDisabled(page, "Next");
+    await expectButtonEnabled(page, "Next");
   });
 
   test("shows the expected controls at each checklist step", async ({ page }) => {
@@ -127,20 +122,20 @@ test.describe("live AI Studio session workflow", () => {
 
     await createNewBranchSessionAtIssueStep(page);
     await assertChecklistControls(page, "issue_file_created", {
-      disabled: ["Discuss issue"],
+      disabled: ["Save issue", "Next"],
       enabled: ["Use existing issue"],
-      hidden: ["Create issue file", "Next"]
+      hidden: []
     });
 
     await useExistingIssue(page, issue.url);
     await assertChecklistControls(page, "issue_file_created", {
-      disabled: ["Discuss issue", "Create issue file", "Use existing issue"],
+      disabled: ["Save issue", "Use existing issue"],
       enabled: ["Next"]
     });
 
     await goNextToStep(page, "issue_submitted");
     await assertChecklistControls(page, "issue_submitted", {
-      disabled: ["Edit issue", "Create issue on GH"],
+      disabled: ["Create issue on GH"],
       enabled: ["Next"]
     });
 
@@ -219,27 +214,22 @@ test.describe("live AI Studio session workflow", () => {
       enabled: ["Commit and push changes", "Next"]
     });
 
-    await goNextToStep(page, "pr_file_created");
-    await assertChecklistControls(page, "pr_file_created", {
-      disabled: ["Next"],
-      enabled: ["Create PR file"]
+    await goNextToStep(page, "create_pull_request");
+    await assertChecklistControls(page, "create_pull_request", {
+      disabled: ["Create PR on GH", "Next"],
+      enabled: ["Draft PR"]
     });
 
     await writePullRequestArtifact(page, `# ${fixtureTitle("checklist-pr")}\n\nChecklist contract draft.\n`);
-    await assertChecklistControls(page, "pr_file_created", {
-      enabled: ["Create PR file", "Next"]
-    });
-
-    await goNextToStep(page, "pr_created");
-    await assertChecklistControls(page, "pr_created", {
-      disabled: ["Open PR", "Next"],
-      enabled: ["Edit PR", "Create PR on GH"]
+    await assertChecklistControls(page, "create_pull_request", {
+      disabled: ["Draft PR", "Open PR", "Next"],
+      enabled: ["Create PR on GH", "Update PR"]
     });
 
     await markMetadataAndReload(page, "pr_url", "https://github.com/mercmobily/studio-ai-e2e-repo/pull/999999");
     await markMetadataAndReload(page, "pr_source", "created");
-    await assertChecklistControls(page, "pr_created", {
-      disabled: ["Edit PR", "Create PR on GH"],
+    await assertChecklistControls(page, "create_pull_request", {
+      disabled: ["Create PR on GH", "Draft PR"],
       enabled: ["Open PR", "Next"]
     });
 
@@ -282,13 +272,11 @@ test.describe("live AI Studio session workflow", () => {
     expect(session.metadata?.issue_source).toBe("existing");
     expect(session.metadata?.issue_number).toBe(issue.number);
 
-    await expectButtonDisabled(page, "Discuss issue");
-    await expectButtonDisabled(page, "Create issue file");
+    await expectButtonDisabled(page, "Save issue");
     await expectButtonDisabled(page, "Use existing issue");
     await expectButtonEnabled(page, "Next");
 
     await goNextToStep(page, "issue_submitted");
-    await expectButtonDisabled(page, "Edit issue");
     await expectButtonDisabled(page, "Create issue on GH");
     await expectButtonEnabled(page, "Next");
   });
@@ -302,10 +290,6 @@ test.describe("live AI Studio session workflow", () => {
 
     await expectButtonEnabled(page, "Next");
     await goNextToStep(page, "issue_submitted");
-    await editIssueDraft(page, {
-      body: `Edited body from ${runId}.`,
-      title: fixtureTitle("new-issue-edited")
-    });
     await runCommandAndWaitForMetadata(page, "Create issue on GH", "issue_url", UI_COMMAND_TIMEOUT_MS);
 
     const session = await latestSession(page);
@@ -346,11 +330,8 @@ test.describe("live AI Studio session workflow", () => {
       addCleanupTask(async () => deleteRemoteBranch(pushedBranch));
     }
 
-    await goNextToStep(page, "pr_file_created");
+    await goNextToStep(page, "create_pull_request");
     await writePullRequestArtifact(page, `# ${fixtureTitle("new-pr")}\n\nCreated by ${runId}.\n`);
-    await expectButtonEnabled(page, "Next");
-    await goNextToStep(page, "pr_created");
-    await editPullRequestDraft(page, `# ${fixtureTitle("new-pr-edited")}\n\nEdited by the live e2e suite.\n`);
     await runCommandAndWaitForMetadata(page, "Create PR on GH", "pr_url", UI_COMMAND_TIMEOUT_MS);
 
     const prSession = await latestSession(page);
@@ -422,13 +403,11 @@ test.describe("live AI Studio session workflow", () => {
       addCleanupTask(async () => deleteRemoteBranch(pushedBranch));
     }
 
-    await goNextToStep(page, "pr_file_created");
+    await goNextToStep(page, "create_pull_request");
     if (updateMode === "direct") {
-      await expectButtonDisabled(page, "Create PR file");
       await expectButtonEnabled(page, "Next");
-      await goNextToStep(page, "pr_created");
       await expectButtonEnabled(page, "Open PR");
-      await expectButtonDisabled(page, "Edit PR");
+      await expectButtonDisabled(page, "Draft PR");
       await expectButtonDisabled(page, "Create PR on GH");
       await expectButtonEnabled(page, "Next");
 
@@ -445,8 +424,6 @@ test.describe("live AI Studio session workflow", () => {
     }
 
     await writePullRequestArtifact(page, `# ${fixtureTitle("replacement-pr")}\n\nReplacement for ${pullRequest.url}.\n`);
-    await expectButtonEnabled(page, "Next");
-    await goNextToStep(page, "pr_created");
     await runCommandAndWaitForMetadata(page, "Create PR on GH", "pr_url", UI_COMMAND_TIMEOUT_MS);
 
     const replacementSession = await latestSession(page);

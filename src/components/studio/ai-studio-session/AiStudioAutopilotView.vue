@@ -139,128 +139,70 @@
       </div>
 
       <form
-        v-if="screenKind === 'issue' && issueDiscussion.inputVisible"
+        v-if="stepInput.visible && !displayRunning && !commandTerminalVisible"
         class="studio-autopilot__issue-form"
-        @submit.prevent="issueDiscussion.submitInitialRequest"
+        @submit.prevent="submitStepInput"
       >
-        <AiStudioAutopilotPromptTextarea
-          v-model="issueDiscussion.requestText"
-          class="studio-autopilot__issue-input"
-          :disabled="page.busy"
-          :error-messages="issueDiscussion.failure ? [issueDiscussion.failure] : []"
-          :hint="issueDiscussion.inputHint"
-          :label="issueDiscussion.inputLabel"
-          persistent-hint
-          rows="5"
-          :session-id="sessionId"
-          variant="outlined"
-        />
+        <p
+          v-if="stepInput.interaction?.prompt"
+          class="text-body-2 text-medium-emphasis mb-0"
+        >
+          {{ stepInput.interaction.prompt }}
+        </p>
 
-        <div class="studio-autopilot__actions">
-          <v-btn
-            color="primary"
-            variant="flat"
-            :disabled="page.busy || !issueDiscussion.canSubmit"
-            :loading="issueDiscussion.waiting"
-            :prepend-icon="mdiSend"
-            :title="issueDiscussion.submitTitle"
-            type="submit"
-          >
-            {{ issueDiscussion.submitLabel }}
-          </v-btn>
-        </div>
-      </form>
-
-      <AiStudioAutopilotQuestionForm
-        v-else-if="screenKind === 'questions'"
-        :can-submit="codexQuestionCanSubmit"
-        :disabled="page.busy || codexQuestionSubmitting"
-        :failure="codexQuestionFailure"
-        intro="Codex needs a few answers before it can continue."
-        :loading="codexQuestionSubmitting"
-        :questions="codexQuestionList"
-        :session-id="sessionId"
-        @answer-change="codexQuestionExchange.setAnswer"
-        @cancel="codexQuestionExchange.cancel"
-        @submit="codexQuestionExchange.submitAnswers"
-      />
-
-      <form
-        v-else-if="screenKind === 'issue' && issueDiscussion.reviewing"
-        class="studio-autopilot__issue-form"
-        @submit.prevent="acceptIssueDraftAndContinue"
-      >
-        <v-text-field
-          v-model="issueDiscussion.draftTitle"
-          class="studio-autopilot__issue-input"
-          :disabled="issueDiscussion.saving"
-          label="Issue title"
-          variant="outlined"
-        />
-
-        <v-text-field
-          v-model="issueDiscussion.draftWord"
-          class="studio-autopilot__issue-input"
-          :disabled="issueDiscussion.saving"
-          label="Session label"
-          variant="outlined"
-        />
-
-        <v-textarea
-          v-model="issueDiscussion.draftBody"
-          auto-grow
-          class="studio-autopilot__issue-input"
-          :disabled="issueDiscussion.saving"
-          label="Issue body"
-          rows="8"
-          variant="outlined"
-        />
+        <template
+          v-for="field in stepInput.fields"
+          :key="field.name"
+        >
+          <v-textarea
+            v-if="field.kind === 'textarea'"
+            auto-grow
+            class="studio-autopilot__issue-input"
+            :disabled="page.busy || stepInput.saving"
+            :label="field.label"
+            :model-value="stepInput.values[field.name] || ''"
+            :placeholder="field.placeholder"
+            rows="8"
+            variant="outlined"
+            @update:model-value="stepInput.updateValue(field.name, $event)"
+          />
+          <v-text-field
+            v-else
+            class="studio-autopilot__issue-input"
+            :disabled="page.busy || stepInput.saving"
+            :label="field.label"
+            :model-value="stepInput.values[field.name] || ''"
+            :placeholder="field.placeholder"
+            variant="outlined"
+            @update:model-value="stepInput.updateValue(field.name, $event)"
+          />
+        </template>
 
         <v-alert
-          v-if="issueDiscussion.failure"
+          v-if="stepInput.error"
           type="warning"
           variant="tonal"
           density="compact"
         >
-          {{ issueDiscussion.failure }}
+          {{ stepInput.error }}
         </v-alert>
 
         <div class="studio-autopilot__actions">
           <v-btn
             color="primary"
-            :disabled="!issueDiscussion.canAccept"
-            :loading="issueDiscussion.saving"
+            variant="flat"
+            :disabled="page.busy || !stepInput.canSubmit"
+            :loading="stepInput.saving"
             :prepend-icon="mdiCheck"
             type="submit"
-            variant="flat"
           >
-            Accept it
-          </v-btn>
-
-          <v-btn
-            :disabled="issueDiscussion.saving"
-            :prepend-icon="mdiRefresh"
-            type="button"
-            variant="tonal"
-            @click="issueDiscussion.rejectIssueDraft"
-          >
-            Back to the drawing board
+            {{ stepInput.interaction?.submitLabel || "Submit" }}
           </v-btn>
         </div>
       </form>
 
-      <v-alert
-        v-else-if="screenKind === 'issue' && issueDiscussion.failure"
-        class="studio-autopilot__issue-form"
-        type="warning"
-        variant="tonal"
-        density="compact"
-      >
-        {{ issueDiscussion.failure }}
-      </v-alert>
-
       <div
-        v-else-if="screenKind === 'agent_conversation'"
+        v-if="screenKind === 'agent_conversation' && !stepInput.visible && !displayRunning && !commandTerminalVisible"
         class="studio-autopilot__agent-conversation"
       >
         <v-alert
@@ -274,9 +216,9 @@
         <AiStudioReportPreview
           v-if="conversationResponsePreviewVisible"
           empty-text="AI response is not ready yet."
-          :error="''"
-          :loading="false"
-          :text="conversationResponse"
+          :error="conversationDisplayError"
+          :loading="conversationDisplayLoading"
+          :text="conversationDisplayResponse"
           title="AI response"
         />
 
@@ -378,9 +320,9 @@
         <AiStudioReportPreview
           v-if="conversationResponsePreviewVisible"
           empty-text="AI response is not ready yet."
-          :error="''"
-          :loading="false"
-          :text="conversationResponse"
+          :error="conversationDisplayError"
+          :loading="conversationDisplayLoading"
+          :text="conversationDisplayResponse"
           title="AI response"
         />
 
@@ -630,19 +572,13 @@ import {
 import AiStudioLaunchControls from "@/components/studio/AiStudioLaunchControls.vue";
 import AiStudioAutopilotNavigation from "@/components/studio/ai-studio-session/AiStudioAutopilotNavigation.vue";
 import AiStudioAutopilotPromptTextarea from "@/components/studio/ai-studio-session/AiStudioAutopilotPromptTextarea.vue";
-import AiStudioAutopilotQuestionForm from "@/components/studio/ai-studio-session/AiStudioAutopilotQuestionForm.vue";
 import AiStudioHeadlessCommandOutput from "@/components/studio/ai-studio-session/AiStudioHeadlessCommandOutput.vue";
 import AiStudioReportPreview from "@/components/studio/ai-studio-session/AiStudioReportPreview.vue";
 import AiStudioSessionActionButton from "@/components/studio/ai-studio-session/AiStudioSessionActionButton.vue";
 import {
   useAiStudioAutopilotController
 } from "@/composables/useAiStudioAutopilotController.js";
-import {
-  useAiStudioAutopilotIssueDiscussion
-} from "@/composables/useAiStudioAutopilotIssueDiscussion.js";
-import {
-  useAiStudioCodexQuestionExchange
-} from "@/composables/useAiStudioCodexQuestionExchange.js";
+import { useAiStudioStepInputForm } from "@/composables/useAiStudioStepInputForm.js";
 import {
   stripTerminalControlSequences
 } from "@/lib/codexOutput.js";
@@ -665,10 +601,6 @@ const props = defineProps({
     default: true,
     type: Boolean
   },
-  autopilotArtifacts: {
-    default: () => ({}),
-    type: Object
-  },
   autopilotSteps: {
     default: () => [],
     type: Array
@@ -682,6 +614,10 @@ const props = defineProps({
     type: Object
   },
   diff: {
+    default: () => ({}),
+    type: Object
+  },
+  humanInputResponsePreview: {
     default: () => ({}),
     type: Object
   },
@@ -715,11 +651,6 @@ const props = defineProps({
   }
 });
 
-const codexQuestionExchange = useAiStudioCodexQuestionExchange({
-  codexTerminal: props.codexTerminal
-});
-const autopilotArtifactState = computed(() => readRefOrGetterValue(props.autopilotArtifacts?.artifacts) || null);
-const clearAutopilotArtifacts = async () => props.autopilotArtifacts?.clear?.() || null;
 const {
   acceptChanges,
   cancelMergeFailure,
@@ -733,12 +664,10 @@ const {
   commandPreview,
   commandResult,
   commandRunning,
-  conversationResponse,
   failure,
   finishAgentConversation,
   mergeAndSyncMainCheckout,
   readyForAgentConversation,
-  readyForIssue,
   rejectChanges,
   requestReviewConversation,
   retry,
@@ -750,18 +679,14 @@ const {
   skipMerge,
   start,
   submitAgentConversationRequest,
-  syncFromAutopilotArtifacts,
   stop,
   stopCommandAction,
   waitingForCodex
 } = useAiStudioAutopilotController({
   actions: props.actions,
-  autopilotArtifacts: autopilotArtifactState,
-  clearAutopilotArtifacts,
   codexTerminal: props.codexTerminal,
   commandRunner: props.commandRunner || undefined,
   enabled: computed(() => props.active),
-  questionExchange: codexQuestionExchange,
   refreshSessionData: () => props.refreshSessionData(),
   session: computed(() => props.session)
 });
@@ -779,22 +704,20 @@ const archiveAction = computed(() => {
     ? currentActions.find((action) => action.id === FINISH_SESSION_ACTION_ID) || null
     : null;
 });
-
-const issueDiscussion = proxyRefs(useAiStudioAutopilotIssueDiscussion({
-  actions: props.actions,
-  autopilotArtifacts: autopilotArtifactState,
-  clearAutopilotArtifacts,
-  codexTerminal: props.codexTerminal,
-  enabled: computed(() => props.active),
-  questionExchange: codexQuestionExchange,
-  readyForIssue,
-  refreshSessionData: () => props.refreshSessionData(),
+const stepInput = proxyRefs(useAiStudioStepInputForm({
+  onSaved: async () => {
+    await props.refreshSessionData();
+    await nextTick();
+    if (props.actions?.currentNext?.enabled === true) {
+      await props.actions.goNext?.();
+      await props.refreshSessionData();
+      await nextTick();
+    }
+    await resume();
+  },
   session: computed(() => props.session)
 }));
-const codexQuestionCanSubmit = computed(() => codexQuestionExchange.canSubmit.value);
-const codexQuestionFailure = computed(() => codexQuestionExchange.failure.value);
-const codexQuestionList = computed(() => codexQuestionExchange.questions.value);
-const codexQuestionSubmitting = computed(() => codexQuestionExchange.submitting.value);
+
 const screenKind = computed(() => screenState.value.kind);
 const sessionId = computed(() => String(props.session?.sessionId || ""));
 const screenMessage = computed(() => String(screenState.value.message || ""));
@@ -804,25 +727,25 @@ const reviewKind = computed(() => String(screenState.value.reviewKind || ""));
 const implementationReviewVisible = computed(() => screenKind.value === "review" && reviewKind.value === "implementation");
 const finalReviewVisible = computed(() => screenKind.value === "review" && reviewKind.value === "final");
 const displayStatusText = computed(() => {
-  if (issueDiscussionWaiting.value) {
-    return issueDiscussion.statusText;
+  if (stepInput.visible) {
+    return stepInput.interaction?.title || screenState.value.title;
   }
-  return screenKind.value === "issue"
-    ? issueDiscussion.statusText
-    : screenState.value.title;
+  if (screenKind.value === "agent_conversation" && String(props.humanInputResponsePreview?.text || "").trim()) {
+    return "AI response";
+  }
+  return screenState.value.title;
 });
-const issueDiscussionWaiting = computed(() => Boolean(readyForIssue.value && issueDiscussion.waiting));
 const codexWaiting = computed(() => Boolean(
-  issueDiscussionWaiting.value ||
   waitingForCodex.value
 ));
 const displayRunning = computed(() => Boolean(
-  screenState.value.showProgress ||
-  issueDiscussionWaiting.value ||
-  (readyForIssue.value && issueDiscussion.saving)
+  screenState.value.showProgress
 ));
 const commandTerminalFailed = computed(() => commandResult.value?.ok === false);
-const commandTerminalVisible = computed(() => screenKind.value === "command");
+const commandTerminalVisible = computed(() => Boolean(
+  screenKind.value === "command" &&
+  !stepInput.visible
+));
 const commandStatus = computed(() => commandRunning.value ? "running" : "");
 const commandTerminalError = computed(() => {
   if (commandResult.value?.ok === false) {
@@ -870,10 +793,8 @@ const commandTerminalText = computed(() => {
 const autopilotBusy = computed(() => Boolean(props.active && (
   running.value ||
   codexWaiting.value ||
-  codexQuestionSubmitting.value ||
   commandFixSubmitting.value ||
-  issueDiscussionWaiting.value ||
-  (readyForIssue.value && issueDiscussion.saving)
+  stepInput.saving
 )));
 const reviewControlsBusy = computed(() => Boolean(running.value));
 const reviewDiffDisabled = computed(() => Boolean(reviewControlsBusy.value || props.review?.diffDisabled));
@@ -909,8 +830,15 @@ const reportPreviewVisible = computed(() => Boolean(
   reportScreenVisible.value &&
   props.reportPreview?.visible
 ));
+const conversationDisplayResponse = computed(() => {
+  return String(props.humanInputResponsePreview?.text || "");
+});
+const conversationDisplayError = computed(() => String(props.humanInputResponsePreview?.error || ""));
+const conversationDisplayLoading = computed(() => Boolean(
+  props.humanInputResponsePreview?.loading
+));
 const conversationResponsePreviewVisible = computed(() => Boolean(
-  conversationResponse.value.trim() &&
+  conversationDisplayResponse.value.trim() &&
   (implementationReviewVisible.value || finalReviewVisible.value || readyForAgentConversation.value)
 ));
 const canSubmitAgentConversation = computed(() => Boolean(
@@ -918,9 +846,6 @@ const canSubmitAgentConversation = computed(() => Boolean(
   agentConversationRequest.value.trim()
 ));
 const screenStopAction = computed(() => {
-  if (issueDiscussionWaiting.value) {
-    return "issue";
-  }
   return String(screenState.value.stopAction || "");
 });
 
@@ -952,16 +877,16 @@ async function requestCommandAiFix() {
   commandFixInjectionError.value = "";
   commandFixSubmitting.value = true;
   try {
-    await clearAutopilotArtifacts();
     const injected = await props.codexTerminal.fixCommandFailure(terminalFailureFixRequest({
       actionId: result.actionId,
       actionLabel: result.actionLabel,
-      artifactsRoot: props.session?.artifactsRoot || "",
       closeError: commandTerminalError.value,
       commandPreview: commandPreview.value || result.commandPreview,
+      currentStep: props.session?.currentStep || "",
       exitCode: result.exitCode,
       output: commandTerminalFailureEvidence.value || commandTerminalText.value,
       sessionId: props.session?.sessionId || "",
+      stepStatus: props.session?.stepMachine?.status || "",
       terminalKind: "command",
       terminalSessionId: result.terminalSessionId,
       terminalStatus: commandStatus.value,
@@ -977,16 +902,16 @@ async function requestCommandAiFix() {
   }
 }
 
+async function submitStepInput() {
+  await stepInput.submit();
+}
+
 function retryFromCommandFailure() {
   clearCommandFixState();
   void retry();
 }
 
 function stopScreenAction() {
-  if (screenStopAction.value === "issue") {
-    issueDiscussion.cancelWaiting();
-    return;
-  }
   stop();
 }
 
@@ -1041,21 +966,7 @@ async function submitAgentConversation() {
   }
 }
 
-async function acceptIssueDraftAndContinue() {
-  const accepted = await issueDiscussion.acceptIssueDraft();
-  if (accepted && props.active) {
-    await nextTick();
-    await resume();
-  }
-}
-
 onMounted(emitBusyState);
-
-onMounted(() => {
-  if (props.active) {
-    void syncFromAutopilotArtifacts();
-  }
-});
 
 watch(autopilotBusy, () => {
   emitBusyState();
@@ -1064,20 +975,19 @@ watch(autopilotBusy, () => {
 });
 
 watch(() => props.active, (active) => {
-  if (active) {
-    void syncFromAutopilotArtifacts();
-  }
+  void active;
   emitBusyState();
 }, {
   flush: "post"
 });
 
-watch(() => props.session?.currentStep || "", () => {
-  if (props.active) {
-    void syncFromAutopilotArtifacts();
+watch(screenKind, (kind) => {
+  if (props.active && kind === "start") {
+    void start();
   }
 }, {
-  flush: "post"
+  flush: "post",
+  immediate: true
 });
 
 watch(commandTerminalFailed, (failed) => {

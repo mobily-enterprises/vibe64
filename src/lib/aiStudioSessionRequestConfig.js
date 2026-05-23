@@ -23,8 +23,8 @@ function aiStudioActionPath(sessionsApiPath = "", sessionId = "", actionId = "")
   return aiStudioSessionPath(sessionsApiPath, sessionId, `/actions/${encodePathSegment(actionId)}`);
 }
 
-function aiStudioArtifactsPath(sessionsApiPath = "", sessionId = "") {
-  return aiStudioSessionPath(sessionsApiPath, sessionId, "/artifacts");
+function aiStudioArtifactPreviewPath(sessionsApiPath = "", sessionId = "") {
+  return aiStudioSessionPath(sessionsApiPath, sessionId, "/artifact-preview");
 }
 
 function aiStudioCodexPromptHandoffPath(sessionsApiPath = "", sessionId = "") {
@@ -75,17 +75,17 @@ function aiStudioShellTerminalPath(sessionsApiPath = "", sessionId = "", termina
   );
 }
 
-function aiStudioArtifactsQueryKey(surfaceId, ownershipFilter, sessionId = "", actionId = "") {
+function aiStudioArtifactPreviewQueryKey(surfaceId, ownershipFilter, sessionId = "", previewId = "") {
   const key = [
     "ai-studio",
     surfaceId,
     ownershipFilter,
-    "session-artifacts",
+    "artifact-preview",
     encodePathSegment(sessionId)
   ];
-  const encodedActionId = encodePathSegment(actionId);
-  if (encodedActionId) {
-    key.push(encodedActionId);
+  const encodedPreviewId = encodePathSegment(previewId);
+  if (encodedPreviewId) {
+    key.push(encodedPreviewId);
   }
   return key;
 }
@@ -113,8 +113,8 @@ export {
   LOCAL_STUDIO_COMMAND_OPTIONS,
   SELECTED_SESSION_STORAGE_KEY,
   aiStudioActionPath,
-  aiStudioArtifactsPath,
-  aiStudioArtifactsQueryKey,
+  aiStudioArtifactPreviewPath,
+  aiStudioArtifactPreviewQueryKey,
   aiStudioCodexAttachmentPath,
   aiStudioCodexPromptHandoffPath,
   aiStudioCodexThreadPath,

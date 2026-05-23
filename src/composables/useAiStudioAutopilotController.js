@@ -1,13 +1,7 @@
 import { computed, nextTick, ref, watch } from "vue";
 import {
-  useAiStudioCodexQuestionExchange
-} from "@/composables/useAiStudioCodexQuestionExchange.js";
-import {
   useAiStudioHeadlessCommandRunner
 } from "@/composables/useAiStudioHeadlessCommandRunner.js";
-import {
-  clearAiStudioAutopilotArtifacts
-} from "@/lib/aiStudioSessionApi.js";
 import {
   readRefOrGetterValue
 } from "@/lib/vueRefOrGetterValue.js";
@@ -37,7 +31,7 @@ const CODEX_TURN_RESULT = Object.freeze({
   INCOMPLETE: "incomplete",
   WAITING_FOR_INPUT: "waiting_for_input"
 });
-const CONVERSATION_ACTION_IDS = new Set([
+const CONVERSATION_REQUEST_ACTION_IDS = new Set([
   AGENT_CONVERSATION_ACTION_ID,
   FINAL_REVIEW_CONVERSATION_ACTION_ID,
   HUMAN_REVIEW_CONVERSATION_ACTION_ID
@@ -74,52 +68,6 @@ function readCodexActive(codexTerminal = {}) {
 
 function actionById(actions = [], actionId = "") {
   return actions.find((action) => action.id === actionId) || null;
-}
-
-function metadataValue(session = {}, name = "") {
-  return String(session?.metadata?.[name] || "").trim();
-}
-
-function artifactReady(session = {}, name = "") {
-  return session?.artifactReadiness?.[name]?.nonEmpty === true;
-}
-
-function conditionValueList(value = "") {
-  return String(value || "")
-    .split(",")
-    .map((entry) => entry.trim())
-    .filter(Boolean);
-}
-
-function conditionIsMet(session = {}, condition = "") {
-  const name = String(condition || "").trim();
-  if (!name || name === "always") {
-    return true;
-  }
-  if (name.startsWith("metadata:")) {
-    return Boolean(metadataValue(session, name.slice("metadata:".length)));
-  }
-  if (name.startsWith("artifact:")) {
-    return artifactReady(session, name.slice("artifact:".length));
-  }
-  if (name.startsWith("artifacts:")) {
-    const artifactNames = conditionValueList(name.slice("artifacts:".length));
-    return artifactNames.length > 0 && artifactNames.every((artifactName) => artifactReady(session, artifactName));
-  }
-  if (name.startsWith("any:")) {
-    return name
-      .slice("any:".length)
-      .split(";")
-      .map((candidate) => candidate.trim())
-      .filter(Boolean)
-      .some((candidate) => conditionIsMet(session, candidate));
-  }
-  return false;
-}
-
-function conditionsAreMet(session = {}, conditions = []) {
-  return (Array.isArray(conditions) ? conditions : [])
-    .every((condition) => conditionIsMet(session, condition));
 }
 
 function stepAutopilot(session = {}) {
@@ -167,6 +115,10 @@ function currentStepIsStartBoundary(stepId = "") {
   return stepId === SESSION_CREATED_STEP_ID || stepId === WORK_SOURCE_SELECTED_STEP_ID;
 }
 
+function currentStepHasPendingPromptWork(session = {}) {
+  return String(session?.stepMachine?.status || "") === "awaiting_agent_result";
+}
+
 function currentStepCanRunAutopilot(session = {}) {
   const stepId = String(session?.currentStep || "");
   return stepId === SESSION_CREATED_STEP_ID ||
@@ -185,18 +137,16 @@ function currentStepCanStartAutopilot(session = {}) {
 }
 
 function stageForSession(session = {}) {
-  const autopilot = stepAutopilot(session);
-  if (Array.isArray(autopilot.actionSequence) && autopilot.actionSequence.length > 0) {
-    return autopilot.actionSequence.find((action) => !conditionsAreMet(session, action.completeWhen)) || null;
+  const machineStatus = String(session?.stepMachine?.status || "");
+  if (machineStatus === "done" || machineStatus === "need_input") {
+    return null;
   }
-  if (autopilot.actionId) {
-    if (autopilot.completeWhen?.length && conditionsAreMet(session, autopilot.completeWhen)) {
-      return null;
-    }
+  const stage = stepAutopilot(session).stage;
+  if (stage && typeof stage === "object" && !Array.isArray(stage) && stage.actionId) {
     return {
-      actionId: autopilot.actionId,
-      advanceOnSuccess: autopilot.advanceOnSuccess === true,
-      label: autopilot.label || autopilot.actionId
+      actionId: String(stage.actionId || ""),
+      advanceOnSuccess: stage.advanceOnSuccess === true,
+      label: String(stage.label || stage.actionId || "")
     };
   }
   return null;
@@ -257,83 +207,26 @@ function autopilotStoppedFailure() {
   };
 }
 
-function actionUsesConversationPrompt(action = {}) {
+function actionUsesConversationRequestInput(action = {}) {
   if (!action || typeof action !== "object") {
     return false;
   }
-  return action.promptId === AGENT_CONVERSATION_ACTION_ID || CONVERSATION_ACTION_IDS.has(action.id);
+  return action.promptId === AGENT_CONVERSATION_ACTION_ID || CONVERSATION_REQUEST_ACTION_IDS.has(action.id);
 }
 
-function conversationOwnerId(session = {}) {
-  return [
-    "conversation",
-    String(session?.sessionId || ""),
-    String(session?.currentStep || "")
-  ].join(":");
+function actionUsesStepMachineHelper(action = {}, session = {}) {
+  return action?.type === "prompt" && Boolean(session?.stepMachine?.stepId);
 }
 
-function conversationArtifactsForSession(artifacts = {}, session = {}) {
-  if (!artifacts || artifacts.sessionId !== session?.sessionId) {
-    return {};
-  }
-  return artifacts.ok === false
-    ? {
-      error: String(artifacts.error || "AI Studio conversation files could not be read.")
-    }
-    : {
-      history: Array.isArray(artifacts.conversation?.history) ? artifacts.conversation.history : [],
-      inputFormat: artifacts.inputFormat || artifacts.conversation?.inputFormat || null,
-      response: String(artifacts.response || artifacts.conversation?.response || "")
-    };
-}
-
-function conversationHasQuestions(inputFormat = {}) {
-  return inputFormat?.status === "awaiting_input" &&
-    inputFormat?.inputKind === "questions" &&
-    Array.isArray(inputFormat.questions) &&
-    inputFormat.questions.length > 0;
-}
-
-function conversationIsDone(inputFormat = {}) {
-  return inputFormat?.status === "done";
-}
-
-function conversationIsBlocked(inputFormat = {}) {
-  return inputFormat?.status === "blocked";
-}
-
-function conversationWantsInput(inputFormat = {}) {
-  return inputFormat?.status === "awaiting_input";
-}
-
-function currentPromptStageState({
-  actions = [],
-  artifacts = {},
-  stage = null
-} = {}) {
-  if (!stage?.actionId) {
-    return {
-      action: null,
-      inputFormat: null,
-      prompt: false
-    };
-  }
-  const action = actionById(actions, stage.actionId);
-  return {
-    action,
-    inputFormat: artifacts.inputFormat || null,
-    prompt: action?.type === "prompt"
-  };
+function currentStepNeedsInput(session = {}) {
+  return String(session?.stepMachine?.status || "") === "need_input";
 }
 
 function useAiStudioAutopilotController({
   actions = {},
-  autopilotArtifacts = null,
-  clearAutopilotArtifacts = clearAiStudioAutopilotArtifacts,
   codexTerminal = {},
   commandRunner = useAiStudioHeadlessCommandRunner(),
   enabled = true,
-  questionExchange = null,
   refreshSessionData = async () => null,
   session
 } = {}) {
@@ -344,9 +237,6 @@ function useAiStudioAutopilotController({
   const failure = ref(null);
   const lastCommandResult = ref(null);
   const replanFeedback = ref("");
-  const codexQuestions = questionExchange || useAiStudioCodexQuestionExchange({
-    codexTerminal
-  });
 
   let autopilotPromise = null;
   let stopRequested = false;
@@ -358,22 +248,19 @@ function useAiStudioAutopilotController({
   const commandResult = computed(() => readRefOrGetterValue(commandRunner.lastResult) || lastCommandResult.value || null);
   const commandRunning = computed(() => readRefOrGetterValue(commandRunner.running) === true);
   const codexActive = computed(() => readCodexActive(codexTerminal));
-  const running = computed(() => active.value || commandRunning.value || codexQuestions.submitting.value);
-  const currentStepAutopilot = computed(() => stepAutopilot(readSession(session)));
-  const currentConversationArtifacts = computed(() => conversationArtifactsForSession(
-    readRefOrGetterValue(autopilotArtifacts) || null,
-    readSession(session) || {}
+  const codexPromptBusy = computed(() => readCodexBusy(codexTerminal));
+  const codexBlocksAutopilot = computed(() => Boolean(
+    codexPromptBusy.value ||
+    (currentStepHasPendingPromptWork(readSession(session)) && codexActive.value)
   ));
-  const conversationInputFormat = computed(() => currentConversationArtifacts.value.inputFormat || null);
-  const conversationResponse = computed(() => currentConversationArtifacts.value.response || "");
-  const conversationHistory = computed(() => currentConversationArtifacts.value.history || []);
-  const conversationInputKind = computed(() => String(conversationInputFormat.value?.inputKind || ""));
+  const running = computed(() => active.value || commandRunning.value);
+  const currentStepAutopilot = computed(() => stepAutopilot(readSession(session)));
   const readyForIssue = computed(() => {
     const kind = currentStepAutopilot.value.kind;
     return kind === "issue_discussion" || kind === "seed_issue_discussion";
   });
   const readyForDeepUiCheck = computed(() => {
-    return currentStepNeedsUserDecision(readSession(session)) && !running.value && !codexActive.value && !failure.value;
+    return currentStepNeedsUserDecision(readSession(session)) && !running.value && !codexBlocksAutopilot.value && !failure.value;
   });
   const readyForFinished = computed(() => currentStepAutopilot.value.kind === "finished");
   const readyForMerge = computed(() => currentStepAutopilot.value.kind === "merge_review");
@@ -391,23 +278,21 @@ function useAiStudioAutopilotController({
     return "";
   });
   const reviewConversationAction = computed(() => {
-    const actionId = currentStepAutopilot.value.actionId || "";
+    const actionId = currentStepAutopilot.value.stage?.actionId || "";
     return actionById(readActions(actions), actionId);
-  });
-  const workflowQuestionActive = computed(() => {
-    return codexQuestions.isOwner(conversationOwnerId(readSession(session))) && codexQuestions.hasQuestions.value;
   });
   const waitingForCodex = computed(() => Boolean(
     autopilotEnabled.value &&
+    !failure.value &&
     codexActive.value &&
-    readSession(session)?.sessionId &&
-    !workflowQuestionActive.value
+    (codexPromptBusy.value || currentStepHasPendingPromptWork(readSession(session))) &&
+    readSession(session)?.sessionId
   ));
   const canStart = computed(() => Boolean(
     autopilotEnabled.value &&
     readSession(session)?.sessionId &&
     !running.value &&
-    !codexActive.value &&
+    !codexBlocksAutopilot.value &&
     !currentStepIsStopPoint(readSession(session)) &&
     currentStepCanStartAutopilot(readSession(session))
   ));
@@ -418,33 +303,33 @@ function useAiStudioAutopilotController({
       currentSession?.sessionId &&
       currentSession.currentStep &&
       !currentStepIsStartBoundary(currentSession.currentStep) &&
-      !currentStepIsStopPoint(currentSession) &&
+      (!currentStepIsStopPoint(currentSession) || currentStepHasPendingPromptWork(currentSession)) &&
       currentStepCanRunAutopilot(currentSession) &&
       !running.value &&
-      !codexActive.value &&
+      !codexBlocksAutopilot.value &&
       !waitingForCodex.value &&
       !failure.value
     );
   });
   const canAcceptReview = computed(() => {
     const next = readNext(actions);
-    return Boolean(readyForReview.value && !running.value && !codexActive.value && nextIsReady(next));
+    return Boolean(readyForReview.value && !running.value && !codexBlocksAutopilot.value && nextIsReady(next));
   });
   const canRequestReviewConversation = computed(() => {
     const action = reviewConversationAction.value;
-    return Boolean(readyForReview.value && !running.value && !codexActive.value && action?.enabled === true);
+    return Boolean(readyForReview.value && !running.value && !codexBlocksAutopilot.value && action?.enabled === true);
   });
   const canArchiveSession = computed(() => {
     const archiveAction = actionById(readActions(actions), FINISH_SESSION_ACTION_ID);
-    return Boolean(readyForFinished.value && !running.value && !codexActive.value && archiveAction?.enabled === true);
+    return Boolean(readyForFinished.value && !running.value && !codexBlocksAutopilot.value && archiveAction?.enabled === true);
   });
   const canSubmitAgentConversationRequest = computed(() => {
     const action = actionById(readActions(actions), AGENT_CONVERSATION_ACTION_ID);
-    return Boolean(readyForAgentConversation.value && !running.value && !codexActive.value && action?.enabled === true);
+    return Boolean(readyForAgentConversation.value && !running.value && !codexBlocksAutopilot.value && action?.enabled === true);
   });
   const canFinishAgentConversation = computed(() => {
     const next = readNext(actions);
-    return Boolean(readyForAgentConversation.value && !running.value && !codexActive.value && nextIsReady(next));
+    return Boolean(readyForAgentConversation.value && !running.value && !codexBlocksAutopilot.value && nextIsReady(next));
   });
   const agentConversationContinueLabel = computed(() => {
     const currentSession = readSession(session);
@@ -467,14 +352,6 @@ function useAiStudioAutopilotController({
         kind: "command",
         showProgress: false,
         title: commandRunning.value ? "Command running." : "Command needs attention."
-      };
-    }
-    if (codexQuestions.hasQuestions.value) {
-      return {
-        icon: "cog",
-        kind: "questions",
-        showProgress: false,
-        title: "A few questions first"
       };
     }
     if (waitingForCodex.value) {
@@ -506,11 +383,9 @@ function useAiStudioAutopilotController({
       return {
         icon: failure.value ? "warning" : "cog",
         kind: "agent_conversation",
-        message: failure.value?.error || (conversationResponse.value.trim()
-          ? "Codex answered. Continue when the work is ready for checks, or send another message."
-          : "Ask Codex for changes. Continue when the work is ready for checks."),
+        message: failure.value?.error || "Ask Codex for changes. Continue when the work is ready for checks.",
         showProgress: false,
-        title: conversationResponse.value.trim() ? "AI response" : stepLabel(readSession(session))
+        title: stepLabel(readSession(session))
       };
     }
     if (readyForDeepUiCheck.value) {
@@ -605,11 +480,10 @@ function useAiStudioAutopilotController({
   function clearFailure() {
     failure.value = null;
     lastCommandResult.value = null;
-    codexQuestions.clearFailure();
   }
 
   async function acceptChanges() {
-    if (!autopilotEnabled.value || codexActive.value || !canAcceptReview.value) {
+    if (!autopilotEnabled.value || codexBlocksAutopilot.value || !canAcceptReview.value) {
       return;
     }
     stopRequested = false;
@@ -656,7 +530,7 @@ function useAiStudioAutopilotController({
   async function requestReviewConversation(message = "") {
     const normalizedMessage = String(message || "").trim();
     const finalReviewRequest = readyForFinalReview.value;
-    if (!autopilotEnabled.value || codexActive.value || !canRequestReviewConversation.value) {
+    if (!autopilotEnabled.value || codexBlocksAutopilot.value || !canRequestReviewConversation.value) {
       return false;
     }
     if (!normalizedMessage) {
@@ -696,7 +570,7 @@ function useAiStudioAutopilotController({
 
   async function submitAgentConversationRequest(message = "") {
     const normalizedMessage = String(message || "").trim();
-    if (!autopilotEnabled.value || codexActive.value || !canSubmitAgentConversationRequest.value) {
+    if (!autopilotEnabled.value || codexBlocksAutopilot.value || !canSubmitAgentConversationRequest.value) {
       return false;
     }
     if (!normalizedMessage) {
@@ -731,7 +605,7 @@ function useAiStudioAutopilotController({
   }
 
   async function finishAgentConversation() {
-    if (!autopilotEnabled.value || codexActive.value || !canFinishAgentConversation.value) {
+    if (!autopilotEnabled.value || codexBlocksAutopilot.value || !canFinishAgentConversation.value) {
       return false;
     }
     stopRequested = false;
@@ -756,7 +630,7 @@ function useAiStudioAutopilotController({
   }
 
   async function start() {
-    if (!autopilotEnabled.value || codexActive.value || !canStart.value) {
+    if (!autopilotEnabled.value || codexBlocksAutopilot.value || !canStart.value) {
       return;
     }
     stopRequested = false;
@@ -765,7 +639,7 @@ function useAiStudioAutopilotController({
   }
 
   async function retry() {
-    if (!autopilotEnabled.value || running.value || codexActive.value) {
+    if (!autopilotEnabled.value || running.value || codexBlocksAutopilot.value) {
       return;
     }
     stopRequested = false;
@@ -774,7 +648,7 @@ function useAiStudioAutopilotController({
   }
 
   async function resume() {
-    if (!autopilotEnabled.value || codexActive.value || !canResume.value) {
+    if (!autopilotEnabled.value || codexBlocksAutopilot.value || !canResume.value) {
       return;
     }
     stopRequested = false;
@@ -788,8 +662,8 @@ function useAiStudioAutopilotController({
       commandRunner.stopCommandAction();
       return;
     }
+    active.value = false;
     activeStage.value = "";
-    codexQuestions.clearForOwner(conversationOwnerId(readSession(session)));
     stopWithFailure(autopilotStoppedFailure());
   }
 
@@ -802,7 +676,7 @@ function useAiStudioAutopilotController({
   }
 
   async function runDeepUiCheck() {
-    if (!autopilotEnabled.value || !currentStepNeedsUserDecision(readSession(session)) || running.value || codexActive.value) {
+    if (!autopilotEnabled.value || !currentStepNeedsUserDecision(readSession(session)) || running.value || codexBlocksAutopilot.value) {
       return;
     }
     stopRequested = false;
@@ -812,7 +686,7 @@ function useAiStudioAutopilotController({
   }
 
   async function skipDeepUiCheck() {
-    if (!autopilotEnabled.value || !currentStepNeedsUserDecision(readSession(session)) || running.value || codexActive.value) {
+    if (!autopilotEnabled.value || !currentStepNeedsUserDecision(readSession(session)) || running.value || codexBlocksAutopilot.value) {
       return;
     }
     stopRequested = false;
@@ -823,7 +697,7 @@ function useAiStudioAutopilotController({
 
   async function rejectChanges(feedback = "") {
     const normalizedFeedback = String(feedback || "").trim();
-    if (!autopilotEnabled.value || !readyForFinalReview.value || running.value || codexActive.value) {
+    if (!autopilotEnabled.value || !readyForFinalReview.value || running.value || codexBlocksAutopilot.value) {
       return false;
     }
     if (!normalizedFeedback) {
@@ -867,7 +741,7 @@ function useAiStudioAutopilotController({
   }
 
   async function mergeAndSyncMainCheckout() {
-    if (!autopilotEnabled.value || !readyForMerge.value || running.value || codexActive.value) {
+    if (!autopilotEnabled.value || !readyForMerge.value || running.value || codexBlocksAutopilot.value) {
       return false;
     }
     stopRequested = false;
@@ -941,7 +815,7 @@ function useAiStudioAutopilotController({
   }
 
   async function skipMerge() {
-    if (!autopilotEnabled.value || !readyForMerge.value || running.value || codexActive.value) {
+    if (!autopilotEnabled.value || !readyForMerge.value || running.value || codexBlocksAutopilot.value) {
       return false;
     }
     stopRequested = false;
@@ -992,7 +866,7 @@ function useAiStudioAutopilotController({
   }
 
   async function archiveSession() {
-    if (!autopilotEnabled.value || !readyForFinished.value || running.value || codexActive.value) {
+    if (!autopilotEnabled.value || !readyForFinished.value || running.value || codexBlocksAutopilot.value) {
       return false;
     }
     const archiveAction = actionById(readActions(actions), FINISH_SESSION_ACTION_ID);
@@ -1053,10 +927,10 @@ function useAiStudioAutopilotController({
         if (!autopilotEnabled.value || stopRequested || !currentSession?.sessionId) {
           return;
         }
-        if (currentStepIsStopPoint(currentSession)) {
+        if (currentStepIsStopPoint(currentSession) && !currentStepHasPendingPromptWork(currentSession)) {
           return;
         }
-        if (codexActive.value) {
+        if (codexBlocksAutopilot.value) {
           return;
         }
 
@@ -1083,15 +957,18 @@ function useAiStudioAutopilotController({
           return;
         }
 
-        if (await handleCurrentPromptStageFiles(currentSession, stage)) {
+        if (await advanceCompletedStepMachine(currentSession)) {
           continue;
         }
-        if (workflowQuestionActive.value || failure.value) {
+        if (failure.value) {
           return;
         }
 
-        await runStageAction(currentSession, stage);
-        if (workflowQuestionActive.value || failure.value) {
+        const stageResult = await runStageAction(currentSession, stage);
+        if (stageResult === CODEX_TURN_RESULT.WAITING_FOR_INPUT) {
+          return;
+        }
+        if (failure.value) {
           return;
         }
         if (currentStepNeedsUserDecision(currentSession)) {
@@ -1118,48 +995,13 @@ function useAiStudioAutopilotController({
     return true;
   }
 
-  async function handleCurrentPromptStageFiles(currentSession = {}, stage = {}) {
-    const artifacts = conversationArtifactsForSession(
-      readRefOrGetterValue(autopilotArtifacts) || null,
-      currentSession
-    );
-    const {
-      action,
-      inputFormat,
-      prompt
-    } = currentPromptStageState({
-      actions: readActions(actions),
-      artifacts,
-      stage
-    });
-    if (!prompt) {
+  async function advanceCompletedStepMachine(currentSession = {}) {
+    if (currentSession?.stepMachine?.stepId && String(currentSession.stepMachine.status || "") === "done") {
+      return advanceCurrentStepIfReady();
+    }
+    if (currentSession?.stepMachine?.stepId && String(currentSession.stepMachine.status || "") === "need_input") {
       return false;
     }
-    if (conversationHasQuestions(inputFormat)) {
-      startConversationQuestionExchange(inputFormat.questions, {
-        action,
-        advanceAfterCompletion: true,
-        conversationPrompt: actionUsesConversationPrompt(action),
-        label: stage.label || action?.label || stepLabel(currentSession),
-        startingStep: currentSession.currentStep
-      });
-      return false;
-    }
-    if (conversationWantsInput(inputFormat)) {
-      return false;
-    }
-    if (!conversationIsDone(inputFormat)) {
-      return false;
-    }
-    if (await advanceCurrentStepIfReady()) {
-      return true;
-    }
-    stopWithFailure({
-      actionId: action?.id || stage.actionId,
-      actionLabel: action?.label || stage.label,
-      error: `${stage.label || action?.label || "Codex"} finished, but the workflow is still missing required files or metadata. Switch to Inspect to review the answer, or retry the step.`,
-      source: "codex"
-    });
     return false;
   }
 
@@ -1188,18 +1030,17 @@ function useAiStudioAutopilotController({
 
     activeStage.value = stage.label;
     if (action.type === "command") {
-      await runTerminalAction(currentSession, action);
-      return;
+      return runTerminalAction(currentSession, action);
     }
     if (action.type === "prompt") {
-      await runPromptAction(action, stage);
-      return;
+      return runPromptAction(action, stage);
     }
 
     try {
       await actions.runAction?.(autopilotActionForStage(action, stage));
       await refreshSessionData();
       await nextTick();
+      return CODEX_TURN_RESULT.COMPLETE;
     } catch (error) {
       stopWithFailure({
         actionId: action.id,
@@ -1207,6 +1048,7 @@ function useAiStudioAutopilotController({
         error: String(error?.message || error || `${action.label || action.id} failed.`),
         source: action.type === "prompt" ? "codex" : ""
       });
+      return CODEX_TURN_RESULT.INCOMPLETE;
     }
   }
 
@@ -1223,35 +1065,38 @@ function useAiStudioAutopilotController({
   async function runPromptAction(action = {}, stage = {}, {
     advanceAfterCompletion = true
   } = {}) {
-    const conversationPrompt = actionUsesConversationPrompt(action);
+    if (actionUsesStepMachineHelper(action, readSession(session))) {
+      const result = await runStepMachinePromptAction(action, stage);
+      if (result === CODEX_TURN_RESULT.COMPLETE) {
+        clearPromptActionInput(action);
+      }
+      return result;
+    }
+
+    void advanceAfterCompletion;
+    stopWithFailure({
+      actionId: action.id,
+      actionLabel: stage.label || action.label,
+      error: `${stage.label || action.label || "Codex"} is not connected to the current step state machine.`,
+      source: "codex"
+    });
+    return CODEX_TURN_RESULT.INCOMPLETE;
+  }
+
+  async function runStepMachinePromptAction(action = {}, stage = {}) {
     const startingStep = currentStep.value;
     try {
-      await clearAutopilotArtifacts(readSession(session)?.sessionId);
       await actions.runAction?.(action, {
         input: promptActionInput(action)
       });
       await refreshSessionData();
       await nextTick();
-      const turnResult = await waitForConversationTurn({
+      return waitForStepMachinePrompt({
         action,
-        advanceAfterCompletion,
-        conversationPrompt,
         label: stage.label || action.label,
         startedAt: Date.now(),
         startingStep
       });
-      if (turnResult !== CODEX_TURN_RESULT.COMPLETE) {
-        return turnResult;
-      }
-      clearPromptActionInput(action);
-      if (action.id === FINAL_REVIEW_CONVERSATION_ACTION_ID) {
-        await rewindFinalReviewForFreshChecks();
-        return CODEX_TURN_RESULT.COMPLETE;
-      }
-      if (advanceAfterCompletion && !conversationPrompt) {
-        await advanceCurrentStepIfReady();
-      }
-      return CODEX_TURN_RESULT.COMPLETE;
     } catch (error) {
       stopWithFailure({
         actionId: action.id,
@@ -1263,10 +1108,8 @@ function useAiStudioAutopilotController({
     }
   }
 
-  async function waitForConversationTurn({
+  async function waitForStepMachinePrompt({
     action = {},
-    advanceAfterCompletion = true,
-    conversationPrompt = false,
     label = "",
     startedAt = Date.now(),
     startingStep = ""
@@ -1283,61 +1126,34 @@ function useAiStudioAutopilotController({
         return CODEX_TURN_RESULT.INCOMPLETE;
       }
 
-      const artifacts = conversationArtifactsForSession(readRefOrGetterValue(autopilotArtifacts) || {}, readSession(session) || {});
-      if (artifacts.error) {
-        stopWithFailure({
-          actionId: action.id,
-          actionLabel: label || action.label,
-          error: artifacts.error,
-          source: "codex"
-        });
-        return CODEX_TURN_RESULT.INCOMPLETE;
+      await refreshSessionData();
+      await nextTick();
+      const currentSession = readSession(session);
+      const machineStatus = String(currentSession?.stepMachine?.status || "");
+      if (machineStatus === "ready" && currentSession?.stepMachine?.promptComplete === true) {
+        return CODEX_TURN_RESULT.COMPLETE;
       }
-      const inputFormat = artifacts.inputFormat;
-      if (conversationHasQuestions(inputFormat)) {
-        startConversationQuestionExchange(inputFormat.questions, {
-          action,
-          advanceAfterCompletion,
-          conversationPrompt,
-          label,
-          startingStep
-        });
+      if (machineStatus === "confirm_files" || machineStatus === "need_input") {
         return CODEX_TURN_RESULT.WAITING_FOR_INPUT;
       }
-      if (conversationIsBlocked(inputFormat)) {
-        stopWithFailure({
-          actionId: action.id,
-          actionLabel: label || action.label,
-          error: artifacts.response || inputFormat.message || `${label || "Codex"} is blocked.`,
-          output: artifacts.response,
-          source: "codex"
-        });
-        return CODEX_TURN_RESULT.BLOCKED;
-      }
-      if (conversationWantsInput(inputFormat)) {
-        return CODEX_TURN_RESULT.WAITING_FOR_INPUT;
-      }
-      if (conversationIsDone(inputFormat)) {
+      if (machineStatus === "done") {
         return CODEX_TURN_RESULT.COMPLETE;
       }
       if (!readCodexActive(codexTerminal) && Date.now() - startedAt >= CODEX_TURN_WITHOUT_ARTIFACT_GRACE_MS) {
-        if (conversationPrompt) {
-          return CODEX_TURN_RESULT.INCOMPLETE;
-        }
         stopWithFailure({
           actionId: action.id,
           actionLabel: label || action.label,
-          error: `${label || "Codex"} finished without writing the AI Studio conversation files.`,
+          error: `${label || "Codex"} finished without updating the current AI Studio step.`,
           source: "codex"
         });
         return CODEX_TURN_RESULT.INCOMPLETE;
       }
-      await waitForConversationSignal();
+      await waitForCodexOrTimer();
     }
     return CODEX_TURN_RESULT.INCOMPLETE;
   }
 
-  function waitForConversationSignal() {
+  function waitForCodexOrTimer() {
     return new Promise((resolve) => {
       const cleanupCallbacks = [];
       let timeoutId = null;
@@ -1348,9 +1164,6 @@ function useAiStudioAutopilotController({
         resolve();
       };
 
-      cleanupCallbacks.push(watch(currentConversationArtifacts, finish, {
-        flush: "post"
-      }));
       cleanupCallbacks.push(watch(codexActive, finish, {
         flush: "post"
       }));
@@ -1362,53 +1175,6 @@ function useAiStudioAutopilotController({
     });
   }
 
-  function startConversationQuestionExchange(questions = [], turnContext = {}) {
-    if (!Array.isArray(questions) || questions.length <= 0) {
-      return false;
-    }
-    const currentSession = readSession(session);
-    return codexQuestions.start({
-      contextLabel: stepLabel(currentSession),
-      onCancel: () => {
-        clearFailure();
-      },
-      onSubmitted: async () => {
-        active.value = true;
-        activeStage.value = stepLabel(readSession(session));
-        try {
-          const result = await waitForConversationTurn({
-            action: turnContext.action || {},
-            advanceAfterCompletion: turnContext.advanceAfterCompletion !== false,
-            conversationPrompt: turnContext.conversationPrompt === true,
-            label: turnContext.label || stepLabel(readSession(session)),
-            startedAt: Date.now(),
-            startingStep: turnContext.startingStep || readSession(session)?.currentStep || ""
-          });
-          if (result === CODEX_TURN_RESULT.COMPLETE) {
-            clearPromptActionInput(turnContext.action || {});
-            if (turnContext.action?.id === FINAL_REVIEW_CONVERSATION_ACTION_ID) {
-              await rewindFinalReviewForFreshChecks();
-              await runUntilStopPoint();
-              return;
-            }
-            if (turnContext.advanceAfterCompletion !== false && !turnContext.conversationPrompt) {
-              await advanceCurrentStepIfReady();
-              await runUntilStopPoint();
-            }
-          }
-        } finally {
-          active.value = false;
-          activeStage.value = "";
-        }
-      },
-      ownerId: conversationOwnerId(currentSession),
-      prepareSubmit: async () => {
-        await clearAutopilotArtifacts(readSession(session)?.sessionId);
-      },
-      questions
-    });
-  }
-
   function promptActionInput(action = {}) {
     if ((action.id === "make_plan" || action.id === "make_seed_plan") && replanFeedback.value) {
       return {
@@ -1416,7 +1182,7 @@ function useAiStudioAutopilotController({
         autopilotReason: "changes_rejected"
       };
     }
-    if (actionUsesConversationPrompt(action) && conversationRequest.value) {
+    if (actionUsesConversationRequestInput(action) && conversationRequest.value) {
       return {
         conversationRequest: conversationRequest.value
       };
@@ -1428,7 +1194,7 @@ function useAiStudioAutopilotController({
     if (action.id === "make_plan" || action.id === "make_seed_plan") {
       replanFeedback.value = "";
     }
-    if (actionUsesConversationPrompt(action)) {
+    if (actionUsesConversationRequestInput(action)) {
       conversationRequest.value = "";
     }
   }
@@ -1437,6 +1203,7 @@ function useAiStudioAutopilotController({
     lastCommandResult.value = null;
     const result = await commandRunner.runCommandAction({
       action,
+      advanceOnSuccess: true,
       input: {},
       sessionId: currentSession.sessionId
     });
@@ -1444,6 +1211,9 @@ function useAiStudioAutopilotController({
     await refreshSessionData();
     await nextTick();
     if (result.ok !== true) {
+      if (currentStepNeedsInput(readSession(session))) {
+        return;
+      }
       stopWithFailure(result);
     }
   }
@@ -1460,53 +1230,9 @@ function useAiStudioAutopilotController({
     };
   }
 
-  async function syncFromAutopilotArtifacts() {
-    if (!autopilotEnabled.value) {
-      return false;
-    }
-    const currentSession = readSession(session);
-    const inputFormat = conversationInputFormat.value;
-    if (conversationHasQuestions(inputFormat)) {
-      const stage = stageForSession(currentSession);
-      const action = stage?.actionId ? actionById(readActions(actions), stage.actionId) : null;
-      return startConversationQuestionExchange(inputFormat.questions, {
-        action,
-        advanceAfterCompletion: true,
-        conversationPrompt: actionUsesConversationPrompt(action),
-        label: stage?.label || action?.label || stepLabel(currentSession),
-        startingStep: currentSession?.currentStep || ""
-      });
-    }
-    return false;
-  }
-
   watch(codexActive, (activeNow) => {
     if (autopilotEnabled.value && activeNow && readSession(session)?.sessionId) {
       clearFailure();
-    }
-  }, {
-    flush: "post"
-  });
-
-  watch(autopilotEnabled, (isEnabled) => {
-    if (isEnabled) {
-      void syncFromAutopilotArtifacts();
-    }
-  }, {
-    flush: "post"
-  });
-
-  watch(() => `${readSession(session)?.sessionId || ""}:${readSession(session)?.currentStep || ""}`, () => {
-    if (autopilotEnabled.value) {
-      void syncFromAutopilotArtifacts();
-    }
-  }, {
-    flush: "post"
-  });
-
-  watch(currentConversationArtifacts, () => {
-    if (autopilotEnabled.value) {
-      void syncFromAutopilotArtifacts();
     }
   }, {
     flush: "post"
@@ -1529,10 +1255,6 @@ function useAiStudioAutopilotController({
     commandPreview,
     commandResult,
     commandRunning,
-    conversationHistory,
-    conversationInputKind,
-    conversationInputFormat,
-    conversationResponse,
     failure,
     finishAgentConversation,
     mergeAndSyncMainCheckout,
@@ -1555,7 +1277,6 @@ function useAiStudioAutopilotController({
     skipMerge,
     start,
     submitAgentConversationRequest,
-    syncFromAutopilotArtifacts,
     stop,
     stopCommandAction,
     resumeButtonText,

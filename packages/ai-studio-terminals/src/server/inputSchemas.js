@@ -47,6 +47,10 @@ const codexThreadFields = {
 };
 
 const commandTerminalFields = {
+  advanceOnSuccess: {
+    type: "boolean",
+    required: false
+  },
   actionId: {
     type: "string",
     noTrim: false,
