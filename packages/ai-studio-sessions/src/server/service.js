@@ -32,6 +32,69 @@ function codexPromptHandoffFromSession(session = {}) {
   return String(handoff.kind || "") === "codex_prompt_handoff" ? handoff : null;
 }
 
+function objectValue(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function codexTerminalPresentation(session = {}, codexTerminal = null) {
+  const terminal = objectValue(codexTerminal);
+  const terminalSessionId = String(terminal.id || "").trim();
+  const screenKind = String(session.presentation?.screen?.kind || "").trim();
+  const visible = Boolean(
+    terminalSessionId &&
+    terminal.status !== "exited" &&
+    screenKind === "codex_running"
+  );
+  return {
+    label: visible ? "Terminal is transmitting..." : "",
+    readOnlyInAutopilot: true,
+    renderer: "codex_terminal",
+    terminalSessionId,
+    visible
+  };
+}
+
+function withCodexTerminalState(session = {}, terminalState = {}) {
+  if (!session || session.ok === false || !session.sessionId) {
+    return session;
+  }
+  const presentation = objectValue(session.presentation);
+  return {
+    ...session,
+    codexTerminal: terminalState.codexTerminal || null,
+    codexWorkdir: terminalState.codexWorkdir || session.codexWorkdir || "",
+    codexPromptHandoffOutputStart: terminalState.codexPromptHandoffOutputStart ?? session.codexPromptHandoffOutputStart,
+    codexPromptHandoffSignature: terminalState.codexPromptHandoffSignature || session.codexPromptHandoffSignature || "",
+    codexThreadId: terminalState.codexThreadId || session.codexThreadId || "",
+    presentation: {
+      ...presentation,
+      terminal: {
+        ...objectValue(presentation.terminal),
+        codex: codexTerminalPresentation(session, terminalState.codexTerminal || null)
+      }
+    }
+  };
+}
+
+async function enrichSessionWithCodexTerminal(terminalService, session = {}) {
+  if (!session || session.ok === false || !session.sessionId) {
+    return session;
+  }
+  if (typeof terminalService?.codexTerminalState !== "function") {
+    return withCodexTerminalState(session, {});
+  }
+  const terminalState = await terminalService.codexTerminalState(session.sessionId);
+  if (terminalState?.ok === false) {
+    throw new Error(terminalState.error || "AI Studio Codex terminal state could not be read.");
+  }
+  return withCodexTerminalState(session, terminalState || {});
+}
+
+async function enrichSessionsWithCodexTerminal(terminalService, sessions = []) {
+  return Promise.all((Array.isArray(sessions) ? sessions : [])
+    .map((session) => enrichSessionWithCodexTerminal(terminalService, session)));
+}
+
 async function deliverCodexPromptIfNeeded(terminalService, session = {}) {
   const handoff = codexPromptHandoffFromSession(session);
   if (!handoff) {
@@ -166,7 +229,7 @@ function createService({
     async advanceSession(sessionId) {
       return sessionResult(async () => {
         const runtime = await projectService.createRuntime();
-        return runtime.advance(sessionId);
+        return enrichSessionWithCodexTerminal(terminalService, await runtime.advance(sessionId));
       });
     },
 
@@ -175,7 +238,7 @@ function createService({
         const runtime = await projectService.createRuntime();
         await runtime.store.writeStatus(sessionId, AI_STUDIO_SESSION_STATUS.ABANDONED);
         await terminalService?.closeSessionTerminals?.(sessionId);
-        return runtime.getSession(sessionId);
+        return enrichSessionWithCodexTerminal(terminalService, await runtime.getSession(sessionId));
       });
     },
 
@@ -244,14 +307,14 @@ function createService({
           },
           workflowProfile: profileSelection.profile
         });
-        return runtime.advance(session.sessionId);
+        return enrichSessionWithCodexTerminal(terminalService, await runtime.advance(session.sessionId));
       });
     },
 
     async inspectSession(sessionId) {
       return sessionResult(async () => {
         const runtime = await projectService.createRuntime();
-        return runtime.getSession(sessionId);
+        return enrichSessionWithCodexTerminal(terminalService, await runtime.getSession(sessionId));
       });
     },
 
@@ -266,7 +329,8 @@ function createService({
       return sessionResult(async () => {
         const runtime = await projectService.createRuntime();
         const sessions = await runtime.listSessions();
-        return sessionListResponse(sessions, await sessionCreationState(runtime, sessions));
+        const enrichedSessions = await enrichSessionsWithCodexTerminal(terminalService, sessions);
+        return sessionListResponse(enrichedSessions, await sessionCreationState(runtime, sessions));
       });
     },
 
@@ -282,7 +346,7 @@ function createService({
         await publishPromptStateChangedIfNeeded(publishSessionChanged.action, session, {
           reason: "codex-prompt-state-updated"
         });
-        return deliverCodexPromptIfNeeded(terminalService, session);
+        return enrichSessionWithCodexTerminal(terminalService, await deliverCodexPromptIfNeeded(terminalService, session));
       });
     },
 
@@ -298,7 +362,7 @@ function createService({
         await publishPromptStateChangedIfNeeded(publishSessionChanged.intent, session, {
           reason: "codex-prompt-state-updated"
         });
-        return deliverCodexPromptIfNeeded(terminalService, session);
+        return enrichSessionWithCodexTerminal(terminalService, await deliverCodexPromptIfNeeded(terminalService, session));
       });
     },
 
@@ -308,7 +372,7 @@ function createService({
         const runtime = await projectService.createRuntime();
         const session = await runtime.rewind(sessionId, stepId);
         await terminalService?.closeSessionNonCodexTerminals?.(sessionId);
-        return session;
+        return enrichSessionWithCodexTerminal(terminalService, session);
       });
     }
   });

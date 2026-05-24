@@ -47,7 +47,12 @@
       </div>
 
       <AiStudioSessionTerminals
+        :class="{
+          'studio-ai-sessions__terminals--autopilot-preview': codexTerminalPreviewVisible
+        }"
+        :allow-codex-start="codexTerminalCanStart"
         :codex-terminal="codexTerminal"
+        :codex-read-only="codexTerminalReadOnly"
         :command-terminal="commandTerminal"
         :display-mode="codexTerminalDisplayMode"
         :headless-command-terminal="headlessCommandTerminal"
@@ -236,6 +241,18 @@ const headlessCommandTerminal = proxyRefs({
 const autopilotBusy = ref(false);
 const autopilotModeActive = computed(() => Boolean(props.active && props.sessionMode === "autopilot"));
 const autopilotAutomationEnabled = computed(() => props.sessionMode === "autopilot");
+const codexTerminalPresentation = computed(() => {
+  const presentation = selectedSession.value?.presentation?.terminal?.codex;
+  return presentation && typeof presentation === "object" && !Array.isArray(presentation)
+    ? presentation
+    : {};
+});
+const codexTerminalPreviewVisible = computed(() => Boolean(
+  props.active &&
+  props.sessionMode === "autopilot" &&
+  codexTerminalPresentation.value.visible === true &&
+  codexTerminalPresentation.value.terminalSessionId
+));
 const codexTerminalDisplayMode = computed(() => {
   if (!props.active) {
     return "headless";
@@ -243,8 +260,13 @@ const codexTerminalDisplayMode = computed(() => {
   if (props.sessionMode === "inspect") {
     return "full";
   }
+  if (codexTerminalPreviewVisible.value) {
+    return "compact";
+  }
   return "headless";
 });
+const codexTerminalCanStart = computed(() => Boolean(props.active && props.sessionMode === "inspect"));
+const codexTerminalReadOnly = computed(() => props.sessionMode !== "inspect");
 const interactionBusy = computed(() => Boolean(page.busy || autopilotBusy.value));
 const guardedPage = computed(() => ({
   busy: interactionBusy.value,
@@ -365,6 +387,20 @@ watch(() => page.error, emitPageError, {
   z-index: 3;
 }
 
+.studio-ai-sessions__layout--autopilot > .studio-ai-sessions__terminals--autopilot-preview {
+  align-self: start;
+  grid-column: 1;
+  grid-row: 1;
+  height: min(18rem, 38vh);
+  justify-self: center;
+  margin-top: clamp(2.5rem, 14vh, 7rem);
+  max-width: min(64rem, calc(100% - 2rem));
+  opacity: 0.14;
+  pointer-events: none;
+  width: min(64rem, calc(100% - 2rem));
+  z-index: 1;
+}
+
 @media (max-width: 980px) {
   .studio-ai-sessions__layout {
     grid-template-columns: 1fr;
@@ -389,6 +425,12 @@ watch(() => page.error, emitPageError, {
 
   .studio-ai-sessions__layout--autopilot > .studio-autopilot {
     grid-column: 1 / -1;
+  }
+
+  .studio-ai-sessions__layout--autopilot > .studio-ai-sessions__terminals--autopilot-preview {
+    grid-column: 2;
+    max-width: min(64rem, 100%);
+    width: 100%;
   }
 }
 </style>

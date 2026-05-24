@@ -138,9 +138,17 @@ const props = defineProps({
     type: Boolean,
     default: true
   },
+  allowStart: {
+    type: Boolean,
+    default: true
+  },
   displayMode: {
     type: String,
     default: "full"
+  },
+  readOnly: {
+    type: Boolean,
+    default: false
   }
 });
 const emit = defineEmits([
@@ -162,6 +170,21 @@ let terminalLifecycle = null;
 const sessionId = computed(() => props.session?.sessionId || "");
 const sessionWorktree = computed(() => aiStudioSessionWorktreePath(props.session || {}));
 const terminalDisplayActive = computed(() => props.visible && props.displayMode !== "headless");
+const serverCodexTerminal = computed(() => {
+  const terminal = props.session?.codexTerminal;
+  if (terminal && typeof terminal === "object" && !Array.isArray(terminal)) {
+    return terminal;
+  }
+  const presentationTerminal = props.session?.presentation?.terminal?.codex;
+  return presentationTerminal && typeof presentationTerminal === "object" && !Array.isArray(presentationTerminal)
+    ? presentationTerminal
+    : {};
+});
+const serverTerminalSession = computed(() => ({
+  commandPreview: String(serverCodexTerminal.value.commandPreview || ""),
+  id: String(serverCodexTerminal.value.id || serverCodexTerminal.value.terminalSessionId || ""),
+  status: String(serverCodexTerminal.value.status || "")
+}));
 
 function runtimeCodexPromptHandoff(session = {}) {
   const actionResultHandoff = session?.actionResult?.codexPromptHandoff;
@@ -173,7 +196,15 @@ function runtimeCodexPromptHandoff(session = {}) {
 }
 
 const canUseTerminal = computed(() => {
-  return Boolean(terminalDisplayActive.value && sessionId.value && sessionWorktree.value);
+  return Boolean(
+    terminalDisplayActive.value &&
+    sessionId.value &&
+    sessionWorktree.value &&
+    (props.allowStart || serverTerminalSession.value.id)
+  );
+});
+const canStartTerminal = computed(() => {
+  return Boolean(props.allowStart && terminalDisplayActive.value && sessionId.value && sessionWorktree.value);
 });
 const {
   appendTerminalDisplay,
@@ -190,6 +221,9 @@ const {
 } = useCodexTerminalViewport({
   expanded,
   onData(data) {
+    if (props.readOnly) {
+      return;
+    }
     void sendTerminalData(data, {
       source: "user"
     });
@@ -238,6 +272,7 @@ const {
 });
 terminalLifecycle = useCodexTerminalSessionLifecycle({
   appendTerminalOutput,
+  canStartTerminal,
   canUseTerminal,
   clearCodexBusy,
   clearCodexWorking,
@@ -382,6 +417,13 @@ function toggleExpanded() {
 watch(() => props.session, (session) => {
   applyServerPromptEchoFilter(session || {});
 }, {
+  immediate: true
+});
+
+watch(serverTerminalSession, (terminal) => {
+  void terminalLifecycle?.attachTerminalSession(terminal);
+}, {
+  flush: "post",
   immediate: true
 });
 

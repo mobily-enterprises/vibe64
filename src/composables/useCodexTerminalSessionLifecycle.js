@@ -1,4 +1,4 @@
-import { computed, nextTick, onBeforeUnmount, onMounted, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, unref, watch } from "vue";
 
 import { useCodexTerminalSocket } from "@/composables/useCodexTerminalSocket.js";
 import {
@@ -11,6 +11,7 @@ function terminalSessionNotFound(error = "") {
 
 function useCodexTerminalSessionLifecycle({
   appendTerminalOutput,
+  canStartTerminal,
   canUseTerminal,
   clearCodexBusy,
   clearCodexWorking,
@@ -50,8 +51,15 @@ function useCodexTerminalSessionLifecycle({
   let terminalRecoveryPromise = null;
 
   const terminalExited = computed(() => terminalStatus.value === "exited");
+  const terminalCanStart = computed(() => {
+    if (canStartTerminal === undefined || canStartTerminal === null) {
+      return Boolean(unref(canUseTerminal));
+    }
+    return Boolean(unref(canStartTerminal));
+  });
   const showTerminalStartPanel = computed(() => (
     canUseTerminal.value &&
+    terminalCanStart.value &&
     componentMounted.value &&
     !terminalStarting.value &&
     (!terminalSessionId.value || terminalExited.value)
@@ -161,14 +169,35 @@ function useCodexTerminalSessionLifecycle({
     terminalError.value = "";
   }
 
+  async function connectAttachedTerminal() {
+    void setupTerminalUi?.();
+    fitTerminal?.({
+      forceResize: true
+    });
+    void setupTerminalUi?.().then((ready) => {
+      if (ready) {
+        fitTerminal?.({
+          forceResize: true
+        });
+        refreshTerminalOutput?.();
+      }
+    });
+    if (!(await terminalSocket.connect())) {
+      throw new Error("Terminal stream failed to connect.");
+    }
+    return true;
+  }
+
   async function startTerminalOnce() {
     void setupTerminalUi?.();
-    if (terminalExited.value) {
+    if (terminalExited.value && terminalCanStart.value) {
       forgetExitedTerminal();
     }
     if (terminalSessionId.value) {
-      fitTerminal?.();
-      return true;
+      return connectAttachedTerminal();
+    }
+    if (!terminalCanStart.value) {
+      return false;
     }
 
     terminalStarting.value = true;
@@ -182,20 +211,7 @@ function useCodexTerminalSessionLifecycle({
       terminalStatus.value = session.status || "running";
       terminalCommandPreview.value = session.commandPreview || "";
       emitTerminalSessionState();
-      fitTerminal?.({
-        forceResize: true
-      });
-      void setupTerminalUi?.().then((ready) => {
-        if (ready) {
-          fitTerminal?.({
-            forceResize: true
-          });
-          refreshTerminalOutput?.();
-        }
-      });
-      if (!(await terminalSocket.connect())) {
-        throw new Error("Terminal stream failed to connect.");
-      }
+      await connectAttachedTerminal();
       onTerminalStarted?.(session);
       return true;
     } catch (startError) {
@@ -208,7 +224,9 @@ function useCodexTerminalSessionLifecycle({
 
   async function ensureTerminalReady() {
     if (!canUseTerminal.value) {
-      terminalError.value = "Create the session worktree before starting Codex.";
+      if (terminalCanStart.value) {
+        terminalError.value = "Create the session worktree before starting Codex.";
+      }
       return false;
     }
     if (terminalStartPromise) {
@@ -253,6 +271,34 @@ function useCodexTerminalSessionLifecycle({
     detachTerminal();
     if (existingTerminalId && sessionId.value) {
       await closeTerminalSession?.(sessionId.value, existingTerminalId).catch(() => null);
+    }
+  }
+
+  async function attachTerminalSession(session = {}) {
+    const nextTerminalSessionId = String(session.id || session.terminalSessionId || "").trim();
+    if (!nextTerminalSessionId) {
+      if (terminalSessionId.value) {
+        detachTerminal();
+      }
+      return false;
+    }
+    const sameTerminal = terminalSessionId.value === nextTerminalSessionId;
+    if (!sameTerminal && terminalSessionId.value) {
+      detachTerminal();
+    }
+    terminalSessionId.value = nextTerminalSessionId;
+    terminalStatus.value = session.status || terminalStatus.value || "running";
+    terminalCommandPreview.value = session.commandPreview || terminalCommandPreview.value || "";
+    emitTerminalSessionState();
+    if (!canUseTerminal.value || !componentMounted.value) {
+      return true;
+    }
+    try {
+      await connectAttachedTerminal();
+      return true;
+    } catch (attachError) {
+      terminalError.value = String(attachError?.message || attachError || "Terminal stream failed to connect.");
+      return false;
     }
   }
 
@@ -368,6 +414,7 @@ function useCodexTerminalSessionLifecycle({
   });
 
   return {
+    attachTerminalSession,
     closeTerminal,
     detachTerminal,
     ensureTerminalReady,

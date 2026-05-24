@@ -72,6 +72,10 @@ function createService({
       return codex.injectCodexPrompt(sessionId, handoff);
     },
 
+    codexTerminalState(sessionId) {
+      return codex.terminalState(sessionId);
+    },
+
     readCodexTerminal(sessionId, terminalSessionId) {
       return codex.readTerminal(sessionId, terminalSessionId);
     },

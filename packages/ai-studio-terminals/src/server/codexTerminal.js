@@ -6,6 +6,7 @@ import stripAnsi from "strip-ansi";
 import {
   closeTerminalSession,
   closeTerminalSessionsForNamespace,
+  listTerminalSessions,
   readTerminalSession,
   resizeTerminalSession,
   startTerminalSession,
@@ -219,6 +220,30 @@ function codexTerminalSnapshot(sessionId = "", terminalSessionId = "") {
   });
 }
 
+function activeCodexTerminal(session = {}) {
+  const sessionId = normalizeText(session.sessionId);
+  if (!sessionId) {
+    return null;
+  }
+  const workdir = terminalWorktreePath(session);
+  const terminals = listTerminalSessions({
+    namespace: codexTerminalNamespace(sessionId)
+  })
+    .filter((terminal) => terminal.status !== "exited")
+    .filter((terminal) => !workdir || terminal.metadata?.workdir === workdir)
+    .sort((left, right) => String(right.createdAt || "").localeCompare(String(left.createdAt || "")));
+  const terminal = terminals[0] || null;
+  if (!terminal) {
+    return null;
+  }
+  return {
+    commandPreview: terminal.commandPreview || "",
+    id: terminal.id || "",
+    status: terminal.status || "",
+    transmitting: terminal.status === "running"
+  };
+}
+
 function writeCodexTerminalInput(sessionId = "", terminalSessionId = "", data = "") {
   return writeTerminalSession(terminalSessionId, data, {
     namespace: codexTerminalNamespace(sessionId)
@@ -236,6 +261,7 @@ function codexState(session = {}) {
       session.sessionId,
       metadata.codex_prompt_handoff_signature
     ),
+    codexTerminal: activeCodexTerminal(session),
     codexThreadId
   };
 }
@@ -670,6 +696,18 @@ function createCodexTerminalController({
     async injectCodexPrompt(sessionId, handoff = {}) {
       return aiStudioResult(async () => {
         return injectPromptIntoCodex(sessionId, handoff);
+      });
+    },
+
+    async terminalState(sessionId) {
+      return aiStudioResult(async () => {
+        const runtime = await projectService.createRuntime();
+        const session = await runtime.getSession(sessionId);
+        return {
+          ok: true,
+          sessionId,
+          ...codexState(session)
+        };
       });
     },
 

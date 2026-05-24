@@ -103,6 +103,11 @@ test("session prompt action injects the rendered Codex handoff from the server",
                 input,
                 status: "prompt_ready"
               },
+              presentation: {
+                screen: {
+                  kind: "codex_running"
+                }
+              },
               sessionId,
               status: AI_STUDIO_SESSION_STATUS.ACTIVE
             };
@@ -135,6 +140,18 @@ test("session prompt action injects the rendered Codex handoff from the server",
           ok: true,
           terminalSessionId: "codex-terminal-1"
         };
+      },
+      async codexTerminalState(sessionId) {
+        return {
+          codexTerminal: {
+            commandPreview: "codex",
+            id: "codex-terminal-1",
+            status: "running",
+            transmitting: true
+          },
+          ok: true,
+          sessionId
+        };
       }
     }
   });
@@ -145,6 +162,19 @@ test("session prompt action injects the rendered Codex handoff from the server",
 
   assert.equal(session.status, AI_STUDIO_SESSION_STATUS.ACTIVE);
   assert.equal(session.codexPromptDelivery.codexPromptInjected, true);
+  assert.deepEqual(session.codexTerminal, {
+    commandPreview: "codex",
+    id: "codex-terminal-1",
+    status: "running",
+    transmitting: true
+  });
+  assert.deepEqual(session.presentation.terminal.codex, {
+    label: "Terminal is transmitting...",
+    readOnlyInAutopilot: true,
+    renderer: "codex_terminal",
+    terminalSessionId: "codex-terminal-1",
+    visible: true
+  });
   assert.deepEqual(deliveries, [
     {
       promptHandoff: handoff,
@@ -286,6 +316,58 @@ test("session prompt action fails visibly when server-side Codex delivery fails"
 
   assert.equal(result.ok, false);
   assert.equal(result.error, "Codex terminal is not running.");
+});
+
+test("session presentation hides the Codex preview while a user input screen is active", async () => {
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async getSession(sessionId) {
+            return {
+              presentation: {
+                screen: {
+                  kind: "input"
+                }
+              },
+              sessionId,
+              status: AI_STUDIO_SESSION_STATUS.ACTIVE
+            };
+          }
+        };
+      }
+    },
+    terminalService: {
+      async codexTerminalState(sessionId) {
+        return {
+          codexTerminal: {
+            commandPreview: "codex",
+            id: "codex-terminal-active",
+            status: "running",
+            transmitting: true
+          },
+          ok: true,
+          sessionId
+        };
+      }
+    }
+  });
+
+  const session = await service.inspectSession("session-1");
+
+  assert.deepEqual(session.codexTerminal, {
+    commandPreview: "codex",
+    id: "codex-terminal-active",
+    status: "running",
+    transmitting: true
+  });
+  assert.deepEqual(session.presentation.terminal.codex, {
+    label: "",
+    readOnlyInAutopilot: true,
+    renderer: "codex_terminal",
+    terminalSessionId: "codex-terminal-active",
+    visible: false
+  });
 });
 
 test("session creation waits for an unsynced merged session", async () => {

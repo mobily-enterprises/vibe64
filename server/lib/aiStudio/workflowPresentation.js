@@ -357,7 +357,7 @@ function waitingPresentation(session = {}) {
       icon: "progress",
       message: "Wait for Codex to finish the current step.",
       showProgress: true,
-      title: "Codex is working..."
+      title: "Terminal is transmitting..."
     })
   };
 }

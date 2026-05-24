@@ -8,7 +8,9 @@
   >
     <CodexSessionTerminal
       class="studio-ai-sessions__codex-terminal"
+      :allow-start="allowCodexStart"
       :display-mode="displayMode"
+      :read-only="codexReadOnly"
       :session="session"
       :visible="displayMode !== 'headless'"
       @session-update="codexTerminal.sessionUpdate"
@@ -65,6 +67,14 @@ const props = defineProps({
   codexTerminal: {
     default: () => ({}),
     type: Object
+  },
+  allowCodexStart: {
+    default: true,
+    type: Boolean
+  },
+  codexReadOnly: {
+    default: false,
+    type: Boolean
   },
   displayMode: {
     default: "full",

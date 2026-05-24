@@ -6,6 +6,141 @@ import {
 } from "./support/base-shell-mocks";
 
 test.describe("Autopilot dumb client contract", () => {
+  test("attaches to the server-owned Codex terminal preview without sending terminal input", async ({ page }) => {
+    await mockCodexTerminalPreviewSocket(page);
+    let codexTerminalStartRequests = 0;
+    const session = sessionPayload({
+      codexTerminal: {
+        commandPreview: "codex",
+        id: "server-codex-terminal",
+        status: "running",
+        transmitting: true
+      },
+      presentation: {
+        auto: {
+          canResume: false,
+          canStart: false,
+          nextOperation: {
+            kind: "wait",
+            reason: "codex"
+          }
+        },
+        screen: {
+          icon: "progress",
+          kind: "codex_running",
+          message: "Wait for Codex to finish the current step.",
+          sections: [],
+          showProgress: true,
+          title: "Terminal is transmitting..."
+        },
+        step: {
+          id: "server_step",
+          label: "Server step",
+          status: "awaiting_agent_result"
+        },
+        terminal: {
+          codex: {
+            label: "Terminal is transmitting...",
+            readOnlyInAutopilot: true,
+            renderer: "codex_terminal",
+            terminalSessionId: "server-codex-terminal",
+            visible: true
+          }
+        }
+      },
+      stepMachine: {
+        status: "awaiting_agent_result",
+        stepId: "server_step"
+      }
+    });
+    await mockAiStudioSession(page, session, {
+      onCodexTerminalStart: () => {
+        codexTerminalStartRequests += 1;
+      }
+    });
+
+    await page.goto(`${BASE_URL}/home`);
+
+    await expect(page.getByRole("heading", { name: "Terminal is transmitting..." })).toBeVisible();
+    await expect(page.locator(".studio-ai-sessions__terminals--autopilot-preview")).toBeVisible();
+    await expect.poll(() => codexTerminalStartRequests).toBe(0);
+    await expect.poll(async () => page.evaluate(() => (
+      (window as unknown as { __aiStudioCodexTerminalInputs?: string[] }).__aiStudioCodexTerminalInputs || []
+    ))).toEqual([]);
+  });
+
+  test("hides the active Codex terminal preview when the server renders input", async ({ page }) => {
+    await mockCodexTerminalPreviewSocket(page);
+    const session = sessionPayload({
+      codexTerminal: {
+        commandPreview: "codex",
+        id: "server-codex-terminal",
+        status: "running",
+        transmitting: true
+      },
+      currentStepDefinition: {
+        id: "server_step",
+        label: "Server Questions"
+      },
+      presentation: {
+        auto: {
+          canResume: false,
+          canStart: false,
+          nextOperation: {
+            kind: "wait",
+            reason: "input"
+          }
+        },
+        screen: {
+          input: {
+            fields: [
+              {
+                kind: "textarea",
+                label: "Response",
+                name: "response"
+              }
+            ],
+            prompt: "What is one workflow in the dog grooming app you want to improve first?",
+            submitLabel: "Send to Codex",
+            title: "Talk to Codex"
+          },
+          kind: "input",
+          message: "What is one workflow in the dog grooming app you want to improve first?",
+          sections: [],
+          title: "Talk to Codex"
+        },
+        step: {
+          id: "server_step",
+          label: "Server Questions",
+          status: "waiting_for_input"
+        },
+        terminal: {
+          codex: {
+            label: "",
+            readOnlyInAutopilot: true,
+            renderer: "codex_terminal",
+            terminalSessionId: "server-codex-terminal",
+            visible: false
+          }
+        }
+      },
+      stepMachine: {
+        status: "waiting_for_input",
+        stepId: "server_step"
+      }
+    });
+    await mockAiStudioSession(page, session);
+
+    await page.goto(`${BASE_URL}/home`);
+
+    await expect(page.getByRole("heading", { name: "Talk to Codex" })).toBeVisible();
+    await expect(page.getByLabel("Response")).toBeVisible();
+    await expect(page.locator(".studio-ai-sessions__terminals--autopilot-preview")).toBeHidden();
+    await expect.poll(async () => page.evaluate(() => (
+      (window as unknown as { __aiStudioCodexTerminalInputs?: string[] }).__aiStudioCodexTerminalInputs || []
+    ))).toEqual([]);
+  });
+
   test("renders server-provided intents and posts the chosen intent without client workflow knowledge", async ({ page }) => {
     const intentRequests: unknown[] = [];
     const session = sessionPayload({
@@ -140,8 +275,10 @@ async function mockAiStudioSession(
   session: Record<string, unknown>,
   {
     onIntent = () => undefined,
-    onStepInput = () => undefined
+    onStepInput = () => undefined,
+    onCodexTerminalStart = () => undefined
   }: {
+    onCodexTerminalStart?: () => void;
     onIntent?: (body: unknown) => void;
     onStepInput?: (body: unknown) => void;
   } = {}
@@ -151,6 +288,16 @@ async function mockAiStudioSession(
     const request = route.request();
     const url = new URL(request.url());
     const method = request.method();
+    if (method === "POST" && url.pathname.endsWith("/codex-terminal")) {
+      onCodexTerminalStart();
+      await fulfillJson(route, {
+        commandPreview: "codex",
+        id: "server-codex-terminal",
+        ok: true,
+        status: "running"
+      });
+      return;
+    }
     if (method === "POST" && /\/intents\/[^/]+$/u.test(url.pathname)) {
       onIntent(request.postDataJSON());
       await fulfillJson(route, {
@@ -188,6 +335,64 @@ async function mockAiStudioSession(
       ok: true,
       sessions: [session]
     });
+  });
+}
+
+async function mockCodexTerminalPreviewSocket(page: Page) {
+  await page.addInitScript(() => {
+    const OriginalWebSocket = window.WebSocket;
+    (window as unknown as {
+      __aiStudioCodexTerminalInputs: string[];
+    }).__aiStudioCodexTerminalInputs = [];
+
+    class MockWebSocket extends EventTarget {
+      static CONNECTING = 0;
+      static OPEN = 1;
+      static CLOSING = 2;
+      static CLOSED = 3;
+      readyState = MockWebSocket.CONNECTING;
+      url = "";
+
+      constructor(url) {
+        super();
+        this.url = String(url || "");
+        const pathname = new URL(this.url, window.location.href).pathname;
+        if (!pathname.includes("/codex-terminal/")) {
+          return new OriginalWebSocket(url);
+        }
+        window.setTimeout(() => {
+          this.readyState = MockWebSocket.OPEN;
+          this.dispatchEvent(new Event("open"));
+          this.dispatchEvent(new MessageEvent("message", {
+            data: JSON.stringify({
+              session: {
+                commandPreview: "codex",
+                ok: true,
+                output: "Server-owned Codex terminal output.",
+                status: "running"
+              },
+              type: "snapshot"
+            })
+          }));
+        }, 0);
+      }
+
+      send(rawMessage) {
+        const message = JSON.parse(String(rawMessage || "{}"));
+        if (message.type === "input") {
+          (window as unknown as {
+            __aiStudioCodexTerminalInputs: string[];
+          }).__aiStudioCodexTerminalInputs.push(String(message.data || ""));
+        }
+      }
+
+      close() {
+        this.readyState = MockWebSocket.CLOSED;
+        this.dispatchEvent(new CloseEvent("close"));
+      }
+    }
+
+    window.WebSocket = MockWebSocket as unknown as typeof WebSocket;
   });
 }
 

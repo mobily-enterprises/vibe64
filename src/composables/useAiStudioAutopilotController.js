@@ -185,12 +185,15 @@ function useAiStudioAutopilotController({
       };
     }
     if (waitingForCodex.value) {
+      const screen = currentScreen(currentSession.value);
       return {
-        icon: "progress",
-        kind: "codex_running",
-        showProgress: true,
+        icon: screen.icon || "progress",
+        kind: screen.kind || "codex_running",
+        message: screen.message || "",
+        sections: Array.isArray(screen.sections) ? screen.sections : [],
+        showProgress: screen.showProgress !== false,
         stopAction: "autopilot",
-        title: activeStage.value ? `Executing: ${activeStage.value}` : "Codex is working..."
+        title: screen.title || "Terminal is transmitting..."
       };
     }
     if (running.value) {
