@@ -36,16 +36,8 @@ function aiStudioArtifactPreviewPath(sessionsApiPath = "", sessionId = "") {
   return aiStudioSessionPath(sessionsApiPath, sessionId, "/artifact-preview");
 }
 
-function aiStudioCodexPromptHandoffPath(sessionsApiPath = "", sessionId = "") {
-  return aiStudioSessionPath(sessionsApiPath, sessionId, "/codex-prompt-handoff");
-}
-
 function aiStudioCodexAttachmentPath(sessionsApiPath = "", sessionId = "") {
   return aiStudioSessionPath(sessionsApiPath, sessionId, "/codex-attachments");
-}
-
-function aiStudioCodexThreadPath(sessionsApiPath = "", sessionId = "") {
-  return aiStudioSessionPath(sessionsApiPath, sessionId, "/codex-thread");
 }
 
 function aiStudioCommandTerminalPath(sessionsApiPath = "", sessionId = "", terminalSessionId = "") {
@@ -126,8 +118,6 @@ export {
   aiStudioArtifactPreviewPath,
   aiStudioArtifactPreviewQueryKey,
   aiStudioCodexAttachmentPath,
-  aiStudioCodexPromptHandoffPath,
-  aiStudioCodexThreadPath,
   aiStudioCommandTerminalPath,
   aiStudioIntentPath,
   aiStudioLaunchTargetOpenPath,

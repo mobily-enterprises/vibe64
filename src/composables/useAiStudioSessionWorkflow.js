@@ -1,7 +1,6 @@
-import { computed, watch } from "vue";
+import { computed } from "vue";
 import { useAiStudioSessionActions } from "@/composables/useAiStudioSessionActions.js";
 import { useAiStudioSessionClipboard } from "@/composables/useAiStudioSessionClipboard.js";
-import { useAiStudioSessionCodexHandoff } from "@/composables/useAiStudioSessionCodexHandoff.js";
 import { useAiStudioSessionCommandTerminal } from "@/composables/useAiStudioSessionCommandTerminal.js";
 import { useAiStudioSessionDialogs } from "@/composables/useAiStudioSessionDialogs.js";
 import { useAiStudioStepInputForm } from "@/composables/useAiStudioStepInputForm.js";
@@ -29,7 +28,6 @@ function useAiStudioSessionWorkflow({
   const clipboard = useAiStudioSessionClipboard();
   const workflow = {
     actions: null,
-    codexHandoff: null,
     commandTerminal: null,
     dialogs: null
   };
@@ -37,7 +35,6 @@ function useAiStudioSessionWorkflow({
   const commandBusy = computed(() => Boolean(
     createSessionCommand.isRunning ||
     workflow.actions?.busy.value ||
-    workflow.codexHandoff?.busy.value ||
     workflow.commandTerminal?.running.value ||
     workflow.dialogs?.busy.value
   ));
@@ -55,17 +52,9 @@ function useAiStudioSessionWorkflow({
 
   function clearSessionTransientState() {
     workflow.actions?.clear();
-    workflow.codexHandoff?.clear();
     workflow.commandTerminal?.clear();
     workflow.dialogs?.clear();
   }
-
-  workflow.codexHandoff = useAiStudioSessionCodexHandoff({
-    refreshSessionData,
-    selectedSessionId,
-    setCopyStatus: clipboard.setCopyStatus,
-    waitingForPromptedArtifact: () => workflow.actions?.waitingForPromptedArtifact.value
-  });
 
   workflow.commandTerminal = useAiStudioSessionCommandTerminal({
     currentNext: () => workflow.actions?.currentNext.value,
@@ -77,7 +66,6 @@ function useAiStudioSessionWorkflow({
 
   workflow.actions = useAiStudioSessionActions({
     clearCopyStatus: clipboard.clearCopyStatus,
-    codexHandoff: workflow.codexHandoff,
     commandBusy: () => commandBusy.value,
     commandTerminal: workflow.commandTerminal,
     onRewindSuccess: clearSessionTransientState,
@@ -91,13 +79,6 @@ function useAiStudioSessionWorkflow({
   workflow.stepInput = useAiStudioStepInputForm({
     onSaved: refreshSessionData,
     session: selectedSession
-  });
-
-  watch(selectedSession, (session) => {
-    workflow.codexHandoff?.syncWithSession(session || {});
-  }, {
-    immediate: true,
-    flush: "post"
   });
 
   workflow.dialogs = useAiStudioSessionDialogs({
@@ -145,17 +126,7 @@ function useAiStudioSessionWorkflow({
       runIntentCommand: workflow.actions.runIntentCommand
     },
     codexTerminal: {
-      busy: workflow.codexHandoff.busy,
-      busyChanged: workflow.codexHandoff.busyChanged,
-      fixCommandFailure: workflow.codexHandoff.fixCommandFailure,
-      injectPrompt: workflow.codexHandoff.injectPrompt,
-      promptInjected: workflow.codexHandoff.promptInjected,
-      promptInjectionError: workflow.codexHandoff.promptInjectionError,
-      promptInjectionFailed: workflow.codexHandoff.promptInjectionFailed,
-      promptInjectionKey: workflow.codexHandoff.promptInjectionKey,
-      promptOverride: workflow.codexHandoff.promptOverride,
-      sessionUpdate: workflow.codexHandoff.sessionUpdate,
-      working: workflow.codexHandoff.working
+      sessionUpdate: refreshSessionData
     },
     commandTerminal: {
       action: workflow.commandTerminal.action,

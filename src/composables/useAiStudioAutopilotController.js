@@ -1,4 +1,4 @@
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, ref } from "vue";
 import {
   useAiStudioHeadlessCommandRunner
 } from "@/composables/useAiStudioHeadlessCommandRunner.js";
@@ -7,7 +7,6 @@ import {
 } from "@/lib/vueRefOrGetterValue.js";
 
 const MAX_AUTOPILOT_OPERATIONS = 40;
-const CODEX_TURN_WITHOUT_ARTIFACT_GRACE_MS = 3000;
 const CODEX_TURN_RESULT = Object.freeze({
   COMPLETE: "complete",
   INCOMPLETE: "incomplete",
@@ -30,22 +29,6 @@ function readSession(session) {
 function readActions(actions = {}) {
   const currentActions = readRefOrGetterValue(actions.currentActions);
   return Array.isArray(currentActions) ? currentActions : [];
-}
-
-function readCodexBusy(codexTerminal = {}) {
-  return readRefOrGetterValue(codexTerminal.busy) === true;
-}
-
-function readCodexWorking(codexTerminal = {}) {
-  return readRefOrGetterValue(codexTerminal.working) === true;
-}
-
-function readCodexActive(codexTerminal = {}) {
-  return readCodexBusy(codexTerminal) || readCodexWorking(codexTerminal);
-}
-
-function readPromptInjectionError(codexTerminal = {}) {
-  return String(readRefOrGetterValue(codexTerminal.promptInjectionError) || "");
 }
 
 function currentPresentation(session = {}) {
@@ -143,7 +126,6 @@ function autopilotStoppedFailure() {
 
 function useAiStudioAutopilotController({
   actions = {},
-  codexTerminal = {},
   commandRunner = useAiStudioHeadlessCommandRunner(),
   enabled = true,
   refreshSessionData = async () => null,
@@ -164,18 +146,14 @@ function useAiStudioAutopilotController({
   const commandPreview = computed(() => String(readRefOrGetterValue(commandRunner.commandPreview) || ""));
   const commandResult = computed(() => readRefOrGetterValue(commandRunner.lastResult) || lastCommandResult.value || null);
   const commandRunning = computed(() => readRefOrGetterValue(commandRunner.running) === true);
-  const codexActive = computed(() => readCodexActive(codexTerminal));
-  const codexPromptBusy = computed(() => readCodexBusy(codexTerminal));
   const codexBlocksAutopilot = computed(() => Boolean(
-    codexPromptBusy.value ||
-    (stepMachineIsPendingPrompt(currentSession.value) && codexActive.value)
+    stepMachineIsPendingPrompt(currentSession.value)
   ));
   const running = computed(() => active.value || commandRunning.value);
   const waitingForCodex = computed(() => Boolean(
     autopilotEnabled.value &&
     !failure.value &&
-    codexActive.value &&
-    (codexPromptBusy.value || stepMachineIsPendingPrompt(currentSession.value)) &&
+    stepMachineIsPendingPrompt(currentSession.value) &&
     currentSession.value?.sessionId
   ));
   const canStart = computed(() => Boolean(
@@ -559,21 +537,10 @@ function useAiStudioAutopilotController({
   async function waitForStepMachinePrompt({
     action = {},
     label = "",
-    startedAt = Date.now(),
     startingStep = ""
   } = {}) {
+    void label;
     while (autopilotEnabled.value && !stopRequested && currentSession.value?.currentStep === startingStep) {
-      const promptError = readPromptInjectionError(codexTerminal);
-      if (promptError) {
-        stopWithFailure({
-          actionId: action.id,
-          actionLabel: label || action.label,
-          error: promptError,
-          source: "codex"
-        });
-        return CODEX_TURN_RESULT.INCOMPLETE;
-      }
-
       await refreshSessionData();
       await nextTick();
       const status = stepMachineStatus(currentSession.value);
@@ -586,15 +553,7 @@ function useAiStudioAutopilotController({
       if (status === STEP_STATUS.DONE) {
         return CODEX_TURN_RESULT.COMPLETE;
       }
-      if (!readCodexActive(codexTerminal) && Date.now() - startedAt >= CODEX_TURN_WITHOUT_ARTIFACT_GRACE_MS) {
-        stopWithFailure({
-          actionId: action.id,
-          actionLabel: label || action.label,
-          error: `${label || "Codex"} finished without updating the current AI Studio step.`,
-          source: "codex"
-        });
-        return CODEX_TURN_RESULT.INCOMPLETE;
-      }
+      void action;
       await waitForCodexOrTimer();
     }
     return CODEX_TURN_RESULT.COMPLETE;
@@ -602,23 +561,7 @@ function useAiStudioAutopilotController({
 
   function waitForCodexOrTimer() {
     return new Promise((resolve) => {
-      const cleanupCallbacks = [];
-      let timeoutId = null;
-      const finish = () => {
-        for (const cleanup of cleanupCallbacks) {
-          cleanup();
-        }
-        resolve();
-      };
-
-      cleanupCallbacks.push(watch(codexActive, finish, {
-        flush: "post"
-      }));
-      cleanupCallbacks.push(watch(() => readPromptInjectionError(codexTerminal), finish, {
-        flush: "post"
-      }));
-      cleanupCallbacks.push(() => clearTimeout(timeoutId));
-      timeoutId = setTimeout(finish, 500);
+      setTimeout(resolve, 500);
     });
   }
 
@@ -639,14 +582,6 @@ function useAiStudioAutopilotController({
       stopWithFailure(result);
     }
   }
-
-  watch(codexActive, (activeNow) => {
-    if (autopilotEnabled.value && activeNow && currentSession.value?.sessionId) {
-      clearFailure();
-    }
-  }, {
-    flush: "post"
-  });
 
   return {
     canStart,

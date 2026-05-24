@@ -10,8 +10,7 @@ import {
 
 const AI_STUDIO_TERMINALS_SERVICE = "feature.ai-studio-terminals.service";
 const TERMINAL_SESSION_MUTATION_EVENT_METHODS = Object.freeze([
-  "saveCodexPromptHandoff",
-  "saveCodexThread",
+  "injectCodexPrompt",
   "startCodexTerminal",
   "startCommandTerminal",
   "startLaunchTargetTerminal"
@@ -50,6 +49,11 @@ class AiStudioTerminalsProvider {
           methodName: "startCodexTerminal",
           serviceToken: AI_STUDIO_TERMINALS_SERVICE
         });
+        const publishCodexPromptChanged = createAiStudioSessionChangedPublisher({
+          domainEvents,
+          methodName: "injectCodexPrompt",
+          serviceToken: AI_STUDIO_TERMINALS_SERVICE
+        });
         const publishLaunchTargetChanged = createAiStudioSessionChangedPublisher({
           domainEvents,
           methodName: "startLaunchTargetTerminal",
@@ -58,6 +62,7 @@ class AiStudioTerminalsProvider {
         return createService({
           projectService: scope.make("feature.ai-studio-project.service"),
           publishSessionChanged: {
+            codexPrompt: publishCodexPromptChanged,
             codexTerminal: publishCodexTerminalChanged,
             commandTerminal: publishCommandTerminalChanged,
             launchTarget: publishLaunchTargetChanged

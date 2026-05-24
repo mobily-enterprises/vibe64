@@ -84,6 +84,210 @@ test("session action keeps terminals when the session remains active", async () 
   assert.deepEqual(closedSessionIds, []);
 });
 
+test("session prompt action injects the rendered Codex handoff from the server", async () => {
+  const deliveries = [];
+  const operations = [];
+  const handoff = {
+    kind: "codex_prompt_handoff",
+    terminalInput: "Ask Codex from the server."
+  };
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async runAction(sessionId, actionId, input) {
+            return {
+              actionResult: {
+                actionId,
+                codexPromptHandoff: handoff,
+                input,
+                status: "prompt_ready"
+              },
+              sessionId,
+              status: AI_STUDIO_SESSION_STATUS.ACTIVE
+            };
+          }
+        };
+      }
+    },
+    publishSessionChanged: {
+      async action(sessionId, event = {}) {
+        operations.push({
+          kind: "publish",
+          reason: event.reason,
+          sessionId
+        });
+      }
+    },
+    setupServices: readySetupServices(),
+    terminalService: {
+      async injectCodexPrompt(sessionId, promptHandoff) {
+        operations.push({
+          kind: "deliver",
+          sessionId
+        });
+        deliveries.push({
+          promptHandoff,
+          sessionId
+        });
+        return {
+          codexPromptInjected: true,
+          ok: true,
+          terminalSessionId: "codex-terminal-1"
+        };
+      }
+    }
+  });
+
+  const session = await service.runSessionAction("session-1", "agent_conversation", {
+    conversationRequest: "Explain this codebase."
+  });
+
+  assert.equal(session.status, AI_STUDIO_SESSION_STATUS.ACTIVE);
+  assert.equal(session.codexPromptDelivery.codexPromptInjected, true);
+  assert.deepEqual(deliveries, [
+    {
+      promptHandoff: handoff,
+      sessionId: "session-1"
+    }
+  ]);
+  assert.deepEqual(operations, [
+    {
+      kind: "publish",
+      reason: "codex-prompt-state-updated",
+      sessionId: "session-1"
+    },
+    {
+      kind: "deliver",
+      sessionId: "session-1"
+    }
+  ]);
+});
+
+test("session prompt intent injects the rendered Codex handoff from the server", async () => {
+  const deliveries = [];
+  const operations = [];
+  const handoff = {
+    kind: "codex_prompt_handoff",
+    terminalInput: "Answer the current step from the server."
+  };
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async runIntent(sessionId, intentId, input) {
+            return {
+              actionResult: {
+                actionId: "answer_question",
+                codexPromptHandoff: handoff,
+                input,
+                intentId,
+                status: "prompt_ready"
+              },
+              sessionId,
+              status: AI_STUDIO_SESSION_STATUS.ACTIVE
+            };
+          }
+        };
+      }
+    },
+    publishSessionChanged: {
+      async intent(sessionId, event = {}) {
+        operations.push({
+          kind: "publish",
+          reason: event.reason,
+          sessionId
+        });
+      }
+    },
+    setupServices: readySetupServices(),
+    terminalService: {
+      async injectCodexPrompt(sessionId, promptHandoff) {
+        operations.push({
+          kind: "deliver",
+          sessionId
+        });
+        deliveries.push({
+          promptHandoff,
+          sessionId
+        });
+        return {
+          codexPromptInjected: true,
+          ok: true,
+          terminalSessionId: "codex-terminal-2"
+        };
+      }
+    }
+  });
+
+  const session = await service.runSessionIntent("session-1", "answer_question", {
+    fields: {
+      response: "Use Pescara."
+    },
+    stepId: "current_step",
+    stepStatus: "waiting_for_input"
+  });
+
+  assert.equal(session.status, AI_STUDIO_SESSION_STATUS.ACTIVE);
+  assert.equal(session.codexPromptDelivery.terminalSessionId, "codex-terminal-2");
+  assert.deepEqual(deliveries, [
+    {
+      promptHandoff: handoff,
+      sessionId: "session-1"
+    }
+  ]);
+  assert.deepEqual(operations, [
+    {
+      kind: "publish",
+      reason: "codex-prompt-state-updated",
+      sessionId: "session-1"
+    },
+    {
+      kind: "deliver",
+      sessionId: "session-1"
+    }
+  ]);
+});
+
+test("session prompt action fails visibly when server-side Codex delivery fails", async () => {
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async runAction(sessionId, actionId) {
+            return {
+              actionResult: {
+                actionId,
+                codexPromptHandoff: {
+                  kind: "codex_prompt_handoff",
+                  terminalInput: "This should be delivered by the server."
+                },
+                status: "prompt_ready"
+              },
+              sessionId,
+              status: AI_STUDIO_SESSION_STATUS.ACTIVE
+            };
+          }
+        };
+      }
+    },
+    setupServices: readySetupServices(),
+    terminalService: {
+      async injectCodexPrompt() {
+        return {
+          error: "Codex terminal is not running.",
+          ok: false
+        };
+      }
+    }
+  });
+
+  const result = await service.runSessionAction("session-1", "agent_conversation");
+
+  assert.equal(result.ok, false);
+  assert.equal(result.error, "Codex terminal is not running.");
+});
+
 test("session creation waits for an unsynced merged session", async () => {
   let createSessionCalled = false;
   const existingSessions = [

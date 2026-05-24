@@ -7,8 +7,6 @@ import {
   aiStudioArtifactPreviewPath,
   aiStudioArtifactPreviewQueryKey,
   aiStudioCodexAttachmentPath,
-  aiStudioCodexPromptHandoffPath,
-  aiStudioCodexThreadPath,
   aiStudioSessionQueryKey,
   aiStudioSessionPath,
   aiStudioSessionsQueryKey,
@@ -55,9 +53,7 @@ describe("AI Studio session request config", () => {
     expect(aiStudioSessionPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo`);
     expect(aiStudioActionPath(apiPath, sessionId, "make plan")).toBe(`${apiPath}/2026-05-16_01%3Atwo/actions/make%20plan`);
     expect(aiStudioArtifactPreviewPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/artifact-preview`);
-    expect(aiStudioCodexPromptHandoffPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/codex-prompt-handoff`);
     expect(aiStudioCodexAttachmentPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/codex-attachments`);
-    expect(aiStudioCodexThreadPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/codex-thread`);
   });
 
   it("normalizes command input payloads from command context", () => {

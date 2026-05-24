@@ -120,7 +120,6 @@ import {
 } from "@/lib/aiStudioSessionApi.js";
 import { useAiStudioCodexCommands } from "@/composables/useAiStudioCodexCommands.js";
 import { useCodexTerminalAttachments } from "@/composables/useCodexTerminalAttachments.js";
-import { useCodexPromptHandoff } from "@/composables/useCodexPromptHandoff.js";
 import { useCodexTerminalOutput } from "@/composables/useCodexTerminalOutput.js";
 import { useCodexTerminalSessionLifecycle } from "@/composables/useCodexTerminalSessionLifecycle.js";
 import { useCodexTerminalViewport } from "@/composables/useCodexTerminalViewport.js";
@@ -139,24 +138,13 @@ const props = defineProps({
     type: Boolean,
     default: true
   },
-  promptInjectionRequestKey: {
-    type: [String, Number],
-    default: ""
-  },
-  promptOverride: {
-    type: String,
-    default: ""
-  },
   displayMode: {
     type: String,
     default: "full"
   }
 });
 const emit = defineEmits([
-  "busy-changed",
   "input",
-  "prompt-injected",
-  "prompt-injection-failed",
   "session-update"
 ]);
 const codexCommands = useAiStudioCodexCommands();
@@ -173,6 +161,7 @@ let terminalLifecycle = null;
 
 const sessionId = computed(() => props.session?.sessionId || "");
 const sessionWorktree = computed(() => aiStudioSessionWorktreePath(props.session || {}));
+const terminalDisplayActive = computed(() => props.visible && props.displayMode !== "headless");
 
 function runtimeCodexPromptHandoff(session = {}) {
   const actionResultHandoff = session?.actionResult?.codexPromptHandoff;
@@ -184,28 +173,8 @@ function runtimeCodexPromptHandoff(session = {}) {
 }
 
 const canUseTerminal = computed(() => {
-  return Boolean(sessionId.value && sessionWorktree.value);
+  return Boolean(terminalDisplayActive.value && sessionId.value && sessionWorktree.value);
 });
-const codexPrompt = computed(() => {
-  if (props.promptOverride) {
-    return String(props.promptOverride || "");
-  }
-  const handoff = runtimeCodexPromptHandoff(props.session);
-  if (handoff?.prompt) {
-    return String(handoff.prompt || "");
-  }
-  const promptField = String(props.session?.codex?.promptField || "");
-  return promptField ? String(props.session?.[promptField] || "") : "";
-});
-const codexTerminalInput = computed(() => {
-  if (props.promptOverride) {
-    return "";
-  }
-  const handoff = runtimeCodexPromptHandoff(props.session);
-  return String(handoff?.terminalInput || "");
-});
-const manualPromptInjectionRequestKey = computed(() => String(props.promptInjectionRequestKey || ""));
-const terminalDisplayActive = computed(() => props.visible && props.displayMode !== "headless");
 const {
   appendTerminalDisplay,
   clearTerminalDisplay,
@@ -217,7 +186,6 @@ const {
   terminalFocused,
   terminalHost,
   terminalSelectedText,
-  visibleTerminalText,
   writeTerminalDisplay
 } = useCodexTerminalViewport({
   expanded,
@@ -234,7 +202,6 @@ const {
   },
   visible: computed(() => props.visible)
 });
-let promptHandoff = null;
 const {
   addPromptEchoFilter,
   appendTerminalOutput,
@@ -243,59 +210,14 @@ const {
   clearPromptEchoFilters,
   flushTerminalOutput,
   getTerminalOutput,
-  hasTerminalOutput,
-  lastTerminalOutputAt,
   markCodexBusy,
-  removePromptEchoFilter,
   resetTerminalOutput,
   writeTerminalOutput
 } = useCodexTerminalOutput({
   appendDisplay: appendTerminalDisplay,
   displayActive: terminalDisplayActive,
-  emitBusyChanged(payload) {
-    emit("busy-changed", payload);
-  },
-  onOutputChanged(output) {
-    void promptHandoff?.captureCodexThreadFromOutput(output);
-  },
-  shouldNotifyOutputChanged() {
-    return promptHandoff?.needsCodexThreadCapture?.() === true;
-  },
   sessionId,
   writeDisplay: writeTerminalDisplay
-});
-promptHandoff = useCodexPromptHandoff({
-  addPromptEchoFilter,
-  clearCodexBusy,
-  clearPromptEchoFilters,
-  codexPrompt,
-  codexTerminalInput,
-  componentMounted,
-  copyStatus,
-  emitPromptInjected(payload) {
-    emit("prompt-injected", payload);
-  },
-  emitPromptInjectionFailed(payload) {
-    emit("prompt-injection-failed", payload);
-  },
-  emitSessionUpdate(payload) {
-    emit("session-update", payload);
-  },
-  ensureTerminalReady,
-  expanded,
-  getTerminalOutput,
-  hasTerminalOutput,
-  lastTerminalOutputAt,
-  manualPromptInjectionRequestKey,
-  markCodexBusy,
-  removePromptEchoFilter,
-  saveThread: (currentSessionId, threadId) => codexCommands.saveThread(currentSessionId, threadId),
-  sendTerminalData,
-  sessionId,
-  terminalError,
-  terminalSessionId,
-  terminalStatus,
-  visibleTerminalText
 });
 const {
   attachmentDragActive,
@@ -336,31 +258,18 @@ terminalLifecycle = useCodexTerminalSessionLifecycle({
   onBeforeDispose() {
     flushTerminalOutput();
   },
-  onBeforeDetach() {
-    promptHandoff?.detach();
-  },
-  onMountedReady() {
-    void promptHandoff?.injectPromptForRequest();
-  },
   onSessionChanged() {
-    promptHandoff?.resetPromptRequestState();
     resetAttachmentDragState();
     clearAttachmentStatus();
   },
   onTerminalRecovered() {
     copyStatus.value = "Studio server restarted; reconnecting Codex.";
-    promptHandoff?.resetTerminalRecoveryState();
     resetTerminalOutput({
       emit: true
     });
   },
   onTerminalSnapshot(session) {
-    promptHandoff?.applyTerminalSnapshot(session);
-  },
-  onTerminalStarted(session) {
-    promptHandoff?.applyCodexThreadState(session);
-    promptHandoff?.noteTerminalStarted();
-    void promptHandoff?.ensureCodexThreadReady();
+    applyServerPromptEchoFilter(session);
   },
   refreshTerminalOutput() {
     writeTerminalOutput(getTerminalOutput());
@@ -416,6 +325,23 @@ function ensureTerminalReady() {
   return terminalLifecycle?.ensureTerminalReady() || Promise.resolve(false);
 }
 
+function serverPromptEchoText(session = {}) {
+  const handoff = runtimeCodexPromptHandoff(session);
+  return String(handoff?.terminalInput || handoff?.prompt || "");
+}
+
+function applyServerPromptEchoFilter(session = {}) {
+  const outputStart = Number(session?.codexPromptHandoffOutputStart);
+  const prompt = serverPromptEchoText(session);
+  if (!Number.isSafeInteger(outputStart) || outputStart < 0 || !prompt) {
+    return;
+  }
+  addPromptEchoFilter({
+    outputStart,
+    prompt
+  });
+}
+
 async function sendTerminalData(data, {
   source = "program"
 } = {}) {
@@ -433,7 +359,6 @@ async function sendTerminalData(data, {
     if (source === "user" && terminalInputHasUserText(input)) {
       emit("input", input);
     }
-    promptHandoff?.noteTerminalInput(input);
     return true;
   } catch (sendError) {
     terminalError.value = String(sendError?.message || sendError || "Terminal input failed.");
@@ -454,22 +379,8 @@ function toggleExpanded() {
   }
 }
 
-watch(manualPromptInjectionRequestKey, (nextRequestKey) => {
-  promptHandoff?.requestPromptInjection(nextRequestKey);
-});
-
-watch(codexPrompt, (nextPrompt, previousPrompt) => {
-  if (nextPrompt === previousPrompt) {
-    return;
-  }
-  promptHandoff?.resetPromptRequestState();
-});
-
-watch(() => [
-  props.session?.codexThreadId || "",
-  props.session?.needsThreadCapture === true
-], () => {
-  promptHandoff?.applyCodexThreadState(props.session || {});
+watch(() => props.session, (session) => {
+  applyServerPromptEchoFilter(session || {});
 }, {
   immediate: true
 });

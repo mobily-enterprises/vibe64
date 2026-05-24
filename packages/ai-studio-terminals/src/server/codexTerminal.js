@@ -1,6 +1,8 @@
 import crypto from "node:crypto";
 import path from "node:path";
 
+import stripAnsi from "strip-ansi";
+
 import {
   closeTerminalSession,
   closeTerminalSessionsForNamespace,
@@ -66,7 +68,29 @@ import {
 } from "./targetToolchainTerminal.js";
 
 const CODEX_THREAD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
-const CODEX_THREAD_PROBE = "!echo $CODEX_THREAD_ID";
+const CODEX_THREAD_ID_TOKEN_PATTERN = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/giu;
+const CODEX_THREAD_COMMAND = "echo $CODEX_THREAD_ID";
+const CODEX_BOOT_MIN_AGE_MS = 1800;
+const CODEX_BOOT_QUIET_MS = 900;
+const CODEX_BOOT_TIMEOUT_MS = 12000;
+const CODEX_KEY_PAUSE_MS = 180;
+const CODEX_THREAD_CAPTURE_TIMEOUT_MS = 12000;
+const PROMPT_INJECTION_PREFIX = "\u001b[200~";
+const PROMPT_INJECTION_SUFFIX = "\u001b[201~\r";
+const ESCAPE_CHARACTER = String.fromCharCode(27);
+const BELL_CHARACTER = String.fromCharCode(7);
+const STANDALONE_TERMINAL_CONTROL_CHARACTERS = [
+  `${String.fromCharCode(0)}-${String.fromCharCode(8)}`,
+  String.fromCharCode(11),
+  String.fromCharCode(12),
+  `${String.fromCharCode(14)}-${String.fromCharCode(31)}`,
+  `${String.fromCharCode(127)}-${String.fromCharCode(159)}`
+].join("");
+const OSC_PATTERN = new RegExp(`${ESCAPE_CHARACTER}\\][\\s\\S]*?(?:${BELL_CHARACTER}|${ESCAPE_CHARACTER}\\\\)`, "gu");
+const TERMINAL_STRING_PATTERN = new RegExp(`${ESCAPE_CHARACTER}[PX^_][\\s\\S]*?(?:${BELL_CHARACTER}|${ESCAPE_CHARACTER}\\\\)`, "gu");
+const CSI_PATTERN = new RegExp(`${ESCAPE_CHARACTER}\\[[0-?]*[ -/]*[@-~]`, "gu");
+const ESCAPE_SEQUENCE_PATTERN = new RegExp(`${ESCAPE_CHARACTER}[ -/]*[@-~]`, "gu");
+const STANDALONE_TERMINAL_CONTROL_PATTERN = new RegExp(`[${STANDALONE_TERMINAL_CONTROL_CHARACTERS}]`, "gu");
 const CODEX_SESSION_MODEL = "gpt-5.5";
 const CODEX_SESSION_REASONING_EFFORT = "xhigh";
 const MAX_OPEN_CODEX_TERMINALS = 3;
@@ -74,6 +98,34 @@ const STUDIO_DAEMON_ID = crypto.randomUUID();
 
 function normalizeText(value) {
   return String(value || "").trim();
+}
+
+function delay(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function stripTerminalControlSequences(value = "") {
+  const source = String(value || "")
+    .replace(OSC_PATTERN, "")
+    .replace(TERMINAL_STRING_PATTERN, "")
+    .replace(CSI_PATTERN, "")
+    .replace(ESCAPE_SEQUENCE_PATTERN, "");
+  return stripAnsi(source)
+    .replace(STANDALONE_TERMINAL_CONTROL_PATTERN, "");
+}
+
+function codexTrustPromptLooksActive(output = "") {
+  const text = stripTerminalControlSequences(output);
+  const promptIndex = text.search(/Do you trust the contents of this directory\?/u);
+  if (promptIndex < 0) {
+    return false;
+  }
+  const promptTail = text.slice(promptIndex);
+  return promptTail.includes("Yes, continue") &&
+    promptTail.includes("No, quit") &&
+    promptTail.includes("Press enter to continue");
 }
 
 function savedCodexWorkdir(session = {}) {
@@ -124,6 +176,55 @@ function normalizeCodexPromptHandoffOutputStart(value) {
   return Number.isSafeInteger(outputStart) && outputStart >= 0 ? outputStart : 0;
 }
 
+function extractCodexThreadId(output = "") {
+  const lines = stripTerminalControlSequences(output)
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  for (let lineIndex = lines.length - 1; lineIndex >= 0; lineIndex -= 1) {
+    if (!lines[lineIndex].includes("CODEX_THREAD_ID")) {
+      continue;
+    }
+    for (const nextLine of lines.slice(lineIndex + 1, lineIndex + 8)) {
+      CODEX_THREAD_ID_TOKEN_PATTERN.lastIndex = 0;
+      const token = [...nextLine.matchAll(CODEX_THREAD_ID_TOKEN_PATTERN)]
+        .map((match) => match[0])
+        .find((value) => normalizeCodexThreadId(value));
+      if (token) {
+        return token.toLowerCase();
+      }
+    }
+  }
+
+  return "";
+}
+
+function codexPromptHandoffTerminalInput(handoff = {}) {
+  const terminalInput = normalizeText(handoff.terminalInput);
+  if (terminalInput) {
+    return terminalInput;
+  }
+  const prompt = normalizeText(handoff.prompt);
+  return prompt ? wrapPromptWithStudioContext(prompt) : "";
+}
+
+function codexPromptHandoffSignature(sessionId = "") {
+  return `${sessionId}:${Date.now()}`;
+}
+
+function codexTerminalSnapshot(sessionId = "", terminalSessionId = "") {
+  return readTerminalSession(terminalSessionId, {
+    namespace: codexTerminalNamespace(sessionId)
+  });
+}
+
+function writeCodexTerminalInput(sessionId = "", terminalSessionId = "", data = "") {
+  return writeTerminalSession(terminalSessionId, data, {
+    namespace: codexTerminalNamespace(sessionId)
+  });
+}
+
 function codexState(session = {}) {
   const metadata = session.metadata || {};
   const workdir = terminalWorktreePath(session);
@@ -135,9 +236,7 @@ function codexState(session = {}) {
       session.sessionId,
       metadata.codex_prompt_handoff_signature
     ),
-    codexThreadId,
-    needsThreadCapture: Boolean(workdir && !codexThreadId),
-    threadProbe: CODEX_THREAD_PROBE
+    codexThreadId
   };
 }
 
@@ -260,8 +359,289 @@ function maskedCodexTerminalDockerArgs(args = []) {
 
 function createCodexTerminalController({
   projectService,
+  publishPromptInjected = async () => null,
   publishSessionChanged = async () => null
 } = {}) {
+  async function startCodexTerminalSession(sessionId) {
+    const runtime = await projectService.createRuntime();
+    const session = await runtime.getSession(sessionId);
+    const targetRoot = terminalTargetRoot(session, projectService);
+    if (!targetRoot) {
+      return {
+        ok: false,
+        error: "AI Studio Codex target root is not available."
+      };
+    }
+    const workdir = terminalWorktreePath(session);
+    if (!workdir || !containerWorkspacePath(targetRoot, workdir)) {
+      return {
+        ok: false,
+        error: workdir
+          ? "AI Studio Codex workdir is outside the target root."
+          : "Create the session worktree before starting Codex."
+      };
+    }
+    if (!await directoryExists(workdir)) {
+      return {
+        ok: false,
+        error: `Session worktree directory does not exist: ${workdir}`
+      };
+    }
+    const imageResult = await resolveTerminalToolchainImage({
+      runtime,
+      session,
+      target: "codex",
+      targetRoot
+    });
+    if (imageResult.ok === false) {
+      return imageResult;
+    }
+
+    await prepareCodexAttachmentRoot();
+    await ensureTargetRuntimeNetwork(targetRoot);
+    await ensureAdapterRuntimeContainers({
+      runtime,
+      session,
+      target: "codex",
+      targetRoot
+    });
+    const baseTerminalEnv = await projectTerminalEnvironment({
+      projectService,
+      runtime,
+      session,
+      target: "codex",
+      targetRoot
+    });
+    const currentStepInputHelper = await prepareCurrentStepInputHelper({
+      onSessionChanged: (changedSessionId) => publishSessionChanged(changedSessionId, {
+        reason: "current-step-input-helper"
+      }),
+      projectService,
+      session,
+      targetRoot
+    });
+    const terminalEnv = {
+      ...baseTerminalEnv,
+      ...currentStepInputHelper.env
+    };
+    const terminalEnvHash = terminalEnvironmentFingerprint(terminalEnv);
+    const namespace = codexTerminalNamespace(sessionId);
+    const promptSession = await runtime.promptSessionForAction(session);
+    const startupPrompt = codexStartupSessionBriefingPrompt(promptSession);
+    const terminalResponse = startTerminalSession({
+      args: ({ id }) => codexTerminalArgs({
+        codexThreadId: codexThreadIdForWorkdir(session, workdir),
+        containerName: codexContainerName({
+          sessionId,
+          terminalId: id
+        }),
+        env: terminalEnv,
+        helperMount: currentStepInputHelper.mount,
+        image: imageResult.image,
+        sessionId,
+        startupPrompt,
+        targetRoot,
+        terminalId: id,
+        worktree: workdir
+      }),
+      command: "docker",
+      commandPreview: ({ args }) => dockerCommand(maskedCodexTerminalDockerArgs(args)),
+      cwd: targetRoot,
+      maxRunning: MAX_OPEN_CODEX_TERMINALS,
+      metadata: {
+        envHash: terminalEnvHash,
+        image: imageResult.image,
+        imageLabel: imageResult.label,
+        sessionId,
+        startupSessionBriefingIncluded: Boolean(startupPrompt),
+        targetRoot,
+        workdir
+      },
+      namespace,
+      onClose: async ({ id }) => {
+        await removeDockerContainer(codexContainerName({
+          sessionId,
+          terminalId: id
+        }));
+        await cleanupCodexAttachments(targetRoot, sessionId);
+      },
+      reuseRunning: (terminalSession) => {
+        return terminalSession.metadata?.targetRoot === targetRoot &&
+          terminalSession.metadata?.envHash === terminalEnvHash &&
+          terminalSession.metadata?.image === imageResult.image &&
+          terminalSession.metadata?.workdir === workdir;
+      }
+    });
+    if (terminalResponse.ok && terminalResponse.metadata?.startupSessionBriefingIncluded === true) {
+      const deliveredAt = new Date().toISOString();
+      await Promise.all([
+        runtime.store.writeMetadataValue(sessionId, "codex_session_briefing_delivered", "yes"),
+        runtime.store.writeMetadataValue(sessionId, "codex_session_briefing_delivered_at", deliveredAt),
+        runtime.store.writeMetadataValue(sessionId, "codex_session_briefing_delivery", "startup")
+      ]);
+      return withCodexState(terminalResponse, {
+        ...session,
+        metadata: {
+          ...(session.metadata || {}),
+          codex_session_briefing_delivered: "yes",
+          codex_session_briefing_delivered_at: deliveredAt,
+          codex_session_briefing_delivery: "startup"
+        }
+      });
+    }
+    return withCodexState(terminalResponse, session);
+  }
+
+  async function waitForCodexReady(sessionId, terminalSessionId) {
+    const startedAt = Date.now();
+    let lastOutput = "";
+    let lastChangedAt = Date.now();
+    while (Date.now() - startedAt <= CODEX_BOOT_TIMEOUT_MS) {
+      const snapshot = codexTerminalSnapshot(sessionId, terminalSessionId);
+      if (snapshot.ok === false || snapshot.status === "exited") {
+        return {
+          ok: false,
+          error: snapshot.error || "Codex terminal is not running."
+        };
+      }
+      const output = String(snapshot.output || "");
+      if (codexTrustPromptLooksActive(output)) {
+        return {
+          ok: false,
+          error: "Answer the Codex trust prompt in Inspect before sending this prompt."
+        };
+      }
+      if (output !== lastOutput) {
+        lastOutput = output;
+        lastChangedAt = Date.now();
+      }
+      if (
+        output &&
+        Date.now() - startedAt >= CODEX_BOOT_MIN_AGE_MS &&
+        Date.now() - lastChangedAt >= CODEX_BOOT_QUIET_MS
+      ) {
+        return {
+          ok: true,
+          output
+        };
+      }
+      await delay(250);
+    }
+    return {
+      ok: true,
+      output: lastOutput
+    };
+  }
+
+  async function sendCodexShellCommand(sessionId, terminalSessionId, command) {
+    const keySequence = [
+      "\u001b",
+      "\u0015",
+      "! ",
+      command,
+      " ",
+      "\u001b",
+      "\r"
+    ];
+    for (const input of keySequence) {
+      const result = writeCodexTerminalInput(sessionId, terminalSessionId, input);
+      if (result.ok === false) {
+        return result;
+      }
+      await delay(CODEX_KEY_PAUSE_MS);
+    }
+    return {
+      ok: true
+    };
+  }
+
+  async function captureCodexThreadId({ runtime, session, terminalSessionId }) {
+    const workdir = terminalWorktreePath(session);
+    const existingThreadId = codexThreadIdForWorkdir(session, workdir);
+    if (existingThreadId) {
+      return existingThreadId;
+    }
+
+    const sendResult = await sendCodexShellCommand(session.sessionId, terminalSessionId, CODEX_THREAD_COMMAND);
+    if (sendResult.ok === false) {
+      return "";
+    }
+    const startedAt = Date.now();
+    while (Date.now() - startedAt <= CODEX_THREAD_CAPTURE_TIMEOUT_MS) {
+      const snapshot = codexTerminalSnapshot(session.sessionId, terminalSessionId);
+      const threadId = extractCodexThreadId(snapshot.output || "");
+      if (threadId) {
+        await Promise.all([
+          runtime.store.writeMetadataValue(session.sessionId, "codex_thread_id", threadId),
+          runtime.store.writeMetadataValue(session.sessionId, "codex_workdir", workdir)
+        ]);
+        return threadId;
+      }
+      await delay(250);
+    }
+    return "";
+  }
+
+  async function injectPromptIntoCodex(sessionId, handoff = {}) {
+    const terminalInput = codexPromptHandoffTerminalInput(handoff);
+    if (!terminalInput) {
+      return {
+        ok: false,
+        error: "Codex prompt handoff is empty."
+      };
+    }
+
+    const runtime = await projectService.createRuntime();
+    const session = await runtime.getSession(sessionId);
+    const terminalResponse = await startCodexTerminalSession(sessionId);
+    if (terminalResponse.ok === false) {
+      return terminalResponse;
+    }
+    const ready = await waitForCodexReady(sessionId, terminalResponse.id);
+    if (ready.ok === false) {
+      return ready;
+    }
+    await captureCodexThreadId({
+      runtime,
+      session,
+      terminalSessionId: terminalResponse.id
+    });
+
+    const snapshot = codexTerminalSnapshot(sessionId, terminalResponse.id);
+    const outputStart = String(snapshot.output || "").length;
+    const injected = writeCodexTerminalInput(
+      sessionId,
+      terminalResponse.id,
+      `${PROMPT_INJECTION_PREFIX}${terminalInput}${PROMPT_INJECTION_SUFFIX}`
+    );
+    if (injected.ok === false) {
+      return injected;
+    }
+
+    const signature = codexPromptHandoffSignature(sessionId);
+    await Promise.all([
+      runtime.store.writeMetadataValue(sessionId, "codex_prompt_handoff_signature", signature),
+      runtime.store.writeMetadataValue(sessionId, "codex_prompt_handoff_output_start", String(outputStart))
+    ]);
+    await publishPromptInjected(sessionId, {
+      reason: "codex-prompt-injected"
+    });
+    return {
+      ...withCodexState(injected, {
+        ...session,
+        metadata: {
+          ...(session.metadata || {}),
+          codex_prompt_handoff_output_start: String(outputStart),
+          codex_prompt_handoff_signature: signature
+        }
+      }),
+      codexPromptInjected: true,
+      codexPromptHandoffOutputStart: outputStart,
+      codexPromptHandoffSignature: signature,
+      terminalSessionId: terminalResponse.id
+    };
+  }
+
   return Object.freeze({
     async closeAllForSession(sessionId) {
       await closeTerminalSessionsForNamespace(codexTerminalNamespace(sessionId));
@@ -287,204 +667,15 @@ function createCodexTerminalController({
       });
     },
 
-    async savePromptHandoff(sessionId, input = {}) {
+    async injectCodexPrompt(sessionId, handoff = {}) {
       return aiStudioResult(async () => {
-        const signature = normalizeCodexPromptHandoffSignature(sessionId, input?.signature);
-        if (!signature) {
-          return {
-            ok: false,
-            error: "Invalid Codex prompt handoff."
-          };
-        }
-        const runtime = await projectService.createRuntime();
-        await runtime.getSession(sessionId);
-        const outputStart = normalizeCodexPromptHandoffOutputStart(input?.outputStart);
-        await Promise.all([
-          runtime.store.writeMetadataValue(sessionId, "codex_prompt_handoff_signature", signature),
-          runtime.store.writeMetadataValue(sessionId, "codex_prompt_handoff_output_start", String(outputStart))
-        ]);
-        return {
-          ok: true,
-          codexPromptHandoffOutputStart: outputStart,
-          codexPromptHandoffSignature: signature
-        };
-      });
-    },
-
-    async saveThread(sessionId, input = {}) {
-      return aiStudioResult(async () => {
-        const codexThreadId = normalizeCodexThreadId(input?.threadId);
-        if (!codexThreadId) {
-          return {
-            ok: false,
-            error: "Invalid Codex thread id."
-          };
-        }
-        const runtime = await projectService.createRuntime();
-        const session = await runtime.getSession(sessionId);
-        const targetRoot = terminalTargetRoot(session, projectService);
-        const workdir = terminalWorktreePath(session);
-        if (!targetRoot) {
-          return {
-            ok: false,
-            error: "AI Studio Codex target root is not available."
-          };
-        }
-        if (!workdir || !containerWorkspacePath(targetRoot, workdir)) {
-          return {
-            ok: false,
-            error: workdir
-              ? "AI Studio Codex workdir is outside the target root."
-              : "Create the session worktree before saving a Codex thread."
-          };
-        }
-        if (!await directoryExists(workdir)) {
-          return {
-            ok: false,
-            error: `Session worktree directory does not exist: ${workdir}`
-          };
-        }
-        await Promise.all([
-          runtime.store.writeMetadataValue(sessionId, "codex_thread_id", codexThreadId),
-          runtime.store.writeMetadataValue(sessionId, "codex_workdir", workdir)
-        ]);
-        return {
-          ok: true,
-          codexThreadId,
-          codexWorkdir: workdir
-        };
+        return injectPromptIntoCodex(sessionId, handoff);
       });
     },
 
     async startTerminal(sessionId) {
       return aiStudioResult(async () => {
-        const runtime = await projectService.createRuntime();
-        const session = await runtime.getSession(sessionId);
-        const targetRoot = terminalTargetRoot(session, projectService);
-        if (!targetRoot) {
-          return {
-            ok: false,
-            error: "AI Studio Codex target root is not available."
-          };
-        }
-        const workdir = terminalWorktreePath(session);
-        if (!workdir || !containerWorkspacePath(targetRoot, workdir)) {
-          return {
-            ok: false,
-            error: workdir
-              ? "AI Studio Codex workdir is outside the target root."
-              : "Create the session worktree before starting Codex."
-          };
-        }
-        if (!await directoryExists(workdir)) {
-          return {
-            ok: false,
-            error: `Session worktree directory does not exist: ${workdir}`
-          };
-        }
-        const imageResult = await resolveTerminalToolchainImage({
-          runtime,
-          session,
-          target: "codex",
-          targetRoot
-        });
-        if (imageResult.ok === false) {
-          return imageResult;
-        }
-
-        await prepareCodexAttachmentRoot();
-        await ensureTargetRuntimeNetwork(targetRoot);
-        await ensureAdapterRuntimeContainers({
-          runtime,
-          session,
-          target: "codex",
-          targetRoot
-        });
-        const baseTerminalEnv = await projectTerminalEnvironment({
-          projectService,
-          runtime,
-          session,
-          target: "codex",
-          targetRoot
-        });
-        const currentStepInputHelper = await prepareCurrentStepInputHelper({
-          onSessionChanged: (changedSessionId) => publishSessionChanged(changedSessionId, {
-            reason: "current-step-input-helper"
-          }),
-          projectService,
-          session,
-          targetRoot
-        });
-        const terminalEnv = {
-          ...baseTerminalEnv,
-          ...currentStepInputHelper.env
-        };
-        const terminalEnvHash = terminalEnvironmentFingerprint(terminalEnv);
-        const namespace = codexTerminalNamespace(sessionId);
-        const promptSession = await runtime.promptSessionForAction(session);
-        const startupPrompt = codexStartupSessionBriefingPrompt(promptSession);
-        const terminalResponse = startTerminalSession({
-          args: ({ id }) => codexTerminalArgs({
-            codexThreadId: codexThreadIdForWorkdir(session, workdir),
-            containerName: codexContainerName({
-              sessionId,
-              terminalId: id
-            }),
-            env: terminalEnv,
-            helperMount: currentStepInputHelper.mount,
-            image: imageResult.image,
-            sessionId,
-            startupPrompt,
-            targetRoot,
-            terminalId: id,
-            worktree: workdir
-          }),
-          command: "docker",
-          commandPreview: ({ args }) => dockerCommand(maskedCodexTerminalDockerArgs(args)),
-          cwd: targetRoot,
-          maxRunning: MAX_OPEN_CODEX_TERMINALS,
-          metadata: {
-            envHash: terminalEnvHash,
-            image: imageResult.image,
-            imageLabel: imageResult.label,
-            sessionId,
-            startupSessionBriefingIncluded: Boolean(startupPrompt),
-            targetRoot,
-            workdir
-          },
-          namespace,
-          onClose: async ({ id }) => {
-            await removeDockerContainer(codexContainerName({
-              sessionId,
-              terminalId: id
-            }));
-            await cleanupCodexAttachments(targetRoot, sessionId);
-          },
-          reuseRunning: (terminalSession) => {
-            return terminalSession.metadata?.targetRoot === targetRoot &&
-              terminalSession.metadata?.envHash === terminalEnvHash &&
-              terminalSession.metadata?.image === imageResult.image &&
-              terminalSession.metadata?.workdir === workdir;
-          }
-        });
-        if (terminalResponse.ok && terminalResponse.metadata?.startupSessionBriefingIncluded === true) {
-          const deliveredAt = new Date().toISOString();
-          await Promise.all([
-            runtime.store.writeMetadataValue(sessionId, "codex_session_briefing_delivered", "yes"),
-            runtime.store.writeMetadataValue(sessionId, "codex_session_briefing_delivered_at", deliveredAt),
-            runtime.store.writeMetadataValue(sessionId, "codex_session_briefing_delivery", "startup")
-          ]);
-          return withCodexState(terminalResponse, {
-            ...session,
-            metadata: {
-              ...(session.metadata || {}),
-              codex_session_briefing_delivered: "yes",
-              codex_session_briefing_delivered_at: deliveredAt,
-              codex_session_briefing_delivery: "startup"
-            }
-          });
-        }
-        return withCodexState(terminalResponse, session);
+        return startCodexTerminalSession(sessionId);
       });
     },
 

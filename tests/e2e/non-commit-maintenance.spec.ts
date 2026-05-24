@@ -83,6 +83,7 @@ test.describe("non-commit maintenance agent chat", () => {
     await page.getByRole("button", { name: "Ask Codex" }).click();
 
     await expectMarkdownResponsePreview(page);
+    await expectNoBrowserCodexTerminalInput(page);
     await expect(page.getByRole("button", { name: "Next" })).toBeEnabled();
     await page.getByRole("button", { name: "Next" }).click();
     await expect(page.getByRole("heading", { name: "Congratulations!" })).toBeVisible();
@@ -111,6 +112,7 @@ test.describe("non-commit maintenance agent chat", () => {
     await autopilot.getByRole("button", { name: "Send to Codex" }).click();
 
     const responseRegion = await expectMarkdownResponsePreview(page, QUESTION_RESPONSE_TEXT);
+    await expectNoBrowserCodexTerminalInput(page);
     await expect(responseRegion).not.toContainText(REALLY_RESPONSE_TEXT);
   });
 
@@ -135,10 +137,12 @@ test.describe("non-commit maintenance agent chat", () => {
     await inputDialog.getByRole("button", { name: "Continue" }).click();
 
     await expectMarkdownResponsePreview(page);
+    await expectNoBrowserCodexTerminalInput(page);
     await expect(page.getByRole("button", { name: "Next" })).toBeEnabled();
 
     await page.getByRole("button", { name: "Quit inspect" }).click();
     await expectMarkdownResponsePreview(page);
+    await expectNoBrowserCodexTerminalInput(page);
   });
 });
 
@@ -153,6 +157,12 @@ async function expectMarkdownResponsePreview(page: Page, expectedText = RESPONSE
     await expect(responseRegion.getByRole("heading", { name: "Answers noted" })).toBeVisible();
   }
   return responseRegion;
+}
+
+async function expectNoBrowserCodexTerminalInput(page: Page) {
+  await expect.poll(async () => page.evaluate(() => (
+    (window as unknown as { __aiStudioCodexTerminalInputs?: string[] }).__aiStudioCodexTerminalInputs || []
+  ))).toEqual([]);
 }
 
 async function createNonCommitMaintenanceSession(page: Page) {
@@ -337,7 +347,6 @@ async function mockAgentChatRoutes(page: Page, runtime: AiStudioSessionRuntime) 
       await fulfillJson(route, {
         commandPreview: "codex",
         id: `codex-${sessionId}`,
-        needsThreadCapture: false,
         ok: true,
         output: "Codex ready.",
         status: "running"
@@ -348,15 +357,6 @@ async function mockAgentChatRoutes(page: Page, runtime: AiStudioSessionRuntime) 
     if (method === "DELETE" && tail[0] === "codex-terminal") {
       await fulfillJson(route, {
         closed: true,
-        ok: true
-      });
-      return;
-    }
-
-    if (method === "POST" && tail[0] === "codex-prompt-handoff") {
-      await fulfillJson(route, {
-        codexPromptHandoffOutputStart: Number(request.postDataJSON()?.outputStart || 0),
-        codexPromptHandoffSignature: "agent-chat-test",
         ok: true
       });
       return;
@@ -467,6 +467,9 @@ async function mockAgentChatBrowserPrimitives(page: Page) {
     const OriginalEventSource = window.EventSource;
     const OriginalWebSocket = window.WebSocket;
     const eventSourcesBySessionId: Record<string, EventTarget[]> = {};
+    (window as unknown as {
+      __aiStudioCodexTerminalInputs: string[];
+    }).__aiStudioCodexTerminalInputs = [];
 
     class MockEventSource extends EventTarget {
       static CONNECTING = 0;
@@ -561,7 +564,6 @@ async function mockAgentChatBrowserPrimitives(page: Page) {
           this.emit({
             session: {
               commandPreview: "codex",
-              needsThreadCapture: false,
               ok: true,
               output: "Codex ready.",
               status: "running"
@@ -577,10 +579,9 @@ async function mockAgentChatBrowserPrimitives(page: Page) {
         }
         const message = JSON.parse(String(rawMessage || "{}"));
         if (message.type === "input") {
-          this.emit({
-            chunk: "\nCodex received the prompt.\n",
-            type: "output"
-          });
+          (window as unknown as {
+            __aiStudioCodexTerminalInputs: string[];
+          }).__aiStudioCodexTerminalInputs.push(String(message.data || ""));
         }
       }
 

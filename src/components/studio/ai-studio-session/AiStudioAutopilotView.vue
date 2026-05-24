@@ -30,45 +30,9 @@
         />
         <div class="studio-autopilot__command-terminal-overlay">
           <strong>{{ commandOverlayTitle }}</strong>
-          <template v-if="commandFixActive">
-            <span>{{ commandFixStatusText }}</span>
-            <div class="studio-autopilot__actions">
-              <v-btn
-                size="small"
-                type="button"
-                variant="tonal"
-                @click="clearCommandFixState"
-              >
-                Back to command output
-              </v-btn>
-            </div>
-          </template>
-          <template v-else-if="commandTerminalFailed">
+          <template v-if="commandTerminalFailed">
             <span>{{ commandFailureSummary }}</span>
-            <AiStudioAutopilotPromptTextarea
-              v-if="canRequestCommandAiFix"
-              v-model="commandFailureNote"
-              class="studio-autopilot__command-fix-note"
-              :disabled="commandFixSubmitting"
-              label="Optional note for Codex"
-              rows="3"
-              :session-id="sessionId"
-              variant="outlined"
-            />
             <div class="studio-autopilot__actions">
-              <v-btn
-                v-if="canRequestCommandAiFix"
-                color="primary"
-                :disabled="commandFixSubmitting"
-                :loading="commandFixSubmitting"
-                :prepend-icon="mdiRobotOutline"
-                size="small"
-                type="button"
-                variant="flat"
-                @click="requestCommandAiFix"
-              >
-                Get AI to fix it
-              </v-btn>
               <v-btn
                 color="primary"
                 :prepend-icon="mdiRefresh"
@@ -227,7 +191,6 @@
           button-size="default"
           button-variant="flat"
           :busy="running"
-          :fix-command-failure="codexTerminal.fixCommandFailure"
           :session="session"
           :window-displayed="props.active"
           workflow-command
@@ -363,7 +326,6 @@ import {
   mdiFileCompare,
   mdiPlay,
   mdiRefresh,
-  mdiRobotOutline,
   mdiSend,
   mdiStopCircleOutline
 } from "@mdi/js";
@@ -379,9 +341,6 @@ import { useAiStudioStepInputForm } from "@/composables/useAiStudioStepInputForm
 import {
   stripTerminalControlSequences
 } from "@/lib/codexOutput.js";
-import {
-  terminalFailureFixRequest
-} from "@/lib/aiStudioTerminalFailurePrompt.js";
 
 // Autopilot workflow meaning belongs to the server. This component renders the
 // current presentation and dispatches the server-provided intents.
@@ -403,10 +362,6 @@ const props = defineProps({
   autopilotSteps: {
     default: () => [],
     type: Array
-  },
-  codexTerminal: {
-    default: () => ({}),
-    type: Object
   },
   commandRunner: {
     default: null,
@@ -468,17 +423,12 @@ const {
   waitingForCodex
 } = useAiStudioAutopilotController({
   actions: props.actions,
-  codexTerminal: props.codexTerminal,
   commandRunner: props.commandRunner || undefined,
   enabled: computed(() => props.automationEnabled),
   refreshSessionData: () => props.refreshSessionData(),
   session: computed(() => props.session)
 });
 
-const commandFixActive = ref(false);
-const commandFixInjectionError = ref("");
-const commandFixSubmitting = ref(false);
-const commandFailureNote = ref("");
 const selectedControl = ref(null);
 const selectedControlValues = ref({});
 
@@ -518,28 +468,7 @@ const commandFailureSummary = computed(() => (
   failure.value?.error ||
   "The command did not finish properly."
 ));
-const commandTerminalFailureEvidence = computed(() => (
-  commandOutput.value ||
-  commandResult.value?.output ||
-  commandPreview.value ||
-  commandTerminalError.value
-));
-const canRequestCommandAiFix = computed(() => Boolean(
-  commandTerminalFailed.value &&
-  typeof props.codexTerminal.fixCommandFailure === "function" &&
-  commandTerminalFailureEvidence.value
-));
-const commandFixStatusText = computed(() => (
-  commandFixInjectionError.value ||
-  "Asking Codex to solve the issue..."
-));
 const commandOverlayTitle = computed(() => {
-  if (commandFixActive.value && commandFixInjectionError.value) {
-    return "Codex prompt could not be sent.";
-  }
-  if (commandFixActive.value) {
-    return commandFixSubmitting.value ? "Preparing Codex..." : "Codex is working...";
-  }
   return commandTerminalFailed.value
     ? "Command needs attention."
     : "Command running.";
@@ -553,8 +482,6 @@ const commandTerminalText = computed(() => {
 const autopilotBusy = computed(() => Boolean(props.active && (
   running.value ||
   waitingForCodex.value ||
-  commandFixActive.value ||
-  commandFixSubmitting.value ||
   stepInput.saving
 )));
 const navigationBusy = computed(() => Boolean(props.page?.busy || autopilotBusy.value || props.rewindBusy));
@@ -625,52 +552,11 @@ function tailCommandText(value = "") {
   return text.slice(text.length - maxLength);
 }
 
-function clearCommandFixState() {
-  commandFixActive.value = false;
-  commandFixInjectionError.value = "";
-  commandFixSubmitting.value = false;
-}
-
-async function requestCommandAiFix() {
-  if (!canRequestCommandAiFix.value || commandFixSubmitting.value) {
-    return;
-  }
-  const result = commandResult.value || {};
-  commandFixActive.value = true;
-  commandFixInjectionError.value = "";
-  commandFixSubmitting.value = true;
-  try {
-    const injected = await props.codexTerminal.fixCommandFailure(terminalFailureFixRequest({
-      actionId: result.actionId,
-      actionLabel: result.actionLabel,
-      closeError: commandTerminalError.value,
-      commandPreview: commandPreview.value || result.commandPreview,
-      currentStep: props.session?.currentStep || "",
-      exitCode: result.exitCode,
-      output: commandTerminalFailureEvidence.value || commandTerminalText.value,
-      sessionId: props.session?.sessionId || "",
-      stepStatus: props.session?.stepMachine?.status || "",
-      terminalKind: "command",
-      terminalSessionId: result.terminalSessionId,
-      terminalStatus: commandStatus.value,
-      userMessage: commandFailureNote.value
-    }));
-    if (injected === false) {
-      commandFixInjectionError.value = "Codex did not accept the prompt. Switch to Inspect and check the Codex terminal.";
-    }
-  } catch (error) {
-    commandFixInjectionError.value = String(error?.message || error || "Codex prompt could not be sent.");
-  } finally {
-    commandFixSubmitting.value = false;
-  }
-}
-
 async function submitStepInput() {
   await stepInput.submit();
 }
 
 function retryFromCommandFailure() {
-  clearCommandFixState();
   void retry();
 }
 
@@ -683,9 +569,7 @@ async function rewindToAutopilotStep(step = {}) {
     return;
   }
   clearFailure();
-  clearCommandFixState();
   clearSelectedControl();
-  commandFailureNote.value = "";
   await props.rewindToStep(step);
 }
 
@@ -788,14 +672,6 @@ watch(screenKind, (kind) => {
 }, {
   flush: "post",
   immediate: true
-});
-
-watch(commandTerminalFailed, (failed) => {
-  if (!failed) {
-    clearCommandFixState();
-  }
-}, {
-  flush: "post"
 });
 
 watch(primaryScreenControl, (control) => {

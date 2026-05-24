@@ -266,7 +266,6 @@ function createControllerContext({
 
   const codexTerminal = {
     busy: ref(false),
-    promptInjectionError: ref(""),
     working: ref(false)
   };
   const controller = useAiStudioAutopilotController({

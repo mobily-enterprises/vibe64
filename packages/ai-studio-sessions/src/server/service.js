@@ -24,6 +24,43 @@ function isOpenAiStudioSession(session = {}) {
   return !CLOSED_SESSION_STATUSES.has(String(session.status || ""));
 }
 
+function codexPromptHandoffFromSession(session = {}) {
+  const handoff = session?.actionResult?.codexPromptHandoff;
+  if (!handoff || typeof handoff !== "object" || Array.isArray(handoff)) {
+    return null;
+  }
+  return String(handoff.kind || "") === "codex_prompt_handoff" ? handoff : null;
+}
+
+async function deliverCodexPromptIfNeeded(terminalService, session = {}) {
+  const handoff = codexPromptHandoffFromSession(session);
+  if (!handoff) {
+    return session;
+  }
+  if (typeof terminalService?.injectCodexPrompt !== "function") {
+    throw new Error("AI Studio Codex prompt delivery service is not available.");
+  }
+  const delivery = await terminalService.injectCodexPrompt(session.sessionId, handoff);
+  if (delivery?.ok === false) {
+    throw new Error(delivery.error || "AI Studio Codex prompt delivery failed.");
+  }
+  return {
+    ...session,
+    codexPromptDelivery: delivery
+  };
+}
+
+async function publishPromptStateChangedIfNeeded(publishSessionChanged, session = {}, {
+  reason = ""
+} = {}) {
+  if (!codexPromptHandoffFromSession(session) || typeof publishSessionChanged !== "function") {
+    return;
+  }
+  await publishSessionChanged(session.sessionId, {
+    reason
+  });
+}
+
 function sessionLimits(sessions = [], {
   maxOpenSessions = MAX_OPEN_AI_STUDIO_SESSIONS
 } = {}) {
@@ -117,6 +154,7 @@ function selectedWorkflowProfile(input = {}, creation = {}) {
 
 function createService({
   projectService,
+  publishSessionChanged = {},
   setupServices = {},
   terminalService
 } = {}) {
@@ -239,8 +277,12 @@ function createService({
         const session = await runtime.runAction(sessionId, actionId, input);
         if (!isOpenAiStudioSession(session)) {
           await terminalService?.closeSessionTerminals?.(sessionId);
+          return session;
         }
-        return session;
+        await publishPromptStateChangedIfNeeded(publishSessionChanged.action, session, {
+          reason: "codex-prompt-state-updated"
+        });
+        return deliverCodexPromptIfNeeded(terminalService, session);
       });
     },
 
@@ -251,8 +293,12 @@ function createService({
         const session = await runtime.runIntent(sessionId, intentId, input);
         if (!isOpenAiStudioSession(session)) {
           await terminalService?.closeSessionTerminals?.(sessionId);
+          return session;
         }
-        return session;
+        await publishPromptStateChangedIfNeeded(publishSessionChanged.intent, session, {
+          reason: "codex-prompt-state-updated"
+        });
+        return deliverCodexPromptIfNeeded(terminalService, session);
       });
     },
 

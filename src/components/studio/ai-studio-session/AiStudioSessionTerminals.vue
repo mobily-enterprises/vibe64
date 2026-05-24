@@ -9,13 +9,8 @@
     <CodexSessionTerminal
       class="studio-ai-sessions__codex-terminal"
       :display-mode="displayMode"
-      :prompt-injection-request-key="codexTerminal.promptInjectionKey"
-      :prompt-override="codexTerminal.promptOverride"
       :session="session"
       :visible="displayMode !== 'headless'"
-      @busy-changed="codexTerminal.busyChanged"
-      @prompt-injected="codexTerminal.promptInjected"
-      @prompt-injection-failed="codexTerminal.promptInjectionFailed"
       @session-update="codexTerminal.sessionUpdate"
     />
 
@@ -31,13 +26,12 @@
         class="studio-ai-sessions__command-terminal"
         :action="commandTerminal.action"
         :action-input="commandTerminal.input"
-        :ai-fix-available="Boolean(codexTerminal.fixCommandFailure)"
+        :ai-fix-available="false"
         :session="session"
         :start-request-key="commandTerminal.startKey"
         @closed="commandTerminal.closed"
         @expanded-changed="handleCommandTerminalExpandedChanged"
         @finished="commandTerminal.finished"
-        @fix-requested="handleCommandTerminalFixRequested"
         @running-changed="commandTerminal.runningChanged"
       />
       <AiStudioHeadlessCommandOutput
@@ -45,7 +39,7 @@
         class="studio-ai-sessions__command-terminal"
         :action-id="headlessCommandTerminal.actionId"
         :action-label="headlessCommandTerminal.actionLabel"
-        :ai-fix-available="Boolean(codexTerminal.fixCommandFailure)"
+        :ai-fix-available="false"
         :command-preview="headlessCommandTerminal.commandPreview"
         :error="headlessCommandTerminal.error"
         :exit-code="headlessCommandTerminal.exitCode"
@@ -56,7 +50,6 @@
         :status="headlessCommandTerminal.status"
         :terminal-session-id="headlessCommandTerminal.terminalSessionId"
         title="Autopilot command output"
-        @fix-requested="codexTerminal.fixCommandFailure"
       />
     </div>
   </section>
@@ -106,11 +99,6 @@ const commandOverlayMinimized = computed(() => Boolean(
 
 function handleCommandTerminalExpandedChanged(expanded) {
   commandTerminalExpanded.value = expanded === true;
-}
-
-function handleCommandTerminalFixRequested(request) {
-  commandTerminalExpanded.value = false;
-  props.codexTerminal.fixCommandFailure?.(request);
 }
 
 watch(() => props.commandTerminal.startKey, () => {

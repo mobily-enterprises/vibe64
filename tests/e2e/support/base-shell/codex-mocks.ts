@@ -5,9 +5,6 @@ import {
   codexPromptSessionId,
   codexPromptSessionPayload,
   codexPromptStepDefinitions,
-  codexThreadCommand,
-  codexThreadId,
-  codexThreadProbe,
   currentAppPayload,
   secondCodexPromptSessionPayload
 } from "../base-shell-data";
@@ -16,14 +13,6 @@ import {
   mockProtectedRouteReady,
   mockTargetScripts
 } from "./setup-mocks";
-
-function mockCodexThreadIdForSession(sessionId: string) {
-  const suffix = String(sessionId || "")
-    .replace(/\D/gu, "")
-    .padEnd(12, "0")
-    .slice(-12);
-  return `019e1575-2458-7b93-bf9d-${suffix}`;
-}
 
 async function mockCodexTerminalWebSocket(page, {
   initialOutputBySessionId,
@@ -53,13 +42,6 @@ async function mockCodexTerminalWebSocket(page, {
       __studioPushCodexTerminalOutput: (input: { output: string; sessionId: string }) => void;
       WebSocket: typeof WebSocket;
     };
-    function sessionThreadId(sessionId) {
-      const suffix = String(sessionId || "")
-        .replace(/\D/gu, "")
-        .padEnd(12, "0")
-        .slice(-12);
-      return `019e1575-2458-7b93-bf9d-${suffix}`;
-    }
     class MockStudioWebSocket extends EventTarget {
       static CONNECTING = 0;
       static OPEN = 1;
@@ -90,9 +72,7 @@ async function mockCodexTerminalWebSocket(page, {
               id: this.terminalSessionId,
               status: "running",
               commandPreview: "codex",
-              output: options.initialOutputBySessionId[this.sessionId] || "Codex ready.",
-              needsThreadCapture: true,
-              threadProbe: options.codexThreadProbe
+              output: options.initialOutputBySessionId[this.sessionId] || "Codex ready."
             }
           });
         }, 0);
@@ -109,12 +89,6 @@ async function mockCodexTerminalWebSocket(page, {
           data,
           sessionId: this.sessionId
         });
-        if (data === "\r" && inputsBySessionId[this.sessionId].includes(options.codexThreadCommand)) {
-          this.__emit({
-            chunk: `\n${options.codexThreadProbe}\n${options.codexThreadIdBySessionId[this.sessionId] || sessionThreadId(this.sessionId)}\n`,
-            type: "output"
-          });
-        }
       }
 
       close() {
@@ -149,23 +123,7 @@ async function mockCodexTerminalWebSocket(page, {
     };
     studioWindow.WebSocket = MockStudioWebSocket as unknown as typeof WebSocket;
   }, {
-    codexThreadCommand,
-    codexThreadIdBySessionId: {
-      [codexPromptSessionId]: codexThreadId
-    },
-    codexThreadProbe,
     initialOutputBySessionId
-  });
-}
-
-async function mockCodexPromptHandoffRoute(page, sessionId: string) {
-  await page.route(`**/api/ai-studio/sessions/${sessionId}/codex-prompt-handoff`, async (route) => {
-    const payload = route.request().postDataJSON();
-    await fulfillJson(route, {
-      codexPromptHandoffOutputStart: Number(payload.outputStart || 0),
-      codexPromptHandoffSignature: payload.signature || "",
-      ok: true
-    });
   });
 }
 
@@ -235,18 +193,9 @@ async function mockCodexPromptSession(page, { stepPayloads = [], terminalInputs 
       id: "term-1",
       status: "running",
       commandPreview: "codex",
-      output: terminalOutput,
-      needsThreadCapture: true,
-      threadProbe: codexThreadProbe
+      output: terminalOutput
     });
   });
-  await page.route(`**/api/ai-studio/sessions/${codexPromptSessionId}/codex-thread`, async (route) => {
-    await fulfillJson(route, {
-      codexThreadId: route.request().postDataJSON().threadId,
-      ok: true
-    });
-  });
-  await mockCodexPromptHandoffRoute(page, codexPromptSessionId);
   return {
     async setTerminalOutput(output) {
       terminalOutput = String(output || "");
@@ -324,18 +273,9 @@ async function mockCodexPromptSessions(page, sessionPayloads) {
         id: `term-${sessionId}`,
         status: "running",
         commandPreview: "codex",
-        output: `Codex ready for ${sessionId}.`,
-        needsThreadCapture: true,
-        threadProbe: codexThreadProbe
+        output: `Codex ready for ${sessionId}.`
       });
     });
-    await page.route(`**/api/ai-studio/sessions/${sessionId}/codex-thread`, async (route) => {
-      await fulfillJson(route, {
-        codexThreadId: route.request().postDataJSON().threadId,
-        ok: true
-      });
-    });
-    await mockCodexPromptHandoffRoute(page, sessionId);
     await page.route(
       `**/api/ai-studio/sessions/${sessionId}/codex-terminal/term-${sessionId}`,
       async (route) => {
@@ -375,10 +315,8 @@ async function mockTwoCodexPromptSessions(page) {
 
 export {
   isOpenMockSession,
-  mockCodexPromptHandoffRoute,
   mockCodexPromptSession,
   mockCodexPromptSessions,
   mockCodexTerminalWebSocket,
-  mockCodexThreadIdForSession,
   mockTwoCodexPromptSessions
 };

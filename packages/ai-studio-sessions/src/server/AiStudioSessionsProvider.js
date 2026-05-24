@@ -4,7 +4,8 @@ import { createService } from "./service.js";
 import { featureActions } from "./actions.js";
 import { registerRoutes } from "./registerRoutes.js";
 import {
-  aiStudioSessionChangedServiceEvent
+  aiStudioSessionChangedServiceEvent,
+  createAiStudioSessionChangedPublisher
 } from "../../../../server/lib/aiStudio/sessionRealtimeEvents.js";
 
 const AI_STUDIO_SESSIONS_SERVICE = "feature.ai-studio-sessions.service";
@@ -34,7 +35,22 @@ class AiStudioSessionsProvider {
     app.service(
       AI_STUDIO_SESSIONS_SERVICE,
       (scope) => {
+        const domainEvents = typeof scope.has === "function" && scope.has("domainEvents")
+          ? scope.make("domainEvents")
+          : null;
         return createService({
+          publishSessionChanged: {
+            action: createAiStudioSessionChangedPublisher({
+              domainEvents,
+              methodName: "runSessionAction",
+              serviceToken: AI_STUDIO_SESSIONS_SERVICE
+            }),
+            intent: createAiStudioSessionChangedPublisher({
+              domainEvents,
+              methodName: "runSessionIntent",
+              serviceToken: AI_STUDIO_SESSIONS_SERVICE
+            })
+          },
           setupServices: {
             accountSetupService: scope.make("feature.ai-studio-accounts.service"),
             adapterSetupService: scope.make("feature.adapter-setup-doctor.service"),

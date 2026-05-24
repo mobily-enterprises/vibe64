@@ -25,27 +25,6 @@ const codexAttachmentFields = {
   }
 };
 
-const codexPromptHandoffFields = {
-  outputStart: {
-    type: "string",
-    noTrim: false,
-    required: false
-  },
-  signature: {
-    type: "string",
-    noTrim: false,
-    required: true
-  }
-};
-
-const codexThreadFields = {
-  threadId: {
-    type: "string",
-    noTrim: false,
-    required: true
-  }
-};
-
 const commandTerminalFields = {
   advanceOnSuccess: {
     type: "boolean",
@@ -92,32 +71,6 @@ const codexAttachmentInputValidator = deepFreeze({
 const codexAttachmentActionInputValidator = deepFreeze({
   schema: createSchema({
     ...codexAttachmentFields,
-    sessionId: sessionIdField
-  }),
-  mode: "patch"
-});
-
-const codexPromptHandoffInputValidator = deepFreeze({
-  schema: createSchema(codexPromptHandoffFields),
-  mode: "patch"
-});
-
-const codexPromptHandoffActionInputValidator = deepFreeze({
-  schema: createSchema({
-    ...codexPromptHandoffFields,
-    sessionId: sessionIdField
-  }),
-  mode: "patch"
-});
-
-const codexThreadInputValidator = deepFreeze({
-  schema: createSchema(codexThreadFields),
-  mode: "patch"
-});
-
-const codexThreadActionInputValidator = deepFreeze({
-  schema: createSchema({
-    ...codexThreadFields,
     sessionId: sessionIdField
   }),
   mode: "patch"
@@ -172,10 +125,6 @@ const openLaunchTargetActionInputValidator = deepFreeze({
 export {
   codexAttachmentActionInputValidator,
   codexAttachmentInputValidator,
-  codexPromptHandoffActionInputValidator,
-  codexPromptHandoffInputValidator,
-  codexThreadActionInputValidator,
-  codexThreadInputValidator,
   commandTerminalActionInputValidator,
   commandTerminalInputValidator,
   launchTargetActionInputValidator,

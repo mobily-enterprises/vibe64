@@ -13,6 +13,7 @@ function createService({
 
   const codex = createCodexTerminalController({
     projectService,
+    publishPromptInjected: publishSessionChanged.codexPrompt,
     publishSessionChanged: publishSessionChanged.codexTerminal
   });
   const command = createCommandTerminalController({
@@ -67,6 +68,10 @@ function createService({
       return shell.closeTerminal(sessionId, terminalSessionId);
     },
 
+    injectCodexPrompt(sessionId, handoff = {}) {
+      return codex.injectCodexPrompt(sessionId, handoff);
+    },
+
     readCodexTerminal(sessionId, terminalSessionId) {
       return codex.readTerminal(sessionId, terminalSessionId);
     },
@@ -89,14 +94,6 @@ function createService({
 
     openLaunchTarget(sessionId) {
       return launchTarget.openLaunchTarget(sessionId);
-    },
-
-    saveCodexPromptHandoff(sessionId, input = {}) {
-      return codex.savePromptHandoff(sessionId, input);
-    },
-
-    saveCodexThread(sessionId, input = {}) {
-      return codex.saveThread(sessionId, input);
     },
 
     startCodexTerminal(sessionId) {

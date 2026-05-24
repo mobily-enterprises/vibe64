@@ -1,15 +1,11 @@
 import {
   codexAttachmentInputValidator,
-  codexPromptHandoffInputValidator,
-  codexThreadInputValidator,
   commandTerminalInputValidator,
   launchTargetInputValidator,
   shellTerminalInputValidator
 } from "./inputSchemas.js";
 import {
   ACTION_OPEN_LAUNCH_TARGET,
-  ACTION_SAVE_CODEX_PROMPT_HANDOFF,
-  ACTION_SAVE_CODEX_THREAD,
   ACTION_START_COMMAND_TERMINAL,
   ACTION_START_LAUNCH_TARGET_TERMINAL,
   ACTION_START_SHELL_TERMINAL,
@@ -84,20 +80,6 @@ function registerRoutes(
     bodyLimit: CODEX_ATTACHMENT_UPLOAD_BODY_LIMIT_BYTES,
     buildInput: bodyWithSessionId(routes),
     summary: "Upload a temporary Codex attachment for an AI Studio session."
-  });
-
-  routes.actionRoute("POST", "/sessions/:sessionId/codex-thread", {
-    actionId: ACTION_SAVE_CODEX_THREAD,
-    body: codexThreadInputValidator,
-    buildInput: bodyWithSessionId(routes),
-    summary: "Persist the active Codex thread for an AI Studio session."
-  });
-
-  routes.actionRoute("POST", "/sessions/:sessionId/codex-prompt-handoff", {
-    actionId: ACTION_SAVE_CODEX_PROMPT_HANDOFF,
-    body: codexPromptHandoffInputValidator,
-    buildInput: bodyWithSessionId(routes),
-    summary: "Persist the active Codex prompt handoff for an AI Studio session."
   });
 
   registerTerminalSnapshotRoutes(routes, {

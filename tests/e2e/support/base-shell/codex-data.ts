@@ -8,18 +8,6 @@ const thirdCodexPromptSessionId = "2026-05-12_01-04-41";
 const nonCodexStepSessionId = "2026-05-12_01-05-42";
 const sessionWorktreePath = (sessionId: string) =>
   `/workspace/example-target-app/.jskit/sessions/active/${sessionId}/worktree`;
-const codexThreadProbe = "! echo $CODEX_THREAD_ID";
-const codexThreadCommand = "echo $CODEX_THREAD_ID";
-const codexThreadId = "019e1575-2458-7b93-bf9d-e7d7ffd49ad2";
-const codexShellSubmitSequence = ["\u001b", "\u0015", "! ", codexThreadCommand, " ", "\u001b", "\r"];
-function codexPromptSignature(session) {
-  return [
-    session?.sessionId || "",
-    session?.currentStep || "",
-    session?.prompt || ""
-  ].join(":::");
-}
-
 const codexPromptStepDefinitions = [
   {
     id: "session_created",
@@ -489,11 +477,6 @@ export {
   thirdCodexPromptSessionId,
   nonCodexStepSessionId,
   sessionWorktreePath,
-  codexThreadProbe,
-  codexThreadCommand,
-  codexThreadId,
-  codexShellSubmitSequence,
-  codexPromptSignature,
   codexPromptStepDefinitions,
   codexPromptSessionPayload,
   secondCodexPromptSessionPayload,

@@ -10,7 +10,6 @@
         :active="autopilotModeActive"
         :automation-enabled="autopilotAutomationEnabled"
         :autopilot-steps="autopilotNavigationSteps"
-        :codex-terminal="codexTerminal"
         :command-runner="autopilotCommandRunner"
         :diff="dialogs.diff"
         :human-input-response-preview="humanInputResponsePreview"
@@ -48,9 +47,6 @@
       </div>
 
       <AiStudioSessionTerminals
-        :class="{
-          'studio-ai-sessions__terminals--autopilot-preview': codexTerminalPreviewVisible
-        }"
         :codex-terminal="codexTerminal"
         :command-terminal="commandTerminal"
         :display-mode="codexTerminalDisplayMode"
@@ -240,22 +236,12 @@ const headlessCommandTerminal = proxyRefs({
 const autopilotBusy = ref(false);
 const autopilotModeActive = computed(() => Boolean(props.active && props.sessionMode === "autopilot"));
 const autopilotAutomationEnabled = computed(() => props.sessionMode === "autopilot");
-const codexTerminalPreviewVisible = computed(() => Boolean(
-  props.active &&
-  props.sessionMode === "autopilot" &&
-  autopilotBusy.value &&
-  (codexTerminal.busy || codexTerminal.working)
-));
 const codexTerminalDisplayMode = computed(() => {
-  // Inactive hosts stay mounted headless so Codex output capture remains session-owned.
   if (!props.active) {
     return "headless";
   }
   if (props.sessionMode === "inspect") {
     return "full";
-  }
-  if (codexTerminalPreviewVisible.value) {
-    return "compact";
   }
   return "headless";
 });
@@ -291,8 +277,7 @@ function emitToolbarControls() {
     controls: {
       abandon: dialogs.abandon,
       diff: dialogs.diff,
-      review,
-      fixCommandFailure: codexTerminal.fixCommandFailure
+      review
     },
     sessionId: props.sessionId
   });
@@ -380,20 +365,6 @@ watch(() => page.error, emitPageError, {
   z-index: 3;
 }
 
-.studio-ai-sessions__layout--autopilot > .studio-ai-sessions__terminals--autopilot-preview {
-  align-self: start;
-  grid-column: 1;
-  grid-row: 1;
-  height: min(18rem, 38vh);
-  justify-self: center;
-  margin-top: clamp(2.5rem, 14vh, 7rem);
-  max-width: min(64rem, calc(100% - 2rem));
-  opacity: 0.14;
-  pointer-events: none;
-  width: min(64rem, calc(100% - 2rem));
-  z-index: 1;
-}
-
 @media (max-width: 980px) {
   .studio-ai-sessions__layout {
     grid-template-columns: 1fr;
@@ -418,12 +389,6 @@ watch(() => page.error, emitPageError, {
 
   .studio-ai-sessions__layout--autopilot > .studio-autopilot {
     grid-column: 1 / -1;
-  }
-
-  .studio-ai-sessions__layout--autopilot > .studio-ai-sessions__terminals--autopilot-preview {
-    grid-column: 2;
-    max-width: min(64rem, 100%);
-    width: 100%;
   }
 }
 </style>

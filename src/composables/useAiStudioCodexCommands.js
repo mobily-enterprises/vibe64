@@ -6,9 +6,7 @@ import {
   AI_STUDIO_SESSIONS_API_SUFFIX,
   AI_STUDIO_SURFACE_ID,
   LOCAL_STUDIO_COMMAND_OPTIONS,
-  aiStudioCodexAttachmentPath,
-  aiStudioCodexPromptHandoffPath,
-  aiStudioCodexThreadPath
+  aiStudioCodexAttachmentPath
 } from "@/lib/aiStudioSessionRequestConfig.js";
 
 function normalizeSessionId(sessionId = "") {
@@ -71,51 +69,6 @@ function useAiStudioCodexCommands() {
     writeMethod: "POST"
   });
 
-  const saveThreadCommand = useCommand({
-    access: "never",
-    apiSuffix: AI_STUDIO_SESSIONS_API_SUFFIX,
-    buildCommandOptions: (_payload, { context }) => ({
-      method: "POST",
-      options: LOCAL_STUDIO_COMMAND_OPTIONS,
-      path: aiStudioCodexThreadPath(sessionsApiPath.value, context.sessionId)
-    }),
-    buildRawPayload: (_model, { context }) => ({
-      threadId: String(context.threadId || "")
-    }),
-    fallbackRunError: "Codex thread could not be saved.",
-    messages: {
-      error: "Codex thread could not be saved."
-    },
-    ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "ai-studio.codex-thread.save",
-    suppressSuccessMessage: true,
-    surfaceId: AI_STUDIO_SURFACE_ID,
-    writeMethod: "POST"
-  });
-
-  const savePromptHandoffCommand = useCommand({
-    access: "never",
-    apiSuffix: AI_STUDIO_SESSIONS_API_SUFFIX,
-    buildCommandOptions: (_payload, { context }) => ({
-      method: "POST",
-      options: LOCAL_STUDIO_COMMAND_OPTIONS,
-      path: aiStudioCodexPromptHandoffPath(sessionsApiPath.value, context.sessionId)
-    }),
-    buildRawPayload: (_model, { context }) => ({
-      outputStart: String(Math.max(0, Number(context.outputStart || 0))),
-      signature: String(context.signature || "")
-    }),
-    fallbackRunError: "Codex prompt handoff could not be saved.",
-    messages: {
-      error: "Codex prompt handoff could not be saved."
-    },
-    ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "ai-studio.codex-prompt-handoff.save",
-    suppressSuccessMessage: true,
-    surfaceId: AI_STUDIO_SURFACE_ID,
-    writeMethod: "POST"
-  });
-
   async function uploadAttachment(sessionId = "", file = null) {
     const normalizedSessionId = normalizeSessionId(sessionId);
     if (!normalizedSessionId) {
@@ -138,41 +91,7 @@ function useAiStudioCodexCommands() {
     };
   }
 
-  async function saveThread(sessionId = "", threadId = "") {
-    const normalizedSessionId = normalizeSessionId(sessionId);
-    if (!normalizedSessionId) {
-      return missingSessionResponse();
-    }
-    const response = await saveThreadCommand.run({
-      sessionId: normalizedSessionId,
-      threadId
-    });
-    return response || {
-      error: "Codex thread save did not start.",
-      ok: false
-    };
-  }
-
-  async function savePromptHandoff(sessionId = "", input = {}) {
-    const normalizedSessionId = normalizeSessionId(sessionId);
-    if (!normalizedSessionId) {
-      return missingSessionResponse();
-    }
-    const response = await savePromptHandoffCommand.run({
-      ...input,
-      sessionId: normalizedSessionId
-    });
-    return response || {
-      error: "Codex prompt handoff save did not start.",
-      ok: false
-    };
-  }
-
   return {
-    savePromptHandoff,
-    savePromptHandoffCommand,
-    saveThread,
-    saveThreadCommand,
     uploadAttachment,
     uploadAttachmentCommand
   };

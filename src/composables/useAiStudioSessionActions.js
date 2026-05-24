@@ -42,7 +42,6 @@ function intentInputFromContext(context = {}) {
 
 function useAiStudioSessionActions({
   clearCopyStatus = () => null,
-  codexHandoff,
   commandBusy = () => false,
   commandTerminal,
   onRewindSuccess = () => null,
@@ -69,9 +68,6 @@ function useAiStudioSessionActions({
       success: "AI Studio action completed."
     },
     onRunSuccess: async (response, { context } = {}) => {
-      if (await codexHandoff.startFromActionResponse(response, context)) {
-        return;
-      }
       if (actionShouldAdvance(response, context)) {
         await advanceCommand.run({
           sessionId: context.sessionId
@@ -101,9 +97,8 @@ function useAiStudioSessionActions({
       success: "AI Studio intent completed."
     },
     onRunSuccess: async (response, { context } = {}) => {
-      if (await codexHandoff.startFromActionResponse(response, context)) {
-        return;
-      }
+      void response;
+      void context;
       await refreshSessionData();
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
@@ -126,7 +121,6 @@ function useAiStudioSessionActions({
       success: "AI Studio session advanced."
     },
     onRunSuccess: async () => {
-      codexHandoff.clearPromptOverride();
       await refreshSessionData();
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
