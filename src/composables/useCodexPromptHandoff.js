@@ -280,9 +280,7 @@ function useCodexPromptHandoff({
     });
   }
 
-  async function ensureCodexThreadReady({
-    forceRetry = false
-  } = {}) {
+  async function ensureCodexThreadReady() {
     if (codexThreadId.value || !codexThreadCaptureRequired.value) {
       return true;
     }
@@ -294,7 +292,7 @@ function useCodexPromptHandoff({
       if (!canCaptureCodexThread()) {
         return false;
       }
-      if (!codexThreadCaptureStarted.value || forceRetry) {
+      if (!codexThreadCaptureStarted.value) {
         await waitForCodexBootReady();
         codexThreadCaptureStarted.value = true;
         const sent = await sendCodexShellCommand(DEFAULT_CODEX_THREAD_COMMAND);
@@ -327,7 +325,7 @@ function useCodexPromptHandoff({
     }
     injectingPrompt.value = true;
     try {
-      if (await ensureTerminalReady?.() && await ensureCodexThreadReady({ forceRetry: true })) {
+      if (await ensureTerminalReady?.() && await ensureCodexThreadReady()) {
         const promptOutputSnapshot = getTerminalOutput?.() || "";
         const promptToSend = wrappedCodexPrompt();
         const promptEchoFilter = addPromptEchoFilter?.({

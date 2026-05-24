@@ -1,5 +1,5 @@
 import { ref } from "vue";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   useCodexPromptHandoff
@@ -59,5 +59,78 @@ describe("useCodexPromptHandoff", () => {
     expect(captured).toBe(true);
     expect(savedThreadId).toBe(THREAD_ID);
     expect(terminalError.value).toBe("");
+  });
+
+  it("does not probe when the session already has a Codex thread id", async () => {
+    const sentInputs = [];
+    const handoff = useCodexPromptHandoff({
+      sendTerminalData: async (input) => {
+        sentInputs.push(input);
+        return true;
+      }
+    });
+
+    handoff.applyCodexThreadState({
+      codexThreadId: THREAD_ID,
+      needsThreadCapture: false
+    });
+
+    expect(await handoff.ensureCodexThreadReady()).toBe(true);
+    expect(sentInputs).toEqual([]);
+  });
+
+  it("does not send a second thread probe while capture is already waiting", async () => {
+    const previousWindow = globalThis.window;
+    globalThis.window = {
+      clearInterval: (...args) => globalThis.clearInterval(...args),
+      clearTimeout: (...args) => globalThis.clearTimeout(...args),
+      setInterval: (...args) => globalThis.setInterval(...args),
+      setTimeout: (...args) => globalThis.setTimeout(...args)
+    };
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-23T00:00:10.000Z"));
+
+    try {
+      const sentInputs = [];
+      const sessionId = ref("session-1");
+      const terminalSessionId = ref("terminal-1");
+      const terminalStatus = ref("running");
+      const handoff = useCodexPromptHandoff({
+        hasTerminalOutput: () => true,
+        lastTerminalOutputAt: () => Date.parse("2026-05-23T00:00:10.000Z"),
+        saveThread: async (_sessionId, threadId) => ({
+          codexThreadId: threadId,
+          ok: true
+        }),
+        sendTerminalData: async (input) => {
+          sentInputs.push(input);
+          return true;
+        },
+        sessionId,
+        terminalSessionId,
+        terminalStatus
+      });
+
+      handoff.applyCodexThreadState({
+        needsThreadCapture: true
+      });
+      handoff.noteTerminalStarted();
+
+      const firstCapture = handoff.ensureCodexThreadReady();
+      await vi.advanceTimersByTimeAsync(3500);
+      const secondCapture = handoff.ensureCodexThreadReady();
+      await vi.advanceTimersByTimeAsync(500);
+
+      expect(sentInputs.filter((input) => input === "echo $CODEX_THREAD_ID")).toHaveLength(1);
+
+      await handoff.captureCodexThreadFromOutput(`CODEX_THREAD_ID\n${THREAD_ID}\n`);
+      await vi.advanceTimersByTimeAsync(250);
+
+      await expect(firstCapture).resolves.toBe(true);
+      await expect(secondCapture).resolves.toBe(true);
+    } finally {
+      vi.useRealTimers();
+      globalThis.window = previousWindow;
+    }
   });
 });

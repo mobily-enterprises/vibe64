@@ -571,6 +571,7 @@ test("ai-studio pull request resolution prompt uses the current-step helper cont
     assert.match(afterAction.actionResult.prompt, /Do not write workflow artifacts directly/u);
     assert.match(afterAction.actionResult.prompt, /write the same question or blocker in normal Codex response text/u);
     assert.match(afterAction.actionResult.prompt, /Keep the visible question text and the helper `message` equivalent/u);
+    assert.match(afterAction.actionResult.prompt, /format each question on its own line as `\[1\] Question text`/u);
   });
 });
 

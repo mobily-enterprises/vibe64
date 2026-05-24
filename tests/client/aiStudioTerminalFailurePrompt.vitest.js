@@ -41,6 +41,8 @@ describe("AI Studio terminal failure prompt", () => {
     expect(request.prompt).toContain("\"stepId\": \"project_validated\"");
     expect(request.prompt).toContain("\"stepStatus\": \"need_input\"");
     expect(request.prompt).toContain("\"kind\": \"need_input\"");
+    expect(request.prompt).toContain("write the same question or blocker in normal Codex response text");
+    expect(request.prompt).toContain("format each question on its own line as `[1] Question text`");
     expect(request.prompt).toContain("- Session: session-1");
     expect(request.prompt).toContain("- Subject: Build app");
     expect(request.prompt).toContain("- Command: npm run build");

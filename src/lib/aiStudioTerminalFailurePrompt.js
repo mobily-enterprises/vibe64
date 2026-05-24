@@ -96,6 +96,8 @@ function terminalFailureFixPrompt({
       stepStatus: stepStatus || "{{session.stepMachine.status}}",
       message: "The question or blocker for the user"
     }, null, 2),
+    "Before calling that helper, write the same question or blocker in normal Codex response text so Inspect users can read it directly in the terminal.",
+    "When asking more than one question, format each question on its own line as `[1] Question text`, `[2] Question text`, and so on. Use the same numbered question text in the helper `message`.",
     "",
     "Terminal context:",
     contextLines || "- No terminal metadata was available.",

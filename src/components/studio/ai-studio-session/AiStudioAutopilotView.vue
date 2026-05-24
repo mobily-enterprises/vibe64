@@ -144,10 +144,10 @@
         @submit.prevent="submitStepInput"
       >
         <p
-          v-if="stepInput.interaction?.prompt"
+          v-if="stepInput.prompt"
           class="text-body-2 text-medium-emphasis mb-0"
         >
-          {{ stepInput.interaction.prompt }}
+          {{ stepInput.prompt }}
         </p>
 
         <template
@@ -162,7 +162,7 @@
             :label="field.label"
             :model-value="stepInput.values[field.name] || ''"
             :placeholder="field.placeholder"
-            rows="8"
+            :rows="field.rows || 8"
             variant="outlined"
             @update:model-value="stepInput.updateValue(field.name, $event)"
           />

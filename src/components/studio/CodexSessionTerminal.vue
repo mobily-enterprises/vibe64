@@ -360,7 +360,7 @@ terminalLifecycle = useCodexTerminalSessionLifecycle({
   onTerminalStarted(session) {
     promptHandoff?.applyCodexThreadState(session);
     promptHandoff?.noteTerminalStarted();
-    void promptHandoff?.ensureCodexThreadReady({ forceRetry: true });
+    void promptHandoff?.ensureCodexThreadReady();
   },
   refreshTerminalOutput() {
     writeTerminalOutput(getTerminalOutput());
