@@ -104,12 +104,13 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import {
   mdiAccountOutline,
   mdiMessageTextOutline,
   mdiRobotOutline
 } from "@mdi/js";
+import { useScrollToBottom } from "@/composables/useScrollToBottom.js";
 import LongTextPreviewBlocks from "@/components/studio/LongTextPreviewBlocks.vue";
 import { parseNumberedQuestionPrompt } from "@/lib/aiStudioNumberedQuestionSugar.js";
 import { parseLongTextReviewBlocks } from "@/lib/studioLongTextBlocks.js";
@@ -208,45 +209,11 @@ const scrollTrigger = computed(() => [
   displayTurns.value.map(turnScrollKey).join("|")
 ].join(":"));
 
-async function scrollToLatestMessage() {
-  if (!props.visible) {
-    return;
-  }
-  await nextTick();
-  scrollBodyToBottom();
-  await waitForLayout();
-  scrollBodyToBottom();
-  scheduleScrollBodyToBottom(0);
-  scheduleScrollBodyToBottom(80);
-}
-
-function scrollBodyToBottom() {
-  const target = bodyElement.value;
-  if (!target) {
-    return;
-  }
-  target.scrollTop = target.scrollHeight;
-  bottomElement.value?.scrollIntoView?.({
-    block: "end"
-  });
-  target.scrollTop = target.scrollHeight;
-}
-
-function scheduleScrollBodyToBottom(delayMs) {
-  if (typeof window === "undefined" || typeof window.setTimeout !== "function") {
-    return;
-  }
-  window.setTimeout(scrollBodyToBottom, delayMs);
-}
-
-function waitForLayout() {
-  if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") {
-    return Promise.resolve();
-  }
-  return new Promise((resolve) => {
-    window.requestAnimationFrame(resolve);
-  });
-}
+const { scrollAfterLayout: scrollToLatestMessage } = useScrollToBottom({
+  anchor: bottomElement,
+  enabled: computed(() => props.visible),
+  target: bodyElement
+});
 
 onMounted(() => {
   void scrollToLatestMessage();

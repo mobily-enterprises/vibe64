@@ -7,8 +7,29 @@ function inactiveNumberedQuestionSugar() {
   };
 }
 
-function isPlainResponseField(field = {}) {
-  return field.name === "response" && field.kind === "textarea";
+function isSingleTextareaMessageField(fields = [], fieldName = "response") {
+  return fields.length === 1 &&
+    fields[0]?.name === fieldName &&
+    fields[0]?.kind === "textarea";
+}
+
+function optionalValueMatches(actual = "", expected = "") {
+  return !expected || String(actual || "") === String(expected || "");
+}
+
+function canRenderNumberedQuestionSugar({
+  fields = [],
+  fieldName = "response",
+  intentId = "",
+  requiredIntentId = "",
+  requiredStepStatus = "",
+  stepStatus = ""
+} = {}) {
+  return Boolean(
+    isSingleTextareaMessageField(fields, fieldName) &&
+    optionalValueMatches(intentId, requiredIntentId) &&
+    optionalValueMatches(stepStatus, requiredStepStatus)
+  );
 }
 
 function numberedQuestionMarkerMatch(line = "") {
@@ -120,10 +141,33 @@ function parseNumberedQuestionPrompt(value = "") {
 }
 
 function numberedQuestionSugarForInput(interaction = {}, fields = []) {
-  if (fields.length !== 1 || !isPlainResponseField(fields[0])) {
+  return numberedQuestionSugarForMessageInput({
+    fields,
+    fieldName: "response",
+    message: interaction?.prompt
+  });
+}
+
+function numberedQuestionSugarForMessageInput({
+  fields = [],
+  fieldName = "response",
+  intentId = "",
+  message = "",
+  requiredIntentId = "",
+  requiredStepStatus = "",
+  stepStatus = ""
+} = {}) {
+  if (!canRenderNumberedQuestionSugar({
+    fields,
+    fieldName,
+    intentId,
+    requiredIntentId,
+    requiredStepStatus,
+    stepStatus
+  })) {
     return inactiveNumberedQuestionSugar();
   }
-  return parseNumberedQuestionPrompt(interaction?.prompt);
+  return parseNumberedQuestionPrompt(message);
 }
 
 function numberedQuestionInputFields(questions = []) {
@@ -149,9 +193,11 @@ function numberedQuestionSubmissionFields(questions = [], values = {}, fieldName
 }
 
 export {
+  canRenderNumberedQuestionSugar,
   numberedQuestionInputFields,
   numberedQuestionSubmissionFields,
   numberedQuestionSubmissionText,
+  numberedQuestionSugarForMessageInput,
   numberedQuestionSugarForInput,
   parseNumberedQuestionPrompt,
   UI_QUESTION_FIELD_PREFIX

@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  canRenderNumberedQuestionSugar,
   numberedQuestionInputFields,
   numberedQuestionSubmissionFields,
+  numberedQuestionSugarForMessageInput,
   numberedQuestionSugarForInput,
   parseNumberedQuestionPrompt,
   UI_QUESTION_FIELD_PREFIX
@@ -12,6 +14,12 @@ const plainResponseField = {
   kind: "textarea",
   label: "Response",
   name: "response",
+  required: true
+};
+const conversationRequestField = {
+  kind: "textarea",
+  label: "Message",
+  name: "conversationRequest",
   required: true
 };
 
@@ -72,6 +80,78 @@ describe("aiStudioNumberedQuestionSugar", () => {
     }, "conversationRequest")).toEqual({
       conversationRequest: "[1] app.js\n[2] use the existing helper"
     });
+  });
+
+  it("uses one activation rule for direct response and conversation message inputs", () => {
+    expect(canRenderNumberedQuestionSugar({
+      fields: [plainResponseField],
+      fieldName: "response"
+    })).toBe(true);
+    expect(canRenderNumberedQuestionSugar({
+      fields: [conversationRequestField],
+      fieldName: "conversationRequest",
+      intentId: "talk_to_codex",
+      requiredIntentId: "talk_to_codex",
+      requiredStepStatus: "waiting_for_input",
+      stepStatus: "waiting_for_input"
+    })).toBe(true);
+  });
+
+  it("renders Autopilot conversation questions only for the expected one-message input", () => {
+    const message = [
+      "[1] Which file should change?",
+      "[2] What should it contain?"
+    ].join("\n");
+
+    expect(numberedQuestionSugarForMessageInput({
+      fields: [conversationRequestField],
+      fieldName: "conversationRequest",
+      intentId: "talk_to_codex",
+      message,
+      requiredIntentId: "talk_to_codex",
+      requiredStepStatus: "waiting_for_input",
+      stepStatus: "waiting_for_input"
+    }).questions.map((question) => question.name)).toEqual([
+      "__ui_question_1",
+      "__ui_question_2"
+    ]);
+  });
+
+  it("does not render conversation questions for the wrong intent, status, or field shape", () => {
+    const message = [
+      "[1] Which file should change?",
+      "[2] What should it contain?"
+    ].join("\n");
+    const expectedContext = {
+      fieldName: "conversationRequest",
+      intentId: "talk_to_codex",
+      message,
+      requiredIntentId: "talk_to_codex",
+      requiredStepStatus: "waiting_for_input",
+      stepStatus: "waiting_for_input"
+    };
+
+    expect(numberedQuestionSugarForMessageInput({
+      ...expectedContext,
+      intentId: "review_diff",
+      fields: [conversationRequestField]
+    }).questions).toEqual([]);
+    expect(numberedQuestionSugarForMessageInput({
+      ...expectedContext,
+      fields: [conversationRequestField],
+      stepStatus: "ready"
+    }).questions).toEqual([]);
+    expect(numberedQuestionSugarForMessageInput({
+      ...expectedContext,
+      fields: [
+        {
+          kind: "text",
+          label: "Title",
+          name: "title"
+        },
+        conversationRequestField
+      ]
+    }).questions).toEqual([]);
   });
 
   it("parses Codex inline numbered question messages", () => {

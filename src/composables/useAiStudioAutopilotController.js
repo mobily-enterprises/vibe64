@@ -72,8 +72,11 @@ function currentRecoveryPresentation(session = {}) {
 }
 
 function operationCanDispatch(operation = {}) {
-  return operation.executable === true &&
-    Object.values(OPERATION_ROUTES).includes(String(operation.route || ""));
+  const route = String(operation.route || "");
+  const operationExecutable = operation.executable === true;
+  const routeCanDispatch = Object.values(OPERATION_ROUTES).includes(route);
+
+  return operationExecutable && routeCanDispatch;
 }
 
 function operationKey(operation = {}) {
@@ -180,22 +183,38 @@ function useAiStudioAutopilotController({
     currentSession.value?.sessionId || "",
     nextOperationKey.value
   ].join("::"));
-  const canDispatchNextOperation = computed(() => Boolean(
-    autopilotEnabled.value &&
-    currentSession.value?.sessionId &&
-    operationCanDispatch(nextOperation.value) &&
-    nextOperationDispatchKey.value !== lastDispatchedOperationKey.value &&
-    !running.value &&
-    !failure.value &&
-    !commandFailed.value
-  ));
-  const stuckRecoveryAvailable = computed(() => Boolean(
-    autopilotEnabled.value &&
-    currentSession.value?.sessionId &&
-    currentRecoveryPresentation(currentSession.value).available === true &&
-    !running.value &&
-    !commandRunning.value
-  ));
+  const canDispatchNextOperation = computed(() => {
+    const hasCurrentSession = Boolean(currentSession.value?.sessionId);
+    const nextOperationReady = operationCanDispatch(nextOperation.value);
+    const dispatchKeyIsNew = nextOperationDispatchKey.value !== lastDispatchedOperationKey.value;
+    const controllerIdle = !running.value;
+    const noAutopilotFailure = !failure.value;
+    const noCommandFailure = !commandFailed.value;
+
+    return Boolean(
+      autopilotEnabled.value &&
+      hasCurrentSession &&
+      nextOperationReady &&
+      dispatchKeyIsNew &&
+      controllerIdle &&
+      noAutopilotFailure &&
+      noCommandFailure
+    );
+  });
+  const stuckRecoveryAvailable = computed(() => {
+    const hasCurrentSession = Boolean(currentSession.value?.sessionId);
+    const recoveryPresented = currentRecoveryPresentation(currentSession.value).available === true;
+    const controllerIdle = !running.value;
+    const commandIdle = !commandRunning.value;
+
+    return Boolean(
+      autopilotEnabled.value &&
+      hasCurrentSession &&
+      recoveryPresented &&
+      controllerIdle &&
+      commandIdle
+    );
+  });
   const screenState = computed(() => {
     if (commandRunning.value || commandFailed.value) {
       return {
@@ -387,13 +406,21 @@ function useAiStudioAutopilotController({
       } finally {
         autopilotPromise = null;
       }
-    } while ((rerunRequested || canDispatchNextOperation.value) && !stopRequested);
+    } while (shouldContinueAutopilotLoop());
     aiStudioSessionDebugLog("client.autopilot.runUntilStopPoint.done", {
       ...aiStudioSessionDebugSummary(currentSession.value || {}),
       durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
       failure: Boolean(failure.value),
       stopRequested
     });
+  }
+
+  function shouldContinueAutopilotLoop() {
+    const rerunWasRequested = rerunRequested;
+    const nextOperationReady = canDispatchNextOperation.value;
+    const stopWasRequested = stopRequested;
+
+    return (rerunWasRequested || nextOperationReady) && !stopWasRequested;
   }
 
   async function executeAutopilot() {
@@ -511,7 +538,7 @@ function useAiStudioAutopilotController({
     continueAfterCompletion = true,
     fields = {}
   } = {}) {
-    if (!autopilotEnabled.value || running.value && !active.value || intent.enabled !== true) {
+    if (!canRunPresentedIntent(intent)) {
       return false;
     }
     clearFailure();
@@ -545,6 +572,18 @@ function useAiStudioAutopilotController({
       active.value = false;
       activeStage.value = "";
     }
+  }
+
+  function canRunPresentedIntent(intent = {}) {
+    const autopilotCanRun = autopilotEnabled.value;
+    const intentIsEnabled = intent.enabled === true;
+    const controllerAlreadyActive = active.value;
+    const nothingElseRunning = !running.value;
+    const intentDispatchSlotAvailable = nothingElseRunning || controllerAlreadyActive;
+
+    return autopilotCanRun &&
+      intentDispatchSlotAvailable &&
+      intentIsEnabled;
   }
 
   async function runCommandTerminalOperation(operation = {}) {

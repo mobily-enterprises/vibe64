@@ -273,83 +273,21 @@
           title="Codex"
         />
 
-        <form
+        <AiStudioAutopilotComposer
           v-if="selectedControl"
-          class="studio-autopilot__control-form"
-          @submit.prevent="submitSelectedControl"
-        >
-          <template
-            v-for="field in selectedControlFields"
-            :key="field.name"
-          >
-            <AiStudioAutopilotPromptTextarea
-              v-if="field.kind === 'textarea'"
-              :model-value="selectedControlValues[field.name] || ''"
-              class="studio-autopilot__input"
-              :disabled="running"
-              :label="field.label"
-              :rows="field.rows || 3"
-              :session-id="sessionId"
-              variant="outlined"
-              @update:model-value="updateSelectedControlValue(field.name, $event)"
-            />
-            <v-text-field
-              v-else
-              class="studio-autopilot__input"
-              :disabled="running"
-              :label="field.label"
-              :model-value="selectedControlValues[field.name] || ''"
-              :placeholder="field.placeholder"
-              variant="outlined"
-              @update:model-value="updateSelectedControlValue(field.name, $event)"
-            />
-          </template>
-
-          <div class="studio-autopilot__composer-actions-row">
-            <div class="studio-autopilot__actions studio-autopilot__composer-submit-actions">
-              <v-btn
-                color="primary"
-                :disabled="!canSubmitSelectedControl"
-                :loading="running"
-                :prepend-icon="mdiSend"
-                type="submit"
-                variant="flat"
-              >
-                {{ selectedControl.label }}
-              </v-btn>
-
-              <v-btn
-                v-if="!selectedControlIsPrimary"
-                :disabled="running"
-                :prepend-icon="mdiClose"
-                type="button"
-                variant="tonal"
-                @click="clearSelectedControl"
-              >
-                Cancel
-              </v-btn>
-            </div>
-
-            <div
-              v-if="screenControls.length"
-              class="studio-autopilot__actions studio-autopilot__screen-actions studio-autopilot__screen-actions--composer"
-            >
-              <v-btn
-                v-for="control in screenControls"
-                :key="control.id"
-                :color="control.style === 'primary' ? 'primary' : undefined"
-                :disabled="controlDisabled(control)"
-                :loading="controlLoading(control)"
-                :prepend-icon="controlIcon(control)"
-                type="button"
-                :variant="control.style === 'primary' ? 'flat' : 'tonal'"
-                @click="activateControl(control)"
-              >
-                {{ control.label }}
-              </v-btn>
-            </div>
-          </div>
-        </form>
+          :can-submit-selected-control="canSubmitSelectedControl"
+          :running="running"
+          :selected-control="selectedControl"
+          :selected-control-fields="selectedControlFields"
+          :selected-control-is-primary="selectedControlIsPrimary"
+          :selected-control-values="selectedControlValues"
+          :session-id="sessionId"
+          :workflow-controls="composerWorkflowControls"
+          @activate-control="activateControl"
+          @cancel="clearSelectedControl"
+          @submit="submitSelectedControl"
+          @update-value="updateSelectedControlValue"
+        />
 
         <div
           v-if="screenControls.length && !selectedControl"
@@ -375,7 +313,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, proxyRefs, ref, watch } from "vue";
+import { computed, nextTick, onMounted, proxyRefs, watch } from "vue";
 import {
   mdiAlertCircleOutline,
   mdiCheck,
@@ -386,16 +324,18 @@ import {
   mdiInformationOutline,
   mdiRefresh,
   mdiRobotOutline,
-  mdiSend,
   mdiStopCircleOutline
 } from "@mdi/js";
 import AiStudioLaunchControls from "@/components/studio/AiStudioLaunchControls.vue";
 import AiStudioBackgroundTasks from "@/components/studio/ai-studio-session/AiStudioBackgroundTasks.vue";
+import AiStudioAutopilotComposer from "@/components/studio/ai-studio-session/AiStudioAutopilotComposer.vue";
 import AiStudioAutopilotNavigation from "@/components/studio/ai-studio-session/AiStudioAutopilotNavigation.vue";
-import AiStudioAutopilotPromptTextarea from "@/components/studio/ai-studio-session/AiStudioAutopilotPromptTextarea.vue";
 import AiStudioConversationLog from "@/components/studio/ai-studio-session/AiStudioConversationLog.vue";
 import AiStudioHeadlessCommandOutput from "@/components/studio/ai-studio-session/AiStudioHeadlessCommandOutput.vue";
 import AiStudioReportPreview from "@/components/studio/ai-studio-session/AiStudioReportPreview.vue";
+import {
+  useAiStudioAutopilotComposer
+} from "@/composables/useAiStudioAutopilotComposer.js";
 import {
   useAiStudioAutopilotController
 } from "@/composables/useAiStudioAutopilotController.js";
@@ -406,11 +346,6 @@ import { useAiStudioStepInputForm } from "@/composables/useAiStudioStepInputForm
 import {
   stripTerminalControlSequences
 } from "@/lib/codexOutput.js";
-import {
-  numberedQuestionInputFields,
-  numberedQuestionSubmissionFields,
-  parseNumberedQuestionPrompt
-} from "@/lib/aiStudioNumberedQuestionSugar.js";
 
 // Autopilot workflow meaning belongs to the server. This component renders the
 // current presentation and dispatches the server-provided intents.
@@ -506,8 +441,6 @@ const {
   session: computed(() => props.session)
 });
 
-const selectedControl = ref(null);
-const selectedControlValues = ref({});
 const {
   backgroundTaskError,
   retryBackgroundTask,
@@ -616,61 +549,38 @@ const allScreenControls = computed(() => {
   return (Array.isArray(props.session?.intents) ? props.session.intents : [])
     .filter((intent) => intent && intent.id && intent.label);
 });
-const primaryScreenControl = computed(() => {
-  if (!primaryIntentId.value) {
-    return null;
-  }
-  return allScreenControls.value.find((control) => control.id === primaryIntentId.value) || null;
+const {
+  activateControl,
+  canSubmitSelectedControl,
+  clearSelectedControl,
+  screenControls,
+  selectedControl,
+  selectedControlFields,
+  selectedControlIsPrimary,
+  selectedControlValues,
+  submitSelectedControl,
+  updateSelectedControlValue
+} = useAiStudioAutopilotComposer({
+  conversationLog: computed(() => props.conversationLog),
+  controls: allScreenControls,
+  isControlDisabled: controlDisabled,
+  onOpenDiff: () => props.diff?.openDialog?.(),
+  onRunControl: (control, options) => runPresentedIntent(control, options),
+  primaryIntentId,
+  running,
+  session: computed(() => props.session)
 });
-const screenControls = computed(() => {
-  const selectedId = String(selectedControl.value?.id || "");
-  return allScreenControls.value.filter((control) => control.id !== selectedId);
+const composerWorkflowControls = computed(() => {
+  return screenControls.value.map((control) => ({
+    ...control,
+    buttonColor: control.style === "primary" ? "primary" : undefined,
+    buttonVariant: control.style === "primary" ? "flat" : "tonal",
+    disabled: controlDisabled(control),
+    icon: controlIcon(control),
+    loading: controlLoading(control),
+    sourceControl: control
+  }));
 });
-const selectedControlOriginalFields = computed(() => {
-  return selectedControl.value && Array.isArray(selectedControl.value.inputFields)
-    ? selectedControl.value.inputFields
-    : [];
-});
-const latestAssistantMessageText = computed(() => {
-  const turns = Array.isArray(props.conversationLog?.turns) ? props.conversationLog.turns : [];
-  for (let index = turns.length - 1; index >= 0; index -= 1) {
-    const text = String(turns[index]?.assistant?.text || "").trim();
-    if (text) {
-      return text;
-    }
-  }
-  return "";
-});
-const selectedControlQuestionInput = computed(() => {
-  const fields = selectedControlOriginalFields.value;
-  if (
-    selectedControl.value?.id !== "talk_to_codex" ||
-    props.session?.stepMachine?.status !== "waiting_for_input" ||
-    fields.length !== 1 ||
-    fields[0]?.name !== "conversationRequest" ||
-    fields[0]?.kind !== "textarea"
-  ) {
-    return {
-      intro: "",
-      questions: []
-    };
-  }
-  return parseNumberedQuestionPrompt(latestAssistantMessageText.value);
-});
-const selectedControlFields = computed(() => {
-  return selectedControlQuestionInput.value.questions.length
-    ? numberedQuestionInputFields(selectedControlQuestionInput.value.questions)
-    : selectedControlOriginalFields.value;
-});
-const selectedControlIsPrimary = computed(() => Boolean(
-  selectedControl.value?.id &&
-  selectedControl.value.id === primaryIntentId.value
-));
-const canSubmitSelectedControl = computed(() => Boolean(
-  selectedControl.value &&
-  !running.value &&
-  !selectedControlFields.value.some((field) => field.required !== false && !String(selectedControlValues.value[field.name] || "").trim())
-));
 
 function sectionVisible(kind = "") {
   return screenSections.value.some((section) => section?.kind === kind);
@@ -733,69 +643,6 @@ function controlIcon(control = {}) {
   return mdiRefresh;
 }
 
-function initialControlValues(control = {}) {
-  return Object.fromEntries((Array.isArray(control.inputFields) ? control.inputFields : [])
-    .map((field) => [field.name, String(field.value ?? "")]));
-}
-
-function controlHasInputFields(control = {}) {
-  return Array.isArray(control.inputFields) && control.inputFields.length > 0;
-}
-
-async function activateControl(control = {}) {
-  if (controlDisabled(control)) {
-    return;
-  }
-  if (control.clientAction === "open_diff") {
-    props.diff?.openDialog?.();
-    return;
-  }
-  if (controlHasInputFields(control)) {
-    selectedControl.value = control;
-    selectedControlValues.value = initialControlValues(control);
-    return;
-  }
-  await runPresentedIntent(control);
-}
-
-function updateSelectedControlValue(name = "", value = "") {
-  selectedControlValues.value = {
-    ...selectedControlValues.value,
-    [String(name || "")]: String(value || "")
-  };
-}
-
-function clearSelectedControl() {
-  selectedControl.value = null;
-  selectedControlValues.value = {};
-}
-
-async function submitSelectedControl() {
-  if (!canSubmitSelectedControl.value) {
-    return;
-  }
-  const control = selectedControl.value;
-  const accepted = await runPresentedIntent(control, {
-    fields: selectedControlSubmissionFields()
-  });
-  if (accepted) {
-    if (control?.id && control.id === primaryIntentId.value) {
-      selectedControl.value = primaryScreenControl.value || control;
-      selectedControlValues.value = initialControlValues(selectedControl.value);
-    } else {
-      clearSelectedControl();
-    }
-  }
-}
-
-function selectedControlSubmissionFields() {
-  const questions = selectedControlQuestionInput.value.questions;
-  if (!questions.length) {
-    return selectedControlValues.value;
-  }
-  return numberedQuestionSubmissionFields(questions, selectedControlValues.value, "conversationRequest");
-}
-
 onMounted(emitBusyState);
 
 watch(autopilotBusy, () => {
@@ -823,32 +670,6 @@ watch(() => [
   immediate: true
 });
 
-watch(primaryScreenControl, (control) => {
-  if (!control || control.enabled !== true || !controlHasInputFields(control)) {
-    return;
-  }
-  if (!selectedControl.value || selectedControl.value.id === primaryIntentId.value) {
-    selectedControl.value = control;
-    selectedControlValues.value = initialControlValues(control);
-  }
-}, {
-  flush: "post",
-  immediate: true
-});
-
-watch(allScreenControls, (controls) => {
-  if (!selectedControl.value) {
-    return;
-  }
-  const updatedControl = controls.find((control) => control.id === selectedControl.value.id) || null;
-  if (!updatedControl || !controlHasInputFields(updatedControl)) {
-    clearSelectedControl();
-    return;
-  }
-  selectedControl.value = updatedControl;
-}, {
-  flush: "post"
-});
 </script>
 
 <style scoped>
@@ -988,8 +809,7 @@ watch(allScreenControls, (controls) => {
 }
 
 .studio-autopilot__input-form,
-.studio-autopilot__server-screen,
-.studio-autopilot__control-form {
+.studio-autopilot__server-screen {
   display: grid;
   gap: 0.6rem;
   max-width: 52rem;
@@ -1007,11 +827,6 @@ watch(allScreenControls, (controls) => {
 
 .studio-autopilot__server-screen--with-response {
   padding-bottom: 0.45rem;
-}
-
-.studio-autopilot__control-form {
-  gap: 0.45rem;
-  margin-top: 0.1rem;
 }
 
 .studio-autopilot__screen-message {
@@ -1089,47 +904,10 @@ watch(allScreenControls, (controls) => {
   width: 100%;
 }
 
-.studio-autopilot__control-form :deep(.studio-autopilot-prompt-textarea) {
-  gap: 0.35rem;
-}
-
-.studio-autopilot__control-form :deep(.v-input),
-.studio-autopilot__control-form :deep(.v-field) {
-  overflow: visible;
-}
-
-.studio-autopilot__control-form :deep(.v-field__input textarea) {
-  min-height: 5.4rem;
-}
-
-.studio-autopilot__composer-actions-row {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  justify-content: space-between;
-  width: 100%;
-}
-
-.studio-autopilot__composer-submit-actions {
-  justify-content: flex-end;
-  margin-left: auto;
-  order: 2;
-}
-
 .studio-autopilot__screen-actions {
   justify-content: flex-end;
   margin-top: auto;
   width: 100%;
-}
-
-.studio-autopilot__screen-actions.studio-autopilot__screen-actions--composer {
-  align-self: center;
-  flex: 1 1 auto;
-  justify-content: flex-start;
-  margin-top: 0;
-  order: 1;
-  width: auto;
 }
 
 @keyframes studio-autopilot-cog-spin {

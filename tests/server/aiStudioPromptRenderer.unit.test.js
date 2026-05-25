@@ -9,6 +9,9 @@ import {
   promptSessionBriefing,
   renderPromptTemplate
 } from "../../server/lib/aiStudio/index.js";
+import {
+  questionBatchLimitInstruction
+} from "../../server/lib/aiStudio/promptQuestionPolicy.js";
 import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
 
 const SYSTEM_PROMPT_PACK_ROOT = fileURLToPath(new URL("../../server/lib/aiStudio/systemPrompts", import.meta.url));
@@ -384,6 +387,18 @@ test("agent conversation prompt keeps simple conversation out of project preflig
   assert.match(rendered.prompt, /If `session.currentStep` is `agent_conversation`, this is the General coding change-making step/u);
   assert.match(rendered.prompt, /Use the current-step input helper contract appended to this prompt/u);
   assert.doesNotMatch(rendered.prompt, /input_format\.json/u);
+});
+
+test("ai-studio missing-information policy uses the shared question batch limit", () => {
+  const rendered = renderPromptTemplate("Policy:\n{{prompt.missingInformationPolicy}}", {
+    action: {},
+    input: {},
+    product: "ai-studio",
+    session: {}
+  });
+
+  assert.match(rendered, /ask concise questions before planning or implementing/u);
+  assert.ok(rendered.includes(questionBatchLimitInstruction()));
 });
 
 test("ai-studio prompt renderer can mask static context after the session briefing", () => {

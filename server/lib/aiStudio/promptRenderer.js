@@ -10,13 +10,15 @@ import {
 import {
   AI_STUDIO_STATE_DIR
 } from "./sessionStore.js";
+import {
+  missingInformationPolicyInstruction
+} from "./promptQuestionPolicy.js";
 
 const DEFAULT_PROMPT_ID = "generic";
 const DEFAULT_SYSTEM_PROMPT_PACK_ROOT = fileURLToPath(new URL("./systemPrompts", import.meta.url));
 const PROMPT_OVERRIDES_DIR = "prompts";
 const PROMPT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
 const TEMPLATE_TOKEN_PATTERN = /\{\{([A-Za-z0-9_.-]+)\}\}/gu;
-const MISSING_INFORMATION_POLICY = "If required external service details, credentials, project URLs, API keys, provider choices, production-vs-local decisions, or runtime configuration are missing, ask concise questions before planning or implementing work that depends on them. Do not invent placeholder credentials, silently choose unrelated local substitutes, or proceed with fake integrations.";
 const MANAGED_SERVICE_POLICY = [
   "Use the Managed services section as the only source for AI Studio-managed database access.",
   "Run the listed non-interactive client command directly from the worktree terminal: mysql or mariadb for MySQL-compatible services, and psql for PostgreSQL services.",
@@ -333,7 +335,7 @@ function promptTemplateTokens(contextInput) {
       : MANAGED_SERVICE_POLICY,
     "prompt.currentStepInputHelperBriefing": currentStepInputHelperBriefing(),
     "input.json": stableJson(context.input),
-    "prompt.missingInformationPolicy": MISSING_INFORMATION_POLICY,
+    "prompt.missingInformationPolicy": missingInformationPolicyInstruction(),
     "prompt.sessionBriefingReference": promptSessionBriefingReference(),
     "product": context.product,
     "session.artifactsRoot": context.session.artifactsRoot,

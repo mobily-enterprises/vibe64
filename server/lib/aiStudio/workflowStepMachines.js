@@ -5,6 +5,9 @@ import {
 import {
   aiStudioSessionDebugLog
 } from "./sessionDebugLog.js";
+import {
+  questionPromptInstructionBullets
+} from "./promptQuestionPolicy.js";
 
 const STEP_STATE_SCHEMA_VERSION = 1;
 
@@ -461,8 +464,7 @@ function currentStepHelperInstruction({
     `- Meaning of waiting_for_input: ${waitingForInputMeaning}`,
     "- Before calling the helper for waiting_for_input, write the same question or blocker in normal Codex response text so Inspect users can read it directly in the terminal.",
     "- Keep the visible question text and the helper `message` equivalent; do not make the UI-only helper message more complete than the terminal-visible response.",
-    "- Ask at most 3 questions at a time. If more uncertainty remains, ask the 3 highest-impact questions first.",
-    "- When asking more than one question, format each question on its own line as `[1] Question text`, `[2] Question text`, and so on. Use the same numbered question text in the helper `message`.",
+    ...questionPromptInstructionBullets(),
     "",
     "After the helper reports success, stop. Do not write workflow artifacts directly for this step."
   ].join("\n");
