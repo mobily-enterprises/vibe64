@@ -257,6 +257,7 @@
           class="studio-autopilot__response-content"
           :error="conversationLog.error"
           :loading="conversationLog.loading"
+          :scroll-key="conversationScrollKey"
           :turns="conversationLog.turns"
           :visible="conversationLog.visible"
         />
@@ -305,25 +306,6 @@
           </template>
 
           <div class="studio-autopilot__composer-actions-row">
-            <div
-              v-if="screenControls.length"
-              class="studio-autopilot__actions studio-autopilot__screen-actions studio-autopilot__screen-actions--composer"
-            >
-              <v-btn
-                v-for="control in screenControls"
-                :key="control.id"
-                :color="control.style === 'primary' ? 'primary' : undefined"
-                :disabled="controlDisabled(control)"
-                :loading="controlLoading(control)"
-                :prepend-icon="controlIcon(control)"
-                type="button"
-                :variant="control.style === 'primary' ? 'flat' : 'tonal'"
-                @click="activateControl(control)"
-              >
-                {{ control.label }}
-              </v-btn>
-            </div>
-
             <div class="studio-autopilot__actions studio-autopilot__composer-submit-actions">
               <v-btn
                 color="primary"
@@ -345,6 +327,25 @@
                 @click="clearSelectedControl"
               >
                 Cancel
+              </v-btn>
+            </div>
+
+            <div
+              v-if="screenControls.length"
+              class="studio-autopilot__actions studio-autopilot__screen-actions studio-autopilot__screen-actions--composer"
+            >
+              <v-btn
+                v-for="control in screenControls"
+                :key="control.id"
+                :color="control.style === 'primary' ? 'primary' : undefined"
+                :disabled="controlDisabled(control)"
+                :loading="controlLoading(control)"
+                :prepend-icon="controlIcon(control)"
+                type="button"
+                :variant="control.style === 'primary' ? 'flat' : 'tonal'"
+                @click="activateControl(control)"
+              >
+                {{ control.label }}
               </v-btn>
             </div>
           </div>
@@ -605,6 +606,12 @@ const responseContentVisible = computed(() => Boolean(
   conversationLogVisible.value ||
   responsePreviewVisible.value
 ));
+const conversationScrollKey = computed(() => [
+  sessionId.value,
+  conversationLogVisible.value ? "conversation-visible" : "conversation-hidden",
+  selectedControl.value?.id || "",
+  selectedControlFields.value.map((field) => field.name).join("|")
+].join(":"));
 const allScreenControls = computed(() => {
   return (Array.isArray(props.session?.intents) ? props.session.intents : [])
     .filter((intent) => intent && intent.id && intent.label);
@@ -1107,6 +1114,7 @@ watch(allScreenControls, (controls) => {
 .studio-autopilot__composer-submit-actions {
   justify-content: flex-end;
   margin-left: auto;
+  order: 2;
 }
 
 .studio-autopilot__screen-actions {
@@ -1120,6 +1128,7 @@ watch(allScreenControls, (controls) => {
   flex: 1 1 auto;
   justify-content: flex-start;
   margin-top: 0;
+  order: 1;
   width: auto;
 }
 

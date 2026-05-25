@@ -27,7 +27,11 @@
       {{ error }}
     </v-alert>
 
-    <div v-else class="studio-conversation-log__body">
+    <div
+      v-else
+      ref="bodyElement"
+      class="studio-conversation-log__body"
+    >
       <article
         v-for="turn in displayTurns"
         :key="turn.turnId"
@@ -90,12 +94,17 @@
           <span>Waiting for Codex...</span>
         </div>
       </article>
+      <div
+        ref="bottomElement"
+        class="studio-conversation-log__bottom"
+        aria-hidden="true"
+      />
     </div>
   </section>
 </template>
 
 <script setup>
-import { computed } from "vue";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
 import {
   mdiAccountOutline,
   mdiMessageTextOutline,
@@ -114,6 +123,10 @@ const props = defineProps({
     default: false,
     type: Boolean
   },
+  scrollKey: {
+    default: "",
+    type: [Number, String]
+  },
   turns: {
     default: () => [],
     type: Array
@@ -124,6 +137,8 @@ const props = defineProps({
   }
 });
 
+const bodyElement = ref(null);
+const bottomElement = ref(null);
 const timeFormatter = new Intl.DateTimeFormat(undefined, {
   hour: "2-digit",
   minute: "2-digit"
@@ -167,6 +182,82 @@ const displayTurns = computed(() => (Array.isArray(props.turns) ? props.turns : 
     user: displayMessage(turn.user)
   }))
   .filter((turn) => turn.user || turn.assistant));
+
+function messageScrollKey(message = null) {
+  if (!message) {
+    return "empty";
+  }
+  return [
+    message.at || "",
+    String(message.text || "").length
+  ].join("/");
+}
+
+function turnScrollKey(turn = {}) {
+  return [
+    turn.turnId,
+    messageScrollKey(turn.user),
+    messageScrollKey(turn.assistant)
+  ].join(":");
+}
+
+const scrollTrigger = computed(() => [
+  props.visible ? "visible" : "hidden",
+  props.loading ? "loading" : "ready",
+  props.scrollKey,
+  displayTurns.value.map(turnScrollKey).join("|")
+].join(":"));
+
+async function scrollToLatestMessage() {
+  if (!props.visible) {
+    return;
+  }
+  await nextTick();
+  scrollBodyToBottom();
+  await waitForLayout();
+  scrollBodyToBottom();
+  scheduleScrollBodyToBottom(0);
+  scheduleScrollBodyToBottom(80);
+}
+
+function scrollBodyToBottom() {
+  const target = bodyElement.value;
+  if (!target) {
+    return;
+  }
+  target.scrollTop = target.scrollHeight;
+  bottomElement.value?.scrollIntoView?.({
+    block: "end"
+  });
+  target.scrollTop = target.scrollHeight;
+}
+
+function scheduleScrollBodyToBottom(delayMs) {
+  if (typeof window === "undefined" || typeof window.setTimeout !== "function") {
+    return;
+  }
+  window.setTimeout(scrollBodyToBottom, delayMs);
+}
+
+function waitForLayout() {
+  if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") {
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    window.requestAnimationFrame(resolve);
+  });
+}
+
+onMounted(() => {
+  void scrollToLatestMessage();
+});
+
+watch(scrollTrigger, () => {
+  void scrollToLatestMessage();
+}, {
+  flush: "post",
+  immediate: true
+});
 </script>
 
 <style scoped>
@@ -297,5 +388,9 @@ const displayTurns = computed(() => (Array.isArray(props.turns) ? props.turns : 
   font-size: 0.84rem;
   gap: 0.45rem;
   padding: 0.15rem 0.25rem;
+}
+
+.studio-conversation-log__bottom {
+  height: 1px;
 }
 </style>

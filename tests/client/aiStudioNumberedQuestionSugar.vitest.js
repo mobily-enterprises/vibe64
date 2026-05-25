@@ -34,9 +34,15 @@ describe("aiStudioNumberedQuestionSugar", () => {
       `${UI_QUESTION_FIELD_PREFIX}1`,
       `${UI_QUESTION_FIELD_PREFIX}2`
     ]);
-    expect(numberedQuestionInputFields(sugar.questions).map((field) => field.name)).toEqual([
-      "__ui_question_1",
-      "__ui_question_2"
+    expect(numberedQuestionInputFields(sugar.questions)).toMatchObject([
+      {
+        kind: "text",
+        name: "__ui_question_1"
+      },
+      {
+        kind: "text",
+        name: "__ui_question_2"
+      }
     ]);
   });
 

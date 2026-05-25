@@ -128,12 +128,11 @@ function numberedQuestionSugarForInput(interaction = {}, fields = []) {
 
 function numberedQuestionInputFields(questions = []) {
   return questions.map((question) => ({
-    kind: "textarea",
+    kind: "text",
     label: question.label,
     name: question.name,
     required: true,
-    requiredMessage: `Answer question ${question.number}.`,
-    rows: 3
+    requiredMessage: `Answer question ${question.number}.`
   }));
 }
 

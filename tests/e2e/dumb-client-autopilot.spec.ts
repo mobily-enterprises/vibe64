@@ -539,6 +539,111 @@ test.describe("Autopilot dumb client contract", () => {
     ]);
   });
 
+  test("tabs from the Codex composer to send before workflow controls", async ({ page }) => {
+    const intentRequests: unknown[] = [];
+    let advances = 0;
+    const session = sessionPayload({
+      intents: [
+        {
+          enabled: true,
+          id: "talk_to_codex",
+          inputFields: [
+            {
+              kind: "textarea",
+              label: "What do you want to ask Codex?",
+              name: "conversationRequest"
+            }
+          ],
+          label: "Ask Codex",
+          style: "primary"
+        },
+        {
+          enabled: true,
+          id: "continue_workflow",
+          label: "Next step",
+          style: "primary"
+        }
+      ],
+      presentation: {
+        auto: {
+          nextOperation: {
+            executable: false,
+            kind: "stop",
+            reason: "user"
+          }
+        },
+        screen: {
+          kind: "conversation",
+          message: "Ask Codex for changes.",
+          primaryIntentId: "talk_to_codex",
+          sections: [
+            {
+              kind: "response_preview"
+            }
+          ],
+          title: "Talk to Codex"
+        },
+        step: {
+          id: "server_step",
+          label: "Talk to Codex",
+          status: "waiting_for_input"
+        }
+      },
+      stepMachine: {
+        status: "waiting_for_input",
+        stepId: "server_step"
+      }
+    });
+    await mockAiStudioSession(page, session, {
+      conversationLog: [
+        {
+          assistant: {
+            at: "2026-05-25T01:03:00.000Z",
+            role: "assistant",
+            text: Array.from({ length: 36 }, (_value, index) => `Codex line ${index + 1}.`).join("\n")
+          },
+          turnId: "turn-1",
+          user: {
+            at: "2026-05-25T01:02:00.000Z",
+            role: "user",
+            text: "Please inspect the current state."
+          }
+        }
+      ],
+      onAdvance: () => {
+        advances += 1;
+      },
+      onIntent: (body) => {
+        intentRequests.push(body);
+      }
+    });
+
+    await page.goto(`${BASE_URL}/home`);
+
+    const composerInput = page.getByLabel("What do you want to ask Codex?");
+    await expect(composerInput).toBeVisible();
+    await expect(page.getByRole("button", { name: "Next step" })).toBeVisible();
+    await expect.poll(async () => page.locator(".studio-conversation-log__body").evaluate((element) => (
+      element.scrollTop + element.clientHeight >= element.scrollHeight - 2
+    ))).toBe(true);
+
+    await composerInput.fill("Please tighten this up.");
+    await composerInput.press("Tab");
+    await expect(page.getByRole("button", { name: "Ask Codex" })).toBeFocused();
+    await page.keyboard.press("Enter");
+
+    await expect.poll(() => intentRequests).toEqual([
+      {
+        fields: {
+          conversationRequest: "Please tighten this up."
+        },
+        stepId: "server_step",
+        stepStatus: "waiting_for_input"
+      }
+    ]);
+    expect(advances).toBe(0);
+  });
+
   test("renders numbered questions as UI sugar and submits only the logical response field", async ({ page }) => {
     const stepInputs: unknown[] = [];
     const session = sessionPayload({
@@ -589,6 +694,7 @@ test.describe("Autopilot dumb client contract", () => {
     await page.goto(`${BASE_URL}/home`);
 
     await expect(page.getByRole("heading", { name: "Server Questions" })).toBeVisible();
+    await expect(page.locator("textarea")).toHaveCount(0);
     await page.getByLabel("What should change?").fill("Tighten the layout.");
     await page.getByLabel("What should stay the same?").fill("Keep the current copy.");
     await page.getByRole("button", { name: "Submit" }).click();
@@ -617,8 +723,10 @@ async function mockAiStudioSession(
     onCommandTerminalStart = () => undefined,
     onIntent = () => undefined,
     onStepInput = () => undefined,
-    onCodexTerminalStart = () => undefined
+    onCodexTerminalStart = () => undefined,
+    conversationLog = []
   }: {
+    conversationLog?: unknown[];
     onAction?: (actionId: string, body: unknown) => void;
     onAdvance?: () => void;
     onCommandTerminalClose?: () => void;
@@ -696,7 +804,7 @@ async function mockAiStudioSession(
     }
     if (method === "GET" && url.pathname.endsWith("/conversation-log")) {
       await fulfillJson(route, {
-        conversationLog: [],
+        conversationLog,
         ok: true,
         sessionId: session.sessionId
       });

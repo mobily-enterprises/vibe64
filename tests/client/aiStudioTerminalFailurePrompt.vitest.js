@@ -42,6 +42,7 @@ describe("AI Studio terminal failure prompt", () => {
     expect(request.prompt).toContain("\"stepStatus\": \"waiting_for_input\"");
     expect(request.prompt).toContain("\"kind\": \"waiting_for_input\"");
     expect(request.prompt).toContain("write the same question or blocker in normal Codex response text");
+    expect(request.prompt).toContain("Ask at most 3 questions at a time");
     expect(request.prompt).toContain("format each question on its own line as `[1] Question text`");
     expect(request.prompt).toContain("- Session: session-1");
     expect(request.prompt).toContain("- Subject: Build app");
