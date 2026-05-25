@@ -188,6 +188,10 @@ function useStudioTerminal({
     terminalMetadata.value = {};
   }
 
+  function scrollTerminalToBottom() {
+    terminalInstance?.scrollToBottom?.();
+  }
+
   function writeTerminalOutput(output) {
     terminalLatestOutput = trimTerminalOutput(output);
     terminalOutput.value = terminalLatestOutput;
@@ -200,7 +204,7 @@ function useStudioTerminal({
     }
     const chunk = terminalLatestOutput.slice(terminalOutputOffset);
     if (chunk) {
-      terminalInstance.write(chunk);
+      terminalInstance.write(chunk, scrollTerminalToBottom);
       terminalOutputOffset = terminalLatestOutput.length;
     }
   }
@@ -213,7 +217,7 @@ function useStudioTerminal({
     terminalLatestOutput = trimTerminalOutput(`${terminalLatestOutput}${outputChunk}`);
     terminalOutput.value = terminalLatestOutput;
     if (terminalInstance) {
-      terminalInstance.write(outputChunk);
+      terminalInstance.write(outputChunk, scrollTerminalToBottom);
       terminalOutputOffset = terminalLatestOutput.length;
     }
   }

@@ -175,7 +175,7 @@ test.describe("Autopilot dumb client contract", () => {
         session.next = {
           disabledReason: "",
           enabled: true,
-          label: "Next",
+          label: "Next step",
           stepId: "next_server_step",
           visible: true
         };
@@ -186,7 +186,7 @@ test.describe("Autopilot dumb client contract", () => {
               executable: true,
               id: "session-advance:next_server_step",
               kind: "advance",
-              label: "Next",
+              label: "Next step",
               route: "session-advance"
             }
           },
@@ -293,7 +293,7 @@ test.describe("Autopilot dumb client contract", () => {
         session.next = {
           disabledReason: "",
           enabled: true,
-          label: "Next",
+          label: "Next step",
           stepId: "next_server_step",
           visible: true
         };
@@ -304,7 +304,7 @@ test.describe("Autopilot dumb client contract", () => {
               executable: true,
               id: "session-advance:next_server_step",
               kind: "advance",
-              label: "Next",
+              label: "Next step",
               route: "session-advance"
             }
           },
@@ -694,6 +694,14 @@ async function mockAiStudioSession(
       });
       return;
     }
+    if (method === "GET" && url.pathname.endsWith("/conversation-log")) {
+      await fulfillJson(route, {
+        conversationLog: [],
+        ok: true,
+        sessionId: session.sessionId
+      });
+      return;
+    }
     if (method === "GET" && /\/sessions\/[^/]+$/u.test(url.pathname)) {
       await fulfillJson(route, {
         ok: true,
@@ -881,7 +889,7 @@ function sessionPayload(overrides: Record<string, unknown> = {}) {
     next: {
       disabledReason: "Server controls this step.",
       enabled: false,
-      label: "Next",
+      label: "Next step",
       stepId: "next_step",
       visible: true
     },

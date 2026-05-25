@@ -11,6 +11,7 @@
         :automation-enabled="autopilotAutomationEnabled"
         :autopilot-steps="autopilotNavigationSteps"
         :command-runner="autopilotCommandRunner"
+        :conversation-log="conversationLog"
         :diff="dialogs.diff"
         :human-input-response-preview="humanInputResponsePreview"
         :page="guardedPage"
@@ -84,6 +85,9 @@ import {
 import {
   useAiStudioHumanInputResponsePreview
 } from "@/composables/useAiStudioHumanInputResponsePreview.js";
+import {
+  useAiStudioConversationLog
+} from "@/composables/useAiStudioConversationLog.js";
 import {
   useAiStudioSessionWorkflow
 } from "@/composables/useAiStudioSessionWorkflow.js";
@@ -205,6 +209,10 @@ const reportPreview = proxyRefs(useAiStudioReportPreview({
 const humanInputResponsePreview = proxyRefs(useAiStudioHumanInputResponsePreview({
   active: computed(() => props.active),
   artifactReadiness: liveArtifactReadiness,
+  session: selectedSession
+}));
+const conversationLog = proxyRefs(useAiStudioConversationLog({
+  active: computed(() => Boolean(props.active && props.sessionMode === "autopilot")),
   session: selectedSession
 }));
 const review = proxyRefs(sessionWorkflow.review);
@@ -421,7 +429,7 @@ watch(() => page.error, emitPageError, {
   grid-row: 1;
   height: min(18rem, 38vh);
   justify-self: center;
-  margin-top: clamp(0.5rem, 4vh, 2rem);
+  margin-top: 0;
   max-width: min(64rem, calc(100% - 2rem));
   opacity: 0.14;
   pointer-events: none;

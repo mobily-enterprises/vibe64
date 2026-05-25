@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import {
   AiStudioSessionRuntime,
@@ -86,6 +86,7 @@ test.describe("non-commit maintenance agent chat", () => {
     await page.getByRole("button", { name: "Ask Codex" }).click();
 
     await expectMarkdownResponsePreview(page);
+    await expectComposerActionsAligned(page);
     await expectNoBrowserCodexTerminalInput(page);
     await expect(page.getByRole("button", { name: "Next step" })).toBeEnabled();
     await page.getByRole("button", { name: "Next step" }).click();
@@ -109,17 +110,15 @@ test.describe("non-commit maintenance agent chat", () => {
     await page.getByRole("button", { name: "Ask Codex" }).click();
 
     const autopilot = page.locator(".studio-autopilot");
-    await expect(autopilot.getByText("Answer these before continuing.")).toBeVisible();
-    await autopilot.getByRole("textbox", { name: "Response" }).fill([
-      "Q1: not much",
-      "Q2: Pescara",
-      "Q3: guitar"
-    ].join("\n"));
+    await expect(autopilot.getByText("Answer these before continuing.", { exact: true })).toBeVisible();
+    await autopilot.getByLabel(RANDOM_QUESTIONS[0]).fill("not much");
+    await autopilot.getByLabel(RANDOM_QUESTIONS[1]).fill("Pescara");
+    await autopilot.getByLabel(RANDOM_QUESTIONS[2]).fill("guitar");
     await autopilot.getByRole("button", { name: "Send to Codex" }).click();
 
     const responseRegion = await expectMarkdownResponsePreview(page, QUESTION_RESPONSE_TEXT);
     await expectNoBrowserCodexTerminalInput(page);
-    await expect(responseRegion).not.toContainText(REALLY_RESPONSE_TEXT);
+    await expect(responseRegion).toContainText(REALLY_RESPONSE_TEXT);
   });
 
   test("runs the agent chat profile in Inspect and displays the same saved answer artifact", async ({ page }) => {
@@ -130,11 +129,11 @@ test.describe("non-commit maintenance agent chat", () => {
     await expect(page.getByRole("button", { name: /^Inspect$/ })).toBeHidden();
     await page.getByRole("button", { name: "Create worktree" }).click();
     await expect(page.getByText("Create worktree finished.")).toBeVisible();
-    await page.getByRole("button", { name: "Next" }).click();
+    await page.getByRole("button", { name: "Next step" }).click();
 
     await page.getByRole("button", { name: "Install checklist items" }).click();
     await expect(page.getByText("Install checklist items finished.")).toBeVisible();
-    await page.getByRole("button", { name: "Next" }).click();
+    await page.getByRole("button", { name: "Next step" }).click();
 
     await page.getByRole("button", { name: "Ask Codex" }).click();
     const inputDialog = page.getByRole("dialog").filter({
@@ -146,7 +145,7 @@ test.describe("non-commit maintenance agent chat", () => {
 
     await expectMarkdownResponsePreview(page);
     await expectNoBrowserCodexTerminalInput(page);
-    await expect(page.getByRole("button", { name: "Next" })).toBeEnabled();
+    await expect(page.getByRole("button", { name: "Next step" })).toBeEnabled();
 
     await page.getByRole("button", { name: "Autopilot" }).click();
     await expectMarkdownResponsePreview(page);
@@ -155,7 +154,9 @@ test.describe("non-commit maintenance agent chat", () => {
 });
 
 async function expectMarkdownResponsePreview(page: Page, expectedText = RESPONSE_TEXT) {
-  const responseRegion = page.getByRole("region", { name: "Codex" });
+  const responseRegion = page.locator('[aria-label="Conversation history"]:visible, [aria-label="Codex"]:visible')
+    .filter({ hasText: expectedText })
+    .first();
   await expect(responseRegion).toContainText(expectedText);
   if (expectedText === RESPONSE_TEXT) {
     await expect(responseRegion.getByRole("heading", { name: "Summary" })).toBeVisible();
@@ -171,6 +172,23 @@ async function expectNoBrowserCodexTerminalInput(page: Page) {
   await expect.poll(async () => page.evaluate(() => (
     (window as unknown as { __aiStudioCodexTerminalInputs?: string[] }).__aiStudioCodexTerminalInputs || []
   ))).toEqual([]);
+}
+
+async function expectComposerActionsAligned(page: Page) {
+  const formBox = await requiredBox(page.locator(".studio-autopilot__control-form"), "composer form");
+  const nextBox = await requiredBox(page.getByRole("button", { name: "Next step" }), "Next step button");
+  const askBox = await requiredBox(page.getByRole("button", { name: "Ask Codex" }), "Ask Codex button");
+  expect(Math.abs(nextBox.y - askBox.y)).toBeLessThan(8);
+  expect(Math.abs(nextBox.x - formBox.x)).toBeLessThan(16);
+  expect(Math.abs((askBox.x + askBox.width) - (formBox.x + formBox.width))).toBeLessThan(16);
+}
+
+async function requiredBox(locator: Locator, label: string) {
+  const box = await locator.boundingBox();
+  if (!box) {
+    throw new Error(`${label} is not visible enough to measure.`);
+  }
+  return box;
 }
 
 async function createNonCommitMaintenanceSession(page: Page) {
@@ -226,6 +244,7 @@ async function mockAgentChatRoutes(page: Page, runtime: AiStudioSessionRuntime) 
       const actionInput = request.postDataJSON() || {};
       const response = await runtime.runAction(sessionId, tail[1], actionInput);
       if (tail[1] === "agent_conversation") {
+        await recordConversationPrompt(runtime, sessionId, actionInput.conversationRequest);
         const session = await runtime.getSession(sessionId);
         const priorResponse = String(session.stepMachine?.response || "");
         if (priorResponse.includes("Pescara")) {
@@ -261,6 +280,7 @@ async function mockAgentChatRoutes(page: Page, runtime: AiStudioSessionRuntime) 
         const fields = intentInput.fields && typeof intentInput.fields === "object"
           ? intentInput.fields
           : {};
+        await recordConversationPrompt(runtime, sessionId, fields.conversationRequest);
         if (String(fields.conversationRequest || "").includes("Pescara")) {
           await writeAgentResponse(
             runtime,
@@ -297,6 +317,17 @@ async function mockAgentChatRoutes(page: Page, runtime: AiStudioSessionRuntime) 
 
     if (method === "GET" && tail[0] === "artifact-preview") {
       await fulfillJson(route, await artifactPreviewPayload(runtime, sessionId, String(url.searchParams.get("previewId") || "")));
+      return;
+    }
+
+    if (method === "GET" && tail[0] === "conversation-log") {
+      const session = await runtime.getSession(sessionId);
+      await fulfillJson(route, {
+        conversationLog: await runtime.store.readConversationLog(sessionId),
+        ok: true,
+        revision: session.revision,
+        sessionId
+      });
       return;
     }
 
@@ -401,6 +432,20 @@ async function applyCommandResult(runtime: AiStudioSessionRuntime, sessionId: st
     await runtime.store.writeMetadataValue(sessionId, "dependencies_installed", "yes");
     await runtime.store.writeMetadataValue(sessionId, "dependencies_path", runtime.targetRoot);
   }
+}
+
+async function recordConversationPrompt(
+  runtime: AiStudioSessionRuntime,
+  sessionId: string,
+  conversationRequest: unknown
+) {
+  const text = String(conversationRequest || "").trim();
+  if (!text) {
+    return;
+  }
+  await runtime.store.writeConversationUserMessage(sessionId, {
+    text
+  });
 }
 
 async function advanceSessionIfReady(runtime: AiStudioSessionRuntime, sessionId: string) {

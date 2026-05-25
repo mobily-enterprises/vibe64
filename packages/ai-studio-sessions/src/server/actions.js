@@ -11,6 +11,7 @@ const ACTION_LIST_SESSIONS = "feature.ai-studio-sessions.list";
 const ACTION_CREATE_SESSION = "feature.ai-studio-sessions.create";
 const ACTION_INSPECT_SESSION = "feature.ai-studio-sessions.inspect";
 const ACTION_INSPECT_SESSION_DIFF = "feature.ai-studio-sessions.diff.inspect";
+const ACTION_READ_SESSION_CONVERSATION_LOG = "feature.ai-studio-sessions.conversation-log.read";
 const ACTION_RUN_SESSION_ACTION = "feature.ai-studio-sessions.action.run";
 const ACTION_RUN_SESSION_INTENT = "feature.ai-studio-sessions.intent.run";
 const ACTION_ADVANCE_SESSION = "feature.ai-studio-sessions.advance";
@@ -89,6 +90,24 @@ const featureActions = Object.freeze([
     async execute(input, context, deps) {
       void context;
       return deps.featureService.inspectSessionDiff(input.sessionId);
+    }
+  },
+  {
+    id: ACTION_READ_SESSION_CONVERSATION_LOG,
+    version: 1,
+    kind: "query",
+    channels: ["api", "automation", "internal"],
+    surfaces: ["home"],
+    input: sessionIdInputValidator,
+    output: null,
+    idempotency: "none",
+    audit: {
+      actionName: ACTION_READ_SESSION_CONVERSATION_LOG
+    },
+    observability: {},
+    async execute(input, context, deps) {
+      void context;
+      return deps.featureService.readSessionConversationLog(input.sessionId);
     }
   },
   {
@@ -220,6 +239,7 @@ export {
   ACTION_INSPECT_SESSION,
   ACTION_INSPECT_SESSION_DIFF,
   ACTION_LIST_SESSIONS,
+  ACTION_READ_SESSION_CONVERSATION_LOG,
   ACTION_RECOVER_STUCK_SESSION_STEP,
   ACTION_REWIND_SESSION,
   ACTION_RUN_SESSION_ACTION,

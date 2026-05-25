@@ -226,7 +226,7 @@ function normalizeNext(next = {}, stepId = "") {
   return {
     disabledReason: normalizeText(next.disabledReason),
     enabledWhen: normalizeWorkflowConditionList(next.enabledWhen, `step ${stepId} next.enabledWhen`),
-    label: normalizeText(next.label || "Next"),
+    label: normalizeText(next.label || "Next step"),
     visible: next.visible !== false,
     visibleWhen: normalizeWorkflowConditionList(next.visibleWhen, `step ${stepId} next.visibleWhen`)
   };
@@ -734,7 +734,7 @@ class WorkflowMachine {
 
   nextStateForStep(currentStep, session = {}) {
     if (!currentStep) {
-      return hiddenNext("Next", "No current step.");
+      return hiddenNext("Next step", "No current step.");
     }
     const followingStep = this.stepAfter(currentStep.id);
     if (!followingStep) {

@@ -40,6 +40,10 @@ function aiStudioCodexAttachmentPath(sessionsApiPath = "", sessionId = "") {
   return aiStudioSessionPath(sessionsApiPath, sessionId, "/codex-attachments");
 }
 
+function aiStudioConversationLogPath(sessionsApiPath = "", sessionId = "") {
+  return aiStudioSessionPath(sessionsApiPath, sessionId, "/conversation-log");
+}
+
 function aiStudioCommandTerminalPath(sessionsApiPath = "", sessionId = "", terminalSessionId = "") {
   return aiStudioSessionPath(
     sessionsApiPath,
@@ -91,6 +95,16 @@ function aiStudioArtifactPreviewQueryKey(surfaceId, ownershipFilter, sessionId =
   return key;
 }
 
+function aiStudioConversationLogQueryKey(surfaceId, ownershipFilter, sessionId = "") {
+  return [
+    "ai-studio",
+    surfaceId,
+    ownershipFilter,
+    "conversation-log",
+    encodePathSegment(sessionId)
+  ];
+}
+
 function aiStudioLaunchTargetsQueryKey(surfaceId, ownershipFilter, sessionId = "") {
   return [
     "ai-studio",
@@ -119,6 +133,8 @@ export {
   aiStudioArtifactPreviewQueryKey,
   aiStudioCodexAttachmentPath,
   aiStudioCommandTerminalPath,
+  aiStudioConversationLogPath,
+  aiStudioConversationLogQueryKey,
   aiStudioIntentPath,
   aiStudioLaunchTargetOpenPath,
   aiStudioLaunchTargetsPath,

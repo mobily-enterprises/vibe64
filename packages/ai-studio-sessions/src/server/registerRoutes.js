@@ -5,6 +5,7 @@ import {
   ACTION_INSPECT_SESSION_DIFF,
   ACTION_INSPECT_SESSION,
   ACTION_LIST_SESSIONS,
+  ACTION_READ_SESSION_CONVERSATION_LOG,
   ACTION_RECOVER_STUCK_SESSION_STEP,
   ACTION_REWIND_SESSION,
   ACTION_RUN_SESSION_ACTION,
@@ -48,6 +49,12 @@ function registerRoutes(
     actionId: ACTION_INSPECT_SESSION_DIFF,
     buildInput: sessionInput,
     summary: "Inspect an AI Studio session worktree diff."
+  });
+
+  routes.actionRoute("GET", "/sessions/:sessionId/conversation-log", {
+    actionId: ACTION_READ_SESSION_CONVERSATION_LOG,
+    buildInput: sessionInput,
+    summary: "Read an AI Studio session conversation log."
   });
 
   routes.actionRoute("POST", "/sessions/:sessionId/actions/:actionId", {

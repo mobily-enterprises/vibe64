@@ -23,6 +23,14 @@ const SESSION_ARCHIVE_QUERY = Object.freeze({
   COMPLETED: "completed",
   FINISHED: "finished"
 });
+const CONVERSATION_ACTION_IDS = new Set([
+  "agent_conversation",
+  "final_review_conversation",
+  "human_review_conversation"
+]);
+const CONVERSATION_INTENT_IDS = new Set([
+  "talk_to_codex"
+]);
 
 function sessionResult(operation) {
   return aiStudioResult(operation, {
@@ -86,6 +94,58 @@ function codexPromptHandoffFromSession(session = {}) {
 
 function objectValue(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function conversationRequestText(input = {}) {
+  const inputObject = objectValue(input);
+  const fields = objectValue(inputObject.fields);
+  return normalizedInputText(
+    inputObject.conversationRequest ||
+    inputObject.feedback ||
+    inputObject.message ||
+    inputObject.response ||
+    fields.conversationRequest ||
+    fields.feedback ||
+    fields.message ||
+    fields.response
+  );
+}
+
+function shouldRecordConversationUserMessage({ actionId = "", intentId = "" } = {}) {
+  const normalizedActionId = normalizedInputText(actionId);
+  const normalizedIntentId = normalizedInputText(intentId);
+  return Boolean(
+    CONVERSATION_ACTION_IDS.has(normalizedActionId) ||
+    CONVERSATION_INTENT_IDS.has(normalizedIntentId)
+  );
+}
+
+async function recordConversationUserMessage(runtime, sessionId, {
+  actionId = "",
+  input = {},
+  intentId = ""
+} = {}) {
+  if (!shouldRecordConversationUserMessage({ actionId, intentId })) {
+    return null;
+  }
+  const text = conversationRequestText(input);
+  if (!text || typeof runtime?.store?.writeConversationUserMessage !== "function") {
+    return null;
+  }
+  return runtime.store.writeConversationUserMessage(sessionId, {
+    text
+  });
+}
+
+async function sessionWithLatestRevision(runtime, session = {}) {
+  if (!session?.sessionId || typeof runtime?.getSession !== "function") {
+    return session;
+  }
+  return {
+    ...await runtime.getSession(session.sessionId),
+    actionResult: session.actionResult,
+    codexPromptDelivery: session.codexPromptDelivery
+  };
 }
 
 function codexTerminalPresentation(codexTerminal = null) {
@@ -536,6 +596,41 @@ function createService({
       });
     },
 
+    async readSessionConversationLog(sessionId) {
+      const startedAtMs = Date.now();
+      aiStudioSessionDebugLog("server.service.readSessionConversationLog.start", {
+        sessionId
+      });
+      return sessionResult(async () => {
+        try {
+          const runtime = await projectService.createRuntime();
+          const session = await runtime.getSession(sessionId);
+          const conversationLog = typeof runtime.store?.readConversationLog === "function"
+            ? await runtime.store.readConversationLog(sessionId)
+            : [];
+          const response = {
+            conversationLog,
+            ok: true,
+            revision: session.revision,
+            sessionId: session.sessionId
+          };
+          aiStudioSessionDebugLog("server.service.readSessionConversationLog.done", {
+            durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
+            sessionId,
+            turnCount: conversationLog.length
+          });
+          return response;
+        } catch (error) {
+          aiStudioSessionDebugLog("server.service.readSessionConversationLog.error", {
+            durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
+            error: aiStudioSessionDebugError(error),
+            sessionId
+          });
+          throw error;
+        }
+      });
+    },
+
     async inspectSessionDiff(sessionId) {
       return sessionResult(async () => {
         const runtime = await projectService.createRuntime();
@@ -617,7 +712,14 @@ function createService({
         try {
           await assertAiStudioSetupReady(setupServices);
           const runtime = await projectService.createRuntime();
-          const session = await runtime.runAction(sessionId, actionId, input);
+          let session = await runtime.runAction(sessionId, actionId, input);
+          const conversationTurn = await recordConversationUserMessage(runtime, sessionId, {
+            actionId,
+            input
+          });
+          if (conversationTurn) {
+            session = await sessionWithLatestRevision(runtime, session);
+          }
           if (!isOpenAiStudioSession(session)) {
             await terminalService?.closeSessionTerminals?.(sessionId);
             aiStudioSessionDebugLog("server.service.runSessionAction.done", {
@@ -662,7 +764,14 @@ function createService({
         try {
           await assertAiStudioSetupReady(setupServices);
           const runtime = await projectService.createRuntime();
-          const session = await runtime.runIntent(sessionId, intentId, input);
+          let session = await runtime.runIntent(sessionId, intentId, input);
+          const conversationTurn = await recordConversationUserMessage(runtime, sessionId, {
+            input,
+            intentId
+          });
+          if (conversationTurn) {
+            session = await sessionWithLatestRevision(runtime, session);
+          }
           if (!isOpenAiStudioSession(session)) {
             await terminalService?.closeSessionTerminals?.(sessionId);
             aiStudioSessionDebugLog("server.service.runSessionIntent.done", {

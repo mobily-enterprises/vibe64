@@ -196,6 +196,14 @@ function deferred() {
   };
 }
 
+async function waitForArrayLength(entries, expectedLength, timeoutMs = POST_COMMIT_TEST_TIMEOUT_MS) {
+  const deadline = Date.now() + timeoutMs;
+  while (entries.length < expectedLength && Date.now() < deadline) {
+    await delay(5);
+  }
+  assert.equal(entries.length, expectedLength);
+}
+
 test("AI Studio Codex terminal joins the target runtime network before the image", () => {
   const targetRoot = "/workspace/project";
   const args = codexTerminalArgs({
@@ -772,11 +780,12 @@ test("AI Studio command terminal records action results and metadata after succe
     assert.match(removedContainerName, /^ai-studio-command-/u);
 
     const updatedSession = await runtime.getSession("terminal_success");
-    assert.equal(updatedSession.metadata.terminal_done, "yes");
-    assert.equal(updatedSession.metadata.dynamic_done, "from-result-file");
-    assert.equal(updatedSession.metadata.stale_value, undefined);
-    assert.deepEqual(successfulCommandHooks, [
-      {
+	    assert.equal(updatedSession.metadata.terminal_done, "yes");
+	    assert.equal(updatedSession.metadata.dynamic_done, "from-result-file");
+	    assert.equal(updatedSession.metadata.stale_value, undefined);
+	    await waitForArrayLength(successfulCommandHooks, 1);
+	    assert.deepEqual(successfulCommandHooks, [
+	      {
         actionId: "unit_command",
         currentStep: "unit_step",
         metadata: {
@@ -806,19 +815,58 @@ test("AI Studio command terminal records action results and metadata after succe
         status: "completed"
       }
     ]);
-    assert.deepEqual(await runtime.store.readCommandLog("terminal_success"), [
-      {
-        actionId: "unit_command",
+	    assert.deepEqual(await runtime.store.readCommandLog("terminal_success"), [
+	      {
+	        actionId: "unit_command",
         actionLabel: "Unit command",
         actionType: "command",
         at: "2026-05-16T01:02:03.000Z",
         kind: "terminal-action",
         status: "completed",
-        stepId: "unit_step"
-      }
-    ]);
-  });
-});
+	        stepId: "unit_step"
+	      }
+	    ]);
+	    let lifecycle = await runtime.store.readCommandLifecycle("terminal_success", "1-unit_command");
+	    for (let attempt = 0; attempt < 20 && lifecycle?.phase !== "done"; attempt += 1) {
+	      await delay(5);
+	      lifecycle = await runtime.store.readCommandLifecycle("terminal_success", "1-unit_command");
+	    }
+	    const lifecycleEventKinds = lifecycle.events.map((event) => event.kind);
+	    assert.deepEqual({
+	      actionId: lifecycle.actionId,
+	      inputKeys: lifecycle.inputKeys,
+	      outcome: lifecycle.outcome,
+	      phase: lifecycle.phase,
+	      postCommit: lifecycle.postCommit,
+	      stepId: lifecycle.stepId,
+	      stepRevision: lifecycle.stepRevision,
+	      terminalSessionId: lifecycle.terminalSessionId
+	    }, {
+	      actionId: "unit_command",
+	      inputKeys: ["dryRun"],
+	      outcome: "completed",
+	      phase: "done",
+	      postCommit: {
+	        afterSuccessfulCommand: "done",
+	        afterSuccessfulCommandError: "",
+	        publishSessionChanged: "done",
+	        publishSessionChangedError: ""
+	      },
+	      stepId: "unit_step",
+	      stepRevision: 1,
+	      terminalSessionId: "unit-command-terminal"
+	    });
+	    assert.deepEqual([...new Set(lifecycleEventKinds)].sort(), [
+	      "done",
+	      "post_commit_running",
+	      "result_writing",
+	      "result_written",
+	      "started",
+	      "starting",
+	      "terminal_exited"
+	    ]);
+	  });
+	});
 
 test("AI Studio command terminal accepts completion after unrelated session metadata changes", async () => {
   await withTemporaryRoot(async (targetRoot) => {
@@ -1268,12 +1316,13 @@ test("AI Studio command terminal advances workflow when requested after success"
     assert.equal(terminal.ok, true);
     await closePromise;
 
-    const session = await runtime.getSession("terminal_advance");
-    assert.equal(session.currentStep, "next_step");
-    assert.deepEqual(session.completedSteps, ["unit_step"]);
-    assert.deepEqual(hookSteps, ["next_step"]);
-  });
-});
+	    const session = await runtime.getSession("terminal_advance");
+	    assert.equal(session.currentStep, "next_step");
+	    assert.deepEqual(session.completedSteps, ["unit_step"]);
+	    await waitForArrayLength(hookSteps, 1);
+	    assert.deepEqual(hookSteps, ["next_step"]);
+	  });
+	});
 
 test("AI Studio shell terminal resolves only declared session targets", async () => {
   await withTemporaryRoot(async (targetRoot) => {

@@ -251,6 +251,77 @@ test("session prompt intent injects the rendered Codex handoff from the server",
   ]);
 });
 
+test("session service records and reads form conversation prompts", async () => {
+  const conversationLog = [];
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async getSession(sessionId) {
+            return {
+              revision: conversationLog.length + 1,
+              sessionId,
+              status: AI_STUDIO_SESSION_STATUS.ACTIVE
+            };
+          },
+          async runIntent(sessionId, intentId, input) {
+            return {
+              actionResult: {
+                actionId: "agent_conversation",
+                input,
+                intentId,
+                status: "prompt_ready"
+              },
+              sessionId,
+              status: AI_STUDIO_SESSION_STATUS.ACTIVE
+            };
+          },
+          store: {
+            async readConversationLog() {
+              return conversationLog;
+            },
+            async writeConversationUserMessage(_sessionId, { text }) {
+              const turn = {
+                assistant: null,
+                messages: [
+                  {
+                    at: "2026-05-25T01:02:03.000Z",
+                    role: "user",
+                    text
+                  }
+                ],
+                turnId: "000001",
+                user: {
+                  at: "2026-05-25T01:02:03.000Z",
+                  role: "user",
+                  text
+                }
+              };
+              conversationLog.push(turn);
+              return turn;
+            }
+          }
+        };
+      }
+    },
+    setupServices: readySetupServices()
+  });
+
+  await service.runSessionIntent("session-1", "talk_to_codex", {
+    fields: {
+      conversationRequest: "Can you tighten the layout?"
+    },
+    stepId: "maintenance_conversation",
+    stepStatus: "ready"
+  });
+  const read = await service.readSessionConversationLog("session-1");
+
+  assert.equal(read.ok, true);
+  assert.deepEqual(read.conversationLog.map((turn) => turn.user.text), [
+    "Can you tighten the layout?"
+  ]);
+});
+
 test("session prompt action fails visibly when server-side Codex delivery fails", async () => {
   const service = createService({
     projectService: {

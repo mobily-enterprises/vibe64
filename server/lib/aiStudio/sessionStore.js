@@ -33,9 +33,23 @@ const CLOSED_AI_STUDIO_SESSION_STATUSES = new Set([
 ]);
 const ACTION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
 const ARTIFACT_PATH_SEGMENT_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/u;
+const COMMAND_LIFECYCLE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,191}$/u;
+const CONVERSATION_MESSAGE_FILE_PATTERN = /^(user|assistant)\.(\d{8}T\d{9}Z)\.md$/u;
+const CONVERSATION_TURN_ID_PATTERN = /^\d{6}$/u;
 const METADATA_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/u;
 const SESSION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
 const STEP_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
+const COMMAND_LIFECYCLE_PHASE_RANK = Object.freeze({
+  starting: 10,
+  started: 20,
+  terminal_exited: 30,
+  result_writing: 40,
+  result_written: 50,
+  advanced: 60,
+  post_commit_running: 70,
+  done: 80,
+  failed: 90
+});
 const sessionMutationChains = new Map();
 const sessionMutationContext = new AsyncLocalStorage();
 
@@ -54,6 +68,10 @@ function isSafeStepId(stepId) {
 
 function isSafeActionId(actionId) {
   return ACTION_ID_PATTERN.test(normalizeText(actionId));
+}
+
+function isSafeCommandLifecycleId(lifecycleId) {
+  return COMMAND_LIFECYCLE_ID_PATTERN.test(normalizeText(lifecycleId));
 }
 
 function assertValidAiStudioSessionId(sessionId) {
@@ -86,6 +104,17 @@ function assertSafeActionId(actionId) {
     throw aiStudioError(`Invalid ai-studio action id: ${normalizedActionId || "(empty)"}`, "ai_studio_invalid_action_id");
   }
   return normalizedActionId;
+}
+
+function assertSafeCommandLifecycleId(lifecycleId) {
+  const normalizedLifecycleId = normalizeText(lifecycleId);
+  if (!isSafeCommandLifecycleId(normalizedLifecycleId)) {
+    throw aiStudioError(
+      `Invalid ai-studio command lifecycle id: ${normalizedLifecycleId || "(empty)"}`,
+      "ai_studio_invalid_command_lifecycle_id"
+    );
+  }
+  return normalizedLifecycleId;
 }
 
 function assertAiStudioSessionStatus(status) {
@@ -231,6 +260,29 @@ function normalizePromptContextSnapshot(snapshot = {}) {
   };
 }
 
+function normalizeCommandLifecyclePhase(value = "") {
+  const phase = normalizeText(value);
+  return COMMAND_LIFECYCLE_PHASE_RANK[phase] ? phase : "";
+}
+
+function commandLifecyclePhaseRank(value = "") {
+  return COMMAND_LIFECYCLE_PHASE_RANK[normalizeCommandLifecyclePhase(value)] || 0;
+}
+
+function latestCommandLifecyclePhase(previousPhase = "", nextPhase = "") {
+  const normalizedPreviousPhase = normalizeCommandLifecyclePhase(previousPhase);
+  const normalizedNextPhase = normalizeCommandLifecyclePhase(nextPhase);
+  if (!normalizedNextPhase) {
+    return normalizedPreviousPhase;
+  }
+  if (!normalizedPreviousPhase) {
+    return normalizedNextPhase;
+  }
+  return commandLifecyclePhaseRank(normalizedNextPhase) >= commandLifecyclePhaseRank(normalizedPreviousPhase)
+    ? normalizedNextPhase
+    : normalizedPreviousPhase;
+}
+
 async function readDirectoryEntries(directoryPath) {
   try {
     return await readdir(directoryPath, {
@@ -290,6 +342,22 @@ function timestampForSessionId(date) {
     .replaceAll(":", "-");
 }
 
+function timestampForConversationFile(date) {
+  return toDate(date)
+    .toISOString()
+    .replace(/[-:]/gu, "")
+    .replace(".", "");
+}
+
+function isoFromConversationTimestamp(timestamp = "") {
+  const value = normalizeText(timestamp);
+  const match = value.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(\d{3})Z$/u);
+  if (!match) {
+    return "";
+  }
+  return `${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}:${match[6]}.${match[7]}Z`;
+}
+
 function resolveAiStudioSessionPaths({
   sessionId = "",
   targetRoot = process.cwd()
@@ -304,7 +372,9 @@ function resolveAiStudioSessionPaths({
     actionsRoot: sessionRoot ? path.join(sessionRoot, "actions") : "",
     activeSessionsRoot,
     artifactsRoot: sessionRoot ? path.join(sessionRoot, "artifacts") : "",
+    commandLifecyclesRoot: sessionRoot ? path.join(sessionRoot, "command-lifecycle") : "",
     commandLogPath: sessionRoot ? path.join(sessionRoot, "command-log.jsonl") : "",
+    conversationLogRoot: sessionRoot ? path.join(sessionRoot, "conversation-log") : "",
     currentStepPath: sessionRoot ? path.join(sessionRoot, "current_step") : "",
     manifestPath: sessionRoot ? path.join(sessionRoot, "session.json") : "",
     metadataRoot: sessionRoot ? path.join(sessionRoot, "metadata") : "",
@@ -377,12 +447,42 @@ function actionResultFilePath(sessionPaths, actionId) {
   return path.join(sessionPaths.actionsRoot, assertSafeActionId(actionId));
 }
 
+function commandLifecycleFilePath(sessionPaths, lifecycleId) {
+  return path.join(sessionPaths.commandLifecyclesRoot, `${assertSafeCommandLifecycleId(lifecycleId)}.json`);
+}
+
 function completedStepFilePath(sessionPaths, stepId) {
   return path.join(sessionPaths.stepsRoot, assertSafeStepId(stepId));
 }
 
 function stepStateFilePath(sessionPaths, stepId) {
   return path.join(sessionPaths.stepStatesRoot, assertSafeStepId(stepId));
+}
+
+function conversationTurnRoot(sessionPaths, turnId) {
+  const normalizedTurnId = normalizeText(turnId);
+  if (!CONVERSATION_TURN_ID_PATTERN.test(normalizedTurnId)) {
+    throw aiStudioError(`Invalid ai-studio conversation turn id: ${normalizedTurnId || "(empty)"}`, "ai_studio_invalid_conversation_turn_id");
+  }
+  return path.join(sessionPaths.conversationLogRoot, normalizedTurnId);
+}
+
+function conversationMessageFileName(role = "", date) {
+  const normalizedRole = normalizeText(role);
+  if (!["assistant", "user"].includes(normalizedRole)) {
+    throw aiStudioError(`Invalid ai-studio conversation role: ${normalizedRole || "(empty)"}`, "ai_studio_invalid_conversation_role");
+  }
+  return `${normalizedRole}.${timestampForConversationFile(date)}.md`;
+}
+
+function nextConversationTurnId(turnIds = []) {
+  const latest = [...turnIds]
+    .filter((turnId) => CONVERSATION_TURN_ID_PATTERN.test(turnId))
+    .map((turnId) => Number.parseInt(turnId, 10))
+    .filter((turnId) => Number.isSafeInteger(turnId) && turnId > 0)
+    .sort((left, right) => left - right)
+    .at(-1) || 0;
+  return String(latest + 1).padStart(6, "0");
 }
 
 function createAiStudioSessionStore({
@@ -603,6 +703,194 @@ function createAiStudioSessionStore({
       .map((line) => JSON.parse(line));
   }
 
+  async function readCommandLifecycleFromPath(sessionPaths, lifecycleId) {
+    const normalizedLifecycleId = assertSafeCommandLifecycleId(lifecycleId);
+    const lifecycleText = await readTextIfExists(commandLifecycleFilePath(sessionPaths, normalizedLifecycleId));
+    if (!lifecycleText) {
+      return null;
+    }
+    try {
+      const record = JSON.parse(lifecycleText);
+      return isPlainObject(record)
+        ? {
+            ...record,
+            events: Array.isArray(record.events) ? record.events.filter(isPlainObject) : [],
+            id: normalizedLifecycleId,
+            phase: normalizeCommandLifecyclePhase(record.phase || record.status),
+            status: normalizeCommandLifecyclePhase(record.phase || record.status)
+          }
+        : null;
+    } catch {
+      throw aiStudioError(
+        `Invalid ai-studio command lifecycle: ${normalizedLifecycleId}`,
+        "ai_studio_invalid_command_lifecycle"
+      );
+    }
+  }
+
+  async function readCommandLifecycle(sessionId, lifecycleId) {
+    const sessionPaths = await ensureSessionRoot(sessionId);
+    return readCommandLifecycleFromPath(sessionPaths, lifecycleId);
+  }
+
+  async function readCommandLifecycles(sessionId) {
+    const sessionPaths = await ensureSessionRoot(sessionId);
+    const lifecycleNames = sortedFileNames(
+      await readDirectoryEntries(sessionPaths.commandLifecyclesRoot),
+      (name) => name.endsWith(".json") && isSafeCommandLifecycleId(name.slice(0, -".json".length))
+    );
+    const lifecycles = await Promise.all(lifecycleNames.map((fileName) => {
+      return readCommandLifecycleFromPath(sessionPaths, fileName.slice(0, -".json".length));
+    }));
+    return lifecycles
+      .filter(Boolean)
+      .sort((left, right) => {
+        const timeComparison = normalizeText(left.updatedAt).localeCompare(normalizeText(right.updatedAt));
+        return timeComparison || normalizeText(left.id).localeCompare(normalizeText(right.id));
+      });
+  }
+
+  async function writeCommandLifecycleEvent(sessionId, lifecycleId, {
+    event = {},
+    patch = {}
+  } = {}) {
+    return mutateSession(sessionId, async (sessionPaths) => {
+      const normalizedLifecycleId = assertSafeCommandLifecycleId(lifecycleId);
+      const previous = await readCommandLifecycleFromPath(sessionPaths, normalizedLifecycleId) || {
+        events: [],
+        id: normalizedLifecycleId
+      };
+      const eventAt = normalizeText(event.at || patch.updatedAt) || now().toISOString();
+      const requestedPhase = normalizeCommandLifecyclePhase(
+        patch.phase || patch.status || event.phase || event.status
+      );
+      const phase = latestCommandLifecyclePhase(previous.phase || previous.status, requestedPhase);
+      const outcome = normalizeText(patch.outcome || event.outcome || previous.outcome);
+      const eventRecord = {
+        ...event,
+        at: eventAt,
+        kind: normalizeText(event.kind || requestedPhase || "updated"),
+        outcome,
+        phase: requestedPhase || phase,
+        status: requestedPhase || phase
+      };
+      const record = {
+        ...previous,
+        ...patch,
+        events: [
+          ...(Array.isArray(previous.events) ? previous.events : []),
+          eventRecord
+        ],
+        finishedAt: normalizeText(patch.finishedAt || previous.finishedAt),
+        id: normalizedLifecycleId,
+        outcome,
+        phase,
+        startedAt: normalizeText(previous.startedAt || patch.startedAt) || eventAt,
+        status: phase,
+        updatedAt: eventAt
+      };
+      if (phase === "done" || phase === "failed") {
+        record.finishedAt = record.finishedAt || eventAt;
+      }
+      await writeJsonFile(commandLifecycleFilePath(sessionPaths, normalizedLifecycleId), record);
+      return record;
+    });
+  }
+
+  async function readConversationMessage(sessionPaths, turnId, fileName) {
+    const match = normalizeText(fileName).match(CONVERSATION_MESSAGE_FILE_PATTERN);
+    if (!match) {
+      return null;
+    }
+    return {
+      at: isoFromConversationTimestamp(match[2]),
+      role: match[1],
+      text: normalizeText(await readTextIfExists(path.join(conversationTurnRoot(sessionPaths, turnId), fileName)))
+    };
+  }
+
+  async function readConversationTurn(sessionPaths, turnId) {
+    const fileNames = sortedFileNames(
+      await readDirectoryEntries(conversationTurnRoot(sessionPaths, turnId)),
+      (name) => CONVERSATION_MESSAGE_FILE_PATTERN.test(name)
+    );
+    const messages = (await Promise.all(
+      fileNames.map((fileName) => readConversationMessage(sessionPaths, turnId, fileName))
+    )).filter((message) => message && message.text);
+    const user = messages.find((message) => message.role === "user") || null;
+    const assistant = messages.find((message) => message.role === "assistant") || null;
+    return {
+      assistant,
+      messages: [user, assistant].filter(Boolean),
+      turnId,
+      user
+    };
+  }
+
+  async function conversationTurnIds(sessionPaths) {
+    return sortedDirectoryNames(
+      await readDirectoryEntries(sessionPaths.conversationLogRoot),
+      (name) => CONVERSATION_TURN_ID_PATTERN.test(name)
+    );
+  }
+
+  async function latestOpenConversationTurnId(sessionPaths) {
+    const turnIds = await conversationTurnIds(sessionPaths);
+    for (const turnId of [...turnIds].reverse()) {
+      const turn = await readConversationTurn(sessionPaths, turnId);
+      if (turn.user && !turn.assistant) {
+        return turnId;
+      }
+    }
+    return "";
+  }
+
+  async function readConversationLog(sessionId) {
+    const sessionPaths = await ensureSessionRoot(sessionId);
+    const turnIds = await conversationTurnIds(sessionPaths);
+    const turns = await Promise.all(turnIds.map((turnId) => readConversationTurn(sessionPaths, turnId)));
+    return turns.filter((turn) => turn.user || turn.assistant);
+  }
+
+  async function writeConversationUserMessage(sessionId, {
+    text = ""
+  } = {}) {
+    const messageText = normalizeText(text);
+    if (!messageText) {
+      return null;
+    }
+    return mutateSession(sessionId, async (sessionPaths) => {
+      const turnId = nextConversationTurnId(await conversationTurnIds(sessionPaths));
+      const createdAt = now();
+      await writeTextFile(
+        path.join(conversationTurnRoot(sessionPaths, turnId), conversationMessageFileName("user", createdAt)),
+        `${messageText}\n`
+      );
+      return readConversationTurn(sessionPaths, turnId);
+    });
+  }
+
+  async function writeConversationAssistantMessage(sessionId, {
+    text = ""
+  } = {}) {
+    const messageText = normalizeText(text);
+    if (!messageText) {
+      return null;
+    }
+    return mutateSession(sessionId, async (sessionPaths) => {
+      const turnId = await latestOpenConversationTurnId(sessionPaths);
+      if (!turnId) {
+        return null;
+      }
+      const createdAt = now();
+      await writeTextFile(
+        path.join(conversationTurnRoot(sessionPaths, turnId), conversationMessageFileName("assistant", createdAt)),
+        `${messageText}\n`
+      );
+      return readConversationTurn(sessionPaths, turnId);
+    });
+  }
+
   async function writeActionResult(sessionId, actionId, result = {}) {
     return mutateSession(sessionId, async (sessionPaths) => {
       const normalizedActionId = assertSafeActionId(actionId);
@@ -782,6 +1070,7 @@ function createAiStudioSessionStore({
       completedSteps,
       artifactReadiness,
       actionResults,
+      commandLifecycles,
       promptContextSnapshot
     ] = await Promise.all([
       readManifest(sessionPaths.sessionId),
@@ -791,17 +1080,28 @@ function createAiStudioSessionStore({
       readCompletedSteps(sessionPaths.sessionId),
       readArtifactReadiness(sessionPaths.sessionId),
       readActionResults(sessionPaths.sessionId),
+      readCommandLifecycles(sessionPaths.sessionId),
       readPromptContextSnapshot(sessionPaths.sessionId)
     ]);
     const sessionName = await sessionNameForSession(sessionPaths, metadata);
     const reportReady = artifactReadiness[REPORT_ARTIFACT]?.nonEmpty === true;
+    const currentCommandLifecycle = commandLifecycles
+      .filter((lifecycle) => {
+        return normalizeText(lifecycle.stepId) === currentStep &&
+          stepRevisionNumber(lifecycle.stepRevision) === stepRevisionNumber(manifest.stepRevision);
+      })
+      .at(-1) || null;
     return {
       actionResults,
       actionsRoot: sessionPaths.actionsRoot,
       artifactReadiness,
       artifactsRoot: sessionPaths.artifactsRoot,
+      commandLifecycles,
+      commandLifecyclesRoot: sessionPaths.commandLifecyclesRoot,
+      currentCommandLifecycle,
       commandLogPath: sessionPaths.commandLogPath,
       completedSteps,
+      conversationLogRoot: sessionPaths.conversationLogRoot,
       currentStep,
       manifest,
       metadata,
@@ -855,6 +1155,9 @@ function createAiStudioSessionStore({
         recursive: true
       }),
       mkdir(sessionPaths.artifactsRoot, {
+        recursive: true
+      }),
+      mkdir(sessionPaths.commandLifecyclesRoot, {
         recursive: true
       }),
       mkdir(sessionPaths.metadataRoot, {
@@ -927,8 +1230,11 @@ function createAiStudioSessionStore({
     readArtifactReadiness,
     readActionResult,
     readActionResults,
+    readCommandLifecycle,
+    readCommandLifecycles,
     readCommandLog,
     readCompletedSteps,
+    readConversationLog,
     readCurrentStep,
     readManifest,
     readMetadata,
@@ -938,8 +1244,11 @@ function createAiStudioSessionStore({
     readStatus,
     readStepState,
     writeArtifact,
+    writeCommandLifecycleEvent,
     writeActionResult,
     writeCompletedStep,
+    writeConversationAssistantMessage,
+    writeConversationUserMessage,
     writeCurrentStep,
     writeIssueWordMetadata,
     writeMetadataValue,

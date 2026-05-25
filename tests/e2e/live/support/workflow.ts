@@ -102,7 +102,7 @@ async function chooseNewBranch(page: Page) {
   await expectSessionMetadata(page, "work_source", "new_branch");
   await expectButtonDisabled(page, "Use new branch");
   await expectButtonDisabled(page, "Use existing PR");
-  await expectButtonEnabled(page, "Next");
+  await expectButtonEnabled(page, "Next step");
 }
 
 async function chooseExistingPr(page: Page, prRef: string) {
@@ -110,7 +110,7 @@ async function chooseExistingPr(page: Page, prRef: string) {
   await fillInputDialog(page, "PR URL or number", prRef);
   const session = await expectSessionMetadata(page, "work_source", "existing_pr");
   expect(session.metadata?.source_pr_url || "").toContain("/pull/");
-  await expectButtonEnabled(page, "Next");
+  await expectButtonEnabled(page, "Next step");
 }
 
 async function useExistingIssue(page: Page, issueRef: string) {
@@ -118,7 +118,7 @@ async function useExistingIssue(page: Page, issueRef: string) {
   await fillInputDialog(page, "Issue URL or number", issueRef);
   const session = await expectSessionMetadataContains(page, "issue_url", "/issues/");
   expect(session.metadata?.issue_source).toBe("existing");
-  await expectButtonEnabled(page, "Next");
+  await expectButtonEnabled(page, "Next step");
 }
 
 async function fillInputDialog(page: Page, label: string, value: string) {
@@ -133,7 +133,7 @@ async function fillInputDialog(page: Page, label: string, value: string) {
 }
 
 async function goNextToStep(page: Page, stepId: string) {
-  await clickButton(page, "Next");
+  await clickButton(page, "Next step");
   await expectStep(page, stepId);
 }
 
@@ -207,7 +207,7 @@ async function runCommandAndWaitForMetadata(
 ) {
   await clickButton(page, buttonLabel);
   await expectSessionMetadataContains(page, metadataName, "", timeout);
-  await expectButtonEnabled(page, "Next");
+  await expectButtonEnabled(page, "Next step");
 }
 
 async function awaitSessions(page: Page) {

@@ -28,6 +28,12 @@ const COMMAND_COMPLETION_REFRESH_ATTEMPTS = 6;
 const COMMAND_COMPLETION_REFRESH_DELAY_MS = 250;
 const STUCK_EXECUTION_RECOVERY_MIN_AGE_MS = 30000;
 const STEP_STATUS_ATTEMPTING_EXECUTION = "attempting_execution";
+const COMMAND_LIFECYCLE_APPLYING_PHASES = Object.freeze(new Set([
+  "starting",
+  "started",
+  "terminal_exited",
+  "result_writing"
+]));
 
 function delay(ms = 0) {
   return new Promise((resolve) => {
@@ -128,8 +134,38 @@ function commandStartWasRejectedAsStale(result = {}) {
   return Number(result?.status || 0) === 409;
 }
 
+function commandLifecyclePhase(lifecycle = {}) {
+  return String(lifecycle?.phase || lifecycle?.status || "").trim();
+}
+
+function commandLifecycleMatchesCurrentStep(session = {}, lifecycle = {}) {
+  if (!lifecycle || typeof lifecycle !== "object" || Array.isArray(lifecycle)) {
+    return false;
+  }
+  return String(lifecycle.stepId || "") === String(session?.currentStep || "") &&
+    Number(lifecycle.stepRevision || 0) === Number(session?.stepRevision || 0);
+}
+
+function currentCommandLifecycle(session = {}) {
+  if (commandLifecycleMatchesCurrentStep(session, session?.currentCommandLifecycle)) {
+    return session.currentCommandLifecycle;
+  }
+  const lifecycles = Array.isArray(session?.commandLifecycles) ? session.commandLifecycles : [];
+  return lifecycles
+    .filter((lifecycle) => commandLifecycleMatchesCurrentStep(session, lifecycle))
+    .at(-1) || null;
+}
+
 function sessionStillApplyingCommand(session = {}) {
-  return String(session?.stepMachine?.status || "") === STEP_STATUS_ATTEMPTING_EXECUTION;
+  if (String(session?.stepMachine?.status || "") !== STEP_STATUS_ATTEMPTING_EXECUTION) {
+    return false;
+  }
+  const lifecycle = currentCommandLifecycle(session);
+  if (!lifecycle) {
+    return true;
+  }
+  const phase = commandLifecyclePhase(lifecycle);
+  return !phase || COMMAND_LIFECYCLE_APPLYING_PHASES.has(phase);
 }
 
 function stepMachineStateAgeMs(session = {}, nowMs = Date.now()) {

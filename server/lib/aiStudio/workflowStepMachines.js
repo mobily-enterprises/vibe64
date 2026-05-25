@@ -94,7 +94,7 @@ function publicState(machine = {}, state = {}) {
 function nextForSession(session = {}, {
   disabledReason = "Complete this step before continuing.",
   enabled = false,
-  label = "Next"
+  label = "Next step"
 } = {}) {
   return {
     disabledReason: enabled ? "" : disabledReason,

@@ -326,6 +326,36 @@ function scalarInputEntries(input = {}) {
     .filter((entry) => entry.name && entry.value);
 }
 
+function inputObject(input = {}) {
+  return input && typeof input === "object" && !Array.isArray(input) ? input : {};
+}
+
+function inputFields(input = {}) {
+  const source = inputObject(input);
+  return inputObject(source.fields || {});
+}
+
+function currentStepInputText(input = {}) {
+  const source = inputObject(input);
+  const fields = inputFields(input);
+  return normalizeText(fields.response || source.text || source.message);
+}
+
+async function recordCurrentStepConversationMessage(runtime, sessionId = "", input = {}) {
+  const source = inputObject(input);
+  const inputSource = normalizeText(source.source);
+  const text = currentStepInputText(source);
+  if (!text) {
+    return null;
+  }
+  if (inputSource === "codex") {
+    return runtime.store.writeConversationAssistantMessage(sessionId, {
+      text
+    });
+  }
+  return null;
+}
+
 function visiblePromptFromActionInput(action = {}, input = {}) {
   const entries = inputFieldEntries(action, input);
   const visibleEntries = entries.length ? entries : scalarInputEntries(input);
@@ -1067,7 +1097,9 @@ class AiStudioSessionRuntime {
     });
     try {
       return await this.store.mutateSession(sessionId, async () => {
-        const session = await saveStepMachineInput(this, sessionId, input);
+        await saveStepMachineInput(this, sessionId, input);
+        await recordCurrentStepConversationMessage(this, sessionId, input);
+        const session = await this.getSession(sessionId);
         aiStudioSessionDebugLog("server.runtime.submitCurrentStepInput.done", {
           ...aiStudioSessionDebugSummary(session),
           durationMs: aiStudioSessionDebugDurationMs(startedAtMs)

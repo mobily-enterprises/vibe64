@@ -11,7 +11,30 @@ function isPlainResponseField(field = {}) {
   return field.name === "response" && field.kind === "textarea";
 }
 
-function parseNumberedQuestionPrompt(value = "") {
+function numberedQuestionMarkerMatch(line = "") {
+  return String(line || "").match(/^\[(?:Q)?(\d+)\]\s+(.+)$/iu);
+}
+
+function questionForMarkerMatch(match = [], index = 0) {
+  const numberText = String(match[1] || "");
+  const number = Number(numberText);
+  const label = String(match[2] || "").trim();
+  if (
+    !Number.isSafeInteger(number) ||
+    number !== index + 1 ||
+    String(number) !== numberText ||
+    !label
+  ) {
+    return null;
+  }
+  return {
+    label,
+    name: `${UI_QUESTION_FIELD_PREFIX}${number}`,
+    number
+  };
+}
+
+function parseLineNumberedQuestionPrompt(value = "") {
   const lines = String(value || "")
     .split(/\r?\n/u)
     .map((line) => line.trim())
@@ -23,7 +46,7 @@ function parseNumberedQuestionPrompt(value = "") {
   const intro = [];
   const questions = [];
   for (const line of lines) {
-    const match = line.match(/^\[(\d+)\]\s+(.+)$/u);
+    const match = numberedQuestionMarkerMatch(line);
     if (!match) {
       if (!questions.length) {
         intro.push(line);
@@ -32,25 +55,68 @@ function parseNumberedQuestionPrompt(value = "") {
       return inactiveNumberedQuestionSugar();
     }
 
-    const number = Number(match[1]);
-    if (!Number.isSafeInteger(number) || number !== questions.length + 1 || String(number) !== match[1]) {
+    const question = questionForMarkerMatch(match, questions.length);
+    if (!question) {
       return inactiveNumberedQuestionSugar();
     }
-
-    questions.push({
-      label: match[2].trim(),
-      name: `${UI_QUESTION_FIELD_PREFIX}${number}`,
-      number
-    });
+    questions.push(question);
   }
 
-  if (!questions.every((question) => question.label) || questions.length < 2) {
+  if (questions.length < 2) {
     return inactiveNumberedQuestionSugar();
   }
   return {
     intro: intro.join("\n"),
     questions
   };
+}
+
+function parseInlineNumberedQuestionPrompt(value = "") {
+  const source = String(value || "").replace(/\r\n/gu, "\n").trim();
+  const firstMarker = source.search(/\[(?:Q)?\d+\]\s+/iu);
+  if (firstMarker < 0) {
+    return inactiveNumberedQuestionSugar();
+  }
+
+  const intro = source.slice(0, firstMarker).trim();
+  const questionText = source.slice(firstMarker).trim();
+  if (!questionText || questionText.includes("\n")) {
+    return inactiveNumberedQuestionSugar();
+  }
+
+  const markerPattern = /\[(?:Q)?(\d+)\]\s+/giu;
+  const markers = [...questionText.matchAll(markerPattern)];
+  if (markers.length < 2 || markers[0].index !== 0) {
+    return inactiveNumberedQuestionSugar();
+  }
+
+  const questions = [];
+  for (const [index, match] of markers.entries()) {
+    const labelStart = match.index + match[0].length;
+    const nextMarker = markers[index + 1];
+    const labelEnd = nextMarker ? nextMarker.index : questionText.length;
+    const question = questionForMarkerMatch([
+      match[0],
+      match[1],
+      questionText.slice(labelStart, labelEnd)
+    ], questions.length);
+    if (!question) {
+      return inactiveNumberedQuestionSugar();
+    }
+    questions.push(question);
+  }
+
+  return {
+    intro,
+    questions
+  };
+}
+
+function parseNumberedQuestionPrompt(value = "") {
+  const lineQuestions = parseLineNumberedQuestionPrompt(value);
+  return lineQuestions.questions.length
+    ? lineQuestions
+    : parseInlineNumberedQuestionPrompt(value);
 }
 
 function numberedQuestionSugarForInput(interaction = {}, fields = []) {
@@ -71,17 +137,22 @@ function numberedQuestionInputFields(questions = []) {
   }));
 }
 
-function numberedQuestionSubmissionFields(questions = [], values = {}) {
+function numberedQuestionSubmissionText(questions = [], values = {}) {
+  return questions
+    .map((question) => `[${question.number}] ${String(values[question.name] || "").trim()}`)
+    .join("\n");
+}
+
+function numberedQuestionSubmissionFields(questions = [], values = {}, fieldName = "response") {
   return {
-    response: questions
-      .map((question) => `[${question.number}] ${String(values[question.name] || "").trim()}`)
-      .join("\n")
+    [fieldName]: numberedQuestionSubmissionText(questions, values)
   };
 }
 
 export {
   numberedQuestionInputFields,
   numberedQuestionSubmissionFields,
+  numberedQuestionSubmissionText,
   numberedQuestionSugarForInput,
   parseNumberedQuestionPrompt,
   UI_QUESTION_FIELD_PREFIX

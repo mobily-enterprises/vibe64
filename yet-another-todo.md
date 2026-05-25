@@ -11,7 +11,7 @@ Canonical product/design decisions live in `.jskit/APP_BLUEPRINT.md`.
 | 1. Client autopilot still contains workflow recovery policy | Outstanding |
 | 2. Background Codex bootstrap is not visible enough | Outstanding |
 | 3. Session list/detail reads are pure but still heavy | Outstanding |
-| 4. Command action completion and session publishing are still loosely coupled | Outstanding |
+| 4. Command action completion and session publishing are still loosely coupled | Done |
 | 5. Skip-merge flow is still procedural | Done |
 | 6. Non-command actions run inside the session mutation queue | Not to do by design |
 | 7. `workflowStepMachines.js` is too large and repetitive | Done, targeted factories only |
@@ -71,21 +71,6 @@ Tackle:
 - Make list payload intentionally shallow.
 - Keep full projection/enrichment for selected session detail.
 - Batch terminal-state reads if list enrichment remains necessary.
-
-### Finding 4 - P2 Medium: Command action completion and session publishing are still loosely coupled
-
-Evidence:
-
-- `packages/ai-studio-terminals/src/server/commandTerminal.js`
-
-Problem:
-
-Command result persistence, advance-on-success, post-commit publishing, and bootstrap effects are separate phases. This fixed latency but still leaves several timing windows.
-
-Tackle:
-
-- Persist a command lifecycle record with states such as `started`, `result_written`, `advanced`, `published`, `bootstrap_started`, `bootstrap_done`.
-- Let the client follow that lifecycle instead of inferring from `attempting_execution`.
 
 ## Explicit Non-TODOs
 
@@ -170,6 +155,29 @@ Done:
 - Replaced the skip-specific server operation with generic `sequence` and `advance_to_step` operations.
 - Moved the skip-merge intent behavior into the workflow catalog: run `skip_merge`, write `merge_skipped`, then advance to `session_finished`.
 - Removed the hard-coded `continueAfterSkipMerge` path from presentation code.
+
+### Finding 4 - Command lifecycle is explicit
+
+Evidence:
+
+- `server/lib/aiStudio/sessionStore.js`
+- `packages/ai-studio-terminals/src/server/commandTerminal.js`
+- `src/composables/useAiStudioAutopilotController.js`
+- `tests/server/aiStudioSessionStore.unit.test.js`
+- `tests/server/aiStudioTerminalsService.unit.test.js`
+- `tests/client/useAiStudioAutopilotController.vitest.js`
+
+Previous problem:
+
+Command result persistence, advance-on-success, post-commit publishing, and background follow-up effects were separate phases with no single durable lifecycle record. The client had to infer completion from terminal exit plus `attempting_execution` refresh timing.
+
+Done:
+
+- Added persisted per-command lifecycle records under each session.
+- Recorded command phases including `starting`, `started`, `terminal_exited`, `result_writing`, `result_written`, `advanced`, `post_commit_running`, `done`, and `failed`.
+- Kept command terminal completion independent from slow post-commit effects.
+- Exposed the latest current-step lifecycle in the session payload.
+- Updated autopilot completion waiting to stop polling when the server lifecycle says result application has finished.
 
 ### Finding 9 - Numbered questions remain UI sugar
 

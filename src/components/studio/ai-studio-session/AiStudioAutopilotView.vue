@@ -209,7 +209,7 @@
         v-else-if="serverScreenVisible"
         class="studio-autopilot__server-screen"
         :class="{
-          'studio-autopilot__server-screen--with-response': responsePreviewVisible
+          'studio-autopilot__server-screen--with-response': responseContentVisible
         }"
       >
         <div
@@ -244,9 +244,18 @@
           :text="reportPreview.text"
         />
 
+        <AiStudioConversationLog
+          v-if="conversationLogVisible"
+          class="studio-autopilot__response-content"
+          :error="conversationLog.error"
+          :loading="conversationLog.loading"
+          :turns="conversationLog.turns"
+          :visible="conversationLog.visible"
+        />
+
         <AiStudioReportPreview
           v-if="responsePreviewVisible"
-          class="studio-autopilot__response-preview"
+          class="studio-autopilot__response-content studio-autopilot__response-preview"
           empty-text="Codex response is not ready yet."
           :error="responsePreviewError"
           :loading="responsePreviewLoading"
@@ -287,33 +296,54 @@
             />
           </template>
 
-          <div class="studio-autopilot__actions">
-            <v-btn
-              color="primary"
-              :disabled="!canSubmitSelectedControl"
-              :loading="running"
-              :prepend-icon="mdiSend"
-              type="submit"
-              variant="flat"
+          <div class="studio-autopilot__composer-actions-row">
+            <div
+              v-if="screenControls.length"
+              class="studio-autopilot__actions studio-autopilot__screen-actions studio-autopilot__screen-actions--composer"
             >
-              {{ selectedControl.label }}
-            </v-btn>
+              <v-btn
+                v-for="control in screenControls"
+                :key="control.id"
+                :color="control.style === 'primary' ? 'primary' : undefined"
+                :disabled="controlDisabled(control)"
+                :loading="controlLoading(control)"
+                :prepend-icon="controlIcon(control)"
+                type="button"
+                :variant="control.style === 'primary' ? 'flat' : 'tonal'"
+                @click="activateControl(control)"
+              >
+                {{ control.label }}
+              </v-btn>
+            </div>
 
-            <v-btn
-              v-if="!selectedControlIsPrimary"
-              :disabled="running"
-              :prepend-icon="mdiClose"
-              type="button"
-              variant="tonal"
-              @click="clearSelectedControl"
-            >
-              Cancel
-            </v-btn>
+            <div class="studio-autopilot__actions studio-autopilot__composer-submit-actions">
+              <v-btn
+                color="primary"
+                :disabled="!canSubmitSelectedControl"
+                :loading="running"
+                :prepend-icon="mdiSend"
+                type="submit"
+                variant="flat"
+              >
+                {{ selectedControl.label }}
+              </v-btn>
+
+              <v-btn
+                v-if="!selectedControlIsPrimary"
+                :disabled="running"
+                :prepend-icon="mdiClose"
+                type="button"
+                variant="tonal"
+                @click="clearSelectedControl"
+              >
+                Cancel
+              </v-btn>
+            </div>
           </div>
         </form>
 
         <div
-          v-if="screenControls.length"
+          v-if="screenControls.length && !selectedControl"
           class="studio-autopilot__actions studio-autopilot__screen-actions"
         >
           <v-btn
@@ -327,7 +357,7 @@
             :variant="control.style === 'primary' ? 'flat' : 'tonal'"
             @click="activateControl(control)"
           >
-            {{ controlDisplayLabel(control) }}
+            {{ control.label }}
           </v-btn>
         </div>
       </div>
@@ -353,6 +383,7 @@ import {
 import AiStudioLaunchControls from "@/components/studio/AiStudioLaunchControls.vue";
 import AiStudioAutopilotNavigation from "@/components/studio/ai-studio-session/AiStudioAutopilotNavigation.vue";
 import AiStudioAutopilotPromptTextarea from "@/components/studio/ai-studio-session/AiStudioAutopilotPromptTextarea.vue";
+import AiStudioConversationLog from "@/components/studio/ai-studio-session/AiStudioConversationLog.vue";
 import AiStudioHeadlessCommandOutput from "@/components/studio/ai-studio-session/AiStudioHeadlessCommandOutput.vue";
 import AiStudioReportPreview from "@/components/studio/ai-studio-session/AiStudioReportPreview.vue";
 import {
@@ -362,6 +393,11 @@ import { useAiStudioStepInputForm } from "@/composables/useAiStudioStepInputForm
 import {
   stripTerminalControlSequences
 } from "@/lib/codexOutput.js";
+import {
+  numberedQuestionInputFields,
+  numberedQuestionSubmissionFields,
+  parseNumberedQuestionPrompt
+} from "@/lib/aiStudioNumberedQuestionSugar.js";
 
 // Autopilot workflow meaning belongs to the server. This component renders the
 // current presentation and dispatches the server-provided intents.
@@ -386,6 +422,10 @@ const props = defineProps({
   },
   commandRunner: {
     default: null,
+    type: Object
+  },
+  conversationLog: {
+    default: () => ({}),
     type: Object
   },
   diff: {
@@ -527,13 +567,22 @@ const responsePreviewError = computed(() => String(props.humanInputResponsePrevi
 const responsePreviewLoading = computed(() => Boolean(props.humanInputResponsePreview?.loading));
 const launchControlsVisible = computed(() => sectionVisible("launch_controls"));
 const reportPreviewVisible = computed(() => Boolean(sectionVisible("report_preview") && props.reportPreview?.visible));
+const conversationLogVisible = computed(() => Boolean(
+  sectionVisible("response_preview") &&
+  props.conversationLog?.visible
+));
 const responsePreviewVisible = computed(() => Boolean(
   sectionVisible("response_preview") &&
+  !conversationLogVisible.value &&
   (
     responsePreviewText.value.trim() ||
     responsePreviewError.value ||
     responsePreviewLoading.value
   )
+));
+const responseContentVisible = computed(() => Boolean(
+  conversationLogVisible.value ||
+  responsePreviewVisible.value
 ));
 const allScreenControls = computed(() => {
   return (Array.isArray(props.session?.intents) ? props.session.intents : [])
@@ -549,10 +598,41 @@ const screenControls = computed(() => {
   const selectedId = String(selectedControl.value?.id || "");
   return allScreenControls.value.filter((control) => control.id !== selectedId);
 });
-const selectedControlFields = computed(() => {
+const selectedControlOriginalFields = computed(() => {
   return selectedControl.value && Array.isArray(selectedControl.value.inputFields)
     ? selectedControl.value.inputFields
     : [];
+});
+const latestAssistantMessageText = computed(() => {
+  const turns = Array.isArray(props.conversationLog?.turns) ? props.conversationLog.turns : [];
+  for (let index = turns.length - 1; index >= 0; index -= 1) {
+    const text = String(turns[index]?.assistant?.text || "").trim();
+    if (text) {
+      return text;
+    }
+  }
+  return "";
+});
+const selectedControlQuestionInput = computed(() => {
+  const fields = selectedControlOriginalFields.value;
+  if (
+    selectedControl.value?.id !== "talk_to_codex" ||
+    props.session?.stepMachine?.status !== "waiting_for_input" ||
+    fields.length !== 1 ||
+    fields[0]?.name !== "conversationRequest" ||
+    fields[0]?.kind !== "textarea"
+  ) {
+    return {
+      intro: "",
+      questions: []
+    };
+  }
+  return parseNumberedQuestionPrompt(latestAssistantMessageText.value);
+});
+const selectedControlFields = computed(() => {
+  return selectedControlQuestionInput.value.questions.length
+    ? numberedQuestionInputFields(selectedControlQuestionInput.value.questions)
+    : selectedControlOriginalFields.value;
 });
 const selectedControlIsPrimary = computed(() => Boolean(
   selectedControl.value?.id &&
@@ -625,11 +705,6 @@ function controlIcon(control = {}) {
   return mdiRefresh;
 }
 
-function controlDisplayLabel(control = {}) {
-  const label = String(control.label || "").trim();
-  return label === "Next" ? "Next step" : label;
-}
-
 function initialControlValues(control = {}) {
   return Object.fromEntries((Array.isArray(control.inputFields) ? control.inputFields : [])
     .map((field) => [field.name, String(field.value ?? "")]));
@@ -673,7 +748,7 @@ async function submitSelectedControl() {
   }
   const control = selectedControl.value;
   const accepted = await runPresentedIntent(control, {
-    fields: selectedControlValues.value
+    fields: selectedControlSubmissionFields()
   });
   if (accepted) {
     if (control?.id && control.id === primaryIntentId.value) {
@@ -683,6 +758,14 @@ async function submitSelectedControl() {
       clearSelectedControl();
     }
   }
+}
+
+function selectedControlSubmissionFields() {
+  const questions = selectedControlQuestionInput.value.questions;
+  if (!questions.length) {
+    return selectedControlValues.value;
+  }
+  return numberedQuestionSubmissionFields(questions, selectedControlValues.value, "conversationRequest");
 }
 
 onMounted(emitBusyState);
@@ -886,18 +969,15 @@ watch(allScreenControls, (controls) => {
 }
 
 .studio-autopilot__server-screen {
-  justify-items: center;
+  align-items: center;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
   min-height: 0;
 }
 
 .studio-autopilot__server-screen--with-response {
-  align-content: stretch;
-  grid-template-areas:
-    "response"
-    "composer"
-    "workflow";
-  grid-template-rows: minmax(0, 1fr) auto auto;
-  height: 100%;
   padding-bottom: 0.45rem;
 }
 
@@ -937,8 +1017,8 @@ watch(allScreenControls, (controls) => {
   color: rgb(var(--v-theme-warning));
 }
 
-.studio-autopilot__response-preview {
-  justify-self: stretch;
+.studio-autopilot__response-content {
+  align-self: stretch;
   min-height: 0;
 }
 
@@ -946,12 +1026,16 @@ watch(allScreenControls, (controls) => {
   max-height: min(34rem, max(14rem, calc(100dvh - 25rem)));
 }
 
-.studio-autopilot__server-screen--with-response .studio-autopilot__response-preview {
+.studio-autopilot__server-screen--with-response .studio-autopilot__response-content {
   align-self: stretch;
   display: grid;
-  grid-area: response;
+  flex: 1 1 auto;
   grid-template-rows: auto minmax(0, 1fr);
   overflow: hidden;
+}
+
+.studio-autopilot__server-screen--with-response .studio-autopilot__response-content :deep(.studio-conversation-log__body) {
+  min-height: 0;
 }
 
 .studio-autopilot__server-screen--with-response .studio-autopilot__response-preview :deep(.studio-report-preview__body) {
@@ -961,14 +1045,15 @@ watch(allScreenControls, (controls) => {
 
 .studio-autopilot__server-screen--with-response .studio-autopilot__control-form {
   align-self: end;
-  grid-area: composer;
+  flex: 0 0 auto;
   min-height: max-content;
   padding-bottom: 0.15rem;
 }
 
 .studio-autopilot__server-screen--with-response .studio-autopilot__screen-actions {
   align-self: end;
-  grid-area: workflow;
+  flex: 0 0 auto;
+  margin-top: 0;
 }
 
 .studio-autopilot__input {
@@ -989,9 +1074,32 @@ watch(allScreenControls, (controls) => {
   min-height: 5.4rem;
 }
 
+.studio-autopilot__composer-actions-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.studio-autopilot__composer-submit-actions {
+  justify-content: flex-end;
+  margin-left: auto;
+}
+
 .studio-autopilot__screen-actions {
   justify-content: flex-end;
-  justify-self: stretch;
+  margin-top: auto;
+  width: 100%;
+}
+
+.studio-autopilot__screen-actions.studio-autopilot__screen-actions--composer {
+  align-self: center;
+  flex: 1 1 auto;
+  justify-content: flex-start;
+  margin-top: 0;
+  width: auto;
 }
 
 @keyframes studio-autopilot-cog-spin {

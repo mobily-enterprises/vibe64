@@ -7,6 +7,8 @@ import {
   aiStudioArtifactPreviewPath,
   aiStudioArtifactPreviewQueryKey,
   aiStudioCodexAttachmentPath,
+  aiStudioConversationLogPath,
+  aiStudioConversationLogQueryKey,
   aiStudioSessionQueryKey,
   aiStudioSessionPath,
   aiStudioSessionsQueryKey,
@@ -44,6 +46,13 @@ describe("AI Studio session request config", () => {
       "2026-05-16_01%3Atwo",
       "issue%20report"
     ]);
+    expect(aiStudioConversationLogQueryKey("home", "public", "2026-05-16_01:two")).toEqual([
+      "ai-studio",
+      "home",
+      "public",
+      "conversation-log",
+      "2026-05-16_01%3Atwo"
+    ]);
   });
 
   it("builds encoded session action and terminal support paths", () => {
@@ -54,6 +63,7 @@ describe("AI Studio session request config", () => {
     expect(aiStudioActionPath(apiPath, sessionId, "make plan")).toBe(`${apiPath}/2026-05-16_01%3Atwo/actions/make%20plan`);
     expect(aiStudioArtifactPreviewPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/artifact-preview`);
     expect(aiStudioCodexAttachmentPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/codex-attachments`);
+    expect(aiStudioConversationLogPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/conversation-log`);
   });
 
   it("normalizes command input payloads from command context", () => {

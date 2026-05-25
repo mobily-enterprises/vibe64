@@ -269,6 +269,27 @@ describe("useAiStudioAutopilotController", () => {
     expect(context.controller.failure.value).toBe(null);
   });
 
+  it("stops command completion polling when the server lifecycle says the result is committed", async () => {
+    const context = createControllerContext({
+      commandCompletionLifecyclePhase: "result_written",
+      commandCompletionStaleRefreshes: 99,
+      operation: {
+        actionId: "cmd_action",
+        executable: true,
+        id: "command-terminal:cmd_action",
+        kind: "command",
+        label: "Run command",
+        route: "command-terminal"
+      }
+    });
+
+    await context.controller.runNextOperation();
+
+    expect(context.refreshSessionData).toHaveBeenCalledTimes(1);
+    expect(context.controller.stuckRecoveryAvailable.value).toBe(false);
+    expect(context.controller.failure.value).toBe(null);
+  });
+
   it("offers stuck-step recovery only after command completion refresh times out", async () => {
     const context = createControllerContext({
       commandCompletionRefreshAttempts: 2,
@@ -300,6 +321,7 @@ describe("useAiStudioAutopilotController", () => {
 
 function createControllerContext({
   commandCompletesWithServerAdvance = false,
+  commandCompletionLifecyclePhase = "",
   commandCompletionRefreshAttempts = 6,
   commandCompletionStaleRefreshes = 0,
   commandStartConflict = false,
@@ -335,6 +357,7 @@ function createControllerContext({
   const commandPreview = ref("");
   const commandResult = ref(null);
   const commandTransportFailureRefreshPending = ref(false);
+  const commandLifecycle = ref(null);
   const commandCompletionStaleRefreshesRef = ref(commandCompletionStaleRefreshes);
   const serverCommandAdvancePending = ref(false);
   const staleCommandRefreshPending = ref(false);
@@ -342,6 +365,7 @@ function createControllerContext({
   function syncSession(values = {}) {
     const currentPresentation = session.value?.presentation || {};
     session.value = sessionView({
+      commandLifecycle: commandLifecycle.value,
       intents,
       operation: values.operation || currentPresentation.auto?.nextOperation || operation,
       screen: values.screen || currentPresentation.screen || screen,
@@ -478,7 +502,7 @@ function createControllerContext({
           executable: true,
           id: "session-advance:step_b",
           kind: "advance",
-          label: "Next",
+          label: "Next step",
           route: "session-advance"
         },
         screen: {
@@ -494,6 +518,16 @@ function createControllerContext({
         status: "attempting_execution",
         stepId: session.value.currentStep
       };
+      commandLifecycle.value = commandCompletionLifecyclePhase
+        ? {
+            actionId: commandResult.value.actionId,
+            id: `1-${commandResult.value.actionId}`,
+            phase: commandCompletionLifecyclePhase,
+            status: commandCompletionLifecyclePhase,
+            stepId: session.value.currentStep,
+            stepRevision: session.value.stepRevision
+          }
+        : null;
       syncSession({
         operation: {
           executable: false,
@@ -524,7 +558,7 @@ function createControllerContext({
           executable: true,
           id: "session-advance:step_b",
           kind: "advance",
-          label: "Next",
+          label: "Next step",
           route: "session-advance"
         },
         screen: {
@@ -557,6 +591,7 @@ function createControllerContext({
 }
 
 function sessionView({
+  commandLifecycle = null,
   intents = [],
   operation = {},
   screen = {},
@@ -569,12 +604,14 @@ function sessionView({
   };
   const next = {
     enabled: true,
-    label: "Next",
+    label: "Next step",
     stepId: "step_b",
     visible: true
   };
   return {
     actions: [],
+    commandLifecycles: commandLifecycle ? [commandLifecycle] : [],
+    currentCommandLifecycle: commandLifecycle,
     currentStep: stepId,
     currentStepDefinition: {
       id: stepId,
@@ -596,6 +633,7 @@ function sessionView({
       }
     },
     sessionId: "session-1",
-    stepMachine
+    stepMachine,
+    stepRevision: 1
   };
 }

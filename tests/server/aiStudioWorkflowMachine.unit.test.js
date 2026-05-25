@@ -1744,6 +1744,7 @@ test("ai-studio runtime blocks advance when workflow next conditions are not met
     assert.equal(blocked.currentStep, "first");
     assert.equal(blocked.next.visible, true);
     assert.equal(blocked.next.enabled, false);
+    assert.equal(blocked.next.label, "Next step");
     assert.equal(blocked.next.disabledReason, "Waiting for metadata: ready.");
     await assert.rejects(
       () => runtime.advance("conditioned"),

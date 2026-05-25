@@ -81,6 +81,31 @@ function sessionStepRevision(value) {
   return Number.isSafeInteger(revision) && revision >= 1 ? revision : null;
 }
 
+function commandLifecycleIdForSession(session = {}, action = {}) {
+  const stepRevision = sessionStepRevision(session.stepRevision) || 1;
+  return `${stepRevision}-${String(action.id || "command").trim() || "command"}`;
+}
+
+function inputKeys(input = {}) {
+  return Object.keys(input && typeof input === "object" && !Array.isArray(input) ? input : {}).sort();
+}
+
+async function writeCommandLifecycleEvent({
+  event = {},
+  lifecycleId = "",
+  patch = {},
+  runtime,
+  sessionId = ""
+} = {}) {
+  if (!lifecycleId || typeof runtime?.store?.writeCommandLifecycleEvent !== "function") {
+    return null;
+  }
+  return runtime.store.writeCommandLifecycleEvent(sessionId, lifecycleId, {
+    event,
+    patch
+  });
+}
+
 function staleCompletionReason(startedSession = {}, currentSession = {}) {
   if (currentSession.currentStep !== startedSession.currentStep) {
     return "step_changed";
@@ -147,12 +172,14 @@ function commandTerminalArgs({
 async function writeActionTerminalResult({
   advanceOnSuccess = false,
   action = {},
+  commandLifecycleId = "",
   exitCode,
   input = {},
   resultFile = {},
   runtime,
   session = {},
-  spec = {}
+  spec = {},
+  terminalSessionId = ""
 } = {}) {
   const startedAtMs = Date.now();
   aiStudioSessionDebugLog("server.commandTerminal.writeResult.start", {
@@ -163,6 +190,20 @@ async function writeActionTerminalResult({
     stepId: String(session.currentStep || "")
   });
   const completed = exitCode === 0;
+  await writeCommandLifecycleEvent({
+    lifecycleId: commandLifecycleId,
+    runtime,
+    sessionId: session.sessionId,
+    patch: {
+      exitCode,
+      phase: "result_writing",
+      terminalSessionId
+    },
+    event: {
+      kind: "result_writing",
+      message: "Command terminal exited; applying command result."
+    }
+  });
   const currentSessionBeforeWrite = await runtime.getSession(session.sessionId);
   const staleReason = staleCompletionReason(session, currentSessionBeforeWrite);
   if (staleReason) {
@@ -178,16 +219,40 @@ async function writeActionTerminalResult({
       startedStepRevision: sessionStepRevision(session.stepRevision),
       startedStep: String(session.currentStep || "")
     });
+    await writeCommandLifecycleEvent({
+      lifecycleId: commandLifecycleId,
+      runtime,
+      sessionId: session.sessionId,
+      patch: {
+        currentStep: String(currentSessionBeforeWrite.currentStep || ""),
+        currentStepRevision: sessionStepRevision(currentSessionBeforeWrite.stepRevision),
+        exitCode,
+        outcome: "stale",
+        phase: "done",
+        startedStep: String(session.currentStep || ""),
+        startedStepRevision: sessionStepRevision(session.stepRevision),
+        staleReason,
+        terminalSessionId
+      },
+      event: {
+        kind: "stale_completion",
+        message: `Ignored stale command completion: ${staleReason}.`,
+        outcome: "stale"
+      }
+    });
     return {
       action,
       actionResult: null,
+      commandLifecycleId,
       completed,
       input,
       metadata: {},
+      outcome: "stale",
       runtime,
       session: currentSessionBeforeWrite,
       spec,
-      stale: true
+      stale: true,
+      terminalSessionId
     };
   }
   const sessionForWrite = currentSessionBeforeWrite;
@@ -249,6 +314,30 @@ async function writeActionTerminalResult({
     session: sessionForWrite
   });
   const currentSession = advancedSession || await runtime.getSession(session.sessionId);
+  const advanced = completed && currentSession.currentStep !== sessionForWrite.currentStep;
+  await writeCommandLifecycleEvent({
+    lifecycleId: commandLifecycleId,
+    runtime,
+    sessionId: session.sessionId,
+    patch: {
+      actionResultStatus: String(actionResult.status || ""),
+      currentStep: String(currentSession.currentStep || ""),
+      currentStepRevision: sessionStepRevision(currentSession.stepRevision),
+      exitCode,
+      metadataKeys: Object.keys(metadata).sort(),
+      outcome: completed ? "completed" : "blocked",
+      phase: advanced ? "advanced" : "result_written",
+      sessionRevisionAfter: sessionRevision(currentSession.revision),
+      terminalSessionId
+    },
+    event: {
+      kind: advanced ? "workflow_advanced" : "result_written",
+      message: advanced
+        ? "Command result was written and the workflow advanced."
+        : "Command result was written.",
+      outcome: completed ? "completed" : "blocked"
+    }
+  });
   aiStudioSessionDebugLog("server.commandTerminal.writeResult.done", {
     ...aiStudioSessionDebugSummary(currentSession),
     actionId: String(action.id || ""),
@@ -261,12 +350,15 @@ async function writeActionTerminalResult({
   return {
     action,
     actionResult,
+    commandLifecycleId,
     completed,
     input,
     metadata,
+    outcome: completed ? "completed" : "blocked",
     runtime,
     session: currentSession,
-    spec
+    spec,
+    terminalSessionId
   };
 }
 
@@ -296,32 +388,77 @@ function scheduleCommandTerminalPostCommitEffects({
   publishSessionChanged = async () => null,
   sessionId = ""
 } = {}) {
-  scheduleCommandTerminalPostCommitTask("publishSessionChanged", () => {
-    return publishSessionChanged(sessionId, {
-      reason: "command-terminal-closed"
-    });
-  }, {
-    actionId: String(completion?.action?.id || ""),
-    reason: "command-terminal-closed",
-    sessionId: String(sessionId || "")
-  });
-
-  if (completion?.completed !== true || completion?.stale === true || !completion?.actionResult) {
-    return;
-  }
-
-  scheduleCommandTerminalPostCommitTask("afterSuccessfulCommand", () => {
-    return afterSuccessfulCommand({
-      action: completion.action,
-      actionResult: completion.actionResult,
-      input: completion.input,
-      metadata: completion.metadata,
+  const shouldRunAfterSuccessfulCommand = completion?.completed === true &&
+    completion?.stale !== true &&
+    Boolean(completion?.actionResult);
+  scheduleCommandTerminalPostCommitTask("effects", async () => {
+    await writeCommandLifecycleEvent({
+      lifecycleId: completion.commandLifecycleId,
       runtime: completion.runtime,
-      session: completion.session,
-      spec: completion.spec
+      sessionId: completion.session?.sessionId || sessionId,
+      patch: {
+        phase: "post_commit_running",
+        postCommit: {
+          afterSuccessfulCommand: shouldRunAfterSuccessfulCommand ? "running" : "skipped",
+          publishSessionChanged: "running"
+        }
+      },
+      event: {
+        kind: "post_commit_running",
+        message: "Command result is committed; running post-commit effects."
+      }
+    });
+    const publishResult = await Promise.allSettled([
+      publishSessionChanged(sessionId, {
+        reason: "command-terminal-closed"
+      }),
+      shouldRunAfterSuccessfulCommand
+        ? afterSuccessfulCommand({
+            action: completion.action,
+            actionResult: completion.actionResult,
+            input: completion.input,
+            metadata: completion.metadata,
+            runtime: completion.runtime,
+            session: completion.session,
+            spec: completion.spec
+          })
+        : Promise.resolve(null)
+    ]);
+    const [publishOutcome, afterSuccessfulCommandOutcome] = publishResult;
+    const postCommitFailed = publishOutcome.status === "rejected" ||
+      afterSuccessfulCommandOutcome.status === "rejected";
+    const afterSuccessfulCommandStatus = shouldRunAfterSuccessfulCommand
+      ? afterSuccessfulCommandOutcome.status === "fulfilled" ? "done" : "failed"
+      : "skipped";
+    await writeCommandLifecycleEvent({
+      lifecycleId: completion.commandLifecycleId,
+      runtime: completion.runtime,
+      sessionId: completion.session?.sessionId || sessionId,
+      patch: {
+        outcome: postCommitFailed ? "post_commit_failed" : completion.outcome || "",
+        phase: postCommitFailed ? "failed" : "done",
+        postCommit: {
+          afterSuccessfulCommand: afterSuccessfulCommandStatus,
+          afterSuccessfulCommandError: afterSuccessfulCommandOutcome.status === "rejected"
+            ? aiStudioSessionDebugError(afterSuccessfulCommandOutcome.reason)
+            : "",
+          publishSessionChanged: publishOutcome.status === "fulfilled" ? "done" : "failed",
+          publishSessionChangedError: publishOutcome.status === "rejected"
+            ? aiStudioSessionDebugError(publishOutcome.reason)
+            : ""
+        }
+      },
+      event: {
+        kind: postCommitFailed ? "post_commit_failed" : "done",
+        message: postCommitFailed
+          ? "Command post-commit effects failed."
+          : "Command lifecycle completed.",
+        outcome: postCommitFailed ? "post_commit_failed" : completion.outcome || ""
+      }
     });
   }, {
     actionId: String(completion.action?.id || ""),
+    reason: "command-terminal-closed",
     sessionId: String(completion.session?.sessionId || sessionId || "")
   });
 }
@@ -571,6 +708,27 @@ function createCommandTerminalController({
             }
             return resultFile;
           };
+          const commandLifecycleId = commandLifecycleIdForSession(session, action);
+          await writeCommandLifecycleEvent({
+            lifecycleId: commandLifecycleId,
+            runtime,
+            sessionId,
+            patch: {
+              actionId: action.id,
+              actionLabel: action.label,
+              advanceOnSuccess,
+              currentStep: String(session.currentStep || ""),
+              inputKeys: inputKeys(commandInput),
+              phase: "starting",
+              sessionRevisionBefore: sessionRevision(session.revision),
+              stepId: String(session.currentStep || ""),
+              stepRevision: sessionStepRevision(session.stepRevision)
+            },
+            event: {
+              kind: "starting",
+              message: "Command terminal start accepted."
+            }
+          });
           let startedSession = session;
           if (typeof runtime.recordCommandActionStarted === "function") {
             await runtime.recordCommandActionStarted(sessionId, action.id);
@@ -627,16 +785,32 @@ function createCommandTerminalController({
                   terminalSessionId: id
                 });
                 try {
+                  await writeCommandLifecycleEvent({
+                    lifecycleId: commandLifecycleId,
+                    runtime,
+                    sessionId,
+                    patch: {
+                      exitCode,
+                      phase: "terminal_exited",
+                      terminalSessionId: id
+                    },
+                    event: {
+                      kind: "terminal_exited",
+                      message: "Command terminal process exited."
+                    }
+                  });
                   const completion = await runtime.store.mutateSession(session.sessionId, async () => {
                     return writeActionTerminalResult({
                       advanceOnSuccess,
                       action,
+                      commandLifecycleId,
                       exitCode,
                       input: commandInput,
                       resultFile: activeResultFile,
                       runtime,
                       session: startedSession,
-                      spec
+                      spec,
+                      terminalSessionId: id
                     });
                   });
                   scheduleCommandTerminalPostCommitEffects({
@@ -653,6 +827,23 @@ function createCommandTerminalController({
                     terminalSessionId: id
                   });
                 } catch (error) {
+                  await writeCommandLifecycleEvent({
+                    lifecycleId: commandLifecycleId,
+                    runtime,
+                    sessionId,
+                    patch: {
+                      error: aiStudioSessionDebugError(error),
+                      exitCode,
+                      outcome: "failed",
+                      phase: "failed",
+                      terminalSessionId: id
+                    },
+                    event: {
+                      kind: "failed",
+                      message: "Command terminal finalization failed.",
+                      outcome: "failed"
+                    }
+                  });
                   aiStudioSessionDebugLog("server.commandTerminal.onClose.error", {
                     actionId: action.id,
                     durationMs: aiStudioSessionDebugDurationMs(onCloseStartedAtMs),
@@ -674,6 +865,30 @@ function createCommandTerminalController({
               },
               reuseRunning: true
             });
+            await writeCommandLifecycleEvent({
+              lifecycleId: commandLifecycleId,
+              runtime,
+              sessionId,
+              patch: {
+                commandPreview: String(terminal?.commandPreview || spec.commandPreview || ""),
+                phase: terminal?.ok === false ? "failed" : "started",
+                terminalSessionId: String(terminal?.id || ""),
+                terminalStatus: String(terminal?.status || "")
+              },
+              event: {
+                kind: terminal?.ok === false ? "failed" : "started",
+                message: terminal?.ok === false
+                  ? "Command terminal could not start."
+                  : "Command terminal process started.",
+                outcome: terminal?.ok === false ? "failed" : ""
+              }
+            });
+            if (terminal?.ok === false && typeof runtime.recordCommandActionFinished === "function") {
+              await runtime.recordCommandActionFinished(startedSession, action.id, {
+                message: String(terminal.error || "Command terminal could not start."),
+                status: "blocked"
+              });
+            }
             aiStudioSessionDebugLog("server.commandTerminal.start.done", {
               actionId: action.id,
               durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
@@ -683,8 +898,23 @@ function createCommandTerminalController({
             });
             return terminal;
           } catch (error) {
+            await writeCommandLifecycleEvent({
+              lifecycleId: commandLifecycleId,
+              runtime,
+              sessionId,
+              patch: {
+                error: aiStudioSessionDebugError(error),
+                outcome: "failed",
+                phase: "failed"
+              },
+              event: {
+                kind: "failed",
+                message: "Command terminal start failed.",
+                outcome: "failed"
+              }
+            });
             if (typeof runtime.recordCommandActionFinished === "function") {
-              await runtime.recordCommandActionFinished(session, action.id, {
+              await runtime.recordCommandActionFinished(startedSession, action.id, {
                 message: String(error?.message || error || "Command terminal could not start."),
                 status: "blocked"
               });

@@ -4,6 +4,7 @@ import test from "node:test";
 
 import {
   AiStudioSessionRuntime,
+  AI_STUDIO_WORKFLOW_PROFILE_IDS,
   FakeTargetAdapter
 } from "../../server/lib/aiStudio/index.js";
 import {
@@ -146,6 +147,49 @@ test("AI Studio artifacts service saves semantic pull request step input", async
     );
     const updatedSession = await runtime.getSession("step_input_pr");
     assert.equal(updatedSession.stepMachine.status, "confirm_files");
+  });
+});
+
+test("AI Studio artifacts service appends helper responses to the conversation log", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new AiStudioSessionRuntime({
+      adapter: new FakeTargetAdapter(),
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "maintenance_conversation",
+      sessionId: "helper_conversation_log",
+      workflowProfile: AI_STUDIO_WORKFLOW_PROFILE_IDS.NON_COMMIT_MAINTENANCE
+    });
+    await runtime.store.writeConversationUserMessage("helper_conversation_log", {
+      text: "What should we improve?"
+    });
+
+    const service = createService({
+      projectService: projectServiceForRuntime(runtime)
+    });
+
+    const saved = await service.submitCurrentStepInput("helper_conversation_log", {
+      fields: {
+        response: "Tighten the Autopilot conversation panel."
+      },
+      kind: "ready",
+      source: "codex",
+      stepId: "maintenance_conversation",
+      stepStatus: "ready"
+    });
+
+    const conversationLog = await runtime.store.readConversationLog("helper_conversation_log");
+    assert.equal(saved.ok, true);
+    assert.deepEqual(conversationLog.map((turn) => [
+      turn.user?.text || "",
+      turn.assistant?.text || ""
+    ]), [
+      [
+        "What should we improve?",
+        "Tighten the Autopilot conversation panel."
+      ]
+    ]);
   });
 });
 

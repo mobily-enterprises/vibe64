@@ -160,13 +160,17 @@ function useCodexTerminalViewport({
     pendingTerminalDisplay = "";
   }
 
+  function scrollTerminalToBottom() {
+    terminalInstance?.scrollToBottom?.();
+  }
+
   function appendTerminalDisplay(outputChunk) {
     const chunk = String(outputChunk || "");
     if (!chunk) {
       return;
     }
     if (terminalInstance) {
-      terminalInstance.write(chunk);
+      terminalInstance.write(chunk, scrollTerminalToBottom);
       return;
     }
     pendingTerminalDisplay = trimPendingTerminalDisplay(`${pendingTerminalDisplay}${chunk}`);
@@ -179,7 +183,7 @@ function useCodexTerminalViewport({
       return;
     }
     terminalInstance.reset();
-    terminalInstance.write(displayOutput);
+    terminalInstance.write(displayOutput, scrollTerminalToBottom);
   }
 
   async function setupTerminalUi() {

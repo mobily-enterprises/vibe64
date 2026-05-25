@@ -37,6 +37,20 @@
 
     <div class="studio-ai-sessions__actions">
       <v-btn
+        v-if="actions.currentNext?.visible"
+        class="studio-ai-sessions__next-step-button"
+        color="primary"
+        variant="tonal"
+        :disabled="page.busy || actions.currentNext.enabled !== true"
+        :loading="actions.advanceCommand.isRunning"
+        :prepend-icon="mdiArrowRight"
+        :title="actions.currentNext.disabledReason || actions.currentNext.label || 'Next step'"
+        @click="actions.goNext"
+      >
+        {{ actions.currentNext.label || "Next step" }}
+      </v-btn>
+
+      <v-btn
         color="primary"
         variant="flat"
         :disabled="page.busy || !stepInput.canSubmit"
@@ -55,23 +69,24 @@
         :busy="page.busy"
         variant="tonal"
       />
-
-      <v-btn
-        v-if="actions.currentNext?.visible"
-        color="primary"
-        variant="tonal"
-        :disabled="page.busy || actions.currentNext.enabled !== true"
-        :loading="actions.advanceCommand.isRunning"
-        :prepend-icon="mdiArrowRight"
-        :title="actions.currentNext.disabledReason || actions.currentNext.label || 'Next'"
-        @click="actions.goNext"
-      >
-        {{ actions.currentNext.label || "Next" }}
-      </v-btn>
     </div>
   </form>
 
   <div v-else class="studio-ai-sessions__actions">
+    <v-btn
+      v-if="actions.currentNext?.visible"
+      class="studio-ai-sessions__next-step-button"
+      color="primary"
+      variant="tonal"
+      :disabled="page.busy || actions.currentNext.enabled !== true"
+      :loading="actions.advanceCommand.isRunning"
+      :prepend-icon="mdiArrowRight"
+      :title="actions.currentNext.disabledReason || actions.currentNext.label || 'Next step'"
+      @click="actions.goNext"
+    >
+      {{ actions.currentNext.label || "Next step" }}
+    </v-btn>
+
     <v-btn
       v-if="review.acceptChangesUtilitiesVisible"
       color="primary"
@@ -93,19 +108,6 @@
       :busy="page.busy"
       variant="flat"
     />
-
-    <v-btn
-      v-if="actions.currentNext?.visible"
-      color="primary"
-      variant="tonal"
-      :disabled="page.busy || actions.currentNext.enabled !== true"
-      :loading="actions.advanceCommand.isRunning"
-      :prepend-icon="mdiArrowRight"
-      :title="actions.currentNext.disabledReason || actions.currentNext.label || 'Next'"
-      @click="actions.goNext"
-    >
-      {{ actions.currentNext.label || "Next" }}
-    </v-btn>
   </div>
 
   <v-alert
@@ -163,6 +165,7 @@ defineProps({
     type: Object
   }
 });
+
 </script>
 
 <style scoped>
@@ -171,6 +174,7 @@ defineProps({
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem;
+  justify-content: flex-start;
 }
 
 .studio-ai-sessions__step-input {

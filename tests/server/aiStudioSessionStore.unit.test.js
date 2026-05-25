@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { access, readFile } from "node:fs/promises";
+import { access, readdir, readFile } from "node:fs/promises";
+import path from "node:path";
 import test from "node:test";
 
 import {
@@ -51,9 +52,10 @@ test("ai-studio session store creates inspectable session state under .ai-studio
 
     await assertPathExists(paths.manifestPath);
     await assertPathExists(paths.currentStepPath);
-    await assertPathExists(paths.statusPath);
-    await assertPathExists(paths.metadataRoot);
-    await assertPathExists(paths.artifactsRoot);
+	    await assertPathExists(paths.statusPath);
+	    await assertPathExists(paths.metadataRoot);
+	    await assertPathExists(paths.artifactsRoot);
+	    await assertPathExists(paths.commandLifecyclesRoot);
 
     assert.equal(await readFile(paths.currentStepPath, "utf8"), "session_created\n");
     assert.equal(await readFile(paths.statusPath, "utf8"), "active\n");
@@ -77,17 +79,67 @@ test("ai-studio session store reads and writes metadata, artifacts, status, curr
     });
     await store.writeMetadataValue("state_contract", "adapter", "cpp-cmake");
     const artifactPath = await store.writeArtifact("state_contract", "summary.txt", "hello\n");
-    await store.appendCommandLogEntry("state_contract", {
-      actionId: "configure",
-      status: "ok"
-    });
+	    await store.appendCommandLogEntry("state_contract", {
+	      actionId: "configure",
+	      status: "ok"
+	    });
+	    await store.writeCommandLifecycleEvent("state_contract", "2-configure", {
+	      event: {
+	        kind: "starting"
+	      },
+	      patch: {
+	        actionId: "configure",
+	        phase: "starting",
+	        stepId: "install_dependencies",
+	        stepRevision: 2
+	      }
+	    });
+	    await store.writeCommandLifecycleEvent("state_contract", "2-configure", {
+	      event: {
+	        kind: "result_written"
+	      },
+	      patch: {
+	        outcome: "completed",
+	        phase: "result_written"
+	      }
+	    });
+	    await store.writeCommandLifecycleEvent("state_contract", "2-configure", {
+	      event: {
+	        kind: "started"
+	      },
+	      patch: {
+	        phase: "started",
+	        terminalSessionId: "terminal-1"
+	      }
+	    });
 
-    const session = await store.readSession("state_contract");
+	    const session = await store.readSession("state_contract");
     assert.equal(session.status, "blocked");
     assert.equal(session.currentStep, "install_dependencies");
     assert.equal(session.stepRevision, 2);
     assert.equal(session.stepStatesRoot.endsWith("/step-state"), true);
-    assert.equal(session.metadata.adapter, "cpp-cmake");
+	    assert.equal(session.metadata.adapter, "cpp-cmake");
+	    assert.deepEqual(session.currentCommandLifecycle && {
+	      actionId: session.currentCommandLifecycle.actionId,
+	      eventKinds: session.currentCommandLifecycle.events.map((event) => event.kind),
+	      id: session.currentCommandLifecycle.id,
+	      outcome: session.currentCommandLifecycle.outcome,
+	      phase: session.currentCommandLifecycle.phase,
+	      status: session.currentCommandLifecycle.status,
+	      stepId: session.currentCommandLifecycle.stepId,
+	      stepRevision: session.currentCommandLifecycle.stepRevision,
+	      terminalSessionId: session.currentCommandLifecycle.terminalSessionId
+	    }, {
+	      actionId: "configure",
+	      eventKinds: ["starting", "result_written", "started"],
+	      id: "2-configure",
+	      outcome: "completed",
+	      phase: "result_written",
+	      status: "result_written",
+	      stepId: "install_dependencies",
+	      stepRevision: 2,
+	      terminalSessionId: "terminal-1"
+	    });
     assert.deepEqual(await store.readStepState("state_contract", "install_dependencies"), {
       at: "2026-05-16T01:02:03.000Z",
       status: "attempting_execution",
@@ -116,6 +168,83 @@ test("ai-studio session store reads and writes metadata, artifacts, status, curr
         actionId: "configure",
         at: "2026-05-16T01:02:03.000Z",
         status: "ok"
+      }
+    ]);
+  });
+});
+
+test("ai-studio session store persists conversation turns as one file per message", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const store = createAiStudioSessionStore({
+      clock: () => new Date("2026-05-16T01:02:03.456Z"),
+      targetRoot
+    });
+    await store.createSession({
+      sessionId: "conversation_log"
+    });
+
+    await store.writeConversationUserMessage("conversation_log", {
+      text: "What should we change?"
+    });
+    await store.writeConversationAssistantMessage("conversation_log", {
+      text: "Change the form layout."
+    });
+    await store.writeConversationUserMessage("conversation_log", {
+      text: "Keep it simple."
+    });
+
+    const paths = resolveAiStudioSessionPaths({
+      sessionId: "conversation_log",
+      targetRoot
+    });
+    const turnIds = await readdir(paths.conversationLogRoot);
+
+    assert.deepEqual(turnIds.sort(), ["000001", "000002"]);
+    assert.deepEqual((await readdir(path.join(paths.conversationLogRoot, "000001"))).sort(), [
+      "assistant.20260516T010203456Z.md",
+      "user.20260516T010203456Z.md"
+    ]);
+    assert.deepEqual(await store.readConversationLog("conversation_log"), [
+      {
+        assistant: {
+          at: "2026-05-16T01:02:03.456Z",
+          role: "assistant",
+          text: "Change the form layout."
+        },
+        messages: [
+          {
+            at: "2026-05-16T01:02:03.456Z",
+            role: "user",
+            text: "What should we change?"
+          },
+          {
+            at: "2026-05-16T01:02:03.456Z",
+            role: "assistant",
+            text: "Change the form layout."
+          }
+        ],
+        turnId: "000001",
+        user: {
+          at: "2026-05-16T01:02:03.456Z",
+          role: "user",
+          text: "What should we change?"
+        }
+      },
+      {
+        assistant: null,
+        messages: [
+          {
+            at: "2026-05-16T01:02:03.456Z",
+            role: "user",
+            text: "Keep it simple."
+          }
+        ],
+        turnId: "000002",
+        user: {
+          at: "2026-05-16T01:02:03.456Z",
+          role: "user",
+          text: "Keep it simple."
+        }
       }
     ]);
   });

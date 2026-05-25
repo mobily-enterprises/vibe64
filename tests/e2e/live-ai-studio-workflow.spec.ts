@@ -88,11 +88,11 @@ test.describe("live AI Studio session workflow", () => {
     await chooseNewBranch(page);
     await goNextToStep(page, "worktree_created");
     await runCommandAndWaitForMetadata(page, "Create worktree", "worktree_path");
-    await expectButtonEnabled(page, "Next");
+    await expectButtonEnabled(page, "Next step");
 
     await goNextToStep(page, "dependencies_installed");
     await runCommandAndWaitForMetadata(page, "Install dependencies", "dependencies_installed", UI_COMMAND_TIMEOUT_MS);
-    await expectButtonEnabled(page, "Next");
+    await expectButtonEnabled(page, "Next step");
 
     await goNextToStep(page, "issue_file_created");
     await expect(page.getByLabel("Issue title")).toBeVisible();
@@ -100,7 +100,7 @@ test.describe("live AI Studio session workflow", () => {
     await expect(page.getByLabel("Issue body")).toBeVisible();
     await expectButtonDisabled(page, "Save issue");
     await expectButtonEnabled(page, "Use existing issue");
-    await expectButtonDisabled(page, "Next");
+    await expectButtonDisabled(page, "Next step");
   });
 
   test("saves issue step input and enables the next step", async ({ page }) => {
@@ -114,7 +114,7 @@ test.describe("live AI Studio session workflow", () => {
       waitUntil: "networkidle"
     });
 
-    await expectButtonEnabled(page, "Next");
+    await expectButtonEnabled(page, "Next step");
   });
 
   test("shows the expected controls at each checklist step", async ({ page }) => {
@@ -122,7 +122,7 @@ test.describe("live AI Studio session workflow", () => {
 
     await createNewBranchSessionAtIssueStep(page);
     await assertChecklistControls(page, "issue_file_created", {
-      disabled: ["Save issue", "Next"],
+      disabled: ["Save issue", "Next step"],
       enabled: ["Use existing issue"],
       hidden: []
     });
@@ -130,99 +130,99 @@ test.describe("live AI Studio session workflow", () => {
     await useExistingIssue(page, issue.url);
     await assertChecklistControls(page, "issue_file_created", {
       disabled: ["Save issue", "Use existing issue"],
-      enabled: ["Next"]
+      enabled: ["Next step"]
     });
 
     await goNextToStep(page, "issue_submitted");
     await assertChecklistControls(page, "issue_submitted", {
       disabled: ["Create issue on GH"],
-      enabled: ["Next"]
+      enabled: ["Next step"]
     });
 
     await goNextToStep(page, "plan_made");
     await assertChecklistControls(page, "plan_made", {
-      enabled: ["Make plan", "Next"]
+      enabled: ["Make plan", "Next step"]
     });
 
     await goNextToStep(page, "plan_executed");
     await assertChecklistControls(page, "plan_executed", {
-      enabled: ["Execute plan", "Next"]
+      enabled: ["Execute plan", "Next step"]
     });
 
     await goNextToStep(page, "implementation_reviewed");
     await assertChecklistControls(page, "implementation_reviewed", {
       disabled: ["Edit AI response", "Open app"],
-      enabled: ["Review diff", "Run app", "Ask AI for tweaks", "Next"]
+      enabled: ["Review diff", "Run app", "Ask AI for tweaks", "Next step"]
     });
 
     await goNextToStep(page, "deep_ui_check_run");
     await assertChecklistControls(page, "deep_ui_check_run", {
-      enabled: ["Run deep UI check", "Next"]
+      enabled: ["Run deep UI check", "Next step"]
     });
 
     await goNextToStep(page, "review_run");
     await assertChecklistControls(page, "review_run", {
-      enabled: ["Run deslop", "Next"]
+      enabled: ["Run deslop", "Next step"]
     });
 
     await goNextToStep(page, "project_validated");
     await assertChecklistControls(page, "project_validated", {
-      disabled: ["Run automated checks", "Next"],
+      disabled: ["Run automated checks", "Next step"],
       enabled: ["Update code index"]
     });
 
     await markMetadataAndReload(page, "code_index_updated", "yes");
     await assertChecklistControls(page, "project_validated", {
-      disabled: ["Next"],
+      disabled: ["Next step"],
       enabled: ["Update code index", "Run automated checks"]
     });
     await markMetadataAndReload(page, "automated_checks_passed", "yes");
     await assertChecklistControls(page, "project_validated", {
-      enabled: ["Update code index", "Run automated checks", "Next"]
+      enabled: ["Update code index", "Run automated checks", "Next step"]
     });
 
     await goNextToStep(page, "changes_accepted");
     await assertChecklistControls(page, "changes_accepted", {
       disabled: ["Edit report", "Open app"],
-      enabled: ["Review diff", "Run app", "Next"]
+      enabled: ["Review diff", "Run app", "Next step"]
     });
 
     await goNextToStep(page, "report_created");
     await assertChecklistControls(page, "report_created", {
-      disabled: ["Edit report", "Next"],
+      disabled: ["Edit report", "Next step"],
       enabled: ["Write report"]
     });
     await writeReportArtifact(page, `# Report\n\nChecklist report for ${runId}.\n`);
     await assertChecklistControls(page, "report_created", {
-      enabled: ["Edit report", "Write report", "Next"]
+      enabled: ["Edit report", "Write report", "Next step"]
     });
 
     await goNextToStep(page, "project_knowledge_updated");
     await assertChecklistControls(page, "project_knowledge_updated", {
-      enabled: ["Update project knowledge", "Next"]
+      enabled: ["Update project knowledge", "Next step"]
     });
 
     await goNextToStep(page, "changes_committed");
     await assertChecklistControls(page, "changes_committed", {
-      disabled: ["Next"],
+      disabled: ["Next step"],
       enabled: ["Commit and push changes"]
     });
 
     await markMetadataAndReload(page, "accepted_commit", "0000000000000000000000000000000000000000");
     await markMetadataAndReload(page, "branch_pushed", "ai-studio/live-e2e-checklist");
     await assertChecklistControls(page, "changes_committed", {
-      enabled: ["Commit and push changes", "Next"]
+      enabled: ["Commit and push changes", "Next step"]
     });
 
     await goNextToStep(page, "create_pull_request");
     await assertChecklistControls(page, "create_pull_request", {
-      disabled: ["Create PR on GH", "Next"],
+      disabled: ["Create PR on GH", "Next step"],
       enabled: ["Draft PR"]
     });
 
     await writePullRequestArtifact(page, `# ${fixtureTitle("checklist-pr")}\n\nChecklist contract draft.\n`);
     await assertChecklistControls(page, "create_pull_request", {
-      disabled: ["Draft PR", "Open PR", "Next"],
+      disabled: ["Draft PR", "Open PR", "Next step"],
       enabled: ["Create PR on GH", "Update PR"]
     });
 
@@ -230,35 +230,35 @@ test.describe("live AI Studio session workflow", () => {
     await markMetadataAndReload(page, "pr_source", "created");
     await assertChecklistControls(page, "create_pull_request", {
       disabled: ["Create PR on GH", "Draft PR"],
-      enabled: ["Open PR", "Next"]
+      enabled: ["Open PR", "Next step"]
     });
 
     await goNextToStep(page, "pr_merged");
     await assertChecklistControls(page, "pr_merged", {
-      disabled: ["Next"],
+      disabled: ["Next step"],
       enabled: ["Prepare for merge", "Merge", "Do not merge"]
     });
 
     await markMetadataAndReload(page, "pr_merged", "yes");
     await assertChecklistControls(page, "pr_merged", {
-      enabled: ["Next"]
+      enabled: ["Next step"]
     });
 
     await goNextToStep(page, "main_checkout_synced");
     await assertChecklistControls(page, "main_checkout_synced", {
-      disabled: ["Next"],
+      disabled: ["Next step"],
       enabled: ["Sync main checkout"]
     });
 
     await markMetadataAndReload(page, "main_checkout_synced", "yes");
     await assertChecklistControls(page, "main_checkout_synced", {
-      enabled: ["Next"]
+      enabled: ["Next step"]
     });
 
     await goNextToStep(page, "session_finished");
     await assertChecklistControls(page, "session_finished", {
       enabled: ["Archive"],
-      hidden: ["Next"]
+      hidden: ["Next step"]
     });
   });
 
@@ -274,11 +274,11 @@ test.describe("live AI Studio session workflow", () => {
 
     await expectButtonDisabled(page, "Save issue");
     await expectButtonDisabled(page, "Use existing issue");
-    await expectButtonEnabled(page, "Next");
+    await expectButtonEnabled(page, "Next step");
 
     await goNextToStep(page, "issue_submitted");
     await expectButtonDisabled(page, "Create issue on GH");
-    await expectButtonEnabled(page, "Next");
+    await expectButtonEnabled(page, "Next step");
   });
 
   test("creates and edits a new issue draft, then creates the GitHub issue", async ({ page }) => {
@@ -288,7 +288,7 @@ test.describe("live AI Studio session workflow", () => {
       title: fixtureTitle("new-issue")
     });
 
-    await expectButtonEnabled(page, "Next");
+    await expectButtonEnabled(page, "Next step");
     await goNextToStep(page, "issue_submitted");
     await runCommandAndWaitForMetadata(page, "Create issue on GH", "issue_url", UI_COMMAND_TIMEOUT_MS);
 
@@ -297,7 +297,7 @@ test.describe("live AI Studio session workflow", () => {
     expect(issueUrl).toContain("/issues/");
     expect(session.metadata?.issue_source).toBe("created");
     addCleanupTask(async () => closeGithubIssue(issueUrl));
-    await expectButtonEnabled(page, "Next");
+    await expectButtonEnabled(page, "Next step");
   });
 
   test("runs the full new-branch path through PR creation, merge, sync, and finish", async ({ page }) => {
@@ -405,11 +405,11 @@ test.describe("live AI Studio session workflow", () => {
 
     await goNextToStep(page, "create_pull_request");
     if (updateMode === "direct") {
-      await expectButtonEnabled(page, "Next");
+      await expectButtonEnabled(page, "Next step");
       await expectButtonEnabled(page, "Open PR");
       await expectButtonDisabled(page, "Draft PR");
       await expectButtonDisabled(page, "Create PR on GH");
-      await expectButtonEnabled(page, "Next");
+      await expectButtonEnabled(page, "Next step");
 
       const updatedPr = await ghJson([
         "pr",
@@ -445,7 +445,7 @@ test.describe("live AI Studio session workflow", () => {
 
     const session = await expectSessionMetadata(page, "source_pr_update_mode", "replacement");
     expect(stringValue(session.metadata?.pr_url)).toBe("");
-    await expectButtonEnabled(page, "Next");
+    await expectButtonEnabled(page, "Next step");
   });
 
   test("requires confirmation before abandoning a session", async ({ page }) => {
