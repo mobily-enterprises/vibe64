@@ -514,7 +514,7 @@ const autopilotBusy = computed(() => Boolean(props.active && (
   stepInput.saving
 )));
 const navigationBusy = computed(() => Boolean(props.page?.busy || autopilotBusy.value || props.rewindBusy));
-const mainStatusVisible = computed(() => !commandTerminalVisible.value);
+const mainStatusVisible = computed(() => !commandTerminalVisible.value && !conversationLogVisible.value);
 const standaloneFailureVisible = computed(() => screenKind.value === "failure");
 const screenStopAction = computed(() => String(screenState.value.stopAction || ""));
 const serverScreenVisible = computed(() => Boolean(

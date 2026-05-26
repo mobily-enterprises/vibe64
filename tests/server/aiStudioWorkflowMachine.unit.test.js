@@ -2267,7 +2267,7 @@ test("ai-studio runtime presents waiting_for_input as the same Codex conversatio
     assert.equal(waiting.presentation.screen.input.submitTarget, "intent");
     assert.equal(waiting.presentation.screen.primaryIntentId, "talk_to_codex");
     assert.equal(waiting.presentation.screen.message, "What food should I use?");
-    assert.deepEqual(waiting.intents.map((intent) => intent.id), ["talk_to_codex"]);
+    assert.deepEqual(waiting.intents.map((intent) => intent.id), ["talk_to_codex", "continue_step"]);
     assert.equal(waiting.intents[0].actionId, "agent_conversation");
     assert.deepEqual(waiting.intents[0].input?.questionSugar, {
       fieldName: "conversationRequest",
@@ -2275,6 +2275,9 @@ test("ai-studio runtime presents waiting_for_input as the same Codex conversatio
       source: "latest_assistant_message"
     });
     assert.equal(waiting.intents[0].inputFields[0].name, "conversationRequest");
+    assert.equal(waiting.intents[1].label, "Next step");
+    assert.equal(waiting.intents[1].enabled, false);
+    assert.equal(waiting.intents[1].disabledReason, "Answer Codex before continuing.");
 
     const afterAnswer = await runtime.runIntent("prompt_response_resume", "talk_to_codex", {
       fields: {

@@ -375,6 +375,12 @@ function presentationFromConfig(session = {}, config = {}) {
   };
 }
 
+function configuredStopIntentsExcept(session = {}, excludedIntentIds = []) {
+  const excluded = new Set(excludedIntentIds.map(normalizeText).filter(Boolean));
+  return stopScreenPresentation(session).intents
+    .filter((candidate) => !excluded.has(candidate.id));
+}
+
 function stopScreenPresentation(session = {}) {
   const configured = stepPresentationConfig(session).stop;
   if (isPlainObject(configured)) {
@@ -427,14 +433,16 @@ function interactionPresentation(session = {}) {
     }
     const inputFields = Array.isArray(interaction.fields) ? interaction.fields : [];
     const action = actionById(session, interaction.actionId || stageAction(session)?.actionId || "");
+    const primaryIntent = intentForAction(conversationIntentId, action, {
+      input: conversationIntentInputPresentation(session, inputFields),
+      inputFields,
+      label: interaction.submitLabel || action?.label || "Send to Codex",
+      style: "primary"
+    });
     return {
       intents: [
-        intentForAction(conversationIntentId, action, {
-          input: conversationIntentInputPresentation(session, inputFields),
-          inputFields,
-          label: interaction.submitLabel || action?.label || "Send to Codex",
-          style: "primary"
-        })
+        primaryIntent,
+        ...configuredStopIntentsExcept(session, [conversationIntentId])
       ],
       screen: screen("conversation", {
         input: inputPresentation(interaction, {

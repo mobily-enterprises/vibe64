@@ -42,15 +42,15 @@
           >
             Review diff
           </v-btn>
-
-          <AiStudioShellControls
-            v-if="selectedToolbarSession"
-            :key="`shell:${selectedToolbarSession.sessionId}`"
-            :session="selectedToolbarSession"
-            show-activator
-            window-displayed
-          />
         </div>
+
+        <AiStudioShellControls
+          v-for="shellSession in shellToolbarSessions"
+          :key="`shell:${shellSession.sessionId}`"
+          :session="shellSession"
+          :show-activator="shellControlsActive(shellSession)"
+          :window-displayed="shellControlsActive(shellSession)"
+        />
 
         <AiStudioLaunchControls
           v-if="selectedToolbarSession"
@@ -175,6 +175,11 @@ const selectedToolbarSession = computed(() => {
     (toolbar.sessions || []).find((session) => session.sessionId === selection.selectedSessionId) ||
     null;
 });
+const shellToolbarSessions = computed(() => {
+  return (toolbar.sessions || [])
+    .map((session) => sessionData.sessionForId(session.sessionId) || session)
+    .filter((session) => session?.sessionId);
+});
 const selectedRuntimeState = computed(() => runtimeStateBySessionId[selection.selectedSessionId] || null);
 const selectedAbandon = computed(() => selectedRuntimeState.value?.toolbarControls?.abandon || fallbackAbandon);
 const selectedDiff = computed(() => selectedRuntimeState.value?.toolbarControls?.diff || {});
@@ -259,6 +264,14 @@ function setSessionMode(mode = "autopilot") {
 
 function switchSessionMode() {
   setSessionMode(modeSwitchTarget.value);
+}
+
+function shellControlsActive(session = {}) {
+  return Boolean(
+    sessionMode.value === "inspect" &&
+    session?.sessionId &&
+    session.sessionId === selection.selectedSessionId
+  );
 }
 
 watch(sessionMode, () => {

@@ -285,7 +285,8 @@ watch(scrollTrigger, () => {
 }
 
 .studio-conversation-log__message--assistant {
-  background: rgba(var(--v-theme-surface-variant), 0.55);
+  background: rgb(var(--v-theme-surface));
+  border: 1px solid rgba(var(--v-theme-outline), 0.18);
   justify-self: start;
   max-width: min(48rem, 94%);
 }

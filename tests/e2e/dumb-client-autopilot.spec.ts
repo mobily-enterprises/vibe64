@@ -695,6 +695,84 @@ test.describe("Autopilot dumb client contract", () => {
       .toBeLessThanOrEqual(0.25);
   });
 
+  test("keeps Inspect shell terminals alive when switching to Autopilot", async ({ page }) => {
+    let shellTerminalCloses = 0;
+    await mockInspectTerminalSockets(page);
+    const session = sessionPayload({
+      completedSteps: ["worktree_created"],
+      metadata: {
+        worktree_path: "/workspace/example-target-app/.ai-studio/sessions/active/session-renderer/worktree"
+      },
+      sessionRoot: "/workspace/example-target-app/.ai-studio/sessions/active/session-renderer",
+      worktreeReady: true
+    });
+    await mockAiStudioSession(page, session, {
+      onShellTerminalClose: () => {
+        shellTerminalCloses += 1;
+      }
+    });
+
+    await page.goto(`${BASE_URL}/home?mode=inspect`);
+    await page.getByLabel("Open shell").click();
+    await page.getByText("Worktree shell").click();
+    await expect(page.locator(".ai-studio-shell-controls__terminal--active .ai-command-terminal__host"))
+      .toBeVisible();
+
+    await page.getByRole("button", { name: "Autopilot" }).click();
+    await expect(page).toHaveURL(/\/home(?:\?|$)/u);
+    await page.waitForTimeout(100);
+    expect(shellTerminalCloses).toBe(0);
+
+    await page.getByRole("button", { name: "Inspect" }).click();
+    await expect(page.locator(".ai-studio-shell-controls__terminal--active .ai-command-terminal__host"))
+      .toBeVisible();
+  });
+
+  test("keeps each session shell terminal alive when switching selected sessions", async ({ page }) => {
+    let shellTerminalCloses = 0;
+    await mockInspectTerminalSockets(page);
+    const firstSession = sessionPayload({
+      sessionId: "session-alpha",
+      sessionName: "Alpha",
+      metadata: {
+        worktree_path: "/workspace/example-target-app/.ai-studio/sessions/active/session-alpha/worktree"
+      },
+      sessionRoot: "/workspace/example-target-app/.ai-studio/sessions/active/session-alpha",
+      worktreeReady: true
+    });
+    const secondSession = sessionPayload({
+      sessionId: "session-beta",
+      sessionName: "Beta",
+      metadata: {
+        worktree_path: "/workspace/example-target-app/.ai-studio/sessions/active/session-beta/worktree"
+      },
+      sessionRoot: "/workspace/example-target-app/.ai-studio/sessions/active/session-beta",
+      worktreeReady: true
+    });
+    await mockAiStudioSession(page, secondSession, {
+      onShellTerminalClose: () => {
+        shellTerminalCloses += 1;
+      },
+      sessionList: [firstSession, secondSession]
+    });
+
+    await page.goto(`${BASE_URL}/home?mode=inspect`);
+    await expect(page.getByText("Beta")).toBeVisible();
+    await page.getByLabel("Open shell").click();
+    await page.getByText("Worktree shell").click();
+    await expect(page.locator(".ai-studio-shell-controls__terminal--active .ai-command-terminal__host"))
+      .toBeVisible();
+
+    await page.getByText("Alpha").click();
+    await page.waitForTimeout(100);
+    expect(shellTerminalCloses).toBe(0);
+
+    await page.getByText("Beta").click();
+    await expect(page.locator(".ai-studio-shell-controls__terminal--active .ai-command-terminal__host"))
+      .toBeVisible();
+    expect(shellTerminalCloses).toBe(0);
+  });
+
   test("renders numbered questions as UI sugar and submits only the logical response field", async ({ page }) => {
     const stepInputs: unknown[] = [];
     const session = sessionPayload({
@@ -775,6 +853,8 @@ async function mockAiStudioSession(
     onIntent = () => undefined,
     onStepInput = () => undefined,
     onCodexTerminalStart = () => undefined,
+    onShellTerminalClose = () => undefined,
+    sessionList = null,
     conversationLog = []
   }: {
     conversationLog?: unknown[];
@@ -784,9 +864,17 @@ async function mockAiStudioSession(
     onCommandTerminalStart?: () => Record<string, unknown> | void;
     onCodexTerminalStart?: () => void;
     onIntent?: (body: unknown) => void;
+    onShellTerminalClose?: () => void;
     onStepInput?: (body: unknown) => void;
+    sessionList?: Record<string, unknown>[] | null;
   } = {}
 ) {
+  const listedSessions = Array.isArray(sessionList) ? sessionList : [session];
+  function sessionForRequest(pathname: string) {
+    const requestedSessionId = decodeURIComponent(pathname.split("/").at(-1) || "");
+    return listedSessions.find((item) => item.sessionId === requestedSessionId) || session;
+  }
+
   await mockStudioReady(page);
   await page.route("**/api/ai-studio/sessions**", async (route) => {
     const request = route.request();
@@ -846,6 +934,14 @@ async function mockAiStudioSession(
       });
       return;
     }
+    if (method === "DELETE" && /\/shell-terminal\/[^/]+$/u.test(url.pathname)) {
+      onShellTerminalClose();
+      await fulfillJson(route, {
+        closed: true,
+        ok: true
+      });
+      return;
+    }
     if (method === "POST" && /\/intents\/[^/]+$/u.test(url.pathname)) {
       onIntent(request.postDataJSON());
       await fulfillJson(route, {
@@ -873,7 +969,7 @@ async function mockAiStudioSession(
     if (method === "GET" && /\/sessions\/[^/]+$/u.test(url.pathname)) {
       await fulfillJson(route, {
         ok: true,
-        ...session
+        ...sessionForRequest(url.pathname)
       });
       return;
     }
@@ -889,7 +985,7 @@ async function mockAiStudioSession(
         openSessionCount: 1
       },
       ok: true,
-      sessions: [session]
+      sessions: listedSessions
     });
   });
 }
