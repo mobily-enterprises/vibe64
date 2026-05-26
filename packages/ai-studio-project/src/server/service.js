@@ -7,7 +7,7 @@ import {
 } from "../../../../server/lib/aiStudio/index.js";
 import {
   aiStudioResult
-} from "../../../../server/lib/aiStudio/serverResponses.js";
+} from "@local/ai-studio-core/server/serverResponses";
 import {
   resolveStudioTargetRoot
 } from "../../../../server/lib/studioRoots.js";

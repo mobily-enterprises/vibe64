@@ -4,39 +4,28 @@ import {
   registerWorkflows
 } from "./workflowRegistry.js";
 import {
-  coreWorkflowStepFactoryModule
+  coreWorkflowStepFactories
 } from "./workflowStepFactories.js";
 import {
-  coreCodingWorkflowDefinitionModule,
-  coreCodingWorkflowMachineModule
+  coreCodingWorkflowModule
 } from "./workflowModules/coreCoding.js";
 import {
-  coreLifecycleWorkflowDefinitionModule,
-  coreLifecycleWorkflowMachineModule
+  coreLifecycleWorkflowModule
 } from "./workflowModules/coreLifecycle.js";
 import {
-  coreMaintenanceWorkflowDefinitionModule,
-  coreMaintenanceWorkflowMachineModule
+  coreMaintenanceWorkflowModule
 } from "./workflowModules/coreMaintenance.js";
 
-const stepFactoryModule = coreWorkflowStepFactoryModule();
-registerWorkflowStepFactories(stepFactoryModule.id, stepFactoryModule.stepFactories);
+registerWorkflowStepFactories(coreWorkflowStepFactories.id, coreWorkflowStepFactories.factories);
 
 [
-  coreLifecycleWorkflowDefinitionModule(),
-  coreCodingWorkflowDefinitionModule(),
-  coreMaintenanceWorkflowDefinitionModule()
+  coreLifecycleWorkflowModule,
+  coreCodingWorkflowModule,
+  coreMaintenanceWorkflowModule
 ].forEach((module) => {
-  registerWorkflowSteps(module.id, module.steps);
-  if (module.workflows) {
-    registerWorkflows(module.id, module.workflows);
+  registerWorkflowSteps(module.id, module.stepDefinitions);
+  if (module.workflowDefinitions.length > 0) {
+    registerWorkflows(module.id, module.workflowDefinitions);
   }
-});
-
-[
-  coreLifecycleWorkflowMachineModule(),
-  coreCodingWorkflowMachineModule(),
-  coreMaintenanceWorkflowMachineModule()
-].forEach((module) => {
-  registerWorkflowSteps(module.id, module.steps);
+  registerWorkflowSteps(module.id, module.stepMachineContributions);
 });

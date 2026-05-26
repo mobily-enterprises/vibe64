@@ -6,6 +6,7 @@ export default Object.freeze({
   description: "Owns AI Studio workflow session state, actions, advance, and abandon.",
   dependsOn: [
     "@jskit-ai/kernel",
+    "@local/ai-studio-core",
     "@local/ai-studio-project",
     "@local/ai-studio-accounts",
     "@local/ai-studio-terminals",

@@ -3,7 +3,7 @@ import { withActionDefaults } from "@jskit-ai/kernel/shared/actions";
 import { createService } from "./service.js";
 import { featureActions } from "./actions.js";
 import { registerRoutes } from "./registerRoutes.js";
-import { aiStudioSessionChangedServiceEvent } from "../../../../server/lib/aiStudio/sessionRealtimeEvents.js";
+import { aiStudioSessionChangedServiceEvent } from "@local/ai-studio-core/server/sessionRealtimeEvents";
 
 const AI_STUDIO_SESSIONS_SERVICE = "feature.ai-studio-sessions.service";
 

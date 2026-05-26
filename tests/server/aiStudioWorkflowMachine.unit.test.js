@@ -14,11 +14,11 @@ import {
   workflowForDefinition
 } from "../../server/lib/aiStudio/index.js";
 import {
-  _testing as workflowRegistryTesting
+  _testing as workflowRegistryTesting,
+  workflowStepMachineForStep
 } from "../../server/lib/aiStudio/workflowRegistry.js";
 import {
-  currentStepPromptInputInstruction,
-  stepMachineForStep
+  currentStepPromptInputInstruction
 } from "../../server/lib/aiStudio/workflowStepMachines.js";
 import {
   _testing as coreCodingTesting
@@ -673,6 +673,7 @@ test("ai-studio runtime exposes and runs the server-owned conversation intent", 
 
     assert.equal(afterIntent.actionResult.status, "prompt_ready");
     assert.equal(afterIntent.actionResult.promptId, "agent_conversation");
+    assert.equal(afterIntent.actionResult.recordsConversationTurn, true);
     assert.match(
       afterIntent.actionResult.codexPromptHandoff.terminalInput,
       /^Explain this codebase\.\n\n\[\[AI_STUDIO_CONTEXT_START\]\]/u
@@ -907,7 +908,7 @@ test("ai-studio workflow definitions have an explicit state machine for every st
   for (const { id: definitionId } of workflowRegistryTesting.registeredWorkflowRecords()) {
     const workflow = workflowForDefinition(definitionId);
     assert.deepEqual(
-      workflow.steps.map((step) => step.id).filter((stepId) => !stepMachineForStep(stepId)),
+      workflow.steps.map((step) => step.id).filter((stepId) => !workflowStepMachineForStep(stepId)),
       [],
       `${definitionId} has workflow steps without state machines`
     );
@@ -1630,6 +1631,7 @@ test("ai-studio runtime prompt handoff shows the action input outside hidden ter
 
     assert.equal(afterAction.actionResult.status, "prompt_ready");
     assert.equal(afterAction.actionResult.promptId, "agent_conversation");
+    assert.equal(afterAction.actionResult.recordsConversationTurn, true);
     assert.match(
       afterAction.actionResult.codexPromptHandoff.terminalInput,
       /^Explain this codebase\.\n\n\[\[AI_STUDIO_CONTEXT_START\]\]/u
@@ -1682,6 +1684,7 @@ test("ai-studio runtime presents waiting_for_input as the same Codex conversatio
 
     assert.equal(afterAnswer.stepMachine.status, "awaiting_agent_result");
     assert.equal(afterAnswer.actionResult.status, "prompt_ready");
+    assert.equal(afterAnswer.actionResult.recordsConversationTurn, true);
     assert.match(afterAnswer.actionResult.codexPromptHandoff.terminalInput, /^Use Pescara\.\n\n\[\[AI_STUDIO_CONTEXT_START\]\]/u);
   });
 });

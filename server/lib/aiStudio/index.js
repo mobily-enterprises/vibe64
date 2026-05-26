@@ -46,8 +46,8 @@ export {
 } from "./workflow.js";
 export {
   AGENT_CONVERSATION_ACTION_ID,
-  agentConversationAction,
-  agentConversationStep
+  buildAgentConversationActionDefinition,
+  buildAgentConversationStepDefinition
 } from "./workflowDefinitionBuilders.js";
 export {
   AI_STUDIO_PROJECT_TYPE_FILE,

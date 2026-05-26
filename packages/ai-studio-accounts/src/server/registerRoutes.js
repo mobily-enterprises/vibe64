@@ -11,7 +11,7 @@ import {
   accountAuthStartInputValidator,
   accountsReadInputValidator
 } from "./inputSchemas.js";
-import { createAiStudioFeatureRoutes } from "../../../../server/lib/aiStudio/featureRoutes.js";
+import { createAiStudioFeatureRoutes } from "@local/ai-studio-core/server/featureRoutes";
 
 function registerRoutes(
   app,

@@ -11,7 +11,7 @@ import {
   ACTION_RUN_SESSION_ACTION,
   ACTION_RUN_SESSION_INTENT
 } from "./actions.js";
-import { createAiStudioFeatureRoutes } from "../../../../server/lib/aiStudio/featureRoutes.js";
+import { createAiStudioFeatureRoutes } from "@local/ai-studio-core/server/featureRoutes";
 
 function registerRoutes(
   app,

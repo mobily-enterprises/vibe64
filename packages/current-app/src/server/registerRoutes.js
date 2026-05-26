@@ -10,8 +10,11 @@ import {
   ACTION_RESET_STARRED_TARGET_SCRIPTS,
   ACTION_SAVE_STARRED_TARGET_SCRIPTS
 } from "./actions.js";
-import { createAiStudioFeatureRoutes } from "../../../../server/lib/aiStudio/featureRoutes.js";
+import { createAiStudioFeatureRoutes } from "@local/ai-studio-core/server/featureRoutes";
+import { registerTerminalWebSocketRoute } from "@local/ai-studio-core/server/terminalWebSocketRoutes";
 import { sendDoctorEventStream } from "../../../../server/lib/doctorStream.js";
+
+const CURRENT_APP_SERVICE = "feature.current-app.service";
 
 function getCurrentAppService(app) {
   return app.make("feature.current-app.service");
@@ -85,10 +88,29 @@ function registerRoutes(
       request.params.terminalSessionId
     );
   });
+
+  registerTargetScriptTerminalWebSocketRoute(app, routes);
 }
 
 function queryInput(request) {
   return request.input.query || {};
+}
+
+function registerTargetScriptTerminalWebSocketRoute(app, routes) {
+  registerTerminalWebSocketRoute(app, {
+    routePath: `${routes.routeBase}/target-script-terminal/:terminalSessionId/ws`,
+    serviceId: CURRENT_APP_SERVICE,
+    serviceUnavailableMessage: "Current app service is unavailable.",
+    subscribe(service, { subscriber, terminalSessionId }) {
+      return service.subscribeTargetScriptTerminal(terminalSessionId, subscriber);
+    },
+    resize(service, { cols, rows, terminalSessionId }) {
+      return service.resizeTargetScriptTerminal(terminalSessionId, { cols, rows });
+    },
+    write(service, { data, terminalSessionId }) {
+      return service.writeTargetScriptTerminal(terminalSessionId, data);
+    }
+  });
 }
 
 export { registerRoutes };

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createAiStudioFeatureRoutes } from "../../server/lib/aiStudio/featureRoutes.js";
+import { createAiStudioFeatureRoutes } from "@local/ai-studio-core/server/featureRoutes";
 import {
   testReply,
   testRouteApp,

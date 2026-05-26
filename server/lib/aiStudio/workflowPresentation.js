@@ -20,44 +20,11 @@ import { STEP_STATUS } from "./workflowStepMachines.js";
 //   and dispatch `presentation.auto.nextOperation` by its explicit route.
 // - Clients must not infer workflow meaning from step ids, action names, action
 //   types, or raw step-machine statuses.
-const ACTION_IDS = Object.freeze({
-  AGENT_CONVERSATION: "agent_conversation",
-  FINAL_REVIEW_CONVERSATION: "final_review_conversation",
-  FINISH_SESSION: "finish_session",
-  HUMAN_REVIEW_CONVERSATION: "human_review_conversation",
-  MAKE_PLAN: "make_plan",
-  MAKE_SEED_PLAN: "make_seed_plan",
-  MERGE_PR: "merge_pr",
-  PREPARE_FOR_MERGE: "prepare_for_merge",
-  RUN_DEEP_UI_CHECK: "run_deep_ui_check"
-});
-
 const INTENT_IDS = Object.freeze({
-  ACCEPT_REVIEW: "accept_review",
-  ARCHIVE_SESSION: "archive_session",
   CONTINUE_STEP: "continue_step",
-  MERGE_AND_SYNC: "merge_and_sync",
-  RECHECK_AFTER_FINAL_TWEAK: "recheck_after_final_tweak",
-  REJECT_AND_REPLAN: "reject_and_replan",
-  REQUEST_REVIEW_TWEAK: "request_review_tweak",
   RUN_OPTIONAL_CHECK: "run_optional_check",
-  SKIP_MERGE: "skip_merge",
   SKIP_OPTIONAL_CHECK: "skip_optional_check",
   TALK_TO_CODEX: "talk_to_codex"
-});
-
-const METADATA_KEYS = Object.freeze({
-  FINAL_REVIEW_FOLLOWUP: "autopilot_final_review_followup",
-  MERGE_INTENT: "autopilot_merge_intent"
-});
-
-const STEP_IDS = Object.freeze({
-  CHANGES_ACCEPTED: "changes_accepted",
-  PLAN_MADE: "plan_made",
-  PR_MERGED: "pr_merged",
-  PROJECT_VALIDATED: "project_validated",
-  REVIEW_RUN: "review_run",
-  SEED_PLAN_MADE: "seed_plan_made"
 });
 
 const OPERATION_ROUTES = Object.freeze({
@@ -228,6 +195,18 @@ function stepPresentationConfig(session = {}) {
   return isPlainObject(presentation) ? presentation : {};
 }
 
+function presentationContractError(message = "Invalid workflow presentation contract.") {
+  throw aiStudioError(message, "ai_studio_workflow_presentation_invalid");
+}
+
+function requiredPresentationValue(source = {}, fieldName = "", context = "workflow presentation") {
+  const value = normalizeText(source[fieldName]);
+  if (!value) {
+    presentationContractError(`${context} requires ${fieldName}.`);
+  }
+  return value;
+}
+
 function screenTitleFromConfig(config = {}, session = {}) {
   const title = normalizeText(config.title);
   if (title === "current_step") {
@@ -366,11 +345,15 @@ function interactionPresentation(session = {}) {
   if (!isPlainObject(interaction)) {
     return null;
   }
-  if (normalizeText(interaction.intentId) === INTENT_IDS.TALK_TO_CODEX || normalizeText(interaction.kind) === "conversation") {
-    const action = actionById(session, interaction.actionId || stageAction(session)?.actionId || ACTION_IDS.AGENT_CONVERSATION);
+  const conversationIntentId = normalizeText(interaction.intentId);
+  if (conversationIntentId || normalizeText(interaction.kind) === "conversation") {
+    if (!conversationIntentId) {
+      presentationContractError("Conversation interactions require an intentId.");
+    }
+    const action = actionById(session, interaction.actionId || stageAction(session)?.actionId || "");
     return {
       intents: [
-        intentForAction(INTENT_IDS.TALK_TO_CODEX, action, {
+        intentForAction(conversationIntentId, action, {
           inputFields: interaction.fields,
           label: interaction.submitLabel || action?.label || "Send to Codex",
           style: "primary"
@@ -381,7 +364,7 @@ function interactionPresentation(session = {}) {
           submitTarget: "intent"
         }),
         message: interaction.prompt || "",
-        primaryIntentId: INTENT_IDS.TALK_TO_CODEX,
+        primaryIntentId: conversationIntentId,
         sections: presentationSections(["response_preview"]),
         title: interaction.title || currentStepLabel(session)
       })
@@ -603,28 +586,28 @@ function stopOperation(reason = "") {
 
 function mergeOperation(session = {}, config = {}) {
   const metadata = session.metadata || {};
-  if (normalizeText(metadata.merge_skipped)) {
+  const skippedMetadataName = requiredPresentationValue(config, "skippedMetadataName", "merge automation");
+  const mergedMetadataName = requiredPresentationValue(config, "mergedMetadataName", "merge automation");
+  if (normalizeText(metadata[skippedMetadataName])) {
     return nextIsReady(session)
       ? advanceOperation(session)
       : stopOperation(session.next?.disabledReason || "");
   }
-  if (normalizeText(metadata.pr_merged)) {
+  if (normalizeText(metadata[mergedMetadataName])) {
     return nextIsReady(session)
       ? advanceOperation(session)
       : stopOperation(session.next?.disabledReason || "");
   }
   if (stepMachineStatus(session) === STEP_STATUS.READY && session.stepMachine?.promptComplete === true) {
     return actionOperation(session, {
-      actionId: config.mergeActionId || ACTION_IDS.MERGE_PR,
-      label: "Merge"
+      actionId: requiredPresentationValue(config, "mergeActionId", "merge automation")
     });
   }
   if (stepMachineIsWaitingForCodex(session) || stepMachineNeedsInput(session)) {
     return waitOperation(automationWaitReason(session));
   }
   return actionOperation(session, {
-    actionId: config.prepareActionId || ACTION_IDS.PREPARE_FOR_MERGE,
-    label: "Prepare for merge"
+    actionId: requiredPresentationValue(config, "prepareActionId", "merge automation")
   });
 }
 
@@ -951,23 +934,31 @@ function firstPresentField(fields = {}, names = []) {
   return normalizeText(names.map((name) => fields[name]).find(Boolean));
 }
 
+function workflowHasStep(session = {}, stepId = "") {
+  const normalizedStepId = normalizeText(stepId);
+  return Boolean(normalizedStepId) && workflowStepIds(session).includes(normalizedStepId);
+}
+
 function replanTargetForSession(session = {}, operation = {}) {
-  if (replanStepIdForSession(session) === STEP_IDS.SEED_PLAN_MADE) {
+  const seedPlanStepId = normalizeText(operation.seedPlanStepId);
+  if (workflowHasStep(session, seedPlanStepId)) {
     return {
-      actionId: normalizeText(operation.seedActionId || ACTION_IDS.MAKE_SEED_PLAN),
-      stepId: normalizeText(operation.seedPlanStepId || STEP_IDS.SEED_PLAN_MADE)
+      actionId: requiredPresentationValue(operation, "seedActionId", "reject_and_replan operation"),
+      stepId: seedPlanStepId
     };
   }
   return {
-    actionId: normalizeText(operation.planActionId || ACTION_IDS.MAKE_PLAN),
-    stepId: normalizeText(operation.planStepId || STEP_IDS.PLAN_MADE)
+    actionId: requiredPresentationValue(operation, "planActionId", "reject_and_replan operation"),
+    stepId: requiredPresentationValue(operation, "planStepId", "reject_and_replan operation")
   };
 }
 
 function finalReviewRecheckTargetStepForSession(session = {}, operation = {}) {
-  return finalReviewRecheckStepIdForSession(session) === STEP_IDS.REVIEW_RUN
-    ? normalizeText(operation.reviewStepId || STEP_IDS.REVIEW_RUN)
-    : normalizeText(operation.validationStepId || STEP_IDS.PROJECT_VALIDATED);
+  const reviewStepId = normalizeText(operation.reviewStepId);
+  if (workflowHasStep(session, reviewStepId)) {
+    return reviewStepId;
+  }
+  return requiredPresentationValue(operation, "validationStepId", "delete_metadata_and_rewind operation");
 }
 
 async function runActionServerOperation(runtime, session = {}, selectedIntent = {}, operation = {}, fields = {}) {
@@ -995,7 +986,7 @@ async function rejectAndReplanServerOperation(runtime, session = {}, operation =
 async function deleteMetadataAndRewindServerOperation(runtime, session = {}, operation = {}) {
   await runtime.store.deleteMetadataValue(
     session.sessionId,
-    normalizeText(operation.metadataName || METADATA_KEYS.FINAL_REVIEW_FOLLOWUP)
+    requiredPresentationValue(operation, "metadataName", "delete_metadata_and_rewind operation")
   );
   return runtime.rewind(
     session.sessionId,
@@ -1006,7 +997,7 @@ async function deleteMetadataAndRewindServerOperation(runtime, session = {}, ope
 async function writeMetadataServerOperation(runtime, session = {}, operation = {}) {
   await runtime.store.writeMetadataValue(
     session.sessionId,
-    normalizeText(operation.metadataName || METADATA_KEYS.MERGE_INTENT),
+    requiredPresentationValue(operation, "metadataName", "write_metadata operation"),
     normalizeText(operation.metadataValue)
   );
   return runtime.getSession(session.sessionId);
@@ -1129,20 +1120,6 @@ async function writeOperationMetadata(runtime, sessionId = "", metadata = {}) {
   }
 }
 
-function replanStepIdForSession(session = {}) {
-  const stepDefinitions = Array.isArray(session.stepDefinitions) ? session.stepDefinitions : [];
-  return stepDefinitions.some((step) => step.id === STEP_IDS.SEED_PLAN_MADE)
-    ? STEP_IDS.SEED_PLAN_MADE
-    : STEP_IDS.PLAN_MADE;
-}
-
-function finalReviewRecheckStepIdForSession(session = {}) {
-  const stepDefinitions = Array.isArray(session.stepDefinitions) ? session.stepDefinitions : [];
-  return stepDefinitions.some((step) => step.id === STEP_IDS.REVIEW_RUN)
-    ? STEP_IDS.REVIEW_RUN
-    : STEP_IDS.PROJECT_VALIDATED;
-}
-
 async function forceAdvanceCurrentStep(runtime, session = {}, message = "Advanced by server intent.") {
   const startedAtMs = Date.now();
   aiStudioSessionDebugLog("server.workflowPresentation.forceAdvance.start", {
@@ -1199,8 +1176,6 @@ async function runWorkflowIntent(runtime, sessionId = "", intentId = "", input =
 }
 
 export {
-  INTENT_IDS,
-  METADATA_KEYS,
   applyWorkflowPresentation,
   runWorkflowIntent
 };

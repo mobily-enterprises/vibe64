@@ -60,6 +60,7 @@
     "@local/adapter-setup-doctor": "file:packages/adapter-setup-doctor",
     "@local/ai-studio-accounts": "file:packages/ai-studio-accounts",
     "@local/ai-studio-artifacts": "file:packages/ai-studio-artifacts",
+    "@local/ai-studio-core": "file:packages/ai-studio-core",
     "@local/ai-studio-project": "file:packages/ai-studio-project",
     "@local/ai-studio-sessions": "file:packages/ai-studio-sessions",
     "@local/ai-studio-terminals": "file:packages/ai-studio-terminals",

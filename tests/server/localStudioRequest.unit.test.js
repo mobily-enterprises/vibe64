@@ -5,10 +5,10 @@ import {
   LOCALHOST_CHECK_BYPASS_FLAG,
   isLocalhostCheckBypassEnabled,
   stripLocalhostCheckBypassArgs
-} from "../../server/lib/localhostCheckBypass.js";
+} from "@local/ai-studio-core/server/localhostCheckBypass";
 import {
   isLocalStudioRequest
-} from "../../server/lib/localStudioRequest.js";
+} from "@local/ai-studio-core/server/localStudioRequest";
 
 test("localhost check bypass is enabled by the explicit CLI flag", () => {
   assert.equal(isLocalhostCheckBypassEnabled({

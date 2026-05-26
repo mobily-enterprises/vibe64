@@ -340,6 +340,34 @@
       },
       "installedAt": "2026-05-24T07:02:06.012Z",
       "migrationSyncVersion": "0.1.82"
+    },
+    "@local/ai-studio-core": {
+      "packageId": "@local/ai-studio-core",
+      "version": "0.1.0",
+      "source": {
+        "type": "local-package",
+        "packagePath": "packages/ai-studio-core",
+        "descriptorPath": "packages/ai-studio-core/package.descriptor.mjs"
+      },
+      "managed": {
+        "packageJson": {
+          "dependencies": {
+            "@local/ai-studio-core": {
+              "hadPrevious": false,
+              "previousValue": "",
+              "value": "file:packages/ai-studio-core"
+            }
+          },
+          "devDependencies": {},
+          "scripts": {}
+        },
+        "text": {},
+        "vite": {},
+        "files": [],
+        "migrations": []
+      },
+      "options": {},
+      "installedAt": "2026-05-26T05:00:29.741Z"
     }
   }
 }

@@ -3,7 +3,7 @@ import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import {
   aiStudioResult
-} from "../../../../server/lib/aiStudio/serverResponses.js";
+} from "@local/ai-studio-core/server/serverResponses";
 
 const ARTIFACT_PREVIEWS = Object.freeze({
   ai_response: {

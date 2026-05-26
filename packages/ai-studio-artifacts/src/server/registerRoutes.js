@@ -6,7 +6,7 @@ import {
   ACTION_READ_ARTIFACT_READINESS,
   ACTION_SUBMIT_CURRENT_STEP_INPUT
 } from "./actions.js";
-import { createAiStudioFeatureRoutes } from "../../../../server/lib/aiStudio/featureRoutes.js";
+import { createAiStudioFeatureRoutes } from "@local/ai-studio-core/server/featureRoutes";
 
 function getArtifactsService(app) {
   return app.make("feature.ai-studio-artifacts.service");

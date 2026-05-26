@@ -21,11 +21,8 @@ import {
   closeTerminalSessionsForNamespacePrefix
 } from "./server/lib/terminalSessions.js";
 import {
-  isLocalStudioRequest
-} from "./server/lib/localStudioRequest.js";
-import {
   isLocalhostCheckBypassEnabled
-} from "./server/lib/localhostCheckBypass.js";
+} from "@local/ai-studio-core/server/localhostCheckBypass";
 import {
   cleanupStaleStudioTerminals
 } from "./server/lib/studioTerminalCleanup.js";
@@ -121,22 +118,6 @@ function readSpaDocument(distRoot) {
   return readFileSync(path.resolve(distRoot, SPA_INDEX_FILE), "utf8");
 }
 
-function sendSocketJson(socket, payload) {
-  if (socket.readyState !== 1) {
-    return;
-  }
-  socket.send(JSON.stringify(payload));
-}
-
-function publicTerminalSnapshot(session = {}) {
-  const {
-    unsubscribe,
-    ...publicSession
-  } = session || {};
-  void unsubscribe;
-  return publicSession;
-}
-
 function preferredPortRange(port) {
   const requestedPort = Number(port) || 0;
   if (requestedPort < 1024 || requestedPort >= 65535) {
@@ -151,208 +132,6 @@ function browserUrlForListenAddress(address = "") {
     url.hostname = "127.0.0.1";
   }
   return `${url.origin}/home`;
-}
-
-function registerTerminalWebSocketRoute(
-  app,
-  runtimeApp,
-  {
-    routePath,
-    resize,
-    serviceId,
-    serviceUnavailableMessage,
-    subscribe,
-    write
-  } = {}
-) {
-  app.get(
-    routePath,
-    { websocket: true },
-    (socket, request) => {
-      let subscription = null;
-      let closed = false;
-
-      const closeSubscription = () => {
-        if (closed) {
-          return;
-        }
-        closed = true;
-        subscription?.unsubscribe?.();
-        subscription = null;
-      };
-
-      const closeWithError = (code, error) => {
-        sendSocketJson(socket, {
-          error,
-          type: "error"
-        });
-        socket.close(code, error);
-      };
-
-      if (!isLocalStudioRequest(request)) {
-        closeWithError(1008, "Open Studio on localhost or 127.0.0.1.");
-        return;
-      }
-
-      let service;
-      try {
-        service = runtimeApp.make(serviceId);
-      } catch (error) {
-        closeWithError(1011, String(error?.message || error || serviceUnavailableMessage));
-        return;
-      }
-      const sessionId = String(request.params?.sessionId || "");
-      const terminalSessionId = String(request.params?.terminalSessionId || "");
-
-      socket.on("message", async (rawMessage) => {
-        try {
-          const message = JSON.parse(rawMessage.toString());
-          if (message?.type === "input") {
-            const response = await write(service, {
-              data: message.data,
-              sessionId,
-              terminalSessionId
-            });
-            if (response?.ok === false) {
-              sendSocketJson(socket, {
-                error: response.error || "Terminal input failed.",
-                type: "error"
-              });
-            }
-            return;
-          }
-          if (message?.type === "resize") {
-            const response = await resize?.(service, {
-              cols: message.cols,
-              rows: message.rows,
-              sessionId,
-              terminalSessionId
-            });
-            if (response?.ok === false) {
-              sendSocketJson(socket, {
-                error: response.error || "Terminal resize failed.",
-                type: "resize.error"
-              });
-            }
-            return;
-          }
-        } catch (error) {
-          sendSocketJson(socket, {
-            error: String(error?.message || error || "Terminal socket message failed."),
-            type: "error"
-          });
-        }
-      });
-
-      socket.on("close", closeSubscription);
-      socket.on("error", closeSubscription);
-
-      void Promise.resolve(subscribe(service, {
-        sessionId,
-        subscriber: (message) => {
-          sendSocketJson(socket, message);
-        },
-        terminalSessionId
-      })).then((result) => {
-        if (result?.ok === false) {
-          closeWithError(1008, result.error || "Terminal session not found.");
-          return;
-        }
-        subscription = result;
-        sendSocketJson(socket, {
-          session: publicTerminalSnapshot(result),
-          type: "snapshot"
-        });
-      }).catch((error) => {
-        closeWithError(1011, String(error?.message || error || "Terminal stream failed."));
-      });
-    }
-  );
-}
-
-function registerAiStudioCodexTerminalWebSocketRoute(app, runtimeApp) {
-  registerTerminalWebSocketRoute(app, runtimeApp, {
-    routePath: "/api/ai-studio/sessions/:sessionId/codex-terminal/:terminalSessionId/ws",
-    serviceId: "feature.ai-studio-terminals.service",
-    serviceUnavailableMessage: "AI Studio terminal service is unavailable.",
-    subscribe(service, { sessionId, subscriber, terminalSessionId }) {
-      return service.subscribeCodexTerminal(sessionId, terminalSessionId, subscriber);
-    },
-    resize(service, { cols, rows, sessionId, terminalSessionId }) {
-      return service.resizeCodexTerminal(sessionId, terminalSessionId, { cols, rows });
-    },
-    write(service, { data, sessionId, terminalSessionId }) {
-      return service.writeCodexTerminal(sessionId, terminalSessionId, data);
-    }
-  });
-}
-
-function registerAiStudioCommandTerminalWebSocketRoute(app, runtimeApp) {
-  registerTerminalWebSocketRoute(app, runtimeApp, {
-    routePath: "/api/ai-studio/sessions/:sessionId/command-terminal/:terminalSessionId/ws",
-    serviceId: "feature.ai-studio-terminals.service",
-    serviceUnavailableMessage: "AI Studio terminal service is unavailable.",
-    subscribe(service, { sessionId, subscriber, terminalSessionId }) {
-      return service.subscribeCommandTerminal(sessionId, terminalSessionId, subscriber);
-    },
-    resize(service, { cols, rows, sessionId, terminalSessionId }) {
-      return service.resizeCommandTerminal(sessionId, terminalSessionId, { cols, rows });
-    },
-    write(service, { data, sessionId, terminalSessionId }) {
-      return service.writeCommandTerminal(sessionId, terminalSessionId, data);
-    }
-  });
-}
-
-function registerAiStudioLaunchTargetTerminalWebSocketRoute(app, runtimeApp) {
-  registerTerminalWebSocketRoute(app, runtimeApp, {
-    routePath: "/api/ai-studio/sessions/:sessionId/launch-terminal/:terminalSessionId/ws",
-    serviceId: "feature.ai-studio-terminals.service",
-    serviceUnavailableMessage: "AI Studio terminal service is unavailable.",
-    subscribe(service, { sessionId, subscriber, terminalSessionId }) {
-      return service.subscribeLaunchTargetTerminal(sessionId, terminalSessionId, subscriber);
-    },
-    resize(service, { cols, rows, sessionId, terminalSessionId }) {
-      return service.resizeLaunchTargetTerminal(sessionId, terminalSessionId, { cols, rows });
-    },
-    write(service, { data, sessionId, terminalSessionId }) {
-      return service.writeLaunchTargetTerminal(sessionId, terminalSessionId, data);
-    }
-  });
-}
-
-function registerAiStudioShellTerminalWebSocketRoute(app, runtimeApp) {
-  registerTerminalWebSocketRoute(app, runtimeApp, {
-    routePath: "/api/ai-studio/sessions/:sessionId/shell-terminal/:terminalSessionId/ws",
-    serviceId: "feature.ai-studio-terminals.service",
-    serviceUnavailableMessage: "AI Studio terminal service is unavailable.",
-    subscribe(service, { sessionId, subscriber, terminalSessionId }) {
-      return service.subscribeShellTerminal(sessionId, terminalSessionId, subscriber);
-    },
-    resize(service, { cols, rows, sessionId, terminalSessionId }) {
-      return service.resizeShellTerminal(sessionId, terminalSessionId, { cols, rows });
-    },
-    write(service, { data, sessionId, terminalSessionId }) {
-      return service.writeShellTerminal(sessionId, terminalSessionId, data);
-    }
-  });
-}
-
-function registerTargetScriptTerminalWebSocketRoute(app, runtimeApp) {
-  registerTerminalWebSocketRoute(app, runtimeApp, {
-    routePath: "/api/studio/current-app/target-script-terminal/:terminalSessionId/ws",
-    serviceId: "feature.current-app.service",
-    serviceUnavailableMessage: "Current app service is unavailable.",
-    subscribe(service, { subscriber, terminalSessionId }) {
-      return service.subscribeTargetScriptTerminal(terminalSessionId, subscriber);
-    },
-    resize(service, { cols, rows, terminalSessionId }) {
-      return service.resizeTargetScriptTerminal(terminalSessionId, { cols, rows });
-    },
-    write(service, { data, terminalSessionId }) {
-      return service.writeTargetScriptTerminal(terminalSessionId, data);
-    }
-  });
 }
 
 async function createServer(options = {}) {
@@ -449,14 +228,6 @@ async function createServer(options = {}) {
     serverSurface: runtimeEnv.SERVER_SURFACE,
     globalUiPaths: resolveGlobalUiPaths(runtime?.globalUiPaths || [])
   });
-
-  if (runtime?.app) {
-    registerAiStudioCodexTerminalWebSocketRoute(app, runtime.app);
-    registerAiStudioCommandTerminalWebSocketRoute(app, runtime.app);
-    registerAiStudioLaunchTargetTerminalWebSocketRoute(app, runtime.app);
-    registerAiStudioShellTerminalWebSocketRoute(app, runtime.app);
-    registerTargetScriptTerminalWebSocketRoute(app, runtime.app);
-  }
 
   if (hasWebBuild) {
     await app.register(fastifyStatic, {

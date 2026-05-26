@@ -60,9 +60,23 @@ test("Codex attachments are not rejected by the old 25 MB product cap", async ()
 
 function testApp() {
   const registeredRoutes = [];
+  const registeredWebSocketRoutes = [];
+  const fastify = {
+    get(path, options, handler) {
+      registeredWebSocketRoutes.push({
+        handler,
+        options,
+        path
+      });
+    }
+  };
   return {
     registeredRoutes,
+    registeredWebSocketRoutes,
     make(token) {
+      if (token === "jskit.fastify") {
+        return fastify;
+      }
       assert.equal(token, "jskit.http.router");
       return {
         register(method, path, options, handler) {

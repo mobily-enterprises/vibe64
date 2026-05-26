@@ -6,7 +6,7 @@ import { registerRoutes } from "./registerRoutes.js";
 import {
   aiStudioSessionChangedServiceEvent,
   createAiStudioSessionChangedPublisher
-} from "../../../../server/lib/aiStudio/sessionRealtimeEvents.js";
+} from "@local/ai-studio-core/server/sessionRealtimeEvents";
 
 const AI_STUDIO_TERMINALS_SERVICE = "feature.ai-studio-terminals.service";
 const TERMINAL_SESSION_MUTATION_EVENT_METHODS = Object.freeze([

@@ -1,0 +1,17 @@
+{
+  "name": "@local/ai-studio-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js",
+    "./server": "./src/server/index.js",
+    "./server/featureRoutes": "./src/server/featureRoutes.js",
+    "./server/localhostCheckBypass": "./src/server/localhostCheckBypass.js",
+    "./server/localStudioRequest": "./src/server/localStudioRequest.js",
+    "./server/serverResponses": "./src/server/serverResponses.js",
+    "./server/sessionRealtimeEvents": "./src/server/sessionRealtimeEvents.js",
+    "./server/terminalWebSocketRoutes": "./src/server/terminalWebSocketRoutes.js",
+    "./shared": "./src/shared/index.js"
+  }
+}

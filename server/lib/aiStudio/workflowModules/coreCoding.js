@@ -11,8 +11,8 @@ import {
   REPORT_ARTIFACT
 } from "../workflowArtifacts.js";
 import {
-  agentConversationAction,
-  agentConversationStep
+  buildAgentConversationActionDefinition,
+  buildAgentConversationStepDefinition
 } from "../workflowDefinitionBuilders.js";
 import {
   STEP_INPUT_KIND,
@@ -84,8 +84,7 @@ function createIssueOnGithubAction() {
   };
 }
 
-function coreCodingStepDefinitions() {
-  return Object.values(deepFreeze({
+const coreCodingStepDefinitions = Object.values(deepFreeze({
   [SEED_APPLICATION_STEP_ID]: {
     actions: [],
     autopilot: {
@@ -244,7 +243,7 @@ function coreCodingStepDefinitions() {
   },
   [implementationReviewedStepId]: {
     actions: [
-      agentConversationAction({
+      buildAgentConversationActionDefinition({
         id: humanReviewConversationActionId,
         label: "Ask AI for tweaks",
         inputLabel: "What would you like changed?",
@@ -295,7 +294,7 @@ function coreCodingStepDefinitions() {
       artifacts: [HUMAN_INPUT_RESPONSE_ARTIFACT]
     }
   },
-  [agentConversationStepId]: agentConversationStep({
+  [agentConversationStepId]: buildAgentConversationStepDefinition({
     actionLabel: "Ask Codex for changes",
     description: "Ask Codex to make focused code changes while you inspect and steer the work.",
     id: agentConversationStepId,
@@ -374,7 +373,7 @@ function coreCodingStepDefinitions() {
   },
   [changesAcceptedStepId]: {
     actions: [
-      agentConversationAction({
+      buildAgentConversationActionDefinition({
         id: finalReviewConversationActionId,
         label: "Ask AI for tweaks",
         inputLabel: "What should Codex adjust before finalizing?",
@@ -517,12 +516,10 @@ function coreCodingStepDefinitions() {
       actionResults: ["update_project_knowledge"]
     }
   }
-  })).map((definition) => ({ definition }));
-}
+})).map((definition) => ({ definition }));
 
-function coreCodingWorkflows() {
-  return Object.values(deepFreeze({
-  [AI_STUDIO_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION]: {
+const coreCodingWorkflowDefinitions = deepFreeze([
+  {
     description: "Create the initial application scaffold and local development foundation.",
     id: AI_STUDIO_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION,
     label: "Seed application",
@@ -547,7 +544,7 @@ function coreCodingWorkflows() {
     ],
     userSelectable: false
   },
-  [AI_STUDIO_WORKFLOW_DEFINITION_IDS.BIG_FEATURE]: {
+  {
     description: "Plan, implement, review, validate, commit, create a PR, and optionally merge.",
     id: AI_STUDIO_WORKFLOW_DEFINITION_IDS.BIG_FEATURE,
     label: "Big feature",
@@ -575,7 +572,7 @@ function coreCodingWorkflows() {
     ],
     userSelectable: true
   },
-  [AI_STUDIO_WORKFLOW_DEFINITION_IDS.GENERAL_CODING]: {
+  {
     description: "Make focused code changes with Codex, review, validate, commit, create a PR, and optionally merge.",
     id: AI_STUDIO_WORKFLOW_DEFINITION_IDS.GENERAL_CODING,
     label: "General coding",
@@ -600,8 +597,7 @@ function coreCodingWorkflows() {
     ],
     userSelectable: true
   }
-  }));
-}
+]);
 
 function issueFilesAreReady(session = {}) {
   return [
@@ -1018,8 +1014,7 @@ const reportCreatedMachine = {
   }
 };
 
-function coreCodingStepMachineContributions() {
-  return Object.values(Object.freeze({
+const coreCodingStepMachineContributions = Object.values(Object.freeze({
   [SEED_APPLICATION_STEP_ID]: {
     config: {
       draftReady: issueFilesAreReady,
@@ -1162,23 +1157,14 @@ function coreCodingStepMachineContributions() {
     id: projectKnowledgeUpdatedStepId,
     machine: projectKnowledgeUpdatedMachine
   }
-  }));
-}
+}));
 
-function coreCodingWorkflowDefinitionModule() {
-  return {
-    id: moduleId,
-    steps: coreCodingStepDefinitions(),
-    workflows: coreCodingWorkflows()
-  };
-}
-
-function coreCodingWorkflowMachineModule() {
-  return {
-    id: moduleId,
-    steps: coreCodingStepMachineContributions()
-  };
-}
+const coreCodingWorkflowModule = Object.freeze({
+  id: moduleId,
+  stepDefinitions: coreCodingStepDefinitions,
+  stepMachineContributions: coreCodingStepMachineContributions,
+  workflowDefinitions: coreCodingWorkflowDefinitions
+});
 
 const _testing = deepFreeze({
   moduleId,
@@ -1207,6 +1193,5 @@ export {
   ISSUE_FILE_STEP_ID,
   SEED_APPLICATION_STEP_ID,
   _testing,
-  coreCodingWorkflowDefinitionModule,
-  coreCodingWorkflowMachineModule
+  coreCodingWorkflowModule
 };

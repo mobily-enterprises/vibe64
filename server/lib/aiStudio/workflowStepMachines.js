@@ -15,12 +15,8 @@ import {
   workflowStepMachineForStep
 } from "./workflowRegistry.js";
 
-function stepMachineForStep(stepId = "") {
-  return workflowStepMachineForStep(stepId);
-}
-
 function currentStepPromptInputInstruction(session = {}, action = {}) {
-  const machine = stepMachineForStep(session.currentStep);
+  const machine = workflowStepMachineForStep(session.currentStep);
   if (!machine || typeof machine.promptInstruction !== "function") {
     return "";
   }
@@ -33,7 +29,7 @@ function currentStepPromptInputInstruction(session = {}, action = {}) {
 }
 
 async function applyStepMachineView(runtime, session = {}) {
-  const machine = stepMachineForStep(session.currentStep);
+  const machine = workflowStepMachineForStep(session.currentStep);
   if (!machine) {
     return session;
   }
@@ -68,7 +64,7 @@ async function applyStepMachineView(runtime, session = {}) {
 async function saveStepMachineInput(runtime, sessionId = "", input = {}) {
   const session = await runtime.getSession(sessionId);
   const normalizedInput = normalizeMachineInput(input);
-  const machine = stepMachineForStep(session.currentStep);
+  const machine = workflowStepMachineForStep(session.currentStep);
   if (!machine || typeof machine.submitInput !== "function") {
     throw aiStudioError(
       `The current AI Studio step does not accept direct input: ${session.currentStep || "(none)"}`,
@@ -94,7 +90,7 @@ async function saveStepMachineInput(runtime, sessionId = "", input = {}) {
 async function recoverStuckStepMachineExecution(runtime, session = {}, {
   message = "Recovered stuck command execution. Re-run the current step."
 } = {}) {
-  const machine = stepMachineForStep(session.currentStep);
+  const machine = workflowStepMachineForStep(session.currentStep);
   if (!machine) {
     throw aiStudioError(
       `The current AI Studio step cannot be recovered: ${session.currentStep || "(none)"}`,
@@ -121,7 +117,7 @@ async function recoverStuckStepMachineExecution(runtime, session = {}, {
 }
 
 async function recordStepMachineActionStarted(runtime, session = {}, actionId = "") {
-  const machine = stepMachineForStep(session.currentStep);
+  const machine = workflowStepMachineForStep(session.currentStep);
   if (typeof machine?.actionStarted !== "function") {
     return;
   }
@@ -133,7 +129,7 @@ async function recordStepMachineActionStarted(runtime, session = {}, actionId = 
 }
 
 async function recordStepMachineActionFinished(runtime, session = {}, actionId = "", actionResult = {}) {
-  const machine = stepMachineForStep(session.currentStep);
+  const machine = workflowStepMachineForStep(session.currentStep);
   if (typeof machine?.actionFinished !== "function") {
     return;
   }
@@ -152,6 +148,5 @@ export {
   recordStepMachineActionFinished,
   recordStepMachineActionStarted,
   recoverStuckStepMachineExecution,
-  saveStepMachineInput,
-  stepMachineForStep
+  saveStepMachineInput
 };

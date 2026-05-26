@@ -5,7 +5,7 @@ import { featureActions } from "./actions.js";
 import { registerRoutes } from "./registerRoutes.js";
 import {
   aiStudioSessionChangedServiceEvent
-} from "../../../../server/lib/aiStudio/sessionRealtimeEvents.js";
+} from "@local/ai-studio-core/server/sessionRealtimeEvents";
 
 const AI_STUDIO_ARTIFACTS_SERVICE = "feature.ai-studio-artifacts.service";
 

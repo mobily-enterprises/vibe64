@@ -211,6 +211,7 @@ function normalizeAction(action = {}, stepId = "") {
     inputFields: normalizeInputFields(action.inputFields, id),
     label: normalizeText(action.label || id),
     promptId: type === "prompt" ? normalizeText(action.promptId || id) : "",
+    recordsConversationTurn: action.recordsConversationTurn === true,
     type,
     visible: action.visible !== false
   };
@@ -439,6 +440,9 @@ function publicActionDefinition(action) {
   }
   if (action.hrefMetadata) {
     definition.hrefMetadata = action.hrefMetadata;
+  }
+  if (action.recordsConversationTurn) {
+    definition.recordsConversationTurn = true;
   }
   if (action.inputFields.length > 0) {
     definition.inputFields = action.inputFields.map((field) => ({

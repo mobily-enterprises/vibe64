@@ -52,8 +52,7 @@ const prMergedStepId = "pr_merged";
 const mainCheckoutSyncedStepId = "main_checkout_synced";
 const sessionFinishedStepId = "session_finished";
 
-function coreLifecycleStepDefinitions() {
-  return Object.values(deepFreeze({
+const coreLifecycleStepDefinitions = Object.values(deepFreeze({
   [sessionCreatedStepId]: {
     description: "Create the AI Studio session.",
     id: sessionCreatedStepId,
@@ -389,9 +388,11 @@ function coreLifecycleStepDefinitions() {
       automation: {
         mergeIntent: {
           mergeActionId: "merge_pr",
+          mergedMetadataName: "pr_merged",
           metadataName: "autopilot_merge_intent",
           metadataValue: "merge_and_sync",
-          prepareActionId: "prepare_for_merge"
+          prepareActionId: "prepare_for_merge",
+          skippedMetadataName: "merge_skipped"
         }
       },
       stop: {
@@ -520,8 +521,7 @@ function coreLifecycleStepDefinitions() {
       actionResults: ["finish_session"]
     }
   }
-  })).map((definition) => ({ definition }));
-}
+})).map((definition) => ({ definition }));
 
 const sessionCreatedMachine = {
   stepId: sessionCreatedStepId,
@@ -1060,112 +1060,103 @@ function pullRequestInputInteraction(values = {}) {
   };
 }
 
-function coreLifecycleStepMachineContributions() {
-  return [
-    {
-      id: sessionCreatedStepId,
-      machine: sessionCreatedMachine
-    },
-    {
-      id: workSourceSelectedStepId,
-      machine: workSourceSelectedMachine
-    },
-    {
-      id: worktreeCreatedStepId,
-      machine: worktreeCreatedMachine
-    },
-    {
-      id: dependenciesInstalledStepId,
-      machine: createInstallDependenciesMachine()
-    },
-    {
-      id: projectValidatedStepId,
-      machine: projectValidatedMachine
-    },
-    {
-      id: changesCommittedStepId,
-      machine: changesCommittedMachine
-    },
-    {
-      config: {
-        command: {
-          actionId: "create_pr_on_gh",
-          doneMetadata: "pr_url",
-          failureState: (context = {}) => machineState(STEP_STATUS.WAITING_FOR_INPUT, {
-            from: STEP_STATUS.ATTEMPTING_EXECUTION,
-            message: normalizeText(context.actionResult?.message),
-            output: normalizeText(context.actionResult?.output)
-          })
-        },
-        done: (session = {}) => metadataExists(session, "pr_url"),
-        draftOrigin: "prompt",
-        draftReady: pullRequestFilesAreReady,
-        interaction: (_status, values = {}) => pullRequestInputInteraction(values),
-        nextWhenConfirmed: {
-          disabledReason: "Create the pull request before continuing."
-        },
-        nextWhenDrafting: {
-          disabledReason: "Resolve the pull request content before continuing."
-        },
-        nextWhenWaitingForInput: {
-          disabledReason: "Resolve the pull request input request before continuing."
-        },
-        nextWhenWorking: {
-          disabledReason: "Create the pull request before continuing."
-        },
-        onWaitingActions: (context = {}) => disableAction(context.session, "create_pr_on_gh", "Resolve the pull request input request before retrying."),
-        promptInstruction() {
-          return currentStepHelperInstruction({
-            doneFields: {
-              body: "Markdown pull request body",
-              title: "Pull request title"
-            },
-            doneMeaning: "The pull request title and body are ready for user confirmation.",
-            waitingForInputMeaning: "You cannot draft the pull request without a user decision or missing repository context."
-          });
-        },
-        readValues: readPullRequestFieldValues,
-        saveValues: writePullRequestFieldValues,
-        unsupportedDoneMessage: "The pull request step cannot accept input right now.",
-        userResponseResumeStatus: (state = {}) => state.from === STEP_STATUS.ATTEMPTING_EXECUTION
-          ? STEP_STATUS.CONFIRM_FILES
-          : STEP_STATUS.AWAITING_AGENT_RESULT,
-        waitingInteraction: (state = {}) => commandFailureInteraction({
-          prompt: state.message || "Codex needs more information before the pull request can continue.",
-          title: "Pull request needs input"
+const coreLifecycleStepMachineContributions = [
+  {
+    id: sessionCreatedStepId,
+    machine: sessionCreatedMachine
+  },
+  {
+    id: workSourceSelectedStepId,
+    machine: workSourceSelectedMachine
+  },
+  {
+    id: worktreeCreatedStepId,
+    machine: worktreeCreatedMachine
+  },
+  {
+    id: dependenciesInstalledStepId,
+    machine: createInstallDependenciesMachine()
+  },
+  {
+    id: projectValidatedStepId,
+    machine: projectValidatedMachine
+  },
+  {
+    id: changesCommittedStepId,
+    machine: changesCommittedMachine
+  },
+  {
+    config: {
+      command: {
+        actionId: "create_pr_on_gh",
+        doneMetadata: "pr_url",
+        failureState: (context = {}) => machineState(STEP_STATUS.WAITING_FOR_INPUT, {
+          from: STEP_STATUS.ATTEMPTING_EXECUTION,
+          message: normalizeText(context.actionResult?.message),
+          output: normalizeText(context.actionResult?.output)
         })
       },
-      factoryId: "editable_artifact_review",
-      id: createPullRequestStepId
+      done: (session = {}) => metadataExists(session, "pr_url"),
+      draftOrigin: "prompt",
+      draftReady: pullRequestFilesAreReady,
+      interaction: (_status, values = {}) => pullRequestInputInteraction(values),
+      nextWhenConfirmed: {
+        disabledReason: "Create the pull request before continuing."
+      },
+      nextWhenDrafting: {
+        disabledReason: "Resolve the pull request content before continuing."
+      },
+      nextWhenWaitingForInput: {
+        disabledReason: "Resolve the pull request input request before continuing."
+      },
+      nextWhenWorking: {
+        disabledReason: "Create the pull request before continuing."
+      },
+      onWaitingActions: (context = {}) => disableAction(context.session, "create_pr_on_gh", "Resolve the pull request input request before retrying."),
+      promptInstruction() {
+        return currentStepHelperInstruction({
+          doneFields: {
+            body: "Markdown pull request body",
+            title: "Pull request title"
+          },
+          doneMeaning: "The pull request title and body are ready for user confirmation.",
+          waitingForInputMeaning: "You cannot draft the pull request without a user decision or missing repository context."
+        });
+      },
+      readValues: readPullRequestFieldValues,
+      saveValues: writePullRequestFieldValues,
+      unsupportedDoneMessage: "The pull request step cannot accept input right now.",
+      userResponseResumeStatus: (state = {}) => state.from === STEP_STATUS.ATTEMPTING_EXECUTION
+        ? STEP_STATUS.CONFIRM_FILES
+        : STEP_STATUS.AWAITING_AGENT_RESULT,
+      waitingInteraction: (state = {}) => commandFailureInteraction({
+        prompt: state.message || "Codex needs more information before the pull request can continue.",
+        title: "Pull request needs input"
+      })
     },
-    {
-      id: prMergedStepId,
-      machine: pullRequestMergedMachine
-    },
-    {
-      id: mainCheckoutSyncedStepId,
-      machine: mainCheckoutSyncedMachine
-    },
-    {
-      id: sessionFinishedStepId,
-      machine: sessionFinishedMachine
-    }
-  ];
-}
+    factoryId: "editable_artifact_review",
+    id: createPullRequestStepId
+  },
+  {
+    id: prMergedStepId,
+    machine: pullRequestMergedMachine
+  },
+  {
+    id: mainCheckoutSyncedStepId,
+    machine: mainCheckoutSyncedMachine
+  },
+  {
+    id: sessionFinishedStepId,
+    machine: sessionFinishedMachine
+  }
+];
 
-function coreLifecycleWorkflowDefinitionModule() {
-  return {
-    id: moduleId,
-    steps: coreLifecycleStepDefinitions()
-  };
-}
-
-function coreLifecycleWorkflowMachineModule() {
-  return {
-    id: moduleId,
-    steps: coreLifecycleStepMachineContributions()
-  };
-}
+const coreLifecycleWorkflowModule = Object.freeze({
+  id: moduleId,
+  stepDefinitions: coreLifecycleStepDefinitions,
+  stepMachineContributions: coreLifecycleStepMachineContributions,
+  workflowDefinitions: []
+});
 
 const _testing = deepFreeze({
   moduleId: moduleId,
@@ -1185,6 +1176,5 @@ const _testing = deepFreeze({
 
 export {
   _testing,
-  coreLifecycleWorkflowDefinitionModule,
-  coreLifecycleWorkflowMachineModule
+  coreLifecycleWorkflowModule
 };

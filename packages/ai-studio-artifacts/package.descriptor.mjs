@@ -6,6 +6,7 @@ export default Object.freeze({
   description: "Owns AI Studio editable artifact and draft file policy.",
   dependsOn: [
     "@jskit-ai/kernel",
+    "@local/ai-studio-core",
     "@local/ai-studio-project"
   ],
   capabilities: {

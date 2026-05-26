@@ -4,7 +4,7 @@ import {
 } from "../../../../server/lib/aiStudio/index.js";
 import {
   aiStudioResult
-} from "../../../../server/lib/aiStudio/serverResponses.js";
+} from "@local/ai-studio-core/server/serverResponses";
 import {
   aiStudioSessionDebugDurationMs,
   aiStudioSessionDebugError,
@@ -23,14 +23,6 @@ const SESSION_ARCHIVE_QUERY = Object.freeze({
   COMPLETED: "completed",
   FINISHED: "finished"
 });
-const CONVERSATION_ACTION_IDS = new Set([
-  "agent_conversation",
-  "final_review_conversation",
-  "human_review_conversation"
-]);
-const CONVERSATION_INTENT_IDS = new Set([
-  "talk_to_codex"
-]);
 
 function sessionResult(operation) {
   return aiStudioResult(operation, {
@@ -115,21 +107,15 @@ function conversationRequestText(input = {}) {
   );
 }
 
-function shouldRecordConversationUserMessage({ actionId = "", intentId = "" } = {}) {
-  const normalizedActionId = normalizedInputText(actionId);
-  const normalizedIntentId = normalizedInputText(intentId);
-  return Boolean(
-    CONVERSATION_ACTION_IDS.has(normalizedActionId) ||
-    CONVERSATION_INTENT_IDS.has(normalizedIntentId)
-  );
+function shouldRecordConversationUserMessage(actionResult = {}) {
+  return actionResult?.recordsConversationTurn === true;
 }
 
 async function recordConversationUserMessage(runtime, sessionId, {
-  actionId = "",
-  input = {},
-  intentId = ""
+  actionResult = {},
+  input = {}
 } = {}) {
-  if (!shouldRecordConversationUserMessage({ actionId, intentId })) {
+  if (!shouldRecordConversationUserMessage(actionResult)) {
     return null;
   }
   const text = conversationRequestText(input);
@@ -710,7 +696,7 @@ function createService({
           const runtime = await projectService.createRuntime();
           let session = await runtime.runAction(sessionId, actionId, input);
           const conversationTurn = await recordConversationUserMessage(runtime, sessionId, {
-            actionId,
+            actionResult: session.actionResult,
             input
           });
           if (conversationTurn) {
@@ -762,8 +748,8 @@ function createService({
           const runtime = await projectService.createRuntime();
           let session = await runtime.runIntent(sessionId, intentId, input);
           const conversationTurn = await recordConversationUserMessage(runtime, sessionId, {
-            input,
-            intentId
+            actionResult: session.actionResult,
+            input
           });
           if (conversationTurn) {
             session = await sessionWithLatestRevision(runtime, session);

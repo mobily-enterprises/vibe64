@@ -14,7 +14,11 @@ import {
 import {
   CODEX_ATTACHMENT_UPLOAD_BODY_LIMIT_BYTES
 } from "./codexAttachments.js";
-import { createAiStudioFeatureRoutes } from "../../../../server/lib/aiStudio/featureRoutes.js";
+import { createAiStudioFeatureRoutes } from "@local/ai-studio-core/server/featureRoutes";
+import { registerTerminalWebSocketRoute } from "@local/ai-studio-core/server/terminalWebSocketRoutes";
+
+const AI_STUDIO_TERMINALS_SERVICE = "feature.ai-studio-terminals.service";
+const AI_STUDIO_TERMINALS_UNAVAILABLE = "AI Studio terminal service is unavailable.";
 
 function getTerminalService(app) {
   return app.make("feature.ai-studio-terminals.service");
@@ -121,6 +125,8 @@ function registerRoutes(
     readSummary: "Read an AI Studio shell terminal snapshot.",
     closeSummary: "Close an AI Studio shell terminal."
   });
+
+  registerAiStudioTerminalWebSocketRoutes(app, routes);
 }
 
 function bodyWithSessionId(routes) {
@@ -167,6 +173,68 @@ function registerTerminalSnapshotRoutes(routes, {
   }, (request) => {
     const input = terminalRouteInput(request);
     return close(input.sessionId, input.terminalSessionId);
+  });
+}
+
+function registerAiStudioTerminalWebSocketRoutes(app, routes) {
+  registerTerminalWebSocketRoute(app, {
+    routePath: `${routes.routeBase}/sessions/:sessionId/codex-terminal/:terminalSessionId/ws`,
+    serviceId: AI_STUDIO_TERMINALS_SERVICE,
+    serviceUnavailableMessage: AI_STUDIO_TERMINALS_UNAVAILABLE,
+    subscribe(service, { sessionId, subscriber, terminalSessionId }) {
+      return service.subscribeCodexTerminal(sessionId, terminalSessionId, subscriber);
+    },
+    resize(service, { cols, rows, sessionId, terminalSessionId }) {
+      return service.resizeCodexTerminal(sessionId, terminalSessionId, { cols, rows });
+    },
+    write(service, { data, sessionId, terminalSessionId }) {
+      return service.writeCodexTerminal(sessionId, terminalSessionId, data);
+    }
+  });
+
+  registerTerminalWebSocketRoute(app, {
+    routePath: `${routes.routeBase}/sessions/:sessionId/command-terminal/:terminalSessionId/ws`,
+    serviceId: AI_STUDIO_TERMINALS_SERVICE,
+    serviceUnavailableMessage: AI_STUDIO_TERMINALS_UNAVAILABLE,
+    subscribe(service, { sessionId, subscriber, terminalSessionId }) {
+      return service.subscribeCommandTerminal(sessionId, terminalSessionId, subscriber);
+    },
+    resize(service, { cols, rows, sessionId, terminalSessionId }) {
+      return service.resizeCommandTerminal(sessionId, terminalSessionId, { cols, rows });
+    },
+    write(service, { data, sessionId, terminalSessionId }) {
+      return service.writeCommandTerminal(sessionId, terminalSessionId, data);
+    }
+  });
+
+  registerTerminalWebSocketRoute(app, {
+    routePath: `${routes.routeBase}/sessions/:sessionId/launch-terminal/:terminalSessionId/ws`,
+    serviceId: AI_STUDIO_TERMINALS_SERVICE,
+    serviceUnavailableMessage: AI_STUDIO_TERMINALS_UNAVAILABLE,
+    subscribe(service, { sessionId, subscriber, terminalSessionId }) {
+      return service.subscribeLaunchTargetTerminal(sessionId, terminalSessionId, subscriber);
+    },
+    resize(service, { cols, rows, sessionId, terminalSessionId }) {
+      return service.resizeLaunchTargetTerminal(sessionId, terminalSessionId, { cols, rows });
+    },
+    write(service, { data, sessionId, terminalSessionId }) {
+      return service.writeLaunchTargetTerminal(sessionId, terminalSessionId, data);
+    }
+  });
+
+  registerTerminalWebSocketRoute(app, {
+    routePath: `${routes.routeBase}/sessions/:sessionId/shell-terminal/:terminalSessionId/ws`,
+    serviceId: AI_STUDIO_TERMINALS_SERVICE,
+    serviceUnavailableMessage: AI_STUDIO_TERMINALS_UNAVAILABLE,
+    subscribe(service, { sessionId, subscriber, terminalSessionId }) {
+      return service.subscribeShellTerminal(sessionId, terminalSessionId, subscriber);
+    },
+    resize(service, { cols, rows, sessionId, terminalSessionId }) {
+      return service.resizeShellTerminal(sessionId, terminalSessionId, { cols, rows });
+    },
+    write(service, { data, sessionId, terminalSessionId }) {
+      return service.writeShellTerminal(sessionId, terminalSessionId, data);
+    }
   });
 }
 

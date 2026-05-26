@@ -168,19 +168,6 @@ function composeActionReadiness(defaultReadiness, extraReadiness) {
   };
 }
 
-function actionResultRecord(action, session, input, handlerResult = {}) {
-  const result = handlerResult || {};
-  return {
-    ...result,
-    actionLabel: action.label,
-    actionType: action.type,
-    input,
-    message: normalizeText(result.message),
-    status: normalizeText(result.status || "completed"),
-    stepId: session.currentStep
-  };
-}
-
 function actionLogEntry(action, session, actionResult) {
   return {
     actionId: action.id,
@@ -188,6 +175,21 @@ function actionLogEntry(action, session, actionResult) {
     actionType: action.type,
     kind: "action",
     status: actionResult.status,
+    stepId: session.currentStep
+  };
+}
+
+function actionResultRecord(action, session, input, handlerResult = {}) {
+  const result = handlerResult || {};
+  const recordsConversationTurn = action.recordsConversationTurn === true;
+  return {
+    ...result,
+    actionLabel: action.label,
+    actionType: action.type,
+    input,
+    message: normalizeText(result.message),
+    ...(recordsConversationTurn ? { recordsConversationTurn: true } : {}),
+    status: normalizeText(result.status || "completed"),
     stepId: session.currentStep
   };
 }

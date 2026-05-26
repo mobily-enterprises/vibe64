@@ -5,7 +5,7 @@ import {
   AI_STUDIO_SESSION_CHANGED_EVENT,
   aiStudioSessionChangedServiceEvent,
   createAiStudioSessionChangedPublisher
-} from "../../server/lib/aiStudio/sessionRealtimeEvents.js";
+} from "@local/ai-studio-core/server/sessionRealtimeEvents";
 
 test("AI Studio session service event describes a realtime session change", () => {
   const event = aiStudioSessionChangedServiceEvent();

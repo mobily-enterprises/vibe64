@@ -5,7 +5,8 @@ export default Object.freeze({
   kind: "runtime",
   description: "Owns AI Studio external account readiness and login orchestration.",
   dependsOn: [
-    "@jskit-ai/kernel"
+    "@jskit-ai/kernel",
+    "@local/ai-studio-core"
   ],
   capabilities: {
     provides: [

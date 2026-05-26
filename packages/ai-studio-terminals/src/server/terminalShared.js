@@ -4,7 +4,7 @@ import path from "node:path";
 import {
   aiStudioResult as sharedAiStudioResult,
   normalizePlainObject
-} from "../../../../server/lib/aiStudio/serverResponses.js";
+} from "@local/ai-studio-core/server/serverResponses";
 import {
   dockerCommand,
   shellQuote,

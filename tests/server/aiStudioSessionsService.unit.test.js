@@ -256,7 +256,7 @@ test("session prompt intent injects the rendered Codex handoff from the server",
   ]);
 });
 
-test("session service records and reads form conversation prompts", async () => {
+test("session service records conversation prompts from the action result contract", async () => {
   const conversationLog = [];
   const service = createService({
     projectService: {
@@ -272,9 +272,10 @@ test("session service records and reads form conversation prompts", async () => 
           async runIntent(sessionId, intentId, input) {
             return {
               actionResult: {
-                actionId: "agent_conversation",
+                actionId: "renamed_conversation_action",
                 input,
                 intentId,
+                recordsConversationTurn: true,
                 status: "prompt_ready"
               },
               sessionId,
@@ -312,7 +313,7 @@ test("session service records and reads form conversation prompts", async () => 
     setupServices: readySetupServices()
   });
 
-  await service.runSessionIntent("session-1", "talk_to_codex", {
+  await service.runSessionIntent("session-1", "renamed_conversation_intent", {
     fields: {
       conversationRequest: "Can you tighten the layout?"
     },

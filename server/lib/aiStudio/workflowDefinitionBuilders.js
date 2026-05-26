@@ -1,6 +1,6 @@
 const AGENT_CONVERSATION_ACTION_ID = "agent_conversation";
 
-function agentConversationAction({
+function buildAgentConversationActionDefinition({
   id = AGENT_CONVERSATION_ACTION_ID,
   inputLabel = "What do you want to ask Codex?",
   inputPlaceholder = "Describe what you want help with.",
@@ -20,11 +20,12 @@ function agentConversationAction({
     ],
     label,
     promptId: AGENT_CONVERSATION_ACTION_ID,
+    recordsConversationTurn: true,
     type: "prompt"
   };
 }
 
-function agentConversationStep({
+function buildAgentConversationStepDefinition({
   actionLabel = "Talk to Codex",
   description = "",
   id,
@@ -35,7 +36,7 @@ function agentConversationStep({
   responseArtifact = ""
 } = {}) {
   const artifactsToClean = responseArtifact ? [responseArtifact] : [];
-  const conversationAction = agentConversationAction({
+  const conversationAction = buildAgentConversationActionDefinition({
     inputLabel,
     inputPlaceholder,
     label: actionLabel
@@ -85,6 +86,6 @@ function agentConversationStep({
 
 export {
   AGENT_CONVERSATION_ACTION_ID,
-  agentConversationAction,
-  agentConversationStep
+  buildAgentConversationActionDefinition,
+  buildAgentConversationStepDefinition
 };

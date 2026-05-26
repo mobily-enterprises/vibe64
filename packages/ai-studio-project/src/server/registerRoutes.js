@@ -9,7 +9,7 @@ import {
   ACTION_SAVE_PROJECT_CONFIG,
   ACTION_SAVE_PROJECT_TYPE
 } from "./actions.js";
-import { createAiStudioFeatureRoutes } from "../../../../server/lib/aiStudio/featureRoutes.js";
+import { createAiStudioFeatureRoutes } from "@local/ai-studio-core/server/featureRoutes";
 
 function registerRoutes(
   app,
