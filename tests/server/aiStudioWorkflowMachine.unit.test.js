@@ -9,6 +9,7 @@ import {
   AiStudioSessionRuntime,
   DEFAULT_AI_STUDIO_WORKFLOW_DEFINITION_ID,
   WorkflowMachine,
+  applyWorkflowPresentation,
   when,
   workflowForDefinition
 } from "@local/ai-studio-runtime/server";
@@ -2292,6 +2293,64 @@ test("ai-studio runtime presents waiting_for_input as the same Codex conversatio
     assert.equal(afterAnswer.actionResult.recordsConversationTurn, true);
     assert.match(afterAnswer.actionResult.codexPromptHandoff.terminalInput, /^Use Pescara\.\n\n\[\[AI_STUDIO_CONTEXT_START\]\]/u);
   });
+});
+
+test("ai-studio presentation keeps Next step on conversation screens without stop config", () => {
+  const waiting = applyWorkflowPresentation({
+    actions: [
+      {
+        enabled: true,
+        id: "agent_conversation",
+        inputFields: [
+          {
+            kind: "textarea",
+            label: "Response",
+            name: "conversationRequest"
+          }
+        ],
+        label: "Send to Codex"
+      }
+    ],
+    currentStep: "maintenance_conversation",
+    currentStepDefinition: {
+      interaction: {
+        actionId: "agent_conversation",
+        fields: [
+          {
+            kind: "textarea",
+            label: "Response",
+            name: "conversationRequest"
+          }
+        ],
+        intentId: "talk_to_codex",
+        kind: "conversation",
+        prompt: "What should happen next?",
+        submitLabel: "Send to Codex",
+        title: "Talk to Codex"
+      },
+      label: "Talk to Codex"
+    },
+    next: {
+      disabledReason: "Answer Codex before continuing.",
+      enabled: false,
+      label: "Next step",
+      stepId: "local_session_finished",
+      visible: true
+    },
+    stepMachine: {
+      status: "waiting_for_input"
+    },
+    workflowAutopilot: {
+      kind: "agent_conversation",
+      stop: true
+    },
+    workflowPresentation: null
+  });
+
+  assert.deepEqual(waiting.intents.map((intent) => intent.id), ["talk_to_codex", "continue_step"]);
+  assert.equal(waiting.intents[1].label, "Next step");
+  assert.equal(waiting.intents[1].enabled, false);
+  assert.equal(waiting.intents[1].disabledReason, "Answer Codex before continuing.");
 });
 
 test("chat-with-ai step instructions make completion ownership explicit", () => {

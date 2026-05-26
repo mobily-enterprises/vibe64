@@ -377,8 +377,13 @@ function presentationFromConfig(session = {}, config = {}) {
 
 function configuredStopIntentsExcept(session = {}, excludedIntentIds = []) {
   const excluded = new Set(excludedIntentIds.map(normalizeText).filter(Boolean));
-  return stopScreenPresentation(session).intents
+  const stopIntents = stopScreenPresentation(session).intents
     .filter((candidate) => !excluded.has(candidate.id));
+  if (stopIntents.length > 0 || session.next?.visible === false || !session.next?.stepId) {
+    return stopIntents;
+  }
+  const fallback = continueIntent(session);
+  return excluded.has(fallback.id) ? [] : [fallback];
 }
 
 function stopScreenPresentation(session = {}) {

@@ -79,6 +79,7 @@
               @expanded-changed="handleShellPanelExpandedChanged(tab.id, $event)"
               @finished="closeShellTab(tab.id)"
               @running-changed="handleRunningChanged(tab.id, $event)"
+              @started="focusShellTab(tab.id)"
             >
               <template #heading>
                 <div
@@ -102,6 +103,7 @@
                       :aria-selected="shellTab.id === activeShellTabId ? 'true' : 'false'"
                       role="tab"
                       :title="`Alt-${index + 1}: ${shellTab.label}`"
+                      @pointerdown.prevent="selectShellTab(shellTab.id)"
                       @click="selectShellTab(shellTab.id)"
                     >
                       <span>{{ shellTab.label }}</span>
@@ -116,6 +118,7 @@
                         class="ai-studio-shell-controls__tab-close"
                         size="15"
                         title="Close tab"
+                        @pointerdown.stop
                         @click.stop="closeShellTab(shellTab.id)"
                       />
                     </button>
@@ -358,9 +361,26 @@ function setShellTerminalRef(tabId = "", terminalComponent = null) {
   shellTerminalRefs.delete(tabId);
 }
 
-async function focusShellTab(tabId = activeShellTabId.value) {
-  await nextTick();
-  shellTerminalRefs.get(tabId)?.focus?.();
+function focusShellTab(tabId = activeShellTabId.value) {
+  const selectedTabId = String(tabId || "");
+  if (!selectedTabId) {
+    return;
+  }
+
+  shellTerminalRefs.get(selectedTabId)?.focus?.();
+  void nextTick().then(() => {
+    shellTerminalRefs.get(selectedTabId)?.focus?.();
+    const focusAfterPaint = () => {
+      shellTerminalRefs.get(selectedTabId)?.focus?.();
+    };
+    if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+      window.requestAnimationFrame(focusAfterPaint);
+      return;
+    }
+    if (typeof window !== "undefined") {
+      window.setTimeout(focusAfterPaint, 0);
+    }
+  });
 }
 
 function handleRunningChanged(tabId = "", nextRunning = false) {

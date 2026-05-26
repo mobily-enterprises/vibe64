@@ -757,20 +757,50 @@ test.describe("Autopilot dumb client contract", () => {
     });
 
     await page.goto(`${BASE_URL}/home?mode=inspect`);
-    await expect(page.getByText("Beta")).toBeVisible();
+    await expect(page.locator(".studio-ai-sessions__tab", { hasText: "Beta" })).toBeVisible();
     await page.getByLabel("Open shell").click();
     await page.getByText("Worktree shell").click();
     await expect(page.locator(".ai-studio-shell-controls__terminal--active .ai-command-terminal__host"))
       .toBeVisible();
 
-    await page.getByText("Alpha").click();
+    await page.locator(".studio-ai-sessions__tab", { hasText: "Alpha" }).click();
     await page.waitForTimeout(100);
     expect(shellTerminalCloses).toBe(0);
 
-    await page.getByText("Beta").click();
+    await page.locator(".studio-ai-sessions__tab", { hasText: "Beta" }).click();
     await expect(page.locator(".ai-studio-shell-controls__terminal--active .ai-command-terminal__host"))
       .toBeVisible();
     expect(shellTerminalCloses).toBe(0);
+  });
+
+  test("focuses the selected shell terminal when switching shell tabs", async ({ page }) => {
+    await mockInspectTerminalSockets(page);
+    const session = sessionPayload({
+      completedSteps: ["worktree_created"],
+      metadata: {
+        worktree_path: "/workspace/example-target-app/.ai-studio/sessions/active/session-renderer/worktree"
+      },
+      sessionRoot: "/workspace/example-target-app/.ai-studio/sessions/active/session-renderer",
+      worktreeReady: true
+    });
+    await mockAiStudioSession(page, session);
+
+    await page.goto(`${BASE_URL}/home?mode=inspect`);
+    await page.getByLabel("Open shell").click();
+    await page.getByText("Worktree shell").click();
+    await expect(page.locator(".ai-studio-shell-controls__terminal--active .ai-command-terminal__host"))
+      .toBeVisible();
+    await expectActiveShellTerminalFocused(page);
+
+    await page.getByTitle("New shell tab (Alt-N)").click();
+    await expect(page.locator(".ai-studio-shell-controls__tab--active", { hasText: "terminal 2" }))
+      .toBeVisible();
+    await expectActiveShellTerminalFocused(page);
+
+    await page.getByTitle("Alt-1: terminal 1").click();
+    await expect(page.locator(".ai-studio-shell-controls__tab--active", { hasText: "terminal 1" }))
+      .toBeVisible();
+    await expectActiveShellTerminalFocused(page);
   });
 
   test("renders numbered questions as UI sugar and submits only the logical response field", async ({ page }) => {
@@ -1008,6 +1038,16 @@ async function recordForbiddenText(page: Page, text: string) {
       });
     });
   }, text);
+}
+
+async function expectActiveShellTerminalFocused(page: Page) {
+  await expect.poll(async () => page.evaluate(() => {
+    const activeTerminal = document.querySelector(".ai-studio-shell-controls__terminal--active");
+    const activeElement = document.activeElement;
+    return Boolean(activeTerminal && activeElement && activeTerminal.contains(activeElement));
+  }), {
+    timeout: 500
+  }).toBe(true);
 }
 
 async function mockInspectTerminalSockets(page: Page) {
