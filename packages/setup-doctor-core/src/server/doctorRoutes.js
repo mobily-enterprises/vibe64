@@ -1,8 +1,8 @@
 import { normalizeSurfaceId, resolveScopedApiBasePath } from "@jskit-ai/kernel/shared/surface";
 
-import { requestBodyObject } from "./aiStudio/serverResponses.js";
+import { requestBodyObject } from "@local/ai-studio-core/server/serverResponses";
 import { sendDoctorEventStream } from "./doctorStream.js";
-import { requireLocalStudioRequest } from "./localStudioRequest.js";
+import { requireLocalStudioRequest } from "@local/ai-studio-core/server/localStudioRequest";
 
 function requireApplication(app) {
   if (!app || typeof app.make !== "function") {

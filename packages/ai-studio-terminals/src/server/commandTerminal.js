@@ -8,25 +8,25 @@ import {
   startTerminalSession,
   subscribeTerminalSession,
   writeTerminalSession
-} from "../../../../server/lib/terminalSessions.js";
+} from "@local/studio-terminal-core/server/terminalSessions";
 import {
   removeDockerContainer
-} from "../../../../server/lib/containerRuntime.js";
+} from "@local/studio-terminal-core/server/containerRuntime";
 import {
   aiStudioError
-} from "../../../../server/lib/aiStudio/core.js";
+} from "@local/ai-studio-core/server/core";
 import {
   aiStudioSessionDebugDurationMs,
   aiStudioSessionDebugError,
   aiStudioSessionDebugLog,
   aiStudioSessionDebugSummary
-} from "../../../../server/lib/aiStudio/sessionDebugLog.js";
+} from "@local/ai-studio-runtime/server/sessionDebugLog";
 import {
   ensureTargetRuntimeNetwork
-} from "../../../../server/lib/aiStudio/runtimeContainers.js";
+} from "@local/studio-terminal-core/server/runtimeContainers";
 import {
   studioUserStartupScript
-} from "../../../../server/lib/studioToolHome.js";
+} from "@local/studio-terminal-core/server/studioToolHome";
 import {
   aiStudioResult,
   commandTerminalNamespace,

@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  AiStudioSessionRuntime,
+  AiStudioSessionRuntime
+} from "@local/ai-studio-runtime/server";
+import {
   FakeTargetAdapter
-} from "../../server/lib/aiStudio/index.js";
+} from "@local/ai-studio-adapters/server";
 import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
 
 function toyWorkflow() {

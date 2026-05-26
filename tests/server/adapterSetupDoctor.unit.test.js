@@ -28,13 +28,13 @@ import {
 } from "../../packages/ai-studio-project/src/server/service.js";
 import {
   JSKIT_ALLOW_SELF_TARGET_CONFIG
-} from "../../server/lib/aiStudio/adapters/jskit/index.js";
+} from "@local/ai-studio-adapters/server/adapters/jskit/index";
 import {
   gitSafeDirectoryArgs,
   gitToolchainMountArgs,
   linkedGitMetadataMountSource,
   linkedGitRepositoryMountSource
-} from "../../server/lib/gitToolchainMounts.js";
+} from "@local/studio-terminal-core/server/gitToolchainMounts";
 import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
 
 function assertShellScriptSurvivesWhitespaceCollapse(script) {

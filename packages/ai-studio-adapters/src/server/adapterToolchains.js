@@ -2,13 +2,13 @@ import {
   createDoctorRepair,
   failDoctorCheck as failCheck,
   passDoctorCheck as passCheck
-} from "../doctorCheckItems.js";
+} from "@local/ai-studio-core/server/doctorCheckItems";
 import {
   dockerCommand
-} from "../shellCommands.js";
+} from "@local/studio-terminal-core/server/shellCommands";
 import {
   STUDIO_BASE_TOOLCHAIN_IMAGE
-} from "../studioRuntimeIdentity.js";
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 
 function adapterToolchainBuildArgs({
   baseImage = STUDIO_BASE_TOOLCHAIN_IMAGE,

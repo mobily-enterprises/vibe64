@@ -2,14 +2,12 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import {
+  AI_STUDIO_STATE_DIR,
   aiStudioError,
   isMissingPathError,
   normalizeTargetRoot,
   normalizeText
-} from "./core.js";
-import {
-  AI_STUDIO_STATE_DIR
-} from "./sessionStore.js";
+} from "@local/ai-studio-core/server/core";
 
 const AI_STUDIO_PROJECT_TYPE_FILE = "project_type";
 

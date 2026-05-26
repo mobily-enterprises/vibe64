@@ -3,7 +3,7 @@ import {
 } from "@/lib/codexOutput.js";
 import {
   questionPromptInstructions
-} from "../../server/lib/aiStudio/promptQuestionPolicy.js";
+} from "@local/ai-studio-adapters/server/promptQuestionPolicy";
 
 const DEFAULT_TERMINAL_FAILURE_TAIL_LINES = 200;
 

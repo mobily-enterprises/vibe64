@@ -8,7 +8,7 @@ import {
 } from "../../packages/ai-studio-sessions/src/server/actions.js";
 import {
   _testing as coreMaintenanceTesting
-} from "../../server/lib/aiStudio/workflowModules/coreMaintenance.js";
+} from "@local/ai-studio-runtime/server/workflowModules/coreMaintenance";
 import { registerRoutes } from "../../packages/ai-studio-sessions/src/server/registerRoutes.js";
 import {
   findRegisteredRoute,

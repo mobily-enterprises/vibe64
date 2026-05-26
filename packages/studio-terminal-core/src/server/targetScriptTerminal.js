@@ -4,25 +4,25 @@ import process from "node:process";
 import {
   containerWorkspacePath,
   removeDockerContainer
-} from "../containerRuntime.js";
+} from "./containerRuntime.js";
 import {
   gitToolchainMountArgs
-} from "../gitToolchainMounts.js";
+} from "./gitToolchainMounts.js";
 import {
   hostUserIdentityEnvArgs,
   shellQuote,
   stableHash
-} from "../shellCommands.js";
+} from "./shellCommands.js";
 import {
   studioPlaywrightBrowsersDockerArgs
-} from "../studioToolHome.js";
+} from "./studioToolHome.js";
 import {
   STUDIO_BASE_TOOLCHAIN_IMAGE,
   STUDIO_DAEMON_PID_LABEL
-} from "../studioRuntimeIdentity.js";
+} from "./studioRuntimeIdentity.js";
 import {
   normalizeText
-} from "./core.js";
+} from "@local/ai-studio-core/server/core";
 import {
   targetRuntimeNetworkDockerArgs
 } from "./runtimeContainers.js";

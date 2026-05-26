@@ -8,7 +8,7 @@ import {
 } from "./terminalShared.js";
 import {
   STUDIO_TEMP_DIR_NAME
-} from "../../../../server/lib/studioRuntimeIdentity.js";
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 
 const CODEX_ATTACHMENT_CONTAINER_ROOT = "/studio-attachments";
 const CODEX_ATTACHMENT_HOST_ROOT = path.join(

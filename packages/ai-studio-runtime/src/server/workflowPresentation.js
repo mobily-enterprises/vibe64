@@ -2,7 +2,7 @@ import {
   aiStudioError,
   isPlainObject,
   normalizeText
-} from "./core.js";
+} from "@local/ai-studio-core/server/core";
 import {
   aiStudioSessionDebugDurationMs,
   aiStudioSessionDebugError,

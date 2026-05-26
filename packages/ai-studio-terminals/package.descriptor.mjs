@@ -6,8 +6,11 @@ export default Object.freeze({
   description: "Owns AI Studio Codex and command terminal lifecycle.",
   dependsOn: [
     "@jskit-ai/kernel",
+    "@local/ai-studio-adapters",
     "@local/ai-studio-core",
-    "@local/ai-studio-project"
+    "@local/ai-studio-project",
+    "@local/ai-studio-runtime",
+    "@local/studio-terminal-core"
   ],
   capabilities: {
     provides: [

@@ -7,7 +7,7 @@ import {
   LOCALHOST_CHECK_BYPASS_ENV,
   hasLocalhostCheckBypassArg,
   stripLocalhostCheckBypassArgs
-} from "../server/lib/localhostCheckBypass.js";
+} from "@local/ai-studio-core/server/localhostCheckBypass";
 
 const require = createRequire(import.meta.url);
 const viteBin = path.join(path.dirname(require.resolve("vite/package.json")), "bin", "vite.js");

@@ -14,27 +14,27 @@ import test from "node:test";
 
 import {
   createCppTargetAdapter
-} from "../../server/lib/aiStudio/adapters/cpp/index.js";
+} from "@local/ai-studio-adapters/server/adapters/cpp/index";
 import {
   GENERIC_NODE_WEB_PREPARE_WORKTREE_SCRIPT_PATH,
   createGenericNodeWebTargetAdapter
-} from "../../server/lib/aiStudio/adapters/node-web/index.js";
+} from "@local/ai-studio-adapters/server/adapters/node-web/index";
 import {
   JSKIT_PREPARE_WORKTREE_SCRIPT_PATH,
   createJskitTargetAdapter
-} from "../../server/lib/aiStudio/adapters/jskit/index.js";
+} from "@local/ai-studio-adapters/server/adapters/jskit/index";
 import {
   LARAVEL_PREPARE_WORKTREE_SCRIPT_PATH,
   createLaravelTargetAdapter
-} from "../../server/lib/aiStudio/adapters/laravel/index.js";
+} from "@local/ai-studio-adapters/server/adapters/laravel/index";
 import {
   NEXTJS_PREPARE_WORKTREE_SCRIPT_PATH,
   createNextjsTargetAdapter
-} from "../../server/lib/aiStudio/adapters/nextjs/index.js";
+} from "@local/ai-studio-adapters/server/adapters/nextjs/index";
 import {
   VINEXT_PREPARE_WORKTREE_SCRIPT_PATH,
   createVinextTargetAdapter
-} from "../../server/lib/aiStudio/adapters/vinext/index.js";
+} from "@local/ai-studio-adapters/server/adapters/vinext/index";
 import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
 
 function runCommand(command, args, {

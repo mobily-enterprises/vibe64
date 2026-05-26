@@ -3,19 +3,17 @@ import path from "node:path";
 import process from "node:process";
 
 import {
+  AI_STUDIO_STATE_DIR,
   aiStudioError,
   isMissingPathError,
   isPlainObject,
   normalizeText,
   normalizeTargetRoot,
   pathExists
-} from "./core.js";
+} from "@local/ai-studio-core/server/core";
 import {
   deepFreeze
-} from "./deepFreeze.js";
-import {
-  AI_STUDIO_STATE_DIR
-} from "./sessionStore.js";
+} from "@local/ai-studio-core/server/deepFreeze";
 
 const AI_STUDIO_CONFIG_DIR = "config";
 const AI_STUDIO_RUNTIME_DIR = "runtime";

@@ -13,10 +13,10 @@ import {
 } from "../../currentAppInspection.js";
 import {
   createAiStudioTargetScriptTerminalSpec
-} from "../../targetScriptTerminal.js";
+} from "@local/studio-terminal-core/server/targetScriptTerminal";
 import {
   normalizePlainObject
-} from "../../serverResponses.js";
+} from "@local/ai-studio-core/server/serverResponses";
 import {
   readDatabaseHostFromDotEnv
 } from "./setupMariaDbRuntime.js";

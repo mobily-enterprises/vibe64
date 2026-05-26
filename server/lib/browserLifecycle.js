@@ -1,6 +1,6 @@
 import {
   isLocalStudioRequest
-} from "./localStudioRequest.js";
+} from "@local/ai-studio-core/server/localStudioRequest";
 
 const BROWSER_LIFECYCLE_WEBSOCKET_PATH = "/api/studio/browser-lifecycle/ws";
 const DEFAULT_BROWSER_LIFECYCLE_SHUTDOWN_DELAY_MS = 1000;

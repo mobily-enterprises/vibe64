@@ -9,7 +9,7 @@ import {
   dockerCommand,
   shellQuote,
   stableHash
-} from "../../../../server/lib/shellCommands.js";
+} from "@local/studio-terminal-core/server/shellCommands";
 
 const CODEX_TERMINAL_NAMESPACE = "ai-studio-codex";
 const CODEX_TERMINAL_NAMESPACE_PREFIX = `${CODEX_TERMINAL_NAMESPACE}:`;

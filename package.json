@@ -88,7 +88,11 @@
     "redis": "^5.8.2",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
-    "@jskit-ai/realtime": "0.x"
+    "@jskit-ai/realtime": "0.x",
+    "@local/ai-studio-adapters": "file:packages/ai-studio-adapters",
+    "@local/ai-studio-runtime": "file:packages/ai-studio-runtime",
+    "@local/studio-terminal-core": "file:packages/studio-terminal-core",
+    "@local/setup-doctor-core": "file:packages/setup-doctor-core"
   },
   "devDependencies": {
     "@jskit-ai/agent-docs": "0.1.44",

@@ -1,6 +1,6 @@
 import {
   registerDoctorRoutes
-} from "../../../../server/lib/doctorRoutes.js";
+} from "@local/setup-doctor-core/server/doctorRoutes";
 
 import {
   ACTION_GET_STATUS

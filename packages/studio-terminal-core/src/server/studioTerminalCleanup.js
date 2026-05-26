@@ -6,13 +6,11 @@ import {
   studioDockerLabel
 } from "./studioRuntimeIdentity.js";
 import {
-  STUDIO_TOOLCHAIN_CONTAINER_LABEL
-} from "./doctorToolchain.js";
-import {
   RUNTIME_NETWORK_KIND
-} from "./aiStudio/runtimeContainers.js";
+} from "./runtimeContainers.js";
 
 const execFileAsync = promisify(execFile);
+const STUDIO_TOOLCHAIN_CONTAINER_LABEL = studioDockerLabel("kind", "toolchain");
 const STUDIO_CODEX_CONTAINER_LABEL = studioDockerLabel("kind", "codex-terminal");
 const STUDIO_TARGET_SCRIPT_CONTAINER_LABEL = studioDockerLabel("kind", "target-script-terminal");
 const STALE_PROCESS_GRACE_MS = 500;

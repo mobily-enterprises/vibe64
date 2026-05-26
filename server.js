@@ -16,16 +16,16 @@ import { surfaceRuntime } from "./server/lib/surfaceRuntime.js";
 import {
   resolveStudioAppRoot,
   resolveStudioTargetRoot
-} from "./server/lib/studioRoots.js";
+} from "@local/ai-studio-core/server/studioRoots";
 import {
   closeTerminalSessionsForNamespacePrefix
-} from "./server/lib/terminalSessions.js";
+} from "@local/studio-terminal-core/server/terminalSessions";
 import {
   isLocalhostCheckBypassEnabled
 } from "@local/ai-studio-core/server/localhostCheckBypass";
 import {
   cleanupStaleStudioTerminals
-} from "./server/lib/studioTerminalCleanup.js";
+} from "@local/studio-terminal-core/server/studioTerminalCleanup";
 import {
   createBrowserLifecycleMonitor,
   registerBrowserLifecycleWebSocketRoute
@@ -34,7 +34,7 @@ import {
   AI_STUDIO_APP_ROOT_ENV,
   AI_STUDIO_SKIP_STALE_TERMINAL_CLEANUP_ENV,
   AI_STUDIO_TARGET_ROOT_ENV
-} from "./server/lib/studioRuntimeIdentity.js";
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 
 const SPA_INDEX_FILE = "index.html";
 const API_BASE_PATH = "/api";

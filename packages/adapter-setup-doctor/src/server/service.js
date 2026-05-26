@@ -7,30 +7,30 @@ import {
   closeTerminalSession,
   readTerminalSession,
   writeTerminalSession
-} from "../../../../server/lib/terminalSessions.js";
+} from "@local/studio-terminal-core/server/terminalSessions";
 import {
   AI_STUDIO_APP_ROOT_ENV,
   AI_STUDIO_TARGET_ROOT_ENV
-} from "../../../../server/lib/studioRuntimeIdentity.js";
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
   runDoctorStep
-} from "../../../../server/lib/doctorStream.js";
+} from "@local/setup-doctor-core/server/doctorStream";
 import {
   createRepositoryReadyStatusCache
-} from "../../../../server/lib/doctorStatusCache.js";
+} from "@local/setup-doctor-core/server/doctorStatusCache";
 import {
   isGithubRemoteUrl,
   repoSlugFromRemoteUrl
-} from "../../../../server/lib/githubRemote.js";
+} from "@local/setup-doctor-core/server/githubRemote";
 import {
   failDoctorCheck as failCheck,
   manualDoctorRepair as manualRepair,
   passDoctorCheck as passCheck
-} from "../../../../server/lib/doctorCheckItems.js";
+} from "@local/ai-studio-core/server/doctorCheckItems";
 import {
   runHostCommand,
   shellQuote
-} from "../../../../server/lib/shellCommands.js";
+} from "@local/studio-terminal-core/server/shellCommands";
 import {
   ghRepoCreateRepair,
   ghRepoCreateScript,
@@ -48,7 +48,7 @@ import {
   startGitIdentityTerminal as startSharedGitIdentityTerminal,
   startGitInitTerminal as startSharedGitInitTerminal,
   validateGitIdentityInputs
-} from "../../../../server/lib/setupDoctorGit.js";
+} from "@local/setup-doctor-core/server/setupDoctorGit";
 
 const TERMINAL_NAMESPACE = "adapter-setup-doctor";
 

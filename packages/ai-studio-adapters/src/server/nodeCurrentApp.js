@@ -10,7 +10,7 @@ import {
   createAiStudioTargetScriptTerminalSpec,
   targetScriptCommandPreview,
   targetScriptError
-} from "./targetScriptTerminal.js";
+} from "@local/studio-terminal-core/server/targetScriptTerminal";
 import {
   detectPackageManager,
   readPackageJson,

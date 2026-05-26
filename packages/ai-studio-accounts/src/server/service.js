@@ -5,24 +5,24 @@ import {
   readTerminalSession,
   startTerminalSession,
   writeTerminalSession
-} from "../../../../server/lib/terminalSessions.js";
+} from "@local/studio-terminal-core/server/terminalSessions";
 import {
   buildDoctorTerminalArgs,
   buildDoctorToolchainArgs
-} from "../../../../server/lib/doctorToolchain.js";
+} from "@local/setup-doctor-core/server/doctorToolchain";
 import {
   createRepositoryReadyStatusCache
-} from "../../../../server/lib/doctorStatusCache.js";
+} from "@local/setup-doctor-core/server/doctorStatusCache";
 import {
   aiStudioResult
 } from "@local/ai-studio-core/server/serverResponses";
 import {
   resolveStudioTargetRoot
-} from "../../../../server/lib/studioRoots.js";
+} from "@local/ai-studio-core/server/studioRoots";
 import {
   dockerCommand,
   runHostCommand
-} from "../../../../server/lib/shellCommands.js";
+} from "@local/studio-terminal-core/server/shellCommands";
 
 const ACCOUNT_AUTH_NAMESPACE = "ai-studio-accounts";
 const BROWSER_AUTH_MODE = "browser";

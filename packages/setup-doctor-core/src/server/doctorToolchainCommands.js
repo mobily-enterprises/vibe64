@@ -1,15 +1,15 @@
 import {
   gitSafeDirectoryArgs
-} from "./gitToolchainMounts.js";
+} from "@local/studio-terminal-core/server/gitToolchainMounts";
 import {
   buildDoctorToolchainArgs
 } from "./doctorToolchain.js";
 import {
   ensureTargetRuntimeNetwork
-} from "./aiStudio/runtimeContainers.js";
+} from "@local/studio-terminal-core/server/runtimeContainers";
 import {
   runHostCommand
-} from "./shellCommands.js";
+} from "@local/studio-terminal-core/server/shellCommands";
 
 const DEFAULT_DOCTOR_COMMAND_TIMEOUT_MS = 20_000;
 

@@ -4,24 +4,24 @@ import test from "node:test";
 import {
   LARAVEL_CONFIG_FIELDS,
   selectedLaravelPackageManager
-} from "../../server/lib/aiStudio/adapters/laravel/config.js";
+} from "@local/ai-studio-adapters/server/adapters/laravel/config";
 import {
   NEXTJS_PACKAGE_MANAGER_CONFIG
-} from "../../server/lib/aiStudio/adapters/nextjs/constants.js";
+} from "@local/ai-studio-adapters/server/adapters/nextjs/constants";
 import {
   NEXTJS_CONFIG_FIELDS,
   selectedNextjsPackageManager
-} from "../../server/lib/aiStudio/adapters/nextjs/config.js";
+} from "@local/ai-studio-adapters/server/adapters/nextjs/config";
 import {
   normalizePackageManager,
   packageManagerDisplayName
-} from "../../server/lib/aiStudio/nodePackageDoctor.js";
+} from "@local/ai-studio-adapters/server/nodePackageDoctor";
 import {
   NODE_PACKAGE_MANAGER_OPTIONS,
   nodePackageManagerDisplayName,
   normalizeNodePackageManager,
   normalizeNodePackageManagerSpec
-} from "../../server/lib/aiStudio/nodePackageManagers.js";
+} from "@local/ai-studio-adapters/server/nodePackageManagers";
 
 function configField(fields = [], id = "") {
   return fields.find((field) => field.id === id);

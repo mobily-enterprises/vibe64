@@ -4,9 +4,11 @@ import path from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import {
-  AiStudioSessionRuntime,
+  AiStudioSessionRuntime
+} from "@local/ai-studio-runtime/server";
+import {
   FakeTargetAdapter
-} from "../../server/lib/aiStudio/index.js";
+} from "@local/ai-studio-adapters/server";
 import { BASE_URL } from "./support/base-shell-data";
 import {
   mockProtectedRouteReady,

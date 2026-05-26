@@ -2,7 +2,7 @@ import path from "node:path";
 
 import {
   shellQuote
-} from "../shellCommands.js";
+} from "@local/studio-terminal-core/server/shellCommands";
 
 const COMMAND_RESULT_ENV = "AI_STUDIO_COMMAND_RESULT_FILE";
 

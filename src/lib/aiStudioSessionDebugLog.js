@@ -4,4 +4,4 @@ export {
   aiStudioSessionDebugError,
   aiStudioSessionDebugLog,
   aiStudioSessionDebugSummary
-} from "../../server/lib/aiStudio/sessionDebugLogCore.js";
+} from "@local/ai-studio-runtime/server/sessionDebugLogCore";

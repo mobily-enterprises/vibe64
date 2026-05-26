@@ -7,7 +7,7 @@ import test from "node:test";
 import {
   createReadyStatusCache,
   createRepositoryReadyStatusCache
-} from "../../server/lib/doctorStatusCache.js";
+} from "@local/setup-doctor-core/server/doctorStatusCache";
 
 test("ready status cache reuses only recent ready statuses", () => {
   const originalNow = Date.now;

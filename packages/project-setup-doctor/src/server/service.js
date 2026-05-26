@@ -13,25 +13,25 @@ import {
   readTerminalSession,
   startTerminalSession,
   writeTerminalSession
-} from "../../../../server/lib/terminalSessions.js";
+} from "@local/studio-terminal-core/server/terminalSessions";
 import {
   createRepositoryReadyStatusCache
-} from "../../../../server/lib/doctorStatusCache.js";
+} from "@local/setup-doctor-core/server/doctorStatusCache";
 import {
   listDoctorPluginChecks,
   runDoctorCheck,
   startDoctorPluginTerminal
-} from "../../../../server/lib/doctorPlugins.js";
+} from "@local/setup-doctor-core/server/doctorPlugins";
 import {
   isGithubRemoteUrl,
   repoSlugFromRemoteUrl
-} from "../../../../server/lib/githubRemote.js";
+} from "@local/setup-doctor-core/server/githubRemote";
 import {
   linkedGitMetadataMountSource
-} from "../../../../server/lib/gitToolchainMounts.js";
+} from "@local/studio-terminal-core/server/gitToolchainMounts";
 import {
   runHostCommand
-} from "../../../../server/lib/shellCommands.js";
+} from "@local/studio-terminal-core/server/shellCommands";
 import {
   blockedDoctorCheck as blockedCheck,
   doctorCheckPassed as checkPassed,
@@ -39,10 +39,10 @@ import {
   hardStopDoctorCheck as hardStopCheck,
   passDoctorCheck as passCheck,
   pendingDoctorCheck as pendingCheck
-} from "../../../../server/lib/doctorCheckItems.js";
+} from "@local/ai-studio-core/server/doctorCheckItems";
 import {
   AI_STUDIO_STATE_DIR
-} from "../../../../server/lib/aiStudio/sessionStore.js";
+} from "@local/ai-studio-runtime/server/sessionStore";
 import {
   ADD_AI_STUDIO_GITIGNORE_RULES_ACTION_ID,
   AI_STUDIO_LOCAL_STATE_GITIGNORE_PATTERNS,
@@ -73,7 +73,7 @@ import {
   startGitInitTerminal as startSharedGitInitTerminal,
   startLinkGithubRemoteTerminal as startSharedLinkGithubRemoteTerminal,
   startMirrorRemoteBranchTerminal as startSharedMirrorRemoteBranchTerminal
-} from "../../../../server/lib/setupDoctorGit.js";
+} from "@local/setup-doctor-core/server/setupDoctorGit";
 
 const TERMINAL_NAMESPACE = "project-setup-doctor";
 const AUTOMATIC_REPAIR_MAX_ATTEMPTS = 12;

@@ -1,7 +1,7 @@
 import {
   ensureRuntimeContainers,
   runtimeContainersTerminalEnv
-} from "../../../../server/lib/aiStudio/runtimeContainers.js";
+} from "@local/studio-terminal-core/server/runtimeContainers";
 
 async function adapterRuntimeContainerContext({
   runtime = null,

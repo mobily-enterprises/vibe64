@@ -1,14 +1,14 @@
 import {
   shellQuote
-} from "../../../shellCommands.js";
+} from "@local/studio-terminal-core/server/shellCommands";
 import {
   managedDatabaseNameFromTargetRoot
-} from "../../managedDatabases.js";
+} from "@local/studio-terminal-core/server/managedDatabases";
 import {
   AI_STUDIO_RUNTIME_HOST_ALIAS,
   createRuntimeContainerRepair,
   runtimeContainerName
-} from "../../runtimeContainers.js";
+} from "@local/studio-terminal-core/server/runtimeContainers";
 import {
   readDatabaseHostFromEnvFile
 } from "../../adapterHelpers/setupDatabaseConnections.js";

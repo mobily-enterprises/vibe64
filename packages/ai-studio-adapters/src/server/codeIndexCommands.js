@@ -3,10 +3,10 @@ import {
 } from "node:fs";
 import {
   shellQuote
-} from "../shellCommands.js";
+} from "@local/studio-terminal-core/server/shellCommands";
 import {
   normalizeText
-} from "./core.js";
+} from "@local/ai-studio-core/server/core";
 import {
   packageScript,
   runScriptCommand

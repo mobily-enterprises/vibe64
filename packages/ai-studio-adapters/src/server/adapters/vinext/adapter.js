@@ -3,12 +3,12 @@ import { fileURLToPath } from "node:url";
 
 import {
   shellQuote
-} from "../../../shellCommands.js";
+} from "@local/studio-terminal-core/server/shellCommands";
 import {
   AiStudioDescribedWorkflowTargetAdapter,
   inspectDescribedProject
 } from "../../workflowAdapter.js";
-import { deepFreeze } from "../../deepFreeze.js";
+import { deepFreeze } from "@local/ai-studio-core/server/deepFreeze";
 import {
   VINEXT_PROJECT_KNOWLEDGE_RELATIVE_PATH
 } from "./constants.js";

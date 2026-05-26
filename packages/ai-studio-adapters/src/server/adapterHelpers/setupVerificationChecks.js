@@ -1,7 +1,7 @@
 import {
   blockedDoctorCheck as blockedCheck,
   passDoctorCheck as passCheck
-} from "../../doctorCheckItems.js";
+} from "@local/ai-studio-core/server/doctorCheckItems";
 import {
   packageScript,
   readTargetPackageJson

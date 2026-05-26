@@ -3,12 +3,12 @@ import test from "node:test";
 
 import {
   targetScriptTerminalArgs
-} from "../../server/lib/aiStudio/targetScriptTerminal.js";
+} from "@local/studio-terminal-core/server/targetScriptTerminal";
 import {
   STUDIO_BASE_TOOLCHAIN_IMAGE,
   STUDIO_PLAYWRIGHT_BROWSERS_PATH,
   STUDIO_PLAYWRIGHT_BROWSERS_VOLUME
-} from "../../server/lib/studioRuntimeIdentity.js";
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
   assertDockerEnv,
   assertDockerVolumeMount

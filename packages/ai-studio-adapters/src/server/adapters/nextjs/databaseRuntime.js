@@ -1,12 +1,12 @@
 import {
   createRuntimeContainerRepair,
   runtimeContainerName
-} from "../../runtimeContainers.js";
+} from "@local/studio-terminal-core/server/runtimeContainers";
 import {
   createManagedDatabaseRuntimeContainer,
   managedDatabaseConnection,
   managedDatabaseNameFromTargetRoot
-} from "../../managedDatabases.js";
+} from "@local/studio-terminal-core/server/managedDatabases";
 import {
   selectedConfigValue
 } from "../../configValues.js";

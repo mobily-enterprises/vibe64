@@ -7,6 +7,7 @@ export default Object.freeze({
   dependsOn: [
     "@jskit-ai/kernel",
     "@local/ai-studio-core",
+    "@local/ai-studio-runtime",
     "@local/ai-studio-project",
     "@local/ai-studio-accounts",
     "@local/ai-studio-terminals",

@@ -1,6 +1,6 @@
 import {
   stableHash
-} from "../../../../server/lib/shellCommands.js";
+} from "@local/studio-terminal-core/server/shellCommands";
 import {
   adapterRuntimeContainersTerminalEnv
 } from "./terminalRuntimeContainers.js";

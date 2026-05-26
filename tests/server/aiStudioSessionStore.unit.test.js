@@ -10,7 +10,7 @@ import {
   createAiStudioSessionStore,
   isValidAiStudioSessionId,
   resolveAiStudioSessionPaths
-} from "../../server/lib/aiStudio/index.js";
+} from "@local/ai-studio-runtime/server";
 import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
 
 function delay(ms) {

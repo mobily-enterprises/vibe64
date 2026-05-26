@@ -5,13 +5,13 @@ import {
 } from "./nodePackage.js";
 import {
   shellQuote
-} from "../shellCommands.js";
+} from "@local/studio-terminal-core/server/shellCommands";
 import {
   adapterProjectFacts
 } from "./adapter.js";
 import {
   normalizeText
-} from "./core.js";
+} from "@local/ai-studio-core/server/core";
 
 const DEFAULT_APP_ROUTER_MARKER_IDS = Object.freeze([
   "app_router",

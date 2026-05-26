@@ -5,10 +5,12 @@ import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
 
 import {
-  AiStudioSessionRuntime,
+  AiStudioSessionRuntime
+} from "@local/ai-studio-runtime/server";
+import {
   TargetAdapter,
   adapterProjectFacts
-} from "../../server/lib/aiStudio/index.js";
+} from "@local/ai-studio-adapters/server";
 import {
   createService
 } from "../../packages/ai-studio-terminals/src/server/service.js";
@@ -41,7 +43,7 @@ import {
   closeTerminalSession,
   startTerminalSession,
   updateTerminalSessionMetadata
-} from "../../server/lib/terminalSessions.js";
+} from "@local/studio-terminal-core/server/terminalSessions";
 import {
   resolveTerminalToolchainImage
 } from "../../packages/ai-studio-terminals/src/server/terminalToolchainImage.js";
@@ -51,26 +53,26 @@ import {
 } from "../../packages/ai-studio-terminals/src/server/terminalEnvironment.js";
 import {
   CppTargetAdapter
-} from "../../server/lib/aiStudio/adapters/cpp/adapter.js";
+} from "@local/ai-studio-adapters/server/adapters/cpp/adapter";
 import {
   CPP_TOOLCHAIN_IMAGE
-} from "../../server/lib/aiStudio/adapters/cpp/toolchainIdentity.js";
+} from "@local/ai-studio-adapters/server/adapters/cpp/toolchainIdentity";
 import {
   JskitTargetAdapter
-} from "../../server/lib/aiStudio/adapters/jskit/adapter.js";
+} from "@local/ai-studio-adapters/server/adapters/jskit/adapter";
 import {
   JSKIT_TOOLCHAIN_IMAGE
-} from "../../server/lib/aiStudio/adapters/jskit/toolchainIdentity.js";
+} from "@local/ai-studio-adapters/server/adapters/jskit/toolchainIdentity";
 import {
   JSKIT_MARIADB_HOST,
   JSKIT_MARIADB_ROOT_PASSWORD
-} from "../../server/lib/aiStudio/adapters/jskit/setupMariaDbRuntime.js";
+} from "@local/ai-studio-adapters/server/adapters/jskit/setupMariaDbRuntime";
 import {
   LaravelTargetAdapter
-} from "../../server/lib/aiStudio/adapters/laravel/adapter.js";
+} from "@local/ai-studio-adapters/server/adapters/laravel/adapter";
 import {
   LARAVEL_TOOLCHAIN_IMAGE
-} from "../../server/lib/aiStudio/adapters/laravel/toolchainIdentity.js";
+} from "@local/ai-studio-adapters/server/adapters/laravel/toolchainIdentity";
 import {
   STUDIO_BASE_TOOLCHAIN_IMAGE,
   STUDIO_PLAYWRIGHT_BROWSERS_PATH,
@@ -78,16 +80,16 @@ import {
   STUDIO_TOOL_HOME_BIN_PATH,
   STUDIO_TOOL_HOME_NPM_PREFIX,
   STUDIO_TOOL_HOME_PATH
-} from "../../server/lib/studioRuntimeIdentity.js";
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
   STUDIO_MYSQL_CLIENT_CONFIG_DIR
-} from "../../server/lib/studioToolHome.js";
+} from "@local/studio-terminal-core/server/studioToolHome";
 import {
   runtimeNetworkName
-} from "../../server/lib/aiStudio/runtimeContainers.js";
+} from "@local/studio-terminal-core/server/runtimeContainers";
 import {
   STUDIO_CONTEXT_START_MARKER
-} from "../../server/lib/aiStudio/promptMarkers.js";
+} from "@local/ai-studio-adapters/server/promptMarkers";
 import {
   stripStudioContextBlocksForDisplay
 } from "../../src/lib/codexOutput.js";

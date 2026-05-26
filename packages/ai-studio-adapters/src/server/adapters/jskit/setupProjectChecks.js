@@ -5,7 +5,7 @@ import {
   formatDoctorList as formatList,
   hardStopDoctorCheck as hardStopCheck,
   passDoctorCheck as passCheck
-} from "../../../doctorCheckItems.js";
+} from "@local/ai-studio-core/server/doctorCheckItems";
 import {
   allDependencyNames,
   checkNodeDependencies,

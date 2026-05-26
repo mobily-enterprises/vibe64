@@ -6,7 +6,9 @@ export default Object.freeze({
   description: "Owns AI Studio external account readiness and login orchestration.",
   dependsOn: [
     "@jskit-ai/kernel",
-    "@local/ai-studio-core"
+    "@local/ai-studio-core",
+    "@local/setup-doctor-core",
+    "@local/studio-terminal-core"
   ],
   capabilities: {
     provides: [

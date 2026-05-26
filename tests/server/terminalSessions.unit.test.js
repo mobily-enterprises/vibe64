@@ -12,7 +12,7 @@ import {
   stopTerminalSession,
   subscribeTerminalSession,
   writeTerminalSession
-} from "../../server/lib/terminalSessions.js";
+} from "@local/studio-terminal-core/server/terminalSessions";
 
 function longRunningNodeArgs() {
   return [

@@ -13,31 +13,31 @@ import {
   subscribeTerminalSession,
   updateTerminalSessionMetadata,
   writeTerminalSession
-} from "../../../../server/lib/terminalSessions.js";
+} from "@local/studio-terminal-core/server/terminalSessions";
 import {
   STUDIO_BASE_TOOLCHAIN_IMAGE,
   STUDIO_CODEX_CONTAINER_PREFIX,
   studioDockerLabel
-} from "../../../../server/lib/studioRuntimeIdentity.js";
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
   studioUserStartupScript
-} from "../../../../server/lib/studioToolHome.js";
+} from "@local/studio-terminal-core/server/studioToolHome";
 import {
   containerWorkspacePath,
   removeDockerContainer
-} from "../../../../server/lib/containerRuntime.js";
+} from "@local/studio-terminal-core/server/containerRuntime";
 import {
   ensureTargetRuntimeNetwork
-} from "../../../../server/lib/aiStudio/runtimeContainers.js";
+} from "@local/studio-terminal-core/server/runtimeContainers";
 import {
   prepareCurrentStepInputHelper
-} from "../../../../server/lib/aiStudio/currentStepInputHelperServer.js";
+} from "@local/ai-studio-runtime/server/currentStepInputHelperServer";
 import {
   promptSessionBriefing
-} from "../../../../server/lib/aiStudio/promptRenderer.js";
+} from "@local/ai-studio-adapters/server/promptRenderer";
 import {
   wrapPromptWithStudioContext
-} from "../../../../server/lib/aiStudio/promptMarkers.js";
+} from "@local/ai-studio-adapters/server/promptMarkers";
 import {
   aiStudioResult,
   codexTerminalNamespace,

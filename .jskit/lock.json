@@ -368,6 +368,118 @@
       },
       "options": {},
       "installedAt": "2026-05-26T05:00:29.741Z"
+    },
+    "@local/ai-studio-adapters": {
+      "packageId": "@local/ai-studio-adapters",
+      "version": "0.1.0",
+      "source": {
+        "type": "local-package",
+        "packagePath": "packages/ai-studio-adapters",
+        "descriptorPath": "packages/ai-studio-adapters/package.descriptor.mjs"
+      },
+      "managed": {
+        "packageJson": {
+          "dependencies": {
+            "@local/ai-studio-adapters": {
+              "hadPrevious": false,
+              "previousValue": "",
+              "value": "file:packages/ai-studio-adapters"
+            }
+          },
+          "devDependencies": {},
+          "scripts": {}
+        },
+        "text": {},
+        "vite": {},
+        "files": [],
+        "migrations": []
+      },
+      "options": {},
+      "installedAt": "2026-05-26T05:55:02.827Z"
+    },
+    "@local/ai-studio-runtime": {
+      "packageId": "@local/ai-studio-runtime",
+      "version": "0.1.0",
+      "source": {
+        "type": "local-package",
+        "packagePath": "packages/ai-studio-runtime",
+        "descriptorPath": "packages/ai-studio-runtime/package.descriptor.mjs"
+      },
+      "managed": {
+        "packageJson": {
+          "dependencies": {
+            "@local/ai-studio-runtime": {
+              "hadPrevious": false,
+              "previousValue": "",
+              "value": "file:packages/ai-studio-runtime"
+            }
+          },
+          "devDependencies": {},
+          "scripts": {}
+        },
+        "text": {},
+        "vite": {},
+        "files": [],
+        "migrations": []
+      },
+      "options": {},
+      "installedAt": "2026-05-26T05:55:03.282Z"
+    },
+    "@local/studio-terminal-core": {
+      "packageId": "@local/studio-terminal-core",
+      "version": "0.1.0",
+      "source": {
+        "type": "local-package",
+        "packagePath": "packages/studio-terminal-core",
+        "descriptorPath": "packages/studio-terminal-core/package.descriptor.mjs"
+      },
+      "managed": {
+        "packageJson": {
+          "dependencies": {
+            "@local/studio-terminal-core": {
+              "hadPrevious": false,
+              "previousValue": "",
+              "value": "file:packages/studio-terminal-core"
+            }
+          },
+          "devDependencies": {},
+          "scripts": {}
+        },
+        "text": {},
+        "vite": {},
+        "files": [],
+        "migrations": []
+      },
+      "options": {},
+      "installedAt": "2026-05-26T05:55:03.906Z"
+    },
+    "@local/setup-doctor-core": {
+      "packageId": "@local/setup-doctor-core",
+      "version": "0.1.0",
+      "source": {
+        "type": "local-package",
+        "packagePath": "packages/setup-doctor-core",
+        "descriptorPath": "packages/setup-doctor-core/package.descriptor.mjs"
+      },
+      "managed": {
+        "packageJson": {
+          "dependencies": {
+            "@local/setup-doctor-core": {
+              "hadPrevious": false,
+              "previousValue": "",
+              "value": "file:packages/setup-doctor-core"
+            }
+          },
+          "devDependencies": {},
+          "scripts": {}
+        },
+        "text": {},
+        "vite": {},
+        "files": [],
+        "migrations": []
+      },
+      "options": {},
+      "installedAt": "2026-05-26T05:55:04.558Z"
     }
   }
 }

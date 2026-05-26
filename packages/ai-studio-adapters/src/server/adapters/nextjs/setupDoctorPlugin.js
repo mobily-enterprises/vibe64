@@ -4,22 +4,22 @@ import {
   failDoctorCheck as failCheck,
   hardStopDoctorCheck as hardStopCheck,
   passDoctorCheck as passCheck
-} from "../../../doctorCheckItems.js";
+} from "@local/ai-studio-core/server/doctorCheckItems";
 import {
   createDoctorPluginToolkit
-} from "../../../doctorPluginToolkit.js";
+} from "@local/setup-doctor-core/server/doctorPluginToolkit";
 import {
   shellQuote
-} from "../../../shellCommands.js";
+} from "@local/studio-terminal-core/server/shellCommands";
 import {
   STUDIO_BASE_TOOLCHAIN_IMAGE
-} from "../../../studioRuntimeIdentity.js";
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
   createRuntimeContainerDoctorEntries
-} from "../../runtimeContainers.js";
+} from "@local/studio-terminal-core/server/runtimeContainers";
 import {
   writableHostUserDockerArgs
-} from "../../dockerRuntime.js";
+} from "@local/studio-terminal-core/server/dockerRuntime";
 import {
   checkNodePackageManagerToolchain
 } from "../../nodePackageDoctor.js";

@@ -6,7 +6,7 @@ import { createService } from "./service.js";
 import {
   resolveStudioAppRoot,
   resolveStudioTargetRoot
-} from "../../../../server/lib/studioRoots.js";
+} from "@local/ai-studio-core/server/studioRoots";
 
 class ProjectSetupDoctorProvider {
   static id = "feature.project-setup-doctor";

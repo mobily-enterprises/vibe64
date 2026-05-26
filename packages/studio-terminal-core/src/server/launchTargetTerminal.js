@@ -8,25 +8,25 @@ import { promisify } from "node:util";
 import {
   containerWorkspacePath,
   removeDockerContainer
-} from "../containerRuntime.js";
+} from "./containerRuntime.js";
 import {
   gitToolchainMountArgs
-} from "../gitToolchainMounts.js";
+} from "./gitToolchainMounts.js";
 import {
   dockerCommand,
   hostUserDockerArgs,
   hostUserIdentityEnvArgs,
   shellQuote,
   stableHash
-} from "../shellCommands.js";
+} from "./shellCommands.js";
 import {
   AI_STUDIO_SKIP_STALE_TERMINAL_CLEANUP_ENV,
   STUDIO_BASE_TOOLCHAIN_IMAGE,
   STUDIO_DAEMON_PID_LABEL
-} from "../studioRuntimeIdentity.js";
+} from "./studioRuntimeIdentity.js";
 import {
   normalizeText
-} from "./core.js";
+} from "@local/ai-studio-core/server/core";
 import {
   targetRuntimeNetworkDockerArgs
 } from "./runtimeContainers.js";

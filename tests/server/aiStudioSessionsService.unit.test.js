@@ -5,13 +5,13 @@ import {
   AI_STUDIO_SESSION_STATUS,
   AI_STUDIO_WORKFLOW_DEFINITION_IDS,
   workflowDefinitionCreationOptions
-} from "../../server/lib/aiStudio/index.js";
+} from "@local/ai-studio-runtime/server";
 import {
   createService
 } from "../../packages/ai-studio-sessions/src/server/service.js";
 import {
   _testing as coreMaintenanceTesting
-} from "../../server/lib/aiStudio/workflowModules/coreMaintenance.js";
+} from "@local/ai-studio-runtime/server/workflowModules/coreMaintenance";
 
 const maintenanceWorkflowDefinitionIds = coreMaintenanceTesting.workflowDefinitionIds;
 

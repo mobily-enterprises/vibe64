@@ -120,6 +120,7 @@ test("starter shell does not include the app.manifest scaffold", async () => {
 test("local package source avoids brittle deep relative imports", async () => {
   const packageSourceFiles = await listFilesRecursive(path.join(APP_ROOT, "packages"));
   const brittleImportPattern = /\bfrom\s+["'](?:\.\.\/){5,}[^"']+["']/;
+  const serverLibImportPattern = /\bfrom\s+["'][^"']*server\/lib\//;
 
   for (const filePath of packageSourceFiles) {
     if (!filePath.endsWith(".js") && !filePath.endsWith(".mjs")) {
@@ -130,6 +131,11 @@ test("local package source avoids brittle deep relative imports", async () => {
       brittleImportPattern.test(source),
       false,
       `Found brittle deep relative import in ${path.relative(APP_ROOT, filePath)}`
+    );
+    assert.equal(
+      serverLibImportPattern.test(source),
+      false,
+      `Found app-private server/lib import in ${path.relative(APP_ROOT, filePath)}`
     );
   }
 });

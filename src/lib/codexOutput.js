@@ -4,7 +4,7 @@ import {
   STUDIO_CONTEXT_START_MARKER,
   hasStudioContextBlock,
   wrapPromptWithStudioContext
-} from "../../server/lib/aiStudio/promptMarkers.js";
+} from "@local/ai-studio-adapters/server/promptMarkers";
 
 const ESCAPE_CHARACTER = String.fromCharCode(27);
 const BELL_CHARACTER = String.fromCharCode(7);

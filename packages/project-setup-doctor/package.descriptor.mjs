@@ -5,7 +5,11 @@ export default Object.freeze({
   kind: "runtime",
   description: "Sequential target project setup readiness checks for Studio.",
   dependsOn: [
-    "@jskit-ai/kernel"
+    "@jskit-ai/kernel",
+    "@local/ai-studio-core",
+    "@local/ai-studio-runtime",
+    "@local/setup-doctor-core",
+    "@local/studio-terminal-core"
   ],
   capabilities: {
     provides: [

@@ -5,16 +5,16 @@ import test from "node:test";
 
 import {
   AiStudioSessionRuntime
-} from "../../server/lib/aiStudio/index.js";
+} from "@local/ai-studio-runtime/server";
 import {
   VINEXT_AI_STUDIO_COMMANDS,
   createVinextLaunchDescriptor,
   createVinextLaunchTargetTerminalSpec,
   createVinextTargetAdapter
-} from "../../server/lib/aiStudio/adapters/vinext/index.js";
+} from "@local/ai-studio-adapters/server/adapters/vinext/index";
 import {
   createVinextSetupDoctorPlugin
-} from "../../server/lib/aiStudio/adapters/vinext/setupDoctorPlugin.js";
+} from "@local/ai-studio-adapters/server/adapters/vinext/setupDoctorPlugin";
 import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
 
 async function writeProjectFile(root, relativePath, text = "") {

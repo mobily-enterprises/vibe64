@@ -4,7 +4,7 @@ import test from "node:test";
 
 import {
   buildDoctorToolchainArgs
-} from "../../server/lib/doctorToolchain.js";
+} from "@local/setup-doctor-core/server/doctorToolchain";
 import {
   STUDIO_BASE_TOOLCHAIN_IMAGE,
   STUDIO_PLAYWRIGHT_BROWSERS_PATH,
@@ -12,7 +12,7 @@ import {
   STUDIO_TOOL_HOME_BIN_PATH,
   STUDIO_TOOL_HOME_NPM_PREFIX,
   STUDIO_TOOL_HOME_PATH
-} from "../../server/lib/studioRuntimeIdentity.js";
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
   assertDockerEnv,
   assertDockerVolumeMount

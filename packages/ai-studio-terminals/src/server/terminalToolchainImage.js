@@ -1,9 +1,9 @@
 import {
   dockerImageExists
-} from "../../../../server/lib/containerRuntime.js";
+} from "@local/studio-terminal-core/server/containerRuntime";
 import {
   STUDIO_BASE_TOOLCHAIN_IMAGE
-} from "../../../../server/lib/studioRuntimeIdentity.js";
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 
 const BASE_TERMINAL_TOOLCHAIN_LABEL = "managed base toolchain";
 

@@ -7,7 +7,7 @@ import { createJskitClientBootstrapPlugin } from "@jskit-ai/kernel/client/vite";
 import { loadViteDevProxyEntries, toPositiveInt } from "./vite.shared.mjs";
 import {
   isLocalhostCheckBypassEnabled
-} from "./server/lib/localhostCheckBypass.js";
+} from "@local/ai-studio-core/server/localhostCheckBypass";
 
 const devPort = toPositiveInt(process.env.VITE_DEV_PORT, 5173);
 const apiProxyTarget = String(process.env.VITE_API_PROXY_TARGET || "").trim() || "http://localhost:3000";

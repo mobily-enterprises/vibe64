@@ -1,6 +1,6 @@
 import {
   hostUserDockerArgs
-} from "../shellCommands.js";
+} from "./shellCommands.js";
 
 function dockerEnvArgs(env = {}) {
   return Object.entries(env)

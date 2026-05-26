@@ -27,26 +27,26 @@ Rules for each stage:
 
 Create `@local/ai-studio-adapters`.
 
-- [ ] Scaffold/install `packages/ai-studio-adapters`.
-- [ ] Move adapter contract and project/application type primitives:
+- [x] Scaffold/install `packages/ai-studio-adapters`.
+- [x] Move adapter contract and project/application type primitives:
   - `server/lib/aiStudio/adapter.js`
   - `server/lib/aiStudio/projectType.js`
   - `server/lib/aiStudio/applicationTypes.js`
   - `server/lib/aiStudio/adapterBlueprints.js`
-- [ ] Move adapter config primitives:
+- [x] Move adapter config primitives:
   - `server/lib/aiStudio/configStore.js`
   - `server/lib/aiStudio/configValues.js`
-- [ ] Move adapter registry creation and public adapter exports out of `server/lib/aiStudio/index.js`.
-- [ ] Move existing built-in adapter implementations that are clearly adapter-owned:
+- [x] Move adapter registry creation and public adapter exports out of `server/lib/aiStudio/index.js`.
+- [x] Move existing built-in adapter implementations that are clearly adapter-owned:
   - `fakeAdapter.js`
   - `nodeWebProject.js`
   - JSKIT adapter modules that do not belong to workflow/session runtime
-- [ ] Update `@local/ai-studio-project` to import adapter APIs from `@local/ai-studio-adapters`.
-- [ ] Update runtime/session code to import adapter APIs from `@local/ai-studio-adapters`.
-- [ ] Add descriptor dependencies for packages that consume adapter APIs.
-- [ ] Add or update tests proving adapter registration/project-type listing still works.
-- [ ] Verify no feature package imports adapter APIs through `server/lib/aiStudio/index.js`.
-- [ ] Run verification commands.
+- [x] Update `@local/ai-studio-project` to import adapter APIs from `@local/ai-studio-adapters`.
+- [x] Update runtime/session code to import adapter APIs from `@local/ai-studio-adapters`.
+- [x] Add descriptor dependencies for packages that consume adapter APIs.
+- [x] Add or update tests proving adapter registration/project-type listing still works.
+- [x] Verify no feature package imports adapter APIs through `server/lib/aiStudio/index.js`.
+- [x] Run verification commands.
 
 Completion criteria:
 
@@ -58,14 +58,16 @@ Completion criteria:
 
 Create `@local/ai-studio-runtime`.
 
-- [ ] Scaffold/install `packages/ai-studio-runtime`.
-- [ ] Move session runtime/store primitives:
+Note: adapter-facing workflow helpers (`workflowAdapter.js`, workflow command terminal specs, command facts, and workflow session actions) landed in `@local/ai-studio-adapters` instead of `@local/ai-studio-runtime` so adapters do not depend on the runtime package.
+
+- [x] Scaffold/install `packages/ai-studio-runtime`.
+- [x] Move session runtime/store primitives:
   - `runtime.js`
   - `sessionStore.js`
   - `sessionDebugLog.js`
   - `sessionDebugLogCore.js`
   - `setupReadiness.js` if it remains runtime-owned
-- [ ] Move workflow engine primitives:
+- [x] Move workflow engine primitives:
   - `workflowMachine.js`
   - `workflowRegistry.js`
   - `workflowAdapter.js`
@@ -73,7 +75,7 @@ Create `@local/ai-studio-runtime`.
   - `workflowCommandFacts.js`
   - `workflowCommandTerminal.js`
   - `workflowSessionActions.js`
-- [ ] Move workflow definition modules/builders:
+- [x] Move workflow definition modules/builders:
   - `workflow.js`
   - `workflowDefinitionBuilders.js`
   - `workflowStepFactories.js`
@@ -81,13 +83,13 @@ Create `@local/ai-studio-runtime`.
   - `workflowStepMachines.js`
   - `registerCoreWorkflowModules.js`
   - `workflowModules/*`
-- [ ] Move presentation only if it remains server-runtime owned:
+- [x] Move presentation only if it remains server-runtime owned:
   - `workflowPresentation.js`
-- [ ] Update `@local/ai-studio-sessions` to depend on `@local/ai-studio-runtime`.
-- [ ] Update `@local/ai-studio-project` only for runtime APIs it genuinely needs.
-- [ ] Keep API route/action ownership in `@local/ai-studio-sessions`.
-- [ ] Add contract tests around workflow registry, session creation, and presentation output.
-- [ ] Run verification commands.
+- [x] Update `@local/ai-studio-sessions` to depend on `@local/ai-studio-runtime`.
+- [x] Update `@local/ai-studio-project` only for runtime APIs it genuinely needs.
+- [x] Keep API route/action ownership in `@local/ai-studio-sessions`.
+- [x] Add contract tests around workflow registry, session creation, and presentation output.
+- [x] Run verification commands.
 
 Completion criteria:
 
@@ -99,23 +101,23 @@ Completion criteria:
 
 Create `@local/studio-terminal-core`.
 
-- [ ] Scaffold/install `packages/studio-terminal-core`.
-- [ ] Move terminal session/process primitives:
+- [x] Scaffold/install `packages/studio-terminal-core`.
+- [x] Move terminal session/process primitives:
   - `server/lib/terminalSessions.js`
   - `server/lib/containerRuntime.js`
   - `server/lib/aiStudio/runtimeContainers.js`
-- [ ] Move shared Studio runtime identity/tool-home primitives:
+- [x] Move shared Studio runtime identity/tool-home primitives:
   - `server/lib/studioRuntimeIdentity.js`
   - `server/lib/studioToolHome.js`
   - relevant terminal cleanup/label helpers if shared
-- [ ] Move shell command helpers if they are terminal-platform primitives:
+- [x] Move shell command helpers if they are terminal-platform primitives:
   - `server/lib/shellCommands.js`
   - `server/lib/shellScript.js`
   - `server/lib/gitToolchainMounts.js`
-- [ ] Update terminal, doctor, current-app, and setup packages to import from `@local/studio-terminal-core`.
-- [ ] Keep terminal feature route/controller ownership in `@local/ai-studio-terminals`.
-- [ ] Add or update tests around PTY lifecycle, container command specs, and websocket IO.
-- [ ] Run verification commands.
+- [x] Update terminal, doctor, current-app, and setup packages to import from `@local/studio-terminal-core`.
+- [x] Keep terminal feature route/controller ownership in `@local/ai-studio-terminals`.
+- [x] Add or update tests around PTY lifecycle, container command specs, and websocket IO.
+- [x] Run verification commands.
 
 Completion criteria:
 
@@ -127,25 +129,27 @@ Completion criteria:
 
 Create `@local/setup-doctor-core`.
 
-- [ ] Scaffold/install `packages/setup-doctor-core`.
-- [ ] Move doctor shared route/stream/cache/plugin primitives:
+Note: generic doctor check item builders landed in `@local/ai-studio-core` because terminal runtime, adapters, and doctor tooling all consume them.
+
+- [x] Scaffold/install `packages/setup-doctor-core`.
+- [x] Move doctor shared route/stream/cache/plugin primitives:
   - `doctorRoutes.js`
   - `doctorStream.js`
   - `doctorStatusCache.js`
   - `doctorPlugins.js`
   - `doctorPluginToolkit.js`
-- [ ] Move doctor check/toolchain primitives:
+- [x] Move doctor check/toolchain primitives:
   - `doctorCheckItems.js`
   - `doctorToolchain.js`
   - `doctorToolchainCommands.js`
-- [ ] Move Git/GitHub setup helpers if they are doctor-owned:
+- [x] Move Git/GitHub setup helpers if they are doctor-owned:
   - `setupDoctorGit.js`
   - `githubRemote.js`
   - `githubRepoSetupScript.js`
-- [ ] Update `studio-setup-doctor`, `adapter-setup-doctor`, `project-setup-doctor`, and `ai-studio-accounts` to import from `@local/setup-doctor-core`.
-- [ ] Keep each doctor package as the owner of its service/actions/routes.
-- [ ] Add or update tests around readiness, repair commands, and doctor route behavior.
-- [ ] Run verification commands.
+- [x] Update `studio-setup-doctor`, `adapter-setup-doctor`, `project-setup-doctor`, and `ai-studio-accounts` to import from `@local/setup-doctor-core`.
+- [x] Keep each doctor package as the owner of its service/actions/routes.
+- [x] Add or update tests around readiness, repair commands, and doctor route behavior.
+- [x] Run verification commands.
 
 Completion criteria:
 
@@ -154,12 +158,12 @@ Completion criteria:
 
 ## Stage 5: Current App / Launch Ownership
 
-- [ ] Audit current-app and launch-related files after stages 1-4.
-- [ ] Move current-app-owned behavior directly into `@local/current-app`.
-- [ ] Move adapter-specific launch inspection into `@local/ai-studio-adapters`.
-- [ ] Move terminal/process launch plumbing into `@local/studio-terminal-core`.
-- [ ] Ensure current-app package owns routes/actions/service only.
-- [ ] Run verification commands.
+- [x] Audit current-app and launch-related files after stages 1-4.
+- [x] Move current-app-owned behavior directly into `@local/current-app`.
+- [x] Move adapter-specific launch inspection into `@local/ai-studio-adapters`.
+- [x] Move terminal/process launch plumbing into `@local/studio-terminal-core`.
+- [x] Ensure current-app package owns routes/actions/service only.
+- [x] Run verification commands.
 
 Completion criteria:
 
@@ -168,17 +172,17 @@ Completion criteria:
 
 ## Stage 6: Burn Down `server/lib`
 
-- [ ] List remaining `packages/** -> server/lib/**` imports.
-- [ ] Classify remaining imports as platform glue, compatibility shim, or missed domain code.
-- [ ] Remove compatibility shims once no package imports them.
-- [ ] Keep `server.js` and `server/lib` focused on app startup/platform concerns only:
+- [x] List remaining `packages/** -> server/lib/**` imports.
+- [x] Classify remaining imports as platform glue, compatibility shim, or missed domain code.
+- [x] Remove compatibility shims once no package imports them.
+- [x] Keep `server.js` and `server/lib` focused on app startup/platform concerns only:
   - runtime env
   - surface runtime
   - browser lifecycle
   - static serving helpers
   - startup cleanup, if not moved elsewhere
-- [ ] Add a test or lint guard preventing feature packages from deep-importing `server/lib`.
-- [ ] Run final `npx jskit app verify`.
+- [x] Add a test or lint guard preventing feature packages from deep-importing `server/lib`.
+- [x] Run final `npx jskit app verify`.
 
 Completion criteria:
 

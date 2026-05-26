@@ -3,11 +3,11 @@ import { promisify } from "node:util";
 
 import {
   shellQuote
-} from "../../shellCommands.js";
+} from "@local/studio-terminal-core/server/shellCommands";
 import {
   normalizeText,
   pathExists
-} from "../core.js";
+} from "@local/ai-studio-core/server/core";
 
 const execFileAsync = promisify(execFile);
 const GIT_COMMAND_TIMEOUT_MS = 30_000;

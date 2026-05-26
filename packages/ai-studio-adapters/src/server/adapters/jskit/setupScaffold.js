@@ -4,13 +4,13 @@ import {
   formatDoctorList as formatList,
   hardStopDoctorCheck as hardStopCheck,
   passDoctorCheck as passCheck
-} from "../../../doctorCheckItems.js";
+} from "@local/ai-studio-core/server/doctorCheckItems";
 import {
   shellQuote
-} from "../../../shellCommands.js";
+} from "@local/studio-terminal-core/server/shellCommands";
 import {
   shellScript
-} from "../../../shellScript.js";
+} from "@local/studio-terminal-core/server/shellScript";
 
 const JSKIT_SCAFFOLD_ALLOWED_BOOTSTRAP_ENTRIES = new Set([
   ".gitignore",

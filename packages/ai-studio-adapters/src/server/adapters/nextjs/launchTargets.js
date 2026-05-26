@@ -1,6 +1,6 @@
 import {
   createAiStudioWebLaunchTargetTerminalSpec
-} from "../../launchTargetTerminal.js";
+} from "@local/studio-terminal-core/server/launchTargetTerminal";
 import {
   detectPackageManager,
   packageBinCommand,

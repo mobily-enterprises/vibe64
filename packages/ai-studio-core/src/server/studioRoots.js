@@ -1,9 +1,8 @@
 import path from "node:path";
 import process from "node:process";
-import {
-  AI_STUDIO_APP_ROOT_ENV,
-  AI_STUDIO_TARGET_ROOT_ENV
-} from "./studioRuntimeIdentity.js";
+
+const AI_STUDIO_APP_ROOT_ENV = "AI_STUDIO_APP_ROOT";
+const AI_STUDIO_TARGET_ROOT_ENV = "AI_STUDIO_TARGET_ROOT";
 
 function normalizeRoot(value, fallbackRoot) {
   const root = String(value || "").trim();
@@ -45,6 +44,8 @@ function resolveStudioTargetRoot({
 }
 
 export {
+  AI_STUDIO_APP_ROOT_ENV,
+  AI_STUDIO_TARGET_ROOT_ENV,
   resolveStudioAppRoot,
   resolveStudioTargetRoot
 };

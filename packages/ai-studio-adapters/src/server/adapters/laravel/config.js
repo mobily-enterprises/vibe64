@@ -1,7 +1,7 @@
 import {
   defaultConfigFromFields
 } from "../../configValues.js";
-import { deepFreeze } from "../../deepFreeze.js";
+import { deepFreeze } from "@local/ai-studio-core/server/deepFreeze";
 import {
   DEFAULT_NODE_PACKAGE_MANAGER
 } from "../../nodePackageManagers.js";

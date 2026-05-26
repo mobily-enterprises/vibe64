@@ -2,14 +2,12 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  AI_STUDIO_STATE_DIR,
   aiStudioError,
   isMissingPathError,
   isPlainObject,
   normalizeText
-} from "./core.js";
-import {
-  AI_STUDIO_STATE_DIR
-} from "./sessionStore.js";
+} from "@local/ai-studio-core/server/core";
 import {
   missingInformationPolicyInstruction
 } from "./promptQuestionPolicy.js";

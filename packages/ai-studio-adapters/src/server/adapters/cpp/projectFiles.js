@@ -7,7 +7,7 @@ import path from "node:path";
 import {
   normalizeText,
   pathExists
-} from "../../core.js";
+} from "@local/ai-studio-core/server/core";
 
 const CPP_HEADER_EXTENSIONS = new Set([".h", ".hh", ".hpp", ".hxx", ".ipp", ".tpp"]);
 const CPP_SOURCE_EXTENSIONS = new Set([".c", ".cc", ".cpp", ".cxx", ".m", ".mm"]);

@@ -3,14 +3,14 @@ import process from "node:process";
 
 import {
   pathExists
-} from "../../core.js";
+} from "@local/ai-studio-core/server/core";
 import {
   inspectDescribedCurrentApp
 } from "../../currentAppInspection.js";
 import {
   createAiStudioTargetScriptTerminalSpec,
   targetScriptError
-} from "../../targetScriptTerminal.js";
+} from "@local/studio-terminal-core/server/targetScriptTerminal";
 import {
   cppBuildTypeValue,
   cppStandardNumber

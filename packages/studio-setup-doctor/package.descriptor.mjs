@@ -5,7 +5,11 @@ export default Object.freeze({
   kind: "runtime",
   description: "Mandatory local runtime Studio Setup checks and repairs for Studio.",
   dependsOn: [
-    "@jskit-ai/kernel"
+    "@jskit-ai/kernel",
+    "@local/ai-studio-adapters",
+    "@local/ai-studio-core",
+    "@local/setup-doctor-core",
+    "@local/studio-terminal-core"
   ],
   capabilities: {
     provides: [

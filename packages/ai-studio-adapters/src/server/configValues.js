@@ -1,6 +1,6 @@
 import {
   normalizeText
-} from "./core.js";
+} from "@local/ai-studio-core/server/core";
 
 function configValues(config = {}) {
   return config?.values && typeof config.values === "object" ? config.values : config;

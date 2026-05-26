@@ -2,6 +2,8 @@ import { access } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 
+const AI_STUDIO_STATE_DIR = ".ai-studio";
+
 function normalizeText(value) {
   return String(value ?? "").trim();
 }
@@ -41,6 +43,7 @@ async function pathExists(filePath) {
 }
 
 export {
+  AI_STUDIO_STATE_DIR,
   aiStudioError,
   isPlainObject,
   isMissingPathError,

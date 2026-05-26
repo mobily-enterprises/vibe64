@@ -1,7 +1,7 @@
 import {
   failDoctorCheck as failCheck,
   passDoctorCheck as passCheck
-} from "../../doctorCheckItems.js";
+} from "@local/ai-studio-core/server/doctorCheckItems";
 import {
   detectPackageManager,
   hasDependency

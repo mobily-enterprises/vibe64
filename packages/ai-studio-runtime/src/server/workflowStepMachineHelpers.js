@@ -1,10 +1,10 @@
 import {
   aiStudioError,
   normalizeText
-} from "./core.js";
+} from "@local/ai-studio-core/server/core";
 import {
   questionPromptInstructionBullets
-} from "./promptQuestionPolicy.js";
+} from "@local/ai-studio-adapters/server/promptQuestionPolicy";
 import {
   aiStudioSessionDebugLog
 } from "./sessionDebugLog.js";

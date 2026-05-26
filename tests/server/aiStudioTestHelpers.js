@@ -4,10 +4,10 @@ import path from "node:path";
 
 import {
   runtimeNetworkName
-} from "../../server/lib/aiStudio/runtimeContainers.js";
+} from "@local/studio-terminal-core/server/runtimeContainers";
 import {
   runHostCommand
-} from "../../server/lib/shellCommands.js";
+} from "@local/studio-terminal-core/server/shellCommands";
 
 async function withTemporaryRoot(callback) {
   const root = await mkdtemp(path.join(tmpdir(), "ai-studio-test-"));

@@ -1,6 +1,6 @@
 import {
   deepFreeze
-} from "../../deepFreeze.js";
+} from "@local/ai-studio-core/server/deepFreeze";
 import {
   AI_STUDIO_APPLICATION_TYPE_WEB
 } from "../../applicationTypes.js";

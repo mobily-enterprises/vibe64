@@ -13,10 +13,10 @@ import {
   AI_STUDIO_LOCAL_STATE_GITIGNORE_PATTERNS,
   MIRROR_REMOTE_BRANCH_ACTION_ID,
   mirrorRemoteBranchScript
-} from "../../server/lib/setupDoctorGit.js";
+} from "@local/setup-doctor-core/server/setupDoctorGit";
 import {
   createRepositoryReadyStatusCache
-} from "../../server/lib/doctorStatusCache.js";
+} from "@local/setup-doctor-core/server/doctorStatusCache";
 import {
   checkRemoteSync,
   createService,

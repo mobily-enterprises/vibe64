@@ -1,4 +1,4 @@
-import { deepFreeze } from "../deepFreeze.js";
+import { deepFreeze } from "@local/ai-studio-core/server/deepFreeze";
 import {
   HUMAN_INPUT_RESPONSE_ARTIFACT
 } from "../workflowArtifacts.js";

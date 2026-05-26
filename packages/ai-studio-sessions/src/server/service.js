@@ -1,7 +1,7 @@
 import {
   AI_STUDIO_SESSION_STATUS,
   workflowDefinitionCreationOptions
-} from "../../../../server/lib/aiStudio/index.js";
+} from "@local/ai-studio-runtime/server";
 import {
   aiStudioResult
 } from "@local/ai-studio-core/server/serverResponses";
@@ -10,10 +10,10 @@ import {
   aiStudioSessionDebugError,
   aiStudioSessionDebugLog,
   aiStudioSessionDebugSummary
-} from "../../../../server/lib/aiStudio/sessionDebugLog.js";
+} from "@local/ai-studio-runtime/server/sessionDebugLog";
 import {
   assertAiStudioSetupReady
-} from "../../../../server/lib/aiStudio/setupReadiness.js";
+} from "@local/ai-studio-runtime/server/setupReadiness";
 import { inspectSessionDiff } from "./sessionDiff.js";
 
 const MAX_OPEN_AI_STUDIO_SESSIONS = 5;

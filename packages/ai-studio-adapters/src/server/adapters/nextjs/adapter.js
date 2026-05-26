@@ -8,7 +8,7 @@ import {
 import {
   createAdapterBlueprintReader
 } from "../../adapterBlueprints.js";
-import { deepFreeze } from "../../deepFreeze.js";
+import { deepFreeze } from "@local/ai-studio-core/server/deepFreeze";
 import {
   dependencyNames,
   hasDependency,

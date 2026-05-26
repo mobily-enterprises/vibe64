@@ -14,18 +14,18 @@ import {
   configImportSpecifiersFromText,
   directDependencyNames,
   missingDirectDependencies
-} from "../../server/lib/aiStudio/adapters/jskit/setupDependencyChecks.js";
+} from "@local/ai-studio-adapters/server/adapters/jskit/setupDependencyChecks";
 import {
   npmInstallScript
-} from "../../server/lib/aiStudio/adapters/jskit/setupProjectChecks.js";
+} from "@local/ai-studio-adapters/server/adapters/jskit/setupProjectChecks";
 import {
   checkJskitScaffold,
   scaffoldCommandPreview,
   scaffoldScript
-} from "../../server/lib/aiStudio/adapters/jskit/setupScaffold.js";
+} from "@local/ai-studio-adapters/server/adapters/jskit/setupScaffold";
 import {
   createDoctorPluginToolkit
-} from "../../server/lib/doctorPluginToolkit.js";
+} from "@local/setup-doctor-core/server/doctorPluginToolkit";
 
 function assertShellScriptSurvivesWhitespaceCollapse(script) {
   const flattened = script.replace(/\s+/gu, " ");

@@ -9,7 +9,7 @@ import {
   removeUnusedStudioRuntimeNetworks,
   selectStaleStudioContainerIds,
   selectStaleStudioToolchainProcessIds
-} from "../../server/lib/studioTerminalCleanup.js";
+} from "@local/studio-terminal-core/server/studioTerminalCleanup";
 
 function aliveDaemonKill(pid, signal) {
   if (signal === 0 && pid === 123) {

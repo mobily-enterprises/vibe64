@@ -5,13 +5,13 @@ import {
   dockerCommand,
   hostUserDockerArgs,
   shellQuote
-} from "../../../shellCommands.js";
+} from "@local/studio-terminal-core/server/shellCommands";
 import {
   buildDoctorToolchainArgs
-} from "../../../doctorToolchain.js";
+} from "@local/setup-doctor-core/server/doctorToolchain";
 import {
   targetRuntimeNetworkEnsureCommand
-} from "../../runtimeContainers.js";
+} from "@local/studio-terminal-core/server/runtimeContainers";
 import {
   adapterProjectFacts
 } from "../../adapter.js";
@@ -21,8 +21,8 @@ import {
 import {
   normalizeText,
   pathExists
-} from "../../core.js";
-import { deepFreeze } from "../../deepFreeze.js";
+} from "@local/ai-studio-core/server/core";
+import { deepFreeze } from "@local/ai-studio-core/server/deepFreeze";
 import {
   AiStudioDescribedWorkflowTargetAdapter,
   inspectDescribedProject

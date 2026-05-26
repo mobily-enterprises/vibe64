@@ -6,13 +6,13 @@ import { promisify } from "node:util";
 
 import {
   pathExists
-} from "./core.js";
+} from "@local/ai-studio-core/server/core";
 import {
   normalizePlainObject
-} from "./serverResponses.js";
+} from "@local/ai-studio-core/server/serverResponses";
 import {
   targetScriptError
-} from "./targetScriptTerminal.js";
+} from "@local/studio-terminal-core/server/targetScriptTerminal";
 
 const execFileAsync = promisify(execFile);
 

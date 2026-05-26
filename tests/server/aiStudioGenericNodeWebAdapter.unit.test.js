@@ -5,19 +5,19 @@ import test from "node:test";
 
 import {
   AiStudioSessionRuntime
-} from "../../server/lib/aiStudio/index.js";
+} from "@local/ai-studio-runtime/server";
 import {
   createAiStudioAdapterRegistry
-} from "../../server/lib/aiStudio/adapters/registry.js";
+} from "@local/ai-studio-adapters/server/adapters/registry";
 import {
   GENERIC_NODE_WEB_AI_STUDIO_COMMANDS,
   GENERIC_NODE_WEB_CLIENT_LIBRARY_CONFIG,
   createGenericNodeWebLaunchDescriptor,
   createGenericNodeWebTargetAdapter
-} from "../../server/lib/aiStudio/adapters/node-web/index.js";
+} from "@local/ai-studio-adapters/server/adapters/node-web/index";
 import {
   createGenericNodeWebSetupDoctorPlugin
-} from "../../server/lib/aiStudio/adapters/node-web/setupDoctorPlugin.js";
+} from "@local/ai-studio-adapters/server/adapters/node-web/setupDoctorPlugin";
 import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
 
 async function writeProjectFile(root, relativePath, text = "") {

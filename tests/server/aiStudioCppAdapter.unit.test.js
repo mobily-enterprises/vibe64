@@ -5,17 +5,17 @@ import test from "node:test";
 
 import {
   AiStudioSessionRuntime
-} from "../../server/lib/aiStudio/index.js";
+} from "@local/ai-studio-runtime/server";
 import {
   createAiStudioAdapterRegistry
-} from "../../server/lib/aiStudio/adapters/registry.js";
+} from "@local/ai-studio-adapters/server/adapters/registry";
 import {
   CPP_AI_STUDIO_COMMANDS,
   CPP_TOOLCHAIN_IMAGE,
   createCppSetupDoctorPlugin,
   createCppTargetAdapter,
   seedCppProjectScript
-} from "../../server/lib/aiStudio/adapters/cpp/index.js";
+} from "@local/ai-studio-adapters/server/adapters/cpp/index";
 import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
 
 async function writeProjectFile(root, relativePath, text = "") {

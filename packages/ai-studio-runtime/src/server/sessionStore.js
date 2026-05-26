@@ -4,6 +4,7 @@ import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import {
+  AI_STUDIO_STATE_DIR,
   aiStudioError,
   isPlainObject,
   isMissingPathError,
@@ -11,10 +12,9 @@ import {
   normalizeText,
   plainClone,
   pathExists
-} from "./core.js";
-import { deepFreeze } from "./deepFreeze.js";
+} from "@local/ai-studio-core/server/core";
+import { deepFreeze } from "@local/ai-studio-core/server/deepFreeze";
 
-const AI_STUDIO_STATE_DIR = ".ai-studio";
 const AI_STUDIO_SESSION_SCHEMA_VERSION = 1;
 const AI_STUDIO_PROMPT_CONTEXT_SNAPSHOT_SCHEMA_VERSION = 1;
 const AI_STUDIO_INITIAL_STEP = "session_created";

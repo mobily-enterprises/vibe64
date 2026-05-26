@@ -15,10 +15,10 @@ import {
   isMissingPathError,
   normalizeText,
   pathExists
-} from "./core.js";
+} from "@local/ai-studio-core/server/core";
 import {
   deepFreeze
-} from "./deepFreeze.js";
+} from "@local/ai-studio-core/server/deepFreeze";
 import {
   PromptRenderer
 } from "./promptRenderer.js";

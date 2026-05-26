@@ -7,7 +7,7 @@ import {
   AI_STUDIO_SESSION_STATUS,
   AI_STUDIO_WORKFLOW_DEFINITION_IDS,
   AiStudioSessionRuntime
-} from "../../server/lib/aiStudio/index.js";
+} from "@local/ai-studio-runtime/server";
 import {
   JSKIT_AI_STUDIO_COMMANDS,
   JSKIT_ALLOW_SELF_TARGET_CONFIG,
@@ -15,14 +15,14 @@ import {
   createJskitLaunchTargetTerminalSpec,
   createJskitTargetAdapter,
   listJskitLaunchTargets
-} from "../../server/lib/aiStudio/adapters/jskit/index.js";
+} from "@local/ai-studio-adapters/server/adapters/jskit/index";
 import {
   JSKIT_ALLOW_SELF_TARGET_CONFIG_PATH
-} from "../../server/lib/aiStudio/adapters/jskit/launchTargets.js";
+} from "@local/ai-studio-adapters/server/adapters/jskit/launchTargets";
 import {
   jskitAutomatedChecksHook,
   jskitCodeIndexHook
-} from "../../server/lib/aiStudio/adapters/jskit/adapter.js";
+} from "@local/ai-studio-adapters/server/adapters/jskit/adapter";
 import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
 
 async function writeProjectFile(root, relativePath, text = "") {

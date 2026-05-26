@@ -8,32 +8,32 @@ import {
   readTerminalSession,
   startTerminalSession,
   writeTerminalSession
-} from "../../../../server/lib/terminalSessions.js";
+} from "@local/studio-terminal-core/server/terminalSessions";
 import {
   createRepositoryReadyStatusCache
-} from "../../../../server/lib/doctorStatusCache.js";
+} from "@local/setup-doctor-core/server/doctorStatusCache";
 import {
   areDoctorChecksReady,
   runDoctorPlugins,
   startDoctorPluginTerminal
-} from "../../../../server/lib/doctorPlugins.js";
+} from "@local/setup-doctor-core/server/doctorPlugins";
 import {
   STUDIO_BASE_TOOLCHAIN_IMAGE as TOOLCHAIN_IMAGE
-} from "../../../../server/lib/studioRuntimeIdentity.js";
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
   resolveStudioAppRoot
-} from "../../../../server/lib/studioRoots.js";
+} from "@local/ai-studio-core/server/studioRoots";
 import {
   createDoctorRepair,
   failDoctorCheck as failCheck,
   passDoctorCheck as passCheck
-} from "../../../../server/lib/doctorCheckItems.js";
+} from "@local/ai-studio-core/server/doctorCheckItems";
 import {
   buildDoctorToolchainArgs
-} from "../../../../server/lib/doctorToolchain.js";
+} from "@local/setup-doctor-core/server/doctorToolchain";
 import {
   packageManagerAvailabilityScript
-} from "../../../../server/lib/aiStudio/nodePackage.js";
+} from "@local/ai-studio-adapters/server/nodePackage";
 
 const TOOLCHAIN_DOCKERFILE = "tooling/studio-setup/Dockerfile";
 const TOOLCHAIN_CONTEXT = "tooling/studio-setup";

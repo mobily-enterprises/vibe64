@@ -7,8 +7,11 @@ export default Object.freeze({
   dependsOn: [
     "@jskit-ai/kernel",
     "@local/ai-studio-core",
+    "@local/ai-studio-runtime",
     "@local/ai-studio-project",
     "@local/ai-studio-accounts",
+    "@local/setup-doctor-core",
+    "@local/studio-terminal-core",
     "@local/studio-setup-doctor",
     "@local/adapter-setup-doctor",
     "@local/project-setup-doctor"

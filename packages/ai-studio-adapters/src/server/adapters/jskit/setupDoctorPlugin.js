@@ -1,9 +1,9 @@
 import {
   createDoctorPluginToolkit
-} from "../../../doctorPluginToolkit.js";
+} from "@local/setup-doctor-core/server/doctorPluginToolkit";
 import {
   STUDIO_BASE_TOOLCHAIN_IMAGE
-} from "../../../studioRuntimeIdentity.js";
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
   adapterToolchainBuildRepair,
   adapterToolchainBuildScript,
@@ -18,7 +18,7 @@ import {
 } from "./setupMariaDbRuntime.js";
 import {
   createRuntimeContainerDoctorEntries
-} from "../../runtimeContainers.js";
+} from "@local/studio-terminal-core/server/runtimeContainers";
 import {
   createJskitProjectSetupTerminalActions,
   createJskitProjectSetupChecks

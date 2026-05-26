@@ -2,25 +2,25 @@ import process from "node:process";
 
 import {
   gitToolchainMountArgs
-} from "./gitToolchainMounts.js";
+} from "@local/studio-terminal-core/server/gitToolchainMounts";
 import {
   targetRuntimeNetworkDockerArgs
-} from "./aiStudio/runtimeContainers.js";
+} from "@local/studio-terminal-core/server/runtimeContainers";
 import {
   STUDIO_DAEMON_PID_LABEL,
   STUDIO_BASE_TOOLCHAIN_IMAGE,
   studioDockerLabel
-} from "./studioRuntimeIdentity.js";
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
   studioPlaywrightBrowsersDockerArgs,
   studioToolHomeDockerArgs,
   studioUserCommand,
   studioUserStartupScript
-} from "./studioToolHome.js";
+} from "@local/studio-terminal-core/server/studioToolHome";
 import {
   hostUserIdentityEnvArgs,
   shellQuote
-} from "./shellCommands.js";
+} from "@local/studio-terminal-core/server/shellCommands";
 
 const STUDIO_TOOLCHAIN_CONTAINER_LABEL = studioDockerLabel("kind", "toolchain");
 const HOST_USER_TOOLCHAIN_HOME = "/tmp/studio-home";

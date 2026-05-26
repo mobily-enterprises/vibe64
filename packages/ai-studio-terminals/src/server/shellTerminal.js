@@ -6,20 +6,20 @@ import {
   startTerminalSession,
   subscribeTerminalSession,
   writeTerminalSession
-} from "../../../../server/lib/terminalSessions.js";
+} from "@local/studio-terminal-core/server/terminalSessions";
 import {
   removeDockerContainer
-} from "../../../../server/lib/containerRuntime.js";
+} from "@local/studio-terminal-core/server/containerRuntime";
 import {
   ensureTargetRuntimeNetwork
-} from "../../../../server/lib/aiStudio/runtimeContainers.js";
+} from "@local/studio-terminal-core/server/runtimeContainers";
 import {
   STUDIO_BASE_TOOLCHAIN_IMAGE,
   studioDockerLabel
-} from "../../../../server/lib/studioRuntimeIdentity.js";
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
   studioUserStartupScript
-} from "../../../../server/lib/studioToolHome.js";
+} from "@local/studio-terminal-core/server/studioToolHome";
 import {
   aiStudioResult,
   directoryExists,

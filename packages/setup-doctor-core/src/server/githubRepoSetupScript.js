@@ -1,9 +1,9 @@
 import {
   shellScript
-} from "./shellScript.js";
+} from "@local/studio-terminal-core/server/shellScript";
 import {
   shellQuote
-} from "./shellCommands.js";
+} from "@local/studio-terminal-core/server/shellCommands";
 
 function buildGithubRepoCreateOrLinkScript(repoName) {
   return shellScript([

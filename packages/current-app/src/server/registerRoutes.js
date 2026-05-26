@@ -12,7 +12,7 @@ import {
 } from "./actions.js";
 import { createAiStudioFeatureRoutes } from "@local/ai-studio-core/server/featureRoutes";
 import { registerTerminalWebSocketRoute } from "@local/ai-studio-core/server/terminalWebSocketRoutes";
-import { sendDoctorEventStream } from "../../../../server/lib/doctorStream.js";
+import { sendDoctorEventStream } from "@local/setup-doctor-core/server/doctorStream";
 
 const CURRENT_APP_SERVICE = "feature.current-app.service";
 

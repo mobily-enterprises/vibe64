@@ -6,7 +6,7 @@ import { registerRoutes } from "./registerRoutes.js";
 import {
   resolveStudioAppRoot,
   resolveStudioTargetRoot
-} from "../../../../server/lib/studioRoots.js";
+} from "@local/ai-studio-core/server/studioRoots";
 
 class AdapterSetupDoctorProvider {
   static id = "feature.adapter-setup-doctor";

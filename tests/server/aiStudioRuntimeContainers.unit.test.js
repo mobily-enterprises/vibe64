@@ -18,16 +18,16 @@ import {
   runtimeNetworkName,
   targetRuntimeNetworkDockerArgs,
   targetRuntimeNetworkEnsureCommand
-} from "../../server/lib/aiStudio/runtimeContainers.js";
+} from "@local/studio-terminal-core/server/runtimeContainers";
 import {
   createJskitMariaDbRuntimeContainer,
   managedMariaDbAccessInstructions,
   mariaDbCapabilitySql,
   startJskitMariaDbRepair
-} from "../../server/lib/aiStudio/adapters/jskit/setupMariaDbRuntime.js";
+} from "@local/ai-studio-adapters/server/adapters/jskit/setupMariaDbRuntime";
 import {
   createManagedDatabaseRuntimeContainer
-} from "../../server/lib/aiStudio/managedDatabases.js";
+} from "@local/studio-terminal-core/server/managedDatabases";
 import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
 
 test("runtime container descriptors describe arbitrary containers without service catalog coupling", async () => {

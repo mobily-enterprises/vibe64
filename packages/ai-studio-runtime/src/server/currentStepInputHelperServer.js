@@ -7,7 +7,7 @@ import process from "node:process";
 import {
   aiStudioErrorResponse,
   aiStudioStatusCode
-} from "./serverResponses.js";
+} from "@local/ai-studio-core/server/serverResponses";
 
 const HELPER_SOCKET_CONTAINER_DIR = "/ai-studio-helper";
 const HELPER_SOCKET_NAME = `current-step-input-${process.pid}.sock`;

@@ -6,11 +6,15 @@
   "exports": {
     ".": "./src/index.js",
     "./server": "./src/server/index.js",
+    "./server/core": "./src/server/core.js",
+    "./server/deepFreeze": "./src/server/deepFreeze.js",
+    "./server/doctorCheckItems": "./src/server/doctorCheckItems.js",
     "./server/featureRoutes": "./src/server/featureRoutes.js",
     "./server/localhostCheckBypass": "./src/server/localhostCheckBypass.js",
     "./server/localStudioRequest": "./src/server/localStudioRequest.js",
     "./server/serverResponses": "./src/server/serverResponses.js",
     "./server/sessionRealtimeEvents": "./src/server/sessionRealtimeEvents.js",
+    "./server/studioRoots": "./src/server/studioRoots.js",
     "./server/terminalWebSocketRoutes": "./src/server/terminalWebSocketRoutes.js",
     "./shared": "./src/shared/index.js"
   }

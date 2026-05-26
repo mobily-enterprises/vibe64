@@ -5,7 +5,7 @@ import { loadAppConfigFromAppRoot } from "@jskit-ai/kernel/server/support";
 import {
   createAiStudioWebLaunchTargetTerminalSpec,
   tcpReadinessProbeCommand
-} from "../../launchTargetTerminal.js";
+} from "@local/studio-terminal-core/server/launchTargetTerminal";
 import {
   JSKIT_ALLOW_SELF_TARGET_CONFIG
 } from "./adapter.js";

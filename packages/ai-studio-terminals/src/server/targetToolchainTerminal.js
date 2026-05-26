@@ -2,22 +2,22 @@ import process from "node:process";
 
 import {
   targetRuntimeNetworkDockerArgs
-} from "../../../../server/lib/aiStudio/runtimeContainers.js";
+} from "@local/studio-terminal-core/server/runtimeContainers";
 import {
   gitToolchainMountArgs
-} from "../../../../server/lib/gitToolchainMounts.js";
+} from "@local/studio-terminal-core/server/gitToolchainMounts";
 import {
   hostUserIdentityEnvArgs
-} from "../../../../server/lib/shellCommands.js";
+} from "@local/studio-terminal-core/server/shellCommands";
 import {
   STUDIO_BASE_TOOLCHAIN_IMAGE,
   STUDIO_DAEMON_PID_LABEL,
   studioDockerLabel
-} from "../../../../server/lib/studioRuntimeIdentity.js";
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
   studioPlaywrightBrowsersDockerArgs,
   studioToolHomeDockerArgs
-} from "../../../../server/lib/studioToolHome.js";
+} from "@local/studio-terminal-core/server/studioToolHome";
 import {
   terminalEnvironmentDockerArgs
 } from "./terminalEnvironment.js";

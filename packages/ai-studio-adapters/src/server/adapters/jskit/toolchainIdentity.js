@@ -1,6 +1,6 @@
 import {
   AI_STUDIO_RUNTIME_NAME
-} from "../../../studioRuntimeIdentity.js";
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 
 const JSKIT_TOOLCHAIN_IMAGE = `${AI_STUDIO_RUNTIME_NAME}-jskit-toolchain:0.1.0`;
 

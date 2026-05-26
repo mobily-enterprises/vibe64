@@ -7,7 +7,7 @@ import {
 } from "./adapter.js";
 import {
   normalizeText
-} from "./core.js";
+} from "@local/ai-studio-core/server/core";
 
 const execFileAsync = promisify(execFile);
 const GITHUB_COMMAND_TIMEOUT_MS = 30_000;

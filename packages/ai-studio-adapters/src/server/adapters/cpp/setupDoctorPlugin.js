@@ -3,10 +3,10 @@ import {
   failDoctorCheck as failCheck,
   hardStopDoctorCheck as hardStopCheck,
   passDoctorCheck as passCheck
-} from "../../../doctorCheckItems.js";
+} from "@local/ai-studio-core/server/doctorCheckItems";
 import {
   createDoctorPluginToolkit
-} from "../../../doctorPluginToolkit.js";
+} from "@local/setup-doctor-core/server/doctorPluginToolkit";
 import {
   adapterToolchainBuildRepair,
   adapterToolchainBuildScript,

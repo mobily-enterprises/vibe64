@@ -7,24 +7,24 @@ import {
 import {
   TargetAdapter,
   adapterView
-} from "./adapter.js";
+} from "@local/ai-studio-adapters/server/adapter";
 import {
   aiStudioError,
   normalizeText
-} from "./core.js";
+} from "@local/ai-studio-core/server/core";
 import {
   promptSessionBriefing
-} from "./promptRenderer.js";
+} from "@local/ai-studio-adapters/server/promptRenderer";
 import {
   STUDIO_CONTEXT_END_MARKER,
   STUDIO_CONTEXT_START_MARKER,
   visibleStudioPromptText,
   wrapPromptWithStudioContext
-} from "./promptMarkers.js";
+} from "@local/ai-studio-adapters/server/promptMarkers";
 import {
   runtimeContainerManagedServicesPromptFacts,
   runtimeContainerPromptFacts
-} from "./runtimeContainers.js";
+} from "@local/studio-terminal-core/server/runtimeContainers";
 import {
   AI_STUDIO_WORKFLOW_DEFINITION_IDS,
   DEFAULT_AI_STUDIO_WORKFLOW_DEFINITION_ID,

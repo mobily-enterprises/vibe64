@@ -2,13 +2,13 @@ import path from "node:path";
 
 import {
   createDoctorRepair as createRepair
-} from "./doctorCheckItems.js";
+} from "@local/ai-studio-core/server/doctorCheckItems";
 import {
   buildDoctorTerminalArgs
 } from "./doctorToolchain.js";
 import {
   ensureTargetRuntimeNetwork
-} from "./aiStudio/runtimeContainers.js";
+} from "@local/studio-terminal-core/server/runtimeContainers";
 import {
   runDoctorGh as runGh,
   runDoctorGit as runGit
@@ -25,13 +25,13 @@ import {
   hostUserDockerArgs,
   hostUserIdentityEnvArgs,
   shellQuote
-} from "./shellCommands.js";
+} from "@local/studio-terminal-core/server/shellCommands";
 import {
   shellScript
-} from "./shellScript.js";
+} from "@local/studio-terminal-core/server/shellScript";
 import {
   startTerminalSession
-} from "./terminalSessions.js";
+} from "@local/studio-terminal-core/server/terminalSessions";
 
 const GIT_INIT_ACTION_ID = "terminal-git-init";
 const GH_CREATE_REPO_ACTION_ID = "terminal-gh-create-repo";

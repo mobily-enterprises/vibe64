@@ -11,7 +11,7 @@ import {
   javascriptCodeIndexCommand,
   packageManagerScriptCommand,
   phpCodeIndexCommand
-} from "../../server/lib/aiStudio/codeIndexCommands.js";
+} from "@local/ai-studio-adapters/server/codeIndexCommands";
 import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
 
 const exec = promisify(execCallback);

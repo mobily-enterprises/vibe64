@@ -1,16 +1,18 @@
 import {
-  AiStudioSessionRuntime,
+  AiStudioSessionRuntime
+} from "@local/ai-studio-runtime/server/runtime";
+import {
   createAiStudioAdapterRegistry,
   createAiStudioProjectConfigStore,
   createAiStudioProjectTypeStore,
   normalizeConfigDefinition
-} from "../../../../server/lib/aiStudio/index.js";
+} from "@local/ai-studio-adapters/server";
 import {
   aiStudioResult
 } from "@local/ai-studio-core/server/serverResponses";
 import {
   resolveStudioTargetRoot
-} from "../../../../server/lib/studioRoots.js";
+} from "@local/ai-studio-core/server/studioRoots";
 
 function resolveAiStudioTargetRoot(targetRoot) {
   return resolveStudioTargetRoot({

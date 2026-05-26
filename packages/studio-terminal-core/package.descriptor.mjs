@@ -1,0 +1,47 @@
+export default Object.freeze({
+  packageVersion: 1,
+  packageId: "@local/studio-terminal-core",
+  version: "0.1.0",
+  kind: "runtime",
+  description: "Shared Studio terminal, shell, Docker, and managed runtime primitives.",
+  dependsOn: [
+    "@local/ai-studio-core"
+  ],
+  capabilities: {
+    provides: [],
+    requires: []
+  },
+  runtime: {
+    server: {
+      providers: []
+    },
+    client: {
+      providers: []
+    }
+  },
+  metadata: {
+    apiSummary: {
+      surfaces: [
+        {
+          subpath: "./server",
+          summary: "Exports terminal session lifecycle, shell helpers, Studio runtime identity, Docker/container runtime helpers, and managed services."
+        }
+      ]
+    }
+  },
+  mutations: {
+    dependencies: {
+      runtime: {},
+      dev: {}
+    },
+    packageJson: {
+      scripts: {}
+    },
+    procfile: {},
+    vite: {
+      proxy: []
+    },
+    text: [],
+    files: []
+  }
+});

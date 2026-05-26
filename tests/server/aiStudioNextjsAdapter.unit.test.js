@@ -5,25 +5,25 @@ import test from "node:test";
 
 import {
   AiStudioSessionRuntime
-} from "../../server/lib/aiStudio/index.js";
+} from "@local/ai-studio-runtime/server";
 import {
   createAiStudioAdapterRegistry
-} from "../../server/lib/aiStudio/adapters/registry.js";
+} from "@local/ai-studio-adapters/server/adapters/registry";
 import {
   NEXTJS_AI_STUDIO_COMMANDS,
   createNextjsLaunchDescriptor,
   createNextjsLaunchTargetTerminalSpec,
   createNextjsTargetAdapter
-} from "../../server/lib/aiStudio/adapters/nextjs/index.js";
+} from "@local/ai-studio-adapters/server/adapters/nextjs/index";
 import {
   expectedNextjsDatabaseUrl,
   nextjsDatabaseEnvWriteScript
-} from "../../server/lib/aiStudio/adapters/nextjs/databaseRuntime.js";
+} from "@local/ai-studio-adapters/server/adapters/nextjs/databaseRuntime";
 import {
   createNextAppCommand,
   createNextAppScript,
   createNextjsSetupDoctorPlugin
-} from "../../server/lib/aiStudio/adapters/nextjs/setupDoctorPlugin.js";
+} from "@local/ai-studio-adapters/server/adapters/nextjs/setupDoctorPlugin";
 import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
 
 async function writeProjectFile(root, relativePath, text = "") {

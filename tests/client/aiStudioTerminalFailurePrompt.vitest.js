@@ -7,7 +7,7 @@ import {
 } from "../../src/lib/aiStudioTerminalFailurePrompt.js";
 import {
   questionBatchLimitInstruction
-} from "../../server/lib/aiStudio/promptQuestionPolicy.js";
+} from "@local/ai-studio-adapters/server/promptQuestionPolicy";
 
 describe("AI Studio terminal failure prompt", () => {
   it("captures the last 200 terminal lines", () => {

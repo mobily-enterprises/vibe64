@@ -1,6 +1,6 @@
 import {
   shellQuote
-} from "../../../shellCommands.js";
+} from "@local/studio-terminal-core/server/shellCommands";
 import {
   cppBuildTypeValue,
   cppStandardNumber,

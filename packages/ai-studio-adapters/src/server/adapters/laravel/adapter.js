@@ -4,11 +4,11 @@ import { fileURLToPath } from "node:url";
 import {
   dockerCommand,
   hostUserDockerArgs
-} from "../../../shellCommands.js";
+} from "@local/studio-terminal-core/server/shellCommands";
 import {
   normalizeText
-} from "../../core.js";
-import { deepFreeze } from "../../deepFreeze.js";
+} from "@local/ai-studio-core/server/core";
+import { deepFreeze } from "@local/ai-studio-core/server/deepFreeze";
 import {
   AiStudioDescribedWorkflowTargetAdapter,
   inspectDescribedProject
@@ -33,10 +33,10 @@ import {
 } from "../../nodePackage.js";
 import {
   buildDoctorToolchainArgs
-} from "../../../doctorToolchain.js";
+} from "@local/setup-doctor-core/server/doctorToolchain";
 import {
   targetRuntimeNetworkEnsureCommand
-} from "../../runtimeContainers.js";
+} from "@local/studio-terminal-core/server/runtimeContainers";
 import {
   composerDependencyNames,
   composerProjectName,

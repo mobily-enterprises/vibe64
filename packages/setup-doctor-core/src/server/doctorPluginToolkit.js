@@ -9,21 +9,21 @@ import {
   createDoctorRepair,
   failDoctorCheck,
   passDoctorCheck
-} from "./doctorCheckItems.js";
+} from "@local/ai-studio-core/server/doctorCheckItems";
 import {
   buildDoctorToolchainArgs
 } from "./doctorToolchain.js";
 import {
   ensureTargetRuntimeNetwork
-} from "./aiStudio/runtimeContainers.js";
+} from "@local/studio-terminal-core/server/runtimeContainers";
 import {
   deepFreeze
-} from "./aiStudio/deepFreeze.js";
+} from "@local/ai-studio-core/server/deepFreeze";
 import {
   dockerCommand,
   runHostCommand,
   shellQuote
-} from "./shellCommands.js";
+} from "@local/studio-terminal-core/server/shellCommands";
 
 function resolveOption(option, context = {}) {
   return typeof option === "function" ? option(context) : option;

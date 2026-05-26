@@ -6,7 +6,10 @@ export default Object.freeze({
   description: "Target adapter readiness checks and repairs for Studio.",
   dependsOn: [
     "@jskit-ai/kernel",
-    "@local/ai-studio-project"
+    "@local/ai-studio-core",
+    "@local/ai-studio-project",
+    "@local/setup-doctor-core",
+    "@local/studio-terminal-core"
   ],
   capabilities: {
     provides: [

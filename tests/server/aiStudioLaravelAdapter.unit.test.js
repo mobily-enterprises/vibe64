@@ -6,16 +6,16 @@ import test from "node:test";
 import {
   AI_STUDIO_WORKFLOW_DEFINITION_IDS,
   AiStudioSessionRuntime
-} from "../../server/lib/aiStudio/index.js";
+} from "@local/ai-studio-runtime/server";
 import {
   createAiStudioAdapterRegistry
-} from "../../server/lib/aiStudio/adapters/registry.js";
+} from "@local/ai-studio-adapters/server/adapters/registry";
 import {
   LARAVEL_AI_STUDIO_COMMANDS,
   createLaravelLaunchDescriptor,
   createLaravelLaunchTargetTerminalSpec,
   createLaravelTargetAdapter
-} from "../../server/lib/aiStudio/adapters/laravel/index.js";
+} from "@local/ai-studio-adapters/server/adapters/laravel/index";
 import {
   LARAVEL_MARIADB_HOST_PORT,
   LARAVEL_MYSQL_HOST_PORT,
@@ -23,17 +23,17 @@ import {
   createLaravelRuntimeContainers,
   laravelDatabaseEnvLines,
   laravelDatabaseEnvWriteScript
-} from "../../server/lib/aiStudio/adapters/laravel/databaseRuntime.js";
+} from "@local/ai-studio-adapters/server/adapters/laravel/databaseRuntime";
 import {
   readComposerJson
-} from "../../server/lib/aiStudio/adapters/laravel/composerPackage.js";
+} from "@local/ai-studio-adapters/server/adapters/laravel/composerPackage";
 import {
   createLaravelSetupDoctorPlugin,
   laravelNewCommand
-} from "../../server/lib/aiStudio/adapters/laravel/setupDoctorPlugin.js";
+} from "@local/ai-studio-adapters/server/adapters/laravel/setupDoctorPlugin";
 import {
   LARAVEL_TOOLCHAIN_IMAGE
-} from "../../server/lib/aiStudio/adapters/laravel/toolchainIdentity.js";
+} from "@local/ai-studio-adapters/server/adapters/laravel/toolchainIdentity";
 import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
 
 async function writeProjectFile(root, relativePath, text = "") {

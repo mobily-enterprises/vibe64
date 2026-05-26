@@ -1,10 +1,10 @@
 import {
   aiStudioError,
   normalizeText
-} from "./core.js";
+} from "@local/ai-studio-core/server/core";
 import {
   deepFreeze
-} from "./deepFreeze.js";
+} from "@local/ai-studio-core/server/deepFreeze";
 
 const AI_STUDIO_APPLICATION_TYPE_WEB = "web_application";
 const AI_STUDIO_APPLICATION_TYPE_PHONE = "phone_app";

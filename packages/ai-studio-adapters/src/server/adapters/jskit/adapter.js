@@ -25,8 +25,8 @@ import {
 } from "../../workflowAdapter.js";
 import {
   normalizeText
-} from "../../core.js";
-import { deepFreeze } from "../../deepFreeze.js";
+} from "@local/ai-studio-core/server/core";
+import { deepFreeze } from "@local/ai-studio-core/server/deepFreeze";
 import {
   createJskitTargetScriptTerminalSpec,
   inspectJskitCurrentApp,

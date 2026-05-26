@@ -6,7 +6,9 @@ export default Object.freeze({
   description: "Owns AI Studio project type selection, readiness, and adapter registry access.",
   dependsOn: [
     "@jskit-ai/kernel",
-    "@local/ai-studio-core"
+    "@local/ai-studio-adapters",
+    "@local/ai-studio-core",
+    "@local/ai-studio-runtime"
   ],
   capabilities: {
     provides: [

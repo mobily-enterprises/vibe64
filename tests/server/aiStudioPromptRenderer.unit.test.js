@@ -8,13 +8,13 @@ import {
   PromptRenderer,
   promptSessionBriefing,
   renderPromptTemplate
-} from "../../server/lib/aiStudio/index.js";
+} from "@local/ai-studio-adapters/server";
 import {
   questionBatchLimitInstruction
-} from "../../server/lib/aiStudio/promptQuestionPolicy.js";
+} from "@local/ai-studio-adapters/server/promptQuestionPolicy";
 import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
 
-const SYSTEM_PROMPT_PACK_ROOT = fileURLToPath(new URL("../../server/lib/aiStudio/systemPrompts", import.meta.url));
+const SYSTEM_PROMPT_PACK_ROOT = fileURLToPath(new URL("../../packages/ai-studio-adapters/src/server/systemPrompts", import.meta.url));
 
 test("ai-studio prompt renderer renders explicit session context into prompt templates", async () => {
   await withTemporaryRoot(async (promptPackRoot) => {

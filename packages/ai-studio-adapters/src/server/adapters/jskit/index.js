@@ -10,7 +10,7 @@ import {
 } from "./adapter.js";
 import {
   deepFreeze
-} from "../../deepFreeze.js";
+} from "@local/ai-studio-core/server/deepFreeze";
 import {
   AI_STUDIO_WORKFLOW_COMMANDS,
   createAiStudioWorkflowCommandTerminalSpec

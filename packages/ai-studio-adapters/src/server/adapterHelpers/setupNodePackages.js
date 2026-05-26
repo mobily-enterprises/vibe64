@@ -4,13 +4,13 @@ import {
   blockedDoctorCheck as blockedCheck,
   formatDoctorList as formatList,
   passDoctorCheck as passCheck
-} from "../../doctorCheckItems.js";
+} from "@local/ai-studio-core/server/doctorCheckItems";
 import {
   shellScript
-} from "../../shellScript.js";
+} from "@local/studio-terminal-core/server/shellScript";
 import {
   writableHostUserDockerArgs
-} from "../dockerRuntime.js";
+} from "@local/studio-terminal-core/server/dockerRuntime";
 import {
   directDependencyNames,
   packageScript

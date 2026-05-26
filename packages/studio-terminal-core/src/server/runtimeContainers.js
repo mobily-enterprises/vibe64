@@ -5,26 +5,26 @@ import {
   blockedDoctorCheck as blockedCheck,
   createDoctorRepair,
   passDoctorCheck as passCheck
-} from "../doctorCheckItems.js";
+} from "@local/ai-studio-core/server/doctorCheckItems";
 import {
   dockerCommand,
   runHostCommand,
   shellQuote,
   stableHash
-} from "../shellCommands.js";
+} from "./shellCommands.js";
 import {
   STUDIO_DAEMON_PID_LABEL,
   studioDockerLabel
-} from "../studioRuntimeIdentity.js";
+} from "./studioRuntimeIdentity.js";
 import {
   normalizeText
-} from "./core.js";
+} from "@local/ai-studio-core/server/core";
 import {
   managedDatabasePromptServiceFacts
 } from "./managedDatabases.js";
 import {
   normalizePlainObject
-} from "./serverResponses.js";
+} from "@local/ai-studio-core/server/serverResponses";
 
 const AI_STUDIO_RUNTIME_HOST_ALIAS = "ai-studio-host";
 const RUNTIME_CONTAINER_KIND = "runtime-container";

@@ -6,10 +6,10 @@ import test from "node:test";
 
 import {
   createPrOnGhTerminalSpec
-} from "../../server/lib/aiStudio/workflowCommandTerminal/issuePr.js";
+} from "@local/ai-studio-adapters/server/workflowCommandTerminal/issuePr";
 import {
   mergePrTerminalSpec
-} from "../../server/lib/aiStudio/workflowCommandTerminal/mergeSync.js";
+} from "@local/ai-studio-adapters/server/workflowCommandTerminal/mergeSync";
 import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
 
 const execFileAsync = promisify(execFile);

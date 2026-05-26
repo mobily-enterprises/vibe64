@@ -1,6 +1,6 @@
 import {
   normalizeText
-} from "./core.js";
+} from "@local/ai-studio-core/server/core";
 import {
   TargetAdapter,
   adapterActionResult,

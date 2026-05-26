@@ -14,23 +14,23 @@ import {
   startTerminalSession,
   subscribeTerminalSession,
   writeTerminalSession
-} from "../../../../server/lib/terminalSessions.js";
+} from "@local/studio-terminal-core/server/terminalSessions";
 import {
   aiStudioResult
 } from "@local/ai-studio-core/server/serverResponses";
 import {
   assertAiStudioSetupReady,
   readAiStudioSetupReadiness
-} from "../../../../server/lib/aiStudio/setupReadiness.js";
+} from "@local/ai-studio-runtime/server/setupReadiness";
 import {
   resolveStudioTargetRoot
-} from "../../../../server/lib/studioRoots.js";
+} from "@local/ai-studio-core/server/studioRoots";
 import {
   shellQuote
-} from "../../../../server/lib/shellCommands.js";
+} from "@local/studio-terminal-core/server/shellCommands";
 import {
   ensureTargetRuntimeNetwork
-} from "../../../../server/lib/aiStudio/runtimeContainers.js";
+} from "@local/studio-terminal-core/server/runtimeContainers";
 
 const PROJECT_SCRIPT_SOURCE = "project";
 const ADAPTER_SCRIPT_SOURCE = "adapter";

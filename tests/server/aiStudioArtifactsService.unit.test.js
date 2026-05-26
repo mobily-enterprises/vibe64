@@ -3,19 +3,21 @@ import { spawn } from "node:child_process";
 import test from "node:test";
 
 import {
-  AiStudioSessionRuntime,
+  AiStudioSessionRuntime
+} from "@local/ai-studio-runtime/server";
+import {
   FakeTargetAdapter
-} from "../../server/lib/aiStudio/index.js";
+} from "@local/ai-studio-adapters/server";
 import {
   createService
 } from "../../packages/ai-studio-artifacts/src/server/service.js";
 import {
   helperSocketHostPath,
   prepareCurrentStepInputHelper
-} from "../../server/lib/aiStudio/currentStepInputHelperServer.js";
+} from "@local/ai-studio-runtime/server/currentStepInputHelperServer";
 import {
   _testing as coreMaintenanceTesting
-} from "../../server/lib/aiStudio/workflowModules/coreMaintenance.js";
+} from "@local/ai-studio-runtime/server/workflowModules/coreMaintenance";
 import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
 
 const maintenanceWorkflowDefinitionIds = coreMaintenanceTesting.workflowDefinitionIds;

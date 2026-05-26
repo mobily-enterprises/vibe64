@@ -1,9 +1,9 @@
 import {
   aiStudioError
-} from "./core.js";
+} from "@local/ai-studio-core/server/core";
 import {
   runDoctorStep
-} from "../doctorStream.js";
+} from "@local/setup-doctor-core/server/doctorStream";
 
 const SETUP_STAGES = Object.freeze([
   {

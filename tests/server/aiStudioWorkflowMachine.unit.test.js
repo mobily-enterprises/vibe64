@@ -8,30 +8,32 @@ import {
   AI_STUDIO_WORKFLOW_DEFINITION_IDS,
   AiStudioSessionRuntime,
   DEFAULT_AI_STUDIO_WORKFLOW_DEFINITION_ID,
-  FakeTargetAdapter,
-  PromptRenderer,
   WorkflowMachine,
   workflowForDefinition
-} from "../../server/lib/aiStudio/index.js";
+} from "@local/ai-studio-runtime/server";
+import {
+  FakeTargetAdapter,
+  PromptRenderer
+} from "@local/ai-studio-adapters/server";
 import {
   _testing as workflowRegistryTesting,
   workflowStepMachineForStep
-} from "../../server/lib/aiStudio/workflowRegistry.js";
+} from "@local/ai-studio-runtime/server/workflowRegistry";
 import {
   currentStepPromptInputInstruction
-} from "../../server/lib/aiStudio/workflowStepMachines.js";
+} from "@local/ai-studio-runtime/server/workflowStepMachines";
 import {
   _testing as coreCodingTesting
-} from "../../server/lib/aiStudio/workflowModules/coreCoding.js";
+} from "@local/ai-studio-runtime/server/workflowModules/coreCoding";
 import {
   _testing as coreLifecycleTesting
-} from "../../server/lib/aiStudio/workflowModules/coreLifecycle.js";
+} from "@local/ai-studio-runtime/server/workflowModules/coreLifecycle";
 import {
   _testing as coreMaintenanceTesting
-} from "../../server/lib/aiStudio/workflowModules/coreMaintenance.js";
+} from "@local/ai-studio-runtime/server/workflowModules/coreMaintenance";
 import {
   questionBatchLimitInstruction
-} from "../../server/lib/aiStudio/promptQuestionPolicy.js";
+} from "@local/ai-studio-adapters/server/promptQuestionPolicy";
 import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
 
 const maintenanceModuleId = coreMaintenanceTesting.moduleId;

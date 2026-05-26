@@ -3,10 +3,10 @@ import {
   createDoctorRepair,
   hardStopDoctorCheck as hardStopCheck,
   passDoctorCheck as passCheck
-} from "../../doctorCheckItems.js";
+} from "@local/ai-studio-core/server/doctorCheckItems";
 import {
   dockerCommand
-} from "../../shellCommands.js";
+} from "@local/studio-terminal-core/server/shellCommands";
 import {
   formatDatabaseEndpoint,
   loopbackDatabaseHost
