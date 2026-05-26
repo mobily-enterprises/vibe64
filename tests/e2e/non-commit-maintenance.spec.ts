@@ -74,7 +74,7 @@ test.describe("non-commit maintenance agent chat", () => {
     }
   });
 
-  test("runs the agent chat profile in Autopilot and displays the saved answer artifact", async ({ page }) => {
+  test("runs the agent chat definition in Autopilot and displays the saved answer artifact", async ({ page }) => {
     await page.goto(`${BASE_URL}/home`);
     await createNonCommitMaintenanceSession(page);
 
@@ -121,7 +121,7 @@ test.describe("non-commit maintenance agent chat", () => {
     await expect(responseRegion).toContainText(REALLY_RESPONSE_TEXT);
   });
 
-  test("runs the agent chat profile in Inspect and displays the same saved answer artifact", async ({ page }) => {
+  test("runs the agent chat definition in Inspect and displays the same saved answer artifact", async ({ page }) => {
     await page.goto(`${BASE_URL}/home?mode=inspect`);
     await createNonCommitMaintenanceSession(page);
 
@@ -131,8 +131,8 @@ test.describe("non-commit maintenance agent chat", () => {
     await expect(page.getByText("Create worktree finished.")).toBeVisible();
     await page.getByRole("button", { name: "Next step" }).click();
 
-    await page.getByRole("button", { name: "Install checklist items" }).click();
-    await expect(page.getByText("Install checklist items finished.")).toBeVisible();
+    await page.getByRole("button", { name: "Install dependencies" }).click();
+    await expect(page.getByText("Install dependencies finished.")).toBeVisible();
     await page.getByRole("button", { name: "Next step" }).click();
 
     await page.getByRole("button", { name: "Ask Codex" }).click();
@@ -229,7 +229,7 @@ async function mockAgentChatRoutes(page: Page, runtime: AiStudioSessionRuntime) 
     if (method === "POST" && url.pathname === "/api/ai-studio/sessions") {
       const created = await runtime.createSession({
         sessionId: SESSION_ID,
-        workflowProfile: String(request.postDataJSON()?.workflowProfile || "")
+        workflowDefinition: String(request.postDataJSON()?.workflowDefinition || "")
       });
       await fulfillJson(route, await runtime.advance(created.sessionId));
       return;
@@ -407,7 +407,7 @@ async function mockAgentChatRoutes(page: Page, runtime: AiStudioSessionRuntime) 
 
 async function sessionListPayload(runtime: AiStudioSessionRuntime) {
   const sessions = await runtime.listSessions();
-  const creation = await runtime.workflowProfileCreationOptions();
+  const creation = await runtime.workflowDefinitionCreationOptions();
   const openSessionCount = sessions.filter((session) => !["abandoned", "finished"].includes(String(session.status || ""))).length;
   return {
     creation: {
@@ -579,7 +579,7 @@ async function mockAgentChatBrowserPrimitives(page: Page) {
             this.actionLabel = "Create worktree";
           }
           if (terminalId.includes("install_dependencies")) {
-            this.actionLabel = "Install checklist items";
+            this.actionLabel = "Install dependencies";
           }
         } else if (pathname.includes("/codex-terminal/")) {
           this.terminalKind = "codex";
@@ -671,7 +671,7 @@ function actionLabel(actionId: string) {
     return "Create worktree";
   }
   if (actionId === "install_dependencies") {
-    return "Install checklist items";
+    return "Install dependencies";
   }
   return actionId;
 }

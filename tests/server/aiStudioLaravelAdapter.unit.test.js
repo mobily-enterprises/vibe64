@@ -4,7 +4,7 @@ import path from "node:path";
 import test from "node:test";
 
 import {
-  AI_STUDIO_WORKFLOW_PROFILE_IDS,
+  AI_STUDIO_WORKFLOW_DEFINITION_IDS,
   AiStudioSessionRuntime
 } from "../../server/lib/aiStudio/index.js";
 import {
@@ -222,7 +222,7 @@ test("laravel seed issue definition uses the current-step input contract before 
     await runtime.createSession({
       initialStep: "seed_application_defined",
       sessionId: "laravel_seed_prompt",
-      workflowProfile: AI_STUDIO_WORKFLOW_PROFILE_IDS.SEED_APPLICATION
+      workflowDefinition: AI_STUDIO_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION
     });
 
     const initialSession = await runtime.getSession("laravel_seed_prompt");

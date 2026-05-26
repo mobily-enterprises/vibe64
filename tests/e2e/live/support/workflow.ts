@@ -74,11 +74,11 @@ async function readCurrentAppReadiness(page: Page) {
 async function createSession(page: Page) {
   await gotoSessions(page);
   await clickButton(page, "New Session");
-  const bigFeatureProfile = page.getByText("Big feature", {
+  const bigFeatureDefinition = page.getByText("Big feature", {
     exact: true
   });
-  if (await bigFeatureProfile.isVisible().catch(() => false)) {
-    await bigFeatureProfile.click();
+  if (await bigFeatureDefinition.isVisible().catch(() => false)) {
+    await bigFeatureDefinition.click();
   }
   await expectButtonEnabled(page, "Use new branch");
   await expectButtonEnabled(page, "Use existing PR");

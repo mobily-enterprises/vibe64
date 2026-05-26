@@ -5,25 +5,27 @@ import test from "node:test";
 
 import {
   AI_STUDIO_SESSION_STATUS,
-  AI_STUDIO_CORE_WORKFLOW_MODULE_ID,
-  AI_STUDIO_WORKFLOW_PROFILE_IDS,
-  AI_STUDIO_WORKFLOW_PROFILES,
+  AI_STUDIO_WORKFLOW_DEFINITION_IDS,
   AiStudioSessionRuntime,
-  createWorkflowRegistry,
-  DEFAULT_AI_STUDIO_WORKFLOW,
-  DEFAULT_AI_STUDIO_WORKFLOW_PROFILE_ID,
+  DEFAULT_AI_STUDIO_WORKFLOW_DEFINITION_ID,
   FakeTargetAdapter,
   PromptRenderer,
-  registeredWorkflowRecords,
-  registeredWorkflowStepRecords,
   WorkflowMachine,
-  workflowForProfile,
-  workflowStepPresentation
+  workflowForDefinition
 } from "../../server/lib/aiStudio/index.js";
+import {
+  _testing as workflowRegistryTesting
+} from "../../server/lib/aiStudio/workflowRegistry.js";
 import {
   currentStepPromptInputInstruction,
   stepMachineForStep
 } from "../../server/lib/aiStudio/workflowStepMachines.js";
+import {
+  _testing as coreCodingTesting
+} from "../../server/lib/aiStudio/workflowModules/coreCoding.js";
+import {
+  _testing as coreLifecycleTesting
+} from "../../server/lib/aiStudio/workflowModules/coreLifecycle.js";
 import {
   _testing as coreMaintenanceTesting
 } from "../../server/lib/aiStudio/workflowModules/coreMaintenance.js";
@@ -32,8 +34,10 @@ import {
 } from "../../server/lib/aiStudio/promptQuestionPolicy.js";
 import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
 
-const CORE_MAINTENANCE_WORKFLOW_MODULE_ID = coreMaintenanceTesting.moduleId;
-const CORE_MAINTENANCE_WORKFLOW_PROFILE_IDS = coreMaintenanceTesting.workflowProfileIds;
+const maintenanceModuleId = coreMaintenanceTesting.moduleId;
+const maintenanceWorkflowDefinitionIds = coreMaintenanceTesting.workflowDefinitionIds;
+const codingModuleId = coreCodingTesting.moduleId;
+const lifecycleModuleId = coreLifecycleTesting.moduleId;
 
 class PromptRendererFakeAdapter extends FakeTargetAdapter {
   constructor({
@@ -119,7 +123,7 @@ test("ai-studio runtime session view exposes workflow steps, current actions, an
       sessionId: "workflow_view"
     });
 
-    assert.equal(session.workflowId, DEFAULT_AI_STUDIO_WORKFLOW.id);
+    assert.equal(session.workflowId, DEFAULT_AI_STUDIO_WORKFLOW_DEFINITION_ID);
     assert.equal(session.currentStep, "session_created");
     assert.deepEqual(session.completedSteps, []);
     assert.equal(session.next.visible, true);
@@ -281,8 +285,9 @@ test("ai-studio runtime presentation exposes durable background task status", as
 
 test("ai-studio runtime presentation snapshots come from workflow step metadata", async () => {
   await withTemporaryRoot(async (targetRoot) => {
+    const changesAcceptedStep = workflowForDefinition().steps.find((step) => step.id === "changes_accepted");
     assert.deepEqual(
-      workflowStepPresentation("changes_accepted").automation.recheckAfterPrompt,
+      changesAcceptedStep.presentation.automation.recheckAfterPrompt,
       {
         intentId: "recheck_after_final_tweak",
         label: "Recheck changes",
@@ -316,7 +321,7 @@ test("ai-studio runtime presentation snapshots come from workflow step metadata"
     const maintenanceConversation = await runtime.createSession({
       initialStep: "maintenance_conversation",
       sessionId: "presentation_snapshot_conversation",
-      workflowProfile: CORE_MAINTENANCE_WORKFLOW_PROFILE_IDS.NON_COMMIT_MAINTENANCE
+      workflowDefinition: maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
     });
     const optionalCheck = await runtime.createSession({
       initialStep: "deep_ui_check_run",
@@ -336,7 +341,7 @@ test("ai-studio runtime presentation snapshots come from workflow step metadata"
     const finished = await runtime.createSession({
       initialStep: "local_session_finished",
       sessionId: "presentation_snapshot_finished",
-      workflowProfile: CORE_MAINTENANCE_WORKFLOW_PROFILE_IDS.NON_COMMIT_MAINTENANCE
+      workflowDefinition: maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
     });
 
     assert.deepEqual({
@@ -643,7 +648,7 @@ test("ai-studio runtime exposes and runs the server-owned conversation intent", 
     await runtime.createSession({
       initialStep: "maintenance_conversation",
       sessionId: "presentation_conversation_intent",
-      workflowProfile: CORE_MAINTENANCE_WORKFLOW_PROFILE_IDS.NON_COMMIT_MAINTENANCE
+      workflowDefinition: maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
     });
 
     const session = await runtime.getSession("presentation_conversation_intent");
@@ -774,14 +779,14 @@ test("ai-studio runtime owns final-review follow-up and merge decision intents",
   });
 });
 
-test("ai-studio workflow profiles are ordered step lists with self-contained step metadata", () => {
-  const bigFeature = workflowForProfile(AI_STUDIO_WORKFLOW_PROFILE_IDS.BIG_FEATURE);
-  const generalCoding = workflowForProfile(AI_STUDIO_WORKFLOW_PROFILE_IDS.GENERAL_CODING);
-  const nonCodeMaintenance = workflowForProfile(CORE_MAINTENANCE_WORKFLOW_PROFILE_IDS.NON_CODE_MAINTENANCE);
-  const seedApplication = workflowForProfile(AI_STUDIO_WORKFLOW_PROFILE_IDS.SEED_APPLICATION);
-  const nonCommitMaintenance = workflowForProfile(CORE_MAINTENANCE_WORKFLOW_PROFILE_IDS.NON_COMMIT_MAINTENANCE);
+test("ai-studio workflow definitions are ordered step lists with self-contained step metadata", () => {
+  const bigFeature = workflowForDefinition(AI_STUDIO_WORKFLOW_DEFINITION_IDS.BIG_FEATURE);
+  const generalCoding = workflowForDefinition(AI_STUDIO_WORKFLOW_DEFINITION_IDS.GENERAL_CODING);
+  const nonCodeMaintenance = workflowForDefinition(maintenanceWorkflowDefinitionIds.NON_CODE_MAINTENANCE);
+  const seedApplication = workflowForDefinition(AI_STUDIO_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION);
+  const nonCommitMaintenance = workflowForDefinition(maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE);
 
-  assert.equal(bigFeature.id, DEFAULT_AI_STUDIO_WORKFLOW_PROFILE_ID);
+  assert.equal(bigFeature.id, DEFAULT_AI_STUDIO_WORKFLOW_DEFINITION_ID);
   assert.ok(bigFeature.steps.find((step) => step.id === "issue_file_created")?.autopilot.stop);
   assert.ok(seedApplication.steps.find((step) => step.id === "seed_application_defined")?.autopilot.stop);
   assert.deepEqual(seedApplication.steps.map((step) => step.id).slice(0, 6), [
@@ -797,8 +802,8 @@ test("ai-studio workflow profiles are ordered step lists with self-contained ste
       seedApplication.steps.findIndex((step) => step.id === "seed_plan_executed"),
     true
   );
-  assert.equal(generalCoding.profile.label, "General coding");
-  assert.equal(generalCoding.profile.sessionWord, "coding");
+  assert.equal(generalCoding.definition.label, "General coding");
+  assert.equal(generalCoding.definition.sessionWord, "coding");
   assert.deepEqual(generalCoding.steps.map((step) => step.id), [
     "session_created",
     "work_source_selected",
@@ -863,8 +868,8 @@ test("ai-studio workflow profiles are ordered step lists with self-contained ste
   assert.equal(generalCoding.steps.some((step) => step.id === "issue_file_created"), false);
   assert.equal(generalCoding.steps.some((step) => step.id === "plan_made"), false);
   assert.equal(generalCoding.steps.some((step) => step.id === "plan_executed"), false);
-  assert.equal(nonCodeMaintenance.profile.label, "Documentation/non code maintenance");
-  assert.equal(nonCodeMaintenance.profile.sessionWord, "documentation");
+  assert.equal(nonCodeMaintenance.definition.label, "Documentation/non code maintenance");
+  assert.equal(nonCodeMaintenance.definition.sessionWord, "documentation");
   assert.deepEqual(nonCodeMaintenance.steps.map((step) => step.id), [
     "session_created",
     "work_source_selected",
@@ -884,33 +889,34 @@ test("ai-studio workflow profiles are ordered step lists with self-contained ste
   assert.equal(nonCodeMaintenance.steps.some((step) => step.id === "changes_accepted"), false);
   assert.equal(nonCodeMaintenance.steps.find((step) => step.id === "maintenance_conversation").autopilot.kind, "agent_conversation");
   assert.equal(nonCodeMaintenance.steps.find((step) => step.id === "maintenance_conversation").label, "Talk to Codex");
-  assert.deepEqual(nonCommitMaintenance.profile.initialMetadata, {
+  assert.deepEqual(nonCommitMaintenance.definition.initialMetadata, {
     work_source: "new_branch"
   });
-  assert.equal(nonCommitMaintenance.profile.sessionWord, "maintenance");
+  assert.equal(nonCommitMaintenance.definition.sessionWord, "maintenance");
   assert.deepEqual(nonCommitMaintenance.steps.map((step) => step.id), [
     "session_created",
     "worktree_created",
-    "checklist_items_installed",
+    "dependencies_installed",
     "maintenance_conversation",
     "local_session_finished"
   ]);
   assert.equal(nonCommitMaintenance.steps.at(-2).autopilot.kind, "agent_conversation");
 });
 
-test("ai-studio workflow profiles have an explicit state machine for every step", () => {
-  for (const profileId of Object.keys(AI_STUDIO_WORKFLOW_PROFILES)) {
-    const workflow = workflowForProfile(profileId);
+test("ai-studio workflow definitions have an explicit state machine for every step", () => {
+  for (const { id: definitionId } of workflowRegistryTesting.registeredWorkflowRecords()) {
+    const workflow = workflowForDefinition(definitionId);
     assert.deepEqual(
       workflow.steps.map((step) => step.id).filter((stepId) => !stepMachineForStep(stepId)),
       [],
-      `${profileId} has workflow steps without state machines`
+      `${definitionId} has workflow steps without state machines`
     );
   }
 });
 
-test("ai-studio core workflow steps are registered with definitions and machines", () => {
-  const records = registeredWorkflowStepRecords();
+test("ai-studio workflow steps are registered with definitions, machines, and clear ownership", () => {
+  const records = workflowRegistryTesting.registeredWorkflowStepRecords();
+  const recordsById = new Map(records.map((record) => [record.id, record]));
   assert.deepEqual(
     records.filter((record) => record.hasDefinition && !record.hasMachine).map((record) => record.id),
     [],
@@ -921,189 +927,293 @@ test("ai-studio core workflow steps are registered with definitions and machines
     [],
     "registered workflow steps must not have machines without definitions"
   );
-  assert.equal(
-    records.find((record) => record.id === "session_created")?.moduleId,
-    AI_STUDIO_CORE_WORKFLOW_MODULE_ID
-  );
-  assert.equal(
-    records.find((record) => record.id === "create_pull_request")?.moduleId,
-    AI_STUDIO_CORE_WORKFLOW_MODULE_ID
-  );
-  assert.equal(
-    records.find((record) => record.id === "maintenance_conversation")?.moduleId,
-    CORE_MAINTENANCE_WORKFLOW_MODULE_ID
+
+  assert.deepEqual(
+    coreLifecycleTesting.ownedStepIds
+      .filter((stepId) => recordsById.get(stepId)?.moduleId !== lifecycleModuleId),
+    [],
+    "lifecycle steps must be owned by the lifecycle module"
   );
   assert.deepEqual(
     records
-      .filter((record) => record.moduleId === CORE_MAINTENANCE_WORKFLOW_MODULE_ID)
+      .filter((record) => record.moduleId === lifecycleModuleId)
+      .map((record) => record.id),
+    [...coreLifecycleTesting.ownedStepIds].sort()
+  );
+
+  assert.deepEqual(
+    coreCodingTesting.ownedStepIds
+      .filter((stepId) => recordsById.get(stepId)?.moduleId !== codingModuleId),
+    [],
+    "coding steps must be owned by the coding module"
+  );
+  assert.deepEqual(
+    records
+      .filter((record) => record.moduleId === codingModuleId)
+      .map((record) => record.id),
+    [...coreCodingTesting.ownedStepIds].sort()
+  );
+
+  assert.deepEqual(
+    records
+      .filter((record) => record.moduleId === maintenanceModuleId)
       .map((record) => record.id),
     [...coreMaintenanceTesting.ownedStepIds].sort()
   );
 });
 
-test("ai-studio workflow modules register workflow profiles", () => {
-  const records = registeredWorkflowRecords();
-  assert.equal(
-    records.find((record) => record.id === AI_STUDIO_WORKFLOW_PROFILE_IDS.BIG_FEATURE)?.moduleId,
-    AI_STUDIO_CORE_WORKFLOW_MODULE_ID
+test("ai-studio workflow step factories are registered separately from steps", () => {
+  assert.deepEqual(
+    workflowRegistryTesting.registeredWorkflowStepFactoryRecords(),
+    [
+      {
+        id: "chat_with_ai",
+        moduleId: "core.step_factories"
+      },
+      {
+        id: "editable_artifact_review",
+        moduleId: "core.step_factories"
+      }
+    ]
   );
-  assert.equal(
-    records.find((record) => record.id === CORE_MAINTENANCE_WORKFLOW_PROFILE_IDS.NON_CODE_MAINTENANCE)?.moduleId,
-    CORE_MAINTENANCE_WORKFLOW_MODULE_ID
+});
+
+test("ai-studio workflow modules register workflow definitions with explicit cross-module composition", () => {
+  const records = workflowRegistryTesting.registeredWorkflowRecords();
+  const recordsById = new Map(records.map((record) => [record.id, record]));
+  const lifecycleStepIds = new Set(coreLifecycleTesting.ownedStepIds);
+  const stepRecordsById = new Map(
+    workflowRegistryTesting.registeredWorkflowStepRecords().map((record) => [record.id, record])
   );
-  assert.equal(
-    records.find((record) => record.id === CORE_MAINTENANCE_WORKFLOW_PROFILE_IDS.NON_COMMIT_MAINTENANCE)?.moduleId,
-    CORE_MAINTENANCE_WORKFLOW_MODULE_ID
+
+  assert.deepEqual(
+    Object.values(coreCodingTesting.workflowDefinitionIds)
+      .filter((definitionId) => recordsById.get(definitionId)?.moduleId !== codingModuleId),
+    [],
+    "coding workflows must be owned by the coding module"
   );
   assert.deepEqual(
-    records.find((record) => record.id === CORE_MAINTENANCE_WORKFLOW_PROFILE_IDS.NON_COMMIT_MAINTENANCE)?.stepIds,
+    records
+      .filter((record) => record.moduleId === codingModuleId)
+      .map((record) => record.id),
+    Object.values(coreCodingTesting.workflowDefinitionIds).sort()
+  );
+
+  assert.deepEqual(
+    Object.values(maintenanceWorkflowDefinitionIds)
+      .filter((definitionId) => recordsById.get(definitionId)?.moduleId !== maintenanceModuleId),
+    [],
+    "maintenance workflows must be owned by the maintenance module"
+  );
+  assert.deepEqual(
+    records
+      .filter((record) => record.moduleId === maintenanceModuleId)
+      .map((record) => record.id),
+    Object.values(maintenanceWorkflowDefinitionIds).sort()
+  );
+
+  const nonCommitMaintenance = recordsById.get(maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE);
+  assert.deepEqual(
+    nonCommitMaintenance?.stepIds,
     [
       "session_created",
       "worktree_created",
-      "checklist_items_installed",
+      "dependencies_installed",
       "maintenance_conversation",
       "local_session_finished"
     ]
   );
+  for (const stepId of nonCommitMaintenance.stepIds.filter((id) => lifecycleStepIds.has(id))) {
+    assert.equal(
+      stepRecordsById.get(stepId)?.moduleId,
+      lifecycleModuleId,
+      `maintenance workflow may compose lifecycle step ${stepId}, but must not own it`
+    );
+  }
 });
 
-test("ai-studio workflow registry rejects duplicate step and workflow ownership", () => {
-  const registry = createWorkflowRegistry();
-  registry.registerModule({
-    id: "alpha",
-    steps: [
-      {
-        definition: {
-          id: "shared_step",
-          label: "Shared step"
-        }
-      }
-    ],
-    workflows: [
-      {
-        id: "shared_workflow",
-        label: "Shared workflow",
-        stepIds: ["shared_step"]
-      }
-    ]
+test("ai-studio workflow registry replaces duplicate step and workflow registrations by name", () => {
+  const registry = workflowRegistryTesting.createWorkflowRegistry();
+  registry.registerStepFactories("alpha", {
+    createMachine: ({ marker = "", stepId = "" } = {}) => ({
+      marker,
+      stepId
+    }),
+    id: "shared_factory"
   });
-  registry.registerModule({
-    id: "alpha",
-    steps: [
-      {
-        id: "shared_step",
-        machine: {
-          stepId: "shared_step"
-        }
-      }
-    ]
+  registry.registerSteps("alpha", {
+    definition: {
+      id: "shared_step",
+      label: "Shared step"
+    }
+  });
+  registry.registerWorkflows("alpha", {
+    id: "shared_workflow",
+    label: "Shared workflow",
+    stepIds: ["shared_step"]
+  });
+  registry.registerSteps("alpha", {
+    id: "shared_step",
+    machine: {
+      stepId: "shared_step"
+    }
   });
   assert.equal(registry.definitionForStep("shared_step").label, "Shared step");
   assert.equal(registry.machineForStep("shared_step").stepId, "shared_step");
-  assert.throws(
-    () => registry.registerModule({
-      id: "beta",
-      steps: [
-        {
-          definition: {
-            id: "shared_step",
-            label: "Duplicate step"
-          }
-        }
-      ]
+
+  registry.registerSteps("beta", {
+    definition: {
+      id: "shared_step",
+      label: "Replacement step"
+    }
+  });
+  registry.registerSteps("beta", {
+    id: "shared_step",
+    machine: {
+      replacement: true,
+      stepId: "shared_step"
+    }
+  });
+  registry.registerWorkflows("beta", {
+    id: "shared_workflow",
+    label: "Replacement workflow",
+    stepIds: ["shared_step"]
+  });
+
+  assert.equal(registry.definitionForStep("shared_step").label, "Replacement step");
+  assert.deepEqual(registry.machineForStep("shared_step"), {
+    replacement: true,
+    stepId: "shared_step"
+  });
+  registry.registerSteps("beta", {
+    config: {
+      marker: "factory"
+    },
+    factoryId: "shared_factory",
+    id: "shared_step"
+  });
+  assert.deepEqual(registry.machineForStep("shared_step"), {
+    marker: "factory",
+    stepId: "shared_step"
+  });
+  registry.registerStepFactories("gamma", {
+    createMachine: ({ stepId = "" } = {}) => ({
+      marker: "replacement_factory",
+      stepId
     }),
-    /already registered by module alpha/
+    id: "shared_factory"
+  });
+  assert.deepEqual(registry.machineForStep("shared_step"), {
+    marker: "replacement_factory",
+    stepId: "shared_step"
+  });
+  assert.equal(registry.definitionForWorkflow("shared_workflow").label, "Replacement workflow");
+  assert.deepEqual(registry.registeredStepFactoryRecords(), [
+    {
+      id: "shared_factory",
+      moduleId: "gamma"
+    }
+  ]);
+  assert.deepEqual(
+    registry.registeredStepRecords().filter((record) => record.id === "shared_step"),
+    [
+      {
+        hasDefinition: true,
+        hasMachine: true,
+        id: "shared_step",
+        moduleId: "beta"
+      }
+    ]
+  );
+  assert.deepEqual(
+    registry.registeredWorkflowRecords().filter((record) => record.id === "shared_workflow"),
+    [
+      {
+        id: "shared_workflow",
+        moduleId: "beta",
+        stepIds: ["shared_step"]
+      }
+    ]
   );
   assert.throws(
-    () => registry.registerModule({
-      id: "beta",
-      workflows: [
-        {
-          id: "shared_workflow",
-          label: "Duplicate workflow",
-          stepIds: ["shared_step"]
-        }
-      ]
-    }),
-    /already registered by module alpha/
-  );
-  assert.throws(
-    () => registry.registerModule({
-      id: "gamma",
-      workflows: [
-        {
-          id: "missing_step_workflow",
-          label: "Missing step workflow",
-          stepIds: ["missing_step"]
-        }
-      ]
+    () => registry.registerWorkflows("gamma", {
+      id: "missing_step_workflow",
+      label: "Missing step workflow",
+      stepIds: ["missing_step"]
     }),
     /references unregistered steps: missing_step/
   );
+  assert.throws(
+    () => registry.registerSteps("gamma", {
+      factoryId: "missing_factory",
+      id: "missing_factory_step"
+    }),
+    /references unregistered step factory: missing_factory/
+  );
 });
 
-test("ai-studio runtime persists the selected workflow profile per session", async () => {
+test("ai-studio runtime persists the selected workflow definition per session", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = new AiStudioSessionRuntime({
       targetRoot
     });
 
     const session = await runtime.createSession({
-      sessionId: "maintenance_profile",
-      workflowProfile: CORE_MAINTENANCE_WORKFLOW_PROFILE_IDS.NON_COMMIT_MAINTENANCE
+      sessionId: "maintenance_definition",
+      workflowDefinition: maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
     });
 
-    assert.equal(session.workflowId, CORE_MAINTENANCE_WORKFLOW_PROFILE_IDS.NON_COMMIT_MAINTENANCE);
-    assert.equal(session.workflowProfile.id, CORE_MAINTENANCE_WORKFLOW_PROFILE_IDS.NON_COMMIT_MAINTENANCE);
-    assert.equal(session.metadata.workflow_profile, CORE_MAINTENANCE_WORKFLOW_PROFILE_IDS.NON_COMMIT_MAINTENANCE);
+    assert.equal(session.workflowId, maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE);
+    assert.equal(session.workflowDefinition.id, maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE);
+    assert.equal(session.metadata.workflow_definition, maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE);
     assert.equal(session.metadata.work_source, "new_branch");
     assert.equal(session.sessionName, "maintenance");
     assert.equal(session.stepDefinitions.at(-1).id, "local_session_finished");
-    assert.equal(await runtime.store.readArtifact("maintenance_profile", "issue_word"), "maintenance\n");
+    assert.equal(await runtime.store.readArtifact("maintenance_definition", "issue_word"), "maintenance\n");
 
     await assert.rejects(
       () => runtime.createSession({
-        sessionId: "bad_profile",
-        workflowProfile: "unknown_profile"
+        sessionId: "bad_definition",
+        workflowDefinition: "unknown_definition"
       }),
-      /Unknown AI Studio workflow profile/u
+      /Unknown AI Studio workflow definition/u
     );
   });
 });
 
-test("ai-studio non-code maintenance profile starts with a reusable session label and skips issue planning", async () => {
+test("ai-studio non-code maintenance definition starts with a reusable session label and skips issue planning", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = new AiStudioSessionRuntime({
       targetRoot
     });
 
     const session = await runtime.createSession({
-      sessionId: "docs_profile",
-      workflowProfile: CORE_MAINTENANCE_WORKFLOW_PROFILE_IDS.NON_CODE_MAINTENANCE
+      sessionId: "docs_definition",
+      workflowDefinition: maintenanceWorkflowDefinitionIds.NON_CODE_MAINTENANCE
     });
 
-    assert.equal(session.workflowId, CORE_MAINTENANCE_WORKFLOW_PROFILE_IDS.NON_CODE_MAINTENANCE);
+    assert.equal(session.workflowId, maintenanceWorkflowDefinitionIds.NON_CODE_MAINTENANCE);
     assert.equal(session.sessionName, "documentation");
-    assert.equal(await runtime.store.readArtifact("docs_profile", "issue_word"), "documentation\n");
+    assert.equal(await runtime.store.readArtifact("docs_definition", "issue_word"), "documentation\n");
     assert.equal(session.stepDefinitions.some((step) => step.id === "issue_file_created"), false);
     assert.equal(session.stepDefinitions.some((step) => step.id === "plan_made"), false);
     assert.equal(session.stepDefinitions.some((step) => step.id === "changes_accepted"), false);
 
-    await runtime.advance("docs_profile");
-    await runtime.store.writeMetadataValue("docs_profile", "work_source", "new_branch");
-    await runtime.advance("docs_profile");
-    await runtime.store.writeMetadataValue("docs_profile", "worktree_path", targetRoot);
-    await runtime.advance("docs_profile");
-    await runtime.store.writeMetadataValue("docs_profile", "dependencies_installed", "yes");
-    await runtime.store.writeMetadataValue("docs_profile", "dependencies_path", targetRoot);
-    const conversationStep = await runtime.advance("docs_profile");
+    await runtime.advance("docs_definition");
+    await runtime.store.writeMetadataValue("docs_definition", "work_source", "new_branch");
+    await runtime.advance("docs_definition");
+    await runtime.store.writeMetadataValue("docs_definition", "worktree_path", targetRoot);
+    await runtime.advance("docs_definition");
+    await runtime.store.writeMetadataValue("docs_definition", "dependencies_installed", "yes");
+    await runtime.store.writeMetadataValue("docs_definition", "dependencies_path", targetRoot);
+    const conversationStep = await runtime.advance("docs_definition");
 
     assert.equal(conversationStep.currentStep, "maintenance_conversation");
     assert.equal(conversationStep.next.stepId, "project_validated");
   });
 });
 
-test("ai-studio runtime selects the seed profile when the adapter says seeding is required", async () => {
+test("ai-studio runtime selects the seed definition when the adapter says seeding is required", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = new AiStudioSessionRuntime({
       adapter: new SeedRequiredFakeAdapter(),
@@ -1111,20 +1221,20 @@ test("ai-studio runtime selects the seed profile when the adapter says seeding i
     });
 
     const session = await runtime.createSession({
-      sessionId: "seed_profile"
+      sessionId: "seed_definition"
     });
 
-    assert.equal(session.workflowId, AI_STUDIO_WORKFLOW_PROFILE_IDS.SEED_APPLICATION);
-    assert.equal(session.metadata.workflow_profile, AI_STUDIO_WORKFLOW_PROFILE_IDS.SEED_APPLICATION);
+    assert.equal(session.workflowId, AI_STUDIO_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION);
+    assert.equal(session.metadata.workflow_definition, AI_STUDIO_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION);
     assert.equal(session.sessionName, "seeding");
-    assert.equal(await runtime.store.readArtifact("seed_profile", "issue_word"), "seeding\n");
-    assert.equal(await runtime.store.readMetadataValue("seed_profile", "issue_word"), "");
+    assert.equal(await runtime.store.readArtifact("seed_definition", "issue_word"), "seeding\n");
+    assert.equal(await runtime.store.readMetadataValue("seed_definition", "issue_word"), "");
     assert.ok(session.stepDefinitions.some((step) => step.id === "seed_application_defined"));
     assert.equal(session.stepDefinitions.some((step) => step.id === "issue_file_created"), false);
   });
 });
 
-test("ai-studio runtime rejects non-seed profiles while seeding is required", async () => {
+test("ai-studio runtime rejects non-seed definitions while seeding is required", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = new AiStudioSessionRuntime({
       adapter: new SeedRequiredFakeAdapter(),
@@ -1133,8 +1243,8 @@ test("ai-studio runtime rejects non-seed profiles while seeding is required", as
 
     await assert.rejects(
       () => runtime.createSession({
-        sessionId: "bad_seed_profile",
-        workflowProfile: AI_STUDIO_WORKFLOW_PROFILE_IDS.BIG_FEATURE
+        sessionId: "bad_seed_definition",
+        workflowDefinition: AI_STUDIO_WORKFLOW_DEFINITION_IDS.BIG_FEATURE
       }),
       {
         code: "ai_studio_seed_workflow_required"
@@ -1143,7 +1253,7 @@ test("ai-studio runtime rejects non-seed profiles while seeding is required", as
   });
 });
 
-test("ai-studio runtime rejects the seed profile after seeding is no longer required", async () => {
+test("ai-studio runtime rejects the seed definition after seeding is no longer required", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = new AiStudioSessionRuntime({
       targetRoot
@@ -1151,8 +1261,8 @@ test("ai-studio runtime rejects the seed profile after seeding is no longer requ
 
     await assert.rejects(
       () => runtime.createSession({
-        sessionId: "late_seed_profile",
-        workflowProfile: AI_STUDIO_WORKFLOW_PROFILE_IDS.SEED_APPLICATION
+        sessionId: "late_seed_definition",
+        workflowDefinition: AI_STUDIO_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION
       }),
       {
         code: "ai_studio_seed_workflow_not_available"
@@ -1511,7 +1621,7 @@ test("ai-studio runtime prompt handoff shows the action input outside hidden ter
     await runtime.createSession({
       initialStep: "maintenance_conversation",
       sessionId: "agent_prompt_visible_input",
-      workflowProfile: CORE_MAINTENANCE_WORKFLOW_PROFILE_IDS.NON_COMMIT_MAINTENANCE
+      workflowDefinition: maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
     });
 
     const afterAction = await runtime.runAction("agent_prompt_visible_input", "agent_conversation", {
@@ -1538,7 +1648,7 @@ test("ai-studio runtime presents waiting_for_input as the same Codex conversatio
     await runtime.createSession({
       initialStep: "maintenance_conversation",
       sessionId: "prompt_response_resume",
-      workflowProfile: CORE_MAINTENANCE_WORKFLOW_PROFILE_IDS.NON_COMMIT_MAINTENANCE
+      workflowDefinition: maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
     });
 
     await runtime.runAction("prompt_response_resume", "agent_conversation", {
@@ -1820,9 +1930,9 @@ test("ai-studio runtime recovers a stuck in-flight command step back to ready", 
       targetRoot
     });
     await runtime.createSession({
-      initialStep: "checklist_items_installed",
+      initialStep: "dependencies_installed",
       sessionId: "recover_stuck_command",
-      workflowProfile: CORE_MAINTENANCE_WORKFLOW_PROFILE_IDS.NON_COMMIT_MAINTENANCE
+      workflowDefinition: maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
     });
     await runtime.recordCommandActionStarted("recover_stuck_command", "install_dependencies");
 
@@ -1830,7 +1940,7 @@ test("ai-studio runtime recovers a stuck in-flight command step back to ready", 
     assert.equal(stuckSession.stepMachine.status, "attempting_execution");
 
     const recoveredSession = await runtime.recoverStuckStep("recover_stuck_command");
-    assert.equal(recoveredSession.currentStep, "checklist_items_installed");
+    assert.equal(recoveredSession.currentStep, "dependencies_installed");
     assert.equal(recoveredSession.stepMachine.status, "ready");
     assert.equal(recoveredSession.next.enabled, false);
 
@@ -1840,7 +1950,7 @@ test("ai-studio runtime recovers a stuck in-flight command step back to ready", 
       fromStatus: "attempting_execution",
       kind: "recover-stuck-step",
       message: "Recovered stuck command execution. Re-run the current step.",
-      stepId: "checklist_items_installed",
+      stepId: "dependencies_installed",
       toStatus: "ready"
     });
   });
@@ -1852,9 +1962,9 @@ test("ai-studio runtime presentation owns command recovery availability", async 
       targetRoot
     });
     await runtime.createSession({
-      initialStep: "checklist_items_installed",
+      initialStep: "dependencies_installed",
       sessionId: "server_owned_command_recovery",
-      workflowProfile: CORE_MAINTENANCE_WORKFLOW_PROFILE_IDS.NON_COMMIT_MAINTENANCE
+      workflowDefinition: maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
     });
     await runtime.recordCommandActionStarted("server_owned_command_recovery", "install_dependencies");
 
@@ -1893,9 +2003,9 @@ test("ai-studio runtime refuses stuck-step recovery unless the step is attemptin
       targetRoot
     });
     await runtime.createSession({
-      initialStep: "checklist_items_installed",
+      initialStep: "dependencies_installed",
       sessionId: "recover_not_stuck",
-      workflowProfile: CORE_MAINTENANCE_WORKFLOW_PROFILE_IDS.NON_COMMIT_MAINTENANCE
+      workflowDefinition: maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
     });
 
     await assert.rejects(

@@ -1032,53 +1032,6 @@ function createInstallDependenciesMachine({
   };
 }
 
-function createFinishSessionMachine({
-  stepId = "session_finished"
-} = {}) {
-  const normalizedStepId = normalizeText(stepId);
-  if (!normalizedStepId) {
-    throw aiStudioError("Finish session step machines require a step id.", "ai_studio_invalid_step_machine");
-  }
-
-  return {
-    stepId: normalizedStepId,
-
-    initialState(context = {}) {
-      return metadataExists(context.session, "session_finished")
-        ? machineState(STEP_STATUS.DONE)
-        : machineState(STEP_STATUS.READY);
-    },
-
-    async view(context = {}) {
-      let state = await readState(context, this);
-      if (metadataExists(context.session, "session_finished")) {
-        state = machineState(STEP_STATUS.DONE);
-      }
-      return commandStepView(context, this, state, {
-        disabledReason: "Archive the session when you are finished.",
-        failurePrompt: "The archive action failed. Explain what should happen, then retry archive.",
-        failureTitle: "Archive needs attention"
-      });
-    },
-
-    async submitInput(context = {}) {
-      return submitCommandFailureInput(context, this);
-    },
-
-    async actionStarted(context = {}) {
-      return markCommandActionStarted(context, this, ["finish_session"]);
-    },
-
-    async actionFinished(context = {}) {
-      return writeCommandActionFinishedState(context, this, {
-        actionIds: ["finish_session"],
-        done: await actionCreatedMetadata(context, "session_finished"),
-        failureTitle: "Archive needs attention"
-      });
-    }
-  };
-}
-
 export {
   STEP_INPUT_KIND,
   STEP_STATUS,
@@ -1094,7 +1047,6 @@ export {
   commandSucceeded,
   createChatWithAiMachine,
   createEditableArtifactReviewMachine,
-  createFinishSessionMachine,
   createInstallDependenciesMachine,
   currentStepHelperInstruction,
   disableAction,

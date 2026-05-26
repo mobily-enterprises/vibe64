@@ -17,9 +17,9 @@ import {
   withLocalRequestBypass
 } from "./aiStudioRouteTestHelpers.js";
 
-const CORE_MAINTENANCE_WORKFLOW_PROFILE_IDS = coreMaintenanceTesting.workflowProfileIds;
+const maintenanceWorkflowDefinitionIds = coreMaintenanceTesting.workflowDefinitionIds;
 
-test("session creation route forwards the selected workflow profile", async () => {
+test("session creation route forwards the selected workflow definition", async () => {
   await withLocalRequestBypass(async () => {
     const app = testRouteApp();
     registerRoutes(app, {
@@ -38,7 +38,7 @@ test("session creation route forwards the selected workflow profile", async () =
     await route.handler({
       input: {
         body: {
-          workflowProfile: CORE_MAINTENANCE_WORKFLOW_PROFILE_IDS.NON_COMMIT_MAINTENANCE
+          workflowDefinition: maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
         }
       },
       async executeAction(action) {
@@ -53,7 +53,7 @@ test("session creation route forwards the selected workflow profile", async () =
     assert.deepEqual(executedAction, {
       actionId: ACTION_CREATE_SESSION,
       input: {
-        workflowProfile: CORE_MAINTENANCE_WORKFLOW_PROFILE_IDS.NON_COMMIT_MAINTENANCE
+        workflowDefinition: maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
       }
     });
   });

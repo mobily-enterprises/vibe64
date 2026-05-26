@@ -1,6 +1,6 @@
 import {
   AI_STUDIO_SESSION_STATUS,
-  workflowProfileCreationOptions
+  workflowDefinitionCreationOptions
 } from "../../../../server/lib/aiStudio/index.js";
 import {
   aiStudioResult
@@ -302,10 +302,10 @@ function sessionListResponse(sessions = [], {
 }
 
 async function workflowCreationOptions(runtime) {
-  if (typeof runtime?.workflowProfileCreationOptions === "function") {
-    return runtime.workflowProfileCreationOptions();
+  if (typeof runtime?.workflowDefinitionCreationOptions === "function") {
+    return runtime.workflowDefinitionCreationOptions();
   }
-  return workflowProfileCreationOptions();
+  return workflowDefinitionCreationOptions();
 }
 
 async function sessionCreationState(runtime, sessions = []) {
@@ -332,30 +332,30 @@ function sessionLimitMessage(limits = {}, workflow = {}) {
   return `Studio allows up to ${limits.maxOpenSessions} active sessions at once. Finish or abandon one before creating another.`;
 }
 
-function selectableWorkflowProfileIds(creation = {}) {
+function selectableWorkflowDefinitionIds(creation = {}) {
   if (creation.seedRequired) {
-    return [creation.defaultWorkflowProfile].filter(Boolean);
+    return [creation.defaultWorkflowDefinition].filter(Boolean);
   }
-  return (Array.isArray(creation.workflowProfiles) ? creation.workflowProfiles : [])
-    .map((profile) => String(profile.id || "").trim())
+  return (Array.isArray(creation.workflowDefinitions) ? creation.workflowDefinitions : [])
+    .map((definition) => String(definition.id || "").trim())
     .filter(Boolean);
 }
 
-function selectedWorkflowProfile(input = {}, creation = {}) {
-  const requestedProfile = String(input.workflowProfile || "").trim();
-  const profile = requestedProfile || String(creation.defaultWorkflowProfile || "").trim();
-  const allowedProfileIds = new Set(selectableWorkflowProfileIds(creation));
-  if (!profile || !allowedProfileIds.has(profile)) {
+function selectedWorkflowDefinitionId(input = {}, creation = {}) {
+  const requestedDefinition = String(input.workflowDefinition || "").trim();
+  const definitionId = requestedDefinition || String(creation.defaultWorkflowDefinition || "").trim();
+  const allowedDefinitionIds = new Set(selectableWorkflowDefinitionIds(creation));
+  if (!definitionId || !allowedDefinitionIds.has(definitionId)) {
     return {
       error: creation.seedRequired
-        ? "The first AI Studio session must seed the application, so no other workflow profile can be selected yet."
-        : "Choose one of the available workflow profiles before creating a session.",
-      profile: ""
+        ? "The first AI Studio session must seed the application, so no other workflow definition can be selected yet."
+        : "Choose one of the available workflow definitions before creating a session.",
+      definitionId: ""
     };
   }
   return {
     error: "",
-    profile
+    definitionId
   };
 }
 
@@ -439,7 +439,7 @@ function createService({
     async createSession(input = {}) {
       const startedAtMs = Date.now();
       aiStudioSessionDebugLog("server.service.createSession.start", {
-        workflowProfile: String(input?.workflowProfile || "")
+        workflowDefinition: String(input?.workflowDefinition || "")
       });
       return sessionResult(async () => {
         try {
@@ -453,7 +453,7 @@ function createService({
             durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
             maxOpenSessions: limits.maxOpenSessions,
             openSessionCount: limits.openSessionCount,
-            requestedWorkflowProfile: String(input?.workflowProfile || ""),
+            requestedWorkflowDefinition: String(input?.workflowDefinition || ""),
             seedRequired: creation.seedRequired === true
           });
           if (limits.openSessionCount >= limits.maxOpenSessions) {
@@ -502,19 +502,19 @@ function createService({
               status: "blocked"
             };
           }
-          const profileSelection = selectedWorkflowProfile(input, creation);
-          if (profileSelection.error) {
+          const definitionSelection = selectedWorkflowDefinitionId(input, creation);
+          if (definitionSelection.error) {
             aiStudioSessionDebugLog("server.service.createSession.blocked", {
-              code: "workflow_profile_not_available",
+              code: "workflow_definition_not_available",
               durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
-              requestedWorkflowProfile: String(input?.workflowProfile || "")
+              requestedWorkflowDefinition: String(input?.workflowDefinition || "")
             });
             return {
               creation,
               errors: [
                 {
-                  code: "workflow_profile_not_available",
-                  message: profileSelection.error
+                  code: "workflow_definition_not_available",
+                  message: definitionSelection.error
                 }
               ],
               limits,
@@ -526,44 +526,44 @@ function createService({
           aiStudioSessionDebugLog("server.service.createSession.runtimeCreate.start", {
             adapterId: projectType.adapter?.id || projectType.projectType,
             projectType: projectType.projectType,
-            workflowProfile: profileSelection.profile
+            workflowDefinition: definitionSelection.definitionId
           });
           const session = await runtime.createSession({
             metadata: {
               adapter_id: projectType.adapter?.id || projectType.projectType,
               project_type: projectType.projectType
             },
-            workflowProfile: profileSelection.profile
+            workflowDefinition: definitionSelection.definitionId
           });
           aiStudioSessionDebugLog("server.service.createSession.runtimeCreate.done", {
             ...sessionServiceDebugResponse(session),
             durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
-            workflowProfile: profileSelection.profile
+            workflowDefinition: definitionSelection.definitionId
           });
           aiStudioSessionDebugLog("server.service.createSession.initialAdvance.start", {
             currentStep: session.currentStep,
             sessionId: session.sessionId,
-            workflowProfile: profileSelection.profile
+            workflowDefinition: definitionSelection.definitionId
           });
           const advancedSession = await runtime.advance(session.sessionId);
           aiStudioSessionDebugLog("server.service.createSession.initialAdvance.done", {
             ...sessionServiceDebugResponse(advancedSession),
             durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
             fromStepId: session.currentStep,
-            workflowProfile: profileSelection.profile
+            workflowDefinition: definitionSelection.definitionId
           });
           const enrichedSession = await enrichSessionWithCodexTerminal(terminalService, advancedSession);
           aiStudioSessionDebugLog("server.service.createSession.done", {
             ...sessionServiceDebugResponse(enrichedSession),
             durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
-            workflowProfile: profileSelection.profile
+            workflowDefinition: definitionSelection.definitionId
           });
           return enrichedSession;
         } catch (error) {
           aiStudioSessionDebugLog("server.service.createSession.error", {
             durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
             error: aiStudioSessionDebugError(error),
-            workflowProfile: String(input?.workflowProfile || "")
+            workflowDefinition: String(input?.workflowDefinition || "")
           });
           throw error;
         }

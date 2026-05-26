@@ -102,8 +102,8 @@ function useAiStudioSessionData({
     access: "never",
     apiSuffix: AI_STUDIO_SESSIONS_API_SUFFIX,
     buildRawPayload: (_model, { context }) => {
-      const workflowProfile = String(context?.workflowProfile || "").trim();
-      return workflowProfile ? { workflowProfile } : {};
+      const workflowDefinition = String(context?.workflowDefinition || "").trim();
+      return workflowDefinition ? { workflowDefinition } : {};
     },
     buildCommandOptions: () => ({
       options: LOCAL_STUDIO_COMMAND_OPTIONS
@@ -147,12 +147,12 @@ function useAiStudioSessionData({
 
   const sessions = computed(() => visibleAiStudioSessions(sessionList.items || []));
   const creationOptions = computed(() => sessionList.pages?.[0]?.creation || {});
-  const workflowProfiles = computed(() => {
-    const profiles = creationOptions.value.workflowProfiles;
-    return Array.isArray(profiles) ? profiles : [];
+  const workflowDefinitions = computed(() => {
+    const definitions = creationOptions.value.workflowDefinitions;
+    return Array.isArray(definitions) ? definitions : [];
   });
   const createSessionMode = computed(() => {
-    return creationOptions.value.mode === "select" && workflowProfiles.value.length > 0
+    return creationOptions.value.mode === "select" && workflowDefinitions.value.length > 0
       ? "select"
       : "direct";
   });
@@ -254,28 +254,28 @@ function useAiStudioSessionData({
     sessionSelection.clear();
   }
 
-  async function createSession(workflowProfile = "") {
+  async function createSession(workflowDefinition = "") {
     const startedAtMs = Date.now();
     aiStudioSessionDebugLog("client.sessionData.createSession.start", {
-      workflowProfile: String(workflowProfile || "")
+      workflowDefinition: String(workflowDefinition || "")
     });
     try {
       const response = await createSessionCommand.run({
-        workflowProfile
+        workflowDefinition
       });
       aiStudioSessionDebugLog("client.sessionData.createSession.done", {
         ...aiStudioSessionDebugSummary(response || {}),
         code: String(response?.code || response?.errors?.[0]?.code || ""),
         durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
         ok: response?.ok !== false,
-        workflowProfile: String(workflowProfile || "")
+        workflowDefinition: String(workflowDefinition || "")
       });
       return response;
     } catch (error) {
       aiStudioSessionDebugLog("client.sessionData.createSession.error", {
         durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
         error: aiStudioSessionDebugError(error),
-        workflowProfile: String(workflowProfile || "")
+        workflowDefinition: String(workflowDefinition || "")
       });
       throw error;
     }
@@ -369,7 +369,7 @@ function useAiStudioSessionData({
     statusColor: aiStudioSessionStatusColor,
     statusLabel: aiStudioSessionStatusLabel,
     timelineSteps,
-    workflowProfiles
+    workflowDefinitions
   };
 }
 

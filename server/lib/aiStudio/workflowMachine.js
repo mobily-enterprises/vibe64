@@ -7,9 +7,6 @@ import {
   plainClone
 } from "./core.js";
 import { deepFreeze } from "./deepFreeze.js";
-import {
-  DEFAULT_AI_STUDIO_WORKFLOW
-} from "./workflow.js";
 
 function normalizeConditionList(value) {
   return Array.isArray(value)
@@ -333,7 +330,7 @@ function normalizeStep(step = {}, index = 0, seenStepIds = new Set()) {
   };
 }
 
-function normalizeWorkflow(workflow = DEFAULT_AI_STUDIO_WORKFLOW) {
+function normalizeWorkflow(workflow = {}) {
   const workflowSteps = Array.isArray(workflow.steps) ? workflow.steps : [];
   if (workflowSteps.length === 0) {
     throw aiStudioError("AI Studio workflow must contain at least one step.", "ai_studio_empty_workflow");
@@ -553,7 +550,7 @@ function defaultActionReadiness() {
 class WorkflowMachine {
   constructor({
     actionReadiness = defaultActionReadiness,
-    workflow = DEFAULT_AI_STUDIO_WORKFLOW
+    workflow = {}
   } = {}) {
     this.workflow = normalizeWorkflow(workflow);
     this.steps = this.workflow.steps;

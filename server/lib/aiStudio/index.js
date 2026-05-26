@@ -35,17 +35,14 @@ export {
   renderPromptTemplate
 } from "./promptRenderer.js";
 export {
-  AI_STUDIO_WORKFLOW_PROFILE_IDS,
-  AI_STUDIO_WORKFLOW_PROFILES,
-  DEFAULT_AI_STUDIO_WORKFLOW,
-  DEFAULT_AI_STUDIO_WORKFLOW_PROFILE_ID,
+  AI_STUDIO_WORKFLOW_DEFINITION_IDS,
+  DEFAULT_AI_STUDIO_WORKFLOW_DEFINITION_ID,
   ISSUE_FILE_STEP_ID,
   SEED_APPLICATION_STEP_ID,
-  normalizeWorkflowProfileId,
-  workflowForProfile,
-  workflowProfileCreationOptions,
-  workflowProfileDefinition,
-  workflowStepPresentation
+  normalizeWorkflowDefinitionId,
+  workflowDefinition,
+  workflowDefinitionCreationOptions,
+  workflowForDefinition
 } from "./workflow.js";
 export {
   AGENT_CONVERSATION_ACTION_ID,
@@ -71,12 +68,9 @@ export {
   normalizeWorkflow
 } from "./workflowMachine.js";
 export {
-  AI_STUDIO_CORE_WORKFLOW_MODULE_ID,
-  createWorkflowRegistry,
-  defineWorkflowModule,
-  registeredWorkflowRecords,
-  registeredWorkflowStepRecords,
-  registerWorkflowModule
+  registerWorkflowStepFactories,
+  registerWorkflowSteps,
+  registerWorkflows
 } from "./workflowRegistry.js";
 export {
   AI_STUDIO_WORKFLOW_COMMANDS,

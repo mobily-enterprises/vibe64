@@ -18,7 +18,7 @@ import {
 } from "../../server/lib/aiStudio/workflowModules/coreMaintenance.js";
 import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
 
-const CORE_MAINTENANCE_WORKFLOW_PROFILE_IDS = coreMaintenanceTesting.workflowProfileIds;
+const maintenanceWorkflowDefinitionIds = coreMaintenanceTesting.workflowDefinitionIds;
 
 function projectServiceForRuntime(runtime) {
   return {
@@ -163,7 +163,7 @@ test("AI Studio artifacts service appends helper responses to the conversation l
     await runtime.createSession({
       initialStep: "maintenance_conversation",
       sessionId: "helper_conversation_log",
-      workflowProfile: CORE_MAINTENANCE_WORKFLOW_PROFILE_IDS.NON_COMMIT_MAINTENANCE
+      workflowDefinition: maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
     });
     await runtime.store.writeConversationUserMessage("helper_conversation_log", {
       text: "What should we improve?"

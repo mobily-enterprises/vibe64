@@ -6,8 +6,6 @@ import {
 } from "./core.js";
 import { deepFreeze } from "./deepFreeze.js";
 
-const AI_STUDIO_CORE_WORKFLOW_MODULE_ID = "core";
-
 function normalizeWorkflowModuleId(moduleId = "") {
   const normalizedModuleId = normalizeText(moduleId);
   if (!normalizedModuleId) {
@@ -27,6 +25,10 @@ function normalizeWorkflowStepContribution(moduleId = "", contribution = {}, ind
   const machine = isPlainObject(contributionObject.machine)
     ? contributionObject.machine
     : null;
+  const factoryId = normalizeText(contributionObject.factoryId);
+  const factoryConfig = isPlainObject(contributionObject.config)
+    ? Object.freeze({ ...contributionObject.config })
+    : null;
   const stepId = normalizeText(contributionObject.id || definition?.id || machine?.stepId);
   const context = `${moduleId} step ${index + 1}`;
 
@@ -36,9 +38,15 @@ function normalizeWorkflowStepContribution(moduleId = "", contribution = {}, ind
       "ai_studio_workflow_module_invalid"
     );
   }
-  if (!definition && !machine) {
+  if (!definition && !machine && !factoryId) {
     throw aiStudioError(
-      `AI Studio workflow ${context} must register a definition or machine.`,
+      `AI Studio workflow ${context} must register a definition, machine, or factory.`,
+      "ai_studio_workflow_module_invalid"
+    );
+  }
+  if (machine && factoryId) {
+    throw aiStudioError(
+      `AI Studio workflow ${context} cannot register both a machine and factory.`,
       "ai_studio_workflow_module_invalid"
     );
   }
@@ -57,9 +65,35 @@ function normalizeWorkflowStepContribution(moduleId = "", contribution = {}, ind
 
   return {
     definition: definition ? deepFreeze(plainClone(definition)) : null,
+    factoryConfig,
+    factoryId,
     id: stepId,
     machine
   };
+}
+
+function normalizeStepFactoryContribution(moduleId = "", contribution = {}, index = 0) {
+  const factory = isPlainObject(contribution) ? contribution : {};
+  const factoryId = normalizeText(factory.id);
+  const context = `${moduleId} step factory ${index + 1}`;
+
+  if (!factoryId) {
+    throw aiStudioError(
+      `AI Studio workflow ${context} requires an id.`,
+      "ai_studio_workflow_module_invalid"
+    );
+  }
+  if (typeof factory.createMachine !== "function") {
+    throw aiStudioError(
+      `AI Studio workflow ${context} requires a createMachine function.`,
+      "ai_studio_workflow_module_invalid"
+    );
+  }
+
+  return Object.freeze({
+    createMachine: factory.createMachine,
+    id: factoryId
+  });
 }
 
 function normalizeWorkflowContribution(moduleId = "", contribution = {}, index = 0) {
@@ -96,63 +130,88 @@ function normalizeWorkflowContribution(moduleId = "", contribution = {}, index =
   });
 }
 
-function defineWorkflowModule(module = {}) {
-  const moduleId = normalizeWorkflowModuleId(module.id);
-  const steps = Array.isArray(module.steps) ? module.steps : [];
-  const workflows = Array.isArray(module.workflows) ? module.workflows : [];
-  if (steps.length === 0 && workflows.length === 0) {
-    throw aiStudioError(
-      `AI Studio workflow module ${moduleId} must register steps or workflows.`,
-      "ai_studio_workflow_module_invalid"
-    );
+function normalizeContributionList(moduleId = "", kind = "contributions", contributions = []) {
+  if (contributions === undefined) {
+    return [];
   }
-  return deepFreeze({
-    id: moduleId,
-    steps: steps.map((step, index) => normalizeWorkflowStepContribution(moduleId, step, index)),
-    workflows: workflows.map((workflow, index) => normalizeWorkflowContribution(moduleId, workflow, index))
+  if (Array.isArray(contributions)) {
+    return contributions;
+  }
+  if (isPlainObject(contributions)) {
+    return [contributions];
+  }
+  throw aiStudioError(
+    `AI Studio workflow module ${moduleId} ${kind} must be an object or array.`,
+    "ai_studio_workflow_module_invalid"
+  );
+}
+
+function normalizeContributionsForModule(
+  moduleId = "",
+  kind = "contributions",
+  contributions = [],
+  normalizeContribution
+) {
+  const normalizedModuleId = normalizeWorkflowModuleId(moduleId);
+  const contributionList = normalizeContributionList(normalizedModuleId, kind, contributions);
+  return {
+    contributions: contributionList.map((contribution, index) => (
+      normalizeContribution(normalizedModuleId, contribution, index)
+    )),
+    normalizedModuleId
+  };
+}
+
+function storeContributions(contributions = [], storeContribution) {
+  const registeredContributions = contributions.map((contribution) => {
+    storeContribution(contribution);
+    return contribution;
   });
+  return deepFreeze(registeredContributions);
 }
 
 function createWorkflowRegistry() {
+  const stepFactoryRecords = new Map();
   const stepRecords = new Map();
   const workflowRecords = new Map();
 
-  function registerStepContribution(moduleId = "", contribution = {}) {
-    const existing = stepRecords.get(contribution.id);
-    if (existing && existing.moduleId !== moduleId) {
-      throw aiStudioError(
-        `AI Studio workflow step ${contribution.id} is already registered by module ${existing.moduleId}.`,
-        "ai_studio_workflow_step_duplicate"
-      );
-    }
-    if (existing?.definition && contribution.definition) {
-      throw aiStudioError(
-        `AI Studio workflow step ${contribution.id} already has a registered definition.`,
-        "ai_studio_workflow_step_duplicate"
-      );
-    }
-    if (existing?.machine && contribution.machine) {
-      throw aiStudioError(
-        `AI Studio workflow step ${contribution.id} already has a registered machine.`,
-        "ai_studio_workflow_step_duplicate"
-      );
-    }
-    stepRecords.set(contribution.id, Object.freeze({
-      definition: contribution.definition || existing?.definition || null,
-      id: contribution.id,
-      machine: contribution.machine || existing?.machine || null,
+  function storeStepFactoryContribution(moduleId = "", factory = {}) {
+    stepFactoryRecords.set(factory.id, Object.freeze({
+      createMachine: factory.createMachine,
+      id: factory.id,
       moduleId
     }));
   }
 
-  function registerWorkflowContribution(moduleId = "", workflow = {}) {
-    const existing = workflowRecords.get(workflow.id);
-    if (existing) {
+  function storeStepContribution(moduleId = "", contribution = {}) {
+    const existing = stepRecords.get(contribution.id);
+    const definition = contribution.definition || existing?.definition || null;
+    const machine = contribution.machine || (contribution.factoryId ? null : existing?.machine || null);
+    const factoryId = contribution.factoryId || (contribution.machine ? "" : existing?.factoryId || "");
+    const factoryConfig = contribution.factoryId
+      ? contribution.factoryConfig
+      : contribution.machine
+        ? null
+        : existing?.factoryConfig || null;
+    const ownerModuleId = contribution.definition ? moduleId : existing?.moduleId || moduleId;
+    if (factoryId && !stepFactoryRecords.has(factoryId)) {
       throw aiStudioError(
-        `AI Studio workflow ${workflow.id} is already registered by module ${existing.moduleId}.`,
-        "ai_studio_workflow_duplicate"
+        `AI Studio workflow step ${contribution.id} references unregistered step factory: ${factoryId}.`,
+        "ai_studio_workflow_unknown_step_factory"
       );
     }
+
+    stepRecords.set(contribution.id, Object.freeze({
+      definition,
+      factoryConfig,
+      factoryId,
+      id: contribution.id,
+      machine,
+      moduleId: ownerModuleId
+    }));
+  }
+
+  function storeWorkflowContribution(moduleId = "", workflow = {}) {
     const missingStepIds = workflow.stepIds.filter((stepId) => !stepRecords.get(stepId)?.definition);
     if (missingStepIds.length > 0) {
       throw aiStudioError(
@@ -167,11 +226,49 @@ function createWorkflowRegistry() {
     }));
   }
 
-  function registerModule(module = {}) {
-    const normalizedModule = defineWorkflowModule(module);
-    normalizedModule.steps.forEach((step) => registerStepContribution(normalizedModule.id, step));
-    normalizedModule.workflows.forEach((workflow) => registerWorkflowContribution(normalizedModule.id, workflow));
-    return normalizedModule;
+  function registerStepFactories(moduleId = "", factories = []) {
+    const {
+      contributions,
+      normalizedModuleId
+    } = normalizeContributionsForModule(
+      moduleId,
+      "step factories",
+      factories,
+      normalizeStepFactoryContribution
+    );
+    return storeContributions(contributions, (factory) => {
+      storeStepFactoryContribution(normalizedModuleId, factory);
+    });
+  }
+
+  function registerSteps(moduleId = "", steps = []) {
+    const {
+      contributions,
+      normalizedModuleId
+    } = normalizeContributionsForModule(
+      moduleId,
+      "steps",
+      steps,
+      normalizeWorkflowStepContribution
+    );
+    return storeContributions(contributions, (step) => {
+      storeStepContribution(normalizedModuleId, step);
+    });
+  }
+
+  function registerWorkflows(moduleId = "", workflows = []) {
+    const {
+      contributions,
+      normalizedModuleId
+    } = normalizeContributionsForModule(
+      moduleId,
+      "workflows",
+      workflows,
+      normalizeWorkflowContribution
+    );
+    return storeContributions(contributions, (workflow) => {
+      storeWorkflowContribution(normalizedModuleId, workflow);
+    });
   }
 
   function definitionForStep(stepId = "") {
@@ -184,19 +281,73 @@ function createWorkflowRegistry() {
     return plainClone(definition);
   }
 
-  function presentationForStep(stepId = "") {
-    return plainClone(stepRecords.get(normalizeText(stepId))?.definition?.presentation || null);
+  function workflowForId(workflowId = "") {
+    const workflowRecord = workflowRecords.get(normalizeText(workflowId));
+    if (!workflowRecord) {
+      return null;
+    }
+    const definition = workflowRecord.definition;
+    return deepFreeze({
+      definition: plainClone(definition),
+      id: definition.id,
+      steps: definition.stepIds.map((stepId) => {
+        const stepDefinition = stepRecords.get(stepId)?.definition || null;
+        if (!stepDefinition) {
+          throw aiStudioError(
+            `AI Studio workflow ${definition.id} references unregistered step: ${stepId}.`,
+            "ai_studio_workflow_unknown_step"
+          );
+        }
+        return plainClone(stepDefinition);
+      })
+    });
   }
 
   function machineForStep(stepId = "") {
-    return stepRecords.get(normalizeText(stepId))?.machine || null;
+    const stepRecord = stepRecords.get(normalizeText(stepId));
+    if (!stepRecord) {
+      return null;
+    }
+    if (stepRecord.machine) {
+      return stepRecord.machine;
+    }
+    if (!stepRecord.factoryId) {
+      return null;
+    }
+    const factoryRecord = stepFactoryRecords.get(stepRecord.factoryId);
+    if (!factoryRecord) {
+      throw aiStudioError(
+        `AI Studio workflow step ${stepRecord.id} references unregistered step factory: ${stepRecord.factoryId}.`,
+        "ai_studio_workflow_unknown_step_factory"
+      );
+    }
+    const machine = factoryRecord.createMachine({
+      ...(stepRecord.factoryConfig || {}),
+      stepId: stepRecord.id
+    });
+    if (!isPlainObject(machine) || normalizeText(machine.stepId) !== stepRecord.id) {
+      throw aiStudioError(
+        `AI Studio workflow step factory ${factoryRecord.id} returned an invalid machine for step ${stepRecord.id}.`,
+        "ai_studio_workflow_invalid_step_factory"
+      );
+    }
+    return machine;
+  }
+
+  function registeredStepFactoryRecords() {
+    return Array.from(stepFactoryRecords.values())
+      .map((record) => ({
+        id: record.id,
+        moduleId: record.moduleId
+      }))
+      .sort((left, right) => left.id.localeCompare(right.id));
   }
 
   function registeredStepRecords() {
     return Array.from(stepRecords.values())
       .map((record) => ({
         hasDefinition: Boolean(record.definition),
-        hasMachine: Boolean(record.machine),
+        hasMachine: Boolean(record.machine || (record.factoryId && stepFactoryRecords.has(record.factoryId))),
         id: record.id,
         moduleId: record.moduleId
       }))
@@ -223,22 +374,37 @@ function createWorkflowRegistry() {
     definitionForStep,
     definitionForWorkflow,
     machineForStep,
-    presentationForStep,
+    registeredStepFactoryRecords,
     registeredStepRecords,
     registeredWorkflowRecords,
-    registerModule,
-    workflowDefinitionsById
+    registerStepFactories,
+    registerSteps,
+    registerWorkflows,
+    workflowDefinitionsById,
+    workflowForId
   });
 }
 
 const workflowRegistry = createWorkflowRegistry();
 
-function registerWorkflowModule(module = {}) {
-  return workflowRegistry.registerModule(module);
+function registerWorkflowStepFactories(moduleId = "", factories = []) {
+  return workflowRegistry.registerStepFactories(moduleId, factories);
+}
+
+function registerWorkflowSteps(moduleId = "", steps = []) {
+  return workflowRegistry.registerSteps(moduleId, steps);
+}
+
+function registerWorkflows(moduleId = "", workflows = []) {
+  return workflowRegistry.registerWorkflows(moduleId, workflows);
 }
 
 function registeredWorkflowStepRecords() {
   return workflowRegistry.registeredStepRecords();
+}
+
+function registeredWorkflowStepFactoryRecords() {
+  return workflowRegistry.registeredStepFactoryRecords();
 }
 
 function registeredWorkflowRecords() {
@@ -249,32 +415,32 @@ function registeredWorkflowDefinitionsById() {
   return workflowRegistry.workflowDefinitionsById();
 }
 
-function workflowDefinitionForProfile(profileId = "") {
-  return workflowRegistry.definitionForWorkflow(profileId);
+function workflowDefinitionForId(workflowId = "") {
+  return workflowRegistry.definitionForWorkflow(workflowId);
 }
 
-function workflowStepDefinitionForStep(stepId = "") {
-  return workflowRegistry.definitionForStep(stepId);
+function workflowForId(workflowId = "") {
+  return workflowRegistry.workflowForId(workflowId);
 }
 
 function workflowStepMachineForStep(stepId = "") {
   return workflowRegistry.machineForStep(stepId);
 }
 
-function workflowStepPresentationForStep(stepId = "") {
-  return workflowRegistry.presentationForStep(stepId);
-}
+const _testing = Object.freeze({
+  createWorkflowRegistry,
+  registeredWorkflowRecords,
+  registeredWorkflowStepFactoryRecords,
+  registeredWorkflowStepRecords
+});
 
 export {
-  AI_STUDIO_CORE_WORKFLOW_MODULE_ID,
-  createWorkflowRegistry,
-  defineWorkflowModule,
+  _testing,
   registeredWorkflowDefinitionsById,
-  registeredWorkflowRecords,
-  registeredWorkflowStepRecords,
-  registerWorkflowModule,
-  workflowDefinitionForProfile,
-  workflowStepDefinitionForStep,
-  workflowStepMachineForStep,
-  workflowStepPresentationForStep
+  registerWorkflowStepFactories,
+  registerWorkflowSteps,
+  registerWorkflows,
+  workflowDefinitionForId,
+  workflowForId,
+  workflowStepMachineForStep
 };

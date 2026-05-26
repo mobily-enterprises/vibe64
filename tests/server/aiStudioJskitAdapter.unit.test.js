@@ -5,7 +5,7 @@ import test from "node:test";
 
 import {
   AI_STUDIO_SESSION_STATUS,
-  AI_STUDIO_WORKFLOW_PROFILE_IDS,
+  AI_STUDIO_WORKFLOW_DEFINITION_IDS,
   AiStudioSessionRuntime
 } from "../../server/lib/aiStudio/index.js";
 import {
@@ -400,7 +400,7 @@ test("jskit seed issue definition uses the current-step input contract before is
     await runtime.createSession({
       initialStep: "seed_application_defined",
       sessionId: "jskit_seed_prompt",
-      workflowProfile: AI_STUDIO_WORKFLOW_PROFILE_IDS.SEED_APPLICATION
+      workflowDefinition: AI_STUDIO_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION
     });
 
     const initialSession = await runtime.getSession("jskit_seed_prompt");

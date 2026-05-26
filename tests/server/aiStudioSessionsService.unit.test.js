@@ -3,8 +3,8 @@ import test from "node:test";
 
 import {
   AI_STUDIO_SESSION_STATUS,
-  AI_STUDIO_WORKFLOW_PROFILE_IDS,
-  workflowProfileCreationOptions
+  AI_STUDIO_WORKFLOW_DEFINITION_IDS,
+  workflowDefinitionCreationOptions
 } from "../../server/lib/aiStudio/index.js";
 import {
   createService
@@ -13,7 +13,7 @@ import {
   _testing as coreMaintenanceTesting
 } from "../../server/lib/aiStudio/workflowModules/coreMaintenance.js";
 
-const CORE_MAINTENANCE_WORKFLOW_PROFILE_IDS = coreMaintenanceTesting.workflowProfileIds;
+const maintenanceWorkflowDefinitionIds = coreMaintenanceTesting.workflowDefinitionIds;
 
 function readySetupServices() {
   const readyService = {
@@ -562,7 +562,7 @@ test("session creation waits for an unsynced merged session", async () => {
   assert.equal(createSessionCalled, false);
 });
 
-test("session list exposes selectable workflow profiles after seeding", async () => {
+test("session list exposes selectable workflow definitions after seeding", async () => {
   const service = createService({
     projectService: {
       async createRuntime() {
@@ -570,8 +570,8 @@ test("session list exposes selectable workflow profiles after seeding", async ()
           async listSessions() {
             return [];
           },
-          async workflowProfileCreationOptions() {
-            return workflowProfileCreationOptions({
+          async workflowDefinitionCreationOptions() {
+            return workflowDefinitionCreationOptions({
               seedRequired: false
             });
           }
@@ -587,15 +587,15 @@ test("session list exposes selectable workflow profiles after seeding", async ()
   assert.equal(result.creation.mode, "select");
   assert.equal(result.creation.seedRequired, false);
   assert.deepEqual(
-    result.creation.workflowProfiles.map((profile) => profile.id),
+    result.creation.workflowDefinitions.map((definition) => definition.id),
     [
-      AI_STUDIO_WORKFLOW_PROFILE_IDS.BIG_FEATURE,
-      AI_STUDIO_WORKFLOW_PROFILE_IDS.GENERAL_CODING,
-      CORE_MAINTENANCE_WORKFLOW_PROFILE_IDS.NON_CODE_MAINTENANCE,
-      CORE_MAINTENANCE_WORKFLOW_PROFILE_IDS.NON_COMMIT_MAINTENANCE
+      AI_STUDIO_WORKFLOW_DEFINITION_IDS.BIG_FEATURE,
+      AI_STUDIO_WORKFLOW_DEFINITION_IDS.GENERAL_CODING,
+      maintenanceWorkflowDefinitionIds.NON_CODE_MAINTENANCE,
+      maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
     ]
   );
-  assert.equal(result.creation.workflowProfiles.some((profile) => profile.id === AI_STUDIO_WORKFLOW_PROFILE_IDS.SEED_APPLICATION), false);
+  assert.equal(result.creation.workflowDefinitions.some((definition) => definition.id === AI_STUDIO_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION), false);
   assert.equal(result.limits.maxOpenSessions, 5);
 });
 
@@ -621,8 +621,8 @@ test("session list asks the runtime for open sessions by default", async () => {
           async listSessions() {
             throw new Error("listSessions should not be used for the session list.");
           },
-          async workflowProfileCreationOptions() {
-            return workflowProfileCreationOptions({
+          async workflowDefinitionCreationOptions() {
+            return workflowDefinitionCreationOptions({
               seedRequired: false
             });
           }
@@ -693,8 +693,8 @@ test("archived session list asks for archived sessions and computes creation lim
           async listSessions() {
             throw new Error("listSessions should not be used for archived session lists.");
           },
-          async workflowProfileCreationOptions() {
-            return workflowProfileCreationOptions({
+          async workflowDefinitionCreationOptions() {
+            return workflowDefinitionCreationOptions({
               seedRequired: false
             });
           }
@@ -735,8 +735,8 @@ test("session list limits unseeded targets to one open seed session", async () =
               }
             ];
           },
-          async workflowProfileCreationOptions() {
-            return workflowProfileCreationOptions({
+          async workflowDefinitionCreationOptions() {
+            return workflowDefinitionCreationOptions({
               seedRequired: true
             });
           }
@@ -751,13 +751,13 @@ test("session list limits unseeded targets to one open seed session", async () =
   assert.equal(result.ok, true);
   assert.equal(result.creation.mode, "seed_required");
   assert.equal(result.creation.canCreate, false);
-  assert.equal(result.creation.defaultWorkflowProfile, AI_STUDIO_WORKFLOW_PROFILE_IDS.SEED_APPLICATION);
-  assert.deepEqual(result.creation.workflowProfiles, []);
+  assert.equal(result.creation.defaultWorkflowDefinition, AI_STUDIO_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION);
+  assert.deepEqual(result.creation.workflowDefinitions, []);
   assert.equal(result.limits.maxOpenSessions, 1);
   assert.equal(result.limits.openSessionCount, 1);
 });
 
-test("session creation blocks non-seed profiles while seeding is required", async () => {
+test("session creation blocks non-seed definitions while seeding is required", async () => {
   let createSessionCalled = false;
   const service = createService({
     projectService: {
@@ -772,8 +772,8 @@ test("session creation blocks non-seed profiles while seeding is required", asyn
           async listSessions() {
             return [];
           },
-          async workflowProfileCreationOptions() {
-            return workflowProfileCreationOptions({
+          async workflowDefinitionCreationOptions() {
+            return workflowDefinitionCreationOptions({
               seedRequired: true
             });
           }
@@ -792,16 +792,16 @@ test("session creation blocks non-seed profiles while seeding is required", asyn
   });
 
   const result = await service.createSession({
-    workflowProfile: AI_STUDIO_WORKFLOW_PROFILE_IDS.BIG_FEATURE
+    workflowDefinition: AI_STUDIO_WORKFLOW_DEFINITION_IDS.BIG_FEATURE
   });
 
   assert.equal(result.ok, false);
-  assert.equal(result.errors[0].code, "workflow_profile_not_available");
+  assert.equal(result.errors[0].code, "workflow_definition_not_available");
   assert.equal(createSessionCalled, false);
 });
 
-test("session creation uses the selected workflow profile after seeding", async () => {
-  let selectedWorkflowProfile = "";
+test("session creation uses the selected workflow definition after seeding", async () => {
+  let selectedWorkflowDefinitionId = "";
   const service = createService({
     projectService: {
       async createRuntime() {
@@ -810,13 +810,13 @@ test("session creation uses the selected workflow profile after seeding", async 
             return {
               ok: true,
               sessionId,
-              workflowProfile: {
-                id: selectedWorkflowProfile
+              workflowDefinition: {
+                id: selectedWorkflowDefinitionId
               }
             };
           },
           async createSession(input = {}) {
-            selectedWorkflowProfile = input.workflowProfile;
+            selectedWorkflowDefinitionId = input.workflowDefinition;
             return {
               sessionId: "new-session"
             };
@@ -824,8 +824,8 @@ test("session creation uses the selected workflow profile after seeding", async 
           async listSessions() {
             return [];
           },
-          async workflowProfileCreationOptions() {
-            return workflowProfileCreationOptions({
+          async workflowDefinitionCreationOptions() {
+            return workflowDefinitionCreationOptions({
               seedRequired: false
             });
           }
@@ -844,12 +844,12 @@ test("session creation uses the selected workflow profile after seeding", async 
   });
 
   const result = await service.createSession({
-    workflowProfile: CORE_MAINTENANCE_WORKFLOW_PROFILE_IDS.NON_COMMIT_MAINTENANCE
+    workflowDefinition: maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
   });
 
   assert.equal(result.ok, true);
-  assert.equal(result.workflowProfile.id, CORE_MAINTENANCE_WORKFLOW_PROFILE_IDS.NON_COMMIT_MAINTENANCE);
-  assert.equal(selectedWorkflowProfile, CORE_MAINTENANCE_WORKFLOW_PROFILE_IDS.NON_COMMIT_MAINTENANCE);
+  assert.equal(result.workflowDefinition.id, maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE);
+  assert.equal(selectedWorkflowDefinitionId, maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE);
 });
 
 test("session creation blocks a second open seed session", async () => {
@@ -872,8 +872,8 @@ test("session creation blocks a second open seed session", async () => {
               }
             ];
           },
-          async workflowProfileCreationOptions() {
-            return workflowProfileCreationOptions({
+          async workflowDefinitionCreationOptions() {
+            return workflowDefinitionCreationOptions({
               seedRequired: true
             });
           }

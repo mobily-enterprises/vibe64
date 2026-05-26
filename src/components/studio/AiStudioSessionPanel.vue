@@ -162,7 +162,7 @@ const toolbar = proxyRefs({
   selectSession: sessionData.selectSessionId,
   sessions: sessionData.sessions,
   shortSessionId: sessionData.shortSessionId,
-  workflowProfiles: sessionData.workflowProfiles
+  workflowDefinitions: sessionData.workflowDefinitions
 });
 
 const sessionMode = computed(() => route.query.mode === "inspect" ? "inspect" : "autopilot");

@@ -36,8 +36,8 @@ Workflow-specific behavior:
 - If `session.currentStep` is `implementation_reviewed`, the user is reviewing the implemented work before slower checks. Make only the focused tweak requested by `conversationRequest`, run the focused checks that prove it when practical, and submit the response through the current-step input helper.
 - If `session.currentStep` is `changes_accepted`, the user is doing final review after validation. Make only the requested final tweak. AI Studio will send the workflow back through review and validation after this prompt completes.
 - If this step needs to show a response in AI Studio, submit that response through the current-step input helper.
-- If `metadata.workflow_profile` is `non_code_maintenance`, make the requested documentation or non-code project changes in the session worktree. Do not modify application code unless the user explicitly asks for it or it is strictly required for the non-code task.
-- For other workflow profiles, answer, inspect, or edit according to the user's request and the current step contract.
+- If `metadata.workflow_definition` is `non_code_maintenance`, make the requested documentation or non-code project changes in the session worktree. Do not modify application code unless the user explicitly asks for it or it is strictly required for the non-code task.
+- For other workflow definitions, answer, inspect, or edit according to the user's request and the current step contract.
 
 Response artifact contract:
 Use the current-step input helper contract appended to this prompt when the current turn is complete.

@@ -88,7 +88,7 @@ async function mockReadyStudioShell(page: Page) {
             socialFederationEnabled: false
           }
         },
-        profile: null,
+        definition: null,
         requestMeta: {
           hasRequest: false
         },
@@ -239,12 +239,12 @@ async function mockReadyStudioShell(page: Page) {
       {
         creation: {
           canCreate: true,
-          defaultWorkflowProfile: "big_feature",
+          defaultWorkflowDefinition: "big_feature",
           disabledReason: "",
           mode: "select",
-          requiredWorkflowProfile: null,
+          requiredWorkflowDefinition: null,
           seedRequired: false,
-          workflowProfiles: [
+          workflowDefinitions: [
             {
               description: "Plan, implement, review, validate, commit, create a PR, and optionally merge.",
               id: "big_feature",

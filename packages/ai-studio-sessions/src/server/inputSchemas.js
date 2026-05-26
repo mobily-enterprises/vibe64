@@ -14,7 +14,7 @@ const sessionListInputValidator = deepFreeze({
 
 const sessionCreateInputValidator = deepFreeze({
   schema: createSchema({
-    workflowProfile: {
+    workflowDefinition: {
       type: "string",
       noTrim: false,
       required: false

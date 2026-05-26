@@ -31,8 +31,8 @@
       </v-chip>
 
       <v-menu
-        v-if="showWorkflowProfileMenu"
-        v-model="workflowProfileMenuOpen"
+        v-if="showWorkflowDefinitionMenu"
+        v-model="workflowDefinitionMenuOpen"
         location="bottom end"
         transition="scale-transition"
       >
@@ -52,19 +52,19 @@
         </template>
 
         <v-list
-          class="studio-ai-sessions__profile-menu"
+          class="studio-ai-sessions__definition-menu"
           density="comfortable"
           lines="two"
           nav
         >
           <v-list-subheader>Session type</v-list-subheader>
           <v-list-item
-            v-for="profile in workflowProfiles"
-            :key="profile.id"
+            v-for="definition in workflowDefinitions"
+            :key="definition.id"
             :disabled="toolbar.createSessionCommand.isRunning"
-            :subtitle="profile.description"
-            :title="profile.label"
-            @click="createSessionFromProfile(profile.id)"
+            :subtitle="definition.description"
+            :title="definition.label"
+            @click="createSessionFromDefinition(definition.id)"
           />
         </v-list>
       </v-menu>
@@ -120,17 +120,17 @@ function sessionTabLabel(sessionItem = {}) {
   return props.toolbar.shortSessionId?.(sessionItem.sessionId) || String(sessionItem.sessionId || "");
 }
 
-const workflowProfiles = computed(() => {
-  return Array.isArray(props.toolbar.workflowProfiles) ? props.toolbar.workflowProfiles : [];
+const workflowDefinitions = computed(() => {
+  return Array.isArray(props.toolbar.workflowDefinitions) ? props.toolbar.workflowDefinitions : [];
 });
-const showWorkflowProfileMenu = computed(() => {
-  return props.toolbar.createSessionMode === "select" && workflowProfiles.value.length > 0;
+const showWorkflowDefinitionMenu = computed(() => {
+  return props.toolbar.createSessionMode === "select" && workflowDefinitions.value.length > 0;
 });
-const workflowProfileMenuOpen = ref(false);
+const workflowDefinitionMenuOpen = ref(false);
 
-function createSessionFromProfile(profileId = "") {
-  workflowProfileMenuOpen.value = false;
-  props.toolbar.createSession?.(profileId);
+function createSessionFromDefinition(definitionId = "") {
+  workflowDefinitionMenuOpen.value = false;
+  props.toolbar.createSession?.(definitionId);
 }
 </script>
 
@@ -171,12 +171,12 @@ function createSessionFromProfile(profileId = "") {
   font-size: 1.15rem;
 }
 
-.studio-ai-sessions__profile-menu {
+.studio-ai-sessions__definition-menu {
   max-width: min(28rem, calc(100vw - 2rem));
   min-width: min(22rem, calc(100vw - 2rem));
 }
 
-.studio-ai-sessions__profile-menu :deep(.v-list-item-subtitle) {
+.studio-ai-sessions__definition-menu :deep(.v-list-item-subtitle) {
   white-space: normal;
 }
 

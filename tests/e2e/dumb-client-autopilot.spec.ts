@@ -820,9 +820,9 @@ async function mockAiStudioSession(
     await fulfillJson(route, {
       creation: {
         canCreate: true,
-        defaultWorkflowProfile: "big_feature",
+        defaultWorkflowDefinition: "big_feature",
         mode: "select",
-        workflowProfiles: []
+        workflowDefinitions: []
       },
       limits: {
         maxOpenSessions: 5,

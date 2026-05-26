@@ -26,12 +26,12 @@ import {
   runtimeContainerPromptFacts
 } from "./runtimeContainers.js";
 import {
-  AI_STUDIO_WORKFLOW_PROFILE_IDS,
-  DEFAULT_AI_STUDIO_WORKFLOW_PROFILE_ID,
-  normalizeWorkflowProfileId,
-  workflowForProfile,
-  workflowProfileCreationOptions,
-  workflowProfileDefinition
+  AI_STUDIO_WORKFLOW_DEFINITION_IDS,
+  DEFAULT_AI_STUDIO_WORKFLOW_DEFINITION_ID,
+  normalizeWorkflowDefinitionId,
+  workflowDefinition,
+  workflowDefinitionCreationOptions,
+  workflowForDefinition
 } from "./workflow.js";
 import { WorkflowMachine } from "./workflowMachine.js";
 import {
@@ -424,38 +424,38 @@ class AiStudioSessionRuntime {
     aiStudioSessionDebugLog("server.runtime.createSession.start", {
       requestedInitialStep: String(input?.initialStep || ""),
       requestedSessionId: String(input?.sessionId || ""),
-      requestedWorkflowProfile: String(input?.workflowProfile || input?.metadata?.workflow_profile || "")
+      requestedWorkflowDefinition: String(input?.workflowDefinition || input?.metadata?.workflow_definition || "")
     });
     try {
-      const workflowProfileId = await this.workflowProfileIdForNewSession(input);
-      const workflowMachine = this.workflowMachineForProfile(workflowProfileId);
+      const workflowDefinitionId = await this.workflowDefinitionIdForNewSession(input);
+      const workflowMachine = this.workflowMachineForDefinition(workflowDefinitionId);
       const initialStep = input.initialStep
         ? workflowMachine.assertStepId(input.initialStep)
         : workflowMachine.firstStepId();
       aiStudioSessionDebugLog("server.runtime.createSession.storeCreate.start", {
         initialStep,
         requestedSessionId: String(input?.sessionId || ""),
-        workflowProfile: workflowProfileId
+        workflowDefinition: workflowDefinitionId
       });
       const session = await this.store.createSession({
         ...input,
-        metadata: this.sessionMetadataWithWorkflowProfile(input.metadata, workflowProfileId),
+        metadata: this.sessionMetadataWithWorkflowDefinition(input.metadata, workflowDefinitionId),
         initialStep
       });
       aiStudioSessionDebugLog("server.runtime.createSession.storeCreate.done", {
         ...aiStudioSessionDebugSummary(session),
         durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
         initialStep,
-        workflowProfile: workflowProfileId
+        workflowDefinition: workflowDefinitionId
       });
       await this.store.mutateSession(session.sessionId, async () => {
-        await this.writeInitialSessionArtifacts(session.sessionId, workflowProfileId);
+        await this.writeInitialSessionArtifacts(session.sessionId, workflowDefinitionId);
       });
       const viewedSession = await this.getSession(session.sessionId);
       aiStudioSessionDebugLog("server.runtime.createSession.done", {
         ...aiStudioSessionDebugSummary(viewedSession),
         durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
-        workflowProfile: workflowProfileId
+        workflowDefinition: workflowDefinitionId
       });
       return viewedSession;
     } catch (error) {
@@ -497,89 +497,94 @@ class AiStudioSessionRuntime {
       config: this.projectConfig,
       adapter: sessionAdapter || await this.adapterViewForSession(session)
     };
-    const workflowProfileId = this.workflowProfileIdForSession(sessionWithConfig);
-    const workflowMachine = this.workflowMachineForProfile(workflowProfileId);
+    const workflowDefinitionId = this.workflowDefinitionIdForSession(sessionWithConfig);
+    const workflowMachine = this.workflowMachineForDefinition(workflowDefinitionId);
     const sessionView = {
       ...workflowMachine.buildSessionView(sessionWithConfig),
-      workflowProfile: workflowProfileDefinition(workflowProfileId)
+      workflowDefinition: workflowDefinition(workflowDefinitionId)
     };
     return applyWorkflowPresentation(await applyStepMachineView(this, sessionView));
   }
 
   sessionSummaryView(session = {}) {
-    const workflowProfileId = this.workflowProfileIdForSession(session);
+    const workflowDefinitionId = this.workflowDefinitionIdForSession(session);
     return {
       ...session,
-      workflowProfile: workflowProfileDefinition(workflowProfileId)
+      workflowDefinition: workflowDefinition(workflowDefinitionId)
     };
   }
 
-  workflowProfileIdForSession(session = {}) {
+  workflowDefinitionIdForSession(session = {}) {
     if (this.workflowMachine) {
-      return DEFAULT_AI_STUDIO_WORKFLOW_PROFILE_ID;
+      return DEFAULT_AI_STUDIO_WORKFLOW_DEFINITION_ID;
     }
-    return normalizeWorkflowProfileId(session.metadata?.workflow_profile);
+    return normalizeWorkflowDefinitionId(
+      session.metadata?.workflow_definition
+    );
   }
 
-  workflowMachineForProfile(profileId = DEFAULT_AI_STUDIO_WORKFLOW_PROFILE_ID) {
+  workflowMachineForDefinition(definitionId = DEFAULT_AI_STUDIO_WORKFLOW_DEFINITION_ID) {
     if (this.workflowMachine) {
       return this.workflowMachine;
     }
-    const normalizedProfileId = normalizeWorkflowProfileId(profileId);
-    if (!this.workflowMachines.has(normalizedProfileId)) {
-      this.workflowMachines.set(normalizedProfileId, new WorkflowMachine({
+    const normalizedDefinitionId = normalizeWorkflowDefinitionId(definitionId);
+    if (!this.workflowMachines.has(normalizedDefinitionId)) {
+      this.workflowMachines.set(normalizedDefinitionId, new WorkflowMachine({
         actionReadiness: this.actionReadiness,
-        workflow: workflowForProfile(normalizedProfileId)
+        workflow: workflowForDefinition(normalizedDefinitionId)
       }));
     }
-    return this.workflowMachines.get(normalizedProfileId);
+    return this.workflowMachines.get(normalizedDefinitionId);
   }
 
   workflowMachineForSession(session = {}) {
-    return this.workflowMachineForProfile(this.workflowProfileIdForSession(session));
+    return this.workflowMachineForDefinition(this.workflowDefinitionIdForSession(session));
   }
 
-  sessionMetadataWithWorkflowProfile(metadata = {}, workflowProfileId = "") {
+  sessionMetadataWithWorkflowDefinition(metadata = {}, workflowDefinitionId = "") {
     if (this.workflowMachine) {
       return metadata;
     }
-    const profile = workflowProfileDefinition(workflowProfileId);
+    const definition = workflowDefinition(workflowDefinitionId);
     return {
-      ...(profile.initialMetadata || {}),
+      ...(definition.initialMetadata || {}),
       ...metadata,
-      workflow_profile: normalizeWorkflowProfileId(workflowProfileId)
+      workflow_definition: normalizeWorkflowDefinitionId(workflowDefinitionId)
     };
   }
 
-  async workflowProfileIdForNewSession(input = {}) {
+  async workflowDefinitionIdForNewSession(input = {}) {
     if (this.workflowMachine) {
-      return DEFAULT_AI_STUDIO_WORKFLOW_PROFILE_ID;
+      return DEFAULT_AI_STUDIO_WORKFLOW_DEFINITION_ID;
     }
-    const requestedProfileId = normalizeText(input.workflowProfile || input.metadata?.workflow_profile);
-    const recommendedProfileId = await this.recommendedWorkflowProfileId();
-    const seedRequired = recommendedProfileId === AI_STUDIO_WORKFLOW_PROFILE_IDS.SEED_APPLICATION;
+    const requestedDefinitionId = normalizeText(
+      input.workflowDefinition ||
+      input.metadata?.workflow_definition
+    );
+    const recommendedDefinitionId = await this.recommendedWorkflowDefinitionId();
+    const seedRequired = recommendedDefinitionId === AI_STUDIO_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION;
     if (seedRequired) {
-      if (requestedProfileId && requestedProfileId !== AI_STUDIO_WORKFLOW_PROFILE_IDS.SEED_APPLICATION) {
+      if (requestedDefinitionId && requestedDefinitionId !== AI_STUDIO_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION) {
         throw aiStudioError(
-          "The first AI Studio session must seed the application before other workflow profiles can be selected.",
+          "The first AI Studio session must seed the application before other workflow definitions can be selected.",
           "ai_studio_seed_workflow_required"
         );
       }
-      return AI_STUDIO_WORKFLOW_PROFILE_IDS.SEED_APPLICATION;
+      return AI_STUDIO_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION;
     }
-    if (requestedProfileId === AI_STUDIO_WORKFLOW_PROFILE_IDS.SEED_APPLICATION) {
+    if (requestedDefinitionId === AI_STUDIO_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION) {
       throw aiStudioError(
         "The seed workflow is only available before the application has been seeded.",
         "ai_studio_seed_workflow_not_available"
       );
     }
-    if (requestedProfileId) {
-      return normalizeWorkflowProfileId(requestedProfileId);
+    if (requestedDefinitionId) {
+      return normalizeWorkflowDefinitionId(requestedDefinitionId);
     }
-    return recommendedProfileId;
+    return recommendedDefinitionId;
   }
 
-  async recommendedWorkflowProfileId() {
+  async recommendedWorkflowDefinitionId() {
     const context = {
       config: this.projectConfig,
       runtime: this,
@@ -589,26 +594,26 @@ class AiStudioSessionRuntime {
     };
     const detection = await this.adapter.detect(context);
     if (detection.detected === false) {
-      return DEFAULT_AI_STUDIO_WORKFLOW_PROFILE_ID;
+      return DEFAULT_AI_STUDIO_WORKFLOW_DEFINITION_ID;
     }
     const facts = await this.adapter.inspect({
       ...context,
       detection
     });
     return facts?.workflow?.seedRequired === true
-      ? AI_STUDIO_WORKFLOW_PROFILE_IDS.SEED_APPLICATION
-      : DEFAULT_AI_STUDIO_WORKFLOW_PROFILE_ID;
+      ? AI_STUDIO_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION
+      : DEFAULT_AI_STUDIO_WORKFLOW_DEFINITION_ID;
   }
 
-  async workflowProfileCreationOptions() {
-    const recommendedProfileId = await this.recommendedWorkflowProfileId();
-    return workflowProfileCreationOptions({
-      seedRequired: recommendedProfileId === AI_STUDIO_WORKFLOW_PROFILE_IDS.SEED_APPLICATION
+  async workflowDefinitionCreationOptions() {
+    const recommendedDefinitionId = await this.recommendedWorkflowDefinitionId();
+    return workflowDefinitionCreationOptions({
+      seedRequired: recommendedDefinitionId === AI_STUDIO_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION
     });
   }
 
-  async writeInitialSessionArtifacts(sessionId = "", workflowProfileId = "") {
-    const sessionWord = normalizeText(workflowProfileDefinition(workflowProfileId).sessionWord);
+  async writeInitialSessionArtifacts(sessionId = "", workflowDefinitionId = "") {
+    const sessionWord = normalizeText(workflowDefinition(workflowDefinitionId).sessionWord);
     if (!sessionWord) {
       return;
     }
