@@ -2,7 +2,6 @@ import {
   aiStudioError,
   normalizeText
 } from "@local/ai-studio-core/server/core";
-import "./registerCoreWorkflowModules.js";
 import {
   STEP_STATUS,
   assertInputMatchesCurrentState,
@@ -11,12 +10,17 @@ import {
   readState,
   writeState
 } from "./workflowStepMachineHelpers.js";
-import {
-  workflowStepMachineForStep
-} from "./workflowRegistry.js";
 
-function currentStepPromptInputInstruction(session = {}, action = {}) {
-  const machine = workflowStepMachineForStep(session.currentStep);
+function workflowStepMachine(runtime = null, stepId = "") {
+  return typeof runtime?.workflowStepMachineForStep === "function"
+    ? runtime.workflowStepMachineForStep(stepId)
+    : null;
+}
+
+function currentStepPromptInputInstruction(session = {}, action = {}, {
+  runtime = null
+} = {}) {
+  const machine = workflowStepMachine(runtime, session.currentStep);
   if (!machine || typeof machine.promptInstruction !== "function") {
     return "";
   }
@@ -29,7 +33,7 @@ function currentStepPromptInputInstruction(session = {}, action = {}) {
 }
 
 async function applyStepMachineView(runtime, session = {}) {
-  const machine = workflowStepMachineForStep(session.currentStep);
+  const machine = workflowStepMachine(runtime, session.currentStep);
   if (!machine) {
     return session;
   }
@@ -64,7 +68,7 @@ async function applyStepMachineView(runtime, session = {}) {
 async function saveStepMachineInput(runtime, sessionId = "", input = {}) {
   const session = await runtime.getSession(sessionId);
   const normalizedInput = normalizeMachineInput(input);
-  const machine = workflowStepMachineForStep(session.currentStep);
+  const machine = workflowStepMachine(runtime, session.currentStep);
   if (!machine || typeof machine.submitInput !== "function") {
     throw aiStudioError(
       `The current AI Studio step does not accept direct input: ${session.currentStep || "(none)"}`,
@@ -90,7 +94,7 @@ async function saveStepMachineInput(runtime, sessionId = "", input = {}) {
 async function recoverStuckStepMachineExecution(runtime, session = {}, {
   message = "Recovered stuck command execution. Re-run the current step."
 } = {}) {
-  const machine = workflowStepMachineForStep(session.currentStep);
+  const machine = workflowStepMachine(runtime, session.currentStep);
   if (!machine) {
     throw aiStudioError(
       `The current AI Studio step cannot be recovered: ${session.currentStep || "(none)"}`,
@@ -117,7 +121,7 @@ async function recoverStuckStepMachineExecution(runtime, session = {}, {
 }
 
 async function recordStepMachineActionStarted(runtime, session = {}, actionId = "") {
-  const machine = workflowStepMachineForStep(session.currentStep);
+  const machine = workflowStepMachine(runtime, session.currentStep);
   if (typeof machine?.actionStarted !== "function") {
     return;
   }
@@ -129,7 +133,7 @@ async function recordStepMachineActionStarted(runtime, session = {}, actionId = 
 }
 
 async function recordStepMachineActionFinished(runtime, session = {}, actionId = "", actionResult = {}) {
-  const machine = workflowStepMachineForStep(session.currentStep);
+  const machine = workflowStepMachine(runtime, session.currentStep);
   if (typeof machine?.actionFinished !== "function") {
     return;
   }

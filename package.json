@@ -3,6 +3,9 @@
   "version": "0.1.21",
   "private": false,
   "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
   "description": "Run AI Studio against the current project.",
   "bin": {
     "vibe-armor": "bin/run.js"
@@ -17,6 +20,23 @@
     "server/",
     "tooling/"
   ],
+  "bundleDependencies": [
+    "@local/adapter-setup-doctor",
+    "@local/ai-studio-accounts",
+    "@local/ai-studio-adapters",
+    "@local/ai-studio-artifacts",
+    "@local/ai-studio-core",
+    "@local/ai-studio-project",
+    "@local/ai-studio-runtime",
+    "@local/ai-studio-sessions",
+    "@local/ai-studio-terminals",
+    "@local/current-app",
+    "@local/main",
+    "@local/project-setup-doctor",
+    "@local/setup-doctor-core",
+    "@local/studio-setup-doctor",
+    "@local/studio-terminal-core"
+  ],
   "publishConfig": {
     "access": "public"
   },
@@ -24,7 +44,7 @@
     "node": "22.x"
   },
   "scripts": {
-    "prepack": "npm run build",
+    "prepack": "npm run verify:packages && npm run build",
     "server": "node ./bin/server.js --no-open",
     "server:all": "node ./bin/server.js --no-open",
     "server:home": "SERVER_SURFACE=home node ./bin/server.js --no-open",
@@ -45,10 +65,12 @@
     "test:e2e": "playwright test --config playwright.config.ts tests/e2e/self-contained-smoke.spec.ts tests/e2e/dumb-client-autopilot.spec.ts",
     "test:e2e:legacy": "playwright test --config playwright.config.ts tests/e2e/base-shell.spec.ts",
     "test:e2e:live": "npm run build && AI_STUDIO_LIVE_E2E=1 playwright test --config playwright.config.ts tests/e2e/live-ai-studio-workflow.spec.ts",
-    "verify": "jskit app verify && npm run --if-present verify:app",
+    "verify": "npx jskit app verify && npm run verify:packages && npm run --if-present verify:app",
+    "verify:packages": "node ./tooling/verify-package-boundaries.mjs",
+    "smoke:package": "node ./tooling/package-install-smoke.mjs",
     "release": "node ./scripts/npm-release.js",
-    "jskit:release": "jskit app release",
-    "jskit:update": "jskit app update-packages"
+    "jskit:release": "npx jskit app release",
+    "jskit:update": "npx jskit app update-packages"
   },
   "dependencies": {
     "@fastify/static": "^9.1.1",
@@ -57,17 +79,17 @@
     "@jskit-ai/kernel": "0.x",
     "@jskit-ai/shell-web": "0.1.82",
     "@jskit-ai/users-web": "0.1.98",
-    "@local/adapter-setup-doctor": "file:packages/adapter-setup-doctor",
-    "@local/ai-studio-accounts": "file:packages/ai-studio-accounts",
-    "@local/ai-studio-artifacts": "file:packages/ai-studio-artifacts",
-    "@local/ai-studio-core": "file:packages/ai-studio-core",
-    "@local/ai-studio-project": "file:packages/ai-studio-project",
-    "@local/ai-studio-sessions": "file:packages/ai-studio-sessions",
-    "@local/ai-studio-terminals": "file:packages/ai-studio-terminals",
-    "@local/current-app": "file:packages/current-app",
-    "@local/main": "file:packages/main",
-    "@local/project-setup-doctor": "file:packages/project-setup-doctor",
-    "@local/studio-setup-doctor": "file:packages/studio-setup-doctor",
+    "@local/adapter-setup-doctor": "0.1.0",
+    "@local/ai-studio-accounts": "0.1.0",
+    "@local/ai-studio-artifacts": "0.1.0",
+    "@local/ai-studio-core": "0.1.0",
+    "@local/ai-studio-project": "0.1.0",
+    "@local/ai-studio-sessions": "0.1.0",
+    "@local/ai-studio-terminals": "0.1.0",
+    "@local/current-app": "0.1.0",
+    "@local/main": "0.1.0",
+    "@local/project-setup-doctor": "0.1.0",
+    "@local/studio-setup-doctor": "0.1.0",
     "@mdi/js": "^7.4.47",
     "@tanstack/vue-query": "^5.90.5",
     "@xterm/addon-fit": "^0.11.0",
@@ -89,10 +111,10 @@
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
     "@jskit-ai/realtime": "0.x",
-    "@local/ai-studio-adapters": "file:packages/ai-studio-adapters",
-    "@local/ai-studio-runtime": "file:packages/ai-studio-runtime",
-    "@local/studio-terminal-core": "file:packages/studio-terminal-core",
-    "@local/setup-doctor-core": "file:packages/setup-doctor-core"
+    "@local/ai-studio-adapters": "0.1.0",
+    "@local/ai-studio-runtime": "0.1.0",
+    "@local/studio-terminal-core": "0.1.0",
+    "@local/setup-doctor-core": "0.1.0"
   },
   "devDependencies": {
     "@jskit-ai/agent-docs": "0.1.44",

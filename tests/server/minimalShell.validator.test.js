@@ -9,9 +9,9 @@ const __dirname = path.dirname(__filename);
 const APP_ROOT = path.resolve(__dirname, "../..");
 
 const EXPECTED_MANAGED_SCRIPTS = Object.freeze({
-  verify: "jskit app verify && npm run --if-present verify:app",
-  "jskit:release": "jskit app release",
-  "jskit:update": "jskit app update-packages"
+  verify: "npx jskit app verify && npm run verify:packages && npm run --if-present verify:app",
+  "jskit:release": "npx jskit app release",
+  "jskit:update": "npx jskit app update-packages"
 });
 
 const REQUIRED_TOP_LEVEL_ENTRIES = Object.freeze([

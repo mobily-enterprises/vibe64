@@ -17,5 +17,8 @@
     "./server/studioRoots": "./src/server/studioRoots.js",
     "./server/terminalWebSocketRoutes": "./src/server/terminalWebSocketRoutes.js",
     "./shared": "./src/shared/index.js"
+  },
+  "dependencies": {
+    "@jskit-ai/kernel": "0.x"
   }
 }

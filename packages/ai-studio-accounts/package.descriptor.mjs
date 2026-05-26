@@ -58,7 +58,10 @@ export default Object.freeze({
   },
   mutations: {
     dependencies: {
-      runtime: {},
+      runtime: {
+        "json-rest-schema": "^1.0.16",
+        "strip-ansi": "^7.2.0"
+      },
       dev: {}
     },
     packageJson: {

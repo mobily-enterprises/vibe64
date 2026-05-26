@@ -26,6 +26,9 @@ import {
   runtimeContainerPromptFacts
 } from "@local/studio-terminal-core/server/runtimeContainers";
 import {
+  createCoreWorkflowRegistry
+} from "./registerCoreWorkflowModules.js";
+import {
   AI_STUDIO_WORKFLOW_DEFINITION_IDS,
   DEFAULT_AI_STUDIO_WORKFLOW_DEFINITION_ID,
   normalizeWorkflowDefinitionId,
@@ -293,9 +296,12 @@ function promptWithSessionBriefing({
 function promptWithCurrentStepInputContract({
   action = {},
   prompt = "",
+  runtime = null,
   session = {}
 } = {}) {
-  const stepInputInstruction = currentStepPromptInputInstruction(session, action);
+  const stepInputInstruction = currentStepPromptInputInstruction(session, action, {
+    runtime
+  });
   return [
     String(prompt || "").trim(),
     stepInputInstruction
@@ -394,7 +400,8 @@ class AiStudioSessionRuntime {
     projectConfig = {},
     store = undefined,
     targetRoot = process.cwd(),
-    workflow = null
+    workflow = null,
+    workflowRegistry = createCoreWorkflowRegistry()
   } = {}) {
     this.actionHandlers = {
       ...actionHandlers
@@ -407,6 +414,7 @@ class AiStudioSessionRuntime {
       ? projectConfig
       : {};
     this.actionReadiness = composeActionReadiness(defaultActionReadiness, actionReadiness);
+    this.workflowRegistry = workflowRegistry;
     this.workflowMachine = workflow
       ? new WorkflowMachine({
           actionReadiness: this.actionReadiness,
@@ -504,7 +512,9 @@ class AiStudioSessionRuntime {
     const workflowMachine = this.workflowMachineForDefinition(workflowDefinitionId);
     const sessionView = {
       ...workflowMachine.buildSessionView(sessionWithConfig),
-      workflowDefinition: workflowDefinition(workflowDefinitionId)
+      workflowDefinition: workflowDefinition(workflowDefinitionId, {
+        workflowRegistry: this.workflowRegistry
+      })
     };
     return applyWorkflowPresentation(await applyStepMachineView(this, sessionView));
   }
@@ -513,7 +523,9 @@ class AiStudioSessionRuntime {
     const workflowDefinitionId = this.workflowDefinitionIdForSession(session);
     return {
       ...session,
-      workflowDefinition: workflowDefinition(workflowDefinitionId)
+      workflowDefinition: workflowDefinition(workflowDefinitionId, {
+        workflowRegistry: this.workflowRegistry
+      })
     };
   }
 
@@ -522,7 +534,10 @@ class AiStudioSessionRuntime {
       return DEFAULT_AI_STUDIO_WORKFLOW_DEFINITION_ID;
     }
     return normalizeWorkflowDefinitionId(
-      session.metadata?.workflow_definition
+      session.metadata?.workflow_definition,
+      {
+        workflowRegistry: this.workflowRegistry
+      }
     );
   }
 
@@ -530,11 +545,15 @@ class AiStudioSessionRuntime {
     if (this.workflowMachine) {
       return this.workflowMachine;
     }
-    const normalizedDefinitionId = normalizeWorkflowDefinitionId(definitionId);
+    const normalizedDefinitionId = normalizeWorkflowDefinitionId(definitionId, {
+      workflowRegistry: this.workflowRegistry
+    });
     if (!this.workflowMachines.has(normalizedDefinitionId)) {
       this.workflowMachines.set(normalizedDefinitionId, new WorkflowMachine({
         actionReadiness: this.actionReadiness,
-        workflow: workflowForDefinition(normalizedDefinitionId)
+        workflow: workflowForDefinition(normalizedDefinitionId, {
+          workflowRegistry: this.workflowRegistry
+        })
       }));
     }
     return this.workflowMachines.get(normalizedDefinitionId);
@@ -544,15 +563,23 @@ class AiStudioSessionRuntime {
     return this.workflowMachineForDefinition(this.workflowDefinitionIdForSession(session));
   }
 
+  workflowStepMachineForStep(stepId = "") {
+    return this.workflowRegistry?.machineForStep(stepId) || null;
+  }
+
   sessionMetadataWithWorkflowDefinition(metadata = {}, workflowDefinitionId = "") {
     if (this.workflowMachine) {
       return metadata;
     }
-    const definition = workflowDefinition(workflowDefinitionId);
+    const definition = workflowDefinition(workflowDefinitionId, {
+      workflowRegistry: this.workflowRegistry
+    });
     return {
       ...(definition.initialMetadata || {}),
       ...metadata,
-      workflow_definition: normalizeWorkflowDefinitionId(workflowDefinitionId)
+      workflow_definition: normalizeWorkflowDefinitionId(workflowDefinitionId, {
+        workflowRegistry: this.workflowRegistry
+      })
     };
   }
 
@@ -582,7 +609,9 @@ class AiStudioSessionRuntime {
       );
     }
     if (requestedDefinitionId) {
-      return normalizeWorkflowDefinitionId(requestedDefinitionId);
+      return normalizeWorkflowDefinitionId(requestedDefinitionId, {
+        workflowRegistry: this.workflowRegistry
+      });
     }
     return recommendedDefinitionId;
   }
@@ -611,12 +640,15 @@ class AiStudioSessionRuntime {
   async workflowDefinitionCreationOptions() {
     const recommendedDefinitionId = await this.recommendedWorkflowDefinitionId();
     return workflowDefinitionCreationOptions({
-      seedRequired: recommendedDefinitionId === AI_STUDIO_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION
+      seedRequired: recommendedDefinitionId === AI_STUDIO_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION,
+      workflowRegistry: this.workflowRegistry
     });
   }
 
   async writeInitialSessionArtifacts(sessionId = "", workflowDefinitionId = "") {
-    const sessionWord = normalizeText(workflowDefinition(workflowDefinitionId).sessionWord);
+    const sessionWord = normalizeText(workflowDefinition(workflowDefinitionId, {
+      workflowRegistry: this.workflowRegistry
+    }).sessionWord);
     if (!sessionWord) {
       return;
     }
@@ -747,6 +779,7 @@ class AiStudioSessionRuntime {
     const prompt = promptWithCurrentStepInputContract({
       action,
       prompt: promptWithBriefing,
+      runtime: this,
       session: promptSession
     });
     return {

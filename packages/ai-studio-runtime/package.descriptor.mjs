@@ -34,7 +34,9 @@ export default Object.freeze({
   },
   mutations: {
     dependencies: {
-      runtime: {},
+      runtime: {
+        "strip-ansi": "^7.2.0"
+      },
       dev: {}
     },
     packageJson: {

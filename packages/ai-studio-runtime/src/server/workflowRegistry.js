@@ -360,6 +360,66 @@ function storeContributions(contributions = [], storeContribution) {
   return deepFreeze(registeredContributions);
 }
 
+function normalizeContributorModules(modules = [], kind = "modules") {
+  const moduleList = Array.isArray(modules) ? modules : [modules];
+  return moduleList.map((module, index) => {
+    if (!isPlainObject(module)) {
+      throw aiStudioError(
+        `AI Studio workflow ${kind} entry ${index + 1} must be an object.`,
+        "ai_studio_workflow_module_invalid"
+      );
+    }
+    return module;
+  });
+}
+
+function hasModuleContribution(module = {}, key = "") {
+  return Object.hasOwn(module, key) && module[key] !== undefined;
+}
+
+function registerWorkflowContributorModules(registry, {
+  stepFactoryModules = [],
+  workflowModules = []
+} = {}) {
+  const normalizedStepFactoryModules = normalizeContributorModules(
+    stepFactoryModules,
+    "step factory modules"
+  );
+  const normalizedWorkflowModules = normalizeContributorModules(
+    workflowModules,
+    "workflow modules"
+  );
+
+  normalizedStepFactoryModules.forEach((module) => {
+    if (!hasModuleContribution(module, "factories")) {
+      throw aiStudioError(
+        `AI Studio workflow step factory module ${normalizeText(module.id) || "(unknown)"} must define factories.`,
+        "ai_studio_workflow_module_invalid"
+      );
+    }
+    registry.registerStepFactories(module.id, module.factories);
+  });
+  normalizedWorkflowModules.forEach((module) => {
+    if (!hasModuleContribution(module, "steps") && !hasModuleContribution(module, "workflowDefinitions")) {
+      throw aiStudioError(
+        `AI Studio workflow module ${normalizeText(module.id) || "(unknown)"} must define steps or workflowDefinitions.`,
+        "ai_studio_workflow_module_invalid"
+      );
+    }
+  });
+  normalizedWorkflowModules.forEach((module) => {
+    if (hasModuleContribution(module, "steps")) {
+      registry.registerSteps(module.id, module.steps);
+    }
+  });
+  normalizedWorkflowModules.forEach((module) => {
+    if (hasModuleContribution(module, "workflowDefinitions")) {
+      registry.registerWorkflows(module.id, module.workflowDefinitions);
+    }
+  });
+  return registry;
+}
+
 function createWorkflowRegistry() {
   const stepFactoryRecords = new Map();
   const stepRecords = new Map();
@@ -557,62 +617,12 @@ function createWorkflowRegistry() {
   });
 }
 
-const workflowRegistry = createWorkflowRegistry();
-
-function registerWorkflowStepFactories(moduleId = "", factories = []) {
-  return workflowRegistry.registerStepFactories(moduleId, factories);
-}
-
-function registerWorkflowSteps(moduleId = "", steps = []) {
-  return workflowRegistry.registerSteps(moduleId, steps);
-}
-
-function registerWorkflows(moduleId = "", workflows = []) {
-  return workflowRegistry.registerWorkflows(moduleId, workflows);
-}
-
-function registeredWorkflowStepRecords() {
-  return workflowRegistry.registeredStepRecords();
-}
-
-function registeredWorkflowStepFactoryRecords() {
-  return workflowRegistry.registeredStepFactoryRecords();
-}
-
-function registeredWorkflowRecords() {
-  return workflowRegistry.registeredWorkflowRecords();
-}
-
-function registeredWorkflowDefinitionsById() {
-  return workflowRegistry.workflowDefinitionsById();
-}
-
-function workflowDefinitionForId(workflowId = "") {
-  return workflowRegistry.definitionForWorkflow(workflowId);
-}
-
-function workflowForId(workflowId = "") {
-  return workflowRegistry.workflowForId(workflowId);
-}
-
-function workflowStepMachineForStep(stepId = "") {
-  return workflowRegistry.machineForStep(stepId);
-}
-
 const _testing = Object.freeze({
-  createWorkflowRegistry,
-  registeredWorkflowRecords,
-  registeredWorkflowStepFactoryRecords,
-  registeredWorkflowStepRecords
+  createWorkflowRegistry
 });
 
 export {
   _testing,
-  registeredWorkflowDefinitionsById,
-  registerWorkflowStepFactories,
-  registerWorkflowSteps,
-  registerWorkflows,
-  workflowDefinitionForId,
-  workflowForId,
-  workflowStepMachineForStep
+  createWorkflowRegistry,
+  registerWorkflowContributorModules
 };

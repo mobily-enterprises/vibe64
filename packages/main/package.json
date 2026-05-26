@@ -8,5 +8,8 @@
     "./server": "./src/server/index.js",
     "./server/MainServiceProvider": "./src/server/MainServiceProvider.js",
     "./shared": "./src/shared/index.js"
+  },
+  "dependencies": {
+    "@jskit-ai/kernel": "0.x"
   }
 }

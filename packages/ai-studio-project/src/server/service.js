@@ -2,6 +2,9 @@ import {
   AiStudioSessionRuntime
 } from "@local/ai-studio-runtime/server/runtime";
 import {
+  createCoreWorkflowRegistry
+} from "@local/ai-studio-runtime/server/registerCoreWorkflowModules";
+import {
   createAiStudioAdapterRegistry,
   createAiStudioProjectConfigStore,
   createAiStudioProjectTypeStore,
@@ -48,7 +51,10 @@ function projectTypeMessage(status = "", projectType = "") {
   return "AI Studio project type is not ready.";
 }
 
-function createService({ targetRoot = "" } = {}) {
+function createService({
+  targetRoot = "",
+  workflowRegistry = createCoreWorkflowRegistry()
+} = {}) {
   const resolvedTargetRoot = resolveAiStudioTargetRoot(targetRoot);
   const adapterRegistry = createAiStudioAdapterRegistry();
   const projectConfigStore = createAiStudioProjectConfigStore({
@@ -211,7 +217,8 @@ function createService({ targetRoot = "" } = {}) {
     return new AiStudioSessionRuntime({
       adapter,
       projectConfig,
-      targetRoot: resolvedTargetRoot
+      targetRoot: resolvedTargetRoot,
+      workflowRegistry
     });
   }
 

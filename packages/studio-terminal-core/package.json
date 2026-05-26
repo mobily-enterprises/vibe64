@@ -8,5 +8,10 @@
     "./server": "./src/server/index.js",
     "./server/*": "./src/server/*.js",
     "./shared": "./src/shared/index.js"
+  },
+  "dependencies": {
+    "@local/ai-studio-core": "0.1.0",
+    "execa": "^9.6.1",
+    "node-pty": "^1.1.0"
   }
 }

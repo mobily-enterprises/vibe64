@@ -10,6 +10,7 @@ import {
   DEFAULT_AI_STUDIO_WORKFLOW_DEFINITION_ID,
   WorkflowMachine,
   applyWorkflowPresentation,
+  createCoreWorkflowRegistry,
   when,
   workflowForDefinition
 } from "@local/ai-studio-runtime/server";
@@ -24,8 +25,7 @@ import {
   AI_STUDIO_CLIENT_CONTROL_STATE_FLAGS
 } from "@local/ai-studio-core/shared";
 import {
-  _testing as workflowRegistryTesting,
-  workflowStepMachineForStep
+  _testing as workflowRegistryTesting
 } from "@local/ai-studio-runtime/server/workflowRegistry";
 import {
   currentStepPromptInputInstruction
@@ -54,6 +54,17 @@ const clientControlActions = Object.freeze(new Set(Object.values(AI_STUDIO_CLIEN
 const clientControlIconTokens = Object.freeze(new Set(Object.values(AI_STUDIO_CLIENT_CONTROL_ICON_TOKENS)));
 const clientControlStateFlags = Object.freeze(new Set(Object.values(AI_STUDIO_CLIENT_CONTROL_STATE_FLAGS)));
 const builtinIntentTypes = Object.freeze(new Set(["action", "continue", "reject"]));
+const coreWorkflowRegistry = createCoreWorkflowRegistry();
+
+function coreWorkflowForDefinition(definitionId = DEFAULT_AI_STUDIO_WORKFLOW_DEFINITION_ID) {
+  return workflowForDefinition(definitionId, {
+    workflowRegistry: coreWorkflowRegistry
+  });
+}
+
+const coreWorkflowStepMachineRuntime = Object.freeze({
+  workflowStepMachineForStep: (stepId = "") => coreWorkflowRegistry.machineForStep(stepId)
+});
 
 class PromptRendererFakeAdapter extends FakeTargetAdapter {
   constructor({
@@ -663,7 +674,7 @@ test("ai-studio runtime presentation emits only declared client controls", async
 
 test("ai-studio runtime presentation snapshots come from workflow step metadata", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const changesAcceptedStep = workflowForDefinition().steps.find((step) => step.id === "changes_accepted");
+    const changesAcceptedStep = coreWorkflowForDefinition().steps.find((step) => step.id === "changes_accepted");
     assert.deepEqual(
       changesAcceptedStep.presentation.automation.recheckAfterPrompt,
       {
@@ -1215,11 +1226,11 @@ test("ai-studio runtime owns final-review follow-up and merge decision intents",
 });
 
 test("ai-studio workflow definitions are ordered step lists with self-contained step metadata", () => {
-  const bigFeature = workflowForDefinition(AI_STUDIO_WORKFLOW_DEFINITION_IDS.BIG_FEATURE);
-  const generalCoding = workflowForDefinition(AI_STUDIO_WORKFLOW_DEFINITION_IDS.GENERAL_CODING);
-  const nonCodeMaintenance = workflowForDefinition(maintenanceWorkflowDefinitionIds.NON_CODE_MAINTENANCE);
-  const seedApplication = workflowForDefinition(AI_STUDIO_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION);
-  const nonCommitMaintenance = workflowForDefinition(maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE);
+  const bigFeature = coreWorkflowForDefinition(AI_STUDIO_WORKFLOW_DEFINITION_IDS.BIG_FEATURE);
+  const generalCoding = coreWorkflowForDefinition(AI_STUDIO_WORKFLOW_DEFINITION_IDS.GENERAL_CODING);
+  const nonCodeMaintenance = coreWorkflowForDefinition(maintenanceWorkflowDefinitionIds.NON_CODE_MAINTENANCE);
+  const seedApplication = coreWorkflowForDefinition(AI_STUDIO_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION);
+  const nonCommitMaintenance = coreWorkflowForDefinition(maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE);
 
   assert.equal(bigFeature.id, DEFAULT_AI_STUDIO_WORKFLOW_DEFINITION_ID);
   assert.ok(bigFeature.steps.find((step) => step.id === "issue_file_created")?.autopilot.stop);
@@ -1370,10 +1381,10 @@ test("ai-studio workflow definitions are ordered step lists with self-contained 
 });
 
 test("ai-studio workflow definitions have an explicit state machine for every step", () => {
-  for (const { id: definitionId } of workflowRegistryTesting.registeredWorkflowRecords()) {
-    const workflow = workflowForDefinition(definitionId);
+  for (const { id: definitionId } of coreWorkflowRegistry.registeredWorkflowRecords()) {
+    const workflow = coreWorkflowForDefinition(definitionId);
     assert.deepEqual(
-      workflow.steps.map((step) => step.id).filter((stepId) => !workflowStepMachineForStep(stepId)),
+      workflow.steps.map((step) => step.id).filter((stepId) => !coreWorkflowRegistry.machineForStep(stepId)),
       [],
       `${definitionId} has workflow steps without state machines`
     );
@@ -1381,14 +1392,14 @@ test("ai-studio workflow definitions have an explicit state machine for every st
 });
 
 test("ai-studio workflow contract resolves every referenced step, action, intent, and workflow handler", () => {
-  const failures = workflowRegistryTesting.registeredWorkflowRecords()
-    .flatMap(({ id: definitionId }) => validateWorkflowContract(workflowForDefinition(definitionId)));
+  const failures = coreWorkflowRegistry.registeredWorkflowRecords()
+    .flatMap(({ id: definitionId }) => validateWorkflowContract(coreWorkflowForDefinition(definitionId)));
 
   assert.deepEqual(failures, []);
 });
 
 test("ai-studio workflow steps are registered with definitions, machines, and clear ownership", () => {
-  const records = workflowRegistryTesting.registeredWorkflowStepRecords();
+  const records = coreWorkflowRegistry.registeredStepRecords();
   const recordsById = new Map(records.map((record) => [record.id, record]));
   assert.deepEqual(
     records.filter((record) => record.hasDefinition && !record.hasMachine).map((record) => record.id),
@@ -1437,7 +1448,7 @@ test("ai-studio workflow steps are registered with definitions, machines, and cl
 
 test("ai-studio workflow step factories are registered separately from steps", () => {
   assert.deepEqual(
-    workflowRegistryTesting.registeredWorkflowStepFactoryRecords(),
+    coreWorkflowRegistry.registeredStepFactoryRecords(),
     [
       {
         id: "chat_with_ai",
@@ -1451,12 +1462,82 @@ test("ai-studio workflow step factories are registered separately from steps", (
   );
 });
 
+test("ai-studio workflow app registry composes non-core contributor modules explicitly", () => {
+  const externalHandler = () => ({ ok: true });
+  const registry = createCoreWorkflowRegistry({
+    stepFactoryModules: {
+      factories: {
+        createMachine: ({ marker = "", stepId = "" } = {}) => ({
+          marker,
+          stepId
+        }),
+        id: "external_factory"
+      },
+      id: "external.factories"
+    },
+    workflowModules: {
+      id: "external.workflow",
+      steps: {
+        config: {
+          marker: "external"
+        },
+        definition: {
+          id: "external_step",
+          label: "External step"
+        },
+        factoryId: "external_factory",
+        id: "external_step"
+      },
+      workflowDefinitions: {
+        id: "external_workflow",
+        intentHandlers: {
+          external_step: {
+            external_intent: externalHandler
+          }
+        },
+        label: "External workflow",
+        steps: ["external_step"],
+        userSelectable: true
+      }
+    }
+  });
+  const workflow = registry.workflowForId("external_workflow");
+
+  assert.equal(coreWorkflowRegistry.workflowForId("external_workflow"), null);
+  assert.equal(workflow.steps[0].id, "external_step");
+  assert.equal(workflow.steps[0].label, "External step");
+  assert.equal(workflow.intentHandlers.external_step.external_intent, externalHandler);
+  assert.deepEqual(registry.machineForStep("external_step"), {
+    marker: "external",
+    stepId: "external_step"
+  });
+  assert.deepEqual(
+    registry.registeredWorkflowRecords().filter((record) => record.id === "external_workflow"),
+    [
+      {
+        id: "external_workflow",
+        intentHandlers: {
+          external_step: ["external_intent"]
+        },
+        moduleId: "external.workflow",
+        steps: [
+          {
+            rejectTo: "",
+            recheckTo: "",
+            stepId: "external_step"
+          }
+        ]
+      }
+    ]
+  );
+});
+
 test("ai-studio workflow modules register workflow definitions with explicit cross-module composition", () => {
-  const records = workflowRegistryTesting.registeredWorkflowRecords();
+  const records = coreWorkflowRegistry.registeredWorkflowRecords();
   const recordsById = new Map(records.map((record) => [record.id, record]));
   const lifecycleStepIds = new Set(coreLifecycleTesting.ownedStepIds);
   const stepRecordsById = new Map(
-    workflowRegistryTesting.registeredWorkflowStepRecords().map((record) => [record.id, record])
+    coreWorkflowRegistry.registeredStepRecords().map((record) => [record.id, record])
   );
 
   assert.deepEqual(
@@ -2310,18 +2391,24 @@ test("chat-with-ai step instructions make completion ownership explicit", () => 
     stepMachine: {
       status: "ready"
     }
+  }, {}, {
+    runtime: coreWorkflowStepMachineRuntime
   });
   const aiDecidedInstruction = currentStepPromptInputInstruction({
     currentStep: "implementation_reviewed",
     stepMachine: {
       status: "ready"
     }
+  }, {}, {
+    runtime: coreWorkflowStepMachineRuntime
   });
   const finalReviewInstruction = currentStepPromptInputInstruction({
     currentStep: "changes_accepted",
     stepMachine: {
       status: "ready"
     }
+  }, {}, {
+    runtime: coreWorkflowStepMachineRuntime
   });
 
   assert.match(

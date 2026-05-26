@@ -31,7 +31,10 @@ export default Object.freeze({
   },
   mutations: {
     dependencies: {
-      runtime: {},
+      runtime: {
+        "execa": "^9.6.1",
+        "node-pty": "^1.1.0"
+      },
       dev: {}
     },
     packageJson: {

@@ -7,6 +7,9 @@ import {
   createService
 } from "../../packages/ai-studio-project/src/server/service.js";
 import {
+  createCoreWorkflowRegistry
+} from "@local/ai-studio-runtime/server";
+import {
   JSKIT_ALLOW_SELF_TARGET_CONFIG
 } from "@local/ai-studio-adapters/server/adapters/jskit/index";
 import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
@@ -103,6 +106,30 @@ test("AI Studio project service saves project type and plain-file configuration"
     assert.equal(runtime.adapter.id, "jskit");
     assert.equal(runtime.projectConfig.values[JSKIT_ALLOW_SELF_TARGET_CONFIG], true);
     assert.equal(runtime.projectConfig.values.jskit_database_runtime, "postgres");
+  });
+});
+
+test("AI Studio project service injects the app workflow registry into runtimes", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const workflowRegistry = createCoreWorkflowRegistry();
+    const service = createService({
+      targetRoot,
+      workflowRegistry
+    });
+
+    await service.saveProjectType({
+      projectType: "jskit"
+    });
+    await service.saveProjectConfig({
+      values: {
+        github_pr_merge_method: "merge",
+        [JSKIT_ALLOW_SELF_TARGET_CONFIG]: false,
+        jskit_database_runtime: "none"
+      }
+    });
+
+    const runtime = await service.createRuntime();
+    assert.equal(runtime.workflowRegistry, workflowRegistry);
   });
 });
 
