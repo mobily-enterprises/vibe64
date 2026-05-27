@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, writeFile } from "node:fs/promises";
+import { chmod, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 
@@ -16,7 +16,8 @@ import {
 } from "@local/vibe64-runtime/server";
 import {
   FakeTargetAdapter,
-  PromptRenderer
+  PromptRenderer,
+  runVibe64WorkflowSessionAction
 } from "@local/vibe64-adapters/server";
 import {
   VIBE64_ACTION_DISPATCH_ROUTES,
@@ -2146,12 +2147,22 @@ test("editable artifact review steps preserve user-origin and prompt-origin draf
       initialStep: "issue_file_created",
       sessionId: "editable_artifact_issue"
     });
-    assert.equal(issueSession.stepMachine.status, "waiting_for_input");
-    assert.deepEqual(issueSession.presentation.screen.input.fields.map((field) => field.name), [
-      "title",
-      "word",
-      "body"
+    assert.equal(issueSession.stepMachine.status, "ready");
+    assert.equal(issueSession.presentation.screen.kind, "issue_source");
+    assert.deepEqual(issueSession.intents.map((intent) => intent.id), [
+      "use_existing_issue",
+      "draft_issue"
     ]);
+
+    const draftingIssue = await runtime.runAction("editable_artifact_issue", "draft_issue", {
+      conversationRequest: "Add saved reports."
+    });
+    assert.equal(draftingIssue.stepMachine.status, "awaiting_agent_result");
+    assert.equal(draftingIssue.actionResult.status, "prompt_ready");
+    assert.equal(draftingIssue.actionResult.promptId, "draft_issue");
+    assert.match(draftingIssue.actionResult.prompt, /Vibe64 step completion contract/u);
+    assert.match(draftingIssue.actionResult.prompt, /"title": "Concise GitHub issue title\."/u);
+    assert.match(draftingIssue.actionResult.prompt, /"word": "Short Vibe64 session label\/word derived from the issue title\."/u);
 
     const confirmedIssue = await runtime.submitCurrentStepInput("editable_artifact_issue", {
       fields: {
@@ -2160,13 +2171,93 @@ test("editable artifact review steps preserve user-origin and prompt-origin draf
         word: "issue-word"
       },
       kind: "ready",
-      source: "ui",
+      source: "codex",
       stepId: "issue_file_created",
-      stepStatus: "waiting_for_input"
+      stepStatus: "awaiting_agent_result"
     });
     assert.equal(confirmedIssue.stepMachine.status, "confirm_files");
+    assert.deepEqual(confirmedIssue.presentation.screen.input.fields.map((field) => field.name), [
+      "title",
+      "word",
+      "body"
+    ]);
+    assert.deepEqual(confirmedIssue.intents.map((intent) => intent.id), [
+      "continue_step",
+      "reject_issue_draft"
+    ]);
     assert.equal(await runtime.store.readArtifact("editable_artifact_issue", "issue_title"), "Issue title\n");
     assert.equal(await runtime.store.readArtifact("editable_artifact_issue", "issue.md"), "Issue body\n");
+
+    await runtime.createSession({
+      initialStep: "issue_file_created",
+      sessionId: "editable_artifact_issue_accept"
+    });
+    await runtime.submitCurrentStepInput("editable_artifact_issue_accept", {
+      fields: {
+        body: "Issue body",
+        title: "Issue title",
+        word: "issue-word"
+      },
+      kind: "ready",
+      stepId: "issue_file_created",
+      stepStatus: "ready"
+    });
+    const acceptedIssue = await runtime.runIntent("editable_artifact_issue_accept", "continue_step", {
+      stepId: "issue_file_created",
+      stepStatus: "confirm_files"
+    });
+    assert.equal(acceptedIssue.currentStep, "issue_submitted");
+
+    const rejectedIssue = await runtime.runIntent("editable_artifact_issue", "reject_issue_draft", {
+      fields: {
+        feedback: "Use a clearer title."
+      },
+      stepId: "issue_file_created",
+      stepStatus: "confirm_files"
+    });
+    assert.equal(rejectedIssue.stepMachine.status, "ready");
+    assert.equal(rejectedIssue.presentation.screen.kind, "issue_source");
+    assert.equal(await runtime.store.readArtifact("editable_artifact_issue", "issue_title"), "");
+    assert.equal(await runtime.store.readArtifact("editable_artifact_issue", "issue.md"), "");
+
+    const existingIssueRuntime = new Vibe64SessionRuntime({
+      actionHandlers: {
+        use_existing_issue: async () => ({
+          artifacts: {
+            "issue.md": "Existing body\n",
+            issue_title: "Existing issue\n",
+            issue_word: "Existing\n"
+          },
+          message: "Selected GitHub issue #12.",
+          metadata: {
+            issue_number: "12",
+            issue_source: "existing",
+            issue_title: "Existing issue",
+            issue_url: "https://github.com/example/project/issues/12",
+            issue_word: "Existing"
+          },
+          status: "completed"
+        })
+      },
+      adapter: new FakeTargetAdapter({
+        capabilities: {
+          use_existing_issue: true
+        }
+      }),
+      targetRoot
+    });
+    await existingIssueRuntime.createSession({
+      initialStep: "issue_file_created",
+      sessionId: "existing_issue_artifacts"
+    });
+    const existingIssue = await existingIssueRuntime.runAction("existing_issue_artifacts", "use_existing_issue", {
+      issueRef: "12"
+    });
+    assert.equal(existingIssue.stepMachine.status, "done");
+    assert.equal(existingIssue.metadata.issue_url, "https://github.com/example/project/issues/12");
+    assert.equal(existingIssue.metadata.issue_word, "Existing");
+    assert.equal(await existingIssueRuntime.store.readArtifact("existing_issue_artifacts", "issue_title"), "Existing issue\n");
+    assert.equal(await existingIssueRuntime.store.readArtifact("existing_issue_artifacts", "issue.md"), "Existing body\n");
 
     const prSession = await runtime.createSession({
       initialStep: "create_pull_request",
@@ -2222,6 +2313,60 @@ test("editable artifact review steps preserve user-origin and prompt-origin draf
       await runtime.store.readArtifact("editable_artifact_pr", "tmp/create_pull_request.body.md"),
       "PR body\n"
     );
+  });
+});
+
+test("vibe64 existing issue action imports issue artifacts and session word", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const binDir = path.join(targetRoot, "bin");
+    await mkdir(binDir, {
+      recursive: true
+    });
+    const ghPath = path.join(binDir, "gh");
+    await writeFile(
+      ghPath,
+      [
+        "#!/usr/bin/env node",
+        "const args = process.argv.slice(2);",
+        "if (!args.some((arg) => arg.includes('body'))) {",
+        "  process.stderr.write('body field missing');",
+        "  process.exit(1);",
+        "}",
+        "process.stdout.write(JSON.stringify({",
+        "  body: 'Body line\\nSecond line',",
+        "  number: 12,",
+        "  state: 'OPEN',",
+        "  title: 'Add saved reports',",
+        "  url: 'https://github.com/example/project/issues/12'",
+        "}));"
+      ].join("\n"),
+      "utf8"
+    );
+    await chmod(ghPath, 0o755);
+
+    const originalPath = process.env.PATH;
+    process.env.PATH = `${binDir}${path.delimiter}${originalPath || ""}`;
+    try {
+      const result = await runVibe64WorkflowSessionAction("use_existing_issue", {
+        input: {
+          issueRef: "#12"
+        },
+        targetRoot
+      });
+
+      assert.equal(result.status, "completed");
+      assert.equal(result.metadata.issue_url, "https://github.com/example/project/issues/12");
+      assert.equal(result.metadata.issue_word, "Add");
+      assert.equal(result.artifacts.issue_title, "Add saved reports");
+      assert.equal(result.artifacts.issue_word, "Add");
+      assert.equal(result.artifacts["issue.md"], "Body line\nSecond line");
+    } finally {
+      if (originalPath === undefined) {
+        delete process.env.PATH;
+      } else {
+        process.env.PATH = originalPath;
+      }
+    }
   });
 });
 

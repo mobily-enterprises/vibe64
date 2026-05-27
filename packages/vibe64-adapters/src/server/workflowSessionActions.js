@@ -12,6 +12,9 @@ import {
 const execFileAsync = promisify(execFile);
 const GITHUB_COMMAND_TIMEOUT_MS = 30_000;
 const GITHUB_OUTPUT_BUFFER_BYTES = 1024 * 1024;
+const ISSUE_BODY_ARTIFACT = "issue.md";
+const ISSUE_TITLE_ARTIFACT = "issue_title";
+const ISSUE_WORD_ARTIFACT = "issue_word";
 
 function commandOutput(error = {}) {
   return normalizeText(`${error.stdout || ""}\n${error.stderr || ""}`) ||
@@ -20,6 +23,20 @@ function commandOutput(error = {}) {
 
 function normalizeGithubNumberOrUrl(value = "") {
   return normalizeText(value).replace(/^#/u, "");
+}
+
+function artifactText(value = "") {
+  const text = normalizeText(value);
+  return text ? `${text}\n` : "";
+}
+
+function issueWordFromGithubIssue(issue = {}, issueRef = "") {
+  const candidate = normalizeText(issue.title)
+    .split(/\s+/u)
+    .map((word) => word.replace(/[^A-Za-z0-9_-]+/gu, ""))
+    .find(Boolean);
+  const fallback = `issue${normalizeText(issue.number) || normalizeText(issueRef) || "selected"}`;
+  return normalizeText(candidate || fallback).slice(0, 24);
 }
 
 async function ghJson(targetRoot, args = []) {
@@ -93,7 +110,7 @@ async function useExistingIssueSessionAction({
     "view",
     issueRef,
     "--json",
-    "number,title,url,state"
+    "number,title,url,state,body"
   ]);
   if (result.ok === false) {
     return adapterActionResult({
@@ -109,13 +126,22 @@ async function useExistingIssueSessionAction({
       status: "blocked"
     });
   }
+  const title = normalizeText(issue.title);
+  const body = normalizeText(issue.body) || title;
+  const word = issueWordFromGithubIssue(issue, issueRef);
   return adapterActionResult({
-    message: `Selected GitHub issue #${issue.number}: ${normalizeText(issue.title)}`,
+    artifacts: {
+      [ISSUE_BODY_ARTIFACT]: artifactText(body),
+      [ISSUE_TITLE_ARTIFACT]: artifactText(title),
+      [ISSUE_WORD_ARTIFACT]: artifactText(word)
+    },
+    message: `Selected GitHub issue #${issue.number}: ${title}`,
     metadata: {
       issue_number: String(issue.number || ""),
       issue_source: "existing",
-      issue_title: normalizeText(issue.title),
-      issue_url: normalizeText(issue.url)
+      issue_title: title,
+      issue_url: normalizeText(issue.url),
+      [ISSUE_WORD_ARTIFACT]: word
     }
   });
 }

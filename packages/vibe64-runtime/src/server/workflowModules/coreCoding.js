@@ -26,6 +26,7 @@ import { when } from "../workflowConditions.js";
 import {
   STEP_INPUT_KIND,
   STEP_STATUS,
+  assertAgentResultSource,
   artifactIsReady,
   artifactText,
   commandFailureInteraction,
@@ -72,6 +73,8 @@ const seedPlanMadeStepId = "seed_plan_made";
 const finalReviewConversationActionId = "final_review_conversation";
 const humanReviewConversationActionId = "human_review_conversation";
 const ISSUE_FILE_STEP_ID = "issue_file_created";
+const draftIssueActionId = "draft_issue";
+const rejectIssueDraftActionId = "reject_issue_draft";
 const SEED_APPLICATION_STEP_ID = "seed_application_defined";
 
 async function skipOptionalCheck(ctx = {}) {
@@ -143,8 +146,11 @@ const coreCodingStepDefinitionsById = deepFreeze({
     actions: [
       {
         adapterCapability: "use_existing_issue",
-        disabledReason: "An existing issue is already selected.",
-        disabledWhen: [when.metadataExists("issue_url")],
+        disabledReason: "Issue details are already saved.",
+        disabledWhen: [
+          when.metadataExists("issue_url"),
+          when.allArtifactsReady(ISSUE_TITLE_ARTIFACT, ISSUE_BODY_ARTIFACT, ISSUE_WORD_ARTIFACT)
+        ],
         icon: "github",
         id: "use_existing_issue",
         inputFields: [
@@ -157,6 +163,48 @@ const coreCodingStepDefinitionsById = deepFreeze({
         ],
         label: "Use existing issue",
         type: "adapter"
+      },
+      {
+        disabledReason: "Issue details are already saved.",
+        disabledWhen: [
+          when.metadataExists("issue_url"),
+          when.allArtifactsReady(ISSUE_TITLE_ARTIFACT, ISSUE_BODY_ARTIFACT, ISSUE_WORD_ARTIFACT)
+        ],
+        icon: "message-square-plus",
+        id: draftIssueActionId,
+        inputFields: [
+          {
+            kind: "textarea",
+            label: "What do you want Vibe64 to work on?",
+            name: "conversationRequest",
+            placeholder: "Describe the feature, bug, or change you want.",
+            requiredMessage: "Describe what you want Vibe64 to work on."
+          }
+        ],
+        label: "Make my own issue",
+        promptId: draftIssueActionId,
+        recordsConversationTurn: true,
+        type: "prompt"
+      },
+      {
+        disabledReason: "Draft an issue before rejecting it.",
+        disabledWhen: [when.metadataExists("issue_url")],
+        disabledWhenReason: "An existing issue is already selected.",
+        enabledWhen: [when.allArtifactsReady(ISSUE_TITLE_ARTIFACT, ISSUE_BODY_ARTIFACT, ISSUE_WORD_ARTIFACT)],
+        enabledWhenReason: "Draft an issue before rejecting it.",
+        icon: "rotate-ccw",
+        id: rejectIssueDraftActionId,
+        inputFields: [
+          {
+            kind: "textarea",
+            label: "What should change?",
+            name: "feedback",
+            placeholder: "Tell Codex what was wrong or missing.",
+            requiredMessage: "Explain what should change before drafting again."
+          }
+        ],
+        label: "Reject and revise",
+        type: "record"
       }
     ],
     autopilot: {
@@ -175,8 +223,34 @@ const coreCodingStepDefinitionsById = deepFreeze({
         )
       ]
     },
+    presentation: {
+      stop: {
+        intents: [
+          {
+            actionId: "use_existing_issue",
+            id: "use_existing_issue",
+            label: "Use existing issue",
+            style: "primary",
+            type: "action"
+          },
+          {
+            actionId: draftIssueActionId,
+            id: draftIssueActionId,
+            label: "Make my own issue",
+            style: "secondary",
+            type: "action"
+          }
+        ],
+        screen: {
+          kind: "issue_source",
+          message: "Enter a GitHub issue number, or draft a new issue from a description.",
+          primaryIntentId: "use_existing_issue",
+          title: "Define or select issue"
+        }
+      }
+    },
     rewindCleanup: {
-      actionResults: ["use_existing_issue"],
+      actionResults: ["use_existing_issue", draftIssueActionId, rejectIssueDraftActionId],
       artifacts: [ISSUE_TITLE_ARTIFACT, ISSUE_BODY_ARTIFACT, ISSUE_WORD_ARTIFACT],
       metadata: ["issue_url", "issue_number", "issue_title", "issue_source", ISSUE_WORD_ARTIFACT]
     }
@@ -645,6 +719,25 @@ function issueFilesAreReady(session = {}) {
   ].every((artifactName) => artifactIsReady(session, artifactName));
 }
 
+function disableActions(session = {}, reasonsById = {}) {
+  const reasons = Object.entries(reasonsById)
+    .filter(([, reason]) => normalizeText(reason));
+  if (reasons.length === 0) {
+    return Array.isArray(session.actions) ? session.actions : [];
+  }
+  return (Array.isArray(session.actions) ? session.actions : []).map((action) => {
+    const reasonEntry = reasons.find(([id]) => action.id === id);
+    if (!reasonEntry) {
+      return action;
+    }
+    return {
+      ...action,
+      disabledReason: reasonEntry[1],
+      enabled: false
+    };
+  });
+}
+
 async function readIssueFieldValues(context = {}) {
   const [title, body, word] = await Promise.all([
     context.runtime.store.readArtifact(context.session.sessionId, ISSUE_TITLE_ARTIFACT),
@@ -673,6 +766,23 @@ async function writeIssueFieldValues(context = {}, fields = {}) {
 }
 
 function issueInputInteraction(status = STEP_STATUS.WAITING_FOR_INPUT, values = {}) {
+  const reviewIntents = status === STEP_STATUS.CONFIRM_FILES
+    ? [
+        {
+          id: "continue_step",
+          label: "Accept saved issue",
+          style: "primary",
+          type: "continue"
+        },
+        {
+          actionId: rejectIssueDraftActionId,
+          id: rejectIssueDraftActionId,
+          label: "Reject and revise",
+          style: "secondary",
+          type: "action"
+        }
+      ]
+    : [];
   return {
     fields: [
       {
@@ -701,6 +811,7 @@ function issueInputInteraction(status = STEP_STATUS.WAITING_FOR_INPUT, values = 
       }
     ],
     kind: "confirm_files_run_command",
+    intents: reviewIntents,
     prompt: status === STEP_STATUS.CONFIRM_FILES
       ? "Review the issue details. Save changes here, or continue to create the GitHub issue."
       : "Discuss the requested change, then submit the issue title, session label, and issue body.",
@@ -711,6 +822,303 @@ function issueInputInteraction(status = STEP_STATUS.WAITING_FOR_INPUT, values = 
     title: "Define issue"
   };
 }
+
+const issueFilePhase = Object.freeze({
+  CHOOSE_SOURCE: "choose_source",
+  DRAFTING: "drafting",
+  EXISTING_SELECTED: "existing_selected",
+  REVIEW_DRAFT: "review_draft",
+  SELECTING_EXISTING: "selecting_existing"
+});
+
+async function clearIssueFieldValues(context = {}) {
+  await Promise.all([
+    context.runtime.store.deleteArtifacts(context.session.sessionId, [
+      ISSUE_TITLE_ARTIFACT,
+      ISSUE_BODY_ARTIFACT,
+      ISSUE_WORD_ARTIFACT
+    ]),
+    context.runtime.store.deleteMetadataValues(context.session.sessionId, [
+      "issue_title",
+      "issue_source",
+      ISSUE_WORD_ARTIFACT
+    ])
+  ]);
+}
+
+function issueSourceSelectionState(details = {}) {
+  return machineState(STEP_STATUS.READY, {
+    phase: issueFilePhase.CHOOSE_SOURCE,
+    ...details
+  });
+}
+
+function issueDraftReviewState(details = {}) {
+  return machineState(STEP_STATUS.CONFIRM_FILES, {
+    phase: issueFilePhase.REVIEW_DRAFT,
+    ...details
+  });
+}
+
+async function submitIssueDraftAgentResult(context = {}, machine = {}, input = {}) {
+  assertAgentResultSource(context.session, input);
+  switch (input.kind) {
+    case STEP_INPUT_KIND.WAITING_FOR_INPUT:
+      await writeState(context, machine, machineState(STEP_STATUS.WAITING_FOR_INPUT, {
+        message: input.message,
+        phase: issueFilePhase.DRAFTING,
+        response: input.response,
+        source: input.source
+      }));
+      return;
+
+    case STEP_INPUT_KIND.CONFIRM_FILES:
+    case STEP_INPUT_KIND.READY:
+      await writeIssueFieldValues(context, input.fields);
+      await writeState(context, machine, issueDraftReviewState({
+        response: input.response,
+        source: input.source
+      }));
+      return;
+
+    default:
+      throw unsupportedInputKind(input.kind, machine.stepId);
+  }
+}
+
+const issueFileMachine = {
+  promptActionId: draftIssueActionId,
+  stepId: ISSUE_FILE_STEP_ID,
+
+  initialState(context = {}) {
+    if (metadataExists(context.session, "issue_url")) {
+      return machineState(STEP_STATUS.DONE, {
+        phase: issueFilePhase.EXISTING_SELECTED
+      });
+    }
+    return issueFilesAreReady(context.session)
+      ? issueDraftReviewState()
+      : issueSourceSelectionState();
+  },
+
+  async view(context = {}) {
+    let state = await readState(context, this);
+    if (metadataExists(context.session, "issue_url")) {
+      state = machineState(STEP_STATUS.DONE, {
+        phase: issueFilePhase.EXISTING_SELECTED
+      });
+    } else if (issueFilesAreReady(context.session) && state.status !== STEP_STATUS.CONFIRM_FILES) {
+      state = issueDraftReviewState({
+        from: state.status
+      });
+    }
+
+    switch (state.status) {
+      case STEP_STATUS.READY:
+        return {
+          actions: disableAction(context.session, rejectIssueDraftActionId, "Draft an issue before rejecting it."),
+          next: {
+            disabledReason: "Select an existing issue or draft a new one."
+          },
+          stepMachine: publicState(this, {
+            ...state,
+            message: state.message || "Select an existing issue or draft a new one."
+          })
+        };
+
+      case STEP_STATUS.ATTEMPTING_EXECUTION:
+        return promptStepWaitingView(context, this, state, {
+          prompt: "Wait for Vibe64 to load the existing GitHub issue.",
+          title: "Loading issue"
+        });
+
+      case STEP_STATUS.AWAITING_AGENT_RESULT:
+        return promptStepWaitingView(context, this, state, {
+          prompt: "Wait for Codex to draft the issue.",
+          title: "Drafting issue"
+        });
+
+      case STEP_STATUS.WAITING_FOR_INPUT:
+        return promptStepWaitingForInputView(context, this, state, {
+          prompt: state.message || "Codex needs more information before it can draft the issue.",
+          title: "Describe the issue"
+        });
+
+      case STEP_STATUS.CONFIRM_FILES: {
+        const values = await readIssueFieldValues(context);
+        return {
+          actions: disableAction(context.session, "use_existing_issue", "Issue details are already saved."),
+          interaction: issueInputInteraction(STEP_STATUS.CONFIRM_FILES, values),
+          next: nextForSession(context.session, {
+            enabled: true
+          }),
+          stepMachine: publicState(this, {
+            ...state,
+            message: state.message || "Review the saved issue draft."
+          })
+        };
+      }
+
+      case STEP_STATUS.DONE:
+        return {
+          actions: disableActions(context.session, {
+            use_existing_issue: "An existing issue is already selected.",
+            [draftIssueActionId]: "An existing issue is already selected.",
+            [rejectIssueDraftActionId]: "An existing issue is already selected."
+          }),
+          next: nextForSession(context.session, {
+            enabled: true
+          }),
+          stepMachine: publicState(this, {
+            ...state,
+            message: state.message || "Existing GitHub issue selected."
+          })
+        };
+
+      case STEP_STATUS.FAILED:
+        return {
+          next: {
+            disabledReason: "Resolve the issue selection failure before continuing."
+          },
+          stepMachine: publicState(this, {
+            ...state,
+            message: state.message || "Issue selection failed."
+          })
+        };
+
+      default:
+        return {
+          next: {
+            disabledReason: "Select an existing issue or draft a new one."
+          },
+          stepMachine: publicState(this, state)
+        };
+    }
+  },
+
+  async actionStarted(context = {}) {
+    if (context.actionId === draftIssueActionId) {
+      await writeState(context, this, machineState(STEP_STATUS.AWAITING_AGENT_RESULT, {
+        phase: issueFilePhase.DRAFTING
+      }));
+      return;
+    }
+
+    if (context.actionId === "use_existing_issue") {
+      await writeState(context, this, machineState(STEP_STATUS.ATTEMPTING_EXECUTION, {
+        phase: issueFilePhase.SELECTING_EXISTING
+      }));
+      return;
+    }
+
+    if (context.actionId === rejectIssueDraftActionId) {
+      await writeState(context, this, machineState(STEP_STATUS.ATTEMPTING_EXECUTION, {
+        phase: issueFilePhase.REVIEW_DRAFT
+      }));
+    }
+  },
+
+  async actionFinished(context = {}) {
+    if (context.actionId === "use_existing_issue") {
+      if (await commandSucceeded(context, "issue_url")) {
+        await writeState(context, this, machineState(STEP_STATUS.DONE, {
+          phase: issueFilePhase.EXISTING_SELECTED
+        }));
+        return;
+      }
+      await writeState(context, this, machineState(STEP_STATUS.FAILED, {
+        message: normalizeText(context.actionResult?.message) || "Could not load the existing GitHub issue.",
+        phase: issueFilePhase.SELECTING_EXISTING
+      }));
+      return;
+    }
+
+    if (context.actionId === rejectIssueDraftActionId) {
+      const feedback = normalizeText(context.actionResult?.input?.feedback);
+      await clearIssueFieldValues(context);
+      await writeState(context, this, issueSourceSelectionState({
+        message: feedback
+          ? `Previous draft rejected: ${feedback}`
+          : "Previous draft rejected. Describe what you want instead."
+      }));
+    }
+  },
+
+  async submitInput(context = {}) {
+    const state = await readState(context, this);
+    const input = normalizeMachineInput(context.input);
+
+    switch (state.status) {
+      case STEP_STATUS.READY:
+        if (input.kind === STEP_INPUT_KIND.CONFIRM_FILES || input.kind === STEP_INPUT_KIND.READY) {
+          await writeIssueFieldValues(context, input.fields);
+          await writeState(context, this, issueDraftReviewState({
+            response: input.response,
+            source: input.source
+          }));
+          return;
+        }
+        throw unsupportedInputKind(input.kind, this.stepId);
+
+      case STEP_STATUS.AWAITING_AGENT_RESULT:
+        await submitIssueDraftAgentResult(context, this, input);
+        return;
+
+      case STEP_STATUS.WAITING_FOR_INPUT:
+        if (input.kind === STEP_INPUT_KIND.CONSIDER_RESOLVED || input.kind === STEP_INPUT_KIND.USER_RESPONSE) {
+          await writeState(context, this, issueSourceSelectionState({
+            message: input.message,
+            response: input.response,
+            source: input.source
+          }));
+          return;
+        }
+        if (input.source === "codex") {
+          await submitIssueDraftAgentResult(context, this, input);
+          return;
+        }
+        throw unsupportedInputKind(input.kind, this.stepId);
+
+      case STEP_STATUS.CONFIRM_FILES:
+        if (input.kind === STEP_INPUT_KIND.CONFIRM_FILES || input.kind === STEP_INPUT_KIND.READY) {
+          await writeIssueFieldValues(context, input.fields);
+          await writeState(context, this, issueDraftReviewState({
+            response: input.response,
+            source: input.source
+          }));
+          return;
+        }
+        throw unsupportedInputKind(input.kind, this.stepId);
+
+      case STEP_STATUS.FAILED:
+        if (input.kind === STEP_INPUT_KIND.CONSIDER_RESOLVED || input.kind === STEP_INPUT_KIND.USER_RESPONSE) {
+          await writeState(context, this, issueSourceSelectionState({
+            message: input.message,
+            response: input.response,
+            source: input.source
+          }));
+          return;
+        }
+        throw unsupportedInputKind(input.kind, this.stepId);
+
+      case STEP_STATUS.DONE:
+      default:
+        throw vibe64Error("The issue step is already complete.", "vibe64_step_input_not_available");
+    }
+  },
+
+  promptInstruction() {
+    return currentStepHelperInstruction({
+      doneFields: {
+        body: "Markdown issue body describing the requested change, context, and acceptance criteria.",
+        title: "Concise GitHub issue title.",
+        word: "Short Vibe64 session label/word derived from the issue title."
+      },
+      doneMeaning: "You have enough information to propose a GitHub issue title, body, and Vibe64 session label for user review.",
+      waitingForInputMeaning: "You need more information from the user before drafting the issue."
+    });
+  }
+};
 
 const issueSubmittedMachine = {
   stepId: issueSubmittedStepId,
@@ -1080,46 +1488,9 @@ const coreCodingSteps = Object.freeze(Object.values(Object.freeze({
     id: SEED_APPLICATION_STEP_ID
   },
   [ISSUE_FILE_STEP_ID]: {
-    config: {
-      command: {
-        actionId: "use_existing_issue",
-        doneMetadata: "issue_url",
-        failureState: (context = {}) => machineState(STEP_STATUS.FAILED, {
-          message: normalizeText(context.actionResult?.message)
-        }),
-        finishStatuses: [
-          STEP_STATUS.WAITING_FOR_INPUT,
-          STEP_STATUS.CONFIRM_FILES,
-          STEP_STATUS.FAILED
-        ],
-        markAttemptingOnStart: false
-      },
-      done: (session = {}) => metadataExists(session, "issue_url"),
-      draftReady: issueFilesAreReady,
-      initialDetails: {
-        doing: "discussion"
-      },
-      interaction: issueInputInteraction,
-      nextWhenDrafting: {
-        disabledReason: "Define and save the issue before continuing."
-      },
-      nextWhenWorking: {
-        disabledReason: "Define and save the issue before continuing."
-      },
-      onConfirmedActions: (context = {}) => disableAction(context.session, "use_existing_issue", "Issue details are already saved."),
-      onDoneActions: (context = {}) => disableAction(context.session, "use_existing_issue", "An existing issue is already selected."),
-      readValues: readIssueFieldValues,
-      saveValues: writeIssueFieldValues,
-      unsupportedDoneMessage: "The issue is already complete.",
-      waitingForInputState: (input = {}) => ({
-        doing: "discussion",
-        message: input.message
-      }),
-      waitingInteraction: () => issueInputInteraction(STEP_STATUS.WAITING_FOR_INPUT, {})
-    },
     definition: coreCodingStepDefinitionsById[ISSUE_FILE_STEP_ID],
-    factoryId: "editable_artifact_review",
-    id: ISSUE_FILE_STEP_ID
+    id: ISSUE_FILE_STEP_ID,
+    machine: issueFileMachine
   },
   [issueSubmittedStepId]: {
     definition: coreCodingStepDefinitionsById[issueSubmittedStepId],

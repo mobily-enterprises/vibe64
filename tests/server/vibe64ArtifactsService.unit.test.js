@@ -89,7 +89,7 @@ test("Vibe64 artifacts service saves semantic issue step input", async () => {
     const saved = await service.submitCurrentStepInput("step_input_issue", {
       kind: "ready",
       stepId: "issue_file_created",
-      stepStatus: "waiting_for_input",
+      stepStatus: "ready",
       fields: {
         body: "Create a booking dashboard.",
         title: "Add booking dashboard",
@@ -291,9 +291,8 @@ test("Vibe64 artifacts service rejects stale current-step input", async () => {
     assert.equal(saved.errors[0].code, "vibe64_step_input_state_changed");
     assert.match(saved.errors[0].message, /Reload state/u);
     assert.equal(saved.currentStep, "issue_file_created");
-    assert.equal(saved.stepStatus, "waiting_for_input");
-    assert.equal(saved.expectedInput.title, "Define issue");
-    assert.equal(saved.expectedInput.fields[0].name, "title");
+    assert.equal(saved.stepStatus, "ready");
+    assert.equal(saved.expectedInput, null);
   });
 });
 
@@ -305,6 +304,9 @@ test("Vibe64 current-step helper submits through the same server path", async ()
     await runtime.createSession({
       initialStep: "issue_file_created",
       sessionId: "step_input_helper"
+    });
+    await runtime.runAction("step_input_helper", "draft_issue", {
+      conversationRequest: "Create a booking dashboard."
     });
     const projectService = projectServiceForRuntime(runtime);
     const session = await runtime.getSession("step_input_helper");
@@ -328,7 +330,7 @@ test("Vibe64 current-step helper submits through the same server path", async ()
         },
         kind: "ready",
         stepId: "issue_file_created",
-        stepStatus: "waiting_for_input"
+        stepStatus: "awaiting_agent_result"
       })
     ], {
       ...helper.env,

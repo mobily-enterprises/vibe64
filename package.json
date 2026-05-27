@@ -1,5 +1,5 @@
 {
-  "name": "@vibe64/run",
+  "name": "vibe64",
   "version": "0.1.21",
   "private": false,
   "type": "module",

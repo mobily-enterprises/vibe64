@@ -158,10 +158,12 @@ function intent(id, {
   input = null,
   inputFields = [],
   label = "",
+  operation = "",
   style = "secondary"
 } = {}) {
   const controlPresentation = isPlainObject(control) ? normalizeControlPresentation(control) : null;
   const intentInputPresentation = isPlainObject(input) ? input : null;
+  const normalizedOperation = normalizeText(operation);
   return {
     actionId: normalizeText(actionId),
     ...(controlPresentation ? { control: controlPresentation } : {}),
@@ -171,6 +173,7 @@ function intent(id, {
     ...(intentInputPresentation ? { input: intentInputPresentation } : {}),
     inputFields: Array.isArray(inputFields) ? inputFields : [],
     label: normalizeText(label || id),
+    ...(normalizedOperation ? { operation: normalizedOperation } : {}),
     style
   };
 }
@@ -238,6 +241,7 @@ function continueIntent(session = {}, {
     disabledReason: session.next?.disabledReason || "",
     enabled: nextIsReady(session),
     label: label || session.next?.label || "Continue",
+    operation: "continue",
     style: "primary"
   });
 }
@@ -340,6 +344,7 @@ function intentFromConfig(session = {}, config = {}) {
       enabled,
       inputFields: config.inputFields,
       label: config.label || "Reject",
+      operation: "reject",
       style: config.style || "secondary"
     });
   }
@@ -428,6 +433,12 @@ function userDecisionPresentation(session = {}) {
   };
 }
 
+function interactionIntents(session = {}, interaction = {}) {
+  return (Array.isArray(interaction.intents) ? interaction.intents : [])
+    .map((intentConfig) => intentFromConfig(session, intentConfig))
+    .filter(Boolean);
+}
+
 function interactionPresentation(session = {}) {
   const interaction = currentStepDefinition(session).interaction;
   if (!isPlainObject(interaction)) {
@@ -463,7 +474,7 @@ function interactionPresentation(session = {}) {
     };
   }
   return {
-    intents: [],
+    intents: interactionIntents(session, interaction),
     screen: screen(stepMachineStatus(session) === STEP_STATUS.CONFIRM_FILES ? "confirm_files" : "input", {
       input: inputPresentation(interaction, {
         submitTarget: "current-step-input"
@@ -1227,7 +1238,7 @@ async function runWorkflowIntentHandler(runtime, session = {}, selectedIntent = 
 
 async function runBuiltinWorkflowIntent(runtime, session = {}, selectedIntent = {}, intentConfig = {}, fields = {}) {
   const hasIntentConfig = isPlainObject(intentConfig) && Object.keys(intentConfig).length > 0;
-  const type = normalizeText(intentConfig?.type);
+  const type = normalizeText(intentConfig?.type || selectedIntent.operation);
   if (type === "continue") {
     return runtime.advance(session.sessionId);
   }
