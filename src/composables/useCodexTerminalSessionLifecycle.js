@@ -83,7 +83,6 @@ function useCodexTerminalSessionLifecycle({
     terminalStatus.value = session.status || terminalStatus.value || "";
     terminalCommandPreview.value = session.commandPreview || terminalCommandPreview.value;
     writeTerminalOutput?.(session.output);
-    emitTerminalSessionState();
   }
 
   function handleTerminalSocketMessage(rawMessage) {
@@ -289,7 +288,6 @@ function useCodexTerminalSessionLifecycle({
     terminalSessionId.value = nextTerminalSessionId;
     terminalStatus.value = session.status || terminalStatus.value || "running";
     terminalCommandPreview.value = session.commandPreview || terminalCommandPreview.value || "";
-    emitTerminalSessionState();
     if (!canUseTerminal.value || !componentMounted.value) {
       return true;
     }

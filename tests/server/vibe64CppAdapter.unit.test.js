@@ -51,6 +51,12 @@ async function createCppProject(root) {
   ]);
 }
 
+function worktreeMetadata(targetRoot, sessionId = "session") {
+  return {
+    worktree_path: path.join(targetRoot, ".vibe64/sessions/active", sessionId, "worktree")
+  };
+}
+
 function commandIds() {
   return CPP_VIBE64_COMMANDS
     .map((command) => command.id)
@@ -165,6 +171,7 @@ test("cpp prompt actions use the C++ prompt pack", async () => {
     });
     await runtime.createSession({
       initialStep: "plan_made",
+      metadata: worktreeMetadata(targetRoot, "cpp_prompt"),
       sessionId: "cpp_prompt"
     });
 

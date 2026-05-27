@@ -43,6 +43,7 @@ import {
   codexTerminalNamespace,
   directoryExists,
   dockerCommand,
+  globalCodexTerminalNamespace,
   stableHash,
   terminalTargetRoot,
   terminalWorktreePath
@@ -97,8 +98,10 @@ const CODEX_SESSION_MODEL = "gpt-5.5";
 const CODEX_SESSION_REASONING_EFFORT = "xhigh";
 const CODEX_BOOTSTRAP_TASK_ID = "codex_bootstrap";
 const START_CODEX_TERMINAL_CONTROL_ACTION = "start_codex_terminal";
+const CONTINUE_CODEX_TURN_PROMPT = "Continue work";
 const MAX_OPEN_CODEX_TERMINALS = 3;
 const STUDIO_DAEMON_ID = crypto.randomUUID();
+const GLOBAL_CODEX_TERMINAL_SCOPE = "global";
 const CODEX_TURN_STATE = Object.freeze({
   IDLE: "idle",
   TRANSMITTING: "transmitting"
@@ -110,6 +113,13 @@ function normalizeText(value) {
 
 function errorMessage(value, fallback = "Codex could not be prepared.") {
   return normalizeText(value?.error || value?.message || value) || fallback;
+}
+
+function retryableTerminalFailure(result = {}) {
+  return {
+    ...result,
+    retryable: false
+  };
 }
 
 function delay(ms) {
@@ -235,6 +245,28 @@ function codexTerminalSnapshot(sessionId = "", terminalSessionId = "") {
   });
 }
 
+function codexTerminalStatus(terminal = null) {
+  if (!terminal) {
+    return null;
+  }
+  return {
+    activityLabel: terminal.metadata?.codexTurnLabel || "",
+    activityStartedAt: terminal.metadata?.codexTurnStartedAt || "",
+    activityFinishedAt: terminal.metadata?.codexTurnFinishedAt || "",
+    activityReason: terminal.metadata?.codexTurnReason || "",
+    commandPreview: terminal.commandPreview || "",
+    id: terminal.id || "",
+    inputVersion: terminal.inputVersion || 0,
+    lastInputAt: terminal.lastInputAt || "",
+    lastInputBytes: terminal.lastInputBytes || 0,
+    lastOutputAt: terminal.lastOutputAt || "",
+    lastOutputBytes: terminal.lastOutputBytes || 0,
+    outputVersion: terminal.outputVersion || 0,
+    status: terminal.status || "",
+    transmitting: terminal.metadata?.codexTurnState === CODEX_TURN_STATE.TRANSMITTING
+  };
+}
+
 function activeCodexTerminal(session = {}) {
   const sessionId = normalizeText(session.sessionId);
   if (!sessionId) {
@@ -248,17 +280,17 @@ function activeCodexTerminal(session = {}) {
     .filter((terminal) => !workdir || terminal.metadata?.workdir === workdir)
     .sort((left, right) => String(right.createdAt || "").localeCompare(String(left.createdAt || "")));
   const terminal = terminals[0] || null;
-  if (!terminal) {
-    return null;
-  }
-  return {
-    activityLabel: terminal.metadata?.codexTurnLabel || "",
-    activityReason: terminal.metadata?.codexTurnReason || "",
-    commandPreview: terminal.commandPreview || "",
-    id: terminal.id || "",
-    status: terminal.status || "",
-    transmitting: terminal.metadata?.codexTurnState === CODEX_TURN_STATE.TRANSMITTING
-  };
+  return codexTerminalStatus(terminal);
+}
+
+function activeGlobalCodexTerminal(targetRoot = "") {
+  const terminals = listTerminalSessions({
+    namespace: globalCodexTerminalNamespace()
+  })
+    .filter((terminal) => terminal.status !== "exited")
+    .filter((terminal) => !targetRoot || terminal.metadata?.targetRoot === targetRoot)
+    .sort((left, right) => String(right.createdAt || "").localeCompare(String(left.createdAt || "")));
+  return codexTerminalStatus(terminals[0] || null);
 }
 
 function writeCodexTerminalInput(sessionId = "", terminalSessionId = "", data = "") {
@@ -429,8 +461,13 @@ function codexTerminalArgs({
   });
 }
 
-function codexContainerName({ sessionId, terminalId }) {
-  return `${STUDIO_CODEX_CONTAINER_PREFIX}-${stableHash(sessionId)}-${stableHash(terminalId)}`;
+function codexContainerName({
+  scope = "",
+  sessionId = "",
+  terminalId = ""
+} = {}) {
+  const containerScope = normalizeText(scope || sessionId || GLOBAL_CODEX_TERMINAL_SCOPE);
+  return `${STUDIO_CODEX_CONTAINER_PREFIX}-${stableHash(containerScope)}-${stableHash(terminalId)}`;
 }
 
 function maskedCodexTerminalDockerArgs(args = []) {
@@ -449,25 +486,25 @@ function createCodexTerminalController({
     const session = await runtime.getSession(sessionId);
     const targetRoot = terminalTargetRoot(session, projectService);
     if (!targetRoot) {
-      return {
+      return retryableTerminalFailure({
         ok: false,
         error: "Vibe64 Codex target root is not available."
-      };
+      });
     }
     const workdir = terminalWorktreePath(session);
     if (!workdir || !containerWorkspacePath(targetRoot, workdir)) {
-      return {
+      return retryableTerminalFailure({
         ok: false,
         error: workdir
           ? "Vibe64 Codex workdir is outside the target root."
           : "Create the session worktree before starting Codex."
-      };
+      });
     }
     if (!await directoryExists(workdir)) {
-      return {
+      return retryableTerminalFailure({
         ok: false,
         error: `Session worktree directory does not exist: ${workdir}`
-      };
+      });
     }
     const imageResult = await resolveTerminalToolchainImage({
       runtime,
@@ -554,6 +591,102 @@ function createCodexTerminalController({
       }
     });
     return withCodexState(terminalResponse, session);
+  }
+
+  async function startGlobalCodexTerminalSession() {
+    const runtime = await projectService.createRuntime();
+    const targetRoot = terminalTargetRoot({}, projectService);
+    if (!targetRoot) {
+      return retryableTerminalFailure({
+        ok: false,
+        error: "Global Codex target root is not available."
+      });
+    }
+    if (!await directoryExists(targetRoot)) {
+      return retryableTerminalFailure({
+        ok: false,
+        error: `Main repo directory does not exist: ${targetRoot}`
+      });
+    }
+
+    const session = {
+      targetRoot
+    };
+    const imageResult = await resolveTerminalToolchainImage({
+      runtime,
+      session,
+      target: "codex",
+      targetRoot
+    });
+    if (imageResult.ok === false) {
+      return imageResult;
+    }
+
+    await prepareCodexAttachmentRoot();
+    await ensureTargetRuntimeNetwork(targetRoot);
+    await ensureAdapterRuntimeContainers({
+      runtime,
+      session,
+      target: "codex",
+      targetRoot
+    });
+    const terminalEnv = await projectTerminalEnvironment({
+      projectService,
+      runtime,
+      session,
+      target: "codex",
+      targetRoot
+    });
+    const terminalEnvHash = terminalEnvironmentFingerprint(terminalEnv);
+    const namespace = globalCodexTerminalNamespace();
+    const terminalResponse = startTerminalSession({
+      args: ({ id }) => codexTerminalArgs({
+        codexThreadId: "",
+        containerName: codexContainerName({
+          scope: GLOBAL_CODEX_TERMINAL_SCOPE,
+          terminalId: id
+        }),
+        env: terminalEnv,
+        image: imageResult.image,
+        sessionId: "",
+        targetRoot,
+        terminalId: id,
+        worktree: targetRoot
+      }),
+      command: "docker",
+      commandPreview: ({ args }) => dockerCommand(maskedCodexTerminalDockerArgs(args)),
+      cwd: targetRoot,
+      maxRunning: MAX_OPEN_CODEX_TERMINALS,
+      metadata: {
+        envHash: terminalEnvHash,
+        image: imageResult.image,
+        imageLabel: imageResult.label,
+        scope: GLOBAL_CODEX_TERMINAL_SCOPE,
+        targetRoot,
+        workdir: targetRoot
+      },
+      namespace,
+      onClose: async ({ id }) => {
+        await removeDockerContainer(codexContainerName({
+          scope: GLOBAL_CODEX_TERMINAL_SCOPE,
+          terminalId: id
+        }));
+        await cleanupCodexAttachments(targetRoot, GLOBAL_CODEX_TERMINAL_SCOPE);
+      },
+      reuseRunning: (terminalSession) => {
+        return terminalSession.metadata?.scope === GLOBAL_CODEX_TERMINAL_SCOPE &&
+          terminalSession.metadata?.targetRoot === targetRoot &&
+          terminalSession.metadata?.envHash === terminalEnvHash &&
+          terminalSession.metadata?.image === imageResult.image &&
+          terminalSession.metadata?.workdir === targetRoot;
+      }
+    });
+    const codexTerminal = activeGlobalCodexTerminal(targetRoot);
+    return {
+      ...terminalResponse,
+      codexTerminal,
+      globalCodexTerminal: codexTerminal
+    };
   }
 
   async function waitForCodexReady(sessionId, terminalSessionId) {
@@ -687,6 +820,7 @@ function createCodexTerminalController({
     error = "",
     kind = "",
     message = "",
+    retryable = true,
     status = "running",
     terminalSessionId = ""
   } = {}) {
@@ -702,7 +836,7 @@ function createCodexTerminalController({
         kind: "codex_bootstrap",
         label: "Codex bootstrap",
         message: normalizeText(message),
-        retry: status === "failed"
+        retry: status === "failed" && retryable !== false
           ? {
               control: {
                 action: START_CODEX_TERMINAL_CONTROL_ACTION
@@ -749,6 +883,7 @@ function createCodexTerminalController({
       error: errorMessage(result),
       kind: "failed",
       message: "Codex bootstrap failed.",
+      retryable: result?.retryable !== false,
       status: "failed",
       terminalSessionId
     });
@@ -1015,7 +1150,66 @@ function createCodexTerminalController({
     };
   }
 
+  async function continueCodexTurn(sessionId) {
+    const bootstrap = await ensureCodexThreadReady(sessionId);
+    if (bootstrap.ok === false) {
+      return bootstrap;
+    }
+
+    const runtime = await projectService.createRuntime();
+    const session = await runtime.getSession(sessionId);
+    const terminalSessionId = bootstrap.terminalSessionId || bootstrap.id || activeCodexTerminal(session)?.id || "";
+    if (!terminalSessionId) {
+      return {
+        ok: false,
+        error: "Codex terminal is not running."
+      };
+    }
+
+    const signature = codexPromptHandoffSignature(sessionId);
+    const turnMetadataResult = await markCodexTerminalTransmitting(
+      sessionId,
+      terminalSessionId,
+      signature,
+      "codex-turn-continue-started"
+    );
+    if (turnMetadataResult.ok === false) {
+      return turnMetadataResult;
+    }
+
+    const ready = await waitForCodexReady(sessionId, terminalSessionId);
+    if (ready.ok === false) {
+      await markCodexTerminalIdle(sessionId, terminalSessionId, "codex-turn-continue-failed");
+      return ready;
+    }
+
+    const injected = await writePromptIntoCodexTerminal(
+      sessionId,
+      terminalSessionId,
+      CONTINUE_CODEX_TURN_PROMPT
+    );
+    if (injected.ok === false) {
+      await markCodexTerminalIdle(sessionId, terminalSessionId, "codex-turn-continue-failed");
+      return injected;
+    }
+
+    await publishPromptInjected(sessionId, {
+      reason: "codex-turn-continue-injected"
+    });
+    return {
+      ...withCodexState(injected, session),
+      codexContinueInjected: true,
+      terminalSessionId
+    };
+  }
+
   return Object.freeze({
+    closeGlobalTerminal(terminalSessionId) {
+      return closeTerminalSession(terminalSessionId, {
+        namespace: globalCodexTerminalNamespace()
+      });
+    },
+
     async closeAllForSession(sessionId) {
       await closeTerminalSessionsForNamespace(codexTerminalNamespace(sessionId));
       const targetRoot = await terminalTargetRootForSession(projectService, sessionId);
@@ -1027,6 +1221,21 @@ function createCodexTerminalController({
     closeTerminal(sessionId, terminalSessionId) {
       return closeTerminalSession(terminalSessionId, {
         namespace: codexTerminalNamespace(sessionId)
+      });
+    },
+
+    readGlobalTerminal(terminalSessionId) {
+      return vibe64Result(async () => {
+        const targetRoot = terminalTargetRoot({}, projectService);
+        const snapshot = readTerminalSession(terminalSessionId, {
+          namespace: globalCodexTerminalNamespace()
+        });
+        const codexTerminal = activeGlobalCodexTerminal(targetRoot);
+        return {
+          ...snapshot,
+          codexTerminal,
+          globalCodexTerminal: codexTerminal
+        };
       });
     },
 
@@ -1043,6 +1252,12 @@ function createCodexTerminalController({
     async injectCodexPrompt(sessionId, handoff = {}) {
       return vibe64Result(async () => {
         return injectPromptIntoCodex(sessionId, handoff);
+      });
+    },
+
+    async continueTurn(sessionId) {
+      return vibe64Result(async () => {
+        return continueCodexTurn(sessionId);
       });
     },
 
@@ -1067,6 +1282,39 @@ function createCodexTerminalController({
     async startTerminal(sessionId) {
       return vibe64Result(async () => {
         return ensureCodexThreadReady(sessionId);
+      });
+    },
+
+    async startGlobalTerminal() {
+      return vibe64Result(async () => {
+        return startGlobalCodexTerminalSession();
+      });
+    },
+
+    async globalTerminalState() {
+      return vibe64Result(async () => {
+        const targetRoot = terminalTargetRoot({}, projectService);
+        const codexTerminal = activeGlobalCodexTerminal(targetRoot);
+        return {
+          codexTerminal,
+          globalCodexTerminal: codexTerminal,
+          ok: true
+        };
+      });
+    },
+
+    subscribeGlobalTerminal(terminalSessionId, subscriber) {
+      return vibe64Result(async () => {
+        const targetRoot = terminalTargetRoot({}, projectService);
+        const subscribed = subscribeTerminalSession(terminalSessionId, subscriber, {
+          namespace: globalCodexTerminalNamespace()
+        });
+        const codexTerminal = activeGlobalCodexTerminal(targetRoot);
+        return {
+          ...subscribed,
+          codexTerminal,
+          globalCodexTerminal: codexTerminal
+        };
       });
     },
 
@@ -1105,9 +1353,21 @@ function createCodexTerminalController({
       });
     },
 
+    writeGlobalTerminal(terminalSessionId, data) {
+      return writeTerminalSession(terminalSessionId, data, {
+        namespace: globalCodexTerminalNamespace()
+      });
+    },
+
     resizeTerminal(sessionId, terminalSessionId, size) {
       return resizeTerminalSession(terminalSessionId, size, {
         namespace: codexTerminalNamespace(sessionId)
+      });
+    },
+
+    resizeGlobalTerminal(terminalSessionId, size) {
+      return resizeTerminalSession(terminalSessionId, size, {
+        namespace: globalCodexTerminalNamespace()
       });
     }
   });

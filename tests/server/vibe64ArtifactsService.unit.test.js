@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import path from "node:path";
 import test from "node:test";
 
 import {
@@ -27,6 +28,12 @@ function projectServiceForRuntime(runtime) {
     async createRuntime() {
       return runtime;
     }
+  };
+}
+
+function worktreeMetadata(targetRoot, sessionId = "session") {
+  return {
+    worktree_path: path.join(targetRoot, ".vibe64/sessions/active", sessionId, "worktree")
   };
 }
 
@@ -303,6 +310,7 @@ test("Vibe64 current-step helper submits through the same server path", async ()
     });
     await runtime.createSession({
       initialStep: "issue_file_created",
+      metadata: worktreeMetadata(targetRoot, "step_input_helper"),
       sessionId: "step_input_helper"
     });
     await runtime.runAction("step_input_helper", "draft_issue", {

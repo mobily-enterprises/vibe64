@@ -106,6 +106,112 @@ test.describe("Autopilot dumb client contract", () => {
     await expect.poll(() => commandTerminalStarts).toBe(0);
   });
 
+  test("shows blocked intent action results as errors and keeps issue input retryable", async ({ page }) => {
+    const intentRequests: unknown[] = [];
+    const session = issueSourceSession();
+    await mockVibe64Session(page, session, {
+      onIntent: (body) => {
+        intentRequests.push(body);
+        session.actionResult = {
+          actionLabel: "Use existing issue",
+          actionType: "adapter",
+          message: "Could not resolve GitHub issue: issue not found",
+          status: "blocked",
+          stepId: "issue_file_created"
+        };
+        session.stepMachine = {
+          status: "failed",
+          stepId: "issue_file_created"
+        };
+      }
+    });
+
+    await page.goto(`${BASE_URL}/home`);
+    await page.getByLabel("Issue URL or number").fill("404404");
+    await page.getByRole("button", { exact: true, name: "Use existing issue" }).click();
+
+    await expect.poll(() => intentRequests).toEqual([
+      {
+        fields: {
+          issueRef: "404404"
+        },
+        stepId: "issue_file_created",
+        stepStatus: "ready"
+      }
+    ]);
+    await expect(page.getByText("Could not resolve GitHub issue: issue not found").first()).toBeVisible();
+    await expect(page.getByText("Vibe64 intent completed.")).toHaveCount(0);
+    await expect(page.getByText("Vibe64 intent could not run.")).toHaveCount(0);
+    await expect(page.getByLabel("Issue URL or number")).toBeVisible();
+  });
+
+  test("progresses after a successful existing-issue intent result", async ({ page }) => {
+    const session = issueSourceSession();
+    await mockVibe64Session(page, session, {
+      onIntent: () => {
+        Object.assign(session, sessionPayload({
+          actionResult: {
+            actionLabel: "Use existing issue",
+            actionType: "adapter",
+            message: "Selected GitHub issue #123: Existing feature",
+            metadata: {
+              issue_number: "123",
+              issue_source: "existing",
+              issue_title: "Existing feature",
+              issue_url: "https://github.com/example/project/issues/123",
+              issue_word: "Existing"
+            },
+            status: "completed",
+            stepId: "issue_file_created"
+          },
+          currentStep: "issue_submitted",
+          currentStepDefinition: {
+            id: "issue_submitted",
+            label: "Edit and submit issue"
+          },
+          intents: [],
+          metadata: {
+            issue_number: "123",
+            issue_source: "existing",
+            issue_title: "Existing feature",
+            issue_url: "https://github.com/example/project/issues/123",
+            issue_word: "Existing"
+          },
+          presentation: {
+            auto: {
+              nextOperation: {
+                executable: false,
+                kind: "stop",
+                reason: "Issue selected"
+              }
+            },
+            screen: {
+              kind: "ready",
+              sections: [],
+              title: "Edit and submit issue"
+            },
+            step: {
+              id: "issue_submitted",
+              label: "Edit and submit issue",
+              status: "ready"
+            }
+          },
+          stepMachine: {
+            status: "ready",
+            stepId: "issue_submitted"
+          }
+        }));
+      }
+    });
+
+    await page.goto(`${BASE_URL}/home`);
+    await page.getByLabel("Issue URL or number").fill("123");
+    await page.getByRole("button", { exact: true, name: "Use existing issue" }).click();
+
+    await expect(page.getByRole("heading", { name: "Edit and submit issue" })).toBeVisible();
+    await expect(page.getByText("Could not resolve GitHub issue")).toHaveCount(0);
+  });
+
   test("continues from server state when a command stream closes after server completion", async ({ page }) => {
     await mockCommandTerminalSocketThatCloses(page);
     const advances: unknown[] = [];
@@ -379,7 +485,8 @@ test.describe("Autopilot dumb client contract", () => {
             readOnlyInAutopilot: true,
             renderer: "codex_terminal",
             terminalSessionId: "server-codex-terminal",
-            visible: true
+            visible: true,
+            visibleUntil: new Date(Date.now() + 10_000).toISOString()
           }
         }
       },
@@ -402,6 +509,232 @@ test.describe("Autopilot dumb client contract", () => {
     await expect.poll(async () => page.evaluate(() => (
       (window as unknown as { __vibe64CodexTerminalInputs?: string[] }).__vibe64CodexTerminalInputs || []
     ))).toEqual([]);
+  });
+
+  test("runs the server-presented Codex continuation control from Autopilot", async ({ page }) => {
+    let continuationRequests = 0;
+    const continuationIntent = {
+      actionId: "",
+      control: {
+        action: "continue_codex_turn",
+        disabledWhen: [],
+        icon: "",
+        loadingWhen: []
+      },
+      disabledReason: "",
+      enabled: true,
+      id: "continue_codex_turn",
+      inputFields: [],
+      label: "Ask Codex to continue",
+      style: "primary"
+    };
+    const session = sessionPayload({
+      intents: [continuationIntent],
+      presentation: {
+        auto: {
+          nextOperation: {
+            executable: false,
+            kind: "wait",
+            reason: "codex"
+          }
+        },
+        intents: [continuationIntent],
+        screen: {
+          icon: "warning",
+          kind: "codex_attention",
+          message: "Codex has not reported progress for the current step.",
+          sections: [],
+          showProgress: false,
+          title: "Codex needs attention"
+        },
+        step: {
+          id: "server_step",
+          label: "Server step",
+          status: "awaiting_agent_result"
+        }
+      },
+      stepMachine: {
+        status: "awaiting_agent_result",
+        stepId: "server_step"
+      }
+    });
+    await mockVibe64Session(page, session, {
+      onCodexTurnContinue: () => {
+        continuationRequests += 1;
+      }
+    });
+
+    await page.goto(`${BASE_URL}/home`);
+
+    await expect(page.getByRole("heading", { name: "Codex needs attention" })).toBeVisible();
+    await page.getByRole("button", { name: "Ask Codex to continue" }).click();
+
+    await expect.poll(() => continuationRequests).toBe(1);
+  });
+
+  test("does not refresh-loop when a headless Codex terminal consumes server state", async ({ page }) => {
+    await mockCodexTerminalPreviewSocket(page);
+    let sessionReads = 0;
+    const continuationIntent = {
+      actionId: "",
+      control: {
+        action: "continue_codex_turn",
+        disabledWhen: [],
+        icon: "",
+        loadingWhen: []
+      },
+      disabledReason: "",
+      enabled: true,
+      id: "continue_codex_turn",
+      inputFields: [],
+      label: "Ask Codex to continue",
+      style: "primary"
+    };
+    const session = sessionPayload({
+      codexTerminal: {
+        commandPreview: "codex",
+        id: "server-codex-terminal",
+        status: "running",
+        transmitting: false
+      },
+      intents: [continuationIntent],
+      presentation: {
+        auto: {
+          nextOperation: {
+            executable: false,
+            kind: "wait",
+            reason: "codex"
+          }
+        },
+        intents: [continuationIntent],
+        screen: {
+          icon: "warning",
+          kind: "codex_attention",
+          message: "Codex has not reported progress for the current step.",
+          sections: [],
+          showProgress: false,
+          title: "Codex needs attention"
+        },
+        step: {
+          id: "server_step",
+          label: "Server step",
+          status: "awaiting_agent_result"
+        }
+      },
+      stepMachine: {
+        status: "awaiting_agent_result",
+        stepId: "server_step"
+      }
+    });
+    await mockVibe64Session(page, session, {
+      onSessionRead: () => {
+        sessionReads += 1;
+      }
+    });
+
+    await page.goto(`${BASE_URL}/home`);
+    await expect(page.getByRole("heading", { name: "Codex needs attention" })).toBeVisible();
+    await page.waitForTimeout(1000);
+
+    expect(sessionReads).toBeLessThanOrEqual(2);
+  });
+
+  test("refreshes an expired Codex wait presentation after Inspect and returns with a continuation control", async ({ page }) => {
+    await mockInspectTerminalSockets(page);
+    let refreshAtMs = 0;
+    const continuationIntent = {
+      actionId: "",
+      control: {
+        action: "continue_codex_turn",
+        disabledWhen: [],
+        icon: "",
+        loadingWhen: []
+      },
+      disabledReason: "",
+      enabled: true,
+      id: "continue_codex_turn",
+      inputFields: [],
+      label: "Ask Codex to continue",
+      style: "primary"
+    };
+    const session = sessionPayload({
+      codexTerminal: {
+        commandPreview: "codex",
+        id: "server-codex-terminal",
+        status: "running",
+        transmitting: false
+      },
+      intents: [],
+      presentation: {
+        auto: {
+          nextOperation: {
+            executable: false,
+            kind: "wait",
+            reason: "codex"
+          }
+        },
+        intents: [],
+        refreshAt: new Date(Date.now() + 5000).toISOString(),
+        refreshReason: "codex_wait",
+        screen: {
+          icon: "progress",
+          kind: "codex_running",
+          message: "Wait for Codex to finish the current step.",
+          sections: [],
+          showProgress: true,
+          title: "Waiting for Codex..."
+        },
+        step: {
+          id: "server_step",
+          label: "Server step",
+          status: "awaiting_agent_result"
+        }
+      },
+      stepMachine: {
+        status: "awaiting_agent_result",
+        stepId: "server_step"
+      }
+    });
+    await mockVibe64Session(page, session, {
+      onSessionRead: () => {
+        if (!refreshAtMs) {
+          refreshAtMs = Date.now() + 1200;
+          session.presentation = {
+            ...session.presentation,
+            refreshAt: new Date(refreshAtMs).toISOString()
+          };
+        }
+        if (Date.now() < refreshAtMs) {
+          return;
+        }
+        session.intents = [continuationIntent];
+        session.presentation = {
+          ...session.presentation,
+          intents: [continuationIntent],
+          refreshAt: "",
+          refreshReason: "",
+          screen: {
+            icon: "warning",
+            kind: "codex_attention",
+            message: "Codex has not reported progress for the current step.",
+            sections: [],
+            showProgress: false,
+            title: "Codex needs attention"
+          }
+        };
+      }
+    });
+
+    await page.goto(`${BASE_URL}/home`);
+    await expect(page.getByRole("heading", { name: "Waiting for Codex..." })).toBeVisible();
+
+    await page.getByRole("button", { name: "Inspect" }).click();
+    await expect(page.locator(".codex-terminal__host")).toBeVisible();
+    await page.getByRole("button", { name: "Autopilot" }).click();
+    await expect(page.getByRole("heading", { name: "Waiting for Codex..." })).toBeVisible();
+
+    await expect(page.getByRole("heading", { name: "Codex needs attention" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Ask Codex to continue" })).toBeVisible();
   });
 
   test("keeps the server-owned Codex terminal preview behind input while transmitting", async ({ page }) => {
@@ -455,7 +788,8 @@ test.describe("Autopilot dumb client contract", () => {
             readOnlyInAutopilot: true,
             renderer: "codex_terminal",
             terminalSessionId: "server-codex-terminal",
-            visible: true
+            visible: true,
+            visibleUntil: new Date(Date.now() + 10_000).toISOString()
           }
         }
       },
@@ -473,6 +807,127 @@ test.describe("Autopilot dumb client contract", () => {
     await expect.poll(async () => page.evaluate(() => (
       (window as unknown as { __vibe64CodexTerminalInputs?: string[] }).__vibe64CodexTerminalInputs || []
     ))).toEqual([]);
+  });
+
+  test("hides the server-owned Codex terminal preview after the byte activity window expires", async ({ page }) => {
+    await mockCodexTerminalPreviewSocket(page);
+    const session = sessionPayload({
+      codexTerminal: {
+        commandPreview: "codex",
+        id: "server-codex-terminal",
+        lastInputAt: new Date(Date.now() - 10_000).toISOString(),
+        lastInputBytes: 2048,
+        status: "running",
+        transmitting: true
+      },
+      presentation: {
+        auto: {
+          nextOperation: {
+            executable: false,
+            kind: "wait",
+            reason: "input"
+          }
+        },
+        screen: {
+          input: {
+            fields: [
+              {
+                kind: "textarea",
+                label: "Response",
+                name: "response"
+              }
+            ],
+            prompt: "What should Codex do next?",
+            submitTarget: "current-step-input",
+            submitLabel: "Send to Codex",
+            title: "Talk to Codex"
+          },
+          kind: "input",
+          message: "What should Codex do next?",
+          sections: [],
+          title: "Talk to Codex"
+        },
+        terminal: {
+          codex: {
+            label: "Terminal is transmitting...",
+            readOnlyInAutopilot: true,
+            renderer: "codex_terminal",
+            terminalSessionId: "server-codex-terminal",
+            visible: true,
+            visibleUntil: new Date(Date.now() - 5000).toISOString()
+          }
+        }
+      },
+      stepMachine: {
+        status: "waiting_for_input",
+        stepId: "server_step"
+      }
+    });
+    await mockVibe64Session(page, session);
+
+    await page.goto(`${BASE_URL}/home`);
+
+    await expect(page.getByLabel("Response")).toBeVisible();
+    await expect(page.locator(".studio-ai-sessions__terminals--autopilot-preview")).toHaveCount(0);
+  });
+
+  test("ignores stale Codex terminal preview presentation without a byte activity expiry", async ({ page }) => {
+    await mockCodexTerminalPreviewSocket(page);
+    const session = sessionPayload({
+      codexTerminal: {
+        commandPreview: "codex",
+        id: "server-codex-terminal",
+        status: "running",
+        transmitting: true
+      },
+      presentation: {
+        auto: {
+          nextOperation: {
+            executable: false,
+            kind: "wait",
+            reason: "input"
+          }
+        },
+        screen: {
+          input: {
+            fields: [
+              {
+                kind: "textarea",
+                label: "Response",
+                name: "response"
+              }
+            ],
+            prompt: "What should Codex do next?",
+            submitTarget: "current-step-input",
+            submitLabel: "Send to Codex",
+            title: "Talk to Codex"
+          },
+          kind: "input",
+          message: "What should Codex do next?",
+          sections: [],
+          title: "Talk to Codex"
+        },
+        terminal: {
+          codex: {
+            label: "Terminal is transmitting...",
+            readOnlyInAutopilot: true,
+            renderer: "codex_terminal",
+            terminalSessionId: "server-codex-terminal",
+            visible: true
+          }
+        }
+      },
+      stepMachine: {
+        status: "waiting_for_input",
+        stepId: "server_step"
+      }
+    });
+    await mockVibe64Session(page, session);
+
+    await page.goto(`${BASE_URL}/home`);
+
+    await expect(page.getByLabel("Response")).toBeVisible();
+    await expect(page.locator(".studio-ai-sessions__terminals--autopilot-preview")).toHaveCount(0);
   });
 
   test("renders server-provided intents and posts the chosen intent without client workflow knowledge", async ({ page }) => {
@@ -880,7 +1335,9 @@ async function mockVibe64Session(
     onAdvance = () => undefined,
     onCommandTerminalClose = () => undefined,
     onCommandTerminalStart = () => undefined,
+    onCodexTurnContinue = () => undefined,
     onIntent = () => undefined,
+    onSessionRead = () => undefined,
     onStepInput = () => undefined,
     onCodexTerminalStart = () => undefined,
     onShellTerminalClose = () => undefined,
@@ -893,7 +1350,9 @@ async function mockVibe64Session(
     onCommandTerminalClose?: () => void;
     onCommandTerminalStart?: () => Record<string, unknown> | void;
     onCodexTerminalStart?: () => void;
+    onCodexTurnContinue?: () => void;
     onIntent?: (body: unknown) => void;
+    onSessionRead?: (session: Record<string, unknown>) => void;
     onShellTerminalClose?: () => void;
     onStepInput?: (body: unknown) => void;
     sessionList?: Record<string, unknown>[] | null;
@@ -910,6 +1369,18 @@ async function mockVibe64Session(
     const request = route.request();
     const url = new URL(request.url());
     const method = request.method();
+    if (method === "POST" && /\/codex-terminal\/continue\/?$/u.test(url.pathname)) {
+      onCodexTurnContinue();
+      await fulfillJson(route, {
+        codexContinueInjected: true,
+        commandPreview: "codex",
+        id: "server-codex-terminal",
+        ok: true,
+        status: "running",
+        terminalSessionId: "server-codex-terminal"
+      });
+      return;
+    }
     if (method === "POST" && url.pathname.endsWith("/codex-terminal")) {
       onCodexTerminalStart();
       await fulfillJson(route, {
@@ -997,6 +1468,7 @@ async function mockVibe64Session(
       return;
     }
     if (method === "GET" && /\/sessions\/[^/]+$/u.test(url.pathname)) {
+      onSessionRead(sessionForRequest(url.pathname));
       await fulfillJson(route, {
         ok: true,
         ...sessionForRequest(url.pathname)
@@ -1267,4 +1739,87 @@ function sessionPayload(overrides: Record<string, unknown> = {}) {
     workflowId: "test-workflow",
     ...overrides
   };
+}
+
+function issueSourceSession(overrides: Record<string, unknown> = {}) {
+  const intents = [
+    {
+      actionId: "use_existing_issue",
+      enabled: true,
+      id: "use_existing_issue",
+      inputFields: [
+        {
+          label: "Issue URL or number",
+          name: "issueRef",
+          placeholder: "123, #123, or https://github.com/org/repo/issues/123",
+          requiredMessage: "Issue URL or number is required."
+        }
+      ],
+      label: "Use existing issue",
+      style: "primary"
+    },
+    {
+      actionId: "draft_issue",
+      enabled: true,
+      id: "draft_issue",
+      inputFields: [
+        {
+          kind: "textarea",
+          label: "What do you want Vibe64 to work on?",
+          name: "conversationRequest",
+          placeholder: "Describe the feature, bug, or change you want.",
+          requiredMessage: "Describe what you want Vibe64 to work on."
+        }
+      ],
+      label: "Make my own issue",
+      style: "secondary"
+    }
+  ];
+  return sessionPayload({
+    currentStep: "issue_file_created",
+    currentStepDefinition: {
+      id: "issue_file_created",
+      label: "Define or select issue"
+    },
+    intents,
+    presentation: {
+      auto: {
+        nextOperation: {
+          executable: false,
+          kind: "stop",
+          reason: "Select an existing issue or draft a new one."
+        }
+      },
+      intents,
+      screen: {
+        kind: "issue_source",
+        message: "Enter a GitHub issue number, or draft a new issue from a description.",
+        primaryIntentId: "use_existing_issue",
+        sections: [],
+        title: "Define or select issue"
+      },
+      step: {
+        id: "issue_file_created",
+        label: "Define or select issue",
+        status: "ready"
+      }
+    },
+    stepDefinitions: [
+      {
+        id: "issue_file_created",
+        label: "Define or select issue",
+        status: "current"
+      },
+      {
+        id: "issue_submitted",
+        label: "Edit and submit issue",
+        status: "pending"
+      }
+    ],
+    stepMachine: {
+      status: "ready",
+      stepId: "issue_file_created"
+    },
+    ...overrides
+  });
 }

@@ -151,6 +151,26 @@
         @retry="retryBackgroundTask"
       />
 
+      <v-alert
+        v-if="actionResultNoticeVisible"
+        class="studio-autopilot__notice"
+        :type="props.actions.actionResultType"
+        variant="tonal"
+        density="compact"
+      >
+        {{ props.actions.actionResultMessage }}
+      </v-alert>
+
+      <v-alert
+        v-if="clientControlErrorVisible"
+        class="studio-autopilot__notice"
+        type="warning"
+        variant="tonal"
+        density="compact"
+      >
+        {{ clientControlError }}
+      </v-alert>
+
       <form
         v-if="stepInput.visible && !displayRunning && !commandTerminalVisible"
         class="studio-autopilot__input-form"
@@ -314,7 +334,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, proxyRefs, watch } from "vue";
+import { computed, nextTick, onMounted, proxyRefs, ref, watch } from "vue";
 import {
   mdiAlertCircleOutline,
   mdiCheck,
@@ -548,6 +568,12 @@ const responseContentVisible = computed(() => Boolean(
   conversationLogVisible.value ||
   responsePreviewVisible.value
 ));
+const actionResultNoticeVisible = computed(() => Boolean(
+  props.actions?.actionResultMessage &&
+  !commandTerminalVisible.value
+));
+const clientControlError = ref("");
+const clientControlErrorVisible = computed(() => Boolean(clientControlError.value && !commandTerminalVisible.value));
 const conversationScrollKey = computed(() => [
   sessionId.value,
   conversationLogVisible.value ? "conversation-visible" : "conversation-hidden",
@@ -555,7 +581,11 @@ const conversationScrollKey = computed(() => [
   selectedControlFields.value.map((field) => field.name).join("|")
 ].join(":"));
 const allScreenControls = computed(() => {
-  return (Array.isArray(props.session?.intents) ? props.session.intents : [])
+  const sessionIntents = Array.isArray(props.session?.intents) ? props.session.intents : null;
+  const presentationIntents = Array.isArray(props.session?.presentation?.intents)
+    ? props.session.presentation.intents
+    : [];
+  return (sessionIntents || presentationIntents)
     .filter((intent) => intent && intent.id && intent.label);
 });
 const {
@@ -635,10 +665,24 @@ function controlStateActive(control = {}, field = "") {
   });
 }
 
-function runClientControl(control = {}) {
-  return runVibe64ClientControl(control, {
-    diff: props.diff
-  });
+async function runClientControl(control = {}) {
+  clientControlError.value = "";
+  try {
+    const result = await runVibe64ClientControl(control, {
+      diff: props.diff,
+      refreshSessionData: props.refreshSessionData,
+      session: props.session,
+      sessionId: sessionId.value
+    });
+    if (result?.ok === false) {
+      clientControlError.value = String(result.error || "The requested control could not run.");
+      return false;
+    }
+    return result;
+  } catch (error) {
+    clientControlError.value = String(error?.message || error || "The requested control could not run.");
+    return false;
+  }
 }
 
 function controlDisabled(control = {}) {
@@ -832,6 +876,11 @@ watch(() => [
 .studio-autopilot__server-screen {
   display: grid;
   gap: 0.6rem;
+  max-width: 52rem;
+  width: 100%;
+}
+
+.studio-autopilot__notice {
   max-width: 52rem;
   width: 100%;
 }

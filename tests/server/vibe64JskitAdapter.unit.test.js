@@ -76,6 +76,12 @@ function assertJskitHelperGuardBeforeContract(prompt = "") {
   assert.ok(helperGuardIndex < guideContractIndex);
 }
 
+function worktreeMetadata(targetRoot, sessionId = "session") {
+  return {
+    worktree_path: path.join(targetRoot, ".vibe64/sessions/active", sessionId, "worktree")
+  };
+}
+
 test("jskit adapter exposes selected-project facts, commands, and prompt context", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createJskitProject(targetRoot);
@@ -368,6 +374,7 @@ test("jskit prompt actions include JSKIT prompt context", async () => {
     });
     await runtime.createSession({
       initialStep: "plan_made",
+      metadata: worktreeMetadata(targetRoot, "jskit_prompt"),
       sessionId: "jskit_prompt"
     });
 
@@ -386,6 +393,10 @@ test("jskit prompt actions include JSKIT prompt context", async () => {
     assert.match(afterPrompt.actionResult.prompt, /Use individual `npx jskit generate \.\.\. help` commands only/u);
     assert.doesNotMatch(afterPrompt.actionResult.prompt, /npx jskit generate crud-server-generator scaffold help/u);
     assert.match(afterPrompt.actionResult.prompt, /Do not plan hand-created packages/u);
+    assert.match(afterPrompt.actionResult.prompt, /Issue source of truth:/u);
+    assert.match(afterPrompt.actionResult.prompt, /issue_title/u);
+    assert.match(afterPrompt.actionResult.prompt, /issue\.md/u);
+    assert.match(afterPrompt.actionResult.prompt, /Do not call GitHub to rediscover the issue content/u);
     assert.match(afterPrompt.actionResult.prompt, /JSKIT placement contract/u);
     assert.match(afterPrompt.actionResult.prompt, /npx jskit list-placements --json/u);
   });
@@ -442,6 +453,7 @@ test("jskit execute-plan prompt requires generators, placements, and database mo
     });
     await runtime.createSession({
       initialStep: "plan_executed",
+      metadata: worktreeMetadata(targetRoot, "jskit_execute_prompt"),
       sessionId: "jskit_execute_prompt"
     });
 
@@ -492,6 +504,7 @@ test("jskit deslop prompt checks framework-shaped helpers before accepting them"
     });
     await runtime.createSession({
       initialStep: "review_run",
+      metadata: worktreeMetadata(targetRoot, "jskit_deslop_prompt"),
       sessionId: "jskit_deslop_prompt"
     });
 
@@ -597,6 +610,7 @@ test("jskit merge, sync, and finish steps follow current metadata gates", async 
 
     await runtime.createSession({
       initialStep: "pr_merged",
+      metadata: worktreeMetadata(targetRoot, "jskit_merge"),
       sessionId: "jskit_merge"
     });
     const mergeWithoutPr = await runtime.getSession("jskit_merge");

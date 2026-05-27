@@ -69,7 +69,7 @@ function targetToolchainTerminalArgs({
     ...dockerLabelArgs([
       kind ? studioDockerLabel("kind", kind) : "",
       `${STUDIO_DAEMON_PID_LABEL}=${process.pid}`,
-      studioDockerLabel("session", sessionId),
+      sessionId ? studioDockerLabel("session", sessionId) : "",
       studioDockerLabel("terminal", terminalId),
       studioDockerLabel("target", stableHash(targetRoot)),
       ...extraLabels

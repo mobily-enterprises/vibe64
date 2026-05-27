@@ -33,7 +33,7 @@ test("run launcher builds a direct server command instead of recursing through t
 
 test("run launcher treats an npm bin symlink as direct CLI execution", () => {
   const symlinkPath = "/workspace/app/node_modules/.bin/vibe64";
-  const entrypointPath = "/workspace/app/node_modules/@vibe64/run/bin/run.js";
+  const entrypointPath = "/workspace/app/node_modules/vibe64/bin/run.js";
   const realpath = (filePath) => filePath === symlinkPath ? entrypointPath : filePath;
 
   assert.equal(isDirectCliExecution({

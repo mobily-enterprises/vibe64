@@ -47,6 +47,12 @@ async function createVinextProject(root, packageJson = {}) {
   ]);
 }
 
+function worktreeMetadata(targetRoot, sessionId = "session") {
+  return {
+    worktree_path: path.join(targetRoot, ".vibe64/sessions/active", sessionId, "worktree")
+  };
+}
+
 function commandIds() {
   return VINEXT_VIBE64_COMMANDS
     .map((command) => command.id)
@@ -85,6 +91,7 @@ test("vinext prompt actions use the Vinext prompt pack", async () => {
     });
     await runtime.createSession({
       initialStep: "plan_made",
+      metadata: worktreeMetadata(targetRoot, "vinext_prompt"),
       sessionId: "vinext_prompt"
     });
 

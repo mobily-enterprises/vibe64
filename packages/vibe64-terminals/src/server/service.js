@@ -65,6 +65,10 @@ function createService({
       return codex.closeTerminal(sessionId, terminalSessionId);
     },
 
+    closeGlobalCodexTerminal(terminalSessionId) {
+      return codex.closeGlobalTerminal(terminalSessionId);
+    },
+
     closeCommandTerminal(sessionId, terminalSessionId) {
       return command.closeTerminal(sessionId, terminalSessionId);
     },
@@ -81,12 +85,24 @@ function createService({
       return codex.injectCodexPrompt(sessionId, handoff);
     },
 
+    continueCodexTurn(sessionId) {
+      return codex.continueTurn(sessionId);
+    },
+
     ensureCodexThread(sessionId) {
       return codex.ensureThread(sessionId);
     },
 
     codexTerminalState(sessionId) {
       return codex.terminalState(sessionId);
+    },
+
+    globalCodexTerminalState() {
+      return codex.globalTerminalState();
+    },
+
+    readGlobalCodexTerminal(terminalSessionId) {
+      return codex.readGlobalTerminal(terminalSessionId);
     },
 
     readCodexTerminal(sessionId, terminalSessionId) {
@@ -117,6 +133,10 @@ function createService({
       return codex.startTerminal(sessionId);
     },
 
+    startGlobalCodexTerminal() {
+      return codex.startGlobalTerminal();
+    },
+
     startCommandTerminal(sessionId, input = {}) {
       return command.startTerminal(sessionId, input);
     },
@@ -135,6 +155,10 @@ function createService({
 
     subscribeCodexTerminal(sessionId, terminalSessionId, subscriber) {
       return codex.subscribeTerminal(sessionId, terminalSessionId, subscriber);
+    },
+
+    subscribeGlobalCodexTerminal(terminalSessionId, subscriber) {
+      return codex.subscribeGlobalTerminal(terminalSessionId, subscriber);
     },
 
     subscribeCommandTerminal(sessionId, terminalSessionId, subscriber) {
@@ -157,8 +181,16 @@ function createService({
       return codex.writeTerminal(sessionId, terminalSessionId, data);
     },
 
+    writeGlobalCodexTerminal(terminalSessionId, data) {
+      return codex.writeGlobalTerminal(terminalSessionId, data);
+    },
+
     resizeCodexTerminal(sessionId, terminalSessionId, size) {
       return codex.resizeTerminal(sessionId, terminalSessionId, size);
+    },
+
+    resizeGlobalCodexTerminal(terminalSessionId, size) {
+      return codex.resizeGlobalTerminal(terminalSessionId, size);
     },
 
     writeCommandTerminal(sessionId, terminalSessionId, data) {

@@ -108,6 +108,7 @@ function useVibe64SessionActions({
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
     placementSource: "vibe64.sessions.action",
+    suppressSuccessMessage: true,
     surfaceId: VIBE64_SURFACE_ID,
     writeMethod: "POST"
   });
@@ -129,6 +130,7 @@ function useVibe64SessionActions({
     onRunSuccess: async (response, { context } = {}) => {
       vibe64SessionDebugLog("client.sessionActions.runIntent.success", {
         ...vibe64SessionDebugSummary(response || {}),
+        actionResultStatus: String(response?.actionResult?.status || ""),
         intentId: String(context?.intentId || ""),
         requestedStepId: String(context?.stepId || ""),
         requestedStepStatus: String(context?.stepStatus || "")
@@ -137,6 +139,7 @@ function useVibe64SessionActions({
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
     placementSource: "vibe64.sessions.intent",
+    suppressSuccessMessage: true,
     surfaceId: VIBE64_SURFACE_ID,
     writeMethod: "POST"
   });

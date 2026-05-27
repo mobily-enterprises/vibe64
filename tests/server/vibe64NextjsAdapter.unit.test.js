@@ -61,6 +61,12 @@ async function createNextjsProject(root, packageJson = {}) {
   ]);
 }
 
+function worktreeMetadata(targetRoot, sessionId = "session") {
+  return {
+    worktree_path: path.join(targetRoot, ".vibe64/sessions/active", sessionId, "worktree")
+  };
+}
+
 function commandIds() {
   return NEXTJS_VIBE64_COMMANDS
     .map((command) => command.id)
@@ -184,6 +190,7 @@ test("nextjs prompt actions use the Next.js prompt pack", async () => {
     });
     await runtime.createSession({
       initialStep: "plan_made",
+      metadata: worktreeMetadata(targetRoot, "nextjs_prompt"),
       sessionId: "nextjs_prompt"
     });
 

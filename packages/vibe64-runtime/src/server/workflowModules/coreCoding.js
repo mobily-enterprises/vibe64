@@ -145,10 +145,8 @@ const coreCodingStepDefinitionsById = deepFreeze({
   [ISSUE_FILE_STEP_ID]: {
     actions: [
       {
-        adapterCapability: "use_existing_issue",
         disabledReason: "Issue details are already saved.",
         disabledWhen: [
-          when.metadataExists("issue_url"),
           when.allArtifactsReady(ISSUE_TITLE_ARTIFACT, ISSUE_BODY_ARTIFACT, ISSUE_WORD_ARTIFACT)
         ],
         icon: "github",
@@ -167,7 +165,6 @@ const coreCodingStepDefinitionsById = deepFreeze({
       {
         disabledReason: "Issue details are already saved.",
         disabledWhen: [
-          when.metadataExists("issue_url"),
           when.allArtifactsReady(ISSUE_TITLE_ARTIFACT, ISSUE_BODY_ARTIFACT, ISSUE_WORD_ARTIFACT)
         ],
         icon: "message-square-plus",
@@ -216,12 +213,7 @@ const coreCodingStepDefinitionsById = deepFreeze({
     label: "Define or select issue",
     next: {
       disabledReason: "Discuss and finalise issue before continuing.",
-      enabledWhen: [
-        when.any(
-          when.metadataExists("issue_url"),
-          when.allArtifactsReady(ISSUE_TITLE_ARTIFACT, ISSUE_BODY_ARTIFACT, ISSUE_WORD_ARTIFACT)
-        )
-      ]
+      enabledWhen: [when.allArtifactsReady(ISSUE_TITLE_ARTIFACT, ISSUE_BODY_ARTIFACT, ISSUE_WORD_ARTIFACT)]
     },
     presentation: {
       stop: {
@@ -319,18 +311,18 @@ const coreCodingStepDefinitionsById = deepFreeze({
     actions: [
       {
         id: "make_plan",
-        label: "Make plan",
+        label: "Make a plan for the issue",
         promptId: "make_plan",
         type: "prompt"
       }
     ],
     autopilot: {
       actionId: "make_plan",
-      label: "Make plan"
+      label: "Make a plan for the issue"
     },
     description: "Ask Codex to create the implementation plan.",
     id: planMadeStepId,
-    label: "Make plan",
+    label: "Make a plan for the issue",
     rewindCleanup: {
       actionResults: ["make_plan"]
     }
@@ -719,6 +711,25 @@ function issueFilesAreReady(session = {}) {
   ].every((artifactName) => artifactIsReady(session, artifactName));
 }
 
+async function actionCreatedIssueFiles(context = {}) {
+  const artifacts = context.actionResult?.artifacts && typeof context.actionResult.artifacts === "object"
+    ? context.actionResult.artifacts
+    : {};
+  const storedValues = await Promise.all([
+    context.runtime.store.readArtifact(context.session.sessionId, ISSUE_TITLE_ARTIFACT),
+    context.runtime.store.readArtifact(context.session.sessionId, ISSUE_BODY_ARTIFACT),
+    context.runtime.store.readArtifact(context.session.sessionId, ISSUE_WORD_ARTIFACT)
+  ]);
+  return [
+    [ISSUE_TITLE_ARTIFACT, storedValues[0]],
+    [ISSUE_BODY_ARTIFACT, storedValues[1]],
+    [ISSUE_WORD_ARTIFACT, storedValues[2]]
+  ].every(([artifactName, storedValue]) => (
+    normalizeText(artifacts[artifactName]) ||
+    normalizeText(storedValue)
+  ));
+}
+
 function disableActions(session = {}, reasonsById = {}) {
   const reasons = Object.entries(reasonsById)
     .filter(([, reason]) => normalizeText(reason));
@@ -761,7 +772,12 @@ async function writeIssueFieldValues(context = {}, fields = {}) {
     context.runtime.store.writeArtifact(context.session.sessionId, ISSUE_BODY_ARTIFACT, artifactText(body)),
     context.runtime.store.writeArtifact(context.session.sessionId, ISSUE_WORD_ARTIFACT, artifactText(word)),
     context.runtime.store.writeMetadataValue(context.session.sessionId, "issue_title", title),
-    context.runtime.store.writeIssueWordMetadata(context.session.sessionId, word)
+    context.runtime.store.writeIssueWordMetadata(context.session.sessionId, word),
+    context.runtime.store.deleteMetadataValues(context.session.sessionId, [
+      "issue_number",
+      "issue_source",
+      "issue_url"
+    ])
   ]);
 }
 
@@ -891,25 +907,32 @@ const issueFileMachine = {
   stepId: ISSUE_FILE_STEP_ID,
 
   initialState(context = {}) {
-    if (metadataExists(context.session, "issue_url")) {
+    const filesReady = issueFilesAreReady(context.session);
+    if (filesReady && metadataExists(context.session, "issue_url")) {
       return machineState(STEP_STATUS.DONE, {
         phase: issueFilePhase.EXISTING_SELECTED
       });
     }
-    return issueFilesAreReady(context.session)
+    return filesReady
       ? issueDraftReviewState()
       : issueSourceSelectionState();
   },
 
   async view(context = {}) {
     let state = await readState(context, this);
-    if (metadataExists(context.session, "issue_url")) {
+    const filesReady = issueFilesAreReady(context.session);
+    if (filesReady && metadataExists(context.session, "issue_url")) {
       state = machineState(STEP_STATUS.DONE, {
         phase: issueFilePhase.EXISTING_SELECTED
       });
-    } else if (issueFilesAreReady(context.session) && state.status !== STEP_STATUS.CONFIRM_FILES) {
+    } else if (filesReady && state.status !== STEP_STATUS.CONFIRM_FILES) {
       state = issueDraftReviewState({
         from: state.status
+      });
+    } else if (state.status === STEP_STATUS.DONE) {
+      state = issueSourceSelectionState({
+        from: STEP_STATUS.DONE,
+        message: "Issue details are incomplete. Select the issue again or draft a new one."
       });
     }
 
@@ -1020,7 +1043,7 @@ const issueFileMachine = {
 
   async actionFinished(context = {}) {
     if (context.actionId === "use_existing_issue") {
-      if (await commandSucceeded(context, "issue_url")) {
+      if (await commandSucceeded(context, "issue_url") && await actionCreatedIssueFiles(context)) {
         await writeState(context, this, machineState(STEP_STATUS.DONE, {
           phase: issueFilePhase.EXISTING_SELECTED
         }));

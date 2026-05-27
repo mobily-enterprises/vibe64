@@ -4,6 +4,7 @@ export * from "./runtime.js";
 export * from "./sessionDebugLog.js";
 export * from "./sessionDebugLogCore.js";
 export * from "./sessionStore.js";
+export * from "./sessionWorktreeState.js";
 export * from "./setupReadiness.js";
 export * from "./terminalFailureFixRequest.js";
 export * from "./workflow.js";

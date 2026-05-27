@@ -8,9 +8,6 @@ import {
   Vibe64SessionRuntime
 } from "@local/vibe64-runtime/server";
 import {
-  VIBE64_CLIENT_CONTROL_ACTIONS
-} from "@local/vibe64-core/shared";
-import {
   TargetAdapter,
   adapterProjectFacts
 } from "@local/vibe64-adapters/server";
@@ -451,15 +448,7 @@ test("Vibe64 Codex bootstrap failure is persisted as a visible background task",
     assert.match(result.error, /Create the session worktree before starting Codex/u);
     assert.equal(task.status, "failed");
     assert.match(task.error, /Create the session worktree before starting Codex/u);
-    assert.deepEqual(task.retry, {
-      control: {
-        action: VIBE64_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL,
-        disabledWhen: [],
-        icon: "",
-        loadingWhen: []
-      },
-      label: "Retry Codex"
-    });
+    assert.equal(task.retry, null);
     assert.deepEqual(publishReasons.map((entry) => entry.reason), [
       "codex-bootstrap-running",
       "codex-bootstrap-failed"

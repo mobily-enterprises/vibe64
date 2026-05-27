@@ -15,6 +15,9 @@ import {
   vibe64SessionDebugLog,
   vibe64SessionDebugSummary
 } from "./sessionDebugLog.js";
+import {
+  sessionHasWorktree
+} from "./sessionWorktreeState.js";
 import { STEP_STATUS } from "./workflowStepMachines.js";
 
 // Vibe64 ownership contract:
@@ -33,6 +36,7 @@ const INTENT_IDS = Object.freeze({
 });
 
 const COMMAND_RECOVERY_DELAY_MS = 5000;
+const CODEX_BOOTSTRAP_TASK_ID = "codex_bootstrap";
 const COMMAND_LIFECYCLE_RUNNING_PHASES = Object.freeze(new Set([
   "starting",
   "started"
@@ -222,13 +226,16 @@ function normalizeControlPresentation(control = {}) {
 }
 
 function intentForAction(id, action = {}, options = {}) {
+  const configuredInputFields = Array.isArray(options.inputFields) && options.inputFields.length > 0
+    ? options.inputFields
+    : null;
   return intent(id, {
     ...options,
     actionId: action?.id || options.actionId || "",
     disabledReason: action?.disabledReason || options.disabledReason || "",
     enabled: action?.enabled === true,
     input: options.input,
-    inputFields: options.inputFields || action?.inputFields || [],
+    inputFields: configuredInputFields || action?.inputFields || [],
     label: options.label || action?.label || id
   });
 }
@@ -366,7 +373,9 @@ function intentFromConfig(session = {}, config = {}) {
     disabledReason: action?.disabledReason || configuredIntentDisabledReason(session, config, enabled),
     enabled: action ? action.enabled === true && enabled : enabled,
     input: config.input,
-    inputFields: config.inputFields || action?.inputFields || [],
+    inputFields: Array.isArray(config.inputFields) && config.inputFields.length > 0
+      ? config.inputFields
+      : action?.inputFields || [],
     label: config.label || action?.label || "",
     style: config.style || "secondary"
   });
@@ -772,10 +781,6 @@ function nextAutomationOperation(session = {}) {
     return waitOperation(waitReason);
   }
 
-  if (stepMachineStatus(session) === STEP_STATUS.DONE && nextIsReady(session)) {
-    return advanceOperation(session);
-  }
-
   const stage = stageAction(session);
   if (stage) {
     return actionOperation(session, stage);
@@ -822,7 +827,14 @@ function promptPresentation(session = {}) {
   }
 }
 
-function backgroundTaskRetryPresentation(task = {}) {
+function backgroundTaskRetryPresentation(task = {}, session = {}) {
+  if (
+    normalizeText(task.id) === CODEX_BOOTSTRAP_TASK_ID &&
+    normalizeText(task.status) === "failed" &&
+    !sessionHasWorktree(session)
+  ) {
+    return null;
+  }
   const retry = isPlainObject(task.retry) ? task.retry : null;
   if (!retry) {
     return null;
@@ -859,7 +871,7 @@ function backgroundTaskPresentation(session = {}) {
         kind: normalizeText(task.kind),
         label: normalizeText(task.label) || id,
         message: normalizeText(task.message),
-        retry: backgroundTaskRetryPresentation(task),
+        retry: backgroundTaskRetryPresentation(task, session),
         startedAt: normalizeText(task.startedAt),
         status,
         terminalSessionId: normalizeText(task.terminalSessionId),
@@ -876,6 +888,9 @@ function buildPresentation(session = {}) {
   const kind = normalizeText(autopilot.kind);
   let base = interaction || waiting;
 
+  if (!base && stepMachineStatus(session) === STEP_STATUS.DONE && nextIsReady(session)) {
+    base = genericPresentation(session);
+  }
   if (!base && autopilot.userDecision === true) {
     base = userDecisionPresentation(session);
   }

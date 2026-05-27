@@ -79,6 +79,12 @@ async function createLaravelProject(root, {
   ]);
 }
 
+function worktreeMetadata(targetRoot, sessionId = "session") {
+  return {
+    worktree_path: path.join(targetRoot, ".vibe64/sessions/active", sessionId, "worktree")
+  };
+}
+
 function commandIds() {
   return LARAVEL_VIBE64_COMMANDS
     .map((command) => command.id)
@@ -197,6 +203,7 @@ test("laravel prompt actions use the Laravel prompt pack", async () => {
     });
     await runtime.createSession({
       initialStep: "plan_made",
+      metadata: worktreeMetadata(targetRoot, "laravel_prompt"),
       sessionId: "laravel_prompt"
     });
 

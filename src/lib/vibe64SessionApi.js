@@ -6,6 +6,7 @@ import {
 
 const VIBE64_ENDPOINT = studioApiPath("vibe64");
 const VIBE64_SESSIONS_ENDPOINT = `${VIBE64_ENDPOINT}/sessions`;
+const VIBE64_GLOBAL_CODEX_TERMINAL_ENDPOINT = `${VIBE64_ENDPOINT}/codex-terminal`;
 
 function vibe64SessionEndpoint(sessionId, suffix = "") {
   return `${VIBE64_SESSIONS_ENDPOINT}/${encodeURIComponent(sessionId)}${suffix}`;
@@ -14,6 +15,12 @@ function vibe64SessionEndpoint(sessionId, suffix = "") {
 function vibe64CodexTerminalEndpoint(sessionId, terminalSessionId = "") {
   const base = vibe64SessionEndpoint(sessionId, "/codex-terminal");
   return terminalSessionId ? `${base}/${encodeURIComponent(terminalSessionId)}` : base;
+}
+
+function vibe64GlobalCodexTerminalEndpoint(terminalSessionId = "") {
+  return terminalSessionId
+    ? `${VIBE64_GLOBAL_CODEX_TERMINAL_ENDPOINT}/${encodeURIComponent(terminalSessionId)}`
+    : VIBE64_GLOBAL_CODEX_TERMINAL_ENDPOINT;
 }
 
 function vibe64CommandTerminalEndpoint(sessionId, terminalSessionId = "") {
@@ -51,6 +58,10 @@ function vibe64CodexTerminalWebSocketUrl(sessionId, terminalSessionId) {
   return resolveWebSocketUrl(`${vibe64CodexTerminalEndpoint(sessionId, terminalSessionId)}/ws`);
 }
 
+function vibe64GlobalCodexTerminalWebSocketUrl(_scopeId, terminalSessionId) {
+  return resolveWebSocketUrl(`${vibe64GlobalCodexTerminalEndpoint(terminalSessionId)}/ws`);
+}
+
 function vibe64CommandTerminalWebSocketUrl(sessionId, terminalSessionId) {
   return resolveWebSocketUrl(`${vibe64CommandTerminalEndpoint(sessionId, terminalSessionId)}/ws`);
 }
@@ -71,8 +82,24 @@ async function startVibe64CodexTerminal(sessionId) {
   return studioHttpClient.post(vibe64CodexTerminalEndpoint(sessionId), {});
 }
 
+async function startVibe64GlobalCodexTerminal() {
+  return studioHttpClient.post(vibe64GlobalCodexTerminalEndpoint(), {});
+}
+
+async function readVibe64GlobalCodexTerminalState() {
+  return studioHttpClient.get(vibe64GlobalCodexTerminalEndpoint());
+}
+
+async function continueVibe64CodexTurn(sessionId) {
+  return studioHttpClient.post(`${vibe64CodexTerminalEndpoint(sessionId)}/continue`, {});
+}
+
 async function closeVibe64CodexTerminal(sessionId, terminalSessionId) {
   return studioHttpClient.delete(vibe64CodexTerminalEndpoint(sessionId, terminalSessionId));
+}
+
+async function closeVibe64GlobalCodexTerminal(_scopeId, terminalSessionId) {
+  return studioHttpClient.delete(vibe64GlobalCodexTerminalEndpoint(terminalSessionId));
 }
 
 async function startVibe64CommandTerminal(sessionId, input = {}) {
@@ -106,16 +133,21 @@ async function buildVibe64TerminalFailureFixRequest(sessionId, input = {}) {
 
 export {
   vibe64CodexTerminalWebSocketUrl,
+  vibe64GlobalCodexTerminalWebSocketUrl,
   vibe64CommandTerminalWebSocketUrl,
   vibe64ArtifactReadinessStreamEndpoint,
   vibe64LaunchTerminalWebSocketUrl,
   vibe64ShellTerminalWebSocketUrl,
   closeVibe64CodexTerminal,
+  closeVibe64GlobalCodexTerminal,
   closeVibe64CommandTerminal,
   buildVibe64TerminalFailureFixRequest,
+  continueVibe64CodexTurn,
+  readVibe64GlobalCodexTerminalState,
   readVibe64ArtifactReadiness,
   readVibe64SessionDiff,
   submitVibe64CurrentStepInput,
   startVibe64CodexTerminal,
+  startVibe64GlobalCodexTerminal,
   startVibe64CommandTerminal
 };

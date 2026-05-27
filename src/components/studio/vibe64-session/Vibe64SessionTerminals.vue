@@ -11,9 +11,11 @@
       :allow-start="allowCodexStart"
       :display-mode="displayMode"
       :read-only="codexReadOnly"
+      :scope="codexScope"
       :session="session"
+      :terminal="codexTerminalState"
       :visible="displayMode !== 'headless'"
-      @session-update="codexTerminal.sessionUpdate"
+      @session-update="handleCodexSessionUpdate"
     />
 
     <div
@@ -76,6 +78,14 @@ const props = defineProps({
     default: false,
     type: Boolean
   },
+  codexScope: {
+    default: "session",
+    type: String
+  },
+  codexTerminalState: {
+    default: null,
+    type: Object
+  },
   displayMode: {
     default: "full",
     type: String
@@ -97,6 +107,7 @@ const props = defineProps({
     type: Object
   }
 });
+const emit = defineEmits(["codex-session-update"]);
 
 const commandTerminalExpanded = ref(true);
 const commandOutputVisible = computed(() => Boolean(
@@ -109,6 +120,13 @@ const commandOverlayMinimized = computed(() => Boolean(
 
 function handleCommandTerminalExpandedChanged(expanded) {
   commandTerminalExpanded.value = expanded === true;
+}
+
+function handleCodexSessionUpdate(payload = {}) {
+  if (typeof props.codexTerminal.sessionUpdate === "function") {
+    props.codexTerminal.sessionUpdate(payload);
+  }
+  emit("codex-session-update", payload);
 }
 
 watch(() => props.commandTerminal.startKey, () => {

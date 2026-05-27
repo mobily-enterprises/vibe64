@@ -3,8 +3,11 @@ import {
   controlClientAction
 } from "@/lib/vibe64PresentationControls.js";
 import {
+  continueVibe64CodexTurn,
   startVibe64CodexTerminal
 } from "@/lib/vibe64SessionApi.js";
+
+const CONTINUE_CODEX_TURN_CONTROL_ACTION = "continue_codex_turn";
 
 function openDiffControl({
   diff = {}
@@ -33,7 +36,26 @@ async function startCodexTerminalControl({
   return true;
 }
 
+async function continueCodexTurnControl({
+  refreshSessionData = async () => null,
+  session = {},
+  sessionId = ""
+} = {}) {
+  const normalizedSessionId = String(sessionId || session?.sessionId || "").trim();
+  if (!normalizedSessionId) {
+    return false;
+  }
+  const result = await continueVibe64CodexTurn(normalizedSessionId);
+  if (result?.ok === false) {
+    return result;
+  }
+  await refreshSessionData();
+  return true;
+}
+
 const VIBE64_CLIENT_CONTROL_DISPATCHERS = Object.freeze({
+  [VIBE64_CLIENT_CONTROL_ACTIONS.CONTINUE_CODEX_TURN]: continueCodexTurnControl,
+  [CONTINUE_CODEX_TURN_CONTROL_ACTION]: continueCodexTurnControl,
   [VIBE64_CLIENT_CONTROL_ACTIONS.OPEN_DIFF]: openDiffControl,
   [VIBE64_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL]: startCodexTerminalControl
 });

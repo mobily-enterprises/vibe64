@@ -141,7 +141,7 @@ test.describe("live Vibe64 session workflow", () => {
 
     await goNextToStep(page, "plan_made");
     await assertChecklistControls(page, "plan_made", {
-      enabled: ["Make plan", "Next step"]
+      enabled: ["Make a plan for the issue", "Next step"]
     });
 
     await goNextToStep(page, "plan_executed");

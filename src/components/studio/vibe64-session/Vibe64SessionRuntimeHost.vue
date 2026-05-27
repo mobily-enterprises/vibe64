@@ -50,16 +50,20 @@
 
       <Vibe64SessionTerminals
         :class="{
-          'studio-ai-sessions__terminals--autopilot-preview': codexTerminalPreviewVisible
+          'studio-ai-sessions__terminals--autopilot-preview': codexTerminalPreviewVisible,
+          'studio-ai-sessions__terminals--autopilot-foreground': globalCodexTerminalVisible
         }"
         :allow-codex-start="codexTerminalCanStart"
         :codex-terminal="codexTerminal"
         :codex-read-only="codexTerminalReadOnly"
+        :codex-scope="codexTerminalScope"
+        :codex-terminal-state="activeCodexTerminalState"
         :command-terminal="commandTerminal"
         :display-mode="codexTerminalDisplayMode"
         :headless-command-terminal="headlessCommandTerminal"
         :session="selection.selectedSession"
         :show-command-output="sessionMode === 'inspect'"
+        @codex-session-update="emitGlobalCodexTerminalUpdate"
       />
     </div>
 
@@ -72,7 +76,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, proxyRefs, ref, unref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, proxyRefs, ref, unref, watch } from "vue";
 import Vibe64AutopilotView from "@/components/studio/vibe64-session/Vibe64AutopilotView.vue";
 import Vibe64SessionDialogs from "@/components/studio/vibe64-session/Vibe64SessionDialogs.vue";
 import Vibe64SessionTerminals from "@/components/studio/vibe64-session/Vibe64SessionTerminals.vue";
@@ -124,6 +128,14 @@ const props = defineProps({
     required: true,
     type: Object
   },
+  globalCodexOpen: {
+    default: false,
+    type: Boolean
+  },
+  globalCodexTerminalState: {
+    default: null,
+    type: Object
+  },
   sessionId: {
     required: true,
     type: String
@@ -136,6 +148,7 @@ const props = defineProps({
 
 const emit = defineEmits([
   "busy-change",
+  "global-codex-update",
   "page-error-change",
   "toolbar-controls-ready"
 ]);
@@ -261,15 +274,42 @@ const codexTerminalPresentation = computed(() => {
     ? presentation
     : {};
 });
+const codexTerminalPreviewClock = ref(Date.now());
+let codexTerminalPreviewTimer = null;
+let presentationRefreshTimer = null;
+let lastPresentationRefreshKey = "";
+const codexTerminalPreviewVisibleUntilMs = computed(() => {
+  const visibleUntil = String(codexTerminalPresentation.value.visibleUntil || "");
+  const time = Date.parse(visibleUntil);
+  return Number.isFinite(time) ? time : 0;
+});
+const presentationRefreshAtMs = computed(() => {
+  const refreshAt = String(selectedSession.value?.presentation?.refreshAt || "");
+  const time = Date.parse(refreshAt);
+  return Number.isFinite(time) ? time : 0;
+});
+const codexTerminalPreviewWithinWindow = computed(() => {
+  const visibleUntil = codexTerminalPreviewVisibleUntilMs.value;
+  return Boolean(visibleUntil && codexTerminalPreviewClock.value <= visibleUntil);
+});
 const codexTerminalPreviewVisible = computed(() => Boolean(
   props.active &&
   props.sessionMode === "autopilot" &&
   codexTerminalPresentation.value.visible === true &&
-  codexTerminalPresentation.value.terminalSessionId
+  codexTerminalPresentation.value.terminalSessionId &&
+  codexTerminalPreviewWithinWindow.value
+));
+const globalCodexTerminalVisible = computed(() => Boolean(
+  props.active &&
+  props.sessionMode === "autopilot" &&
+  props.globalCodexOpen
 ));
 const codexTerminalDisplayMode = computed(() => {
   if (!props.active) {
     return "headless";
+  }
+  if (globalCodexTerminalVisible.value) {
+    return "full";
   }
   if (props.sessionMode === "inspect") {
     return "full";
@@ -279,13 +319,23 @@ const codexTerminalDisplayMode = computed(() => {
   }
   return "headless";
 });
-const codexTerminalCanStart = computed(() => Boolean(props.active && props.sessionMode === "inspect"));
+const codexTerminalCanStart = computed(() => Boolean(
+  props.active &&
+  (props.sessionMode === "inspect" || globalCodexTerminalVisible.value)
+));
 const codexTerminalReadOnly = computed(() => {
+  if (globalCodexTerminalVisible.value) {
+    return false;
+  }
   if (props.sessionMode === "inspect") {
     return false;
   }
   return codexTerminalPresentation.value.readOnlyInAutopilot !== false;
 });
+const codexTerminalScope = computed(() => (globalCodexTerminalVisible.value ? "global" : "session"));
+const activeCodexTerminalState = computed(() => (
+  globalCodexTerminalVisible.value ? props.globalCodexTerminalState : null
+));
 const interactionBusy = computed(() => Boolean(page.busy || autopilotBusy.value));
 const guardedPage = computed(() => ({
   busy: interactionBusy.value,
@@ -324,6 +374,12 @@ function emitToolbarControls() {
   });
 }
 
+function emitGlobalCodexTerminalUpdate(payload = {}) {
+  if (globalCodexTerminalVisible.value) {
+    emit("global-codex-update", payload);
+  }
+}
+
 function artifactReadinessVersion(readiness = {}) {
   return Object.entries(readiness)
     .sort(([leftName], [rightName]) => leftName.localeCompare(rightName))
@@ -335,10 +391,74 @@ function artifactReadinessVersion(readiness = {}) {
     .join("|");
 }
 
+function clearCodexTerminalPreviewTimer() {
+  if (!codexTerminalPreviewTimer) {
+    return;
+  }
+  globalThis.clearTimeout(codexTerminalPreviewTimer);
+  codexTerminalPreviewTimer = null;
+}
+
+function clearPresentationRefreshTimer() {
+  if (!presentationRefreshTimer) {
+    return;
+  }
+  globalThis.clearTimeout(presentationRefreshTimer);
+  presentationRefreshTimer = null;
+}
+
+function scheduleCodexTerminalPreviewExpiry() {
+  clearCodexTerminalPreviewTimer();
+  codexTerminalPreviewClock.value = Date.now();
+  const visibleUntil = codexTerminalPreviewVisibleUntilMs.value;
+  if (!visibleUntil || !props.active || props.sessionMode !== "autopilot") {
+    return;
+  }
+  const delay = Math.max(0, visibleUntil - Date.now()) + 25;
+  codexTerminalPreviewTimer = globalThis.setTimeout(() => {
+    codexTerminalPreviewTimer = null;
+    codexTerminalPreviewClock.value = Date.now();
+  }, delay);
+}
+
+function schedulePresentationRefresh() {
+  clearPresentationRefreshTimer();
+  const refreshAt = presentationRefreshAtMs.value;
+  if (!refreshAt || !props.active || !props.sessionId) {
+    return;
+  }
+  const refreshKey = `${props.sessionId}:${refreshAt}`;
+  if (lastPresentationRefreshKey === refreshKey) {
+    return;
+  }
+  const delay = Math.max(25, refreshAt - Date.now() + 25);
+  presentationRefreshTimer = globalThis.setTimeout(async () => {
+    presentationRefreshTimer = null;
+    lastPresentationRefreshKey = refreshKey;
+    if (!props.active || !props.sessionId) {
+      return;
+    }
+    try {
+      await props.sessionData.refreshSessionData();
+    } catch (error) {
+      vibe64SessionDebugLog("client.sessionRuntimeHost.presentationRefresh.error", {
+        error: String(error?.message || error || "Session presentation refresh failed."),
+        refreshAt: new Date(refreshAt).toISOString(),
+        sessionId: props.sessionId
+      });
+    }
+  }, delay);
+}
+
 onMounted(() => {
   emitToolbarControls();
   emitBusy();
   emitPageError();
+});
+
+onBeforeUnmount(() => {
+  clearCodexTerminalPreviewTimer();
+  clearPresentationRefreshTimer();
 });
 
 watch(interactionBusy, emitBusy, {
@@ -378,6 +498,26 @@ watch(liveArtifactReadinessVersion, (version, previousVersion) => {
 
 watch(() => page.error, emitPageError, {
   flush: "post"
+});
+
+watch(() => [
+  props.active ? "active" : "inactive",
+  props.sessionMode,
+  codexTerminalPresentation.value.visible === true ? "visible" : "hidden",
+  codexTerminalPresentation.value.terminalSessionId || "",
+  codexTerminalPresentation.value.visibleUntil || ""
+].join("|"), scheduleCodexTerminalPreviewExpiry, {
+  flush: "post",
+  immediate: true
+});
+
+watch(() => [
+  props.active ? "active" : "inactive",
+  props.sessionId,
+  presentationRefreshAtMs.value || ""
+].join("|"), schedulePresentationRefresh, {
+  flush: "post",
+  immediate: true
 });
 </script>
 

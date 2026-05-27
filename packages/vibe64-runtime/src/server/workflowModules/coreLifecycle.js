@@ -90,7 +90,6 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
         type: "adapter"
       },
       {
-        adapterCapability: "use_existing_pr",
         disabledReason: "Work source is already selected.",
         disabledWhen: [when.metadataExists("work_source")],
         icon: "github",

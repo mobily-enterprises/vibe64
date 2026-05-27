@@ -50,6 +50,9 @@ import {
   runWorkflowIntent
 } from "./workflowPresentation.js";
 import {
+  sessionHasWorktree
+} from "./sessionWorktreeState.js";
+import {
   vibe64SessionDebugDurationMs,
   vibe64SessionDebugError,
   vibe64SessionDebugLog,
@@ -62,6 +65,10 @@ function metadataFlagIsOn(value) {
 
 function promptActionIsBlocked(action = {}, session = {}) {
   return action.type === "prompt" && metadataFlagIsOn(session.metadata?.terminal_active);
+}
+
+function promptActionMissingWorktree(action = {}, session = {}) {
+  return action.type === "prompt" && !sessionHasWorktree(session);
 }
 
 function promptActionHasUnfinishedRun(action = {}, session = {}) {
@@ -99,6 +106,9 @@ function defaultActionReadiness({ action = {}, session = {} } = {}) {
   }
   if (promptActionHasUnfinishedRun(action, session)) {
     return disabledAction("Codex prompt is waiting to continue.");
+  }
+  if (promptActionMissingWorktree(action, session)) {
+    return disabledAction("Create the session worktree before asking Codex.");
   }
   if (actionCapabilityIsMissing(action, session)) {
     return disabledAction(adapterCapabilityDisabledReason(action, session));

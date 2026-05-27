@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import crypto from "node:crypto";
 import { spawn as spawnPty } from "node-pty";
 
@@ -47,8 +48,14 @@ function terminalSessionResponse(session) {
     id: session.id,
     commandPreview: session.commandPreview,
     exitCode: session.exitCode,
+    inputVersion: session.inputVersion || 0,
+    lastInputAt: session.lastInputAt || "",
+    lastInputBytes: session.lastInputBytes || 0,
+    lastOutputAt: session.lastOutputAt || "",
+    lastOutputBytes: session.lastOutputBytes || 0,
     metadata: session.metadata || {},
     output: session.output,
+    outputVersion: session.outputVersion || 0,
     rows: session.rows || DEFAULT_TERMINAL_ROWS,
     status: session.status
   };
@@ -99,6 +106,36 @@ function applySessionMetadata(session, metadata = {}) {
     type: "metadata"
   });
   return terminalSessionResponse(session);
+}
+
+function byteLength(value = "") {
+  return Buffer.byteLength(String(value || ""), "utf8");
+}
+
+function recordTerminalInput(session, data = "") {
+  const bytes = byteLength(data);
+  if (bytes < 1) {
+    return;
+  }
+  session.inputVersion = Number(session.inputVersion || 0) + 1;
+  session.lastInputAt = new Date().toISOString();
+  session.lastInputBytes = bytes;
+  sendToSubscribers(session, {
+    bytes,
+    inputVersion: session.inputVersion,
+    lastInputAt: session.lastInputAt,
+    type: "input"
+  });
+}
+
+function recordTerminalOutput(session, data = "") {
+  const bytes = byteLength(data);
+  if (bytes < 1) {
+    return;
+  }
+  session.outputVersion = Number(session.outputVersion || 0) + 1;
+  session.lastOutputAt = new Date().toISOString();
+  session.lastOutputBytes = bytes;
 }
 
 function sendToSubscribers(session, message) {
@@ -300,7 +337,13 @@ function startTerminalSession({
       : {},
     onClose,
     onStop,
+    inputVersion: 0,
+    lastInputAt: "",
+    lastInputBytes: 0,
+    lastOutputAt: "",
+    lastOutputBytes: 0,
     output: "",
+    outputVersion: 0,
     rows: DEFAULT_TERMINAL_ROWS,
     status: "running",
     subscribers: new Set(),
@@ -308,9 +351,12 @@ function startTerminalSession({
   };
 
   terminal.onData((data) => {
+    recordTerminalOutput(session, data);
     session.output = trimBuffer(session.output + data);
     sendToSubscribers(session, {
       chunk: data,
+      lastOutputAt: session.lastOutputAt,
+      outputVersion: session.outputVersion,
       type: "output"
     });
     if (typeof onOutput === "function") {
@@ -420,7 +466,11 @@ function writeTerminalSession(id, data, { namespace = "default" } = {}) {
     return readTerminalSession(id, { namespace });
   }
 
-  session.terminal.write(String(data || ""));
+  const input = String(data || "");
+  if (input) {
+    recordTerminalInput(session, input);
+    session.terminal.write(input);
+  }
   return readTerminalSession(id, { namespace });
 }
 

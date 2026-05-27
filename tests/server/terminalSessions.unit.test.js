@@ -146,6 +146,60 @@ test("terminal sessions stream PTY output to subscribers", async () => {
   }
 });
 
+test("terminal sessions record input and output byte activity", async () => {
+  const namespace = `terminal-activity-test-${crypto.randomUUID()}`;
+  const session = startTerminalSession({
+    args: [
+      "-e",
+      "process.stdin.on('data', (chunk) => process.stdout.write(`echo:${chunk}`)); process.stdin.resume();"
+    ],
+    command: process.execPath,
+    commandPreview: "node echo",
+    namespace
+  });
+  const messages = [];
+
+  try {
+    assert.equal(session.inputVersion, 0);
+    assert.equal(session.outputVersion, 0);
+    assert.equal(session.lastInputAt, "");
+    assert.equal(session.lastOutputAt, "");
+
+    const subscription = subscribeTerminalSession(session.id, (message) => {
+      messages.push(message);
+    }, {
+      namespace
+    });
+    assert.equal(subscription.ok, true);
+
+    const written = writeTerminalSession(session.id, "hello\n", {
+      namespace
+    });
+    assert.equal(written.inputVersion, 1);
+    assert.ok(Date.parse(written.lastInputAt));
+    assert.equal(written.lastInputBytes, Buffer.byteLength("hello\n"));
+
+    await waitFor(() => readTerminalSession(session.id, { namespace }).output.includes("echo:hello"));
+    const snapshot = readTerminalSession(session.id, { namespace });
+    assert.ok(Date.parse(snapshot.lastOutputAt));
+    assert.ok(snapshot.lastOutputBytes > 0);
+    assert.ok(snapshot.outputVersion > 0);
+    assert.ok(messages.some((message) =>
+      message.type === "input" &&
+      message.inputVersion === 1 &&
+      Date.parse(message.lastInputAt)
+    ));
+    assert.ok(messages.some((message) =>
+      message.type === "output" &&
+      message.outputVersion > 0 &&
+      Date.parse(message.lastOutputAt)
+    ));
+    subscription.unsubscribe();
+  } finally {
+    await closeTerminalSessionsForNamespacePrefix(namespace);
+  }
+});
+
 test("terminal sessions resize the running PTY", async () => {
   const namespace = `terminal-resize-test-${crypto.randomUUID()}`;
   const session = startTerminalSession({

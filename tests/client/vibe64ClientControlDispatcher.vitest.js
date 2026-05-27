@@ -7,15 +7,18 @@ import {
   runVibe64ClientControl
 } from "../../src/lib/vibe64ClientControlDispatcher.js";
 import {
+  continueVibe64CodexTurn,
   startVibe64CodexTerminal
 } from "@/lib/vibe64SessionApi.js";
 
 vi.mock("@/lib/vibe64SessionApi.js", () => ({
+  continueVibe64CodexTurn: vi.fn(),
   startVibe64CodexTerminal: vi.fn()
 }));
 
 describe("vibe64ClientControlDispatcher", () => {
   beforeEach(() => {
+    vi.mocked(continueVibe64CodexTurn).mockReset();
     vi.mocked(startVibe64CodexTerminal).mockReset();
   });
 
@@ -51,6 +54,27 @@ describe("vibe64ClientControlDispatcher", () => {
     })).resolves.toBe(true);
 
     expect(startVibe64CodexTerminal).toHaveBeenCalledWith("session_123");
+    expect(refreshSessionData).toHaveBeenCalledTimes(1);
+  });
+
+  it("dispatches Codex continuation controls through the terminal service", async () => {
+    const refreshSessionData = vi.fn();
+    vi.mocked(continueVibe64CodexTurn).mockResolvedValue({
+      ok: true
+    });
+
+    await expect(runVibe64ClientControl({
+      control: {
+        action: VIBE64_CLIENT_CONTROL_ACTIONS.CONTINUE_CODEX_TURN
+      }
+    }, {
+      refreshSessionData,
+      session: {
+        sessionId: "session_456"
+      }
+    })).resolves.toBe(true);
+
+    expect(continueVibe64CodexTurn).toHaveBeenCalledWith("session_456");
     expect(refreshSessionData).toHaveBeenCalledTimes(1);
   });
 });

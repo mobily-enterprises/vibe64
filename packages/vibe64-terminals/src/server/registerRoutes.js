@@ -39,6 +39,18 @@ function registerRoutes(
   });
   const terminalService = () => getTerminalService(app);
 
+  routes.serviceRoute("GET", "/codex-terminal", {
+    summary: "Read global Vibe64 Codex terminal status."
+  }, () => {
+    return terminalService().globalCodexTerminalState();
+  });
+
+  routes.serviceRoute("POST", "/codex-terminal", {
+    summary: "Start a global Vibe64 Codex terminal."
+  }, () => {
+    return terminalService().startGlobalCodexTerminal();
+  });
+
   routes.serviceRoute("GET", "/sessions/:sessionId/launch-targets", {
     summary: "Read Vibe64 launch target status."
   }, (request) => {
@@ -78,6 +90,12 @@ function registerRoutes(
     return terminalService().startCodexTerminal(request.params.sessionId);
   });
 
+  routes.serviceRoute("POST", "/sessions/:sessionId/codex-terminal/continue", {
+    summary: "Continue the current Vibe64 Codex turn."
+  }, (request) => {
+    return terminalService().continueCodexTurn(request.params.sessionId);
+  });
+
   routes.actionRoute("POST", "/sessions/:sessionId/codex-attachments", {
     actionId: ACTION_UPLOAD_CODEX_ATTACHMENT,
     body: codexAttachmentInputValidator,
@@ -108,6 +126,14 @@ function registerRoutes(
     read: (sessionId, terminalSessionId) => terminalService().readCodexTerminal(sessionId, terminalSessionId),
     readSummary: "Read an Vibe64 Codex terminal snapshot.",
     closeSummary: "Close an Vibe64 Codex terminal."
+  });
+
+  registerGlobalTerminalSnapshotRoutes(routes, {
+    close: (terminalSessionId) => terminalService().closeGlobalCodexTerminal(terminalSessionId),
+    path: "/codex-terminal/:terminalSessionId",
+    read: (terminalSessionId) => terminalService().readGlobalCodexTerminal(terminalSessionId),
+    readSummary: "Read a global Vibe64 Codex terminal snapshot.",
+    closeSummary: "Close a global Vibe64 Codex terminal."
   });
 
   registerTerminalSnapshotRoutes(routes, {
@@ -151,6 +177,12 @@ function terminalRouteInput(request) {
   };
 }
 
+function globalTerminalRouteInput(request) {
+  return {
+    terminalSessionId: request.params.terminalSessionId
+  };
+}
+
 function registerTerminalSnapshotRoutes(routes, {
   close,
   closeSummary,
@@ -176,7 +208,47 @@ function registerTerminalSnapshotRoutes(routes, {
   });
 }
 
+function registerGlobalTerminalSnapshotRoutes(routes, {
+  close,
+  closeSummary,
+  path,
+  read,
+  readSummary
+}) {
+  routes.serviceRoute("GET", path, {
+    failureStatus: 404,
+    successStatus: 200,
+    summary: readSummary
+  }, (request) => {
+    const input = globalTerminalRouteInput(request);
+    return read(input.terminalSessionId);
+  });
+
+  routes.serviceRoute("DELETE", path, {
+    statusCode: 200,
+    summary: closeSummary
+  }, (request) => {
+    const input = globalTerminalRouteInput(request);
+    return close(input.terminalSessionId);
+  });
+}
+
 function registerVibe64TerminalWebSocketRoutes(app, routes) {
+  registerTerminalWebSocketRoute(app, {
+    routePath: `${routes.routeBase}/codex-terminal/:terminalSessionId/ws`,
+    serviceId: VIBE64_TERMINALS_SERVICE,
+    serviceUnavailableMessage: VIBE64_TERMINALS_UNAVAILABLE,
+    subscribe(service, { subscriber, terminalSessionId }) {
+      return service.subscribeGlobalCodexTerminal(terminalSessionId, subscriber);
+    },
+    resize(service, { cols, rows, terminalSessionId }) {
+      return service.resizeGlobalCodexTerminal(terminalSessionId, { cols, rows });
+    },
+    write(service, { data, terminalSessionId }) {
+      return service.writeGlobalCodexTerminal(terminalSessionId, data);
+    }
+  });
+
   registerTerminalWebSocketRoute(app, {
     routePath: `${routes.routeBase}/sessions/:sessionId/codex-terminal/:terminalSessionId/ws`,
     serviceId: VIBE64_TERMINALS_SERVICE,

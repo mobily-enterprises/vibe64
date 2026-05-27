@@ -75,7 +75,7 @@ describe("Vibe64 session view model", () => {
     }, [
       { id: "session_created", index: 0, label: "Create session" },
       { id: "worktree_created", index: 1, label: "Create worktree" },
-      { id: "plan_made", index: 2, label: "Make plan" }
+      { id: "plan_made", index: 2, label: "Make a plan for the issue" }
     ]);
 
     expect(facts.map((fact) => fact.key)).toEqual([
@@ -90,7 +90,7 @@ describe("Vibe64 session view model", () => {
       "session-report",
       "pr-outcome"
     ]);
-    expect(facts.find((fact) => fact.key === "step")?.value).toBe("Make plan");
+    expect(facts.find((fact) => fact.key === "step")?.value).toBe("Make a plan for the issue");
     expect(facts.find((fact) => fact.key === "issue")?.value).toBe("Issue #12");
     expect(facts.find((fact) => fact.key === "pr")?.value).toBe("PR #34");
     expect(facts.find((fact) => fact.key === "blueprint")?.href)

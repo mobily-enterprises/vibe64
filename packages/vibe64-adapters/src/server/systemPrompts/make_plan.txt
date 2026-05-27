@@ -1,4 +1,4 @@
-Make plan
+Make a plan for the issue
 
 Vibe64 standard planning instructions.
 
@@ -7,6 +7,7 @@ Session:
 - current step: {{session.currentStep}}
 - target root: {{session.targetRoot}}
 - worktree path: {{session.worktreePath}}
+- artifacts root: {{session.artifactsRoot}}
 
 Known session metadata:
 {{session.metadata.json}}
@@ -19,4 +20,12 @@ Action input:
 Missing information policy:
 {{prompt.missingInformationPolicy}}
 
-Create a clear, ordered implementation plan as your normal Codex response. Use the current Codex conversation, Action input, adapter facts, and project files as context. Do not modify files while creating the plan. Do not run shell commands just to display the plan.
+Issue source of truth:
+- Read the selected issue artifacts before planning:
+  - `{{session.artifactsRoot}}/issue_title`
+  - `{{session.artifactsRoot}}/issue.md`
+  - `{{session.artifactsRoot}}/issue_word`
+- Treat those artifacts as the issue title, body, and Vibe64 issue word for this plan.
+- Use `issue_url` and `issue_number` metadata only as references. Do not call GitHub to rediscover the issue content unless the artifacts are missing or empty.
+
+Create a clear, ordered implementation plan as your normal Codex response. Use the selected issue artifacts, current Codex conversation, Action input, adapter facts, and project files as context. Do not modify files while creating the plan. Do not run shell commands just to display the plan.

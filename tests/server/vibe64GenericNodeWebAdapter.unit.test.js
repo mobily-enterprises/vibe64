@@ -62,6 +62,12 @@ async function createGenericNodeWebProject(root, packageJson = {}) {
   ]);
 }
 
+function worktreeMetadata(targetRoot, sessionId = "session") {
+  return {
+    worktree_path: path.join(targetRoot, ".vibe64/sessions/active", sessionId, "worktree")
+  };
+}
+
 function commandIds() {
   return GENERIC_NODE_WEB_VIBE64_COMMANDS
     .map((command) => command.id)
@@ -192,6 +198,7 @@ test("generic Node web prompt actions use the prompt pack", async () => {
     });
     await runtime.createSession({
       initialStep: "plan_made",
+      metadata: worktreeMetadata(targetRoot, "node_web_prompt"),
       sessionId: "node_web_prompt"
     });
 

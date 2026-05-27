@@ -1,7 +1,11 @@
 import {
+  STEP_STATUS,
   VIBE64_SESSION_STATUS,
   workflowDefinitionCreationOptions
 } from "@local/vibe64-runtime/server";
+import {
+  VIBE64_CLIENT_CONTROL_ACTIONS
+} from "@local/vibe64-core/shared";
 import {
   vibe64Result
 } from "@local/vibe64-core/server/serverResponses";
@@ -141,28 +145,225 @@ async function sessionWithLatestRevision(runtime, session = {}) {
   };
 }
 
+const CODEX_TERMINAL_ACTIVITY_PREVIEW_MS = 2500;
+const CODEX_WAIT_RECOVERY_DELAY_MS = 30000;
+
+function timeMs(value = "") {
+  const time = Date.parse(String(value || ""));
+  return Number.isFinite(time) ? time : 0;
+}
+
+function nextFutureIso(timestamps = [], nowMs = Date.now()) {
+  const nextTimestamp = timestamps
+    .filter((timestamp) => Number.isFinite(timestamp) && timestamp > nowMs)
+    .sort((left, right) => left - right)[0];
+  return nextTimestamp ? new Date(nextTimestamp).toISOString() : "";
+}
+
+function latestCodexTerminalInputActivity(terminal = {}) {
+  const inputAt = timeMs(terminal.lastInputAt);
+  if (!inputAt) {
+    return null;
+  }
+  return {
+    activityAt: inputAt,
+    visibleUntil: new Date(inputAt + CODEX_TERMINAL_ACTIVITY_PREVIEW_MS).toISOString()
+  };
+}
+
 function codexTerminalPresentation(codexTerminal = null) {
   const terminal = objectValue(codexTerminal);
   const terminalSessionId = String(terminal.id || "").trim();
+  const latestActivity = latestCodexTerminalInputActivity(terminal);
+  const visibleUntilMs = timeMs(latestActivity?.visibleUntil);
   const visible = Boolean(
     terminalSessionId &&
     terminal.status !== "exited" &&
-    terminal.transmitting === true
+    latestActivity &&
+    Date.now() <= visibleUntilMs
   );
   return {
     label: visible ? terminal.activityLabel || "Terminal is transmitting..." : "",
     readOnlyInAutopilot: true,
     renderer: "codex_terminal",
     terminalSessionId,
-    visible
+    visible,
+    visibleUntil: latestActivity?.visibleUntil || ""
   };
+}
+
+function codexWaitStepStartedAt(session = {}) {
+  return timeMs(session.stepMachine?.at);
+}
+
+function terminalInputMs(terminal = {}) {
+  return timeMs(terminal.lastInputAt);
+}
+
+function terminalTurnStartedAt(terminal = {}) {
+  return timeMs(terminal.activityStartedAt);
+}
+
+function promptHandoffSignatureStartedAt(session = {}) {
+  const signature = String(session.metadata?.codex_prompt_handoff_signature || "").trim();
+  const timestamp = Number(signature.split(":").at(-1));
+  return Number.isSafeInteger(timestamp) && timestamp > 0 ? timestamp : 0;
+}
+
+function codexWaitReferenceAt(session = {}, terminal = {}) {
+  const stepStartedAt = codexWaitStepStartedAt(session);
+  const candidates = [
+    terminalTurnStartedAt(terminal),
+    promptHandoffSignatureStartedAt(session),
+    stepStartedAt
+  ].filter((timestamp) => timestamp && (!stepStartedAt || timestamp >= stepStartedAt));
+  return candidates.length ? Math.max(...candidates) : stepStartedAt;
+}
+
+function waitAgeMs(session = {}, terminal = {}, nowMs = Date.now()) {
+  const reference = codexWaitReferenceAt(session, terminal);
+  return reference ? Math.max(0, nowMs - reference) : Number.POSITIVE_INFINITY;
+}
+
+function terminalHasRecentVibe64InputForTurn(terminal = {}, nowMs = Date.now()) {
+  const startedAt = terminalTurnStartedAt(terminal);
+  const inputAt = timeMs(terminal.lastInputAt);
+  return Boolean(
+    startedAt &&
+    inputAt >= startedAt &&
+    nowMs - inputAt <= CODEX_TERMINAL_ACTIVITY_PREVIEW_MS
+  );
+}
+
+function codexWaitRefreshAt(session = {}, terminal = {}, nowMs = Date.now()) {
+  const inputAt = terminalInputMs(terminal);
+  const referenceAt = codexWaitReferenceAt(session, terminal);
+  const ageMs = waitAgeMs(session, terminal, nowMs);
+  const candidates = [];
+
+  if (ageMs < CODEX_WAIT_RECOVERY_DELAY_MS) {
+    if (terminalHasRecentVibe64InputForTurn(terminal, nowMs)) {
+      candidates.push(inputAt + CODEX_TERMINAL_ACTIVITY_PREVIEW_MS);
+    }
+    candidates.push(referenceAt + CODEX_WAIT_RECOVERY_DELAY_MS);
+  }
+
+  return nextFutureIso(candidates, nowMs);
+}
+
+function codexRecoveryControlIntent({
+  id = "continue_codex_turn",
+  label = "Ask Codex to continue",
+  style = "primary"
+} = {}) {
+  return {
+    actionId: "",
+    control: {
+      action: VIBE64_CLIENT_CONTROL_ACTIONS.CONTINUE_CODEX_TURN,
+      disabledWhen: [],
+      icon: "",
+      loadingWhen: []
+    },
+    disabledReason: "",
+    enabled: true,
+    id,
+    inputFields: [],
+    label,
+    style
+  };
+}
+
+function sessionWaitsForCodex(session = {}) {
+  return String(session.stepMachine?.status || "").trim() === STEP_STATUS.AWAITING_AGENT_RESULT;
+}
+
+function codexWaitPresentationOverlay(session = {}, terminalState = {}) {
+  if (!sessionWaitsForCodex(session)) {
+    return null;
+  }
+  const terminal = objectValue(terminalState.codexTerminal);
+  const terminalSessionId = String(terminal.id || "").trim();
+  const terminalRunning = Boolean(terminalSessionId && terminal.status !== "exited");
+  const nowMs = Date.now();
+  const ageMs = waitAgeMs(session, terminal);
+  const refreshAt = codexWaitRefreshAt(session, terminal, nowMs);
+
+  if (!terminalRunning) {
+    return {
+      intents: [codexRecoveryControlIntent()],
+      screen: {
+        icon: "warning",
+        kind: "codex_attention",
+        message: "Codex is not running for the current step.",
+        sections: [],
+        showProgress: false,
+        title: "Codex needs attention"
+      }
+    };
+  }
+
+  if (ageMs < CODEX_WAIT_RECOVERY_DELAY_MS && terminalHasRecentVibe64InputForTurn(terminal, nowMs)) {
+    return {
+      refreshAt
+    };
+  }
+
+  if (ageMs < CODEX_WAIT_RECOVERY_DELAY_MS) {
+    return {
+      intents: [],
+      refreshAt,
+      screen: {
+        icon: "progress",
+        kind: "codex_running",
+        message: "Wait for Codex to finish the current step.",
+        sections: [],
+        showProgress: true,
+        title: "Waiting for Codex..."
+      }
+    };
+  }
+
+  return {
+    intents: [codexRecoveryControlIntent()],
+    screen: {
+      icon: "warning",
+      kind: "codex_attention",
+      message: "Codex has not reported progress for the current step.",
+      sections: [],
+      showProgress: false,
+      title: "Codex needs attention"
+    }
+  };
+}
+
+function withCodexWaitPresentation(session = {}, terminalState = {}) {
+  const overlay = codexWaitPresentationOverlay(session, terminalState);
+  const presentation = objectValue(session.presentation);
+  if (!overlay) {
+    return presentation;
+  }
+  const nextPresentation = {
+    ...presentation,
+    refreshAt: overlay.refreshAt || presentation.refreshAt || "",
+    refreshReason: overlay.refreshAt ? "codex_wait" : presentation.refreshReason || ""
+  };
+  if (Array.isArray(overlay.intents)) {
+    nextPresentation.intents = overlay.intents;
+  }
+  if (overlay.screen) {
+    nextPresentation.screen = {
+      ...objectValue(presentation.screen),
+      ...overlay.screen
+    };
+  }
+  return nextPresentation;
 }
 
 function withCodexTerminalState(session = {}, terminalState = {}) {
   if (!session || session.ok === false || !session.sessionId) {
     return session;
   }
-  const presentation = objectValue(session.presentation);
+  const presentation = withCodexWaitPresentation(session, terminalState);
   return {
     ...session,
     codexTerminal: terminalState.codexTerminal || null,
@@ -170,6 +371,7 @@ function withCodexTerminalState(session = {}, terminalState = {}) {
     codexPromptHandoffOutputStart: terminalState.codexPromptHandoffOutputStart ?? session.codexPromptHandoffOutputStart,
     codexPromptHandoffSignature: terminalState.codexPromptHandoffSignature || session.codexPromptHandoffSignature || "",
     codexThreadId: terminalState.codexThreadId || session.codexThreadId || "",
+    intents: Array.isArray(presentation.intents) ? presentation.intents : [],
     presentation: {
       ...presentation,
       terminal: {
