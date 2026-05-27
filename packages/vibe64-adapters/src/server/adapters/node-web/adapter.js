@@ -5,12 +5,12 @@ import {
   adapterProjectFacts
 } from "../../adapter.js";
 import {
-  AI_STUDIO_VERIFY_SCRIPT_NAME,
+  VIBE64_VERIFY_SCRIPT_NAME,
   javascriptAdapterCodeIndexCommand,
   packageManagerScriptCommand
 } from "../../codeIndexCommands.js";
 import {
-  AiStudioDescribedWorkflowTargetAdapter,
+  Vibe64DescribedWorkflowTargetAdapter,
   inspectDescribedProject
 } from "../../workflowAdapter.js";
 import {
@@ -110,7 +110,7 @@ function genericNodeWebCommands(commands = [], {
       return {
         ...command,
         available: false,
-        disabledReason: "No ai-studio:verify, verify, check, test, build, lint, or typecheck package script was found."
+        disabledReason: "No vibe64:verify, verify, check, test, build, lint, or typecheck package script was found."
       };
     }
     return command;
@@ -249,7 +249,7 @@ async function inspectGenericNodeWebProject(targetRoot) {
     extra: nodePackageManagerInspectionExtra,
     markers: GENERIC_NODE_WEB_MARKERS,
     packageJson: {
-      invalidJsonCode: "ai_studio_invalid_node_web_json",
+      invalidJsonCode: "vibe64_invalid_node_web_json",
       invalidJsonMessage: (filePath) => `Invalid JSON in generic Node web project file: ${filePath}`
     }
   });
@@ -263,7 +263,7 @@ async function genericNodeWebAutomatedChecksHook({ worktreePath = "" } = {}) {
   const verifyCommand = packageManagerScriptCommand({
     packageJson: packageJson || {},
     packageManager,
-    scriptName: AI_STUDIO_VERIFY_SCRIPT_NAME
+    scriptName: VIBE64_VERIFY_SCRIPT_NAME
   });
   const scriptName = verifyCommand ? "" : preferredAutomatedCheckScriptName(packageJson || {});
   const command = verifyCommand || (scriptName ? runScriptCommand(packageManager.name, scriptName) : "");
@@ -272,7 +272,7 @@ async function genericNodeWebAutomatedChecksHook({ worktreePath = "" } = {}) {
         commandPreview: command,
         metadata: {
           automated_checks_package_manager: packageManager.name,
-          automated_checks_script: verifyCommand ? AI_STUDIO_VERIFY_SCRIPT_NAME : scriptName
+          automated_checks_script: verifyCommand ? VIBE64_VERIFY_SCRIPT_NAME : scriptName
         },
         script: studioCommandScript({
           command,
@@ -302,7 +302,7 @@ async function genericNodeWebCodeIndexHook({ worktreePath = "" } = {}) {
   };
 }
 
-class GenericNodeWebTargetAdapter extends AiStudioDescribedWorkflowTargetAdapter {
+class GenericNodeWebTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
   constructor({
     commandTerminalSpecFactory = null,
     commands = [],

@@ -1,7 +1,7 @@
-ARG AI_STUDIO_BASE_IMAGE=ai-studio-base-toolchain:0.1.0
+ARG VIBE64_BASE_IMAGE=vibe64-base-toolchain:0.1.0
 ARG DEBIAN_FRONTEND=noninteractive
 
-FROM ${AI_STUDIO_BASE_IMAGE}
+FROM ${VIBE64_BASE_IMAGE}
 ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update \

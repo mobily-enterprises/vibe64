@@ -7,7 +7,7 @@
       v-for="field in selectedControlFields"
       :key="field.name"
     >
-      <AiStudioAutopilotPromptTextarea
+      <Vibe64AutopilotPromptTextarea
         v-if="field.kind === 'textarea'"
         :model-value="selectedControlValues[field.name] || ''"
         class="studio-autopilot__input"
@@ -30,7 +30,7 @@
       />
     </template>
 
-    <AiStudioAutopilotComposerActions class="studio-autopilot__composer-actions-row">
+    <Vibe64AutopilotComposerActions class="studio-autopilot__composer-actions-row">
       <template #submit>
         <div class="studio-autopilot__actions studio-autopilot__composer-submit-actions">
           <v-btn
@@ -77,7 +77,7 @@
           </v-btn>
         </div>
       </template>
-    </AiStudioAutopilotComposerActions>
+    </Vibe64AutopilotComposerActions>
   </form>
 </template>
 
@@ -86,8 +86,8 @@ import {
   mdiClose,
   mdiSend
 } from "@mdi/js";
-import AiStudioAutopilotComposerActions from "@/components/studio/ai-studio-session/AiStudioAutopilotComposerActions.vue";
-import AiStudioAutopilotPromptTextarea from "@/components/studio/ai-studio-session/AiStudioAutopilotPromptTextarea.vue";
+import Vibe64AutopilotComposerActions from "@/components/studio/vibe64-session/Vibe64AutopilotComposerActions.vue";
+import Vibe64AutopilotPromptTextarea from "@/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue";
 
 defineEmits([
   "activate-control",

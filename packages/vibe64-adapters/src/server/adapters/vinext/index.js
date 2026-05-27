@@ -7,10 +7,10 @@ import {
 } from "./adapter.js";
 import {
   deepFreeze
-} from "@local/ai-studio-core/server/deepFreeze";
+} from "@local/vibe64-core/server/deepFreeze";
 import {
-  AI_STUDIO_WORKFLOW_COMMANDS,
-  createAiStudioWorkflowCommandTerminalSpec
+  VIBE64_WORKFLOW_COMMANDS,
+  createVibe64WorkflowCommandTerminalSpec
 } from "../../workflowAdapter.js";
 import {
   createVinextAppReviewTerminalSpec,
@@ -31,8 +31,8 @@ export {
   VINEXT_REVIEW_MODE_CONFIG
 } from "./constants.js";
 
-const VINEXT_AI_STUDIO_COMMANDS = deepFreeze(AI_STUDIO_WORKFLOW_COMMANDS);
-const createVinextAiStudioCommandTerminalSpec = createAiStudioWorkflowCommandTerminalSpec;
+const VINEXT_VIBE64_COMMANDS = deepFreeze(VIBE64_WORKFLOW_COMMANDS);
+const createVinextVibe64CommandTerminalSpec = createVibe64WorkflowCommandTerminalSpec;
 
 function createVinextTargetAdapter({
   commandTerminalSpecFactory = null,
@@ -43,19 +43,19 @@ function createVinextTargetAdapter({
     commandTerminalSpecFactory,
     launchTargetTerminalSpecFactory,
     launchTargets,
-    commands: VINEXT_AI_STUDIO_COMMANDS
+    commands: VINEXT_VIBE64_COMMANDS
   });
 }
 
 export {
-  createVinextAiStudioCommandTerminalSpec,
+  createVinextVibe64CommandTerminalSpec,
   createVinextAppReviewTerminalSpec,
   createVinextLaunchDescriptor,
   createVinextLaunchTargetTerminalSpec,
   createVinextReviewDescriptor,
   createVinextTargetAdapter,
   listVinextLaunchTargets,
-  VINEXT_AI_STUDIO_COMMANDS,
+  VINEXT_VIBE64_COMMANDS,
   VINEXT_CONFIG_FIELDS,
   VINEXT_MARKERS,
   VINEXT_PROMPT_PACK_ROOT,

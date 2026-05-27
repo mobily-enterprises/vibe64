@@ -4,27 +4,27 @@ import path from "node:path";
 import test from "node:test";
 
 import {
-  AiStudioSessionRuntime
-} from "@local/ai-studio-runtime/server";
+  Vibe64SessionRuntime
+} from "@local/vibe64-runtime/server";
 import {
-  createAiStudioAdapterRegistry
-} from "@local/ai-studio-adapters/server/adapters/registry";
+  createVibe64AdapterRegistry
+} from "@local/vibe64-adapters/server/adapters/registry";
 import {
-  NEXTJS_AI_STUDIO_COMMANDS,
+  NEXTJS_VIBE64_COMMANDS,
   createNextjsLaunchDescriptor,
   createNextjsLaunchTargetTerminalSpec,
   createNextjsTargetAdapter
-} from "@local/ai-studio-adapters/server/adapters/nextjs/index";
+} from "@local/vibe64-adapters/server/adapters/nextjs/index";
 import {
   expectedNextjsDatabaseUrl,
   nextjsDatabaseEnvWriteScript
-} from "@local/ai-studio-adapters/server/adapters/nextjs/databaseRuntime";
+} from "@local/vibe64-adapters/server/adapters/nextjs/databaseRuntime";
 import {
   createNextAppCommand,
   createNextAppScript,
   createNextjsSetupDoctorPlugin
-} from "@local/ai-studio-adapters/server/adapters/nextjs/setupDoctorPlugin";
-import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
+} from "@local/vibe64-adapters/server/adapters/nextjs/setupDoctorPlugin";
+import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 async function writeProjectFile(root, relativePath, text = "") {
   const filePath = path.join(root, relativePath);
@@ -62,13 +62,13 @@ async function createNextjsProject(root, packageJson = {}) {
 }
 
 function commandIds() {
-  return NEXTJS_AI_STUDIO_COMMANDS
+  return NEXTJS_VIBE64_COMMANDS
     .map((command) => command.id)
     .sort((left, right) => left.localeCompare(right));
 }
 
 test("nextjs adapter is registered as an implemented project type", async () => {
-  const registry = createAiStudioAdapterRegistry();
+  const registry = createVibe64AdapterRegistry();
   const projectTypes = registry.availableProjectTypes();
   const nextjsProjectType = projectTypes.find((type) => type.id === "nextjs");
 
@@ -173,7 +173,7 @@ test("nextjs adapter composes prompt blueprints from independent config choices"
 test("nextjs prompt actions use the Next.js prompt pack", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createNextjsProject(targetRoot);
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       adapter: createNextjsTargetAdapter(),
       projectConfig: {
         values: {
@@ -211,8 +211,8 @@ test("nextjs prompt actions use the Next.js prompt pack", async () => {
     assert.doesNotMatch(afterPrompt.actionResult.prompt, /Managed runtime containers/u);
     assert.doesNotMatch(afterPrompt.actionResult.prompt, /containerName/u);
     assert.match(afterPrompt.actionResult.prompt, /ask concise questions before planning or implementing/u);
-    assert.match(afterPrompt.actionResult.prompt, /AI Studio session briefing[\s\S]*Database runtime: PostgreSQL/u);
-    assert.match(afterPrompt.actionResult.prompt, /Next\.js selected blueprint:\nSee the AI Studio session briefing/u);
+    assert.match(afterPrompt.actionResult.prompt, /Vibe64 session briefing[\s\S]*Database runtime: PostgreSQL/u);
+    assert.match(afterPrompt.actionResult.prompt, /Next\.js selected blueprint:\nSee the Vibe64 session briefing/u);
     assert.match(afterPrompt.actionResult.prompt, /Data layer: Prisma/u);
     assert.doesNotMatch(afterPrompt.actionResult.prompt, /\{\{adapter\.promptContext\.environment_blueprint\}\}/u);
     assert.match(afterPrompt.actionResult.prompt, /example-nextjs-app/u);

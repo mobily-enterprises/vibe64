@@ -2,12 +2,12 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  AI_STUDIO_STATE_DIR,
-  aiStudioError,
+  VIBE64_STATE_DIR,
+  vibe64Error,
   isMissingPathError,
   isPlainObject,
   normalizeText
-} from "@local/ai-studio-core/server/core";
+} from "@local/vibe64-core/server/core";
 import {
   missingInformationPolicyInstruction
 } from "./promptQuestionPolicy.js";
@@ -18,20 +18,20 @@ const PROMPT_OVERRIDES_DIR = "prompts";
 const PROMPT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
 const TEMPLATE_TOKEN_PATTERN = /\{\{([A-Za-z0-9_.-]+)\}\}/gu;
 const MANAGED_SERVICE_POLICY = [
-  "Use the Managed services section as the only source for AI Studio-managed database access.",
+  "Use the Managed services section as the only source for Vibe64-managed database access.",
   "Run the listed non-interactive client command directly from the worktree terminal: mysql or mariadb for MySQL-compatible services, and psql for PostgreSQL services.",
   "When checking connectivity or inspecting schema from Codex, use `checkCommand`, use `command` with a real SQL statement, or pipe SQL to the client; do not run a bare interactive database client that waits for input.",
   "When framework generators or CLIs ask for database connection tokens or flags, including commands such as `npx jskit ...`, pass the environment-variable references from `generatorTokenHints` instead of discovering replacement values.",
   "Do not inspect Docker, Docker Compose, container names, runtime networks, localhost sockets, getent, mysqladmin, mariadb-admin, pg_isready, or host port probes for normal managed-service work.",
   "If the listed client command cannot connect, report that the managed service is not ready or ask for the missing external detail; do not invent alternate credentials or infrastructure."
 ].join(" ");
-const STATIC_CONTEXT_REFERENCE = "Use the AI Studio session briefing already provided for adapter facts, adapter prompt context, managed services, managed service policy, and project config.";
+const STATIC_CONTEXT_REFERENCE = "Use the Vibe64 session briefing already provided for adapter facts, adapter prompt context, managed services, managed service policy, and project config.";
 const STATIC_CONTEXT_REFERENCE_MODE = "reference";
 
 function assertPromptId(promptId) {
   const normalizedPromptId = normalizeText(promptId);
   if (!PROMPT_ID_PATTERN.test(normalizedPromptId)) {
-    throw aiStudioError(`Invalid AI Studio prompt id: ${normalizedPromptId || "(empty)"}`, "ai_studio_invalid_prompt_id");
+    throw vibe64Error(`Invalid Vibe64 prompt id: ${normalizedPromptId || "(empty)"}`, "vibe64_invalid_prompt_id");
   }
   return normalizedPromptId;
 }
@@ -67,7 +67,7 @@ function promptTemplatePath(promptPackRoot, promptId) {
 function promptOverrideRoot(targetRoot = "") {
   const normalizedTargetRoot = normalizeText(targetRoot);
   return normalizedTargetRoot
-    ? path.join(path.resolve(normalizedTargetRoot), AI_STUDIO_STATE_DIR, PROMPT_OVERRIDES_DIR)
+    ? path.join(path.resolve(normalizedTargetRoot), VIBE64_STATE_DIR, PROMPT_OVERRIDES_DIR)
     : "";
 }
 
@@ -84,7 +84,7 @@ function promptOverrideTemplatePath({
 function assertPromptPackRoot(promptPackRoot) {
   const normalizedPromptPackRoot = normalizeText(promptPackRoot);
   if (!normalizedPromptPackRoot) {
-    throw aiStudioError("AI Studio prompt renderer requires a prompt pack root.", "ai_studio_prompt_pack_root_missing");
+    throw vibe64Error("Vibe64 prompt renderer requires a prompt pack root.", "vibe64_prompt_pack_root_missing");
   }
   return path.resolve(normalizedPromptPackRoot);
 }
@@ -171,7 +171,7 @@ function normalizePromptContext(context = {}) {
     },
     config: isPlainObject(context.config) ? context.config : {},
     input: context.input ?? {},
-    product: normalizeText(context.product || "ai-studio"),
+    product: normalizeText(context.product || "vibe64"),
     prompt: {
       staticContextMode: promptStaticContextMode
     },
@@ -211,12 +211,12 @@ function sessionPromptContext(session = {}) {
 
 function staticJsonReference(label = "") {
   return {
-    aiStudioSessionBriefingReference: normalizeText(label) || STATIC_CONTEXT_REFERENCE
+    vibe64SessionBriefingReference: normalizeText(label) || STATIC_CONTEXT_REFERENCE
   };
 }
 
 function staticScalarReference(tokenName = "") {
-  return `See the AI Studio session briefing for ${tokenName}.`;
+  return `See the Vibe64 session briefing for ${tokenName}.`;
 }
 
 function contextWithStaticReferences(context = {}) {
@@ -224,12 +224,12 @@ function contextWithStaticReferences(context = {}) {
     ...context,
     adapter: {
       ...context.adapter,
-      commands: staticJsonReference("Adapter commands are in the AI Studio session briefing."),
-      facts: staticJsonReference("Adapter project facts are in the AI Studio session briefing."),
-      managedServices: staticJsonReference("Managed service connection details and policy are in the AI Studio session briefing."),
-      promptContext: staticJsonReference("Adapter prompt context is in the AI Studio session briefing.")
+      commands: staticJsonReference("Adapter commands are in the Vibe64 session briefing."),
+      facts: staticJsonReference("Adapter project facts are in the Vibe64 session briefing."),
+      managedServices: staticJsonReference("Managed service connection details and policy are in the Vibe64 session briefing."),
+      promptContext: staticJsonReference("Adapter prompt context is in the Vibe64 session briefing.")
     },
-    config: staticJsonReference("Project config is in the AI Studio session briefing.")
+    config: staticJsonReference("Project config is in the Vibe64 session briefing.")
   };
 }
 
@@ -237,15 +237,15 @@ function promptSessionBriefingReference() {
   return [
     "Session briefing:",
     STATIC_CONTEXT_REFERENCE,
-    "Do not ask the user to restate those static setup details. If this prompt includes an AI Studio session briefing above, treat that briefing as the source of truth for this Codex session."
+    "Do not ask the user to restate those static setup details. If this prompt includes an Vibe64 session briefing above, treat that briefing as the source of truth for this Codex session."
   ].join("\n");
 }
 
 function currentStepInputHelperBriefing() {
   return [
-    "AI Studio current-step input helper:",
-    "- When you need to update AI Studio workflow state, call the helper command instead of writing AI Studio artifacts directly.",
-    "- Command: node \"$AI_STUDIO_CURRENT_STEP_INPUT_HELPER\"",
+    "Vibe64 current-step input helper:",
+    "- When you need to update Vibe64 workflow state, call the helper command instead of writing Vibe64 artifacts directly.",
+    "- Command: node \"$VIBE64_CURRENT_STEP_INPUT_HELPER\"",
     "- Pass one JSON object on stdin or with --json.",
     "- Include `kind`, `stepId`, and `stepStatus` exactly for the current workflow state.",
     "- The current values are in Action context as `session.currentStep` and `session.stepMachine.status`.",
@@ -264,9 +264,9 @@ function promptSessionBriefing(contextInput = {}) {
     ].join("\n")
     : "If later session metadata includes `code_index_path`, read that generated code index before adding or reviewing helper-like code. Prefer existing helpers and structures from that index over redefining them.";
   return [
-    "AI Studio session briefing",
+    "Vibe64 session briefing",
     "",
-    "This briefing is sent once at the start of this Codex session. Keep using it for later AI Studio prompts in the same session instead of asking for or rediscovering these static setup facts.",
+    "This briefing is sent once at the start of this Codex session. Keep using it for later Vibe64 prompts in the same session instead of asking for or rediscovering these static setup facts.",
     "",
     "Fixed session paths:",
     `- session id: ${context.session.id}`,
@@ -309,27 +309,27 @@ function promptTemplateTokens(contextInput) {
     "action.label": context.action.label,
     "action.promptId": context.action.promptId,
     "adapter.commands.json": referenceStaticContext
-      ? stableJson(staticJsonReference("Adapter commands are in the AI Studio session briefing."))
+      ? stableJson(staticJsonReference("Adapter commands are in the Vibe64 session briefing."))
       : stableJson(context.adapter.commands),
     "adapter.detection.json": stableJson(context.adapter.detection),
     "adapter.facts.json": referenceStaticContext
-      ? stableJson(staticJsonReference("Adapter project facts are in the AI Studio session briefing."))
+      ? stableJson(staticJsonReference("Adapter project facts are in the Vibe64 session briefing."))
       : stableJson(context.adapter.facts),
     "adapter.id": context.adapter.id,
     "adapter.label": context.adapter.label,
     "adapter.managedServices.json": referenceStaticContext
-      ? stableJson(staticJsonReference("Managed service connection details are in the AI Studio session briefing."))
+      ? stableJson(staticJsonReference("Managed service connection details are in the Vibe64 session briefing."))
       : stableJson(context.adapter.managedServices),
     "adapter.promptContext.json": referenceStaticContext
-      ? stableJson(staticJsonReference("Adapter prompt context is in the AI Studio session briefing."))
+      ? stableJson(staticJsonReference("Adapter prompt context is in the Vibe64 session briefing."))
       : stableJson(context.adapter.promptContext),
     "adapter.runtimeContainers.json": stableJson([]),
     "config.json": referenceStaticContext
-      ? stableJson(staticJsonReference("Project config is in the AI Studio session briefing."))
+      ? stableJson(staticJsonReference("Project config is in the Vibe64 session briefing."))
       : stableJson(context.config),
     "context.json": stableJson(jsonContext),
     "prompt.managedServicePolicy": referenceStaticContext
-      ? "Use the managed service policy from the AI Studio session briefing."
+      ? "Use the managed service policy from the Vibe64 session briefing."
       : MANAGED_SERVICE_POLICY,
     "prompt.currentStepInputHelperBriefing": currentStepInputHelperBriefing(),
     "input.json": stableJson(context.input),
@@ -391,7 +391,7 @@ function renderPromptTemplate(template, context, extraTokens = {}) {
   };
   return String(template || "").replace(TEMPLATE_TOKEN_PATTERN, (match, tokenName) => {
     if (!Object.hasOwn(tokens, tokenName)) {
-      throw aiStudioError(`Unknown AI Studio prompt token: ${tokenName}`, "ai_studio_unknown_prompt_token");
+      throw vibe64Error(`Unknown Vibe64 prompt token: ${tokenName}`, "vibe64_unknown_prompt_token");
     }
     return tokens[tokenName];
   }).trim();

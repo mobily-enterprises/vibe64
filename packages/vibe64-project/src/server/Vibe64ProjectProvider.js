@@ -2,13 +2,13 @@ import { withActionDefaults } from "@jskit-ai/kernel/shared/actions";
 
 import {
   createService,
-  resolveAiStudioTargetRoot
+  resolveVibe64TargetRoot
 } from "./service.js";
 import { featureActions } from "./actions.js";
 import { registerRoutes } from "./registerRoutes.js";
 
-class AiStudioProjectProvider {
-  static id = "feature.ai-studio-project";
+class Vibe64ProjectProvider {
+  static id = "feature.vibe64-project";
 
   static dependsOn = ["runtime.actions"];
 
@@ -18,13 +18,13 @@ class AiStudioProjectProvider {
       typeof app.service !== "function" ||
       typeof app.actions !== "function"
     ) {
-      throw new Error("AiStudioProjectProvider requires application service()/actions().");
+      throw new Error("Vibe64ProjectProvider requires application service()/actions().");
     }
 
-    const targetRoot = resolveAiStudioTargetRoot();
+    const targetRoot = resolveVibe64TargetRoot();
 
     app.service(
-      "feature.ai-studio-project.service",
+      "feature.vibe64-project.service",
       () => {
         return createService({
           targetRoot
@@ -36,7 +36,7 @@ class AiStudioProjectProvider {
       withActionDefaults(featureActions, {
         domain: "feature",
         dependencies: {
-          featureService: "feature.ai-studio-project.service"
+          featureService: "feature.vibe64-project.service"
         }
       })
     );
@@ -44,10 +44,10 @@ class AiStudioProjectProvider {
 
   boot(app) {
     registerRoutes(app, {
-      routeRelativePath: "ai-studio",
+      routeRelativePath: "vibe64",
       routeSurface: "home"
     });
   }
 }
 
-export { AiStudioProjectProvider };
+export { Vibe64ProjectProvider };

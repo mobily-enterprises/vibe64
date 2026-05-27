@@ -14,28 +14,28 @@ import test from "node:test";
 
 import {
   createCppTargetAdapter
-} from "@local/ai-studio-adapters/server/adapters/cpp/index";
+} from "@local/vibe64-adapters/server/adapters/cpp/index";
 import {
   GENERIC_NODE_WEB_PREPARE_WORKTREE_SCRIPT_PATH,
   createGenericNodeWebTargetAdapter
-} from "@local/ai-studio-adapters/server/adapters/node-web/index";
+} from "@local/vibe64-adapters/server/adapters/node-web/index";
 import {
   JSKIT_PREPARE_WORKTREE_SCRIPT_PATH,
   createJskitTargetAdapter
-} from "@local/ai-studio-adapters/server/adapters/jskit/index";
+} from "@local/vibe64-adapters/server/adapters/jskit/index";
 import {
   LARAVEL_PREPARE_WORKTREE_SCRIPT_PATH,
   createLaravelTargetAdapter
-} from "@local/ai-studio-adapters/server/adapters/laravel/index";
+} from "@local/vibe64-adapters/server/adapters/laravel/index";
 import {
   NEXTJS_PREPARE_WORKTREE_SCRIPT_PATH,
   createNextjsTargetAdapter
-} from "@local/ai-studio-adapters/server/adapters/nextjs/index";
+} from "@local/vibe64-adapters/server/adapters/nextjs/index";
 import {
   VINEXT_PREPARE_WORKTREE_SCRIPT_PATH,
   createVinextTargetAdapter
-} from "@local/ai-studio-adapters/server/adapters/vinext/index";
-import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
+} from "@local/vibe64-adapters/server/adapters/vinext/index";
+import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 function runCommand(command, args, {
   cwd
@@ -74,7 +74,7 @@ async function createGitTarget(root) {
   runGit(root, ["config", "user.email", "studio-test@example.com"]);
   await Promise.all([
     writeProjectFile(root, ".gitignore", [
-      ".ai-studio/",
+      ".vibe64/",
       ".env"
     ].join("\n")),
     writeProjectFile(root, "README.md", "# Test target\n"),
@@ -117,7 +117,7 @@ test("create worktree terminal specs mount adapter preparation scripts", async (
       const session = {
         metadata: {},
         sessionId: `prepare-mount-${adapter.id}`,
-        sessionRoot: path.join(targetRoot, ".ai-studio", "sessions", "active", `prepare-mount-${adapter.id}`),
+        sessionRoot: path.join(targetRoot, ".vibe64", "sessions", "active", `prepare-mount-${adapter.id}`),
         targetRoot
       };
       const spec = await adapter.createCommandTerminalSpec("create_worktree", {
@@ -141,7 +141,7 @@ test("create worktree terminal specs mount adapter preparation scripts", async (
 test("create worktree runs the adapter preparation script without overwriting session edits", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createGitTarget(targetRoot);
-    const sessionRoot = path.join(targetRoot, ".ai-studio", "sessions", "active", "prepare-env");
+    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", "prepare-env");
     const worktreePath = path.join(sessionRoot, "worktree");
     const adapter = createJskitTargetAdapter();
     const session = {

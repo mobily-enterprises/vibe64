@@ -22,7 +22,7 @@ import {
 } from "./studioRuntimeIdentity.js";
 import {
   normalizeText
-} from "@local/ai-studio-core/server/core";
+} from "@local/vibe64-core/server/core";
 import {
   targetRuntimeNetworkDockerArgs
 } from "./runtimeContainers.js";
@@ -61,8 +61,8 @@ function targetScriptStartupScript(command = "", {
   return [
     "set -e",
     "mkdir -p /tmp/studio-home",
-    "if [ \"$(id -u)\" = \"0\" ] && [ -n \"${AI_STUDIO_HOST_UID:-}\" ] && [ -n \"${AI_STUDIO_HOST_GID:-}\" ] && command -v setpriv >/dev/null 2>&1; then",
-    "  chown -R \"$AI_STUDIO_HOST_UID:$AI_STUDIO_HOST_GID\" /tmp/studio-home",
+    "if [ \"$(id -u)\" = \"0\" ] && [ -n \"${VIBE64_HOST_UID:-}\" ] && [ -n \"${VIBE64_HOST_GID:-}\" ] && command -v setpriv >/dev/null 2>&1; then",
+    "  chown -R \"$VIBE64_HOST_UID:$VIBE64_HOST_GID\" /tmp/studio-home",
     "  docker_group_args=\"--clear-groups\"",
     "  if [ -S /var/run/docker.sock ]; then",
     "    docker_sock_gid=\"$(stat -c '%g' /var/run/docker.sock 2>/dev/null || true)\"",
@@ -70,7 +70,7 @@ function targetScriptStartupScript(command = "", {
     "      docker_group_args=\"--groups $docker_sock_gid\"",
     "    fi",
     "  fi",
-    `  exec setpriv --reuid "$AI_STUDIO_HOST_UID" --regid "$AI_STUDIO_HOST_GID" $docker_group_args env HOME=/tmp/studio-home bash -lc ${shellQuote(runCommand)}`,
+    `  exec setpriv --reuid "$VIBE64_HOST_UID" --regid "$VIBE64_HOST_GID" $docker_group_args env HOME=/tmp/studio-home bash -lc ${shellQuote(runCommand)}`,
     "fi",
     `exec env HOME=/tmp/studio-home bash -lc ${shellQuote(runCommand)}`
   ].join("\n");
@@ -80,7 +80,7 @@ function targetScriptContainerName({
   adapterId = "generic",
   terminalId = ""
 } = {}) {
-  return `ai-studio-${adapterId}-target-script-${stableHash(terminalId)}`;
+  return `vibe64-${adapterId}-target-script-${stableHash(terminalId)}`;
 }
 
 function targetScriptTerminalArgs({
@@ -101,17 +101,17 @@ function targetScriptTerminalArgs({
     "--name",
     containerName,
     "--label",
-    "ai-studio.kind=target-script-terminal",
+    "vibe64.kind=target-script-terminal",
     "--label",
-    `ai-studio.adapter=${adapterId}`,
+    `vibe64.adapter=${adapterId}`,
     "--label",
     `${STUDIO_DAEMON_PID_LABEL}=${process.pid}`,
     "--label",
-    "ai-studio.session=target",
+    "vibe64.session=target",
     "--label",
-    `ai-studio.terminal=${terminalId}`,
+    `vibe64.terminal=${terminalId}`,
     "--label",
-    `ai-studio.target=${stableHash(targetRoot)}`,
+    `vibe64.target=${stableHash(targetRoot)}`,
     ...gitToolchainMountArgs(targetRoot),
     "-v",
     `${targetRoot}:/workspace`,
@@ -144,7 +144,7 @@ function targetScriptCommandPreview(command = "") {
   return normalizeText(command);
 }
 
-async function createAiStudioTargetScriptTerminalSpec({
+async function createVibe64TargetScriptTerminalSpec({
   adapterId = "generic",
   extraDockerArgs = [],
   image = STUDIO_BASE_TOOLCHAIN_IMAGE,
@@ -215,7 +215,7 @@ async function createAiStudioTargetScriptTerminalSpec({
 
 export {
   adapterScriptNameFromInput,
-  createAiStudioTargetScriptTerminalSpec,
+  createVibe64TargetScriptTerminalSpec,
   targetScriptCommandPreview,
   targetScriptError,
   targetScriptStartupScript,

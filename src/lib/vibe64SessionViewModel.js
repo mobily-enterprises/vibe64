@@ -1,11 +1,11 @@
 const CLOSED_SESSION_STATUSES = new Set(["abandoned", "finished"]);
 const REPORT_LABEL = "Report";
 
-function shortAiStudioSessionId(sessionId) {
+function shortVibe64SessionId(sessionId) {
   return String(sessionId || "").replace(/^\d{4}-/u, "");
 }
 
-function aiStudioSessionDisplayTitle(session = {}) {
+function vibe64SessionDisplayTitle(session = {}) {
   const sessionName = firstText(session?.sessionName) || firstText(session?.metadata?.issue_word);
   if (sessionName) {
     return sessionName;
@@ -14,7 +14,7 @@ function aiStudioSessionDisplayTitle(session = {}) {
   if (issueTitle) {
     return issueTitle;
   }
-  const shortSessionId = shortAiStudioSessionId(session?.sessionId);
+  const shortSessionId = shortVibe64SessionId(session?.sessionId);
   return shortSessionId ? `Session ${shortSessionId}` : "";
 }
 
@@ -52,11 +52,11 @@ function parseGithubSessionLink(value, kind) {
   };
 }
 
-function aiStudioSessionStatusLabel(status) {
+function vibe64SessionStatusLabel(status) {
   return String(status || "pending").replaceAll("_", " ");
 }
 
-function aiStudioSessionStatusColor(status) {
+function vibe64SessionStatusColor(status) {
   const normalizedStatus = String(status || "");
   if (normalizedStatus === "finished") {
     return "success";
@@ -70,16 +70,16 @@ function aiStudioSessionStatusColor(status) {
   return "primary";
 }
 
-function isAbandonedAiStudioSession(session = {}) {
+function isAbandonedVibe64Session(session = {}) {
   return String(session?.status || "") === "abandoned";
 }
 
-function isClosedAiStudioSession(session = {}) {
+function isClosedVibe64Session(session = {}) {
   return CLOSED_SESSION_STATUSES.has(String(session?.status || ""));
 }
 
-function isOpenAiStudioSession(session = {}) {
-  return !isClosedAiStudioSession(session);
+function isOpenVibe64Session(session = {}) {
+  return !isClosedVibe64Session(session);
 }
 
 function normalizedText(value) {
@@ -90,7 +90,7 @@ function firstText(...values) {
   return values.map(normalizedText).find(Boolean) || "";
 }
 
-function aiStudioSessionCurrentStepLabel(session = {}, stepDefinitions = []) {
+function vibe64SessionCurrentStepLabel(session = {}, stepDefinitions = []) {
   const stepId = normalizedText(session?.currentStep);
   const step = stepDefinitions.find((definition) => {
     return definition.id === stepId;
@@ -106,12 +106,12 @@ function fileHref(filePath) {
   return `file://${path.split("/").map((segment) => encodeURIComponent(segment)).join("/")}`;
 }
 
-function buildAiStudioSessionFacts(session = {}, stepDefinitions = []) {
+function buildVibe64SessionFacts(session = {}, stepDefinitions = []) {
   const issueTitle = firstText(session.issueTitle);
   const issueLink = parseGithubSessionLink(session.issueUrl, "issue");
   const prLink = parseGithubSessionLink(session.prUrl, "pr");
   const completedStepCount = Array.isArray(session.completedSteps) ? session.completedSteps.length : 0;
-  const currentStepLabel = aiStudioSessionCurrentStepLabel(session, stepDefinitions);
+  const currentStepLabel = vibe64SessionCurrentStepLabel(session, stepDefinitions);
   const blueprintPath = firstText(session.blueprintPath);
   const prOutcome = session.prOutcome && typeof session.prOutcome === "object" ? session.prOutcome : null;
   const reportPath = firstText(session.reportPath);
@@ -133,7 +133,7 @@ function buildAiStudioSessionFacts(session = {}, stepDefinitions = []) {
       icon: "session",
       key: "session",
       label: "Session",
-      value: shortAiStudioSessionId(session.sessionId),
+      value: shortVibe64SessionId(session.sessionId),
       visible: Boolean(session.sessionId)
     },
     {
@@ -215,20 +215,20 @@ function buildAiStudioSessionFacts(session = {}, stepDefinitions = []) {
       icon: "github",
       key: "pr-outcome",
       label: "PR Outcome",
-      value: aiStudioSessionStatusLabel(prOutcome?.outcome || ""),
+      value: vibe64SessionStatusLabel(prOutcome?.outcome || ""),
       visible: Boolean(prOutcome?.outcome)
     }
   ].filter((fact) => fact.visible);
 }
 
 export {
-  isAbandonedAiStudioSession,
-  isClosedAiStudioSession,
-  isOpenAiStudioSession,
-  aiStudioSessionDisplayTitle,
-  buildAiStudioSessionFacts,
-  aiStudioSessionStatusColor,
-  aiStudioSessionStatusLabel,
+  isAbandonedVibe64Session,
+  isClosedVibe64Session,
+  isOpenVibe64Session,
+  vibe64SessionDisplayTitle,
+  buildVibe64SessionFacts,
+  vibe64SessionStatusColor,
+  vibe64SessionStatusLabel,
   parseGithubSessionLink,
-  shortAiStudioSessionId
+  shortVibe64SessionId
 };

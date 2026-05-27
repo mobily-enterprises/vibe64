@@ -19,11 +19,11 @@ function actionResultsForAction(session = {}, actionId = "", {
     .sort((left, right) => actionResultTime(left) - actionResultTime(right));
 }
 
-function latestAiStudioActionResult(session = {}, actionId = "", options = {}) {
+function latestVibe64ActionResult(session = {}, actionId = "", options = {}) {
   return actionResultsForAction(session, actionId, options).at(-1) || null;
 }
 
 export {
   actionResultsForAction,
-  latestAiStudioActionResult
+  latestVibe64ActionResult
 };

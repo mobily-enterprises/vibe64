@@ -1,14 +1,14 @@
 import { getCurrentInstance, onBeforeUnmount, ref } from "vue";
 import {
-  aiStudioCommandTerminalWebSocketUrl,
-  closeAiStudioCommandTerminal,
-  startAiStudioCommandTerminal
-} from "@/lib/aiStudioSessionApi.js";
+  vibe64CommandTerminalWebSocketUrl,
+  closeVibe64CommandTerminal,
+  startVibe64CommandTerminal
+} from "@/lib/vibe64SessionApi.js";
 import {
-  aiStudioSessionDebugDurationMs,
-  aiStudioSessionDebugError,
-  aiStudioSessionDebugLog
-} from "@/lib/aiStudioSessionDebugLog.js";
+  vibe64SessionDebugDurationMs,
+  vibe64SessionDebugError,
+  vibe64SessionDebugLog
+} from "@/lib/vibe64SessionDebugLog.js";
 
 const WEBSOCKET_CLOSING = 2;
 const WEBSOCKET_CLOSED = 3;
@@ -126,10 +126,10 @@ function commandStopped({
   });
 }
 
-function useAiStudioHeadlessCommandRunner({
-  closeCommandTerminal = closeAiStudioCommandTerminal,
-  startCommandTerminal = startAiStudioCommandTerminal,
-  webSocketUrl = aiStudioCommandTerminalWebSocketUrl
+function useVibe64HeadlessCommandRunner({
+  closeCommandTerminal = closeVibe64CommandTerminal,
+  startCommandTerminal = startVibe64CommandTerminal,
+  webSocketUrl = vibe64CommandTerminalWebSocketUrl
 } = {}) {
   const commandPreview = ref("");
   const output = ref("");
@@ -151,7 +151,7 @@ function useAiStudioHeadlessCommandRunner({
     const normalizedSessionId = String(sessionId || "").trim();
     const actionId = terminalActionId(action);
     if (!normalizedSessionId || !actionId || running.value) {
-      aiStudioSessionDebugLog("client.headlessCommand.run.skipped", {
+      vibe64SessionDebugLog("client.headlessCommand.run.skipped", {
         actionId,
         running: running.value,
         reason: !normalizedSessionId ? "missing_session" : !actionId ? "missing_action" : "running",
@@ -163,7 +163,7 @@ function useAiStudioHeadlessCommandRunner({
       });
     }
 
-    aiStudioSessionDebugLog("client.headlessCommand.run.start", {
+    vibe64SessionDebugLog("client.headlessCommand.run.start", {
       actionId,
       advanceOnSuccess: advanceOnSuccess === true,
       inputKeys: Object.keys(input && typeof input === "object" && !Array.isArray(input) ? input : {}).sort(),
@@ -181,10 +181,10 @@ function useAiStudioHeadlessCommandRunner({
         input: normalizePlainObject(input)
       });
       if (terminalSession?.ok === false) {
-        aiStudioSessionDebugLog("client.headlessCommand.startTerminal.rejected", {
+        vibe64SessionDebugLog("client.headlessCommand.startTerminal.rejected", {
           actionId,
           code: String(terminalSession.code || terminalSession.errors?.[0]?.code || ""),
-          durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
+          durationMs: vibe64SessionDebugDurationMs(startedAtMs),
           sessionId: normalizedSessionId,
           status: terminalSession.status || terminalSession.statusCode || null
         });
@@ -204,9 +204,9 @@ function useAiStudioHeadlessCommandRunner({
         sessionId: normalizedSessionId,
         terminalSessionId: String(terminalSession.id || "")
       };
-      aiStudioSessionDebugLog("client.headlessCommand.startTerminal.done", {
+      vibe64SessionDebugLog("client.headlessCommand.startTerminal.done", {
         actionId,
-        durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
         sessionId: normalizedSessionId,
         terminalSessionId: activeTerminal.terminalSessionId,
         terminalStatus: String(terminalSession.status || "")
@@ -221,9 +221,9 @@ function useAiStudioHeadlessCommandRunner({
         webSocketUrl
       });
       lastResult.value = result;
-      aiStudioSessionDebugLog("client.headlessCommand.run.done", {
+      vibe64SessionDebugLog("client.headlessCommand.run.done", {
         actionId,
-        durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
         exitCode: result.exitCode ?? null,
         ok: result.ok === true,
         sessionId: normalizedSessionId,
@@ -231,10 +231,10 @@ function useAiStudioHeadlessCommandRunner({
       });
       return result;
     } catch (error) {
-      aiStudioSessionDebugLog("client.headlessCommand.run.error", {
+      vibe64SessionDebugLog("client.headlessCommand.run.error", {
         actionId,
-        durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
-        error: aiStudioSessionDebugError(error),
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+        error: vibe64SessionDebugError(error),
         sessionId: normalizedSessionId
       });
       const result = commandFailure({
@@ -282,9 +282,9 @@ function useAiStudioHeadlessCommandRunner({
         if (settled) {
           return;
         }
-        aiStudioSessionDebugLog("client.headlessCommand.stream.settle", {
+        vibe64SessionDebugLog("client.headlessCommand.stream.settle", {
           actionId: terminalActionId(action),
-          durationMs: aiStudioSessionDebugDurationMs(commandStartedAtMs),
+          durationMs: vibe64SessionDebugDurationMs(commandStartedAtMs),
           error: String(result?.error || ""),
           exitCode: result?.exitCode ?? null,
           ok: result?.ok === true,
@@ -367,7 +367,7 @@ function useAiStudioHeadlessCommandRunner({
       };
 
       if (terminalHasExited(initialSession)) {
-        aiStudioSessionDebugLog("client.headlessCommand.stream.initialExited", {
+        vibe64SessionDebugLog("client.headlessCommand.stream.initialExited", {
           actionId: terminalActionId(action),
           sessionId,
           terminalSessionId
@@ -376,7 +376,7 @@ function useAiStudioHeadlessCommandRunner({
         return;
       }
       if (!terminalSessionId || typeof WebSocket !== "function") {
-        aiStudioSessionDebugLog("client.headlessCommand.stream.unavailable", {
+        vibe64SessionDebugLog("client.headlessCommand.stream.unavailable", {
           actionId: terminalActionId(action),
           hasTerminalSessionId: Boolean(terminalSessionId),
           hasWebSocket: typeof WebSocket === "function",
@@ -393,7 +393,7 @@ function useAiStudioHeadlessCommandRunner({
         return;
       }
 
-      aiStudioSessionDebugLog("client.headlessCommand.stream.open", {
+      vibe64SessionDebugLog("client.headlessCommand.stream.open", {
         actionId: terminalActionId(action),
         sessionId,
         terminalSessionId
@@ -463,5 +463,5 @@ function useAiStudioHeadlessCommandRunner({
 }
 
 export {
-  useAiStudioHeadlessCommandRunner
+  useVibe64HeadlessCommandRunner
 };

@@ -6,12 +6,12 @@ import { createService } from "./service.js";
 import {
   resolveStudioAppRoot,
   resolveStudioTargetRoot
-} from "@local/ai-studio-core/server/studioRoots";
+} from "@local/vibe64-core/server/studioRoots";
 
 class ProjectSetupDoctorProvider {
   static id = "feature.project-setup-doctor";
 
-  static dependsOn = ["runtime.actions", "feature.ai-studio-project"];
+  static dependsOn = ["runtime.actions", "feature.vibe64-project"];
 
   register(app) {
     if (
@@ -32,7 +32,7 @@ class ProjectSetupDoctorProvider {
       "feature.project-setup-doctor.service",
       () => {
         return createService({
-          projectService: app.make("feature.ai-studio-project.service"),
+          projectService: app.make("feature.vibe64-project.service"),
           studioRoot,
           targetRoot
         });

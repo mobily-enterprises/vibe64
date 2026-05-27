@@ -51,7 +51,7 @@ describe("codexOutput terminal utilities", () => {
       "Create the issue file."
     );
 
-    expect(terminalInput).toContain("[[AI_STUDIO_CONTEXT_START]]");
+    expect(terminalInput).toContain("[[VIBE64_CONTEXT_START]]");
     expect(stripStudioContextBlocksForDisplay(terminalInput)).toBe("Create the issue file.\n\n");
   });
 
@@ -87,7 +87,7 @@ describe("codexOutput terminal utilities", () => {
   it("hides a retained tail that starts inside hidden Studio prompt context", () => {
     const terminalInput = [
       "hidden prompt body still in retained tail",
-      "[[AI_STUDIO_CONTEXT_END]]",
+      "[[VIBE64_CONTEXT_END]]",
       "Visible output"
     ].join("\n");
 

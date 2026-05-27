@@ -7,7 +7,7 @@ import {
 import {
   normalizeText,
   pathExists
-} from "@local/ai-studio-core/server/core";
+} from "@local/vibe64-core/server/core";
 
 const execFileAsync = promisify(execFile);
 const GIT_COMMAND_TIMEOUT_MS = 30_000;

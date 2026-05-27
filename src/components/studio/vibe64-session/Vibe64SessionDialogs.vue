@@ -1,21 +1,21 @@
 <template>
-  <AiStudioSessionInputDialog
+  <Vibe64SessionInputDialog
     :input="dialogs.input"
     @update-values="emit('update-input-values', $event)"
   />
 
-  <AiStudioSessionDiffDialog :diff="dialogs.diff" />
+  <Vibe64SessionDiffDialog :diff="dialogs.diff" />
 
-  <AiStudioSessionAbandonDialog
+  <Vibe64SessionAbandonDialog
     :abandon="dialogs.abandon"
     :short-session-id="shortSessionId"
   />
 </template>
 
 <script setup>
-import AiStudioSessionAbandonDialog from "@/components/studio/ai-studio-session/AiStudioSessionAbandonDialog.vue";
-import AiStudioSessionDiffDialog from "@/components/studio/ai-studio-session/AiStudioSessionDiffDialog.vue";
-import AiStudioSessionInputDialog from "@/components/studio/ai-studio-session/AiStudioSessionInputDialog.vue";
+import Vibe64SessionAbandonDialog from "@/components/studio/vibe64-session/Vibe64SessionAbandonDialog.vue";
+import Vibe64SessionDiffDialog from "@/components/studio/vibe64-session/Vibe64SessionDiffDialog.vue";
+import Vibe64SessionInputDialog from "@/components/studio/vibe64-session/Vibe64SessionInputDialog.vue";
 
 defineProps({
   dialogs: {

@@ -28,7 +28,7 @@ test.describe("Autopilot dumb client contract", () => {
         }
       }
     });
-    await mockAiStudioSession(page, session, {
+    await mockVibe64Session(page, session, {
       onAction: (actionId, body) => {
         actionRequests.push({
           actionId,
@@ -62,7 +62,7 @@ test.describe("Autopilot dumb client contract", () => {
     ]);
     await expect(page.getByRole("heading", { name: "Terminal is transmitting..." })).toBeVisible();
     await expect.poll(async () => page.evaluate(() => (
-      (window as unknown as { __aiStudioForbiddenTextSeen?: boolean }).__aiStudioForbiddenTextSeen === true
+      (window as unknown as { __vibe64ForbiddenTextSeen?: boolean }).__vibe64ForbiddenTextSeen === true
     ))).toBe(false);
   });
 
@@ -94,7 +94,7 @@ test.describe("Autopilot dumb client contract", () => {
         }
       }
     });
-    await mockAiStudioSession(page, session, {
+    await mockVibe64Session(page, session, {
       onCommandTerminalStart: () => {
         commandTerminalStarts += 1;
       }
@@ -137,7 +137,7 @@ test.describe("Autopilot dumb client contract", () => {
         }
       }
     });
-    await mockAiStudioSession(page, session, {
+    await mockVibe64Session(page, session, {
       onAdvance: () => {
         advances.push({});
         Object.assign(session, sessionPayload({
@@ -255,7 +255,7 @@ test.describe("Autopilot dumb client contract", () => {
         }
       }
     });
-    await mockAiStudioSession(page, session, {
+    await mockVibe64Session(page, session, {
       onAdvance: () => {
         advances.push({});
         Object.assign(session, sessionPayload({
@@ -388,7 +388,7 @@ test.describe("Autopilot dumb client contract", () => {
         stepId: "server_step"
       }
     });
-    await mockAiStudioSession(page, session, {
+    await mockVibe64Session(page, session, {
       onCodexTerminalStart: () => {
         codexTerminalStartRequests += 1;
       }
@@ -400,7 +400,7 @@ test.describe("Autopilot dumb client contract", () => {
     await expect(page.locator(".studio-ai-sessions__terminals--autopilot-preview")).toBeVisible();
     await expect.poll(() => codexTerminalStartRequests).toBe(0);
     await expect.poll(async () => page.evaluate(() => (
-      (window as unknown as { __aiStudioCodexTerminalInputs?: string[] }).__aiStudioCodexTerminalInputs || []
+      (window as unknown as { __vibe64CodexTerminalInputs?: string[] }).__vibe64CodexTerminalInputs || []
     ))).toEqual([]);
   });
 
@@ -464,14 +464,14 @@ test.describe("Autopilot dumb client contract", () => {
         stepId: "server_step"
       }
     });
-    await mockAiStudioSession(page, session);
+    await mockVibe64Session(page, session);
 
     await page.goto(`${BASE_URL}/home`);
 
     await expect(page.getByLabel("Response")).toBeVisible();
     await expect(page.locator(".studio-ai-sessions__terminals--autopilot-preview")).toBeVisible();
     await expect.poll(async () => page.evaluate(() => (
-      (window as unknown as { __aiStudioCodexTerminalInputs?: string[] }).__aiStudioCodexTerminalInputs || []
+      (window as unknown as { __vibe64CodexTerminalInputs?: string[] }).__vibe64CodexTerminalInputs || []
     ))).toEqual([]);
   });
 
@@ -510,7 +510,7 @@ test.describe("Autopilot dumb client contract", () => {
         }
       }
     });
-    await mockAiStudioSession(page, session, {
+    await mockVibe64Session(page, session, {
       onIntent: (body) => {
         intentRequests.push(body);
       }
@@ -594,7 +594,7 @@ test.describe("Autopilot dumb client contract", () => {
         stepId: "server_step"
       }
     });
-    await mockAiStudioSession(page, session, {
+    await mockVibe64Session(page, session, {
       conversationLog: [
         {
           assistant: {
@@ -653,18 +653,18 @@ test.describe("Autopilot dumb client contract", () => {
     const session = sessionPayload({
       completedSteps: ["worktree_created"],
       metadata: {
-        worktree_path: "/workspace/example-target-app/.ai-studio/sessions/active/session-renderer/worktree"
+        worktree_path: "/workspace/example-target-app/.vibe64/sessions/active/session-renderer/worktree"
       },
-      sessionRoot: "/workspace/example-target-app/.ai-studio/sessions/active/session-renderer",
+      sessionRoot: "/workspace/example-target-app/.vibe64/sessions/active/session-renderer",
       worktreeReady: true
     });
-    await mockAiStudioSession(page, session);
+    await mockVibe64Session(page, session);
 
     await page.goto(`${BASE_URL}/home?mode=inspect`);
     await expect(page.locator(".codex-terminal__host")).toBeVisible();
     await page.getByLabel("Open shell").click();
     await page.getByText("Worktree shell").click();
-    await expect(page.locator(".ai-studio-shell-controls__terminal--active .ai-command-terminal__host"))
+    await expect(page.locator(".vibe64-shell-controls__terminal--active .ai-command-terminal__host"))
       .toBeVisible();
 
     const terminalBounds = await page.evaluate(() => {
@@ -680,7 +680,7 @@ test.describe("Autopilot dumb client contract", () => {
           top: rect.top
         };
       }
-      const shell = rectFor(".ai-studio-shell-controls__terminal--active .ai-command-terminal__host");
+      const shell = rectFor(".vibe64-shell-controls__terminal--active .ai-command-terminal__host");
       const codex = rectFor(".codex-terminal__host");
       return {
         codex,
@@ -701,12 +701,12 @@ test.describe("Autopilot dumb client contract", () => {
     const session = sessionPayload({
       completedSteps: ["worktree_created"],
       metadata: {
-        worktree_path: "/workspace/example-target-app/.ai-studio/sessions/active/session-renderer/worktree"
+        worktree_path: "/workspace/example-target-app/.vibe64/sessions/active/session-renderer/worktree"
       },
-      sessionRoot: "/workspace/example-target-app/.ai-studio/sessions/active/session-renderer",
+      sessionRoot: "/workspace/example-target-app/.vibe64/sessions/active/session-renderer",
       worktreeReady: true
     });
-    await mockAiStudioSession(page, session, {
+    await mockVibe64Session(page, session, {
       onShellTerminalClose: () => {
         shellTerminalCloses += 1;
       }
@@ -715,7 +715,7 @@ test.describe("Autopilot dumb client contract", () => {
     await page.goto(`${BASE_URL}/home?mode=inspect`);
     await page.getByLabel("Open shell").click();
     await page.getByText("Worktree shell").click();
-    await expect(page.locator(".ai-studio-shell-controls__terminal--active .ai-command-terminal__host"))
+    await expect(page.locator(".vibe64-shell-controls__terminal--active .ai-command-terminal__host"))
       .toBeVisible();
 
     await page.getByRole("button", { name: "Autopilot" }).click();
@@ -724,7 +724,7 @@ test.describe("Autopilot dumb client contract", () => {
     expect(shellTerminalCloses).toBe(0);
 
     await page.getByRole("button", { name: "Inspect" }).click();
-    await expect(page.locator(".ai-studio-shell-controls__terminal--active .ai-command-terminal__host"))
+    await expect(page.locator(".vibe64-shell-controls__terminal--active .ai-command-terminal__host"))
       .toBeVisible();
   });
 
@@ -735,21 +735,21 @@ test.describe("Autopilot dumb client contract", () => {
       sessionId: "session-alpha",
       sessionName: "Alpha",
       metadata: {
-        worktree_path: "/workspace/example-target-app/.ai-studio/sessions/active/session-alpha/worktree"
+        worktree_path: "/workspace/example-target-app/.vibe64/sessions/active/session-alpha/worktree"
       },
-      sessionRoot: "/workspace/example-target-app/.ai-studio/sessions/active/session-alpha",
+      sessionRoot: "/workspace/example-target-app/.vibe64/sessions/active/session-alpha",
       worktreeReady: true
     });
     const secondSession = sessionPayload({
       sessionId: "session-beta",
       sessionName: "Beta",
       metadata: {
-        worktree_path: "/workspace/example-target-app/.ai-studio/sessions/active/session-beta/worktree"
+        worktree_path: "/workspace/example-target-app/.vibe64/sessions/active/session-beta/worktree"
       },
-      sessionRoot: "/workspace/example-target-app/.ai-studio/sessions/active/session-beta",
+      sessionRoot: "/workspace/example-target-app/.vibe64/sessions/active/session-beta",
       worktreeReady: true
     });
-    await mockAiStudioSession(page, secondSession, {
+    await mockVibe64Session(page, secondSession, {
       onShellTerminalClose: () => {
         shellTerminalCloses += 1;
       },
@@ -760,7 +760,7 @@ test.describe("Autopilot dumb client contract", () => {
     await expect(page.locator(".studio-ai-sessions__tab", { hasText: "Beta" })).toBeVisible();
     await page.getByLabel("Open shell").click();
     await page.getByText("Worktree shell").click();
-    await expect(page.locator(".ai-studio-shell-controls__terminal--active .ai-command-terminal__host"))
+    await expect(page.locator(".vibe64-shell-controls__terminal--active .ai-command-terminal__host"))
       .toBeVisible();
 
     await page.locator(".studio-ai-sessions__tab", { hasText: "Alpha" }).click();
@@ -768,7 +768,7 @@ test.describe("Autopilot dumb client contract", () => {
     expect(shellTerminalCloses).toBe(0);
 
     await page.locator(".studio-ai-sessions__tab", { hasText: "Beta" }).click();
-    await expect(page.locator(".ai-studio-shell-controls__terminal--active .ai-command-terminal__host"))
+    await expect(page.locator(".vibe64-shell-controls__terminal--active .ai-command-terminal__host"))
       .toBeVisible();
     expect(shellTerminalCloses).toBe(0);
   });
@@ -778,27 +778,27 @@ test.describe("Autopilot dumb client contract", () => {
     const session = sessionPayload({
       completedSteps: ["worktree_created"],
       metadata: {
-        worktree_path: "/workspace/example-target-app/.ai-studio/sessions/active/session-renderer/worktree"
+        worktree_path: "/workspace/example-target-app/.vibe64/sessions/active/session-renderer/worktree"
       },
-      sessionRoot: "/workspace/example-target-app/.ai-studio/sessions/active/session-renderer",
+      sessionRoot: "/workspace/example-target-app/.vibe64/sessions/active/session-renderer",
       worktreeReady: true
     });
-    await mockAiStudioSession(page, session);
+    await mockVibe64Session(page, session);
 
     await page.goto(`${BASE_URL}/home?mode=inspect`);
     await page.getByLabel("Open shell").click();
     await page.getByText("Worktree shell").click();
-    await expect(page.locator(".ai-studio-shell-controls__terminal--active .ai-command-terminal__host"))
+    await expect(page.locator(".vibe64-shell-controls__terminal--active .ai-command-terminal__host"))
       .toBeVisible();
     await expectActiveShellTerminalFocused(page);
 
     await page.getByTitle("New shell tab (Alt-N)").click();
-    await expect(page.locator(".ai-studio-shell-controls__tab--active", { hasText: "terminal 2" }))
+    await expect(page.locator(".vibe64-shell-controls__tab--active", { hasText: "terminal 2" }))
       .toBeVisible();
     await expectActiveShellTerminalFocused(page);
 
     await page.getByTitle("Alt-1: terminal 1").click();
-    await expect(page.locator(".ai-studio-shell-controls__tab--active", { hasText: "terminal 1" }))
+    await expect(page.locator(".vibe64-shell-controls__tab--active", { hasText: "terminal 1" }))
       .toBeVisible();
     await expectActiveShellTerminalFocused(page);
   });
@@ -844,7 +844,7 @@ test.describe("Autopilot dumb client contract", () => {
         }
       }
     });
-    await mockAiStudioSession(page, session, {
+    await mockVibe64Session(page, session, {
       onStepInput: (body) => {
         stepInputs.push(body);
       }
@@ -872,7 +872,7 @@ test.describe("Autopilot dumb client contract", () => {
   });
 });
 
-async function mockAiStudioSession(
+async function mockVibe64Session(
   page: Page,
   session: Record<string, unknown>,
   {
@@ -906,7 +906,7 @@ async function mockAiStudioSession(
   }
 
   await mockStudioReady(page);
-  await page.route("**/api/ai-studio/sessions**", async (route) => {
+  await page.route("**/api/vibe64/sessions**", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const method = request.method();
@@ -1022,11 +1022,11 @@ async function mockAiStudioSession(
 
 async function recordForbiddenText(page: Page, text: string) {
   await page.addInitScript((forbiddenText) => {
-    const state = window as unknown as { __aiStudioForbiddenTextSeen?: boolean };
-    state.__aiStudioForbiddenTextSeen = false;
+    const state = window as unknown as { __vibe64ForbiddenTextSeen?: boolean };
+    state.__vibe64ForbiddenTextSeen = false;
     function check() {
       if (document.body?.innerText.includes(String(forbiddenText || ""))) {
-        state.__aiStudioForbiddenTextSeen = true;
+        state.__vibe64ForbiddenTextSeen = true;
       }
     }
     document.addEventListener("DOMContentLoaded", () => {
@@ -1042,7 +1042,7 @@ async function recordForbiddenText(page: Page, text: string) {
 
 async function expectActiveShellTerminalFocused(page: Page) {
   await expect.poll(async () => page.evaluate(() => {
-    const activeTerminal = document.querySelector(".ai-studio-shell-controls__terminal--active");
+    const activeTerminal = document.querySelector(".vibe64-shell-controls__terminal--active");
     const activeElement = document.activeElement;
     return Boolean(activeTerminal && activeElement && activeTerminal.contains(activeElement));
   }), {
@@ -1154,8 +1154,8 @@ async function mockCodexTerminalPreviewSocket(page: Page) {
   await page.addInitScript(() => {
     const OriginalWebSocket = window.WebSocket;
     (window as unknown as {
-      __aiStudioCodexTerminalInputs: string[];
-    }).__aiStudioCodexTerminalInputs = [];
+      __vibe64CodexTerminalInputs: string[];
+    }).__vibe64CodexTerminalInputs = [];
 
     class MockWebSocket extends EventTarget {
       static CONNECTING = 0;
@@ -1193,8 +1193,8 @@ async function mockCodexTerminalPreviewSocket(page: Page) {
         const message = JSON.parse(String(rawMessage || "{}"));
         if (message.type === "input") {
           (window as unknown as {
-            __aiStudioCodexTerminalInputs: string[];
-          }).__aiStudioCodexTerminalInputs.push(String(message.data || ""));
+            __vibe64CodexTerminalInputs: string[];
+          }).__vibe64CodexTerminalInputs.push(String(message.data || ""));
         }
       }
 
@@ -1233,7 +1233,7 @@ function sessionPayload(overrides: Record<string, unknown> = {}) {
   return {
     actionResults: [],
     actions: [],
-    artifactsRoot: "/workspace/example-target-app/.ai-studio/sessions/active/session-renderer/artifacts",
+    artifactsRoot: "/workspace/example-target-app/.vibe64/sessions/active/session-renderer/artifacts",
     completedSteps: [],
     createdAt: "2026-05-24T00:00:00.000Z",
     currentStep: "server_step",

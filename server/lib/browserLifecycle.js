@@ -1,6 +1,6 @@
 import {
   isLocalStudioRequest
-} from "@local/ai-studio-core/server/localStudioRequest";
+} from "@local/vibe64-core/server/localStudioRequest";
 
 const BROWSER_LIFECYCLE_WEBSOCKET_PATH = "/api/studio/browser-lifecycle/ws";
 const DEFAULT_BROWSER_LIFECYCLE_SHUTDOWN_DELAY_MS = 1000;
@@ -51,7 +51,7 @@ function createBrowserLifecycleMonitor({
       }
 
       serverClosing = true;
-      logger?.info?.("Closing AI Studio because the browser window disconnected.");
+      logger?.info?.("Closing Vibe64 because the browser window disconnected.");
       try {
         await closeServer("browser-lifecycle-disconnected");
       } catch (error) {

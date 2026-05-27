@@ -1,12 +1,12 @@
-const AI_STUDIO_SURFACE_ID = "home";
+const VIBE64_SURFACE_ID = "home";
 
 const LOCAL_STUDIO_COMMAND_OPTIONS = Object.freeze({
   headers: Object.freeze({
-    "csrf-token": "ai-studio-local-command"
+    "csrf-token": "vibe64-local-command"
   })
 });
 
 export {
-  AI_STUDIO_SURFACE_ID,
+  VIBE64_SURFACE_ID,
   LOCAL_STUDIO_COMMAND_OPTIONS
 };

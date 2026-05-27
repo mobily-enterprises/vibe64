@@ -4,21 +4,21 @@ import path from "node:path";
 import test from "node:test";
 
 import {
-  AiStudioSessionRuntime
-} from "@local/ai-studio-runtime/server";
+  Vibe64SessionRuntime
+} from "@local/vibe64-runtime/server";
 import {
-  createAiStudioAdapterRegistry
-} from "@local/ai-studio-adapters/server/adapters/registry";
+  createVibe64AdapterRegistry
+} from "@local/vibe64-adapters/server/adapters/registry";
 import {
-  GENERIC_NODE_WEB_AI_STUDIO_COMMANDS,
+  GENERIC_NODE_WEB_VIBE64_COMMANDS,
   GENERIC_NODE_WEB_CLIENT_LIBRARY_CONFIG,
   createGenericNodeWebLaunchDescriptor,
   createGenericNodeWebTargetAdapter
-} from "@local/ai-studio-adapters/server/adapters/node-web/index";
+} from "@local/vibe64-adapters/server/adapters/node-web/index";
 import {
   createGenericNodeWebSetupDoctorPlugin
-} from "@local/ai-studio-adapters/server/adapters/node-web/setupDoctorPlugin";
-import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
+} from "@local/vibe64-adapters/server/adapters/node-web/setupDoctorPlugin";
+import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 async function writeProjectFile(root, relativePath, text = "") {
   const filePath = path.join(root, relativePath);
@@ -63,13 +63,13 @@ async function createGenericNodeWebProject(root, packageJson = {}) {
 }
 
 function commandIds() {
-  return GENERIC_NODE_WEB_AI_STUDIO_COMMANDS
+  return GENERIC_NODE_WEB_VIBE64_COMMANDS
     .map((command) => command.id)
     .sort((left, right) => left.localeCompare(right));
 }
 
 test("generic Node web adapter is registered as an implemented project type", async () => {
-  const registry = createAiStudioAdapterRegistry();
+  const registry = createVibe64AdapterRegistry();
   const projectTypes = registry.availableProjectTypes();
   const nodeWebProjectType = projectTypes.find((type) => type.id === "node-web");
 
@@ -179,14 +179,14 @@ test("generic Node web adapter disables automated checks when no verification sc
     assert.equal(facts.promptContext.automated_check_script, "");
     assert.equal(facts.capabilities.run_automated_checks, false);
     assert.equal(automatedChecksCommand.available, false);
-    assert.match(automatedChecksCommand.disabledReason, /No ai-studio:verify/u);
+    assert.match(automatedChecksCommand.disabledReason, /No vibe64:verify/u);
   });
 });
 
 test("generic Node web prompt actions use the prompt pack", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createGenericNodeWebProject(targetRoot);
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       adapter: createGenericNodeWebTargetAdapter(),
       targetRoot
     });
@@ -200,10 +200,10 @@ test("generic Node web prompt actions use the prompt pack", async () => {
     assert.equal(afterPrompt.actionResult.status, "prompt_ready");
     assert.equal(afterPrompt.actionResult.promptContext.adapter.id, "node-web");
     assert.match(afterPrompt.actionResult.prompt, /Create the implementation plan for this generic Node web app/u);
-    assert.match(afterPrompt.actionResult.prompt, /AI Studio session briefing[\s\S]*"client_library_label": "React"/u);
-    assert.match(afterPrompt.actionResult.prompt, /AI Studio session briefing[\s\S]*"framework_hints": "Vite"/u);
-    assert.match(afterPrompt.actionResult.prompt, /Client library: See the AI Studio session briefing/u);
-    assert.match(afterPrompt.actionResult.prompt, /Framework hints: See the AI Studio session briefing/u);
+    assert.match(afterPrompt.actionResult.prompt, /Vibe64 session briefing[\s\S]*"client_library_label": "React"/u);
+    assert.match(afterPrompt.actionResult.prompt, /Vibe64 session briefing[\s\S]*"framework_hints": "Vite"/u);
+    assert.match(afterPrompt.actionResult.prompt, /Client library: See the Vibe64 session briefing/u);
+    assert.match(afterPrompt.actionResult.prompt, /Framework hints: See the Vibe64 session briefing/u);
     assert.match(afterPrompt.actionResult.prompt, /example-node-web-app/u);
   });
 });

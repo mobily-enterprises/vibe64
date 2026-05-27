@@ -31,15 +31,15 @@ import {
 } from "@local/studio-terminal-core/server/runtimeContainers";
 import {
   prepareCurrentStepInputHelper
-} from "@local/ai-studio-runtime/server/currentStepInputHelperServer";
+} from "@local/vibe64-runtime/server/currentStepInputHelperServer";
 import {
   promptSessionBriefing
-} from "@local/ai-studio-adapters/server/promptRenderer";
+} from "@local/vibe64-adapters/server/promptRenderer";
 import {
   wrapPromptWithStudioContext
-} from "@local/ai-studio-adapters/server/promptMarkers";
+} from "@local/vibe64-adapters/server/promptMarkers";
 import {
-  aiStudioResult,
+  vibe64Result,
   codexTerminalNamespace,
   directoryExists,
   dockerCommand,
@@ -370,9 +370,9 @@ function codexSessionBriefingPrompt(session = {}) {
     briefing,
     "",
     "Session briefing instruction:",
-    "Keep this AI Studio briefing as the source of truth for this Codex session. Do not start project work from this briefing alone. Reply exactly: AI Studio session briefing loaded."
+    "Keep this Vibe64 briefing as the source of truth for this Codex session. Do not start project work from this briefing alone. Reply exactly: Vibe64 session briefing loaded."
   ].join("\n").trim();
-  return wrapPromptWithStudioContext(prompt, "Load AI Studio session briefing.");
+  return wrapPromptWithStudioContext(prompt, "Load Vibe64 session briefing.");
 }
 
 function codexStartupScript(codexThreadId = "") {
@@ -451,7 +451,7 @@ function createCodexTerminalController({
     if (!targetRoot) {
       return {
         ok: false,
-        error: "AI Studio Codex target root is not available."
+        error: "Vibe64 Codex target root is not available."
       };
     }
     const workdir = terminalWorktreePath(session);
@@ -459,7 +459,7 @@ function createCodexTerminalController({
       return {
         ok: false,
         error: workdir
-          ? "AI Studio Codex workdir is outside the target root."
+          ? "Vibe64 Codex workdir is outside the target root."
           : "Create the session worktree before starting Codex."
       };
     }
@@ -929,7 +929,7 @@ function createCodexTerminalController({
     if (!normalizedSessionId) {
       return {
         ok: false,
-        error: "AI Studio session ID is required."
+        error: "Vibe64 session ID is required."
       };
     }
     if (codexBootstrapPromises.has(normalizedSessionId)) {
@@ -1031,7 +1031,7 @@ function createCodexTerminalController({
     },
 
     readTerminal(sessionId, terminalSessionId) {
-      return aiStudioResult(async () => {
+      return vibe64Result(async () => {
         const runtime = await projectService.createRuntime();
         const session = await runtime.getSession(sessionId);
         return withCodexState(readTerminalSession(terminalSessionId, {
@@ -1041,19 +1041,19 @@ function createCodexTerminalController({
     },
 
     async injectCodexPrompt(sessionId, handoff = {}) {
-      return aiStudioResult(async () => {
+      return vibe64Result(async () => {
         return injectPromptIntoCodex(sessionId, handoff);
       });
     },
 
     async ensureThread(sessionId) {
-      return aiStudioResult(async () => {
+      return vibe64Result(async () => {
         return ensureCodexThreadReady(sessionId);
       });
     },
 
     async terminalState(sessionId) {
-      return aiStudioResult(async () => {
+      return vibe64Result(async () => {
         const runtime = await projectService.createRuntime();
         const session = await runtime.getSession(sessionId);
         return {
@@ -1065,13 +1065,13 @@ function createCodexTerminalController({
     },
 
     async startTerminal(sessionId) {
-      return aiStudioResult(async () => {
+      return vibe64Result(async () => {
         return ensureCodexThreadReady(sessionId);
       });
     },
 
     subscribeTerminal(sessionId, terminalSessionId, subscriber) {
-      return aiStudioResult(async () => {
+      return vibe64Result(async () => {
         const runtime = await projectService.createRuntime();
         const session = await runtime.getSession(sessionId);
         return withCodexState(subscribeTerminalSession(terminalSessionId, subscriber, {
@@ -1081,14 +1081,14 @@ function createCodexTerminalController({
     },
 
     async uploadAttachment(sessionId, input = {}) {
-      return aiStudioResult(async () => {
+      return vibe64Result(async () => {
         const runtime = await projectService.createRuntime();
         const session = await runtime.getSession(sessionId);
         const targetRoot = terminalTargetRoot(session, projectService);
         if (!targetRoot) {
           return {
             ok: false,
-            error: "AI Studio Codex target root is not available."
+            error: "Vibe64 Codex target root is not available."
           };
         }
         return storeCodexAttachment({

@@ -1,10 +1,10 @@
 import stripAnsi from "strip-ansi";
 import {
   questionPromptInstructions
-} from "@local/ai-studio-adapters/server/promptQuestionPolicy";
+} from "@local/vibe64-adapters/server/promptQuestionPolicy";
 import {
   normalizeText
-} from "@local/ai-studio-core/server/core";
+} from "@local/vibe64-core/server/core";
 
 const DEFAULT_TERMINAL_FAILURE_TAIL_LINES = 200;
 
@@ -83,9 +83,9 @@ function terminalFailureFixPrompt({
   ].filter(Boolean).join("\n");
 
   return [
-    "A terminal script failed in AI Studio. Diagnose the failure from the repository and the terminal output, then attempt to fix the underlying cause in the current worktree.",
+    "A terminal script failed in Vibe64. Diagnose the failure from the repository and the terminal output, then attempt to fix the underlying cause in the current worktree.",
     "",
-    "When you believe the failed command should be retried, call the AI Studio current-step input helper with:",
+    "When you believe the failed command should be retried, call the Vibe64 current-step input helper with:",
     JSON.stringify({
       kind: "consider_resolved",
       stepId: currentStep || "{{session.currentStep}}",

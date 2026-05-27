@@ -4,7 +4,7 @@
       class="studio-ai-sessions__layout"
       :class="`studio-ai-sessions__layout--${sessionMode}`"
     >
-      <AiStudioAutopilotView
+      <Vibe64AutopilotView
         v-show="sessionMode === 'autopilot'"
         :actions="actions"
         :active="autopilotModeActive"
@@ -28,7 +28,7 @@
         v-show="sessionMode === 'inspect'"
         class="studio-ai-sessions__inspect-slot"
       >
-        <AiStudioSessionWorkspace
+        <Vibe64SessionWorkspace
           class="studio-ai-sessions__inspect-workspace"
           :actions="actions"
           :dialogs="dialogs"
@@ -48,7 +48,7 @@
         />
       </div>
 
-      <AiStudioSessionTerminals
+      <Vibe64SessionTerminals
         :class="{
           'studio-ai-sessions__terminals--autopilot-preview': codexTerminalPreviewVisible
         }"
@@ -63,7 +63,7 @@
       />
     </div>
 
-    <AiStudioSessionDialogs
+    <Vibe64SessionDialogs
       :dialogs="dialogs"
       :short-session-id="sessionData.shortSessionId"
       @update-input-values="dialogs.input.values = $event"
@@ -73,47 +73,47 @@
 
 <script setup>
 import { computed, onMounted, proxyRefs, ref, unref, watch } from "vue";
-import AiStudioAutopilotView from "@/components/studio/ai-studio-session/AiStudioAutopilotView.vue";
-import AiStudioSessionDialogs from "@/components/studio/ai-studio-session/AiStudioSessionDialogs.vue";
-import AiStudioSessionTerminals from "@/components/studio/ai-studio-session/AiStudioSessionTerminals.vue";
-import AiStudioSessionWorkspace from "@/components/studio/ai-studio-session/AiStudioSessionWorkspace.vue";
+import Vibe64AutopilotView from "@/components/studio/vibe64-session/Vibe64AutopilotView.vue";
+import Vibe64SessionDialogs from "@/components/studio/vibe64-session/Vibe64SessionDialogs.vue";
+import Vibe64SessionTerminals from "@/components/studio/vibe64-session/Vibe64SessionTerminals.vue";
+import Vibe64SessionWorkspace from "@/components/studio/vibe64-session/Vibe64SessionWorkspace.vue";
 import {
-  useAiStudioHeadlessCommandRunner
-} from "@/composables/useAiStudioHeadlessCommandRunner.js";
+  useVibe64HeadlessCommandRunner
+} from "@/composables/useVibe64HeadlessCommandRunner.js";
 import {
-  useAiStudioArtifactReadiness
-} from "@/composables/useAiStudioArtifactReadiness.js";
+  useVibe64ArtifactReadiness
+} from "@/composables/useVibe64ArtifactReadiness.js";
 import {
-  useAiStudioHumanInputResponsePreview
-} from "@/composables/useAiStudioHumanInputResponsePreview.js";
+  useVibe64HumanInputResponsePreview
+} from "@/composables/useVibe64HumanInputResponsePreview.js";
 import {
-  useAiStudioConversationLog
-} from "@/composables/useAiStudioConversationLog.js";
+  useVibe64ConversationLog
+} from "@/composables/useVibe64ConversationLog.js";
 import {
-  useAiStudioSessionWorkflow
-} from "@/composables/useAiStudioSessionWorkflow.js";
+  useVibe64SessionWorkflow
+} from "@/composables/useVibe64SessionWorkflow.js";
 import {
-  useAiStudioReportPreview
-} from "@/composables/useAiStudioReportPreview.js";
+  useVibe64ReportPreview
+} from "@/composables/useVibe64ReportPreview.js";
 import {
-  aiStudioSessionFacts,
-  buildAiStudioAutopilotNavigationSteps,
-  buildAiStudioTimelineSteps,
-  enrichAiStudioSessionForDisplay
-} from "@/lib/aiStudioSessionPanelModel.js";
+  vibe64SessionFacts,
+  buildVibe64AutopilotNavigationSteps,
+  buildVibe64TimelineSteps,
+  enrichVibe64SessionForDisplay
+} from "@/lib/vibe64SessionPanelModel.js";
 import {
-  aiStudioSessionDisplayTitle,
-  aiStudioSessionStatusColor,
-  aiStudioSessionStatusLabel,
-  isClosedAiStudioSession
-} from "@/lib/aiStudioSessionViewModel.js";
+  vibe64SessionDisplayTitle,
+  vibe64SessionStatusColor,
+  vibe64SessionStatusLabel,
+  isClosedVibe64Session
+} from "@/lib/vibe64SessionViewModel.js";
 import {
-  aiStudioShellPanelTargetId
-} from "@/lib/aiStudioShellPanelTarget.js";
+  vibe64ShellPanelTargetId
+} from "@/lib/vibe64ShellPanelTarget.js";
 import {
-  aiStudioSessionDebugLog,
-  aiStudioSessionDebugSummary
-} from "@/lib/aiStudioSessionDebugLog.js";
+  vibe64SessionDebugLog,
+  vibe64SessionDebugSummary
+} from "@/lib/vibe64SessionDebugLog.js";
 
 const props = defineProps({
   active: {
@@ -148,16 +148,16 @@ const selectedListSession = computed(() => {
   const sessions = unref(props.sessionData.sessions) || [];
   return sessions.find((session) => session.sessionId === props.sessionId) || null;
 });
-const selectedSession = computed(() => enrichAiStudioSessionForDisplay(selectedListSession.value));
+const selectedSession = computed(() => enrichVibe64SessionForDisplay(selectedListSession.value));
 const selectedSessionTitle = computed(() => {
-  return aiStudioSessionDisplayTitle(selectedSession.value || {}) ||
+  return vibe64SessionDisplayTitle(selectedSession.value || {}) ||
     `Session ${props.sessionData.shortSessionId(props.sessionId)}`;
 });
-const shellPanelTargetId = computed(() => aiStudioShellPanelTargetId(props.sessionId));
-const isSelectedSessionClosed = computed(() => isClosedAiStudioSession(selectedSession.value || {}));
-const sessionFacts = computed(() => aiStudioSessionFacts(selectedSession.value || {}));
-const timelineSteps = computed(() => buildAiStudioTimelineSteps(selectedSession.value));
-const autopilotNavigationSteps = computed(() => buildAiStudioAutopilotNavigationSteps(selectedSession.value));
+const shellPanelTargetId = computed(() => vibe64ShellPanelTargetId(props.sessionId));
+const isSelectedSessionClosed = computed(() => isClosedVibe64Session(selectedSession.value || {}));
+const sessionFacts = computed(() => vibe64SessionFacts(selectedSession.value || {}));
+const timelineSteps = computed(() => buildVibe64TimelineSteps(selectedSession.value));
+const autopilotNavigationSteps = computed(() => buildVibe64AutopilotNavigationSteps(selectedSession.value));
 const sessionScopedData = {
   canCreateSession: props.sessionData.canCreateSession,
   clearSelectedSession: props.sessionData.clearSelectedSession,
@@ -179,11 +179,11 @@ const sessionScopedData = {
   statusLabel: props.sessionData.statusLabel,
   timelineSteps
 };
-const sessionWorkflow = useAiStudioSessionWorkflow({
+const sessionWorkflow = useVibe64SessionWorkflow({
   sessionData: sessionScopedData
 });
-const autopilotCommandRunner = useAiStudioHeadlessCommandRunner();
-const artifactReadiness = useAiStudioArtifactReadiness({
+const autopilotCommandRunner = useVibe64HeadlessCommandRunner();
+const artifactReadiness = useVibe64ArtifactReadiness({
   active: computed(() => props.active),
   sessionId: selectedSessionId
 });
@@ -202,17 +202,17 @@ const dialogs = {
   input: proxyRefs(sessionWorkflow.dialogs.input)
 };
 const page = proxyRefs(sessionWorkflow.page);
-const reportPreview = proxyRefs(useAiStudioReportPreview({
+const reportPreview = proxyRefs(useVibe64ReportPreview({
   active: computed(() => props.active),
   artifactReadiness: liveArtifactReadiness,
   session: selectedSession
 }));
-const humanInputResponsePreview = proxyRefs(useAiStudioHumanInputResponsePreview({
+const humanInputResponsePreview = proxyRefs(useVibe64HumanInputResponsePreview({
   active: computed(() => props.active),
   artifactReadiness: liveArtifactReadiness,
   session: selectedSession
 }));
-const conversationLog = proxyRefs(useAiStudioConversationLog({
+const conversationLog = proxyRefs(useVibe64ConversationLog({
   active: computed(() => Boolean(props.active && props.sessionMode === "autopilot")),
   session: selectedSession
 }));
@@ -224,8 +224,8 @@ const selection = proxyRefs({
   selectedSession,
   selectedSessionId,
   selectedSessionTitle,
-  statusColor: aiStudioSessionStatusColor,
-  statusLabel: aiStudioSessionStatusLabel
+  statusColor: vibe64SessionStatusColor,
+  statusLabel: vibe64SessionStatusLabel
 });
 const timeline = proxyRefs({
   rewindCommand: sessionWorkflow.timeline.rewindCommand,
@@ -280,7 +280,12 @@ const codexTerminalDisplayMode = computed(() => {
   return "headless";
 });
 const codexTerminalCanStart = computed(() => Boolean(props.active && props.sessionMode === "inspect"));
-const codexTerminalReadOnly = computed(() => props.sessionMode !== "inspect");
+const codexTerminalReadOnly = computed(() => {
+  if (props.sessionMode === "inspect") {
+    return false;
+  }
+  return codexTerminalPresentation.value.readOnlyInAutopilot !== false;
+});
 const interactionBusy = computed(() => Boolean(page.busy || autopilotBusy.value));
 const guardedPage = computed(() => ({
   busy: interactionBusy.value,
@@ -347,8 +352,8 @@ watch(() => [
   selectedSession.value?.currentStep || "",
   selectedSession.value?.stepMachine?.status || ""
 ].join("|"), () => {
-  aiStudioSessionDebugLog("client.sessionRuntimeHost.state", {
-    ...aiStudioSessionDebugSummary(selectedSession.value || {}),
+  vibe64SessionDebugLog("client.sessionRuntimeHost.state", {
+    ...vibe64SessionDebugSummary(selectedSession.value || {}),
     active: props.active,
     sessionId: props.sessionId,
     sessionMode: props.sessionMode
@@ -360,7 +365,7 @@ watch(() => [
 
 watch(liveArtifactReadinessVersion, (version, previousVersion) => {
   if (props.active && version && version !== previousVersion) {
-    aiStudioSessionDebugLog("client.sessionRuntimeHost.artifactReadiness.changed", {
+    vibe64SessionDebugLog("client.sessionRuntimeHost.artifactReadiness.changed", {
       artifactReadinessVersion: version,
       previousArtifactReadinessVersion: previousVersion || "",
       sessionId: props.sessionId
@@ -441,6 +446,16 @@ watch(() => page.error, emitPageError, {
   z-index: 1;
 }
 
+.studio-ai-sessions__layout--autopilot > .studio-ai-sessions__terminals--autopilot-foreground {
+  align-self: stretch;
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: stretch;
+  min-height: min(42rem, 72vh);
+  pointer-events: auto;
+  z-index: 5;
+}
+
 @media (max-width: 980px) {
   .studio-ai-sessions__layout {
     grid-template-columns: 1fr;
@@ -470,6 +485,11 @@ watch(() => page.error, emitPageError, {
   .studio-ai-sessions__layout--autopilot > .studio-ai-sessions__terminals--autopilot-preview {
     grid-column: 2;
     max-width: min(64rem, 100%);
+    width: 100%;
+  }
+
+  .studio-ai-sessions__layout--autopilot > .studio-ai-sessions__terminals--autopilot-foreground {
+    grid-column: 2;
     width: 100%;
   }
 }

@@ -1,13 +1,13 @@
 import { nextTick, ref } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  aiStudioSessionModeStorageKey
-} from "../../src/lib/aiStudioSessionModeStorage.js";
+  vibe64SessionModeStorageKey
+} from "../../src/lib/vibe64SessionModeStorage.js";
 import {
-  useAiStudioSessionMode
-} from "../../src/composables/useAiStudioSessionMode.js";
+  useVibe64SessionMode
+} from "../../src/composables/useVibe64SessionMode.js";
 
-describe("useAiStudioSessionMode", () => {
+describe("useVibe64SessionMode", () => {
   let originalWindowDescriptor;
 
   beforeEach(() => {
@@ -30,7 +30,7 @@ describe("useAiStudioSessionMode", () => {
       surface: "home"
     });
     const router = refRouter(route);
-    const sessionMode = useAiStudioSessionMode({
+    const sessionMode = useVibe64SessionMode({
       route,
       router,
       selectedSessionId
@@ -40,7 +40,7 @@ describe("useAiStudioSessionMode", () => {
     await nextTick();
 
     expect(sessionMode.sessionMode.value).toBe("inspect");
-    expect(window.localStorage.getItem(aiStudioSessionModeStorageKey("session-alpha"))).toBe("inspect");
+    expect(window.localStorage.getItem(vibe64SessionModeStorageKey("session-alpha"))).toBe("inspect");
     expect(route.query).toEqual({
       mode: "inspect",
       surface: "home"
@@ -50,13 +50,13 @@ describe("useAiStudioSessionMode", () => {
     await nextTick();
 
     expect(sessionMode.sessionMode.value).toBe("autopilot");
-    expect(window.localStorage.getItem(aiStudioSessionModeStorageKey("session-beta"))).toBeNull();
+    expect(window.localStorage.getItem(vibe64SessionModeStorageKey("session-beta"))).toBeNull();
     expect(route.query).toEqual({
       surface: "home"
     });
 
     sessionMode.setSessionMode("inspect");
-    expect(window.localStorage.getItem(aiStudioSessionModeStorageKey("session-beta"))).toBe("inspect");
+    expect(window.localStorage.getItem(vibe64SessionModeStorageKey("session-beta"))).toBe("inspect");
     expect(route.query).toEqual({
       mode: "inspect",
       surface: "home"
@@ -66,7 +66,7 @@ describe("useAiStudioSessionMode", () => {
     await nextTick();
 
     expect(sessionMode.sessionMode.value).toBe("inspect");
-    expect(window.localStorage.getItem(aiStudioSessionModeStorageKey("session-alpha"))).toBe("inspect");
+    expect(window.localStorage.getItem(vibe64SessionModeStorageKey("session-alpha"))).toBe("inspect");
   });
 });
 

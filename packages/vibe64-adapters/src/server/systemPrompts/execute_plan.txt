@@ -1,6 +1,6 @@
 Execute plan
 
-AI Studio standard implementation instructions.
+Vibe64 standard implementation instructions.
 
 Session:
 - id: {{session.id}}

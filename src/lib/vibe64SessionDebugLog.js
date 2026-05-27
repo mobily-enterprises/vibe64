@@ -1,7 +1,7 @@
 export {
-  AI_STUDIO_SESSION_DEBUG_MARKER,
-  aiStudioSessionDebugDurationMs,
-  aiStudioSessionDebugError,
-  aiStudioSessionDebugLog,
-  aiStudioSessionDebugSummary
-} from "@local/ai-studio-runtime/server/sessionDebugLogCore";
+  VIBE64_SESSION_DEBUG_MARKER,
+  vibe64SessionDebugDurationMs,
+  vibe64SessionDebugError,
+  vibe64SessionDebugLog,
+  vibe64SessionDebugSummary
+} from "@local/vibe64-runtime/server/sessionDebugLogCore";

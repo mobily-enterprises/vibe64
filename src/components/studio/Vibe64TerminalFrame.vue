@@ -2,20 +2,20 @@
   <v-sheet
     rounded="lg"
     color="surface"
-    class="ai-studio-terminal-frame"
+    class="vibe64-terminal-frame"
   >
     <div
-      class="ai-studio-terminal-frame__bar"
+      class="vibe64-terminal-frame__bar"
       :class="{
-        'ai-studio-terminal-frame__bar--draggable': draggable
+        'vibe64-terminal-frame__bar--draggable': draggable
       }"
       @pointerdown="startDrag"
     >
-      <div class="ai-studio-terminal-frame__heading">
-        <div class="ai-studio-terminal-frame__title">{{ title }}</div>
-        <div class="ai-studio-terminal-frame__subtitle">{{ subtitle }}</div>
+      <div class="vibe64-terminal-frame__heading">
+        <div class="vibe64-terminal-frame__title">{{ title }}</div>
+        <div class="vibe64-terminal-frame__subtitle">{{ subtitle }}</div>
       </div>
-      <div class="ai-studio-terminal-frame__actions" @pointerdown.stop>
+      <div class="vibe64-terminal-frame__actions" @pointerdown.stop>
         <slot name="actions" />
       </div>
     </div>
@@ -28,9 +28,9 @@
       class="mb-2"
     />
 
-    <div :ref="terminalHostRef" class="ai-studio-terminal-frame__host" />
+    <div :ref="terminalHostRef" class="vibe64-terminal-frame__host" />
 
-    <div class="ai-studio-terminal-frame__footer">
+    <div class="vibe64-terminal-frame__footer">
       <span>{{ commandPreview || "No command running." }}</span>
       <v-chip v-if="status" size="x-small" variant="tonal">
         {{ status }}
@@ -84,15 +84,15 @@ function startDrag(event) {
 </script>
 
 <style scoped>
-.ai-studio-terminal-frame {
+.vibe64-terminal-frame {
   color: rgb(var(--v-theme-on-surface));
   min-width: 0;
   padding: 0.75rem;
   text-align: left;
 }
 
-.ai-studio-terminal-frame__bar,
-.ai-studio-terminal-frame__footer {
+.vibe64-terminal-frame__bar,
+.vibe64-terminal-frame__footer {
   align-items: center;
   display: flex;
   gap: 0.75rem;
@@ -100,33 +100,33 @@ function startDrag(event) {
   min-width: 0;
 }
 
-.ai-studio-terminal-frame__bar {
+.vibe64-terminal-frame__bar {
   margin-bottom: 0.5rem;
 }
 
-.ai-studio-terminal-frame__bar--draggable {
+.vibe64-terminal-frame__bar--draggable {
   cursor: move;
   touch-action: none;
   user-select: none;
 }
 
-.ai-studio-terminal-frame__heading {
+.vibe64-terminal-frame__heading {
   flex: 1 1 auto;
   min-width: 0;
 }
 
-.ai-studio-terminal-frame__title {
+.vibe64-terminal-frame__title {
   font-size: 0.85rem;
   font-weight: 700;
 }
 
-.ai-studio-terminal-frame__subtitle,
-.ai-studio-terminal-frame__footer {
+.vibe64-terminal-frame__subtitle,
+.vibe64-terminal-frame__footer {
   color: rgba(var(--v-theme-on-surface), 0.72);
   font-size: 0.75rem;
 }
 
-.ai-studio-terminal-frame__actions {
+.vibe64-terminal-frame__actions {
   align-items: center;
   cursor: default;
   display: flex;
@@ -136,19 +136,19 @@ function startDrag(event) {
   min-width: 0;
 }
 
-.ai-studio-terminal-frame__host {
+.vibe64-terminal-frame__host {
   background: #101216;
   border-radius: 0.45rem;
   height: clamp(18rem, 48vh, 34rem);
   overflow: hidden;
 }
 
-.ai-studio-terminal-frame__footer {
+.vibe64-terminal-frame__footer {
   margin-top: 0.45rem;
   overflow: hidden;
 }
 
-.ai-studio-terminal-frame__footer span {
+.vibe64-terminal-frame__footer span {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

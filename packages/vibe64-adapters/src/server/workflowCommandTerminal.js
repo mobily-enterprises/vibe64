@@ -1,6 +1,6 @@
 import {
   normalizeText
-} from "@local/ai-studio-core/server/core";
+} from "@local/vibe64-core/server/core";
 import {
   commitChangesTerminalSpec
 } from "./workflowCommandTerminal/commitPush.js";
@@ -33,7 +33,7 @@ const COMMAND_TERMINAL_SPECS = Object.freeze({
   update_code_index: updateCodeIndexTerminalSpec
 });
 
-async function createAiStudioWorkflowCommandTerminalSpec({
+async function createVibe64WorkflowCommandTerminalSpec({
   commandId = "",
   context = {},
   hooks = {},
@@ -44,7 +44,7 @@ async function createAiStudioWorkflowCommandTerminalSpec({
   if (!createSpec) {
     return {
       ok: false,
-      message: `AI Studio workflow command ${commandId} is not implemented in the command terminal.`
+      message: `Vibe64 workflow command ${commandId} is not implemented in the command terminal.`
     };
   }
   return createSpec({
@@ -57,7 +57,7 @@ async function createAiStudioWorkflowCommandTerminalSpec({
 }
 
 export {
-  createAiStudioWorkflowCommandTerminalSpec,
+  createVibe64WorkflowCommandTerminalSpec,
   createWorktreeBranch,
   createWorktreePath
 };

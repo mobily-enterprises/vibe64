@@ -1,6 +1,6 @@
 import {
   normalizeText
-} from "@local/ai-studio-core/server/core";
+} from "@local/vibe64-core/server/core";
 
 const WORKFLOW_CONDITION_KINDS = Object.freeze({
   ACTION_INPUT_EXISTS: "action_input_exists",

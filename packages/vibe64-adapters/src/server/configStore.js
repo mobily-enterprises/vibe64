@@ -3,25 +3,25 @@ import path from "node:path";
 import process from "node:process";
 
 import {
-  AI_STUDIO_STATE_DIR,
-  aiStudioError,
+  VIBE64_STATE_DIR,
+  vibe64Error,
   isMissingPathError,
   isPlainObject,
   normalizeText,
   normalizeTargetRoot,
   pathExists
-} from "@local/ai-studio-core/server/core";
+} from "@local/vibe64-core/server/core";
 import {
   deepFreeze
-} from "@local/ai-studio-core/server/deepFreeze";
+} from "@local/vibe64-core/server/deepFreeze";
 
-const AI_STUDIO_CONFIG_DIR = "config";
-const AI_STUDIO_RUNTIME_DIR = "runtime";
-const AI_STUDIO_CONFIG_HELPER_FILE = "ai-studio-config.sh";
+const VIBE64_CONFIG_DIR = "config";
+const VIBE64_RUNTIME_DIR = "runtime";
+const VIBE64_CONFIG_HELPER_FILE = "vibe64-config.sh";
 const CONFIG_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/u;
 const CONFIG_FIELD_TYPES = new Set(["boolean", "path", "select", "string"]);
 
-const AI_STUDIO_GENERAL_CONFIG_FIELDS = deepFreeze([
+const VIBE64_GENERAL_CONFIG_FIELDS = deepFreeze([
   {
     defaultValue: "merge",
     description: "How Studio should merge completed pull requests when you choose to merge at the end of Autopilot.",
@@ -51,9 +51,9 @@ const AI_STUDIO_GENERAL_CONFIG_FIELDS = deepFreeze([
 function assertConfigName(name = "") {
   const normalizedName = normalizeText(name);
   if (!CONFIG_NAME_PATTERN.test(normalizedName)) {
-    throw aiStudioError(
-      `Invalid AI Studio config name: ${normalizedName || "(empty)"}`,
-      "ai_studio_invalid_config_name"
+    throw vibe64Error(
+      `Invalid Vibe64 config name: ${normalizedName || "(empty)"}`,
+      "vibe64_invalid_config_name"
     );
   }
   return normalizedName;
@@ -62,9 +62,9 @@ function assertConfigName(name = "") {
 function normalizeFieldType(type = "") {
   const normalizedType = normalizeText(type || "string");
   if (!CONFIG_FIELD_TYPES.has(normalizedType)) {
-    throw aiStudioError(
-      `Invalid AI Studio config field type: ${normalizedType || "(empty)"}`,
-      "ai_studio_invalid_config_field_type"
+    throw vibe64Error(
+      `Invalid Vibe64 config field type: ${normalizedType || "(empty)"}`,
+      "vibe64_invalid_config_field_type"
     );
   }
   return normalizedType;
@@ -73,7 +73,7 @@ function normalizeFieldType(type = "") {
 function normalizeConfigOption(option = {}) {
   const value = normalizeText(isPlainObject(option) ? option.value : option);
   if (!value) {
-    throw aiStudioError("AI Studio select config option is missing a value.", "ai_studio_invalid_config_option");
+    throw vibe64Error("Vibe64 select config option is missing a value.", "vibe64_invalid_config_option");
   }
   return {
     description: normalizeText(option.description),
@@ -93,9 +93,9 @@ function normalizeBooleanValue(value, fieldId) {
   if (["", "0", "false", "no", "off"].includes(normalizedValue)) {
     return false;
   }
-  throw aiStudioError(
+  throw vibe64Error(
     `Config ${fieldId} must be true or false.`,
-    "ai_studio_invalid_boolean_config"
+    "vibe64_invalid_boolean_config"
   );
 }
 
@@ -103,9 +103,9 @@ function normalizeSelectValue(value, field) {
   const normalizedValue = normalizeText(value);
   const allowedValues = new Set(field.options.map((option) => option.value));
   if (!allowedValues.has(normalizedValue)) {
-    throw aiStudioError(
+    throw vibe64Error(
       `Config ${field.id} must be one of: ${[...allowedValues].join(", ")}.`,
-      "ai_studio_invalid_select_config"
+      "vibe64_invalid_select_config"
     );
   }
   return normalizedValue;
@@ -129,8 +129,8 @@ function normalizeConfigValue(value, field) {
 }
 
 function isSavedConfigValueError(error) {
-  return error?.code === "ai_studio_invalid_boolean_config" ||
-    error?.code === "ai_studio_invalid_select_config";
+  return error?.code === "vibe64_invalid_boolean_config" ||
+    error?.code === "vibe64_invalid_select_config";
 }
 
 function invalidSavedConfigValue({
@@ -185,9 +185,9 @@ function normalizeConfigField(field = {}, {
     normalizedField.options = (Array.isArray(field.options) ? field.options : [])
       .map(normalizeConfigOption);
     if (!normalizedField.options.length) {
-      throw aiStudioError(
+      throw vibe64Error(
         `Select config field ${normalizedField.id} must declare options.`,
-        "ai_studio_invalid_config_field"
+        "vibe64_invalid_config_field"
       );
     }
   } else {
@@ -211,9 +211,9 @@ function assertUniqueConfigFields(fields = []) {
   const seen = new Set();
   for (const field of fields) {
     if (seen.has(field.id)) {
-      throw aiStudioError(
-        `Duplicate AI Studio config field: ${field.id}.`,
-        "ai_studio_duplicate_config_field"
+      throw vibe64Error(
+        `Duplicate Vibe64 config field: ${field.id}.`,
+        "vibe64_duplicate_config_field"
       );
     }
     seen.add(field.id);
@@ -242,24 +242,24 @@ function assertKnownConfigInputValues(fields = [], inputValues = {}) {
   for (const fieldId of Object.keys(isPlainObject(inputValues) ? inputValues : {})) {
     const normalizedFieldId = assertConfigName(fieldId);
     if (!knownFieldIds.has(normalizedFieldId)) {
-      throw aiStudioError(
-        `Unknown AI Studio config field: ${normalizedFieldId}.`,
-        "ai_studio_unknown_config_field"
+      throw vibe64Error(
+        `Unknown Vibe64 config field: ${normalizedFieldId}.`,
+        "vibe64_unknown_config_field"
       );
     }
   }
 }
 
-function resolveAiStudioConfigPaths({
+function resolveVibe64ConfigPaths({
   targetRoot = process.cwd()
 } = {}) {
   const normalizedTargetRoot = normalizeTargetRoot(targetRoot);
-  const stateRoot = path.join(normalizedTargetRoot, AI_STUDIO_STATE_DIR);
-  const configRoot = path.join(stateRoot, AI_STUDIO_CONFIG_DIR);
-  const runtimeRoot = path.join(stateRoot, AI_STUDIO_RUNTIME_DIR);
+  const stateRoot = path.join(normalizedTargetRoot, VIBE64_STATE_DIR);
+  const configRoot = path.join(stateRoot, VIBE64_CONFIG_DIR);
+  const runtimeRoot = path.join(stateRoot, VIBE64_RUNTIME_DIR);
   return {
     configRoot,
-    helperPath: path.join(runtimeRoot, AI_STUDIO_CONFIG_HELPER_FILE),
+    helperPath: path.join(runtimeRoot, VIBE64_CONFIG_HELPER_FILE),
     runtimeRoot,
     stateRoot,
     targetRoot: normalizedTargetRoot
@@ -302,11 +302,11 @@ function configSections(fields = []) {
 function configHelperScript() {
   return `#!/usr/bin/env bash
 
-ai_studio_config_dir() {
-  printf '%s\\n' "\${AI_STUDIO_CONFIG_DIR:-}"
+vibe64_config_dir() {
+  printf '%s\\n' "\${VIBE64_CONFIG_DIR:-}"
 }
 
-ai_studio_config_path() {
+vibe64_config_path() {
   local name="\${1:-}"
   case "$name" in
     ''|*/*|*'..'*)
@@ -314,18 +314,18 @@ ai_studio_config_path() {
       ;;
   esac
   local dir
-  dir="$(ai_studio_config_dir)"
+  dir="$(vibe64_config_dir)"
   if [ -z "$dir" ]; then
     return 2
   fi
   printf '%s/%s\\n' "$dir" "$name"
 }
 
-ai_studio_config_value() {
+vibe64_config_value() {
   local name="\${1:-}"
   local default_value="\${2:-}"
   local file_path
-  file_path="$(ai_studio_config_path "$name")" || {
+  file_path="$(vibe64_config_path "$name")" || {
     printf '%s\\n' "$default_value"
     return 0
   }
@@ -336,9 +336,9 @@ ai_studio_config_value() {
   head -n 1 "$file_path" | sed 's/[[:space:]]*$//'
 }
 
-ai_studio_config_bool() {
+vibe64_config_bool() {
   local value
-  value="$(ai_studio_config_value "\${1:-}" "\${2:-false}" | tr '[:upper:]' '[:lower:]')"
+  value="$(vibe64_config_value "\${1:-}" "\${2:-false}" | tr '[:upper:]' '[:lower:]')"
   case "$value" in
     1|true|yes|on)
       return 0
@@ -349,8 +349,8 @@ ai_studio_config_bool() {
   esac
 }
 
-ai_studio_config_is() {
-  [ "$(ai_studio_config_value "\${1:-}" "")" = "\${2:-}" ]
+vibe64_config_is() {
+  [ "$(vibe64_config_value "\${1:-}" "")" = "\${2:-}" ]
 }
 `;
 }
@@ -368,7 +368,7 @@ function normalizeConfigDefinition({
   adapterLabel = "Adapter",
   defaultValues = {},
   fields = null,
-  generalFields = AI_STUDIO_GENERAL_CONFIG_FIELDS
+  generalFields = VIBE64_GENERAL_CONFIG_FIELDS
 } = {}) {
   if (Array.isArray(fields)) {
     const normalizedFields = normalizeConfigFields(fields);
@@ -400,10 +400,10 @@ function normalizeConfigDefinition({
   };
 }
 
-function createAiStudioProjectConfigStore({
+function createVibe64ProjectConfigStore({
   targetRoot = process.cwd()
 } = {}) {
-  const paths = resolveAiStudioConfigPaths({
+  const paths = resolveVibe64ConfigPaths({
     targetRoot
   });
 
@@ -506,8 +506,8 @@ function createAiStudioProjectConfigStore({
   async function environment() {
     await ensureRuntimeFiles();
     return {
-      AI_STUDIO_CONFIG_DIR: paths.configRoot,
-      AI_STUDIO_CONFIG_SH: paths.helperPath
+      VIBE64_CONFIG_DIR: paths.configRoot,
+      VIBE64_CONFIG_SH: paths.helperPath
     };
   }
 
@@ -522,11 +522,11 @@ function createAiStudioProjectConfigStore({
 }
 
 export {
-  AI_STUDIO_CONFIG_DIR,
-  AI_STUDIO_CONFIG_HELPER_FILE,
-  AI_STUDIO_GENERAL_CONFIG_FIELDS,
-  AI_STUDIO_RUNTIME_DIR,
-  createAiStudioProjectConfigStore,
+  VIBE64_CONFIG_DIR,
+  VIBE64_CONFIG_HELPER_FILE,
+  VIBE64_GENERAL_CONFIG_FIELDS,
+  VIBE64_RUNTIME_DIR,
+  createVibe64ProjectConfigStore,
   normalizeConfigDefinition,
-  resolveAiStudioConfigPaths
+  resolveVibe64ConfigPaths
 };

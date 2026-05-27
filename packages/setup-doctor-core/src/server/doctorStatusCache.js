@@ -63,17 +63,17 @@ function defaultDoctorStatusStateRoot({
   env = process.env,
   home = os.homedir()
 } = {}) {
-  if (String(env.AI_STUDIO_DOCTOR_STATUS_ROOT || "").trim()) {
-    return normalizeCacheRoot(env.AI_STUDIO_DOCTOR_STATUS_ROOT);
+  if (String(env.VIBE64_DOCTOR_STATUS_ROOT || "").trim()) {
+    return normalizeCacheRoot(env.VIBE64_DOCTOR_STATUS_ROOT);
   }
   if (String(env.XDG_STATE_HOME || "").trim()) {
-    return path.join(normalizeCacheRoot(env.XDG_STATE_HOME), "ai-studio", "doctor-status");
+    return path.join(normalizeCacheRoot(env.XDG_STATE_HOME), "vibe64", "doctor-status");
   }
   if (String(env.LOCALAPPDATA || "").trim()) {
-    return path.join(normalizeCacheRoot(env.LOCALAPPDATA), "AI Studio", "doctor-status");
+    return path.join(normalizeCacheRoot(env.LOCALAPPDATA), "Vibe64", "doctor-status");
   }
 
-  return path.join(normalizeCacheRoot(home || process.cwd()), ".local", "state", "ai-studio", "doctor-status");
+  return path.join(normalizeCacheRoot(home || process.cwd()), ".local", "state", "vibe64", "doctor-status");
 }
 
 function readyStatusCacheIdentity({
@@ -121,7 +121,7 @@ function readyStatusCachePath({
 
 function warnReadyStatusCache(operation, filePath, error) {
   console.warn(
-    `AI Studio doctor ready cache ${operation} failed for ${filePath}: ${String(error?.message || error)}`
+    `Vibe64 doctor ready cache ${operation} failed for ${filePath}: ${String(error?.message || error)}`
   );
 }
 

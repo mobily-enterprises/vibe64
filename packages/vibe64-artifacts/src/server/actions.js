@@ -4,9 +4,9 @@ import {
   sessionIdInputValidator,
 } from "./inputSchemas.js";
 
-const ACTION_READ_ARTIFACT_PREVIEW = "feature.ai-studio-artifacts.preview.read";
-const ACTION_READ_ARTIFACT_READINESS = "feature.ai-studio-artifacts.readiness.read";
-const ACTION_SUBMIT_CURRENT_STEP_INPUT = "feature.ai-studio-artifacts.current-step-input.submit";
+const ACTION_READ_ARTIFACT_PREVIEW = "feature.vibe64-artifacts.preview.read";
+const ACTION_READ_ARTIFACT_READINESS = "feature.vibe64-artifacts.readiness.read";
+const ACTION_SUBMIT_CURRENT_STEP_INPUT = "feature.vibe64-artifacts.current-step-input.submit";
 
 const featureActions = Object.freeze([
   {

@@ -1,8 +1,8 @@
-# AI Studio State Machine Restructuring TODO
+# Vibe64 State Machine Restructuring TODO
 
 ## Goal
 
-Make AI Studio workflow steps server-owned, explicit, and easy to reason about.
+Make Vibe64 workflow steps server-owned, explicit, and easy to reason about.
 
 The client must not create or understand artifacts. The UI should only render the current server-provided step view and submit input. Codex should update state through the same server contract as the UI.
 

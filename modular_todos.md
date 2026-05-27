@@ -2,7 +2,7 @@
 
 ## 1. State Of The Modules Right Now
 
-- `workflowRegistry.js` now provides a real registry for workflow modules. It can register step definitions, step machines, and workflow definitions, and it detects duplicate ownership. However, it still owns the generic `AI_STUDIO_CORE_WORKFLOW_MODULE_ID = "core"`, which means a concrete module id is still sitting in generic registry code.
+- `workflowRegistry.js` now provides a real registry for workflow modules. It can register step definitions, step machines, and workflow definitions, and it detects duplicate ownership. However, it still owns the generic `VIBE64_CORE_WORKFLOW_MODULE_ID = "core"`, which means a concrete module id is still sitting in generic registry code.
 - `workflow.js` is still doing two jobs. It is the public workflow lookup/API layer, but it also owns the large built-in core step catalog and the built-in workflow profiles for `seed_application`, `big_feature`, and `general_coding`.
 - `workflowStepMachines.js` is also still doing two jobs. It exposes the runtime step-machine API, but it also owns the large built-in set of core machines for session setup, worktree setup, issue creation, planning, execution, validation, commit, PR, merge, sync, and finish.
 - `workflowModules/coreMaintenance.js` is the first real module-shaped vertical slice. It owns its module id, its maintenance workflow profile ids, its maintenance-specific step ids, its step definitions, its workflow definitions, and its machines.
@@ -175,7 +175,7 @@
 
 7. Remove the generic core module id from the registry.
 
-   `workflowRegistry.js` should not export `AI_STUDIO_CORE_WORKFLOW_MODULE_ID`.
+   `workflowRegistry.js` should not export `VIBE64_CORE_WORKFLOW_MODULE_ID`.
 
    Tests should import module ids from each module's `_testing` export instead of from the public registry barrel.
 
@@ -188,11 +188,11 @@
 9. Verify behavior after each vertical move.
 
    After the lifecycle move, run:
-   - `node --test tests/server/aiStudioWorkflowMachine.unit.test.js`
+   - `node --test tests/server/vibe64WorkflowMachine.unit.test.js`
    - the impacted session/artifact route tests
 
    After the coding move, run:
-   - `node --test tests/server/aiStudioWorkflowMachine.unit.test.js tests/server/aiStudioSessionsService.unit.test.js tests/server/aiStudioArtifactsService.unit.test.js tests/server/aiStudioSessionsRoutes.unit.test.js`
+   - `node --test tests/server/vibe64WorkflowMachine.unit.test.js tests/server/vibe64SessionsService.unit.test.js tests/server/vibe64ArtifactsService.unit.test.js tests/server/vibe64SessionsRoutes.unit.test.js`
 
    Before considering the slice complete, run:
    - `npx jskit app verify`

@@ -1,6 +1,6 @@
 import {
   normalizeText
-} from "@local/ai-studio-core/server/core";
+} from "@local/vibe64-core/server/core";
 import {
   TargetAdapter,
   adapterActionResult,
@@ -96,7 +96,7 @@ class FakeTargetAdapter extends TargetAdapter {
   } = {}) {
     const actionId = normalizeText(action.id || "finish_session");
     return adapterActionResult(this.actionResults[actionId] || {
-      message: "Fake adapter finished the AI Studio session."
+      message: "Fake adapter finished the Vibe64 session."
     });
   }
 

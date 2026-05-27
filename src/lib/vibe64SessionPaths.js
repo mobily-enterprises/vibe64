@@ -8,7 +8,7 @@ function canonicalSessionWorktreePath(session = {}) {
   return sessionRoot && sessionHasCreatedWorktree(session) ? `${sessionRoot}/worktree` : "";
 }
 
-function aiStudioSessionWorktreePath(session = {}) {
+function vibe64SessionWorktreePath(session = {}) {
   const metadata = session?.metadata || {};
   const explicitPath = String(
     metadata.worktree_path ||
@@ -22,5 +22,5 @@ function aiStudioSessionWorktreePath(session = {}) {
 
 export {
   canonicalSessionWorktreePath,
-  aiStudioSessionWorktreePath
+  vibe64SessionWorktreePath
 };

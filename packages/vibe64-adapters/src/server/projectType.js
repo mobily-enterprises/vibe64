@@ -2,17 +2,17 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import {
-  AI_STUDIO_STATE_DIR,
-  aiStudioError,
+  VIBE64_STATE_DIR,
+  vibe64Error,
   isMissingPathError,
   normalizeTargetRoot,
   normalizeText
-} from "@local/ai-studio-core/server/core";
+} from "@local/vibe64-core/server/core";
 
-const AI_STUDIO_PROJECT_TYPE_FILE = "project_type";
+const VIBE64_PROJECT_TYPE_FILE = "project_type";
 
 function projectTypePath(targetRoot = process.cwd()) {
-  return path.join(normalizeTargetRoot(targetRoot), AI_STUDIO_STATE_DIR, AI_STUDIO_PROJECT_TYPE_FILE);
+  return path.join(normalizeTargetRoot(targetRoot), VIBE64_STATE_DIR, VIBE64_PROJECT_TYPE_FILE);
 }
 
 async function readProjectTypeFile(filePath) {
@@ -26,7 +26,7 @@ async function readProjectTypeFile(filePath) {
   }
 }
 
-function createAiStudioProjectTypeStore({
+function createVibe64ProjectTypeStore({
   targetRoot = process.cwd()
 } = {}) {
   const normalizedTargetRoot = normalizeTargetRoot(targetRoot);
@@ -39,7 +39,7 @@ function createAiStudioProjectTypeStore({
   async function writeProjectType(projectType) {
     const normalizedProjectType = normalizeText(projectType);
     if (!normalizedProjectType) {
-      throw aiStudioError("Choose an AI Studio project type.", "ai_studio_project_type_missing");
+      throw vibe64Error("Choose an Vibe64 project type.", "vibe64_project_type_missing");
     }
     await mkdir(path.dirname(filePath), {
       recursive: true
@@ -57,7 +57,7 @@ function createAiStudioProjectTypeStore({
 }
 
 export {
-  AI_STUDIO_PROJECT_TYPE_FILE,
-  createAiStudioProjectTypeStore,
+  VIBE64_PROJECT_TYPE_FILE,
+  createVibe64ProjectTypeStore,
   projectTypePath
 };

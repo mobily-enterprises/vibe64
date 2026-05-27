@@ -6,7 +6,7 @@ import {
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
   isPlainObject,
-} from "@local/ai-studio-core/server/core";
+} from "@local/vibe64-core/server/core";
 import {
   DEFAULT_NODE_PACKAGE_MANAGER,
   normalizeNodePackageManagerSpec

@@ -12,8 +12,8 @@ class CurrentAppProvider {
 
   static dependsOn = [
     "runtime.actions",
-    "feature.ai-studio-project",
-    "feature.ai-studio-accounts",
+    "feature.vibe64-project",
+    "feature.vibe64-accounts",
     "feature.studio-setup-doctor",
     "feature.adapter-setup-doctor",
     "feature.project-setup-doctor"
@@ -36,9 +36,9 @@ class CurrentAppProvider {
       () => {
         return createService({
           appRoot,
-          projectService: app.make("feature.ai-studio-project.service"),
+          projectService: app.make("feature.vibe64-project.service"),
           setupServices: {
-            accountSetupService: app.make("feature.ai-studio-accounts.service"),
+            accountSetupService: app.make("feature.vibe64-accounts.service"),
             adapterSetupService: app.make("feature.adapter-setup-doctor.service"),
             projectSetupService: app.make("feature.project-setup-doctor.service"),
             studioSetupService: app.make("feature.studio-setup-doctor.service")

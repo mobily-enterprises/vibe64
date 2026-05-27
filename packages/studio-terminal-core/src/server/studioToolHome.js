@@ -12,7 +12,7 @@ import {
   shellQuote
 } from "./shellCommands.js";
 
-const STUDIO_MYSQL_CLIENT_CONFIG_DIR = "/tmp/ai-studio-mysql-client";
+const STUDIO_MYSQL_CLIENT_CONFIG_DIR = "/tmp/vibe64-mysql-client";
 
 function studioPlaywrightBrowsersDockerArgs() {
   return [
@@ -45,14 +45,14 @@ function studioToolHomeSetupLines() {
 
 function studioMysqlClientConfigSetupLines() {
   return [
-    "if [ -n \"${MYSQL_HOST:-}\" ] || [ -n \"${AI_STUDIO_MYSQL_USER:-}\" ] || [ -n \"${MYSQL_PWD:-}\" ] || [ -n \"${MYSQL_TCP_PORT:-}\" ]; then",
+    "if [ -n \"${MYSQL_HOST:-}\" ] || [ -n \"${VIBE64_MYSQL_USER:-}\" ] || [ -n \"${MYSQL_PWD:-}\" ] || [ -n \"${MYSQL_TCP_PORT:-}\" ]; then",
     `  export MYSQL_HOME=${STUDIO_MYSQL_CLIENT_CONFIG_DIR}`,
     "  mkdir -p \"$MYSQL_HOME\"",
     "  chmod 700 \"$MYSQL_HOME\"",
     "  {",
     "    printf '%s\\n' '[client]'",
     "    [ -n \"${MYSQL_HOST:-}\" ] && printf 'host=%s\\n' \"$MYSQL_HOST\"",
-    "    [ -n \"${AI_STUDIO_MYSQL_USER:-}\" ] && printf 'user=%s\\n' \"$AI_STUDIO_MYSQL_USER\"",
+    "    [ -n \"${VIBE64_MYSQL_USER:-}\" ] && printf 'user=%s\\n' \"$VIBE64_MYSQL_USER\"",
     "    [ -n \"${MYSQL_PWD:-}\" ] && printf 'password=%s\\n' \"$MYSQL_PWD\"",
     "    [ -n \"${MYSQL_TCP_PORT:-}\" ] && printf 'port=%s\\n' \"$MYSQL_TCP_PORT\"",
     "    if [ -n \"${MYSQL_DATABASE:-}\" ]; then",

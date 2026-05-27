@@ -16,15 +16,15 @@ import {
   writeTerminalSession
 } from "@local/studio-terminal-core/server/terminalSessions";
 import {
-  aiStudioResult
-} from "@local/ai-studio-core/server/serverResponses";
+  vibe64Result
+} from "@local/vibe64-core/server/serverResponses";
 import {
-  assertAiStudioSetupReady,
-  readAiStudioSetupReadiness
-} from "@local/ai-studio-runtime/server/setupReadiness";
+  assertVibe64SetupReady,
+  readVibe64SetupReadiness
+} from "@local/vibe64-runtime/server/setupReadiness";
 import {
   resolveStudioTargetRoot
-} from "@local/ai-studio-core/server/studioRoots";
+} from "@local/vibe64-core/server/studioRoots";
 import {
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
@@ -34,8 +34,8 @@ import {
 
 const PROJECT_SCRIPT_SOURCE = "project";
 const ADAPTER_SCRIPT_SOURCE = "adapter";
-const PROJECT_SCRIPTS_DIR = ".ai-studio/scripts";
-const STARRED_TARGET_SCRIPTS_CONFIG = ".ai-studio/config/starred_scripts";
+const PROJECT_SCRIPTS_DIR = ".vibe64/scripts";
+const STARRED_TARGET_SCRIPTS_CONFIG = ".vibe64/config/starred_scripts";
 const TARGET_SCRIPT_TERMINAL_NAMESPACE = "current-app-target-script";
 const TARGET_SCRIPT_TERMINAL_NAMESPACE_PREFIX = `${TARGET_SCRIPT_TERMINAL_NAMESPACE}:`;
 const PROJECT_SCRIPT_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u;
@@ -117,8 +117,8 @@ function targetScriptError(code, message, extra = {}) {
 }
 
 function currentAppResult(operation) {
-  return aiStudioResult(operation, {
-    fallbackCode: "ai_studio_current_app_request_failed",
+  return vibe64Result(operation, {
+    fallbackCode: "vibe64_current_app_request_failed",
     fallbackMessage: "Current app request failed."
   });
 }
@@ -350,7 +350,7 @@ function createService({
   setupServices = {}
 } = {}) {
   if (!projectService || typeof projectService.createRuntime !== "function") {
-    throw new TypeError("createService requires feature.ai-studio-project.service.");
+    throw new TypeError("createService requires feature.vibe64-project.service.");
   }
 
   const targetRoot = resolveCurrentAppRoot(appRoot || projectService.targetRoot);
@@ -374,11 +374,11 @@ function createService({
   }
 
   async function setupReadiness(options = {}) {
-    return readAiStudioSetupReadiness(setupServices, options);
+    return readVibe64SetupReadiness(setupServices, options);
   }
 
   async function requireSetupReady() {
-    return assertAiStudioSetupReady(setupServices);
+    return assertVibe64SetupReady(setupServices);
   }
 
   async function projectConfigEnvironment() {
@@ -394,7 +394,7 @@ function createService({
   async function requireAdapterMethod(methodName) {
     const activeAdapter = await adapter();
     if (typeof activeAdapter?.[methodName] !== "function") {
-      throw new Error(`Active AI Studio adapter does not implement ${methodName}().`);
+      throw new Error(`Active Vibe64 adapter does not implement ${methodName}().`);
     }
     return activeAdapter[methodName].bind(activeAdapter);
   }
@@ -566,7 +566,7 @@ function createService({
         if (!spec || typeof spec !== "object") {
           return targetScriptError(
             "invalid_target_script_terminal_spec",
-            "The active AI Studio adapter returned an invalid target script terminal spec."
+            "The active Vibe64 adapter returned an invalid target script terminal spec."
           );
         }
 

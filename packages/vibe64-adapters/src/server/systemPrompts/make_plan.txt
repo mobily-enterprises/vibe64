@@ -1,6 +1,6 @@
 Make plan
 
-AI Studio standard planning instructions.
+Vibe64 standard planning instructions.
 
 Session:
 - id: {{session.id}}

@@ -3,13 +3,13 @@ import {
   numberedQuestionInputFields,
   numberedQuestionSubmissionFields,
   numberedQuestionSugarForMessageInput
-} from "@/lib/aiStudioNumberedQuestionSugar.js";
+} from "@/lib/vibe64NumberedQuestionSugar.js";
 import {
   readRefOrGetterValue
 } from "@/lib/vueRefOrGetterValue.js";
 import {
   controlHasClientAction
-} from "@/lib/aiStudioPresentationControls.js";
+} from "@/lib/vibe64PresentationControls.js";
 
 function controlHasInputFields(control = {}) {
   return Array.isArray(control.inputFields) && control.inputFields.length > 0;
@@ -52,7 +52,7 @@ function requiredFieldIsMissing(field = {}, values = {}) {
   return field.required !== false && !String(values[field.name] || "").trim();
 }
 
-function useAiStudioAutopilotComposer({
+function useVibe64AutopilotComposer({
   conversationLog,
   controls,
   isControlDisabled = () => false,
@@ -221,5 +221,5 @@ function useAiStudioAutopilotComposer({
 export {
   controlHasInputFields,
   initialControlValues,
-  useAiStudioAutopilotComposer
+  useVibe64AutopilotComposer
 };

@@ -1,6 +1,6 @@
 Write report
 
-AI Studio standard session-report instructions.
+Vibe64 standard session-report instructions.
 
 Session:
 - id: {{session.id}}

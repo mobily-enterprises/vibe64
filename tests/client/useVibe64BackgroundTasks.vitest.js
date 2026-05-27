@@ -2,23 +2,23 @@ import { ref } from "vue";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  startAiStudioCodexTerminal
-} from "@/lib/aiStudioSessionApi.js";
+  startVibe64CodexTerminal
+} from "@/lib/vibe64SessionApi.js";
 import {
-  AI_STUDIO_CLIENT_CONTROL_ACTIONS
-} from "../../src/lib/aiStudioPresentationControls.js";
+  VIBE64_CLIENT_CONTROL_ACTIONS
+} from "../../src/lib/vibe64PresentationControls.js";
 import {
-  useAiStudioBackgroundTasks,
+  useVibe64BackgroundTasks,
   normalizeBackgroundTasks
-} from "../../src/composables/useAiStudioBackgroundTasks.js";
+} from "../../src/composables/useVibe64BackgroundTasks.js";
 
-vi.mock("@/lib/aiStudioSessionApi.js", () => ({
-  startAiStudioCodexTerminal: vi.fn()
+vi.mock("@/lib/vibe64SessionApi.js", () => ({
+  startVibe64CodexTerminal: vi.fn()
 }));
 
-describe("useAiStudioBackgroundTasks", () => {
+describe("useVibe64BackgroundTasks", () => {
   beforeEach(() => {
-    vi.mocked(startAiStudioCodexTerminal).mockReset();
+    vi.mocked(startVibe64CodexTerminal).mockReset();
   });
 
   it("normalizes presentation background tasks for the UI", () => {
@@ -32,7 +32,7 @@ describe("useAiStudioBackgroundTasks", () => {
             message: "failed",
             retry: {
               control: {
-                action: AI_STUDIO_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL
+                action: VIBE64_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL
               },
               label: "Retry Codex"
             },
@@ -53,7 +53,7 @@ describe("useAiStudioBackgroundTasks", () => {
         message: "failed",
         retry: {
           control: {
-            action: AI_STUDIO_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL
+            action: VIBE64_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL
           },
           label: "Retry Codex"
         },
@@ -65,7 +65,7 @@ describe("useAiStudioBackgroundTasks", () => {
 
   it("retries background tasks through server-declared retry controls", async () => {
     const refreshSessionData = vi.fn();
-    vi.mocked(startAiStudioCodexTerminal).mockResolvedValue({
+    vi.mocked(startVibe64CodexTerminal).mockResolvedValue({
       ok: true
     });
     const session = ref({
@@ -76,7 +76,7 @@ describe("useAiStudioBackgroundTasks", () => {
             id: "codex_bootstrap",
             retry: {
               control: {
-                action: AI_STUDIO_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL
+                action: VIBE64_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL
               },
               label: "Retry Codex"
             },
@@ -85,7 +85,7 @@ describe("useAiStudioBackgroundTasks", () => {
         ]
       }
     });
-    const backgroundTasks = useAiStudioBackgroundTasks({
+    const backgroundTasks = useVibe64BackgroundTasks({
       refreshSessionData,
       session
     });
@@ -93,7 +93,7 @@ describe("useAiStudioBackgroundTasks", () => {
     await expect(backgroundTasks.retryBackgroundTask(backgroundTasks.backgroundTasks.value[0]))
       .resolves.toBe(true);
 
-    expect(startAiStudioCodexTerminal).toHaveBeenCalledWith("session_123");
+    expect(startVibe64CodexTerminal).toHaveBeenCalledWith("session_123");
     expect(refreshSessionData).toHaveBeenCalledTimes(1);
   });
 });

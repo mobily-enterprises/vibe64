@@ -1,8 +1,8 @@
 import {
-  AI_STUDIO_CLIENT_CONTROL_ACTIONS,
-  AI_STUDIO_CLIENT_CONTROL_ICON_TOKENS,
-  AI_STUDIO_CLIENT_CONTROL_STATE_FLAGS
-} from "@local/ai-studio-core/shared";
+  VIBE64_CLIENT_CONTROL_ACTIONS,
+  VIBE64_CLIENT_CONTROL_ICON_TOKENS,
+  VIBE64_CLIENT_CONTROL_STATE_FLAGS
+} from "@local/vibe64-core/shared";
 
 function objectValue(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
@@ -37,9 +37,9 @@ function controlUsesClientAction(control = {}, action = "") {
 
 function controlStateFlagActive(flag = "", state = {}) {
   switch (String(flag || "").trim()) {
-    case AI_STUDIO_CLIENT_CONTROL_STATE_FLAGS.DIFF_DISABLED:
+    case VIBE64_CLIENT_CONTROL_STATE_FLAGS.DIFF_DISABLED:
       return Boolean(state.review?.diffDisabled);
-    case AI_STUDIO_CLIENT_CONTROL_STATE_FLAGS.DIFF_LOADING:
+    case VIBE64_CLIENT_CONTROL_STATE_FLAGS.DIFF_LOADING:
       return Boolean(state.diff?.loading);
     default:
       return false;
@@ -51,9 +51,9 @@ function controlStateActive(control = {}, field = "", state = {}) {
 }
 
 export {
-  AI_STUDIO_CLIENT_CONTROL_ACTIONS,
-  AI_STUDIO_CLIENT_CONTROL_ICON_TOKENS,
-  AI_STUDIO_CLIENT_CONTROL_STATE_FLAGS,
+  VIBE64_CLIENT_CONTROL_ACTIONS,
+  VIBE64_CLIENT_CONTROL_ICON_TOKENS,
+  VIBE64_CLIENT_CONTROL_STATE_FLAGS,
   controlClientAction,
   controlHasClientAction,
   controlIconToken,

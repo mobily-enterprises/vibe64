@@ -4,21 +4,21 @@ import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
 import { usePaths } from "@jskit-ai/users-web/client/composables/usePaths";
 import { useStudioTerminal } from "@/composables/useStudioTerminal.js";
 import {
-  aiStudioCommandTerminalWebSocketUrl,
-  aiStudioLaunchTerminalWebSocketUrl,
-  aiStudioShellTerminalWebSocketUrl
-} from "@/lib/aiStudioSessionApi.js";
+  vibe64CommandTerminalWebSocketUrl,
+  vibe64LaunchTerminalWebSocketUrl,
+  vibe64ShellTerminalWebSocketUrl
+} from "@/lib/vibe64SessionApi.js";
 import {
-  AI_STUDIO_SESSIONS_API_SUFFIX,
-  AI_STUDIO_SURFACE_ID,
+  VIBE64_SESSIONS_API_SUFFIX,
+  VIBE64_SURFACE_ID,
   LOCAL_STUDIO_COMMAND_OPTIONS,
-  aiStudioCommandTerminalPath,
-  aiStudioLaunchTerminalPath,
-  aiStudioShellTerminalPath
-} from "@/lib/aiStudioSessionRequestConfig.js";
+  vibe64CommandTerminalPath,
+  vibe64LaunchTerminalPath,
+  vibe64ShellTerminalPath
+} from "@/lib/vibe64SessionRequestConfig.js";
 import {
   terminalFailureFixRequest
-} from "@/lib/aiStudioTerminalFailurePrompt.js";
+} from "@/lib/vibe64TerminalFailurePrompt.js";
 
 const FINISHED_TERMINAL_HOLD_MS = 500;
 
@@ -48,7 +48,7 @@ function commandTerminalCanRequestAiFix({
   );
 }
 
-function useAiStudioCommandTerminalController(props, emit) {
+function useVibe64CommandTerminalController(props, emit) {
   const terminalClosedByUser = ref(false);
   const expanded = ref(props.initialExpanded !== false);
   const paths = usePaths();
@@ -65,8 +65,8 @@ function useAiStudioCommandTerminalController(props, emit) {
   const launchTargetId = computed(() => props.launchTarget?.id || "");
   const launchTargetLabel = computed(() => props.launchTarget?.label || "");
   const shellTarget = computed(() => props.shellTarget || "");
-  const sessionsApiPath = computed(() => paths.api(AI_STUDIO_SESSIONS_API_SUFFIX, {
-    surface: AI_STUDIO_SURFACE_ID
+  const sessionsApiPath = computed(() => paths.api(VIBE64_SESSIONS_API_SUFFIX, {
+    surface: VIBE64_SURFACE_ID
   }));
   const launchTerminal = computed(() => props.terminalKind === "launch");
   const shellTerminal = computed(() => props.terminalKind === "shell");
@@ -113,17 +113,17 @@ function useAiStudioCommandTerminalController(props, emit) {
     terminalSessionId: selectedTerminalSessionId = ""
   } = {}) {
     if (terminalKind === "launch") {
-      return aiStudioLaunchTerminalPath(sessionsApiPath.value, selectedSessionId, selectedTerminalSessionId);
+      return vibe64LaunchTerminalPath(sessionsApiPath.value, selectedSessionId, selectedTerminalSessionId);
     }
     if (terminalKind === "shell") {
-      return aiStudioShellTerminalPath(sessionsApiPath.value, selectedSessionId, selectedTerminalSessionId);
+      return vibe64ShellTerminalPath(sessionsApiPath.value, selectedSessionId, selectedTerminalSessionId);
     }
-    return aiStudioCommandTerminalPath(sessionsApiPath.value, selectedSessionId, selectedTerminalSessionId);
+    return vibe64CommandTerminalPath(sessionsApiPath.value, selectedSessionId, selectedTerminalSessionId);
   }
 
   const startTerminalCommand = useCommand({
     access: "never",
-    apiSuffix: AI_STUDIO_SESSIONS_API_SUFFIX,
+    apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
     buildCommandOptions: (_payload, { context }) => ({
       method: "POST",
       options: LOCAL_STUDIO_COMMAND_OPTIONS,
@@ -155,15 +155,15 @@ function useAiStudioCommandTerminalController(props, emit) {
       error: "Terminal failed to start."
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "ai-studio.terminal.start",
+    placementSource: "vibe64.terminal.start",
     suppressSuccessMessage: true,
-    surfaceId: AI_STUDIO_SURFACE_ID,
+    surfaceId: VIBE64_SURFACE_ID,
     writeMethod: "POST"
   });
 
   const closeTerminalCommand = useCommand({
     access: "never",
-    apiSuffix: AI_STUDIO_SESSIONS_API_SUFFIX,
+    apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
     buildCommandOptions: (_payload, { context }) => ({
       method: "DELETE",
       options: LOCAL_STUDIO_COMMAND_OPTIONS,
@@ -174,9 +174,9 @@ function useAiStudioCommandTerminalController(props, emit) {
       error: "Terminal could not close."
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "ai-studio.terminal.close",
+    placementSource: "vibe64.terminal.close",
     suppressSuccessMessage: true,
-    surfaceId: AI_STUDIO_SURFACE_ID,
+    surfaceId: VIBE64_SURFACE_ID,
     writeMethod: "DELETE"
   });
 
@@ -185,12 +185,12 @@ function useAiStudioCommandTerminalController(props, emit) {
     onStatusUpdate: handleTerminalStatusUpdate,
     webSocketUrl(terminalId) {
       if (launchTerminal.value) {
-        return aiStudioLaunchTerminalWebSocketUrl(sessionId.value, terminalId);
+        return vibe64LaunchTerminalWebSocketUrl(sessionId.value, terminalId);
       }
       if (shellTerminal.value) {
-        return aiStudioShellTerminalWebSocketUrl(sessionId.value, terminalId);
+        return vibe64ShellTerminalWebSocketUrl(sessionId.value, terminalId);
       }
-      return aiStudioCommandTerminalWebSocketUrl(sessionId.value, terminalId);
+      return vibe64CommandTerminalWebSocketUrl(sessionId.value, terminalId);
     }
   });
 
@@ -541,5 +541,5 @@ function useAiStudioCommandTerminalController(props, emit) {
 
 export {
   commandTerminalCanRequestAiFix,
-  useAiStudioCommandTerminalController
+  useVibe64CommandTerminalController
 };

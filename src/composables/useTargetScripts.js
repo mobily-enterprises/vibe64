@@ -5,9 +5,9 @@ import { useList } from "@jskit-ai/users-web/client/composables/useList";
 import { usePaths } from "@jskit-ai/users-web/client/composables/usePaths";
 import { useStudioTerminal } from "@/composables/useStudioTerminal.js";
 import {
-  AI_STUDIO_SURFACE_ID,
+  VIBE64_SURFACE_ID,
   LOCAL_STUDIO_COMMAND_OPTIONS
-} from "@/lib/aiStudioRequestConfig.js";
+} from "@/lib/vibe64RequestConfig.js";
 import {
   TARGET_SCRIPT_TERMINAL_API_SUFFIX,
   TARGET_SCRIPTS_API_SUFFIX,
@@ -30,10 +30,10 @@ function useTargetScripts({
   const currentTerminalScriptLabel = ref("");
 
   const targetScriptsApiPath = computed(() => paths.api(TARGET_SCRIPTS_API_SUFFIX, {
-    surface: AI_STUDIO_SURFACE_ID
+    surface: VIBE64_SURFACE_ID
   }));
   const targetScriptTerminalApiPath = computed(() => paths.api(TARGET_SCRIPT_TERMINAL_API_SUFFIX, {
-    surface: AI_STUDIO_SURFACE_ID
+    surface: VIBE64_SURFACE_ID
   }));
 
   const scriptList = useList({
@@ -41,10 +41,10 @@ function useTargetScripts({
     apiSuffix: TARGET_SCRIPTS_API_SUFFIX,
     fallbackLoadError: "Target scripts could not be loaded.",
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "ai-studio.target-scripts.list",
+    placementSource: "vibe64.target-scripts.list",
     queryKeyFactory: targetScriptsQueryKey,
     selectItems: (payload) => Array.isArray(payload?.scripts) ? payload.scripts : [],
-    surfaceId: AI_STUDIO_SURFACE_ID
+    surfaceId: VIBE64_SURFACE_ID
   });
 
   const saveStarredCommand = useCommand({
@@ -66,9 +66,9 @@ function useTargetScripts({
       await refreshScripts();
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "ai-studio.target-scripts.starred.save",
+    placementSource: "vibe64.target-scripts.starred.save",
     suppressSuccessMessage: true,
-    surfaceId: AI_STUDIO_SURFACE_ID,
+    surfaceId: VIBE64_SURFACE_ID,
     writeMethod: "PUT"
   });
 
@@ -88,9 +88,9 @@ function useTargetScripts({
       await refreshScripts();
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "ai-studio.target-scripts.starred.reset",
+    placementSource: "vibe64.target-scripts.starred.reset",
     suppressSuccessMessage: true,
-    surfaceId: AI_STUDIO_SURFACE_ID,
+    surfaceId: VIBE64_SURFACE_ID,
     writeMethod: "DELETE"
   });
 
@@ -110,9 +110,9 @@ function useTargetScripts({
       error: "Target script terminal failed to start."
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "ai-studio.target-scripts.terminal.start",
+    placementSource: "vibe64.target-scripts.terminal.start",
     suppressSuccessMessage: true,
-    surfaceId: AI_STUDIO_SURFACE_ID,
+    surfaceId: VIBE64_SURFACE_ID,
     writeMethod: "POST"
   });
 
@@ -129,9 +129,9 @@ function useTargetScripts({
       error: "Target script terminal could not close."
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "ai-studio.target-scripts.terminal.close",
+    placementSource: "vibe64.target-scripts.terminal.close",
     suppressSuccessMessage: true,
-    surfaceId: AI_STUDIO_SURFACE_ID,
+    surfaceId: VIBE64_SURFACE_ID,
     writeMethod: "DELETE"
   });
 

@@ -1,8 +1,8 @@
 import {
   deepFreeze
-} from "@local/ai-studio-core/server/deepFreeze";
+} from "@local/vibe64-core/server/deepFreeze";
 import {
-  AI_STUDIO_APPLICATION_TYPE_WEB
+  VIBE64_APPLICATION_TYPE_WEB
 } from "../../applicationTypes.js";
 import {
   createGenericNodeWebTargetAdapter
@@ -12,7 +12,7 @@ const GENERIC_NODE_WEB_ADAPTER_MANIFEST = deepFreeze({
   applicationTypes: [
     {
       explanation: "Existing package.json-based web applications when the exact JavaScript framework is unknown, mixed, custom, or not worth specializing.",
-      id: AI_STUDIO_APPLICATION_TYPE_WEB,
+      id: VIBE64_APPLICATION_TYPE_WEB,
       priority: 40
     }
   ],

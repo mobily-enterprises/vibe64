@@ -14,19 +14,22 @@ import {
   createRepositoryReadyStatusCache
 } from "@local/setup-doctor-core/server/doctorStatusCache";
 import {
-  aiStudioResult
-} from "@local/ai-studio-core/server/serverResponses";
+  vibe64Result
+} from "@local/vibe64-core/server/serverResponses";
 import {
   resolveStudioTargetRoot
-} from "@local/ai-studio-core/server/studioRoots";
+} from "@local/vibe64-core/server/studioRoots";
 import {
   dockerCommand,
-  runHostCommand
+  runHostCommand,
+  shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
 
-const ACCOUNT_AUTH_NAMESPACE = "ai-studio-accounts";
+const ACCOUNT_AUTH_NAMESPACE = "vibe64-accounts";
 const BROWSER_AUTH_MODE = "browser";
 const DEVICE_AUTH_MODE = "device";
+const GITHUB_DEVICE_AUTH_URL = "https://github.com/login/device";
+const GITHUB_GIT_CREDENTIAL_HELPER = "gh auth git-credential";
 const REQUIRED_GITHUB_SCOPES = Object.freeze(["repo", "read:org", "gist", "workflow"]);
 
 const ACCOUNT_DEFINITIONS = Object.freeze({
@@ -42,16 +45,16 @@ const ACCOUNT_DEFINITIONS = Object.freeze({
   })
 });
 
-function resolveAiStudioAccountsRoot(targetRoot) {
+function resolveVibe64AccountsRoot(targetRoot) {
   return resolveStudioTargetRoot({
     explicitRoot: targetRoot
   });
 }
 
 function accountsResult(operation) {
-  return aiStudioResult(operation, {
-    fallbackCode: "ai_studio_accounts_request_failed",
-    fallbackMessage: "AI Studio accounts request failed."
+  return vibe64Result(operation, {
+    fallbackCode: "vibe64_accounts_request_failed",
+    fallbackMessage: "Vibe64 accounts request failed."
   });
 }
 
@@ -77,6 +80,20 @@ function normalizedAuthMode(accountId, mode = "") {
 }
 
 function ghLoginCommandArgs() {
+  return [
+    "bash",
+    "-lc",
+    [
+      "set -e",
+      "if ! gh auth status --hostname github.com >/dev/null 2>&1; then",
+      `  ${ghLoginCommandOnlyArgs().map(shellQuote).join(" ")}`,
+      "fi",
+      "gh auth setup-git --hostname github.com --force"
+    ].join("\n")
+  ];
+}
+
+function ghLoginCommandOnlyArgs() {
   return [
     "gh",
     "auth",
@@ -148,9 +165,10 @@ function parseAuthOutput({
   output
 } = {}) {
   if (accountId === "github") {
+    const userCode = parseGithubUserCode(output);
     return {
-      authUrl: firstMatchingUrl(output, (url) => url.includes("github.com/")),
-      userCode: parseGithubUserCode(output)
+      authUrl: firstMatchingUrl(output, (url) => url.includes("github.com/")) || (userCode ? GITHUB_DEVICE_AUTH_URL : ""),
+      userCode
     };
   }
 
@@ -216,22 +234,28 @@ async function runDefaultToolchain(commandArgs, options = {}) {
 async function readGithubStatus({
   runToolchain = runDefaultToolchain
 } = {}) {
-  const [statusResult, userResult] = await Promise.all([
+  const [statusResult, userResult, gitCredentialResult] = await Promise.all([
     runToolchain(["gh", "auth", "status", "--hostname", "github.com"]),
-    runToolchain(["gh", "api", "user", "--jq", ".login"])
+    runToolchain(["gh", "api", "user", "--jq", ".login"]),
+    runToolchain(["git", "config", "--global", "--get-urlmatch", "credential.helper", "https://github.com"])
   ]);
   const output = [statusResult.output, userResult.output].filter(Boolean).join("\n");
   const missingScopes = REQUIRED_GITHUB_SCOPES.filter((scope) => !output.includes(scope));
+  const credentialHelperOutput = [gitCredentialResult.stdout, gitCredentialResult.output].filter(Boolean).join("\n");
+  const missingGitCredentialHelper = !credentialHelperOutput.includes(GITHUB_GIT_CREDENTIAL_HELPER);
 
-  if (!statusResult.ok || !userResult.ok || !userResult.stdout || missingScopes.length > 0) {
+  if (!statusResult.ok || !userResult.ok || !userResult.stdout || missingScopes.length > 0 || missingGitCredentialHelper) {
     const scopeMessage = missingScopes.length
       ? ` Missing scopes: ${missingScopes.join(", ")}.`
+      : "";
+    const gitCredentialMessage = missingGitCredentialHelper
+      ? " Git credential helper is not configured."
       : "";
     return accountDisconnected({
       id: "github",
       label: "GitHub",
-      message: `GitHub CLI is not authenticated for Studio.${scopeMessage}`,
-      observed: output
+      message: `GitHub CLI is not authenticated for Studio.${scopeMessage}${gitCredentialMessage}`,
+      observed: [output, credentialHelperOutput].filter(Boolean).join("\n")
     });
   }
 
@@ -286,6 +310,19 @@ function authError(code, message, extra = {}) {
   };
 }
 
+function authTerminalMetadata(accountId, mode) {
+  return {
+    accountId,
+    mode
+  };
+}
+
+function canReuseAuthTerminal(accountId, mode) {
+  return (session = {}) => {
+    return session.metadata?.accountId === accountId && session.metadata?.mode === mode;
+  };
+}
+
 function authSessionStatus({
   account = null,
   terminal = null
@@ -328,7 +365,7 @@ function createService({
   runToolchain = runDefaultToolchain,
   targetRoot = ""
 } = {}) {
-  const resolvedTargetRoot = resolveAiStudioAccountsRoot(targetRoot);
+  const resolvedTargetRoot = resolveVibe64AccountsRoot(targetRoot);
   const authSessions = new Map();
   const readyStatusCache = createRepositoryReadyStatusCache({
     doctorId: "accounts",
@@ -439,18 +476,22 @@ function createService({
       commandPreview: dockerCommand(args),
       cwd: resolvedTargetRoot,
       maxRunning: 1,
-      namespace: ACCOUNT_AUTH_NAMESPACE
+      metadata: authTerminalMetadata(accountId, mode),
+      namespace: ACCOUNT_AUTH_NAMESPACE,
+      reuseRunning: canReuseAuthTerminal(accountId, mode)
     });
     if (terminal.ok === false) {
       return terminal;
     }
 
-    authSessions.set(terminal.id, {
-      accountId,
-      enterSent: false,
-      mode,
-      startedAt: new Date().toISOString()
-    });
+    if (!authSessions.has(terminal.id)) {
+      authSessions.set(terminal.id, {
+        accountId,
+        enterSent: false,
+        mode,
+        startedAt: new Date().toISOString()
+      });
+    }
     return terminal;
   }
 
@@ -530,8 +571,13 @@ function createService({
 
 export {
   ACCOUNT_AUTH_NAMESPACE,
+  canReuseAuthTerminal,
+  GITHUB_DEVICE_AUTH_URL,
+  GITHUB_GIT_CREDENTIAL_HELPER,
+  parseAuthOutput,
   REQUIRED_GITHUB_SCOPES,
+  authTerminalMetadata,
   createService,
   ghLoginCommandArgs,
-  resolveAiStudioAccountsRoot
+  resolveVibe64AccountsRoot
 };

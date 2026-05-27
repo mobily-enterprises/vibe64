@@ -11,7 +11,7 @@ import {
 } from "./adapter.js";
 import {
   normalizeText
-} from "@local/ai-studio-core/server/core";
+} from "@local/vibe64-core/server/core";
 
 const DEFAULT_APP_ROUTER_MARKER_IDS = Object.freeze([
   "app_router",

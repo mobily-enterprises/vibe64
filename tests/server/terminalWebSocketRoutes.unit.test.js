@@ -3,10 +3,10 @@ import test from "node:test";
 
 import {
   LOCALHOST_CHECK_BYPASS_ENV
-} from "@local/ai-studio-core/server/localhostCheckBypass";
+} from "@local/vibe64-core/server/localhostCheckBypass";
 import {
   registerTerminalWebSocketRoute
-} from "@local/ai-studio-core/server/terminalWebSocketRoutes";
+} from "@local/vibe64-core/server/terminalWebSocketRoutes";
 
 function testSocket() {
   const handlers = {};

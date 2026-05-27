@@ -2,16 +2,16 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  AI_STUDIO_SESSION_STATUS,
-  AI_STUDIO_WORKFLOW_DEFINITION_IDS,
+  VIBE64_SESSION_STATUS,
+  VIBE64_WORKFLOW_DEFINITION_IDS,
   workflowDefinitionCreationOptions
-} from "@local/ai-studio-runtime/server";
+} from "@local/vibe64-runtime/server";
 import {
   createService
-} from "../../packages/ai-studio-sessions/src/server/service.js";
+} from "../../packages/vibe64-sessions/src/server/service.js";
 import {
   _testing as coreMaintenanceTesting
-} from "@local/ai-studio-runtime/server/workflowModules/coreMaintenance";
+} from "@local/vibe64-runtime/server/workflowModules/coreMaintenance";
 
 const maintenanceWorkflowDefinitionIds = coreMaintenanceTesting.workflowDefinitionIds;
 
@@ -40,7 +40,7 @@ test("session action closes terminals when the action archives the session", asy
           async runAction(sessionId) {
             return {
               sessionId,
-              status: AI_STUDIO_SESSION_STATUS.FINISHED
+              status: VIBE64_SESSION_STATUS.FINISHED
             };
           }
         };
@@ -56,7 +56,7 @@ test("session action closes terminals when the action archives the session", asy
 
   const session = await service.runSessionAction("session-1", "finish_session");
 
-  assert.equal(session.status, AI_STUDIO_SESSION_STATUS.FINISHED);
+  assert.equal(session.status, VIBE64_SESSION_STATUS.FINISHED);
   assert.deepEqual(closedSessionIds, ["session-1"]);
 });
 
@@ -69,7 +69,7 @@ test("session action keeps terminals when the session remains active", async () 
           async runAction(sessionId) {
             return {
               sessionId,
-              status: AI_STUDIO_SESSION_STATUS.ACTIVE
+              status: VIBE64_SESSION_STATUS.ACTIVE
             };
           }
         };
@@ -85,7 +85,7 @@ test("session action keeps terminals when the session remains active", async () 
 
   const session = await service.runSessionAction("session-1", "record_action");
 
-  assert.equal(session.status, AI_STUDIO_SESSION_STATUS.ACTIVE);
+  assert.equal(session.status, VIBE64_SESSION_STATUS.ACTIVE);
   assert.deepEqual(closedSessionIds, []);
 });
 
@@ -114,7 +114,7 @@ test("session prompt action injects the rendered Codex handoff from the server",
                 }
               },
               sessionId,
-              status: AI_STUDIO_SESSION_STATUS.ACTIVE
+              status: VIBE64_SESSION_STATUS.ACTIVE
             };
           }
         };
@@ -156,7 +156,7 @@ test("session prompt action injects the rendered Codex handoff from the server",
     conversationRequest: "Explain this codebase."
   });
 
-  assert.equal(session.status, AI_STUDIO_SESSION_STATUS.ACTIVE);
+  assert.equal(session.status, VIBE64_SESSION_STATUS.ACTIVE);
   assert.equal(session.codexPromptDelivery.codexPromptInjected, true);
   assert.deepEqual(session.codexTerminal, {
     commandPreview: "codex",
@@ -206,7 +206,7 @@ test("session prompt intent injects the rendered Codex handoff from the server",
                 status: "prompt_ready"
               },
               sessionId,
-              status: AI_STUDIO_SESSION_STATUS.ACTIVE
+              status: VIBE64_SESSION_STATUS.ACTIVE
             };
           }
         };
@@ -240,7 +240,7 @@ test("session prompt intent injects the rendered Codex handoff from the server",
     stepStatus: "waiting_for_input"
   });
 
-  assert.equal(session.status, AI_STUDIO_SESSION_STATUS.ACTIVE);
+  assert.equal(session.status, VIBE64_SESSION_STATUS.ACTIVE);
   assert.equal(session.codexPromptDelivery.terminalSessionId, "codex-terminal-2");
   assert.deepEqual(deliveries, [
     {
@@ -266,7 +266,7 @@ test("session service records conversation prompts from the action result contra
             return {
               revision: conversationLog.length + 1,
               sessionId,
-              status: AI_STUDIO_SESSION_STATUS.ACTIVE
+              status: VIBE64_SESSION_STATUS.ACTIVE
             };
           },
           async runIntent(sessionId, intentId, input) {
@@ -279,7 +279,7 @@ test("session service records conversation prompts from the action result contra
                 status: "prompt_ready"
               },
               sessionId,
-              status: AI_STUDIO_SESSION_STATUS.ACTIVE
+              status: VIBE64_SESSION_STATUS.ACTIVE
             };
           },
           store: {
@@ -344,7 +344,7 @@ test("session prompt action fails visibly when server-side Codex delivery fails"
                 status: "prompt_ready"
               },
               sessionId,
-              status: AI_STUDIO_SESSION_STATUS.ACTIVE
+              status: VIBE64_SESSION_STATUS.ACTIVE
             };
           }
         };
@@ -380,7 +380,7 @@ test("session presentation keeps the Codex preview while a transmitting terminal
                 }
               },
               sessionId,
-              status: AI_STUDIO_SESSION_STATUS.ACTIVE
+              status: VIBE64_SESSION_STATUS.ACTIVE
             };
           }
         };
@@ -428,7 +428,7 @@ test("session inspect reads existing Codex terminal state without preparing it",
           async getSession(sessionId) {
             return {
               metadata: {
-                worktree_path: "/workspace/project/.ai-studio/sessions/active/session-1/worktree"
+                worktree_path: "/workspace/project/.vibe64/sessions/active/session-1/worktree"
               },
               presentation: {
                 screen: {
@@ -436,7 +436,7 @@ test("session inspect reads existing Codex terminal state without preparing it",
                 }
               },
               sessionId,
-              status: AI_STUDIO_SESSION_STATUS.ACTIVE
+              status: VIBE64_SESSION_STATUS.ACTIVE
             };
           }
         };
@@ -484,7 +484,7 @@ test("session presentation hides the Codex preview when the terminal is not tran
                 }
               },
               sessionId,
-              status: AI_STUDIO_SESSION_STATUS.ACTIVE
+              status: VIBE64_SESSION_STATUS.ACTIVE
             };
           }
         };
@@ -525,7 +525,7 @@ test("session creation waits for an unsynced merged session", async () => {
         pr_merged: "yes"
       },
       sessionId: "session-merged",
-      status: AI_STUDIO_SESSION_STATUS.ACTIVE
+      status: VIBE64_SESSION_STATUS.ACTIVE
     }
   ];
   const service = createService({
@@ -590,13 +590,13 @@ test("session list exposes selectable workflow definitions after seeding", async
   assert.deepEqual(
     result.creation.workflowDefinitions.map((definition) => definition.id),
     [
-      AI_STUDIO_WORKFLOW_DEFINITION_IDS.BIG_FEATURE,
-      AI_STUDIO_WORKFLOW_DEFINITION_IDS.GENERAL_CODING,
+      VIBE64_WORKFLOW_DEFINITION_IDS.BIG_FEATURE,
+      VIBE64_WORKFLOW_DEFINITION_IDS.GENERAL_CODING,
       maintenanceWorkflowDefinitionIds.NON_CODE_MAINTENANCE,
       maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
     ]
   );
-  assert.equal(result.creation.workflowDefinitions.some((definition) => definition.id === AI_STUDIO_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION), false);
+  assert.equal(result.creation.workflowDefinitions.some((definition) => definition.id === VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION), false);
   assert.equal(result.limits.maxOpenSessions, 5);
 });
 
@@ -614,7 +614,7 @@ test("session list asks the runtime for open sessions by default", async () => {
               {
                 currentStep: "worktree_created",
                 sessionId: "open-session",
-                status: AI_STUDIO_SESSION_STATUS.ACTIVE,
+                status: VIBE64_SESSION_STATUS.ACTIVE,
                 updatedAt: "2026-05-25T00:00:00.000Z"
               }
             ];
@@ -680,14 +680,14 @@ test("archived session list asks for archived sessions and computes creation lim
                 {
                   completedStepCount: 3,
                   sessionId: "abandoned-session",
-                  status: AI_STUDIO_SESSION_STATUS.ABANDONED
+                  status: VIBE64_SESSION_STATUS.ABANDONED
                 }
               ];
             }
             return [
               {
                 sessionId: "open-session",
-                status: AI_STUDIO_SESSION_STATUS.ACTIVE
+                status: VIBE64_SESSION_STATUS.ACTIVE
               }
             ];
           },
@@ -713,7 +713,7 @@ test("archived session list asks for archived sessions and computes creation lim
   assert.deepEqual(listCalls, [
     {
       statusGroup: "closed",
-      statuses: [AI_STUDIO_SESSION_STATUS.ABANDONED]
+      statuses: [VIBE64_SESSION_STATUS.ABANDONED]
     },
     {
       statusGroup: "open"
@@ -732,7 +732,7 @@ test("session list limits unseeded targets to one open seed session", async () =
             return [
               {
                 sessionId: "seed-session",
-                status: AI_STUDIO_SESSION_STATUS.ACTIVE
+                status: VIBE64_SESSION_STATUS.ACTIVE
               }
             ];
           },
@@ -752,7 +752,7 @@ test("session list limits unseeded targets to one open seed session", async () =
   assert.equal(result.ok, true);
   assert.equal(result.creation.mode, "seed_required");
   assert.equal(result.creation.canCreate, false);
-  assert.equal(result.creation.defaultWorkflowDefinition, AI_STUDIO_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION);
+  assert.equal(result.creation.defaultWorkflowDefinition, VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION);
   assert.deepEqual(result.creation.workflowDefinitions, []);
   assert.equal(result.limits.maxOpenSessions, 1);
   assert.equal(result.limits.openSessionCount, 1);
@@ -793,7 +793,7 @@ test("session creation blocks non-seed definitions while seeding is required", a
   });
 
   const result = await service.createSession({
-    workflowDefinition: AI_STUDIO_WORKFLOW_DEFINITION_IDS.BIG_FEATURE
+    workflowDefinition: VIBE64_WORKFLOW_DEFINITION_IDS.BIG_FEATURE
   });
 
   assert.equal(result.ok, false);
@@ -869,7 +869,7 @@ test("session creation blocks a second open seed session", async () => {
             return [
               {
                 sessionId: "seed-session",
-                status: AI_STUDIO_SESSION_STATUS.ACTIVE
+                status: VIBE64_SESSION_STATUS.ACTIVE
               }
             ];
           },

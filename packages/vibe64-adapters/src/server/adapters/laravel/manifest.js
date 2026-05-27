@@ -1,8 +1,8 @@
 import {
   deepFreeze
-} from "@local/ai-studio-core/server/deepFreeze";
+} from "@local/vibe64-core/server/deepFreeze";
 import {
-  AI_STUDIO_APPLICATION_TYPE_WEB
+  VIBE64_APPLICATION_TYPE_WEB
 } from "../../applicationTypes.js";
 import {
   createLaravelTargetAdapter
@@ -12,7 +12,7 @@ const LARAVEL_ADAPTER_MANIFEST = deepFreeze({
   applicationTypes: [
     {
       explanation: "Full-stack PHP web applications and API-backed products using Laravel conventions, Composer, Artisan, Eloquent, and Vite.",
-      id: AI_STUDIO_APPLICATION_TYPE_WEB,
+      id: VIBE64_APPLICATION_TYPE_WEB,
       priority: 70
     }
   ],

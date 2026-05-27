@@ -1,7 +1,7 @@
-const AI_STUDIO_SESSION_CHANGED_EVENT = "ai-studio.session.changed";
-const AI_STUDIO_SESSION_EVENT_ENTITY = "session";
-const AI_STUDIO_SESSION_EVENT_SOURCE = "ai-studio";
-const AI_STUDIO_SESSION_REALTIME_AUDIENCE = "all_clients";
+const VIBE64_SESSION_CHANGED_EVENT = "vibe64.session.changed";
+const VIBE64_SESSION_EVENT_ENTITY = "session";
+const VIBE64_SESSION_EVENT_SOURCE = "vibe64";
+const VIBE64_SESSION_REALTIME_AUDIENCE = "all_clients";
 
 function normalizeSessionId(value = "") {
   return String(value || "").trim();
@@ -47,7 +47,7 @@ function sessionIdFromServiceEvent({ result = {}, args = [] } = {}) {
   return sessionIdFromResult(result) || normalizeSessionId(args?.[0]);
 }
 
-function aiStudioSessionRealtimePayload({ result = {}, args = [] } = {}) {
+function vibe64SessionRealtimePayload({ result = {}, args = [] } = {}) {
   const sessionId = sessionIdFromResult(result) || normalizeSessionId(args?.[0]);
   return sessionId
     ? {
@@ -57,24 +57,24 @@ function aiStudioSessionRealtimePayload({ result = {}, args = [] } = {}) {
     : {};
 }
 
-function aiStudioSessionChangedServiceEvent({
+function vibe64SessionChangedServiceEvent({
   operation = "updated"
 } = {}) {
   return Object.freeze({
     type: "entity.changed",
-    source: AI_STUDIO_SESSION_EVENT_SOURCE,
-    entity: AI_STUDIO_SESSION_EVENT_ENTITY,
+    source: VIBE64_SESSION_EVENT_SOURCE,
+    entity: VIBE64_SESSION_EVENT_ENTITY,
     operation,
     entityId: sessionIdFromServiceEvent,
     realtime: Object.freeze({
-      event: AI_STUDIO_SESSION_CHANGED_EVENT,
-      audience: AI_STUDIO_SESSION_REALTIME_AUDIENCE,
-      payload: aiStudioSessionRealtimePayload
+      event: VIBE64_SESSION_CHANGED_EVENT,
+      audience: VIBE64_SESSION_REALTIME_AUDIENCE,
+      payload: vibe64SessionRealtimePayload
     })
   });
 }
 
-function createAiStudioSessionChangedPublisher({
+function createVibe64SessionChangedPublisher({
   domainEvents = null,
   methodName = "",
   serviceToken = ""
@@ -87,7 +87,7 @@ function createAiStudioSessionChangedPublisher({
     };
   }
 
-  return async function publishAiStudioSessionChanged(sessionId = "", {
+  return async function publishVibe64SessionChanged(sessionId = "", {
     operation = "updated",
     reason = "",
     session = null
@@ -97,7 +97,7 @@ function createAiStudioSessionChangedPublisher({
       return null;
     }
     const realtimePayload = {
-      ...aiStudioSessionRealtimePayload({
+      ...vibe64SessionRealtimePayload({
         args: [normalizedSessionId],
         result: session || {
           sessionId: normalizedSessionId
@@ -107,8 +107,8 @@ function createAiStudioSessionChangedPublisher({
     };
 
     return domainEvents.publish({
-      source: AI_STUDIO_SESSION_EVENT_SOURCE,
-      entity: AI_STUDIO_SESSION_EVENT_ENTITY,
+      source: VIBE64_SESSION_EVENT_SOURCE,
+      entity: VIBE64_SESSION_EVENT_ENTITY,
       operation: normalizeSessionId(operation) || "updated",
       entityId: normalizedSessionId,
       scope: {
@@ -122,7 +122,7 @@ function createAiStudioSessionChangedPublisher({
           method: normalizedMethodName
         },
         realtime: {
-          event: AI_STUDIO_SESSION_CHANGED_EVENT,
+          event: VIBE64_SESSION_CHANGED_EVENT,
           payload: realtimePayload
         }
       }
@@ -131,7 +131,7 @@ function createAiStudioSessionChangedPublisher({
 }
 
 export {
-  AI_STUDIO_SESSION_CHANGED_EVENT,
-  aiStudioSessionChangedServiceEvent,
-  createAiStudioSessionChangedPublisher
+  VIBE64_SESSION_CHANGED_EVENT,
+  vibe64SessionChangedServiceEvent,
+  createVibe64SessionChangedPublisher
 };

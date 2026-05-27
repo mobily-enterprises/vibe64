@@ -5,11 +5,11 @@ import {
   projectTypeReadInputValidator
 } from "./inputSchemas.js";
 
-const ACTION_READ_PROJECT_TYPE = "feature.ai-studio-project.project-type.read";
-const ACTION_SAVE_PROJECT_TYPE = "feature.ai-studio-project.project-type.save";
-const ACTION_READ_PROJECT_CONFIG = "feature.ai-studio-project.config.read";
-const ACTION_READ_PROJECT_CONFIG_DEFAULTS = "feature.ai-studio-project.config.defaults.read";
-const ACTION_SAVE_PROJECT_CONFIG = "feature.ai-studio-project.config.save";
+const ACTION_READ_PROJECT_TYPE = "feature.vibe64-project.project-type.read";
+const ACTION_SAVE_PROJECT_TYPE = "feature.vibe64-project.project-type.save";
+const ACTION_READ_PROJECT_CONFIG = "feature.vibe64-project.config.read";
+const ACTION_READ_PROJECT_CONFIG_DEFAULTS = "feature.vibe64-project.config.defaults.read";
+const ACTION_SAVE_PROJECT_CONFIG = "feature.vibe64-project.config.save";
 
 const featureActions = Object.freeze([
   {

@@ -1,12 +1,12 @@
 import {
-  aiStudioError,
+  vibe64Error,
   normalizeText
-} from "@local/ai-studio-core/server/core";
+} from "@local/vibe64-core/server/core";
 import {
   questionPromptInstructionBullets
-} from "@local/ai-studio-adapters/server/promptQuestionPolicy";
+} from "@local/vibe64-adapters/server/promptQuestionPolicy";
 import {
-  aiStudioSessionDebugLog
+  vibe64SessionDebugLog
 } from "./sessionDebugLog.js";
 import {
   HUMAN_INPUT_RESPONSE_ARTIFACT
@@ -57,7 +57,7 @@ async function writeState(context = {}, machine = {}, state = {}) {
     schemaVersion: STEP_STATE_SCHEMA_VERSION,
     ...state
   });
-  aiStudioSessionDebugLog("server.stepMachine.writeState", {
+  vibe64SessionDebugLog("server.stepMachine.writeState", {
     sessionId: String(context.session?.sessionId || ""),
     status: String(record.status || ""),
     stepId: String(machine.stepId || "")
@@ -144,15 +144,15 @@ function normalizeMachineInput(input = {}) {
 function requireInputValue(value = "", message = "") {
   const normalizedValue = normalizeText(value);
   if (!normalizedValue) {
-    throw aiStudioError(message, "ai_studio_step_input_required");
+    throw vibe64Error(message, "vibe64_step_input_required");
   }
   return normalizedValue;
 }
 
 function unsupportedInputKind(kind = "", stepId = "") {
-  return aiStudioError(
-    `AI Studio step ${stepId || "(unknown)"} cannot handle input kind: ${kind || "(empty)"}`,
-    "ai_studio_step_input_kind_not_available"
+  return vibe64Error(
+    `Vibe64 step ${stepId || "(unknown)"} cannot handle input kind: ${kind || "(empty)"}`,
+    "vibe64_step_input_kind_not_available"
   );
 }
 
@@ -165,9 +165,9 @@ function stateChangedError(session = {}, input = {}) {
     session.currentStep || "(no current step)",
     session.stepMachine?.status || "(no machine status)"
   ].join(":");
-  return aiStudioError(
+  return vibe64Error(
     `Reload state. This input was prepared for ${expected}, but the current workflow state is ${actual}.`,
-    "ai_studio_step_input_state_changed"
+    "vibe64_step_input_state_changed"
   );
 }
 
@@ -180,9 +180,9 @@ function assertAgentResultSource(session = {}, input = {}) {
     return;
   }
 
-  throw aiStudioError(
+  throw vibe64Error(
     `Reload state. The current workflow state is ${session.currentStep || "(no current step)"}:${session.stepMachine?.status || "(no machine status)"}, and it is waiting for Codex to submit the next result.`,
-    "ai_studio_step_input_state_changed"
+    "vibe64_step_input_state_changed"
   );
 }
 
@@ -286,8 +286,8 @@ function currentStepHelperInstruction({
   stepStatus = "{{session.stepMachine.status}}"
 } = {}) {
   return [
-    "AI Studio step completion contract:",
-    "- Do not write AI Studio workflow artifacts directly for this step.",
+    "Vibe64 step completion contract:",
+    "- Do not write Vibe64 workflow artifacts directly for this step.",
     "- When this step is complete, call the current-step input helper with this JSON:",
     promptActionDoneInstruction({
       fields: doneFields,
@@ -395,7 +395,7 @@ function createChatWithAiMachine({
   const normalizedPromptActionId = normalizeText(promptActionId);
   const normalizedStepId = normalizeText(stepId);
   if (!normalizedPromptActionId || !normalizedStepId) {
-    throw aiStudioError("Chat-with-AI step machines require a step id and prompt action id.", "ai_studio_invalid_step_machine");
+    throw vibe64Error("Chat-with-AI step machines require a step id and prompt action id.", "vibe64_invalid_step_machine");
   }
 
   return {
@@ -495,13 +495,13 @@ function createEditableArtifactReviewMachine({
     typeof readValues !== "function" ||
     typeof saveValues !== "function"
   ) {
-    throw aiStudioError("Editable artifact review machines require a step id, interaction, and draft artifact handlers.", "ai_studio_invalid_step_machine");
+    throw vibe64Error("Editable artifact review machines require a step id, interaction, and draft artifact handlers.", "vibe64_invalid_step_machine");
   }
   if (
     command &&
     (!commandActionId || (typeof command.succeeded !== "function" && !commandDoneMetadata) || typeof command.failureState !== "function")
   ) {
-    throw aiStudioError("Editable artifact review command config requires an action id, success detector, and failure state.", "ai_studio_invalid_step_machine");
+    throw vibe64Error("Editable artifact review command config requires an action id, success detector, and failure state.", "vibe64_invalid_step_machine");
   }
   const initialDraftStatus = normalizeText(draftOrigin) === "prompt"
     ? STEP_STATUS.AWAITING_AGENT_RESULT
@@ -652,7 +652,7 @@ function createEditableArtifactReviewMachine({
         case STEP_STATUS.DONE:
         case STEP_STATUS.ATTEMPTING_EXECUTION:
         default:
-          throw aiStudioError(unsupportedDoneMessage, "ai_studio_step_input_not_available");
+          throw vibe64Error(unsupportedDoneMessage, "vibe64_step_input_not_available");
       }
     },
 
@@ -708,7 +708,7 @@ async function handleStandardPromptInput(context = {}, machine = {}, {
     case STEP_STATUS.FAILED:
       break;
     default:
-      throw aiStudioError("This step is already complete.", "ai_studio_step_input_not_available");
+      throw vibe64Error("This step is already complete.", "vibe64_step_input_not_available");
   }
 
   switch (state.status) {
@@ -738,7 +738,7 @@ async function handleStandardPromptInput(context = {}, machine = {}, {
 
     case STEP_STATUS.DONE:
     default:
-      throw aiStudioError("This step is already complete.", "ai_studio_step_input_not_available");
+      throw vibe64Error("This step is already complete.", "vibe64_step_input_not_available");
   }
 }
 
@@ -799,7 +799,7 @@ async function submitCommandFailureInput(context = {}, machine = {}) {
     case STEP_STATUS.ATTEMPTING_EXECUTION:
     case STEP_STATUS.DONE:
     default:
-      throw aiStudioError("This command step cannot accept input right now.", "ai_studio_step_input_not_available");
+      throw vibe64Error("This command step cannot accept input right now.", "vibe64_step_input_not_available");
   }
 }
 

@@ -18,7 +18,7 @@ function targetScriptTerminalWebSocketUrl(terminalSessionId) {
 }
 
 function targetScriptsQueryKey(surfaceId, ownershipFilter) {
-  return ["ai-studio", surfaceId, ownershipFilter, "target-scripts"];
+  return ["vibe64", surfaceId, ownershipFilter, "target-scripts"];
 }
 
 export {

@@ -3,7 +3,7 @@ import {
   defaultConfigFromFields,
   selectedConfigValue
 } from "../../configValues.js";
-import { deepFreeze } from "@local/ai-studio-core/server/deepFreeze";
+import { deepFreeze } from "@local/vibe64-core/server/deepFreeze";
 import {
   CPP_BUILD_SYSTEM_CONFIG,
   CPP_BUILD_TYPE_CONFIG,

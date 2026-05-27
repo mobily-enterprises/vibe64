@@ -5,7 +5,7 @@ import {
   blockedDoctorCheck as blockedCheck,
   createDoctorRepair,
   passDoctorCheck as passCheck
-} from "@local/ai-studio-core/server/doctorCheckItems";
+} from "@local/vibe64-core/server/doctorCheckItems";
 import {
   dockerCommand,
   runHostCommand,
@@ -18,15 +18,15 @@ import {
 } from "./studioRuntimeIdentity.js";
 import {
   normalizeText
-} from "@local/ai-studio-core/server/core";
+} from "@local/vibe64-core/server/core";
 import {
   managedDatabasePromptServiceFacts
 } from "./managedDatabases.js";
 import {
   normalizePlainObject
-} from "@local/ai-studio-core/server/serverResponses";
+} from "@local/vibe64-core/server/serverResponses";
 
-const AI_STUDIO_RUNTIME_HOST_ALIAS = "ai-studio-host";
+const VIBE64_RUNTIME_HOST_ALIAS = "vibe64-host";
 const RUNTIME_CONTAINER_KIND = "runtime-container";
 const RUNTIME_CONTAINER_KIND_LABEL = studioDockerLabel("kind", RUNTIME_CONTAINER_KIND);
 const RUNTIME_NETWORK_KIND = "runtime-network";
@@ -44,7 +44,7 @@ function dockerNamePart(value = "runtime") {
 }
 
 function runtimeNetworkName(targetRoot = "") {
-  return `ai-studio-runtime-${stableHash(path.resolve(targetRoot || process.cwd()))}`;
+  return `vibe64-runtime-${stableHash(path.resolve(targetRoot || process.cwd()))}`;
 }
 
 function runtimeNetworkTargetHash(targetRoot = "") {
@@ -70,7 +70,7 @@ function runtimeContainerName({
   containerId = "runtime",
   targetRoot = ""
 } = {}) {
-  const prefix = `ai-studio-${dockerNamePart(adapterId)}-${dockerNamePart(containerId)}`;
+  const prefix = `vibe64-${dockerNamePart(adapterId)}-${dockerNamePart(containerId)}`;
   return `${prefix.slice(0, 48)}-${stableHash(path.resolve(targetRoot || process.cwd()))}`;
 }
 
@@ -81,7 +81,7 @@ function runtimeVolumeName({
   volumeId = "data"
 } = {}) {
   return [
-    "ai_studio",
+    "vibe64",
     dockerNamePart(adapterId).replaceAll("-", "_"),
     dockerNamePart(containerId).replaceAll("-", "_"),
     dockerNamePart(volumeId).replaceAll("-", "_"),
@@ -576,7 +576,7 @@ function waitForRuntimeContainerLines(spec) {
     "    runtime_ready=1",
     "    break",
     "  fi",
-    `  sleep "\${AI_STUDIO_RUNTIME_CONTAINER_WAIT_SECONDS:-${sleepSeconds}}"`,
+    `  sleep "\${VIBE64_RUNTIME_CONTAINER_WAIT_SECONDS:-${sleepSeconds}}"`,
     "done",
     "if [ \"$runtime_ready\" != \"1\" ]; then",
     `echo ${shellQuote(`${spec.label} did not become ready in time.`)} >&2`,
@@ -797,7 +797,7 @@ function createRuntimeContainerCheck(toolkit, descriptor = {}, {
           `Network: ${runtimeNetworkName(spec.targetRoot)}`,
           `Aliases: ${spec.aliases.join(", ")}`
         ].filter(Boolean).join("\n"),
-        explanation: descriptor.readyExplanation || "AI Studio can attach setup, script, and launch-target containers to this runtime container network."
+        explanation: descriptor.readyExplanation || "Vibe64 can attach setup, script, and launch-target containers to this runtime container network."
       });
     }
   };
@@ -843,7 +843,7 @@ function runtimeContainerNetworkDockerArgs(targetRoot = "", {
     runtimeNetworkName(targetRoot),
     ...(includeHostAlias ? [
       "--add-host",
-      `${AI_STUDIO_RUNTIME_HOST_ALIAS}:host-gateway`
+      `${VIBE64_RUNTIME_HOST_ALIAS}:host-gateway`
     ] : [])
   ];
 }
@@ -880,11 +880,11 @@ async function ensureTargetRuntimeNetwork(targetRoot = "", {
     return networkName;
   }
 
-  throw new Error(`Could not prepare AI Studio runtime network ${networkName}: ${create.output || inspect.output}`);
+  throw new Error(`Could not prepare Vibe64 runtime network ${networkName}: ${create.output || inspect.output}`);
 }
 
 export {
-  AI_STUDIO_RUNTIME_HOST_ALIAS,
+  VIBE64_RUNTIME_HOST_ALIAS,
   RUNTIME_CONTAINER_KIND,
   RUNTIME_CONTAINER_KIND_LABEL,
   RUNTIME_NETWORK_KIND,

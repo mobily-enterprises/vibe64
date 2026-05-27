@@ -2,8 +2,8 @@ import { watch } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import {
-  aiStudioResult
-} from "@local/ai-studio-core/server/serverResponses";
+  vibe64Result
+} from "@local/vibe64-core/server/serverResponses";
 
 const ARTIFACT_PREVIEWS = Object.freeze({
   ai_response: {
@@ -19,9 +19,9 @@ const ARTIFACT_PREVIEWS = Object.freeze({
 });
 
 function artifactResult(operation) {
-  return aiStudioResult(operation, {
-    fallbackCode: "ai_studio_artifact_request_failed",
-    fallbackMessage: "AI Studio artifact request failed."
+  return vibe64Result(operation, {
+    fallbackCode: "vibe64_artifact_request_failed",
+    fallbackMessage: "Vibe64 artifact request failed."
   });
 }
 
@@ -66,7 +66,7 @@ async function artifactPreviewResponse(runtime, session = {}, preview = {}) {
 
 function createService({ projectService } = {}) {
   if (!projectService) {
-    throw new TypeError("createService requires feature.ai-studio-project.service.");
+    throw new TypeError("createService requires feature.vibe64-project.service.");
   }
 
   return Object.freeze({
@@ -78,7 +78,7 @@ function createService({ projectService } = {}) {
         if (!preview) {
           return artifactErrorResponse(
             session,
-            "ai_studio_artifact_preview_not_available",
+            "vibe64_artifact_preview_not_available",
             `Artifact preview is not available: ${input.previewId || "(empty)"}`
           );
         }

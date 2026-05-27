@@ -1,5 +1,5 @@
 import {
-  createAiStudioWebLaunchTargetTerminalSpec
+  createVibe64WebLaunchTargetTerminalSpec
 } from "@local/studio-terminal-core/server/launchTargetTerminal";
 import {
   detectPackageManager,
@@ -129,7 +129,7 @@ function createGenericNodeWebLaunchTargetTerminalSpec({
     };
   }
   const launchTargetRoot = targetRoot || session.targetRoot || "";
-  return createAiStudioWebLaunchTargetTerminalSpec({
+  return createVibe64WebLaunchTargetTerminalSpec({
     adapterId: "node-web",
     launchTarget: context.launchTarget || launchTarget(launchTargetId, launchTargetId),
     resolveLaunch: ({ port, worktreePath }) => createGenericNodeWebLaunchDescriptor({

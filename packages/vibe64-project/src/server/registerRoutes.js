@@ -9,7 +9,7 @@ import {
   ACTION_SAVE_PROJECT_CONFIG,
   ACTION_SAVE_PROJECT_TYPE
 } from "./actions.js";
-import { createAiStudioFeatureRoutes } from "@local/ai-studio-core/server/featureRoutes";
+import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRoutes";
 
 function registerRoutes(
   app,
@@ -18,40 +18,40 @@ function registerRoutes(
     routeRelativePath = ""
   } = {}
 ) {
-  const routes = createAiStudioFeatureRoutes(app, {
-    localRequestMessage: "AI Studio project routes only accept loopback Studio requests.",
+  const routes = createVibe64FeatureRoutes(app, {
+    localRequestMessage: "Vibe64 project routes only accept loopback Studio requests.",
     routeRelativePath,
     routeSurface,
-    tags: ["studio", "ai-studio-project"]
+    tags: ["studio", "vibe64-project"]
   });
 
   routes.actionRoute("GET", "/project-type", {
     actionId: ACTION_READ_PROJECT_TYPE,
-    summary: "Read the AI Studio project type."
+    summary: "Read the Vibe64 project type."
   });
 
   routes.actionRoute("PUT", "/project-type", {
     actionId: ACTION_SAVE_PROJECT_TYPE,
     body: projectTypeInputValidator,
     buildInput: routes.requestBody,
-    summary: "Set the AI Studio project type."
+    summary: "Set the Vibe64 project type."
   });
 
   routes.actionRoute("GET", "/project-config", {
     actionId: ACTION_READ_PROJECT_CONFIG,
-    summary: "Read the AI Studio project configuration."
+    summary: "Read the Vibe64 project configuration."
   });
 
   routes.actionRoute("GET", "/project-config/defaults", {
     actionId: ACTION_READ_PROJECT_CONFIG_DEFAULTS,
-    summary: "Read default AI Studio project configuration values."
+    summary: "Read default Vibe64 project configuration values."
   });
 
   routes.actionRoute("PUT", "/project-config", {
     actionId: ACTION_SAVE_PROJECT_CONFIG,
     body: projectConfigInputValidator,
     buildInput: routes.requestBody,
-    summary: "Save the AI Studio project configuration."
+    summary: "Save the Vibe64 project configuration."
   });
 }
 

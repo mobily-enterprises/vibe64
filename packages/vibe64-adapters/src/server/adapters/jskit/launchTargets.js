@@ -3,7 +3,7 @@ import path from "node:path";
 import { loadAppConfigFromAppRoot } from "@jskit-ai/kernel/server/support";
 
 import {
-  createAiStudioWebLaunchTargetTerminalSpec,
+  createVibe64WebLaunchTargetTerminalSpec,
   tcpReadinessProbeCommand
 } from "@local/studio-terminal-core/server/launchTargetTerminal";
 import {
@@ -25,7 +25,7 @@ const DEFAULT_LAUNCH_PORT = 4100;
 const BUILT_LAUNCH_COMMAND_CONFIG = ".jskit/config/testrun_command";
 const BUILT_LAUNCH_PORT_CONFIG = ".jskit/config/server_port_for_user_review";
 const DEV_SERVER_COMMAND_CONFIG = "config/dev_server_command";
-const JSKIT_ALLOW_SELF_TARGET_CONFIG_PATH = `.ai-studio/config/${JSKIT_ALLOW_SELF_TARGET_CONFIG}`;
+const JSKIT_ALLOW_SELF_TARGET_CONFIG_PATH = `.vibe64/config/${JSKIT_ALLOW_SELF_TARGET_CONFIG}`;
 
 function enabledConfigValue(value) {
   const normalized = String(value || "").trim().toLowerCase();
@@ -156,24 +156,24 @@ function createJskitDevCommand({
 } = {}) {
   return [
     "set -e",
-    `export AI_STUDIO_JSKIT_BACKEND_PORT=${shellQuotedNumber(backendPort)}`,
-    "cleanup_ai_studio_jskit_dev() {",
-    "  kill \"$ai_studio_jskit_backend_pid\" \"$ai_studio_jskit_frontend_pid\" 2>/dev/null || true",
+    `export VIBE64_JSKIT_BACKEND_PORT=${shellQuotedNumber(backendPort)}`,
+    "cleanup_vibe64_jskit_dev() {",
+    "  kill \"$vibe64_jskit_backend_pid\" \"$vibe64_jskit_frontend_pid\" 2>/dev/null || true",
     "}",
-    "trap cleanup_ai_studio_jskit_dev EXIT INT TERM",
-    `(export PORT="$AI_STUDIO_JSKIT_BACKEND_PORT"; ${backendCommand}) &`,
-    "ai_studio_jskit_backend_pid=$!",
+    "trap cleanup_vibe64_jskit_dev EXIT INT TERM",
+    `(export PORT="$VIBE64_JSKIT_BACKEND_PORT"; ${backendCommand}) &`,
+    "vibe64_jskit_backend_pid=$!",
     tcpReadinessProbeCommand({
       marker: "[studio] JSKIT backend is ready.",
       port: backendPort
     }),
-    `(export VITE_API_PROXY_TARGET="http://127.0.0.1:$AI_STUDIO_JSKIT_BACKEND_PORT"; ${frontendCommand}) &`,
-    "ai_studio_jskit_frontend_pid=$!",
-    "while kill -0 \"$ai_studio_jskit_backend_pid\" 2>/dev/null && kill -0 \"$ai_studio_jskit_frontend_pid\" 2>/dev/null; do",
+    `(export VITE_API_PROXY_TARGET="http://127.0.0.1:$VIBE64_JSKIT_BACKEND_PORT"; ${frontendCommand}) &`,
+    "vibe64_jskit_frontend_pid=$!",
+    "while kill -0 \"$vibe64_jskit_backend_pid\" 2>/dev/null && kill -0 \"$vibe64_jskit_frontend_pid\" 2>/dev/null; do",
     "  sleep 1",
     "done",
-    "cleanup_ai_studio_jskit_dev",
-    "wait \"$ai_studio_jskit_backend_pid\" \"$ai_studio_jskit_frontend_pid\""
+    "cleanup_vibe64_jskit_dev",
+    "wait \"$vibe64_jskit_backend_pid\" \"$vibe64_jskit_frontend_pid\""
   ].join("\n");
 }
 
@@ -324,7 +324,7 @@ async function createJskitLaunchTargetTerminalSpec({
     ? createJskitDevLaunchDescriptor
     : createJskitBuiltLaunchDescriptor;
 
-  return createAiStudioWebLaunchTargetTerminalSpec({
+  return createVibe64WebLaunchTargetTerminalSpec({
     adapterId: "jskit",
     image: JSKIT_TOOLCHAIN_IMAGE,
     launchTarget,

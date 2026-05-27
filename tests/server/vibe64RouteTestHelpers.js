@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { LOCALHOST_CHECK_BYPASS_ENV } from "@local/ai-studio-core/server/localhostCheckBypass";
+import { LOCALHOST_CHECK_BYPASS_ENV } from "@local/vibe64-core/server/localhostCheckBypass";
 
 function testRouteApp() {
   const registeredRoutes = [];

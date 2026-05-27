@@ -1,9 +1,9 @@
 export default Object.freeze({
   packageVersion: 1,
-  packageId: "@local/ai-studio-core",
+  packageId: "@local/vibe64-core",
   version: "0.1.0",
   kind: "runtime",
-  description: "Shared AI Studio server primitives.",
+  description: "Shared Vibe64 server primitives.",
   dependsOn: [
     "@jskit-ai/kernel"
   ],
@@ -25,7 +25,7 @@ export default Object.freeze({
       surfaces: [
         {
           subpath: "./server/featureRoutes",
-          summary: "Shared route registration helpers for AI Studio feature packages."
+          summary: "Shared route registration helpers for Vibe64 feature packages."
         },
         {
           subpath: "./server/terminalWebSocketRoutes",
@@ -33,11 +33,11 @@ export default Object.freeze({
         },
         {
           subpath: "./server/serverResponses",
-          summary: "Shared AI Studio response normalization helpers."
+          summary: "Shared Vibe64 response normalization helpers."
         },
         {
           subpath: "./server/sessionRealtimeEvents",
-          summary: "Shared AI Studio session realtime event descriptors."
+          summary: "Shared Vibe64 session realtime event descriptors."
         }
       ]
     }

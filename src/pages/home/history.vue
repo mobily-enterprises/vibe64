@@ -7,7 +7,7 @@
         </p>
         <h1 class="studio-session-history__title">Session History</h1>
         <p class="text-body-2 text-medium-emphasis mb-0">
-          Review completed and abandoned AI Studio sessions without crowding the active session workspace.
+          Review completed and abandoned Vibe64 sessions without crowding the active session workspace.
         </p>
       </div>
     </header>
@@ -45,7 +45,7 @@
             </v-btn>
           </div>
 
-          <ArchivedAiStudioSessions
+          <ArchivedVibe64Sessions
             ref="archiveSessions"
             :key="selectedArchive"
             :archive="selectedArchiveConfig.archive"
@@ -64,7 +64,7 @@
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { mdiRefresh } from "@mdi/js";
-import ArchivedAiStudioSessions from "@/components/studio/ArchivedAiStudioSessions.vue";
+import ArchivedVibe64Sessions from "@/components/studio/ArchivedVibe64Sessions.vue";
 import ProjectTypeGate from "@/components/studio/ProjectTypeGate.vue";
 import SetupReadinessGate from "@/components/studio/SetupReadinessGate.vue";
 

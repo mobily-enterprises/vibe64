@@ -11,25 +11,25 @@ import {
   adapterTerminalToolchainSpec
 } from "./adapter.js";
 import {
-  aiStudioError,
+  vibe64Error,
   isMissingPathError,
   normalizeText,
   pathExists
-} from "@local/ai-studio-core/server/core";
+} from "@local/vibe64-core/server/core";
 import {
   deepFreeze
-} from "@local/ai-studio-core/server/deepFreeze";
+} from "@local/vibe64-core/server/deepFreeze";
 import {
   PromptRenderer
 } from "./promptRenderer.js";
 import {
-  createAiStudioWorkflowCommandTerminalSpec
+  createVibe64WorkflowCommandTerminalSpec
 } from "./workflowCommandTerminal.js";
 import {
-  runAiStudioWorkflowSessionAction
+  runVibe64WorkflowSessionAction
 } from "./workflowSessionActions.js";
 
-const AI_STUDIO_WORKFLOW_COMMANDS = deepFreeze([
+const VIBE64_WORKFLOW_COMMANDS = deepFreeze([
   {
     id: "commit_changes",
     label: "Commit and push changes"
@@ -72,7 +72,7 @@ const AI_STUDIO_WORKFLOW_COMMANDS = deepFreeze([
   }
 ]);
 
-const AI_STUDIO_WORKFLOW_SESSION_ACTION_CAPABILITIES = deepFreeze([
+const VIBE64_WORKFLOW_SESSION_ACTION_CAPABILITIES = deepFreeze([
   "use_existing_issue",
   "use_existing_pr"
 ]);
@@ -89,18 +89,18 @@ function normalizeLaunchTargets(targets = []) {
     .sort((left, right) => left.id.localeCompare(right.id));
 }
 
-function aiStudioWorkflowCapabilities({
+function vibe64WorkflowCapabilities({
   commands = [],
   extraCapabilities = []
 } = {}) {
   return {
     ...Object.fromEntries(normalizeWorkflowCommands(commands).map((command) => [command.id, true])),
-    ...Object.fromEntries(AI_STUDIO_WORKFLOW_SESSION_ACTION_CAPABILITIES.map((capability) => [capability, true])),
+    ...Object.fromEntries(VIBE64_WORKFLOW_SESSION_ACTION_CAPABILITIES.map((capability) => [capability, true])),
     ...Object.fromEntries(extraCapabilities.map(normalizeText).filter(Boolean).map((capability) => [capability, true]))
   };
 }
 
-class AiStudioWorkflowTargetAdapter extends TargetAdapter {
+class Vibe64WorkflowTargetAdapter extends TargetAdapter {
   constructor({
     commandTerminalSpecFactory = null,
     commands = [],
@@ -120,7 +120,7 @@ class AiStudioWorkflowTargetAdapter extends TargetAdapter {
   }
 
   workflowCapabilities(extra = {}) {
-    return aiStudioWorkflowCapabilities({
+    return vibe64WorkflowCapabilities({
       commands: this.commands,
       ...extra
     });
@@ -146,7 +146,7 @@ class AiStudioWorkflowTargetAdapter extends TargetAdapter {
         targetRoot: context.session?.targetRoot || context.targetRoot || ""
       });
     }
-    return createAiStudioWorkflowCommandTerminalSpec({
+    return createVibe64WorkflowCommandTerminalSpec({
       commandId,
       context,
       hooks: await this.getWorkflowCommandHooks(context),
@@ -160,7 +160,7 @@ class AiStudioWorkflowTargetAdapter extends TargetAdapter {
     input = {},
     session = {}
   } = {}) {
-    return runAiStudioWorkflowSessionAction(action.id, {
+    return runVibe64WorkflowSessionAction(action.id, {
       input,
       session,
       targetRoot: session.targetRoot || process.cwd()
@@ -169,7 +169,7 @@ class AiStudioWorkflowTargetAdapter extends TargetAdapter {
 
   async finishSession() {
     return adapterActionResult({
-      message: "Finished AI Studio session.",
+      message: "Finished Vibe64 session.",
       metadata: {
         session_finished: "yes"
       },
@@ -198,7 +198,7 @@ function createPromptRenderer({
 
 async function readOptionalProjectJson(filePath, {
   defaultValue = null,
-  invalidJsonCode = "ai_studio_invalid_project_json",
+  invalidJsonCode = "vibe64_invalid_project_json",
   invalidJsonMessage = (invalidPath) => `Invalid JSON in project file: ${invalidPath}`
 } = {}) {
   let text = "";
@@ -214,7 +214,7 @@ async function readOptionalProjectJson(filePath, {
   try {
     return JSON.parse(text);
   } catch {
-    throw aiStudioError(invalidJsonMessage(filePath), invalidJsonCode);
+    throw vibe64Error(invalidJsonMessage(filePath), invalidJsonCode);
   }
 }
 
@@ -235,7 +235,7 @@ async function inspectDescribedProject(targetRoot, {
   const resolvedTargetRoot = path.resolve(targetRoot || process.cwd());
   const packageJsonOptions = {
     defaultValue: null,
-    invalidJsonCode: "ai_studio_invalid_project_json",
+    invalidJsonCode: "vibe64_invalid_project_json",
     invalidJsonMessage: (filePath) => `Invalid JSON in project file: ${filePath}`,
     key: "packageJson",
     relativePath: "package.json",
@@ -262,7 +262,7 @@ async function inspectDescribedProject(targetRoot, {
   };
 }
 
-class AiStudioDescribedWorkflowTargetAdapter extends AiStudioWorkflowTargetAdapter {
+class Vibe64DescribedWorkflowTargetAdapter extends Vibe64WorkflowTargetAdapter {
   constructor({
     commandTerminalSpecFactory = null,
     commands = [],
@@ -452,12 +452,12 @@ class AiStudioDescribedWorkflowTargetAdapter extends AiStudioWorkflowTargetAdapt
 }
 
 export {
-  AI_STUDIO_WORKFLOW_COMMANDS,
-  AI_STUDIO_WORKFLOW_SESSION_ACTION_CAPABILITIES,
-  AiStudioDescribedWorkflowTargetAdapter,
-  AiStudioWorkflowTargetAdapter,
-  aiStudioWorkflowCapabilities,
-  createAiStudioWorkflowCommandTerminalSpec,
+  VIBE64_WORKFLOW_COMMANDS,
+  VIBE64_WORKFLOW_SESSION_ACTION_CAPABILITIES,
+  Vibe64DescribedWorkflowTargetAdapter,
+  Vibe64WorkflowTargetAdapter,
+  vibe64WorkflowCapabilities,
+  createVibe64WorkflowCommandTerminalSpec,
   inspectDescribedProject,
   normalizeWorkflowCommands
 };

@@ -4,7 +4,7 @@
 
 - [x] Server derives `session.presentation` from workflow/step-machine state and returns it with the session view.
 - [x] Server exposes current-screen `intents` beside current-step `actions`.
-- [x] Server handles intent dispatch through `POST /api/ai-studio/sessions/:sessionId/intents/:intentId`.
+- [x] Server handles intent dispatch through `POST /api/vibe64/sessions/:sessionId/intents/:intentId`.
 - [x] Intent dispatch validates current availability, enablement, and optional stale `stepId`/`stepStatus`.
 - [x] Review, final-review follow-up, merge, skip-merge, optional-check, conversation, continue, and archive choices are server-declared intents.
 - [x] Autopilot client control logic no longer imports or branches on workflow-specific step IDs or action IDs.
@@ -20,7 +20,7 @@
 
 ## Goal
 
-Make AI Studio workflow ownership unambiguous:
+Make Vibe64 workflow ownership unambiguous:
 
 - [x] Server owns workflow meaning.
 - [x] Server owns current step, available actions, available intents, next availability, prompts, and step-machine state.
@@ -170,7 +170,7 @@ presentation: {
 - [ ] Proposed endpoint:
 
 ```http
-POST /api/ai-studio/sessions/:sessionId/intents/:intentId
+POST /api/vibe64/sessions/:sessionId/intents/:intentId
 ```
 
 - [ ] Require the intent to exist in the current server session view.
@@ -379,7 +379,7 @@ prompt: {
 
 ## Client Component Refactor
 
-- [ ] Replace `useAiStudioAutopilotController` workflow branching with a generic presentation controller.
+- [ ] Replace `useVibe64AutopilotController` workflow branching with a generic presentation controller.
 - [ ] Replace `screenState` derivation with direct use of server `presentation.screen`.
 - [ ] Replace `readyForIssue`, `readyForMerge`, `readyForReview`, `readyForFinished`, and similar computed values with server presentation fields.
 - [ ] Replace hard-coded Autopilot buttons with a generic renderer for server-provided screen actions/intents.

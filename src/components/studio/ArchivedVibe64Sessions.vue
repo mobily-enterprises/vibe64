@@ -123,19 +123,19 @@ import {
   mdiSourceBranch
 } from "@mdi/js";
 import {
-  AI_STUDIO_SESSIONS_API_SUFFIX,
-  AI_STUDIO_SURFACE_ID,
-  aiStudioSessionsQueryKey
-} from "@/lib/aiStudioSessionRequestConfig.js";
+  VIBE64_SESSIONS_API_SUFFIX,
+  VIBE64_SURFACE_ID,
+  vibe64SessionsQueryKey
+} from "@/lib/vibe64SessionRequestConfig.js";
 import {
-  enrichAiStudioSessionForDisplay
-} from "@/lib/aiStudioSessionPanelModel.js";
+  enrichVibe64SessionForDisplay
+} from "@/lib/vibe64SessionPanelModel.js";
 import {
-  aiStudioSessionStatusColor,
-  aiStudioSessionStatusLabel,
+  vibe64SessionStatusColor,
+  vibe64SessionStatusLabel,
   parseGithubSessionLink,
-  shortAiStudioSessionId
-} from "@/lib/aiStudioSessionViewModel.js";
+  shortVibe64SessionId
+} from "@/lib/vibe64SessionViewModel.js";
 
 const props = defineProps({
   archive: {
@@ -168,23 +168,23 @@ const emit = defineEmits(["loading-changed"]);
 
 const sessionList = useList({
   access: "never",
-  apiSuffix: AI_STUDIO_SESSIONS_API_SUFFIX,
+  apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
   fallbackLoadError: "Archived sessions could not be loaded.",
   ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-  placementSource: "ai-studio.sessions.archive",
-  queryKeyFactory: aiStudioSessionsQueryKey,
+  placementSource: "vibe64.sessions.archive",
+  queryKeyFactory: vibe64SessionsQueryKey,
   requestQueryParams: computed(() => ({
     archive: props.archive
   })),
   selectItems: (payload) => Array.isArray(payload?.sessions) ? payload.sessions : [],
-  surfaceId: AI_STUDIO_SURFACE_ID
+  surfaceId: VIBE64_SURFACE_ID
 });
 
 const loading = computed(() => Boolean(sessionList.isLoading));
 const error = computed(() => String(sessionList.loadError || ""));
 const sessions = computed(() => {
   return (Array.isArray(sessionList.items) ? sessionList.items : [])
-    .map(enrichAiStudioSessionForDisplay)
+    .map(enrichVibe64SessionForDisplay)
     .filter(sessionIsInArchive);
 });
 
@@ -201,15 +201,15 @@ function completedStepCount(session = {}) {
 }
 
 function shortSessionId(sessionId) {
-  return shortAiStudioSessionId(sessionId);
+  return shortVibe64SessionId(sessionId);
 }
 
 function statusLabel(status) {
-  return aiStudioSessionStatusLabel(status);
+  return vibe64SessionStatusLabel(status);
 }
 
 function statusColor(status) {
-  return aiStudioSessionStatusColor(status);
+  return vibe64SessionStatusColor(status);
 }
 
 function githubLabel(url, fallback) {

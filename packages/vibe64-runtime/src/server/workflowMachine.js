@@ -1,16 +1,16 @@
 import {
-  AI_STUDIO_SESSION_STATUS
+  VIBE64_SESSION_STATUS
 } from "./sessionStore.js";
 import {
-  aiStudioError,
+  vibe64Error,
   isPlainObject,
   normalizeText,
   plainClone
-} from "@local/ai-studio-core/server/core";
-import { deepFreeze } from "@local/ai-studio-core/server/deepFreeze";
+} from "@local/vibe64-core/server/core";
+import { deepFreeze } from "@local/vibe64-core/server/deepFreeze";
 import {
-  AI_STUDIO_ACTION_DISPATCH_ROUTES as ACTION_DISPATCH_ROUTES
-} from "@local/ai-studio-core/shared";
+  VIBE64_ACTION_DISPATCH_ROUTES as ACTION_DISPATCH_ROUTES
+} from "@local/vibe64-core/shared";
 import {
   WORKFLOW_CONDITION_KINDS,
   when
@@ -39,16 +39,16 @@ function workflowConditionContext(context = "") {
 }
 
 function malformedWorkflowCondition(condition, context, reason) {
-  throw aiStudioError(
-    `Malformed AI Studio workflow condition${workflowConditionContext(context)}: ${workflowConditionSummary(condition)}. ${reason}`,
-    "ai_studio_workflow_malformed_condition"
+  throw vibe64Error(
+    `Malformed Vibe64 workflow condition${workflowConditionContext(context)}: ${workflowConditionSummary(condition)}. ${reason}`,
+    "vibe64_workflow_malformed_condition"
   );
 }
 
 function unknownWorkflowCondition(condition, context) {
-  throw aiStudioError(
-    `Unknown AI Studio workflow condition${workflowConditionContext(context)}: ${workflowConditionSummary(condition)}.`,
-    "ai_studio_workflow_unknown_condition"
+  throw vibe64Error(
+    `Unknown Vibe64 workflow condition${workflowConditionContext(context)}: ${workflowConditionSummary(condition)}.`,
+    "vibe64_workflow_unknown_condition"
   );
 }
 
@@ -214,9 +214,9 @@ function metadataCleanupApplies(entry = {}, session = {}) {
 function normalizeInputField(field = {}, actionId = "") {
   const name = normalizeText(field.name);
   if (!name) {
-    throw aiStudioError(
-      `AI Studio action ${actionId} has an input field without a name.`,
-      "ai_studio_workflow_input_field_name_missing"
+    throw vibe64Error(
+      `Vibe64 action ${actionId} has an input field without a name.`,
+      "vibe64_workflow_input_field_name_missing"
     );
   }
   const kind = normalizeText(field.kind || "text");
@@ -236,9 +236,9 @@ function normalizeInputFields(fields = [], actionId = "") {
   for (const field of Array.isArray(fields) ? fields : []) {
     const normalizedField = normalizeInputField(field, actionId);
     if (seenFieldNames.has(normalizedField.name)) {
-      throw aiStudioError(
-        `Duplicate AI Studio input field in action ${actionId}: ${normalizedField.name}`,
-        "ai_studio_duplicate_workflow_input_field"
+      throw vibe64Error(
+        `Duplicate Vibe64 input field in action ${actionId}: ${normalizedField.name}`,
+        "vibe64_duplicate_workflow_input_field"
       );
     }
     seenFieldNames.add(normalizedField.name);
@@ -250,7 +250,7 @@ function normalizeInputFields(fields = [], actionId = "") {
 function normalizeAction(action = {}, stepId = "") {
   const id = normalizeText(action.id);
   if (!id) {
-    throw aiStudioError(`AI Studio workflow step ${stepId} has an action without an id.`, "ai_studio_workflow_action_id_missing");
+    throw vibe64Error(`Vibe64 workflow step ${stepId} has an action without an id.`, "vibe64_workflow_action_id_missing");
   }
   const type = normalizeText(action.type || "command");
   return {
@@ -315,9 +315,9 @@ function normalizeAutopilot(autopilot = {}, stepId = "") {
 function normalizeInteractionField(field = {}) {
   const name = normalizeText(field.name);
   if (!name) {
-    throw aiStudioError(
-      "AI Studio step interaction field is missing a name.",
-      "ai_studio_workflow_interaction_field_name_missing"
+    throw vibe64Error(
+      "Vibe64 step interaction field is missing a name.",
+      "vibe64_workflow_interaction_field_name_missing"
     );
   }
   const kind = normalizeText(field.kind || "text");
@@ -359,9 +359,9 @@ function normalizeActions(actions = [], stepId = "") {
   for (const action of Array.isArray(actions) ? actions : []) {
     const normalizedAction = normalizeAction(action, stepId);
     if (seenActionIds.has(normalizedAction.id)) {
-      throw aiStudioError(
-        `Duplicate AI Studio workflow action id in step ${stepId}: ${normalizedAction.id}`,
-        "ai_studio_duplicate_workflow_action"
+      throw vibe64Error(
+        `Duplicate Vibe64 workflow action id in step ${stepId}: ${normalizedAction.id}`,
+        "vibe64_duplicate_workflow_action"
       );
     }
     seenActionIds.add(normalizedAction.id);
@@ -373,10 +373,10 @@ function normalizeActions(actions = [], stepId = "") {
 function normalizeStep(step = {}, index = 0, seenStepIds = new Set()) {
   const id = normalizeText(step.id);
   if (!id) {
-    throw aiStudioError(`AI Studio workflow step ${index + 1} is missing an id.`, "ai_studio_workflow_step_id_missing");
+    throw vibe64Error(`Vibe64 workflow step ${index + 1} is missing an id.`, "vibe64_workflow_step_id_missing");
   }
   if (seenStepIds.has(id)) {
-    throw aiStudioError(`Duplicate AI Studio workflow step id: ${id}`, "ai_studio_duplicate_workflow_step");
+    throw vibe64Error(`Duplicate Vibe64 workflow step id: ${id}`, "vibe64_duplicate_workflow_step");
   }
   seenStepIds.add(id);
   return {
@@ -400,33 +400,33 @@ function normalizeWorkflowIntentHandlers(intentHandlers = {}, stepIds = new Set(
     return {};
   }
   if (!isPlainObject(intentHandlers)) {
-    throw aiStudioError(
-      `AI Studio workflow ${workflowId} intentHandlers must be an object.`,
-      "ai_studio_workflow_intent_handlers_invalid"
+    throw vibe64Error(
+      `Vibe64 workflow ${workflowId} intentHandlers must be an object.`,
+      "vibe64_workflow_intent_handlers_invalid"
     );
   }
   const normalizedHandlers = {};
   for (const [rawStepId, stepHandlers] of Object.entries(intentHandlers)) {
     const stepId = normalizeText(rawStepId);
     if (!stepId || !stepIds.has(stepId)) {
-      throw aiStudioError(
-        `AI Studio workflow ${workflowId} intentHandlers references unknown step: ${stepId || "(empty)"}.`,
-        "ai_studio_workflow_unknown_step"
+      throw vibe64Error(
+        `Vibe64 workflow ${workflowId} intentHandlers references unknown step: ${stepId || "(empty)"}.`,
+        "vibe64_workflow_unknown_step"
       );
     }
     if (!isPlainObject(stepHandlers)) {
-      throw aiStudioError(
-        `AI Studio workflow ${workflowId} intentHandlers.${stepId} must be an object.`,
-        "ai_studio_workflow_intent_handlers_invalid"
+      throw vibe64Error(
+        `Vibe64 workflow ${workflowId} intentHandlers.${stepId} must be an object.`,
+        "vibe64_workflow_intent_handlers_invalid"
       );
     }
     normalizedHandlers[stepId] = Object.freeze(Object.fromEntries(Object.entries(stepHandlers)
       .map(([rawIntentId, handler]) => {
         const intentId = normalizeText(rawIntentId);
         if (!intentId || typeof handler !== "function") {
-          throw aiStudioError(
-            `AI Studio workflow ${workflowId} intentHandlers.${stepId}.${intentId || "(empty)"} must be a function.`,
-            "ai_studio_workflow_intent_handlers_invalid"
+          throw vibe64Error(
+            `Vibe64 workflow ${workflowId} intentHandlers.${stepId}.${intentId || "(empty)"} must be a function.`,
+            "vibe64_workflow_intent_handlers_invalid"
           );
         }
         return [intentId, handler];
@@ -438,7 +438,7 @@ function normalizeWorkflowIntentHandlers(intentHandlers = {}, stepIds = new Set(
 function normalizeWorkflow(workflow = {}) {
   const workflowSteps = Array.isArray(workflow.steps) ? workflow.steps : [];
   if (workflowSteps.length === 0) {
-    throw aiStudioError("AI Studio workflow must contain at least one step.", "ai_studio_empty_workflow");
+    throw vibe64Error("Vibe64 workflow must contain at least one step.", "vibe64_empty_workflow");
   }
   const seenStepIds = new Set();
   const id = normalizeText(workflow.id || "default");
@@ -658,7 +658,7 @@ class WorkflowMachine {
   assertStepId(stepId) {
     const normalizedStepId = normalizeText(stepId);
     if (!this.stepById.has(normalizedStepId)) {
-      throw aiStudioError(`Unknown AI Studio workflow step: ${normalizedStepId || "(empty)"}`, "ai_studio_unknown_workflow_step");
+      throw vibe64Error(`Unknown Vibe64 workflow step: ${normalizedStepId || "(empty)"}`, "vibe64_unknown_workflow_step");
     }
     return normalizedStepId;
   }
@@ -701,7 +701,7 @@ class WorkflowMachine {
       case WORKFLOW_CONDITION_KINDS.ALWAYS:
         return conditionMet();
       case WORKFLOW_CONDITION_KINDS.SESSION_ACTIVE:
-        return session.status === AI_STUDIO_SESSION_STATUS.ACTIVE
+        return session.status === VIBE64_SESSION_STATUS.ACTIVE
           ? conditionMet()
           : conditionMissing("Session is not active.");
       case WORKFLOW_CONDITION_KINDS.METADATA_EXISTS: {
@@ -876,15 +876,15 @@ class WorkflowMachine {
   rewindPlanForSession(session = {}, stepId = "") {
     const targetStep = this.stepById.get(normalizeText(stepId));
     if (!targetStep) {
-      throw aiStudioError(`Unknown AI Studio rewind step: ${normalizeText(stepId) || "(empty)"}`, "ai_studio_unknown_rewind_step");
+      throw vibe64Error(`Unknown Vibe64 rewind step: ${normalizeText(stepId) || "(empty)"}`, "vibe64_unknown_rewind_step");
     }
     if (!targetStep.rewindable) {
-      throw aiStudioError(`AI Studio step cannot be rewound: ${targetStep.label}`, "ai_studio_step_not_rewindable");
+      throw vibe64Error(`Vibe64 step cannot be rewound: ${targetStep.label}`, "vibe64_step_not_rewindable");
     }
 
     const completed = new Set(this.completedStepIds(session));
     if (!completed.has(targetStep.id)) {
-      throw aiStudioError(`AI Studio step has not been completed: ${targetStep.label}`, "ai_studio_rewind_step_not_completed");
+      throw vibe64Error(`Vibe64 step has not been completed: ${targetStep.label}`, "vibe64_rewind_step_not_completed");
     }
 
     const affectedSteps = this.stepsFrom(targetStep.id);

@@ -3,7 +3,7 @@ import {
   createDoctorRepair,
   hardStopDoctorCheck as hardStopCheck,
   passDoctorCheck as passCheck
-} from "@local/ai-studio-core/server/doctorCheckItems";
+} from "@local/vibe64-core/server/doctorCheckItems";
 import {
   dockerCommand
 } from "@local/studio-terminal-core/server/shellCommands";

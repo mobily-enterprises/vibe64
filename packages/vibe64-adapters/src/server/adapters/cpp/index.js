@@ -6,10 +6,10 @@ import {
 } from "./adapter.js";
 import {
   deepFreeze
-} from "@local/ai-studio-core/server/deepFreeze";
+} from "@local/vibe64-core/server/deepFreeze";
 import {
-  AI_STUDIO_WORKFLOW_COMMANDS,
-  createAiStudioWorkflowCommandTerminalSpec
+  VIBE64_WORKFLOW_COMMANDS,
+  createVibe64WorkflowCommandTerminalSpec
 } from "../../workflowAdapter.js";
 
 export {
@@ -43,22 +43,22 @@ export {
   createCppSetupDoctorPlugin
 } from "./setupDoctorPlugin.js";
 
-const CPP_AI_STUDIO_COMMANDS = deepFreeze(AI_STUDIO_WORKFLOW_COMMANDS);
-const createCppAiStudioCommandTerminalSpec = createAiStudioWorkflowCommandTerminalSpec;
+const CPP_VIBE64_COMMANDS = deepFreeze(VIBE64_WORKFLOW_COMMANDS);
+const createCppVibe64CommandTerminalSpec = createVibe64WorkflowCommandTerminalSpec;
 
 function createCppTargetAdapter({
   commandTerminalSpecFactory = null
 } = {}) {
   return new CppTargetAdapter({
     commandTerminalSpecFactory,
-    commands: CPP_AI_STUDIO_COMMANDS
+    commands: CPP_VIBE64_COMMANDS
   });
 }
 
 export {
-  createCppAiStudioCommandTerminalSpec,
+  createCppVibe64CommandTerminalSpec,
   createCppTargetAdapter,
-  CPP_AI_STUDIO_COMMANDS,
+  CPP_VIBE64_COMMANDS,
   CPP_CONFIG_FIELDS,
   CPP_MARKERS,
   CPP_PROMPT_PACK_ROOT,

@@ -4,17 +4,17 @@ import path from "node:path";
 import test from "node:test";
 
 import {
-  AI_STUDIO_INITIAL_STEP,
-  AI_STUDIO_SESSION_STATUS,
-  AiStudioSessionRuntime,
-  createAiStudioSessionStore,
-  isValidAiStudioSessionId,
-  resolveAiStudioSessionPaths
-} from "@local/ai-studio-runtime/server";
+  VIBE64_INITIAL_STEP,
+  VIBE64_SESSION_STATUS,
+  Vibe64SessionRuntime,
+  createVibe64SessionStore,
+  isValidVibe64SessionId,
+  resolveVibe64SessionPaths
+} from "@local/vibe64-runtime/server";
 import {
-  AI_STUDIO_CLIENT_CONTROL_ACTIONS
-} from "@local/ai-studio-core/shared";
-import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
+  VIBE64_CLIENT_CONTROL_ACTIONS
+} from "@local/vibe64-core/shared";
+import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 function delay(ms) {
   return new Promise((resolve) => {
@@ -26,9 +26,9 @@ async function assertPathExists(filePath) {
   await assert.doesNotReject(access(filePath));
 }
 
-test("ai-studio session store creates inspectable session state under .ai-studio", async () => {
+test("vibe64 session store creates inspectable session state under .vibe64", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const store = createAiStudioSessionStore({
+    const store = createVibe64SessionStore({
       clock: () => new Date("2026-05-16T01:02:03.000Z"),
       targetRoot
     });
@@ -40,17 +40,17 @@ test("ai-studio session store creates inspectable session state under .ai-studio
       sessionId: "store_session"
     });
 
-    const paths = resolveAiStudioSessionPaths({
+    const paths = resolveVibe64SessionPaths({
       sessionId: "store_session",
       targetRoot
     });
 
     assert.equal(session.sessionId, "store_session");
     assert.equal(session.targetRoot, targetRoot);
-    assert.equal(session.currentStep, AI_STUDIO_INITIAL_STEP);
-    assert.equal(session.status, AI_STUDIO_SESSION_STATUS.ACTIVE);
+    assert.equal(session.currentStep, VIBE64_INITIAL_STEP);
+    assert.equal(session.status, VIBE64_SESSION_STATUS.ACTIVE);
     assert.equal(session.metadata.adapter, "fake");
-    assert.equal(session.manifest.product, "ai-studio");
+    assert.equal(session.manifest.product, "vibe64");
     assert.equal(session.manifest.schemaVersion, 1);
 
     await assertPathExists(paths.manifestPath);
@@ -66,9 +66,9 @@ test("ai-studio session store creates inspectable session state under .ai-studio
   });
 });
 
-test("ai-studio session store reads and writes metadata, artifacts, status, current step, and command logs", async () => {
+test("vibe64 session store reads and writes metadata, artifacts, status, current step, and command logs", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const store = createAiStudioSessionStore({
+    const store = createVibe64SessionStore({
       clock: () => new Date("2026-05-16T01:02:03.000Z"),
       targetRoot
     });
@@ -152,7 +152,7 @@ test("ai-studio session store reads and writes metadata, artifacts, status, curr
     assert.equal(await store.readMetadataValue("state_contract", "adapter"), "cpp-cmake");
     assert.equal(await store.readArtifact("state_contract", "summary.txt"), "hello\n");
     assert.equal(await store.artifactExists("state_contract", "summary.txt"), true);
-    assert.match(artifactPath, /\.ai-studio\/sessions\/active\/state_contract\/artifacts\/summary\.txt$/u);
+    assert.match(artifactPath, /\.vibe64\/sessions\/active\/state_contract\/artifacts\/summary\.txt$/u);
     assert.equal(typeof session.artifactReadiness["summary.txt"].fingerprint, "string");
     assert.equal(session.artifactReadiness["summary.txt"].fingerprint.length, 64);
 
@@ -200,9 +200,9 @@ test("ai-studio session store reads and writes metadata, artifacts, status, curr
   });
 });
 
-test("ai-studio session store persists background task status with retry metadata", async () => {
+test("vibe64 session store persists background task status with retry metadata", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const store = createAiStudioSessionStore({
+    const store = createVibe64SessionStore({
       clock: () => new Date("2026-05-16T01:02:03.000Z"),
       targetRoot
     });
@@ -229,7 +229,7 @@ test("ai-studio session store persists background task status with retry metadat
         error: "Create the session worktree before starting Codex.",
         message: "Codex bootstrap failed.",
         retry: {
-          clientAction: AI_STUDIO_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL,
+          clientAction: VIBE64_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL,
           label: "Retry Codex"
         },
         status: "failed"
@@ -250,7 +250,7 @@ test("ai-studio session store persists background task status with retry metadat
       id: "codex_bootstrap",
       label: "Codex bootstrap",
       retry: {
-        clientAction: AI_STUDIO_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL,
+        clientAction: VIBE64_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL,
         label: "Retry Codex"
       },
       status: "failed"
@@ -261,9 +261,9 @@ test("ai-studio session store persists background task status with retry metadat
   });
 });
 
-test("ai-studio session store persists conversation turns as one file per message", async () => {
+test("vibe64 session store persists conversation turns as one file per message", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const store = createAiStudioSessionStore({
+    const store = createVibe64SessionStore({
       clock: () => new Date("2026-05-16T01:02:03.456Z"),
       targetRoot
     });
@@ -281,7 +281,7 @@ test("ai-studio session store persists conversation turns as one file per messag
       text: "Keep it simple."
     });
 
-    const paths = resolveAiStudioSessionPaths({
+    const paths = resolveVibe64SessionPaths({
       sessionId: "conversation_log",
       targetRoot
     });
@@ -338,12 +338,12 @@ test("ai-studio session store persists conversation turns as one file per messag
   });
 });
 
-test("ai-studio session store serializes per-session mutations and bumps revision once per committed boundary", async () => {
+test("vibe64 session store serializes per-session mutations and bumps revision once per committed boundary", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const storeA = createAiStudioSessionStore({
+    const storeA = createVibe64SessionStore({
       targetRoot
     });
-    const storeB = createAiStudioSessionStore({
+    const storeB = createVibe64SessionStore({
       targetRoot
     });
     const created = await storeA.createSession({
@@ -386,9 +386,9 @@ test("ai-studio session store serializes per-session mutations and bumps revisio
   });
 });
 
-test("ai-studio session store exposes the explicit issue word as the session name", async () => {
+test("vibe64 session store exposes the explicit issue word as the session name", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const store = createAiStudioSessionStore({
+    const store = createVibe64SessionStore({
       targetRoot
     });
     await store.createSession({
@@ -410,16 +410,16 @@ test("ai-studio session store exposes the explicit issue word as the session nam
   });
 });
 
-test("ai-studio session store persists a prompt context snapshot", async () => {
+test("vibe64 session store persists a prompt context snapshot", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const store = createAiStudioSessionStore({
+    const store = createVibe64SessionStore({
       targetRoot
     });
     await store.createSession({
       sessionId: "prompt_context_snapshot"
     });
 
-    const paths = resolveAiStudioSessionPaths({
+    const paths = resolveVibe64SessionPaths({
       sessionId: "prompt_context_snapshot",
       targetRoot
     });
@@ -450,9 +450,9 @@ test("ai-studio session store persists a prompt context snapshot", async () => {
   });
 });
 
-test("ai-studio session store allocates deterministic available ids and lists sessions", async () => {
+test("vibe64 session store allocates deterministic available ids and lists sessions", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const store = createAiStudioSessionStore({
+    const store = createVibe64SessionStore({
       clock: () => new Date("2026-05-16T01:02:03.000Z"),
       targetRoot
     });
@@ -470,9 +470,9 @@ test("ai-studio session store allocates deterministic available ids and lists se
   });
 });
 
-test("ai-studio session store filters session lists by status before full reads", async () => {
+test("vibe64 session store filters session lists by status before full reads", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const store = createAiStudioSessionStore({
+    const store = createVibe64SessionStore({
       targetRoot
     });
 
@@ -488,9 +488,9 @@ test("ai-studio session store filters session lists by status before full reads"
     await store.createSession({
       sessionId: "finished_session"
     });
-    await store.writeStatus("blocked_session", AI_STUDIO_SESSION_STATUS.BLOCKED);
-    await store.writeStatus("abandoned_session", AI_STUDIO_SESSION_STATUS.ABANDONED);
-    await store.writeStatus("finished_session", AI_STUDIO_SESSION_STATUS.FINISHED);
+    await store.writeStatus("blocked_session", VIBE64_SESSION_STATUS.BLOCKED);
+    await store.writeStatus("abandoned_session", VIBE64_SESSION_STATUS.ABANDONED);
+    await store.writeStatus("finished_session", VIBE64_SESSION_STATUS.FINISHED);
 
     const openSessions = await store.listSessions({
       statusGroup: "open"
@@ -500,7 +500,7 @@ test("ai-studio session store filters session lists by status before full reads"
     });
     const abandonedSessions = await store.listSessions({
       statusGroup: "closed",
-      statuses: [AI_STUDIO_SESSION_STATUS.ABANDONED]
+      statuses: [VIBE64_SESSION_STATUS.ABANDONED]
     });
 
     assert.deepEqual(openSessions.map((session) => session.sessionId), [
@@ -517,9 +517,9 @@ test("ai-studio session store filters session lists by status before full reads"
   });
 });
 
-test("ai-studio runtime delegates session operations to the store", async () => {
+test("vibe64 runtime delegates session operations to the store", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       clock: () => new Date("2026-05-16T01:02:03.000Z"),
       targetRoot
     });
@@ -536,19 +536,19 @@ test("ai-studio runtime delegates session operations to the store", async () => 
   });
 });
 
-test("ai-studio session ids, artifact paths, and metadata names reject unsafe values", async () => {
+test("vibe64 session ids, artifact paths, and metadata names reject unsafe values", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const store = createAiStudioSessionStore({
+    const store = createVibe64SessionStore({
       targetRoot
     });
 
-    assert.equal(isValidAiStudioSessionId("safe_123"), true);
-    assert.equal(isValidAiStudioSessionId("../unsafe"), false);
+    assert.equal(isValidVibe64SessionId("safe_123"), true);
+    assert.equal(isValidVibe64SessionId("../unsafe"), false);
     await assert.rejects(
       () => store.createSession({
         sessionId: "../unsafe"
       }),
-      /Invalid ai-studio session id/u
+      /Invalid vibe64 session id/u
     );
 
     await store.createSession({
@@ -556,33 +556,33 @@ test("ai-studio session ids, artifact paths, and metadata names reject unsafe va
     });
     await assert.rejects(
       () => store.writeArtifact("safe_123", "../outside.txt", "bad"),
-      /Invalid ai-studio artifact path/u
+      /Invalid vibe64 artifact path/u
     );
     await assert.rejects(
       () => store.writeArtifact("safe_123", "tmp/../outside.txt", "bad"),
-      /Invalid ai-studio artifact path/u
+      /Invalid vibe64 artifact path/u
     );
     await assert.rejects(
       () => store.writeArtifact("safe_123", "tmp//issue.md", "bad"),
-      /Invalid ai-studio artifact path/u
+      /Invalid vibe64 artifact path/u
     );
 
     const nestedPath = await store.writeArtifact("safe_123", "tmp/create_issue.title.txt", "Title\n");
     const session = await store.readSession("safe_123");
-    assert.match(nestedPath, /\.ai-studio\/sessions\/active\/safe_123\/artifacts\/tmp\/create_issue\.title\.txt$/u);
+    assert.match(nestedPath, /\.vibe64\/sessions\/active\/safe_123\/artifacts\/tmp\/create_issue\.title\.txt$/u);
     assert.equal(await store.readArtifact("safe_123", "tmp/create_issue.title.txt"), "Title\n");
     assert.equal(session.artifactReadiness["tmp/create_issue.title.txt"].nonEmpty, true);
 
     await assert.rejects(
       () => store.writeMetadataValue("safe_123", "../outside", "bad"),
-      /Invalid ai-studio metadata name/u
+      /Invalid vibe64 metadata name/u
     );
   });
 });
 
-test("ai-studio session store rejects invalid statuses before creating a session", async () => {
+test("vibe64 session store rejects invalid statuses before creating a session", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const store = createAiStudioSessionStore({
+    const store = createVibe64SessionStore({
       targetRoot
     });
 
@@ -591,11 +591,11 @@ test("ai-studio session store rejects invalid statuses before creating a session
         sessionId: "bad_status",
         status: "confused"
       }),
-      /Invalid ai-studio session status/u
+      /Invalid vibe64 session status/u
     );
     await assert.rejects(
       () => store.readSession("bad_status"),
-      /Unknown ai-studio session/u
+      /Unknown vibe64 session/u
     );
   });
 });

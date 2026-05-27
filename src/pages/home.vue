@@ -15,8 +15,8 @@ import { RouterView, useRoute } from "vue-router";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
 import {
-  AI_STUDIO_SURFACE_ID
-} from "@/lib/aiStudioRequestConfig.js";
+  VIBE64_SURFACE_ID
+} from "@/lib/vibe64RequestConfig.js";
 import {
   PROJECT_TYPE_ENDPOINT,
   projectTypeQueryKey
@@ -31,7 +31,7 @@ const projectTypeResource = useEndpointResource({
   client: studioHttpClient,
   fallbackLoadError: "Project type could not load.",
   path: PROJECT_TYPE_ENDPOINT,
-  queryKey: computed(() => projectTypeQueryKey(AI_STUDIO_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC)),
+  queryKey: computed(() => projectTypeQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC)),
   refreshOnPull: true
 });
 const targetRoot = computed(() => String(projectTypeResource.data.value?.projectType?.targetRoot || "").trim());

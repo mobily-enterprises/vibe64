@@ -1,92 +1,92 @@
 import {
-  AI_STUDIO_SURFACE_ID,
+  VIBE64_SURFACE_ID,
   LOCAL_STUDIO_COMMAND_OPTIONS
-} from "@/lib/aiStudioRequestConfig.js";
+} from "@/lib/vibe64RequestConfig.js";
 
-const AI_STUDIO_SESSIONS_API_SUFFIX = "/ai-studio/sessions";
-const AI_STUDIO_SESSION_CHANGED_EVENT = "ai-studio.session.changed";
+const VIBE64_SESSIONS_API_SUFFIX = "/vibe64/sessions";
+const VIBE64_SESSION_CHANGED_EVENT = "vibe64.session.changed";
 const DEFAULT_MAX_OPEN_SESSIONS = 5;
-const SELECTED_SESSION_STORAGE_KEY = "ai-studio:selected-session-id";
+const SELECTED_SESSION_STORAGE_KEY = "vibe64:selected-session-id";
 
-function aiStudioSessionsQueryKey(surfaceId, ownershipFilter) {
-  return ["ai-studio", surfaceId, ownershipFilter, "sessions"];
+function vibe64SessionsQueryKey(surfaceId, ownershipFilter) {
+  return ["vibe64", surfaceId, ownershipFilter, "sessions"];
 }
 
-function aiStudioSessionQueryKey(surfaceId, ownershipFilter) {
-  return ["ai-studio", surfaceId, ownershipFilter, "session"];
+function vibe64SessionQueryKey(surfaceId, ownershipFilter) {
+  return ["vibe64", surfaceId, ownershipFilter, "session"];
 }
 
 function encodePathSegment(value = "") {
   return encodeURIComponent(String(value || "").trim());
 }
 
-function aiStudioSessionPath(sessionsApiPath = "", sessionId = "", suffix = "") {
+function vibe64SessionPath(sessionsApiPath = "", sessionId = "", suffix = "") {
   return `${sessionsApiPath}/${encodePathSegment(sessionId)}${suffix}`;
 }
 
-function aiStudioActionPath(sessionsApiPath = "", sessionId = "", actionId = "") {
-  return aiStudioSessionPath(sessionsApiPath, sessionId, `/actions/${encodePathSegment(actionId)}`);
+function vibe64ActionPath(sessionsApiPath = "", sessionId = "", actionId = "") {
+  return vibe64SessionPath(sessionsApiPath, sessionId, `/actions/${encodePathSegment(actionId)}`);
 }
 
-function aiStudioIntentPath(sessionsApiPath = "", sessionId = "", intentId = "") {
-  return aiStudioSessionPath(sessionsApiPath, sessionId, `/intents/${encodePathSegment(intentId)}`);
+function vibe64IntentPath(sessionsApiPath = "", sessionId = "", intentId = "") {
+  return vibe64SessionPath(sessionsApiPath, sessionId, `/intents/${encodePathSegment(intentId)}`);
 }
 
-function aiStudioArtifactPreviewPath(sessionsApiPath = "", sessionId = "") {
-  return aiStudioSessionPath(sessionsApiPath, sessionId, "/artifact-preview");
+function vibe64ArtifactPreviewPath(sessionsApiPath = "", sessionId = "") {
+  return vibe64SessionPath(sessionsApiPath, sessionId, "/artifact-preview");
 }
 
-function aiStudioCodexAttachmentPath(sessionsApiPath = "", sessionId = "") {
-  return aiStudioSessionPath(sessionsApiPath, sessionId, "/codex-attachments");
+function vibe64CodexAttachmentPath(sessionsApiPath = "", sessionId = "") {
+  return vibe64SessionPath(sessionsApiPath, sessionId, "/codex-attachments");
 }
 
-function aiStudioConversationLogPath(sessionsApiPath = "", sessionId = "") {
-  return aiStudioSessionPath(sessionsApiPath, sessionId, "/conversation-log");
+function vibe64ConversationLogPath(sessionsApiPath = "", sessionId = "") {
+  return vibe64SessionPath(sessionsApiPath, sessionId, "/conversation-log");
 }
 
-function aiStudioTerminalFailureFixRequestPath(sessionsApiPath = "", sessionId = "") {
-  return aiStudioSessionPath(sessionsApiPath, sessionId, "/terminal-failure-fix-request");
+function vibe64TerminalFailureFixRequestPath(sessionsApiPath = "", sessionId = "") {
+  return vibe64SessionPath(sessionsApiPath, sessionId, "/terminal-failure-fix-request");
 }
 
-function aiStudioCommandTerminalPath(sessionsApiPath = "", sessionId = "", terminalSessionId = "") {
-  return aiStudioSessionPath(
+function vibe64CommandTerminalPath(sessionsApiPath = "", sessionId = "", terminalSessionId = "") {
+  return vibe64SessionPath(
     sessionsApiPath,
     sessionId,
     terminalSessionId ? `/command-terminal/${encodePathSegment(terminalSessionId)}` : "/command-terminal"
   );
 }
 
-function aiStudioLaunchTargetOpenPath(sessionsApiPath = "", sessionId = "") {
-  return aiStudioSessionPath(sessionsApiPath, sessionId, "/launch-target/open");
+function vibe64LaunchTargetOpenPath(sessionsApiPath = "", sessionId = "") {
+  return vibe64SessionPath(sessionsApiPath, sessionId, "/launch-target/open");
 }
 
-function aiStudioLaunchTargetsPath(sessionsApiPath = "", sessionId = "") {
-  return aiStudioSessionPath(sessionsApiPath, sessionId, "/launch-targets");
+function vibe64LaunchTargetsPath(sessionsApiPath = "", sessionId = "") {
+  return vibe64SessionPath(sessionsApiPath, sessionId, "/launch-targets");
 }
 
-function aiStudioLaunchTerminalPath(sessionsApiPath = "", sessionId = "", terminalSessionId = "") {
-  return aiStudioSessionPath(
+function vibe64LaunchTerminalPath(sessionsApiPath = "", sessionId = "", terminalSessionId = "") {
+  return vibe64SessionPath(
     sessionsApiPath,
     sessionId,
     terminalSessionId ? `/launch-terminal/${encodePathSegment(terminalSessionId)}` : "/launch-terminal"
   );
 }
 
-function aiStudioLaunchTerminalStopPath(sessionsApiPath = "", sessionId = "", terminalSessionId = "") {
-  return `${aiStudioLaunchTerminalPath(sessionsApiPath, sessionId, terminalSessionId)}/stop`;
+function vibe64LaunchTerminalStopPath(sessionsApiPath = "", sessionId = "", terminalSessionId = "") {
+  return `${vibe64LaunchTerminalPath(sessionsApiPath, sessionId, terminalSessionId)}/stop`;
 }
 
-function aiStudioShellTerminalPath(sessionsApiPath = "", sessionId = "", terminalSessionId = "") {
-  return aiStudioSessionPath(
+function vibe64ShellTerminalPath(sessionsApiPath = "", sessionId = "", terminalSessionId = "") {
+  return vibe64SessionPath(
     sessionsApiPath,
     sessionId,
     terminalSessionId ? `/shell-terminal/${encodePathSegment(terminalSessionId)}` : "/shell-terminal"
   );
 }
 
-function aiStudioArtifactPreviewQueryKey(surfaceId, ownershipFilter, sessionId = "", previewId = "") {
+function vibe64ArtifactPreviewQueryKey(surfaceId, ownershipFilter, sessionId = "", previewId = "") {
   const key = [
-    "ai-studio",
+    "vibe64",
     surfaceId,
     ownershipFilter,
     "artifact-preview",
@@ -99,9 +99,9 @@ function aiStudioArtifactPreviewQueryKey(surfaceId, ownershipFilter, sessionId =
   return key;
 }
 
-function aiStudioConversationLogQueryKey(surfaceId, ownershipFilter, sessionId = "") {
+function vibe64ConversationLogQueryKey(surfaceId, ownershipFilter, sessionId = "") {
   return [
-    "ai-studio",
+    "vibe64",
     surfaceId,
     ownershipFilter,
     "conversation-log",
@@ -109,9 +109,9 @@ function aiStudioConversationLogQueryKey(surfaceId, ownershipFilter, sessionId =
   ];
 }
 
-function aiStudioLaunchTargetsQueryKey(surfaceId, ownershipFilter, sessionId = "") {
+function vibe64LaunchTargetsQueryKey(surfaceId, ownershipFilter, sessionId = "") {
   return [
-    "ai-studio",
+    "vibe64",
     surfaceId,
     ownershipFilter,
     "launch-targets",
@@ -126,29 +126,29 @@ function commandInputFromContext(context = {}) {
 }
 
 export {
-  AI_STUDIO_SESSION_CHANGED_EVENT,
-  AI_STUDIO_SESSIONS_API_SUFFIX,
-  AI_STUDIO_SURFACE_ID,
+  VIBE64_SESSION_CHANGED_EVENT,
+  VIBE64_SESSIONS_API_SUFFIX,
+  VIBE64_SURFACE_ID,
   DEFAULT_MAX_OPEN_SESSIONS,
   LOCAL_STUDIO_COMMAND_OPTIONS,
   SELECTED_SESSION_STORAGE_KEY,
-  aiStudioActionPath,
-  aiStudioArtifactPreviewPath,
-  aiStudioArtifactPreviewQueryKey,
-  aiStudioCodexAttachmentPath,
-  aiStudioCommandTerminalPath,
-  aiStudioConversationLogPath,
-  aiStudioConversationLogQueryKey,
-  aiStudioIntentPath,
-  aiStudioLaunchTargetOpenPath,
-  aiStudioLaunchTargetsPath,
-  aiStudioLaunchTargetsQueryKey,
-  aiStudioLaunchTerminalPath,
-  aiStudioLaunchTerminalStopPath,
-  aiStudioSessionPath,
-  aiStudioSessionQueryKey,
-  aiStudioShellTerminalPath,
-  aiStudioSessionsQueryKey,
-  aiStudioTerminalFailureFixRequestPath,
+  vibe64ActionPath,
+  vibe64ArtifactPreviewPath,
+  vibe64ArtifactPreviewQueryKey,
+  vibe64CodexAttachmentPath,
+  vibe64CommandTerminalPath,
+  vibe64ConversationLogPath,
+  vibe64ConversationLogQueryKey,
+  vibe64IntentPath,
+  vibe64LaunchTargetOpenPath,
+  vibe64LaunchTargetsPath,
+  vibe64LaunchTargetsQueryKey,
+  vibe64LaunchTerminalPath,
+  vibe64LaunchTerminalStopPath,
+  vibe64SessionPath,
+  vibe64SessionQueryKey,
+  vibe64ShellTerminalPath,
+  vibe64SessionsQueryKey,
+  vibe64TerminalFailureFixRequestPath,
   commandInputFromContext
 };

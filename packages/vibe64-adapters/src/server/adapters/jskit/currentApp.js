@@ -12,11 +12,11 @@ import {
   readJsonFile
 } from "../../currentAppInspection.js";
 import {
-  createAiStudioTargetScriptTerminalSpec
+  createVibe64TargetScriptTerminalSpec
 } from "@local/studio-terminal-core/server/targetScriptTerminal";
 import {
   normalizePlainObject
-} from "@local/ai-studio-core/server/serverResponses";
+} from "@local/vibe64-core/server/serverResponses";
 import {
   readDatabaseHostFromDotEnv
 } from "./setupMariaDbRuntime.js";
@@ -194,7 +194,7 @@ async function createJskitTargetScriptTerminalSpec(targetRoot, input = {}) {
     return scriptsResult;
   }
   const databaseHost = await readDatabaseHostFromDotEnv(normalizedTargetRoot);
-  return createAiStudioTargetScriptTerminalSpec({
+  return createVibe64TargetScriptTerminalSpec({
     adapterId: "jskit",
     image: JSKIT_TOOLCHAIN_IMAGE,
     input,

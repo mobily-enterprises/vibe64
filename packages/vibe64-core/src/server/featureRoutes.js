@@ -2,14 +2,14 @@ import { resolveScopedApiBasePath, normalizeSurfaceId } from "@jskit-ai/kernel/s
 
 import { requireLocalStudioRequest } from "./localStudioRequest.js";
 import {
-  aiStudioStatusCode,
+  vibe64StatusCode,
   requestBodyObject
 } from "./serverResponses.js";
 
-function createAiStudioFeatureRoutes(
+function createVibe64FeatureRoutes(
   app,
   {
-    localRequestMessage = "AI Studio routes only accept loopback Studio requests.",
+    localRequestMessage = "Vibe64 routes only accept loopback Studio requests.",
     routeRelativePath = "",
     routeSurface = "",
     tags = []
@@ -52,7 +52,7 @@ function createAiStudioFeatureRoutes(
         surface,
         tags
       }),
-      async function handleAiStudioFeatureRoute(request, reply) {
+      async function handleVibe64FeatureRoute(request, reply) {
         if (!requireLocalStudioRequest(request, reply, { message: localRequestMessage })) {
           return;
         }
@@ -77,7 +77,7 @@ function createAiStudioFeatureRoutes(
 
 function requireApplication(app) {
   if (!app || typeof app.make !== "function") {
-    throw new Error("createAiStudioFeatureRoutes requires application make().");
+    throw new Error("createVibe64FeatureRoutes requires application make().");
   }
 }
 
@@ -139,7 +139,7 @@ function responseStatusCode(response, {
   if (response?.ok !== false && Number.isInteger(successStatus)) {
     return successStatus;
   }
-  return aiStudioStatusCode(response, { missingStatus });
+  return vibe64StatusCode(response, { missingStatus });
 }
 
-export { createAiStudioFeatureRoutes };
+export { createVibe64FeatureRoutes };

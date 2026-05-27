@@ -7,7 +7,7 @@ import {
 } from "./adapter.js";
 import {
   normalizeText
-} from "@local/ai-studio-core/server/core";
+} from "@local/vibe64-core/server/core";
 
 const execFileAsync = promisify(execFile);
 const GITHUB_COMMAND_TIMEOUT_MS = 30_000;
@@ -60,7 +60,7 @@ function prCanUseDirectUpdate(pr = {}) {
 
 async function useNewBranchSessionAction() {
   return adapterActionResult({
-    message: "Selected a new AI Studio branch.",
+    message: "Selected a new Vibe64 branch.",
     metadata: {
       work_source: "new_branch"
     }
@@ -69,7 +69,7 @@ async function useNewBranchSessionAction() {
 
 async function skipMergeSessionAction() {
   return adapterActionResult({
-    message: "Selected not to merge this pull request from AI Studio.",
+    message: "Selected not to merge this pull request from Vibe64.",
     metadata: {
       merge_skipped: "yes"
     }
@@ -185,18 +185,18 @@ async function useExistingPrSessionAction({
   });
 }
 
-const AI_STUDIO_WORKFLOW_SESSION_ACTIONS = Object.freeze({
+const VIBE64_WORKFLOW_SESSION_ACTIONS = Object.freeze({
   skip_merge: skipMergeSessionAction,
   use_existing_issue: useExistingIssueSessionAction,
   use_existing_pr: useExistingPrSessionAction,
   use_new_branch: useNewBranchSessionAction
 });
 
-async function runAiStudioWorkflowSessionAction(actionId, context = {}) {
-  const runAction = AI_STUDIO_WORKFLOW_SESSION_ACTIONS[normalizeText(actionId)];
+async function runVibe64WorkflowSessionAction(actionId, context = {}) {
+  const runAction = VIBE64_WORKFLOW_SESSION_ACTIONS[normalizeText(actionId)];
   if (!runAction) {
     return adapterActionResult({
-      message: `AI Studio workflow action is not implemented: ${normalizeText(actionId) || "(unknown)"}`,
+      message: `Vibe64 workflow action is not implemented: ${normalizeText(actionId) || "(unknown)"}`,
       status: "blocked"
     });
   }
@@ -207,5 +207,5 @@ async function runAiStudioWorkflowSessionAction(actionId, context = {}) {
 }
 
 export {
-  runAiStudioWorkflowSessionAction
+  runVibe64WorkflowSessionAction
 };

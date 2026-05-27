@@ -161,7 +161,7 @@ function createNpmUserConfig({ packageName, registry, token }) {
   const registryWithSlash = `${registryUrl.origin}${registryUrl.pathname}`.replace(/\/+$/u, "/");
   const authHost = `${registryUrl.host}${registryUrl.pathname}`.replace(/\/+$/u, "");
   const scope = packageScope(packageName);
-  const directory = mkdtempSync(path.join(os.tmpdir(), "vibe-armor-npmrc-"));
+  const directory = mkdtempSync(path.join(os.tmpdir(), "vibe64-npmrc-"));
   const configPath = path.join(directory, "npmrc");
   const lines = [
     scope ? `${scope}:registry=${registryWithSlash}` : "",
@@ -186,16 +186,16 @@ function createNpmUserConfig({ packageName, registry, token }) {
 }
 
 function npmToken() {
-  return String(process.env.VIBE_ARMOR_NPM_TOKEN || process.env.NPM_TOKEN || "").trim();
+  return String(process.env.VIBE64_NPM_TOKEN || process.env.NPM_TOKEN || "").trim();
 }
 
 function authHelp(registry) {
   return [
-    `VIBE_ARMOR_NPM_TOKEN or NPM_TOKEN is required to publish to ${registry}.`,
+    `VIBE64_NPM_TOKEN or NPM_TOKEN is required to publish to ${registry}.`,
     "Create a granular npm token with read/write access to this package.",
     "Enable the token's Bypass 2FA option so npm publish cannot prompt for OTP.",
     "Then run:",
-    "  export VIBE_ARMOR_NPM_TOKEN=npm_xxx",
+    "  export VIBE64_NPM_TOKEN=npm_xxx",
     "  npm run release"
   ].join("\n");
 }
@@ -211,10 +211,10 @@ function printHelp() {
     "  npm run release -- --bump minor",
     "",
     "Auth:",
-    "  Requires VIBE_ARMOR_NPM_TOKEN or NPM_TOKEN.",
+    "  Requires VIBE64_NPM_TOKEN or NPM_TOKEN.",
     "  Create a granular npm token with read/write package access.",
     "  Enable the token's Bypass 2FA option to avoid npm's interactive publish prompt.",
-    "  VIBE_ARMOR_NPM_TOKEN is preferred when both variables are set.",
+    "  VIBE64_NPM_TOKEN is preferred when both variables are set.",
     "",
     "Notes:",
     "  Stock npm does not support `npm release`; use `npm run release`.",

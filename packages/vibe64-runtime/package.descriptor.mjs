@@ -1,12 +1,12 @@
 export default Object.freeze({
   packageVersion: 1,
-  packageId: "@local/ai-studio-runtime",
+  packageId: "@local/vibe64-runtime",
   version: "0.1.0",
   kind: "runtime",
-  description: "AI Studio workflow session runtime and durable session store.",
+  description: "Vibe64 workflow session runtime and durable session store.",
   dependsOn: [
-    "@local/ai-studio-adapters",
-    "@local/ai-studio-core",
+    "@local/vibe64-adapters",
+    "@local/vibe64-core",
     "@local/setup-doctor-core",
     "@local/studio-terminal-core"
   ],

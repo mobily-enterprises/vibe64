@@ -21,7 +21,7 @@ import {
   studioUserStartupScript
 } from "@local/studio-terminal-core/server/studioToolHome";
 import {
-  aiStudioResult,
+  vibe64Result,
   directoryExists,
   pathInsideOrEqual,
   shellTerminalNamespace,
@@ -47,7 +47,7 @@ const MAX_OPEN_SHELL_TERMINALS = 9;
 const SHELL_TARGET_MAIN = "main";
 const SHELL_TARGET_WORKTREE = "worktree";
 const SHELL_CONTAINER_COMMAND = "bash";
-const SHELL_RC_PATH = "/tmp/ai-studio-shell.bashrc";
+const SHELL_RC_PATH = "/tmp/vibe64-shell.bashrc";
 const SHELL_TERMINAL_COLOR_ENV = Object.freeze({
   COLORTERM: "truecolor",
   FORCE_COLOR: "1",
@@ -95,10 +95,10 @@ function shellTerminalEnv({
   return {
     ...env,
     ...SHELL_TERMINAL_COLOR_ENV,
-    AI_STUDIO_PROJECT_ROOT: targetRoot,
-    AI_STUDIO_SHELL_PROMPT: shellPrompt(target),
-    AI_STUDIO_SHELL_TARGET: target,
-    AI_STUDIO_SHELL_WORKDIR: workdir,
+    VIBE64_PROJECT_ROOT: targetRoot,
+    VIBE64_SHELL_PROMPT: shellPrompt(target),
+    VIBE64_SHELL_TARGET: target,
+    VIBE64_SHELL_WORKDIR: workdir,
     LOGNAME: "studio",
     PS1: shellPrompt(target),
     SHELL: "/bin/bash",
@@ -108,7 +108,7 @@ function shellTerminalEnv({
 
 function shellRcFileSetupLines() {
   return [
-    `cat > ${SHELL_RC_PATH} <<'AI_STUDIO_SHELL_RC'`,
+    `cat > ${SHELL_RC_PATH} <<'VIBE64_SHELL_RC'`,
     "shopt -s checkwinsize 2>/dev/null || true",
     "PROMPT_DIRTRIM=4",
     "export TERM=${TERM:-xterm-256color}",
@@ -123,8 +123,8 @@ function shellRcFileSetupLines() {
     "alias grep='grep --color=auto'",
     "alias fgrep='fgrep --color=auto'",
     "alias egrep='egrep --color=auto'",
-    "PS1=\"${AI_STUDIO_SHELL_PROMPT:-\\w \\$ }\"",
-    "AI_STUDIO_SHELL_RC"
+    "PS1=\"${VIBE64_SHELL_PROMPT:-\\w \\$ }\"",
+    "VIBE64_SHELL_RC"
   ];
 }
 
@@ -133,11 +133,11 @@ function shellContainerName({
   target = "",
   terminalId = ""
 } = {}) {
-  return `ai-studio-shell-${stableHash(sessionId)}-${stableHash(target)}-${stableHash(terminalId)}`;
+  return `vibe64-shell-${stableHash(sessionId)}-${stableHash(target)}-${stableHash(terminalId)}`;
 }
 
 function shellContainerHostname(target = "") {
-  return `ai-studio-${shellPromptLabel(target)}`;
+  return `vibe64-${shellPromptLabel(target)}`;
 }
 
 function shellStartupScript() {
@@ -199,7 +199,7 @@ async function resolveShellTerminalCwd({
   if (!targetRoot) {
     return {
       ok: false,
-      error: "AI Studio shell target root is not available."
+      error: "Vibe64 shell target root is not available."
     };
   }
   if (!await directoryExists(targetRoot)) {
@@ -226,7 +226,7 @@ async function resolveShellTerminalCwd({
   if (!pathInsideOrEqual(targetRoot, worktreePath)) {
     return {
       ok: false,
-      error: "AI Studio shell worktree is outside the target root."
+      error: "Vibe64 shell worktree is outside the target root."
     };
   }
   if (!await directoryExists(worktreePath)) {
@@ -260,7 +260,7 @@ function createShellTerminalController({ projectService } = {}) {
     },
 
     async startTerminal(sessionId, input = {}) {
-      return aiStudioResult(async () => {
+      return vibe64Result(async () => {
         const target = normalizeShellTarget(input?.target);
         if (!target) {
           return {

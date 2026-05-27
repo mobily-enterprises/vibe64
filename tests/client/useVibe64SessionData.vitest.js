@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   selectedSessionRecord
-} from "../../src/composables/useAiStudioSessionData.js";
+} from "../../src/composables/useVibe64SessionData.js";
 
-describe("useAiStudioSessionData selected session record", () => {
+describe("useVibe64SessionData selected session record", () => {
   it("prefers the selected detail record over the shallow list summary", () => {
     const detailRecord = {
       actions: [

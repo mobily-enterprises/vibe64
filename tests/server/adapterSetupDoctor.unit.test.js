@@ -25,17 +25,17 @@ import {
 } from "../../packages/adapter-setup-doctor/src/server/inputSchemas.js";
 import {
   createService as createProjectService
-} from "../../packages/ai-studio-project/src/server/service.js";
+} from "../../packages/vibe64-project/src/server/service.js";
 import {
   JSKIT_ALLOW_SELF_TARGET_CONFIG
-} from "@local/ai-studio-adapters/server/adapters/jskit/index";
+} from "@local/vibe64-adapters/server/adapters/jskit/index";
 import {
   gitSafeDirectoryArgs,
   gitToolchainMountArgs,
   linkedGitMetadataMountSource,
   linkedGitRepositoryMountSource
 } from "@local/studio-terminal-core/server/gitToolchainMounts";
-import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
+import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 function assertShellScriptSurvivesWhitespaceCollapse(script) {
   const flattened = script.replace(/\s+/gu, " ");
@@ -78,8 +78,8 @@ test("Adapter Setup repair commands stay explicit", () => {
 });
 
 test("Adapter Setup toolchain mounts linked worktree Git metadata", async () => {
-  const repoRoot = await mkdtemp(path.join(os.tmpdir(), "ai-studio-adapter-linked-worktree-"));
-  const worktreeRoot = path.join(repoRoot, ".ai-studio", "sessions", "active", "example", "worktree");
+  const repoRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-adapter-linked-worktree-"));
+  const worktreeRoot = path.join(repoRoot, ".vibe64", "sessions", "active", "example", "worktree");
   const gitDir = path.join(repoRoot, ".git", "worktrees", "example");
   const gitMetadataRoot = path.join(repoRoot, ".git");
 
@@ -162,7 +162,7 @@ test("Adapter Setup rejects Git identity terminal repair without valid inputs", 
 });
 
 test("Adapter Setup blocks dependent checks when target directory is unavailable", async () => {
-  const targetRoot = path.join(os.tmpdir(), `ai-studio-missing-${Date.now()}`);
+  const targetRoot = path.join(os.tmpdir(), `vibe64-missing-${Date.now()}`);
   const status = await inspectAdapterSetup({
     studioRoot: process.cwd(),
     targetRoot

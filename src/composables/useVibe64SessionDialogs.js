@@ -2,24 +2,24 @@ import { computed, ref, unref } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
 import {
-  useAiStudioDiffDialog
-} from "@/composables/useAiStudioDiffDialog.js";
+  useVibe64DiffDialog
+} from "@/composables/useVibe64DiffDialog.js";
 import {
   emptyActionInputValues,
   normalizeActionInputFields,
   requiredActionInputMissing
-} from "@/lib/aiStudioActionInputModel.js";
+} from "@/lib/vibe64ActionInputModel.js";
 import {
-  AI_STUDIO_SESSIONS_API_SUFFIX,
-  AI_STUDIO_SURFACE_ID,
+  VIBE64_SESSIONS_API_SUFFIX,
+  VIBE64_SURFACE_ID,
   LOCAL_STUDIO_COMMAND_OPTIONS,
-  aiStudioSessionPath
-} from "@/lib/aiStudioSessionRequestConfig.js";
+  vibe64SessionPath
+} from "@/lib/vibe64SessionRequestConfig.js";
 import {
   readRefOrGetterBoolean
 } from "@/lib/vueRefOrGetterValue.js";
 
-function useAiStudioSessionDialogs({
+function useVibe64SessionDialogs({
   activeActionId,
   canOpenDiff = () => false,
   clearSelectedSession,
@@ -49,23 +49,23 @@ function useAiStudioSessionDialogs({
     diffLoading,
     diffPayload,
     openDiffDialog
-  } = useAiStudioDiffDialog({
+  } = useVibe64DiffDialog({
     canOpen: canOpenDiff,
     selectedSessionId
   });
 
   const abandonCommand = useCommand({
     access: "never",
-    apiSuffix: AI_STUDIO_SESSIONS_API_SUFFIX,
+    apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
     buildCommandOptions: (_payload, { context }) => ({
       method: "POST",
       options: LOCAL_STUDIO_COMMAND_OPTIONS,
-      path: aiStudioSessionPath(sessionsApiPath.value, context?.sessionId, "/abandon")
+      path: vibe64SessionPath(sessionsApiPath.value, context?.sessionId, "/abandon")
     }),
-    fallbackRunError: "AI Studio session could not be abandoned.",
+    fallbackRunError: "Vibe64 session could not be abandoned.",
     messages: {
-      error: "AI Studio session could not be abandoned.",
-      success: "AI Studio session abandoned."
+      error: "Vibe64 session could not be abandoned.",
+      success: "Vibe64 session abandoned."
     },
     onRunSuccess: async (_response, { context } = {}) => {
       if (!context?.sessionId || context.sessionId === unref(selectedSessionId)) {
@@ -75,8 +75,8 @@ function useAiStudioSessionDialogs({
       await refreshSessionData();
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "ai-studio.sessions.abandon",
-    surfaceId: AI_STUDIO_SURFACE_ID,
+    placementSource: "vibe64.sessions.abandon",
+    surfaceId: VIBE64_SURFACE_ID,
     writeMethod: "POST"
   });
 
@@ -220,5 +220,5 @@ function useAiStudioSessionDialogs({
 }
 
 export {
-  useAiStudioSessionDialogs
+  useVibe64SessionDialogs
 };

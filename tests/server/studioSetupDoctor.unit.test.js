@@ -41,20 +41,20 @@ test("Studio Setup terminal input preserves enter/control characters", () => {
 });
 
 test("Studio Setup resolves the Studio implementation root separately", () => {
-  const previousStudioRoot = process.env.AI_STUDIO_APP_ROOT;
+  const previousStudioRoot = process.env.VIBE64_APP_ROOT;
   const envRoot = path.join(tmpdir(), "example-studio-root");
   const explicitRoot = path.join(tmpdir(), "explicit-studio-root");
-  process.env.AI_STUDIO_APP_ROOT = envRoot;
+  process.env.VIBE64_APP_ROOT = envRoot;
 
   try {
     assert.equal(resolveStudioRoot(), envRoot);
     assert.equal(resolveStudioRoot(explicitRoot), explicitRoot);
-    assert.match(TOOLCHAIN_IMAGE, /^ai-studio-base-toolchain:/u);
+    assert.match(TOOLCHAIN_IMAGE, /^vibe64-base-toolchain:/u);
   } finally {
     if (previousStudioRoot == null) {
-      delete process.env.AI_STUDIO_APP_ROOT;
+      delete process.env.VIBE64_APP_ROOT;
     } else {
-      process.env.AI_STUDIO_APP_ROOT = previousStudioRoot;
+      process.env.VIBE64_APP_ROOT = previousStudioRoot;
     }
   }
 });
@@ -73,7 +73,7 @@ test("Studio Setup Codex repair reinstalls Codex in the managed tool home", () =
   assert.match(repair.commandPreview, /rm -rf "\$CODEX_GLOBAL_PACKAGE_DIR\/codex"/u);
   assert.match(repair.commandPreview, /rm -rf "\$CODEX_GLOBAL_PACKAGE_DIR\/\.codex-"\*/u);
   assert.match(repair.commandPreview, /npm install -g @openai\/codex@latest/u);
-  assert.doesNotMatch(repair.commandPreview, /docker build -t ai-studio-base-toolchain/u);
+  assert.doesNotMatch(repair.commandPreview, /docker build -t vibe64-base-toolchain/u);
   assert.doesNotMatch(script, /npm uninstall -g @openai\/codex/u);
   assert.match(script, /rm -rf "\$CODEX_GLOBAL_PACKAGE_DIR\/codex"/u);
   assert.match(script, /codex --version/u);
@@ -83,7 +83,7 @@ test("Studio Setup Codex repair terminal shows clear lifecycle text", () => {
   const script = reinstallCodexCliTerminalScript();
 
   assert.equal(REINSTALL_CODEX_CLI_TERMINAL_PREVIEW, "Reinstall Codex CLI inside the managed Studio toolchain");
-  assert.match(script, /AI Studio setup: reinstalling Codex CLI/u);
+  assert.match(script, /Vibe64 setup: reinstalling Codex CLI/u);
   assert.match(script, /Status: running\. Keep this terminal open\./u);
   assert.match(script, /Status: done\. Codex CLI was reinstalled and verified\./u);
   assert.match(script, /It is safe to close this terminal\./u);

@@ -25,7 +25,7 @@ test.describe("session history navigation", () => {
       await expect(page.getByRole("link", { name: /^Completed$/u })).toHaveCount(0);
       await expect(page.getByRole("link", { name: /^Abandoned$/u })).toHaveCount(0);
       expect(archiveRequests.some((request) => {
-        return request.startsWith("/api/ai-studio/sessions?") && request.includes("archive=completed");
+        return request.startsWith("/api/vibe64/sessions?") && request.includes("archive=completed");
       })).toBe(true);
 
       await page.getByRole("tab", { name: "Abandoned", exact: true }).click();

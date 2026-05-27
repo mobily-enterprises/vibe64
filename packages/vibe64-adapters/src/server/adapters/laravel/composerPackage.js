@@ -5,10 +5,10 @@ import {
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
-  aiStudioError,
+  vibe64Error,
   isPlainObject,
   normalizeText
-} from "@local/ai-studio-core/server/core";
+} from "@local/vibe64-core/server/core";
 
 async function fileExists(filePath = "") {
   try {
@@ -34,7 +34,7 @@ async function readComposerJson(root = "") {
   try {
     return JSON.parse(text);
   } catch {
-    throw aiStudioError(`Invalid JSON in Laravel composer file: ${composerJsonPath}`, "ai_studio_invalid_laravel_composer_json");
+    throw vibe64Error(`Invalid JSON in Laravel composer file: ${composerJsonPath}`, "vibe64_invalid_laravel_composer_json");
   }
 }
 

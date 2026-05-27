@@ -19,7 +19,7 @@
       >
         <template #default>
           <SetupReadinessGate>
-            <AiStudioSessionPanel @title-change="emitPageTitle" />
+            <Vibe64SessionPanel @title-change="emitPageTitle" />
           </SetupReadinessGate>
         </template>
       </ProjectTypeGate>
@@ -30,7 +30,7 @@
 <script setup>
 import { computed, onBeforeUnmount, ref } from "vue";
 import { useRoute } from "vue-router";
-import AiStudioSessionPanel from "@/components/studio/AiStudioSessionPanel.vue";
+import Vibe64SessionPanel from "@/components/studio/Vibe64SessionPanel.vue";
 import ProjectTypeGate from "@/components/studio/ProjectTypeGate.vue";
 import SetupReadinessGate from "@/components/studio/SetupReadinessGate.vue";
 

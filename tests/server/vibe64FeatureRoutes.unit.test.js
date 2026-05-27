@@ -1,19 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createAiStudioFeatureRoutes } from "@local/ai-studio-core/server/featureRoutes";
+import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRoutes";
 import {
   testReply,
   testRouteApp,
   withLocalRequestBypass
-} from "./aiStudioRouteTestHelpers.js";
+} from "./vibe64RouteTestHelpers.js";
 
-test("AI Studio feature routes centralize route metadata and action dispatch", async () => {
+test("Vibe64 feature routes centralize route metadata and action dispatch", async () => {
   await withLocalRequestBypass(async () => {
     const app = testRouteApp();
-    const routes = createAiStudioFeatureRoutes(app, {
+    const routes = createVibe64FeatureRoutes(app, {
       localRequestMessage: "Local only.",
-      routeRelativePath: "ai-studio",
+      routeRelativePath: "vibe64",
       routeSurface: "home",
       tags: ["studio", "unit-test"]
     });
@@ -34,7 +34,7 @@ test("AI Studio feature routes centralize route metadata and action dispatch", a
     assert.equal(app.registeredRoutes.length, 1);
     const route = app.registeredRoutes[0];
     assert.equal(route.method, "POST");
-    assert.equal(route.path, "/api/ai-studio/sessions/:sessionId/action");
+    assert.equal(route.path, "/api/vibe64/sessions/:sessionId/action");
     assert.equal(route.options.auth, "public");
     assert.equal(route.options.surface, "home");
     assert.deepEqual(route.options.meta, {
@@ -78,11 +78,11 @@ test("AI Studio feature routes centralize route metadata and action dispatch", a
   });
 });
 
-test("AI Studio feature routes support service response status overrides", async () => {
+test("Vibe64 feature routes support service response status overrides", async () => {
   await withLocalRequestBypass(async () => {
     const app = testRouteApp();
-    const routes = createAiStudioFeatureRoutes(app, {
-      routeRelativePath: "ai-studio",
+    const routes = createVibe64FeatureRoutes(app, {
+      routeRelativePath: "vibe64",
       routeSurface: "home",
       tags: ["studio", "unit-test"]
     });

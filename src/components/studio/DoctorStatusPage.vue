@@ -259,7 +259,7 @@ const props = defineProps({
   },
   quietLede: {
     type: String,
-    default: "AI Studio is checking the project and preparing anything it can handle automatically."
+    default: "Vibe64 is checking the project and preparing anything it can handle automatically."
   },
   quietTitle: {
     type: String,
@@ -566,18 +566,18 @@ const quietStatusMessage = computed(() => {
     return "Everything needed for this step is ready.";
   }
   if (automaticRepairRunning.value && automaticRepair.value?.label) {
-    return `AI Studio is running ${automaticRepair.value.label}.`;
+    return `Vibe64 is running ${automaticRepair.value.label}.`;
   }
   if (currentOperation.value) {
     return currentOperation.value;
   }
   if (automaticRepairRunning.value || automaticRepairAvailable.value) {
-    return "AI Studio is handling this setup step automatically.";
+    return "Vibe64 is handling this setup step automatically.";
   }
   if (isLoading.value) {
-    return "AI Studio is checking what this project needs.";
+    return "Vibe64 is checking what this project needs.";
   }
-  return "AI Studio is getting the project ready.";
+  return "Vibe64 is getting the project ready.";
 });
 
 const checking = computed(() => {

@@ -2,19 +2,19 @@
 
 ## Product
 
-- App purpose: AI Studio is a local-first operator UI for the target project selected by the local operator.
+- App purpose: Vibe64 is a local-first operator UI for the target project selected by the local operator.
 - Primary users: the local operator running the Studio process.
 - Success criteria: inspect, run, review, verify, and later deploy the current target project without a hosted service or project registry.
 - First-run rule: Studio gates readiness behind the Setup flow at `/setup`. The default tab is `studio-setup`; missing or unknown `tab` query values normalize to `studio-setup`.
-- Root rule: the controlled project root is the launcher/invocation directory, not necessarily the Studio implementation directory. If the Studio executable has to start the server from the Studio app root, the launcher must preserve the original project root in `AI_STUDIO_TARGET_ROOT`.
+- Root rule: the controlled project root is the launcher/invocation directory, not necessarily the Studio implementation directory. If the Studio executable has to start the server from the Studio app root, the launcher must preserve the original project root in `VIBE64_TARGET_ROOT`.
 - Target-readiness rule: after Studio Setup Doctor passes and before any app inspection, Studio runs Adapter Setup Doctor in `/setup?tab=adapter-setup` to prove target identity, filesystem access, Git state, and GitHub control capability without reading target-specific app metadata.
 - App-setup rule: after Adapter Setup Doctor passes and before `/home`, Studio runs Project Setup Doctor in `/setup?tab=project-setup` to make the target root ready for the selected adapter.
 
 ## Important Design Decisions
 
 - Numbered questions are deliberately UI-only sugar. The server sends one prompt/message and one logical response field; the client may render supported numbered-question text as separate inputs, but it submits one combined response value. Do not replace this with server question metadata, structured question endpoints, or separate persisted question-answer fields.
-- Non-command action handlers stay inside the per-session mutation queue by default. AI Studio is an interactive, sequential workflow, and long-running Codex/command work is already made visible through live terminal surfaces. Do not split prompt/adapter/finish handlers out into parallel action execution unless timestamped logs show a real user-visible gap before the terminal appears; fix that measured pre-terminal stall before changing the serialization model.
-- AI Studio is a single-process local editor for one target root. It is launched from the destination directory, or with that directory preserved as `AI_STUDIO_TARGET_ROOT`, and it works on that directory only. Session persistence is file-backed under `.ai-studio`; in-process mutation queues are the concurrency boundary. JSKIT realtime is used for local UI event fanout so the same operator can keep multiple browsers or devices in sync with the same Studio process. That realtime layer does not make session persistence distributed. Do not add Redis, Socket.IO clustering, cross-process locking, distributed session coordination, or hosted project-registry assumptions unless this product contract is deliberately changed first.
+- Non-command action handlers stay inside the per-session mutation queue by default. Vibe64 is an interactive, sequential workflow, and long-running Codex/command work is already made visible through live terminal surfaces. Do not split prompt/adapter/finish handlers out into parallel action execution unless timestamped logs show a real user-visible gap before the terminal appears; fix that measured pre-terminal stall before changing the serialization model.
+- Vibe64 is a single-process local editor for one target root. It is launched from the destination directory, or with that directory preserved as `VIBE64_TARGET_ROOT`, and it works on that directory only. Session persistence is file-backed under `.vibe64`; in-process mutation queues are the concurrency boundary. JSKIT realtime is used for local UI event fanout so the same operator can keep multiple browsers or devices in sync with the same Studio process. That realtime layer does not make session persistence distributed. Do not add Redis, Socket.IO clustering, cross-process locking, distributed session coordination, or hosted project-registry assumptions unless this product contract is deliberately changed first.
 
 ## Platform Choices
 
@@ -44,9 +44,9 @@
 | StudioSetupEnvironment | Machine-level runtime readiness for Studio | public | Checks Docker/runtime ability to provide the managed base toolchain, git, ripgrep, Playwright/Chromium, GH auth, Codex auth, and Codex sandboxing before project work begins. |
 | AdapterSetupReadiness | Pre-inspection Git/GitHub readiness for the target root | public | Derived from target path, Git, and GitHub CLI checks; blocks app inspection and edits until ready or repaired. |
 | ProjectSetupReadiness | Sequential setup state for the target app | public | Derived from filesystem, Git/GitHub remote state, adapter setup plugins, local dependencies, runtime service needs, and the selected adapter's readiness checks. |
-| CurrentApp | Runtime snapshot of the target project root | public | Derived from filesystem and git on request; not persisted. The target root comes from the invocation directory or `AI_STUDIO_TARGET_ROOT`, not from a stored project list. |
-| IssueSession | AI Studio session runtime state for the current target app | public | Derived from `.ai-studio/sessions` and AI Studio runtime APIs; not a database table. Active sessions stay on `/home`; completed and abandoned archive views are read through Current App APIs. Adapter-specific framework work uses the selected adapter's commands. AI Studio session state is inspected through `.ai-studio`. |
-| CurrentAppTargetScripts | Target scripts plus operator shortcuts | public | Derived from adapter-provided scripts and project-owned `.ai-studio/scripts/*` files. Starred script overrides are target-root config in `.ai-studio/config/starred_scripts`, not database or CRUD-owned data. |
+| CurrentApp | Runtime snapshot of the target project root | public | Derived from filesystem and git on request; not persisted. The target root comes from the invocation directory or `VIBE64_TARGET_ROOT`, not from a stored project list. |
+| IssueSession | Vibe64 session runtime state for the current target app | public | Derived from `.vibe64/sessions` and Vibe64 runtime APIs; not a database table. Active sessions stay on `/home`; completed and abandoned archive views are read through Current App APIs. Adapter-specific framework work uses the selected adapter's commands. Vibe64 session state is inspected through `.vibe64`. |
+| CurrentAppTargetScripts | Target scripts plus operator shortcuts | public | Derived from adapter-provided scripts and project-owned `.vibe64/scripts/*` files. Starred script overrides are target-root config in `.vibe64/config/starred_scripts`, not database or CRUD-owned data. |
 
 ## Route And Screen Plan
 
@@ -66,7 +66,7 @@
 - Baseline runtime packages: `@jskit-ai/shell-web`, `@local/main`, `@local/studio-setup-doctor`, `@local/adapter-setup-doctor`, `@local/project-setup-doctor`, `@local/current-app`.
 - Optional runtime packages: none for V0.
 - Generator packages to use: `feature-server-generator` for Studio Setup Doctor, Adapter Setup Doctor, and Current App endpoints.
-- Package-owned workflows to accept as baseline: base AI Studio app runtime.
+- Package-owned workflows to accept as baseline: base Vibe64 app runtime.
 - Package-owned workflows to override or extend: none.
 
 ## Implementation Notes
@@ -79,11 +79,11 @@
 - Issue-session archives: `ArchivedIssueSessions` owns archive list loading, empty, error, refresh, and card-detail states. The Session History page reuses it with `archive=completed|abandoned`, hides archive-specific title/description copy inside tabs, and places one top-level Refresh action in the tab controls so the archive content does not gain an extra action-only header row.
 - Active issue-session naming: derive display titles through `issueSessionDisplayTitle(session)` using trimmed `session.issueTitle`, then the first meaningful line from `session.issueText`, then `Session <shortIssueSessionId(session.sessionId)>`. `IssueSessionPanel` emits the selected title upward; `/home/index.vue` forwards it; `/home.vue` owns shell app-bar rendering and clears it when leaving `/home` or when the current app/session is unavailable.
 - Current-app archive API: completed and abandoned archive lists use `GET /api/studio/current-app/issue-sessions?archive=<completed|abandoned>`. This is app runtime data, not CRUD-owned persistence.
-- Current-app target script API: `@local/current-app` owns `GET /api/studio/current-app/target-scripts`, `PUT /api/studio/current-app/target-scripts/starred`, `DELETE /api/studio/current-app/target-scripts/starred`, `POST /api/studio/current-app/target-script-terminal`, and `DELETE /api/studio/current-app/target-script-terminal/:terminalSessionId`. All are local-only Studio routes. Adapter scripts are validated by the adapter; project scripts are files under `.ai-studio/scripts/` with safe filenames.
-- Starred target script config: missing `.ai-studio/config/starred_scripts` means adapter-provided defaults are used. A present blank file means no starred scripts. Saving writes stable script ids in sorted order; reset deletes the file.
-- Target script terminal: script runs use the terminal session infrastructure and the selected adapter's terminal spec. Project-owned scripts run as `bash .ai-studio/scripts/<scriptName>`. Adapter-owned scripts decide their own command shape.
+- Current-app target script API: `@local/current-app` owns `GET /api/studio/current-app/target-scripts`, `PUT /api/studio/current-app/target-scripts/starred`, `DELETE /api/studio/current-app/target-scripts/starred`, `POST /api/studio/current-app/target-script-terminal`, and `DELETE /api/studio/current-app/target-script-terminal/:terminalSessionId`. All are local-only Studio routes. Adapter scripts are validated by the adapter; project scripts are files under `.vibe64/scripts/` with safe filenames.
+- Starred target script config: missing `.vibe64/config/starred_scripts` means adapter-provided defaults are used. A present blank file means no starred scripts. Saving writes stable script ids in sorted order; reset deletes the file.
+- Target script terminal: script runs use the terminal session infrastructure and the selected adapter's terminal spec. Project-owned scripts run as `bash .vibe64/scripts/<scriptName>`. Adapter-owned scripts decide their own command shape.
 - Shared terminal UI: Studio xterm lifecycle, websocket connection, output trimming, input, Ctrl-C, retry, and close behavior live in `src/composables/useStudioTerminal.js` and should be reused by new terminal surfaces instead of copied into each component.
-- Local Studio request guard: Current App Studio HTTP and websocket routes are loopback-only by default. Container/host UI testing that cannot satisfy loopback host/origin checks must use the explicit `--bypass-localhost-check` flag or `AI_STUDIO_BYPASS_LOCALHOST_CHECK=1`; `bin/dev.js` forwards the bypass as environment to Vite and the dev proxy rewrites origin only under that explicit bypass.
+- Local Studio request guard: Current App Studio HTTP and websocket routes are loopback-only by default. Container/host UI testing that cannot satisfy loopback host/origin checks must use the explicit `--bypass-localhost-check` flag or `VIBE64_BYPASS_LOCALHOST_CHECK=1`; `bin/dev.js` forwards the bypass as environment to Vite and the dev proxy rewrites origin only under that explicit bypass.
 - App test run config: adapter/project-specific test commands are not a mainline Studio Setup concern. Studio self-testing may still use the explicit localhost-check bypass when a local browser runner must reach local-only Current App routes.
 - Studio terminal cleanup: toolchain-backed Codex/app-test terminals are labeled with the Studio daemon PID so startup cleanup can remove stale containers and process trees from dead Studio daemons without touching active sessions.
 

@@ -2,8 +2,8 @@ import { computed, ref, unref } from "vue";
 
 import {
   clientControlHasDispatcher,
-  runAiStudioClientControl
-} from "@/lib/aiStudioClientControlDispatcher.js";
+  runVibe64ClientControl
+} from "@/lib/vibe64ClientControlDispatcher.js";
 
 const VISIBLE_BACKGROUND_TASK_STATUSES = new Set(["failed", "running"]);
 
@@ -31,7 +31,7 @@ function taskRetryErrorMessage(error) {
   return String(error?.message || error || "Background task retry failed.").trim();
 }
 
-function useAiStudioBackgroundTasks({
+function useVibe64BackgroundTasks({
   refreshSessionData = async () => null,
   session
 } = {}) {
@@ -50,7 +50,7 @@ function useAiStudioBackgroundTasks({
     backgroundTaskError.value = "";
     retryingBackgroundTaskId.value = task.id;
     try {
-      const result = await runAiStudioClientControl(task.retry, {
+      const result = await runVibe64ClientControl(task.retry, {
         refreshSessionData,
         session: unref(session),
         sessionId
@@ -81,5 +81,5 @@ function useAiStudioBackgroundTasks({
 
 export {
   normalizeBackgroundTasks,
-  useAiStudioBackgroundTasks
+  useVibe64BackgroundTasks
 };

@@ -61,7 +61,7 @@ function databaseEnvWriteScript(targetRoot, {
   return [
     envFileWriteScript({
       existingValuesError: replaceExisting ? "" : existingValuesError,
-      header: "# AI Studio managed MariaDB defaults",
+      header: "# Vibe64 managed MariaDB defaults",
       relativePath: ".env",
       replaceExisting,
       values: defaultDatabaseEnv(targetRoot)

@@ -1,6 +1,6 @@
 # Yet Another TODO
 
-This file tracks the current outstanding findings from the AI Studio state-machine review.
+This file tracks the current outstanding findings from the Vibe64 state-machine review.
 
 Canonical product/design decisions live in `.jskit/APP_BLUEPRINT.md`.
 
@@ -29,7 +29,7 @@ None.
 
 Evidence:
 
-- `server/lib/aiStudio/runtime.js`
+- `server/lib/vibe64/runtime.js`
 
 Decision:
 
@@ -37,7 +37,7 @@ Do not split prompt/adapter/finish action handlers out of the per-session mutati
 
 Why:
 
-- AI Studio is an interactive, sequential workflow.
+- Vibe64 is an interactive, sequential workflow.
 - Long-running prompt work is already made visible by the live Codex terminal.
 - Long-running command work is already made visible by the command terminal.
 - Releasing the mutation queue would add run-token state, stale completion handling, and extra recovery paths without a demonstrated UX gain.
@@ -51,16 +51,16 @@ Only revisit this if timestamped logs show a real user-visible gap before the Co
 
 Changed files:
 
-- `server/lib/aiStudio/sessionStore.js`
-- `server/lib/aiStudio/runtime.js`
-- `packages/ai-studio-sessions/src/server/service.js`
-- `src/composables/useAiStudioSessionData.js`
-- `src/components/studio/AiStudioSessionPanel.vue`
-- `src/components/studio/ArchivedAiStudioSessions.vue`
-- `tests/client/useAiStudioSessionData.vitest.js`
-- `tests/server/aiStudioSessionStore.unit.test.js`
-- `tests/server/aiStudioSessionsService.unit.test.js`
-- `tests/server/aiStudioWorkflowMachine.unit.test.js`
+- `server/lib/vibe64/sessionStore.js`
+- `server/lib/vibe64/runtime.js`
+- `packages/vibe64-sessions/src/server/service.js`
+- `src/composables/useVibe64SessionData.js`
+- `src/components/studio/Vibe64SessionPanel.vue`
+- `src/components/studio/ArchivedVibe64Sessions.vue`
+- `tests/client/useVibe64SessionData.vitest.js`
+- `tests/server/vibe64SessionStore.unit.test.js`
+- `tests/server/vibe64SessionsService.unit.test.js`
+- `tests/server/vibe64WorkflowMachine.unit.test.js`
 
 Implemented:
 
@@ -72,8 +72,8 @@ Implemented:
 
 Verification:
 
-- `node --test tests/server/aiStudioSessionStore.unit.test.js tests/server/aiStudioWorkflowMachine.unit.test.js tests/server/aiStudioSessionsService.unit.test.js`
-- `npx vitest run tests/client/useAiStudioSessionData.vitest.js tests/client/aiStudioSessionPanelModel.vitest.js`
+- `node --test tests/server/vibe64SessionStore.unit.test.js tests/server/vibe64WorkflowMachine.unit.test.js tests/server/vibe64SessionsService.unit.test.js`
+- `npx vitest run tests/client/useVibe64SessionData.vitest.js tests/client/vibe64SessionPanelModel.vitest.js`
 - `npm run test:client`
 - `npm run build`
 - `npx playwright test --config playwright.config.ts tests/e2e/base-shell.spec.ts -g "session history"`
@@ -83,31 +83,31 @@ Verification:
 
 Changed files:
 
-- `server/lib/aiStudio/sessionStore.js`
-- `server/lib/aiStudio/workflowPresentation.js`
-- `packages/ai-studio-terminals/src/server/codexTerminal.js`
-- `src/composables/useAiStudioBackgroundTasks.js`
-- `src/components/studio/ai-studio-session/AiStudioBackgroundTasks.vue`
-- `src/components/studio/ai-studio-session/AiStudioAutopilotView.vue`
-- `src/components/studio/ai-studio-session/AiStudioSessionCurrentStep.vue`
-- `src/components/studio/ai-studio-session/AiStudioSessionWorkspace.vue`
-- `src/components/studio/ai-studio-session/AiStudioSessionRuntimeHost.vue`
-- `tests/client/useAiStudioBackgroundTasks.vitest.js`
-- `tests/server/aiStudioSessionStore.unit.test.js`
-- `tests/server/aiStudioTerminalsService.unit.test.js`
-- `tests/server/aiStudioWorkflowMachine.unit.test.js`
+- `server/lib/vibe64/sessionStore.js`
+- `server/lib/vibe64/workflowPresentation.js`
+- `packages/vibe64-terminals/src/server/codexTerminal.js`
+- `src/composables/useVibe64BackgroundTasks.js`
+- `src/components/studio/vibe64-session/Vibe64BackgroundTasks.vue`
+- `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
+- `src/components/studio/vibe64-session/Vibe64SessionCurrentStep.vue`
+- `src/components/studio/vibe64-session/Vibe64SessionWorkspace.vue`
+- `src/components/studio/vibe64-session/Vibe64SessionRuntimeHost.vue`
+- `tests/client/useVibe64BackgroundTasks.vitest.js`
+- `tests/server/vibe64SessionStore.unit.test.js`
+- `tests/server/vibe64TerminalsService.unit.test.js`
+- `tests/server/vibe64WorkflowMachine.unit.test.js`
 
 Implemented:
 
-- Added durable session background-task records under `.ai-studio/sessions/active/<session>/background-tasks/`.
+- Added durable session background-task records under `.vibe64/sessions/active/<session>/background-tasks/`.
 - Codex bootstrap now writes `running`, `ready`, and `failed` task status from the actual bootstrap path.
 - `presentation.backgroundTasks` exposes the status, timestamps, error, terminal id, and retry metadata.
 - Autopilot and Inspect render failed/running background tasks and retry failed Codex bootstrap through the existing Codex terminal action.
 
 Verification:
 
-- `node --test tests/server/aiStudioSessionStore.unit.test.js tests/server/aiStudioTerminalsService.unit.test.js tests/server/aiStudioWorkflowMachine.unit.test.js`
-- `npx vitest run tests/client/useAiStudioBackgroundTasks.vitest.js`
+- `node --test tests/server/vibe64SessionStore.unit.test.js tests/server/vibe64TerminalsService.unit.test.js tests/server/vibe64WorkflowMachine.unit.test.js`
+- `npx vitest run tests/client/useVibe64BackgroundTasks.vitest.js`
 - `npm run test:client`
 - `npm run build`
 - `git diff --check`
@@ -116,17 +116,17 @@ Verification:
 
 Changed files:
 
-- `server/lib/aiStudio/workflowPresentation.js`
-- `server/lib/aiStudio/sessionRealtimeEvents.js`
-- `server/lib/aiStudio/serverResponses.js`
-- `server/lib/aiStudio/runtime.js`
-- `packages/ai-studio-terminals/src/server/commandTerminal.js`
-- `src/composables/useAiStudioAutopilotController.js`
-- `src/composables/useAiStudioHeadlessCommandRunner.js`
-- `src/composables/useAiStudioSessionActions.js`
-- `tests/client/useAiStudioAutopilotController.vitest.js`
-- `tests/server/aiStudioWorkflowMachine.unit.test.js`
-- `tests/server/aiStudioSessionRealtimeEvents.unit.test.js`
+- `server/lib/vibe64/workflowPresentation.js`
+- `server/lib/vibe64/sessionRealtimeEvents.js`
+- `server/lib/vibe64/serverResponses.js`
+- `server/lib/vibe64/runtime.js`
+- `packages/vibe64-terminals/src/server/commandTerminal.js`
+- `src/composables/useVibe64AutopilotController.js`
+- `src/composables/useVibe64HeadlessCommandRunner.js`
+- `src/composables/useVibe64SessionActions.js`
+- `tests/client/useVibe64AutopilotController.vitest.js`
+- `tests/server/vibe64WorkflowMachine.unit.test.js`
+- `tests/server/vibe64SessionRealtimeEvents.unit.test.js`
 
 Done:
 
@@ -140,11 +140,11 @@ Done:
 
 Evidence:
 
-- `server/lib/aiStudio/workflow.js`
-- `server/lib/aiStudio/workflowMachine.js`
-- `server/lib/aiStudio/workflowPresentation.js`
-- `server/lib/aiStudio/workflowStepMachines.js`
-- `tests/server/aiStudioWorkflowMachine.unit.test.js`
+- `server/lib/vibe64/workflow.js`
+- `server/lib/vibe64/workflowMachine.js`
+- `server/lib/vibe64/workflowPresentation.js`
+- `server/lib/vibe64/workflowStepMachines.js`
+- `tests/server/vibe64WorkflowMachine.unit.test.js`
 
 Previous problem:
 
@@ -160,8 +160,8 @@ Done:
 
 Evidence:
 
-- `server/lib/aiStudio/workflowStepMachines.js`
-- `tests/server/aiStudioWorkflowMachine.unit.test.js`
+- `server/lib/vibe64/workflowStepMachines.js`
+- `tests/server/vibe64WorkflowMachine.unit.test.js`
 
 Previous problem:
 
@@ -182,9 +182,9 @@ Done:
 
 Evidence:
 
-- `server/lib/aiStudio/workflow.js`
-- `server/lib/aiStudio/workflowPresentation.js`
-- `tests/server/aiStudioWorkflowMachine.unit.test.js`
+- `server/lib/vibe64/workflow.js`
+- `server/lib/vibe64/workflowPresentation.js`
+- `tests/server/vibe64WorkflowMachine.unit.test.js`
 
 Previous problem:
 
@@ -200,12 +200,12 @@ Done:
 
 Evidence:
 
-- `server/lib/aiStudio/sessionStore.js`
-- `packages/ai-studio-terminals/src/server/commandTerminal.js`
-- `src/composables/useAiStudioAutopilotController.js`
-- `tests/server/aiStudioSessionStore.unit.test.js`
-- `tests/server/aiStudioTerminalsService.unit.test.js`
-- `tests/client/useAiStudioAutopilotController.vitest.js`
+- `server/lib/vibe64/sessionStore.js`
+- `packages/vibe64-terminals/src/server/commandTerminal.js`
+- `src/composables/useVibe64AutopilotController.js`
+- `tests/server/vibe64SessionStore.unit.test.js`
+- `tests/server/vibe64TerminalsService.unit.test.js`
+- `tests/client/useVibe64AutopilotController.vitest.js`
 
 Previous problem:
 
@@ -224,10 +224,10 @@ Done:
 Evidence:
 
 - `.jskit/APP_BLUEPRINT.md`
-- `src/lib/aiStudioNumberedQuestionSugar.js`
-- `src/composables/useAiStudioStepInputForm.js`
-- `tests/client/aiStudioNumberedQuestionSugar.vitest.js`
-- `tests/client/useAiStudioStepInputForm.vitest.js`
+- `src/lib/vibe64NumberedQuestionSugar.js`
+- `src/composables/useVibe64StepInputForm.js`
+- `tests/client/vibe64NumberedQuestionSugar.vitest.js`
+- `tests/client/useVibe64StepInputForm.vitest.js`
 
 Previous problem:
 
@@ -244,7 +244,7 @@ Done:
 
 Evidence:
 
-- `server/lib/aiStudio/workflowMachine.js`
+- `server/lib/vibe64/workflowMachine.js`
 - `tests/client/dumbClientOwnership.vitest.js`
 
 Previous problem:

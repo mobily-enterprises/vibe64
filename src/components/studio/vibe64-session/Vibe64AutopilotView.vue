@@ -1,6 +1,6 @@
 <template>
   <section class="studio-autopilot">
-    <AiStudioAutopilotNavigation
+    <Vibe64AutopilotNavigation
       class="studio-autopilot__nav"
       :busy="navigationBusy"
       layout="rail"
@@ -18,7 +18,7 @@
         v-if="commandTerminalVisible"
         class="studio-autopilot__command-terminal-stage"
       >
-        <AiStudioHeadlessCommandOutput
+        <Vibe64HeadlessCommandOutput
           class="studio-autopilot__command-terminal-output"
           :command-preview="commandPreview"
           compact
@@ -143,7 +143,7 @@
         </div>
       </div>
 
-      <AiStudioBackgroundTasks
+      <Vibe64BackgroundTasks
         v-if="visibleBackgroundTasks.length || backgroundTaskError"
         :error="backgroundTaskError"
         :retrying-task-id="retryingBackgroundTaskId"
@@ -235,7 +235,7 @@
           <span>{{ screenMessage }}</span>
         </div>
 
-        <AiStudioLaunchControls
+        <Vibe64LaunchControls
           v-if="launchControlsVisible"
           button-label="Try it!"
           button-size="default"
@@ -246,14 +246,14 @@
           workflow-command
         />
 
-        <AiStudioReportPreview
+        <Vibe64ReportPreview
           v-if="reportPreviewVisible"
           :error="reportPreview.error"
           :loading="reportPreview.loading"
           :text="reportPreview.text"
         />
 
-        <AiStudioConversationLog
+        <Vibe64ConversationLog
           v-if="conversationLogVisible"
           class="studio-autopilot__response-content"
           :error="conversationLog.error"
@@ -263,7 +263,7 @@
           :visible="conversationLog.visible"
         />
 
-        <AiStudioReportPreview
+        <Vibe64ReportPreview
           v-if="responsePreviewVisible"
           class="studio-autopilot__response-content studio-autopilot__response-preview"
           empty-text="Codex response is not ready yet."
@@ -274,7 +274,7 @@
           title="Codex"
         />
 
-        <AiStudioAutopilotComposer
+        <Vibe64AutopilotComposer
           v-if="selectedControl"
           :can-submit-selected-control="canSubmitSelectedControl"
           :running="running"
@@ -327,34 +327,34 @@ import {
   mdiRobotOutline,
   mdiStopCircleOutline
 } from "@mdi/js";
-import AiStudioLaunchControls from "@/components/studio/AiStudioLaunchControls.vue";
-import AiStudioBackgroundTasks from "@/components/studio/ai-studio-session/AiStudioBackgroundTasks.vue";
-import AiStudioAutopilotComposer from "@/components/studio/ai-studio-session/AiStudioAutopilotComposer.vue";
-import AiStudioAutopilotNavigation from "@/components/studio/ai-studio-session/AiStudioAutopilotNavigation.vue";
-import AiStudioConversationLog from "@/components/studio/ai-studio-session/AiStudioConversationLog.vue";
-import AiStudioHeadlessCommandOutput from "@/components/studio/ai-studio-session/AiStudioHeadlessCommandOutput.vue";
-import AiStudioReportPreview from "@/components/studio/ai-studio-session/AiStudioReportPreview.vue";
+import Vibe64LaunchControls from "@/components/studio/Vibe64LaunchControls.vue";
+import Vibe64BackgroundTasks from "@/components/studio/vibe64-session/Vibe64BackgroundTasks.vue";
+import Vibe64AutopilotComposer from "@/components/studio/vibe64-session/Vibe64AutopilotComposer.vue";
+import Vibe64AutopilotNavigation from "@/components/studio/vibe64-session/Vibe64AutopilotNavigation.vue";
+import Vibe64ConversationLog from "@/components/studio/vibe64-session/Vibe64ConversationLog.vue";
+import Vibe64HeadlessCommandOutput from "@/components/studio/vibe64-session/Vibe64HeadlessCommandOutput.vue";
+import Vibe64ReportPreview from "@/components/studio/vibe64-session/Vibe64ReportPreview.vue";
 import {
-  useAiStudioAutopilotComposer
-} from "@/composables/useAiStudioAutopilotComposer.js";
+  useVibe64AutopilotComposer
+} from "@/composables/useVibe64AutopilotComposer.js";
 import {
-  useAiStudioAutopilotController
-} from "@/composables/useAiStudioAutopilotController.js";
+  useVibe64AutopilotController
+} from "@/composables/useVibe64AutopilotController.js";
 import {
-  useAiStudioBackgroundTasks
-} from "@/composables/useAiStudioBackgroundTasks.js";
-import { useAiStudioStepInputForm } from "@/composables/useAiStudioStepInputForm.js";
+  useVibe64BackgroundTasks
+} from "@/composables/useVibe64BackgroundTasks.js";
+import { useVibe64StepInputForm } from "@/composables/useVibe64StepInputForm.js";
 import {
   stripTerminalControlSequences
 } from "@/lib/codexOutput.js";
 import {
-  runAiStudioClientControl
-} from "@/lib/aiStudioClientControlDispatcher.js";
+  runVibe64ClientControl
+} from "@/lib/vibe64ClientControlDispatcher.js";
 import {
-  AI_STUDIO_CLIENT_CONTROL_ICON_TOKENS,
+  VIBE64_CLIENT_CONTROL_ICON_TOKENS,
   controlIconToken,
   controlStateActive as presentationControlStateActive
-} from "@/lib/aiStudioPresentationControls.js";
+} from "@/lib/vibe64PresentationControls.js";
 
 // Autopilot workflow meaning belongs to the server. This component renders the
 // current presentation and dispatches the server-provided intents.
@@ -442,7 +442,7 @@ const {
   stopCommandAction,
   stuckRecoveryAvailable,
   stuckRecoveryRunning
-} = useAiStudioAutopilotController({
+} = useVibe64AutopilotController({
   actions: props.actions,
   commandRunner: props.commandRunner || undefined,
   enabled: computed(() => props.automationEnabled),
@@ -455,12 +455,12 @@ const {
   retryBackgroundTask,
   retryingBackgroundTaskId,
   visibleBackgroundTasks
-} = useAiStudioBackgroundTasks({
+} = useVibe64BackgroundTasks({
   refreshSessionData: () => props.refreshSessionData(),
   session: computed(() => props.session)
 });
 
-const stepInput = proxyRefs(useAiStudioStepInputForm({
+const stepInput = proxyRefs(useVibe64StepInputForm({
   onSaved: async () => {
     await props.refreshSessionData();
     await nextTick();
@@ -569,7 +569,7 @@ const {
   selectedControlValues,
   submitSelectedControl,
   updateSelectedControlValue
-} = useAiStudioAutopilotComposer({
+} = useVibe64AutopilotComposer({
   conversationLog: computed(() => props.conversationLog),
   controls: allScreenControls,
   isControlDisabled: controlDisabled,
@@ -636,7 +636,7 @@ function controlStateActive(control = {}, field = "") {
 }
 
 function runClientControl(control = {}) {
-  return runAiStudioClientControl(control, {
+  return runVibe64ClientControl(control, {
     diff: props.diff
   });
 }
@@ -654,7 +654,7 @@ function controlLoading(control = {}) {
 }
 
 function controlIcon(control = {}) {
-  if (controlIconToken(control) === AI_STUDIO_CLIENT_CONTROL_ICON_TOKENS.DIFF) {
+  if (controlIconToken(control) === VIBE64_CLIENT_CONTROL_ICON_TOKENS.DIFF) {
     return mdiFileCompare;
   }
   if (control.style === "primary") {

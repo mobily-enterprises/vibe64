@@ -1,10 +1,10 @@
 import { computed, ref } from "vue";
 import { describe, expect, it, vi } from "vitest";
 import {
-  useAiStudioAutopilotController
-} from "../../src/composables/useAiStudioAutopilotController.js";
+  useVibe64AutopilotController
+} from "../../src/composables/useVibe64AutopilotController.js";
 
-describe("useAiStudioAutopilotController", () => {
+describe("useVibe64AutopilotController", () => {
   it("dispatches a server-routed command operation without reading action metadata", async () => {
     const context = createControllerContext({
       operation: {
@@ -428,7 +428,7 @@ function createControllerContext({
         commandResult.value = {
           actionId: action.id,
           actionLabel: action.label,
-          code: "ai_studio_action_disabled",
+          code: "vibe64_action_disabled",
           error: "This step is already complete.",
           ok: false,
           operationOutcome: "stale_operation",
@@ -566,7 +566,7 @@ function createControllerContext({
     }
     syncSession();
   });
-  const controller = useAiStudioAutopilotController({
+  const controller = useVibe64AutopilotController({
     actions: actionSurface,
     commandCompletionRefreshAttempts,
     commandCompletionRefreshDelayMs: 0,

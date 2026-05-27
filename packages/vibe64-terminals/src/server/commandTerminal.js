@@ -13,14 +13,14 @@ import {
   removeDockerContainer
 } from "@local/studio-terminal-core/server/containerRuntime";
 import {
-  aiStudioError
-} from "@local/ai-studio-core/server/core";
+  vibe64Error
+} from "@local/vibe64-core/server/core";
 import {
-  aiStudioSessionDebugDurationMs,
-  aiStudioSessionDebugError,
-  aiStudioSessionDebugLog,
-  aiStudioSessionDebugSummary
-} from "@local/ai-studio-runtime/server/sessionDebugLog";
+  vibe64SessionDebugDurationMs,
+  vibe64SessionDebugError,
+  vibe64SessionDebugLog,
+  vibe64SessionDebugSummary
+} from "@local/vibe64-runtime/server/sessionDebugLog";
 import {
   ensureTargetRuntimeNetwork
 } from "@local/studio-terminal-core/server/runtimeContainers";
@@ -28,7 +28,7 @@ import {
   studioUserStartupScript
 } from "@local/studio-terminal-core/server/studioToolHome";
 import {
-  aiStudioResult,
+  vibe64Result,
   commandTerminalNamespace,
   normalizePlainObject,
   pathInsideOrEqual,
@@ -55,8 +55,8 @@ import {
   targetToolchainTerminalArgs
 } from "./targetToolchainTerminal.js";
 import {
-  AI_STUDIO_ACTION_DISPATCH_ROUTES as ACTION_DISPATCH_ROUTES
-} from "@local/ai-studio-core/shared";
+  VIBE64_ACTION_DISPATCH_ROUTES as ACTION_DISPATCH_ROUTES
+} from "@local/vibe64-core/shared";
 
 function actionById(session = {}, actionId = "") {
   return (Array.isArray(session.actions) ? session.actions : [])
@@ -71,7 +71,7 @@ function commandTerminalContainerName({
   sessionId = "",
   terminalId = ""
 } = {}) {
-  return `ai-studio-command-${stableHash(sessionId)}-${stableHash(terminalId)}`;
+  return `vibe64-command-${stableHash(sessionId)}-${stableHash(terminalId)}`;
 }
 
 function sessionRevision(value) {
@@ -196,7 +196,7 @@ async function writeActionTerminalResult({
   terminalSessionId = ""
 } = {}) {
   const startedAtMs = Date.now();
-  aiStudioSessionDebugLog("server.commandTerminal.writeResult.start", {
+  vibe64SessionDebugLog("server.commandTerminal.writeResult.start", {
     actionId: String(action.id || ""),
     advanceOnSuccess,
     exitCode,
@@ -221,7 +221,7 @@ async function writeActionTerminalResult({
   const currentSessionBeforeWrite = await runtime.getSession(session.sessionId);
   const staleReason = staleCompletionReason(session, currentSessionBeforeWrite);
   if (staleReason) {
-    aiStudioSessionDebugLog("server.commandTerminal.writeResult.stale", {
+    vibe64SessionDebugLog("server.commandTerminal.writeResult.stale", {
       actionId: String(action.id || ""),
       currentStep: String(currentSessionBeforeWrite.currentStep || ""),
       currentRevision: sessionRevision(currentSessionBeforeWrite.revision),
@@ -352,12 +352,12 @@ async function writeActionTerminalResult({
       outcome: completed ? "completed" : "blocked"
     }
   });
-  aiStudioSessionDebugLog("server.commandTerminal.writeResult.done", {
-    ...aiStudioSessionDebugSummary(currentSession),
+  vibe64SessionDebugLog("server.commandTerminal.writeResult.done", {
+    ...vibe64SessionDebugSummary(currentSession),
     actionId: String(action.id || ""),
     actionResultStatus: String(actionResult.status || ""),
     completed,
-    durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
+    durationMs: vibe64SessionDebugDurationMs(startedAtMs),
     exitCode,
     metadataKeys: Object.keys(metadata).sort()
   });
@@ -378,19 +378,19 @@ async function writeActionTerminalResult({
 
 function scheduleCommandTerminalPostCommitTask(label, task, details = {}) {
   const startedAtMs = Date.now();
-  aiStudioSessionDebugLog(`server.commandTerminal.postCommit.${label}.scheduled`, details);
+  vibe64SessionDebugLog(`server.commandTerminal.postCommit.${label}.scheduled`, details);
   void (async () => {
     try {
       await task();
-      aiStudioSessionDebugLog(`server.commandTerminal.postCommit.${label}.done`, {
+      vibe64SessionDebugLog(`server.commandTerminal.postCommit.${label}.done`, {
         ...details,
-        durationMs: aiStudioSessionDebugDurationMs(startedAtMs)
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs)
       });
     } catch (error) {
-      aiStudioSessionDebugLog(`server.commandTerminal.postCommit.${label}.error`, {
+      vibe64SessionDebugLog(`server.commandTerminal.postCommit.${label}.error`, {
         ...details,
-        durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
-        error: aiStudioSessionDebugError(error)
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+        error: vibe64SessionDebugError(error)
       });
     }
   })();
@@ -455,11 +455,11 @@ function scheduleCommandTerminalPostCommitEffects({
         postCommit: {
           afterSuccessfulCommand: afterSuccessfulCommandStatus,
           afterSuccessfulCommandError: afterSuccessfulCommandOutcome.status === "rejected"
-            ? aiStudioSessionDebugError(afterSuccessfulCommandOutcome.reason)
+            ? vibe64SessionDebugError(afterSuccessfulCommandOutcome.reason)
             : "",
           publishSessionChanged: publishOutcome.status === "fulfilled" ? "done" : "failed",
           publishSessionChangedError: publishOutcome.status === "rejected"
-            ? aiStudioSessionDebugError(publishOutcome.reason)
+            ? vibe64SessionDebugError(publishOutcome.reason)
             : ""
         }
       },
@@ -485,7 +485,7 @@ async function advanceSessionAfterSuccessfulCommand({
   session = {}
 } = {}) {
   if (!advanceOnSuccess || !completed) {
-    aiStudioSessionDebugLog("server.commandTerminal.advanceAfterSuccess.skipped", {
+    vibe64SessionDebugLog("server.commandTerminal.advanceAfterSuccess.skipped", {
       advanceOnSuccess,
       completed,
       hasAdvance: typeof runtime?.advance === "function",
@@ -494,9 +494,9 @@ async function advanceSessionAfterSuccessfulCommand({
     return null;
   }
   if (typeof runtime?.advance !== "function") {
-    throw aiStudioError(
-      "AI Studio runtime advance is not available for command completion.",
-      "ai_studio_runtime_advance_not_available"
+    throw vibe64Error(
+      "Vibe64 runtime advance is not available for command completion.",
+      "vibe64_runtime_advance_not_available"
     );
   }
 
@@ -506,13 +506,13 @@ async function advanceSessionAfterSuccessfulCommand({
     refreshedSession.next.enabled === true &&
     refreshedSession.next.stepId
   ) {
-    aiStudioSessionDebugLog("server.commandTerminal.advanceAfterSuccess.start", {
-      ...aiStudioSessionDebugSummary(refreshedSession)
+    vibe64SessionDebugLog("server.commandTerminal.advanceAfterSuccess.start", {
+      ...vibe64SessionDebugSummary(refreshedSession)
     });
     return runtime.advance(session.sessionId);
   }
-  aiStudioSessionDebugLog("server.commandTerminal.advanceAfterSuccess.notReady", {
-    ...aiStudioSessionDebugSummary(refreshedSession),
+  vibe64SessionDebugLog("server.commandTerminal.advanceAfterSuccess.notReady", {
+    ...vibe64SessionDebugSummary(refreshedSession),
     nextDisabledReason: String(refreshedSession?.next?.disabledReason || ""),
     nextVisible: refreshedSession?.next?.visible === true
   });
@@ -587,65 +587,65 @@ function createCommandTerminalController({
     async startTerminal(sessionId, input = {}) {
       const startedAtMs = Date.now();
       const requestedActionId = String(input?.actionId || "").trim();
-      aiStudioSessionDebugLog("server.commandTerminal.start.start", {
+      vibe64SessionDebugLog("server.commandTerminal.start.start", {
         actionId: requestedActionId,
         advanceOnSuccess: input?.advanceOnSuccess === true,
         inputKeys: Object.keys(normalizePlainObject(input?.input)).sort(),
         sessionId
       });
-      return aiStudioResult(async () => {
+      return vibe64Result(async () => {
         try {
           const actionId = requestedActionId;
           const runtime = await projectService.createRuntime();
           const session = await runtime.getSession(sessionId);
-          aiStudioSessionDebugLog("server.commandTerminal.start.sessionLoaded", {
-            ...aiStudioSessionDebugSummary(session),
+          vibe64SessionDebugLog("server.commandTerminal.start.sessionLoaded", {
+            ...vibe64SessionDebugSummary(session),
             actionId
           });
           const action = actionById(session, actionId);
           if (!action) {
-            aiStudioSessionDebugLog("server.commandTerminal.start.blocked", {
-              ...aiStudioSessionDebugSummary(session),
+            vibe64SessionDebugLog("server.commandTerminal.start.blocked", {
+              ...vibe64SessionDebugSummary(session),
               actionId,
               reason: "action_not_available"
             });
-            throw refreshRecommendedCommandError(aiStudioError(
-              `Action ${actionId || "(empty)"} is not available on this AI Studio step.`,
-              "ai_studio_action_not_available"
+            throw refreshRecommendedCommandError(vibe64Error(
+              `Action ${actionId || "(empty)"} is not available on this Vibe64 step.`,
+              "vibe64_action_not_available"
             ), session, "stale_operation");
           }
           if (!actionRunsInCommandTerminal(action)) {
-            aiStudioSessionDebugLog("server.commandTerminal.start.blocked", {
-              ...aiStudioSessionDebugSummary(session),
+            vibe64SessionDebugLog("server.commandTerminal.start.blocked", {
+              ...vibe64SessionDebugSummary(session),
               actionId,
               reason: "command_requires_terminal"
             });
-            throw aiStudioError(
+            throw vibe64Error(
               `Action ${action.label || action.id} does not run in the command terminal.`,
-              "ai_studio_command_requires_terminal"
+              "vibe64_command_requires_terminal"
             );
           }
           if (action.enabled !== true) {
-            aiStudioSessionDebugLog("server.commandTerminal.start.blocked", {
-              ...aiStudioSessionDebugSummary(session),
+            vibe64SessionDebugLog("server.commandTerminal.start.blocked", {
+              ...vibe64SessionDebugSummary(session),
               actionId,
               reason: "action_disabled"
             });
-            throw refreshRecommendedCommandError(aiStudioError(
+            throw refreshRecommendedCommandError(vibe64Error(
               action.disabledReason || `Action ${action.label || action.id} is disabled.`,
-              "ai_studio_action_disabled"
+              "vibe64_action_disabled"
             ), session, "state_rejected");
           }
           const targetRoot = terminalTargetRoot(session, projectService);
           if (!targetRoot) {
-            aiStudioSessionDebugLog("server.commandTerminal.start.blocked", {
-              ...aiStudioSessionDebugSummary(session),
+            vibe64SessionDebugLog("server.commandTerminal.start.blocked", {
+              ...vibe64SessionDebugSummary(session),
               actionId,
               reason: "missing_target_root"
             });
             return {
               ok: false,
-              error: "AI Studio command target root is not available."
+              error: "Vibe64 command target root is not available."
             };
           }
 
@@ -660,8 +660,8 @@ function createCommandTerminalController({
             store: runtime.store
           });
           if (spec?.ok === false) {
-            aiStudioSessionDebugLog("server.commandTerminal.start.blocked", {
-              ...aiStudioSessionDebugSummary(session),
+            vibe64SessionDebugLog("server.commandTerminal.start.blocked", {
+              ...vibe64SessionDebugSummary(session),
               actionId,
               reason: "spec_not_ready"
             });
@@ -673,14 +673,14 @@ function createCommandTerminalController({
 
           const workdir = resolveCommandWorkdir(targetRoot, spec.cwd);
           if (!pathInsideOrEqual(targetRoot, workdir)) {
-            aiStudioSessionDebugLog("server.commandTerminal.start.blocked", {
-              ...aiStudioSessionDebugSummary(session),
+            vibe64SessionDebugLog("server.commandTerminal.start.blocked", {
+              ...vibe64SessionDebugSummary(session),
               actionId,
               reason: "workdir_outside_target"
             });
             return {
               ok: false,
-              error: "AI Studio command workdir is outside the target root."
+              error: "Vibe64 command workdir is outside the target root."
             };
           }
 
@@ -691,8 +691,8 @@ function createCommandTerminalController({
             targetRoot
           });
           if (imageResult.ok === false) {
-            aiStudioSessionDebugLog("server.commandTerminal.start.blocked", {
-              ...aiStudioSessionDebugSummary(session),
+            vibe64SessionDebugLog("server.commandTerminal.start.blocked", {
+              ...vibe64SessionDebugSummary(session),
               actionId,
               reason: "toolchain_image",
               toolchainError: String(imageResult.error || "")
@@ -793,7 +793,7 @@ function createCommandTerminalController({
               onClose: async ({ exitCode, id }) => {
                 const onCloseStartedAtMs = Date.now();
                 const activeResultFile = resultFile || {};
-                aiStudioSessionDebugLog("server.commandTerminal.onClose.start", {
+                vibe64SessionDebugLog("server.commandTerminal.onClose.start", {
                   actionId: action.id,
                   exitCode,
                   sessionId,
@@ -834,9 +834,9 @@ function createCommandTerminalController({
                     publishSessionChanged,
                     sessionId
                   });
-                  aiStudioSessionDebugLog("server.commandTerminal.onClose.done", {
+                  vibe64SessionDebugLog("server.commandTerminal.onClose.done", {
                     actionId: action.id,
-                    durationMs: aiStudioSessionDebugDurationMs(onCloseStartedAtMs),
+                    durationMs: vibe64SessionDebugDurationMs(onCloseStartedAtMs),
                     exitCode,
                     sessionId,
                     terminalSessionId: id
@@ -847,7 +847,7 @@ function createCommandTerminalController({
                     runtime,
                     sessionId,
                     patch: {
-                      error: aiStudioSessionDebugError(error),
+                      error: vibe64SessionDebugError(error),
                       exitCode,
                       outcome: "failed",
                       phase: "failed",
@@ -859,10 +859,10 @@ function createCommandTerminalController({
                       outcome: "failed"
                     }
                   });
-                  aiStudioSessionDebugLog("server.commandTerminal.onClose.error", {
+                  vibe64SessionDebugLog("server.commandTerminal.onClose.error", {
                     actionId: action.id,
-                    durationMs: aiStudioSessionDebugDurationMs(onCloseStartedAtMs),
-                    error: aiStudioSessionDebugError(error),
+                    durationMs: vibe64SessionDebugDurationMs(onCloseStartedAtMs),
+                    error: vibe64SessionDebugError(error),
                     exitCode,
                     sessionId,
                     terminalSessionId: id
@@ -904,9 +904,9 @@ function createCommandTerminalController({
                 status: "blocked"
               });
             }
-            aiStudioSessionDebugLog("server.commandTerminal.start.done", {
+            vibe64SessionDebugLog("server.commandTerminal.start.done", {
               actionId: action.id,
-              durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
+              durationMs: vibe64SessionDebugDurationMs(startedAtMs),
               sessionId,
               terminalSessionId: String(terminal?.id || ""),
               terminalStatus: String(terminal?.status || "")
@@ -918,7 +918,7 @@ function createCommandTerminalController({
               runtime,
               sessionId,
               patch: {
-                error: aiStudioSessionDebugError(error),
+                error: vibe64SessionDebugError(error),
                 outcome: "failed",
                 phase: "failed"
               },
@@ -937,10 +937,10 @@ function createCommandTerminalController({
             throw error;
           }
         } catch (error) {
-          aiStudioSessionDebugLog("server.commandTerminal.start.error", {
+          vibe64SessionDebugLog("server.commandTerminal.start.error", {
             actionId: requestedActionId,
-            durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
-            error: aiStudioSessionDebugError(error),
+            durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+            error: vibe64SessionDebugError(error),
             sessionId
           });
           throw error;

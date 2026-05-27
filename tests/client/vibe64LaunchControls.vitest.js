@@ -8,9 +8,9 @@ import {
   openLaunchBrowserTarget,
   openPendingLaunchBrowserWindow,
   openReadyLaunchBrowserTarget
-} from "../../src/composables/useAiStudioLaunchControls.js";
+} from "../../src/composables/useVibe64LaunchControls.js";
 
-describe("AI Studio launch controls", () => {
+describe("Vibe64 launch controls", () => {
   it("builds a stable browser target name from the project root", () => {
     const firstSession = {
       sessionId: "session-1",
@@ -92,11 +92,11 @@ describe("AI Studio launch controls", () => {
 
     expect(launchTargetWorktreePath({
       metadata: {
-        worktree_path: "/workspace/.ai-studio/sessions/session-1/worktree"
+        worktree_path: "/workspace/.vibe64/sessions/session-1/worktree"
       },
       sessionId: "session-1",
       worktreeReady: true
-    })).toBe("/workspace/.ai-studio/sessions/session-1/worktree");
+    })).toBe("/workspace/.vibe64/sessions/session-1/worktree");
   });
 
   it("only offers AI repair for workflow-owned launch commands", () => {

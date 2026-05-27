@@ -1,5 +1,5 @@
 ---
-title: vibe-armor
+title: vibe64
 description: A local checklist-driven AI coding studio for serious product work.
 layout: doc
 aside: false
@@ -8,7 +8,7 @@ aside: false
 <div class="why-jskit-page">
 
 <section class="why-jskit-hero">
-  <p class="why-jskit-kicker">vibe-armor</p>
+  <p class="why-jskit-kicker">vibe64</p>
   <div class="why-jskit-title-stack">
     <div>NOT</div>
     <div>JUST</div>
@@ -16,7 +16,7 @@ aside: false
     <div>PROMPT.</div>
   </div>
   <p class="why-jskit-lead">
-    vibe-armor turns open-ended AI coding into a visible product workflow:
+    vibe64 turns open-ended AI coding into a visible product workflow:
     <strong>durable session state</strong>, <strong>setup checks</strong>,
     <strong>adapter boundaries</strong>, <strong>prompt handoff</strong>,
     <strong>terminals</strong>, and <strong>review gates</strong>.
@@ -35,7 +35,7 @@ aside: false
 <section class="why-jskit-quote-band">
   <p>
     AI coding is easy to start.
-    <span>vibe-armor keeps it coherent long enough to ship.</span>
+    <span>vibe64 keeps it coherent long enough to ship.</span>
   </p>
 </section>
 
@@ -44,7 +44,7 @@ aside: false
     <p class="why-jskit-card-label">01</p>
     <h2>A real workflow around the AI</h2>
     <p>
-      vibe-armor does not leave delivery inside a chat transcript. It gives each
+      vibe64 does not leave delivery inside a chat transcript. It gives each
       session a visible checklist, explicit actions, durable files, and clear
       conditions for moving forward.
     </p>
@@ -54,7 +54,7 @@ aside: false
     <p class="why-jskit-card-label">02</p>
     <h2>Session truth is durable</h2>
     <p>
-      Active work lives under <code>.ai-studio/sessions/active/&lt;session_id&gt;</code>,
+      Active work lives under <code>.vibe64/sessions/active/&lt;session_id&gt;</code>,
       with real artifacts as real files and structured state where machines need it.
     </p>
   </article>
@@ -110,7 +110,7 @@ aside: false
   </div>
   <div class="why-jskit-wall-list">
     <div>
-      <strong>vibe-armor gives you:</strong>
+      <strong>vibe64 gives you:</strong>
     </div>
     <ul>
       <li>the checklist</li>
@@ -182,7 +182,7 @@ aside: false
   <p class="why-jskit-close-top">Less session drift. Less hidden state. Less AI slop.</p>
   <h2>More control.</h2>
   <p class="why-jskit-close-bottom">
-    vibe-armor keeps the human, the runtime, the terminal, and the target project
+    vibe64 keeps the human, the runtime, the terminal, and the target project
     looking at the same facts.
   </p>
   <div class="why-jskit-close-actions">

@@ -3,9 +3,13 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  authTerminalMetadata,
+  canReuseAuthTerminal,
+  GITHUB_DEVICE_AUTH_URL,
+  parseAuthOutput,
   createService
-} from "../../packages/ai-studio-accounts/src/server/service.js";
-import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
+} from "../../packages/vibe64-accounts/src/server/service.js";
+import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 function connectedToolchain(calls = []) {
   return async function runToolchain(commandArgs) {
@@ -36,6 +40,13 @@ function connectedToolchainResult(commandArgs) {
       stdout: "merc"
     };
   }
+  if (commandArgs[0] === "git" && commandArgs[1] === "config") {
+    return {
+      ok: true,
+      output: "!/usr/bin/gh auth git-credential",
+      stdout: "!/usr/bin/gh auth git-credential"
+    };
+  }
   throw new Error(`Unexpected toolchain command: ${commandArgs.join(" ")}`);
 }
 
@@ -46,6 +57,20 @@ function disconnectedCodexToolchain(calls = []) {
       return {
         ok: false,
         output: "Codex is not logged in.",
+        stdout: ""
+      };
+    }
+    return connectedToolchainResult(commandArgs);
+  };
+}
+
+function disconnectedGithubGitCredentialToolchain(calls = []) {
+  return async function runToolchain(commandArgs) {
+    calls.push(commandArgs);
+    if (commandArgs[0] === "git" && commandArgs[1] === "config") {
+      return {
+        ok: false,
+        output: "",
         stdout: ""
       };
     }
@@ -67,7 +92,7 @@ test("Accounts status reuses a persisted ready status for setup readiness", asyn
     const first = await service.getStatus();
     assert.equal(first.ok, true);
     assert.equal(first.ready, true);
-    assert.equal(calls.length, 3);
+    assert.equal(calls.length, 4);
 
     const restored = createService({
       readyStatusCacheRoot,
@@ -103,7 +128,7 @@ test("Accounts refresh bypasses and clears a stale ready status", async () => {
     });
     assert.equal(refreshed.ok, true);
     assert.equal(refreshed.ready, false);
-    assert.equal(disconnectedCalls.length, 3);
+    assert.equal(disconnectedCalls.length, 4);
 
     const connectedCalls = [];
     const afterClear = await createService({
@@ -113,6 +138,57 @@ test("Accounts refresh bypasses and clears a stale ready status", async () => {
     }).getStatus();
     assert.equal(afterClear.ok, true);
     assert.equal(afterClear.ready, true);
-    assert.equal(connectedCalls.length, 3);
+    assert.equal(connectedCalls.length, 4);
   });
+});
+
+test("Accounts status requires GitHub Git credential helper for remote operations", async () => {
+  await withTemporaryRoot(async (root) => {
+    const targetRoot = path.join(root, "target");
+    const calls = [];
+    const status = await createService({
+      readyStatusCacheRoot: path.join(root, "status-cache"),
+      runToolchain: disconnectedGithubGitCredentialToolchain(calls),
+      targetRoot
+    }).getStatus({
+      refresh: true
+    });
+
+    assert.equal(status.ok, true);
+    assert.equal(status.ready, false);
+    assert.match(status.blockedReason, /Git credential helper is not configured/u);
+    assert.equal(calls.length, 4);
+  });
+});
+
+test("GitHub auth output falls back to the device URL when gh only prints a code", () => {
+  const parsed = parseAuthOutput({
+    accountId: "github",
+    output: [
+      "! First copy your one-time code: A1B2-C3D4",
+      "Press Enter to open github.com in your browser..."
+    ].join("\n")
+  });
+
+  assert.equal(parsed.authUrl, GITHUB_DEVICE_AUTH_URL);
+  assert.equal(parsed.userCode, "A1B2-C3D4");
+});
+
+test("Account auth terminal reuse is scoped to the requested account and mode", () => {
+  const metadata = authTerminalMetadata("github", "browser");
+  const canReuse = canReuseAuthTerminal("github", "browser");
+
+  assert.deepEqual(metadata, {
+    accountId: "github",
+    mode: "browser"
+  });
+  assert.equal(canReuse({
+    metadata
+  }), true);
+  assert.equal(canReuse({
+    metadata: authTerminalMetadata("codex", "browser")
+  }), false);
+  assert.equal(canReuse({
+    metadata: authTerminalMetadata("github", "device")
+  }), false);
 });

@@ -1,9 +1,9 @@
-# @local/ai-studio-core
+# @local/vibe64-core
 
-Shared AI Studio server primitives.
+Shared Vibe64 server primitives.
 
 This package is intentionally small. It owns reusable infrastructure that
-multiple AI Studio feature packages need, such as route helpers, response
+multiple Vibe64 feature packages need, such as route helpers, response
 normalization, session realtime event descriptors, and terminal websocket
 plumbing.
 

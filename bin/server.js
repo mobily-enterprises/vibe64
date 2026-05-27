@@ -36,14 +36,14 @@ try {
     browserLifecycleShutdown: openOnStart,
     strictPort: Boolean(String(process.env.PORT || "").trim())
   });
-  const url = app.aiStudioUrl;
+  const url = app.vibe64Url;
   if (url) {
-    console.log(`AI Studio is running at ${url}`);
+    console.log(`Vibe64 is running at ${url}`);
     if (openOnStart) {
       await openBrowser(url);
     }
   }
 } catch (error) {
-  console.error("Failed to start AI Studio server:", error);
+  console.error("Failed to start Vibe64 server:", error);
   process.exitCode = 1;
 }

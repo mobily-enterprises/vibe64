@@ -6,7 +6,7 @@ import {
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
   normalizeText
-} from "@local/ai-studio-core/server/core";
+} from "@local/vibe64-core/server/core";
 import {
   recordCommandFactScript
 } from "../workflowCommandFacts.js";
@@ -27,7 +27,7 @@ function createWorktreePath(session = {}) {
 }
 
 function createWorktreeBranch(session = {}) {
-  return `ai-studio/${session.sessionId}`;
+  return `vibe64/${session.sessionId}`;
 }
 
 function prepareWorktreeScriptMount(prepareWorktreeScriptPath = "") {
@@ -65,12 +65,12 @@ function createWorktreeScript({
   const requestedUpdateMode = normalizeText(session.metadata?.source_pr_update_mode);
   return [
     "set -e",
-    `export AI_STUDIO_TARGET_ROOT=${quotedTargetRoot}`,
-    `export AI_STUDIO_WORKTREE_PATH=${quotedWorktreePath}`,
-    `AI_STUDIO_PREPARE_WORKTREE_SCRIPT=${quotedPrepareWorktreeScriptPath}`,
-    "prepare_ai_studio_worktree() {",
-    "  if [ -n \"$AI_STUDIO_PREPARE_WORKTREE_SCRIPT\" ]; then",
-    "    \"$AI_STUDIO_PREPARE_WORKTREE_SCRIPT\"",
+    `export VIBE64_TARGET_ROOT=${quotedTargetRoot}`,
+    `export VIBE64_WORKTREE_PATH=${quotedWorktreePath}`,
+    `VIBE64_PREPARE_WORKTREE_SCRIPT=${quotedPrepareWorktreeScriptPath}`,
+    "prepare_vibe64_worktree() {",
+    "  if [ -n \"$VIBE64_PREPARE_WORKTREE_SCRIPT\" ]; then",
+    "    \"$VIBE64_PREPARE_WORKTREE_SCRIPT\"",
     "  fi",
     "}",
     `printf '[studio] Preparing worktree %s\\n' ${quotedWorktreePath}`,
@@ -78,7 +78,7 @@ function createWorktreeScript({
     `if [ -e ${quotedWorktreePath} ]; then`,
     `  if git -C ${quotedWorktreePath} rev-parse --is-inside-work-tree >/dev/null 2>&1; then`,
     "    printf '[studio] Reusing existing worktree.\\n'",
-    "    prepare_ai_studio_worktree",
+    "    prepare_vibe64_worktree",
     "    exit 0",
     "  fi",
     `  if [ -d ${quotedWorktreePath} ] && [ -z "$(find ${quotedWorktreePath} -mindepth 1 -maxdepth 1 -print -quit)" ]; then`,
@@ -98,7 +98,7 @@ function createWorktreeScript({
       "  printf '[studio] Existing PR metadata is incomplete. Abandon this session and start again.\\n' >&2",
       "  exit 1",
       "fi",
-      "PR_FETCH_REF=\"refs/remotes/ai-studio/pr/$SOURCE_PR_NUMBER\"",
+      "PR_FETCH_REF=\"refs/remotes/vibe64/pr/$SOURCE_PR_NUMBER\"",
       "printf '[studio] Fetching PR #%s\\n' \"$SOURCE_PR_NUMBER\"",
       `git -C ${quotedTargetRoot} fetch origin "pull/$SOURCE_PR_NUMBER/head:$PR_FETCH_REF"`,
       `if git -C ${quotedTargetRoot} show-ref --verify --quiet ${quotedBranchRef}; then`,
@@ -106,14 +106,14 @@ function createWorktreeScript({
       "else",
       `  git -C ${quotedTargetRoot} worktree add -b ${quotedBranch} ${quotedWorktreePath} "$PR_FETCH_REF"`,
       "fi",
-      "prepare_ai_studio_worktree",
+      "prepare_vibe64_worktree",
       "if [ \"$REQUESTED_UPDATE_MODE\" = \"direct\" ]; then",
       "  if [ -z \"$SOURCE_PR_HEAD_REF\" ] || [ -z \"$SOURCE_PR_HEAD_REPO\" ]; then",
       "    printf '[studio] Existing PR push target is incomplete; this session will create a replacement PR.\\n'",
       `    ${recordCommandFactScript("source_pr_update_mode", "replacement")}`,
       "    exit 0",
       "  fi",
-      "  PR_HEAD_REMOTE=\"ai-studio-pr-head\"",
+      "  PR_HEAD_REMOTE=\"vibe64-pr-head\"",
       `  git -C ${quotedWorktreePath} remote remove "$PR_HEAD_REMOTE" >/dev/null 2>&1 || true`,
       `  git -C ${quotedWorktreePath} remote add "$PR_HEAD_REMOTE" "https://github.com/$SOURCE_PR_HEAD_REPO.git"`,
       `  if git -C ${quotedWorktreePath} push --dry-run "$PR_HEAD_REMOTE" "HEAD:refs/heads/$SOURCE_PR_HEAD_REF"; then`,
@@ -132,7 +132,7 @@ function createWorktreeScript({
     "else",
     `  git -C ${quotedTargetRoot} worktree add -b ${quotedBranch} ${quotedWorktreePath} HEAD`,
     "fi",
-    "prepare_ai_studio_worktree"
+    "prepare_vibe64_worktree"
   ].join("\n");
 }
 
@@ -147,7 +147,7 @@ async function createWorktreeTerminalSpec({
   if (!worktreePath || !branch) {
     return {
       ok: false,
-      message: "Cannot create a worktree before the AI Studio session has a root path."
+      message: "Cannot create a worktree before the Vibe64 session has a root path."
     };
   }
   const [baseBranch, baseCommit] = await Promise.all([

@@ -2,7 +2,7 @@ import {
   createDoctorRepair,
   failDoctorCheck as failCheck,
   passDoctorCheck as passCheck
-} from "@local/ai-studio-core/server/doctorCheckItems";
+} from "@local/vibe64-core/server/doctorCheckItems";
 import {
   dockerCommand
 } from "@local/studio-terminal-core/server/shellCommands";
@@ -21,7 +21,7 @@ function adapterToolchainBuildArgs({
     "-t",
     image,
     "--build-arg",
-    `AI_STUDIO_BASE_IMAGE=${baseImage}`,
+    `VIBE64_BASE_IMAGE=${baseImage}`,
     "-f",
     dockerfile,
     context

@@ -2,13 +2,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
-  AiStudioDescribedWorkflowTargetAdapter,
+  Vibe64DescribedWorkflowTargetAdapter,
   inspectDescribedProject
 } from "../../workflowAdapter.js";
 import {
   createAdapterBlueprintReader
 } from "../../adapterBlueprints.js";
-import { deepFreeze } from "@local/ai-studio-core/server/deepFreeze";
+import { deepFreeze } from "@local/vibe64-core/server/deepFreeze";
 import {
   dependencyNames,
   hasDependency,
@@ -28,7 +28,7 @@ import {
   studioCommandScript
 } from "../../nodeWebProject.js";
 import {
-  AI_STUDIO_VERIFY_SCRIPT_NAME,
+  VIBE64_VERIFY_SCRIPT_NAME,
   javascriptAdapterCodeIndexCommand,
   packageManagerScriptCommand
 } from "../../codeIndexCommands.js";
@@ -249,7 +249,7 @@ async function inspectNextjsProject(targetRoot) {
     extra: nodePackageManagerInspectionExtra,
     markers: NEXTJS_MARKERS,
     packageJson: {
-      invalidJsonCode: "ai_studio_invalid_nextjs_json",
+      invalidJsonCode: "vibe64_invalid_nextjs_json",
       invalidJsonMessage: (filePath) => `Invalid JSON in Next.js project file: ${filePath}`
     }
   });
@@ -263,7 +263,7 @@ async function nextjsAutomatedChecksHook({ worktreePath = "" } = {}) {
   const buildCommand = packageManagerScriptCommand({
     packageJson: packageJson || {},
     packageManager,
-    scriptName: AI_STUDIO_VERIFY_SCRIPT_NAME
+    scriptName: VIBE64_VERIFY_SCRIPT_NAME
   }) || (packageScript(packageJson || {}, "build")
     ? runScriptCommand(packageManager.name, "build")
     : packageBinCommand(packageManager.name, "next", ["build"]));
@@ -299,7 +299,7 @@ async function nextjsCodeIndexHook({ worktreePath = "" } = {}) {
   };
 }
 
-class NextjsTargetAdapter extends AiStudioDescribedWorkflowTargetAdapter {
+class NextjsTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
   constructor({
     commandTerminalSpecFactory = null,
     commands = [],

@@ -1,5 +1,5 @@
 <template>
-  <AiStudioBackgroundTasks
+  <Vibe64BackgroundTasks
     v-if="visibleBackgroundTasks.length || backgroundTaskError"
     class="studio-ai-sessions__background-tasks"
     :error="backgroundTaskError"
@@ -70,7 +70,7 @@
         {{ stepInput.interaction?.submitLabel || "Submit" }}
       </v-btn>
 
-      <AiStudioSessionActionButton
+      <Vibe64SessionActionButton
         v-for="action in actions.currentActions"
         :key="action.id"
         :action="action"
@@ -109,7 +109,7 @@
       Review diff
     </v-btn>
 
-    <AiStudioSessionActionButton
+    <Vibe64SessionActionButton
       v-for="action in actions.currentActions"
       :key="action.id"
       :action="action"
@@ -151,11 +151,11 @@ import {
   mdiCheck,
   mdiFileCompare
 } from "@mdi/js";
-import AiStudioBackgroundTasks from "@/components/studio/ai-studio-session/AiStudioBackgroundTasks.vue";
-import AiStudioSessionActionButton from "@/components/studio/ai-studio-session/AiStudioSessionActionButton.vue";
+import Vibe64BackgroundTasks from "@/components/studio/vibe64-session/Vibe64BackgroundTasks.vue";
+import Vibe64SessionActionButton from "@/components/studio/vibe64-session/Vibe64SessionActionButton.vue";
 import {
-  useAiStudioBackgroundTasks
-} from "@/composables/useAiStudioBackgroundTasks.js";
+  useVibe64BackgroundTasks
+} from "@/composables/useVibe64BackgroundTasks.js";
 
 const props = defineProps({
   actions: {
@@ -193,7 +193,7 @@ const {
   retryBackgroundTask,
   retryingBackgroundTaskId,
   visibleBackgroundTasks
-} = useAiStudioBackgroundTasks({
+} = useVibe64BackgroundTasks({
   refreshSessionData: () => props.refreshSessionData(),
   session: computed(() => props.session)
 });

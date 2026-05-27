@@ -1,10 +1,10 @@
 import {
-  aiStudioError,
+  vibe64Error,
   normalizeText
-} from "@local/ai-studio-core/server/core";
-import { deepFreeze } from "@local/ai-studio-core/server/deepFreeze";
+} from "@local/vibe64-core/server/core";
+import { deepFreeze } from "@local/vibe64-core/server/deepFreeze";
 import {
-  AI_STUDIO_APPLICATION_TYPES,
+  VIBE64_APPLICATION_TYPES,
   normalizeApplicationTypeCoverageList,
   publicApplicationType
 } from "../applicationTypes.js";
@@ -112,16 +112,16 @@ function assertUniqueAdapterIds(definitions = []) {
   const seen = new Set();
   for (const definition of definitions) {
     if (!definition.id) {
-      throw aiStudioError("AI Studio adapter manifest is missing an id.", "ai_studio_adapter_manifest_invalid");
+      throw vibe64Error("Vibe64 adapter manifest is missing an id.", "vibe64_adapter_manifest_invalid");
     }
     if (seen.has(definition.id)) {
-      throw aiStudioError(`Duplicate AI Studio adapter id: ${definition.id}.`, "ai_studio_adapter_manifest_duplicate");
+      throw vibe64Error(`Duplicate Vibe64 adapter id: ${definition.id}.`, "vibe64_adapter_manifest_duplicate");
     }
     seen.add(definition.id);
   }
 }
 
-function createAiStudioAdapterRegistry({
+function createVibe64AdapterRegistry({
   adapterManifests = DEFAULT_ADAPTER_MANIFESTS
 } = {}) {
   const definitions = adapterManifests.map(normalizeAdapterManifest);
@@ -136,7 +136,7 @@ function createAiStudioAdapterRegistry({
   }
 
   function availableApplicationTypes() {
-    return AI_STUDIO_APPLICATION_TYPES
+    return VIBE64_APPLICATION_TYPES
       .map((applicationType) => publicApplicationTypeGroup(applicationType, definitions))
       .filter((applicationType) => applicationType.adapters.length > 0);
   }
@@ -148,9 +148,9 @@ function createAiStudioAdapterRegistry({
   function assertKnownProjectType(projectType) {
     const definition = projectTypeDefinition(projectType);
     if (!definition) {
-      throw aiStudioError(
-        `Unknown AI Studio project type: ${normalizeText(projectType) || "(empty)"}.`,
-        "ai_studio_unknown_project_type"
+      throw vibe64Error(
+        `Unknown Vibe64 project type: ${normalizeText(projectType) || "(empty)"}.`,
+        "vibe64_unknown_project_type"
       );
     }
     return definition;
@@ -159,9 +159,9 @@ function createAiStudioAdapterRegistry({
   function assertImplementedProjectType(projectType) {
     const definition = assertKnownProjectType(projectType);
     if (definition.enabled !== true) {
-      throw aiStudioError(
-        definition.disabledReason || `AI Studio project type is not implemented: ${definition.label}.`,
-        "ai_studio_project_type_unimplemented"
+      throw vibe64Error(
+        definition.disabledReason || `Vibe64 project type is not implemented: ${definition.label}.`,
+        "vibe64_project_type_unimplemented"
       );
     }
     return definition;
@@ -170,9 +170,9 @@ function createAiStudioAdapterRegistry({
   async function createAdapter(projectType) {
     const definition = assertImplementedProjectType(projectType);
     if (typeof definition.createAdapter !== "function") {
-      throw aiStudioError(
-        `AI Studio project type has no adapter factory: ${definition.label}.`,
-        "ai_studio_project_type_adapter_missing"
+      throw vibe64Error(
+        `Vibe64 project type has no adapter factory: ${definition.label}.`,
+        "vibe64_project_type_adapter_missing"
       );
     }
     return definition.createAdapter();
@@ -188,9 +188,9 @@ function createAiStudioAdapterRegistry({
 }
 
 const DEFAULT_ADAPTER_DEFINITIONS = deepFreeze(DEFAULT_ADAPTER_MANIFESTS.map(normalizeAdapterManifest));
-const AI_STUDIO_PROJECT_TYPES = deepFreeze(DEFAULT_ADAPTER_DEFINITIONS.map(publicProjectType));
-const AI_STUDIO_APPLICATION_TYPE_GROUPS = deepFreeze(
-  AI_STUDIO_APPLICATION_TYPES
+const VIBE64_PROJECT_TYPES = deepFreeze(DEFAULT_ADAPTER_DEFINITIONS.map(publicProjectType));
+const VIBE64_APPLICATION_TYPE_GROUPS = deepFreeze(
+  VIBE64_APPLICATION_TYPES
     .map((applicationType) => publicApplicationTypeGroup(
       applicationType,
       DEFAULT_ADAPTER_DEFINITIONS
@@ -199,8 +199,8 @@ const AI_STUDIO_APPLICATION_TYPE_GROUPS = deepFreeze(
 );
 
 export {
-  AI_STUDIO_APPLICATION_TYPE_GROUPS,
-  AI_STUDIO_PROJECT_TYPES,
-  createAiStudioAdapterRegistry,
+  VIBE64_APPLICATION_TYPE_GROUPS,
+  VIBE64_PROJECT_TYPES,
+  createVibe64AdapterRegistry,
   DEFAULT_ADAPTER_MANIFESTS
 };

@@ -27,13 +27,13 @@ async function mockProjectGateReady(page) {
   await page.route("**/api/studio/current-app", async (route) => {
     await fulfillJson(route, currentAppPayload);
   });
-  await page.route("**/api/ai-studio/project-type", async (route) => {
+  await page.route("**/api/vibe64/project-type", async (route) => {
     await fulfillJson(route, readyProjectTypePayload);
   });
-  await page.route("**/api/ai-studio/project-config", async (route) => {
+  await page.route("**/api/vibe64/project-config", async (route) => {
     await fulfillJson(route, readyProjectConfigPayload);
   });
-  await page.route("**/api/ai-studio/accounts", async (route) => {
+  await page.route("**/api/vibe64/accounts", async (route) => {
     await fulfillJson(route, readyAccountsPayload);
   });
 }
@@ -140,7 +140,7 @@ async function mockCurrentAppInspection(page) {
   await page.route("**/api/studio/current-app", async (route) => {
     await fulfillJson(route, currentAppPayload);
   });
-  await page.route("**/api/ai-studio/sessions**", async (route) => {
+  await page.route("**/api/vibe64/sessions**", async (route) => {
     await fulfillJson(route, {
       limits: {
         maxOpenSessions: 5,
@@ -241,7 +241,7 @@ async function mockTargetScripts(page, {
       ...currentPayload,
       config: {
         exists: true,
-        path: ".ai-studio/config/starred_scripts"
+        path: ".vibe64/config/starred_scripts"
       },
       starredScriptIds: scriptIds,
       scripts: currentPayload.scripts.map((script) => ({
@@ -288,7 +288,7 @@ async function mockSessionHistoryArchives(page, archiveRequests = []) {
   await page.route("**/api/studio/current-app", async (route) => {
     await fulfillJson(route, currentAppPayload);
   });
-  await page.route("**/api/ai-studio/sessions**", async (route) => {
+  await page.route("**/api/vibe64/sessions**", async (route) => {
     const url = new URL(route.request().url());
     archiveRequests.push(`${url.pathname}${url.search}`);
     await fulfillJson(route, {

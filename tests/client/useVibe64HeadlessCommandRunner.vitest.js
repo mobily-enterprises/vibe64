@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  useAiStudioHeadlessCommandRunner
-} from "../../src/composables/useAiStudioHeadlessCommandRunner.js";
+  useVibe64HeadlessCommandRunner
+} from "../../src/composables/useVibe64HeadlessCommandRunner.js";
 
-describe("useAiStudioHeadlessCommandRunner", () => {
+describe("useVibe64HeadlessCommandRunner", () => {
   let originalWebSocket;
 
   beforeEach(() => {
@@ -27,7 +27,7 @@ describe("useAiStudioHeadlessCommandRunner", () => {
       output: "",
       status: "running"
     }));
-    const runner = useAiStudioHeadlessCommandRunner({
+    const runner = useVibe64HeadlessCommandRunner({
       closeCommandTerminal,
       startCommandTerminal,
       webSocketUrl: (sessionId, terminalSessionId) => `ws://studio/${sessionId}/${terminalSessionId}`
@@ -81,7 +81,7 @@ describe("useAiStudioHeadlessCommandRunner", () => {
   });
 
   it("returns terminal output when the command exits with an error", async () => {
-    const runner = useAiStudioHeadlessCommandRunner({
+    const runner = useVibe64HeadlessCommandRunner({
       closeCommandTerminal: vi.fn(async () => ({
         ok: true
       })),
@@ -131,11 +131,11 @@ describe("useAiStudioHeadlessCommandRunner", () => {
     const closeCommandTerminal = vi.fn(async () => ({
       ok: true
     }));
-    const runner = useAiStudioHeadlessCommandRunner({
+    const runner = useVibe64HeadlessCommandRunner({
       closeCommandTerminal,
       startCommandTerminal: vi.fn(async () => {
         const error = new Error("This step is already complete.");
-        error.code = "ai_studio_action_disabled";
+        error.code = "vibe64_action_disabled";
         error.status = 409;
         throw error;
       }),
@@ -150,7 +150,7 @@ describe("useAiStudioHeadlessCommandRunner", () => {
       sessionId: "session-1"
     })).resolves.toMatchObject({
       actionId: "create_worktree",
-      code: "ai_studio_action_disabled",
+      code: "vibe64_action_disabled",
       error: "This step is already complete.",
       ok: false,
       status: 409,
@@ -164,7 +164,7 @@ describe("useAiStudioHeadlessCommandRunner", () => {
     const closeCommandTerminal = vi.fn(async () => ({
       ok: true
     }));
-    const runner = useAiStudioHeadlessCommandRunner({
+    const runner = useVibe64HeadlessCommandRunner({
       closeCommandTerminal,
       startCommandTerminal: vi.fn(async () => ({
         commandPreview: "npx --no-install jskit helper-map update",

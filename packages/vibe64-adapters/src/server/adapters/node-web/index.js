@@ -7,10 +7,10 @@ import {
 } from "./adapter.js";
 import {
   deepFreeze
-} from "@local/ai-studio-core/server/deepFreeze";
+} from "@local/vibe64-core/server/deepFreeze";
 import {
-  AI_STUDIO_WORKFLOW_COMMANDS,
-  createAiStudioWorkflowCommandTerminalSpec
+  VIBE64_WORKFLOW_COMMANDS,
+  createVibe64WorkflowCommandTerminalSpec
 } from "../../workflowAdapter.js";
 import {
   createGenericNodeWebLaunchTargetTerminalSpec,
@@ -29,8 +29,8 @@ export {
   GENERIC_NODE_WEB_PROJECT_KNOWLEDGE_RELATIVE_PATH
 } from "./constants.js";
 
-const GENERIC_NODE_WEB_AI_STUDIO_COMMANDS = deepFreeze(AI_STUDIO_WORKFLOW_COMMANDS);
-const createGenericNodeWebAiStudioCommandTerminalSpec = createAiStudioWorkflowCommandTerminalSpec;
+const GENERIC_NODE_WEB_VIBE64_COMMANDS = deepFreeze(VIBE64_WORKFLOW_COMMANDS);
+const createGenericNodeWebVibe64CommandTerminalSpec = createVibe64WorkflowCommandTerminalSpec;
 
 function createGenericNodeWebTargetAdapter({
   commandTerminalSpecFactory = null,
@@ -41,18 +41,18 @@ function createGenericNodeWebTargetAdapter({
     commandTerminalSpecFactory,
     launchTargetTerminalSpecFactory,
     launchTargets,
-    commands: GENERIC_NODE_WEB_AI_STUDIO_COMMANDS
+    commands: GENERIC_NODE_WEB_VIBE64_COMMANDS
   });
 }
 
 export {
-  GENERIC_NODE_WEB_AI_STUDIO_COMMANDS,
+  GENERIC_NODE_WEB_VIBE64_COMMANDS,
   GENERIC_NODE_WEB_CONFIG_FIELDS,
   GENERIC_NODE_WEB_MARKERS,
   GENERIC_NODE_WEB_PROMPT_PACK_ROOT,
   GENERIC_NODE_WEB_PREPARE_WORKTREE_SCRIPT_PATH,
   GenericNodeWebTargetAdapter,
-  createGenericNodeWebAiStudioCommandTerminalSpec,
+  createGenericNodeWebVibe64CommandTerminalSpec,
   createGenericNodeWebLaunchDescriptor,
   createGenericNodeWebLaunchTargetTerminalSpec,
   createGenericNodeWebTargetAdapter,

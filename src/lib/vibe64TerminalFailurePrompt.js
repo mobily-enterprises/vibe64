@@ -1,6 +1,6 @@
 import {
-  buildAiStudioTerminalFailureFixRequest
-} from "@/lib/aiStudioSessionApi.js";
+  buildVibe64TerminalFailureFixRequest
+} from "@/lib/vibe64SessionApi.js";
 
 function terminalFailureFixContext(input = {}) {
   return {
@@ -25,7 +25,7 @@ function terminalFailureFixContext(input = {}) {
 
 async function terminalFailureFixRequest(input = {}) {
   const context = terminalFailureFixContext(input);
-  return buildAiStudioTerminalFailureFixRequest(context.sessionId, context);
+  return buildVibe64TerminalFailureFixRequest(context.sessionId, context);
 }
 
 export {

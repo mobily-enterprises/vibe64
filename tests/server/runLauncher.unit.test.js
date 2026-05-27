@@ -32,8 +32,8 @@ test("run launcher builds a direct server command instead of recursing through t
 });
 
 test("run launcher treats an npm bin symlink as direct CLI execution", () => {
-  const symlinkPath = "/workspace/app/node_modules/.bin/vibe-armor";
-  const entrypointPath = "/workspace/app/node_modules/@vibe-armor/run/bin/run.js";
+  const symlinkPath = "/workspace/app/node_modules/.bin/vibe64";
+  const entrypointPath = "/workspace/app/node_modules/@vibe64/run/bin/run.js";
   const realpath = (filePath) => filePath === symlinkPath ? entrypointPath : filePath;
 
   assert.equal(isDirectCliExecution({
@@ -87,7 +87,7 @@ test("run launcher opens the foreground server in a linux terminal", () => {
   assert.deepEqual(candidates[0].args.slice(0, 3), ["-e", "bash", "-lc"]);
   assert.match(candidates[0].args[3], /cd '\/workspace\/example-app'/u);
   assert.match(candidates[0].args[3], /'\/usr\/bin\/node' '\/pkg\/bin\/server\.js' '--example'/u);
-  assert.match(candidates[0].args[3], /finish_ai_studio_terminal "\$\?" "AI Studio server exited\."/u);
+  assert.match(candidates[0].args[3], /finish_vibe64_terminal "\$\?" "Vibe64 server exited\."/u);
   assert.equal(candidates.some((candidate) => candidate.command === "x-terminal-emulator"), true);
 });
 
@@ -108,7 +108,7 @@ test("run launcher opens WSL through Windows terminal before linux terminal fall
   assert.deepEqual(candidates[0].args.slice(0, 5), [
     "new-window",
     "--title",
-    "AI Studio - example-app",
+    "Vibe64 - example-app",
     "wsl.exe",
     "-d"
   ]);
@@ -118,7 +118,7 @@ test("run launcher opens WSL through Windows terminal before linux terminal fall
 
   assert.equal(candidates[1].command, "cmd.exe");
   assert.deepEqual(candidates[1].args.slice(0, 2), ["/d", "/c"]);
-  assert.match(candidates[1].args[2], /^start "AI Studio - example-app" "wsl\.exe"/u);
+  assert.match(candidates[1].args[2], /^start "Vibe64 - example-app" "wsl\.exe"/u);
   assert.match(candidates[1].args[2], /"-d" "Ubuntu" "--" "bash" "-lc"/u);
   assert.equal(candidates.some((candidate) => candidate.command === "x-terminal-emulator"), true);
 });
@@ -126,7 +126,7 @@ test("run launcher opens WSL through Windows terminal before linux terminal fall
 test("run launcher encodes WSL shell scripts instead of passing raw shell through Windows", () => {
   const args = wslServerCommandArgs({
     distroName: "Ubuntu",
-    shellScript: "printf '\\033]0;%s\\007' 'AI Studio'\nexit 7"
+    shellScript: "printf '\\033]0;%s\\007' 'Vibe64'\nexit 7"
   });
 
   assert.deepEqual(args.slice(0, 5), ["-d", "Ubuntu", "--", "bash", "-lc"]);
@@ -138,13 +138,13 @@ test("run launcher shell script pauses before closing after server errors", () =
     cwd: "/workspace/example-app",
     nodePath: "/usr/bin/node",
     serverPath: "/pkg/bin/server.js",
-    title: "AI Studio - example-app"
+    title: "Vibe64 - example-app"
   });
 
   assert.match(script, /cd '\/workspace\/example-app'/u);
-  assert.equal(script.includes("printf '\\033]0;%s\\007' 'AI Studio - example-app'"), true);
+  assert.equal(script.includes("printf '\\033]0;%s\\007' 'Vibe64 - example-app'"), true);
   assert.match(script, /'\/usr\/bin\/node' '\/pkg\/bin\/server\.js'/u);
-  assert.match(script, /AI Studio server exited/u);
+  assert.match(script, /Vibe64 server exited/u);
   assert.match(script, /IFS= read -r _/u);
   assert.doesNotMatch(script, /\bexec\b/u);
 });
@@ -163,13 +163,13 @@ test("run launcher windows command pauses before closing after server errors", (
   });
 
   assert.match(command, /if errorlevel 1/u);
-  assert.match(command, /AI Studio server exited with status !AI_STUDIO_STATUS!/u);
-  assert.match(command, /set \/p AI_STUDIO_PAUSE=Press Enter to close this terminal/u);
-  assert.match(command, /exit \/b !AI_STUDIO_STATUS!/u);
+  assert.match(command, /Vibe64 server exited with status !VIBE64_STATUS!/u);
+  assert.match(command, /set \/p VIBE64_PAUSE=Press Enter to close this terminal/u);
+  assert.match(command, /exit \/b !VIBE64_STATUS!/u);
   assert.deepEqual(candidates[0].args.slice(0, 7), [
     "/c",
     "start",
-    "AI Studio - example-app",
+    "Vibe64 - example-app",
     "cmd.exe",
     "/v:on",
     "/c",
@@ -183,7 +183,7 @@ test("run launcher shell script preserves failed server output until enter", () 
     nodePath: "/bin/sh",
     serverArgs: ["printf 'server failed\\n' >&2; exit 7"],
     serverPath: "-c",
-    title: "AI Studio - failing-app"
+    title: "Vibe64 - failing-app"
   });
 
   const result = spawnSync("bash", ["-lc", script], {
@@ -193,5 +193,5 @@ test("run launcher shell script preserves failed server output until enter", () 
 
   assert.equal(result.status, 7);
   assert.match(result.stderr, /server failed/u);
-  assert.match(result.stdout, /AI Studio server exited\. Exit status 7\. Press Enter to close this terminal/u);
+  assert.match(result.stdout, /Vibe64 server exited\. Exit status 7\. Press Enter to close this terminal/u);
 });

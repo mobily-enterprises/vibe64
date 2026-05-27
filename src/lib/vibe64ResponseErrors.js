@@ -1,4 +1,4 @@
-function resolveResponseErrorMessage(response = {}, fallback = "AI Studio request failed.") {
+function resolveResponseErrorMessage(response = {}, fallback = "Vibe64 request failed.") {
   return String(response?.errors?.[0]?.message || response?.error || fallback);
 }
 

@@ -143,13 +143,13 @@
       "installedAt": "2026-05-11T10:00:00.000Z",
       "migrationSyncVersion": "0.1.0"
     },
-    "@local/ai-studio-project": {
-      "packageId": "@local/ai-studio-project",
+    "@local/vibe64-project": {
+      "packageId": "@local/vibe64-project",
       "version": "0.1.0",
       "source": {
         "type": "app-local-package",
-        "packagePath": "packages/ai-studio-project",
-        "descriptorPath": "packages/ai-studio-project/package.descriptor.mjs"
+        "packagePath": "packages/vibe64-project",
+        "descriptorPath": "packages/vibe64-project/package.descriptor.mjs"
       },
       "managed": {
         "packageJson": {
@@ -166,13 +166,13 @@
       "installedAt": "2026-05-16T15:39:11.046Z",
       "migrationSyncVersion": "0.1.0"
     },
-    "@local/ai-studio-accounts": {
-      "packageId": "@local/ai-studio-accounts",
+    "@local/vibe64-accounts": {
+      "packageId": "@local/vibe64-accounts",
       "version": "0.1.0",
       "source": {
         "type": "app-local-package",
-        "packagePath": "packages/ai-studio-accounts",
-        "descriptorPath": "packages/ai-studio-accounts/package.descriptor.mjs"
+        "packagePath": "packages/vibe64-accounts",
+        "descriptorPath": "packages/vibe64-accounts/package.descriptor.mjs"
       },
       "managed": {
         "packageJson": {
@@ -189,13 +189,13 @@
       "installedAt": "2026-05-18T00:00:00.000Z",
       "migrationSyncVersion": "0.1.0"
     },
-    "@local/ai-studio-sessions": {
-      "packageId": "@local/ai-studio-sessions",
+    "@local/vibe64-sessions": {
+      "packageId": "@local/vibe64-sessions",
       "version": "0.1.0",
       "source": {
         "type": "app-local-package",
-        "packagePath": "packages/ai-studio-sessions",
-        "descriptorPath": "packages/ai-studio-sessions/package.descriptor.mjs"
+        "packagePath": "packages/vibe64-sessions",
+        "descriptorPath": "packages/vibe64-sessions/package.descriptor.mjs"
       },
       "managed": {
         "packageJson": {
@@ -212,13 +212,13 @@
       "installedAt": "2026-05-16T15:39:17.312Z",
       "migrationSyncVersion": "0.1.0"
     },
-    "@local/ai-studio-artifacts": {
-      "packageId": "@local/ai-studio-artifacts",
+    "@local/vibe64-artifacts": {
+      "packageId": "@local/vibe64-artifacts",
       "version": "0.1.0",
       "source": {
         "type": "app-local-package",
-        "packagePath": "packages/ai-studio-artifacts",
-        "descriptorPath": "packages/ai-studio-artifacts/package.descriptor.mjs"
+        "packagePath": "packages/vibe64-artifacts",
+        "descriptorPath": "packages/vibe64-artifacts/package.descriptor.mjs"
       },
       "managed": {
         "packageJson": {
@@ -235,13 +235,13 @@
       "installedAt": "2026-05-16T15:39:20.952Z",
       "migrationSyncVersion": "0.1.0"
     },
-    "@local/ai-studio-terminals": {
-      "packageId": "@local/ai-studio-terminals",
+    "@local/vibe64-terminals": {
+      "packageId": "@local/vibe64-terminals",
       "version": "0.1.0",
       "source": {
         "type": "app-local-package",
-        "packagePath": "packages/ai-studio-terminals",
-        "descriptorPath": "packages/ai-studio-terminals/package.descriptor.mjs"
+        "packagePath": "packages/vibe64-terminals",
+        "descriptorPath": "packages/vibe64-terminals/package.descriptor.mjs"
       },
       "managed": {
         "packageJson": {
@@ -341,21 +341,21 @@
       "installedAt": "2026-05-24T07:02:06.012Z",
       "migrationSyncVersion": "0.1.82"
     },
-    "@local/ai-studio-core": {
-      "packageId": "@local/ai-studio-core",
+    "@local/vibe64-core": {
+      "packageId": "@local/vibe64-core",
       "version": "0.1.0",
       "source": {
         "type": "local-package",
-        "packagePath": "packages/ai-studio-core",
-        "descriptorPath": "packages/ai-studio-core/package.descriptor.mjs"
+        "packagePath": "packages/vibe64-core",
+        "descriptorPath": "packages/vibe64-core/package.descriptor.mjs"
       },
       "managed": {
         "packageJson": {
           "dependencies": {
-            "@local/ai-studio-core": {
+            "@local/vibe64-core": {
               "hadPrevious": false,
               "previousValue": "",
-              "value": "file:packages/ai-studio-core"
+              "value": "file:packages/vibe64-core"
             }
           },
           "devDependencies": {},
@@ -369,21 +369,21 @@
       "options": {},
       "installedAt": "2026-05-26T05:00:29.741Z"
     },
-    "@local/ai-studio-adapters": {
-      "packageId": "@local/ai-studio-adapters",
+    "@local/vibe64-adapters": {
+      "packageId": "@local/vibe64-adapters",
       "version": "0.1.0",
       "source": {
         "type": "local-package",
-        "packagePath": "packages/ai-studio-adapters",
-        "descriptorPath": "packages/ai-studio-adapters/package.descriptor.mjs"
+        "packagePath": "packages/vibe64-adapters",
+        "descriptorPath": "packages/vibe64-adapters/package.descriptor.mjs"
       },
       "managed": {
         "packageJson": {
           "dependencies": {
-            "@local/ai-studio-adapters": {
+            "@local/vibe64-adapters": {
               "hadPrevious": false,
               "previousValue": "",
-              "value": "file:packages/ai-studio-adapters"
+              "value": "file:packages/vibe64-adapters"
             }
           },
           "devDependencies": {},
@@ -397,21 +397,21 @@
       "options": {},
       "installedAt": "2026-05-26T05:55:02.827Z"
     },
-    "@local/ai-studio-runtime": {
-      "packageId": "@local/ai-studio-runtime",
+    "@local/vibe64-runtime": {
+      "packageId": "@local/vibe64-runtime",
       "version": "0.1.0",
       "source": {
         "type": "local-package",
-        "packagePath": "packages/ai-studio-runtime",
-        "descriptorPath": "packages/ai-studio-runtime/package.descriptor.mjs"
+        "packagePath": "packages/vibe64-runtime",
+        "descriptorPath": "packages/vibe64-runtime/package.descriptor.mjs"
       },
       "managed": {
         "packageJson": {
           "dependencies": {
-            "@local/ai-studio-runtime": {
+            "@local/vibe64-runtime": {
               "hadPrevious": false,
               "previousValue": "",
-              "value": "file:packages/ai-studio-runtime"
+              "value": "file:packages/vibe64-runtime"
             }
           },
           "devDependencies": {},

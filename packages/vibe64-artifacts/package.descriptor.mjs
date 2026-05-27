@@ -1,20 +1,20 @@
 export default Object.freeze({
   packageVersion: 1,
-  packageId: "@local/ai-studio-artifacts",
+  packageId: "@local/vibe64-artifacts",
   version: "0.1.0",
   kind: "runtime",
-  description: "Owns AI Studio editable artifact and draft file policy.",
+  description: "Owns Vibe64 editable artifact and draft file policy.",
   dependsOn: [
     "@jskit-ai/kernel",
-    "@local/ai-studio-core",
-    "@local/ai-studio-project"
+    "@local/vibe64-core",
+    "@local/vibe64-project"
   ],
   capabilities: {
     provides: [
-      "feature.ai-studio-artifacts"
+      "feature.vibe64-artifacts"
     ],
     requires: [
-      "feature.ai-studio-project",
+      "feature.vibe64-project",
       "runtime.actions"
     ]
   },
@@ -22,8 +22,8 @@ export default Object.freeze({
     server: {
       providers: [
         {
-          entrypoint: "src/server/AiStudioArtifactsProvider.js",
-          export: "AiStudioArtifactsProvider"
+          entrypoint: "src/server/Vibe64ArtifactsProvider.js",
+          export: "Vibe64ArtifactsProvider"
         }
       ]
     },
@@ -45,7 +45,7 @@ export default Object.freeze({
       ],
       containerTokens: {
         server: [
-          "feature.ai-studio-artifacts.service"
+          "feature.vibe64-artifacts.service"
         ],
         client: []
       }

@@ -1,6 +1,6 @@
 Update project knowledge
 
-AI Studio standard project-knowledge instructions.
+Vibe64 standard project-knowledge instructions.
 
 Session:
 - id: {{session.id}}

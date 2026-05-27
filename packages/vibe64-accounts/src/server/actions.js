@@ -5,11 +5,11 @@ import {
   accountsReadInputValidator
 } from "./inputSchemas.js";
 
-const ACTION_READ_ACCOUNTS = "feature.ai-studio-accounts.read";
-const ACTION_START_ACCOUNT_AUTH = "feature.ai-studio-accounts.auth.start";
-const ACTION_LOGOUT_ACCOUNT = "feature.ai-studio-accounts.logout";
-const ACTION_READ_ACCOUNT_AUTH_SESSION = "feature.ai-studio-accounts.auth-session.read";
-const ACTION_CANCEL_ACCOUNT_AUTH_SESSION = "feature.ai-studio-accounts.auth-session.cancel";
+const ACTION_READ_ACCOUNTS = "feature.vibe64-accounts.read";
+const ACTION_START_ACCOUNT_AUTH = "feature.vibe64-accounts.auth.start";
+const ACTION_LOGOUT_ACCOUNT = "feature.vibe64-accounts.logout";
+const ACTION_READ_ACCOUNT_AUTH_SESSION = "feature.vibe64-accounts.auth-session.read";
+const ACTION_CANCEL_ACCOUNT_AUTH_SESSION = "feature.vibe64-accounts.auth-session.cancel";
 
 const featureActions = Object.freeze([
   {

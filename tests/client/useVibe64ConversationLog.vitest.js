@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   normalizeConversationLog
-} from "../../src/composables/useAiStudioConversationLog.js";
+} from "../../src/composables/useVibe64ConversationLog.js";
 
-describe("useAiStudioConversationLog", () => {
+describe("useVibe64ConversationLog", () => {
   it("normalizes durable conversation turns and ignores empty messages", () => {
     expect(normalizeConversationLog({
       conversationLog: [

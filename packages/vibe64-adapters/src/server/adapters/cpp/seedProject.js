@@ -226,9 +226,9 @@ function pathDirectory(relativePath = "") {
 function writeSeedFileScript(relativePath = "", contents = "") {
   return [
     `mkdir -p ${shellQuote(pathDirectory(relativePath))}`,
-    `cat > ${shellQuote(relativePath)} <<'AI_STUDIO_CPP_FILE'`,
+    `cat > ${shellQuote(relativePath)} <<'VIBE64_CPP_FILE'`,
     contents.trim(),
-    "AI_STUDIO_CPP_FILE"
+    "VIBE64_CPP_FILE"
   ].join("\n");
 }
 

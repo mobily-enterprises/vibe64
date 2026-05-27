@@ -1,66 +1,66 @@
 import {
-  AiStudioSessionRuntime
-} from "@local/ai-studio-runtime/server/runtime";
+  Vibe64SessionRuntime
+} from "@local/vibe64-runtime/server/runtime";
 import {
   createCoreWorkflowRegistry
-} from "@local/ai-studio-runtime/server/registerCoreWorkflowModules";
+} from "@local/vibe64-runtime/server/registerCoreWorkflowModules";
 import {
-  createAiStudioAdapterRegistry,
-  createAiStudioProjectConfigStore,
-  createAiStudioProjectTypeStore,
+  createVibe64AdapterRegistry,
+  createVibe64ProjectConfigStore,
+  createVibe64ProjectTypeStore,
   normalizeConfigDefinition
-} from "@local/ai-studio-adapters/server";
+} from "@local/vibe64-adapters/server";
 import {
-  aiStudioResult
-} from "@local/ai-studio-core/server/serverResponses";
+  vibe64Result
+} from "@local/vibe64-core/server/serverResponses";
 import {
   resolveStudioTargetRoot
-} from "@local/ai-studio-core/server/studioRoots";
+} from "@local/vibe64-core/server/studioRoots";
 
-function resolveAiStudioTargetRoot(targetRoot) {
+function resolveVibe64TargetRoot(targetRoot) {
   return resolveStudioTargetRoot({
     explicitRoot: targetRoot
   });
 }
 
 function projectResult(operation) {
-  return aiStudioResult(operation, {
-    fallbackCode: "ai_studio_project_request_failed",
-    fallbackMessage: "AI Studio project request failed."
+  return vibe64Result(operation, {
+    fallbackCode: "vibe64_project_request_failed",
+    fallbackMessage: "Vibe64 project request failed."
   });
 }
 
 function projectTypeErrorCode(status = "") {
   return {
-    missing: "ai_studio_project_type_missing",
-    unimplemented: "ai_studio_project_type_unimplemented",
-    unknown: "ai_studio_unknown_project_type"
-  }[status] || "ai_studio_project_type_invalid";
+    missing: "vibe64_project_type_missing",
+    unimplemented: "vibe64_project_type_unimplemented",
+    unknown: "vibe64_unknown_project_type"
+  }[status] || "vibe64_project_type_invalid";
 }
 
 function projectTypeMessage(status = "", projectType = "") {
   if (status === "missing") {
-    return "Choose an AI Studio project type before using project-specific tools.";
+    return "Choose an Vibe64 project type before using project-specific tools.";
   }
   if (status === "unknown") {
-    return `Unknown AI Studio project type: ${projectType}.`;
+    return `Unknown Vibe64 project type: ${projectType}.`;
   }
   if (status === "unimplemented") {
-    return `AI Studio project type is not implemented yet: ${projectType}.`;
+    return `Vibe64 project type is not implemented yet: ${projectType}.`;
   }
-  return "AI Studio project type is not ready.";
+  return "Vibe64 project type is not ready.";
 }
 
 function createService({
   targetRoot = "",
   workflowRegistry = createCoreWorkflowRegistry()
 } = {}) {
-  const resolvedTargetRoot = resolveAiStudioTargetRoot(targetRoot);
-  const adapterRegistry = createAiStudioAdapterRegistry();
-  const projectConfigStore = createAiStudioProjectConfigStore({
+  const resolvedTargetRoot = resolveVibe64TargetRoot(targetRoot);
+  const adapterRegistry = createVibe64AdapterRegistry();
+  const projectConfigStore = createVibe64ProjectConfigStore({
     targetRoot: resolvedTargetRoot
   });
-  const projectTypeStore = createAiStudioProjectTypeStore({
+  const projectTypeStore = createVibe64ProjectTypeStore({
     targetRoot: resolvedTargetRoot
   });
 
@@ -167,8 +167,8 @@ function createService({
   async function requireProjectConfigForAdapter(adapter, projectType) {
     const config = await readProjectConfigForAdapter(adapter, projectType);
     if (config.ready !== true) {
-      const error = new Error("Save AI Studio project configuration before using project tools.");
-      error.code = "ai_studio_project_config_missing";
+      const error = new Error("Save Vibe64 project configuration before using project tools.");
+      error.code = "vibe64_project_config_missing";
       error.projectConfig = config;
       throw error;
     }
@@ -214,7 +214,7 @@ function createService({
   async function createRuntime() {
     const { adapter, projectType } = await createProjectAdapter();
     const projectConfig = await requireProjectConfigForAdapter(adapter, projectType);
-    return new AiStudioSessionRuntime({
+    return new Vibe64SessionRuntime({
       adapter,
       projectConfig,
       targetRoot: resolvedTargetRoot,
@@ -286,5 +286,5 @@ function createService({
 
 export {
   createService,
-  resolveAiStudioTargetRoot
+  resolveVibe64TargetRoot
 };

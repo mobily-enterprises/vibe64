@@ -4,59 +4,59 @@ import path from "node:path";
 import test from "node:test";
 
 import {
-  AI_STUDIO_SESSION_STATUS,
-  AI_STUDIO_WORKFLOW_DEFINITION_IDS,
-  AiStudioSessionRuntime,
-  DEFAULT_AI_STUDIO_WORKFLOW_DEFINITION_ID,
+  VIBE64_SESSION_STATUS,
+  VIBE64_WORKFLOW_DEFINITION_IDS,
+  Vibe64SessionRuntime,
+  DEFAULT_VIBE64_WORKFLOW_DEFINITION_ID,
   WorkflowMachine,
   applyWorkflowPresentation,
   createCoreWorkflowRegistry,
   when,
   workflowForDefinition
-} from "@local/ai-studio-runtime/server";
+} from "@local/vibe64-runtime/server";
 import {
   FakeTargetAdapter,
   PromptRenderer
-} from "@local/ai-studio-adapters/server";
+} from "@local/vibe64-adapters/server";
 import {
-  AI_STUDIO_ACTION_DISPATCH_ROUTES,
-  AI_STUDIO_CLIENT_CONTROL_ACTIONS,
-  AI_STUDIO_CLIENT_CONTROL_ICON_TOKENS,
-  AI_STUDIO_CLIENT_CONTROL_STATE_FLAGS
-} from "@local/ai-studio-core/shared";
+  VIBE64_ACTION_DISPATCH_ROUTES,
+  VIBE64_CLIENT_CONTROL_ACTIONS,
+  VIBE64_CLIENT_CONTROL_ICON_TOKENS,
+  VIBE64_CLIENT_CONTROL_STATE_FLAGS
+} from "@local/vibe64-core/shared";
 import {
   _testing as workflowRegistryTesting
-} from "@local/ai-studio-runtime/server/workflowRegistry";
+} from "@local/vibe64-runtime/server/workflowRegistry";
 import {
   currentStepPromptInputInstruction
-} from "@local/ai-studio-runtime/server/workflowStepMachines";
+} from "@local/vibe64-runtime/server/workflowStepMachines";
 import {
   _testing as coreCodingTesting
-} from "@local/ai-studio-runtime/server/workflowModules/coreCoding";
+} from "@local/vibe64-runtime/server/workflowModules/coreCoding";
 import {
   _testing as coreLifecycleTesting
-} from "@local/ai-studio-runtime/server/workflowModules/coreLifecycle";
+} from "@local/vibe64-runtime/server/workflowModules/coreLifecycle";
 import {
   _testing as coreMaintenanceTesting
-} from "@local/ai-studio-runtime/server/workflowModules/coreMaintenance";
+} from "@local/vibe64-runtime/server/workflowModules/coreMaintenance";
 import {
   questionBatchLimitInstruction
-} from "@local/ai-studio-adapters/server/promptQuestionPolicy";
-import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
+} from "@local/vibe64-adapters/server/promptQuestionPolicy";
+import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 const maintenanceModuleId = coreMaintenanceTesting.moduleId;
 const maintenanceWorkflowDefinitionIds = coreMaintenanceTesting.workflowDefinitionIds;
 const codingModuleId = coreCodingTesting.moduleId;
 const lifecycleModuleId = coreLifecycleTesting.moduleId;
 const presentationGroups = Object.freeze(["decision", "stop"]);
-const actionDispatchRoutes = Object.freeze(new Set(Object.values(AI_STUDIO_ACTION_DISPATCH_ROUTES)));
-const clientControlActions = Object.freeze(new Set(Object.values(AI_STUDIO_CLIENT_CONTROL_ACTIONS)));
-const clientControlIconTokens = Object.freeze(new Set(Object.values(AI_STUDIO_CLIENT_CONTROL_ICON_TOKENS)));
-const clientControlStateFlags = Object.freeze(new Set(Object.values(AI_STUDIO_CLIENT_CONTROL_STATE_FLAGS)));
+const actionDispatchRoutes = Object.freeze(new Set(Object.values(VIBE64_ACTION_DISPATCH_ROUTES)));
+const clientControlActions = Object.freeze(new Set(Object.values(VIBE64_CLIENT_CONTROL_ACTIONS)));
+const clientControlIconTokens = Object.freeze(new Set(Object.values(VIBE64_CLIENT_CONTROL_ICON_TOKENS)));
+const clientControlStateFlags = Object.freeze(new Set(Object.values(VIBE64_CLIENT_CONTROL_STATE_FLAGS)));
 const builtinIntentTypes = Object.freeze(new Set(["action", "continue", "reject"]));
 const coreWorkflowRegistry = createCoreWorkflowRegistry();
 
-function coreWorkflowForDefinition(definitionId = DEFAULT_AI_STUDIO_WORKFLOW_DEFINITION_ID) {
+function coreWorkflowForDefinition(definitionId = DEFAULT_VIBE64_WORKFLOW_DEFINITION_ID) {
   return workflowForDefinition(definitionId, {
     workflowRegistry: coreWorkflowRegistry
   });
@@ -455,9 +455,9 @@ function presentationSnapshot(session = {}) {
   };
 }
 
-test("ai-studio runtime session view exposes workflow steps, current actions, and next state", async () => {
+test("vibe64 runtime session view exposes workflow steps, current actions, and next state", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       clock: () => new Date("2026-05-16T01:02:03.000Z"),
       targetRoot
     });
@@ -466,7 +466,7 @@ test("ai-studio runtime session view exposes workflow steps, current actions, an
       sessionId: "workflow_view"
     });
 
-    assert.equal(session.workflowId, DEFAULT_AI_STUDIO_WORKFLOW_DEFINITION_ID);
+    assert.equal(session.workflowId, DEFAULT_VIBE64_WORKFLOW_DEFINITION_ID);
     assert.equal(session.currentStep, "session_created");
     assert.deepEqual(session.completedSteps, []);
     assert.equal(session.next.visible, true);
@@ -478,9 +478,9 @@ test("ai-studio runtime session view exposes workflow steps, current actions, an
   });
 });
 
-test("ai-studio runtime read views do not persist default or derived step-machine state", async () => {
+test("vibe64 runtime read views do not persist default or derived step-machine state", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
     await runtime.createSession({
@@ -510,9 +510,9 @@ test("ai-studio runtime read views do not persist default or derived step-machin
   });
 });
 
-test("ai-studio runtime keeps evaluated Autopilot state in presentation, not raw step definitions", async () => {
+test("vibe64 runtime keeps evaluated Autopilot state in presentation, not raw step definitions", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       adapter: new FakeTargetAdapter({
         capabilities: {
           run_automated_checks: true,
@@ -550,9 +550,9 @@ test("ai-studio runtime keeps evaluated Autopilot state in presentation, not raw
   });
 });
 
-test("ai-studio runtime exposes server-owned presentation and intents for Autopilot stops", async () => {
+test("vibe64 runtime exposes server-owned presentation and intents for Autopilot stops", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
 
@@ -573,10 +573,10 @@ test("ai-studio runtime exposes server-owned presentation and intents for Autopi
       "request_review_tweak"
     ]);
     assert.deepEqual(session.intents.find((intent) => intent.id === "open_diff")?.control, {
-      action: AI_STUDIO_CLIENT_CONTROL_ACTIONS.OPEN_DIFF,
-      disabledWhen: [AI_STUDIO_CLIENT_CONTROL_STATE_FLAGS.DIFF_DISABLED],
-      icon: AI_STUDIO_CLIENT_CONTROL_ICON_TOKENS.DIFF,
-      loadingWhen: [AI_STUDIO_CLIENT_CONTROL_STATE_FLAGS.DIFF_LOADING]
+      action: VIBE64_CLIENT_CONTROL_ACTIONS.OPEN_DIFF,
+      disabledWhen: [VIBE64_CLIENT_CONTROL_STATE_FLAGS.DIFF_DISABLED],
+      icon: VIBE64_CLIENT_CONTROL_ICON_TOKENS.DIFF,
+      loadingWhen: [VIBE64_CLIENT_CONTROL_STATE_FLAGS.DIFF_LOADING]
     });
     assert.equal(session.presentation.auto.nextOperation.kind, "wait");
     assert.equal(session.presentation.auto.nextOperation.executable, false);
@@ -584,9 +584,9 @@ test("ai-studio runtime exposes server-owned presentation and intents for Autopi
   });
 });
 
-test("ai-studio runtime presentation exposes durable background task status", async () => {
+test("vibe64 runtime presentation exposes durable background task status", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
 
@@ -604,7 +604,7 @@ test("ai-studio runtime presentation exposes durable background task status", as
         message: "Codex bootstrap failed.",
         retry: {
           control: {
-            action: AI_STUDIO_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL
+            action: VIBE64_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL
           },
           label: "Retry Codex"
         },
@@ -623,7 +623,7 @@ test("ai-studio runtime presentation exposes durable background task status", as
         message: "Codex bootstrap failed.",
         retry: {
           control: {
-            action: AI_STUDIO_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL,
+            action: VIBE64_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL,
             disabledWhen: [],
             icon: "",
             loadingWhen: []
@@ -639,9 +639,9 @@ test("ai-studio runtime presentation exposes durable background task status", as
   });
 });
 
-test("ai-studio runtime presentation emits only declared client controls", async () => {
+test("vibe64 runtime presentation emits only declared client controls", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
 
@@ -656,7 +656,7 @@ test("ai-studio runtime presentation emits only declared client controls", async
       patch: {
         retry: {
           control: {
-            action: AI_STUDIO_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL
+            action: VIBE64_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL
           },
           label: "Retry Codex"
         },
@@ -672,7 +672,7 @@ test("ai-studio runtime presentation emits only declared client controls", async
   });
 });
 
-test("ai-studio runtime presentation snapshots come from workflow step metadata", async () => {
+test("vibe64 runtime presentation snapshots come from workflow step metadata", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const changesAcceptedStep = coreWorkflowForDefinition().steps.find((step) => step.id === "changes_accepted");
     assert.deepEqual(
@@ -687,7 +687,7 @@ test("ai-studio runtime presentation snapshots come from workflow step metadata"
       }
     );
 
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       adapter: new FakeTargetAdapter({
         capabilities: {
           finish_session: true,
@@ -930,9 +930,9 @@ test("ai-studio runtime presentation snapshots come from workflow step metadata"
   });
 });
 
-test("ai-studio runtime presentation uses the workflow instance metadata as the step contract", async () => {
+test("vibe64 runtime presentation uses the workflow instance metadata as the step contract", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       targetRoot,
       workflow: {
         id: "custom_presentation_contract",
@@ -986,9 +986,9 @@ test("ai-studio runtime presentation uses the workflow instance metadata as the 
   });
 });
 
-test("ai-studio runtime exposes server-owned action icon hints", async () => {
+test("vibe64 runtime exposes server-owned action icon hints", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
 
@@ -1004,7 +1004,7 @@ test("ai-studio runtime exposes server-owned action icon hints", async () => {
   });
 });
 
-test("ai-studio runtime exposes and runs the server-owned conversation intent", async () => {
+test("vibe64 runtime exposes and runs the server-owned conversation intent", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const promptPackRoot = path.join(targetRoot, "prompt-pack");
     await mkdir(promptPackRoot, {
@@ -1021,7 +1021,7 @@ test("ai-studio runtime exposes and runs the server-owned conversation intent", 
       "utf8"
     );
 
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       adapter: new PromptRendererFakeAdapter({
         promptPackRoot
       }),
@@ -1059,14 +1059,14 @@ test("ai-studio runtime exposes and runs the server-owned conversation intent", 
     assert.equal(afterIntent.actionResult.recordsConversationTurn, true);
     assert.match(
       afterIntent.actionResult.codexPromptHandoff.terminalInput,
-      /^Explain this codebase\.\n\n\[\[AI_STUDIO_CONTEXT_START\]\]/u
+      /^Explain this codebase\.\n\n\[\[VIBE64_CONTEXT_START\]\]/u
     );
   });
 });
 
-test("ai-studio runtime runs server-owned intents and rejects stale intent submissions", async () => {
+test("vibe64 runtime runs server-owned intents and rejects stale intent submissions", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
 
@@ -1093,9 +1093,9 @@ test("ai-studio runtime runs server-owned intents and rejects stale intent submi
   });
 });
 
-test("ai-studio runtime owns final-review follow-up and merge decision intents", async () => {
+test("vibe64 runtime owns final-review follow-up and merge decision intents", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
 
@@ -1157,14 +1157,14 @@ test("ai-studio runtime owns final-review follow-up and merge decision intents",
     assert.equal(bigFeatureRejected.actionResult.input.autopilotFeedback, "Plan a simpler version.");
     assert.equal(bigFeatureRejected.actionResult.input.autopilotReason, "changes_rejected");
 
-    const seedRuntime = new AiStudioSessionRuntime({
+    const seedRuntime = new Vibe64SessionRuntime({
       adapter: new SeedRequiredFakeAdapter(),
       targetRoot
     });
     await seedRuntime.createSession({
       initialStep: "changes_accepted",
       sessionId: "seed_reject",
-      workflowDefinition: AI_STUDIO_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION
+      workflowDefinition: VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION
     });
     await seedRuntime.store.writeCompletedStep("seed_reject", "seed_plan_made", {
       message: "Seed plan was completed before final review."
@@ -1183,7 +1183,7 @@ test("ai-studio runtime owns final-review follow-up and merge decision intents",
     await runtime.createSession({
       initialStep: "changes_accepted",
       sessionId: "general_coding_reject",
-      workflowDefinition: AI_STUDIO_WORKFLOW_DEFINITION_IDS.GENERAL_CODING
+      workflowDefinition: VIBE64_WORKFLOW_DEFINITION_IDS.GENERAL_CODING
     });
     await runtime.store.writeCompletedStep("general_coding_reject", "agent_conversation", {
       message: "Conversation step was completed before final review."
@@ -1225,14 +1225,14 @@ test("ai-studio runtime owns final-review follow-up and merge decision intents",
   });
 });
 
-test("ai-studio workflow definitions are ordered step lists with self-contained step metadata", () => {
-  const bigFeature = coreWorkflowForDefinition(AI_STUDIO_WORKFLOW_DEFINITION_IDS.BIG_FEATURE);
-  const generalCoding = coreWorkflowForDefinition(AI_STUDIO_WORKFLOW_DEFINITION_IDS.GENERAL_CODING);
+test("vibe64 workflow definitions are ordered step lists with self-contained step metadata", () => {
+  const bigFeature = coreWorkflowForDefinition(VIBE64_WORKFLOW_DEFINITION_IDS.BIG_FEATURE);
+  const generalCoding = coreWorkflowForDefinition(VIBE64_WORKFLOW_DEFINITION_IDS.GENERAL_CODING);
   const nonCodeMaintenance = coreWorkflowForDefinition(maintenanceWorkflowDefinitionIds.NON_CODE_MAINTENANCE);
-  const seedApplication = coreWorkflowForDefinition(AI_STUDIO_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION);
+  const seedApplication = coreWorkflowForDefinition(VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION);
   const nonCommitMaintenance = coreWorkflowForDefinition(maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE);
 
-  assert.equal(bigFeature.id, DEFAULT_AI_STUDIO_WORKFLOW_DEFINITION_ID);
+  assert.equal(bigFeature.id, DEFAULT_VIBE64_WORKFLOW_DEFINITION_ID);
   assert.ok(bigFeature.steps.find((step) => step.id === "issue_file_created")?.autopilot.stop);
   assert.ok(seedApplication.steps.find((step) => step.id === "seed_application_defined")?.autopilot.stop);
   assert.deepEqual(seedApplication.steps.map((step) => step.id).slice(0, 6), [
@@ -1380,7 +1380,7 @@ test("ai-studio workflow definitions are ordered step lists with self-contained 
   assert.equal(nonCommitMaintenance.steps.at(-2).autopilot.kind, "agent_conversation");
 });
 
-test("ai-studio workflow definitions have an explicit state machine for every step", () => {
+test("vibe64 workflow definitions have an explicit state machine for every step", () => {
   for (const { id: definitionId } of coreWorkflowRegistry.registeredWorkflowRecords()) {
     const workflow = coreWorkflowForDefinition(definitionId);
     assert.deepEqual(
@@ -1391,14 +1391,14 @@ test("ai-studio workflow definitions have an explicit state machine for every st
   }
 });
 
-test("ai-studio workflow contract resolves every referenced step, action, intent, and workflow handler", () => {
+test("vibe64 workflow contract resolves every referenced step, action, intent, and workflow handler", () => {
   const failures = coreWorkflowRegistry.registeredWorkflowRecords()
     .flatMap(({ id: definitionId }) => validateWorkflowContract(coreWorkflowForDefinition(definitionId)));
 
   assert.deepEqual(failures, []);
 });
 
-test("ai-studio workflow steps are registered with definitions, machines, and clear ownership", () => {
+test("vibe64 workflow steps are registered with definitions, machines, and clear ownership", () => {
   const records = coreWorkflowRegistry.registeredStepRecords();
   const recordsById = new Map(records.map((record) => [record.id, record]));
   assert.deepEqual(
@@ -1446,7 +1446,7 @@ test("ai-studio workflow steps are registered with definitions, machines, and cl
   );
 });
 
-test("ai-studio workflow step factories are registered separately from steps", () => {
+test("vibe64 workflow step factories are registered separately from steps", () => {
   assert.deepEqual(
     coreWorkflowRegistry.registeredStepFactoryRecords(),
     [
@@ -1462,7 +1462,7 @@ test("ai-studio workflow step factories are registered separately from steps", (
   );
 });
 
-test("ai-studio workflow app registry composes non-core contributor modules explicitly", () => {
+test("vibe64 workflow app registry composes non-core contributor modules explicitly", () => {
   const externalHandler = () => ({ ok: true });
   const registry = createCoreWorkflowRegistry({
     stepFactoryModules: {
@@ -1532,7 +1532,7 @@ test("ai-studio workflow app registry composes non-core contributor modules expl
   );
 });
 
-test("ai-studio workflow modules register workflow definitions with explicit cross-module composition", () => {
+test("vibe64 workflow modules register workflow definitions with explicit cross-module composition", () => {
   const records = coreWorkflowRegistry.registeredWorkflowRecords();
   const recordsById = new Map(records.map((record) => [record.id, record]));
   const lifecycleStepIds = new Set(coreLifecycleTesting.ownedStepIds);
@@ -1587,7 +1587,7 @@ test("ai-studio workflow modules register workflow definitions with explicit cro
   }
 });
 
-test("ai-studio workflow registry replaces duplicate step and workflow registrations by name", () => {
+test("vibe64 workflow registry replaces duplicate step and workflow registrations by name", () => {
   const registry = workflowRegistryTesting.createWorkflowRegistry();
   registry.registerStepFactories("alpha", {
     createMachine: ({ marker = "", stepId = "" } = {}) => ({
@@ -1783,9 +1783,9 @@ test("ai-studio workflow registry replaces duplicate step and workflow registrat
   );
 });
 
-test("ai-studio runtime persists the selected workflow definition per session", async () => {
+test("vibe64 runtime persists the selected workflow definition per session", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
 
@@ -1807,14 +1807,14 @@ test("ai-studio runtime persists the selected workflow definition per session", 
         sessionId: "bad_definition",
         workflowDefinition: "unknown_definition"
       }),
-      /Unknown AI Studio workflow definition/u
+      /Unknown Vibe64 workflow definition/u
     );
   });
 });
 
-test("ai-studio non-code maintenance definition starts with a reusable session label and skips issue planning", async () => {
+test("vibe64 non-code maintenance definition starts with a reusable session label and skips issue planning", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
 
@@ -1844,9 +1844,9 @@ test("ai-studio non-code maintenance definition starts with a reusable session l
   });
 });
 
-test("ai-studio runtime selects the seed definition when the adapter says seeding is required", async () => {
+test("vibe64 runtime selects the seed definition when the adapter says seeding is required", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       adapter: new SeedRequiredFakeAdapter(),
       targetRoot
     });
@@ -1855,8 +1855,8 @@ test("ai-studio runtime selects the seed definition when the adapter says seedin
       sessionId: "seed_definition"
     });
 
-    assert.equal(session.workflowId, AI_STUDIO_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION);
-    assert.equal(session.metadata.workflow_definition, AI_STUDIO_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION);
+    assert.equal(session.workflowId, VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION);
+    assert.equal(session.metadata.workflow_definition, VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION);
     assert.equal(session.sessionName, "seeding");
     assert.equal(await runtime.store.readArtifact("seed_definition", "issue_word"), "seeding\n");
     assert.equal(await runtime.store.readMetadataValue("seed_definition", "issue_word"), "");
@@ -1865,9 +1865,9 @@ test("ai-studio runtime selects the seed definition when the adapter says seedin
   });
 });
 
-test("ai-studio runtime rejects non-seed definitions while seeding is required", async () => {
+test("vibe64 runtime rejects non-seed definitions while seeding is required", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       adapter: new SeedRequiredFakeAdapter(),
       targetRoot
     });
@@ -1875,36 +1875,36 @@ test("ai-studio runtime rejects non-seed definitions while seeding is required",
     await assert.rejects(
       () => runtime.createSession({
         sessionId: "bad_seed_definition",
-        workflowDefinition: AI_STUDIO_WORKFLOW_DEFINITION_IDS.BIG_FEATURE
+        workflowDefinition: VIBE64_WORKFLOW_DEFINITION_IDS.BIG_FEATURE
       }),
       {
-        code: "ai_studio_seed_workflow_required"
+        code: "vibe64_seed_workflow_required"
       }
     );
   });
 });
 
-test("ai-studio runtime rejects the seed definition after seeding is no longer required", async () => {
+test("vibe64 runtime rejects the seed definition after seeding is no longer required", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
 
     await assert.rejects(
       () => runtime.createSession({
         sessionId: "late_seed_definition",
-        workflowDefinition: AI_STUDIO_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION
+        workflowDefinition: VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION
       }),
       {
-        code: "ai_studio_seed_workflow_not_available"
+        code: "vibe64_seed_workflow_not_available"
       }
     );
   });
 });
 
-test("ai-studio runtime advance records completed steps and moves to the next workflow step", async () => {
+test("vibe64 runtime advance records completed steps and moves to the next workflow step", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       clock: () => new Date("2026-05-16T01:02:03.000Z"),
       targetRoot
     });
@@ -1930,9 +1930,9 @@ test("ai-studio runtime advance records completed steps and moves to the next wo
   });
 });
 
-test("ai-studio runtime shows current-step actions from the workflow", async () => {
+test("vibe64 runtime shows current-step actions from the workflow", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       adapter: new FakeTargetAdapter({
         capabilities: {
           create_worktree: true
@@ -1964,9 +1964,9 @@ test("ai-studio runtime shows current-step actions from the workflow", async () 
   });
 });
 
-test("ai-studio runtime runAction records non-command action results without advancing", async () => {
+test("vibe64 runtime runAction records non-command action results without advancing", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       clock: () => new Date("2026-05-16T01:02:03.000Z"),
       targetRoot,
       workflow: {
@@ -2022,9 +2022,9 @@ test("ai-studio runtime runAction records non-command action results without adv
   });
 });
 
-test("ai-studio runtime rejects command actions because terminals own command execution", async () => {
+test("vibe64 runtime rejects command actions because terminals own command execution", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       adapter: new FakeTargetAdapter({
         capabilities: {
           create_worktree: true
@@ -2043,16 +2043,16 @@ test("ai-studio runtime rejects command actions because terminals own command ex
     await assert.rejects(
       () => runtime.runAction("command_action", "create_worktree"),
       {
-        code: "ai_studio_command_requires_terminal",
+        code: "vibe64_command_requires_terminal",
         message: "Command action Create worktree must run in the command terminal."
       }
     );
   });
 });
 
-test("ai-studio runtime prompt actions render Codex handoff data without advancing", async () => {
+test("vibe64 runtime prompt actions render Codex handoff data without advancing", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       clock: () => new Date("2026-05-16T01:02:03.000Z"),
       targetRoot
     });
@@ -2069,18 +2069,18 @@ test("ai-studio runtime prompt actions render Codex handoff data without advanci
     assert.deepEqual(afterAction.completedSteps, []);
     assert.equal(afterAction.actionResult.status, "prompt_ready");
     assert.equal(afterAction.actionResult.promptId, "make_plan");
-    assert.match(afterAction.actionResult.prompt, /Run the AI Studio prompt action: Make plan/u);
+    assert.match(afterAction.actionResult.prompt, /Run the Vibe64 prompt action: Make plan/u);
     assert.match(afterAction.actionResult.prompt, /"scope": "unit test"/u);
-    assert.match(afterAction.actionResult.prompt, /AI Studio step completion contract:/u);
+    assert.match(afterAction.actionResult.prompt, /Vibe64 step completion contract:/u);
     assert.match(afterAction.actionResult.prompt, /"kind": "ready"/u);
     assert.match(afterAction.actionResult.prompt, /"stepStatus": "awaiting_agent_result"/u);
     assert.match(afterAction.actionResult.prompt, /Do not write workflow artifacts directly/u);
-    assert.doesNotMatch(afterAction.actionResult.prompt, /AI_STUDIO_AUTOPILOT_DONE/u);
+    assert.doesNotMatch(afterAction.actionResult.prompt, /VIBE64_AUTOPILOT_DONE/u);
     assert.equal(afterAction.actionResult.codexPromptHandoff.kind, "codex_prompt_handoff");
     assert.equal(afterAction.actionResult.codexPromptHandoff.codex.mode, "inject_prompt");
     assert.equal(afterAction.actionResult.codexPromptHandoff.prompt, afterAction.actionResult.prompt);
     assert.match(afterAction.actionResult.codexPromptHandoff.terminalInput, /Make plan/u);
-    assert.match(afterAction.actionResult.codexPromptHandoff.terminalInput, /\[\[AI_STUDIO_CONTEXT_START\]\]/u);
+    assert.match(afterAction.actionResult.codexPromptHandoff.terminalInput, /\[\[VIBE64_CONTEXT_START\]\]/u);
 
     await runtime.submitCurrentStepInput("prompt_action", {
       kind: "ready",
@@ -2093,7 +2093,7 @@ test("ai-studio runtime prompt actions render Codex handoff data without advanci
   });
 });
 
-test("ai-studio pull request resolution prompt uses the current-step helper contract", async () => {
+test("vibe64 pull request resolution prompt uses the current-step helper contract", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const promptPackRoot = path.join(targetRoot, "prompt-pack");
     await mkdir(promptPackRoot, {
@@ -2104,7 +2104,7 @@ test("ai-studio pull request resolution prompt uses the current-step helper cont
       "{{systemStandard}}",
       "utf8"
     );
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       adapter: new PromptRendererFakeAdapter({
         promptPackRoot
       }),
@@ -2114,7 +2114,7 @@ test("ai-studio pull request resolution prompt uses the current-step helper cont
     await runtime.createSession({
       initialStep: "create_pull_request",
       metadata: {
-        branch_pushed: "origin/ai-studio/test-session"
+        branch_pushed: "origin/vibe64/test-session"
       },
       sessionId: "pull_request_resolution_prompt"
     });
@@ -2124,7 +2124,7 @@ test("ai-studio pull request resolution prompt uses the current-step helper cont
     assert.equal(afterAction.currentStep, "create_pull_request");
     assert.equal(afterAction.actionResult.status, "prompt_ready");
     assert.equal(afterAction.actionResult.promptId, "resolve_pull_request");
-    assert.match(afterAction.actionResult.prompt, /AI Studio current-step input helper/u);
+    assert.match(afterAction.actionResult.prompt, /Vibe64 current-step input helper/u);
     assert.match(afterAction.actionResult.prompt, /"kind": "ready"/u);
     assert.match(afterAction.actionResult.prompt, /"stepId": "create_pull_request"/u);
     assert.match(afterAction.actionResult.prompt, /"stepStatus": "awaiting_agent_result"/u);
@@ -2138,7 +2138,7 @@ test("ai-studio pull request resolution prompt uses the current-step helper cont
 
 test("editable artifact review steps preserve user-origin and prompt-origin draft behavior", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
 
@@ -2171,7 +2171,7 @@ test("editable artifact review steps preserve user-origin and prompt-origin draf
     const prSession = await runtime.createSession({
       initialStep: "create_pull_request",
       metadata: {
-        branch_pushed: "origin/ai-studio/test-session"
+        branch_pushed: "origin/vibe64/test-session"
       },
       sessionId: "editable_artifact_pr"
     });
@@ -2225,7 +2225,7 @@ test("editable artifact review steps preserve user-origin and prompt-origin draf
   });
 });
 
-test("ai-studio runtime prompt handoff shows the action input outside hidden terminal context", async () => {
+test("vibe64 runtime prompt handoff shows the action input outside hidden terminal context", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const promptPackRoot = path.join(targetRoot, "prompt-pack");
     await mkdir(promptPackRoot, {
@@ -2242,7 +2242,7 @@ test("ai-studio runtime prompt handoff shows the action input outside hidden ter
       "utf8"
     );
 
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       adapter: new PromptRendererFakeAdapter({
         promptPackRoot
       }),
@@ -2264,16 +2264,16 @@ test("ai-studio runtime prompt handoff shows the action input outside hidden ter
     assert.equal(afterAction.actionResult.recordsConversationTurn, true);
     assert.match(
       afterAction.actionResult.codexPromptHandoff.terminalInput,
-      /^Explain this codebase\.\n\n\[\[AI_STUDIO_CONTEXT_START\]\]/u
+      /^Explain this codebase\.\n\n\[\[VIBE64_CONTEXT_START\]\]/u
     );
     assert.match(afterAction.actionResult.codexPromptHandoff.prompt, /"conversationRequest": "Explain this codebase\."/u);
     assert.equal((await runtime.getSession("agent_prompt_visible_input")).currentStep, "maintenance_conversation");
   });
 });
 
-test("ai-studio runtime presents waiting_for_input as the same Codex conversation intent", async () => {
+test("vibe64 runtime presents waiting_for_input as the same Codex conversation intent", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       clock: () => new Date("2026-05-16T01:02:03.000Z"),
       targetRoot
     });
@@ -2323,11 +2323,11 @@ test("ai-studio runtime presents waiting_for_input as the same Codex conversatio
     assert.equal(afterAnswer.stepMachine.status, "awaiting_agent_result");
     assert.equal(afterAnswer.actionResult.status, "prompt_ready");
     assert.equal(afterAnswer.actionResult.recordsConversationTurn, true);
-    assert.match(afterAnswer.actionResult.codexPromptHandoff.terminalInput, /^Use Pescara\.\n\n\[\[AI_STUDIO_CONTEXT_START\]\]/u);
+    assert.match(afterAnswer.actionResult.codexPromptHandoff.terminalInput, /^Use Pescara\.\n\n\[\[VIBE64_CONTEXT_START\]\]/u);
   });
 });
 
-test("ai-studio presentation keeps Next step on conversation screens without stop config", () => {
+test("vibe64 presentation keeps Next step on conversation screens without stop config", () => {
   const waiting = applyWorkflowPresentation({
     actions: [
       {
@@ -2429,9 +2429,9 @@ test("chat-with-ai step instructions make completion ownership explicit", () => 
   );
 });
 
-test("ai-studio runtime reuses the persisted prompt context snapshot for later prompt actions", async () => {
+test("vibe64 runtime reuses the persisted prompt context snapshot for later prompt actions", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       adapter: new FakeTargetAdapter({
         promptContext: {
           helper_map: ".jskit/helper-map.md",
@@ -2470,7 +2470,7 @@ test("ai-studio runtime reuses the persisted prompt context snapshot for later p
       }
     }
 
-    const restartedRuntime = new AiStudioSessionRuntime({
+    const restartedRuntime = new Vibe64SessionRuntime({
       adapter: new ThrowingInspectionAdapter({
         promptContext: {
           marker: "second"
@@ -2486,7 +2486,7 @@ test("ai-studio runtime reuses the persisted prompt context snapshot for later p
   });
 });
 
-test("ai-studio runtime sends static adapter context once and references it later", async () => {
+test("vibe64 runtime sends static adapter context once and references it later", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const promptPackRoot = path.join(targetRoot, "prompt-pack");
     await mkdir(promptPackRoot, {
@@ -2517,7 +2517,7 @@ test("ai-studio runtime sends static adapter context once and references it late
       "utf8"
     );
 
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       adapter: new PromptRendererFakeAdapter({
         facts: {
           summary: "Large static project summary"
@@ -2540,7 +2540,7 @@ test("ai-studio runtime sends static adapter context once and references it late
     });
 
     const firstPrompt = await runtime.runAction("session_briefing_once", "make_plan");
-    assert.match(firstPrompt.actionResult.prompt, /AI Studio session briefing/u);
+    assert.match(firstPrompt.actionResult.prompt, /Vibe64 session briefing/u);
     assert.match(firstPrompt.actionResult.prompt, /Large static project summary/u);
     assert.match(firstPrompt.actionResult.prompt, /Large static environment blueprint/u);
     assert.match(firstPrompt.actionResult.prompt, /large-static-config/u);
@@ -2555,11 +2555,11 @@ test("ai-studio runtime sends static adapter context once and references it late
     await runtime.advance("session_briefing_once");
     const secondPrompt = await runtime.runAction("session_briefing_once", "execute_plan");
 
-    assert.doesNotMatch(secondPrompt.actionResult.prompt, /AI Studio session briefing\n\nThis briefing is sent once/u);
+    assert.doesNotMatch(secondPrompt.actionResult.prompt, /Vibe64 session briefing\n\nThis briefing is sent once/u);
     assert.doesNotMatch(secondPrompt.actionResult.prompt, /Large static project summary/u);
     assert.doesNotMatch(secondPrompt.actionResult.prompt, /Large static environment blueprint/u);
     assert.doesNotMatch(secondPrompt.actionResult.prompt, /large-static-config/u);
-    assert.match(secondPrompt.actionResult.prompt, /Use the AI Studio session briefing already provided/u);
+    assert.match(secondPrompt.actionResult.prompt, /Use the Vibe64 session briefing already provided/u);
     assert.equal(secondPrompt.actionResult.promptContext.adapter.facts.summary, "Large static project summary");
     assert.equal(
       secondPrompt.actionResult.promptContext.adapter.promptContext.environment_blueprint,
@@ -2568,9 +2568,9 @@ test("ai-studio runtime sends static adapter context once and references it late
   });
 });
 
-test("ai-studio runtime disables prompt actions while the terminal is active", async () => {
+test("vibe64 runtime disables prompt actions while the terminal is active", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       adapter: new FakeTargetAdapter({
         capabilities: {
           create_worktree: true
@@ -2603,16 +2603,16 @@ test("ai-studio runtime disables prompt actions while the terminal is active", a
     await assert.rejects(
       () => runtime.runAction("terminal_active", "make_plan"),
       {
-        code: "ai_studio_action_disabled",
+        code: "vibe64_action_disabled",
         message: "Codex terminal is active."
       }
     );
   });
 });
 
-test("ai-studio runtime rejects actions that are not available on the current step", async () => {
+test("vibe64 runtime rejects actions that are not available on the current step", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
     await runtime.createSession({
@@ -2623,15 +2623,15 @@ test("ai-studio runtime rejects actions that are not available on the current st
     await assert.rejects(
       () => runtime.runAction("wrong_action", "install_dependencies"),
       {
-        code: "ai_studio_action_not_available"
+        code: "vibe64_action_not_available"
       }
     );
   });
 });
 
-test("ai-studio runtime recovers a stuck in-flight command step back to ready", async () => {
+test("vibe64 runtime recovers a stuck in-flight command step back to ready", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
     await runtime.createSession({
@@ -2661,9 +2661,9 @@ test("ai-studio runtime recovers a stuck in-flight command step back to ready", 
   });
 });
 
-test("ai-studio runtime presentation owns command recovery availability", async () => {
+test("vibe64 runtime presentation owns command recovery availability", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
     await runtime.createSession({
@@ -2702,9 +2702,9 @@ test("ai-studio runtime presentation owns command recovery availability", async 
   });
 });
 
-test("ai-studio runtime refuses stuck-step recovery unless the step is attempting execution", async () => {
+test("vibe64 runtime refuses stuck-step recovery unless the step is attempting execution", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
     await runtime.createSession({
@@ -2716,15 +2716,15 @@ test("ai-studio runtime refuses stuck-step recovery unless the step is attemptin
     await assert.rejects(
       () => runtime.recoverStuckStep("recover_not_stuck"),
       {
-        code: "ai_studio_step_recovery_not_available"
+        code: "vibe64_step_recovery_not_available"
       }
     );
   });
 });
 
-test("ai-studio runtime keeps disabled actions visible and rejects execution with the disabled reason", async () => {
+test("vibe64 runtime keeps disabled actions visible and rejects execution with the disabled reason", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       targetRoot,
       workflow: {
         id: "disabled_action",
@@ -2763,14 +2763,14 @@ test("ai-studio runtime keeps disabled actions visible and rejects execution wit
     await assert.rejects(
       () => runtime.runAction("disabled_action", "blocked_action"),
       {
-        code: "ai_studio_action_disabled",
+        code: "vibe64_action_disabled",
         message: "Waiting for metadata: ready."
       }
     );
   });
 });
 
-test("ai-studio runtime blocks advance when workflow next conditions are not met", async () => {
+test("vibe64 runtime blocks advance when workflow next conditions are not met", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const workflow = {
       id: "conditioned",
@@ -2788,7 +2788,7 @@ test("ai-studio runtime blocks advance when workflow next conditions are not met
         }
       ]
     };
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       targetRoot,
       workflow
     });
@@ -2814,9 +2814,9 @@ test("ai-studio runtime blocks advance when workflow next conditions are not met
   });
 });
 
-test("ai-studio project validation requires code index and automated checks", async () => {
+test("vibe64 project validation requires code index and automated checks", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       adapter: new FakeTargetAdapter({
         capabilities: {
           run_automated_checks: true,
@@ -2873,9 +2873,9 @@ test("ai-studio project validation requires code index and automated checks", as
   });
 });
 
-test("ai-studio runtime validates initial workflow steps", async () => {
+test("vibe64 runtime validates initial workflow steps", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
 
@@ -2890,12 +2890,12 @@ test("ai-studio runtime validates initial workflow steps", async () => {
         initialStep: "not_a_step",
         sessionId: "bad_initial_step"
       }),
-      /Unknown AI Studio workflow step/u
+      /Unknown Vibe64 workflow step/u
     );
   });
 });
 
-test("ai-studio workflow rejects duplicate action ids inside a step", () => {
+test("vibe64 workflow rejects duplicate action ids inside a step", () => {
   assert.throws(
     () => new WorkflowMachine({
       workflow: {
@@ -2918,11 +2918,11 @@ test("ai-studio workflow rejects duplicate action ids inside a step", () => {
         ]
       }
     }),
-    /Duplicate AI Studio workflow action id/u
+    /Duplicate Vibe64 workflow action id/u
   );
 });
 
-test("ai-studio workflow accepts structured condition forms and keeps runtime checks stable", () => {
+test("vibe64 workflow accepts structured condition forms and keeps runtime checks stable", () => {
   const machine = new WorkflowMachine({
     workflow: {
       id: "condition_forms",
@@ -2985,13 +2985,13 @@ test("ai-studio workflow accepts structured condition forms and keeps runtime ch
       any_ready: "yes",
       ready: "yes"
     },
-    status: AI_STUDIO_SESSION_STATUS.ACTIVE
+    status: VIBE64_SESSION_STATUS.ACTIVE
   });
 
   assert.equal(session.actions[0].enabled, true);
 });
 
-test("ai-studio workflow rejects condition strings during construction", () => {
+test("vibe64 workflow rejects condition strings during construction", () => {
   assert.throws(
     () => new WorkflowMachine({
       workflow: {
@@ -3012,7 +3012,7 @@ test("ai-studio workflow rejects condition strings during construction", () => {
       }
     }),
     (error) => {
-      assert.equal(error.code, "ai_studio_workflow_malformed_condition");
+      assert.equal(error.code, "vibe64_workflow_malformed_condition");
       assert.match(error.message, /Condition must be a condition object/u);
       assert.match(error.message, /metadata:ready/u);
       return true;
@@ -3020,7 +3020,7 @@ test("ai-studio workflow rejects condition strings during construction", () => {
   );
 });
 
-test("ai-studio workflow rejects unknown nested structured condition kinds during construction", () => {
+test("vibe64 workflow rejects unknown nested structured condition kinds during construction", () => {
   assert.throws(
     () => new WorkflowMachine({
       workflow: {
@@ -3049,15 +3049,15 @@ test("ai-studio workflow rejects unknown nested structured condition kinds durin
       }
     }),
     (error) => {
-      assert.equal(error.code, "ai_studio_workflow_unknown_condition");
-      assert.match(error.message, /Unknown AI Studio workflow condition/u);
+      assert.equal(error.code, "vibe64_workflow_unknown_condition");
+      assert.match(error.message, /Unknown Vibe64 workflow condition/u);
       assert.match(error.message, /kind:unknown/u);
       return true;
     }
   );
 });
 
-test("ai-studio workflow rejects malformed structured condition values during construction", () => {
+test("vibe64 workflow rejects malformed structured condition values during construction", () => {
   assert.throws(
     () => new WorkflowMachine({
       workflow: {
@@ -3078,15 +3078,15 @@ test("ai-studio workflow rejects malformed structured condition values during co
       }
     }),
     (error) => {
-      assert.equal(error.code, "ai_studio_workflow_malformed_condition");
-      assert.match(error.message, /Malformed AI Studio workflow condition/u);
+      assert.equal(error.code, "vibe64_workflow_malformed_condition");
+      assert.match(error.message, /Malformed Vibe64 workflow condition/u);
       assert.match(error.message, /Action input conditions require an input name/u);
       return true;
     }
   );
 });
 
-test("ai-studio workflow rejects malformed structured condition lists during construction", () => {
+test("vibe64 workflow rejects malformed structured condition lists during construction", () => {
   assert.throws(
     () => new WorkflowMachine({
       workflow: {
@@ -3107,7 +3107,7 @@ test("ai-studio workflow rejects malformed structured condition lists during con
       }
     }),
     (error) => {
-      assert.equal(error.code, "ai_studio_workflow_malformed_condition");
+      assert.equal(error.code, "vibe64_workflow_malformed_condition");
       assert.match(error.message, /Artifacts conditions require one or more artifact names/u);
       return true;
     }

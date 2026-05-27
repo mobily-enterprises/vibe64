@@ -1,5 +1,5 @@
 const GENERIC_NODE_WEB_CLIENT_LIBRARY_CONFIG = "node_web_client_library";
-const GENERIC_NODE_WEB_PROJECT_KNOWLEDGE_RELATIVE_PATH = ".ai-studio/project-knowledge/node-web.md";
+const GENERIC_NODE_WEB_PROJECT_KNOWLEDGE_RELATIVE_PATH = ".vibe64/project-knowledge/node-web.md";
 
 export {
   GENERIC_NODE_WEB_CLIENT_LIBRARY_CONFIG,

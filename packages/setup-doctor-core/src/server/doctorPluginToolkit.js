@@ -9,7 +9,7 @@ import {
   createDoctorRepair,
   failDoctorCheck,
   passDoctorCheck
-} from "@local/ai-studio-core/server/doctorCheckItems";
+} from "@local/vibe64-core/server/doctorCheckItems";
 import {
   buildDoctorToolchainArgs
 } from "./doctorToolchain.js";
@@ -18,7 +18,7 @@ import {
 } from "@local/studio-terminal-core/server/runtimeContainers";
 import {
   deepFreeze
-} from "@local/ai-studio-core/server/deepFreeze";
+} from "@local/vibe64-core/server/deepFreeze";
 import {
   dockerCommand,
   runHostCommand,

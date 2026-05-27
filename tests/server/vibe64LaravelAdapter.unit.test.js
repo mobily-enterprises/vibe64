@@ -4,18 +4,18 @@ import path from "node:path";
 import test from "node:test";
 
 import {
-  AI_STUDIO_WORKFLOW_DEFINITION_IDS,
-  AiStudioSessionRuntime
-} from "@local/ai-studio-runtime/server";
+  VIBE64_WORKFLOW_DEFINITION_IDS,
+  Vibe64SessionRuntime
+} from "@local/vibe64-runtime/server";
 import {
-  createAiStudioAdapterRegistry
-} from "@local/ai-studio-adapters/server/adapters/registry";
+  createVibe64AdapterRegistry
+} from "@local/vibe64-adapters/server/adapters/registry";
 import {
-  LARAVEL_AI_STUDIO_COMMANDS,
+  LARAVEL_VIBE64_COMMANDS,
   createLaravelLaunchDescriptor,
   createLaravelLaunchTargetTerminalSpec,
   createLaravelTargetAdapter
-} from "@local/ai-studio-adapters/server/adapters/laravel/index";
+} from "@local/vibe64-adapters/server/adapters/laravel/index";
 import {
   LARAVEL_MARIADB_HOST_PORT,
   LARAVEL_MYSQL_HOST_PORT,
@@ -23,18 +23,18 @@ import {
   createLaravelRuntimeContainers,
   laravelDatabaseEnvLines,
   laravelDatabaseEnvWriteScript
-} from "@local/ai-studio-adapters/server/adapters/laravel/databaseRuntime";
+} from "@local/vibe64-adapters/server/adapters/laravel/databaseRuntime";
 import {
   readComposerJson
-} from "@local/ai-studio-adapters/server/adapters/laravel/composerPackage";
+} from "@local/vibe64-adapters/server/adapters/laravel/composerPackage";
 import {
   createLaravelSetupDoctorPlugin,
   laravelNewCommand
-} from "@local/ai-studio-adapters/server/adapters/laravel/setupDoctorPlugin";
+} from "@local/vibe64-adapters/server/adapters/laravel/setupDoctorPlugin";
 import {
   LARAVEL_TOOLCHAIN_IMAGE
-} from "@local/ai-studio-adapters/server/adapters/laravel/toolchainIdentity";
-import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
+} from "@local/vibe64-adapters/server/adapters/laravel/toolchainIdentity";
+import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 async function writeProjectFile(root, relativePath, text = "") {
   const filePath = path.join(root, relativePath);
@@ -80,13 +80,13 @@ async function createLaravelProject(root, {
 }
 
 function commandIds() {
-  return LARAVEL_AI_STUDIO_COMMANDS
+  return LARAVEL_VIBE64_COMMANDS
     .map((command) => command.id)
     .sort((left, right) => left.localeCompare(right));
 }
 
 test("laravel adapter is registered as an implemented project type", async () => {
-  const registry = createAiStudioAdapterRegistry();
+  const registry = createVibe64AdapterRegistry();
   const projectTypes = registry.availableProjectTypes();
   const laravelProjectType = projectTypes.find((type) => type.id === "laravel");
 
@@ -164,7 +164,7 @@ test("laravel adapter reports malformed composer.json instead of hiding it", asy
         targetRoot
       }),
       {
-        code: "ai_studio_invalid_laravel_composer_json"
+        code: "vibe64_invalid_laravel_composer_json"
       }
     );
   });
@@ -186,7 +186,7 @@ test("laravel composer reader preserves filesystem read errors", async () => {
 test("laravel prompt actions use the Laravel prompt pack", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createLaravelProject(targetRoot);
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       adapter: createLaravelTargetAdapter(),
       projectConfig: {
         values: {
@@ -204,7 +204,7 @@ test("laravel prompt actions use the Laravel prompt pack", async () => {
 
     assert.equal(afterPrompt.actionResult.status, "prompt_ready");
     assert.equal(afterPrompt.actionResult.promptContext.adapter.id, "laravel");
-    assert.match(afterPrompt.actionResult.prompt, /AI Studio standard planning instructions/u);
+    assert.match(afterPrompt.actionResult.prompt, /Vibe64 standard planning instructions/u);
     assert.match(afterPrompt.actionResult.prompt, /Create the implementation plan for this Laravel project/u);
     assert.match(afterPrompt.actionResult.prompt, /Database runtime: MariaDB/u);
     assert.match(afterPrompt.actionResult.prompt, /chosen in the seed workflow/u);
@@ -215,14 +215,14 @@ test("laravel prompt actions use the Laravel prompt pack", async () => {
 
 test("laravel seed issue definition uses the current-step input contract before issue creation", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       adapter: createLaravelTargetAdapter(),
       targetRoot
     });
     await runtime.createSession({
       initialStep: "seed_application_defined",
       sessionId: "laravel_seed_prompt",
-      workflowDefinition: AI_STUDIO_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION
+      workflowDefinition: VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION
     });
 
     const initialSession = await runtime.getSession("laravel_seed_prompt");
@@ -321,7 +321,7 @@ test("laravel launch target describes Artisan serve and uses the Laravel toolcha
   });
 });
 
-test("laravel launch target passes AI Studio port through Composer serve scripts", async () => {
+test("laravel launch target passes Vibe64 port through Composer serve scripts", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createLaravelProject(targetRoot, {
       composer: {

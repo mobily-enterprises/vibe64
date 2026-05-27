@@ -1,7 +1,7 @@
 import {
   blockedDoctorCheck as blockedCheck,
   passDoctorCheck as passCheck
-} from "@local/ai-studio-core/server/doctorCheckItems";
+} from "@local/vibe64-core/server/doctorCheckItems";
 import {
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";

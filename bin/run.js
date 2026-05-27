@@ -97,9 +97,9 @@ function serverWindowsCommand({
   ].join(" ");
   return [
     `cd /d ${quoteWindowsArg(cwd)}`,
-    "if errorlevel 1 (set AI_STUDIO_STATUS=!ERRORLEVEL! & echo. & echo AI Studio could not enter the target directory. Exit status !AI_STUDIO_STATUS!. & set /p AI_STUDIO_PAUSE=Press Enter to close this terminal... & exit /b !AI_STUDIO_STATUS!)",
+    "if errorlevel 1 (set VIBE64_STATUS=!ERRORLEVEL! & echo. & echo Vibe64 could not enter the target directory. Exit status !VIBE64_STATUS!. & set /p VIBE64_PAUSE=Press Enter to close this terminal... & exit /b !VIBE64_STATUS!)",
     command,
-    "if errorlevel 1 (set AI_STUDIO_STATUS=!ERRORLEVEL! & echo. & echo AI Studio server exited with status !AI_STUDIO_STATUS!. & set /p AI_STUDIO_PAUSE=Press Enter to close this terminal... & exit /b !AI_STUDIO_STATUS!)",
+    "if errorlevel 1 (set VIBE64_STATUS=!ERRORLEVEL! & echo. & echo Vibe64 server exited with status !VIBE64_STATUS!. & set /p VIBE64_PAUSE=Press Enter to close this terminal... & exit /b !VIBE64_STATUS!)",
     "exit /b 0"
   ].join("\r\n");
 }
@@ -109,10 +109,10 @@ function terminalShellScript({
   nodePath = process.execPath,
   serverArgs = [],
   serverPath = SERVER_ENTRYPOINT,
-  title = `AI Studio - ${path.basename(process.cwd()) || "target"}`
+  title = `Vibe64 - ${path.basename(process.cwd()) || "target"}`
 } = {}) {
   return [
-    "finish_ai_studio_terminal() {",
+    "finish_vibe64_terminal() {",
     "  status=\"$1\"",
     "  message=\"$2\"",
     "  if [ \"$status\" -ne 0 ]; then",
@@ -124,11 +124,11 @@ function terminalShellScript({
     `cd ${quoteShellArg(cwd)}`,
     "status=$?",
     "if [ \"$status\" -ne 0 ]; then",
-    "  finish_ai_studio_terminal \"$status\" \"AI Studio could not enter the target directory.\"",
+    "  finish_vibe64_terminal \"$status\" \"Vibe64 could not enter the target directory.\"",
     "fi",
     `printf '\\033]0;%s\\007' ${quoteShellArg(title)}`,
     serverShellCommand({ nodePath, serverArgs, serverPath }),
-    "finish_ai_studio_terminal \"$?\" \"AI Studio server exited.\""
+    "finish_vibe64_terminal \"$?\" \"Vibe64 server exited.\""
   ].join("\n");
 }
 
@@ -155,7 +155,7 @@ function wslTerminalLaunchCandidates({
   cwd = process.cwd(),
   env = process.env,
   shellScript = "",
-  title = `AI Studio - ${targetNameFromCwd(cwd, "linux")}`
+  title = `Vibe64 - ${targetNameFromCwd(cwd, "linux")}`
 } = {}) {
   const wslArgs = wslServerCommandArgs({
     distroName: env.WSL_DISTRO_NAME,
@@ -186,7 +186,7 @@ function terminalLaunchCandidates({
   serverArgs = [],
   serverPath = SERVER_ENTRYPOINT
 } = {}) {
-  const title = `AI Studio - ${targetNameFromCwd(cwd, platform)}`;
+  const title = `Vibe64 - ${targetNameFromCwd(cwd, platform)}`;
   const shellScript = terminalShellScript({
     cwd,
     nodePath,
@@ -370,10 +370,10 @@ async function runLauncher({
       serverArgs,
       serverPath
     });
-    console.log("AI Studio is starting in a new terminal window.");
+    console.log("Vibe64 is starting in a new terminal window.");
     return 0;
   } catch (error) {
-    console.warn(`${error.message} Starting AI Studio in this terminal instead.`);
+    console.warn(`${error.message} Starting Vibe64 in this terminal instead.`);
     return runServerInCurrentTerminal({
       cwd,
       env,
@@ -388,7 +388,7 @@ if (isDirectCliExecution()) {
   runLauncher().then((exitCode) => {
     process.exitCode = exitCode;
   }).catch((error) => {
-    console.error("Failed to start AI Studio:", error);
+    console.error("Failed to start Vibe64:", error);
     process.exitCode = 1;
   });
 }

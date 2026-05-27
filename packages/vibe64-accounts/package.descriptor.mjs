@@ -1,18 +1,18 @@
 export default Object.freeze({
   packageVersion: 1,
-  packageId: "@local/ai-studio-accounts",
+  packageId: "@local/vibe64-accounts",
   version: "0.1.0",
   kind: "runtime",
-  description: "Owns AI Studio external account readiness and login orchestration.",
+  description: "Owns Vibe64 external account readiness and login orchestration.",
   dependsOn: [
     "@jskit-ai/kernel",
-    "@local/ai-studio-core",
+    "@local/vibe64-core",
     "@local/setup-doctor-core",
     "@local/studio-terminal-core"
   ],
   capabilities: {
     provides: [
-      "feature.ai-studio-accounts"
+      "feature.vibe64-accounts"
     ],
     requires: [
       "runtime.actions"
@@ -22,8 +22,8 @@ export default Object.freeze({
     server: {
       providers: [
         {
-          entrypoint: "src/server/AiStudioAccountsProvider.js",
-          export: "AiStudioAccountsProvider"
+          entrypoint: "src/server/Vibe64AccountsProvider.js",
+          export: "Vibe64AccountsProvider"
         }
       ]
     },
@@ -36,7 +36,7 @@ export default Object.freeze({
       surfaces: [
         {
           subpath: "./server/registerRoutes",
-          summary: "Registers AI Studio account status and login orchestration routes."
+          summary: "Registers Vibe64 account status and login orchestration routes."
         },
         {
           subpath: "./server/service",
@@ -45,7 +45,7 @@ export default Object.freeze({
       ],
       containerTokens: {
         server: [
-          "feature.ai-studio-accounts.service"
+          "feature.vibe64-accounts.service"
         ],
         client: []
       }

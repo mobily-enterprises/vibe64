@@ -15,7 +15,7 @@
     blocked-title="Adapter Setup blocked"
     ready-title="Adapter Setup ready"
     quiet-title="Checking project access"
-    quiet-lede="AI Studio is checking Git, GitHub, and project access before it starts working."
+    quiet-lede="Vibe64 is checking Git, GitHub, and project access before it starts working."
     continue-label="Continue to Project Setup"
     continue-emits
     doctor-class="adapter-setup-doctor"

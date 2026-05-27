@@ -1,4 +1,4 @@
-Draft pull request details for AI Studio.
+Draft pull request details for Vibe64.
 
 Session:
 - id: {{session.id}}
@@ -16,8 +16,8 @@ Action context:
 Goal:
 - Inspect the current repository state and draft the pull request title and body.
 - Do not create the pull request.
-- Do not write AI Studio artifacts directly.
-- Submit the result only by following the AI Studio step completion contract appended to this prompt.
+- Do not write Vibe64 artifacts directly.
+- Submit the result only by following the Vibe64 step completion contract appended to this prompt.
 
 Body guidance:
 - Summarize the user-visible change.

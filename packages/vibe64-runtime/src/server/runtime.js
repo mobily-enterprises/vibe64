@@ -1,26 +1,26 @@
 import {
-  AI_STUDIO_PROMPT_CONTEXT_SNAPSHOT_SCHEMA_VERSION,
-  AI_STUDIO_SESSION_STATUS,
+  VIBE64_PROMPT_CONTEXT_SNAPSHOT_SCHEMA_VERSION,
+  VIBE64_SESSION_STATUS,
   assertSafeActionId,
-  createAiStudioSessionStore
+  createVibe64SessionStore
 } from "./sessionStore.js";
 import {
   TargetAdapter,
   adapterView
-} from "@local/ai-studio-adapters/server/adapter";
+} from "@local/vibe64-adapters/server/adapter";
 import {
-  aiStudioError,
+  vibe64Error,
   normalizeText
-} from "@local/ai-studio-core/server/core";
+} from "@local/vibe64-core/server/core";
 import {
   promptSessionBriefing
-} from "@local/ai-studio-adapters/server/promptRenderer";
+} from "@local/vibe64-adapters/server/promptRenderer";
 import {
   STUDIO_CONTEXT_END_MARKER,
   STUDIO_CONTEXT_START_MARKER,
   visibleStudioPromptText,
   wrapPromptWithStudioContext
-} from "@local/ai-studio-adapters/server/promptMarkers";
+} from "@local/vibe64-adapters/server/promptMarkers";
 import {
   runtimeContainerManagedServicesPromptFacts,
   runtimeContainerPromptFacts
@@ -29,8 +29,8 @@ import {
   createCoreWorkflowRegistry
 } from "./registerCoreWorkflowModules.js";
 import {
-  AI_STUDIO_WORKFLOW_DEFINITION_IDS,
-  DEFAULT_AI_STUDIO_WORKFLOW_DEFINITION_ID,
+  VIBE64_WORKFLOW_DEFINITION_IDS,
+  DEFAULT_VIBE64_WORKFLOW_DEFINITION_ID,
   normalizeWorkflowDefinitionId,
   workflowDefinition,
   workflowDefinitionCreationOptions,
@@ -50,10 +50,10 @@ import {
   runWorkflowIntent
 } from "./workflowPresentation.js";
 import {
-  aiStudioSessionDebugDurationMs,
-  aiStudioSessionDebugError,
-  aiStudioSessionDebugLog,
-  aiStudioSessionDebugSummary
+  vibe64SessionDebugDurationMs,
+  vibe64SessionDebugError,
+  vibe64SessionDebugLog,
+  vibe64SessionDebugSummary
 } from "./sessionDebugLog.js";
 
 function metadataFlagIsOn(value) {
@@ -126,23 +126,23 @@ async function defaultActionHandler(context = {}) {
 }
 
 function actionNotAvailableError(session, actionId) {
-  return refreshRecommendedStateError(aiStudioError(
+  return refreshRecommendedStateError(vibe64Error(
     `Action ${actionId} is not available on step ${session.currentStep || "(none)"}.`,
-    "ai_studio_action_not_available"
+    "vibe64_action_not_available"
   ), session, "stale_operation");
 }
 
 function actionDisabledError(action, session = {}) {
-  return refreshRecommendedStateError(aiStudioError(
+  return refreshRecommendedStateError(vibe64Error(
     action.disabledReason || `Action ${action.id} is disabled.`,
-    "ai_studio_action_disabled"
+    "vibe64_action_disabled"
   ), session, "state_rejected");
 }
 
 function commandActionRequiresTerminalError(action) {
-  return aiStudioError(
+  return vibe64Error(
     `Command action ${action.label || action.id} must run in the command terminal.`,
-    "ai_studio_command_requires_terminal"
+    "vibe64_command_requires_terminal"
   );
 }
 
@@ -235,7 +235,7 @@ function buildCodexPromptHandoff(renderedPrompt) {
 function toDate(value) {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) {
-    throw aiStudioError("Invalid ai-studio clock value.", "ai_studio_invalid_clock");
+    throw vibe64Error("Invalid vibe64 clock value.", "vibe64_invalid_clock");
   }
   return date;
 }
@@ -258,7 +258,7 @@ function createPromptContextSnapshot({
   return {
     adapter,
     createdAt: now().toISOString(),
-    schemaVersion: AI_STUDIO_PROMPT_CONTEXT_SNAPSHOT_SCHEMA_VERSION
+    schemaVersion: VIBE64_PROMPT_CONTEXT_SNAPSHOT_SCHEMA_VERSION
   };
 }
 
@@ -390,7 +390,7 @@ function visiblePromptFromActionInput(action = {}, input = {}) {
     .join("\n\n");
 }
 
-class AiStudioSessionRuntime {
+class Vibe64SessionRuntime {
   constructor({
     actionReadiness = undefined,
     actionHandlers = {},
@@ -423,7 +423,7 @@ class AiStudioSessionRuntime {
       : null;
     this.workflowMachines = new Map();
     this.targetRoot = targetRoot;
-    this.store = store || createAiStudioSessionStore({
+    this.store = store || createVibe64SessionStore({
       clock,
       targetRoot
     });
@@ -432,7 +432,7 @@ class AiStudioSessionRuntime {
 
   async createSession(input = {}) {
     const startedAtMs = Date.now();
-    aiStudioSessionDebugLog("server.runtime.createSession.start", {
+    vibe64SessionDebugLog("server.runtime.createSession.start", {
       requestedInitialStep: String(input?.initialStep || ""),
       requestedSessionId: String(input?.sessionId || ""),
       requestedWorkflowDefinition: String(input?.workflowDefinition || input?.metadata?.workflow_definition || "")
@@ -443,7 +443,7 @@ class AiStudioSessionRuntime {
       const initialStep = input.initialStep
         ? workflowMachine.assertStepId(input.initialStep)
         : workflowMachine.firstStepId();
-      aiStudioSessionDebugLog("server.runtime.createSession.storeCreate.start", {
+      vibe64SessionDebugLog("server.runtime.createSession.storeCreate.start", {
         initialStep,
         requestedSessionId: String(input?.sessionId || ""),
         workflowDefinition: workflowDefinitionId
@@ -453,9 +453,9 @@ class AiStudioSessionRuntime {
         metadata: this.sessionMetadataWithWorkflowDefinition(input.metadata, workflowDefinitionId),
         initialStep
       });
-      aiStudioSessionDebugLog("server.runtime.createSession.storeCreate.done", {
-        ...aiStudioSessionDebugSummary(session),
-        durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
+      vibe64SessionDebugLog("server.runtime.createSession.storeCreate.done", {
+        ...vibe64SessionDebugSummary(session),
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
         initialStep,
         workflowDefinition: workflowDefinitionId
       });
@@ -463,16 +463,16 @@ class AiStudioSessionRuntime {
         await this.writeInitialSessionArtifacts(session.sessionId, workflowDefinitionId);
       });
       const viewedSession = await this.getSession(session.sessionId);
-      aiStudioSessionDebugLog("server.runtime.createSession.done", {
-        ...aiStudioSessionDebugSummary(viewedSession),
-        durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
+      vibe64SessionDebugLog("server.runtime.createSession.done", {
+        ...vibe64SessionDebugSummary(viewedSession),
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
         workflowDefinition: workflowDefinitionId
       });
       return viewedSession;
     } catch (error) {
-      aiStudioSessionDebugLog("server.runtime.createSession.error", {
-        durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
-        error: aiStudioSessionDebugError(error),
+      vibe64SessionDebugLog("server.runtime.createSession.error", {
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+        error: vibe64SessionDebugError(error),
         requestedInitialStep: String(input?.initialStep || ""),
         requestedSessionId: String(input?.sessionId || "")
       });
@@ -531,7 +531,7 @@ class AiStudioSessionRuntime {
 
   workflowDefinitionIdForSession(session = {}) {
     if (this.workflowMachine) {
-      return DEFAULT_AI_STUDIO_WORKFLOW_DEFINITION_ID;
+      return DEFAULT_VIBE64_WORKFLOW_DEFINITION_ID;
     }
     return normalizeWorkflowDefinitionId(
       session.metadata?.workflow_definition,
@@ -541,7 +541,7 @@ class AiStudioSessionRuntime {
     );
   }
 
-  workflowMachineForDefinition(definitionId = DEFAULT_AI_STUDIO_WORKFLOW_DEFINITION_ID) {
+  workflowMachineForDefinition(definitionId = DEFAULT_VIBE64_WORKFLOW_DEFINITION_ID) {
     if (this.workflowMachine) {
       return this.workflowMachine;
     }
@@ -585,27 +585,27 @@ class AiStudioSessionRuntime {
 
   async workflowDefinitionIdForNewSession(input = {}) {
     if (this.workflowMachine) {
-      return DEFAULT_AI_STUDIO_WORKFLOW_DEFINITION_ID;
+      return DEFAULT_VIBE64_WORKFLOW_DEFINITION_ID;
     }
     const requestedDefinitionId = normalizeText(
       input.workflowDefinition ||
       input.metadata?.workflow_definition
     );
     const recommendedDefinitionId = await this.recommendedWorkflowDefinitionId();
-    const seedRequired = recommendedDefinitionId === AI_STUDIO_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION;
+    const seedRequired = recommendedDefinitionId === VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION;
     if (seedRequired) {
-      if (requestedDefinitionId && requestedDefinitionId !== AI_STUDIO_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION) {
-        throw aiStudioError(
-          "The first AI Studio session must seed the application before other workflow definitions can be selected.",
-          "ai_studio_seed_workflow_required"
+      if (requestedDefinitionId && requestedDefinitionId !== VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION) {
+        throw vibe64Error(
+          "The first Vibe64 session must seed the application before other workflow definitions can be selected.",
+          "vibe64_seed_workflow_required"
         );
       }
-      return AI_STUDIO_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION;
+      return VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION;
     }
-    if (requestedDefinitionId === AI_STUDIO_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION) {
-      throw aiStudioError(
+    if (requestedDefinitionId === VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION) {
+      throw vibe64Error(
         "The seed workflow is only available before the application has been seeded.",
-        "ai_studio_seed_workflow_not_available"
+        "vibe64_seed_workflow_not_available"
       );
     }
     if (requestedDefinitionId) {
@@ -626,21 +626,21 @@ class AiStudioSessionRuntime {
     };
     const detection = await this.adapter.detect(context);
     if (detection.detected === false) {
-      return DEFAULT_AI_STUDIO_WORKFLOW_DEFINITION_ID;
+      return DEFAULT_VIBE64_WORKFLOW_DEFINITION_ID;
     }
     const facts = await this.adapter.inspect({
       ...context,
       detection
     });
     return facts?.workflow?.seedRequired === true
-      ? AI_STUDIO_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION
-      : DEFAULT_AI_STUDIO_WORKFLOW_DEFINITION_ID;
+      ? VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION
+      : DEFAULT_VIBE64_WORKFLOW_DEFINITION_ID;
   }
 
   async workflowDefinitionCreationOptions() {
     const recommendedDefinitionId = await this.recommendedWorkflowDefinitionId();
     return workflowDefinitionCreationOptions({
-      seedRequired: recommendedDefinitionId === AI_STUDIO_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION,
+      seedRequired: recommendedDefinitionId === VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION,
       workflowRegistry: this.workflowRegistry
     });
   }
@@ -801,9 +801,9 @@ class AiStudioSessionRuntime {
     session
   } = {}) {
     if (action?.type !== "finish") {
-      throw aiStudioError(
+      throw vibe64Error(
         `Action ${action?.label || action?.id || "(unknown)"} is not a finish action.`,
-        "ai_studio_action_not_finish"
+        "vibe64_action_not_finish"
       );
     }
     return this.adapter.finishSession({
@@ -849,13 +849,13 @@ class AiStudioSessionRuntime {
         ...result.metadata,
         session_finished: "yes"
       },
-      sessionStatus: AI_STUDIO_SESSION_STATUS.FINISHED
+      sessionStatus: VIBE64_SESSION_STATUS.FINISHED
     };
   }
 
   async runAction(sessionId, actionId, input = {}) {
     const startedAtMs = Date.now();
-    aiStudioSessionDebugLog("server.runtime.runAction.start", {
+    vibe64SessionDebugLog("server.runtime.runAction.start", {
       actionId,
       inputKeys: Object.keys(input && typeof input === "object" && !Array.isArray(input) ? input : {}).sort(),
       sessionId
@@ -864,30 +864,30 @@ class AiStudioSessionRuntime {
       return await this.store.mutateSession(sessionId, async () => {
         const normalizedActionId = assertSafeActionId(actionId);
         const session = await this.runActionSessionView(sessionId);
-        aiStudioSessionDebugLog("server.runtime.runAction.sessionLoaded", {
-          ...aiStudioSessionDebugSummary(session),
+        vibe64SessionDebugLog("server.runtime.runAction.sessionLoaded", {
+          ...vibe64SessionDebugSummary(session),
           actionId: normalizedActionId
         });
         const action = currentAction(session, normalizedActionId);
         if (!action) {
-          aiStudioSessionDebugLog("server.runtime.runAction.blocked", {
-            ...aiStudioSessionDebugSummary(session),
+          vibe64SessionDebugLog("server.runtime.runAction.blocked", {
+            ...vibe64SessionDebugSummary(session),
             actionId: normalizedActionId,
             reason: "action_not_available"
           });
           throw actionNotAvailableError(session, normalizedActionId);
         }
         if (!action.enabled) {
-          aiStudioSessionDebugLog("server.runtime.runAction.blocked", {
-            ...aiStudioSessionDebugSummary(session),
+          vibe64SessionDebugLog("server.runtime.runAction.blocked", {
+            ...vibe64SessionDebugSummary(session),
             actionId: normalizedActionId,
             reason: "action_disabled"
           });
           throw actionDisabledError(action, session);
         }
         if (action.type === "command") {
-          aiStudioSessionDebugLog("server.runtime.runAction.blocked", {
-            ...aiStudioSessionDebugSummary(session),
+          vibe64SessionDebugLog("server.runtime.runAction.blocked", {
+            ...vibe64SessionDebugSummary(session),
             actionId: normalizedActionId,
             reason: "command_requires_terminal"
           });
@@ -898,8 +898,8 @@ class AiStudioSessionRuntime {
         const actionSession = await this.runActionSessionView(session.sessionId);
         const actionAfterStart = currentAction(actionSession, normalizedActionId) || action;
 
-        aiStudioSessionDebugLog("server.runtime.runAction.handler.start", {
-          ...aiStudioSessionDebugSummary(actionSession),
+        vibe64SessionDebugLog("server.runtime.runAction.handler.start", {
+          ...vibe64SessionDebugSummary(actionSession),
           actionId: actionAfterStart.id,
           actionType: String(actionAfterStart.type || "")
         });
@@ -926,19 +926,19 @@ class AiStudioSessionRuntime {
           ...await this.runActionSessionView(actionSession.sessionId),
           actionResult
         };
-        aiStudioSessionDebugLog("server.runtime.runAction.done", {
-          ...aiStudioSessionDebugSummary(viewedSession),
+        vibe64SessionDebugLog("server.runtime.runAction.done", {
+          ...vibe64SessionDebugSummary(viewedSession),
           actionId: actionAfterStart.id,
           actionResultStatus: String(actionResult.status || ""),
-          durationMs: aiStudioSessionDebugDurationMs(startedAtMs)
+          durationMs: vibe64SessionDebugDurationMs(startedAtMs)
         });
         return viewedSession;
       });
     } catch (error) {
-      aiStudioSessionDebugLog("server.runtime.runAction.error", {
+      vibe64SessionDebugLog("server.runtime.runAction.error", {
         actionId,
-        durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
-        error: aiStudioSessionDebugError(error),
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+        error: vibe64SessionDebugError(error),
         sessionId
       });
       throw error;
@@ -947,30 +947,30 @@ class AiStudioSessionRuntime {
 
   async advance(sessionId) {
     const startedAtMs = Date.now();
-    aiStudioSessionDebugLog("server.runtime.advance.start", {
+    vibe64SessionDebugLog("server.runtime.advance.start", {
       sessionId
     });
     try {
       return await this.store.mutateSession(sessionId, async () => {
         const session = await this.getSession(sessionId);
-        aiStudioSessionDebugLog("server.runtime.advance.loaded", {
-          ...aiStudioSessionDebugSummary(session),
+        vibe64SessionDebugLog("server.runtime.advance.loaded", {
+          ...vibe64SessionDebugSummary(session),
           nextVisible: session.next?.visible !== false,
           nextDisabledReason: String(session.next?.disabledReason || "")
         });
         if (!session.next?.visible || !session.next.enabled || !session.next.stepId) {
-          aiStudioSessionDebugLog("server.runtime.advance.blocked", {
-            ...aiStudioSessionDebugSummary(session),
+          vibe64SessionDebugLog("server.runtime.advance.blocked", {
+            ...vibe64SessionDebugSummary(session),
             nextDisabledReason: String(session.next?.disabledReason || ""),
             nextVisible: session.next?.visible !== false,
             reason: "step_not_ready"
           });
-          throw refreshRecommendedStateError(aiStudioError(
-            session.next?.disabledReason || "Current AI Studio step cannot advance.",
-            "ai_studio_step_not_ready"
+          throw refreshRecommendedStateError(vibe64Error(
+            session.next?.disabledReason || "Current Vibe64 step cannot advance.",
+            "vibe64_step_not_ready"
           ), session, "state_rejected");
         }
-        aiStudioSessionDebugLog("server.runtime.advance.transition", {
+        vibe64SessionDebugLog("server.runtime.advance.transition", {
           fromStepId: session.currentStep,
           sessionId: session.sessionId,
           toStepId: session.next.stepId
@@ -980,17 +980,17 @@ class AiStudioSessionRuntime {
         });
         await this.store.writeCurrentStep(session.sessionId, session.next.stepId);
         const advancedSession = await this.getSession(session.sessionId);
-        aiStudioSessionDebugLog("server.runtime.advance.done", {
-          ...aiStudioSessionDebugSummary(advancedSession),
-          durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
+        vibe64SessionDebugLog("server.runtime.advance.done", {
+          ...vibe64SessionDebugSummary(advancedSession),
+          durationMs: vibe64SessionDebugDurationMs(startedAtMs),
           fromStepId: session.currentStep
         });
         return advancedSession;
       });
     } catch (error) {
-      aiStudioSessionDebugLog("server.runtime.advance.error", {
-        durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
-        error: aiStudioSessionDebugError(error),
+      vibe64SessionDebugLog("server.runtime.advance.error", {
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+        error: vibe64SessionDebugError(error),
         sessionId
       });
       throw error;
@@ -1001,7 +1001,7 @@ class AiStudioSessionRuntime {
     message = "Advanced by server intent."
   } = {}) {
     const startedAtMs = Date.now();
-    aiStudioSessionDebugLog("server.runtime.forceAdvance.start", {
+    vibe64SessionDebugLog("server.runtime.forceAdvance.start", {
       message,
       sessionId
     });
@@ -1009,17 +1009,17 @@ class AiStudioSessionRuntime {
       return await this.store.mutateSession(sessionId, async () => {
         const session = await this.getSession(sessionId);
         if (session.next?.visible === false || !session.next?.stepId) {
-          aiStudioSessionDebugLog("server.runtime.forceAdvance.blocked", {
-            ...aiStudioSessionDebugSummary(session),
+          vibe64SessionDebugLog("server.runtime.forceAdvance.blocked", {
+            ...vibe64SessionDebugSummary(session),
             nextDisabledReason: String(session.next?.disabledReason || ""),
             reason: "step_not_ready"
           });
-          throw aiStudioError(
-            session.next?.disabledReason || "Current AI Studio step cannot advance.",
-            "ai_studio_step_not_ready"
+          throw vibe64Error(
+            session.next?.disabledReason || "Current Vibe64 step cannot advance.",
+            "vibe64_step_not_ready"
           );
         }
-        aiStudioSessionDebugLog("server.runtime.forceAdvance.transition", {
+        vibe64SessionDebugLog("server.runtime.forceAdvance.transition", {
           fromStepId: session.currentStep,
           sessionId: session.sessionId,
           toStepId: session.next.stepId
@@ -1029,17 +1029,17 @@ class AiStudioSessionRuntime {
         });
         await this.store.writeCurrentStep(session.sessionId, session.next.stepId);
         const advancedSession = await this.getSession(session.sessionId);
-        aiStudioSessionDebugLog("server.runtime.forceAdvance.done", {
-          ...aiStudioSessionDebugSummary(advancedSession),
-          durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
+        vibe64SessionDebugLog("server.runtime.forceAdvance.done", {
+          ...vibe64SessionDebugSummary(advancedSession),
+          durationMs: vibe64SessionDebugDurationMs(startedAtMs),
           fromStepId: session.currentStep
         });
         return advancedSession;
       });
     } catch (error) {
-      aiStudioSessionDebugLog("server.runtime.forceAdvance.error", {
-        durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
-        error: aiStudioSessionDebugError(error),
+      vibe64SessionDebugLog("server.runtime.forceAdvance.error", {
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+        error: vibe64SessionDebugError(error),
         sessionId
       });
       throw error;
@@ -1048,24 +1048,24 @@ class AiStudioSessionRuntime {
 
   async rewind(sessionId, stepId) {
     const startedAtMs = Date.now();
-    aiStudioSessionDebugLog("server.runtime.rewind.start", {
+    vibe64SessionDebugLog("server.runtime.rewind.start", {
       requestedStepId: stepId,
       sessionId
     });
     try {
       return await this.store.mutateSession(sessionId, async () => {
         const session = await this.getSession(sessionId);
-        if (session.status !== AI_STUDIO_SESSION_STATUS.ACTIVE) {
-          aiStudioSessionDebugLog("server.runtime.rewind.blocked", {
-            ...aiStudioSessionDebugSummary(session),
+        if (session.status !== VIBE64_SESSION_STATUS.ACTIVE) {
+          vibe64SessionDebugLog("server.runtime.rewind.blocked", {
+            ...vibe64SessionDebugSummary(session),
             reason: "closed_session"
           });
-          throw aiStudioError("Closed AI Studio sessions cannot be rewound.", "ai_studio_closed_session_rewind");
+          throw vibe64Error("Closed Vibe64 sessions cannot be rewound.", "vibe64_closed_session_rewind");
         }
 
         const plan = this.workflowMachineForSession(session).rewindPlanForSession(session, stepId);
-        aiStudioSessionDebugLog("server.runtime.rewind.plan", {
-          ...aiStudioSessionDebugSummary(session),
+        vibe64SessionDebugLog("server.runtime.rewind.plan", {
+          ...vibe64SessionDebugSummary(session),
           actionResultCount: plan.actionResultIds.length,
           artifactCount: plan.artifactNames.length,
           completedStepCount: plan.completedStepIds.length,
@@ -1091,18 +1091,18 @@ class AiStudioSessionRuntime {
           toStepId: plan.targetStepId
         });
         const rewoundSession = await this.getSession(session.sessionId);
-        aiStudioSessionDebugLog("server.runtime.rewind.done", {
-          ...aiStudioSessionDebugSummary(rewoundSession),
-          durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
+        vibe64SessionDebugLog("server.runtime.rewind.done", {
+          ...vibe64SessionDebugSummary(rewoundSession),
+          durationMs: vibe64SessionDebugDurationMs(startedAtMs),
           fromStepId: session.currentStep,
           requestedStepId: stepId
         });
         return rewoundSession;
       });
     } catch (error) {
-      aiStudioSessionDebugLog("server.runtime.rewind.error", {
-        durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
-        error: aiStudioSessionDebugError(error),
+      vibe64SessionDebugLog("server.runtime.rewind.error", {
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+        error: vibe64SessionDebugError(error),
         requestedStepId: stepId,
         sessionId
       });
@@ -1114,19 +1114,19 @@ class AiStudioSessionRuntime {
     message = "Recovered stuck command execution. Re-run the current step."
   } = {}) {
     const startedAtMs = Date.now();
-    aiStudioSessionDebugLog("server.runtime.recoverStuckStep.start", {
+    vibe64SessionDebugLog("server.runtime.recoverStuckStep.start", {
       message,
       sessionId
     });
     try {
       return await this.store.mutateSession(sessionId, async () => {
         const session = await this.getSession(sessionId);
-        if (session.status !== AI_STUDIO_SESSION_STATUS.ACTIVE) {
-          aiStudioSessionDebugLog("server.runtime.recoverStuckStep.blocked", {
-            ...aiStudioSessionDebugSummary(session),
+        if (session.status !== VIBE64_SESSION_STATUS.ACTIVE) {
+          vibe64SessionDebugLog("server.runtime.recoverStuckStep.blocked", {
+            ...vibe64SessionDebugSummary(session),
             reason: "closed_session"
           });
-          throw aiStudioError("Closed AI Studio sessions cannot be recovered.", "ai_studio_closed_session_recovery");
+          throw vibe64Error("Closed Vibe64 sessions cannot be recovered.", "vibe64_closed_session_recovery");
         }
         await recoverStuckStepMachineExecution(this, session, {
           message
@@ -1139,17 +1139,17 @@ class AiStudioSessionRuntime {
           toStatus: "ready"
         });
         const recoveredSession = await this.getSession(session.sessionId);
-        aiStudioSessionDebugLog("server.runtime.recoverStuckStep.done", {
-          ...aiStudioSessionDebugSummary(recoveredSession),
-          durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
+        vibe64SessionDebugLog("server.runtime.recoverStuckStep.done", {
+          ...vibe64SessionDebugSummary(recoveredSession),
+          durationMs: vibe64SessionDebugDurationMs(startedAtMs),
           fromStepStatus: String(session.stepMachine?.status || "")
         });
         return recoveredSession;
       });
     } catch (error) {
-      aiStudioSessionDebugLog("server.runtime.recoverStuckStep.error", {
-        durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
-        error: aiStudioSessionDebugError(error),
+      vibe64SessionDebugLog("server.runtime.recoverStuckStep.error", {
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+        error: vibe64SessionDebugError(error),
         sessionId
       });
       throw error;
@@ -1158,7 +1158,7 @@ class AiStudioSessionRuntime {
 
   async submitCurrentStepInput(sessionId, input = {}) {
     const startedAtMs = Date.now();
-    aiStudioSessionDebugLog("server.runtime.submitCurrentStepInput.start", {
+    vibe64SessionDebugLog("server.runtime.submitCurrentStepInput.start", {
       inputKeys: Object.keys(input && typeof input === "object" && !Array.isArray(input) ? input : {}).sort(),
       sessionId
     });
@@ -1167,16 +1167,16 @@ class AiStudioSessionRuntime {
         await saveStepMachineInput(this, sessionId, input);
         await recordCurrentStepConversationMessage(this, sessionId, input);
         const session = await this.getSession(sessionId);
-        aiStudioSessionDebugLog("server.runtime.submitCurrentStepInput.done", {
-          ...aiStudioSessionDebugSummary(session),
-          durationMs: aiStudioSessionDebugDurationMs(startedAtMs)
+        vibe64SessionDebugLog("server.runtime.submitCurrentStepInput.done", {
+          ...vibe64SessionDebugSummary(session),
+          durationMs: vibe64SessionDebugDurationMs(startedAtMs)
         });
         return session;
       });
     } catch (error) {
-      aiStudioSessionDebugLog("server.runtime.submitCurrentStepInput.error", {
-        durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
-        error: aiStudioSessionDebugError(error),
+      vibe64SessionDebugLog("server.runtime.submitCurrentStepInput.error", {
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+        error: vibe64SessionDebugError(error),
         sessionId
       });
       throw error;
@@ -1185,7 +1185,7 @@ class AiStudioSessionRuntime {
 
   async runIntent(sessionId, intentId, input = {}) {
     const startedAtMs = Date.now();
-    aiStudioSessionDebugLog("server.runtime.runIntent.start", {
+    vibe64SessionDebugLog("server.runtime.runIntent.start", {
       intentId,
       sessionId,
       stepId: String(input?.stepId || ""),
@@ -1194,17 +1194,17 @@ class AiStudioSessionRuntime {
     try {
       return await this.store.mutateSession(sessionId, async () => {
         const session = await runWorkflowIntent(this, sessionId, intentId, input);
-        aiStudioSessionDebugLog("server.runtime.runIntent.done", {
-          ...aiStudioSessionDebugSummary(session),
-          durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
+        vibe64SessionDebugLog("server.runtime.runIntent.done", {
+          ...vibe64SessionDebugSummary(session),
+          durationMs: vibe64SessionDebugDurationMs(startedAtMs),
           intentId
         });
         return session;
       });
     } catch (error) {
-      aiStudioSessionDebugLog("server.runtime.runIntent.error", {
-        durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
-        error: aiStudioSessionDebugError(error),
+      vibe64SessionDebugLog("server.runtime.runIntent.error", {
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+        error: vibe64SessionDebugError(error),
         intentId,
         sessionId
       });
@@ -1227,5 +1227,5 @@ class AiStudioSessionRuntime {
 }
 
 export {
-  AiStudioSessionRuntime
+  Vibe64SessionRuntime
 };

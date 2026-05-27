@@ -1,12 +1,12 @@
 import { computed, ref, watch } from "vue";
 import {
-  submitAiStudioCurrentStepInput
-} from "@/lib/aiStudioSessionApi.js";
+  submitVibe64CurrentStepInput
+} from "@/lib/vibe64SessionApi.js";
 import {
   numberedQuestionInputFields,
   numberedQuestionSubmissionFields,
   numberedQuestionSugarForInput
-} from "@/lib/aiStudioNumberedQuestionSugar.js";
+} from "@/lib/vibe64NumberedQuestionSugar.js";
 import {
   readRefOrGetterValue
 } from "@/lib/vueRefOrGetterValue.js";
@@ -31,9 +31,9 @@ function requiredFieldIsMissing(field = {}, values = {}) {
   return field.required !== false && !String(values[field.name] || "").trim();
 }
 
-function useAiStudioStepInputForm({
+function useVibe64StepInputForm({
   onSaved = async () => null,
-  submitCurrentStepInput = submitAiStudioCurrentStepInput,
+  submitCurrentStepInput = submitVibe64CurrentStepInput,
   session
 } = {}) {
   const values = ref({});
@@ -102,7 +102,7 @@ function useAiStudioStepInputForm({
         stepStatus: currentSession.value?.stepMachine?.status || ""
       });
       if (response?.ok === false) {
-        if (response.errors?.[0]?.code === "ai_studio_step_input_state_changed") {
+        if (response.errors?.[0]?.code === "vibe64_step_input_state_changed") {
           await onSaved(response);
         }
         throw new Error(response.error || response.errors?.[0]?.message || "Step input could not be saved.");
@@ -110,7 +110,7 @@ function useAiStudioStepInputForm({
       await onSaved(response);
       return true;
     } catch (caught) {
-      if (caught?.code === "ai_studio_step_input_state_changed") {
+      if (caught?.code === "vibe64_step_input_state_changed") {
         await onSaved({
           ok: false
         });
@@ -146,5 +146,5 @@ function useAiStudioStepInputForm({
 }
 
 export {
-  useAiStudioStepInputForm
+  useVibe64StepInputForm
 };

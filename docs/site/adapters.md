@@ -1,6 +1,6 @@
 ---
 title: Adapters
-description: How vibe-armor keeps target-specific behavior behind adapter boundaries.
+description: How vibe64 keeps target-specific behavior behind adapter boundaries.
 layout: doc
 aside: false
 ---
@@ -14,7 +14,7 @@ aside: false
     <span>REALITY</span>
   </div>
   <p class="why-jskit-lead">
-    vibe-armor is the workflow product. Adapters own project-specific reality:
+    vibe64 is the workflow product. Adapters own project-specific reality:
     inspection, setup checks, commands, prompt context, terminals, and files.
   </p>
   <div class="why-jskit-signal-row">

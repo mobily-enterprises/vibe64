@@ -2,8 +2,8 @@ import { ref } from "vue";
 import { describe, expect, it } from "vitest";
 
 import {
-  useAiStudioStepInputForm
-} from "../../src/composables/useAiStudioStepInputForm.js";
+  useVibe64StepInputForm
+} from "../../src/composables/useVibe64StepInputForm.js";
 
 function promptResponseSession(prompt) {
   return {
@@ -32,7 +32,7 @@ function promptResponseSession(prompt) {
   };
 }
 
-describe("useAiStudioStepInputForm", () => {
+describe("useVibe64StepInputForm", () => {
   it("does not treat server-owned Codex conversation input as a direct step input form", () => {
     const session = ref({
       presentation: {
@@ -58,7 +58,7 @@ describe("useAiStudioStepInputForm", () => {
         status: "waiting_for_input"
       }
     });
-    const form = useAiStudioStepInputForm({
+    const form = useVibe64StepInputForm({
       session
     });
 
@@ -71,7 +71,7 @@ describe("useAiStudioStepInputForm", () => {
       "[1] What filename should I create?",
       "[2] What contents should it have?"
     ].join("\n")));
-    const form = useAiStudioStepInputForm({
+    const form = useVibe64StepInputForm({
       session,
       submitCurrentStepInput: async (_sessionId, input) => {
         submittedInput = input;
@@ -108,7 +108,7 @@ describe("useAiStudioStepInputForm", () => {
 
   it("keeps the normal response textarea when the prompt is not a clean question list", () => {
     const session = ref(promptResponseSession("What should happen next?"));
-    const form = useAiStudioStepInputForm({
+    const form = useVibe64StepInputForm({
       session
     });
 
@@ -151,7 +151,7 @@ describe("useAiStudioStepInputForm", () => {
         status: "waiting_for_input"
       }
     });
-    const form = useAiStudioStepInputForm({
+    const form = useVibe64StepInputForm({
       session
     });
 
@@ -167,7 +167,7 @@ describe("useAiStudioStepInputForm", () => {
       "[1] What filename should I create?",
       "[3] What contents should it have?"
     ].join("\n")));
-    const form = useAiStudioStepInputForm({
+    const form = useVibe64StepInputForm({
       session
     });
 
@@ -184,7 +184,7 @@ describe("useAiStudioStepInputForm", () => {
       "[1] Which file should change?",
       "[2] What should it contain?"
     ].join("\n")));
-    const form = useAiStudioStepInputForm({
+    const form = useVibe64StepInputForm({
       session
     });
 

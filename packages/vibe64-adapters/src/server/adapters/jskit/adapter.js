@@ -10,8 +10,8 @@ import {
   runScriptCommand
 } from "../../nodePackage.js";
 import {
-  AI_STUDIO_CODE_INDEX_SCRIPT_NAME,
-  AI_STUDIO_VERIFY_SCRIPT_NAME,
+  VIBE64_CODE_INDEX_SCRIPT_NAME,
+  VIBE64_VERIFY_SCRIPT_NAME,
   packageManagerScriptCommand
 } from "../../codeIndexCommands.js";
 import {
@@ -20,13 +20,13 @@ import {
   studioCommandScript
 } from "../../nodeWebProject.js";
 import {
-  AiStudioDescribedWorkflowTargetAdapter,
+  Vibe64DescribedWorkflowTargetAdapter,
   inspectDescribedProject
 } from "../../workflowAdapter.js";
 import {
   normalizeText
-} from "@local/ai-studio-core/server/core";
-import { deepFreeze } from "@local/ai-studio-core/server/deepFreeze";
+} from "@local/vibe64-core/server/core";
+import { deepFreeze } from "@local/vibe64-core/server/deepFreeze";
 import {
   createJskitTargetScriptTerminalSpec,
   inspectJskitCurrentApp,
@@ -110,7 +110,7 @@ const JSKIT_GENERATOR_DISCOVERY_COMMANDS = [
 const JSKIT_CONFIG_FIELDS = deepFreeze([
   {
     defaultValue: false,
-    description: "Only turn this on when developing AI Studio itself. It lets a Studio instance open another Studio session against this checkout.",
+    description: "Only turn this on when developing Vibe64 itself. It lets a Studio instance open another Studio session against this checkout.",
     id: JSKIT_ALLOW_SELF_TARGET_CONFIG,
     label: "Allow Studio self-targeting",
     type: "boolean"
@@ -292,7 +292,7 @@ async function jskitAutomatedChecksHook({ worktreePath = "" } = {}) {
   const command = packageManagerScriptCommand({
     packageJson: packageJson || {},
     packageManager,
-    scriptName: AI_STUDIO_VERIFY_SCRIPT_NAME
+    scriptName: VIBE64_VERIFY_SCRIPT_NAME
   }) || (packageScript(packageJson || {}, "verify:local")
     ? runScriptCommand(packageManager.name, "verify:local")
     : packageScript(packageJson || {}, "verify")
@@ -321,7 +321,7 @@ async function jskitCodeIndexHook({ worktreePath = "" } = {}) {
   const packageScriptCommand = packageManagerScriptCommand({
     packageJson: packageJson || {},
     packageManager,
-    scriptName: AI_STUDIO_CODE_INDEX_SCRIPT_NAME
+    scriptName: VIBE64_CODE_INDEX_SCRIPT_NAME
   });
   const command = packageScriptCommand || packageBinCommand(packageManager.name, "jskit", ["helper-map", "update"]);
   return {
@@ -351,7 +351,7 @@ async function inspectJskitProject(targetRoot) {
     markers: JSKIT_MARKERS,
     packageJson: {
       defaultValue: {},
-      invalidJsonCode: "ai_studio_invalid_jskit_json",
+      invalidJsonCode: "vibe64_invalid_jskit_json",
       invalidJsonMessage: (filePath) => `Invalid JSON in JSKIT project file: ${filePath}`
     }
   });
@@ -377,7 +377,7 @@ function createJskitRuntimeContainers({
   ];
 }
 
-class JskitTargetAdapter extends AiStudioDescribedWorkflowTargetAdapter {
+class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
   constructor({
     commandTerminalSpecFactory = null,
     commands = [],

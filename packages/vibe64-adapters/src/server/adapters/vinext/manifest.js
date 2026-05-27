@@ -1,8 +1,8 @@
 import {
   deepFreeze
-} from "@local/ai-studio-core/server/deepFreeze";
+} from "@local/vibe64-core/server/deepFreeze";
 import {
-  AI_STUDIO_APPLICATION_TYPE_WEB
+  VIBE64_APPLICATION_TYPE_WEB
 } from "../../applicationTypes.js";
 import {
   createVinextTargetAdapter
@@ -12,7 +12,7 @@ const VINEXT_ADAPTER_MANIFEST = deepFreeze({
   applicationTypes: [
     {
       explanation: "Next.js-compatible React web apps that should target Cloudflare with Vite-powered Vinext workflows.",
-      id: AI_STUDIO_APPLICATION_TYPE_WEB,
+      id: VIBE64_APPLICATION_TYPE_WEB,
       priority: 65
     }
   ],

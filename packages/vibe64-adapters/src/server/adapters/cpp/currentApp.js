@@ -3,12 +3,12 @@ import process from "node:process";
 
 import {
   pathExists
-} from "@local/ai-studio-core/server/core";
+} from "@local/vibe64-core/server/core";
 import {
   inspectDescribedCurrentApp
 } from "../../currentAppInspection.js";
 import {
-  createAiStudioTargetScriptTerminalSpec,
+  createVibe64TargetScriptTerminalSpec,
   targetScriptError
 } from "@local/studio-terminal-core/server/targetScriptTerminal";
 import {
@@ -244,7 +244,7 @@ async function createCppTargetScriptTerminalSpec(targetRoot, input = {}, {
   if (scriptsResult.ok === false) {
     return scriptsResult;
   }
-  return createAiStudioTargetScriptTerminalSpec({
+  return createVibe64TargetScriptTerminalSpec({
     adapterId: "cpp",
     image: CPP_TOOLCHAIN_IMAGE,
     input,

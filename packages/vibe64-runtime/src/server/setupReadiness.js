@@ -1,6 +1,6 @@
 import {
-  aiStudioError
-} from "@local/ai-studio-core/server/core";
+  vibe64Error
+} from "@local/vibe64-core/server/core";
 import {
   runDoctorStep
 } from "@local/setup-doctor-core/server/doctorStream";
@@ -67,7 +67,7 @@ async function readSetupStageStatus(stage, services = {}, {
     : readStatus();
 }
 
-async function readAiStudioSetupReadiness(services = {}, options = {}) {
+async function readVibe64SetupReadiness(services = {}, options = {}) {
   const stages = [];
 
   for (const stage of SETUP_STAGES) {
@@ -94,19 +94,19 @@ async function readAiStudioSetupReadiness(services = {}, options = {}) {
   };
 }
 
-async function assertAiStudioSetupReady(services = {}) {
-  const readiness = await readAiStudioSetupReadiness(services);
+async function assertVibe64SetupReady(services = {}) {
+  const readiness = await readVibe64SetupReadiness(services);
   if (readiness.ready === true) {
     return readiness;
   }
 
-  const error = aiStudioError(readiness.message, "ai_studio_setup_not_ready");
+  const error = vibe64Error(readiness.message, "vibe64_setup_not_ready");
   error.setup = readiness;
   throw error;
 }
 
 export {
   SETUP_STAGES,
-  assertAiStudioSetupReady,
-  readAiStudioSetupReadiness
+  assertVibe64SetupReady,
+  readVibe64SetupReadiness
 };

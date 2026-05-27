@@ -16,7 +16,7 @@
     blocked-title="Project Setup blocked"
     ready-title="Project Setup ready"
     quiet-title="Preparing your project"
-    quiet-lede="AI Studio is creating the starter files, installing dependencies, and checking the project before Autopilot starts."
+    quiet-lede="Vibe64 is creating the starter files, installing dependencies, and checking the project before Autopilot starts."
     continue-label="Continue to home"
     continue-to="/home"
     doctor-class="project-setup-doctor"

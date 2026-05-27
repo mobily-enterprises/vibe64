@@ -1,5 +1,5 @@
 import {
-  createAiStudioWebLaunchTargetTerminalSpec
+  createVibe64WebLaunchTargetTerminalSpec
 } from "@local/studio-terminal-core/server/launchTargetTerminal";
 import {
   detectPackageManager,
@@ -91,7 +91,7 @@ function createLaravelLaunchTargetTerminalSpec({
     };
   }
   const launchTargetRoot = targetRoot || session.targetRoot || "";
-  return createAiStudioWebLaunchTargetTerminalSpec({
+  return createVibe64WebLaunchTargetTerminalSpec({
     adapterId: "laravel",
     image: LARAVEL_TOOLCHAIN_IMAGE,
     launchTarget: context.launchTarget || laravelLaunchTarget(launchTargetId, launchTargetId),

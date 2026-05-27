@@ -8,7 +8,7 @@ function createService({
   publishSessionChanged = {}
 } = {}) {
   if (!projectService) {
-    throw new TypeError("createService requires feature.ai-studio-project.service.");
+    throw new TypeError("createService requires feature.vibe64-project.service.");
   }
 
   const codex = createCodexTerminalController({
@@ -23,7 +23,7 @@ function createService({
       }
       const result = await codex.ensureThread(session.sessionId);
       if (result?.ok === false) {
-        throw new Error(result.error || "AI Studio Codex terminal could not be prepared.");
+        throw new Error(result.error || "Vibe64 Codex terminal could not be prepared.");
       }
     },
     projectService,

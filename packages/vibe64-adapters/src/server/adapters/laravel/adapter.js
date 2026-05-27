@@ -7,10 +7,10 @@ import {
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
   normalizeText
-} from "@local/ai-studio-core/server/core";
-import { deepFreeze } from "@local/ai-studio-core/server/deepFreeze";
+} from "@local/vibe64-core/server/core";
+import { deepFreeze } from "@local/vibe64-core/server/deepFreeze";
 import {
-  AiStudioDescribedWorkflowTargetAdapter,
+  Vibe64DescribedWorkflowTargetAdapter,
   inspectDescribedProject
 } from "../../workflowAdapter.js";
 import {
@@ -18,8 +18,8 @@ import {
   studioCommandScript
 } from "../../nodeWebProject.js";
 import {
-  AI_STUDIO_CODE_INDEX_SCRIPT_NAME,
-  AI_STUDIO_VERIFY_SCRIPT_NAME,
+  VIBE64_CODE_INDEX_SCRIPT_NAME,
+  VIBE64_VERIFY_SCRIPT_NAME,
   DEFAULT_CODE_INDEX_RELATIVE_PATH,
   packageManagerScriptCommand,
   phpCodeIndexCommand
@@ -178,7 +178,7 @@ async function inspectLaravelProject(targetRoot) {
     },
     markers: LARAVEL_MARKERS,
     packageJson: {
-      invalidJsonCode: "ai_studio_invalid_laravel_package_json",
+      invalidJsonCode: "vibe64_invalid_laravel_package_json",
       invalidJsonMessage: (filePath) => `Invalid JSON in Laravel package file: ${filePath}`
     }
   });
@@ -311,12 +311,12 @@ async function laravelAutomatedChecksHook({ context = {}, worktreePath = "" } = 
     readPackageJson(worktreePath)
   ]);
   const packageManager = await detectPackageManager(worktreePath, packageJson || {});
-  const adapterVerifyCommand = composerScript(composerJson || {}, AI_STUDIO_VERIFY_SCRIPT_NAME)
-    ? composerRunCommand(AI_STUDIO_VERIFY_SCRIPT_NAME)
+  const adapterVerifyCommand = composerScript(composerJson || {}, VIBE64_VERIFY_SCRIPT_NAME)
+    ? composerRunCommand(VIBE64_VERIFY_SCRIPT_NAME)
     : packageManagerScriptCommand({
       packageJson: packageJson || {},
       packageManager,
-      scriptName: AI_STUDIO_VERIFY_SCRIPT_NAME
+      scriptName: VIBE64_VERIFY_SCRIPT_NAME
     });
   const phpCommand = composerScript(composerJson || {}, "test")
     ? composerRunCommand("test")
@@ -351,13 +351,13 @@ async function laravelCodeIndexHook({ context = {}, worktreePath = "" } = {}) {
     readPackageJson(worktreePath)
   ]);
   const packageManager = await detectPackageManager(worktreePath, packageJson || {});
-  const composerIndexCommand = composerScript(composerJson || {}, AI_STUDIO_CODE_INDEX_SCRIPT_NAME)
-    ? composerRunCommand(AI_STUDIO_CODE_INDEX_SCRIPT_NAME)
+  const composerIndexCommand = composerScript(composerJson || {}, VIBE64_CODE_INDEX_SCRIPT_NAME)
+    ? composerRunCommand(VIBE64_CODE_INDEX_SCRIPT_NAME)
     : "";
   const packageScriptCommand = composerIndexCommand ? "" : packageManagerScriptCommand({
     packageJson: packageJson || {},
     packageManager,
-    scriptName: AI_STUDIO_CODE_INDEX_SCRIPT_NAME
+    scriptName: VIBE64_CODE_INDEX_SCRIPT_NAME
   });
   const command = composerIndexCommand || packageScriptCommand || phpCodeIndexCommand();
   const commandPreview = composerIndexCommand ||
@@ -385,7 +385,7 @@ async function laravelCodeIndexHook({ context = {}, worktreePath = "" } = {}) {
   };
 }
 
-class LaravelTargetAdapter extends AiStudioDescribedWorkflowTargetAdapter {
+class LaravelTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
   constructor({
     commandTerminalSpecFactory = null,
     commands = [],

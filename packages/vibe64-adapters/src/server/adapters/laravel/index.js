@@ -7,10 +7,10 @@ import {
 } from "./adapter.js";
 import {
   deepFreeze
-} from "@local/ai-studio-core/server/deepFreeze";
+} from "@local/vibe64-core/server/deepFreeze";
 import {
-  AI_STUDIO_WORKFLOW_COMMANDS,
-  createAiStudioWorkflowCommandTerminalSpec
+  VIBE64_WORKFLOW_COMMANDS,
+  createVibe64WorkflowCommandTerminalSpec
 } from "../../workflowAdapter.js";
 import {
   createLaravelLaunchDescriptor,
@@ -29,8 +29,8 @@ export {
   LARAVEL_PROJECT_KNOWLEDGE_RELATIVE_PATH
 } from "./constants.js";
 
-const LARAVEL_AI_STUDIO_COMMANDS = deepFreeze(AI_STUDIO_WORKFLOW_COMMANDS);
-const createLaravelAiStudioCommandTerminalSpec = createAiStudioWorkflowCommandTerminalSpec;
+const LARAVEL_VIBE64_COMMANDS = deepFreeze(VIBE64_WORKFLOW_COMMANDS);
+const createLaravelVibe64CommandTerminalSpec = createVibe64WorkflowCommandTerminalSpec;
 
 function createLaravelTargetAdapter({
   commandTerminalSpecFactory = null,
@@ -41,17 +41,17 @@ function createLaravelTargetAdapter({
     commandTerminalSpecFactory,
     launchTargetTerminalSpecFactory,
     launchTargets,
-    commands: LARAVEL_AI_STUDIO_COMMANDS
+    commands: LARAVEL_VIBE64_COMMANDS
   });
 }
 
 export {
-  createLaravelAiStudioCommandTerminalSpec,
+  createLaravelVibe64CommandTerminalSpec,
   createLaravelLaunchDescriptor,
   createLaravelLaunchTargetTerminalSpec,
   createLaravelTargetAdapter,
   listLaravelLaunchTargets,
-  LARAVEL_AI_STUDIO_COMMANDS,
+  LARAVEL_VIBE64_COMMANDS,
   LARAVEL_CONFIG_FIELDS,
   LARAVEL_MARKERS,
   LARAVEL_PROMPT_PACK_ROOT,

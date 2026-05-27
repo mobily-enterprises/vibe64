@@ -4,7 +4,7 @@ const repoName = process.env.GITHUB_REPOSITORY?.split("/")[1];
 const base = repoName ? `/${repoName}/` : "/";
 
 export default defineConfig({
-  title: "vibe-armor",
+  title: "vibe64",
   description: "A local checklist-driven AI coding studio for serious product work.",
   base,
   cleanUrls: true,
@@ -12,7 +12,7 @@ export default defineConfig({
   head: [
     ["meta", { name: "theme-color", content: "#111827" }],
     ["meta", { property: "og:type", content: "website" }],
-    ["meta", { property: "og:title", content: "vibe-armor" }],
+    ["meta", { property: "og:title", content: "vibe64" }],
     [
       "meta",
       {
@@ -22,12 +22,12 @@ export default defineConfig({
     ]
   ],
   themeConfig: {
-    siteTitle: "vibe-armor",
+    siteTitle: "vibe64",
     nav: [
       { text: "Workflow", link: "/workflow" },
       { text: "Adapters", link: "/adapters" },
       { text: "Setup", link: "/setup" },
-      { text: "GitHub", link: "https://github.com/mobily-enterprises/ai-studio" }
+      { text: "GitHub", link: "https://github.com/mobily-enterprises/vibe64" }
     ],
     search: {
       provider: "local"
@@ -36,10 +36,10 @@ export default defineConfig({
       level: [2, 3]
     },
     socialLinks: [
-      { icon: "github", link: "https://github.com/mobily-enterprises/ai-studio" }
+      { icon: "github", link: "https://github.com/mobily-enterprises/vibe64" }
     ],
     footer: {
-      message: "vibe-armor product site",
+      message: "vibe64 product site",
       copyright: "Copyright 2026 Mobily Enterprises"
     }
   }

@@ -1,5 +1,5 @@
 import {
-  createAiStudioWebLaunchTargetTerminalSpec
+  createVibe64WebLaunchTargetTerminalSpec
 } from "@local/studio-terminal-core/server/launchTargetTerminal";
 import {
   selectedConfigValue
@@ -122,7 +122,7 @@ function createVinextLaunchTargetTerminalSpec({
       message: `Unknown Vinext launch target: ${launchTargetId || "(empty)"}.`
     };
   }
-  return createAiStudioWebLaunchTargetTerminalSpec({
+  return createVibe64WebLaunchTargetTerminalSpec({
     adapterId: "vinext",
     launchTarget: context.launchTarget || vinextLaunchTarget(launchTargetId, launchTargetId),
     resolveLaunch: ({ port, worktreePath }) => createVinextLaunchDescriptor({
@@ -142,7 +142,7 @@ async function createVinextAppReviewTerminalSpec({
 } = {}) {
   const config = context.config || session.config || {};
   const mode = reviewMode(config);
-  const spec = await createAiStudioWebLaunchTargetTerminalSpec({
+  const spec = await createVibe64WebLaunchTargetTerminalSpec({
     adapterId: "vinext",
     launchTarget: reviewLaunchTarget(mode),
     resolveLaunch: ({ port, worktreePath }) => createVinextReviewDescriptor({

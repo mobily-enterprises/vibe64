@@ -1,6 +1,6 @@
 Run deslop
 
-AI Studio standard review/deslop instructions.
+Vibe64 standard review/deslop instructions.
 
 Session:
 - id: {{session.id}}

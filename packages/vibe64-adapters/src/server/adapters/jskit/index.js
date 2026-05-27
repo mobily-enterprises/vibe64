@@ -10,10 +10,10 @@ import {
 } from "./adapter.js";
 import {
   deepFreeze
-} from "@local/ai-studio-core/server/deepFreeze";
+} from "@local/vibe64-core/server/deepFreeze";
 import {
-  AI_STUDIO_WORKFLOW_COMMANDS,
-  createAiStudioWorkflowCommandTerminalSpec
+  VIBE64_WORKFLOW_COMMANDS,
+  createVibe64WorkflowCommandTerminalSpec
 } from "../../workflowAdapter.js";
 import {
   createJskitLaunchTargetTerminalSpec,
@@ -27,8 +27,8 @@ export {
   targetScriptCommandPreview
 } from "./currentApp.js";
 
-const JSKIT_AI_STUDIO_COMMANDS = deepFreeze(AI_STUDIO_WORKFLOW_COMMANDS);
-const createJskitAiStudioCommandTerminalSpec = createAiStudioWorkflowCommandTerminalSpec;
+const JSKIT_VIBE64_COMMANDS = deepFreeze(VIBE64_WORKFLOW_COMMANDS);
+const createJskitVibe64CommandTerminalSpec = createVibe64WorkflowCommandTerminalSpec;
 
 function createJskitTargetAdapter({
   commandTerminalSpecFactory = null,
@@ -39,13 +39,13 @@ function createJskitTargetAdapter({
     commandTerminalSpecFactory,
     launchTargetTerminalSpecFactory,
     launchTargets,
-    commands: JSKIT_AI_STUDIO_COMMANDS
+    commands: JSKIT_VIBE64_COMMANDS
   });
 }
 
 export {
   createJskitTargetAdapter,
-  createJskitAiStudioCommandTerminalSpec,
+  createJskitVibe64CommandTerminalSpec,
   createJskitLaunchTargetTerminalSpec,
   listJskitLaunchTargets,
   JSKIT_ALLOW_SELF_TARGET_CONFIG,
@@ -54,7 +54,7 @@ export {
   JSKIT_MARKERS,
   JSKIT_PROMPT_PACK_ROOT,
   JSKIT_PREPARE_WORKTREE_SCRIPT_PATH,
-  JSKIT_AI_STUDIO_COMMANDS,
+  JSKIT_VIBE64_COMMANDS,
   JskitTargetAdapter,
   jskitConfigAllowsStudioSelfTarget
 };

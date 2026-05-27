@@ -9,8 +9,8 @@ import {
   writeTerminalSession
 } from "@local/studio-terminal-core/server/terminalSessions";
 import {
-  AI_STUDIO_APP_ROOT_ENV,
-  AI_STUDIO_TARGET_ROOT_ENV
+  VIBE64_APP_ROOT_ENV,
+  VIBE64_TARGET_ROOT_ENV
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
   runDoctorStep
@@ -26,7 +26,7 @@ import {
   failDoctorCheck as failCheck,
   manualDoctorRepair as manualRepair,
   passDoctorCheck as passCheck
-} from "@local/ai-studio-core/server/doctorCheckItems";
+} from "@local/vibe64-core/server/doctorCheckItems";
 import {
   runHostCommand,
   shellQuote
@@ -161,7 +161,7 @@ async function checkTargetIdentity({
       label: "Target identity",
       expected: "Target root is Studio's own repository root or a separate app root.",
       observed,
-      explanation: "Studio is targeting itself in self-development mode. AI Studio sessions will make changes in managed session worktrees."
+      explanation: "Studio is targeting itself in self-development mode. Vibe64 sessions will make changes in managed session worktrees."
     });
   }
 
@@ -690,8 +690,8 @@ async function inspectAdapterSetup({
 
 function createService({
   projectService = null,
-  studioRoot = process.env[AI_STUDIO_APP_ROOT_ENV] || process.cwd(),
-  targetRoot = process.env[AI_STUDIO_TARGET_ROOT_ENV] || process.cwd()
+  studioRoot = process.env[VIBE64_APP_ROOT_ENV] || process.cwd(),
+  targetRoot = process.env[VIBE64_TARGET_ROOT_ENV] || process.cwd()
 } = {}) {
   const resolvedStudioRoot = normalizeRoot(studioRoot);
   const resolvedTargetRoot = normalizeRoot(targetRoot);

@@ -10,7 +10,7 @@ export default function getPlacements() {
 }
 
 addPlacement({
-  id: "ai-studio.home.menu.setup",
+  id: "vibe64.home.menu.setup",
   target: "shell.secondary-nav",
   kind: "link",
   surfaces: ["home"],
@@ -23,7 +23,7 @@ addPlacement({
 });
 
 addPlacement({
-  id: "ai-studio.home.menu.configure",
+  id: "vibe64.home.menu.configure",
   target: "shell.secondary-nav",
   kind: "link",
   surfaces: ["home"],
@@ -36,7 +36,7 @@ addPlacement({
 });
 
 addPlacement({
-  id: "ai-studio.home.menu.history",
+  id: "vibe64.home.menu.history",
   target: "shell.secondary-nav",
   kind: "link",
   surfaces: ["home"],
@@ -49,7 +49,7 @@ addPlacement({
 });
 
 addPlacement({
-  id: "ai-studio.home.menu.home",
+  id: "vibe64.home.menu.home",
   target: "shell.primary-nav",
   kind: "link",
   surfaces: ["home"],
@@ -67,7 +67,7 @@ addPlacement({
   kind: "component",
   surfaces: ["home"],
   order: 60,
-  componentToken: "local.main.ui.ai-studio-target-scripts-nav-link"
+  componentToken: "local.main.ui.vibe64-target-scripts-nav-link"
 });
 
 

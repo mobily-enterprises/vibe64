@@ -3,18 +3,18 @@ import { withActionDefaults } from "@jskit-ai/kernel/shared/actions";
 import { createService } from "./service.js";
 import { featureActions } from "./actions.js";
 import { registerRoutes } from "./registerRoutes.js";
-import { aiStudioSessionChangedServiceEvent } from "@local/ai-studio-core/server/sessionRealtimeEvents";
+import { vibe64SessionChangedServiceEvent } from "@local/vibe64-core/server/sessionRealtimeEvents";
 
-const AI_STUDIO_SESSIONS_SERVICE = "feature.ai-studio-sessions.service";
+const VIBE64_SESSIONS_SERVICE = "feature.vibe64-sessions.service";
 
-class AiStudioSessionsProvider {
-  static id = "feature.ai-studio-sessions";
+class Vibe64SessionsProvider {
+  static id = "feature.vibe64-sessions";
 
   static dependsOn = [
     "runtime.actions",
-    "feature.ai-studio-project",
-    "feature.ai-studio-accounts",
-    "feature.ai-studio-terminals",
+    "feature.vibe64-project",
+    "feature.vibe64-accounts",
+    "feature.vibe64-terminals",
     "feature.studio-setup-doctor",
     "feature.adapter-setup-doctor",
     "feature.project-setup-doctor"
@@ -26,33 +26,33 @@ class AiStudioSessionsProvider {
       typeof app.service !== "function" ||
       typeof app.actions !== "function"
     ) {
-      throw new Error("AiStudioSessionsProvider requires application service()/actions().");
+      throw new Error("Vibe64SessionsProvider requires application service()/actions().");
     }
 
     app.service(
-      AI_STUDIO_SESSIONS_SERVICE,
+      VIBE64_SESSIONS_SERVICE,
       (scope) => {
         return createService({
           setupServices: {
-            accountSetupService: scope.make("feature.ai-studio-accounts.service"),
+            accountSetupService: scope.make("feature.vibe64-accounts.service"),
             adapterSetupService: scope.make("feature.adapter-setup-doctor.service"),
             projectSetupService: scope.make("feature.project-setup-doctor.service"),
             studioSetupService: scope.make("feature.studio-setup-doctor.service")
           },
-          projectService: scope.make("feature.ai-studio-project.service"),
-          terminalService: scope.make("feature.ai-studio-terminals.service")
+          projectService: scope.make("feature.vibe64-project.service"),
+          terminalService: scope.make("feature.vibe64-terminals.service")
         });
       },
       {
         events: {
-          abandonSession: [aiStudioSessionChangedServiceEvent()],
-          advanceSession: [aiStudioSessionChangedServiceEvent()],
-          createSession: [aiStudioSessionChangedServiceEvent({
+          abandonSession: [vibe64SessionChangedServiceEvent()],
+          advanceSession: [vibe64SessionChangedServiceEvent()],
+          createSession: [vibe64SessionChangedServiceEvent({
             operation: "created"
           })],
-          rewindSession: [aiStudioSessionChangedServiceEvent()],
-          runSessionAction: [aiStudioSessionChangedServiceEvent()],
-          runSessionIntent: [aiStudioSessionChangedServiceEvent()]
+          rewindSession: [vibe64SessionChangedServiceEvent()],
+          runSessionAction: [vibe64SessionChangedServiceEvent()],
+          runSessionIntent: [vibe64SessionChangedServiceEvent()]
         }
       }
     );
@@ -61,7 +61,7 @@ class AiStudioSessionsProvider {
       withActionDefaults(featureActions, {
         domain: "feature",
         dependencies: {
-          featureService: "feature.ai-studio-sessions.service"
+          featureService: "feature.vibe64-sessions.service"
         }
       })
     );
@@ -69,10 +69,10 @@ class AiStudioSessionsProvider {
 
   boot(app) {
     registerRoutes(app, {
-      routeRelativePath: "ai-studio",
+      routeRelativePath: "vibe64",
       routeSurface: "home"
     });
   }
 }
 
-export { AiStudioSessionsProvider };
+export { Vibe64SessionsProvider };

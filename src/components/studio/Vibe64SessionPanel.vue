@@ -3,12 +3,12 @@
     <div class="studio-ai-sessions__header">
       <StudioErrorNotice
         v-if="pageError"
-        title="AI Studio sessions could not load"
+        title="Vibe64 sessions could not load"
         :error="pageError"
         compact
       />
 
-      <AiStudioSessionToolbar
+      <Vibe64SessionToolbar
         :abandon="selectedAbandon"
         :selected-session-id="selection.selectedSessionId"
         :selection-closed="selection.isClosed"
@@ -44,7 +44,7 @@
           </v-btn>
         </div>
 
-        <AiStudioShellControls
+        <Vibe64ShellControls
           v-for="shellSession in shellToolbarSessions"
           :key="`shell:${shellSession.sessionId}`"
           :session="shellSession"
@@ -52,7 +52,7 @@
           :window-displayed="shellControlsActive(shellSession)"
         />
 
-        <AiStudioLaunchControls
+        <Vibe64LaunchControls
           v-if="selectedToolbarSession"
           :key="`launch:${selectedToolbarSession.sessionId}`"
           button-size="large"
@@ -94,7 +94,7 @@
     </v-sheet>
 
     <div v-else class="studio-ai-sessions__runtime-stack">
-      <AiStudioSessionRuntimeHost
+      <Vibe64SessionRuntimeHost
         :key="selection.selectedSessionId"
         active
         :session-data="sessionData"
@@ -116,23 +116,23 @@ import {
   mdiPlayCircleOutline,
   mdiTune
 } from "@mdi/js";
-import AiStudioLaunchControls from "@/components/studio/AiStudioLaunchControls.vue";
-import AiStudioSessionRuntimeHost from "@/components/studio/ai-studio-session/AiStudioSessionRuntimeHost.vue";
-import AiStudioSessionToolbar from "@/components/studio/ai-studio-session/AiStudioSessionToolbar.vue";
-import AiStudioShellControls from "@/components/studio/AiStudioShellControls.vue";
+import Vibe64LaunchControls from "@/components/studio/Vibe64LaunchControls.vue";
+import Vibe64SessionRuntimeHost from "@/components/studio/vibe64-session/Vibe64SessionRuntimeHost.vue";
+import Vibe64SessionToolbar from "@/components/studio/vibe64-session/Vibe64SessionToolbar.vue";
+import Vibe64ShellControls from "@/components/studio/Vibe64ShellControls.vue";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
 import {
   inspectDiffButtonVisible
-} from "@/lib/aiStudioSessionPanelModel.js";
+} from "@/lib/vibe64SessionPanelModel.js";
 import {
-  useAiStudioSessionData
-} from "@/composables/useAiStudioSessionData.js";
+  useVibe64SessionData
+} from "@/composables/useVibe64SessionData.js";
 import {
-  useAiStudioSessionMode
-} from "@/composables/useAiStudioSessionMode.js";
+  useVibe64SessionMode
+} from "@/composables/useVibe64SessionMode.js";
 import {
-  aiStudioSessionDebugLog
-} from "@/lib/aiStudioSessionDebugLog.js";
+  vibe64SessionDebugLog
+} from "@/lib/vibe64SessionDebugLog.js";
 
 const emit = defineEmits(["title-change"]);
 const route = useRoute();
@@ -145,7 +145,7 @@ const fallbackAbandon = {
   request: () => null
 };
 const runtimeStateBySessionId = reactive({});
-const sessionData = useAiStudioSessionData({
+const sessionData = useVibe64SessionData({
   onTitleChange(title) {
     emit("title-change", title);
   }
@@ -171,7 +171,7 @@ const toolbar = proxyRefs({
 const {
   sessionMode,
   setSessionMode: storeSessionMode
-} = useAiStudioSessionMode({
+} = useVibe64SessionMode({
   route,
   router,
   selectedSessionId: sessionData.selectedSessionId
@@ -254,7 +254,7 @@ function setRuntimePageError({
 }
 
 function setSessionMode(mode = "autopilot") {
-  aiStudioSessionDebugLog("client.sessionPanel.setSessionMode", {
+  vibe64SessionDebugLog("client.sessionPanel.setSessionMode", {
     fromMode: sessionMode.value,
     selectedSessionId: String(selection.selectedSessionId || ""),
     toMode: mode
@@ -275,7 +275,7 @@ function shellControlsActive(session = {}) {
 }
 
 watch(sessionMode, () => {
-  aiStudioSessionDebugLog("client.sessionPanel.sessionMode.changed", {
+  vibe64SessionDebugLog("client.sessionPanel.sessionMode.changed", {
     selectedSessionId: String(selection.selectedSessionId || ""),
     sessionMode: sessionMode.value
   });

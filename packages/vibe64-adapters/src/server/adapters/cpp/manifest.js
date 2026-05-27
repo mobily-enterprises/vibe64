@@ -1,8 +1,8 @@
 import {
   deepFreeze
-} from "@local/ai-studio-core/server/deepFreeze";
+} from "@local/vibe64-core/server/deepFreeze";
 import {
-  AI_STUDIO_APPLICATION_TYPE_SYSTEM
+  VIBE64_APPLICATION_TYPE_SYSTEM
 } from "../../applicationTypes.js";
 import {
   createCppTargetAdapter
@@ -12,7 +12,7 @@ const CPP_ADAPTER_MANIFEST = deepFreeze({
   applicationTypes: [
     {
       explanation: "Native command-line tools, libraries, and systems programs built with CMake, Make, or Meson.",
-      id: AI_STUDIO_APPLICATION_TYPE_SYSTEM,
+      id: VIBE64_APPLICATION_TYPE_SYSTEM,
       priority: 100
     }
   ],

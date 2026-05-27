@@ -60,7 +60,7 @@ import {
 } from "@mdi/js";
 import {
   controlHasClientAction
-} from "@/lib/aiStudioPresentationControls.js";
+} from "@/lib/vibe64PresentationControls.js";
 
 const props = defineProps({
   error: {

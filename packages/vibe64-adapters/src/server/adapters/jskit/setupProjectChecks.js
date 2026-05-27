@@ -5,7 +5,7 @@ import {
   formatDoctorList as formatList,
   hardStopDoctorCheck as hardStopCheck,
   passDoctorCheck as passCheck
-} from "@local/ai-studio-core/server/doctorCheckItems";
+} from "@local/vibe64-core/server/doctorCheckItems";
 import {
   allDependencyNames,
   checkNodeDependencies,

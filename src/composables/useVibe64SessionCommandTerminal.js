@@ -1,14 +1,14 @@
 import { computed, nextTick, ref, unref } from "vue";
 import {
-  aiStudioSessionDebugDurationMs,
-  aiStudioSessionDebugLog,
-  aiStudioSessionDebugSummary
-} from "@/lib/aiStudioSessionDebugLog.js";
+  vibe64SessionDebugDurationMs,
+  vibe64SessionDebugLog,
+  vibe64SessionDebugSummary
+} from "@/lib/vibe64SessionDebugLog.js";
 import {
   readRefOrGetterValue
 } from "@/lib/vueRefOrGetterValue.js";
 
-function useAiStudioSessionCommandTerminal({
+function useVibe64SessionCommandTerminal({
   currentNext = () => null,
   refreshSessionData,
   selectedSession,
@@ -24,7 +24,7 @@ function useAiStudioSessionCommandTerminal({
 
   function clear() {
     if (action.value || running.value) {
-      aiStudioSessionDebugLog("client.sessionCommandTerminal.clear", {
+      vibe64SessionDebugLog("client.sessionCommandTerminal.clear", {
         actionId: String(action.value?.id || ""),
         running: running.value,
         sessionId: String(unref(selectedSessionId) || "")
@@ -39,8 +39,8 @@ function useAiStudioSessionCommandTerminal({
 
   function start(nextAction = {}) {
     const commandStartedAt = Date.now();
-    aiStudioSessionDebugLog("client.sessionCommandTerminal.start", {
-      ...aiStudioSessionDebugSummary(readRefOrGetterValue(selectedSession) || {}),
+    vibe64SessionDebugLog("client.sessionCommandTerminal.start", {
+      ...vibe64SessionDebugSummary(readRefOrGetterValue(selectedSession) || {}),
       actionId: String(nextAction.id || ""),
       advanceOnSuccess: nextAction.advanceOnSuccess === true,
       sessionId: String(unref(selectedSessionId) || "")
@@ -56,7 +56,7 @@ function useAiStudioSessionCommandTerminal({
     exitCode = null
   } = {}) {
     const startedAtMs = pendingStartedAt.value || Date.now();
-    aiStudioSessionDebugLog("client.sessionCommandTerminal.settled.start", {
+    vibe64SessionDebugLog("client.sessionCommandTerminal.settled.start", {
       actionId: String(actionId || ""),
       exitCode,
       sessionId: String(unref(selectedSessionId) || "")
@@ -66,10 +66,10 @@ function useAiStudioSessionCommandTerminal({
     await nextTick();
 
     const next = readRefOrGetterValue(currentNext);
-    aiStudioSessionDebugLog("client.sessionCommandTerminal.settled.afterRefresh", {
-      ...aiStudioSessionDebugSummary(readRefOrGetterValue(selectedSession) || {}),
+    vibe64SessionDebugLog("client.sessionCommandTerminal.settled.afterRefresh", {
+      ...vibe64SessionDebugSummary(readRefOrGetterValue(selectedSession) || {}),
       actionId: String(actionId || ""),
-      durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
+      durationMs: vibe64SessionDebugDurationMs(startedAtMs),
       exitCode,
       nextEnabled: next?.enabled === true,
       nextVisible: next?.visible === true,
@@ -80,7 +80,7 @@ function useAiStudioSessionCommandTerminal({
   }
 
   function handleClosed() {
-    aiStudioSessionDebugLog("client.sessionCommandTerminal.closed", {
+    vibe64SessionDebugLog("client.sessionCommandTerminal.closed", {
       actionId: String(action.value?.id || ""),
       sessionId: String(unref(selectedSessionId) || "")
     });
@@ -89,14 +89,14 @@ function useAiStudioSessionCommandTerminal({
 
   async function handleFinished(event = {}) {
     if (event.sessionId && event.sessionId !== unref(selectedSessionId)) {
-      aiStudioSessionDebugLog("client.sessionCommandTerminal.finished.ignored", {
+      vibe64SessionDebugLog("client.sessionCommandTerminal.finished.ignored", {
         actionId: String(event.actionId || ""),
         eventSessionId: String(event.sessionId || ""),
         selectedSessionId: String(unref(selectedSessionId) || "")
       });
       return;
     }
-    aiStudioSessionDebugLog("client.sessionCommandTerminal.finished", {
+    vibe64SessionDebugLog("client.sessionCommandTerminal.finished", {
       actionId: String(event.actionId || ""),
       eventSessionId: String(event.sessionId || ""),
       exitCode: event.exitCode ?? null,
@@ -111,7 +111,7 @@ function useAiStudioSessionCommandTerminal({
   async function handleRunningChanged(nextRunning) {
     const wasRunning = running.value;
     running.value = Boolean(nextRunning);
-    aiStudioSessionDebugLog("client.sessionCommandTerminal.runningChanged", {
+    vibe64SessionDebugLog("client.sessionCommandTerminal.runningChanged", {
       actionId: String(action.value?.id || ""),
       nextRunning: running.value,
       sessionId: String(unref(selectedSessionId) || ""),
@@ -140,5 +140,5 @@ function useAiStudioSessionCommandTerminal({
 }
 
 export {
-  useAiStudioSessionCommandTerminal
+  useVibe64SessionCommandTerminal
 };

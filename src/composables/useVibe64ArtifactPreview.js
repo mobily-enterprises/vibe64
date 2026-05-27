@@ -1,10 +1,10 @@
 import { computed, ref, watch } from "vue";
 import {
-  useAiStudioSessionArtifacts
-} from "@/composables/useAiStudioSessionArtifacts.js";
+  useVibe64SessionArtifacts
+} from "@/composables/useVibe64SessionArtifacts.js";
 import {
   resolveResponseErrorMessage
-} from "@/lib/aiStudioResponseErrors.js";
+} from "@/lib/vibe64ResponseErrors.js";
 import {
   readRefOrGetterValue
 } from "@/lib/vueRefOrGetterValue.js";
@@ -20,14 +20,14 @@ function artifactReadinessVersion(readiness = {}) {
     .join("|");
 }
 
-function useAiStudioArtifactPreview({
+function useVibe64ArtifactPreview({
   active = true,
   artifactReadiness = null,
   loadErrorMessage = "Artifact could not be loaded.",
   previewId = "",
   session
 } = {}) {
-  const artifactPreview = useAiStudioSessionArtifacts();
+  const artifactPreview = useVibe64SessionArtifacts();
   const error = ref("");
   const text = ref("");
   let requestId = 0;
@@ -100,5 +100,5 @@ function useAiStudioArtifactPreview({
 }
 
 export {
-  useAiStudioArtifactPreview
+  useVibe64ArtifactPreview
 };

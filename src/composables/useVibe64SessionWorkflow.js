@@ -1,14 +1,14 @@
 import { computed } from "vue";
-import { useAiStudioSessionActions } from "@/composables/useAiStudioSessionActions.js";
-import { useAiStudioSessionClipboard } from "@/composables/useAiStudioSessionClipboard.js";
-import { useAiStudioSessionCommandTerminal } from "@/composables/useAiStudioSessionCommandTerminal.js";
-import { useAiStudioSessionDialogs } from "@/composables/useAiStudioSessionDialogs.js";
-import { useAiStudioStepInputForm } from "@/composables/useAiStudioStepInputForm.js";
+import { useVibe64SessionActions } from "@/composables/useVibe64SessionActions.js";
+import { useVibe64SessionClipboard } from "@/composables/useVibe64SessionClipboard.js";
+import { useVibe64SessionCommandTerminal } from "@/composables/useVibe64SessionCommandTerminal.js";
+import { useVibe64SessionDialogs } from "@/composables/useVibe64SessionDialogs.js";
+import { useVibe64StepInputForm } from "@/composables/useVibe64StepInputForm.js";
 import {
   commandMessage
-} from "@/lib/aiStudioSessionPanelModel.js";
+} from "@/lib/vibe64SessionPanelModel.js";
 
-function useAiStudioSessionWorkflow({
+function useVibe64SessionWorkflow({
   sessionData
 } = {}) {
   const {
@@ -25,7 +25,7 @@ function useAiStudioSessionWorkflow({
     sessionsApiPath
   } = sessionData;
 
-  const clipboard = useAiStudioSessionClipboard();
+  const clipboard = useVibe64SessionClipboard();
   const workflow = {
     actions: null,
     commandTerminal: null,
@@ -56,7 +56,7 @@ function useAiStudioSessionWorkflow({
     workflow.dialogs?.clear();
   }
 
-  workflow.commandTerminal = useAiStudioSessionCommandTerminal({
+  workflow.commandTerminal = useVibe64SessionCommandTerminal({
     currentNext: () => workflow.actions?.currentNext.value,
     goNext: () => workflow.actions?.goNext(),
     refreshSessionData,
@@ -64,7 +64,7 @@ function useAiStudioSessionWorkflow({
     selectedSessionId
   });
 
-  workflow.actions = useAiStudioSessionActions({
+  workflow.actions = useVibe64SessionActions({
     clearCopyStatus: clipboard.clearCopyStatus,
     commandBusy: () => commandBusy.value,
     commandTerminal: workflow.commandTerminal,
@@ -76,12 +76,12 @@ function useAiStudioSessionWorkflow({
     sessionsApiPath
   });
 
-  workflow.stepInput = useAiStudioStepInputForm({
+  workflow.stepInput = useVibe64StepInputForm({
     onSaved: refreshSessionData,
     session: selectedSession
   });
 
-  workflow.dialogs = useAiStudioSessionDialogs({
+  workflow.dialogs = useVibe64SessionDialogs({
     activeActionId: workflow.actions.activeActionId,
     canOpenDiff: () => !reviewDiffDisabled.value,
     clearSelectedSession,
@@ -180,5 +180,5 @@ function useAiStudioSessionWorkflow({
 }
 
 export {
-  useAiStudioSessionWorkflow
+  useVibe64SessionWorkflow
 };

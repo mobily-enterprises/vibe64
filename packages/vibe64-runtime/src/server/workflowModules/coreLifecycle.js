@@ -1,8 +1,8 @@
 import {
-  aiStudioError,
+  vibe64Error,
   normalizeText
-} from "@local/ai-studio-core/server/core";
-import { deepFreeze } from "@local/ai-studio-core/server/deepFreeze";
+} from "@local/vibe64-core/server/core";
+import { deepFreeze } from "@local/vibe64-core/server/deepFreeze";
 import {
   PULL_REQUEST_BODY_DRAFT_ARTIFACT,
   PULL_REQUEST_TITLE_DRAFT_ARTIFACT
@@ -74,7 +74,7 @@ const coreLifecycleWorkflowIntentHandlers = deepFreeze({
 
 const coreLifecycleStepDefinitionsById = deepFreeze({
   [sessionCreatedStepId]: {
-    description: "Create the AI Studio session.",
+    description: "Create the Vibe64 session.",
     id: sessionCreatedStepId,
     label: "Create session",
     rewindable: false
@@ -714,7 +714,7 @@ const worktreeCreatedMachine = {
       case STEP_STATUS.ATTEMPTING_EXECUTION:
       case STEP_STATUS.DONE:
       default:
-        throw aiStudioError("The worktree step cannot accept input right now.", "ai_studio_step_input_not_available");
+        throw vibe64Error("The worktree step cannot accept input right now.", "vibe64_step_input_not_available");
     }
   },
 
@@ -835,7 +835,7 @@ const dependenciesInstalledMachine = {
       case STEP_STATUS.ATTEMPTING_EXECUTION:
       case STEP_STATUS.DONE:
       default:
-        throw aiStudioError("The dependency install step cannot accept input right now.", "ai_studio_step_input_not_available");
+        throw vibe64Error("The dependency install step cannot accept input right now.", "vibe64_step_input_not_available");
     }
   },
 
@@ -1040,7 +1040,7 @@ const pullRequestMergedMachine = {
       case STEP_STATUS.ATTEMPTING_EXECUTION:
       case STEP_STATUS.DONE:
       default:
-        throw aiStudioError("The merge step cannot accept input right now.", "ai_studio_step_input_not_available");
+        throw vibe64Error("The merge step cannot accept input right now.", "vibe64_step_input_not_available");
     }
   },
 

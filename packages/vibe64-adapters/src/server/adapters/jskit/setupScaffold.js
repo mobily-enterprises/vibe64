@@ -4,7 +4,7 @@ import {
   formatDoctorList as formatList,
   hardStopDoctorCheck as hardStopCheck,
   passDoctorCheck as passCheck
-} from "@local/ai-studio-core/server/doctorCheckItems";
+} from "@local/vibe64-core/server/doctorCheckItems";
 import {
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
@@ -85,7 +85,7 @@ async function checkJskitScaffold(targetRoot, context, toolkit) {
   return passCheck({
     id: "scaffold",
     label: "Seed JSKIT app",
-    expected: "Minimal JSKIT scaffold markers exist, or this empty target can be seeded by the first AI Studio session.",
+    expected: "Minimal JSKIT scaffold markers exist, or this empty target can be seeded by the first Vibe64 session.",
     observed: "No scaffold files are present yet.",
     explanation: "The seed workflow will ask the user which JSKIT modules to install and then create the app. Setup should only prepare Studio infrastructure."
   });

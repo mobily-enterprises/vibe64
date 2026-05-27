@@ -24,13 +24,13 @@ function aliveDaemonKill(pid, signal) {
 
 test("Studio terminal cleanup only selects toolchain process trees owned by dead daemons", () => {
   const processes = parseProcessRows(`
-       10     1 docker run --rm -it ai-studio-base-toolchain:0.1.0 bash -lc codex
+       10     1 docker run --rm -it vibe64-base-toolchain:0.1.0 bash -lc codex
        11    10 bash -lc codex
        12    11 node /usr/local/bin/codex
-       20     1 docker run --rm -it --label ai-studio.kind=toolchain --label ai-studio.daemon-pid=999 ai-studio-base-toolchain:0.1.0 bash -lc codex
+       20     1 docker run --rm -it --label vibe64.kind=toolchain --label vibe64.daemon-pid=999 vibe64-base-toolchain:0.1.0 bash -lc codex
        21    20 bash -lc codex
        22    21 node /usr/local/bin/codex
-       30     1 docker run --rm -it --label ai-studio.kind=toolchain --label ai-studio.daemon-pid=123 ai-studio-base-toolchain:0.1.0 bash -lc codex
+       30     1 docker run --rm -it --label vibe64.kind=toolchain --label vibe64.daemon-pid=123 vibe64-base-toolchain:0.1.0 bash -lc codex
        31    30 bash -lc codex
        40     1 node /home/merc/.nvm/versions/node/v20.19.0/bin/codex resume
        41    40 /home/merc/.nvm/versions/node/v20.19.0/lib/node_modules/@openai/codex/vendor/codex
@@ -67,9 +67,9 @@ test("Studio runtime network cleanup removes only unused Studio networks", async
     if (command === "docker" && args[0] === "network" && args[1] === "ls") {
       return {
         stdout: [
-          "network-unused\tai-studio-runtime-aaaaaaaaaaaa\truntime-network\t999",
-          "network-active\tai-studio-runtime-cccccccccccc\truntime-network\t999",
-          "network-current\tai-studio-runtime-dddddddddddd\truntime-network\t123",
+          "network-unused\tvibe64-runtime-aaaaaaaaaaaa\truntime-network\t999",
+          "network-active\tvibe64-runtime-cccccccccccc\truntime-network\t999",
+          "network-current\tvibe64-runtime-dddddddddddd\truntime-network\t123",
           "network-other\tordinary-network\t<no value>\t<no value>"
         ].join("\n")
       };
@@ -90,14 +90,14 @@ test("Studio runtime network cleanup removes only unused Studio networks", async
   };
 
   assert.deepEqual(parseDockerNetworkRows([
-    "network-id\tai-studio-runtime-aaaaaaaaaaaa\truntime-network\t999",
+    "network-id\tvibe64-runtime-aaaaaaaaaaaa\truntime-network\t999",
     "ordinary-id\tordinary-network\t<no value>\t<no value>"
   ].join("\n")), [
     {
       daemonPid: 999,
       id: "network-id",
       kind: "runtime-network",
-      name: "ai-studio-runtime-aaaaaaaaaaaa"
+      name: "vibe64-runtime-aaaaaaaaaaaa"
     },
     {
       daemonPid: 0,
@@ -116,7 +116,7 @@ test("Studio runtime network cleanup removes only unused Studio networks", async
   });
 
   assert.deepEqual(removed, [
-    "ai-studio-runtime-aaaaaaaaaaaa"
+    "vibe64-runtime-aaaaaaaaaaaa"
   ]);
   assert.deepEqual(calls.filter(([, args]) => args[0] === "network" && args[1] === "rm"), [
     ["docker", ["network", "rm", "network-unused"]]
@@ -150,12 +150,12 @@ test("Studio terminal cleanup removes only dead-daemon containers and processes"
     if (command === "ps") {
       return {
         stdout: [
-          "100 1 docker run --rm -it --label ai-studio.kind=toolchain --label ai-studio.daemon-pid=999 ai-studio-base-toolchain:0.1.0 bash -lc codex",
+          "100 1 docker run --rm -it --label vibe64.kind=toolchain --label vibe64.daemon-pid=999 vibe64-base-toolchain:0.1.0 bash -lc codex",
           "101 100 bash -lc codex",
           "102 101 node /usr/local/bin/codex",
-          "110 1 docker run --rm -it ai-studio-base-toolchain:0.1.0 bash -lc codex",
+          "110 1 docker run --rm -it vibe64-base-toolchain:0.1.0 bash -lc codex",
           "111 110 bash -lc codex",
-          "120 1 docker run --rm -it --label ai-studio.kind=toolchain --label ai-studio.daemon-pid=123 ai-studio-base-toolchain:0.1.0 bash -lc codex",
+          "120 1 docker run --rm -it --label vibe64.kind=toolchain --label vibe64.daemon-pid=123 vibe64-base-toolchain:0.1.0 bash -lc codex",
           "121 120 bash -lc codex",
           "200 1 node /home/merc/.nvm/versions/node/v20.19.0/bin/codex resume"
         ].join("\n")
@@ -197,9 +197,9 @@ test("Studio terminal cleanup removes only dead-daemon containers and processes"
       "ps",
       "-a",
       "--filter",
-      "label=ai-studio.kind=codex-terminal",
+      "label=vibe64.kind=codex-terminal",
       "--format",
-      "{{.ID}}\t{{.Label \"ai-studio.daemon-pid\"}}"
+      "{{.ID}}\t{{.Label \"vibe64.daemon-pid\"}}"
     ]
   ]);
   assert.deepEqual(calls[1], [
@@ -208,9 +208,9 @@ test("Studio terminal cleanup removes only dead-daemon containers and processes"
       "ps",
       "-a",
       "--filter",
-      "label=ai-studio.kind=target-script-terminal",
+      "label=vibe64.kind=target-script-terminal",
       "--format",
-      "{{.ID}}\t{{.Label \"ai-studio.daemon-pid\"}}"
+      "{{.ID}}\t{{.Label \"vibe64.daemon-pid\"}}"
     ]
   ]);
   assert.deepEqual(calls[2], [
@@ -219,9 +219,9 @@ test("Studio terminal cleanup removes only dead-daemon containers and processes"
       "ps",
       "-a",
       "--filter",
-      "label=ai-studio.kind=toolchain",
+      "label=vibe64.kind=toolchain",
       "--format",
-      "{{.ID}}\t{{.Label \"ai-studio.daemon-pid\"}}"
+      "{{.ID}}\t{{.Label \"vibe64.daemon-pid\"}}"
     ]
   ]);
   assert.deepEqual(calls[3], ["docker", ["rm", "-f", "container-dead", "container-target-script-dead"]]);

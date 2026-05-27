@@ -1,17 +1,17 @@
 <template>
   <div
     v-if="visible"
-    class="ai-studio-launch-controls"
-    :class="{ 'ai-studio-launch-controls--prominent': prominent }"
+    class="vibe64-launch-controls"
+    :class="{ 'vibe64-launch-controls--prominent': prominent }"
   >
     <div
       v-if="terminalDockVisible"
-      class="ai-studio-launch-controls__dock"
+      class="vibe64-launch-controls__dock"
       :title="terminalTitle"
     >
       <span
-        class="ai-studio-launch-controls__status-dot"
-        :class="`ai-studio-launch-controls__status-dot--${terminalIndicatorState}`"
+        class="vibe64-launch-controls__status-dot"
+        :class="`vibe64-launch-controls__status-dot--${terminalIndicatorState}`"
         :aria-label="terminalIndicatorLabel"
         :title="terminalIndicatorLabel"
       />
@@ -59,7 +59,7 @@
       <template #activator="{ props: menuProps }">
         <v-btn
           v-bind="menuProps"
-          class="ai-studio-launch-controls__run-button"
+          class="vibe64-launch-controls__run-button"
           color="primary"
           :disabled="runMenuDisabled"
           :loading="loading"
@@ -72,7 +72,7 @@
         </v-btn>
       </template>
 
-      <v-list class="ai-studio-launch-controls__menu" density="compact">
+      <v-list class="vibe64-launch-controls__menu" density="compact">
         <v-list-item
           v-for="launchTarget in launchTargets"
           :key="launchTarget.id"
@@ -95,15 +95,15 @@
       Launch unavailable
     </v-chip>
 
-    <AiStudioFloatingTerminalWindow
+    <Vibe64FloatingTerminalWindow
       :displayed="terminalDisplayed"
       :minimized="false"
       :storage-key="terminalWindowStorageKey"
       :visible="terminalWindowVisible"
     >
       <template #default="{ startDrag }">
-        <AiStudioTerminalFrame
-          class="ai-studio-launch-controls__terminal"
+        <Vibe64TerminalFrame
+          class="vibe64-launch-controls__terminal"
           :command-preview="terminalCommandPreview"
           draggable
           :error="terminalError"
@@ -201,9 +201,9 @@
               Close
             </v-btn>
           </template>
-        </AiStudioTerminalFrame>
+        </Vibe64TerminalFrame>
       </template>
-    </AiStudioFloatingTerminalWindow>
+    </Vibe64FloatingTerminalWindow>
   </div>
 </template>
 
@@ -221,15 +221,15 @@ import {
   mdiRestart,
   mdiStop
 } from "@mdi/js";
-import AiStudioFloatingTerminalWindow from "@/components/studio/AiStudioFloatingTerminalWindow.vue";
-import AiStudioTerminalFrame from "@/components/studio/AiStudioTerminalFrame.vue";
+import Vibe64FloatingTerminalWindow from "@/components/studio/Vibe64FloatingTerminalWindow.vue";
+import Vibe64TerminalFrame from "@/components/studio/Vibe64TerminalFrame.vue";
 import {
   launchTerminalAiFixAvailable,
-  useAiStudioLaunchControls
-} from "@/composables/useAiStudioLaunchControls.js";
+  useVibe64LaunchControls
+} from "@/composables/useVibe64LaunchControls.js";
 import {
   terminalFailureFixRequest
-} from "@/lib/aiStudioTerminalFailurePrompt.js";
+} from "@/lib/vibe64TerminalFailurePrompt.js";
 
 const props = defineProps({
   buttonLabel: {
@@ -311,7 +311,7 @@ const {
   terminalWindowVisible,
   terminalWindowStorageKey,
   visible
-} = useAiStudioLaunchControls({
+} = useVibe64LaunchControls({
   windowDisplayed: () => props.windowDisplayed,
   busy: () => props.busy,
   session: () => props.session
@@ -365,7 +365,7 @@ async function requestAiFix() {
 </script>
 
 <style scoped>
-.ai-studio-launch-controls {
+.vibe64-launch-controls {
   align-items: center;
   display: flex;
   gap: 0.45rem;
@@ -373,7 +373,7 @@ async function requestAiFix() {
   min-width: 0;
 }
 
-.ai-studio-launch-controls--prominent .ai-studio-launch-controls__run-button {
+.vibe64-launch-controls--prominent .vibe64-launch-controls__run-button {
   font-size: 1rem;
   font-weight: 720;
   min-height: 2.75rem;
@@ -381,15 +381,15 @@ async function requestAiFix() {
   padding-inline: 1.1rem 1.25rem;
 }
 
-.ai-studio-launch-controls--prominent .ai-studio-launch-controls__run-button :deep(.v-btn__prepend) {
+.vibe64-launch-controls--prominent .vibe64-launch-controls__run-button :deep(.v-btn__prepend) {
   margin-inline-end: 0.5rem;
 }
 
-.ai-studio-launch-controls--prominent .ai-studio-launch-controls__run-button :deep(.v-icon) {
+.vibe64-launch-controls--prominent .vibe64-launch-controls__run-button :deep(.v-icon) {
   font-size: 1.55rem;
 }
 
-.ai-studio-launch-controls__dock {
+.vibe64-launch-controls__dock {
   align-items: center;
   background: rgba(var(--v-theme-primary), 0.08);
   border: 1px solid rgba(var(--v-theme-primary), 0.18);
@@ -400,7 +400,7 @@ async function requestAiFix() {
   padding: 0 0.25rem;
 }
 
-.ai-studio-launch-controls__status-dot {
+.vibe64-launch-controls__status-dot {
   border-radius: 999px;
   display: inline-block;
   flex: 0 0 auto;
@@ -409,42 +409,42 @@ async function requestAiFix() {
   width: 0.55rem;
 }
 
-.ai-studio-launch-controls__status-dot--stopped {
+.vibe64-launch-controls__status-dot--stopped {
   background: rgba(var(--v-theme-on-surface), 0.38);
   box-shadow: 0 0 0 0.2rem rgba(var(--v-theme-on-surface), 0.08);
 }
 
-.ai-studio-launch-controls__status-dot--starting {
-  animation: ai-studio-launch-status-pulse 0.9s ease-in-out infinite;
+.vibe64-launch-controls__status-dot--starting {
+  animation: vibe64-launch-status-pulse 0.9s ease-in-out infinite;
   background: rgb(var(--v-theme-error));
   box-shadow: 0 0 0 0.2rem rgba(var(--v-theme-error), 0.14);
 }
 
-.ai-studio-launch-controls__status-dot--running {
+.vibe64-launch-controls__status-dot--running {
   background: rgb(var(--v-theme-success));
   box-shadow: 0 0 0 0.2rem rgba(var(--v-theme-success), 0.16);
 }
 
-.ai-studio-launch-controls__status-dot--failed {
+.vibe64-launch-controls__status-dot--failed {
   background: rgb(var(--v-theme-error));
   box-shadow: 0 0 0 0.2rem rgba(var(--v-theme-error), 0.14);
 }
 
-.ai-studio-launch-controls__menu {
+.vibe64-launch-controls__menu {
   max-width: min(20rem, 92vw);
   min-width: min(14rem, 92vw);
 }
 
-.ai-studio-launch-controls__terminal {
+.vibe64-launch-controls__terminal {
   box-shadow: 0 1rem 3rem rgba(13, 24, 42, 0.24);
   height: 100%;
 }
 
-.ai-studio-launch-controls__terminal :deep(.ai-studio-terminal-frame__host) {
+.vibe64-launch-controls__terminal :deep(.vibe64-terminal-frame__host) {
   height: calc(100% - 5rem);
 }
 
-@keyframes ai-studio-launch-status-pulse {
+@keyframes vibe64-launch-status-pulse {
   0%,
   100% {
     opacity: 0.32;

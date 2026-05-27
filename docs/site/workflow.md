@@ -1,6 +1,6 @@
 ---
 title: Workflow
-description: The vibe-armor checklist model.
+description: The vibe64 checklist model.
 layout: doc
 aside: false
 ---
@@ -14,7 +14,7 @@ aside: false
     <span>CHAOS</span>
   </div>
   <p class="why-jskit-lead">
-    vibe-armor makes AI delivery visible. Each step has explicit actions,
+    vibe64 makes AI delivery visible. Each step has explicit actions,
     disabled reasons, artifacts, and advance rules.
   </p>
   <div class="why-jskit-signal-row">
@@ -93,7 +93,7 @@ aside: false
       <p class="why-jskit-card-label">F</p>
       <h2>Sessions live on disk</h2>
       <p>
-        Runtime state is stored under <code>.ai-studio</code>, with active
+        Runtime state is stored under <code>.vibe64</code>, with active
         session directories, metadata, artifacts, command logs, and step state.
       </p>
     </article>

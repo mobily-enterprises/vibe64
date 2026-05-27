@@ -39,17 +39,17 @@ import {
   hardStopDoctorCheck as hardStopCheck,
   passDoctorCheck as passCheck,
   pendingDoctorCheck as pendingCheck
-} from "@local/ai-studio-core/server/doctorCheckItems";
+} from "@local/vibe64-core/server/doctorCheckItems";
 import {
-  AI_STUDIO_STATE_DIR
-} from "@local/ai-studio-core/server/core";
+  VIBE64_STATE_DIR
+} from "@local/vibe64-core/server/core";
 import {
-  ADD_AI_STUDIO_GITIGNORE_RULES_ACTION_ID,
-  AI_STUDIO_LOCAL_STATE_GITIGNORE_PATTERNS,
+  ADD_VIBE64_GITIGNORE_RULES_ACTION_ID,
+  VIBE64_LOCAL_STATE_GITIGNORE_PATTERNS,
   CREATE_GIT_CHECKPOINT_ACTION_ID,
   MIRROR_REMOTE_BRANCH_ACTION_ID,
   PUSH_GIT_CHECKPOINT_ACTION_ID,
-  addAiStudioGitignoreRulesRepair,
+  addVibe64GitignoreRulesRepair,
   ghRepoCreateRepair,
   ghRepoCreateScript,
   gitCheckpointRepair,
@@ -67,7 +67,7 @@ import {
   readRemoteBranchShaWithGh,
   readRemoteBranchShaWithGit,
   remoteHeadIsAncestorOfLocalHead,
-  startAddAiStudioGitignoreRulesTerminal as startSharedAddAiStudioGitignoreRulesTerminal,
+  startAddVibe64GitignoreRulesTerminal as startSharedAddVibe64GitignoreRulesTerminal,
   startGhCreateRepoTerminal as startSharedGhCreateRepoTerminal,
   startGitCheckpointTerminal as startSharedGitCheckpointTerminal,
   startGitInitTerminal as startSharedGitInitTerminal,
@@ -81,14 +81,14 @@ const AUTOMATIC_REPAIR_TIMEOUT_MS = 30 * 60 * 1000;
 const AUTOMATIC_REPAIR_POLL_MS = 250;
 const REPAIRABLE_STATUSES = Object.freeze(["blocked", "fail", "hard-stop"]);
 const STUDIO_OWNED_BOOTSTRAP_ENTRIES = new Set([
-  AI_STUDIO_STATE_DIR
+  VIBE64_STATE_DIR
 ]);
 const REMOTE_MIRROR_ALLOWED_BOOTSTRAP_ENTRIES = new Set([
   ".gitignore"
 ]);
 const READY_CACHE_NON_PROJECT_ENTRIES = new Set([
   ".git",
-  AI_STUDIO_STATE_DIR,
+  VIBE64_STATE_DIR,
   "node_modules"
 ]);
 
@@ -355,12 +355,12 @@ function projectGitInitRepair(targetRoot) {
   });
 }
 
-function missingAiStudioGitignorePatterns(gitignoreText = "") {
+function missingVibe64GitignorePatterns(gitignoreText = "") {
   const lines = new Set(String(gitignoreText || "")
     .split(/\r?\n/u)
     .map((line) => line.trim())
     .filter(Boolean));
-  return AI_STUDIO_LOCAL_STATE_GITIGNORE_PATTERNS.filter((pattern) => !lines.has(pattern));
+  return VIBE64_LOCAL_STATE_GITIGNORE_PATTERNS.filter((pattern) => !lines.has(pattern));
 }
 
 function nonBootstrapRemoteMirrorEntries(context = {}) {
@@ -595,15 +595,15 @@ async function checkGitReady(targetRoot, context) {
   });
 }
 
-async function checkAiStudioGitignore(targetRoot) {
+async function checkVibe64Gitignore(targetRoot) {
   let gitignoreText = "";
   try {
     gitignoreText = await readFile(path.join(targetRoot, ".gitignore"), "utf8");
   } catch (error) {
     if (error?.code !== "ENOENT") {
       return hardStopCheck({
-        id: "ai-studio-gitignore",
-        label: "AI Studio ignore rules",
+        id: "vibe64-gitignore",
+        label: "Vibe64 ignore rules",
         expected: "Target .gitignore can be read before checkpointing.",
         observed: String(error?.message || error),
         explanation: "Studio cannot prove local runtime state is excluded from Git until .gitignore is readable."
@@ -611,23 +611,23 @@ async function checkAiStudioGitignore(targetRoot) {
     }
   }
 
-  const missingPatterns = missingAiStudioGitignorePatterns(gitignoreText);
+  const missingPatterns = missingVibe64GitignorePatterns(gitignoreText);
   if (missingPatterns.length) {
     return blockedCheck({
-      id: "ai-studio-gitignore",
-      label: "AI Studio ignore rules",
-      expected: "Target .gitignore excludes AI Studio session and runtime state.",
+      id: "vibe64-gitignore",
+      label: "Vibe64 ignore rules",
+      expected: "Target .gitignore excludes Vibe64 session and runtime state.",
       observed: `Missing .gitignore entries:\n${formatList(missingPatterns)}`,
       explanation: "Add these ignore rules before checkpointing so Studio-owned volatile state is not committed.",
-      repair: addAiStudioGitignoreRulesRepair()
+      repair: addVibe64GitignoreRulesRepair()
     });
   }
 
   return passCheck({
-    id: "ai-studio-gitignore",
-    label: "AI Studio ignore rules",
-    expected: "Target .gitignore excludes AI Studio session and runtime state.",
-    observed: "Required AI Studio local-state entries are present in .gitignore.",
+    id: "vibe64-gitignore",
+    label: "Vibe64 ignore rules",
+    expected: "Target .gitignore excludes Vibe64 session and runtime state.",
+    observed: "Required Vibe64 local-state entries are present in .gitignore.",
     explanation: "Studio session and runtime files are protected from broad Git add operations."
   });
 }
@@ -905,10 +905,10 @@ function genericSetupChecks(targetRoot, context) {
       run: () => checkGitReady(targetRoot, context)
     },
     {
-      expected: "Target .gitignore excludes AI Studio session and runtime state.",
-      id: "ai-studio-gitignore",
-      label: "AI Studio ignore rules",
-      run: () => checkAiStudioGitignore(targetRoot)
+      expected: "Target .gitignore excludes Vibe64 session and runtime state.",
+      id: "vibe64-gitignore",
+      label: "Vibe64 ignore rules",
+      run: () => checkVibe64Gitignore(targetRoot)
     },
     {
       expected: "origin points at an accessible GitHub repository.",
@@ -1043,8 +1043,8 @@ async function startProjectSetupTerminalAction({
   if (actionId === "terminal-link-github-remote") {
     return startLinkRemoteTerminal(targetRoot, inputs, setupRuntime.configEnvironment);
   }
-  if (actionId === ADD_AI_STUDIO_GITIGNORE_RULES_ACTION_ID) {
-    return startAiStudioGitignoreTerminal(targetRoot, setupRuntime.configEnvironment);
+  if (actionId === ADD_VIBE64_GITIGNORE_RULES_ACTION_ID) {
+    return startVibe64GitignoreTerminal(targetRoot, setupRuntime.configEnvironment);
   }
   if (actionId === MIRROR_REMOTE_BRANCH_ACTION_ID) {
     return startMirrorRemoteBranchTerminal(targetRoot, inputs, setupRuntime.configEnvironment);
@@ -1203,8 +1203,8 @@ function startLinkRemoteTerminal(targetRoot, input = {}, env = {}) {
   });
 }
 
-function startAiStudioGitignoreTerminal(targetRoot, env = {}) {
-  return startSharedAddAiStudioGitignoreRulesTerminal({
+function startVibe64GitignoreTerminal(targetRoot, env = {}) {
+  return startSharedAddVibe64GitignoreRulesTerminal({
     env,
     namespace: TERMINAL_NAMESPACE,
     targetRoot
@@ -1348,7 +1348,7 @@ function createService({
         "terminal-git-init",
         "terminal-gh-create-repo",
         "terminal-link-github-remote",
-        ADD_AI_STUDIO_GITIGNORE_RULES_ACTION_ID,
+        ADD_VIBE64_GITIGNORE_RULES_ACTION_ID,
         MIRROR_REMOTE_BRANCH_ACTION_ID,
         CREATE_GIT_CHECKPOINT_ACTION_ID,
         PUSH_GIT_CHECKPOINT_ACTION_ID

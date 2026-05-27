@@ -1,16 +1,16 @@
 import { computed, nextTick, ref, watch } from "vue";
 import {
-  AI_STUDIO_OPERATION_ROUTES as OPERATION_ROUTES
-} from "@local/ai-studio-core/shared";
+  VIBE64_OPERATION_ROUTES as OPERATION_ROUTES
+} from "@local/vibe64-core/shared";
 import {
-  useAiStudioHeadlessCommandRunner
-} from "@/composables/useAiStudioHeadlessCommandRunner.js";
+  useVibe64HeadlessCommandRunner
+} from "@/composables/useVibe64HeadlessCommandRunner.js";
 import {
-  aiStudioSessionDebugDurationMs,
-  aiStudioSessionDebugError,
-  aiStudioSessionDebugLog,
-  aiStudioSessionDebugSummary
-} from "@/lib/aiStudioSessionDebugLog.js";
+  vibe64SessionDebugDurationMs,
+  vibe64SessionDebugError,
+  vibe64SessionDebugLog,
+  vibe64SessionDebugSummary
+} from "@/lib/vibe64SessionDebugLog.js";
 import {
   readRefOrGetterValue
 } from "@/lib/vueRefOrGetterValue.js";
@@ -146,11 +146,11 @@ function serverNoLongerPresentsCommand(previousOperation = {}, session = {}) {
   return operationKey(nextOperation) !== operationKey(previousOperation);
 }
 
-function useAiStudioAutopilotController({
+function useVibe64AutopilotController({
   actions = {},
   commandCompletionRefreshAttempts = COMMAND_COMPLETION_REFRESH_ATTEMPTS,
   commandCompletionRefreshDelayMs = COMMAND_COMPLETION_REFRESH_DELAY_MS,
-  commandRunner = useAiStudioHeadlessCommandRunner(),
+  commandRunner = useVibe64HeadlessCommandRunner(),
   enabled = true,
   refreshSessionData = async () => null,
   session
@@ -242,7 +242,7 @@ function useAiStudioAutopilotController({
       sections: Array.isArray(screen.sections) ? screen.sections : [],
       showProgress: screen.showProgress === true,
       stopAction: screen.stopAction || "",
-      title: screen.title || "AI Studio",
+      title: screen.title || "Vibe64",
       variant: screen.variant || ""
     };
   });
@@ -253,7 +253,7 @@ function useAiStudioAutopilotController({
   }
 
   function stopWithFailure(result = {}) {
-    aiStudioSessionDebugLog("client.autopilot.failure", {
+    vibe64SessionDebugLog("client.autopilot.failure", {
       actionId: String(result.actionId || ""),
       actionLabel: String(result.actionLabel || result.actionId || "Action"),
       error: String(result.error || "Autopilot action failed."),
@@ -274,8 +274,8 @@ function useAiStudioAutopilotController({
 
   async function runNextOperation() {
     if (!canDispatchNextOperation.value) {
-      aiStudioSessionDebugLog("client.autopilot.runNextOperation.skipped", {
-        ...aiStudioSessionDebugSummary(currentSession.value || {}),
+      vibe64SessionDebugLog("client.autopilot.runNextOperation.skipped", {
+        ...vibe64SessionDebugSummary(currentSession.value || {}),
         ...operationDebugSummary(nextOperation.value),
         commandFailed: commandFailed.value,
         enabled: autopilotEnabled.value,
@@ -286,8 +286,8 @@ function useAiStudioAutopilotController({
     }
     stopRequested = false;
     clearFailure();
-    aiStudioSessionDebugLog("client.autopilot.runNextOperation.start", {
-      ...aiStudioSessionDebugSummary(currentSession.value || {}),
+    vibe64SessionDebugLog("client.autopilot.runNextOperation.start", {
+      ...vibe64SessionDebugSummary(currentSession.value || {}),
       ...operationDebugSummary(nextOperation.value)
     });
     await runUntilStopPoint();
@@ -295,15 +295,15 @@ function useAiStudioAutopilotController({
 
   async function retry() {
     if (!autopilotEnabled.value || running.value) {
-      aiStudioSessionDebugLog("client.autopilot.retry.skipped", {
+      vibe64SessionDebugLog("client.autopilot.retry.skipped", {
         enabled: autopilotEnabled.value,
         running: running.value,
         sessionId: String(currentSession.value?.sessionId || "")
       });
       return;
     }
-    aiStudioSessionDebugLog("client.autopilot.retry.start", {
-      ...aiStudioSessionDebugSummary(currentSession.value || {})
+    vibe64SessionDebugLog("client.autopilot.retry.start", {
+      ...vibe64SessionDebugSummary(currentSession.value || {})
     });
     stopRequested = false;
     lastDispatchedOperationKey.value = "";
@@ -312,7 +312,7 @@ function useAiStudioAutopilotController({
   }
 
   function stop() {
-    aiStudioSessionDebugLog("client.autopilot.stop.requested", {
+    vibe64SessionDebugLog("client.autopilot.stop.requested", {
       commandRunning: commandRunning.value,
       sessionId: String(currentSession.value?.sessionId || "")
     });
@@ -336,8 +336,8 @@ function useAiStudioAutopilotController({
 
   async function recoverStuckStep() {
     if (!stuckRecoveryAvailable.value || recoveryRunning.value) {
-      aiStudioSessionDebugLog("client.autopilot.recoverStuckStep.skipped", {
-        ...aiStudioSessionDebugSummary(currentSession.value || {}),
+      vibe64SessionDebugLog("client.autopilot.recoverStuckStep.skipped", {
+        ...vibe64SessionDebugSummary(currentSession.value || {}),
         available: stuckRecoveryAvailable.value,
         recoveryRunning: recoveryRunning.value
       });
@@ -345,8 +345,8 @@ function useAiStudioAutopilotController({
     }
     const startedAtMs = Date.now();
     recoveryRunning.value = true;
-    aiStudioSessionDebugLog("client.autopilot.recoverStuckStep.start", {
-      ...aiStudioSessionDebugSummary(currentSession.value || {})
+    vibe64SessionDebugLog("client.autopilot.recoverStuckStep.start", {
+      ...vibe64SessionDebugSummary(currentSession.value || {})
     });
     try {
       await actions.recoverStuckStep?.({
@@ -358,21 +358,21 @@ function useAiStudioAutopilotController({
       }
       await refreshSessionData();
       await nextTick();
-      aiStudioSessionDebugLog("client.autopilot.recoverStuckStep.done", {
-        ...aiStudioSessionDebugSummary(currentSession.value || {}),
-        durationMs: aiStudioSessionDebugDurationMs(startedAtMs)
+      vibe64SessionDebugLog("client.autopilot.recoverStuckStep.done", {
+        ...vibe64SessionDebugSummary(currentSession.value || {}),
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs)
       });
       return true;
     } catch (error) {
-      aiStudioSessionDebugLog("client.autopilot.recoverStuckStep.error", {
-        durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
-        error: aiStudioSessionDebugError(error),
+      vibe64SessionDebugLog("client.autopilot.recoverStuckStep.error", {
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+        error: vibe64SessionDebugError(error),
         sessionId: String(currentSession.value?.sessionId || "")
       });
       stopWithFailure({
         actionId: "recover_stuck_step",
         actionLabel: "Recover step",
-        error: String(error?.message || error || "AI Studio session step could not be recovered."),
+        error: String(error?.message || error || "Vibe64 session step could not be recovered."),
         source: "recovery"
       });
       return false;
@@ -384,15 +384,15 @@ function useAiStudioAutopilotController({
   async function runUntilStopPoint() {
     if (autopilotPromise) {
       rerunRequested = true;
-      aiStudioSessionDebugLog("client.autopilot.runUntilStopPoint.rerunRequested", {
-        ...aiStudioSessionDebugSummary(currentSession.value || {}),
+      vibe64SessionDebugLog("client.autopilot.runUntilStopPoint.rerunRequested", {
+        ...vibe64SessionDebugSummary(currentSession.value || {}),
         ...operationDebugSummary(nextOperation.value)
       });
       return autopilotPromise;
     }
     const startedAtMs = Date.now();
-    aiStudioSessionDebugLog("client.autopilot.runUntilStopPoint.start", {
-      ...aiStudioSessionDebugSummary(currentSession.value || {}),
+    vibe64SessionDebugLog("client.autopilot.runUntilStopPoint.start", {
+      ...vibe64SessionDebugSummary(currentSession.value || {}),
       ...operationDebugSummary(nextOperation.value)
     });
     do {
@@ -404,9 +404,9 @@ function useAiStudioAutopilotController({
         autopilotPromise = null;
       }
     } while (shouldContinueAutopilotLoop());
-    aiStudioSessionDebugLog("client.autopilot.runUntilStopPoint.done", {
-      ...aiStudioSessionDebugSummary(currentSession.value || {}),
-      durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
+    vibe64SessionDebugLog("client.autopilot.runUntilStopPoint.done", {
+      ...vibe64SessionDebugSummary(currentSession.value || {}),
+      durationMs: vibe64SessionDebugDurationMs(startedAtMs),
       failure: Boolean(failure.value),
       stopRequested
     });
@@ -426,7 +426,7 @@ function useAiStudioAutopilotController({
     try {
       const sessionNow = currentSession.value;
       if (!autopilotEnabled.value || stopRequested || !sessionNow?.sessionId) {
-        aiStudioSessionDebugLog("client.autopilot.execute.skipped", {
+        vibe64SessionDebugLog("client.autopilot.execute.skipped", {
           enabled: autopilotEnabled.value,
           hasSession: Boolean(sessionNow?.sessionId),
           stopRequested
@@ -435,8 +435,8 @@ function useAiStudioAutopilotController({
       }
       const operation = currentOperation(sessionNow);
       if (!operationCanDispatch(operation)) {
-        aiStudioSessionDebugLog("client.autopilot.execute.noDispatchableOperation", {
-          ...aiStudioSessionDebugSummary(sessionNow),
+        vibe64SessionDebugLog("client.autopilot.execute.noDispatchableOperation", {
+          ...vibe64SessionDebugSummary(sessionNow),
           ...operationDebugSummary(operation)
         });
         return;
@@ -445,20 +445,20 @@ function useAiStudioAutopilotController({
         sessionNow.sessionId,
         operationKey(operation)
       ].join("::");
-      aiStudioSessionDebugLog("client.autopilot.execute.dispatch", {
-        ...aiStudioSessionDebugSummary(sessionNow),
+      vibe64SessionDebugLog("client.autopilot.execute.dispatch", {
+        ...vibe64SessionDebugSummary(sessionNow),
         ...operationDebugSummary(operation),
         dispatchKey: lastDispatchedOperationKey.value
       });
       await dispatchOperation(operation);
-      aiStudioSessionDebugLog("client.autopilot.execute.done", {
-        ...aiStudioSessionDebugSummary(currentSession.value || {}),
-        durationMs: aiStudioSessionDebugDurationMs(startedAtMs)
+      vibe64SessionDebugLog("client.autopilot.execute.done", {
+        ...vibe64SessionDebugSummary(currentSession.value || {}),
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs)
       });
     } catch (error) {
-      aiStudioSessionDebugLog("client.autopilot.execute.error", {
-        durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
-        error: aiStudioSessionDebugError(error),
+      vibe64SessionDebugLog("client.autopilot.execute.error", {
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+        error: vibe64SessionDebugError(error),
         sessionId: String(currentSession.value?.sessionId || "")
       });
       throw error;
@@ -471,13 +471,13 @@ function useAiStudioAutopilotController({
   async function dispatchOperation(operation = {}) {
     const startedAtMs = Date.now();
     activeStage.value = String(operation.label || operation.actionId || operation.intentId || "Autopilot");
-    aiStudioSessionDebugLog("client.autopilot.operation.start", {
-      ...aiStudioSessionDebugSummary(currentSession.value || {}),
+    vibe64SessionDebugLog("client.autopilot.operation.start", {
+      ...vibe64SessionDebugSummary(currentSession.value || {}),
       ...operationDebugSummary(operation)
     });
     if (!operationCanDispatch(operation)) {
-      aiStudioSessionDebugLog("client.autopilot.operation.blocked", {
-        ...aiStudioSessionDebugSummary(currentSession.value || {}),
+      vibe64SessionDebugLog("client.autopilot.operation.blocked", {
+        ...vibe64SessionDebugSummary(currentSession.value || {}),
         ...operationDebugSummary(operation),
         reason: "not_dispatchable"
       });
@@ -488,16 +488,16 @@ function useAiStudioAutopilotController({
     const route = String(operation.route || "");
     try {
       await dispatchOperationRoute(route, operation);
-      aiStudioSessionDebugLog("client.autopilot.operation.done", {
-        ...aiStudioSessionDebugSummary(currentSession.value || {}),
+      vibe64SessionDebugLog("client.autopilot.operation.done", {
+        ...vibe64SessionDebugSummary(currentSession.value || {}),
         ...operationDebugSummary(operation),
-        durationMs: aiStudioSessionDebugDurationMs(startedAtMs)
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs)
       });
     } catch (error) {
-      aiStudioSessionDebugLog("client.autopilot.operation.error", {
+      vibe64SessionDebugLog("client.autopilot.operation.error", {
         ...operationDebugSummary(operation),
-        durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
-        error: aiStudioSessionDebugError(error),
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+        error: vibe64SessionDebugError(error),
         sessionId: String(currentSession.value?.sessionId || "")
       });
       throw error;
@@ -610,8 +610,8 @@ function useAiStudioAutopilotController({
 
   async function runCommandTerminalOperation(operation = {}) {
     const startedAtMs = Date.now();
-    aiStudioSessionDebugLog("client.autopilot.commandTerminal.start", {
-      ...aiStudioSessionDebugSummary(currentSession.value || {}),
+    vibe64SessionDebugLog("client.autopilot.commandTerminal.start", {
+      ...vibe64SessionDebugSummary(currentSession.value || {}),
       ...operationDebugSummary(operation)
     });
     lastCommandResult.value = null;
@@ -625,10 +625,10 @@ function useAiStudioAutopilotController({
       sessionId: currentSession.value?.sessionId || ""
     });
     if (commandStartNeedsRefresh(result)) {
-      aiStudioSessionDebugLog("client.autopilot.commandTerminal.startNeedsRefresh", {
+      vibe64SessionDebugLog("client.autopilot.commandTerminal.startNeedsRefresh", {
         ...operationDebugSummary(operation),
         code: String(result?.code || ""),
-        durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
         operationOutcome: String(result?.operationOutcome || ""),
         refreshRecommended: result?.refreshRecommended === true,
         sessionId: String(currentSession.value?.sessionId || ""),
@@ -646,10 +646,10 @@ function useAiStudioAutopilotController({
     await nextTick();
     if (result?.ok !== true) {
       if (serverNoLongerPresentsCommand(operation, currentSession.value)) {
-        aiStudioSessionDebugLog("client.autopilot.commandTerminal.serverNoLongerPresentsCommand", {
-          ...aiStudioSessionDebugSummary(currentSession.value || {}),
+        vibe64SessionDebugLog("client.autopilot.commandTerminal.serverNoLongerPresentsCommand", {
+          ...vibe64SessionDebugSummary(currentSession.value || {}),
           ...operationDebugSummary(operation),
-          durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
+          durationMs: vibe64SessionDebugDurationMs(startedAtMs),
           resultError: String(result?.error || "")
         });
         lastCommandResult.value = null;
@@ -659,9 +659,9 @@ function useAiStudioAutopilotController({
         return;
       }
       lastCommandResult.value = result;
-      aiStudioSessionDebugLog("client.autopilot.commandTerminal.failed", {
+      vibe64SessionDebugLog("client.autopilot.commandTerminal.failed", {
         ...operationDebugSummary(operation),
-        durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
         error: String(result?.error || ""),
         exitCode: result?.exitCode ?? null,
         sessionId: String(currentSession.value?.sessionId || "")
@@ -674,10 +674,10 @@ function useAiStudioAutopilotController({
       startedAtMs
     });
     lastCommandResult.value = result;
-    aiStudioSessionDebugLog("client.autopilot.commandTerminal.done", {
-      ...aiStudioSessionDebugSummary(currentSession.value || {}),
+    vibe64SessionDebugLog("client.autopilot.commandTerminal.done", {
+      ...vibe64SessionDebugSummary(currentSession.value || {}),
       ...operationDebugSummary(operation),
-      durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
+      durationMs: vibe64SessionDebugDurationMs(startedAtMs),
       exitCode: result?.exitCode ?? null
     });
   }
@@ -693,12 +693,12 @@ function useAiStudioAutopilotController({
         return true;
       }
       const delayMs = baseDelayMs * attempt;
-      aiStudioSessionDebugLog("client.autopilot.commandTerminal.waitForState", {
-        ...aiStudioSessionDebugSummary(currentSession.value || {}),
+      vibe64SessionDebugLog("client.autopilot.commandTerminal.waitForState", {
+        ...vibe64SessionDebugSummary(currentSession.value || {}),
         ...operationDebugSummary(operation),
         attempt,
         delayMs,
-        durationMs: aiStudioSessionDebugDurationMs(startedAtMs)
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs)
       });
       if (delayMs > 0) {
         await delay(delayMs);
@@ -706,18 +706,18 @@ function useAiStudioAutopilotController({
       await refreshSessionData();
       await nextTick();
     }
-    aiStudioSessionDebugLog("client.autopilot.commandTerminal.waitForState.timeout", {
-      ...aiStudioSessionDebugSummary(currentSession.value || {}),
+    vibe64SessionDebugLog("client.autopilot.commandTerminal.waitForState.timeout", {
+      ...vibe64SessionDebugSummary(currentSession.value || {}),
       ...operationDebugSummary(operation),
       attempts: maxAttempts,
-      durationMs: aiStudioSessionDebugDurationMs(startedAtMs)
+      durationMs: vibe64SessionDebugDurationMs(startedAtMs)
     });
     return !sessionStillApplyingCommand(currentSession.value);
   }
 
   watch(nextOperationDispatchKey, (key) => {
     if (key !== lastDispatchedOperationKey.value) {
-      aiStudioSessionDebugLog("client.autopilot.dispatchKey.reset", {
+      vibe64SessionDebugLog("client.autopilot.dispatchKey.reset", {
         lastDispatchedOperationKey: lastDispatchedOperationKey.value,
         nextOperationDispatchKey: key,
         sessionId: String(currentSession.value?.sessionId || "")
@@ -750,5 +750,5 @@ function useAiStudioAutopilotController({
 }
 
 export {
-  useAiStudioAutopilotController
+  useVibe64AutopilotController
 };

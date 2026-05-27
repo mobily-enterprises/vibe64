@@ -1,4 +1,4 @@
-# @local/ai-studio-runtime
+# @local/vibe64-runtime
 
 App-local JSKIT module scaffold.
 

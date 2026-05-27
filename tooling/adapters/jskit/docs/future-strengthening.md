@@ -1,7 +1,7 @@
 # Future JSKIT Adapter Strengthening
 
 This note records planned behavior for JSKIT adapter configuration that already
-exists in AI Studio.
+exists in Vibe64.
 
 The current config screen can save these values and pass them into prompt and
 adapter context. JSKIT seeding already uses the selected tenancy value. The
@@ -13,7 +13,7 @@ behavior actively use the selected values.
 Store each value as a single file under:
 
 ```text
-.ai-studio/config/
+.vibe64/config/
 ```
 
 ### `jskit_database_runtime`
@@ -61,7 +61,7 @@ The JSKIT seed command uses these values when creating an app from an empty dire
 Affected area:
 
 ```text
-server/lib/aiStudio/adapters/jskit/setupProjectChecks.js
+server/lib/vibe64/adapters/jskit/setupProjectChecks.js
 ```
 
 Current behavior:
@@ -80,9 +80,9 @@ The JSKIT setup doctor should verify the target matches the selected values.
 Affected areas:
 
 ```text
-server/lib/aiStudio/adapters/jskit/setupDoctorPlugin.js
-server/lib/aiStudio/adapters/jskit/setupProjectChecks.js
-server/lib/aiStudio/adapters/jskit/setupMariaDbRuntime.js
+server/lib/vibe64/adapters/jskit/setupDoctorPlugin.js
+server/lib/vibe64/adapters/jskit/setupProjectChecks.js
+server/lib/vibe64/adapters/jskit/setupMariaDbRuntime.js
 ```
 
 Expected future behavior:
@@ -99,7 +99,7 @@ JSKIT prompts should include the selected values so Codex does not invent the wr
 Affected area:
 
 ```text
-server/lib/aiStudio/adapters/jskit/adapter.js
+server/lib/vibe64/adapters/jskit/adapter.js
 ```
 
 Expected prompt facts:
@@ -125,7 +125,7 @@ The JSKIT prompt pack should use these values when giving architecture/deslop in
 Affected area:
 
 ```text
-server/lib/aiStudio/adapters/jskit/prompts/
+server/lib/vibe64/adapters/jskit/prompts/
 ```
 
 Expected future behavior:
@@ -141,7 +141,7 @@ Runtime service checks should eventually support both MariaDB-compatible JSKIT r
 Affected area:
 
 ```text
-server/lib/aiStudio/adapters/jskit/setupProjectChecks.js
+server/lib/vibe64/adapters/jskit/setupProjectChecks.js
 ```
 
 Current status:

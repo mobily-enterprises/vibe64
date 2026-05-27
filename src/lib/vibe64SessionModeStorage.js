@@ -2,49 +2,49 @@ import {
   browserLocalStorage
 } from "@/lib/browserLocalStorage.js";
 
-const AI_STUDIO_SESSION_MODES = Object.freeze({
+const VIBE64_SESSION_MODES = Object.freeze({
   AUTOPILOT: "autopilot",
   INSPECT: "inspect"
 });
-const DEFAULT_AI_STUDIO_SESSION_MODE = AI_STUDIO_SESSION_MODES.AUTOPILOT;
-const SESSION_MODE_STORAGE_PREFIX = "ai-studio:session-mode:";
+const DEFAULT_VIBE64_SESSION_MODE = VIBE64_SESSION_MODES.AUTOPILOT;
+const SESSION_MODE_STORAGE_PREFIX = "vibe64:session-mode:";
 
-function normalizeAiStudioSessionMode(value = "", fallback = DEFAULT_AI_STUDIO_SESSION_MODE) {
+function normalizeVibe64SessionMode(value = "", fallback = DEFAULT_VIBE64_SESSION_MODE) {
   const mode = String(value || "").trim();
   switch (mode) {
-    case AI_STUDIO_SESSION_MODES.AUTOPILOT:
-    case AI_STUDIO_SESSION_MODES.INSPECT:
+    case VIBE64_SESSION_MODES.AUTOPILOT:
+    case VIBE64_SESSION_MODES.INSPECT:
       return mode;
     default:
       return fallback;
   }
 }
 
-function aiStudioSessionModeStorageKey(sessionId = "") {
+function vibe64SessionModeStorageKey(sessionId = "") {
   const normalizedSessionId = String(sessionId || "").trim();
   return normalizedSessionId
     ? `${SESSION_MODE_STORAGE_PREFIX}${encodeURIComponent(normalizedSessionId)}`
     : "";
 }
 
-function readAiStudioSessionMode(sessionId = "", fallback = DEFAULT_AI_STUDIO_SESSION_MODE) {
-  const storageKey = aiStudioSessionModeStorageKey(sessionId);
+function readVibe64SessionMode(sessionId = "", fallback = DEFAULT_VIBE64_SESSION_MODE) {
+  const storageKey = vibe64SessionModeStorageKey(sessionId);
   if (!storageKey) {
-    return normalizeAiStudioSessionMode("", fallback);
+    return normalizeVibe64SessionMode("", fallback);
   }
   try {
-    return normalizeAiStudioSessionMode(browserLocalStorage()?.getItem(storageKey), fallback);
+    return normalizeVibe64SessionMode(browserLocalStorage()?.getItem(storageKey), fallback);
   } catch {
-    return normalizeAiStudioSessionMode("", fallback);
+    return normalizeVibe64SessionMode("", fallback);
   }
 }
 
-function writeAiStudioSessionMode(sessionId = "", mode = DEFAULT_AI_STUDIO_SESSION_MODE) {
-  const storageKey = aiStudioSessionModeStorageKey(sessionId);
+function writeVibe64SessionMode(sessionId = "", mode = DEFAULT_VIBE64_SESSION_MODE) {
+  const storageKey = vibe64SessionModeStorageKey(sessionId);
   if (!storageKey) {
     return "";
   }
-  const normalizedMode = normalizeAiStudioSessionMode(mode);
+  const normalizedMode = normalizeVibe64SessionMode(mode);
   try {
     browserLocalStorage()?.setItem(storageKey, normalizedMode);
   } catch {
@@ -53,40 +53,40 @@ function writeAiStudioSessionMode(sessionId = "", mode = DEFAULT_AI_STUDIO_SESSI
   return normalizedMode;
 }
 
-function aiStudioSessionModeFromRouteQuery(query = {}) {
+function vibe64SessionModeFromRouteQuery(query = {}) {
   const rawMode = Array.isArray(query?.mode) ? query.mode[0] : query?.mode;
-  return normalizeAiStudioSessionMode(rawMode, "");
+  return normalizeVibe64SessionMode(rawMode, "");
 }
 
-function aiStudioSessionModeRouteQuery(query = {}, mode = DEFAULT_AI_STUDIO_SESSION_MODE) {
+function vibe64SessionModeRouteQuery(query = {}, mode = DEFAULT_VIBE64_SESSION_MODE) {
   const nextQuery = {
     ...query
   };
-  if (normalizeAiStudioSessionMode(mode) === AI_STUDIO_SESSION_MODES.INSPECT) {
-    nextQuery.mode = AI_STUDIO_SESSION_MODES.INSPECT;
+  if (normalizeVibe64SessionMode(mode) === VIBE64_SESSION_MODES.INSPECT) {
+    nextQuery.mode = VIBE64_SESSION_MODES.INSPECT;
   } else {
     delete nextQuery.mode;
   }
   return nextQuery;
 }
 
-function aiStudioSessionModeRouteSynced(query = {}, mode = DEFAULT_AI_STUDIO_SESSION_MODE) {
-  const normalizedMode = normalizeAiStudioSessionMode(mode);
+function vibe64SessionModeRouteSynced(query = {}, mode = DEFAULT_VIBE64_SESSION_MODE) {
+  const normalizedMode = normalizeVibe64SessionMode(mode);
   const hasMode = Object.prototype.hasOwnProperty.call(query || {}, "mode");
-  if (normalizedMode === AI_STUDIO_SESSION_MODES.INSPECT) {
-    return query?.mode === AI_STUDIO_SESSION_MODES.INSPECT;
+  if (normalizedMode === VIBE64_SESSION_MODES.INSPECT) {
+    return query?.mode === VIBE64_SESSION_MODES.INSPECT;
   }
   return !hasMode;
 }
 
 export {
-  AI_STUDIO_SESSION_MODES,
-  DEFAULT_AI_STUDIO_SESSION_MODE,
-  aiStudioSessionModeFromRouteQuery,
-  aiStudioSessionModeRouteQuery,
-  aiStudioSessionModeRouteSynced,
-  aiStudioSessionModeStorageKey,
-  normalizeAiStudioSessionMode,
-  readAiStudioSessionMode,
-  writeAiStudioSessionMode
+  VIBE64_SESSION_MODES,
+  DEFAULT_VIBE64_SESSION_MODE,
+  vibe64SessionModeFromRouteQuery,
+  vibe64SessionModeRouteQuery,
+  vibe64SessionModeRouteSynced,
+  vibe64SessionModeStorageKey,
+  normalizeVibe64SessionMode,
+  readVibe64SessionMode,
+  writeVibe64SessionMode
 };

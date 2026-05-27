@@ -10,11 +10,11 @@ Completion notes:
 - Prompt actions and intents are posted to the server as normal session operations. The server owns Codex prompt injection into the visible server-owned Codex terminal.
 - Command execution in Autopilot only happens when the server operation route is `command-terminal`; action metadata alone cannot start command machinery.
 - Input rendering uses `presentation.screen.input.submitTarget`. The old fallback to `currentStepDefinition.interaction` was removed.
-- Realtime remains on the JSKIT service-event path: session and terminal services emit `ai-studio.session.changed`; the client listens through `useList` / `useEndpointResource`.
+- Realtime remains on the JSKIT service-event path: session and terminal services emit `vibe64.session.changed`; the client listens through `useList` / `useEndpointResource`.
 - Focused Playwright coverage confirms the non-commit maintenance workflow, the no-`Let's start` regression, server-owned Codex terminal preview behavior, server-routed operation dispatch, and question UI sugar.
 - Full verification passed with `npx jskit app verify`.
 
-Goal: make AI Studio state ownership simple, readable, and absolute.
+Goal: make Vibe64 state ownership simple, readable, and absolute.
 
 The server owns workflow state, state-machine transitions, presentation, available intents, available automation operations, prompt delivery, command routing, terminal lifecycle side effects, and realtime session-change events.
 
@@ -84,7 +84,7 @@ No legacy compatibility. No shims. Old contracts may break.
     id: "opaque-operation-id",
     label: "Create worktree",
     method: "POST",
-    url: "/api/ai-studio/sessions/<id>/actions/<actionId>",
+    url: "/api/vibe64/sessions/<id>/actions/<actionId>",
     body: {
       input: {},
       advanceOnSuccess: true
@@ -220,7 +220,7 @@ No legacy compatibility. No shims. Old contracts may break.
 
 ## 5. Delete Client Step-Status Interpretation From Autopilot
 
-- [x] Remove the client-side `STEP_STATUS` constant from `useAiStudioAutopilotController`.
+- [x] Remove the client-side `STEP_STATUS` constant from `useVibe64AutopilotController`.
 
 - [x] Remove `stepMachineStatus()`.
 

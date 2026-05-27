@@ -44,7 +44,7 @@ import {
 } from "@/lib/codexOutput.js";
 import {
   terminalFailureFixRequest
-} from "@/lib/aiStudioTerminalFailurePrompt.js";
+} from "@/lib/vibe64TerminalFailurePrompt.js";
 
 const props = defineProps({
   actionId: {

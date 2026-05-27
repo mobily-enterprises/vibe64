@@ -4,118 +4,118 @@ import {
   studioHttpClient
 } from "@/lib/studioHttp.js";
 
-const AI_STUDIO_ENDPOINT = studioApiPath("ai-studio");
-const AI_STUDIO_SESSIONS_ENDPOINT = `${AI_STUDIO_ENDPOINT}/sessions`;
+const VIBE64_ENDPOINT = studioApiPath("vibe64");
+const VIBE64_SESSIONS_ENDPOINT = `${VIBE64_ENDPOINT}/sessions`;
 
-function aiStudioSessionEndpoint(sessionId, suffix = "") {
-  return `${AI_STUDIO_SESSIONS_ENDPOINT}/${encodeURIComponent(sessionId)}${suffix}`;
+function vibe64SessionEndpoint(sessionId, suffix = "") {
+  return `${VIBE64_SESSIONS_ENDPOINT}/${encodeURIComponent(sessionId)}${suffix}`;
 }
 
-function aiStudioCodexTerminalEndpoint(sessionId, terminalSessionId = "") {
-  const base = aiStudioSessionEndpoint(sessionId, "/codex-terminal");
+function vibe64CodexTerminalEndpoint(sessionId, terminalSessionId = "") {
+  const base = vibe64SessionEndpoint(sessionId, "/codex-terminal");
   return terminalSessionId ? `${base}/${encodeURIComponent(terminalSessionId)}` : base;
 }
 
-function aiStudioCommandTerminalEndpoint(sessionId, terminalSessionId = "") {
-  const base = aiStudioSessionEndpoint(sessionId, "/command-terminal");
+function vibe64CommandTerminalEndpoint(sessionId, terminalSessionId = "") {
+  const base = vibe64SessionEndpoint(sessionId, "/command-terminal");
   return terminalSessionId ? `${base}/${encodeURIComponent(terminalSessionId)}` : base;
 }
 
-function aiStudioArtifactReadinessEndpoint(sessionId) {
-  return aiStudioSessionEndpoint(sessionId, "/artifact-readiness");
+function vibe64ArtifactReadinessEndpoint(sessionId) {
+  return vibe64SessionEndpoint(sessionId, "/artifact-readiness");
 }
 
-function aiStudioCurrentStepInputEndpoint(sessionId) {
-  return aiStudioSessionEndpoint(sessionId, "/current-step/input");
+function vibe64CurrentStepInputEndpoint(sessionId) {
+  return vibe64SessionEndpoint(sessionId, "/current-step/input");
 }
 
-function aiStudioTerminalFailureFixRequestEndpoint(sessionId) {
-  return aiStudioSessionEndpoint(sessionId, "/terminal-failure-fix-request");
+function vibe64TerminalFailureFixRequestEndpoint(sessionId) {
+  return vibe64SessionEndpoint(sessionId, "/terminal-failure-fix-request");
 }
 
-function aiStudioArtifactReadinessStreamEndpoint(sessionId) {
-  return aiStudioSessionEndpoint(sessionId, "/artifact-readiness/stream");
+function vibe64ArtifactReadinessStreamEndpoint(sessionId) {
+  return vibe64SessionEndpoint(sessionId, "/artifact-readiness/stream");
 }
 
-function aiStudioLaunchTerminalEndpoint(sessionId, terminalSessionId = "") {
-  const base = aiStudioSessionEndpoint(sessionId, "/launch-terminal");
+function vibe64LaunchTerminalEndpoint(sessionId, terminalSessionId = "") {
+  const base = vibe64SessionEndpoint(sessionId, "/launch-terminal");
   return terminalSessionId ? `${base}/${encodeURIComponent(terminalSessionId)}` : base;
 }
 
-function aiStudioShellTerminalEndpoint(sessionId, terminalSessionId = "") {
-  const base = aiStudioSessionEndpoint(sessionId, "/shell-terminal");
+function vibe64ShellTerminalEndpoint(sessionId, terminalSessionId = "") {
+  const base = vibe64SessionEndpoint(sessionId, "/shell-terminal");
   return terminalSessionId ? `${base}/${encodeURIComponent(terminalSessionId)}` : base;
 }
 
-function aiStudioCodexTerminalWebSocketUrl(sessionId, terminalSessionId) {
-  return resolveWebSocketUrl(`${aiStudioCodexTerminalEndpoint(sessionId, terminalSessionId)}/ws`);
+function vibe64CodexTerminalWebSocketUrl(sessionId, terminalSessionId) {
+  return resolveWebSocketUrl(`${vibe64CodexTerminalEndpoint(sessionId, terminalSessionId)}/ws`);
 }
 
-function aiStudioCommandTerminalWebSocketUrl(sessionId, terminalSessionId) {
-  return resolveWebSocketUrl(`${aiStudioCommandTerminalEndpoint(sessionId, terminalSessionId)}/ws`);
+function vibe64CommandTerminalWebSocketUrl(sessionId, terminalSessionId) {
+  return resolveWebSocketUrl(`${vibe64CommandTerminalEndpoint(sessionId, terminalSessionId)}/ws`);
 }
 
-function aiStudioLaunchTerminalWebSocketUrl(sessionId, terminalSessionId) {
-  return resolveWebSocketUrl(`${aiStudioLaunchTerminalEndpoint(sessionId, terminalSessionId)}/ws`);
+function vibe64LaunchTerminalWebSocketUrl(sessionId, terminalSessionId) {
+  return resolveWebSocketUrl(`${vibe64LaunchTerminalEndpoint(sessionId, terminalSessionId)}/ws`);
 }
 
-function aiStudioShellTerminalWebSocketUrl(sessionId, terminalSessionId) {
-  return resolveWebSocketUrl(`${aiStudioShellTerminalEndpoint(sessionId, terminalSessionId)}/ws`);
+function vibe64ShellTerminalWebSocketUrl(sessionId, terminalSessionId) {
+  return resolveWebSocketUrl(`${vibe64ShellTerminalEndpoint(sessionId, terminalSessionId)}/ws`);
 }
 
-async function readAiStudioSessionDiff(sessionId) {
-  return studioHttpClient.get(aiStudioSessionEndpoint(sessionId, "/diff"));
+async function readVibe64SessionDiff(sessionId) {
+  return studioHttpClient.get(vibe64SessionEndpoint(sessionId, "/diff"));
 }
 
-async function startAiStudioCodexTerminal(sessionId) {
-  return studioHttpClient.post(aiStudioCodexTerminalEndpoint(sessionId), {});
+async function startVibe64CodexTerminal(sessionId) {
+  return studioHttpClient.post(vibe64CodexTerminalEndpoint(sessionId), {});
 }
 
-async function closeAiStudioCodexTerminal(sessionId, terminalSessionId) {
-  return studioHttpClient.delete(aiStudioCodexTerminalEndpoint(sessionId, terminalSessionId));
+async function closeVibe64CodexTerminal(sessionId, terminalSessionId) {
+  return studioHttpClient.delete(vibe64CodexTerminalEndpoint(sessionId, terminalSessionId));
 }
 
-async function startAiStudioCommandTerminal(sessionId, input = {}) {
-  return studioHttpClient.post(aiStudioCommandTerminalEndpoint(sessionId), input);
+async function startVibe64CommandTerminal(sessionId, input = {}) {
+  return studioHttpClient.post(vibe64CommandTerminalEndpoint(sessionId), input);
 }
 
-async function closeAiStudioCommandTerminal(sessionId, terminalSessionId) {
-  return studioHttpClient.delete(aiStudioCommandTerminalEndpoint(sessionId, terminalSessionId));
+async function closeVibe64CommandTerminal(sessionId, terminalSessionId) {
+  return studioHttpClient.delete(vibe64CommandTerminalEndpoint(sessionId, terminalSessionId));
 }
 
-async function readAiStudioArtifactReadiness(sessionId) {
-  return studioHttpClient.get(aiStudioArtifactReadinessEndpoint(sessionId));
+async function readVibe64ArtifactReadiness(sessionId) {
+  return studioHttpClient.get(vibe64ArtifactReadinessEndpoint(sessionId));
 }
 
-async function submitAiStudioCurrentStepInput(sessionId, input = {}) {
+async function submitVibe64CurrentStepInput(sessionId, input = {}) {
   const payload = input && typeof input === "object" && !Array.isArray(input)
     ? input
     : {};
-  return studioHttpClient.post(aiStudioCurrentStepInputEndpoint(sessionId), {
+  return studioHttpClient.post(vibe64CurrentStepInputEndpoint(sessionId), {
     ...payload,
     kind: payload.kind || "ready"
   });
 }
 
-async function buildAiStudioTerminalFailureFixRequest(sessionId, input = {}) {
+async function buildVibe64TerminalFailureFixRequest(sessionId, input = {}) {
   const payload = input && typeof input === "object" && !Array.isArray(input)
     ? input
     : {};
-  return studioHttpClient.post(aiStudioTerminalFailureFixRequestEndpoint(sessionId), payload);
+  return studioHttpClient.post(vibe64TerminalFailureFixRequestEndpoint(sessionId), payload);
 }
 
 export {
-  aiStudioCodexTerminalWebSocketUrl,
-  aiStudioCommandTerminalWebSocketUrl,
-  aiStudioArtifactReadinessStreamEndpoint,
-  aiStudioLaunchTerminalWebSocketUrl,
-  aiStudioShellTerminalWebSocketUrl,
-  closeAiStudioCodexTerminal,
-  closeAiStudioCommandTerminal,
-  buildAiStudioTerminalFailureFixRequest,
-  readAiStudioArtifactReadiness,
-  readAiStudioSessionDiff,
-  submitAiStudioCurrentStepInput,
-  startAiStudioCodexTerminal,
-  startAiStudioCommandTerminal
+  vibe64CodexTerminalWebSocketUrl,
+  vibe64CommandTerminalWebSocketUrl,
+  vibe64ArtifactReadinessStreamEndpoint,
+  vibe64LaunchTerminalWebSocketUrl,
+  vibe64ShellTerminalWebSocketUrl,
+  closeVibe64CodexTerminal,
+  closeVibe64CommandTerminal,
+  buildVibe64TerminalFailureFixRequest,
+  readVibe64ArtifactReadiness,
+  readVibe64SessionDiff,
+  submitVibe64CurrentStepInput,
+  startVibe64CodexTerminal,
+  startVibe64CommandTerminal
 };

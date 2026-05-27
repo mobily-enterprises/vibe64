@@ -1,6 +1,6 @@
 Database runtime: PostgreSQL
 
 Use Laravel's pgsql connection in .env.
-Keep DB_HOST, DB_PORT, DB_DATABASE, DB_USERNAME, and DB_PASSWORD aligned with the AI Studio-managed PostgreSQL runtime.
+Keep DB_HOST, DB_PORT, DB_DATABASE, DB_USERNAME, and DB_PASSWORD aligned with the Vibe64-managed PostgreSQL runtime.
 Use Eloquent, migrations, seeders, factories, and transactions normally.
 Avoid PostgreSQL-specific SQL unless the user asks for it or it clearly improves the requested feature.

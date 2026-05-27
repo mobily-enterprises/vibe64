@@ -4,7 +4,7 @@ import {
   failDoctorCheck as failCheck,
   hardStopDoctorCheck as hardStopCheck,
   passDoctorCheck as passCheck
-} from "@local/ai-studio-core/server/doctorCheckItems";
+} from "@local/vibe64-core/server/doctorCheckItems";
 import {
   createDoctorPluginToolkit
 } from "@local/setup-doctor-core/server/doctorPluginToolkit";
@@ -263,7 +263,7 @@ async function checkDatabaseEnv(toolkit, targetRoot, config = {}) {
     id: "nextjs-database-env",
     label: "Database environment",
     missingObserved: "DATABASE_URL is missing or points somewhere else.",
-    passObserved: "DATABASE_URL matches the selected AI Studio-managed database.",
+    passObserved: "DATABASE_URL matches the selected Vibe64-managed database.",
     relativePath: ".env.local",
     repair: seedRepair,
     repairs: [

@@ -8,7 +8,7 @@ import {
   stringValue
 } from "./environment";
 
-type AiStudioSession = {
+type Vibe64Session = {
   actionResults?: Array<Record<string, unknown>>;
   actions?: Array<Record<string, unknown>>;
   artifactReadiness?: Record<string, { nonEmpty?: boolean }>;
@@ -47,7 +47,7 @@ async function waitForCurrentAppReady(page: Page) {
     }).toBe(true);
   } catch (error) {
     throw new Error([
-      "AI Studio current app did not become ready before opening Sessions.",
+      "Vibe64 current app did not become ready before opening Sessions.",
       JSON.stringify(lastReadiness, null, 2),
       String((error as Error)?.message || error)
     ].join("\n"));
@@ -211,7 +211,7 @@ async function runCommandAndWaitForMetadata(
 }
 
 async function awaitSessions(page: Page) {
-  const response = await page.request.get(`${getLiveBaseUrl()}/api/ai-studio/sessions?limit=20`);
+  const response = await page.request.get(`${getLiveBaseUrl()}/api/vibe64/sessions?limit=20`);
   expect(response.ok()).toBe(true);
   return response.json();
 }
@@ -219,7 +219,7 @@ async function awaitSessions(page: Page) {
 async function runSessionAction(page: Page, actionId: string, input: Record<string, unknown> = {}) {
   const session = await latestSession(page);
   const response = await page.request.post(
-    `${getLiveBaseUrl()}/api/ai-studio/sessions/${encodeURIComponent(session.sessionId)}/actions/${encodeURIComponent(actionId)}`,
+    `${getLiveBaseUrl()}/api/vibe64/sessions/${encodeURIComponent(session.sessionId)}/actions/${encodeURIComponent(actionId)}`,
     {
       data: input
     }
@@ -228,28 +228,28 @@ async function runSessionAction(page: Page, actionId: string, input: Record<stri
   const payload = await response.json();
   expect(payload.sessionId).toBe(session.sessionId);
   expect(payload.actionResult?.actionId).toBe(actionId);
-  return payload as AiStudioSession;
+  return payload as Vibe64Session;
 }
 
-async function onlyActiveSession(page: Page): Promise<AiStudioSession> {
+async function onlyActiveSession(page: Page): Promise<Vibe64Session> {
   await expect.poll(async () => {
     const payload = await awaitSessions(page);
-    const activeSessions = payload.sessions.filter((session: AiStudioSession) => session.status === "active");
+    const activeSessions = payload.sessions.filter((session: Vibe64Session) => session.status === "active");
     return activeSessions.length;
   }, {
     timeout: 60_000
   }).toBe(1);
   const payload = await awaitSessions(page);
-  return payload.sessions.find((session: AiStudioSession) => session.status === "active");
+  return payload.sessions.find((session: Vibe64Session) => session.status === "active");
 }
 
-async function latestSession(page: Page): Promise<AiStudioSession> {
+async function latestSession(page: Page): Promise<Vibe64Session> {
   const payload = await awaitSessions(page);
-  const sessions = payload.sessions as AiStudioSession[];
+  const sessions = payload.sessions as Vibe64Session[];
   if (sessions.length < 1) {
-    throw new Error("Expected at least one AI Studio session.");
+    throw new Error("Expected at least one Vibe64 session.");
   }
-  return sessions.slice().sort((left, right) => left.sessionId.localeCompare(right.sessionId)).at(-1) as AiStudioSession;
+  return sessions.slice().sort((left, right) => left.sessionId.localeCompare(right.sessionId)).at(-1) as Vibe64Session;
 }
 
 async function expectStep(page: Page, stepId: string) {
@@ -314,7 +314,7 @@ async function writeIssueArtifacts(page: Page, {
 
 async function writePullRequestArtifact(page: Page, body: string) {
   await submitCurrentStepInput(page, {
-    title: firstMarkdownHeading(body) || "AI Studio pull request",
+    title: firstMarkdownHeading(body) || "Vibe64 pull request",
     body
   });
   await page.reload({
@@ -340,7 +340,7 @@ async function submitCurrentStepInput(page: Page, fields: Record<string, string>
   const session = await latestSession(page);
   const stepStatus = String(session.stepMachine?.status || "");
   const response = await page.request.post(
-    `${getLiveBaseUrl()}/api/ai-studio/sessions/${encodeURIComponent(session.sessionId)}/current-step/input`,
+    `${getLiveBaseUrl()}/api/vibe64/sessions/${encodeURIComponent(session.sessionId)}/current-step/input`,
     {
       data: {
         fields,
@@ -368,7 +368,7 @@ async function writeReportArtifact(page: Page, body: string) {
   }).toBe(true);
 }
 
-async function writeArtifact(session: AiStudioSession, artifactName: string, contents: string) {
+async function writeArtifact(session: Vibe64Session, artifactName: string, contents: string) {
   await mkdir(session.artifactsRoot, {
     recursive: true
   });
@@ -449,5 +449,5 @@ export {
 };
 
 export type {
-  AiStudioSession
+  Vibe64Session
 };

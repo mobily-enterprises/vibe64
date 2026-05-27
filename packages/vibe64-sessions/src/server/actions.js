@@ -8,18 +8,18 @@ import {
   sessionTerminalFailureFixInputValidator
 } from "./inputSchemas.js";
 
-const ACTION_LIST_SESSIONS = "feature.ai-studio-sessions.list";
-const ACTION_CREATE_SESSION = "feature.ai-studio-sessions.create";
-const ACTION_INSPECT_SESSION = "feature.ai-studio-sessions.inspect";
-const ACTION_INSPECT_SESSION_DIFF = "feature.ai-studio-sessions.diff.inspect";
-const ACTION_READ_SESSION_CONVERSATION_LOG = "feature.ai-studio-sessions.conversation-log.read";
-const ACTION_BUILD_TERMINAL_FAILURE_FIX_REQUEST = "feature.ai-studio-sessions.terminal-failure-fix-request.build";
-const ACTION_RUN_SESSION_ACTION = "feature.ai-studio-sessions.action.run";
-const ACTION_RUN_SESSION_INTENT = "feature.ai-studio-sessions.intent.run";
-const ACTION_ADVANCE_SESSION = "feature.ai-studio-sessions.advance";
-const ACTION_ABANDON_SESSION = "feature.ai-studio-sessions.abandon";
-const ACTION_RECOVER_STUCK_SESSION_STEP = "feature.ai-studio-sessions.step.stuck.recover";
-const ACTION_REWIND_SESSION = "feature.ai-studio-sessions.rewind";
+const ACTION_LIST_SESSIONS = "feature.vibe64-sessions.list";
+const ACTION_CREATE_SESSION = "feature.vibe64-sessions.create";
+const ACTION_INSPECT_SESSION = "feature.vibe64-sessions.inspect";
+const ACTION_INSPECT_SESSION_DIFF = "feature.vibe64-sessions.diff.inspect";
+const ACTION_READ_SESSION_CONVERSATION_LOG = "feature.vibe64-sessions.conversation-log.read";
+const ACTION_BUILD_TERMINAL_FAILURE_FIX_REQUEST = "feature.vibe64-sessions.terminal-failure-fix-request.build";
+const ACTION_RUN_SESSION_ACTION = "feature.vibe64-sessions.action.run";
+const ACTION_RUN_SESSION_INTENT = "feature.vibe64-sessions.intent.run";
+const ACTION_ADVANCE_SESSION = "feature.vibe64-sessions.advance";
+const ACTION_ABANDON_SESSION = "feature.vibe64-sessions.abandon";
+const ACTION_RECOVER_STUCK_SESSION_STEP = "feature.vibe64-sessions.step.stuck.recover";
+const ACTION_REWIND_SESSION = "feature.vibe64-sessions.rewind";
 
 const featureActions = Object.freeze([
   {

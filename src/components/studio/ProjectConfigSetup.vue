@@ -1,7 +1,7 @@
 <template>
   <v-sheet rounded="lg" border class="project-config-setup">
     <div class="project-config-setup__heading">
-      <p class="project-config-setup__eyebrow">AI Studio</p>
+      <p class="project-config-setup__eyebrow">Vibe64</p>
       <h2 class="project-config-setup__title">Configure project</h2>
       <p class="project-config-setup__message">
         {{ message }}

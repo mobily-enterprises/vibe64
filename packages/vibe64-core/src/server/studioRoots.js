@@ -1,8 +1,8 @@
 import path from "node:path";
 import process from "node:process";
 
-const AI_STUDIO_APP_ROOT_ENV = "AI_STUDIO_APP_ROOT";
-const AI_STUDIO_TARGET_ROOT_ENV = "AI_STUDIO_TARGET_ROOT";
+const VIBE64_APP_ROOT_ENV = "VIBE64_APP_ROOT";
+const VIBE64_TARGET_ROOT_ENV = "VIBE64_TARGET_ROOT";
 
 function normalizeRoot(value, fallbackRoot) {
   const root = String(value || "").trim();
@@ -14,7 +14,7 @@ function resolveStudioAppRoot({
   explicitRoot = "",
   fallbackRoot = process.cwd()
 } = {}) {
-  return normalizeRoot(explicitRoot || env[AI_STUDIO_APP_ROOT_ENV], fallbackRoot);
+  return normalizeRoot(explicitRoot || env[VIBE64_APP_ROOT_ENV], fallbackRoot);
 }
 
 function resolveStudioTargetRoot({
@@ -23,8 +23,8 @@ function resolveStudioTargetRoot({
   cwd = process.cwd(),
   studioAppRoot = ""
 } = {}) {
-  if (String(explicitRoot || "").trim() || String(env[AI_STUDIO_TARGET_ROOT_ENV] || "").trim()) {
-    return normalizeRoot(explicitRoot || env[AI_STUDIO_TARGET_ROOT_ENV], cwd);
+  if (String(explicitRoot || "").trim() || String(env[VIBE64_TARGET_ROOT_ENV] || "").trim()) {
+    return normalizeRoot(explicitRoot || env[VIBE64_TARGET_ROOT_ENV], cwd);
   }
 
   const normalizedCwd = normalizeRoot(cwd, process.cwd());
@@ -44,8 +44,8 @@ function resolveStudioTargetRoot({
 }
 
 export {
-  AI_STUDIO_APP_ROOT_ENV,
-  AI_STUDIO_TARGET_ROOT_ENV,
+  VIBE64_APP_ROOT_ENV,
+  VIBE64_TARGET_ROOT_ENV,
   resolveStudioAppRoot,
   resolveStudioTargetRoot
 };

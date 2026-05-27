@@ -14,15 +14,15 @@ import {
   configImportSpecifiersFromText,
   directDependencyNames,
   missingDirectDependencies
-} from "@local/ai-studio-adapters/server/adapters/jskit/setupDependencyChecks";
+} from "@local/vibe64-adapters/server/adapters/jskit/setupDependencyChecks";
 import {
   npmInstallScript
-} from "@local/ai-studio-adapters/server/adapters/jskit/setupProjectChecks";
+} from "@local/vibe64-adapters/server/adapters/jskit/setupProjectChecks";
 import {
   checkJskitScaffold,
   scaffoldCommandPreview,
   scaffoldScript
-} from "@local/ai-studio-adapters/server/adapters/jskit/setupScaffold";
+} from "@local/vibe64-adapters/server/adapters/jskit/setupScaffold";
 import {
   createDoctorPluginToolkit
 } from "@local/setup-doctor-core/server/doctorPluginToolkit";
@@ -37,7 +37,7 @@ function assertShellScriptSurvivesWhitespaceCollapse(script) {
 }
 
 test("JSKIT setup dependency gate catches partial node_modules installs", async () => {
-  const targetRoot = await mkdtemp(path.join(os.tmpdir(), "ai-studio-jskit-deps-"));
+  const targetRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-jskit-deps-"));
   const toolkit = createDoctorPluginToolkit({
     targetRoot
   });
@@ -101,11 +101,11 @@ test("JSKIT seed command defaults tenancy because seed workflow now chooses it",
 });
 
 test("JSKIT scaffold check lets an empty target with root .gitignore reach the seed workflow", async () => {
-  const targetRoot = await mkdtemp(path.join(os.tmpdir(), "ai-studio-jskit-gitignore-"));
+  const targetRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-jskit-gitignore-"));
   const toolkit = createDoctorPluginToolkit({
     targetRoot
   });
-  await writeFile(path.join(targetRoot, ".gitignore"), ".ai-studio/\n", "utf8");
+  await writeFile(path.join(targetRoot, ".gitignore"), ".vibe64/\n", "utf8");
 
   const result = await checkJskitScaffold(targetRoot, {
     nonGitEntries: [
@@ -131,7 +131,7 @@ test("JSKIT setup parses config package imports", () => {
 });
 
 test("JSKIT setup catches stale config package subpath exports", async () => {
-  const targetRoot = await mkdtemp(path.join(os.tmpdir(), "ai-studio-jskit-config-imports-"));
+  const targetRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-jskit-config-imports-"));
   const toolkit = createDoctorPluginToolkit({
     targetRoot
   });

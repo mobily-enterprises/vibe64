@@ -1,23 +1,23 @@
 import {
-  aiStudioError,
+  vibe64Error,
   isPlainObject,
   normalizeText
-} from "@local/ai-studio-core/server/core";
+} from "@local/vibe64-core/server/core";
 import {
-  AI_STUDIO_CLIENT_CONTROL_ACTIONS,
-  AI_STUDIO_CLIENT_CONTROL_ICON_TOKENS,
-  AI_STUDIO_CLIENT_CONTROL_STATE_FLAGS,
-  AI_STUDIO_OPERATION_ROUTES as OPERATION_ROUTES
-} from "@local/ai-studio-core/shared";
+  VIBE64_CLIENT_CONTROL_ACTIONS,
+  VIBE64_CLIENT_CONTROL_ICON_TOKENS,
+  VIBE64_CLIENT_CONTROL_STATE_FLAGS,
+  VIBE64_OPERATION_ROUTES as OPERATION_ROUTES
+} from "@local/vibe64-core/shared";
 import {
-  aiStudioSessionDebugDurationMs,
-  aiStudioSessionDebugError,
-  aiStudioSessionDebugLog,
-  aiStudioSessionDebugSummary
+  vibe64SessionDebugDurationMs,
+  vibe64SessionDebugError,
+  vibe64SessionDebugLog,
+  vibe64SessionDebugSummary
 } from "./sessionDebugLog.js";
 import { STEP_STATUS } from "./workflowStepMachines.js";
 
-// AI Studio ownership contract:
+// Vibe64 ownership contract:
 // - Durable workflow truth remains in the session files, workflow machine, step
 //   machines, action results, and metadata.
 // - This module is the server-owned projection from workflow truth to UI and
@@ -52,9 +52,9 @@ const INTENT_PRESENTATION_GROUPS = Object.freeze([
   "decision",
   "stop"
 ]);
-const CLIENT_CONTROL_ACTIONS = Object.freeze(new Set(Object.values(AI_STUDIO_CLIENT_CONTROL_ACTIONS)));
-const CLIENT_CONTROL_ICON_TOKENS = Object.freeze(new Set(Object.values(AI_STUDIO_CLIENT_CONTROL_ICON_TOKENS)));
-const CLIENT_CONTROL_STATE_FLAGS = Object.freeze(new Set(Object.values(AI_STUDIO_CLIENT_CONTROL_STATE_FLAGS)));
+const CLIENT_CONTROL_ACTIONS = Object.freeze(new Set(Object.values(VIBE64_CLIENT_CONTROL_ACTIONS)));
+const CLIENT_CONTROL_ICON_TOKENS = Object.freeze(new Set(Object.values(VIBE64_CLIENT_CONTROL_ICON_TOKENS)));
+const CLIENT_CONTROL_STATE_FLAGS = Object.freeze(new Set(Object.values(VIBE64_CLIENT_CONTROL_STATE_FLAGS)));
 const INPUT_BEHAVIOR_KINDS = Object.freeze({
   NUMBERED_QUESTIONS: "numbered_questions"
 });
@@ -260,7 +260,7 @@ function rejectTargetStepId(session = {}) {
 }
 
 function presentationContractError(message = "Invalid workflow presentation contract.") {
-  throw aiStudioError(message, "ai_studio_workflow_presentation_invalid");
+  throw vibe64Error(message, "vibe64_workflow_presentation_invalid");
 }
 
 function requiredPresentationValue(source = {}, fieldName = "", context = "workflow presentation") {
@@ -924,9 +924,9 @@ function assertIntentMatchesCurrentState(session = {}, input = {}) {
     return;
   }
   if (stepId !== normalizeText(session.currentStep) || stepStatus !== normalizeText(session.stepMachine?.status)) {
-    const error = aiStudioError(
+    const error = vibe64Error(
       `Reload state. This intent was prepared for ${stepId || "(missing step)"}:${stepStatus || "(missing status)"}, but the current workflow state is ${session.currentStep || "(no current step)"}:${session.stepMachine?.status || "(no machine status)"}.`,
-      "ai_studio_intent_state_changed"
+      "vibe64_intent_state_changed"
     );
     error.operationOutcome = "stale_operation";
     error.refreshRecommended = true;
@@ -1029,10 +1029,10 @@ function workflowHasStep(session = {}, stepId = "") {
 function workflowRejectTargetForSession(runtime, session = {}) {
   const targetStepId = normalizeText(currentWorkflowStepBehavior(runtime, session).rejectTo);
   if (!targetStepId) {
-    throw aiStudioError("This workflow does not define a rejection target for the current step.", "ai_studio_reject_target_missing");
+    throw vibe64Error("This workflow does not define a rejection target for the current step.", "vibe64_reject_target_missing");
   }
   if (!workflowHasStep(session, targetStepId)) {
-    throw aiStudioError(`Workflow reject target does not exist: ${targetStepId}`, "ai_studio_unknown_workflow_step");
+    throw vibe64Error(`Workflow reject target does not exist: ${targetStepId}`, "vibe64_unknown_workflow_step");
   }
   return targetStepId;
 }
@@ -1040,10 +1040,10 @@ function workflowRejectTargetForSession(runtime, session = {}) {
 function workflowRecheckTargetForSession(runtime, session = {}) {
   const targetStepId = normalizeText(currentWorkflowStepBehavior(runtime, session).recheckTo);
   if (!targetStepId) {
-    throw aiStudioError("This workflow does not define a recheck target for the current step.", "ai_studio_recheck_target_missing");
+    throw vibe64Error("This workflow does not define a recheck target for the current step.", "vibe64_recheck_target_missing");
   }
   if (!workflowHasStep(session, targetStepId)) {
-    throw aiStudioError(`Workflow recheck target does not exist: ${targetStepId}`, "ai_studio_unknown_workflow_step");
+    throw vibe64Error(`Workflow recheck target does not exist: ${targetStepId}`, "vibe64_unknown_workflow_step");
   }
   return targetStepId;
 }
@@ -1065,9 +1065,9 @@ async function runActionIntent(runtime, session = {}, selectedIntent = {}, inten
   const config = isPlainObject(intentConfig) ? intentConfig : {};
   const actionId = normalizeText(config.actionId) || selectedIntent.actionId;
   if (!actionId) {
-    throw aiStudioError(
+    throw vibe64Error(
       `Intent ${selectedIntent.id || "(empty)"} does not define an action.`,
-      "ai_studio_intent_not_handled"
+      "vibe64_intent_not_handled"
     );
   }
   return runtime.runAction(session.sessionId, actionId, fields);
@@ -1076,7 +1076,7 @@ async function runActionIntent(runtime, session = {}, selectedIntent = {}, inten
 async function rejectWorkflowIntent(runtime, session = {}, fields = {}) {
   const feedback = firstPresentField(fields, ["feedback", "message", "response"]);
   if (!feedback) {
-    throw aiStudioError("Describe what should change before sending the work back to Codex.", "ai_studio_intent_input_required");
+    throw vibe64Error("Describe what should change before sending the work back to Codex.", "vibe64_intent_input_required");
   }
   const rewoundSession = await runtime.rewind(
     session.sessionId,
@@ -1084,9 +1084,9 @@ async function rejectWorkflowIntent(runtime, session = {}, fields = {}) {
   );
   const actionId = currentAutopilotAction(runtime, rewoundSession);
   if (!actionId) {
-    throw aiStudioError(
+    throw vibe64Error(
       `Workflow reject target ${rewoundSession.currentStep || "(none)"} does not define an autopilot action.`,
-      "ai_studio_reject_target_action_missing"
+      "vibe64_reject_target_action_missing"
     );
   }
   return runtime.runAction(rewoundSession.sessionId, actionId, {
@@ -1105,35 +1105,35 @@ async function advanceToWorkflowStep(runtime, session = {}, targetStepId = "") {
   const startedAtMs = Date.now();
   const normalizedTargetStepId = normalizeText(targetStepId);
   if (!normalizedTargetStepId) {
-    throw aiStudioError("Workflow intent target step is required.", "ai_studio_operation_target_required");
+    throw vibe64Error("Workflow intent target step is required.", "vibe64_operation_target_required");
   }
 
   let currentSession = await runtime.getSession(session.sessionId);
   const stepIds = workflowStepIds(currentSession);
   if (!stepIds.includes(normalizedTargetStepId)) {
-    throw aiStudioError(`Workflow target step does not exist: ${normalizedTargetStepId}`, "ai_studio_unknown_workflow_step");
+    throw vibe64Error(`Workflow target step does not exist: ${normalizedTargetStepId}`, "vibe64_unknown_workflow_step");
   }
 
-  aiStudioSessionDebugLog("server.workflowPresentation.advanceToStep.start", {
-    ...aiStudioSessionDebugSummary(currentSession),
+  vibe64SessionDebugLog("server.workflowPresentation.advanceToStep.start", {
+    ...vibe64SessionDebugSummary(currentSession),
     targetStepId: normalizedTargetStepId
   });
 
   for (let count = 0; normalizeText(currentSession.currentStep) !== normalizedTargetStepId; count += 1) {
     if (count >= stepIds.length) {
-      throw aiStudioError(`Workflow could not advance to ${normalizedTargetStepId}.`, "ai_studio_advance_target_not_reached");
+      throw vibe64Error(`Workflow could not advance to ${normalizedTargetStepId}.`, "vibe64_advance_target_not_reached");
     }
-    aiStudioSessionDebugLog("server.workflowPresentation.advanceToStep.advance", {
-      ...aiStudioSessionDebugSummary(currentSession),
+    vibe64SessionDebugLog("server.workflowPresentation.advanceToStep.advance", {
+      ...vibe64SessionDebugSummary(currentSession),
       count: count + 1,
       targetStepId: normalizedTargetStepId
     });
     currentSession = await runtime.advance(currentSession.sessionId);
   }
 
-  aiStudioSessionDebugLog("server.workflowPresentation.advanceToStep.done", {
-    ...aiStudioSessionDebugSummary(currentSession),
-    durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
+  vibe64SessionDebugLog("server.workflowPresentation.advanceToStep.done", {
+    ...vibe64SessionDebugSummary(currentSession),
+    durationMs: vibe64SessionDebugDurationMs(startedAtMs),
     targetStepId: normalizedTargetStepId
   });
   return currentSession;
@@ -1157,30 +1157,30 @@ function conversationInput(fields = {}) {
 
 async function forceAdvanceCurrentStep(runtime, session = {}, message = "Advanced by server intent.") {
   const startedAtMs = Date.now();
-  aiStudioSessionDebugLog("server.workflowPresentation.forceAdvance.start", {
-    ...aiStudioSessionDebugSummary(session),
+  vibe64SessionDebugLog("server.workflowPresentation.forceAdvance.start", {
+    ...vibe64SessionDebugSummary(session),
     message
   });
   try {
     if (typeof runtime?.forceAdvance !== "function") {
-      throw aiStudioError(
-        "AI Studio runtime force-advance is not available.",
-        "ai_studio_force_advance_not_available"
+      throw vibe64Error(
+        "Vibe64 runtime force-advance is not available.",
+        "vibe64_force_advance_not_available"
       );
     }
     const advancedSession = await runtime.forceAdvance(session.sessionId, {
       message
     });
-    aiStudioSessionDebugLog("server.workflowPresentation.forceAdvance.done", {
-      ...aiStudioSessionDebugSummary(advancedSession),
-      durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
+    vibe64SessionDebugLog("server.workflowPresentation.forceAdvance.done", {
+      ...vibe64SessionDebugSummary(advancedSession),
+      durationMs: vibe64SessionDebugDurationMs(startedAtMs),
       fromStepId: session.currentStep
     });
     return advancedSession;
   } catch (error) {
-    aiStudioSessionDebugLog("server.workflowPresentation.forceAdvance.error", {
-      durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
-      error: aiStudioSessionDebugError(error),
+    vibe64SessionDebugLog("server.workflowPresentation.forceAdvance.error", {
+      durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+      error: vibe64SessionDebugError(error),
       sessionId: session.sessionId
     });
     throw error;
@@ -1237,9 +1237,9 @@ async function runBuiltinWorkflowIntent(runtime, session = {}, selectedIntent = 
   if (type === "action" || (!hasIntentConfig && selectedIntent.actionId)) {
     return runActionIntent(runtime, session, selectedIntent, intentConfig, fields);
   }
-  throw aiStudioError(
+  throw vibe64Error(
     `Intent ${selectedIntent.id || "(empty)"} has no server handler.`,
-    "ai_studio_intent_not_handled"
+    "vibe64_intent_not_handled"
   );
 }
 
@@ -1248,15 +1248,15 @@ async function runWorkflowIntent(runtime, sessionId = "", intentId = "", input =
   const normalizedIntentId = normalizeText(intentId);
   const selectedIntent = selectedIntentById(session, normalizedIntentId);
   if (!selectedIntent) {
-    throw aiStudioError(
+    throw vibe64Error(
       `Intent ${normalizedIntentId || "(empty)"} is not available on step ${session.currentStep || "(none)"}.`,
-      "ai_studio_intent_not_available"
+      "vibe64_intent_not_available"
     );
   }
   if (selectedIntent.enabled !== true) {
-    throw aiStudioError(
+    throw vibe64Error(
       selectedIntent.disabledReason || `Intent ${normalizedIntentId} is disabled.`,
-      "ai_studio_intent_disabled"
+      "vibe64_intent_disabled"
     );
   }
   assertIntentMatchesCurrentState(session, input);

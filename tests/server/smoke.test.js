@@ -8,7 +8,7 @@ import { createServer, startServer } from "../../server.js";
 import { resolveRuntimeEnv } from "../../server/lib/runtimeEnv.js";
 
 async function withTemporaryPackageRoot(packageName, callback) {
-  const root = await mkdtemp(path.join(tmpdir(), "ai-studio-target-"));
+  const root = await mkdtemp(path.join(tmpdir(), "vibe64-target-"));
   await writeFile(
     path.join(root, "package.json"),
     JSON.stringify({
@@ -33,8 +33,8 @@ async function withTemporaryPackageRoot(packageName, callback) {
 }
 
 async function withTargetRoot(targetRoot, callback) {
-  const previousTargetRoot = process.env.AI_STUDIO_TARGET_ROOT;
-  process.env.AI_STUDIO_TARGET_ROOT = targetRoot;
+  const previousTargetRoot = process.env.VIBE64_TARGET_ROOT;
+  process.env.VIBE64_TARGET_ROOT = targetRoot;
 
   let app;
   try {
@@ -45,9 +45,9 @@ async function withTargetRoot(targetRoot, callback) {
       await app.close();
     }
     if (previousTargetRoot == null) {
-      delete process.env.AI_STUDIO_TARGET_ROOT;
+      delete process.env.VIBE64_TARGET_ROOT;
     } else {
-      process.env.AI_STUDIO_TARGET_ROOT = previousTargetRoot;
+      process.env.VIBE64_TARGET_ROOT = previousTargetRoot;
     }
   }
 }
@@ -86,7 +86,7 @@ test("started server publishes home as the browser entry URL", async () => {
   });
 
   try {
-    const url = new URL(app.aiStudioUrl);
+    const url = new URL(app.vibe64Url);
     assert.equal(url.hostname, "127.0.0.1");
     assert.equal(url.pathname, "/home");
   } finally {
@@ -121,12 +121,12 @@ test("current-app route reports the selected target root before project type set
   });
 });
 
-test("AI Studio project routes persist project type and plain-file config", async () => {
+test("Vibe64 project routes persist project type and plain-file config", async () => {
   await withTemporaryPackageRoot("configured-target-app", async (targetRoot) => {
     await withTargetRoot(targetRoot, async (app) => {
       const beforeType = await app.inject({
         method: "GET",
-        url: "/api/ai-studio/project-type"
+        url: "/api/vibe64/project-type"
       });
       assert.equal(beforeType.statusCode, 200);
       assert.equal(beforeType.json().projectType.ready, false);
@@ -137,18 +137,18 @@ test("AI Studio project routes persist project type and plain-file config", asyn
         payload: {
           projectType: "jskit"
         },
-        url: "/api/ai-studio/project-type"
+        url: "/api/vibe64/project-type"
       });
       assert.equal(savedType.statusCode, 200);
       assert.equal(savedType.json().projectType.ready, true);
       assert.equal(
-        await readFile(path.join(targetRoot, ".ai-studio", "project_type"), "utf8"),
+        await readFile(path.join(targetRoot, ".vibe64", "project_type"), "utf8"),
         "jskit\n"
       );
 
       const defaults = await app.inject({
         method: "GET",
-        url: "/api/ai-studio/project-config/defaults"
+        url: "/api/vibe64/project-config/defaults"
       });
       assert.equal(defaults.statusCode, 200);
       assert.equal(defaults.json().defaults.projectType, "jskit");
@@ -162,19 +162,19 @@ test("AI Studio project routes persist project type and plain-file config", asyn
             jskit_database_runtime: "mysql"
           }
         },
-        url: "/api/ai-studio/project-config"
+        url: "/api/vibe64/project-config"
       });
       assert.equal(savedConfig.statusCode, 200);
       assert.equal(savedConfig.json().config.ready, true);
       assert.equal(
-        await readFile(path.join(targetRoot, ".ai-studio", "config", "github_pr_merge_method"), "utf8"),
+        await readFile(path.join(targetRoot, ".vibe64", "config", "github_pr_merge_method"), "utf8"),
         "squash\n"
       );
     });
   });
 });
 
-test("AI Studio session creation returns a setup gate instead of using legacy issue-session routes", async () => {
+test("Vibe64 session creation returns a setup gate instead of using legacy issue-session routes", async () => {
   await withTemporaryPackageRoot("session-target-app", async (targetRoot) => {
     await withTargetRoot(targetRoot, async (app) => {
       const legacy = await app.inject({
@@ -186,11 +186,11 @@ test("AI Studio session creation returns a setup gate instead of using legacy is
       const missingProjectType = await app.inject({
         method: "POST",
         payload: {},
-        url: "/api/ai-studio/sessions"
+        url: "/api/vibe64/sessions"
       });
       assert.equal(missingProjectType.statusCode, 400);
       assert.equal(missingProjectType.json().ok, false);
-      assert.equal(missingProjectType.json().errors[0].code, "ai_studio_project_type_missing");
+      assert.equal(missingProjectType.json().errors[0].code, "vibe64_project_type_missing");
     });
   });
 });

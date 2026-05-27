@@ -10,7 +10,7 @@ import {
 } from "../../packages/current-app/src/server/service.js";
 
 async function withTemporaryRoot(callback) {
-  const root = await mkdtemp(path.join(tmpdir(), "ai-studio-current-app-"));
+  const root = await mkdtemp(path.join(tmpdir(), "vibe64-current-app-"));
   try {
     return await callback(root);
   } finally {
@@ -75,7 +75,7 @@ function fakeProjectService({
     },
     async projectConfigEnvironment() {
       return {
-        AI_STUDIO_CONFIG_DIR: path.join(targetRoot, ".ai-studio", "config")
+        VIBE64_CONFIG_DIR: path.join(targetRoot, ".vibe64", "config")
       };
     },
     async readProjectConfig() {
@@ -155,19 +155,19 @@ function fakeAdapter() {
   };
 }
 
-test("current-app resolves the launch target root from AI Studio environment", async () => {
+test("current-app resolves the launch target root from Vibe64 environment", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const previousTargetRoot = process.env.AI_STUDIO_TARGET_ROOT;
-    process.env.AI_STUDIO_TARGET_ROOT = targetRoot;
+    const previousTargetRoot = process.env.VIBE64_TARGET_ROOT;
+    process.env.VIBE64_TARGET_ROOT = targetRoot;
 
     try {
       assert.equal(resolveCurrentAppRoot(), targetRoot);
       assert.equal(resolveCurrentAppRoot(path.join(targetRoot, "explicit")), path.join(targetRoot, "explicit"));
     } finally {
       if (previousTargetRoot == null) {
-        delete process.env.AI_STUDIO_TARGET_ROOT;
+        delete process.env.VIBE64_TARGET_ROOT;
       } else {
-        process.env.AI_STUDIO_TARGET_ROOT = previousTargetRoot;
+        process.env.VIBE64_TARGET_ROOT = previousTargetRoot;
       }
     }
   });
@@ -224,10 +224,10 @@ test("current-app reports project type, config, and setup gates before adapter i
 
 test("current-app merges adapter scripts with project scripts and stores starred target script ids", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    await mkdir(path.join(targetRoot, ".ai-studio", "scripts"), {
+    await mkdir(path.join(targetRoot, ".vibe64", "scripts"), {
       recursive: true
     });
-    await writeFile(path.join(targetRoot, ".ai-studio", "scripts", "local-check"), "echo ok\n", "utf8");
+    await writeFile(path.join(targetRoot, ".vibe64", "scripts", "local-check"), "echo ok\n", "utf8");
     const service = createService({
       appRoot: targetRoot,
       projectService: fakeProjectService({
@@ -252,7 +252,7 @@ test("current-app merges adapter scripts with project scripts and stores starred
     assert.equal(saved.ok, true);
     assert.deepEqual(saved.starredScriptIds, ["adapter:verify", "project:local-check"]);
     assert.equal(
-      await readFile(path.join(targetRoot, ".ai-studio", "config", "starred_scripts"), "utf8"),
+      await readFile(path.join(targetRoot, ".vibe64", "config", "starred_scripts"), "utf8"),
       "adapter:verify,project:local-check\n"
     );
 
@@ -265,7 +265,7 @@ test("current-app merges adapter scripts with project scripts and stores starred
     const reset = await service.resetStarredTargetScripts();
     assert.equal(reset.ok, true);
     assert.deepEqual(reset.starredScriptIds, ["adapter:build"]);
-    await assert.rejects(access(path.join(targetRoot, ".ai-studio", "config", "starred_scripts")), {
+    await assert.rejects(access(path.join(targetRoot, ".vibe64", "config", "starred_scripts")), {
       code: "ENOENT"
     });
   });

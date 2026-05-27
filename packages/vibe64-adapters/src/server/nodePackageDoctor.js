@@ -1,7 +1,7 @@
 import {
   failDoctorCheck as failCheck,
   passDoctorCheck as passCheck
-} from "@local/ai-studio-core/server/doctorCheckItems";
+} from "@local/vibe64-core/server/doctorCheckItems";
 import {
   packageManagerAvailabilityScript
 } from "./nodePackage.js";
@@ -45,7 +45,7 @@ async function checkNodePackageManagerToolchain(toolkit, {
       label,
       expected: `${displayName} is available inside ${toolchainLabel}.`,
       observed: result.output || `${displayName} did not run.`,
-      explanation: `AI Studio runs Node project setup, install, scripts, and launch-target commands inside ${toolchainLabel}.`
+      explanation: `Vibe64 runs Node project setup, install, scripts, and launch-target commands inside ${toolchainLabel}.`
     });
   }
 

@@ -1,6 +1,6 @@
-const AI_STUDIO_SESSION_DEBUG_MARKER = "AI_STUDIO_SESSION_DEBUG";
+const VIBE64_SESSION_DEBUG_MARKER = "VIBE64_SESSION_DEBUG";
 
-function aiStudioSessionDebugError(error = {}) {
+function vibe64SessionDebugError(error = {}) {
   return {
     code: String(error?.code || ""),
     message: String(error?.message || error || ""),
@@ -9,19 +9,19 @@ function aiStudioSessionDebugError(error = {}) {
   };
 }
 
-function aiStudioSessionDebugDurationMs(startedAtMs) {
+function vibe64SessionDebugDurationMs(startedAtMs) {
   return Math.max(0, Date.now() - Number(startedAtMs || Date.now()));
 }
 
-function aiStudioSessionDebugLog(event = "", details = {}) {
+function vibe64SessionDebugLog(event = "", details = {}) {
   const timestamp = new Date().toISOString();
   const entry = {
-    marker: AI_STUDIO_SESSION_DEBUG_MARKER,
+    marker: VIBE64_SESSION_DEBUG_MARKER,
     timestamp,
     event: String(event || ""),
     ...(details && typeof details === "object" && !Array.isArray(details) ? details : {})
   };
-  entry.marker = AI_STUDIO_SESSION_DEBUG_MARKER;
+  entry.marker = VIBE64_SESSION_DEBUG_MARKER;
   entry.timestamp = timestamp;
 
   const logger = globalThis.console;
@@ -30,14 +30,14 @@ function aiStudioSessionDebugLog(event = "", details = {}) {
   }
 
   try {
-    logger.info(`[${AI_STUDIO_SESSION_DEBUG_MARKER}] ${JSON.stringify(entry)}`);
+    logger.info(`[${VIBE64_SESSION_DEBUG_MARKER}] ${JSON.stringify(entry)}`);
   } catch {
-    logger.info(`[${AI_STUDIO_SESSION_DEBUG_MARKER}] ${timestamp} ${entry.event}`);
+    logger.info(`[${VIBE64_SESSION_DEBUG_MARKER}] ${timestamp} ${entry.event}`);
   }
   return entry;
 }
 
-function aiStudioSessionDebugSummary(session = {}) {
+function vibe64SessionDebugSummary(session = {}) {
   return {
     currentStep: String(session?.currentStep || ""),
     nextEnabled: session?.next?.enabled === true,
@@ -49,9 +49,9 @@ function aiStudioSessionDebugSummary(session = {}) {
 }
 
 export {
-  AI_STUDIO_SESSION_DEBUG_MARKER,
-  aiStudioSessionDebugDurationMs,
-  aiStudioSessionDebugError,
-  aiStudioSessionDebugLog,
-  aiStudioSessionDebugSummary
+  VIBE64_SESSION_DEBUG_MARKER,
+  vibe64SessionDebugDurationMs,
+  vibe64SessionDebugError,
+  vibe64SessionDebugLog,
+  vibe64SessionDebugSummary
 };

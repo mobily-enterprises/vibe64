@@ -5,7 +5,7 @@ export default Object.freeze({
   kind: "runtime",
   description: "Shared Studio terminal, shell, Docker, and managed runtime primitives.",
   dependsOn: [
-    "@local/ai-studio-core"
+    "@local/vibe64-core"
   ],
   capabilities: {
     provides: [],

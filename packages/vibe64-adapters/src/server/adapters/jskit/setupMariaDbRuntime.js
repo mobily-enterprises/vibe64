@@ -5,7 +5,7 @@ import {
   managedDatabaseNameFromTargetRoot
 } from "@local/studio-terminal-core/server/managedDatabases";
 import {
-  AI_STUDIO_RUNTIME_HOST_ALIAS,
+  VIBE64_RUNTIME_HOST_ALIAS,
   createRuntimeContainerRepair,
   runtimeContainerName
 } from "@local/studio-terminal-core/server/runtimeContainers";
@@ -23,14 +23,14 @@ import {
 } from "../../adapterHelpers/setupNodePackages.js";
 
 const JSKIT_MARIADB_CONTAINER_ID = "jskit-mariadb";
-const JSKIT_MARIADB_HOST = "ai-studio-mariadb";
+const JSKIT_MARIADB_HOST = "vibe64-mariadb";
 const JSKIT_MARIADB_IMAGE = "mariadb:12.0.2";
-const JSKIT_MARIADB_ROOT_PASSWORD = "ai_studio_jskit_root";
-const JSKIT_MARIADB_PROBE_DATABASE = "ai_studio_jskit_probe";
+const JSKIT_MARIADB_ROOT_PASSWORD = "vibe64_jskit_root";
+const JSKIT_MARIADB_PROBE_DATABASE = "vibe64_jskit_probe";
 const JSKIT_MARIADB_PROBE_TABLE = "capability_probe";
-const JSKIT_HOST_DATABASE_HOST = AI_STUDIO_RUNTIME_HOST_ALIAS;
-const JSKIT_MARIADB_PROBE_SQL_VARIABLE = "@ai_studio_jskit_probe_sql";
-const JSKIT_MARIADB_PROBE_STATEMENT = "ai_studio_jskit_probe_statement";
+const JSKIT_HOST_DATABASE_HOST = VIBE64_RUNTIME_HOST_ALIAS;
+const JSKIT_MARIADB_PROBE_SQL_VARIABLE = "@vibe64_jskit_probe_sql";
+const JSKIT_MARIADB_PROBE_STATEMENT = "vibe64_jskit_probe_statement";
 
 async function targetWantsJskitMariaDb(targetRoot = "", toolkit) {
   const lockJsonResult = await toolkit.readTargetJson(".jskit/lock.json", {
@@ -56,8 +56,8 @@ function mariaDbPreparedStatement(sqlExpression = "") {
 }
 
 function mariaDbTemporaryProbeSql() {
-  const probeDatabaseVariable = "@ai_studio_jskit_probe_database";
-  const probeIdentifierVariable = "@ai_studio_jskit_probe_identifier";
+  const probeDatabaseVariable = "@vibe64_jskit_probe_database";
+  const probeIdentifierVariable = "@vibe64_jskit_probe_identifier";
   return [
     `SET ${probeDatabaseVariable} = CONCAT('${JSKIT_MARIADB_PROBE_DATABASE}_', REPLACE(UUID(), '-', ''))`,
     `SET ${probeIdentifierVariable} = REPLACE(${probeDatabaseVariable}, '\`', '\`\`')`,
@@ -148,7 +148,7 @@ function createJskitMariaDbRuntimeContainer({
     ],
     terminalEnv: ({ targetRoot: contextTargetRoot = "" } = {}) => {
       return {
-        AI_STUDIO_MYSQL_USER: "root",
+        VIBE64_MYSQL_USER: "root",
         MYSQL_DATABASE: terminalDatabaseName(contextTargetRoot),
         MYSQL_HOST: JSKIT_MARIADB_HOST,
         MYSQL_PWD: JSKIT_MARIADB_ROOT_PASSWORD,

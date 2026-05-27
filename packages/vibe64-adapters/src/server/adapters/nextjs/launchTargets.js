@@ -1,5 +1,5 @@
 import {
-  createAiStudioWebLaunchTargetTerminalSpec
+  createVibe64WebLaunchTargetTerminalSpec
 } from "@local/studio-terminal-core/server/launchTargetTerminal";
 import {
   detectPackageManager,
@@ -102,7 +102,7 @@ function createNextjsLaunchTargetTerminalSpec({
     };
   }
   const launchTargetRoot = targetRoot || session.targetRoot || "";
-  return createAiStudioWebLaunchTargetTerminalSpec({
+  return createVibe64WebLaunchTargetTerminalSpec({
     adapterId: "nextjs",
     launchTarget: context.launchTarget || nextjsLaunchTarget(launchTargetId, launchTargetId),
     resolveLaunch: ({ port, worktreePath }) => createNextjsLaunchDescriptor({

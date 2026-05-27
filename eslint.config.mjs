@@ -9,8 +9,10 @@ export default [
       "coverage/**",
       "test-results/**",
       ".jskit/**",
-      ".ai-studio/sessions/**",
-      ".ai-studio/runtime/**"
+      ".vibe64/sessions/**",
+      ".vibe64/runtime/**",
+      ".ai[-]studio/sessions/**",
+      ".ai[-]studio/runtime/**"
     ]
   },
   {

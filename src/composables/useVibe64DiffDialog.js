@@ -1,16 +1,16 @@
 import { ref, unref } from "vue";
 
 import {
-  readAiStudioSessionDiff
-} from "@/lib/aiStudioSessionApi.js";
+  readVibe64SessionDiff
+} from "@/lib/vibe64SessionApi.js";
 import {
   resolveResponseErrorMessage
-} from "@/lib/aiStudioResponseErrors.js";
+} from "@/lib/vibe64ResponseErrors.js";
 import {
   readRefOrGetterBoolean
 } from "@/lib/vueRefOrGetterValue.js";
 
-function useAiStudioDiffDialog({
+function useVibe64DiffDialog({
   canOpen,
   selectedSessionId
 } = {}) {
@@ -28,7 +28,7 @@ function useAiStudioDiffDialog({
     diffLoading.value = true;
     diffPayload.value = null;
     try {
-      const response = await readAiStudioSessionDiff(unref(selectedSessionId));
+      const response = await readVibe64SessionDiff(unref(selectedSessionId));
       diffPayload.value = response;
       if (response?.ok === false) {
         diffError.value = resolveResponseErrorMessage(response, "Diff inspection failed.");
@@ -62,5 +62,5 @@ function useAiStudioDiffDialog({
 }
 
 export {
-  useAiStudioDiffDialog
+  useVibe64DiffDialog
 };

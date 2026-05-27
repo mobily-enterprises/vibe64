@@ -214,7 +214,7 @@ function laravelDatabaseEnvWriteScript({
       "mkdir -p database",
       "touch database/database.sqlite"
     ] : []),
-    "echo 'Wrote Laravel database settings for AI Studio-managed runtime.'"
+    "echo 'Wrote Laravel database settings for Vibe64-managed runtime.'"
   ].join("\n");
 }
 

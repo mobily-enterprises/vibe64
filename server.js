@@ -16,13 +16,13 @@ import { surfaceRuntime } from "./server/lib/surfaceRuntime.js";
 import {
   resolveStudioAppRoot,
   resolveStudioTargetRoot
-} from "@local/ai-studio-core/server/studioRoots";
+} from "@local/vibe64-core/server/studioRoots";
 import {
   closeTerminalSessionsForNamespacePrefix
 } from "@local/studio-terminal-core/server/terminalSessions";
 import {
   isLocalhostCheckBypassEnabled
-} from "@local/ai-studio-core/server/localhostCheckBypass";
+} from "@local/vibe64-core/server/localhostCheckBypass";
 import {
   cleanupStaleStudioTerminals
 } from "@local/studio-terminal-core/server/studioTerminalCleanup";
@@ -31,9 +31,9 @@ import {
   registerBrowserLifecycleWebSocketRoute
 } from "./server/lib/browserLifecycle.js";
 import {
-  AI_STUDIO_APP_ROOT_ENV,
-  AI_STUDIO_SKIP_STALE_TERMINAL_CLEANUP_ENV,
-  AI_STUDIO_TARGET_ROOT_ENV
+  VIBE64_APP_ROOT_ENV,
+  VIBE64_SKIP_STALE_TERMINAL_CLEANUP_ENV,
+  VIBE64_TARGET_ROOT_ENV
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 
 const SPA_INDEX_FILE = "index.html";
@@ -143,7 +143,7 @@ async function createServer(options = {}) {
       }
     }
   });
-  if (isTruthyEnvValue(process.env[AI_STUDIO_SKIP_STALE_TERMINAL_CLEANUP_ENV])) {
+  if (isTruthyEnvValue(process.env[VIBE64_SKIP_STALE_TERMINAL_CLEANUP_ENV])) {
     app.log.warn("Skipping stale Studio terminal cleanup for this process.");
   } else {
     await cleanupStaleStudioTerminals({
@@ -168,7 +168,7 @@ async function createServer(options = {}) {
   app.get("/api/health", async () => {
     return {
       ok: true,
-      app: "ai-studio"
+      app: "vibe64"
     };
   });
   const runtimeEnv = resolveRuntimeEnv();
@@ -190,13 +190,13 @@ async function createServer(options = {}) {
   const hasWebBuild = existsSync(path.resolve(distRoot, SPA_INDEX_FILE));
   const providerEnv = {
     ...runtimeEnv,
-    [AI_STUDIO_APP_ROOT_ENV]: appRoot,
-    [AI_STUDIO_TARGET_ROOT_ENV]: targetRoot
+    [VIBE64_APP_ROOT_ENV]: appRoot,
+    [VIBE64_TARGET_ROOT_ENV]: targetRoot
   };
-  const previousStudioAppRoot = process.env[AI_STUDIO_APP_ROOT_ENV];
-  const previousStudioTargetRoot = process.env[AI_STUDIO_TARGET_ROOT_ENV];
-  process.env[AI_STUDIO_APP_ROOT_ENV] = appRoot;
-  process.env[AI_STUDIO_TARGET_ROOT_ENV] = targetRoot;
+  const previousStudioAppRoot = process.env[VIBE64_APP_ROOT_ENV];
+  const previousStudioTargetRoot = process.env[VIBE64_TARGET_ROOT_ENV];
+  process.env[VIBE64_APP_ROOT_ENV] = appRoot;
+  process.env[VIBE64_TARGET_ROOT_ENV] = targetRoot;
   let runtime;
   try {
     runtime = await tryCreateProviderRuntimeFromApp({
@@ -211,14 +211,14 @@ async function createServer(options = {}) {
     });
   } finally {
     if (previousStudioAppRoot == null) {
-      delete process.env[AI_STUDIO_APP_ROOT_ENV];
+      delete process.env[VIBE64_APP_ROOT_ENV];
     } else {
-      process.env[AI_STUDIO_APP_ROOT_ENV] = previousStudioAppRoot;
+      process.env[VIBE64_APP_ROOT_ENV] = previousStudioAppRoot;
     }
     if (previousStudioTargetRoot == null) {
-      delete process.env[AI_STUDIO_TARGET_ROOT_ENV];
+      delete process.env[VIBE64_TARGET_ROOT_ENV];
     } else {
-      process.env[AI_STUDIO_TARGET_ROOT_ENV] = previousStudioTargetRoot;
+      process.env[VIBE64_TARGET_ROOT_ENV] = previousStudioTargetRoot;
     }
   }
 
@@ -305,12 +305,12 @@ async function startServer(options = {}) {
       return;
     }
     closing = true;
-    app.log.info({ signal }, "Stopping ai-studio server.");
+    app.log.info({ signal }, "Stopping vibe64 server.");
     try {
       await app.close();
       process.exitCode = 0;
     } catch (error) {
-      app.log.error({ error }, "Failed to stop ai-studio server cleanly.");
+      app.log.error({ error }, "Failed to stop vibe64 server cleanly.");
       process.exitCode = 1;
     }
   };
@@ -330,7 +330,7 @@ async function startServer(options = {}) {
     host,
     port: selectedPort
   });
-  app.aiStudioUrl = browserUrlForListenAddress(listenAddress);
+  app.vibe64Url = browserUrlForListenAddress(listenAddress);
   return app;
 }
 

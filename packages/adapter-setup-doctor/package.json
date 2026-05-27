@@ -8,8 +8,8 @@
   },
   "dependencies": {
     "@jskit-ai/kernel": "0.x",
-    "@local/ai-studio-core": "0.1.0",
-    "@local/ai-studio-project": "0.1.0",
+    "@local/vibe64-core": "0.1.0",
+    "@local/vibe64-project": "0.1.0",
     "@local/setup-doctor-core": "0.1.0",
     "@local/studio-terminal-core": "0.1.0",
     "json-rest-schema": "^1.0.16"

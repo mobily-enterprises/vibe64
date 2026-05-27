@@ -4,11 +4,11 @@ import path from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import {
-  AiStudioSessionRuntime
-} from "@local/ai-studio-runtime/server";
+  Vibe64SessionRuntime
+} from "@local/vibe64-runtime/server";
 import {
   FakeTargetAdapter
-} from "@local/ai-studio-adapters/server";
+} from "@local/vibe64-adapters/server";
 import { BASE_URL } from "./support/base-shell-data";
 import {
   mockProtectedRouteReady,
@@ -45,11 +45,11 @@ const SESSION_ID = "agent-chat-session";
 
 test.describe("non-commit maintenance agent chat", () => {
   let targetRoot = "";
-  let runtime: AiStudioSessionRuntime;
+  let runtime: Vibe64SessionRuntime;
 
   test.beforeEach(async ({ page }) => {
-    targetRoot = await mkdtemp(path.join(os.tmpdir(), "ai-studio-agent-chat-"));
-    runtime = new AiStudioSessionRuntime({
+    targetRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-agent-chat-"));
+    runtime = new Vibe64SessionRuntime({
       adapter: new FakeTargetAdapter({
         capabilities: {
           create_worktree: true,
@@ -172,7 +172,7 @@ async function expectMarkdownResponsePreview(page: Page, expectedText = RESPONSE
 
 async function expectNoBrowserCodexTerminalInput(page: Page) {
   await expect.poll(async () => page.evaluate(() => (
-    (window as unknown as { __aiStudioCodexTerminalInputs?: string[] }).__aiStudioCodexTerminalInputs || []
+    (window as unknown as { __vibe64CodexTerminalInputs?: string[] }).__vibe64CodexTerminalInputs || []
   ))).toEqual([]);
 }
 
@@ -200,7 +200,7 @@ async function createNonCommitMaintenanceSession(page: Page) {
   }).click();
 }
 
-async function mockAgentChatRoutes(page: Page, runtime: AiStudioSessionRuntime) {
+async function mockAgentChatRoutes(page: Page, runtime: Vibe64SessionRuntime) {
   async function pushArtifactReadiness(sessionId: string) {
     const payload = await artifactReadinessPayload(runtime, sessionId);
     await page.evaluate((payload) => {
@@ -210,7 +210,7 @@ async function mockAgentChatRoutes(page: Page, runtime: AiStudioSessionRuntime) 
     }, payload).catch(() => null);
   }
 
-  await page.route("**/api/ai-studio/sessions**", async (route) => {
+  await page.route("**/api/vibe64/sessions**", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const method = request.method().toUpperCase();
@@ -218,7 +218,7 @@ async function mockAgentChatRoutes(page: Page, runtime: AiStudioSessionRuntime) 
     const sessionId = parts[3] || "";
     const tail = parts.slice(4);
 
-    if (method === "GET" && url.pathname === "/api/ai-studio/sessions") {
+    if (method === "GET" && url.pathname === "/api/vibe64/sessions") {
       await fulfillJson(route, await sessionListPayload(runtime));
       return;
     }
@@ -228,7 +228,7 @@ async function mockAgentChatRoutes(page: Page, runtime: AiStudioSessionRuntime) 
       return;
     }
 
-    if (method === "POST" && url.pathname === "/api/ai-studio/sessions") {
+    if (method === "POST" && url.pathname === "/api/vibe64/sessions") {
       const created = await runtime.createSession({
         sessionId: SESSION_ID,
         workflowDefinition: String(request.postDataJSON()?.workflowDefinition || "")
@@ -407,7 +407,7 @@ async function mockAgentChatRoutes(page: Page, runtime: AiStudioSessionRuntime) 
   });
 }
 
-async function sessionListPayload(runtime: AiStudioSessionRuntime) {
+async function sessionListPayload(runtime: Vibe64SessionRuntime) {
   const sessions = await runtime.listSessions();
   const creation = await runtime.workflowDefinitionCreationOptions();
   const openSessionCount = sessions.filter((session) => !["abandoned", "finished"].includes(String(session.status || ""))).length;
@@ -426,9 +426,9 @@ async function sessionListPayload(runtime: AiStudioSessionRuntime) {
   };
 }
 
-async function applyCommandResult(runtime: AiStudioSessionRuntime, sessionId: string, actionId: string) {
+async function applyCommandResult(runtime: Vibe64SessionRuntime, sessionId: string, actionId: string) {
   if (actionId === "create_worktree") {
-    await runtime.store.writeMetadataValue(sessionId, "worktree_path", path.join(runtime.targetRoot, ".ai-studio/worktree"));
+    await runtime.store.writeMetadataValue(sessionId, "worktree_path", path.join(runtime.targetRoot, ".vibe64/worktree"));
   }
   if (actionId === "install_dependencies") {
     await runtime.store.writeMetadataValue(sessionId, "dependencies_installed", "yes");
@@ -437,7 +437,7 @@ async function applyCommandResult(runtime: AiStudioSessionRuntime, sessionId: st
 }
 
 async function recordConversationPrompt(
-  runtime: AiStudioSessionRuntime,
+  runtime: Vibe64SessionRuntime,
   sessionId: string,
   conversationRequest: unknown
 ) {
@@ -450,7 +450,7 @@ async function recordConversationPrompt(
   });
 }
 
-async function advanceSessionIfReady(runtime: AiStudioSessionRuntime, sessionId: string) {
+async function advanceSessionIfReady(runtime: Vibe64SessionRuntime, sessionId: string) {
   const session = await runtime.getSession(sessionId);
   if (session.next?.visible === true && session.next.enabled === true && session.next.stepId) {
     await runtime.advance(sessionId);
@@ -458,7 +458,7 @@ async function advanceSessionIfReady(runtime: AiStudioSessionRuntime, sessionId:
 }
 
 async function writeAgentResponse(
-  runtime: AiStudioSessionRuntime,
+  runtime: Vibe64SessionRuntime,
   sessionId: string,
   markdown = RESPONSE_MARKDOWN
 ) {
@@ -474,7 +474,7 @@ async function writeAgentResponse(
   });
 }
 
-async function writeAgentQuestions(runtime: AiStudioSessionRuntime, sessionId: string) {
+async function writeAgentQuestions(runtime: Vibe64SessionRuntime, sessionId: string) {
   const session = await runtime.getSession(sessionId);
   await runtime.submitCurrentStepInput(sessionId, {
     kind: "waiting_for_input",
@@ -495,7 +495,7 @@ function responseMarkdownForRequest(conversationRequest = "") {
     : RESPONSE_MARKDOWN;
 }
 
-async function artifactPreviewPayload(runtime: AiStudioSessionRuntime, sessionId: string, previewId: string) {
+async function artifactPreviewPayload(runtime: Vibe64SessionRuntime, sessionId: string, previewId: string) {
   const session = await runtime.getSession(sessionId);
   const text = previewId === "ai_response"
     ? await runtime.store.readArtifact(sessionId, RESPONSE_ARTIFACT)
@@ -508,7 +508,7 @@ async function artifactPreviewPayload(runtime: AiStudioSessionRuntime, sessionId
   };
 }
 
-async function artifactReadinessPayload(runtime: AiStudioSessionRuntime, sessionId: string) {
+async function artifactReadinessPayload(runtime: Vibe64SessionRuntime, sessionId: string) {
   const session = await runtime.getSession(sessionId);
   return {
     artifactReadiness: session.artifactReadiness,
@@ -523,8 +523,8 @@ async function mockAgentChatBrowserPrimitives(page: Page) {
     const OriginalWebSocket = window.WebSocket;
     const eventSourcesBySessionId: Record<string, EventTarget[]> = {};
     (window as unknown as {
-      __aiStudioCodexTerminalInputs: string[];
-    }).__aiStudioCodexTerminalInputs = [];
+      __vibe64CodexTerminalInputs: string[];
+    }).__vibe64CodexTerminalInputs = [];
 
     class MockEventSource extends EventTarget {
       static CONNECTING = 0;
@@ -635,8 +635,8 @@ async function mockAgentChatBrowserPrimitives(page: Page) {
         const message = JSON.parse(String(rawMessage || "{}"));
         if (message.type === "input") {
           (window as unknown as {
-            __aiStudioCodexTerminalInputs: string[];
-          }).__aiStudioCodexTerminalInputs.push(String(message.data || ""));
+            __vibe64CodexTerminalInputs: string[];
+          }).__vibe64CodexTerminalInputs.push(String(message.data || ""));
         }
       }
 

@@ -7,8 +7,8 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFileCallback);
 
-const LIVE_E2E_FLAG = "AI_STUDIO_LIVE_E2E";
-const TARGET_ROOT_ENV = "AI_STUDIO_E2E_TARGET_ROOT";
+const LIVE_E2E_FLAG = "VIBE64_LIVE_E2E";
+const TARGET_ROOT_ENV = "VIBE64_E2E_TARGET_ROOT";
 const EXPECTED_TARGET_REPO_NAME = "studio-ai-e2e-repo";
 const COMMAND_TIMEOUT_MS = 120_000;
 const SERVER_START_TIMEOUT_MS = 45_000;
@@ -47,7 +47,7 @@ function setLiveBaseUrl(nextBaseUrl: string) {
 
 function getLiveBaseUrl() {
   if (!baseUrl) {
-    throw new Error("Live AI Studio base URL has not been initialized.");
+    throw new Error("Live Vibe64 base URL has not been initialized.");
   }
   return baseUrl;
 }
@@ -57,7 +57,7 @@ function addCleanupTask(cleanupTask: () => Promise<void>) {
 }
 
 function fixtureTitle(name: string) {
-  return `[ai-studio live e2e] ${name} ${runId}`;
+  return `[vibe64 live e2e] ${name} ${runId}`;
 }
 
 function stringValue(value: unknown) {
@@ -120,7 +120,7 @@ async function ghJson(args: string[]) {
 async function prepareTargetRoot() {
   if (!targetRoot) {
     throw new Error([
-      `Live AI Studio e2e tests require ${TARGET_ROOT_ENV}.`,
+      `Live Vibe64 e2e tests require ${TARGET_ROOT_ENV}.`,
       "",
       `Set it to the dedicated seeded test repository before running ${LIVE_E2E_FLAG}=1 tests:`,
       "",
@@ -135,8 +135,8 @@ async function prepareTargetRoot() {
   if (!await pathExists(path.join(targetRoot, ".git"))) {
     throw new Error(`${TARGET_ROOT_ENV} must be a Git repository: ${targetRoot}`);
   }
-  if (!await pathExists(path.join(targetRoot, ".ai-studio", "project_type"))) {
-    throw new Error(`${TARGET_ROOT_ENV} must be seeded with .ai-studio/project_type.`);
+  if (!await pathExists(path.join(targetRoot, ".vibe64", "project_type"))) {
+    throw new Error(`${TARGET_ROOT_ENV} must be seeded with .vibe64/project_type.`);
   }
 
   const remoteUrl = await git(["remote", "get-url", "origin"]);
@@ -163,7 +163,7 @@ async function assertGithubCliReady() {
 
 async function removeGeneratedSessionState() {
   await removeGeneratedWorktrees();
-  await rm(path.join(targetRoot, ".ai-studio", "sessions"), {
+  await rm(path.join(targetRoot, ".vibe64", "sessions"), {
     force: true,
     recursive: true
   });
@@ -189,7 +189,7 @@ async function syncTargetMainCheckout() {
 
 async function removeGeneratedWorktrees() {
   const output = await git(["worktree", "list", "--porcelain"]).catch(() => "");
-  const generatedRoot = path.join(targetRoot, ".ai-studio", "sessions");
+  const generatedRoot = path.join(targetRoot, ".vibe64", "sessions");
   for (const worktreePath of parseWorktreePaths(output)) {
     if (worktreePath.startsWith(generatedRoot)) {
       await git(["worktree", "remove", "--force", worktreePath]).catch(() => "");
@@ -210,8 +210,8 @@ async function startStudioServer(): Promise<StudioServer> {
     cwd: appRoot,
     env: {
       ...process.env,
-      AI_STUDIO_SKIP_STALE_TERMINAL_CLEANUP: "1",
-      AI_STUDIO_TARGET_ROOT: targetRoot,
+      VIBE64_SKIP_STALE_TERMINAL_CLEANUP: "1",
+      VIBE64_TARGET_ROOT: targetRoot,
       PORT: String(port)
     },
     stdio: ["ignore", "pipe", "pipe"]
@@ -258,7 +258,7 @@ async function waitForServerHealth(
   const deadline = Date.now() + SERVER_START_TIMEOUT_MS;
   while (Date.now() < deadline) {
     if (serverProcess.exitCode !== null) {
-      throw new Error(`AI Studio server exited before it became ready:\n${logs()}`);
+      throw new Error(`Vibe64 server exited before it became ready:\n${logs()}`);
     }
     try {
       const response = await fetch(`${serverBaseUrl}/api/health`);
@@ -269,7 +269,7 @@ async function waitForServerHealth(
       await delay(250);
     }
   }
-  throw new Error(`AI Studio server did not become ready:\n${logs()}`);
+  throw new Error(`Vibe64 server did not become ready:\n${logs()}`);
 }
 
 async function stopServer(serverProcess: ChildProcessWithoutNullStreams) {
@@ -309,7 +309,7 @@ async function createFixtureIssue(label: string): Promise<FixtureIssue> {
     "--title",
     title,
     "--body",
-    `Created by live AI Studio e2e run ${runId}.`
+    `Created by live Vibe64 e2e run ${runId}.`
   ]);
   const issue = await ghJson([
     "issue",
@@ -327,7 +327,7 @@ async function createFixtureIssue(label: string): Promise<FixtureIssue> {
 }
 
 async function createFixturePullRequest(label: string): Promise<FixturePullRequest> {
-  const branch = `ai-studio-e2e/${runId}/${label}`;
+  const branch = `vibe64-e2e/${runId}/${label}`;
   const title = fixtureTitle(label);
   const relativePath = `e2e-fixtures/${runId}-${label}.txt`;
 
@@ -355,7 +355,7 @@ async function createFixturePullRequest(label: string): Promise<FixturePullReque
     "--title",
     title,
     "--body",
-    `Created by live AI Studio e2e run ${runId}.`
+    `Created by live Vibe64 e2e run ${runId}.`
   ], {
     timeout: 120_000
   });
@@ -381,7 +381,7 @@ async function closeGithubIssue(issueUrl: string) {
     "close",
     issueUrl,
     "--comment",
-    `Closed by live AI Studio e2e cleanup ${runId}.`
+    `Closed by live Vibe64 e2e cleanup ${runId}.`
   ]).catch(() => "");
 }
 
@@ -394,7 +394,7 @@ async function closeGithubPr(prUrl: string) {
     "close",
     prUrl,
     "--comment",
-    `Closed by live AI Studio e2e cleanup ${runId}.`
+    `Closed by live Vibe64 e2e cleanup ${runId}.`
   ]).catch(() => "");
 }
 

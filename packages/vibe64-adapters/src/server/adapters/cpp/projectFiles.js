@@ -7,14 +7,14 @@ import path from "node:path";
 import {
   normalizeText,
   pathExists
-} from "@local/ai-studio-core/server/core";
+} from "@local/vibe64-core/server/core";
 
 const CPP_HEADER_EXTENSIONS = new Set([".h", ".hh", ".hpp", ".hxx", ".ipp", ".tpp"]);
 const CPP_SOURCE_EXTENSIONS = new Set([".c", ".cc", ".cpp", ".cxx", ".m", ".mm"]);
 const CPP_SCAN_DIRECTORIES = Object.freeze(["src", "include", "tests", "test", "lib", "app"]);
 const IGNORED_DIRECTORIES = new Set([
   ".git",
-  ".ai-studio",
+  ".vibe64",
   "build",
   "cmake-build-debug",
   "cmake-build-release",

@@ -6,10 +6,10 @@ import {
   ACTION_READ_ARTIFACT_READINESS,
   ACTION_SUBMIT_CURRENT_STEP_INPUT
 } from "./actions.js";
-import { createAiStudioFeatureRoutes } from "@local/ai-studio-core/server/featureRoutes";
+import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRoutes";
 
 function getArtifactsService(app) {
-  return app.make("feature.ai-studio-artifacts.service");
+  return app.make("feature.vibe64-artifacts.service");
 }
 
 async function sendArtifactReadinessEventStream(reply, run) {
@@ -92,11 +92,11 @@ function registerRoutes(
     routeRelativePath = ""
   } = {}
 ) {
-  const routes = createAiStudioFeatureRoutes(app, {
-    localRequestMessage: "AI Studio artifact routes only accept loopback Studio requests.",
+  const routes = createVibe64FeatureRoutes(app, {
+    localRequestMessage: "Vibe64 artifact routes only accept loopback Studio requests.",
     routeRelativePath,
     routeSurface,
-    tags: ["studio", "ai-studio-artifacts"]
+    tags: ["studio", "vibe64-artifacts"]
   });
 
   routes.actionRoute("GET", "/sessions/:sessionId/artifact-preview", {
@@ -107,7 +107,7 @@ function registerRoutes(
         sessionId: request.params.sessionId
       };
     },
-    summary: "Read a server-owned AI Studio artifact preview."
+    summary: "Read a server-owned Vibe64 artifact preview."
   });
 
   routes.actionRoute("GET", "/sessions/:sessionId/artifact-readiness", {
@@ -117,7 +117,7 @@ function registerRoutes(
         sessionId: request.params.sessionId
       };
     },
-    summary: "Read AI Studio artifact readiness."
+    summary: "Read Vibe64 artifact readiness."
   });
 
   routes.actionRoute("POST", "/sessions/:sessionId/current-step/input", {
@@ -129,11 +129,11 @@ function registerRoutes(
         sessionId: request.params.sessionId
       };
     },
-    summary: "Submit input for the current AI Studio workflow step."
+    summary: "Submit input for the current Vibe64 workflow step."
   });
 
   routes.serviceRoute("GET", "/sessions/:sessionId/artifact-readiness/stream", {
-    summary: "Stream AI Studio artifact readiness updates."
+    summary: "Stream Vibe64 artifact readiness updates."
   }, async (request, reply) => {
     await sendArtifactReadinessEventStream(reply, ({ emit, isClosed, onClose }) => {
       return getArtifactsService(app).streamArtifactReadiness(request.params.sessionId, {

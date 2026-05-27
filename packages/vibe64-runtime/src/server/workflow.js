@@ -1,13 +1,13 @@
 import {
-  aiStudioError,
+  vibe64Error,
   normalizeText
-} from "@local/ai-studio-core/server/core";
+} from "@local/vibe64-core/server/core";
 import {
   createCoreWorkflowRegistry
 } from "./registerCoreWorkflowModules.js";
 import {
-  AI_STUDIO_WORKFLOW_DEFINITION_IDS,
-  DEFAULT_AI_STUDIO_WORKFLOW_DEFINITION_ID,
+  VIBE64_WORKFLOW_DEFINITION_IDS,
+  DEFAULT_VIBE64_WORKFLOW_DEFINITION_ID,
   ISSUE_FILE_STEP_ID,
   SEED_APPLICATION_STEP_ID
 } from "./workflowModules/coreCoding.js";
@@ -20,17 +20,17 @@ function normalizeWorkflowDefinitionId(definitionId = "", {
   workflowRegistry = null
 } = {}) {
   const registry = registryOrDefault(workflowRegistry);
-  const normalizedDefinitionId = normalizeText(definitionId) || DEFAULT_AI_STUDIO_WORKFLOW_DEFINITION_ID;
+  const normalizedDefinitionId = normalizeText(definitionId) || DEFAULT_VIBE64_WORKFLOW_DEFINITION_ID;
   if (!registry.definitionForWorkflow(normalizedDefinitionId)) {
-    throw aiStudioError(
-      `Unknown AI Studio workflow definition: ${normalizedDefinitionId}`,
-      "ai_studio_unknown_workflow_definition"
+    throw vibe64Error(
+      `Unknown Vibe64 workflow definition: ${normalizedDefinitionId}`,
+      "vibe64_unknown_workflow_definition"
     );
   }
   return normalizedDefinitionId;
 }
 
-function workflowDefinition(definitionId = DEFAULT_AI_STUDIO_WORKFLOW_DEFINITION_ID, {
+function workflowDefinition(definitionId = DEFAULT_VIBE64_WORKFLOW_DEFINITION_ID, {
   workflowRegistry = null
 } = {}) {
   const registry = registryOrDefault(workflowRegistry);
@@ -39,7 +39,7 @@ function workflowDefinition(definitionId = DEFAULT_AI_STUDIO_WORKFLOW_DEFINITION
   }));
 }
 
-function workflowForDefinition(definitionId = DEFAULT_AI_STUDIO_WORKFLOW_DEFINITION_ID, {
+function workflowForDefinition(definitionId = DEFAULT_VIBE64_WORKFLOW_DEFINITION_ID, {
   workflowRegistry = null
 } = {}) {
   const registry = registryOrDefault(workflowRegistry);
@@ -54,11 +54,11 @@ function workflowDefinitionCreationOptions({
 } = {}) {
   const registry = registryOrDefault(workflowRegistry);
   if (seedRequired) {
-    const definition = workflowDefinition(AI_STUDIO_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION, {
+    const definition = workflowDefinition(VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION, {
       workflowRegistry: registry
     });
     return {
-      defaultWorkflowDefinition: AI_STUDIO_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION,
+      defaultWorkflowDefinition: VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION,
       mode: "seed_required",
       requiredWorkflowDefinition: {
         description: definition.description,
@@ -70,7 +70,7 @@ function workflowDefinitionCreationOptions({
     };
   }
   return {
-    defaultWorkflowDefinition: DEFAULT_AI_STUDIO_WORKFLOW_DEFINITION_ID,
+    defaultWorkflowDefinition: DEFAULT_VIBE64_WORKFLOW_DEFINITION_ID,
     mode: "select",
     requiredWorkflowDefinition: null,
     seedRequired: false,
@@ -85,8 +85,8 @@ function workflowDefinitionCreationOptions({
 }
 
 export {
-  AI_STUDIO_WORKFLOW_DEFINITION_IDS,
-  DEFAULT_AI_STUDIO_WORKFLOW_DEFINITION_ID,
+  VIBE64_WORKFLOW_DEFINITION_IDS,
+  DEFAULT_VIBE64_WORKFLOW_DEFINITION_ID,
   ISSUE_FILE_STEP_ID,
   SEED_APPLICATION_STEP_ID,
   normalizeWorkflowDefinitionId,

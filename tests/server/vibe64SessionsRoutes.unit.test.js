@@ -5,17 +5,17 @@ import {
   ACTION_CREATE_SESSION,
   ACTION_LIST_SESSIONS,
   ACTION_READ_SESSION_CONVERSATION_LOG
-} from "../../packages/ai-studio-sessions/src/server/actions.js";
+} from "../../packages/vibe64-sessions/src/server/actions.js";
 import {
   _testing as coreMaintenanceTesting
-} from "@local/ai-studio-runtime/server/workflowModules/coreMaintenance";
-import { registerRoutes } from "../../packages/ai-studio-sessions/src/server/registerRoutes.js";
+} from "@local/vibe64-runtime/server/workflowModules/coreMaintenance";
+import { registerRoutes } from "../../packages/vibe64-sessions/src/server/registerRoutes.js";
 import {
   findRegisteredRoute,
   testReply,
   testRouteApp,
   withLocalRequestBypass
-} from "./aiStudioRouteTestHelpers.js";
+} from "./vibe64RouteTestHelpers.js";
 
 const maintenanceWorkflowDefinitionIds = coreMaintenanceTesting.workflowDefinitionIds;
 
@@ -23,13 +23,13 @@ test("session creation route forwards the selected workflow definition", async (
   await withLocalRequestBypass(async () => {
     const app = testRouteApp();
     registerRoutes(app, {
-      routeRelativePath: "ai-studio",
+      routeRelativePath: "vibe64",
       routeSurface: "home"
     });
 
     const route = findRegisteredRoute(app, {
       method: "POST",
-      path: "/api/ai-studio/sessions"
+      path: "/api/vibe64/sessions"
     });
     assert.ok(route);
 
@@ -63,13 +63,13 @@ test("session list route forwards the requested archive filter", async () => {
   await withLocalRequestBypass(async () => {
     const app = testRouteApp();
     registerRoutes(app, {
-      routeRelativePath: "ai-studio",
+      routeRelativePath: "vibe64",
       routeSurface: "home"
     });
 
     const route = findRegisteredRoute(app, {
       method: "GET",
-      path: "/api/ai-studio/sessions"
+      path: "/api/vibe64/sessions"
     });
     assert.ok(route);
 
@@ -107,13 +107,13 @@ test("session conversation log route forwards the session id", async () => {
   await withLocalRequestBypass(async () => {
     const app = testRouteApp();
     registerRoutes(app, {
-      routeRelativePath: "ai-studio",
+      routeRelativePath: "vibe64",
       routeSurface: "home"
     });
 
     const route = findRegisteredRoute(app, {
       method: "GET",
-      path: "/api/ai-studio/sessions/:sessionId/conversation-log"
+      path: "/api/vibe64/sessions/:sessionId/conversation-log"
     });
     assert.ok(route);
 

@@ -1,6 +1,6 @@
-function aiStudioErrorResponse(error, {
-  fallbackCode = "ai_studio_request_failed",
-  fallbackMessage = "AI Studio request failed."
+function vibe64ErrorResponse(error, {
+  fallbackCode = "vibe64_request_failed",
+  fallbackMessage = "Vibe64 request failed."
 } = {}) {
   const code = String(error?.code || fallbackCode);
   const message = String(error?.message || error || fallbackMessage);
@@ -28,30 +28,30 @@ function aiStudioErrorResponse(error, {
   };
 }
 
-async function aiStudioResult(operation, options = {}) {
+async function vibe64Result(operation, options = {}) {
   try {
     return await operation();
   } catch (error) {
-    return aiStudioErrorResponse(error, options);
+    return vibe64ErrorResponse(error, options);
   }
 }
 
-function aiStudioStatusCode(response, { missingStatus = 404 } = {}) {
+function vibe64StatusCode(response, { missingStatus = 404 } = {}) {
   const code = response?.errors?.[0]?.code || "";
-  if (code === "ai_studio_session_not_found") {
+  if (code === "vibe64_session_not_found") {
     return missingStatus;
   }
-  if (code.startsWith("ai_studio_invalid") || code === "ai_studio_project_type_missing") {
+  if (code.startsWith("vibe64_invalid") || code === "vibe64_project_type_missing") {
     return 400;
   }
   if (
-    code === "ai_studio_action_disabled" ||
-    code === "ai_studio_action_not_available" ||
-    code === "ai_studio_command_requires_terminal" ||
-    code === "ai_studio_project_config_missing" ||
-    code === "ai_studio_setup_not_ready" ||
-    code === "ai_studio_step_input_state_changed" ||
-    code === "ai_studio_step_not_ready"
+    code === "vibe64_action_disabled" ||
+    code === "vibe64_action_not_available" ||
+    code === "vibe64_command_requires_terminal" ||
+    code === "vibe64_project_config_missing" ||
+    code === "vibe64_setup_not_ready" ||
+    code === "vibe64_step_input_state_changed" ||
+    code === "vibe64_step_not_ready"
   ) {
     return 409;
   }
@@ -68,9 +68,9 @@ function normalizePlainObject(value) {
 }
 
 export {
-  aiStudioErrorResponse,
-  aiStudioResult,
-  aiStudioStatusCode,
+  vibe64ErrorResponse,
+  vibe64Result,
+  vibe64StatusCode,
   normalizePlainObject,
   requestBodyObject
 };

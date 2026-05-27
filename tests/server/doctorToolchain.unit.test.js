@@ -11,7 +11,8 @@ import {
   STUDIO_PLAYWRIGHT_BROWSERS_VOLUME,
   STUDIO_TOOL_HOME_BIN_PATH,
   STUDIO_TOOL_HOME_NPM_PREFIX,
-  STUDIO_TOOL_HOME_PATH
+  STUDIO_TOOL_HOME_PATH,
+  STUDIO_TOOL_HOME_VOLUME
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
   assertDockerEnv,
@@ -29,8 +30,8 @@ test("doctor toolchain commands run with the shared Studio tool-home ownership c
   assertPlaywrightBrowserCache(args);
   assert.ok(args.includes(`HOME=${STUDIO_TOOL_HOME_PATH}`));
   assert.ok(args.includes(`NPM_CONFIG_PREFIX=${STUDIO_TOOL_HOME_NPM_PREFIX}`));
-  assert.ok(args.includes(`AI_STUDIO_HOST_UID=${process.getuid()}`));
-  assert.ok(args.includes(`AI_STUDIO_HOST_GID=${process.getgid()}`));
+  assert.ok(args.includes(`VIBE64_HOST_UID=${process.getuid()}`));
+  assert.ok(args.includes(`VIBE64_HOST_GID=${process.getgid()}`));
 
   const imageIndex = args.indexOf(STUDIO_BASE_TOOLCHAIN_IMAGE);
   assert.notEqual(imageIndex, -1);
@@ -40,8 +41,8 @@ test("doctor toolchain commands run with the shared Studio tool-home ownership c
   assert.ok(startupScript.includes(`export HOME=${STUDIO_TOOL_HOME_PATH}`));
   assert.ok(startupScript.includes(`export NPM_CONFIG_PREFIX=${STUDIO_TOOL_HOME_NPM_PREFIX}`));
   assert.ok(startupScript.includes(`export PATH=${STUDIO_TOOL_HOME_BIN_PATH}:$PATH`));
-  assert.match(startupScript, /chown -R "\$AI_STUDIO_HOST_UID:\$AI_STUDIO_HOST_GID" "\$HOME"/u);
-  assert.match(startupScript, /setpriv --reuid "\$AI_STUDIO_HOST_UID" --regid "\$AI_STUDIO_HOST_GID"/u);
+  assert.match(startupScript, /chown -R "\$VIBE64_HOST_UID:\$VIBE64_HOST_GID" "\$HOME"/u);
+  assert.match(startupScript, /setpriv --reuid "\$VIBE64_HOST_UID" --regid "\$VIBE64_HOST_GID"/u);
   assert.match(startupScript, /npm prefix -g/u);
 });
 
@@ -56,7 +57,7 @@ test("doctor toolchain host-user commands use a temporary writable home", () => 
   });
 
   assertPlaywrightBrowserCache(args);
-  assert.equal(args.includes("ai_studio_tool_home:/home/studio"), false);
+  assert.equal(args.includes(`${STUDIO_TOOL_HOME_VOLUME}:${STUDIO_TOOL_HOME_PATH}`), false);
   assert.equal(args.includes(`NPM_CONFIG_PREFIX=${STUDIO_TOOL_HOME_NPM_PREFIX}`), false);
   assert.ok(args.includes("HOME=/tmp/studio-home"));
 

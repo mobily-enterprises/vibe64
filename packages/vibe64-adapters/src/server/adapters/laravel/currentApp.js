@@ -5,7 +5,7 @@ import {
   inspectDescribedCurrentApp
 } from "../../currentAppInspection.js";
 import {
-  createAiStudioTargetScriptTerminalSpec,
+  createVibe64TargetScriptTerminalSpec,
   targetScriptError
 } from "@local/studio-terminal-core/server/targetScriptTerminal";
 import {
@@ -164,7 +164,7 @@ async function createLaravelTargetScriptTerminalSpec(targetRoot, input = {}) {
   if (scriptsResult.ok === false) {
     return scriptsResult;
   }
-  return createAiStudioTargetScriptTerminalSpec({
+  return createVibe64TargetScriptTerminalSpec({
     adapterId: "laravel",
     image: LARAVEL_TOOLCHAIN_IMAGE,
     input,

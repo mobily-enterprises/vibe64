@@ -4,19 +4,19 @@ import path from "node:path";
 import test from "node:test";
 
 import {
-  AiStudioSessionRuntime
-} from "@local/ai-studio-runtime/server";
+  Vibe64SessionRuntime
+} from "@local/vibe64-runtime/server";
 import {
-  createAiStudioAdapterRegistry
-} from "@local/ai-studio-adapters/server/adapters/registry";
+  createVibe64AdapterRegistry
+} from "@local/vibe64-adapters/server/adapters/registry";
 import {
-  CPP_AI_STUDIO_COMMANDS,
+  CPP_VIBE64_COMMANDS,
   CPP_TOOLCHAIN_IMAGE,
   createCppSetupDoctorPlugin,
   createCppTargetAdapter,
   seedCppProjectScript
-} from "@local/ai-studio-adapters/server/adapters/cpp/index";
-import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
+} from "@local/vibe64-adapters/server/adapters/cpp/index";
+import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 async function writeProjectFile(root, relativePath, text = "") {
   const filePath = path.join(root, relativePath);
@@ -52,13 +52,13 @@ async function createCppProject(root) {
 }
 
 function commandIds() {
-  return CPP_AI_STUDIO_COMMANDS
+  return CPP_VIBE64_COMMANDS
     .map((command) => command.id)
     .sort((left, right) => left.localeCompare(right));
 }
 
 test("cpp adapter is registered as an implemented project type", async () => {
-  const registry = createAiStudioAdapterRegistry();
+  const registry = createVibe64AdapterRegistry();
   const projectTypes = registry.availableProjectTypes();
   const cppProjectType = projectTypes.find((type) => type.id === "cpp");
 
@@ -154,7 +154,7 @@ test("cpp adapter composes prompt blueprints from independent config choices", a
 test("cpp prompt actions use the C++ prompt pack", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createCppProject(targetRoot);
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       adapter: createCppTargetAdapter(),
       projectConfig: {
         values: {
@@ -173,7 +173,7 @@ test("cpp prompt actions use the C++ prompt pack", async () => {
     assert.equal(afterPrompt.actionResult.status, "prompt_ready");
     assert.equal(afterPrompt.actionResult.promptContext.adapter.id, "cpp");
     assert.equal(afterPrompt.actionResult.promptContext.adapter.promptContext.cpp_standard, "C++23");
-    assert.match(afterPrompt.actionResult.prompt, /AI Studio standard planning instructions/u);
+    assert.match(afterPrompt.actionResult.prompt, /Vibe64 standard planning instructions/u);
     assert.match(afterPrompt.actionResult.prompt, /Create the implementation plan for this C\+\+ project/u);
     assert.match(afterPrompt.actionResult.prompt, /C\+\+ selected blueprint:/u);
     assert.match(afterPrompt.actionResult.prompt, /C\+\+ standard: C\+\+23/u);
@@ -256,7 +256,7 @@ test("cpp setup checks the full C++ toolchain inside the adapter image", async (
     }
 
     assert.equal(dockerCalls[0].command, "docker");
-    assert.match(dockerCalls[0].args.join(" "), /image inspect ai-studio-cpp-toolchain:0\.1\.0/u);
+    assert.match(dockerCalls[0].args.join(" "), /image inspect vibe64-cpp-toolchain:0\.1\.0/u);
     assert.ok(dockerCalls.some((call) => /c\+\+ --version/u.test(call.args.join(" "))));
     assert.ok(dockerCalls.some((call) => /cmake --version/u.test(call.args.join(" "))));
     assert.ok(dockerCalls.some((call) => /ninja --version/u.test(call.args.join(" "))));

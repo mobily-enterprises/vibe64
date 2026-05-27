@@ -1,25 +1,25 @@
 import {
-  AI_STUDIO_SESSION_STATUS,
+  VIBE64_SESSION_STATUS,
   workflowDefinitionCreationOptions
-} from "@local/ai-studio-runtime/server";
+} from "@local/vibe64-runtime/server";
 import {
-  aiStudioResult
-} from "@local/ai-studio-core/server/serverResponses";
+  vibe64Result
+} from "@local/vibe64-core/server/serverResponses";
 import {
-  aiStudioSessionDebugDurationMs,
-  aiStudioSessionDebugError,
-  aiStudioSessionDebugLog,
-  aiStudioSessionDebugSummary
-} from "@local/ai-studio-runtime/server/sessionDebugLog";
+  vibe64SessionDebugDurationMs,
+  vibe64SessionDebugError,
+  vibe64SessionDebugLog,
+  vibe64SessionDebugSummary
+} from "@local/vibe64-runtime/server/sessionDebugLog";
 import {
-  assertAiStudioSetupReady
-} from "@local/ai-studio-runtime/server/setupReadiness";
+  assertVibe64SetupReady
+} from "@local/vibe64-runtime/server/setupReadiness";
 import {
   terminalFailureFixRequestForSession
-} from "@local/ai-studio-runtime/server/terminalFailureFixRequest";
+} from "@local/vibe64-runtime/server/terminalFailureFixRequest";
 import { inspectSessionDiff } from "./sessionDiff.js";
 
-const MAX_OPEN_AI_STUDIO_SESSIONS = 5;
+const MAX_OPEN_VIBE64_SESSIONS = 5;
 const CLOSED_SESSION_STATUSES = new Set(["abandoned", "finished"]);
 const SESSION_ARCHIVE_QUERY = Object.freeze({
   ABANDONED: "abandoned",
@@ -28,13 +28,13 @@ const SESSION_ARCHIVE_QUERY = Object.freeze({
 });
 
 function sessionResult(operation) {
-  return aiStudioResult(operation, {
-    fallbackCode: "ai_studio_session_request_failed",
-    fallbackMessage: "AI Studio session request failed."
+  return vibe64Result(operation, {
+    fallbackCode: "vibe64_session_request_failed",
+    fallbackMessage: "Vibe64 session request failed."
   });
 }
 
-function isOpenAiStudioSession(session = {}) {
+function isOpenVibe64Session(session = {}) {
   return !CLOSED_SESSION_STATUSES.has(String(session.status || ""));
 }
 
@@ -55,7 +55,7 @@ function sessionListOptions(input = {}) {
     return {
       runtimeOptions: {
         statusGroup: "closed",
-        statuses: [AI_STUDIO_SESSION_STATUS.ABANDONED]
+        statuses: [VIBE64_SESSION_STATUS.ABANDONED]
       }
     };
   }
@@ -63,11 +63,11 @@ function sessionListOptions(input = {}) {
     return {
       runtimeOptions: {
         statusGroup: "closed",
-        statuses: [AI_STUDIO_SESSION_STATUS.FINISHED]
+        statuses: [VIBE64_SESSION_STATUS.FINISHED]
       }
     };
   }
-  throw new Error(`Unknown AI Studio session archive: ${archive}`);
+  throw new Error(`Unknown Vibe64 session archive: ${archive}`);
 }
 
 async function listSessionSummaries(runtime, options = {}) {
@@ -185,31 +185,31 @@ async function enrichSessionWithCodexTerminal(terminalService, session = {}) {
     return session;
   }
   if (typeof terminalService?.codexTerminalState !== "function") {
-    aiStudioSessionDebugLog("server.service.codexTerminalState.skipped", {
+    vibe64SessionDebugLog("server.service.codexTerminalState.skipped", {
       reason: "service_unavailable",
       sessionId: session.sessionId
     });
     return withCodexTerminalState(session, {});
   }
   const startedAtMs = Date.now();
-  aiStudioSessionDebugLog("server.service.codexTerminalState.start", {
+  vibe64SessionDebugLog("server.service.codexTerminalState.start", {
     sessionId: session.sessionId
   });
   const terminalState = await terminalService.codexTerminalState(session.sessionId);
   if (terminalState?.ok === false) {
-    aiStudioSessionDebugLog("server.service.codexTerminalState.error", {
-      durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
-      error: String(terminalState.error || "AI Studio Codex terminal state could not be read."),
+    vibe64SessionDebugLog("server.service.codexTerminalState.error", {
+      durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+      error: String(terminalState.error || "Vibe64 Codex terminal state could not be read."),
       sessionId: session.sessionId
     });
-    throw new Error(terminalState.error || "AI Studio Codex terminal state could not be read.");
+    throw new Error(terminalState.error || "Vibe64 Codex terminal state could not be read.");
   }
   const enrichedSession = withCodexTerminalState(session, terminalState || {});
-  aiStudioSessionDebugLog("server.service.codexTerminalState.done", {
-    ...aiStudioSessionDebugSummary(enrichedSession),
+  vibe64SessionDebugLog("server.service.codexTerminalState.done", {
+    ...vibe64SessionDebugSummary(enrichedSession),
     codexTerminalId: String(enrichedSession.codexTerminal?.id || ""),
     codexTerminalStatus: String(enrichedSession.codexTerminal?.status || ""),
-    durationMs: aiStudioSessionDebugDurationMs(startedAtMs)
+    durationMs: vibe64SessionDebugDurationMs(startedAtMs)
   });
   return enrichedSession;
 }
@@ -217,36 +217,36 @@ async function enrichSessionWithCodexTerminal(terminalService, session = {}) {
 async function deliverCodexPromptIfNeeded(terminalService, session = {}) {
   const handoff = codexPromptHandoffFromSession(session);
   if (!handoff) {
-    aiStudioSessionDebugLog("server.service.deliverCodexPrompt.skipped", {
+    vibe64SessionDebugLog("server.service.deliverCodexPrompt.skipped", {
       reason: "no_handoff",
       sessionId: String(session?.sessionId || "")
     });
     return session;
   }
   if (typeof terminalService?.injectCodexPrompt !== "function") {
-    aiStudioSessionDebugLog("server.service.deliverCodexPrompt.error", {
-      error: "AI Studio Codex prompt delivery service is not available.",
+    vibe64SessionDebugLog("server.service.deliverCodexPrompt.error", {
+      error: "Vibe64 Codex prompt delivery service is not available.",
       sessionId: String(session?.sessionId || "")
     });
-    throw new Error("AI Studio Codex prompt delivery service is not available.");
+    throw new Error("Vibe64 Codex prompt delivery service is not available.");
   }
   const startedAtMs = Date.now();
-  aiStudioSessionDebugLog("server.service.deliverCodexPrompt.start", {
+  vibe64SessionDebugLog("server.service.deliverCodexPrompt.start", {
     promptId: String(handoff.promptId || ""),
     sessionId: session.sessionId
   });
   const delivery = await terminalService.injectCodexPrompt(session.sessionId, handoff);
   if (delivery?.ok === false) {
-    aiStudioSessionDebugLog("server.service.deliverCodexPrompt.error", {
-      durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
-      error: String(delivery.error || "AI Studio Codex prompt delivery failed."),
+    vibe64SessionDebugLog("server.service.deliverCodexPrompt.error", {
+      durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+      error: String(delivery.error || "Vibe64 Codex prompt delivery failed."),
       promptId: String(handoff.promptId || ""),
       sessionId: session.sessionId
     });
-    throw new Error(delivery.error || "AI Studio Codex prompt delivery failed.");
+    throw new Error(delivery.error || "Vibe64 Codex prompt delivery failed.");
   }
-  aiStudioSessionDebugLog("server.service.deliverCodexPrompt.done", {
-    durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
+  vibe64SessionDebugLog("server.service.deliverCodexPrompt.done", {
+    durationMs: vibe64SessionDebugDurationMs(startedAtMs),
     promptId: String(handoff.promptId || ""),
     sessionId: session.sessionId,
     terminalSessionId: String(delivery?.terminalSessionId || "")
@@ -258,17 +258,17 @@ async function deliverCodexPromptIfNeeded(terminalService, session = {}) {
 }
 
 function sessionLimits(sessions = [], {
-  maxOpenSessions = MAX_OPEN_AI_STUDIO_SESSIONS
+  maxOpenSessions = MAX_OPEN_VIBE64_SESSIONS
 } = {}) {
   return {
     maxOpenSessions,
-    openSessionCount: sessions.filter(isOpenAiStudioSession).length
+    openSessionCount: sessions.filter(isOpenVibe64Session).length
   };
 }
 
 function sessionNeedsMainCheckoutSync(session = {}) {
   const metadata = session.metadata || {};
-  return isOpenAiStudioSession(session) &&
+  return isOpenVibe64Session(session) &&
     String(metadata.pr_merged || "").trim() &&
     !String(metadata.main_checkout_synced || "").trim() &&
     !String(metadata.merge_skipped || "").trim();
@@ -300,7 +300,7 @@ async function workflowCreationOptions(runtime) {
 async function sessionCreationState(runtime, sessions = []) {
   const workflow = await workflowCreationOptions(runtime);
   const limits = sessionLimits(sessions, {
-    maxOpenSessions: workflow.seedRequired ? 1 : MAX_OPEN_AI_STUDIO_SESSIONS
+    maxOpenSessions: workflow.seedRequired ? 1 : MAX_OPEN_VIBE64_SESSIONS
   });
   return {
     creation: {
@@ -316,7 +316,7 @@ async function sessionCreationState(runtime, sessions = []) {
 
 function sessionLimitMessage(limits = {}, workflow = {}) {
   if (workflow.seedRequired) {
-    return "The first AI Studio session must seed the application. Finish or abandon the current seed session before creating another session.";
+    return "The first Vibe64 session must seed the application. Finish or abandon the current seed session before creating another session.";
   }
   return `Studio allows up to ${limits.maxOpenSessions} active sessions at once. Finish or abandon one before creating another.`;
 }
@@ -337,7 +337,7 @@ function selectedWorkflowDefinitionId(input = {}, creation = {}) {
   if (!definitionId || !allowedDefinitionIds.has(definitionId)) {
     return {
       error: creation.seedRequired
-        ? "The first AI Studio session must seed the application, so no other workflow definition can be selected yet."
+        ? "The first Vibe64 session must seed the application, so no other workflow definition can be selected yet."
         : "Choose one of the available workflow definitions before creating a session.",
       definitionId: ""
     };
@@ -355,7 +355,7 @@ function sessionServiceDebugResponse(response = {}) {
     };
   }
   return {
-    ...aiStudioSessionDebugSummary(response),
+    ...vibe64SessionDebugSummary(response),
     code: String(response.code || response.errors?.[0]?.code || ""),
     ok: response.ok !== false,
     status: String(response.status || "")
@@ -368,13 +368,13 @@ function createService({
   terminalService
 } = {}) {
   if (!projectService) {
-    throw new TypeError("createService requires feature.ai-studio-project.service.");
+    throw new TypeError("createService requires feature.vibe64-project.service.");
   }
 
   return Object.freeze({
     async advanceSession(sessionId) {
       const startedAtMs = Date.now();
-      aiStudioSessionDebugLog("server.service.advanceSession.start", {
+      vibe64SessionDebugLog("server.service.advanceSession.start", {
         sessionId
       });
       return sessionResult(async () => {
@@ -382,15 +382,15 @@ function createService({
           const runtime = await projectService.createRuntime();
           const session = await runtime.advance(sessionId);
           const enrichedSession = await enrichSessionWithCodexTerminal(terminalService, session);
-          aiStudioSessionDebugLog("server.service.advanceSession.done", {
+          vibe64SessionDebugLog("server.service.advanceSession.done", {
             ...sessionServiceDebugResponse(enrichedSession),
-            durationMs: aiStudioSessionDebugDurationMs(startedAtMs)
+            durationMs: vibe64SessionDebugDurationMs(startedAtMs)
           });
           return enrichedSession;
         } catch (error) {
-          aiStudioSessionDebugLog("server.service.advanceSession.error", {
-            durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
-            error: aiStudioSessionDebugError(error),
+          vibe64SessionDebugLog("server.service.advanceSession.error", {
+            durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+            error: vibe64SessionDebugError(error),
             sessionId
           });
           throw error;
@@ -400,24 +400,24 @@ function createService({
 
     async abandonSession(sessionId) {
       const startedAtMs = Date.now();
-      aiStudioSessionDebugLog("server.service.abandonSession.start", {
+      vibe64SessionDebugLog("server.service.abandonSession.start", {
         sessionId
       });
       return sessionResult(async () => {
         try {
           const runtime = await projectService.createRuntime();
-          await runtime.store.writeStatus(sessionId, AI_STUDIO_SESSION_STATUS.ABANDONED);
+          await runtime.store.writeStatus(sessionId, VIBE64_SESSION_STATUS.ABANDONED);
           await terminalService?.closeSessionTerminals?.(sessionId);
           const enrichedSession = await enrichSessionWithCodexTerminal(terminalService, await runtime.getSession(sessionId));
-          aiStudioSessionDebugLog("server.service.abandonSession.done", {
+          vibe64SessionDebugLog("server.service.abandonSession.done", {
             ...sessionServiceDebugResponse(enrichedSession),
-            durationMs: aiStudioSessionDebugDurationMs(startedAtMs)
+            durationMs: vibe64SessionDebugDurationMs(startedAtMs)
           });
           return enrichedSession;
         } catch (error) {
-          aiStudioSessionDebugLog("server.service.abandonSession.error", {
-            durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
-            error: aiStudioSessionDebugError(error),
+          vibe64SessionDebugLog("server.service.abandonSession.error", {
+            durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+            error: vibe64SessionDebugError(error),
             sessionId
           });
           throw error;
@@ -427,28 +427,28 @@ function createService({
 
     async createSession(input = {}) {
       const startedAtMs = Date.now();
-      aiStudioSessionDebugLog("server.service.createSession.start", {
+      vibe64SessionDebugLog("server.service.createSession.start", {
         workflowDefinition: String(input?.workflowDefinition || "")
       });
       return sessionResult(async () => {
         try {
           const projectType = await projectService.requireProjectType();
-          await assertAiStudioSetupReady(setupServices);
+          await assertVibe64SetupReady(setupServices);
           const runtime = await projectService.createRuntime();
           const existingOpenSessions = await listOpenSessionSummaries(runtime);
           const { creation, limits } = await sessionCreationState(runtime, existingOpenSessions);
-          aiStudioSessionDebugLog("server.service.createSession.creationState", {
+          vibe64SessionDebugLog("server.service.createSession.creationState", {
             canCreate: creation.canCreate === true,
-            durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
+            durationMs: vibe64SessionDebugDurationMs(startedAtMs),
             maxOpenSessions: limits.maxOpenSessions,
             openSessionCount: limits.openSessionCount,
             requestedWorkflowDefinition: String(input?.workflowDefinition || ""),
             seedRequired: creation.seedRequired === true
           });
           if (limits.openSessionCount >= limits.maxOpenSessions) {
-            aiStudioSessionDebugLog("server.service.createSession.blocked", {
+            vibe64SessionDebugLog("server.service.createSession.blocked", {
               code: "open_session_limit",
-              durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
+              durationMs: vibe64SessionDebugDurationMs(startedAtMs),
               maxOpenSessions: limits.maxOpenSessions,
               openSessionCount: limits.openSessionCount
             });
@@ -468,10 +468,10 @@ function createService({
           }
           const syncBlocker = mainCheckoutSyncBlocker(existingOpenSessions);
           if (syncBlocker) {
-            aiStudioSessionDebugLog("server.service.createSession.blocked", {
+            vibe64SessionDebugLog("server.service.createSession.blocked", {
               blockerSessionId: syncBlocker.sessionId,
               code: "main_checkout_sync_required",
-              durationMs: aiStudioSessionDebugDurationMs(startedAtMs)
+              durationMs: vibe64SessionDebugDurationMs(startedAtMs)
             });
             return {
               errors: [
@@ -493,9 +493,9 @@ function createService({
           }
           const definitionSelection = selectedWorkflowDefinitionId(input, creation);
           if (definitionSelection.error) {
-            aiStudioSessionDebugLog("server.service.createSession.blocked", {
+            vibe64SessionDebugLog("server.service.createSession.blocked", {
               code: "workflow_definition_not_available",
-              durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
+              durationMs: vibe64SessionDebugDurationMs(startedAtMs),
               requestedWorkflowDefinition: String(input?.workflowDefinition || "")
             });
             return {
@@ -512,7 +512,7 @@ function createService({
               status: "blocked"
             };
           }
-          aiStudioSessionDebugLog("server.service.createSession.runtimeCreate.start", {
+          vibe64SessionDebugLog("server.service.createSession.runtimeCreate.start", {
             adapterId: projectType.adapter?.id || projectType.projectType,
             projectType: projectType.projectType,
             workflowDefinition: definitionSelection.definitionId
@@ -524,34 +524,34 @@ function createService({
             },
             workflowDefinition: definitionSelection.definitionId
           });
-          aiStudioSessionDebugLog("server.service.createSession.runtimeCreate.done", {
+          vibe64SessionDebugLog("server.service.createSession.runtimeCreate.done", {
             ...sessionServiceDebugResponse(session),
-            durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
+            durationMs: vibe64SessionDebugDurationMs(startedAtMs),
             workflowDefinition: definitionSelection.definitionId
           });
-          aiStudioSessionDebugLog("server.service.createSession.initialAdvance.start", {
+          vibe64SessionDebugLog("server.service.createSession.initialAdvance.start", {
             currentStep: session.currentStep,
             sessionId: session.sessionId,
             workflowDefinition: definitionSelection.definitionId
           });
           const advancedSession = await runtime.advance(session.sessionId);
-          aiStudioSessionDebugLog("server.service.createSession.initialAdvance.done", {
+          vibe64SessionDebugLog("server.service.createSession.initialAdvance.done", {
             ...sessionServiceDebugResponse(advancedSession),
-            durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
+            durationMs: vibe64SessionDebugDurationMs(startedAtMs),
             fromStepId: session.currentStep,
             workflowDefinition: definitionSelection.definitionId
           });
           const enrichedSession = await enrichSessionWithCodexTerminal(terminalService, advancedSession);
-          aiStudioSessionDebugLog("server.service.createSession.done", {
+          vibe64SessionDebugLog("server.service.createSession.done", {
             ...sessionServiceDebugResponse(enrichedSession),
-            durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
+            durationMs: vibe64SessionDebugDurationMs(startedAtMs),
             workflowDefinition: definitionSelection.definitionId
           });
           return enrichedSession;
         } catch (error) {
-          aiStudioSessionDebugLog("server.service.createSession.error", {
-            durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
-            error: aiStudioSessionDebugError(error),
+          vibe64SessionDebugLog("server.service.createSession.error", {
+            durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+            error: vibe64SessionDebugError(error),
             workflowDefinition: String(input?.workflowDefinition || "")
           });
           throw error;
@@ -561,22 +561,22 @@ function createService({
 
     async inspectSession(sessionId) {
       const startedAtMs = Date.now();
-      aiStudioSessionDebugLog("server.service.inspectSession.start", {
+      vibe64SessionDebugLog("server.service.inspectSession.start", {
         sessionId
       });
       return sessionResult(async () => {
         try {
           const runtime = await projectService.createRuntime();
           const session = await enrichSessionWithCodexTerminal(terminalService, await runtime.getSession(sessionId));
-          aiStudioSessionDebugLog("server.service.inspectSession.done", {
+          vibe64SessionDebugLog("server.service.inspectSession.done", {
             ...sessionServiceDebugResponse(session),
-            durationMs: aiStudioSessionDebugDurationMs(startedAtMs)
+            durationMs: vibe64SessionDebugDurationMs(startedAtMs)
           });
           return session;
         } catch (error) {
-          aiStudioSessionDebugLog("server.service.inspectSession.error", {
-            durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
-            error: aiStudioSessionDebugError(error),
+          vibe64SessionDebugLog("server.service.inspectSession.error", {
+            durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+            error: vibe64SessionDebugError(error),
             sessionId
           });
           throw error;
@@ -586,7 +586,7 @@ function createService({
 
     async readSessionConversationLog(sessionId) {
       const startedAtMs = Date.now();
-      aiStudioSessionDebugLog("server.service.readSessionConversationLog.start", {
+      vibe64SessionDebugLog("server.service.readSessionConversationLog.start", {
         sessionId
       });
       return sessionResult(async () => {
@@ -602,16 +602,16 @@ function createService({
             revision: session.revision,
             sessionId: session.sessionId
           };
-          aiStudioSessionDebugLog("server.service.readSessionConversationLog.done", {
-            durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
+          vibe64SessionDebugLog("server.service.readSessionConversationLog.done", {
+            durationMs: vibe64SessionDebugDurationMs(startedAtMs),
             sessionId,
             turnCount: conversationLog.length
           });
           return response;
         } catch (error) {
-          aiStudioSessionDebugLog("server.service.readSessionConversationLog.error", {
-            durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
-            error: aiStudioSessionDebugError(error),
+          vibe64SessionDebugLog("server.service.readSessionConversationLog.error", {
+            durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+            error: vibe64SessionDebugError(error),
             sessionId
           });
           throw error;
@@ -628,7 +628,7 @@ function createService({
 
     async buildTerminalFailureFixRequest(sessionId, input = {}) {
       const startedAtMs = Date.now();
-      aiStudioSessionDebugLog("server.service.buildTerminalFailureFixRequest.start", {
+      vibe64SessionDebugLog("server.service.buildTerminalFailureFixRequest.start", {
         sessionId,
         terminalKind: String(input?.terminalKind || "")
       });
@@ -637,16 +637,16 @@ function createService({
           const runtime = await projectService.createRuntime();
           const session = await runtime.getSession(sessionId);
           const request = terminalFailureFixRequestForSession(session, input);
-          aiStudioSessionDebugLog("server.service.buildTerminalFailureFixRequest.done", {
-            durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
+          vibe64SessionDebugLog("server.service.buildTerminalFailureFixRequest.done", {
+            durationMs: vibe64SessionDebugDurationMs(startedAtMs),
             outputTailLength: request.outputTail.length,
             sessionId
           });
           return request;
         } catch (error) {
-          aiStudioSessionDebugLog("server.service.buildTerminalFailureFixRequest.error", {
-            durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
-            error: aiStudioSessionDebugError(error),
+          vibe64SessionDebugLog("server.service.buildTerminalFailureFixRequest.error", {
+            durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+            error: vibe64SessionDebugError(error),
             sessionId
           });
           throw error;
@@ -656,25 +656,25 @@ function createService({
 
     async recoverStuckSessionStep(sessionId) {
       const startedAtMs = Date.now();
-      aiStudioSessionDebugLog("server.service.recoverStuckSessionStep.start", {
+      vibe64SessionDebugLog("server.service.recoverStuckSessionStep.start", {
         sessionId
       });
       return sessionResult(async () => {
         try {
-          await assertAiStudioSetupReady(setupServices);
+          await assertVibe64SetupReady(setupServices);
           const runtime = await projectService.createRuntime();
           await terminalService?.closeSessionNonCodexTerminals?.(sessionId);
           const session = await runtime.recoverStuckStep(sessionId);
           const enrichedSession = await enrichSessionWithCodexTerminal(terminalService, session);
-          aiStudioSessionDebugLog("server.service.recoverStuckSessionStep.done", {
+          vibe64SessionDebugLog("server.service.recoverStuckSessionStep.done", {
             ...sessionServiceDebugResponse(enrichedSession),
-            durationMs: aiStudioSessionDebugDurationMs(startedAtMs)
+            durationMs: vibe64SessionDebugDurationMs(startedAtMs)
           });
           return enrichedSession;
         } catch (error) {
-          aiStudioSessionDebugLog("server.service.recoverStuckSessionStep.error", {
-            durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
-            error: aiStudioSessionDebugError(error),
+          vibe64SessionDebugLog("server.service.recoverStuckSessionStep.error", {
+            durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+            error: vibe64SessionDebugError(error),
             sessionId
           });
           throw error;
@@ -684,7 +684,7 @@ function createService({
 
     async listSessions(input = {}) {
       const startedAtMs = Date.now();
-      aiStudioSessionDebugLog("server.service.listSessions.start", {
+      vibe64SessionDebugLog("server.service.listSessions.start", {
         archive: String(input?.archive || "")
       });
       return sessionResult(async () => {
@@ -697,18 +697,18 @@ function createService({
             ? sessions
             : await listOpenSessionSummaries(runtime);
           const response = sessionListResponse(sessions, await sessionCreationState(runtime, openSessions));
-          aiStudioSessionDebugLog("server.service.listSessions.done", {
+          vibe64SessionDebugLog("server.service.listSessions.done", {
             archive: String(input?.archive || ""),
-            durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
+            durationMs: vibe64SessionDebugDurationMs(startedAtMs),
             openSessionCount: response.limits?.openSessionCount ?? null,
             sessionCount: response.sessions.length
           });
           return response;
         } catch (error) {
-          aiStudioSessionDebugLog("server.service.listSessions.error", {
+          vibe64SessionDebugLog("server.service.listSessions.error", {
             archive: String(input?.archive || ""),
-            durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
-            error: aiStudioSessionDebugError(error)
+            durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+            error: vibe64SessionDebugError(error)
           });
           throw error;
         }
@@ -717,13 +717,13 @@ function createService({
 
     async runSessionAction(sessionId, actionId, input = {}) {
       const startedAtMs = Date.now();
-      aiStudioSessionDebugLog("server.service.runSessionAction.start", {
+      vibe64SessionDebugLog("server.service.runSessionAction.start", {
         actionId,
         sessionId
       });
       return sessionResult(async () => {
         try {
-          await assertAiStudioSetupReady(setupServices);
+          await assertVibe64SetupReady(setupServices);
           const runtime = await projectService.createRuntime();
           let session = await runtime.runAction(sessionId, actionId, input);
           const conversationTurn = await recordConversationUserMessage(runtime, sessionId, {
@@ -733,12 +733,12 @@ function createService({
           if (conversationTurn) {
             session = await sessionWithLatestRevision(runtime, session);
           }
-          if (!isOpenAiStudioSession(session)) {
+          if (!isOpenVibe64Session(session)) {
             await terminalService?.closeSessionTerminals?.(sessionId);
-            aiStudioSessionDebugLog("server.service.runSessionAction.done", {
+            vibe64SessionDebugLog("server.service.runSessionAction.done", {
               ...sessionServiceDebugResponse(session),
               actionId,
-              durationMs: aiStudioSessionDebugDurationMs(startedAtMs)
+              durationMs: vibe64SessionDebugDurationMs(startedAtMs)
             });
             return session;
           }
@@ -746,18 +746,18 @@ function createService({
             terminalService,
             await deliverCodexPromptIfNeeded(terminalService, session)
           );
-          aiStudioSessionDebugLog("server.service.runSessionAction.done", {
+          vibe64SessionDebugLog("server.service.runSessionAction.done", {
             ...sessionServiceDebugResponse(enrichedSession),
             actionId,
             actionResultStatus: String(enrichedSession.actionResult?.status || ""),
-            durationMs: aiStudioSessionDebugDurationMs(startedAtMs)
+            durationMs: vibe64SessionDebugDurationMs(startedAtMs)
           });
           return enrichedSession;
         } catch (error) {
-          aiStudioSessionDebugLog("server.service.runSessionAction.error", {
+          vibe64SessionDebugLog("server.service.runSessionAction.error", {
             actionId,
-            durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
-            error: aiStudioSessionDebugError(error),
+            durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+            error: vibe64SessionDebugError(error),
             sessionId
           });
           throw error;
@@ -767,7 +767,7 @@ function createService({
 
     async runSessionIntent(sessionId, intentId, input = {}) {
       const startedAtMs = Date.now();
-      aiStudioSessionDebugLog("server.service.runSessionIntent.start", {
+      vibe64SessionDebugLog("server.service.runSessionIntent.start", {
         intentId,
         sessionId,
         stepId: String(input?.stepId || ""),
@@ -775,7 +775,7 @@ function createService({
       });
       return sessionResult(async () => {
         try {
-          await assertAiStudioSetupReady(setupServices);
+          await assertVibe64SetupReady(setupServices);
           const runtime = await projectService.createRuntime();
           let session = await runtime.runIntent(sessionId, intentId, input);
           const conversationTurn = await recordConversationUserMessage(runtime, sessionId, {
@@ -785,11 +785,11 @@ function createService({
           if (conversationTurn) {
             session = await sessionWithLatestRevision(runtime, session);
           }
-          if (!isOpenAiStudioSession(session)) {
+          if (!isOpenVibe64Session(session)) {
             await terminalService?.closeSessionTerminals?.(sessionId);
-            aiStudioSessionDebugLog("server.service.runSessionIntent.done", {
+            vibe64SessionDebugLog("server.service.runSessionIntent.done", {
               ...sessionServiceDebugResponse(session),
-              durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
+              durationMs: vibe64SessionDebugDurationMs(startedAtMs),
               intentId
             });
             return session;
@@ -798,17 +798,17 @@ function createService({
             terminalService,
             await deliverCodexPromptIfNeeded(terminalService, session)
           );
-          aiStudioSessionDebugLog("server.service.runSessionIntent.done", {
+          vibe64SessionDebugLog("server.service.runSessionIntent.done", {
             ...sessionServiceDebugResponse(enrichedSession),
             actionResultStatus: String(enrichedSession.actionResult?.status || ""),
-            durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
+            durationMs: vibe64SessionDebugDurationMs(startedAtMs),
             intentId
           });
           return enrichedSession;
         } catch (error) {
-          aiStudioSessionDebugLog("server.service.runSessionIntent.error", {
-            durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
-            error: aiStudioSessionDebugError(error),
+          vibe64SessionDebugLog("server.service.runSessionIntent.error", {
+            durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+            error: vibe64SessionDebugError(error),
             intentId,
             sessionId
           });
@@ -819,27 +819,27 @@ function createService({
 
     async rewindSession(sessionId, stepId) {
       const startedAtMs = Date.now();
-      aiStudioSessionDebugLog("server.service.rewindSession.start", {
+      vibe64SessionDebugLog("server.service.rewindSession.start", {
         sessionId,
         stepId
       });
       return sessionResult(async () => {
         try {
-          await assertAiStudioSetupReady(setupServices);
+          await assertVibe64SetupReady(setupServices);
           const runtime = await projectService.createRuntime();
           const session = await runtime.rewind(sessionId, stepId);
           await terminalService?.closeSessionNonCodexTerminals?.(sessionId);
           const enrichedSession = await enrichSessionWithCodexTerminal(terminalService, session);
-          aiStudioSessionDebugLog("server.service.rewindSession.done", {
+          vibe64SessionDebugLog("server.service.rewindSession.done", {
             ...sessionServiceDebugResponse(enrichedSession),
-            durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
+            durationMs: vibe64SessionDebugDurationMs(startedAtMs),
             requestedStepId: stepId
           });
           return enrichedSession;
         } catch (error) {
-          aiStudioSessionDebugLog("server.service.rewindSession.error", {
-            durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
-            error: aiStudioSessionDebugError(error),
+          vibe64SessionDebugLog("server.service.rewindSession.error", {
+            durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+            error: vibe64SessionDebugError(error),
             sessionId,
             stepId
           });

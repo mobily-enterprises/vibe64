@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   commandTerminalCanRequestAiFix
-} from "../../src/composables/useAiStudioCommandTerminalController.js";
+} from "../../src/composables/useVibe64CommandTerminalController.js";
 
-describe("useAiStudioCommandTerminalController", () => {
+describe("useVibe64CommandTerminalController", () => {
   it("does not offer AI fixes while a terminal is still running", () => {
     expect(commandTerminalCanRequestAiFix({
       aiFixAvailable: true,

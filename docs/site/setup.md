@@ -1,6 +1,6 @@
 ---
 title: Setup
-description: The vibe-armor setup model.
+description: The vibe64 setup model.
 layout: doc
 aside: false
 ---
@@ -14,7 +14,7 @@ aside: false
     <span>CHECKED</span>
   </div>
   <p class="why-jskit-lead">
-    vibe-armor separates machine readiness, adapter readiness, and target
+    vibe64 separates machine readiness, adapter readiness, and target
     project readiness so each blocker has a clear owner.
   </p>
   <div class="why-jskit-signal-row">

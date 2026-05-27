@@ -1,23 +1,23 @@
 export default Object.freeze({
   packageVersion: 1,
-  packageId: "@local/ai-studio-terminals",
+  packageId: "@local/vibe64-terminals",
   version: "0.1.0",
   kind: "runtime",
-  description: "Owns AI Studio Codex and command terminal lifecycle.",
+  description: "Owns Vibe64 Codex and command terminal lifecycle.",
   dependsOn: [
     "@jskit-ai/kernel",
-    "@local/ai-studio-adapters",
-    "@local/ai-studio-core",
-    "@local/ai-studio-project",
-    "@local/ai-studio-runtime",
+    "@local/vibe64-adapters",
+    "@local/vibe64-core",
+    "@local/vibe64-project",
+    "@local/vibe64-runtime",
     "@local/studio-terminal-core"
   ],
   capabilities: {
     provides: [
-      "feature.ai-studio-terminals"
+      "feature.vibe64-terminals"
     ],
     requires: [
-      "feature.ai-studio-project",
+      "feature.vibe64-project",
       "runtime.actions"
     ]
   },
@@ -25,8 +25,8 @@ export default Object.freeze({
     server: {
       providers: [
         {
-          entrypoint: "src/server/AiStudioTerminalsProvider.js",
-          export: "AiStudioTerminalsProvider"
+          entrypoint: "src/server/Vibe64TerminalsProvider.js",
+          export: "Vibe64TerminalsProvider"
         }
       ]
     },
@@ -39,7 +39,7 @@ export default Object.freeze({
       surfaces: [
         {
           subpath: "./server/registerRoutes",
-          summary: "Registers AI Studio terminal, attachment, and Codex handoff routes."
+          summary: "Registers Vibe64 terminal, attachment, and Codex handoff routes."
         },
         {
           subpath: "./server/service",
@@ -48,7 +48,7 @@ export default Object.freeze({
       ],
       containerTokens: {
         server: [
-          "feature.ai-studio-terminals.service"
+          "feature.vibe64-terminals.service"
         ],
         client: []
       }

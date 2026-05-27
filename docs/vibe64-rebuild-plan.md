@@ -1,20 +1,20 @@
-# AI Studio Implementation Plan
+# Vibe64 Implementation Plan
 
-This plan describes the V0 implementation of the general `ai-studio` product.
+This plan describes the V0 implementation of the general `vibe64` product.
 
 V0 rules:
 
 - No alternate session support.
 - No compatibility wrappers.
 - No migration commands.
-- Runtime session state lives in `.ai-studio`.
+- Runtime session state lives in `.vibe64`.
 - No hidden fallbacks to JSKIT-specific behavior.
 
 The new product is a checklist-driven AI coding studio. The core owns workflow state. Target adapters own project-specific reality.
 
 ## Non-Negotiable Goals
 
-- Rename the product concept to `ai-studio`.
+- Rename the product concept to `vibe64`.
 - Move session state management out of JSKIT.
 - Create a clear class-based runtime that is easy to read.
 - Make JSKIT the first target adapter, not the state machine.
@@ -32,8 +32,8 @@ There is no command-line product surface in this rebuild.
 
 This means:
 
-- Do not create an `ai-studio` binary.
-- Do not create `ai-studio session ...` commands.
+- Do not create an `vibe64` binary.
+- Do not create `vibe64 session ...` commands.
 - Do not design the workflow around copy/paste CLI usage.
 - Do not add CLI-specific tests.
 - Do not keep CLI placeholders in slices.
@@ -54,7 +54,7 @@ The runtime still needs a clean programmatic API because Studio must call it. Th
 
 ## Product Shape
 
-AI Studio has three layers:
+Vibe64 has three layers:
 
 1. Core runtime
 2. Target adapters
@@ -95,7 +95,7 @@ The UI must not own workflow state.
 
 ## Important Design Decisions
 
-Canonical AI Studio design decisions live in
+Canonical Vibe64 design decisions live in
 `.jskit/APP_BLUEPRINT.md#important-design-decisions`. This rebuild plan must
 follow those decisions rather than redefining them.
 
@@ -135,7 +135,7 @@ Checklist:
 Create a new class:
 
 ```ts
-class AiStudioSessionRuntime {
+class Vibe64SessionRuntime {
   constructor({ store, adapter, workflow, promptPack, clock, logger }) {}
 
   createSession(input) {}
@@ -214,26 +214,26 @@ Goal: Establish the product boundary and naming.
 
 Instructions:
 
-- Create the `ai-studio` runtime namespace.
+- Create the `vibe64` runtime namespace.
 - Decide the session root.
-- Use `.ai-studio/sessions/active/<session_id>/`.
+- Use `.vibe64/sessions/active/<session_id>/`.
 - Treat JSKIT as an adapter name, not the product name.
 - Keep JSKIT-specific assumptions out of core files.
 - Do not add compatibility paths.
-- Session state is read from `.ai-studio`.
+- Session state is read from `.vibe64`.
 
 Checklist:
 
-- [ ] Product name is `ai-studio` in runtime code.
-- [ ] Sessions are stored under `.ai-studio/`.
-- [ ] Runtime code uses AI Studio session APIs.
-- [ ] Runtime code uses `.ai-studio` session roots.
+- [ ] Product name is `vibe64` in runtime code.
+- [ ] Sessions are stored under `.vibe64/`.
+- [ ] Runtime code uses Vibe64 session APIs.
+- [ ] Runtime code uses `.vibe64` session roots.
 - [ ] JSKIT appears only as an adapter concept.
-- [ ] Documentation states that sessions are clean `ai-studio` sessions.
+- [ ] Documentation states that sessions are clean `vibe64` sessions.
 
 Acceptance:
 
-- A session can be created in `.ai-studio/sessions/active/`.
+- A session can be created in `.vibe64/sessions/active/`.
 - The session has no dependency on external session state.
 
 ## Phase 2: Session Store
@@ -253,7 +253,7 @@ Instructions:
 Recommended session layout:
 
 ```text
-.ai-studio/
+.vibe64/
   sessions/
     active/
       <session_id>/
@@ -366,7 +366,7 @@ Acceptance:
 
 ## Phase 5: Default Checklist Workflow
 
-Goal: Recreate the current checklist as the first clean `ai-studio` workflow.
+Goal: Recreate the current checklist as the first clean `vibe64` workflow.
 
 Instructions:
 
@@ -564,7 +564,7 @@ Checklist:
 
 Acceptance:
 
-- A C++ CMake project can use AI Studio to define work, plan, execute, build/test, create PR, and finish.
+- A C++ CMake project can use Vibe64 to define work, plan, execute, build/test, create PR, and finish.
 
 ## Phase 10: Python Adapter
 
@@ -639,8 +639,8 @@ Goal: Keep the rebuild focused on Studio and the runtime API.
 Instructions:
 
 - Do not add a command-line interface.
-- Do not add an `ai-studio` binary.
-- Do not add `ai-studio session ...` commands.
+- Do not add an `vibe64` binary.
+- Do not add `vibe64 session ...` commands.
 - Do not add command-line renderers for checklist state, actions, prompts, or disabled reasons.
 - Do not add command-line tests.
 - Keep the runtime API clean enough that Studio can call it directly.
@@ -649,7 +649,7 @@ Instructions:
 Checklist:
 
 - [ ] No CLI files exist for the new runtime.
-- [ ] No package binary is added for `ai-studio`.
+- [ ] No package binary is added for `vibe64`.
 - [ ] No slice depends on command-line usage.
 - [ ] Runtime actions are callable from code.
 - [ ] Studio can render current step, actions, disabled reasons, and `Next` from runtime data.
@@ -771,7 +771,7 @@ Goal: Let projects configure adapter behavior without bloating the core.
 
 Instructions:
 
-- Define an optional `ai-studio.config.*` format.
+- Define an optional `vibe64.config.*` format.
 - Keep config small.
 - Use config to override adapter choices.
 - Do not require config for common projects.
@@ -800,7 +800,7 @@ Checklist:
 
 Acceptance:
 
-- A project with unusual commands can still use AI Studio without code changes.
+- A project with unusual commands can still use Vibe64 without code changes.
 
 ## Phase 18: Documentation For Adapter Authors
 
@@ -907,12 +907,12 @@ These slices are the delivery plan. Do them in order. Do not start a later slice
 
 ### SLICE 1: Core Skeleton And Session Store
 
-Goal: Create the new `ai-studio` runtime shell and durable session store with no JSKIT dependency.
+Goal: Create the new `vibe64` runtime shell and durable session store with no JSKIT dependency.
 
 Instructions:
 
 - Create the new runtime package/module namespace.
-- Create `.ai-studio/sessions/active/<session_id>/`.
+- Create `.vibe64/sessions/active/<session_id>/`.
 - Implement session creation, session lookup, session listing, status storage, current-step storage, metadata storage, artifact storage, and command logging.
 - Keep the API small and boring.
 - Do not add adapters yet.
@@ -920,9 +920,9 @@ Instructions:
 
 Checklist:
 
-- [x] `AiStudioSessionRuntime` class exists.
+- [x] `Vibe64SessionRuntime` class exists.
 - [x] Session store class/module exists.
-- [x] New sessions write to `.ai-studio/sessions/active/`.
+- [x] New sessions write to `.vibe64/sessions/active/`.
 - [x] `session.json` or equivalent core manifest exists.
 - [x] `current_step` is readable and writable.
 - [x] `status` is readable and writable.
@@ -934,7 +934,7 @@ Checklist:
 
 Acceptance:
 
-- A local script or fast unit test can create a new `ai-studio` session and read it back.
+- A local script or fast unit test can create a new `vibe64` session and read it back.
 - The session directory is understandable by inspection.
 
 ### SLICE 2: Workflow Machine And Session View
@@ -978,8 +978,8 @@ Instructions:
 
 - Implement `runAction(sessionId, actionId, input)`.
 - Do not add a command-line interface.
-- Do not add an `ai-studio` binary.
-- Do not add `ai-studio session ...` commands.
+- Do not add an `vibe64` binary.
+- Do not add `vibe64 session ...` commands.
 - Do not wire real target commands yet.
 - Use fake/no-op action handlers where needed to prove the contract.
 - The runtime session view must show current step, actions, disabled reasons, and `Next`.
@@ -1061,7 +1061,7 @@ Acceptance:
 
 ### SLICE 6: JSKIT Adapter, Setup Through Issue
 
-Goal: Implement the first real adapter enough to create an AI Studio session for a JSKIT project, set up the worktree, define an issue, create issue files, edit them, and create the GitHub issue.
+Goal: Implement the first real adapter enough to create an Vibe64 session for a JSKIT project, set up the worktree, define an issue, create issue files, edit them, and create the GitHub issue.
 
 Instructions:
 
@@ -1197,7 +1197,7 @@ Acceptance:
 
 ### SLICE 10: C++ Adapter Vertical Slice
 
-Goal: Prove AI Studio works for the C++ project case without npm, package.json, JSKIT, browser UI, or blueprint assumptions.
+Goal: Prove Vibe64 works for the C++ project case without npm, package.json, JSKIT, browser UI, or blueprint assumptions.
 
 Instructions:
 
@@ -1323,7 +1323,7 @@ Instructions:
 - Remove duplicate UI workflow inference.
 - Remove duplicate prompt-generation paths.
 - Remove deterministic command dispatch paths that duplicate runtime actions.
-- Remove non-`.ai-studio` Studio workflow assumptions.
+- Remove non-`.vibe64` Studio workflow assumptions.
 - Remove dead endpoints and client API calls replaced by the runtime.
 - Do not keep compatibility routes.
 - Do not keep fallback behavior that hides runtime errors.
@@ -1336,7 +1336,7 @@ Checklist:
 - [x] Duplicate legacy button mapping code is deleted.
 - [x] Duplicate legacy prompt construction code is deleted.
 - [x] Duplicate legacy command execution code is deleted.
-- [x] Non-`.ai-studio` Studio workflow reads are absent.
+- [x] Non-`.vibe64` Studio workflow reads are absent.
 - [x] Replaced API routes are deleted.
 - [x] Replaced client API helpers are deleted.
 - [x] Dead view-model branches are deleted.
@@ -1346,7 +1346,7 @@ Checklist:
 
 Acceptance:
 
-- Studio uses one workflow system: the AI Studio runtime.
+- Studio uses one workflow system: the Vibe64 runtime.
 - Searching the codebase does not reveal an alternate legacy workflow path.
 
 ### SLICE 15: Final Audit And Simplification
@@ -1367,7 +1367,7 @@ Instructions:
 Checklist:
 
 - [x] No stale JSKIT product naming remains outside JSKIT adapter code.
-- [x] No non-`.ai-studio` session root behavior remains.
+- [x] No non-`.vibe64` session root behavior remains.
 - [x] No compatibility or migration behavior remains.
 - [x] No duplicate workflow state remains.
 - [x] Studio Setup, Adapter Setup, and Project Setup are the only setup concepts.
@@ -1432,8 +1432,8 @@ Use the execution slices above as the primary plan. This shorter order is only a
 
 The rebuild is successful when:
 
-- [ ] The product is named `ai-studio`.
-- [ ] The state machine lives in AI Studio core.
+- [ ] The product is named `vibe64`.
+- [ ] The state machine lives in Vibe64 core.
 - [ ] JSKIT is only an adapter.
 - [ ] At least one non-JSKIT adapter works end to end.
 - [ ] The checklist remains intact.

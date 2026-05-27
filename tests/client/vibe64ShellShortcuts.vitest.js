@@ -3,7 +3,7 @@ import {
   consumeShellShortcutEvent,
   MAX_SHELL_TABS,
   shellShortcutAction
-} from "../../src/lib/aiStudioShellShortcuts.js";
+} from "../../src/lib/vibe64ShellShortcuts.js";
 
 function keyboardEvent(overrides = {}) {
   return {
@@ -18,7 +18,7 @@ function keyboardEvent(overrides = {}) {
   };
 }
 
-describe("AI Studio shell shortcuts", () => {
+describe("Vibe64 shell shortcuts", () => {
   it("recognizes tab creation and tab selection shortcuts", () => {
     expect(shellShortcutAction(keyboardEvent({
       ctrlKey: true,

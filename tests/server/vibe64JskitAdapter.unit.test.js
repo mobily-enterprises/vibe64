@@ -4,26 +4,26 @@ import path from "node:path";
 import test from "node:test";
 
 import {
-  AI_STUDIO_SESSION_STATUS,
-  AI_STUDIO_WORKFLOW_DEFINITION_IDS,
-  AiStudioSessionRuntime
-} from "@local/ai-studio-runtime/server";
+  VIBE64_SESSION_STATUS,
+  VIBE64_WORKFLOW_DEFINITION_IDS,
+  Vibe64SessionRuntime
+} from "@local/vibe64-runtime/server";
 import {
-  JSKIT_AI_STUDIO_COMMANDS,
+  JSKIT_VIBE64_COMMANDS,
   JSKIT_ALLOW_SELF_TARGET_CONFIG,
   JSKIT_CONFIG_FIELDS,
   createJskitLaunchTargetTerminalSpec,
   createJskitTargetAdapter,
   listJskitLaunchTargets
-} from "@local/ai-studio-adapters/server/adapters/jskit/index";
+} from "@local/vibe64-adapters/server/adapters/jskit/index";
 import {
   JSKIT_ALLOW_SELF_TARGET_CONFIG_PATH
-} from "@local/ai-studio-adapters/server/adapters/jskit/launchTargets";
+} from "@local/vibe64-adapters/server/adapters/jskit/launchTargets";
 import {
   jskitAutomatedChecksHook,
   jskitCodeIndexHook
-} from "@local/ai-studio-adapters/server/adapters/jskit/adapter";
-import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
+} from "@local/vibe64-adapters/server/adapters/jskit/adapter";
+import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 async function writeProjectFile(root, relativePath, text = "") {
   const filePath = path.join(root, relativePath);
@@ -51,7 +51,7 @@ async function createJskitProject(root) {
 }
 
 function commandIds() {
-  return JSKIT_AI_STUDIO_COMMANDS
+  return JSKIT_VIBE64_COMMANDS
     .map((command) => command.id)
     .sort((left, right) => left.localeCompare(right));
 }
@@ -266,7 +266,7 @@ test("jskit built launch waits for the server readiness marker before opening", 
     });
 
     assert.equal(spec.ok, true);
-    assert.match(spec.metadata.readinessMarker, /^\[\[AI_STUDIO_LAUNCH_READY_V1:/u);
+    assert.match(spec.metadata.readinessMarker, /^\[\[VIBE64_LAUNCH_READY_V1:/u);
     assert.equal(spec.metadata.launchReady, false);
     assert.equal(spec.metadata.defaultDisplay, "minimized");
     assert.equal(spec.metadata.buildCommand, "npm run build");
@@ -279,7 +279,7 @@ test("jskit built launch waits for the server readiness marker before opening", 
     assert.match(startupScript, /npm run build/u);
     assert.match(startupScript, /npm run server/u);
     assert.match(startupScript, /action:%s/u);
-    assert.match(startupScript, /AI_STUDIO_LAUNCH_READY_V1/u);
+    assert.match(startupScript, /VIBE64_LAUNCH_READY_V1/u);
   });
 });
 
@@ -309,17 +309,17 @@ test("jskit dev launch starts backend and Vite together", async () => {
     assert.equal(spec.metadata.backendPort, 3000);
     assert.equal(spec.metadata.defaultDisplay, "minimized");
     assert.equal(spec.metadata.frontendCommand, "npm run dev -- --host 0.0.0.0 --port \"$PORT\"");
-    assert.match(spec.metadata.readinessMarker, /^\[\[AI_STUDIO_LAUNCH_READY_V1:/u);
+    assert.match(spec.metadata.readinessMarker, /^\[\[VIBE64_LAUNCH_READY_V1:/u);
 
     const args = spec.args({
       id: "unit-terminal"
     });
     const startupScript = args.at(-1);
-    assert.match(startupScript, /AI_STUDIO_JSKIT_BACKEND_PORT=\\?"?3000/u);
+    assert.match(startupScript, /VIBE64_JSKIT_BACKEND_PORT=\\?"?3000/u);
     assert.match(startupScript, /npm run server/u);
-    assert.match(startupScript, /VITE_API_PROXY_TARGET="http:\/\/127\.0\.0\.1:\$AI_STUDIO_JSKIT_BACKEND_PORT"/u);
+    assert.match(startupScript, /VITE_API_PROXY_TARGET="http:\/\/127\.0\.0\.1:\$VIBE64_JSKIT_BACKEND_PORT"/u);
     assert.match(startupScript, /npm run dev -- --host 0\.0\.0\.0 --port "\$PORT"/u);
-    assert.match(startupScript, /AI_STUDIO_LAUNCH_READY_V1/u);
+    assert.match(startupScript, /VIBE64_LAUNCH_READY_V1/u);
   });
 });
 
@@ -353,7 +353,7 @@ test("jskit adapter reports malformed package.json instead of hiding it", async 
         targetRoot
       }),
       {
-        code: "ai_studio_invalid_jskit_json"
+        code: "vibe64_invalid_jskit_json"
       }
     );
   });
@@ -362,7 +362,7 @@ test("jskit adapter reports malformed package.json instead of hiding it", async 
 test("jskit prompt actions include JSKIT prompt context", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createJskitProject(targetRoot);
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       adapter: createJskitTargetAdapter(),
       targetRoot
     });
@@ -393,14 +393,14 @@ test("jskit prompt actions include JSKIT prompt context", async () => {
 
 test("jskit seed issue definition uses the current-step input contract before issue creation", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       adapter: createJskitTargetAdapter(),
       targetRoot
     });
     await runtime.createSession({
       initialStep: "seed_application_defined",
       sessionId: "jskit_seed_prompt",
-      workflowDefinition: AI_STUDIO_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION
+      workflowDefinition: VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION
     });
 
     const initialSession = await runtime.getSession("jskit_seed_prompt");
@@ -431,7 +431,7 @@ test("jskit seed issue definition uses the current-step input contract before is
 test("jskit execute-plan prompt requires generators, placements, and database modules before hand-built files", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createJskitProject(targetRoot);
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       adapter: createJskitTargetAdapter(),
       projectConfig: {
         values: {
@@ -466,7 +466,7 @@ test("jskit execute-plan prompt requires generators, placements, and database mo
     assert.match(afterPrompt.actionResult.prompt, /mysql --host/u);
     assert.match(afterPrompt.actionResult.prompt, /--execute/u);
     assert.match(afterPrompt.actionResult.prompt, /<SQL>/u);
-    assert.match(afterPrompt.actionResult.prompt, /AI_STUDIO_MYSQL_USER/u);
+    assert.match(afterPrompt.actionResult.prompt, /VIBE64_MYSQL_USER/u);
     assert.match(afterPrompt.actionResult.prompt, /MYSQL_DATABASE/u);
     assert.match(afterPrompt.actionResult.prompt, /database host reachable from the terminal/u);
     assert.match(afterPrompt.actionResult.prompt, /database password used by mysql and mariadb clients/u);
@@ -486,7 +486,7 @@ test("jskit execute-plan prompt requires generators, placements, and database mo
 test("jskit deslop prompt checks framework-shaped helpers before accepting them", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createJskitProject(targetRoot);
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       adapter: createJskitTargetAdapter(),
       targetRoot
     });
@@ -509,7 +509,7 @@ test("jskit deslop prompt checks framework-shaped helpers before accepting them"
 test("jskit issue and pull-request steps are gated by artifacts and metadata", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createJskitProject(targetRoot);
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       adapter: createJskitTargetAdapter(),
       targetRoot
     });
@@ -561,7 +561,7 @@ test("jskit issue and pull-request steps are gated by artifacts and metadata", a
     await runtime.createSession({
       initialStep: "create_pull_request",
       metadata: {
-        branch_pushed: "ai-studio/jskit_pr"
+        branch_pushed: "vibe64/jskit_pr"
       },
       sessionId: "jskit_pr"
     });
@@ -590,7 +590,7 @@ test("jskit issue and pull-request steps are gated by artifacts and metadata", a
 test("jskit merge, sync, and finish steps follow current metadata gates", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createJskitProject(targetRoot);
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       adapter: createJskitTargetAdapter(),
       targetRoot
     });
@@ -622,7 +622,7 @@ test("jskit merge, sync, and finish steps follow current metadata gates", async 
     await assert.rejects(
       () => runtime.runAction("jskit_merge", "merge_pr"),
       {
-        code: "ai_studio_command_requires_terminal"
+        code: "vibe64_command_requires_terminal"
       }
     );
 
@@ -667,9 +667,9 @@ test("jskit merge, sync, and finish steps follow current metadata gates", async 
       sessionId: "jskit_finish"
     });
     const afterFinish = await runtime.runAction("jskit_finish", "finish_session");
-    assert.equal(afterFinish.status, AI_STUDIO_SESSION_STATUS.FINISHED);
+    assert.equal(afterFinish.status, VIBE64_SESSION_STATUS.FINISHED);
     assert.equal(afterFinish.metadata.session_finished, "yes");
-    assert.equal(afterFinish.actionResult.sessionStatus, AI_STUDIO_SESSION_STATUS.FINISHED);
+    assert.equal(afterFinish.actionResult.sessionStatus, VIBE64_SESSION_STATUS.FINISHED);
   });
 });
 

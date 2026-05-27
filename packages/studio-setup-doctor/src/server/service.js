@@ -22,18 +22,18 @@ import {
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
   resolveStudioAppRoot
-} from "@local/ai-studio-core/server/studioRoots";
+} from "@local/vibe64-core/server/studioRoots";
 import {
   createDoctorRepair,
   failDoctorCheck as failCheck,
   passDoctorCheck as passCheck
-} from "@local/ai-studio-core/server/doctorCheckItems";
+} from "@local/vibe64-core/server/doctorCheckItems";
 import {
   buildDoctorToolchainArgs
 } from "@local/setup-doctor-core/server/doctorToolchain";
 import {
   packageManagerAvailabilityScript
-} from "@local/ai-studio-adapters/server/nodePackage";
+} from "@local/vibe64-adapters/server/nodePackage";
 
 const TOOLCHAIN_DOCKERFILE = "tooling/studio-setup/Dockerfile";
 const TOOLCHAIN_CONTEXT = "tooling/studio-setup";
@@ -152,7 +152,7 @@ function reinstallCodexCliTerminalScript() {
   const args = reinstallCodexCliToolchainArgs();
   return [
     "set -e",
-    printTerminalLine("AI Studio setup: reinstalling Codex CLI."),
+    printTerminalLine("Vibe64 setup: reinstalling Codex CLI."),
     printTerminalLine("Status: running. Keep this terminal open."),
     printTerminalLine("This can take a minute while npm downloads Codex and its native package."),
     commandPreview(args),

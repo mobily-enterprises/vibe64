@@ -10,7 +10,7 @@ import {
 } from "@local/studio-terminal-core/server/shellCommands";
 
 async function withTemporaryRoot(callback) {
-  const root = await mkdtemp(path.join(tmpdir(), "ai-studio-test-"));
+  const root = await mkdtemp(path.join(tmpdir(), "vibe64-test-"));
   try {
     return await callback(root);
   } finally {

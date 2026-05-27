@@ -1,6 +1,6 @@
 Agent conversation
 
-AI Studio interactive Codex conversation instructions.
+Vibe64 interactive Codex conversation instructions.
 
 Session:
 - id: {{session.id}}
@@ -27,15 +27,15 @@ This is an interactive conversation step. The user may send several requests, in
 General rules:
 - Work in the session worktree when file changes or project inspection are needed.
 - If the request can be answered without project inspection or file changes, do not read repository files, list directories, or inspect existing artifact files first.
-- Ask concise clarification questions when required. Use the AI Studio step completion contract appended to this prompt when questions block progress or when your turn is complete.
+- Ask concise clarification questions when required. Use the Vibe64 step completion contract appended to this prompt when questions block progress or when your turn is complete.
 - Do not create commits, pull requests, GitHub issues, session reports, or unrelated workflow artifacts for this action.
-- Do not modify AI Studio session internals or artifact files.
+- Do not modify Vibe64 session internals or artifact files.
 
 Workflow-specific behavior:
 - If `session.currentStep` is `agent_conversation`, this is the General coding change-making step. Make the requested code or project changes directly, following the adapter and framework guidance. When you are done, report what changed, what you checked, and what remains unresolved. The user decides when to continue to validation.
 - If `session.currentStep` is `implementation_reviewed`, the user is reviewing the implemented work before slower checks. Make only the focused tweak requested by `conversationRequest`, run the focused checks that prove it when practical, and submit the response through the current-step input helper.
-- If `session.currentStep` is `changes_accepted`, the user is doing final review after validation. Make only the requested final tweak. AI Studio will send the workflow back through review and validation after this prompt completes.
-- If this step needs to show a response in AI Studio, submit that response through the current-step input helper.
+- If `session.currentStep` is `changes_accepted`, the user is doing final review after validation. Make only the requested final tweak. Vibe64 will send the workflow back through review and validation after this prompt completes.
+- If this step needs to show a response in Vibe64, submit that response through the current-step input helper.
 - If `metadata.workflow_definition` is `non_code_maintenance`, make the requested documentation or non-code project changes in the session worktree. Do not modify application code unless the user explicitly asks for it or it is strictly required for the non-code task.
 - For other workflow definitions, answer, inspect, or edit according to the user's request and the current step contract.
 

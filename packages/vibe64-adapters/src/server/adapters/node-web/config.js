@@ -5,7 +5,7 @@ import {
 } from "../../configValues.js";
 import {
   deepFreeze
-} from "@local/ai-studio-core/server/deepFreeze";
+} from "@local/vibe64-core/server/deepFreeze";
 import {
   GENERIC_NODE_WEB_CLIENT_LIBRARY_CONFIG
 } from "./constants.js";

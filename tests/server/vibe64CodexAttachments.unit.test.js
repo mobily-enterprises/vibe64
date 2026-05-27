@@ -8,10 +8,10 @@ import {
   CODEX_ATTACHMENT_UPLOAD_BODY_LIMIT_BYTES,
   cleanupCodexAttachments,
   storeCodexAttachment
-} from "../../packages/ai-studio-terminals/src/server/codexAttachments.js";
+} from "../../packages/vibe64-terminals/src/server/codexAttachments.js";
 import {
   registerRoutes
-} from "../../packages/ai-studio-terminals/src/server/registerRoutes.js";
+} from "../../packages/vibe64-terminals/src/server/registerRoutes.js";
 
 test("Codex attachment route opts into the attachment upload body limit", () => {
   const app = testApp();
@@ -27,7 +27,7 @@ test("Codex attachment route opts into the attachment upload body limit", () => 
 });
 
 test("Codex attachments are not rejected by the old 25 MB product cap", async () => {
-  const targetRoot = await mkdtemp(path.join(tmpdir(), "ai-studio-attachment-test-"));
+  const targetRoot = await mkdtemp(path.join(tmpdir(), "vibe64-attachment-test-"));
   try {
     const sessionId = "large-attachment-session";
     const previousLimitBytes = 25 * 1024 * 1024;

@@ -83,7 +83,7 @@ test.describe("studio startup navigation", () => {
         body: JSON.stringify(currentAppPayload)
       });
     });
-    await page.route("**/api/ai-studio/sessions**", async (route) => {
+    await page.route("**/api/vibe64/sessions**", async (route) => {
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify({

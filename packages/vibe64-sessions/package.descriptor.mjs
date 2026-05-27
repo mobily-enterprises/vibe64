@@ -1,28 +1,28 @@
 export default Object.freeze({
   packageVersion: 1,
-  packageId: "@local/ai-studio-sessions",
+  packageId: "@local/vibe64-sessions",
   version: "0.1.0",
   kind: "runtime",
-  description: "Owns AI Studio workflow session state, actions, advance, and abandon.",
+  description: "Owns Vibe64 workflow session state, actions, advance, and abandon.",
   dependsOn: [
     "@jskit-ai/kernel",
-    "@local/ai-studio-core",
-    "@local/ai-studio-runtime",
-    "@local/ai-studio-project",
-    "@local/ai-studio-accounts",
-    "@local/ai-studio-terminals",
+    "@local/vibe64-core",
+    "@local/vibe64-runtime",
+    "@local/vibe64-project",
+    "@local/vibe64-accounts",
+    "@local/vibe64-terminals",
     "@local/studio-setup-doctor",
     "@local/adapter-setup-doctor",
     "@local/project-setup-doctor"
   ],
   capabilities: {
     provides: [
-      "feature.ai-studio-sessions"
+      "feature.vibe64-sessions"
     ],
     requires: [
-      "feature.ai-studio-project",
-      "feature.ai-studio-accounts",
-      "feature.ai-studio-terminals",
+      "feature.vibe64-project",
+      "feature.vibe64-accounts",
+      "feature.vibe64-terminals",
       "feature.studio-setup-doctor",
       "feature.adapter-setup-doctor",
       "feature.project-setup-doctor",
@@ -33,8 +33,8 @@ export default Object.freeze({
     server: {
       providers: [
         {
-          entrypoint: "src/server/AiStudioSessionsProvider.js",
-          export: "AiStudioSessionsProvider"
+          entrypoint: "src/server/Vibe64SessionsProvider.js",
+          export: "Vibe64SessionsProvider"
         }
       ]
     },
@@ -47,7 +47,7 @@ export default Object.freeze({
       surfaces: [
         {
           subpath: "./server/registerRoutes",
-          summary: "Registers AI Studio session list/create/inspect/action/advance/abandon routes."
+          summary: "Registers Vibe64 session list/create/inspect/action/advance/abandon routes."
         },
         {
           subpath: "./server/service",
@@ -56,7 +56,7 @@ export default Object.freeze({
       ],
       containerTokens: {
         server: [
-          "feature.ai-studio-sessions.service"
+          "feature.vibe64-sessions.service"
         ],
         client: []
       }

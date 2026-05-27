@@ -178,7 +178,7 @@ function nextjsDatabaseEnvWriteScript({
       replaceExisting: true,
       values: envValuesFromLines(lines)
     }),
-    "echo 'Wrote Next.js database settings for AI Studio-managed runtime.'"
+    "echo 'Wrote Next.js database settings for Vibe64-managed runtime.'"
   ].join("\n");
 }
 

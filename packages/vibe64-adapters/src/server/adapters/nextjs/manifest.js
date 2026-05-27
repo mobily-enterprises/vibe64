@@ -1,9 +1,9 @@
 import {
   deepFreeze
-} from "@local/ai-studio-core/server/deepFreeze";
+} from "@local/vibe64-core/server/deepFreeze";
 import {
-  AI_STUDIO_APPLICATION_TYPE_PHONE,
-  AI_STUDIO_APPLICATION_TYPE_WEB
+  VIBE64_APPLICATION_TYPE_PHONE,
+  VIBE64_APPLICATION_TYPE_WEB
 } from "../../applicationTypes.js";
 import {
   createNextjsTargetAdapter
@@ -13,12 +13,12 @@ const NEXTJS_ADAPTER_MANIFEST = deepFreeze({
   applicationTypes: [
     {
       explanation: "React web apps and full-stack products built around the standard Next.js ecosystem.",
-      id: AI_STUDIO_APPLICATION_TYPE_WEB,
+      id: VIBE64_APPLICATION_TYPE_WEB,
       priority: 90
     },
     {
       explanation: "Mobile-first React web apps that can be wrapped with Capacitor when native packaging is needed.",
-      id: AI_STUDIO_APPLICATION_TYPE_PHONE,
+      id: VIBE64_APPLICATION_TYPE_PHONE,
       priority: 80
     }
   ],

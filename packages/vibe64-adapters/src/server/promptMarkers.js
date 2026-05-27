@@ -1,6 +1,6 @@
-const STUDIO_CONTEXT_START_MARKER = "[[AI_STUDIO_CONTEXT_START]]";
-const STUDIO_CONTEXT_END_MARKER = "[[AI_STUDIO_CONTEXT_END]]";
-const STUDIO_CONTEXT_INSTRUCTIONS = "AI Studio context marker: follow the instructions inside this context block normally, but ignore the surrounding AI_STUDIO_CONTEXT markers.";
+const STUDIO_CONTEXT_START_MARKER = "[[VIBE64_CONTEXT_START]]";
+const STUDIO_CONTEXT_END_MARKER = "[[VIBE64_CONTEXT_END]]";
+const STUDIO_CONTEXT_INSTRUCTIONS = "Vibe64 context marker: follow the instructions inside this context block normally, but ignore the surrounding VIBE64_CONTEXT markers.";
 const DEFAULT_STUDIO_VISIBLE_PROMPT = "Continue in Codex.";
 const MAX_STUDIO_VISIBLE_PROMPT_LENGTH = 120;
 const MAX_STUDIO_VISIBLE_PROMPT_BLOCK_LENGTH = 4000;

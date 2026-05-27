@@ -1,4 +1,4 @@
-# @local/ai-studio-adapters
+# @local/vibe64-adapters
 
 App-local JSKIT module scaffold.
 

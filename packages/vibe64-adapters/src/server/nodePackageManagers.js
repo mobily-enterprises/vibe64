@@ -1,7 +1,7 @@
 import {
   normalizeText
-} from "@local/ai-studio-core/server/core";
-import { deepFreeze } from "@local/ai-studio-core/server/deepFreeze";
+} from "@local/vibe64-core/server/core";
+import { deepFreeze } from "@local/vibe64-core/server/deepFreeze";
 
 const DEFAULT_NODE_PACKAGE_MANAGER = "npm";
 const NODE_PACKAGE_MANAGER_VALUES = deepFreeze(["npm", "pnpm", "yarn", "bun"]);

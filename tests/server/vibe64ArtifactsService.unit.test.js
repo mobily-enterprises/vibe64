@@ -3,22 +3,22 @@ import { spawn } from "node:child_process";
 import test from "node:test";
 
 import {
-  AiStudioSessionRuntime
-} from "@local/ai-studio-runtime/server";
+  Vibe64SessionRuntime
+} from "@local/vibe64-runtime/server";
 import {
   FakeTargetAdapter
-} from "@local/ai-studio-adapters/server";
+} from "@local/vibe64-adapters/server";
 import {
   createService
-} from "../../packages/ai-studio-artifacts/src/server/service.js";
+} from "../../packages/vibe64-artifacts/src/server/service.js";
 import {
   helperSocketHostPath,
   prepareCurrentStepInputHelper
-} from "@local/ai-studio-runtime/server/currentStepInputHelperServer";
+} from "@local/vibe64-runtime/server/currentStepInputHelperServer";
 import {
   _testing as coreMaintenanceTesting
-} from "@local/ai-studio-runtime/server/workflowModules/coreMaintenance";
-import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
+} from "@local/vibe64-runtime/server/workflowModules/coreMaintenance";
+import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 const maintenanceWorkflowDefinitionIds = coreMaintenanceTesting.workflowDefinitionIds;
 
@@ -67,9 +67,9 @@ function runNodeScript(scriptPath = "", args = [], env = {}) {
   });
 }
 
-test("AI Studio artifacts service saves semantic issue step input", async () => {
+test("Vibe64 artifacts service saves semantic issue step input", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       adapter: new FakeTargetAdapter({
         capabilities: {
           create_issue_on_gh: true
@@ -112,9 +112,9 @@ test("AI Studio artifacts service saves semantic issue step input", async () => 
   });
 });
 
-test("AI Studio artifacts service saves semantic pull request step input", async () => {
+test("Vibe64 artifacts service saves semantic pull request step input", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       adapter: new FakeTargetAdapter({
         capabilities: {
           create_pr_on_gh: true
@@ -156,9 +156,9 @@ test("AI Studio artifacts service saves semantic pull request step input", async
   });
 });
 
-test("AI Studio artifacts service appends helper responses to the conversation log", async () => {
+test("Vibe64 artifacts service appends helper responses to the conversation log", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       adapter: new FakeTargetAdapter(),
       targetRoot
     });
@@ -199,9 +199,9 @@ test("AI Studio artifacts service appends helper responses to the conversation l
   });
 });
 
-test("AI Studio artifacts service rejects UI input while a step waits for Codex", async () => {
+test("Vibe64 artifacts service rejects UI input while a step waits for Codex", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       adapter: new FakeTargetAdapter({
         capabilities: {
           create_pr_on_gh: true
@@ -230,14 +230,14 @@ test("AI Studio artifacts service rejects UI input while a step waits for Codex"
     });
 
     assert.equal(saved.ok, false);
-    assert.equal(saved.errors[0].code, "ai_studio_step_input_state_changed");
+    assert.equal(saved.errors[0].code, "vibe64_step_input_state_changed");
     assert.match(saved.errors[0].message, /waiting for Codex/u);
   });
 });
 
-test("AI Studio artifacts service rejects semantic step input on steps without an input contract", async () => {
+test("Vibe64 artifacts service rejects semantic step input on steps without an input contract", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
     await runtime.createSession({
@@ -259,13 +259,13 @@ test("AI Studio artifacts service rejects semantic step input on steps without a
     });
 
     assert.equal(saved.ok, false);
-    assert.equal(saved.errors[0].code, "ai_studio_step_input_not_available");
+    assert.equal(saved.errors[0].code, "vibe64_step_input_not_available");
   });
 });
 
-test("AI Studio artifacts service rejects stale current-step input", async () => {
+test("Vibe64 artifacts service rejects stale current-step input", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
     await runtime.createSession({
@@ -288,7 +288,7 @@ test("AI Studio artifacts service rejects stale current-step input", async () =>
     });
 
     assert.equal(saved.ok, false);
-    assert.equal(saved.errors[0].code, "ai_studio_step_input_state_changed");
+    assert.equal(saved.errors[0].code, "vibe64_step_input_state_changed");
     assert.match(saved.errors[0].message, /Reload state/u);
     assert.equal(saved.currentStep, "issue_file_created");
     assert.equal(saved.stepStatus, "waiting_for_input");
@@ -297,9 +297,9 @@ test("AI Studio artifacts service rejects stale current-step input", async () =>
   });
 });
 
-test("AI Studio current-step helper submits through the same server path", async () => {
+test("Vibe64 current-step helper submits through the same server path", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
     await runtime.createSession({
@@ -318,7 +318,7 @@ test("AI Studio current-step helper submits through the same server path", async
       targetRoot
     });
 
-    const result = await runNodeScript(helper.env.AI_STUDIO_CURRENT_STEP_INPUT_HELPER, [
+    const result = await runNodeScript(helper.env.VIBE64_CURRENT_STEP_INPUT_HELPER, [
       "--json",
       JSON.stringify({
         fields: {
@@ -332,7 +332,7 @@ test("AI Studio current-step helper submits through the same server path", async
       })
     ], {
       ...helper.env,
-      AI_STUDIO_CURRENT_STEP_INPUT_SOCKET: helperSocketHostPath(targetRoot)
+      VIBE64_CURRENT_STEP_INPUT_SOCKET: helperSocketHostPath(targetRoot)
     });
 
     assert.equal(result.code, 0, result.stderr || result.stdout);
@@ -344,9 +344,9 @@ test("AI Studio current-step helper submits through the same server path", async
   });
 });
 
-test("AI Studio current-step helper rejects stale state", async () => {
+test("Vibe64 current-step helper rejects stale state", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
     await runtime.createSession({
@@ -361,7 +361,7 @@ test("AI Studio current-step helper rejects stale state", async () => {
       targetRoot
     });
 
-    const result = await runNodeScript(helper.env.AI_STUDIO_CURRENT_STEP_INPUT_HELPER, [
+    const result = await runNodeScript(helper.env.VIBE64_CURRENT_STEP_INPUT_HELPER, [
       "--json",
       JSON.stringify({
         fields: {
@@ -375,20 +375,20 @@ test("AI Studio current-step helper rejects stale state", async () => {
       })
     ], {
       ...helper.env,
-      AI_STUDIO_CURRENT_STEP_INPUT_SOCKET: helperSocketHostPath(targetRoot)
+      VIBE64_CURRENT_STEP_INPUT_SOCKET: helperSocketHostPath(targetRoot)
     });
 
     assert.equal(result.code, 1);
     const response = JSON.parse(result.stdout);
     assert.equal(response.ok, false);
-    assert.equal(response.errors[0].code, "ai_studio_step_input_state_changed");
+    assert.equal(response.errors[0].code, "vibe64_step_input_state_changed");
     assert.match(response.errors[0].message, /Reload state/u);
   });
 });
 
-test("AI Studio artifacts service lets issue command failures return to retry state", async () => {
+test("Vibe64 artifacts service lets issue command failures return to retry state", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       adapter: new FakeTargetAdapter({
         capabilities: {
           create_issue_on_gh: true
@@ -436,9 +436,9 @@ test("AI Studio artifacts service lets issue command failures return to retry st
   });
 });
 
-test("AI Studio artifacts service lets setup command failures return to retry state", async () => {
+test("Vibe64 artifacts service lets setup command failures return to retry state", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
     await runtime.createSession({
@@ -475,9 +475,9 @@ test("AI Studio artifacts service lets setup command failures return to retry st
   });
 });
 
-test("AI Studio artifacts service keeps pull request command failures inside the pull request machine", async () => {
+test("Vibe64 artifacts service keeps pull request command failures inside the pull request machine", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       adapter: new FakeTargetAdapter({
         capabilities: {
           create_pr_on_gh: true
@@ -488,7 +488,7 @@ test("AI Studio artifacts service keeps pull request command failures inside the
     await runtime.createSession({
       initialStep: "create_pull_request",
       metadata: {
-        branch_pushed: "ai-studio/test-pr"
+        branch_pushed: "vibe64/test-pr"
       },
       sessionId: "step_input_pr_failure"
     });
@@ -532,9 +532,9 @@ test("AI Studio artifacts service keeps pull request command failures inside the
   });
 });
 
-test("AI Studio artifacts service reads live artifact readiness", async () => {
+test("Vibe64 artifacts service reads live artifact readiness", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
     await runtime.createSession({
@@ -553,9 +553,9 @@ test("AI Studio artifacts service reads live artifact readiness", async () => {
   });
 });
 
-test("AI Studio artifacts service reads server-owned artifact previews by semantic id", async () => {
+test("Vibe64 artifacts service reads server-owned artifact previews by semantic id", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
     await runtime.createSession({
@@ -578,6 +578,6 @@ test("AI Studio artifacts service reads server-owned artifact previews by semant
       previewId: "unknown"
     });
     assert.equal(unknown.ok, false);
-    assert.equal(unknown.errors[0].code, "ai_studio_artifact_preview_not_available");
+    assert.equal(unknown.errors[0].code, "vibe64_artifact_preview_not_available");
   });
 });

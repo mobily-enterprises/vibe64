@@ -23,7 +23,7 @@
         'studio-ai-sessions__command-overlay--minimized': commandOverlayMinimized
       }"
     >
-      <AiStudioCommandTerminal
+      <Vibe64CommandTerminal
         v-if="commandTerminal.visible"
         class="studio-ai-sessions__command-terminal"
         :action="commandTerminal.action"
@@ -36,7 +36,7 @@
         @finished="commandTerminal.finished"
         @running-changed="commandTerminal.runningChanged"
       />
-      <AiStudioHeadlessCommandOutput
+      <Vibe64HeadlessCommandOutput
         v-else
         class="studio-ai-sessions__command-terminal"
         :action-id="headlessCommandTerminal.actionId"
@@ -59,8 +59,8 @@
 
 <script setup>
 import { computed, ref, watch } from "vue";
-import AiStudioCommandTerminal from "@/components/studio/AiStudioCommandTerminal.vue";
-import AiStudioHeadlessCommandOutput from "@/components/studio/ai-studio-session/AiStudioHeadlessCommandOutput.vue";
+import Vibe64CommandTerminal from "@/components/studio/Vibe64CommandTerminal.vue";
+import Vibe64HeadlessCommandOutput from "@/components/studio/vibe64-session/Vibe64HeadlessCommandOutput.vue";
 import CodexSessionTerminal from "@/components/studio/CodexSessionTerminal.vue";
 
 const props = defineProps({

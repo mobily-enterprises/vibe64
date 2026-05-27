@@ -4,7 +4,7 @@ import {
   defaultConfigFromFields,
   selectedConfigValue
 } from "../../configValues.js";
-import { deepFreeze } from "@local/ai-studio-core/server/deepFreeze";
+import { deepFreeze } from "@local/vibe64-core/server/deepFreeze";
 import {
   DEFAULT_NODE_PACKAGE_MANAGER,
   NODE_PACKAGE_MANAGER_OPTIONS,
@@ -171,7 +171,7 @@ const NEXTJS_CONFIG_FIELDS = deepFreeze([
   },
   {
     defaultValue: "postgres",
-    description: "Optional AI Studio-managed database runtime for local setup, target scripts, and launch targets.",
+    description: "Optional Vibe64-managed database runtime for local setup, target scripts, and launch targets.",
     id: NEXTJS_DATABASE_RUNTIME_CONFIG,
     label: "Database runtime",
     options: [

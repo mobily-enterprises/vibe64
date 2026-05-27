@@ -6,10 +6,10 @@ import { promisify } from "node:util";
 
 import {
   pathExists
-} from "@local/ai-studio-core/server/core";
+} from "@local/vibe64-core/server/core";
 import {
   normalizePlainObject
-} from "@local/ai-studio-core/server/serverResponses";
+} from "@local/vibe64-core/server/serverResponses";
 import {
   targetScriptError
 } from "@local/studio-terminal-core/server/targetScriptTerminal";

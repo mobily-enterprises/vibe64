@@ -7,10 +7,10 @@ import {
 } from "./adapter.js";
 import {
   deepFreeze
-} from "@local/ai-studio-core/server/deepFreeze";
+} from "@local/vibe64-core/server/deepFreeze";
 import {
-  AI_STUDIO_WORKFLOW_COMMANDS,
-  createAiStudioWorkflowCommandTerminalSpec
+  VIBE64_WORKFLOW_COMMANDS,
+  createVibe64WorkflowCommandTerminalSpec
 } from "../../workflowAdapter.js";
 import {
   createNextjsLaunchTargetTerminalSpec,
@@ -37,8 +37,8 @@ export {
   NEXTJS_SEED_STYLING_CONFIG
 } from "./constants.js";
 
-const NEXTJS_AI_STUDIO_COMMANDS = deepFreeze(AI_STUDIO_WORKFLOW_COMMANDS);
-const createNextjsAiStudioCommandTerminalSpec = createAiStudioWorkflowCommandTerminalSpec;
+const NEXTJS_VIBE64_COMMANDS = deepFreeze(VIBE64_WORKFLOW_COMMANDS);
+const createNextjsVibe64CommandTerminalSpec = createVibe64WorkflowCommandTerminalSpec;
 
 function createNextjsTargetAdapter({
   commandTerminalSpecFactory = null,
@@ -49,17 +49,17 @@ function createNextjsTargetAdapter({
     commandTerminalSpecFactory,
     launchTargetTerminalSpecFactory,
     launchTargets,
-    commands: NEXTJS_AI_STUDIO_COMMANDS
+    commands: NEXTJS_VIBE64_COMMANDS
   });
 }
 
 export {
-  createNextjsAiStudioCommandTerminalSpec,
+  createNextjsVibe64CommandTerminalSpec,
   createNextjsLaunchDescriptor,
   createNextjsLaunchTargetTerminalSpec,
   createNextjsTargetAdapter,
   listNextjsLaunchTargets,
-  NEXTJS_AI_STUDIO_COMMANDS,
+  NEXTJS_VIBE64_COMMANDS,
   NEXTJS_CONFIG_FIELDS,
   NEXTJS_MARKERS,
   NEXTJS_PROMPT_PACK_ROOT,

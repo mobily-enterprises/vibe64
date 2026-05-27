@@ -2,7 +2,7 @@ import path from "node:path";
 
 import {
   createDoctorRepair as createRepair
-} from "@local/ai-studio-core/server/doctorCheckItems";
+} from "@local/vibe64-core/server/doctorCheckItems";
 import {
   buildDoctorTerminalArgs
 } from "./doctorToolchain.js";
@@ -37,20 +37,20 @@ const GIT_INIT_ACTION_ID = "terminal-git-init";
 const GH_CREATE_REPO_ACTION_ID = "terminal-gh-create-repo";
 const LINK_GITHUB_REMOTE_ACTION_ID = "terminal-link-github-remote";
 const GIT_IDENTITY_ACTION_ID = "terminal-git-identity";
-const ADD_AI_STUDIO_GITIGNORE_RULES_ACTION_ID = "terminal-add-ai-studio-gitignore-rules";
+const ADD_VIBE64_GITIGNORE_RULES_ACTION_ID = "terminal-add-vibe64-gitignore-rules";
 const MIRROR_REMOTE_BRANCH_ACTION_ID = "terminal-mirror-remote-branch";
 const CREATE_GIT_CHECKPOINT_ACTION_ID = "terminal-git-checkpoint";
 const PUSH_GIT_CHECKPOINT_ACTION_ID = "terminal-git-push-checkpoint";
 const DEFAULT_CHECKPOINT_COMMIT_MESSAGE = "Initial project setup";
-const AI_STUDIO_LOCAL_STATE_GITIGNORE_PATTERNS = Object.freeze([
-  ".ai-studio/sessions/",
-  ".ai-studio/runtime/"
+const VIBE64_LOCAL_STATE_GITIGNORE_PATTERNS = Object.freeze([
+  ".vibe64/sessions/",
+  ".vibe64/runtime/"
 ]);
 
 function repoNameFromTargetRoot(targetRoot) {
-  return String(path.basename(targetRoot) || "ai-studio-target")
+  return String(path.basename(targetRoot) || "vibe64-target")
     .replace(/[^A-Za-z0-9_.-]+/gu, "-")
-    .replace(/^-+|-+$/gu, "") || "ai-studio-target";
+    .replace(/^-+|-+$/gu, "") || "vibe64-target";
 }
 
 function hostWritableWorkspaceDockerArgs() {
@@ -165,25 +165,25 @@ function mirrorRemoteBranchScript() {
   return shellScript([
     "set -e",
     "set -x",
-    ": \"${AI_STUDIO_REMOTE_BRANCH:?AI_STUDIO_REMOTE_BRANCH is required}\"",
+    ": \"${VIBE64_REMOTE_BRANCH:?VIBE64_REMOTE_BRANCH is required}\"",
     "set +x",
     "export GIT_PASSWORD=\"$(gh auth token)\"",
-    "printf '%s\\n' '#!/bin/sh' 'case \"$1\" in' '*Username*) printf \"%s\\\\n\" \"x-access-token\" ;;' '*) printf \"%s\\\\n\" \"$GIT_PASSWORD\" ;;' 'esac' > /tmp/ai-studio-git-askpass",
-    "chmod 700 /tmp/ai-studio-git-askpass",
-    "export GIT_ASKPASS=/tmp/ai-studio-git-askpass",
+    "printf '%s\\n' '#!/bin/sh' 'case \"$1\" in' '*Username*) printf \"%s\\\\n\" \"x-access-token\" ;;' '*) printf \"%s\\\\n\" \"$GIT_PASSWORD\" ;;' 'esac' > /tmp/vibe64-git-askpass",
+    "chmod 700 /tmp/vibe64-git-askpass",
+    "export GIT_ASKPASS=/tmp/vibe64-git-askpass",
     "export GIT_TERMINAL_PROMPT=0",
     "set -x",
-    "git -c safe.directory=/workspace check-ref-format --branch \"$AI_STUDIO_REMOTE_BRANCH\" >/dev/null",
+    "git -c safe.directory=/workspace check-ref-format --branch \"$VIBE64_REMOTE_BRANCH\" >/dev/null",
     "if git -c safe.directory=/workspace rev-parse --verify HEAD >/dev/null 2>&1; then echo 'Local commits exist; refusing to mirror remote into a non-empty local history.'; exit 1; fi",
     "unexpected_entries=\"\"",
-    "for entry in .[!.]* ..?* *; do [ -e \"$entry\" ] || continue; case \"$entry\" in .git|.gitignore|.ai-studio) ;; *) unexpected_entries=\"$unexpected_entries${unexpected_entries:+ }$entry\" ;; esac; done",
+    "for entry in .[!.]* ..?* *; do [ -e \"$entry\" ] || continue; case \"$entry\" in .git|.gitignore|.vibe64) ;; *) unexpected_entries=\"$unexpected_entries${unexpected_entries:+ }$entry\" ;; esac; done",
     "if [ -n \"$unexpected_entries\" ]; then printf 'Refusing to mirror remote over existing local files:\\n%s\\n' \"$unexpected_entries\"; exit 1; fi",
-    "remote_ref=\"refs/remotes/origin/$AI_STUDIO_REMOTE_BRANCH\"",
-    "timeout 120s git -c safe.directory=/workspace -c credential.helper= fetch origin \"refs/heads/$AI_STUDIO_REMOTE_BRANCH:$remote_ref\"",
+    "remote_ref=\"refs/remotes/origin/$VIBE64_REMOTE_BRANCH\"",
+    "timeout 120s git -c safe.directory=/workspace -c credential.helper= fetch origin \"refs/heads/$VIBE64_REMOTE_BRANCH:$remote_ref\"",
     "git -c safe.directory=/workspace rev-parse --verify \"$remote_ref^{commit}\"",
     "rm -f .gitignore",
     "git -c safe.directory=/workspace reset --hard \"$remote_ref\"",
-    "git -c safe.directory=/workspace branch -M \"$AI_STUDIO_REMOTE_BRANCH\"",
+    "git -c safe.directory=/workspace branch -M \"$VIBE64_REMOTE_BRANCH\"",
     "git -c safe.directory=/workspace status --short"
   ]);
 }
@@ -250,33 +250,33 @@ function validateGitIdentityInputs(inputs = {}) {
   };
 }
 
-function addAiStudioGitignoreRulesCommandPreview() {
+function addVibe64GitignoreRulesCommandPreview() {
   return [
     "touch .gitignore",
-    ...AI_STUDIO_LOCAL_STATE_GITIGNORE_PATTERNS.map((pattern) => {
+    ...VIBE64_LOCAL_STATE_GITIGNORE_PATTERNS.map((pattern) => {
       return `grep -qxF ${shellQuote(pattern)} .gitignore || printf '%s\\n' ${shellQuote(pattern)} >> .gitignore`;
     })
   ].join("\n");
 }
 
-function addAiStudioGitignoreRulesScript() {
+function addVibe64GitignoreRulesScript() {
   return shellScript([
     "set -e",
     "set -x",
     "touch .gitignore",
-    ...AI_STUDIO_LOCAL_STATE_GITIGNORE_PATTERNS.map((pattern) => {
+    ...VIBE64_LOCAL_STATE_GITIGNORE_PATTERNS.map((pattern) => {
       return `grep -qxF ${shellQuote(pattern)} .gitignore || printf '%s\\n' ${shellQuote(pattern)} >> .gitignore`;
     }),
     "cat .gitignore"
   ]);
 }
 
-function addAiStudioGitignoreRulesRepair() {
+function addVibe64GitignoreRulesRepair() {
   return createRepair({
-    actionId: ADD_AI_STUDIO_GITIGNORE_RULES_ACTION_ID,
+    actionId: ADD_VIBE64_GITIGNORE_RULES_ACTION_ID,
     autoRun: true,
-    command: addAiStudioGitignoreRulesCommandPreview(),
-    label: "Add AI Studio ignore rules"
+    command: addVibe64GitignoreRulesCommandPreview(),
+    label: "Add Vibe64 ignore rules"
   });
 }
 
@@ -284,19 +284,19 @@ function gitCheckpointScript() {
   return shellScript([
     "set -e",
     "set -x",
-    ": \"${AI_STUDIO_HOST_UID:=0}\"",
-    ": \"${AI_STUDIO_HOST_GID:=0}\"",
-    "as_host() { if [ \"$(id -u)\" = \"0\" ] && command -v setpriv >/dev/null 2>&1; then setpriv --reuid \"$AI_STUDIO_HOST_UID\" --regid \"$AI_STUDIO_HOST_GID\" --clear-groups \"$@\"; else \"$@\"; fi; }",
+    ": \"${VIBE64_HOST_UID:=0}\"",
+    ": \"${VIBE64_HOST_GID:=0}\"",
+    "as_host() { if [ \"$(id -u)\" = \"0\" ] && command -v setpriv >/dev/null 2>&1; then setpriv --reuid \"$VIBE64_HOST_UID\" --regid \"$VIBE64_HOST_GID\" --clear-groups \"$@\"; else \"$@\"; fi; }",
     "set +x",
     "export GIT_PASSWORD=\"$(gh auth token)\"",
-    "printf '%s\\n' '#!/bin/sh' 'case \"$1\" in' '*Username*) printf \"%s\\\\n\" \"x-access-token\" ;;' '*) printf \"%s\\\\n\" \"$GIT_PASSWORD\" ;;' 'esac' > /tmp/ai-studio-git-askpass",
-    "if [ \"$(id -u)\" = \"0\" ]; then chown \"$AI_STUDIO_HOST_UID:$AI_STUDIO_HOST_GID\" /tmp/ai-studio-git-askpass; fi",
-    "chmod 700 /tmp/ai-studio-git-askpass",
-    "export GIT_ASKPASS=/tmp/ai-studio-git-askpass",
+    "printf '%s\\n' '#!/bin/sh' 'case \"$1\" in' '*Username*) printf \"%s\\\\n\" \"x-access-token\" ;;' '*) printf \"%s\\\\n\" \"$GIT_PASSWORD\" ;;' 'esac' > /tmp/vibe64-git-askpass",
+    "if [ \"$(id -u)\" = \"0\" ]; then chown \"$VIBE64_HOST_UID:$VIBE64_HOST_GID\" /tmp/vibe64-git-askpass; fi",
+    "chmod 700 /tmp/vibe64-git-askpass",
+    "export GIT_ASKPASS=/tmp/vibe64-git-askpass",
     "export GIT_TERMINAL_PROMPT=0",
     "set -x",
     "as_host git -c safe.directory=/workspace status --short",
-    "if ! as_host git -c safe.directory=/workspace rev-parse --verify HEAD >/dev/null 2>&1; then if [ \"${AI_STUDIO_CHECKPOINT_ALLOW_CREATE:-0}\" != \"1\" ]; then echo 'No local commit exists to push.'; exit 1; fi; if [ -z \"$(as_host git -c safe.directory=/workspace status --porcelain=v1)\" ]; then echo 'No files to checkpoint and no commits exist.'; exit 1; fi; as_host git -c safe.directory=/workspace add .; as_host git -c safe.directory=/workspace commit -m \"$AI_STUDIO_COMMIT_MESSAGE\"; fi",
+    "if ! as_host git -c safe.directory=/workspace rev-parse --verify HEAD >/dev/null 2>&1; then if [ \"${VIBE64_CHECKPOINT_ALLOW_CREATE:-0}\" != \"1\" ]; then echo 'No local commit exists to push.'; exit 1; fi; if [ -z \"$(as_host git -c safe.directory=/workspace status --porcelain=v1)\" ]; then echo 'No files to checkpoint and no commits exist.'; exit 1; fi; as_host git -c safe.directory=/workspace add .; as_host git -c safe.directory=/workspace commit -m \"$VIBE64_COMMIT_MESSAGE\"; fi",
     "branch=\"$(as_host git -c safe.directory=/workspace branch --show-current)\"",
     "if [ -z \"$branch\" ]; then echo 'No current branch.'; exit 1; fi",
     "remote_ref=\"refs/heads/$branch\"",
@@ -439,14 +439,14 @@ function startLinkGithubRemoteTerminal({
   const script = shellScript([
     "set -e",
     "set -x",
-    "git -c safe.directory=/workspace remote add origin \"$AI_STUDIO_REMOTE_URL\"",
+    "git -c safe.directory=/workspace remote add origin \"$VIBE64_REMOTE_URL\"",
     "git -c safe.directory=/workspace remote get-url origin"
   ]);
   const args = setupDoctorTerminalArgs(["bash", "-lc", script], {
     extraArgs: [
       ...extraArgs,
       "-e",
-      `AI_STUDIO_REMOTE_URL=${validation.url}`
+      `VIBE64_REMOTE_URL=${validation.url}`
     ],
     targetRoot
   });
@@ -475,17 +475,17 @@ function startGitIdentityTerminal({
   const script = shellScript([
     "set -e",
     "set -x",
-    "git config --global user.name \"$AI_STUDIO_GIT_USER_NAME\"",
-    "git config --global user.email \"$AI_STUDIO_GIT_USER_EMAIL\"",
+    "git config --global user.name \"$VIBE64_GIT_USER_NAME\"",
+    "git config --global user.email \"$VIBE64_GIT_USER_EMAIL\"",
     "git config --global --get user.name",
     "git config --global --get user.email"
   ]);
   const args = setupDoctorTerminalArgs(["bash", "-lc", script], {
     extraArgs: [
       "-e",
-      `AI_STUDIO_GIT_USER_NAME=${inputValidation.name}`,
+      `VIBE64_GIT_USER_NAME=${inputValidation.name}`,
       "-e",
-      `AI_STUDIO_GIT_USER_EMAIL=${inputValidation.email}`
+      `VIBE64_GIT_USER_EMAIL=${inputValidation.email}`
     ],
     targetRoot
   });
@@ -497,19 +497,19 @@ function startGitIdentityTerminal({
   });
 }
 
-function startAddAiStudioGitignoreRulesTerminal({
+function startAddVibe64GitignoreRulesTerminal({
   env = {},
   extraArgs = hostWritableWorkspaceDockerArgs(),
   namespace,
   targetRoot
 } = {}) {
-  const args = setupDoctorTerminalArgs(["bash", "-lc", addAiStudioGitignoreRulesScript()], {
+  const args = setupDoctorTerminalArgs(["bash", "-lc", addVibe64GitignoreRulesScript()], {
     extraArgs,
     targetRoot
   });
   return startSetupDoctorDockerTerminal({
     args,
-    commandPreview: addAiStudioGitignoreRulesCommandPreview(),
+    commandPreview: addVibe64GitignoreRulesCommandPreview(),
     env,
     namespace,
     targetRoot
@@ -534,7 +534,7 @@ function startMirrorRemoteBranchTerminal({
     extraArgs: [
       ...extraArgs,
       "-e",
-      `AI_STUDIO_REMOTE_BRANCH=${branch}`
+      `VIBE64_REMOTE_BRANCH=${branch}`
     ],
     targetRoot
   });
@@ -572,9 +572,9 @@ function startGitCheckpointTerminal({
       "-e",
       "GH_PROMPT_DISABLED=1",
       "-e",
-      `AI_STUDIO_CHECKPOINT_ALLOW_CREATE=${allowCreate ? "1" : "0"}`,
+      `VIBE64_CHECKPOINT_ALLOW_CREATE=${allowCreate ? "1" : "0"}`,
       "-e",
-      `AI_STUDIO_COMMIT_MESSAGE=${commitMessage.commitMessage}`
+      `VIBE64_COMMIT_MESSAGE=${commitMessage.commitMessage}`
     ],
     targetRoot
   });
@@ -764,8 +764,8 @@ async function readRemoteBranchShaWithGh(targetRoot, repoSlug, branch) {
 }
 
 export {
-  ADD_AI_STUDIO_GITIGNORE_RULES_ACTION_ID,
-  AI_STUDIO_LOCAL_STATE_GITIGNORE_PATTERNS,
+  ADD_VIBE64_GITIGNORE_RULES_ACTION_ID,
+  VIBE64_LOCAL_STATE_GITIGNORE_PATTERNS,
   CREATE_GIT_CHECKPOINT_ACTION_ID,
   DEFAULT_CHECKPOINT_COMMIT_MESSAGE,
   GH_CREATE_REPO_ACTION_ID,
@@ -774,9 +774,9 @@ export {
   LINK_GITHUB_REMOTE_ACTION_ID,
   MIRROR_REMOTE_BRANCH_ACTION_ID,
   PUSH_GIT_CHECKPOINT_ACTION_ID,
-  addAiStudioGitignoreRulesCommandPreview,
-  addAiStudioGitignoreRulesRepair,
-  addAiStudioGitignoreRulesScript,
+  addVibe64GitignoreRulesCommandPreview,
+  addVibe64GitignoreRulesRepair,
+  addVibe64GitignoreRulesScript,
   ghRepoCreateRepair,
   ghRepoCreateScript,
   ghRepoCreateTerminalArgs,
@@ -807,7 +807,7 @@ export {
   remoteHeadIsAncestorOfLocalHead,
   repoNameFromTargetRoot,
   setupDoctorTerminalArgs,
-  startAddAiStudioGitignoreRulesTerminal,
+  startAddVibe64GitignoreRulesTerminal,
   startGhCreateRepoTerminal,
   startGitCheckpointTerminal,
   startGitIdentityTerminal,

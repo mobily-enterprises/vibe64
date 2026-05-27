@@ -190,12 +190,12 @@ import {
   mdiContentCopy,
   mdiRefresh
 } from "@mdi/js";
-import { useAiStudioAccounts } from "@/composables/useAiStudioAccounts.js";
+import { useVibe64Accounts } from "@/composables/useVibe64Accounts.js";
 import { useAccountAuthSessions } from "@/composables/useAccountAuthSessions.js";
 
 const emit = defineEmits(["continue"]);
 
-const accounts = useAiStudioAccounts();
+const accounts = useVibe64Accounts();
 const status = computed(() => accounts.status || null);
 const statusReady = computed(() => status.value?.ready === true);
 const accountRows = computed(() => {

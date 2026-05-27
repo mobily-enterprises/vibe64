@@ -4,10 +4,10 @@ import {
   DEFAULT_TERMINAL_FAILURE_TAIL_LINES,
   terminalFailureFixRequestForSession,
   terminalFailureOutputTail
-} from "@local/ai-studio-runtime/server/terminalFailureFixRequest";
+} from "@local/vibe64-runtime/server/terminalFailureFixRequest";
 import {
   questionBatchLimitInstruction
-} from "@local/ai-studio-adapters/server/promptQuestionPolicy";
+} from "@local/vibe64-adapters/server/promptQuestionPolicy";
 
 test("terminal failure fix requests capture the last 200 terminal lines", () => {
   const output = Array.from({ length: DEFAULT_TERMINAL_FAILURE_TAIL_LINES + 5 }, (_, index) => `line-${index + 1}`)

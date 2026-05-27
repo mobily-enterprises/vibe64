@@ -15,7 +15,7 @@ import {
   ensureTargetRuntimeNetwork
 } from "@local/studio-terminal-core/server/runtimeContainers";
 import {
-  aiStudioResult,
+  vibe64Result,
   launchTargetTerminalNamespace,
   sessionTerminalCwd,
   stableHash
@@ -288,7 +288,7 @@ function createLaunchTargetTerminalController({
     },
 
     async launchStatus(sessionId) {
-      return aiStudioResult(async () => {
+      return vibe64Result(async () => {
         const context = await createLaunchContext(projectService, sessionId);
         return launchStatusResponse({
           launchTargets: await listLaunchTargets(context),
@@ -299,7 +299,7 @@ function createLaunchTargetTerminalController({
     },
 
     async openLaunchTarget(sessionId) {
-      return aiStudioResult(async () => {
+      return vibe64Result(async () => {
         const context = await createLaunchContext(projectService, sessionId);
         const status = launchStatusResponse({
           launchTargets: await listLaunchTargets(context),
@@ -325,13 +325,13 @@ function createLaunchTargetTerminalController({
     },
 
     async startTerminal(sessionId, input = {}) {
-      return aiStudioResult(async () => {
+      return vibe64Result(async () => {
         const context = await createLaunchContext(projectService, sessionId);
         const cwd = sessionTerminalCwd(context.session, projectService);
         if (!cwd) {
           return {
             ok: false,
-            error: "AI Studio launch target root is not available."
+            error: "Vibe64 launch target root is not available."
           };
         }
 

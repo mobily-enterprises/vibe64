@@ -4,18 +4,18 @@ import path from "node:path";
 import test from "node:test";
 
 import {
-  AiStudioSessionRuntime
-} from "@local/ai-studio-runtime/server";
+  Vibe64SessionRuntime
+} from "@local/vibe64-runtime/server";
 import {
-  VINEXT_AI_STUDIO_COMMANDS,
+  VINEXT_VIBE64_COMMANDS,
   createVinextLaunchDescriptor,
   createVinextLaunchTargetTerminalSpec,
   createVinextTargetAdapter
-} from "@local/ai-studio-adapters/server/adapters/vinext/index";
+} from "@local/vibe64-adapters/server/adapters/vinext/index";
 import {
   createVinextSetupDoctorPlugin
-} from "@local/ai-studio-adapters/server/adapters/vinext/setupDoctorPlugin";
-import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
+} from "@local/vibe64-adapters/server/adapters/vinext/setupDoctorPlugin";
+import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 async function writeProjectFile(root, relativePath, text = "") {
   const filePath = path.join(root, relativePath);
@@ -48,7 +48,7 @@ async function createVinextProject(root, packageJson = {}) {
 }
 
 function commandIds() {
-  return VINEXT_AI_STUDIO_COMMANDS
+  return VINEXT_VIBE64_COMMANDS
     .map((command) => command.id)
     .sort((left, right) => left.localeCompare(right));
 }
@@ -79,7 +79,7 @@ test("vinext adapter exposes project facts, commands, and prompt context", async
 test("vinext prompt actions use the Vinext prompt pack", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createVinextProject(targetRoot);
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       adapter: createVinextTargetAdapter(),
       targetRoot
     });

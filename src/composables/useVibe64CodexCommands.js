@@ -3,11 +3,11 @@ import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibil
 import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
 import { usePaths } from "@jskit-ai/users-web/client/composables/usePaths";
 import {
-  AI_STUDIO_SESSIONS_API_SUFFIX,
-  AI_STUDIO_SURFACE_ID,
+  VIBE64_SESSIONS_API_SUFFIX,
+  VIBE64_SURFACE_ID,
   LOCAL_STUDIO_COMMAND_OPTIONS,
-  aiStudioCodexAttachmentPath
-} from "@/lib/aiStudioSessionRequestConfig.js";
+  vibe64CodexAttachmentPath
+} from "@/lib/vibe64SessionRequestConfig.js";
 
 function normalizeSessionId(sessionId = "") {
   return String(sessionId || "").trim();
@@ -15,7 +15,7 @@ function normalizeSessionId(sessionId = "") {
 
 function missingSessionResponse() {
   return {
-    error: "AI Studio session id is required.",
+    error: "Vibe64 session id is required.",
     ok: false
   };
 }
@@ -39,19 +39,19 @@ async function filePayload(file) {
   };
 }
 
-function useAiStudioCodexCommands() {
+function useVibe64CodexCommands() {
   const paths = usePaths();
-  const sessionsApiPath = computed(() => paths.api(AI_STUDIO_SESSIONS_API_SUFFIX, {
-    surface: AI_STUDIO_SURFACE_ID
+  const sessionsApiPath = computed(() => paths.api(VIBE64_SESSIONS_API_SUFFIX, {
+    surface: VIBE64_SURFACE_ID
   }));
 
   const uploadAttachmentCommand = useCommand({
     access: "never",
-    apiSuffix: AI_STUDIO_SESSIONS_API_SUFFIX,
+    apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
     buildCommandOptions: (_payload, { context }) => ({
       method: "POST",
       options: LOCAL_STUDIO_COMMAND_OPTIONS,
-      path: aiStudioCodexAttachmentPath(sessionsApiPath.value, context.sessionId)
+      path: vibe64CodexAttachmentPath(sessionsApiPath.value, context.sessionId)
     }),
     buildRawPayload: (_model, { context }) => ({
       contentType: String(context.contentType || ""),
@@ -63,9 +63,9 @@ function useAiStudioCodexCommands() {
       error: "Codex attachment could not be uploaded."
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "ai-studio.codex-attachment.upload",
+    placementSource: "vibe64.codex-attachment.upload",
     suppressSuccessMessage: true,
-    surfaceId: AI_STUDIO_SURFACE_ID,
+    surfaceId: VIBE64_SURFACE_ID,
     writeMethod: "POST"
   });
 
@@ -98,5 +98,5 @@ function useAiStudioCodexCommands() {
 }
 
 export {
-  useAiStudioCodexCommands
+  useVibe64CodexCommands
 };

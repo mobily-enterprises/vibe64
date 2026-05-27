@@ -27,7 +27,7 @@ import {
 } from "./projectDetection.js";
 
 const DEFAULT_TARGET_SCRIPT_NAMES = Object.freeze([
-  "ai-studio:verify",
+  "vibe64:verify",
   "dev",
   "start",
   "build",

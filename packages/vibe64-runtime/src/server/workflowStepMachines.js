@@ -1,7 +1,7 @@
 import {
-  aiStudioError,
+  vibe64Error,
   normalizeText
-} from "@local/ai-studio-core/server/core";
+} from "@local/vibe64-core/server/core";
 import {
   STEP_STATUS,
   assertInputMatchesCurrentState,
@@ -70,9 +70,9 @@ async function saveStepMachineInput(runtime, sessionId = "", input = {}) {
   const normalizedInput = normalizeMachineInput(input);
   const machine = workflowStepMachine(runtime, session.currentStep);
   if (!machine || typeof machine.submitInput !== "function") {
-    throw aiStudioError(
-      `The current AI Studio step does not accept direct input: ${session.currentStep || "(none)"}`,
-      "ai_studio_step_input_not_available"
+    throw vibe64Error(
+      `The current Vibe64 step does not accept direct input: ${session.currentStep || "(none)"}`,
+      "vibe64_step_input_not_available"
     );
   }
   try {
@@ -96,9 +96,9 @@ async function recoverStuckStepMachineExecution(runtime, session = {}, {
 } = {}) {
   const machine = workflowStepMachine(runtime, session.currentStep);
   if (!machine) {
-    throw aiStudioError(
-      `The current AI Studio step cannot be recovered: ${session.currentStep || "(none)"}`,
-      "ai_studio_step_recovery_not_available"
+    throw vibe64Error(
+      `The current Vibe64 step cannot be recovered: ${session.currentStep || "(none)"}`,
+      "vibe64_step_recovery_not_available"
     );
   }
   const state = await readState({
@@ -106,9 +106,9 @@ async function recoverStuckStepMachineExecution(runtime, session = {}, {
     session
   }, machine);
   if (normalizeText(state.status) !== STEP_STATUS.ATTEMPTING_EXECUTION) {
-    throw aiStudioError(
-      "The current AI Studio step is not waiting on an in-flight command.",
-      "ai_studio_step_recovery_not_available"
+    throw vibe64Error(
+      "The current Vibe64 step is not waiting on an in-flight command.",
+      "vibe64_step_recovery_not_available"
     );
   }
   await writeState({

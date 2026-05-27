@@ -21,10 +21,10 @@ import {
 import {
   normalizeText,
   pathExists
-} from "@local/ai-studio-core/server/core";
-import { deepFreeze } from "@local/ai-studio-core/server/deepFreeze";
+} from "@local/vibe64-core/server/core";
+import { deepFreeze } from "@local/vibe64-core/server/deepFreeze";
 import {
-  AiStudioDescribedWorkflowTargetAdapter,
+  Vibe64DescribedWorkflowTargetAdapter,
   inspectDescribedProject
 } from "../../workflowAdapter.js";
 import {
@@ -266,7 +266,7 @@ async function inspectCppProject(targetRoot) {
     markers: CPP_MARKERS,
     packageJson: {
       defaultValue: null,
-      invalidJsonCode: "ai_studio_invalid_cpp_package_json",
+      invalidJsonCode: "vibe64_invalid_cpp_package_json",
       invalidJsonMessage: (filePath) => `Invalid JSON in optional C++ package file: ${filePath}`
     }
   });
@@ -424,7 +424,7 @@ async function cppAutomatedChecksHook({
 
 function cppCodeIndexShellCommand() {
   return [
-    "mkdir -p .ai-studio",
+    "mkdir -p .vibe64",
     "{",
     "  printf '# C++ code index\\n\\n'",
     "  printf '## Build manifests\\n'",
@@ -464,7 +464,7 @@ async function cppCodeIndexHook({
   };
 }
 
-class CppTargetAdapter extends AiStudioDescribedWorkflowTargetAdapter {
+class CppTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
   constructor({
     commandTerminalSpecFactory = null,
     commands = []

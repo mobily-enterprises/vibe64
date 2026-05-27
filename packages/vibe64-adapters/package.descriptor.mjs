@@ -1,12 +1,12 @@
 export default Object.freeze({
   packageVersion: 1,
-  packageId: "@local/ai-studio-adapters",
+  packageId: "@local/vibe64-adapters",
   version: "0.1.0",
   kind: "runtime",
-  description: "AI Studio adapter registry, adapter contracts, and built-in adapters.",
+  description: "Vibe64 adapter registry, adapter contracts, and built-in adapters.",
   dependsOn: [
     "@jskit-ai/kernel",
-    "@local/ai-studio-core",
+    "@local/vibe64-core",
     "@local/setup-doctor-core",
     "@local/studio-terminal-core"
   ],

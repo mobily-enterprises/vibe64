@@ -8,7 +8,7 @@ import {
   numberedQuestionSugarForInput,
   parseNumberedQuestionPrompt,
   UI_QUESTION_FIELD_PREFIX
-} from "../../src/lib/aiStudioNumberedQuestionSugar.js";
+} from "../../src/lib/vibe64NumberedQuestionSugar.js";
 
 const plainResponseField = {
   kind: "textarea",
@@ -29,7 +29,7 @@ function sugarForPrompt(prompt, fields = [plainResponseField]) {
   }, fields);
 }
 
-describe("aiStudioNumberedQuestionSugar", () => {
+describe("vibe64NumberedQuestionSugar", () => {
   it("turns a clean numbered prompt into private UI-only fields", () => {
     const sugar = sugarForPrompt([
       "Codex needs these details:",

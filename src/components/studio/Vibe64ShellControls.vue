@@ -1,5 +1,5 @@
 <template>
-  <div v-if="sessionId" class="ai-studio-shell-controls">
+  <div v-if="sessionId" class="vibe64-shell-controls">
     <v-menu v-if="showShellTargetMenu" location="bottom end">
       <template #activator="{ props: menuProps }">
         <v-btn
@@ -14,7 +14,7 @@
         />
       </template>
 
-      <v-list class="ai-studio-shell-controls__menu" density="compact">
+      <v-list class="vibe64-shell-controls__menu" density="compact">
         <v-list-item
           :disabled="!canCreateWorktreeShell"
           :prepend-icon="mdiFolderOutline"
@@ -49,22 +49,22 @@
       to="body"
     >
       <div
-        class="ai-studio-shell-controls__inline-panel"
+        class="vibe64-shell-controls__inline-panel"
         :class="{
-          'ai-studio-shell-controls__inline-panel--displayed': shellPanelOpen,
-          'ai-studio-shell-controls__inline-panel--hidden': !shellPanelOpen
+          'vibe64-shell-controls__inline-panel--displayed': shellPanelOpen,
+          'vibe64-shell-controls__inline-panel--hidden': !shellPanelOpen
         }"
         :style="shellPanelStyle"
       >
-        <div class="ai-studio-shell-controls__window">
-          <div class="ai-studio-shell-controls__terminal-stack">
-            <AiStudioCommandTerminal
+        <div class="vibe64-shell-controls__window">
+          <div class="vibe64-shell-controls__terminal-stack">
+            <Vibe64CommandTerminal
               v-for="tab in shellTabs"
               :key="tab.id"
               :ref="(terminalComponent) => setShellTerminalRef(tab.id, terminalComponent)"
-              class="ai-studio-shell-controls__terminal"
+              class="vibe64-shell-controls__terminal"
               :class="{
-                'ai-studio-shell-controls__terminal--active': tab.id === activeShellTabId
+                'vibe64-shell-controls__terminal--active': tab.id === activeShellTabId
               }"
               emit-closed-before-server-ack
               :finished-hold-ms="0"
@@ -84,11 +84,11 @@
               <template #heading>
                 <div
                   v-if="tab.id === activeShellTabId"
-                  class="ai-studio-shell-controls__tabs"
+                  class="vibe64-shell-controls__tabs"
                   :title="shellTabsShortcutTitle"
                 >
                   <div
-                    class="ai-studio-shell-controls__tab-list"
+                    class="vibe64-shell-controls__tab-list"
                     role="tablist"
                     @pointerdown.stop
                   >
@@ -96,9 +96,9 @@
                       v-for="(shellTab, index) in shellTabs"
                       :key="shellTab.id"
                       type="button"
-                      class="ai-studio-shell-controls__tab"
+                      class="vibe64-shell-controls__tab"
                       :class="{
-                        'ai-studio-shell-controls__tab--active': shellTab.id === activeShellTabId
+                        'vibe64-shell-controls__tab--active': shellTab.id === activeShellTabId
                       }"
                       :aria-selected="shellTab.id === activeShellTabId ? 'true' : 'false'"
                       role="tab"
@@ -109,13 +109,13 @@
                       <span>{{ shellTab.label }}</span>
                       <v-icon
                         v-if="shellTab.running"
-                        class="ai-studio-shell-controls__tab-running"
+                        class="vibe64-shell-controls__tab-running"
                         :icon="mdiCircleSmall"
                         size="18"
                       />
                       <v-icon
                         :icon="mdiClose"
-                        class="ai-studio-shell-controls__tab-close"
+                        class="vibe64-shell-controls__tab-close"
                         size="15"
                         title="Close tab"
                         @pointerdown.stop
@@ -125,7 +125,7 @@
                   </div>
 
                   <v-btn
-                    class="ai-studio-shell-controls__new-tab"
+                    class="vibe64-shell-controls__new-tab"
                     :disabled="!canOpenNewTab"
                     :icon="mdiPlus"
                     size="small"
@@ -136,7 +136,7 @@
                   />
                 </div>
               </template>
-            </AiStudioCommandTerminal>
+            </Vibe64CommandTerminal>
           </div>
         </div>
       </div>
@@ -155,18 +155,18 @@ import {
   mdiPlus,
   mdiSourceRepository
 } from "@mdi/js";
-import AiStudioCommandTerminal from "@/components/studio/AiStudioCommandTerminal.vue";
+import Vibe64CommandTerminal from "@/components/studio/Vibe64CommandTerminal.vue";
 import {
-  aiStudioSessionWorktreePath
-} from "@/lib/aiStudioSessionPaths.js";
+  vibe64SessionWorktreePath
+} from "@/lib/vibe64SessionPaths.js";
 import {
-  aiStudioShellPanelTargetSelector
-} from "@/lib/aiStudioShellPanelTarget.js";
+  vibe64ShellPanelTargetSelector
+} from "@/lib/vibe64ShellPanelTarget.js";
 import {
   consumeShellShortcutEvent,
   MAX_SHELL_TABS,
   shellShortcutAction
-} from "@/lib/aiStudioShellShortcuts.js";
+} from "@/lib/vibe64ShellShortcuts.js";
 
 const props = defineProps({
   session: {
@@ -193,7 +193,7 @@ let shortcutListenerActive = false;
 let shellPanelResizeObserver = null;
 
 const sessionId = computed(() => String(props.session?.sessionId || ""));
-const worktreePath = computed(() => aiStudioSessionWorktreePath(props.session || {}));
+const worktreePath = computed(() => vibe64SessionWorktreePath(props.session || {}));
 const menuDisabled = computed(() => !sessionId.value);
 const canOpenMainShell = computed(() => Boolean(sessionId.value && !menuDisabled.value));
 const canOpenWorktreeShell = computed(() => Boolean(canOpenMainShell.value && worktreePath.value));
@@ -215,7 +215,7 @@ const canOpenNewTab = computed(() => {
 const mainShellMenuSubtitle = computed(() => (shellTabLimitReached.value ? shellTabLimitMessage : "Project root"));
 const newShellTabTitle = computed(() => (shellTabLimitReached.value ? shellTabLimitMessage : "New shell tab (Alt-N)"));
 const shellTabsShortcutTitle = `Alt-N creates a tab. Alt-1 through Alt-${MAX_SHELL_TABS} switches tabs.`;
-const shellPanelTargetSelector = computed(() => aiStudioShellPanelTargetSelector(sessionId.value));
+const shellPanelTargetSelector = computed(() => vibe64ShellPanelTargetSelector(sessionId.value));
 const runningShellCount = computed(() => shellTabs.value.filter((tab) => tab.running).length);
 const shellActivatorIcon = computed(() => (runningShellCount.value > 0 ? mdiMonitorDashboard : mdiMonitor));
 const shellActivatorColor = computed(() => (hasShellTabs.value ? "primary" : undefined));
@@ -525,18 +525,18 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.ai-studio-shell-controls {
+.vibe64-shell-controls {
   align-items: center;
   display: inline-flex;
   min-width: 0;
 }
 
-.ai-studio-shell-controls__menu {
+.vibe64-shell-controls__menu {
   max-width: min(22rem, 92vw);
   min-width: min(18rem, 92vw);
 }
 
-.ai-studio-shell-controls__window {
+.vibe64-shell-controls__window {
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -544,7 +544,7 @@ onBeforeUnmount(() => {
   min-height: 0;
 }
 
-.ai-studio-shell-controls__inline-panel {
+.vibe64-shell-controls__inline-panel {
   background: rgb(var(--v-theme-surface));
   height: 100%;
   min-height: 0;
@@ -552,12 +552,12 @@ onBeforeUnmount(() => {
   pointer-events: auto;
 }
 
-.ai-studio-shell-controls__inline-panel--displayed {
+.vibe64-shell-controls__inline-panel--displayed {
   position: fixed;
   z-index: 2600;
 }
 
-.ai-studio-shell-controls__inline-panel--hidden {
+.vibe64-shell-controls__inline-panel--hidden {
   height: 0;
   overflow: hidden;
   pointer-events: none;
@@ -566,7 +566,7 @@ onBeforeUnmount(() => {
   width: 0;
 }
 
-.ai-studio-shell-controls__tabs {
+.vibe64-shell-controls__tabs {
   align-items: center;
   cursor: default;
   display: flex;
@@ -577,7 +577,7 @@ onBeforeUnmount(() => {
   width: 100%;
 }
 
-.ai-studio-shell-controls__tab-list {
+.vibe64-shell-controls__tab-list {
   cursor: default;
   display: flex;
   flex: 1 1 auto;
@@ -587,15 +587,15 @@ onBeforeUnmount(() => {
   scrollbar-width: none;
 }
 
-.ai-studio-shell-controls__tab-list::-webkit-scrollbar {
+.vibe64-shell-controls__tab-list::-webkit-scrollbar {
   display: none;
 }
 
-.ai-studio-shell-controls__new-tab {
+.vibe64-shell-controls__new-tab {
   flex: 0 0 auto;
 }
 
-.ai-studio-shell-controls__tab {
+.vibe64-shell-controls__tab {
   align-items: center;
   background: transparent;
   border: 0;
@@ -613,42 +613,42 @@ onBeforeUnmount(() => {
   padding: 0.25rem 0.32rem 0.25rem 0.5rem;
 }
 
-.ai-studio-shell-controls__tab:hover,
-.ai-studio-shell-controls__tab--active {
+.vibe64-shell-controls__tab:hover,
+.vibe64-shell-controls__tab--active {
   background: rgba(var(--v-theme-primary), 0.12);
   color: rgb(var(--v-theme-on-surface));
 }
 
-.ai-studio-shell-controls__tab span {
+.vibe64-shell-controls__tab span {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.ai-studio-shell-controls__tab-running {
+.vibe64-shell-controls__tab-running {
   color: rgb(var(--v-theme-success));
   flex: 0 0 auto;
 }
 
-.ai-studio-shell-controls__tab-close {
+.vibe64-shell-controls__tab-close {
   border-radius: 999px;
   flex: 0 0 auto;
   opacity: 0.62;
 }
 
-.ai-studio-shell-controls__tab-close:hover {
+.vibe64-shell-controls__tab-close:hover {
   background: rgba(var(--v-theme-on-surface), 0.12);
   opacity: 1;
 }
 
-.ai-studio-shell-controls__terminal-stack {
+.vibe64-shell-controls__terminal-stack {
   flex: 1 1 auto;
   min-height: 0;
   position: relative;
 }
 
-.ai-studio-shell-controls__terminal {
+.vibe64-shell-controls__terminal {
   height: 100%;
   inset: 0;
   pointer-events: none;
@@ -657,17 +657,17 @@ onBeforeUnmount(() => {
   width: 100%;
 }
 
-.ai-studio-shell-controls__terminal--active {
+.vibe64-shell-controls__terminal--active {
   pointer-events: auto;
   visibility: visible;
 }
 
-.ai-studio-shell-controls__inline-panel :deep(.ai-command-terminal) {
+.vibe64-shell-controls__inline-panel :deep(.ai-command-terminal) {
   box-shadow: none;
   height: 100%;
 }
 
-.ai-studio-shell-controls__inline-panel :deep(.ai-command-terminal__body) {
+.vibe64-shell-controls__inline-panel :deep(.ai-command-terminal__body) {
   flex: 1 1 auto;
   grid-template-rows: auto minmax(0, 1fr) auto;
   height: auto;
@@ -675,17 +675,17 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
-.ai-studio-shell-controls__inline-panel :deep(.ai-command-terminal--shell .ai-command-terminal__body) {
+.vibe64-shell-controls__inline-panel :deep(.ai-command-terminal--shell .ai-command-terminal__body) {
   gap: 0.5rem;
 }
 
-.ai-studio-shell-controls__inline-panel :deep(.ai-command-terminal__host) {
+.vibe64-shell-controls__inline-panel :deep(.ai-command-terminal__host) {
   height: 100%;
   min-height: 0;
 }
 
 @media (max-width: 980px) {
-  .ai-studio-shell-controls__inline-panel--displayed {
+  .vibe64-shell-controls__inline-panel--displayed {
     background: rgb(var(--v-theme-background));
     height: auto !important;
     inset: 0;

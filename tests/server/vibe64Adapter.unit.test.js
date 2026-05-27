@@ -2,12 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  AiStudioSessionRuntime
-} from "@local/ai-studio-runtime/server";
+  Vibe64SessionRuntime
+} from "@local/vibe64-runtime/server";
 import {
   FakeTargetAdapter
-} from "@local/ai-studio-adapters/server";
-import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
+} from "@local/vibe64-adapters/server";
+import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 function toyWorkflow() {
   return {
@@ -29,9 +29,9 @@ function toyWorkflow() {
   };
 }
 
-test("ai-studio runtime exposes fake adapter facts, commands, and enabled actions", async () => {
+test("vibe64 runtime exposes fake adapter facts, commands, and enabled actions", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       adapter: new FakeTargetAdapter({
         actionResults: {
           toy_command: {
@@ -98,16 +98,16 @@ test("ai-studio runtime exposes fake adapter facts, commands, and enabled action
     await assert.rejects(
       () => runtime.runAction("toy_session", "toy_command"),
       {
-        code: "ai_studio_command_requires_terminal",
+        code: "vibe64_command_requires_terminal",
         message: "Command action Toy command must run in the command terminal."
       }
     );
   });
 });
 
-test("ai-studio runtime disables actions when the adapter lacks a required capability", async () => {
+test("vibe64 runtime disables actions when the adapter lacks a required capability", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       adapter: new FakeTargetAdapter({
         capabilities: {}
       }),
@@ -135,16 +135,16 @@ test("ai-studio runtime disables actions when the adapter lacks a required capab
     await assert.rejects(
       () => runtime.runAction("missing_capability", "toy_command"),
       {
-        code: "ai_studio_action_disabled",
+        code: "vibe64_action_disabled",
         message: "Fake adapter does not support capability: toy_command."
       }
     );
   });
 });
 
-test("ai-studio prompt actions include adapter facts in rendered prompt context", async () => {
+test("vibe64 prompt actions include adapter facts in rendered prompt context", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       adapter: new FakeTargetAdapter({
         capabilities: [
           "planning"

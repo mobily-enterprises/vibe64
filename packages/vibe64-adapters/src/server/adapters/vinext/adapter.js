@@ -5,10 +5,10 @@ import {
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
-  AiStudioDescribedWorkflowTargetAdapter,
+  Vibe64DescribedWorkflowTargetAdapter,
   inspectDescribedProject
 } from "../../workflowAdapter.js";
-import { deepFreeze } from "@local/ai-studio-core/server/deepFreeze";
+import { deepFreeze } from "@local/vibe64-core/server/deepFreeze";
 import {
   VINEXT_PROJECT_KNOWLEDGE_RELATIVE_PATH
 } from "./constants.js";
@@ -42,7 +42,7 @@ import {
   studioCommandScript
 } from "../../nodeWebProject.js";
 import {
-  AI_STUDIO_VERIFY_SCRIPT_NAME,
+  VIBE64_VERIFY_SCRIPT_NAME,
   javascriptAdapterCodeIndexCommand,
   packageManagerScriptCommand
 } from "../../codeIndexCommands.js";
@@ -246,7 +246,7 @@ async function inspectVinextProject(targetRoot) {
     extra: nodePackageManagerInspectionExtra,
     markers: VINEXT_MARKERS,
     packageJson: {
-      invalidJsonCode: "ai_studio_invalid_vinext_json",
+      invalidJsonCode: "vibe64_invalid_vinext_json",
       invalidJsonMessage: (filePath) => `Invalid JSON in Vinext project file: ${filePath}`
     }
   });
@@ -260,7 +260,7 @@ async function vinextAutomatedChecksHook({ worktreePath = "" } = {}) {
   const verifyCommand = packageManagerScriptCommand({
     packageJson: packageJson || {},
     packageManager,
-    scriptName: AI_STUDIO_VERIFY_SCRIPT_NAME
+    scriptName: VIBE64_VERIFY_SCRIPT_NAME
   });
   if (verifyCommand) {
     return {
@@ -312,7 +312,7 @@ async function vinextCodeIndexHook({ worktreePath = "" } = {}) {
   };
 }
 
-class VinextTargetAdapter extends AiStudioDescribedWorkflowTargetAdapter {
+class VinextTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
   constructor({
     commandTerminalSpecFactory = null,
     commands = [],

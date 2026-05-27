@@ -4,23 +4,23 @@ import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
 import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
 import { usePaths } from "@jskit-ai/users-web/client/composables/usePaths";
 import {
-  AI_STUDIO_SESSIONS_API_SUFFIX,
-  AI_STUDIO_SURFACE_ID,
+  VIBE64_SESSIONS_API_SUFFIX,
+  VIBE64_SURFACE_ID,
   LOCAL_STUDIO_COMMAND_OPTIONS,
-  aiStudioLaunchTargetsPath,
-  aiStudioLaunchTargetsQueryKey,
-  aiStudioLaunchTerminalPath,
-  aiStudioLaunchTerminalStopPath
-} from "@/lib/aiStudioSessionRequestConfig.js";
+  vibe64LaunchTargetsPath,
+  vibe64LaunchTargetsQueryKey,
+  vibe64LaunchTerminalPath,
+  vibe64LaunchTerminalStopPath
+} from "@/lib/vibe64SessionRequestConfig.js";
 import {
-  aiStudioLaunchTerminalWebSocketUrl
-} from "@/lib/aiStudioSessionApi.js";
+  vibe64LaunchTerminalWebSocketUrl
+} from "@/lib/vibe64SessionApi.js";
 import {
   readRefOrGetterValue
 } from "@/lib/vueRefOrGetterValue.js";
 import {
-  aiStudioSessionWorktreePath
-} from "@/lib/aiStudioSessionPaths.js";
+  vibe64SessionWorktreePath
+} from "@/lib/vibe64SessionPaths.js";
 import {
   useStudioTerminal
 } from "@/composables/useStudioTerminal.js";
@@ -38,11 +38,11 @@ function browserCanOpenTarget(target = {}) {
 
 function launchBrowserTargetName(session = {}) {
   const source = session?.targetRoot || session?.worktree || session?.sessionRoot || session?.sessionId || "target";
-  return `ai-studio-launch-${stableLocalStorageKeyPart(source)}`;
+  return `vibe64-launch-${stableLocalStorageKeyPart(source)}`;
 }
 
 function launchTerminalStorageKey(session = {}) {
-  return `ai-studio:floating-terminal:launch:${launchBrowserTargetName(session)}`;
+  return `vibe64:floating-terminal:launch:${launchBrowserTargetName(session)}`;
 }
 
 function openLaunchBrowserTarget(target = {}, session = {}, browserWindow = null) {
@@ -120,7 +120,7 @@ function openReadyLaunchBrowserTarget(target = {}, session = {}, pendingWindow =
 }
 
 function launchTargetWorktreePath(session = {}) {
-  return aiStudioSessionWorktreePath(session);
+  return vibe64SessionWorktreePath(session);
 }
 
 function delay(milliseconds = 0) {
@@ -138,7 +138,7 @@ function launchTerminalIsReady(metadata = {}) {
   return metadata?.launchReady === true || metadata?.launchReady === "true";
 }
 
-function useAiStudioLaunchControls({
+function useVibe64LaunchControls({
   busy = () => false,
   session = null,
   windowDisplayed = () => true
@@ -154,17 +154,17 @@ function useAiStudioLaunchControls({
     sessionId.value &&
     launchTargetWorktreePath(selectedSession.value || {})
   ));
-  const sessionsApiPath = computed(() => paths.api(AI_STUDIO_SESSIONS_API_SUFFIX, {
-    surface: AI_STUDIO_SURFACE_ID
+  const sessionsApiPath = computed(() => paths.api(VIBE64_SESSIONS_API_SUFFIX, {
+    surface: VIBE64_SURFACE_ID
   }));
   const launchTargetsPath = computed(() => {
-    return sessionId.value ? aiStudioLaunchTargetsPath(sessionsApiPath.value, sessionId.value) : "";
+    return sessionId.value ? vibe64LaunchTargetsPath(sessionsApiPath.value, sessionId.value) : "";
   });
   const terminalWindowStorageKey = computed(() => launchTerminalStorageKey(selectedSession.value || {}));
   const terminalDisplayed = computed(() => readRefOrGetterValue(windowDisplayed) !== false);
   const terminal = useStudioTerminal({
     webSocketUrl(terminalId) {
-      return aiStudioLaunchTerminalWebSocketUrl(sessionId.value, terminalId);
+      return vibe64LaunchTerminalWebSocketUrl(sessionId.value, terminalId);
     }
   });
   const {
@@ -193,8 +193,8 @@ function useAiStudioLaunchControls({
     enabled: canLoadLaunchTargets,
     fallbackLoadError: "Launch targets could not be loaded.",
     path: launchTargetsPath,
-    queryKey: computed(() => aiStudioLaunchTargetsQueryKey(
-      AI_STUDIO_SURFACE_ID,
+    queryKey: computed(() => vibe64LaunchTargetsQueryKey(
+      VIBE64_SURFACE_ID,
       ROUTE_VISIBILITY_PUBLIC,
       sessionId.value
     )),
@@ -203,11 +203,11 @@ function useAiStudioLaunchControls({
 
   const startTerminalCommand = useCommand({
     access: "never",
-    apiSuffix: AI_STUDIO_SESSIONS_API_SUFFIX,
+    apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
     buildCommandOptions: (_payload, { context }) => ({
       method: "POST",
       options: LOCAL_STUDIO_COMMAND_OPTIONS,
-      path: aiStudioLaunchTerminalPath(sessionsApiPath.value, context.sessionId)
+      path: vibe64LaunchTerminalPath(sessionsApiPath.value, context.sessionId)
     }),
     buildRawPayload: (_model, { context }) => ({
       launchTargetId: String(context.launchTargetId || "")
@@ -217,47 +217,47 @@ function useAiStudioLaunchControls({
       error: "Launch target could not be started."
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "ai-studio.launch-target.start",
+    placementSource: "vibe64.launch-target.start",
     suppressSuccessMessage: true,
-    surfaceId: AI_STUDIO_SURFACE_ID,
+    surfaceId: VIBE64_SURFACE_ID,
     writeMethod: "POST"
   });
 
   const stopTerminalCommand = useCommand({
     access: "never",
-    apiSuffix: AI_STUDIO_SESSIONS_API_SUFFIX,
+    apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
     buildCommandOptions: (_payload, { context }) => ({
       method: "POST",
       options: LOCAL_STUDIO_COMMAND_OPTIONS,
-      path: aiStudioLaunchTerminalStopPath(sessionsApiPath.value, context.sessionId, context.terminalSessionId)
+      path: vibe64LaunchTerminalStopPath(sessionsApiPath.value, context.sessionId, context.terminalSessionId)
     }),
     fallbackRunError: "Launch target could not be stopped.",
     messages: {
       error: "Launch target could not be stopped."
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "ai-studio.launch-target.stop",
+    placementSource: "vibe64.launch-target.stop",
     suppressSuccessMessage: true,
-    surfaceId: AI_STUDIO_SURFACE_ID,
+    surfaceId: VIBE64_SURFACE_ID,
     writeMethod: "POST"
   });
 
   const closeTerminalCommand = useCommand({
     access: "never",
-    apiSuffix: AI_STUDIO_SESSIONS_API_SUFFIX,
+    apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
     buildCommandOptions: (_payload, { context }) => ({
       method: "DELETE",
       options: LOCAL_STUDIO_COMMAND_OPTIONS,
-      path: aiStudioLaunchTerminalPath(sessionsApiPath.value, context.sessionId, context.terminalSessionId)
+      path: vibe64LaunchTerminalPath(sessionsApiPath.value, context.sessionId, context.terminalSessionId)
     }),
     fallbackRunError: "Launch target terminal could not close.",
     messages: {
       error: "Launch target terminal could not close."
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "ai-studio.launch-target.close",
+    placementSource: "vibe64.launch-target.close",
     suppressSuccessMessage: true,
-    surfaceId: AI_STUDIO_SURFACE_ID,
+    surfaceId: VIBE64_SURFACE_ID,
     writeMethod: "DELETE"
   });
 
@@ -650,5 +650,5 @@ export {
   openLaunchBrowserTarget,
   openPendingLaunchBrowserWindow,
   openReadyLaunchBrowserTarget,
-  useAiStudioLaunchControls
+  useVibe64LaunchControls
 };

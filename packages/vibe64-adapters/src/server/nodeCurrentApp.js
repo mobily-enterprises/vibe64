@@ -7,7 +7,7 @@ import {
   readJsonFile
 } from "./currentAppInspection.js";
 import {
-  createAiStudioTargetScriptTerminalSpec,
+  createVibe64TargetScriptTerminalSpec,
   targetScriptCommandPreview,
   targetScriptError
 } from "@local/studio-terminal-core/server/targetScriptTerminal";
@@ -176,7 +176,7 @@ async function createNodeTargetScriptTerminalSpec(targetRoot, input = {}, {
   if (scriptsResult.ok === false) {
     return scriptsResult;
   }
-  return createAiStudioTargetScriptTerminalSpec({
+  return createVibe64TargetScriptTerminalSpec({
     adapterId,
     extraDockerArgs,
     input,

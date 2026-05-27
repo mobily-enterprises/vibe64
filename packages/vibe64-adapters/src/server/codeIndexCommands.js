@@ -6,15 +6,15 @@ import {
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
   normalizeText
-} from "@local/ai-studio-core/server/core";
+} from "@local/vibe64-core/server/core";
 import {
   packageScript,
   runScriptCommand
 } from "./nodePackage.js";
 
-const AI_STUDIO_CODE_INDEX_SCRIPT_NAME = "ai-studio:index";
-const AI_STUDIO_VERIFY_SCRIPT_NAME = "ai-studio:verify";
-const DEFAULT_CODE_INDEX_RELATIVE_PATH = ".ai-studio/code-index.md";
+const VIBE64_CODE_INDEX_SCRIPT_NAME = "vibe64:index";
+const VIBE64_VERIFY_SCRIPT_NAME = "vibe64:verify";
+const DEFAULT_CODE_INDEX_RELATIVE_PATH = ".vibe64/code-index.md";
 const CODE_INDEX_SCRIPTS_ROOT = new URL("./codeIndexScripts/", import.meta.url);
 
 function readCodeIndexScript(fileName) {
@@ -42,7 +42,7 @@ function packageManagerScriptCommand({
 
 function heredocCommand({
   environment = {},
-  marker = "AI_STUDIO_SCRIPT",
+  marker = "VIBE64_SCRIPT",
   runtime = "",
   source = ""
 } = {}) {
@@ -61,9 +61,9 @@ function javascriptCodeIndexCommand({
 } = {}) {
   return heredocCommand({
     environment: {
-      AI_STUDIO_CODE_INDEX_PATH: outputPath
+      VIBE64_CODE_INDEX_PATH: outputPath
     },
-    marker: "AI_STUDIO_JS_CODE_INDEX",
+    marker: "VIBE64_JS_CODE_INDEX",
     runtime: "node --input-type=module",
     source: JAVASCRIPT_CODE_INDEX_SOURCE
   });
@@ -77,7 +77,7 @@ function javascriptAdapterCodeIndexCommand({
   const packageScriptCommand = packageManagerScriptCommand({
     packageJson,
     packageManager,
-    scriptName: AI_STUDIO_CODE_INDEX_SCRIPT_NAME
+    scriptName: VIBE64_CODE_INDEX_SCRIPT_NAME
   });
   const commandPreview = packageScriptCommand || `node --input-type=module # writes ${outputPath}`;
   return {
@@ -98,17 +98,17 @@ function phpCodeIndexCommand({
 } = {}) {
   return heredocCommand({
     environment: {
-      AI_STUDIO_CODE_INDEX_PATH: outputPath
+      VIBE64_CODE_INDEX_PATH: outputPath
     },
-    marker: "AI_STUDIO_PHP_CODE_INDEX",
+    marker: "VIBE64_PHP_CODE_INDEX",
     runtime: "php",
     source: PHP_CODE_INDEX_SOURCE
   });
 }
 
 export {
-  AI_STUDIO_CODE_INDEX_SCRIPT_NAME,
-  AI_STUDIO_VERIFY_SCRIPT_NAME,
+  VIBE64_CODE_INDEX_SCRIPT_NAME,
+  VIBE64_VERIFY_SCRIPT_NAME,
   DEFAULT_CODE_INDEX_RELATIVE_PATH,
   javascriptAdapterCodeIndexCommand,
   javascriptCodeIndexCommand,

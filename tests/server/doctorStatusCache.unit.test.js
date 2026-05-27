@@ -53,7 +53,7 @@ test("ready status cache clears when a non-ready status is observed", () => {
 });
 
 test("repository ready status cache persists ready statuses per doctor and target root", async () => {
-  const stateRoot = await mkdtemp(path.join(tmpdir(), "ai-studio-doctor-cache-"));
+  const stateRoot = await mkdtemp(path.join(tmpdir(), "vibe64-doctor-cache-"));
 
   try {
     const targetRoot = path.join(stateRoot, "target");
@@ -107,7 +107,7 @@ test("repository ready status cache persists ready statuses per doctor and targe
 
 test("repository ready status cache keeps blocked statuses briefly in memory only", async () => {
   const originalNow = Date.now;
-  const stateRoot = await mkdtemp(path.join(tmpdir(), "ai-studio-doctor-cache-"));
+  const stateRoot = await mkdtemp(path.join(tmpdir(), "vibe64-doctor-cache-"));
   let now = 1_000;
   Date.now = () => now;
 

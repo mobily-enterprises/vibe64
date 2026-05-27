@@ -1,5 +1,5 @@
 const LOCALHOST_CHECK_BYPASS_FLAG = "--bypass-localhost-check";
-const LOCALHOST_CHECK_BYPASS_ENV = "AI_STUDIO_BYPASS_LOCALHOST_CHECK";
+const LOCALHOST_CHECK_BYPASS_ENV = "VIBE64_BYPASS_LOCALHOST_CHECK";
 
 function isTruthyEnvValue(value = "") {
   return ["1", "true", "yes", "on"].includes(String(value || "").trim().toLowerCase());

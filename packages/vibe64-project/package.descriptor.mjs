@@ -1,18 +1,18 @@
 export default Object.freeze({
   packageVersion: 1,
-  packageId: "@local/ai-studio-project",
+  packageId: "@local/vibe64-project",
   version: "0.1.0",
   kind: "runtime",
-  description: "Owns AI Studio project type selection, readiness, and adapter registry access.",
+  description: "Owns Vibe64 project type selection, readiness, and adapter registry access.",
   dependsOn: [
     "@jskit-ai/kernel",
-    "@local/ai-studio-adapters",
-    "@local/ai-studio-core",
-    "@local/ai-studio-runtime"
+    "@local/vibe64-adapters",
+    "@local/vibe64-core",
+    "@local/vibe64-runtime"
   ],
   capabilities: {
     provides: [
-      "feature.ai-studio-project"
+      "feature.vibe64-project"
     ],
     requires: [
       "runtime.actions"
@@ -22,8 +22,8 @@ export default Object.freeze({
     server: {
       providers: [
         {
-          entrypoint: "src/server/AiStudioProjectProvider.js",
-          export: "AiStudioProjectProvider"
+          entrypoint: "src/server/Vibe64ProjectProvider.js",
+          export: "Vibe64ProjectProvider"
         }
       ]
     },
@@ -36,7 +36,7 @@ export default Object.freeze({
       surfaces: [
         {
           subpath: "./server/registerRoutes",
-          summary: "Registers AI Studio project type and project config read/write routes."
+          summary: "Registers Vibe64 project type and project config read/write routes."
         },
         {
           subpath: "./server/service",
@@ -45,7 +45,7 @@ export default Object.freeze({
       ],
       containerTokens: {
         server: [
-          "feature.ai-studio-project.service"
+          "feature.vibe64-project.service"
         ],
         client: []
       }

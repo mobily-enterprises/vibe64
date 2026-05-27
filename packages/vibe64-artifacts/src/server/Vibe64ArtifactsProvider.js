@@ -4,17 +4,17 @@ import { createService } from "./service.js";
 import { featureActions } from "./actions.js";
 import { registerRoutes } from "./registerRoutes.js";
 import {
-  aiStudioSessionChangedServiceEvent
-} from "@local/ai-studio-core/server/sessionRealtimeEvents";
+  vibe64SessionChangedServiceEvent
+} from "@local/vibe64-core/server/sessionRealtimeEvents";
 
-const AI_STUDIO_ARTIFACTS_SERVICE = "feature.ai-studio-artifacts.service";
+const VIBE64_ARTIFACTS_SERVICE = "feature.vibe64-artifacts.service";
 
-class AiStudioArtifactsProvider {
-  static id = "feature.ai-studio-artifacts";
+class Vibe64ArtifactsProvider {
+  static id = "feature.vibe64-artifacts";
 
   static dependsOn = [
     "runtime.actions",
-    "feature.ai-studio-project"
+    "feature.vibe64-project"
   ];
 
   register(app) {
@@ -23,19 +23,19 @@ class AiStudioArtifactsProvider {
       typeof app.service !== "function" ||
       typeof app.actions !== "function"
     ) {
-      throw new Error("AiStudioArtifactsProvider requires application service()/actions().");
+      throw new Error("Vibe64ArtifactsProvider requires application service()/actions().");
     }
 
     app.service(
-      AI_STUDIO_ARTIFACTS_SERVICE,
+      VIBE64_ARTIFACTS_SERVICE,
       (scope) => {
         return createService({
-          projectService: scope.make("feature.ai-studio-project.service")
+          projectService: scope.make("feature.vibe64-project.service")
         });
       },
       {
         events: {
-          submitCurrentStepInput: [aiStudioSessionChangedServiceEvent()]
+          submitCurrentStepInput: [vibe64SessionChangedServiceEvent()]
         }
       }
     );
@@ -44,7 +44,7 @@ class AiStudioArtifactsProvider {
       withActionDefaults(featureActions, {
         domain: "feature",
         dependencies: {
-          featureService: "feature.ai-studio-artifacts.service"
+          featureService: "feature.vibe64-artifacts.service"
         }
       })
     );
@@ -52,10 +52,10 @@ class AiStudioArtifactsProvider {
 
   boot(app) {
     registerRoutes(app, {
-      routeRelativePath: "ai-studio",
+      routeRelativePath: "vibe64",
       routeSurface: "home"
     });
   }
 }
 
-export { AiStudioArtifactsProvider };
+export { Vibe64ArtifactsProvider };

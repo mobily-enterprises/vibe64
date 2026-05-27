@@ -1,6 +1,6 @@
 Run deep UI check
 
-AI Studio standard deep UI check instructions.
+Vibe64 standard deep UI check instructions.
 
 Session:
 - id: {{session.id}}

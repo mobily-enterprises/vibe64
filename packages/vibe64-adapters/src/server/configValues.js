@@ -1,6 +1,6 @@
 import {
   normalizeText
-} from "@local/ai-studio-core/server/core";
+} from "@local/vibe64-core/server/core";
 
 function configValues(config = {}) {
   return config?.values && typeof config.values === "object" ? config.values : config;

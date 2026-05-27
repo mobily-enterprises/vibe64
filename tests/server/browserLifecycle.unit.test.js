@@ -40,7 +40,7 @@ test("browser lifecycle monitor shuts down after the last client disconnects", a
   assert.deepEqual(shutdowns, ["browser-lifecycle-disconnected"]);
   assert.deepEqual(messages, [
     "Browser window disconnected. Terminating in 1 second...",
-    "Closing AI Studio because the browser window disconnected."
+    "Closing Vibe64 because the browser window disconnected."
   ]);
 });
 

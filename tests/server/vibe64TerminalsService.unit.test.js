@@ -5,43 +5,43 @@ import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
 
 import {
-  AiStudioSessionRuntime
-} from "@local/ai-studio-runtime/server";
+  Vibe64SessionRuntime
+} from "@local/vibe64-runtime/server";
 import {
-  AI_STUDIO_CLIENT_CONTROL_ACTIONS
-} from "@local/ai-studio-core/shared";
+  VIBE64_CLIENT_CONTROL_ACTIONS
+} from "@local/vibe64-core/shared";
 import {
   TargetAdapter,
   adapterProjectFacts
-} from "@local/ai-studio-adapters/server";
+} from "@local/vibe64-adapters/server";
 import {
   createService
-} from "../../packages/ai-studio-terminals/src/server/service.js";
+} from "../../packages/vibe64-terminals/src/server/service.js";
 import {
   ACTION_START_SHELL_TERMINAL,
   featureActions as terminalFeatureActions
-} from "../../packages/ai-studio-terminals/src/server/actions.js";
+} from "../../packages/vibe64-terminals/src/server/actions.js";
 import {
   codexSessionBriefingPrompt,
   codexTerminalArgs
-} from "../../packages/ai-studio-terminals/src/server/codexTerminal.js";
+} from "../../packages/vibe64-terminals/src/server/codexTerminal.js";
 import {
   COMMAND_RESULT_ENV
-} from "../../packages/ai-studio-terminals/src/server/commandTerminalResults.js";
+} from "../../packages/vibe64-terminals/src/server/commandTerminalResults.js";
 import {
   commandTerminalArgs,
   createCommandTerminalController
-} from "../../packages/ai-studio-terminals/src/server/commandTerminal.js";
+} from "../../packages/vibe64-terminals/src/server/commandTerminal.js";
 import {
   launchActionsFromOutput
-} from "../../packages/ai-studio-terminals/src/server/launchTargetTerminal.js";
+} from "../../packages/vibe64-terminals/src/server/launchTargetTerminal.js";
 import {
   codexTerminalNamespace
-} from "../../packages/ai-studio-terminals/src/server/terminalShared.js";
+} from "../../packages/vibe64-terminals/src/server/terminalShared.js";
 import {
   resolveShellTerminalCwd,
   shellTerminalArgs
-} from "../../packages/ai-studio-terminals/src/server/shellTerminal.js";
+} from "../../packages/vibe64-terminals/src/server/shellTerminal.js";
 import {
   closeTerminalSession,
   startTerminalSession,
@@ -49,33 +49,33 @@ import {
 } from "@local/studio-terminal-core/server/terminalSessions";
 import {
   resolveTerminalToolchainImage
-} from "../../packages/ai-studio-terminals/src/server/terminalToolchainImage.js";
+} from "../../packages/vibe64-terminals/src/server/terminalToolchainImage.js";
 import {
   maskedTerminalDockerArgs,
   projectTerminalEnvironment
-} from "../../packages/ai-studio-terminals/src/server/terminalEnvironment.js";
+} from "../../packages/vibe64-terminals/src/server/terminalEnvironment.js";
 import {
   CppTargetAdapter
-} from "@local/ai-studio-adapters/server/adapters/cpp/adapter";
+} from "@local/vibe64-adapters/server/adapters/cpp/adapter";
 import {
   CPP_TOOLCHAIN_IMAGE
-} from "@local/ai-studio-adapters/server/adapters/cpp/toolchainIdentity";
+} from "@local/vibe64-adapters/server/adapters/cpp/toolchainIdentity";
 import {
   JskitTargetAdapter
-} from "@local/ai-studio-adapters/server/adapters/jskit/adapter";
+} from "@local/vibe64-adapters/server/adapters/jskit/adapter";
 import {
   JSKIT_TOOLCHAIN_IMAGE
-} from "@local/ai-studio-adapters/server/adapters/jskit/toolchainIdentity";
+} from "@local/vibe64-adapters/server/adapters/jskit/toolchainIdentity";
 import {
   JSKIT_MARIADB_HOST,
   JSKIT_MARIADB_ROOT_PASSWORD
-} from "@local/ai-studio-adapters/server/adapters/jskit/setupMariaDbRuntime";
+} from "@local/vibe64-adapters/server/adapters/jskit/setupMariaDbRuntime";
 import {
   LaravelTargetAdapter
-} from "@local/ai-studio-adapters/server/adapters/laravel/adapter";
+} from "@local/vibe64-adapters/server/adapters/laravel/adapter";
 import {
   LARAVEL_TOOLCHAIN_IMAGE
-} from "@local/ai-studio-adapters/server/adapters/laravel/toolchainIdentity";
+} from "@local/vibe64-adapters/server/adapters/laravel/toolchainIdentity";
 import {
   STUDIO_BASE_TOOLCHAIN_IMAGE,
   STUDIO_PLAYWRIGHT_BROWSERS_PATH,
@@ -92,11 +92,11 @@ import {
 } from "@local/studio-terminal-core/server/runtimeContainers";
 import {
   STUDIO_CONTEXT_START_MARKER
-} from "@local/ai-studio-adapters/server/promptMarkers";
+} from "@local/vibe64-adapters/server/promptMarkers";
 import {
   stripStudioContextBlocksForDisplay
 } from "../../src/lib/codexOutput.js";
-import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
+import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 import {
   assertDockerEnv,
   assertDockerVolumeMount,
@@ -138,7 +138,7 @@ class UnitCommandAdapter extends TargetAdapter {
         "-lc",
         [
           "set -e",
-          "printf 'fact:set\\t%s\\t%s\\n' dynamic_done \"$(printf '%s' from-result-file | base64 | tr -d '\\n')\" >> \"$AI_STUDIO_COMMAND_RESULT_FILE\""
+          "printf 'fact:set\\t%s\\t%s\\n' dynamic_done \"$(printf '%s' from-result-file | base64 | tr -d '\\n')\" >> \"$VIBE64_COMMAND_RESULT_FILE\""
         ].join("\n")
       ],
       applySuccessFacts({ facts }) {
@@ -209,15 +209,15 @@ async function waitForArrayLength(entries, expectedLength, timeoutMs = POST_COMM
   assert.equal(entries.length, expectedLength);
 }
 
-test("AI Studio Codex terminal joins the target runtime network before the image", () => {
+test("Vibe64 Codex terminal joins the target runtime network before the image", () => {
   const targetRoot = "/workspace/project";
   const args = codexTerminalArgs({
     codexThreadId: "",
-    containerName: "ai-studio-codex-unit",
+    containerName: "vibe64-codex-unit",
     sessionId: "unit-session",
     targetRoot,
     terminalId: "unit-terminal",
-    worktree: "/workspace/project/.ai-studio/sessions/active/unit/worktree"
+    worktree: "/workspace/project/.vibe64/sessions/active/unit/worktree"
   });
 
   assertPlaywrightBrowserCache(args);
@@ -230,12 +230,12 @@ test("AI Studio Codex terminal joins the target runtime network before the image
   assert.ok(startupScript.includes(`export HOME=${STUDIO_TOOL_HOME_PATH}`));
   assert.ok(startupScript.includes(`export NPM_CONFIG_PREFIX=${STUDIO_TOOL_HOME_NPM_PREFIX}`));
   assert.ok(startupScript.includes(`export PATH=${STUDIO_TOOL_HOME_BIN_PATH}:$PATH`));
-  assert.match(startupScript, /chown -R "\$AI_STUDIO_HOST_UID:\$AI_STUDIO_HOST_GID" "\$HOME"/u);
+  assert.match(startupScript, /chown -R "\$VIBE64_HOST_UID:\$VIBE64_HOST_GID" "\$HOME"/u);
   assert.ok(args.includes(`NPM_CONFIG_PREFIX=${STUDIO_TOOL_HOME_NPM_PREFIX}`));
 
   const adapterImageArgs = codexTerminalArgs({
     codexThreadId: "",
-    containerName: "ai-studio-codex-adapter",
+    containerName: "vibe64-codex-adapter",
     env: {
       MYSQL_HOST: JSKIT_MARIADB_HOST,
       MYSQL_PWD: JSKIT_MARIADB_ROOT_PASSWORD,
@@ -245,7 +245,7 @@ test("AI Studio Codex terminal joins the target runtime network before the image
     sessionId: "unit-session",
     targetRoot,
     terminalId: "adapter-terminal",
-    worktree: "/workspace/project/.ai-studio/sessions/active/unit/worktree"
+    worktree: "/workspace/project/.vibe64/sessions/active/unit/worktree"
   });
   assertPlaywrightBrowserCache(adapterImageArgs);
   assert.ok(adapterImageArgs.indexOf("--network") < adapterImageArgs.indexOf("adapter-toolchain:1.0.0"));
@@ -254,7 +254,7 @@ test("AI Studio Codex terminal joins the target runtime network before the image
   assert.ok(!maskedTerminalDockerArgs(adapterImageArgs).includes(`MYSQL_PWD=${JSKIT_MARIADB_ROOT_PASSWORD}`));
 });
 
-test("AI Studio Codex terminal renders the session briefing for explicit delivery", () => {
+test("Vibe64 Codex terminal renders the session briefing for explicit delivery", () => {
   const briefingPrompt = codexSessionBriefingPrompt({
     adapter: {
       facts: {
@@ -276,18 +276,18 @@ test("AI Studio Codex terminal renders the session briefing for explicit deliver
       database: "mysql"
     },
     metadata: {
-      code_index_path: ".ai-studio/code-index.md"
+      code_index_path: ".vibe64/code-index.md"
     },
     sessionId: "startup_prompt",
     targetRoot: "/workspace/project",
-    worktree: "/workspace/project/.ai-studio/sessions/active/startup_prompt/worktree"
+    worktree: "/workspace/project/.vibe64/sessions/active/startup_prompt/worktree"
   });
-  assert.match(briefingPrompt, /AI Studio session briefing/u);
+  assert.match(briefingPrompt, /Vibe64 session briefing/u);
   assert.match(briefingPrompt, /Unit MariaDB/u);
-  assert.match(briefingPrompt, /\.ai-studio\/code-index\.md/u);
-  assert.match(briefingPrompt, /Reply exactly: AI Studio session briefing loaded/u);
-  assert.equal(briefingPrompt.startsWith(`Load AI Studio session briefing.\n\n${STUDIO_CONTEXT_START_MARKER}`), true);
-  assert.equal(stripStudioContextBlocksForDisplay(briefingPrompt), "Load AI Studio session briefing.\n\n");
+  assert.match(briefingPrompt, /\.vibe64\/code-index\.md/u);
+  assert.match(briefingPrompt, /Reply exactly: Vibe64 session briefing loaded/u);
+  assert.equal(briefingPrompt.startsWith(`Load Vibe64 session briefing.\n\n${STUDIO_CONTEXT_START_MARKER}`), true);
+  assert.equal(stripStudioContextBlocksForDisplay(briefingPrompt), "Load Vibe64 session briefing.\n\n");
   assert.equal(codexSessionBriefingPrompt({
     metadata: {
       codex_session_briefing_delivered: "yes"
@@ -296,34 +296,34 @@ test("AI Studio Codex terminal renders the session briefing for explicit deliver
 
   const args = codexTerminalArgs({
     codexThreadId: "",
-    containerName: "ai-studio-codex-startup",
+    containerName: "vibe64-codex-startup",
     sessionId: "startup_prompt",
     targetRoot: "/workspace/project",
     terminalId: "startup-terminal",
-    worktree: "/workspace/project/.ai-studio/sessions/active/startup_prompt/worktree"
+    worktree: "/workspace/project/.vibe64/sessions/active/startup_prompt/worktree"
   });
   const startupScript = args.at(-1);
   assert.match(startupScript, /codex/u);
-  assert.doesNotMatch(startupScript, /AI Studio session briefing/u);
+  assert.doesNotMatch(startupScript, /Vibe64 session briefing/u);
   assert.doesNotMatch(startupScript, /Unit MariaDB/u);
   assert.doesNotMatch(startupScript, /resume [0-9a-f-]{36}/u);
 
   const resumedArgs = codexTerminalArgs({
     codexThreadId: "00000000-0000-4000-8000-000000000001",
-    containerName: "ai-studio-codex-startup-resume",
+    containerName: "vibe64-codex-startup-resume",
     sessionId: "startup_prompt",
     targetRoot: "/workspace/project",
     terminalId: "startup-terminal",
-    worktree: "/workspace/project/.ai-studio/sessions/active/startup_prompt/worktree"
+    worktree: "/workspace/project/.vibe64/sessions/active/startup_prompt/worktree"
   });
   assert.match(
     resumedArgs.at(-1),
     /resume 00000000-0000-4000-8000-000000000001/u
   );
-  assert.doesNotMatch(resumedArgs.at(-1), /AI Studio session briefing/u);
+  assert.doesNotMatch(resumedArgs.at(-1), /Vibe64 session briefing/u);
 });
 
-test("AI Studio Codex terminal mounts linked git metadata for worktree roots", async () => {
+test("Vibe64 Codex terminal mounts linked git metadata for worktree roots", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const linkedRepository = path.join(path.dirname(targetRoot), "linked-repository");
     await mkdir(path.join(linkedRepository, ".git"), {
@@ -333,21 +333,21 @@ test("AI Studio Codex terminal mounts linked git metadata for worktree roots", a
 
     const args = codexTerminalArgs({
       codexThreadId: "",
-      containerName: "ai-studio-codex-linked-git",
+      containerName: "vibe64-codex-linked-git",
       sessionId: "unit-session",
       targetRoot,
       terminalId: "unit-terminal",
-      worktree: path.join(targetRoot, ".ai-studio", "sessions", "active", "unit", "worktree")
+      worktree: path.join(targetRoot, ".vibe64", "sessions", "active", "unit", "worktree")
     });
 
     assert.ok(args.includes(`${linkedRepository}:${linkedRepository}`));
   });
 });
 
-test("AI Studio Codex terminal state separates running from transmitting", async () => {
+test("Vibe64 Codex terminal state separates running from transmitting", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_turn_state";
-    const sessionRoot = path.join(targetRoot, ".ai-studio", "sessions", "active", sessionId);
+    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
     const worktree = path.join(sessionRoot, "worktree");
     await mkdir(worktree, {
       recursive: true
@@ -417,9 +417,9 @@ test("AI Studio Codex terminal state separates running from transmitting", async
   });
 });
 
-test("AI Studio Codex bootstrap failure is persisted as a visible background task", async () => {
+test("Vibe64 Codex bootstrap failure is persisted as a visible background task", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
     await runtime.createSession({
@@ -453,7 +453,7 @@ test("AI Studio Codex bootstrap failure is persisted as a visible background tas
     assert.match(task.error, /Create the session worktree before starting Codex/u);
     assert.deepEqual(task.retry, {
       control: {
-        action: AI_STUDIO_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL,
+        action: VIBE64_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL,
         disabledWhen: [],
         icon: "",
         loadingWhen: []
@@ -467,14 +467,14 @@ test("AI Studio Codex bootstrap failure is persisted as a visible background tas
   });
 });
 
-test("AI Studio shell terminal joins the target runtime network before the image", () => {
+test("Vibe64 shell terminal joins the target runtime network before the image", () => {
   const targetRoot = "/workspace/project";
-  const worktree = "/workspace/project/.ai-studio/sessions/active/unit/worktree";
+  const worktree = "/workspace/project/.vibe64/sessions/active/unit/worktree";
   const args = shellTerminalArgs({
-    containerName: "ai-studio-shell-unit",
+    containerName: "vibe64-shell-unit",
     env: {
-      AI_STUDIO_MYSQL_USER: "root",
-      AI_STUDIO_CONFIG_DIR: "/workspace/project/.ai-studio/config",
+      VIBE64_MYSQL_USER: "root",
+      VIBE64_CONFIG_DIR: "/workspace/project/.vibe64/config",
       MYSQL_HOST: JSKIT_MARIADB_HOST,
       MYSQL_PWD: JSKIT_MARIADB_ROOT_PASSWORD,
       MYSQL_TCP_PORT: "3306"
@@ -494,20 +494,20 @@ test("AI Studio shell terminal joins the target runtime network before the image
   assert.deepEqual(args.slice(args.indexOf("-w"), args.indexOf("-w") + 2), ["-w", worktree]);
   assert.deepEqual(args.slice(args.indexOf("--hostname"), args.indexOf("--hostname") + 2), [
     "--hostname",
-    "ai-studio-worktree"
+    "vibe64-worktree"
   ]);
-  assert.ok(args.includes("AI_STUDIO_CONFIG_DIR=/workspace/project/.ai-studio/config"));
+  assert.ok(args.includes("VIBE64_CONFIG_DIR=/workspace/project/.vibe64/config"));
   assert.ok(args.includes(`MYSQL_HOST=${JSKIT_MARIADB_HOST}`));
   assert.ok(args.includes(`MYSQL_PWD=${JSKIT_MARIADB_ROOT_PASSWORD}`));
   assert.ok(args.includes("MYSQL_TCP_PORT=3306"));
-  assert.ok(args.includes("AI_STUDIO_MYSQL_USER=root"));
+  assert.ok(args.includes("VIBE64_MYSQL_USER=root"));
   assert.ok(args.includes("TERM=xterm-256color"));
   assert.ok(args.includes("COLORTERM=truecolor"));
   assert.ok(args.includes("FORCE_COLOR=1"));
   assert.ok(args.includes("USER=studio"));
-  assert.ok(args.includes("AI_STUDIO_PROJECT_ROOT=/workspace/project"));
-  assert.ok(args.includes(`AI_STUDIO_SHELL_WORKDIR=${worktree}`));
-  assert.ok(args.some((arg) => String(arg).startsWith("AI_STUDIO_SHELL_PROMPT=\\[\\e[38;5;39m\\]studio")));
+  assert.ok(args.includes("VIBE64_PROJECT_ROOT=/workspace/project"));
+  assert.ok(args.includes(`VIBE64_SHELL_WORKDIR=${worktree}`));
+  assert.ok(args.some((arg) => String(arg).startsWith("VIBE64_SHELL_PROMPT=\\[\\e[38;5;39m\\]studio")));
   assert.ok(args.some((arg) => String(arg).startsWith("PS1=\\[\\e[38;5;39m\\]studio")));
 
   const startupScript = args.at(-1);
@@ -515,27 +515,27 @@ test("AI Studio shell terminal joins the target runtime network before the image
   assert.ok(startupScript.includes(`export NPM_CONFIG_PREFIX=${STUDIO_TOOL_HOME_NPM_PREFIX}`));
   assert.ok(startupScript.includes(`export PATH=${STUDIO_TOOL_HOME_BIN_PATH}:$PATH`));
   assert.ok(startupScript.includes(`export MYSQL_HOME=${STUDIO_MYSQL_CLIENT_CONFIG_DIR}`));
-  assert.ok(startupScript.includes("printf 'user=%s\\n' \"$AI_STUDIO_MYSQL_USER\""));
+  assert.ok(startupScript.includes("printf 'user=%s\\n' \"$VIBE64_MYSQL_USER\""));
   assert.ok(startupScript.includes("printf 'database=%s\\n' \"$MYSQL_DATABASE\""));
   assert.ok(startupScript.includes("PROMPT_DIRTRIM=4"));
   assert.ok(startupScript.includes("alias ls='ls --color=auto'"));
-  assert.ok(startupScript.includes("PS1=\"${AI_STUDIO_SHELL_PROMPT:-\\w \\$ }\""));
-  assert.match(startupScript, /chown -R "\$AI_STUDIO_HOST_UID:\$AI_STUDIO_HOST_GID" "\$HOME"/u);
-  assert.match(startupScript, /setpriv .* bash --rcfile \/tmp\/ai-studio-shell\.bashrc -i/u);
+  assert.ok(startupScript.includes("PS1=\"${VIBE64_SHELL_PROMPT:-\\w \\$ }\""));
+  assert.match(startupScript, /chown -R "\$VIBE64_HOST_UID:\$VIBE64_HOST_GID" "\$HOME"/u);
+  assert.match(startupScript, /setpriv .* bash --rcfile \/tmp\/vibe64-shell\.bashrc -i/u);
 });
 
-test("AI Studio command terminal joins the target runtime network before the image", () => {
+test("Vibe64 command terminal joins the target runtime network before the image", () => {
   const targetRoot = "/workspace/project";
-  const worktree = "/workspace/project/.ai-studio/sessions/active/unit/worktree";
-  const resultDirectory = "/tmp/ai-studio-command-unit";
-  const supportDirectory = "/opt/ai-studio-support";
+  const worktree = "/workspace/project/.vibe64/sessions/active/unit/worktree";
+  const resultDirectory = "/tmp/vibe64-command-unit";
+  const supportDirectory = "/opt/vibe64-support";
   const args = commandTerminalArgs({
     args: [
       "-lc",
       "npm test"
     ],
     command: "bash",
-    containerName: "ai-studio-command-unit",
+    containerName: "vibe64-command-unit",
     env: {
       [COMMAND_RESULT_ENV]: `${resultDirectory}/result.tsv`,
       MYSQL_HOST: JSKIT_MARIADB_HOST,
@@ -578,7 +578,7 @@ test("AI Studio command terminal joins the target runtime network before the ima
   assert.match(startupScript, /setpriv .* bash -lc 'npm test'/u);
 });
 
-test("AI Studio terminals use the base image when the adapter does not declare one", async () => {
+test("Vibe64 terminals use the base image when the adapter does not declare one", async () => {
   const result = await resolveTerminalToolchainImage({
     imageExists: async (image) => image === STUDIO_BASE_TOOLCHAIN_IMAGE,
     runtime: {
@@ -592,7 +592,7 @@ test("AI Studio terminals use the base image when the adapter does not declare o
   assert.equal(result.label, "managed base toolchain");
 });
 
-test("AI Studio terminals use declared adapter toolchain images", async () => {
+test("Vibe64 terminals use declared adapter toolchain images", async () => {
   const result = await resolveTerminalToolchainImage({
     imageExists: async (image) => image === "adapter-toolchain:1.0.0",
     runtime: {
@@ -614,7 +614,7 @@ test("AI Studio terminals use declared adapter toolchain images", async () => {
   assert.equal(result.label, "Adapter toolchain");
 });
 
-test("AI Studio terminals fail clearly when a declared adapter image is missing", async () => {
+test("Vibe64 terminals fail clearly when a declared adapter image is missing", async () => {
   const result = await resolveTerminalToolchainImage({
     imageExists: async () => false,
     runtime: {
@@ -643,15 +643,15 @@ test("adapters with managed toolchains declare their terminal toolchain image", 
   assert.equal((await new CppTargetAdapter().getTerminalToolchainSpec()).image, CPP_TOOLCHAIN_IMAGE);
 });
 
-test("AI Studio terminal env includes JSKIT managed MariaDB client defaults when selected", async () => {
+test("Vibe64 terminal env includes JSKIT managed MariaDB client defaults when selected", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await writeFile(path.join(targetRoot, ".env"), `DB_HOST=${JSKIT_MARIADB_HOST}\n`, "utf8");
-    const configDir = path.join(targetRoot, ".ai-studio", "config");
+    const configDir = path.join(targetRoot, ".vibe64", "config");
     const env = await projectTerminalEnvironment({
       projectService: {
         async projectConfigEnvironment() {
           return {
-            AI_STUDIO_CONFIG_DIR: configDir
+            VIBE64_CONFIG_DIR: configDir
           };
         }
       },
@@ -666,16 +666,16 @@ test("AI Studio terminal env includes JSKIT managed MariaDB client defaults when
       targetRoot
     });
 
-    assert.equal(env.AI_STUDIO_CONFIG_DIR, configDir);
+    assert.equal(env.VIBE64_CONFIG_DIR, configDir);
     assert.equal(env.MYSQL_HOST, JSKIT_MARIADB_HOST);
     assert.equal(env.MYSQL_PWD, JSKIT_MARIADB_ROOT_PASSWORD);
     assert.equal(env.MYSQL_TCP_PORT, "3306");
-    assert.equal(env.AI_STUDIO_MYSQL_USER, "root");
+    assert.equal(env.VIBE64_MYSQL_USER, "root");
     assert.equal(env.MYSQL_DATABASE, path.basename(targetRoot).replace(/[^A-Za-z0-9_]+/gu, "_"));
   });
 });
 
-test("AI Studio terminal env includes JSKIT managed MariaDB client defaults when config selects MySQL", async () => {
+test("Vibe64 terminal env includes JSKIT managed MariaDB client defaults when config selects MySQL", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const env = await projectTerminalEnvironment({
       runtime: {
@@ -696,12 +696,12 @@ test("AI Studio terminal env includes JSKIT managed MariaDB client defaults when
     assert.equal(env.MYSQL_HOST, JSKIT_MARIADB_HOST);
     assert.equal(env.MYSQL_PWD, JSKIT_MARIADB_ROOT_PASSWORD);
     assert.equal(env.MYSQL_TCP_PORT, "3306");
-    assert.equal(env.AI_STUDIO_MYSQL_USER, "root");
+    assert.equal(env.VIBE64_MYSQL_USER, "root");
     assert.equal(env.MYSQL_DATABASE, path.basename(targetRoot).replace(/[^A-Za-z0-9_]+/gu, "_"));
   });
 });
 
-test("AI Studio terminal env skips JSKIT MariaDB client defaults when unmanaged", async () => {
+test("Vibe64 terminal env skips JSKIT MariaDB client defaults when unmanaged", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await writeFile(path.join(targetRoot, ".env"), "DB_HOST=localhost\n", "utf8");
     const env = await projectTerminalEnvironment({
@@ -721,9 +721,9 @@ test("AI Studio terminal env skips JSKIT MariaDB client defaults when unmanaged"
   });
 });
 
-test("AI Studio command terminal records action results and metadata after success", async () => {
+test("Vibe64 command terminal records action results and metadata after success", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       adapter: new UnitCommandAdapter(),
       clock: () => new Date("2026-05-16T01:02:03.000Z"),
       targetRoot,
@@ -776,7 +776,7 @@ test("AI Studio command terminal records action results and metadata after succe
         },
         async projectConfigEnvironment() {
           return {
-            AI_STUDIO_CONFIG_DIR: path.join(targetRoot, ".ai-studio", "config")
+            VIBE64_CONFIG_DIR: path.join(targetRoot, ".vibe64", "config")
           };
         }
       },
@@ -832,7 +832,7 @@ test("AI Studio command terminal records action results and metadata after succe
       runtimeNetworkName(targetRoot)
     ]);
     assert.ok(startedDockerArgs.indexOf("--network") < startedDockerArgs.indexOf("unit-command-toolchain:1.0.0"));
-    assert.match(removedContainerName, /^ai-studio-command-/u);
+    assert.match(removedContainerName, /^vibe64-command-/u);
 
     const updatedSession = await runtime.getSession("terminal_success");
 	    assert.equal(updatedSession.metadata.terminal_done, "yes");
@@ -923,9 +923,9 @@ test("AI Studio command terminal records action results and metadata after succe
 	  });
 	});
 
-test("AI Studio command terminal accepts completion after unrelated session metadata changes", async () => {
+test("Vibe64 command terminal accepts completion after unrelated session metadata changes", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       adapter: new UnitCommandAdapter(),
       targetRoot,
       workflow: {
@@ -960,7 +960,7 @@ test("AI Studio command terminal accepts completion after unrelated session meta
         },
         async projectConfigEnvironment() {
           return {
-            AI_STUDIO_CONFIG_DIR: path.join(targetRoot, ".ai-studio", "config")
+            VIBE64_CONFIG_DIR: path.join(targetRoot, ".vibe64", "config")
           };
         }
       },
@@ -1019,9 +1019,9 @@ test("AI Studio command terminal accepts completion after unrelated session meta
   });
 });
 
-test("AI Studio command terminal commits completion before slow post-commit hooks finish", async () => {
+test("Vibe64 command terminal commits completion before slow post-commit hooks finish", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       adapter: new UnitCommandAdapter(),
       targetRoot,
       workflow: {
@@ -1064,7 +1064,7 @@ test("AI Studio command terminal commits completion before slow post-commit hook
         },
         async projectConfigEnvironment() {
           return {
-            AI_STUDIO_CONFIG_DIR: path.join(targetRoot, ".ai-studio", "config")
+            VIBE64_CONFIG_DIR: path.join(targetRoot, ".vibe64", "config")
           };
         }
       },
@@ -1137,9 +1137,9 @@ test("AI Studio command terminal commits completion before slow post-commit hook
   });
 });
 
-test("AI Studio command terminal ignores stale close after advance and rewind", async () => {
+test("Vibe64 command terminal ignores stale close after advance and rewind", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       adapter: new UnitCommandAdapter(),
       targetRoot,
       workflow: {
@@ -1178,7 +1178,7 @@ test("AI Studio command terminal ignores stale close after advance and rewind", 
         },
         async projectConfigEnvironment() {
           return {
-            AI_STUDIO_CONFIG_DIR: path.join(targetRoot, ".ai-studio", "config")
+            VIBE64_CONFIG_DIR: path.join(targetRoot, ".vibe64", "config")
           };
         }
       },
@@ -1233,9 +1233,9 @@ test("AI Studio command terminal ignores stale close after advance and rewind", 
   });
 });
 
-test("AI Studio command terminal refuses prompt actions and disabled command actions", async () => {
+test("Vibe64 command terminal refuses prompt actions and disabled command actions", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       adapter: new UnitCommandAdapter(),
       targetRoot,
       workflow: {
@@ -1287,9 +1287,9 @@ test("AI Studio command terminal refuses prompt actions and disabled command act
   });
 });
 
-test("AI Studio command terminal advances workflow when requested after success", async () => {
+test("Vibe64 command terminal advances workflow when requested after success", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       adapter: new UnitCommandAdapter(),
       targetRoot,
       workflow: {
@@ -1332,7 +1332,7 @@ test("AI Studio command terminal advances workflow when requested after success"
         },
         async projectConfigEnvironment() {
           return {
-            AI_STUDIO_CONFIG_DIR: path.join(targetRoot, ".ai-studio", "config")
+            VIBE64_CONFIG_DIR: path.join(targetRoot, ".vibe64", "config")
           };
         }
       },
@@ -1379,9 +1379,9 @@ test("AI Studio command terminal advances workflow when requested after success"
 	  });
 	});
 
-test("AI Studio shell terminal resolves only declared session targets", async () => {
+test("Vibe64 shell terminal resolves only declared session targets", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const worktreePath = path.join(targetRoot, ".ai-studio", "sessions", "active", "shell_success", "worktree");
+    const worktreePath = path.join(targetRoot, ".vibe64", "sessions", "active", "shell_success", "worktree");
     const session = {
       metadata: {
         worktree_path: worktreePath
@@ -1412,7 +1412,7 @@ test("AI Studio shell terminal resolves only declared session targets", async ()
     assert.equal(main.ok, true);
     assert.equal(main.cwd, path.resolve(targetRoot));
 
-    const canonicalWorktreePath = path.join(targetRoot, ".ai-studio", "sessions", "active", "canonical_shell", "worktree");
+    const canonicalWorktreePath = path.join(targetRoot, ".vibe64", "sessions", "active", "canonical_shell", "worktree");
     await mkdir(canonicalWorktreePath, {
       recursive: true
     });
@@ -1448,7 +1448,7 @@ test("AI Studio shell terminal resolves only declared session targets", async ()
   });
 });
 
-test("AI Studio shell terminal blocks unavailable worktree targets", async () => {
+test("Vibe64 shell terminal blocks unavailable worktree targets", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const missingWorktree = await resolveShellTerminalCwd({
       projectService: {
@@ -1465,9 +1465,9 @@ test("AI Studio shell terminal blocks unavailable worktree targets", async () =>
   });
 });
 
-test("AI Studio shell terminal service rejects invalid targets before Docker startup", async () => {
+test("Vibe64 shell terminal service rejects invalid targets before Docker startup", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new AiStudioSessionRuntime({
+    const runtime = new Vibe64SessionRuntime({
       adapter: new UnitCommandAdapter(),
       targetRoot,
       workflow: {
@@ -1500,7 +1500,7 @@ test("AI Studio shell terminal service rejects invalid targets before Docker sta
   });
 });
 
-test("AI Studio shell terminal action preserves reuseRunning", async () => {
+test("Vibe64 shell terminal action preserves reuseRunning", async () => {
   const action = terminalFeatureActions.find((item) => item.id === ACTION_START_SHELL_TERMINAL);
   const calls = [];
 

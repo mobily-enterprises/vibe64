@@ -24,11 +24,11 @@ import {
   managedMariaDbAccessInstructions,
   mariaDbCapabilitySql,
   startJskitMariaDbRepair
-} from "@local/ai-studio-adapters/server/adapters/jskit/setupMariaDbRuntime";
+} from "@local/vibe64-adapters/server/adapters/jskit/setupMariaDbRuntime";
 import {
   createManagedDatabaseRuntimeContainer
 } from "@local/studio-terminal-core/server/managedDatabases";
-import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
+import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 test("runtime container descriptors describe arbitrary containers without service catalog coupling", async () => {
   await withTemporaryRoot(async (targetRoot) => {
@@ -160,7 +160,7 @@ test("jskit declares MariaDB through the generic runtime container layer", async
     assert.match(repair.commandPreview, /MARIADB_DATABASE=/u);
     assert.match(repair.commandPreview, new RegExp(path.basename(targetRoot).replace(/[^A-Za-z0-9_]+/gu, "_"), "u"));
     assert.match(repair.commandPreview, /MARIADB_ROOT_PASSWORD=\*\*\*\*\*/u);
-    assert.doesNotMatch(repair.commandPreview, /ai_studio_jskit_root/u);
+    assert.doesNotMatch(repair.commandPreview, /vibe64_jskit_root/u);
     assert.doesNotMatch(repair.commandPreview, /127\.0\.0\.1:13306:3306/u);
     assert.doesNotMatch(
       managedMariaDbAccessInstructions("app_db", targetRoot),
@@ -175,10 +175,10 @@ test("jskit declares MariaDB through the generic runtime container layer", async
       runtimeNetworkName(targetRoot)
     );
     assert.deepEqual(terminalEnv, {
-      AI_STUDIO_MYSQL_USER: "root",
+      VIBE64_MYSQL_USER: "root",
       MYSQL_DATABASE: path.basename(targetRoot).replace(/[^A-Za-z0-9_]+/gu, "_"),
-      MYSQL_HOST: "ai-studio-mariadb",
-      MYSQL_PWD: "ai_studio_jskit_root",
+      MYSQL_HOST: "vibe64-mariadb",
+      MYSQL_PWD: "vibe64_jskit_root",
       MYSQL_TCP_PORT: "3306"
     });
   });
@@ -440,7 +440,7 @@ test("managed database descriptors expose client terminal environment", async ()
     });
 
     assert.deepEqual(mysqlEnv, {
-      AI_STUDIO_MYSQL_USER: "root",
+      VIBE64_MYSQL_USER: "root",
       MYSQL_DATABASE: path.basename(targetRoot).replace(/[^A-Za-z0-9_]+/gu, "_"),
       MYSQL_HOST: "nextjs-mysql",
       MYSQL_PWD: "nextjs_root_password",
@@ -485,11 +485,11 @@ test("target runtime network preparation creates the shared network only when mi
           "network",
           "create",
           "--label",
-          "ai-studio.kind=runtime-network",
+          "vibe64.kind=runtime-network",
           "--label",
-          `ai-studio.daemon-pid=${process.pid}`,
+          `vibe64.daemon-pid=${process.pid}`,
           "--label",
-          `ai-studio.target=${networkName.replace("ai-studio-runtime-", "")}`,
+          `vibe64.target=${networkName.replace("vibe64-runtime-", "")}`,
           networkName
         ]
       ]
@@ -518,8 +518,8 @@ test("target runtime network shell command tolerates concurrent network creation
     const inspectCommand = `docker network inspect ${networkName} >/dev/null 2>&1`;
 
     assert.equal(command.split(" || ").filter((part) => part === inspectCommand).length, 2);
-    assert.ok(command.includes(`docker network create --label ai-studio.kind=runtime-network`));
-    assert.ok(command.includes(`--label ai-studio.target=${networkName.replace("ai-studio-runtime-", "")}`));
+    assert.ok(command.includes(`docker network create --label vibe64.kind=runtime-network`));
+    assert.ok(command.includes(`--label vibe64.target=${networkName.replace("vibe64-runtime-", "")}`));
     assert.ok(command.includes(`${networkName} >/dev/null`));
   });
 });
@@ -544,10 +544,10 @@ test("runtime container start script safely displays shell-quoted commands", asy
     assert.doesNotMatch(script, /127\.0\.0\.1:13306:3306/u);
     assert.match(script, new RegExp(`MARIADB_DATABASE=${databaseName}`, "u"));
     assert.match(script, new RegExp(`CREATE DATABASE IF NOT EXISTS .${databaseName}.`, "u"));
-    assert.match(script, /timeout 15s docker exec ai-studio-jskit-jskit-mariadb-/u);
-    assert.match(script, /if ! docker start ai-studio-jskit-jskit-mariadb-/u);
+    assert.match(script, /timeout 15s docker exec vibe64-jskit-jskit-mariadb-/u);
+    assert.match(script, /if ! docker start vibe64-jskit-jskit-mariadb-/u);
     assert.match(script, /container could not start\. Recreating the container while keeping managed volumes\./u);
-    assert.match(script, /docker rm -f ai-studio-jskit-jskit-mariadb-/u);
+    assert.match(script, /docker rm -f vibe64-jskit-jskit-mariadb-/u);
   });
 });
 
@@ -557,10 +557,10 @@ test("JSKIT MariaDB readiness probe uses isolated temporary schema names", () =>
   });
 
   assert.match(sql, /CREATE DATABASE IF NOT EXISTS `dogandgroom`/u);
-  assert.match(sql, /CONCAT\('ai_studio_jskit_probe_', REPLACE\(UUID\(\), '-', ''\)\)/u);
-  assert.match(sql, /CREATE TABLE `', @ai_studio_jskit_probe_identifier, '`\.`capability_probe`/u);
-  assert.match(sql, /DROP TABLE IF EXISTS `', @ai_studio_jskit_probe_identifier, '`\.`capability_probe`/u);
-  assert.match(sql, /DROP DATABASE IF EXISTS `', @ai_studio_jskit_probe_identifier, '`/u);
-  assert.doesNotMatch(sql, /DROP TABLE `ai_studio_jskit_probe`\.`capability_probe`/u);
-  assert.doesNotMatch(sql, /DROP DATABASE `ai_studio_jskit_probe`/u);
+  assert.match(sql, /CONCAT\('vibe64_jskit_probe_', REPLACE\(UUID\(\), '-', ''\)\)/u);
+  assert.match(sql, /CREATE TABLE `', @vibe64_jskit_probe_identifier, '`\.`capability_probe`/u);
+  assert.match(sql, /DROP TABLE IF EXISTS `', @vibe64_jskit_probe_identifier, '`\.`capability_probe`/u);
+  assert.match(sql, /DROP DATABASE IF EXISTS `', @vibe64_jskit_probe_identifier, '`/u);
+  assert.doesNotMatch(sql, /DROP TABLE `vibe64_jskit_probe`\.`capability_probe`/u);
+  assert.doesNotMatch(sql, /DROP DATABASE `vibe64_jskit_probe`/u);
 });

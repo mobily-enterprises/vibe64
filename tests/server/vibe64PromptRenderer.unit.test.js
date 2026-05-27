@@ -8,15 +8,15 @@ import {
   PromptRenderer,
   promptSessionBriefing,
   renderPromptTemplate
-} from "@local/ai-studio-adapters/server";
+} from "@local/vibe64-adapters/server";
 import {
   questionBatchLimitInstruction
-} from "@local/ai-studio-adapters/server/promptQuestionPolicy";
-import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
+} from "@local/vibe64-adapters/server/promptQuestionPolicy";
+import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
-const SYSTEM_PROMPT_PACK_ROOT = fileURLToPath(new URL("../../packages/ai-studio-adapters/src/server/systemPrompts", import.meta.url));
+const SYSTEM_PROMPT_PACK_ROOT = fileURLToPath(new URL("../../packages/vibe64-adapters/src/server/systemPrompts", import.meta.url));
 
-test("ai-studio prompt renderer renders explicit session context into prompt templates", async () => {
+test("vibe64 prompt renderer renders explicit session context into prompt templates", async () => {
   await withTemporaryRoot(async (promptPackRoot) => {
     await writeFile(
       path.join(promptPackRoot, "make_plan.txt"),
@@ -62,7 +62,7 @@ test("ai-studio prompt renderer renders explicit session context into prompt tem
   });
 });
 
-test("ai-studio prompt renderer falls back to the generic prompt", async () => {
+test("vibe64 prompt renderer falls back to the generic prompt", async () => {
   await withTemporaryRoot(async (promptPackRoot) => {
     await writeFile(path.join(promptPackRoot, "generic.txt"), "Generic {{action.label}} for {{session.currentStep}}.", "utf8");
     const renderer = new PromptRenderer({
@@ -84,7 +84,7 @@ test("ai-studio prompt renderer falls back to the generic prompt", async () => {
   });
 });
 
-test("ai-studio prompt renderer makes the system standard available to adapter prompts", async () => {
+test("vibe64 prompt renderer makes the system standard available to adapter prompts", async () => {
   await withTemporaryRoot(async (promptPackRoot) => {
     await withTemporaryRoot(async (systemPromptPackRoot) => {
       await writeFile(
@@ -134,7 +134,7 @@ test("ai-studio prompt renderer makes the system standard available to adapter p
   });
 });
 
-test("ai-studio prompt overrides can include the rendered system standard", async () => {
+test("vibe64 prompt overrides can include the rendered system standard", async () => {
   await withTemporaryRoot(async (promptPackRoot) => {
     await withTemporaryRoot(async (systemPromptPackRoot) => {
       await withTemporaryRoot(async (targetRoot) => {
@@ -148,7 +148,7 @@ test("ai-studio prompt overrides can include the rendered system standard", asyn
           "Shared standard for {{session.id}}",
           "utf8"
         );
-        const overrideRoot = path.join(targetRoot, ".ai-studio", "prompts", "jskit");
+        const overrideRoot = path.join(targetRoot, ".vibe64", "prompts", "jskit");
         await mkdir(overrideRoot, {
           recursive: true
         });
@@ -196,7 +196,7 @@ test("ai-studio prompt overrides can include the rendered system standard", asyn
   });
 });
 
-test("ai-studio prompt renderer applies target overrides with the rendered original prompt", async () => {
+test("vibe64 prompt renderer applies target overrides with the rendered original prompt", async () => {
   await withTemporaryRoot(async (promptPackRoot) => {
     await withTemporaryRoot(async (targetRoot) => {
       await writeFile(
@@ -204,7 +204,7 @@ test("ai-studio prompt renderer applies target overrides with the rendered origi
         "Built-in {{action.label}} for {{session.id}} in {{session.targetRoot}}.",
         "utf8"
       );
-      const overrideRoot = path.join(targetRoot, ".ai-studio", "prompts", "jskit");
+      const overrideRoot = path.join(targetRoot, ".vibe64", "prompts", "jskit");
       await mkdir(overrideRoot, {
         recursive: true
       });
@@ -248,14 +248,14 @@ test("ai-studio prompt renderer applies target overrides with the rendered origi
       );
       assert.equal(rendered.promptOverridePath, path.join(overrideRoot, "make_plan.txt"));
       await assert.rejects(
-        access(path.join(targetRoot, ".ai-studio", "prompts", "README.md")),
+        access(path.join(targetRoot, ".vibe64", "prompts", "README.md")),
         /ENOENT/u
       );
     });
   });
 });
 
-test("ai-studio prompt renderer does not create target files when no override exists", async () => {
+test("vibe64 prompt renderer does not create target files when no override exists", async () => {
   await withTemporaryRoot(async (promptPackRoot) => {
     await withTemporaryRoot(async (targetRoot) => {
       await writeFile(
@@ -285,7 +285,7 @@ test("ai-studio prompt renderer does not create target files when no override ex
 
       assert.equal(rendered.prompt, "Built-in Make plan for prompt_session.");
       await assert.rejects(
-        access(path.join(targetRoot, ".ai-studio", "prompts")),
+        access(path.join(targetRoot, ".vibe64", "prompts")),
         /ENOENT/u
       );
     });
@@ -369,7 +369,7 @@ test("agent conversation prompt keeps simple conversation out of project preflig
       conversationRequest: "How are you?"
     },
     session: {
-      artifactsRoot: "/workspace/.ai-studio/session/artifacts",
+      artifactsRoot: "/workspace/.vibe64/session/artifacts",
       currentStep: "maintenance_conversation",
       currentStepDefinition: {
         autopilot: {},
@@ -378,7 +378,7 @@ test("agent conversation prompt keeps simple conversation out of project preflig
       metadata: {},
       sessionId: "direct_conversation_prompt",
       targetRoot: "/workspace",
-      worktreePath: "/workspace/.ai-studio/session/worktree"
+      worktreePath: "/workspace/.vibe64/session/worktree"
     }
   });
 
@@ -389,11 +389,11 @@ test("agent conversation prompt keeps simple conversation out of project preflig
   assert.doesNotMatch(rendered.prompt, /input_format\.json/u);
 });
 
-test("ai-studio missing-information policy uses the shared question batch limit", () => {
+test("vibe64 missing-information policy uses the shared question batch limit", () => {
   const rendered = renderPromptTemplate("Policy:\n{{prompt.missingInformationPolicy}}", {
     action: {},
     input: {},
-    product: "ai-studio",
+    product: "vibe64",
     session: {}
   });
 
@@ -401,7 +401,7 @@ test("ai-studio missing-information policy uses the shared question batch limit"
   assert.ok(rendered.includes(questionBatchLimitInstruction()));
 });
 
-test("ai-studio prompt renderer can mask static context after the session briefing", () => {
+test("vibe64 prompt renderer can mask static context after the session briefing", () => {
   const rendered = renderPromptTemplate([
     "Facts: {{adapter.facts.json}}",
     "Blueprint: {{adapter.promptContext.environment_blueprint}}",
@@ -429,11 +429,11 @@ test("ai-studio prompt renderer can mask static context after the session briefi
     prompt: {
       staticContextMode: "reference"
     },
-    product: "ai-studio",
+    product: "vibe64",
     session: {}
   });
 
-  assert.match(rendered, /AI Studio session briefing/u);
+  assert.match(rendered, /Vibe64 session briefing/u);
   assert.match(rendered, /adapter\.promptContext\.environment_blueprint/u);
   assert.doesNotMatch(rendered, /Large static project summary/u);
   assert.doesNotMatch(rendered, /Large static database service/u);
@@ -441,7 +441,7 @@ test("ai-studio prompt renderer can mask static context after the session briefi
   assert.doesNotMatch(rendered, /large-static-config/u);
 });
 
-test("ai-studio session briefing contains the static adapter setup once", () => {
+test("vibe64 session briefing contains the static adapter setup once", () => {
   const briefing = promptSessionBriefing({
     adapter: {
       facts: {
@@ -462,9 +462,9 @@ test("ai-studio session briefing contains the static adapter setup once", () => 
       packageManager: "npm"
     },
     session: {
-      artifactsRoot: "/workspace/.ai-studio/session/artifacts",
+      artifactsRoot: "/workspace/.vibe64/session/artifacts",
       metadata: {
-        code_index_path: ".ai-studio/code-index.md"
+        code_index_path: ".vibe64/code-index.md"
       },
       sessionId: "briefing_session",
       targetRoot: "/workspace",
@@ -472,27 +472,27 @@ test("ai-studio session briefing contains the static adapter setup once", () => 
     }
   });
 
-  assert.match(briefing, /AI Studio session briefing/u);
+  assert.match(briefing, /Vibe64 session briefing/u);
   assert.match(briefing, /Prompt-aware project/u);
   assert.match(briefing, /Static environment blueprint/u);
   assert.match(briefing, /Managed database/u);
   assert.match(briefing, /packageManager/u);
-  assert.match(briefing, /Generated code index path: \.ai-studio\/code-index\.md/u);
+  assert.match(briefing, /Generated code index path: \.vibe64\/code-index\.md/u);
 });
 
-test("ai-studio prompt templates reject unknown tokens", () => {
+test("vibe64 prompt templates reject unknown tokens", () => {
   assert.throws(
     () => renderPromptTemplate("{{unknown.token}}", {
       action: {},
       input: {},
-      product: "ai-studio",
+      product: "vibe64",
       session: {}
     }),
-    /Unknown AI Studio prompt token/u
+    /Unknown Vibe64 prompt token/u
   );
 });
 
-test("ai-studio prompt templates can render scalar adapter prompt context tokens", () => {
+test("vibe64 prompt templates can render scalar adapter prompt context tokens", () => {
   assert.equal(
     renderPromptTemplate("Blueprint:\n{{adapter.promptContext.blueprint}}", {
       adapter: {
@@ -502,14 +502,14 @@ test("ai-studio prompt templates can render scalar adapter prompt context tokens
       },
       action: {},
       input: {},
-      product: "ai-studio",
+      product: "vibe64",
       session: {}
     }),
     "Blueprint:\nUse Prisma server-side."
   );
 });
 
-test("ai-studio prompt templates can render managed services without container internals", () => {
+test("vibe64 prompt templates can render managed services without container internals", () => {
   const rendered = renderPromptTemplate("Services:\n{{adapter.managedServices.json}}\nPolicy:\n{{prompt.managedServicePolicy}}\nContext:\n{{context.json}}", {
     adapter: {
       managedServices: [
@@ -525,7 +525,7 @@ test("ai-studio prompt templates can render managed services without container i
       ],
       runtimeContainers: [
         {
-          containerName: "ai-studio-postgres-secret",
+          containerName: "vibe64-postgres-secret",
           id: "postgres",
           label: "PostgreSQL",
           terminalEnv: {
@@ -536,7 +536,7 @@ test("ai-studio prompt templates can render managed services without container i
     },
     action: {},
     input: {},
-    product: "ai-studio",
+    product: "vibe64",
     session: {}
   });
 
@@ -546,6 +546,6 @@ test("ai-studio prompt templates can render managed services without container i
   assert.match(rendered, /npx jskit/u);
   assert.match(rendered, /bare interactive database client/u);
   assert.doesNotMatch(rendered, /runtimeContainers/u);
-  assert.doesNotMatch(rendered, /ai-studio-postgres-secret/u);
+  assert.doesNotMatch(rendered, /vibe64-postgres-secret/u);
   assert.doesNotMatch(rendered, /postgresql:\/\/example/u);
 });

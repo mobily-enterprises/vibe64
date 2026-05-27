@@ -110,8 +110,8 @@ import {
 } from "@mdi/js";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
 import {
-  useAiStudioCommandTerminalController
-} from "@/composables/useAiStudioCommandTerminalController.js";
+  useVibe64CommandTerminalController
+} from "@/composables/useVibe64CommandTerminalController.js";
 
 const props = defineProps({
   action: {
@@ -207,7 +207,7 @@ const {
   terminalSubtitle,
   terminalTitle,
   toggleExpanded
-} = useAiStudioCommandTerminalController(props, emit);
+} = useVibe64CommandTerminalController(props, emit);
 
 defineExpose({
   focus: focusTerminal,

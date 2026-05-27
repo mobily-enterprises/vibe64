@@ -1,6 +1,6 @@
 Prepare for merge
 
-AI Studio standard merge-preparation instructions.
+Vibe64 standard merge-preparation instructions.
 
 Session:
 - id: {{session.id}}

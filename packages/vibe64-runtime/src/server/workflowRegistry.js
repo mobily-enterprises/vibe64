@@ -1,17 +1,17 @@
 import {
-  aiStudioError,
+  vibe64Error,
   isPlainObject,
   normalizeText,
   plainClone
-} from "@local/ai-studio-core/server/core";
-import { deepFreeze } from "@local/ai-studio-core/server/deepFreeze";
+} from "@local/vibe64-core/server/core";
+import { deepFreeze } from "@local/vibe64-core/server/deepFreeze";
 
 function normalizeWorkflowModuleId(moduleId = "") {
   const normalizedModuleId = normalizeText(moduleId);
   if (!normalizedModuleId) {
-    throw aiStudioError(
-      "AI Studio workflow modules require an id.",
-      "ai_studio_workflow_module_invalid"
+    throw vibe64Error(
+      "Vibe64 workflow modules require an id.",
+      "vibe64_workflow_module_invalid"
     );
   }
   return normalizedModuleId;
@@ -33,39 +33,39 @@ function normalizeWorkflowStepContribution(moduleId = "", contribution = {}, ind
   const context = `${moduleId} step ${index + 1}`;
 
   if (!stepId) {
-    throw aiStudioError(
-      `AI Studio workflow ${context} requires a step id.`,
-      "ai_studio_workflow_module_invalid"
+    throw vibe64Error(
+      `Vibe64 workflow ${context} requires a step id.`,
+      "vibe64_workflow_module_invalid"
     );
   }
   if (!definition) {
-    throw aiStudioError(
-      `AI Studio workflow ${context} must register a definition.`,
-      "ai_studio_workflow_module_invalid"
+    throw vibe64Error(
+      `Vibe64 workflow ${context} must register a definition.`,
+      "vibe64_workflow_module_invalid"
     );
   }
   if (!machine && !factoryId) {
-    throw aiStudioError(
-      `AI Studio workflow ${context} must register a machine or factory.`,
-      "ai_studio_workflow_module_invalid"
+    throw vibe64Error(
+      `Vibe64 workflow ${context} must register a machine or factory.`,
+      "vibe64_workflow_module_invalid"
     );
   }
   if (machine && factoryId) {
-    throw aiStudioError(
-      `AI Studio workflow ${context} cannot register both a machine and factory.`,
-      "ai_studio_workflow_module_invalid"
+    throw vibe64Error(
+      `Vibe64 workflow ${context} cannot register both a machine and factory.`,
+      "vibe64_workflow_module_invalid"
     );
   }
   if (definition && normalizeText(definition.id) !== stepId) {
-    throw aiStudioError(
-      `AI Studio workflow ${context} definition id does not match ${stepId}.`,
-      "ai_studio_workflow_module_invalid"
+    throw vibe64Error(
+      `Vibe64 workflow ${context} definition id does not match ${stepId}.`,
+      "vibe64_workflow_module_invalid"
     );
   }
   if (machine && normalizeText(machine.stepId) !== stepId) {
-    throw aiStudioError(
-      `AI Studio workflow ${context} machine step id does not match ${stepId}.`,
-      "ai_studio_workflow_module_invalid"
+    throw vibe64Error(
+      `Vibe64 workflow ${context} machine step id does not match ${stepId}.`,
+      "vibe64_workflow_module_invalid"
     );
   }
 
@@ -84,15 +84,15 @@ function normalizeStepFactoryContribution(moduleId = "", contribution = {}, inde
   const context = `${moduleId} step factory ${index + 1}`;
 
   if (!factoryId) {
-    throw aiStudioError(
-      `AI Studio workflow ${context} requires an id.`,
-      "ai_studio_workflow_module_invalid"
+    throw vibe64Error(
+      `Vibe64 workflow ${context} requires an id.`,
+      "vibe64_workflow_module_invalid"
     );
   }
   if (typeof factory.createMachine !== "function") {
-    throw aiStudioError(
-      `AI Studio workflow ${context} requires a createMachine function.`,
-      "ai_studio_workflow_module_invalid"
+    throw vibe64Error(
+      `Vibe64 workflow ${context} requires a createMachine function.`,
+      "vibe64_workflow_module_invalid"
     );
   }
 
@@ -128,15 +128,15 @@ function normalizeWorkflowSteps(workflow = {}) {
 function validateWorkflowStepEntries(workflowId = "", steps = []) {
   const stepIds = steps.map((entry) => entry.stepId);
   if (steps.length === 0) {
-    throw aiStudioError(
-      `AI Studio workflow ${workflowId} must list at least one step.`,
-      "ai_studio_workflow_module_invalid"
+    throw vibe64Error(
+      `Vibe64 workflow ${workflowId} must list at least one step.`,
+      "vibe64_workflow_module_invalid"
     );
   }
   if (stepIds.length !== new Set(stepIds).size) {
-    throw aiStudioError(
-      `AI Studio workflow ${workflowId} has duplicate step ids.`,
-      "ai_studio_workflow_module_invalid"
+    throw vibe64Error(
+      `Vibe64 workflow ${workflowId} has duplicate step ids.`,
+      "vibe64_workflow_module_invalid"
     );
   }
 
@@ -148,15 +148,15 @@ function validateWorkflowStepEntries(workflowId = "", steps = []) {
     }
     const targetIndex = stepIndexById.get(targetStepId);
     if (targetIndex === undefined) {
-      throw aiStudioError(
-        `AI Studio workflow ${workflowId} step ${entry.stepId} ${fieldName} points to unknown step: ${targetStepId}.`,
-        "ai_studio_workflow_unknown_target_step"
+      throw vibe64Error(
+        `Vibe64 workflow ${workflowId} step ${entry.stepId} ${fieldName} points to unknown step: ${targetStepId}.`,
+        "vibe64_workflow_unknown_target_step"
       );
     }
     if (targetIndex >= index) {
-      throw aiStudioError(
-        `AI Studio workflow ${workflowId} step ${entry.stepId} ${fieldName} target must be an earlier step: ${targetStepId}.`,
-        "ai_studio_workflow_invalid_target_step"
+      throw vibe64Error(
+        `Vibe64 workflow ${workflowId} step ${entry.stepId} ${fieldName} target must be an earlier step: ${targetStepId}.`,
+        "vibe64_workflow_invalid_target_step"
       );
     }
   }
@@ -172,9 +172,9 @@ function normalizeWorkflowIntentHandlers(workflowId = "", steps = [], intentHand
     return deepFreeze({});
   }
   if (!isPlainObject(intentHandlers)) {
-    throw aiStudioError(
-      `AI Studio workflow ${workflowId} intentHandlers must be an object.`,
-      "ai_studio_workflow_module_invalid"
+    throw vibe64Error(
+      `Vibe64 workflow ${workflowId} intentHandlers must be an object.`,
+      "vibe64_workflow_module_invalid"
     );
   }
 
@@ -183,21 +183,21 @@ function normalizeWorkflowIntentHandlers(workflowId = "", steps = [], intentHand
   for (const [rawStepId, stepHandlers] of Object.entries(intentHandlers)) {
     const stepId = normalizeText(rawStepId);
     if (!stepId) {
-      throw aiStudioError(
-        `AI Studio workflow ${workflowId} intentHandlers contains an empty step id.`,
-        "ai_studio_workflow_module_invalid"
+      throw vibe64Error(
+        `Vibe64 workflow ${workflowId} intentHandlers contains an empty step id.`,
+        "vibe64_workflow_module_invalid"
       );
     }
     if (!stepIds.has(stepId)) {
-      throw aiStudioError(
-        `AI Studio workflow ${workflowId} intentHandlers references unknown step: ${stepId}.`,
-        "ai_studio_workflow_unknown_step"
+      throw vibe64Error(
+        `Vibe64 workflow ${workflowId} intentHandlers references unknown step: ${stepId}.`,
+        "vibe64_workflow_unknown_step"
       );
     }
     if (!isPlainObject(stepHandlers)) {
-      throw aiStudioError(
-        `AI Studio workflow ${workflowId} intentHandlers.${stepId} must be an object.`,
-        "ai_studio_workflow_module_invalid"
+      throw vibe64Error(
+        `Vibe64 workflow ${workflowId} intentHandlers.${stepId} must be an object.`,
+        "vibe64_workflow_module_invalid"
       );
     }
 
@@ -205,15 +205,15 @@ function normalizeWorkflowIntentHandlers(workflowId = "", steps = [], intentHand
     for (const [rawIntentId, handler] of Object.entries(stepHandlers)) {
       const intentId = normalizeText(rawIntentId);
       if (!intentId) {
-        throw aiStudioError(
-          `AI Studio workflow ${workflowId} intentHandlers.${stepId} contains an empty intent id.`,
-          "ai_studio_workflow_module_invalid"
+        throw vibe64Error(
+          `Vibe64 workflow ${workflowId} intentHandlers.${stepId} contains an empty intent id.`,
+          "vibe64_workflow_module_invalid"
         );
       }
       if (typeof handler !== "function") {
-        throw aiStudioError(
-          `AI Studio workflow ${workflowId} intentHandlers.${stepId}.${intentId} must be a function.`,
-          "ai_studio_workflow_module_invalid"
+        throw vibe64Error(
+          `Vibe64 workflow ${workflowId} intentHandlers.${stepId}.${intentId} must be a function.`,
+          "vibe64_workflow_module_invalid"
         );
       }
       normalizedStepHandlers[intentId] = handler;
@@ -236,9 +236,9 @@ function normalizeWorkflowContribution(moduleId = "", contribution = {}, index =
   delete workflowMetadata.steps;
 
   if (!workflowId) {
-    throw aiStudioError(
-      `AI Studio workflow ${context} requires an id.`,
-      "ai_studio_workflow_module_invalid"
+    throw vibe64Error(
+      `Vibe64 workflow ${context} requires an id.`,
+      "vibe64_workflow_module_invalid"
     );
   }
   validateWorkflowStepEntries(workflowId, steps);
@@ -304,9 +304,9 @@ function workflowForRecord(workflowRecord = {}, stepRecords = new Map()) {
       const stepId = entry.stepId;
       const stepDefinition = stepRecords.get(stepId)?.definition || null;
       if (!stepDefinition) {
-        throw aiStudioError(
-          `AI Studio workflow ${definition.id} references unregistered step: ${stepId}.`,
-          "ai_studio_workflow_unknown_step"
+        throw vibe64Error(
+          `Vibe64 workflow ${definition.id} references unregistered step: ${stepId}.`,
+          "vibe64_workflow_unknown_step"
         );
       }
       return {
@@ -330,9 +330,9 @@ function normalizeContributionList(moduleId = "", kind = "contributions", contri
   if (isPlainObject(contributions)) {
     return [contributions];
   }
-  throw aiStudioError(
-    `AI Studio workflow module ${moduleId} ${kind} must be an object or array.`,
-    "ai_studio_workflow_module_invalid"
+  throw vibe64Error(
+    `Vibe64 workflow module ${moduleId} ${kind} must be an object or array.`,
+    "vibe64_workflow_module_invalid"
   );
 }
 
@@ -364,9 +364,9 @@ function normalizeContributorModules(modules = [], kind = "modules") {
   const moduleList = Array.isArray(modules) ? modules : [modules];
   return moduleList.map((module, index) => {
     if (!isPlainObject(module)) {
-      throw aiStudioError(
-        `AI Studio workflow ${kind} entry ${index + 1} must be an object.`,
-        "ai_studio_workflow_module_invalid"
+      throw vibe64Error(
+        `Vibe64 workflow ${kind} entry ${index + 1} must be an object.`,
+        "vibe64_workflow_module_invalid"
       );
     }
     return module;
@@ -392,18 +392,18 @@ function registerWorkflowContributorModules(registry, {
 
   normalizedStepFactoryModules.forEach((module) => {
     if (!hasModuleContribution(module, "factories")) {
-      throw aiStudioError(
-        `AI Studio workflow step factory module ${normalizeText(module.id) || "(unknown)"} must define factories.`,
-        "ai_studio_workflow_module_invalid"
+      throw vibe64Error(
+        `Vibe64 workflow step factory module ${normalizeText(module.id) || "(unknown)"} must define factories.`,
+        "vibe64_workflow_module_invalid"
       );
     }
     registry.registerStepFactories(module.id, module.factories);
   });
   normalizedWorkflowModules.forEach((module) => {
     if (!hasModuleContribution(module, "steps") && !hasModuleContribution(module, "workflowDefinitions")) {
-      throw aiStudioError(
-        `AI Studio workflow module ${normalizeText(module.id) || "(unknown)"} must define steps or workflowDefinitions.`,
-        "ai_studio_workflow_module_invalid"
+      throw vibe64Error(
+        `Vibe64 workflow module ${normalizeText(module.id) || "(unknown)"} must define steps or workflowDefinitions.`,
+        "vibe64_workflow_module_invalid"
       );
     }
   });
@@ -435,9 +435,9 @@ function createWorkflowRegistry() {
 
   function storeStepContribution(moduleId = "", contribution = {}) {
     if (contribution.factoryId && !stepFactoryRecords.has(contribution.factoryId)) {
-      throw aiStudioError(
-        `AI Studio workflow step ${contribution.id} references unregistered step factory: ${contribution.factoryId}.`,
-        "ai_studio_workflow_unknown_step_factory"
+      throw vibe64Error(
+        `Vibe64 workflow step ${contribution.id} references unregistered step factory: ${contribution.factoryId}.`,
+        "vibe64_workflow_unknown_step_factory"
       );
     }
 
@@ -458,9 +458,9 @@ function createWorkflowRegistry() {
       .map((entry) => entry.stepId)
       .filter((stepId) => !stepRecords.get(stepId)?.definition);
     if (missingStepIds.length > 0) {
-      throw aiStudioError(
-        `AI Studio workflow ${definition.id} references unregistered steps: ${missingStepIds.join(", ")}.`,
-        "ai_studio_workflow_unknown_step"
+      throw vibe64Error(
+        `Vibe64 workflow ${definition.id} references unregistered steps: ${missingStepIds.join(", ")}.`,
+        "vibe64_workflow_unknown_step"
       );
     }
     workflowRecords.set(definition.id, Object.freeze({
@@ -547,9 +547,9 @@ function createWorkflowRegistry() {
     }
     const factoryRecord = stepFactoryRecords.get(stepRecord.factoryId);
     if (!factoryRecord) {
-      throw aiStudioError(
-        `AI Studio workflow step ${stepRecord.id} references unregistered step factory: ${stepRecord.factoryId}.`,
-        "ai_studio_workflow_unknown_step_factory"
+      throw vibe64Error(
+        `Vibe64 workflow step ${stepRecord.id} references unregistered step factory: ${stepRecord.factoryId}.`,
+        "vibe64_workflow_unknown_step_factory"
       );
     }
     const machine = factoryRecord.createMachine({
@@ -557,9 +557,9 @@ function createWorkflowRegistry() {
       stepId: stepRecord.id
     });
     if (!isPlainObject(machine) || normalizeText(machine.stepId) !== stepRecord.id) {
-      throw aiStudioError(
-        `AI Studio workflow step factory ${factoryRecord.id} returned an invalid machine for step ${stepRecord.id}.`,
-        "ai_studio_workflow_invalid_step_factory"
+      throw vibe64Error(
+        `Vibe64 workflow step factory ${factoryRecord.id} returned an invalid machine for step ${stepRecord.id}.`,
+        "vibe64_workflow_invalid_step_factory"
       );
     }
     return machine;

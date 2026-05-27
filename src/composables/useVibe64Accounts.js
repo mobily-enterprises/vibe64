@@ -3,14 +3,14 @@ import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibil
 import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
 import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
 import {
-  AI_STUDIO_SURFACE_ID,
+  VIBE64_SURFACE_ID,
   LOCAL_STUDIO_COMMAND_OPTIONS
-} from "@/lib/aiStudioRequestConfig.js";
+} from "@/lib/vibe64RequestConfig.js";
 import {
   ACCOUNTS_AUTH_ENDPOINT,
   ACCOUNTS_ENDPOINT,
   ACCOUNTS_LOGOUT_ENDPOINT,
-  AI_STUDIO_ACCOUNTS_AUTH_API_SUFFIX,
+  VIBE64_ACCOUNTS_AUTH_API_SUFFIX,
   accountsQueryKey
 } from "@/lib/studioGateApi.js";
 import {
@@ -18,10 +18,10 @@ import {
 } from "@/lib/studioHttp.js";
 
 function accountsResourceQueryKey() {
-  return computed(() => accountsQueryKey(AI_STUDIO_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC));
+  return computed(() => accountsQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC));
 }
 
-function useAiStudioAccounts() {
+function useVibe64Accounts() {
   const forceRefresh = ref(false);
   const statusResource = useEndpointResource({
     client: studioHttpClient,
@@ -35,7 +35,7 @@ function useAiStudioAccounts() {
 
   const startAuthCommand = useCommand({
     access: "never",
-    apiSuffix: AI_STUDIO_ACCOUNTS_AUTH_API_SUFFIX,
+    apiSuffix: VIBE64_ACCOUNTS_AUTH_API_SUFFIX,
     buildCommandOptions: () => ({
       method: "POST",
       options: LOCAL_STUDIO_COMMAND_OPTIONS
@@ -50,8 +50,8 @@ function useAiStudioAccounts() {
       success: "Account login started."
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "ai-studio.accounts.auth.start",
-    surfaceId: AI_STUDIO_SURFACE_ID,
+    placementSource: "vibe64.accounts.auth.start",
+    surfaceId: VIBE64_SURFACE_ID,
     writeMethod: "POST"
   });
 
@@ -100,5 +100,5 @@ function useAiStudioAccounts() {
 }
 
 export {
-  useAiStudioAccounts
+  useVibe64Accounts
 };

@@ -3,12 +3,12 @@ import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibil
 import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
 import { usePaths } from "@jskit-ai/users-web/client/composables/usePaths";
 import {
-  AI_STUDIO_SESSION_CHANGED_EVENT,
-  AI_STUDIO_SESSIONS_API_SUFFIX,
-  AI_STUDIO_SURFACE_ID,
-  aiStudioConversationLogPath,
-  aiStudioConversationLogQueryKey
-} from "@/lib/aiStudioSessionRequestConfig.js";
+  VIBE64_SESSION_CHANGED_EVENT,
+  VIBE64_SESSIONS_API_SUFFIX,
+  VIBE64_SURFACE_ID,
+  vibe64ConversationLogPath,
+  vibe64ConversationLogQueryKey
+} from "@/lib/vibe64SessionRequestConfig.js";
 import {
   readRefOrGetterValue
 } from "@/lib/vueRefOrGetterValue.js";
@@ -53,7 +53,7 @@ function normalizeConversationLog(payload = {}) {
     .filter(Boolean);
 }
 
-function useAiStudioConversationLog({
+function useVibe64ConversationLog({
   active = true,
   session
 } = {}) {
@@ -64,18 +64,18 @@ function useAiStudioConversationLog({
     readRefOrGetterValue(active) !== false &&
     sessionId.value
   ));
-  const sessionsApiPath = computed(() => paths.api(AI_STUDIO_SESSIONS_API_SUFFIX, {
-    surface: AI_STUDIO_SURFACE_ID
+  const sessionsApiPath = computed(() => paths.api(VIBE64_SESSIONS_API_SUFFIX, {
+    surface: VIBE64_SURFACE_ID
   }));
   const resource = useEndpointResource({
     enabled,
     fallbackLoadError: "Conversation history could not be loaded.",
     path: computed(() => sessionId.value
-      ? aiStudioConversationLogPath(sessionsApiPath.value, sessionId.value)
+      ? vibe64ConversationLogPath(sessionsApiPath.value, sessionId.value)
       : ""),
     queryKey: computed(() => [
-      ...aiStudioConversationLogQueryKey(
-        AI_STUDIO_SURFACE_ID,
+      ...vibe64ConversationLogQueryKey(
+        VIBE64_SURFACE_ID,
         ROUTE_VISIBILITY_PUBLIC,
         sessionId.value
       ),
@@ -85,7 +85,7 @@ function useAiStudioConversationLog({
     readMethod: "GET",
     refreshOnPull: true,
     realtime: {
-      event: AI_STUDIO_SESSION_CHANGED_EVENT,
+      event: VIBE64_SESSION_CHANGED_EVENT,
       matches: ({ payload = {} } = {}) => {
         const changedSessionId = String(payload.sessionId || payload.entityId || "").trim();
         return Boolean(changedSessionId) && changedSessionId === sessionId.value;
@@ -110,5 +110,5 @@ function useAiStudioConversationLog({
 
 export {
   normalizeConversationLog,
-  useAiStudioConversationLog
+  useVibe64ConversationLog
 };

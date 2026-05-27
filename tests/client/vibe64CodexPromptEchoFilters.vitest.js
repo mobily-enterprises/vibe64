@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { createCodexPromptEchoFilters } from "../../src/lib/codexPromptEchoFilters.js";
 
-describe("AI Studio Codex prompt echo filters", () => {
+describe("Vibe64 Codex prompt echo filters", () => {
   it("replaces a visible echoed prompt with a short status message", () => {
     const filters = createCodexPromptEchoFilters();
     filters.add({
@@ -19,9 +19,9 @@ describe("AI Studio Codex prompt echo filters", () => {
   it("hides long marked Studio prompt context without leaking the full prompt", () => {
     const filters = createCodexPromptEchoFilters();
     const longPrompt = [
-      "[[AI_STUDIO_CONTEXT_START]]",
+      "[[VIBE64_CONTEXT_START]]",
       "x".repeat(300),
-      "[[AI_STUDIO_CONTEXT_END]]"
+      "[[VIBE64_CONTEXT_END]]"
     ].join("\n");
     filters.add({
       outputStart: 0,
@@ -34,9 +34,9 @@ describe("AI Studio Codex prompt echo filters", () => {
   it("applies prompt offsets relative to a retained output tail", () => {
     const filters = createCodexPromptEchoFilters();
     const longPrompt = [
-      "[[AI_STUDIO_CONTEXT_START]]",
+      "[[VIBE64_CONTEXT_START]]",
       "x".repeat(300),
-      "[[AI_STUDIO_CONTEXT_END]]"
+      "[[VIBE64_CONTEXT_END]]"
     ].join("\n");
     filters.add({
       outputStart: 300000,

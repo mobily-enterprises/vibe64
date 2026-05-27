@@ -52,7 +52,7 @@ const readyProjectTypePayload = {
     ],
     errorCode: "",
     message: "",
-    path: `${targetRoot}/.ai-studio/project_type`,
+    path: `${targetRoot}/.vibe64/project_type`,
     projectType: "jskit",
     ready: true,
     status: "ready",
@@ -66,7 +66,7 @@ const readyProjectConfigPayload = {
       id: "jskit",
       label: "JSKIT target adapter"
     },
-    configRoot: `${targetRoot}/.ai-studio/config`,
+    configRoot: `${targetRoot}/.vibe64/config`,
     defaults: savedProjectConfigValues,
     fields: [],
     fieldValues: Object.fromEntries(
@@ -74,20 +74,20 @@ const readyProjectConfigPayload = {
         fieldId,
         {
           defaultValue: value,
-          filePath: `${targetRoot}/.ai-studio/config/${fieldId}`,
+          filePath: `${targetRoot}/.vibe64/config/${fieldId}`,
           invalid: null,
           saved: true,
           value
         }
       ])
     ),
-    helperPath: `${targetRoot}/.ai-studio/runtime/ai-studio-config.sh`,
+    helperPath: `${targetRoot}/.vibe64/runtime/vibe64-config.sh`,
     invalid: [],
     message: "",
     missing: [],
     projectType: "jskit",
     ready: true,
-    runtimeRoot: `${targetRoot}/.ai-studio/runtime`,
+    runtimeRoot: `${targetRoot}/.vibe64/runtime`,
     sections: [],
     values: savedProjectConfigValues
   },
@@ -146,7 +146,7 @@ const blockedBootstrapPayload = {
       status: "pass",
       required: true,
       expected: "The managed toolchain image exists.",
-      observed: "jskit-ai-studio-toolchain:0.1.0",
+      observed: "jskit-vibe64-toolchain:0.1.0",
       explanation: "Node, npm, git, GitHub CLI, and Codex run inside this managed image."
     },
     {
@@ -217,7 +217,7 @@ const readyBootstrapPayload = {
 
 const blockedTargetAppPayload = {
   ready: false,
-  studioRoot: "/studio/jskit-ai-studio",
+  studioRoot: "/studio/jskit-vibe64",
   targetRoot: "/workspace/example-target-app",
   checks: [
     {
@@ -235,7 +235,7 @@ const blockedTargetAppPayload = {
       status: "pass",
       required: true,
       expected: "Target root and Studio root are separate.",
-      observed: "Studio root: /studio/jskit-ai-studio\nTarget root: /workspace/example-target-app",
+      observed: "Studio root: /studio/jskit-vibe64\nTarget root: /workspace/example-target-app",
       explanation: "Studio is pointed at a separate target directory."
     },
     {
@@ -250,7 +250,7 @@ const blockedTargetAppPayload = {
         kind: "terminal",
         actionId: "terminal-git-init",
         label: "Initialize Git",
-        commandPreview: "docker run --rm jskit-ai-studio-toolchain:0.1.0 git init"
+        commandPreview: "docker run --rm jskit-vibe64-toolchain:0.1.0 git init"
       }
     },
     {
@@ -313,7 +313,7 @@ const blockedTargetAppPayload = {
 
 const readyTargetAppPayload = {
   ready: true,
-  studioRoot: "/studio/jskit-ai-studio",
+  studioRoot: "/studio/jskit-vibe64",
   targetRoot: "/workspace/example-target-app",
   checks: [
     {
@@ -543,7 +543,7 @@ const targetScriptsPayload = {
   ok: true,
   config: {
     exists: false,
-    path: ".ai-studio/config/starred_scripts"
+    path: ".vibe64/config/starred_scripts"
   },
   starredScriptIds: ["jskit:update", "build", "server", "verify"],
   scripts: [

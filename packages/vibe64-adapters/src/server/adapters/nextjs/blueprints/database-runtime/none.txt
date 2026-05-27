@@ -1,6 +1,6 @@
 Database runtime: none
 
-No AI Studio-managed database is selected.
+No Vibe64-managed database is selected.
 Do not assume DATABASE_URL exists.
 Do not add database dependencies, schema files, migrations, or database scripts unless the issue explicitly asks for persistence.
 If the app later needs durable storage, update the project configuration first so prompts and setup agree on the runtime.

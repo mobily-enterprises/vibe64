@@ -2,11 +2,11 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const AUTOPILOT_RUNTIME_FILES = Object.freeze([
-  "src/components/studio/ai-studio-session/AiStudioAutopilotView.vue",
-  "src/composables/useAiStudioAutopilotController.js",
-  "src/composables/useAiStudioSessionData.js",
-  "src/composables/useAiStudioSessionActions.js",
-  "src/lib/aiStudioSessionPanelModel.js"
+  "src/components/studio/vibe64-session/Vibe64AutopilotView.vue",
+  "src/composables/useVibe64AutopilotController.js",
+  "src/composables/useVibe64SessionData.js",
+  "src/composables/useVibe64SessionActions.js",
+  "src/lib/vibe64SessionPanelModel.js"
 ]);
 
 const SERVER_OWNED_WORKFLOW_WORDS = Object.freeze([
@@ -48,7 +48,7 @@ describe("dumb Autopilot client ownership", () => {
   });
 
   it("keeps direct step-input advancement owned by the server autopilot operation", () => {
-    const source = readFileSync("src/components/studio/ai-studio-session/AiStudioAutopilotView.vue", "utf8");
+    const source = readFileSync("src/components/studio/vibe64-session/Vibe64AutopilotView.vue", "utf8");
     expect(source).not.toContain("props.actions.goNext");
   });
 });

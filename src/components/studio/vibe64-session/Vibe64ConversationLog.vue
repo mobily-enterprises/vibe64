@@ -112,7 +112,7 @@ import {
 } from "@mdi/js";
 import { useScrollToBottom } from "@/composables/useScrollToBottom.js";
 import LongTextPreviewBlocks from "@/components/studio/LongTextPreviewBlocks.vue";
-import { parseNumberedQuestionPrompt } from "@/lib/aiStudioNumberedQuestionSugar.js";
+import { parseNumberedQuestionPrompt } from "@/lib/vibe64NumberedQuestionSugar.js";
 import { parseLongTextReviewBlocks } from "@/lib/studioLongTextBlocks.js";
 
 const props = defineProps({

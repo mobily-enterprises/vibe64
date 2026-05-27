@@ -3,7 +3,7 @@ import test from "node:test";
 
 import {
   studioCommandScript
-} from "@local/ai-studio-adapters/server/nodeWebProject";
+} from "@local/vibe64-adapters/server/nodeWebProject";
 
 test("studio command scripts print a readable intro and preview before the command", () => {
   assert.equal(

@@ -1,7 +1,7 @@
 <template>
   <section class="project-type-setup">
     <div class="project-type-setup__heading">
-      <p class="project-type-setup__eyebrow">AI Studio</p>
+      <p class="project-type-setup__eyebrow">Vibe64</p>
       <h2 class="project-type-setup__title">What do you want to build?</h2>
       <p class="project-type-setup__message">
         {{ headingMessage }}
@@ -108,7 +108,7 @@
           <dl class="project-type-setup__details">
             <div>
               <dt>Best for</dt>
-              <dd>{{ projectType.bestFor || "Project-specific AI Studio workflows." }}</dd>
+              <dd>{{ projectType.bestFor || "Project-specific Vibe64 workflows." }}</dd>
             </div>
             <div>
               <dt>End result</dt>
@@ -245,7 +245,7 @@ function adapterSummary(projectType = {}) {
   return projectType.explanation ||
     projectType.summary ||
     projectType.description ||
-    "A configured AI Studio adapter for this project type.";
+    "A configured Vibe64 adapter for this project type.";
 }
 
 function selectApplicationType(applicationTypeId) {

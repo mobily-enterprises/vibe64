@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@jskit-ai/kernel": "0.x",
-    "@local/ai-studio-core": "0.1.0",
+    "@local/vibe64-core": "0.1.0",
     "@local/studio-terminal-core": "0.1.0"
   }
 }

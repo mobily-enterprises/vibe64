@@ -6,8 +6,8 @@ export default Object.freeze({
   description: "Target adapter readiness checks and repairs for Studio.",
   dependsOn: [
     "@jskit-ai/kernel",
-    "@local/ai-studio-core",
-    "@local/ai-studio-project",
+    "@local/vibe64-core",
+    "@local/vibe64-project",
     "@local/setup-doctor-core",
     "@local/studio-terminal-core"
   ],
@@ -17,7 +17,7 @@ export default Object.freeze({
     ],
     requires: [
       "runtime.actions",
-      "feature.ai-studio-project"
+      "feature.vibe64-project"
     ]
   },
   runtime: {

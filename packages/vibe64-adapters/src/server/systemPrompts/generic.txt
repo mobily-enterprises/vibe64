@@ -1,6 +1,6 @@
 Run {{action.label}}
 
-AI Studio standard workflow instructions.
+Vibe64 standard workflow instructions.
 
 Action:
 - id: {{action.id}}
@@ -30,4 +30,4 @@ Action input:
 Missing information policy:
 {{prompt.missingInformationPolicy}}
 
-Follow the current Codex conversation, Action input, session metadata, adapter facts, and project files as the source of truth. Work in the target project workspace. If session metadata includes a code_index_path, read that generated code index when it is relevant before adding or reviewing helper-like code. Do not inspect AI Studio session internals unless this prompt explicitly asks for that. In your normal Codex response, report the work completed, files modified, checks run, and remaining blockers. Do not run shell commands just to display the response.
+Follow the current Codex conversation, Action input, session metadata, adapter facts, and project files as the source of truth. Work in the target project workspace. If session metadata includes a code_index_path, read that generated code index when it is relevant before adding or reviewing helper-like code. Do not inspect Vibe64 session internals unless this prompt explicitly asks for that. In your normal Codex response, report the work completed, files modified, checks run, and remaining blockers. Do not run shell commands just to display the response.

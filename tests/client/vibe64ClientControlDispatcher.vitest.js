@@ -1,30 +1,30 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  AI_STUDIO_CLIENT_CONTROL_ACTIONS
-} from "../../src/lib/aiStudioPresentationControls.js";
+  VIBE64_CLIENT_CONTROL_ACTIONS
+} from "../../src/lib/vibe64PresentationControls.js";
 import {
-  runAiStudioClientControl
-} from "../../src/lib/aiStudioClientControlDispatcher.js";
+  runVibe64ClientControl
+} from "../../src/lib/vibe64ClientControlDispatcher.js";
 import {
-  startAiStudioCodexTerminal
-} from "@/lib/aiStudioSessionApi.js";
+  startVibe64CodexTerminal
+} from "@/lib/vibe64SessionApi.js";
 
-vi.mock("@/lib/aiStudioSessionApi.js", () => ({
-  startAiStudioCodexTerminal: vi.fn()
+vi.mock("@/lib/vibe64SessionApi.js", () => ({
+  startVibe64CodexTerminal: vi.fn()
 }));
 
-describe("aiStudioClientControlDispatcher", () => {
+describe("vibe64ClientControlDispatcher", () => {
   beforeEach(() => {
-    vi.mocked(startAiStudioCodexTerminal).mockReset();
+    vi.mocked(startVibe64CodexTerminal).mockReset();
   });
 
   it("dispatches the open diff control through the shared action contract", async () => {
     const openDialog = vi.fn();
 
-    await expect(runAiStudioClientControl({
+    await expect(runVibe64ClientControl({
       control: {
-        action: AI_STUDIO_CLIENT_CONTROL_ACTIONS.OPEN_DIFF
+        action: VIBE64_CLIENT_CONTROL_ACTIONS.OPEN_DIFF
       }
     }, {
       diff: {
@@ -37,20 +37,20 @@ describe("aiStudioClientControlDispatcher", () => {
 
   it("dispatches Codex terminal retry controls without workflow-specific UI checks", async () => {
     const refreshSessionData = vi.fn();
-    vi.mocked(startAiStudioCodexTerminal).mockResolvedValue({
+    vi.mocked(startVibe64CodexTerminal).mockResolvedValue({
       ok: true
     });
 
-    await expect(runAiStudioClientControl({
+    await expect(runVibe64ClientControl({
       control: {
-        action: AI_STUDIO_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL
+        action: VIBE64_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL
       }
     }, {
       refreshSessionData,
       sessionId: "session_123"
     })).resolves.toBe(true);
 
-    expect(startAiStudioCodexTerminal).toHaveBeenCalledWith("session_123");
+    expect(startVibe64CodexTerminal).toHaveBeenCalledWith("session_123");
     expect(refreshSessionData).toHaveBeenCalledTimes(1);
   });
 });

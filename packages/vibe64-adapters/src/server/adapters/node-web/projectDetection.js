@@ -498,7 +498,7 @@ function packageScriptIsPlaceholder(command = "") {
 
 function preferredAutomatedCheckScriptName(packageJson = {}) {
   const candidates = [
-    "ai-studio:verify",
+    "vibe64:verify",
     "verify",
     "check",
     "test",

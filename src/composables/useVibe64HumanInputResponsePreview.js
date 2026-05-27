@@ -1,11 +1,11 @@
 import {
-  useAiStudioArtifactPreview
-} from "@/composables/useAiStudioArtifactPreview.js";
+  useVibe64ArtifactPreview
+} from "@/composables/useVibe64ArtifactPreview.js";
 
 const HUMAN_INPUT_RESPONSE_PREVIEW_ID = "ai_response";
 
-function useAiStudioHumanInputResponsePreview(options = {}) {
-  return useAiStudioArtifactPreview({
+function useVibe64HumanInputResponsePreview(options = {}) {
+  return useVibe64ArtifactPreview({
     ...options,
     loadErrorMessage: "AI response could not be loaded.",
     previewId: HUMAN_INPUT_RESPONSE_PREVIEW_ID
@@ -14,5 +14,5 @@ function useAiStudioHumanInputResponsePreview(options = {}) {
 
 export {
   HUMAN_INPUT_RESPONSE_PREVIEW_ID,
-  useAiStudioHumanInputResponsePreview
+  useVibe64HumanInputResponsePreview
 };

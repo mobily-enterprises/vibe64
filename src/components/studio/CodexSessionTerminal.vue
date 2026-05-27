@@ -114,19 +114,19 @@ import {
 } from "@mdi/js";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
 import {
-  aiStudioCodexTerminalWebSocketUrl,
-  closeAiStudioCodexTerminal,
-  startAiStudioCodexTerminal
-} from "@/lib/aiStudioSessionApi.js";
-import { useAiStudioCodexCommands } from "@/composables/useAiStudioCodexCommands.js";
+  vibe64CodexTerminalWebSocketUrl,
+  closeVibe64CodexTerminal,
+  startVibe64CodexTerminal
+} from "@/lib/vibe64SessionApi.js";
+import { useVibe64CodexCommands } from "@/composables/useVibe64CodexCommands.js";
 import { useCodexTerminalAttachments } from "@/composables/useCodexTerminalAttachments.js";
 import { useCodexTerminalOutput } from "@/composables/useCodexTerminalOutput.js";
 import { useCodexTerminalSessionLifecycle } from "@/composables/useCodexTerminalSessionLifecycle.js";
 import { useCodexTerminalViewport } from "@/composables/useCodexTerminalViewport.js";
 import { writeClipboardText } from "@/lib/clipboard.js";
 import {
-  aiStudioSessionWorktreePath
-} from "@/lib/aiStudioSessionPaths.js";
+  vibe64SessionWorktreePath
+} from "@/lib/vibe64SessionPaths.js";
 import { terminalInputHasUserText } from "@/lib/terminalInput.js";
 
 const props = defineProps({
@@ -155,7 +155,7 @@ const emit = defineEmits([
   "input",
   "session-update"
 ]);
-const codexCommands = useAiStudioCodexCommands();
+const codexCommands = useVibe64CodexCommands();
 
 const terminalSessionId = ref("");
 const terminalStatus = ref("");
@@ -168,7 +168,7 @@ const componentMounted = ref(false);
 let terminalLifecycle = null;
 
 const sessionId = computed(() => props.session?.sessionId || "");
-const sessionWorktree = computed(() => aiStudioSessionWorktreePath(props.session || {}));
+const sessionWorktree = computed(() => vibe64SessionWorktreePath(props.session || {}));
 const terminalDisplayActive = computed(() => props.visible && props.displayMode !== "headless");
 const serverCodexTerminal = computed(() => {
   const terminal = props.session?.codexTerminal;
@@ -281,7 +281,7 @@ terminalLifecycle = useCodexTerminalSessionLifecycle({
   clearTerminalOutput() {
     resetTerminalOutput();
   },
-  closeTerminalSession: closeAiStudioCodexTerminal,
+  closeTerminalSession: closeVibe64CodexTerminal,
   componentMounted,
   defaultExpanded,
   disposeTerminalViewport,
@@ -312,7 +312,7 @@ terminalLifecycle = useCodexTerminalSessionLifecycle({
   resetTerminal,
   sessionId,
   setupTerminalUi,
-  startTerminalSession: startAiStudioCodexTerminal,
+  startTerminalSession: startVibe64CodexTerminal,
   terminalCommandPreview,
   terminalError,
   terminalHost,
@@ -320,7 +320,7 @@ terminalLifecycle = useCodexTerminalSessionLifecycle({
   terminalStarting,
   terminalStatus,
   visible: computed(() => props.visible),
-  webSocketUrl: aiStudioCodexTerminalWebSocketUrl,
+  webSocketUrl: vibe64CodexTerminalWebSocketUrl,
   writeTerminalOutput
 });
 const {

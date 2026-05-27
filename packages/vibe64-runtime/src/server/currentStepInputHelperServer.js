@@ -5,13 +5,13 @@ import path from "node:path";
 import process from "node:process";
 
 import {
-  aiStudioErrorResponse,
-  aiStudioStatusCode
-} from "@local/ai-studio-core/server/serverResponses";
+  vibe64ErrorResponse,
+  vibe64StatusCode
+} from "@local/vibe64-core/server/serverResponses";
 
-const HELPER_SOCKET_CONTAINER_DIR = "/ai-studio-helper";
+const HELPER_SOCKET_CONTAINER_DIR = "/vibe64-helper";
 const HELPER_SOCKET_NAME = `current-step-input-${process.pid}.sock`;
-const HELPER_SCRIPT_NAME = "ai-studio-current-step-input.mjs";
+const HELPER_SCRIPT_NAME = "vibe64-current-step-input.mjs";
 const MAX_HELPER_BODY_BYTES = 128 * 1024;
 const TOKEN_SECRET = randomBytes(32);
 const helperServers = new Map();
@@ -39,7 +39,7 @@ function bearerToken(headerValue = "") {
 }
 
 function helperRuntimeHostDir(targetRoot = "") {
-  return path.join(path.resolve(targetRoot), ".ai-studio", "runtime");
+  return path.join(path.resolve(targetRoot), ".vibe64", "runtime");
 }
 
 function helperSocketHostPath(targetRoot = "") {
@@ -55,7 +55,7 @@ function helperScriptHostPath(session = {}) {
 }
 
 function helperRequestToken(request) {
-  return bearerToken(request.headers.authorization) || normalizeText(request.headers["x-ai-studio-helper-token"]);
+  return bearerToken(request.headers.authorization) || normalizeText(request.headers["x-vibe64-helper-token"]);
 }
 
 async function readRequestJson(request) {
@@ -63,8 +63,8 @@ async function readRequestJson(request) {
   for await (const chunk of request) {
     body += chunk;
     if (Buffer.byteLength(body) > MAX_HELPER_BODY_BYTES) {
-      const error = new Error("AI Studio helper input is too large.");
-      error.code = "ai_studio_helper_input_too_large";
+      const error = new Error("Vibe64 helper input is too large.");
+      error.code = "vibe64_helper_input_too_large";
       throw error;
     }
   }
@@ -72,8 +72,8 @@ async function readRequestJson(request) {
     const parsed = JSON.parse(body || "{}");
     return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
   } catch {
-    const error = new Error("AI Studio helper input must be valid JSON.");
-    error.code = "ai_studio_helper_invalid_json";
+    const error = new Error("Vibe64 helper input must be valid JSON.");
+    error.code = "vibe64_helper_invalid_json";
     throw error;
   }
 }
@@ -115,7 +115,7 @@ function parsePayload(text) {
     const parsed = JSON.parse(String(text || "").trim() || "{}");
     return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
   } catch {
-    throw new Error("Usage: ai-studio-current-step-input --json '{\\"kind\\":\\"ready\\", ...}' or pipe JSON on stdin.");
+    throw new Error("Usage: vibe64-current-step-input --json '{\\"kind\\":\\"ready\\", ...}' or pipe JSON on stdin.");
   }
 }
 
@@ -147,13 +147,13 @@ function postJsonToSocket({ payload, socketPath, token }) {
   });
 }
 
-const socketPath = process.env.AI_STUDIO_CURRENT_STEP_INPUT_SOCKET || "";
-const token = process.env.AI_STUDIO_CURRENT_STEP_INPUT_TOKEN || "";
-const sessionId = process.env.AI_STUDIO_CURRENT_STEP_INPUT_SESSION || "";
+const socketPath = process.env.VIBE64_CURRENT_STEP_INPUT_SOCKET || "";
+const token = process.env.VIBE64_CURRENT_STEP_INPUT_TOKEN || "";
+const sessionId = process.env.VIBE64_CURRENT_STEP_INPUT_SESSION || "";
 
 try {
   if (!socketPath || !token || !sessionId) {
-    throw new Error("AI Studio current-step helper environment is not available.");
+    throw new Error("Vibe64 current-step helper environment is not available.");
   }
 
   const payload = {
@@ -180,10 +180,10 @@ try {
 function helperEnvironment(session = {}, targetRoot = "") {
   const scriptPath = helperScriptHostPath(session);
   return {
-    AI_STUDIO_CURRENT_STEP_INPUT_HELPER: scriptPath,
-    AI_STUDIO_CURRENT_STEP_INPUT_SESSION: session.sessionId,
-    AI_STUDIO_CURRENT_STEP_INPUT_SOCKET: helperSocketContainerPath(targetRoot),
-    AI_STUDIO_CURRENT_STEP_INPUT_TOKEN: currentStepInputToken(session.sessionId)
+    VIBE64_CURRENT_STEP_INPUT_HELPER: scriptPath,
+    VIBE64_CURRENT_STEP_INPUT_SESSION: session.sessionId,
+    VIBE64_CURRENT_STEP_INPUT_SOCKET: helperSocketContainerPath(targetRoot),
+    VIBE64_CURRENT_STEP_INPUT_TOKEN: currentStepInputToken(session.sessionId)
   };
 }
 
@@ -228,8 +228,8 @@ async function ensureHelperServer({
         ok: false,
         errors: [
           {
-            code: "ai_studio_helper_route_not_found",
-            message: "Unknown AI Studio helper route."
+            code: "vibe64_helper_route_not_found",
+            message: "Unknown Vibe64 helper route."
           }
         ]
       });
@@ -244,8 +244,8 @@ async function ensureHelperServer({
           ok: false,
           errors: [
             {
-              code: "ai_studio_helper_token_invalid",
-              message: "AI Studio helper token is invalid for this session."
+              code: "vibe64_helper_token_invalid",
+              message: "Vibe64 helper token is invalid for this session."
             }
           ]
         });
@@ -255,16 +255,16 @@ async function ensureHelperServer({
       const runtime = await projectService.createRuntime();
       const result = await runtime.submitCurrentStepInput(sessionId, input);
       await onSessionChanged(result?.sessionId || sessionId);
-      sendJson(response, aiStudioStatusCode(result), {
+      sendJson(response, vibe64StatusCode(result), {
         ...result,
         ok: true
       });
     } catch (error) {
-      const payload = aiStudioErrorResponse(error, {
-        fallbackCode: "ai_studio_helper_request_failed",
-        fallbackMessage: "AI Studio helper request failed."
+      const payload = vibe64ErrorResponse(error, {
+        fallbackCode: "vibe64_helper_request_failed",
+        fallbackMessage: "Vibe64 helper request failed."
       });
-      sendJson(response, aiStudioStatusCode(payload), payload);
+      sendJson(response, vibe64StatusCode(payload), payload);
     }
   });
 

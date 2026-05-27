@@ -8,7 +8,7 @@ import { featureActions } from "./actions.js";
 import { registerRoutes } from "./registerRoutes.js";
 import {
   resolveStudioTargetRoot
-} from "@local/ai-studio-core/server/studioRoots";
+} from "@local/vibe64-core/server/studioRoots";
 
 class StudioSetupDoctorProvider {
   static id = "feature.studio-setup-doctor";

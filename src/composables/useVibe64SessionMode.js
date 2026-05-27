@@ -1,22 +1,22 @@
 import { ref, unref, watch } from "vue";
 import {
-  DEFAULT_AI_STUDIO_SESSION_MODE,
-  aiStudioSessionModeFromRouteQuery,
-  aiStudioSessionModeRouteQuery,
-  aiStudioSessionModeRouteSynced,
-  normalizeAiStudioSessionMode,
-  readAiStudioSessionMode,
-  writeAiStudioSessionMode
-} from "@/lib/aiStudioSessionModeStorage.js";
+  DEFAULT_VIBE64_SESSION_MODE,
+  vibe64SessionModeFromRouteQuery,
+  vibe64SessionModeRouteQuery,
+  vibe64SessionModeRouteSynced,
+  normalizeVibe64SessionMode,
+  readVibe64SessionMode,
+  writeVibe64SessionMode
+} from "@/lib/vibe64SessionModeStorage.js";
 
-function useAiStudioSessionMode({
+function useVibe64SessionMode({
   route = null,
   router = null,
   selectedSessionId
 } = {}) {
   const modeBySessionId = new Map();
-  let initialRouteMode = aiStudioSessionModeFromRouteQuery(route?.query || {});
-  const sessionMode = ref(DEFAULT_AI_STUDIO_SESSION_MODE);
+  let initialRouteMode = vibe64SessionModeFromRouteQuery(route?.query || {});
+  const sessionMode = ref(DEFAULT_VIBE64_SESSION_MODE);
 
   function selectedId() {
     return String(unref(selectedSessionId) || "").trim();
@@ -25,7 +25,7 @@ function useAiStudioSessionMode({
   function modeForSession(sessionId = "") {
     const normalizedSessionId = String(sessionId || "").trim();
     if (!normalizedSessionId) {
-      return DEFAULT_AI_STUDIO_SESSION_MODE;
+      return DEFAULT_VIBE64_SESSION_MODE;
     }
     if (modeBySessionId.has(normalizedSessionId)) {
       return modeBySessionId.get(normalizedSessionId);
@@ -33,23 +33,23 @@ function useAiStudioSessionMode({
     if (initialRouteMode) {
       const routeMode = initialRouteMode;
       initialRouteMode = "";
-      modeBySessionId.set(normalizedSessionId, writeAiStudioSessionMode(normalizedSessionId, routeMode));
+      modeBySessionId.set(normalizedSessionId, writeVibe64SessionMode(normalizedSessionId, routeMode));
       return modeBySessionId.get(normalizedSessionId);
     }
-    const storedMode = readAiStudioSessionMode(normalizedSessionId);
+    const storedMode = readVibe64SessionMode(normalizedSessionId);
     modeBySessionId.set(normalizedSessionId, storedMode);
     return storedMode;
   }
 
-  function syncRouteMode(mode = DEFAULT_AI_STUDIO_SESSION_MODE) {
+  function syncRouteMode(mode = DEFAULT_VIBE64_SESSION_MODE) {
     if (!selectedId() || typeof router?.replace !== "function") {
       return;
     }
-    if (aiStudioSessionModeRouteSynced(route?.query || {}, mode)) {
+    if (vibe64SessionModeRouteSynced(route?.query || {}, mode)) {
       return;
     }
     void router.replace({
-      query: aiStudioSessionModeRouteQuery(route?.query || {}, mode)
+      query: vibe64SessionModeRouteQuery(route?.query || {}, mode)
     });
   }
 
@@ -59,12 +59,12 @@ function useAiStudioSessionMode({
     syncRouteMode(sessionMode.value);
   }
 
-  function setSessionMode(mode = DEFAULT_AI_STUDIO_SESSION_MODE) {
+  function setSessionMode(mode = DEFAULT_VIBE64_SESSION_MODE) {
     const sessionId = selectedId();
     if (!sessionId) {
       return;
     }
-    const normalizedMode = writeAiStudioSessionMode(sessionId, normalizeAiStudioSessionMode(mode));
+    const normalizedMode = writeVibe64SessionMode(sessionId, normalizeVibe64SessionMode(mode));
     modeBySessionId.set(sessionId, normalizedMode);
     sessionMode.value = normalizedMode;
     syncRouteMode(normalizedMode);
@@ -81,5 +81,5 @@ function useAiStudioSessionMode({
 }
 
 export {
-  useAiStudioSessionMode
+  useVibe64SessionMode
 };

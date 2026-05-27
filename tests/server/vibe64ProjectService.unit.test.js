@@ -5,16 +5,16 @@ import test from "node:test";
 
 import {
   createService
-} from "../../packages/ai-studio-project/src/server/service.js";
+} from "../../packages/vibe64-project/src/server/service.js";
 import {
   createCoreWorkflowRegistry
-} from "@local/ai-studio-runtime/server";
+} from "@local/vibe64-runtime/server";
 import {
   JSKIT_ALLOW_SELF_TARGET_CONFIG
-} from "@local/ai-studio-adapters/server/adapters/jskit/index";
-import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
+} from "@local/vibe64-adapters/server/adapters/jskit/index";
+import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
-test("AI Studio project service saves project type and plain-file configuration", async () => {
+test("Vibe64 project service saves project type and plain-file configuration", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const service = createService({
       targetRoot
@@ -66,7 +66,7 @@ test("AI Studio project service saves project type and plain-file configuration"
     assert.equal(savedType.projectType.adapter.id, "jskit");
     assert.equal(savedType.projectType.targetRoot, targetRoot);
     assert.equal(
-      await readFile(path.join(targetRoot, ".ai-studio", "project_type"), "utf8"),
+      await readFile(path.join(targetRoot, ".vibe64", "project_type"), "utf8"),
       "jskit\n"
     );
 
@@ -94,13 +94,13 @@ test("AI Studio project service saves project type and plain-file configuration"
     assert.equal(savedConfig.config.values.github_pr_merge_method, "rebase");
     assert.equal(savedConfig.config.values[JSKIT_ALLOW_SELF_TARGET_CONFIG], true);
     assert.equal(
-      await readFile(path.join(targetRoot, ".ai-studio", "config", "jskit_database_runtime"), "utf8"),
+      await readFile(path.join(targetRoot, ".vibe64", "config", "jskit_database_runtime"), "utf8"),
       "postgres\n"
     );
 
     const environment = await service.projectConfigEnvironment();
-    assert.equal(environment.AI_STUDIO_CONFIG_DIR, path.join(targetRoot, ".ai-studio", "config"));
-    assert.equal(environment.AI_STUDIO_CONFIG_SH, path.join(targetRoot, ".ai-studio", "runtime", "ai-studio-config.sh"));
+    assert.equal(environment.VIBE64_CONFIG_DIR, path.join(targetRoot, ".vibe64", "config"));
+    assert.equal(environment.VIBE64_CONFIG_SH, path.join(targetRoot, ".vibe64", "runtime", "vibe64-config.sh"));
 
     const runtime = await service.createRuntime();
     assert.equal(runtime.adapter.id, "jskit");
@@ -109,7 +109,7 @@ test("AI Studio project service saves project type and plain-file configuration"
   });
 });
 
-test("AI Studio project service injects the app workflow registry into runtimes", async () => {
+test("Vibe64 project service injects the app workflow registry into runtimes", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const workflowRegistry = createCoreWorkflowRegistry();
     const service = createService({
@@ -133,7 +133,7 @@ test("AI Studio project service injects the app workflow registry into runtimes"
   });
 });
 
-test("AI Studio project service reports unknown and unimplemented project types as structured errors", async () => {
+test("Vibe64 project service reports unknown and unimplemented project types as structured errors", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const service = createService({
       targetRoot
@@ -143,17 +143,17 @@ test("AI Studio project service reports unknown and unimplemented project types 
       projectType: "unknown"
     });
     assert.equal(unknown.ok, false);
-    assert.equal(unknown.errors[0].code, "ai_studio_unknown_project_type");
+    assert.equal(unknown.errors[0].code, "vibe64_unknown_project_type");
 
     const unimplemented = await service.saveProjectType({
       projectType: "python"
     });
     assert.equal(unimplemented.ok, false);
-    assert.equal(unimplemented.errors[0].code, "ai_studio_project_type_unimplemented");
+    assert.equal(unimplemented.errors[0].code, "vibe64_project_type_unimplemented");
   });
 });
 
-test("AI Studio project service loads invalid saved config as editable not ready state", async () => {
+test("Vibe64 project service loads invalid saved config as editable not ready state", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const service = createService({
       targetRoot
@@ -162,12 +162,12 @@ test("AI Studio project service loads invalid saved config as editable not ready
     await service.saveProjectType({
       projectType: "jskit"
     });
-    await mkdir(path.join(targetRoot, ".ai-studio", "config"), {
+    await mkdir(path.join(targetRoot, ".vibe64", "config"), {
       recursive: true
     });
-    await writeFile(path.join(targetRoot, ".ai-studio", "config", "github_pr_merge_method"), "merge\n", "utf8");
-    await writeFile(path.join(targetRoot, ".ai-studio", "config", JSKIT_ALLOW_SELF_TARGET_CONFIG), "false\n", "utf8");
-    await writeFile(path.join(targetRoot, ".ai-studio", "config", "jskit_database_runtime"), "mysql\n", "utf8");
+    await writeFile(path.join(targetRoot, ".vibe64", "config", "github_pr_merge_method"), "merge\n", "utf8");
+    await writeFile(path.join(targetRoot, ".vibe64", "config", JSKIT_ALLOW_SELF_TARGET_CONFIG), "false\n", "utf8");
+    await writeFile(path.join(targetRoot, ".vibe64", "config", "jskit_database_runtime"), "mysql\n", "utf8");
 
     const config = await service.readProjectConfig();
     assert.equal(config.ok, true);

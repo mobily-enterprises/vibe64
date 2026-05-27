@@ -1,8 +1,8 @@
 import { onBeforeUnmount, ref, unref, watch } from "vue";
 import {
-  aiStudioArtifactReadinessStreamEndpoint,
-  readAiStudioArtifactReadiness
-} from "@/lib/aiStudioSessionApi.js";
+  vibe64ArtifactReadinessStreamEndpoint,
+  readVibe64ArtifactReadiness
+} from "@/lib/vibe64SessionApi.js";
 import { parseJsonStreamEvent } from "@/lib/streamEvents.js";
 
 function emptyArtifactReadiness(sessionId = "") {
@@ -13,9 +13,9 @@ function emptyArtifactReadiness(sessionId = "") {
   };
 }
 
-function useAiStudioArtifactReadiness({
+function useVibe64ArtifactReadiness({
   active = true,
-  readReadiness = readAiStudioArtifactReadiness,
+  readReadiness = readVibe64ArtifactReadiness,
   sessionId = () => ""
 } = {}) {
   const readiness = ref(emptyArtifactReadiness());
@@ -83,7 +83,7 @@ function useAiStudioArtifactReadiness({
       return false;
     }
 
-    const source = new EventSource(aiStudioArtifactReadinessStreamEndpoint(nextSessionId), {
+    const source = new EventSource(vibe64ArtifactReadinessStreamEndpoint(nextSessionId), {
       withCredentials: true
     });
     eventSource = source;
@@ -130,5 +130,5 @@ function useAiStudioArtifactReadiness({
 }
 
 export {
-  useAiStudioArtifactReadiness
+  useVibe64ArtifactReadiness
 };

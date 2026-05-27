@@ -4,7 +4,7 @@ import {
   failDoctorCheck as failCheck,
   hardStopDoctorCheck as hardStopCheck,
   passDoctorCheck as passCheck
-} from "@local/ai-studio-core/server/doctorCheckItems";
+} from "@local/vibe64-core/server/doctorCheckItems";
 import {
   createDoctorPluginToolkit
 } from "@local/setup-doctor-core/server/doctorPluginToolkit";
@@ -229,7 +229,7 @@ async function checkComposerJson(toolkit, targetRoot, context = {}) {
     return passCheck({
       id: "laravel-composer-json",
       label: "composer.json",
-      expected: "A readable composer.json exists, or this empty target can be seeded by the first AI Studio session.",
+      expected: "A readable composer.json exists, or this empty target can be seeded by the first Vibe64 session.",
       observed: result.missing ? "composer.json is missing." : result.error,
       explanation: "The seed workflow will ask the user which Laravel starter kit, modules, and local dev values to use before creating the app."
     });

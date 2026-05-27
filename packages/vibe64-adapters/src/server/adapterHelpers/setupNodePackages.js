@@ -4,7 +4,7 @@ import {
   blockedDoctorCheck as blockedCheck,
   formatDoctorList as formatList,
   passDoctorCheck as passCheck
-} from "@local/ai-studio-core/server/doctorCheckItems";
+} from "@local/vibe64-core/server/doctorCheckItems";
 import {
   shellScript
 } from "@local/studio-terminal-core/server/shellScript";

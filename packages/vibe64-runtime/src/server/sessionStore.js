@@ -4,33 +4,33 @@ import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import {
-  AI_STUDIO_STATE_DIR,
-  aiStudioError,
+  VIBE64_STATE_DIR,
+  vibe64Error,
   isPlainObject,
   isMissingPathError,
   normalizeTargetRoot,
   normalizeText,
   plainClone,
   pathExists
-} from "@local/ai-studio-core/server/core";
-import { deepFreeze } from "@local/ai-studio-core/server/deepFreeze";
+} from "@local/vibe64-core/server/core";
+import { deepFreeze } from "@local/vibe64-core/server/deepFreeze";
 
-const AI_STUDIO_SESSION_SCHEMA_VERSION = 1;
-const AI_STUDIO_PROMPT_CONTEXT_SNAPSHOT_SCHEMA_VERSION = 1;
-const AI_STUDIO_INITIAL_STEP = "session_created";
+const VIBE64_SESSION_SCHEMA_VERSION = 1;
+const VIBE64_PROMPT_CONTEXT_SNAPSHOT_SCHEMA_VERSION = 1;
+const VIBE64_INITIAL_STEP = "session_created";
 const ISSUE_WORD_ARTIFACT = "issue_word";
 const REPORT_ARTIFACT = "report.md";
 const ISSUE_WORD_MAX_LENGTH = 24;
-const AI_STUDIO_SESSION_STATUS = deepFreeze({
+const VIBE64_SESSION_STATUS = deepFreeze({
   ABANDONED: "abandoned",
   ACTIVE: "active",
   BLOCKED: "blocked",
   FINISHED: "finished"
 });
-const AI_STUDIO_SESSION_STATUSES = new Set(Object.values(AI_STUDIO_SESSION_STATUS));
-const CLOSED_AI_STUDIO_SESSION_STATUSES = new Set([
-  AI_STUDIO_SESSION_STATUS.ABANDONED,
-  AI_STUDIO_SESSION_STATUS.FINISHED
+const VIBE64_SESSION_STATUSES = new Set(Object.values(VIBE64_SESSION_STATUS));
+const CLOSED_VIBE64_SESSION_STATUSES = new Set([
+  VIBE64_SESSION_STATUS.ABANDONED,
+  VIBE64_SESSION_STATUS.FINISHED
 ]);
 const ACTION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
 const ARTIFACT_PATH_SEGMENT_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/u;
@@ -61,7 +61,7 @@ const BACKGROUND_TASK_STATUSES = new Set(Object.values(BACKGROUND_TASK_STATUS));
 const sessionMutationChains = new Map();
 const sessionMutationContext = new AsyncLocalStorage();
 
-function isValidAiStudioSessionId(sessionId) {
+function isValidVibe64SessionId(sessionId) {
   const normalizedSessionId = normalizeText(sessionId);
   return SESSION_ID_PATTERN.test(normalizedSessionId);
 }
@@ -86,10 +86,10 @@ function isSafeBackgroundTaskId(taskId) {
   return BACKGROUND_TASK_ID_PATTERN.test(normalizeText(taskId));
 }
 
-function assertValidAiStudioSessionId(sessionId) {
+function assertValidVibe64SessionId(sessionId) {
   const normalizedSessionId = normalizeText(sessionId);
-  if (!isValidAiStudioSessionId(normalizedSessionId)) {
-    throw aiStudioError(`Invalid ai-studio session id: ${normalizedSessionId || "(empty)"}`, "ai_studio_invalid_session_id");
+  if (!isValidVibe64SessionId(normalizedSessionId)) {
+    throw vibe64Error(`Invalid vibe64 session id: ${normalizedSessionId || "(empty)"}`, "vibe64_invalid_session_id");
   }
   return normalizedSessionId;
 }
@@ -97,7 +97,7 @@ function assertValidAiStudioSessionId(sessionId) {
 function assertSafeMetadataName(name) {
   const normalizedName = normalizeText(name);
   if (!METADATA_NAME_PATTERN.test(normalizedName)) {
-    throw aiStudioError(`Invalid ai-studio metadata name: ${normalizedName || "(empty)"}`, "ai_studio_invalid_metadata_name");
+    throw vibe64Error(`Invalid vibe64 metadata name: ${normalizedName || "(empty)"}`, "vibe64_invalid_metadata_name");
   }
   return normalizedName;
 }
@@ -105,7 +105,7 @@ function assertSafeMetadataName(name) {
 function assertSafeStepId(stepId) {
   const normalizedStepId = normalizeText(stepId);
   if (!isSafeStepId(normalizedStepId)) {
-    throw aiStudioError(`Invalid ai-studio step id: ${normalizedStepId || "(empty)"}`, "ai_studio_invalid_step_id");
+    throw vibe64Error(`Invalid vibe64 step id: ${normalizedStepId || "(empty)"}`, "vibe64_invalid_step_id");
   }
   return normalizedStepId;
 }
@@ -113,7 +113,7 @@ function assertSafeStepId(stepId) {
 function assertSafeActionId(actionId) {
   const normalizedActionId = normalizeText(actionId);
   if (!isSafeActionId(normalizedActionId)) {
-    throw aiStudioError(`Invalid ai-studio action id: ${normalizedActionId || "(empty)"}`, "ai_studio_invalid_action_id");
+    throw vibe64Error(`Invalid vibe64 action id: ${normalizedActionId || "(empty)"}`, "vibe64_invalid_action_id");
   }
   return normalizedActionId;
 }
@@ -121,9 +121,9 @@ function assertSafeActionId(actionId) {
 function assertSafeCommandLifecycleId(lifecycleId) {
   const normalizedLifecycleId = normalizeText(lifecycleId);
   if (!isSafeCommandLifecycleId(normalizedLifecycleId)) {
-    throw aiStudioError(
-      `Invalid ai-studio command lifecycle id: ${normalizedLifecycleId || "(empty)"}`,
-      "ai_studio_invalid_command_lifecycle_id"
+    throw vibe64Error(
+      `Invalid vibe64 command lifecycle id: ${normalizedLifecycleId || "(empty)"}`,
+      "vibe64_invalid_command_lifecycle_id"
     );
   }
   return normalizedLifecycleId;
@@ -132,9 +132,9 @@ function assertSafeCommandLifecycleId(lifecycleId) {
 function assertSafeBackgroundTaskId(taskId) {
   const normalizedTaskId = normalizeText(taskId);
   if (!isSafeBackgroundTaskId(normalizedTaskId)) {
-    throw aiStudioError(
-      `Invalid ai-studio background task id: ${normalizedTaskId || "(empty)"}`,
-      "ai_studio_invalid_background_task_id"
+    throw vibe64Error(
+      `Invalid vibe64 background task id: ${normalizedTaskId || "(empty)"}`,
+      "vibe64_invalid_background_task_id"
     );
   }
   return normalizedTaskId;
@@ -143,18 +143,18 @@ function assertSafeBackgroundTaskId(taskId) {
 function normalizeBackgroundTaskStatus(status) {
   const normalizedStatus = normalizeText(status) || BACKGROUND_TASK_STATUS.RUNNING;
   if (!BACKGROUND_TASK_STATUSES.has(normalizedStatus)) {
-    throw aiStudioError(
-      `Invalid ai-studio background task status: ${normalizedStatus}`,
-      "ai_studio_invalid_background_task_status"
+    throw vibe64Error(
+      `Invalid vibe64 background task status: ${normalizedStatus}`,
+      "vibe64_invalid_background_task_status"
     );
   }
   return normalizedStatus;
 }
 
-function assertAiStudioSessionStatus(status) {
-  const normalizedStatus = normalizeText(status) || AI_STUDIO_SESSION_STATUS.ACTIVE;
-  if (!AI_STUDIO_SESSION_STATUSES.has(normalizedStatus)) {
-    throw aiStudioError(`Invalid ai-studio session status: ${normalizedStatus}`, "ai_studio_invalid_session_status");
+function assertVibe64SessionStatus(status) {
+  const normalizedStatus = normalizeText(status) || VIBE64_SESSION_STATUS.ACTIVE;
+  if (!VIBE64_SESSION_STATUSES.has(normalizedStatus)) {
+    throw vibe64Error(`Invalid vibe64 session status: ${normalizedStatus}`, "vibe64_invalid_session_status");
   }
   return normalizedStatus;
 }
@@ -167,14 +167,14 @@ function normalizeSessionListStatusGroup(statusGroup = "") {
   if (["all", "closed", "open"].includes(normalizedStatusGroup)) {
     return normalizedStatusGroup;
   }
-  throw aiStudioError(`Invalid ai-studio session list status group: ${normalizedStatusGroup}`, "ai_studio_invalid_session_list_status_group");
+  throw vibe64Error(`Invalid vibe64 session list status group: ${normalizedStatusGroup}`, "vibe64_invalid_session_list_status_group");
 }
 
 function normalizeSessionListStatuses(statuses = []) {
   return new Set((Array.isArray(statuses) ? statuses : [])
     .map((status) => normalizeText(status))
     .filter(Boolean)
-    .map(assertAiStudioSessionStatus));
+    .map(assertVibe64SessionStatus));
 }
 
 function normalizeSessionListOptions(options = {}) {
@@ -188,15 +188,15 @@ function sessionStatusMatchesListOptions(status, {
   statusGroup = "",
   statuses = new Set()
 } = {}) {
-  const normalizedStatus = normalizeText(status) || AI_STUDIO_SESSION_STATUS.ACTIVE;
+  const normalizedStatus = normalizeText(status) || VIBE64_SESSION_STATUS.ACTIVE;
   if (statuses.size > 0 && !statuses.has(normalizedStatus)) {
     return false;
   }
   if (statusGroup === "open") {
-    return !CLOSED_AI_STUDIO_SESSION_STATUSES.has(normalizedStatus);
+    return !CLOSED_VIBE64_SESSION_STATUSES.has(normalizedStatus);
   }
   if (statusGroup === "closed") {
-    return CLOSED_AI_STUDIO_SESSION_STATUSES.has(normalizedStatus);
+    return CLOSED_VIBE64_SESSION_STATUSES.has(normalizedStatus);
   }
   return true;
 }
@@ -284,9 +284,9 @@ function normalizePromptContextSnapshot(snapshot = {}) {
   return {
     adapter: plainClone(snapshot.adapter),
     createdAt: normalizeText(snapshot.createdAt),
-    schemaVersion: snapshot.schemaVersion === AI_STUDIO_PROMPT_CONTEXT_SNAPSHOT_SCHEMA_VERSION
-      ? AI_STUDIO_PROMPT_CONTEXT_SNAPSHOT_SCHEMA_VERSION
-      : AI_STUDIO_PROMPT_CONTEXT_SNAPSHOT_SCHEMA_VERSION
+    schemaVersion: snapshot.schemaVersion === VIBE64_PROMPT_CONTEXT_SNAPSHOT_SCHEMA_VERSION
+      ? VIBE64_PROMPT_CONTEXT_SNAPSHOT_SCHEMA_VERSION
+      : VIBE64_PROMPT_CONTEXT_SNAPSHOT_SCHEMA_VERSION
   };
 }
 
@@ -359,7 +359,7 @@ async function sortedArtifactPaths(rootPath, relativeDirectory = "") {
 function toDate(value) {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) {
-    throw aiStudioError("Invalid ai-studio clock value.", "ai_studio_invalid_clock");
+    throw vibe64Error("Invalid vibe64 clock value.", "vibe64_invalid_clock");
   }
   return date;
 }
@@ -388,16 +388,16 @@ function isoFromConversationTimestamp(timestamp = "") {
   return `${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}:${match[6]}.${match[7]}Z`;
 }
 
-function resolveAiStudioSessionPaths({
+function resolveVibe64SessionPaths({
   sessionId = "",
   targetRoot = process.cwd()
 } = {}) {
   const normalizedTargetRoot = normalizeTargetRoot(targetRoot);
-  const stateRoot = path.join(normalizedTargetRoot, AI_STUDIO_STATE_DIR);
+  const stateRoot = path.join(normalizedTargetRoot, VIBE64_STATE_DIR);
   const sessionsRoot = path.join(stateRoot, "sessions");
   const activeSessionsRoot = path.join(sessionsRoot, "active");
   const normalizedSessionId = normalizeText(sessionId);
-  const sessionRoot = normalizedSessionId ? path.join(activeSessionsRoot, assertValidAiStudioSessionId(normalizedSessionId)) : "";
+  const sessionRoot = normalizedSessionId ? path.join(activeSessionsRoot, assertValidVibe64SessionId(normalizedSessionId)) : "";
   return {
     actionsRoot: sessionRoot ? path.join(sessionRoot, "actions") : "",
     activeSessionsRoot,
@@ -436,7 +436,7 @@ async function createAvailableSessionId(rootPaths, now) {
       return sessionId;
     }
   }
-  throw aiStudioError("Unable to allocate an ai-studio session id.", "ai_studio_session_id_exhausted");
+  throw vibe64Error("Unable to allocate an vibe64 session id.", "vibe64_session_id_exhausted");
 }
 
 function metadataFilePath(sessionPaths, name) {
@@ -458,7 +458,7 @@ function assertSafeArtifactPath(relativePath) {
     || normalizedPath.includes("\\")
     || segments.some((segment) => !ARTIFACT_PATH_SEGMENT_PATTERN.test(segment))
   ) {
-    throw aiStudioError(`Invalid ai-studio artifact path: ${normalizedPath || "(empty)"}`, "ai_studio_invalid_artifact_path");
+    throw vibe64Error(`Invalid vibe64 artifact path: ${normalizedPath || "(empty)"}`, "vibe64_invalid_artifact_path");
   }
   return segments.join("/");
 }
@@ -469,7 +469,7 @@ function artifactFilePath(sessionPaths, relativePath) {
   const artifactPath = path.resolve(artifactsRoot, ...safeRelativePath.split("/"));
   const pathFromRoot = path.relative(artifactsRoot, artifactPath);
   if (pathFromRoot.startsWith("..") || path.isAbsolute(pathFromRoot)) {
-    throw aiStudioError(`Invalid ai-studio artifact path: ${safeRelativePath}`, "ai_studio_invalid_artifact_path");
+    throw vibe64Error(`Invalid vibe64 artifact path: ${safeRelativePath}`, "vibe64_invalid_artifact_path");
   }
   return artifactPath;
 }
@@ -497,7 +497,7 @@ function stepStateFilePath(sessionPaths, stepId) {
 function conversationTurnRoot(sessionPaths, turnId) {
   const normalizedTurnId = normalizeText(turnId);
   if (!CONVERSATION_TURN_ID_PATTERN.test(normalizedTurnId)) {
-    throw aiStudioError(`Invalid ai-studio conversation turn id: ${normalizedTurnId || "(empty)"}`, "ai_studio_invalid_conversation_turn_id");
+    throw vibe64Error(`Invalid vibe64 conversation turn id: ${normalizedTurnId || "(empty)"}`, "vibe64_invalid_conversation_turn_id");
   }
   return path.join(sessionPaths.conversationLogRoot, normalizedTurnId);
 }
@@ -505,7 +505,7 @@ function conversationTurnRoot(sessionPaths, turnId) {
 function conversationMessageFileName(role = "", date) {
   const normalizedRole = normalizeText(role);
   if (!["assistant", "user"].includes(normalizedRole)) {
-    throw aiStudioError(`Invalid ai-studio conversation role: ${normalizedRole || "(empty)"}`, "ai_studio_invalid_conversation_role");
+    throw vibe64Error(`Invalid vibe64 conversation role: ${normalizedRole || "(empty)"}`, "vibe64_invalid_conversation_role");
   }
   return `${normalizedRole}.${timestampForConversationFile(date)}.md`;
 }
@@ -520,7 +520,7 @@ function nextConversationTurnId(turnIds = []) {
   return String(latest + 1).padStart(6, "0");
 }
 
-function createAiStudioSessionStore({
+function createVibe64SessionStore({
   clock = undefined,
   targetRoot = process.cwd()
 } = {}) {
@@ -528,7 +528,7 @@ function createAiStudioSessionStore({
   const now = createClockNow(clock);
 
   function paths(sessionId = "") {
-    return resolveAiStudioSessionPaths({
+    return resolveVibe64SessionPaths({
       sessionId,
       targetRoot: normalizedTargetRoot
     });
@@ -537,7 +537,7 @@ function createAiStudioSessionStore({
   async function ensureSessionRoot(sessionId) {
     const sessionPaths = paths(sessionId);
     if (!await pathExists(sessionPaths.manifestPath)) {
-      throw aiStudioError(`Unknown ai-studio session: ${sessionPaths.sessionId}`, "ai_studio_session_not_found");
+      throw vibe64Error(`Unknown vibe64 session: ${sessionPaths.sessionId}`, "vibe64_session_not_found");
     }
     return sessionPaths;
   }
@@ -578,19 +578,19 @@ function createAiStudioSessionStore({
 
   async function writeStatus(sessionId, status) {
     return mutateSession(sessionId, async (sessionPaths) => {
-      await writeTextFile(sessionPaths.statusPath, `${assertAiStudioSessionStatus(status)}\n`);
+      await writeTextFile(sessionPaths.statusPath, `${assertVibe64SessionStatus(status)}\n`);
     });
   }
 
   async function readStatus(sessionId) {
     const sessionPaths = await ensureSessionRoot(sessionId);
-    return normalizeText(await readTextIfExists(sessionPaths.statusPath)) || AI_STUDIO_SESSION_STATUS.ACTIVE;
+    return normalizeText(await readTextIfExists(sessionPaths.statusPath)) || VIBE64_SESSION_STATUS.ACTIVE;
   }
 
   async function writeCurrentStep(sessionId, currentStep) {
     return mutateSession(sessionId, async (sessionPaths) => {
-      const nextStep = normalizeText(currentStep) || AI_STUDIO_INITIAL_STEP;
-      const previousStep = normalizeText(await readTextIfExists(sessionPaths.currentStepPath)) || AI_STUDIO_INITIAL_STEP;
+      const nextStep = normalizeText(currentStep) || VIBE64_INITIAL_STEP;
+      const previousStep = normalizeText(await readTextIfExists(sessionPaths.currentStepPath)) || VIBE64_INITIAL_STEP;
       await writeTextFile(sessionPaths.currentStepPath, `${nextStep}\n`);
       if (previousStep !== nextStep) {
         await bumpSessionStepRevision(sessionPaths);
@@ -600,7 +600,7 @@ function createAiStudioSessionStore({
 
   async function readCurrentStep(sessionId) {
     const sessionPaths = await ensureSessionRoot(sessionId);
-    return normalizeText(await readTextIfExists(sessionPaths.currentStepPath)) || AI_STUDIO_INITIAL_STEP;
+    return normalizeText(await readTextIfExists(sessionPaths.currentStepPath)) || VIBE64_INITIAL_STEP;
   }
 
   async function writeMetadataValue(sessionId, name, value) {
@@ -755,9 +755,9 @@ function createAiStudioSessionStore({
           }
         : null;
     } catch {
-      throw aiStudioError(
-        `Invalid ai-studio background task: ${normalizedTaskId}`,
-        "ai_studio_invalid_background_task"
+      throw vibe64Error(
+        `Invalid vibe64 background task: ${normalizedTaskId}`,
+        "vibe64_invalid_background_task"
       );
     }
   }
@@ -847,9 +847,9 @@ function createAiStudioSessionStore({
           }
         : null;
     } catch {
-      throw aiStudioError(
-        `Invalid ai-studio command lifecycle: ${normalizedLifecycleId}`,
-        "ai_studio_invalid_command_lifecycle"
+      throw vibe64Error(
+        `Invalid vibe64 command lifecycle: ${normalizedLifecycleId}`,
+        "vibe64_invalid_command_lifecycle"
       );
     }
   }
@@ -1040,7 +1040,7 @@ function createAiStudioSessionStore({
     try {
       return JSON.parse(actionText);
     } catch {
-      throw aiStudioError(`Invalid ai-studio action result: ${normalizedActionId}`, "ai_studio_invalid_action_result");
+      throw vibe64Error(`Invalid vibe64 action result: ${normalizedActionId}`, "vibe64_invalid_action_result");
     }
   }
 
@@ -1067,9 +1067,9 @@ function createAiStudioSessionStore({
     return mutateSession(sessionId, async (sessionPaths) => {
       const record = normalizePromptContextSnapshot(snapshot);
       if (!record) {
-        throw aiStudioError(
-          "Invalid ai-studio prompt context snapshot.",
-          "ai_studio_invalid_prompt_context_snapshot"
+        throw vibe64Error(
+          "Invalid vibe64 prompt context snapshot.",
+          "vibe64_invalid_prompt_context_snapshot"
         );
       }
       await writeJsonFile(sessionPaths.promptContextSnapshotPath, record);
@@ -1090,9 +1090,9 @@ function createAiStudioSessionStore({
       }
       return snapshot;
     } catch {
-      throw aiStudioError(
-        `Invalid ai-studio prompt context snapshot: ${sessionPaths.sessionId}`,
-        "ai_studio_invalid_prompt_context_snapshot"
+      throw vibe64Error(
+        `Invalid vibe64 prompt context snapshot: ${sessionPaths.sessionId}`,
+        "vibe64_invalid_prompt_context_snapshot"
       );
     }
   }
@@ -1147,7 +1147,7 @@ function createAiStudioSessionStore({
       const state = JSON.parse(stateText);
       return isPlainObject(state) ? state : null;
     } catch {
-      throw aiStudioError(`Invalid ai-studio step state: ${assertSafeStepId(stepId)}`, "ai_studio_invalid_step_state");
+      throw vibe64Error(`Invalid vibe64 step state: ${assertSafeStepId(stepId)}`, "vibe64_invalid_step_state");
     }
   }
 
@@ -1182,7 +1182,7 @@ function createAiStudioSessionStore({
     try {
       return normalizeManifest(JSON.parse(manifestText));
     } catch {
-      throw aiStudioError(`Invalid ai-studio session manifest: ${sessionPaths.sessionId}`, "ai_studio_invalid_manifest");
+      throw vibe64Error(`Invalid vibe64 session manifest: ${sessionPaths.sessionId}`, "vibe64_invalid_manifest");
     }
   }
 
@@ -1291,29 +1291,29 @@ function createAiStudioSessionStore({
   }
 
   async function createSession({
-    initialStep = AI_STUDIO_INITIAL_STEP,
+    initialStep = VIBE64_INITIAL_STEP,
     metadata = {},
     sessionId = "",
-    status = AI_STUDIO_SESSION_STATUS.ACTIVE
+    status = VIBE64_SESSION_STATUS.ACTIVE
   } = {}) {
     const normalizedMetadata = Object.fromEntries(
       Object.entries(metadata).map(([name, value]) => [assertSafeMetadataName(name), normalizeText(value)])
     );
-    const normalizedStatus = assertAiStudioSessionStatus(status);
+    const normalizedStatus = assertVibe64SessionStatus(status);
     const rootPaths = paths();
     await mkdir(rootPaths.activeSessionsRoot, {
       recursive: true
     });
     const createdAt = now().toISOString();
     const resolvedSessionId = sessionId
-      ? assertValidAiStudioSessionId(sessionId)
+      ? assertValidVibe64SessionId(sessionId)
       : await createAvailableSessionId(rootPaths, createdAt);
     const sessionPaths = paths(resolvedSessionId);
     try {
       await mkdir(sessionPaths.sessionRoot);
     } catch (error) {
       if (error?.code === "EEXIST") {
-        throw aiStudioError(`AI Studio session already exists: ${resolvedSessionId}`, "ai_studio_session_exists");
+        throw vibe64Error(`Vibe64 session already exists: ${resolvedSessionId}`, "vibe64_session_exists");
       }
       throw error;
     }
@@ -1342,9 +1342,9 @@ function createAiStudioSessionStore({
     ]);
     const manifest = {
       createdAt,
-      product: "ai-studio",
+      product: "vibe64",
       revision: 1,
-      schemaVersion: AI_STUDIO_SESSION_SCHEMA_VERSION,
+      schemaVersion: VIBE64_SESSION_SCHEMA_VERSION,
       sessionId: resolvedSessionId,
       stepRevision: 1,
       targetRoot: sessionPaths.targetRoot,
@@ -1352,7 +1352,7 @@ function createAiStudioSessionStore({
     };
     await Promise.all([
       writeJsonFile(sessionPaths.manifestPath, manifest),
-      writeTextFile(sessionPaths.currentStepPath, `${normalizeText(initialStep) || AI_STUDIO_INITIAL_STEP}\n`),
+      writeTextFile(sessionPaths.currentStepPath, `${normalizeText(initialStep) || VIBE64_INITIAL_STEP}\n`),
       writeTextFile(sessionPaths.statusPath, `${normalizedStatus}\n`),
       ...Object.entries(normalizedMetadata).map(([name, value]) => {
         return writeTextFile(metadataFilePath(sessionPaths, name), `${value}\n`);
@@ -1365,7 +1365,7 @@ function createAiStudioSessionStore({
     const rootPaths = paths();
     const sessionIds = sortedDirectoryNames(
       await readDirectoryEntries(rootPaths.activeSessionsRoot),
-      isValidAiStudioSessionId
+      isValidVibe64SessionId
     );
     const listOptions = normalizeSessionListOptions(options);
     const filteredSessionIds = listOptions.statusGroup || listOptions.statuses.size > 0
@@ -1382,7 +1382,7 @@ function createAiStudioSessionStore({
     const rootPaths = paths();
     const sessionIds = sortedDirectoryNames(
       await readDirectoryEntries(rootPaths.activeSessionsRoot),
-      isValidAiStudioSessionId
+      isValidVibe64SessionId
     );
     const listOptions = normalizeSessionListOptions(options);
     const filteredSessionIds = listOptions.statusGroup || listOptions.statuses.size > 0
@@ -1451,18 +1451,18 @@ function createAiStudioSessionStore({
 }
 
 export {
-  AI_STUDIO_INITIAL_STEP,
-  AI_STUDIO_PROMPT_CONTEXT_SNAPSHOT_SCHEMA_VERSION,
-  AI_STUDIO_SESSION_SCHEMA_VERSION,
-  AI_STUDIO_SESSION_STATUS,
-  AI_STUDIO_STATE_DIR,
-  assertAiStudioSessionStatus,
+  VIBE64_INITIAL_STEP,
+  VIBE64_PROMPT_CONTEXT_SNAPSHOT_SCHEMA_VERSION,
+  VIBE64_SESSION_SCHEMA_VERSION,
+  VIBE64_SESSION_STATUS,
+  VIBE64_STATE_DIR,
+  assertVibe64SessionStatus,
   assertSafeActionId,
   assertSafeStepId,
-  assertValidAiStudioSessionId,
-  createAiStudioSessionStore,
+  assertValidVibe64SessionId,
+  createVibe64SessionStore,
   isSafeActionId,
   isSafeStepId,
-  isValidAiStudioSessionId,
-  resolveAiStudioSessionPaths
+  isValidVibe64SessionId,
+  resolveVibe64SessionPaths
 };

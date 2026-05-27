@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   appendPromptAttachmentReferences,
   promptAttachmentReference
-} from "../../src/lib/aiStudioPromptAttachments.js";
+} from "../../src/lib/vibe64PromptAttachments.js";
 
-describe("aiStudioPromptAttachments", () => {
+describe("vibe64PromptAttachments", () => {
   it("formats uploaded files as Codex-readable prompt references", () => {
     expect(promptAttachmentReference({
       containerPath: "/studio-attachments/session/file.txt",

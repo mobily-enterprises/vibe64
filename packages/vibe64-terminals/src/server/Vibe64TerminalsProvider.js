@@ -4,11 +4,11 @@ import { createService } from "./service.js";
 import { featureActions } from "./actions.js";
 import { registerRoutes } from "./registerRoutes.js";
 import {
-  aiStudioSessionChangedServiceEvent,
-  createAiStudioSessionChangedPublisher
-} from "@local/ai-studio-core/server/sessionRealtimeEvents";
+  vibe64SessionChangedServiceEvent,
+  createVibe64SessionChangedPublisher
+} from "@local/vibe64-core/server/sessionRealtimeEvents";
 
-const AI_STUDIO_TERMINALS_SERVICE = "feature.ai-studio-terminals.service";
+const VIBE64_TERMINALS_SERVICE = "feature.vibe64-terminals.service";
 const TERMINAL_SESSION_MUTATION_EVENT_METHODS = Object.freeze([
   "injectCodexPrompt",
   "startCodexTerminal",
@@ -16,12 +16,12 @@ const TERMINAL_SESSION_MUTATION_EVENT_METHODS = Object.freeze([
   "startLaunchTargetTerminal"
 ]);
 
-class AiStudioTerminalsProvider {
-  static id = "feature.ai-studio-terminals";
+class Vibe64TerminalsProvider {
+  static id = "feature.vibe64-terminals";
 
   static dependsOn = [
     "runtime.actions",
-    "feature.ai-studio-project"
+    "feature.vibe64-project"
   ];
 
   register(app) {
@@ -30,37 +30,37 @@ class AiStudioTerminalsProvider {
       typeof app.service !== "function" ||
       typeof app.actions !== "function"
     ) {
-      throw new Error("AiStudioTerminalsProvider requires application service()/actions().");
+      throw new Error("Vibe64TerminalsProvider requires application service()/actions().");
     }
 
     app.service(
-      AI_STUDIO_TERMINALS_SERVICE,
+      VIBE64_TERMINALS_SERVICE,
       (scope) => {
         const domainEvents = typeof scope.has === "function" && scope.has("domainEvents")
           ? scope.make("domainEvents")
           : null;
-        const publishCommandTerminalChanged = createAiStudioSessionChangedPublisher({
+        const publishCommandTerminalChanged = createVibe64SessionChangedPublisher({
           domainEvents,
           methodName: "startCommandTerminal",
-          serviceToken: AI_STUDIO_TERMINALS_SERVICE
+          serviceToken: VIBE64_TERMINALS_SERVICE
         });
-        const publishCodexTerminalChanged = createAiStudioSessionChangedPublisher({
+        const publishCodexTerminalChanged = createVibe64SessionChangedPublisher({
           domainEvents,
           methodName: "startCodexTerminal",
-          serviceToken: AI_STUDIO_TERMINALS_SERVICE
+          serviceToken: VIBE64_TERMINALS_SERVICE
         });
-        const publishCodexPromptChanged = createAiStudioSessionChangedPublisher({
+        const publishCodexPromptChanged = createVibe64SessionChangedPublisher({
           domainEvents,
           methodName: "injectCodexPrompt",
-          serviceToken: AI_STUDIO_TERMINALS_SERVICE
+          serviceToken: VIBE64_TERMINALS_SERVICE
         });
-        const publishLaunchTargetChanged = createAiStudioSessionChangedPublisher({
+        const publishLaunchTargetChanged = createVibe64SessionChangedPublisher({
           domainEvents,
           methodName: "startLaunchTargetTerminal",
-          serviceToken: AI_STUDIO_TERMINALS_SERVICE
+          serviceToken: VIBE64_TERMINALS_SERVICE
         });
         return createService({
-          projectService: scope.make("feature.ai-studio-project.service"),
+          projectService: scope.make("feature.vibe64-project.service"),
           publishSessionChanged: {
             codexPrompt: publishCodexPromptChanged,
             codexTerminal: publishCodexTerminalChanged,
@@ -73,7 +73,7 @@ class AiStudioTerminalsProvider {
         events: Object.fromEntries(
           TERMINAL_SESSION_MUTATION_EVENT_METHODS.map((methodName) => [
             methodName,
-            [aiStudioSessionChangedServiceEvent()]
+            [vibe64SessionChangedServiceEvent()]
           ])
         )
       }
@@ -83,7 +83,7 @@ class AiStudioTerminalsProvider {
       withActionDefaults(featureActions, {
         domain: "feature",
         dependencies: {
-          featureService: "feature.ai-studio-terminals.service"
+          featureService: "feature.vibe64-terminals.service"
         }
       })
     );
@@ -91,10 +91,10 @@ class AiStudioTerminalsProvider {
 
   boot(app) {
     registerRoutes(app, {
-      routeRelativePath: "ai-studio",
+      routeRelativePath: "vibe64",
       routeSurface: "home"
     });
   }
 }
 
-export { AiStudioTerminalsProvider };
+export { Vibe64TerminalsProvider };

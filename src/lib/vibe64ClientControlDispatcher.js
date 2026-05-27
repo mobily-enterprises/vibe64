@@ -1,10 +1,10 @@
 import {
-  AI_STUDIO_CLIENT_CONTROL_ACTIONS,
+  VIBE64_CLIENT_CONTROL_ACTIONS,
   controlClientAction
-} from "@/lib/aiStudioPresentationControls.js";
+} from "@/lib/vibe64PresentationControls.js";
 import {
-  startAiStudioCodexTerminal
-} from "@/lib/aiStudioSessionApi.js";
+  startVibe64CodexTerminal
+} from "@/lib/vibe64SessionApi.js";
 
 function openDiffControl({
   diff = {}
@@ -25,7 +25,7 @@ async function startCodexTerminalControl({
   if (!normalizedSessionId) {
     return false;
   }
-  const result = await startAiStudioCodexTerminal(normalizedSessionId);
+  const result = await startVibe64CodexTerminal(normalizedSessionId);
   if (result?.ok === false) {
     return result;
   }
@@ -33,20 +33,20 @@ async function startCodexTerminalControl({
   return true;
 }
 
-const AI_STUDIO_CLIENT_CONTROL_DISPATCHERS = Object.freeze({
-  [AI_STUDIO_CLIENT_CONTROL_ACTIONS.OPEN_DIFF]: openDiffControl,
-  [AI_STUDIO_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL]: startCodexTerminalControl
+const VIBE64_CLIENT_CONTROL_DISPATCHERS = Object.freeze({
+  [VIBE64_CLIENT_CONTROL_ACTIONS.OPEN_DIFF]: openDiffControl,
+  [VIBE64_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL]: startCodexTerminalControl
 });
 
 function clientControlDispatcher(control = {}) {
-  return AI_STUDIO_CLIENT_CONTROL_DISPATCHERS[controlClientAction(control)] || null;
+  return VIBE64_CLIENT_CONTROL_DISPATCHERS[controlClientAction(control)] || null;
 }
 
 function clientControlHasDispatcher(control = {}) {
   return Boolean(clientControlDispatcher(control));
 }
 
-async function runAiStudioClientControl(control = {}, context = {}) {
+async function runVibe64ClientControl(control = {}, context = {}) {
   const dispatcher = clientControlDispatcher(control);
   if (!dispatcher) {
     return false;
@@ -55,8 +55,8 @@ async function runAiStudioClientControl(control = {}, context = {}) {
 }
 
 export {
-  AI_STUDIO_CLIENT_CONTROL_DISPATCHERS,
+  VIBE64_CLIENT_CONTROL_DISPATCHERS,
   clientControlDispatcher,
   clientControlHasDispatcher,
-  runAiStudioClientControl
+  runVibe64ClientControl
 };

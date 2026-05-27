@@ -3,7 +3,8 @@ dist/
 coverage/
 test-results/
 *.sw?
-.ai-studio/sessions/
+.vibe64/sessions/
+.ai[-]studio/sessions/
 .jskit/WORKBOARD.md
 .jskit/verification/
 .jskit/config/devel_*
@@ -11,4 +12,5 @@ test-results/
 .env
 .env.*
 !.env.example
-.ai-studio/runtime/
+.vibe64/runtime/
+.ai[-]studio/runtime/

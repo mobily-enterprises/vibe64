@@ -20,20 +20,20 @@ import {
   stableHash
 } from "./shellCommands.js";
 import {
-  AI_STUDIO_SKIP_STALE_TERMINAL_CLEANUP_ENV,
+  VIBE64_SKIP_STALE_TERMINAL_CLEANUP_ENV,
   STUDIO_BASE_TOOLCHAIN_IMAGE,
   STUDIO_DAEMON_PID_LABEL
 } from "./studioRuntimeIdentity.js";
 import {
   normalizeText
-} from "@local/ai-studio-core/server/core";
+} from "@local/vibe64-core/server/core";
 import {
   targetRuntimeNetworkDockerArgs
 } from "./runtimeContainers.js";
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_WEB_LAUNCH_TARGET_PORT = 4100;
-const LAUNCH_READY_MARKER_PREFIX = "AI_STUDIO_LAUNCH_READY_V1";
+const LAUNCH_READY_MARKER_PREFIX = "VIBE64_LAUNCH_READY_V1";
 
 function normalizePort(value, fallback = DEFAULT_WEB_LAUNCH_TARGET_PORT) {
   const port = Number.parseInt(String(value || ""), 10);
@@ -188,18 +188,18 @@ function commandWithTcpReadiness({
     "{",
     "  set -e",
     `  (${command}) &`,
-    "  ai_studio_launch_pid=$!",
-    "  cleanup_ai_studio_launch() {",
-    "    kill \"$ai_studio_launch_pid\" 2>/dev/null || true",
+    "  vibe64_launch_pid=$!",
+    "  cleanup_vibe64_launch() {",
+    "    kill \"$vibe64_launch_pid\" 2>/dev/null || true",
     "  }",
-    "  trap cleanup_ai_studio_launch EXIT INT TERM",
+    "  trap cleanup_vibe64_launch EXIT INT TERM",
     `  ${tcpReadinessProbeCommand({
       host,
       marker,
       port,
       timeoutSeconds
     })}`,
-    "  wait \"$ai_studio_launch_pid\"",
+    "  wait \"$vibe64_launch_pid\"",
     "}"
   ].join("\n");
 }
@@ -272,8 +272,8 @@ function webLaunchTargetStartupScript({
   return [
     "set -e",
     "mkdir -p /tmp/studio-home",
-    "if [ \"$(id -u)\" = \"0\" ] && [ -n \"${AI_STUDIO_HOST_UID:-}\" ] && [ -n \"${AI_STUDIO_HOST_GID:-}\" ] && command -v setpriv >/dev/null 2>&1; then",
-    "  chown -R \"$AI_STUDIO_HOST_UID:$AI_STUDIO_HOST_GID\" /tmp/studio-home",
+    "if [ \"$(id -u)\" = \"0\" ] && [ -n \"${VIBE64_HOST_UID:-}\" ] && [ -n \"${VIBE64_HOST_GID:-}\" ] && command -v setpriv >/dev/null 2>&1; then",
+    "  chown -R \"$VIBE64_HOST_UID:$VIBE64_HOST_GID\" /tmp/studio-home",
     "  docker_group_args=\"--clear-groups\"",
     "  if [ -S /var/run/docker.sock ]; then",
     "    docker_sock_gid=\"$(stat -c '%g' /var/run/docker.sock 2>/dev/null || true)\"",
@@ -281,7 +281,7 @@ function webLaunchTargetStartupScript({
     "      docker_group_args=\"--groups $docker_sock_gid\"",
     "    fi",
     "  fi",
-    `  exec setpriv --reuid "$AI_STUDIO_HOST_UID" --regid "$AI_STUDIO_HOST_GID" $docker_group_args env HOME=/tmp/studio-home bash -lc ${shellQuote(runCommand)}`,
+    `  exec setpriv --reuid "$VIBE64_HOST_UID" --regid "$VIBE64_HOST_GID" $docker_group_args env HOME=/tmp/studio-home bash -lc ${shellQuote(runCommand)}`,
     "fi",
     `exec env HOME=/tmp/studio-home bash -lc ${shellQuote(runCommand)}`
   ].join("\n");
@@ -295,7 +295,7 @@ function hostDockerArgs(enabled = false) {
     "-e",
     "DOCKER_HOST=unix:///var/run/docker.sock",
     "-e",
-    `${AI_STUDIO_SKIP_STALE_TERMINAL_CLEANUP_ENV}=1`,
+    `${VIBE64_SKIP_STALE_TERMINAL_CLEANUP_ENV}=1`,
     "-v",
     "/var/run/docker.sock:/var/run/docker.sock"
   ];
@@ -317,7 +317,7 @@ function launchContainerName({
   sessionId = "",
   terminalId = ""
 } = {}) {
-  return `ai-studio-${adapterId}-launch-${stableHash(sessionId)}-${stableHash(terminalId)}`;
+  return `vibe64-${adapterId}-launch-${stableHash(sessionId)}-${stableHash(terminalId)}`;
 }
 
 function removeLaunchContainer({
@@ -352,17 +352,17 @@ function launchTargetTerminalArgs({
     "--name",
     containerName,
     "--label",
-    "ai-studio.kind=launch-target-terminal",
+    "vibe64.kind=launch-target-terminal",
     "--label",
-    `ai-studio.adapter=${adapterId}`,
+    `vibe64.adapter=${adapterId}`,
     "--label",
     `${STUDIO_DAEMON_PID_LABEL}=${process.pid}`,
     "--label",
-    `ai-studio.session=${sessionId}`,
+    `vibe64.session=${sessionId}`,
     "--label",
-    `ai-studio.terminal=${terminalId}`,
+    `vibe64.terminal=${terminalId}`,
     "--label",
-    `ai-studio.target=${stableHash(targetRoot)}`,
+    `vibe64.target=${stableHash(targetRoot)}`,
     "-p",
     `127.0.0.1:${port}:${port}`,
     ...gitToolchainMountArgs(targetRoot),
@@ -398,7 +398,7 @@ function normalizeOpenTarget({
   };
 }
 
-async function createAiStudioWebLaunchTargetTerminalSpec({
+async function createVibe64WebLaunchTargetTerminalSpec({
   adapterId = "generic",
   image = STUDIO_BASE_TOOLCHAIN_IMAGE,
   launchTarget = {},
@@ -532,7 +532,7 @@ async function createAiStudioWebLaunchTargetTerminalSpec({
 
 export {
   DEFAULT_WEB_LAUNCH_TARGET_PORT,
-  createAiStudioWebLaunchTargetTerminalSpec,
+  createVibe64WebLaunchTargetTerminalSpec,
   findAvailableWebLaunchTargetPort,
   commandWithTcpReadiness,
   launchReadinessMarker,

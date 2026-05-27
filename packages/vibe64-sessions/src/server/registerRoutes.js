@@ -12,7 +12,7 @@ import {
   ACTION_RUN_SESSION_ACTION,
   ACTION_RUN_SESSION_INTENT
 } from "./actions.js";
-import { createAiStudioFeatureRoutes } from "@local/ai-studio-core/server/featureRoutes";
+import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRoutes";
 
 function registerRoutes(
   app,
@@ -21,41 +21,41 @@ function registerRoutes(
     routeRelativePath = ""
   } = {}
 ) {
-  const routes = createAiStudioFeatureRoutes(app, {
-    localRequestMessage: "AI Studio session routes only accept loopback Studio requests.",
+  const routes = createVibe64FeatureRoutes(app, {
+    localRequestMessage: "Vibe64 session routes only accept loopback Studio requests.",
     routeRelativePath,
     routeSurface,
-    tags: ["studio", "ai-studio-sessions"]
+    tags: ["studio", "vibe64-sessions"]
   });
 
   routes.actionRoute("GET", "/sessions", {
     actionId: ACTION_LIST_SESSIONS,
     buildInput: sessionsQueryInput,
-    summary: "List AI Studio sessions."
+    summary: "List Vibe64 sessions."
   });
 
   routes.actionRoute("POST", "/sessions", {
     actionId: ACTION_CREATE_SESSION,
     buildInput: routes.requestBody,
-    summary: "Create an AI Studio session."
+    summary: "Create an Vibe64 session."
   });
 
   routes.actionRoute("GET", "/sessions/:sessionId", {
     actionId: ACTION_INSPECT_SESSION,
     buildInput: sessionInput,
-    summary: "Inspect an AI Studio session."
+    summary: "Inspect an Vibe64 session."
   });
 
   routes.actionRoute("GET", "/sessions/:sessionId/diff", {
     actionId: ACTION_INSPECT_SESSION_DIFF,
     buildInput: sessionInput,
-    summary: "Inspect an AI Studio session worktree diff."
+    summary: "Inspect an Vibe64 session worktree diff."
   });
 
   routes.actionRoute("GET", "/sessions/:sessionId/conversation-log", {
     actionId: ACTION_READ_SESSION_CONVERSATION_LOG,
     buildInput: sessionInput,
-    summary: "Read an AI Studio session conversation log."
+    summary: "Read an Vibe64 session conversation log."
   });
 
   routes.actionRoute("POST", "/sessions/:sessionId/terminal-failure-fix-request", {
@@ -66,7 +66,7 @@ function registerRoutes(
         sessionId: request.params.sessionId
       };
     },
-    summary: "Build an AI Studio terminal failure repair prompt."
+    summary: "Build an Vibe64 terminal failure repair prompt."
   });
 
   routes.actionRoute("POST", "/sessions/:sessionId/actions/:actionId", {
@@ -78,7 +78,7 @@ function registerRoutes(
         sessionId: request.params.sessionId
       };
     },
-    summary: "Run an AI Studio session action."
+    summary: "Run an Vibe64 session action."
   });
 
   routes.actionRoute("POST", "/sessions/:sessionId/intents/:intentId", {
@@ -93,13 +93,13 @@ function registerRoutes(
         stepStatus: body.stepStatus
       };
     },
-    summary: "Run an AI Studio session intent."
+    summary: "Run an Vibe64 session intent."
   });
 
   routes.actionRoute("POST", "/sessions/:sessionId/advance", {
     actionId: ACTION_ADVANCE_SESSION,
     buildInput: sessionInput,
-    summary: "Advance an AI Studio session."
+    summary: "Advance an Vibe64 session."
   });
 
   routes.actionRoute("POST", "/sessions/:sessionId/rewind", {
@@ -110,19 +110,19 @@ function registerRoutes(
         stepId: routes.requestBody(request).stepId
       };
     },
-    summary: "Rewind an AI Studio session."
+    summary: "Rewind an Vibe64 session."
   });
 
   routes.actionRoute("POST", "/sessions/:sessionId/recover-stuck-step", {
     actionId: ACTION_RECOVER_STUCK_SESSION_STEP,
     buildInput: sessionInput,
-    summary: "Recover an AI Studio session step stuck in command execution."
+    summary: "Recover an Vibe64 session step stuck in command execution."
   });
 
   routes.actionRoute("POST", "/sessions/:sessionId/abandon", {
     actionId: ACTION_ABANDON_SESSION,
     buildInput: sessionInput,
-    summary: "Abandon an AI Studio session."
+    summary: "Abandon an Vibe64 session."
   });
 }
 

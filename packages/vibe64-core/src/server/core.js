@@ -2,7 +2,7 @@ import { access } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 
-const AI_STUDIO_STATE_DIR = ".ai-studio";
+const VIBE64_STATE_DIR = ".vibe64";
 
 function normalizeText(value) {
   return String(value ?? "").trim();
@@ -20,7 +20,7 @@ function normalizeTargetRoot(targetRoot = process.cwd()) {
   return path.resolve(normalizeText(targetRoot) || process.cwd());
 }
 
-function aiStudioError(message, code) {
+function vibe64Error(message, code) {
   const error = new Error(message);
   error.code = code;
   return error;
@@ -43,8 +43,8 @@ async function pathExists(filePath) {
 }
 
 export {
-  AI_STUDIO_STATE_DIR,
-  aiStudioError,
+  VIBE64_STATE_DIR,
+  vibe64Error,
   isPlainObject,
   isMissingPathError,
   normalizeText,

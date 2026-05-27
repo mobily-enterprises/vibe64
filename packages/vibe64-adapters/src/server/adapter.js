@@ -1,8 +1,8 @@
 import {
-  aiStudioError,
+  vibe64Error,
   isPlainObject,
   normalizeText
-} from "@local/ai-studio-core/server/core";
+} from "@local/vibe64-core/server/core";
 import {
   promptContextForAction,
   renderPromptWithOverrides
@@ -20,7 +20,7 @@ function sortedEntries(value = {}) {
 function assertAdapterId(adapterId) {
   const normalizedAdapterId = normalizeText(adapterId);
   if (!ADAPTER_ID_PATTERN.test(normalizedAdapterId)) {
-    throw aiStudioError(`Invalid AI Studio adapter id: ${normalizedAdapterId || "(empty)"}`, "ai_studio_invalid_adapter_id");
+    throw vibe64Error(`Invalid Vibe64 adapter id: ${normalizedAdapterId || "(empty)"}`, "vibe64_invalid_adapter_id");
   }
   return normalizedAdapterId;
 }
@@ -28,7 +28,7 @@ function assertAdapterId(adapterId) {
 function assertCommandId(commandId) {
   const normalizedCommandId = normalizeText(commandId);
   if (!COMMAND_ID_PATTERN.test(normalizedCommandId)) {
-    throw aiStudioError(`Invalid AI Studio adapter command id: ${normalizedCommandId || "(empty)"}`, "ai_studio_invalid_adapter_command_id");
+    throw vibe64Error(`Invalid Vibe64 adapter command id: ${normalizedCommandId || "(empty)"}`, "vibe64_invalid_adapter_command_id");
   }
   return normalizedCommandId;
 }
@@ -36,7 +36,7 @@ function assertCommandId(commandId) {
 function assertLaunchTargetId(launchTargetId) {
   const normalizedLaunchTargetId = normalizeText(launchTargetId);
   if (!LAUNCH_TARGET_ID_PATTERN.test(normalizedLaunchTargetId)) {
-    throw aiStudioError(`Invalid AI Studio launch target id: ${normalizedLaunchTargetId || "(empty)"}`, "ai_studio_invalid_launch_target_id");
+    throw vibe64Error(`Invalid Vibe64 launch target id: ${normalizedLaunchTargetId || "(empty)"}`, "vibe64_invalid_launch_target_id");
   }
   return normalizedLaunchTargetId;
 }
@@ -161,7 +161,7 @@ function promptJson(value = {}) {
 
 function defaultPromptText(action = {}, input = {}) {
   return [
-    `Run the AI Studio prompt action: ${normalizeText(action.label || promptIdForAction(action))}.`,
+    `Run the Vibe64 prompt action: ${normalizeText(action.label || promptIdForAction(action))}.`,
     "",
     "Action input:",
     promptJson(input)
@@ -264,7 +264,7 @@ class TargetAdapter {
 
   async finishSession() {
     return adapterActionResult({
-      message: "Finished AI Studio session."
+      message: "Finished Vibe64 session."
     });
   }
 

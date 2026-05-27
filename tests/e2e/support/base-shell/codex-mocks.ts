@@ -142,7 +142,7 @@ async function mockCodexPromptSession(page, { stepPayloads = [], terminalInputs 
   await page.route("**/api/studio/current-app", async (route) => {
     await fulfillJson(route, currentAppPayload);
   });
-  await page.route("**/api/ai-studio/sessions**", async (route) => {
+  await page.route("**/api/vibe64/sessions**", async (route) => {
     await fulfillJson(route, {
       limits: {
         maxOpenSessions: 5,
@@ -154,10 +154,10 @@ async function mockCodexPromptSession(page, { stepPayloads = [], terminalInputs 
     });
   });
   await mockTargetScripts(page);
-  await page.route(`**/api/ai-studio/sessions/${codexPromptSessionId}`, async (route) => {
+  await page.route(`**/api/vibe64/sessions/${codexPromptSessionId}`, async (route) => {
     await fulfillJson(route, codexPromptSessionPayload);
   });
-  await page.route(`**/api/ai-studio/sessions/${codexPromptSessionId}/step`, async (route) => {
+  await page.route(`**/api/vibe64/sessions/${codexPromptSessionId}/step`, async (route) => {
     const payload = route.request().postDataJSON();
     stepPayloads.push(payload);
     stepRequestCount += 1;
@@ -187,7 +187,7 @@ async function mockCodexPromptSession(page, { stepPayloads = [], terminalInputs 
         : stepRequestCount === 2 ? createdPayload : planPromptPayload
     );
   });
-  await page.route(`**/api/ai-studio/sessions/${codexPromptSessionId}/codex-terminal`, async (route) => {
+  await page.route(`**/api/vibe64/sessions/${codexPromptSessionId}/codex-terminal`, async (route) => {
     await fulfillJson(route, {
       ok: true,
       id: "term-1",
@@ -238,7 +238,7 @@ async function mockCodexPromptSessions(page, sessionPayloads) {
   await page.route("**/api/studio/current-app", async (route) => {
     await fulfillJson(route, currentAppPayload);
   });
-  await page.route("**/api/ai-studio/sessions**", async (route) => {
+  await page.route("**/api/vibe64/sessions**", async (route) => {
     await fulfillJson(route, {
       limits: {
         maxOpenSessions: 5,
@@ -252,10 +252,10 @@ async function mockCodexPromptSessions(page, sessionPayloads) {
   await mockTargetScripts(page);
 
   for (const sessionId of Object.keys(payloadsBySessionId)) {
-    await page.route(`**/api/ai-studio/sessions/${sessionId}`, async (route) => {
+    await page.route(`**/api/vibe64/sessions/${sessionId}`, async (route) => {
       await fulfillJson(route, payloadsBySessionId[sessionId]);
     });
-    await page.route(`**/api/ai-studio/sessions/${sessionId}/abandon`, async (route) => {
+    await page.route(`**/api/vibe64/sessions/${sessionId}/abandon`, async (route) => {
       terminalDeletes[sessionId] += 1;
       payloadsBySessionId[sessionId] = {
         ...payloadsBySessionId[sessionId],
@@ -266,7 +266,7 @@ async function mockCodexPromptSessions(page, sessionPayloads) {
       visibleSessionPayloads = visibleSessionPayloads.filter((session) => session.sessionId !== sessionId);
       await fulfillJson(route, payloadsBySessionId[sessionId]);
     });
-    await page.route(`**/api/ai-studio/sessions/${sessionId}/codex-terminal`, async (route) => {
+    await page.route(`**/api/vibe64/sessions/${sessionId}/codex-terminal`, async (route) => {
       terminalStarts[sessionId] += 1;
       await fulfillJson(route, {
         ok: true,
@@ -277,7 +277,7 @@ async function mockCodexPromptSessions(page, sessionPayloads) {
       });
     });
     await page.route(
-      `**/api/ai-studio/sessions/${sessionId}/codex-terminal/term-${sessionId}`,
+      `**/api/vibe64/sessions/${sessionId}/codex-terminal/term-${sessionId}`,
       async (route) => {
         if (route.request().method() === "DELETE") {
           terminalDeletes[sessionId] += 1;

@@ -1,10 +1,10 @@
 import { computed, ref } from "vue";
 import { describe, expect, it, vi } from "vitest";
 import {
-  useAiStudioSessionCommandTerminal
-} from "../../src/composables/useAiStudioSessionCommandTerminal.js";
+  useVibe64SessionCommandTerminal
+} from "../../src/composables/useVibe64SessionCommandTerminal.js";
 
-describe("useAiStudioSessionCommandTerminal", () => {
+describe("useVibe64SessionCommandTerminal", () => {
   it("refreshes after command completion without locally advancing the session", async () => {
     const selectedSessionId = ref("session-1");
     const selectedSession = ref({
@@ -38,7 +38,7 @@ describe("useAiStudioSessionCommandTerminal", () => {
       };
     });
     const goNext = vi.fn();
-    const terminal = useAiStudioSessionCommandTerminal({
+    const terminal = useVibe64SessionCommandTerminal({
       currentNext: computed(() => selectedSession.value.next),
       goNext,
       refreshSessionData,

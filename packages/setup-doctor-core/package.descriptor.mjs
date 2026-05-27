@@ -6,7 +6,7 @@ export default Object.freeze({
   description: "Shared setup doctor route, stream, status, plugin, and repair tooling.",
   dependsOn: [
     "@jskit-ai/kernel",
-    "@local/ai-studio-core",
+    "@local/vibe64-core",
     "@local/studio-terminal-core"
   ],
   capabilities: {

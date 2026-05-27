@@ -5,7 +5,7 @@ import {
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
   normalizeText
-} from "@local/ai-studio-core/server/core";
+} from "@local/vibe64-core/server/core";
 import {
   configValues
 } from "../configValues.js";

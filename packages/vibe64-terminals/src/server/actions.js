@@ -6,11 +6,11 @@ import {
   shellTerminalActionInputValidator
 } from "./inputSchemas.js";
 
-const ACTION_START_COMMAND_TERMINAL = "feature.ai-studio-terminals.command-terminal.start";
-const ACTION_START_LAUNCH_TARGET_TERMINAL = "feature.ai-studio-terminals.launch-target-terminal.start";
-const ACTION_START_SHELL_TERMINAL = "feature.ai-studio-terminals.shell-terminal.start";
-const ACTION_OPEN_LAUNCH_TARGET = "feature.ai-studio-terminals.launch-target.open";
-const ACTION_UPLOAD_CODEX_ATTACHMENT = "feature.ai-studio-terminals.codex-attachment.upload";
+const ACTION_START_COMMAND_TERMINAL = "feature.vibe64-terminals.command-terminal.start";
+const ACTION_START_LAUNCH_TARGET_TERMINAL = "feature.vibe64-terminals.launch-target-terminal.start";
+const ACTION_START_SHELL_TERMINAL = "feature.vibe64-terminals.shell-terminal.start";
+const ACTION_OPEN_LAUNCH_TARGET = "feature.vibe64-terminals.launch-target.open";
+const ACTION_UPLOAD_CODEX_ATTACHMENT = "feature.vibe64-terminals.codex-attachment.upload";
 
 const featureActions = Object.freeze([
   {

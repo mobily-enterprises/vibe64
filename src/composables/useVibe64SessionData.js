@@ -6,34 +6,34 @@ import { useList } from "@jskit-ai/users-web/client/composables/useList";
 import { usePaths } from "@jskit-ai/users-web/client/composables/usePaths";
 import { useStoredSelection } from "@/composables/useStoredSelection.js";
 import {
-  AI_STUDIO_SESSION_CHANGED_EVENT,
-  AI_STUDIO_SESSIONS_API_SUFFIX,
-  AI_STUDIO_SURFACE_ID,
+  VIBE64_SESSION_CHANGED_EVENT,
+  VIBE64_SESSIONS_API_SUFFIX,
+  VIBE64_SURFACE_ID,
   LOCAL_STUDIO_COMMAND_OPTIONS,
   SELECTED_SESSION_STORAGE_KEY,
-  aiStudioSessionQueryKey,
-  aiStudioSessionsQueryKey
-} from "@/lib/aiStudioSessionRequestConfig.js";
+  vibe64SessionQueryKey,
+  vibe64SessionsQueryKey
+} from "@/lib/vibe64SessionRequestConfig.js";
 import {
-  aiStudioSessionFacts,
-  aiStudioSessionLimits,
-  buildAiStudioTimelineSteps,
-  enrichAiStudioSessionForDisplay,
-  shortAiStudioSessionId as shortSessionId,
-  visibleAiStudioSessions
-} from "@/lib/aiStudioSessionPanelModel.js";
+  vibe64SessionFacts,
+  vibe64SessionLimits,
+  buildVibe64TimelineSteps,
+  enrichVibe64SessionForDisplay,
+  shortVibe64SessionId as shortSessionId,
+  visibleVibe64Sessions
+} from "@/lib/vibe64SessionPanelModel.js";
 import {
-  aiStudioSessionDisplayTitle,
-  aiStudioSessionStatusColor,
-  aiStudioSessionStatusLabel,
-  isClosedAiStudioSession
-} from "@/lib/aiStudioSessionViewModel.js";
+  vibe64SessionDisplayTitle,
+  vibe64SessionStatusColor,
+  vibe64SessionStatusLabel,
+  isClosedVibe64Session
+} from "@/lib/vibe64SessionViewModel.js";
 import {
-  aiStudioSessionDebugDurationMs,
-  aiStudioSessionDebugError,
-  aiStudioSessionDebugLog,
-  aiStudioSessionDebugSummary
-} from "@/lib/aiStudioSessionDebugLog.js";
+  vibe64SessionDebugDurationMs,
+  vibe64SessionDebugError,
+  vibe64SessionDebugLog,
+  vibe64SessionDebugSummary
+} from "@/lib/vibe64SessionDebugLog.js";
 
 function selectedSessionOperationSummary(session = {}) {
   const operation = session?.presentation?.auto?.nextOperation;
@@ -62,7 +62,7 @@ function selectedSessionRecord(detailSession = null, listSession = null, selecte
   return listSession;
 }
 
-function useAiStudioSessionData({
+function useVibe64SessionData({
   onTitleChange = null
 } = {}) {
   const notifyTitleChange = typeof onTitleChange === "function" ? onTitleChange : () => null;
@@ -72,35 +72,35 @@ function useAiStudioSessionData({
   });
 
   const selectedSessionId = sessionSelection.selectedId;
-  const sessionsApiPath = computed(() => paths.api(AI_STUDIO_SESSIONS_API_SUFFIX, {
-    surface: AI_STUDIO_SURFACE_ID
+  const sessionsApiPath = computed(() => paths.api(VIBE64_SESSIONS_API_SUFFIX, {
+    surface: VIBE64_SURFACE_ID
   }));
   const selectedSessionPath = computed(() => {
     const sessionId = String(selectedSessionId.value || "").trim();
     return sessionId ? `${sessionsApiPath.value}/${encodeURIComponent(sessionId)}` : "";
   });
   const selectedSessionQueryKey = computed(() => [
-    ...aiStudioSessionQueryKey(AI_STUDIO_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC),
+    ...vibe64SessionQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC),
     String(selectedSessionId.value || "").trim()
   ]);
 
   const sessionList = useList({
     access: "never",
-    apiSuffix: AI_STUDIO_SESSIONS_API_SUFFIX,
-    fallbackLoadError: "AI Studio sessions could not be loaded.",
+    apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
+    fallbackLoadError: "Vibe64 sessions could not be loaded.",
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "ai-studio.sessions.list",
-    queryKeyFactory: aiStudioSessionsQueryKey,
+    placementSource: "vibe64.sessions.list",
+    queryKeyFactory: vibe64SessionsQueryKey,
     realtime: {
-      event: AI_STUDIO_SESSION_CHANGED_EVENT
+      event: VIBE64_SESSION_CHANGED_EVENT
     },
     selectItems: (payload) => Array.isArray(payload?.sessions) ? payload.sessions : [],
-    surfaceId: AI_STUDIO_SURFACE_ID
+    surfaceId: VIBE64_SURFACE_ID
   });
 
   const createSessionCommand = useCommand({
     access: "never",
-    apiSuffix: AI_STUDIO_SESSIONS_API_SUFFIX,
+    apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
     buildRawPayload: (_model, { context }) => {
       const workflowDefinition = String(context?.workflowDefinition || "").trim();
       return workflowDefinition ? { workflowDefinition } : {};
@@ -108,10 +108,10 @@ function useAiStudioSessionData({
     buildCommandOptions: () => ({
       options: LOCAL_STUDIO_COMMAND_OPTIONS
     }),
-    fallbackRunError: "AI Studio session could not be created.",
+    fallbackRunError: "Vibe64 session could not be created.",
     messages: {
-      error: "AI Studio session could not be created.",
-      success: "AI Studio session created."
+      error: "Vibe64 session could not be created.",
+      success: "Vibe64 session created."
     },
     onRunSuccess: async (response) => {
       if (response?.sessionId) {
@@ -120,19 +120,19 @@ function useAiStudioSessionData({
       await refreshSessionData();
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "ai-studio.sessions.create",
-    surfaceId: AI_STUDIO_SURFACE_ID,
+    placementSource: "vibe64.sessions.create",
+    surfaceId: VIBE64_SURFACE_ID,
     writeMethod: "POST"
   });
   const selectedSessionResource = useEndpointResource({
     enabled: computed(() => Boolean(selectedSessionId.value)),
-    fallbackLoadError: "AI Studio session could not be loaded.",
+    fallbackLoadError: "Vibe64 session could not be loaded.",
     path: selectedSessionPath,
     queryKey: selectedSessionQueryKey,
     readMethod: "GET",
     refreshOnPull: true,
     realtime: {
-      event: AI_STUDIO_SESSION_CHANGED_EVENT,
+      event: VIBE64_SESSION_CHANGED_EVENT,
       matches: ({ payload = {} } = {}) => {
         const changedSessionId = String(payload.sessionId || payload.entityId || "").trim();
         return Boolean(changedSessionId) && changedSessionId === selectedSessionId.value;
@@ -145,7 +145,7 @@ function useAiStudioSessionData({
     refresh: selectedSessionResource.reload
   });
 
-  const sessions = computed(() => visibleAiStudioSessions(sessionList.items || []));
+  const sessions = computed(() => visibleVibe64Sessions(sessionList.items || []));
   const creationOptions = computed(() => sessionList.pages?.[0]?.creation || {});
   const workflowDefinitions = computed(() => {
     const definitions = creationOptions.value.workflowDefinitions;
@@ -166,10 +166,10 @@ function useAiStudioSessionData({
       selectedSessionId.value
     );
   });
-  const selectedSession = computed(() => enrichAiStudioSessionForDisplay(selectedRawSession.value));
-  const isSelectedSessionClosed = computed(() => isClosedAiStudioSession(selectedSession.value || {}));
+  const selectedSession = computed(() => enrichVibe64SessionForDisplay(selectedRawSession.value));
+  const isSelectedSessionClosed = computed(() => isClosedVibe64Session(selectedSession.value || {}));
   const pageLoading = computed(() => Boolean(sessionList.isLoading));
-  const limits = computed(() => aiStudioSessionLimits({
+  const limits = computed(() => vibe64SessionLimits({
     payloadLimits: sessionList.pages?.[0]?.limits || {},
     sessions: sessions.value
   }));
@@ -186,14 +186,14 @@ function useAiStudioSessionData({
     if (limits.value.openSessionCount >= limits.value.maxOpenSessions) {
       return `Studio allows up to ${limits.value.maxOpenSessions} active sessions.`;
     }
-    return "Create a new AI Studio session";
+    return "Create a new Vibe64 session";
   });
   const selectedSessionTitle = computed(() => {
-    return aiStudioSessionDisplayTitle(selectedSession.value || {}) ||
+    return vibe64SessionDisplayTitle(selectedSession.value || {}) ||
       `Session ${shortSessionId(selectedSessionId.value)}`;
   });
-  const timelineSteps = computed(() => buildAiStudioTimelineSteps(selectedSession.value));
-  const sessionFacts = computed(() => aiStudioSessionFacts(selectedSession.value || {}));
+  const timelineSteps = computed(() => buildVibe64TimelineSteps(selectedSession.value));
+  const sessionFacts = computed(() => vibe64SessionFacts(selectedSession.value || {}));
 
   function sessionForId(sessionId = "") {
     const normalizedSessionId = String(sessionId || "").trim();
@@ -201,9 +201,9 @@ function useAiStudioSessionData({
       return null;
     }
     if (normalizedSessionId === selectedSessionId.value && selectedRawSession.value) {
-      return enrichAiStudioSessionForDisplay(selectedRawSession.value);
+      return enrichVibe64SessionForDisplay(selectedRawSession.value);
     }
-    return enrichAiStudioSessionForDisplay(
+    return enrichVibe64SessionForDisplay(
       sessions.value.find((session) => session.sessionId === normalizedSessionId) || null
     );
   }
@@ -217,7 +217,7 @@ function useAiStudioSessionData({
 
   async function refreshSessionData() {
     const startedAtMs = Date.now();
-    aiStudioSessionDebugLog("client.sessionData.refresh.start", {
+    vibe64SessionDebugLog("client.sessionData.refresh.start", {
       selectedSessionId: String(selectedSessionId.value || "")
     });
     try {
@@ -225,17 +225,17 @@ function useAiStudioSessionData({
         sessionList.reload(),
         refreshSelectedSession()
       ]);
-      aiStudioSessionDebugLog("client.sessionData.refresh.done", {
-        ...aiStudioSessionDebugSummary(selectedSession.value || {}),
-        durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
+      vibe64SessionDebugLog("client.sessionData.refresh.done", {
+        ...vibe64SessionDebugSummary(selectedSession.value || {}),
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
         selectedSessionId: String(selectedSessionId.value || ""),
         sessionCount: sessions.value.length
       });
       return result;
     } catch (error) {
-      aiStudioSessionDebugLog("client.sessionData.refresh.error", {
-        durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
-        error: aiStudioSessionDebugError(error),
+      vibe64SessionDebugLog("client.sessionData.refresh.error", {
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+        error: vibe64SessionDebugError(error),
         selectedSessionId: String(selectedSessionId.value || "")
       });
       throw error;
@@ -243,7 +243,7 @@ function useAiStudioSessionData({
   }
 
   function selectSessionId(sessionId = "") {
-    aiStudioSessionDebugLog("client.sessionData.selectSession", {
+    vibe64SessionDebugLog("client.sessionData.selectSession", {
       fromSessionId: String(selectedSessionId.value || ""),
       toSessionId: String(sessionId || "")
     });
@@ -256,25 +256,25 @@ function useAiStudioSessionData({
 
   async function createSession(workflowDefinition = "") {
     const startedAtMs = Date.now();
-    aiStudioSessionDebugLog("client.sessionData.createSession.start", {
+    vibe64SessionDebugLog("client.sessionData.createSession.start", {
       workflowDefinition: String(workflowDefinition || "")
     });
     try {
       const response = await createSessionCommand.run({
         workflowDefinition
       });
-      aiStudioSessionDebugLog("client.sessionData.createSession.done", {
-        ...aiStudioSessionDebugSummary(response || {}),
+      vibe64SessionDebugLog("client.sessionData.createSession.done", {
+        ...vibe64SessionDebugSummary(response || {}),
         code: String(response?.code || response?.errors?.[0]?.code || ""),
-        durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
         ok: response?.ok !== false,
         workflowDefinition: String(workflowDefinition || "")
       });
       return response;
     } catch (error) {
-      aiStudioSessionDebugLog("client.sessionData.createSession.error", {
-        durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
-        error: aiStudioSessionDebugError(error),
+      vibe64SessionDebugLog("client.sessionData.createSession.error", {
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+        error: vibe64SessionDebugError(error),
         workflowDefinition: String(workflowDefinition || "")
       });
       throw error;
@@ -299,7 +299,7 @@ function useAiStudioSessionData({
   }
 
   watch(sessions, (nextSessions) => {
-    aiStudioSessionDebugLog("client.sessionData.sessions.changed", {
+    vibe64SessionDebugLog("client.sessionData.sessions.changed", {
       selectedSessionId: String(selectedSessionId.value || ""),
       sessionCount: nextSessions.length
     });
@@ -330,8 +330,8 @@ function useAiStudioSessionData({
     if (!session.sessionId) {
       return;
     }
-    aiStudioSessionDebugLog("client.sessionData.selectedSession.state", {
-      ...aiStudioSessionDebugSummary(session),
+    vibe64SessionDebugLog("client.sessionData.selectedSession.state", {
+      ...vibe64SessionDebugSummary(session),
       ...selectedSessionOperationSummary(session)
     });
   }, {
@@ -366,8 +366,8 @@ function useAiStudioSessionData({
     sessions,
     sessionsApiPath,
     shortSessionId,
-    statusColor: aiStudioSessionStatusColor,
-    statusLabel: aiStudioSessionStatusLabel,
+    statusColor: vibe64SessionStatusColor,
+    statusLabel: vibe64SessionStatusLabel,
     timelineSteps,
     workflowDefinitions
   };
@@ -375,5 +375,5 @@ function useAiStudioSessionData({
 
 export {
   selectedSessionRecord,
-  useAiStudioSessionData
+  useVibe64SessionData
 };

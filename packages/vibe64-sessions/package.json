@@ -1,5 +1,5 @@
 {
-  "name": "@local/ai-studio-sessions",
+  "name": "@local/vibe64-sessions",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -9,11 +9,11 @@
   "dependencies": {
     "@jskit-ai/kernel": "0.x",
     "@local/adapter-setup-doctor": "0.1.0",
-    "@local/ai-studio-accounts": "0.1.0",
-    "@local/ai-studio-core": "0.1.0",
-    "@local/ai-studio-project": "0.1.0",
-    "@local/ai-studio-runtime": "0.1.0",
-    "@local/ai-studio-terminals": "0.1.0",
+    "@local/vibe64-accounts": "0.1.0",
+    "@local/vibe64-core": "0.1.0",
+    "@local/vibe64-project": "0.1.0",
+    "@local/vibe64-runtime": "0.1.0",
+    "@local/vibe64-terminals": "0.1.0",
     "@local/project-setup-doctor": "0.1.0",
     "@local/studio-setup-doctor": "0.1.0",
     "json-rest-schema": "^1.0.16"

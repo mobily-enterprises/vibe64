@@ -45,14 +45,14 @@ import {
   mdiPaperclip
 } from "@mdi/js";
 import {
-  useAiStudioCodexCommands
-} from "@/composables/useAiStudioCodexCommands.js";
+  useVibe64CodexCommands
+} from "@/composables/useVibe64CodexCommands.js";
 import {
   useCodexAttachments
 } from "@/composables/useCodexAttachments.js";
 import {
   appendPromptAttachmentReferences
-} from "@/lib/aiStudioPromptAttachments.js";
+} from "@/lib/vibe64PromptAttachments.js";
 
 const emit = defineEmits(["update:modelValue"]);
 
@@ -99,7 +99,7 @@ const props = defineProps({
   }
 });
 
-const { uploadAttachment } = useAiStudioCodexCommands();
+const { uploadAttachment } = useVibe64CodexCommands();
 const attachments = useCodexAttachments({
   canUpload: () => !props.disabled,
   onUploaded: async (uploaded = []) => {

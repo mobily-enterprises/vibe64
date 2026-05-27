@@ -6,8 +6,8 @@ export default Object.freeze({
   description: "Mandatory local runtime Studio Setup checks and repairs for Studio.",
   dependsOn: [
     "@jskit-ai/kernel",
-    "@local/ai-studio-adapters",
-    "@local/ai-studio-core",
+    "@local/vibe64-adapters",
+    "@local/vibe64-core",
     "@local/setup-doctor-core",
     "@local/studio-terminal-core"
   ],

@@ -5,7 +5,7 @@ import { readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-const COMMAND_RESULT_ENV = "AI_STUDIO_COMMAND_RESULT_FILE";
+const COMMAND_RESULT_ENV = "VIBE64_COMMAND_RESULT_FILE";
 
 function commandResultFileFromDirectory(directory = "") {
   return {
@@ -15,7 +15,7 @@ function commandResultFileFromDirectory(directory = "") {
 }
 
 function createCommandResultFileSync() {
-  return commandResultFileFromDirectory(mkdtempSync(path.join(os.tmpdir(), "ai-studio-command-")));
+  return commandResultFileFromDirectory(mkdtempSync(path.join(os.tmpdir(), "vibe64-command-")));
 }
 
 async function createCommandResultFile() {

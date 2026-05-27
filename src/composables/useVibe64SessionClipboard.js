@@ -1,7 +1,7 @@
 import { ref } from "vue";
 import { writeClipboardText } from "@/lib/clipboard.js";
 
-function useAiStudioSessionClipboard() {
+function useVibe64SessionClipboard() {
   const copyStatus = ref("");
 
   function clearCopyStatus() {
@@ -30,5 +30,5 @@ function useAiStudioSessionClipboard() {
 }
 
 export {
-  useAiStudioSessionClipboard
+  useVibe64SessionClipboard
 };

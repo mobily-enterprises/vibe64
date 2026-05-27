@@ -1,53 +1,53 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  AI_STUDIO_SESSION_CHANGED_EVENT,
+  VIBE64_SESSION_CHANGED_EVENT,
   SELECTED_SESSION_STORAGE_KEY,
-  aiStudioActionPath,
-  aiStudioArtifactPreviewPath,
-  aiStudioArtifactPreviewQueryKey,
-  aiStudioCodexAttachmentPath,
-  aiStudioConversationLogPath,
-  aiStudioConversationLogQueryKey,
-  aiStudioSessionQueryKey,
-  aiStudioSessionPath,
-  aiStudioSessionsQueryKey,
+  vibe64ActionPath,
+  vibe64ArtifactPreviewPath,
+  vibe64ArtifactPreviewQueryKey,
+  vibe64CodexAttachmentPath,
+  vibe64ConversationLogPath,
+  vibe64ConversationLogQueryKey,
+  vibe64SessionQueryKey,
+  vibe64SessionPath,
+  vibe64SessionsQueryKey,
   commandInputFromContext
-} from "../../src/lib/aiStudioSessionRequestConfig.js";
+} from "../../src/lib/vibe64SessionRequestConfig.js";
 
-describe("AI Studio session request config", () => {
-  it("uses current AI Studio storage and route names", () => {
-    expect(SELECTED_SESSION_STORAGE_KEY).toBe("ai-studio:selected-session-id");
-    expect(AI_STUDIO_SESSION_CHANGED_EVENT).toBe("ai-studio.session.changed");
-    expect(aiStudioSessionsQueryKey("home", "public")).toEqual([
-      "ai-studio",
+describe("Vibe64 session request config", () => {
+  it("uses current Vibe64 storage and route names", () => {
+    expect(SELECTED_SESSION_STORAGE_KEY).toBe("vibe64:selected-session-id");
+    expect(VIBE64_SESSION_CHANGED_EVENT).toBe("vibe64.session.changed");
+    expect(vibe64SessionsQueryKey("home", "public")).toEqual([
+      "vibe64",
       "home",
       "public",
       "sessions"
     ]);
-    expect(aiStudioSessionQueryKey("home", "public")).toEqual([
-      "ai-studio",
+    expect(vibe64SessionQueryKey("home", "public")).toEqual([
+      "vibe64",
       "home",
       "public",
       "session"
     ]);
-    expect(aiStudioArtifactPreviewQueryKey("home", "public", "2026-05-16_01:two")).toEqual([
-      "ai-studio",
+    expect(vibe64ArtifactPreviewQueryKey("home", "public", "2026-05-16_01:two")).toEqual([
+      "vibe64",
       "home",
       "public",
       "artifact-preview",
       "2026-05-16_01%3Atwo"
     ]);
-    expect(aiStudioArtifactPreviewQueryKey("home", "public", "2026-05-16_01:two", "issue report")).toEqual([
-      "ai-studio",
+    expect(vibe64ArtifactPreviewQueryKey("home", "public", "2026-05-16_01:two", "issue report")).toEqual([
+      "vibe64",
       "home",
       "public",
       "artifact-preview",
       "2026-05-16_01%3Atwo",
       "issue%20report"
     ]);
-    expect(aiStudioConversationLogQueryKey("home", "public", "2026-05-16_01:two")).toEqual([
-      "ai-studio",
+    expect(vibe64ConversationLogQueryKey("home", "public", "2026-05-16_01:two")).toEqual([
+      "vibe64",
       "home",
       "public",
       "conversation-log",
@@ -56,14 +56,14 @@ describe("AI Studio session request config", () => {
   });
 
   it("builds encoded session action and terminal support paths", () => {
-    const apiPath = "/api/studio/ai-studio/sessions";
+    const apiPath = "/api/studio/vibe64/sessions";
     const sessionId = "2026-05-16_01:two";
 
-    expect(aiStudioSessionPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo`);
-    expect(aiStudioActionPath(apiPath, sessionId, "make plan")).toBe(`${apiPath}/2026-05-16_01%3Atwo/actions/make%20plan`);
-    expect(aiStudioArtifactPreviewPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/artifact-preview`);
-    expect(aiStudioCodexAttachmentPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/codex-attachments`);
-    expect(aiStudioConversationLogPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/conversation-log`);
+    expect(vibe64SessionPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo`);
+    expect(vibe64ActionPath(apiPath, sessionId, "make plan")).toBe(`${apiPath}/2026-05-16_01%3Atwo/actions/make%20plan`);
+    expect(vibe64ArtifactPreviewPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/artifact-preview`);
+    expect(vibe64CodexAttachmentPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/codex-attachments`);
+    expect(vibe64ConversationLogPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/conversation-log`);
   });
 
   it("normalizes command input payloads from command context", () => {

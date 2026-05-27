@@ -48,18 +48,18 @@ import {
   writePullRequestArtifact,
   writeReportArtifact,
   writeWorktreeFile,
-  type AiStudioSession
+  type Vibe64Session
 } from "./live/support/workflow";
 
 let studioServer: StudioServer | null = null;
 
-test.describe("live AI Studio session workflow", () => {
+test.describe("live Vibe64 session workflow", () => {
   test.describe.configure({
     mode: "serial"
   });
   test.setTimeout(20 * 60_000);
 
-  test.skip(!liveE2eEnabled, `Set ${LIVE_E2E_FLAG}=1 to run live AI Studio e2e tests.`);
+  test.skip(!liveE2eEnabled, `Set ${LIVE_E2E_FLAG}=1 to run live Vibe64 e2e tests.`);
 
   test.beforeAll(async () => {
     await prepareTargetRoot();
@@ -209,7 +209,7 @@ test.describe("live AI Studio session workflow", () => {
     });
 
     await markMetadataAndReload(page, "accepted_commit", "0000000000000000000000000000000000000000");
-    await markMetadataAndReload(page, "branch_pushed", "ai-studio/live-e2e-checklist");
+    await markMetadataAndReload(page, "branch_pushed", "vibe64/live-e2e-checklist");
     await assertChecklistControls(page, "changes_committed", {
       enabled: ["Commit and push changes", "Next step"]
     });
@@ -284,7 +284,7 @@ test.describe("live AI Studio session workflow", () => {
   test("creates and edits a new issue draft, then creates the GitHub issue", async ({ page }) => {
     await createNewBranchSessionAtIssueStep(page);
     await writeIssueArtifacts(page, {
-      body: `Created by ${runId} through the live AI Studio issue flow.`,
+      body: `Created by ${runId} through the live Vibe64 issue flow.`,
       title: fixtureTitle("new-issue")
     });
 
@@ -435,8 +435,8 @@ test.describe("live AI Studio session workflow", () => {
   });
 
   test("marks an unpushable existing PR as a replacement-PR workflow when configured", async ({ page }) => {
-    const replacementPrRef = stringValue(process.env.AI_STUDIO_E2E_REPLACEMENT_PR_REF);
-    test.skip(!replacementPrRef, "Set AI_STUDIO_E2E_REPLACEMENT_PR_REF to exercise a cross-repo replacement PR.");
+    const replacementPrRef = stringValue(process.env.VIBE64_E2E_REPLACEMENT_PR_REF);
+    test.skip(!replacementPrRef, "Set VIBE64_E2E_REPLACEMENT_PR_REF to exercise a cross-repo replacement PR.");
 
     await createSession(page);
     await chooseExistingPr(page, replacementPrRef);
@@ -458,7 +458,7 @@ test.describe("live AI Studio session workflow", () => {
       name: "Cancel"
     }).click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
-    expect((await awaitSessions(page)).sessions.filter((session: AiStudioSession) => session.status === "active")).toHaveLength(1);
+    expect((await awaitSessions(page)).sessions.filter((session: Vibe64Session) => session.status === "active")).toHaveLength(1);
 
     await clickButton(page, "Abandon session");
     await page.getByRole("button", {
@@ -467,7 +467,7 @@ test.describe("live AI Studio session workflow", () => {
     }).last().click();
     await expect.poll(async () => {
       const payload = await awaitSessions(page);
-      return payload.sessions.filter((session: AiStudioSession) => session.status === "active").length;
+      return payload.sessions.filter((session: Vibe64Session) => session.status === "active").length;
     }, {
       timeout: 30_000
     }).toBe(0);

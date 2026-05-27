@@ -1,13 +1,13 @@
 import {
-  aiStudioError,
+  vibe64Error,
   normalizeText
-} from "@local/ai-studio-core/server/core";
+} from "@local/vibe64-core/server/core";
 import {
-  AI_STUDIO_CLIENT_CONTROL_ACTIONS,
-  AI_STUDIO_CLIENT_CONTROL_ICON_TOKENS,
-  AI_STUDIO_CLIENT_CONTROL_STATE_FLAGS
-} from "@local/ai-studio-core/shared";
-import { deepFreeze } from "@local/ai-studio-core/server/deepFreeze";
+  VIBE64_CLIENT_CONTROL_ACTIONS,
+  VIBE64_CLIENT_CONTROL_ICON_TOKENS,
+  VIBE64_CLIENT_CONTROL_STATE_FLAGS
+} from "@local/vibe64-core/shared";
+import { deepFreeze } from "@local/vibe64-core/server/deepFreeze";
 import {
   HUMAN_INPUT_RESPONSE_ARTIFACT,
   ISSUE_BODY_ARTIFACT,
@@ -50,12 +50,12 @@ import {
 
 const moduleId = "core.coding";
 
-const AI_STUDIO_WORKFLOW_DEFINITION_IDS = deepFreeze({
+const VIBE64_WORKFLOW_DEFINITION_IDS = deepFreeze({
   BIG_FEATURE: "big_feature",
   GENERAL_CODING: "general_coding",
   SEED_APPLICATION: "seed_application"
 });
-const DEFAULT_AI_STUDIO_WORKFLOW_DEFINITION_ID = AI_STUDIO_WORKFLOW_DEFINITION_IDS.BIG_FEATURE;
+const DEFAULT_VIBE64_WORKFLOW_DEFINITION_ID = VIBE64_WORKFLOW_DEFINITION_IDS.BIG_FEATURE;
 
 const agentConversationStepId = "agent_conversation";
 const changesAcceptedStepId = "changes_accepted";
@@ -303,10 +303,10 @@ const coreCodingStepDefinitionsById = deepFreeze({
         intents: [
           {
             control: {
-              action: AI_STUDIO_CLIENT_CONTROL_ACTIONS.OPEN_DIFF,
-              disabledWhen: [AI_STUDIO_CLIENT_CONTROL_STATE_FLAGS.DIFF_DISABLED],
-              icon: AI_STUDIO_CLIENT_CONTROL_ICON_TOKENS.DIFF,
-              loadingWhen: [AI_STUDIO_CLIENT_CONTROL_STATE_FLAGS.DIFF_LOADING]
+              action: VIBE64_CLIENT_CONTROL_ACTIONS.OPEN_DIFF,
+              disabledWhen: [VIBE64_CLIENT_CONTROL_STATE_FLAGS.DIFF_DISABLED],
+              icon: VIBE64_CLIENT_CONTROL_ICON_TOKENS.DIFF,
+              loadingWhen: [VIBE64_CLIENT_CONTROL_STATE_FLAGS.DIFF_LOADING]
             },
             enabled: true,
             id: "open_diff",
@@ -444,10 +444,10 @@ const coreCodingStepDefinitionsById = deepFreeze({
         intents: [
           {
             control: {
-              action: AI_STUDIO_CLIENT_CONTROL_ACTIONS.OPEN_DIFF,
-              disabledWhen: [AI_STUDIO_CLIENT_CONTROL_STATE_FLAGS.DIFF_DISABLED],
-              icon: AI_STUDIO_CLIENT_CONTROL_ICON_TOKENS.DIFF,
-              loadingWhen: [AI_STUDIO_CLIENT_CONTROL_STATE_FLAGS.DIFF_LOADING]
+              action: VIBE64_CLIENT_CONTROL_ACTIONS.OPEN_DIFF,
+              disabledWhen: [VIBE64_CLIENT_CONTROL_STATE_FLAGS.DIFF_DISABLED],
+              icon: VIBE64_CLIENT_CONTROL_ICON_TOKENS.DIFF,
+              loadingWhen: [VIBE64_CLIENT_CONTROL_STATE_FLAGS.DIFF_LOADING]
             },
             enabled: true,
             id: "open_diff",
@@ -544,7 +544,7 @@ const coreCodingStepDefinitionsById = deepFreeze({
 const coreCodingWorkflowDefinitions = deepFreeze([
   {
     description: "Create the initial application scaffold and local development foundation.",
-    id: AI_STUDIO_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION,
+    id: VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION,
     intentHandlers: coreCodingSeedWorkflowIntentHandlers,
     label: "Seed application",
     sessionWord: "seeding",
@@ -574,7 +574,7 @@ const coreCodingWorkflowDefinitions = deepFreeze([
   },
   {
     description: "Plan, implement, review, validate, commit, create a PR, and optionally merge.",
-    id: AI_STUDIO_WORKFLOW_DEFINITION_IDS.BIG_FEATURE,
+    id: VIBE64_WORKFLOW_DEFINITION_IDS.BIG_FEATURE,
     intentHandlers: coreCodingStandardWorkflowIntentHandlers,
     label: "Big feature",
     steps: [
@@ -607,7 +607,7 @@ const coreCodingWorkflowDefinitions = deepFreeze([
   },
   {
     description: "Make focused code changes with Codex, review, validate, commit, create a PR, and optionally merge.",
-    id: AI_STUDIO_WORKFLOW_DEFINITION_IDS.GENERAL_CODING,
+    id: VIBE64_WORKFLOW_DEFINITION_IDS.GENERAL_CODING,
     intentHandlers: coreCodingStandardWorkflowIntentHandlers,
     label: "General coding",
     sessionWord: "coding",
@@ -789,7 +789,7 @@ const issueSubmittedMachine = {
       case STEP_STATUS.ATTEMPTING_EXECUTION:
       case STEP_STATUS.DONE:
       default:
-        throw aiStudioError("The GitHub issue step cannot accept input right now.", "ai_studio_step_input_not_available");
+        throw vibe64Error("The GitHub issue step cannot accept input right now.", "vibe64_step_input_not_available");
     }
   },
 
@@ -1189,7 +1189,7 @@ const coreCodingSteps = Object.freeze(Object.values(Object.freeze({
     config: {
       completionPolicy: {
         decidedBy: "ai",
-        enoughWhen: "the requested final tweak has either been made or you can clearly report the blocker; AI Studio can then rerun review and validation.",
+        enoughWhen: "the requested final tweak has either been made or you can clearly report the blocker; Vibe64 can then rerun review and validation.",
         waitingForInputMeaning: "You cannot complete the final review tweak without a user decision or missing project detail."
       },
       promptActionId: finalReviewConversationActionId,
@@ -1235,12 +1235,12 @@ const _testing = deepFreeze({
     reportCreatedStepId,
     projectKnowledgeUpdatedStepId
   ],
-  workflowDefinitionIds: AI_STUDIO_WORKFLOW_DEFINITION_IDS
+  workflowDefinitionIds: VIBE64_WORKFLOW_DEFINITION_IDS
 });
 
 export {
-  AI_STUDIO_WORKFLOW_DEFINITION_IDS,
-  DEFAULT_AI_STUDIO_WORKFLOW_DEFINITION_ID,
+  VIBE64_WORKFLOW_DEFINITION_IDS,
+  DEFAULT_VIBE64_WORKFLOW_DEFINITION_ID,
   ISSUE_FILE_STEP_ID,
   SEED_APPLICATION_STEP_ID,
   _testing,

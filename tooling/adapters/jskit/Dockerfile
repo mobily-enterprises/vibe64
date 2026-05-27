@@ -1,6 +1,6 @@
-ARG AI_STUDIO_BASE_IMAGE=ai-studio-base-toolchain:0.1.0
+ARG VIBE64_BASE_IMAGE=vibe64-base-toolchain:0.1.0
 
-FROM ${AI_STUDIO_BASE_IMAGE}
+FROM ${VIBE64_BASE_IMAGE}
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends mariadb-client \

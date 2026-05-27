@@ -10,8 +10,8 @@ import {
   ACTION_RESET_STARRED_TARGET_SCRIPTS,
   ACTION_SAVE_STARRED_TARGET_SCRIPTS
 } from "./actions.js";
-import { createAiStudioFeatureRoutes } from "@local/ai-studio-core/server/featureRoutes";
-import { registerTerminalWebSocketRoute } from "@local/ai-studio-core/server/terminalWebSocketRoutes";
+import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRoutes";
+import { registerTerminalWebSocketRoute } from "@local/vibe64-core/server/terminalWebSocketRoutes";
 import { sendDoctorEventStream } from "@local/setup-doctor-core/server/doctorStream";
 
 const CURRENT_APP_SERVICE = "feature.current-app.service";
@@ -27,7 +27,7 @@ function registerRoutes(
     routeRelativePath = ""
   } = {}
 ) {
-  const routes = createAiStudioFeatureRoutes(app, {
+  const routes = createVibe64FeatureRoutes(app, {
     localRequestMessage: "Current-app Studio routes only accept loopback Studio requests.",
     routeRelativePath,
     routeSurface,
@@ -48,11 +48,11 @@ function registerRoutes(
 
   routes.actionRoute("GET", "/setup-readiness", {
     actionId: ACTION_READ_SETUP_READINESS,
-    summary: "Read AI Studio setup readiness for protected current-app routes."
+    summary: "Read Vibe64 setup readiness for protected current-app routes."
   });
 
   routes.serviceRoute("GET", "/setup-readiness/stream", {
-    summary: "Stream AI Studio setup readiness for protected current-app routes."
+    summary: "Stream Vibe64 setup readiness for protected current-app routes."
   }, async (_request, reply) => {
     await sendDoctorEventStream(reply, ({ emit }) => {
       return getCurrentAppService(app).streamSetupReadiness({

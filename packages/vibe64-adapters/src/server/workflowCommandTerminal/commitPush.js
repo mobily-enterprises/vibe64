@@ -3,7 +3,7 @@ import {
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
   normalizeText
-} from "@local/ai-studio-core/server/core";
+} from "@local/vibe64-core/server/core";
 import {
   metadataFilePath,
   recordCommandFactScript
@@ -28,7 +28,7 @@ function commitChangesScript(session = {}) {
     "set -e",
     `COMMIT_TITLE="$(cat ${shellQuote(issueTitlePath)} 2>/dev/null | head -n 1 | sed 's/[[:space:]]*$//')"`,
     "if [ -z \"$COMMIT_TITLE\" ]; then",
-    `  COMMIT_TITLE="AI Studio session ${session.sessionId}"`,
+    `  COMMIT_TITLE="Vibe64 session ${session.sessionId}"`,
     "fi",
     "if [ -n \"$(git status --short)\" ]; then",
     "  printf '[studio] Committing changes: %s\\n' \"$COMMIT_TITLE\"",
@@ -58,7 +58,7 @@ function commitChangesScript(session = {}) {
       "  printf '[studio] Existing PR push target is missing.\\n' >&2",
       "  exit 1",
       "fi",
-      "PR_HEAD_REMOTE=\"ai-studio-pr-head\"",
+      "PR_HEAD_REMOTE=\"vibe64-pr-head\"",
       "git remote remove \"$PR_HEAD_REMOTE\" >/dev/null 2>&1 || true",
       "git remote add \"$PR_HEAD_REMOTE\" \"https://github.com/$SOURCE_PR_HEAD_REPO.git\"",
       "printf '[studio] Pushing changes to existing PR branch %s/%s\\n' \"$SOURCE_PR_HEAD_REPO\" \"$SOURCE_PR_HEAD_REF\"",

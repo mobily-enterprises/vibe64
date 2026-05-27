@@ -13,34 +13,34 @@ import {
   mdiSync
 } from "@mdi/js";
 import {
-  buildAiStudioSessionFacts,
-  isOpenAiStudioSession,
-  shortAiStudioSessionId as formatShortAiStudioSessionId
-} from "@/lib/aiStudioSessionViewModel.js";
+  buildVibe64SessionFacts,
+  isOpenVibe64Session,
+  shortVibe64SessionId as formatShortVibe64SessionId
+} from "@/lib/vibe64SessionViewModel.js";
 import {
   DEFAULT_MAX_OPEN_SESSIONS
-} from "@/lib/aiStudioSessionRequestConfig.js";
+} from "@/lib/vibe64SessionRequestConfig.js";
 import {
-  aiStudioSessionWorktreePath
-} from "@/lib/aiStudioSessionPaths.js";
+  vibe64SessionWorktreePath
+} from "@/lib/vibe64SessionPaths.js";
 
 function sessionOrderKey(session = {}) {
   return String(session.createdAt || session.manifest?.createdAt || session.sessionId || "");
 }
 
-function visibleAiStudioSessions(sessions = []) {
+function visibleVibe64Sessions(sessions = []) {
   return sessions
-    .filter(isOpenAiStudioSession)
+    .filter(isOpenVibe64Session)
     .sort((left, right) => sessionOrderKey(left).localeCompare(sessionOrderKey(right)));
 }
 
-function aiStudioSessionLimits({
+function vibe64SessionLimits({
   payloadLimits = {},
   sessions = []
 } = {}) {
   return {
     maxOpenSessions: Number(payloadLimits.maxOpenSessions || DEFAULT_MAX_OPEN_SESSIONS),
-    openSessionCount: Number(payloadLimits.openSessionCount || sessions.filter(isOpenAiStudioSession).length)
+    openSessionCount: Number(payloadLimits.openSessionCount || sessions.filter(isOpenVibe64Session).length)
   };
 }
 
@@ -54,12 +54,12 @@ function inspectDiffButtonVisible({
     typeof diff.openDialog === "function";
 }
 
-function enrichAiStudioSessionForDisplay(session = null) {
+function enrichVibe64SessionForDisplay(session = null) {
   if (!session) {
     return null;
   }
   const metadata = session.metadata || {};
-  const worktree = aiStudioSessionWorktreePath(session);
+  const worktree = vibe64SessionWorktreePath(session);
   return {
     ...session,
     branch: session.branch || metadata.branch || metadata.session_branch || "",
@@ -77,9 +77,9 @@ function enrichAiStudioSessionForDisplay(session = null) {
   };
 }
 
-function buildAiStudioTimelineSteps(session = {}) {
+function buildVibe64TimelineSteps(session = {}) {
   const currentStepId = String(session?.currentStep || "");
-  const sessionIsOpen = isOpenAiStudioSession(session || {});
+  const sessionIsOpen = isOpenVibe64Session(session || {});
   return (session?.stepDefinitions || []).map((step, fallbackIndex) => {
     const status = String(step.status || "");
     const current = status === "current" || step.id === currentStepId;
@@ -104,11 +104,11 @@ function buildAiStudioTimelineSteps(session = {}) {
   });
 }
 
-function buildAiStudioAutopilotNavigationSteps(session = {}) {
-  return buildAiStudioTimelineSteps(session);
+function buildVibe64AutopilotNavigationSteps(session = {}) {
+  return buildVibe64TimelineSteps(session);
 }
 
-function aiStudioPromptHandoffFromSession(session = {}) {
+function vibe64PromptHandoffFromSession(session = {}) {
   const actionHandoff = session?.actionResult?.codexPromptHandoff;
   if (actionHandoff && typeof actionHandoff === "object") {
     return actionHandoff;
@@ -117,7 +117,7 @@ function aiStudioPromptHandoffFromSession(session = {}) {
   return sessionHandoff && typeof sessionHandoff === "object" ? sessionHandoff : null;
 }
 
-function aiStudioSessionFactIcon(icon) {
+function vibe64SessionFactIcon(icon) {
   return {
     blueprint: mdiFileDocumentOutline,
     branch: mdiSourceBranch,
@@ -130,15 +130,15 @@ function aiStudioSessionFactIcon(icon) {
   }[icon] || mdiIdentifier;
 }
 
-function aiStudioSessionFacts(session = {}) {
-  return buildAiStudioSessionFacts(session, session?.stepDefinitions || [])
+function vibe64SessionFacts(session = {}) {
+  return buildVibe64SessionFacts(session, session?.stepDefinitions || [])
     .map((fact) => ({
       ...fact,
-      icon: aiStudioSessionFactIcon(fact.icon)
+      icon: vibe64SessionFactIcon(fact.icon)
     }));
 }
 
-function aiStudioActionIcon(action = {}) {
+function vibe64ActionIcon(action = {}) {
   const icon = String(action.icon || "");
   if (icon) {
     return {
@@ -170,21 +170,21 @@ function commandMessage(command, type) {
   return command.messageType === type ? command.message : "";
 }
 
-function shortAiStudioSessionId(sessionId = "") {
-  return formatShortAiStudioSessionId(sessionId);
+function shortVibe64SessionId(sessionId = "") {
+  return formatShortVibe64SessionId(sessionId);
 }
 
 export {
-  aiStudioActionIcon,
-  aiStudioPromptHandoffFromSession,
-  aiStudioSessionFacts,
-  aiStudioSessionLimits,
-  buildAiStudioAutopilotNavigationSteps,
-  buildAiStudioTimelineSteps,
+  vibe64ActionIcon,
+  vibe64PromptHandoffFromSession,
+  vibe64SessionFacts,
+  vibe64SessionLimits,
+  buildVibe64AutopilotNavigationSteps,
+  buildVibe64TimelineSteps,
   commandMessage,
   currentStepDisabledReason,
-  enrichAiStudioSessionForDisplay,
+  enrichVibe64SessionForDisplay,
   inspectDiffButtonVisible,
-  shortAiStudioSessionId,
-  visibleAiStudioSessions
+  shortVibe64SessionId,
+  visibleVibe64Sessions
 };

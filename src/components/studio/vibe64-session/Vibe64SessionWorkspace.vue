@@ -1,12 +1,12 @@
 <template>
   <section class="studio-ai-sessions__main">
-    <AiStudioSessionTimeline
+    <Vibe64SessionTimeline
       :busy="page.busy"
       :steps="timeline.steps"
       @rewind="timeline.rewindToStep"
     >
       <template #current-step>
-        <AiStudioSessionCurrentStep
+        <Vibe64SessionCurrentStep
           :actions="actions"
           :diff="dialogs.diff"
           :page="page"
@@ -16,9 +16,9 @@
           :step-input="stepInput"
         />
       </template>
-    </AiStudioSessionTimeline>
+    </Vibe64SessionTimeline>
 
-    <AiStudioSessionFacts
+    <Vibe64SessionFacts
       class="studio-ai-sessions__facts"
       :facts="selection.facts"
       :status-color="selection.statusColor(selection.selectedSession.status)"
@@ -26,7 +26,7 @@
       @copy="page.copyText"
     />
 
-    <AiStudioReportPreview
+    <Vibe64ReportPreview
       v-if="reportPreview.visible"
       class="studio-ai-sessions__report"
       :error="reportPreview.error"
@@ -34,7 +34,7 @@
       :text="reportPreview.text"
     />
 
-    <AiStudioReportPreview
+    <Vibe64ReportPreview
       v-if="humanInputResponsePreview.visible"
       class="studio-ai-sessions__report"
       empty-text="Codex response is not ready yet."
@@ -51,10 +51,10 @@
 import {
   mdiRobotOutline
 } from "@mdi/js";
-import AiStudioReportPreview from "@/components/studio/ai-studio-session/AiStudioReportPreview.vue";
-import AiStudioSessionCurrentStep from "@/components/studio/ai-studio-session/AiStudioSessionCurrentStep.vue";
-import AiStudioSessionFacts from "@/components/studio/ai-studio-session/AiStudioSessionFacts.vue";
-import AiStudioSessionTimeline from "@/components/studio/ai-studio-session/AiStudioSessionTimeline.vue";
+import Vibe64ReportPreview from "@/components/studio/vibe64-session/Vibe64ReportPreview.vue";
+import Vibe64SessionCurrentStep from "@/components/studio/vibe64-session/Vibe64SessionCurrentStep.vue";
+import Vibe64SessionFacts from "@/components/studio/vibe64-session/Vibe64SessionFacts.vue";
+import Vibe64SessionTimeline from "@/components/studio/vibe64-session/Vibe64SessionTimeline.vue";
 
 defineProps({
   actions: {

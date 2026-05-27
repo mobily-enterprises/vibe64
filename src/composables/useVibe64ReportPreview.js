@@ -1,11 +1,11 @@
 import {
-  useAiStudioArtifactPreview
-} from "@/composables/useAiStudioArtifactPreview.js";
+  useVibe64ArtifactPreview
+} from "@/composables/useVibe64ArtifactPreview.js";
 
 const REPORT_PREVIEW_ID = "report";
 
-function useAiStudioReportPreview(options = {}) {
-  return useAiStudioArtifactPreview({
+function useVibe64ReportPreview(options = {}) {
+  return useVibe64ArtifactPreview({
     ...options,
     loadErrorMessage: "Report could not be loaded.",
     previewId: REPORT_PREVIEW_ID
@@ -14,5 +14,5 @@ function useAiStudioReportPreview(options = {}) {
 
 export {
   REPORT_PREVIEW_ID,
-  useAiStudioReportPreview
+  useVibe64ReportPreview
 };

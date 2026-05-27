@@ -19,7 +19,7 @@ test("target script terminals use the shared Playwright browser cache", () => {
   const args = targetScriptTerminalArgs({
     adapterId: "node-web",
     command: "npm run dev",
-    containerName: "ai-studio-node-web-target-script-unit",
+    containerName: "vibe64-node-web-target-script-unit",
     extraDockerArgs: ["-e", "PLAYWRIGHT_BROWSERS_PATH=/tmp/project-playwright"],
     targetRoot,
     terminalId: "unit-terminal",

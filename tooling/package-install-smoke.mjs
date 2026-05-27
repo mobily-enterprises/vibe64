@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 
 const TOOLING_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(TOOLING_DIR, "..");
-const ROOT_PACKAGE_NAME = "@vibe-armor/run";
+const ROOT_PACKAGE_NAME = "@vibe64/run";
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -95,9 +95,9 @@ function verifierScript() {
       }
     }
 
-    const binTarget = path.join(packageRoot, manifest.bin["vibe-armor"]);
+    const binTarget = path.join(packageRoot, manifest.bin["vibe64"]);
     if (!fs.existsSync(binTarget)) {
-      throw new Error(\`The vibe-armor bin target is missing: \${binTarget}\`);
+      throw new Error(\`The vibe64 bin target is missing: \${binTarget}\`);
     }
 
     const serverModule = await import(pathToFileURL(path.join(packageRoot, "server.js")).href);
@@ -113,7 +113,7 @@ function verifierScript() {
 }
 
 function packageSmoke() {
-  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "vibe-armor-package-smoke-"));
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "vibe64-package-smoke-"));
   const packDirectory = path.join(tempRoot, "pack");
   const installDirectory = path.join(tempRoot, "install");
   fs.mkdirSync(packDirectory, { recursive: true });
@@ -144,7 +144,7 @@ function packageSmoke() {
 
     console.log(`Package install smoke passed for ${packedRootManifest.name}@${packedRootManifest.version}.`);
   } finally {
-    if (!process.env.AI_STUDIO_KEEP_PACKAGE_SMOKE) {
+    if (!process.env.VIBE64_KEEP_PACKAGE_SMOKE) {
       fs.rmSync(tempRoot, {
         force: true,
         recursive: true

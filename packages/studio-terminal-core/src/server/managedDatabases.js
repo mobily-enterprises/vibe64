@@ -6,10 +6,10 @@ const MYSQL_GENERATOR_TOKEN_HINTS = Object.freeze({
   host: "$MYSQL_HOST",
   password: "$MYSQL_PWD",
   port: "$MYSQL_TCP_PORT",
-  username: "$AI_STUDIO_MYSQL_USER"
+  username: "$VIBE64_MYSQL_USER"
 });
 const MYSQL_ENVIRONMENT_VARIABLES = Object.freeze({
-  AI_STUDIO_MYSQL_USER: "database username",
+  VIBE64_MYSQL_USER: "database username",
   MYSQL_DATABASE: "database name",
   MYSQL_HOST: "database host reachable from the terminal",
   MYSQL_PWD: "database password used by mysql and mariadb clients",
@@ -122,7 +122,7 @@ function managedPostgresTerminalEnv(connection = {}) {
 
 function managedMysqlTerminalEnv(connection = {}) {
   return {
-    AI_STUDIO_MYSQL_USER: connection.username,
+    VIBE64_MYSQL_USER: connection.username,
     MYSQL_DATABASE: connection.database,
     MYSQL_HOST: connection.host,
     MYSQL_PWD: connection.password,
@@ -151,12 +151,12 @@ function managedMysqlServicePromptFacts({
   const alternateClient = mysqlCompatibleAlternateClient();
   return {
     client,
-    checkCommand: `${client} --host="$MYSQL_HOST" --port="\${MYSQL_TCP_PORT:-3306}" --user="\${AI_STUDIO_MYSQL_USER:-root}" --password="$MYSQL_PWD" "$MYSQL_DATABASE" --execute="SELECT 1"`,
-    command: `${client} --host="$MYSQL_HOST" --port="\${MYSQL_TCP_PORT:-3306}" --user="\${AI_STUDIO_MYSQL_USER:-root}" --password="$MYSQL_PWD" "$MYSQL_DATABASE" --execute="<SQL>"`,
+    checkCommand: `${client} --host="$MYSQL_HOST" --port="\${MYSQL_TCP_PORT:-3306}" --user="\${VIBE64_MYSQL_USER:-root}" --password="$MYSQL_PWD" "$MYSQL_DATABASE" --execute="SELECT 1"`,
+    command: `${client} --host="$MYSQL_HOST" --port="\${MYSQL_TCP_PORT:-3306}" --user="\${VIBE64_MYSQL_USER:-root}" --password="$MYSQL_PWD" "$MYSQL_DATABASE" --execute="<SQL>"`,
     environment: MYSQL_ENVIRONMENT_VARIABLES,
     generatorTokenHints: MYSQL_GENERATOR_TOKEN_HINTS,
     id,
-    interactiveCommand: `${client} --host="$MYSQL_HOST" --port="\${MYSQL_TCP_PORT:-3306}" --user="\${AI_STUDIO_MYSQL_USER:-root}" --password="$MYSQL_PWD" "$MYSQL_DATABASE"`,
+    interactiveCommand: `${client} --host="$MYSQL_HOST" --port="\${MYSQL_TCP_PORT:-3306}" --user="\${VIBE64_MYSQL_USER:-root}" --password="$MYSQL_PWD" "$MYSQL_DATABASE"`,
     kind: "database",
     label,
     notes: [
@@ -166,8 +166,8 @@ function managedMysqlServicePromptFacts({
     ],
     runtime,
     alternateClient,
-    alternateCheckCommand: `${alternateClient} --host="$MYSQL_HOST" --port="\${MYSQL_TCP_PORT:-3306}" --user="\${AI_STUDIO_MYSQL_USER:-root}" --password="$MYSQL_PWD" "$MYSQL_DATABASE" --execute="SELECT 1"`,
-    alternateCommand: `${alternateClient} --host="$MYSQL_HOST" --port="\${MYSQL_TCP_PORT:-3306}" --user="\${AI_STUDIO_MYSQL_USER:-root}" --password="$MYSQL_PWD" "$MYSQL_DATABASE" --execute="<SQL>"`
+    alternateCheckCommand: `${alternateClient} --host="$MYSQL_HOST" --port="\${MYSQL_TCP_PORT:-3306}" --user="\${VIBE64_MYSQL_USER:-root}" --password="$MYSQL_PWD" "$MYSQL_DATABASE" --execute="SELECT 1"`,
+    alternateCommand: `${alternateClient} --host="$MYSQL_HOST" --port="\${MYSQL_TCP_PORT:-3306}" --user="\${VIBE64_MYSQL_USER:-root}" --password="$MYSQL_PWD" "$MYSQL_DATABASE" --execute="<SQL>"`
   };
 }
 
@@ -206,7 +206,7 @@ function managedDatabasePromptServiceFacts({
       label
     });
   }
-  if (terminalEnvHasKeys(terminalEnv, ["AI_STUDIO_MYSQL_USER", "MYSQL_DATABASE", "MYSQL_HOST", "MYSQL_PWD", "MYSQL_TCP_PORT"])) {
+  if (terminalEnvHasKeys(terminalEnv, ["VIBE64_MYSQL_USER", "MYSQL_DATABASE", "MYSQL_HOST", "MYSQL_PWD", "MYSQL_TCP_PORT"])) {
     return managedMysqlServicePromptFacts({
       id,
       label,

@@ -46,12 +46,12 @@ import ProjectConfigSetup from "@/components/studio/ProjectConfigSetup.vue";
 import ProjectTypeSetup from "@/components/studio/ProjectTypeSetup.vue";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
 import {
-  AI_STUDIO_SURFACE_ID,
+  VIBE64_SURFACE_ID,
   LOCAL_STUDIO_COMMAND_OPTIONS
-} from "@/lib/aiStudioRequestConfig.js";
+} from "@/lib/vibe64RequestConfig.js";
 import {
-  AI_STUDIO_PROJECT_CONFIG_API_SUFFIX,
-  AI_STUDIO_PROJECT_TYPE_API_SUFFIX,
+  VIBE64_PROJECT_CONFIG_API_SUFFIX,
+  VIBE64_PROJECT_TYPE_API_SUFFIX,
   PROJECT_CONFIG_ENDPOINT,
   PROJECT_TYPE_ENDPOINT,
   projectConfigQueryKey,
@@ -73,7 +73,7 @@ const savingConfig = ref(false);
 const savingType = ref("");
 
 function projectQueryKey(queryKeyFactory) {
-  return computed(() => queryKeyFactory(AI_STUDIO_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC));
+  return computed(() => queryKeyFactory(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC));
 }
 
 function useStudioEndpointView({
@@ -116,7 +116,7 @@ const projectConfigView = useStudioEndpointView({
 
 const saveProjectTypeCommand = useCommand({
   access: "never",
-  apiSuffix: AI_STUDIO_PROJECT_TYPE_API_SUFFIX,
+  apiSuffix: VIBE64_PROJECT_TYPE_API_SUFFIX,
   buildCommandOptions: () => ({
     method: "PUT",
     options: LOCAL_STUDIO_COMMAND_OPTIONS
@@ -131,14 +131,14 @@ const saveProjectTypeCommand = useCommand({
   },
   onRunSuccess: loadProjectState,
   ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-  placementSource: "ai-studio.project-type.save",
-  surfaceId: AI_STUDIO_SURFACE_ID,
+  placementSource: "vibe64.project-type.save",
+  surfaceId: VIBE64_SURFACE_ID,
   writeMethod: "PUT"
 });
 
 const saveProjectConfigCommand = useCommand({
   access: "never",
-  apiSuffix: AI_STUDIO_PROJECT_CONFIG_API_SUFFIX,
+  apiSuffix: VIBE64_PROJECT_CONFIG_API_SUFFIX,
   buildCommandOptions: () => ({
     method: "PUT",
     options: LOCAL_STUDIO_COMMAND_OPTIONS
@@ -153,8 +153,8 @@ const saveProjectConfigCommand = useCommand({
   },
   onRunSuccess: loadProjectState,
   ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-  placementSource: "ai-studio.project-config.save",
-  surfaceId: AI_STUDIO_SURFACE_ID,
+  placementSource: "vibe64.project-config.save",
+  surfaceId: VIBE64_SURFACE_ID,
   writeMethod: "PUT"
 });
 

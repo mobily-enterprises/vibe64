@@ -2,13 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  AI_STUDIO_SESSION_CHANGED_EVENT,
-  aiStudioSessionChangedServiceEvent,
-  createAiStudioSessionChangedPublisher
-} from "@local/ai-studio-core/server/sessionRealtimeEvents";
+  VIBE64_SESSION_CHANGED_EVENT,
+  vibe64SessionChangedServiceEvent,
+  createVibe64SessionChangedPublisher
+} from "@local/vibe64-core/server/sessionRealtimeEvents";
 
-test("AI Studio session service event describes a realtime session change", () => {
-  const event = aiStudioSessionChangedServiceEvent();
+test("Vibe64 session service event describes a realtime session change", () => {
+  const event = vibe64SessionChangedServiceEvent();
   const entityId = event.entityId({
     args: ["session-from-args"],
     result: {
@@ -23,10 +23,10 @@ test("AI Studio session service event describes a realtime session change", () =
   });
 
   assert.equal(event.type, "entity.changed");
-  assert.equal(event.source, "ai-studio");
+  assert.equal(event.source, "vibe64");
   assert.equal(event.entity, "session");
   assert.equal(event.operation, "updated");
-  assert.equal(event.realtime.event, AI_STUDIO_SESSION_CHANGED_EVENT);
+  assert.equal(event.realtime.event, VIBE64_SESSION_CHANGED_EVENT);
   assert.equal(event.realtime.audience, "all_clients");
   assert.equal(entityId, "session-from-result");
   assert.deepEqual(payload, {
@@ -34,8 +34,8 @@ test("AI Studio session service event describes a realtime session change", () =
   });
 });
 
-test("AI Studio session service event includes session revision context when available", () => {
-  const event = aiStudioSessionChangedServiceEvent();
+test("Vibe64 session service event includes session revision context when available", () => {
+  const event = vibe64SessionChangedServiceEvent();
   const payload = event.realtime.payload({
     result: {
       currentStep: "project_validated",
@@ -57,16 +57,16 @@ test("AI Studio session service event includes session revision context when ava
   });
 });
 
-test("AI Studio session change publisher emits service-scoped domain events", async () => {
+test("Vibe64 session change publisher emits service-scoped domain events", async () => {
   const events = [];
-  const publish = createAiStudioSessionChangedPublisher({
+  const publish = createVibe64SessionChangedPublisher({
     domainEvents: {
       async publish(event) {
         events.push(event);
       }
     },
     methodName: "startCommandTerminal",
-    serviceToken: "feature.ai-studio-terminals.service"
+    serviceToken: "feature.vibe64-terminals.service"
   });
 
   await publish("session-1", {
@@ -74,15 +74,15 @@ test("AI Studio session change publisher emits service-scoped domain events", as
   });
 
   assert.equal(events.length, 1);
-  assert.equal(events[0].source, "ai-studio");
+  assert.equal(events[0].source, "vibe64");
   assert.equal(events[0].entity, "session");
   assert.equal(events[0].entityId, "session-1");
   assert.deepEqual(events[0].meta.service, {
     method: "startCommandTerminal",
-    token: "feature.ai-studio-terminals.service"
+    token: "feature.vibe64-terminals.service"
   });
   assert.deepEqual(events[0].meta.realtime, {
-    event: AI_STUDIO_SESSION_CHANGED_EVENT,
+    event: VIBE64_SESSION_CHANGED_EVENT,
     payload: {
       reason: "command-terminal-closed",
       sessionId: "session-1"

@@ -2,13 +2,13 @@ import { withActionDefaults } from "@jskit-ai/kernel/shared/actions";
 
 import {
   createService,
-  resolveAiStudioAccountsRoot
+  resolveVibe64AccountsRoot
 } from "./service.js";
 import { featureActions } from "./actions.js";
 import { registerRoutes } from "./registerRoutes.js";
 
-class AiStudioAccountsProvider {
-  static id = "feature.ai-studio-accounts";
+class Vibe64AccountsProvider {
+  static id = "feature.vibe64-accounts";
 
   static dependsOn = ["runtime.actions"];
 
@@ -18,13 +18,13 @@ class AiStudioAccountsProvider {
       typeof app.service !== "function" ||
       typeof app.actions !== "function"
     ) {
-      throw new Error("AiStudioAccountsProvider requires application service()/actions().");
+      throw new Error("Vibe64AccountsProvider requires application service()/actions().");
     }
 
-    const targetRoot = resolveAiStudioAccountsRoot();
+    const targetRoot = resolveVibe64AccountsRoot();
 
     app.service(
-      "feature.ai-studio-accounts.service",
+      "feature.vibe64-accounts.service",
       () => {
         return createService({
           targetRoot
@@ -36,7 +36,7 @@ class AiStudioAccountsProvider {
       withActionDefaults(featureActions, {
         domain: "feature",
         dependencies: {
-          featureService: "feature.ai-studio-accounts.service"
+          featureService: "feature.vibe64-accounts.service"
         }
       })
     );
@@ -44,10 +44,10 @@ class AiStudioAccountsProvider {
 
   boot(app) {
     registerRoutes(app, {
-      routeRelativePath: "ai-studio/accounts",
+      routeRelativePath: "vibe64/accounts",
       routeSurface: "home"
     });
   }
 }
 
-export { AiStudioAccountsProvider };
+export { Vibe64AccountsProvider };

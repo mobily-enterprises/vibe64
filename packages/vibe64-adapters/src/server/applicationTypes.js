@@ -1,16 +1,16 @@
 import {
-  aiStudioError,
+  vibe64Error,
   normalizeText
-} from "@local/ai-studio-core/server/core";
+} from "@local/vibe64-core/server/core";
 import {
   deepFreeze
-} from "@local/ai-studio-core/server/deepFreeze";
+} from "@local/vibe64-core/server/deepFreeze";
 
-const AI_STUDIO_APPLICATION_TYPE_WEB = "web_application";
-const AI_STUDIO_APPLICATION_TYPE_PHONE = "phone_app";
-const AI_STUDIO_APPLICATION_TYPE_SYSTEM = "system_program";
+const VIBE64_APPLICATION_TYPE_WEB = "web_application";
+const VIBE64_APPLICATION_TYPE_PHONE = "phone_app";
+const VIBE64_APPLICATION_TYPE_SYSTEM = "system_program";
 
-const AI_STUDIO_APPLICATION_TYPES = deepFreeze([
+const VIBE64_APPLICATION_TYPES = deepFreeze([
   {
     description: "Browser-based products, dashboards, admin systems, SaaS apps, and full-stack web applications.",
     iconPaths: [
@@ -19,7 +19,7 @@ const AI_STUDIO_APPLICATION_TYPES = deepFreeze([
       "M18 40h10M36 40h10M18 48h28"
     ],
     iconViewBox: "0 0 64 64",
-    id: AI_STUDIO_APPLICATION_TYPE_WEB,
+    id: VIBE64_APPLICATION_TYPE_WEB,
     label: "Web application",
     summary: "Build something people use in a browser."
   },
@@ -31,7 +31,7 @@ const AI_STUDIO_APPLICATION_TYPES = deepFreeze([
       "M29 51h6"
     ],
     iconViewBox: "0 0 64 64",
-    id: AI_STUDIO_APPLICATION_TYPE_PHONE,
+    id: VIBE64_APPLICATION_TYPE_PHONE,
     label: "Phone app",
     summary: "Build a mobile app from a web app base."
   },
@@ -43,13 +43,13 @@ const AI_STUDIO_APPLICATION_TYPES = deepFreeze([
       "M34 43h13"
     ],
     iconViewBox: "0 0 64 64",
-    id: AI_STUDIO_APPLICATION_TYPE_SYSTEM,
+    id: VIBE64_APPLICATION_TYPE_SYSTEM,
     label: "System program",
     summary: "Build native software that runs close to the machine."
   }
 ]);
 
-const APPLICATION_TYPES_BY_ID = new Map(AI_STUDIO_APPLICATION_TYPES.map((applicationType) => [
+const APPLICATION_TYPES_BY_ID = new Map(VIBE64_APPLICATION_TYPES.map((applicationType) => [
   applicationType.id,
   applicationType
 ]));
@@ -74,9 +74,9 @@ function requireApplicationType(id = "", {
   const definition = APPLICATION_TYPES_BY_ID.get(normalizedId);
   if (!definition) {
     const adapterText = adapterId ? ` for adapter ${adapterId}` : "";
-    throw aiStudioError(
-      `Unknown AI Studio application type${adapterText}: ${normalizedId || "(empty)"}.`,
-      "ai_studio_unknown_application_type"
+    throw vibe64Error(
+      `Unknown Vibe64 application type${adapterText}: ${normalizedId || "(empty)"}.`,
+      "vibe64_unknown_application_type"
     );
   }
   return definition;
@@ -118,9 +118,9 @@ function normalizeApplicationTypeCoverageList(coverageList = [], {
   const uniqueCoverage = [];
   for (const coverage of normalizedCoverage) {
     if (seen.has(coverage.id)) {
-      throw aiStudioError(
-        `Duplicate AI Studio application type for adapter ${adapterId || "(unknown)"}: ${coverage.id}.`,
-        "ai_studio_duplicate_application_type"
+      throw vibe64Error(
+        `Duplicate Vibe64 application type for adapter ${adapterId || "(unknown)"}: ${coverage.id}.`,
+        "vibe64_duplicate_application_type"
       );
     }
     seen.add(coverage.id);
@@ -130,10 +130,10 @@ function normalizeApplicationTypeCoverageList(coverageList = [], {
 }
 
 export {
-  AI_STUDIO_APPLICATION_TYPES,
-  AI_STUDIO_APPLICATION_TYPE_PHONE,
-  AI_STUDIO_APPLICATION_TYPE_SYSTEM,
-  AI_STUDIO_APPLICATION_TYPE_WEB,
+  VIBE64_APPLICATION_TYPES,
+  VIBE64_APPLICATION_TYPE_PHONE,
+  VIBE64_APPLICATION_TYPE_SYSTEM,
+  VIBE64_APPLICATION_TYPE_WEB,
   normalizeApplicationTypeCoverageList,
   publicApplicationType
 };

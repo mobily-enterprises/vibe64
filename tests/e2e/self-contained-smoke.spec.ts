@@ -102,7 +102,7 @@ async function mockReadyStudioShell(page: Page) {
       }
     ],
     [
-      "/api/ai-studio/project-type",
+      "/api/vibe64/project-type",
       {
         ok: true,
         projectType: {
@@ -119,7 +119,7 @@ async function mockReadyStudioShell(page: Page) {
           ],
           errorCode: "",
           message: "",
-          path: `${targetRoot}/.ai-studio/project_type`,
+          path: `${targetRoot}/.vibe64/project_type`,
           projectType: "jskit",
           ready: true,
           status: "ready",
@@ -128,14 +128,14 @@ async function mockReadyStudioShell(page: Page) {
       }
     ],
     [
-      "/api/ai-studio/project-config",
+      "/api/vibe64/project-config",
       {
         config: {
           adapter: {
             id: "jskit",
             label: "JSKIT target adapter"
           },
-          configRoot: `${targetRoot}/.ai-studio/config`,
+          configRoot: `${targetRoot}/.vibe64/config`,
           defaults: savedProjectConfigValues,
           fields: [],
           fieldValues: Object.fromEntries(
@@ -143,20 +143,20 @@ async function mockReadyStudioShell(page: Page) {
               fieldId,
               {
                 defaultValue: value,
-                filePath: `${targetRoot}/.ai-studio/config/${fieldId}`,
+                filePath: `${targetRoot}/.vibe64/config/${fieldId}`,
                 invalid: null,
                 saved: true,
                 value
               }
             ])
           ),
-          helperPath: `${targetRoot}/.ai-studio/runtime/ai-studio-config.sh`,
+          helperPath: `${targetRoot}/.vibe64/runtime/vibe64-config.sh`,
           invalid: [],
           message: "",
           missing: [],
           projectType: "jskit",
           ready: true,
-          runtimeRoot: `${targetRoot}/.ai-studio/runtime`,
+          runtimeRoot: `${targetRoot}/.vibe64/runtime`,
           sections: [],
           values: savedProjectConfigValues
         },
@@ -164,7 +164,7 @@ async function mockReadyStudioShell(page: Page) {
       }
     ],
     [
-      "/api/ai-studio/accounts",
+      "/api/vibe64/accounts",
       {
         accounts: [
           {
@@ -235,7 +235,7 @@ async function mockReadyStudioShell(page: Page) {
       }
     ],
     [
-      "/api/ai-studio/sessions",
+      "/api/vibe64/sessions",
       {
         creation: {
           canCreate: true,
@@ -297,7 +297,7 @@ async function mockReadyStudioShell(page: Page) {
       await fulfillJson(route, apiPayloads.get(url.pathname));
     }
 
-    if (url.pathname === "/api/ai-studio/project-config") {
+    if (url.pathname === "/api/vibe64/project-config") {
       markProjectConfigResolved();
     }
   });

@@ -3,42 +3,42 @@ import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibil
 import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
 import { usersWebHttpClient } from "@jskit-ai/users-web/client/lib/httpClient";
 import {
-  AI_STUDIO_ACTION_DISPATCH_ROUTES as ACTION_DISPATCH_ROUTES
-} from "@local/ai-studio-core/shared";
+  VIBE64_ACTION_DISPATCH_ROUTES as ACTION_DISPATCH_ROUTES
+} from "@local/vibe64-core/shared";
 import {
   normalizeActionInputFields
-} from "@/lib/aiStudioActionInputModel.js";
+} from "@/lib/vibe64ActionInputModel.js";
 import {
-  aiStudioActionIcon as actionIcon,
+  vibe64ActionIcon as actionIcon,
   commandMessage,
   currentStepDisabledReason as resolveCurrentStepDisabledReason
-} from "@/lib/aiStudioSessionPanelModel.js";
+} from "@/lib/vibe64SessionPanelModel.js";
 import {
-  AI_STUDIO_SESSIONS_API_SUFFIX,
-  AI_STUDIO_SURFACE_ID,
+  VIBE64_SESSIONS_API_SUFFIX,
+  VIBE64_SURFACE_ID,
   LOCAL_STUDIO_COMMAND_OPTIONS,
-  aiStudioActionPath,
-  aiStudioIntentPath,
-  aiStudioSessionPath,
+  vibe64ActionPath,
+  vibe64IntentPath,
+  vibe64SessionPath,
   commandInputFromContext
-} from "@/lib/aiStudioSessionRequestConfig.js";
+} from "@/lib/vibe64SessionRequestConfig.js";
 import {
-  aiStudioSessionWorktreePath
-} from "@/lib/aiStudioSessionPaths.js";
+  vibe64SessionWorktreePath
+} from "@/lib/vibe64SessionPaths.js";
 import {
   readRefOrGetterBoolean
 } from "@/lib/vueRefOrGetterValue.js";
 import {
-  AI_STUDIO_CLIENT_CONTROL_ACTIONS,
+  VIBE64_CLIENT_CONTROL_ACTIONS,
   controlHasClientAction,
   controlUsesClientAction
-} from "@/lib/aiStudioPresentationControls.js";
+} from "@/lib/vibe64PresentationControls.js";
 import {
-  aiStudioSessionDebugDurationMs,
-  aiStudioSessionDebugError,
-  aiStudioSessionDebugLog,
-  aiStudioSessionDebugSummary
-} from "@/lib/aiStudioSessionDebugLog.js";
+  vibe64SessionDebugDurationMs,
+  vibe64SessionDebugError,
+  vibe64SessionDebugLog,
+  vibe64SessionDebugSummary
+} from "@/lib/vibe64SessionDebugLog.js";
 
 function displayableActionResultMessage(result = {}) {
   const message = String(result?.message || "");
@@ -64,7 +64,7 @@ function staleAdvanceError(error = {}) {
     String(error?.operationOutcome || "") === "stale_operation";
 }
 
-function useAiStudioSessionActions({
+function useVibe64SessionActions({
   clearCopyStatus = () => null,
   commandBusy = () => false,
   commandTerminal,
@@ -85,21 +85,21 @@ function useAiStudioSessionActions({
 
   const runActionCommand = useCommand({
     access: "never",
-    apiSuffix: AI_STUDIO_SESSIONS_API_SUFFIX,
+    apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
     buildRawPayload: (_model, { context }) => commandInputFromContext(context),
     buildCommandOptions: (_payload, { context }) => ({
       method: "POST",
       options: LOCAL_STUDIO_COMMAND_OPTIONS,
-      path: aiStudioActionPath(sessionsApiPath.value, context?.sessionId, context?.actionId)
+      path: vibe64ActionPath(sessionsApiPath.value, context?.sessionId, context?.actionId)
     }),
-    fallbackRunError: "AI Studio action could not run.",
+    fallbackRunError: "Vibe64 action could not run.",
     messages: {
-      error: "AI Studio action could not run.",
-      success: "AI Studio action completed."
+      error: "Vibe64 action could not run.",
+      success: "Vibe64 action completed."
     },
     onRunSuccess: async (response, { context } = {}) => {
-      aiStudioSessionDebugLog("client.sessionActions.runAction.success", {
-        ...aiStudioSessionDebugSummary(response || {}),
+      vibe64SessionDebugLog("client.sessionActions.runAction.success", {
+        ...vibe64SessionDebugSummary(response || {}),
         actionId: String(context?.actionId || ""),
         actionResultStatus: String(response?.actionResult?.status || ""),
         advanceOnSuccess: context?.advanceOnSuccess === true
@@ -107,28 +107,28 @@ function useAiStudioSessionActions({
       await refreshSessionData();
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "ai-studio.sessions.action",
-    surfaceId: AI_STUDIO_SURFACE_ID,
+    placementSource: "vibe64.sessions.action",
+    surfaceId: VIBE64_SURFACE_ID,
     writeMethod: "POST"
   });
 
   const runIntentCommand = useCommand({
     access: "never",
-    apiSuffix: AI_STUDIO_SESSIONS_API_SUFFIX,
+    apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
     buildRawPayload: (_model, { context }) => intentInputFromContext(context),
     buildCommandOptions: (_payload, { context }) => ({
       method: "POST",
       options: LOCAL_STUDIO_COMMAND_OPTIONS,
-      path: aiStudioIntentPath(sessionsApiPath.value, context?.sessionId, context?.intentId)
+      path: vibe64IntentPath(sessionsApiPath.value, context?.sessionId, context?.intentId)
     }),
-    fallbackRunError: "AI Studio intent could not run.",
+    fallbackRunError: "Vibe64 intent could not run.",
     messages: {
-      error: "AI Studio intent could not run.",
-      success: "AI Studio intent completed."
+      error: "Vibe64 intent could not run.",
+      success: "Vibe64 intent completed."
     },
     onRunSuccess: async (response, { context } = {}) => {
-      aiStudioSessionDebugLog("client.sessionActions.runIntent.success", {
-        ...aiStudioSessionDebugSummary(response || {}),
+      vibe64SessionDebugLog("client.sessionActions.runIntent.success", {
+        ...vibe64SessionDebugSummary(response || {}),
         intentId: String(context?.intentId || ""),
         requestedStepId: String(context?.stepId || ""),
         requestedStepStatus: String(context?.stepStatus || "")
@@ -136,8 +136,8 @@ function useAiStudioSessionActions({
       await refreshSessionData();
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "ai-studio.sessions.intent",
-    surfaceId: AI_STUDIO_SURFACE_ID,
+    placementSource: "vibe64.sessions.intent",
+    surfaceId: VIBE64_SURFACE_ID,
     writeMethod: "POST"
   });
 
@@ -156,27 +156,27 @@ function useAiStudioSessionActions({
 
   const rewindCommand = useCommand({
     access: "never",
-    apiSuffix: AI_STUDIO_SESSIONS_API_SUFFIX,
+    apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
     buildRawPayload: (_model, { context }) => ({
       stepId: String(context?.stepId || "")
     }),
     buildCommandOptions: (_payload, { context }) => ({
       method: "POST",
       options: LOCAL_STUDIO_COMMAND_OPTIONS,
-      path: aiStudioSessionPath(sessionsApiPath.value, context?.sessionId, "/rewind")
+      path: vibe64SessionPath(sessionsApiPath.value, context?.sessionId, "/rewind")
     }),
-    fallbackRunError: "AI Studio session could not rewind.",
+    fallbackRunError: "Vibe64 session could not rewind.",
     messages: {
-      error: "AI Studio session could not rewind.",
-      success: "AI Studio session rewound."
+      error: "Vibe64 session could not rewind.",
+      success: "Vibe64 session rewound."
     },
     onRunSuccess: async () => {
       onRewindSuccess();
       await refreshSessionData();
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "ai-studio.sessions.rewind",
-    surfaceId: AI_STUDIO_SURFACE_ID,
+    placementSource: "vibe64.sessions.rewind",
+    surfaceId: VIBE64_SURFACE_ID,
     writeMethod: "POST"
   });
 
@@ -189,7 +189,7 @@ function useAiStudioSessionActions({
   const currentActions = computed(() => {
     return baseCurrentActions.value;
   });
-  const worktreeReady = computed(() => Boolean(aiStudioSessionWorktreePath(selectedSession.value || {})));
+  const worktreeReady = computed(() => Boolean(vibe64SessionWorktreePath(selectedSession.value || {})));
   const latestActionResult = computed(() => {
     if (selectedSession.value?.actionResult) {
       return selectedSession.value.actionResult;
@@ -220,7 +220,7 @@ function useAiStudioSessionActions({
   const acceptChangesUtilitiesVisible = computed(() => {
     const intents = Array.isArray(selectedSession.value?.intents) ? selectedSession.value.intents : [];
     return intents.some((intent) => (
-      controlUsesClientAction(intent, AI_STUDIO_CLIENT_CONTROL_ACTIONS.OPEN_DIFF) &&
+      controlUsesClientAction(intent, VIBE64_CLIENT_CONTROL_ACTIONS.OPEN_DIFF) &&
       intent.enabled !== false
     ));
   });
@@ -256,25 +256,25 @@ function useAiStudioSessionActions({
     advanceMessageType.value = "success";
     try {
       const response = await usersWebHttpClient.request(
-        aiStudioSessionPath(sessionsApiPath.value, normalizedSessionId, "/advance"),
+        vibe64SessionPath(sessionsApiPath.value, normalizedSessionId, "/advance"),
         {
           method: "POST",
           ...LOCAL_STUDIO_COMMAND_OPTIONS
         }
       );
-      aiStudioSessionDebugLog("client.sessionActions.advanceCommand.success", {
-        ...aiStudioSessionDebugSummary(response || selectedSession.value || {}),
+      vibe64SessionDebugLog("client.sessionActions.advanceCommand.success", {
+        ...vibe64SessionDebugSummary(response || selectedSession.value || {}),
         selectedSessionId: String(unref(selectedSessionId) || "")
       });
-      advanceMessage.value = "AI Studio session advanced.";
+      advanceMessage.value = "Vibe64 session advanced.";
       await refreshSessionData();
       return response;
     } catch (error) {
       if (staleAdvanceError(error)) {
-        aiStudioSessionDebugLog("client.sessionActions.advanceCommand.stale", {
-          ...aiStudioSessionDebugSummary(selectedSession.value || {}),
+        vibe64SessionDebugLog("client.sessionActions.advanceCommand.stale", {
+          ...vibe64SessionDebugSummary(selectedSession.value || {}),
           code: String(error?.code || ""),
-          error: aiStudioSessionDebugError(error),
+          error: vibe64SessionDebugError(error),
           selectedSessionId: String(unref(selectedSessionId) || ""),
           sessionId: normalizedSessionId,
           status: error?.status ?? null
@@ -289,7 +289,7 @@ function useAiStudioSessionActions({
         };
       }
       advanceMessageType.value = "error";
-      advanceMessage.value = String(error?.message || "AI Studio session could not advance.");
+      advanceMessage.value = String(error?.message || "Vibe64 session could not advance.");
       throw error;
     } finally {
       advanceRunning.value = false;
@@ -306,7 +306,7 @@ function useAiStudioSessionActions({
     const normalizedSessionId = String(sessionId || "").trim();
     const busy = readRefOrGetterBoolean(commandBusy);
     if (!normalizedSessionId || !normalizedActionId || busy) {
-      aiStudioSessionDebugLog("client.sessionActions.runActionById.skipped", {
+      vibe64SessionDebugLog("client.sessionActions.runActionById.skipped", {
         actionId: normalizedActionId,
         busy,
         reason: !normalizedSessionId ? "missing_session" : !normalizedActionId ? "missing_action" : "busy",
@@ -315,8 +315,8 @@ function useAiStudioSessionActions({
       return;
     }
     const startedAtMs = Date.now();
-    aiStudioSessionDebugLog("client.sessionActions.runActionById.start", {
-      ...aiStudioSessionDebugSummary(selectedSession.value || {}),
+    vibe64SessionDebugLog("client.sessionActions.runActionById.start", {
+      ...vibe64SessionDebugSummary(selectedSession.value || {}),
       actionId: normalizedActionId,
       advanceOnSuccess: advanceOnSuccess === true,
       inputKeys: Object.keys(input && typeof input === "object" && !Array.isArray(input) ? input : {}).sort(),
@@ -331,20 +331,20 @@ function useAiStudioSessionActions({
         input: input && typeof input === "object" && !Array.isArray(input) ? input : {},
         sessionId: normalizedSessionId
       });
-      aiStudioSessionDebugLog("client.sessionActions.runActionById.done", {
-        ...aiStudioSessionDebugSummary(response || {}),
+      vibe64SessionDebugLog("client.sessionActions.runActionById.done", {
+        ...vibe64SessionDebugSummary(response || {}),
         actionId: normalizedActionId,
         actionResultStatus: String(response?.actionResult?.status || ""),
-        durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
         ok: response?.ok !== false,
         sessionId: normalizedSessionId
       });
       return response;
     } catch (error) {
-      aiStudioSessionDebugLog("client.sessionActions.runActionById.error", {
+      vibe64SessionDebugLog("client.sessionActions.runActionById.error", {
         actionId: normalizedActionId,
-        durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
-        error: aiStudioSessionDebugError(error),
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+        error: vibe64SessionDebugError(error),
         sessionId: normalizedSessionId
       });
       throw error;
@@ -365,22 +365,22 @@ function useAiStudioSessionActions({
     recoverStuckStepMessageType.value = "success";
     try {
       const response = await usersWebHttpClient.request(
-        aiStudioSessionPath(sessionsApiPath.value, normalizedSessionId, "/recover-stuck-step"),
+        vibe64SessionPath(sessionsApiPath.value, normalizedSessionId, "/recover-stuck-step"),
         {
           method: "POST",
           ...LOCAL_STUDIO_COMMAND_OPTIONS
         }
       );
-      aiStudioSessionDebugLog("client.sessionActions.recoverStuckStepCommand.success", {
-        ...aiStudioSessionDebugSummary(response || selectedSession.value || {}),
+      vibe64SessionDebugLog("client.sessionActions.recoverStuckStepCommand.success", {
+        ...vibe64SessionDebugSummary(response || selectedSession.value || {}),
         selectedSessionId: String(unref(selectedSessionId) || "")
       });
-      recoverStuckStepMessage.value = "AI Studio session step recovered.";
+      recoverStuckStepMessage.value = "Vibe64 session step recovered.";
       await refreshSessionData();
       return response;
     } catch (error) {
       recoverStuckStepMessageType.value = "error";
-      recoverStuckStepMessage.value = String(error?.message || "AI Studio session step could not be recovered.");
+      recoverStuckStepMessage.value = String(error?.message || "Vibe64 session step could not be recovered.");
       throw error;
     } finally {
       recoverStuckStepRunning.value = false;
@@ -393,8 +393,8 @@ function useAiStudioSessionActions({
     const normalizedSessionId = String(sessionId || "").trim();
     const busy = readRefOrGetterBoolean(commandBusy);
     if (!normalizedSessionId || busy) {
-      aiStudioSessionDebugLog("client.sessionActions.recoverStuckStep.skipped", {
-        ...aiStudioSessionDebugSummary(selectedSession.value || {}),
+      vibe64SessionDebugLog("client.sessionActions.recoverStuckStep.skipped", {
+        ...vibe64SessionDebugSummary(selectedSession.value || {}),
         busy,
         reason: !normalizedSessionId ? "missing_session" : "busy",
         sessionId: normalizedSessionId
@@ -402,26 +402,26 @@ function useAiStudioSessionActions({
       return null;
     }
     const startedAtMs = Date.now();
-    aiStudioSessionDebugLog("client.sessionActions.recoverStuckStep.start", {
-      ...aiStudioSessionDebugSummary(selectedSession.value || {}),
+    vibe64SessionDebugLog("client.sessionActions.recoverStuckStep.start", {
+      ...vibe64SessionDebugSummary(selectedSession.value || {}),
       sessionId: normalizedSessionId
     });
     try {
       const response = await recoverStuckStepCommand.run({
         sessionId: normalizedSessionId
       });
-      aiStudioSessionDebugLog("client.sessionActions.recoverStuckStep.done", {
-        ...aiStudioSessionDebugSummary(response || selectedSession.value || {}),
-        durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
+      vibe64SessionDebugLog("client.sessionActions.recoverStuckStep.done", {
+        ...vibe64SessionDebugSummary(response || selectedSession.value || {}),
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
         ok: response?.ok !== false,
         sessionId: normalizedSessionId
       });
       commandTerminal.clear();
       return response;
     } catch (error) {
-      aiStudioSessionDebugLog("client.sessionActions.recoverStuckStep.error", {
-        durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
-        error: aiStudioSessionDebugError(error),
+      vibe64SessionDebugLog("client.sessionActions.recoverStuckStep.error", {
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+        error: vibe64SessionDebugError(error),
         sessionId: normalizedSessionId
       });
       throw error;
@@ -439,7 +439,7 @@ function useAiStudioSessionActions({
     const normalizedSessionId = String(sessionId || "").trim();
     const busy = readRefOrGetterBoolean(commandBusy);
     if (!normalizedSessionId || !normalizedIntentId || busy) {
-      aiStudioSessionDebugLog("client.sessionActions.runIntentById.skipped", {
+      vibe64SessionDebugLog("client.sessionActions.runIntentById.skipped", {
         busy,
         intentId: normalizedIntentId,
         reason: !normalizedSessionId ? "missing_session" : !normalizedIntentId ? "missing_intent" : "busy",
@@ -448,8 +448,8 @@ function useAiStudioSessionActions({
       return;
     }
     const startedAtMs = Date.now();
-    aiStudioSessionDebugLog("client.sessionActions.runIntentById.start", {
-      ...aiStudioSessionDebugSummary(selectedSession.value || {}),
+    vibe64SessionDebugLog("client.sessionActions.runIntentById.start", {
+      ...vibe64SessionDebugSummary(selectedSession.value || {}),
       fieldKeys: Object.keys(fields && typeof fields === "object" && !Array.isArray(fields) ? fields : {}).sort(),
       intentId: normalizedIntentId,
       sessionId: normalizedSessionId,
@@ -466,18 +466,18 @@ function useAiStudioSessionActions({
         stepId,
         stepStatus
       });
-      aiStudioSessionDebugLog("client.sessionActions.runIntentById.done", {
-        ...aiStudioSessionDebugSummary(response || {}),
-        durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
+      vibe64SessionDebugLog("client.sessionActions.runIntentById.done", {
+        ...vibe64SessionDebugSummary(response || {}),
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
         intentId: normalizedIntentId,
         ok: response?.ok !== false,
         sessionId: normalizedSessionId
       });
       return response;
     } catch (error) {
-      aiStudioSessionDebugLog("client.sessionActions.runIntentById.error", {
-        durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
-        error: aiStudioSessionDebugError(error),
+      vibe64SessionDebugLog("client.sessionActions.runIntentById.error", {
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+        error: vibe64SessionDebugError(error),
         intentId: normalizedIntentId,
         sessionId: normalizedSessionId
       });
@@ -493,8 +493,8 @@ function useAiStudioSessionActions({
     const normalizedSessionId = String(sessionId || "").trim();
     const busy = readRefOrGetterBoolean(commandBusy);
     if (!normalizedSessionId || busy || currentNext.value?.enabled !== true) {
-      aiStudioSessionDebugLog("client.sessionActions.advanceSession.skipped", {
-        ...aiStudioSessionDebugSummary(selectedSession.value || {}),
+      vibe64SessionDebugLog("client.sessionActions.advanceSession.skipped", {
+        ...vibe64SessionDebugSummary(selectedSession.value || {}),
         busy,
         nextDisabledReason: String(currentNext.value?.disabledReason || ""),
         reason: !normalizedSessionId ? "missing_session" : busy ? "busy" : "next_disabled",
@@ -503,17 +503,17 @@ function useAiStudioSessionActions({
       return;
     }
     const startedAtMs = Date.now();
-    aiStudioSessionDebugLog("client.sessionActions.advanceSession.start", {
-      ...aiStudioSessionDebugSummary(selectedSession.value || {}),
+    vibe64SessionDebugLog("client.sessionActions.advanceSession.start", {
+      ...vibe64SessionDebugSummary(selectedSession.value || {}),
       sessionId: normalizedSessionId
     });
     try {
       const response = await advanceCommand.run({
         sessionId: normalizedSessionId
       });
-      aiStudioSessionDebugLog("client.sessionActions.advanceSession.done", {
-        ...aiStudioSessionDebugSummary(response || selectedSession.value || {}),
-        durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
+      vibe64SessionDebugLog("client.sessionActions.advanceSession.done", {
+        ...vibe64SessionDebugSummary(response || selectedSession.value || {}),
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
         ok: response?.ok !== false,
         sessionId: normalizedSessionId
       });
@@ -522,9 +522,9 @@ function useAiStudioSessionActions({
       }
       return response;
     } catch (error) {
-      aiStudioSessionDebugLog("client.sessionActions.advanceSession.error", {
-        durationMs: aiStudioSessionDebugDurationMs(startedAtMs),
-        error: aiStudioSessionDebugError(error),
+      vibe64SessionDebugLog("client.sessionActions.advanceSession.error", {
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+        error: vibe64SessionDebugError(error),
         sessionId: normalizedSessionId
       });
       throw error;
@@ -534,7 +534,7 @@ function useAiStudioSessionActions({
   async function runAction(action = {}, options = {}) {
     const busy = readRefOrGetterBoolean(commandBusy);
     if (!unref(selectedSessionId) || !action.id || busy || action.enabled !== true) {
-      aiStudioSessionDebugLog("client.sessionActions.runAction.skipped", {
+      vibe64SessionDebugLog("client.sessionActions.runAction.skipped", {
         actionId: String(action.id || ""),
         actionEnabled: action.enabled === true,
         busy,
@@ -555,7 +555,7 @@ function useAiStudioSessionActions({
       return;
     }
     if (actionDispatchRoute(action) === ACTION_DISPATCH_ROUTES.COMMAND_TERMINAL) {
-      aiStudioSessionDebugLog("client.sessionActions.runAction.commandTerminal.start", {
+      vibe64SessionDebugLog("client.sessionActions.runAction.commandTerminal.start", {
         actionId: String(action.id || ""),
         sessionId: String(unref(selectedSessionId) || "")
       });
@@ -572,7 +572,7 @@ function useAiStudioSessionActions({
   async function runIntent(intent = {}, options = {}) {
     const busy = readRefOrGetterBoolean(commandBusy);
     if (!unref(selectedSessionId) || !intent.id || busy || intent.enabled !== true) {
-      aiStudioSessionDebugLog("client.sessionActions.runIntent.skipped", {
+      vibe64SessionDebugLog("client.sessionActions.runIntent.skipped", {
         busy,
         intentEnabled: intent.enabled === true,
         intentId: String(intent.id || ""),
@@ -643,5 +643,5 @@ function useAiStudioSessionActions({
 }
 
 export {
-  useAiStudioSessionActions
+  useVibe64SessionActions
 };

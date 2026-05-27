@@ -2,8 +2,8 @@ import { nextTick, ref } from "vue";
 import { describe, expect, it } from "vitest";
 
 import {
-  useAiStudioAutopilotComposer
-} from "../../src/composables/useAiStudioAutopilotComposer.js";
+  useVibe64AutopilotComposer
+} from "../../src/composables/useVibe64AutopilotComposer.js";
 
 function conversationControl(overrides = {}) {
   return {
@@ -31,7 +31,7 @@ function conversationControl(overrides = {}) {
   };
 }
 
-describe("useAiStudioAutopilotComposer", () => {
+describe("useVibe64AutopilotComposer", () => {
   it("selects the primary input control and hides it from workflow controls", async () => {
     const controls = ref([
       conversationControl(),
@@ -41,7 +41,7 @@ describe("useAiStudioAutopilotComposer", () => {
         label: "Retry"
       }
     ]);
-    const composer = useAiStudioAutopilotComposer({
+    const composer = useVibe64AutopilotComposer({
       controls,
       conversationLog: ref({}),
       primaryIntentId: ref("talk_to_codex"),
@@ -57,7 +57,7 @@ describe("useAiStudioAutopilotComposer", () => {
 
   it("submits numbered Codex questions as one conversationRequest field", async () => {
     let submitted = null;
-    const composer = useAiStudioAutopilotComposer({
+    const composer = useVibe64AutopilotComposer({
       controls: ref([conversationControl()]),
       conversationLog: ref({
         turns: [
@@ -98,7 +98,7 @@ describe("useAiStudioAutopilotComposer", () => {
   });
 
   it("does not infer numbered question behavior without server input metadata", async () => {
-    const composer = useAiStudioAutopilotComposer({
+    const composer = useVibe64AutopilotComposer({
       controls: ref([conversationControl({
         input: null
       })]),

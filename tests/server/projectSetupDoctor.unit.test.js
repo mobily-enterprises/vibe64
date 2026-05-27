@@ -9,8 +9,8 @@ import path from "node:path";
 import test from "node:test";
 
 import {
-  ADD_AI_STUDIO_GITIGNORE_RULES_ACTION_ID,
-  AI_STUDIO_LOCAL_STATE_GITIGNORE_PATTERNS,
+  ADD_VIBE64_GITIGNORE_RULES_ACTION_ID,
+  VIBE64_LOCAL_STATE_GITIGNORE_PATTERNS,
   MIRROR_REMOTE_BRANCH_ACTION_ID,
   mirrorRemoteBranchScript
 } from "@local/setup-doctor-core/server/setupDoctorGit";
@@ -25,7 +25,7 @@ import {
   githubBranchRefApiPath,
   inspectProjectSetup
 } from "../../packages/project-setup-doctor/src/server/service.js";
-import { withTemporaryRoot } from "./aiStudioTestHelpers.js";
+import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 function assertShellScriptSurvivesWhitespaceCollapse(script) {
   const flattened = script.replace(/\s+/gu, " ");
@@ -109,12 +109,12 @@ test("Project Setup blocks an empty directory at Git initialization", async () =
   });
 });
 
-test("Project Setup treats .ai-studio as bootstrap state in an otherwise empty directory", async () => {
+test("Project Setup treats .vibe64 as bootstrap state in an otherwise empty directory", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    await mkdir(path.join(targetRoot, ".ai-studio", "config"), {
+    await mkdir(path.join(targetRoot, ".vibe64", "config"), {
       recursive: true
     });
-    await writeFile(path.join(targetRoot, ".ai-studio", "project_type"), "jskit\n", "utf8");
+    await writeFile(path.join(targetRoot, ".vibe64", "project_type"), "jskit\n", "utf8");
 
     const status = await inspectProjectSetup({
       targetRoot
@@ -123,7 +123,7 @@ test("Project Setup treats .ai-studio as bootstrap state in an otherwise empty d
     assert.equal(status.ready, false);
     assert.equal(status.hardStop, false);
     assert.equal(status.stages[0].status, "pass");
-    assert.match(status.stages[0].observed, /\.ai-studio/u);
+    assert.match(status.stages[0].observed, /\.vibe64/u);
     assert.equal(status.currentStageId, "git-ready");
     assert.equal(status.stages.find((stage) => stage.id === "git-ready")?.repair?.actionId, "terminal-git-init");
   });
@@ -141,7 +141,7 @@ test("Project Setup admits linked Git worktrees before Git safety checks", async
   });
 });
 
-test("Project Setup blocks before remote setup when AI Studio ignore rules are missing", async () => {
+test("Project Setup blocks before remote setup when Vibe64 ignore rules are missing", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createGitRepository(targetRoot);
 
@@ -149,11 +149,11 @@ test("Project Setup blocks before remote setup when AI Studio ignore rules are m
       targetRoot
     });
 
-    const ignoreStage = status.stages.find((stage) => stage.id === "ai-studio-gitignore");
-    assert.equal(status.currentStageId, "ai-studio-gitignore");
+    const ignoreStage = status.stages.find((stage) => stage.id === "vibe64-gitignore");
+    assert.equal(status.currentStageId, "vibe64-gitignore");
     assert.equal(ignoreStage?.status, "blocked");
-    assert.equal(ignoreStage?.repair?.actionId, ADD_AI_STUDIO_GITIGNORE_RULES_ACTION_ID);
-    for (const pattern of AI_STUDIO_LOCAL_STATE_GITIGNORE_PATTERNS) {
+    assert.equal(ignoreStage?.repair?.actionId, ADD_VIBE64_GITIGNORE_RULES_ACTION_ID);
+    for (const pattern of VIBE64_LOCAL_STATE_GITIGNORE_PATTERNS) {
       assert.match(ignoreStage?.observed || "", new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"), "u"));
       assert.match(ignoreStage?.repair?.commandPreview || "", new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"), "u"));
     }
@@ -173,11 +173,11 @@ test("Project Setup retries automatic repairs when the same check reports a new 
         repair
       }) => {
         attempts.push(repair.actionId);
-        if (repair.actionId === ADD_AI_STUDIO_GITIGNORE_RULES_ACTION_ID) {
+        if (repair.actionId === ADD_VIBE64_GITIGNORE_RULES_ACTION_ID) {
           ignoreRuleRepairAttempts += 1;
           await writeFile(
             path.join(targetRoot, ".gitignore"),
-            `${AI_STUDIO_LOCAL_STATE_GITIGNORE_PATTERNS.slice(0, ignoreRuleRepairAttempts).join("\n")}\n`,
+            `${VIBE64_LOCAL_STATE_GITIGNORE_PATTERNS.slice(0, ignoreRuleRepairAttempts).join("\n")}\n`,
             "utf8"
           );
           return {
@@ -199,11 +199,11 @@ test("Project Setup retries automatic repairs when the same check reports a new 
     });
 
     assert.deepEqual(attempts, [
-      ADD_AI_STUDIO_GITIGNORE_RULES_ACTION_ID,
-      ADD_AI_STUDIO_GITIGNORE_RULES_ACTION_ID,
+      ADD_VIBE64_GITIGNORE_RULES_ACTION_ID,
+      ADD_VIBE64_GITIGNORE_RULES_ACTION_ID,
       "terminal-gh-create-repo"
     ]);
-    assert.equal(status.stages.find((stage) => stage.id === "ai-studio-gitignore")?.status, "pass");
+    assert.equal(status.stages.find((stage) => stage.id === "vibe64-gitignore")?.status, "pass");
     assert.equal(status.currentStageId, "remote-ready");
     assert.equal(status.stages.find((stage) => stage.id === "remote-ready")?.status, "blocked");
     assert.match(status.stages.find((stage) => stage.id === "remote-ready")?.observed || "", /Automatic repair failed/u);
@@ -222,8 +222,8 @@ test("Project Setup status reads are passive so setup gates do not auto-repair",
       refresh: true
     });
 
-    assert.equal(status.currentStageId, "ai-studio-gitignore");
-    assert.equal(status.stages.find((stage) => stage.id === "ai-studio-gitignore")?.status, "blocked");
+    assert.equal(status.currentStageId, "vibe64-gitignore");
+    assert.equal(status.stages.find((stage) => stage.id === "vibe64-gitignore")?.status, "blocked");
     assert.equal(status.stages.find((stage) => stage.id === "remote-ready")?.status, "pending");
     await assert.rejects(readFile(path.join(targetRoot, ".gitignore"), "utf8"), {
       code: "ENOENT"
@@ -234,8 +234,8 @@ test("Project Setup status reads are passive so setup gates do not auto-repair",
 test("Project Setup rechecks the target instead of trusting stale ready cache", async () => {
   await withTemporaryRoot(async (cacheRoot) => {
     await withTemporaryRoot(async (targetRoot) => {
-      const previousCacheRoot = process.env.AI_STUDIO_DOCTOR_STATUS_ROOT;
-      process.env.AI_STUDIO_DOCTOR_STATUS_ROOT = cacheRoot;
+      const previousCacheRoot = process.env.VIBE64_DOCTOR_STATUS_ROOT;
+      process.env.VIBE64_DOCTOR_STATUS_ROOT = cacheRoot;
       try {
         await createRepositoryReadyStatusCache({
           doctorId: "project-setup",
@@ -263,9 +263,9 @@ test("Project Setup rechecks the target instead of trusting stale ready cache", 
         assert.equal(status.currentStageId, "git-ready");
       } finally {
         if (previousCacheRoot == null) {
-          delete process.env.AI_STUDIO_DOCTOR_STATUS_ROOT;
+          delete process.env.VIBE64_DOCTOR_STATUS_ROOT;
         } else {
-          process.env.AI_STUDIO_DOCTOR_STATUS_ROOT = previousCacheRoot;
+          process.env.VIBE64_DOCTOR_STATUS_ROOT = previousCacheRoot;
         }
       }
     });
@@ -275,8 +275,8 @@ test("Project Setup rechecks the target instead of trusting stale ready cache", 
 test("Project Setup reuses a validated ready cache until refresh is requested", async () => {
   await withTemporaryRoot(async (cacheRoot) => {
     await withTemporaryRoot(async (targetRoot) => {
-      const previousCacheRoot = process.env.AI_STUDIO_DOCTOR_STATUS_ROOT;
-      process.env.AI_STUDIO_DOCTOR_STATUS_ROOT = cacheRoot;
+      const previousCacheRoot = process.env.VIBE64_DOCTOR_STATUS_ROOT;
+      process.env.VIBE64_DOCTOR_STATUS_ROOT = cacheRoot;
       try {
         await createGitRepository(targetRoot);
         runGit(targetRoot, ["config", "user.name", "Studio Test"]);
@@ -322,16 +322,16 @@ test("Project Setup reuses a validated ready cache until refresh is requested", 
           refresh: true
         });
         assert.equal(refreshed.ready, false);
-        assert.equal(refreshed.currentStageId, "ai-studio-gitignore");
+        assert.equal(refreshed.currentStageId, "vibe64-gitignore");
 
         const afterRefresh = await service.getStatus();
         assert.equal(afterRefresh.ready, false);
-        assert.equal(afterRefresh.currentStageId, "ai-studio-gitignore");
+        assert.equal(afterRefresh.currentStageId, "vibe64-gitignore");
       } finally {
         if (previousCacheRoot == null) {
-          delete process.env.AI_STUDIO_DOCTOR_STATUS_ROOT;
+          delete process.env.VIBE64_DOCTOR_STATUS_ROOT;
         } else {
-          process.env.AI_STUDIO_DOCTOR_STATUS_ROOT = previousCacheRoot;
+          process.env.VIBE64_DOCTOR_STATUS_ROOT = previousCacheRoot;
         }
       }
     });
@@ -341,10 +341,10 @@ test("Project Setup reuses a validated ready cache until refresh is requested", 
 test("Project Setup ready cache reuse does not require Docker or setup plugins", async () => {
   await withTemporaryRoot(async (cacheRoot) => {
     await withTemporaryRoot(async (targetRoot) => {
-      const previousCacheRoot = process.env.AI_STUDIO_DOCTOR_STATUS_ROOT;
+      const previousCacheRoot = process.env.VIBE64_DOCTOR_STATUS_ROOT;
       const previousDockerHost = process.env.DOCKER_HOST;
-      process.env.AI_STUDIO_DOCTOR_STATUS_ROOT = cacheRoot;
-      process.env.DOCKER_HOST = "unix:///tmp/ai-studio-docker-should-not-be-used.sock";
+      process.env.VIBE64_DOCTOR_STATUS_ROOT = cacheRoot;
+      process.env.DOCKER_HOST = "unix:///tmp/vibe64-docker-should-not-be-used.sock";
       try {
         await createGitRepository(targetRoot);
         runGit(targetRoot, ["config", "user.name", "Studio Test"]);
@@ -411,9 +411,9 @@ test("Project Setup ready cache reuse does not require Docker or setup plugins",
         assert.equal(createRuntimeCalls, 0);
       } finally {
         if (previousCacheRoot == null) {
-          delete process.env.AI_STUDIO_DOCTOR_STATUS_ROOT;
+          delete process.env.VIBE64_DOCTOR_STATUS_ROOT;
         } else {
-          process.env.AI_STUDIO_DOCTOR_STATUS_ROOT = previousCacheRoot;
+          process.env.VIBE64_DOCTOR_STATUS_ROOT = previousCacheRoot;
         }
         if (previousDockerHost == null) {
           delete process.env.DOCKER_HOST;
@@ -425,12 +425,12 @@ test("Project Setup ready cache reuse does not require Docker or setup plugins",
   });
 });
 
-test("Project Setup continues to remote setup when AI Studio ignore rules are present", async () => {
+test("Project Setup continues to remote setup when Vibe64 ignore rules are present", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createGitRepository(targetRoot);
     await writeFile(
       path.join(targetRoot, ".gitignore"),
-      `${AI_STUDIO_LOCAL_STATE_GITIGNORE_PATTERNS.join("\n")}\n`,
+      `${VIBE64_LOCAL_STATE_GITIGNORE_PATTERNS.join("\n")}\n`,
       "utf8"
     );
 
@@ -438,7 +438,7 @@ test("Project Setup continues to remote setup when AI Studio ignore rules are pr
       targetRoot
     });
 
-    assert.equal(status.stages.find((stage) => stage.id === "ai-studio-gitignore")?.status, "pass");
+    assert.equal(status.stages.find((stage) => stage.id === "vibe64-gitignore")?.status, "pass");
     assert.equal(status.currentStageId, "remote-ready");
     assert.equal(status.stages.find((stage) => stage.id === "remote-ready")?.status, "blocked");
   });
@@ -468,7 +468,7 @@ test("Project Setup offers remote mirroring when a bootstrap-only target links a
     const sourceRoot = path.join(root, "source");
     await mkdir(targetRoot);
     await createGitRepository(targetRoot);
-    await writeFile(path.join(targetRoot, ".gitignore"), ".ai-studio/sessions/\n.ai-studio/runtime/\n", "utf8");
+    await writeFile(path.join(targetRoot, ".gitignore"), ".vibe64/sessions/\n.vibe64/runtime/\n", "utf8");
     runGit(targetRoot, ["init", "--bare", "-b", "main", "remote.git"]);
 
     await mkdir(sourceRoot, {
@@ -533,9 +533,9 @@ test("Project Setup hard-stops when remote has commits and local app files exist
 });
 
 test("Project Setup remote mirror repair script is valid shell", () => {
-  assert.match(mirrorRemoteBranchScript(), /AI_STUDIO_REMOTE_BRANCH is required/u);
+  assert.match(mirrorRemoteBranchScript(), /VIBE64_REMOTE_BRANCH is required/u);
   assert.match(mirrorRemoteBranchScript(), /gh auth token/u);
-  assert.match(mirrorRemoteBranchScript(), /GIT_ASKPASS=\/tmp\/ai-studio-git-askpass/u);
+  assert.match(mirrorRemoteBranchScript(), /GIT_ASKPASS=\/tmp\/vibe64-git-askpass/u);
   assert.match(mirrorRemoteBranchScript(), /GIT_TERMINAL_PROMPT=0/u);
   assert.match(mirrorRemoteBranchScript(), /timeout 120s git -c safe\.directory=\/workspace -c credential\.helper= fetch/u);
   assert.match(mirrorRemoteBranchScript(), /Refusing to mirror remote over existing local files/u);
@@ -558,11 +558,11 @@ test("Project Setup checkpoint repair commits and pushes the baseline", () => {
   const script = gitCheckpointScript();
 
   assert.match(script, /gh auth token/u);
-  assert.match(script, /GIT_ASKPASS=\/tmp\/ai-studio-git-askpass/u);
+  assert.match(script, /GIT_ASKPASS=\/tmp\/vibe64-git-askpass/u);
   assert.match(script, /if \[ "\$\(id -u\)" = "0" \] && command -v setpriv/u);
-  assert.match(script, /setpriv --reuid "\$AI_STUDIO_HOST_UID" --regid "\$AI_STUDIO_HOST_GID"/u);
-  assert.match(script, /if \[ "\$\(id -u\)" = "0" \]; then chown "\$AI_STUDIO_HOST_UID:\$AI_STUDIO_HOST_GID"/u);
-  assert.match(script, /as_host git -c safe\.directory=\/workspace commit -m "\$AI_STUDIO_COMMIT_MESSAGE"/u);
+  assert.match(script, /setpriv --reuid "\$VIBE64_HOST_UID" --regid "\$VIBE64_HOST_GID"/u);
+  assert.match(script, /if \[ "\$\(id -u\)" = "0" \]; then chown "\$VIBE64_HOST_UID:\$VIBE64_HOST_GID"/u);
+  assert.match(script, /as_host git -c safe\.directory=\/workspace commit -m "\$VIBE64_COMMIT_MESSAGE"/u);
   assert.match(script, /remote_ref="refs\/heads\/\$branch"/u);
   assert.match(script, /as_host git -c safe\.directory=\/workspace -c credential\.helper= push -u origin "HEAD:\$remote_ref"/u);
   assert.match(script, /GIT_TERMINAL_PROMPT=0/u);
