@@ -241,7 +241,8 @@ test.describe("studio startup navigation", () => {
     await page.goto(`${BASE_URL}/setup?tab=adapter-setup`);
     await page.getByRole("button", { name: "Continue to Project Setup" }).click();
     await expect(page).toHaveURL(/\/setup\?tab=project-setup$/u);
-    await expect(page.getByRole("heading", { name: "Project Setup", exact: true })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Project Setup", exact: true })).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("heading", { name: "Preparing your project", exact: true })).toBeVisible();
   });
 
   test("ready continue moves from Project Setup to home", async ({ page }) => {
@@ -252,9 +253,9 @@ test.describe("studio startup navigation", () => {
     await expectSessionsRoute(page);
   });
 
-  test("old setup routes do not redirect to the new setup page", async ({ page }) => {
-    for (const oldRoute of ["/bootup", "/app-bootup", "/app-setup"]) {
-      await page.goto(`${BASE_URL}${oldRoute}`);
+  test("removed setup routes stay unsupported", async ({ page }) => {
+    for (const removedRoute of ["/bootup", "/app-bootup", "/app-setup"]) {
+      await page.goto(`${BASE_URL}${removedRoute}`);
       await expect(page).not.toHaveURL(/\/setup/u);
     }
   });

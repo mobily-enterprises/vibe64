@@ -117,6 +117,21 @@ function buildVibe64SessionFacts(session = {}, stepDefinitions = []) {
   const reportPath = firstText(session.reportPath);
   const workSource = firstText(session.workSource);
   const sourcePrLink = parseGithubSessionLink(session.sourcePrUrl, "pr");
+  const workSourceDetail = workSource === "existing_pr"
+    ? firstText(session.sourcePrTitle, session.sourcePrUpdateMode === "stacked" ? "Stacked PR base" : session.sourcePrUpdateMode)
+    : workSource === "existing_issue"
+      ? issueTitle
+      : "New branch";
+  const workSourceHref = workSource === "existing_pr"
+    ? session.sourcePrUrl || ""
+    : workSource === "existing_issue"
+      ? session.issueUrl || ""
+      : "";
+  const workSourceValue = workSource === "existing_pr"
+    ? `Stack on ${sourcePrLink.label}`
+    : workSource === "existing_issue"
+      ? issueLink.label
+      : "New branch";
 
   return [
     {
@@ -164,12 +179,12 @@ function buildVibe64SessionFacts(session = {}, stepDefinitions = []) {
       visible: Boolean(session.branch)
     },
     {
-      detail: firstText(session.sourcePrTitle, session.sourcePrUpdateMode),
-      href: session.sourcePrUrl || "",
+      detail: workSourceDetail,
+      href: workSourceHref,
       icon: "github",
       key: "work-source",
       label: "Work Source",
-      value: workSource === "existing_pr" ? sourcePrLink.label : "New branch",
+      value: workSourceValue,
       visible: Boolean(workSource)
     },
     {

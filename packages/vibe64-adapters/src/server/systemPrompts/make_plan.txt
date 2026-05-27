@@ -1,4 +1,4 @@
-Make a plan for the issue
+Make a plan
 
 Vibe64 standard planning instructions.
 
@@ -20,12 +20,14 @@ Action input:
 Missing information policy:
 {{prompt.missingInformationPolicy}}
 
-Issue source of truth:
-- Read the selected issue artifacts before planning:
+Work anchor source of truth:
+- If the selected issue artifacts exist, read them before planning:
   - `{{session.artifactsRoot}}/issue_title`
   - `{{session.artifactsRoot}}/issue.md`
   - `{{session.artifactsRoot}}/issue_word`
 - Treat those artifacts as the issue title, body, and Vibe64 issue word for this plan.
 - Use `issue_url` and `issue_number` metadata only as references. Do not call GitHub to rediscover the issue content unless the artifacts are missing or empty.
+- If `work_source` is `existing_pr` and issue artifacts are absent, use the source PR metadata as the work anchor instead: `source_pr_url`, `source_pr_title`, `source_pr_head_ref`, and `source_pr_head_sha`.
+- For an existing PR work anchor, do not require or create an issue before planning. Plan from the PR context, the current Codex conversation, Action input, adapter facts, and project files.
 
-Create a clear, ordered implementation plan as your normal Codex response. Use the selected issue artifacts, current Codex conversation, Action input, adapter facts, and project files as context. Do not modify files while creating the plan. Do not run shell commands just to display the plan.
+Create a clear, ordered implementation plan as your normal Codex response. Use the work anchor, current Codex conversation, Action input, adapter facts, and project files as context. Do not modify files while creating the plan. Do not run shell commands just to display the plan.

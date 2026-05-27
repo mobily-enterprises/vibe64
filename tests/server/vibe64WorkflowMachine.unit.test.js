@@ -477,7 +477,7 @@ test("vibe64 runtime session view exposes workflow steps, current actions, and n
     assert.equal(session.next.enabled, true);
     assert.equal(session.next.stepId, "work_source_selected");
     assert.equal(session.stepDefinitions[0].status, "current");
-    assert.equal(session.stepDefinitions[1].label, "Choose work source");
+    assert.equal(session.stepDefinitions[1].label, "Choose starting point");
     assert.deepEqual(session.actions, []);
   });
 });
@@ -2065,6 +2065,22 @@ test("vibe64 runtime advance records completed steps and moves to the next workf
     assert.equal(afterFirstAdvance.stepDefinitions[1].status, "current");
     assert.equal(afterFirstAdvance.next.stepId, "worktree_created");
     assert.equal(afterFirstAdvance.next.enabled, false);
+    assert.equal(afterFirstAdvance.presentation.screen.kind, "work_source");
+    assert.deepEqual(afterFirstAdvance.actions.map((action) => action.id), [
+      "use_new_branch",
+      "use_existing_issue",
+      "use_existing_pr"
+    ]);
+    assert.deepEqual(afterFirstAdvance.intents.map((intent) => intent.id), [
+      "use_new_branch",
+      "use_existing_issue",
+      "use_existing_pr"
+    ]);
+    const existingIssueAction = afterFirstAdvance.actions.find((action) => action.id === "use_existing_issue");
+    assert.equal(existingIssueAction?.enabled, true);
+    assert.deepEqual(existingIssueAction?.inputFields.map((field) => field.name), [
+      "issueRef"
+    ]);
     const existingPrAction = afterFirstAdvance.actions.find((action) => action.id === "use_existing_pr");
     assert.equal(existingPrAction?.enabled, true);
     assert.equal(existingPrAction?.adapterCapability, undefined);
@@ -2222,7 +2238,7 @@ test("vibe64 runtime prompt actions render Codex handoff data without advancing"
     assert.deepEqual(afterAction.completedSteps, []);
     assert.equal(afterAction.actionResult.status, "prompt_ready");
     assert.equal(afterAction.actionResult.promptId, "make_plan");
-    assert.match(afterAction.actionResult.prompt, /Run the Vibe64 prompt action: Make a plan for the issue/u);
+    assert.match(afterAction.actionResult.prompt, /Run the Vibe64 prompt action: Make a plan/u);
     assert.match(afterAction.actionResult.prompt, /"scope": "unit test"/u);
     assert.match(afterAction.actionResult.prompt, /Vibe64 step completion contract:/u);
     assert.match(afterAction.actionResult.prompt, /"kind": "ready"/u);
@@ -2232,7 +2248,7 @@ test("vibe64 runtime prompt actions render Codex handoff data without advancing"
     assert.equal(afterAction.actionResult.codexPromptHandoff.kind, "codex_prompt_handoff");
     assert.equal(afterAction.actionResult.codexPromptHandoff.codex.mode, "inject_prompt");
     assert.equal(afterAction.actionResult.codexPromptHandoff.prompt, afterAction.actionResult.prompt);
-    assert.match(afterAction.actionResult.codexPromptHandoff.terminalInput, /Make a plan for the issue/u);
+    assert.match(afterAction.actionResult.codexPromptHandoff.terminalInput, /Make a plan/u);
     assert.match(afterAction.actionResult.codexPromptHandoff.terminalInput, /\[\[VIBE64_CONTEXT_START\]\]/u);
 
     await runtime.submitCurrentStepInput("prompt_action", {
@@ -2561,6 +2577,43 @@ test("editable artifact review steps preserve user-origin and prompt-origin draf
   });
 });
 
+test("vibe64 existing PR work anchors skip issue creation steps", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot
+    });
+    const session = await runtime.createSession({
+      initialStep: "issue_file_created",
+      metadata: {
+        ...worktreeMetadata(targetRoot, "existing_pr_issue_skip"),
+        source_pr_title: "Upstream feature",
+        source_pr_url: "https://github.com/example/project/pull/77",
+        work_source: "existing_pr"
+      },
+      sessionId: "existing_pr_issue_skip"
+    });
+
+    assert.equal(session.stepMachine.status, "done");
+    assert.equal(
+      session.stepMachine.message,
+      "Skipped: existing PR selected as the work anchor; no GitHub issue is required."
+    );
+    assert.equal(session.next.enabled, true);
+    assert.equal(session.actions.find((action) => action.id === "use_existing_issue")?.enabled, false);
+    assert.equal(session.actions.find((action) => action.id === "draft_issue")?.enabled, false);
+
+    const submitted = await runtime.advance("existing_pr_issue_skip");
+    assert.equal(submitted.currentStep, "issue_submitted");
+    assert.equal(submitted.stepMachine.status, "done");
+    assert.equal(
+      submitted.stepMachine.message,
+      "Skipped: existing PR selected as the work anchor; no GitHub issue is required."
+    );
+    assert.equal(submitted.next.enabled, true);
+    assert.equal(submitted.actions.find((action) => action.id === "create_issue_on_gh")?.enabled, false);
+  });
+});
+
 test("vibe64 existing issue action imports issue artifacts and session word", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const binDir = path.join(targetRoot, "bin");
@@ -2602,9 +2655,102 @@ test("vibe64 existing issue action imports issue artifacts and session word", as
       assert.equal(result.status, "completed");
       assert.equal(result.metadata.issue_url, "https://github.com/example/project/issues/12");
       assert.equal(result.metadata.issue_word, "Add");
+      assert.equal(result.metadata.work_anchor_number, "12");
+      assert.equal(result.metadata.work_anchor_title, "Add saved reports");
+      assert.equal(result.metadata.work_anchor_type, "issue");
+      assert.equal(result.metadata.work_anchor_url, "https://github.com/example/project/issues/12");
+      assert.equal(result.metadata.work_source, "existing_issue");
       assert.equal(result.artifacts.issue_title, "Add saved reports");
       assert.equal(result.artifacts.issue_word, "Add");
       assert.equal(result.artifacts["issue.md"], "Body line\nSecond line");
+    } finally {
+      if (originalPath === undefined) {
+        delete process.env.PATH;
+      } else {
+        process.env.PATH = originalPath;
+      }
+    }
+  });
+});
+
+test("vibe64 existing PR action selects only same-repository open PRs as stacked bases", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const binDir = path.join(targetRoot, "bin");
+    await mkdir(binDir, {
+      recursive: true
+    });
+    const ghPath = path.join(binDir, "gh");
+    await writeFile(
+      ghPath,
+      [
+        "#!/usr/bin/env node",
+        "const args = process.argv.slice(2);",
+        "const number = args[2];",
+        "const common = {",
+        "  baseRefName: 'main',",
+        "  headRefName: 'feature-base',",
+        "  headRefOid: 'abc123',",
+        "  headRepository: { nameWithOwner: 'example/project' },",
+        "  headRepositoryOwner: { login: 'example' },",
+        "  maintainerCanModify: true,",
+        "  state: 'OPEN',",
+        "  title: 'Upstream feature'",
+        "};",
+        "if (number === '77') {",
+        "  process.stdout.write(JSON.stringify({",
+        "    ...common,",
+        "    isCrossRepository: false,",
+        "    number: 77,",
+        "    url: 'https://github.com/example/project/pull/77'",
+        "  }));",
+        "  process.exit(0);",
+        "}",
+        "if (number === '88') {",
+        "  process.stdout.write(JSON.stringify({",
+        "    ...common,",
+        "    isCrossRepository: true,",
+        "    number: 88,",
+        "    url: 'https://github.com/example/project/pull/88'",
+        "  }));",
+        "  process.exit(0);",
+        "}",
+        "process.stderr.write('unexpected gh args: ' + args.join(' '));",
+        "process.exit(1);"
+      ].join("\n"),
+      "utf8"
+    );
+    await chmod(ghPath, 0o755);
+
+    const originalPath = process.env.PATH;
+    process.env.PATH = `${binDir}${path.delimiter}${originalPath || ""}`;
+    try {
+      const selected = await runVibe64WorkflowSessionAction("use_existing_pr", {
+        input: {
+          prRef: "#77"
+        },
+        targetRoot
+      });
+
+      assert.equal(selected.status, "completed");
+      assert.equal(selected.metadata.work_source, "existing_pr");
+      assert.equal(selected.metadata.issue_source, "none");
+      assert.equal(selected.metadata.source_pr_update_mode, "stacked");
+      assert.equal(selected.metadata.source_pr_number, "77");
+      assert.equal(selected.metadata.source_pr_head_ref, "feature-base");
+      assert.equal(selected.metadata.source_pr_head_sha, "abc123");
+      assert.equal(selected.metadata.work_anchor_number, "77");
+      assert.equal(selected.metadata.work_anchor_type, "pull_request");
+      assert.equal(selected.metadata.work_anchor_url, "https://github.com/example/project/pull/77");
+
+      const blocked = await runVibe64WorkflowSessionAction("use_existing_pr", {
+        input: {
+          prRef: "#88"
+        },
+        targetRoot
+      });
+
+      assert.equal(blocked.status, "blocked");
+      assert.match(blocked.message, /cannot be used as a stacked PR base/u);
     } finally {
       if (originalPath === undefined) {
         delete process.env.PATH;
@@ -2989,7 +3135,7 @@ test("vibe64 runtime disables prompt actions while the terminal is active", asyn
         enabled: false,
         icon: "codex",
         id: "make_plan",
-        label: "Make a plan for the issue",
+        label: "Make a plan",
         promptId: "make_plan",
         type: "prompt",
         visible: true
@@ -3023,7 +3169,7 @@ test("vibe64 runtime disables prompt actions before the session worktree exists"
         enabled: false,
         icon: "codex",
         id: "make_plan",
-        label: "Make a plan for the issue",
+        label: "Make a plan",
         promptId: "make_plan",
         type: "prompt",
         visible: true

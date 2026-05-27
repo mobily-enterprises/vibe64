@@ -42,7 +42,7 @@ test.describe("session history navigation", () => {
     });
   }
 
-  test("old completed and abandoned routes are not preserved as archive views", async ({ page }) => {
+  test("removed completed and abandoned routes stay unsupported", async ({ page }) => {
     const archiveRequests = [];
     await mockSessionHistoryArchives(page, archiveRequests);
 

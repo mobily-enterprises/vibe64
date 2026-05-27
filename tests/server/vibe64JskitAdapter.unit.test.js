@@ -387,7 +387,7 @@ test("jskit prompt actions include JSKIT prompt context", async () => {
     assert.match(afterPrompt.actionResult.prompt, /Use individual `npx jskit generate \.\.\. help` commands only/u);
     assert.doesNotMatch(afterPrompt.actionResult.prompt, /npx jskit generate crud-server-generator scaffold help/u);
     assert.match(afterPrompt.actionResult.prompt, /Do not plan hand-created packages/u);
-    assert.match(afterPrompt.actionResult.prompt, /Issue source of truth:/u);
+    assert.match(afterPrompt.actionResult.prompt, /Work anchor source of truth:/u);
     assert.match(afterPrompt.actionResult.prompt, /issue_title/u);
     assert.match(afterPrompt.actionResult.prompt, /issue\.md/u);
     assert.match(afterPrompt.actionResult.prompt, /Do not call GitHub to rediscover the issue content/u);

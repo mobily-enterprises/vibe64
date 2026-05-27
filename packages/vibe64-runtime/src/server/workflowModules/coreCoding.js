@@ -358,18 +358,18 @@ const coreCodingStepDefinitionsById = deepFreeze({
     actions: [
       {
         id: "make_plan",
-        label: "Make a plan for the issue",
+        label: "Make a plan",
         promptId: "make_plan",
         type: "prompt"
       }
     ],
     autopilot: {
       actionId: "make_plan",
-      label: "Make a plan for the issue"
+      label: "Make a plan"
     },
     description: "Ask Codex to create the implementation plan.",
     id: planMadeStepId,
-    label: "Make a plan for the issue",
+    label: "Make a plan",
     rewindCleanup: {
       actionResults: ["make_plan"]
     }
@@ -865,22 +865,24 @@ const issueFilePhase = Object.freeze({
   DRAFTING: "drafting",
   EXISTING_SELECTED: "existing_selected",
   REVIEW_DRAFT: "review_draft",
-  SELECTING_EXISTING: "selecting_existing"
+  SELECTING_EXISTING: "selecting_existing",
+  SKIPPED_EXISTING_PR: "skipped_existing_pr"
 });
 
-async function clearIssueFieldValues(context = {}) {
-  await Promise.all([
-    context.runtime.store.deleteArtifacts(context.session.sessionId, [
-      ISSUE_TITLE_ARTIFACT,
-      ISSUE_BODY_ARTIFACT,
-      ISSUE_WORD_ARTIFACT
-    ]),
-    context.runtime.store.deleteMetadataValues(context.session.sessionId, [
-      "issue_title",
-      "issue_source",
-      ISSUE_WORD_ARTIFACT
-    ])
-  ]);
+function existingPrIsWorkAnchor(session = {}) {
+  return normalizeText(session.metadata?.work_source) === "existing_pr";
+}
+
+function existingPrIssueSkipMessage() {
+  return "Skipped: existing PR selected as the work anchor; no GitHub issue is required.";
+}
+
+function existingPrIssueSkipState() {
+  return machineState(STEP_STATUS.DONE, {
+    message: existingPrIssueSkipMessage(),
+    phase: issueFilePhase.SKIPPED_EXISTING_PR,
+    skipReason: existingPrIssueSkipMessage()
+  });
 }
 
 function issueSourceSelectionState(details = {}) {
@@ -936,6 +938,9 @@ const issueFileMachine = {
   stepId: ISSUE_FILE_STEP_ID,
 
   initialState(context = {}) {
+    if (existingPrIsWorkAnchor(context.session)) {
+      return existingPrIssueSkipState();
+    }
     const filesReady = issueFilesAreReady(context.session);
     if (filesReady && metadataExists(context.session, "issue_url")) {
       return machineState(STEP_STATUS.DONE, {
@@ -950,7 +955,9 @@ const issueFileMachine = {
   async view(context = {}) {
     let state = await readState(context, this);
     const filesReady = issueFilesAreReady(context.session);
-    if (filesReady && metadataExists(context.session, "issue_url")) {
+    if (existingPrIsWorkAnchor(context.session)) {
+      state = existingPrIssueSkipState();
+    } else if (filesReady && metadataExists(context.session, "issue_url")) {
       state = machineState(STEP_STATUS.DONE, {
         phase: issueFilePhase.EXISTING_SELECTED
       });
@@ -1014,9 +1021,9 @@ const issueFileMachine = {
       case STEP_STATUS.DONE:
         return {
           actions: disableActions(context.session, {
-            use_existing_issue: "An existing issue is already selected.",
-            [draftIssueActionId]: "An existing issue is already selected.",
-            [rejectIssueDraftActionId]: "An existing issue is already selected."
+            use_existing_issue: state.skipReason || "An existing issue is already selected.",
+            [draftIssueActionId]: state.skipReason || "An existing issue is already selected.",
+            [rejectIssueDraftActionId]: state.skipReason || "An existing issue is already selected."
           }),
           next: nextForSession(context.session, {
             enabled: true
@@ -1166,6 +1173,9 @@ const issueSubmittedMachine = {
   stepId: issueSubmittedStepId,
 
   initialState(context = {}) {
+    if (existingPrIsWorkAnchor(context.session)) {
+      return existingPrIssueSkipState();
+    }
     if (metadataExists(context.session, "issue_url")) {
       return machineState(STEP_STATUS.DONE);
     }
@@ -1178,7 +1188,9 @@ const issueSubmittedMachine = {
 
   async view(context = {}) {
     let state = await readState(context, this);
-    if (metadataExists(context.session, "issue_url")) {
+    if (existingPrIsWorkAnchor(context.session)) {
+      state = existingPrIssueSkipState();
+    } else if (metadataExists(context.session, "issue_url")) {
       state = machineState(STEP_STATUS.DONE);
     } else if (issueFilesAreReady(context.session) && state.status === STEP_STATUS.WAITING_FOR_INPUT && state.from !== STEP_STATUS.ATTEMPTING_EXECUTION) {
       state = machineState(STEP_STATUS.READY);
@@ -1187,7 +1199,11 @@ const issueSubmittedMachine = {
     switch (state.status) {
       case STEP_STATUS.DONE:
         return {
-          actions: disableAction(context.session, "create_issue_on_gh", "The GitHub issue already exists."),
+          actions: disableAction(
+            context.session,
+            "create_issue_on_gh",
+            state.skipReason || "The GitHub issue already exists."
+          ),
           next: nextForSession(context.session, {
             enabled: true
           }),

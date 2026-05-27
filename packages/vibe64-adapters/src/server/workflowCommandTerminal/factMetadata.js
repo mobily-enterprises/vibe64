@@ -37,27 +37,23 @@ function createWorktreeSuccessMetadataFromFacts({ facts = {}, session = {} } = {
     return commandMetadataResult();
   }
 
-  const updateMode = normalizeText(facts.source_pr_update_mode);
-  if (updateMode === "direct") {
-    return commandMetadataResult({
-      metadata: {
-        pr_source: "existing",
-        pr_url: normalizeText(facts.pr_url) || normalizeText(session.metadata?.source_pr_url),
-        source_pr_update_mode: "direct"
-      }
-    });
+  const updateMode = normalizeText(facts.source_pr_update_mode) ||
+    normalizeText(session.metadata?.source_pr_update_mode);
+  if (updateMode !== "stacked" && !normalizeText(session.metadata?.source_pr_url)) {
+    return commandMetadataResult();
   }
 
-  if (updateMode === "replacement") {
-    return commandMetadataResult({
-      deleteMetadata: ["pr_url"],
-      metadata: {
-        source_pr_update_mode: "replacement"
-      }
-    });
-  }
-
-  return commandMetadataResult();
+  const sessionPrUrl = normalizeText(session.metadata?.pr_url);
+  const sourcePrUrl = normalizeText(session.metadata?.source_pr_url);
+  const deletePrMetadata = sessionPrUrl && sessionPrUrl === sourcePrUrl
+    ? ["pr_url", "pr_source", "pr_number", "pr_title"]
+    : [];
+  return commandMetadataResult({
+    deleteMetadata: deletePrMetadata,
+    metadata: {
+      source_pr_update_mode: "stacked"
+    }
+  });
 }
 
 function commitChangesSuccessMetadataFromFacts({ facts = {} } = {}) {
@@ -99,7 +95,7 @@ function createPrSuccessMetadataFromFacts({ facts = {}, session = {} } = {}) {
   return commandMetadataResult({
     metadata: {
       ...metadata,
-      pr_source: normalizeText(metadata.pr_source) || (normalizeText(session.metadata?.source_pr_url) ? "replacement" : "created")
+      pr_source: normalizeText(metadata.pr_source) || (normalizeText(session.metadata?.source_pr_url) ? "stacked" : "created")
     }
   });
 }

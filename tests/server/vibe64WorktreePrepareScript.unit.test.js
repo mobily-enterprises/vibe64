@@ -138,6 +138,54 @@ test("create worktree terminal specs mount adapter preparation scripts", async (
   });
 });
 
+test("create worktree terminal specs branch existing PR sessions from the source PR head", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createGitTarget(targetRoot);
+    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", "stacked-pr");
+    const session = {
+      metadata: {
+        source_pr_head_ref: "feature-base",
+        source_pr_head_repo: "example/project",
+        source_pr_head_sha: "abc123",
+        source_pr_number: "77",
+        source_pr_update_mode: "stacked",
+        source_pr_url: "https://github.com/example/project/pull/77",
+        work_source: "existing_pr"
+      },
+      sessionId: "stacked-pr",
+      sessionRoot,
+      targetRoot
+    };
+    const spec = await createGenericNodeWebTargetAdapter().createCommandTerminalSpec("create_worktree", {
+      session,
+      targetRoot
+    });
+
+    assert.equal(spec.ok, true);
+    assert.equal(spec.successMetadata.base_branch, "feature-base");
+    assert.equal(spec.successMetadata.base_commit, "abc123");
+
+    const script = spec.args.at(-1);
+    assert.match(script, /git -C .* fetch origin "pull\/\$SOURCE_PR_NUMBER\/head:\$PR_FETCH_REF"/u);
+    assert.match(script, /FETCHED_PR_SHA=/u);
+    assert.match(script, /Existing PR #%s moved from %s to %s/u);
+    assert.match(script, /worktree add -b .* "\$PR_FETCH_REF"/u);
+    assert.match(script, /source_pr_update_mode/u);
+    assert.doesNotMatch(script, /git push --dry-run/u);
+    assert.doesNotMatch(script, /source_pr_update_mode.*direct/u);
+
+    const factMetadata = spec.applySuccessFacts({
+      facts: {
+        source_pr_update_mode: "stacked"
+      },
+      session
+    });
+    assert.deepEqual(factMetadata.metadata, {
+      source_pr_update_mode: "stacked"
+    });
+  });
+});
+
 test("create worktree runs the adapter preparation script without overwriting session edits", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createGitTarget(targetRoot);

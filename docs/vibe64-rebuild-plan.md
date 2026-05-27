@@ -1163,7 +1163,7 @@ Goal: Make Studio a thin renderer over the new runtime session view.
 Runtime wiring rule for slices 9-13:
 
 - Do not build compatibility bridges.
-- Do not normalize runtime data into unrelated legacy workflow shapes.
+- Do not normalize runtime data into retired workflow shapes.
 - Do not preserve unused UI contracts just to keep the workflow usable mid-slice.
 - The app must still compile and boot.
 - The Studio workflow may be incomplete until Slice 13 is finished.
@@ -1319,7 +1319,7 @@ Goal: Keep one Studio session workflow after the runtime is wired and proven.
 
 Instructions:
 
-- Remove duplicate legacy workflow state code.
+- Remove duplicate retired workflow state code.
 - Remove duplicate UI workflow inference.
 - Remove duplicate prompt-generation paths.
 - Remove deterministic command dispatch paths that duplicate runtime actions.
@@ -1332,10 +1332,10 @@ Instructions:
 
 Checklist:
 
-- [x] Duplicate legacy state machine code is deleted.
-- [x] Duplicate legacy button mapping code is deleted.
-- [x] Duplicate legacy prompt construction code is deleted.
-- [x] Duplicate legacy command execution code is deleted.
+- [x] Duplicate retired state machine code is deleted.
+- [x] Duplicate retired button mapping code is deleted.
+- [x] Duplicate retired prompt construction code is deleted.
+- [x] Duplicate retired command execution code is deleted.
 - [x] Non-`.vibe64` Studio workflow reads are absent.
 - [x] Replaced API routes are deleted.
 - [x] Replaced client API helpers are deleted.
@@ -1347,7 +1347,7 @@ Checklist:
 Acceptance:
 
 - Studio uses one workflow system: the Vibe64 runtime.
-- Searching the codebase does not reveal an alternate legacy workflow path.
+- Searching the codebase does not reveal an alternate retired workflow path.
 
 ### SLICE 15: Final Audit And Simplification
 
@@ -1442,5 +1442,5 @@ The rebuild is successful when:
 - [ ] Prompts adapt to the target environment.
 - [ ] No npm assumptions exist outside web/JSKIT adapters.
 - [ ] No JSKIT assumptions exist in the core runtime.
-- [ ] No duplicate legacy workflow remains.
+- [ ] No duplicate retired workflow remains.
 - [ ] A developer can add a simple adapter without reading UI code.

@@ -75,7 +75,7 @@ describe("Vibe64 session view model", () => {
     }, [
       { id: "session_created", index: 0, label: "Create session" },
       { id: "worktree_created", index: 1, label: "Create worktree" },
-      { id: "plan_made", index: 2, label: "Make a plan for the issue" }
+      { id: "plan_made", index: 2, label: "Make a plan" }
     ]);
 
     expect(facts.map((fact) => fact.key)).toEqual([
@@ -90,7 +90,7 @@ describe("Vibe64 session view model", () => {
       "session-report",
       "pr-outcome"
     ]);
-    expect(facts.find((fact) => fact.key === "step")?.value).toBe("Make a plan for the issue");
+    expect(facts.find((fact) => fact.key === "step")?.value).toBe("Make a plan");
     expect(facts.find((fact) => fact.key === "issue")?.value).toBe("Issue #12");
     expect(facts.find((fact) => fact.key === "pr")?.value).toBe("PR #34");
     expect(facts.find((fact) => fact.key === "blueprint")?.href)
@@ -98,5 +98,31 @@ describe("Vibe64 session view model", () => {
     expect(facts.find((fact) => fact.key === "session-report")?.href)
       .toBe("file:///workspace/.vibe64/sessions/active/session/artifacts/report.md");
     expect(facts.find((fact) => fact.key === "pr-outcome")?.value).toBe("merged");
+  });
+
+  it("labels existing work anchors without treating source PRs as created PRs", () => {
+    const prFacts = buildVibe64SessionFacts({
+      sourcePrTitle: "Upstream feature",
+      sourcePrUrl: "https://github.com/example/app/pull/77",
+      sourcePrUpdateMode: "stacked",
+      workSource: "existing_pr"
+    });
+    const issueFacts = buildVibe64SessionFacts({
+      issueTitle: "Add reports",
+      issueUrl: "https://github.com/example/app/issues/12",
+      workSource: "existing_issue"
+    });
+
+    expect(prFacts.find((fact) => fact.key === "work-source")).toMatchObject({
+      detail: "Upstream feature",
+      href: "https://github.com/example/app/pull/77",
+      value: "Stack on PR #77"
+    });
+    expect(prFacts.some((fact) => fact.key === "pr")).toBe(false);
+    expect(issueFacts.find((fact) => fact.key === "work-source")).toMatchObject({
+      detail: "Add reports",
+      href: "https://github.com/example/app/issues/12",
+      value: "Issue #12"
+    });
   });
 });

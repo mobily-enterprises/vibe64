@@ -49,9 +49,13 @@ function createPrOnGhScript(session = {}) {
   const stepId = "create_pull_request";
   const prBodyPath = artifactFilePath(session, `tmp/${stepId}.body.md`);
   const prTitlePath = artifactFilePath(session, `tmp/${stepId}.title.txt`);
+  const sourcePrHeadSha = normalizeText(session.metadata?.source_pr_head_sha);
+  const sourcePrNumber = normalizeText(session.metadata?.source_pr_number);
   const sourcePrUrl = normalizeText(session.metadata?.source_pr_url);
   const branch = normalizeText(session.metadata?.branch);
-  const baseBranch = normalizeText(session.metadata?.base_branch) || "main";
+  const baseBranch = normalizeText(session.metadata?.base_branch) ||
+    normalizeText(session.metadata?.source_pr_head_ref) ||
+    "main";
   const quotedBaseBranch = shellQuote(baseBranch);
   const quotedBranch = shellQuote(branch);
   return [
@@ -71,6 +75,25 @@ function createPrOnGhScript(session = {}) {
     "  printf '[studio] Worktree is on branch %s, expected %s.\\n' \"$CURRENT_BRANCH\" \"$EXPECTED_BRANCH\" >&2",
     "  exit 1",
     "fi",
+    `SOURCE_PR_NUMBER=${shellQuote(sourcePrNumber)}`,
+    `SOURCE_PR_HEAD_SHA=${shellQuote(sourcePrHeadSha)}`,
+    "if [ -n \"$SOURCE_PR_NUMBER\" ]; then",
+    "  printf '[studio] Validating stacked PR base #%s\\n' \"$SOURCE_PR_NUMBER\"",
+    "  SOURCE_PR_STATE=\"$(gh pr view \"$SOURCE_PR_NUMBER\" --json state --jq '.state' 2>/dev/null | head -n 1 | sed 's/[[:space:]]*$//')\"",
+    "  SOURCE_PR_CURRENT_SHA=\"$(gh pr view \"$SOURCE_PR_NUMBER\" --json headRefOid --jq '.headRefOid' 2>/dev/null | head -n 1 | sed 's/[[:space:]]*$//')\"",
+    "  if [ -z \"$SOURCE_PR_STATE\" ] || [ -z \"$SOURCE_PR_CURRENT_SHA\" ]; then",
+    "    printf '[studio] Could not validate existing PR #%s. Check GitHub access, then retry.\\n' \"$SOURCE_PR_NUMBER\" >&2",
+    "    exit 1",
+    "  fi",
+    "  if [ \"$SOURCE_PR_STATE\" != \"OPEN\" ]; then",
+    "    printf '[studio] Existing PR #%s is %s. Start a new session from the current work anchor.\\n' \"$SOURCE_PR_NUMBER\" \"$SOURCE_PR_STATE\" >&2",
+    "    exit 1",
+    "  fi",
+    "  if [ -n \"$SOURCE_PR_HEAD_SHA\" ] && [ \"$SOURCE_PR_CURRENT_SHA\" != \"$SOURCE_PR_HEAD_SHA\" ]; then",
+    "    printf '[studio] Existing PR #%s moved from %s to %s. Start a new session from the updated PR.\\n' \"$SOURCE_PR_NUMBER\" \"$SOURCE_PR_HEAD_SHA\" \"$SOURCE_PR_CURRENT_SHA\" >&2",
+    "    exit 1",
+    "  fi",
+    "fi",
     "git fetch origin \"$BASE_BRANCH\"",
     "BASE_REF=\"origin/$BASE_BRANCH\"",
     "if ! git rev-parse --verify \"$BASE_REF\" >/dev/null 2>&1; then",
@@ -88,7 +111,7 @@ function createPrOnGhScript(session = {}) {
     "fi",
     `SOURCE_PR_URL=${shellQuote(sourcePrUrl)}`,
     "if [ -n \"$SOURCE_PR_URL\" ]; then",
-    "  PR_SOURCE=replacement",
+    "  PR_SOURCE=stacked",
     "else",
     "  PR_SOURCE=created",
     "fi",
@@ -96,7 +119,7 @@ function createPrOnGhScript(session = {}) {
     "if [ -n \"$SOURCE_PR_URL\" ]; then",
     "  PR_BODY_FILE=\"$(mktemp)\"",
     `  cat ${shellQuote(prBodyPath)} > "$PR_BODY_FILE"`,
-    "  printf '\\n\\nContinues existing pull request: %s\\n' \"$SOURCE_PR_URL\" >> \"$PR_BODY_FILE\"",
+    "  printf '\\n\\nStacks on existing pull request: %s\\n' \"$SOURCE_PR_URL\" >> \"$PR_BODY_FILE\"",
     "fi",
     "find_existing_pull_request_url() {",
     "  gh pr list --head \"$EXPECTED_BRANCH\" --base \"$BASE_BRANCH\" --state open --json url --jq '.[0].url' 2>/dev/null | head -n 1 | sed 's/[[:space:]]*$//'",

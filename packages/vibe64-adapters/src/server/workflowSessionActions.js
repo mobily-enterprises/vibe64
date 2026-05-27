@@ -65,14 +65,11 @@ function repositoryNameWithOwner(repository = {}) {
     normalizeText(repository.url).replace(/^https:\/\/github\.com\//u, "");
 }
 
-function prCanUseDirectUpdate(pr = {}) {
-  if (normalizeText(pr.state).toUpperCase() !== "OPEN") {
-    return false;
-  }
-  if (!normalizeText(pr.headRefName) || !repositoryNameWithOwner(pr.headRepository)) {
-    return false;
-  }
-  return pr.isCrossRepository !== true || pr.maintainerCanModify === true;
+function prCanUseStackedBase(pr = {}) {
+  return normalizeText(pr.state).toUpperCase() === "OPEN" &&
+    normalizeText(pr.headRefName) &&
+    normalizeText(pr.headRefOid) &&
+    pr.isCrossRepository === false;
 }
 
 async function useNewBranchSessionAction() {
@@ -141,6 +138,11 @@ async function useExistingIssueSessionAction({
       issue_source: "existing",
       issue_title: title,
       issue_url: normalizeText(issue.url),
+      work_anchor_number: String(issue.number || ""),
+      work_anchor_title: title,
+      work_anchor_type: "issue",
+      work_anchor_url: normalizeText(issue.url),
+      work_source: "existing_issue",
       [ISSUE_WORD_ARTIFACT]: word
     }
   });
@@ -191,10 +193,17 @@ async function useExistingPrSessionAction({
       status: "blocked"
     });
   }
-  const updateMode = prCanUseDirectUpdate(pr) ? "direct" : "replacement";
+  if (!prCanUseStackedBase(pr)) {
+    return adapterActionResult({
+      message: `GitHub PR #${pr.number || prRef} cannot be used as a stacked PR base because its head branch is not in this repository.`,
+      status: "blocked"
+    });
+  }
+  const title = normalizeText(pr.title);
   return adapterActionResult({
-    message: `Selected GitHub PR #${pr.number}: ${normalizeText(pr.title)}`,
+    message: `Selected GitHub PR #${pr.number}: ${title}`,
     metadata: {
+      issue_source: "none",
       source_pr_base_ref: normalizeText(pr.baseRefName),
       source_pr_head_ref: normalizeText(pr.headRefName),
       source_pr_head_repo: repositoryNameWithOwner(pr.headRepository),
@@ -203,9 +212,13 @@ async function useExistingPrSessionAction({
       source_pr_maintainer_can_modify: pr.maintainerCanModify === true ? "yes" : "no",
       source_pr_number: String(pr.number || ""),
       source_pr_state: normalizeText(pr.state),
-      source_pr_title: normalizeText(pr.title),
-      source_pr_update_mode: updateMode,
+      source_pr_title: title,
+      source_pr_update_mode: "stacked",
       source_pr_url: normalizeText(pr.url),
+      work_anchor_number: String(pr.number || ""),
+      work_anchor_title: title,
+      work_anchor_type: "pull_request",
+      work_anchor_url: normalizeText(pr.url),
       work_source: "existing_pr"
     }
   });

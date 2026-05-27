@@ -354,30 +354,21 @@ test.describe("live Vibe64 session workflow", () => {
     }).toBe("finished");
   });
 
-  test("opens an existing PR and follows the detected update mode", async ({ page }) => {
-    const issue = await createFixtureIssue("existing-pr-source-issue");
-    const pullRequest = await createFixturePullRequest("direct-existing-pr");
+  test("opens an existing PR and creates a stacked pull request from it", async ({ page }) => {
+    const pullRequest = await createFixturePullRequest("stacked-existing-pr");
 
     await createSession(page);
     await chooseExistingPr(page, pullRequest.url);
     await goNextToStep(page, "worktree_created");
     await runCommandAndWaitForMetadata(page, "Create worktree", "worktree_path", UI_COMMAND_TIMEOUT_MS);
 
-    const worktreeSession = await expectSessionMetadataContains(page, "source_pr_update_mode", "");
-    const updateMode = stringValue(worktreeSession.metadata?.source_pr_update_mode);
-    expect(["direct", "replacement"]).toContain(updateMode);
-    if (updateMode === "direct") {
-      expect(worktreeSession.metadata?.pr_url).toBe(pullRequest.url);
-      expect(worktreeSession.metadata?.pr_source).toBe("existing");
-    } else {
-      expect(stringValue(worktreeSession.metadata?.pr_url)).toBe("");
-    }
+    const worktreeSession = await expectSessionMetadata(page, "source_pr_update_mode", "stacked");
+    expect(worktreeSession.metadata?.source_pr_url).toBe(pullRequest.url);
+    expect(worktreeSession.metadata?.source_pr_head_ref).toBe(pullRequest.branch);
+    expect(stringValue(worktreeSession.metadata?.pr_url)).toBe("");
 
     await goNextToStep(page, "dependencies_installed");
     await runCommandAndWaitForMetadata(page, "Install dependencies", "dependencies_installed", UI_COMMAND_TIMEOUT_MS);
-    await goNextToStep(page, "issue_file_created");
-    await useExistingIssue(page, issue.url);
-    await goNextToStep(page, "issue_submitted");
     await goNextToStep(page, "plan_made");
     await goNextToStep(page, "plan_executed");
     await goNextToStep(page, "implementation_reviewed");
@@ -390,7 +381,7 @@ test.describe("live Vibe64 session workflow", () => {
       waitUntil: "networkidle"
     });
     await goNextToStep(page, "changes_accepted");
-    await writeWorktreeFile(page, `e2e-fixtures/${runId}-existing-direct-pr.txt`, `Existing direct PR path ${runId}\n`);
+    await writeWorktreeFile(page, `e2e-fixtures/${runId}-existing-stacked-pr.txt`, `Existing stacked PR path ${runId}\n`);
     await goNextToStep(page, "report_created");
     await writeReportArtifact(page, `# Report\n\nExisting PR path ${runId}.\n`);
     await goNextToStep(page, "project_knowledge_updated");
@@ -399,53 +390,51 @@ test.describe("live Vibe64 session workflow", () => {
 
     const committedSession = await latestSession(page);
     const pushedBranch = stringValue(committedSession.metadata?.branch_pushed);
-    if (updateMode === "replacement" && pushedBranch) {
+    if (pushedBranch) {
       addCleanupTask(async () => deleteRemoteBranch(pushedBranch));
     }
 
     await goNextToStep(page, "create_pull_request");
-    if (updateMode === "direct") {
-      await expectButtonEnabled(page, "Next step");
-      await expectButtonEnabled(page, "Open PR");
-      await expectButtonDisabled(page, "Draft PR");
-      await expectButtonDisabled(page, "Create PR on GH");
-      await expectButtonEnabled(page, "Next step");
-
-      const updatedPr = await ghJson([
-        "pr",
-        "view",
-        pullRequest.url,
-        "--json",
-        "commits,url"
-      ]);
-      expect(updatedPr.url).toBe(pullRequest.url);
-      expect(Array.isArray(updatedPr.commits) ? updatedPr.commits.length : 0).toBeGreaterThan(1);
-      return;
-    }
-
-    await writePullRequestArtifact(page, `# ${fixtureTitle("replacement-pr")}\n\nReplacement for ${pullRequest.url}.\n`);
+    await writePullRequestArtifact(page, `# ${fixtureTitle("stacked-pr")}\n\nStacked on ${pullRequest.url}.\n`);
     await runCommandAndWaitForMetadata(page, "Create PR on GH", "pr_url", UI_COMMAND_TIMEOUT_MS);
 
-    const replacementSession = await latestSession(page);
-    const replacementPrUrl = stringValue(replacementSession.metadata?.pr_url);
-    expect(replacementPrUrl).toContain("/pull/");
-    expect(replacementPrUrl).not.toBe(pullRequest.url);
-    expect(replacementSession.metadata?.pr_source).toBe("replacement");
-    addCleanupTask(async () => closeGithubPr(replacementPrUrl));
+    const stackedSession = await latestSession(page);
+    const stackedPrUrl = stringValue(stackedSession.metadata?.pr_url);
+    expect(stackedPrUrl).toContain("/pull/");
+    expect(stackedPrUrl).not.toBe(pullRequest.url);
+    expect(stackedSession.metadata?.pr_source).toBe("stacked");
+    addCleanupTask(async () => closeGithubPr(stackedPrUrl));
+
+    const stackedPullRequest = await ghJson([
+      "pr",
+      "view",
+      stackedPrUrl,
+      "--json",
+      "baseRefName,body,url"
+    ]);
+    expect(stackedPullRequest.url).toBe(stackedPrUrl);
+    expect(stackedPullRequest.baseRefName).toBe(pullRequest.branch);
+    expect(stringValue(stackedPullRequest.body)).toContain(pullRequest.url);
   });
 
-  test("marks an unpushable existing PR as a replacement-PR workflow when configured", async ({ page }) => {
+  test("rejects a cross-repo existing PR when configured", async ({ page }) => {
     const replacementPrRef = stringValue(process.env.VIBE64_E2E_REPLACEMENT_PR_REF);
-    test.skip(!replacementPrRef, "Set VIBE64_E2E_REPLACEMENT_PR_REF to exercise a cross-repo replacement PR.");
+    test.skip(!replacementPrRef, "Set VIBE64_E2E_REPLACEMENT_PR_REF to exercise a cross-repo PR rejection.");
 
     await createSession(page);
-    await chooseExistingPr(page, replacementPrRef);
-    await goNextToStep(page, "worktree_created");
-    await runCommandAndWaitForMetadata(page, "Create worktree", "worktree_path", UI_COMMAND_TIMEOUT_MS);
-
-    const session = await expectSessionMetadata(page, "source_pr_update_mode", "replacement");
-    expect(stringValue(session.metadata?.pr_url)).toBe("");
-    await expectButtonEnabled(page, "Next step");
+    await clickButton(page, "Use existing PR");
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    await dialog.getByLabel("PR URL or number").fill(replacementPrRef);
+    await dialog.getByRole("button", {
+      exact: true,
+      name: "Continue"
+    }).click();
+    await expect(page.getByText("cannot be used as a stacked PR base because its head branch is not in this repository").first()).toBeVisible({
+      timeout: 60_000
+    });
+    await expectSessionMetadata(page, "work_source", "");
+    await expectButtonDisabled(page, "Next step");
   });
 
   test("requires confirmation before abandoning a session", async ({ page }) => {

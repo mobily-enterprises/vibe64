@@ -174,14 +174,14 @@ test("Vibe64 project routes persist project type and plain-file config", async (
   });
 });
 
-test("Vibe64 session creation returns a setup gate instead of using legacy issue-session routes", async () => {
+test("Vibe64 session creation returns a setup gate and removed issue-session routes stay unavailable", async () => {
   await withTemporaryPackageRoot("session-target-app", async (targetRoot) => {
     await withTargetRoot(targetRoot, async (app) => {
-      const legacy = await app.inject({
+      const removedIssueSessionRoute = await app.inject({
         method: "POST",
         url: "/api/studio/current-app/issue-sessions"
       });
-      assert.equal(legacy.statusCode, 404);
+      assert.equal(removedIssueSessionRoute.statusCode, 404);
 
       const missingProjectType = await app.inject({
         method: "POST",

@@ -23,6 +23,7 @@ Body guidance:
 - Summarize the user-visible change.
 - List important files or areas changed.
 - List verification already run, or clearly say when verification is still pending.
+- If this session stacks on `source_pr_url`, mention that relationship in the pull request body.
 - Mention blockers or risks only when they matter to the reviewer.
 
 After the helper reports success, stop.

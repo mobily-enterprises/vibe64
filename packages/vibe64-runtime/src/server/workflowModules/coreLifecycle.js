@@ -93,6 +93,22 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
         disabledReason: "Work source is already selected.",
         disabledWhen: [when.metadataExists("work_source")],
         icon: "github",
+        id: "use_existing_issue",
+        inputFields: [
+          {
+            label: "Issue URL or number",
+            name: "issueRef",
+            placeholder: "123, #123, or https://github.com/org/repo/issues/123",
+            requiredMessage: "Issue URL or number is required."
+          }
+        ],
+        label: "Use existing issue",
+        type: "adapter"
+      },
+      {
+        disabledReason: "Work source is already selected.",
+        disabledWhen: [when.metadataExists("work_source")],
+        icon: "github",
         id: "use_existing_pr",
         inputFields: [
           {
@@ -107,22 +123,50 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
       }
     ],
     autopilot: {
-      actionId: "use_new_branch",
-      advanceOnSuccess: true,
       completeWhen: [when.metadataExists("work_source")],
-      label: "Choose work source"
+      kind: "work_source",
+      label: "Choose starting point",
+      stop: true
     },
-    description: "Choose whether this session starts from a new branch or an existing pull request.",
+    description: "Choose whether this session starts from a new branch, an existing issue, or an existing pull request.",
     id: workSourceSelectedStepId,
-    interaction: {
-      kind: "run_action",
-      primaryActionLabel: "Use new branch",
-      title: "Choose work source"
-    },
-    label: "Choose work source",
+    label: "Choose starting point",
     next: {
-      disabledReason: "Choose a work source before continuing.",
+      disabledReason: "Choose a starting point before continuing.",
       enabledWhen: [when.metadataExists("work_source")]
+    },
+    presentation: {
+      stop: {
+        intents: [
+          {
+            actionId: "use_new_branch",
+            id: "use_new_branch",
+            label: "Use new branch",
+            style: "primary",
+            type: "action"
+          },
+          {
+            actionId: "use_existing_issue",
+            id: "use_existing_issue",
+            label: "Use existing issue",
+            style: "secondary",
+            type: "action"
+          },
+          {
+            actionId: "use_existing_pr",
+            id: "use_existing_pr",
+            label: "Use existing PR",
+            style: "secondary",
+            type: "action"
+          }
+        ],
+        screen: {
+          kind: "work_source",
+          message: "Start from a new branch, an existing issue, or a pull request to stack on.",
+          sections: [],
+          title: "Choose starting point"
+        }
+      }
     },
     rewindable: false
   },
@@ -598,7 +642,7 @@ const workSourceSelectedMachine = {
       default:
         return {
           next: nextForSession(context.session, {
-            disabledReason: "Choose a work source before continuing."
+            disabledReason: "Choose a starting point before continuing."
           }),
           stepMachine: publicState(this, state)
         };
@@ -606,7 +650,7 @@ const workSourceSelectedMachine = {
   },
 
   async actionFinished(context = {}) {
-    if (!["use_new_branch", "use_existing_pr"].includes(context.actionId)) {
+    if (!["use_new_branch", "use_existing_issue", "use_existing_pr"].includes(context.actionId)) {
       return;
     }
 

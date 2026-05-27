@@ -61,8 +61,7 @@ function createWorktreeScript({
   const sourcePrNumber = normalizeText(session.metadata?.source_pr_number);
   const sourcePrHeadRef = normalizeText(session.metadata?.source_pr_head_ref);
   const sourcePrHeadRepo = normalizeText(session.metadata?.source_pr_head_repo);
-  const sourcePrUrl = normalizeText(session.metadata?.source_pr_url);
-  const requestedUpdateMode = normalizeText(session.metadata?.source_pr_update_mode);
+  const sourcePrHeadSha = normalizeText(session.metadata?.source_pr_head_sha);
   return [
     "set -e",
     `export VIBE64_TARGET_ROOT=${quotedTargetRoot}`,
@@ -92,8 +91,7 @@ function createWorktreeScript({
       `SOURCE_PR_NUMBER=${shellQuote(sourcePrNumber)}`,
       `SOURCE_PR_HEAD_REF=${shellQuote(sourcePrHeadRef)}`,
       `SOURCE_PR_HEAD_REPO=${shellQuote(sourcePrHeadRepo)}`,
-      `SOURCE_PR_URL=${shellQuote(sourcePrUrl)}`,
-      `REQUESTED_UPDATE_MODE=${shellQuote(requestedUpdateMode)}`,
+      `SOURCE_PR_HEAD_SHA=${shellQuote(sourcePrHeadSha)}`,
       "if [ -z \"$SOURCE_PR_NUMBER\" ]; then",
       "  printf '[studio] Existing PR metadata is incomplete. Abandon this session and start again.\\n' >&2",
       "  exit 1",
@@ -101,30 +99,19 @@ function createWorktreeScript({
       "PR_FETCH_REF=\"refs/remotes/vibe64/pr/$SOURCE_PR_NUMBER\"",
       "printf '[studio] Fetching PR #%s\\n' \"$SOURCE_PR_NUMBER\"",
       `git -C ${quotedTargetRoot} fetch origin "pull/$SOURCE_PR_NUMBER/head:$PR_FETCH_REF"`,
+      "FETCHED_PR_SHA=\"$(git -C " + quotedTargetRoot + " rev-parse --verify \"$PR_FETCH_REF\")\"",
+      "if [ -n \"$SOURCE_PR_HEAD_SHA\" ] && [ \"$FETCHED_PR_SHA\" != \"$SOURCE_PR_HEAD_SHA\" ]; then",
+      "  printf '[studio] Existing PR #%s moved from %s to %s. Start a new session from the updated PR.\\n' \"$SOURCE_PR_NUMBER\" \"$SOURCE_PR_HEAD_SHA\" \"$FETCHED_PR_SHA\" >&2",
+      "  exit 1",
+      "fi",
       `if git -C ${quotedTargetRoot} show-ref --verify --quiet ${quotedBranchRef}; then`,
       `  git -C ${quotedTargetRoot} worktree add ${quotedWorktreePath} ${quotedBranch}`,
       "else",
       `  git -C ${quotedTargetRoot} worktree add -b ${quotedBranch} ${quotedWorktreePath} "$PR_FETCH_REF"`,
       "fi",
       "prepare_vibe64_worktree",
-      "if [ \"$REQUESTED_UPDATE_MODE\" = \"direct\" ]; then",
-      "  if [ -z \"$SOURCE_PR_HEAD_REF\" ] || [ -z \"$SOURCE_PR_HEAD_REPO\" ]; then",
-      "    printf '[studio] Existing PR push target is incomplete; this session will create a replacement PR.\\n'",
-      `    ${recordCommandFactScript("source_pr_update_mode", "replacement")}`,
-      "    exit 0",
-      "  fi",
-      "  PR_HEAD_REMOTE=\"vibe64-pr-head\"",
-      `  git -C ${quotedWorktreePath} remote remove "$PR_HEAD_REMOTE" >/dev/null 2>&1 || true`,
-      `  git -C ${quotedWorktreePath} remote add "$PR_HEAD_REMOTE" "https://github.com/$SOURCE_PR_HEAD_REPO.git"`,
-      `  if git -C ${quotedWorktreePath} push --dry-run "$PR_HEAD_REMOTE" "HEAD:refs/heads/$SOURCE_PR_HEAD_REF"; then`,
-      "    printf '[studio] Existing PR can be updated directly.\\n'",
-      `    ${recordCommandFactScript("source_pr_update_mode", "direct")}`,
-      `    ${recordCommandFactScript("pr_url", "\"$SOURCE_PR_URL\"")}`,
-      "  else",
-      "    printf '[studio] Existing PR cannot be pushed directly; this session will create a replacement PR.\\n'",
-      `    ${recordCommandFactScript("source_pr_update_mode", "replacement")}`,
-      "  fi",
-      "fi",
+      "printf '[studio] Session branch will stack on existing PR branch %s/%s.\\n' \"$SOURCE_PR_HEAD_REPO\" \"$SOURCE_PR_HEAD_REF\"",
+      recordCommandFactScript("source_pr_update_mode", "stacked"),
       "exit 0"
     ] : []),
     `if git -C ${quotedTargetRoot} show-ref --verify --quiet ${quotedBranchRef}; then`,
@@ -156,7 +143,7 @@ async function createWorktreeTerminalSpec({
   ]);
   const workSource = normalizeText(session.metadata?.work_source) || "new_branch";
   const metadataBaseBranch = workSource === "existing_pr"
-    ? normalizeText(session.metadata?.source_pr_base_ref) || baseBranch
+    ? normalizeText(session.metadata?.source_pr_head_ref) || baseBranch
     : baseBranch;
   const metadataBaseCommit = workSource === "existing_pr"
     ? normalizeText(session.metadata?.source_pr_head_sha) || baseCommit

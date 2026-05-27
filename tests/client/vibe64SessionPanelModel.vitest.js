@@ -99,7 +99,7 @@ describe("Vibe64 session panel model", () => {
         {
           id: "plan_made",
           index: 2,
-          label: "Make a plan for the issue",
+          label: "Make a plan",
           status: "current"
         }
       ]
@@ -139,7 +139,7 @@ describe("Vibe64 session panel model", () => {
         {
           id: "plan_made",
           index: 6,
-          label: "Make a plan for the issue",
+          label: "Make a plan",
           status: "current"
         },
         {
@@ -178,7 +178,7 @@ describe("Vibe64 session panel model", () => {
     }))).toEqual([
       { canRewind: false, id: "session_created", label: "Create session", state: "done" },
       { canRewind: true, id: "issue_file_created", label: "Define or select issue", state: "done" },
-      { canRewind: false, id: "plan_made", label: "Make a plan for the issue", state: "current" },
+      { canRewind: false, id: "plan_made", label: "Make a plan", state: "current" },
       { canRewind: false, id: "implementation_reviewed", label: "Human review", state: "pending" },
       { canRewind: false, id: "deep_ui_check_run", label: "Run deep UI check", state: "pending" },
       { canRewind: false, id: "changes_accepted", label: "Final review", state: "pending" },

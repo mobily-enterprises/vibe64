@@ -212,6 +212,109 @@ test.describe("Autopilot dumb client contract", () => {
     await expect(page.getByText("Could not resolve GitHub issue")).toHaveCount(0);
   });
 
+  test("renders the starting-point choices and submits existing issue and PR refs through server intents", async ({ page }) => {
+    const intentRequests: unknown[] = [];
+    const session = workSourceSession();
+    await mockVibe64Session(page, session, {
+      onIntent: (body) => {
+        intentRequests.push(body);
+      }
+    });
+
+    await page.goto(`${BASE_URL}/home`);
+
+    await expect(page.getByRole("heading", { name: "Choose starting point" })).toBeVisible();
+    await expect(page.getByText("Start from a new branch, an existing issue, or a pull request to stack on."))
+      .toBeVisible();
+    await expect(page.getByRole("button", { name: "Use new branch" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Use existing issue" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Use existing PR" })).toBeVisible();
+
+    await page.getByRole("button", { name: "Use existing issue" }).click();
+    await expect(page.getByLabel("Issue URL or number")).toBeVisible();
+    await page.getByLabel("Issue URL or number").fill("#123");
+    await page.getByRole("button", { name: "Use existing issue" }).click();
+
+    await page.getByRole("button", { name: "Use existing PR" }).click();
+    await expect(page.getByLabel("PR URL or number")).toBeVisible();
+    await page.getByLabel("PR URL or number").fill("https://github.com/example/project/pull/77");
+    await page.getByRole("button", { name: "Use existing PR" }).click();
+
+    await expect.poll(() => intentRequests).toEqual([
+      {
+        fields: {
+          issueRef: "#123"
+        },
+        stepId: "work_source_selected",
+        stepStatus: "ready"
+      },
+      {
+        fields: {
+          prRef: "https://github.com/example/project/pull/77"
+        },
+        stepId: "work_source_selected",
+        stepStatus: "ready"
+      }
+    ]);
+  });
+
+  test("auto-advances skipped issue steps for an existing PR work anchor", async ({ page }) => {
+    const advances: string[] = [];
+    const session = existingPrIssueSkipSession();
+    await mockVibe64Session(page, session, {
+      onAdvance: () => {
+        advances.push(String(session.currentStep || ""));
+        if (session.currentStep === "issue_file_created") {
+          Object.assign(session, existingPrIssueSubmittedSkipSession());
+          return;
+        }
+        if (session.currentStep === "issue_submitted") {
+          Object.assign(session, sessionPayload({
+            currentStep: "plan_made",
+            currentStepDefinition: {
+              id: "plan_made",
+              label: "Make a plan"
+            },
+            presentation: {
+              auto: {
+                nextOperation: {
+                  executable: false,
+                  kind: "stop",
+                  reason: "Plan from the PR work anchor."
+                }
+              },
+              screen: {
+                kind: "ready",
+                sections: [],
+                title: "Make a plan"
+              },
+              step: {
+                id: "plan_made",
+                label: "Make a plan",
+                status: "ready"
+              }
+            },
+            stepMachine: {
+              status: "ready",
+              stepId: "plan_made"
+            }
+          }));
+        }
+      }
+    });
+
+    await page.goto(`${BASE_URL}/home`);
+
+    await expect(page.getByRole("heading", { name: "Make a plan" })).toBeVisible();
+    await expect.poll(() => advances).toEqual([
+      "issue_file_created",
+      "issue_submitted"
+    ]);
+    await expect(page.getByRole("button", { name: "Use existing issue" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Make my own issue" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Create issue on GH" })).toHaveCount(0);
+  });
+
   test("continues from server state when a command stream closes after server completion", async ({ page }) => {
     await mockCommandTerminalSocketThatCloses(page);
     const advances: unknown[] = [];
@@ -1998,6 +2101,223 @@ function issueSourceSession(overrides: Record<string, unknown> = {}) {
     stepMachine: {
       status: "ready",
       stepId: "issue_file_created"
+    },
+    ...overrides
+  });
+}
+
+function workSourceSession(overrides: Record<string, unknown> = {}) {
+  const intents = [
+    {
+      actionId: "use_new_branch",
+      enabled: true,
+      id: "use_new_branch",
+      inputFields: [],
+      label: "Use new branch",
+      style: "primary"
+    },
+    {
+      actionId: "use_existing_issue",
+      enabled: true,
+      id: "use_existing_issue",
+      inputFields: [
+        {
+          label: "Issue URL or number",
+          name: "issueRef",
+          placeholder: "123, #123, or https://github.com/org/repo/issues/123",
+          requiredMessage: "Issue URL or number is required."
+        }
+      ],
+      label: "Use existing issue",
+      style: "secondary"
+    },
+    {
+      actionId: "use_existing_pr",
+      enabled: true,
+      id: "use_existing_pr",
+      inputFields: [
+        {
+          label: "PR URL or number",
+          name: "prRef",
+          placeholder: "123, #123, or https://github.com/org/repo/pull/123",
+          requiredMessage: "PR URL or number is required."
+        }
+      ],
+      label: "Use existing PR",
+      style: "secondary"
+    }
+  ];
+  return sessionPayload({
+    currentStep: "work_source_selected",
+    currentStepDefinition: {
+      id: "work_source_selected",
+      label: "Choose starting point"
+    },
+    intents,
+    presentation: {
+      auto: {
+        nextOperation: {
+          executable: false,
+          kind: "wait",
+          reason: "user"
+        }
+      },
+      intents,
+      screen: {
+        kind: "work_source",
+        message: "Start from a new branch, an existing issue, or a pull request to stack on.",
+        sections: [],
+        title: "Choose starting point"
+      },
+      step: {
+        id: "work_source_selected",
+        label: "Choose starting point",
+        status: "ready"
+      }
+    },
+    stepDefinitions: [
+      {
+        id: "work_source_selected",
+        label: "Choose starting point",
+        status: "current"
+      },
+      {
+        id: "worktree_created",
+        label: "Create worktree",
+        status: "pending"
+      }
+    ],
+    stepMachine: {
+      status: "ready",
+      stepId: "work_source_selected"
+    },
+    ...overrides
+  });
+}
+
+function existingPrIssueSkipSession(overrides: Record<string, unknown> = {}) {
+  return sessionPayload({
+    currentStep: "issue_file_created",
+    currentStepDefinition: {
+      id: "issue_file_created",
+      label: "Define or select issue"
+    },
+    metadata: {
+      source_pr_title: "Upstream feature",
+      source_pr_update_mode: "stacked",
+      source_pr_url: "https://github.com/example/project/pull/77",
+      work_source: "existing_pr"
+    },
+    next: {
+      disabledReason: "",
+      enabled: true,
+      label: "Next step",
+      stepId: "issue_submitted",
+      visible: true
+    },
+    presentation: {
+      auto: {
+        nextOperation: {
+          executable: true,
+          id: "session-advance:issue_submitted",
+          kind: "advance",
+          label: "Next step",
+          route: "session-advance"
+        }
+      },
+      intents: [
+        {
+          actionId: "",
+          disabledReason: "",
+          enabled: true,
+          id: "continue_step",
+          inputFields: [],
+          label: "Next step",
+          operation: "continue",
+          style: "primary"
+        }
+      ],
+      screen: {
+        kind: "ready",
+        sections: [],
+        title: "Define or select issue"
+      },
+      step: {
+        id: "issue_file_created",
+        label: "Define or select issue",
+        status: "done"
+      }
+    },
+    stepMachine: {
+      message: "Skipped: existing PR selected as the work anchor; no GitHub issue is required.",
+      phase: "skipped_existing_pr",
+      skipReason: "Skipped: existing PR selected as the work anchor; no GitHub issue is required.",
+      status: "done",
+      stepId: "issue_file_created"
+    },
+    ...overrides
+  });
+}
+
+function existingPrIssueSubmittedSkipSession(overrides: Record<string, unknown> = {}) {
+  return sessionPayload({
+    currentStep: "issue_submitted",
+    currentStepDefinition: {
+      id: "issue_submitted",
+      label: "Edit and submit issue"
+    },
+    metadata: {
+      source_pr_title: "Upstream feature",
+      source_pr_update_mode: "stacked",
+      source_pr_url: "https://github.com/example/project/pull/77",
+      work_source: "existing_pr"
+    },
+    next: {
+      disabledReason: "",
+      enabled: true,
+      label: "Next step",
+      stepId: "plan_made",
+      visible: true
+    },
+    presentation: {
+      auto: {
+        nextOperation: {
+          executable: true,
+          id: "session-advance:plan_made",
+          kind: "advance",
+          label: "Next step",
+          route: "session-advance"
+        }
+      },
+      intents: [
+        {
+          actionId: "",
+          disabledReason: "",
+          enabled: true,
+          id: "continue_step",
+          inputFields: [],
+          label: "Next step",
+          operation: "continue",
+          style: "primary"
+        }
+      ],
+      screen: {
+        kind: "ready",
+        sections: [],
+        title: "Edit and submit issue"
+      },
+      step: {
+        id: "issue_submitted",
+        label: "Edit and submit issue",
+        status: "done"
+      }
+    },
+    stepMachine: {
+      message: "Skipped: existing PR selected as the work anchor; no GitHub issue is required.",
+      phase: "skipped_existing_pr",
+      skipReason: "Skipped: existing PR selected as the work anchor; no GitHub issue is required.",
+      status: "done",
+      stepId: "issue_submitted"
     },
     ...overrides
   });

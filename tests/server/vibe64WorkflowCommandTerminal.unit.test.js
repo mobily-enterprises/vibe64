@@ -5,6 +5,9 @@ import { promisify } from "node:util";
 import test from "node:test";
 
 import {
+  commitChangesTerminalSpec
+} from "@local/vibe64-adapters/server/workflowCommandTerminal/commitPush";
+import {
   createPrOnGhTerminalSpec
 } from "@local/vibe64-adapters/server/workflowCommandTerminal/issuePr";
 import {
@@ -58,6 +61,79 @@ test("create PR command treats an existing branch pull request as success", asyn
     assert.match(script, /fact:set\\t%s\\t%s\\n' pr_url/u);
     assert.match(script, /fact:set\\t%s\\t%s\\n' pr_title/u);
     assert.match(script, /if ! PR_URL="\$\(gh pr create/u);
+  });
+});
+
+test("create PR command stacks new pull requests on selected existing PRs", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createGitRepository(targetRoot);
+
+    const spec = await createPrOnGhTerminalSpec({
+      session: {
+        artifactsRoot: path.join(targetRoot, ".vibe64", "artifacts"),
+        metadata: {
+          base_branch: "feature-base",
+          branch: "vibe64/test-session",
+          source_pr_head_ref: "feature-base",
+          source_pr_head_sha: "abc123",
+          source_pr_number: "77",
+          source_pr_url: "https://github.com/example/project/pull/77",
+          worktree_path: targetRoot
+        },
+        metadataRoot: path.join(targetRoot, ".vibe64", "metadata"),
+        sessionId: "test-session",
+        targetRoot
+      }
+    });
+
+    assert.equal(spec.ok, true);
+
+    const script = spec.args.at(-1);
+    assert.match(script, /BASE_BRANCH=feature-base/u);
+    assert.match(script, /SOURCE_PR_NUMBER=77/u);
+    assert.match(script, /SOURCE_PR_HEAD_SHA=abc123/u);
+    assert.match(script, /Validating stacked PR base/u);
+    assert.match(script, /gh pr view "\$SOURCE_PR_NUMBER" --json state/u);
+    assert.match(script, /gh pr view "\$SOURCE_PR_NUMBER" --json headRefOid/u);
+    assert.match(script, /PR_SOURCE=stacked/u);
+    assert.match(script, /Stacks on existing pull request: %s/u);
+    assert.match(script, /gh pr create --base "\$BASE_BRANCH" --head "\$EXPECTED_BRANCH"/u);
+    assert.doesNotMatch(script, /PR_SOURCE=replacement/u);
+    assert.doesNotMatch(script, /Continues existing pull request/u);
+  });
+});
+
+test("commit command always pushes the session branch for existing PR sessions", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createGitRepository(targetRoot);
+
+    const spec = await commitChangesTerminalSpec({
+      session: {
+        artifactsRoot: path.join(targetRoot, ".vibe64", "artifacts"),
+        metadata: {
+          base_branch: "feature-base",
+          branch: "vibe64/test-session",
+          source_pr_head_ref: "feature-base",
+          source_pr_head_repo: "example/project",
+          source_pr_update_mode: "direct",
+          work_source: "existing_pr",
+          worktree_path: targetRoot
+        },
+        metadataRoot: path.join(targetRoot, ".vibe64", "metadata"),
+        sessionId: "test-session",
+        targetRoot
+      }
+    });
+
+    assert.equal(spec.ok, true);
+
+    const script = spec.args.at(-1);
+    assert.match(script, /BASE_BRANCH=feature-base/u);
+    assert.match(script, /git push -u origin "\$CURRENT_BRANCH"/u);
+    assert.match(script, /VIBE64_COMMAND_FACT_VALUE="\$CURRENT_BRANCH"/u);
+    assert.match(script, /fact:set\\t%s\\t%s\\n' branch_pushed/u);
+    assert.doesNotMatch(script, /vibe64-pr-head/u);
+    assert.doesNotMatch(script, /HEAD:refs\/heads\/\$SOURCE_PR_HEAD_REF/u);
   });
 });
 
