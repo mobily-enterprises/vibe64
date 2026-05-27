@@ -1,0 +1,271 @@
+import assert from "node:assert/strict";
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
+import test from "node:test";
+
+import {
+  createProjectToolRegistry
+} from "@local/vibe64-runtime/server/projectToolRegistry";
+import {
+  createService
+} from "../../packages/vibe64-project/src/server/service.js";
+import {
+  VIBE64_DEPLOY_PRODUCTION_COMMAND_CONFIG,
+  VIBE64_DEPLOY_STAGING_COMMAND_CONFIG,
+  createVibe64ProjectConfigStore
+} from "@local/vibe64-adapters/server/configStore";
+import {
+  LARAVEL_DATABASE_RUNTIME_CONFIG
+} from "@local/vibe64-adapters/server/adapters/laravel/constants";
+import {
+  createFixCodexJobStore,
+  fixCodexReportInstructions
+} from "../../packages/vibe64-terminals/src/server/fixCodexJobs.js";
+import { withTemporaryRoot } from "./vibe64TestHelpers.js";
+
+test("project tool registry validates models and lists tools deterministically", async () => {
+  const registry = createProjectToolRegistry();
+
+  registry.registerTools("unit", [
+    {
+      id: "z_tool",
+      label: "Z tool",
+      type: "command",
+      parameters: [],
+      command: async () => ({ ok: true })
+    },
+    {
+      id: "a_tool",
+      label: "A tool",
+      type: "prompt",
+      parameters: [
+        {
+          id: "mode",
+          label: "Mode",
+          type: "enum",
+          options: [
+            {
+              label: "Fast",
+              value: "fast"
+            }
+          ]
+        }
+      ],
+      prompt: "Do the thing."
+    }
+  ]);
+
+  assert.deepEqual((await registry.listTools()).map((tool) => tool.id), [
+    "a_tool",
+    "z_tool"
+  ]);
+  await assert.rejects(
+    async () => registry.resolveToolRun("a_tool", {
+      parameters: {
+        mode: "slow"
+      }
+    }),
+    /must be one of/u
+  );
+  assert.throws(() => {
+    registry.registerTools("bad", {
+      id: "missing_runner",
+      type: "command"
+    });
+  }, /requires a command function/u);
+});
+
+test("optional project config fields do not block readiness", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const store = createVibe64ProjectConfigStore({
+      targetRoot
+    });
+    const configRoot = path.join(targetRoot, ".vibe64", "config");
+    await mkdir(configRoot, {
+      recursive: true
+    });
+    await writeFile(path.join(configRoot, "required_field"), "saved\n", "utf8");
+
+    const config = await store.readConfig({
+      fields: [
+        {
+          id: "required_field",
+          label: "Required",
+          type: "string"
+        },
+        {
+          defaultValue: "",
+          id: "optional_field",
+          label: "Optional",
+          required: false,
+          type: "string"
+        }
+      ]
+    });
+
+    assert.equal(config.ready, true);
+    assert.deepEqual(config.missing, []);
+    assert.equal(config.fieldValues.optional_field.saved, false);
+  });
+});
+
+test("deploy project tools are disabled without saved command config", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const service = createService({
+      targetRoot
+    });
+    await service.saveProjectType({
+      projectType: "jskit"
+    });
+    await service.saveProjectConfig({
+      values: {
+        github_pr_merge_method: "merge",
+        jskit_allow_self_target: false,
+        jskit_database_runtime: "none"
+      }
+    });
+
+    const response = await service.listProjectTools();
+    const production = response.tools.find((tool) => tool.id === "push_to_production");
+    const staging = response.tools.find((tool) => tool.id === "push_to_staging");
+
+    assert.equal(response.ok, true);
+    assert.equal(production.enabled, false);
+    assert.match(production.disabledReason, /deploy_production_command/u);
+    assert.equal(staging.enabled, false);
+    assert.match(staging.disabledReason, /deploy_staging_command/u);
+  });
+});
+
+test("deploy project tool specs use saved config commands", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const service = createService({
+      targetRoot
+    });
+    await service.saveProjectType({
+      projectType: "jskit"
+    });
+    await service.saveProjectConfig({
+      values: {
+        [VIBE64_DEPLOY_PRODUCTION_COMMAND_CONFIG]: "npm run deploy:prod",
+        [VIBE64_DEPLOY_STAGING_COMMAND_CONFIG]: "npm run deploy:stage",
+        github_pr_merge_method: "merge",
+        jskit_allow_self_target: false,
+        jskit_database_runtime: "none"
+      }
+    });
+
+    const production = await service.prepareProjectToolRun("push_to_production");
+    const staging = await service.prepareProjectToolRun("push_to_staging");
+
+    assert.equal(production.ok, true);
+    assert.equal(production.spec.commandPreview, "npm run deploy:prod");
+    assert.deepEqual(production.spec.args, ["-lc", "npm run deploy:prod"]);
+    assert.equal(staging.spec.commandPreview, "npm run deploy:stage");
+  });
+});
+
+test("sync main project tool does not require session merge metadata", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const service = createService({
+      targetRoot
+    });
+    await service.saveProjectType({
+      projectType: "jskit"
+    });
+    await service.saveProjectConfig({
+      values: {
+        github_pr_merge_method: "merge",
+        jskit_allow_self_target: false,
+        jskit_database_runtime: "none"
+      }
+    });
+
+    const run = await service.prepareProjectToolRun("sync_main_with_main");
+
+    assert.equal(run.ok, true);
+    assert.equal(run.spec.ok, true);
+    assert.match(run.spec.args.at(-1), /git -C .* fetch origin main/u);
+    assert.doesNotMatch(run.spec.args.at(-1), /Merge the pull request/u);
+  });
+});
+
+test("Laravel MySQL project tool is gated by compatible managed database runtime", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const service = createService({
+      targetRoot
+    });
+    await service.saveProjectType({
+      projectType: "laravel"
+    });
+    await service.saveProjectConfig({
+      values: {
+        github_pr_merge_method: "merge",
+        [LARAVEL_DATABASE_RUNTIME_CONFIG]: "sqlite"
+      }
+    });
+
+    let response = await service.listProjectTools();
+    assert.equal(response.tools.some((tool) => tool.id === "connect_mysql"), false);
+
+    await service.saveProjectConfig({
+      values: {
+        github_pr_merge_method: "merge",
+        [LARAVEL_DATABASE_RUNTIME_CONFIG]: "mysql"
+      }
+    });
+    response = await service.listProjectTools();
+    const mysql = response.tools.find((tool) => tool.id === "connect_mysql");
+    assert.equal(mysql.enabled, true);
+    assert.equal(mysql.label, "Connect to MySQL");
+  });
+});
+
+test("Fix Codex jobs validate one-time report tokens", () => {
+  const store = createFixCodexJobStore({
+    clock: () => new Date("2026-05-27T01:02:03.000Z")
+  });
+  const { job, token } = store.createJob({
+    scope: "project",
+    subject: "Unit tool",
+    targetRoot: "/workspace/project"
+  });
+
+  assert.throws(() => {
+    store.reportJob(job.id, {
+      status: "fixed",
+      token: "wrong"
+    });
+  }, /token is invalid/u);
+
+  const reported = store.reportJob(job.id, {
+    message: "Fixed command.",
+    status: "fixed",
+    token,
+    verificationSummary: "npm test passed."
+  });
+  assert.equal(reported.status, "fixed");
+  assert.equal(reported.message, "Fixed command.");
+  assert.equal(reported.verificationSummary, "npm test passed.");
+
+  assert.throws(() => {
+    store.reportJob(job.id, {
+      status: "fixed",
+      token
+    });
+  }, /already been reported/u);
+});
+
+test("Fix Codex report instructions expose the mounted helper command", () => {
+  const instructions = fixCodexReportInstructions({
+    job: {
+      id: "job-1"
+    },
+    token: "secret-token"
+  });
+
+  assert.match(instructions, /VIBE64_FIX_CODEX_REPORT_HELPER/u);
+  assert.match(instructions, /"status":"fixed"/u);
+  assert.match(instructions, /"jobId": "job-1"/u);
+  assert.match(instructions, /"token": "secret-token"/u);
+});

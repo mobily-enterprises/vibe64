@@ -43,6 +43,7 @@ function optionalContextLine(label, value) {
 function terminalFailureFixPrompt({
   actionId = "",
   actionLabel = "",
+  attemptedCommand = "",
   closeError = "",
   commandPreview = "",
   currentStep = "",
@@ -79,6 +80,7 @@ function terminalFailureFixPrompt({
     optionalContextLine("Status", terminalStatus),
     optionalContextLine("Exit code", exitCode),
     optionalContextLine("Error", closeError),
+    optionalContextLine("Attempted command", attemptedCommand),
     optionalContextLine("Command", commandPreview)
   ].filter(Boolean).join("\n");
 
@@ -125,6 +127,112 @@ function terminalFailureFixRequest(input = {}) {
   };
 }
 
+function projectToolDeployRepairInstructions(toolId = "") {
+  if (!["push_to_production", "push_to_staging"].includes(normalizeText(toolId))) {
+    return [];
+  }
+  return [
+    "This deploy tool runs a command saved in Vibe64 project configuration.",
+    "Treat the exact Attempted command as authoritative. Do not replace or rewrite the saved deploy command just because it exited non-zero.",
+    "Only change repository files when the attempted command failed because of a clear repository-owned defect.",
+    "If the attempted command itself is a placeholder, intentionally failing command, missing external credentials, remote access issue, or otherwise needs user intent, report `blocked` through the callback instead of editing config/code."
+  ];
+}
+
+function sessionTerminalFailureFixPrompt(input = {}) {
+  const outputTail = terminalFailureOutputTail(input.output);
+  const subject = describeTerminalFailureSubject({
+    actionId: input.actionId,
+    actionLabel: input.actionLabel,
+    launchTargetId: input.launchTargetId,
+    launchTargetLabel: input.launchTargetLabel,
+    shellTarget: input.shellTarget,
+    terminalKind: input.terminalKind
+  });
+  const contextLines = [
+    optionalContextLine("Scope", "session"),
+    optionalContextLine("Session", input.sessionId),
+    optionalContextLine("Current step", input.currentStep),
+    optionalContextLine("Step status", input.stepStatus),
+    optionalContextLine("Target root", input.targetRoot),
+    optionalContextLine("Worktree", input.worktreePath),
+    optionalContextLine("Terminal kind", input.terminalKind),
+    optionalContextLine("Terminal session", input.terminalSessionId),
+    optionalContextLine("Subject", subject),
+    optionalContextLine("Action id", input.actionId),
+    optionalContextLine("Launch target id", input.launchTargetId),
+    optionalContextLine("Shell target", input.shellTarget),
+    optionalContextLine("Status", input.terminalStatus),
+    optionalContextLine("Exit code", input.exitCode),
+    optionalContextLine("Error", input.closeError),
+    optionalContextLine("Attempted command", input.attemptedCommand),
+    optionalContextLine("Command", input.commandPreview)
+  ].filter(Boolean).join("\n");
+
+  return [
+    "A Vibe64 session terminal failed. Diagnose the failure from the repository and terminal output, then attempt to fix the underlying cause in the session worktree.",
+    "This is an ephemeral repair job, not a chat. Do not use the session Codex terminal or global Codex terminal for this repair.",
+    "Leave any code/config changes in the session worktree. When the repair is complete or blocked, report through the Fix Codex callback helper.",
+    "",
+    "Terminal context:",
+    contextLines || "- No terminal metadata was available.",
+    "",
+    "User note:",
+    normalizeText(input.userMessage) || "(No extra note was provided.)",
+    "",
+    `Last ${DEFAULT_TERMINAL_FAILURE_TAIL_LINES} terminal lines:`,
+    "~~~text",
+    outputTail || "(No terminal output was captured.)",
+    "~~~"
+  ].join("\n");
+}
+
+function projectToolFailureFixPrompt(input = {}, {
+  reportInstructions = ""
+} = {}) {
+  const toolId = input.toolId || input.actionId;
+  const outputTail = terminalFailureOutputTail(input.output);
+  const subject = describeTerminalFailureSubject({
+    actionId: toolId,
+    actionLabel: input.toolLabel || input.actionLabel,
+    terminalKind: "project_tool"
+  });
+  const contextLines = [
+    optionalContextLine("Scope", "project"),
+    optionalContextLine("Target root", input.targetRoot),
+    optionalContextLine("Tool id", input.toolId || input.actionId),
+    optionalContextLine("Tool label", input.toolLabel || input.actionLabel),
+    optionalContextLine("Subject", subject),
+    optionalContextLine("Terminal session", input.terminalSessionId),
+    optionalContextLine("Status", input.terminalStatus),
+    optionalContextLine("Exit code", input.exitCode),
+    optionalContextLine("Error", input.closeError),
+    optionalContextLine("Attempted command", input.attemptedCommand),
+    optionalContextLine("Command", input.commandPreview)
+  ].filter(Boolean).join("\n");
+
+  return [
+    "A project-level Vibe64 tool failed. Diagnose the failure from the repository and terminal output, then attempt to fix the underlying cause in the main project checkout.",
+    "This is an ephemeral repair job, not a chat. Do not use or modify Vibe64 session state unless the failure itself requires a repository code/config change.",
+    "The Terminal context includes the exact Attempted command. Start from that command, not from the tool label alone.",
+    "If the exact Attempted command is itself invalid, intentionally failing, or depends on missing external/user configuration, do not guess a replacement command. Report `blocked` with the command and the reason.",
+    ...projectToolDeployRepairInstructions(toolId),
+    "",
+    reportInstructions,
+    "",
+    "Terminal context:",
+    contextLines || "- No terminal metadata was available.",
+    "",
+    "User note:",
+    normalizeText(input.userMessage) || "(No extra note was provided.)",
+    "",
+    `Last ${DEFAULT_TERMINAL_FAILURE_TAIL_LINES} terminal lines:`,
+    "~~~text",
+    outputTail || "(No terminal output was captured.)",
+    "~~~"
+  ].filter((line) => line !== "").join("\n");
+}
+
 function terminalFailureFixRequestForSession(session = {}, input = {}) {
   return terminalFailureFixRequest({
     ...input,
@@ -136,6 +244,8 @@ function terminalFailureFixRequestForSession(session = {}, input = {}) {
 
 export {
   DEFAULT_TERMINAL_FAILURE_TAIL_LINES,
+  projectToolFailureFixPrompt,
+  sessionTerminalFailureFixPrompt,
   terminalFailureFixPrompt,
   terminalFailureFixRequest,
   terminalFailureFixRequestForSession,

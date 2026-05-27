@@ -24,4 +24,13 @@ describe("useVibe64CommandTerminalController", () => {
       terminalExitCode: 1
     })).toBe(true);
   });
+
+  it("offers AI fixes for failed project tool terminals without a session id", () => {
+    expect(commandTerminalCanRequestAiFix({
+      aiFixAvailable: true,
+      terminalCommandPreview: "npm run deploy",
+      terminalExited: true,
+      terminalExitCode: 1
+    })).toBe(true);
+  });
 });

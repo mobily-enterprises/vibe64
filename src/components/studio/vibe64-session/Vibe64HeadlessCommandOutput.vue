@@ -59,6 +59,10 @@ const props = defineProps({
     default: false,
     type: Boolean
   },
+  attemptedCommand: {
+    default: "",
+    type: String
+  },
   commandPreview: {
     default: "",
     type: String
@@ -145,6 +149,7 @@ async function requestAiFix() {
   emit("fix-requested", await terminalFailureFixRequest({
     actionId: props.actionId,
     actionLabel: props.actionLabel,
+    attemptedCommand: props.attemptedCommand,
     closeError: props.error,
     commandPreview: props.commandPreview,
     exitCode: props.exitCode,

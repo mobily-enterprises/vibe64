@@ -7,6 +7,8 @@ import {
 const VIBE64_ENDPOINT = studioApiPath("vibe64");
 const VIBE64_SESSIONS_ENDPOINT = `${VIBE64_ENDPOINT}/sessions`;
 const VIBE64_GLOBAL_CODEX_TERMINAL_ENDPOINT = `${VIBE64_ENDPOINT}/codex-terminal`;
+const VIBE64_TOOLS_ENDPOINT = `${VIBE64_ENDPOINT}/tools`;
+const VIBE64_FIX_CODEX_JOBS_ENDPOINT = `${VIBE64_ENDPOINT}/fix-codex-jobs`;
 
 function vibe64SessionEndpoint(sessionId, suffix = "") {
   return `${VIBE64_SESSIONS_ENDPOINT}/${encodeURIComponent(sessionId)}${suffix}`;
@@ -28,6 +30,28 @@ function vibe64CommandTerminalEndpoint(sessionId, terminalSessionId = "") {
   return terminalSessionId ? `${base}/${encodeURIComponent(terminalSessionId)}` : base;
 }
 
+function vibe64ProjectToolEndpoint(toolId, suffix = "") {
+  return `${VIBE64_TOOLS_ENDPOINT}/${encodeURIComponent(toolId)}${suffix}`;
+}
+
+function vibe64ProjectToolRunEndpoint(toolId) {
+  return vibe64ProjectToolEndpoint(toolId, "/run");
+}
+
+function vibe64ProjectToolFixEndpoint(toolId) {
+  return vibe64ProjectToolEndpoint(toolId, "/fix");
+}
+
+function vibe64ProjectToolTerminalEndpoint(toolId, terminalSessionId = "") {
+  const base = vibe64ProjectToolEndpoint(toolId, "/terminal");
+  return terminalSessionId ? `${base}/${encodeURIComponent(terminalSessionId)}` : base;
+}
+
+function vibe64FixCodexTerminalEndpoint(jobId, terminalSessionId = "") {
+  const base = `${VIBE64_FIX_CODEX_JOBS_ENDPOINT}/${encodeURIComponent(jobId)}/terminal`;
+  return terminalSessionId ? `${base}/${encodeURIComponent(terminalSessionId)}` : base;
+}
+
 function vibe64ArtifactReadinessEndpoint(sessionId) {
   return vibe64SessionEndpoint(sessionId, "/artifact-readiness");
 }
@@ -38,6 +62,10 @@ function vibe64CurrentStepInputEndpoint(sessionId) {
 
 function vibe64TerminalFailureFixRequestEndpoint(sessionId) {
   return vibe64SessionEndpoint(sessionId, "/terminal-failure-fix-request");
+}
+
+function vibe64TerminalFailureFixEndpoint(sessionId) {
+  return vibe64SessionEndpoint(sessionId, "/terminal-failure-fix");
 }
 
 function vibe64ArtifactReadinessStreamEndpoint(sessionId) {
@@ -66,12 +94,38 @@ function vibe64CommandTerminalWebSocketUrl(sessionId, terminalSessionId) {
   return resolveWebSocketUrl(`${vibe64CommandTerminalEndpoint(sessionId, terminalSessionId)}/ws`);
 }
 
+function vibe64ProjectToolTerminalWebSocketUrl(toolId, terminalSessionId) {
+  return resolveWebSocketUrl(`${vibe64ProjectToolTerminalEndpoint(toolId, terminalSessionId)}/ws`);
+}
+
+function vibe64FixCodexTerminalWebSocketUrl(jobId, terminalSessionId) {
+  return resolveWebSocketUrl(`${vibe64FixCodexTerminalEndpoint(jobId, terminalSessionId)}/ws`);
+}
+
 function vibe64LaunchTerminalWebSocketUrl(sessionId, terminalSessionId) {
   return resolveWebSocketUrl(`${vibe64LaunchTerminalEndpoint(sessionId, terminalSessionId)}/ws`);
 }
 
 function vibe64ShellTerminalWebSocketUrl(sessionId, terminalSessionId) {
   return resolveWebSocketUrl(`${vibe64ShellTerminalEndpoint(sessionId, terminalSessionId)}/ws`);
+}
+
+function normalizeVibe64ProjectToolFixInput(input = {}) {
+  const source = input && typeof input === "object" && !Array.isArray(input) ? input : {};
+  return {
+    actionId: String(source.actionId || ""),
+    actionLabel: String(source.actionLabel || ""),
+    attemptedCommand: String(source.attemptedCommand || ""),
+    closeError: String(source.closeError || ""),
+    commandPreview: String(source.commandPreview || ""),
+    exitCode: source.exitCode == null ? "" : String(source.exitCode),
+    output: String(source.output || ""),
+    terminalSessionId: String(source.terminalSessionId || ""),
+    terminalStatus: String(source.terminalStatus || ""),
+    toolId: String(source.toolId || ""),
+    toolLabel: String(source.toolLabel || ""),
+    userMessage: String(source.userMessage || "")
+  };
 }
 
 async function readVibe64SessionDiff(sessionId) {
@@ -106,6 +160,29 @@ async function startVibe64CommandTerminal(sessionId, input = {}) {
   return studioHttpClient.post(vibe64CommandTerminalEndpoint(sessionId), input);
 }
 
+async function readVibe64ProjectTools() {
+  return studioHttpClient.get(VIBE64_TOOLS_ENDPOINT);
+}
+
+async function runVibe64ProjectTool(toolId, input = {}) {
+  return studioHttpClient.post(vibe64ProjectToolRunEndpoint(toolId), input);
+}
+
+async function closeVibe64ProjectToolTerminal(toolId, terminalSessionId) {
+  return studioHttpClient.delete(vibe64ProjectToolTerminalEndpoint(toolId, terminalSessionId));
+}
+
+async function startVibe64ProjectToolFixJob(toolId, input = {}) {
+  return studioHttpClient.post(vibe64ProjectToolFixEndpoint(toolId), normalizeVibe64ProjectToolFixInput({
+    ...input,
+    toolId: input?.toolId || toolId
+  }));
+}
+
+async function closeVibe64FixCodexTerminal(jobId, terminalSessionId) {
+  return studioHttpClient.delete(vibe64FixCodexTerminalEndpoint(jobId, terminalSessionId));
+}
+
 async function closeVibe64CommandTerminal(sessionId, terminalSessionId) {
   return studioHttpClient.delete(vibe64CommandTerminalEndpoint(sessionId, terminalSessionId));
 }
@@ -131,23 +208,39 @@ async function buildVibe64TerminalFailureFixRequest(sessionId, input = {}) {
   return studioHttpClient.post(vibe64TerminalFailureFixRequestEndpoint(sessionId), payload);
 }
 
+async function startVibe64SessionTerminalFixJob(sessionId, input = {}) {
+  const payload = input && typeof input === "object" && !Array.isArray(input)
+    ? input
+    : {};
+  return studioHttpClient.post(vibe64TerminalFailureFixEndpoint(sessionId), payload);
+}
+
 export {
   vibe64CodexTerminalWebSocketUrl,
   vibe64GlobalCodexTerminalWebSocketUrl,
   vibe64CommandTerminalWebSocketUrl,
+  vibe64FixCodexTerminalWebSocketUrl,
   vibe64ArtifactReadinessStreamEndpoint,
   vibe64LaunchTerminalWebSocketUrl,
+  vibe64ProjectToolTerminalWebSocketUrl,
   vibe64ShellTerminalWebSocketUrl,
+  normalizeVibe64ProjectToolFixInput,
   closeVibe64CodexTerminal,
+  closeVibe64FixCodexTerminal,
   closeVibe64GlobalCodexTerminal,
   closeVibe64CommandTerminal,
+  closeVibe64ProjectToolTerminal,
   buildVibe64TerminalFailureFixRequest,
   continueVibe64CodexTurn,
   readVibe64GlobalCodexTerminalState,
   readVibe64ArtifactReadiness,
   readVibe64SessionDiff,
+  readVibe64ProjectTools,
+  runVibe64ProjectTool,
   submitVibe64CurrentStepInput,
   startVibe64CodexTerminal,
   startVibe64GlobalCodexTerminal,
-  startVibe64CommandTerminal
+  startVibe64CommandTerminal,
+  startVibe64SessionTerminalFixJob,
+  startVibe64ProjectToolFixJob
 };

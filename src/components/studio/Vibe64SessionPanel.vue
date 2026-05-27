@@ -24,6 +24,11 @@
         v-if="toolbarActionsVisible"
         class="studio-ai-sessions__app-bar-actions"
       >
+        <Vibe64ProjectTools
+          @global-codex-open="openGlobalCodexTerminal"
+          @global-codex-update="updateGlobalCodexTerminalState"
+        />
+
         <v-btn
           v-if="globalCodexButtonVisible"
           class="studio-ai-sessions__global-codex-button"
@@ -76,6 +81,7 @@
             prominent
             :session="selectedToolbarSession"
             window-displayed
+            workflow-command
           />
 
           <v-btn
@@ -155,6 +161,7 @@ import {
   mdiTune
 } from "@mdi/js";
 import Vibe64LaunchControls from "@/components/studio/Vibe64LaunchControls.vue";
+import Vibe64ProjectTools from "@/components/studio/Vibe64ProjectTools.vue";
 import Vibe64SessionRuntimeHost from "@/components/studio/vibe64-session/Vibe64SessionRuntimeHost.vue";
 import Vibe64SessionTerminals from "@/components/studio/vibe64-session/Vibe64SessionTerminals.vue";
 import Vibe64SessionToolbar from "@/components/studio/vibe64-session/Vibe64SessionToolbar.vue";
@@ -221,10 +228,7 @@ const modeSwitchTarget = computed(() => sessionMode.value === "inspect" ? "autop
 const modeSwitchLabel = computed(() => modeSwitchTarget.value === "inspect" ? "Inspect" : "Autopilot");
 const modeSwitchIcon = computed(() => modeSwitchTarget.value === "inspect" ? mdiTune : mdiPlayCircleOutline);
 const pageLoading = sessionData.pageLoading;
-const toolbarActionsVisible = computed(() => Boolean(
-  selection.selectedSession ||
-  globalCodexButtonVisible.value
-));
+const toolbarActionsVisible = computed(() => true);
 const globalCodexButtonVisible = computed(() => sessionMode.value === "autopilot");
 const globalCodexTerminalController = {
   sessionUpdate: updateGlobalCodexTerminalState
@@ -317,6 +321,10 @@ function switchSessionMode() {
 
 function toggleGlobalCodexTerminal() {
   globalCodexTerminalOpen.value = !globalCodexTerminalOpen.value;
+}
+
+function openGlobalCodexTerminal() {
+  globalCodexTerminalOpen.value = true;
 }
 
 function updateGlobalCodexTerminalState(payload = {}) {

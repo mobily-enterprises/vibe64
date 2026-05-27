@@ -88,6 +88,9 @@ describe("useVibe64HeadlessCommandRunner", () => {
       startCommandTerminal: vi.fn(async () => ({
         commandPreview: "git worktree add",
         id: "terminal-2",
+        metadata: {
+          attemptedCommand: "bash -lc 'git worktree add /tmp/worktree'"
+        },
         ok: true,
         output: "starting\n",
         status: "running"
@@ -120,6 +123,7 @@ describe("useVibe64HeadlessCommandRunner", () => {
 
     await expect(resultPromise).resolves.toMatchObject({
       actionId: "create_worktree",
+      attemptedCommand: "bash -lc 'git worktree add /tmp/worktree'",
       error: "Create worktree failed with exit code 1.",
       exitCode: 1,
       ok: false,

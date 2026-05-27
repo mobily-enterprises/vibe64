@@ -204,6 +204,12 @@
         </Vibe64TerminalFrame>
       </template>
     </Vibe64FloatingTerminalWindow>
+
+    <Vibe64FixCodexDialog
+      v-model="fixDialogOpen"
+      :job="fixJob"
+      :terminal="fixTerminal"
+    />
   </div>
 </template>
 
@@ -221,12 +227,16 @@ import {
   mdiRestart,
   mdiStop
 } from "@mdi/js";
+import Vibe64FixCodexDialog from "@/components/studio/Vibe64FixCodexDialog.vue";
 import Vibe64FloatingTerminalWindow from "@/components/studio/Vibe64FloatingTerminalWindow.vue";
 import Vibe64TerminalFrame from "@/components/studio/Vibe64TerminalFrame.vue";
 import {
   launchTerminalAiFixAvailable,
   useVibe64LaunchControls
 } from "@/composables/useVibe64LaunchControls.js";
+import {
+  useVibe64FixCodexDialog
+} from "@/composables/useVibe64FixCodexDialog.js";
 import {
   terminalFailureFixRequest
 } from "@/lib/vibe64TerminalFailurePrompt.js";
@@ -302,6 +312,7 @@ const {
   terminalIndicatorLabel,
   terminalIndicatorState,
   terminalIsRunning,
+  terminalMetadata,
   terminalOutput,
   terminalSessionId,
   terminalStatus,
@@ -316,6 +327,12 @@ const {
   busy: () => props.busy,
   session: () => props.session
 });
+const {
+  fixDialogOpen,
+  fixJob,
+  fixTerminal,
+  openFixCodexDialog
+} = useVibe64FixCodexDialog();
 
 const runMenuDisabled = computed(() => Boolean(
   launchButtonsDisabled.value ||
@@ -331,7 +348,6 @@ const launchTerminalFailed = computed(() => Boolean(
 ));
 const workflowAiFixVisible = computed(() => Boolean(
   launchTerminalAiFixAvailable({
-    fixCommandFailure: props.fixCommandFailure,
     workflowCommand: props.workflowCommand
   }) &&
   !terminalIsRunning.value &&
@@ -349,6 +365,7 @@ async function requestAiFix() {
   }
   minimizeTerminal();
   const request = await terminalFailureFixRequest({
+    attemptedCommand: String(terminalMetadata.value?.attemptedCommand || ""),
     closeError: terminalError.value,
     commandPreview: terminalCommandPreview.value,
     exitCode: terminalExitCode.value,
@@ -360,7 +377,11 @@ async function requestAiFix() {
     terminalSessionId: terminalSessionId.value,
     terminalStatus: terminalStatus.value
   });
-  return props.fixCommandFailure?.(request);
+  if (typeof props.fixCommandFailure === "function") {
+    props.fixCommandFailure(request);
+  }
+  openFixCodexDialog(request);
+  return request;
 }
 </script>
 

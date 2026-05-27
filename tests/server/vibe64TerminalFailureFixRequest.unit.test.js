@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   DEFAULT_TERMINAL_FAILURE_TAIL_LINES,
+  projectToolFailureFixPrompt,
+  sessionTerminalFailureFixPrompt,
   terminalFailureFixRequestForSession,
   terminalFailureOutputTail
 } from "@local/vibe64-runtime/server/terminalFailureFixRequest";
@@ -31,6 +33,7 @@ test("terminal failure fix requests are built from server session state", () => 
   }, {
     actionId: "build",
     actionLabel: "Build app",
+    attemptedCommand: "bash -lc 'npm run build'",
     closeError: "Command exited with code 1",
     commandPreview: "npm run build",
     exitCode: "1",
@@ -52,9 +55,62 @@ test("terminal failure fix requests are built from server session state", () => 
   assert.match(request.prompt, /format each question on its own line as `\[1\] Question text`/u);
   assert.match(request.prompt, /- Session: session-1/u);
   assert.match(request.prompt, /- Subject: Build app/u);
+  assert.match(request.prompt, /- Attempted command: bash -lc 'npm run build'/u);
   assert.match(request.prompt, /- Command: npm run build/u);
   assert.match(request.prompt, /This looked stuck before I stopped it\./u);
   assert.match(request.prompt, /latest failure/u);
+});
+
+test("session Fix Codex prompts use ephemeral job reporting instead of session helpers", () => {
+  const prompt = sessionTerminalFailureFixPrompt({
+    actionId: "build",
+    actionLabel: "Build app",
+    attemptedCommand: "bash -lc 'npm run build'",
+    closeError: "Command exited with code 1",
+    commandPreview: "npm run build",
+    currentStep: "project_validated",
+    exitCode: "1",
+    output: "latest failure",
+    sessionId: "session-1",
+    stepStatus: "waiting_for_input",
+    targetRoot: "/workspace/app",
+    terminalKind: "command",
+    terminalSessionId: "terminal-1",
+    terminalStatus: "exited",
+    worktreePath: "/workspace/app/.vibe64/sessions/active/session-1/worktree"
+  });
+
+  assert.match(prompt, /ephemeral repair job/u);
+  assert.match(prompt, /Fix Codex callback helper/u);
+  assert.match(prompt, /- Scope: session/u);
+  assert.match(prompt, /- Worktree: \/workspace\/app\/\.vibe64\/sessions\/active\/session-1\/worktree/u);
+  assert.match(prompt, /- Attempted command: bash -lc 'npm run build'/u);
+  assert.match(prompt, /latest failure/u);
+  assert.doesNotMatch(prompt, /current-step input helper/u);
+  assert.doesNotMatch(prompt, /consider_resolved/u);
+});
+
+test("project deploy Fix Codex prompts preserve configured command ownership", () => {
+  const prompt = projectToolFailureFixPrompt({
+    attemptedCommand: "bash -lc 'sh -c '\\''echo \"failing intentionally\"; exit 1'\\'''",
+    commandPreview: "sh -c 'echo \"failing intentionally\"; exit 1'",
+    exitCode: "1",
+    output: "failing intentionally",
+    terminalSessionId: "terminal-1",
+    terminalStatus: "exited",
+    toolId: "push_to_production",
+    toolLabel: "Push to production"
+  }, {
+    reportInstructions: "Report through the callback."
+  });
+
+  assert.match(prompt, /exact Attempted command/u);
+  assert.match(prompt, /Treat the exact Attempted command as authoritative/u);
+  assert.match(prompt, /Do not replace or rewrite the saved deploy command/u);
+  assert.match(prompt, /placeholder, intentionally failing command/u);
+  assert.match(prompt, /Report `blocked`/u);
+  assert.match(prompt, /- Attempted command: bash -lc/u);
+  assert.match(prompt, /failing intentionally/u);
 });
 
 function escapeRegExp(value = "") {

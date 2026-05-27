@@ -42,6 +42,180 @@ const commandTerminalFields = {
   }
 };
 
+const projectToolRunFields = {
+  parameters: {
+    type: "object",
+    additionalProperties: true,
+    required: false
+  },
+  toolId: {
+    type: "string",
+    noTrim: false,
+    required: true
+  }
+};
+
+const projectToolFixFields = {
+  actionId: {
+    type: "string",
+    noTrim: false,
+    required: false
+  },
+  actionLabel: {
+    type: "string",
+    noTrim: false,
+    required: false
+  },
+  attemptedCommand: {
+    type: "string",
+    noTrim: false,
+    required: false
+  },
+  closeError: {
+    type: "string",
+    noTrim: false,
+    required: false
+  },
+  commandPreview: {
+    type: "string",
+    noTrim: false,
+    required: false
+  },
+  exitCode: {
+    type: "string",
+    noTrim: false,
+    required: false
+  },
+  output: {
+    type: "string",
+    noTrim: true,
+    required: false
+  },
+  terminalSessionId: {
+    type: "string",
+    noTrim: false,
+    required: false
+  },
+  terminalStatus: {
+    type: "string",
+    noTrim: false,
+    required: false
+  },
+  toolId: {
+    type: "string",
+    noTrim: false,
+    required: true
+  },
+  toolLabel: {
+    type: "string",
+    noTrim: false,
+    required: false
+  },
+  userMessage: {
+    type: "string",
+    noTrim: false,
+    required: false
+  }
+};
+
+const sessionTerminalFixFields = {
+  actionId: {
+    type: "string",
+    noTrim: false,
+    required: false
+  },
+  actionLabel: {
+    type: "string",
+    noTrim: false,
+    required: false
+  },
+  attemptedCommand: {
+    type: "string",
+    noTrim: false,
+    required: false
+  },
+  closeError: {
+    type: "string",
+    noTrim: false,
+    required: false
+  },
+  commandPreview: {
+    type: "string",
+    noTrim: false,
+    required: false
+  },
+  exitCode: {
+    type: "string",
+    noTrim: false,
+    required: false
+  },
+  launchTargetId: {
+    type: "string",
+    noTrim: false,
+    required: false
+  },
+  launchTargetLabel: {
+    type: "string",
+    noTrim: false,
+    required: false
+  },
+  output: {
+    type: "string",
+    noTrim: true,
+    required: false
+  },
+  sessionId: sessionIdField,
+  shellTarget: {
+    type: "string",
+    noTrim: false,
+    required: false
+  },
+  terminalKind: {
+    type: "string",
+    noTrim: false,
+    required: false
+  },
+  terminalSessionId: {
+    type: "string",
+    noTrim: false,
+    required: false
+  },
+  terminalStatus: {
+    type: "string",
+    noTrim: false,
+    required: false
+  },
+  userMessage: {
+    type: "string",
+    noTrim: false,
+    required: false
+  }
+};
+
+const fixCodexReportFields = {
+  message: {
+    type: "string",
+    noTrim: false,
+    required: false
+  },
+  status: {
+    type: "string",
+    enum: ["fixed", "blocked"],
+    noTrim: false,
+    required: true
+  },
+  token: {
+    type: "string",
+    noTrim: false,
+    required: true
+  },
+  verificationSummary: {
+    type: "string",
+    noTrim: false,
+    required: false
+  }
+};
+
 const launchTargetFields = {
   launchTargetId: {
     type: "string",
@@ -89,6 +263,55 @@ const commandTerminalActionInputValidator = deepFreeze({
   mode: "patch"
 });
 
+const projectToolRunInputValidator = deepFreeze({
+  schema: createSchema({
+    parameters: projectToolRunFields.parameters
+  }),
+  mode: "patch"
+});
+
+const projectToolRunActionInputValidator = deepFreeze({
+  schema: createSchema(projectToolRunFields),
+  mode: "patch"
+});
+
+const projectToolFixInputValidator = deepFreeze({
+  schema: createSchema({
+    ...projectToolFixFields,
+    toolId: {
+      ...projectToolFixFields.toolId,
+      required: false
+    }
+  }),
+  mode: "patch"
+});
+
+const projectToolFixActionInputValidator = deepFreeze({
+  schema: createSchema(projectToolFixFields),
+  mode: "patch"
+});
+
+const sessionTerminalFixInputValidator = deepFreeze({
+  schema: createSchema({
+    ...sessionTerminalFixFields,
+    sessionId: {
+      ...sessionTerminalFixFields.sessionId,
+      required: false
+    }
+  }),
+  mode: "patch"
+});
+
+const sessionTerminalFixActionInputValidator = deepFreeze({
+  schema: createSchema(sessionTerminalFixFields),
+  mode: "patch"
+});
+
+const fixCodexReportInputValidator = deepFreeze({
+  schema: createSchema(fixCodexReportFields),
+  mode: "patch"
+});
+
 const launchTargetInputValidator = deepFreeze({
   schema: createSchema(launchTargetFields),
   mode: "patch"
@@ -130,6 +353,13 @@ export {
   launchTargetActionInputValidator,
   launchTargetInputValidator,
   openLaunchTargetActionInputValidator,
+  fixCodexReportInputValidator,
+  projectToolFixActionInputValidator,
+  projectToolFixInputValidator,
+  projectToolRunActionInputValidator,
+  projectToolRunInputValidator,
+  sessionTerminalFixActionInputValidator,
+  sessionTerminalFixInputValidator,
   shellTerminalActionInputValidator,
   shellTerminalInputValidator
 };

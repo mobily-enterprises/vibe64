@@ -30,12 +30,13 @@
         class="studio-ai-sessions__command-terminal"
         :action="commandTerminal.action"
         :action-input="commandTerminal.input"
-        :ai-fix-available="false"
+        ai-fix-available
         :session="session"
         :start-request-key="commandTerminal.startKey"
         @closed="commandTerminal.closed"
         @expanded-changed="handleCommandTerminalExpandedChanged"
         @finished="commandTerminal.finished"
+        @fix-requested="openFixCodexDialog"
         @running-changed="commandTerminal.runningChanged"
       />
       <Vibe64HeadlessCommandOutput
@@ -43,7 +44,8 @@
         class="studio-ai-sessions__command-terminal"
         :action-id="headlessCommandTerminal.actionId"
         :action-label="headlessCommandTerminal.actionLabel"
-        :ai-fix-available="false"
+        ai-fix-available
+        :attempted-command="headlessCommandTerminal.attemptedCommand"
         :command-preview="headlessCommandTerminal.commandPreview"
         :error="headlessCommandTerminal.error"
         :exit-code="headlessCommandTerminal.exitCode"
@@ -54,16 +56,27 @@
         :status="headlessCommandTerminal.status"
         :terminal-session-id="headlessCommandTerminal.terminalSessionId"
         title="Autopilot command output"
+        @fix-requested="openFixCodexDialog"
       />
     </div>
+
+    <Vibe64FixCodexDialog
+      v-model="fixDialogOpen"
+      :job="fixJob"
+      :terminal="fixTerminal"
+    />
   </section>
 </template>
 
 <script setup>
 import { computed, ref, watch } from "vue";
+import Vibe64FixCodexDialog from "@/components/studio/Vibe64FixCodexDialog.vue";
 import Vibe64CommandTerminal from "@/components/studio/Vibe64CommandTerminal.vue";
 import Vibe64HeadlessCommandOutput from "@/components/studio/vibe64-session/Vibe64HeadlessCommandOutput.vue";
 import CodexSessionTerminal from "@/components/studio/CodexSessionTerminal.vue";
+import {
+  useVibe64FixCodexDialog
+} from "@/composables/useVibe64FixCodexDialog.js";
 
 const props = defineProps({
   codexTerminal: {
@@ -110,6 +123,12 @@ const props = defineProps({
 const emit = defineEmits(["codex-session-update"]);
 
 const commandTerminalExpanded = ref(true);
+const {
+  fixDialogOpen,
+  fixJob,
+  fixTerminal,
+  openFixCodexDialog
+} = useVibe64FixCodexDialog();
 const commandOutputVisible = computed(() => Boolean(
   props.showCommandOutput &&
   (props.commandTerminal.visible || props.headlessCommandTerminal.visible)

@@ -34,14 +34,17 @@ function mergePrScript({
   ].filter(Boolean).join("\n");
 }
 
-function syncMainCheckoutScript(session = {}, targetRoot = "") {
-  const baseBranch = normalizeText(session.metadata?.base_branch) || "main";
+function syncMainCheckoutScript({
+  baseBranch = "main",
+  targetRoot = ""
+} = {}) {
+  const normalizedBaseBranch = normalizeText(baseBranch) || "main";
   return [
     "set -e",
-    `printf '[studio] Syncing main checkout %s to %s\\n' ${shellQuote(targetRoot)} ${shellQuote(baseBranch)}`,
-    `git -C ${shellQuote(targetRoot)} fetch origin ${shellQuote(baseBranch)}`,
-    `git -C ${shellQuote(targetRoot)} checkout ${shellQuote(baseBranch)}`,
-    `git -C ${shellQuote(targetRoot)} pull --ff-only origin ${shellQuote(baseBranch)}`
+    `printf '[studio] Syncing main checkout %s to %s\\n' ${shellQuote(targetRoot)} ${shellQuote(normalizedBaseBranch)}`,
+    `git -C ${shellQuote(targetRoot)} fetch origin ${shellQuote(normalizedBaseBranch)}`,
+    `git -C ${shellQuote(targetRoot)} checkout ${shellQuote(normalizedBaseBranch)}`,
+    `git -C ${shellQuote(targetRoot)} pull --ff-only origin ${shellQuote(normalizedBaseBranch)}`
   ].join("\n");
 }
 
@@ -102,11 +105,35 @@ async function syncMainCheckoutTerminalSpec({
     metadata: {
       main_checkout_synced: "yes"
     },
-    script: syncMainCheckoutScript(session, syncRoot)
+    script: syncMainCheckoutScript({
+      baseBranch: session.metadata?.base_branch,
+      targetRoot: syncRoot
+    })
+  });
+}
+
+async function projectSyncMainCheckoutTerminalSpec({
+  baseBranch = "main",
+  targetRoot = ""
+} = {}) {
+  const syncRoot = targetRoot || process.cwd();
+  return completedMetadataSpec({
+    commandPreview: "git fetch && git pull --ff-only",
+    cwd: syncRoot,
+    label: "Sync main checkout",
+    metadata: {
+      main_checkout_synced: "yes"
+    },
+    script: syncMainCheckoutScript({
+      baseBranch,
+      targetRoot: syncRoot
+    })
   });
 }
 
 export {
   mergePrTerminalSpec,
+  projectSyncMainCheckoutTerminalSpec,
+  syncMainCheckoutScript,
   syncMainCheckoutTerminalSpec
 };

@@ -233,6 +233,10 @@ class TargetAdapter {
     return [];
   }
 
+  async listProjectTools() {
+    return [];
+  }
+
   async createCommandTerminalSpec(commandId) {
     return {
       ok: false,

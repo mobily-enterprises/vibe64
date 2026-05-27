@@ -62,6 +62,7 @@ import {
 } from "./currentApp.js";
 import {
   createLaravelRuntimeContainers,
+  listLaravelDatabaseProjectTools,
   selectedLaravelDatabaseRuntime
 } from "./databaseRuntime.js";
 import {
@@ -427,6 +428,10 @@ class LaravelTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
         updateCodeIndex: laravelCodeIndexHook
       }
     });
+  }
+
+  async listProjectTools(context = {}) {
+    return listLaravelDatabaseProjectTools(context);
   }
 }
 

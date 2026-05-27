@@ -15,6 +15,7 @@ import {
   ensureTargetRuntimeNetwork
 } from "@local/studio-terminal-core/server/runtimeContainers";
 import {
+  commandInvocation,
   vibe64Result,
   launchTargetTerminalNamespace,
   sessionTerminalCwd,
@@ -396,6 +397,7 @@ function createLaunchTargetTerminalController({
           maxRunning: 1,
           metadata: {
             ...(spec.metadata || {}),
+            attemptedCommand: commandInvocation(spec),
             envHash: launchEnvHash,
             launchTargetId: launchTarget.id,
             launchTargetLabel: launchTarget.label,

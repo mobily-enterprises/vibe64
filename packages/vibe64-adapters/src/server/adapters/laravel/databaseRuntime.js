@@ -141,6 +141,54 @@ function createLaravelRuntimeContainers({
   return [];
 }
 
+function mysqlCompatibleLaravelRuntime(config = {}) {
+  return ["mysql", "mariadb"].includes(selectedLaravelDatabaseRuntime(config));
+}
+
+function mysqlClientScript() {
+  return [
+    "set -e",
+    "if command -v mysql >/dev/null 2>&1; then",
+    "  exec mysql",
+    "fi",
+    "if command -v mariadb >/dev/null 2>&1; then",
+    "  exec mariadb",
+    "fi",
+    "printf '[studio] No MySQL-compatible client was found in this toolchain.\\n' >&2",
+    "exit 127"
+  ].join("\n");
+}
+
+function listLaravelDatabaseProjectTools({
+  config = {},
+  targetRoot = ""
+} = {}) {
+  if (!mysqlCompatibleLaravelRuntime(config)) {
+    return [];
+  }
+  return [
+    {
+      id: "connect_mysql",
+      label: "Connect to MySQL",
+      description: "Open an interactive client for the configured Vibe64-managed MySQL or MariaDB service.",
+      type: "command",
+      parameters: [],
+      async command() {
+        return {
+          args: [
+            "-lc",
+            mysqlClientScript()
+          ],
+          command: "bash",
+          commandPreview: "mysql",
+          cwd: targetRoot,
+          ok: true
+        };
+      }
+    }
+  ];
+}
+
 function laravelRuntimeContainerName({
   config = {},
   targetRoot = ""
@@ -232,6 +280,8 @@ export {
   laravelDatabaseEnvWriteScript,
   laravelDatabaseNameFromTargetRoot,
   laravelRuntimeContainerName,
+  listLaravelDatabaseProjectTools,
+  mysqlCompatibleLaravelRuntime,
   selectedLaravelDatabaseRuntime,
   startLaravelRuntimeRepair
 };

@@ -1,11 +1,12 @@
 import {
-  buildVibe64TerminalFailureFixRequest
+  startVibe64SessionTerminalFixJob
 } from "@/lib/vibe64SessionApi.js";
 
 function terminalFailureFixContext(input = {}) {
   return {
     actionId: String(input.actionId || ""),
     actionLabel: String(input.actionLabel || ""),
+    attemptedCommand: String(input.attemptedCommand || ""),
     closeError: String(input.closeError || ""),
     commandPreview: String(input.commandPreview || ""),
     currentStep: String(input.currentStep || ""),
@@ -25,7 +26,7 @@ function terminalFailureFixContext(input = {}) {
 
 async function terminalFailureFixRequest(input = {}) {
   const context = terminalFailureFixContext(input);
-  return buildVibe64TerminalFailureFixRequest(context.sessionId, context);
+  return startVibe64SessionTerminalFixJob(context.sessionId, context);
 }
 
 export {

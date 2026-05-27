@@ -2,6 +2,9 @@ import {
   Vibe64SessionRuntime
 } from "@local/vibe64-runtime/server/runtime";
 import {
+  createCoreProjectToolRegistry
+} from "@local/vibe64-runtime/server/coreProjectTools";
+import {
   createCoreWorkflowRegistry
 } from "@local/vibe64-runtime/server/registerCoreWorkflowModules";
 import {
@@ -138,11 +141,11 @@ function createService({
     };
   }
 
-  function configResponse({
-    adapter,
-    config,
-    projectType
-  } = {}) {
+function configResponse({
+  adapter,
+  config,
+  projectType
+} = {}) {
     return {
       ...config,
       adapter: {
@@ -150,6 +153,102 @@ function createService({
         label: adapter.label
       },
       projectType: projectType.projectType
+    };
+  }
+
+  async function projectToolContext() {
+    const projectType = await readProjectTypeState();
+    if (!projectType.ready) {
+      return {
+        adapter: null,
+        baseBranch: "main",
+        config: null,
+        projectConfig: null,
+        projectMessage: projectType.message,
+        projectReady: false,
+        projectType,
+        targetRoot: resolvedTargetRoot
+      };
+    }
+
+    const adapter = await adapterRegistry.createAdapter(projectType.projectType);
+    const config = await readProjectConfigForAdapter(adapter, projectType);
+    const projectReady = config.ready === true;
+    return {
+      adapter,
+      baseBranch: "main",
+      config,
+      projectConfig: config,
+      projectMessage: projectReady
+        ? ""
+        : config.message || "Save Vibe64 project configuration before using project tools.",
+      projectReady,
+      projectType,
+      targetRoot: resolvedTargetRoot
+    };
+  }
+
+  async function createProjectToolRegistry(context = {}) {
+    const adapterTools = typeof context.adapter?.listProjectTools === "function"
+      ? await context.adapter.listProjectTools({
+          adapter: context.adapter,
+          config: context.config,
+          projectConfig: context.projectConfig,
+          projectType: context.projectType,
+          targetRoot: resolvedTargetRoot
+        })
+      : [];
+    const adapterToolModule = Array.isArray(adapterTools) && adapterTools.length
+      ? [{
+          id: `adapter.${context.adapter.id}`,
+          tools: adapterTools
+        }]
+      : [];
+    return createCoreProjectToolRegistry({
+      toolModules: adapterToolModule
+    });
+  }
+
+  function projectToolRunParameters(input = {}) {
+    const inputObject = input && typeof input === "object" && !Array.isArray(input) ? input : {};
+    const parameters = inputObject.parameters || inputObject.input || {};
+    return parameters && typeof parameters === "object" && !Array.isArray(parameters)
+      ? parameters
+      : {};
+  }
+
+  async function listProjectToolState() {
+    const context = await projectToolContext();
+    const registry = await createProjectToolRegistry(context);
+    return registry.listTools(context);
+  }
+
+  async function prepareProjectToolRunState(toolId = "", input = {}) {
+    const context = await projectToolContext();
+    const registry = await createProjectToolRegistry(context);
+    const run = await registry.resolveToolRun(toolId, {
+      context,
+      parameters: projectToolRunParameters(input)
+    });
+    if (run.type === "command" && run.spec?.ok === false) {
+      const error = new Error(run.spec.message || `${run.tool.label} cannot start.`);
+      error.code = "vibe64_project_tool_not_ready";
+      throw error;
+    }
+    if (run.type === "prompt" && !run.prompt) {
+      const error = new Error(`${run.tool.label} did not produce a prompt.`);
+      error.code = "vibe64_project_tool_not_ready";
+      throw error;
+    }
+    return {
+      ...run,
+      adapter: context.adapter
+        ? {
+            id: context.adapter.id,
+            label: context.adapter.label
+          }
+        : null,
+      targetRoot: resolvedTargetRoot
     };
   }
 
@@ -223,6 +322,8 @@ function createService({
   }
 
   return Object.freeze({
+    targetRoot: resolvedTargetRoot,
+
     async createRuntime() {
       return createRuntime();
     },
@@ -262,6 +363,24 @@ function createService({
       return projectConfigStore.environment();
     },
 
+    async listProjectTools() {
+      return projectResult(async () => {
+        return {
+          ok: true,
+          tools: await listProjectToolState()
+        };
+      });
+    },
+
+    async prepareProjectToolRun(toolId, input = {}) {
+      return projectResult(async () => {
+        return {
+          ok: true,
+          ...await prepareProjectToolRunState(toolId, input)
+        };
+      });
+    },
+
     async saveProjectType(input = {}) {
       return projectResult(async () => {
         return {
@@ -278,9 +397,7 @@ function createService({
           ok: true
         };
       });
-    },
-
-    targetRoot: resolvedTargetRoot
+    }
   });
 }
 

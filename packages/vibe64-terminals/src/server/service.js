@@ -1,7 +1,18 @@
 import { createCodexTerminalController } from "./codexTerminal.js";
-import { createCommandTerminalController } from "./commandTerminal.js";
+import {
+  createCommandTerminalController,
+  createProjectToolTerminalController
+} from "./commandTerminal.js";
 import { createLaunchTargetTerminalController } from "./launchTargetTerminal.js";
 import { createShellTerminalController } from "./shellTerminal.js";
+import {
+  projectToolFailureFixPrompt,
+  sessionTerminalFailureFixPrompt
+} from "@local/vibe64-runtime/server/terminalFailureFixRequest";
+import {
+  terminalTargetRoot,
+  terminalWorktreePath
+} from "./terminalShared.js";
 
 function createService({
   projectService,
@@ -32,6 +43,9 @@ function createService({
   const launchTarget = createLaunchTargetTerminalController({
     projectService,
     publishSessionChanged: publishSessionChanged.launchTarget
+  });
+  const projectTool = createProjectToolTerminalController({
+    projectService
   });
   const shell = createShellTerminalController({
     projectService
@@ -69,8 +83,16 @@ function createService({
       return codex.closeGlobalTerminal(terminalSessionId);
     },
 
+    closeFixCodexTerminal(jobId, terminalSessionId) {
+      return codex.closeFixTerminal(jobId, terminalSessionId);
+    },
+
     closeCommandTerminal(sessionId, terminalSessionId) {
       return command.closeTerminal(sessionId, terminalSessionId);
+    },
+
+    closeProjectToolTerminal(toolId, terminalSessionId) {
+      return projectTool.closeTerminal(toolId, terminalSessionId);
     },
 
     closeLaunchTargetTerminal(sessionId, terminalSessionId) {
@@ -83,6 +105,10 @@ function createService({
 
     injectCodexPrompt(sessionId, handoff = {}) {
       return codex.injectCodexPrompt(sessionId, handoff);
+    },
+
+    injectGlobalCodexPrompt(handoff = {}) {
+      return codex.injectGlobalCodexPrompt(handoff);
     },
 
     continueCodexTurn(sessionId) {
@@ -105,12 +131,20 @@ function createService({
       return codex.readGlobalTerminal(terminalSessionId);
     },
 
+    readFixCodexTerminal(jobId, terminalSessionId) {
+      return codex.readFixTerminal(jobId, terminalSessionId);
+    },
+
     readCodexTerminal(sessionId, terminalSessionId) {
       return codex.readTerminal(sessionId, terminalSessionId);
     },
 
     readCommandTerminal(sessionId, terminalSessionId) {
       return command.readTerminal(sessionId, terminalSessionId);
+    },
+
+    readProjectToolTerminal(toolId, terminalSessionId) {
+      return projectTool.readTerminal(toolId, terminalSessionId);
     },
 
     readLaunchTargetTerminal(sessionId, terminalSessionId) {
@@ -137,8 +171,61 @@ function createService({
       return codex.startGlobalTerminal();
     },
 
+    async startProjectToolFixJob(toolId, input = {}) {
+      const targetRoot = projectService.targetRoot || "";
+      return codex.startFixJob({
+        prompt: projectToolFailureFixPrompt({
+          ...input,
+          targetRoot,
+          toolId: input.toolId || toolId,
+          toolLabel: input.toolLabel || input.actionLabel
+        }),
+        scope: "project",
+        subject: input.toolLabel || input.actionLabel || toolId,
+        targetRoot
+      });
+    },
+
+    async startSessionTerminalFixJob(sessionId, input = {}) {
+      const runtime = await projectService.createRuntime();
+      const session = await runtime.getSession(sessionId);
+      const targetRoot = terminalTargetRoot(session, projectService);
+      const worktreePath = terminalWorktreePath(session);
+      return codex.startFixJob({
+        prompt: sessionTerminalFailureFixPrompt({
+          ...input,
+          currentStep: input.currentStep || session.currentStep || "",
+          sessionId: input.sessionId || sessionId,
+          stepStatus: input.stepStatus || session.stepMachine?.status || "",
+          targetRoot,
+          worktreePath
+        }),
+        scope: "session",
+        subject: input.actionLabel || input.launchTargetLabel || input.actionId || input.launchTargetId || sessionId,
+        targetRoot,
+        workdir: worktreePath || targetRoot
+      });
+    },
+
+    reportFixCodexJob(jobId, input = {}) {
+      return codex.reportFixJob(jobId, input);
+    },
+
     startCommandTerminal(sessionId, input = {}) {
       return command.startTerminal(sessionId, input);
+    },
+
+    async runProjectTool(toolId, input = {}) {
+      const run = await projectService.prepareProjectToolRun(toolId, input);
+      if (run?.ok === false) {
+        return run;
+      }
+      if (run.type === "prompt") {
+        return codex.injectGlobalCodexPrompt({
+          prompt: run.prompt
+        });
+      }
+      return projectTool.startPreparedRun(toolId, run);
     },
 
     startLaunchTargetTerminal(sessionId, input = {}) {
@@ -161,8 +248,16 @@ function createService({
       return codex.subscribeGlobalTerminal(terminalSessionId, subscriber);
     },
 
+    subscribeFixCodexTerminal(jobId, terminalSessionId, subscriber) {
+      return codex.subscribeFixTerminal(jobId, terminalSessionId, subscriber);
+    },
+
     subscribeCommandTerminal(sessionId, terminalSessionId, subscriber) {
       return command.subscribeTerminal(sessionId, terminalSessionId, subscriber);
+    },
+
+    subscribeProjectToolTerminal(toolId, terminalSessionId, subscriber) {
+      return projectTool.subscribeTerminal(toolId, terminalSessionId, subscriber);
     },
 
     subscribeLaunchTargetTerminal(sessionId, terminalSessionId, subscriber) {
@@ -185,6 +280,10 @@ function createService({
       return codex.writeGlobalTerminal(terminalSessionId, data);
     },
 
+    writeFixCodexTerminal(jobId, terminalSessionId, data) {
+      return codex.writeFixTerminal(jobId, terminalSessionId, data);
+    },
+
     resizeCodexTerminal(sessionId, terminalSessionId, size) {
       return codex.resizeTerminal(sessionId, terminalSessionId, size);
     },
@@ -193,12 +292,24 @@ function createService({
       return codex.resizeGlobalTerminal(terminalSessionId, size);
     },
 
+    resizeFixCodexTerminal(jobId, terminalSessionId, size) {
+      return codex.resizeFixTerminal(jobId, terminalSessionId, size);
+    },
+
     writeCommandTerminal(sessionId, terminalSessionId, data) {
       return command.writeTerminal(sessionId, terminalSessionId, data);
     },
 
+    writeProjectToolTerminal(toolId, terminalSessionId, data) {
+      return projectTool.writeTerminal(toolId, terminalSessionId, data);
+    },
+
     resizeCommandTerminal(sessionId, terminalSessionId, size) {
       return command.resizeTerminal(sessionId, terminalSessionId, size);
+    },
+
+    resizeProjectToolTerminal(toolId, terminalSessionId, size) {
+      return projectTool.resizeTerminal(toolId, terminalSessionId, size);
     },
 
     writeLaunchTargetTerminal(sessionId, terminalSessionId, data) {

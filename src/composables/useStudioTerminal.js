@@ -18,7 +18,29 @@ function resolveCallback(callback, fallback) {
   return typeof callback === "function" ? callback : fallback;
 }
 
+function terminalDisplayWriteState({
+  displayOutput = "",
+  renderedOffset = 0,
+  renderedOutput = ""
+} = {}) {
+  const output = String(displayOutput || "");
+  const previousOutput = String(renderedOutput || "");
+  const offset = Math.min(
+    Math.max(0, Number(renderedOffset) || 0),
+    previousOutput.length
+  );
+  const reset = output.length < offset || !output.startsWith(previousOutput.slice(0, offset));
+  const nextOffset = reset ? 0 : offset;
+  return {
+    chunk: output.slice(nextOffset),
+    offset: output.length,
+    output,
+    reset
+  };
+}
+
 function useStudioTerminal({
+  displayOutput = null,
   onSessionUpdate = null,
   onStatusUpdate = null,
   webSocketUrl = null
@@ -45,9 +67,11 @@ function useStudioTerminal({
   let terminalReportedCols = 0;
   let terminalReportedRows = 0;
   let terminalLatestOutput = "";
-  let terminalOutputOffset = 0;
+  let terminalRenderedOutput = "";
+  let terminalRenderedOutputOffset = 0;
   let terminalSetupPromise = null;
 
+  const resolveDisplayOutput = resolveCallback(displayOutput, (output) => String(output || ""));
   const notifySessionUpdate = resolveCallback(onSessionUpdate, () => null);
   const notifyStatusUpdate = resolveCallback(onStatusUpdate, () => null);
   const resolveWebSocketUrl = resolveCallback(webSocketUrl, () => "");
@@ -162,7 +186,8 @@ function useStudioTerminal({
     terminalInstance = null;
     terminalFitAddon = null;
     terminalSetupPromise = null;
-    terminalOutputOffset = 0;
+    terminalRenderedOutput = "";
+    terminalRenderedOutputOffset = 0;
     resetReportedTerminalSize();
   }
 
@@ -173,8 +198,9 @@ function useStudioTerminal({
 
   function resetTerminalDisplay() {
     terminalLatestOutput = "";
+    terminalRenderedOutput = "";
     terminalOutput.value = "";
-    terminalOutputOffset = 0;
+    terminalRenderedOutputOffset = 0;
     resetReportedTerminalSize();
     terminalInstance?.reset?.();
   }
@@ -198,15 +224,19 @@ function useStudioTerminal({
     if (!terminalInstance) {
       return;
     }
-    if (terminalLatestOutput.length < terminalOutputOffset) {
-      terminalOutputOffset = 0;
+    const displayUpdate = terminalDisplayWriteState({
+      displayOutput: resolveDisplayOutput(terminalLatestOutput),
+      renderedOffset: terminalRenderedOutputOffset,
+      renderedOutput: terminalRenderedOutput
+    });
+    if (displayUpdate.reset) {
       terminalInstance.reset();
     }
-    const chunk = terminalLatestOutput.slice(terminalOutputOffset);
-    if (chunk) {
-      terminalInstance.write(chunk, scrollTerminalToBottom);
-      terminalOutputOffset = terminalLatestOutput.length;
+    if (displayUpdate.chunk) {
+      terminalInstance.write(displayUpdate.chunk, scrollTerminalToBottom);
     }
+    terminalRenderedOutput = displayUpdate.output;
+    terminalRenderedOutputOffset = displayUpdate.offset;
   }
 
   function appendTerminalOutput(chunk) {
@@ -216,10 +246,7 @@ function useStudioTerminal({
     }
     terminalLatestOutput = trimTerminalOutput(`${terminalLatestOutput}${outputChunk}`);
     terminalOutput.value = terminalLatestOutput;
-    if (terminalInstance) {
-      terminalInstance.write(outputChunk, scrollTerminalToBottom);
-      terminalOutputOffset = terminalLatestOutput.length;
-    }
+    writeTerminalOutput(terminalLatestOutput);
   }
 
   function applyTerminalSession(session = {}, {
@@ -451,5 +478,6 @@ function useStudioTerminal({
 }
 
 export {
+  terminalDisplayWriteState,
   useStudioTerminal
 };

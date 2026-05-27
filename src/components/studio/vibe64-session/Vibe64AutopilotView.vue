@@ -44,6 +44,16 @@
               >
                 Retry
               </v-btn>
+              <v-btn
+                color="primary"
+                :prepend-icon="mdiRobotOutline"
+                size="small"
+                type="button"
+                variant="tonal"
+                @click="requestCommandAiFix"
+              >
+                Get AI to fix it
+              </v-btn>
             </div>
           </template>
           <template v-else>
@@ -330,6 +340,12 @@
         </div>
       </div>
     </div>
+
+    <Vibe64FixCodexDialog
+      v-model="fixDialogOpen"
+      :job="fixJob"
+      :terminal="fixTerminal"
+    />
   </section>
 </template>
 
@@ -347,6 +363,7 @@ import {
   mdiRobotOutline,
   mdiStopCircleOutline
 } from "@mdi/js";
+import Vibe64FixCodexDialog from "@/components/studio/Vibe64FixCodexDialog.vue";
 import Vibe64LaunchControls from "@/components/studio/Vibe64LaunchControls.vue";
 import Vibe64BackgroundTasks from "@/components/studio/vibe64-session/Vibe64BackgroundTasks.vue";
 import Vibe64AutopilotComposer from "@/components/studio/vibe64-session/Vibe64AutopilotComposer.vue";
@@ -370,6 +387,12 @@ import {
 import {
   runVibe64ClientControl
 } from "@/lib/vibe64ClientControlDispatcher.js";
+import {
+  useVibe64FixCodexDialog
+} from "@/composables/useVibe64FixCodexDialog.js";
+import {
+  terminalFailureFixRequest
+} from "@/lib/vibe64TerminalFailurePrompt.js";
 import {
   VIBE64_CLIENT_CONTROL_ICON_TOKENS,
   controlIconToken,
@@ -479,6 +502,12 @@ const {
   refreshSessionData: () => props.refreshSessionData(),
   session: computed(() => props.session)
 });
+const {
+  fixDialogOpen,
+  fixJob,
+  fixTerminal,
+  openFixCodexDialog
+} = useVibe64FixCodexDialog();
 
 const stepInput = proxyRefs(useVibe64StepInputForm({
   onSaved: async () => {
@@ -643,6 +672,25 @@ async function submitStepInput() {
 
 function retryFromCommandFailure() {
   void retry();
+}
+
+async function requestCommandAiFix() {
+  if (!commandTerminalFailed.value) {
+    return;
+  }
+  openFixCodexDialog(await terminalFailureFixRequest({
+    actionId: commandResult.value?.actionId || "",
+    actionLabel: commandResult.value?.actionLabel || "",
+    attemptedCommand: commandResult.value?.attemptedCommand || "",
+    closeError: commandTerminalError.value,
+    commandPreview: commandPreview.value,
+    exitCode: commandResult.value?.exitCode ?? "",
+    output: commandTerminalText.value,
+    sessionId: sessionId.value,
+    terminalKind: "command",
+    terminalSessionId: commandResult.value?.terminalSessionId || "",
+    terminalStatus: commandStatus.value
+  }));
 }
 
 function stopScreenAction() {

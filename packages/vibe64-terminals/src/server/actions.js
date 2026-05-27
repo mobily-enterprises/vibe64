@@ -3,9 +3,15 @@ import {
   commandTerminalActionInputValidator,
   launchTargetActionInputValidator,
   openLaunchTargetActionInputValidator,
+  projectToolFixActionInputValidator,
+  projectToolRunActionInputValidator,
+  sessionTerminalFixActionInputValidator,
   shellTerminalActionInputValidator
 } from "./inputSchemas.js";
 
+const ACTION_START_PROJECT_TOOL_FIX = "feature.vibe64-terminals.project-tool.fix.start";
+const ACTION_START_SESSION_TERMINAL_FIX = "feature.vibe64-terminals.session-terminal.fix.start";
+const ACTION_RUN_PROJECT_TOOL = "feature.vibe64-terminals.project-tool.run";
 const ACTION_START_COMMAND_TERMINAL = "feature.vibe64-terminals.command-terminal.start";
 const ACTION_START_LAUNCH_TARGET_TERMINAL = "feature.vibe64-terminals.launch-target-terminal.start";
 const ACTION_START_SHELL_TERMINAL = "feature.vibe64-terminals.shell-terminal.start";
@@ -13,6 +19,62 @@ const ACTION_OPEN_LAUNCH_TARGET = "feature.vibe64-terminals.launch-target.open";
 const ACTION_UPLOAD_CODEX_ATTACHMENT = "feature.vibe64-terminals.codex-attachment.upload";
 
 const featureActions = Object.freeze([
+  {
+    id: ACTION_START_PROJECT_TOOL_FIX,
+    version: 1,
+    kind: "command",
+    channels: ["api", "automation", "internal"],
+    surfaces: ["home"],
+    input: projectToolFixActionInputValidator,
+    output: null,
+    idempotency: "optional",
+    audit: {
+      actionName: ACTION_START_PROJECT_TOOL_FIX
+    },
+    observability: {},
+    async execute(input, context, deps) {
+      void context;
+      return deps.featureService.startProjectToolFixJob(input.toolId, input);
+    }
+  },
+  {
+    id: ACTION_START_SESSION_TERMINAL_FIX,
+    version: 1,
+    kind: "command",
+    channels: ["api", "automation", "internal"],
+    surfaces: ["home"],
+    input: sessionTerminalFixActionInputValidator,
+    output: null,
+    idempotency: "optional",
+    audit: {
+      actionName: ACTION_START_SESSION_TERMINAL_FIX
+    },
+    observability: {},
+    async execute(input, context, deps) {
+      void context;
+      return deps.featureService.startSessionTerminalFixJob(input.sessionId, input);
+    }
+  },
+  {
+    id: ACTION_RUN_PROJECT_TOOL,
+    version: 1,
+    kind: "command",
+    channels: ["api", "automation", "internal"],
+    surfaces: ["home"],
+    input: projectToolRunActionInputValidator,
+    output: null,
+    idempotency: "optional",
+    audit: {
+      actionName: ACTION_RUN_PROJECT_TOOL
+    },
+    observability: {},
+    async execute(input, context, deps) {
+      void context;
+      return deps.featureService.runProjectTool(input.toolId, {
+        parameters: input.parameters || {}
+      });
+    }
+  },
   {
     id: ACTION_START_COMMAND_TERMINAL,
     version: 1,
@@ -116,6 +178,9 @@ const featureActions = Object.freeze([
 
 export {
   ACTION_OPEN_LAUNCH_TARGET,
+  ACTION_RUN_PROJECT_TOOL,
+  ACTION_START_PROJECT_TOOL_FIX,
+  ACTION_START_SESSION_TERMINAL_FIX,
   ACTION_START_COMMAND_TERMINAL,
   ACTION_START_LAUNCH_TARGET_TERMINAL,
   ACTION_START_SHELL_TERMINAL,

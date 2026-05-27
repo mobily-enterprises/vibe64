@@ -9,9 +9,13 @@ import {
   vibe64CodexAttachmentPath,
   vibe64ConversationLogPath,
   vibe64ConversationLogQueryKey,
+  vibe64ProjectToolFixPath,
+  vibe64ProjectToolRunPath,
+  vibe64ProjectToolTerminalPath,
   vibe64SessionQueryKey,
   vibe64SessionPath,
   vibe64SessionsQueryKey,
+  vibe64TerminalFailureFixPath,
   commandInputFromContext
 } from "../../src/lib/vibe64SessionRequestConfig.js";
 
@@ -64,6 +68,17 @@ describe("Vibe64 session request config", () => {
     expect(vibe64ArtifactPreviewPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/artifact-preview`);
     expect(vibe64CodexAttachmentPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/codex-attachments`);
     expect(vibe64ConversationLogPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/conversation-log`);
+    expect(vibe64TerminalFailureFixPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/terminal-failure-fix`);
+  });
+
+  it("builds encoded project tool terminal paths", () => {
+    const apiPath = "/api/studio/vibe64";
+    const toolId = "deploy:prod";
+    const terminalId = "terminal one";
+
+    expect(vibe64ProjectToolRunPath(apiPath, toolId)).toBe(`${apiPath}/tools/deploy%3Aprod/run`);
+    expect(vibe64ProjectToolFixPath(apiPath, toolId)).toBe(`${apiPath}/tools/deploy%3Aprod/fix`);
+    expect(vibe64ProjectToolTerminalPath(apiPath, toolId, terminalId)).toBe(`${apiPath}/tools/deploy%3Aprod/terminal/terminal%20one`);
   });
 
   it("normalizes command input payloads from command context", () => {

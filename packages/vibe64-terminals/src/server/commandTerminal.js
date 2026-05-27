@@ -29,11 +29,13 @@ import {
 } from "@local/studio-terminal-core/server/studioToolHome";
 import {
   vibe64Result,
+  commandInvocation,
   commandTerminalNamespace,
   normalizePlainObject,
   pathInsideOrEqual,
   stableHash,
-  terminalTargetRoot
+  terminalTargetRoot,
+  toolTerminalNamespace
 } from "./terminalShared.js";
 import {
   COMMAND_RESULT_ENV,
@@ -72,6 +74,13 @@ function commandTerminalContainerName({
   terminalId = ""
 } = {}) {
   return `vibe64-command-${stableHash(sessionId)}-${stableHash(terminalId)}`;
+}
+
+function toolTerminalContainerName({
+  terminalId = "",
+  toolId = ""
+} = {}) {
+  return `vibe64-tool-${stableHash(toolId)}-${stableHash(terminalId)}`;
 }
 
 function sessionRevision(value) {
@@ -558,6 +567,125 @@ async function applySuccessFacts({
   };
 }
 
+async function startCommandTerminalProcess({
+  containerName,
+  ensureRuntimeNetwork = ensureTargetRuntimeNetwork,
+  maxRunning = 1,
+  metadata = {},
+  namespace = "",
+  namespaceLimitPrefix = "",
+  onClose = async () => null,
+  projectService,
+  removeContainer = removeDockerContainer,
+  resolveToolchainImage = resolveTerminalToolchainImage,
+  reuseRunning = true,
+  runtime,
+  session = {},
+  spec = {},
+  startTerminal = startTerminalSession,
+  target = "command",
+  targetRoot = ""
+} = {}) {
+  const workdir = resolveCommandWorkdir(targetRoot, spec.cwd);
+  if (!pathInsideOrEqual(targetRoot, workdir)) {
+    return {
+      ok: false,
+      error: "Vibe64 command workdir is outside the target root."
+    };
+  }
+
+  const imageResult = await resolveToolchainImage({
+    runtime,
+    session,
+    target,
+    targetRoot
+  });
+  if (imageResult.ok === false) {
+    return imageResult;
+  }
+
+  await ensureRuntimeNetwork(targetRoot);
+  await ensureAdapterRuntimeContainers({
+    runtime,
+    session,
+    target,
+    targetRoot
+  });
+  const terminalEnv = await projectTerminalEnvironment({
+    projectService,
+    runtime,
+    session,
+    target,
+    targetRoot
+  });
+  const terminalEnvHash = terminalEnvironmentFingerprint(terminalEnv);
+  let resultFile = null;
+  const commandResultFile = () => {
+    if (!resultFile) {
+      resultFile = createCommandResultFileSync();
+    }
+    return resultFile;
+  };
+
+  return startTerminal({
+    args: (terminalContext) => {
+      const activeResultFile = commandResultFile();
+      const specEnv = typeof spec.env === "function" ? spec.env(terminalContext) : spec.env || {};
+      return commandTerminalArgs({
+        args: spec.args || [],
+        command: spec.command,
+        containerName: containerName(terminalContext),
+        env: {
+          ...terminalEnv,
+          ...specEnv,
+          [COMMAND_RESULT_ENV]: activeResultFile.path
+        },
+        image: imageResult.image,
+        mounts: Array.isArray(spec.mounts) ? spec.mounts : [],
+        resultFile: activeResultFile,
+        sessionId: session.sessionId || "",
+        targetRoot,
+        terminalId: terminalContext.id,
+        workdir
+      });
+    },
+    command: "docker",
+    commandPreview: spec.commandPreview,
+    cwd: workdir,
+    maxRunning,
+    metadata: {
+      attemptedCommand: commandInvocation(spec),
+      cwd: workdir,
+      envHash: terminalEnvHash,
+      image: imageResult.image,
+      imageLabel: imageResult.label,
+      targetRoot,
+      ...metadata
+    },
+    namespace,
+    namespaceLimitPrefix: namespaceLimitPrefix || namespace,
+    onClose: async ({ exitCode, id }) => {
+      const activeResultFile = resultFile || {};
+      try {
+        await onClose({
+          exitCode,
+          id,
+          resultFile: activeResultFile
+        });
+      } finally {
+        await Promise.all([
+          removeCommandResultFile(activeResultFile),
+          removeContainer(containerName({
+            id,
+            namespace
+          }))
+        ]);
+      }
+    },
+    reuseRunning
+  });
+}
+
 function createCommandTerminalController({
   afterSuccessfulCommand = async () => null,
   ensureRuntimeNetwork = ensureTargetRuntimeNetwork,
@@ -782,6 +910,7 @@ function createCommandTerminalController({
               metadata: {
                 actionId: action.id,
                 actionLabel: action.label,
+                attemptedCommand: commandInvocation(spec),
                 cwd: workdir,
                 envHash: terminalEnvHash,
                 image: imageResult.image,
@@ -968,8 +1097,116 @@ function createCommandTerminalController({
   });
 }
 
+function createProjectToolTerminalController({
+  ensureRuntimeNetwork = ensureTargetRuntimeNetwork,
+  projectService,
+  removeContainer = removeDockerContainer,
+  resolveToolchainImage = resolveTerminalToolchainImage,
+  startTerminal = startTerminalSession
+} = {}) {
+  async function startPreparedRun(toolId, run = {}) {
+    if (run?.ok === false) {
+      return run;
+    }
+    if (run.type !== "command") {
+      return {
+        ok: false,
+        error: `${run.tool?.label || toolId} is not a command tool.`
+      };
+    }
+    const runtime = await projectService.createRuntime();
+    const targetRoot = terminalTargetRoot({
+      targetRoot: run.targetRoot || projectService.targetRoot
+    });
+    if (!targetRoot) {
+      return {
+        ok: false,
+        error: "Vibe64 tool target root is not available."
+      };
+    }
+    const tool = run.tool || {
+      id: toolId,
+      label: toolId
+    };
+    const session = {
+      targetRoot
+    };
+    return startCommandTerminalProcess({
+      containerName: ({ id }) => toolTerminalContainerName({
+        terminalId: id,
+        toolId: tool.id
+      }),
+      ensureRuntimeNetwork,
+      metadata: {
+        inputKeys: Object.keys(normalizePlainObject(run.input)).sort(),
+        toolId: tool.id,
+        toolLabel: tool.label
+      },
+      namespace: toolTerminalNamespace(tool.id),
+      onClose: async () => null,
+      projectService,
+      removeContainer,
+      resolveToolchainImage,
+      runtime,
+      session,
+      spec: run.spec,
+      startTerminal,
+      target: "tool",
+      targetRoot
+    });
+  }
+
+  return Object.freeze({
+    closeTerminal(toolId, terminalSessionId) {
+      return closeTerminalSession(terminalSessionId, {
+        namespace: toolTerminalNamespace(toolId)
+      });
+    },
+
+    readTerminal(toolId, terminalSessionId) {
+      return readTerminalSession(terminalSessionId, {
+        namespace: toolTerminalNamespace(toolId)
+      });
+    },
+
+    async startTerminal(toolId, input = {}) {
+      return vibe64Result(async () => {
+        const run = await projectService.prepareProjectToolRun(toolId, input);
+        return startPreparedRun(toolId, run);
+      });
+    },
+
+    async startPreparedRun(toolId, run = {}) {
+      return vibe64Result(async () => {
+        return startPreparedRun(toolId, run);
+      });
+    },
+
+    subscribeTerminal(toolId, terminalSessionId, subscriber) {
+      return subscribeTerminalSession(terminalSessionId, subscriber, {
+        namespace: toolTerminalNamespace(toolId)
+      });
+    },
+
+    writeTerminal(toolId, terminalSessionId, data) {
+      return writeTerminalSession(terminalSessionId, data, {
+        namespace: toolTerminalNamespace(toolId)
+      });
+    },
+
+    resizeTerminal(toolId, terminalSessionId, size) {
+      return resizeTerminalSession(terminalSessionId, size, {
+        namespace: toolTerminalNamespace(toolId)
+      });
+    }
+  });
+}
+
 export {
   commandTerminalArgs,
   commandTerminalContainerName,
-  createCommandTerminalController
+  createCommandTerminalController,
+  createProjectToolTerminalController,
+  startCommandTerminalProcess,
+  toolTerminalContainerName
 };

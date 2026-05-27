@@ -100,20 +100,12 @@ describe("Vibe64 launch controls", () => {
   });
 
   it("only offers AI repair for workflow-owned launch commands", () => {
-    const fixCommandFailure = vi.fn();
-
     expect(launchTerminalAiFixAvailable({
-      fixCommandFailure,
       workflowCommand: false
     })).toBe(false);
     expect(launchTerminalAiFixAvailable({
-      fixCommandFailure,
       workflowCommand: true
     })).toBe(true);
-    expect(launchTerminalAiFixAvailable({
-      fixCommandFailure: "not a handler",
-      workflowCommand: true
-    })).toBe(false);
   });
 });
 

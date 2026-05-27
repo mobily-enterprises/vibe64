@@ -128,10 +128,9 @@ function delay(milliseconds = 0) {
 }
 
 function launchTerminalAiFixAvailable({
-  fixCommandFailure = null,
   workflowCommand = false
 } = {}) {
-  return Boolean(workflowCommand && typeof fixCommandFailure === "function");
+  return Boolean(workflowCommand);
 }
 
 function launchTerminalIsReady(metadata = {}) {
@@ -629,6 +628,7 @@ function useVibe64LaunchControls({
     terminalIndicatorState,
     terminalIsRunning,
     terminalLaunchReady,
+    terminalMetadata,
     terminalOutput,
     terminalSessionId,
     terminalStarting,

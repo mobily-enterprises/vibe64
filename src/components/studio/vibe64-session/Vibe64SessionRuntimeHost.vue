@@ -248,6 +248,7 @@ const timeline = proxyRefs({
 const headlessCommandTerminal = proxyRefs({
   actionId: computed(() => String(autopilotCommandRunner.lastResult.value?.actionId || "")),
   actionLabel: computed(() => String(autopilotCommandRunner.lastResult.value?.actionLabel || "")),
+  attemptedCommand: computed(() => String(autopilotCommandRunner.lastResult.value?.attemptedCommand || "")),
   commandPreview: autopilotCommandRunner.commandPreview,
   error: computed(() => {
     const result = autopilotCommandRunner.lastResult.value;

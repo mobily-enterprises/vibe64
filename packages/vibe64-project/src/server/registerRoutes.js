@@ -3,6 +3,7 @@ import {
   projectTypeInputValidator
 } from "./inputSchemas.js";
 import {
+  ACTION_LIST_PROJECT_TOOLS,
   ACTION_READ_PROJECT_CONFIG,
   ACTION_READ_PROJECT_CONFIG_DEFAULTS,
   ACTION_READ_PROJECT_TYPE,
@@ -23,6 +24,11 @@ function registerRoutes(
     routeRelativePath,
     routeSurface,
     tags: ["studio", "vibe64-project"]
+  });
+
+  routes.actionRoute("GET", "/tools", {
+    actionId: ACTION_LIST_PROJECT_TOOLS,
+    summary: "List Vibe64 project tools."
   });
 
   routes.actionRoute("GET", "/project-type", {

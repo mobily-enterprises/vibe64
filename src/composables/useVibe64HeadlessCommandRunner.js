@@ -48,6 +48,10 @@ function terminalHasExited(message = {}) {
   return String(message.status || "") === "exited";
 }
 
+function terminalAttemptedCommand(session = {}) {
+  return String(normalizePlainObject(session.metadata).attemptedCommand || "");
+}
+
 function closeSocket(socket) {
   if (!socket || socket.readyState === WEBSOCKET_CLOSING || socket.readyState === WEBSOCKET_CLOSED) {
     return;
@@ -63,6 +67,7 @@ function registerUnmountCleanup(callback) {
 
 function commandFailure({
   action = {},
+  attemptedCommand = "",
   code = "",
   commandPreview = "",
   error = "",
@@ -77,6 +82,7 @@ function commandFailure({
   return {
     actionId: terminalActionId(action),
     actionLabel: label,
+    attemptedCommand: String(attemptedCommand || ""),
     code: String(code || ""),
     commandPreview,
     error: String(error || `${label} failed.`),
@@ -92,6 +98,7 @@ function commandFailure({
 
 function commandSuccess({
   action = {},
+  attemptedCommand = "",
   commandPreview = "",
   exitCode = 0,
   output = "",
@@ -100,6 +107,7 @@ function commandSuccess({
   return {
     actionId: terminalActionId(action),
     actionLabel: terminalActionLabel(action),
+    attemptedCommand: String(attemptedCommand || ""),
     commandPreview,
     error: "",
     exitCode,
@@ -111,6 +119,7 @@ function commandSuccess({
 
 function commandStopped({
   action = {},
+  attemptedCommand = "",
   commandPreview = "",
   output = "",
   terminalSessionId = ""
@@ -118,6 +127,7 @@ function commandStopped({
   const label = terminalActionLabel(action);
   return commandFailure({
     action,
+    attemptedCommand,
     commandPreview,
     error: `${label} was stopped before it finished.`,
     exitCode: null,
@@ -274,6 +284,7 @@ function useVibe64HeadlessCommandRunner({
     webSocketUrl: resolveWebSocketUrl
   } = {}) {
     return new Promise((resolve) => {
+      let attemptedCommand = terminalAttemptedCommand(initialSession);
       let commandPreview = String(initialSession.commandPreview || "");
       let output = String(initialSession.output || "");
       let settled = false;
@@ -301,6 +312,7 @@ function useVibe64HeadlessCommandRunner({
       function resultForExit(exitCode, closeError = "") {
         const commonResult = {
           action,
+          attemptedCommand,
           commandPreview,
           exitCode,
           output,
@@ -315,6 +327,7 @@ function useVibe64HeadlessCommandRunner({
       }
 
       function applySnapshot(session = {}) {
+        attemptedCommand = terminalAttemptedCommand(session) || attemptedCommand;
         commandPreview = String(session.commandPreview || commandPreview);
         output = String(session.output || output);
         applyLiveTerminalSnapshot({
@@ -339,6 +352,10 @@ function useVibe64HeadlessCommandRunner({
           appendLiveTerminalOutput(chunk);
           return;
         }
+        if (message.type === "metadata") {
+          attemptedCommand = String(normalizePlainObject(message.metadata).attemptedCommand || attemptedCommand);
+          return;
+        }
         if (message.type === "status" && terminalHasExited(message)) {
           status.value = String(message.status || "");
           settle(resultForExit(message.exitCode ?? null, String(message.closeError || "")));
@@ -347,6 +364,7 @@ function useVibe64HeadlessCommandRunner({
         if (message.type === "error") {
           settle(commandFailure({
             action,
+            attemptedCommand,
             commandPreview,
             error: String(message.error || "Terminal stream failed."),
             output,
@@ -359,6 +377,7 @@ function useVibe64HeadlessCommandRunner({
         status.value = "stopping";
         settle(commandStopped({
           action,
+          attemptedCommand,
           commandPreview,
           output,
           terminalSessionId
@@ -385,6 +404,7 @@ function useVibe64HeadlessCommandRunner({
         });
         settle(commandFailure({
           action,
+          attemptedCommand,
           commandPreview,
           error: "Terminal stream is not available.",
           output,

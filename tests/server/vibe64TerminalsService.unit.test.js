@@ -16,6 +16,7 @@ import {
   createService
 } from "../../packages/vibe64-terminals/src/server/service.js";
 import {
+  ACTION_START_SESSION_TERMINAL_FIX,
   ACTION_START_SHELL_TERMINAL,
   featureActions as terminalFeatureActions
 } from "../../packages/vibe64-terminals/src/server/actions.js";
@@ -877,6 +878,8 @@ test("Vibe64 command terminal records action results and metadata after success"
           id,
           namespace: options.namespace
         });
+        assert.match(options.metadata.attemptedCommand, /^bash -lc /u);
+        assert.match(options.metadata.attemptedCommand, /dynamic_done/u);
         const resultFilePath = dockerEnvValue(startedDockerArgs, COMMAND_RESULT_ENV);
         assert.ok(resultFilePath);
         closePromise = (async () => {
@@ -1616,6 +1619,59 @@ test("Vibe64 shell terminal action preserves reuseRunning", async () => {
         target: "worktree"
       },
       sessionId: "shell_action"
+    }
+  ]);
+});
+
+test("Vibe64 session terminal fix action starts an ephemeral Fix Codex job", async () => {
+  const action = terminalFeatureActions.find((item) => item.id === ACTION_START_SESSION_TERMINAL_FIX);
+  const calls = [];
+
+  const result = await action.execute({
+    actionId: "build",
+    attemptedCommand: "bash -lc 'npm run build'",
+    commandPreview: "npm run build",
+    output: "failed",
+    sessionId: "fix-session",
+    terminalSessionId: "terminal-1"
+  }, {}, {
+    featureService: {
+      startSessionTerminalFixJob(sessionId, input) {
+        calls.push({
+          input,
+          sessionId
+        });
+        return {
+          fixJob: {
+            id: "job-1",
+            scope: "session"
+          },
+          id: "fix-terminal-1",
+          ok: true
+        };
+      }
+    }
+  });
+
+  assert.deepEqual(result, {
+    fixJob: {
+      id: "job-1",
+      scope: "session"
+    },
+    id: "fix-terminal-1",
+    ok: true
+  });
+  assert.deepEqual(calls, [
+    {
+      input: {
+        actionId: "build",
+        attemptedCommand: "bash -lc 'npm run build'",
+        commandPreview: "npm run build",
+        output: "failed",
+        sessionId: "fix-session",
+        terminalSessionId: "terminal-1"
+      },
+      sessionId: "fix-session"
     }
   ]);
 });

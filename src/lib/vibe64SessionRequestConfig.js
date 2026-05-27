@@ -4,6 +4,7 @@ import {
 } from "@/lib/vibe64RequestConfig.js";
 
 const VIBE64_SESSIONS_API_SUFFIX = "/vibe64/sessions";
+const VIBE64_API_SUFFIX = "/vibe64";
 const VIBE64_SESSION_CHANGED_EVENT = "vibe64.session.changed";
 const DEFAULT_MAX_OPEN_SESSIONS = 5;
 const SELECTED_SESSION_STORAGE_KEY = "vibe64:selected-session-id";
@@ -22,6 +23,26 @@ function encodePathSegment(value = "") {
 
 function vibe64SessionPath(sessionsApiPath = "", sessionId = "", suffix = "") {
   return `${sessionsApiPath}/${encodePathSegment(sessionId)}${suffix}`;
+}
+
+function vibe64ProjectToolPath(vibe64ApiPath = "", toolId = "", suffix = "") {
+  return `${vibe64ApiPath}/tools/${encodePathSegment(toolId)}${suffix}`;
+}
+
+function vibe64ProjectToolRunPath(vibe64ApiPath = "", toolId = "") {
+  return vibe64ProjectToolPath(vibe64ApiPath, toolId, "/run");
+}
+
+function vibe64ProjectToolFixPath(vibe64ApiPath = "", toolId = "") {
+  return vibe64ProjectToolPath(vibe64ApiPath, toolId, "/fix");
+}
+
+function vibe64ProjectToolTerminalPath(vibe64ApiPath = "", toolId = "", terminalSessionId = "") {
+  return vibe64ProjectToolPath(
+    vibe64ApiPath,
+    toolId,
+    terminalSessionId ? `/terminal/${encodePathSegment(terminalSessionId)}` : "/terminal"
+  );
 }
 
 function vibe64ActionPath(sessionsApiPath = "", sessionId = "", actionId = "") {
@@ -46,6 +67,10 @@ function vibe64ConversationLogPath(sessionsApiPath = "", sessionId = "") {
 
 function vibe64TerminalFailureFixRequestPath(sessionsApiPath = "", sessionId = "") {
   return vibe64SessionPath(sessionsApiPath, sessionId, "/terminal-failure-fix-request");
+}
+
+function vibe64TerminalFailureFixPath(sessionsApiPath = "", sessionId = "") {
+  return vibe64SessionPath(sessionsApiPath, sessionId, "/terminal-failure-fix");
 }
 
 function vibe64CommandTerminalPath(sessionsApiPath = "", sessionId = "", terminalSessionId = "") {
@@ -127,6 +152,7 @@ function commandInputFromContext(context = {}) {
 
 export {
   VIBE64_SESSION_CHANGED_EVENT,
+  VIBE64_API_SUFFIX,
   VIBE64_SESSIONS_API_SUFFIX,
   VIBE64_SURFACE_ID,
   DEFAULT_MAX_OPEN_SESSIONS,
@@ -145,10 +171,14 @@ export {
   vibe64LaunchTargetsQueryKey,
   vibe64LaunchTerminalPath,
   vibe64LaunchTerminalStopPath,
+  vibe64ProjectToolFixPath,
+  vibe64ProjectToolRunPath,
+  vibe64ProjectToolTerminalPath,
   vibe64SessionPath,
   vibe64SessionQueryKey,
   vibe64ShellTerminalPath,
   vibe64SessionsQueryKey,
   vibe64TerminalFailureFixRequestPath,
+  vibe64TerminalFailureFixPath,
   commandInputFromContext
 };

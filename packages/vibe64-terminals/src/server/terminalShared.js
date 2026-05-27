@@ -17,6 +17,8 @@ const GLOBAL_CODEX_TERMINAL_NAMESPACE = "vibe64-global-codex";
 const COMMAND_TERMINAL_NAMESPACE = "vibe64-command";
 const LAUNCH_TARGET_TERMINAL_NAMESPACE = "vibe64-launch-target";
 const SHELL_TERMINAL_NAMESPACE = "vibe64-shell";
+const TOOL_TERMINAL_NAMESPACE = "vibe64-tool";
+const FIX_CODEX_TERMINAL_NAMESPACE = "vibe64-fix-codex";
 
 function vibe64Result(operation) {
   return sharedVibe64Result(operation, {
@@ -33,8 +35,16 @@ function globalCodexTerminalNamespace() {
   return GLOBAL_CODEX_TERMINAL_NAMESPACE;
 }
 
+function fixCodexTerminalNamespace(jobId) {
+  return `${FIX_CODEX_TERMINAL_NAMESPACE}:${String(jobId || "")}`;
+}
+
 function commandTerminalNamespace(sessionId) {
   return `${COMMAND_TERMINAL_NAMESPACE}:${String(sessionId || "")}`;
+}
+
+function toolTerminalNamespace(toolId) {
+  return `${TOOL_TERMINAL_NAMESPACE}:${String(toolId || "")}`;
 }
 
 function launchTargetTerminalNamespace(sessionId) {
@@ -43,6 +53,21 @@ function launchTargetTerminalNamespace(sessionId) {
 
 function shellTerminalNamespace(sessionId) {
   return `${SHELL_TERMINAL_NAMESPACE}:${String(sessionId || "")}`;
+}
+
+function commandInvocation({
+  args = [],
+  command = ""
+} = {}) {
+  const normalizedCommand = String(command || "").trim();
+  if (!normalizedCommand) {
+    return "";
+  }
+  const normalizedArgs = Array.isArray(args) ? args : [];
+  return [
+    normalizedCommand,
+    ...normalizedArgs.map((arg) => String(arg))
+  ].map(shellQuote).join(" ");
 }
 
 async function directoryExists(filePath = "") {
@@ -102,8 +127,10 @@ export {
   CODEX_TERMINAL_NAMESPACE_PREFIX,
   vibe64Result,
   codexTerminalNamespace,
+  commandInvocation,
   commandTerminalNamespace,
   directoryExists,
+  fixCodexTerminalNamespace,
   globalCodexTerminalNamespace,
   launchTargetTerminalNamespace,
   pathInsideOrEqual,
@@ -111,6 +138,7 @@ export {
   sessionTerminalCwd,
   terminalTargetRoot,
   terminalWorktreePath,
+  toolTerminalNamespace,
   dockerCommand,
   normalizePlainObject,
   shellQuote,

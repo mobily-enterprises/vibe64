@@ -1,4 +1,6 @@
 export * from "./currentStepInputHelperServer.js";
+export * from "./coreProjectTools.js";
+export * from "./projectToolRegistry.js";
 export * from "./registerCoreWorkflowModules.js";
 export * from "./runtime.js";
 export * from "./sessionDebugLog.js";

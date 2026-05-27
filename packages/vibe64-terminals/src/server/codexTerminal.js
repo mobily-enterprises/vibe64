@@ -46,6 +46,7 @@ import {
   codexTerminalNamespace,
   directoryExists,
   dockerCommand,
+  fixCodexTerminalNamespace,
   globalCodexTerminalNamespace,
   stableHash,
   terminalTargetRoot,
@@ -72,6 +73,11 @@ import {
 import {
   targetToolchainTerminalArgs
 } from "./targetToolchainTerminal.js";
+import {
+  defaultFixCodexJobStore,
+  fixCodexReportInstructions,
+  prepareFixCodexReportHelper
+} from "./fixCodexJobs.js";
 
 const CODEX_THREAD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 const CODEX_THREAD_ID_TOKEN_PATTERN = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/giu;
@@ -298,6 +304,12 @@ function codexBootstrapSignature(sessionId = "") {
 function codexTerminalSnapshot(sessionId = "", terminalSessionId = "") {
   return readTerminalSession(terminalSessionId, {
     namespace: codexTerminalNamespace(sessionId)
+  });
+}
+
+function globalCodexTerminalSnapshot(terminalSessionId = "") {
+  return readTerminalSession(terminalSessionId, {
+    namespace: globalCodexTerminalNamespace()
   });
 }
 
@@ -531,6 +543,7 @@ function maskedCodexTerminalDockerArgs(args = []) {
 }
 
 function createCodexTerminalController({
+  fixJobStore = defaultFixCodexJobStore,
   projectService,
   publishPromptInjected = async () => null,
   publishSessionChanged = async () => null
@@ -845,6 +858,16 @@ function createCodexTerminalController({
     );
   }
 
+  async function writePromptIntoGlobalCodexTerminal(terminalSessionId, prompt) {
+    return writeTerminalSession(
+      terminalSessionId,
+      `${PROMPT_INJECTION_PREFIX}${prompt}${PROMPT_INJECTION_SUFFIX}`,
+      {
+        namespace: globalCodexTerminalNamespace()
+      }
+    );
+  }
+
   async function markCodexTerminalTransmitting(sessionId, terminalSessionId, signature, reason) {
     const result = updateCodexTerminalMetadata(
       sessionId,
@@ -870,6 +893,285 @@ function createCodexTerminalController({
       reason
     });
     return result;
+  }
+
+  async function waitForGlobalCodexReady(terminalSessionId) {
+    const startedAt = Date.now();
+    let lastOutput = "";
+    let lastChangedAt = Date.now();
+    while (Date.now() - startedAt <= CODEX_BOOT_TIMEOUT_MS) {
+      const snapshot = globalCodexTerminalSnapshot(terminalSessionId);
+      if (snapshot.ok === false || snapshot.status === "exited") {
+        return {
+          ok: false,
+          error: snapshot.error || "Global Codex terminal is not running."
+        };
+      }
+      const output = String(snapshot.output || "");
+      if (codexTrustPromptLooksActive(output)) {
+        return {
+          ok: false,
+          error: "Answer the Codex trust prompt before sending this project tool prompt."
+        };
+      }
+      if (output !== lastOutput) {
+        lastOutput = output;
+        lastChangedAt = Date.now();
+      }
+      if (
+        output &&
+        Date.now() - startedAt >= CODEX_BOOT_MIN_AGE_MS &&
+        Date.now() - lastChangedAt >= CODEX_BOOT_QUIET_MS
+      ) {
+        return {
+          ok: true,
+          output
+        };
+      }
+      await delay(250);
+    }
+    return {
+      ok: true,
+      output: lastOutput
+    };
+  }
+
+  async function injectPromptIntoGlobalCodex(handoff = {}) {
+    const terminalInput = codexPromptHandoffTerminalInput(handoff);
+    if (!terminalInput) {
+      return {
+        ok: false,
+        error: "Codex prompt handoff is empty."
+      };
+    }
+
+    const terminalResponse = await startGlobalCodexTerminalSession();
+    if (terminalResponse.ok === false) {
+      return terminalResponse;
+    }
+    const terminalSessionId = terminalResponse.id || terminalResponse.terminalSessionId || "";
+    if (!terminalSessionId) {
+      return {
+        ok: false,
+        error: "Global Codex terminal did not start."
+      };
+    }
+
+    const ready = await waitForGlobalCodexReady(terminalSessionId);
+    if (ready.ok === false) {
+      return ready;
+    }
+
+    const snapshot = globalCodexTerminalSnapshot(terminalSessionId);
+    const outputStart = String(snapshot.output || "").length;
+    const injected = await writePromptIntoGlobalCodexTerminal(
+      terminalSessionId,
+      terminalInput
+    );
+    if (injected.ok === false) {
+      return injected;
+    }
+
+    const targetRoot = await globalCodexTargetRoot(projectService);
+    const codexTerminal = activeGlobalCodexTerminal(targetRoot);
+    return {
+      ...injected,
+      codexPromptInjected: true,
+      codexPromptHandoffOutputStart: outputStart,
+      codexTerminal,
+      globalCodexTerminal: codexTerminal,
+      terminalSessionId
+    };
+  }
+
+  async function waitForCodexReadyInNamespace(namespace = "", terminalSessionId = "") {
+    const startedAt = Date.now();
+    let lastOutput = "";
+    let lastChangedAt = Date.now();
+    while (Date.now() - startedAt <= CODEX_BOOT_TIMEOUT_MS) {
+      const snapshot = readTerminalSession(terminalSessionId, {
+        namespace
+      });
+      if (snapshot.ok === false || snapshot.status === "exited") {
+        return {
+          ok: false,
+          error: snapshot.error || "Fix Codex terminal is not running."
+        };
+      }
+      const output = String(snapshot.output || "");
+      if (codexTrustPromptLooksActive(output)) {
+        return {
+          ok: false,
+          error: "Answer the Codex trust prompt before sending this fix prompt."
+        };
+      }
+      if (output !== lastOutput) {
+        lastOutput = output;
+        lastChangedAt = Date.now();
+      }
+      if (
+        output &&
+        Date.now() - startedAt >= CODEX_BOOT_MIN_AGE_MS &&
+        Date.now() - lastChangedAt >= CODEX_BOOT_QUIET_MS
+      ) {
+        return {
+          ok: true,
+          output
+        };
+      }
+      await delay(250);
+    }
+    return {
+      ok: true,
+      output: lastOutput
+    };
+  }
+
+  async function startFixCodexJob(input = {}) {
+    const runtime = await projectService.createRuntime();
+    const targetRoot = terminalTargetRoot({
+      targetRoot: input.targetRoot || projectService.targetRoot || runtime?.targetRoot
+    });
+    if (!targetRoot) {
+      return retryableTerminalFailure({
+        ok: false,
+        error: "Fix Codex target root is not available."
+      });
+    }
+    if (!await directoryExists(targetRoot)) {
+      return retryableTerminalFailure({
+        ok: false,
+        error: `Main repo directory does not exist: ${targetRoot}`
+      });
+    }
+    const workdir = path.resolve(normalizeText(input.workdir) || targetRoot);
+    if (!containerWorkspacePath(targetRoot, workdir)) {
+      return retryableTerminalFailure({
+        ok: false,
+        error: "Fix Codex workdir is outside the target root."
+      });
+    }
+    if (!await directoryExists(workdir)) {
+      return retryableTerminalFailure({
+        ok: false,
+        error: `Fix Codex workdir does not exist: ${workdir}`
+      });
+    }
+    const jobSeed = fixJobStore.createJob({
+      prompt: input.prompt,
+      scope: input.scope || "project",
+      subject: input.subject,
+      targetRoot
+    });
+    const fullPrompt = [
+      input.prompt,
+      "",
+      fixCodexReportInstructions(jobSeed)
+    ].join("\n").trim();
+    const jobId = jobSeed.job.id;
+    const namespace = fixCodexTerminalNamespace(jobId);
+    const session = {
+      metadata: {
+        worktree_path: workdir
+      },
+      targetRoot
+    };
+    const imageResult = await resolveTerminalToolchainImage({
+      runtime,
+      session,
+      target: "fix-codex",
+      targetRoot
+    });
+    if (imageResult.ok === false) {
+      return imageResult;
+    }
+
+    await prepareCodexAttachmentRoot();
+    const reportHelper = await prepareFixCodexReportHelper({
+      fixJobStore,
+      jobId,
+      targetRoot,
+      token: jobSeed.token
+    });
+    await ensureTargetRuntimeNetwork(targetRoot);
+    await ensureAdapterRuntimeContainers({
+      runtime,
+      session,
+      target: "fix-codex",
+      targetRoot
+    });
+    const terminalEnv = await projectTerminalEnvironment({
+      projectService,
+      runtime,
+      session,
+      target: "fix-codex",
+      targetRoot
+    });
+    const terminalEnvHash = terminalEnvironmentFingerprint(terminalEnv);
+    const terminalResponse = startTerminalSession({
+      args: ({ id }) => codexTerminalArgs({
+        codexThreadId: "",
+        containerName: codexContainerName({
+          scope: `fix:${jobId}`,
+          terminalId: id
+        }),
+        env: {
+          ...terminalEnv,
+          ...reportHelper.env
+        },
+        helperMount: reportHelper.mount,
+        image: imageResult.image,
+        sessionId: "",
+        targetRoot,
+        terminalId: id,
+        worktree: workdir
+      }),
+      command: "docker",
+      commandPreview: ({ args }) => dockerCommand(maskedCodexTerminalDockerArgs(args)),
+      cwd: targetRoot,
+      maxRunning: 1,
+      metadata: {
+        envHash: terminalEnvHash,
+        fixJobId: jobId,
+        image: imageResult.image,
+        imageLabel: imageResult.label,
+        scope: "fix-codex",
+        targetRoot,
+        workdir
+      },
+      namespace,
+      onClose: async ({ id }) => {
+        await removeDockerContainer(codexContainerName({
+          scope: `fix:${jobId}`,
+          terminalId: id
+        }));
+        await cleanupCodexAttachments(targetRoot, `fix:${jobId}`);
+      },
+      reuseRunning: false
+    });
+    if (terminalResponse.ok === false) {
+      return terminalResponse;
+    }
+
+    const job = fixJobStore.attachTerminal(jobId, terminalResponse.id);
+    void (async () => {
+      const ready = await waitForCodexReadyInNamespace(namespace, terminalResponse.id);
+      if (ready.ok === false) {
+        return;
+      }
+      await writeTerminalSession(
+        terminalResponse.id,
+        `${PROMPT_INJECTION_PREFIX}${wrapPromptWithStudioContext(fullPrompt)}${PROMPT_INJECTION_SUFFIX}`,
+        {
+          namespace
+        }
+      );
+    })();
+
+    return {
+      ...terminalResponse,
+      fixJob: job
+    };
   }
 
   async function writeCodexBootstrapTaskEvent(runtime, sessionId, {
@@ -1290,6 +1592,12 @@ function createCodexTerminalController({
       });
     },
 
+    closeFixTerminal(jobId, terminalSessionId) {
+      return closeTerminalSession(terminalSessionId, {
+        namespace: fixCodexTerminalNamespace(jobId)
+      });
+    },
+
     async closeAllForSession(sessionId) {
       await closeTerminalSessionsForNamespace(codexTerminalNamespace(sessionId));
       const targetRoot = await terminalTargetRootForSession(projectService, sessionId);
@@ -1319,6 +1627,14 @@ function createCodexTerminalController({
       });
     },
 
+    readFixTerminal(jobId, terminalSessionId) {
+      return vibe64Result(async () => {
+        return readTerminalSession(terminalSessionId, {
+          namespace: fixCodexTerminalNamespace(jobId)
+        });
+      });
+    },
+
     readTerminal(sessionId, terminalSessionId) {
       return vibe64Result(async () => {
         const runtime = await projectService.createRuntime();
@@ -1332,6 +1648,27 @@ function createCodexTerminalController({
     async injectCodexPrompt(sessionId, handoff = {}) {
       return vibe64Result(async () => {
         return injectPromptIntoCodex(sessionId, handoff);
+      });
+    },
+
+    async injectGlobalCodexPrompt(handoff = {}) {
+      return vibe64Result(async () => {
+        return injectPromptIntoGlobalCodex(handoff);
+      });
+    },
+
+    async startFixJob(input = {}) {
+      return vibe64Result(async () => {
+        return startFixCodexJob(input);
+      });
+    },
+
+    async reportFixJob(jobId, input = {}) {
+      return vibe64Result(async () => {
+        return {
+          fixJob: fixJobStore.reportJob(jobId, input),
+          ok: true
+        };
       });
     },
 
@@ -1398,6 +1735,14 @@ function createCodexTerminalController({
       });
     },
 
+    subscribeFixTerminal(jobId, terminalSessionId, subscriber) {
+      return vibe64Result(async () => {
+        return subscribeTerminalSession(terminalSessionId, subscriber, {
+          namespace: fixCodexTerminalNamespace(jobId)
+        });
+      });
+    },
+
     subscribeTerminal(sessionId, terminalSessionId, subscriber) {
       return vibe64Result(async () => {
         const runtime = await projectService.createRuntime();
@@ -1439,6 +1784,12 @@ function createCodexTerminalController({
       });
     },
 
+    writeFixTerminal(jobId, terminalSessionId, data) {
+      return writeTerminalSession(terminalSessionId, data, {
+        namespace: fixCodexTerminalNamespace(jobId)
+      });
+    },
+
     resizeTerminal(sessionId, terminalSessionId, size) {
       return resizeTerminalSession(terminalSessionId, size, {
         namespace: codexTerminalNamespace(sessionId)
@@ -1448,6 +1799,12 @@ function createCodexTerminalController({
     resizeGlobalTerminal(terminalSessionId, size) {
       return resizeTerminalSession(terminalSessionId, size, {
         namespace: globalCodexTerminalNamespace()
+      });
+    },
+
+    resizeFixTerminal(jobId, terminalSessionId, size) {
+      return resizeTerminalSession(terminalSessionId, size, {
+        namespace: fixCodexTerminalNamespace(jobId)
       });
     }
   });

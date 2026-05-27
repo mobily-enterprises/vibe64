@@ -5,6 +5,7 @@ import {
   projectTypeReadInputValidator
 } from "./inputSchemas.js";
 
+const ACTION_LIST_PROJECT_TOOLS = "feature.vibe64-project.tools.list";
 const ACTION_READ_PROJECT_TYPE = "feature.vibe64-project.project-type.read";
 const ACTION_SAVE_PROJECT_TYPE = "feature.vibe64-project.project-type.save";
 const ACTION_READ_PROJECT_CONFIG = "feature.vibe64-project.config.read";
@@ -12,6 +13,25 @@ const ACTION_READ_PROJECT_CONFIG_DEFAULTS = "feature.vibe64-project.config.defau
 const ACTION_SAVE_PROJECT_CONFIG = "feature.vibe64-project.config.save";
 
 const featureActions = Object.freeze([
+  {
+    id: ACTION_LIST_PROJECT_TOOLS,
+    version: 1,
+    kind: "query",
+    channels: ["api", "automation", "internal"],
+    surfaces: ["home"],
+    input: projectConfigReadInputValidator,
+    output: null,
+    idempotency: "none",
+    audit: {
+      actionName: ACTION_LIST_PROJECT_TOOLS
+    },
+    observability: {},
+    async execute(input, context, deps) {
+      void input;
+      void context;
+      return deps.featureService.listProjectTools();
+    }
+  },
   {
     id: ACTION_READ_PROJECT_TYPE,
     version: 1,
@@ -108,6 +128,7 @@ const featureActions = Object.freeze([
 ]);
 
 export {
+  ACTION_LIST_PROJECT_TOOLS,
   ACTION_READ_PROJECT_CONFIG,
   ACTION_READ_PROJECT_CONFIG_DEFAULTS,
   ACTION_READ_PROJECT_TYPE,

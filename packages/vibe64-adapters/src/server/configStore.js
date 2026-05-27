@@ -18,6 +18,8 @@ import {
 const VIBE64_CONFIG_DIR = "config";
 const VIBE64_RUNTIME_DIR = "runtime";
 const VIBE64_CONFIG_HELPER_FILE = "vibe64-config.sh";
+const VIBE64_DEPLOY_PRODUCTION_COMMAND_CONFIG = "deploy_production_command";
+const VIBE64_DEPLOY_STAGING_COMMAND_CONFIG = "deploy_staging_command";
 const CONFIG_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/u;
 const CONFIG_FIELD_TYPES = new Set(["boolean", "path", "select", "string"]);
 
@@ -45,6 +47,22 @@ const VIBE64_GENERAL_CONFIG_FIELDS = deepFreeze([
       }
     ],
     type: "select"
+  },
+  {
+    defaultValue: "",
+    description: "Command Studio should run from the main checkout when you choose Tools > Push to production.",
+    id: VIBE64_DEPLOY_PRODUCTION_COMMAND_CONFIG,
+    label: "Production deploy command",
+    required: false,
+    type: "string"
+  },
+  {
+    defaultValue: "",
+    description: "Command Studio should run from the main checkout when you choose Tools > Push to staging.",
+    id: VIBE64_DEPLOY_STAGING_COMMAND_CONFIG,
+    label: "Staging deploy command",
+    required: false,
+    type: "string"
   }
 ]);
 
@@ -444,8 +462,9 @@ function createVibe64ProjectConfigStore({
     }));
     const fieldValues = Object.fromEntries(entries);
     const values = Object.fromEntries(entries.map(([fieldId, state]) => [fieldId, state.value]));
+    const fieldById = new Map(normalizedDefinition.fields.map((field) => [field.id, field]));
     const missing = entries
-      .filter(([, state]) => !state.saved)
+      .filter(([fieldId, state]) => fieldById.get(fieldId)?.required !== false && !state.saved)
       .map(([fieldId]) => fieldId)
       .sort((left, right) => left.localeCompare(right));
     const invalid = entries
@@ -524,6 +543,8 @@ function createVibe64ProjectConfigStore({
 export {
   VIBE64_CONFIG_DIR,
   VIBE64_CONFIG_HELPER_FILE,
+  VIBE64_DEPLOY_PRODUCTION_COMMAND_CONFIG,
+  VIBE64_DEPLOY_STAGING_COMMAND_CONFIG,
   VIBE64_GENERAL_CONFIG_FIELDS,
   VIBE64_RUNTIME_DIR,
   createVibe64ProjectConfigStore,

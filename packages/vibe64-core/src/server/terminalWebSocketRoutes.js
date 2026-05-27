@@ -83,8 +83,11 @@ function registerTerminalWebSocketRoute(
         closeWithError(1011, String(error?.message || error || serviceUnavailableMessage));
         return;
       }
-      const sessionId = String(request.params?.sessionId || "");
-      const terminalSessionId = String(request.params?.terminalSessionId || "");
+      const routeParams = request.params || {};
+      const sessionId = String(routeParams.sessionId || "");
+      const terminalSessionId = String(routeParams.terminalSessionId || "");
+      const toolId = String(routeParams.toolId || "");
+      const jobId = String(routeParams.jobId || "");
 
       socket.on("message", async (rawMessage) => {
         try {
@@ -92,8 +95,10 @@ function registerTerminalWebSocketRoute(
           if (message?.type === "input") {
             const response = await write(service, {
               data: message.data,
+              jobId,
               sessionId,
-              terminalSessionId
+              terminalSessionId,
+              toolId
             });
             if (response?.ok === false) {
               sendSocketJson(socket, {
@@ -106,9 +111,11 @@ function registerTerminalWebSocketRoute(
           if (message?.type === "resize") {
             const response = await resize?.(service, {
               cols: message.cols,
+              jobId,
               rows: message.rows,
               sessionId,
-              terminalSessionId
+              terminalSessionId,
+              toolId
             });
             if (response?.ok === false) {
               sendSocketJson(socket, {
@@ -129,11 +136,13 @@ function registerTerminalWebSocketRoute(
       socket.on("error", closeSubscription);
 
       void Promise.resolve(subscribe(service, {
+        jobId,
         sessionId,
         subscriber: (message) => {
           sendSocketJson(socket, message);
         },
-        terminalSessionId
+        terminalSessionId,
+        toolId
       })).then((result) => {
         if (result?.ok === false) {
           closeWithError(1008, result.error || "Terminal session not found.");

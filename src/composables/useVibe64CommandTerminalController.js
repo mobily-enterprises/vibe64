@@ -6,14 +6,19 @@ import { useStudioTerminal } from "@/composables/useStudioTerminal.js";
 import {
   vibe64CommandTerminalWebSocketUrl,
   vibe64LaunchTerminalWebSocketUrl,
-  vibe64ShellTerminalWebSocketUrl
+  vibe64ProjectToolTerminalWebSocketUrl,
+  vibe64ShellTerminalWebSocketUrl,
+  startVibe64ProjectToolFixJob
 } from "@/lib/vibe64SessionApi.js";
 import {
+  VIBE64_API_SUFFIX,
   VIBE64_SESSIONS_API_SUFFIX,
   VIBE64_SURFACE_ID,
   LOCAL_STUDIO_COMMAND_OPTIONS,
   vibe64CommandTerminalPath,
   vibe64LaunchTerminalPath,
+  vibe64ProjectToolRunPath,
+  vibe64ProjectToolTerminalPath,
   vibe64ShellTerminalPath
 } from "@/lib/vibe64SessionRequestConfig.js";
 import {
@@ -24,7 +29,6 @@ const FINISHED_TERMINAL_HOLD_MS = 500;
 
 function commandTerminalCanRequestAiFix({
   aiFixAvailable = false,
-  sessionId = "",
   terminalCommandPreview = "",
   terminalError = "",
   terminalExited = false,
@@ -34,7 +38,6 @@ function commandTerminalCanRequestAiFix({
 } = {}) {
   return Boolean(
     aiFixAvailable &&
-    sessionId &&
     !terminalRunning &&
     (
       terminalError ||
@@ -68,8 +71,12 @@ function useVibe64CommandTerminalController(props, emit) {
   const sessionsApiPath = computed(() => paths.api(VIBE64_SESSIONS_API_SUFFIX, {
     surface: VIBE64_SURFACE_ID
   }));
+  const vibe64ApiPath = computed(() => paths.api(VIBE64_API_SUFFIX, {
+    surface: VIBE64_SURFACE_ID
+  }));
   const launchTerminal = computed(() => props.terminalKind === "launch");
   const shellTerminal = computed(() => props.terminalKind === "shell");
+  const projectToolTerminal = computed(() => props.terminalKind === "tool");
   const terminalTitle = computed(() => {
     if (props.title) {
       return props.title;
@@ -86,17 +93,26 @@ function useVibe64CommandTerminalController(props, emit) {
     if (shellTerminal.value) {
       return shellTarget.value === "main" ? "Main repo" : "Session worktree";
     }
+    if (projectToolTerminal.value) {
+      return activeActionLabel.value || "Project tool";
+    }
     return activeActionLabel.value || "Run adapter commands here.";
   });
   const startFailureMessage = computed(() => {
     if (launchTerminal.value) {
       return "Launch terminal failed to start.";
     }
+    if (projectToolTerminal.value) {
+      return "Project tool failed to start.";
+    }
     return shellTerminal.value
       ? "Shell terminal failed to start."
       : "Command terminal failed to start.";
   });
   const canStartTerminal = computed(() => {
+    if (projectToolTerminal.value) {
+      return Boolean(actionId.value);
+    }
     return Boolean(
       sessionId.value &&
       (
@@ -117,6 +133,11 @@ function useVibe64CommandTerminalController(props, emit) {
     }
     if (terminalKind === "shell") {
       return vibe64ShellTerminalPath(sessionsApiPath.value, selectedSessionId, selectedTerminalSessionId);
+    }
+    if (terminalKind === "tool") {
+      return selectedTerminalSessionId
+        ? vibe64ProjectToolTerminalPath(vibe64ApiPath.value, actionId.value, selectedTerminalSessionId)
+        : vibe64ProjectToolRunPath(vibe64ApiPath.value, actionId.value);
     }
     return vibe64CommandTerminalPath(sessionsApiPath.value, selectedSessionId, selectedTerminalSessionId);
   }
@@ -146,6 +167,11 @@ function useVibe64CommandTerminalController(props, emit) {
         return {
           reuseRunning: context.reuseRunning !== false,
           target: String(context.shellTarget || "")
+        };
+      }
+      if (context.terminalKind === "tool") {
+        return {
+          parameters: context.actionInput || {}
         };
       }
       return {};
@@ -189,6 +215,9 @@ function useVibe64CommandTerminalController(props, emit) {
       }
       if (shellTerminal.value) {
         return vibe64ShellTerminalWebSocketUrl(sessionId.value, terminalId);
+      }
+      if (projectToolTerminal.value) {
+        return vibe64ProjectToolTerminalWebSocketUrl(actionId.value, terminalId);
       }
       return vibe64CommandTerminalWebSocketUrl(sessionId.value, terminalId);
     }
@@ -432,9 +461,10 @@ function useVibe64CommandTerminalController(props, emit) {
       return;
     }
     setExpanded(false);
-    emit("fix-requested", await terminalFailureFixRequest({
+    const context = {
       actionId: actionId.value,
       actionLabel: activeActionLabel.value,
+      attemptedCommand: String(terminalMetadata.value?.attemptedCommand || ""),
       closeError: terminalError.value,
       commandPreview: terminalCommandPreview.value,
       exitCode: terminalExitCode.value,
@@ -445,7 +475,16 @@ function useVibe64CommandTerminalController(props, emit) {
       shellTarget: shellTarget.value,
       terminalKind: props.terminalKind,
       terminalSessionId: terminalSessionId.value,
-      terminalStatus: terminalStatus.value
+      terminalStatus: terminalStatus.value,
+      toolId: actionId.value,
+      toolLabel: activeActionLabel.value
+    };
+    if (projectToolTerminal.value) {
+      emit("fix-requested", await startVibe64ProjectToolFixJob(actionId.value, context));
+      return;
+    }
+    emit("fix-requested", await terminalFailureFixRequest({
+      ...context
     }));
   }
 
