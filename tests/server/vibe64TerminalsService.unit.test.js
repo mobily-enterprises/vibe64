@@ -5,6 +5,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
 
 import {
+  STEP_STATUS,
   Vibe64SessionRuntime
 } from "@local/vibe64-runtime/server";
 import {
@@ -33,7 +34,8 @@ import {
   launchActionsFromOutput
 } from "../../packages/vibe64-terminals/src/server/launchTargetTerminal.js";
 import {
-  codexTerminalNamespace
+  codexTerminalNamespace,
+  globalCodexTerminalNamespace
 } from "../../packages/vibe64-terminals/src/server/terminalShared.js";
 import {
   resolveShellTerminalCwd,
@@ -251,6 +253,67 @@ test("Vibe64 Codex terminal joins the target runtime network before the image", 
   assert.ok(!maskedTerminalDockerArgs(adapterImageArgs).includes(`MYSQL_PWD=${JSKIT_MARIADB_ROOT_PASSWORD}`));
 });
 
+test("Vibe64 global Codex terminal args use the project root without a session token", () => {
+  const targetRoot = "/workspace/project";
+  const args = codexTerminalArgs({
+    codexThreadId: "",
+    containerName: "vibe64-codex-global",
+    sessionId: "",
+    targetRoot,
+    terminalId: "global-terminal",
+    worktree: targetRoot
+  });
+
+  assert.notEqual(globalCodexTerminalNamespace(), codexTerminalNamespace("global"));
+  assert.equal(args.some((arg) => String(arg).startsWith("vibe64.session=")), false);
+  assert.equal(args.at(args.indexOf("-w") + 1), targetRoot);
+  assert.doesNotMatch(args.at(-1), /resume [0-9a-f-]{36}/u);
+});
+
+test("Vibe64 global Codex terminal state resolves target root from project service APIs", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const terminal = startTerminalSession({
+      args: [
+        "-e",
+        "process.stdin.resume(); setInterval(() => {}, 1000);"
+      ],
+      command: process.execPath,
+      commandPreview: "codex",
+      metadata: {
+        scope: "global",
+        targetRoot,
+        workdir: targetRoot
+      },
+      namespace: globalCodexTerminalNamespace()
+    });
+    assert.equal(terminal.ok, true);
+
+    const terminalService = createService({
+      projectService: {
+        async readProjectType() {
+          return {
+            ok: true,
+            projectType: {
+              targetRoot
+            }
+          };
+        }
+      }
+    });
+
+    try {
+      const state = await terminalService.globalCodexTerminalState();
+      assert.equal(state.ok, true);
+      assert.equal(state.globalCodexTerminal.id, terminal.id);
+      assert.equal(state.globalCodexTerminal.status, "running");
+    } finally {
+      await closeTerminalSession(terminal.id, {
+        namespace: globalCodexTerminalNamespace()
+      });
+    }
+  });
+});
+
 test("Vibe64 Codex terminal renders the session briefing for explicit delivery", () => {
   const briefingPrompt = codexSessionBriefingPrompt({
     adapter: {
@@ -412,6 +475,36 @@ test("Vibe64 Codex terminal state separates running from transmitting", async ()
       });
     }
   });
+});
+
+test("Vibe64 Codex continue rejects non-waiting workflow states before bootstrap", async () => {
+  let createRuntimeCalls = 0;
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        createRuntimeCalls += 1;
+        return {
+          async getSession(sessionId) {
+            assert.equal(sessionId, "codex_continue_done");
+            return {
+              sessionId,
+              stepMachine: {
+                status: STEP_STATUS.DONE
+              }
+            };
+          }
+        };
+      }
+    }
+  });
+
+  const result = await service.continueCodexTurn("codex_continue_done");
+
+  assert.equal(result.ok, false);
+  assert.equal(result.retryable, false);
+  assert.equal(result.stepMachineStatus, STEP_STATUS.DONE);
+  assert.match(result.error, /waiting for Codex/u);
+  assert.equal(createRuntimeCalls, 1);
 });
 
 test("Vibe64 Codex bootstrap failure is persisted as a visible background task", async () => {

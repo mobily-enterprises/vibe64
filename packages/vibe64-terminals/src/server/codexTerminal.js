@@ -33,6 +33,9 @@ import {
   prepareCurrentStepInputHelper
 } from "@local/vibe64-runtime/server/currentStepInputHelperServer";
 import {
+  STEP_STATUS
+} from "@local/vibe64-runtime/server/workflowStepMachines";
+import {
   promptSessionBriefing
 } from "@local/vibe64-adapters/server/promptRenderer";
 import {
@@ -122,6 +125,31 @@ function retryableTerminalFailure(result = {}) {
   };
 }
 
+function codexContinueTurnRejected(session = {}) {
+  const status = normalizeText(session.stepMachine?.status);
+  if (status === STEP_STATUS.AWAITING_AGENT_RESULT) {
+    return null;
+  }
+  return {
+    ok: false,
+    retryable: false,
+    stepMachineStatus: status,
+    error: "Codex can only be continued while the current step is waiting for Codex."
+  };
+}
+
+async function readCodexContinueTurnSession(runtime, sessionId) {
+  const session = await runtime.getSession(sessionId);
+  const rejection = codexContinueTurnRejected(session);
+  if (rejection) {
+    return rejection;
+  }
+  return {
+    ok: true,
+    session
+  };
+}
+
 function delay(ms) {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
@@ -159,9 +187,37 @@ async function terminalTargetRootForSession(projectService, sessionId) {
   try {
     const runtime = await projectService.createRuntime();
     const session = await runtime.getSession(sessionId);
-    return terminalTargetRoot(session, projectService);
+    return terminalTargetRoot(session, projectService) ||
+      await globalCodexTargetRoot(projectService, runtime);
   } catch {
-    return terminalTargetRoot({}, projectService);
+    return globalCodexTargetRoot(projectService);
+  }
+}
+
+async function globalCodexTargetRoot(projectService = {}, runtime = null) {
+  const serviceRoot = terminalTargetRoot({}, projectService);
+  if (serviceRoot) {
+    return serviceRoot;
+  }
+
+  const runtimeRoot = terminalTargetRoot({
+    targetRoot: runtime?.targetRoot
+  });
+  if (runtimeRoot) {
+    return runtimeRoot;
+  }
+
+  if (typeof projectService.readProjectType !== "function") {
+    return "";
+  }
+
+  try {
+    const projectType = await projectService.readProjectType();
+    return terminalTargetRoot({
+      targetRoot: projectType?.projectType?.targetRoot || projectType?.targetRoot
+    });
+  } catch {
+    return "";
   }
 }
 
@@ -595,7 +651,7 @@ function createCodexTerminalController({
 
   async function startGlobalCodexTerminalSession() {
     const runtime = await projectService.createRuntime();
-    const targetRoot = terminalTargetRoot({}, projectService);
+    const targetRoot = await globalCodexTargetRoot(projectService, runtime);
     if (!targetRoot) {
       return retryableTerminalFailure({
         ok: false,
@@ -1151,13 +1207,31 @@ function createCodexTerminalController({
   }
 
   async function continueCodexTurn(sessionId) {
-    const bootstrap = await ensureCodexThreadReady(sessionId);
+    const normalizedSessionId = normalizeText(sessionId);
+    if (!normalizedSessionId) {
+      return {
+        ok: false,
+        error: "Vibe64 session ID is required."
+      };
+    }
+
+    const runtime = await projectService.createRuntime();
+    let sessionResult = await readCodexContinueTurnSession(runtime, normalizedSessionId);
+    if (sessionResult.ok === false) {
+      return sessionResult;
+    }
+
+    const bootstrap = await ensureCodexThreadReady(normalizedSessionId);
     if (bootstrap.ok === false) {
       return bootstrap;
     }
 
-    const runtime = await projectService.createRuntime();
-    const session = await runtime.getSession(sessionId);
+    sessionResult = await readCodexContinueTurnSession(runtime, normalizedSessionId);
+    if (sessionResult.ok === false) {
+      return sessionResult;
+    }
+
+    const session = sessionResult.session;
     const terminalSessionId = bootstrap.terminalSessionId || bootstrap.id || activeCodexTerminal(session)?.id || "";
     if (!terminalSessionId) {
       return {
@@ -1166,9 +1240,9 @@ function createCodexTerminalController({
       };
     }
 
-    const signature = codexPromptHandoffSignature(sessionId);
+    const signature = codexPromptHandoffSignature(normalizedSessionId);
     const turnMetadataResult = await markCodexTerminalTransmitting(
-      sessionId,
+      normalizedSessionId,
       terminalSessionId,
       signature,
       "codex-turn-continue-started"
@@ -1177,27 +1251,33 @@ function createCodexTerminalController({
       return turnMetadataResult;
     }
 
-    const ready = await waitForCodexReady(sessionId, terminalSessionId);
+    const ready = await waitForCodexReady(normalizedSessionId, terminalSessionId);
     if (ready.ok === false) {
-      await markCodexTerminalIdle(sessionId, terminalSessionId, "codex-turn-continue-failed");
+      await markCodexTerminalIdle(normalizedSessionId, terminalSessionId, "codex-turn-continue-failed");
       return ready;
     }
 
+    sessionResult = await readCodexContinueTurnSession(runtime, normalizedSessionId);
+    if (sessionResult.ok === false) {
+      await markCodexTerminalIdle(normalizedSessionId, terminalSessionId, "codex-turn-continue-rejected");
+      return sessionResult;
+    }
+
     const injected = await writePromptIntoCodexTerminal(
-      sessionId,
+      normalizedSessionId,
       terminalSessionId,
       CONTINUE_CODEX_TURN_PROMPT
     );
     if (injected.ok === false) {
-      await markCodexTerminalIdle(sessionId, terminalSessionId, "codex-turn-continue-failed");
+      await markCodexTerminalIdle(normalizedSessionId, terminalSessionId, "codex-turn-continue-failed");
       return injected;
     }
 
-    await publishPromptInjected(sessionId, {
+    await publishPromptInjected(normalizedSessionId, {
       reason: "codex-turn-continue-injected"
     });
     return {
-      ...withCodexState(injected, session),
+      ...withCodexState(injected, sessionResult.session),
       codexContinueInjected: true,
       terminalSessionId
     };
@@ -1226,7 +1306,7 @@ function createCodexTerminalController({
 
     readGlobalTerminal(terminalSessionId) {
       return vibe64Result(async () => {
-        const targetRoot = terminalTargetRoot({}, projectService);
+        const targetRoot = await globalCodexTargetRoot(projectService);
         const snapshot = readTerminalSession(terminalSessionId, {
           namespace: globalCodexTerminalNamespace()
         });
@@ -1293,7 +1373,7 @@ function createCodexTerminalController({
 
     async globalTerminalState() {
       return vibe64Result(async () => {
-        const targetRoot = terminalTargetRoot({}, projectService);
+        const targetRoot = await globalCodexTargetRoot(projectService);
         const codexTerminal = activeGlobalCodexTerminal(targetRoot);
         return {
           codexTerminal,
@@ -1305,7 +1385,7 @@ function createCodexTerminalController({
 
     subscribeGlobalTerminal(terminalSessionId, subscriber) {
       return vibe64Result(async () => {
-        const targetRoot = terminalTargetRoot({}, projectService);
+        const targetRoot = await globalCodexTargetRoot(projectService);
         const subscribed = subscribeTerminalSession(terminalSessionId, subscriber, {
           namespace: globalCodexTerminalNamespace()
         });

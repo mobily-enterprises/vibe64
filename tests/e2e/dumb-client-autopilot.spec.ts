@@ -511,6 +511,68 @@ test.describe("Autopilot dumb client contract", () => {
     ))).toEqual([]);
   });
 
+  test("opens a global Codex terminal from Autopilot when no sessions exist", async ({ page }) => {
+    await mockCodexTerminalPreviewSocket(page);
+    await page.addInitScript(() => {
+      window.localStorage.removeItem("vibe64:selected-session-id");
+    });
+    let globalCodexStarts = 0;
+    let sessionCodexStarts = 0;
+
+    await mockStudioReady(page);
+    await page.route("**/api/vibe64/codex-terminal", async (route) => {
+      if (route.request().method() === "POST") {
+        globalCodexStarts += 1;
+        await fulfillJson(route, {
+          commandPreview: "codex",
+          globalCodexTerminal: {
+            commandPreview: "codex",
+            id: "global-codex-terminal",
+            status: "running"
+          },
+          id: "global-codex-terminal",
+          ok: true,
+          status: "running"
+        });
+        return;
+      }
+      await fulfillJson(route, {
+        codexTerminal: null,
+        globalCodexTerminal: null,
+        ok: true
+      });
+    });
+    await page.route("**/api/vibe64/sessions**", async (route) => {
+      const url = new URL(route.request().url());
+      if (route.request().method() === "POST" && url.pathname.endsWith("/codex-terminal")) {
+        sessionCodexStarts += 1;
+      }
+      await fulfillJson(route, {
+        creation: {
+          canCreate: true,
+          defaultWorkflowDefinition: "big_feature",
+          mode: "select",
+          workflowDefinitions: []
+        },
+        limits: {
+          maxOpenSessions: 5,
+          openSessionCount: 0
+        },
+        ok: true,
+        sessions: []
+      });
+    });
+
+    await page.goto(`${BASE_URL}/home`);
+
+    await expect(page.getByText("No sessions yet.")).toBeVisible();
+    await page.getByRole("button", { name: "Codex terminal" }).click();
+
+    await expect(page.locator(".studio-ai-sessions__global-codex-terminal .codex-terminal__host")).toBeVisible();
+    await expect.poll(() => globalCodexStarts).toBe(1);
+    await expect.poll(() => sessionCodexStarts).toBe(0);
+  });
+
   test("runs the server-presented Codex continuation control from Autopilot", async ({ page }) => {
     let continuationRequests = 0;
     const continuationIntent = {

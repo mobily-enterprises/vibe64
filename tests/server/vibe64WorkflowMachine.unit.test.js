@@ -11,7 +11,10 @@ import {
   WorkflowMachine,
   applyWorkflowPresentation,
   createCoreWorkflowRegistry,
+  defineWorkflow,
   when,
+  workflowGroup,
+  workflowWhen,
   workflowForDefinition
 } from "@local/vibe64-runtime/server";
 import {
@@ -1270,6 +1273,38 @@ test("vibe64 runtime owns final-review follow-up and merge decision intents", as
   });
 });
 
+test("vibe64 workflow definition groups expand named sequences and conditionals", () => {
+  const groupedIntentHandler = () => ({ ok: true });
+  const workflow = defineWorkflow({
+    id: "grouped_workflow",
+    label: "Grouped workflow",
+    parts: [
+      "start",
+      workflowGroup({
+        id: "qa",
+        intentHandlers: {
+          conditional_step: {
+            grouped_intent: groupedIntentHandler
+          }
+        },
+        steps: [
+          workflowWhen(true, "conditional_step"),
+          workflowWhen(false, "skipped_step"),
+          "finish"
+        ]
+      })
+    ]
+  });
+
+  assert.deepEqual(workflow.steps, [
+    "start",
+    "conditional_step",
+    "finish"
+  ]);
+  assert.equal(workflow.parts, undefined);
+  assert.equal(workflow.intentHandlers.conditional_step.grouped_intent, groupedIntentHandler);
+});
+
 test("vibe64 workflow definitions are ordered step lists with self-contained step metadata", () => {
   const bigFeature = coreWorkflowForDefinition(VIBE64_WORKFLOW_DEFINITION_IDS.BIG_FEATURE);
   const generalCoding = coreWorkflowForDefinition(VIBE64_WORKFLOW_DEFINITION_IDS.GENERAL_CODING);
@@ -1280,6 +1315,28 @@ test("vibe64 workflow definitions are ordered step lists with self-contained ste
   assert.equal(bigFeature.id, DEFAULT_VIBE64_WORKFLOW_DEFINITION_ID);
   assert.ok(bigFeature.steps.find((step) => step.id === "issue_file_created")?.autopilot.stop);
   assert.ok(seedApplication.steps.find((step) => step.id === "seed_application_defined")?.autopilot.stop);
+  assert.deepEqual(bigFeature.steps.map((step) => step.id), [
+    "session_created",
+    "work_source_selected",
+    "worktree_created",
+    "dependencies_installed",
+    "issue_file_created",
+    "issue_submitted",
+    "plan_made",
+    "plan_executed",
+    "implementation_reviewed",
+    "deep_ui_check_run",
+    "review_run",
+    "project_validated",
+    "changes_accepted",
+    "report_created",
+    "project_knowledge_updated",
+    "changes_committed",
+    "create_pull_request",
+    "pr_merged",
+    "main_checkout_synced",
+    "session_finished"
+  ]);
   assert.deepEqual(seedApplication.steps.map((step) => step.id).slice(0, 6), [
     "session_created",
     "work_source_selected",
@@ -1398,7 +1455,9 @@ test("vibe64 workflow definitions are ordered step lists with self-contained ste
     "worktree_created",
     "dependencies_installed",
     "maintenance_conversation",
-    "project_validated",
+    "changes_accepted",
+    "report_created",
+    "project_knowledge_updated",
     "changes_committed",
     "create_pull_request",
     "pr_merged",
@@ -1407,8 +1466,16 @@ test("vibe64 workflow definitions are ordered step lists with self-contained ste
   ]);
   assert.equal(nonCodeMaintenance.steps.some((step) => step.id === "issue_file_created"), false);
   assert.equal(nonCodeMaintenance.steps.some((step) => step.id === "plan_made"), false);
+  assert.equal(nonCodeMaintenance.steps.some((step) => step.id === "project_validated"), false);
   assert.equal(nonCodeMaintenance.steps.some((step) => step.id === "review_run"), false);
-  assert.equal(nonCodeMaintenance.steps.some((step) => step.id === "changes_accepted"), false);
+  assert.equal(
+    nonCodeMaintenance.steps.find((step) => step.id === "changes_accepted").workflow.rejectTo,
+    "maintenance_conversation"
+  );
+  assert.equal(
+    nonCodeMaintenance.steps.find((step) => step.id === "changes_accepted").workflow.recheckTo,
+    "maintenance_conversation"
+  );
   assert.equal(nonCodeMaintenance.steps.find((step) => step.id === "maintenance_conversation").autopilot.kind, "agent_conversation");
   assert.equal(nonCodeMaintenance.steps.find((step) => step.id === "maintenance_conversation").label, "Talk to Codex");
   assert.deepEqual(nonCommitMaintenance.definition.initialMetadata, {
@@ -1609,6 +1676,16 @@ test("vibe64 workflow modules register workflow definitions with explicit cross-
       .filter((record) => record.moduleId === maintenanceModuleId)
       .map((record) => record.id),
     Object.values(maintenanceWorkflowDefinitionIds).sort()
+  );
+
+  const nonCodeMaintenance = recordsById.get(maintenanceWorkflowDefinitionIds.NON_CODE_MAINTENANCE);
+  const nonCodeMaintenanceStepIds = nonCodeMaintenance?.steps.map((step) => step.stepId) || [];
+  assert.equal(nonCodeMaintenanceStepIds.includes("project_validated"), false);
+  assert.equal(nonCodeMaintenanceStepIds.includes("changes_accepted"), true);
+  assert.equal(
+    stepRecordsById.get("changes_accepted")?.moduleId,
+    codingModuleId,
+    "maintenance workflow may compose finish_off coding steps, but must not own them"
   );
 
   const nonCommitMaintenance = recordsById.get(maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE);
@@ -1857,7 +1934,7 @@ test("vibe64 runtime persists the selected workflow definition per session", asy
   });
 });
 
-test("vibe64 non-code maintenance definition starts with a reusable session label and skips issue planning", async () => {
+test("vibe64 non-code maintenance definition starts with a reusable session label and skips issue planning and qa", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = new Vibe64SessionRuntime({
       targetRoot
@@ -1873,7 +1950,8 @@ test("vibe64 non-code maintenance definition starts with a reusable session labe
     assert.equal(await runtime.store.readArtifact("docs_definition", "issue_word"), "documentation\n");
     assert.equal(session.stepDefinitions.some((step) => step.id === "issue_file_created"), false);
     assert.equal(session.stepDefinitions.some((step) => step.id === "plan_made"), false);
-    assert.equal(session.stepDefinitions.some((step) => step.id === "changes_accepted"), false);
+    assert.equal(session.stepDefinitions.some((step) => step.id === "project_validated"), false);
+    assert.equal(session.stepDefinitions.some((step) => step.id === "changes_accepted"), true);
 
     await runtime.advance("docs_definition");
     await runtime.store.writeMetadataValue("docs_definition", "work_source", "new_branch");
@@ -1885,7 +1963,7 @@ test("vibe64 non-code maintenance definition starts with a reusable session labe
     const conversationStep = await runtime.advance("docs_definition");
 
     assert.equal(conversationStep.currentStep, "maintenance_conversation");
-    assert.equal(conversationStep.next.stepId, "project_validated");
+    assert.equal(conversationStep.next.stepId, "changes_accepted");
   });
 });
 

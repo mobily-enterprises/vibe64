@@ -21,58 +21,73 @@
       to="#studio-home-app-bar-actions"
     >
       <div
-        v-if="selection.selectedSession"
+        v-if="toolbarActionsVisible"
         class="studio-ai-sessions__app-bar-actions"
       >
-        <div
-          v-if="sessionMode === 'inspect'"
-          class="studio-ai-sessions__inspect-tools"
+        <v-btn
+          v-if="globalCodexButtonVisible"
+          class="studio-ai-sessions__global-codex-button"
+          :color="globalCodexTerminalOpen ? 'primary' : undefined"
+          :prepend-icon="mdiRobotOutline"
+          size="small"
+          type="button"
+          :variant="globalCodexTerminalOpen ? 'flat' : 'tonal'"
+          @click="toggleGlobalCodexTerminal"
         >
+          Codex terminal
+        </v-btn>
+
+        <template v-if="selection.selectedSession">
+          <div
+            v-if="sessionMode === 'inspect'"
+            class="studio-ai-sessions__inspect-tools"
+          >
+            <v-btn
+              v-if="inspectDiffVisible"
+              class="studio-ai-sessions__inspect-button"
+              :disabled="selectedReview.diffDisabled"
+              :loading="selectedDiff.loading"
+              :prepend-icon="mdiFileCompare"
+              size="small"
+              :title="selectedReview.diffTitle"
+              type="button"
+              variant="tonal"
+              @click="selectedDiff.openDialog"
+            >
+              Review diff
+            </v-btn>
+          </div>
+
+          <Vibe64ShellControls
+            v-for="shellSession in shellToolbarSessions"
+            :key="`shell:${shellSession.sessionId}`"
+            :session="shellSession"
+            :show-activator="shellControlsActive(shellSession)"
+            :window-displayed="shellControlsActive(shellSession)"
+          />
+
+          <Vibe64LaunchControls
+            v-if="selectedToolbarSession"
+            :key="`launch:${selectedToolbarSession.sessionId}`"
+            button-size="large"
+            button-variant="flat"
+            :busy="false"
+            class="studio-ai-sessions__run-controls"
+            prominent
+            :session="selectedToolbarSession"
+            window-displayed
+          />
+
           <v-btn
-            v-if="inspectDiffVisible"
-            class="studio-ai-sessions__inspect-button"
-            :disabled="selectedReview.diffDisabled"
-            :loading="selectedDiff.loading"
-            :prepend-icon="mdiFileCompare"
-            size="small"
-            :title="selectedReview.diffTitle"
+            class="studio-ai-sessions__mode-switch"
+            :prepend-icon="modeSwitchIcon"
             type="button"
             variant="tonal"
-            @click="selectedDiff.openDialog"
+            @click="switchSessionMode"
           >
-            Review diff
+            {{ modeSwitchLabel }}
           </v-btn>
-        </div>
-
-        <Vibe64ShellControls
-          v-for="shellSession in shellToolbarSessions"
-          :key="`shell:${shellSession.sessionId}`"
-          :session="shellSession"
-          :show-activator="shellControlsActive(shellSession)"
-          :window-displayed="shellControlsActive(shellSession)"
-        />
-
-        <Vibe64LaunchControls
-          v-if="selectedToolbarSession"
-          :key="`launch:${selectedToolbarSession.sessionId}`"
-          button-size="large"
-          button-variant="flat"
-          :busy="false"
-          class="studio-ai-sessions__run-controls"
-          prominent
-          :session="selectedToolbarSession"
-          window-displayed
-        />
-
-        <v-btn
-          class="studio-ai-sessions__mode-switch"
-          :prepend-icon="modeSwitchIcon"
-          type="button"
-          variant="tonal"
-          @click="switchSessionMode"
-        >
-          {{ modeSwitchLabel }}
-        </v-btn>
+        </template>
       </div>
     </Teleport>
 
@@ -84,23 +99,45 @@
       rounded
     />
 
-    <v-sheet
+    <div
       v-else-if="!selection.selectedSession"
-      rounded="lg"
-      border
-      class="studio-ai-sessions__empty"
+      class="studio-ai-sessions__empty-layout"
+      :class="{
+        'studio-ai-sessions__empty-layout--with-terminal': globalCodexTerminalOpen
+      }"
     >
-      <p class="text-body-2 text-medium-emphasis mb-0">No sessions yet.</p>
-    </v-sheet>
+      <v-sheet
+        rounded="lg"
+        border
+        class="studio-ai-sessions__empty"
+      >
+        <p class="text-body-2 text-medium-emphasis mb-0">No sessions yet.</p>
+      </v-sheet>
+
+      <Vibe64SessionTerminals
+        v-if="globalCodexTerminalOpen"
+        :allow-codex-start="true"
+        class="studio-ai-sessions__global-codex-terminal"
+        :codex-terminal="globalCodexTerminalController"
+        :codex-scope="'global'"
+        :codex-terminal-state="globalCodexTerminalState"
+        :display-mode="'full'"
+        :show-command-output="false"
+        @codex-session-update="updateGlobalCodexTerminalState"
+      />
+    </div>
 
     <div v-else class="studio-ai-sessions__runtime-stack">
       <Vibe64SessionRuntimeHost
         :key="selection.selectedSessionId"
         active
+        :global-codex-open="globalCodexTerminalOpen"
+        :global-codex-terminal-state="globalCodexTerminalState"
         :session-data="sessionData"
         :session-id="selection.selectedSessionId"
         :session-mode="sessionMode"
         @busy-change="setRuntimeBusy"
+        @global-codex-update="updateGlobalCodexTerminalState"
         @page-error-change="setRuntimePageError"
         @toolbar-controls-ready="setRuntimeToolbarControls"
       />
@@ -109,15 +146,17 @@
 </template>
 
 <script setup>
-import { computed, proxyRefs, reactive, watch } from "vue";
+import { computed, proxyRefs, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
   mdiFileCompare,
   mdiPlayCircleOutline,
+  mdiRobotOutline,
   mdiTune
 } from "@mdi/js";
 import Vibe64LaunchControls from "@/components/studio/Vibe64LaunchControls.vue";
 import Vibe64SessionRuntimeHost from "@/components/studio/vibe64-session/Vibe64SessionRuntimeHost.vue";
+import Vibe64SessionTerminals from "@/components/studio/vibe64-session/Vibe64SessionTerminals.vue";
 import Vibe64SessionToolbar from "@/components/studio/vibe64-session/Vibe64SessionToolbar.vue";
 import Vibe64ShellControls from "@/components/studio/Vibe64ShellControls.vue";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
@@ -145,6 +184,8 @@ const fallbackAbandon = {
   request: () => null
 };
 const runtimeStateBySessionId = reactive({});
+const globalCodexTerminalOpen = ref(false);
+const globalCodexTerminalState = ref(null);
 const sessionData = useVibe64SessionData({
   onTitleChange(title) {
     emit("title-change", title);
@@ -180,6 +221,14 @@ const modeSwitchTarget = computed(() => sessionMode.value === "inspect" ? "autop
 const modeSwitchLabel = computed(() => modeSwitchTarget.value === "inspect" ? "Inspect" : "Autopilot");
 const modeSwitchIcon = computed(() => modeSwitchTarget.value === "inspect" ? mdiTune : mdiPlayCircleOutline);
 const pageLoading = sessionData.pageLoading;
+const toolbarActionsVisible = computed(() => Boolean(
+  selection.selectedSession ||
+  globalCodexButtonVisible.value
+));
+const globalCodexButtonVisible = computed(() => sessionMode.value === "autopilot");
+const globalCodexTerminalController = {
+  sessionUpdate: updateGlobalCodexTerminalState
+};
 const selectedToolbarSession = computed(() => {
   return selection.selectedSession ||
     (toolbar.sessions || []).find((session) => session.sessionId === selection.selectedSessionId) ||
@@ -266,6 +315,24 @@ function switchSessionMode() {
   setSessionMode(modeSwitchTarget.value);
 }
 
+function toggleGlobalCodexTerminal() {
+  globalCodexTerminalOpen.value = !globalCodexTerminalOpen.value;
+}
+
+function updateGlobalCodexTerminalState(payload = {}) {
+  const directTerminal = payload?.globalCodexTerminal || payload?.codexTerminal;
+  if (directTerminal && typeof directTerminal === "object" && !Array.isArray(directTerminal)) {
+    globalCodexTerminalState.value = directTerminal;
+    return;
+  }
+  globalCodexTerminalState.value = {
+    ...(globalCodexTerminalState.value || {}),
+    commandPreview: String(payload.codexTerminalCommandPreview || payload.commandPreview || ""),
+    id: String(payload.codexTerminalSessionId || payload.terminalSessionId || payload.id || ""),
+    status: String(payload.codexTerminalStatus || payload.status || "")
+  };
+}
+
 function shellControlsActive(session = {}) {
   return Boolean(
     sessionMode.value === "inspect" &&
@@ -305,6 +372,20 @@ watch(sessionData.sessions, (sessions = []) => {
   padding: 0.9rem;
 }
 
+.studio-ai-sessions__empty-layout {
+  --studio-ai-sessions-codex-terminal-column: minmax(30rem, 1.22fr);
+  --studio-ai-sessions-inspect-main-column: minmax(18rem, 0.78fr);
+  --studio-ai-sessions-layout-gap: 0.9rem;
+  display: grid;
+  gap: var(--studio-ai-sessions-layout-gap);
+  min-height: 0;
+}
+
+.studio-ai-sessions__global-codex-terminal {
+  min-height: 0;
+  min-width: 0;
+}
+
 .studio-ai-sessions__header {
   display: grid;
   gap: 0.65rem;
@@ -327,6 +408,13 @@ watch(sessionData.sessions, (sessions = []) => {
     min-height: 0;
     overflow: hidden;
   }
+
+  .studio-ai-sessions__empty-layout--with-terminal {
+    align-items: stretch;
+    grid-template-columns: var(--studio-ai-sessions-inspect-main-column) var(--studio-ai-sessions-codex-terminal-column);
+    height: 100%;
+    overflow: hidden;
+  }
 }
 
 .studio-ai-sessions__app-bar-actions {
@@ -339,6 +427,7 @@ watch(sessionData.sessions, (sessions = []) => {
 }
 
 .studio-ai-sessions__inspect-tools,
+.studio-ai-sessions__global-codex-button,
 .studio-ai-sessions__mode-switch,
 .studio-ai-sessions__run-controls,
 .studio-ai-sessions__inspect-button {

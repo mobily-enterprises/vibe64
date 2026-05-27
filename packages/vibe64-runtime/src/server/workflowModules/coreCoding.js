@@ -20,6 +20,11 @@ import {
   buildAgentConversationStepDefinition
 } from "../workflowDefinitionBuilders.js";
 import {
+  defineWorkflow,
+  workflowGroup,
+  workflowWhen
+} from "../workflowDefinitionComposers.js";
+import {
   coreLifecycleWorkflowIntentHandlers
 } from "./coreLifecycle.js";
 import { when } from "../workflowConditions.js";
@@ -57,6 +62,10 @@ const VIBE64_WORKFLOW_DEFINITION_IDS = deepFreeze({
   SEED_APPLICATION: "seed_application"
 });
 const DEFAULT_VIBE64_WORKFLOW_DEFINITION_ID = VIBE64_WORKFLOW_DEFINITION_IDS.BIG_FEATURE;
+const CORE_CODING_WORKFLOW_GROUP_IDS = deepFreeze({
+  FINISH_OFF: "finish_off",
+  QA: "qa"
+});
 
 const agentConversationStepId = "agent_conversation";
 const changesAcceptedStepId = "changes_accepted";
@@ -98,14 +107,50 @@ const finalReviewIntentHandlers = deepFreeze({
 const optionalCheckIntentHandlers = deepFreeze({
   skip_optional_check: skipOptionalCheck
 });
-const coreCodingSeedWorkflowIntentHandlers = deepFreeze({
-  ...coreLifecycleWorkflowIntentHandlers,
-  [changesAcceptedStepId]: finalReviewIntentHandlers
-});
-const coreCodingStandardWorkflowIntentHandlers = deepFreeze({
-  ...coreCodingSeedWorkflowIntentHandlers,
-  [deepUiCheckRunStepId]: optionalCheckIntentHandlers
-});
+
+function finishOffWorkflowGroup({
+  recheckTo = "",
+  rejectTo = ""
+} = {}) {
+  return workflowGroup({
+    id: CORE_CODING_WORKFLOW_GROUP_IDS.FINISH_OFF,
+    intentHandlers: {
+      ...coreLifecycleWorkflowIntentHandlers,
+      [changesAcceptedStepId]: finalReviewIntentHandlers
+    },
+    steps: [
+      {
+        recheckTo,
+        rejectTo,
+        stepId: changesAcceptedStepId
+      },
+      reportCreatedStepId,
+      projectKnowledgeUpdatedStepId,
+      "changes_committed",
+      "create_pull_request",
+      "pr_merged",
+      "main_checkout_synced",
+      "session_finished"
+    ]
+  });
+}
+
+function qaWorkflowGroup({
+  humanReview = true
+} = {}) {
+  return workflowGroup({
+    id: CORE_CODING_WORKFLOW_GROUP_IDS.QA,
+    intentHandlers: {
+      [deepUiCheckRunStepId]: optionalCheckIntentHandlers
+    },
+    steps: [
+      workflowWhen(humanReview, implementationReviewedStepId),
+      deepUiCheckRunStepId,
+      reviewRunStepId,
+      "project_validated"
+    ]
+  });
+}
 
 function createIssueOnGithubAction() {
   return {
@@ -608,13 +653,11 @@ const coreCodingStepDefinitionsById = deepFreeze({
 });
 
 const coreCodingWorkflowDefinitions = deepFreeze([
-  {
+  defineWorkflow({
     description: "Create the initial application scaffold and local development foundation.",
     id: VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION,
-    intentHandlers: coreCodingSeedWorkflowIntentHandlers,
     label: "Seed application",
-    sessionWord: "seeding",
-    steps: [
+    parts: [
       "session_created",
       "work_source_selected",
       "worktree_created",
@@ -623,27 +666,19 @@ const coreCodingWorkflowDefinitions = deepFreeze([
       seedPlanExecutedStepId,
       "dependencies_installed",
       "project_validated",
-      {
+      finishOffWorkflowGroup({
         rejectTo: seedPlanMadeStepId,
-        recheckTo: "project_validated",
-        stepId: changesAcceptedStepId
-      },
-      reportCreatedStepId,
-      projectKnowledgeUpdatedStepId,
-      "changes_committed",
-      "create_pull_request",
-      "pr_merged",
-      "main_checkout_synced",
-      "session_finished"
+        recheckTo: "project_validated"
+      })
     ],
+    sessionWord: "seeding",
     userSelectable: false
-  },
-  {
+  }),
+  defineWorkflow({
     description: "Plan, implement, review, validate, commit, create a PR, and optionally merge.",
     id: VIBE64_WORKFLOW_DEFINITION_IDS.BIG_FEATURE,
-    intentHandlers: coreCodingStandardWorkflowIntentHandlers,
     label: "Big feature",
-    steps: [
+    parts: [
       "session_created",
       "work_source_selected",
       "worktree_created",
@@ -652,55 +687,37 @@ const coreCodingWorkflowDefinitions = deepFreeze([
       issueSubmittedStepId,
       planMadeStepId,
       planExecutedStepId,
-      implementationReviewedStepId,
-      deepUiCheckRunStepId,
-      reviewRunStepId,
-      "project_validated",
-      {
+      qaWorkflowGroup({
+        humanReview: true
+      }),
+      finishOffWorkflowGroup({
         rejectTo: planMadeStepId,
-        recheckTo: reviewRunStepId,
-        stepId: changesAcceptedStepId
-      },
-      reportCreatedStepId,
-      projectKnowledgeUpdatedStepId,
-      "changes_committed",
-      "create_pull_request",
-      "pr_merged",
-      "main_checkout_synced",
-      "session_finished"
+        recheckTo: reviewRunStepId
+      })
     ],
     userSelectable: true
-  },
-  {
+  }),
+  defineWorkflow({
     description: "Make focused code changes with Codex, review, validate, commit, create a PR, and optionally merge.",
     id: VIBE64_WORKFLOW_DEFINITION_IDS.GENERAL_CODING,
-    intentHandlers: coreCodingStandardWorkflowIntentHandlers,
     label: "General coding",
-    sessionWord: "coding",
-    steps: [
+    parts: [
       "session_created",
       "work_source_selected",
       "worktree_created",
       "dependencies_installed",
       agentConversationStepId,
-      deepUiCheckRunStepId,
-      reviewRunStepId,
-      "project_validated",
-      {
+      qaWorkflowGroup({
+        humanReview: false
+      }),
+      finishOffWorkflowGroup({
         rejectTo: agentConversationStepId,
-        recheckTo: reviewRunStepId,
-        stepId: changesAcceptedStepId
-      },
-      reportCreatedStepId,
-      projectKnowledgeUpdatedStepId,
-      "changes_committed",
-      "create_pull_request",
-      "pr_merged",
-      "main_checkout_synced",
-      "session_finished"
+        recheckTo: reviewRunStepId
+      })
     ],
+    sessionWord: "coding",
     userSelectable: true
-  }
+  })
 ]);
 
 function issueFilesAreReady(session = {}) {
@@ -1612,6 +1629,7 @@ const coreCodingWorkflowModule = Object.freeze({
 });
 
 const _testing = deepFreeze({
+  groupIds: CORE_CODING_WORKFLOW_GROUP_IDS,
   moduleId,
   ownedStepIds: [
     SEED_APPLICATION_STEP_ID,
@@ -1638,5 +1656,7 @@ export {
   ISSUE_FILE_STEP_ID,
   SEED_APPLICATION_STEP_ID,
   _testing,
-  coreCodingWorkflowModule
+  coreCodingWorkflowModule,
+  finishOffWorkflowGroup,
+  qaWorkflowGroup
 };

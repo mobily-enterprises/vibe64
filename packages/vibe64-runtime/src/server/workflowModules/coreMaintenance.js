@@ -6,8 +6,11 @@ import {
   buildAgentConversationStepDefinition
 } from "../workflowDefinitionBuilders.js";
 import {
-  coreLifecycleWorkflowIntentHandlers
-} from "./coreLifecycle.js";
+  defineWorkflow
+} from "../workflowDefinitionComposers.js";
+import {
+  finishOffWorkflowGroup
+} from "./coreCoding.js";
 import { when } from "../workflowConditions.js";
 import {
   STEP_STATUS,
@@ -87,27 +90,24 @@ const coreMaintenanceStepDefinitionsById = deepFreeze({
 });
 
 const coreMaintenanceWorkflowDefinitions = [
-  {
-    description: "Update documentation or other non-code project files, validate, commit, create a PR, and optionally merge.",
+  defineWorkflow({
+    description: "Update documentation or other non-code project files, review, report, commit, create a PR, and optionally merge.",
     id: workflowDefinitionIds.NON_CODE_MAINTENANCE,
-    intentHandlers: coreLifecycleWorkflowIntentHandlers,
     label: "Documentation/non code maintenance",
-    sessionWord: "documentation",
-    steps: [
+    parts: [
       "session_created",
       "work_source_selected",
       "worktree_created",
       "dependencies_installed",
       "maintenance_conversation",
-      "project_validated",
-      "changes_committed",
-      "create_pull_request",
-      "pr_merged",
-      "main_checkout_synced",
-      "session_finished"
+      finishOffWorkflowGroup({
+        rejectTo: "maintenance_conversation",
+        recheckTo: "maintenance_conversation"
+      })
     ],
+    sessionWord: "documentation",
     userSelectable: true
-  },
+  }),
   {
     description: "Run a local maintenance task without commit, pull request, or merge steps.",
     id: workflowDefinitionIds.NON_COMMIT_MAINTENANCE,
