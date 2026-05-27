@@ -34,7 +34,7 @@ import {
 import {
   LARAVEL_TOOLCHAIN_IMAGE
 } from "@local/vibe64-adapters/server/adapters/laravel/toolchainIdentity";
-import { withTemporaryRoot } from "./vibe64TestHelpers.js";
+import { withTemporaryRoot, worktreeMetadata } from "./vibe64TestHelpers.js";
 
 async function writeProjectFile(root, relativePath, text = "") {
   const filePath = path.join(root, relativePath);
@@ -77,12 +77,6 @@ async function createLaravelProject(root, {
     writeProjectFile(root, "public/index.php", "<?php\n"),
     writeProjectFile(root, "routes/web.php", "<?php\n")
   ]);
-}
-
-function worktreeMetadata(targetRoot, sessionId = "session") {
-  return {
-    worktree_path: path.join(targetRoot, ".vibe64/sessions/active", sessionId, "worktree")
-  };
 }
 
 function commandIds() {

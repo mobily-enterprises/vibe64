@@ -96,23 +96,38 @@ function useCodexTerminalSocket({
       };
 
       nextSocket.addEventListener("open", () => {
+        if (socket !== nextSocket) {
+          settle(false);
+          return;
+        }
         clearReconnect();
         onConnected?.();
         settle(true);
       });
 
       nextSocket.addEventListener("message", (event) => {
+        if (socket !== nextSocket) {
+          return;
+        }
         onMessage?.(event.data);
       });
 
       nextSocket.addEventListener("error", () => {
+        if (socket !== nextSocket) {
+          settle(false);
+          return;
+        }
         onError?.("Terminal stream failed.");
         settle(false);
       });
 
       nextSocket.addEventListener("close", (event) => {
-        if (socket === nextSocket) {
+        const activeSocketClosed = socket === nextSocket;
+        if (activeSocketClosed) {
           socket = null;
+        } else {
+          settle(false);
+          return;
         }
         socketOpenPromise = null;
         settle(false);

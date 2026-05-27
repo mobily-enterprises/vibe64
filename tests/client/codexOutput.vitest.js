@@ -14,7 +14,7 @@ describe("codexOutput terminal utilities", () => {
     expect(stripTerminalControlSequences("\u001B[31mhello\u001B[0m")).toBe("hello");
   });
 
-  it("keeps color while making terminal snapshots safe to replay", () => {
+  it("keeps replayable terminal controls so snapshots reconstruct the current screen", () => {
     const output = terminalSnapshotOutputForDisplay([
       "\u001B]0;worktree\u0007",
       "\u001B[?2026h\u001B[22;2H\u001B[K",
@@ -22,7 +22,11 @@ describe("codexOutput terminal utilities", () => {
       "\u001B[25;1H\u0007\u001B[?25h"
     ].join(""));
 
-    expect(output).toBe("\u001B[31mhello\u001B[0m\n");
+    expect(output).toBe([
+      "\u001B[?2026h\u001B[22;2H\u001B[K",
+      "\u001B[31mhello\u001B[0m\r",
+      "\u001B[25;1H\u001B[?25h"
+    ].join(""));
   });
 
   it("detects Codex trust prompts", () => {

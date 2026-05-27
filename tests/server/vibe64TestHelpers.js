@@ -24,6 +24,13 @@ async function withTemporaryRoot(callback) {
   }
 }
 
+function worktreeMetadata(targetRoot, sessionId = "session") {
+  return {
+    worktree_path: path.join(targetRoot, ".vibe64/sessions/active", sessionId, "worktree")
+  };
+}
+
 export {
-  withTemporaryRoot
+  withTemporaryRoot,
+  worktreeMetadata
 };

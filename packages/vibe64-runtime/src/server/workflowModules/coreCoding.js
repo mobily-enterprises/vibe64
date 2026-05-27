@@ -707,9 +707,7 @@ const coreCodingWorkflowDefinitions = deepFreeze([
       "worktree_created",
       "dependencies_installed",
       agentConversationStepId,
-      qaWorkflowGroup({
-        humanReview: false
-      }),
+      qaWorkflowGroup(),
       finishOffWorkflowGroup({
         rejectTo: agentConversationStepId,
         recheckTo: reviewRunStepId

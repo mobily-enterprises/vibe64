@@ -111,10 +111,12 @@ function stripTerminalControlSequences(value) {
     .replace(STANDALONE_TERMINAL_CONTROL_PATTERN, "");
 }
 
-function terminalControlSequenceKeepsColor(source = "", startIndex = 0, endIndex = startIndex) {
-  return source[startIndex] === ESCAPE_CHARACTER &&
-    source[startIndex + 1] === "[" &&
-    source[endIndex - 1] === "m";
+function terminalControlSequenceCanReplay(source = "", startIndex = 0) {
+  const character = source[startIndex] || "";
+  if (character === ESCAPE_CHARACTER) {
+    return !ESCAPE_TERMINAL_STRING_INTRODUCERS.has(source[startIndex + 1] || "");
+  }
+  return character === C1_CSI_CHARACTER;
 }
 
 function isStandaloneTerminalControlCharacter(character = "") {
@@ -133,7 +135,7 @@ function terminalSnapshotOutputForDisplay(value) {
   for (let cursor = 0; cursor < source.length;) {
     const controlEnd = terminalControlSequenceEnd(source, cursor);
     if (controlEnd > cursor) {
-      if (terminalControlSequenceKeepsColor(source, cursor, controlEnd)) {
+      if (terminalControlSequenceCanReplay(source, cursor, controlEnd)) {
         output += source.slice(cursor, controlEnd);
       }
       cursor = controlEnd;
@@ -141,15 +143,13 @@ function terminalSnapshotOutputForDisplay(value) {
     }
 
     const character = source[cursor];
-    if (character === "\r") {
-      output += "\n";
-    } else if (!isStandaloneTerminalControlCharacter(character)) {
+    if (!isStandaloneTerminalControlCharacter(character)) {
       output += character;
     }
     cursor += 1;
   }
 
-  return output.replace(/\n{4,}/gu, "\n\n\n");
+  return output;
 }
 
 function trailingMarkerPrefixLength(value, marker) {

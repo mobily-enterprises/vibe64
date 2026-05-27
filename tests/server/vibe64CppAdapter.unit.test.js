@@ -16,7 +16,7 @@ import {
   createCppTargetAdapter,
   seedCppProjectScript
 } from "@local/vibe64-adapters/server/adapters/cpp/index";
-import { withTemporaryRoot } from "./vibe64TestHelpers.js";
+import { withTemporaryRoot, worktreeMetadata } from "./vibe64TestHelpers.js";
 
 async function writeProjectFile(root, relativePath, text = "") {
   const filePath = path.join(root, relativePath);
@@ -49,12 +49,6 @@ async function createCppProject(root) {
       "}"
     ].join("\n"))
   ]);
-}
-
-function worktreeMetadata(targetRoot, sessionId = "session") {
-  return {
-    worktree_path: path.join(targetRoot, ".vibe64/sessions/active", sessionId, "worktree")
-  };
 }
 
 function commandIds() {

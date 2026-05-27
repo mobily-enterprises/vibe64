@@ -15,6 +15,10 @@ import {
 import {
   terminalInputValidator
 } from "../../packages/studio-setup-doctor/src/server/inputSchemas.js";
+import {
+  STUDIO_TOOL_HOME_NPM_PREFIX,
+  STUDIO_TOOL_HOME_PATH
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 
 test("Studio Setup readiness requires every required check to pass", () => {
   assert.equal(isStudioSetupReady([
@@ -67,8 +71,8 @@ test("Studio Setup Codex repair reinstalls Codex in the managed tool home", () =
   assert.equal(repair.autoRun, false);
   assert.equal(repair.label, "Reinstall Codex CLI");
   assert.match(repair.commandPreview, /docker run/u);
-  assert.match(repair.commandPreview, /HOME=\/home\/studio/u);
-  assert.match(repair.commandPreview, /NPM_CONFIG_PREFIX=\/home\/studio\/\.local/u);
+  assert.ok(repair.commandPreview.includes(`HOME=${STUDIO_TOOL_HOME_PATH}`));
+  assert.ok(repair.commandPreview.includes(`NPM_CONFIG_PREFIX=${STUDIO_TOOL_HOME_NPM_PREFIX}`));
   assert.match(repair.commandPreview, /CODEX_GLOBAL_PACKAGE_DIR=/u);
   assert.match(repair.commandPreview, /rm -rf "\$CODEX_GLOBAL_PACKAGE_DIR\/codex"/u);
   assert.match(repair.commandPreview, /rm -rf "\$CODEX_GLOBAL_PACKAGE_DIR\/\.codex-"\*/u);

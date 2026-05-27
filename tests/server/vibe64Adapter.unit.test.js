@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import path from "node:path";
 import test from "node:test";
 
 import {
@@ -8,13 +7,7 @@ import {
 import {
   FakeTargetAdapter
 } from "@local/vibe64-adapters/server";
-import { withTemporaryRoot } from "./vibe64TestHelpers.js";
-
-function worktreeMetadata(targetRoot, sessionId = "session") {
-  return {
-    worktree_path: path.join(targetRoot, ".vibe64/sessions/active", sessionId, "worktree")
-  };
-}
+import { withTemporaryRoot, worktreeMetadata } from "./vibe64TestHelpers.js";
 
 function toyWorkflow() {
   return {

@@ -46,7 +46,7 @@ import {
 import {
   questionBatchLimitInstruction
 } from "@local/vibe64-adapters/server/promptQuestionPolicy";
-import { withTemporaryRoot } from "./vibe64TestHelpers.js";
+import { withTemporaryRoot, worktreeMetadata } from "./vibe64TestHelpers.js";
 
 const maintenanceModuleId = coreMaintenanceTesting.moduleId;
 const maintenanceWorkflowDefinitionIds = coreMaintenanceTesting.workflowDefinitionIds;
@@ -119,12 +119,6 @@ function objectRecord(value) {
 
 function arrayValue(value) {
   return Array.isArray(value) ? value : [];
-}
-
-function worktreeMetadata(targetRoot, sessionId = "session") {
-  return {
-    worktree_path: path.join(targetRoot, ".vibe64/sessions/active", sessionId, "worktree")
-  };
 }
 
 function conditionReferences(condition = {}, refs = []) {
@@ -1358,6 +1352,7 @@ test("vibe64 workflow definitions are ordered step lists with self-contained ste
     "worktree_created",
     "dependencies_installed",
     "agent_conversation",
+    "implementation_reviewed",
     "deep_ui_check_run",
     "review_run",
     "project_validated",

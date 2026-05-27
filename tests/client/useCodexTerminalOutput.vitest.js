@@ -241,6 +241,27 @@ describe("useCodexTerminalOutput", () => {
     expect(writeDisplay).toHaveBeenCalledWith("");
   });
 
+  it("replays terminal-control snapshots through xterm instead of flattening repaint frames", () => {
+    const writeDisplay = vi.fn();
+    const terminalOutput = useCodexTerminalOutput({
+      writeDisplay
+    });
+    const snapshot = [
+      "\u001b[2J\u001b[H",
+      "OpenAI Codex\r\n",
+      "\u001b[3;1H",
+      "directory: /workspace/app\r",
+      "\u001b[K",
+      "\u001b[5;1H",
+      "gpt-5.5 xhigh"
+    ].join("");
+
+    terminalOutput.writeTerminalOutput(snapshot);
+
+    expect(terminalOutput.getTerminalOutput()).toBe(snapshot);
+    expect(writeDisplay).toHaveBeenCalledWith(snapshot);
+  });
+
   it("renders tiny cursor-repaint fragments live without storing them as transcript", () => {
     const appendDisplay = vi.fn();
     const terminalOutput = useCodexTerminalOutput({

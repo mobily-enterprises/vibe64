@@ -7,8 +7,6 @@ import {
   startVibe64CodexTerminal
 } from "@/lib/vibe64SessionApi.js";
 
-const CONTINUE_CODEX_TURN_CONTROL_ACTION = "continue_codex_turn";
-
 function openDiffControl({
   diff = {}
 } = {}) {
@@ -55,7 +53,6 @@ async function continueCodexTurnControl({
 
 const VIBE64_CLIENT_CONTROL_DISPATCHERS = Object.freeze({
   [VIBE64_CLIENT_CONTROL_ACTIONS.CONTINUE_CODEX_TURN]: continueCodexTurnControl,
-  [CONTINUE_CODEX_TURN_CONTROL_ACTION]: continueCodexTurnControl,
   [VIBE64_CLIENT_CONTROL_ACTIONS.OPEN_DIFF]: openDiffControl,
   [VIBE64_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL]: startCodexTerminalControl
 });

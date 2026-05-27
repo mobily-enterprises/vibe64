@@ -15,7 +15,7 @@ import {
 import {
   createVinextSetupDoctorPlugin
 } from "@local/vibe64-adapters/server/adapters/vinext/setupDoctorPlugin";
-import { withTemporaryRoot } from "./vibe64TestHelpers.js";
+import { withTemporaryRoot, worktreeMetadata } from "./vibe64TestHelpers.js";
 
 async function writeProjectFile(root, relativePath, text = "") {
   const filePath = path.join(root, relativePath);
@@ -45,12 +45,6 @@ async function createVinextProject(root, packageJson = {}) {
     }, null, 2)),
     writeProjectFile(root, "app/page.jsx", "export default function Page() { return <main>Hello</main>; }\n")
   ]);
-}
-
-function worktreeMetadata(targetRoot, sessionId = "session") {
-  return {
-    worktree_path: path.join(targetRoot, ".vibe64/sessions/active", sessionId, "worktree")
-  };
 }
 
 function commandIds() {

@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import path from "node:path";
 import test from "node:test";
 
 import {
@@ -19,7 +18,7 @@ import {
 import {
   _testing as coreMaintenanceTesting
 } from "@local/vibe64-runtime/server/workflowModules/coreMaintenance";
-import { withTemporaryRoot } from "./vibe64TestHelpers.js";
+import { withTemporaryRoot, worktreeMetadata } from "./vibe64TestHelpers.js";
 
 const maintenanceWorkflowDefinitionIds = coreMaintenanceTesting.workflowDefinitionIds;
 
@@ -28,12 +27,6 @@ function projectServiceForRuntime(runtime) {
     async createRuntime() {
       return runtime;
     }
-  };
-}
-
-function worktreeMetadata(targetRoot, sessionId = "session") {
-  return {
-    worktree_path: path.join(targetRoot, ".vibe64/sessions/active", sessionId, "worktree")
   };
 }
 
