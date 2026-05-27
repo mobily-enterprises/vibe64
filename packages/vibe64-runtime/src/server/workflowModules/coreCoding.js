@@ -436,11 +436,13 @@ const coreCodingStepDefinitionsById = deepFreeze({
             type: "action"
           }
         ],
+        persistWhenComplete: true,
         screen: {
           kind: "review",
           message: "Try the work now. Ask Codex for small tweaks, or continue when it looks right.",
           sections: ["launch_controls", "report_preview", "response_preview"],
           title: "Human review",
+          primaryIntentId: "request_review_tweak",
           variant: "implementation"
         }
       }
@@ -590,11 +592,13 @@ const coreCodingStepDefinitionsById = deepFreeze({
             type: "reject"
           }
         ],
+        persistWhenComplete: true,
         screen: {
           kind: "review",
           message: "Review the validated work before Autopilot writes the report and commits.",
           sections: ["launch_controls", "report_preview", "response_preview"],
           title: "Final review",
+          primaryIntentId: "request_review_tweak",
           variant: "final"
         }
       }

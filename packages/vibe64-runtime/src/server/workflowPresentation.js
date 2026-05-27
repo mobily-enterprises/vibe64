@@ -416,6 +416,11 @@ function stopScreenPresentation(session = {}) {
   };
 }
 
+function stopPresentationPersistsWhenComplete(session = {}) {
+  const configured = stepPresentationConfig(session).stop;
+  return isPlainObject(configured) && configured.persistWhenComplete === true;
+}
+
 function userDecisionPresentation(session = {}) {
   const configured = stepPresentationConfig(session).decision;
   if (isPlainObject(configured)) {
@@ -888,6 +893,9 @@ function buildPresentation(session = {}) {
   const kind = normalizeText(autopilot.kind);
   let base = interaction || waiting;
 
+  if (!base && autopilot.stop === true && stopPresentationPersistsWhenComplete(session)) {
+    base = stopScreenPresentation(session);
+  }
   if (!base && stepMachineStatus(session) === STEP_STATUS.DONE && nextIsReady(session)) {
     base = genericPresentation(session);
   }

@@ -773,6 +773,10 @@ test("session presentation keeps a fresh awaiting Codex turn in waiting state", 
   assert.deepEqual(session.presentation.intents, []);
   assert.ok(Date.parse(session.presentation.refreshAt));
   assert.equal(session.presentation.refreshReason, "codex_wait");
+  assert.equal(session.presentation.terminal.codex.label, "Waiting for Codex...");
+  assert.equal(session.presentation.terminal.codex.terminalSessionId, "codex-terminal-fresh-wait");
+  assert.equal(session.presentation.terminal.codex.visible, true);
+  assert.ok(Date.parse(session.presentation.terminal.codex.visibleUntil));
 });
 
 test("session presentation does not treat stale manual terminal input as Codex progress", async () => {
@@ -836,7 +840,7 @@ test("session presentation does not treat stale manual terminal input as Codex p
   assert.equal(session.presentation.refreshAt, "");
 });
 
-test("session presentation does not revive a stale Codex wait from fresh terminal output", async () => {
+test("session presentation keeps a stale Codex wait running while current-turn output is fresh", async () => {
   const stepStartedAt = staleIso();
   const service = createService({
     projectService: {
@@ -890,10 +894,79 @@ test("session presentation does not revive a stale Codex wait from fresh termina
 
   const session = await service.inspectSession("session-1");
 
+  assert.equal(session.presentation.screen.kind, "codex_running");
+  assert.equal(session.presentation.screen.showProgress, true);
+  assert.equal(session.presentation.screen.title, "Waiting for Codex...");
+  assert.deepEqual(session.presentation.intents, []);
+  assert.ok(Date.parse(session.presentation.refreshAt));
+  assert.equal(session.presentation.refreshReason, "codex_wait");
+  assert.equal(session.presentation.terminal.codex.label, "Waiting for Codex...");
+  assert.equal(session.presentation.terminal.codex.terminalSessionId, "codex-terminal-output-after-stale");
+  assert.equal(session.presentation.terminal.codex.visible, true);
+  assert.ok(Date.parse(session.presentation.terminal.codex.visibleUntil));
+});
+
+test("session presentation offers Codex continuation when current-turn output is stale", async () => {
+  const stepStartedAt = staleIso();
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async getSession(sessionId) {
+            return {
+              metadata: {
+                codex_prompt_handoff_signature: `${sessionId}:${Date.now() - 120_000}`
+              },
+              presentation: {
+                intents: [],
+                screen: {
+                  icon: "progress",
+                  kind: "codex_running",
+                  sections: [],
+                  showProgress: true,
+                  title: "Terminal is transmitting..."
+                }
+              },
+              sessionId,
+              status: VIBE64_SESSION_STATUS.ACTIVE,
+              stepMachine: {
+                at: stepStartedAt,
+                status: "awaiting_agent_result",
+                stepId: "plan_executed"
+              }
+            };
+          }
+        };
+      }
+    },
+    terminalService: {
+      async codexTerminalState(sessionId) {
+        return {
+          codexTerminal: {
+            activityStartedAt: staleIso(120_000),
+            commandPreview: "codex",
+            id: "codex-terminal-output-stale",
+            lastOutputAt: staleIso(45_000),
+            lastOutputBytes: 512,
+            status: "running",
+            transmitting: true
+          },
+          ok: true,
+          sessionId
+        };
+      }
+    }
+  });
+
+  const session = await service.inspectSession("session-1");
+
   assert.equal(session.presentation.screen.kind, "codex_attention");
   assert.equal(session.presentation.screen.showProgress, false);
   assert.equal(session.presentation.intents[0].label, "Ask Codex to continue");
   assert.equal(session.presentation.refreshAt, "");
+  assert.equal(session.presentation.terminal.codex.terminalSessionId, "codex-terminal-output-stale");
+  assert.equal(session.presentation.terminal.codex.visible, false);
+  assert.equal(session.presentation.terminal.codex.visibleUntil, "");
 });
 
 test("session creation waits for an unsynced merged session", async () => {

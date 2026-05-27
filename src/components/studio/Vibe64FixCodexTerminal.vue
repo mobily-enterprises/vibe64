@@ -33,7 +33,7 @@ import { computed, onBeforeUnmount, watch } from "vue";
 import Vibe64TerminalFrame from "@/components/studio/Vibe64TerminalFrame.vue";
 import { useStudioTerminal } from "@/composables/useStudioTerminal.js";
 import {
-  stripStudioContextBlocksForDisplay
+  createStudioContextDisplayFilter
 } from "@/lib/codexOutput.js";
 import {
   closeVibe64FixCodexTerminal,
@@ -56,7 +56,7 @@ const jobId = computed(() => String(props.job?.id || props.terminal?.metadata?.f
 const subtitle = computed(() => String(props.job?.subject || "Ephemeral repair job"));
 
 const terminalController = useStudioTerminal({
-  displayOutput: stripStudioContextBlocksForDisplay,
+  displayFilter: createStudioContextDisplayFilter(),
   webSocketUrl(terminalId) {
     return vibe64FixCodexTerminalWebSocketUrl(jobId.value, terminalId);
   }

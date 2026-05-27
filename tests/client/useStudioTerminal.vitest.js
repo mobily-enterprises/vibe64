@@ -1,12 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  terminalDisplayWriteState
-} from "../../src/composables/useStudioTerminal.js";
-import {
-  stripStudioContextBlocksForDisplay
-} from "../../src/lib/codexOutput.js";
-import {
   INVALID_TERMINAL_SIZE_ERROR,
   reportableTerminalSize,
   terminalResizeErrorMessage
@@ -41,37 +35,5 @@ describe("useStudioTerminal", () => {
   it("recognizes resize failures as non-fatal terminal messages", () => {
     expect(terminalResizeErrorMessage(INVALID_TERMINAL_SIZE_ERROR)).toBe(true);
     expect(terminalResizeErrorMessage("Terminal stream failed.")).toBe(false);
-  });
-
-  it("can keep raw terminal output while hiding streamed Studio context from display", () => {
-    let renderedOutput = "";
-    let renderedOffset = 0;
-
-    function apply(rawOutput) {
-      const update = terminalDisplayWriteState({
-        displayOutput: stripStudioContextBlocksForDisplay(rawOutput),
-        renderedOffset,
-        renderedOutput
-      });
-      renderedOutput = update.output;
-      renderedOffset = update.offset;
-      return update;
-    }
-
-    expect(apply("Intro\n").chunk).toBe("Intro\n");
-    expect(apply("Intro\n[[VIBE64_CONTEXT_START]]\nhidden prompt")).toMatchObject({
-      chunk: "",
-      output: "Intro\n"
-    });
-    expect(apply([
-      "Intro",
-      "[[VIBE64_CONTEXT_START]]",
-      "hidden prompt",
-      "[[VIBE64_CONTEXT_END]]",
-      "Visible result"
-    ].join("\n"))).toMatchObject({
-      chunk: "\nVisible result",
-      output: "Intro\n\nVisible result"
-    });
   });
 });

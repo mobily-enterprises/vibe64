@@ -18,29 +18,8 @@ function resolveCallback(callback, fallback) {
   return typeof callback === "function" ? callback : fallback;
 }
 
-function terminalDisplayWriteState({
-  displayOutput = "",
-  renderedOffset = 0,
-  renderedOutput = ""
-} = {}) {
-  const output = String(displayOutput || "");
-  const previousOutput = String(renderedOutput || "");
-  const offset = Math.min(
-    Math.max(0, Number(renderedOffset) || 0),
-    previousOutput.length
-  );
-  const reset = output.length < offset || !output.startsWith(previousOutput.slice(0, offset));
-  const nextOffset = reset ? 0 : offset;
-  return {
-    chunk: output.slice(nextOffset),
-    offset: output.length,
-    output,
-    reset
-  };
-}
-
 function useStudioTerminal({
-  displayOutput = null,
+  displayFilter = null,
   onSessionUpdate = null,
   onStatusUpdate = null,
   webSocketUrl = null
@@ -67,15 +46,20 @@ function useStudioTerminal({
   let terminalReportedCols = 0;
   let terminalReportedRows = 0;
   let terminalLatestOutput = "";
-  let terminalRenderedOutput = "";
-  let terminalRenderedOutputOffset = 0;
+  let terminalOutputOffset = 0;
   let terminalSetupPromise = null;
 
-  const resolveDisplayOutput = resolveCallback(displayOutput, (output) => String(output || ""));
+  const resolveDisplayChunk = typeof displayFilter?.filterChunk === "function"
+    ? (chunk) => displayFilter.filterChunk(chunk)
+    : (chunk) => String(chunk || "");
   const notifySessionUpdate = resolveCallback(onSessionUpdate, () => null);
   const notifyStatusUpdate = resolveCallback(onStatusUpdate, () => null);
   const resolveWebSocketUrl = resolveCallback(webSocketUrl, () => "");
   const terminalExited = computed(() => terminalStatus.value === "exited");
+
+  function resetDisplayFilter() {
+    displayFilter?.reset?.();
+  }
 
   function resetReportedTerminalSize() {
     terminalReportedCols = 0;
@@ -186,8 +170,8 @@ function useStudioTerminal({
     terminalInstance = null;
     terminalFitAddon = null;
     terminalSetupPromise = null;
-    terminalRenderedOutput = "";
-    terminalRenderedOutputOffset = 0;
+    terminalOutputOffset = 0;
+    resetDisplayFilter();
     resetReportedTerminalSize();
   }
 
@@ -198,9 +182,9 @@ function useStudioTerminal({
 
   function resetTerminalDisplay() {
     terminalLatestOutput = "";
-    terminalRenderedOutput = "";
+    terminalOutputOffset = 0;
     terminalOutput.value = "";
-    terminalRenderedOutputOffset = 0;
+    resetDisplayFilter();
     resetReportedTerminalSize();
     terminalInstance?.reset?.();
   }
@@ -224,19 +208,19 @@ function useStudioTerminal({
     if (!terminalInstance) {
       return;
     }
-    const displayUpdate = terminalDisplayWriteState({
-      displayOutput: resolveDisplayOutput(terminalLatestOutput),
-      renderedOffset: terminalRenderedOutputOffset,
-      renderedOutput: terminalRenderedOutput
-    });
-    if (displayUpdate.reset) {
+    if (terminalLatestOutput.length < terminalOutputOffset) {
       terminalInstance.reset();
+      terminalOutputOffset = 0;
+      resetDisplayFilter();
     }
-    if (displayUpdate.chunk) {
-      terminalInstance.write(displayUpdate.chunk, scrollTerminalToBottom);
+    const outputChunk = terminalLatestOutput.slice(terminalOutputOffset);
+    if (outputChunk) {
+      const displayChunk = resolveDisplayChunk(outputChunk);
+      if (displayChunk) {
+        terminalInstance.write(displayChunk, scrollTerminalToBottom);
+      }
     }
-    terminalRenderedOutput = displayUpdate.output;
-    terminalRenderedOutputOffset = displayUpdate.offset;
+    terminalOutputOffset = terminalLatestOutput.length;
   }
 
   function appendTerminalOutput(chunk) {
@@ -246,7 +230,14 @@ function useStudioTerminal({
     }
     terminalLatestOutput = trimTerminalOutput(`${terminalLatestOutput}${outputChunk}`);
     terminalOutput.value = terminalLatestOutput;
-    writeTerminalOutput(terminalLatestOutput);
+    if (!terminalInstance) {
+      return;
+    }
+    const displayChunk = resolveDisplayChunk(outputChunk);
+    if (displayChunk) {
+      terminalInstance.write(displayChunk, scrollTerminalToBottom);
+    }
+    terminalOutputOffset = terminalLatestOutput.length;
   }
 
   function applyTerminalSession(session = {}, {
@@ -478,6 +469,5 @@ function useStudioTerminal({
 }
 
 export {
-  terminalDisplayWriteState,
   useStudioTerminal
 };

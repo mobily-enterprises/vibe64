@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   codexTrustPromptLooksActive,
+  createStudioContextDisplayFilter,
   extractCodexThreadId,
   isCodexThreadId,
   stripStudioContextBlocksForDisplay,
@@ -96,5 +97,28 @@ describe("codexOutput terminal utilities", () => {
     ].join("\n");
 
     expect(stripStudioContextBlocksForDisplay(terminalInput)).toBe("Visible output");
+  });
+
+  it("streams Studio context blocks out of terminal display without replaying output", () => {
+    const filter = createStudioContextDisplayFilter();
+
+    expect(filter.filterChunk("Intro\n[[VIBE64_CONTEXT")).toBe("Intro\n");
+    expect(filter.filterChunk("_START]]\nhidden prompt")).toBe("");
+    expect(filter.filterChunk("\n[[VIBE64_CONTEXT_END]]\nVisible result")).toBe("Visible result");
+  });
+
+  it("keeps filtering stable when marker chunks split at the end marker", () => {
+    const filter = createStudioContextDisplayFilter();
+
+    expect(filter.filterChunk("Visible\n[[VIBE64_CONTEXT_START]]\nhidden[[VIBE64_CONTEXT")).toBe("Visible\n");
+    expect(filter.filterChunk("_END]]\nAfter")).toBe("After");
+  });
+
+  it("resets streamed Studio context filtering state between terminal sessions", () => {
+    const filter = createStudioContextDisplayFilter();
+
+    expect(filter.filterChunk("[[VIBE64_CONTEXT_START]]\nhidden")).toBe("");
+    filter.reset();
+    expect(filter.filterChunk("Visible")).toBe("Visible");
   });
 });

@@ -567,6 +567,7 @@ test("vibe64 runtime exposes server-owned presentation and intents for Autopilot
 
     assert.equal(session.presentation.screen.kind, "review");
     assert.equal(session.presentation.screen.title, "Human review");
+    assert.equal(session.presentation.screen.primaryIntentId, "request_review_tweak");
     assert.equal(session.presentation.screen.variant, "implementation");
     assert.equal(session.presentation.prompt.state, "idle");
     assert.equal(session.presentation.actions, session.actions);
@@ -585,6 +586,21 @@ test("vibe64 runtime exposes server-owned presentation and intents for Autopilot
     assert.equal(session.presentation.auto.nextOperation.kind, "wait");
     assert.equal(session.presentation.auto.nextOperation.executable, false);
     assert.equal(session.presentation.auto.nextOperation.reason, "user");
+
+    await runtime.store.writeStepState("presentation_review", "implementation_reviewed", {
+      schemaVersion: 1,
+      status: "done"
+    });
+    const completedReview = await runtime.getSession("presentation_review");
+    assert.equal(completedReview.presentation.screen.kind, "review");
+    assert.equal(completedReview.presentation.screen.primaryIntentId, "request_review_tweak");
+    assert.deepEqual(completedReview.intents.map((intent) => intent.id), [
+      "open_diff",
+      "accept_review",
+      "request_review_tweak"
+    ]);
+    assert.equal(completedReview.presentation.auto.nextOperation.kind, "wait");
+    assert.equal(completedReview.presentation.auto.nextOperation.reason, "user");
   });
 });
 
@@ -795,7 +811,7 @@ test("vibe64 runtime presentation snapshots come from workflow step metadata", a
         screen: {
           kind: "review",
           message: "Review the validated work before Autopilot writes the report and commits.",
-          primaryIntentId: "",
+          primaryIntentId: "request_review_tweak",
           sections: [
             "launch_controls",
             "report_preview",
@@ -857,7 +873,7 @@ test("vibe64 runtime presentation snapshots come from workflow step metadata", a
         screen: {
           kind: "review",
           message: "Try the work now. Ask Codex for small tweaks, or continue when it looks right.",
-          primaryIntentId: "",
+          primaryIntentId: "request_review_tweak",
           sections: [
             "launch_controls",
             "report_preview",
@@ -1098,6 +1114,18 @@ test("vibe64 runtime exposes and runs the server-owned conversation intent", asy
       afterIntent.actionResult.codexPromptHandoff.terminalInput,
       /^Explain this codebase\.\n\n\[\[VIBE64_CONTEXT_START\]\]/u
     );
+
+    await runtime.store.writeStepState("presentation_conversation_intent", "maintenance_conversation", {
+      schemaVersion: 1,
+      status: "done"
+    });
+    const completedConversation = await runtime.getSession("presentation_conversation_intent");
+    assert.equal(completedConversation.presentation.screen.kind, "conversation");
+    assert.equal(completedConversation.presentation.screen.primaryIntentId, "talk_to_codex");
+    assert.deepEqual(completedConversation.intents.map((intent) => intent.id), [
+      "talk_to_codex",
+      "continue_step"
+    ]);
   });
 });
 

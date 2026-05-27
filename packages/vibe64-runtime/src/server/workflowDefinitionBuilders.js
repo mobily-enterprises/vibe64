@@ -68,6 +68,7 @@ function buildAgentConversationStepDefinition({
             type: "continue"
           }
         ],
+        persistWhenComplete: true,
         screen: {
           kind: "conversation",
           message: "Ask Codex for changes. Continue when the work is ready for the next workflow step.",

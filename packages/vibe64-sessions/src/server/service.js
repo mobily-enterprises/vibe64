@@ -167,28 +167,8 @@ function latestCodexTerminalInputActivity(terminal = {}) {
   }
   return {
     activityAt: inputAt,
+    label: terminal.activityLabel || "Terminal is transmitting...",
     visibleUntil: new Date(inputAt + CODEX_TERMINAL_ACTIVITY_PREVIEW_MS).toISOString()
-  };
-}
-
-function codexTerminalPresentation(codexTerminal = null) {
-  const terminal = objectValue(codexTerminal);
-  const terminalSessionId = String(terminal.id || "").trim();
-  const latestActivity = latestCodexTerminalInputActivity(terminal);
-  const visibleUntilMs = timeMs(latestActivity?.visibleUntil);
-  const visible = Boolean(
-    terminalSessionId &&
-    terminal.status !== "exited" &&
-    latestActivity &&
-    Date.now() <= visibleUntilMs
-  );
-  return {
-    label: visible ? terminal.activityLabel || "Terminal is transmitting..." : "",
-    readOnlyInAutopilot: true,
-    renderer: "codex_terminal",
-    terminalSessionId,
-    visible,
-    visibleUntil: latestActivity?.visibleUntil || ""
   };
 }
 
@@ -198,6 +178,10 @@ function codexWaitStepStartedAt(session = {}) {
 
 function terminalInputMs(terminal = {}) {
   return timeMs(terminal.lastInputAt);
+}
+
+function terminalOutputMs(terminal = {}) {
+  return timeMs(terminal.lastOutputAt);
 }
 
 function terminalTurnStartedAt(terminal = {}) {
@@ -220,9 +204,69 @@ function codexWaitReferenceAt(session = {}, terminal = {}) {
   return candidates.length ? Math.max(...candidates) : stepStartedAt;
 }
 
+function terminalCurrentTurnOutputAt(session = {}, terminal = {}) {
+  const outputAt = terminalOutputMs(terminal);
+  const referenceAt = codexWaitReferenceAt(session, terminal);
+  return outputAt && referenceAt && outputAt >= referenceAt ? outputAt : 0;
+}
+
+function codexWaitActivityReferenceAt(session = {}, terminal = {}) {
+  const referenceAt = codexWaitReferenceAt(session, terminal);
+  const outputAt = terminalCurrentTurnOutputAt(session, terminal);
+  return outputAt ? Math.max(referenceAt, outputAt) : referenceAt;
+}
+
 function waitAgeMs(session = {}, terminal = {}, nowMs = Date.now()) {
-  const reference = codexWaitReferenceAt(session, terminal);
+  const reference = codexWaitActivityReferenceAt(session, terminal);
   return reference ? Math.max(0, nowMs - reference) : Number.POSITIVE_INFINITY;
+}
+
+function activeCodexWaitTerminalActivity(session = {}, terminal = {}, nowMs = Date.now()) {
+  const referenceAt = codexWaitActivityReferenceAt(session, terminal);
+  const visibleUntilMs = referenceAt ? referenceAt + CODEX_WAIT_RECOVERY_DELAY_MS : 0;
+  if (
+    !sessionWaitsForCodex(session) ||
+    !visibleUntilMs ||
+    nowMs > visibleUntilMs
+  ) {
+    return null;
+  }
+  return {
+    activityAt: referenceAt,
+    label: "Waiting for Codex...",
+    visibleUntil: new Date(visibleUntilMs).toISOString()
+  };
+}
+
+function latestCodexTerminalPresentationActivity(session = {}, terminal = {}, nowMs = Date.now()) {
+  return [
+    latestCodexTerminalInputActivity(terminal),
+    activeCodexWaitTerminalActivity(session, terminal, nowMs)
+  ]
+    .filter(Boolean)
+    .sort((left, right) => timeMs(right.visibleUntil) - timeMs(left.visibleUntil))[0] || null;
+}
+
+function codexTerminalPresentation(session = {}, codexTerminal = null) {
+  const terminal = objectValue(codexTerminal);
+  const terminalSessionId = String(terminal.id || "").trim();
+  const nowMs = Date.now();
+  const latestActivity = latestCodexTerminalPresentationActivity(session, terminal, nowMs);
+  const visibleUntilMs = timeMs(latestActivity?.visibleUntil);
+  const visible = Boolean(
+    terminalSessionId &&
+    terminal.status !== "exited" &&
+    latestActivity &&
+    nowMs <= visibleUntilMs
+  );
+  return {
+    label: visible ? latestActivity.label || "" : "",
+    readOnlyInAutopilot: true,
+    renderer: "codex_terminal",
+    terminalSessionId,
+    visible,
+    visibleUntil: latestActivity?.visibleUntil || ""
+  };
 }
 
 function terminalHasRecentVibe64InputForTurn(terminal = {}, nowMs = Date.now()) {
@@ -237,7 +281,7 @@ function terminalHasRecentVibe64InputForTurn(terminal = {}, nowMs = Date.now()) 
 
 function codexWaitRefreshAt(session = {}, terminal = {}, nowMs = Date.now()) {
   const inputAt = terminalInputMs(terminal);
-  const referenceAt = codexWaitReferenceAt(session, terminal);
+  const referenceAt = codexWaitActivityReferenceAt(session, terminal);
   const ageMs = waitAgeMs(session, terminal, nowMs);
   const candidates = [];
 
@@ -285,7 +329,7 @@ function codexWaitPresentationOverlay(session = {}, terminalState = {}) {
   const terminalSessionId = String(terminal.id || "").trim();
   const terminalRunning = Boolean(terminalSessionId && terminal.status !== "exited");
   const nowMs = Date.now();
-  const ageMs = waitAgeMs(session, terminal);
+  const ageMs = waitAgeMs(session, terminal, nowMs);
   const refreshAt = codexWaitRefreshAt(session, terminal, nowMs);
 
   if (!terminalRunning) {
@@ -376,7 +420,7 @@ function withCodexTerminalState(session = {}, terminalState = {}) {
       ...presentation,
       terminal: {
         ...objectValue(presentation.terminal),
-        codex: codexTerminalPresentation(terminalState.codexTerminal || null)
+        codex: codexTerminalPresentation(session, terminalState.codexTerminal || null)
       }
     }
   };

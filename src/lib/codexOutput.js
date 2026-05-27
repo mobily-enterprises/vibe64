@@ -163,6 +163,82 @@ function trailingMarkerPrefixLength(value, marker) {
   return 0;
 }
 
+function stripLeadingLineBreak(value) {
+  const source = String(value || "");
+  if (source.startsWith("\r\n")) {
+    return source.slice(2);
+  }
+  if (source.startsWith("\n") || source.startsWith("\r")) {
+    return source.slice(1);
+  }
+  return source;
+}
+
+function createStudioContextDisplayFilter() {
+  let hidingContext = false;
+  let pendingOutput = "";
+
+  function reset() {
+    hidingContext = false;
+    pendingOutput = "";
+  }
+
+  function filterChunk(chunk = "") {
+    pendingOutput += String(chunk || "");
+    let displayOutput = "";
+
+    while (pendingOutput) {
+      if (hidingContext) {
+        const contextEnd = pendingOutput.indexOf(STUDIO_CONTEXT_END_MARKER);
+        if (contextEnd < 0) {
+          const pendingEndPrefixLength = trailingMarkerPrefixLength(pendingOutput, STUDIO_CONTEXT_END_MARKER);
+          pendingOutput = pendingEndPrefixLength > 0
+            ? pendingOutput.slice(pendingOutput.length - pendingEndPrefixLength)
+            : "";
+          return displayOutput;
+        }
+        pendingOutput = stripLeadingLineBreak(
+          pendingOutput.slice(contextEnd + STUDIO_CONTEXT_END_MARKER.length)
+        );
+        hidingContext = false;
+        continue;
+      }
+
+      const contextStart = pendingOutput.indexOf(STUDIO_CONTEXT_START_MARKER);
+      const orphanContextEnd = pendingOutput.indexOf(STUDIO_CONTEXT_END_MARKER);
+      if (orphanContextEnd >= 0 && (contextStart < 0 || orphanContextEnd < contextStart)) {
+        pendingOutput = stripLeadingLineBreak(
+          pendingOutput.slice(orphanContextEnd + STUDIO_CONTEXT_END_MARKER.length)
+        );
+        continue;
+      }
+
+      if (contextStart < 0) {
+        const pendingStartPrefixLength = trailingMarkerPrefixLength(pendingOutput, STUDIO_CONTEXT_START_MARKER);
+        const emitLength = pendingOutput.length - pendingStartPrefixLength;
+        if (emitLength > 0) {
+          displayOutput += pendingOutput.slice(0, emitLength);
+        }
+        pendingOutput = pendingStartPrefixLength > 0
+          ? pendingOutput.slice(emitLength)
+          : "";
+        return displayOutput;
+      }
+
+      displayOutput += pendingOutput.slice(0, contextStart);
+      pendingOutput = pendingOutput.slice(contextStart + STUDIO_CONTEXT_START_MARKER.length);
+      hidingContext = true;
+    }
+
+    return displayOutput;
+  }
+
+  return {
+    filterChunk,
+    reset
+  };
+}
+
 function terminalVisibleTextMap(value) {
   const source = String(value || "");
   let text = "";
@@ -285,6 +361,7 @@ export {
   STUDIO_CONTEXT_END_MARKER,
   STUDIO_CONTEXT_START_MARKER,
   codexTrustPromptLooksActive,
+  createStudioContextDisplayFilter,
   extractCodexThreadId,
   hasStudioContextBlock,
   isCodexThreadId,
