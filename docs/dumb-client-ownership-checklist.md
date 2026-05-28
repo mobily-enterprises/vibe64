@@ -347,7 +347,7 @@ prompt: {
 - [ ] Server decides what running means.
 - [ ] Server decides what skipping means.
 - [ ] Client no longer knows the `deep_ui_check_run` step ID.
-- [ ] Client no longer hard-codes "Run deep UI check" versus "Skip" for workflow reasons.
+- [ ] Client no longer hard-codes "Check user interface" versus "Skip" for workflow reasons.
 - [ ] Keep optional-check server code as a simple decision: run declared operation or skip to next declared state.
 - [ ] Add focused Playwright coverage that optional-check run/skip choices render from server presentation and dispatch server-declared intents.
 

@@ -1043,8 +1043,6 @@ test("session list exposes selectable workflow definitions after seeding", async
     result.creation.workflowDefinitions.map((definition) => definition.id),
     [
       VIBE64_WORKFLOW_DEFINITION_IDS.BIG_FEATURE,
-      VIBE64_WORKFLOW_DEFINITION_IDS.GENERAL_CODING,
-      maintenanceWorkflowDefinitionIds.NON_CODE_MAINTENANCE,
       maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
     ]
   );

@@ -74,11 +74,11 @@ async function readCurrentAppReadiness(page: Page) {
 async function createSession(page: Page) {
   await gotoSessions(page);
   await clickButton(page, "New Session");
-  const bigFeatureDefinition = page.getByText("Big feature", {
+  const makeImprovementsDefinition = page.getByText("Make improvements", {
     exact: true
   });
-  if (await bigFeatureDefinition.isVisible().catch(() => false)) {
-    await bigFeatureDefinition.click();
+  if (await makeImprovementsDefinition.isVisible().catch(() => false)) {
+    await makeImprovementsDefinition.click();
   }
   await expectButtonEnabled(page, "Start fresh with a new issue");
   await expectButtonEnabled(page, "Use existing PR");

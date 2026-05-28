@@ -1511,11 +1511,11 @@ test.describe("Autopilot dumb client contract", () => {
               kind: "response_preview"
             }
           ],
-          title: "Human review"
+          title: "Initial human review"
         },
         step: {
           id: "server_step",
-          label: "Human review",
+          label: "Initial human review",
           status: "confirm_files"
         }
       },

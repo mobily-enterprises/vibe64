@@ -347,7 +347,7 @@ Checklist:
 - [ ] `Create issue on GH` is an action.
 - [ ] `Make plan` is an action.
 - [ ] `Execute plan` is an action.
-- [ ] `Run deep UI check` is an action.
+- [ ] `Check user interface` is an action.
 - [ ] `Run deslop` is an action and owns repeated cleanup until no findings remain.
 - [ ] `Run automated checks` is an action.
 - [ ] `Update blueprint` is an adapter-provided action when supported.
@@ -385,7 +385,7 @@ Default workflow:
 - Edit and submit issue
 - Make plan
 - Execute plan
-- Run deep UI check
+- Check user interface
 - Run review/deslop
 - Run automated checks
 - Accept changes

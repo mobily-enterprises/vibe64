@@ -16,8 +16,7 @@ import {
   REPORT_ARTIFACT
 } from "../workflowArtifacts.js";
 import {
-  buildAgentConversationActionDefinition,
-  buildAgentConversationStepDefinition
+  buildAgentConversationActionDefinition
 } from "../workflowDefinitionBuilders.js";
 import {
   defineWorkflow,
@@ -61,7 +60,6 @@ const moduleId = "core.coding";
 
 const VIBE64_WORKFLOW_DEFINITION_IDS = deepFreeze({
   BIG_FEATURE: "big_feature",
-  GENERAL_CODING: "general_coding",
   SEED_APPLICATION: "seed_application"
 });
 const DEFAULT_VIBE64_WORKFLOW_DEFINITION_ID = VIBE64_WORKFLOW_DEFINITION_IDS.BIG_FEATURE;
@@ -70,7 +68,6 @@ const CORE_CODING_WORKFLOW_GROUP_IDS = deepFreeze({
   QA: "qa"
 });
 
-const agentConversationStepId = "agent_conversation";
 const changesAcceptedStepId = "changes_accepted";
 const deepUiCheckRunStepId = "deep_ui_check_run";
 const implementationReviewedStepId = "implementation_reviewed";
@@ -401,7 +398,7 @@ const coreCodingStepDefinitionsById = deepFreeze({
     },
     description: "Try the implemented work and request small tweaks before slower review steps.",
     id: implementationReviewedStepId,
-    label: "Human review",
+    label: "Initial human review",
     presentation: {
       stop: {
         intents: [
@@ -434,7 +431,7 @@ const coreCodingStepDefinitionsById = deepFreeze({
           kind: "review",
           message: "Try the work now. Ask Codex for small tweaks, or continue when it looks right.",
           sections: ["launch_controls", "report_preview", "response_preview"],
-          title: "Human review",
+          title: "Initial human review",
           primaryIntentId: "request_review_tweak",
           variant: "implementation"
         }
@@ -445,32 +442,23 @@ const coreCodingStepDefinitionsById = deepFreeze({
       artifacts: [HUMAN_INPUT_RESPONSE_ARTIFACT]
     }
   },
-  [agentConversationStepId]: buildAgentConversationStepDefinition({
-    actionLabel: "Ask Codex for changes",
-    description: "Ask Codex to make focused code changes while you inspect and steer the work.",
-    id: agentConversationStepId,
-    inputLabel: "What should Codex change?",
-    inputPlaceholder: "Describe the code change, cleanup, bug fix, or follow-up request.",
-    label: "Make changes",
-    responseArtifact: HUMAN_INPUT_RESPONSE_ARTIFACT
-  }),
   [deepUiCheckRunStepId]: {
     actions: [
       {
         id: "run_deep_ui_check",
-        label: "Run deep UI check",
+        label: "Check user interface",
         promptId: "run_deep_ui_check",
         type: "prompt"
       }
     ],
     autopilot: {
       actionId: "run_deep_ui_check",
-      label: "Run deep UI check",
+      label: "Check user interface",
       userDecision: true
     },
     description: "Run the deeper UI review when the target supports it.",
     id: deepUiCheckRunStepId,
-    label: "Run deep UI check",
+    label: "Check user interface",
     presentation: {
       decision: {
         intents: [
@@ -588,7 +576,7 @@ const coreCodingStepDefinitionsById = deepFreeze({
     },
     description: "Review the validated work before the report, commit, and pull request.",
     id: changesAcceptedStepId,
-    label: "Final review",
+    label: "Final human review",
     presentation: {
       automation: {
         recheckAfterPrompt: {
@@ -644,7 +632,7 @@ const coreCodingStepDefinitionsById = deepFreeze({
           kind: "review",
           message: "Review the validated work before Autopilot writes the report and commits.",
           sections: ["launch_controls", "report_preview", "response_preview"],
-          title: "Final review",
+          title: "Final human review",
           primaryIntentId: "request_review_tweak",
           variant: "final"
         }
@@ -728,9 +716,9 @@ const coreCodingWorkflowDefinitions = deepFreeze([
     userSelectable: false
   }),
   defineWorkflow({
-    description: "Plan, implement, review, validate, commit, create a PR, and optionally merge.",
+    description: "Define, plan, implement, review, validate, commit, create a PR, and optionally merge.",
     id: VIBE64_WORKFLOW_DEFINITION_IDS.BIG_FEATURE,
-    label: "Big feature",
+    label: "Make improvements",
     parts: [
       "session_created",
       "work_source_selected",
@@ -746,25 +734,6 @@ const coreCodingWorkflowDefinitions = deepFreeze([
         recheckTo: reviewAndValidateStepId
       })
     ],
-    userSelectable: true
-  }),
-  defineWorkflow({
-    description: "Make focused code changes with Codex, review, validate, commit, create a PR, and optionally merge.",
-    id: VIBE64_WORKFLOW_DEFINITION_IDS.GENERAL_CODING,
-    label: "General coding",
-    parts: [
-      "session_created",
-      "work_source_selected",
-      "worktree_created",
-      "dependencies_installed",
-      agentConversationStepId,
-      qaWorkflowGroup(),
-      finishOffWorkflowGroup({
-        rejectTo: agentConversationStepId,
-        recheckTo: reviewAndValidateStepId
-      })
-    ],
-    sessionWord: "coding",
     userSelectable: true
   })
 ]);
@@ -2030,7 +1999,7 @@ const coreCodingSteps = Object.freeze(Object.values(Object.freeze({
   },
   [implementationReviewedStepId]: {
     config: {
-      completionMessage: "Human review turn completed.",
+      completionMessage: "Initial human review turn completed.",
       completionPolicy: {
         decidedBy: "ai",
         enoughWhen: "the requested focused tweak has either been made and focused checks run when practical, or you can clearly report that no code change is needed.",
@@ -2042,22 +2011,6 @@ const coreCodingSteps = Object.freeze(Object.values(Object.freeze({
     definition: coreCodingStepDefinitionsById[implementationReviewedStepId],
     factoryId: "chat_with_ai",
     id: implementationReviewedStepId
-  },
-  [agentConversationStepId]: {
-    config: {
-      completionMessage: "Codex conversation turn completed.",
-      completionPolicy: {
-        decidedBy: "user"
-      },
-      nextWhenIdle: (context = {}) => ({
-        disabledReason: "Ask Codex for changes before continuing.",
-        enabled: artifactIsReady(context.session, HUMAN_INPUT_RESPONSE_ARTIFACT)
-      }),
-      promptActionId: "agent_conversation"
-    },
-    definition: coreCodingStepDefinitionsById[agentConversationStepId],
-    factoryId: "chat_with_ai",
-    id: agentConversationStepId
   },
   [deepUiCheckRunStepId]: {
     definition: coreCodingStepDefinitionsById[deepUiCheckRunStepId],
@@ -2071,7 +2024,7 @@ const coreCodingSteps = Object.freeze(Object.values(Object.freeze({
   },
   [changesAcceptedStepId]: {
     config: {
-      completionMessage: "Final review turn completed.",
+      completionMessage: "Final human review turn completed.",
       completionPolicy: {
         decidedBy: "ai",
         enoughWhen: "the requested final tweak has either been made or you can clearly report the blocker; Vibe64 can then rerun review and validation.",
@@ -2107,7 +2060,6 @@ const _testing = deepFreeze({
     seedPlanExecutedStepId,
     planAndExecuteStepId,
     implementationReviewedStepId,
-    agentConversationStepId,
     deepUiCheckRunStepId,
     reviewAndValidateStepId,
     changesAcceptedStepId,

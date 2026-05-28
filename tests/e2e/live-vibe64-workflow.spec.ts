@@ -145,7 +145,7 @@ test.describe("live Vibe64 session workflow", () => {
 
     await goNextToStep(page, "deep_ui_check_run");
     await assertChecklistControls(page, "deep_ui_check_run", {
-      enabled: ["Run deep UI check", "Next step"]
+      enabled: ["Check user interface", "Next step"]
     });
 
     await goNextToStep(page, "review_and_validate");

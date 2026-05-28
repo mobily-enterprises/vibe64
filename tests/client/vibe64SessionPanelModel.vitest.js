@@ -145,17 +145,17 @@ describe("Vibe64 session panel model", () => {
         {
           id: "implementation_reviewed",
           index: 8,
-          label: "Human review"
+          label: "Initial human review"
         },
         {
           id: "deep_ui_check_run",
           index: 9,
-          label: "Run deep UI check"
+          label: "Check user interface"
         },
         {
           id: "changes_accepted",
           index: 12,
-          label: "Final review"
+          label: "Final human review"
         },
         {
           id: "create_and_merge_pull_request",
@@ -179,9 +179,9 @@ describe("Vibe64 session panel model", () => {
       { canRewind: false, id: "session_created", label: "Create session", state: "done" },
       { canRewind: true, id: "issue_file_created", label: "Define work", state: "done" },
       { canRewind: false, id: "plan_and_execute", label: "Plan and execute", state: "current" },
-      { canRewind: false, id: "implementation_reviewed", label: "Human review", state: "pending" },
-      { canRewind: false, id: "deep_ui_check_run", label: "Run deep UI check", state: "pending" },
-      { canRewind: false, id: "changes_accepted", label: "Final review", state: "pending" },
+      { canRewind: false, id: "implementation_reviewed", label: "Initial human review", state: "pending" },
+      { canRewind: false, id: "deep_ui_check_run", label: "Check user interface", state: "pending" },
+      { canRewind: false, id: "changes_accepted", label: "Final human review", state: "pending" },
       { canRewind: false, id: "create_and_merge_pull_request", label: "Create and merge PR", state: "pending" },
       { canRewind: false, id: "session_finished", label: "Congratulations!", state: "pending" }
     ]);

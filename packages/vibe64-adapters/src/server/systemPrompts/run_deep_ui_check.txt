@@ -1,6 +1,6 @@
-Run deep UI check
+Check user interface
 
-Vibe64 standard deep UI check instructions.
+Vibe64 standard user interface check instructions.
 
 Session:
 - id: {{session.id}}
