@@ -168,6 +168,7 @@ const localSessionFinishedMachine = {
 const coreMaintenanceSteps = Object.freeze([
   {
     config: {
+      completionMessage: "Maintenance conversation turn completed.",
       completionPolicy: {
         decidedBy: "user"
       },

@@ -99,7 +99,7 @@ test.describe("live Vibe64 session workflow", () => {
     await expect(page.getByLabel("Session label")).toBeVisible();
     await expect(page.getByLabel("Issue body")).toBeVisible();
     await expectButtonDisabled(page, "Save issue");
-    await expectButtonEnabled(page, "Use existing issue");
+    await expectButtonEnabled(page, "Solve existing issue");
     await expectButtonDisabled(page, "Next step");
   });
 
@@ -123,13 +123,13 @@ test.describe("live Vibe64 session workflow", () => {
     await createNewBranchSessionAtIssueStep(page);
     await assertChecklistControls(page, "issue_file_created", {
       disabled: ["Save issue", "Next step"],
-      enabled: ["Use existing issue"],
+      enabled: ["Solve existing issue"],
       hidden: []
     });
 
     await useExistingIssue(page, issue.url);
     await assertChecklistControls(page, "issue_file_created", {
-      disabled: ["Save issue", "Use existing issue"],
+      disabled: ["Save issue", "Solve existing issue"],
       enabled: ["Next step"]
     });
 
@@ -273,7 +273,7 @@ test.describe("live Vibe64 session workflow", () => {
     expect(session.metadata?.issue_number).toBe(issue.number);
 
     await expectButtonDisabled(page, "Save issue");
-    await expectButtonDisabled(page, "Use existing issue");
+    await expectButtonDisabled(page, "Solve existing issue");
     await expectButtonEnabled(page, "Next step");
 
     await goNextToStep(page, "issue_submitted");

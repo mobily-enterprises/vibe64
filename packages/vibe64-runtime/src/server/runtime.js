@@ -39,6 +39,7 @@ import {
 import { WorkflowMachine } from "./workflowMachine.js";
 import {
   applyStepMachineView,
+  currentStepInputConversationText,
   currentStepPromptInputInstruction,
   recordStepMachineActionFinished,
   recordStepMachineActionStarted,
@@ -360,40 +361,15 @@ function inputObject(input = {}) {
   return input && typeof input === "object" && !Array.isArray(input) ? input : {};
 }
 
-function inputFields(input = {}) {
-  const source = inputObject(input);
-  return inputObject(source.fields || {});
-}
-
-function currentStepInputText(input = {}) {
-  const source = inputObject(input);
-  const fields = inputFields(input);
-  const directText = normalizeText(fields.response || source.text || source.message);
-  if (directText) {
-    return directText;
-  }
-  if (normalizeText(source.kind) !== "ready") {
-    return "";
-  }
-  const title = normalizeText(fields.title);
-  if (title) {
-    return `Prepared: ${title}`;
-  }
-  if (Object.keys(fields).length) {
-    return "Completed this step.";
-  }
-  return "";
-}
-
-async function recordCurrentStepConversationMessage(runtime, sessionId = "", input = {}) {
+async function recordCurrentStepConversationMessage(runtime, session = {}, input = {}) {
   const source = inputObject(input);
   const inputSource = normalizeText(source.source);
-  const text = currentStepInputText(source);
+  const text = currentStepInputConversationText(runtime, session, source);
   if (!text) {
     return null;
   }
   if (inputSource === "codex") {
-    return runtime.store.writeConversationAssistantMessage(sessionId, {
+    return runtime.store.writeConversationAssistantMessage(session.sessionId, {
       text
     });
   }
@@ -1189,7 +1165,8 @@ class Vibe64SessionRuntime {
     try {
       return await this.store.mutateSession(sessionId, async () => {
         await saveStepMachineInput(this, sessionId, input);
-        await recordCurrentStepConversationMessage(this, sessionId, input);
+        const savedSession = await this.getSession(sessionId);
+        await recordCurrentStepConversationMessage(this, savedSession, input);
         const session = await this.getSession(sessionId);
         vibe64SessionDebugLog("server.runtime.submitCurrentStepInput.done", {
           ...vibe64SessionDebugSummary(session),

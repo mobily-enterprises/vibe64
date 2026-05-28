@@ -32,6 +32,33 @@ function currentStepPromptInputInstruction(session = {}, action = {}, {
     .replaceAll("{{session.stepMachine.status}}", normalizeText(session.stepMachine?.status));
 }
 
+function currentStepInputConversationText(runtime = null, session = {}, input = {}) {
+  const normalizedInput = normalizeMachineInput(input);
+  const directText = normalizeText(
+    normalizedInput.fields.response ||
+    normalizedInput.text ||
+    normalizedInput.message
+  );
+  if (directText) {
+    return directText;
+  }
+
+  const machine = workflowStepMachine(runtime, session.currentStep);
+  if (machine && typeof machine.inputCompletionMessage === "function") {
+    const machineText = normalizeText(machine.inputCompletionMessage({
+      input: normalizedInput,
+      runtime,
+      session
+    }));
+    if (machineText) {
+      return machineText;
+    }
+  }
+  return normalizedInput.kind === "ready"
+    ? "Completed this step."
+    : "";
+}
+
 async function applyStepMachineView(runtime, session = {}) {
   const machine = workflowStepMachine(runtime, session.currentStep);
   if (!machine) {
@@ -148,6 +175,7 @@ async function recordStepMachineActionFinished(runtime, session = {}, actionId =
 export {
   STEP_STATUS,
   applyStepMachineView,
+  currentStepInputConversationText,
   currentStepPromptInputInstruction,
   recordStepMachineActionFinished,
   recordStepMachineActionStarted,

@@ -113,7 +113,7 @@ test.describe("Autopilot dumb client contract", () => {
       onIntent: (body) => {
         intentRequests.push(body);
         session.actionResult = {
-          actionLabel: "Use existing issue",
+          actionLabel: "Solve existing issue",
           actionType: "adapter",
           message: "Could not resolve GitHub issue: issue not found",
           status: "blocked",
@@ -128,7 +128,7 @@ test.describe("Autopilot dumb client contract", () => {
 
     await page.goto(`${BASE_URL}/home`);
     await page.getByLabel("Issue URL or number").fill("404404");
-    await page.getByRole("button", { exact: true, name: "Use existing issue" }).click();
+    await page.getByRole("button", { exact: true, name: "Solve existing issue" }).click();
 
     await expect.poll(() => intentRequests).toEqual([
       {
@@ -151,7 +151,7 @@ test.describe("Autopilot dumb client contract", () => {
       onIntent: () => {
         Object.assign(session, sessionPayload({
           actionResult: {
-            actionLabel: "Use existing issue",
+            actionLabel: "Solve existing issue",
             actionType: "adapter",
             message: "Selected GitHub issue #123: Existing feature",
             metadata: {
@@ -206,7 +206,7 @@ test.describe("Autopilot dumb client contract", () => {
 
     await page.goto(`${BASE_URL}/home`);
     await page.getByLabel("Issue URL or number").fill("123");
-    await page.getByRole("button", { exact: true, name: "Use existing issue" }).click();
+    await page.getByRole("button", { exact: true, name: "Solve existing issue" }).click();
 
     await expect(page.getByRole("heading", { name: "Edit and submit issue" })).toBeVisible();
     await expect(page.getByText("Could not resolve GitHub issue")).toHaveCount(0);
@@ -224,16 +224,16 @@ test.describe("Autopilot dumb client contract", () => {
     await page.goto(`${BASE_URL}/home`);
 
     await expect(page.getByRole("heading", { name: "Choose starting point" })).toBeVisible();
-    await expect(page.getByText("Start from a new branch, an existing issue, or a pull request to stack on."))
+    await expect(page.getByText("Start fresh with a new issue, solve an existing issue, or build on an existing pull request."))
       .toBeVisible();
-    await expect(page.getByRole("button", { name: "Use new branch" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Use existing issue" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Start fresh with a new issue" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Solve existing issue" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Use existing PR" })).toBeVisible();
 
-    await page.getByRole("button", { name: "Use existing issue" }).click();
+    await page.getByRole("button", { name: "Solve existing issue" }).click();
     await expect(page.getByLabel("Issue URL or number")).toBeVisible();
     await page.getByLabel("Issue URL or number").fill("#123");
-    await page.getByRole("button", { name: "Use existing issue" }).click();
+    await page.getByRole("button", { name: "Solve existing issue" }).click();
 
     await page.getByRole("button", { name: "Use existing PR" }).click();
     await expect(page.getByLabel("PR URL or number")).toBeVisible();
@@ -310,7 +310,7 @@ test.describe("Autopilot dumb client contract", () => {
       "issue_file_created",
       "issue_submitted"
     ]);
-    await expect(page.getByRole("button", { name: "Use existing issue" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Solve existing issue" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Make my own issue" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Create issue on GH" })).toHaveCount(0);
   });
@@ -2125,7 +2125,7 @@ function issueSourceSession(overrides: Record<string, unknown> = {}) {
           requiredMessage: "Issue URL or number is required."
         }
       ],
-      label: "Use existing issue",
+      label: "Solve existing issue",
       style: "primary"
     },
     {
@@ -2201,7 +2201,7 @@ function workSourceSession(overrides: Record<string, unknown> = {}) {
       enabled: true,
       id: "use_new_branch",
       inputFields: [],
-      label: "Use new branch",
+      label: "Start fresh with a new issue",
       style: "primary"
     },
     {
@@ -2216,7 +2216,7 @@ function workSourceSession(overrides: Record<string, unknown> = {}) {
           requiredMessage: "Issue URL or number is required."
         }
       ],
-      label: "Use existing issue",
+      label: "Solve existing issue",
       style: "secondary"
     },
     {
@@ -2253,7 +2253,7 @@ function workSourceSession(overrides: Record<string, unknown> = {}) {
       intents,
       screen: {
         kind: "work_source",
-        message: "Start from a new branch, an existing issue, or a pull request to stack on.",
+        message: "Start fresh with a new issue, solve an existing issue, or build on an existing pull request.",
         sections: [],
         title: "Choose starting point"
       },

@@ -86,7 +86,7 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
         disabledWhen: [when.metadataExists("work_source")],
         icon: "branch",
         id: "use_new_branch",
-        label: "Use new branch",
+        label: "Start fresh with a new issue",
         type: "adapter"
       },
       {
@@ -102,7 +102,7 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
             requiredMessage: "Issue URL or number is required."
           }
         ],
-        label: "Use existing issue",
+        label: "Solve existing issue",
         type: "adapter"
       },
       {
@@ -128,7 +128,7 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
       label: "Choose starting point",
       stop: true
     },
-    description: "Choose whether this session starts from a new branch, an existing issue, or an existing pull request.",
+    description: "Choose whether this session starts fresh with a new issue, solves an existing issue, or builds on an existing pull request.",
     id: workSourceSelectedStepId,
     label: "Choose starting point",
     next: {
@@ -141,14 +141,14 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
           {
             actionId: "use_new_branch",
             id: "use_new_branch",
-            label: "Use new branch",
+            label: "Start fresh with a new issue",
             style: "primary",
             type: "action"
           },
           {
             actionId: "use_existing_issue",
             id: "use_existing_issue",
-            label: "Use existing issue",
+            label: "Solve existing issue",
             style: "secondary",
             type: "action"
           },
@@ -162,7 +162,7 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
         ],
         screen: {
           kind: "work_source",
-          message: "Start from a new branch, an existing issue, or a pull request to stack on.",
+          message: "Start fresh with a new issue, solve an existing issue, or build on an existing pull request.",
           sections: [],
           title: "Choose starting point"
         }
@@ -1106,6 +1106,13 @@ const pullRequestMergedMachine = {
     });
   },
 
+  inputCompletionMessage(context = {}) {
+    const input = normalizeMachineInput(context.input);
+    return input.kind === STEP_INPUT_KIND.READY
+      ? "Merge preparation completed."
+      : "";
+  },
+
   promptInstruction() {
     return currentStepHelperInstruction({
       doneMeaning: "The pull request and main checkout are ready for the merge command.",
@@ -1295,6 +1302,7 @@ const coreLifecycleSteps = Object.freeze([
           output: normalizeText(context.actionResult?.output)
         })
       },
+      completionMessage: "Pull request draft submitted for review.",
       done: (session = {}) => metadataExists(session, "pr_url"),
       draftOrigin: "prompt",
       draftReady: pullRequestFilesAreReady,

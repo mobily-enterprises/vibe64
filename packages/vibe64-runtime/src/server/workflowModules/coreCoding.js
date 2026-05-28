@@ -204,7 +204,7 @@ const coreCodingStepDefinitionsById = deepFreeze({
             requiredMessage: "Issue URL or number is required."
           }
         ],
-        label: "Use existing issue",
+        label: "Solve existing issue",
         type: "adapter"
       },
       {
@@ -268,7 +268,7 @@ const coreCodingStepDefinitionsById = deepFreeze({
           {
             actionId: "use_existing_issue",
             id: "use_existing_issue",
-            label: "Use existing issue",
+            label: "Solve existing issue",
             style: "primary",
             type: "action"
           },
@@ -1156,6 +1156,13 @@ const issueFileMachine = {
     }
   },
 
+  inputCompletionMessage(context = {}) {
+    const input = normalizeMachineInput(context.input);
+    return [STEP_INPUT_KIND.READY, STEP_INPUT_KIND.CONFIRM_FILES].includes(input.kind)
+      ? "Issue draft submitted for review."
+      : "";
+  },
+
   promptInstruction() {
     return currentStepHelperInstruction({
       doneFields: {
@@ -1332,6 +1339,13 @@ const makePlanMachine = {
     return handleStandardPromptInput(context, this);
   },
 
+  inputCompletionMessage(context = {}) {
+    const input = normalizeMachineInput(context.input);
+    return input.kind === STEP_INPUT_KIND.READY
+      ? "Plan submitted for review."
+      : "";
+  },
+
   async actionStarted(context = {}) {
     return markPromptActionStarted(context, this, "make_plan");
   },
@@ -1351,6 +1365,13 @@ const seedPlanMadeMachine = {
 
   async actionStarted(context = {}) {
     return markPromptActionStarted(context, this, "make_seed_plan");
+  },
+
+  inputCompletionMessage(context = {}) {
+    const input = normalizeMachineInput(context.input);
+    return input.kind === STEP_INPUT_KIND.READY
+      ? "Seed plan submitted for review."
+      : "";
   },
 
   promptInstruction() {
@@ -1388,6 +1409,13 @@ const executePlanMachine = {
     return handleStandardPromptInput(context, this);
   },
 
+  inputCompletionMessage(context = {}) {
+    const input = normalizeMachineInput(context.input);
+    return input.kind === STEP_INPUT_KIND.READY
+      ? "Implementation submitted for review."
+      : "";
+  },
+
   async actionStarted(context = {}) {
     return markPromptActionStarted(context, this, "execute_plan");
   },
@@ -1409,6 +1437,13 @@ const seedPlanExecutedMachine = {
     return markPromptActionStarted(context, this, "execute_seed_plan");
   },
 
+  inputCompletionMessage(context = {}) {
+    const input = normalizeMachineInput(context.input);
+    return input.kind === STEP_INPUT_KIND.READY
+      ? "Seed implementation submitted for review."
+      : "";
+  },
+
   promptInstruction() {
     return currentStepHelperInstruction({
       doneMeaning: "The seed implementation work is complete enough to continue.",
@@ -1424,6 +1459,13 @@ const deepUiCheckMachine = {
 
   async actionStarted(context = {}) {
     return markPromptActionStarted(context, this, "run_deep_ui_check");
+  },
+
+  inputCompletionMessage(context = {}) {
+    const input = normalizeMachineInput(context.input);
+    return input.kind === STEP_INPUT_KIND.READY
+      ? "Deep UI check completed."
+      : "";
   },
 
   promptInstruction() {
@@ -1443,6 +1485,13 @@ const reviewRunMachine = {
     return markPromptActionStarted(context, this, "run_deslop");
   },
 
+  inputCompletionMessage(context = {}) {
+    const input = normalizeMachineInput(context.input);
+    return input.kind === STEP_INPUT_KIND.READY
+      ? "Review/deslop completed."
+      : "";
+  },
+
   promptInstruction() {
     return currentStepHelperInstruction({
       doneMeaning: "The review/deslop loop has completed and only acceptable low-risk findings remain.",
@@ -1458,6 +1507,13 @@ const projectKnowledgeUpdatedMachine = {
 
   async actionStarted(context = {}) {
     return markPromptActionStarted(context, this, "update_project_knowledge");
+  },
+
+  inputCompletionMessage(context = {}) {
+    const input = normalizeMachineInput(context.input);
+    return input.kind === STEP_INPUT_KIND.READY
+      ? "Project knowledge update completed."
+      : "";
   },
 
   promptInstruction() {
@@ -1503,6 +1559,13 @@ const reportCreatedMachine = {
     });
   },
 
+  inputCompletionMessage(context = {}) {
+    const input = normalizeMachineInput(context.input);
+    return input.kind === STEP_INPUT_KIND.READY
+      ? "Report submitted for review."
+      : "";
+  },
+
   async actionStarted(context = {}) {
     return markPromptActionStarted(context, this, "write_report");
   },
@@ -1522,6 +1585,7 @@ const coreCodingSteps = Object.freeze(Object.values(Object.freeze({
   [SEED_APPLICATION_STEP_ID]: {
     config: {
       draftReady: issueFilesAreReady,
+      completionMessage: "Seed issue draft submitted for review.",
       initialDetails: {
         doing: "discussion"
       },
@@ -1577,6 +1641,7 @@ const coreCodingSteps = Object.freeze(Object.values(Object.freeze({
   },
   [implementationReviewedStepId]: {
     config: {
+      completionMessage: "Human review turn completed.",
       completionPolicy: {
         decidedBy: "ai",
         enoughWhen: "the requested focused tweak has either been made and focused checks run when practical, or you can clearly report that no code change is needed.",
@@ -1591,6 +1656,7 @@ const coreCodingSteps = Object.freeze(Object.values(Object.freeze({
   },
   [agentConversationStepId]: {
     config: {
+      completionMessage: "Codex conversation turn completed.",
       completionPolicy: {
         decidedBy: "user"
       },
@@ -1616,6 +1682,7 @@ const coreCodingSteps = Object.freeze(Object.values(Object.freeze({
   },
   [changesAcceptedStepId]: {
     config: {
+      completionMessage: "Final review turn completed.",
       completionPolicy: {
         decidedBy: "ai",
         enoughWhen: "the requested final tweak has either been made or you can clearly report the blocker; Vibe64 can then rerun review and validation.",

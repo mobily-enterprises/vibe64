@@ -80,7 +80,7 @@ async function createSession(page: Page) {
   if (await bigFeatureDefinition.isVisible().catch(() => false)) {
     await bigFeatureDefinition.click();
   }
-  await expectButtonEnabled(page, "Use new branch");
+  await expectButtonEnabled(page, "Start fresh with a new issue");
   await expectButtonEnabled(page, "Use existing PR");
   const session = await onlyActiveSession(page);
   expect(session.currentStep).toBe("work_source_selected");
@@ -98,9 +98,9 @@ async function createNewBranchSessionAtIssueStep(page: Page) {
 }
 
 async function chooseNewBranch(page: Page) {
-  await clickButton(page, "Use new branch");
+  await clickButton(page, "Start fresh with a new issue");
   await expectSessionMetadata(page, "work_source", "new_branch");
-  await expectButtonDisabled(page, "Use new branch");
+  await expectButtonDisabled(page, "Start fresh with a new issue");
   await expectButtonDisabled(page, "Use existing PR");
   await expectButtonEnabled(page, "Next step");
 }
@@ -114,7 +114,7 @@ async function chooseExistingPr(page: Page, prRef: string) {
 }
 
 async function useExistingIssue(page: Page, issueRef: string) {
-  await clickButton(page, "Use existing issue");
+  await clickButton(page, "Solve existing issue");
   await fillInputDialog(page, "Issue URL or number", issueRef);
   const session = await expectSessionMetadataContains(page, "issue_url", "/issues/");
   expect(session.metadata?.issue_source).toBe("existing");

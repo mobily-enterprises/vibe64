@@ -126,6 +126,9 @@ test("Vibe64 artifacts service saves semantic pull request step input", async ()
       initialStep: "create_pull_request",
       sessionId: "step_input_pr"
     });
+    await runtime.store.writeConversationUserMessage("step_input_pr", {
+      text: "Draft the pull request."
+    });
 
     const service = createService({
       projectService: projectServiceForRuntime(runtime)
@@ -153,6 +156,16 @@ test("Vibe64 artifacts service saves semantic pull request step input", async ()
     );
     const updatedSession = await runtime.getSession("step_input_pr");
     assert.equal(updatedSession.stepMachine.status, "confirm_files");
+    const conversationLog = await runtime.store.readConversationLog("step_input_pr");
+    assert.deepEqual(conversationLog.map((turn) => [
+      turn.user?.text || "",
+      turn.assistant?.text || ""
+    ]), [
+      [
+        "Draft the pull request.",
+        "Pull request draft submitted for review."
+      ]
+    ]);
   });
 });
 
@@ -241,7 +254,48 @@ test("Vibe64 artifacts service closes structured Codex helper turns in the conve
     ]), [
       [
         "Create a file called P.txt in the project root.",
-        "Prepared: Create lowercase p.txt"
+        "Issue draft submitted for review."
+      ]
+    ]);
+  });
+});
+
+test("Vibe64 artifacts service records step-owned completion messages for prompt-only steps", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new Vibe64SessionRuntime({
+      adapter: new FakeTargetAdapter(),
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "plan_made",
+      metadata: worktreeMetadata(targetRoot, "plan_completion_conversation_log"),
+      sessionId: "plan_completion_conversation_log"
+    });
+    await runtime.runAction("plan_completion_conversation_log", "make_plan");
+    await runtime.store.writeConversationUserMessage("plan_completion_conversation_log", {
+      text: "Make the plan."
+    });
+
+    const service = createService({
+      projectService: projectServiceForRuntime(runtime)
+    });
+
+    const saved = await service.submitCurrentStepInput("plan_completion_conversation_log", {
+      kind: "ready",
+      source: "codex",
+      stepId: "plan_made",
+      stepStatus: "awaiting_agent_result"
+    });
+
+    const conversationLog = await runtime.store.readConversationLog("plan_completion_conversation_log");
+    assert.equal(saved.ok, true);
+    assert.deepEqual(conversationLog.map((turn) => [
+      turn.user?.text || "",
+      turn.assistant?.text || ""
+    ]), [
+      [
+        "Make the plan.",
+        "Plan submitted for review."
       ]
     ]);
   });

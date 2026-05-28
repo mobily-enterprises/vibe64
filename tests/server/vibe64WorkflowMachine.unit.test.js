@@ -32,6 +32,7 @@ import {
   _testing as workflowRegistryTesting
 } from "@local/vibe64-runtime/server/workflowRegistry";
 import {
+  currentStepInputConversationText,
   currentStepPromptInputInstruction
 } from "@local/vibe64-runtime/server/workflowStepMachines";
 import {
@@ -58,6 +59,32 @@ const clientControlActions = Object.freeze(new Set(Object.values(VIBE64_CLIENT_C
 const clientControlIconTokens = Object.freeze(new Set(Object.values(VIBE64_CLIENT_CONTROL_ICON_TOKENS)));
 const clientControlStateFlags = Object.freeze(new Set(Object.values(VIBE64_CLIENT_CONTROL_STATE_FLAGS)));
 const builtinIntentTypes = Object.freeze(new Set(["action", "continue", "reject"]));
+
+test("current step conversation text keeps a last-resort completion fallback", () => {
+  assert.equal(currentStepInputConversationText({
+    workflowStepMachineForStep: () => null
+  }, {
+    currentStep: "unknown_step"
+  }, {
+    kind: "ready",
+    source: "codex",
+    stepId: "unknown_step",
+    stepStatus: "awaiting_agent_result"
+  }), "Completed this step.");
+
+  assert.equal(currentStepInputConversationText({
+    workflowStepMachineForStep: () => ({
+      inputCompletionMessage: () => "Step-specific completion."
+    })
+  }, {
+    currentStep: "known_step"
+  }, {
+    kind: "ready",
+    source: "codex",
+    stepId: "known_step",
+    stepStatus: "awaiting_agent_result"
+  }), "Step-specific completion.");
+});
 const coreWorkflowRegistry = createCoreWorkflowRegistry();
 
 function coreWorkflowForDefinition(definitionId = DEFAULT_VIBE64_WORKFLOW_DEFINITION_ID) {

@@ -314,6 +314,16 @@ function promptActionIsReadyForDone(input = {}) {
   return input.kind === STEP_INPUT_KIND.READY || input.kind === STEP_INPUT_KIND.CONSIDER_RESOLVED;
 }
 
+function inputIsStructuredCompletion(input = {}) {
+  return input.kind === STEP_INPUT_KIND.READY || input.kind === STEP_INPUT_KIND.CONFIRM_FILES;
+}
+
+function configuredCompletionMessage(completionMessage, context = {}, input = {}) {
+  return normalizeText(typeof completionMessage === "function"
+    ? completionMessage(context, input)
+    : completionMessage);
+}
+
 async function writePromptResponseArtifact(context = {}, artifactName = "", text = "") {
   const normalizedArtifact = normalizeText(artifactName);
   if (!normalizedArtifact) {
@@ -383,6 +393,7 @@ function chatWithAiPromptInstructionOptions({
 }
 
 function createChatWithAiMachine({
+  completionMessage = "Conversation turn completed.",
   completionPolicy = {},
   nextWhenIdle = {
     enabled: true
@@ -430,6 +441,13 @@ function createChatWithAiMachine({
       });
     },
 
+    inputCompletionMessage(context = {}) {
+      const input = normalizeMachineInput(context.input);
+      return promptActionIsReadyForDone(input)
+        ? configuredCompletionMessage(completionMessage, context, input)
+        : "";
+    },
+
     async actionStarted(context = {}) {
       return markPromptActionStarted(context, this, normalizedPromptActionId, {
         restartDone: true
@@ -455,6 +473,7 @@ function optionalActionsView(context = {}, state = {}, actionConfig = null) {
 // show those fields for user confirmation, then optionally wait for a command.
 function createEditableArtifactReviewMachine({
   command = null,
+  completionMessage = "Draft submitted for review.",
   done,
   draftOrigin = "user",
   draftReady,
@@ -687,6 +706,13 @@ function createEditableArtifactReviewMachine({
       await writeState(context, this, succeeded
         ? machineState(STEP_STATUS.DONE)
         : command.failureState(context, state));
+    },
+
+    inputCompletionMessage(context = {}) {
+      const input = normalizeMachineInput(context.input);
+      return inputIsStructuredCompletion(input)
+        ? configuredCompletionMessage(completionMessage, context, input)
+        : "";
     },
 
     ...(typeof promptInstruction === "function" ? { promptInstruction } : {})
