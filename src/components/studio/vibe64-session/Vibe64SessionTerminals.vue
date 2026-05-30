@@ -10,11 +10,13 @@
       class="studio-ai-sessions__codex-terminal"
       :allow-start="allowCodexStart"
       :display-mode="displayMode"
+      :listen-when-hidden="listenCodexWhenHidden"
       :read-only="codexReadOnly"
       :scope="codexScope"
       :session="session"
       :terminal="codexTerminalState"
       :visible="displayMode !== 'headless'"
+      @activity-change="handleCodexActivityChange"
       @session-update="handleCodexSessionUpdate"
     />
 
@@ -91,6 +93,10 @@ const props = defineProps({
     default: false,
     type: Boolean
   },
+  listenCodexWhenHidden: {
+    default: false,
+    type: Boolean
+  },
   codexScope: {
     default: "session",
     type: String
@@ -120,7 +126,7 @@ const props = defineProps({
     type: Object
   }
 });
-const emit = defineEmits(["codex-session-update"]);
+const emit = defineEmits(["codex-activity-change", "codex-session-update"]);
 
 const commandTerminalExpanded = ref(true);
 const {
@@ -146,6 +152,10 @@ function handleCodexSessionUpdate(payload = {}) {
     props.codexTerminal.sessionUpdate(payload);
   }
   emit("codex-session-update", payload);
+}
+
+function handleCodexActivityChange(payload = {}) {
+  emit("codex-activity-change", payload);
 }
 
 watch(() => props.commandTerminal.startKey, () => {

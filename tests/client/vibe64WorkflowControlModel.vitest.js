@@ -30,6 +30,67 @@ describe("vibe64WorkflowControlModel", () => {
     expect(workflowControlSourceAction(controls[0])).toBeNull();
   });
 
+  it("links server presentation controls to matching current actions", () => {
+    const action = {
+      dispatchRoute: "command-terminal",
+      enabled: true,
+      id: "create_issue_on_gh",
+      label: "Create issue on GH",
+      type: "command"
+    };
+    const controls = currentStepWorkflowControls({
+      actions: [action],
+      session: {
+        intents: [
+          {
+            actionId: "create_issue_on_gh",
+            enabled: true,
+            id: "continue_step",
+            label: "Create GitHub issue",
+            saveCurrentStepInputBeforeRun: true
+          }
+        ]
+      }
+    });
+
+    expect(controls).toHaveLength(1);
+    expect(controls[0]).toMatchObject({
+      actionId: "create_issue_on_gh",
+      enabled: true,
+      id: "continue_step",
+      label: "Create GitHub issue"
+    });
+    expect(workflowControlSourceAction(controls[0])).toBe(action);
+  });
+
+  it("disables action-backed presentation controls when the source action is disabled", () => {
+    const controls = currentStepWorkflowControls({
+      actions: [
+        {
+          disabledReason: "Resolve the command failure first.",
+          enabled: false,
+          id: "create_issue_on_gh",
+          label: "Create issue on GH"
+        }
+      ],
+      session: {
+        intents: [
+          {
+            actionId: "create_issue_on_gh",
+            enabled: true,
+            id: "continue_step",
+            label: "Create GitHub issue"
+          }
+        ]
+      }
+    });
+
+    expect(controls[0]).toMatchObject({
+      disabledReason: "Resolve the command failure first.",
+      enabled: false
+    });
+  });
+
   it("falls back to current actions when no presentation controls exist", () => {
     const action = {
       enabled: true,

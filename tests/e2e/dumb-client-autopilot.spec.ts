@@ -1296,6 +1296,78 @@ test.describe("Autopilot dumb client contract", () => {
     await expect(page.locator(".studio-ai-sessions__terminals--autopilot-preview")).toHaveCount(0);
   });
 
+  test("shows the hidden session Codex terminal preview when output streams in Autopilot", async ({ page }) => {
+    await mockCodexTerminalPreviewSocket(page);
+    const session = sessionPayload({
+      codexTerminal: {
+        commandPreview: "codex",
+        id: "server-codex-terminal",
+        status: "running"
+      },
+      presentation: {
+        auto: {
+          nextOperation: {
+            executable: false,
+            kind: "wait",
+            reason: "input"
+          }
+        },
+        screen: {
+          input: {
+            fields: [
+              {
+                kind: "textarea",
+                label: "Response",
+                name: "response"
+              }
+            ],
+            prompt: "What should Codex do next?",
+            submitTarget: "current-step-input",
+            submitLabel: "Send to Codex",
+            title: "Talk to Codex"
+          },
+          kind: "input",
+          message: "What should Codex do next?",
+          sections: [],
+          title: "Talk to Codex"
+        },
+        terminal: {
+          codex: {
+            label: "",
+            readOnlyInAutopilot: true,
+            renderer: "codex_terminal",
+            terminalSessionId: "server-codex-terminal",
+            visible: false,
+            visibleUntil: ""
+          }
+        }
+      },
+      stepMachine: {
+        status: "waiting_for_input",
+        stepId: "server_step"
+      },
+      worktree: "/workspace/example-target-app/.vibe64/sessions/active/session-renderer/worktree"
+    });
+    await mockVibe64Session(page, session);
+
+    await page.goto(`${BASE_URL}/home`);
+
+    await expect(page.getByLabel("Response")).toBeVisible();
+    await expect(page.locator(".studio-ai-sessions__terminals--autopilot-preview")).toHaveCount(0);
+    await expect(page.locator(".studio-autopilot")).not.toHaveAttribute("inert", "");
+    await page.evaluate(() => {
+      (window as unknown as {
+        __vibe64PushCodexTerminalOutput: (output: string) => void;
+      }).__vibe64PushCodexTerminalOutput("Working (1s)\r");
+    });
+    await expect(page.locator(".studio-ai-sessions__terminals--autopilot-preview")).toBeVisible();
+    await expect(page.locator(".studio-autopilot")).toHaveAttribute("inert", "");
+    await expect(page.getByText("Codex is thinking...")).toBeVisible();
+    await expect.poll(async () => page.evaluate(() => (
+      (window as unknown as { __vibe64CodexTerminalInputs?: string[] }).__vibe64CodexTerminalInputs || []
+    ))).toEqual([]);
+  });
+
   test("ignores stale Codex terminal preview presentation without a byte activity expiry", async ({ page }) => {
     await mockCodexTerminalPreviewSocket(page);
     const session = sessionPayload({
@@ -1972,10 +2044,12 @@ test.describe("Autopilot dumb client contract", () => {
   });
 
   test("saves current-step fields before running a save-backed workflow control", async ({ page }) => {
+    const commandRequests: unknown[] = [];
     const intentRequests: unknown[] = [];
     const stepInputs: unknown[] = [];
     const intents = [
       {
+        actionId: "create_issue_on_gh",
         enabled: true,
         id: "continue_step",
         inputFields: [],
@@ -1985,6 +2059,17 @@ test.describe("Autopilot dumb client contract", () => {
       }
     ];
     const session = sessionPayload({
+      actions: [
+        {
+          dispatchRoute: "command-terminal",
+          enabled: true,
+          id: "create_issue_on_gh",
+          label: "Create issue on GH",
+          saveCurrentStepInputBeforeRun: true,
+          type: "command",
+          visible: true
+        }
+      ],
       currentStep: "issue_file_created",
       currentStepDefinition: {
         id: "issue_file_created",
@@ -2049,6 +2134,9 @@ test.describe("Autopilot dumb client contract", () => {
       onIntent: (body) => {
         intentRequests.push(body);
       },
+      onCommandTerminalStart: (body) => {
+        commandRequests.push(body);
+      },
       onStepInput: (body) => {
         stepInputs.push(body);
       }
@@ -2073,13 +2161,14 @@ test.describe("Autopilot dumb client contract", () => {
         stepStatus: "confirm_files"
       }
     ]);
-    await expect.poll(() => intentRequests).toEqual([
+    await expect.poll(() => commandRequests).toEqual([
       {
-        fields: {},
-        stepId: "issue_file_created",
-        stepStatus: "confirm_files"
+        actionId: "create_issue_on_gh",
+        advanceOnSuccess: false,
+        input: {}
       }
     ]);
+    await expect.poll(() => intentRequests).toEqual([]);
   });
 
   test("renders current-step actions alongside save-only input forms in Autopilot", async ({ page }) => {
@@ -2350,6 +2439,127 @@ test.describe("Autopilot dumb client contract", () => {
         stepStatus: "confirm_files"
       }
     ]);
+  });
+
+  test("saves current-step fields before running an action-backed workflow control in Inspect", async ({ page }) => {
+    const commandRequests: unknown[] = [];
+    const intentRequests: unknown[] = [];
+    const stepInputs: unknown[] = [];
+    const intents = [
+      {
+        actionId: "create_issue_on_gh",
+        enabled: true,
+        id: "continue_step",
+        inputFields: [],
+        label: "Create GitHub issue",
+        saveCurrentStepInputBeforeRun: true,
+        style: "primary"
+      }
+    ];
+    const session = sessionPayload({
+      actions: [
+        {
+          dispatchRoute: "command-terminal",
+          enabled: true,
+          id: "create_issue_on_gh",
+          label: "Create issue on GH",
+          saveCurrentStepInputBeforeRun: true,
+          type: "command",
+          visible: true
+        }
+      ],
+      currentStep: "issue_file_created",
+      currentStepDefinition: {
+        id: "issue_file_created",
+        label: "Define work"
+      },
+      intents,
+      presentation: {
+        intents,
+        screen: {
+          input: {
+            fields: [
+              {
+                kind: "text",
+                label: "Issue title",
+                name: "title",
+                value: "Separate Drying and Cleaning workflows"
+              },
+              {
+                kind: "text",
+                label: "Session label",
+                name: "word",
+                value: "drying-cleaning"
+              },
+              {
+                kind: "textarea",
+                label: "Issue body",
+                name: "body",
+                value: "Correct the pollen workflow so received pollen goes through drying first."
+              }
+            ],
+            intents,
+            prompt: "Review the issue details, then create the GitHub issue.",
+            submitKind: "confirm_files",
+            submitTarget: "current-step-input",
+            submitLabel: "Save changes",
+            title: "Define issue"
+          },
+          kind: "confirm_files",
+          message: "Review the issue details, then create the GitHub issue.",
+          sections: [],
+          title: "Define issue"
+        },
+        step: {
+          id: "issue_file_created",
+          label: "Define work",
+          status: "confirm_files"
+        }
+      },
+      stepMachine: {
+        status: "confirm_files",
+        stepId: "issue_file_created"
+      }
+    });
+    await mockVibe64Session(page, session, {
+      onCommandTerminalStart: (body) => {
+        commandRequests.push(body);
+      },
+      onIntent: (body) => {
+        intentRequests.push(body);
+      },
+      onStepInput: (body) => {
+        stepInputs.push(body);
+      }
+    });
+
+    await page.goto(`${BASE_URL}/home?mode=inspect`);
+
+    const inspect = page.locator(".studio-ai-sessions__inspect-slot");
+    await inspect.getByLabel("Issue title").fill("Updated issue title");
+    await inspect.getByRole("button", { name: "Create GitHub issue" }).click();
+
+    await expect.poll(() => stepInputs).toEqual([
+      {
+        fields: {
+          body: "Correct the pollen workflow so received pollen goes through drying first.",
+          title: "Updated issue title",
+          word: "drying-cleaning"
+        },
+        kind: "confirm_files",
+        source: "ui",
+        stepId: "issue_file_created",
+        stepStatus: "confirm_files"
+      }
+    ]);
+    await expect.poll(() => commandRequests).toEqual([
+      {
+        actionId: "create_issue_on_gh",
+        advanceOnSuccess: false,
+        input: {}
+      }
+    ]);
+    await expect.poll(() => intentRequests).toEqual([]);
   });
 });
 
@@ -2716,9 +2926,25 @@ async function mockCommandTerminalSocketThatExits(page: Page, {
 async function mockCodexTerminalPreviewSocket(page: Page) {
   await page.addInitScript(() => {
     const OriginalWebSocket = window.WebSocket;
+    const codexSockets: MockWebSocket[] = [];
     (window as unknown as {
       __vibe64CodexTerminalInputs: string[];
+      __vibe64PushCodexTerminalOutput: (output: string) => void;
     }).__vibe64CodexTerminalInputs = [];
+    (window as unknown as {
+      __vibe64PushCodexTerminalOutput: (output: string) => void;
+    }).__vibe64PushCodexTerminalOutput = (output: string) => {
+      for (const socket of codexSockets) {
+        if (socket.readyState === MockWebSocket.OPEN) {
+          socket.dispatchEvent(new MessageEvent("message", {
+            data: JSON.stringify({
+              chunk: String(output || ""),
+              type: "output"
+            })
+          }));
+        }
+      }
+    };
 
     class MockWebSocket extends EventTarget {
       static CONNECTING = 0;
@@ -2735,6 +2961,7 @@ async function mockCodexTerminalPreviewSocket(page: Page) {
         if (!pathname.includes("/codex-terminal/")) {
           return new OriginalWebSocket(url);
         }
+        codexSockets.push(this);
         window.setTimeout(() => {
           this.readyState = MockWebSocket.OPEN;
           this.dispatchEvent(new Event("open"));
@@ -2763,6 +2990,10 @@ async function mockCodexTerminalPreviewSocket(page: Page) {
 
       close() {
         this.readyState = MockWebSocket.CLOSED;
+        const index = codexSockets.indexOf(this);
+        if (index >= 0) {
+          codexSockets.splice(index, 1);
+        }
         this.dispatchEvent(new CloseEvent("close"));
       }
     }

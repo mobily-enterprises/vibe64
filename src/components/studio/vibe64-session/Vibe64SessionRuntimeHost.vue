@@ -21,9 +21,29 @@
         :rewind-busy="Boolean(timeline.rewindCommand?.isRunning)"
         :rewind-to-step="timeline.rewindToStep"
         :session="selection.selectedSession"
-        :inert="sessionMode !== 'autopilot'"
+        :inert="autopilotViewInert"
         @busy-change="setAutopilotBusy"
       />
+
+      <div
+        v-if="autopilotInteractionLocked"
+        class="studio-ai-sessions__codex-thinking-overlay"
+        role="status"
+        aria-live="polite"
+      >
+        <div class="studio-ai-sessions__codex-thinking-status">
+          <v-progress-circular
+            class="studio-ai-sessions__codex-thinking-spinner"
+            color="primary"
+            indeterminate
+            :size="48"
+            :width="3"
+          >
+            <v-icon :icon="mdiRobotOutline" size="24" />
+          </v-progress-circular>
+          <strong>Codex is thinking...</strong>
+        </div>
+      </div>
 
       <div
         v-if="sessionMode === 'inspect'"
@@ -64,8 +84,10 @@
         :command-terminal="commandTerminal"
         :display-mode="codexTerminalDisplayMode"
         :headless-command-terminal="headlessCommandTerminal"
+        :listen-codex-when-hidden="codexTerminalListenWhenHidden"
         :session="selection.selectedSession"
         :show-command-output="sessionMode === 'inspect'"
+        @codex-activity-change="handleCodexActivityChange"
         @codex-session-update="emitGlobalCodexTerminalUpdate"
       />
     </div>
@@ -80,6 +102,9 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, proxyRefs, ref, unref, watch } from "vue";
+import {
+  mdiRobotOutline
+} from "@mdi/js";
 import Vibe64AutopilotView from "@/components/studio/vibe64-session/Vibe64AutopilotView.vue";
 import Vibe64SessionDialogs from "@/components/studio/vibe64-session/Vibe64SessionDialogs.vue";
 import Vibe64SessionTerminals from "@/components/studio/vibe64-session/Vibe64SessionTerminals.vue";
@@ -288,6 +313,14 @@ const headlessCommandTerminal = proxyRefs({
 });
 
 const autopilotBusy = ref(false);
+const codexTerminalActivity = ref({
+  active: false,
+  busy: false,
+  scope: "",
+  sessionId: "",
+  terminalSessionId: "",
+  working: false
+});
 const autopilotModeActive = computed(() => Boolean(props.active && props.sessionMode === "autopilot"));
 const autopilotAutomationEnabled = computed(() => props.sessionMode === "autopilot");
 const codexTerminalPresentation = computed(() => {
@@ -314,7 +347,7 @@ const codexTerminalPreviewWithinWindow = computed(() => {
   const visibleUntil = codexTerminalPreviewVisibleUntilMs.value;
   return Boolean(visibleUntil && codexTerminalPreviewClock.value <= visibleUntil);
 });
-const codexTerminalPreviewVisible = computed(() => Boolean(
+const serverCodexTerminalPreviewVisible = computed(() => Boolean(
   props.active &&
   props.sessionMode === "autopilot" &&
   codexTerminalPresentation.value.visible === true &&
@@ -336,6 +369,31 @@ const globalCodexTerminalVisible = computed(() => Boolean(
 const codexTerminalForegroundVisible = computed(() => Boolean(
   autopilotCodexTerminalVisible.value ||
   globalCodexTerminalVisible.value
+));
+const selectedCodexTerminalId = computed(() => String(
+  selectedSession.value?.codexTerminal?.id || ""
+));
+const hiddenCodexTerminalActivityVisible = computed(() => Boolean(
+  props.active &&
+  props.sessionMode === "autopilot" &&
+  !codexTerminalForegroundVisible.value &&
+  codexTerminalActivity.value.active &&
+  codexTerminalActivity.value.scope === "session" &&
+  codexTerminalActivity.value.sessionId === selectedSessionId.value
+));
+const codexTerminalPreviewVisible = computed(() => Boolean(
+  serverCodexTerminalPreviewVisible.value ||
+  hiddenCodexTerminalActivityVisible.value
+));
+const autopilotInteractionLocked = computed(() => Boolean(
+  props.active &&
+  props.sessionMode === "autopilot" &&
+  codexTerminalPreviewVisible.value &&
+  !codexTerminalForegroundVisible.value
+));
+const autopilotViewInert = computed(() => Boolean(
+  props.sessionMode !== "autopilot" ||
+  autopilotInteractionLocked.value
 ));
 const codexTerminalDisplayMode = computed(() => {
   if (!props.active) {
@@ -369,7 +427,17 @@ const codexTerminalScope = computed(() => (globalCodexTerminalVisible.value ? "g
 const activeCodexTerminalState = computed(() => (
   globalCodexTerminalVisible.value ? props.globalCodexTerminalState : null
 ));
-const interactionBusy = computed(() => Boolean(page.busy || autopilotBusy.value));
+const codexTerminalListenWhenHidden = computed(() => Boolean(
+  props.active &&
+  props.sessionMode === "autopilot" &&
+  !codexTerminalForegroundVisible.value &&
+  selectedCodexTerminalId.value
+));
+const interactionBusy = computed(() => Boolean(
+  page.busy ||
+  autopilotBusy.value ||
+  autopilotInteractionLocked.value
+));
 const guardedPage = computed(() => ({
   busy: interactionBusy.value,
   copyStatus: page.copyStatus,
@@ -411,6 +479,28 @@ function emitGlobalCodexTerminalUpdate(payload = {}) {
   if (globalCodexTerminalVisible.value) {
     emit("global-codex-update", payload);
   }
+}
+
+function handleCodexActivityChange(payload = {}) {
+  const activity = {
+    active: Boolean(payload.active || payload.busy || payload.working),
+    busy: Boolean(payload.busy),
+    scope: String(payload.scope || ""),
+    sessionId: String(payload.sessionId || ""),
+    terminalSessionId: String(payload.terminalSessionId || ""),
+    working: Boolean(payload.working)
+  };
+  if (activity.scope !== "session" || activity.sessionId !== selectedSessionId.value) {
+    return;
+  }
+  if (
+    selectedCodexTerminalId.value &&
+    activity.terminalSessionId &&
+    activity.terminalSessionId !== selectedCodexTerminalId.value
+  ) {
+    return;
+  }
+  codexTerminalActivity.value = activity;
 }
 
 function artifactReadinessVersion(readiness = {}) {
@@ -534,9 +624,26 @@ watch(() => page.error, emitPageError, {
 });
 
 watch(() => [
+  props.sessionId,
+  props.sessionMode,
+  selectedCodexTerminalId.value
+].join("|"), () => {
+  codexTerminalActivity.value = {
+    active: false,
+    busy: false,
+    scope: "",
+    sessionId: "",
+    terminalSessionId: "",
+    working: false
+  };
+}, {
+  flush: "post"
+});
+
+watch(() => [
   props.active ? "active" : "inactive",
   props.sessionMode,
-  codexTerminalPresentation.value.visible === true ? "visible" : "hidden",
+  serverCodexTerminalPreviewVisible.value ? "visible" : "hidden",
   codexTerminalPresentation.value.terminalSessionId || "",
   codexTerminalPresentation.value.visibleUntil || ""
 ].join("|"), scheduleCodexTerminalPreviewExpiry, {
@@ -584,6 +691,54 @@ watch(() => [
   grid-row: 1;
   position: relative;
   z-index: 2;
+}
+
+.studio-ai-sessions__codex-thinking-overlay {
+  display: flex;
+  justify-content: center;
+  left: 0;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+  top: 0.45rem;
+  z-index: 4;
+}
+
+.studio-ai-sessions__codex-thinking-status {
+  align-items: center;
+  background: rgba(var(--v-theme-surface), 0.88);
+  border: 1px solid rgba(var(--v-theme-primary), 0.22);
+  border-radius: 8px;
+  box-shadow: 0 0.4rem 1.1rem rgba(0, 0, 0, 0.12);
+  color: rgb(var(--v-theme-on-surface));
+  display: flex;
+  gap: 0.7rem;
+  min-height: 3.5rem;
+  padding: 0.35rem 0.8rem;
+}
+
+.studio-ai-sessions__codex-thinking-status strong {
+  font-size: 1.05rem;
+  font-weight: 720;
+  letter-spacing: 0;
+  line-height: 1.15;
+}
+
+.studio-ai-sessions__codex-thinking-spinner :deep(.v-icon) {
+  animation: studio-ai-sessions-codex-thinking-pulse 1.45s ease-in-out infinite;
+}
+
+@keyframes studio-ai-sessions-codex-thinking-pulse {
+  0%,
+  100% {
+    opacity: 0.58;
+    transform: scale(0.96);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .studio-ai-sessions__inspect-slot {

@@ -11,6 +11,7 @@ function normalizeControlList(controls = []) {
 }
 
 function currentStepPresentationControls({
+  actions = [],
   interaction = {},
   session = {}
 } = {}) {
@@ -22,10 +23,32 @@ function currentStepPresentationControls({
   for (const source of sources) {
     const controls = normalizeControlList(source);
     if (controls.length > 0) {
-      return controls;
+      return controls.map((control) => presentationWorkflowControl(control, actions));
     }
   }
   return [];
+}
+
+function actionById(actions = [], actionId = "") {
+  const normalizedActionId = String(actionId || "").trim();
+  if (!normalizedActionId) {
+    return null;
+  }
+  return arrayItems(actions)
+    .find((action) => String(action?.id || "").trim() === normalizedActionId) || null;
+}
+
+function presentationWorkflowControl(control = {}, actions = []) {
+  const sourceAction = actionById(actions, control.actionId);
+  if (!sourceAction) {
+    return control;
+  }
+  return {
+    ...control,
+    disabledReason: control.disabledReason || sourceAction.disabledReason || "",
+    enabled: control.enabled === true && sourceAction.enabled === true,
+    sourceAction
+  };
 }
 
 function actionWorkflowControl(action = {}) {
@@ -59,6 +82,7 @@ function currentStepWorkflowControls({
   session = {}
 } = {}) {
   const presentationControls = currentStepPresentationControls({
+    actions,
     interaction,
     session
   });

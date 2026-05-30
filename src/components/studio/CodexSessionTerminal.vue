@@ -153,6 +153,10 @@ const props = defineProps({
     type: Boolean,
     default: false
   },
+  listenWhenHidden: {
+    type: Boolean,
+    default: false
+  },
   scope: {
     type: String,
     default: "session",
@@ -164,6 +168,7 @@ const props = defineProps({
   }
 });
 const emit = defineEmits([
+  "activity-change",
   "input",
   "session-update"
 ]);
@@ -202,6 +207,15 @@ const serverTerminalSession = computed(() => ({
   id: String(serverCodexTerminal.value.id || serverCodexTerminal.value.terminalSessionId || ""),
   status: String(serverCodexTerminal.value.status || "")
 }));
+const hiddenTerminalListenActive = computed(() => Boolean(
+  props.listenWhenHidden &&
+  serverTerminalSession.value.id &&
+  !terminalDisplayActive.value
+));
+const terminalStreamActive = computed(() => Boolean(
+  terminalDisplayActive.value ||
+  hiddenTerminalListenActive.value
+));
 
 function runtimeCodexPromptHandoff(session = {}) {
   const actionResultHandoff = session?.actionResult?.codexPromptHandoff;
@@ -215,13 +229,13 @@ function runtimeCodexPromptHandoff(session = {}) {
 const canUseTerminal = computed(() => {
   if (globalScope.value) {
     return Boolean(
-      terminalDisplayActive.value &&
+      terminalStreamActive.value &&
       terminalScopeId.value &&
       (props.allowStart || serverTerminalSession.value.id)
     );
   }
   return Boolean(
-    terminalDisplayActive.value &&
+    terminalStreamActive.value &&
     sessionId.value &&
     sessionWorktree.value &&
     (props.allowStart || serverTerminalSession.value.id)
@@ -277,6 +291,7 @@ const {
 } = useCodexTerminalOutput({
   appendDisplay: appendTerminalDisplay,
   displayActive: terminalDisplayActive,
+  emitBusyChanged: emitCodexActivityChanged,
   sessionId: terminalScopeId,
   writeDisplay: writeTerminalDisplay
 });
@@ -404,6 +419,17 @@ function applyServerPromptEchoFilter(session = {}) {
   addPromptEchoFilter({
     outputStart,
     prompt
+  });
+}
+
+function emitCodexActivityChanged(payload = {}) {
+  emit("activity-change", {
+    active: Boolean(payload.busy || payload.working),
+    busy: Boolean(payload.busy),
+    scope: props.scope,
+    sessionId: String(payload.sessionId || terminalScopeId.value || ""),
+    terminalSessionId: terminalSessionId.value || serverTerminalSession.value.id || "",
+    working: Boolean(payload.working)
   });
 }
 
