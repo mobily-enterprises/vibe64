@@ -15,6 +15,9 @@ const GITHUB_OUTPUT_BUFFER_BYTES = 1024 * 1024;
 const ISSUE_BODY_ARTIFACT = "issue.md";
 const ISSUE_TITLE_ARTIFACT = "issue_title";
 const ISSUE_WORD_ARTIFACT = "issue_word";
+const WORK_BODY_ARTIFACT = "work.md";
+const WORK_TITLE_ARTIFACT = "work_title";
+const WORK_WORD_ARTIFACT = "work_word";
 
 function commandOutput(error = {}) {
   return normalizeText(`${error.stdout || ""}\n${error.stderr || ""}`) ||
@@ -145,7 +148,10 @@ async function useExistingIssueSessionAction({
     artifacts: {
       [ISSUE_BODY_ARTIFACT]: artifactText(body),
       [ISSUE_TITLE_ARTIFACT]: artifactText(title),
-      [ISSUE_WORD_ARTIFACT]: artifactText(word)
+      [ISSUE_WORD_ARTIFACT]: artifactText(word),
+      [WORK_BODY_ARTIFACT]: artifactText(body),
+      [WORK_TITLE_ARTIFACT]: artifactText(title),
+      [WORK_WORD_ARTIFACT]: artifactText(word)
     },
     message: `Selected GitHub issue #${issue.number}: ${title}`,
     metadata: {
@@ -154,6 +160,8 @@ async function useExistingIssueSessionAction({
       issue_source: "existing",
       issue_title: title,
       issue_url: normalizeText(issue.url),
+      work_title: title,
+      work_word: word,
       work_anchor_number: String(issue.number || ""),
       work_anchor_title: title,
       work_anchor_type: "issue",
@@ -236,6 +244,7 @@ async function useExistingPrSessionAction({
       work_anchor_title: title,
       work_anchor_type: "pull_request",
       work_anchor_url: normalizeText(pr.url),
+      work_title: title,
       work_source: "existing_pr"
     }
   });

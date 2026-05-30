@@ -1288,20 +1288,22 @@ function createCodexTerminalController({
   async function ensureCodexThreadReadyNow(sessionId) {
     const runtime = await projectService.createRuntime();
     try {
-      await writeCodexBootstrapRunning(runtime, sessionId, {
-        kind: "started",
-        message: "Preparing Codex for this session."
-      });
       let session = await runtime.getSession(sessionId);
       const workdir = terminalWorktreePath(session);
       const existingTerminal = activeCodexTerminal(session);
+      const needsThreadCapture = !codexThreadIdForWorkdir(session, workdir);
+      const needsBriefing = !sessionBriefingIsDelivered(session);
+      if (!existingTerminal || needsThreadCapture || needsBriefing) {
+        await writeCodexBootstrapRunning(runtime, sessionId, {
+          kind: "started",
+          message: "Preparing Codex for this session."
+        });
+      }
       const terminalResponse = await startCodexTerminalSession(sessionId);
       if (terminalResponse.ok === false) {
         return writeCodexBootstrapFailure(runtime, sessionId, terminalResponse);
       }
 
-      const needsThreadCapture = !codexThreadIdForWorkdir(session, workdir);
-      const needsBriefing = !sessionBriefingIsDelivered(session);
       if (!needsThreadCapture && !needsBriefing) {
         if (!existingTerminal) {
           const ready = await waitForCodexReady(sessionId, terminalResponse.id);

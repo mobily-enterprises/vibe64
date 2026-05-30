@@ -5,6 +5,9 @@ const ISSUE_WORD_ARTIFACT = "issue_word";
 const PULL_REQUEST_BODY_DRAFT_ARTIFACT = "tmp/create_and_merge_pull_request.body.md";
 const PULL_REQUEST_TITLE_DRAFT_ARTIFACT = "tmp/create_and_merge_pull_request.title.txt";
 const REPORT_ARTIFACT = "report.md";
+const WORK_BODY_ARTIFACT = "work.md";
+const WORK_TITLE_ARTIFACT = "work_title";
+const WORK_WORD_ARTIFACT = "work_word";
 
 export {
   HUMAN_INPUT_RESPONSE_ARTIFACT,
@@ -13,5 +16,8 @@ export {
   ISSUE_WORD_ARTIFACT,
   PULL_REQUEST_BODY_DRAFT_ARTIFACT,
   PULL_REQUEST_TITLE_DRAFT_ARTIFACT,
-  REPORT_ARTIFACT
+  REPORT_ARTIFACT,
+  WORK_BODY_ARTIFACT,
+  WORK_TITLE_ARTIFACT,
+  WORK_WORD_ARTIFACT
 };

@@ -33,6 +33,7 @@ const CLOSED_VIBE64_SESSION_STATUSES = new Set([
   VIBE64_SESSION_STATUS.FINISHED
 ]);
 const ACTION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
+const ACTION_ATTEMPT_FILE_PATTERN = /^(\d{6})-([A-Za-z0-9][A-Za-z0-9_-]{0,127})\.json$/u;
 const ARTIFACT_PATH_SEGMENT_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/u;
 const BACKGROUND_TASK_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,191}$/u;
 const COMMAND_LIFECYCLE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,191}$/u;
@@ -400,6 +401,7 @@ function resolveVibe64SessionPaths({
   const sessionRoot = normalizedSessionId ? path.join(activeSessionsRoot, assertValidVibe64SessionId(normalizedSessionId)) : "";
   return {
     actionsRoot: sessionRoot ? path.join(sessionRoot, "actions") : "",
+    actionAttemptsRoot: sessionRoot ? path.join(sessionRoot, "action-attempts") : "",
     activeSessionsRoot,
     artifactsRoot: sessionRoot ? path.join(sessionRoot, "artifacts") : "",
     backgroundTasksRoot: sessionRoot ? path.join(sessionRoot, "background-tasks") : "",
@@ -476,6 +478,14 @@ function artifactFilePath(sessionPaths, relativePath) {
 
 function actionResultFilePath(sessionPaths, actionId) {
   return path.join(sessionPaths.actionsRoot, assertSafeActionId(actionId));
+}
+
+function actionAttemptFilePath(sessionPaths, attemptFileName) {
+  const normalizedFileName = normalizeText(attemptFileName);
+  if (!ACTION_ATTEMPT_FILE_PATTERN.test(normalizedFileName)) {
+    throw vibe64Error(`Invalid vibe64 action attempt file: ${normalizedFileName || "(empty)"}`, "vibe64_invalid_action_attempt");
+  }
+  return path.join(sessionPaths.actionAttemptsRoot, normalizedFileName);
 }
 
 function backgroundTaskFilePath(sessionPaths, taskId) {
@@ -1004,10 +1014,8 @@ function createVibe64SessionStore({
       return null;
     }
     return mutateSession(sessionId, async (sessionPaths) => {
-      const turnId = await latestOpenConversationTurnId(sessionPaths);
-      if (!turnId) {
-        return null;
-      }
+      const turnId = await latestOpenConversationTurnId(sessionPaths) ||
+        nextConversationTurnId(await conversationTurnIds(sessionPaths));
       const createdAt = now();
       await writeTextFile(
         path.join(conversationTurnRoot(sessionPaths, turnId), conversationMessageFileName("assistant", createdAt)),
@@ -1017,14 +1025,40 @@ function createVibe64SessionStore({
     });
   }
 
+  async function actionAttemptFileNames(sessionPaths) {
+    return sortedFileNames(
+      await readDirectoryEntries(sessionPaths.actionAttemptsRoot),
+      (name) => ACTION_ATTEMPT_FILE_PATTERN.test(name)
+    );
+  }
+
+  function nextActionAttemptFileName(existingFileNames = [], actionId = "") {
+    const nextNumber = existingFileNames
+      .map((fileName) => ACTION_ATTEMPT_FILE_PATTERN.exec(fileName))
+      .filter(Boolean)
+      .map((match) => Number.parseInt(match[1], 10))
+      .filter((number) => Number.isSafeInteger(number) && number > 0)
+      .sort((left, right) => left - right)
+      .at(-1) || 0;
+    return `${String(nextNumber + 1).padStart(6, "0")}-${assertSafeActionId(actionId)}.json`;
+  }
+
   async function writeActionResult(sessionId, actionId, result = {}) {
     return mutateSession(sessionId, async (sessionPaths) => {
       const normalizedActionId = assertSafeActionId(actionId);
+      const attemptFileName = nextActionAttemptFileName(
+        await actionAttemptFileNames(sessionPaths),
+        normalizedActionId
+      );
+      const attemptNumber = Number.parseInt(attemptFileName.slice(0, 6), 10);
       const record = {
         ...result,
         actionId: normalizedActionId,
+        attemptFile: attemptFileName,
+        attemptNumber,
         at: normalizeText(result.at) || now().toISOString()
       };
+      await writeJsonFile(actionAttemptFilePath(sessionPaths, attemptFileName), record);
       await writeJsonFile(actionResultFilePath(sessionPaths, normalizedActionId), record);
       return record;
     });
@@ -1061,6 +1095,25 @@ function createVibe64SessionStore({
     const actionNames = sortedFileNames(await readDirectoryEntries(sessionPaths.actionsRoot), isSafeActionId);
     const actionResults = await Promise.all(actionNames.map((actionName) => readActionResult(sessionId, actionName)));
     return actionResults.filter(Boolean);
+  }
+
+  async function readActionAttempt(sessionPaths, fileName) {
+    const attemptText = await readTextIfExists(actionAttemptFilePath(sessionPaths, fileName));
+    if (!attemptText) {
+      return null;
+    }
+    try {
+      return JSON.parse(attemptText);
+    } catch {
+      throw vibe64Error(`Invalid vibe64 action attempt: ${fileName}`, "vibe64_invalid_action_attempt");
+    }
+  }
+
+  async function readActionAttempts(sessionId) {
+    const sessionPaths = await ensureSessionRoot(sessionId);
+    const fileNames = await actionAttemptFileNames(sessionPaths);
+    const attempts = await Promise.all(fileNames.map((fileName) => readActionAttempt(sessionPaths, fileName)));
+    return attempts.filter(Boolean);
   }
 
   async function writePromptContextSnapshot(sessionId, snapshot = {}) {
@@ -1196,6 +1249,7 @@ function createVibe64SessionStore({
       completedSteps,
       artifactReadiness,
       actionResults,
+      actionAttempts,
       backgroundTasks,
       commandLifecycles,
       promptContextSnapshot
@@ -1207,6 +1261,7 @@ function createVibe64SessionStore({
       readCompletedSteps(sessionPaths.sessionId),
       readArtifactReadiness(sessionPaths.sessionId),
       readActionResults(sessionPaths.sessionId),
+      readActionAttempts(sessionPaths.sessionId),
       readBackgroundTasks(sessionPaths.sessionId),
       readCommandLifecycles(sessionPaths.sessionId),
       readPromptContextSnapshot(sessionPaths.sessionId)
@@ -1221,6 +1276,8 @@ function createVibe64SessionStore({
       .at(-1) || null;
     return {
       actionResults,
+      actionAttempts,
+      actionAttemptsRoot: sessionPaths.actionAttemptsRoot,
       actionsRoot: sessionPaths.actionsRoot,
       artifactReadiness,
       artifactsRoot: sessionPaths.artifactsRoot,
@@ -1321,6 +1378,9 @@ function createVibe64SessionStore({
       mkdir(sessionPaths.actionsRoot, {
         recursive: true
       }),
+      mkdir(sessionPaths.actionAttemptsRoot, {
+        recursive: true
+      }),
       mkdir(sessionPaths.artifactsRoot, {
         recursive: true
       }),
@@ -1416,6 +1476,7 @@ function createVibe64SessionStore({
     paths,
     readArtifact,
     readArtifactReadiness,
+    readActionAttempts,
     readActionResult,
     readActionResults,
     readBackgroundTask,

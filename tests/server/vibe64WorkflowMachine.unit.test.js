@@ -2215,6 +2215,8 @@ test("vibe64 runtime runAction records non-command action results without advanc
       actionId: "record_review",
       actionLabel: "Record review",
       actionType: "record",
+      attemptFile: "000001-record_review.json",
+      attemptNumber: 1,
       at: "2026-05-16T01:02:03.000Z",
       input: {
         dryRun: true
@@ -2223,6 +2225,8 @@ test("vibe64 runtime runAction records non-command action results without advanc
       status: "completed",
       stepId: "review"
     });
+    assert.equal(afterAction.actionAttempts.length, 1);
+    assert.equal(afterAction.actionAttempts[0].attemptFile, "000001-record_review.json");
     assert.deepEqual(await runtime.store.readCommandLog("run_action"), [
       {
         actionId: "record_review",
@@ -2413,8 +2417,8 @@ test("editable artifact review steps preserve user-origin and prompt-origin draf
     assert.equal(draftingIssue.actionResult.status, "prompt_ready");
     assert.equal(draftingIssue.actionResult.promptId, "draft_issue");
     assert.match(draftingIssue.actionResult.prompt, /Vibe64 step completion contract/u);
-    assert.match(draftingIssue.actionResult.prompt, /"title": "Concise GitHub issue title\."/u);
-    assert.match(draftingIssue.actionResult.prompt, /"word": "Short Vibe64 session label\/word derived from the issue title\."/u);
+    assert.match(draftingIssue.actionResult.prompt, /"title": "Concise work title\."/u);
+    assert.match(draftingIssue.actionResult.prompt, /"word": "Short Vibe64 session label\/word derived from the work title\."/u);
 
     const confirmedIssue = await runtime.submitCurrentStepInput("editable_artifact_issue", {
       fields: {
@@ -2623,6 +2627,49 @@ test("editable artifact review steps preserve user-origin and prompt-origin draf
       await runtime.store.readArtifact("editable_artifact_pr", "tmp/create_and_merge_pull_request.body.md"),
       "PR body\n"
     );
+  });
+});
+
+test("human review Codex turns can update the canonical work definition", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new Vibe64SessionRuntime({
+      adapter: new FakeTargetAdapter(),
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "implementation_reviewed",
+      metadata: worktreeMetadata(targetRoot, "review_updates_work"),
+      sessionId: "review_updates_work"
+    });
+    await Promise.all([
+      runtime.store.writeArtifact("review_updates_work", "work_title", "Create p.txt\n"),
+      runtime.store.writeArtifact("review_updates_work", "work.md", "Create p.txt.\n"),
+      runtime.store.writeArtifact("review_updates_work", "work_word", "p\n"),
+      runtime.store.writeMetadataValue("review_updates_work", "work_title", "Create p.txt"),
+      runtime.store.writeMetadataValue("review_updates_work", "work_word", "p")
+    ]);
+
+    await runtime.runAction("review_updates_work", "human_review_conversation", {
+      conversationRequest: "Actually make it q.txt."
+    });
+    await runtime.submitCurrentStepInput("review_updates_work", {
+      fields: {
+        response: "Changed the requested file to q.txt.",
+        workDescription: "Create an empty q.txt file in the project root.",
+        workTitle: "Create q.txt",
+        workWord: "q"
+      },
+      kind: "ready",
+      source: "codex",
+      stepId: "implementation_reviewed",
+      stepStatus: "awaiting_agent_result"
+    });
+
+    assert.equal(await runtime.store.readArtifact("review_updates_work", "work_title"), "Create q.txt\n");
+    assert.equal(await runtime.store.readArtifact("review_updates_work", "work.md"), "Create an empty q.txt file in the project root.\n");
+    assert.equal(await runtime.store.readArtifact("review_updates_work", "work_word"), "q\n");
+    assert.equal(await runtime.store.readMetadataValue("review_updates_work", "work_title"), "Create q.txt");
+    assert.equal(await runtime.store.readMetadataValue("review_updates_work", "work_word"), "q");
   });
 });
 

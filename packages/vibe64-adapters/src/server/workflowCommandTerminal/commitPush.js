@@ -16,6 +16,7 @@ import {
 } from "./shellHelpers.js";
 
 function commitChangesScript(session = {}) {
+  const workTitlePath = metadataFilePath(session, "work_title");
   const issueTitlePath = metadataFilePath(session, "issue_title");
   const baseBranch = normalizeText(session.metadata?.base_branch) ||
     normalizeText(session.metadata?.source_pr_head_ref) ||
@@ -23,7 +24,10 @@ function commitChangesScript(session = {}) {
     "main";
   return [
     "set -e",
-    `COMMIT_TITLE="$(cat ${shellQuote(issueTitlePath)} 2>/dev/null | head -n 1 | sed 's/[[:space:]]*$//')"`,
+    `COMMIT_TITLE="$(cat ${shellQuote(workTitlePath)} 2>/dev/null | head -n 1 | sed 's/[[:space:]]*$//')"`,
+    "if [ -z \"$COMMIT_TITLE\" ]; then",
+    `  COMMIT_TITLE="$(cat ${shellQuote(issueTitlePath)} 2>/dev/null | head -n 1 | sed 's/[[:space:]]*$//')"`,
+    "fi",
     "if [ -z \"$COMMIT_TITLE\" ]; then",
     `  COMMIT_TITLE="Vibe64 session ${session.sessionId}"`,
     "fi",

@@ -13,7 +13,10 @@ import {
   ISSUE_BODY_ARTIFACT,
   ISSUE_TITLE_ARTIFACT,
   ISSUE_WORD_ARTIFACT,
-  REPORT_ARTIFACT
+  REPORT_ARTIFACT,
+  WORK_BODY_ARTIFACT,
+  WORK_TITLE_ARTIFACT,
+  WORK_WORD_ARTIFACT
 } from "../workflowArtifacts.js";
 import {
   buildAgentConversationActionDefinition
@@ -92,6 +95,11 @@ const GITHUB_ISSUE_MODES = deepFreeze({
   REUSE: "reuse",
   SKIP: "skip"
 });
+const WORK_DEFINITION_ARTIFACTS = deepFreeze([
+  WORK_TITLE_ARTIFACT,
+  WORK_BODY_ARTIFACT,
+  WORK_WORD_ARTIFACT
+]);
 
 async function skipOptionalCheck(ctx = {}) {
   return ctx.forceAdvance("Skipped optional check.");
@@ -197,7 +205,7 @@ const coreCodingStepDefinitionsById = deepFreeze({
       {
         disabledReason: "Work details are already saved.",
         disabledWhen: [
-          when.allArtifactsReady(ISSUE_TITLE_ARTIFACT, ISSUE_BODY_ARTIFACT, ISSUE_WORD_ARTIFACT)
+          when.allArtifactsReady(WORK_TITLE_ARTIFACT, WORK_BODY_ARTIFACT, WORK_WORD_ARTIFACT)
         ],
         icon: "message-square-plus",
         id: draftIssueActionId,
@@ -219,7 +227,7 @@ const coreCodingStepDefinitionsById = deepFreeze({
         disabledReason: "Draft an issue before requesting improvements.",
         disabledWhen: [when.metadataExists("issue_url")],
         disabledWhenReason: "An existing issue is already selected.",
-        enabledWhen: [when.allArtifactsReady(ISSUE_TITLE_ARTIFACT, ISSUE_BODY_ARTIFACT, ISSUE_WORD_ARTIFACT)],
+        enabledWhen: [when.allArtifactsReady(WORK_TITLE_ARTIFACT, WORK_BODY_ARTIFACT, WORK_WORD_ARTIFACT)],
         enabledWhenReason: "Draft an issue before requesting improvements.",
         icon: "rotate-ccw",
         id: rejectIssueDraftActionId,
@@ -248,7 +256,7 @@ const coreCodingStepDefinitionsById = deepFreeze({
     label: "Define work",
     next: {
       disabledReason: "Define the work before continuing.",
-      enabledWhen: [when.allArtifactsReady(ISSUE_TITLE_ARTIFACT, ISSUE_BODY_ARTIFACT, ISSUE_WORD_ARTIFACT)]
+      enabledWhen: [when.allArtifactsReady(WORK_TITLE_ARTIFACT, WORK_BODY_ARTIFACT, WORK_WORD_ARTIFACT)]
     },
     presentation: {
       stop: {
@@ -278,12 +286,21 @@ const coreCodingStepDefinitionsById = deepFreeze({
     },
     rewindCleanup: {
       actionResults: [draftIssueActionId, rejectIssueDraftActionId, "create_issue_on_gh"],
-      artifacts: [ISSUE_TITLE_ARTIFACT, ISSUE_BODY_ARTIFACT, ISSUE_WORD_ARTIFACT],
+      artifacts: [
+        WORK_TITLE_ARTIFACT,
+        WORK_BODY_ARTIFACT,
+        WORK_WORD_ARTIFACT,
+        ISSUE_TITLE_ARTIFACT,
+        ISSUE_BODY_ARTIFACT,
+        ISSUE_WORD_ARTIFACT
+      ],
       metadata: [
         "issue_url",
         "issue_number",
         "issue_title",
         "issue_source",
+        "work_title",
+        "work_word",
         "work_anchor_number",
         "work_anchor_title",
         "work_anchor_type",
@@ -739,7 +756,11 @@ const coreCodingWorkflowDefinitions = deepFreeze([
   })
 ]);
 
-function issueFilesAreReady(session = {}) {
+function workDefinitionArtifactsAreReady(session = {}) {
+  const workArtifactsReady = WORK_DEFINITION_ARTIFACTS.every((artifactName) => artifactIsReady(session, artifactName));
+  if (workArtifactsReady) {
+    return true;
+  }
   return [
     ISSUE_TITLE_ARTIFACT,
     ISSUE_WORD_ARTIFACT,
@@ -794,7 +815,7 @@ function conversationSection(label = "", value = "") {
   ].join("\n");
 }
 
-function issueDraftConversationMessage(context = {}, input = {}, {
+function workDefinitionConversationMessage(context = {}, input = {}, {
   proposed = false
 } = {}) {
   const fields = input?.fields || {};
@@ -811,20 +832,23 @@ function issueDraftConversationMessage(context = {}, input = {}, {
   ].join("\n");
 }
 
-async function readIssueFieldValues(context = {}) {
-  const [title, body, word] = await Promise.all([
+async function readWorkDefinitionFieldValues(context = {}) {
+  const [workTitle, workBody, workWord, issueTitle, issueBody, issueWord] = await Promise.all([
+    context.runtime.store.readArtifact(context.session.sessionId, WORK_TITLE_ARTIFACT),
+    context.runtime.store.readArtifact(context.session.sessionId, WORK_BODY_ARTIFACT),
+    context.runtime.store.readArtifact(context.session.sessionId, WORK_WORD_ARTIFACT),
     context.runtime.store.readArtifact(context.session.sessionId, ISSUE_TITLE_ARTIFACT),
     context.runtime.store.readArtifact(context.session.sessionId, ISSUE_BODY_ARTIFACT),
     context.runtime.store.readArtifact(context.session.sessionId, ISSUE_WORD_ARTIFACT)
   ]);
   return {
-    body: normalizeText(body),
-    title: normalizeText(title),
-    word: normalizeText(word)
+    body: normalizeText(workBody) || normalizeText(issueBody),
+    title: normalizeText(workTitle) || normalizeText(issueTitle),
+    word: normalizeText(workWord) || normalizeText(issueWord)
   };
 }
 
-async function writeIssueFieldValues(context = {}, fields = {}) {
+async function writeWorkDefinitionFieldValues(context = {}, fields = {}) {
   const title = requireInputValue(fields.title, "Work title is required.");
   const body = requireInputValue(fields.body, "Work description is required.");
   const word = requireInputValue(fields.word, "Session label is required.");
@@ -836,6 +860,8 @@ async function writeIssueFieldValues(context = {}, fields = {}) {
     : ["issue_number", "issue_url", "work_anchor_number", "work_anchor_url"];
   const metadata = {
     issue_title: title,
+    work_title: title,
+    work_word: word,
     ...(preservesExistingPrAnchor ? {} : { work_anchor_title: title }),
     ...(mode === GITHUB_ISSUE_MODES.SKIP
       ? {
@@ -849,6 +875,9 @@ async function writeIssueFieldValues(context = {}, fields = {}) {
   };
 
   await Promise.all([
+    context.runtime.store.writeArtifact(context.session.sessionId, WORK_TITLE_ARTIFACT, artifactText(title)),
+    context.runtime.store.writeArtifact(context.session.sessionId, WORK_BODY_ARTIFACT, artifactText(body)),
+    context.runtime.store.writeArtifact(context.session.sessionId, WORK_WORD_ARTIFACT, artifactText(word)),
     context.runtime.store.writeArtifact(context.session.sessionId, ISSUE_TITLE_ARTIFACT, artifactText(title)),
     context.runtime.store.writeArtifact(context.session.sessionId, ISSUE_BODY_ARTIFACT, artifactText(body)),
     context.runtime.store.writeArtifact(context.session.sessionId, ISSUE_WORD_ARTIFACT, artifactText(word)),
@@ -862,7 +891,7 @@ async function writeIssueFieldValues(context = {}, fields = {}) {
   ]);
 }
 
-function issueInputInteraction(status = STEP_STATUS.WAITING_FOR_INPUT, values = {}, {
+function workDefinitionInputInteraction(status = STEP_STATUS.WAITING_FOR_INPUT, values = {}, {
   createGithubIssue = false
 } = {}) {
   const reviewIntents = status === STEP_STATUS.CONFIRM_FILES
@@ -921,7 +950,7 @@ function issueInputInteraction(status = STEP_STATUS.WAITING_FOR_INPUT, values = 
           ? "Review the issue details, then create the GitHub issue."
           : "Review the work details, then continue without creating a GitHub issue.")
       : (createGithubIssue
-          ? "Discuss the requested change, then submit the issue title, session label, and issue body."
+          ? "Discuss the requested change, then submit the work title, session label, and description."
           : "Discuss the requested change, then submit the work title, session label, and description."),
     submitKind: status === STEP_STATUS.CONFIRM_FILES
       ? STEP_INPUT_KIND.CONFIRM_FILES
@@ -931,7 +960,7 @@ function issueInputInteraction(status = STEP_STATUS.WAITING_FOR_INPUT, values = 
   };
 }
 
-const issueFilePhase = Object.freeze({
+const workDefinitionPhase = Object.freeze({
   CHOOSE_SOURCE: "choose_source",
   CREATING_ISSUE: "creating_issue",
   DRAFTING: "drafting",
@@ -940,35 +969,35 @@ const issueFilePhase = Object.freeze({
   SKIPPED: "skipped"
 });
 
-function issueSkipMessage(session = {}) {
+function workDefinitionSkipMessage(session = {}) {
   return normalizeText(session.metadata?.work_source) === "existing_pr"
     ? "Skipped: existing PR selected as the work anchor; no GitHub issue is required."
     : "No GitHub issue is required for this session.";
 }
 
-function issueSkipState(session = {}) {
+function workDefinitionSkipState(session = {}) {
   return machineState(STEP_STATUS.DONE, {
-    message: issueSkipMessage(session),
-    phase: issueFilePhase.SKIPPED,
-    skipReason: issueSkipMessage(session)
+    message: workDefinitionSkipMessage(session),
+    phase: workDefinitionPhase.SKIPPED,
+    skipReason: workDefinitionSkipMessage(session)
   });
 }
 
-function issueSourceSelectionState(details = {}) {
+function workDefinitionSourceSelectionState(details = {}) {
   return machineState(STEP_STATUS.READY, {
-    phase: issueFilePhase.CHOOSE_SOURCE,
+    phase: workDefinitionPhase.CHOOSE_SOURCE,
     ...details
   });
 }
 
-function issueDraftReviewState(details = {}) {
+function workDefinitionReviewState(details = {}) {
   return machineState(STEP_STATUS.CONFIRM_FILES, {
-    phase: issueFilePhase.REVIEW_DRAFT,
+    phase: workDefinitionPhase.REVIEW_DRAFT,
     ...details
   });
 }
 
-function issueDraftPromptIsActive(state = {}) {
+function workDefinitionPromptIsActive(state = {}) {
   return [
     STEP_STATUS.ATTEMPTING_EXECUTION,
     STEP_STATUS.AWAITING_AGENT_RESULT,
@@ -982,7 +1011,7 @@ function workflowActionEnabled(session = {}, actionId = "") {
     .find((action) => action.id === normalizedActionId)?.enabled);
 }
 
-function issueDraftResponseActionId(context = {}, state = {}) {
+function workDefinitionResponseActionId(context = {}, state = {}) {
   const stateActionId = normalizeText(state.promptActionId);
   if (stateActionId) {
     return stateActionId;
@@ -992,15 +1021,15 @@ function issueDraftResponseActionId(context = {}, state = {}) {
     : draftIssueActionId;
 }
 
-async function submitIssueDraftAgentResult(context = {}, machine = {}, input = {}) {
+async function submitWorkDefinitionAgentResult(context = {}, machine = {}, input = {}) {
   assertAgentResultSource(context.session, input);
   const state = await readState(context, machine);
-  const promptActionId = issueDraftResponseActionId(context, state);
+  const promptActionId = workDefinitionResponseActionId(context, state);
   switch (input.kind) {
     case STEP_INPUT_KIND.WAITING_FOR_INPUT:
       await writeState(context, machine, machineState(STEP_STATUS.WAITING_FOR_INPUT, {
         message: input.message,
-        phase: issueFilePhase.DRAFTING,
+        phase: workDefinitionPhase.DRAFTING,
         promptActionId,
         response: inputResponseText(input),
         source: input.source
@@ -1009,8 +1038,8 @@ async function submitIssueDraftAgentResult(context = {}, machine = {}, input = {
 
     case STEP_INPUT_KIND.CONFIRM_FILES:
     case STEP_INPUT_KIND.READY:
-      await writeIssueFieldValues(context, input.fields);
-      await writeState(context, machine, issueDraftReviewState({
+      await writeWorkDefinitionFieldValues(context, input.fields);
+      await writeState(context, machine, workDefinitionReviewState({
         response: inputResponseText(input),
         source: input.source
       }));
@@ -1021,42 +1050,42 @@ async function submitIssueDraftAgentResult(context = {}, machine = {}, input = {
   }
 }
 
-const issueFileMachine = {
+const workDefinitionMachine = {
   promptActionId: draftIssueActionId,
   stepId: ISSUE_FILE_STEP_ID,
 
   initialState(context = {}) {
-    const filesReady = issueFilesAreReady(context.session);
+    const filesReady = workDefinitionArtifactsAreReady(context.session);
     if (githubIssueShouldBeSkipped(context.session) && filesReady) {
-      return issueSkipState(context.session);
+      return workDefinitionSkipState(context.session);
     }
     if ((githubIssueIsReused(context.session) || githubIssueShouldBeCreated(context.session)) && filesReady && metadataExists(context.session, "issue_url")) {
       return machineState(STEP_STATUS.DONE, {
-        phase: issueFilePhase.EXISTING_SELECTED
+        phase: workDefinitionPhase.EXISTING_SELECTED
       });
     }
     return filesReady
-      ? issueDraftReviewState()
-      : issueSourceSelectionState();
+      ? workDefinitionReviewState()
+      : workDefinitionSourceSelectionState();
   },
 
   async view(context = {}) {
     let state = await readState(context, this);
-    const filesReady = issueFilesAreReady(context.session);
+    const filesReady = workDefinitionArtifactsAreReady(context.session);
     const createGithubIssue = githubIssueShouldBeCreated(context.session);
     const skipGithubIssue = githubIssueShouldBeSkipped(context.session);
-    if (skipGithubIssue && filesReady && state.status !== STEP_STATUS.CONFIRM_FILES && !issueDraftPromptIsActive(state)) {
-      state = issueSkipState(context.session);
+    if (skipGithubIssue && filesReady && state.status !== STEP_STATUS.CONFIRM_FILES && !workDefinitionPromptIsActive(state)) {
+      state = workDefinitionSkipState(context.session);
     } else if ((githubIssueIsReused(context.session) || createGithubIssue) && filesReady && metadataExists(context.session, "issue_url")) {
       state = machineState(STEP_STATUS.DONE, {
-        phase: issueFilePhase.EXISTING_SELECTED
+        phase: workDefinitionPhase.EXISTING_SELECTED
       });
-    } else if (filesReady && state.status !== STEP_STATUS.CONFIRM_FILES && !issueDraftPromptIsActive(state)) {
-      state = issueDraftReviewState({
+    } else if (filesReady && state.status !== STEP_STATUS.CONFIRM_FILES && !workDefinitionPromptIsActive(state)) {
+      state = workDefinitionReviewState({
         from: state.status
       });
     } else if (state.status === STEP_STATUS.DONE) {
-      state = issueSourceSelectionState({
+      state = workDefinitionSourceSelectionState({
         from: STEP_STATUS.DONE,
         message: "Issue details are incomplete. Select the issue again or draft a new one."
       });
@@ -1087,7 +1116,7 @@ const issueFileMachine = {
         return promptStepWaitingView(context, this, state, "Wait for Codex to draft the work details.");
 
       case STEP_STATUS.WAITING_FOR_INPUT:
-        if (state.phase === issueFilePhase.CREATING_ISSUE) {
+        if (state.phase === workDefinitionPhase.CREATING_ISSUE) {
           return {
             actions: disableAction(context.session, "create_issue_on_gh", "Resolve the issue command before retrying."),
             interaction: commandFailureInteraction({
@@ -1101,19 +1130,19 @@ const issueFileMachine = {
           };
         }
         return promptStepWaitingForInputView(context, this, state, {
-          actionId: issueDraftResponseActionId(context, state),
-          prompt: state.message || "Codex needs more information before it can draft the issue.",
+          actionId: workDefinitionResponseActionId(context, state),
+          prompt: state.message || "Codex needs more information before it can draft the work description.",
           skipInput: LET_CODEX_DECIDE_INPUT,
-          title: "Describe the issue"
+          title: "Define work"
         });
 
       case STEP_STATUS.CONFIRM_FILES: {
-        const values = await readIssueFieldValues(context);
+        const values = await readWorkDefinitionFieldValues(context);
         return {
           actions: skipGithubIssue
             ? disableAction(context.session, "create_issue_on_gh", "This session continues without creating a GitHub issue.")
             : context.session.actions,
-          interaction: issueInputInteraction(STEP_STATUS.CONFIRM_FILES, values, {
+          interaction: workDefinitionInputInteraction(STEP_STATUS.CONFIRM_FILES, values, {
             createGithubIssue
           }),
           next: nextForSession(context.session, {
@@ -1167,7 +1196,7 @@ const issueFileMachine = {
   async actionStarted(context = {}) {
     if (context.actionId === draftIssueActionId) {
       await writeState(context, this, machineState(STEP_STATUS.AWAITING_AGENT_RESULT, {
-        phase: issueFilePhase.DRAFTING,
+        phase: workDefinitionPhase.DRAFTING,
         promptActionId: context.actionId
       }));
       return;
@@ -1175,14 +1204,14 @@ const issueFileMachine = {
 
     if (context.actionId === "create_issue_on_gh") {
       await writeState(context, this, machineState(STEP_STATUS.ATTEMPTING_EXECUTION, {
-        phase: issueFilePhase.CREATING_ISSUE
+        phase: workDefinitionPhase.CREATING_ISSUE
       }));
       return;
     }
 
     if (context.actionId === rejectIssueDraftActionId) {
       await writeState(context, this, machineState(STEP_STATUS.AWAITING_AGENT_RESULT, {
-        phase: issueFilePhase.DRAFTING,
+        phase: workDefinitionPhase.DRAFTING,
         promptActionId: context.actionId
       }));
     }
@@ -1192,7 +1221,7 @@ const issueFileMachine = {
     if (context.actionId === "create_issue_on_gh") {
       if (await commandSucceeded(context, "issue_url")) {
         await writeState(context, this, machineState(STEP_STATUS.DONE, {
-          phase: issueFilePhase.EXISTING_SELECTED
+          phase: workDefinitionPhase.EXISTING_SELECTED
         }));
         return;
       }
@@ -1200,7 +1229,7 @@ const issueFileMachine = {
         from: STEP_STATUS.ATTEMPTING_EXECUTION,
         message: normalizeText(context.actionResult?.message) || "Could not create the GitHub issue.",
         output: normalizeText(context.actionResult?.output),
-        phase: issueFilePhase.CREATING_ISSUE
+        phase: workDefinitionPhase.CREATING_ISSUE
       }));
       return;
     }
@@ -1213,8 +1242,8 @@ const issueFileMachine = {
     switch (state.status) {
       case STEP_STATUS.READY:
         if (input.kind === STEP_INPUT_KIND.CONFIRM_FILES || input.kind === STEP_INPUT_KIND.READY) {
-          await writeIssueFieldValues(context, input.fields);
-          await writeState(context, this, issueDraftReviewState({
+          await writeWorkDefinitionFieldValues(context, input.fields);
+          await writeState(context, this, workDefinitionReviewState({
             response: inputResponseText(input),
             source: input.source
           }));
@@ -1223,12 +1252,12 @@ const issueFileMachine = {
         throw unsupportedInputKind(input.kind, this.stepId);
 
       case STEP_STATUS.AWAITING_AGENT_RESULT:
-        await submitIssueDraftAgentResult(context, this, input);
+        await submitWorkDefinitionAgentResult(context, this, input);
         return;
 
       case STEP_STATUS.WAITING_FOR_INPUT:
-        if (state.phase === issueFilePhase.CREATING_ISSUE && (input.kind === STEP_INPUT_KIND.CONSIDER_RESOLVED || input.kind === STEP_INPUT_KIND.USER_RESPONSE)) {
-          await writeState(context, this, issueDraftReviewState({
+        if (state.phase === workDefinitionPhase.CREATING_ISSUE && (input.kind === STEP_INPUT_KIND.CONSIDER_RESOLVED || input.kind === STEP_INPUT_KIND.USER_RESPONSE)) {
+          await writeState(context, this, workDefinitionReviewState({
             message: input.message,
             response: inputResponseText(input),
             source: input.source
@@ -1236,17 +1265,17 @@ const issueFileMachine = {
           return;
         }
         if (input.source === "codex") {
-          await submitIssueDraftAgentResult(context, this, input);
+          await submitWorkDefinitionAgentResult(context, this, input);
           return;
         }
         throw unsupportedInputKind(input.kind, this.stepId);
 
       case STEP_STATUS.CONFIRM_FILES:
         if (input.kind === STEP_INPUT_KIND.CONFIRM_FILES || input.kind === STEP_INPUT_KIND.READY) {
-          await writeIssueFieldValues(context, input.fields);
+          await writeWorkDefinitionFieldValues(context, input.fields);
           await writeState(context, this, githubIssueShouldBeSkipped(context.session)
-            ? issueSkipState(context.session)
-            : issueDraftReviewState({
+            ? workDefinitionSkipState(context.session)
+            : workDefinitionReviewState({
                 response: inputResponseText(input),
                 source: input.source
               }));
@@ -1256,7 +1285,7 @@ const issueFileMachine = {
 
       case STEP_STATUS.FAILED:
         if (input.kind === STEP_INPUT_KIND.CONSIDER_RESOLVED || input.kind === STEP_INPUT_KIND.USER_RESPONSE) {
-          await writeState(context, this, issueSourceSelectionState({
+          await writeState(context, this, workDefinitionSourceSelectionState({
             message: input.message,
             response: inputResponseText(input),
             source: input.source
@@ -1277,10 +1306,10 @@ const issueFileMachine = {
       return "";
     }
     if (input.source === "codex") {
-      return issueDraftConversationMessage(context, input, { proposed: true });
+      return workDefinitionConversationMessage(context, input, { proposed: true });
     }
     if (input.source === "ui") {
-      return issueDraftConversationMessage(context, input);
+      return workDefinitionConversationMessage(context, input);
     }
     return githubIssueShouldBeSkipped(context.session)
       ? "Work description saved."
@@ -1290,12 +1319,12 @@ const issueFileMachine = {
   promptInstruction() {
     return currentStepHelperInstruction({
       doneFields: {
-        body: "Markdown issue body describing the requested change, context, and acceptance criteria.",
-        title: "Concise GitHub issue title.",
-        word: "Short Vibe64 session label/word derived from the issue title."
+        body: "Markdown work description with the requested change, context, and acceptance criteria.",
+        title: "Concise work title.",
+        word: "Short Vibe64 session label/word derived from the work title."
       },
-      doneMeaning: "You have enough information to propose a GitHub issue title, body, and Vibe64 session label for user review.",
-      waitingForInputMeaning: "You need more information from the user before drafting the issue."
+      doneMeaning: "You have enough information to propose a work title, work description, and Vibe64 session label for user review.",
+      waitingForInputMeaning: "You need more information from the user before drafting the work description."
     });
   }
 };
@@ -2010,26 +2039,26 @@ const reportAndKnowledgeUpdatedMachine = {
 const coreCodingSteps = Object.freeze(Object.values(Object.freeze({
   [SEED_APPLICATION_STEP_ID]: {
     config: {
-      draftReady: issueFilesAreReady,
+      draftReady: workDefinitionArtifactsAreReady,
       completionMessage: "Seed issue draft submitted for review.",
       initialDetails: {
         doing: "discussion"
       },
-      interaction: issueInputInteraction,
+      interaction: workDefinitionInputInteraction,
       nextWhenDrafting: {
         disabledReason: "Define and save the seed issue before continuing."
       },
       nextWhenWorking: {
         disabledReason: "Define and save the seed issue before continuing."
       },
-      readValues: readIssueFieldValues,
-      saveValues: writeIssueFieldValues,
+      readValues: readWorkDefinitionFieldValues,
+      saveValues: writeWorkDefinitionFieldValues,
       unsupportedDoneMessage: "The seed definition step cannot accept input right now.",
       waitingForInputState: (input = {}) => ({
         doing: "discussion",
         message: input.message
       }),
-      waitingInteraction: () => issueInputInteraction(STEP_STATUS.WAITING_FOR_INPUT, {})
+      waitingInteraction: () => workDefinitionInputInteraction(STEP_STATUS.WAITING_FOR_INPUT, {})
     },
     definition: coreCodingStepDefinitionsById[SEED_APPLICATION_STEP_ID],
     factoryId: "editable_artifact_review",
@@ -2038,7 +2067,7 @@ const coreCodingSteps = Object.freeze(Object.values(Object.freeze({
   [ISSUE_FILE_STEP_ID]: {
     definition: coreCodingStepDefinitionsById[ISSUE_FILE_STEP_ID],
     id: ISSUE_FILE_STEP_ID,
-    machine: issueFileMachine
+    machine: workDefinitionMachine
   },
   [seedPlanMadeStepId]: {
     definition: coreCodingStepDefinitionsById[seedPlanMadeStepId],

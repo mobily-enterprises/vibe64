@@ -105,8 +105,13 @@ test("Vibe64 artifacts service saves semantic issue step input", async () => {
     assert.equal(await runtime.store.readArtifact("step_input_issue", "issue_title"), "Add booking dashboard\n");
     assert.equal(await runtime.store.readArtifact("step_input_issue", "issue_word"), "Booking\n");
     assert.equal(await runtime.store.readArtifact("step_input_issue", "issue.md"), "Create a booking dashboard.\n");
+    assert.equal(await runtime.store.readArtifact("step_input_issue", "work_title"), "Add booking dashboard\n");
+    assert.equal(await runtime.store.readArtifact("step_input_issue", "work_word"), "Booking\n");
+    assert.equal(await runtime.store.readArtifact("step_input_issue", "work.md"), "Create a booking dashboard.\n");
     assert.equal(await runtime.store.readMetadataValue("step_input_issue", "issue_title"), "Add booking dashboard");
     assert.equal(await runtime.store.readMetadataValue("step_input_issue", "issue_word"), "Booking");
+    assert.equal(await runtime.store.readMetadataValue("step_input_issue", "work_title"), "Add booking dashboard");
+    assert.equal(await runtime.store.readMetadataValue("step_input_issue", "work_word"), "Booking");
 
     const updatedSession = await runtime.getSession("step_input_issue");
     assert.equal(updatedSession.sessionName, "Booking");

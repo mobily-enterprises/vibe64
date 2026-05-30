@@ -7,13 +7,13 @@ Use the user's request or feedback to propose:
 - a Markdown work description with the requested change, useful context, and acceptance criteria
 - a short Vibe64 session label/word derived from the work title
 
-If Relevant workflow facts show `github_issue_mode` as `create`, the saved title and description will be used to create a GitHub issue later in this same workflow step.
+If Relevant workflow facts show `github_issue_mode` as `create`, the saved work title and description will be used to create a GitHub issue later in this same workflow step.
 If `github_issue_mode` is `skip`, no GitHub issue will be created; the saved title and description are the work anchor for planning.
 
 If User/request input contains feedback about an existing draft, read the current draft artifacts from the artifacts root listed in Vibe64 workflow context before revising it:
-- issue_title
-- issue.md
-- issue_word
+- work_title
+- work.md
+- work_word
 
 If the request is too vague to define useful work, ask for the missing information through the current-step helper instead of guessing.
 

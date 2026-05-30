@@ -410,8 +410,8 @@ test("jskit prompt actions include JSKIT prompt context", async () => {
     assert.doesNotMatch(afterPrompt.actionResult.prompt, /npx jskit generate crud-server-generator scaffold help/u);
     assert.match(afterPrompt.actionResult.prompt, /Do not plan hand-created packages/u);
     assert.match(afterPrompt.actionResult.prompt, /Work anchor source of truth:/u);
-    assert.match(afterPrompt.actionResult.prompt, /issue_title/u);
-    assert.match(afterPrompt.actionResult.prompt, /issue\.md/u);
+    assert.match(afterPrompt.actionResult.prompt, /work_title/u);
+    assert.match(afterPrompt.actionResult.prompt, /work\.md/u);
     assert.match(afterPrompt.actionResult.prompt, /Do not call GitHub to rediscover the issue content/u);
     assert.match(afterPrompt.actionResult.prompt, /JSKIT placement contract/u);
     assert.match(afterPrompt.actionResult.prompt, /npx jskit list-placements --json/u);

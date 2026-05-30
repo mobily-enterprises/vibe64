@@ -26,6 +26,7 @@ export default defineConfig({
     nav: [
       { text: "Why Vibe64", link: "/" },
       { text: "Supported tech", link: "/supported-tech" },
+      { text: "Pricing", link: "/pricing" },
       { text: "Start Building", link: "/start-building" }
     ],
     outline: {

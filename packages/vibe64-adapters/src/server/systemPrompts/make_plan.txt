@@ -4,9 +4,9 @@ Vibe64 standard planning instructions.
 
 Work anchor source of truth:
 - If the saved work artifacts exist, read them from the artifacts root listed in Vibe64 workflow context before planning:
-  - `issue_title`
-  - `issue.md`
-  - `issue_word`
+  - `work_title`
+  - `work.md`
+  - `work_word`
 - Treat those artifacts as the work title, work description, and Vibe64 session word for this plan.
 - When `github_issue_mode` is `create` or `reuse`, the work artifacts describe the GitHub issue context. Use `issue_url` and `issue_number` metadata only as references. Do not call GitHub to rediscover the issue content unless the artifacts are missing or empty.
 - When `github_issue_mode` is `skip`, do not require or create a GitHub issue before planning. Plan from the saved work artifacts, the current Codex conversation, User/request input, adapter facts, and project files.

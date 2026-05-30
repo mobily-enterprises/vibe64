@@ -65,7 +65,7 @@ function commitChangesSuccessMetadataFromFacts({ facts = {} } = {}) {
   });
 }
 
-function createIssueSuccessMetadataFromFacts({ facts = {} } = {}) {
+function createIssueSuccessMetadataFromFacts({ facts = {}, session = {} } = {}) {
   const metadata = metadataFromFacts(facts, [
     "issue_number",
     "issue_title",
@@ -79,7 +79,7 @@ function createIssueSuccessMetadataFromFacts({ facts = {} } = {}) {
       github_issue_mode: "create",
       issue_source: "created",
       work_anchor_number: normalizeText(metadata.issue_number),
-      work_anchor_title: normalizeText(metadata.issue_title),
+      work_anchor_title: normalizeText(session.metadata?.work_title) || normalizeText(metadata.issue_title),
       work_anchor_type: "issue",
       work_anchor_url: normalizeText(metadata.issue_url),
       ...metadata

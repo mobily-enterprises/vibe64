@@ -9,7 +9,10 @@ import {
   vibe64SessionDebugLog
 } from "./sessionDebugLog.js";
 import {
-  HUMAN_INPUT_RESPONSE_ARTIFACT
+  HUMAN_INPUT_RESPONSE_ARTIFACT,
+  WORK_BODY_ARTIFACT,
+  WORK_TITLE_ARTIFACT,
+  WORK_WORD_ARTIFACT
 } from "./workflowArtifacts.js";
 
 const STEP_STATE_SCHEMA_VERSION = 1;
@@ -311,6 +314,7 @@ function currentStepHelperInstruction({
       stepId,
       stepStatus
     }),
+    "- Include any additional `fields` explicitly requested by this prompt.",
     `- Meaning of ready: ${doneMeaning}`,
     "",
     "- If you need user input before this step can continue, call the current-step input helper with this JSON:",
@@ -347,6 +351,30 @@ async function writePromptResponseArtifact(context = {}, artifactName = "", text
     return;
   }
   await context.runtime.store.writeArtifact(context.session.sessionId, normalizedArtifact, artifactText(text));
+}
+
+function workWordFromTitle(title = "") {
+  return normalizeText(title)
+    .split(/\s+/u)
+    .map((word) => word.replaceAll(/[^A-Za-z0-9_-]/gu, "").slice(0, 24))
+    .find(Boolean) || "";
+}
+
+async function writeCurrentWorkFromInput(context = {}, input = {}) {
+  const fields = input.fields || {};
+  const title = normalizeText(fields.workTitle || fields.currentWorkTitle);
+  const body = normalizeText(fields.workDescription || fields.currentWorkDescription);
+  const word = normalizeText(fields.workWord || fields.currentWorkWord) || workWordFromTitle(title);
+  if (!title || !body) {
+    return;
+  }
+  await Promise.all([
+    context.runtime.store.writeArtifact(context.session.sessionId, WORK_TITLE_ARTIFACT, artifactText(title)),
+    context.runtime.store.writeArtifact(context.session.sessionId, WORK_BODY_ARTIFACT, artifactText(body)),
+    ...(word ? [context.runtime.store.writeArtifact(context.session.sessionId, WORK_WORD_ARTIFACT, artifactText(word))] : []),
+    context.runtime.store.writeMetadataValue(context.session.sessionId, "work_title", title),
+    ...(word ? [context.runtime.store.writeMetadataValue(context.session.sessionId, "work_word", word)] : [])
+  ]);
 }
 
 function promptStepDoneView(context = {}, machine = {}, state = {}) {
@@ -772,6 +800,7 @@ async function handleStandardPromptInput(context = {}, machine = {}, {
         if (responseArtifact) {
           await writePromptResponseArtifact(context, responseArtifact, input.fields.response || input.text);
         }
+        await writeCurrentWorkFromInput(context, input);
         const completionMessage = normalizeText(input.message) ||
           (typeof machine.inputCompletionMessage === "function"
             ? normalizeText(machine.inputCompletionMessage({

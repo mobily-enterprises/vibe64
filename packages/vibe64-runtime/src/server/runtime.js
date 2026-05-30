@@ -229,8 +229,11 @@ function actionResultRecord(action, session, input, handlerResult = {}) {
 
 async function writeActionResultEffects(store, sessionId, result = {}) {
   for (const [name, value] of Object.entries(result.metadata || {})) {
-    if (name === "issue_word" && typeof store.writeIssueWordMetadata === "function") {
+    if ((name === "issue_word" || name === "work_word") && typeof store.writeIssueWordMetadata === "function") {
       await store.writeIssueWordMetadata(sessionId, value);
+      if (name === "work_word") {
+        await store.writeMetadataValue(sessionId, name, value);
+      }
       continue;
     }
     await store.writeMetadataValue(sessionId, name, value);
@@ -428,9 +431,20 @@ function workflowMetadataIsPromptRelevant(name = "", value = undefined) {
 }
 
 function promptWorkflowFacts(metadata = {}) {
+  const workTitle = normalizeText(metadata.work_title);
+  const workWord = normalizeText(metadata.work_word);
   return Object.fromEntries(
     sortedObjectEntries(metadata)
       .filter(([name, value]) => workflowMetadataIsPromptRelevant(name, value))
+      .filter(([name, value]) => {
+        if (name === "issue_title" && workTitle && normalizeText(value) === workTitle) {
+          return false;
+        }
+        if (name === "issue_word" && workWord && normalizeText(value) === workWord) {
+          return false;
+        }
+        return true;
+      })
   );
 }
 
@@ -851,7 +865,10 @@ class Vibe64SessionRuntime {
     if (!sessionWord) {
       return;
     }
-    await this.store.writeArtifact(sessionId, "issue_word", `${sessionWord}\n`);
+    await Promise.all([
+      this.store.writeArtifact(sessionId, "issue_word", `${sessionWord}\n`),
+      this.store.writeArtifact(sessionId, "work_word", `${sessionWord}\n`)
+    ]);
   }
 
   async promptContextSnapshotForSession(session) {

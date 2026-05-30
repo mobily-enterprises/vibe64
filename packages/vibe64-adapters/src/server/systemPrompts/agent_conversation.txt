@@ -16,6 +16,7 @@ General rules:
 Workflow-specific behavior:
 - If current step is `implementation_reviewed`, the user is reviewing the implemented work before slower checks. Make only the focused tweak requested by `conversationRequest`, run the focused checks that prove it when practical, and submit the response through the current-step input helper.
 - If current step is `changes_accepted`, the user is doing final review after validation. Make only the requested final tweak. Vibe64 will send the workflow back through review and validation after this prompt completes.
+- If the user's request changes the actual work scope, filename, title, or acceptance criteria, include `workTitle`, `workDescription`, and `workWord` in the helper `fields` alongside `response`. Keep `workDescription` as the updated complete work anchor, not just the latest tweak.
 - If this step needs to show a response in Vibe64, submit that response through the current-step input helper.
 - For other workflow definitions, answer, inspect, or edit according to the user's request and the current step contract.
 
