@@ -99,10 +99,10 @@ const CODEX_BOOT_TIMEOUT_MS = 12000;
 const CODEX_TURN_SETTLE_MS = CODEX_BOOT_QUIET_MS;
 const CODEX_TURN_UNKNOWN_QUIET_MS = 5000;
 const CODEX_KEY_PAUSE_MS = 180;
-const CODEX_THREAD_CAPTURE_TIMEOUT_MS = 30000;
+const DEBUG_PROMPTS_ENABLED = String(process.env.DEBUG_PROMPTS || "").trim() === "1";
+const CODEX_THREAD_CAPTURE_TIMEOUT_MS = DEBUG_PROMPTS_ENABLED ? 10 * 60_000 : 30_000;
 const PROMPT_INJECTION_PREFIX = "\u001b[200~";
 const PROMPT_INJECTION_SUFFIX = "\u001b[201~\r";
-const DEBUG_PROMPTS_ENABLED = String(process.env.DEBUG_PROMPTS || "").trim() === "1";
 const ESCAPE_CHARACTER = String.fromCharCode(27);
 const BELL_CHARACTER = String.fromCharCode(7);
 const STANDALONE_TERMINAL_CONTROL_CHARACTERS = [
@@ -1098,12 +1098,7 @@ function createCodexTerminalController({
 
   async function sendCodexShellCommand(sessionId, terminalSessionId, command) {
     const keySequence = [
-      "\u001b",
-      "\u0015",
-      "! ",
       command,
-      " ",
-      "\u001b",
       "\r"
     ];
     for (const input of keySequence) {

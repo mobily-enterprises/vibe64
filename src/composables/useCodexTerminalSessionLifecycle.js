@@ -131,6 +131,7 @@ function useCodexTerminalSessionLifecycle({
         terminalSessionId: terminalSessionId.value
       });
       terminalStatus.value = message.status || terminalStatus.value || "";
+      emitTerminalSessionState();
       if (terminalStatus.value === "exited") {
         clearCodexBusy?.();
         clearCodexWorking?.();

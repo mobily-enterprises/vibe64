@@ -1,5 +1,6 @@
 <template>
   <section
+    v-show="!compactTerminalHidden"
     class="studio-ai-sessions__terminals"
     :class="{
       'studio-ai-sessions__terminals--compact': displayMode === 'compact',
@@ -203,6 +204,7 @@ const emit = defineEmits(["codex-activity-change", "codex-session-update"]);
 
 const commandTerminalExpanded = ref(true);
 const compactTerminalCollapsed = ref(false);
+const compactTerminalHidden = ref(false);
 const codexTerminalComponent = ref(null);
 const {
   fixDialogOpen,
@@ -211,10 +213,12 @@ const {
   openFixCodexDialog
 } = useVibe64FixCodexDialog();
 const compactMode = computed(() => props.displayMode === "compact");
-const compactTerminalDisplayMode = computed(() => compactTerminalCollapsed.value ? "headless" : "compact");
+const compactTerminalDisplayMode = computed(() => compactTerminalCollapsed.value || compactTerminalHidden.value
+  ? "headless"
+  : "compact");
 const codexTerminalDisplayMode = computed(() => compactMode.value ? compactTerminalDisplayMode.value : props.displayMode);
 const codexTerminalVisible = computed(() => compactMode.value
-  ? !compactTerminalCollapsed.value
+  ? !compactTerminalCollapsed.value && !compactTerminalHidden.value
   : props.displayMode !== "headless");
 const codexAutoFocus = computed(() => Boolean(
   !props.codexReadOnly &&
@@ -227,7 +231,10 @@ const codexListenWhenHidden = computed(() => Boolean(
   props.listenCodexWhenHidden ||
   (
     compactMode.value &&
-    compactTerminalCollapsed.value
+    (
+      compactTerminalCollapsed.value ||
+      compactTerminalHidden.value
+    )
   )
 ));
 const codexRecoveryAvailable = computed(() => typeof props.codexRecovery?.resume === "function");
@@ -251,6 +258,12 @@ function handleCommandTerminalExpandedChanged(expanded) {
 }
 
 function handleCodexSessionUpdate(payload = {}) {
+  if (
+    compactMode.value &&
+    String(payload.codexTerminalStatus || "") === "exited"
+  ) {
+    hideCompactTerminal();
+  }
   if (typeof props.codexTerminal.sessionUpdate === "function") {
     props.codexTerminal.sessionUpdate(payload);
   }
@@ -263,9 +276,11 @@ function handleCodexActivityChange(payload = {}) {
 
 function hideCompactTerminal() {
   compactTerminalCollapsed.value = true;
+  compactTerminalHidden.value = true;
 }
 
 function showCompactTerminal() {
+  compactTerminalHidden.value = false;
   compactTerminalCollapsed.value = false;
   focusCodexTerminalSoon();
 }
@@ -274,11 +289,11 @@ async function resumeCodexFromAttention() {
   if (!codexRecoveryAvailable.value || codexRecoveryBusy.value) {
     return;
   }
+  hideCompactTerminal();
   const result = await props.codexRecovery.resume();
   if (result?.ok === false) {
     return;
   }
-  compactTerminalCollapsed.value = true;
 }
 
 function focusCodexTerminalSoon() {
@@ -312,11 +327,13 @@ watch(() => props.commandTerminal.visible, (visible) => {
 
 watch(() => props.session?.sessionId || "", () => {
   commandTerminalExpanded.value = true;
+  compactTerminalHidden.value = false;
   compactTerminalCollapsed.value = false;
 });
 
 watch(() => props.displayMode, (displayMode) => {
   if (displayMode !== "compact") {
+    compactTerminalHidden.value = false;
     compactTerminalCollapsed.value = false;
   }
 });

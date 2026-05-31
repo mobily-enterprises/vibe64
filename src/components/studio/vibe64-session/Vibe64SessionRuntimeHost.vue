@@ -350,7 +350,6 @@ const codexTerminalStreaming = computed(() => Boolean(
 ));
 const autopilotCodexTerminalVisible = computed(() => Boolean(
   serverSaysCodexIsWorking.value &&
-  selectedCodexTerminalId.value &&
   codexTerminalQuietTooLong.value
 ));
 const autopilotCodexWorkingVisible = computed(() => Boolean(
@@ -385,7 +384,10 @@ const codexTerminalDisplayMode = computed(() => {
 });
 const codexTerminalCanStart = computed(() => Boolean(
   props.active &&
-  props.sessionMode === "inspect"
+  (
+    props.sessionMode === "inspect" ||
+    autopilotCodexTerminalVisible.value
+  )
 ));
 const codexTerminalReadOnly = computed(() => {
   if (props.sessionMode === "inspect") {
@@ -634,8 +636,7 @@ watch(() => [
     sessionId: props.sessionId
   });
   if (
-    !serverSaysCodexIsWorking.value ||
-    !selectedCodexTerminalId.value
+    !serverSaysCodexIsWorking.value
   ) {
     codexTerminalQuietTooLong.value = false;
     vibe64SessionDebugLog("client.sessionRuntimeHost.codexQuiet.reset", {
@@ -670,7 +671,6 @@ watch(() => [
     codexQuietTerminalTimer = null;
     if (
       serverSaysCodexIsWorking.value &&
-      selectedCodexTerminalId.value &&
       !codexTerminalStreaming.value
     ) {
       codexTerminalQuietTooLong.value = true;
