@@ -41,6 +41,9 @@ import {
   pendingDoctorCheck as pendingCheck
 } from "@local/vibe64-core/server/doctorCheckItems";
 import {
+  projectServiceTargetRoot
+} from "@local/vibe64-core/server/projectServiceSelection";
+import {
   VIBE64_STATE_DIR
 } from "@local/vibe64-core/server/core";
 import {
@@ -1237,17 +1240,38 @@ function createService({
   studioRoot = "",
   targetRoot
 } = {}) {
-  const resolvedTargetRoot = path.resolve(String(targetRoot || process.cwd()));
   const resolvedStudioRoot = path.resolve(String(studioRoot || process.cwd()));
-  const readyStatusCache = createRepositoryReadyStatusCache({
-    doctorId: "project-setup",
-    studioRoot: resolvedStudioRoot,
-    targetRoot: resolvedTargetRoot
-  });
+
+  function currentTargetRoot() {
+    const selectedTargetRoot = String(targetRoot || projectServiceTargetRoot(projectService)).trim();
+    return selectedTargetRoot ? path.resolve(selectedTargetRoot) : "";
+  }
+
+  function noProjectSelectedStatus() {
+    return {
+      blockedReason: "Choose a project before running Project Setup.",
+      currentStageId: "project-selection",
+      hardStop: false,
+      ok: true,
+      ready: false,
+      stages: [],
+      targetRoot: "",
+      updatedAt: new Date().toISOString()
+    };
+  }
+
+  function readyStatusCache(targetRootValue) {
+    return createRepositoryReadyStatusCache({
+      doctorId: "project-setup",
+      studioRoot: resolvedStudioRoot,
+      targetRoot: targetRootValue
+    });
+  }
 
   async function loadAdapterSetupRuntime({
     includeSetupPlugins = true
   } = {}) {
+    const resolvedTargetRoot = currentTargetRoot();
     if (!projectService || typeof projectService.createRuntime !== "function") {
       return {
         config: {},
@@ -1293,9 +1317,14 @@ function createService({
 
   return Object.freeze({
     async getStatus(input = {}) {
+      const resolvedTargetRoot = currentTargetRoot();
+      if (!resolvedTargetRoot) {
+        return noProjectSelectedStatus();
+      }
+      const cache = readyStatusCache(resolvedTargetRoot);
       const useCache = !refreshRequested(input);
       if (useCache) {
-        const cachedStatus = await readReusableProjectSetupStatus(readyStatusCache, {
+        const cachedStatus = await readReusableProjectSetupStatus(cache, {
           readConfig: loadProjectSetupConfig,
           targetRoot: resolvedTargetRoot
         });
@@ -1304,7 +1333,7 @@ function createService({
         }
       }
       const fullSetupRuntime = await loadAdapterSetupRuntime();
-      return readyStatusCache.remember(await inspectProjectSetup({
+      return cache.remember(await inspectProjectSetup({
         config: fullSetupRuntime.config,
         configEnvironment: fullSetupRuntime.configEnvironment,
         setupPlugins: fullSetupRuntime.setupPlugins,
@@ -1317,9 +1346,14 @@ function createService({
       emit,
       refresh = false
     } = {}) {
+      const resolvedTargetRoot = currentTargetRoot();
+      if (!resolvedTargetRoot) {
+        return noProjectSelectedStatus();
+      }
+      const cache = readyStatusCache(resolvedTargetRoot);
       const useCache = !refreshRequested({ refresh });
       if (useCache) {
-        const cachedStatus = await readReusableProjectSetupStatus(readyStatusCache, {
+        const cachedStatus = await readReusableProjectSetupStatus(cache, {
           readConfig: loadProjectSetupConfig,
           targetRoot: resolvedTargetRoot
         });
@@ -1328,7 +1362,7 @@ function createService({
         }
       }
       const fullSetupRuntime = await loadAdapterSetupRuntime();
-      return readyStatusCache.remember(await inspectProjectSetup({
+      return cache.remember(await inspectProjectSetup({
         autoRepair: true,
         config: fullSetupRuntime.config,
         configEnvironment: fullSetupRuntime.configEnvironment,
@@ -1343,6 +1377,13 @@ function createService({
       actionId,
       inputs = {}
     } = {}) {
+      const resolvedTargetRoot = currentTargetRoot();
+      if (!resolvedTargetRoot) {
+        return {
+          error: "Choose a project before running Project Setup terminal actions.",
+          ok: false
+        };
+      }
       const setupRuntime = await loadAdapterSetupRuntime();
       const coreActionIds = new Set([
         "terminal-git-init",

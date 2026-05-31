@@ -9,6 +9,7 @@ import {
   readyAccountsPayload,
   readyAppSetupPayload,
   readyBootstrapPayload,
+  readyProjectSelectionPayload,
   readyProjectConfigPayload,
   readyProjectTypePayload,
   readyTargetAppPayload,
@@ -36,6 +37,9 @@ async function mockProjectTools(page) {
 async function mockProjectGateReady(page) {
   await page.route("**/api/bootstrap", async (route) => {
     await fulfillJson(route, bootstrapPayload);
+  });
+  await page.route("**/api/vibe64/projects", async (route) => {
+    await fulfillJson(route, readyProjectSelectionPayload);
   });
   await page.route("**/api/studio/current-app", async (route) => {
     await fulfillJson(route, currentAppPayload);

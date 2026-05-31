@@ -4,9 +4,10 @@
 
 - App purpose: Vibe64 is a local-first operator UI for the target project selected by the local operator.
 - Primary users: the local operator running the Studio process.
-- Success criteria: inspect, run, review, verify, and later deploy the current target project without a hosted service or project registry.
-- First-run rule: Studio gates readiness behind the Setup flow at `/setup`. The default tab is `studio-setup`; missing or unknown `tab` query values normalize to `studio-setup`.
-- Root rule: the controlled project root is the launcher/invocation directory, not necessarily the Studio implementation directory. If the Studio executable has to start the server from the Studio app root, the launcher must preserve the original project root in `VIBE64_TARGET_ROOT`.
+- Success criteria: choose or create a local project folder, then inspect, run, review, verify, and later deploy the selected target project without a hosted service.
+- First-run rule: when no explicit target root is provided, Studio opens to project selection before project type, setup readiness, sessions, or target scripts load. Only after a project is selected does Studio gate readiness behind the Setup flow at `/setup`. The default setup tab is `studio-setup`; missing or unknown `tab` query values normalize to `studio-setup`.
+- Project root rule: managed project folders live under `~/vibe64` by default, or under `VIBE64_PROJECTS_ROOT` when configured. Starting Studio with `vibe64 .`, `vibe64 /path/to/project`, `--target <path>`, or `VIBE64_TARGET_ROOT=/path/to/project` selects that explicit target root immediately. Without an explicit target, the process cwd is not treated as the target project.
+- Project identity rule: the selected directory is a filesystem target, not the canonical application name. Directory name is only a fallback/convention for generated setup prompts when no better project identity exists.
 - Target-readiness rule: after Studio Setup Doctor passes and before any app inspection, Studio runs Adapter Setup Doctor in `/setup?tab=adapter-setup` to prove target identity, filesystem access, Git state, and GitHub control capability without reading target-specific app metadata.
 - App-setup rule: after Adapter Setup Doctor passes and before `/home`, Studio runs Project Setup Doctor in `/setup?tab=project-setup` to make the target root ready for the selected adapter.
 
@@ -14,7 +15,7 @@
 
 - Numbered questions are deliberately UI-only sugar. The server sends one prompt/message and one logical response field; the client may render supported numbered-question text as separate inputs, but it submits one combined response value. Do not replace this with server question metadata, structured question endpoints, or separate persisted question-answer fields.
 - Non-command action handlers stay inside the per-session mutation queue by default. Vibe64 is an interactive, sequential workflow, and long-running Codex/command work is already made visible through live terminal surfaces. Do not split prompt/adapter/finish handlers out into parallel action execution unless timestamped logs show a real user-visible gap before the terminal appears; fix that measured pre-terminal stall before changing the serialization model.
-- Vibe64 is a single-process local editor for one target root. It is launched from the destination directory, or with that directory preserved as `VIBE64_TARGET_ROOT`, and it works on that directory only. Session persistence is file-backed under `.vibe64`; in-process mutation queues are the concurrency boundary. JSKIT realtime is used for local UI event fanout so the same operator can keep multiple browsers or devices in sync with the same Studio process. That realtime layer does not make session persistence distributed. Do not add Redis, Socket.IO clustering, cross-process locking, distributed session coordination, or hosted project-registry assumptions unless this product contract is deliberately changed first.
+- Vibe64 is a single-process local editor for one selected target root at a time. The selected root comes from explicit startup input or the in-process project selector; all project-specific services read that shared selection instead of inferring cwd. Session persistence is file-backed under the selected root's `.vibe64`; in-process mutation queues are the concurrency boundary. JSKIT realtime is used for local UI event fanout so the same operator can keep multiple browsers or devices in sync with the same Studio process. That realtime layer does not make session persistence distributed. Do not add Redis, Socket.IO clustering, cross-process locking, distributed session coordination, or hosted project-registry assumptions unless this product contract is deliberately changed first.
 
 ## Platform Choices
 
@@ -42,15 +43,16 @@
 | Entity | Purpose | Ownership | Notes |
 | --- | --- | --- | --- |
 | StudioSetupEnvironment | Machine-level runtime readiness for Studio | public | Checks Docker/runtime ability to provide the managed base toolchain, git, ripgrep, Playwright/Chromium, GH auth, Codex auth, and Codex sandboxing before project work begins. |
+| StudioProjectSelection | In-process selected target root plus managed project folders | public | Lists and creates folders under `~/vibe64` or `VIBE64_PROJECTS_ROOT`. Explicit startup targets may be outside that managed root. This is process state, not a hosted registry or project database. |
 | AdapterSetupReadiness | Pre-inspection Git/GitHub readiness for the target root | public | Derived from target path, Git, and GitHub CLI checks; blocks app inspection and edits until ready or repaired. |
 | ProjectSetupReadiness | Sequential setup state for the target app | public | Derived from filesystem, Git/GitHub remote state, adapter setup plugins, local dependencies, runtime service needs, and the selected adapter's readiness checks. |
-| CurrentApp | Runtime snapshot of the target project root | public | Derived from filesystem and git on request; not persisted. The target root comes from the invocation directory or `VIBE64_TARGET_ROOT`, not from a stored project list. |
+| CurrentApp | Runtime snapshot of the target project root | public | Derived from filesystem and git on request; not persisted. The target root comes from StudioProjectSelection or an explicit startup target. |
 | IssueSession | Vibe64 session runtime state for the current target app | public | Derived from `.vibe64/sessions` and Vibe64 runtime APIs; not a database table. Active sessions stay on `/home`; completed and abandoned archive views are read through Current App APIs. Adapter-specific framework work uses the selected adapter's commands. Vibe64 session state is inspected through `.vibe64`. |
 | CurrentAppTargetScripts | Target scripts plus operator shortcuts | public | Derived from adapter-provided scripts and project-owned `.vibe64/scripts/*` files. Starred script overrides are target-root config in `.vibe64/config/starred_scripts`, not database or CRUD-owned data. |
 
 ## Route And Screen Plan
 
-- Home/global routes: `/setup` is the single Setup route and renders three query-addressable tabs: `?tab=studio-setup`, `?tab=adapter-setup`, and `?tab=project-setup`. `/home` is the active issue-session workspace for the current target app.
+- Home/global routes: `/home` hosts project selection when no project is selected and the active issue-session workspace after selection. `/setup` is the single Setup route and renders three query-addressable tabs after project selection: `?tab=studio-setup`, `?tab=adapter-setup`, and `?tab=project-setup`.
 - Active session title behavior: `/home` shows the selected active `IssueSession` title in the shell app bar top-left area so it does not consume page content height. The title is unboxed and is not duplicated as a Session details fact. When no active title is available, the shell falls back to the normal `Sessions` label.
 - Target Scripts route: `/home/target-scripts` is a generated-style page reached from `shell.secondary-nav` as `Target Scripts`. It is separate from `/home` so script shortcuts do not dominate the issue-session workspace.
 - Session history route: `/home/history` is the single archive screen for issue sessions. It is reached from `shell.secondary-nav` as `Session History`, uses Vuetify tabs for `Completed` and `Abandoned`, stores the selected tab in `?tab=completed|abandoned`, and defaults missing or invalid tab state to `completed`.
@@ -75,6 +77,7 @@
 - Non-CRUD pages to scaffold: use the JSKIT UI generator for new app pages when it fits; `/home/target-scripts` is a generated-style page customized around `TargetScriptsPanel`, and `/home/history` is a generated-style Vuetify page customized for Session History tabs. The `/setup` route owns doctor tabs and gate query behavior.
 - Custom code areas: Studio Setup runtime checks, Adapter Setup Git/GitHub readiness checks, Project Setup orchestration checks, current-app server inspection service, issue-session UI, the Setup tab host, and gated home page UI.
 - Setup UI ownership: `src/pages/setup.vue` owns the single `ShellLayout` wrapper and lazy-mounts one active doctor screen at a time. The reusable doctor screens live under `src/components/studio/` and must not include their own `ShellLayout`.
+- Project selection ownership: `@local/vibe64-project` owns project selection state and routes. The client gates `/home`, `/home/history`, `/home/target-scripts`, and `/setup` behind `ProjectSelectionGate` so project type, setup readiness, current app, sessions, and target scripts do not load before a target root exists.
 - Gate route state: `resolveStudioGate()` stores the shared route `/setup` plus a `tab` value (`studio-setup`, `adapter-setup`, or `project-setup`).
 - Issue-session archives: `ArchivedIssueSessions` owns archive list loading, empty, error, refresh, and card-detail states. The Session History page reuses it with `archive=completed|abandoned`, hides archive-specific title/description copy inside tabs, and places one top-level Refresh action in the tab controls so the archive content does not gain an extra action-only header row.
 - Active issue-session naming: derive display titles through `issueSessionDisplayTitle(session)` using trimmed `session.issueTitle`, then the first meaningful line from `session.issueText`, then `Session <shortIssueSessionId(session.sessionId)>`. `IssueSessionPanel` emits the selected title upward; `/home/index.vue` forwards it; `/home.vue` owns shell app-bar rendering and clears it when leaving `/home` or when the current app/session is unavailable.
@@ -109,7 +112,7 @@
 
 ## Project Setup Doctor Plan
 
-- Scope: sequential target setup after machine and target-control gates are ready. This stage may read project setup files because it is explicitly about making the current directory app-ready.
+- Scope: sequential target setup after machine and target-control gates are ready. This stage may read project setup files because it is explicitly about making the selected project app-ready.
 - Authority boundary: Studio does not duplicate adapter internals. It only checks the safe outer state needed to run adapter setup plugins; the selected adapter owns framework correctness.
 - Admissible starting states: an empty directory with no `.git`, or an existing coherent Git repository. A directory with files but no `.git` is a hard stop.
 - Hard stops: linked worktrees/submodule-style `.git` files, bare repos, detached/unknown branches, non-GitHub `origin`, inaccessible GitHub repositories, local/remote history divergence, remote content not mirrored locally, malformed adapter metadata, and existing files where an adapter generator would overwrite user-owned work.

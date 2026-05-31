@@ -226,6 +226,7 @@ test("laravel seed issue definition uses the current-step input contract before 
     });
     await runtime.createSession({
       initialStep: "seed_application_defined",
+      metadata: worktreeMetadata(targetRoot, "laravel_seed_prompt"),
       sessionId: "laravel_seed_prompt",
       workflowDefinition: VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION
     });
@@ -234,7 +235,20 @@ test("laravel seed issue definition uses the current-step input contract before 
 
     assert.equal(initialSession.currentStep, "seed_application_defined");
     assert.equal(initialSession.stepMachine.status, "waiting_for_input");
-    assert.equal(initialSession.currentStepDefinition.interaction.submitKind, "ready");
+    assert.equal(initialSession.currentStepDefinition.interaction.kind, "conversation");
+    assert.equal(initialSession.currentStepDefinition.interaction.actionId, "define_seed_application");
+
+    const afterPrompt = await runtime.runAction("laravel_seed_prompt", "define_seed_application", {
+      conversationRequest: "Ask me the Laravel setup choices you need."
+    });
+
+    assert.equal(afterPrompt.stepMachine.status, "awaiting_agent_result");
+    assert.equal(afterPrompt.actionResult.status, "prompt_ready");
+    assert.equal(afterPrompt.actionResult.promptId, "define_seed_application");
+    assert.match(afterPrompt.actionResult.prompt, /defining the initial seed work/u);
+    assert.match(afterPrompt.actionResult.prompt, /Laravel seed guidance/u);
+    assert.match(afterPrompt.actionResult.prompt, /starter kit/u);
+    assert.match(afterPrompt.actionResult.prompt, /Vibe64 step completion contract/u);
 
     const afterInput = await runtime.submitCurrentStepInput("laravel_seed_prompt", {
       fields: {
@@ -243,8 +257,9 @@ test("laravel seed issue definition uses the current-step input contract before 
         word: "seed"
       },
       kind: "ready",
+      source: "codex",
       stepId: "seed_application_defined",
-      stepStatus: "waiting_for_input"
+      stepStatus: "awaiting_agent_result"
     });
 
     assert.equal(afterInput.stepMachine.status, "confirm_files");
@@ -252,6 +267,9 @@ test("laravel seed issue definition uses the current-step input contract before 
     assert.equal(await runtime.store.readArtifact("laravel_seed_prompt", "issue_title"), "Seed Laravel application foundation\n");
     assert.equal(await runtime.store.readArtifact("laravel_seed_prompt", "issue_word"), "seed\n");
     assert.equal(await runtime.store.readArtifact("laravel_seed_prompt", "issue.md"), "Seed the Laravel app foundation.\n");
+    assert.equal(await runtime.store.readArtifact("laravel_seed_prompt", "work_title"), "Seed Laravel application foundation\n");
+    assert.equal(await runtime.store.readArtifact("laravel_seed_prompt", "work_word"), "seed\n");
+    assert.equal(await runtime.store.readArtifact("laravel_seed_prompt", "work.md"), "Seed the Laravel app foundation.\n");
   });
 });
 

@@ -347,6 +347,49 @@ function selectedWorkflowDefinitionId(input = {}, creation = {}) {
   };
 }
 
+function sessionProjectMetadata(projectType = {}) {
+  return {
+    adapter_id: projectType.adapter?.id || projectType.projectType,
+    project_type: projectType.projectType
+  };
+}
+
+function workflowSessionInput(projectType = {}, workflowDefinition = "") {
+  return {
+    metadata: sessionProjectMetadata(projectType),
+    workflowDefinition
+  };
+}
+
+async function createAndAdvanceWorkflowSession(runtime, projectType, workflowDefinition, {
+  onCreated = null
+} = {}) {
+  const session = await runtime.createSession(workflowSessionInput(projectType, workflowDefinition));
+  await onCreated?.(session);
+  return {
+    advancedSession: await runtime.advance(session.sessionId),
+    session
+  };
+}
+
+function isOpenSessionList(options = {}) {
+  return options.runtimeOptions?.statusGroup === "open" && !Array.isArray(options.runtimeOptions?.statuses);
+}
+
+function shouldOpenSeedSession(options = {}, creationState = {}) {
+  return isOpenSessionList(options) &&
+    creationState.creation?.seedRequired === true &&
+    creationState.limits?.openSessionCount === 0 &&
+    Boolean(String(creationState.creation?.defaultWorkflowDefinition || "").trim());
+}
+
+function seedSessionOpenLockKey(projectService = {}) {
+  if (typeof projectService?.currentTargetRoot !== "function") {
+    return "default";
+  }
+  return String(projectService.currentTargetRoot() || "default");
+}
+
 function sessionServiceDebugResponse(response = {}) {
   if (!response || typeof response !== "object" || Array.isArray(response)) {
     return {
@@ -368,6 +411,21 @@ function createService({
 } = {}) {
   if (!projectService) {
     throw new TypeError("createService requires feature.vibe64-project.service.");
+  }
+  const seedSessionOpenPromises = new Map();
+
+  async function openSeedSessionOnce(operation) {
+    const lockKey = seedSessionOpenLockKey(projectService);
+    const existingPromise = seedSessionOpenPromises.get(lockKey);
+    if (existingPromise) {
+      await existingPromise;
+      return;
+    }
+    const promise = operation().finally(() => {
+      seedSessionOpenPromises.delete(lockKey);
+    });
+    seedSessionOpenPromises.set(lockKey, promise);
+    await promise;
   }
 
   return Object.freeze({
@@ -518,24 +576,23 @@ function createService({
             projectType: projectType.projectType,
             workflowDefinition: definitionSelection.definitionId
           });
-          const session = await runtime.createSession({
-            metadata: {
-              adapter_id: projectType.adapter?.id || projectType.projectType,
-              project_type: projectType.projectType
-            },
-            workflowDefinition: definitionSelection.definitionId
+          const {
+            advancedSession,
+            session
+          } = await createAndAdvanceWorkflowSession(runtime, projectType, definitionSelection.definitionId, {
+            onCreated(createdSession) {
+              vibe64SessionDebugLog("server.service.createSession.runtimeCreate.done", {
+                ...sessionServiceDebugResponse(createdSession),
+                durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+                workflowDefinition: definitionSelection.definitionId
+              });
+              vibe64SessionDebugLog("server.service.createSession.initialAdvance.start", {
+                currentStep: createdSession.currentStep,
+                sessionId: createdSession.sessionId,
+                workflowDefinition: definitionSelection.definitionId
+              });
+            }
           });
-          vibe64SessionDebugLog("server.service.createSession.runtimeCreate.done", {
-            ...sessionServiceDebugResponse(session),
-            durationMs: vibe64SessionDebugDurationMs(startedAtMs),
-            workflowDefinition: definitionSelection.definitionId
-          });
-          vibe64SessionDebugLog("server.service.createSession.initialAdvance.start", {
-            currentStep: session.currentStep,
-            sessionId: session.sessionId,
-            workflowDefinition: definitionSelection.definitionId
-          });
-          const advancedSession = await runtime.advance(session.sessionId);
           vibe64SessionDebugLog("server.service.createSession.initialAdvance.done", {
             ...sessionServiceDebugResponse(advancedSession),
             durationMs: vibe64SessionDebugDurationMs(startedAtMs),
@@ -692,12 +749,34 @@ function createService({
         try {
           const runtime = await projectService.createRuntime();
           const options = sessionListOptions(input);
-          const sessions = await listSessionSummaries(runtime, options.runtimeOptions);
-          const openSessions = options.runtimeOptions.statusGroup === "open" &&
-            !Array.isArray(options.runtimeOptions.statuses)
+          let sessions = await listSessionSummaries(runtime, options.runtimeOptions);
+          let openSessions = isOpenSessionList(options)
             ? sessions
             : await listOpenSessionSummaries(runtime);
-          const response = sessionListResponse(sessions, await sessionCreationState(runtime, openSessions));
+          let creationState = await sessionCreationState(runtime, openSessions);
+          if (shouldOpenSeedSession(options, creationState)) {
+            const workflowDefinition = creationState.creation.defaultWorkflowDefinition;
+            await openSeedSessionOnce(async () => {
+              await assertVibe64SetupReady(setupServices);
+              const projectType = await projectService.requireProjectType();
+              vibe64SessionDebugLog("server.service.listSessions.openSeedSession.start", {
+                durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+                workflowDefinition
+              });
+              const { advancedSession } = await createAndAdvanceWorkflowSession(runtime, projectType, workflowDefinition);
+              vibe64SessionDebugLog("server.service.listSessions.openSeedSession.done", {
+                ...sessionServiceDebugResponse(advancedSession),
+                durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+                workflowDefinition
+              });
+            });
+            sessions = await listSessionSummaries(runtime, options.runtimeOptions);
+            openSessions = isOpenSessionList(options)
+              ? sessions
+              : await listOpenSessionSummaries(runtime);
+            creationState = await sessionCreationState(runtime, openSessions);
+          }
+          const response = sessionListResponse(sessions, creationState);
           vibe64SessionDebugLog("server.service.listSessions.done", {
             archive: String(input?.archive || ""),
             durationMs: vibe64SessionDebugDurationMs(startedAtMs),

@@ -18,8 +18,8 @@ import {
   VIBE64_SURFACE_ID
 } from "@/lib/vibe64RequestConfig.js";
 import {
-  PROJECT_TYPE_ENDPOINT,
-  projectTypeQueryKey
+  PROJECT_SELECTION_ENDPOINT,
+  projectSelectionQueryKey
 } from "@/lib/studioGateApi.js";
 import {
   studioHttpClient
@@ -27,14 +27,14 @@ import {
 
 const route = useRoute();
 const pageTitle = ref("");
-const projectTypeResource = useEndpointResource({
+const projectSelectionResource = useEndpointResource({
   client: studioHttpClient,
-  fallbackLoadError: "Project type could not load.",
-  path: PROJECT_TYPE_ENDPOINT,
-  queryKey: computed(() => projectTypeQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC)),
+  fallbackLoadError: "Project selection could not load.",
+  path: PROJECT_SELECTION_ENDPOINT,
+  queryKey: computed(() => projectSelectionQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC)),
   refreshOnPull: true
 });
-const targetRoot = computed(() => String(projectTypeResource.data.value?.projectType?.targetRoot || "").trim());
+const targetRoot = computed(() => String(projectSelectionResource.data.value?.targetRoot || "").trim());
 const targetFolderName = computed(() => finalPathSegment(targetRoot.value));
 
 function finalPathSegment(pathValue = "") {

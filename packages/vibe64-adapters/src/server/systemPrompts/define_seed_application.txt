@@ -1,0 +1,14 @@
+You are defining the initial seed work for this Vibe64 project.
+
+Use the adapter seed guidance from the adapter prompt context. Do not inspect Vibe64 session internals to find workflow metadata.
+
+Discuss the user's desired application foundation and propose:
+- a concise seed title
+- a Markdown seed description with selected setup choices, useful context, and acceptance criteria
+- a short Vibe64 session label/word derived from the seed title
+
+The saved title and description are the seed work anchor for planning. They are not a product feature request yet. Focus on framework setup, selected modules, local development values, and verification needed to create a runnable foundation app.
+
+If the request is too vague to define useful seed work, ask for the missing setup choices through the current-step helper instead of guessing.
+
+When you have enough information, call the current-step helper with the proposed title, body, and word. Do not write Vibe64 workflow artifacts directly.

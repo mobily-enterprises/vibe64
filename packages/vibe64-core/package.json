@@ -12,8 +12,10 @@
     "./server/featureRoutes": "./src/server/featureRoutes.js",
     "./server/localhostCheckBypass": "./src/server/localhostCheckBypass.js",
     "./server/localStudioRequest": "./src/server/localStudioRequest.js",
+    "./server/projectServiceSelection": "./src/server/projectServiceSelection.js",
     "./server/serverResponses": "./src/server/serverResponses.js",
     "./server/sessionRealtimeEvents": "./src/server/sessionRealtimeEvents.js",
+    "./server/studioProjectContext": "./src/server/studioProjectContext.js",
     "./server/studioRoots": "./src/server/studioRoots.js",
     "./server/terminalWebSocketRoutes": "./src/server/terminalWebSocketRoutes.js",
     "./shared": "./src/shared/index.js"

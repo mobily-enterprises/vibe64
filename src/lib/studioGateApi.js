@@ -6,6 +6,8 @@ import {
 const TARGET_PROJECT_API_SUFFIX = "/studio/current-app";
 const VIBE64_ACCOUNTS_AUTH_API_SUFFIX = "/vibe64/accounts/auth";
 const VIBE64_PROJECT_CONFIG_API_SUFFIX = "/vibe64/project-config";
+const VIBE64_PROJECT_CREATE_API_SUFFIX = "/vibe64/projects";
+const VIBE64_PROJECT_SELECT_API_SUFFIX = "/vibe64/projects/select";
 const VIBE64_PROJECT_TYPE_API_SUFFIX = "/vibe64/project-type";
 
 const ACCOUNTS_ENDPOINT = studioApiPath("vibe64/accounts");
@@ -16,6 +18,7 @@ const TARGET_PROJECT_ENDPOINT = studioApiPath("studio/current-app");
 const SETUP_READINESS_ENDPOINT = `${TARGET_PROJECT_ENDPOINT}/setup-readiness`;
 const SETUP_READINESS_STREAM_ENDPOINT = `${SETUP_READINESS_ENDPOINT}/stream`;
 const VIBE64_ENDPOINT = studioApiPath("vibe64");
+const PROJECT_SELECTION_ENDPOINT = `${VIBE64_ENDPOINT}/projects`;
 const PROJECT_CONFIG_ENDPOINT = `${VIBE64_ENDPOINT}/project-config`;
 const PROJECT_TYPE_ENDPOINT = `${VIBE64_ENDPOINT}/project-type`;
 const ACCOUNTS_AUTH_ENDPOINT = `${ACCOUNTS_ENDPOINT}/auth`;
@@ -39,6 +42,10 @@ function withRefreshQuery(endpoint, {
 
 function projectTypeQueryKey(surfaceId, ownershipFilter) {
   return ["vibe64", surfaceId, ownershipFilter, "project-type"];
+}
+
+function projectSelectionQueryKey(surfaceId, ownershipFilter) {
+  return ["vibe64", surfaceId, ownershipFilter, "projects"];
 }
 
 function projectConfigQueryKey(surfaceId, ownershipFilter) {
@@ -79,8 +86,11 @@ export {
   ACCOUNTS_LOGOUT_ENDPOINT,
   VIBE64_ACCOUNTS_AUTH_API_SUFFIX,
   VIBE64_PROJECT_CONFIG_API_SUFFIX,
+  VIBE64_PROJECT_CREATE_API_SUFFIX,
+  VIBE64_PROJECT_SELECT_API_SUFFIX,
   VIBE64_PROJECT_TYPE_API_SUFFIX,
   PROJECT_CONFIG_ENDPOINT,
+  PROJECT_SELECTION_ENDPOINT,
   PROJECT_TYPE_ENDPOINT,
   PROJECT_SETUP_STREAM_ENDPOINT,
   PROJECT_SETUP_TERMINAL_ENDPOINT,
@@ -94,6 +104,7 @@ export {
   ADAPTER_SETUP_TERMINAL_ENDPOINT,
   accountsQueryKey,
   projectConfigQueryKey,
+  projectSelectionQueryKey,
   projectTypeQueryKey,
   readAccountsStatus,
   readProjectSetupStatus,

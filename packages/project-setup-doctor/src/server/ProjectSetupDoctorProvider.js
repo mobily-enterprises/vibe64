@@ -4,8 +4,7 @@ import { featureActions } from "./actions.js";
 import { registerRoutes } from "./registerRoutes.js";
 import { createService } from "./service.js";
 import {
-  resolveStudioAppRoot,
-  resolveStudioTargetRoot
+  resolveStudioAppRoot
 } from "@local/vibe64-core/server/studioRoots";
 
 class ProjectSetupDoctorProvider {
@@ -24,17 +23,13 @@ class ProjectSetupDoctorProvider {
     }
 
     const studioRoot = resolveStudioAppRoot();
-    const targetRoot = resolveStudioTargetRoot({
-      studioAppRoot: studioRoot
-    });
 
     app.service(
       "feature.project-setup-doctor.service",
-      () => {
+      (scope) => {
         return createService({
-          projectService: app.make("feature.vibe64-project.service"),
-          studioRoot,
-          targetRoot
+          projectService: scope.make("feature.vibe64-project.service"),
+          studioRoot
         });
       }
     );

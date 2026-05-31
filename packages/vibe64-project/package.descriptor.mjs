@@ -3,7 +3,7 @@ export default Object.freeze({
   packageId: "@local/vibe64-project",
   version: "0.1.0",
   kind: "runtime",
-  description: "Owns Vibe64 project type selection, readiness, and adapter registry access.",
+  description: "Owns Vibe64 project folder selection, project type selection, readiness, and adapter registry access.",
   dependsOn: [
     "@jskit-ai/kernel",
     "@local/vibe64-adapters",
@@ -36,11 +36,11 @@ export default Object.freeze({
       surfaces: [
         {
           subpath: "./server/registerRoutes",
-          summary: "Registers Vibe64 project type and project config read/write routes."
+          summary: "Registers Vibe64 project selection, project type, and project config read/write routes."
         },
         {
           subpath: "./server/service",
-          summary: "Provides project type state, project config state, and adapter-backed session runtime creation."
+          summary: "Provides project folder selection, project type state, project config state, and adapter-backed session runtime creation."
         }
       ],
       containerTokens: {

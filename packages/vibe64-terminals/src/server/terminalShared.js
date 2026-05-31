@@ -6,6 +6,9 @@ import {
   normalizePlainObject
 } from "@local/vibe64-core/server/serverResponses";
 import {
+  projectServiceTargetRoot
+} from "@local/vibe64-core/server/projectServiceSelection";
+import {
   dockerCommand,
   shellQuote,
   stableHash
@@ -95,11 +98,11 @@ function pathInsideOrEqual(rootPath = "", candidatePath = "") {
 }
 
 function sessionTerminalCwd(session = {}, projectService = {}) {
-  return String(session.targetRoot || projectService.targetRoot || "").trim();
+  return String(session.targetRoot || projectServiceTargetRoot(projectService)).trim();
 }
 
 function terminalTargetRoot(session = {}, projectService = {}) {
-  return normalizedTerminalPath(session.targetRoot || projectService.targetRoot);
+  return normalizedTerminalPath(session.targetRoot || projectServiceTargetRoot(projectService));
 }
 
 function sessionHasCreatedWorktree(session = {}) {

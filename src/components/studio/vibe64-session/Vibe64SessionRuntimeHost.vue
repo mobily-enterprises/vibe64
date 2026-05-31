@@ -72,10 +72,6 @@
       </div>
 
       <Vibe64SessionTerminals
-        :class="{
-          'studio-ai-sessions__terminals--autopilot-preview': codexTerminalPreviewVisible,
-          'studio-ai-sessions__terminals--autopilot-foreground': codexTerminalForegroundVisible
-        }"
         :allow-codex-start="codexTerminalCanStart"
         :codex-terminal="codexTerminal"
         :codex-read-only="codexTerminalReadOnly"
@@ -88,7 +84,6 @@
         :session="selection.selectedSession"
         :show-command-output="sessionMode === 'inspect'"
         @codex-activity-change="handleCodexActivityChange"
-        @codex-session-update="emitGlobalCodexTerminalUpdate"
       />
     </div>
 
@@ -156,14 +151,6 @@ const props = defineProps({
     required: true,
     type: Object
   },
-  globalCodexOpen: {
-    default: false,
-    type: Boolean
-  },
-  globalCodexTerminalState: {
-    default: null,
-    type: Object
-  },
   sessionId: {
     required: true,
     type: String
@@ -172,15 +159,10 @@ const props = defineProps({
     default: "autopilot",
     type: String
   },
-  autopilotCodexOpen: {
-    default: false,
-    type: Boolean
-  }
 });
 
 const emit = defineEmits([
   "busy-change",
-  "global-codex-update",
   "page-error-change",
   "toolbar-controls-ready"
 ]);
@@ -330,41 +312,20 @@ const codexTerminalPresentation = computed(() => {
     ? presentation
     : {};
 });
-const autopilotCodexTerminalVisible = computed(() => Boolean(
-  props.active &&
-  props.sessionMode === "autopilot" &&
-  props.autopilotCodexOpen &&
-  selectedSessionId.value
-));
-const globalCodexTerminalVisible = computed(() => Boolean(
-  props.active &&
-  props.sessionMode === "autopilot" &&
-  props.globalCodexOpen &&
-  !autopilotCodexTerminalVisible.value
-));
-const codexTerminalForegroundVisible = computed(() => Boolean(
-  autopilotCodexTerminalVisible.value ||
-  globalCodexTerminalVisible.value
-));
 const selectedCodexTerminalId = computed(() => String(
   selectedSession.value?.codexTerminal?.id || ""
 ));
-const hiddenCodexTerminalActivityVisible = computed(() => Boolean(
+const autopilotCodexWorkingVisible = computed(() => Boolean(
   props.active &&
   props.sessionMode === "autopilot" &&
-  !codexTerminalForegroundVisible.value &&
-  codexTerminalActivity.value.streaming &&
+  codexTerminalActivity.value.active &&
   codexTerminalActivity.value.scope === "session" &&
   codexTerminalActivity.value.sessionId === selectedSessionId.value
-));
-const codexTerminalPreviewVisible = computed(() => Boolean(
-  hiddenCodexTerminalActivityVisible.value
 ));
 const autopilotInteractionLocked = computed(() => Boolean(
   props.active &&
   props.sessionMode === "autopilot" &&
-  !codexTerminalForegroundVisible.value &&
-  codexTerminalPreviewVisible.value
+  autopilotCodexWorkingVisible.value
 ));
 const autopilotViewInert = computed(() => Boolean(
   props.sessionMode !== "autopilot" ||
@@ -374,38 +335,26 @@ const codexTerminalDisplayMode = computed(() => {
   if (!props.active) {
     return "headless";
   }
-  if (codexTerminalForegroundVisible.value) {
-    return "full";
-  }
   if (props.sessionMode === "inspect") {
     return "full";
-  }
-  if (codexTerminalPreviewVisible.value) {
-    return "compact";
   }
   return "headless";
 });
 const codexTerminalCanStart = computed(() => Boolean(
   props.active &&
-  (props.sessionMode === "inspect" || codexTerminalForegroundVisible.value)
+  props.sessionMode === "inspect"
 ));
 const codexTerminalReadOnly = computed(() => {
-  if (codexTerminalForegroundVisible.value) {
-    return false;
-  }
   if (props.sessionMode === "inspect") {
     return false;
   }
   return codexTerminalPresentation.value.readOnlyInAutopilot !== false;
 });
-const codexTerminalScope = computed(() => (globalCodexTerminalVisible.value ? "global" : "session"));
-const activeCodexTerminalState = computed(() => (
-  globalCodexTerminalVisible.value ? props.globalCodexTerminalState : null
-));
+const codexTerminalScope = computed(() => "session");
+const activeCodexTerminalState = computed(() => null);
 const codexTerminalListenWhenHidden = computed(() => Boolean(
   props.active &&
   props.sessionMode === "autopilot" &&
-  !codexTerminalForegroundVisible.value &&
   selectedCodexTerminalId.value
 ));
 const interactionBusy = computed(() => Boolean(
@@ -448,12 +397,6 @@ function emitToolbarControls() {
     },
     sessionId: props.sessionId
   });
-}
-
-function emitGlobalCodexTerminalUpdate(payload = {}) {
-  if (globalCodexTerminalVisible.value) {
-    emit("global-codex-update", payload);
-  }
 }
 
 function handleCodexActivityChange(payload = {}) {
@@ -575,7 +518,6 @@ watch(() => [
 }
 
 .studio-ai-sessions__layout--autopilot {
-  --studio-ai-sessions-autopilot-codex-height: min(42rem, 72vh);
   grid-template-columns: minmax(0, 1fr);
   position: relative;
 }
@@ -658,30 +600,6 @@ watch(() => [
   z-index: 3;
 }
 
-.studio-ai-sessions__layout--autopilot > .studio-ai-sessions__terminals--autopilot-preview {
-  align-self: start;
-  grid-column: 1;
-  grid-row: 1;
-  height: var(--studio-ai-sessions-autopilot-codex-height);
-  justify-self: center;
-  margin-top: 0;
-  max-width: min(64rem, calc(100% - 2rem));
-  opacity: 0.14;
-  pointer-events: none;
-  width: min(64rem, calc(100% - 2rem));
-  z-index: 1;
-}
-
-.studio-ai-sessions__layout--autopilot > .studio-ai-sessions__terminals--autopilot-foreground {
-  align-self: stretch;
-  grid-column: 1;
-  grid-row: 1;
-  justify-self: stretch;
-  min-height: var(--studio-ai-sessions-autopilot-codex-height);
-  pointer-events: auto;
-  z-index: 5;
-}
-
 @media (max-width: 980px) {
   .studio-ai-sessions__layout {
     grid-template-columns: 1fr;
@@ -698,25 +616,6 @@ watch(() => [
 
   .studio-ai-sessions__layout {
     align-items: stretch;
-  }
-
-  .studio-ai-sessions__layout--autopilot {
-    grid-template-columns: var(--studio-ai-sessions-inspect-main-column) var(--studio-ai-sessions-codex-terminal-column);
-  }
-
-  .studio-ai-sessions__layout--autopilot > .studio-autopilot {
-    grid-column: 1 / -1;
-  }
-
-  .studio-ai-sessions__layout--autopilot > .studio-ai-sessions__terminals--autopilot-preview {
-    grid-column: 2;
-    max-width: min(64rem, 100%);
-    width: 100%;
-  }
-
-  .studio-ai-sessions__layout--autopilot > .studio-ai-sessions__terminals--autopilot-foreground {
-    grid-column: 2;
-    width: 100%;
   }
 }
 </style>

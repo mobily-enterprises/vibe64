@@ -1,12 +1,17 @@
 import {
   projectConfigInputValidator,
+  projectCreateInputValidator,
+  projectSelectInputValidator,
   projectTypeInputValidator
 } from "./inputSchemas.js";
 import {
+  ACTION_CREATE_PROJECT,
+  ACTION_LIST_PROJECTS,
   ACTION_LIST_PROJECT_TOOLS,
   ACTION_READ_PROJECT_CONFIG,
   ACTION_READ_PROJECT_CONFIG_DEFAULTS,
   ACTION_READ_PROJECT_TYPE,
+  ACTION_SELECT_PROJECT,
   ACTION_SAVE_PROJECT_CONFIG,
   ACTION_SAVE_PROJECT_TYPE
 } from "./actions.js";
@@ -24,6 +29,25 @@ function registerRoutes(
     routeRelativePath,
     routeSurface,
     tags: ["studio", "vibe64-project"]
+  });
+
+  routes.actionRoute("GET", "/projects", {
+    actionId: ACTION_LIST_PROJECTS,
+    summary: "List selectable Vibe64 projects."
+  });
+
+  routes.actionRoute("POST", "/projects", {
+    actionId: ACTION_CREATE_PROJECT,
+    body: projectCreateInputValidator,
+    buildInput: routes.requestBody,
+    summary: "Create and select a Vibe64 project."
+  });
+
+  routes.actionRoute("POST", "/projects/select", {
+    actionId: ACTION_SELECT_PROJECT,
+    body: projectSelectInputValidator,
+    buildInput: routes.requestBody,
+    summary: "Select an existing Vibe64 project."
   });
 
   routes.actionRoute("GET", "/tools", {

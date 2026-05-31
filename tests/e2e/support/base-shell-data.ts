@@ -14,6 +14,31 @@ const savedProjectConfigValues = {
   jskit_database_runtime: "none"
 };
 
+const readyProjectSelectionPayload = {
+  ok: true,
+  currentProject: {
+    external: false,
+    name: "example-target-app",
+    path: targetRoot,
+    selected: true,
+    slug: "example-target-app",
+    source: "managed"
+  },
+  hasSelection: true,
+  projects: [
+    {
+      external: false,
+      name: "example-target-app",
+      path: targetRoot,
+      selected: true,
+      slug: "example-target-app",
+      source: "managed"
+    }
+  ],
+  projectsRoot: "/workspace/vibe64",
+  targetRoot
+};
+
 const bootstrapPayload = {
   app: {
     features: {
@@ -579,6 +604,7 @@ const abandonedArchiveSession = {
 export {
   BASE_URL,
   viewports,
+  readyProjectSelectionPayload,
   bootstrapPayload,
   readyAccountsPayload,
   readyProjectConfigPayload,

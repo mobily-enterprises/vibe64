@@ -11,6 +11,36 @@ const projectConfigReadInputValidator = deepFreeze({
   mode: "patch"
 });
 
+const projectsReadInputValidator = deepFreeze({
+  schema: createSchema({}),
+  mode: "patch"
+});
+
+const projectCreateInputValidator = deepFreeze({
+  schema: createSchema({
+    name: {
+      type: "string",
+      noTrim: false
+    },
+    slug: {
+      type: "string",
+      noTrim: false
+    }
+  }),
+  mode: "patch"
+});
+
+const projectSelectInputValidator = deepFreeze({
+  schema: createSchema({
+    slug: {
+      type: "string",
+      noTrim: false,
+      required: true
+    }
+  }),
+  mode: "patch"
+});
+
 const projectConfigInputValidator = deepFreeze({
   schema: createSchema({
     values: {
@@ -36,6 +66,9 @@ const projectTypeInputValidator = deepFreeze({
 export {
   projectConfigInputValidator,
   projectConfigReadInputValidator,
+  projectCreateInputValidator,
+  projectsReadInputValidator,
+  projectSelectInputValidator,
   projectTypeInputValidator,
   projectTypeReadInputValidator
 };

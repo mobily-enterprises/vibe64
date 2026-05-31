@@ -742,7 +742,7 @@ function actionOperation(session = {}, stage = {}) {
     advanceOnSuccess: stage.advanceOnSuccess === true || action.advanceOnSuccess === true,
     executable: true,
     id: `${route}:${action.id}`,
-    input: {},
+    input: isPlainObject(stage.input) ? stage.input : {},
     kind: route === OPERATION_ROUTES.COMMAND_TERMINAL ? "command" : "action",
     label: stage.label || action.label || action.id,
     route
@@ -828,11 +828,45 @@ function mergeOperation(session = {}, config = {}) {
   });
 }
 
+function stateFieldsAreMissing(session = {}, names = []) {
+  const state = isPlainObject(session.stepMachine) ? session.stepMachine : {};
+  return names.every((name) => !normalizeText(state[normalizeText(name)]));
+}
+
+function configuredActionOperation(session = {}, config = null) {
+  if (!isPlainObject(config)) {
+    return null;
+  }
+  const statuses = Array.isArray(config.statuses)
+    ? config.statuses.map(normalizeText).filter(Boolean)
+    : [];
+  if (statuses.length > 0 && !statuses.includes(stepMachineStatus(session))) {
+    return null;
+  }
+  const missingStateFields = Array.isArray(config.whenStateMissing)
+    ? config.whenStateMissing.map(normalizeText).filter(Boolean)
+    : [];
+  if (missingStateFields.length > 0 && !stateFieldsAreMissing(session, missingStateFields)) {
+    return null;
+  }
+  return actionOperation(session, {
+    actionId: requiredPresentationValue(config, "actionId", "automation action"),
+    advanceOnSuccess: config.advanceOnSuccess === true,
+    input: isPlainObject(config.input) ? config.input : {},
+    label: config.label || ""
+  });
+}
+
 function configuredAutomationOperation(session = {}) {
   const automation = stepPresentationConfig(session).automation;
   if (!isPlainObject(automation)) {
     return null;
   }
+  const action = configuredActionOperation(session, automation.action);
+  if (action) {
+    return action;
+  }
+
   const metadata = session.metadata || {};
   const recheck = isPlainObject(automation.recheckAfterPrompt) ? automation.recheckAfterPrompt : null;
   if (

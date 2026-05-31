@@ -541,6 +541,7 @@ function createEditableArtifactReviewMachine({
   onConfirmedActions = null,
   onDoneActions = null,
   onWaitingActions = null,
+  promptActionId = "",
   promptInstruction = null,
   readValues,
   saveValues,
@@ -553,6 +554,7 @@ function createEditableArtifactReviewMachine({
   const normalizedStepId = normalizeText(stepId);
   const commandActionId = command ? normalizeText(command.actionId) : "";
   const commandDoneMetadata = command ? normalizeText(command.doneMetadata) : "";
+  const normalizedPromptActionId = normalizeText(promptActionId);
   if (
     !normalizedStepId ||
     typeof draftReady !== "function" ||
@@ -722,6 +724,15 @@ function createEditableArtifactReviewMachine({
     },
 
     async actionStarted(context = {}) {
+      if (normalizedPromptActionId && context.actionId === normalizedPromptActionId) {
+        const state = await readState(context, this);
+        if ([STEP_STATUS.WAITING_FOR_INPUT, STEP_STATUS.FAILED].includes(state.status)) {
+          await writeState(context, this, machineState(STEP_STATUS.AWAITING_AGENT_RESULT, {
+            promptActionId: normalizedPromptActionId
+          }));
+        }
+        return;
+      }
       if (!command || context.actionId !== commandActionId || command.markAttemptingOnStart === false) {
         return;
       }
@@ -1007,6 +1018,7 @@ export {
   metadataExists,
   nextForSession,
   normalizeMachineInput,
+  promptWaitingForInputInteraction,
   promptStepDoneView,
   promptStepWaitingForInputView,
   promptStepWaitingView,

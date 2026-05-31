@@ -304,7 +304,7 @@
         }"
       >
         <div
-          v-if="screenMessage && !headerScreenMessageVisible"
+          v-if="bodyScreenMessageVisible"
           class="studio-autopilot__screen-message"
           :class="{
             'studio-autopilot__screen-message--warning': standaloneFailureVisible
@@ -680,6 +680,15 @@ const reportPreviewVisible = computed(() => Boolean(sectionVisible("report_previ
 const conversationLogVisible = computed(() => Boolean(
   sectionVisible("response_preview") &&
   props.conversationLog?.visible
+));
+const conversationBodyOwnsMessage = computed(() => Boolean(
+  screenKind.value === "conversation" &&
+  conversationLogVisible.value
+));
+const bodyScreenMessageVisible = computed(() => Boolean(
+  screenMessage.value &&
+  !headerScreenMessageVisible.value &&
+  !conversationBodyOwnsMessage.value
 ));
 const responsePreviewVisible = computed(() => Boolean(
   sectionVisible("response_preview") &&

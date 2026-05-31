@@ -3,6 +3,7 @@ import process from "node:process";
 
 const VIBE64_APP_ROOT_ENV = "VIBE64_APP_ROOT";
 const VIBE64_TARGET_ROOT_ENV = "VIBE64_TARGET_ROOT";
+const VIBE64_PROJECTS_ROOT_ENV = "VIBE64_PROJECTS_ROOT";
 
 function normalizeRoot(value, fallbackRoot) {
   const root = String(value || "").trim();
@@ -21,10 +22,15 @@ function resolveStudioTargetRoot({
   env = process.env,
   explicitRoot = "",
   cwd = process.cwd(),
-  studioAppRoot = ""
+  studioAppRoot = "",
+  allowCwdFallback = true
 } = {}) {
   if (String(explicitRoot || "").trim() || String(env[VIBE64_TARGET_ROOT_ENV] || "").trim()) {
     return normalizeRoot(explicitRoot || env[VIBE64_TARGET_ROOT_ENV], cwd);
+  }
+
+  if (!allowCwdFallback) {
+    return "";
   }
 
   const normalizedCwd = normalizeRoot(cwd, process.cwd());
@@ -43,9 +49,24 @@ function resolveStudioTargetRoot({
   return normalizedCwd;
 }
 
+function resolveExplicitStudioTargetRoot({
+  env = process.env,
+  explicitRoot = "",
+  cwd = process.cwd()
+} = {}) {
+  return resolveStudioTargetRoot({
+    allowCwdFallback: false,
+    cwd,
+    env,
+    explicitRoot
+  });
+}
+
 export {
   VIBE64_APP_ROOT_ENV,
+  VIBE64_PROJECTS_ROOT_ENV,
   VIBE64_TARGET_ROOT_ENV,
+  resolveExplicitStudioTargetRoot,
   resolveStudioAppRoot,
   resolveStudioTargetRoot
 };

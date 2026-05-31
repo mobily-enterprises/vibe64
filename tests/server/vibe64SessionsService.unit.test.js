@@ -1023,6 +1023,158 @@ test("archived session list asks for archived sessions and computes creation lim
   assert.equal(result.limits.openSessionCount, 1);
 });
 
+test("open session list creates the first seed session automatically when seeding is required", async () => {
+  const advancedSessions = [];
+  const createdInputs = [];
+  const listCalls = [];
+  let openSessions = [];
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async advance(sessionId) {
+            advancedSessions.push(sessionId);
+            return {
+              currentStep: "worktree_created",
+              sessionId,
+              status: VIBE64_SESSION_STATUS.ACTIVE
+            };
+          },
+          async createSession(input = {}) {
+            createdInputs.push(input);
+            openSessions = [
+              {
+                sessionId: "seed-session",
+                status: VIBE64_SESSION_STATUS.ACTIVE
+              }
+            ];
+            return {
+              currentStep: "session_created",
+              sessionId: "seed-session",
+              status: VIBE64_SESSION_STATUS.ACTIVE
+            };
+          },
+          async listSessions(options = {}) {
+            listCalls.push(options);
+            return openSessions;
+          },
+          async workflowDefinitionCreationOptions() {
+            return workflowDefinitionCreationOptions({
+              seedRequired: true
+            });
+          }
+        };
+      },
+      async requireProjectType() {
+        return {
+          adapter: {
+            id: "jskit"
+          },
+          projectType: "jskit"
+        };
+      }
+    },
+    setupServices: readySetupServices()
+  });
+
+  const result = await service.listSessions();
+
+  assert.equal(result.ok, true);
+  assert.equal(createdInputs.length, 1);
+  assert.deepEqual(createdInputs[0], {
+    metadata: {
+      adapter_id: "jskit",
+      project_type: "jskit"
+    },
+    workflowDefinition: VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION
+  });
+  assert.deepEqual(advancedSessions, ["seed-session"]);
+  assert.deepEqual(listCalls, [
+    {
+      statusGroup: "open"
+    },
+    {
+      statusGroup: "open"
+    }
+  ]);
+  assert.deepEqual(result.sessions.map((session) => session.sessionId), ["seed-session"]);
+  assert.equal(result.creation.mode, "seed_required");
+  assert.equal(result.creation.canCreate, false);
+  assert.equal(result.limits.maxOpenSessions, 1);
+  assert.equal(result.limits.openSessionCount, 1);
+});
+
+test("open session list serializes automatic seed session creation", async () => {
+  let advancedCount = 0;
+  let createCount = 0;
+  let openSessions = [];
+  const service = createService({
+    projectService: {
+      currentTargetRoot() {
+        return "/target";
+      },
+      async createRuntime() {
+        return {
+          async advance(sessionId) {
+            advancedCount += 1;
+            return {
+              currentStep: "worktree_created",
+              sessionId,
+              status: VIBE64_SESSION_STATUS.ACTIVE
+            };
+          },
+          async createSession() {
+            createCount += 1;
+            await new Promise((resolve) => {
+              setTimeout(resolve, 10);
+            });
+            openSessions = [
+              {
+                sessionId: "seed-session",
+                status: VIBE64_SESSION_STATUS.ACTIVE
+              }
+            ];
+            return {
+              currentStep: "session_created",
+              sessionId: "seed-session",
+              status: VIBE64_SESSION_STATUS.ACTIVE
+            };
+          },
+          async listSessions() {
+            return openSessions;
+          },
+          async workflowDefinitionCreationOptions() {
+            return workflowDefinitionCreationOptions({
+              seedRequired: true
+            });
+          }
+        };
+      },
+      async requireProjectType() {
+        return {
+          adapter: {
+            id: "jskit"
+          },
+          projectType: "jskit"
+        };
+      }
+    },
+    setupServices: readySetupServices()
+  });
+
+  const [firstResult, secondResult] = await Promise.all([
+    service.listSessions(),
+    service.listSessions()
+  ]);
+
+  assert.equal(createCount, 1);
+  assert.equal(advancedCount, 1);
+  assert.deepEqual(firstResult.sessions.map((session) => session.sessionId), ["seed-session"]);
+  assert.deepEqual(secondResult.sessions.map((session) => session.sessionId), ["seed-session"]);
+  assert.equal(firstResult.creation.canCreate, false);
+  assert.equal(secondResult.creation.canCreate, false);
+});
+
 test("session list limits unseeded targets to one open seed session", async () => {
   const service = createService({
     projectService: {

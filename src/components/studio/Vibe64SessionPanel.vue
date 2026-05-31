@@ -29,19 +29,6 @@
           @global-codex-update="updateGlobalCodexTerminalState"
         />
 
-        <v-btn
-          v-if="autopilotCodexButtonVisible"
-          class="studio-ai-sessions__autopilot-codex-button"
-          :color="autopilotCodexTerminalOpen ? 'primary' : undefined"
-          :prepend-icon="mdiRobotOutline"
-          size="small"
-          type="button"
-          :variant="autopilotCodexTerminalOpen ? 'flat' : 'tonal'"
-          @click="toggleAutopilotCodexTerminal"
-        >
-          Codex terminal
-        </v-btn>
-
         <template v-if="selection.selectedSession">
           <div
             v-if="sessionMode === 'inspect'"
@@ -136,14 +123,10 @@
     <div v-else class="studio-ai-sessions__runtime-stack">
       <Vibe64SessionRuntimeHost
         active
-        :autopilot-codex-open="autopilotCodexTerminalOpen"
-        :global-codex-open="globalCodexTerminalOpen"
-        :global-codex-terminal-state="globalCodexTerminalState"
         :session-data="sessionData"
         :session-id="selection.selectedSessionId"
         :session-mode="sessionMode"
         @busy-change="setRuntimeBusy"
-        @global-codex-update="updateGlobalCodexTerminalState"
         @page-error-change="setRuntimePageError"
         @toolbar-controls-ready="setRuntimeToolbarControls"
       />
@@ -157,7 +140,6 @@ import { useRoute, useRouter } from "vue-router";
 import {
   mdiFileCompare,
   mdiPlayCircleOutline,
-  mdiRobotOutline,
   mdiTune
 } from "@mdi/js";
 import Vibe64LaunchControls from "@/components/studio/Vibe64LaunchControls.vue";
@@ -192,7 +174,6 @@ const fallbackAbandon = {
   request: () => null
 };
 const runtimeStateBySessionId = reactive({});
-const autopilotCodexTerminalOpen = ref(false);
 const globalCodexTerminalOpen = ref(false);
 const globalCodexTerminalState = ref(null);
 const sessionData = useVibe64SessionData({
@@ -231,10 +212,6 @@ const modeSwitchLabel = computed(() => modeSwitchTarget.value === "inspect" ? "I
 const modeSwitchIcon = computed(() => modeSwitchTarget.value === "inspect" ? mdiTune : mdiPlayCircleOutline);
 const pageLoading = sessionData.pageLoading;
 const toolbarActionsVisible = computed(() => true);
-const autopilotCodexButtonVisible = computed(() => Boolean(
-  sessionMode.value === "autopilot" &&
-  selection.selectedSession
-));
 const globalCodexTerminalController = {
   sessionUpdate: updateGlobalCodexTerminalState
 };
@@ -325,10 +302,6 @@ function switchSessionMode() {
   setSessionMode(modeSwitchTarget.value);
 }
 
-function toggleAutopilotCodexTerminal() {
-  autopilotCodexTerminalOpen.value = !autopilotCodexTerminalOpen.value;
-}
-
 function openGlobalCodexTerminal() {
   globalCodexTerminalOpen.value = true;
 }
@@ -362,12 +335,6 @@ watch(sessionMode, () => {
   });
   if (selection.selectedSessionId) {
     void sessionData.refreshSessionData();
-  }
-});
-
-watch(() => selection.selectedSessionId, (sessionId) => {
-  if (!sessionId) {
-    autopilotCodexTerminalOpen.value = false;
   }
 });
 
@@ -447,7 +414,6 @@ watch(sessionData.sessions, (sessions = []) => {
 }
 
 .studio-ai-sessions__inspect-tools,
-.studio-ai-sessions__autopilot-codex-button,
 .studio-ai-sessions__mode-switch,
 .studio-ai-sessions__run-controls,
 .studio-ai-sessions__inspect-button {

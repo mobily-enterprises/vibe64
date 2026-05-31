@@ -1,8 +1,7 @@
 import { withActionDefaults } from "@jskit-ai/kernel/shared/actions";
 
 import {
-  createService,
-  resolveVibe64AccountsRoot
+  createService
 } from "./service.js";
 import { featureActions } from "./actions.js";
 import { registerRoutes } from "./registerRoutes.js";
@@ -10,7 +9,7 @@ import { registerRoutes } from "./registerRoutes.js";
 class Vibe64AccountsProvider {
   static id = "feature.vibe64-accounts";
 
-  static dependsOn = ["runtime.actions"];
+  static dependsOn = ["runtime.actions", "feature.vibe64-project"];
 
   register(app) {
     if (
@@ -21,13 +20,11 @@ class Vibe64AccountsProvider {
       throw new Error("Vibe64AccountsProvider requires application service()/actions().");
     }
 
-    const targetRoot = resolveVibe64AccountsRoot();
-
     app.service(
       "feature.vibe64-accounts.service",
-      () => {
+      (scope) => {
         return createService({
-          targetRoot
+          projectService: scope.make("feature.vibe64-project.service")
         });
       }
     );

@@ -51,9 +51,9 @@ const lede = computed(() => {
     return "Checking Studio Setup and Accounts before Adapter Setup runs.";
   }
   if (adapterSetup.value?.ready) {
-    return `Adapter Setup is ready for: ${adapterSetup.value.targetRoot || "current directory"}`;
+    return `Adapter Setup is ready for: ${adapterSetup.value.targetRoot || "selected project"}`;
   }
-  return `Checking Adapter Setup for: ${adapterSetup.value?.targetRoot || "current directory"}`;
+  return `Checking Adapter Setup for: ${adapterSetup.value?.targetRoot || "selected project"}`;
 });
 
 async function loadAdapterSetup({

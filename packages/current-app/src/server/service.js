@@ -26,6 +26,9 @@ import {
   resolveStudioTargetRoot
 } from "@local/vibe64-core/server/studioRoots";
 import {
+  projectServiceTargetRoot
+} from "@local/vibe64-core/server/projectServiceSelection";
+import {
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
@@ -353,7 +356,33 @@ function createService({
     throw new TypeError("createService requires feature.vibe64-project.service.");
   }
 
-  const targetRoot = resolveCurrentAppRoot(appRoot || projectService.targetRoot);
+  function currentTargetRoot() {
+    return String(appRoot || "").trim()
+      ? resolveCurrentAppRoot(appRoot)
+      : projectServiceTargetRoot(projectService);
+  }
+
+  function requireTargetRoot() {
+    const targetRoot = currentTargetRoot();
+    if (!targetRoot) {
+      const error = new Error("Choose a project before using current-app tools.");
+      error.code = "vibe64_project_not_selected";
+      throw error;
+    }
+    return targetRoot;
+  }
+
+  function noProjectSelectedSetupReadiness() {
+    return {
+      currentStage: {
+        id: "project-selection",
+        label: "Project selection"
+      },
+      message: "Choose a project before checking setup.",
+      ready: false,
+      stages: []
+    };
+  }
 
   async function readProjectTypeState() {
     const response = typeof projectService.readProjectType === "function"
@@ -374,10 +403,14 @@ function createService({
   }
 
   async function setupReadiness(options = {}) {
+    if (!currentTargetRoot()) {
+      return noProjectSelectedSetupReadiness();
+    }
     return readVibe64SetupReadiness(setupServices, options);
   }
 
   async function requireSetupReady() {
+    requireTargetRoot();
     return assertVibe64SetupReady(setupServices);
   }
 
@@ -400,6 +433,7 @@ function createService({
   }
 
   async function listAdapterScripts() {
+    const targetRoot = requireTargetRoot();
     const runtime = await createRuntime();
     const listTargetScripts = await requireAdapterMethod("listCurrentAppTargetScripts");
     const response = await listTargetScripts({
@@ -416,6 +450,7 @@ function createService({
   }
 
   async function listAvailableTargetScripts() {
+    const targetRoot = requireTargetRoot();
     const [adapterScripts, projectScripts] = await Promise.all([
       listAdapterScripts(),
       readProjectScripts(targetRoot)
@@ -430,6 +465,7 @@ function createService({
   }
 
   async function terminalSpecForScript(script) {
+    const targetRoot = requireTargetRoot();
     if (script.source === PROJECT_SCRIPT_SOURCE) {
       return projectScriptTerminalSpec(script, targetRoot);
     }
@@ -449,6 +485,7 @@ function createService({
     async inspectCurrentApp(input = {}, options = {}) {
       void options;
       return currentAppResult(async () => {
+        const targetRoot = currentTargetRoot();
         const projectType = await readProjectTypeState();
         if (projectType.ready !== true) {
           return currentAppBeforeProjectType(targetRoot, projectType);
@@ -494,6 +531,7 @@ function createService({
 
     async listTargetScripts() {
       return currentAppResult(async () => {
+        const targetRoot = requireTargetRoot();
         await requireSetupReady();
         const [availableScripts, config] = await Promise.all([
           listAvailableTargetScripts(),
@@ -511,6 +549,7 @@ function createService({
 
     async saveStarredTargetScripts(input = {}) {
       return currentAppResult(async () => {
+        const targetRoot = requireTargetRoot();
         await requireSetupReady();
         const availableScripts = await listAvailableTargetScripts();
         if (availableScripts.ok === false) {
@@ -530,6 +569,7 @@ function createService({
 
     async resetStarredTargetScripts() {
       return currentAppResult(async () => {
+        const targetRoot = requireTargetRoot();
         await requireSetupReady();
         const availableScripts = await listAvailableTargetScripts();
         if (availableScripts.ok === false) {
@@ -545,6 +585,7 @@ function createService({
 
     async startTargetScriptTerminal(input = {}) {
       return currentAppResult(async () => {
+        const targetRoot = requireTargetRoot();
         await requireSetupReady();
         const scriptId = normalizeScriptId(input?.scriptId);
         if (!scriptId) {

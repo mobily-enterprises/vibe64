@@ -12,51 +12,53 @@
       </div>
     </header>
 
-    <ProjectTypeGate>
-      <template #default>
-        <SetupReadinessGate>
-          <div class="studio-session-history__controls">
-            <v-sheet class="studio-session-history__tabs" rounded="lg" border>
-              <v-tabs
-                v-model="selectedArchive"
-                color="primary"
-                density="comfortable"
-                grow
-              >
-                <v-tab
-                  v-for="tab in archiveTabs"
-                  :key="tab.value"
-                  :value="tab.value"
+    <ProjectSelectionGate>
+      <ProjectTypeGate>
+        <template #default>
+          <SetupReadinessGate>
+            <div class="studio-session-history__controls">
+              <v-sheet class="studio-session-history__tabs" rounded="lg" border>
+                <v-tabs
+                  v-model="selectedArchive"
+                  color="primary"
+                  density="comfortable"
+                  grow
                 >
-                  {{ tab.label }}
-                </v-tab>
-              </v-tabs>
-            </v-sheet>
+                  <v-tab
+                    v-for="tab in archiveTabs"
+                    :key="tab.value"
+                    :value="tab.value"
+                  >
+                    {{ tab.label }}
+                  </v-tab>
+                </v-tabs>
+              </v-sheet>
 
-            <v-btn
-              class="studio-session-history__refresh"
-              :loading="archiveLoading"
-              :prepend-icon="mdiRefresh"
-              size="small"
-              variant="tonal"
-              @click="refreshArchive"
-            >
-              Refresh
-            </v-btn>
-          </div>
+              <v-btn
+                class="studio-session-history__refresh"
+                :loading="archiveLoading"
+                :prepend-icon="mdiRefresh"
+                size="small"
+                variant="tonal"
+                @click="refreshArchive"
+              >
+                Refresh
+              </v-btn>
+            </div>
 
-          <ArchivedVibe64Sessions
-            ref="archiveSessions"
-            :key="selectedArchive"
-            :archive="selectedArchiveConfig.archive"
-            :empty-text="selectedArchiveConfig.emptyText"
-            :empty-title="selectedArchiveConfig.emptyTitle"
-            :show-refresh="false"
-            @loading-changed="archiveLoading = $event"
-          />
-        </SetupReadinessGate>
-      </template>
-    </ProjectTypeGate>
+            <ArchivedVibe64Sessions
+              ref="archiveSessions"
+              :key="selectedArchive"
+              :archive="selectedArchiveConfig.archive"
+              :empty-text="selectedArchiveConfig.emptyText"
+              :empty-title="selectedArchiveConfig.emptyTitle"
+              :show-refresh="false"
+              @loading-changed="archiveLoading = $event"
+            />
+          </SetupReadinessGate>
+        </template>
+      </ProjectTypeGate>
+    </ProjectSelectionGate>
   </section>
 </template>
 
@@ -65,6 +67,7 @@ import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { mdiRefresh } from "@mdi/js";
 import ArchivedVibe64Sessions from "@/components/studio/ArchivedVibe64Sessions.vue";
+import ProjectSelectionGate from "@/components/studio/ProjectSelectionGate.vue";
 import ProjectTypeGate from "@/components/studio/ProjectTypeGate.vue";
 import SetupReadinessGate from "@/components/studio/SetupReadinessGate.vue";
 

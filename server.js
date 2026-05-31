@@ -15,8 +15,11 @@ import { matchesPathPrefix, normalizePathname } from "@jskit-ai/kernel/shared/su
 import { surfaceRuntime } from "./server/lib/surfaceRuntime.js";
 import {
   resolveStudioAppRoot,
-  resolveStudioTargetRoot
+  VIBE64_PROJECTS_ROOT_ENV
 } from "@local/vibe64-core/server/studioRoots";
+import {
+  configureStudioProjectContext
+} from "@local/vibe64-core/server/studioProjectContext";
 import {
   closeTerminalSessionsForNamespacePrefix
 } from "@local/studio-terminal-core/server/terminalSessions";
@@ -180,23 +183,31 @@ async function createServer(options = {}) {
     explicitRoot: options.appRoot,
     fallbackRoot: MODULE_APP_ROOT
   });
-  const targetRoot = resolveStudioTargetRoot({
-    env: runtimeEnv,
-    explicitRoot: options.targetRoot,
+  const projectContext = configureStudioProjectContext({
     cwd: process.cwd(),
-    studioAppRoot: appRoot
+    env: runtimeEnv,
+    explicitProjectsRoot: options.projectsRoot,
+    explicitTargetRoot: options.targetRoot
   });
+  const targetRoot = projectContext.targetRoot || "";
   const distRoot = path.resolve(appRoot, "dist");
   const hasWebBuild = existsSync(path.resolve(distRoot, SPA_INDEX_FILE));
   const providerEnv = {
     ...runtimeEnv,
     [VIBE64_APP_ROOT_ENV]: appRoot,
-    [VIBE64_TARGET_ROOT_ENV]: targetRoot
+    [VIBE64_PROJECTS_ROOT_ENV]: projectContext.projectsRoot,
+    ...(targetRoot ? { [VIBE64_TARGET_ROOT_ENV]: targetRoot } : {})
   };
   const previousStudioAppRoot = process.env[VIBE64_APP_ROOT_ENV];
+  const previousStudioProjectsRoot = process.env[VIBE64_PROJECTS_ROOT_ENV];
   const previousStudioTargetRoot = process.env[VIBE64_TARGET_ROOT_ENV];
   process.env[VIBE64_APP_ROOT_ENV] = appRoot;
-  process.env[VIBE64_TARGET_ROOT_ENV] = targetRoot;
+  process.env[VIBE64_PROJECTS_ROOT_ENV] = projectContext.projectsRoot;
+  if (targetRoot) {
+    process.env[VIBE64_TARGET_ROOT_ENV] = targetRoot;
+  } else {
+    delete process.env[VIBE64_TARGET_ROOT_ENV];
+  }
   let runtime;
   try {
     runtime = await tryCreateProviderRuntimeFromApp({
@@ -214,6 +225,11 @@ async function createServer(options = {}) {
       delete process.env[VIBE64_APP_ROOT_ENV];
     } else {
       process.env[VIBE64_APP_ROOT_ENV] = previousStudioAppRoot;
+    }
+    if (previousStudioProjectsRoot == null) {
+      delete process.env[VIBE64_PROJECTS_ROOT_ENV];
+    } else {
+      process.env[VIBE64_PROJECTS_ROOT_ENV] = previousStudioProjectsRoot;
     }
     if (previousStudioTargetRoot == null) {
       delete process.env[VIBE64_TARGET_ROOT_ENV];
@@ -278,7 +294,8 @@ async function createServer(options = {}) {
       {
         routeCount: runtime.routeCount,
         surface: surfaceRuntime.normalizeSurfaceMode(runtimeEnv.SERVER_SURFACE),
-        targetRoot,
+        projectsRoot: projectContext.projectsRoot,
+        targetRoot: projectContext.targetRoot || "",
         providerPackages: runtime.providerPackageOrder,
         packageOrder: runtime.packageOrder
       },
@@ -297,6 +314,7 @@ async function startServer(options = {}) {
   const app = await createServer({
     appRoot: options?.appRoot,
     browserLifecycleShutdownDelayMs: options?.browserLifecycleShutdownDelayMs,
+    projectsRoot: options?.projectsRoot,
     targetRoot: options?.targetRoot
   });
   let closing = false;

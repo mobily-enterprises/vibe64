@@ -7,6 +7,7 @@ export default Object.freeze({
   dependsOn: [
     "@jskit-ai/kernel",
     "@local/vibe64-core",
+    "@local/vibe64-project",
     "@local/setup-doctor-core",
     "@local/studio-terminal-core"
   ],
@@ -15,7 +16,8 @@ export default Object.freeze({
       "feature.vibe64-accounts"
     ],
     requires: [
-      "runtime.actions"
+      "runtime.actions",
+      "feature.vibe64-project"
     ]
   },
   runtime: {

@@ -1149,8 +1149,8 @@ function createProjectToolTerminalController({
     }
     const runtime = await projectService.createRuntime();
     const targetRoot = terminalTargetRoot({
-      targetRoot: run.targetRoot || projectService.targetRoot
-    });
+      targetRoot: run.targetRoot
+    }, projectService);
     if (!targetRoot) {
       return {
         ok: false,

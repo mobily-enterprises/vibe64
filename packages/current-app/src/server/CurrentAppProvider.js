@@ -1,8 +1,7 @@
 import { withActionDefaults } from "@jskit-ai/kernel/shared/actions";
 
 import {
-  createService,
-  resolveCurrentAppRoot
+  createService
 } from "./service.js";
 import { featureActions } from "./actions.js";
 import { registerRoutes } from "./registerRoutes.js";
@@ -29,19 +28,16 @@ class CurrentAppProvider {
       throw new Error("CurrentAppProvider requires application singleton()/service()/actions().");
     }
 
-    const appRoot = resolveCurrentAppRoot();
-
     app.service(
       "feature.current-app.service",
-      () => {
+      (scope) => {
         return createService({
-          appRoot,
-          projectService: app.make("feature.vibe64-project.service"),
+          projectService: scope.make("feature.vibe64-project.service"),
           setupServices: {
-            accountSetupService: app.make("feature.vibe64-accounts.service"),
-            adapterSetupService: app.make("feature.adapter-setup-doctor.service"),
-            projectSetupService: app.make("feature.project-setup-doctor.service"),
-            studioSetupService: app.make("feature.studio-setup-doctor.service")
+            accountSetupService: scope.make("feature.vibe64-accounts.service"),
+            adapterSetupService: scope.make("feature.adapter-setup-doctor.service"),
+            projectSetupService: scope.make("feature.project-setup-doctor.service"),
+            studioSetupService: scope.make("feature.studio-setup-doctor.service")
           }
         });
       }

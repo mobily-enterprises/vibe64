@@ -1,0 +1,8 @@
+{{systemStandard}}
+
+Laravel seed guidance:
+{{adapter.promptContext.seed_issue_guidance}}
+
+Keep the seed description command-first and framework-owned. It should identify the Laravel installer or Composer/Artisan commands, selected starter kit/packages, auth/team/database choices, local fake development secrets, dependency install expectations, key generation, migrations when appropriate, and verification path.
+
+Do not define product CRUD entities, detailed screens, or feature implementation beyond the foundation required by the selected packages.

@@ -1097,8 +1097,8 @@ function createCodexTerminalController({
   async function startFixCodexJob(input = {}) {
     const runtime = await projectService.createRuntime();
     const targetRoot = terminalTargetRoot({
-      targetRoot: input.targetRoot || projectService.targetRoot || runtime?.targetRoot
-    });
+      targetRoot: input.targetRoot || runtime?.targetRoot
+    }, projectService);
     if (!targetRoot) {
       return retryableTerminalFailure({
         ok: false,

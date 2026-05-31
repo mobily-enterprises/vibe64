@@ -1,12 +1,14 @@
 <template>
   <section class="generated-ui-screen generated-ui-screen--studio studio-target-scripts">
-    <ProjectTypeGate>
-      <template #default>
-        <SetupReadinessGate>
-          <TargetScriptsPanel :mode="targetScriptsMode" />
-        </SetupReadinessGate>
-      </template>
-    </ProjectTypeGate>
+    <ProjectSelectionGate>
+      <ProjectTypeGate>
+        <template #default>
+          <SetupReadinessGate>
+            <TargetScriptsPanel :mode="targetScriptsMode" />
+          </SetupReadinessGate>
+        </template>
+      </ProjectTypeGate>
+    </ProjectSelectionGate>
   </section>
 </template>
 
@@ -14,6 +16,7 @@
 import { computed } from "vue";
 import { useRoute } from "vue-router";
 import TargetScriptsPanel from "@/components/studio/TargetScriptsPanel.vue";
+import ProjectSelectionGate from "@/components/studio/ProjectSelectionGate.vue";
 import ProjectTypeGate from "@/components/studio/ProjectTypeGate.vue";
 import SetupReadinessGate from "@/components/studio/SetupReadinessGate.vue";
 

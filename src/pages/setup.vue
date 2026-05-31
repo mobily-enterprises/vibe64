@@ -16,55 +16,57 @@
         <h1 id="setup-title" class="setup__title">Setup</h1>
       </header>
 
-      <ProjectTypeGate>
-        <template #default>
-          <div class="setup__tabs">
-            <v-tabs
-              :model-value="activeTab"
-              aria-label="Setup sections"
-              color="primary"
-              density="comfortable"
-              show-arrows
-              @update:model-value="selectTab"
-            >
-              <v-tab
-                v-for="tab in tabs"
-                :id="tabId(tab.value)"
-                :key="tab.value"
-                :aria-controls="panelId(tab.value)"
-                :value="tab.value"
+      <ProjectSelectionGate>
+        <ProjectTypeGate>
+          <template #default>
+            <div class="setup__tabs">
+              <v-tabs
+                :model-value="activeTab"
+                aria-label="Setup sections"
+                color="primary"
+                density="comfortable"
+                show-arrows
+                @update:model-value="selectTab"
               >
-                {{ tab.label }}
-              </v-tab>
-            </v-tabs>
-          </div>
+                <v-tab
+                  v-for="tab in tabs"
+                  :id="tabId(tab.value)"
+                  :key="tab.value"
+                  :aria-controls="panelId(tab.value)"
+                  :value="tab.value"
+                >
+                  {{ tab.label }}
+                </v-tab>
+              </v-tabs>
+            </div>
 
-          <div
-            :id="panelId(activeTab)"
-            class="setup__panel"
-            role="tabpanel"
-            tabindex="0"
-            :aria-labelledby="tabId(activeTab)"
-          >
-            <StudioSetupDoctorScreen
-              v-if="activeTab === 'studio-setup'"
-              @select-tab="selectTab"
-            />
-            <AccountsSetup
-              v-else-if="activeTab === 'accounts'"
-              @continue="selectTab('adapter-setup')"
-            />
-            <AdapterSetupDoctorScreen
-              v-else-if="activeTab === 'adapter-setup'"
-              @select-tab="selectTab"
-            />
-            <ProjectSetupDoctorScreen
-              v-else-if="activeTab === 'project-setup'"
-              @select-tab="selectTab"
-            />
-          </div>
-        </template>
-      </ProjectTypeGate>
+            <div
+              :id="panelId(activeTab)"
+              class="setup__panel"
+              role="tabpanel"
+              tabindex="0"
+              :aria-labelledby="tabId(activeTab)"
+            >
+              <StudioSetupDoctorScreen
+                v-if="activeTab === 'studio-setup'"
+                @select-tab="selectTab"
+              />
+              <AccountsSetup
+                v-else-if="activeTab === 'accounts'"
+                @continue="selectTab('adapter-setup')"
+              />
+              <AdapterSetupDoctorScreen
+                v-else-if="activeTab === 'adapter-setup'"
+                @select-tab="selectTab"
+              />
+              <ProjectSetupDoctorScreen
+                v-else-if="activeTab === 'project-setup'"
+                @select-tab="selectTab"
+              />
+            </div>
+          </template>
+        </ProjectTypeGate>
+      </ProjectSelectionGate>
     </section>
   </ShellLayout>
 </template>
@@ -74,6 +76,7 @@ import { computed, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import ShellLayout from "@/components/ShellLayout.vue";
 import AccountsSetup from "@/components/studio/AccountsSetup.vue";
+import ProjectSelectionGate from "@/components/studio/ProjectSelectionGate.vue";
 import ProjectTypeGate from "@/components/studio/ProjectTypeGate.vue";
 
 import AdapterSetupDoctorScreen from "../components/studio/AdapterSetupDoctorScreen.vue";

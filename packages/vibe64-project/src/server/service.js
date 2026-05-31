@@ -19,6 +19,10 @@ import {
 import {
   resolveStudioTargetRoot
 } from "@local/vibe64-core/server/studioRoots";
+import {
+  createStudioProjectContext,
+  getStudioProjectContext
+} from "@local/vibe64-core/server/studioProjectContext";
 
 function resolveVibe64TargetRoot(targetRoot) {
   return resolveStudioTargetRoot({
@@ -35,6 +39,7 @@ function projectResult(operation) {
 
 function projectTypeErrorCode(status = "") {
   return {
+    no_project_selected: "vibe64_project_not_selected",
     missing: "vibe64_project_type_missing",
     unimplemented: "vibe64_project_type_unimplemented",
     unknown: "vibe64_unknown_project_type"
@@ -42,6 +47,9 @@ function projectTypeErrorCode(status = "") {
 }
 
 function projectTypeMessage(status = "", projectType = "") {
+  if (status === "no_project_selected") {
+    return "Choose a project before using project-specific tools.";
+  }
   if (status === "missing") {
     return "Choose an Vibe64 project type before using project-specific tools.";
   }
@@ -55,19 +63,75 @@ function projectTypeMessage(status = "", projectType = "") {
 }
 
 function createService({
+  projectContext = null,
   targetRoot = "",
   workflowRegistry = createCoreWorkflowRegistry()
 } = {}) {
-  const resolvedTargetRoot = resolveVibe64TargetRoot(targetRoot);
+  const studioProjectContext = projectContext || (String(targetRoot || "").trim()
+    ? createStudioProjectContext({
+      explicitTargetRoot: targetRoot
+    })
+    : getStudioProjectContext());
   const adapterRegistry = createVibe64AdapterRegistry();
-  const projectConfigStore = createVibe64ProjectConfigStore({
-    targetRoot: resolvedTargetRoot
-  });
-  const projectTypeStore = createVibe64ProjectTypeStore({
-    targetRoot: resolvedTargetRoot
-  });
+
+  function currentTargetRoot() {
+    return String(studioProjectContext.targetRoot || "").trim();
+  }
+
+  function requireSelectedTargetRoot() {
+    return studioProjectContext.requireSelectedTargetRoot();
+  }
+
+  function projectStores(targetRootValue = requireSelectedTargetRoot()) {
+    const resolvedTargetRoot = resolveVibe64TargetRoot(targetRootValue);
+    return {
+      projectConfigStore: createVibe64ProjectConfigStore({
+        targetRoot: resolvedTargetRoot
+      }),
+      projectTypeStore: createVibe64ProjectTypeStore({
+        targetRoot: resolvedTargetRoot
+      }),
+      resolvedTargetRoot
+    };
+  }
+
+  function noProjectSelectedTypeState() {
+    const status = "no_project_selected";
+    return {
+      adapter: null,
+      availableApplicationTypes: adapterRegistry.availableApplicationTypes(),
+      availableProjectTypes: adapterRegistry.availableProjectTypes(),
+      errorCode: projectTypeErrorCode(status),
+      message: projectTypeMessage(status),
+      path: "",
+      projectType: "",
+      ready: false,
+      status,
+      targetRoot: ""
+    };
+  }
+
+  function noProjectSelectedConfigState() {
+    return {
+      invalid: [],
+      message: projectTypeMessage("no_project_selected"),
+      missing: [],
+      projectType: "",
+      ready: false,
+      status: "no_project_selected",
+      values: {}
+    };
+  }
 
   async function readProjectTypeState() {
+    const targetRootValue = currentTargetRoot();
+    if (!targetRootValue) {
+      return noProjectSelectedTypeState();
+    }
+    const {
+      projectTypeStore,
+      resolvedTargetRoot
+    } = projectStores(targetRootValue);
     const projectType = await projectTypeStore.readProjectType();
     const definition = adapterRegistry.projectTypeDefinition(projectType);
     const status = projectType
@@ -109,6 +173,9 @@ function createService({
   }
 
   async function saveProjectTypeState(input = {}) {
+    const {
+      projectTypeStore
+    } = projectStores();
     const projectType = String(input?.projectType || "").trim();
     adapterRegistry.requireImplementedProjectType(projectType);
     await projectTypeStore.writeProjectType(projectType);
@@ -124,11 +191,11 @@ function createService({
     };
   }
 
-  async function projectConfigDefinition(adapter, projectType) {
+  async function projectConfigDefinition(adapter, projectType, targetRootValue = requireSelectedTargetRoot()) {
     const configContext = {
       adapter,
       projectType,
-      targetRoot: resolvedTargetRoot
+      targetRoot: resolveVibe64TargetRoot(targetRootValue)
     };
     const [adapterFields, adapterDefaults] = await Promise.all([
       adapter.getConfigFields(configContext),
@@ -141,11 +208,11 @@ function createService({
     };
   }
 
-function configResponse({
-  adapter,
-  config,
-  projectType
-} = {}) {
+  function configResponse({
+    adapter,
+    config,
+    projectType
+  } = {}) {
     return {
       ...config,
       adapter: {
@@ -157,6 +224,20 @@ function configResponse({
   }
 
   async function projectToolContext() {
+    const targetRootValue = currentTargetRoot();
+    if (!targetRootValue) {
+      const projectType = noProjectSelectedTypeState();
+      return {
+        adapter: null,
+        baseBranch: "main",
+        config: null,
+        projectConfig: null,
+        projectMessage: projectType.message,
+        projectReady: false,
+        projectType,
+        targetRoot: ""
+      };
+    }
     const projectType = await readProjectTypeState();
     if (!projectType.ready) {
       return {
@@ -167,7 +248,7 @@ function configResponse({
         projectMessage: projectType.message,
         projectReady: false,
         projectType,
-        targetRoot: resolvedTargetRoot
+        targetRoot: targetRootValue
       };
     }
 
@@ -184,7 +265,7 @@ function configResponse({
         : config.message || "Save Vibe64 project configuration before using project tools.",
       projectReady,
       projectType,
-      targetRoot: resolvedTargetRoot
+      targetRoot: targetRootValue
     };
   }
 
@@ -195,7 +276,7 @@ function configResponse({
           config: context.config,
           projectConfig: context.projectConfig,
           projectType: context.projectType,
-          targetRoot: resolvedTargetRoot
+          targetRoot: context.targetRoot
         })
       : [];
     const adapterToolModule = Array.isArray(adapterTools) && adapterTools.length
@@ -248,13 +329,17 @@ function configResponse({
             label: context.adapter.label
           }
         : null,
-      targetRoot: resolvedTargetRoot
+      targetRoot: context.targetRoot
     };
   }
 
   async function readProjectConfigForAdapter(adapter, projectType) {
+    const targetRootValue = requireSelectedTargetRoot();
+    const {
+      projectConfigStore
+    } = projectStores(targetRootValue);
     const config = await projectConfigStore.readConfig(
-      await projectConfigDefinition(adapter, projectType)
+      await projectConfigDefinition(adapter, projectType, targetRootValue)
     );
     return configResponse({
       adapter,
@@ -275,13 +360,20 @@ function configResponse({
   }
 
   async function readProjectConfigState() {
+    if (!currentTargetRoot()) {
+      return noProjectSelectedConfigState();
+    }
     const { adapter, projectType } = await createProjectAdapter();
     return readProjectConfigForAdapter(adapter, projectType);
   }
 
   async function readProjectConfigDefaultsState() {
     const { adapter, projectType } = await createProjectAdapter();
-    const config = normalizeConfigDefinition(await projectConfigDefinition(adapter, projectType));
+    const targetRootValue = requireSelectedTargetRoot();
+    const {
+      projectConfigStore
+    } = projectStores(targetRootValue);
+    const config = normalizeConfigDefinition(await projectConfigDefinition(adapter, projectType, targetRootValue));
     return {
       adapter: {
         id: adapter.id,
@@ -299,8 +391,12 @@ function configResponse({
 
   async function saveProjectConfigState(input = {}) {
     const { adapter, projectType } = await createProjectAdapter();
+    const targetRootValue = requireSelectedTargetRoot();
+    const {
+      projectConfigStore
+    } = projectStores(targetRootValue);
     const config = await projectConfigStore.saveConfig({
-      definition: await projectConfigDefinition(adapter, projectType),
+      definition: await projectConfigDefinition(adapter, projectType, targetRootValue),
       values: input?.values || {}
     });
     return configResponse({
@@ -311,6 +407,7 @@ function configResponse({
   }
 
   async function createRuntime() {
+    const resolvedTargetRoot = requireSelectedTargetRoot();
     const { adapter, projectType } = await createProjectAdapter();
     const projectConfig = await requireProjectConfigForAdapter(adapter, projectType);
     return new Vibe64SessionRuntime({
@@ -322,7 +419,21 @@ function configResponse({
   }
 
   return Object.freeze({
-    targetRoot: resolvedTargetRoot,
+    currentTargetRoot() {
+      return currentTargetRoot();
+    },
+
+    get targetRoot() {
+      return currentTargetRoot();
+    },
+
+    get selectedProject() {
+      return studioProjectContext.selectedProject;
+    },
+
+    async createProject(input = {}) {
+      return projectResult(() => studioProjectContext.createManagedProject(input));
+    },
 
     async createRuntime() {
       return createRuntime();
@@ -360,7 +471,21 @@ function configResponse({
     },
 
     async projectConfigEnvironment() {
+      if (!currentTargetRoot()) {
+        return {};
+      }
+      const {
+        projectConfigStore
+      } = projectStores(currentTargetRoot());
       return projectConfigStore.environment();
+    },
+
+    async listProjects() {
+      return projectResult(() => studioProjectContext.listProjects());
+    },
+
+    async requireSelectedTargetRoot() {
+      return requireSelectedTargetRoot();
     },
 
     async listProjectTools() {
@@ -397,6 +522,10 @@ function configResponse({
           ok: true
         };
       });
+    },
+
+    async selectProject(input = {}) {
+      return projectResult(() => studioProjectContext.selectManagedProject(input));
     }
   });
 }

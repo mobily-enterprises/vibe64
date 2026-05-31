@@ -17,6 +17,9 @@ import {
   vibe64Result
 } from "@local/vibe64-core/server/serverResponses";
 import {
+  projectServiceTargetRoot
+} from "@local/vibe64-core/server/projectServiceSelection";
+import {
   resolveStudioTargetRoot
 } from "@local/vibe64-core/server/studioRoots";
 import {
@@ -361,17 +364,25 @@ function publicAuthSession({
 }
 
 function createService({
+  projectService = null,
   readyStatusCacheRoot = "",
   runToolchain = runDefaultToolchain,
   targetRoot = ""
 } = {}) {
-  const resolvedTargetRoot = resolveVibe64AccountsRoot(targetRoot);
   const authSessions = new Map();
-  const readyStatusCache = createRepositoryReadyStatusCache({
-    doctorId: "accounts",
-    stateRoot: readyStatusCacheRoot,
-    targetRoot: resolvedTargetRoot
-  });
+
+  function currentTargetRoot() {
+    const selectedTargetRoot = String(targetRoot || projectServiceTargetRoot(projectService)).trim();
+    return selectedTargetRoot ? resolveVibe64AccountsRoot(selectedTargetRoot) : "";
+  }
+
+  function readyStatusCache() {
+    return createRepositoryReadyStatusCache({
+      doctorId: "accounts",
+      stateRoot: readyStatusCacheRoot,
+      targetRoot: currentTargetRoot() || process.cwd()
+    });
+  }
 
   function authMetadata(sessionId = "") {
     return authSessions.get(sessionId) || null;
@@ -407,7 +418,7 @@ function createService({
       blockedReason: ready ? "" : blockedReason(accounts),
       ok: true,
       ready,
-      targetRoot: resolvedTargetRoot,
+      targetRoot: currentTargetRoot(),
       updatedAt: new Date().toISOString()
     };
   }
@@ -470,11 +481,12 @@ function createService({
 
   function startAuthTerminal(accountId, mode) {
     const args = terminalArgsForAuth(accountId, mode);
+    const authCwd = currentTargetRoot() || process.cwd();
     const terminal = startTerminalSession({
       args,
       command: "docker",
       commandPreview: dockerCommand(args),
-      cwd: resolvedTargetRoot,
+      cwd: authCwd,
       maxRunning: 1,
       metadata: authTerminalMetadata(accountId, mode),
       namespace: ACCOUNT_AUTH_NAMESPACE,
@@ -499,12 +511,13 @@ function createService({
     async getStatus(input = {}) {
       return accountsResult(async () => {
         if (!refreshRequested(input)) {
-          const cachedStatus = await readyStatusCache.read();
+          const cache = readyStatusCache();
+          const cachedStatus = await cache.read();
           if (cachedStatus) {
             return cachedStatus;
           }
         }
-        return readyStatusCache.remember(await accountsStatus());
+        return readyStatusCache().remember(await accountsStatus());
       });
     },
 
@@ -541,7 +554,7 @@ function createService({
         });
         const account = await accountStatus(accountId);
         if (result.ok && account.connected !== true) {
-          await readyStatusCache.remember({
+          await readyStatusCache().remember({
             ready: false
           });
         }

@@ -8,6 +8,12 @@ import {
   createService,
   resolveCurrentAppRoot
 } from "../../packages/current-app/src/server/service.js";
+import {
+  createService as createProjectService
+} from "../../packages/vibe64-project/src/server/service.js";
+import {
+  createStudioProjectContext
+} from "../../packages/vibe64-core/src/server/studioProjectContext.js";
 
 async function withTemporaryRoot(callback) {
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-current-app-"));
@@ -62,6 +68,9 @@ function fakeProjectService({
 } = {}) {
   return {
     targetRoot,
+    currentTargetRoot() {
+      return targetRoot;
+    },
     async createRuntime() {
       return {
         adapter,
@@ -170,6 +179,52 @@ test("current-app resolves the launch target root from Vibe64 environment", asyn
         process.env.VIBE64_TARGET_ROOT = previousTargetRoot;
       }
     }
+  });
+});
+
+test("current-app reports project selection before setup readiness when no project is selected", async () => {
+  await withTemporaryRoot(async (root) => {
+    const projectService = createProjectService({
+      projectContext: createStudioProjectContext({
+        explicitProjectsRoot: path.join(root, "projects"),
+        env: {},
+        home: root
+      })
+    });
+    const service = createService({
+      projectService,
+      setupServices: readySetupServices()
+    });
+
+    const setup = await service.inspectSetupReadiness();
+    assert.equal(setup.ready, false);
+    assert.equal(setup.currentStage.id, "project-selection");
+    assert.deepEqual(setup.stages, []);
+
+    const currentApp = await service.inspectCurrentApp();
+    assert.equal(currentApp.ok, true);
+    assert.equal(currentApp.ready, false);
+    assert.equal(currentApp.root, "");
+    assert.equal(currentApp.projectType.status, "no_project_selected");
+  });
+});
+
+test("current-app reads selected project root from the project service method", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const service = createService({
+      projectService: {
+        currentTargetRoot() {
+          return targetRoot;
+        },
+        async createRuntime() {
+          throw new Error("Runtime should not load for setup readiness.");
+        }
+      },
+      setupServices: readySetupServices()
+    });
+
+    const setup = await service.inspectSetupReadiness();
+    assert.equal(setup.ready, true);
   });
 });
 

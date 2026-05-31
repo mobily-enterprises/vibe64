@@ -52,9 +52,9 @@ const lede = computed(() => {
     return "Checking Studio Setup, Accounts, and Adapter Setup before Project Setup runs.";
   }
   if (projectSetup.value?.ready) {
-    return `Project Setup is ready for: ${projectSetup.value.targetRoot || "current directory"}`;
+    return `Project Setup is ready for: ${projectSetup.value.targetRoot || "selected project"}`;
   }
-  return `Checking Project Setup for: ${projectSetup.value?.targetRoot || "current directory"}`;
+  return `Checking Project Setup for: ${projectSetup.value?.targetRoot || "selected project"}`;
 });
 
 async function loadProjectSetup({

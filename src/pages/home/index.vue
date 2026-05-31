@@ -11,18 +11,24 @@
     </v-alert>
 
     <div class="studio-screen__gate-scroll">
-      <ProjectTypeGate
-        :configure-project="configureProject"
-        @error="handleProjectTypeError"
-        @missing="handleProjectTypeMissing"
-        @ready="handleProjectTypeReady"
+      <ProjectSelectionGate
+        @error="handleProjectSelectionError"
+        @missing="handleProjectSelectionMissing"
+        @ready="handleProjectSelectionReady"
       >
-        <template #default>
-          <SetupReadinessGate>
-            <Vibe64SessionPanel @title-change="emitPageTitle" />
-          </SetupReadinessGate>
-        </template>
-      </ProjectTypeGate>
+        <ProjectTypeGate
+          :configure-project="configureProject"
+          @error="handleProjectTypeError"
+          @missing="handleProjectTypeMissing"
+          @ready="handleProjectTypeReady"
+        >
+          <template #default>
+            <SetupReadinessGate>
+              <Vibe64SessionPanel @title-change="emitPageTitle" />
+            </SetupReadinessGate>
+          </template>
+        </ProjectTypeGate>
+      </ProjectSelectionGate>
     </div>
   </section>
 </template>
@@ -31,6 +37,7 @@
 import { computed, onBeforeUnmount, ref } from "vue";
 import { useRoute } from "vue-router";
 import Vibe64SessionPanel from "@/components/studio/Vibe64SessionPanel.vue";
+import ProjectSelectionGate from "@/components/studio/ProjectSelectionGate.vue";
 import ProjectTypeGate from "@/components/studio/ProjectTypeGate.vue";
 import SetupReadinessGate from "@/components/studio/SetupReadinessGate.vue";
 
@@ -45,6 +52,21 @@ function emitPageTitle(title = "") {
 
 function handleProjectTypeReady() {
   pageError.value = "";
+}
+
+function handleProjectSelectionReady() {
+  pageError.value = "";
+  emitPageTitle();
+}
+
+function handleProjectSelectionMissing() {
+  pageError.value = "";
+  emitPageTitle("Choose project");
+}
+
+function handleProjectSelectionError(error) {
+  pageError.value = String(error || "");
+  emitPageTitle();
 }
 
 function handleProjectTypeMissing(project = {}) {
@@ -116,6 +138,13 @@ onBeforeUnmount(() => {
   }
 
   .studio-screen__gate-scroll :deep(.project-type-gate) {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .studio-screen__gate-scroll :deep(.project-selection-gate) {
     display: flex;
     flex: 1 1 auto;
     flex-direction: column;

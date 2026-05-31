@@ -49,6 +49,7 @@ function vibe64StatusCode(response, { missingStatus = 404 } = {}) {
     code === "vibe64_action_not_available" ||
     code === "vibe64_command_requires_terminal" ||
     code === "vibe64_project_config_missing" ||
+    code === "vibe64_project_not_selected" ||
     code === "vibe64_setup_not_ready" ||
     code === "vibe64_step_input_state_changed" ||
     code === "vibe64_step_not_ready"

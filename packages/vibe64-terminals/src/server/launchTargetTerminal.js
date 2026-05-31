@@ -106,7 +106,7 @@ async function createLaunchContext(projectService, sessionId) {
     runtime,
     session,
     store: runtime.store,
-    targetRoot: session.targetRoot || projectService.targetRoot || ""
+    targetRoot: sessionTerminalCwd(session, projectService)
   };
 }
 

@@ -10,9 +10,58 @@ import {
   createCoreWorkflowRegistry
 } from "@local/vibe64-runtime/server";
 import {
+  createStudioProjectContext
+} from "../../packages/vibe64-core/src/server/studioProjectContext.js";
+import {
   JSKIT_ALLOW_SELF_TARGET_CONFIG
 } from "@local/vibe64-adapters/server/adapters/jskit/index";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
+
+test("Vibe64 project service exposes project selection before project-specific state", async () => {
+  await withTemporaryRoot(async (root) => {
+    const projectsRoot = path.join(root, "projects");
+    const service = createService({
+      projectContext: createStudioProjectContext({
+        explicitProjectsRoot: projectsRoot,
+        env: {},
+        home: root
+      })
+    });
+
+    const initialProjects = await service.listProjects();
+    assert.equal(initialProjects.ok, true);
+    assert.equal(initialProjects.hasSelection, false);
+    assert.deepEqual(initialProjects.projects, []);
+
+    const beforeSelection = await service.readProjectType();
+    assert.equal(beforeSelection.ok, true);
+    assert.equal(beforeSelection.projectType.ready, false);
+    assert.equal(beforeSelection.projectType.status, "no_project_selected");
+    assert.equal(beforeSelection.projectType.errorCode, "vibe64_project_not_selected");
+    assert.equal(beforeSelection.projectType.targetRoot, "");
+    assert.deepEqual(await service.projectConfigEnvironment(), {});
+
+    const invalid = await service.createProject({
+      name: "!!!"
+    });
+    assert.equal(invalid.ok, false);
+    assert.equal(invalid.errors[0].code, "vibe64_invalid_project_slug");
+
+    const created = await service.createProject({
+      name: "Example App"
+    });
+    assert.equal(created.ok, true);
+    assert.equal(created.hasSelection, true);
+    assert.equal(created.targetRoot, path.join(projectsRoot, "example-app"));
+    assert.equal(service.targetRoot, path.join(projectsRoot, "example-app"));
+    assert.equal(service.currentTargetRoot(), path.join(projectsRoot, "example-app"));
+
+    const afterSelection = await service.readProjectType();
+    assert.equal(afterSelection.ok, true);
+    assert.equal(afterSelection.projectType.status, "missing");
+    assert.equal(afterSelection.projectType.targetRoot, path.join(projectsRoot, "example-app"));
+  });
+});
 
 test("Vibe64 project service saves project type and plain-file configuration", async () => {
   await withTemporaryRoot(async (targetRoot) => {

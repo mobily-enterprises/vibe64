@@ -6,9 +6,6 @@ import {
 } from "./service.js";
 import { featureActions } from "./actions.js";
 import { registerRoutes } from "./registerRoutes.js";
-import {
-  resolveStudioTargetRoot
-} from "@local/vibe64-core/server/studioRoots";
 
 class StudioSetupDoctorProvider {
   static id = "feature.studio-setup-doctor";
@@ -26,16 +23,12 @@ class StudioSetupDoctorProvider {
     }
 
     const studioRoot = resolveStudioRoot();
-    const targetRoot = resolveStudioTargetRoot({
-      studioAppRoot: studioRoot
-    });
 
     app.service(
       "feature.studio-setup-doctor.service",
       () => {
         return createService({
-          studioRoot,
-          targetRoot
+          studioRoot
         });
       }
     );

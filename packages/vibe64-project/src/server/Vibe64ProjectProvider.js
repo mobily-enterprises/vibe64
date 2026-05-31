@@ -1,9 +1,11 @@
 import { withActionDefaults } from "@jskit-ai/kernel/shared/actions";
 
 import {
-  createService,
-  resolveVibe64TargetRoot
+  createService
 } from "./service.js";
+import {
+  getStudioProjectContext
+} from "@local/vibe64-core/server/studioProjectContext";
 import { featureActions } from "./actions.js";
 import { registerRoutes } from "./registerRoutes.js";
 
@@ -21,13 +23,13 @@ class Vibe64ProjectProvider {
       throw new Error("Vibe64ProjectProvider requires application service()/actions().");
     }
 
-    const targetRoot = resolveVibe64TargetRoot();
+    const projectContext = getStudioProjectContext();
 
     app.service(
       "feature.vibe64-project.service",
       () => {
         return createService({
-          targetRoot
+          projectContext
         });
       }
     );

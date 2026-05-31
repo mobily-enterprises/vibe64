@@ -48,6 +48,7 @@ import {
   metadataExists,
   nextForSession,
   normalizeMachineInput,
+  promptWaitingForInputInteraction,
   promptStepDoneView,
   promptStepWaitingForInputView,
   promptStepWaitingView,
@@ -85,6 +86,7 @@ const ISSUE_FILE_STEP_ID = "issue_file_created";
 const draftIssueActionId = "draft_issue";
 const rejectIssueDraftActionId = "reject_issue_draft";
 const SEED_APPLICATION_STEP_ID = "seed_application_defined";
+const draftSeedApplicationActionId = "define_seed_application";
 const GITHUB_ISSUE_MODE_METADATA = "github_issue_mode";
 const PLAN_READY_METADATA = "plan_ready";
 const IMPLEMENTATION_DONE_METADATA = "implementation_done";
@@ -182,7 +184,30 @@ function createIssueOnGithubAction() {
 
 const coreCodingStepDefinitionsById = deepFreeze({
   [SEED_APPLICATION_STEP_ID]: {
-    actions: [],
+    actions: [
+      {
+        disabledReason: "Seed details are already saved.",
+        disabledWhen: [
+          when.allArtifactsReady(WORK_TITLE_ARTIFACT, WORK_BODY_ARTIFACT, WORK_WORD_ARTIFACT)
+        ],
+        disabledWhenReason: "Seed details are already saved.",
+        icon: "message-square-plus",
+        id: draftSeedApplicationActionId,
+        inputFields: [
+          {
+            kind: "textarea",
+            label: "What kind of app should Vibe64 seed?",
+            name: "conversationRequest",
+            placeholder: "Describe the app foundation, modules, auth, database, and local development needs.",
+            requiredMessage: "Describe what Vibe64 should seed, or ask Codex what choices it needs."
+          }
+        ],
+        label: "Discuss seed choices",
+        promptId: draftSeedApplicationActionId,
+        recordsConversationTurn: true,
+        type: "prompt"
+      }
+    ],
     autopilot: {
       kind: "issue_discussion",
       stop: true
@@ -193,6 +218,19 @@ const coreCodingStepDefinitionsById = deepFreeze({
     next: {
       disabledReason: "Define and save the seed issue before continuing.",
       enabledWhen: [when.allArtifactsReady(ISSUE_TITLE_ARTIFACT, ISSUE_BODY_ARTIFACT, ISSUE_WORD_ARTIFACT)]
+    },
+    presentation: {
+      automation: {
+        action: {
+          actionId: draftSeedApplicationActionId,
+          input: {
+            conversationRequest: "Ask me the setup choices you need to seed this application."
+          },
+          label: "Discuss seed choices",
+          statuses: [STEP_STATUS.WAITING_FOR_INPUT],
+          whenStateMissing: ["message"]
+        }
+      }
     },
     rewindCleanup: {
       actionResults: [],
@@ -719,10 +757,12 @@ const coreCodingWorkflowDefinitions = deepFreeze([
   defineWorkflow({
     description: "Create the initial application scaffold and local development foundation.",
     id: VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION,
+    initialMetadata: {
+      work_source: "seed"
+    },
     label: "Seed application",
     parts: [
       "session_created",
-      "work_source_selected",
       "worktree_created",
       SEED_APPLICATION_STEP_ID,
       seedPlanMadeStepId,
@@ -896,7 +936,11 @@ async function writeWorkDefinitionFieldValues(context = {}, fields = {}) {
 }
 
 function workDefinitionInputInteraction(status = STEP_STATUS.WAITING_FOR_INPUT, values = {}, {
-  createGithubIssue = false
+  createGithubIssue = false,
+  fieldLabels = {},
+  prompt = "",
+  submitLabel = "",
+  title = ""
 } = {}) {
   const reviewIntents = status === STEP_STATUS.CONFIRM_FILES
     ? [
@@ -924,10 +968,10 @@ function workDefinitionInputInteraction(status = STEP_STATUS.WAITING_FOR_INPUT, 
     fields: [
       {
         kind: "text",
-        label: createGithubIssue ? "Issue title" : "Work title",
+        label: fieldLabels.title || (createGithubIssue ? "Issue title" : "Work title"),
         name: "title",
         required: true,
-        requiredMessage: createGithubIssue ? "Issue title is required." : "Work title is required.",
+        requiredMessage: fieldLabels.titleRequired || (createGithubIssue ? "Issue title is required." : "Work title is required."),
         value: values.title || ""
       },
       {
@@ -940,28 +984,64 @@ function workDefinitionInputInteraction(status = STEP_STATUS.WAITING_FOR_INPUT, 
       },
       {
         kind: "textarea",
-        label: createGithubIssue ? "Issue body" : "Work description",
+        label: fieldLabels.body || (createGithubIssue ? "Issue body" : "Work description"),
         name: "body",
         required: true,
-        requiredMessage: createGithubIssue ? "Issue body is required." : "Work description is required.",
+        requiredMessage: fieldLabels.bodyRequired || (createGithubIssue ? "Issue body is required." : "Work description is required."),
         value: values.body || ""
       }
     ],
     kind: "confirm_files_run_command",
     intents: reviewIntents,
-    prompt: status === STEP_STATUS.CONFIRM_FILES
+    prompt: prompt || (status === STEP_STATUS.CONFIRM_FILES
       ? (createGithubIssue
           ? "Review the issue details, then create the GitHub issue."
           : "Review the work details, then continue without creating a GitHub issue.")
       : (createGithubIssue
           ? "Discuss the requested change, then submit the work title, session label, and description."
-          : "Discuss the requested change, then submit the work title, session label, and description."),
+          : "Discuss the requested change, then submit the work title, session label, and description.")),
     submitKind: status === STEP_STATUS.CONFIRM_FILES
       ? STEP_INPUT_KIND.CONFIRM_FILES
       : STEP_INPUT_KIND.READY,
-    submitLabel: status === STEP_STATUS.CONFIRM_FILES ? "Save changes" : "Save details",
-    title: createGithubIssue ? "Define issue" : "Define work"
+    submitLabel: submitLabel || (status === STEP_STATUS.CONFIRM_FILES ? "Save changes" : "Save details"),
+    title: title || (createGithubIssue ? "Define issue" : "Define work")
   };
+}
+
+function seedDefinitionInputInteraction(status = STEP_STATUS.WAITING_FOR_INPUT, values = {}) {
+  return workDefinitionInputInteraction(status, values, {
+    fieldLabels: {
+      body: "Seed description",
+      bodyRequired: "Seed description is required.",
+      title: "Seed title",
+      titleRequired: "Seed title is required."
+    },
+    prompt: status === STEP_STATUS.CONFIRM_FILES
+      ? "Review the seed details, then continue."
+      : "Discuss the application foundation with Codex, then review the proposed seed details.",
+    title: "Seed application"
+  });
+}
+
+function seedDefinitionConversationInteraction(state = {}) {
+  return promptWaitingForInputInteraction({
+    actionId: draftSeedApplicationActionId,
+    prompt: state.message || "Tell Codex what kind of application to seed, or ask it to identify the setup choices it needs.",
+    submitLabel: "Send to Codex",
+    title: "Seed application"
+  });
+}
+
+function seedDefinitionPromptInstruction() {
+  return currentStepHelperInstruction({
+    doneFields: {
+      body: "Markdown seed description with selected setup choices, useful context, and acceptance criteria.",
+      title: "Concise seed title.",
+      word: "Short Vibe64 session label/word derived from the seed title."
+    },
+    doneMeaning: "You have enough information to propose the seed title, seed description, and Vibe64 session label for user review.",
+    waitingForInputMeaning: "You need more information from the user before drafting the seed description."
+  });
 }
 
 const workDefinitionPhase = Object.freeze({
@@ -2048,13 +2128,15 @@ const coreCodingSteps = Object.freeze(Object.values(Object.freeze({
       initialDetails: {
         doing: "discussion"
       },
-      interaction: workDefinitionInputInteraction,
+      interaction: seedDefinitionInputInteraction,
       nextWhenDrafting: {
         disabledReason: "Define and save the seed issue before continuing."
       },
       nextWhenWorking: {
         disabledReason: "Define and save the seed issue before continuing."
       },
+      promptActionId: draftSeedApplicationActionId,
+      promptInstruction: seedDefinitionPromptInstruction,
       readValues: readWorkDefinitionFieldValues,
       saveValues: writeWorkDefinitionFieldValues,
       unsupportedDoneMessage: "The seed definition step cannot accept input right now.",
@@ -2062,7 +2144,7 @@ const coreCodingSteps = Object.freeze(Object.values(Object.freeze({
         doing: "discussion",
         message: input.message
       }),
-      waitingInteraction: () => workDefinitionInputInteraction(STEP_STATUS.WAITING_FOR_INPUT, {})
+      waitingInteraction: seedDefinitionConversationInteraction
     },
     definition: coreCodingStepDefinitionsById[SEED_APPLICATION_STEP_ID],
     factoryId: "editable_artifact_review",

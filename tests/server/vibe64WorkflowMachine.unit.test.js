@@ -1559,7 +1559,10 @@ test("vibe64 workflow definitions are ordered step lists with self-contained ste
   assert.equal(bigFeature.id, DEFAULT_VIBE64_WORKFLOW_DEFINITION_ID);
   assert.equal(bigFeature.definition.label, "Make improvements");
   assert.ok(bigFeature.steps.find((step) => step.id === "issue_file_created")?.autopilot.stop);
-  assert.ok(seedApplication.steps.find((step) => step.id === "seed_application_defined")?.autopilot.stop);
+  const seedDefinitionStep = seedApplication.steps.find((step) => step.id === "seed_application_defined");
+  assert.ok(seedDefinitionStep?.autopilot.stop);
+  assert.deepEqual(seedDefinitionStep.actions.map((action) => action.id), ["define_seed_application"]);
+  assert.equal(seedDefinitionStep.actions[0].type, "prompt");
   assert.deepEqual(bigFeature.steps.map((step) => step.id), [
     "session_created",
     "work_source_selected",
@@ -1578,11 +1581,11 @@ test("vibe64 workflow definitions are ordered step lists with self-contained ste
   ]);
   assert.deepEqual(seedApplication.steps.map((step) => step.id).slice(0, 6), [
     "session_created",
-    "work_source_selected",
     "worktree_created",
     "seed_application_defined",
     "seed_plan_made",
-    "seed_plan_executed"
+    "seed_plan_executed",
+    "dependencies_installed"
   ]);
   assert.equal(
     seedApplication.steps.findIndex((step) => step.id === "dependencies_installed") >
@@ -2107,11 +2110,80 @@ test("vibe64 runtime selects the seed definition when the adapter says seeding i
 
     assert.equal(session.workflowId, VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION);
     assert.equal(session.metadata.workflow_definition, VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION);
+    assert.equal(session.metadata.work_source, "seed");
     assert.equal(session.sessionName, "seeding");
     assert.equal(await runtime.store.readArtifact("seed_definition", "issue_word"), "seeding\n");
     assert.equal(await runtime.store.readMetadataValue("seed_definition", "issue_word"), "");
     assert.ok(session.stepDefinitions.some((step) => step.id === "seed_application_defined"));
     assert.equal(session.stepDefinitions.some((step) => step.id === "issue_file_created"), false);
+  });
+});
+
+test("vibe64 runtime auto-starts the initial seed conversation only before Codex asks a question", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new Vibe64SessionRuntime({
+      adapter: new SeedRequiredFakeAdapter(),
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "seed_application_defined",
+      metadata: worktreeMetadata(targetRoot, "seed_conversation_auto_start"),
+      sessionId: "seed_conversation_auto_start",
+      workflowDefinition: VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION
+    });
+
+    const initial = await runtime.getSession("seed_conversation_auto_start");
+
+    assert.equal(initial.currentStep, "seed_application_defined");
+    assert.equal(initial.stepMachine.status, "waiting_for_input");
+    assert.equal(initial.presentation.screen.kind, "conversation");
+    assert.equal(initial.presentation.auto.nextOperation.kind, "action");
+    assert.equal(initial.presentation.auto.nextOperation.route, "session-action");
+    assert.equal(initial.presentation.auto.nextOperation.actionId, "define_seed_application");
+    assert.equal(
+      initial.presentation.auto.nextOperation.input.conversationRequest,
+      "Ask me the setup choices you need to seed this application."
+    );
+
+    await runtime.store.writeStepState("seed_conversation_auto_start", "seed_application_defined", {
+      schemaVersion: 1,
+      status: "waiting_for_input",
+      message: "What should the app be called?"
+    });
+    const afterCodexQuestion = await runtime.getSession("seed_conversation_auto_start");
+
+    assert.equal(afterCodexQuestion.presentation.auto.nextOperation.kind, "wait");
+    assert.equal(afterCodexQuestion.presentation.auto.nextOperation.reason, "input");
+    assert.equal(afterCodexQuestion.presentation.screen.message, "What should the app be called?");
+  });
+});
+
+test("vibe64 runtime applies workflow initial metadata to existing seed sessions", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new Vibe64SessionRuntime({
+      adapter: new SeedRequiredFakeAdapter({
+        capabilities: {
+          create_worktree: true
+        }
+      }),
+      targetRoot
+    });
+
+    await runtime.createSession({
+      sessionId: "stale_seed",
+      workflowDefinition: VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION
+    });
+    await runtime.store.writeCompletedStep("stale_seed", "session_created");
+    await runtime.store.writeCurrentStep("stale_seed", "work_source_selected");
+    await runtime.store.deleteMetadataValue("stale_seed", "work_source");
+
+    const session = await runtime.getSession("stale_seed");
+
+    assert.equal(session.currentStep, "worktree_created");
+    assert.equal(session.metadata.work_source, "seed");
+    assert.equal(session.actions.find((action) => action.id === "create_worktree")?.enabled, true);
+    assert.equal(session.presentation.auto.nextOperation.executable, true);
+    assert.equal(session.presentation.auto.nextOperation.actionId, "create_worktree");
   });
 });
 

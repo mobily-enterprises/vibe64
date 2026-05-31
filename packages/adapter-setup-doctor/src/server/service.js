@@ -28,6 +28,9 @@ import {
   passDoctorCheck as passCheck
 } from "@local/vibe64-core/server/doctorCheckItems";
 import {
+  projectServiceTargetRoot
+} from "@local/vibe64-core/server/projectServiceSelection";
+import {
   runHostCommand,
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
@@ -691,25 +694,49 @@ async function inspectAdapterSetup({
 function createService({
   projectService = null,
   studioRoot = process.env[VIBE64_APP_ROOT_ENV] || process.cwd(),
-  targetRoot = process.env[VIBE64_TARGET_ROOT_ENV] || process.cwd()
+  targetRoot = process.env[VIBE64_TARGET_ROOT_ENV] || ""
 } = {}) {
   const resolvedStudioRoot = normalizeRoot(studioRoot);
-  const resolvedTargetRoot = normalizeRoot(targetRoot);
-  const readyStatusCache = createRepositoryReadyStatusCache({
-    doctorId: "adapter-setup",
-    studioRoot: resolvedStudioRoot,
-    targetRoot: resolvedTargetRoot
-  });
+
+  function currentTargetRoot() {
+    const selectedTargetRoot = String(targetRoot || projectServiceTargetRoot(projectService)).trim();
+    return selectedTargetRoot ? normalizeRoot(selectedTargetRoot) : "";
+  }
+
+  function noProjectSelectedStatus() {
+    return {
+      blockedReason: "Choose a project before running Adapter Setup.",
+      checks: [],
+      ok: true,
+      ready: false,
+      studioRoot: resolvedStudioRoot,
+      targetRoot: "",
+      updatedAt: new Date().toISOString()
+    };
+  }
+
+  function readyStatusCache(targetRootValue) {
+    return createRepositoryReadyStatusCache({
+      doctorId: "adapter-setup",
+      studioRoot: resolvedStudioRoot,
+      targetRoot: targetRootValue
+    });
+  }
 
   return Object.freeze({
     async getStatus(input = {}) {
+      const resolvedTargetRoot = currentTargetRoot();
+      if (!resolvedTargetRoot) {
+        return noProjectSelectedStatus();
+      }
+      const cache = readyStatusCache(resolvedTargetRoot);
       if (!refreshRequested(input)) {
-        const cachedStatus = await readyStatusCache.read();
+        const cachedStatus = await cache.read();
         if (cachedStatus) {
           return cachedStatus;
         }
       }
-      return readyStatusCache.remember(await inspectAdapterSetup({
+      return cache.remember(await inspectAdapterSetup({
         projectService,
         studioRoot: resolvedStudioRoot,
         targetRoot: resolvedTargetRoot
@@ -720,13 +747,18 @@ function createService({
       emit,
       refresh = false
     } = {}) {
+      const resolvedTargetRoot = currentTargetRoot();
+      if (!resolvedTargetRoot) {
+        return noProjectSelectedStatus();
+      }
+      const cache = readyStatusCache(resolvedTargetRoot);
       if (!refreshRequested({ refresh })) {
-        const cachedStatus = await readyStatusCache.read();
+        const cachedStatus = await cache.read();
         if (cachedStatus) {
           return cachedStatus;
         }
       }
-      return readyStatusCache.remember(await inspectAdapterSetup({
+      return cache.remember(await inspectAdapterSetup({
         emit,
         projectService,
         studioRoot: resolvedStudioRoot,
@@ -735,6 +767,13 @@ function createService({
     },
 
     startTerminal(input = {}) {
+      const resolvedTargetRoot = currentTargetRoot();
+      if (!resolvedTargetRoot) {
+        return {
+          ok: false,
+          error: "Choose a project before running Adapter Setup terminal actions."
+        };
+      }
       const actionId = String(input.actionId || "");
 
       if (actionId === "terminal-git-init") {

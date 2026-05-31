@@ -426,6 +426,7 @@ test("jskit seed issue definition uses the current-step input contract before is
     });
     await runtime.createSession({
       initialStep: "seed_application_defined",
+      metadata: worktreeMetadata(targetRoot, "jskit_seed_prompt"),
       sessionId: "jskit_seed_prompt",
       workflowDefinition: VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION
     });
@@ -434,7 +435,20 @@ test("jskit seed issue definition uses the current-step input contract before is
 
     assert.equal(initialSession.currentStep, "seed_application_defined");
     assert.equal(initialSession.stepMachine.status, "waiting_for_input");
-    assert.equal(initialSession.currentStepDefinition.interaction.submitKind, "ready");
+    assert.equal(initialSession.currentStepDefinition.interaction.kind, "conversation");
+    assert.equal(initialSession.currentStepDefinition.interaction.actionId, "define_seed_application");
+
+    const afterPrompt = await runtime.runAction("jskit_seed_prompt", "define_seed_application", {
+      conversationRequest: "Ask me the JSKIT setup choices you need."
+    });
+
+    assert.equal(afterPrompt.stepMachine.status, "awaiting_agent_result");
+    assert.equal(afterPrompt.actionResult.status, "prompt_ready");
+    assert.equal(afterPrompt.actionResult.promptId, "define_seed_application");
+    assert.match(afterPrompt.actionResult.prompt, /defining the initial seed work/u);
+    assert.match(afterPrompt.actionResult.prompt, /JSKIT seed guidance/u);
+    assert.match(afterPrompt.actionResult.prompt, /app name\/title/u);
+    assert.match(afterPrompt.actionResult.prompt, /Vibe64 step completion contract/u);
 
     const afterInput = await runtime.submitCurrentStepInput("jskit_seed_prompt", {
       fields: {
@@ -443,8 +457,9 @@ test("jskit seed issue definition uses the current-step input contract before is
         word: "seed"
       },
       kind: "ready",
+      source: "codex",
       stepId: "seed_application_defined",
-      stepStatus: "waiting_for_input"
+      stepStatus: "awaiting_agent_result"
     });
 
     assert.equal(afterInput.stepMachine.status, "confirm_files");
@@ -452,6 +467,9 @@ test("jskit seed issue definition uses the current-step input contract before is
     assert.equal(await runtime.store.readArtifact("jskit_seed_prompt", "issue_title"), "Seed JSKIT application foundation\n");
     assert.equal(await runtime.store.readArtifact("jskit_seed_prompt", "issue_word"), "seed\n");
     assert.equal(await runtime.store.readArtifact("jskit_seed_prompt", "issue.md"), "Seed the JSKIT app foundation.\n");
+    assert.equal(await runtime.store.readArtifact("jskit_seed_prompt", "work_title"), "Seed JSKIT application foundation\n");
+    assert.equal(await runtime.store.readArtifact("jskit_seed_prompt", "work_word"), "seed\n");
+    assert.equal(await runtime.store.readArtifact("jskit_seed_prompt", "work.md"), "Seed the JSKIT app foundation.\n");
   });
 });
 

@@ -4,19 +4,14 @@
     class="studio-conversation-log"
     aria-label="Conversation history"
   >
-    <div class="studio-conversation-log__header">
-      <div class="studio-conversation-log__title">
-        <v-icon :icon="mdiMessageTextOutline" size="18" />
-        <strong>Conversation</strong>
-      </div>
-      <v-progress-circular
-        v-if="loading"
-        color="primary"
-        indeterminate
-        size="18"
-        width="2"
-      />
-    </div>
+    <v-progress-circular
+      v-if="loading"
+      class="studio-conversation-log__loading"
+      color="primary"
+      indeterminate
+      size="18"
+      width="2"
+    />
 
     <v-alert
       v-if="error"
@@ -94,7 +89,6 @@
 import { computed, onMounted, ref, watch } from "vue";
 import {
   mdiAccountOutline,
-  mdiMessageTextOutline,
   mdiRobotOutline
 } from "@mdi/js";
 import { useScrollToBottom } from "@/composables/useScrollToBottom.js";
@@ -225,23 +219,8 @@ watch(scrollTrigger, () => {
   text-align: left;
 }
 
-.studio-conversation-log__header {
-  align-items: center;
-  display: flex;
-  gap: 0.5rem;
-  justify-content: space-between;
-}
-
-.studio-conversation-log__title {
-  align-items: center;
-  color: rgb(var(--v-theme-primary));
-  display: flex;
-  gap: 0.38rem;
-  min-width: 0;
-}
-
-.studio-conversation-log__title strong {
-  color: rgb(var(--v-theme-on-surface));
+.studio-conversation-log__loading {
+  justify-self: end;
 }
 
 .studio-conversation-log__body {

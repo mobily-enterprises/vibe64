@@ -13,6 +13,62 @@ import {
 } from "../support/base-shell-mocks";
 
 test.describe("studio startup navigation", () => {
+  test("root opens the project picker before setup checks when no project is selected", async ({ page }) => {
+    let projectSelectionRequests = 0;
+    await page.route("**/api/bootstrap", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          app: {},
+          requestMeta: {
+            hasRequest: false
+          },
+          session: {
+            authenticated: false
+          },
+          surfaceAccess: {}
+        })
+      });
+    });
+    await page.route("**/api/vibe64/projects", async (route) => {
+      projectSelectionRequests += 1;
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          currentProject: null,
+          hasSelection: false,
+          projects: [
+            {
+              external: false,
+              name: "demo-app",
+              path: "/workspace/vibe64/demo-app",
+              selected: false,
+              slug: "demo-app",
+              source: "managed"
+            }
+          ],
+          projectsRoot: "/workspace/vibe64",
+          targetRoot: ""
+        })
+      });
+    });
+    const apiRequests = trackStudioApiRequests(page);
+
+    await page.goto(`${BASE_URL}/`);
+
+    await expect(page).toHaveURL(/\/home$/u);
+    await expect(page.getByRole("heading", { name: "Choose a project", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: /demo-app/u })).toBeVisible();
+    await expect(page.getByLabel("New project folder")).toBeVisible();
+    expect(projectSelectionRequests).toBeGreaterThanOrEqual(1);
+    expect(apiRequests.count("/api/studio/current-app/setup-readiness")).toBe(0);
+    expect(apiRequests.count("/api/studio/studio-setup")).toBe(0);
+    expect(apiRequests.count("/api/studio/adapter-setup")).toBe(0);
+    expect(apiRequests.count("/api/studio/project-setup")).toBe(0);
+    expect(apiRequests.count("/api/studio/current-app")).toBe(0);
+  });
+
   test("root opens Studio Setup when studio readiness is blocked", async ({ page }) => {
     const apiRequests = trackStudioApiRequests(page);
     await mockBootstrapBlocked(page);

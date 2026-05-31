@@ -733,12 +733,13 @@ class Vibe64SessionRuntime {
   async sessionView(session, {
     sessionAdapter = undefined
   } = {}) {
+    const workflowDefinitionId = this.workflowDefinitionIdForSession(session);
+    const sessionWithWorkflowMetadata = this.sessionWithWorkflowInitialMetadata(session, workflowDefinitionId);
     const sessionWithConfig = {
-      ...session,
+      ...sessionWithWorkflowMetadata,
       config: this.projectConfig,
-      adapter: sessionAdapter || await this.adapterViewForSession(session)
+      adapter: sessionAdapter || await this.adapterViewForSession(sessionWithWorkflowMetadata)
     };
-    const workflowDefinitionId = this.workflowDefinitionIdForSession(sessionWithConfig);
     const workflowMachine = this.workflowMachineForDefinition(workflowDefinitionId);
     const sessionView = {
       ...workflowMachine.buildSessionView(sessionWithConfig),
@@ -752,7 +753,7 @@ class Vibe64SessionRuntime {
   sessionSummaryView(session = {}) {
     const workflowDefinitionId = this.workflowDefinitionIdForSession(session);
     return {
-      ...session,
+      ...this.sessionWithWorkflowInitialMetadata(session, workflowDefinitionId),
       workflowDefinition: workflowDefinition(workflowDefinitionId, {
         workflowRegistry: this.workflowRegistry
       })
@@ -810,6 +811,16 @@ class Vibe64SessionRuntime {
       workflow_definition: normalizeWorkflowDefinitionId(workflowDefinitionId, {
         workflowRegistry: this.workflowRegistry
       })
+    };
+  }
+
+  sessionWithWorkflowInitialMetadata(session = {}, workflowDefinitionId = "") {
+    if (this.workflowMachine) {
+      return session;
+    }
+    return {
+      ...session,
+      metadata: this.sessionMetadataWithWorkflowDefinition(session.metadata, workflowDefinitionId)
     };
   }
 

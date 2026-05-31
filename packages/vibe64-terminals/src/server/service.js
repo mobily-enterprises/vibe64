@@ -168,7 +168,7 @@ function createService({
     },
 
     async startProjectToolFixJob(toolId, input = {}) {
-      const targetRoot = projectService.targetRoot || "";
+      const targetRoot = terminalTargetRoot({}, projectService);
       return codex.startFixJob({
         prompt: projectToolFailureFixPrompt({
           ...input,

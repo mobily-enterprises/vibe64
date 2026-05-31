@@ -1,0 +1,8 @@
+{{systemStandard}}
+
+JSKIT seed guidance:
+{{adapter.promptContext.seed_issue_guidance}}
+
+Keep the seed description command-first and framework-owned. It should identify the JSKIT app creation command, selected JSKIT modules/packages, database/runtime choices, local fake development secrets, dependency install expectations, generated metadata/helper-map work, and verification path.
+
+Do not define product CRUD entities, detailed screens, or feature implementation beyond the foundation required by the selected modules.
