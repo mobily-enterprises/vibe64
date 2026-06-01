@@ -6,11 +6,12 @@ import {
   closeTerminalSessionsForNamespace,
   listTerminalSessions,
   readTerminalSession,
+  readTerminalSessionControlState,
   resizeTerminalSession,
   startTerminalSession,
   subscribeTerminalSession,
   updateTerminalSessionMetadata,
-  writeTerminalSession
+  writeTerminalSessionText
 } from "@local/studio-terminal-core/server/terminalSessions";
 import {
   STUDIO_BASE_TOOLCHAIN_IMAGE,
@@ -105,14 +106,14 @@ const CODEX_BOOT_MIN_AGE_MS = 1800;
 const CODEX_BOOT_QUIET_MS = 900;
 const CODEX_BOOT_TIMEOUT_MS = 12000;
 const CODEX_TURN_SETTLE_MS = CODEX_BOOT_QUIET_MS;
-const CODEX_TURN_UNKNOWN_QUIET_MS = 5000;
+const CODEX_TURN_UNKNOWN_QUIET_MS = 3000;
 const DEBUG_PROMPTS_ENABLED = String(process.env.DEBUG_PROMPTS || "").trim() === "1";
 const CODEX_KEY_PAUSE_MS = 180;
 const CODEX_THREAD_CAPTURE_TIMEOUT_MS = DEBUG_PROMPTS_ENABLED ? 10 * 60_000 : 30_000;
 const CODEX_SESSION_MODEL = "gpt-5.5";
 const CODEX_SESSION_REASONING_EFFORT = "xhigh";
 const CODEX_BOOTSTRAP_TASK_ID = "codex_bootstrap";
-const CODEX_SESSION_TERMINAL_BOOTSTRAP_DISABLED = true;
+const CODEX_SESSION_TERMINAL_BOOTSTRAP_DISABLED = false;
 const START_CODEX_TERMINAL_CONTROL_ACTION = "start_codex_terminal";
 const MAX_OPEN_CODEX_TERMINALS = 3;
 const STUDIO_DAEMON_ID = crypto.randomUUID();
@@ -391,13 +392,13 @@ function codexBootstrapSignature(sessionId = "") {
 }
 
 function codexTerminalSnapshot(sessionId = "", terminalSessionId = "") {
-  return readTerminalSession(terminalSessionId, {
+  return readTerminalSessionControlState(terminalSessionId, {
     namespace: codexTerminalNamespace(sessionId)
   });
 }
 
 function globalCodexTerminalSnapshot(terminalSessionId = "") {
-  return readTerminalSession(terminalSessionId, {
+  return readTerminalSessionControlState(terminalSessionId, {
     namespace: globalCodexTerminalNamespace()
   });
 }
@@ -459,7 +460,7 @@ function activeGlobalCodexTerminal(targetRoot = "") {
 }
 
 function writeCodexTerminalInput(sessionId = "", terminalSessionId = "", data = "") {
-  return writeTerminalSession(terminalSessionId, data, {
+  return writeTerminalSessionText(terminalSessionId, data, {
     namespace: codexTerminalNamespace(sessionId)
   });
 }
@@ -778,14 +779,10 @@ function createCodexTerminalController({
       return;
     }
 
-    const lastOutputAt = Date.parse(snapshot.lastOutputAt || "");
     const turnStartedAt = Date.parse(snapshot.metadata?.codexTurnStartedAt || "");
-    const quietSince = Number.isFinite(lastOutputAt)
-      ? lastOutputAt
-      : Number.isFinite(turnStartedAt)
-        ? turnStartedAt
-        : Date.now();
-    const quietMs = Date.now() - quietSince;
+    const quietMs = Number.isFinite(Number(snapshot.idleForMs))
+      ? Number(snapshot.idleForMs)
+      : Date.now() - (Number.isFinite(turnStartedAt) ? turnStartedAt : Date.now());
     if (quietMs < CODEX_TURN_SETTLE_MS) {
       scheduleCodexTurnWatchdog(sessionId, terminalSessionId, {
         delayMs: CODEX_TURN_SETTLE_MS - quietMs
@@ -1299,7 +1296,7 @@ function createCodexTerminalController({
   }
 
   async function writePromptIntoGlobalCodexTerminal(terminalSessionId, prompt) {
-    return writeTerminalSession(
+    return writeTerminalSessionText(
       terminalSessionId,
       codexPromptTerminalInput(prompt),
       {
@@ -1634,7 +1631,7 @@ function createCodexTerminalController({
       if (ready.ok === false) {
         return;
       }
-      await writeTerminalSession(
+      await writeTerminalSessionText(
         terminalResponse.id,
         codexPromptTerminalInput(fullPrompt),
         {
@@ -2542,19 +2539,19 @@ function createCodexTerminalController({
     },
 
     writeTerminal(sessionId, terminalSessionId, data) {
-      return writeTerminalSession(terminalSessionId, data, {
+      return writeTerminalSessionText(terminalSessionId, data, {
         namespace: codexTerminalNamespace(sessionId)
       });
     },
 
     writeGlobalTerminal(terminalSessionId, data) {
-      return writeTerminalSession(terminalSessionId, data, {
+      return writeTerminalSessionText(terminalSessionId, data, {
         namespace: globalCodexTerminalNamespace()
       });
     },
 
     writeFixTerminal(jobId, terminalSessionId, data) {
-      return writeTerminalSession(terminalSessionId, data, {
+      return writeTerminalSessionText(terminalSessionId, data, {
         namespace: fixCodexTerminalNamespace(jobId)
       });
     },

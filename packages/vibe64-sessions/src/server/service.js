@@ -20,7 +20,7 @@ import {
 import { inspectSessionDiff } from "./sessionDiff.js";
 
 const MAX_OPEN_VIBE64_SESSIONS = 5;
-const CODEX_PROMPT_HANDOFF_DELIVERY_ENABLED = false;
+const CODEX_PROMPT_HANDOFF_DELIVERY_ENABLED = true;
 const CLOSED_SESSION_STATUSES = new Set(["abandoned", "finished"]);
 const SESSION_ARCHIVE_QUERY = Object.freeze({
   ABANDONED: "abandoned",
@@ -261,6 +261,15 @@ async function deliverCodexPromptIfNeeded(terminalService, session = {}) {
       promptId: String(handoff.promptId || ""),
       sessionId: session.sessionId
     });
+    if (
+      delivery.attentionRequired === true ||
+      String(delivery.terminalSessionId || delivery.id || "").trim()
+    ) {
+      return {
+        ...session,
+        codexPromptDelivery: delivery
+      };
+    }
     throw new Error(delivery.error || "Vibe64 Codex prompt delivery failed.");
   }
   vibe64SessionDebugLog("server.service.deliverCodexPrompt.done", {

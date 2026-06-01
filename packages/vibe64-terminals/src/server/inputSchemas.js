@@ -247,6 +247,23 @@ const shellTerminalFields = {
   }
 };
 
+const terminalControlTextFields = {
+  text: {
+    type: "string",
+    noTrim: true,
+    required: true
+  }
+};
+
+const terminalControlKeyFields = {
+  key: {
+    type: "string",
+    enum: ["ctrl-c", "enter", "escape", "tab"],
+    noTrim: false,
+    required: true
+  }
+};
+
 const codexAttachmentInputValidator = deepFreeze({
   schema: createSchema(codexAttachmentFields),
   mode: "patch"
@@ -340,6 +357,16 @@ const shellTerminalInputValidator = deepFreeze({
   mode: "patch"
 });
 
+const terminalControlTextInputValidator = deepFreeze({
+  schema: createSchema(terminalControlTextFields),
+  mode: "patch"
+});
+
+const terminalControlKeyInputValidator = deepFreeze({
+  schema: createSchema(terminalControlKeyFields),
+  mode: "patch"
+});
+
 const shellTerminalActionInputValidator = deepFreeze({
   schema: createSchema({
     ...shellTerminalFields,
@@ -371,5 +398,7 @@ export {
   sessionTerminalFixActionInputValidator,
   sessionTerminalFixInputValidator,
   shellTerminalActionInputValidator,
-  shellTerminalInputValidator
+  shellTerminalInputValidator,
+  terminalControlKeyInputValidator,
+  terminalControlTextInputValidator
 };

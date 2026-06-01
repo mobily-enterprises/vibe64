@@ -9,6 +9,14 @@ const MIN_TERMINAL_COLS = 20;
 const MIN_TERMINAL_ROWS = 5;
 const MAX_TERMINAL_COLS = 300;
 const MAX_TERMINAL_ROWS = 120;
+const DEFAULT_QUIET_THRESHOLD_MS = 3000;
+const MAX_QUIET_THRESHOLD_MS = 10 * 60 * 1000;
+const TERMINAL_KEY_INPUTS = Object.freeze({
+  "ctrl-c": "\u0003",
+  "enter": "\r",
+  "escape": "\u001b",
+  "tab": "\t"
+});
 const stores = new Map();
 
 function normalizeNamespace(namespace = "") {
@@ -110,6 +118,126 @@ function applySessionMetadata(session, metadata = {}) {
 
 function byteLength(value = "") {
   return Buffer.byteLength(String(value || ""), "utf8");
+}
+
+function normalizeQuietThresholdMs(value = DEFAULT_QUIET_THRESHOLD_MS) {
+  const threshold = Math.floor(Number(value));
+  if (!Number.isFinite(threshold) || threshold < 0) {
+    return DEFAULT_QUIET_THRESHOLD_MS;
+  }
+  return Math.min(threshold, MAX_QUIET_THRESHOLD_MS);
+}
+
+function timestampMs(value = "") {
+  const ms = Date.parse(String(value || ""));
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+function terminalMovementState(snapshot = {}, {
+  now = Date.now(),
+  quietThresholdMs = DEFAULT_QUIET_THRESHOLD_MS
+} = {}) {
+  const threshold = normalizeQuietThresholdMs(quietThresholdMs);
+  const candidates = [
+    {
+      at: snapshot.lastInputAt || "",
+      direction: "input"
+    },
+    {
+      at: snapshot.lastOutputAt || "",
+      direction: "output"
+    },
+    {
+      at: snapshot.createdAt || "",
+      direction: "created"
+    }
+  ]
+    .map((candidate) => ({
+      ...candidate,
+      ms: timestampMs(candidate.at)
+    }))
+    .filter((candidate) => candidate.ms > 0)
+    .sort((left, right) => right.ms - left.ms);
+  const lastMovement = candidates[0] || {
+    at: "",
+    direction: "",
+    ms: Number(now)
+  };
+  const idleForMs = Math.max(0, Number(now) - lastMovement.ms);
+  return {
+    idleForMs,
+    lastMovementAt: lastMovement.at,
+    lastMovementDirection: lastMovement.direction,
+    quiet: idleForMs >= threshold,
+    quietThresholdMs: threshold
+  };
+}
+
+function terminalSessionControlSnapshot(snapshot = {}, options = {}) {
+  if (!snapshot || snapshot.ok === false) {
+    return snapshot;
+  }
+  return {
+    ...snapshot,
+    ...terminalMovementState(snapshot, options)
+  };
+}
+
+function readTerminalSessionControlState(id, {
+  namespace = "default",
+  quietThresholdMs = DEFAULT_QUIET_THRESHOLD_MS
+} = {}) {
+  return terminalSessionControlSnapshot(readTerminalSession(id, {
+    namespace
+  }), {
+    quietThresholdMs
+  });
+}
+
+function terminalSessionContainsText(snapshot = {}, text = "", options = {}) {
+  const controlSnapshot = terminalSessionControlSnapshot(snapshot, options);
+  if (!controlSnapshot || controlSnapshot.ok === false) {
+    return controlSnapshot;
+  }
+  const needle = String(text || "");
+  return {
+    ...controlSnapshot,
+    checkedTextLength: needle.length,
+    containsText: needle ? String(controlSnapshot.output || "").includes(needle) : false
+  };
+}
+
+function terminalKeyInput(key = "") {
+  const normalizedKey = String(key || "").trim().toLowerCase().replace(/_/gu, "-");
+  return TERMINAL_KEY_INPUTS[normalizedKey] || "";
+}
+
+function writeTerminalSessionText(id, text = "", {
+  namespace = "default",
+  quietThresholdMs = DEFAULT_QUIET_THRESHOLD_MS
+} = {}) {
+  return terminalSessionControlSnapshot(writeTerminalSession(id, String(text || ""), {
+    namespace
+  }), {
+    quietThresholdMs
+  });
+}
+
+function writeTerminalSessionKey(id, key = "", {
+  namespace = "default",
+  quietThresholdMs = DEFAULT_QUIET_THRESHOLD_MS
+} = {}) {
+  const input = terminalKeyInput(key);
+  if (!input) {
+    return {
+      ok: false,
+      error: `Unsupported terminal key: ${String(key || "")}`
+    };
+  }
+  return writeTerminalSessionText(id, input, {
+    namespace,
+    quietThresholdMs
+  });
 }
 
 function recordTerminalInput(session, data = "") {
@@ -597,6 +725,13 @@ export {
   startTerminalSession,
   stopTerminalSession,
   subscribeTerminalSession,
+  terminalKeyInput,
+  terminalMovementState,
+  terminalSessionContainsText,
+  terminalSessionControlSnapshot,
   updateTerminalSessionMetadata,
-  writeTerminalSession
+  readTerminalSessionControlState,
+  writeTerminalSession,
+  writeTerminalSessionKey,
+  writeTerminalSessionText
 };

@@ -7,11 +7,17 @@ import {
   countRunningTerminalSessions,
   listTerminalSessions,
   readTerminalSession,
+  readTerminalSessionControlState,
   resizeTerminalSession,
   startTerminalSession,
   stopTerminalSession,
   subscribeTerminalSession,
-  writeTerminalSession
+  terminalKeyInput,
+  terminalMovementState,
+  terminalSessionContainsText,
+  writeTerminalSession,
+  writeTerminalSessionKey,
+  writeTerminalSessionText
 } from "@local/studio-terminal-core/server/terminalSessions";
 
 function longRunningNodeArgs() {
@@ -194,6 +200,80 @@ test("terminal sessions record input and output byte activity", async () => {
   } finally {
     await closeTerminalSessionsForNamespacePrefix(namespace);
   }
+});
+
+test("terminal session control helpers send exact text, narrow keys, and expose quiet state", async () => {
+  const namespace = `terminal-control-test-${crypto.randomUUID()}`;
+  const session = startTerminalSession({
+    args: [
+      "-e",
+      "process.stdin.on('data', (chunk) => process.stdout.write(`echo:${chunk}`)); process.stdin.resume();"
+    ],
+    command: process.execPath,
+    commandPreview: "node echo",
+    namespace
+  });
+
+  try {
+    assert.equal(terminalKeyInput("escape"), "\u001b");
+    assert.equal(terminalKeyInput("ctrl_c"), "\u0003");
+    assert.equal(terminalKeyInput("delete"), "");
+
+    const written = writeTerminalSessionText(session.id, "hello\n", {
+      namespace
+    });
+    assert.equal(written.ok, true);
+    assert.equal(written.inputVersion, 1);
+
+    await waitFor(() => readTerminalSession(session.id, { namespace }).output.includes("echo:hello"));
+    const snapshot = readTerminalSessionControlState(session.id, {
+      namespace
+    });
+    assert.equal(snapshot.ok, true);
+    assert.equal(snapshot.lastMovementDirection, "output");
+    assert.equal(terminalSessionContainsText(snapshot, "echo:hello").containsText, true);
+    assert.equal(terminalSessionContainsText(snapshot, "missing").containsText, false);
+
+    const keyWritten = writeTerminalSessionKey(session.id, "enter", {
+      namespace
+    });
+    assert.equal(keyWritten.ok, true);
+    assert.equal(keyWritten.inputVersion, 2);
+  } finally {
+    await closeTerminalSessionsForNamespacePrefix(namespace);
+  }
+});
+
+test("terminal movement state treats input and output as activity for quiet checks", () => {
+  const now = Date.now();
+  const oldTimestamp = new Date(now - 4000).toISOString();
+  const freshTimestamp = new Date(now - 500).toISOString();
+
+  assert.deepEqual(terminalMovementState({
+    createdAt: oldTimestamp,
+    lastInputAt: "",
+    lastOutputAt: ""
+  }, {
+    now,
+    quietThresholdMs: 3000
+  }), {
+    idleForMs: 4000,
+    lastMovementAt: oldTimestamp,
+    lastMovementDirection: "created",
+    quiet: true,
+    quietThresholdMs: 3000
+  });
+
+  const activeState = terminalMovementState({
+    createdAt: oldTimestamp,
+    lastInputAt: freshTimestamp,
+    lastOutputAt: oldTimestamp
+  }, {
+    now,
+    quietThresholdMs: 3000
+  });
+  assert.equal(activeState.quiet, false);
+  assert.equal(activeState.lastMovementDirection, "input");
 });
 
 test("terminal sessions resize the running PTY", async () => {

@@ -19,6 +19,10 @@ function vibe64CodexTerminalEndpoint(sessionId, terminalSessionId = "") {
   return terminalSessionId ? `${base}/${encodeURIComponent(terminalSessionId)}` : base;
 }
 
+function vibe64CodexTerminalControlEndpoint(sessionId, terminalSessionId, suffix = "") {
+  return `${vibe64CodexTerminalEndpoint(sessionId, terminalSessionId)}/control${suffix}`;
+}
+
 function vibe64GlobalCodexTerminalEndpoint(terminalSessionId = "") {
   return terminalSessionId
     ? `${VIBE64_GLOBAL_CODEX_TERMINAL_ENDPOINT}/${encodeURIComponent(terminalSessionId)}`
@@ -84,6 +88,10 @@ function vibe64LaunchTerminalEndpoint(sessionId, terminalSessionId = "") {
 function vibe64ShellTerminalEndpoint(sessionId, terminalSessionId = "") {
   const base = vibe64SessionEndpoint(sessionId, "/shell-terminal");
   return terminalSessionId ? `${base}/${encodeURIComponent(terminalSessionId)}` : base;
+}
+
+function vibe64ShellTerminalControlEndpoint(sessionId, terminalSessionId, suffix = "") {
+  return `${vibe64ShellTerminalEndpoint(sessionId, terminalSessionId)}/control${suffix}`;
 }
 
 function vibe64CodexTerminalWebSocketUrl(sessionId, terminalSessionId) {
@@ -160,6 +168,58 @@ async function closeVibe64GlobalCodexTerminal(_scopeId, terminalSessionId) {
   return studioHttpClient.delete(vibe64GlobalCodexTerminalEndpoint(terminalSessionId));
 }
 
+async function readVibe64CodexTerminalControlSnapshot(sessionId, terminalSessionId) {
+  return studioHttpClient.get(vibe64CodexTerminalControlEndpoint(sessionId, terminalSessionId, "/snapshot"));
+}
+
+async function readVibe64CodexTerminalQuiet(sessionId, terminalSessionId) {
+  return studioHttpClient.get(vibe64CodexTerminalControlEndpoint(sessionId, terminalSessionId, "/quiet"));
+}
+
+async function checkVibe64CodexTerminalText(sessionId, terminalSessionId, text = "") {
+  return studioHttpClient.post(vibe64CodexTerminalControlEndpoint(sessionId, terminalSessionId, "/check-text"), {
+    text: String(text || "")
+  });
+}
+
+async function sendVibe64CodexTerminalText(sessionId, terminalSessionId, text = "") {
+  return studioHttpClient.post(vibe64CodexTerminalControlEndpoint(sessionId, terminalSessionId, "/text"), {
+    text: String(text || "")
+  });
+}
+
+async function sendVibe64CodexTerminalKey(sessionId, terminalSessionId, key = "") {
+  return studioHttpClient.post(vibe64CodexTerminalControlEndpoint(sessionId, terminalSessionId, "/key"), {
+    key: String(key || "")
+  });
+}
+
+async function readVibe64ShellTerminalControlSnapshot(sessionId, terminalSessionId) {
+  return studioHttpClient.get(vibe64ShellTerminalControlEndpoint(sessionId, terminalSessionId, "/snapshot"));
+}
+
+async function readVibe64ShellTerminalQuiet(sessionId, terminalSessionId) {
+  return studioHttpClient.get(vibe64ShellTerminalControlEndpoint(sessionId, terminalSessionId, "/quiet"));
+}
+
+async function checkVibe64ShellTerminalText(sessionId, terminalSessionId, text = "") {
+  return studioHttpClient.post(vibe64ShellTerminalControlEndpoint(sessionId, terminalSessionId, "/check-text"), {
+    text: String(text || "")
+  });
+}
+
+async function sendVibe64ShellTerminalText(sessionId, terminalSessionId, text = "") {
+  return studioHttpClient.post(vibe64ShellTerminalControlEndpoint(sessionId, terminalSessionId, "/text"), {
+    text: String(text || "")
+  });
+}
+
+async function sendVibe64ShellTerminalKey(sessionId, terminalSessionId, key = "") {
+  return studioHttpClient.post(vibe64ShellTerminalControlEndpoint(sessionId, terminalSessionId, "/key"), {
+    key: String(key || "")
+  });
+}
+
 async function startVibe64CommandTerminal(sessionId, input = {}) {
   return studioHttpClient.post(vibe64CommandTerminalEndpoint(sessionId), input);
 }
@@ -234,12 +294,22 @@ export {
   closeVibe64GlobalCodexTerminal,
   closeVibe64CommandTerminal,
   closeVibe64ProjectToolTerminal,
+  checkVibe64CodexTerminalText,
+  checkVibe64ShellTerminalText,
   buildVibe64TerminalFailureFixRequest,
+  readVibe64CodexTerminalControlSnapshot,
   readVibe64GlobalCodexTerminalState,
+  readVibe64CodexTerminalQuiet,
   readVibe64ArtifactReadiness,
   readVibe64SessionDiff,
   readVibe64ProjectTools,
+  readVibe64ShellTerminalControlSnapshot,
+  readVibe64ShellTerminalQuiet,
   runVibe64ProjectTool,
+  sendVibe64CodexTerminalKey,
+  sendVibe64CodexTerminalText,
+  sendVibe64ShellTerminalKey,
+  sendVibe64ShellTerminalText,
   submitVibe64CurrentStepInput,
   returnVibe64AgentControl,
   startVibe64CodexTerminal,

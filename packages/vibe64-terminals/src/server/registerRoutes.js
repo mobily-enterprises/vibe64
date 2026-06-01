@@ -6,7 +6,9 @@ import {
   projectToolFixInputValidator,
   projectToolRunInputValidator,
   sessionTerminalFixInputValidator,
-  shellTerminalInputValidator
+  shellTerminalInputValidator,
+  terminalControlKeyInputValidator,
+  terminalControlTextInputValidator
 } from "./inputSchemas.js";
 import {
   ACTION_RUN_PROJECT_TOOL,
@@ -23,6 +25,11 @@ import {
 } from "./codexAttachments.js";
 import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRoutes";
 import { registerTerminalWebSocketRoute } from "@local/vibe64-core/server/terminalWebSocketRoutes";
+import {
+  terminalKeyInput,
+  terminalSessionContainsText,
+  terminalSessionControlSnapshot
+} from "@local/studio-terminal-core/server/terminalSessions";
 
 const VIBE64_TERMINALS_SERVICE = "feature.vibe64-terminals.service";
 const VIBE64_TERMINALS_UNAVAILABLE = "Vibe64 terminal service is unavailable.";
@@ -153,7 +160,8 @@ function registerRoutes(
     path: "/sessions/:sessionId/launch-terminal/:terminalSessionId",
     read: (sessionId, terminalSessionId) => terminalService().readLaunchTargetTerminal(sessionId, terminalSessionId),
     readSummary: "Read an Vibe64 launch target terminal snapshot.",
-    closeSummary: "Close an Vibe64 launch target terminal."
+    closeSummary: "Close an Vibe64 launch target terminal.",
+    write: (sessionId, terminalSessionId, data) => terminalService().writeLaunchTargetTerminal(sessionId, terminalSessionId, data)
   });
 
   routes.serviceRoute("POST", "/sessions/:sessionId/launch-terminal/:terminalSessionId/stop", {
@@ -166,18 +174,22 @@ function registerRoutes(
 
   registerTerminalSnapshotRoutes(routes, {
     close: (sessionId, terminalSessionId) => terminalService().closeCodexTerminal(sessionId, terminalSessionId),
+    control: true,
     path: "/sessions/:sessionId/codex-terminal/:terminalSessionId",
     read: (sessionId, terminalSessionId) => terminalService().readCodexTerminal(sessionId, terminalSessionId),
     readSummary: "Read an Vibe64 Codex terminal snapshot.",
-    closeSummary: "Close an Vibe64 Codex terminal."
+    closeSummary: "Close an Vibe64 Codex terminal.",
+    write: (sessionId, terminalSessionId, data) => terminalService().writeCodexTerminal(sessionId, terminalSessionId, data)
   });
 
   registerGlobalTerminalSnapshotRoutes(routes, {
     close: (terminalSessionId) => terminalService().closeGlobalCodexTerminal(terminalSessionId),
+    control: true,
     path: "/codex-terminal/:terminalSessionId",
     read: (terminalSessionId) => terminalService().readGlobalCodexTerminal(terminalSessionId),
     readSummary: "Read a global Vibe64 Codex terminal snapshot.",
-    closeSummary: "Close a global Vibe64 Codex terminal."
+    closeSummary: "Close a global Vibe64 Codex terminal.",
+    write: (terminalSessionId, data) => terminalService().writeGlobalCodexTerminal(terminalSessionId, data)
   });
 
   registerToolTerminalSnapshotRoutes(routes, {
@@ -185,15 +197,18 @@ function registerRoutes(
     path: "/tools/:toolId/terminal/:terminalSessionId",
     read: (toolId, terminalSessionId) => terminalService().readProjectToolTerminal(toolId, terminalSessionId),
     readSummary: "Read a Vibe64 project tool terminal snapshot.",
-    closeSummary: "Close a Vibe64 project tool terminal."
+    closeSummary: "Close a Vibe64 project tool terminal.",
+    write: (toolId, terminalSessionId, data) => terminalService().writeProjectToolTerminal(toolId, terminalSessionId, data)
   });
 
   registerFixTerminalSnapshotRoutes(routes, {
     close: (jobId, terminalSessionId) => terminalService().closeFixCodexTerminal(jobId, terminalSessionId),
+    control: true,
     path: "/fix-codex-jobs/:jobId/terminal/:terminalSessionId",
     read: (jobId, terminalSessionId) => terminalService().readFixCodexTerminal(jobId, terminalSessionId),
     readSummary: "Read a Fix Codex terminal snapshot.",
-    closeSummary: "Close a Fix Codex terminal."
+    closeSummary: "Close a Fix Codex terminal.",
+    write: (jobId, terminalSessionId, data) => terminalService().writeFixCodexTerminal(jobId, terminalSessionId, data)
   });
 
   registerTerminalSnapshotRoutes(routes, {
@@ -201,15 +216,18 @@ function registerRoutes(
     path: "/sessions/:sessionId/command-terminal/:terminalSessionId",
     read: (sessionId, terminalSessionId) => terminalService().readCommandTerminal(sessionId, terminalSessionId),
     readSummary: "Read an Vibe64 command terminal snapshot.",
-    closeSummary: "Close an Vibe64 command terminal."
+    closeSummary: "Close an Vibe64 command terminal.",
+    write: (sessionId, terminalSessionId, data) => terminalService().writeCommandTerminal(sessionId, terminalSessionId, data)
   });
 
   registerTerminalSnapshotRoutes(routes, {
     close: (sessionId, terminalSessionId) => terminalService().closeShellTerminal(sessionId, terminalSessionId),
+    control: true,
     path: "/sessions/:sessionId/shell-terminal/:terminalSessionId",
     read: (sessionId, terminalSessionId) => terminalService().readShellTerminal(sessionId, terminalSessionId),
     readSummary: "Read an Vibe64 shell terminal snapshot.",
-    closeSummary: "Close an Vibe64 shell terminal."
+    closeSummary: "Close an Vibe64 shell terminal.",
+    write: (sessionId, terminalSessionId, data) => terminalService().writeShellTerminal(sessionId, terminalSessionId, data)
   });
 
   registerVibe64TerminalWebSocketRoutes(app, routes);
@@ -260,9 +278,11 @@ function fixTerminalRouteInput(request) {
 function registerTerminalSnapshotRoutes(routes, {
   close,
   closeSummary,
+  control = false,
   path,
   read,
-  readSummary
+  readSummary,
+  write = null
 }) {
   routes.serviceRoute("GET", path, {
     failureStatus: 404,
@@ -280,14 +300,27 @@ function registerTerminalSnapshotRoutes(routes, {
     const input = terminalRouteInput(request);
     return close(input.sessionId, input.terminalSessionId);
   });
+
+  if (control) {
+    registerTerminalControlRoutes(routes, {
+      inputForRequest: terminalRouteInput,
+      path,
+      read: (input) => read(input.sessionId, input.terminalSessionId),
+      write: write
+        ? (input, data) => write(input.sessionId, input.terminalSessionId, data)
+        : null
+    });
+  }
 }
 
 function registerGlobalTerminalSnapshotRoutes(routes, {
   close,
   closeSummary,
+  control = false,
   path,
   read,
-  readSummary
+  readSummary,
+  write = null
 }) {
   routes.serviceRoute("GET", path, {
     failureStatus: 404,
@@ -305,14 +338,27 @@ function registerGlobalTerminalSnapshotRoutes(routes, {
     const input = globalTerminalRouteInput(request);
     return close(input.terminalSessionId);
   });
+
+  if (control) {
+    registerTerminalControlRoutes(routes, {
+      inputForRequest: globalTerminalRouteInput,
+      path,
+      read: (input) => read(input.terminalSessionId),
+      write: write
+        ? (input, data) => write(input.terminalSessionId, data)
+        : null
+    });
+  }
 }
 
 function registerToolTerminalSnapshotRoutes(routes, {
   close,
   closeSummary,
+  control = false,
   path,
   read,
-  readSummary
+  readSummary,
+  write = null
 }) {
   routes.serviceRoute("GET", path, {
     failureStatus: 404,
@@ -330,14 +376,27 @@ function registerToolTerminalSnapshotRoutes(routes, {
     const input = toolTerminalRouteInput(request);
     return close(input.toolId, input.terminalSessionId);
   });
+
+  if (control) {
+    registerTerminalControlRoutes(routes, {
+      inputForRequest: toolTerminalRouteInput,
+      path,
+      read: (input) => read(input.toolId, input.terminalSessionId),
+      write: write
+        ? (input, data) => write(input.toolId, input.terminalSessionId, data)
+        : null
+    });
+  }
 }
 
 function registerFixTerminalSnapshotRoutes(routes, {
   close,
   closeSummary,
+  control = false,
   path,
   read,
-  readSummary
+  readSummary,
+  write = null
 }) {
   routes.serviceRoute("GET", path, {
     failureStatus: 404,
@@ -354,6 +413,84 @@ function registerFixTerminalSnapshotRoutes(routes, {
   }, (request) => {
     const input = fixTerminalRouteInput(request);
     return close(input.jobId, input.terminalSessionId);
+  });
+
+  if (control) {
+    registerTerminalControlRoutes(routes, {
+      inputForRequest: fixTerminalRouteInput,
+      path,
+      read: (input) => read(input.jobId, input.terminalSessionId),
+      write: write
+        ? (input, data) => write(input.jobId, input.terminalSessionId, data)
+        : null
+    });
+  }
+}
+
+function registerTerminalControlRoutes(routes, {
+  inputForRequest,
+  path,
+  read,
+  write
+}) {
+  routes.serviceRoute("GET", `${path}/control/snapshot`, {
+    failureStatus: 404,
+    successStatus: 200,
+    summary: "Read a terminal control snapshot."
+  }, async (request) => {
+    return terminalSessionControlSnapshot(await read(inputForRequest(request)));
+  });
+
+  routes.serviceRoute("GET", `${path}/control/quiet`, {
+    failureStatus: 404,
+    successStatus: 200,
+    summary: "Read whether a terminal has been quiet recently."
+  }, async (request) => {
+    return terminalSessionControlSnapshot(await read(inputForRequest(request)));
+  });
+
+  routes.serviceRoute("POST", `${path}/control/check-text`, {
+    body: terminalControlTextInputValidator,
+    failureStatus: 404,
+    successStatus: 200,
+    summary: "Check whether a terminal snapshot contains literal text."
+  }, async (request) => {
+    return terminalSessionContainsText(
+      await read(inputForRequest(request)),
+      routes.requestBody(request).text
+    );
+  });
+
+  if (!write) {
+    return;
+  }
+
+  routes.serviceRoute("POST", `${path}/control/text`, {
+    body: terminalControlTextInputValidator,
+    failureStatus: 404,
+    successStatus: 200,
+    summary: "Send exact text to a terminal."
+  }, async (request) => {
+    return terminalSessionControlSnapshot(
+      await write(inputForRequest(request), routes.requestBody(request).text)
+    );
+  });
+
+  routes.serviceRoute("POST", `${path}/control/key`, {
+    body: terminalControlKeyInputValidator,
+    failureStatus: 404,
+    successStatus: 200,
+    summary: "Send a narrow supported key to a terminal."
+  }, async (request) => {
+    const key = routes.requestBody(request).key;
+    const input = terminalKeyInput(key);
+    if (!input) {
+      return {
+        ok: false,
+        error: `Unsupported terminal key: ${String(key || "")}`
+      };
+    }
+    return terminalSessionControlSnapshot(await write(inputForRequest(request), input));
   });
 }
 

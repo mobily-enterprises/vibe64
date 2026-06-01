@@ -36,7 +36,6 @@
 
       <template #ai-terminal="{ active: tabActive }">
         <Vibe64SessionTerminals
-          ref="sessionTerminals"
           class="studio-ai-sessions__tab-terminal"
           :allow-codex-start="tabActive && codexTerminalCanStart"
           :codex-recovery="codexRecovery"
@@ -104,7 +103,9 @@ import {
   vibe64SessionDebugSummary
 } from "@/lib/vibe64SessionDebugLog.js";
 import {
+  readVibe64CodexTerminalQuiet,
   returnVibe64AgentControl,
+  sendVibe64CodexTerminalKey,
   startVibe64CodexTerminal
 } from "@/lib/vibe64SessionApi.js";
 
@@ -137,8 +138,7 @@ const emit = defineEmits([
   "toolbar-controls-ready"
 ]);
 
-const CODEX_QUIET_TERMINAL_DELAY_MS = 5000;
-const CODEX_AUTOMATIC_TERMINAL_INTERRUPT_ENABLED = false;
+const CODEX_QUIET_TERMINAL_POLL_MS = 1000;
 
 const selectedSessionId = computed(() => props.sessionId);
 const selectedListSession = computed(() => {
@@ -279,7 +279,6 @@ const headlessCommandTerminal = proxyRefs({
 });
 
 const autopilotBusy = ref(false);
-const sessionTerminals = ref(null);
 const codexTerminalActivity = ref({
   active: false,
   busy: false,
@@ -320,6 +319,9 @@ const serverSaysCodexIsWorking = computed(() => Boolean(
 const codexBootstrapNeedsTerminalAttention = computed(() => {
   if (!props.active) {
     return false;
+  }
+  if (selectedSession.value?.codexTerminal?.attentionRequired === true) {
+    return true;
   }
   return (Array.isArray(selectedSession.value?.presentation?.backgroundTasks)
     ? selectedSession.value.presentation.backgroundTasks
@@ -520,7 +522,6 @@ async function returnControlFromQuietCodex() {
     sessionId
   });
   try {
-    await interruptCodexTurn("quiet_return");
     const result = await returnVibe64AgentControl(sessionId);
     if (result?.ok === false) {
       throw new Error(result.error || "Codex control could not be returned.");
@@ -553,7 +554,12 @@ async function interruptCodexTurn(reason = "user_interrupt") {
     return false;
   }
   try {
-    const sent = await sessionTerminals.value?.interruptCodexTerminal?.();
+    const result = await sendVibe64CodexTerminalKey(
+      selectedSessionId.value || props.sessionId,
+      selectedCodexTerminalId.value,
+      "escape"
+    );
+    const sent = result?.ok !== false;
     vibe64SessionDebugLog("client.sessionRuntimeHost.codexInterrupt", {
       reason,
       sent: sent === true,
@@ -582,6 +588,57 @@ function clearCodexQuietTerminalTimer() {
 
 function resetCodexQuietTerminalState() {
   clearCodexQuietTerminalTimer();
+}
+
+function canCheckCodexQuietState() {
+  return Boolean(
+    props.active &&
+    codexPromptResponseExpected.value &&
+    selectedCodexTerminalId.value &&
+    !codexBootstrapNeedsTerminalAttention.value &&
+    !codexControlReturnRunning.value
+  );
+}
+
+function scheduleCodexQuietTerminalCheck(delayMs = CODEX_QUIET_TERMINAL_POLL_MS) {
+  clearCodexQuietTerminalTimer();
+  if (!canCheckCodexQuietState()) {
+    return;
+  }
+  codexQuietTerminalTimer = globalThis.setTimeout(() => {
+    codexQuietTerminalTimer = null;
+    void checkCodexQuietTerminal();
+  }, Math.max(0, Number(delayMs || 0)));
+}
+
+async function checkCodexQuietTerminal() {
+  if (!canCheckCodexQuietState()) {
+    return;
+  }
+  const sessionId = selectedSessionId.value || props.sessionId;
+  const terminalSessionId = selectedCodexTerminalId.value;
+  try {
+    const quietState = await readVibe64CodexTerminalQuiet(sessionId, terminalSessionId);
+    if (quietState?.ok === false) {
+      scheduleCodexQuietTerminalCheck();
+      return;
+    }
+    if (quietState?.quiet === true) {
+      await returnControlFromQuietCodex();
+      return;
+    }
+    const idleForMs = Number(quietState?.idleForMs || 0);
+    const thresholdMs = Number(quietState?.quietThresholdMs || 0);
+    const remainingMs = thresholdMs > idleForMs ? thresholdMs - idleForMs : CODEX_QUIET_TERMINAL_POLL_MS;
+    scheduleCodexQuietTerminalCheck(Math.min(CODEX_QUIET_TERMINAL_POLL_MS, Math.max(250, remainingMs)));
+  } catch (error) {
+    vibe64SessionDebugLog("client.sessionRuntimeHost.codexQuietCheck.error", {
+      error: String(error?.message || error || "Codex quiet check failed."),
+      sessionId,
+      terminalSessionId
+    });
+    scheduleCodexQuietTerminalCheck();
+  }
 }
 
 function artifactReadinessVersion(readiness = {}) {
@@ -662,31 +719,10 @@ watch(() => [
 
 watch(() => [
   codexPromptResponseExpected.value ? "prompt-expected" : "prompt-idle",
-  codexProgressExpected.value ? "progress-expected" : "progress-idle",
   selectedCodexTerminalId.value,
-  codexBootstrapNeedsTerminalAttention.value ? "bootstrap-attention" : "bootstrap-ok",
-  codexTerminalActive.value ? "active" : "quiet"
+  codexBootstrapNeedsTerminalAttention.value ? "bootstrap-attention" : "bootstrap-ok"
 ].join("|"), () => {
-  clearCodexQuietTerminalTimer();
-  if (!CODEX_AUTOMATIC_TERMINAL_INTERRUPT_ENABLED) {
-    return;
-  }
-  if (!codexPromptResponseExpected.value || codexBootstrapNeedsTerminalAttention.value) {
-    return;
-  }
-  if (codexTerminalActive.value) {
-    return;
-  }
-  codexQuietTerminalTimer = globalThis.setTimeout(() => {
-    codexQuietTerminalTimer = null;
-    if (
-      codexPromptResponseExpected.value &&
-      !codexBootstrapNeedsTerminalAttention.value &&
-      !codexTerminalActive.value
-    ) {
-      void returnControlFromQuietCodex();
-    }
-  }, CODEX_QUIET_TERMINAL_DELAY_MS);
+  scheduleCodexQuietTerminalCheck();
 }, {
   flush: "post",
   immediate: true
