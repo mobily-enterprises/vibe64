@@ -96,18 +96,21 @@ import {
   CODEX_BOOT_UNKNOWN_QUIET_MS,
   classifyCodexBootScreen,
   codexBootAttentionMessage,
-  codexBootShouldRestartAfterExit
+  codexBootShouldRestartAfterExit,
+  normalizeCodexBootText
 } from "./codexBootAdapter.js";
 
 const CODEX_AGENT_PROVIDER = "codex";
 const CODEX_THREAD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
-const CODEX_LATEST_RESUME_ID_PATTERN = /^codex-latest:[0-9a-f]{12}$/u;
+const CODEX_THREAD_ID_TOKEN_PATTERN = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/giu;
+const CODEX_THREAD_COMMAND = "echo $CODEX_THREAD_ID";
 const CODEX_BOOT_MIN_AGE_MS = 1800;
 const CODEX_BOOT_QUIET_MS = 900;
 const CODEX_BOOT_TIMEOUT_MS = 12000;
 const CODEX_TURN_SETTLE_MS = CODEX_BOOT_QUIET_MS;
 const CODEX_TURN_UNKNOWN_QUIET_MS = 5000;
 const DEBUG_PROMPTS_ENABLED = String(process.env.DEBUG_PROMPTS || "").trim() === "1";
+const CODEX_THREAD_CAPTURE_TIMEOUT_MS = DEBUG_PROMPTS_ENABLED ? 10 * 60_000 : 30_000;
 const PROMPT_INJECTION_PREFIX = "\u001b[200~";
 const PROMPT_INJECTION_SUFFIX = "\u001b[201~\r";
 const CODEX_SESSION_MODEL = "gpt-5.5";
@@ -223,24 +226,8 @@ function normalizeCodexThreadId(value) {
   return threadId.toLowerCase();
 }
 
-function codexLatestResumeConversationId(workdir = "") {
-  const normalizedWorkdir = workdir ? path.resolve(workdir) : "";
-  return normalizedWorkdir ? `codex-latest:${stableHash(normalizedWorkdir)}` : "";
-}
-
-function normalizeCodexConversationId(value, {
-  workdir = ""
-} = {}) {
-  const normalizedValue = normalizeText(value);
-  const threadId = normalizeCodexThreadId(normalizedValue);
-  if (threadId) {
-    return threadId;
-  }
-  if (!CODEX_LATEST_RESUME_ID_PATTERN.test(normalizedValue)) {
-    return "";
-  }
-  const expectedLocator = codexLatestResumeConversationId(workdir);
-  return !expectedLocator || normalizedValue === expectedLocator ? normalizedValue : "";
+function normalizeCodexConversationId(value) {
+  return normalizeCodexThreadId(value);
 }
 
 function normalizeCodexPromptHandoffSignature(sessionId, signature) {
@@ -344,6 +331,30 @@ function latestPendingCodexPromptHandoff(session = {}) {
     attemptNumber: Number(latestAttempt.attemptNumber || 0),
     handoffId
   };
+}
+
+function extractCodexThreadId(output = "") {
+  const lines = normalizeCodexBootText(output)
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  for (let lineIndex = lines.length - 1; lineIndex >= 0; lineIndex -= 1) {
+    if (!lines[lineIndex].includes("CODEX_THREAD_ID")) {
+      continue;
+    }
+    for (const nextLine of lines.slice(lineIndex + 1, lineIndex + 8)) {
+      CODEX_THREAD_ID_TOKEN_PATTERN.lastIndex = 0;
+      const token = [...nextLine.matchAll(CODEX_THREAD_ID_TOKEN_PATTERN)]
+        .map((match) => match[0])
+        .find((value) => normalizeCodexThreadId(value));
+      if (token) {
+        return token.toLowerCase();
+      }
+    }
+  }
+
+  return "";
 }
 
 function codexPromptHandoffTerminalInput(handoff = {}) {
@@ -566,9 +577,7 @@ function codexReadyIdentityForWorkdir(session = {}, workdir = "") {
   const normalizedWorkdir = workdir ? path.resolve(workdir) : terminalWorktreePath(session);
   const identity = agentTerminalIdentityForWorkdir(session, {
     provider: CODEX_AGENT_PROVIDER,
-    validateConversationId: (value) => normalizeCodexConversationId(value, {
-      workdir: normalizedWorkdir
-    }),
+    validateConversationId: normalizeCodexConversationId,
     workdir: normalizedWorkdir
   });
   if (identity) {
@@ -602,9 +611,7 @@ function codexAgentIdentityState(session = {}, workdir = "") {
 
   return agentTerminalIdentityState(session, {
     provider: CODEX_AGENT_PROVIDER,
-    validateConversationId: (value) => normalizeCodexConversationId(value, {
-      workdir: normalizedWorkdir
-    }),
+    validateConversationId: normalizeCodexConversationId,
     workdir: normalizedWorkdir
   });
 }
@@ -639,7 +646,6 @@ function codexSessionBriefingPrompt(session = {}) {
 
 function codexStartupScript(codexThreadId = "") {
   const normalizedThreadId = normalizeCodexThreadId(codexThreadId);
-  const resumeLatestForWorkdir = !normalizedThreadId && normalizeCodexConversationId(codexThreadId);
   const codexReasoningConfig = `model_reasoning_effort="${CODEX_SESSION_REASONING_EFFORT}"`;
   const codexCommand = [
     "codex",
@@ -648,8 +654,7 @@ function codexStartupScript(codexThreadId = "") {
     "-c",
     codexReasoningConfig,
     "--dangerously-bypass-approvals-and-sandbox",
-    ...(normalizedThreadId ? ["resume", normalizedThreadId] : []),
-    ...(resumeLatestForWorkdir ? ["resume", "--last"] : [])
+    ...(normalizedThreadId ? ["resume", normalizedThreadId] : [])
   ];
   return studioUserStartupScript(codexCommand);
 }
@@ -1197,44 +1202,86 @@ function createCodexTerminalController({
     });
   }
 
-  async function ensureCapturedCodexIdentity({ runtime, session, terminalSessionId }) {
+  async function sendCodexShellCommand(sessionId, terminalSessionId, command) {
+    const commandText = String(command || "");
+    const terminalInput = /[\r\n]$/u.test(commandText) ? commandText : `${commandText}\r`;
+    const result = writeCodexTerminalInput(sessionId, terminalSessionId, terminalInput);
+    if (result.ok === false) {
+      return result;
+    }
+    return {
+      ok: true
+    };
+  }
+
+  async function captureCodexThreadId({ session, terminalSessionId }) {
     const workdir = terminalWorktreePath(session);
+    const existingThreadId = codexThreadIdForWorkdir(session, workdir);
+    if (existingThreadId) {
+      return existingThreadId;
+    }
+
+    const sendResult = await sendCodexShellCommand(session.sessionId, terminalSessionId, CODEX_THREAD_COMMAND);
+    if (sendResult.ok === false) {
+      return "";
+    }
+
+    const startedAt = Date.now();
+    while (Date.now() - startedAt <= CODEX_THREAD_CAPTURE_TIMEOUT_MS) {
+      const snapshot = codexTerminalSnapshot(session.sessionId, terminalSessionId);
+      if (snapshot.ok === false || snapshot.status === "exited") {
+        return "";
+      }
+      const threadId = extractCodexThreadId(snapshot.output || "");
+      if (threadId) {
+        return threadId;
+      }
+      await delay(CODEX_BOOT_POLL_MS);
+    }
+    return "";
+  }
+
+  async function ensureCapturedCodexIdentity({ runtime, session, terminalSessionId }) {
     const result = await ensureAgentTerminalIdentity({
       adapter: {
-        captureIdentity: ({ workdir: currentWorkdir }) => ({
-          conversationId: codexLatestResumeConversationId(currentWorkdir),
-          resumeStrategy: AGENT_TERMINAL_RESUME_STRATEGY.PROVIDER_NATIVE
-        }),
+        captureIdentity: async (input) => {
+          const threadId = await captureCodexThreadId(input);
+          return threadId ? {
+            conversationId: threadId,
+            resumeStrategy: AGENT_TERMINAL_RESUME_STRATEGY.PROVIDER_NATIVE
+          } : null;
+        },
         displayName: "Codex",
         legacyMetadataForIdentity: (identity) => ({
+          codex_thread_id: identity.conversationId,
           codex_workdir: identity.workdir
         }),
         provider: CODEX_AGENT_PROVIDER,
         readIdentity: (currentSession, currentWorkdir) => codexReadyIdentityForWorkdir(currentSession, currentWorkdir),
         resumeStrategy: AGENT_TERMINAL_RESUME_STRATEGY.PROVIDER_NATIVE,
-        validateConversationId: (value) => normalizeCodexConversationId(value, {
-          workdir
-        }),
-        waitUntilReady: async () => {
-          const ready = await waitForCodexBootReadyForInput(session.sessionId, terminalSessionId);
-          if (ready.ok === false) {
-            return ready;
-          }
-          return deliverSessionBriefing({
-            runtime,
-            session,
-            terminalSessionId
-          });
-        },
+        validateConversationId: normalizeCodexConversationId,
+        waitUntilReady: () => waitForCodexBootReadyForInput(session.sessionId, terminalSessionId),
         workdir: terminalWorktreePath
       },
       runtime,
       session,
       terminalSessionId
     });
-    const conversationId = normalizeCodexConversationId(result.identity?.conversationId, {
-      workdir
-    });
+    const conversationId = normalizeCodexConversationId(result.identity?.conversationId);
+    if (result.ok === false) {
+      return result;
+    }
+    if (!conversationId) {
+      vibe64SessionDebugLog("server.codex.threadCapture.failed", {
+        sessionId: normalizeText(session?.sessionId),
+        terminalSessionId
+      });
+      return {
+        ok: false,
+        error: "Codex session id could not be saved. Restart Codex from Vibe64 before continuing this agent.",
+        retryable: true
+      };
+    }
     return {
       ...result,
       conversationId,
@@ -2083,6 +2130,8 @@ function createCodexTerminalController({
           runtime.store.writeMetadataValue(sessionId, "codex_prompt_handoff_id", handoffId)
         ] : []),
         ...(sessionBriefingDeliveredAt ? [
+          runtime.store.writeMetadataValue(sessionId, "codex_session_briefing_echo_input", sessionBriefingInput),
+          runtime.store.writeMetadataValue(sessionId, "codex_session_briefing_output_start", String(outputStart)),
           runtime.store.writeMetadataValue(sessionId, "codex_session_briefing_delivered", "yes"),
           runtime.store.writeMetadataValue(sessionId, "codex_session_briefing_delivered_at", sessionBriefingDeliveredAt),
           runtime.store.writeMetadataValue(sessionId, "codex_session_briefing_delivery", "terminal_prompt_handoff")
@@ -2173,7 +2222,7 @@ function createCodexTerminalController({
     };
   }
 
-  async function resumeLatestPendingCodexPromptFromActiveTerminal(sessionId) {
+  async function resumePendingCodexPromptFromActiveTerminal(sessionId) {
     const runtime = await projectService.createRuntime();
     let session = await runtime.getSession(sessionId);
     const handoff = latestPendingCodexPromptHandoff(session);
@@ -2367,7 +2416,7 @@ function createCodexTerminalController({
 
     async startTerminal(sessionId) {
       return vibe64Result(async () => {
-        const resumed = await resumeLatestPendingCodexPromptFromActiveTerminal(sessionId);
+        const resumed = await resumePendingCodexPromptFromActiveTerminal(sessionId);
         if (resumed) {
           return resumed;
         }

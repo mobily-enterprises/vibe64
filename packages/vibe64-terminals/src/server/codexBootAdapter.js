@@ -91,7 +91,7 @@ const CODEX_RUNNING_PATTERNS = [
   /directory:\s+/iu
 ];
 
-function normalizeBootText(value = "") {
+export function normalizeCodexBootText(value = "") {
   const source = String(value || "")
     .slice(-MAX_CLASSIFIED_OUTPUT_LENGTH)
     .replace(OSC_PATTERN, "")
@@ -127,7 +127,7 @@ function lastPatternMatch(text = "", patterns = []) {
 }
 
 export function classifyCodexBootScreen(output = "") {
-  const text = normalizeBootText(output);
+  const text = normalizeCodexBootText(output);
   if (!text.trim()) {
     return {
       confidence: "low",

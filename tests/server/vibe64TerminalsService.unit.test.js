@@ -51,8 +51,7 @@ import {
 import {
   codexTerminalNamespace,
   fixCodexTerminalNamespace,
-  globalCodexTerminalNamespace,
-  stableHash
+  globalCodexTerminalNamespace
 } from "../../packages/vibe64-terminals/src/server/terminalShared.js";
 import {
   resolveShellTerminalCwd,
@@ -449,16 +448,15 @@ test("Vibe64 Codex terminal renders the session briefing for explicit delivery",
   );
   assert.doesNotMatch(resumedArgs.at(-1), /Vibe64 session briefing/u);
 
-  const workdirResumeArgs = codexTerminalArgs({
-    codexThreadId: `codex-latest:${stableHash("/workspace/project/.vibe64/sessions/active/startup_prompt/worktree")}`,
-    containerName: "vibe64-codex-startup-resume-latest",
+  const invalidThreadArgs = codexTerminalArgs({
+    codexThreadId: "not-a-thread-id",
+    containerName: "vibe64-codex-startup-invalid-thread",
     sessionId: "startup_prompt",
     targetRoot: "/workspace/project",
     terminalId: "startup-terminal",
     worktree: "/workspace/project/.vibe64/sessions/active/startup_prompt/worktree"
   });
-  assert.match(workdirResumeArgs.at(-1), /resume --last/u);
-  assert.doesNotMatch(workdirResumeArgs.at(-1), /resume [0-9a-f-]{36}/u);
+  assert.doesNotMatch(invalidThreadArgs.at(-1), /resume [0-9a-f-]{36}/u);
 });
 
 test("Vibe64 Codex terminal mounts linked git metadata for worktree roots", async () => {
@@ -666,7 +664,9 @@ test("Vibe64 Codex terminal resumes a pending prompt through the active terminal
           "process.stdout.write('OpenAI Codex\\ngpt-5.5 xhigh \\u00b7 /workspace/example\\n');",
           "process.stdin.setEncoding('utf8');",
           "process.stdin.on('data', (chunk) => {",
-          "  if (String(chunk).includes('Load Vibe64 session briefing.')) {",
+          "  if (String(chunk).includes('echo $CODEX_THREAD_ID')) {",
+          "    process.stdout.write('echo $CODEX_THREAD_ID\\n00000000-0000-4000-8000-000000000002\\ngpt-5.5 xhigh \\u00b7 /workspace/example\\n');",
+          "  } else if (String(chunk).includes('Load Vibe64 session briefing.')) {",
           "    process.stdout.write('Vibe64 session briefing loaded.\\ngpt-5.5 xhigh \\u00b7 /workspace/example\\n');",
           "  } else if (String(chunk).includes('Ask the user for seed choices.')) {",
           "    process.stdout.write('Seed choices prompt received.\\ngpt-5.5 xhigh \\u00b7 /workspace/example\\n');",
@@ -702,8 +702,8 @@ test("Vibe64 Codex terminal resumes a pending prompt through the active terminal
       assert.equal(result.pendingCodexPromptInjected, true);
       assert.equal(result.terminalSessionId, terminal.id);
 
-      const expectedConversationId = `codex-latest:${stableHash(worktree)}`;
-      assert.equal(session.metadata.codex_thread_id, undefined);
+      const expectedConversationId = "00000000-0000-4000-8000-000000000002";
+      assert.equal(session.metadata.codex_thread_id, expectedConversationId);
       assert.equal(session.metadata.codex_workdir, worktree);
       assert.equal(session.metadata.agent_identity_provider, "codex");
       assert.equal(session.metadata.agent_identity_status, "ready");
@@ -715,14 +715,14 @@ test("Vibe64 Codex terminal resumes a pending prompt through the active terminal
       assert.equal(result.agentIdentity.status, "ready");
       assert.equal(result.agentIdentity.conversationId, expectedConversationId);
       assert.equal(result.agentConversationId, expectedConversationId);
-      assert.equal(result.codexThreadId, "");
+      assert.equal(result.codexThreadId, expectedConversationId);
       assert.equal(session.metadata.codex_prompt_handoff_id, actionResult.codexPromptHandoff.handoffId);
       assert.match(session.metadata.codex_session_briefing_echo_input, /Load Vibe64 session briefing\./u);
       assert.match(session.metadata.codex_prompt_handoff_echo_input, /Ask the user for seed choices\./u);
       assert.equal(session.metadata.codex_prompt_handoff_terminal_id, terminal.id);
       assert.equal(session.metadata.codex_session_briefing_delivered, "yes");
-      assert.equal(session.metadata.codex_session_briefing_delivery, "terminal_bootstrap");
-      assert.equal(result.codexSessionBriefingDelivered, false);
+      assert.equal(session.metadata.codex_session_briefing_delivery, "terminal_prompt_handoff");
+      assert.equal(result.codexSessionBriefingDelivered, true);
       assert.match(result.codexPromptHandoffEchoInput, /Ask the user for seed choices\./u);
       assert.equal(
         session.presentation.backgroundTasks.find((task) => task.id === "codex_bootstrap")?.status,
