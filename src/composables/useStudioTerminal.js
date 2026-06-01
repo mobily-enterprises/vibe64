@@ -19,7 +19,6 @@ function resolveCallback(callback, fallback) {
 }
 
 function useStudioTerminal({
-  displayFilter = null,
   onSessionUpdate = null,
   onStatusUpdate = null,
   webSocketUrl = null
@@ -49,17 +48,10 @@ function useStudioTerminal({
   let terminalOutputOffset = 0;
   let terminalSetupPromise = null;
 
-  const resolveDisplayChunk = typeof displayFilter?.filterChunk === "function"
-    ? (chunk) => displayFilter.filterChunk(chunk)
-    : (chunk) => String(chunk || "");
   const notifySessionUpdate = resolveCallback(onSessionUpdate, () => null);
   const notifyStatusUpdate = resolveCallback(onStatusUpdate, () => null);
   const resolveWebSocketUrl = resolveCallback(webSocketUrl, () => "");
   const terminalExited = computed(() => terminalStatus.value === "exited");
-
-  function resetDisplayFilter() {
-    displayFilter?.reset?.();
-  }
 
   function resetReportedTerminalSize() {
     terminalReportedCols = 0;
@@ -184,7 +176,6 @@ function useStudioTerminal({
     terminalLatestOutput = "";
     terminalOutputOffset = 0;
     terminalOutput.value = "";
-    resetDisplayFilter();
     resetReportedTerminalSize();
     terminalInstance?.reset?.();
   }
@@ -211,14 +202,10 @@ function useStudioTerminal({
     if (terminalLatestOutput.length < terminalOutputOffset) {
       terminalInstance.reset();
       terminalOutputOffset = 0;
-      resetDisplayFilter();
     }
     const outputChunk = terminalLatestOutput.slice(terminalOutputOffset);
     if (outputChunk) {
-      const displayChunk = resolveDisplayChunk(outputChunk);
-      if (displayChunk) {
-        terminalInstance.write(displayChunk, scrollTerminalToBottom);
-      }
+      terminalInstance.write(outputChunk, scrollTerminalToBottom);
     }
     terminalOutputOffset = terminalLatestOutput.length;
   }
@@ -233,10 +220,7 @@ function useStudioTerminal({
     if (!terminalInstance) {
       return;
     }
-    const displayChunk = resolveDisplayChunk(outputChunk);
-    if (displayChunk) {
-      terminalInstance.write(displayChunk, scrollTerminalToBottom);
-    }
+    terminalInstance.write(outputChunk, scrollTerminalToBottom);
     terminalOutputOffset = terminalLatestOutput.length;
   }
 

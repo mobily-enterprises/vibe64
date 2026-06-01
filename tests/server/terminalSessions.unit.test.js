@@ -184,11 +184,7 @@ test("terminal sessions record input and output byte activity", async () => {
     assert.ok(Date.parse(snapshot.lastOutputAt));
     assert.ok(snapshot.lastOutputBytes > 0);
     assert.ok(snapshot.outputVersion > 0);
-    assert.ok(messages.some((message) =>
-      message.type === "input" &&
-      message.inputVersion === 1 &&
-      Date.parse(message.lastInputAt)
-    ));
+    assert.equal(messages.some((message) => message.type === "input"), false);
     assert.ok(messages.some((message) =>
       message.type === "output" &&
       message.outputVersion > 0 &&

@@ -1,32 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
-  createStudioContextDisplayFilter,
   extractCodexThreadId,
   isCodexThreadId,
-  stripStudioContextBlocksForDisplay,
-  stripTerminalControlSequences,
-  terminalSnapshotOutputForDisplay,
-  wrapPromptWithStudioContext
+  stripTerminalControlSequences
 } from "../../src/lib/codexOutput.js";
 
 describe("codexOutput terminal utilities", () => {
   it("strips terminal control sequences without parsing AI responses", () => {
     expect(stripTerminalControlSequences("\u001B[31mhello\u001B[0m")).toBe("hello");
-  });
-
-  it("keeps replayable terminal controls so snapshots reconstruct the current screen", () => {
-    const output = terminalSnapshotOutputForDisplay([
-      "\u001B]0;worktree\u0007",
-      "\u001B[?2026h\u001B[22;2H\u001B[K",
-      "\u001B[31mhello\u001B[0m\r",
-      "\u001B[25;1H\u0007\u001B[?25h"
-    ].join(""));
-
-    expect(output).toBe([
-      "\u001B[?2026h\u001B[22;2H\u001B[K",
-      "\u001B[31mhello\u001B[0m\r",
-      "\u001B[25;1H\u001B[?25h"
-    ].join(""));
   });
 
   it("extracts thread ids from explicit terminal metadata", () => {
@@ -39,77 +20,5 @@ describe("codexOutput terminal utilities", () => {
       "  └ 019e7876-a528-7b70-9356-1530050052e1"
     ].join("\n"))).toBe("019e7876-a528-7b70-9356-1530050052e1");
     expect(isCodexThreadId("v0.130.0")).toBe(false);
-  });
-
-  it("hides marked Studio prompt context from terminal display", () => {
-    const terminalInput = wrapPromptWithStudioContext(
-      "This is the long prompt body.",
-      "Create the issue file."
-    );
-
-    expect(terminalInput).toContain("[[VIBE64_CONTEXT_START]]");
-    expect(stripStudioContextBlocksForDisplay(terminalInput)).toBe("Create the issue file.\n\n");
-  });
-
-  it("keeps a multiline user prompt visible outside the hidden Studio prompt context", () => {
-    const terminalInput = wrapPromptWithStudioContext(
-      "This is the long hidden prompt body.",
-      [
-        "What do you want to ask Codex?",
-        "",
-        "Explain this codebase."
-      ].join("\n")
-    );
-
-    expect(stripStudioContextBlocksForDisplay(terminalInput)).toBe([
-      "What do you want to ask Codex?",
-      "",
-      "Explain this codebase.",
-      "",
-      ""
-    ].join("\n"));
-  });
-
-  it("uses the rendered prompt title as the visible Studio prompt text", () => {
-    const terminalInput = wrapPromptWithStudioContext([
-      "Make plan",
-      "",
-      "This is the long hidden prompt body."
-    ].join("\n"));
-
-    expect(stripStudioContextBlocksForDisplay(terminalInput)).toBe("Make plan\n\n");
-  });
-
-  it("hides a retained tail that starts inside hidden Studio prompt context", () => {
-    const terminalInput = [
-      "hidden prompt body still in retained tail",
-      "[[VIBE64_CONTEXT_END]]",
-      "Visible output"
-    ].join("\n");
-
-    expect(stripStudioContextBlocksForDisplay(terminalInput)).toBe("Visible output");
-  });
-
-  it("streams Studio context blocks out of terminal display without replaying output", () => {
-    const filter = createStudioContextDisplayFilter();
-
-    expect(filter.filterChunk("Intro\n[[VIBE64_CONTEXT")).toBe("Intro\n");
-    expect(filter.filterChunk("_START]]\nhidden prompt")).toBe("");
-    expect(filter.filterChunk("\n[[VIBE64_CONTEXT_END]]\nVisible result")).toBe("Visible result");
-  });
-
-  it("keeps filtering stable when marker chunks split at the end marker", () => {
-    const filter = createStudioContextDisplayFilter();
-
-    expect(filter.filterChunk("Visible\n[[VIBE64_CONTEXT_START]]\nhidden[[VIBE64_CONTEXT")).toBe("Visible\n");
-    expect(filter.filterChunk("_END]]\nAfter")).toBe("After");
-  });
-
-  it("resets streamed Studio context filtering state between terminal sessions", () => {
-    const filter = createStudioContextDisplayFilter();
-
-    expect(filter.filterChunk("[[VIBE64_CONTEXT_START]]\nhidden")).toBe("");
-    filter.reset();
-    expect(filter.filterChunk("Visible")).toBe("Visible");
   });
 });

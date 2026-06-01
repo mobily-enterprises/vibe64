@@ -130,8 +130,8 @@ describe("useCodexAttachments", () => {
     expect(attachments.status.value).toBe("Second upload failed.");
   });
 
-  it("keeps terminal paste formatting in the terminal-specific consumer", () => {
+  it("formats uploaded attachment paths as plain terminal input", () => {
     expect(attachmentPathForTerminal("/studio-attachments/session/file.txt"))
-      .toBe("\u001b[200~[/studio-attachments/session/file.txt] \u001b[201~");
+      .toBe("[/studio-attachments/session/file.txt] ");
   });
 });

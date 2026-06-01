@@ -1,26 +1,15 @@
 import { ref, unref } from "vue";
 
 import {
-  STUDIO_CONTEXT_END_MARKER,
-  STUDIO_CONTEXT_START_MARKER,
-  stripStudioContextBlocksForDisplay,
-  terminalSnapshotOutputForDisplay,
-  stripTerminalControlSequences
-} from "@/lib/codexOutput.js";
-import { createCodexPromptEchoFilters } from "@/lib/codexPromptEchoFilters.js";
-import {
   vibe64SessionDebugLog
 } from "@/lib/vibe64SessionDebugLog.js";
 
 const CODEX_ACTIVITY_QUIET_MS = 2200;
 const TERMINAL_STREAM_QUIET_MS = 650;
 const CODEX_ACTIVITY_BUFFER_LENGTH = 8192;
-const TERMINAL_REPAINT_VISIBLE_TEXT_LIMIT = 12;
-const TERMINAL_ESCAPE_CHARACTER = String.fromCharCode(27);
 const TERMINAL_OUTPUT_TAIL_LENGTH = 256 * 1024;
 const TERMINAL_DISPLAY_UPDATE_INTERVAL_MS = 80;
 const TERMINAL_OUTPUT_OBSERVER_INTERVAL_MS = 120;
-const TERMINAL_CURSOR_POSITION_PATTERN = new RegExp(`${TERMINAL_ESCAPE_CHARACTER}\\[\\d+;\\d+H`, "u");
 const CODEX_WORKING_TEXT_MARKERS = Object.freeze([
   "Working (",
   "Waiting for background terminal",
@@ -74,61 +63,6 @@ function codexWorkingStateFromText(value = "") {
   return null;
 }
 
-function terminalChunkHasControlSequences(value = "") {
-  const source = String(value || "");
-  for (let index = 0; index < source.length; index += 1) {
-    const code = source.charCodeAt(index);
-    if (
-      (code >= 0 && code <= 8) ||
-      code === 11 ||
-      code === 12 ||
-      (code >= 14 && code <= 31) ||
-      (code >= 127 && code <= 159)
-    ) {
-      return true;
-    }
-  }
-  return false;
-}
-
-function terminalOutputVisibleText(value = "") {
-  if (!terminalChunkHasControlSequences(value)) {
-    return String(value || "");
-  }
-  return stripTerminalControlSequences(value);
-}
-
-function terminalOutputLooksLikeSmallCursorRepaint(value = "") {
-  const source = String(value || "");
-  return source.length <= 256 &&
-    source.includes(`${TERMINAL_ESCAPE_CHARACTER}[?2026`) &&
-    source.includes(`${TERMINAL_ESCAPE_CHARACTER}[K`) &&
-    TERMINAL_CURSOR_POSITION_PATTERN.test(source);
-}
-
-function terminalOutputIsSmallCursorRepaint(value = "", visibleText = terminalOutputVisibleText(value)) {
-  const trimmedVisibleText = String(visibleText || "").trim();
-  if (
-    !trimmedVisibleText ||
-    trimmedVisibleText.length > TERMINAL_REPAINT_VISIBLE_TEXT_LIMIT ||
-    trimmedVisibleText.includes("\n")
-  ) {
-    return false;
-  }
-  return terminalOutputLooksLikeSmallCursorRepaint(value);
-}
-
-function stripStudioContextBlocksIfPresent(output) {
-  const source = String(output || "");
-  if (
-    !source.includes(STUDIO_CONTEXT_START_MARKER) &&
-    !source.includes(STUDIO_CONTEXT_END_MARKER)
-  ) {
-    return source;
-  }
-  return stripStudioContextBlocksForDisplay(source);
-}
-
 function useCodexTerminalOutput({
   appendDisplay,
   displayActive = true,
@@ -141,7 +75,6 @@ function useCodexTerminalOutput({
   const codexBusy = ref(false);
   const codexWorking = ref(false);
   const terminalStreaming = ref(false);
-  const promptEchoFilters = createCodexPromptEchoFilters();
 
   let terminalDisplayTimer = null;
   let terminalOutputChangedTimer = null;
@@ -151,7 +84,6 @@ function useCodexTerminalOutput({
   let codexBusyOutputVersion = 0;
   let terminalHasOutput = false;
   let terminalOutputTail = "";
-  let terminalOutputTailStartOffset = 0;
   let terminalLastOutputAt = 0;
   let terminalOutputVersion = 0;
   let pendingDisplayChunk = "";
@@ -167,9 +99,7 @@ function useCodexTerminalOutput({
   }
 
   function displayTerminalOutput(output = terminalOutputTail) {
-    return stripStudioContextBlocksIfPresent(promptEchoFilters.apply(output, {
-      outputStartOffset: terminalOutputTailStartOffset
-    }));
+    return String(output || "");
   }
 
   function clearCodexIdleTimer() {
@@ -254,8 +184,7 @@ function useCodexTerminalOutput({
       return;
     }
 
-    const visibleActivityText = stripTerminalControlSequences(codexActivityBuffer);
-    const nextWorking = codexWorkingStateFromText(visibleActivityText);
+    const nextWorking = codexWorkingStateFromText(codexActivityBuffer);
     if (nextWorking === null) {
       return;
     }
@@ -285,12 +214,6 @@ function useCodexTerminalOutput({
     }, CODEX_ACTIVITY_QUIET_MS);
   }
 
-  function noteTerminalActivityWithoutOutput() {
-    terminalOutputVersion += 1;
-    terminalLastOutputAt = Date.now();
-    scheduleCodexIdleWhenQuiet();
-  }
-
   function clearTerminalDisplayTimer() {
     if (!terminalDisplayTimer) {
       return;
@@ -305,13 +228,7 @@ function useCodexTerminalOutput({
   }
 
   function displayChunkCanAppendRaw(outputChunk = "") {
-    const chunk = String(outputChunk || "");
-    return Boolean(
-      chunk &&
-      !promptEchoFilters.hasPending() &&
-      !chunk.includes(STUDIO_CONTEXT_START_MARKER) &&
-      !chunk.includes(STUDIO_CONTEXT_END_MARKER)
-    );
+    return Boolean(String(outputChunk || ""));
   }
 
   function writeDisplayNow() {
@@ -406,25 +323,24 @@ function useCodexTerminalOutput({
   }
 
   function noteTerminalTextOutput({
-    visibleText = ""
+    outputText = ""
   } = {}) {
     terminalOutputVersion += 1;
     terminalLastOutputAt = Date.now();
-    terminalHasOutput = terminalHasOutput || String(visibleText || "").trim().length > 0;
+    terminalHasOutput = terminalHasOutput || String(outputText || "").trim().length > 0;
     scheduleCodexIdleWhenQuiet();
   }
 
   function replaceTerminalOutputTail(nextOutput, {
     emitImmediately = false,
-    visibleText = ""
+    outputText = ""
   } = {}) {
     const previousOutput = terminalOutputTail;
     const trimmedTail = trimTerminalOutputTail(nextOutput);
     terminalOutputTail = trimmedTail.output;
-    terminalOutputTailStartOffset = trimmedTail.trimmedLength;
     if (terminalOutputTail !== previousOutput) {
       noteTerminalTextOutput({
-        visibleText
+        outputText
       });
       updateCodexWorkingFromOutput(terminalOutputTail, {
         replace: true
@@ -440,30 +356,25 @@ function useCodexTerminalOutput({
   }
 
   function appendTerminalOutputTail(outputChunk, {
-    visibleText = ""
+    outputText = ""
   } = {}) {
-    const previousTailLength = terminalOutputTail.length;
     const nextOutput = outputChunk.length >= TERMINAL_OUTPUT_TAIL_LENGTH
       ? outputChunk
       : `${terminalOutputTail}${outputChunk}`;
     const trimmedTail = trimTerminalOutputTail(nextOutput);
     terminalOutputTail = trimmedTail.output;
-    terminalOutputTailStartOffset += outputChunk.length >= TERMINAL_OUTPUT_TAIL_LENGTH
-      ? previousTailLength + outputChunk.length - terminalOutputTail.length
-      : trimmedTail.trimmedLength;
     noteTerminalTextOutput({
-      visibleText
+      outputText
     });
     updateCodexWorkingFromOutput(outputChunk);
     scheduleTerminalOutputChanged();
   }
 
   function writeTerminalOutput(output) {
-    const terminalOutput = terminalSnapshotOutputForDisplay(output);
-    const visibleText = terminalOutputVisibleText(terminalOutput);
-    replaceTerminalOutputTail(visibleText.trim() ? terminalOutput : "", {
+    const terminalOutput = String(output || "");
+    replaceTerminalOutputTail(terminalOutput, {
       emitImmediately: true,
-      visibleText
+      outputText: terminalOutput
     });
   }
 
@@ -473,23 +384,8 @@ function useCodexTerminalOutput({
       return;
     }
     markTerminalStreaming();
-    if (terminalOutputLooksLikeSmallCursorRepaint(outputChunk)) {
-      noteTerminalActivityWithoutOutput();
-      if (displayChunkCanAppendRaw(outputChunk)) {
-        scheduleTerminalDisplayAppend(outputChunk);
-      }
-      return;
-    }
-    const visibleText = terminalOutputVisibleText(outputChunk);
-    if (!visibleText.trim() || terminalOutputIsSmallCursorRepaint(outputChunk, visibleText)) {
-      noteTerminalActivityWithoutOutput();
-      if (displayChunkCanAppendRaw(outputChunk)) {
-        scheduleTerminalDisplayAppend(outputChunk);
-      }
-      return;
-    }
     appendTerminalOutputTail(outputChunk, {
-      visibleText
+      outputText: outputChunk
     });
     if (displayChunkCanAppendRaw(outputChunk)) {
       scheduleTerminalDisplayAppend(outputChunk);
@@ -511,7 +407,6 @@ function useCodexTerminalOutput({
     codexActivityBuffer = "";
     terminalHasOutput = false;
     terminalOutputTail = "";
-    terminalOutputTailStartOffset = 0;
     terminalLastOutputAt = 0;
     terminalOutputVersion += 1;
     if (emit) {
@@ -523,11 +418,9 @@ function useCodexTerminalOutput({
   }
 
   return {
-    addPromptEchoFilter: promptEchoFilters.add,
     appendTerminalOutput,
     clearCodexBusy,
     clearCodexWorking,
-    clearPromptEchoFilters: promptEchoFilters.clear,
     codexBusy,
     codexWorking,
     flushTerminalOutput,
@@ -535,7 +428,6 @@ function useCodexTerminalOutput({
     hasTerminalOutput: () => terminalHasOutput,
     lastTerminalOutputAt: () => terminalLastOutputAt,
     markCodexBusy,
-    removePromptEchoFilter: promptEchoFilters.remove,
     resetTerminalOutput,
     terminalStreaming,
     writeTerminalOutput

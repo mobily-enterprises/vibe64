@@ -142,7 +142,6 @@ function createLifecycleOptions(overrides = {}) {
     appendTerminalOutput: vi.fn(),
     canUseTerminal: ref(true),
     clearCodexBusy: vi.fn(),
-    clearPromptEchoFilters: vi.fn(),
     clearTerminalDisplay: vi.fn(),
     clearTerminalOutput: vi.fn(),
     closeTerminalSession: vi.fn(async () => ({})),

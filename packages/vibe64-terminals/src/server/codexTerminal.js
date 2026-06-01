@@ -39,9 +39,6 @@ import {
   promptSessionBriefing
 } from "@local/vibe64-adapters/server/promptRenderer";
 import {
-  wrapPromptWithStudioContext
-} from "@local/vibe64-adapters/server/promptMarkers";
-import {
   vibe64Result,
   codexTerminalNamespace,
   directoryExists,
@@ -103,16 +100,15 @@ import {
 const CODEX_AGENT_PROVIDER = "codex";
 const CODEX_THREAD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 const CODEX_THREAD_ID_TOKEN_PATTERN = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/giu;
-const CODEX_THREAD_COMMAND = "echo $CODEX_THREAD_ID";
+const CODEX_THREAD_COMMAND = "echo $CODEX_THREAD_ID ";
 const CODEX_BOOT_MIN_AGE_MS = 1800;
 const CODEX_BOOT_QUIET_MS = 900;
 const CODEX_BOOT_TIMEOUT_MS = 12000;
 const CODEX_TURN_SETTLE_MS = CODEX_BOOT_QUIET_MS;
 const CODEX_TURN_UNKNOWN_QUIET_MS = 5000;
 const DEBUG_PROMPTS_ENABLED = String(process.env.DEBUG_PROMPTS || "").trim() === "1";
+const CODEX_KEY_PAUSE_MS = 180;
 const CODEX_THREAD_CAPTURE_TIMEOUT_MS = DEBUG_PROMPTS_ENABLED ? 10 * 60_000 : 30_000;
-const PROMPT_INJECTION_PREFIX = "\u001b[200~";
-const PROMPT_INJECTION_SUFFIX = "\u001b[201~\r";
 const CODEX_SESSION_MODEL = "gpt-5.5";
 const CODEX_SESSION_REASONING_EFFORT = "xhigh";
 const CODEX_BOOTSTRAP_TASK_ID = "codex_bootstrap";
@@ -372,14 +368,17 @@ function codexPromptHandoffTerminalInput(handoff = {}) {
   return prompt ? codexPromptInput(prompt) : "";
 }
 
-function codexPromptInput(prompt = "", visiblePrompt = "") {
+function codexPromptInput(prompt = "") {
   const source = String(prompt || "");
   if (!source) {
     return "";
   }
-  return DEBUG_PROMPTS_ENABLED
-    ? source
-    : wrapPromptWithStudioContext(source, visiblePrompt);
+  return source;
+}
+
+function codexPromptTerminalInput(prompt = "") {
+  const source = codexPromptInput(prompt);
+  return source ? `${source}\r` : "";
 }
 
 function codexPromptHandoffSignature(sessionId = "") {
@@ -641,7 +640,7 @@ function codexSessionBriefingPrompt(session = {}) {
     "Session briefing instruction:",
     "Keep this Vibe64 briefing as the source of truth for this Codex session. Do not start project work from this briefing alone. Reply exactly: Vibe64 session briefing loaded."
   ].join("\n").trim();
-  return codexPromptInput(prompt, "Load Vibe64 session briefing.");
+  return codexPromptInput(prompt);
 }
 
 function codexStartupScript(codexThreadId = "") {
@@ -1203,11 +1202,12 @@ function createCodexTerminalController({
   }
 
   async function sendCodexShellCommand(sessionId, terminalSessionId, command) {
-    const commandText = String(command || "");
-    const terminalInput = /[\r\n]$/u.test(commandText) ? commandText : `${commandText}\r`;
-    const result = writeCodexTerminalInput(sessionId, terminalSessionId, terminalInput);
-    if (result.ok === false) {
-      return result;
+    for (const terminalInput of [String(command || ""), "\r"]) {
+      const result = writeCodexTerminalInput(sessionId, terminalSessionId, terminalInput);
+      if (result.ok === false) {
+        return result;
+      }
+      await delay(CODEX_KEY_PAUSE_MS);
     }
     return {
       ok: true
@@ -1293,14 +1293,14 @@ function createCodexTerminalController({
     return writeCodexTerminalInput(
       sessionId,
       terminalSessionId,
-      `${PROMPT_INJECTION_PREFIX}${prompt}${PROMPT_INJECTION_SUFFIX}`
+      codexPromptTerminalInput(prompt)
     );
   }
 
   async function writePromptIntoGlobalCodexTerminal(terminalSessionId, prompt) {
     return writeTerminalSession(
       terminalSessionId,
-      `${PROMPT_INJECTION_PREFIX}${prompt}${PROMPT_INJECTION_SUFFIX}`,
+      codexPromptTerminalInput(prompt),
       {
         namespace: globalCodexTerminalNamespace()
       }
@@ -1635,7 +1635,7 @@ function createCodexTerminalController({
       }
       await writeTerminalSession(
         terminalResponse.id,
-        `${PROMPT_INJECTION_PREFIX}${codexPromptInput(fullPrompt)}${PROMPT_INJECTION_SUFFIX}`,
+        codexPromptTerminalInput(fullPrompt),
         {
           namespace
         }

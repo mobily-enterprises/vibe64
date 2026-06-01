@@ -135,7 +135,6 @@ import { writeClipboardText } from "@/lib/clipboard.js";
 import {
   vibe64SessionWorktreePath
 } from "@/lib/vibe64SessionPaths.js";
-import { terminalInputHasUserText } from "@/lib/terminalInput.js";
 
 const props = defineProps({
   session: {
@@ -178,7 +177,6 @@ const props = defineProps({
 });
 const emit = defineEmits([
   "activity-change",
-  "input",
   "session-update"
 ]);
 const codexCommands = useVibe64CodexCommands();
@@ -225,15 +223,6 @@ const terminalStreamActive = computed(() => Boolean(
   terminalDisplayActive.value ||
   hiddenTerminalListenActive.value
 ));
-
-function runtimeCodexPromptHandoff(session = {}) {
-  const actionResultHandoff = session?.actionResult?.codexPromptHandoff;
-  if (actionResultHandoff && typeof actionResultHandoff === "object") {
-    return actionResultHandoff;
-  }
-  const sessionHandoff = session?.codexPromptHandoff;
-  return sessionHandoff && typeof sessionHandoff === "object" ? sessionHandoff : null;
-}
 
 const canUseTerminal = computed(() => {
   if (globalScope.value) {
@@ -289,11 +278,9 @@ const {
   visible: computed(() => props.visible)
 });
 const {
-  addPromptEchoFilter,
   appendTerminalOutput,
   clearCodexBusy,
   clearCodexWorking,
-  clearPromptEchoFilters,
   codexBusy,
   codexWorking,
   flushTerminalOutput,
@@ -332,7 +319,6 @@ terminalLifecycle = useCodexTerminalSessionLifecycle({
   canUseTerminal,
   clearCodexBusy,
   clearCodexWorking,
-  clearPromptEchoFilters,
   clearTerminalDisplay,
   clearTerminalOutput() {
     resetTerminalOutput();
@@ -358,9 +344,6 @@ terminalLifecycle = useCodexTerminalSessionLifecycle({
     resetTerminalOutput({
       emit: true
     });
-  },
-  onTerminalSnapshot(session) {
-    applyServerPromptEchoFilter(session);
   },
   refreshTerminalOutput() {
     writeTerminalOutput(getTerminalOutput());
@@ -414,56 +397,6 @@ async function copyTerminalSelection() {
 
 function ensureTerminalReady() {
   return terminalLifecycle?.ensureTerminalReady() || Promise.resolve(false);
-}
-
-function serverPromptEchoText(session = {}) {
-  const echoInput = String(session?.codexPromptHandoffEchoInput || "");
-  if (echoInput) {
-    return echoInput;
-  }
-  const handoff = runtimeCodexPromptHandoff(session);
-  return String(handoff?.terminalInput || handoff?.prompt || "");
-}
-
-function serverPromptEchoFilters(session = {}) {
-  const filters = [];
-  const briefingPrompt = String(session?.codexSessionBriefingEchoInput || "");
-  const briefingOutputStart = Number(session?.codexSessionBriefingOutputStart);
-  if (Number.isSafeInteger(briefingOutputStart) && briefingOutputStart >= 0 && briefingPrompt) {
-    filters.push({
-      outputStart: briefingOutputStart,
-      prompt: briefingPrompt
-    });
-  }
-  const prompt = serverPromptEchoText(session);
-  const outputStart = Number(session?.codexPromptHandoffOutputStart);
-  if (Number.isSafeInteger(outputStart) && outputStart >= 0 && prompt) {
-    filters.push({
-      outputStart,
-      prompt
-    });
-  }
-  return filters;
-}
-
-function applyServerPromptEchoFilter(session = {}) {
-  if (globalScope.value) {
-    return;
-  }
-  let filterAdded = false;
-  for (const {
-    outputStart,
-    prompt
-  } of serverPromptEchoFilters(session)) {
-    const filterId = addPromptEchoFilter({
-      outputStart,
-      prompt
-    });
-    filterAdded = filterAdded || Boolean(filterId);
-  }
-  if (filterAdded) {
-    writeTerminalOutput(getTerminalOutput());
-  }
 }
 
 function emitCodexActivityChanged(payload = {}) {
@@ -520,9 +453,6 @@ async function sendTerminalData(data, {
     } else if (source === "user" && input.includes("\r")) {
       markCodexBusy();
     }
-    if (source === "user" && terminalInputHasUserText(input)) {
-      emit("input", input);
-    }
     return true;
   } catch (sendError) {
     terminalError.value = String(sendError?.message || sendError || "Terminal input failed.");
@@ -566,12 +496,6 @@ async function focusWritableTerminalWhenShown(visible) {
     }
   }
 }
-
-watch(() => props.session, (session) => {
-  applyServerPromptEchoFilter(session || {});
-}, {
-  immediate: true
-});
 
 watch(serverTerminalSession, (terminal) => {
   void terminalLifecycle?.attachTerminalSession(terminal);

@@ -147,30 +147,26 @@ describe("useCodexTerminalOutput", () => {
     expect(terminalOutput.getTerminalOutput()).toBe("plain user-facing text");
   });
 
-  it("hides echoed prompts when redrawing from a retained output tail", () => {
+  it("renders echoed prompts and context markers as raw terminal output", () => {
     const writeDisplay = vi.fn();
     const terminalOutput = useCodexTerminalOutput({
       writeDisplay
     });
-    const filler = "x".repeat(300000);
     const longPrompt = [
       "[[VIBE64_CONTEXT_START]]",
       "hidden prompt body",
       "[[VIBE64_CONTEXT_END]]"
     ].join("\n");
-    terminalOutput.addPromptEchoFilter({
-      outputStart: filler.length,
-      prompt: longPrompt
-    });
 
-    terminalOutput.appendTerminalOutput(`${filler}${longPrompt}\nVisible output`);
+    terminalOutput.appendTerminalOutput(`${longPrompt}\nVisible output`);
     vi.advanceTimersByTime(80);
 
     const displayOutput = writeDisplay.mock.calls.at(-1)?.[0] || "";
-    expect(displayOutput).toContain("Prompt sent.\nVisible output");
-    expect(displayOutput).not.toContain("hidden prompt body");
-    expect(displayOutput).not.toContain("[[VIBE64_CONTEXT_START]]");
-    expect(displayOutput).not.toContain("[[VIBE64_CONTEXT_END]]");
+    expect(displayOutput).toContain(longPrompt);
+    expect(displayOutput).toContain("hidden prompt body");
+    expect(displayOutput).toContain("[[VIBE64_CONTEXT_START]]");
+    expect(displayOutput).toContain("[[VIBE64_CONTEXT_END]]");
+    expect(displayOutput).toContain("Visible output");
   });
 
   it("reports Codex background work separately from explicit busy state", () => {
@@ -234,7 +230,7 @@ describe("useCodexTerminalOutput", () => {
 
     expect(terminalOutput.codexBusy.value).toBe(false);
     expect(terminalOutput.terminalStreaming.value).toBe(true);
-    expect(terminalOutput.getTerminalOutput()).toBe("");
+    expect(terminalOutput.getTerminalOutput()).toBe("\u001b[?25h");
     expect(activityEvents.at(-1)).toMatchObject({
       busy: false,
       streaming: true,
@@ -247,7 +243,8 @@ describe("useCodexTerminalOutput", () => {
     vi.advanceTimersByTime(1);
 
     expect(appendDisplay).toHaveBeenCalledWith("\u001b[?25h");
-    expect(onOutputChanged).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(40);
+    expect(onOutputChanged).toHaveBeenCalledWith("\u001b[?25h");
     expect(writeDisplay).not.toHaveBeenCalled();
 
     expect(terminalOutput.codexBusy.value).toBe(false);
@@ -259,7 +256,7 @@ describe("useCodexTerminalOutput", () => {
     });
   });
 
-  it("drops pure terminal-control snapshots instead of replaying blank animation state", () => {
+  it("preserves pure terminal-control snapshots for raw xterm replay", () => {
     const writeDisplay = vi.fn();
     const terminalOutput = useCodexTerminalOutput({
       writeDisplay
@@ -267,8 +264,8 @@ describe("useCodexTerminalOutput", () => {
 
     terminalOutput.writeTerminalOutput("\u001b[22;2H\u001b[0m\u001b[49m\u001b[K\u001b[?25h");
 
-    expect(terminalOutput.getTerminalOutput()).toBe("");
-    expect(writeDisplay).toHaveBeenCalledWith("");
+    expect(terminalOutput.getTerminalOutput()).toBe("\u001b[22;2H\u001b[0m\u001b[49m\u001b[K\u001b[?25h");
+    expect(writeDisplay).toHaveBeenCalledWith("\u001b[22;2H\u001b[0m\u001b[49m\u001b[K\u001b[?25h");
   });
 
   it("replays terminal-control snapshots through xterm instead of flattening repaint frames", () => {
@@ -292,22 +289,24 @@ describe("useCodexTerminalOutput", () => {
     expect(writeDisplay).toHaveBeenCalledWith(snapshot);
   });
 
-  it("renders tiny cursor-repaint fragments live without storing them as transcript", () => {
+  it("stores tiny cursor-repaint fragments exactly as received", () => {
     const appendDisplay = vi.fn();
     const terminalOutput = useCodexTerminalOutput({
       appendDisplay,
       writeDisplay: vi.fn()
     });
+    const repaint = "\u001b[?2026h\u001b[22;2H\u001b[0m\u001b[49m\u001b[K\u001b[23;1HWo\u001b[39m\u001b[49m\u001b[0m\u001b[?25h\u001b[26;3H\u001b[?2026l";
 
-    terminalOutput.appendTerminalOutput("\u001b[?2026h\u001b[22;2H\u001b[0m\u001b[49m\u001b[K\u001b[23;1HWo\u001b[39m\u001b[49m\u001b[0m\u001b[?25h\u001b[26;3H\u001b[?2026l");
+    terminalOutput.appendTerminalOutput(repaint);
 
     expect(terminalOutput.codexBusy.value).toBe(false);
     expect(terminalOutput.terminalStreaming.value).toBe(true);
-    expect(terminalOutput.getTerminalOutput()).toBe("");
+    expect(terminalOutput.getTerminalOutput()).toBe(repaint);
 
     vi.advanceTimersByTime(80);
 
     expect(appendDisplay).toHaveBeenCalledTimes(1);
+    expect(appendDisplay).toHaveBeenCalledWith(repaint);
 
     vi.advanceTimersByTime(570);
 

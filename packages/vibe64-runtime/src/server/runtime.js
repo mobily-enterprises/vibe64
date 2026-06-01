@@ -20,12 +20,6 @@ import {
   missingInformationPolicyInstruction
 } from "@local/vibe64-adapters/server/promptQuestionPolicy";
 import {
-  STUDIO_CONTEXT_END_MARKER,
-  STUDIO_CONTEXT_START_MARKER,
-  visibleStudioPromptText,
-  wrapPromptWithStudioContext
-} from "@local/vibe64-adapters/server/promptMarkers";
-import {
   runtimeContainerManagedServicesPromptFacts,
   runtimeContainerPromptFacts
 } from "@local/studio-terminal-core/server/runtimeContainers";
@@ -265,20 +259,15 @@ async function writeActionResultEffects(store, sessionId, result = {}) {
 }
 
 function buildCodexPromptHandoff(renderedPrompt) {
-  const visiblePrompt = visibleStudioPromptText(renderedPrompt.prompt, renderedPrompt.visiblePrompt);
   return {
     codex: {
       mode: "inject_prompt",
       promptField: "prompt"
     },
     kind: "codex_prompt_handoff",
-    markers: {
-      end: STUDIO_CONTEXT_END_MARKER,
-      start: STUDIO_CONTEXT_START_MARKER
-    },
     prompt: renderedPrompt.prompt,
     promptId: renderedPrompt.promptId,
-    terminalInput: wrapPromptWithStudioContext(renderedPrompt.prompt, visiblePrompt)
+    terminalInput: renderedPrompt.prompt
   };
 }
 

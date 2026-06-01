@@ -5,7 +5,7 @@ import {
 
 function attachmentPathForTerminal(containerPath = "") {
   const normalizedPath = String(containerPath || "").trim();
-  return normalizedPath ? `\u001b[200~[${normalizedPath}] \u001b[201~` : "";
+  return normalizedPath ? `[${normalizedPath}] ` : "";
 }
 
 function useCodexTerminalAttachments({

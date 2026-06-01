@@ -120,12 +120,6 @@ function recordTerminalInput(session, data = "") {
   session.inputVersion = Number(session.inputVersion || 0) + 1;
   session.lastInputAt = new Date().toISOString();
   session.lastInputBytes = bytes;
-  sendToSubscribers(session, {
-    bytes,
-    inputVersion: session.inputVersion,
-    lastInputAt: session.lastInputAt,
-    type: "input"
-  });
 }
 
 function recordTerminalOutput(session, data = "") {

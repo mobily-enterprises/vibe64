@@ -18,7 +18,6 @@ function useCodexTerminalSessionLifecycle({
   canUseTerminal,
   clearCodexBusy,
   clearCodexWorking,
-  clearPromptEchoFilters,
   clearTerminalDisplay,
   clearTerminalOutput,
   closeTerminalSession,
@@ -201,7 +200,6 @@ function useCodexTerminalSessionLifecycle({
     clearCodexWorking?.();
     terminalSocket.closeSocket();
     disposeTerminalViewport?.();
-    clearPromptEchoFilters?.();
     clearTerminalOutput?.();
   }
 
