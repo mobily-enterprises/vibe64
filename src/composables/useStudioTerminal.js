@@ -1,4 +1,4 @@
-import { computed, nextTick, ref } from "vue";
+import { computed, nextTick, ref, unref } from "vue";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import {
@@ -12,8 +12,11 @@ function resolveCallback(callback, fallback) {
 }
 
 function useStudioTerminal({
+  onOutput = null,
   onSessionUpdate = null,
   onStatusUpdate = null,
+  onUserData = null,
+  readOnly = false,
   webSocketUrl = null
 } = {}) {
   const terminalHost = ref(null);
@@ -22,8 +25,10 @@ function useStudioTerminal({
   const terminalCommandPreview = ref("");
   const terminalError = ref("");
   const terminalExitCode = ref(null);
+  const terminalFocused = ref(false);
   const terminalMetadata = ref({});
   const terminalOutput = ref("");
+  const terminalSelectedText = ref("");
   const terminalStarting = ref(false);
 
   let terminalInstance = null;
@@ -33,22 +38,50 @@ function useStudioTerminal({
   let terminalSocketOpenPromise = null;
   let terminalSocketOpenSessionId = "";
   let terminalDataDisposable = null;
+  let terminalSelectionDisposable = null;
+  let terminalFocusInHandler = null;
+  let terminalFocusOutHandler = null;
+  let terminalWindowBlurHandler = null;
   let terminalResizeHandler = null;
   let terminalResizeObserver = null;
   let terminalReportedCols = 0;
   let terminalReportedRows = 0;
   let terminalLatestOutput = "";
   let terminalOutputOffset = 0;
+  let terminalOutputVersion = 0;
   let terminalSetupPromise = null;
 
+  const notifyOutput = resolveCallback(onOutput, () => null);
   const notifySessionUpdate = resolveCallback(onSessionUpdate, () => null);
   const notifyStatusUpdate = resolveCallback(onStatusUpdate, () => null);
+  const notifyUserData = resolveCallback(onUserData, () => null);
   const resolveWebSocketUrl = resolveCallback(webSocketUrl, () => "");
   const terminalExited = computed(() => terminalStatus.value === "exited");
+
+  function terminalReadOnly() {
+    return Boolean(typeof readOnly === "function" ? readOnly() : unref(readOnly));
+  }
+
+  function normalizedOutputVersion(value) {
+    const version = Number(value || 0);
+    return Number.isFinite(version) && version > 0 ? version : 0;
+  }
 
   function resetReportedTerminalSize() {
     terminalReportedCols = 0;
     terminalReportedRows = 0;
+  }
+
+  function updateTerminalSelection() {
+    terminalSelectedText.value = terminalInstance?.hasSelection?.()
+      ? terminalInstance.getSelection()
+      : "";
+  }
+
+  function syncTerminalFocus() {
+    const host = terminalHost.value;
+    const activeElement = document.activeElement;
+    terminalFocused.value = Boolean(host && activeElement && host.contains(activeElement));
   }
 
   function terminalCurrentSize() {
@@ -106,8 +139,25 @@ function useStudioTerminal({
       terminalInstance.open(terminalHost.value);
       fitTerminalUi();
       terminalDataDisposable = terminalInstance.onData((data) => {
+        if (terminalReadOnly()) {
+          return;
+        }
+        notifyUserData(data);
         void sendTerminalData(data);
       });
+      terminalSelectionDisposable = terminalInstance.onSelectionChange(updateTerminalSelection);
+      terminalFocusInHandler = () => {
+        terminalFocused.value = true;
+      };
+      terminalFocusOutHandler = () => {
+        window.setTimeout(syncTerminalFocus, 0);
+      };
+      terminalWindowBlurHandler = () => {
+        terminalFocused.value = false;
+      };
+      terminalHost.value.addEventListener("focusin", terminalFocusInHandler);
+      terminalHost.value.addEventListener("focusout", terminalFocusOutHandler);
+      window.addEventListener("blur", terminalWindowBlurHandler);
       terminalResizeHandler = () => {
         fitTerminalUi();
       };
@@ -144,6 +194,20 @@ function useStudioTerminal({
   function disposeTerminalDisplay() {
     terminalDataDisposable?.dispose?.();
     terminalDataDisposable = null;
+    terminalSelectionDisposable?.dispose?.();
+    terminalSelectionDisposable = null;
+    if (terminalFocusInHandler) {
+      terminalHost.value?.removeEventListener("focusin", terminalFocusInHandler);
+      terminalFocusInHandler = null;
+    }
+    if (terminalFocusOutHandler) {
+      terminalHost.value?.removeEventListener("focusout", terminalFocusOutHandler);
+      terminalFocusOutHandler = null;
+    }
+    if (terminalWindowBlurHandler) {
+      window.removeEventListener("blur", terminalWindowBlurHandler);
+      terminalWindowBlurHandler = null;
+    }
     if (terminalResizeHandler) {
       window.removeEventListener("resize", terminalResizeHandler);
       terminalResizeHandler = null;
@@ -155,6 +219,8 @@ function useStudioTerminal({
     terminalFitAddon = null;
     terminalSetupPromise = null;
     terminalOutputOffset = 0;
+    terminalFocused.value = false;
+    terminalSelectedText.value = "";
     resetReportedTerminalSize();
   }
 
@@ -166,6 +232,7 @@ function useStudioTerminal({
   function resetTerminalDisplay() {
     terminalLatestOutput = "";
     terminalOutputOffset = 0;
+    terminalOutputVersion = 0;
     terminalOutput.value = "";
     resetReportedTerminalSize();
     terminalInstance?.reset?.();
@@ -184,9 +251,36 @@ function useStudioTerminal({
     terminalInstance?.scrollToBottom?.();
   }
 
-  function writeTerminalOutput(output) {
-    terminalLatestOutput = String(output || "");
+  function writeTerminalOutput(output, {
+    outputVersion = 0
+  } = {}) {
+    const previousOutput = terminalLatestOutput;
+    const nextOutput = String(output || "");
+    const nextOutputVersion = normalizedOutputVersion(outputVersion);
+    if (
+      nextOutputVersion &&
+      terminalOutputVersion &&
+      nextOutputVersion < terminalOutputVersion
+    ) {
+      return false;
+    }
+    if (previousOutput && !nextOutput.startsWith(previousOutput)) {
+      if (!nextOutputVersion || nextOutputVersion <= terminalOutputVersion) {
+        return false;
+      }
+      terminalInstance?.reset?.();
+      terminalOutputOffset = 0;
+    }
+    terminalLatestOutput = nextOutput;
+    terminalOutputVersion = Math.max(terminalOutputVersion, nextOutputVersion);
     terminalOutput.value = terminalLatestOutput;
+    if (terminalLatestOutput !== previousOutput) {
+      notifyOutput({
+        outputVersion: terminalOutputVersion,
+        output: terminalLatestOutput,
+        source: "snapshot"
+      });
+    }
     if (!terminalInstance) {
       return;
     }
@@ -199,24 +293,44 @@ function useStudioTerminal({
       terminalInstance.write(outputChunk, scrollTerminalToBottom);
     }
     terminalOutputOffset = terminalLatestOutput.length;
+    return true;
   }
 
-  function appendTerminalOutput(chunk) {
+  function appendTerminalOutput(chunk, {
+    outputVersion = 0
+  } = {}) {
     const outputChunk = String(chunk || "");
     if (!outputChunk) {
-      return;
+      return false;
+    }
+    const nextOutputVersion = normalizedOutputVersion(outputVersion);
+    if (
+      nextOutputVersion &&
+      terminalOutputVersion &&
+      nextOutputVersion <= terminalOutputVersion
+    ) {
+      return false;
     }
     terminalLatestOutput += outputChunk;
+    terminalOutputVersion = Math.max(terminalOutputVersion, nextOutputVersion);
     terminalOutput.value = terminalLatestOutput;
+    notifyOutput({
+      chunk: outputChunk,
+      output: terminalLatestOutput,
+      outputVersion: terminalOutputVersion,
+      source: "append"
+    });
     if (!terminalInstance) {
-      return;
+      return true;
     }
     terminalInstance.write(outputChunk, scrollTerminalToBottom);
     terminalOutputOffset = terminalLatestOutput.length;
+    return true;
   }
 
   function applyTerminalSession(session = {}, {
-    fallbackStatus = ""
+    fallbackStatus = "",
+    preserveOutput = false
   } = {}) {
     const terminalSession = session && typeof session === "object" && !Array.isArray(session) ? session : {};
     const nextTerminalSessionId = String(terminalSession.id || "");
@@ -238,7 +352,11 @@ function useStudioTerminal({
       !Array.isArray(terminalSession.metadata)
       ? terminalSession.metadata
       : {};
-    writeTerminalOutput(terminalSession.output || "");
+    if (!preserveOutput || Object.hasOwn(terminalSession, "output")) {
+      writeTerminalOutput(terminalSession.output || "", {
+        outputVersion: terminalSession.outputVersion
+      });
+    }
     void sendTerminalResize();
     notifySessionUpdate(terminalSession);
     notifyStatusUpdate({
@@ -264,7 +382,9 @@ function useStudioTerminal({
     }
 
     if (message?.type === "output") {
-      appendTerminalOutput(message.chunk);
+      appendTerminalOutput(message.chunk, {
+        outputVersion: message.outputVersion
+      });
       return;
     }
 
@@ -415,6 +535,7 @@ function useStudioTerminal({
       return false;
     }
     terminalInstance?.focus?.();
+    syncTerminalFocus();
     return true;
   }
 
@@ -434,9 +555,11 @@ function useStudioTerminal({
     terminalError,
     terminalExited,
     terminalExitCode,
+    terminalFocused,
     terminalHost,
     terminalMetadata,
     terminalOutput,
+    terminalSelectedText,
     terminalSessionId,
     terminalStarting,
     terminalStatus

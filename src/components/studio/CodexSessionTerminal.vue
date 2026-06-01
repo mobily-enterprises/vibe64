@@ -10,7 +10,7 @@
     }"
     :aria-hidden="displayMode === 'headless' ? 'true' : undefined"
   >
-    <template v-if="displayMode !== 'headless'">
+    <div v-show="displayMode !== 'headless'" class="codex-terminal__content">
       <div class="codex-terminal__bar">
         <div class="codex-terminal__actions">
           <v-btn
@@ -105,12 +105,12 @@
           </p>
         </div>
       </v-expand-transition>
-    </template>
+    </div>
   </v-sheet>
 </template>
 
 <script setup>
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import {
   mdiChevronDown,
   mdiChevronUp,
@@ -118,6 +118,7 @@ import {
   mdiRestart
 } from "@mdi/js";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
+import { useStudioTerminal } from "@/composables/useStudioTerminal.js";
 import {
   vibe64CodexTerminalWebSocketUrl,
   vibe64GlobalCodexTerminalWebSocketUrl,
@@ -129,8 +130,6 @@ import {
 import { useVibe64CodexCommands } from "@/composables/useVibe64CodexCommands.js";
 import { useCodexTerminalAttachments } from "@/composables/useCodexTerminalAttachments.js";
 import { useCodexTerminalOutput } from "@/composables/useCodexTerminalOutput.js";
-import { useCodexTerminalSessionLifecycle } from "@/composables/useCodexTerminalSessionLifecycle.js";
-import { useCodexTerminalViewport } from "@/composables/useCodexTerminalViewport.js";
 import { writeClipboardText } from "@/lib/clipboard.js";
 import {
   vibe64SessionWorktreePath
@@ -181,15 +180,10 @@ const emit = defineEmits([
 ]);
 const codexCommands = useVibe64CodexCommands();
 
-const terminalSessionId = ref("");
-const terminalStatus = ref("");
-const terminalCommandPreview = ref("");
-const terminalError = ref("");
-const terminalStarting = ref(false);
 const copyStatus = ref("");
 const expanded = ref(true);
 const componentMounted = ref(false);
-let terminalLifecycle = null;
+let terminalStartPromise = null;
 
 const globalScope = computed(() => props.scope === "global");
 const sessionId = computed(() => props.session?.sessionId || "");
@@ -247,28 +241,38 @@ const canStartTerminal = computed(() => {
   }
   return Boolean(props.allowStart && terminalDisplayActive.value && sessionId.value && sessionWorktree.value);
 });
+
+const terminalController = useStudioTerminal({
+  onOutput: handleTerminalOutput,
+  onStatusUpdate: handleTerminalStatusUpdate,
+  onUserData: handleTerminalUserData,
+  readOnly: computed(() => props.readOnly),
+  webSocketUrl(terminalId) {
+    return webSocketUrlForScope(terminalScopeId.value, terminalId);
+  }
+});
 const {
-  appendTerminalDisplay,
-  disposeTerminalUi: disposeTerminalViewport,
-  focusTerminal,
+  applyTerminalSession,
+  closeTerminalSocket,
+  connectTerminalSocket,
+  disposeTerminalUi,
+  focusTerminal: focusTerminalUi,
+  resetTerminalDisplay,
+  resetTerminalSessionState,
+  sendTerminalData: sendTerminalBytes,
   setupTerminalUi,
   terminalFocused,
   terminalHost,
   terminalSelectedText,
-  writeTerminalDisplay
-} = useCodexTerminalViewport({
-  expanded,
-  onData(data) {
-    if (props.readOnly) {
-      return;
-    }
-    void sendTerminalData(data, {
-      source: "user"
-    });
-  }
-});
+  terminalCommandPreview,
+  terminalError,
+  terminalExited,
+  terminalSessionId,
+  terminalStarting,
+  terminalStatus
+} = terminalController;
 const {
-  appendTerminalOutput,
+  appendTerminalOutput: noteTerminalOutputChunk,
   clearCodexBusy,
   clearCodexWorking,
   codexBusy,
@@ -276,13 +280,10 @@ const {
   markCodexBusy,
   resetTerminalOutput,
   terminalStreaming,
-  writeTerminalOutput
+  writeTerminalOutput: noteTerminalOutputSnapshot
 } = useCodexTerminalOutput({
-  appendDisplay: appendTerminalDisplay,
-  displayActive: terminalDisplayActive,
   emitBusyChanged: emitCodexActivityChanged,
-  sessionId: terminalScopeId,
-  writeDisplay: writeTerminalDisplay
+  sessionId: terminalScopeId
 });
 const {
   attachmentDragActive,
@@ -301,46 +302,14 @@ const {
   sessionId: terminalScopeId,
   uploadAttachment: uploadAttachmentForScope
 });
-terminalLifecycle = useCodexTerminalSessionLifecycle({
-  appendTerminalOutput,
-  canStartTerminal,
-  canUseTerminal,
-  clearCodexBusy,
-  clearCodexWorking,
-  clearTerminalOutput() {
-    resetTerminalOutput();
-  },
-  closeTerminalSession: closeTerminalSessionForScope,
-  componentMounted,
-  defaultExpanded,
-  disposeTerminalViewport,
-  emitSessionState(payload) {
-    emit("session-update", payload);
-  },
-  expanded,
-  onSessionChanged() {
-    resetAttachmentDragState();
-    clearAttachmentStatus();
-  },
-  sessionId: terminalScopeId,
-  setupTerminalUi,
-  startTerminalSession: startTerminalSessionForScope,
-  terminalCommandPreview,
-  terminalError,
-  terminalHost,
-  terminalSessionId,
-  terminalStarting,
-  terminalStatus,
-  visible: computed(() => props.visible),
-  webSocketUrl: webSocketUrlForScope,
-  writeTerminalOutput
-});
-const {
-  closeTerminal,
-  restartTerminal,
-  showTerminalStartPanel,
-  terminalExited
-} = terminalLifecycle;
+const terminalCanStart = computed(() => Boolean(canStartTerminal.value));
+const showTerminalStartPanel = computed(() => (
+  canUseTerminal.value &&
+  terminalCanStart.value &&
+  componentMounted.value &&
+  !terminalStarting.value &&
+  (!terminalSessionId.value || terminalExited.value)
+));
 
 function defaultExpanded() {
   if (typeof window === "undefined" || !window.matchMedia) {
@@ -369,7 +338,19 @@ async function copyTerminalSelection() {
 }
 
 function ensureTerminalReady() {
-  return terminalLifecycle?.ensureTerminalReady() || Promise.resolve(false);
+  if (!canUseTerminal.value) {
+    if (terminalCanStart.value) {
+      terminalError.value = "Create the session worktree before starting Codex.";
+    }
+    return Promise.resolve(false);
+  }
+  if (terminalStartPromise) {
+    return terminalStartPromise;
+  }
+  terminalStartPromise = startTerminalOnce();
+  return terminalStartPromise.finally(() => {
+    terminalStartPromise = null;
+  });
 }
 
 function emitCodexActivityChanged(payload = {}) {
@@ -385,6 +366,57 @@ function emitCodexActivityChanged(payload = {}) {
     terminalSessionId: terminalSessionId.value || serverTerminalSession.value.id || "",
     working
   });
+}
+
+function emitTerminalSessionState(extra = {}) {
+  if (!terminalScopeId.value || !terminalSessionId.value) {
+    return;
+  }
+  emit("session-update", {
+    codexTerminalCommandPreview: terminalCommandPreview.value,
+    codexTerminalSessionId: terminalSessionId.value,
+    codexTerminalStatus: terminalStatus.value,
+    sessionId: terminalScopeId.value,
+    ...extra
+  });
+}
+
+function handleTerminalOutput({
+  chunk = "",
+  output = "",
+  source = ""
+} = {}) {
+  if (source === "append") {
+    noteTerminalOutputChunk(chunk);
+    return;
+  }
+  noteTerminalOutputSnapshot(output);
+}
+
+function handleTerminalStatusUpdate({
+  closeError = "",
+  status = ""
+} = {}) {
+  if (closeError) {
+    terminalError.value = String(closeError);
+  }
+  emitTerminalSessionState();
+  if (status === "exited") {
+    clearCodexBusy();
+    clearCodexWorking();
+  }
+}
+
+function handleTerminalUserData(data) {
+  const input = String(data || "");
+  if (input.includes("\u0003")) {
+    clearCodexBusy();
+    clearCodexWorking();
+    return;
+  }
+  if (input.includes("\r")) {
+    markCodexBusy();
+  }
 }
 
 function startTerminalSessionForScope(currentScopeId) {
@@ -417,7 +449,10 @@ async function sendTerminalData(data, {
 } = {}) {
   const input = String(data || "");
   try {
-    if (!(await terminalLifecycle?.sendTerminalInput(input))) {
+    if (!(await ensureTerminalReady())) {
+      return false;
+    }
+    if (!(await sendTerminalBytes(input))) {
       return false;
     }
     if (source === "user" && input.includes("\u0003")) {
@@ -452,6 +487,14 @@ function toggleExpanded() {
   }
 }
 
+async function focusTerminal() {
+  if (!expanded.value) {
+    expanded.value = true;
+    await nextTick();
+  }
+  return focusTerminalUi();
+}
+
 async function focusWritableTerminalWhenShown(visible) {
   if (!visible || props.readOnly) {
     return;
@@ -469,11 +512,133 @@ async function focusWritableTerminalWhenShown(visible) {
   }
 }
 
+async function connectAttachedTerminal() {
+  void setupTerminalUi();
+  if (!(await connectTerminalSocket())) {
+    throw new Error("Terminal stream failed to connect.");
+  }
+  return true;
+}
+
+async function startTerminalOnce() {
+  void setupTerminalUi();
+  if (terminalExited.value && terminalCanStart.value) {
+    closeTerminalSocket();
+    resetTerminalSessionState();
+    resetTerminalDisplay();
+    resetTerminalOutput();
+  }
+  if (terminalSessionId.value) {
+    return connectAttachedTerminal();
+  }
+  if (!terminalCanStart.value) {
+    return false;
+  }
+
+  terminalStarting.value = true;
+  terminalError.value = "";
+  try {
+    const session = await startTerminalSessionForScope(terminalScopeId.value);
+    if (session?.ok === false) {
+      throw new Error(session.error || session.errors?.[0]?.message || "Codex terminal failed to start.");
+    }
+    if (!session?.id) {
+      throw new Error("Codex terminal failed to start.");
+    }
+    applyTerminalSession(session, {
+      fallbackStatus: "running"
+    });
+    emitTerminalSessionState();
+    return connectAttachedTerminal();
+  } catch (startError) {
+    terminalError.value = String(startError?.message || startError || "Codex terminal failed to start.");
+    return false;
+  } finally {
+    terminalStarting.value = false;
+  }
+}
+
+function startTerminalWhenReady() {
+  if (!canUseTerminal.value) {
+    return;
+  }
+  void ensureTerminalReady();
+}
+
+async function attachTerminalSession(session = {}) {
+  const nextTerminalSessionId = String(session.id || session.terminalSessionId || "").trim();
+  if (!nextTerminalSessionId) {
+    return Boolean(terminalSessionId.value);
+  }
+  const previousTerminalSessionId = terminalSessionId.value;
+  if (previousTerminalSessionId && previousTerminalSessionId !== nextTerminalSessionId) {
+    resetTerminalOutput();
+  }
+  applyTerminalSession({
+    ...session,
+    id: nextTerminalSessionId
+  }, {
+    fallbackStatus: "running",
+    preserveOutput: true
+  });
+  if (!canUseTerminal.value || !componentMounted.value) {
+    return true;
+  }
+  try {
+    await connectAttachedTerminal();
+    return true;
+  } catch (attachError) {
+    terminalError.value = String(attachError?.message || attachError || "Terminal stream failed to connect.");
+    return false;
+  }
+}
+
+function detachTerminal() {
+  terminalStartPromise = null;
+  closeTerminalSocket();
+  resetTerminalSessionState();
+  resetTerminalDisplay();
+  resetTerminalOutput();
+  clearAttachmentStatus();
+  resetAttachmentDragState();
+}
+
+async function closeTerminal() {
+  const existingTerminalId = terminalSessionId.value;
+  detachTerminal();
+  if (existingTerminalId && terminalScopeId.value) {
+    await closeTerminalSessionForScope(terminalScopeId.value, existingTerminalId).catch(() => null);
+  }
+}
+
+async function restartTerminal() {
+  terminalError.value = "";
+  expanded.value = true;
+  await closeTerminal();
+  await ensureTerminalReady();
+}
+
 watch(serverTerminalSession, (terminal) => {
-  void terminalLifecycle?.attachTerminalSession(terminal);
+  void attachTerminalSession(terminal);
 }, {
   flush: "post",
   immediate: true
+});
+
+watch(sessionId, (nextSessionId, previousSessionId) => {
+  if (previousSessionId && previousSessionId !== nextSessionId) {
+    detachTerminal();
+  }
+  resetAttachmentDragState();
+  clearAttachmentStatus();
+  expanded.value = defaultExpanded();
+  startTerminalWhenReady();
+});
+
+watch(canUseTerminal, (ready) => {
+  if (ready) {
+    startTerminalWhenReady();
+  }
 });
 
 watch(terminalDisplayActive, (visible, previousVisible) => {
@@ -489,8 +654,26 @@ watch(terminalHost, (host) => {
   if (host && terminalDisplayActive.value && props.autoFocus && !props.readOnly) {
     void focusWritableTerminalWhenShown(true);
   }
+  if (host) {
+    void setupTerminalUi();
+    startTerminalWhenReady();
+  }
 }, {
   flush: "post"
+});
+
+onMounted(() => {
+  componentMounted.value = true;
+  expanded.value = defaultExpanded();
+  startTerminalWhenReady();
+});
+
+onBeforeUnmount(() => {
+  componentMounted.value = false;
+  terminalStartPromise = null;
+  closeTerminalSocket();
+  disposeTerminalUi();
+  resetTerminalOutput();
 });
 
 defineExpose({
