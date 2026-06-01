@@ -11,6 +11,8 @@ const MAX_TERMINAL_COLS = 300;
 const MAX_TERMINAL_ROWS = 120;
 const DEFAULT_QUIET_THRESHOLD_MS = 3000;
 const MAX_QUIET_THRESHOLD_MS = 10 * 60 * 1000;
+const TERMINAL_TEXT_WRITE_CHUNK_BYTES = 200;
+const TERMINAL_TEXT_WRITE_CHUNK_DELAY_MS = 200;
 const TERMINAL_KEY_INPUTS = Object.freeze({
   "ctrl-c": "\u0003",
   "enter": "\r",
@@ -212,11 +214,53 @@ function terminalKeyInput(key = "") {
   return TERMINAL_KEY_INPUTS[normalizedKey] || "";
 }
 
-function writeTerminalSessionText(id, text = "", {
+function delay(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function terminalTextChunks(text = "", maxBytes = TERMINAL_TEXT_WRITE_CHUNK_BYTES) {
+  const source = String(text || "");
+  if (Buffer.byteLength(source, "utf8") <= maxBytes) {
+    return [source];
+  }
+
+  const chunks = [];
+  let chunk = "";
+  let chunkBytes = 0;
+  for (const char of source) {
+    const charBytes = Buffer.byteLength(char, "utf8");
+    if (chunk && chunkBytes + charBytes > maxBytes) {
+      chunks.push(chunk);
+      chunk = "";
+      chunkBytes = 0;
+    }
+    chunk += char;
+    chunkBytes += charBytes;
+  }
+  if (chunk) {
+    chunks.push(chunk);
+  }
+  return chunks;
+}
+
+async function writeTerminalSessionText(id, text = "", {
   namespace = "default",
   quietThresholdMs = DEFAULT_QUIET_THRESHOLD_MS
 } = {}) {
-  return terminalSessionControlSnapshot(writeTerminalSession(id, String(text || ""), {
+  const chunks = terminalTextChunks(text);
+  let snapshot = null;
+  for (const [index, chunk] of chunks.entries()) {
+    snapshot = writeTerminalSession(id, chunk, {
+      namespace
+    });
+    if (!snapshot.ok || index === chunks.length - 1) {
+      break;
+    }
+    await delay(TERMINAL_TEXT_WRITE_CHUNK_DELAY_MS);
+  }
+  return terminalSessionControlSnapshot(snapshot || readTerminalSession(id, {
     namespace
   }), {
     quietThresholdMs
@@ -234,8 +278,9 @@ function writeTerminalSessionKey(id, key = "", {
       error: `Unsupported terminal key: ${String(key || "")}`
     };
   }
-  return writeTerminalSessionText(id, input, {
-    namespace,
+  return terminalSessionControlSnapshot(writeTerminalSession(id, input, {
+    namespace
+  }), {
     quietThresholdMs
   });
 }

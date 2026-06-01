@@ -219,7 +219,7 @@ test("terminal session control helpers send exact text, narrow keys, and expose 
     assert.equal(terminalKeyInput("ctrl_c"), "\u0003");
     assert.equal(terminalKeyInput("delete"), "");
 
-    const written = writeTerminalSessionText(session.id, "hello\n", {
+    const written = await writeTerminalSessionText(session.id, "hello\n", {
       namespace
     });
     assert.equal(written.ok, true);
@@ -239,6 +239,44 @@ test("terminal session control helpers send exact text, narrow keys, and expose 
     });
     assert.equal(keyWritten.ok, true);
     assert.equal(keyWritten.inputVersion, 2);
+  } finally {
+    await closeTerminalSessionsForNamespacePrefix(namespace);
+  }
+});
+
+test("terminal session text helper chunks long writes", async () => {
+  const namespace = `terminal-chunked-write-test-${crypto.randomUUID()}`;
+  const session = startTerminalSession({
+    args: [
+      "-e",
+      [
+        "process.stdin.setRawMode(true);",
+        "let received = '';",
+        "process.stdin.on('data', (chunk) => {",
+        "  received += chunk.toString('utf8');",
+        "  if (received.includes('\\n')) {",
+        "    process.stdout.write(`received:${Buffer.byteLength(received, 'utf8')}`);",
+        "  }",
+        "});",
+        "process.stdin.resume();"
+      ].join(" ")
+    ],
+    command: process.execPath,
+    commandPreview: "node raw echo",
+    namespace
+  });
+
+  try {
+    const text = `${"a".repeat(201)}\n`;
+    const written = await writeTerminalSessionText(session.id, text, {
+      namespace
+    });
+    assert.equal(written.ok, true);
+    assert.equal(written.inputVersion, 2);
+
+    await waitFor(() => readTerminalSession(session.id, {
+      namespace
+    }).output.includes("received:202"));
   } finally {
     await closeTerminalSessionsForNamespacePrefix(namespace);
   }

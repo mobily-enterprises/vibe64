@@ -5,7 +5,7 @@ import {
   resizeTerminalSession,
   startTerminalSession,
   subscribeTerminalSession,
-  writeTerminalSession
+  writeTerminalSessionText
 } from "@local/studio-terminal-core/server/terminalSessions";
 import {
   removeDockerContainer
@@ -365,7 +365,7 @@ function createShellTerminalController({ projectService } = {}) {
     },
 
     writeTerminal(sessionId, terminalSessionId, data) {
-      return writeTerminalSession(terminalSessionId, data, {
+      return writeTerminalSessionText(terminalSessionId, data, {
         namespace: shellTerminalNamespace(sessionId)
       });
     },
