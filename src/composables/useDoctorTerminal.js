@@ -140,7 +140,6 @@ function useDoctorTerminal({
     }
 
     terminalInstance = new Terminal({
-      convertEol: true,
       cursorBlink: true,
       fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
       fontSize: 13,

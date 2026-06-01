@@ -339,10 +339,6 @@ const codexTerminalActivityMatchesSelectedSession = computed(() => {
     !activity.terminalSessionId ||
     activity.terminalSessionId === selectedCodexTerminalId.value;
 });
-const codexTerminalStreaming = computed(() => Boolean(
-  codexTerminalActivityMatchesSelectedSession.value &&
-  codexTerminalActivity.value.streaming
-));
 const codexTerminalActive = computed(() => Boolean(
   codexTerminalActivityMatchesSelectedSession.value &&
   codexTerminalActivity.value.active
@@ -376,12 +372,6 @@ const autopilotInteractionLocked = computed(() => Boolean(
   props.active &&
   autopilotCodexWorkingVisible.value
 ));
-const codexTerminalDisplayMode = computed(() => {
-  if (!props.active) {
-    return "headless";
-  }
-  return autopilotCodexTerminalVisible.value ? "ai-terminal" : "headless";
-});
 const codexTerminalCanStart = computed(() => Boolean(
   props.active
 ));
@@ -467,18 +457,8 @@ function handleCodexActivityChange(payload = {}) {
     activity.terminalSessionId &&
     activity.terminalSessionId !== selectedCodexTerminalId.value
   ) {
-    vibe64SessionDebugLog("client.sessionRuntimeHost.codexActivity.ignored", {
-      activity,
-      expectedTerminalSessionId: selectedCodexTerminalId.value,
-      sessionId: props.sessionId
-    });
     return;
   }
-  vibe64SessionDebugLog("client.sessionRuntimeHost.codexActivity", {
-    activity,
-    serverSaysCodexIsWorking: serverSaysCodexIsWorking.value,
-    sessionId: props.sessionId
-  });
   codexTerminalActivity.value = activity;
 }
 
@@ -687,41 +667,12 @@ watch(() => [
   codexTerminalActive.value ? "active" : "quiet"
 ].join("|"), () => {
   clearCodexQuietTerminalTimer();
-  vibe64SessionDebugLog("client.sessionRuntimeHost.codexQuiet.evaluate", {
-    codexBootstrapNeedsTerminalAttention: codexBootstrapNeedsTerminalAttention.value,
-    codexPromptResponseExpected: codexPromptResponseExpected.value,
-    codexProgressExpected: codexProgressExpected.value,
-    codexTerminalActive: codexTerminalActive.value,
-    codexTerminalStreaming: codexTerminalStreaming.value,
-    selectedCodexTerminalId: selectedCodexTerminalId.value,
-    serverSaysCodexIsWorking: serverSaysCodexIsWorking.value,
-    sessionId: props.sessionId
-  });
   if (!codexPromptResponseExpected.value || codexBootstrapNeedsTerminalAttention.value) {
-    vibe64SessionDebugLog("client.sessionRuntimeHost.codexQuiet.reset", {
-      codexBootstrapNeedsTerminalAttention: codexBootstrapNeedsTerminalAttention.value,
-      codexPromptResponseExpected: codexPromptResponseExpected.value,
-      selectedCodexTerminalId: selectedCodexTerminalId.value,
-      serverSaysCodexIsWorking: serverSaysCodexIsWorking.value,
-      sessionId: props.sessionId,
-      terminalActive: codexTerminalActive.value,
-      streaming: codexTerminalStreaming.value
-    });
     return;
   }
   if (codexTerminalActive.value) {
-    vibe64SessionDebugLog("client.sessionRuntimeHost.codexQuiet.waitForQuiet", {
-      selectedCodexTerminalId: selectedCodexTerminalId.value,
-      sessionId: props.sessionId,
-      streaming: codexTerminalStreaming.value
-    });
     return;
   }
-  vibe64SessionDebugLog("client.sessionRuntimeHost.codexQuiet.schedule", {
-    delayMs: CODEX_QUIET_TERMINAL_DELAY_MS,
-    selectedCodexTerminalId: selectedCodexTerminalId.value,
-    sessionId: props.sessionId
-  });
   codexQuietTerminalTimer = globalThis.setTimeout(() => {
     codexQuietTerminalTimer = null;
     if (
@@ -729,34 +680,9 @@ watch(() => [
       !codexBootstrapNeedsTerminalAttention.value &&
       !codexTerminalActive.value
     ) {
-      vibe64SessionDebugLog("client.sessionRuntimeHost.codexQuiet.fire", {
-        selectedCodexTerminalId: selectedCodexTerminalId.value,
-        sessionId: props.sessionId
-      });
       void returnControlFromQuietCodex();
     }
   }, CODEX_QUIET_TERMINAL_DELAY_MS);
-}, {
-  flush: "post",
-  immediate: true
-});
-
-watch(() => [
-  codexTerminalDisplayMode.value,
-  autopilotCodexWorkingVisible.value ? "working" : "not-working",
-  autopilotCodexTerminalVisible.value ? "terminal-visible" : "terminal-hidden",
-  autopilotInteractionLocked.value ? "locked" : "unlocked"
-].join("|"), () => {
-  vibe64SessionDebugLog("client.sessionRuntimeHost.codexDisplay", {
-    autopilotCodexTerminalVisible: autopilotCodexTerminalVisible.value,
-    autopilotCodexWorkingVisible: autopilotCodexWorkingVisible.value,
-    autopilotInteractionLocked: autopilotInteractionLocked.value,
-    displayMode: codexTerminalDisplayMode.value,
-    selectedCodexTerminalId: selectedCodexTerminalId.value,
-    serverSaysCodexIsWorking: serverSaysCodexIsWorking.value,
-    sessionId: props.sessionId,
-    terminalSaysCodexIsWorking: terminalSaysCodexIsWorking.value
-  });
 }, {
   flush: "post",
   immediate: true

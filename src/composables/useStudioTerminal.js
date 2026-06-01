@@ -7,13 +7,6 @@ import {
 } from "@/lib/studioTerminalSize.js";
 import "@xterm/xterm/css/xterm.css";
 
-const MAX_TERMINAL_OUTPUT_LENGTH = 160000;
-
-function trimTerminalOutput(output) {
-  const text = String(output || "");
-  return text.length <= MAX_TERMINAL_OUTPUT_LENGTH ? text : text.slice(text.length - MAX_TERMINAL_OUTPUT_LENGTH);
-}
-
 function resolveCallback(callback, fallback) {
   return typeof callback === "function" ? callback : fallback;
 }
@@ -99,7 +92,6 @@ function useStudioTerminal({
       }
       terminalHost.value.replaceChildren();
       terminalInstance = new Terminal({
-        convertEol: true,
         cursorBlink: false,
         disableStdin: false,
         fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
@@ -163,7 +155,6 @@ function useStudioTerminal({
     terminalFitAddon = null;
     terminalSetupPromise = null;
     terminalOutputOffset = 0;
-    resetDisplayFilter();
     resetReportedTerminalSize();
   }
 
@@ -194,7 +185,7 @@ function useStudioTerminal({
   }
 
   function writeTerminalOutput(output) {
-    terminalLatestOutput = trimTerminalOutput(output);
+    terminalLatestOutput = String(output || "");
     terminalOutput.value = terminalLatestOutput;
     if (!terminalInstance) {
       return;
@@ -215,7 +206,7 @@ function useStudioTerminal({
     if (!outputChunk) {
       return;
     }
-    terminalLatestOutput = trimTerminalOutput(`${terminalLatestOutput}${outputChunk}`);
+    terminalLatestOutput += outputChunk;
     terminalOutput.value = terminalLatestOutput;
     if (!terminalInstance) {
       return;

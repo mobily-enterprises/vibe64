@@ -283,7 +283,6 @@ const {
   clearCodexWorking,
   codexBusy,
   codexWorking,
-  flushTerminalOutput,
   getTerminalOutput,
   markCodexBusy,
   resetTerminalOutput,
@@ -332,9 +331,6 @@ terminalLifecycle = useCodexTerminalSessionLifecycle({
   },
   expanded,
   fitTerminal,
-  onBeforeDispose() {
-    flushTerminalOutput();
-  },
   onSessionChanged() {
     resetAttachmentDragState();
     clearAttachmentStatus();

@@ -4,9 +4,6 @@ import { useCodexTerminalSocket } from "@/composables/useCodexTerminalSocket.js"
 import {
   terminalResizeErrorMessage
 } from "@/lib/studioTerminalSize.js";
-import {
-  vibe64SessionDebugLog
-} from "@/lib/vibe64SessionDebugLog.js";
 
 function terminalSessionNotFound(error = "") {
   return String(error || "").toLowerCase().includes("terminal session not found");
@@ -81,13 +78,6 @@ function useCodexTerminalSessionLifecycle({
   }
 
   function applyTerminalSnapshot(session = {}) {
-    vibe64SessionDebugLog("client.codexTerminal.snapshot", {
-      outputLength: String(session.output || "").length,
-      outputVersion: Number(session.outputVersion || 0),
-      sessionId: sessionId.value,
-      status: String(session.status || ""),
-      terminalSessionId: String(session.id || terminalSessionId.value || "")
-    });
     onTerminalSnapshot?.(session);
     terminalStatus.value = session.status || terminalStatus.value || "";
     terminalCommandPreview.value = session.commandPreview || terminalCommandPreview.value;
@@ -104,31 +94,16 @@ function useCodexTerminalSessionLifecycle({
     }
 
     if (message?.type === "snapshot") {
-      vibe64SessionDebugLog("client.codexTerminal.socket.snapshot", {
-        sessionId: sessionId.value,
-        terminalSessionId: terminalSessionId.value
-      });
       applyTerminalSnapshot(message.session || {});
       return;
     }
 
     if (message?.type === "output") {
-      vibe64SessionDebugLog("client.codexTerminal.socket.output", {
-        bytes: String(message.chunk || "").length,
-        sessionId: sessionId.value,
-        terminalSessionId: terminalSessionId.value
-      });
       appendTerminalOutput?.(message.chunk);
       return;
     }
 
     if (message?.type === "status") {
-      vibe64SessionDebugLog("client.codexTerminal.socket.status", {
-        previousStatus: terminalStatus.value,
-        sessionId: sessionId.value,
-        status: String(message.status || ""),
-        terminalSessionId: terminalSessionId.value
-      });
       terminalStatus.value = message.status || terminalStatus.value || "";
       emitTerminalSessionState();
       if (terminalStatus.value === "exited") {
@@ -144,11 +119,6 @@ function useCodexTerminalSessionLifecycle({
 
     if (message?.type === "error") {
       const error = String(message.error || "Terminal stream failed.");
-      vibe64SessionDebugLog("client.codexTerminal.socket.error", {
-        error,
-        sessionId: sessionId.value,
-        terminalSessionId: terminalSessionId.value
-      });
       if (terminalResizeErrorMessage(error)) {
         return;
       }
@@ -165,18 +135,9 @@ function useCodexTerminalSessionLifecycle({
     componentMounted,
     isTerminalSessionNotFound: terminalSessionNotFound,
     onConnected() {
-      vibe64SessionDebugLog("client.codexTerminal.socket.connected", {
-        sessionId: sessionId.value,
-        terminalSessionId: terminalSessionId.value
-      });
       terminalError.value = "";
     },
     onError(error) {
-      vibe64SessionDebugLog("client.codexTerminal.socket.connectError", {
-        error,
-        sessionId: sessionId.value,
-        terminalSessionId: terminalSessionId.value
-      });
       terminalError.value = error;
     },
     onMessage: handleTerminalSocketMessage,
@@ -190,11 +151,6 @@ function useCodexTerminalSessionLifecycle({
   });
 
   function disposeTerminalUi() {
-    vibe64SessionDebugLog("client.codexTerminal.dispose", {
-      sessionId: sessionId.value,
-      terminalSessionId: terminalSessionId.value,
-      visible: Boolean(unref(visible))
-    });
     onBeforeDispose?.();
     clearCodexBusy?.();
     clearCodexWorking?.();
@@ -212,12 +168,6 @@ function useCodexTerminalSessionLifecycle({
   }
 
   async function connectAttachedTerminal() {
-    vibe64SessionDebugLog("client.codexTerminal.connect.start", {
-      canUseTerminal: Boolean(canUseTerminal.value),
-      sessionId: sessionId.value,
-      terminalSessionId: terminalSessionId.value,
-      visible: Boolean(unref(visible))
-    });
     void setupTerminalUi?.();
     fitTerminal?.({
       forceResize: true
@@ -231,16 +181,8 @@ function useCodexTerminalSessionLifecycle({
       }
     });
     if (!(await terminalSocket.connect())) {
-      vibe64SessionDebugLog("client.codexTerminal.connect.failed", {
-        sessionId: sessionId.value,
-        terminalSessionId: terminalSessionId.value
-      });
       throw new Error("Terminal stream failed to connect.");
     }
-    vibe64SessionDebugLog("client.codexTerminal.connect.done", {
-      sessionId: sessionId.value,
-      terminalSessionId: terminalSessionId.value
-    });
     return true;
   }
 
@@ -250,26 +192,14 @@ function useCodexTerminalSessionLifecycle({
       forgetExitedTerminal();
     }
     if (terminalSessionId.value) {
-      vibe64SessionDebugLog("client.codexTerminal.start.reuse", {
-        sessionId: sessionId.value,
-        terminalSessionId: terminalSessionId.value
-      });
       return connectAttachedTerminal();
     }
     if (!terminalCanStart.value) {
-      vibe64SessionDebugLog("client.codexTerminal.start.skipped", {
-        canStart: Boolean(terminalCanStart.value),
-        canUseTerminal: Boolean(canUseTerminal.value),
-        sessionId: sessionId.value
-      });
       return false;
     }
 
     terminalStarting.value = true;
     terminalError.value = "";
-    vibe64SessionDebugLog("client.codexTerminal.start.request", {
-      sessionId: sessionId.value
-    });
     try {
       const session = await startTerminalSession?.(sessionId.value);
       if (session?.ok === false) {
@@ -279,20 +209,11 @@ function useCodexTerminalSessionLifecycle({
       terminalStatus.value = session.status || "running";
       terminalCommandPreview.value = session.commandPreview || "";
       emitTerminalSessionState();
-      vibe64SessionDebugLog("client.codexTerminal.start.response", {
-        sessionId: sessionId.value,
-        status: terminalStatus.value,
-        terminalSessionId: terminalSessionId.value
-      });
       await connectAttachedTerminal();
       onTerminalStarted?.(session);
       return true;
     } catch (startError) {
       terminalError.value = String(startError?.message || startError || "Codex terminal failed to start.");
-      vibe64SessionDebugLog("client.codexTerminal.start.error", {
-        error: terminalError.value,
-        sessionId: sessionId.value
-      });
       return false;
     } finally {
       terminalStarting.value = false;
@@ -353,14 +274,6 @@ function useCodexTerminalSessionLifecycle({
 
   async function attachTerminalSession(session = {}) {
     const nextTerminalSessionId = String(session.id || session.terminalSessionId || "").trim();
-    vibe64SessionDebugLog("client.codexTerminal.attach.request", {
-      canUseTerminal: Boolean(canUseTerminal.value),
-      currentTerminalSessionId: terminalSessionId.value,
-      nextTerminalSessionId,
-      sessionId: sessionId.value,
-      status: String(session.status || ""),
-      visible: Boolean(unref(visible))
-    });
     if (!nextTerminalSessionId) {
       if (terminalSessionId.value) {
         detachTerminal();
@@ -375,12 +288,6 @@ function useCodexTerminalSessionLifecycle({
     terminalStatus.value = session.status || terminalStatus.value || "running";
     terminalCommandPreview.value = session.commandPreview || terminalCommandPreview.value || "";
     if (!canUseTerminal.value || !componentMounted.value) {
-      vibe64SessionDebugLog("client.codexTerminal.attach.deferred", {
-        canUseTerminal: Boolean(canUseTerminal.value),
-        componentMounted: Boolean(componentMounted.value),
-        sessionId: sessionId.value,
-        terminalSessionId: terminalSessionId.value
-      });
       return true;
     }
     try {
@@ -426,10 +333,6 @@ function useCodexTerminalSessionLifecycle({
   }
 
   function detachTerminal() {
-    vibe64SessionDebugLog("client.codexTerminal.detach", {
-      sessionId: sessionId.value,
-      terminalSessionId: terminalSessionId.value
-    });
     terminalSessionId.value = "";
     terminalStatus.value = "";
     terminalCommandPreview.value = "";

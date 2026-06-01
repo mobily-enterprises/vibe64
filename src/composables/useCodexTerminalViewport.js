@@ -4,15 +4,6 @@ import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 
 const CODEX_TERMINAL_SCROLLBACK_LINES = 50000;
-const PENDING_TERMINAL_DISPLAY_TAIL_LENGTH = 256 * 1024;
-
-function trimPendingTerminalDisplay(output) {
-  const displayOutput = String(output || "");
-  if (displayOutput.length <= PENDING_TERMINAL_DISPLAY_TAIL_LENGTH) {
-    return displayOutput;
-  }
-  return displayOutput.slice(displayOutput.length - PENDING_TERMINAL_DISPLAY_TAIL_LENGTH);
-}
 
 function useCodexTerminalViewport({
   expanded,
@@ -173,11 +164,11 @@ function useCodexTerminalViewport({
       terminalInstance.write(chunk, scrollTerminalToBottom);
       return;
     }
-    pendingTerminalDisplay = trimPendingTerminalDisplay(`${pendingTerminalDisplay}${chunk}`);
+    pendingTerminalDisplay += chunk;
   }
 
   function writeTerminalDisplay(output) {
-    const displayOutput = trimPendingTerminalDisplay(output);
+    const displayOutput = String(output || "");
     pendingTerminalDisplay = displayOutput;
     if (!terminalInstance) {
       return;
@@ -200,7 +191,6 @@ function useCodexTerminalViewport({
         return false;
       }
       terminalInstance = new Terminal({
-        convertEol: true,
         cursorBlink: true,
         fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
         fontSize: 13,
