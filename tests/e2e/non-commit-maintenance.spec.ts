@@ -82,9 +82,9 @@ test.describe("non-commit maintenance agent chat", () => {
 
     await expect(page.getByRole("button", { name: /^Inspect$/ })).toBeVisible();
     await expect(page.getByRole("button", { name: /^Autopilot$/ })).toBeHidden();
-    await expect(page.getByText("Tell me what you want to change. Mention the feature, bug, page, or behavior you want Vibe64 to work on."))
+    await expect(page.getByText("What would you like to do?"))
       .toBeVisible();
-    await page.getByLabel("What do you want to ask Codex?").fill("Tell me what maintenance is needed.");
+    await page.getByLabel("What would you like to do?").fill("Tell me what maintenance is needed.");
     await page.getByRole("button", { name: "Ask Codex" }).click();
 
     await expectMarkdownResponsePreview(page);
@@ -101,14 +101,14 @@ test.describe("non-commit maintenance agent chat", () => {
 
     await expect(page.getByRole("button", { name: /^Inspect$/ })).toBeVisible();
     await expect(page.getByRole("button", { name: /^Autopilot$/ })).toBeHidden();
-    await expect(page.getByText("Tell me what you want to change. Mention the feature, bug, page, or behavior you want Vibe64 to work on."))
+    await expect(page.getByText("What would you like to do?"))
       .toBeVisible();
 
-    await page.getByLabel("What do you want to ask Codex?").fill("Really?");
+    await page.getByLabel("What would you like to do?").fill("Really?");
     await page.getByRole("button", { name: "Ask Codex" }).click();
     await expectMarkdownResponsePreview(page, REALLY_RESPONSE_TEXT);
 
-    await page.getByLabel("What do you want to ask Codex?").fill("Ask me three random questions.");
+    await page.getByLabel("What would you like to do?").fill("Ask me three random questions.");
     await page.getByRole("button", { name: "Ask Codex" }).click();
 
     const autopilot = page.locator(".studio-autopilot");
@@ -138,7 +138,7 @@ test.describe("non-commit maintenance agent chat", () => {
     await page.getByRole("button", { name: "Next step" }).click();
 
     const inspect = page.locator(".studio-ai-sessions__inspect-slot");
-    await inspect.getByLabel("What do you want to ask Codex?").fill("Explain this local maintenance task.");
+    await inspect.getByLabel("What would you like to do?").fill("Explain this local maintenance task.");
     await inspect.getByRole("button", { name: "Ask Codex" }).click();
 
     await expectMarkdownResponsePreview(page);
@@ -173,12 +173,12 @@ async function expectNoBrowserCodexTerminalInput(page: Page) {
 }
 
 async function expectComposerActionsAligned(page: Page) {
-  const formBox = await requiredBox(page.locator(".studio-autopilot__control-form"), "composer form");
-  const nextBox = await requiredBox(page.getByRole("button", { name: "Next step" }), "Next step button");
+  const inputBox = await requiredBox(page.locator(".studio-autopilot-prompt-textarea"), "composer input");
   const askBox = await requiredBox(page.getByRole("button", { name: "Ask Codex" }), "Ask Codex button");
-  expect(Math.abs(nextBox.y - askBox.y)).toBeLessThan(8);
-  expect(Math.abs(nextBox.x - formBox.x)).toBeLessThan(16);
-  expect(Math.abs((askBox.x + askBox.width) - (formBox.x + formBox.width))).toBeLessThan(16);
+  expect(askBox.x).toBeGreaterThan(inputBox.x);
+  expect(askBox.y).toBeGreaterThan(inputBox.y);
+  expect(askBox.x + askBox.width).toBeLessThanOrEqual(inputBox.x + inputBox.width);
+  expect(askBox.y + askBox.height).toBeLessThanOrEqual(inputBox.y + inputBox.height);
 }
 
 async function requiredBox(locator: Locator, label: string) {

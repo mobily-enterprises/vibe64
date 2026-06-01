@@ -134,6 +134,32 @@ describe("useScrollToBottom", () => {
 
     expect(target.scrollWrites).toEqual([]);
   });
+
+  it("can keep scrolling confined to the target element", async () => {
+    installWindow({
+      requestAnimationFrame(callback) {
+        callback();
+        return 1;
+      }
+    });
+
+    const target = createScrollableElement(320);
+    const anchor = {
+      scrollIntoView: vi.fn()
+    };
+    const { useScrollToBottom } = await import("../../src/composables/useScrollToBottom.js");
+    const { scrollAfterLayout } = useScrollToBottom({
+      anchor: ref(anchor),
+      scrollAnchorIntoView: false,
+      target: ref(target)
+    });
+
+    await scrollAfterLayout();
+    vi.runAllTimers();
+
+    expect(target.scrollWrites).toEqual([320, 320, 320, 320, 320, 320, 320, 320]);
+    expect(anchor.scrollIntoView).not.toHaveBeenCalled();
+  });
 });
 
 function installWindow({

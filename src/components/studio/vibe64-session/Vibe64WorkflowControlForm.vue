@@ -4,6 +4,7 @@
     class="vibe64-workflow-control-form"
     :class="[
       `vibe64-workflow-control-form--${layout}`,
+      { 'vibe64-workflow-control-form--inline-submit': inlineSubmitActive },
       { 'vibe64-workflow-control-form--sticky-actions': stickyActions }
     ]"
     @submit.prevent="submitFromForm"
@@ -12,17 +13,38 @@
       v-for="field in selectedControlFields"
       :key="field.name"
     >
-      <Vibe64AutopilotPromptTextarea
+      <div
         v-if="field.kind === 'textarea' && attachTextarea"
-        :model-value="selectedControlValues[field.name] || ''"
-        class="vibe64-workflow-control-form__input"
-        :disabled="running"
-        :label="field.label"
-        :rows="field.rows || textareaRows"
-        :session-id="sessionId"
-        variant="outlined"
-        @update:model-value="$emit('update-value', field.name, $event)"
-      />
+        class="vibe64-workflow-control-form__prompt-shell"
+        :class="{ 'vibe64-workflow-control-form__prompt-shell--inline-submit': inlineSubmitForField(field) }"
+      >
+        <Vibe64AutopilotPromptTextarea
+          :model-value="selectedControlValues[field.name] || ''"
+          class="vibe64-workflow-control-form__input"
+          :disabled="running"
+          :label="field.label"
+          :rows="field.rows || textareaRows"
+          :session-id="sessionId"
+          variant="outlined"
+          @update:model-value="$emit('update-value', field.name, $event)"
+        />
+
+        <v-btn
+          v-if="inlineSubmitForField(field)"
+          :aria-label="selectedControl.label"
+          class="vibe64-workflow-control-form__inline-submit"
+          color="primary"
+          :disabled="!canSubmitSelectedControl"
+          icon
+          :loading="running"
+          :title="selectedControl.label"
+          type="button"
+          variant="flat"
+          @click="submitFromButton"
+        >
+          <v-icon :icon="mdiSend" size="20" />
+        </v-btn>
+      </div>
       <v-textarea
         v-else-if="field.kind === 'textarea'"
         auto-grow
@@ -49,14 +71,21 @@
       />
     </template>
 
-    <div class="vibe64-workflow-control-form__actions">
-      <div class="vibe64-workflow-control-form__submit-actions">
+    <div
+      v-if="actionsVisible"
+      class="vibe64-workflow-control-form__actions"
+    >
+      <div
+        v-if="!inlineSubmitActive || cancelVisible"
+        class="vibe64-workflow-control-form__submit-actions"
+      >
         <v-btn
+          v-if="!inlineSubmitActive"
           color="primary"
           :disabled="!canSubmitSelectedControl"
           :loading="running"
           :prepend-icon="mdiSend"
-          :type="asForm ? 'submit' : 'button'"
+          type="button"
           variant="flat"
           @click="submitFromButton"
         >
@@ -135,6 +164,10 @@ const props = defineProps({
     validator: (value) => ["center", "split", "start"].includes(value),
     type: String
   },
+  inlineSubmit: {
+    default: false,
+    type: Boolean
+  },
   running: {
     default: false,
     type: Boolean
@@ -170,15 +203,37 @@ const props = defineProps({
 });
 
 const rootTag = computed(() => props.asForm ? "form" : "div");
+const inlineSubmitActive = computed(() => Boolean(
+  props.inlineSubmit &&
+  props.attachTextarea &&
+  !props.cancelVisible
+));
+const actionsVisible = computed(() => Boolean(
+  !inlineSubmitActive.value ||
+  props.cancelVisible ||
+  props.workflowControls.length
+));
+const inlineSubmitFieldName = computed(() => {
+  if (!inlineSubmitActive.value) {
+    return "";
+  }
+  const field = props.selectedControlFields.find((candidate) => candidate?.kind === "textarea");
+  return String(field?.name || "");
+});
+
+function inlineSubmitForField(field = {}) {
+  return Boolean(
+    inlineSubmitActive.value &&
+    String(field?.name || "") === inlineSubmitFieldName.value
+  );
+}
 
 function submitFromForm() {
   emit("submit");
 }
 
 function submitFromButton() {
-  if (!props.asForm) {
-    emit("submit");
-  }
+  emit("submit");
 }
 </script>
 
@@ -186,6 +241,7 @@ function submitFromButton() {
 .vibe64-workflow-control-form {
   display: grid;
   gap: 0.45rem;
+  position: relative;
   width: 100%;
 }
 
@@ -197,6 +253,14 @@ function submitFromButton() {
 
 .vibe64-workflow-control-form :deep(.studio-autopilot-prompt-textarea) {
   gap: 0.35rem;
+}
+
+.vibe64-workflow-control-form__prompt-shell {
+  position: relative;
+}
+
+.vibe64-workflow-control-form--inline-submit .vibe64-workflow-control-form__prompt-shell {
+  order: 2;
 }
 
 .vibe64-workflow-control-form :deep(.v-input),
@@ -212,9 +276,22 @@ function submitFromButton() {
   border-radius: 18px;
 }
 
+.vibe64-workflow-control-form :deep(.studio-autopilot-prompt-textarea .v-field-label) {
+  color: rgba(var(--v-theme-on-surface), 0.82);
+  opacity: 1;
+}
+
+.vibe64-workflow-control-form :deep(.studio-autopilot-prompt-textarea .v-field__field) {
+  color: rgb(var(--v-theme-on-surface));
+}
+
 .vibe64-workflow-control-form :deep(.studio-autopilot-prompt-textarea .v-field__input) {
   min-height: 3.25rem;
   padding-block: 0.45rem;
+}
+
+.vibe64-workflow-control-form__prompt-shell--inline-submit :deep(.studio-autopilot-prompt-textarea .v-field__input) {
+  padding-right: 3.65rem;
 }
 
 .vibe64-workflow-control-form :deep(.studio-autopilot-prompt-textarea .v-field__input textarea) {
@@ -235,6 +312,10 @@ function submitFromButton() {
   width: 100%;
 }
 
+.vibe64-workflow-control-form--inline-submit .vibe64-workflow-control-form__actions {
+  order: 1;
+}
+
 .vibe64-workflow-control-form--center .vibe64-workflow-control-form__actions {
   justify-content: center;
 }
@@ -251,6 +332,15 @@ function submitFromButton() {
   justify-content: flex-end;
   margin-left: auto;
   order: 2;
+}
+
+.vibe64-workflow-control-form__inline-submit {
+  bottom: 0.7rem;
+  min-height: 2.35rem;
+  min-width: 2.35rem;
+  position: absolute;
+  right: 0.7rem;
+  z-index: 2;
 }
 
 .vibe64-workflow-control-form--split .vibe64-workflow-control-form__workflow-actions {

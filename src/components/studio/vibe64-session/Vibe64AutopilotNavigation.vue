@@ -35,39 +35,23 @@
           <span class="studio-autopilot-nav__step-icon">
             <v-icon :icon="stepIcon(step)" size="16" />
           </span>
+          <v-btn
+            v-if="step.canRewind && !step.current"
+            class="studio-autopilot-nav__step-rewind"
+            color="error"
+            :disabled="busy"
+            :icon="mdiUndoVariant"
+            size="x-small"
+            :title="`Rewind to ${step.rewindLabel || step.label}`"
+            type="button"
+            variant="text"
+            @click.stop="requestRewind(step)"
+          />
           <span class="studio-autopilot-nav__step-label">
             {{ step.label }}
           </span>
         </li>
       </ol>
-
-      <v-menu location="bottom end">
-        <template #activator="{ props: menuProps }">
-          <v-btn
-            v-bind="menuProps"
-            :disabled="busy || !hasJumpableSteps"
-            :icon="compactLayout ? mdiUndoVariant : undefined"
-            :prepend-icon="compactLayout ? undefined : mdiUndoVariant"
-            size="small"
-            title="Jump back"
-            type="button"
-            variant="tonal"
-          >
-            <template v-if="!compactLayout">Jump back</template>
-          </v-btn>
-        </template>
-
-        <v-list density="compact" class="studio-autopilot-nav__jump-list">
-          <v-list-item
-            v-for="step in rewindMenuSteps"
-            :key="step.id"
-            :disabled="busy || !step.canRewind || step.current"
-            :prepend-icon="mdiUndoVariant"
-            :title="step.rewindLabel || step.label"
-            @click="requestRewind(step)"
-          />
-        </v-list>
-      </v-menu>
     </div>
 
     <v-dialog
@@ -75,7 +59,7 @@
       max-width="28rem"
     >
       <v-card>
-        <v-card-title>Jump back?</v-card-title>
+        <v-card-title>Rewind?</v-card-title>
         <v-card-text>
           Rewind this session to {{ pendingStepLabel }}. Later Autopilot progress will be discarded.
         </v-card-text>
@@ -141,14 +125,10 @@ const mobileStepsOpen = ref(false);
 const pendingStep = ref(null);
 const confirmationOpen = ref(false);
 
-const compactLayout = computed(() => props.layout === "icons");
 const railLayout = computed(() => props.layout === "rail");
 const currentStep = computed(() => props.steps.find((step) => step.current) || props.steps[0] || null);
 const currentStepLabel = computed(() => currentStep.value?.label || "Steps");
 const mobileToggleLabel = computed(() => `Steps: ${currentStepLabel.value}`);
-const jumpableSteps = computed(() => props.steps.filter((step) => step.canRewind && !step.current));
-const rewindMenuSteps = computed(() => props.steps.filter((step) => !step.current));
-const hasJumpableSteps = computed(() => jumpableSteps.value.length > 0);
 const pendingStepLabel = computed(() => pendingStep.value?.rewindLabel || pendingStep.value?.label || "this point");
 
 function toggleMobileSteps() {
@@ -216,7 +196,7 @@ watch(currentStepLabel, () => {
   align-items: center;
   display: grid;
   gap: 0.6rem;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   min-width: 0;
 }
 
@@ -267,10 +247,6 @@ watch(currentStepLabel, () => {
   overflow-wrap: anywhere;
 }
 
-.studio-autopilot-nav__jump-list {
-  min-width: min(15rem, 88vw);
-}
-
 .studio-autopilot-nav--rail {
   align-self: stretch;
   min-height: 0;
@@ -299,7 +275,7 @@ watch(currentStepLabel, () => {
 }
 
 .studio-autopilot-nav--icons .studio-autopilot-nav__content {
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .studio-autopilot-nav--icons .studio-autopilot-nav__steps {
@@ -351,6 +327,22 @@ watch(currentStepLabel, () => {
   position: absolute;
   right: 0.12rem;
   width: 0.48rem;
+}
+
+.studio-autopilot-nav__step-rewind {
+  opacity: 0;
+  position: absolute;
+  right: -0.36rem;
+  top: -0.36rem;
+  transform: scale(0.86);
+  transition: opacity 0.14s ease, transform 0.14s ease;
+  z-index: 2;
+}
+
+.studio-autopilot-nav__step:hover .studio-autopilot-nav__step-rewind,
+.studio-autopilot-nav__step:focus-within .studio-autopilot-nav__step-rewind {
+  opacity: 1;
+  transform: scale(1);
 }
 
 .studio-autopilot-nav--icons.studio-autopilot-nav--executing .studio-autopilot-nav__step--current .studio-autopilot-nav__step-icon {

@@ -23,6 +23,7 @@ function waitForLayoutFrame() {
 function useScrollToBottom({
   anchor = null,
   enabled = true,
+  scrollAnchorIntoView = true,
   settleDelaysMs = DEFAULT_SETTLE_DELAYS_MS,
   target
 } = {}) {
@@ -53,9 +54,11 @@ function useScrollToBottom({
     }
 
     targetElement.scrollTop = targetElement.scrollHeight;
-    readElement(anchor)?.scrollIntoView?.({
-      block: "end"
-    });
+    if (scrollAnchorIntoView !== false) {
+      readElement(anchor)?.scrollIntoView?.({
+        block: "end"
+      });
+    }
     targetElement.scrollTop = targetElement.scrollHeight;
   }
 

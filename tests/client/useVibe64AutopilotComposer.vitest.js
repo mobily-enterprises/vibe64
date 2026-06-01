@@ -125,6 +125,31 @@ describe("useVibe64AutopilotComposer", () => {
     expect(composer.screenControls.value.map((control) => control.id)).toEqual(["request_review_tweak"]);
   });
 
+  it("keeps the primary input control visible when it is temporarily disabled", async () => {
+    const composer = useVibe64AutopilotComposer({
+      controls: ref([
+        conversationControl({
+          enabled: false
+        }),
+        {
+          enabled: true,
+          id: "next_step",
+          label: "Next step"
+        }
+      ]),
+      conversationLog: ref({}),
+      isControlDisabled: (control) => control.enabled !== true,
+      primaryIntentId: ref("talk_to_codex"),
+      running: ref(false)
+    });
+
+    await nextTick();
+
+    expect(composer.selectedControl.value?.id).toBe("talk_to_codex");
+    expect(composer.canSubmitSelectedControl.value).toBe(false);
+    expect(composer.screenControls.value.map((control) => control.id)).toEqual(["next_step"]);
+  });
+
   it("submits numbered Codex questions as one conversationRequest field", async () => {
     let submitted = null;
     const composer = useVibe64AutopilotComposer({

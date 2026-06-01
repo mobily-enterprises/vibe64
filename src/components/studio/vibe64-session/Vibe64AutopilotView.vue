@@ -24,142 +24,16 @@
         class="studio-autopilot__chat-body"
         :class="{ 'studio-autopilot__chat-body--artifact': chatTakeoverVisible }"
       >
-        <Vibe64BackgroundTasks
-          v-if="visibleBackgroundTasks.length || backgroundTaskError"
-          :error="backgroundTaskError"
-          :retrying-task-id="retryingBackgroundTaskId"
-          :tasks="visibleBackgroundTasks"
-          @retry="retryBackgroundTask"
+        <Vibe64ReportPreview
+          v-if="reportPreviewVisible"
+          class="studio-autopilot__artifact"
+          :error="reportPreview.error"
+          :loading="reportPreview.loading"
+          :text="reportPreview.text"
         />
-
-        <template v-if="chatTakeoverVisible">
-          <form
-            v-if="stepInputFormVisible"
-            class="studio-autopilot__input-form"
-            @submit.prevent="submitStepInputForm"
-          >
-            <p
-              v-if="stepInput.prompt"
-              class="text-body-2 text-medium-emphasis mb-0"
-            >
-              {{ stepInput.prompt }}
-            </p>
-
-            <template
-              v-for="field in stepInput.fields"
-              :key="field.name"
-            >
-              <v-textarea
-                v-if="field.kind === 'textarea'"
-                auto-grow
-                class="studio-autopilot__input"
-                :disabled="page.busy || stepInput.saving"
-                hide-details="auto"
-                :label="field.label"
-                :model-value="stepInput.values[field.name] || ''"
-                :placeholder="field.placeholder"
-                :rows="field.rows || 5"
-                variant="outlined"
-                @update:model-value="stepInput.updateValue(field.name, $event)"
-              />
-              <v-text-field
-                v-else
-                class="studio-autopilot__input"
-                :disabled="page.busy || stepInput.saving"
-                hide-details="auto"
-                :label="field.label"
-                :model-value="stepInput.values[field.name] || ''"
-                :placeholder="field.placeholder"
-                variant="outlined"
-                @update:model-value="stepInput.updateValue(field.name, $event)"
-              />
-            </template>
-
-            <v-alert
-              v-if="stepInput.error"
-              type="warning"
-              variant="tonal"
-              density="compact"
-            >
-              {{ stepInput.error }}
-            </v-alert>
-
-            <Vibe64WorkflowControlForm
-              v-if="selectedStepInputControlVisible"
-              class="studio-autopilot__inline-control"
-              :can-submit-selected-control="canSubmitSelectedControl"
-              layout="center"
-              :running="running"
-              :selected-control="selectedControl"
-              :selected-control-fields="selectedControlFields"
-              :selected-control-values="selectedControlValues"
-              sticky-actions
-              :workflow-controls="workflowButtonControls"
-              @activate-control="activateWorkflowButtonControl"
-              @cancel="clearSelectedControl"
-              @submit="submitSelectedWorkflowControl"
-              @update-value="updateSelectedControlValue"
-            />
-
-            <div
-              v-else
-              class="studio-autopilot__actions"
-            >
-              <v-btn
-                v-if="!stepInputHasWorkflowIntents"
-                color="primary"
-                :variant="stepInputHasWorkflowIntents ? 'tonal' : 'flat'"
-                :disabled="page.busy || !stepInput.canSubmit"
-                :loading="stepInput.saving"
-                :prepend-icon="mdiCheck"
-                type="submit"
-              >
-                {{ stepInput.interaction?.submitLabel || "Submit" }}
-              </v-btn>
-
-              <v-btn
-                v-for="control in workflowButtonControls"
-                :key="control.id"
-                :color="control.buttonColor"
-                :disabled="control.disabled"
-                :loading="control.loading"
-                :prepend-icon="control.icon"
-                :title="control.disabledReason || control.label"
-                type="button"
-                :variant="control.buttonVariant"
-                @click="activateWorkflowButtonControl(control.sourceControl || control)"
-              >
-                {{ control.label }}
-              </v-btn>
-
-              <template
-                v-if="!stepInputHasWorkflowIntents && !workflowButtonControls.length"
-              >
-                <Vibe64SessionActionButton
-                  v-for="action in actions.currentActions"
-                  :key="action.id"
-                  :action="action"
-                  :actions="stepInputActionHandlers"
-                  :before-run="runActionFromStepInput"
-                  :busy="page.busy || stepInput.saving"
-                  variant="tonal"
-                />
-              </template>
-            </div>
-          </form>
-
-          <Vibe64ReportPreview
-            v-else-if="reportPreviewVisible"
-            class="studio-autopilot__artifact"
-            :error="reportPreview.error"
-            :loading="reportPreview.loading"
-            :text="reportPreview.text"
-          />
-        </template>
 
         <template v-else>
           <Vibe64ConversationLog
-            v-if="chatTimelineVisible"
             class="studio-autopilot__conversation"
             :activity-messages="chatActivityMessages"
             :error="conversationLog.error"
@@ -168,7 +42,195 @@
             :turns="conversationLog.turns"
             :visible="chatTimelineVisible"
           />
+        </template>
+      </div>
 
+      <div
+        class="studio-autopilot__thinking"
+        :class="{ 'studio-autopilot__thinking--empty': !thinkingVisible }"
+        role="status"
+        :aria-hidden="thinkingVisible ? undefined : 'true'"
+        aria-live="polite"
+      >
+        <span class="studio-autopilot__thinking-mark" />
+        <span>Thinking...</span>
+      </div>
+
+      <div
+        class="studio-autopilot__runtime-status"
+        :class="{ 'studio-autopilot__runtime-status--empty': !runtimeStatusVisible }"
+        :aria-hidden="runtimeStatusVisible ? undefined : 'true'"
+        aria-live="polite"
+      >
+        <Vibe64BackgroundTasks
+          v-if="visibleBackgroundTasks.length || backgroundTaskError"
+          compact
+          :error="backgroundTaskError"
+          :retrying-task-id="retryingBackgroundTaskId"
+          :tasks="visibleBackgroundTasks"
+          @retry="retryBackgroundTask"
+        />
+
+        <div
+          v-for="message in runtimeNoticeMessages"
+          :key="message.id"
+          class="studio-autopilot__runtime-notice"
+          :class="`studio-autopilot__runtime-notice--${message.tone}`"
+        >
+          <v-icon :icon="message.icon" size="15" />
+          <span>{{ message.text }}</span>
+        </div>
+      </div>
+
+      <div
+        v-if="composerVisible"
+        class="studio-autopilot__composer"
+      >
+        <form
+          v-if="stepInputFormVisible"
+          class="studio-autopilot__input-form"
+          @submit.prevent="submitStepInputForm"
+        >
+          <p
+            v-if="stepInput.prompt"
+            class="text-body-2 text-medium-emphasis mb-0"
+          >
+            {{ stepInput.prompt }}
+          </p>
+
+          <template
+            v-for="field in stepInput.fields"
+            :key="field.name"
+          >
+            <v-textarea
+              v-if="field.kind === 'textarea'"
+              auto-grow
+              class="studio-autopilot__input"
+              :disabled="page.busy || stepInput.saving"
+              hide-details="auto"
+              :label="field.label"
+              :model-value="stepInput.values[field.name] || ''"
+              :placeholder="field.placeholder"
+              :rows="field.rows || 2"
+              variant="outlined"
+              @update:model-value="stepInput.updateValue(field.name, $event)"
+            />
+            <v-text-field
+              v-else
+              class="studio-autopilot__input"
+              :disabled="page.busy || stepInput.saving"
+              hide-details="auto"
+              :label="field.label"
+              :model-value="stepInput.values[field.name] || ''"
+              :placeholder="field.placeholder"
+              variant="outlined"
+              @update:model-value="stepInput.updateValue(field.name, $event)"
+            />
+          </template>
+
+          <v-alert
+            v-if="stepInput.error"
+            type="warning"
+            variant="tonal"
+            density="compact"
+          >
+            {{ stepInput.error }}
+          </v-alert>
+
+          <div
+            v-if="statusActionsVisible"
+            class="studio-autopilot__status-actions"
+          >
+            <v-btn
+              v-if="screenStopAction"
+              class="studio-autopilot__stop-button"
+              :prepend-icon="mdiClose"
+              size="small"
+              type="button"
+              variant="tonal"
+              @click="stopScreenAction"
+            >
+              Stop Autopilot
+            </v-btn>
+            <v-btn
+              v-if="stuckRecoveryAvailable"
+              class="studio-autopilot__stop-button"
+              :loading="stuckRecoveryRunning"
+              :prepend-icon="mdiRefresh"
+              size="small"
+              type="button"
+              variant="tonal"
+              @click="recoverStuckStep"
+            >
+              Recover step
+            </v-btn>
+          </div>
+
+          <Vibe64WorkflowControlForm
+            v-if="selectedStepInputControlVisible"
+            class="studio-autopilot__inline-control"
+            :can-submit-selected-control="canSubmitSelectedControl"
+            layout="center"
+            :running="running"
+            :selected-control="selectedControl"
+            :selected-control-fields="selectedControlFields"
+            :selected-control-values="selectedControlValues"
+            sticky-actions
+            :workflow-controls="workflowButtonControls"
+            @activate-control="activateWorkflowButtonControl"
+            @cancel="clearSelectedControl"
+            @submit="submitSelectedWorkflowControl"
+            @update-value="updateSelectedControlValue"
+          />
+
+          <div
+            v-else
+            class="studio-autopilot__actions"
+          >
+            <v-btn
+              v-if="!stepInputHasWorkflowIntents"
+              color="primary"
+              :variant="stepInputHasWorkflowIntents ? 'tonal' : 'flat'"
+              :disabled="page.busy || !stepInput.canSubmit"
+              :loading="stepInput.saving"
+              :prepend-icon="mdiCheck"
+              type="submit"
+            >
+              {{ stepInput.interaction?.submitLabel || "Submit" }}
+            </v-btn>
+
+            <v-btn
+              v-for="control in workflowButtonControls"
+              :key="control.id"
+              :color="control.buttonColor"
+              :disabled="control.disabled"
+              :loading="control.loading"
+              :prepend-icon="control.icon"
+              :title="control.disabledReason || control.label"
+              type="button"
+              :variant="control.buttonVariant"
+              @click="activateWorkflowButtonControl(control.sourceControl || control)"
+            >
+              {{ control.label }}
+            </v-btn>
+
+            <template
+              v-if="!stepInputHasWorkflowIntents && !workflowButtonControls.length"
+            >
+              <Vibe64SessionActionButton
+                v-for="action in actions.currentActions"
+                :key="action.id"
+                :action="action"
+                :actions="stepInputActionHandlers"
+                :before-run="runActionFromStepInput"
+                :busy="page.busy || stepInput.saving"
+                variant="tonal"
+              />
+            </template>
+          </div>
+        </form>
+
+        <template v-else>
           <div
             v-if="statusActionsVisible"
             class="studio-autopilot__status-actions"
@@ -205,6 +267,7 @@
             class="studio-autopilot__control-form"
             :cancel-visible="!selectedControlIsPrimary"
             :can-submit-selected-control="canSubmitSelectedControl"
+            inline-submit
             layout="split"
             :running="running"
             :selected-control="selectedControl"
@@ -239,16 +302,6 @@
             </v-btn>
           </div>
         </template>
-      </div>
-
-      <div
-        v-if="thinkingVisible"
-        class="studio-autopilot__thinking"
-        role="status"
-        aria-live="polite"
-      >
-        <span class="studio-autopilot__thinking-mark" />
-        <span>Thinking...</span>
       </div>
     </section>
 
@@ -637,14 +690,9 @@ const displayStatusText = computed(() => {
   }
   return screenState.value.title;
 });
-const statusTitleIsCodexChat = computed(() => String(displayStatusText.value || "").trim() === "Talk to Codex");
-const statusTitleVisible = computed(() => !statusTitleIsCodexChat.value);
 const displayRunning = computed(() => Boolean(
   screenState.value.showProgress &&
   screenKind.value !== "codex_running"
-));
-const codexRunningStatusSuppressed = computed(() => Boolean(
-  screenKind.value === "codex_running"
 ));
 const commandTerminalFailed = computed(() => commandResult.value?.ok === false);
 const commandTerminalVisible = computed(() => Boolean(screenKind.value === "command"));
@@ -717,7 +765,6 @@ const commandSpyVisible = computed(() => Boolean(
   commandRunning.value ||
   commandTerminalFailed.value
 ));
-const standaloneFailureVisible = computed(() => screenKind.value === "failure");
 const screenStopAction = computed(() => String(screenState.value.stopAction || ""));
 const responsePreviewText = computed(() => String(props.humanInputResponsePreview?.text || ""));
 const responsePreviewError = computed(() => String(props.humanInputResponsePreview?.error || ""));
@@ -727,20 +774,6 @@ const conversationLogVisible = computed(() => Boolean(
   sectionVisible("response_preview") &&
   props.conversationLog?.visible
 ));
-const conversationHasUserOrAssistantTurn = computed(() => (
-  Array.isArray(props.conversationLog?.turns) ? props.conversationLog.turns : []
-).some((turn) => Boolean(
-  String(turn?.user?.text || "").trim() ||
-  String(turn?.assistant?.text || "").trim()
-)));
-const conversationBodyOwnsMessage = computed(() => Boolean(
-  screenKind.value === "conversation" &&
-  conversationLogVisible.value
-));
-const bodyScreenMessageVisible = computed(() => Boolean(
-  screenMessage.value &&
-  !conversationBodyOwnsMessage.value
-));
 const responsePreviewVisible = computed(() => Boolean(
   sectionVisible("response_preview") &&
   (
@@ -749,53 +782,14 @@ const responsePreviewVisible = computed(() => Boolean(
     responsePreviewLoading.value
   )
 ));
-const chatTakeoverVisible = computed(() => Boolean(stepInputFormVisible.value || reportPreviewVisible.value));
+const chatTakeoverVisible = computed(() => Boolean(reportPreviewVisible.value));
 const screenMessageIsGuidance = computed(() => String(screenState.value.variant || "") === "guide");
 const guidanceScreenVisible = computed(() => Boolean(
   !chatTakeoverVisible.value &&
   screenMessageIsGuidance.value &&
   screenMessage.value &&
-  !conversationHasUserOrAssistantTurn.value &&
   !commandTerminalVisible.value
 ));
-const statusActivityVisible = computed(() => Boolean(
-  !guidanceScreenVisible.value &&
-  !chatTakeoverVisible.value &&
-  !codexRunningStatusSuppressed.value &&
-  !commandTerminalVisible.value &&
-  (
-    !conversationLogVisible.value ||
-    standaloneFailureVisible.value ||
-    screenStopAction.value ||
-    stuckRecoveryAvailable.value
-  ) &&
-  (
-    bodyScreenMessageVisible.value ||
-    statusTitleVisible.value
-  )
-));
-const statusActivityIcon = computed(() => {
-  if (screenState.value.icon === "warning") {
-    return mdiAlertCircleOutline;
-  }
-  if (screenState.value.icon === "success") {
-    return mdiCheckCircleOutline;
-  }
-  return mdiRobotOutline;
-});
-const statusActivityMessage = computed(() => {
-  if (!statusActivityVisible.value) {
-    return null;
-  }
-  return activityMessage({
-    icon: statusActivityIcon.value,
-    id: "screen-status",
-    label: "Vibe64",
-    text: bodyScreenMessageVisible.value ? screenMessage.value : "",
-    title: statusTitleVisible.value ? displayStatusText.value : "",
-    tone: standaloneFailureVisible.value ? "warning" : "info"
-  });
-});
 const guidanceActivityMessage = computed(() => {
   if (!guidanceScreenVisible.value) {
     return null;
@@ -824,47 +818,9 @@ const responsePreviewActivityMessage = computed(() => {
 const actionResultNoticeVisible = computed(() => Boolean(
   props.actions?.actionResultMessage
 ));
+const actionResultType = computed(() => String(props.actions?.actionResultType || "info"));
 const clientControlError = ref("");
 const clientControlErrorVisible = computed(() => Boolean(clientControlError.value));
-const commandActivityMessage = computed(() => {
-  if (!commandSpyVisible.value) {
-    return null;
-  }
-  return activityMessage({
-    icon: mdiConsoleLine,
-    id: "command-status",
-    label: "Command",
-    loading: commandRunning.value,
-    text: commandTerminalFailed.value ? commandFailureSummary.value : commandTerminalSummary.value,
-    title: commandOverlayTitle.value,
-    tone: commandTerminalFailed.value ? "error" : "info"
-  });
-});
-const actionResultActivityMessage = computed(() => {
-  if (!actionResultNoticeVisible.value) {
-    return null;
-  }
-  const actionResultType = String(props.actions?.actionResultType || "info");
-  return activityMessage({
-    icon: actionResultType === "success" ? mdiCheckCircleOutline : mdiAlertCircleOutline,
-    id: "action-result",
-    label: "Vibe64",
-    text: props.actions.actionResultMessage,
-    tone: ["success", "warning", "error"].includes(actionResultType) ? actionResultType : "info"
-  });
-});
-const clientControlActivityMessage = computed(() => {
-  if (!clientControlErrorVisible.value) {
-    return null;
-  }
-  return activityMessage({
-    icon: mdiAlertCircleOutline,
-    id: "client-control-error",
-    label: "Vibe64",
-    text: clientControlError.value,
-    tone: "warning"
-  });
-});
 const statusActionsVisible = computed(() => Boolean(
   !chatTakeoverVisible.value &&
   (
@@ -872,20 +828,42 @@ const statusActionsVisible = computed(() => Boolean(
     stuckRecoveryAvailable.value
   )
 ));
-const chatActivityMessages = computed(() => [
-  guidanceActivityMessage.value,
-  statusActivityMessage.value,
-  responsePreviewActivityMessage.value,
-  commandActivityMessage.value,
-  actionResultActivityMessage.value,
-  clientControlActivityMessage.value
-].filter(Boolean));
-const chatTimelineVisible = computed(() => Boolean(
+const composerVisible = computed(() => Boolean(
   !chatTakeoverVisible.value &&
   (
-    conversationLogVisible.value ||
-    chatActivityMessages.value.length
+    stepInputFormVisible.value ||
+    selectedScreenControlVisible.value ||
+    workflowButtonControls.value.length ||
+    statusActionsVisible.value
   )
+));
+const chatActivityMessages = computed(() => [
+  guidanceActivityMessage.value,
+  responsePreviewActivityMessage.value
+].filter(Boolean));
+const chatTimelineVisible = computed(() => Boolean(!chatTakeoverVisible.value));
+const runtimeNoticeMessages = computed(() => [
+  actionResultNoticeVisible.value
+    ? {
+        icon: actionResultType.value === "success" ? mdiCheckCircleOutline : mdiAlertCircleOutline,
+        id: "action-result",
+        text: String(props.actions.actionResultMessage || ""),
+        tone: ["success", "warning", "error"].includes(actionResultType.value) ? actionResultType.value : "info"
+      }
+    : null,
+  clientControlErrorVisible.value
+    ? {
+        icon: mdiAlertCircleOutline,
+        id: "client-control-error",
+        text: clientControlError.value,
+        tone: "warning"
+      }
+    : null
+].filter(Boolean));
+const runtimeStatusVisible = computed(() => Boolean(
+  visibleBackgroundTasks.value.length ||
+  backgroundTaskError.value ||
+  runtimeNoticeMessages.value.length
 ));
 const conversationScrollKey = computed(() => [
   sessionId.value,
@@ -1221,7 +1199,7 @@ watch(() => [
 .studio-autopilot__chat-panel {
   display: grid;
   gap: 0.55rem;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto auto;
   padding: 0.65rem;
 }
 
@@ -1230,13 +1208,14 @@ watch(() => [
   flex-direction: column;
   gap: 0.55rem;
   min-height: 0;
-  overflow-y: auto;
+  overflow: hidden;
   padding-right: 0.1rem;
   scrollbar-gutter: stable;
 }
 
 .studio-autopilot__chat-body--artifact {
   align-content: stretch;
+  overflow-y: auto;
 }
 
 .studio-autopilot__conversation,
@@ -1268,21 +1247,25 @@ watch(() => [
   justify-content: flex-end;
 }
 
+.studio-autopilot__composer {
+  border-top: 1px solid rgba(var(--v-theme-outline), 0.14);
+  display: grid;
+  gap: 0.55rem;
+  min-width: 0;
+  padding-top: 0.55rem;
+}
+
 .studio-autopilot__input-form,
 .studio-autopilot__control-form {
   display: grid;
   gap: 0.55rem;
-  margin-top: auto;
   min-width: 0;
   width: 100%;
 }
 
 .studio-autopilot__input-form > .studio-autopilot__actions {
   background: rgb(var(--v-theme-surface));
-  border-top: 1px solid rgba(var(--v-theme-outline), 0.14);
-  bottom: 0;
-  padding-block: 0.55rem 0.15rem;
-  position: sticky;
+  padding-block: 0.1rem 0;
 }
 
 .studio-autopilot__input {
@@ -1304,6 +1287,54 @@ watch(() => [
   gap: 0.5rem;
   min-height: 2.35rem;
   padding-top: 0.35rem;
+}
+
+.studio-autopilot__thinking--empty {
+  visibility: hidden;
+}
+
+.studio-autopilot__runtime-status {
+  display: grid;
+  gap: 0.18rem;
+  height: 1.35rem;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.studio-autopilot__runtime-status--empty {
+  visibility: hidden;
+}
+
+.studio-autopilot__runtime-notice {
+  align-items: center;
+  color: rgba(var(--v-theme-on-surface), 0.68);
+  display: flex;
+  font-size: 0.78rem;
+  gap: 0.35rem;
+  line-height: 1.2;
+  min-height: 1.35rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-autopilot__runtime-notice--success {
+  color: rgb(var(--v-theme-success));
+}
+
+.studio-autopilot__runtime-notice--warning {
+  color: rgb(var(--v-theme-warning));
+}
+
+.studio-autopilot__runtime-notice--error {
+  color: rgb(var(--v-theme-error));
+}
+
+.studio-autopilot__runtime-notice span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .studio-autopilot__thinking-mark {

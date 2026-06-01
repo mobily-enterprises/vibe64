@@ -30,8 +30,9 @@ const coreMaintenanceStepDefinitionsById = deepFreeze({
     actionLabel: "Ask Codex",
     description: "Ask Codex for local maintenance help and save the answer as an editable AI response artifact.",
     id: "maintenance_conversation",
+    inputLabel: "What would you like to do?",
     label: "Talk to Codex",
-    message: "Tell me what you want to change. Mention the feature, bug, page, or behavior you want Vibe64 to work on.",
+    message: "What would you like to do?",
     next: {
       disabledReason: "Ask Codex and save an AI response before finishing.",
       enabledWhen: [when.artifactReady(HUMAN_INPUT_RESPONSE_ARTIFACT)]

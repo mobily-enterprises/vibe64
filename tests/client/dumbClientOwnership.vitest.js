@@ -51,10 +51,11 @@ describe("dumb Autopilot client ownership", () => {
     expect(source).not.toContain("props.actions.goNext");
   });
 
-  it("keeps Autopilot conversation history out of response-preview replacement branches", () => {
+  it("keeps Autopilot conversation history outside normal input and runtime state", () => {
     const source = readFileSync("src/components/studio/vibe64-session/Vibe64AutopilotView.vue", "utf8");
     expect(source).toContain(":activity-messages=\"chatActivityMessages\"");
-    expect(source).toContain("v-if=\"chatTakeoverVisible\"");
+    expect(source).toContain("const chatTakeoverVisible = computed(() => Boolean(reportPreviewVisible.value));");
+    expect(source).not.toContain("const chatTakeoverVisible = computed(() => Boolean(stepInputFormVisible.value");
     expect(source).not.toContain("v-else-if=\"responsePreviewVisible\"");
   });
 

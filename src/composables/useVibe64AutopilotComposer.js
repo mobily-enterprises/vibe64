@@ -12,7 +12,7 @@ import {
 } from "@/lib/vibe64PresentationControls.js";
 
 function controlHasInputFields(control = {}) {
-  return Array.isArray(control.inputFields) && control.inputFields.length > 0;
+  return Boolean(control && Array.isArray(control.inputFields) && control.inputFields.length > 0);
 }
 
 function initialControlValues(control = {}) {
@@ -85,10 +85,7 @@ function useVibe64AutopilotComposer({
     ));
   });
   const defaultInputControl = computed(() => {
-    if (
-      primaryScreenControl.value?.enabled === true &&
-      controlHasInputFields(primaryScreenControl.value)
-    ) {
+    if (controlHasInputFields(primaryScreenControl.value)) {
       return primaryScreenControl.value;
     }
     return enabledInputControls.value.length === 1
@@ -131,6 +128,7 @@ function useVibe64AutopilotComposer({
   const canSubmitSelectedControl = computed(() => Boolean(
     selectedControl.value &&
     !isRunning.value &&
+    !isControlDisabled(selectedControl.value) &&
     !selectedControlFields.value.some((field) => requiredFieldIsMissing(field, selectedControlValues.value))
   ));
 

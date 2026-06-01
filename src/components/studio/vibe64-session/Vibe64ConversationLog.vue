@@ -55,46 +55,53 @@
 
         <div
           v-if="turn.user"
-          class="studio-conversation-log__message studio-conversation-log__message--user"
+          class="studio-conversation-log__message-row studio-conversation-log__message-row--user"
         >
-          <div class="studio-conversation-log__message-header">
-            <span>
-              <v-icon :icon="mdiAccountOutline" size="16" />
-              You
-            </span>
-            <time v-if="turn.user.displayAt">{{ turn.user.displayAt }}</time>
+          <div class="studio-conversation-log__message studio-conversation-log__message--user">
+            <div class="studio-conversation-log__message-header">
+              <span>
+                <v-icon :icon="mdiAccountOutline" size="16" />
+                You
+              </span>
+              <time v-if="turn.user.displayAt">{{ turn.user.displayAt }}</time>
+            </div>
+            <LongTextPreviewBlocks :blocks="turn.user.blocks" />
           </div>
-          <LongTextPreviewBlocks :blocks="turn.user.blocks" />
+          <span class="studio-conversation-log__avatar studio-conversation-log__avatar--user">
+            <v-icon :icon="mdiAccountOutline" size="15" />
+          </span>
         </div>
 
         <div
           v-if="turn.assistant"
-          class="studio-conversation-log__message studio-conversation-log__message--assistant"
+          class="studio-conversation-log__message-row studio-conversation-log__message-row--assistant"
         >
-          <div class="studio-conversation-log__message-header">
-            <span>
-              <v-icon :icon="mdiRobotOutline" size="16" />
-              Codex
-            </span>
-            <time v-if="turn.assistant.displayAt">{{ turn.assistant.displayAt }}</time>
-          </div>
-          <LongTextPreviewBlocks
-            v-if="turn.assistant.blocks.length"
-            :blocks="turn.assistant.blocks"
-          />
-          <ol
-            v-if="turn.assistant.questions.length"
-            class="studio-conversation-log__questions"
-          >
-            <li
-              v-for="question in turn.assistant.questions"
-              :key="question.name"
-              class="studio-conversation-log__question"
+          <span class="studio-conversation-log__avatar studio-conversation-log__avatar--assistant">
+            <v-icon :icon="mdiRobotOutline" size="16" />
+          </span>
+          <div class="studio-conversation-log__message studio-conversation-log__message--assistant">
+            <div class="studio-conversation-log__message-header">
+              <span>Codex</span>
+              <time v-if="turn.assistant.displayAt">{{ turn.assistant.displayAt }}</time>
+            </div>
+            <LongTextPreviewBlocks
+              v-if="turn.assistant.blocks.length"
+              :blocks="turn.assistant.blocks"
+            />
+            <ol
+              v-if="turn.assistant.questions.length"
+              class="studio-conversation-log__questions"
             >
-              <span class="studio-conversation-log__question-number">{{ question.number }}</span>
-              <span class="studio-conversation-log__question-text">{{ question.label }}</span>
-            </li>
-          </ol>
+              <li
+                v-for="question in turn.assistant.questions"
+                :key="question.name"
+                class="studio-conversation-log__question"
+              >
+                <span class="studio-conversation-log__question-number">{{ question.number }}</span>
+                <span class="studio-conversation-log__question-text">{{ question.label }}</span>
+              </li>
+            </ol>
+          </div>
         </div>
       </article>
 
@@ -296,6 +303,7 @@ const scrollTrigger = computed(() => [
 const { scrollAfterLayout: scrollToLatestMessage } = useScrollToBottom({
   anchor: bottomElement,
   enabled: computed(() => props.visible),
+  scrollAnchorIntoView: false,
   target: bodyElement
 });
 
@@ -317,13 +325,19 @@ watch(scrollTrigger, () => {
   border-radius: 8px;
   display: grid;
   gap: 0.65rem;
+  grid-template-rows: minmax(0, 1fr);
   min-height: 0;
+  overflow: hidden;
   padding: 0.75rem;
+  position: relative;
   text-align: left;
 }
 
 .studio-conversation-log__loading {
-  justify-self: end;
+  position: absolute;
+  right: 0.75rem;
+  top: 0.75rem;
+  z-index: 1;
 }
 
 .studio-conversation-log__body {
@@ -341,25 +355,67 @@ watch(scrollTrigger, () => {
   min-height: max-content;
 }
 
+.studio-conversation-log__message-row {
+  align-items: start;
+  display: grid;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.studio-conversation-log__message-row--user {
+  grid-template-columns: minmax(0, auto) auto;
+  justify-self: end;
+  max-width: min(30rem, 88%);
+}
+
+.studio-conversation-log__message-row--assistant {
+  grid-template-columns: auto minmax(0, 1fr);
+  justify-self: start;
+  max-width: min(42rem, 96%);
+}
+
 .studio-conversation-log__message {
-  border-radius: 8px;
   display: grid;
   gap: 0.35rem;
   min-width: 0;
-  padding: 0.65rem 0.75rem;
+}
+
+.studio-conversation-log__avatar {
+  align-items: center;
+  border-radius: 999px;
+  display: inline-flex;
+  height: 1.5rem;
+  justify-content: center;
+  width: 1.5rem;
+}
+
+.studio-conversation-log__avatar--user {
+  background: rgba(var(--v-theme-primary), 0.12);
+  color: rgb(var(--v-theme-primary));
+  margin-top: 0.2rem;
+}
+
+.studio-conversation-log__avatar--assistant {
+  background: linear-gradient(
+    180deg,
+    rgba(var(--v-theme-primary), 0.92),
+    rgba(var(--v-theme-primary), 0.72)
+  );
+  color: rgb(var(--v-theme-on-primary));
+  margin-top: 0.05rem;
 }
 
 .studio-conversation-log__message--user {
-  background: rgba(var(--v-theme-primary), 0.07);
-  justify-self: end;
-  max-width: min(42rem, 88%);
+  background: rgb(var(--v-theme-surface-variant));
+  border-radius: 14px;
+  color: rgb(var(--v-theme-on-surface));
+  padding: 0.85rem 1rem;
 }
 
 .studio-conversation-log__message--assistant {
   background: rgb(var(--v-theme-surface));
-  border: 1px solid rgba(var(--v-theme-outline), 0.18);
-  justify-self: start;
-  max-width: min(48rem, 94%);
+  color: rgb(var(--v-theme-on-surface));
+  padding: 0.1rem 0 0.35rem;
 }
 
 .studio-conversation-log__message--activity {
@@ -435,18 +491,47 @@ watch(scrollTrigger, () => {
 
 .studio-conversation-log__message-header {
   align-items: center;
-  color: rgb(var(--v-theme-on-surface-variant));
+  color: rgba(var(--v-theme-on-surface), 0.82);
   display: flex;
-  font-size: 0.78rem;
+  font-size: 0.88rem;
   gap: 0.7rem;
   justify-content: space-between;
   line-height: 1.2;
+}
+
+.studio-conversation-log__message--user .studio-conversation-log__message-header {
+  color: rgba(var(--v-theme-on-surface), 0.9);
+  font-weight: 650;
+}
+
+.studio-conversation-log__message--assistant .studio-conversation-log__message-header {
+  color: rgba(var(--v-theme-on-surface), 0.78);
+  font-weight: 650;
+  margin-bottom: 0.35rem;
 }
 
 .studio-conversation-log__message-header span {
   align-items: center;
   display: flex;
   gap: 0.25rem;
+}
+
+.studio-conversation-log__message-header time {
+  color: rgba(var(--v-theme-on-surface), 0.62);
+  font-weight: 650;
+}
+
+.studio-conversation-log__message--assistant :deep(.studio-long-text-review__blocks),
+.studio-conversation-log__message--user :deep(.studio-long-text-review__blocks) {
+  color: inherit;
+  font-size: 1rem;
+  line-height: 1.45;
+}
+
+.studio-conversation-log__message--assistant :deep(.studio-long-text-review__paragraph),
+.studio-conversation-log__message--user :deep(.studio-long-text-review__paragraph) {
+  font-size: 1rem;
+  margin-block: 0;
 }
 
 .studio-conversation-log__questions {
