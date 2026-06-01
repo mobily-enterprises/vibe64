@@ -5,7 +5,7 @@
     aria-label="Conversation history"
   >
     <v-progress-circular
-      v-if="loading"
+      v-if="loadingIndicatorVisible"
       class="studio-conversation-log__loading"
       color="primary"
       indeterminate
@@ -58,14 +58,13 @@
           class="studio-conversation-log__message-row studio-conversation-log__message-row--user"
         >
           <div class="studio-conversation-log__message studio-conversation-log__message--user">
-            <div class="studio-conversation-log__message-header">
-              <span>
-                <v-icon :icon="mdiAccountOutline" size="16" />
-                You
-              </span>
+            <LongTextPreviewBlocks :blocks="turn.user.blocks" />
+            <div
+              v-if="turn.user.displayAt"
+              class="studio-conversation-log__message-footer studio-conversation-log__message-footer--user"
+            >
               <time v-if="turn.user.displayAt">{{ turn.user.displayAt }}</time>
             </div>
-            <LongTextPreviewBlocks :blocks="turn.user.blocks" />
           </div>
           <span class="studio-conversation-log__avatar studio-conversation-log__avatar--user">
             <v-icon :icon="mdiAccountOutline" size="15" />
@@ -76,14 +75,15 @@
           v-if="turn.assistant"
           class="studio-conversation-log__message-row studio-conversation-log__message-row--assistant"
         >
-          <span class="studio-conversation-log__avatar studio-conversation-log__avatar--assistant">
-            <v-icon :icon="mdiRobotOutline" size="16" />
-          </span>
-          <div class="studio-conversation-log__message studio-conversation-log__message--assistant">
+          <div class="studio-conversation-log__assistant-header">
+            <span class="studio-conversation-log__avatar studio-conversation-log__avatar--assistant">
+              <v-icon :icon="mdiRobotOutline" size="16" />
+            </span>
             <div class="studio-conversation-log__message-header">
               <span>Codex</span>
-              <time v-if="turn.assistant.displayAt">{{ turn.assistant.displayAt }}</time>
             </div>
+          </div>
+          <div class="studio-conversation-log__message studio-conversation-log__message--assistant">
             <LongTextPreviewBlocks
               v-if="turn.assistant.blocks.length"
               :blocks="turn.assistant.blocks"
@@ -102,6 +102,12 @@
               </li>
             </ol>
           </div>
+          <div
+            v-if="turn.assistant.displayAt"
+            class="studio-conversation-log__message-footer studio-conversation-log__message-footer--assistant"
+          >
+            <time>{{ turn.assistant.displayAt }}</time>
+          </div>
         </div>
       </article>
 
@@ -111,6 +117,46 @@
         class="studio-conversation-log__turn"
       >
         <div
+          v-if="message.appearance === 'assistant'"
+          class="studio-conversation-log__message-row studio-conversation-log__message-row--assistant"
+        >
+          <div class="studio-conversation-log__assistant-header">
+            <span class="studio-conversation-log__avatar studio-conversation-log__avatar--assistant">
+              <v-progress-circular
+                v-if="message.loading"
+                color="white"
+                indeterminate
+                size="15"
+                width="2"
+              />
+              <v-icon
+                v-else
+                :icon="message.icon || mdiRobotOutline"
+                size="16"
+              />
+            </span>
+            <div class="studio-conversation-log__message-header">
+              <span>{{ message.label }}</span>
+            </div>
+          </div>
+          <div class="studio-conversation-log__message studio-conversation-log__message--assistant">
+            <h3 v-if="message.title" class="studio-conversation-log__activity-title">
+              {{ message.title }}
+            </h3>
+            <LongTextPreviewBlocks
+              v-if="message.blocks.length"
+              :blocks="message.blocks"
+            />
+          </div>
+          <div
+            v-if="message.displayAt"
+            class="studio-conversation-log__message-footer studio-conversation-log__message-footer--assistant"
+          >
+            <time>{{ message.displayAt }}</time>
+          </div>
+        </div>
+        <div
+          v-else
           class="studio-conversation-log__message studio-conversation-log__message--activity"
           :class="{
             'studio-conversation-log__message--activity-guide': message.appearance === 'guide',
@@ -210,7 +256,8 @@ function displayTime(value = "") {
 }
 
 function displayMessage(message = null, {
-  allowNumberedQuestions = false
+  allowNumberedQuestions = false,
+  preserveParagraphLineBreaks = false
 } = {}) {
   if (!message) {
     return null;
@@ -224,7 +271,9 @@ function displayMessage(message = null, {
   const hasQuestions = questionInput.questions.length > 0;
   return {
     ...message,
-    blocks: parseLongTextReviewBlocks(hasQuestions ? questionInput.intro : message.text),
+    blocks: parseLongTextReviewBlocks(hasQuestions ? questionInput.intro : message.text, {
+      preserveParagraphLineBreaks
+    }),
     questions: hasQuestions ? questionInput.questions : [],
     displayAt: displayTime(message.at)
   };
@@ -237,7 +286,9 @@ const displayTurns = computed(() => (Array.isArray(props.turns) ? props.turns : 
     }),
     system: displayMessage(turn.system),
     turnId: String(turn.turnId || index + 1),
-    user: displayMessage(turn.user)
+    user: displayMessage(turn.user, {
+      preserveParagraphLineBreaks: true
+    })
   }))
   .filter((turn) => turn.system || turn.user || turn.assistant));
 
@@ -247,11 +298,12 @@ function displayActivityMessage(message = {}, index = 0) {
   }
   const text = String(message.text || "").trim();
   const title = String(message.title || "").trim();
+  const appearance = String(message.appearance || "");
   if (!text && !title && message.loading !== true) {
     return null;
   }
   return {
-    appearance: message.appearance === "guide" ? "guide" : "activity",
+    appearance: ["assistant", "guide"].includes(appearance) ? appearance : "activity",
     blocks: parseLongTextReviewBlocks(text),
     displayAt: displayTime(message.at),
     icon: String(message.icon || "").trim(),
@@ -266,6 +318,12 @@ function displayActivityMessage(message = {}, index = 0) {
 const displayActivityMessages = computed(() => (Array.isArray(props.activityMessages) ? props.activityMessages : [])
   .map(displayActivityMessage)
   .filter(Boolean));
+
+const loadingIndicatorVisible = computed(() => Boolean(
+  props.loading &&
+  !displayTurns.value.length &&
+  !displayActivityMessages.value.length
+));
 
 function messageScrollKey(message = null) {
   if (!message) {
@@ -288,7 +346,7 @@ function turnScrollKey(turn = {}) {
 
 const scrollTrigger = computed(() => [
   props.visible ? "visible" : "hidden",
-  props.loading ? "loading" : "ready",
+  loadingIndicatorVisible.value ? "loading" : "ready",
   props.scrollKey,
   displayTurns.value.map(turnScrollKey).join("|"),
   displayActivityMessages.value.map((message) => [
@@ -341,18 +399,20 @@ watch(scrollTrigger, () => {
 }
 
 .studio-conversation-log__body {
-  align-content: start;
-  display: grid;
-  gap: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
   min-height: 0;
   overflow: auto;
   padding-right: 0.15rem;
 }
 
 .studio-conversation-log__turn {
-  display: grid;
-  gap: 0.45rem;
-  min-height: max-content;
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 1.15rem;
+  min-height: 0;
 }
 
 .studio-conversation-log__message-row {
@@ -365,17 +425,30 @@ watch(scrollTrigger, () => {
 .studio-conversation-log__message-row--user {
   grid-template-columns: minmax(0, auto) auto;
   justify-self: end;
-  max-width: min(30rem, 88%);
+  max-width: min(28rem, 88%);
+  margin-left: auto;
 }
 
 .studio-conversation-log__message-row--assistant {
-  grid-template-columns: auto minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
   justify-self: start;
-  max-width: min(42rem, 96%);
+  max-width: min(42rem, 94%);
+  margin-right: auto;
+}
+
+.studio-conversation-log__assistant-header {
+  align-items: center;
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: auto minmax(0, 1fr);
+  min-width: 0;
 }
 
 .studio-conversation-log__message {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 0.35rem;
   min-width: 0;
 }
@@ -390,32 +463,31 @@ watch(scrollTrigger, () => {
 }
 
 .studio-conversation-log__avatar--user {
-  background: rgba(var(--v-theme-primary), 0.12);
-  color: rgb(var(--v-theme-primary));
+  background: #e9f2fc;
+  color: #2f79ca;
   margin-top: 0.2rem;
 }
 
 .studio-conversation-log__avatar--assistant {
-  background: linear-gradient(
-    180deg,
-    rgba(var(--v-theme-primary), 0.92),
-    rgba(var(--v-theme-primary), 0.72)
-  );
-  color: rgb(var(--v-theme-on-primary));
+  background: #5b9ce1;
+  color: #ffffff;
   margin-top: 0.05rem;
 }
 
 .studio-conversation-log__message--user {
-  background: rgb(var(--v-theme-surface-variant));
-  border-radius: 14px;
-  color: rgb(var(--v-theme-on-surface));
-  padding: 0.85rem 1rem;
+  background: #e3ebf5;
+  border-radius: 16px;
+  color: #202936;
+  gap: 0.75rem;
+  justify-content: space-between;
+  padding: 0.75rem 1rem 0.72rem;
+  width: fit-content;
 }
 
 .studio-conversation-log__message--assistant {
   background: rgb(var(--v-theme-surface));
   color: rgb(var(--v-theme-on-surface));
-  padding: 0.1rem 0 0.35rem;
+  padding: 0;
 }
 
 .studio-conversation-log__message--activity {
@@ -493,21 +565,15 @@ watch(scrollTrigger, () => {
   align-items: center;
   color: rgba(var(--v-theme-on-surface), 0.82);
   display: flex;
-  font-size: 0.88rem;
+  font-size: 0.9rem;
   gap: 0.7rem;
   justify-content: space-between;
   line-height: 1.2;
 }
 
-.studio-conversation-log__message--user .studio-conversation-log__message-header {
-  color: rgba(var(--v-theme-on-surface), 0.9);
-  font-weight: 650;
-}
-
 .studio-conversation-log__message--assistant .studio-conversation-log__message-header {
   color: rgba(var(--v-theme-on-surface), 0.78);
-  font-weight: 650;
-  margin-bottom: 0.35rem;
+  font-weight: 560;
 }
 
 .studio-conversation-log__message-header span {
@@ -517,21 +583,54 @@ watch(scrollTrigger, () => {
 }
 
 .studio-conversation-log__message-header time {
-  color: rgba(var(--v-theme-on-surface), 0.62);
+  color: #6d7888;
   font-weight: 650;
+}
+
+.studio-conversation-log__message-footer {
+  align-items: center;
+  color: #9aa6b6;
+  display: flex;
+  font-size: 0.88rem;
+  font-weight: 500;
+  gap: 0.65rem;
+  line-height: 1.2;
+}
+
+.studio-conversation-log__message-footer--user {
+  justify-content: flex-start;
+}
+
+.studio-conversation-log__message-footer--assistant {
+  justify-content: flex-start;
+  margin-top: -0.15rem;
 }
 
 .studio-conversation-log__message--assistant :deep(.studio-long-text-review__blocks),
 .studio-conversation-log__message--user :deep(.studio-long-text-review__blocks) {
   color: inherit;
-  font-size: 1rem;
-  line-height: 1.45;
+  font-size: 0.94rem;
+  line-height: 1.5;
 }
 
 .studio-conversation-log__message--assistant :deep(.studio-long-text-review__paragraph),
 .studio-conversation-log__message--user :deep(.studio-long-text-review__paragraph) {
-  font-size: 1rem;
+  font-size: 0.94rem;
   margin-block: 0;
+}
+
+.studio-conversation-log__message--user :deep(.studio-long-text-review__paragraph) {
+  white-space: pre-wrap;
+}
+
+.studio-conversation-log__message--assistant :deep(.studio-long-text-review__paragraph code),
+.studio-conversation-log__message--user :deep(.studio-long-text-review__paragraph code) {
+  background: transparent;
+  border-radius: 0;
+  color: inherit;
+  font-family: inherit;
+  font-size: 1em;
+  padding: 0;
 }
 
 .studio-conversation-log__questions {

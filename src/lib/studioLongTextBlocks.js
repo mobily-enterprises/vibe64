@@ -1,12 +1,15 @@
-function parseLongTextReviewBlocks(value) {
+function parseLongTextReviewBlocks(value, options = {}) {
   const lines = String(value || "").replace(/\r\n/gu, "\n").split("\n");
   const blocks = [];
   let paragraphLines = [];
   let listBlock = null;
   let codeLines = null;
+  const preserveParagraphLineBreaks = options.preserveParagraphLineBreaks === true;
 
   const flushParagraph = () => {
-    const text = paragraphLines.join(" ").replace(/\s+/gu, " ").trim();
+    const text = preserveParagraphLineBreaks
+      ? paragraphLines.join("\n").trim()
+      : paragraphLines.join(" ").replace(/\s+/gu, " ").trim();
     paragraphLines = [];
     if (text) {
       blocks.push({

@@ -22,7 +22,7 @@
           :model-value="selectedControlValues[field.name] || ''"
           class="vibe64-workflow-control-form__input"
           :disabled="running"
-          :label="field.label"
+          label=""
           :rows="field.rows || textareaRows"
           :session-id="sessionId"
           variant="outlined"
@@ -287,7 +287,7 @@ function submitFromButton() {
 
 .vibe64-workflow-control-form :deep(.studio-autopilot-prompt-textarea .v-field__input) {
   min-height: 3.25rem;
-  padding-block: 0.45rem;
+  padding-block: 0.85rem 0.75rem;
 }
 
 .vibe64-workflow-control-form__prompt-shell--inline-submit :deep(.studio-autopilot-prompt-textarea .v-field__input) {
@@ -295,7 +295,15 @@ function submitFromButton() {
 }
 
 .vibe64-workflow-control-form :deep(.studio-autopilot-prompt-textarea .v-field__input textarea) {
+  color: rgb(var(--v-theme-on-surface));
+  line-height: 1.4;
   min-height: 2.3rem;
+  opacity: 1;
+}
+
+.vibe64-workflow-control-form :deep(.studio-autopilot-prompt-textarea .v-field__input textarea::placeholder) {
+  color: rgba(var(--v-theme-on-surface), 0.62);
+  opacity: 1;
 }
 
 .vibe64-workflow-control-form__actions,

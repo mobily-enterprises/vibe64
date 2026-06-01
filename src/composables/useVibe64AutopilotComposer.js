@@ -197,6 +197,14 @@ function useVibe64AutopilotComposer({
     if (!accepted) {
       return false;
     }
+    if (controlHasInputFields(control)) {
+      selectControl(
+        control?.id && control.id === currentPrimaryIntentId.value
+          ? primaryScreenControl.value || control
+          : control
+      );
+      return true;
+    }
     if (control?.id && control.id === currentPrimaryIntentId.value) {
       selectControl(primaryScreenControl.value || control);
     } else {

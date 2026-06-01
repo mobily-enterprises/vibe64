@@ -795,10 +795,10 @@ const guidanceActivityMessage = computed(() => {
     return null;
   }
   return activityMessage({
-    appearance: "guide",
+    appearance: "assistant",
     icon: mdiRobotOutline,
     id: "screen-guidance",
-    label: "Vibe64",
+    label: "Codex",
     text: screenMessage.value
   });
 });
