@@ -347,16 +347,29 @@ const codexTerminalActive = computed(() => Boolean(
   codexTerminalActivityMatchesSelectedSession.value &&
   codexTerminalActivity.value.active
 ));
+const terminalSaysCodexIsWorking = computed(() => Boolean(
+  codexTerminalActivityMatchesSelectedSession.value &&
+  (
+    codexTerminalActivity.value.busy ||
+    codexTerminalActivity.value.streaming ||
+    codexTerminalActivity.value.working
+  )
+));
 const autopilotCodexTerminalVisible = computed(() => Boolean(
   codexBootstrapNeedsTerminalAttention.value
 ));
 const autopilotCodexWorkingVisible = computed(() => Boolean(
-  serverSaysCodexIsWorking.value &&
   selectedCodexTerminalId.value &&
   !autopilotCodexTerminalVisible.value &&
   (
-    codexTerminalActive.value ||
-    codexTerminalListenWhenHidden.value
+    terminalSaysCodexIsWorking.value ||
+    (
+      serverSaysCodexIsWorking.value &&
+      (
+        codexTerminalActive.value ||
+        codexTerminalListenWhenHidden.value
+      )
+    )
   )
 ));
 const autopilotInteractionLocked = computed(() => Boolean(
@@ -741,7 +754,8 @@ watch(() => [
     displayMode: codexTerminalDisplayMode.value,
     selectedCodexTerminalId: selectedCodexTerminalId.value,
     serverSaysCodexIsWorking: serverSaysCodexIsWorking.value,
-    sessionId: props.sessionId
+    sessionId: props.sessionId,
+    terminalSaysCodexIsWorking: terminalSaysCodexIsWorking.value
   });
 }, {
   flush: "post",
