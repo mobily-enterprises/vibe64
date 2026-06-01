@@ -106,6 +106,7 @@
         <div
           class="studio-conversation-log__message studio-conversation-log__message--activity"
           :class="{
+            'studio-conversation-log__message--activity-guide': message.appearance === 'guide',
             'studio-conversation-log__message--activity-success': message.tone === 'success',
             'studio-conversation-log__message--activity-warning': message.tone === 'warning',
             'studio-conversation-log__message--activity-error': message.tone === 'error'
@@ -243,6 +244,7 @@ function displayActivityMessage(message = {}, index = 0) {
     return null;
   }
   return {
+    appearance: message.appearance === "guide" ? "guide" : "activity",
     blocks: parseLongTextReviewBlocks(text),
     displayAt: displayTime(message.at),
     icon: String(message.icon || "").trim(),
@@ -284,6 +286,7 @@ const scrollTrigger = computed(() => [
   displayTurns.value.map(turnScrollKey).join("|"),
   displayActivityMessages.value.map((message) => [
     message.id,
+    message.appearance,
     message.loading ? "loading" : "ready",
     message.title,
     String(message.blocks.map((block) => block.text || "").join("\n")).length
@@ -364,6 +367,14 @@ watch(scrollTrigger, () => {
   border: 1px solid rgba(var(--v-theme-primary), 0.16);
   justify-self: start;
   max-width: min(48rem, 94%);
+}
+
+.studio-conversation-log__message--activity-guide {
+  background: rgb(var(--v-theme-surface));
+  border-color: rgba(var(--v-theme-primary), 0.18);
+  border-radius: 18px 18px 18px 6px;
+  box-shadow: 0 0.45rem 1.4rem rgba(15, 23, 42, 0.05);
+  max-width: min(38rem, 94%);
 }
 
 .studio-conversation-log__message--activity-success {

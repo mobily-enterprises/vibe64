@@ -727,6 +727,12 @@ const conversationLogVisible = computed(() => Boolean(
   sectionVisible("response_preview") &&
   props.conversationLog?.visible
 ));
+const conversationHasUserOrAssistantTurn = computed(() => (
+  Array.isArray(props.conversationLog?.turns) ? props.conversationLog.turns : []
+).some((turn) => Boolean(
+  String(turn?.user?.text || "").trim() ||
+  String(turn?.assistant?.text || "").trim()
+)));
 const conversationBodyOwnsMessage = computed(() => Boolean(
   screenKind.value === "conversation" &&
   conversationLogVisible.value
@@ -744,7 +750,16 @@ const responsePreviewVisible = computed(() => Boolean(
   )
 ));
 const chatTakeoverVisible = computed(() => Boolean(stepInputFormVisible.value || reportPreviewVisible.value));
+const screenMessageIsGuidance = computed(() => String(screenState.value.variant || "") === "guide");
+const guidanceScreenVisible = computed(() => Boolean(
+  !chatTakeoverVisible.value &&
+  screenMessageIsGuidance.value &&
+  screenMessage.value &&
+  !conversationHasUserOrAssistantTurn.value &&
+  !commandTerminalVisible.value
+));
 const statusActivityVisible = computed(() => Boolean(
+  !guidanceScreenVisible.value &&
   !chatTakeoverVisible.value &&
   !codexRunningStatusSuppressed.value &&
   !commandTerminalVisible.value &&
@@ -779,6 +794,18 @@ const statusActivityMessage = computed(() => {
     text: bodyScreenMessageVisible.value ? screenMessage.value : "",
     title: statusTitleVisible.value ? displayStatusText.value : "",
     tone: standaloneFailureVisible.value ? "warning" : "info"
+  });
+});
+const guidanceActivityMessage = computed(() => {
+  if (!guidanceScreenVisible.value) {
+    return null;
+  }
+  return activityMessage({
+    appearance: "guide",
+    icon: mdiRobotOutline,
+    id: "screen-guidance",
+    label: "Vibe64",
+    text: screenMessage.value
   });
 });
 const responsePreviewActivityMessage = computed(() => {
@@ -846,6 +873,7 @@ const statusActionsVisible = computed(() => Boolean(
   )
 ));
 const chatActivityMessages = computed(() => [
+  guidanceActivityMessage.value,
   statusActivityMessage.value,
   responsePreviewActivityMessage.value,
   commandActivityMessage.value,
@@ -866,6 +894,7 @@ const conversationScrollKey = computed(() => [
   selectedControlFields.value.map((field) => field.name).join("|"),
   chatActivityMessages.value.map((message) => [
     message.id,
+    message.appearance,
     message.loading ? "loading" : "ready",
     message.text,
     message.title
@@ -919,6 +948,7 @@ function sectionVisible(kind = "") {
 }
 
 function activityMessage({
+  appearance = "activity",
   icon = "",
   id = "",
   label = "Vibe64",
@@ -933,6 +963,7 @@ function activityMessage({
     return null;
   }
   return {
+    appearance,
     icon,
     id,
     label,

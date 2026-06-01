@@ -2852,10 +2852,11 @@ function issueSourceSession(overrides: Record<string, unknown> = {}) {
       intents,
       screen: {
         kind: "issue_source",
-        message: "Describe the work, review the saved details, and create a GitHub issue only when this session requires one.",
+        message: "Tell me what you want built or fixed. Vibe64 can turn it into a GitHub issue if this session needs one.",
         primaryIntentId: "draft_issue",
         sections: [],
-        title: "Define work"
+        title: "Define work",
+        variant: "guide"
       },
       step: {
         id: "issue_file_created",
@@ -3119,10 +3120,11 @@ function existingPrIssueSkipSession(overrides: Record<string, unknown> = {}) {
       intents,
       screen: {
         kind: "issue_source",
-        message: "Describe the work, review the saved details, and create a GitHub issue only when this session requires one.",
+        message: "Tell me what you want built or fixed. Vibe64 can turn it into a GitHub issue if this session needs one.",
         primaryIntentId: "draft_issue",
         sections: [],
-        title: "Define work"
+        title: "Define work",
+        variant: "guide"
       },
       step: {
         id: "issue_file_created",

@@ -316,9 +316,10 @@ const coreCodingStepDefinitionsById = deepFreeze({
         ],
         screen: {
           kind: "issue_source",
-          message: "Describe the work, review the saved details, and create a GitHub issue only when this session requires one.",
+          message: "Tell me what you want built or fixed. Vibe64 can turn it into a GitHub issue if this session needs one.",
           primaryIntentId: draftIssueActionId,
-          title: "Define work"
+          title: "Define work",
+          variant: "guide"
         }
       }
     },

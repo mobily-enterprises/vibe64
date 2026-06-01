@@ -1062,11 +1062,11 @@ test("vibe64 runtime presentation snapshots come from workflow step metadata", a
         ],
         screen: {
           kind: "conversation",
-          message: "Ask Codex for changes. Continue when the work is ready for the next workflow step.",
+          message: "Tell me what you want to change. Mention the feature, bug, page, or behavior you want Vibe64 to work on.",
           primaryIntentId: "talk_to_codex",
           sections: ["response_preview"],
           title: "Talk to Codex",
-          variant: ""
+          variant: "guide"
         },
         step: {
           id: "maintenance_conversation",

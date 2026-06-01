@@ -32,6 +32,7 @@ function buildAgentConversationStepDefinition({
   inputLabel = "What do you want to ask Codex?",
   inputPlaceholder = "Describe what you want help with.",
   label = "Talk to Codex",
+  message = "Ask Codex for changes. Continue when the work is ready for the next workflow step.",
   next = null,
   responseArtifact = ""
 } = {}) {
@@ -71,10 +72,11 @@ function buildAgentConversationStepDefinition({
         persistWhenComplete: true,
         screen: {
           kind: "conversation",
-          message: "Ask Codex for changes. Continue when the work is ready for the next workflow step.",
+          message,
           primaryIntentId: "talk_to_codex",
           sections: ["response_preview"],
-          title: "current_step"
+          title: "current_step",
+          variant: "guide"
         }
       }
     },

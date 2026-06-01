@@ -82,7 +82,7 @@ test.describe("non-commit maintenance agent chat", () => {
 
     await expect(page.getByRole("button", { name: /^Inspect$/ })).toBeVisible();
     await expect(page.getByRole("button", { name: /^Autopilot$/ })).toBeHidden();
-    await expect(page.getByText("Ask Codex for changes. Continue when the work is ready for the next workflow step."))
+    await expect(page.getByText("Tell me what you want to change. Mention the feature, bug, page, or behavior you want Vibe64 to work on."))
       .toBeVisible();
     await page.getByLabel("What do you want to ask Codex?").fill("Tell me what maintenance is needed.");
     await page.getByRole("button", { name: "Ask Codex" }).click();
@@ -101,7 +101,7 @@ test.describe("non-commit maintenance agent chat", () => {
 
     await expect(page.getByRole("button", { name: /^Inspect$/ })).toBeVisible();
     await expect(page.getByRole("button", { name: /^Autopilot$/ })).toBeHidden();
-    await expect(page.getByText("Ask Codex for changes. Continue when the work is ready for the next workflow step."))
+    await expect(page.getByText("Tell me what you want to change. Mention the feature, bug, page, or behavior you want Vibe64 to work on."))
       .toBeVisible();
 
     await page.getByLabel("What do you want to ask Codex?").fill("Really?");
