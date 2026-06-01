@@ -243,6 +243,7 @@ const canStartTerminal = computed(() => {
 });
 
 const terminalController = useStudioTerminal({
+  liveResize: false,
   onOutput: handleTerminalOutput,
   onStatusUpdate: handleTerminalStatusUpdate,
   onUserData: handleTerminalUserData,

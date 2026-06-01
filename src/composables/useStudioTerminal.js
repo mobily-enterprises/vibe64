@@ -12,6 +12,7 @@ function resolveCallback(callback, fallback) {
 }
 
 function useStudioTerminal({
+  liveResize = true,
   onOutput = null,
   onSessionUpdate = null,
   onStatusUpdate = null,
@@ -46,6 +47,7 @@ function useStudioTerminal({
   let terminalResizeObserver = null;
   let terminalReportedCols = 0;
   let terminalReportedRows = 0;
+  let terminalInitialFitDone = false;
   let terminalLatestOutput = "";
   let terminalOutputOffset = 0;
   let terminalOutputVersion = 0;
@@ -60,6 +62,10 @@ function useStudioTerminal({
 
   function terminalReadOnly() {
     return Boolean(typeof readOnly === "function" ? readOnly() : unref(readOnly));
+  }
+
+  function terminalLiveResize() {
+    return Boolean(typeof liveResize === "function" ? liveResize() : unref(liveResize));
   }
 
   function normalizedOutputVersion(value) {
@@ -97,11 +103,19 @@ function useStudioTerminal({
 
   function fitTerminalUi() {
     if (!terminalFitAddon || !terminalInstance) {
-      return;
+      return false;
+    }
+    if (!terminalLiveResize() && terminalInitialFitDone) {
+      return true;
     }
     terminalFitAddon.fit();
     terminalInstance.refresh?.(0, Math.max(0, terminalInstance.rows - 1));
+    const size = terminalCurrentSize();
+    if (size) {
+      terminalInitialFitDone = true;
+    }
     void sendTerminalResize();
+    return Boolean(size);
   }
 
   async function setupTerminalUi() {
@@ -161,8 +175,10 @@ function useStudioTerminal({
       terminalResizeHandler = () => {
         fitTerminalUi();
       };
-      window.addEventListener("resize", terminalResizeHandler);
-      if (typeof ResizeObserver !== "undefined") {
+      if (terminalLiveResize()) {
+        window.addEventListener("resize", terminalResizeHandler);
+      }
+      if (terminalLiveResize() && typeof ResizeObserver !== "undefined") {
         terminalResizeObserver = new ResizeObserver(() => {
           fitTerminalUi();
         });
@@ -219,6 +235,7 @@ function useStudioTerminal({
     terminalFitAddon = null;
     terminalSetupPromise = null;
     terminalOutputOffset = 0;
+    terminalInitialFitDone = false;
     terminalFocused.value = false;
     terminalSelectedText.value = "";
     resetReportedTerminalSize();

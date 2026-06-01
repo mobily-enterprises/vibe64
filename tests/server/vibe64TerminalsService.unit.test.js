@@ -660,8 +660,8 @@ test("Vibe64 Codex terminal resumes a pending prompt through the active terminal
           "process.stdin.setEncoding('utf8');",
           "process.stdin.on('data', (chunk) => {",
           "  if (String(chunk).includes('echo $CODEX_THREAD_ID')) {",
-          "    process.stdout.write(String(chunk).includes('echo $CODEX_THREAD_ID ') ? 'thread-command-has-delimiter\\n' : 'thread-command-missing-delimiter\\n');",
-          "    process.stdout.write('echo $CODEX_THREAD_ID\\n00000000-0000-4000-8000-000000000002\\ngpt-5.5 xhigh \\u00b7 /workspace/example\\n');",
+          "    process.stdout.write(String(chunk).includes('!echo $CODEX_THREAD_ID -- ') ? 'thread-command-has-codex-shell-prefix\\n' : 'thread-command-missing-codex-shell-prefix\\n');",
+          "    process.stdout.write('!echo $CODEX_THREAD_ID --\\n00000000-0000-4000-8000-000000000002 --\\ngpt-5.5 xhigh \\u00b7 /workspace/example\\n');",
           "  } else if (String(chunk).includes('Reply exactly: Vibe64 session briefing loaded.')) {",
           "    process.stdout.write('Vibe64 session briefing loaded.\\ngpt-5.5 xhigh \\u00b7 /workspace/example\\n');",
           "  } else if (String(chunk).includes('Ask the user for seed choices.')) {",
@@ -715,8 +715,8 @@ test("Vibe64 Codex terminal resumes a pending prompt through the active terminal
       const terminalSnapshot = readTerminalSession(terminal.id, {
         namespace
       });
-      assert.match(terminalSnapshot.output, /thread-command-has-delimiter/u);
-      assert.doesNotMatch(terminalSnapshot.output, /thread-command-missing-delimiter/u);
+      assert.match(terminalSnapshot.output, /thread-command-has-codex-shell-prefix/u);
+      assert.doesNotMatch(terminalSnapshot.output, /thread-command-missing-codex-shell-prefix/u);
       assert.equal(session.metadata.codex_prompt_handoff_id, actionResult.codexPromptHandoff.handoffId);
       assert.match(session.metadata.codex_session_briefing_echo_input, /Vibe64 session briefing/u);
       assert.doesNotMatch(session.metadata.codex_session_briefing_echo_input, /\[\[VIBE64_CONTEXT_START\]\]/u);

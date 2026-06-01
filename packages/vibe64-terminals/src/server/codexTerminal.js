@@ -101,7 +101,7 @@ import {
 const CODEX_AGENT_PROVIDER = "codex";
 const CODEX_THREAD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 const CODEX_THREAD_ID_TOKEN_PATTERN = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/giu;
-const CODEX_THREAD_COMMAND = "echo $CODEX_THREAD_ID ";
+const CODEX_THREAD_COMMAND = "!echo $CODEX_THREAD_ID -- ";
 const CODEX_BOOT_MIN_AGE_MS = 1800;
 const CODEX_BOOT_QUIET_MS = 900;
 const CODEX_BOOT_TIMEOUT_MS = 12000;
@@ -109,6 +109,7 @@ const CODEX_TURN_SETTLE_MS = CODEX_BOOT_QUIET_MS;
 const CODEX_TURN_UNKNOWN_QUIET_MS = 3000;
 const DEBUG_PROMPTS_ENABLED = String(process.env.DEBUG_PROMPTS || "").trim() === "1";
 const CODEX_KEY_PAUSE_MS = 180;
+const CODEX_PROMPT_SUBMIT_PAUSE_MS = 20;
 const CODEX_THREAD_CAPTURE_TIMEOUT_MS = DEBUG_PROMPTS_ENABLED ? 10 * 60_000 : 30_000;
 const CODEX_SESSION_MODEL = "gpt-5.5";
 const CODEX_SESSION_REASONING_EFFORT = "xhigh";
@@ -379,8 +380,7 @@ function codexPromptInput(prompt = "") {
 }
 
 function codexPromptTerminalInput(prompt = "") {
-  const source = codexPromptInput(prompt);
-  return source ? `${source}\r` : "";
+  return codexPromptInput(prompt);
 }
 
 function codexPromptHandoffSignature(sessionId = "") {
@@ -462,6 +462,28 @@ function activeGlobalCodexTerminal(targetRoot = "") {
 function writeCodexTerminalInput(sessionId = "", terminalSessionId = "", data = "") {
   return writeTerminalSessionText(terminalSessionId, data, {
     namespace: codexTerminalNamespace(sessionId)
+  });
+}
+
+async function writeCodexPromptIntoNamespace(terminalSessionId = "", prompt = "", {
+  namespace = "default"
+} = {}) {
+  const input = codexPromptTerminalInput(prompt);
+  if (!input) {
+    return {
+      ok: false,
+      error: "Codex prompt input is empty."
+    };
+  }
+  const written = await writeTerminalSessionText(terminalSessionId, input, {
+    namespace
+  });
+  if (written.ok === false) {
+    return written;
+  }
+  await delay(CODEX_PROMPT_SUBMIT_PAUSE_MS);
+  return writeTerminalSessionText(terminalSessionId, "\r", {
+    namespace
   });
 }
 
@@ -1200,13 +1222,18 @@ function createCodexTerminalController({
   }
 
   async function sendCodexShellCommand(sessionId, terminalSessionId, command) {
-    for (const terminalInput of [String(command || ""), "\r"]) {
-      const result = writeCodexTerminalInput(sessionId, terminalSessionId, terminalInput);
-      if (result.ok === false) {
-        return result;
-      }
-      await delay(CODEX_KEY_PAUSE_MS);
+    const commandResult = await writeCodexTerminalInput(sessionId, terminalSessionId, String(command || ""));
+    if (commandResult.ok === false) {
+      return commandResult;
     }
+    await delay(CODEX_KEY_PAUSE_MS);
+    const enterResult = await writeTerminalSessionText(terminalSessionId, "\r", {
+      namespace: codexTerminalNamespace(sessionId)
+    });
+    if (enterResult.ok === false) {
+      return enterResult;
+    }
+    await delay(CODEX_KEY_PAUSE_MS);
     return {
       ok: true
     };
@@ -1288,21 +1315,15 @@ function createCodexTerminalController({
   }
 
   async function writePromptIntoCodexTerminal(sessionId, terminalSessionId, prompt) {
-    return writeCodexTerminalInput(
-      sessionId,
-      terminalSessionId,
-      codexPromptTerminalInput(prompt)
-    );
+    return writeCodexPromptIntoNamespace(terminalSessionId, prompt, {
+      namespace: codexTerminalNamespace(sessionId)
+    });
   }
 
   async function writePromptIntoGlobalCodexTerminal(terminalSessionId, prompt) {
-    return writeTerminalSessionText(
-      terminalSessionId,
-      codexPromptTerminalInput(prompt),
-      {
-        namespace: globalCodexTerminalNamespace()
-      }
-    );
+    return writeCodexPromptIntoNamespace(terminalSessionId, prompt, {
+      namespace: globalCodexTerminalNamespace()
+    });
   }
 
   async function markCodexTerminalTurnActive(sessionId, terminalSessionId, signature, reason, {
@@ -1631,13 +1652,9 @@ function createCodexTerminalController({
       if (ready.ok === false) {
         return;
       }
-      await writeTerminalSessionText(
-        terminalResponse.id,
-        codexPromptTerminalInput(fullPrompt),
-        {
-          namespace
-        }
-      );
+      await writeCodexPromptIntoNamespace(terminalResponse.id, fullPrompt, {
+        namespace
+      });
     })();
 
     return {
