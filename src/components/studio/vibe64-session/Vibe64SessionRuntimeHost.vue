@@ -138,6 +138,7 @@ const emit = defineEmits([
 ]);
 
 const CODEX_QUIET_TERMINAL_DELAY_MS = 5000;
+const CODEX_AUTOMATIC_TERMINAL_INTERRUPT_ENABLED = false;
 
 const selectedSessionId = computed(() => props.sessionId);
 const selectedListSession = computed(() => {
@@ -667,6 +668,9 @@ watch(() => [
   codexTerminalActive.value ? "active" : "quiet"
 ].join("|"), () => {
   clearCodexQuietTerminalTimer();
+  if (!CODEX_AUTOMATIC_TERMINAL_INTERRUPT_ENABLED) {
+    return;
+  }
   if (!codexPromptResponseExpected.value || codexBootstrapNeedsTerminalAttention.value) {
     return;
   }

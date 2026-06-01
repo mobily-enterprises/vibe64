@@ -15,7 +15,6 @@ function useCodexTerminalSessionLifecycle({
   canUseTerminal,
   clearCodexBusy,
   clearCodexWorking,
-  clearTerminalDisplay,
   clearTerminalOutput,
   closeTerminalSession,
   componentMounted,
@@ -23,16 +22,12 @@ function useCodexTerminalSessionLifecycle({
   disposeTerminalViewport,
   emitSessionState,
   expanded,
-  fitTerminal,
   onBeforeDispose,
   onBeforeDetach,
   onMountedReady,
   onSessionChanged,
-  onTerminalRecovered,
   onTerminalSnapshot,
   onTerminalStarted,
-  refreshTerminalOutput,
-  resetTerminal,
   sessionId,
   setupTerminalUi,
   startTerminalSession,
@@ -47,7 +42,6 @@ function useCodexTerminalSessionLifecycle({
   writeTerminalOutput
 } = {}) {
   let terminalStartPromise = null;
-  let terminalRecoveryPromise = null;
 
   const terminalExited = computed(() => terminalStatus.value === "exited");
   const terminalCanStart = computed(() => {
@@ -169,17 +163,6 @@ function useCodexTerminalSessionLifecycle({
 
   async function connectAttachedTerminal() {
     void setupTerminalUi?.();
-    fitTerminal?.({
-      forceResize: true
-    });
-    void setupTerminalUi?.().then((ready) => {
-      if (ready) {
-        fitTerminal?.({
-          forceResize: true
-        });
-        refreshTerminalOutput?.();
-      }
-    });
     if (!(await terminalSocket.connect())) {
       throw new Error("Terminal stream failed to connect.");
     }
@@ -251,19 +234,6 @@ function useCodexTerminalSessionLifecycle({
     }
   }
 
-  async function resizeTerminal(size = {}) {
-    if (!terminalSessionId.value || terminalStatus.value === "exited") {
-      return false;
-    }
-    try {
-      await terminalSocket.resize(size);
-      return true;
-    } catch (resizeError) {
-      terminalError.value = String(resizeError?.message || resizeError || "Terminal resize failed.");
-      return false;
-    }
-  }
-
   async function closeTerminal() {
     const existingTerminalId = terminalSessionId.value;
     detachTerminal();
@@ -275,10 +245,7 @@ function useCodexTerminalSessionLifecycle({
   async function attachTerminalSession(session = {}) {
     const nextTerminalSessionId = String(session.id || session.terminalSessionId || "").trim();
     if (!nextTerminalSessionId) {
-      if (terminalSessionId.value) {
-        detachTerminal();
-      }
-      return false;
+      return Boolean(terminalSessionId.value);
     }
     const sameTerminal = terminalSessionId.value === nextTerminalSessionId;
     if (!sameTerminal && terminalSessionId.value) {
@@ -300,36 +267,12 @@ function useCodexTerminalSessionLifecycle({
   }
 
   async function recoverMissingTerminal() {
-    if (!canUseTerminal.value) {
-      terminalError.value = "Terminal session not found.";
-      return false;
-    }
-    if (terminalRecoveryPromise) {
-      return terminalRecoveryPromise;
-    }
-
-    terminalRecoveryPromise = (async () => {
-      const recoveredSessionId = sessionId.value;
-      terminalSocket.closeSocket();
-      terminalSessionId.value = "";
-      terminalStatus.value = "";
-      terminalCommandPreview.value = "";
-      terminalError.value = "";
-      resetTerminal?.();
-      clearTerminalDisplay?.();
-      onTerminalRecovered?.();
-
-      if (recoveredSessionId !== sessionId.value) {
-        return false;
-      }
-      return ensureTerminalReady();
-    })();
-
-    try {
-      return await terminalRecoveryPromise;
-    } finally {
-      terminalRecoveryPromise = null;
-    }
+    terminalSocket.closeSocket();
+    terminalSessionId.value = "";
+    terminalStatus.value = "";
+    terminalCommandPreview.value = "";
+    terminalError.value = "Terminal session disappeared. Start Codex manually to open a new terminal.";
+    return false;
   }
 
   function detachTerminal() {
@@ -386,17 +329,10 @@ function useCodexTerminalSessionLifecycle({
 
   watch(visible, async (isVisible) => {
     if (!isVisible) {
-      disposeTerminalViewport?.({
-        preserveDisplay: true
-      });
       return;
     }
     await nextTick();
-    const ready = await setupTerminalUi?.();
-    if (ready) {
-      fitTerminal?.();
-      refreshTerminalOutput?.();
-    }
+    await setupTerminalUi?.();
     startTerminalWhenReady();
   });
 
@@ -416,7 +352,6 @@ function useCodexTerminalSessionLifecycle({
     detachTerminal,
     ensureTerminalReady,
     restartTerminal,
-    resizeTerminal,
     sendTerminalInput,
     showTerminalStartPanel,
     startTerminalWhenReady,

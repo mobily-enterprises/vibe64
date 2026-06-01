@@ -249,11 +249,8 @@ const canStartTerminal = computed(() => {
 });
 const {
   appendTerminalDisplay,
-  clearTerminalDisplay,
   disposeTerminalUi: disposeTerminalViewport,
-  fitTerminal,
   focusTerminal,
-  resetTerminal,
   setupTerminalUi,
   terminalFocused,
   terminalHost,
@@ -268,14 +265,7 @@ const {
     void sendTerminalData(data, {
       source: "user"
     });
-  },
-  onResize(size) {
-    if (!terminalLifecycle) {
-      return false;
-    }
-    return terminalLifecycle.resizeTerminal(size);
-  },
-  visible: computed(() => props.visible)
+  }
 });
 const {
   appendTerminalOutput,
@@ -283,7 +273,6 @@ const {
   clearCodexWorking,
   codexBusy,
   codexWorking,
-  getTerminalOutput,
   markCodexBusy,
   resetTerminalOutput,
   terminalStreaming,
@@ -318,7 +307,6 @@ terminalLifecycle = useCodexTerminalSessionLifecycle({
   canUseTerminal,
   clearCodexBusy,
   clearCodexWorking,
-  clearTerminalDisplay,
   clearTerminalOutput() {
     resetTerminalOutput();
   },
@@ -330,21 +318,10 @@ terminalLifecycle = useCodexTerminalSessionLifecycle({
     emit("session-update", payload);
   },
   expanded,
-  fitTerminal,
   onSessionChanged() {
     resetAttachmentDragState();
     clearAttachmentStatus();
   },
-  onTerminalRecovered() {
-    copyStatus.value = "Studio server restarted; reconnecting Codex.";
-    resetTerminalOutput({
-      emit: true
-    });
-  },
-  refreshTerminalOutput() {
-    writeTerminalOutput(getTerminalOutput());
-  },
-  resetTerminal,
   sessionId: terminalScopeId,
   setupTerminalUi,
   startTerminalSession: startTerminalSessionForScope,
@@ -481,7 +458,6 @@ async function focusWritableTerminalWhenShown(visible) {
   }
   await nextTick();
   if (await setupTerminalUi()) {
-    fitTerminal();
     focusTerminal();
     for (const delayMs of [50, 150, 300]) {
       globalThis.setTimeout(() => {
@@ -498,14 +474,6 @@ watch(serverTerminalSession, (terminal) => {
 }, {
   flush: "post",
   immediate: true
-});
-
-watch(() => props.displayMode, async (displayMode) => {
-  if (displayMode === "headless") {
-    return;
-  }
-  await nextTick();
-  fitTerminal();
 });
 
 watch(terminalDisplayActive, (visible, previousVisible) => {

@@ -1,22 +1,19 @@
-import { nextTick, ref, unref } from "vue";
-import { FitAddon } from "@xterm/addon-fit";
+import { nextTick, ref } from "vue";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 
+const CODEX_TERMINAL_COLS = 100;
+const CODEX_TERMINAL_ROWS = 28;
 const CODEX_TERMINAL_SCROLLBACK_LINES = 50000;
 
 function useCodexTerminalViewport({
-  expanded,
-  onData,
-  onResize,
-  visible
+  onData
 } = {}) {
   const terminalHost = ref(null);
   const terminalFocused = ref(false);
   const terminalSelectedText = ref("");
 
   let terminalInstance = null;
-  let terminalFitAddon = null;
   let terminalDataDisposable = null;
   let terminalSelectionDisposable = null;
   let terminalFocusInHandler = null;
@@ -24,13 +21,7 @@ function useCodexTerminalViewport({
   let terminalDocumentFocusInHandler = null;
   let terminalOutsidePointerHandler = null;
   let terminalWindowBlurHandler = null;
-  let terminalResizeHandler = null;
-  let terminalResizeObserver = null;
-  let pendingFitFrame = null;
   let terminalSetupPromise = null;
-  let terminalReportedCols = 0;
-  let terminalReportedRows = 0;
-  let pendingTerminalDisplay = "";
 
   function updateSelection() {
     terminalSelectedText.value = terminalInstance?.hasSelection?.()
@@ -65,90 +56,12 @@ function useCodexTerminalViewport({
     blurTerminal();
   }
 
-  function terminalCanFit() {
-    return Boolean(terminalInstance && terminalFitAddon && unref(expanded) && unref(visible));
-  }
-
-  function fitTerminal(options = {}) {
-    if (!terminalCanFit()) {
-      return;
-    }
-    terminalFitAddon.fit();
-    reportTerminalSize(options);
-    terminalInstance.refresh?.(0, Math.max(0, terminalInstance.rows - 1));
-  }
-
-  function markTerminalSizeReported({
-    cols,
-    rows
-  } = {}) {
-    terminalReportedCols = cols;
-    terminalReportedRows = rows;
-  }
-
-  function resetReportedTerminalSize() {
-    terminalReportedCols = 0;
-    terminalReportedRows = 0;
-  }
-
-  function reportTerminalSize({
-    forceResize = false
-  } = {}) {
-    const cols = Number(terminalInstance?.cols || 0);
-    const rows = Number(terminalInstance?.rows || 0);
-    if (!cols || !rows || (!forceResize && cols === terminalReportedCols && rows === terminalReportedRows)) {
-      return;
-    }
-    const size = {
-      cols,
-      rows
-    };
-    const resizeResult = onResize?.(size);
-    if (resizeResult && typeof resizeResult.then === "function") {
-      resizeResult.then((resized) => {
-        if (resized !== false) {
-          markTerminalSizeReported(size);
-        }
-      }).catch(() => null);
-      return;
-    }
-    if (resizeResult !== false) {
-      markTerminalSizeReported(size);
-    }
-  }
-
-  function cancelScheduledFit() {
-    if (pendingFitFrame === null) {
-      return;
-    }
-    const cancelFrame = typeof window.cancelAnimationFrame === "function"
-      ? window.cancelAnimationFrame.bind(window)
-      : window.clearTimeout.bind(window);
-    cancelFrame(pendingFitFrame);
-    pendingFitFrame = null;
-  }
-
-  function scheduleTerminalFit() {
-    if (pendingFitFrame !== null || !terminalCanFit()) {
-      return;
-    }
-    const requestFrame = typeof window.requestAnimationFrame === "function"
-      ? window.requestAnimationFrame.bind(window)
-      : window.setTimeout.bind(window);
-    pendingFitFrame = requestFrame(() => {
-      pendingFitFrame = null;
-      fitTerminal();
-    });
-  }
-
   function resetTerminal() {
-    terminalInstance?.reset?.();
-    pendingTerminalDisplay = "";
-    resetReportedTerminalSize();
+    return undefined;
   }
 
   function clearTerminalDisplay() {
-    pendingTerminalDisplay = "";
+    return undefined;
   }
 
   function scrollTerminalToBottom() {
@@ -162,19 +75,11 @@ function useCodexTerminalViewport({
     }
     if (terminalInstance) {
       terminalInstance.write(chunk, scrollTerminalToBottom);
-      return;
     }
-    pendingTerminalDisplay += chunk;
   }
 
   function writeTerminalDisplay(output) {
-    const displayOutput = String(output || "");
-    pendingTerminalDisplay = displayOutput;
-    if (!terminalInstance) {
-      return;
-    }
-    terminalInstance.reset();
-    terminalInstance.write(displayOutput, scrollTerminalToBottom);
+    appendTerminalDisplay(output);
   }
 
   async function setupTerminalUi() {
@@ -191,22 +96,18 @@ function useCodexTerminalViewport({
         return false;
       }
       terminalInstance = new Terminal({
+        cols: CODEX_TERMINAL_COLS,
         cursorBlink: true,
         fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
         fontSize: 13,
+        rows: CODEX_TERMINAL_ROWS,
         scrollback: CODEX_TERMINAL_SCROLLBACK_LINES,
         theme: {
           background: "#101216",
           foreground: "#f5f7fb"
         }
       });
-      terminalFitAddon = new FitAddon();
-      terminalInstance.loadAddon(terminalFitAddon);
       terminalInstance.open(terminalHost.value);
-      if (unref(expanded) && unref(visible)) {
-        fitTerminal();
-      }
-      writeTerminalDisplay(pendingTerminalDisplay);
       terminalDataDisposable = terminalInstance.onData((data) => {
         onData?.(data);
       });
@@ -229,12 +130,6 @@ function useCodexTerminalViewport({
       document.addEventListener("pointerdown", terminalOutsidePointerHandler, true);
       window.addEventListener("blur", terminalWindowBlurHandler);
       terminalSelectionDisposable = terminalInstance.onSelectionChange(updateSelection);
-      terminalResizeHandler = scheduleTerminalFit;
-      window.addEventListener("resize", terminalResizeHandler);
-      if (typeof ResizeObserver !== "undefined") {
-        terminalResizeObserver = new ResizeObserver(scheduleTerminalFit);
-        terminalResizeObserver.observe(terminalHost.value);
-      }
       return true;
     })();
 
@@ -286,20 +181,9 @@ function useCodexTerminalViewport({
       window.removeEventListener("blur", terminalWindowBlurHandler);
       terminalWindowBlurHandler = null;
     }
-    if (terminalResizeHandler) {
-      window.removeEventListener("resize", terminalResizeHandler);
-      terminalResizeHandler = null;
-    }
-    terminalResizeObserver?.disconnect?.();
-    terminalResizeObserver = null;
-    cancelScheduledFit();
     terminalInstance?.dispose?.();
     terminalInstance = null;
-    terminalFitAddon = null;
-    resetReportedTerminalSize();
-    if (!preserveDisplay) {
-      pendingTerminalDisplay = "";
-    }
+    void preserveDisplay;
     terminalFocused.value = false;
     terminalSelectedText.value = "";
   }
@@ -308,7 +192,6 @@ function useCodexTerminalViewport({
     appendTerminalDisplay,
     clearTerminalDisplay,
     disposeTerminalUi,
-    fitTerminal,
     focusTerminal,
     resetTerminal,
     setupTerminalUi,

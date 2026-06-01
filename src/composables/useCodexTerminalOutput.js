@@ -122,9 +122,6 @@ function useCodexTerminalOutput({
     const nextOutput = String(output || "");
     terminalOutput = nextOutput;
     noteTerminalOutput();
-    if (displayIsActive()) {
-      writeDisplay?.(nextOutput);
-    }
   }
 
   function appendTerminalOutput(chunk) {
@@ -142,7 +139,7 @@ function useCodexTerminalOutput({
       appendDisplay(outputChunk);
       return;
     }
-    writeDisplay?.(terminalOutput);
+    writeDisplay?.(outputChunk);
   }
 
   function resetTerminalOutput({

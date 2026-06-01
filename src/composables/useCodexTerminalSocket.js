@@ -159,22 +159,10 @@ function useCodexTerminalSocket({
     });
   }
 
-  async function resize({
-    cols,
-    rows
-  } = {}) {
-    await sendSocketMessage({
-      cols,
-      rows,
-      type: "resize"
-    });
-  }
-
   return {
     clearReconnect,
     closeSocket,
     connect,
-    resize,
     scheduleReconnect,
     send
   };

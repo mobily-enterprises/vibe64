@@ -31,7 +31,7 @@ describe("useCodexTerminalOutput", () => {
     expect(terminalOutput.getTerminalOutput()).toBe("first second");
   });
 
-  it("falls back to direct full writes when append display is unavailable", () => {
+  it("falls back to direct chunk writes when append display is unavailable", () => {
     const writeDisplay = vi.fn();
     const terminalOutput = useCodexTerminalOutput({
       writeDisplay
@@ -41,10 +41,11 @@ describe("useCodexTerminalOutput", () => {
     terminalOutput.appendTerminalOutput("second");
 
     expect(writeDisplay).toHaveBeenCalledTimes(2);
-    expect(writeDisplay).toHaveBeenLastCalledWith("first second");
+    expect(writeDisplay).toHaveBeenNthCalledWith(1, "first ");
+    expect(writeDisplay).toHaveBeenNthCalledWith(2, "second");
   });
 
-  it("writes snapshots immediately", () => {
+  it("stores snapshots without replaying them into xterm", () => {
     const writeDisplay = vi.fn();
     const terminalOutput = useCodexTerminalOutput({
       writeDisplay
@@ -52,11 +53,11 @@ describe("useCodexTerminalOutput", () => {
 
     terminalOutput.writeTerminalOutput("snapshot");
 
-    expect(writeDisplay).toHaveBeenCalledTimes(1);
-    expect(writeDisplay).toHaveBeenLastCalledWith("snapshot");
+    expect(writeDisplay).not.toHaveBeenCalled();
+    expect(terminalOutput.getTerminalOutput()).toBe("snapshot");
   });
 
-  it("stores output while display is inactive and replays it when asked", () => {
+  it("stores output while display is inactive without replaying it when asked", () => {
     const displayActive = ref(false);
     const writeDisplay = vi.fn();
     const terminalOutput = useCodexTerminalOutput({
@@ -71,8 +72,8 @@ describe("useCodexTerminalOutput", () => {
     displayActive.value = true;
     terminalOutput.writeTerminalOutput(terminalOutput.getTerminalOutput());
 
-    expect(writeDisplay).toHaveBeenCalledTimes(1);
-    expect(writeDisplay).toHaveBeenLastCalledWith("hidden output");
+    expect(writeDisplay).not.toHaveBeenCalled();
+    expect(terminalOutput.getTerminalOutput()).toBe("hidden output");
   });
 
   it("keeps terminal-control bytes exactly as received", () => {

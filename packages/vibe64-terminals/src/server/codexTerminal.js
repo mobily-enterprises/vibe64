@@ -112,6 +112,7 @@ const CODEX_THREAD_CAPTURE_TIMEOUT_MS = DEBUG_PROMPTS_ENABLED ? 10 * 60_000 : 30
 const CODEX_SESSION_MODEL = "gpt-5.5";
 const CODEX_SESSION_REASONING_EFFORT = "xhigh";
 const CODEX_BOOTSTRAP_TASK_ID = "codex_bootstrap";
+const CODEX_SESSION_TERMINAL_BOOTSTRAP_DISABLED = true;
 const START_CODEX_TERMINAL_CONTROL_ACTION = "start_codex_terminal";
 const MAX_OPEN_CODEX_TERMINALS = 3;
 const STUDIO_DAEMON_ID = crypto.randomUUID();
@@ -2301,6 +2302,39 @@ function createCodexTerminalController({
     };
   }
 
+  async function codexBootstrapDisabledResult(sessionId) {
+    const runtime = await projectService.createRuntime();
+    const session = await runtime.getSession(sessionId);
+    return {
+      ok: true,
+      sessionId,
+      ...codexState(session),
+      codexBootstrapDisabled: true,
+      codexPromptInjected: false,
+      codexSessionBriefingDelivered: false,
+      pendingCodexPromptInjected: false,
+      terminalSessionId: ""
+    };
+  }
+
+  async function startCodexTerminalWithoutBootstrap(sessionId) {
+    const terminalResponse = await startCodexTerminalSession(sessionId);
+    if (terminalResponse?.ok === false) {
+      return terminalResponse;
+    }
+    await publishSessionChanged(sessionId, {
+      reason: "codex-terminal-started-bootstrap-disabled"
+    });
+    return {
+      ...terminalResponse,
+      codexBootstrapDisabled: true,
+      codexPromptInjected: false,
+      codexSessionBriefingDelivered: false,
+      pendingCodexPromptInjected: false,
+      terminalSessionId: terminalResponse.terminalSessionId || terminalResponse.id || ""
+    };
+  }
+
   return Object.freeze({
     closeGlobalTerminal(terminalSessionId) {
       return closeTerminalSession(terminalSessionId, {
@@ -2363,6 +2397,10 @@ function createCodexTerminalController({
 
     async injectCodexPrompt(sessionId, handoff = {}) {
       return vibe64Result(async () => {
+        void handoff;
+        if (CODEX_SESSION_TERMINAL_BOOTSTRAP_DISABLED) {
+          return codexBootstrapDisabledResult(sessionId);
+        }
         return injectPromptIntoCodex(sessionId, handoff);
       });
     },
@@ -2395,6 +2433,9 @@ function createCodexTerminalController({
 
     async ensureThread(sessionId) {
       return vibe64Result(async () => {
+        if (CODEX_SESSION_TERMINAL_BOOTSTRAP_DISABLED) {
+          return codexBootstrapDisabledResult(sessionId);
+        }
         return injectLatestPendingCodexPrompt(
           sessionId,
           await ensureCodexThreadReady(sessionId)
@@ -2416,6 +2457,9 @@ function createCodexTerminalController({
 
     async startTerminal(sessionId) {
       return vibe64Result(async () => {
+        if (CODEX_SESSION_TERMINAL_BOOTSTRAP_DISABLED) {
+          return startCodexTerminalWithoutBootstrap(sessionId);
+        }
         const resumed = await resumePendingCodexPromptFromActiveTerminal(sessionId);
         if (resumed) {
           return resumed;

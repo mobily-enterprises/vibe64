@@ -14,6 +14,8 @@ import {
   terminalWorktreePath
 } from "./terminalShared.js";
 
+const CODEX_AFTER_COMMAND_THREAD_PREP_ENABLED = false;
+
 function createService({
   projectService,
   publishSessionChanged = {}
@@ -29,6 +31,9 @@ function createService({
   });
   const command = createCommandTerminalController({
     afterSuccessfulCommand: async ({ metadata = {}, session = {} } = {}) => {
+      if (!CODEX_AFTER_COMMAND_THREAD_PREP_ENABLED) {
+        return;
+      }
       if (!String(metadata.worktree_path || "").trim()) {
         return;
       }

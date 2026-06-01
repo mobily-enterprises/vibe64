@@ -20,6 +20,7 @@ import {
 import { inspectSessionDiff } from "./sessionDiff.js";
 
 const MAX_OPEN_VIBE64_SESSIONS = 5;
+const CODEX_PROMPT_HANDOFF_DELIVERY_ENABLED = false;
 const CLOSED_SESSION_STATUSES = new Set(["abandoned", "finished"]);
 const SESSION_ARCHIVE_QUERY = Object.freeze({
   ABANDONED: "abandoned",
@@ -228,6 +229,14 @@ async function deliverCodexPromptIfNeeded(terminalService, session = {}) {
   if (!handoff) {
     vibe64SessionDebugLog("server.service.deliverCodexPrompt.skipped", {
       reason: "no_handoff",
+      sessionId: String(session?.sessionId || "")
+    });
+    return session;
+  }
+  if (!CODEX_PROMPT_HANDOFF_DELIVERY_ENABLED) {
+    vibe64SessionDebugLog("server.service.deliverCodexPrompt.skipped", {
+      promptId: String(handoff.promptId || ""),
+      reason: "delivery_disabled",
       sessionId: String(session?.sessionId || "")
     });
     return session;
