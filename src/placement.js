@@ -17,3 +17,12 @@ addPlacement({
   order: 950,
   componentToken: "realtime.web.connection.indicator"
 });
+
+addPlacement({
+  id: "vibe64.session-info",
+  target: "vibe64.session-dashboard",
+  kind: "component",
+  surfaces: ["home"],
+  order: 100,
+  componentToken: "local.main.ui.vibe64-session-info-dashboard"
+});

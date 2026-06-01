@@ -481,9 +481,14 @@
 
         <div
           v-show="rightPaneTab === 'dashboard'"
-          class="studio-autopilot__right-pane-page studio-autopilot__right-pane-page--empty"
+          class="studio-autopilot__right-pane-page studio-autopilot__dashboard-pane"
           role="tabpanel"
-        />
+        >
+          <ShellOutlet
+            :context="dashboardPlacementContext"
+            target="vibe64-session-dashboard:items"
+          />
+        </div>
 
         <div
           v-show="rightPaneTab === 'shell'"
@@ -513,6 +518,7 @@
 
 <script setup>
 import { computed, nextTick, onMounted, proxyRefs, ref, watch } from "vue";
+import ShellOutlet from "@jskit-ai/shell-web/client/components/ShellOutlet";
 import {
   mdiAlertCircleOutline,
   mdiCheck,
@@ -547,6 +553,9 @@ import {
   useVibe64AutopilotComposer
 } from "@/composables/useVibe64AutopilotComposer.js";
 import {
+  provideVibe64SessionDashboardContext
+} from "@/composables/useVibe64SessionDashboardContext.js";
+import {
   useVibe64AutopilotController
 } from "@/composables/useVibe64AutopilotController.js";
 import {
@@ -578,6 +587,13 @@ import {
   currentStepWorkflowControls,
   workflowControlSourceAction
 } from "@/lib/vibe64WorkflowControlModel.js";
+import {
+  vibe64SessionFacts
+} from "@/lib/vibe64SessionPanelModel.js";
+import {
+  vibe64SessionStatusColor,
+  vibe64SessionStatusLabel
+} from "@/lib/vibe64SessionViewModel.js";
 
 // Autopilot workflow meaning belongs to the server. This component renders the
 // current presentation and dispatches the server-provided intents.
@@ -751,6 +767,20 @@ const stepInput = proxyRefs(useVibe64StepInputForm({
 
 const screenKind = computed(() => screenState.value.kind);
 const sessionId = computed(() => String(props.session?.sessionId || ""));
+const dashboardSessionContext = computed(() => ({
+  copyText: typeof props.page?.copyText === "function" ? props.page.copyText : null,
+  facts: vibe64SessionFacts(props.session || {}),
+  session: props.session || null,
+  sessionId: sessionId.value,
+  statusColor: vibe64SessionStatusColor(props.session?.status),
+  statusLabel: vibe64SessionStatusLabel(props.session?.status)
+}));
+const dashboardPlacementContext = computed(() => ({
+  hasSessionFacts: dashboardSessionContext.value.facts.length > 0,
+  sessionId: dashboardSessionContext.value.sessionId,
+  sessionStatus: String(props.session?.status || "")
+}));
+provideVibe64SessionDashboardContext(dashboardSessionContext);
 const workspacePaneValue = computed(() => normalizeWorkspacePane(props.workspacePane));
 const workspacePanelVisible = computed(() => workspacePaneValue.value !== "preview");
 const workspacePanelTitle = computed(() => workspacePanelCopy.value.title);
@@ -1578,8 +1608,12 @@ watch(workspacePaneValue, (pane) => {
   position: relative;
 }
 
-.studio-autopilot__right-pane-page--empty {
-  background: rgba(var(--v-theme-on-surface), 0.035);
+.studio-autopilot__dashboard-pane {
+  align-content: start;
+  gap: 0.75rem;
+  overflow-y: auto;
+  padding: 0.85rem;
+  scrollbar-gutter: stable;
 }
 
 .studio-autopilot__preview-launch {

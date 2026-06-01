@@ -1,6 +1,7 @@
 import MenuLinkItem from "/src/components/menus/MenuLinkItem.vue";
 import SurfaceAwareMenuLinkItem from "/src/components/menus/SurfaceAwareMenuLinkItem.vue";
 import TabLinkItem from "/src/components/menus/TabLinkItem.vue";
+import Vibe64SessionInfoDashboardElement from "/src/components/studio/vibe64-session/Vibe64SessionInfoDashboardElement.vue";
 import Vibe64TargetScriptsNavLink from "/src/components/studio/Vibe64TargetScriptsNavLink.vue";
 
 const mainClientComponents = [];
@@ -27,4 +28,5 @@ export {
 registerMainClientComponent("local.main.ui.menu-link-item", () => MenuLinkItem);
 registerMainClientComponent("local.main.ui.surface-aware-menu-link-item", () => SurfaceAwareMenuLinkItem);
 registerMainClientComponent("local.main.ui.tab-link-item", () => TabLinkItem);
+registerMainClientComponent("local.main.ui.vibe64-session-info-dashboard", () => Vibe64SessionInfoDashboardElement);
 registerMainClientComponent("local.main.ui.vibe64-target-scripts-nav-link", () => Vibe64TargetScriptsNavLink);

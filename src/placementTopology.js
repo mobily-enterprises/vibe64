@@ -126,3 +126,20 @@ addPlacementTopology({
     }
   }
 });
+
+addPlacementTopology({
+  id: "vibe64.session-dashboard",
+  description: "Dashboard items for the selected Vibe64 session.",
+  surfaces: ["home"],
+  variants: {
+    compact: {
+      outlet: "vibe64-session-dashboard:items"
+    },
+    medium: {
+      outlet: "vibe64-session-dashboard:items"
+    },
+    expanded: {
+      outlet: "vibe64-session-dashboard:items"
+    }
+  }
+});
