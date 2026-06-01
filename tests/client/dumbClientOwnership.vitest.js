@@ -50,4 +50,21 @@ describe("dumb Autopilot client ownership", () => {
     const source = readFileSync("src/components/studio/vibe64-session/Vibe64AutopilotView.vue", "utf8");
     expect(source).not.toContain("props.actions.goNext");
   });
+
+  it("keeps Autopilot conversation history out of response-preview replacement branches", () => {
+    const source = readFileSync("src/components/studio/vibe64-session/Vibe64AutopilotView.vue", "utf8");
+    expect(source).toContain(":activity-messages=\"chatActivityMessages\"");
+    expect(source).toContain("v-if=\"chatTakeoverVisible\"");
+    expect(source).not.toContain("v-else-if=\"responsePreviewVisible\"");
+  });
+
+  it("keeps the transient command spy tied to live or failed commands", () => {
+    const source = readFileSync("src/components/studio/vibe64-session/Vibe64AutopilotView.vue", "utf8");
+    const commandSpyVisible = source.match(/const commandSpyVisible = computed\(\(\) => Boolean\(([\s\S]*?)\n\)\);/u)?.[1] || "";
+    expect(commandSpyVisible).toContain("commandTerminalVisible.value");
+    expect(commandSpyVisible).toContain("commandRunning.value");
+    expect(commandSpyVisible).toContain("commandTerminalFailed.value");
+    expect(commandSpyVisible).not.toContain("commandPreview.value");
+    expect(commandSpyVisible).not.toContain("commandOutput.value");
+  });
 });

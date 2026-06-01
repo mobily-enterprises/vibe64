@@ -373,22 +373,23 @@ test("session service records workflow audit messages from action results", asyn
             async readConversationLog() {
               return conversationLog;
             },
-            async writeConversationUserMessage(_sessionId, { text }) {
+            async writeConversationSystemMessage(_sessionId, { text }) {
               const turn = {
                 assistant: null,
                 messages: [
                   {
                     at: "2026-05-25T01:02:03.000Z",
-                    role: "user",
+                    role: "system",
                     text
                   }
                 ],
-                turnId: "000001",
-                user: {
+                system: {
                   at: "2026-05-25T01:02:03.000Z",
-                  role: "user",
+                  role: "system",
                   text
-                }
+                },
+                turnId: "000001",
+                user: null
               };
               conversationLog.push(turn);
               return turn;
@@ -404,7 +405,7 @@ test("session service records workflow audit messages from action results", asyn
   const read = await service.readSessionConversationLog("session-1");
 
   assert.equal(read.ok, true);
-  assert.deepEqual(read.conversationLog.map((turn) => turn.user.text), [
+  assert.deepEqual(read.conversationLog.map((turn) => turn.system.text), [
     "Pull request draft accepted; creating GitHub pull request."
   ]);
 });

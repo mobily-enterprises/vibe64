@@ -1416,13 +1416,22 @@ async function withIntentAuditMessage(runtime, session = {}, selectedIntent = {}
   ) {
     return resultSession;
   }
-  const auditMessage = intentFieldAuditText(fields) ||
-    normalizeText(selectedIntent.auditMessage) ||
+  const userMessage = intentFieldAuditText(fields);
+  if (userMessage && typeof runtime?.store?.writeConversationUserMessage === "function") {
+    await runtime.store.writeConversationUserMessage(session.sessionId, {
+      text: userMessage
+    });
+    return {
+      ...await runtime.getSession(session.sessionId),
+      ...(resultSession?.actionResult ? { actionResult: resultSession.actionResult } : {})
+    };
+  }
+  const auditMessage = normalizeText(selectedIntent.auditMessage) ||
     sentenceFromLabel(selectedIntent.label);
-  if (!auditMessage || typeof runtime?.store?.writeConversationUserMessage !== "function") {
+  if (!auditMessage || typeof runtime?.store?.writeConversationSystemMessage !== "function") {
     return resultSession;
   }
-  await runtime.store.writeConversationUserMessage(session.sessionId, {
+  await runtime.store.writeConversationSystemMessage(session.sessionId, {
     text: auditMessage
   });
   return {

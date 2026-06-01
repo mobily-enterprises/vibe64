@@ -76,13 +76,13 @@ function actionRunsInCommandTerminal(action = {}) {
   return action.dispatchRoute === ACTION_DISPATCH_ROUTES.COMMAND_TERMINAL || action.type === "command";
 }
 
-async function recordCommandAuditMessage(runtime, sessionId = "", action = {}) {
-  const auditMessage = normalizeText(action.auditMessage);
-  if (!auditMessage || typeof runtime?.store?.writeConversationUserMessage !== "function") {
+async function recordCommandSystemMessage(runtime, sessionId = "", message = "") {
+  const text = normalizeText(message);
+  if (!text || typeof runtime?.store?.writeConversationSystemMessage !== "function") {
     return null;
   }
-  return runtime.store.writeConversationUserMessage(sessionId, {
-    text: auditMessage
+  return runtime.store.writeConversationSystemMessage(sessionId, {
+    text
   });
 }
 
@@ -359,6 +359,11 @@ async function writeActionTerminalResult({
   if (typeof runtime.recordCommandActionFinished === "function") {
     await runtime.recordCommandActionFinished(sessionForWrite, action.id, actionResult);
   }
+  await recordCommandSystemMessage(
+    runtime,
+    session.sessionId,
+    completed ? action.auditMessage || message : message
+  );
   const advancedSession = await advanceSessionAfterSuccessfulCommand({
     advanceOnSuccess,
     completed,
@@ -1062,9 +1067,6 @@ function createCommandTerminalController({
                 message: String(terminal.error || "Command terminal could not start."),
                 status: "blocked"
               });
-            }
-            if (terminal?.ok !== false) {
-              await recordCommandAuditMessage(runtime, sessionId, action);
             }
             vibe64SessionDebugLog("server.commandTerminal.start.done", {
               actionId: action.id,

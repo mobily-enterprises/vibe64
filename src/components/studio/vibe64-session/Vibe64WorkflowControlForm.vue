@@ -208,6 +208,19 @@ function submitFromButton() {
   min-height: 5.4rem;
 }
 
+.vibe64-workflow-control-form :deep(.studio-autopilot-prompt-textarea .v-field) {
+  border-radius: 18px;
+}
+
+.vibe64-workflow-control-form :deep(.studio-autopilot-prompt-textarea .v-field__input) {
+  min-height: 3.25rem;
+  padding-block: 0.45rem;
+}
+
+.vibe64-workflow-control-form :deep(.studio-autopilot-prompt-textarea .v-field__input textarea) {
+  min-height: 2.3rem;
+}
+
 .vibe64-workflow-control-form__actions,
 .vibe64-workflow-control-form__submit-actions,
 .vibe64-workflow-control-form__workflow-actions {

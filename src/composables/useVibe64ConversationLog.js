@@ -35,12 +35,14 @@ function normalizeConversationTurn(turn = {}, index = 0) {
   }
   const user = normalizeConversationMessage(turn.user);
   const assistant = normalizeConversationMessage(turn.assistant);
-  if (!user && !assistant) {
+  const system = normalizeConversationMessage(turn.system);
+  if (!system && !user && !assistant) {
     return null;
   }
   return {
     assistant,
-    messages: [user, assistant].filter(Boolean),
+    messages: [system, user, assistant].filter(Boolean),
+    ...(system ? { system } : {}),
     turnId: String(turn.turnId || index + 1).trim(),
     user
   };

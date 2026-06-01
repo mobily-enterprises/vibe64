@@ -110,26 +110,30 @@ function conversationRequestText(input = {}) {
   );
 }
 
-function shouldRecordConversationUserMessage(actionResult = {}) {
-  return actionResult?.recordsConversationTurn === true || Boolean(normalizedInputText(actionResult?.auditMessage));
-}
-
-async function recordConversationUserMessage(runtime, sessionId, {
+async function recordConversationMessage(runtime, sessionId, {
   actionResult = {},
   input = {}
 } = {}) {
-  if (!shouldRecordConversationUserMessage(actionResult)) {
-    return null;
+  const inputText = conversationRequestText(input) || conversationRequestText(actionResult?.input);
+  const auditText = normalizedInputText(actionResult?.auditMessage);
+  const userText = inputText || (actionResult?.recordsConversationTurn === true ? auditText : "");
+  if (userText) {
+    if (typeof runtime?.store?.writeConversationUserMessage !== "function") {
+      return null;
+    }
+    return runtime.store.writeConversationUserMessage(sessionId, {
+      text: userText
+    });
   }
-  const text = conversationRequestText(input) ||
-    conversationRequestText(actionResult?.input) ||
-    normalizedInputText(actionResult?.auditMessage);
-  if (!text || typeof runtime?.store?.writeConversationUserMessage !== "function") {
-    return null;
+  if (
+    auditText &&
+    typeof runtime?.store?.writeConversationSystemMessage === "function"
+  ) {
+    return runtime.store.writeConversationSystemMessage(sessionId, {
+      text: auditText
+    });
   }
-  return runtime.store.writeConversationUserMessage(sessionId, {
-    text
-  });
+  return null;
 }
 
 async function sessionWithLatestRevision(runtime, session = {}) {
@@ -812,7 +816,7 @@ function createService({
           await assertVibe64SetupReady(setupServices);
           const runtime = await projectService.createRuntime();
           let session = await runtime.runAction(sessionId, actionId, input);
-          const conversationTurn = await recordConversationUserMessage(runtime, sessionId, {
+          const conversationTurn = await recordConversationMessage(runtime, sessionId, {
             actionResult: session.actionResult,
             input
           });
@@ -864,7 +868,7 @@ function createService({
           await assertVibe64SetupReady(setupServices);
           const runtime = await projectService.createRuntime();
           let session = await runtime.runIntent(sessionId, intentId, input);
-          const conversationTurn = await recordConversationUserMessage(runtime, sessionId, {
+          const conversationTurn = await recordConversationMessage(runtime, sessionId, {
             actionResult: session.actionResult,
             input
           });

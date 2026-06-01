@@ -3,6 +3,7 @@ import {
   mdiCodeBraces,
   mdiGithub,
   mdiMessagePlusOutline,
+  mdiPackageVariantClosed,
   mdiRobotOutline,
   mdiSync,
   mdiUndoVariant
@@ -146,6 +147,23 @@ describe("Vibe64 session panel model", () => {
       { canRewind: true, id: "worktree_created", state: "done" },
       { canRewind: false, id: "plan_and_execute", state: "current" }
     ]);
+  });
+
+  it("uses a package icon for dependency workflow steps", () => {
+    const rows = buildVibe64TimelineSteps({
+      currentStep: "dependencies_installed",
+      status: "active",
+      stepDefinitions: [
+        {
+          id: "dependencies_installed",
+          index: 0,
+          label: "Install dependencies",
+          status: "current"
+        }
+      ]
+    });
+
+    expect(rows[0].icon).toBe(mdiPackageVariantClosed);
   });
 
   it("builds Autopilot navigation from the full workflow", () => {

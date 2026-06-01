@@ -319,6 +319,9 @@ test("vibe64 session store persists conversation turns as one file per message",
     await store.writeConversationUserMessage("conversation_log", {
       text: "Keep it simple."
     });
+    await store.writeConversationSystemMessage("conversation_log", {
+      text: "Worktree created."
+    });
 
     const paths = resolveVibe64SessionPaths({
       sessionId: "conversation_log",
@@ -326,7 +329,7 @@ test("vibe64 session store persists conversation turns as one file per message",
     });
     const turnIds = await readdir(paths.conversationLogRoot);
 
-    assert.deepEqual(turnIds.sort(), ["000001", "000002"]);
+    assert.deepEqual(turnIds.sort(), ["000001", "000002", "000003"]);
     assert.deepEqual((await readdir(path.join(paths.conversationLogRoot, "000001"))).sort(), [
       "assistant.20260516T010203456Z.md",
       "user.20260516T010203456Z.md"
@@ -372,6 +375,23 @@ test("vibe64 session store persists conversation turns as one file per message",
           role: "user",
           text: "Keep it simple."
         }
+      },
+      {
+        assistant: null,
+        messages: [
+          {
+            at: "2026-05-16T01:02:03.456Z",
+            role: "system",
+            text: "Worktree created."
+          }
+        ],
+        system: {
+          at: "2026-05-16T01:02:03.456Z",
+          role: "system",
+          text: "Worktree created."
+        },
+        turnId: "000003",
+        user: null
       }
     ]);
   });

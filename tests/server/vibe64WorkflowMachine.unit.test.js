@@ -1336,7 +1336,7 @@ test("vibe64 runtime records conversation audit turns for workflow actions and i
       stepId: initialReview.currentStep,
       stepStatus: initialReview.stepMachine.status
     });
-    assert.deepEqual((await runtime.store.readConversationLog("initial_review_audit")).map((turn) => turn.user.text), [
+    assert.deepEqual((await runtime.store.readConversationLog("initial_review_audit")).map((turn) => turn.system.text), [
       "Initial human review accepted."
     ]);
 
@@ -1349,7 +1349,7 @@ test("vibe64 runtime records conversation audit turns for workflow actions and i
       stepId: uiCheck.currentStep,
       stepStatus: uiCheck.stepMachine.status
     });
-    assert.deepEqual((await runtime.store.readConversationLog("ui_skip_audit")).map((turn) => turn.user.text), [
+    assert.deepEqual((await runtime.store.readConversationLog("ui_skip_audit")).map((turn) => turn.system.text), [
       "User interface check skipped."
     ]);
 
@@ -2314,7 +2314,7 @@ test("vibe64 runtime shows current-step actions from the workflow", async () => 
     assert.deepEqual(session.actions, [
       {
         adapterCapability: "create_worktree",
-        auditMessage: "Create worktree.",
+        auditMessage: "Worktree created.",
         disabledReason: "",
         dispatchRoute: "command-terminal",
         enabled: true,

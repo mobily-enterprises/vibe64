@@ -239,6 +239,7 @@ watch(currentStepLabel, () => {
   gap: 0.35rem;
   min-width: 0;
   padding: 0.38rem 0.45rem;
+  position: relative;
 }
 
 .studio-autopilot-nav__step--done {
@@ -331,7 +332,25 @@ watch(currentStepLabel, () => {
 .studio-autopilot-nav--icons .studio-autopilot-nav__step--current {
   background: rgba(var(--v-theme-warning), 0.12);
   border-color: rgba(var(--v-theme-warning), 0.54);
+  border-width: 2px;
+  box-shadow: 0 0 0 4px rgba(var(--v-theme-warning), 0.13);
   color: rgb(var(--v-theme-warning));
+  height: 2.35rem;
+  margin-inline: 0.08rem;
+  width: 2.35rem;
+}
+
+.studio-autopilot-nav--icons .studio-autopilot-nav__step--current::after {
+  background: rgb(var(--v-theme-warning));
+  border: 2px solid rgb(var(--v-theme-surface));
+  border-radius: 999px;
+  bottom: 0.12rem;
+  box-shadow: 0 0 0 2px rgba(var(--v-theme-warning), 0.18);
+  content: "";
+  height: 0.48rem;
+  position: absolute;
+  right: 0.12rem;
+  width: 0.48rem;
 }
 
 .studio-autopilot-nav--icons.studio-autopilot-nav--executing .studio-autopilot-nav__step--current .studio-autopilot-nav__step-icon {

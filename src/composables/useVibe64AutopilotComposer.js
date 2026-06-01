@@ -173,6 +173,21 @@ function useVibe64AutopilotComposer({
     return numberedQuestionSubmissionFields(questions, selectedControlValues.value, "conversationRequest");
   }
 
+  function syncSelectedControlWithCurrentControls() {
+    if (!selectedControl.value) {
+      return;
+    }
+    const updatedControl = currentControls.value.find((control) => control.id === selectedControl.value.id) || null;
+    if (updatedControl && controlHasInputFields(updatedControl)) {
+      selectedControl.value = updatedControl;
+      return;
+    }
+    if (isRunning.value && controlHasInputFields(selectedControl.value)) {
+      return;
+    }
+    clearSelectedControl();
+  }
+
   async function submitSelectedControl() {
     if (!canSubmitSelectedControl.value) {
       return false;
@@ -215,16 +230,14 @@ function useVibe64AutopilotComposer({
     immediate: true
   });
 
-  watch(currentControls, (updatedControls) => {
-    if (!selectedControl.value) {
-      return;
-    }
-    const updatedControl = updatedControls.find((control) => control.id === selectedControl.value.id) || null;
-    if (!updatedControl || !controlHasInputFields(updatedControl)) {
-      clearSelectedControl();
-      return;
-    }
-    selectedControl.value = updatedControl;
+  watch(currentControls, () => {
+    syncSelectedControlWithCurrentControls();
+  }, {
+    flush: "post"
+  });
+
+  watch(isRunning, () => {
+    syncSelectedControlWithCurrentControls();
   }, {
     flush: "post"
   });

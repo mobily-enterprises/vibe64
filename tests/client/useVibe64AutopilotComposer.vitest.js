@@ -167,6 +167,36 @@ describe("useVibe64AutopilotComposer", () => {
     expect(submitted.fields).not.toHaveProperty("__ui_question_2");
   });
 
+  it("keeps the submitted input visible while a turn is running", async () => {
+    const controls = ref([conversationControl()]);
+    const running = ref(false);
+    const composer = useVibe64AutopilotComposer({
+      controls,
+      conversationLog: ref({}),
+      onRunControl: async () => {
+        running.value = true;
+        controls.value = [];
+        return true;
+      },
+      primaryIntentId: ref("talk_to_codex"),
+      running
+    });
+
+    await nextTick();
+    composer.updateSelectedControlValue("conversationRequest", "Explain the app.");
+
+    expect(await composer.submitSelectedControl()).toBe(true);
+    await nextTick();
+
+    expect(composer.selectedControl.value?.id).toBe("talk_to_codex");
+    expect(composer.canSubmitSelectedControl.value).toBe(false);
+
+    running.value = false;
+    await nextTick();
+
+    expect(composer.selectedControl.value).toBeNull();
+  });
+
   it("does not infer numbered question behavior without server input metadata", async () => {
     const composer = useVibe64AutopilotComposer({
       controls: ref([conversationControl({

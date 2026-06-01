@@ -6,6 +6,7 @@ import {
   mdiGithub,
   mdiIdentifier,
   mdiMessagePlusOutline,
+  mdiPackageVariantClosed,
   mdiPlay,
   mdiProgressCheck,
   mdiRobotOutline,
@@ -155,7 +156,7 @@ function vibe64TimelineStepIcon(step = {}) {
     return mdiPlay;
   }
   if (id.includes("dependencies")) {
-    return mdiCodeBraces;
+    return mdiPackageVariantClosed;
   }
   if (id.includes("review") || id.includes("accepted")) {
     return mdiCheck;

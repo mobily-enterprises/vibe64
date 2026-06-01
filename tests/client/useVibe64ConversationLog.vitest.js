@@ -134,6 +134,38 @@ describe("useVibe64ConversationLog", () => {
     ]);
   });
 
+  it("keeps system turns distinct from user and assistant messages", () => {
+    expect(normalizeConversationLog({
+      conversationLog: [
+        {
+          system: {
+            role: "system",
+            text: "Worktree created."
+          },
+          turnId: "000001"
+        }
+      ]
+    })).toEqual([
+      {
+        assistant: null,
+        messages: [
+          {
+            at: "",
+            role: "system",
+            text: "Worktree created."
+          }
+        ],
+        system: {
+          at: "",
+          role: "system",
+          text: "Worktree created."
+        },
+        turnId: "000001",
+        user: null
+      }
+    ]);
+  });
+
   it("derives pending state from the step machine status", () => {
     expect(sessionIsAwaitingCodex({
       stepMachine: {
