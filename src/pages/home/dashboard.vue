@@ -133,14 +133,8 @@ onBeforeUnmount(() => {
 
 @media (min-width: 981px) {
   .studio-screen {
-    height:
-      calc(
-        100dvh
-        - var(--v-layout-top, 0px)
-        - var(--v-layout-bottom, 0px)
-        - 1.25rem
-        - env(safe-area-inset-bottom, 0px)
-      );
+    flex: 1 1 auto;
+    height: 100%;
     overflow: hidden;
   }
 

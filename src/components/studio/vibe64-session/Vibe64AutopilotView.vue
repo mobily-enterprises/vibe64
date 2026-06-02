@@ -1437,6 +1437,10 @@ watch(workspacePaneValue, (pane) => {
 }
 
 .studio-autopilot__chat-panel {
+  overflow: visible;
+}
+
+.studio-autopilot__chat-panel {
   display: grid;
   gap: 0.16rem;
   grid-template-rows: auto minmax(0, 1fr) auto auto auto;

@@ -407,6 +407,10 @@ watch(scrollTrigger, () => {
   padding-right: 0.15rem;
 }
 
+.studio-conversation-log__body > .studio-conversation-log__turn:first-child {
+  margin-top: auto;
+}
+
 .studio-conversation-log__turn {
   display: flex;
   flex: 0 0 auto;

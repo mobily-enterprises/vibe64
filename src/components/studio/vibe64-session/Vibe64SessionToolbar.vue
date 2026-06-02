@@ -239,15 +239,38 @@ function createSessionFromDefinition(definitionId = "") {
 
 .studio-ai-sessions__toolbar--compact .studio-ai-sessions__tabs {
   flex-wrap: nowrap;
-  gap: 0.32rem;
+  gap: 0.42rem;
 }
 
 .studio-ai-sessions__toolbar--compact {
-  transform: translateY(-0.25rem);
+  height: 1.5rem;
+  min-height: 1.5rem;
+  transform: translateY(-0.35rem);
 }
 
 .studio-ai-sessions__toolbar--compact .studio-ai-sessions__tab {
-  max-width: 9rem;
+  font-size: 1rem;
+  height: 2.25rem;
+  letter-spacing: 0;
+  max-width: 13.5rem;
+  min-height: 2.25rem;
+  padding-inline: 0.85rem;
+}
+
+.studio-ai-sessions__toolbar--compact .studio-ai-sessions__status-dot {
+  height: 0.68rem;
+  margin-right: 0.5rem;
+  width: 0.68rem;
+}
+
+.studio-ai-sessions__toolbar--compact .studio-ai-sessions__tab-abandon {
+  margin-left: 0.42rem;
+  min-height: 2.05rem;
+  min-width: 2.05rem;
+}
+
+.studio-ai-sessions__toolbar--compact .studio-ai-sessions__tab-abandon :deep(.v-icon) {
+  font-size: 1.3rem;
 }
 
 .studio-ai-sessions__toolbar--compact .studio-ai-sessions__create-button {

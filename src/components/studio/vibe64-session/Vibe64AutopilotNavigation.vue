@@ -35,6 +35,13 @@
           <span class="studio-autopilot-nav__step-icon">
             <v-icon :icon="stepIcon(step)" size="16" />
           </span>
+          <span
+            v-if="step.state === 'done'"
+            class="studio-autopilot-nav__step-done-check"
+            aria-hidden="true"
+          >
+            <v-icon :icon="mdiCheck" size="10" />
+          </span>
           <v-btn
             v-if="step.canRewind && !step.current"
             class="studio-autopilot-nav__step-rewind"
@@ -93,6 +100,7 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import {
+  mdiCheck,
   mdiCheckCircle,
   mdiChevronDown,
   mdiChevronUp,
@@ -305,6 +313,21 @@ watch(currentStepLabel, () => {
   border-color: rgba(var(--v-theme-success), 0.34);
 }
 
+.studio-autopilot-nav--icons .studio-autopilot-nav__step-done-check {
+  align-items: center;
+  background: rgb(var(--v-theme-success));
+  border: 2px solid rgb(var(--v-theme-surface));
+  border-radius: 999px;
+  bottom: -0.08rem;
+  color: rgb(var(--v-theme-on-success));
+  display: inline-flex;
+  height: 0.78rem;
+  justify-content: center;
+  position: absolute;
+  right: -0.08rem;
+  width: 0.78rem;
+}
+
 .studio-autopilot-nav--icons .studio-autopilot-nav__step--current {
   background: rgba(var(--v-theme-warning), 0.12);
   border-color: rgba(var(--v-theme-warning), 0.54);
@@ -314,6 +337,10 @@ watch(currentStepLabel, () => {
   height: 2.35rem;
   margin-inline: 0.02rem;
   width: 2.35rem;
+}
+
+.studio-autopilot-nav--icons .studio-autopilot-nav__step--current .studio-autopilot-nav__step-icon {
+  transform: scale(1.22);
 }
 
 .studio-autopilot-nav--icons .studio-autopilot-nav__step--current::after {

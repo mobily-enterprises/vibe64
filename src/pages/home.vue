@@ -10,7 +10,7 @@
 
 <script setup>
 import ShellLayout from "@/components/ShellLayout.vue";
-import { computed, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { RouterView, useRoute } from "vue-router";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
@@ -27,6 +27,7 @@ import {
 import { useStudioShellDrawer } from "@/composables/useStudioShellDrawer.js";
 
 const route = useRoute();
+const HOME_SHELL_CLASS = "studio-home-shell-active";
 const pageTitle = ref("");
 const projectSelectionResource = useEndpointResource({
   client: studioHttpClient,
@@ -41,6 +42,13 @@ const targetFolderName = computed(() => finalPathSegment(targetRoot.value));
 useStudioShellDrawer({
   hidden: true
 });
+
+function setHomeShellActive(active) {
+  if (typeof document === "undefined") {
+    return;
+  }
+  document.body.classList.toggle(HOME_SHELL_CLASS, Boolean(active));
+}
 
 function finalPathSegment(pathValue = "") {
   const normalizedPath = String(pathValue || "").trim().replace(/[\\/]+$/u, "");
@@ -63,6 +71,14 @@ watch(
   },
   { immediate: true }
 );
+
+onMounted(() => {
+  setHomeShellActive(true);
+});
+
+onBeforeUnmount(() => {
+  setHomeShellActive(false);
+});
 </script>
 
 <template>
