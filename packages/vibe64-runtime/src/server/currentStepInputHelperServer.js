@@ -12,6 +12,7 @@ import {
 const HELPER_SOCKET_CONTAINER_DIR = "/vibe64-helper";
 const HELPER_SOCKET_NAME = `current-step-input-${process.pid}.sock`;
 const HELPER_SCRIPT_NAME = "vibe64-current-step-input.mjs";
+const TERMINAL_CHAT_HELPER_SCRIPT_NAME = "vibe64-terminal-chat.mjs";
 const MAX_HELPER_BODY_BYTES = 128 * 1024;
 const TOKEN_SECRET = randomBytes(32);
 const helperServers = new Map();
@@ -52,6 +53,10 @@ function helperSocketContainerPath() {
 
 function helperScriptHostPath(session = {}) {
   return path.join(path.resolve(session.sessionRoot), "helpers", HELPER_SCRIPT_NAME);
+}
+
+function terminalChatHelperScriptHostPath(session = {}) {
+  return path.join(path.resolve(session.sessionRoot), "helpers", TERMINAL_CHAT_HELPER_SCRIPT_NAME);
 }
 
 function helperRequestToken(request) {
@@ -188,13 +193,111 @@ try {
 `;
 }
 
+function terminalChatHelperScriptSource() {
+  return `#!/usr/bin/env node
+import http from "node:http";
+import process from "node:process";
+
+function readStdin() {
+  return new Promise((resolve, reject) => {
+    let text = "";
+    process.stdin.setEncoding("utf8");
+    process.stdin.on("data", (chunk) => {
+      text += chunk;
+    });
+    process.stdin.once("error", reject);
+    process.stdin.once("end", () => resolve(text));
+  });
+}
+
+async function payloadTextFromArgs(args) {
+  const jsonIndex = args.indexOf("--json");
+  if (jsonIndex >= 0) {
+    const nextArg = args[jsonIndex + 1] || "";
+    return nextArg && !nextArg.startsWith("--") ? nextArg : readStdin();
+  }
+  return readStdin();
+}
+
+function parsePayload(text) {
+  try {
+    const parsed = JSON.parse(String(text || "").trim() || "{}");
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    throw new Error("Usage: vibe64-terminal-chat --json '{\\"request\\":\\"...\\",\\"response\\":\\"...\\"}' or pipe JSON on stdin.");
+  }
+}
+
+function postJsonToSocket({ payload, socketPath, token }) {
+  const body = JSON.stringify(payload);
+  return new Promise((resolve, reject) => {
+    const request = http.request({
+      headers: {
+        Authorization: \`Bearer \${token}\`,
+        "Content-Length": Buffer.byteLength(body),
+        "Content-Type": "application/json"
+      },
+      method: "POST",
+      path: "/terminal-chat/exchange",
+      socketPath
+    }, (response) => {
+      let text = "";
+      response.setEncoding("utf8");
+      response.on("data", (chunk) => {
+        text += chunk;
+      });
+      response.once("end", () => resolve({
+        statusCode: response.statusCode,
+        text
+      }));
+    });
+    request.once("error", reject);
+    request.end(body);
+  });
+}
+
+const socketPath = process.env.VIBE64_TERMINAL_CHAT_SOCKET || "";
+const token = process.env.VIBE64_TERMINAL_CHAT_TOKEN || "";
+const sessionId = process.env.VIBE64_TERMINAL_CHAT_SESSION || "";
+
+try {
+  if (!socketPath || !token || !sessionId) {
+    throw new Error("Vibe64 terminal chat helper environment is not available.");
+  }
+
+  const payload = {
+    ...parsePayload(await payloadTextFromArgs(process.argv.slice(2))),
+    sessionId,
+    source: "codex-terminal"
+  };
+  const response = await postJsonToSocket({
+    payload,
+    socketPath,
+    token
+  });
+  process.stdout.write(response.text);
+  if (Number(response.statusCode) >= 400) {
+    process.exitCode = 1;
+  }
+} catch (error) {
+  process.stderr.write(\`\${error?.message || error}\\n\`);
+  process.exitCode = 1;
+}
+`;
+}
+
 function helperEnvironment(session = {}, targetRoot = "") {
   const scriptPath = helperScriptHostPath(session);
+  const terminalChatScriptPath = terminalChatHelperScriptHostPath(session);
   return {
     VIBE64_CURRENT_STEP_INPUT_HELPER: scriptPath,
     VIBE64_CURRENT_STEP_INPUT_SESSION: session.sessionId,
     VIBE64_CURRENT_STEP_INPUT_SOCKET: helperSocketContainerPath(targetRoot),
-    VIBE64_CURRENT_STEP_INPUT_TOKEN: currentStepInputToken(session.sessionId)
+    VIBE64_CURRENT_STEP_INPUT_TOKEN: currentStepInputToken(session.sessionId),
+    VIBE64_TERMINAL_CHAT_HELPER: terminalChatScriptPath,
+    VIBE64_TERMINAL_CHAT_SESSION: session.sessionId,
+    VIBE64_TERMINAL_CHAT_SOCKET: helperSocketContainerPath(targetRoot),
+    VIBE64_TERMINAL_CHAT_TOKEN: currentStepInputToken(session.sessionId)
   };
 }
 
@@ -211,6 +314,16 @@ async function writeHelperScript(session = {}) {
     recursive: true
   });
   await writeFile(scriptPath, helperScriptSource(), "utf8");
+  await chmod(scriptPath, 0o755);
+  return scriptPath;
+}
+
+async function writeTerminalChatHelperScript(session = {}) {
+  const scriptPath = terminalChatHelperScriptHostPath(session);
+  await mkdir(path.dirname(scriptPath), {
+    recursive: true
+  });
+  await writeFile(scriptPath, terminalChatHelperScriptSource(), "utf8");
   await chmod(scriptPath, 0o755);
   return scriptPath;
 }
@@ -234,7 +347,7 @@ async function ensureHelperServer({
   });
 
   const server = createServer(async (request, response) => {
-    if (request.method !== "POST" || request.url !== "/current-step/input") {
+    if (request.method !== "POST" || !["/current-step/input", "/terminal-chat/exchange"].includes(request.url)) {
       sendJson(response, 404, {
         ok: false,
         errors: [
@@ -264,7 +377,9 @@ async function ensureHelperServer({
       }
 
       const runtime = await projectService.createRuntime();
-      const result = await runtime.submitCurrentStepInput(sessionId, input);
+      const result = request.url === "/terminal-chat/exchange"
+        ? await runtime.appendTerminalChatExchange(sessionId, input)
+        : await runtime.submitCurrentStepInput(sessionId, input);
       await onSessionChanged(result?.sessionId || sessionId);
       const statusCode = vibe64StatusCode(result);
       sendJson(response, statusCode, statusCode >= 400
@@ -303,6 +418,7 @@ async function prepareCurrentStepInputHelper({
     targetRoot
   });
   await writeHelperScript(session);
+  await writeTerminalChatHelperScript(session);
   return {
     env: helperEnvironment(session, targetRoot),
     mount: helperMount(targetRoot)

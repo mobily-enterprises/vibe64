@@ -558,6 +558,62 @@ test("Vibe64 current-step helper accepts --json with stdin payload", async () =>
   });
 });
 
+test("Vibe64 terminal chat helper mirrors direct terminal exchanges into the conversation log", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "maintenance_conversation",
+      sessionId: "terminal_chat_helper",
+      workflowDefinition: maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
+    });
+    const projectService = projectServiceForRuntime(runtime);
+    const session = await runtime.getSession("terminal_chat_helper");
+    const changedSessionIds = [];
+    const helper = await prepareCurrentStepInputHelper({
+      onSessionChanged: async (sessionId) => {
+        changedSessionIds.push(sessionId);
+      },
+      projectService,
+      session,
+      targetRoot
+    });
+
+    const result = await runNodeScript(helper.env.VIBE64_TERMINAL_CHAT_HELPER, [
+      "--json",
+      JSON.stringify({
+        request: "This came from the Codex terminal.",
+        response: "This answer should be mirrored into Vibe64 chat."
+      })
+    ], {
+      ...helper.env,
+      VIBE64_TERMINAL_CHAT_SOCKET: helperSocketHostPath(targetRoot)
+    });
+
+    assert.equal(result.code, 0, result.stderr || result.stdout);
+    const response = JSON.parse(result.stdout);
+    assert.deepEqual(response, {
+      ok: true,
+      sessionId: "terminal_chat_helper",
+      currentStep: "maintenance_conversation",
+      stepStatus: "ready",
+      status: "active"
+    });
+    const conversationLog = await runtime.store.readConversationLog("terminal_chat_helper");
+    assert.deepEqual(conversationLog.map((turn) => [
+      turn.user?.text,
+      turn.assistant?.text
+    ]), [
+      [
+        "This came from the Codex terminal.",
+        "This answer should be mirrored into Vibe64 chat."
+      ]
+    ]);
+    assert.deepEqual(changedSessionIds, ["terminal_chat_helper"]);
+  });
+});
+
 test("Vibe64 current-step helper rejects stale state", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = new Vibe64SessionRuntime({

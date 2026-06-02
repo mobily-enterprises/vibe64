@@ -264,7 +264,13 @@ function currentStepInputHelperBriefing() {
     "- The current values are listed in each Vibe64 prompt as current step and step status.",
     "- Use `fields` for structured form values, `message` for questions to the user, and `text` for plain user responses.",
     "- In interactive Vibe64 conversation steps, submit every user-visible response through this helper; a terminal-only response is incomplete.",
-    "- If the helper reports Reload state or a state mismatch, stop immediately; Vibe64 will show the current state."
+    "- If the helper reports Reload state or a state mismatch, stop immediately; Vibe64 will show the current state.",
+    "",
+    "Vibe64 terminal chat mirror helper:",
+    "- Command: node \"$VIBE64_TERMINAL_CHAT_HELPER\"",
+    "- If you later receive a user prompt that does not include `VIBE64_ROUTED_TURN`, treat it as direct Codex terminal input.",
+    "- For direct terminal input, answer normally and best-effort call this helper with `request` and `response` fields.",
+    "- This helper only mirrors the exchange into Vibe64 chat; it does not advance workflow state."
   ].join("\n");
 }
 

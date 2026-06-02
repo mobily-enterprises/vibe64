@@ -556,6 +556,7 @@ function promptWithConversationTurnContext({
   return [
     [
       "Vibe64 interactive conversation turn:",
+      "VIBE64_ROUTED_TURN: yes",
       workflowContextLine("action", action.label || action.id),
       workflowContextLine("action id", action.id),
       workflowContextLine("prompt", promptId),
@@ -575,7 +576,8 @@ function promptWithConversationTurnContext({
       "Response routing:",
       "- Always submit the user-visible answer through the current-step input helper.",
       "- A terminal-only answer is incomplete.",
-      "- If the helper reports Reload state or a state mismatch, stop immediately; Vibe64 will show the current state."
+      "- If the helper reports Reload state or a state mismatch, stop immediately; Vibe64 will show the current state.",
+      "- Direct terminal fallback: if a later user prompt does not include `VIBE64_ROUTED_TURN`, answer normally and best-effort call `node \"$VIBE64_TERMINAL_CHAT_HELPER\"` with `request` and `response`; this only mirrors the exchange into Vibe64 chat."
     ].join("\n"),
     String(prompt || "").trim()
   ]
@@ -1524,6 +1526,46 @@ class Vibe64SessionRuntime {
       });
     } catch (error) {
       vibe64SessionDebugLog("server.runtime.returnControlFromAgentWait.error", {
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+        error: vibe64SessionDebugError(error),
+        sessionId
+      });
+      throw error;
+    }
+  }
+
+  async appendTerminalChatExchange(sessionId, input = {}) {
+    const startedAtMs = Date.now();
+    vibe64SessionDebugLog("server.runtime.appendTerminalChatExchange.start", {
+      inputKeys: Object.keys(input && typeof input === "object" && !Array.isArray(input) ? input : {}).sort(),
+      sessionId
+    });
+    try {
+      return await this.store.mutateSession(sessionId, async () => {
+        const session = await this.getSession(sessionId);
+        const requestText = normalizeText(input.request || input.prompt || input.user || input.text);
+        const responseText = normalizeText(input.response || input.answer || input.assistant);
+        if (requestText) {
+          await this.store.writeConversationUserMessage(session.sessionId, {
+            text: requestText
+          });
+        }
+        if (responseText) {
+          await this.store.writeConversationAssistantMessage(session.sessionId, {
+            text: responseText
+          });
+        }
+        const updatedSession = await this.getSession(session.sessionId);
+        vibe64SessionDebugLog("server.runtime.appendTerminalChatExchange.done", {
+          ...vibe64SessionDebugSummary(updatedSession),
+          durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+          mirroredRequest: Boolean(requestText),
+          mirroredResponse: Boolean(responseText)
+        });
+        return updatedSession;
+      });
+    } catch (error) {
+      vibe64SessionDebugLog("server.runtime.appendTerminalChatExchange.error", {
         durationMs: vibe64SessionDebugDurationMs(startedAtMs),
         error: vibe64SessionDebugError(error),
         sessionId

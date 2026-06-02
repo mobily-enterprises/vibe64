@@ -3269,6 +3269,7 @@ test("vibe64 runtime renders compact conversation turns after the session briefi
     const prompt = afterAction.actionResult.prompt;
 
     assert.match(prompt, /Vibe64 interactive conversation turn:/u);
+    assert.match(prompt, /VIBE64_ROUTED_TURN: yes/u);
     assert.doesNotMatch(prompt, /Vibe64 workflow context:/u);
     assert.match(prompt, /Session briefing: Use the Vibe64 session briefing already provided/u);
     assert.match(prompt, /User\/request input:\n- conversationRequest: This is the first prompt/u);
@@ -3280,6 +3281,8 @@ test("vibe64 runtime renders compact conversation turns after the session briefi
     assert.doesNotMatch(prompt, /worktree path:/u);
     assert.match(prompt, /Always submit the user-visible answer through the current-step input helper/u);
     assert.match(prompt, /A terminal-visible response alone is not complete; always call the helper/u);
+    assert.match(prompt, /Direct terminal fallback: if a later user prompt does not include `VIBE64_ROUTED_TURN`/u);
+    assert.match(prompt, /VIBE64_TERMINAL_CHAT_HELPER/u);
   });
 });
 
