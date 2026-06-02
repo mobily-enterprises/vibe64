@@ -32,17 +32,8 @@
       }"
     >
       <div class="studio-ai-sessions__empty-main">
-        <v-progress-linear
-          v-if="pageLoading"
-          class="studio-ai-sessions__loading-bar"
-          color="primary"
-          height="6"
-          indeterminate
-          rounded
-        />
-
         <v-sheet
-          v-else
+          v-if="emptyStateVisible"
           rounded="lg"
           border
           class="studio-ai-sessions__empty"
@@ -141,6 +132,7 @@ const panelSessionToolbarVisible = computed(() => Boolean(
 ));
 const dashboardWorkspaceActive = computed(() => workspacePane.value === "dashboard");
 const emptyDashboardContext = Object.freeze({});
+const emptyStateVisible = computed(() => Boolean(!pageLoading.value || (toolbar.sessions || []).length > 0));
 const emptyStateText = computed(() => {
   return toolbar.sessions?.length > 0 ? "Selecting session..." : "No sessions yet.";
 });
@@ -252,10 +244,6 @@ watch(sessionData.sessions, (sessions = []) => {
   display: grid;
   gap: var(--studio-ai-sessions-layout-gap);
   min-height: 0;
-}
-
-.studio-ai-sessions__loading-bar {
-  max-width: 32rem;
 }
 
 .studio-ai-sessions__dashboard-empty-pane {

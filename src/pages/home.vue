@@ -25,10 +25,14 @@ import {
   studioHttpClient
 } from "@/lib/studioHttp.js";
 import { useStudioShellDrawer } from "@/composables/useStudioShellDrawer.js";
+import ProjectSelectionGate from "@/components/studio/ProjectSelectionGate.vue";
+import ProjectTypeGate from "@/components/studio/ProjectTypeGate.vue";
+import Vibe64SessionPanel from "@/components/studio/Vibe64SessionPanel.vue";
 
 const route = useRoute();
 const HOME_SHELL_CLASS = "studio-home-shell-active";
 const pageTitle = ref("");
+const pageError = ref("");
 const projectSelectionResource = useEndpointResource({
   client: studioHttpClient,
   fallbackLoadError: "Project selection could not load.",
@@ -38,6 +42,8 @@ const projectSelectionResource = useEndpointResource({
 });
 const targetRoot = computed(() => String(projectSelectionResource.data.value?.targetRoot || "").trim());
 const targetFolderName = computed(() => finalPathSegment(targetRoot.value));
+const dashboardRouteActive = computed(() => String(route.path || "").startsWith("/home/dashboard"));
+const workspacePane = computed(() => dashboardRouteActive.value ? "dashboard" : "preview");
 
 useStudioShellDrawer({
   hidden: true
@@ -60,6 +66,39 @@ function finalPathSegment(pathValue = "") {
 
 function setPageTitle(title = "") {
   pageTitle.value = String(title || "").trim();
+}
+
+function emitPageTitle(title = "") {
+  setPageTitle(title);
+}
+
+function handleProjectTypeReady() {
+  pageError.value = "";
+}
+
+function handleProjectSelectionReady() {
+  pageError.value = "";
+  emitPageTitle();
+}
+
+function handleProjectSelectionMissing() {
+  pageError.value = "";
+  emitPageTitle("Choose project");
+}
+
+function handleProjectSelectionError(error) {
+  pageError.value = String(error || "");
+  emitPageTitle();
+}
+
+function handleProjectTypeMissing(project = {}) {
+  pageError.value = "";
+  emitPageTitle(project?.projectType?.ready === true ? "Configure project" : "Choose project type");
+}
+
+function handleProjectTypeError(error) {
+  pageError.value = String(error || "");
+  emitPageTitle();
 }
 
 watch(
@@ -107,11 +146,70 @@ onBeforeUnmount(() => {
         -->
       </div>
     </template>
-    <RouterView @page-title-change="setPageTitle" />
+    <section class="generated-ui-screen generated-ui-screen--studio studio-screen d-flex flex-column ga-3">
+      <v-alert
+        v-if="pageError"
+        type="error"
+        variant="tonal"
+        border="start"
+        class="studio-screen__alert"
+      >
+        {{ pageError }}
+      </v-alert>
+
+      <div class="studio-screen__gate-scroll">
+        <ProjectSelectionGate
+          @error="handleProjectSelectionError"
+          @missing="handleProjectSelectionMissing"
+          @ready="handleProjectSelectionReady"
+        >
+          <template #default>
+            <ProjectTypeGate
+              @error="handleProjectTypeError"
+              @missing="handleProjectTypeMissing"
+              @ready="handleProjectTypeReady"
+            >
+              <template #default="projectGateSlotProps">
+                <Vibe64SessionPanel
+                  :workspace-pane="workspacePane"
+                  @title-change="emitPageTitle"
+                >
+                  <template #dashboard="dashboardSlotProps">
+                    <RouterView
+                      v-if="dashboardRouteActive"
+                      :dashboard-context="dashboardSlotProps?.dashboardContext || {}"
+                      :project-context="projectGateSlotProps?.targetProject || {}"
+                      :save-project-config="projectGateSlotProps?.saveProjectConfig"
+                      :saving-project-config="projectGateSlotProps?.savingConfig === true"
+                    />
+                  </template>
+                </Vibe64SessionPanel>
+              </template>
+            </ProjectTypeGate>
+          </template>
+        </ProjectSelectionGate>
+      </div>
+    </section>
   </ShellLayout>
 </template>
 
 <style scoped>
+.generated-ui-screen {
+  --generated-ui-screen-title-size: clamp(1.2rem, 1.7vw, 1.55rem);
+  --generated-ui-screen-panel-padding: 0;
+}
+
+.studio-screen {
+  margin-inline: 0;
+  max-width: none;
+  min-height: 0;
+  width: 100%;
+}
+
+.studio-screen__panel {
+  padding: var(--generated-ui-screen-panel-padding);
+}
+
 .studio-home-shell-heading {
   align-items: center;
   display: flex;
@@ -174,6 +272,46 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
+@media (min-width: 981px) {
+  .studio-screen {
+    flex: 1 1 auto;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .studio-screen__gate-scroll {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .studio-screen__gate-scroll :deep(.project-type-gate),
+  .studio-screen__gate-scroll :deep(.project-selection-gate) {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .studio-screen__gate-scroll :deep(.project-type-gate .studio-ai-sessions) {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .studio-screen__gate-scroll :deep(.project-type-gate .studio-ai-sessions--autopilot) {
+    padding: 0;
+  }
+
+  .studio-screen__gate-scroll :deep(.project-type-setup),
+  .studio-screen__gate-scroll :deep(.project-config-setup) {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+  }
+}
+
 @media (max-width: 600px) {
   .studio-home-shell-title {
     font-size: 1.05rem;
@@ -188,6 +326,10 @@ onBeforeUnmount(() => {
   .studio-home-shell-actions {
     gap: 0.25rem;
     max-width: calc(100vw - 9rem);
+  }
+
+  .studio-screen {
+    max-width: 100%;
   }
 }
 </style>

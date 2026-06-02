@@ -2,9 +2,9 @@
   <section class="accounts-setup">
     <header class="accounts-setup__header">
       <div>
-        <h1 class="accounts-setup__title">Accounts</h1>
+        <h1 class="accounts-setup__title">{{ title }}</h1>
         <p class="accounts-setup__lede">
-          Connect the accounts Studio uses for Codex sessions and GitHub issue, pull request, and merge actions.
+          {{ lede }}
         </p>
       </div>
       <div class="accounts-setup__header-actions">
@@ -12,7 +12,7 @@
           :color="statusReady ? 'success' : 'warning'"
           variant="tonal"
         >
-          {{ statusReady ? "Accounts ready" : "Accounts needed" }}
+          {{ statusReady ? readyLabel : neededLabel }}
         </v-chip>
         <v-btn
           v-if="backLabel"
@@ -210,9 +210,25 @@ defineProps({
     default: "Continue to Adapter Setup",
     type: String
   },
+  lede: {
+    default: "Choose and authenticate the providers Studio uses for AI sessions and GitHub issue, pull request, and merge actions.",
+    type: String
+  },
+  neededLabel: {
+    default: "Connections needed",
+    type: String
+  },
+  readyLabel: {
+    default: "Connections ready",
+    type: String
+  },
   showContinue: {
     default: true,
     type: Boolean
+  },
+  title: {
+    default: "Connections",
+    type: String
   }
 });
 

@@ -7,22 +7,14 @@
       compact
     />
 
-    <v-progress-linear
-      v-if="showLoadingBar"
-      color="primary"
-      height="6"
-      indeterminate
-      rounded
-    />
-
     <slot
-      v-else-if="hasSelection"
+      v-if="hasSelection"
       :project-selection="projectSelection"
       :reload="loadProjectSelection"
     />
 
     <v-sheet
-      v-else
+      v-else-if="selectionReady"
       class="project-selection-gate__picker"
       rounded="lg"
       border
@@ -78,6 +70,10 @@
     </v-sheet>
   </div>
 </template>
+
+<script>
+let cachedProjectSelection = null;
+</script>
 
 <script setup>
 import { computed, proxyRefs, ref, watch } from "vue";
@@ -164,12 +160,12 @@ const selectProjectCommand = useCommand({
   writeMethod: "POST"
 });
 
-const projectSelection = computed(() => projectSelectionView.record || {});
+const projectSelection = computed(() => projectSelectionView.record || cachedProjectSelection || {});
 const projects = computed(() => Array.isArray(projectSelection.value.projects) ? projectSelection.value.projects : []);
 const projectsRoot = computed(() => String(projectSelection.value.projectsRoot || "~/vibe64"));
 const hasSelection = computed(() => projectSelection.value.hasSelection === true);
+const selectionReady = computed(() => Boolean(projectSelectionView.record || cachedProjectSelection));
 const busy = computed(() => creating.value || Boolean(selectingSlug.value));
-const showLoadingBar = computed(() => projectSelectionView.isLoading && !projectSelectionView.record);
 const saveError = computed(() => {
   if (createProjectCommand.messageType === "error") {
     return String(createProjectCommand.message || "");
@@ -217,6 +213,9 @@ async function selectProject(slug) {
 }
 
 watch(projectSelection, (selection) => {
+  if (selection && Object.keys(selection).length > 0) {
+    cachedProjectSelection = selection;
+  }
   if (selection?.hasSelection === true) {
     emit("ready", selection);
     return;

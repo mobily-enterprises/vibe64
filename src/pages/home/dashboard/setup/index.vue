@@ -56,10 +56,6 @@ function selectTab(value, { replace = false } = {}) {
 watch(
   () => route.query.tab,
   (tab) => {
-    if (tab === "accounts") {
-      void router.replace("/home/accounts");
-      return;
-    }
     if (!normalizeTab(tab)) {
       void selectTab(fallbackTab(), { replace: true });
     }

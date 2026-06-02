@@ -1169,7 +1169,7 @@ function selectRightPaneTab(tabId = "") {
     return;
   }
   if (tabId === "dashboard" && !dashboardRouteActive.value) {
-    void router.push("/home/dashboard/configure");
+    void router.push("/home/dashboard/connections");
     return;
   }
   if (tabId === "preview" && dashboardRouteActive.value) {

@@ -42,6 +42,8 @@ const STARRED_TARGET_SCRIPTS_CONFIG = ".vibe64/config/starred_scripts";
 const TARGET_SCRIPT_TERMINAL_NAMESPACE = "current-app-target-script";
 const TARGET_SCRIPT_TERMINAL_NAMESPACE_PREFIX = `${TARGET_SCRIPT_TERMINAL_NAMESPACE}:`;
 const PROJECT_SCRIPT_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u;
+const CONNECTIONS_DASHBOARD_ROUTE = "/home/dashboard/connections";
+const SETUP_DASHBOARD_ROUTE = "/home/dashboard/setup";
 
 function resolveCurrentAppRoot(appRoot) {
   return resolveStudioTargetRoot({
@@ -117,6 +119,53 @@ function targetScriptError(code, message, extra = {}) {
     ],
     ok: false
   };
+}
+
+function dashboardFix(route = "", label = "") {
+  return {
+    label,
+    route
+  };
+}
+
+function capability(enabled, reason = "", fix = null) {
+  return {
+    enabled: enabled === true,
+    fix,
+    reason: enabled === true ? "" : String(reason || "")
+  };
+}
+
+function accountRecord(accounts = [], accountId = "", fallbackLabel = "") {
+  const account = accounts.find((item) => String(item?.id || "") === accountId);
+  return account || {
+    connected: false,
+    id: accountId,
+    label: fallbackLabel || accountId,
+    message: `${fallbackLabel || accountId} is not connected.`,
+    status: "unknown"
+  };
+}
+
+function connectionRecord(account = {}) {
+  const connected = account.connected === true;
+  return {
+    connected,
+    id: String(account.id || ""),
+    label: String(account.label || account.id || ""),
+    message: String(account.message || ""),
+    ready: connected,
+    status: String(account.status || (connected ? "connected" : "not_connected")),
+    username: String(account.username || "")
+  };
+}
+
+function firstBlockedCapability(capabilities = []) {
+  return capabilities.find((item) => item.enabled !== true && item.reason) || null;
+}
+
+function automaticSetupReason(setup = {}) {
+  return String(setup.message || "Finish automatic setup before using this capability.");
 }
 
 function currentAppResult(operation) {
@@ -409,6 +458,79 @@ function createService({
     return readVibe64SetupReadiness(setupServices, options);
   }
 
+  async function connectionReadiness() {
+    const accountSetupService = setupServices.accountSetupService;
+    if (!accountSetupService || typeof accountSetupService.getStatus !== "function") {
+      return {
+        accounts: [],
+        blockedReason: "Connection status service is not available.",
+        ok: false,
+        ready: false,
+        targetRoot: currentTargetRoot(),
+        updatedAt: new Date().toISOString()
+      };
+    }
+    return accountSetupService.getStatus();
+  }
+
+  function capabilityState({
+    connections = {},
+    setup = {}
+  } = {}) {
+    const accounts = Array.isArray(connections.accounts) ? connections.accounts : [];
+    const github = connectionRecord(accountRecord(accounts, "github", "GitHub"));
+    const codex = connectionRecord(accountRecord(accounts, "codex", "Codex"));
+    const selectedAiProvider = {
+      ...codex,
+      selected: true
+    };
+    const aiReady = selectedAiProvider.ready === true;
+    const githubReady = github.ready === true;
+    const setupReady = setup.ready === true;
+    const connectionFix = dashboardFix(CONNECTIONS_DASHBOARD_ROUTE, "Open Connections");
+    const setupFix = dashboardFix(SETUP_DASHBOARD_ROUTE, "Open Setup");
+    const chatCapability = capability(
+      aiReady && setupReady,
+      aiReady ? automaticSetupReason(setup) : "Choose and authenticate an AI provider before using chat.",
+      aiReady ? setupFix : connectionFix
+    );
+    const createSessionCapability = capability(
+      aiReady && githubReady && setupReady,
+      firstBlockedCapability([
+        capability(aiReady, "Choose and authenticate an AI provider before starting a session.", connectionFix),
+        capability(githubReady, "Connect GitHub before starting GitHub-backed session work.", connectionFix),
+        capability(setupReady, automaticSetupReason(setup), setupFix)
+      ])?.reason || "",
+      firstBlockedCapability([
+        capability(aiReady, "Choose and authenticate an AI provider before starting a session.", connectionFix),
+        capability(githubReady, "Connect GitHub before starting GitHub-backed session work.", connectionFix),
+        capability(setupReady, automaticSetupReason(setup), setupFix)
+      ])?.fix || null
+    );
+
+    return {
+      capabilities: {
+        chat: chatCapability,
+        createSession: createSessionCapability,
+        githubWorkflow: capability(githubReady, "Connect GitHub before using GitHub issue, pull request, or merge actions.", connectionFix),
+        home: capability(true),
+        preview: capability(setupReady, automaticSetupReason(setup), setupFix),
+        runScripts: capability(setupReady, automaticSetupReason(setup), setupFix)
+      },
+      connections: {
+        accounts,
+        ai: {
+          message: aiReady ? "Codex is selected and authenticated." : selectedAiProvider.message,
+          providers: [selectedAiProvider],
+          ready: aiReady,
+          selectedProviderId: "codex"
+        },
+        github,
+        ready: aiReady && githubReady
+      }
+    };
+  }
+
   async function requireSetupReady() {
     requireTargetRoot();
     return assertVibe64SetupReady(setupServices);
@@ -523,6 +645,26 @@ function createService({
 
     async inspectSetupReadiness() {
       return currentAppResult(setupReadiness);
+    },
+
+    async inspectCapabilities() {
+      return currentAppResult(async () => {
+        const [setup, connections] = await Promise.all([
+          setupReadiness(),
+          connectionReadiness()
+        ]);
+        const state = capabilityState({
+          connections,
+          setup
+        });
+        return {
+          ...state,
+          ok: true,
+          setup,
+          targetRoot: currentTargetRoot(),
+          updatedAt: new Date().toISOString()
+        };
+      });
     },
 
     async streamSetupReadiness(options = {}) {

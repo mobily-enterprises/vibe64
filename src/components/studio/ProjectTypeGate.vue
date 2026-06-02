@@ -7,16 +7,8 @@
       compact
     />
 
-    <v-progress-linear
-      v-if="showLoadingBar"
-      color="primary"
-      height="6"
-      indeterminate
-      rounded
-    />
-
     <ProjectTypeSetup
-      v-else-if="needsProjectType"
+      v-if="needsProjectType"
       :saving-type="savingType"
       :state="projectType"
       @select="saveProjectType"
@@ -38,6 +30,11 @@
     />
   </div>
 </template>
+
+<script>
+let cachedProjectTypeRecord = null;
+let cachedProjectConfigRecord = null;
+</script>
 
 <script setup>
 import { computed, proxyRefs, ref, watch } from "vue";
@@ -107,7 +104,8 @@ const projectTypeView = useStudioEndpointView({
   path: PROJECT_TYPE_ENDPOINT,
   queryKeyFactory: projectTypeQueryKey
 });
-const projectType = computed(() => projectTypeView.record?.projectType || {});
+const projectTypeRecord = computed(() => projectTypeView.record || cachedProjectTypeRecord || {});
+const projectType = computed(() => projectTypeRecord.value?.projectType || {});
 
 const projectConfigView = useStudioEndpointView({
   enabled: computed(() => projectType.value.ready === true),
@@ -160,9 +158,10 @@ const saveProjectConfigCommand = useCommand({
   writeMethod: "PUT"
 });
 
-const projectConfig = computed(() => projectConfigView.record?.config || {});
-const projectTypeLoaded = computed(() => Boolean(projectTypeView.record?.projectType));
-const projectConfigLoaded = computed(() => Boolean(projectConfigView.record?.config));
+const projectConfigRecord = computed(() => projectConfigView.record || cachedProjectConfigRecord || {});
+const projectConfig = computed(() => projectConfigRecord.value?.config || {});
+const projectTypeLoaded = computed(() => Boolean(projectTypeRecord.value?.projectType));
+const projectConfigLoaded = computed(() => Boolean(projectConfigRecord.value?.config));
 const projectReady = computed(() => projectType.value.ready === true && projectConfig.value.ready === true);
 const projectState = computed(() => ({
   projectConfig: projectConfig.value,
@@ -176,17 +175,6 @@ const needsProjectConfig = computed(() => {
   return projectType.value.ready === true &&
     projectConfigLoaded.value &&
     (props.configureProject || projectConfig.value.ready !== true);
-});
-const waitingForProjectConfig = computed(() => {
-  return projectType.value.ready === true &&
-    !projectConfigLoaded.value &&
-    projectConfigView.isLoading;
-});
-const showLoadingBar = computed(() => {
-  return Boolean(
-    projectTypeView.isLoading ||
-    waitingForProjectConfig.value
-  );
 });
 const saveError = computed(() => {
   if (saveProjectTypeCommand.messageType === "error") {
@@ -232,6 +220,22 @@ async function saveProjectConfig(values) {
     savingConfig.value = false;
   }
 }
+
+watch(projectTypeRecord, (record) => {
+  if (record?.projectType) {
+    cachedProjectTypeRecord = record;
+  }
+}, {
+  immediate: true
+});
+
+watch(projectConfigRecord, (record) => {
+  if (record?.config) {
+    cachedProjectConfigRecord = record;
+  }
+}, {
+  immediate: true
+});
 
 watch([projectState, () => props.configureProject], ([project, configureProject]) => {
   if (!projectTypeLoaded.value) {

@@ -12,6 +12,15 @@
       />
       <v-btn
         v-if="showScriptManagement"
+        :disabled="loading"
+        size="small"
+        variant="tonal"
+        @click="showAllScripts = !showAllScripts"
+      >
+        {{ showAllScripts ? "Starred only" : "Show all" }}
+      </v-btn>
+      <v-btn
+        v-if="showScriptManagement"
         :disabled="loading || resetBusy || starBusy"
         :loading="resetBusy"
         :prepend-icon="mdiRestore"
@@ -61,6 +70,15 @@
       class="mb-0"
     >
       {{ emptyScriptsMessage }}
+      <template v-if="showScriptManagement && !showAllScripts" #append>
+        <v-btn
+          size="small"
+          variant="tonal"
+          @click="showAllScripts = true"
+        >
+          Show all
+        </v-btn>
+      </template>
     </v-alert>
 
     <div v-else-if="visibleScripts.length > 0" class="target-scripts-panel__body">
@@ -224,7 +242,7 @@
 </template>
 
 <script setup>
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import {
   mdiClose,
   mdiPlay,
@@ -246,9 +264,10 @@ const props = defineProps({
   }
 });
 
+const showAllScripts = ref(false);
 const showScriptManagement = computed(() => props.mode === "inspect");
 const emptyScriptsMessage = computed(() => {
-  return showScriptManagement.value
+  return showScriptManagement.value && showAllScripts.value
     ? "No target scripts are available."
     : "No starred target scripts are available.";
 });
@@ -281,7 +300,7 @@ const {
   toggleStar,
   visibleScripts
 } = useTargetScripts({
-  showAllScripts: showScriptManagement
+  showAllScripts
 });
 </script>
 

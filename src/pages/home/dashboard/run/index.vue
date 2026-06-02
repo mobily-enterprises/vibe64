@@ -1,6 +1,6 @@
 <template>
   <section class="vibe64-dashboard-page">
-    <TargetScriptsPanel mode="autopilot" />
+    <TargetScriptsPanel mode="inspect" />
   </section>
 </template>
 

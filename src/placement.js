@@ -18,21 +18,25 @@ addPlacement({
   componentToken: "realtime.web.connection.indicator"
 });
 
-addPlacement({
-  id: "vibe64.accounts.top-action",
-  target: "shell.global-actions",
-  kind: "component",
-  surfaces: ["home"],
-  order: 100,
-  componentToken: "local.main.ui.top-action-link-item",
-  props: {
-    label: "Accounts",
-    icon: "mdi-account-key-outline",
-    to: "/home/accounts",
-    returnToCurrent: true,
-    exact: true
-  }
-});
+// jskit:ui-generator.page.link:home:/dashboard/connections
+{
+  addPlacement({
+    id: "ui-generator.page.home.dashboard.connections.link",
+    target: "page.section-nav",
+    owner: "home-dashboard",
+    kind: "link",
+    surfaces: ["home"],
+    order: 50,
+    props: {
+      label: "Connections",
+      icon: "mdi-account-key-outline",
+      surface: "home",
+      scopedSuffix: "/dashboard/connections",
+      unscopedSuffix: "/dashboard/connections",
+      to: "./connections",
+    },
+  });
+}
 
 // jskit:ui-generator.page.link:home:/dashboard/configure
 {

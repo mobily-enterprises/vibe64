@@ -19,8 +19,8 @@ test.describe("setup tabbed doctor responsive smoke", () => {
     test(`${viewport.name} default route renders the Studio Setup tab without horizontal overflow`, async ({ page }) => {
       await mockBootstrapBlocked(page);
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      await page.goto(`${BASE_URL}/setup`);
-      await expect(page).toHaveURL(/\/setup\?tab=studio-setup$/u);
+      await page.goto(`${BASE_URL}/home/dashboard/setup`);
+      await expect(page).toHaveURL(/\/home\/dashboard\/setup\?tab=studio-setup$/u);
       await expect(page.getByRole("tab", { name: "Studio Setup", exact: true })).toHaveAttribute("aria-selected", "true");
       await expect(page.getByRole("heading", { name: "Studio Setup", exact: true })).toBeVisible();
       await expect(page.getByText("Studio Setup blocked").first()).toBeVisible();
@@ -40,7 +40,7 @@ test.describe("setup tabbed doctor responsive smoke", () => {
     test(`${viewport.name} Adapter Setup tab renders before current app inspection`, async ({ page }) => {
       await mockTargetAppBlocked(page);
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      await page.goto(`${BASE_URL}/setup?tab=adapter-setup`);
+      await page.goto(`${BASE_URL}/home/dashboard/setup?tab=adapter-setup`);
       await expect(page.getByRole("tab", { name: "Adapter Setup", exact: true })).toHaveAttribute("aria-selected", "true");
       await expect(page.getByRole("heading", { name: "Adapter Setup", exact: true })).toBeVisible();
       await expect(page.getByText("Adapter Setup blocked").first()).toBeVisible();
@@ -78,7 +78,7 @@ test.describe("setup tabbed doctor responsive smoke", () => {
     test(`${viewport.name} Project Setup tab renders sequential stages`, async ({ page }) => {
       await mockAppSetupBlocked(page);
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      await page.goto(`${BASE_URL}/setup?tab=project-setup`);
+      await page.goto(`${BASE_URL}/home/dashboard/setup?tab=project-setup`);
       await expect(page.getByRole("tab", { name: "Project Setup", exact: true })).toHaveAttribute("aria-selected", "true");
       await expect(page.getByRole("heading", { name: "Project Setup", exact: true })).toBeVisible();
       await expect(page.getByText("Project Setup blocked").first()).toBeVisible();

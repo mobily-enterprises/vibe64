@@ -19,14 +19,15 @@ test.describe("Autopilot dumb client contract", () => {
     await expect(page.getByRole("button", { name: "Tools" })).toHaveCount(0);
 
     await page.getByRole("tab", { name: "Dashboard" }).click();
-    await expect(page).toHaveURL(/\/home\/dashboard\/configure\/?$/u);
+    await expect(page).toHaveURL(/\/home\/dashboard\/connections\/?$/u);
     await expectNoAttentionRequired(page);
     await expect(page.getByRole("tab", { name: "Dashboard" })).toHaveAttribute("aria-selected", "true");
-    await expect(page.locator(".project-config-setup")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Connections", exact: true })).toBeVisible();
     await expect.poll(async () => page.locator(
       ".section-container-shell__nav .v-list-item-title"
     ).evaluateAll((nodes) => nodes.map((node) => String(node.textContent || "").trim()).filter(Boolean)))
       .toEqual([
+        "Connections",
         "Configure",
         "Remote",
         "Run",
@@ -35,6 +36,7 @@ test.describe("Autopilot dumb client contract", () => {
       ]);
 
     for (const { label, routePath, selector, text } of [
+      { label: "Connections", routePath: "connections", selector: ".accounts-setup", text: "Connections" },
       { label: "Remote", routePath: "remote", selector: ".vibe64-project-tools--panel", text: "Project tools" },
       { label: "Run", routePath: "run", selector: ".target-scripts-panel", text: "" },
       { label: "Session History", routePath: "history", selector: ".vibe64-session-history-panel", text: "" },
@@ -50,19 +52,12 @@ test.describe("Autopilot dumb client contract", () => {
     }
   });
 
-  test("keeps setup-ready content visible while dashboard routes avoid setup readiness remounts", async ({ page }) => {
+  test("keeps home content visible while dashboard routes avoid setup readiness checks", async ({ page }) => {
     const setupReadinessRequests: string[] = [];
-    let allowSecondSetupReadinessResponse: () => void = () => undefined;
-    const secondSetupReadinessResponse = new Promise<void>((resolve) => {
-      allowSecondSetupReadinessResponse = resolve;
-    });
     await mockVibe64Session(page, sessionPayload());
     await page.unroute("**/api/studio/current-app/setup-readiness");
     await page.route("**/api/studio/current-app/setup-readiness", async (route) => {
       setupReadinessRequests.push(route.request().url());
-      if (setupReadinessRequests.length > 1) {
-        await secondSetupReadinessResponse;
-      }
       await fulfillJson(route, {
         currentStage: null,
         message: "",
@@ -75,11 +70,10 @@ test.describe("Autopilot dumb client contract", () => {
     await expect(page.getByRole("tab", { name: "Preview" })).toBeVisible();
 
     await page.getByRole("tab", { name: "Dashboard" }).click();
-    await expect(page).toHaveURL(/\/home\/dashboard\/configure\/?$/u);
+    await expect(page).toHaveURL(/\/home\/dashboard\/connections\/?$/u);
     await expect(page.getByText("Checking setup", { exact: true })).toHaveCount(0);
-    await expect(page.locator(".project-config-setup")).toBeVisible();
-    expect(setupReadinessRequests).toHaveLength(1);
-    allowSecondSetupReadinessResponse();
+    await expect(page.getByRole("heading", { name: "Connections", exact: true })).toBeVisible();
+    expect(setupReadinessRequests).toHaveLength(0);
   });
 
   test("auto-dispatches the server operation without rendering a manual start override", async ({ page }) => {

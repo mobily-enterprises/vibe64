@@ -12,7 +12,7 @@ import {
   vibe64SessionDebugSummary
 } from "@local/vibe64-runtime/server/sessionDebugLog";
 import {
-  assertVibe64SetupReady
+  assertVibe64WorkspaceReady
 } from "@local/vibe64-runtime/server/setupReadiness";
 import {
   terminalFailureFixRequestForSession
@@ -551,7 +551,7 @@ function createService({
       return sessionResult(async () => {
         try {
           const projectType = await projectService.requireProjectType();
-          await assertVibe64SetupReady(setupServices);
+          await assertVibe64WorkspaceReady(setupServices);
           const runtime = await projectService.createRuntime();
           const existingOpenSessions = await listOpenSessionSummaries(runtime);
           const { creation, limits } = await sessionCreationState(runtime, existingOpenSessions);
@@ -778,7 +778,7 @@ function createService({
       });
       return sessionResult(async () => {
         try {
-          await assertVibe64SetupReady(setupServices);
+          await assertVibe64WorkspaceReady(setupServices);
           const runtime = await projectService.createRuntime();
           await terminalService?.closeSessionNonCodexTerminals?.(sessionId);
           const session = await runtime.recoverStuckStep(sessionId);
@@ -842,7 +842,7 @@ function createService({
           if (shouldOpenSeedSession(options, creationState)) {
             const workflowDefinition = creationState.creation.defaultWorkflowDefinition;
             await openSeedSessionOnce(async () => {
-              await assertVibe64SetupReady(setupServices);
+              await assertVibe64WorkspaceReady(setupServices);
               const projectType = await projectService.requireProjectType();
               vibe64SessionDebugLog("server.service.listSessions.openSeedSession.start", {
                 durationMs: vibe64SessionDebugDurationMs(startedAtMs),
@@ -888,7 +888,7 @@ function createService({
       });
       return sessionResult(async () => {
         try {
-          await assertVibe64SetupReady(setupServices);
+          await assertVibe64WorkspaceReady(setupServices);
           const runtime = await projectService.createRuntime();
           let session = await runtime.runAction(sessionId, actionId, input);
           const conversationTurn = await recordConversationMessage(runtime, sessionId, {
@@ -940,7 +940,7 @@ function createService({
       });
       return sessionResult(async () => {
         try {
-          await assertVibe64SetupReady(setupServices);
+          await assertVibe64WorkspaceReady(setupServices);
           const runtime = await projectService.createRuntime();
           let session = await runtime.runIntent(sessionId, intentId, input);
           const conversationTurn = await recordConversationMessage(runtime, sessionId, {
@@ -990,7 +990,7 @@ function createService({
       });
       return sessionResult(async () => {
         try {
-          await assertVibe64SetupReady(setupServices);
+          await assertVibe64WorkspaceReady(setupServices);
           const runtime = await projectService.createRuntime();
           const session = await runtime.rewind(sessionId, stepId);
           await terminalService?.closeSessionNonCodexTerminals?.(sessionId);

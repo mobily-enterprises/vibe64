@@ -20,14 +20,5 @@ onMounted(async () => {
 </script>
 
 <template>
-  <section class="generated-ui-screen generated-ui-screen--studio studio-redirect">
-    <v-progress-linear color="primary" height="6" indeterminate rounded />
-  </section>
+  <span hidden />
 </template>
-
-<style scoped>
-.studio-redirect {
-  margin: 2rem auto;
-  max-width: 24rem;
-}
-</style>

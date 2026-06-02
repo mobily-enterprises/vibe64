@@ -1,4 +1,3 @@
-* Make seeding screens WAY more user friendly
-* Move the menu on the left AWAY, no longer a drawer. No idea where
-* Improve VASTLY the look&feel of the app, make it look like the web site
+* Add ability to star commands, we still have the code somewhere, view all in commands
+* Fix the way shells are created: only worktree-related from worktree, where the generic one?
 * 

@@ -625,6 +625,7 @@ const abandonedArchiveSession = {
 
 export {
   BASE_URL,
+  targetRoot,
   viewports,
   readyProjectSelectionPayload,
   bootstrapPayload,

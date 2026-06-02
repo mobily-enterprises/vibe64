@@ -15,6 +15,7 @@ const STUDIO_SETUP_ENDPOINT = studioApiPath("studio/studio-setup");
 const ADAPTER_SETUP_ENDPOINT = studioApiPath("studio/adapter-setup");
 const PROJECT_SETUP_ENDPOINT = studioApiPath("studio/project-setup");
 const TARGET_PROJECT_ENDPOINT = studioApiPath("studio/current-app");
+const CAPABILITIES_ENDPOINT = `${TARGET_PROJECT_ENDPOINT}/capabilities`;
 const SETUP_READINESS_ENDPOINT = `${TARGET_PROJECT_ENDPOINT}/setup-readiness`;
 const SETUP_READINESS_STREAM_ENDPOINT = `${SETUP_READINESS_ENDPOINT}/stream`;
 const VIBE64_ENDPOINT = studioApiPath("vibe64");
@@ -60,8 +61,16 @@ function accountsQueryKey(surfaceId, ownershipFilter) {
   return ["vibe64", surfaceId, ownershipFilter, "accounts"];
 }
 
+function capabilitiesQueryKey(surfaceId, ownershipFilter) {
+  return ["vibe64", surfaceId, ownershipFilter, "capabilities"];
+}
+
 async function readAccountsStatus(options = {}) {
   return studioHttpClient.get(withRefreshQuery(ACCOUNTS_ENDPOINT, options));
+}
+
+async function readCapabilitiesStatus() {
+  return studioHttpClient.get(CAPABILITIES_ENDPOINT);
 }
 
 async function readStudioSetupStatus(options = {}) {
@@ -84,6 +93,7 @@ export {
   ACCOUNTS_AUTH_ENDPOINT,
   ACCOUNTS_ENDPOINT,
   ACCOUNTS_LOGOUT_ENDPOINT,
+  CAPABILITIES_ENDPOINT,
   VIBE64_ACCOUNTS_AUTH_API_SUFFIX,
   VIBE64_PROJECT_CONFIG_API_SUFFIX,
   VIBE64_PROJECT_CREATE_API_SUFFIX,
@@ -103,10 +113,12 @@ export {
   ADAPTER_SETUP_STREAM_ENDPOINT,
   ADAPTER_SETUP_TERMINAL_ENDPOINT,
   accountsQueryKey,
+  capabilitiesQueryKey,
   projectConfigQueryKey,
   projectSelectionQueryKey,
   projectTypeQueryKey,
   readAccountsStatus,
+  readCapabilitiesStatus,
   readProjectSetupStatus,
   readSetupReadinessStatus,
   readStudioSetupStatus,

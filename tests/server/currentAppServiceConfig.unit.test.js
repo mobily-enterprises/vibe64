@@ -277,6 +277,55 @@ test("current-app reports project type, config, and setup gates before adapter i
   });
 });
 
+test("current-app reports connections separately from automatic setup capabilities", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const service = createService({
+      appRoot: targetRoot,
+      projectService: fakeProjectService({
+        targetRoot
+      }),
+      setupServices: {
+        ...readySetupServices(),
+        accountSetupService: {
+          async getStatus() {
+            return {
+              accounts: [
+                {
+                  connected: false,
+                  id: "codex",
+                  label: "Codex",
+                  message: "Codex is not authenticated for Studio.",
+                  status: "not_connected"
+                },
+                {
+                  connected: true,
+                  id: "github",
+                  label: "GitHub",
+                  status: "connected"
+                }
+              ],
+              blockedReason: "Choose and authenticate an AI provider.",
+              ok: true,
+              ready: false
+            };
+          }
+        }
+      }
+    });
+
+    const state = await service.inspectCapabilities();
+    assert.equal(state.ok, true);
+    assert.equal(state.setup.ready, true);
+    assert.equal(state.connections.ready, false);
+    assert.equal(state.connections.ai.ready, false);
+    assert.equal(state.connections.github.ready, true);
+    assert.equal(state.capabilities.home.enabled, true);
+    assert.equal(state.capabilities.chat.enabled, false);
+    assert.equal(state.capabilities.chat.fix.route, "/home/dashboard/connections");
+    assert.match(state.capabilities.createSession.reason, /AI provider/u);
+  });
+});
+
 test("current-app merges adapter scripts with project scripts and stores starred target script ids", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await mkdir(path.join(targetRoot, ".vibe64", "scripts"), {

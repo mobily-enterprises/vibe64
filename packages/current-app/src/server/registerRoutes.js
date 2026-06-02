@@ -5,6 +5,7 @@ import {
 } from "./inputSchemas.js";
 import {
   ACTION_LIST_TARGET_SCRIPTS,
+  ACTION_READ_CAPABILITIES,
   ACTION_READ_CURRENT_APP,
   ACTION_READ_SETUP_READINESS,
   ACTION_RESET_STARRED_TARGET_SCRIPTS,
@@ -39,6 +40,11 @@ function registerRoutes(
     buildInput: queryInput,
     query: currentAppQueryInputValidator,
     summary: "Inspect the current app."
+  });
+
+  routes.actionRoute("GET", "/capabilities", {
+    actionId: ACTION_READ_CAPABILITIES,
+    summary: "Read Studio capability state for the current app."
   });
 
   routes.actionRoute("GET", "/target-scripts", {

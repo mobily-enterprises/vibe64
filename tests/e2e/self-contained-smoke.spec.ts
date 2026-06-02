@@ -53,29 +53,29 @@ async function mockReadyStudioShell(page: Page) {
       resolve();
     };
   });
+  const accountsReadyPayload = {
+    accounts: [
+      {
+        connected: true,
+        id: "codex",
+        label: "Codex",
+        status: "connected"
+      },
+      {
+        connected: true,
+        id: "github",
+        label: "GitHub",
+        status: "connected"
+      }
+    ],
+    ok: true,
+    ready: true
+  };
   const setupReadinessReadyPayload = {
     currentStage: null,
     message: "",
     ready: true,
     stages: [
-      {
-        accounts: [
-          {
-            connected: true,
-            id: "codex",
-            label: "Codex",
-            status: "connected"
-          },
-          {
-            connected: true,
-            id: "github",
-            label: "GitHub",
-            status: "connected"
-          }
-        ],
-        ok: true,
-        ready: true
-      },
       {
         checks: [],
         ok: true,
@@ -92,6 +92,40 @@ async function mockReadyStudioShell(page: Page) {
         stages: []
       }
     ]
+  };
+  const capabilitiesPayload = {
+    capabilities: {
+      chat: { enabled: true, fix: null, reason: "" },
+      createSession: { enabled: true, fix: null, reason: "" },
+      githubWorkflow: { enabled: true, fix: null, reason: "" },
+      home: { enabled: true, fix: null, reason: "" },
+      preview: { enabled: true, fix: null, reason: "" },
+      runScripts: { enabled: true, fix: null, reason: "" }
+    },
+    connections: {
+      accounts: accountsReadyPayload.accounts,
+      ai: {
+        message: "Codex is selected and authenticated.",
+        providers: [
+          {
+            ...accountsReadyPayload.accounts[0],
+            ready: true,
+            selected: true
+          }
+        ],
+        ready: true,
+        selectedProviderId: "codex"
+      },
+      github: {
+        ...accountsReadyPayload.accounts[1],
+        ready: true
+      },
+      ready: true
+    },
+    ok: true,
+    setup: setupReadinessReadyPayload,
+    targetRoot,
+    updatedAt: "2026-06-02T00:00:00.000Z"
   };
   const projectToolsPayload = {
     ok: true,
@@ -255,24 +289,7 @@ async function mockReadyStudioShell(page: Page) {
     ],
     [
       "/api/vibe64/accounts",
-      {
-        accounts: [
-          {
-            connected: true,
-            id: "codex",
-            label: "Codex",
-            status: "connected"
-          },
-          {
-            connected: true,
-            id: "github",
-            label: "GitHub",
-            status: "connected"
-          }
-        ],
-        ok: true,
-        ready: true
-      }
+      accountsReadyPayload
     ],
     [
       "/api/studio/studio-setup",
@@ -305,6 +322,10 @@ async function mockReadyStudioShell(page: Page) {
     [
       "/api/studio/current-app/setup-readiness/stream",
       setupReadinessReadyPayload
+    ],
+    [
+      "/api/studio/current-app/capabilities",
+      capabilitiesPayload
     ],
     [
       "/api/vibe64/tools",

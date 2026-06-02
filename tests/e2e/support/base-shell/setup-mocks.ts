@@ -7,6 +7,7 @@ import {
   blockedTargetAppPayload,
   completedArchiveSession,
   currentAppPayload,
+  targetRoot,
   readyAccountsPayload,
   readyAppSetupPayload,
   readyBootstrapPayload,
@@ -35,6 +36,100 @@ async function mockProjectTools(page) {
   });
 }
 
+async function mockEmptySessions(page) {
+  await page.route("**/api/vibe64/sessions**", async (route) => {
+    await fulfillJson(route, {
+      limits: {
+        maxOpenSessions: 5,
+        openSessionCount: 0
+      },
+      ok: true,
+      sessions: [],
+      stepDefinitions: []
+    });
+  });
+}
+
+function capabilitiesPayload({
+  accounts = readyAccountsPayload,
+  setup = setupReadinessPayload({
+    stages: [
+      readyBootstrapPayload,
+      readyTargetAppPayload,
+      readyAppSetupPayload
+    ]
+  })
+} = {}) {
+  const accountRows = Array.isArray(accounts.accounts) ? accounts.accounts : [];
+  const codex = accountRows.find((account) => account.id === "codex") || {
+    connected: false,
+    id: "codex",
+    label: "Codex",
+    message: "Codex is not authenticated for Studio."
+  };
+  const github = accountRows.find((account) => account.id === "github") || {
+    connected: false,
+    id: "github",
+    label: "GitHub",
+    message: "GitHub CLI is not authenticated for Studio."
+  };
+  const setupReady = setup.ready === true;
+  const aiReady = codex.connected === true;
+  const githubReady = github.connected === true;
+  const connectionsRoute = "/home/dashboard/connections";
+  const setupRoute = "/home/dashboard/setup";
+  const fix = (route: string, label: string) => ({
+    label,
+    route
+  });
+  const capability = (enabled: boolean, reason = "", route = "") => ({
+    enabled,
+    fix: enabled || !route ? null : fix(route, route === connectionsRoute ? "Open Connections" : "Open Setup"),
+    reason: enabled ? "" : reason
+  });
+  const setupReason = setup.message || "Finish automatic setup before using this capability.";
+  const createSessionReason = !aiReady
+    ? "Choose and authenticate an AI provider before starting a session."
+    : !githubReady
+      ? "Connect GitHub before starting GitHub-backed session work."
+      : setupReason;
+
+  return {
+    capabilities: {
+      chat: capability(aiReady && setupReady, aiReady ? setupReason : "Choose and authenticate an AI provider before using chat.", aiReady ? setupRoute : connectionsRoute),
+      createSession: capability(aiReady && githubReady && setupReady, createSessionReason, aiReady && githubReady ? setupRoute : connectionsRoute),
+      githubWorkflow: capability(githubReady, "Connect GitHub before using GitHub issue, pull request, or merge actions.", connectionsRoute),
+      home: capability(true),
+      preview: capability(setupReady, setupReason, setupRoute),
+      runScripts: capability(setupReady, setupReason, setupRoute)
+    },
+    connections: {
+      accounts: accountRows,
+      ai: {
+        message: aiReady ? "Codex is selected and authenticated." : codex.message,
+        providers: [
+          {
+            ...codex,
+            ready: aiReady,
+            selected: true
+          }
+        ],
+        ready: aiReady,
+        selectedProviderId: "codex"
+      },
+      github: {
+        ...github,
+        ready: githubReady
+      },
+      ready: aiReady && githubReady
+    },
+    ok: true,
+    setup,
+    targetRoot,
+    updatedAt: "2026-06-02T00:00:00.000Z"
+  };
+}
+
 async function mockProjectGateReady(page) {
   await page.route("**/api/bootstrap", async (route) => {
     await fulfillJson(route, bootstrapPayload);
@@ -44,6 +139,9 @@ async function mockProjectGateReady(page) {
   });
   await page.route("**/api/studio/current-app", async (route) => {
     await fulfillJson(route, currentAppPayload);
+  });
+  await page.route("**/api/studio/current-app/capabilities", async (route) => {
+    await fulfillJson(route, capabilitiesPayload());
   });
   await page.route("**/api/vibe64/project-type", async (route) => {
     await fulfillJson(route, readyProjectTypePayload);
@@ -69,7 +167,6 @@ async function mockSetupReadiness(page, payload) {
 async function mockSetupGateReady(page) {
   await mockSetupReadiness(page, setupReadinessPayload({
     stages: [
-      readyAccountsPayload,
       readyBootstrapPayload,
       readyTargetAppPayload,
       readyAppSetupPayload
@@ -93,7 +190,7 @@ async function mockProtectedRouteReady(page) {
 
 async function mockBootstrapBlocked(page) {
   await mockProjectGateReady(page);
-  await mockSetupReadiness(page, setupReadinessPayload({
+  const setup = setupReadinessPayload({
     currentStage: {
       id: "studio-setup",
       label: "Studio Setup"
@@ -101,22 +198,47 @@ async function mockBootstrapBlocked(page) {
     message: "Studio Setup is not ready.",
     ready: false,
     stages: [
-      readyAccountsPayload,
       blockedBootstrapPayload,
       readyTargetAppPayload,
       readyAppSetupPayload
     ]
-  }));
+  });
+  await mockSetupReadiness(page, setup);
+  await page.route("**/api/studio/current-app/capabilities", async (route) => {
+    await fulfillJson(route, capabilitiesPayload({
+      setup
+    }));
+  });
   await page.route("**/api/studio/studio-setup", async (route) => {
     await fulfillJson(route, blockedBootstrapPayload);
   });
   await page.route("**/api/studio/studio-setup/stream", async (route) => {
     await fulfillSse(route, blockedBootstrapPayload);
   });
+  await mockEmptySessions(page);
 }
 
 async function mockTargetAppBlocked(page) {
   await mockProjectGateReady(page);
+  const setup = setupReadinessPayload({
+    currentStage: {
+      id: "adapter-setup",
+      label: "Adapter Setup"
+    },
+    message: "Adapter Setup is not ready.",
+    ready: false,
+    stages: [
+      readyBootstrapPayload,
+      blockedTargetAppPayload,
+      readyAppSetupPayload
+    ]
+  });
+  await mockSetupReadiness(page, setup);
+  await page.route("**/api/studio/current-app/capabilities", async (route) => {
+    await fulfillJson(route, capabilitiesPayload({
+      setup
+    }));
+  });
   await page.route("**/api/studio/studio-setup", async (route) => {
     await fulfillJson(route, readyBootstrapPayload);
   });
@@ -157,14 +279,10 @@ async function mockStudioReady(page) {
 async function mockAccountsBlocked(page) {
   await mockProjectGateReady(page);
   await mockSetupReadiness(page, setupReadinessPayload({
-    currentStage: {
-      id: "accounts",
-      label: "Accounts"
-    },
-    message: "Connect Codex and GitHub before using Studio project actions.",
-    ready: false,
+    currentStage: null,
+    message: "",
+    ready: true,
     stages: [
-      blockedAccountsPayload,
       readyBootstrapPayload,
       readyTargetAppPayload,
       readyAppSetupPayload
@@ -172,6 +290,11 @@ async function mockAccountsBlocked(page) {
   }));
   await page.route("**/api/vibe64/accounts", async (route) => {
     await fulfillJson(route, blockedAccountsPayload);
+  });
+  await page.route("**/api/studio/current-app/capabilities", async (route) => {
+    await fulfillJson(route, capabilitiesPayload({
+      accounts: blockedAccountsPayload
+    }));
   });
   await page.route("**/api/studio/current-app", async (route) => {
     await fulfillJson(route, currentAppPayload);
@@ -360,7 +483,7 @@ async function mockSessionHistoryArchives(page, archiveRequests = []) {
 
 async function mockAppSetupBlocked(page) {
   await mockProjectGateReady(page);
-  await mockSetupReadiness(page, setupReadinessPayload({
+  const setup = setupReadinessPayload({
     currentStage: {
       id: "project-setup",
       label: "Project Setup"
@@ -368,12 +491,17 @@ async function mockAppSetupBlocked(page) {
     message: "Project Setup is not ready.",
     ready: false,
     stages: [
-      readyAccountsPayload,
       readyBootstrapPayload,
       readyTargetAppPayload,
       blockedAppSetupPayload
     ]
-  }));
+  });
+  await mockSetupReadiness(page, setup);
+  await page.route("**/api/studio/current-app/capabilities", async (route) => {
+    await fulfillJson(route, capabilitiesPayload({
+      setup
+    }));
+  });
   await page.route("**/api/studio/studio-setup", async (route) => {
     await fulfillJson(route, readyBootstrapPayload);
   });
@@ -392,6 +520,7 @@ async function mockAppSetupBlocked(page) {
   await page.route("**/api/studio/project-setup/stream", async (route) => {
     await fulfillSse(route, blockedAppSetupPayload, "stages");
   });
+  await mockEmptySessions(page);
 }
 
 export {

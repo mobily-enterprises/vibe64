@@ -27,20 +27,16 @@
 
 <script setup>
 import { computed, onMounted, ref } from "vue";
-import { useRoute, useRouter } from "vue-router";
 
 import DoctorStatusPage from "./DoctorStatusPage.vue";
 import {
   ADAPTER_SETUP_STREAM_ENDPOINT,
   ADAPTER_SETUP_TERMINAL_ENDPOINT,
-  readAccountsStatus,
   readAdapterSetupStatus,
   readStudioSetupStatus
 } from "../../lib/studioGateApi.js";
 
 const emit = defineEmits(["select-tab"]);
-const route = useRoute();
-const router = useRouter();
 
 const studioSetup = ref(null);
 const adapterSetup = ref(null);
@@ -51,7 +47,7 @@ const streamAutoStart = ref(true);
 
 const lede = computed(() => {
   if (loading.value && !streamEnabled.value) {
-    return "Checking Accounts and Studio Setup before Adapter Setup runs.";
+    return "Checking Studio Setup before Adapter Setup runs.";
   }
   if (adapterSetup.value?.ready) {
     return `Adapter Setup is ready for: ${adapterSetup.value.targetRoot || "selected project"}`;
@@ -69,13 +65,6 @@ async function loadAdapterSetup({
   streamAutoStart.value = autoStart;
 
   try {
-    const accounts = await readAccountsStatus();
-
-    if (accounts?.ready !== true) {
-      await router.push(accountsRoute());
-      return;
-    }
-
     studioSetup.value = await readStudioSetupStatus();
 
     if (studioSetup.value?.ready !== true) {
@@ -100,15 +89,6 @@ async function loadAdapterSetup({
 
 function handleAdapterSetupUpdated(status) {
   adapterSetup.value = status;
-}
-
-function accountsRoute() {
-  return {
-    path: "/home/accounts",
-    query: {
-      returnTo: route.fullPath || "/home/dashboard/setup?tab=adapter-setup"
-    }
-  };
 }
 
 onMounted(() => {

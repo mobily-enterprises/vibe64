@@ -15,6 +15,13 @@ import {
   vibe64SessionsQueryKey
 } from "@/lib/vibe64SessionRequestConfig.js";
 import {
+  CAPABILITIES_ENDPOINT,
+  capabilitiesQueryKey
+} from "@/lib/studioGateApi.js";
+import {
+  studioHttpClient
+} from "@/lib/studioHttp.js";
+import {
   vibe64SessionFacts,
   vibe64SessionLimits,
   buildVibe64TimelineSteps,
@@ -162,6 +169,14 @@ function useVibe64SessionData({
       }
     }
   });
+  const capabilitiesResource = useEndpointResource({
+    client: studioHttpClient,
+    fallbackLoadError: "Studio capabilities could not be loaded.",
+    path: CAPABILITIES_ENDPOINT,
+    queryKey: computed(() => capabilitiesQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC)),
+    readMethod: "GET",
+    refreshOnPull: true
+  });
   const selectedSessionView = proxyRefs({
     loadError: selectedSessionResource.loadError,
     record: computed(() => selectedSessionResource.data.value || null),
@@ -169,6 +184,18 @@ function useVibe64SessionData({
   });
 
   const sessions = computed(() => visibleVibe64Sessions(sessionList.items || []));
+  const studioCapabilities = computed(() => {
+    const capabilities = capabilitiesResource.data.value?.capabilities;
+    return capabilities && typeof capabilities === "object" && !Array.isArray(capabilities)
+      ? capabilities
+      : {};
+  });
+  const createSessionCapability = computed(() => {
+    const createSession = studioCapabilities.value.createSession;
+    return createSession && typeof createSession === "object" && !Array.isArray(createSession)
+      ? createSession
+      : null;
+  });
   const creationOptions = computed(() => sessionList.pages?.[0]?.creation || {});
   const workflowDefinitions = computed(() => {
     const definitions = creationOptions.value.workflowDefinitions;
@@ -197,12 +224,18 @@ function useVibe64SessionData({
     sessions: sessions.value
   }));
   const canCreateSession = computed(() => {
+    if (createSessionCapability.value?.enabled === false) {
+      return false;
+    }
     if (typeof creationOptions.value.canCreate === "boolean") {
       return creationOptions.value.canCreate;
     }
     return limits.value.openSessionCount < limits.value.maxOpenSessions;
   });
   const createSessionTitle = computed(() => {
+    if (createSessionCapability.value?.enabled === false && createSessionCapability.value.reason) {
+      return String(createSessionCapability.value.reason);
+    }
     if (creationOptions.value.disabledReason) {
       return String(creationOptions.value.disabledReason);
     }
@@ -376,6 +409,8 @@ function useVibe64SessionData({
 
   return {
     canCreateSession,
+    capabilities: capabilitiesResource.data,
+    capabilitiesResource,
     clearSelectedSession,
     createSession,
     createSessionCommand,
