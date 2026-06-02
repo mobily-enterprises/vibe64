@@ -231,6 +231,21 @@ async function waitForNoRunningTerminals(namespace, timeoutMs = POST_COMMIT_TEST
   assert.equal(countRunningTerminalSessions({ namespace }), 0);
 }
 
+async function waitForTerminalOutput(terminalId, namespace, pattern, timeoutMs = POST_COMMIT_TEST_TIMEOUT_MS) {
+  const deadline = Date.now() + timeoutMs;
+  let snapshot = readTerminalSession(terminalId, {
+    namespace
+  });
+  while (!pattern.test(String(snapshot.output || "")) && Date.now() < deadline) {
+    await delay(5);
+    snapshot = readTerminalSession(terminalId, {
+      namespace
+    });
+  }
+  assert.match(String(snapshot.output || ""), pattern);
+  return snapshot;
+}
+
 function runNodeScript(scriptPath = "", args = [], env = {}, stdin = "") {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [
@@ -658,14 +673,24 @@ test("Vibe64 Codex terminal resumes a pending prompt through the active terminal
         [
           "process.stdout.write('OpenAI Codex\\ngpt-5.5 xhigh \\u00b7 /workspace/example\\n');",
           "process.stdin.setEncoding('utf8');",
+          "if (typeof process.stdin.setRawMode === 'function') process.stdin.setRawMode(true);",
+          "let pendingPasteSubmit = false;",
           "process.stdin.on('data', (chunk) => {",
-          "  if (String(chunk).includes('echo $CODEX_THREAD_ID')) {",
-          "    process.stdout.write(String(chunk).includes('!echo $CODEX_THREAD_ID -- ') ? 'thread-command-has-codex-shell-prefix\\n' : 'thread-command-missing-codex-shell-prefix\\n');",
+          "  const input = String(chunk);",
+          "  if (input === '\\r' && pendingPasteSubmit) {",
+          "    pendingPasteSubmit = false;",
+          "    process.stdout.write('bracketed-paste-submitted-by-enter\\n');",
+          "  } else if (input.includes('echo $CODEX_THREAD_ID')) {",
+          "    process.stdout.write(input.includes('!echo $CODEX_THREAD_ID -- ') ? 'thread-command-has-codex-shell-prefix\\n' : 'thread-command-missing-codex-shell-prefix\\n');",
           "    process.stdout.write('!echo $CODEX_THREAD_ID --\\n00000000-0000-4000-8000-000000000002 --\\ngpt-5.5 xhigh \\u00b7 /workspace/example\\n');",
-          "  } else if (String(chunk).includes('Reply exactly: Vibe64 session briefing loaded.')) {",
+          "  } else if (input.includes('\\u001b[200~') && input.includes('\\u001b[201~')) {",
+          "    pendingPasteSubmit = true;",
+          "    process.stdout.write('codex-prompt-has-bracketed-paste\\n');",
+          "    if (input.includes('Reply exactly: Vibe64 session briefing loaded.')) {",
           "    process.stdout.write('Vibe64 session briefing loaded.\\ngpt-5.5 xhigh \\u00b7 /workspace/example\\n');",
-          "  } else if (String(chunk).includes('Ask the user for seed choices.')) {",
+          "    } else if (input.includes('Ask the user for seed choices.')) {",
           "    process.stdout.write('Seed choices prompt received.\\ngpt-5.5 xhigh \\u00b7 /workspace/example\\n');",
+          "    }",
           "  }",
           "});",
           "process.stdin.resume();",
@@ -712,11 +737,14 @@ test("Vibe64 Codex terminal resumes a pending prompt through the active terminal
       assert.equal(result.agentIdentity.conversationId, expectedConversationId);
       assert.equal(result.agentConversationId, expectedConversationId);
       assert.equal(result.codexThreadId, expectedConversationId);
-      const terminalSnapshot = readTerminalSession(terminal.id, {
-        namespace
-      });
+      const terminalSnapshot = await waitForTerminalOutput(
+        terminal.id,
+        namespace,
+        /bracketed-paste-submitted-by-enter/u
+      );
       assert.match(terminalSnapshot.output, /thread-command-has-codex-shell-prefix/u);
       assert.doesNotMatch(terminalSnapshot.output, /thread-command-missing-codex-shell-prefix/u);
+      assert.match(terminalSnapshot.output, /codex-prompt-has-bracketed-paste/u);
       assert.equal(session.metadata.codex_prompt_handoff_id, actionResult.codexPromptHandoff.handoffId);
       assert.match(session.metadata.codex_session_briefing_echo_input, /Vibe64 session briefing/u);
       assert.doesNotMatch(session.metadata.codex_session_briefing_echo_input, /\[\[VIBE64_CONTEXT_START\]\]/u);

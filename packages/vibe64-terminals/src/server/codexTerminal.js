@@ -110,6 +110,8 @@ const CODEX_TURN_UNKNOWN_QUIET_MS = 3000;
 const DEBUG_PROMPTS_ENABLED = String(process.env.DEBUG_PROMPTS || "").trim() === "1";
 const CODEX_KEY_PAUSE_MS = 180;
 const CODEX_PROMPT_SUBMIT_PAUSE_MS = 20;
+const TERMINAL_BRACKETED_PASTE_START = "\u001b[200~";
+const TERMINAL_BRACKETED_PASTE_END = "\u001b[201~";
 const CODEX_THREAD_CAPTURE_TIMEOUT_MS = DEBUG_PROMPTS_ENABLED ? 10 * 60_000 : 30_000;
 const CODEX_SESSION_MODEL = "gpt-5.5";
 const CODEX_SESSION_REASONING_EFFORT = "xhigh";
@@ -379,6 +381,14 @@ function codexPromptInput(prompt = "") {
   return source;
 }
 
+function codexPromptPasteInput(prompt = "") {
+  const input = codexPromptInput(prompt);
+  if (!input) {
+    return "";
+  }
+  return `${TERMINAL_BRACKETED_PASTE_START}${input}${TERMINAL_BRACKETED_PASTE_END}`;
+}
+
 function codexPromptHandoffSignature(sessionId = "") {
   return `${sessionId}:${Date.now()}`;
 }
@@ -464,7 +474,7 @@ function writeCodexTerminalInput(sessionId = "", terminalSessionId = "", data = 
 async function writeCodexPromptIntoNamespace(terminalSessionId = "", prompt = "", {
   namespace = "default"
 } = {}) {
-  const input = codexPromptInput(prompt);
+  const input = codexPromptPasteInput(prompt);
   if (!input) {
     return {
       ok: false,

@@ -244,7 +244,7 @@ test("terminal session control helpers send exact text, narrow keys, and expose 
   }
 });
 
-test("terminal session text helper chunks long writes", async () => {
+test("terminal session text helper writes long text in one input write", async () => {
   const namespace = `terminal-chunked-write-test-${crypto.randomUUID()}`;
   const session = startTerminalSession({
     args: [
@@ -272,7 +272,7 @@ test("terminal session text helper chunks long writes", async () => {
       namespace
     });
     assert.equal(written.ok, true);
-    assert.equal(written.inputVersion, 2);
+    assert.equal(written.inputVersion, 1);
 
     await waitFor(() => readTerminalSession(session.id, {
       namespace
