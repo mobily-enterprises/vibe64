@@ -4,8 +4,13 @@
       <template #default="projectSelectionSlotProps">
         <ProjectTypeGate>
           <template #default>
-            <SetupReadinessGate :cache-key="projectSelectionSlotProps?.projectSelection?.targetRoot || ''">
-              <TargetScriptsPanel :mode="targetScriptsMode" />
+            <SetupReadinessGate
+              :cache-key="projectSelectionSlotProps?.projectSelection?.targetRoot || ''"
+              :non-blocking-stage-ids="['accounts']"
+            >
+              <AccountsReadinessGate :cache-key="projectSelectionSlotProps?.projectSelection?.targetRoot || ''">
+                <TargetScriptsPanel :mode="targetScriptsMode" />
+              </AccountsReadinessGate>
             </SetupReadinessGate>
           </template>
         </ProjectTypeGate>
@@ -21,6 +26,7 @@ import TargetScriptsPanel from "@/components/studio/TargetScriptsPanel.vue";
 import ProjectSelectionGate from "@/components/studio/ProjectSelectionGate.vue";
 import ProjectTypeGate from "@/components/studio/ProjectTypeGate.vue";
 import SetupReadinessGate from "@/components/studio/SetupReadinessGate.vue";
+import AccountsReadinessGate from "@/components/studio/AccountsReadinessGate.vue";
 
 const route = useRoute();
 const targetScriptsMode = computed(() => route.query.mode === "inspect" ? "inspect" : "autopilot");

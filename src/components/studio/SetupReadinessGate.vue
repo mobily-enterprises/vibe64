@@ -68,6 +68,10 @@ const props = defineProps({
   cacheKey: {
     default: "",
     type: String
+  },
+  nonBlockingStageIds: {
+    default: () => [],
+    type: Array
   }
 });
 
@@ -107,17 +111,35 @@ function setupGateFromStatus(status = {}) {
   };
 }
 
-const ready = computed(() => setupGate.value.ready === true);
+const nonBlockingStageIds = computed(() => new Set(
+  props.nonBlockingStageIds
+    .map((stageId) => String(stageId || "").trim())
+    .filter(Boolean)
+));
+const currentStageId = computed(() => String(setupGate.value.tab || "").trim());
+const currentStageNonBlocking = computed(() => nonBlockingStageIds.value.has(currentStageId.value));
+const ready = computed(() => setupGate.value.ready === true || currentStageNonBlocking.value);
 const errorMessage = computed(() => fallbackError.value);
 const checking = computed(() => !checked.value && !errorMessage.value);
-const needsSetup = computed(() => checked.value && !ready.value && !errorMessage.value);
-const setupPageActive = computed(() => route.path === "/setup" || route.path === "/home/setup");
+const needsSetup = computed(() => checked.value && setupGate.value.ready !== true && !currentStageNonBlocking.value && !errorMessage.value);
+const setupPageActive = computed(() => (
+  route.path === "/setup" ||
+  route.path === "/home/accounts" ||
+  route.path === "/home/setup" ||
+  route.path === "/home/dashboard/setup"
+));
 const redirecting = computed(() => !setupPageActive.value && needsSetup.value);
 const setupRoute = computed(() => ({
-  path: route.path.startsWith("/home") ? "/home/setup" : "/setup",
-  query: {
-    tab: setupGate.value.tab || "studio-setup"
-  }
+  path: setupGate.value.tab === "accounts"
+    ? "/home/accounts"
+    : route.path.startsWith("/home")
+      ? "/home/dashboard/setup"
+      : "/setup",
+  query: setupGate.value.tab === "accounts"
+    ? {}
+    : {
+        tab: setupGate.value.tab || "studio-setup"
+      }
 }));
 
 function normalizeStage(stage = {}) {

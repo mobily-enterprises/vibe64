@@ -19,7 +19,7 @@ import {
 } from "@local/vibe64-runtime/server/terminalFailureFixRequest";
 import { inspectSessionDiff } from "./sessionDiff.js";
 
-const MAX_OPEN_VIBE64_SESSIONS = 5;
+const MAX_OPEN_VIBE64_SESSIONS = 3;
 const CODEX_PROMPT_HANDOFF_DELIVERY_ENABLED = true;
 const CLOSED_SESSION_STATUSES = new Set(["abandoned", "finished"]);
 const SESSION_ARCHIVE_QUERY = Object.freeze({

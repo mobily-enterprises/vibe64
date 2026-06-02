@@ -24,8 +24,13 @@
             @ready="handleProjectTypeReady"
           >
             <template #default>
-              <SetupReadinessGate :cache-key="projectSelectionSlotProps?.projectSelection?.targetRoot || ''">
-                <Vibe64SessionPanel @title-change="emitPageTitle" />
+              <SetupReadinessGate
+                :cache-key="projectSelectionSlotProps?.projectSelection?.targetRoot || ''"
+                :non-blocking-stage-ids="['accounts']"
+              >
+                <AccountsReadinessGate :cache-key="projectSelectionSlotProps?.projectSelection?.targetRoot || ''">
+                  <Vibe64SessionPanel @title-change="emitPageTitle" />
+                </AccountsReadinessGate>
               </SetupReadinessGate>
             </template>
           </ProjectTypeGate>
@@ -42,6 +47,7 @@ import Vibe64SessionPanel from "@/components/studio/Vibe64SessionPanel.vue";
 import ProjectSelectionGate from "@/components/studio/ProjectSelectionGate.vue";
 import ProjectTypeGate from "@/components/studio/ProjectTypeGate.vue";
 import SetupReadinessGate from "@/components/studio/SetupReadinessGate.vue";
+import AccountsReadinessGate from "@/components/studio/AccountsReadinessGate.vue";
 
 const pageError = ref("");
 const emit = defineEmits(["page-title-change"]);
@@ -154,6 +160,14 @@ onBeforeUnmount(() => {
   }
 
   .studio-screen__gate-scroll :deep(.project-type-gate > .setup-readiness-gate) {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .studio-screen__gate-scroll :deep(.accounts-readiness-gate),
+  .studio-screen__gate-scroll :deep(.accounts-readiness-gate__content) {
     display: flex;
     flex: 1 1 auto;
     flex-direction: column;

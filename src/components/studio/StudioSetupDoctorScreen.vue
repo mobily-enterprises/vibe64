@@ -16,9 +16,9 @@
     ready-title="Studio Setup ready"
     quiet-title="Checking your machine"
     quiet-lede="Vibe64 is checking Docker and local tools before it starts."
-    continue-label="Continue to Accounts"
+    continue-label="Continue to Adapter Setup"
     continue-emits
-    @continue="emit('select-tab', 'accounts')"
+    @continue="emit('select-tab', 'adapter-setup')"
     @refresh="loadStudioSetup"
     @status-updated="handleStudioSetupUpdated"
   />
@@ -43,7 +43,7 @@ const streamAutoStart = ref(false);
 
 const lede = computed(() => {
   if (studioSetup.value?.ready) {
-    return "Machine runtime is ready. Continue to connect Codex and GitHub.";
+    return "Machine runtime is ready. Continue to Adapter Setup.";
   }
   return "Machine runtime must be ready before Studio can operate on the target project.";
 });

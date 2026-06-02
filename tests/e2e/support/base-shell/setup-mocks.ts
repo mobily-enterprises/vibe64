@@ -2,6 +2,7 @@ import {
   abandonedArchiveSession,
   bootstrapPayload,
   blockedAppSetupPayload,
+  blockedAccountsPayload,
   blockedBootstrapPayload,
   blockedTargetAppPayload,
   completedArchiveSession,
@@ -68,8 +69,8 @@ async function mockSetupReadiness(page, payload) {
 async function mockSetupGateReady(page) {
   await mockSetupReadiness(page, setupReadinessPayload({
     stages: [
-      readyBootstrapPayload,
       readyAccountsPayload,
+      readyBootstrapPayload,
       readyTargetAppPayload,
       readyAppSetupPayload
     ]
@@ -100,8 +101,8 @@ async function mockBootstrapBlocked(page) {
     message: "Studio Setup is not ready.",
     ready: false,
     stages: [
-      blockedBootstrapPayload,
       readyAccountsPayload,
+      blockedBootstrapPayload,
       readyTargetAppPayload,
       readyAppSetupPayload
     ]
@@ -151,6 +152,41 @@ async function mockStudioReady(page) {
     await fulfillJson(route, readyAppSetupPayload);
   });
   await mockCurrentAppInspection(page);
+}
+
+async function mockAccountsBlocked(page) {
+  await mockProjectGateReady(page);
+  await mockSetupReadiness(page, setupReadinessPayload({
+    currentStage: {
+      id: "accounts",
+      label: "Accounts"
+    },
+    message: "Connect Codex and GitHub before using Studio project actions.",
+    ready: false,
+    stages: [
+      blockedAccountsPayload,
+      readyBootstrapPayload,
+      readyTargetAppPayload,
+      readyAppSetupPayload
+    ]
+  }));
+  await page.route("**/api/vibe64/accounts", async (route) => {
+    await fulfillJson(route, blockedAccountsPayload);
+  });
+  await page.route("**/api/studio/current-app", async (route) => {
+    await fulfillJson(route, currentAppPayload);
+  });
+  await page.route("**/api/vibe64/sessions**", async (route) => {
+    await fulfillJson(route, {
+      limits: {
+        maxOpenSessions: 5,
+        openSessionCount: 0
+      },
+      ok: true,
+      sessions: [],
+      stepDefinitions: []
+    });
+  });
 }
 
 async function mockCurrentAppInspection(page) {
@@ -332,8 +368,8 @@ async function mockAppSetupBlocked(page) {
     message: "Project Setup is not ready.",
     ready: false,
     stages: [
-      readyBootstrapPayload,
       readyAccountsPayload,
+      readyBootstrapPayload,
       readyTargetAppPayload,
       blockedAppSetupPayload
     ]
@@ -359,6 +395,7 @@ async function mockAppSetupBlocked(page) {
 }
 
 export {
+  mockAccountsBlocked,
   mockAppSetupBlocked,
   mockBootstrapBlocked,
   mockCurrentAppInspection,

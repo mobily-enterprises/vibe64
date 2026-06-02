@@ -15,6 +15,14 @@
           {{ statusReady ? "Accounts ready" : "Accounts needed" }}
         </v-chip>
         <v-btn
+          v-if="backLabel"
+          color="primary"
+          variant="tonal"
+          @click="emit('back')"
+        >
+          {{ backLabel }}
+        </v-btn>
+        <v-btn
           color="primary"
           variant="tonal"
           :loading="accounts.isLoading"
@@ -24,12 +32,12 @@
           Refresh
         </v-btn>
         <v-btn
-          v-if="statusReady"
+          v-if="statusReady && showContinue"
           color="primary"
           variant="flat"
           @click="emit('continue')"
         >
-          Continue to Adapter Setup
+          {{ continueLabel }}
         </v-btn>
       </div>
     </header>
@@ -193,7 +201,22 @@ import {
 import { useVibe64Accounts } from "@/composables/useVibe64Accounts.js";
 import { useAccountAuthSessions } from "@/composables/useAccountAuthSessions.js";
 
-const emit = defineEmits(["continue"]);
+defineProps({
+  backLabel: {
+    default: "",
+    type: String
+  },
+  continueLabel: {
+    default: "Continue to Adapter Setup",
+    type: String
+  },
+  showContinue: {
+    default: true,
+    type: Boolean
+  }
+});
+
+const emit = defineEmits(["back", "continue"]);
 
 const accounts = useVibe64Accounts();
 const status = computed(() => accounts.status || null);

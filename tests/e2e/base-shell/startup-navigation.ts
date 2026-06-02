@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 import { BASE_URL, currentAppPayload } from "../support/base-shell-data";
 import { expectSessionsRoute } from "../support/base-shell-assertions";
 import {
+  mockAccountsBlocked,
   mockAppSetupBlocked,
   mockBootstrapBlocked,
   mockCurrentAppInspection,
@@ -73,7 +74,7 @@ test.describe("studio startup navigation", () => {
     const apiRequests = trackStudioApiRequests(page);
     await mockBootstrapBlocked(page);
     await page.goto(`${BASE_URL}/`);
-    await expect(page).toHaveURL(/\/setup\?tab=studio-setup$/u);
+    await expect(page).toHaveURL(/\/home\/dashboard\/setup\?tab=studio-setup$/u);
     await expect(page.getByRole("heading", { name: "Studio Setup", exact: true })).toBeVisible();
     await expect(page.getByText("Studio Setup blocked").first()).toBeVisible();
     expect(apiRequests.count("/api/studio/current-app/setup-readiness")).toBe(1);
@@ -226,7 +227,7 @@ test.describe("studio startup navigation", () => {
     const apiRequests = trackStudioApiRequests(page);
     await mockAppSetupBlocked(page);
     await page.goto(`${BASE_URL}/home`);
-    await expect(page).toHaveURL(/\/setup\?tab=project-setup$/u);
+    await expect(page).toHaveURL(/\/home\/dashboard\/setup\?tab=project-setup$/u);
     await expect(page.getByRole("heading", { name: "Project Setup", exact: true })).toBeVisible();
     expect(apiRequests.count("/api/studio/current-app/setup-readiness")).toBe(1);
     expect(apiRequests.count("/api/studio/current-app/setup-readiness/stream")).toBe(0);
@@ -284,12 +285,34 @@ test.describe("studio startup navigation", () => {
     await expect(page.getByRole("tab", { name: "Project Setup", exact: true })).toHaveAttribute("aria-selected", "true");
   });
 
-  test("ready continue moves from Studio Setup to Accounts tab", async ({ page }) => {
+  test("ready continue moves from Accounts to Studio Setup", async ({ page }) => {
+    await mockStudioReady(page);
+    await page.goto(`${BASE_URL}/home/accounts`);
+    await page.getByRole("button", { name: "Continue to Studio Setup" }).click();
+    await expect(page).toHaveURL(/\/home\/dashboard\/setup\?tab=studio-setup$/u);
+    await expect(page.getByRole("tab", { name: "Studio Setup", exact: true })).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator(".vibe64-setup-panel")).toBeVisible();
+  });
+
+  test("ready continue moves from Studio Setup to Adapter Setup tab", async ({ page }) => {
     await mockStudioReady(page);
     await page.goto(`${BASE_URL}/setup?tab=studio-setup`);
-    await page.getByRole("button", { name: "Continue to Accounts" }).click();
-    await expect(page).toHaveURL(/\/setup\?tab=accounts$/u);
+    await page.getByRole("button", { name: "Continue to Adapter Setup" }).click();
+    await expect(page).toHaveURL(/\/setup\?tab=adapter-setup$/u);
+    await expect(page.getByRole("tab", { name: "Adapter Setup", exact: true })).toHaveAttribute("aria-selected", "true");
+  });
+
+  test("home disables project actions when accounts are missing", async ({ page }) => {
+    await mockAccountsBlocked(page);
+    await page.goto(`${BASE_URL}/home`);
+    await expect(page).toHaveURL(/\/home$/u);
+    await expect(page.getByRole("heading", { name: "Accounts required", exact: true })).toBeVisible();
+    await expect(page.getByTestId("accounts-readiness-gate").locator(".accounts-readiness-gate__content")).toHaveAttribute("aria-disabled", "true");
+    await page.getByRole("link", { name: "Accounts", exact: true }).click();
+    await expect(page).toHaveURL(/\/home\/accounts\?returnTo=\/home$/u);
     await expect(page.getByRole("heading", { name: "Accounts", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Back to Studio" }).click();
+    await expect(page).toHaveURL(/\/home$/u);
   });
 
   test("ready continue moves from Adapter Setup to Project Setup tab", async ({ page }) => {

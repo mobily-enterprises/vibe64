@@ -15,16 +15,10 @@ test.describe("Autopilot dumb client contract", () => {
 
     await page.goto(`${BASE_URL}/home`);
 
-    await page.getByRole("button", { name: "Menu" }).click();
-    const workspaceMenu = page.locator(".vibe64-home-workspace-menu");
-    await expect(workspaceMenu).toBeVisible();
-    await expect(workspaceMenu.getByText("Preview", { exact: true })).toHaveCount(0);
-    await expect(workspaceMenu.getByText("Configure", { exact: true })).toBeVisible();
-    await expect(workspaceMenu.getByText("Run", { exact: true })).toBeVisible();
-    await expect(workspaceMenu.getByText("Session History", { exact: true })).toBeVisible();
-    await expect(workspaceMenu.getByText("Setup", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Menu" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Tools" })).toHaveCount(0);
 
-    await workspaceMenu.getByText("Configure", { exact: true }).click();
+    await page.getByRole("tab", { name: "Dashboard" }).click();
     await expect(page).toHaveURL(/\/home\/dashboard\/configure\/?$/u);
     await expectNoAttentionRequired(page);
     await expect(page.getByRole("tab", { name: "Dashboard" })).toHaveAttribute("aria-selected", "true");
@@ -33,38 +27,30 @@ test.describe("Autopilot dumb client contract", () => {
       ".section-container-shell__nav .v-list-item-title"
     ).evaluateAll((nodes) => nodes.map((node) => String(node.textContent || "").trim()).filter(Boolean)))
       .toEqual([
-        "Session Details",
         "Configure",
-        "Run"
+        "Remote",
+        "Run",
+        "Session History",
+        "Setup"
       ]);
 
     for (const { label, routePath, selector, text } of [
-      { label: "Session Details", routePath: "session", selector: ".section-container-shell__content", text: "Session Details" },
+      { label: "Remote", routePath: "remote", selector: ".vibe64-project-tools--panel", text: "Project tools" },
       { label: "Run", routePath: "run", selector: ".target-scripts-panel", text: "" },
+      { label: "Session History", routePath: "history", selector: ".vibe64-session-history-panel", text: "" },
+      { label: "Setup", routePath: "setup", selector: ".vibe64-setup-panel", text: "" },
       { label: "Configure", routePath: "configure", selector: ".project-config-setup", text: "" }
     ]) {
       await page.locator(".section-container-shell__nav").getByText(label, { exact: true }).click();
-      await expect(page).toHaveURL(new RegExp(`/home/dashboard/${routePath}/?$`, "u"));
+      await expect(page).toHaveURL(new RegExp(`/home/dashboard/${routePath}/?(?:\\?.*)?$`, "u"));
       await expectNoAttentionRequired(page);
       await expect(page.getByRole("tab", { name: "Dashboard" })).toHaveAttribute("aria-selected", "true");
       const content = page.locator(selector);
       await expect(text ? content.filter({ hasText: text }) : content).toBeVisible();
     }
-
-    await page.getByRole("button", { name: "Menu" }).click();
-    await workspaceMenu.getByText("Session History", { exact: true }).click();
-    await expect(page).toHaveURL(/\/home\/history(?:\?.*)?$/u);
-    await expectNoAttentionRequired(page);
-    await expect(page.locator(".vibe64-session-history-panel")).toBeVisible();
-
-    await page.getByRole("button", { name: "Menu" }).click();
-    await workspaceMenu.getByText("Setup", { exact: true }).click();
-    await expect(page).toHaveURL(/\/home\/setup(?:\?.*)?$/u);
-    await expectNoAttentionRequired(page);
-    await expect(page.locator(".vibe64-setup-panel")).toBeVisible();
   });
 
-  test("keeps setup-ready content visible while menu routes refresh setup readiness", async ({ page }) => {
+  test("keeps setup-ready content visible while dashboard routes avoid setup readiness remounts", async ({ page }) => {
     const setupReadinessRequests: string[] = [];
     let allowSecondSetupReadinessResponse: () => void = () => undefined;
     const secondSetupReadinessResponse = new Promise<void>((resolve) => {
@@ -88,13 +74,12 @@ test.describe("Autopilot dumb client contract", () => {
     await page.goto(`${BASE_URL}/home`);
     await expect(page.getByRole("tab", { name: "Preview" })).toBeVisible();
 
-    await page.getByRole("button", { name: "Menu" }).click();
-    await page.locator(".vibe64-home-workspace-menu").getByText("Configure", { exact: true }).click();
+    await page.getByRole("tab", { name: "Dashboard" }).click();
     await expect(page).toHaveURL(/\/home\/dashboard\/configure\/?$/u);
-    await expect.poll(() => setupReadinessRequests.length).toBeGreaterThan(1);
     await expect(page.getByText("Checking setup", { exact: true })).toHaveCount(0);
-    allowSecondSetupReadinessResponse();
     await expect(page.locator(".project-config-setup")).toBeVisible();
+    expect(setupReadinessRequests).toHaveLength(1);
+    allowSecondSetupReadinessResponse();
   });
 
   test("auto-dispatches the server operation without rendering a manual start override", async ({ page }) => {

@@ -26,8 +26,6 @@ test.describe("setup tabbed doctor responsive smoke", () => {
       await expect(page.getByText("Studio Setup blocked").first()).toBeVisible();
       await expect(page.getByText("MySQL capability").first()).toBeVisible();
       await expect(page.getByText("Managed toolchain image").first()).toBeVisible();
-      await expect(page.getByText("GitHub login").first()).toBeVisible();
-      await expect(page.getByText("Codex login").first()).toBeVisible();
       await expect(page.locator(".doctor-status__status-icon")).toHaveCount(blockedBootstrapPayload.checks.length);
       await expect(page.getByText("Pass", { exact: true })).toHaveCount(0);
       await expect(page.getByText("Fail", { exact: true })).toHaveCount(0);

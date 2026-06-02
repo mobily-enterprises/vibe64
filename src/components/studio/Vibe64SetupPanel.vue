@@ -32,10 +32,6 @@
         v-if="activeTab === 'studio-setup'"
         @select-tab="selectTab"
       />
-      <AccountsSetup
-        v-else-if="activeTab === 'accounts'"
-        @continue="selectTab('adapter-setup')"
-      />
       <AdapterSetupDoctorScreen
         v-else-if="activeTab === 'adapter-setup'"
         @select-tab="selectTab"
@@ -50,14 +46,12 @@
 
 <script setup>
 import { computed } from "vue";
-import AccountsSetup from "@/components/studio/AccountsSetup.vue";
 import AdapterSetupDoctorScreen from "@/components/studio/AdapterSetupDoctorScreen.vue";
 import ProjectSetupDoctorScreen from "@/components/studio/ProjectSetupDoctorScreen.vue";
 import StudioSetupDoctorScreen from "@/components/studio/StudioSetupDoctorScreen.vue";
 
 const tabs = [
   { label: "Studio Setup", value: "studio-setup" },
-  { label: "Accounts", value: "accounts" },
   { label: "Adapter Setup", value: "adapter-setup" },
   { label: "Project Setup", value: "project-setup" }
 ];

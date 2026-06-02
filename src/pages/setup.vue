@@ -16,12 +16,6 @@
       </div>
     </template>
 
-    <template #top-right>
-      <div class="setup__shell-actions">
-        <Vibe64HomeWorkspaceMenu />
-      </div>
-    </template>
-
     <section class="setup" aria-labelledby="setup-title">
       <header class="setup__header">
         <p class="setup__eyebrow">Studio readiness</p>
@@ -48,13 +42,11 @@ import { useRoute, useRouter } from "vue-router";
 import ShellLayout from "@/components/ShellLayout.vue";
 import ProjectTypeGate from "@/components/studio/ProjectTypeGate.vue";
 import ProjectSelectionGate from "@/components/studio/ProjectSelectionGate.vue";
-import Vibe64HomeWorkspaceMenu from "@/components/studio/Vibe64HomeWorkspaceMenu.vue";
 import Vibe64SetupPanel from "@/components/studio/Vibe64SetupPanel.vue";
 import { useStudioShellDrawer } from "@/composables/useStudioShellDrawer.js";
 
 const tabs = [
   { label: "Studio Setup", value: "studio-setup" },
-  { label: "Accounts", value: "accounts" },
   { label: "Adapter Setup", value: "adapter-setup" },
   { label: "Project Setup", value: "project-setup" }
 ];
@@ -101,6 +93,10 @@ function selectTab(value, { replace = false } = {}) {
 watch(
   () => route.query.tab,
   (tab) => {
+    if (tab === "accounts") {
+      void router.replace("/home/accounts");
+      return;
+    }
     if (!normalizeTab(tab)) {
       void selectTab(fallbackTab(), { replace: true });
     }

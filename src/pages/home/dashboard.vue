@@ -6,11 +6,11 @@ import { RouterView } from "vue-router";
 import SectionContainerShell from "/src/components/SectionContainerShell.vue";
 import ProjectSelectionGate from "@/components/studio/ProjectSelectionGate.vue";
 import ProjectTypeGate from "@/components/studio/ProjectTypeGate.vue";
-import SetupReadinessGate from "@/components/studio/SetupReadinessGate.vue";
 import Vibe64SessionPanel from "@/components/studio/Vibe64SessionPanel.vue";
+import AccountsReadinessGate from "@/components/studio/AccountsReadinessGate.vue";
 
 definePage({
-  redirect: redirectToChild("session")
+  redirect: redirectToChild("configure")
 });
 
 const pageError = ref("");
@@ -79,16 +79,13 @@ onBeforeUnmount(() => {
             @ready="handleProjectTypeReady"
           >
             <template #default="projectGateSlotProps">
-              <SetupReadinessGate :cache-key="projectSelectionSlotProps?.projectSelection?.targetRoot || ''">
+              <AccountsReadinessGate :cache-key="projectSelectionSlotProps?.projectSelection?.targetRoot || ''">
                 <Vibe64SessionPanel
                   workspace-pane="dashboard"
                   @title-change="emitPageTitle"
                 >
                   <template #dashboard="dashboardSlotProps">
-                    <SectionContainerShell
-                      title="Dashboard"
-                      subtitle="Session dashboard."
-                    >
+                    <SectionContainerShell>
                       <template #tabs>
                         <ShellOutlet target="home-dashboard:primary-menu" />
                       </template>
@@ -102,7 +99,7 @@ onBeforeUnmount(() => {
                     </SectionContainerShell>
                   </template>
                 </Vibe64SessionPanel>
-              </SetupReadinessGate>
+              </AccountsReadinessGate>
             </template>
           </ProjectTypeGate>
         </template>
@@ -156,8 +153,15 @@ onBeforeUnmount(() => {
   }
 
   .studio-screen__gate-scroll :deep(.project-type-gate),
-  .studio-screen__gate-scroll :deep(.project-selection-gate),
-  .studio-screen__gate-scroll :deep(.project-type-gate > .setup-readiness-gate) {
+  .studio-screen__gate-scroll :deep(.project-selection-gate) {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .studio-screen__gate-scroll :deep(.accounts-readiness-gate),
+  .studio-screen__gate-scroll :deep(.accounts-readiness-gate__content) {
     display: flex;
     flex: 1 1 auto;
     flex-direction: column;

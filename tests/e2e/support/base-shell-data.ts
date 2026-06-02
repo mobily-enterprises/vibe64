@@ -138,6 +138,28 @@ const readyAccountsPayload = {
   ready: true
 };
 
+const blockedAccountsPayload = {
+  accounts: [
+    {
+      connected: false,
+      id: "codex",
+      label: "Codex",
+      message: "Codex is not authenticated for Studio.",
+      status: "missing"
+    },
+    {
+      connected: false,
+      id: "github",
+      label: "GitHub",
+      message: "GitHub CLI is not authenticated for Studio.",
+      status: "missing"
+    }
+  ],
+  message: "Connect Codex and GitHub before using Studio project actions.",
+  ok: true,
+  ready: false
+};
+
 const blockedBootstrapPayload = {
   ready: false,
   checks: [
@@ -606,6 +628,7 @@ export {
   viewports,
   readyProjectSelectionPayload,
   bootstrapPayload,
+  blockedAccountsPayload,
   readyAccountsPayload,
   readyProjectConfigPayload,
   readyProjectTypePayload,

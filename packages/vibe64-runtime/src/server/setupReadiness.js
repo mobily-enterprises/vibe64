@@ -7,14 +7,14 @@ import {
 
 const SETUP_STAGES = Object.freeze([
   {
-    id: "studio-setup",
-    label: "Studio Setup",
-    serviceName: "studioSetupService"
-  },
-  {
     id: "accounts",
     label: "Accounts",
     serviceName: "accountSetupService"
+  },
+  {
+    id: "studio-setup",
+    label: "Studio Setup",
+    serviceName: "studioSetupService"
   },
   {
     id: "adapter-setup",

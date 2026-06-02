@@ -105,7 +105,7 @@ function pathForItem(itemId = "") {
   if (itemId === "workspace") {
     return "/home";
   }
-  if (itemId === "configure" || itemId === "run") {
+  if (itemId === "configure" || itemId === "run" || itemId === "history" || itemId === "setup") {
     return `/home/dashboard/${itemId}`;
   }
   return `/home/${itemId}`;

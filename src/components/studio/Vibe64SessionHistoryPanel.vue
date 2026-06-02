@@ -122,6 +122,7 @@ function refreshArchive() {
 
 .vibe64-session-history-panel__refresh {
   flex: 0 0 auto;
+  height: 48px;
   min-height: 48px;
 }
 

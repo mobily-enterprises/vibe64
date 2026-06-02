@@ -34,31 +34,6 @@
       </v-chip>
 
       <v-menu
-        v-if="hiddenSessions.length"
-        location="bottom start"
-      >
-        <template #activator="{ props: menuProps }">
-          <v-btn
-            v-bind="menuProps"
-            :icon="mdiDotsHorizontal"
-            size="small"
-            title="More sessions"
-            variant="tonal"
-          />
-        </template>
-
-        <v-list density="compact" class="studio-ai-sessions__session-menu">
-          <v-list-item
-            v-for="sessionItem in hiddenSessions"
-            :key="sessionItem.sessionId"
-            :active="sessionItem.sessionId === selectedSessionId"
-            :title="sessionTabLabel(sessionItem)"
-            @click="toolbar.selectSession(sessionItem.sessionId)"
-          />
-        </v-list>
-      </v-menu>
-
-      <v-menu
         v-if="showWorkflowDefinitionMenu"
         v-model="workflowDefinitionMenuOpen"
         location="bottom end"
@@ -98,7 +73,7 @@
       </v-menu>
 
       <v-btn
-        v-else
+        v-else-if="createSessionVisible"
         aria-label="New session"
         class="studio-ai-sessions__create-button"
         color="primary"
@@ -118,7 +93,6 @@
 import { computed, ref } from "vue";
 import {
   mdiClose,
-  mdiDotsHorizontal,
   mdiPlus
 } from "@mdi/js";
 
@@ -144,7 +118,7 @@ const props = defineProps({
     type: Boolean
   },
   maxVisibleSessions: {
-    default: 0,
+    default: 3,
     type: Number
   }
 });
@@ -161,8 +135,14 @@ const workflowDefinitions = computed(() => {
   return Array.isArray(props.toolbar.workflowDefinitions) ? props.toolbar.workflowDefinitions : [];
 });
 const allSessions = computed(() => Array.isArray(props.toolbar.sessions) ? props.toolbar.sessions : []);
+const sessionLimit = computed(() => Math.max(0, Number(props.maxVisibleSessions || 0)));
+const sessionLimitReached = computed(() => Boolean(
+  sessionLimit.value > 0 &&
+  allSessions.value.length >= sessionLimit.value
+));
+const createSessionVisible = computed(() => !sessionLimitReached.value);
 const visibleSessions = computed(() => {
-  const limit = Math.max(0, Number(props.maxVisibleSessions || 0));
+  const limit = sessionLimit.value;
   if (limit < 1 || allSessions.value.length <= limit) {
     return allSessions.value;
   }
@@ -175,12 +155,8 @@ const visibleSessions = computed(() => {
     allSessions.value[selectedIndex]
   ];
 });
-const hiddenSessions = computed(() => {
-  const visibleIds = new Set(visibleSessions.value.map((sessionItem) => sessionItem.sessionId));
-  return allSessions.value.filter((sessionItem) => !visibleIds.has(sessionItem.sessionId));
-});
 const showWorkflowDefinitionMenu = computed(() => {
-  return props.toolbar.createSessionMode === "select" && workflowDefinitions.value.length > 0;
+  return createSessionVisible.value && props.toolbar.createSessionMode === "select" && workflowDefinitions.value.length > 0;
 });
 const workflowDefinitionMenuOpen = ref(false);
 
@@ -229,18 +205,14 @@ function createSessionFromDefinition(definitionId = "") {
 
 .studio-ai-sessions__create-button {
   border-radius: 999px;
-  min-height: 2.2rem;
-  min-width: 2.2rem;
+  height: 3rem;
+  min-height: 3rem;
+  min-width: 3rem;
 }
 
 .studio-ai-sessions__definition-menu {
   max-width: min(28rem, calc(100vw - 2rem));
   min-width: min(22rem, calc(100vw - 2rem));
-}
-
-.studio-ai-sessions__session-menu {
-  max-width: min(18rem, 88vw);
-  min-width: min(12rem, 88vw);
 }
 
 .studio-ai-sessions__definition-menu :deep(.v-list-item-subtitle) {

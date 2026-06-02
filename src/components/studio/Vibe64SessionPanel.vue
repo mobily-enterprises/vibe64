@@ -23,21 +23,6 @@
       />
     </div>
 
-    <Teleport
-      defer
-      to="#studio-home-app-bar-actions"
-    >
-      <div
-        v-if="toolbarActionsVisible"
-        class="studio-ai-sessions__app-bar-actions"
-      >
-        <Vibe64ProjectTools
-          @global-codex-open="openGlobalCodexTerminal"
-          @global-codex-update="updateGlobalCodexTerminalState"
-        />
-      </div>
-    </Teleport>
-
     <v-progress-linear
       v-if="pageLoading && !selection.selectedSession"
       color="primary"
@@ -50,7 +35,7 @@
       v-else-if="!selection.selectedSession"
       class="studio-ai-sessions__empty-layout"
       :class="{
-        'studio-ai-sessions__empty-layout--with-terminal': globalCodexTerminalOpen
+        'studio-ai-sessions__empty-layout--dashboard': dashboardWorkspaceActive
       }"
     >
       <v-sheet
@@ -61,17 +46,12 @@
         <p class="text-body-2 text-medium-emphasis mb-0">No sessions yet.</p>
       </v-sheet>
 
-      <Vibe64SessionTerminals
-        v-if="globalCodexTerminalOpen"
-        :allow-codex-start="true"
-        class="studio-ai-sessions__global-codex-terminal"
-        :codex-terminal="globalCodexTerminalController"
-        :codex-scope="'global'"
-        :codex-terminal-state="globalCodexTerminalState"
-        :display-mode="'full'"
-        :show-command-output="false"
-        @codex-session-update="updateGlobalCodexTerminalState"
-      />
+      <div
+        v-if="dashboardWorkspaceActive"
+        class="studio-ai-sessions__dashboard-empty-pane"
+      >
+        <slot name="dashboard" :dashboard-context="emptyDashboardContext" />
+      </div>
     </div>
 
     <div v-else class="studio-ai-sessions__runtime-stack">
@@ -98,11 +78,9 @@
 </template>
 
 <script setup>
-import { computed, proxyRefs, reactive, ref, watch } from "vue";
+import { computed, proxyRefs, reactive, watch } from "vue";
 import { useRoute } from "vue-router";
-import Vibe64ProjectTools from "@/components/studio/Vibe64ProjectTools.vue";
 import Vibe64SessionRuntimeHost from "@/components/studio/vibe64-session/Vibe64SessionRuntimeHost.vue";
-import Vibe64SessionTerminals from "@/components/studio/vibe64-session/Vibe64SessionTerminals.vue";
 import Vibe64SessionToolbar from "@/components/studio/vibe64-session/Vibe64SessionToolbar.vue";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
 import {
@@ -128,8 +106,6 @@ const fallbackAbandon = {
   request: () => null
 };
 const runtimeStateBySessionId = reactive({});
-const globalCodexTerminalOpen = ref(false);
-const globalCodexTerminalState = ref(null);
 const sessionData = useVibe64SessionData({
   onTitleChange(title) {
     emit("title-change", title);
@@ -155,13 +131,11 @@ const toolbar = proxyRefs({
 
 const workspacePane = computed(() => normalizeWorkspacePane(props.workspacePane || route.query.pane));
 const pageLoading = sessionData.pageLoading;
-const toolbarActionsVisible = computed(() => true);
 const panelSessionToolbarVisible = computed(() => Boolean(
   !selection.selectedSession
 ));
-const globalCodexTerminalController = {
-  sessionUpdate: updateGlobalCodexTerminalState
-};
+const dashboardWorkspaceActive = computed(() => workspacePane.value === "dashboard");
+const emptyDashboardContext = Object.freeze({});
 const selectedRuntimeState = computed(() => runtimeStateBySessionId[selection.selectedSessionId] || null);
 const selectedAbandon = computed(() => selectedRuntimeState.value?.toolbarControls?.abandon || fallbackAbandon);
 const pageError = computed(() => blockingVibe64SessionPageError({
@@ -223,24 +197,6 @@ function normalizeWorkspacePane(value = "") {
     : "preview";
 }
 
-function openGlobalCodexTerminal() {
-  globalCodexTerminalOpen.value = true;
-}
-
-function updateGlobalCodexTerminalState(payload = {}) {
-  const directTerminal = payload?.globalCodexTerminal || payload?.codexTerminal;
-  if (directTerminal && typeof directTerminal === "object" && !Array.isArray(directTerminal)) {
-    globalCodexTerminalState.value = directTerminal;
-    return;
-  }
-  globalCodexTerminalState.value = {
-    ...(globalCodexTerminalState.value || {}),
-    commandPreview: String(payload.codexTerminalCommandPreview || payload.commandPreview || ""),
-    id: String(payload.codexTerminalSessionId || payload.terminalSessionId || payload.id || ""),
-    status: String(payload.codexTerminalStatus || payload.status || "")
-  };
-}
-
 watch(sessionData.sessions, (sessions = []) => {
   const visibleSessionIds = new Set(sessions.map((session) => session.sessionId));
   for (const sessionId of Object.keys(runtimeStateBySessionId)) {
@@ -280,7 +236,7 @@ watch(sessionData.sessions, (sessions = []) => {
   min-height: 0;
 }
 
-.studio-ai-sessions__global-codex-terminal {
+.studio-ai-sessions__dashboard-empty-pane {
   min-height: 0;
   min-width: 0;
 }
@@ -316,26 +272,11 @@ watch(sessionData.sessions, (sessions = []) => {
     overflow: hidden;
   }
 
-  .studio-ai-sessions__empty-layout--with-terminal {
+  .studio-ai-sessions__empty-layout--dashboard {
     align-items: stretch;
     grid-template-columns: var(--studio-ai-sessions-main-column) var(--studio-ai-sessions-codex-terminal-column);
     height: 100%;
     overflow: hidden;
-  }
-}
-
-.studio-ai-sessions__app-bar-actions {
-  align-items: center;
-  display: flex;
-  gap: 0.35rem;
-  justify-content: flex-end;
-  margin-left: auto;
-  min-width: 0;
-}
-
-@media (max-width: 600px) {
-  .studio-ai-sessions__app-bar-actions {
-    gap: 0.25rem;
   }
 }
 </style>

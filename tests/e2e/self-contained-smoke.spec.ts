@@ -12,10 +12,11 @@ test("home loads through a self-contained mocked Studio shell", async ({ page })
   await page.goto("/home");
 
   await expect(page).toHaveURL(/\/home$/u);
-  await expect(page.getByRole("link", { name: "Setup", exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Target Scripts", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Tools" })).toBeVisible();
-  await page.getByRole("button", { name: "Tools" }).click();
+  await expect(page.getByRole("button", { name: "Menu" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Tools" })).toHaveCount(0);
+  await page.goto("/home/dashboard/remote");
+  await page.locator(".section-container-shell__nav").getByText("Remote", { exact: true }).click();
+  await expect(page).toHaveURL(/\/home\/dashboard\/remote\/?$/u);
   await expect(page.getByText("Project tools")).toBeVisible();
   await expect(page.getByText("Push to staging", { exact: true })).toBeVisible();
   await expect(page.getByText("Parameterized smoke tool", { exact: true })).toBeVisible();
@@ -24,11 +25,12 @@ test("home loads through a self-contained mocked Studio shell", async ({ page })
   await expect(parameterDialog).toBeVisible();
   await expect(parameterDialog.getByLabel("Scope")).toBeVisible();
   await parameterDialog.getByRole("button", { name: "Cancel" }).click();
-  await page.getByRole("button", { name: "Tools" }).click();
   await page.getByText("Push to staging", { exact: true }).click();
   const confirmationDialog = page.getByRole("dialog").filter({ hasText: "Push to staging" });
   await expect(confirmationDialog.getByText("Deploy to staging from this checkout?")).toBeVisible();
   await confirmationDialog.getByRole("button", { name: "Cancel" }).click();
+  await page.goto("/home");
+  await expect(page).toHaveURL(/\/home$/u);
   await expect(page.getByRole("button", { name: "New Session" })).toBeVisible();
   await page.getByRole("button", { name: "New Session" }).click();
   await expect(page.getByText("Session type")).toBeVisible();
@@ -57,11 +59,6 @@ async function mockReadyStudioShell(page: Page) {
     ready: true,
     stages: [
       {
-        checks: [],
-        ok: true,
-        ready: true
-      },
-      {
         accounts: [
           {
             connected: true,
@@ -76,6 +73,11 @@ async function mockReadyStudioShell(page: Page) {
             status: "connected"
           }
         ],
+        ok: true,
+        ready: true
+      },
+      {
+        checks: [],
         ok: true,
         ready: true
       },
@@ -160,6 +162,33 @@ async function mockReadyStudioShell(page: Page) {
         },
         surfaceAccess: {},
         userSettings: null
+      }
+    ],
+    [
+      "/api/vibe64/projects",
+      {
+        currentProject: {
+          external: true,
+          name: "example-target-app",
+          path: targetRoot,
+          selected: true,
+          slug: "example-target-app",
+          source: "external"
+        },
+        hasSelection: true,
+        ok: true,
+        projects: [
+          {
+            external: true,
+            name: "example-target-app",
+            path: targetRoot,
+            selected: true,
+            slug: "example-target-app",
+            source: "external"
+          }
+        ],
+        projectsRoot: "/workspace",
+        targetRoot
       }
     ],
     [

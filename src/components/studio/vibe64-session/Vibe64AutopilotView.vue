@@ -1,24 +1,48 @@
 <template>
   <section class="studio-autopilot">
     <section class="studio-autopilot__chat-panel" aria-label="Session chat">
-      <Vibe64SessionToolbar
-        v-if="sessionToolbarVisible"
-        :abandon="sessionAbandon"
-        compact
-        :max-visible-sessions="3"
-        :selected-session-id="sessionId"
-        :selection-closed="sessionSelectionClosed"
-        :toolbar="sessionToolbar"
-      />
+      <div class="studio-autopilot__session-header">
+        <Vibe64SessionToolbar
+          v-if="sessionToolbarVisible"
+          :abandon="sessionAbandon"
+          compact
+          :max-visible-sessions="3"
+          :selected-session-id="sessionId"
+          :selection-closed="sessionSelectionClosed"
+          :toolbar="sessionToolbar"
+        />
 
-      <Vibe64AutopilotNavigation
-        class="studio-autopilot__nav"
-        :busy="navigationBusy"
-        :executing="workflowExecuting"
-        layout="icons"
-        :steps="autopilotSteps"
-        @rewind="rewindToAutopilotStep"
-      />
+        <div
+          v-if="sessionToolsVisible"
+          class="studio-autopilot__session-tools"
+          aria-label="Active session tools"
+        >
+          <v-btn
+            v-for="tool in sessionToolControls"
+            :key="tool.id"
+            class="studio-autopilot__session-tool"
+            :color="rightPaneTab === tool.id ? 'primary' : undefined"
+            :disabled="tool.disabled"
+            :prepend-icon="tool.icon"
+            size="small"
+            :title="tool.title"
+            type="button"
+            :variant="rightPaneTab === tool.id ? 'flat' : 'tonal'"
+            @click="selectSessionTool(tool.id)"
+          >
+            {{ tool.label }}
+          </v-btn>
+        </div>
+
+        <Vibe64AutopilotNavigation
+          class="studio-autopilot__nav"
+          :busy="navigationBusy"
+          :executing="workflowExecuting"
+          layout="icons"
+          :steps="autopilotSteps"
+          @rewind="rewindToAutopilotStep"
+        />
+      </div>
 
       <div
         class="studio-autopilot__chat-body"
@@ -450,6 +474,26 @@
       </div>
 
       <div
+        v-show="rightPaneTab === 'session-details'"
+        class="studio-autopilot__right-pane-page"
+        role="tabpanel"
+      >
+        <Vibe64SessionDetailsPane :context="dashboardSessionContext" />
+      </div>
+
+      <div
+        v-show="rightPaneTab === 'diff'"
+        class="studio-autopilot__right-pane-page"
+        role="tabpanel"
+      >
+        <Vibe64SessionDiffPanel
+          :active="rightPaneTab === 'diff'"
+          :diff="diff"
+          :review="review"
+        />
+      </div>
+
+      <div
         v-show="rightPaneTab === 'shell'"
         class="studio-autopilot__right-pane-page"
         role="tabpanel"
@@ -486,6 +530,7 @@ import {
   mdiClose,
   mdiConsoleLine,
   mdiFileCompare,
+  mdiInformationOutline,
   mdiRefresh,
   mdiRobotOutline,
   mdiStopCircleOutline
@@ -501,6 +546,8 @@ import Vibe64ConversationLog from "@/components/studio/vibe64-session/Vibe64Conv
 import Vibe64HeadlessCommandOutput from "@/components/studio/vibe64-session/Vibe64HeadlessCommandOutput.vue";
 import Vibe64ReportPreview from "@/components/studio/vibe64-session/Vibe64ReportPreview.vue";
 import Vibe64SessionActionButton from "@/components/studio/vibe64-session/Vibe64SessionActionButton.vue";
+import Vibe64SessionDetailsPane from "@/components/studio/vibe64-session/Vibe64SessionDetailsPane.vue";
+import Vibe64SessionDiffPanel from "@/components/studio/vibe64-session/Vibe64SessionDiffPanel.vue";
 import Vibe64SessionToolbar from "@/components/studio/vibe64-session/Vibe64SessionToolbar.vue";
 import Vibe64WorkflowControlForm from "@/components/studio/vibe64-session/Vibe64WorkflowControlForm.vue";
 import {
@@ -696,15 +743,13 @@ const rightPaneTabs = Object.freeze([
   {
     id: "dashboard",
     label: "Dashboard"
-  },
-  {
-    id: "shell",
-    label: "Shell"
-  },
-  {
-    id: "ai-terminal",
-    label: "AI Terminal"
   }
+]);
+const sessionPaneIds = Object.freeze([
+  "session-details",
+  "diff",
+  "shell",
+  "ai-terminal"
 ]);
 
 const stepInput = proxyRefs(useVibe64StepInputForm({
@@ -816,6 +861,34 @@ const sessionToolbarVisible = computed(() => Boolean(
   Array.isArray(props.sessionToolbar?.sessions) &&
   props.sessionToolbar.sessions.length
 ));
+const sessionToolsVisible = computed(() => Boolean(props.session));
+const sessionToolControls = computed(() => [
+  {
+    icon: mdiInformationOutline,
+    id: "session-details",
+    label: "Session",
+    title: "Show active session details"
+  },
+  {
+    disabled: props.review?.diffDisabled === true,
+    icon: mdiFileCompare,
+    id: "diff",
+    label: "Diff",
+    title: props.review?.diffTitle || "Review changes in the session worktree"
+  },
+  {
+    icon: mdiConsoleLine,
+    id: "shell",
+    label: "Shell",
+    title: "Open the session worktree terminal"
+  },
+  {
+    icon: mdiRobotOutline,
+    id: "ai-terminal",
+    label: "AI Terminal",
+    title: "Open the active session Codex terminal"
+  }
+]);
 const commandSpyVisible = computed(() => Boolean(
   commandTerminalVisible.value ||
   commandRunning.value ||
@@ -1049,12 +1122,16 @@ function normalizeWorkspacePane(value = "") {
     : "preview";
 }
 
+function rightPaneExists(tabId = "") {
+  return rightPaneTabs.some((tab) => tab.id === tabId) || sessionPaneIds.includes(tabId);
+}
+
 function selectRightPaneTab(tabId = "") {
-  if (!rightPaneTabs.some((tab) => tab.id === tabId)) {
+  if (!rightPaneExists(tabId)) {
     return;
   }
   if (tabId === "dashboard" && !dashboardRouteActive.value) {
-    void router.push("/home/dashboard/session");
+    void router.push("/home/dashboard/configure");
     return;
   }
   if (tabId === "preview" && dashboardRouteActive.value) {
@@ -1062,6 +1139,17 @@ function selectRightPaneTab(tabId = "") {
     return;
   }
   rightPaneTab.value = tabId;
+}
+
+function selectSessionTool(tabId = "") {
+  if (!sessionPaneIds.includes(tabId)) {
+    return false;
+  }
+  rightPaneTab.value = tabId;
+  if (tabId === "diff" && !props.diff?.payload && !props.diff?.loading && typeof props.diff?.load === "function") {
+    void props.diff.load();
+  }
+  return true;
 }
 
 function emitBusyState() {
@@ -1217,6 +1305,7 @@ async function runClientControl(control = {}) {
   try {
     const result = await runVibe64ClientControl(control, {
       diff: props.diff,
+      openDiffPane: () => selectSessionTool("diff"),
       refreshSessionData: props.refreshSessionData,
       session: props.session,
       sessionId: sessionId.value
@@ -1339,8 +1428,14 @@ watch(workspacePaneValue, (pane) => {
 .studio-autopilot__chat-panel {
   display: grid;
   gap: 0.55rem;
-  grid-template-rows: auto auto minmax(0, 1fr) auto auto auto;
+  grid-template-rows: auto minmax(0, 1fr) auto auto auto;
   padding: 0.65rem;
+}
+
+.studio-autopilot__session-header {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
 }
 
 .studio-autopilot__chat-body {
@@ -1381,6 +1476,19 @@ watch(workspacePaneValue, (pane) => {
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem;
+}
+
+.studio-autopilot__session-tools {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.studio-autopilot__session-tool {
+  letter-spacing: 0;
+  min-width: 0;
 }
 
 .studio-autopilot__actions {

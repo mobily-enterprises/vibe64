@@ -6,7 +6,7 @@ import {
 const VIBE64_SESSIONS_API_SUFFIX = "/vibe64/sessions";
 const VIBE64_API_SUFFIX = "/vibe64";
 const VIBE64_SESSION_CHANGED_EVENT = "vibe64.session.changed";
-const DEFAULT_MAX_OPEN_SESSIONS = 5;
+const DEFAULT_MAX_OPEN_SESSIONS = 3;
 const SELECTED_SESSION_STORAGE_KEY = "vibe64:selected-session-id";
 
 function vibe64SessionsQueryKey(surfaceId, ownershipFilter) {

@@ -19,11 +19,10 @@ function useVibe64DiffDialog({
   const diffLoading = ref(false);
   const diffPayload = ref(null);
 
-  async function openDiffDialog() {
+  async function loadDiff() {
     if (!unref(selectedSessionId) || !readRefOrGetterBoolean(canOpen)) {
-      return;
+      return false;
     }
-    diffDialogOpen.value = true;
     diffError.value = "";
     diffLoading.value = true;
     diffPayload.value = null;
@@ -32,12 +31,23 @@ function useVibe64DiffDialog({
       diffPayload.value = response;
       if (response?.ok === false) {
         diffError.value = resolveResponseErrorMessage(response, "Diff inspection failed.");
+        return false;
       }
+      return true;
     } catch (error) {
       diffError.value = String(error?.message || error || "Diff inspection failed.");
+      return false;
     } finally {
       diffLoading.value = false;
     }
+  }
+
+  async function openDiffDialog() {
+    if (!unref(selectedSessionId) || !readRefOrGetterBoolean(canOpen)) {
+      return false;
+    }
+    diffDialogOpen.value = true;
+    return loadDiff();
   }
 
   function closeDiffDialog() {
@@ -57,6 +67,7 @@ function useVibe64DiffDialog({
     diffError,
     diffLoading,
     diffPayload,
+    loadDiff,
     openDiffDialog
   };
 }

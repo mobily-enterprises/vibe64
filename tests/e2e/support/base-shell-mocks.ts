@@ -1,5 +1,6 @@
 export { trackStudioApiRequests } from "./base-shell/http";
 export {
+  mockAccountsBlocked,
   mockAppSetupBlocked,
   mockBootstrapBlocked,
   mockCurrentAppInspection,

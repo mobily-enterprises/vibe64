@@ -898,7 +898,7 @@ test("session list exposes selectable workflow definitions after seeding", async
     ]
   );
   assert.equal(result.creation.workflowDefinitions.some((definition) => definition.id === VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION), false);
-  assert.equal(result.limits.maxOpenSessions, 5);
+  assert.equal(result.limits.maxOpenSessions, 3);
 });
 
 test("session list asks the runtime for open sessions by default", async () => {
@@ -1350,5 +1350,64 @@ test("session creation blocks a second open seed session", async () => {
   assert.equal(result.ok, false);
   assert.equal(result.errors[0].code, "open_session_limit");
   assert.equal(result.limits.maxOpenSessions, 1);
+  assert.equal(createSessionCalled, false);
+});
+
+test("session creation blocks a fourth open session", async () => {
+  let createSessionCalled = false;
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async createSession() {
+            createSessionCalled = true;
+            return {
+              sessionId: "new-session"
+            };
+          },
+          async listSessions() {
+            return [
+              {
+                sessionId: "session-one",
+                status: VIBE64_SESSION_STATUS.ACTIVE
+              },
+              {
+                sessionId: "session-two",
+                status: VIBE64_SESSION_STATUS.ACTIVE
+              },
+              {
+                sessionId: "session-three",
+                status: VIBE64_SESSION_STATUS.ACTIVE
+              }
+            ];
+          },
+          async workflowDefinitionCreationOptions() {
+            return workflowDefinitionCreationOptions({
+              seedRequired: false
+            });
+          }
+        };
+      },
+      async requireProjectType() {
+        return {
+          adapter: {
+            id: "jskit"
+          },
+          projectType: "jskit"
+        };
+      }
+    },
+    setupServices: readySetupServices()
+  });
+
+  const result = await service.createSession({
+    workflowDefinition: maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.status, "blocked");
+  assert.equal(result.errors[0].code, "open_session_limit");
+  assert.equal(result.limits.maxOpenSessions, 3);
+  assert.equal(result.limits.openSessionCount, 3);
   assert.equal(createSessionCalled, false);
 });

@@ -35,6 +35,25 @@ describe("vibe64ClientControlDispatcher", () => {
     expect(openDialog).toHaveBeenCalledTimes(1);
   });
 
+  it("opens the right-pane diff surface when the caller provides one", async () => {
+    const openDialog = vi.fn();
+    const openDiffPane = vi.fn(() => true);
+
+    await expect(runVibe64ClientControl({
+      control: {
+        action: VIBE64_CLIENT_CONTROL_ACTIONS.OPEN_DIFF
+      }
+    }, {
+      diff: {
+        openDialog
+      },
+      openDiffPane
+    })).resolves.toBe(true);
+
+    expect(openDiffPane).toHaveBeenCalledTimes(1);
+    expect(openDialog).not.toHaveBeenCalled();
+  });
+
   it("dispatches Codex terminal retry controls without workflow-specific UI checks", async () => {
     const refreshSessionData = vi.fn();
     vi.mocked(startVibe64CodexTerminal).mockResolvedValue({

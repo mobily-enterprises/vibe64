@@ -25,7 +25,6 @@ import {
   studioHttpClient
 } from "@/lib/studioHttp.js";
 import { useStudioShellDrawer } from "@/composables/useStudioShellDrawer.js";
-import Vibe64HomeWorkspaceMenu from "@/components/studio/Vibe64HomeWorkspaceMenu.vue";
 
 const route = useRoute();
 const pageTitle = ref("");
@@ -90,14 +89,6 @@ watch(
           Sessions
         </span>
         -->
-      </div>
-    </template>
-    <template #top-right>
-      <div
-        id="studio-home-app-bar-actions"
-        class="studio-home-shell-actions"
-      >
-        <Vibe64HomeWorkspaceMenu />
       </div>
     </template>
     <RouterView @page-title-change="setPageTitle" />

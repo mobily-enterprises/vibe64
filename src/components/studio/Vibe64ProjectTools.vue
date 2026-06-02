@@ -1,6 +1,10 @@
 <template>
-  <div class="vibe64-project-tools">
+  <div
+    class="vibe64-project-tools"
+    :class="`vibe64-project-tools--${displayMode}`"
+  >
     <v-menu
+      v-if="menuMode"
       v-model="menuOpen"
       location="bottom end"
       transition="scale-transition"
@@ -43,6 +47,42 @@
         />
       </v-list>
     </v-menu>
+
+    <section
+      v-else
+      class="vibe64-project-tools__panel"
+      aria-label="Remote project tools"
+    >
+      <v-progress-linear
+        v-if="loading"
+        color="primary"
+        indeterminate
+        rounded
+      />
+
+      <v-list
+        class="vibe64-project-tools__list"
+        density="comfortable"
+        lines="two"
+        nav
+      >
+        <v-list-subheader>Project tools</v-list-subheader>
+        <v-list-item
+          v-for="tool in tools"
+          :key="tool.id"
+          :disabled="tool.enabled !== true"
+          :subtitle="tool.enabled === true ? tool.description : tool.disabledReason"
+          :title="tool.label"
+          @click="selectTool(tool)"
+        />
+        <v-list-item
+          v-if="!tools.length && !loading"
+          disabled
+          subtitle="Configure remote project tools before using this section."
+          title="No remote tools"
+        />
+      </v-list>
+    </section>
 
     <v-dialog v-model="parametersDialogOpen" max-width="34rem">
       <v-card>
@@ -145,6 +185,12 @@ const emit = defineEmits([
   "global-codex-open",
   "global-codex-update"
 ]);
+const props = defineProps({
+  displayMode: {
+    default: "menu",
+    type: String
+  }
+});
 
 const loading = ref(false);
 const menuOpen = ref(false);
@@ -167,6 +213,8 @@ const {
 const selectedToolParameters = computed(() => (
   Array.isArray(selectedTool.value?.parameters) ? selectedTool.value.parameters : []
 ));
+const displayMode = computed(() => props.displayMode === "panel" ? "panel" : "menu");
+const menuMode = computed(() => displayMode.value === "menu");
 
 async function loadTools() {
   if (loading.value) {
@@ -253,12 +301,31 @@ onMounted(loadTools);
   flex: 0 0 auto;
 }
 
+.vibe64-project-tools--panel {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
 .vibe64-project-tools__menu {
   max-width: min(30rem, calc(100vw - 2rem));
   min-width: min(23rem, calc(100vw - 2rem));
 }
 
-.vibe64-project-tools__menu :deep(.v-list-item-subtitle) {
+.vibe64-project-tools__panel {
+  display: grid;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.vibe64-project-tools__list {
+  border: 1px solid rgba(var(--v-theme-outline), 0.18);
+  border-radius: 8px;
+  min-width: 0;
+}
+
+.vibe64-project-tools__menu :deep(.v-list-item-subtitle),
+.vibe64-project-tools__list :deep(.v-list-item-subtitle) {
   white-space: normal;
 }
 

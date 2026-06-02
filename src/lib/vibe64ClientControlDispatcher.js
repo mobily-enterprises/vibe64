@@ -7,8 +7,12 @@ import {
 } from "@/lib/vibe64SessionApi.js";
 
 function openDiffControl({
-  diff = {}
+  diff = {},
+  openDiffPane = null
 } = {}) {
+  if (typeof openDiffPane === "function") {
+    return openDiffPane();
+  }
   if (typeof diff.openDialog !== "function") {
     return false;
   }
