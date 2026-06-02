@@ -118,7 +118,7 @@ import {
   mdiRestart
 } from "@mdi/js";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
-import { useStudioTerminal } from "@/composables/useStudioTerminal.js";
+import { useCodexTerminalElement } from "@/composables/useCodexTerminalElement.js";
 import {
   vibe64CodexTerminalWebSocketUrl,
   vibe64GlobalCodexTerminalWebSocketUrl,
@@ -242,8 +242,22 @@ const canStartTerminal = computed(() => {
   return Boolean(props.allowStart && terminalDisplayActive.value && sessionId.value && sessionWorktree.value);
 });
 
-const terminalController = useStudioTerminal({
-  liveResize: false,
+const {
+  appendTerminalOutput: noteTerminalOutputChunk,
+  clearCodexBusy,
+  clearCodexWorking,
+  codexBusy,
+  codexWorking,
+  markCodexBusy,
+  resetTerminalOutput,
+  terminalStreaming,
+  writeTerminalOutput: noteTerminalOutputSnapshot
+} = useCodexTerminalOutput({
+  emitBusyChanged: emitCodexActivityChanged,
+  sessionId: terminalScopeId
+});
+const terminalController = useCodexTerminalElement({
+  onBeforeTerminalSessionChange: resetTerminalOutput,
   onOutput: handleTerminalOutput,
   onStatusUpdate: handleTerminalStatusUpdate,
   onUserData: handleTerminalUserData,
@@ -253,7 +267,7 @@ const terminalController = useStudioTerminal({
   }
 });
 const {
-  applyTerminalSession,
+  applyCodexTerminalSession,
   closeTerminalSocket,
   connectTerminalSocket,
   disposeTerminalUi,
@@ -272,20 +286,6 @@ const {
   terminalStarting,
   terminalStatus
 } = terminalController;
-const {
-  appendTerminalOutput: noteTerminalOutputChunk,
-  clearCodexBusy,
-  clearCodexWorking,
-  codexBusy,
-  codexWorking,
-  markCodexBusy,
-  resetTerminalOutput,
-  terminalStreaming,
-  writeTerminalOutput: noteTerminalOutputSnapshot
-} = useCodexTerminalOutput({
-  emitBusyChanged: emitCodexActivityChanged,
-  sessionId: terminalScopeId
-});
 const {
   attachmentDragActive,
   attachmentStatus,
@@ -546,7 +546,7 @@ async function startTerminalOnce() {
     if (!session?.id) {
       throw new Error("Codex terminal failed to start.");
     }
-    applyTerminalSession(session, {
+    applyCodexTerminalSession(session, {
       fallbackStatus: "running"
     });
     emitTerminalSessionState();
@@ -567,33 +567,15 @@ function startTerminalWhenReady() {
 }
 
 async function attachTerminalSession(session = {}) {
-  const nextTerminalSessionId = String(session.id || session.terminalSessionId || "").trim();
-  if (!nextTerminalSessionId) {
+  const attached = applyCodexTerminalSession(session, {
+    fallbackStatus: "running"
+  });
+  if (!attached.applied) {
     return Boolean(terminalSessionId.value);
   }
-  const previousTerminalSessionId = terminalSessionId.value;
-  const sameTerminalSession = previousTerminalSessionId === nextTerminalSessionId;
-  if (sameTerminalSession) {
-    applyTerminalSession({
-      ...session,
-      id: nextTerminalSessionId
-    }, {
-      fallbackStatus: "running",
-      preserveOutput: true,
-      resize: false
-    });
+  if (attached.sameTerminalSession) {
     return true;
   }
-  if (previousTerminalSessionId && previousTerminalSessionId !== nextTerminalSessionId) {
-    resetTerminalOutput();
-  }
-  applyTerminalSession({
-    ...session,
-    id: nextTerminalSessionId
-  }, {
-    fallbackStatus: "running",
-    preserveOutput: true
-  });
   if (!canUseTerminal.value || !componentMounted.value) {
     return true;
   }

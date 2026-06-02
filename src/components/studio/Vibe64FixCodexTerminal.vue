@@ -23,7 +23,7 @@
 <script setup>
 import { computed, onBeforeUnmount, watch } from "vue";
 import Vibe64TerminalFrame from "@/components/studio/Vibe64TerminalFrame.vue";
-import { useStudioTerminal } from "@/composables/useStudioTerminal.js";
+import { useCodexTerminalElement } from "@/composables/useCodexTerminalElement.js";
 import {
   closeVibe64FixCodexTerminal,
   vibe64FixCodexTerminalWebSocketUrl
@@ -44,14 +44,14 @@ const emit = defineEmits(["closed"]);
 const jobId = computed(() => String(props.job?.id || props.terminal?.metadata?.fixJobId || ""));
 const subtitle = computed(() => String(props.job?.subject || "Ephemeral repair job"));
 
-const terminalController = useStudioTerminal({
+const terminalController = useCodexTerminalElement({
   webSocketUrl(terminalId) {
     return vibe64FixCodexTerminalWebSocketUrl(jobId.value, terminalId);
   }
 });
 
 const {
-  applyTerminalSession,
+  applyCodexTerminalSession,
   closeTerminalSocket,
   connectTerminalSocket,
   disposeTerminalDisplay,
@@ -74,7 +74,7 @@ async function attachTerminal() {
     return;
   }
   await setupTerminalUi();
-  applyTerminalSession(props.terminal, {
+  applyCodexTerminalSession(props.terminal, {
     fallbackStatus: "running"
   });
   await connectTerminalSocket();

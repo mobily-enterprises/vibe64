@@ -379,10 +379,6 @@ function codexPromptInput(prompt = "") {
   return source;
 }
 
-function codexPromptTerminalInput(prompt = "") {
-  return codexPromptInput(prompt);
-}
-
 function codexPromptHandoffSignature(sessionId = "") {
   return `${sessionId}:${Date.now()}`;
 }
@@ -468,7 +464,7 @@ function writeCodexTerminalInput(sessionId = "", terminalSessionId = "", data = 
 async function writeCodexPromptIntoNamespace(terminalSessionId = "", prompt = "", {
   namespace = "default"
 } = {}) {
-  const input = codexPromptTerminalInput(prompt);
+  const input = codexPromptInput(prompt);
   if (!input) {
     return {
       ok: false,
