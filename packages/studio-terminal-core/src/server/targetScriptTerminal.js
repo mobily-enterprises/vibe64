@@ -2,8 +2,7 @@ import path from "node:path";
 import process from "node:process";
 
 import {
-  containerWorkspacePath,
-  removeDockerContainer
+  containerWorkspacePath
 } from "./containerRuntime.js";
 import {
   gitToolchainMountArgs
@@ -201,12 +200,6 @@ async function createVibe64TargetScriptTerminalSpec({
       ...(metadata || {})
     },
     ok: true,
-    onClose: async ({ id }) => {
-      await removeDockerContainer(targetScriptContainerName({
-        adapterId,
-        terminalId: id
-      }));
-    },
     prepareTargetRuntimeNetwork: true,
     reuseRunning: false,
     targetRoot: normalizedTargetRoot

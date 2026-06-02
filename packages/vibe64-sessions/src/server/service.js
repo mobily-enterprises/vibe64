@@ -432,6 +432,35 @@ function sessionServiceDebugResponse(response = {}) {
   };
 }
 
+function closeSessionTerminalsInBackground(terminalService, sessionId = "", {
+  eventPrefix = "server.service.sessionTerminalCleanup"
+} = {}) {
+  if (typeof terminalService?.closeSessionTerminals !== "function") {
+    return;
+  }
+  const cleanupStartedAtMs = Date.now();
+  vibe64SessionDebugLog(`${eventPrefix}.start`, {
+    sessionId
+  });
+  void Promise.resolve()
+    .then(() => terminalService.closeSessionTerminals(sessionId))
+    .then((result = {}) => {
+      vibe64SessionDebugLog(`${eventPrefix}.done`, {
+        closed: Number(result.closed || 0),
+        durationMs: vibe64SessionDebugDurationMs(cleanupStartedAtMs),
+        ok: result.ok !== false,
+        sessionId
+      });
+    })
+    .catch((error) => {
+      vibe64SessionDebugLog(`${eventPrefix}.error`, {
+        durationMs: vibe64SessionDebugDurationMs(cleanupStartedAtMs),
+        error: vibe64SessionDebugError(error),
+        sessionId
+      });
+    });
+}
+
 function createService({
   projectService,
   setupServices = {},
@@ -494,7 +523,9 @@ function createService({
         try {
           const runtime = await projectService.createRuntime();
           await runtime.store.writeStatus(sessionId, VIBE64_SESSION_STATUS.ABANDONED);
-          await terminalService?.closeSessionTerminals?.(sessionId);
+          closeSessionTerminalsInBackground(terminalService, sessionId, {
+            eventPrefix: "server.service.abandonSession.terminalCleanup"
+          });
           const enrichedSession = await enrichSessionWithCodexTerminal(terminalService, await runtime.getSession(sessionId));
           vibe64SessionDebugLog("server.service.abandonSession.done", {
             ...sessionServiceDebugResponse(enrichedSession),

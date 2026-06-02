@@ -6,8 +6,7 @@ import process from "node:process";
 import { promisify } from "node:util";
 
 import {
-  containerWorkspacePath,
-  removeDockerContainer
+  containerWorkspacePath
 } from "./containerRuntime.js";
 import {
   gitToolchainMountArgs
@@ -320,18 +319,6 @@ function launchContainerName({
   return `vibe64-${adapterId}-launch-${stableHash(sessionId)}-${stableHash(terminalId)}`;
 }
 
-function removeLaunchContainer({
-  adapterId = "generic",
-  sessionId = "",
-  terminalId = ""
-} = {}) {
-  return removeDockerContainer(launchContainerName({
-    adapterId,
-    sessionId,
-    terminalId
-  }));
-}
-
 function launchTargetTerminalArgs({
   adapterId = "generic",
   containerName = "",
@@ -512,20 +499,6 @@ async function createVibe64WebLaunchTargetTerminalSpec({
     metadata,
     ok: true,
     readinessMarker: readiness.readinessMarker,
-    onClose: async ({ id }) => {
-      await removeLaunchContainer({
-        adapterId,
-        sessionId: session.sessionId,
-        terminalId: id
-      });
-    },
-    onStop: async ({ id }) => {
-      await removeLaunchContainer({
-        adapterId,
-        sessionId: session.sessionId,
-        terminalId: id
-      });
-    },
     reuseRunning: true
   };
 }

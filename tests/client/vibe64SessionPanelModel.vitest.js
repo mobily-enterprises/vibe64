@@ -312,7 +312,7 @@ describe("Vibe64 session panel model", () => {
         { status: "active" }
       ]
     })).toEqual({
-      maxOpenSessions: 5,
+      maxOpenSessions: 3,
       openSessionCount: 2
     });
   });

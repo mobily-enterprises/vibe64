@@ -156,37 +156,38 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
           {
             actionId: "use_new_issue",
             id: "use_new_issue",
-            label: "Start fresh with a new issue",
+            label: "New issue",
             style: "primary",
             type: "action"
           },
           {
             actionId: "use_existing_issue",
             id: "use_existing_issue",
-            label: "Solve existing issue",
+            label: "Existing issue",
             style: "secondary",
             type: "action"
           },
           {
             actionId: "use_existing_pr",
             id: "use_existing_pr",
-            label: "Use existing PR",
+            label: "Existing PR",
             style: "secondary",
             type: "action"
           },
           {
             actionId: "use_description",
             id: "use_description",
-            label: "Describe work without an issue",
+            label: "No issue",
             style: "secondary",
             type: "action"
           }
         ],
         screen: {
           kind: "work_source",
-          message: "Start fresh with a new issue, solve an existing issue, build on an existing pull request, or describe work without creating an issue.",
+          message: "What would you like this session to do? Choose New issue to start fresh and let Vibe64 create a GitHub issue for the work. Choose Existing issue if you already have an issue number or URL. Choose Existing PR to continue from a pull request that already exists. Choose No issue when you only want to describe the work in chat and do not need a GitHub issue.",
           sections: [],
-          title: "Choose starting point"
+          title: "Choose starting point",
+          variant: "guide"
         }
       }
     },

@@ -281,7 +281,7 @@ watch(currentStepLabel, () => {
 .studio-autopilot-nav--icons .studio-autopilot-nav__steps {
   display: flex;
   flex-wrap: nowrap;
-  gap: 0.28rem;
+  gap: 0.12rem;
   overflow-x: auto;
   padding-block: 0.1rem;
   scrollbar-width: thin;
@@ -312,7 +312,7 @@ watch(currentStepLabel, () => {
   box-shadow: 0 0 0 4px rgba(var(--v-theme-warning), 0.13);
   color: rgb(var(--v-theme-warning));
   height: 2.35rem;
-  margin-inline: 0.08rem;
+  margin-inline: 0.02rem;
   width: 2.35rem;
 }
 

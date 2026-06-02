@@ -10,9 +10,6 @@ import {
   writeTerminalSession
 } from "@local/studio-terminal-core/server/terminalSessions";
 import {
-  removeDockerContainer
-} from "@local/studio-terminal-core/server/containerRuntime";
-import {
   githubSshToHttpsGitEnv
 } from "@local/studio-terminal-core/server/gitGithubTransport";
 import {
@@ -610,7 +607,6 @@ async function startCommandTerminalProcess({
   namespaceLimitPrefix = "",
   onClose = async () => null,
   projectService,
-  removeContainer = removeDockerContainer,
   resolveToolchainImage = resolveTerminalToolchainImage,
   reuseRunning = true,
   runtime,
@@ -707,13 +703,7 @@ async function startCommandTerminalProcess({
           resultFile: activeResultFile
         });
       } finally {
-        await Promise.all([
-          removeCommandResultFile(activeResultFile),
-          removeContainer(containerName({
-            id,
-            namespace
-          }))
-        ]);
+        await removeCommandResultFile(activeResultFile);
       }
     },
     reuseRunning
@@ -725,7 +715,6 @@ function createCommandTerminalController({
   ensureRuntimeNetwork = ensureTargetRuntimeNetwork,
   projectService,
   publishSessionChanged = async () => null,
-  removeContainer = removeDockerContainer,
   resolveToolchainImage = resolveTerminalToolchainImage,
   startTerminal = startTerminalSession
 } = {}) {
@@ -1033,13 +1022,7 @@ function createCommandTerminalController({
                   });
                   throw error;
                 } finally {
-                  await Promise.all([
-                    removeCommandResultFile(activeResultFile),
-                    removeContainer(commandTerminalContainerName({
-                      sessionId,
-                      terminalId: id
-                    }))
-                  ]);
+                  await removeCommandResultFile(activeResultFile);
                 }
               },
               reuseRunning: false
@@ -1135,7 +1118,6 @@ function createCommandTerminalController({
 function createProjectToolTerminalController({
   ensureRuntimeNetwork = ensureTargetRuntimeNetwork,
   projectService,
-  removeContainer = removeDockerContainer,
   resolveToolchainImage = resolveTerminalToolchainImage,
   startTerminal = startTerminalSession
 } = {}) {
@@ -1180,7 +1162,6 @@ function createProjectToolTerminalController({
       namespace: toolTerminalNamespace(tool.id),
       onClose: async () => null,
       projectService,
-      removeContainer,
       resolveToolchainImage,
       runtime,
       session,

@@ -239,10 +239,22 @@ function createSessionFromDefinition(definitionId = "") {
 
 .studio-ai-sessions__toolbar--compact .studio-ai-sessions__tabs {
   flex-wrap: nowrap;
+  gap: 0.32rem;
+}
+
+.studio-ai-sessions__toolbar--compact {
+  transform: translateY(-0.25rem);
 }
 
 .studio-ai-sessions__toolbar--compact .studio-ai-sessions__tab {
   max-width: 9rem;
+}
+
+.studio-ai-sessions__toolbar--compact .studio-ai-sessions__create-button {
+  height: 2.25rem;
+  min-height: 2.25rem;
+  min-width: 2.25rem;
+  width: 2.25rem;
 }
 
 @media (max-width: 640px) {

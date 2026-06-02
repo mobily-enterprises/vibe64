@@ -8,9 +8,6 @@ import {
   writeTerminalSessionText
 } from "@local/studio-terminal-core/server/terminalSessions";
 import {
-  removeDockerContainer
-} from "@local/studio-terminal-core/server/containerRuntime";
-import {
   ensureTargetRuntimeNetwork
 } from "@local/studio-terminal-core/server/runtimeContainers";
 import {
@@ -339,13 +336,6 @@ function createShellTerminalController({ projectService } = {}) {
           },
           namespace,
           namespaceLimitPrefix: namespace,
-          onClose: async ({ id }) => {
-            await removeDockerContainer(shellContainerName({
-              sessionId,
-              target,
-              terminalId: id
-            }));
-          },
           reuseRunning: reuseRunning
             ? (runningSession) => {
               return runningSession.metadata?.target === target &&

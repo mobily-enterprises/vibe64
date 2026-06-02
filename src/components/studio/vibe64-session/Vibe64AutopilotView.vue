@@ -218,6 +218,7 @@
               :disabled="page.busy || !stepInput.canSubmit"
               :loading="stepInput.saving"
               :prepend-icon="mdiCheck"
+              size="small"
               type="submit"
             >
               {{ stepInput.interaction?.submitLabel || "Submit" }}
@@ -230,6 +231,7 @@
               :disabled="control.disabled"
               :loading="control.loading"
               :prepend-icon="control.icon"
+              size="small"
               :title="control.disabledReason || control.label"
               type="button"
               :variant="control.buttonVariant"
@@ -344,6 +346,7 @@
               :disabled="control.disabled"
               :loading="control.loading"
               :prepend-icon="control.icon"
+              size="small"
               :title="control.disabledReason || control.label"
               type="button"
               :variant="control.buttonVariant"
@@ -913,7 +916,6 @@ const responsePreviewVisible = computed(() => Boolean(
 ));
 const chatTakeoverVisible = computed(() => Boolean(reportPreviewVisible.value));
 const conversationLogReady = computed(() => Boolean(
-  props.conversationLog?.visible &&
   !props.conversationLog?.loading
 ));
 const conversationHasTurns = computed(() => Boolean(
@@ -932,6 +934,15 @@ const guidanceScreenVisible = computed(() => Boolean(
 const guidanceActivityMessage = computed(() => {
   if (!guidanceScreenVisible.value) {
     return null;
+  }
+  if (screenKind.value === "work_source") {
+    return activityMessage({
+      appearance: "assistant",
+      icon: mdiInformationOutline,
+      id: "screen-guidance",
+      label: "Vibe64",
+      text: screenMessage.value
+    });
   }
   return activityMessage({
     appearance: "assistant",
@@ -1078,7 +1089,7 @@ const workflowButtonControls = computed(() => {
   }));
 });
 const activeComposerWorkflowControls = computed(() => (
-  composerInputLocked.value ? [] : workflowButtonControls.value
+  workflowButtonControls.value
 ));
 const stepInputActionHandlers = computed(() => ({
   ...props.actions,
@@ -1427,21 +1438,21 @@ watch(workspacePaneValue, (pane) => {
 
 .studio-autopilot__chat-panel {
   display: grid;
-  gap: 0.55rem;
+  gap: 0.16rem;
   grid-template-rows: auto minmax(0, 1fr) auto auto auto;
-  padding: 0.65rem;
+  padding: 0.05rem 0.65rem 0.18rem;
 }
 
 .studio-autopilot__session-header {
   display: grid;
-  gap: 0.5rem;
+  gap: 0.28rem;
   min-width: 0;
 }
 
 .studio-autopilot__chat-body {
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
+  gap: 0.25rem;
   min-height: 0;
   overflow: hidden;
   padding-right: 0.1rem;
@@ -1475,14 +1486,14 @@ watch(workspacePaneValue, (pane) => {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.45rem;
+  gap: 0.32rem;
 }
 
 .studio-autopilot__session-tools {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
+  gap: 0.28rem;
   min-width: 0;
 }
 
@@ -1496,17 +1507,16 @@ watch(workspacePaneValue, (pane) => {
 }
 
 .studio-autopilot__composer {
-  border-top: 1px solid rgba(var(--v-theme-outline), 0.14);
+  align-content: end;
   display: grid;
-  gap: 0.55rem;
+  gap: 0.24rem;
   min-width: 0;
-  padding-top: 0.55rem;
 }
 
 .studio-autopilot__input-form,
 .studio-autopilot__control-form {
   display: grid;
-  gap: 0.55rem;
+  gap: 0.24rem;
   min-width: 0;
   width: 100%;
 }
@@ -1523,18 +1533,15 @@ watch(workspacePaneValue, (pane) => {
 
 .studio-autopilot__screen-actions {
   justify-content: flex-end;
-  margin-top: auto;
 }
 
 .studio-autopilot__thinking {
   align-items: center;
-  border-top: 1px solid rgba(var(--v-theme-outline), 0.14);
   color: rgba(var(--v-theme-on-surface), 0.72);
   display: flex;
-  font-size: 0.9rem;
-  gap: 0.5rem;
-  min-height: 2.35rem;
-  padding-top: 0.35rem;
+  font-size: 0.86rem;
+  gap: 0.38rem;
+  min-height: 1.35rem;
 }
 
 .studio-autopilot__thinking--empty {
@@ -1544,13 +1551,13 @@ watch(workspacePaneValue, (pane) => {
 .studio-autopilot__runtime-status {
   display: grid;
   gap: 0.18rem;
-  height: 1.35rem;
+  min-height: 0;
   min-width: 0;
   overflow: hidden;
 }
 
 .studio-autopilot__runtime-status--empty {
-  visibility: hidden;
+  display: none;
 }
 
 .studio-autopilot__runtime-notice {

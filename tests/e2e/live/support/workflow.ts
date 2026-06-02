@@ -80,8 +80,8 @@ async function createSession(page: Page) {
   if (await makeImprovementsDefinition.isVisible().catch(() => false)) {
     await makeImprovementsDefinition.click();
   }
-  await expectButtonEnabled(page, "Start fresh with a new issue");
-  await expectButtonEnabled(page, "Use existing PR");
+  await expectButtonEnabled(page, "New issue");
+  await expectButtonEnabled(page, "Existing PR");
   const session = await onlyActiveSession(page);
   expect(session.currentStep).toBe("work_source_selected");
   return session;
@@ -97,14 +97,14 @@ async function createNewBranchSessionAtIssueStep(page: Page) {
 }
 
 async function chooseNewBranch(page: Page) {
-  await clickButton(page, "Start fresh with a new issue");
+  await clickButton(page, "New issue");
   await expectSessionMetadata(page, "work_source", "new_issue");
   await expectStep(page, "worktree_created");
 }
 
 async function chooseExistingPr(page: Page, prRef: string) {
-  await clickButton(page, "Use existing PR");
-  await fillInlineWorkflowInput(page, "PR URL or number", prRef, "Use existing PR");
+  await clickButton(page, "Existing PR");
+  await fillInlineWorkflowInput(page, "PR URL or number", prRef, "Existing PR");
   const session = await expectSessionMetadata(page, "work_source", "existing_pr");
   expect(session.metadata?.source_pr_url || "").toContain("/pull/");
   await expectStep(page, "worktree_created");

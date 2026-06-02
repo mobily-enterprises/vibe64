@@ -1,5 +1,4 @@
 import path from "node:path";
-import { execa } from "execa";
 import {
   runHostCommand
 } from "./shellCommands.js";
@@ -13,17 +12,6 @@ function containerWorkspacePath(targetRoot, absolutePath) {
     return "";
   }
   return path.posix.join("/workspace", ...relativePath.split(path.sep));
-}
-
-async function removeDockerContainer(containerName) {
-  const normalizedContainerName = String(containerName || "").trim();
-  if (!normalizedContainerName) {
-    return;
-  }
-  await execa("docker", ["rm", "-f", normalizedContainerName], {
-    reject: false,
-    timeout: 10_000
-  }).catch(() => null);
 }
 
 async function dockerImageExists(imageName, {
@@ -48,6 +36,5 @@ async function dockerImageExists(imageName, {
 
 export {
   containerWorkspacePath,
-  dockerImageExists,
-  removeDockerContainer
+  dockerImageExists
 };

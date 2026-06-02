@@ -22,8 +22,7 @@ import {
   studioUserStartupScript
 } from "@local/studio-terminal-core/server/studioToolHome";
 import {
-  containerWorkspacePath,
-  removeDockerContainer
+  containerWorkspacePath
 } from "@local/studio-terminal-core/server/containerRuntime";
 import {
   ensureTargetRuntimeNetwork
@@ -933,10 +932,6 @@ function createCodexTerminalController({
       namespace,
       onClose: async ({ id }) => {
         clearCodexTurnWatchdog(sessionId, id);
-        await removeDockerContainer(codexContainerName({
-          sessionId,
-          terminalId: id
-        }));
         await cleanupCodexAttachments(targetRoot, sessionId);
       },
       onOutput: ({ session: terminalSession }) => {
@@ -1027,11 +1022,7 @@ function createCodexTerminalController({
         workdir: targetRoot
       },
       namespace,
-      onClose: async ({ id }) => {
-        await removeDockerContainer(codexContainerName({
-          scope: GLOBAL_CODEX_TERMINAL_SCOPE,
-          terminalId: id
-        }));
+      onClose: async () => {
         await cleanupCodexAttachments(targetRoot, GLOBAL_CODEX_TERMINAL_SCOPE);
       },
       reuseRunning: (terminalSession) => {
@@ -1639,11 +1630,7 @@ function createCodexTerminalController({
         workdir
       },
       namespace,
-      onClose: async ({ id }) => {
-        await removeDockerContainer(codexContainerName({
-          scope: `fix:${jobId}`,
-          terminalId: id
-        }));
+      onClose: async () => {
         await cleanupCodexAttachments(targetRoot, `fix:${jobId}`);
       },
       reuseRunning: false

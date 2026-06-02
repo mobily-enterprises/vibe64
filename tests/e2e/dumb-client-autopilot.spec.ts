@@ -204,9 +204,9 @@ test.describe("Autopilot dumb client contract", () => {
     });
 
     await page.goto(`${BASE_URL}/home`);
-    await page.getByRole("button", { exact: true, name: "Solve existing issue" }).click();
+    await page.getByRole("button", { exact: true, name: "Existing issue" }).click();
     await page.getByLabel("Issue URL or number").fill("404404");
-    await page.getByRole("button", { exact: true, name: "Solve existing issue" }).click();
+    await page.getByRole("button", { exact: true, name: "Existing issue" }).click();
 
     await expect.poll(() => intentRequests).toEqual([
       {
@@ -283,9 +283,9 @@ test.describe("Autopilot dumb client contract", () => {
     });
 
     await page.goto(`${BASE_URL}/home`);
-    await page.getByRole("button", { exact: true, name: "Solve existing issue" }).click();
+    await page.getByRole("button", { exact: true, name: "Existing issue" }).click();
     await page.getByLabel("Issue URL or number").fill("123");
-    await page.getByRole("button", { exact: true, name: "Solve existing issue" }).click();
+    await page.getByRole("button", { exact: true, name: "Existing issue" }).click();
 
     await expect(page.getByRole("heading", { name: "Create worktree" })).toBeVisible();
     await expect(page.getByText("Could not resolve GitHub issue")).toHaveCount(0);
@@ -302,23 +302,22 @@ test.describe("Autopilot dumb client contract", () => {
 
     await page.goto(`${BASE_URL}/home`);
 
-    await expect(page.getByRole("heading", { name: "Choose starting point" })).toBeVisible();
-    await expect(page.getByText("Start fresh with a new issue, solve an existing issue, build on an existing pull request, or describe work without creating an issue."))
+    await expect(page.getByText("What would you like this session to do? Choose New issue to start fresh and let Vibe64 create a GitHub issue for the work. Choose Existing issue if you already have an issue number or URL. Choose Existing PR to continue from a pull request that already exists. Choose No issue when you only want to describe the work in chat and do not need a GitHub issue."))
       .toBeVisible();
-    await expect(page.getByRole("button", { name: "Start fresh with a new issue" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Solve existing issue" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Describe work without an issue" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Use existing PR" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "New issue" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Existing issue" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "No issue" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Existing PR" })).toBeVisible();
 
-    await page.getByRole("button", { name: "Solve existing issue" }).click();
+    await page.getByRole("button", { name: "Existing issue" }).click();
     await expect(page.getByLabel("Issue URL or number")).toBeVisible();
     await page.getByLabel("Issue URL or number").fill("#123");
-    await page.getByRole("button", { name: "Solve existing issue" }).click();
+    await page.getByRole("button", { name: "Existing issue" }).click();
 
-    await page.getByRole("button", { name: "Use existing PR" }).click();
+    await page.getByRole("button", { name: "Existing PR" }).click();
     await expect(page.getByLabel("PR URL or number")).toBeVisible();
     await page.getByLabel("PR URL or number").fill("https://github.com/example/project/pull/77");
-    await page.getByRole("button", { name: "Use existing PR" }).click();
+    await page.getByRole("button", { name: "Existing PR" }).click();
 
     await expect.poll(() => intentRequests).toEqual([
       {
@@ -350,7 +349,7 @@ test.describe("Autopilot dumb client contract", () => {
 
     await page.goto(`${BASE_URL}/home`);
 
-    await page.getByRole("button", { name: "Start fresh with a new issue" }).click();
+    await page.getByRole("button", { name: "New issue" }).click();
 
     await expect.poll(() => intentRequests).toEqual([
       {
@@ -3233,7 +3232,7 @@ function workSourceSession(overrides: Record<string, unknown> = {}) {
       enabled: true,
       id: "use_new_issue",
       inputFields: [],
-      label: "Start fresh with a new issue",
+      label: "New issue",
       style: "primary"
     },
     {
@@ -3248,7 +3247,7 @@ function workSourceSession(overrides: Record<string, unknown> = {}) {
           requiredMessage: "Issue URL or number is required."
         }
       ],
-      label: "Solve existing issue",
+      label: "Existing issue",
       style: "secondary"
     },
     {
@@ -3263,7 +3262,7 @@ function workSourceSession(overrides: Record<string, unknown> = {}) {
           requiredMessage: "PR URL or number is required."
         }
       ],
-      label: "Use existing PR",
+      label: "Existing PR",
       style: "secondary"
     },
     {
@@ -3271,7 +3270,7 @@ function workSourceSession(overrides: Record<string, unknown> = {}) {
       enabled: true,
       id: "use_description",
       inputFields: [],
-      label: "Describe work without an issue",
+      label: "No issue",
       style: "secondary"
     }
   ];
@@ -3293,9 +3292,10 @@ function workSourceSession(overrides: Record<string, unknown> = {}) {
       intents,
       screen: {
         kind: "work_source",
-        message: "Start fresh with a new issue, solve an existing issue, build on an existing pull request, or describe work without creating an issue.",
+        message: "What would you like this session to do? Choose New issue to start fresh and let Vibe64 create a GitHub issue for the work. Choose Existing issue if you already have an issue number or URL. Choose Existing PR to continue from a pull request that already exists. Choose No issue when you only want to describe the work in chat and do not need a GitHub issue.",
         sections: [],
-        title: "Choose starting point"
+        title: "Choose starting point",
+        variant: "guide"
       },
       step: {
         id: "work_source_selected",

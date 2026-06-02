@@ -53,6 +53,12 @@ function assertCodexPreviewHidden(presentation = {}, terminalSessionId = "") {
   assert.equal(presentation.visibleUntil, "");
 }
 
+function delay(ms = 0) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
 test("session action closes terminals when the action archives the session", async () => {
   const closedSessionIds = [];
   const service = createService({
@@ -109,6 +115,69 @@ test("session action keeps terminals when the session remains active", async () 
 
   assert.equal(session.status, VIBE64_SESSION_STATUS.ACTIVE);
   assert.deepEqual(closedSessionIds, []);
+});
+
+test("session abandon does not wait for terminal cleanup", async () => {
+  let finishCleanup = null;
+  let markCleanupStarted = null;
+  const cleanupStarted = new Promise((resolve) => {
+    markCleanupStarted = resolve;
+  });
+  const cleanupFinished = new Promise((resolve) => {
+    finishCleanup = () => {
+      resolve({
+        closed: 1,
+        ok: true
+      });
+    };
+  });
+  const statusWrites = [];
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async getSession(sessionId) {
+            return {
+              sessionId,
+              status: VIBE64_SESSION_STATUS.ABANDONED
+            };
+          },
+          store: {
+            async writeStatus(sessionId, status) {
+              statusWrites.push({
+                sessionId,
+                status
+              });
+            }
+          }
+        };
+      }
+    },
+    setupServices: readySetupServices(),
+    terminalService: {
+      async closeSessionTerminals() {
+        markCleanupStarted();
+        return cleanupFinished;
+      }
+    }
+  });
+
+  const abandonResultPromise = service.abandonSession("session-1");
+  await cleanupStarted;
+  const result = await Promise.race([
+    abandonResultPromise,
+    delay(25).then(() => "timeout")
+  ]);
+
+  assert.notEqual(result, "timeout");
+  assert.equal(result.status, VIBE64_SESSION_STATUS.ABANDONED);
+  assert.deepEqual(statusWrites, [
+    {
+      sessionId: "session-1",
+      status: VIBE64_SESSION_STATUS.ABANDONED
+    }
+  ]);
+  finishCleanup();
 });
 
 test("session prompt action injects the rendered Codex handoff from the server", async () => {

@@ -1297,7 +1297,6 @@ test("Vibe64 command terminal records action results and metadata after success"
     });
 
     let ensuredTargetRoot = "";
-    let removedContainerName = "";
     let closePromise = Promise.resolve();
     let startedCommand = "";
     let startedDockerArgs = [];
@@ -1323,9 +1322,6 @@ test("Vibe64 command terminal records action results and metadata after success"
             VIBE64_CONFIG_DIR: path.join(targetRoot, ".vibe64", "config")
           };
         }
-      },
-      removeContainer: async (containerName) => {
-        removedContainerName = containerName;
       },
       resolveToolchainImage: async () => ({
         image: "unit-command-toolchain:1.0.0",
@@ -1380,7 +1376,6 @@ test("Vibe64 command terminal records action results and metadata after success"
       runtimeNetworkName(targetRoot)
     ]);
     assert.ok(startedDockerArgs.indexOf("--network") < startedDockerArgs.indexOf("unit-command-toolchain:1.0.0"));
-    assert.match(removedContainerName, /^vibe64-command-/u);
 
     const updatedSession = await runtime.getSession("terminal_success");
 	    assert.equal(updatedSession.metadata.terminal_done, "yes");
@@ -1512,7 +1507,6 @@ test("Vibe64 command terminal persists failed command context for reload-stable 
           };
         }
       },
-      removeContainer: async () => null,
       resolveToolchainImage: async () => ({
         image: "unit-command-toolchain:1.0.0",
         label: "Unit command toolchain",
@@ -1609,7 +1603,6 @@ test("Vibe64 command terminal accepts completion after unrelated session metadat
           };
         }
       },
-      removeContainer: async () => null,
       resolveToolchainImage: async () => ({
         image: "unit-command-toolchain:1.0.0",
         label: "Unit command toolchain",
@@ -1717,7 +1710,6 @@ test("Vibe64 command terminal commits completion before slow post-commit hooks f
         publishStarted.resolve();
         await publishReleased.promise;
       },
-      removeContainer: async () => null,
       resolveToolchainImage: async () => ({
         image: "unit-command-toolchain:1.0.0",
         label: "Unit command toolchain",
@@ -1827,7 +1819,6 @@ test("Vibe64 command terminal ignores stale close after advance and rewind", asy
           };
         }
       },
-      removeContainer: async () => null,
       resolveToolchainImage: async () => ({
         image: "unit-command-toolchain:1.0.0",
         label: "Unit command toolchain",
@@ -1981,7 +1972,6 @@ test("Vibe64 command terminal advances workflow when requested after success", a
           };
         }
       },
-      removeContainer: async () => null,
       resolveToolchainImage: async () => ({
         image: "unit-command-toolchain:1.0.0",
         label: "Unit command toolchain",

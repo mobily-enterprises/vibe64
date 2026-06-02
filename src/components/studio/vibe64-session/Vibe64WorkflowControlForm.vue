@@ -88,6 +88,7 @@
           :disabled="!canSubmitSelectedControl"
           :loading="running"
           :prepend-icon="mdiSend"
+          size="small"
           type="button"
           variant="flat"
           @click="submitFromButton"
@@ -99,6 +100,7 @@
           v-if="cancelVisible"
           :disabled="running"
           :prepend-icon="mdiClose"
+          size="small"
           type="button"
           variant="tonal"
           @click="$emit('cancel')"
@@ -118,6 +120,7 @@
           :disabled="control.disabled"
           :loading="control.loading"
           :prepend-icon="control.icon"
+          size="small"
           :title="control.disabledReason || control.label"
           type="button"
           :variant="control.buttonVariant"
@@ -283,7 +286,7 @@ function handleInlineSubmitButton() {
 <style scoped>
 .vibe64-workflow-control-form {
   display: grid;
-  gap: 0.45rem;
+  gap: 0.24rem;
   position: relative;
   width: 100%;
 }
@@ -333,18 +336,18 @@ function handleInlineSubmitButton() {
 }
 
 .vibe64-workflow-control-form :deep(.studio-autopilot-prompt-textarea .v-field__input) {
-  min-height: 3.25rem;
-  padding-block: 0.85rem 0.75rem;
+  min-height: 2.9rem;
+  padding-block: 0.64rem 0.56rem;
 }
 
 .vibe64-workflow-control-form__prompt-shell--inline-submit :deep(.studio-autopilot-prompt-textarea .v-field__input) {
-  padding-right: 3.65rem;
+  padding-right: 3.2rem;
 }
 
 .vibe64-workflow-control-form :deep(.studio-autopilot-prompt-textarea .v-field__input textarea) {
   color: rgb(var(--v-theme-on-surface));
   line-height: 1.4;
-  min-height: 2.3rem;
+  min-height: 2rem;
   opacity: 1;
 }
 
@@ -359,7 +362,7 @@ function handleInlineSubmitButton() {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 0.36rem;
 }
 
 .vibe64-workflow-control-form__actions {
@@ -390,11 +393,13 @@ function handleInlineSubmitButton() {
 }
 
 .vibe64-workflow-control-form__inline-submit {
-  bottom: 0.7rem;
-  min-height: 2.35rem;
-  min-width: 2.35rem;
+  bottom: 0.55rem;
+  height: 2.15rem;
+  min-height: 2.15rem;
+  min-width: 2.15rem;
   position: absolute;
-  right: 0.7rem;
+  right: 0.55rem;
+  width: 2.15rem;
   z-index: 2;
 }
 

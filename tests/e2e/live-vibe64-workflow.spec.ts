@@ -392,11 +392,11 @@ test.describe("live Vibe64 session workflow", () => {
     test.skip(!replacementPrRef, "Set VIBE64_E2E_REPLACEMENT_PR_REF to exercise a cross-repo PR rejection.");
 
     await createSession(page);
-    await clickButton(page, "Use existing PR");
+    await clickButton(page, "Existing PR");
     await page.getByLabel("PR URL or number").fill(replacementPrRef);
     await page.getByRole("button", {
       exact: true,
-      name: "Use existing PR"
+      name: "Existing PR"
     }).click();
     await expect(page.getByText("cannot be used as a stacked PR base because its head branch is not in this repository").first()).toBeVisible({
       timeout: 60_000

@@ -69,11 +69,11 @@ function useVibe64SessionDialogs({
       success: "Vibe64 session abandoned."
     },
     onRunSuccess: async (_response, { context } = {}) => {
+      onAbandoned();
+      await refreshSessionData();
       if (!context?.sessionId || context.sessionId === unref(selectedSessionId)) {
         clearSelectedSession();
       }
-      onAbandoned();
-      await refreshSessionData();
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
     placementSource: "vibe64.sessions.abandon",
