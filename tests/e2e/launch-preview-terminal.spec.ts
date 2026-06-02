@@ -24,6 +24,18 @@ test("embedded preview renders through the proxy and displays the target URL", a
   await expect(page.getByText(TARGET_APP_URL)).toBeVisible();
 });
 
+test("embedded preview keeps the opening overlay until the bridge reports rendered content", async ({ page }) => {
+  await mockLaunchTerminalSocket(page);
+  await mockLaunchSession(page, {
+    previewReadyDelayMs: 1000
+  });
+
+  await page.goto(`${BASE_URL}/home`);
+
+  await expect(page.locator(".vibe64-launch-controls__preview-overlay")).toContainText("Opening preview.");
+  await expect(page.locator(".vibe64-launch-controls__preview-overlay")).toHaveCount(0);
+});
+
 test("embedded launch terminal can be shown and hidden again", async ({ page }) => {
   await mockLaunchTerminalSocket(page);
   await mockLaunchSession(page);
@@ -56,7 +68,11 @@ test("embedded launch terminal can be shown and hidden again", async ({ page }) 
   await expect(page.getByText("Hide terminal")).toHaveCount(0);
 });
 
-async function mockLaunchSession(page: Page) {
+async function mockLaunchSession(page: Page, {
+  previewReadyDelayMs = 0
+}: {
+  previewReadyDelayMs?: number;
+} = {}) {
   const session = sessionPayload();
   await mockStudioReady(page);
   await page.route("**/api/vibe64/sessions**", async (route) => {
@@ -100,20 +116,35 @@ async function mockLaunchSession(page: Page) {
   });
   await page.route("http://127.0.0.1:49000/**", async (route) => {
     await route.fulfill({
-      body: previewAppHtml(),
+      body: previewAppHtml({
+        readyDelayMs: previewReadyDelayMs
+      }),
       contentType: "text/html"
     });
   });
 }
 
-function previewAppHtml() {
-  const message = JSON.stringify({
+function previewAppHtml({
+  readyDelayMs = 0
+}: {
+  readyDelayMs?: number;
+} = {}) {
+  const locationMessage = JSON.stringify({
     href: TARGET_APP_URL,
     reason: "ready",
     type: "vibe64:preview-location",
     version: 1
   });
-  return `<!doctype html><title>Preview</title><body>Preview app<script>parent.postMessage(${message}, "*");</script></body>`;
+  const readyMessage = JSON.stringify({
+    href: TARGET_APP_URL,
+    reason: "rendered",
+    type: "vibe64:preview-ready",
+    version: 1
+  });
+  return `<!doctype html><title>Preview</title><body>Preview app<script>
+parent.postMessage(${locationMessage}, "*");
+setTimeout(() => parent.postMessage(${readyMessage}, "*"), ${Number(readyDelayMs) || 0});
+</script></body>`;
 }
 
 async function mockLaunchTerminalSocket(page: Page) {

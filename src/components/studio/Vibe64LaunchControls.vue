@@ -65,7 +65,7 @@
           <v-btn
             v-if="terminalCanRestart"
             :disabled="operationBusy"
-            :icon="mdiRestart"
+            :icon="mdiPowerCycle"
             size="small"
             title="Restart"
             variant="text"
@@ -168,7 +168,17 @@
         class="vibe64-launch-controls__preview-frame"
         :src="previewUrl"
         title="App preview"
+        @load="requestPreviewState"
       />
+      <div
+        v-if="previewLoadingOverlayVisible"
+        class="vibe64-launch-controls__preview-empty vibe64-launch-controls__preview-overlay"
+      >
+        <div class="vibe64-launch-controls__preview-pulse">
+          <v-icon :icon="mdiWebClock" size="46" />
+        </div>
+        <span>Opening preview.</span>
+      </div>
       <div
         v-else-if="!previewUrl"
         class="vibe64-launch-controls__preview-empty"
@@ -241,8 +251,8 @@ import {
   mdiContentCopy,
   mdiOpenInNew,
   mdiPlayCircleOutline,
+  mdiPowerCycle,
   mdiRefresh,
-  mdiRestart,
   mdiWebClock
 } from "@mdi/js";
 import Vibe64FloatingTerminalWindow from "@/components/studio/Vibe64FloatingTerminalWindow.vue";
@@ -349,9 +359,12 @@ const runMenuDisabled = computed(() => Boolean(
   launchTargets.value.length < 1
 ));
 const PREVIEW_LOCATION_MESSAGE_TYPE = "vibe64:preview-location";
+const PREVIEW_QUERY_MESSAGE_TYPE = "vibe64:preview-query";
+const PREVIEW_READY_MESSAGE_TYPE = "vibe64:preview-ready";
 const PREVIEW_RELOAD_QUERY_PARAM = "vibe64_reload";
 const previewFrame = ref(null);
 const previewReloadKey = ref(0);
+const previewReadyUrl = ref("");
 const previewVisitedUrl = ref("");
 const previewToolbarPosition = ref("center");
 const toolbarTeleportTarget = computed(() => String(props.toolbarTeleportTarget || "").trim());
@@ -377,6 +390,10 @@ const previewUrl = computed(() => launchPreviewUrl({
 const previewStarting = computed(() => Boolean(
   previewBaseUrl.value &&
   !terminalLaunchReady.value
+));
+const previewLoadingOverlayVisible = computed(() => Boolean(
+  previewUrl.value &&
+  previewReadyUrl.value !== previewUrl.value
 ));
 const previewEmptyText = computed(() => {
   if (loading.value) {
@@ -411,6 +428,15 @@ async function copyPreviewUrl() {
   return true;
 }
 
+function requestPreviewState() {
+  if (!previewFrame.value?.contentWindow || !previewUrl.value) {
+    return;
+  }
+  previewFrame.value.contentWindow.postMessage({
+    type: PREVIEW_QUERY_MESSAGE_TYPE
+  }, "*");
+}
+
 function toggleTerminal() {
   if (embeddedTerminalVisible.value) {
     minimizeTerminal();
@@ -438,7 +464,12 @@ function previewUrlWithoutReload(value = "") {
 }
 
 function previewMessageUrl(data = {}) {
-  if (!data || typeof data !== "object" || data.type !== PREVIEW_LOCATION_MESSAGE_TYPE) {
+  const messageType = String(data?.type || "");
+  if (
+    !data ||
+    typeof data !== "object" ||
+    ![PREVIEW_LOCATION_MESSAGE_TYPE, PREVIEW_READY_MESSAGE_TYPE].includes(messageType)
+  ) {
     return "";
   }
   const href = String(data.href || data.url || "").trim();
@@ -477,10 +508,18 @@ function handlePreviewLocationMessage(event) {
     return;
   }
   const frameUrl = previewMessageUrl(event.data);
+  if (frameUrl && event.data?.type === PREVIEW_READY_MESSAGE_TYPE) {
+    previewReadyUrl.value = previewUrl.value;
+  }
   if (frameUrl) {
     previewVisitedUrl.value = frameUrl;
   }
 }
+
+watch(previewUrl, () => {
+  previewReadyUrl.value = "";
+  requestPreviewState();
+});
 
 watch(previewDisplayBaseUrl, (baseUrl) => {
   previewVisitedUrl.value = previewUrlWithoutReload(baseUrl);
@@ -676,6 +715,13 @@ onBeforeUnmount(() => {
   justify-content: center;
   min-height: 12rem;
   padding: 1rem;
+}
+
+.vibe64-launch-controls__preview-overlay {
+  background:
+    linear-gradient(180deg, rgba(var(--v-theme-primary), 0.035), rgba(var(--v-theme-surface), 0.9)),
+    rgb(var(--v-theme-surface));
+  z-index: 1;
 }
 
 .vibe64-launch-controls__preview-pulse {

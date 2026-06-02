@@ -3,7 +3,9 @@ import { createServer } from "node:http";
 import test from "node:test";
 
 import {
-  PREVIEW_BRIDGE_MESSAGE_TYPE
+  PREVIEW_BRIDGE_MESSAGE_TYPE,
+  PREVIEW_QUERY_MESSAGE_TYPE,
+  PREVIEW_READY_MESSAGE_TYPE
 } from "../../packages/vibe64-terminals/src/server/launchPreviewBridge.js";
 import {
   createLaunchPreviewProxyRegistry,
@@ -20,6 +22,10 @@ test("launch preview bridge injects once and reports target URLs", () => {
 
   assert.match(injected, /data-vibe64-preview-bridge="1"/u);
   assert.match(injected, new RegExp(PREVIEW_BRIDGE_MESSAGE_TYPE, "u"));
+  assert.match(injected, new RegExp(PREVIEW_QUERY_MESSAGE_TYPE, "u"));
+  assert.match(injected, new RegExp(PREVIEW_READY_MESSAGE_TYPE, "u"));
+  assert.match(injected, /MutationObserver/u);
+  assert.match(injected, /force: true/u);
   assert.match(injected, /http:\/\/127\.0\.0\.1:4103/u);
   assert.equal(injectLaunchPreviewBridge(injected), injected);
 });
