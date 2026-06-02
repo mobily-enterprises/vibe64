@@ -2,9 +2,10 @@
   <v-sheet
     rounded="lg"
     class="studio-ai-sessions studio-ai-sessions--autopilot studio-screen__panel"
+    :class="{ 'studio-ai-sessions--with-header': panelHeaderVisible }"
   >
     <div
-      v-if="pageError || panelSessionToolbarVisible"
+      v-if="panelHeaderVisible"
       class="studio-ai-sessions__header"
     >
       <StudioErrorNotice
@@ -23,28 +24,32 @@
       />
     </div>
 
-    <v-progress-linear
-      v-if="pageLoading && !selection.selectedSession"
-      color="primary"
-      height="6"
-      indeterminate
-      rounded
-    />
-
     <div
-      v-else-if="!selection.selectedSession"
+      v-if="!selection.selectedSession"
       class="studio-ai-sessions__empty-layout"
       :class="{
         'studio-ai-sessions__empty-layout--dashboard': dashboardWorkspaceActive
       }"
     >
-      <v-sheet
-        rounded="lg"
-        border
-        class="studio-ai-sessions__empty"
-      >
-        <p class="text-body-2 text-medium-emphasis mb-0">No sessions yet.</p>
-      </v-sheet>
+      <div class="studio-ai-sessions__empty-main">
+        <v-progress-linear
+          v-if="pageLoading"
+          class="studio-ai-sessions__loading-bar"
+          color="primary"
+          height="6"
+          indeterminate
+          rounded
+        />
+
+        <v-sheet
+          v-else
+          rounded="lg"
+          border
+          class="studio-ai-sessions__empty"
+        >
+          <p class="text-body-2 text-medium-emphasis mb-0">{{ emptyStateText }}</p>
+        </v-sheet>
+      </div>
 
       <div
         v-if="dashboardWorkspaceActive"
@@ -136,6 +141,9 @@ const panelSessionToolbarVisible = computed(() => Boolean(
 ));
 const dashboardWorkspaceActive = computed(() => workspacePane.value === "dashboard");
 const emptyDashboardContext = Object.freeze({});
+const emptyStateText = computed(() => {
+  return toolbar.sessions?.length > 0 ? "Selecting session..." : "No sessions yet.";
+});
 const selectedRuntimeState = computed(() => runtimeStateBySessionId[selection.selectedSessionId] || null);
 const selectedAbandon = computed(() => selectedRuntimeState.value?.toolbarControls?.abandon || fallbackAbandon);
 const pageError = computed(() => blockingVibe64SessionPageError({
@@ -145,6 +153,7 @@ const pageError = computed(() => blockingVibe64SessionPageError({
   sessionListLoadError: sessionData.sessionList.loadError,
   sessions: toolbar.sessions || []
 }));
+const panelHeaderVisible = computed(() => Boolean(pageError.value || panelSessionToolbarVisible.value));
 
 function ensureRuntimeState(sessionId = "") {
   const key = String(sessionId || "");
@@ -223,8 +232,17 @@ watch(sessionData.sessions, (sessions = []) => {
   padding: 0;
 }
 
+.studio-ai-sessions--autopilot.studio-ai-sessions--with-header {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
 .studio-ai-sessions__empty {
   padding: 0.9rem;
+}
+
+.studio-ai-sessions__empty-main {
+  align-self: start;
+  min-width: 0;
 }
 
 .studio-ai-sessions__empty-layout {
@@ -234,6 +252,10 @@ watch(sessionData.sessions, (sessions = []) => {
   display: grid;
   gap: var(--studio-ai-sessions-layout-gap);
   min-height: 0;
+}
+
+.studio-ai-sessions__loading-bar {
+  max-width: 32rem;
 }
 
 .studio-ai-sessions__dashboard-empty-pane {
@@ -264,6 +286,10 @@ watch(sessionData.sessions, (sessions = []) => {
 
   .studio-ai-sessions--autopilot {
     grid-template-rows: minmax(0, 1fr);
+  }
+
+  .studio-ai-sessions--autopilot.studio-ai-sessions--with-header {
+    grid-template-rows: auto minmax(0, 1fr);
   }
 
   .studio-ai-sessions__runtime-stack {

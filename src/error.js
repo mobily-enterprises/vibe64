@@ -12,6 +12,15 @@ function errorSummary(error = {}) {
   };
 }
 
+function errorConsoleMessage(payload = {}) {
+  return [
+    payload.message,
+    payload.code ? `code=${payload.code}` : "",
+    payload.source ? `source=${payload.source}` : "",
+    payload.traceId ? `trace=${payload.traceId}` : ""
+  ].filter(Boolean).join(" | ") || "JSKIT reported an error.";
+}
+
 function installJskitErrorConsoleTrail(runtime = null) {
   if (!runtime || typeof runtime.subscribe !== "function") {
     return;
@@ -35,6 +44,7 @@ function installJskitErrorConsoleTrail(runtime = null) {
       message: String(reportedError.message || decision.message || ""),
       presenterId: String(decision.presenterId || ""),
       reason: String(result.reason || ""),
+      severity: String(reportedError.severity || decision.severity || ""),
       skipped: result.skipped === true,
       source: String(reportedError.source || ""),
       traceId: String(reportedError.traceId || ""),
@@ -42,9 +52,13 @@ function installJskitErrorConsoleTrail(runtime = null) {
     };
 
     try {
-      console.error("[JSKIT_ERROR]", payload);
+      const severity = String(payload.severity || "").toLowerCase();
+      const consoleMethod = severity === "success" ? "info" : severity === "warning" ? "warn" : "error";
+      const label = severity === "success" ? "JSKIT_FEEDBACK" : severity === "warning" ? "JSKIT_WARNING" : "JSKIT_ERROR";
+      console[consoleMethod](`[${label}] ${errorConsoleMessage(payload)}`, payload);
       if (reportedError.cause) {
-        console.error("[JSKIT_ERROR_CAUSE]", errorSummary(reportedError.cause));
+        const cause = errorSummary(reportedError.cause);
+        console.error(`[JSKIT_ERROR_CAUSE] ${cause.message || cause.name || "Unknown cause"}`, cause);
       }
     } catch {
       // Console diagnostics must never interfere with JSKIT error presentation.

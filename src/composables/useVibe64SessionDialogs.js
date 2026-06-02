@@ -71,7 +71,7 @@ function useVibe64SessionDialogs({
     onRunSuccess: async (_response, { context } = {}) => {
       onAbandoned();
       await refreshSessionData();
-      if (!context?.sessionId || context.sessionId === unref(selectedSessionId)) {
+      if (!context?.sessionId) {
         clearSelectedSession();
       }
     },

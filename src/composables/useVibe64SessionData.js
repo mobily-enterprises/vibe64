@@ -62,6 +62,29 @@ function selectedSessionRecord(detailSession = null, listSession = null, selecte
   return listSession;
 }
 
+function sessionIdExistsInList(sessionId = "", nextSessions = []) {
+  const normalizedSessionId = String(sessionId || "").trim();
+  return Boolean(normalizedSessionId) && nextSessions.some((session) => session.sessionId === normalizedSessionId);
+}
+
+function shouldPreserveSelectedSessionDuringRefresh({
+  createSessionRunning = false,
+  currentSessionId = "",
+  nextSessions = [],
+  selectedSessionLoading = false,
+  sessionListLoading = false
+} = {}) {
+  const normalizedSessionId = String(currentSessionId || "").trim();
+  if (!normalizedSessionId || sessionIdExistsInList(normalizedSessionId, nextSessions)) {
+    return false;
+  }
+  return Boolean(
+    sessionListLoading ||
+    createSessionRunning ||
+    selectedSessionLoading
+  );
+}
+
 function useVibe64SessionData({
   onTitleChange = null
 } = {}) {
@@ -281,29 +304,35 @@ function useVibe64SessionData({
     }
   }
 
-  function sessionIdExistsInList(sessionId = "", nextSessions = []) {
-    const normalizedSessionId = String(sessionId || "").trim();
-    return Boolean(normalizedSessionId) && nextSessions.some((session) => session.sessionId === normalizedSessionId);
-  }
+  const selectionReconciliationState = computed(() => {
+    const nextSessions = sessions.value;
+    return {
+      createSessionRunning: createSessionCommand.isRunning,
+      nextSessions,
+      selectedSessionId: String(selectedSessionId.value || ""),
+      selectedSessionLoading: Boolean(selectedSessionResource.isLoading?.value),
+      sessionIds: nextSessions.map((session) => session.sessionId).join("|"),
+      sessionListInitialLoading: sessionList.isInitialLoading,
+      sessionListLoading: sessionList.isLoading
+    };
+  });
 
-  function shouldPreserveSelectedSessionDuringRefresh(nextSessions = []) {
-    const currentSessionId = String(selectedSessionId.value || "").trim();
-    if (!currentSessionId || sessionIdExistsInList(currentSessionId, nextSessions)) {
-      return false;
-    }
-    return Boolean(
-      sessionList.isLoading ||
-      createSessionCommand.isRunning ||
-      selectedSessionResource.isLoading?.value
-    );
-  }
-
-  watch(sessions, (nextSessions) => {
+  watch(selectionReconciliationState, (state) => {
+    const nextSessions = state.nextSessions;
     vibe64SessionDebugLog("client.sessionData.sessions.changed", {
       selectedSessionId: String(selectedSessionId.value || ""),
       sessionCount: nextSessions.length
     });
-    if (sessionList.isInitialLoading || shouldPreserveSelectedSessionDuringRefresh(nextSessions)) {
+    if (
+      state.sessionListInitialLoading ||
+      shouldPreserveSelectedSessionDuringRefresh({
+        createSessionRunning: state.createSessionRunning,
+        currentSessionId: state.selectedSessionId,
+        nextSessions,
+        selectedSessionLoading: state.selectedSessionLoading,
+        sessionListLoading: state.sessionListLoading
+      })
+    ) {
       return;
     }
     sessionSelection.selectAvailableId(nextSessions, {
@@ -375,5 +404,7 @@ function useVibe64SessionData({
 
 export {
   selectedSessionRecord,
+  sessionIdExistsInList,
+  shouldPreserveSelectedSessionDuringRefresh,
   useVibe64SessionData
 };

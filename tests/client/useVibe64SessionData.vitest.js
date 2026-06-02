@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  selectedSessionRecord
+  selectedSessionRecord,
+  shouldPreserveSelectedSessionDuringRefresh
 } from "../../src/composables/useVibe64SessionData.js";
 
 describe("useVibe64SessionData selected session record", () => {
@@ -39,5 +40,39 @@ describe("useVibe64SessionData selected session record", () => {
       ok: false,
       sessionId: "session-1"
     }, listSummary, "session-1")).toBe(listSummary);
+  });
+
+  it("preserves a missing selected id only while refresh work is active", () => {
+    const nextSessions = [
+      { sessionId: "session-2" }
+    ];
+
+    expect(shouldPreserveSelectedSessionDuringRefresh({
+      currentSessionId: "session-1",
+      nextSessions,
+      sessionListLoading: true
+    })).toBe(true);
+
+    expect(shouldPreserveSelectedSessionDuringRefresh({
+      currentSessionId: "session-1",
+      nextSessions,
+      selectedSessionLoading: true
+    })).toBe(true);
+
+    expect(shouldPreserveSelectedSessionDuringRefresh({
+      currentSessionId: "session-1",
+      nextSessions
+    })).toBe(false);
+  });
+
+  it("does not preserve when the selected id is still visible", () => {
+    expect(shouldPreserveSelectedSessionDuringRefresh({
+      currentSessionId: "session-1",
+      nextSessions: [
+        { sessionId: "session-1" },
+        { sessionId: "session-2" }
+      ],
+      sessionListLoading: true
+    })).toBe(false);
   });
 });
