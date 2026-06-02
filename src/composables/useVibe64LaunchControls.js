@@ -137,6 +137,24 @@ function launchTerminalIsReady(metadata = {}) {
   return metadata?.launchReady === true || metadata?.launchReady === "true";
 }
 
+function launchPreviewBaseUrl(actions = []) {
+  const previewAction = Array.isArray(actions) ? actions.find((action) => browserCanOpenTarget(action)) : null;
+  return String(previewAction?.href || "");
+}
+
+function launchPreviewUrl({
+  baseUrl = "",
+  ready = false,
+  reloadKey = 0
+} = {}) {
+  const normalizedBaseUrl = String(baseUrl || "");
+  if (!normalizedBaseUrl || ready !== true) {
+    return "";
+  }
+  const separator = normalizedBaseUrl.includes("?") ? "&" : "?";
+  return `${normalizedBaseUrl}${separator}vibe64_reload=${reloadKey}`;
+}
+
 function useVibe64LaunchControls({
   autoStartTargetId = () => "",
   busy = () => false,
@@ -687,6 +705,8 @@ function useVibe64LaunchControls({
 export {
   browserCanOpenTarget,
   launchBrowserTargetName,
+  launchPreviewBaseUrl,
+  launchPreviewUrl,
   launchTargetWorktreePath,
   launchTerminalAiFixAvailable,
   openLaunchBrowserTarget,

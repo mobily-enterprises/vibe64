@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import {
   browserCanOpenTarget,
   launchBrowserTargetName,
+  launchPreviewBaseUrl,
+  launchPreviewUrl,
   launchTargetWorktreePath,
   launchTerminalAiFixAvailable,
   openLaunchBrowserTarget,
@@ -106,6 +108,33 @@ describe("Vibe64 launch controls", () => {
     expect(launchTerminalAiFixAvailable({
       workflowCommand: true
     })).toBe(true);
+  });
+
+  it("keeps the embedded preview URL blank until the launch preview is ready", () => {
+    const actions = [
+      {
+        href: "mailto:test@example.com",
+        kind: "mailto"
+      },
+      {
+        href: "http://127.0.0.1:4103/home?mode=dev",
+        kind: "url"
+      }
+    ];
+
+    const baseUrl = launchPreviewBaseUrl(actions);
+
+    expect(baseUrl).toBe("http://127.0.0.1:4103/home?mode=dev");
+    expect(launchPreviewUrl({
+      baseUrl,
+      ready: false,
+      reloadKey: 2
+    })).toBe("");
+    expect(launchPreviewUrl({
+      baseUrl,
+      ready: true,
+      reloadKey: 2
+    })).toBe("http://127.0.0.1:4103/home?mode=dev&vibe64_reload=2");
   });
 });
 

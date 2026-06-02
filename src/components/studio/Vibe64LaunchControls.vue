@@ -129,18 +129,27 @@
         class="vibe64-launch-controls__preview-frame"
         :src="previewUrl"
         title="App preview"
+        @load="previewFrameLoaded = true"
       />
       <div
-        v-else
+        v-if="previewUrl && !previewFrameLoaded"
+        class="vibe64-launch-controls__preview-overlay"
+      >
+        <div class="vibe64-launch-controls__preview-pulse">
+          <v-icon :icon="mdiWebClock" size="46" />
+        </div>
+        <span>Opening preview.</span>
+      </div>
+      <div
+        v-else-if="!previewUrl"
         class="vibe64-launch-controls__preview-empty"
       >
-        <v-progress-circular
-          v-if="loading || terminalIsRunning"
-          color="primary"
-          indeterminate
-          size="22"
-          width="2"
-        />
+        <div
+          v-if="previewStarting"
+          class="vibe64-launch-controls__preview-pulse"
+        >
+          <v-icon :icon="mdiWebClock" size="46" />
+        </div>
         <span>{{ previewEmptyText }}</span>
       </div>
     </div>
@@ -264,7 +273,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import {
   mdiChevronDown,
   mdiClose,
@@ -275,12 +284,15 @@ import {
   mdiRefresh,
   mdiRobotOutline,
   mdiRestart,
-  mdiStop
+  mdiStop,
+  mdiWebClock
 } from "@mdi/js";
 import Vibe64FixCodexDialog from "@/components/studio/Vibe64FixCodexDialog.vue";
 import Vibe64FloatingTerminalWindow from "@/components/studio/Vibe64FloatingTerminalWindow.vue";
 import Vibe64TerminalFrame from "@/components/studio/Vibe64TerminalFrame.vue";
 import {
+  launchPreviewBaseUrl,
+  launchPreviewUrl,
   launchTerminalAiFixAvailable,
   useVibe64LaunchControls
 } from "@/composables/useVibe64LaunchControls.js";
@@ -374,6 +386,7 @@ const {
   terminalIndicatorLabel,
   terminalIndicatorState,
   terminalIsRunning,
+  terminalLaunchReady,
   terminalMetadata,
   terminalOutput,
   terminalSessionId,
@@ -421,29 +434,135 @@ const workflowAiFixVisible = computed(() => Boolean(
     terminalError.value
   )
 ));
+const PREVIEW_PROBE_MAX_ATTEMPTS = 20;
+const PREVIEW_PROBE_RETRY_DELAY_MS = 750;
 const previewReloadKey = ref(0);
+const previewFrameLoaded = ref(false);
+const previewProbeAttempt = ref(0);
+const previewProbeError = ref("");
+const previewProbeLoading = ref(false);
+const previewProbeReady = ref(false);
+let previewProbeRunId = 0;
+let previewProbeTimer = null;
 const toolbarTeleportTarget = computed(() => String(props.toolbarTeleportTarget || "").trim());
-const previewBaseUrl = computed(() => String(launchActions.value[0]?.href || ""));
-const previewUrl = computed(() => {
-  if (!previewBaseUrl.value) {
-    return "";
-  }
-  const separator = previewBaseUrl.value.includes("?") ? "&" : "?";
-  return `${previewBaseUrl.value}${separator}vibe64_reload=${previewReloadKey.value}`;
-});
+const previewBaseUrl = computed(() => launchPreviewBaseUrl(launchActions.value));
+const previewUrl = computed(() => launchPreviewUrl({
+  baseUrl: previewBaseUrl.value,
+  ready: previewProbeReady.value,
+  reloadKey: previewReloadKey.value
+}));
+const previewStarting = computed(() => Boolean(
+  previewBaseUrl.value &&
+  !previewProbeError.value &&
+  (
+    !terminalLaunchReady.value ||
+    previewProbeLoading.value ||
+    (previewUrl.value && !previewFrameLoaded.value)
+  )
+));
 const previewEmptyText = computed(() => {
   if (loading.value) {
     return "Loading preview targets.";
   }
-  if (terminalIsRunning.value) {
+  if (previewProbeError.value) {
+    return previewProbeError.value;
+  }
+  if (previewStarting.value || terminalIsRunning.value) {
     return "Starting preview.";
   }
   return "Run the app to show the preview.";
 });
 
 function reloadPreview() {
+  previewFrameLoaded.value = false;
+  previewProbeError.value = "";
+  if (!previewProbeReady.value && previewBaseUrl.value && terminalLaunchReady.value) {
+    startPreviewProbe();
+    return;
+  }
   previewReloadKey.value += 1;
 }
+
+function clearPreviewProbeTimer() {
+  if (previewProbeTimer) {
+    clearTimeout(previewProbeTimer);
+    previewProbeTimer = null;
+  }
+}
+
+function schedulePreviewProbe(runId) {
+  clearPreviewProbeTimer();
+  previewProbeTimer = setTimeout(() => {
+    void probePreview(runId);
+  }, PREVIEW_PROBE_RETRY_DELAY_MS);
+}
+
+async function probePreview(runId) {
+  if (runId !== previewProbeRunId) {
+    return;
+  }
+  const baseUrl = previewBaseUrl.value;
+  if (!baseUrl || !terminalLaunchReady.value) {
+    previewProbeLoading.value = false;
+    return;
+  }
+  if (typeof fetch !== "function") {
+    previewProbeReady.value = true;
+    previewProbeLoading.value = false;
+    return;
+  }
+  try {
+    await fetch(baseUrl, {
+      cache: "no-store",
+      mode: "no-cors"
+    });
+    if (runId !== previewProbeRunId) {
+      return;
+    }
+    previewProbeError.value = "";
+    previewProbeLoading.value = false;
+    previewProbeReady.value = true;
+  } catch {
+    if (runId !== previewProbeRunId) {
+      return;
+    }
+    previewProbeAttempt.value += 1;
+    if (previewProbeAttempt.value >= PREVIEW_PROBE_MAX_ATTEMPTS) {
+      previewProbeError.value = "Preview is taking longer than expected.";
+      previewProbeLoading.value = false;
+      previewProbeReady.value = false;
+      return;
+    }
+    schedulePreviewProbe(runId);
+  }
+}
+
+function startPreviewProbe() {
+  clearPreviewProbeTimer();
+  previewProbeRunId += 1;
+  previewFrameLoaded.value = false;
+  previewProbeAttempt.value = 0;
+  previewProbeError.value = "";
+  previewProbeReady.value = false;
+  if (!previewBaseUrl.value || !terminalLaunchReady.value) {
+    previewProbeLoading.value = false;
+    return;
+  }
+  previewProbeLoading.value = true;
+  void probePreview(previewProbeRunId);
+}
+
+watch(() => [
+  previewBaseUrl.value,
+  terminalLaunchReady.value ? "ready" : "not-ready"
+].join("|"), startPreviewProbe, {
+  immediate: true
+});
+
+onBeforeUnmount(() => {
+  previewProbeRunId += 1;
+  clearPreviewProbeTimer();
+});
 
 async function requestAiFix() {
   if (!workflowAiFixVisible.value) {
@@ -586,6 +705,10 @@ async function requestAiFix() {
   overflow: hidden;
 }
 
+.vibe64-launch-controls__preview > * {
+  grid-area: 1 / 1;
+}
+
 .vibe64-launch-controls__preview-frame {
   background: white;
   border: 0;
@@ -594,14 +717,42 @@ async function requestAiFix() {
   width: 100%;
 }
 
+.vibe64-launch-controls__preview-overlay {
+  align-items: center;
+  backdrop-filter: blur(2px);
+  background: rgba(var(--v-theme-surface), 0.72);
+  color: rgba(var(--v-theme-on-surface), 0.68);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  justify-content: center;
+  min-height: 12rem;
+  padding: 1rem;
+  z-index: 1;
+}
+
 .vibe64-launch-controls__preview-empty {
   align-items: center;
   color: rgba(var(--v-theme-on-surface), 0.62);
   display: flex;
+  flex-direction: column;
   gap: 0.55rem;
   justify-content: center;
   min-height: 12rem;
   padding: 1rem;
+}
+
+.vibe64-launch-controls__preview-pulse {
+  align-items: center;
+  animation: vibe64-launch-preview-pulse 1.7s ease-in-out infinite;
+  background: rgba(var(--v-theme-primary), 0.1);
+  border: 1px solid rgba(var(--v-theme-primary), 0.16);
+  border-radius: 999px;
+  color: rgba(var(--v-theme-primary), 0.72);
+  display: inline-flex;
+  height: 5.25rem;
+  justify-content: center;
+  width: 5.25rem;
 }
 
 .vibe64-launch-controls__terminal {
@@ -618,6 +769,19 @@ async function requestAiFix() {
   100% {
     opacity: 0.32;
     transform: scale(0.84);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes vibe64-launch-preview-pulse {
+  0%,
+  100% {
+    opacity: 0.46;
+    transform: scale(0.94);
   }
 
   50% {
