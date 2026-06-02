@@ -572,6 +572,18 @@ async function attachTerminalSession(session = {}) {
     return Boolean(terminalSessionId.value);
   }
   const previousTerminalSessionId = terminalSessionId.value;
+  const sameTerminalSession = previousTerminalSessionId === nextTerminalSessionId;
+  if (sameTerminalSession) {
+    applyTerminalSession({
+      ...session,
+      id: nextTerminalSessionId
+    }, {
+      fallbackStatus: "running",
+      preserveOutput: true,
+      resize: false
+    });
+    return true;
+  }
   if (previousTerminalSessionId && previousTerminalSessionId !== nextTerminalSessionId) {
     resetTerminalOutput();
   }

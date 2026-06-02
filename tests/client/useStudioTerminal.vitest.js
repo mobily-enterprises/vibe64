@@ -1,5 +1,52 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+const xtermMock = vi.hoisted(() => {
+  class FakeTerminal {
+    constructor() {
+      this.cols = 93;
+      this.rows = 28;
+    }
+
+    dispose() {}
+    focus() {}
+    hasSelection() {
+      return false;
+    }
+    loadAddon() {}
+    open() {}
+    onData() {
+      return {
+        dispose() {}
+      };
+    }
+    onSelectionChange() {
+      return {
+        dispose() {}
+      };
+    }
+    refresh() {}
+    reset() {}
+    scrollToBottom() {}
+    write(_chunk, callback) {
+      callback?.();
+    }
+  }
+
+  return {
+    FakeTerminal
+  };
+});
+
+vi.mock("@xterm/xterm", () => ({
+  Terminal: xtermMock.FakeTerminal
+}));
+
+vi.mock("@xterm/addon-fit", () => ({
+  FitAddon: class FakeFitAddon {
+    fit() {}
+  }
+}));
+
 import {
   INVALID_TERMINAL_SIZE_ERROR,
   reportableTerminalSize,
@@ -11,15 +58,23 @@ import {
 
 describe("useStudioTerminal", () => {
   let originalWebSocket;
+  let originalWindow;
 
   beforeEach(() => {
     originalWebSocket = globalThis.WebSocket;
+    originalWindow = globalThis.window;
     FakeWebSocket.instances.length = 0;
     globalThis.WebSocket = FakeWebSocket;
+    globalThis.window = {
+      addEventListener() {},
+      removeEventListener() {},
+      setTimeout: globalThis.setTimeout
+    };
   });
 
   afterEach(() => {
     globalThis.WebSocket = originalWebSocket;
+    globalThis.window = originalWindow;
   });
 
   it("does not report transient terminal sizes that the PTY server rejects", () => {
@@ -166,7 +221,55 @@ describe("useStudioTerminal", () => {
 
     expect(terminal.terminalOutput.value).toBe("draft in progress");
   });
+
+  it("does not send repeated resize control messages when live resize is disabled", async () => {
+    const terminal = useStudioTerminal({
+      liveResize: false,
+      webSocketUrl: (terminalId) => `ws://terminal/${terminalId}`
+    });
+    terminal.terminalHost.value = fakeTerminalHost();
+
+    await terminal.setupTerminalUi();
+    terminal.applyTerminalSession({
+      id: "terminal-1",
+      status: "running"
+    });
+
+    const firstSocket = FakeWebSocket.instances[0];
+    firstSocket.dispatch("open");
+    await flushPromises();
+
+    expect(firstSocket.sentMessages()).toEqual([{
+      cols: 93,
+      rows: 28,
+      type: "resize"
+    }]);
+
+    terminal.closeTerminalSocket();
+    terminal.applyTerminalSession({
+      id: "terminal-1",
+      status: "running"
+    });
+    await terminal.setupTerminalUi();
+    await flushPromises();
+
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    expect(firstSocket.sentMessages()).toHaveLength(1);
+  });
 });
+
+async function flushPromises() {
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
+function fakeTerminalHost() {
+  return {
+    addEventListener() {},
+    removeEventListener() {},
+    replaceChildren() {}
+  };
+}
 
 class FakeWebSocket {
   static CONNECTING = 0;
@@ -178,6 +281,7 @@ class FakeWebSocket {
   constructor(url) {
     this.listeners = new Map();
     this.readyState = FakeWebSocket.CONNECTING;
+    this.sent = [];
     this.url = url;
     FakeWebSocket.instances.push(this);
   }
@@ -196,5 +300,13 @@ class FakeWebSocket {
       this.readyState = FakeWebSocket.OPEN;
     }
     this.listeners.get(eventName)?.(event);
+  }
+
+  send(message) {
+    this.sent.push(JSON.parse(String(message || "{}")));
+  }
+
+  sentMessages() {
+    return this.sent;
   }
 }

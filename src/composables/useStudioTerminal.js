@@ -47,6 +47,7 @@ function useStudioTerminal({
   let terminalResizeObserver = null;
   let terminalReportedCols = 0;
   let terminalReportedRows = 0;
+  let terminalInitialResizeReported = false;
   let terminalInitialFitDone = false;
   let terminalLatestOutput = "";
   let terminalOutputOffset = 0;
@@ -76,6 +77,10 @@ function useStudioTerminal({
   function resetReportedTerminalSize() {
     terminalReportedCols = 0;
     terminalReportedRows = 0;
+  }
+
+  function resetInitialTerminalResize() {
+    terminalInitialResizeReported = false;
   }
 
   function updateTerminalSelection() {
@@ -252,6 +257,7 @@ function useStudioTerminal({
     terminalOutputVersion = 0;
     terminalOutput.value = "";
     resetReportedTerminalSize();
+    resetInitialTerminalResize();
     terminalInstance?.reset?.();
   }
 
@@ -347,7 +353,8 @@ function useStudioTerminal({
 
   function applyTerminalSession(session = {}, {
     fallbackStatus = "",
-    preserveOutput = false
+    preserveOutput = false,
+    resize = true
   } = {}) {
     const terminalSession = session && typeof session === "object" && !Array.isArray(session) ? session : {};
     const nextTerminalSessionId = String(terminalSession.id || "");
@@ -374,7 +381,9 @@ function useStudioTerminal({
         outputVersion: terminalSession.outputVersion
       });
     }
-    void sendTerminalResize();
+    if (resize) {
+      void sendTerminalResize();
+    }
     notifySessionUpdate(terminalSession);
     notifyStatusUpdate({
       closeError: String(terminalSession.closeError || ""),
@@ -526,6 +535,9 @@ function useStudioTerminal({
     if (!terminalSessionId.value || terminalStatus.value === "exited") {
       return false;
     }
+    if (!terminalLiveResize() && terminalInitialResizeReported) {
+      return false;
+    }
     const size = terminalCurrentSize();
     if (!size || terminalSizeAlreadyReported(size)) {
       return false;
@@ -540,6 +552,9 @@ function useStudioTerminal({
       rows: size.rows,
       type: "resize"
     }));
+    if (!terminalLiveResize()) {
+      terminalInitialResizeReported = true;
+    }
     return true;
   }
 
