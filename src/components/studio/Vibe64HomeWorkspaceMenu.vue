@@ -57,18 +57,9 @@ const isAutopilotHome = computed(() => Boolean(
   isHomeRoute.value &&
   route.query.configure !== "project"
 ));
-const activePane = computed(() => normalizePane(route.query.pane));
 const menuItems = computed(() => {
   if (isAutopilotHome.value) {
-    return [
-      {
-        description: "Show the running app.",
-        icon: mdiMonitorDashboard,
-        id: "preview",
-        label: "Preview"
-      },
-      ...sharedItems()
-    ];
+    return sharedItems();
   }
   return [
     {
@@ -110,63 +101,28 @@ function sharedItems() {
   ];
 }
 
-function normalizePane(value = "") {
-  return ["configure", "history", "preview", "run", "setup"].includes(value)
-    ? value
-    : "preview";
-}
-
-function autopilotQueryForPane(pane = "preview") {
-  const query = { ...route.query };
-  delete query.configure;
-  delete query.mode;
-  if (pane === "preview") {
-    delete query.pane;
-  } else {
-    query.pane = pane;
+function pathForItem(itemId = "") {
+  if (itemId === "workspace") {
+    return "/home";
   }
-  return query;
+  if (itemId === "configure" || itemId === "run") {
+    return `/home/dashboard/${itemId}`;
+  }
+  return `/home/${itemId}`;
 }
 
 function itemRoute(item = {}) {
-  if (item.id !== "workspace") {
-    if (item.id === "setup") {
-      return { path: "/setup", query: {} };
-    }
-    if (item.id === "history") {
-      return { path: "/home/history", query: {} };
-    }
-    return {
-      path: "/home",
-      query: autopilotQueryForPane(item.id)
-    };
-  }
   return {
-    path: "/home",
-    query: autopilotQueryForPane("preview")
+    path: pathForItem(item.id),
+    query: {}
   };
 }
 
 function itemActive(item = {}) {
-  if (isAutopilotHome.value) {
-    return activePane.value === item.id;
-  }
   if (item.id === "workspace") {
     return isHomeRoute.value && route.query.configure !== "project";
   }
-  if (item.id === "configure") {
-    return isHomeRoute.value && activePane.value === "configure";
-  }
-  if (item.id === "history") {
-    return route.path === "/home/history";
-  }
-  if (item.id === "run") {
-    return isHomeRoute.value && activePane.value === "run";
-  }
-  if (item.id === "setup") {
-    return route.path === "/setup";
-  }
-  return false;
+  return route.path === pathForItem(item.id);
 }
 
 function selectItem(item = {}) {

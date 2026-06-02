@@ -33,6 +33,8 @@
       v-else-if="projectReady"
       :target-project="projectState"
       :reload="loadProjectState"
+      :save-project-config="saveProjectConfig"
+      :saving-config="savingConfig"
     />
   </div>
 </template>

@@ -85,7 +85,14 @@
         @busy-change="setRuntimeBusy"
         @page-error-change="setRuntimePageError"
         @toolbar-controls-ready="setRuntimeToolbarControls"
-      />
+      >
+        <template #dashboard="dashboardSlotProps">
+          <slot
+            name="dashboard"
+            :dashboard-context="dashboardSlotProps?.dashboardContext || {}"
+          />
+        </template>
+      </Vibe64SessionRuntimeHost>
     </div>
   </v-sheet>
 </template>
@@ -106,6 +113,12 @@ import {
 } from "@/composables/useVibe64SessionData.js";
 
 const emit = defineEmits(["title-change"]);
+const props = defineProps({
+  workspacePane: {
+    default: "",
+    type: String
+  }
+});
 const route = useRoute();
 
 const fallbackAbandon = {
@@ -140,7 +153,7 @@ const toolbar = proxyRefs({
   workflowDefinitions: sessionData.workflowDefinitions
 });
 
-const workspacePane = computed(() => normalizeWorkspacePane(route.query.pane));
+const workspacePane = computed(() => normalizeWorkspacePane(props.workspacePane || route.query.pane));
 const pageLoading = sessionData.pageLoading;
 const toolbarActionsVisible = computed(() => true);
 const panelSessionToolbarVisible = computed(() => Boolean(
@@ -205,7 +218,7 @@ function setRuntimePageError({
 }
 
 function normalizeWorkspacePane(value = "") {
-  return ["configure", "history", "preview", "run", "setup"].includes(value)
+  return ["configure", "dashboard", "history", "preview", "run", "setup"].includes(value)
     ? value
     : "preview";
 }

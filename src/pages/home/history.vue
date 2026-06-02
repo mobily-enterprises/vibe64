@@ -13,16 +13,18 @@
     </header>
 
     <ProjectSelectionGate>
-      <ProjectTypeGate>
-        <template #default>
-          <SetupReadinessGate>
-            <Vibe64SessionHistoryPanel
-              :model-value="selectedArchive"
-              @update:model-value="selectedArchive = $event"
-            />
-          </SetupReadinessGate>
-        </template>
-      </ProjectTypeGate>
+      <template #default="projectSelectionSlotProps">
+        <ProjectTypeGate>
+          <template #default>
+            <SetupReadinessGate :cache-key="projectSelectionSlotProps?.projectSelection?.targetRoot || ''">
+              <Vibe64SessionHistoryPanel
+                :model-value="selectedArchive"
+                @update:model-value="selectedArchive = $event"
+              />
+            </SetupReadinessGate>
+          </template>
+        </ProjectTypeGate>
+      </template>
     </ProjectSelectionGate>
   </section>
 </template>

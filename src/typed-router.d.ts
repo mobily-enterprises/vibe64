@@ -44,7 +44,12 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       Record<never, never>,
       | '/home/'
+      | '/home/dashboard'
+      | '/home/dashboard/configure/'
+      | '/home/dashboard/run/'
+      | '/home/dashboard/session/'
       | '/home/history'
+      | '/home/setup'
       | '/home/target-scripts'
     >,
     '/home/': RouteRecordInfo<
@@ -54,9 +59,46 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       | never
     >,
+    '/home/dashboard': RouteRecordInfo<
+      '/home/dashboard',
+      '/home/dashboard',
+      Record<never, never>,
+      Record<never, never>,
+      | '/home/dashboard/configure/'
+      | '/home/dashboard/run/'
+      | '/home/dashboard/session/'
+    >,
+    '/home/dashboard/configure/': RouteRecordInfo<
+      '/home/dashboard/configure/',
+      '/home/dashboard/configure',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/home/dashboard/run/': RouteRecordInfo<
+      '/home/dashboard/run/',
+      '/home/dashboard/run',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/home/dashboard/session/': RouteRecordInfo<
+      '/home/dashboard/session/',
+      '/home/dashboard/session',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
     '/home/history': RouteRecordInfo<
       '/home/history',
       '/home/history',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/home/setup': RouteRecordInfo<
+      '/home/setup',
+      '/home/setup',
       Record<never, never>,
       Record<never, never>,
       | never
@@ -98,7 +140,12 @@ declare module 'vue-router/auto-routes' {
       routes:
         | '/home'
         | '/home/'
+        | '/home/dashboard'
+        | '/home/dashboard/configure/'
+        | '/home/dashboard/run/'
+        | '/home/dashboard/session/'
         | '/home/history'
+        | '/home/setup'
         | '/home/target-scripts'
       views:
         | 'default'
@@ -109,9 +156,42 @@ declare module 'vue-router/auto-routes' {
       views:
         | never
     }
+    'src/pages/home/dashboard.vue': {
+      routes:
+        | '/home/dashboard'
+        | '/home/dashboard/configure/'
+        | '/home/dashboard/run/'
+        | '/home/dashboard/session/'
+      views:
+        | 'default'
+    }
+    'src/pages/home/dashboard/configure/index.vue': {
+      routes:
+        | '/home/dashboard/configure/'
+      views:
+        | never
+    }
+    'src/pages/home/dashboard/run/index.vue': {
+      routes:
+        | '/home/dashboard/run/'
+      views:
+        | never
+    }
+    'src/pages/home/dashboard/session/index.vue': {
+      routes:
+        | '/home/dashboard/session/'
+      views:
+        | never
+    }
     'src/pages/home/history.vue': {
       routes:
         | '/home/history'
+      views:
+        | never
+    }
+    'src/pages/home/setup.vue': {
+      routes:
+        | '/home/setup'
       views:
         | never
     }

@@ -52,6 +52,13 @@
           @codex-activity-change="handleCodexActivityChange"
         />
       </template>
+
+      <template #dashboard="dashboardSlotProps">
+        <slot
+          name="dashboard"
+          :dashboard-context="dashboardSlotProps?.dashboardContext || {}"
+        />
+      </template>
     </Vibe64AutopilotView>
 
     <Vibe64SessionDialogs

@@ -52,6 +52,10 @@
   </div>
 </template>
 
+<script>
+const cachedSetupReadinessStatuses = new Map();
+</script>
+
 <script setup>
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
@@ -60,29 +64,62 @@ import {
   readSetupReadinessStatus
 } from "@/lib/studioGateApi.js";
 
+const props = defineProps({
+  cacheKey: {
+    default: "",
+    type: String
+  }
+});
+
 const route = useRoute();
 const router = useRouter();
-const checked = ref(false);
 const fallbackError = ref("");
-const setupGate = ref({
-  message: "",
-  ready: false,
-  stages: [],
-  tab: "studio-setup"
-});
+const activeCacheKey = computed(() => normalizeCacheKey(props.cacheKey));
+const cachedSetupReadinessStatus = cachedSetupReadinessForKey();
+const checked = ref(Boolean(cachedSetupReadinessStatus));
+const setupGate = ref(cachedSetupReadinessStatus
+  ? setupGateFromStatus(cachedSetupReadinessStatus)
+  : emptySetupGate());
+
+function normalizeCacheKey(value = "") {
+  return String(value || "default").trim() || "default";
+}
+
+function cachedSetupReadinessForKey() {
+  return cachedSetupReadinessStatuses.get(activeCacheKey.value) || null;
+}
+
+function emptySetupGate() {
+  return {
+    message: "",
+    ready: false,
+    stages: [],
+    tab: "studio-setup"
+  };
+}
+
+function setupGateFromStatus(status = {}) {
+  return {
+    message: status?.message || "",
+    ready: status?.ready === true,
+    stages: normalizeStages(status?.stages),
+    tab: status?.currentStage?.id || ""
+  };
+}
 
 const ready = computed(() => setupGate.value.ready === true);
 const errorMessage = computed(() => fallbackError.value);
 const checking = computed(() => !checked.value && !errorMessage.value);
 const needsSetup = computed(() => checked.value && !ready.value && !errorMessage.value);
-const setupPageActive = computed(() => route.path === "/setup");
+const setupPageActive = computed(() => route.path === "/setup" || route.path === "/home/setup");
 const redirecting = computed(() => !setupPageActive.value && needsSetup.value);
 const setupRoute = computed(() => ({
-  path: "/setup",
+  path: route.path.startsWith("/home") ? "/home/setup" : "/setup",
   query: {
     tab: setupGate.value.tab || "studio-setup"
   }
 }));
+
 function normalizeStage(stage = {}) {
   return {
     ...stage,
@@ -96,29 +133,41 @@ function normalizeStages(value = []) {
 }
 
 function applySetupReadiness(status = {}) {
+  const normalizedStatus = status && typeof status === "object" ? status : null;
+  if (normalizedStatus) {
+    cachedSetupReadinessStatuses.set(activeCacheKey.value, normalizedStatus);
+  } else {
+    cachedSetupReadinessStatuses.delete(activeCacheKey.value);
+  }
+  setupGate.value = setupGateFromStatus(normalizedStatus || {});
+  fallbackError.value = "";
+  checked.value = true;
+}
+
+function applySetupReadinessError(error) {
+  fallbackError.value = String(error?.message || error || "Setup readiness could not load.");
   setupGate.value = {
-    message: status?.message || "",
-    ready: status?.ready === true,
-    stages: normalizeStages(status?.stages),
-    tab: status?.currentStage?.id || ""
+    ...emptySetupGate(),
+    message: "Setup readiness could not load."
   };
   checked.value = true;
 }
 
-async function loadSetupGateWithRequest() {
-  checked.value = false;
-  fallbackError.value = "";
+async function loadSetupGateWithRequest({
+  preserveCurrent = false
+} = {}) {
+  if (!preserveCurrent) {
+    checked.value = false;
+    fallbackError.value = "";
+  }
   try {
     applySetupReadiness(await readSetupReadinessStatus());
   } catch (error) {
-    fallbackError.value = String(error?.message || error || "Setup readiness could not load.");
-    setupGate.value = {
-      message: "Setup readiness could not load.",
-      ready: false,
-      stages: [],
-      tab: "studio-setup"
-    };
-    checked.value = true;
+    if (preserveCurrent && checked.value) {
+      console.error("[VIBE64_SETUP_READINESS_REFRESH_ERROR]", error);
+      return;
+    }
+    applySetupReadinessError(error);
   }
 }
 
@@ -132,8 +181,26 @@ watch(redirecting, redirectToSetup, {
   immediate: true
 });
 
-onMounted(() => {
+watch(activeCacheKey, () => {
+  const cachedStatus = cachedSetupReadinessForKey();
+  fallbackError.value = "";
+  if (cachedStatus) {
+    setupGate.value = setupGateFromStatus(cachedStatus);
+    checked.value = true;
+    void loadSetupGateWithRequest({
+      preserveCurrent: true
+    });
+    return;
+  }
+  setupGate.value = emptySetupGate();
+  checked.value = false;
   void loadSetupGateWithRequest();
+});
+
+onMounted(() => {
+  void loadSetupGateWithRequest({
+    preserveCurrent: checked.value
+  });
 });
 </script>
 

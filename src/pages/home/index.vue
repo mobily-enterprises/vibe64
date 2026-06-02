@@ -16,18 +16,20 @@
         @missing="handleProjectSelectionMissing"
         @ready="handleProjectSelectionReady"
       >
-        <ProjectTypeGate
-          :configure-project="configureProject"
-          @error="handleProjectTypeError"
-          @missing="handleProjectTypeMissing"
-          @ready="handleProjectTypeReady"
-        >
-          <template #default>
-            <SetupReadinessGate>
-              <Vibe64SessionPanel @title-change="emitPageTitle" />
-            </SetupReadinessGate>
-          </template>
-        </ProjectTypeGate>
+        <template #default="projectSelectionSlotProps">
+          <ProjectTypeGate
+            :configure-project="configureProject"
+            @error="handleProjectTypeError"
+            @missing="handleProjectTypeMissing"
+            @ready="handleProjectTypeReady"
+          >
+            <template #default>
+              <SetupReadinessGate :cache-key="projectSelectionSlotProps?.projectSelection?.targetRoot || ''">
+                <Vibe64SessionPanel @title-change="emitPageTitle" />
+              </SetupReadinessGate>
+            </template>
+          </ProjectTypeGate>
+        </template>
       </ProjectSelectionGate>
     </div>
   </section>

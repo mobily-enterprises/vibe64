@@ -5,7 +5,98 @@ import {
   mockStudioReady
 } from "./support/base-shell-mocks";
 
+async function expectNoAttentionRequired(page: Page) {
+  await expect(page.getByText("Attention required", { exact: true })).toHaveCount(0);
+}
+
 test.describe("Autopilot dumb client contract", () => {
+  test("routes workspace menu shortcuts and JSKIT dashboard subpages", async ({ page }) => {
+    await mockVibe64Session(page, sessionPayload());
+
+    await page.goto(`${BASE_URL}/home`);
+
+    await page.getByRole("button", { name: "Menu" }).click();
+    const workspaceMenu = page.locator(".vibe64-home-workspace-menu");
+    await expect(workspaceMenu).toBeVisible();
+    await expect(workspaceMenu.getByText("Preview", { exact: true })).toHaveCount(0);
+    await expect(workspaceMenu.getByText("Configure", { exact: true })).toBeVisible();
+    await expect(workspaceMenu.getByText("Run", { exact: true })).toBeVisible();
+    await expect(workspaceMenu.getByText("Session History", { exact: true })).toBeVisible();
+    await expect(workspaceMenu.getByText("Setup", { exact: true })).toBeVisible();
+
+    await workspaceMenu.getByText("Configure", { exact: true }).click();
+    await expect(page).toHaveURL(/\/home\/dashboard\/configure\/?$/u);
+    await expectNoAttentionRequired(page);
+    await expect(page.getByRole("tab", { name: "Dashboard" })).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator(".project-config-setup")).toBeVisible();
+    await expect.poll(async () => page.locator(
+      ".section-container-shell__nav .v-list-item-title"
+    ).evaluateAll((nodes) => nodes.map((node) => String(node.textContent || "").trim()).filter(Boolean)))
+      .toEqual([
+        "Session Details",
+        "Configure",
+        "Run"
+      ]);
+
+    for (const { label, routePath, selector, text } of [
+      { label: "Session Details", routePath: "session", selector: ".section-container-shell__content", text: "Session Details" },
+      { label: "Run", routePath: "run", selector: ".target-scripts-panel", text: "" },
+      { label: "Configure", routePath: "configure", selector: ".project-config-setup", text: "" }
+    ]) {
+      await page.locator(".section-container-shell__nav").getByText(label, { exact: true }).click();
+      await expect(page).toHaveURL(new RegExp(`/home/dashboard/${routePath}/?$`, "u"));
+      await expectNoAttentionRequired(page);
+      await expect(page.getByRole("tab", { name: "Dashboard" })).toHaveAttribute("aria-selected", "true");
+      const content = page.locator(selector);
+      await expect(text ? content.filter({ hasText: text }) : content).toBeVisible();
+    }
+
+    await page.getByRole("button", { name: "Menu" }).click();
+    await workspaceMenu.getByText("Session History", { exact: true }).click();
+    await expect(page).toHaveURL(/\/home\/history(?:\?.*)?$/u);
+    await expectNoAttentionRequired(page);
+    await expect(page.locator(".vibe64-session-history-panel")).toBeVisible();
+
+    await page.getByRole("button", { name: "Menu" }).click();
+    await workspaceMenu.getByText("Setup", { exact: true }).click();
+    await expect(page).toHaveURL(/\/home\/setup(?:\?.*)?$/u);
+    await expectNoAttentionRequired(page);
+    await expect(page.locator(".vibe64-setup-panel")).toBeVisible();
+  });
+
+  test("keeps setup-ready content visible while menu routes refresh setup readiness", async ({ page }) => {
+    const setupReadinessRequests: string[] = [];
+    let allowSecondSetupReadinessResponse: () => void = () => undefined;
+    const secondSetupReadinessResponse = new Promise<void>((resolve) => {
+      allowSecondSetupReadinessResponse = resolve;
+    });
+    await mockVibe64Session(page, sessionPayload());
+    await page.unroute("**/api/studio/current-app/setup-readiness");
+    await page.route("**/api/studio/current-app/setup-readiness", async (route) => {
+      setupReadinessRequests.push(route.request().url());
+      if (setupReadinessRequests.length > 1) {
+        await secondSetupReadinessResponse;
+      }
+      await fulfillJson(route, {
+        currentStage: null,
+        message: "",
+        ready: true,
+        stages: []
+      });
+    });
+
+    await page.goto(`${BASE_URL}/home`);
+    await expect(page.getByRole("tab", { name: "Preview" })).toBeVisible();
+
+    await page.getByRole("button", { name: "Menu" }).click();
+    await page.locator(".vibe64-home-workspace-menu").getByText("Configure", { exact: true }).click();
+    await expect(page).toHaveURL(/\/home\/dashboard\/configure\/?$/u);
+    await expect.poll(() => setupReadinessRequests.length).toBeGreaterThan(1);
+    await expect(page.getByText("Checking setup", { exact: true })).toHaveCount(0);
+    allowSecondSetupReadinessResponse();
+    await expect(page.locator(".project-config-setup")).toBeVisible();
+  });
+
   test("auto-dispatches the server operation without rendering a manual start override", async ({ page }) => {
     await recordForbiddenText(page, "Let's start");
     const actionRequests: unknown[] = [];

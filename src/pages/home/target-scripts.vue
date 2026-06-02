@@ -1,13 +1,15 @@
 <template>
   <section class="generated-ui-screen generated-ui-screen--studio studio-target-scripts">
     <ProjectSelectionGate>
-      <ProjectTypeGate>
-        <template #default>
-          <SetupReadinessGate>
-            <TargetScriptsPanel :mode="targetScriptsMode" />
-          </SetupReadinessGate>
-        </template>
-      </ProjectTypeGate>
+      <template #default="projectSelectionSlotProps">
+        <ProjectTypeGate>
+          <template #default>
+            <SetupReadinessGate :cache-key="projectSelectionSlotProps?.projectSelection?.targetRoot || ''">
+              <TargetScriptsPanel :mode="targetScriptsMode" />
+            </SetupReadinessGate>
+          </template>
+        </ProjectTypeGate>
+      </template>
     </ProjectSelectionGate>
   </section>
 </template>

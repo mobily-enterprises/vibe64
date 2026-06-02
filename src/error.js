@@ -1,12 +1,68 @@
 import { createDefaultErrorPolicy } from "@jskit-ai/shell-web/client/error";
 
-export default Object.freeze({
-  defaultPresenterId: "material.snackbar",
-  policy: createDefaultErrorPolicy({
-    resourceLoadChannel: "silent",
-    actionFeedbackChannel: "snackbar",
-    appRecoverableChannel: "banner",
-    blockingChannel: "dialog"
-  }),
-  presenters: []
-});
+const ERROR_RUNTIME_LOG_UNSUBSCRIBE_KEY = "__vibe64JskitErrorRuntimeLogUnsubscribe";
+
+function errorSummary(error = {}) {
+  return {
+    code: String(error?.code || ""),
+    message: String(error?.message || error || ""),
+    name: String(error?.name || ""),
+    stack: typeof error?.stack === "string" ? error.stack : "",
+    status: Number.isInteger(error?.status) ? error.status : null
+  };
+}
+
+function installJskitErrorConsoleTrail(runtime = null) {
+  if (!runtime || typeof runtime.subscribe !== "function") {
+    return;
+  }
+
+  const previousUnsubscribe = globalThis[ERROR_RUNTIME_LOG_UNSUBSCRIBE_KEY];
+  if (typeof previousUnsubscribe === "function") {
+    previousUnsubscribe();
+  }
+
+  globalThis[ERROR_RUNTIME_LOG_UNSUBSCRIBE_KEY] = runtime.subscribe((event = {}) => {
+    const result = event.result || {};
+    const reportedError = result.event || {};
+    const decision = result.decision || {};
+    const payload = {
+      channel: String(decision.channel || ""),
+      code: String(reportedError.code || ""),
+      dedupeKey: String(decision.dedupeKey || reportedError.dedupeKey || ""),
+      details: reportedError.details || null,
+      intent: String(reportedError.intent || ""),
+      message: String(reportedError.message || decision.message || ""),
+      presenterId: String(decision.presenterId || ""),
+      reason: String(result.reason || ""),
+      skipped: result.skipped === true,
+      source: String(reportedError.source || ""),
+      traceId: String(reportedError.traceId || ""),
+      type: String(event.type || "")
+    };
+
+    try {
+      console.error("[JSKIT_ERROR]", payload);
+      if (reportedError.cause) {
+        console.error("[JSKIT_ERROR_CAUSE]", errorSummary(reportedError.cause));
+      }
+    } catch {
+      // Console diagnostics must never interfere with JSKIT error presentation.
+    }
+  });
+}
+
+export default function configureVibe64ErrorRuntime({ runtime } = {}) {
+  installJskitErrorConsoleTrail(runtime);
+
+  return Object.freeze({
+    defaultPresenterId: "material.snackbar",
+    policy: createDefaultErrorPolicy({
+      resourceLoadChannel: "silent",
+      actionFeedbackChannel: "snackbar",
+      appRecoverableChannel: "banner",
+      blockingChannel: "dialog"
+    }),
+    presenters: []
+  });
+}

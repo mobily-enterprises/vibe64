@@ -1,4 +1,7 @@
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, getCurrentInstance, nextTick, ref, watch } from "vue";
+import {
+  useShellWebErrorRuntime
+} from "@jskit-ai/shell-web/client/error";
 import {
   VIBE64_OPERATION_ROUTES as OPERATION_ROUTES
 } from "@local/vibe64-core/shared";
@@ -17,6 +20,7 @@ import {
 
 const COMMAND_COMPLETION_REFRESH_ATTEMPTS = 6;
 const COMMAND_COMPLETION_REFRESH_DELAY_MS = 250;
+const FAILURE_TEXT_LIMIT = 1200;
 
 function delay(ms = 0) {
   return new Promise((resolve) => {
@@ -99,6 +103,22 @@ function operationDebugSummary(operation = {}) {
     operationLabel: String(operation.label || ""),
     operationRoute: String(operation.route || "")
   };
+}
+
+function truncatedText(value = "", limit = FAILURE_TEXT_LIMIT) {
+  const text = String(value || "");
+  if (text.length <= limit) {
+    return text;
+  }
+  return `${text.slice(0, limit)}...`;
+}
+
+function currentBrowserLocation() {
+  const location = typeof window === "object" ? window.location : null;
+  if (!location) {
+    return "";
+  }
+  return `${location.pathname || ""}${location.search || ""}${location.hash || ""}`;
 }
 
 function missingOperationFailure(operation = {}) {
@@ -198,6 +218,7 @@ function useVibe64AutopilotController({
   refreshSessionData = async () => null,
   session
 } = {}) {
+  const errorRuntime = getCurrentInstance() ? useShellWebErrorRuntime() : null;
   const active = ref(false);
   const activeStage = ref("");
   const failure = ref(null);
@@ -341,15 +362,68 @@ function useVibe64AutopilotController({
     return selectedSessionIs(sessionId) ? currentSession.value : null;
   }
 
-  function stopWithFailure(result = {}) {
+  function reportFailureTrail({
+    cause = null,
+    event = "client.autopilot.failure",
+    result = {}
+  } = {}) {
     const failedSessionId = resultSessionId(result) || currentSessionId.value;
-    vibe64SessionDebugLog("client.autopilot.failure", {
+    const errorDetails = vibe64SessionDebugError(cause || result?.cause || result?.error || result?.message || result);
+    const details = {
       actionId: String(result.actionId || ""),
       actionLabel: String(result.actionLabel || result.actionId || "Action"),
-      error: String(result.error || "Autopilot action failed."),
+      commandPreview: truncatedText(result.commandPreview || ""),
+      error: errorDetails,
       exitCode: result.exitCode ?? null,
+      location: currentBrowserLocation(),
+      output: truncatedText(result.output || ""),
       sessionId: failedSessionId,
       source: String(result.source || "")
+    };
+    vibe64SessionDebugLog(event, details);
+
+    try {
+      console.error("[VIBE64_AUTOPILOT_FAILURE]", {
+        ...details,
+        message: String(result.error || result.message || errorDetails.message || "Autopilot action failed.")
+      });
+      if (cause) {
+        console.error("[VIBE64_AUTOPILOT_FAILURE_CAUSE]", cause);
+      }
+    } catch {
+      // Console diagnostics must never interfere with session state updates.
+    }
+
+    try {
+      errorRuntime?.report({
+        source: "vibe64.autopilot.failure",
+        channel: "silent",
+        message: String(result.error || result.message || errorDetails.message || "Autopilot action failed."),
+        cause: cause || result?.cause || null,
+        severity: "error",
+        dedupeKey: [
+          "vibe64.autopilot.failure",
+          failedSessionId,
+          result.actionId || "",
+          result.source || "",
+          String(result.error || result.message || errorDetails.message || "")
+        ].join(":"),
+        dedupeWindowMs: 1000,
+        details
+      });
+    } catch (reportError) {
+      vibe64SessionDebugLog("client.autopilot.failure.jskitReport.error", {
+        error: vibe64SessionDebugError(reportError),
+        sessionId: failedSessionId
+      });
+    }
+  }
+
+  function stopWithFailure(result = {}) {
+    const failedSessionId = resultSessionId(result) || currentSessionId.value;
+    reportFailureTrail({
+      cause: result?.cause || null,
+      result
     });
     failure.value = {
       actionId: String(result.actionId || ""),
@@ -465,6 +539,7 @@ function useVibe64AutopilotController({
       stopWithFailure({
         actionId: "recover_stuck_step",
         actionLabel: "Recover step",
+        cause: error,
         error: String(error?.message || error || "Vibe64 session step could not be recovered."),
         source: "recovery"
       });
@@ -494,6 +569,15 @@ function useVibe64AutopilotController({
       autopilotPromise = executeAutopilot();
       try {
         await autopilotPromise;
+      } catch (error) {
+        stopWithFailure({
+          actionId: String(nextOperation.value.actionId || nextOperation.value.intentId || ""),
+          actionLabel: String(activeStage.value || nextOperation.value.label || "Autopilot"),
+          cause: error,
+          error: String(error?.message || error || "Autopilot action failed."),
+          source: "autopilot"
+        });
+        return;
       } finally {
         autopilotPromise = null;
       }
@@ -688,6 +772,7 @@ function useVibe64AutopilotController({
       stopWithFailure({
         actionId: intent.id,
         actionLabel: intent.label,
+        cause: error,
         error: String(error?.message || error || `${intent.label || intent.id} failed.`)
       });
       return false;
@@ -732,6 +817,7 @@ function useVibe64AutopilotController({
       stopWithFailure({
         actionId: String(action.id || ""),
         actionLabel: String(action.label || action.id || "Command"),
+        cause: error,
         error: String(error?.message || error || "Command action failed."),
         source: "manual_command"
       });

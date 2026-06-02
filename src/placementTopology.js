@@ -127,19 +127,30 @@ addPlacementTopology({
   }
 });
 
+// jskit:ui-generator.topology:page.section-nav:home-dashboard
 addPlacementTopology({
-  id: "vibe64.session-dashboard",
-  description: "Dashboard items for the selected Vibe64 session.",
+  id: "page.section-nav",
+  owner: "home-dashboard",
+  description: "Navigation between child pages in this section.",
   surfaces: ["home"],
   variants: {
     compact: {
-      outlet: "vibe64-session-dashboard:items"
+      outlet: "home-dashboard:primary-menu",
+      renderers: {
+        link: "local.main.ui.surface-aware-menu-link-item"
+      }
     },
     medium: {
-      outlet: "vibe64-session-dashboard:items"
+      outlet: "home-dashboard:primary-menu",
+      renderers: {
+        link: "local.main.ui.surface-aware-menu-link-item"
+      }
     },
     expanded: {
-      outlet: "vibe64-session-dashboard:items"
+      outlet: "home-dashboard:primary-menu",
+      renderers: {
+        link: "local.main.ui.surface-aware-menu-link-item"
+      }
     }
   }
 });

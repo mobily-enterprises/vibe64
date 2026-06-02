@@ -333,177 +333,137 @@
     </section>
 
     <section class="studio-autopilot__preview-panel" aria-label="App preview">
-      <div
-        v-if="workspacePanelVisible"
-        class="studio-autopilot__workspace-panel"
-      >
-        <header class="studio-autopilot__workspace-header">
-          <div>
-            <p class="studio-autopilot__workspace-eyebrow">Workspace</p>
-            <h2>{{ workspacePanelTitle }}</h2>
-          </div>
-          <p>{{ workspacePanelDescription }}</p>
-        </header>
-
-        <div class="studio-autopilot__workspace-body">
-          <Vibe64SetupPanel
-            v-if="workspacePaneValue === 'setup'"
-            v-model="setupPanelTab"
-          />
-
-          <ProjectTypeGate
-            v-else-if="workspacePaneValue === 'configure'"
-            configure-project
-          />
-
-          <TargetScriptsPanel
-            v-else-if="workspacePaneValue === 'run'"
-            mode="autopilot"
-          />
-
-          <Vibe64SessionHistoryPanel
-            v-else-if="workspacePaneValue === 'history'"
-            v-model="historyArchive"
-          />
-        </div>
+      <div class="studio-autopilot__preview-tabs" role="tablist" aria-label="Session workspace">
+        <button
+          v-for="tab in rightPaneTabs"
+          :key="tab.id"
+          type="button"
+          class="studio-autopilot__preview-tab"
+          :class="{ 'studio-autopilot__preview-tab--active': rightPaneTab === tab.id }"
+          :aria-selected="rightPaneTab === tab.id ? 'true' : 'false'"
+          role="tab"
+          @click="selectRightPaneTab(tab.id)"
+        >
+          {{ tab.label }}
+        </button>
       </div>
 
-      <template v-else>
-        <div class="studio-autopilot__preview-tabs" role="tablist" aria-label="Session workspace">
-          <button
-            v-for="tab in rightPaneTabs"
-            :key="tab.id"
-            type="button"
-            class="studio-autopilot__preview-tab"
-            :class="{ 'studio-autopilot__preview-tab--active': rightPaneTab === tab.id }"
-            :aria-selected="rightPaneTab === tab.id ? 'true' : 'false'"
-            role="tab"
-            @click="selectRightPaneTab(tab.id)"
-          >
-            {{ tab.label }}
-          </button>
-        </div>
-
+      <div
+        v-show="rightPaneTab === 'preview'"
+        class="studio-autopilot__right-pane-page"
+        role="tabpanel"
+      >
         <div
-          v-show="rightPaneTab === 'preview'"
-          class="studio-autopilot__right-pane-page"
-          role="tabpanel"
+          v-if="commandSpyVisible"
+          class="studio-autopilot__command-spy"
+          :class="{ 'studio-autopilot__command-spy--expanded': commandSpyExpanded }"
         >
-          <div
-            v-if="commandSpyVisible"
-            class="studio-autopilot__command-spy"
-            :class="{ 'studio-autopilot__command-spy--expanded': commandSpyExpanded }"
-          >
-            <div class="studio-autopilot__command-spy-header">
-              <div class="studio-autopilot__command-spy-title">
-                <v-icon :icon="mdiConsoleLine" size="18" />
-                <span>{{ commandOverlayTitle }}</span>
-              </div>
-              <div class="studio-autopilot__command-spy-actions">
-                <v-btn
-                  v-if="commandRunning"
-                  :prepend-icon="mdiStopCircleOutline"
-                  size="small"
-                  type="button"
-                  variant="tonal"
-                  @click="stopCommandAction"
-                >
-                  Stop
-                </v-btn>
-                <v-btn
-                  v-if="commandTerminalFailed"
-                  :prepend-icon="mdiRefresh"
-                  size="small"
-                  type="button"
-                  variant="tonal"
-                  @click="retryFromCommandFailure"
-                >
-                  Retry
-                </v-btn>
-                <v-btn
-                  v-if="commandTerminalFailed"
-                  :prepend-icon="mdiRobotOutline"
-                  size="small"
-                  type="button"
-                  variant="tonal"
-                  @click="requestCommandAiFix"
-                >
-                  Fix
-                </v-btn>
-                <v-btn
-                  :icon="commandSpyExpanded ? mdiChevronUp : mdiChevronDown"
-                  size="small"
-                  :title="commandSpyExpanded ? 'Collapse command output' : 'Expand command output'"
-                  type="button"
-                  variant="text"
-                  @click="commandSpyExpanded = !commandSpyExpanded"
-                />
-              </div>
+          <div class="studio-autopilot__command-spy-header">
+            <div class="studio-autopilot__command-spy-title">
+              <v-icon :icon="mdiConsoleLine" size="18" />
+              <span>{{ commandOverlayTitle }}</span>
             </div>
-            <p v-if="!commandSpyExpanded" class="studio-autopilot__command-spy-summary">
-              {{ commandTerminalFailed ? commandFailureSummary : commandTerminalSummary }}
-            </p>
-            <Vibe64HeadlessCommandOutput
-              v-else
-              class="studio-autopilot__command-terminal-output"
-              :action-id="commandResult?.actionId || ''"
-              :action-label="commandResult?.actionLabel || ''"
-              :attempted-command="commandResult?.attemptedCommand || ''"
-              :command-preview="commandPreview"
-              compact
-              :error="commandTerminalError"
-              :exit-code="commandResult?.exitCode ?? null"
-              :failed="commandTerminalFailed"
-              :output="commandTerminalText"
-              :running="commandRunning"
-              :session-id="sessionId"
-              :status="commandStatus"
-              :terminal-session-id="commandResult?.terminalSessionId || ''"
-              title="Autopilot command"
-              @fix-requested="openFixCodexDialog"
-            />
+            <div class="studio-autopilot__command-spy-actions">
+              <v-btn
+                v-if="commandRunning"
+                :prepend-icon="mdiStopCircleOutline"
+                size="small"
+                type="button"
+                variant="tonal"
+                @click="stopCommandAction"
+              >
+                Stop
+              </v-btn>
+              <v-btn
+                v-if="commandTerminalFailed"
+                :prepend-icon="mdiRefresh"
+                size="small"
+                type="button"
+                variant="tonal"
+                @click="retryFromCommandFailure"
+              >
+                Retry
+              </v-btn>
+              <v-btn
+                v-if="commandTerminalFailed"
+                :prepend-icon="mdiRobotOutline"
+                size="small"
+                type="button"
+                variant="tonal"
+                @click="requestCommandAiFix"
+              >
+                Fix
+              </v-btn>
+              <v-btn
+                :icon="commandSpyExpanded ? mdiChevronUp : mdiChevronDown"
+                size="small"
+                :title="commandSpyExpanded ? 'Collapse command output' : 'Expand command output'"
+                type="button"
+                variant="text"
+                @click="commandSpyExpanded = !commandSpyExpanded"
+              />
+            </div>
           </div>
-
-          <Vibe64LaunchControls
-            auto-start-target-id="dev"
-            button-label="Run"
-            button-size="small"
-            button-variant="tonal"
-            :busy="false"
-            class="studio-autopilot__preview-launch"
-            embedded-preview
-            :session="session"
-            :window-displayed="props.active"
+          <p v-if="!commandSpyExpanded" class="studio-autopilot__command-spy-summary">
+            {{ commandTerminalFailed ? commandFailureSummary : commandTerminalSummary }}
+          </p>
+          <Vibe64HeadlessCommandOutput
+            v-else
+            class="studio-autopilot__command-terminal-output"
+            :action-id="commandResult?.actionId || ''"
+            :action-label="commandResult?.actionLabel || ''"
+            :attempted-command="commandResult?.attemptedCommand || ''"
+            :command-preview="commandPreview"
+            compact
+            :error="commandTerminalError"
+            :exit-code="commandResult?.exitCode ?? null"
+            :failed="commandTerminalFailed"
+            :output="commandTerminalText"
+            :running="commandRunning"
+            :session-id="sessionId"
+            :status="commandStatus"
+            :terminal-session-id="commandResult?.terminalSessionId || ''"
+            title="Autopilot command"
+            @fix-requested="openFixCodexDialog"
           />
         </div>
 
-        <div
-          v-show="rightPaneTab === 'dashboard'"
-          class="studio-autopilot__right-pane-page studio-autopilot__dashboard-pane"
-          role="tabpanel"
-        >
-          <ShellOutlet
-            :context="dashboardPlacementContext"
-            target="vibe64-session-dashboard:items"
-          />
-        </div>
+        <Vibe64LaunchControls
+          auto-start-target-id="dev"
+          button-label="Run"
+          button-size="small"
+          button-variant="tonal"
+          :busy="false"
+          class="studio-autopilot__preview-launch"
+          embedded-preview
+          :session="session"
+          :window-displayed="props.active"
+        />
+      </div>
 
-        <div
-          v-show="rightPaneTab === 'shell'"
-          class="studio-autopilot__right-pane-page"
-          role="tabpanel"
-        >
-          <slot name="shell-terminal" :active="rightPaneTab === 'shell'" />
-        </div>
+      <div
+        v-show="rightPaneTab === 'dashboard'"
+        class="studio-autopilot__right-pane-page studio-autopilot__dashboard-pane"
+        role="tabpanel"
+      >
+        <slot name="dashboard" :dashboard-context="dashboardSessionContext" />
+      </div>
 
-        <div
-          v-show="rightPaneTab === 'ai-terminal'"
-          class="studio-autopilot__right-pane-page"
-          role="tabpanel"
-        >
-          <slot name="ai-terminal" :active="rightPaneTab === 'ai-terminal'" />
-        </div>
-      </template>
+      <div
+        v-show="rightPaneTab === 'shell'"
+        class="studio-autopilot__right-pane-page"
+        role="tabpanel"
+      >
+        <slot name="shell-terminal" :active="rightPaneTab === 'shell'" />
+      </div>
+
+      <div
+        v-show="rightPaneTab === 'ai-terminal'"
+        class="studio-autopilot__right-pane-page"
+        role="tabpanel"
+      >
+        <slot name="ai-terminal" :active="rightPaneTab === 'ai-terminal'" />
+      </div>
     </section>
 
     <Vibe64FixCodexDialog
@@ -516,7 +476,7 @@
 
 <script setup>
 import { computed, nextTick, onMounted, proxyRefs, ref, watch } from "vue";
-import ShellOutlet from "@jskit-ai/shell-web/client/components/ShellOutlet";
+import { useRoute, useRouter } from "vue-router";
 import {
   mdiAlertCircleOutline,
   mdiCheck,
@@ -535,24 +495,17 @@ import {
 } from "@local/vibe64-core/shared";
 import Vibe64FixCodexDialog from "@/components/studio/Vibe64FixCodexDialog.vue";
 import Vibe64LaunchControls from "@/components/studio/Vibe64LaunchControls.vue";
-import ProjectTypeGate from "@/components/studio/ProjectTypeGate.vue";
-import TargetScriptsPanel from "@/components/studio/TargetScriptsPanel.vue";
 import Vibe64BackgroundTasks from "@/components/studio/vibe64-session/Vibe64BackgroundTasks.vue";
 import Vibe64AutopilotNavigation from "@/components/studio/vibe64-session/Vibe64AutopilotNavigation.vue";
 import Vibe64ConversationLog from "@/components/studio/vibe64-session/Vibe64ConversationLog.vue";
 import Vibe64HeadlessCommandOutput from "@/components/studio/vibe64-session/Vibe64HeadlessCommandOutput.vue";
 import Vibe64ReportPreview from "@/components/studio/vibe64-session/Vibe64ReportPreview.vue";
 import Vibe64SessionActionButton from "@/components/studio/vibe64-session/Vibe64SessionActionButton.vue";
-import Vibe64SessionHistoryPanel from "@/components/studio/Vibe64SessionHistoryPanel.vue";
 import Vibe64SessionToolbar from "@/components/studio/vibe64-session/Vibe64SessionToolbar.vue";
-import Vibe64SetupPanel from "@/components/studio/Vibe64SetupPanel.vue";
 import Vibe64WorkflowControlForm from "@/components/studio/vibe64-session/Vibe64WorkflowControlForm.vue";
 import {
   useVibe64AutopilotComposer
 } from "@/composables/useVibe64AutopilotComposer.js";
-import {
-  provideVibe64SessionDashboardContext
-} from "@/composables/useVibe64SessionDashboardContext.js";
 import {
   useVibe64AutopilotController
 } from "@/composables/useVibe64AutopilotController.js";
@@ -596,6 +549,8 @@ import {
 // Autopilot workflow meaning belongs to the server. This component renders the
 // current presentation and dispatches the server-provided intents.
 const emit = defineEmits(["busy-change"]);
+const route = useRoute();
+const router = useRouter();
 
 const props = defineProps({
   actions: {
@@ -732,9 +687,7 @@ const {
   openFixCodexDialog
 } = useVibe64FixCodexDialog();
 const commandSpyExpanded = ref(false);
-const historyArchive = ref("completed");
 const rightPaneTab = ref("preview");
-const setupPanelTab = ref("studio-setup");
 const rightPaneTabs = Object.freeze([
   {
     id: "preview",
@@ -765,6 +718,8 @@ const stepInput = proxyRefs(useVibe64StepInputForm({
 
 const screenKind = computed(() => screenState.value.kind);
 const sessionId = computed(() => String(props.session?.sessionId || ""));
+const workspacePaneValue = computed(() => normalizeWorkspacePane(props.workspacePane));
+const dashboardRouteActive = computed(() => String(route.path || "").startsWith("/home/dashboard"));
 const dashboardSessionContext = computed(() => ({
   copyText: typeof props.page?.copyText === "function" ? props.page.copyText : null,
   facts: vibe64SessionFacts(props.session || {}),
@@ -773,40 +728,6 @@ const dashboardSessionContext = computed(() => ({
   statusColor: vibe64SessionStatusColor(props.session?.status),
   statusLabel: vibe64SessionStatusLabel(props.session?.status)
 }));
-const dashboardPlacementContext = computed(() => ({
-  hasSessionFacts: dashboardSessionContext.value.facts.length > 0,
-  sessionId: dashboardSessionContext.value.sessionId,
-  sessionStatus: String(props.session?.status || "")
-}));
-provideVibe64SessionDashboardContext(dashboardSessionContext);
-const workspacePaneValue = computed(() => normalizeWorkspacePane(props.workspacePane));
-const workspacePanelVisible = computed(() => workspacePaneValue.value !== "preview");
-const workspacePanelTitle = computed(() => workspacePanelCopy.value.title);
-const workspacePanelDescription = computed(() => workspacePanelCopy.value.description);
-const workspacePanelCopy = computed(() => {
-  const copy = {
-    configure: {
-      description: "Edit the Vibe64 settings used to prepare this project.",
-      title: "Configure"
-    },
-    history: {
-      description: "Review completed and abandoned sessions.",
-      title: "Session History"
-    },
-    run: {
-      description: "Run starred target project scripts without leaving the session.",
-      title: "Run"
-    },
-    setup: {
-      description: "Check machine, account, adapter, and project readiness.",
-      title: "Setup"
-    }
-  };
-  return copy[workspacePaneValue.value] || {
-    description: "Show the running app.",
-    title: "Preview"
-  };
-});
 const screenMessage = computed(() => String(screenState.value.message || ""));
 const screenSections = computed(() => Array.isArray(screenState.value.sections) ? screenState.value.sections : []);
 const primaryIntentId = computed(() => props.active ? String(screenState.value.primaryIntentId || "") : "");
@@ -1123,13 +1044,21 @@ function activityMessage({
 }
 
 function normalizeWorkspacePane(value = "") {
-  return ["configure", "history", "preview", "run", "setup"].includes(value)
+  return ["configure", "dashboard", "history", "preview", "run", "setup"].includes(value)
     ? value
     : "preview";
 }
 
 function selectRightPaneTab(tabId = "") {
   if (!rightPaneTabs.some((tab) => tab.id === tabId)) {
+    return;
+  }
+  if (tabId === "dashboard" && !dashboardRouteActive.value) {
+    void router.push("/home/dashboard/session");
+    return;
+  }
+  if (tabId === "preview" && dashboardRouteActive.value) {
+    void router.push("/home");
     return;
   }
   rightPaneTab.value = tabId;
@@ -1375,9 +1304,13 @@ watch(() => props.codexTerminalAttention, (needsAttention) => {
 });
 
 watch(workspacePaneValue, (pane) => {
-  if (pane !== "preview") {
+  if (pane === "preview") {
     selectRightPaneTab("preview");
+    return;
   }
+  selectRightPaneTab("dashboard");
+}, {
+  immediate: true
 });
 
 </script>
@@ -1619,62 +1552,6 @@ watch(workspacePaneValue, (pane) => {
   min-height: 0;
 }
 
-.studio-autopilot__workspace-panel {
-  display: grid;
-  gap: 0.85rem;
-  grid-template-rows: auto minmax(0, 1fr);
-  min-height: 0;
-  overflow: hidden;
-  padding: 0.85rem;
-}
-
-.studio-autopilot__workspace-header {
-  align-items: start;
-  border-bottom: 1px solid rgba(var(--v-theme-outline), 0.14);
-  display: flex;
-  gap: 1rem;
-  justify-content: space-between;
-  min-width: 0;
-  padding-bottom: 0.75rem;
-}
-
-.studio-autopilot__workspace-header h2,
-.studio-autopilot__workspace-header p {
-  letter-spacing: 0;
-  margin: 0;
-}
-
-.studio-autopilot__workspace-header h2 {
-  color: rgb(var(--v-theme-on-surface));
-  font-size: 1.12rem;
-  font-weight: 760;
-  line-height: 1.1;
-}
-
-.studio-autopilot__workspace-header > p {
-  color: rgba(var(--v-theme-on-surface), 0.68);
-  flex: 0 1 28rem;
-  font-size: 0.85rem;
-  line-height: 1.35;
-  text-align: right;
-}
-
-.studio-autopilot__workspace-eyebrow {
-  color: rgba(var(--v-theme-primary), 0.84);
-  font-size: 0.72rem;
-  font-weight: 750;
-  line-height: 1.1;
-  text-transform: uppercase;
-}
-
-.studio-autopilot__workspace-body {
-  min-height: 0;
-  min-width: 0;
-  overflow-y: auto;
-  padding-right: 0.1rem;
-  scrollbar-gutter: stable;
-}
-
 .studio-autopilot__command-spy {
   background: rgba(var(--v-theme-surface), 0.96);
   border: 1px solid rgba(var(--v-theme-primary), 0.18);
@@ -1762,16 +1639,6 @@ watch(workspacePaneValue, (pane) => {
 @media (max-width: 980px) {
   .studio-autopilot {
     grid-template-rows: minmax(28rem, 52vh) minmax(24rem, 1fr);
-  }
-
-  .studio-autopilot__workspace-header {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .studio-autopilot__workspace-header > p {
-    flex-basis: auto;
-    text-align: left;
   }
 }
 </style>

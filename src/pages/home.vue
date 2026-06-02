@@ -100,12 +100,7 @@ watch(
         <Vibe64HomeWorkspaceMenu />
       </div>
     </template>
-    <RouterView v-slot="{ Component }">
-      <component
-        :is="Component"
-        @page-title-change="setPageTitle"
-      />
-    </RouterView>
+    <RouterView @page-title-change="setPageTitle" />
   </ShellLayout>
 </template>
 

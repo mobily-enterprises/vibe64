@@ -1,11 +1,36 @@
 const VIBE64_SESSION_DEBUG_MARKER = "VIBE64_SESSION_DEBUG";
 
+function normalizeErrorStatus(error = {}) {
+  const status = Number(error?.status ?? error?.statusCode);
+  return Number.isInteger(status) ? status : null;
+}
+
+function normalizeErrorStack(error = {}) {
+  return typeof error?.stack === "string" ? error.stack : "";
+}
+
+function normalizeErrorCause(error = {}) {
+  const cause = error?.cause;
+  if (!cause) {
+    return null;
+  }
+  return {
+    code: String(cause?.code || ""),
+    message: String(cause?.message || cause || ""),
+    name: String(cause?.name || ""),
+    status: normalizeErrorStatus(cause),
+    stack: normalizeErrorStack(cause)
+  };
+}
+
 function vibe64SessionDebugError(error = {}) {
   return {
     code: String(error?.code || ""),
     message: String(error?.message || error || ""),
     name: String(error?.name || ""),
-    status: Number.isInteger(error?.status) ? error.status : null
+    status: normalizeErrorStatus(error),
+    stack: normalizeErrorStack(error),
+    cause: normalizeErrorCause(error)
   };
 }
 

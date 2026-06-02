@@ -18,11 +18,60 @@ addPlacement({
   componentToken: "realtime.web.connection.indicator"
 });
 
-addPlacement({
-  id: "vibe64.session-info",
-  target: "vibe64.session-dashboard",
-  kind: "component",
-  surfaces: ["home"],
-  order: 100,
-  componentToken: "local.main.ui.vibe64-session-info-dashboard"
-});
+// jskit:ui-generator.page.link:home:/dashboard/session
+{
+  addPlacement({
+    id: "ui-generator.page.home.dashboard.session.link",
+    target: "page.section-nav",
+    owner: "home-dashboard",
+    kind: "link",
+    surfaces: ["home"],
+    order: 100,
+    props: {
+      label: "Session Details",
+      icon: "mdi-view-list-outline",
+      surface: "home",
+      scopedSuffix: "/dashboard/session",
+      unscopedSuffix: "/dashboard/session",
+      to: "./session",
+    },
+  });
+}
+// jskit:ui-generator.page.link:home:/dashboard/configure
+{
+  addPlacement({
+    id: "ui-generator.page.home.dashboard.configure.link",
+    target: "page.section-nav",
+    owner: "home-dashboard",
+    kind: "link",
+    surfaces: ["home"],
+    order: 200,
+    props: {
+      label: "Configure",
+      icon: "mdi-view-list-outline",
+      surface: "home",
+      scopedSuffix: "/dashboard/configure",
+      unscopedSuffix: "/dashboard/configure",
+      to: "./configure",
+    },
+  });
+}
+// jskit:ui-generator.page.link:home:/dashboard/run
+{
+  addPlacement({
+    id: "ui-generator.page.home.dashboard.run.link",
+    target: "page.section-nav",
+    owner: "home-dashboard",
+    kind: "link",
+    surfaces: ["home"],
+    order: 500,
+    props: {
+      label: "Run",
+      icon: "mdi-view-list-outline",
+      surface: "home",
+      scopedSuffix: "/dashboard/run",
+      unscopedSuffix: "/dashboard/run",
+      to: "./run",
+    },
+  });
+}
