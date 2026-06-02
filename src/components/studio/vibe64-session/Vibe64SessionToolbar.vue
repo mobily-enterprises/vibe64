@@ -85,6 +85,8 @@
         @click="toolbar.createSession()"
         variant="tonal"
       />
+
+      <slot name="after-sessions" />
     </div>
   </div>
 </template>
@@ -173,6 +175,7 @@ function createSessionFromDefinition(definitionId = "") {
   gap: 0.75rem;
   justify-content: flex-start;
   min-width: 0;
+  width: 100%;
 }
 
 .studio-ai-sessions__tabs {
@@ -181,6 +184,7 @@ function createSessionFromDefinition(definitionId = "") {
   flex-wrap: wrap;
   gap: 0.45rem;
   min-width: 0;
+  width: 100%;
 }
 
 .studio-ai-sessions__tab {
@@ -239,44 +243,44 @@ function createSessionFromDefinition(definitionId = "") {
 
 .studio-ai-sessions__toolbar--compact .studio-ai-sessions__tabs {
   flex-wrap: nowrap;
-  gap: 0.42rem;
+  gap: 0.34rem;
 }
 
 .studio-ai-sessions__toolbar--compact {
-  height: 2.25rem;
-  min-height: 2.25rem;
+  height: 2rem;
+  min-height: 2rem;
 }
 
 .studio-ai-sessions__toolbar--compact .studio-ai-sessions__tab {
-  font-size: 1rem;
-  height: 2.25rem;
+  font-size: 0.92rem;
+  height: 2rem;
   letter-spacing: 0;
-  max-width: 13.5rem;
-  min-height: 2.25rem;
-  padding-inline: 0.85rem;
+  max-width: 12.5rem;
+  min-height: 2rem;
+  padding-inline: 0.72rem;
 }
 
 .studio-ai-sessions__toolbar--compact .studio-ai-sessions__status-dot {
-  height: 0.68rem;
-  margin-right: 0.5rem;
-  width: 0.68rem;
+  height: 0.58rem;
+  margin-right: 0.42rem;
+  width: 0.58rem;
 }
 
 .studio-ai-sessions__toolbar--compact .studio-ai-sessions__tab-abandon {
-  margin-left: 0.42rem;
-  min-height: 2.05rem;
-  min-width: 2.05rem;
+  margin-left: 0.34rem;
+  min-height: 1.82rem;
+  min-width: 1.82rem;
 }
 
 .studio-ai-sessions__toolbar--compact .studio-ai-sessions__tab-abandon :deep(.v-icon) {
-  font-size: 1.3rem;
+  font-size: 1.15rem;
 }
 
 .studio-ai-sessions__toolbar--compact .studio-ai-sessions__create-button {
-  height: 2.25rem;
-  min-height: 2.25rem;
-  min-width: 2.25rem;
-  width: 2.25rem;
+  height: 2rem;
+  min-height: 2rem;
+  min-width: 2rem;
+  width: 2rem;
 }
 
 @media (max-width: 640px) {

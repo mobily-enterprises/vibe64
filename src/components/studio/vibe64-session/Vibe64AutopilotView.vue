@@ -10,29 +10,52 @@
           :selected-session-id="sessionId"
           :selection-closed="sessionSelectionClosed"
           :toolbar="sessionToolbar"
-        />
-
-        <div
-          v-if="sessionToolsVisible"
-          class="studio-autopilot__session-tools"
-          aria-label="Active session tools"
         >
-          <v-btn
-            v-for="tool in sessionToolControls"
-            :key="tool.id"
-            class="studio-autopilot__session-tool"
-            :color="rightPaneTab === tool.id ? 'primary' : undefined"
-            :disabled="tool.disabled"
-            :prepend-icon="tool.icon"
-            size="small"
-            :title="tool.title"
-            type="button"
-            :variant="rightPaneTab === tool.id ? 'flat' : 'tonal'"
-            @click="selectSessionTool(tool.id)"
-          >
-            {{ tool.label }}
-          </v-btn>
-        </div>
+          <template #after-sessions>
+            <v-menu
+              v-if="sessionToolsVisible"
+              v-model="sessionToolsMenuOpen"
+              location="bottom end"
+              transition="scale-transition"
+            >
+              <template #activator="{ props: menuProps }">
+                <v-btn
+                  v-bind="menuProps"
+                  aria-label="Session tools"
+                  class="studio-autopilot__session-tools-button"
+                  :color="activeSessionTool ? 'primary' : undefined"
+                  density="comfortable"
+                  :icon="activeSessionTool?.icon || mdiInformationOutline"
+                  size="small"
+                  title="Session tools"
+                  type="button"
+                  :variant="activeSessionTool ? 'flat' : 'tonal'"
+                />
+              </template>
+
+              <div
+                class="studio-autopilot__session-tools-menu"
+                aria-label="Active session tools"
+              >
+                <v-btn
+                  v-for="tool in sessionToolControls"
+                  :key="tool.id"
+                  class="studio-autopilot__session-tool"
+                  :color="rightPaneTab === tool.id ? 'primary' : undefined"
+                  :disabled="tool.disabled"
+                  :prepend-icon="tool.icon"
+                  size="large"
+                  :title="tool.title"
+                  type="button"
+                  :variant="rightPaneTab === tool.id ? 'flat' : 'tonal'"
+                  @click="selectSessionToolFromMenu(tool.id)"
+                >
+                  {{ tool.label }}
+                </v-btn>
+              </div>
+            </v-menu>
+          </template>
+        </Vibe64SessionToolbar>
 
         <Vibe64AutopilotNavigation
           class="studio-autopilot__nav"
@@ -737,6 +760,7 @@ const {
   openFixCodexDialog
 } = useVibe64FixCodexDialog();
 const commandSpyExpanded = ref(false);
+const sessionToolsMenuOpen = ref(false);
 const rightPaneTab = ref("preview");
 const rightPaneTabs = Object.freeze([
   {
@@ -892,6 +916,9 @@ const sessionToolControls = computed(() => [
     title: "Open the active session Codex terminal"
   }
 ]);
+const activeSessionTool = computed(() => {
+  return sessionToolControls.value.find((tool) => tool.id === rightPaneTab.value) || null;
+});
 const commandSpyVisible = computed(() => Boolean(
   commandTerminalVisible.value ||
   commandRunning.value ||
@@ -1161,6 +1188,12 @@ function selectSessionTool(tabId = "") {
     void props.diff.load();
   }
   return true;
+}
+
+function selectSessionToolFromMenu(tabId = "") {
+  if (selectSessionTool(tabId)) {
+    sessionToolsMenuOpen.value = false;
+  }
 }
 
 function emitBusyState() {
@@ -1493,12 +1526,31 @@ watch(workspacePaneValue, (pane) => {
   gap: 0.32rem;
 }
 
-.studio-autopilot__session-tools {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.28rem;
-  min-width: 0;
+.studio-autopilot__session-tools-button {
+  height: 2rem;
+  letter-spacing: 0;
+  margin-left: auto;
+  min-height: 2rem;
+  min-width: 2rem;
+  width: 2rem;
+}
+
+.studio-autopilot__session-tools-menu {
+  background: rgb(var(--v-theme-surface));
+  border: 1px solid rgba(var(--v-theme-outline), 0.18);
+  border-radius: 8px;
+  box-shadow: 0 0.75rem 1.5rem rgba(15, 23, 42, 0.14);
+  display: grid;
+  gap: 0.42rem;
+  min-width: 13rem;
+  padding: 0.55rem;
+}
+
+.studio-autopilot__session-tools-menu .studio-autopilot__session-tool {
+  font-size: 0.96rem;
+  min-height: 2.65rem;
+  justify-content: start;
+  width: 100%;
 }
 
 .studio-autopilot__session-tool {
