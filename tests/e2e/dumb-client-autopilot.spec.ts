@@ -76,6 +76,58 @@ test.describe("Autopilot dumb client contract", () => {
     expect(setupReadinessRequests).toHaveLength(0);
   });
 
+  test("keeps the chat resource mounted while switching dashboard sections", async ({ page }) => {
+    const conversationLogReadPaths: string[] = [];
+    const sessionReadPaths: string[] = [];
+    await mockVibe64Session(page, sessionPayload(), {
+      conversationLog: [
+        {
+          assistant: {
+            at: "2026-06-02T01:03:00.000Z",
+            role: "assistant",
+            text: "Dashboard navigation should not reload this chat."
+          },
+          turnId: "turn-dashboard-reload",
+          user: {
+            at: "2026-06-02T01:02:00.000Z",
+            role: "user",
+            text: "Open the dashboard."
+          }
+        }
+      ],
+      onConversationLogRead: (pathname) => {
+        conversationLogReadPaths.push(pathname);
+      },
+      onSessionRead: (_session, pathname) => {
+        sessionReadPaths.push(pathname);
+      }
+    });
+
+    await page.goto(`${BASE_URL}/home`);
+    await expect(page.getByText("Dashboard navigation should not reload this chat.")).toBeVisible();
+    await page.getByRole("tab", { name: "Dashboard" }).click();
+    await expect(page).toHaveURL(/\/home\/dashboard\/connections\/?$/u);
+    await expect(page.getByRole("heading", { name: "Connections", exact: true })).toBeVisible();
+
+    const sessionReadsAfterDashboardOpen = sessionReadPaths.length;
+    const conversationReadsAfterDashboardOpen = conversationLogReadPaths.length;
+
+    for (const { label, routePath } of [
+      { label: "Configure", routePath: "configure" },
+      { label: "Remote", routePath: "remote" },
+      { label: "Run", routePath: "run" },
+      { label: "Session History", routePath: "history" },
+      { label: "Setup", routePath: "setup" },
+      { label: "Connections", routePath: "connections" }
+    ]) {
+      await page.locator(".section-container-shell__nav").getByText(label, { exact: true }).click();
+      await expect(page).toHaveURL(new RegExp(`/home/dashboard/${routePath}/?$`, "u"));
+      await expect(page.getByText("Dashboard navigation should not reload this chat.")).toBeVisible();
+      expect(sessionReadPaths, `unexpected session reads after ${label}`).toHaveLength(sessionReadsAfterDashboardOpen);
+      expect(conversationLogReadPaths, `unexpected conversation reads after ${label}`).toHaveLength(conversationReadsAfterDashboardOpen);
+    }
+  });
+
   test("auto-dispatches the server operation without rendering a manual start override", async ({ page }) => {
     await recordForbiddenText(page, "Let's start");
     const actionRequests: unknown[] = [];
@@ -2657,6 +2709,7 @@ async function mockVibe64Session(
     onAdvance = () => undefined,
     onCommandTerminalClose = () => undefined,
     onCommandTerminalStart = () => undefined,
+    onConversationLogRead = () => undefined,
     onIntent = () => undefined,
     onSessionRead = () => undefined,
     onStepInput = () => undefined,
@@ -2671,8 +2724,9 @@ async function mockVibe64Session(
     onCommandTerminalClose?: () => void;
     onCommandTerminalStart?: (body?: Record<string, unknown>) => Record<string, unknown> | void;
     onCodexTerminalStart?: () => Record<string, unknown> | void;
+    onConversationLogRead?: (pathname: string) => void;
     onIntent?: (body: unknown) => void;
-    onSessionRead?: (session: Record<string, unknown>) => void;
+    onSessionRead?: (session: Record<string, unknown>, pathname: string) => void;
     onShellTerminalClose?: () => void;
     onStepInput?: (body: unknown) => void;
     sessionList?: Record<string, unknown>[] | null;
@@ -2769,6 +2823,7 @@ async function mockVibe64Session(
       return;
     }
     if (method === "GET" && url.pathname.endsWith("/conversation-log")) {
+      onConversationLogRead(url.pathname);
       await fulfillJson(route, {
         conversationLog,
         ok: true,
@@ -2777,7 +2832,7 @@ async function mockVibe64Session(
       return;
     }
     if (method === "GET" && /\/sessions\/[^/]+$/u.test(url.pathname)) {
-      onSessionRead(sessionForRequest(url.pathname));
+      onSessionRead(sessionForRequest(url.pathname), url.pathname);
       await fulfillJson(route, {
         ok: true,
         ...sessionForRequest(url.pathname)

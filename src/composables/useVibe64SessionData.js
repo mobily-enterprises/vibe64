@@ -124,6 +124,10 @@ function useVibe64SessionData({
     realtime: {
       event: VIBE64_SESSION_CHANGED_EVENT
     },
+    queryOptions: {
+      refetchOnMount: false,
+      refetchOnWindowFocus: false
+    },
     selectItems: (payload) => Array.isArray(payload?.sessions) ? payload.sessions : [],
     surfaceId: VIBE64_SURFACE_ID
   });
@@ -160,6 +164,10 @@ function useVibe64SessionData({
     path: selectedSessionPath,
     queryKey: selectedSessionQueryKey,
     readMethod: "GET",
+    queryOptions: {
+      refetchOnMount: false,
+      refetchOnWindowFocus: false
+    },
     refreshOnPull: true,
     realtime: {
       event: VIBE64_SESSION_CHANGED_EVENT,
@@ -174,6 +182,10 @@ function useVibe64SessionData({
     fallbackLoadError: "Studio capabilities could not be loaded.",
     path: CAPABILITIES_ENDPOINT,
     queryKey: computed(() => capabilitiesQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC)),
+    queryOptions: {
+      refetchOnMount: false,
+      refetchOnWindowFocus: false
+    },
     readMethod: "GET",
     refreshOnPull: true
   });

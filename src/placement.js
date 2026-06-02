@@ -33,7 +33,7 @@ addPlacement({
       surface: "home",
       scopedSuffix: "/dashboard/connections",
       unscopedSuffix: "/dashboard/connections",
-      to: "./connections",
+      to: "/home/dashboard/connections",
     },
   });
 }
@@ -53,7 +53,7 @@ addPlacement({
       surface: "home",
       scopedSuffix: "/dashboard/configure",
       unscopedSuffix: "/dashboard/configure",
-      to: "./configure",
+      to: "/home/dashboard/configure",
     },
   });
 }
@@ -72,7 +72,7 @@ addPlacement({
       surface: "home",
       scopedSuffix: "/dashboard/run",
       unscopedSuffix: "/dashboard/run",
-      to: "./run",
+      to: "/home/dashboard/run",
     },
   });
 }
@@ -91,7 +91,7 @@ addPlacement({
       surface: "home",
       scopedSuffix: "/dashboard/remote",
       unscopedSuffix: "/dashboard/remote",
-      to: "./remote",
+      to: "/home/dashboard/remote",
     },
   });
 }
@@ -110,7 +110,7 @@ addPlacement({
       surface: "home",
       scopedSuffix: "/dashboard/history",
       unscopedSuffix: "/dashboard/history",
-      to: "./history",
+      to: "/home/dashboard/history",
     },
   });
 }
@@ -129,7 +129,7 @@ addPlacement({
       surface: "home",
       scopedSuffix: "/dashboard/setup",
       unscopedSuffix: "/dashboard/setup",
-      to: "./setup",
+      to: "/home/dashboard/setup",
     },
   });
 }

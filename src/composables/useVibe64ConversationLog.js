@@ -99,6 +99,10 @@ function useVibe64ConversationLog({
       String(currentSession.value?.revision || ""),
       String(currentSession.value?.stepRevision || "")
     ]),
+    queryOptions: {
+      refetchOnMount: false,
+      refetchOnWindowFocus: false
+    },
     readMethod: "GET",
     refreshOnPull: true,
     realtime: {
