@@ -28,6 +28,9 @@ import {
 import {
   ensureAdapterRuntimeContainers
 } from "./terminalRuntimeContainers.js";
+import {
+  createLaunchPreviewProxyRegistry
+} from "./launchPreviewProxy.js";
 
 const LAUNCH_METADATA = Object.freeze({
   href: "launch_target_open_href",
@@ -123,20 +126,35 @@ function findLaunchTarget(targets = [], launchTargetId = "") {
 function launchStatusResponse({
   launchTargets = [],
   session = {},
-  terminal = null
+  terminal = null,
+  previewTarget = null
 } = {}) {
   const lastLaunchTarget = launchTargetFromMetadata(session.metadata || {});
   const openTarget = lastLaunchTarget?.openTarget || null;
+  const normalizedPreviewTarget = previewTarget && previewTarget.available !== false
+    ? previewTarget
+    : null;
   return {
     ok: true,
-    activeTerminal: terminal ? launchTerminalStatus(terminal) : null,
+    activeTerminal: terminal ? launchTerminalStatus(terminal, {
+      previewTarget: normalizedPreviewTarget
+    }) : null,
     launchTargets,
+    previewTarget: normalizedPreviewTarget || {
+      available: false,
+      disabledReason: previewTarget?.disabledReason || "Run a launch target first.",
+      href: "",
+      kind: "url",
+      label: "Preview",
+      targetHref: ""
+    },
     lastLaunchTarget,
     openTarget: openTarget
       ? {
           ...openTarget,
           available: true,
-          disabledReason: ""
+          disabledReason: "",
+          previewHref: normalizedPreviewTarget?.href || ""
         }
       : {
           available: false,
@@ -152,21 +170,43 @@ function launchTerminalIsRunning(terminal = {}) {
   return terminal.status === "running" || terminal.status === "closing";
 }
 
-function launchTerminalStatus(terminal = {}) {
+function launchTerminalStatus(terminal = {}, {
+  previewTarget = null
+} = {}) {
   const metadata = terminal.metadata && typeof terminal.metadata === "object" && !Array.isArray(terminal.metadata)
     ? terminal.metadata
     : {};
+  const actions = launchActionsWithPreviewTarget(metadata.actions, previewTarget);
   return {
     closeError: String(terminal.closeError || ""),
     commandPreview: String(terminal.commandPreview || ""),
     createdAt: String(terminal.createdAt || ""),
     exitCode: terminal.exitCode ?? null,
     id: String(terminal.id || ""),
-    metadata,
+    metadata: {
+      ...metadata,
+      actions
+    },
     output: String(terminal.output || ""),
     running: launchTerminalIsRunning(terminal),
     status: String(terminal.status || "")
   };
+}
+
+function launchActionsWithPreviewTarget(actions = [], previewTarget = null) {
+  const entries = Array.isArray(actions) ? actions : [];
+  if (!previewTarget?.href || !previewTarget.targetHref) {
+    return entries;
+  }
+  return entries.map((action) => {
+    if (String(action?.href || "") !== previewTarget.targetHref) {
+      return action;
+    }
+    return {
+      ...action,
+      previewHref: previewTarget.href
+    };
+  });
 }
 
 function latestLaunchTerminal(sessionId = "") {
@@ -277,12 +317,35 @@ function createLaunchTargetTerminalController({
   projectService,
   publishSessionChanged = async () => null
 } = {}) {
+  const launchPreviewProxies = createLaunchPreviewProxyRegistry();
+
+  async function previewTargetForStatus(sessionId = "", status = {}) {
+    const targetHref = String(status.openTarget?.href || "").trim();
+    if (!targetHref || status.openTarget?.available === false) {
+      return null;
+    }
+    try {
+      return await launchPreviewProxies.ensure(sessionId, targetHref);
+    } catch (error) {
+      return {
+        available: false,
+        disabledReason: String(error?.message || error || "Launch preview proxy could not start."),
+        href: "",
+        kind: "url",
+        label: "Preview",
+        targetHref
+      };
+    }
+  }
+
   return Object.freeze({
-    closeAllForSession(sessionId) {
+    async closeAllForSession(sessionId) {
+      await launchPreviewProxies.close(sessionId);
       return closeTerminalSessionsForNamespace(launchTargetTerminalNamespace(sessionId));
     },
 
-    closeTerminal(sessionId, terminalSessionId) {
+    async closeTerminal(sessionId, terminalSessionId) {
+      await launchPreviewProxies.close(sessionId);
       return closeTerminalSession(terminalSessionId, {
         namespace: launchTargetTerminalNamespace(sessionId)
       });
@@ -291,8 +354,15 @@ function createLaunchTargetTerminalController({
     async launchStatus(sessionId) {
       return vibe64Result(async () => {
         const context = await createLaunchContext(projectService, sessionId);
-        return launchStatusResponse({
+        const status = launchStatusResponse({
           launchTargets: await listLaunchTargets(context),
+          session: context.session,
+          terminal: latestLaunchTerminal(sessionId)
+        });
+        const previewTarget = await previewTargetForStatus(sessionId, status);
+        return launchStatusResponse({
+          launchTargets: status.launchTargets,
+          previewTarget,
           session: context.session,
           terminal: latestLaunchTerminal(sessionId)
         });
@@ -439,7 +509,8 @@ function createLaunchTargetTerminalController({
       });
     },
 
-    stopTerminal(sessionId, terminalSessionId) {
+    async stopTerminal(sessionId, terminalSessionId) {
+      await launchPreviewProxies.close(sessionId);
       return stopTerminalSession(terminalSessionId, {
         namespace: launchTargetTerminalNamespace(sessionId)
       });

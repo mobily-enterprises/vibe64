@@ -473,9 +473,7 @@
             class="studio-autopilot__preview-launch"
             embedded-preview
             :session="session"
-            toolbar-teleport-target="#studio-home-app-bar-actions"
             :window-displayed="props.active"
-            workflow-command
           />
         </div>
 

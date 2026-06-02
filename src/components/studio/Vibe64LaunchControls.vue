@@ -15,10 +15,23 @@
     >
       <div
         class="vibe64-launch-controls__toolbar"
-        :class="{ 'vibe64-launch-controls__toolbar--teleported': toolbarTeleportTarget }"
+        :class="[
+          { 'vibe64-launch-controls__toolbar--teleported': toolbarTeleportTarget },
+          embeddedPreview ? `vibe64-launch-controls__toolbar--${previewToolbarPosition}` : ''
+        ]"
       >
+        <v-btn
+          v-if="embeddedPreview"
+          :disabled="previewToolbarPosition === 'left'"
+          :icon="mdiChevronLeft"
+          size="small"
+          title="Move controls left"
+          variant="text"
+          @click="movePreviewToolbar(-1)"
+        />
+
         <div
-          v-if="terminalDockVisible"
+          v-if="launchToolbarDockVisible"
           class="vibe64-launch-controls__dock"
           :title="terminalTitle"
         >
@@ -60,11 +73,26 @@
           />
 
           <v-btn
+            v-if="embeddedTerminalVisible"
+            aria-label="Hide launch terminal"
+            class="vibe64-launch-controls__terminal-toggle--hide"
+            :prepend-icon="mdiClose"
+            size="small"
+            title="Hide launch terminal"
+            variant="text"
+            @click="toggleTerminal"
+          >
+            Hide terminal
+          </v-btn>
+
+          <v-btn
+            v-else
+            aria-label="Show launch terminal"
             :icon="mdiConsoleLine"
             size="small"
             title="Show launch terminal"
             variant="text"
-            @click="expandTerminal"
+            @click="toggleTerminal"
           />
         </div>
 
@@ -116,6 +144,16 @@
           variant="text"
           @click="reloadPreview"
         />
+
+        <v-btn
+          v-if="embeddedPreview"
+          :disabled="previewToolbarPosition === 'right'"
+          :icon="mdiChevronRight"
+          size="small"
+          title="Move controls right"
+          variant="text"
+          @click="movePreviewToolbar(1)"
+        />
       </div>
     </Teleport>
 
@@ -125,21 +163,12 @@
     >
       <iframe
         v-if="previewUrl"
+        ref="previewFrame"
         :key="previewUrl"
         class="vibe64-launch-controls__preview-frame"
         :src="previewUrl"
         title="App preview"
-        @load="previewFrameLoaded = true"
       />
-      <div
-        v-if="previewUrl && !previewFrameLoaded"
-        class="vibe64-launch-controls__preview-overlay"
-      >
-        <div class="vibe64-launch-controls__preview-pulse">
-          <v-icon :icon="mdiWebClock" size="46" />
-        </div>
-        <span>Opening preview.</span>
-      </div>
       <div
         v-else-if="!previewUrl"
         class="vibe64-launch-controls__preview-empty"
@@ -152,9 +181,34 @@
         </div>
         <span>{{ previewEmptyText }}</span>
       </div>
+      <Vibe64TerminalFrame
+        v-if="embeddedTerminalVisible"
+        class="vibe64-launch-controls__terminal vibe64-launch-controls__terminal--embedded"
+        :command-preview="terminalCommandPreview"
+        :error="terminalError"
+        :status="terminalStatus"
+        :subtitle="terminalSubtitle"
+        :terminal-host-ref="setTerminalHost"
+        :title="terminalTitle"
+      />
+      <div
+        v-if="previewDisplayedUrl"
+        class="vibe64-launch-controls__preview-url"
+        :title="previewDisplayedUrl"
+      >
+        <span>{{ previewDisplayedUrl }}</span>
+        <v-btn
+          :icon="mdiContentCopy"
+          size="x-small"
+          title="Copy preview URL"
+          variant="text"
+          @click="copyPreviewUrl"
+        />
+      </div>
     </div>
 
     <Vibe64FloatingTerminalWindow
+      v-if="!embeddedPreview"
       :displayed="terminalDisplayed"
       :minimized="false"
       :storage-key="terminalWindowStorageKey"
@@ -171,137 +225,41 @@
           :terminal-host-ref="setTerminalHost"
           :title="terminalTitle"
           @drag-start="startDrag"
-        >
-          <template #actions>
-            <v-btn
-              :icon="mdiChevronDown"
-              size="small"
-              title="Minimize terminal"
-              variant="text"
-              @click="minimizeTerminal"
-            />
-
-            <v-btn
-              v-for="action in launchActions"
-              :key="`window:${action.id || action.href}`"
-              color="primary"
-              :prepend-icon="mdiOpenInNew"
-              size="small"
-              :title="action.href"
-              variant="tonal"
-              @click="openAction(action)"
-            >
-              {{ action.label || "Open" }}
-            </v-btn>
-
-            <v-btn
-              v-if="terminalCanRestart"
-              color="primary"
-              :disabled="operationBusy"
-              :prepend-icon="mdiRestart"
-              size="small"
-              variant="tonal"
-              @click="restartTerminal"
-            >
-              Restart
-            </v-btn>
-
-            <v-btn
-              v-if="terminalCanStop"
-              :disabled="operationBusy"
-              :prepend-icon="mdiStop"
-              size="small"
-              variant="tonal"
-              @click="stopTerminal"
-            >
-              Stop
-            </v-btn>
-
-            <v-btn
-              v-if="terminalCanRetry"
-              color="primary"
-              :disabled="operationBusy"
-              :prepend-icon="mdiRefresh"
-              size="small"
-              variant="flat"
-              @click="retryTerminal"
-            >
-              Retry
-            </v-btn>
-
-            <v-btn
-              v-if="workflowAiFixVisible"
-              color="primary"
-              :prepend-icon="mdiRobotOutline"
-              size="small"
-              variant="tonal"
-              @click="requestAiFix"
-            >
-              Get AI to fix it
-            </v-btn>
-
-            <v-btn
-              v-if="terminalCanCopyLog"
-              :icon="mdiContentCopy"
-              size="small"
-              title="Copy log"
-              variant="text"
-              @click="copyLog"
-            />
-
-            <v-btn
-              v-if="terminalCanClose"
-              :disabled="operationBusy"
-              :prepend-icon="mdiClose"
-              size="small"
-              variant="text"
-              @click="closeTerminal"
-            >
-              Close
-            </v-btn>
-          </template>
-        </Vibe64TerminalFrame>
+        />
       </template>
     </Vibe64FloatingTerminalWindow>
-
-    <Vibe64FixCodexDialog
-      v-model="fixDialogOpen"
-      :job="fixJob"
-      :terminal="fixTerminal"
-    />
   </div>
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import {
-  mdiChevronDown,
+  mdiChevronLeft,
+  mdiChevronRight,
   mdiClose,
   mdiConsoleLine,
   mdiContentCopy,
   mdiOpenInNew,
   mdiPlayCircleOutline,
   mdiRefresh,
-  mdiRobotOutline,
   mdiRestart,
-  mdiStop,
   mdiWebClock
 } from "@mdi/js";
-import Vibe64FixCodexDialog from "@/components/studio/Vibe64FixCodexDialog.vue";
 import Vibe64FloatingTerminalWindow from "@/components/studio/Vibe64FloatingTerminalWindow.vue";
 import Vibe64TerminalFrame from "@/components/studio/Vibe64TerminalFrame.vue";
 import {
+  launchPreviewToolbarStorageKey,
   launchPreviewBaseUrl,
+  launchPreviewDisplayUrl,
   launchPreviewUrl,
-  launchTerminalAiFixAvailable,
+  nextLaunchPreviewToolbarPosition,
+  normalizeLaunchPreviewToolbarPosition,
   useVibe64LaunchControls
 } from "@/composables/useVibe64LaunchControls.js";
 import {
-  useVibe64FixCodexDialog
-} from "@/composables/useVibe64FixCodexDialog.js";
-import {
-  terminalFailureFixRequest
-} from "@/lib/vibe64TerminalFailurePrompt.js";
+  readLocalStorageJson,
+  writeLocalStorageJson
+} from "@/lib/browserLocalStorage.js";
 
 const props = defineProps({
   buttonLabel: {
@@ -332,10 +290,6 @@ const props = defineProps({
     type: Boolean,
     default: false
   },
-  fixCommandFailure: {
-    type: Function,
-    default: null
-  },
   session: {
     type: Object,
     default: null
@@ -347,18 +301,10 @@ const props = defineProps({
   windowDisplayed: {
     type: Boolean,
     default: true
-  },
-  workflowCommand: {
-    type: Boolean,
-    default: false
   }
 });
 
 const {
-  activeLaunchTarget,
-  activeLaunchTargetId,
-  closeTerminal,
-  copyLog,
   expandTerminal,
   launchActions,
   launchButtonsDisabled,
@@ -368,28 +314,21 @@ const {
   minimizeTerminal,
   openAction,
   operationBusy,
+  refresh: refreshLaunchTargets,
   restartTerminal,
   retryTerminal,
   run,
   setTerminalHost,
-  stopTerminal,
-  terminalCanClose,
-  terminalCanCopyLog,
   terminalCanRestart,
   terminalCanRetry,
-  terminalCanStop,
   terminalCommandPreview,
   terminalDisplayed,
   terminalDockVisible,
   terminalError,
-  terminalExitCode,
   terminalIndicatorLabel,
   terminalIndicatorState,
   terminalIsRunning,
   terminalLaunchReady,
-  terminalMetadata,
-  terminalOutput,
-  terminalSessionId,
   terminalStatus,
   terminalSubtitle,
   terminalTitle,
@@ -403,69 +342,45 @@ const {
   busy: () => props.busy,
   session: () => props.session
 });
-const {
-  fixDialogOpen,
-  fixJob,
-  fixTerminal,
-  openFixCodexDialog
-} = useVibe64FixCodexDialog();
 
 const runMenuDisabled = computed(() => Boolean(
   launchButtonsDisabled.value ||
   loading.value ||
   launchTargets.value.length < 1
 ));
-const launchTerminalFailed = computed(() => Boolean(
-  terminalError.value ||
-  (
-    terminalStatus.value === "exited" &&
-    terminalExitCode.value !== 0
-  )
-));
-const workflowAiFixVisible = computed(() => Boolean(
-  launchTerminalAiFixAvailable({
-    workflowCommand: props.workflowCommand
-  }) &&
-  !terminalIsRunning.value &&
-  launchTerminalFailed.value &&
-  (
-    terminalOutput.value ||
-    terminalCommandPreview.value ||
-    terminalError.value
-  )
-));
-const PREVIEW_PROBE_MAX_ATTEMPTS = 20;
-const PREVIEW_PROBE_RETRY_DELAY_MS = 750;
+const PREVIEW_LOCATION_MESSAGE_TYPE = "vibe64:preview-location";
+const PREVIEW_RELOAD_QUERY_PARAM = "vibe64_reload";
+const previewFrame = ref(null);
 const previewReloadKey = ref(0);
-const previewFrameLoaded = ref(false);
-const previewProbeAttempt = ref(0);
-const previewProbeError = ref("");
-const previewProbeLoading = ref(false);
-const previewProbeReady = ref(false);
-let previewProbeRunId = 0;
-let previewProbeTimer = null;
+const previewVisitedUrl = ref("");
+const previewToolbarPosition = ref("center");
 const toolbarTeleportTarget = computed(() => String(props.toolbarTeleportTarget || "").trim());
+const embeddedTerminalVisible = computed(() => Boolean(props.embeddedPreview && terminalWindowVisible.value));
+const launchToolbarDockVisible = computed(() => props.embeddedPreview
+  ? terminalVisible.value
+  : terminalDockVisible.value);
+const previewToolbarStorageKey = computed(() => props.embeddedPreview && props.session
+  ? launchPreviewToolbarStorageKey(props.session)
+  : "");
 const previewBaseUrl = computed(() => launchPreviewBaseUrl(launchActions.value));
+const previewDisplayBaseUrl = computed(() => launchPreviewDisplayUrl(launchActions.value));
+const previewDisplayedUrl = computed(() => (
+  previewVisitedUrl.value ||
+  previewDisplayBaseUrl.value ||
+  previewBaseUrl.value
+));
 const previewUrl = computed(() => launchPreviewUrl({
   baseUrl: previewBaseUrl.value,
-  ready: previewProbeReady.value,
+  ready: terminalLaunchReady.value,
   reloadKey: previewReloadKey.value
 }));
 const previewStarting = computed(() => Boolean(
   previewBaseUrl.value &&
-  !previewProbeError.value &&
-  (
-    !terminalLaunchReady.value ||
-    previewProbeLoading.value ||
-    (previewUrl.value && !previewFrameLoaded.value)
-  )
+  !terminalLaunchReady.value
 ));
 const previewEmptyText = computed(() => {
   if (loading.value) {
     return "Loading preview targets.";
-  }
-  if (previewProbeError.value) {
-    return previewProbeError.value;
   }
   if (previewStarting.value || terminalIsRunning.value) {
     return "Starting preview.";
@@ -473,121 +388,121 @@ const previewEmptyText = computed(() => {
   return "Run the app to show the preview.";
 });
 
-function reloadPreview() {
-  previewFrameLoaded.value = false;
-  previewProbeError.value = "";
-  if (!previewProbeReady.value && previewBaseUrl.value && terminalLaunchReady.value) {
-    startPreviewProbe();
-    return;
-  }
+async function reloadPreview() {
+  await refreshLaunchTargets();
   previewReloadKey.value += 1;
 }
 
-function clearPreviewProbeTimer() {
-  if (previewProbeTimer) {
-    clearTimeout(previewProbeTimer);
-    previewProbeTimer = null;
+function movePreviewToolbar(direction = 0) {
+  previewToolbarPosition.value = nextLaunchPreviewToolbarPosition(
+    previewToolbarPosition.value,
+    direction
+  );
+  if (previewToolbarStorageKey.value) {
+    writeLocalStorageJson(previewToolbarStorageKey.value, previewToolbarPosition.value);
   }
 }
 
-function schedulePreviewProbe(runId) {
-  clearPreviewProbeTimer();
-  previewProbeTimer = setTimeout(() => {
-    void probePreview(runId);
-  }, PREVIEW_PROBE_RETRY_DELAY_MS);
+async function copyPreviewUrl() {
+  if (!previewDisplayedUrl.value || typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+    return false;
+  }
+  await navigator.clipboard.writeText(previewDisplayedUrl.value);
+  return true;
 }
 
-async function probePreview(runId) {
-  if (runId !== previewProbeRunId) {
+function toggleTerminal() {
+  if (embeddedTerminalVisible.value) {
+    minimizeTerminal();
     return;
   }
-  const baseUrl = previewBaseUrl.value;
-  if (!baseUrl || !terminalLaunchReady.value) {
-    previewProbeLoading.value = false;
-    return;
-  }
-  if (typeof fetch !== "function") {
-    previewProbeReady.value = true;
-    previewProbeLoading.value = false;
-    return;
+  void expandTerminal();
+}
+
+function previewUrlWithoutReload(value = "") {
+  const text = String(value || "").trim();
+  if (!text) {
+    return "";
   }
   try {
-    await fetch(baseUrl, {
-      cache: "no-store",
-      mode: "no-cors"
-    });
-    if (runId !== previewProbeRunId) {
-      return;
-    }
-    previewProbeError.value = "";
-    previewProbeLoading.value = false;
-    previewProbeReady.value = true;
+    const url = new URL(text);
+    url.searchParams.delete(PREVIEW_RELOAD_QUERY_PARAM);
+    return url.toString();
   } catch {
-    if (runId !== previewProbeRunId) {
-      return;
-    }
-    previewProbeAttempt.value += 1;
-    if (previewProbeAttempt.value >= PREVIEW_PROBE_MAX_ATTEMPTS) {
-      previewProbeError.value = "Preview is taking longer than expected.";
-      previewProbeLoading.value = false;
-      previewProbeReady.value = false;
-      return;
-    }
-    schedulePreviewProbe(runId);
+    return text
+      .replace(/([?&])vibe64_reload=[^&]*&?/u, (match, prefix) => {
+        return prefix === "?" && match.endsWith("&") ? "?" : "";
+      })
+      .replace(/[?&]$/u, "");
   }
 }
 
-function startPreviewProbe() {
-  clearPreviewProbeTimer();
-  previewProbeRunId += 1;
-  previewFrameLoaded.value = false;
-  previewProbeAttempt.value = 0;
-  previewProbeError.value = "";
-  previewProbeReady.value = false;
-  if (!previewBaseUrl.value || !terminalLaunchReady.value) {
-    previewProbeLoading.value = false;
+function previewMessageUrl(data = {}) {
+  if (!data || typeof data !== "object" || data.type !== PREVIEW_LOCATION_MESSAGE_TYPE) {
+    return "";
+  }
+  const href = String(data.href || data.url || "").trim();
+  const baseUrl = String(previewDisplayBaseUrl.value || previewBaseUrl.value || "").trim();
+  if (!href || !baseUrl) {
+    return "";
+  }
+  try {
+    const url = new URL(href, baseUrl);
+    const baseOrigin = new URL(baseUrl).origin;
+    return url.origin === baseOrigin ? previewUrlWithoutReload(url.toString()) : "";
+  } catch {
+    return "";
+  }
+}
+
+function previewMessageOriginAllowed(event) {
+  const origins = [
+    previewBaseUrl.value,
+    previewDisplayBaseUrl.value
+  ].map((value) => {
+    try {
+      return value ? new URL(value).origin : "";
+    } catch {
+      return "";
+    }
+  }).filter(Boolean);
+  return origins.length < 1 || origins.includes(String(event?.origin || ""));
+}
+
+function handlePreviewLocationMessage(event) {
+  if (
+    event?.source !== previewFrame.value?.contentWindow ||
+    !previewMessageOriginAllowed(event)
+  ) {
     return;
   }
-  previewProbeLoading.value = true;
-  void probePreview(previewProbeRunId);
+  const frameUrl = previewMessageUrl(event.data);
+  if (frameUrl) {
+    previewVisitedUrl.value = frameUrl;
+  }
 }
 
-watch(() => [
-  previewBaseUrl.value,
-  terminalLaunchReady.value ? "ready" : "not-ready"
-].join("|"), startPreviewProbe, {
+watch(previewDisplayBaseUrl, (baseUrl) => {
+  previewVisitedUrl.value = previewUrlWithoutReload(baseUrl);
+}, {
   immediate: true
 });
 
-onBeforeUnmount(() => {
-  previewProbeRunId += 1;
-  clearPreviewProbeTimer();
+watch(previewToolbarStorageKey, (storageKey) => {
+  previewToolbarPosition.value = normalizeLaunchPreviewToolbarPosition(
+    readLocalStorageJson(storageKey, "center")
+  );
+}, {
+  immediate: true
 });
 
-async function requestAiFix() {
-  if (!workflowAiFixVisible.value) {
-    return null;
-  }
-  minimizeTerminal();
-  const request = await terminalFailureFixRequest({
-    attemptedCommand: String(terminalMetadata.value?.attemptedCommand || ""),
-    closeError: terminalError.value,
-    commandPreview: terminalCommandPreview.value,
-    exitCode: terminalExitCode.value,
-    launchTargetId: activeLaunchTargetId.value,
-    launchTargetLabel: activeLaunchTarget.value?.label || activeLaunchTargetId.value,
-    output: terminalOutput.value,
-    sessionId: props.session?.sessionId || "",
-    terminalKind: "launch",
-    terminalSessionId: terminalSessionId.value,
-    terminalStatus: terminalStatus.value
-  });
-  if (typeof props.fixCommandFailure === "function") {
-    props.fixCommandFailure(request);
-  }
-  openFixCodexDialog(request);
-  return request;
-}
+onMounted(() => {
+  window.addEventListener("message", handlePreviewLocationMessage);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("message", handlePreviewLocationMessage);
+});
 </script>
 
 <style scoped>
@@ -612,12 +527,11 @@ async function requestAiFix() {
   background: rgb(var(--v-theme-surface));
   border: 1px solid rgba(var(--v-theme-outline), 0.16);
   border-radius: 14px;
-  display: grid;
-  gap: 0.55rem;
-  grid-template-rows: auto minmax(0, 1fr);
+  display: block;
   height: 100%;
   justify-content: stretch;
   padding: 0.6rem;
+  position: relative;
 }
 
 .vibe64-launch-controls--toolbar-teleported {
@@ -625,7 +539,42 @@ async function requestAiFix() {
 }
 
 .vibe64-launch-controls--embedded .vibe64-launch-controls__toolbar {
+  background: rgba(var(--v-theme-surface), 0.42);
+  border: 1px solid rgba(var(--v-theme-outline), 0.1);
+  border-radius: 999px;
+  box-shadow: 0 0.4rem 1.2rem rgba(15, 23, 42, 0.14);
+  left: 50%;
   justify-content: flex-end;
+  opacity: 0.58;
+  padding: 0.18rem;
+  position: absolute;
+  top: 1rem;
+  transform: translateX(-50%);
+  transition: opacity 140ms ease, background-color 140ms ease, border-color 140ms ease;
+  z-index: 3;
+}
+
+.vibe64-launch-controls--embedded .vibe64-launch-controls__toolbar:hover,
+.vibe64-launch-controls--embedded .vibe64-launch-controls__toolbar:focus-within {
+  background: rgba(var(--v-theme-surface), 0.94);
+  border-color: rgba(var(--v-theme-outline), 0.18);
+  opacity: 1;
+}
+
+.vibe64-launch-controls--embedded .vibe64-launch-controls__toolbar--left {
+  left: 1rem;
+  transform: none;
+}
+
+.vibe64-launch-controls--embedded .vibe64-launch-controls__toolbar--center {
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.vibe64-launch-controls--embedded .vibe64-launch-controls__toolbar--right {
+  left: auto;
+  right: 1rem;
+  transform: none;
 }
 
 .vibe64-launch-controls__toolbar--teleported {
@@ -701,6 +650,7 @@ async function requestAiFix() {
   border: 1px solid rgba(var(--v-theme-outline), 0.12);
   border-radius: 12px;
   display: grid;
+  height: 100%;
   min-height: 0;
   overflow: hidden;
 }
@@ -715,20 +665,6 @@ async function requestAiFix() {
   height: 100%;
   min-height: 0;
   width: 100%;
-}
-
-.vibe64-launch-controls__preview-overlay {
-  align-items: center;
-  backdrop-filter: blur(2px);
-  background: rgba(var(--v-theme-surface), 0.72);
-  color: rgba(var(--v-theme-on-surface), 0.68);
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  justify-content: center;
-  min-height: 12rem;
-  padding: 1rem;
-  z-index: 1;
 }
 
 .vibe64-launch-controls__preview-empty {
@@ -758,6 +694,45 @@ async function requestAiFix() {
 .vibe64-launch-controls__terminal {
   box-shadow: 0 1rem 3rem rgba(13, 24, 42, 0.24);
   height: 100%;
+}
+
+.vibe64-launch-controls__terminal--embedded {
+  border-radius: 12px;
+  box-shadow: none;
+  min-height: 0;
+  z-index: 2;
+}
+
+.vibe64-launch-controls__preview-url {
+  align-items: center;
+  align-self: end;
+  background: rgba(var(--v-theme-surface), 0.38);
+  border: 1px solid rgba(var(--v-theme-outline), 0.08);
+  border-radius: 999px;
+  color: rgba(var(--v-theme-on-surface), 0.52);
+  display: flex;
+  font-size: 0.72rem;
+  gap: 0.2rem;
+  justify-self: start;
+  margin: 0 0 0.7rem 0.7rem;
+  max-width: min(28rem, calc(100% - 1.4rem));
+  min-width: 0;
+  padding: 0.08rem 0.16rem 0.08rem 0.55rem;
+  user-select: none;
+  z-index: 3;
+}
+
+.vibe64-launch-controls__preview-url:hover,
+.vibe64-launch-controls__preview-url:focus-within {
+  background: rgba(var(--v-theme-surface), 0.88);
+  color: rgba(var(--v-theme-on-surface), 0.82);
+}
+
+.vibe64-launch-controls__preview-url span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .vibe64-launch-controls__terminal :deep(.vibe64-terminal-frame__host) {

@@ -29,6 +29,7 @@ import {
 } from "@/lib/browserLocalStorage.js";
 
 const LAUNCH_BROWSER_WINDOW_FEATURES = "popup,width=1400,height=900,left=80,top=60";
+const LAUNCH_PREVIEW_TOOLBAR_POSITIONS = Object.freeze(["left", "center", "right"]);
 const TERMINAL_STOP_POLL_INTERVAL_MS = 100;
 const TERMINAL_STOP_POLL_ATTEMPTS = 50;
 
@@ -43,6 +44,26 @@ function launchBrowserTargetName(session = {}) {
 
 function launchTerminalStorageKey(session = {}) {
   return `vibe64:floating-terminal:launch:${launchBrowserTargetName(session)}`;
+}
+
+function launchPreviewToolbarStorageKey(session = {}) {
+  return `vibe64:launch-preview-toolbar:${launchBrowserTargetName(session)}`;
+}
+
+function normalizeLaunchPreviewToolbarPosition(value = "") {
+  const normalized = String(value || "").trim();
+  return LAUNCH_PREVIEW_TOOLBAR_POSITIONS.includes(normalized) ? normalized : "center";
+}
+
+function nextLaunchPreviewToolbarPosition(currentPosition = "center", direction = 0) {
+  const currentIndex = LAUNCH_PREVIEW_TOOLBAR_POSITIONS.indexOf(
+    normalizeLaunchPreviewToolbarPosition(currentPosition)
+  );
+  const nextIndex = Math.min(
+    LAUNCH_PREVIEW_TOOLBAR_POSITIONS.length - 1,
+    Math.max(0, currentIndex + Math.sign(Number(direction) || 0))
+  );
+  return LAUNCH_PREVIEW_TOOLBAR_POSITIONS[nextIndex] || "center";
 }
 
 function openLaunchBrowserTarget(target = {}, session = {}, browserWindow = null) {
@@ -127,17 +148,16 @@ function delay(milliseconds = 0) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
-function launchTerminalAiFixAvailable({
-  workflowCommand = false
-} = {}) {
-  return Boolean(workflowCommand);
-}
-
 function launchTerminalIsReady(metadata = {}) {
   return metadata?.launchReady === true || metadata?.launchReady === "true";
 }
 
 function launchPreviewBaseUrl(actions = []) {
+  const previewAction = Array.isArray(actions) ? actions.find((action) => browserCanOpenTarget(action)) : null;
+  return String(previewAction?.previewHref || previewAction?.href || "");
+}
+
+function launchPreviewDisplayUrl(actions = []) {
   const previewAction = Array.isArray(actions) ? actions.find((action) => browserCanOpenTarget(action)) : null;
   return String(previewAction?.href || "");
 }
@@ -310,7 +330,20 @@ function useVibe64LaunchControls({
   });
   const launchActions = computed(() => {
     const actions = terminalMetadata.value.actions || activeTerminal.value?.metadata?.actions || [];
-    return Array.isArray(actions) ? actions.filter((action) => browserCanOpenTarget(action)) : [];
+    const previewTarget = status.value.previewTarget || null;
+    const browserActions = Array.isArray(actions) ? actions.filter((action) => browserCanOpenTarget(action)) : [];
+    if (!previewTarget?.href || !previewTarget.targetHref) {
+      return browserActions;
+    }
+    return browserActions.map((action) => {
+      if (String(action.href || "") !== String(previewTarget.targetHref || "")) {
+        return action;
+      }
+      return {
+        ...action,
+        previewHref: previewTarget.href
+      };
+    });
   });
   const terminalLaunchReady = computed(() => launchTerminalIsReady({
     ...(activeTerminal.value?.metadata || {}),
@@ -618,6 +651,17 @@ function useVibe64LaunchControls({
 
   watch(() => [
     sessionId.value,
+    terminalLaunchReady.value ? "ready" : "not-ready"
+  ].join("|"), () => {
+    if (terminalLaunchReady.value) {
+      void refresh();
+    }
+  }, {
+    immediate: true
+  });
+
+  watch(() => [
+    sessionId.value,
     requestedAutoStartTargetId.value,
     launchTargetsResource.isLoading.value ? "loading" : "ready",
     terminalVisible.value ? "terminal-visible" : "terminal-hidden",
@@ -706,9 +750,12 @@ export {
   browserCanOpenTarget,
   launchBrowserTargetName,
   launchPreviewBaseUrl,
+  launchPreviewDisplayUrl,
+  launchPreviewToolbarStorageKey,
   launchPreviewUrl,
   launchTargetWorktreePath,
-  launchTerminalAiFixAvailable,
+  nextLaunchPreviewToolbarPosition,
+  normalizeLaunchPreviewToolbarPosition,
   openLaunchBrowserTarget,
   openPendingLaunchBrowserWindow,
   openReadyLaunchBrowserTarget,

@@ -4,9 +4,12 @@ import {
   browserCanOpenTarget,
   launchBrowserTargetName,
   launchPreviewBaseUrl,
+  launchPreviewDisplayUrl,
+  launchPreviewToolbarStorageKey,
   launchPreviewUrl,
   launchTargetWorktreePath,
-  launchTerminalAiFixAvailable,
+  nextLaunchPreviewToolbarPosition,
+  normalizeLaunchPreviewToolbarPosition,
   openLaunchBrowserTarget,
   openPendingLaunchBrowserWindow,
   openReadyLaunchBrowserTarget
@@ -101,15 +104,6 @@ describe("Vibe64 launch controls", () => {
     })).toBe("/workspace/.vibe64/sessions/session-1/worktree");
   });
 
-  it("only offers AI repair for workflow-owned launch commands", () => {
-    expect(launchTerminalAiFixAvailable({
-      workflowCommand: false
-    })).toBe(false);
-    expect(launchTerminalAiFixAvailable({
-      workflowCommand: true
-    })).toBe(true);
-  });
-
   it("keeps the embedded preview URL blank until the launch preview is ready", () => {
     const actions = [
       {
@@ -135,6 +129,55 @@ describe("Vibe64 launch controls", () => {
       ready: true,
       reloadKey: 2
     })).toBe("http://127.0.0.1:4103/home?mode=dev&vibe64_reload=2");
+  });
+
+  it("uses the proxy URL for the embedded iframe and the target URL for display", () => {
+    const actions = [
+      {
+        href: "http://127.0.0.1:4103/home",
+        kind: "url",
+        previewHref: "http://127.0.0.1:4188/home"
+      }
+    ];
+
+    expect(launchPreviewBaseUrl(actions)).toBe("http://127.0.0.1:4188/home");
+    expect(launchPreviewDisplayUrl(actions)).toBe("http://127.0.0.1:4103/home");
+  });
+
+  it("uses center as the default embedded preview toolbar position", () => {
+    expect(normalizeLaunchPreviewToolbarPosition("")).toBe("center");
+    expect(normalizeLaunchPreviewToolbarPosition("bottom")).toBe("center");
+    expect(normalizeLaunchPreviewToolbarPosition("left")).toBe("left");
+    expect(normalizeLaunchPreviewToolbarPosition("right")).toBe("right");
+  });
+
+  it("moves the embedded preview toolbar within the top positions", () => {
+    expect(nextLaunchPreviewToolbarPosition("center", -1)).toBe("left");
+    expect(nextLaunchPreviewToolbarPosition("center", 1)).toBe("right");
+    expect(nextLaunchPreviewToolbarPosition("left", -1)).toBe("left");
+    expect(nextLaunchPreviewToolbarPosition("right", 1)).toBe("right");
+    expect(nextLaunchPreviewToolbarPosition("left", 1)).toBe("center");
+    expect(nextLaunchPreviewToolbarPosition("right", -1)).toBe("center");
+  });
+
+  it("stores embedded preview toolbar position by project target", () => {
+    const firstSession = {
+      sessionId: "session-1",
+      targetRoot: "/workspace/customer-app"
+    };
+    const secondSessionForSameProject = {
+      sessionId: "session-2",
+      targetRoot: "/workspace/customer-app"
+    };
+    const differentProject = {
+      sessionId: "session-1",
+      targetRoot: "/workspace/admin-app"
+    };
+
+    expect(launchPreviewToolbarStorageKey(firstSession))
+      .toBe(launchPreviewToolbarStorageKey(secondSessionForSameProject));
+    expect(launchPreviewToolbarStorageKey(firstSession))
+      .not.toBe(launchPreviewToolbarStorageKey(differentProject));
   });
 });
 
