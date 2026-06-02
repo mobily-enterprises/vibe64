@@ -243,9 +243,8 @@ function createSessionFromDefinition(definitionId = "") {
 }
 
 .studio-ai-sessions__toolbar--compact {
-  height: 1.5rem;
-  min-height: 1.5rem;
-  transform: translateY(-0.35rem);
+  height: 2.25rem;
+  min-height: 2.25rem;
 }
 
 .studio-ai-sessions__toolbar--compact .studio-ai-sessions__tab {
