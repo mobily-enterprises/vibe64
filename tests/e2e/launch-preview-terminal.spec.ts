@@ -36,6 +36,21 @@ test("embedded preview keeps the opening overlay until the bridge reports render
   await expect(page.locator(".vibe64-launch-controls__preview-overlay")).toHaveCount(0);
 });
 
+test("embedded preview retries when the first iframe load never reports ready", async ({ page }) => {
+  await mockLaunchTerminalSocket(page);
+  await mockLaunchSession(page, {
+    previewReadyLoadNumber: 3
+  });
+
+  await page.goto(`${BASE_URL}/home`);
+
+  await expect(page.locator(".vibe64-launch-controls__preview-overlay")).toContainText("Opening preview.");
+  await expect(page.locator(".vibe64-launch-controls__preview-frame")).toHaveAttribute("src", /vibe64_reload=2/u, {
+    timeout: 12000
+  });
+  await expect(page.locator(".vibe64-launch-controls__preview-overlay")).toHaveCount(0);
+});
+
 test("embedded launch terminal can be shown and hidden again", async ({ page }) => {
   await mockLaunchTerminalSocket(page);
   await mockLaunchSession(page);
@@ -69,11 +84,14 @@ test("embedded launch terminal can be shown and hidden again", async ({ page }) 
 });
 
 async function mockLaunchSession(page: Page, {
-  previewReadyDelayMs = 0
+  previewReadyDelayMs = 0,
+  previewReadyLoadNumber = 1
 }: {
   previewReadyDelayMs?: number;
+  previewReadyLoadNumber?: number;
 } = {}) {
   const session = sessionPayload();
+  let previewLoadCount = 0;
   await mockStudioReady(page);
   await page.route("**/api/vibe64/sessions**", async (route) => {
     const request = route.request();
@@ -115,9 +133,11 @@ async function mockLaunchSession(page: Page, {
     });
   });
   await page.route("http://127.0.0.1:49000/**", async (route) => {
+    previewLoadCount += 1;
     await route.fulfill({
       body: previewAppHtml({
-        readyDelayMs: previewReadyDelayMs
+        readyDelayMs: previewReadyDelayMs,
+        readyEnabled: previewLoadCount >= previewReadyLoadNumber
       }),
       contentType: "text/html"
     });
@@ -125,9 +145,11 @@ async function mockLaunchSession(page: Page, {
 }
 
 function previewAppHtml({
-  readyDelayMs = 0
+  readyDelayMs = 0,
+  readyEnabled = true
 }: {
   readyDelayMs?: number;
+  readyEnabled?: boolean;
 } = {}) {
   const locationMessage = JSON.stringify({
     href: TARGET_APP_URL,
@@ -135,15 +157,26 @@ function previewAppHtml({
     type: "vibe64:preview-location",
     version: 1
   });
-  const readyMessage = JSON.stringify({
+  const readyMessage = {
     href: TARGET_APP_URL,
     reason: "rendered",
     type: "vibe64:preview-ready",
     version: 1
-  });
+  };
+  const readyDelay = Number(readyDelayMs) || 0;
   return `<!doctype html><title>Preview</title><body>Preview app<script>
 parent.postMessage(${locationMessage}, "*");
-setTimeout(() => parent.postMessage(${readyMessage}, "*"), ${Number(readyDelayMs) || 0});
+const readyEnabled = ${JSON.stringify(readyEnabled)};
+function postReady(reason) {
+  if (!readyEnabled) {
+    return;
+  }
+  parent.postMessage({
+    ...${JSON.stringify(readyMessage)},
+    reason
+  }, "*");
+}
+setTimeout(() => postReady("rendered"), ${readyDelay});
 </script></body>`;
 }
 

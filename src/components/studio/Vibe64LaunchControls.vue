@@ -362,11 +362,16 @@ const PREVIEW_LOCATION_MESSAGE_TYPE = "vibe64:preview-location";
 const PREVIEW_QUERY_MESSAGE_TYPE = "vibe64:preview-query";
 const PREVIEW_READY_MESSAGE_TYPE = "vibe64:preview-ready";
 const PREVIEW_RELOAD_QUERY_PARAM = "vibe64_reload";
+// Vite may reload optimized dependencies after "ready"; the preview is ready only when the bridge reports rendered content.
+const PREVIEW_READY_RETRY_INTERVAL_MS = 5000;
+const PREVIEW_READY_RETRY_LIMIT = 30;
 const previewFrame = ref(null);
 const previewReloadKey = ref(0);
 const previewReadyUrl = ref("");
 const previewVisitedUrl = ref("");
 const previewToolbarPosition = ref("center");
+let previewReadyRetryCount = 0;
+let previewReadyRetryTimer = 0;
 const toolbarTeleportTarget = computed(() => String(props.toolbarTeleportTarget || "").trim());
 const embeddedTerminalVisible = computed(() => Boolean(props.embeddedPreview && terminalWindowVisible.value));
 const launchToolbarDockVisible = computed(() => props.embeddedPreview
@@ -407,6 +412,7 @@ const previewEmptyText = computed(() => {
 
 async function reloadPreview() {
   await refreshLaunchTargets();
+  previewReadyRetryCount = 0;
   previewReloadKey.value += 1;
 }
 
@@ -435,6 +441,33 @@ function requestPreviewState() {
   previewFrame.value.contentWindow.postMessage({
     type: PREVIEW_QUERY_MESSAGE_TYPE
   }, "*");
+}
+
+function stopPreviewReadyRetries() {
+  if (!previewReadyRetryTimer) {
+    return;
+  }
+  window.clearTimeout(previewReadyRetryTimer);
+  previewReadyRetryTimer = 0;
+}
+
+function schedulePreviewReadyRetry() {
+  if (previewReadyRetryTimer || typeof window === "undefined") {
+    return;
+  }
+  previewReadyRetryTimer = window.setTimeout(() => {
+    previewReadyRetryTimer = 0;
+    if (
+      !previewLoadingOverlayVisible.value ||
+      !previewUrl.value ||
+      previewReadyRetryCount >= PREVIEW_READY_RETRY_LIMIT
+    ) {
+      return;
+    }
+    previewReadyRetryCount += 1;
+    previewReloadKey.value += 1;
+    schedulePreviewReadyRetry();
+  }, PREVIEW_READY_RETRY_INTERVAL_MS);
 }
 
 function toggleTerminal() {
@@ -516,9 +549,22 @@ function handlePreviewLocationMessage(event) {
   }
 }
 
-watch(previewUrl, () => {
+watch(previewUrl, (nextUrl, previousUrl) => {
+  if (previewUrlWithoutReload(nextUrl) !== previewUrlWithoutReload(previousUrl)) {
+    previewReadyRetryCount = 0;
+  }
   previewReadyUrl.value = "";
   requestPreviewState();
+});
+
+watch(previewLoadingOverlayVisible, (visible) => {
+  if (visible) {
+    schedulePreviewReadyRetry();
+    return;
+  }
+  stopPreviewReadyRetries();
+}, {
+  immediate: true
 });
 
 watch(previewDisplayBaseUrl, (baseUrl) => {
@@ -540,6 +586,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  stopPreviewReadyRetries();
   window.removeEventListener("message", handlePreviewLocationMessage);
 });
 </script>
