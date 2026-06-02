@@ -59,6 +59,8 @@ const hasTabs = computed(() => Boolean(slots.tabs));
 .section-container-shell {
   display: grid;
   gap: 0.85rem;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
   min-height: 0;
   min-width: 0;
 }
@@ -76,6 +78,7 @@ const hasTabs = computed(() => Boolean(slots.tabs));
 }
 
 .section-container-shell__panel {
+  display: grid;
   min-height: 0;
   overflow: hidden;
 }
@@ -84,7 +87,9 @@ const hasTabs = computed(() => Boolean(slots.tabs));
   display: grid;
   gap: 0.85rem;
   grid-template-columns: minmax(11rem, 13rem) minmax(0, 1fr);
+  height: 100%;
   min-height: 0;
+  overflow: hidden;
   padding: 0.75rem;
 }
 
@@ -93,7 +98,10 @@ const hasTabs = computed(() => Boolean(slots.tabs));
 }
 
 .section-container-shell__content {
+  min-height: 0;
   min-width: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 
 @media (max-width: 760px) {
