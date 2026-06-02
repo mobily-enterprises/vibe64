@@ -4,11 +4,8 @@ const CODEX_ACTIVITY_QUIET_MS = 2200;
 const TERMINAL_STREAM_QUIET_MS = 2500;
 
 function useCodexTerminalOutput({
-  appendDisplay,
-  displayActive = true,
   emitBusyChanged,
-  sessionId,
-  writeDisplay
+  sessionId
 } = {}) {
   const codexBusy = ref(false);
   const codexWorking = ref(false);
@@ -19,10 +16,6 @@ function useCodexTerminalOutput({
   let codexBusyOutputVersion = 0;
   let terminalOutput = "";
   let terminalOutputVersion = 0;
-
-  function displayIsActive() {
-    return Boolean(unref(displayActive));
-  }
 
   function clearCodexIdleTimer() {
     if (!codexIdleTimer) {
@@ -132,28 +125,15 @@ function useCodexTerminalOutput({
     markTerminalStreaming();
     terminalOutput += outputChunk;
     noteTerminalOutput();
-    if (!displayIsActive()) {
-      return;
-    }
-    if (appendDisplay) {
-      appendDisplay(outputChunk);
-      return;
-    }
-    writeDisplay?.(outputChunk);
   }
 
-  function resetTerminalOutput({
-    emit = false
-  } = {}) {
+  function resetTerminalOutput() {
     clearTerminalStreamingTimer();
     setTerminalStreaming(false);
     clearCodexBusy();
     clearCodexWorking();
     terminalOutput = "";
     terminalOutputVersion += 1;
-    if (displayIsActive() || emit) {
-      writeDisplay?.("");
-    }
   }
 
   return {

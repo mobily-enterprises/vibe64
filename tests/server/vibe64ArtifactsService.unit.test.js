@@ -497,8 +497,13 @@ test("Vibe64 current-step helper submits through the same server path", async ()
 
     assert.equal(result.code, 0, result.stderr || result.stdout);
     const response = JSON.parse(result.stdout);
-    assert.equal(response.ok, true);
-    assert.equal(response.stepMachine.status, "confirm_files");
+    assert.deepEqual(response, {
+      ok: true,
+      sessionId: "step_input_helper",
+      currentStep: "issue_file_created",
+      stepStatus: "confirm_files",
+      status: "active"
+    });
     assert.equal(await runtime.store.readArtifact("step_input_helper", "issue_title"), "Add booking dashboard\n");
     assert.deepEqual(changedSessionIds, ["step_input_helper"]);
   });
@@ -543,8 +548,13 @@ test("Vibe64 current-step helper accepts --json with stdin payload", async () =>
 
     assert.equal(result.code, 0, result.stderr || result.stdout);
     const response = JSON.parse(result.stdout);
-    assert.equal(response.ok, true);
-    assert.equal(response.stepMachine.status, "confirm_files");
+    assert.deepEqual(response, {
+      ok: true,
+      sessionId: "step_input_helper_stdin",
+      currentStep: "issue_file_created",
+      stepStatus: "confirm_files",
+      status: "active"
+    });
   });
 });
 

@@ -85,6 +85,16 @@ function sendJson(response, statusCode, payload = {}) {
   response.end(`${JSON.stringify(payload, null, 2)}\n`);
 }
 
+function helperSuccessResponse(result = {}, sessionId = "") {
+  return {
+    ok: true,
+    sessionId: normalizeText(result.sessionId || sessionId),
+    currentStep: normalizeText(result.currentStep),
+    stepStatus: normalizeText(result.stepMachine?.status),
+    status: normalizeText(result.status)
+  };
+}
+
 function helperScriptSource() {
   return `#!/usr/bin/env node
 import http from "node:http";
@@ -256,10 +266,10 @@ async function ensureHelperServer({
       const runtime = await projectService.createRuntime();
       const result = await runtime.submitCurrentStepInput(sessionId, input);
       await onSessionChanged(result?.sessionId || sessionId);
-      sendJson(response, vibe64StatusCode(result), {
-        ...result,
-        ok: true
-      });
+      const statusCode = vibe64StatusCode(result);
+      sendJson(response, statusCode, statusCode >= 400
+        ? result
+        : helperSuccessResponse(result, sessionId));
     } catch (error) {
       const payload = vibe64ErrorResponse(error, {
         fallbackCode: "vibe64_helper_request_failed",

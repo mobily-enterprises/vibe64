@@ -245,7 +245,7 @@ test("terminal session control helpers send exact text, narrow keys, and expose 
 });
 
 test("terminal session text helper writes long text in one input write", async () => {
-  const namespace = `terminal-chunked-write-test-${crypto.randomUUID()}`;
+  const namespace = `terminal-single-write-test-${crypto.randomUUID()}`;
   const session = startTerminalSession({
     args: [
       "-e",

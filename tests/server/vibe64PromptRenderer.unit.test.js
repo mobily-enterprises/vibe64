@@ -410,9 +410,10 @@ test("agent conversation prompt keeps simple conversation out of project preflig
     }
   });
 
-  assert.match(rendered.prompt, /do not read repository files, list directories, or inspect existing artifact files first/u);
-  assert.match(rendered.prompt, /This is an interactive conversation step/u);
-  assert.match(rendered.prompt, /Use the current-step input helper contract appended to this prompt/u);
+  assert.match(rendered.prompt, /do not read repository files, list directories, or inspect artifacts first/u);
+  assert.match(rendered.prompt, /Submit every user-visible response through the current-step input helper/u);
+  assert.doesNotMatch(rendered.prompt, /This is an interactive conversation step/u);
+  assert.doesNotMatch(rendered.prompt, /Use the current-step input helper contract appended to this prompt/u);
   assert.doesNotMatch(rendered.prompt, /input_format\.json/u);
 });
 

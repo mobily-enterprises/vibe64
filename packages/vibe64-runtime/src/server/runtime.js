@@ -413,6 +413,20 @@ const WORKFLOW_METADATA_CONTEXT_REPLACEMENTS = new Set([
   "dependencies_path",
   "worktree_path"
 ]);
+const AGENT_CONVERSATION_ACTION_ID = "agent_conversation";
+const CONVERSATION_WORKFLOW_FACT_NAMES = new Set([
+  "code_index_path",
+  "dependencies_installed",
+  "dependencies_package_manager",
+  "github_issue_mode",
+  "issue_source",
+  "project_type",
+  "workflow_definition"
+]);
+const CONVERSATION_WORKFLOW_FACT_PREFIXES = Object.freeze([
+  "launch_target_",
+  "work_"
+]);
 
 function workflowMetadataIsPromptRelevant(name = "", value = undefined) {
   const normalizedName = normalizeText(name);
@@ -452,6 +466,26 @@ function promptWorkflowFacts(metadata = {}) {
         }
         return true;
       })
+  );
+}
+
+function agentConversationAction(action = {}) {
+  return normalizeText(action.id || action.promptId) === AGENT_CONVERSATION_ACTION_ID;
+}
+
+function conversationWorkflowMetadataIsPromptRelevant(name = "", value = undefined) {
+  const normalizedName = normalizeText(name);
+  return workflowMetadataIsPromptRelevant(normalizedName, value) &&
+    (
+      CONVERSATION_WORKFLOW_FACT_NAMES.has(normalizedName) ||
+      CONVERSATION_WORKFLOW_FACT_PREFIXES.some((prefix) => normalizedName.startsWith(prefix))
+    );
+}
+
+function promptConversationWorkflowFacts(metadata = {}) {
+  return Object.fromEntries(
+    sortedObjectEntries(metadata)
+      .filter(([name, value]) => conversationWorkflowMetadataIsPromptRelevant(name, value))
   );
 }
 
@@ -503,6 +537,46 @@ function promptWithWorkflowContext({
     promptContextSection("User/request input", input),
     promptContextSection("Relevant workflow facts", promptWorkflowFacts(session.metadata)),
     "Missing information policy:\n" + missingInformationPolicyInstruction(),
+    String(prompt || "").trim()
+  ]
+    .map((part) => String(part || "").trim())
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+function promptWithConversationTurnContext({
+  action = {},
+  input = {},
+  prompt = "",
+  session = {},
+  sessionBriefingIncluded = false
+} = {}) {
+  const promptId = normalizeText(action.promptId || action.id);
+  const workflowFacts = promptConversationWorkflowFacts(session.metadata);
+  return [
+    [
+      "Vibe64 interactive conversation turn:",
+      workflowContextLine("action", action.label || action.id),
+      workflowContextLine("action id", action.id),
+      workflowContextLine("prompt", promptId),
+      workflowContextLine("session id", session.sessionId || session.id),
+      workflowContextLine("current step", session.currentStep),
+      workflowContextLine("step status", session.stepMachine?.status),
+      workflowContextLine("session status", session.status)
+    ].filter(Boolean).join("\n"),
+    sessionBriefingIncluded
+      ? ""
+      : "Session briefing: Use the Vibe64 session briefing already provided for static setup facts, fixed paths, adapter contracts, managed services, project config, and missing-information policy.",
+    promptContextSection("User/request input", input),
+    Object.keys(workflowFacts).length > 0
+      ? promptContextSection("Current dynamic workflow facts", workflowFacts)
+      : "",
+    [
+      "Response routing:",
+      "- Always submit the user-visible answer through the current-step input helper.",
+      "- A terminal-only answer is incomplete.",
+      "- If the helper reports Reload state or a state mismatch, stop immediately; Vibe64 will show the current state."
+    ].join("\n"),
     String(prompt || "").trim()
   ]
     .map((part) => String(part || "").trim())
@@ -1005,13 +1079,21 @@ class Vibe64SessionRuntime {
       session: actionPromptSession,
       store: this.store
     });
-    const promptWithActionContext = promptWithWorkflowContext({
-      action,
-      includeSessionPaths: !sessionBriefingIncluded,
-      input,
-      prompt: renderedPrompt.prompt,
-      session: promptSession
-    });
+    const promptWithActionContext = agentConversationAction(action)
+      ? promptWithConversationTurnContext({
+          action,
+          input,
+          prompt: renderedPrompt.prompt,
+          session: promptSession,
+          sessionBriefingIncluded
+        })
+      : promptWithWorkflowContext({
+          action,
+          includeSessionPaths: !sessionBriefingIncluded,
+          input,
+          prompt: renderedPrompt.prompt,
+          session: promptSession
+        });
     const promptWithBriefing = promptWithSessionBriefing({
       prompt: promptWithActionContext,
       session: promptSession,

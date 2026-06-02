@@ -269,7 +269,7 @@ function promptWaitingForInputInteraction({
   };
 }
 
-function promptActionDoneInstruction({
+function promptActionDonePayload({
   fields = {},
   kind = STEP_INPUT_KIND.READY,
   stepId = "{{session.currentStep}}",
@@ -283,19 +283,33 @@ function promptActionDoneInstruction({
   if (Object.keys(fields).length > 0) {
     payload.fields = fields;
   }
-  return JSON.stringify(payload, null, 2);
+  return payload;
 }
 
-function promptActionWaitingForInputInstruction({
+function promptActionWaitingForInputPayload({
   stepId = "{{session.currentStep}}",
   stepStatus = "{{session.stepMachine.status}}"
 } = {}) {
-  return JSON.stringify({
+  return {
     kind: STEP_INPUT_KIND.WAITING_FOR_INPUT,
     stepId,
     stepStatus,
     message: "The question or blocker for the user"
-  }, null, 2);
+  };
+}
+
+function helperPayloadInstruction(title = "", payload = {}) {
+  const lines = [`- ${title} payload fields:`];
+  for (const [name, value] of Object.entries(payload || {})) {
+    if (name === "fields" && value && typeof value === "object" && !Array.isArray(value)) {
+      for (const [fieldName, fieldValue] of Object.entries(value)) {
+        lines.push(`  - fields.${normalizeText(fieldName)}: ${normalizeText(fieldValue) || "<value>"}`);
+      }
+      continue;
+    }
+    lines.push(`  - ${normalizeText(name)}: ${normalizeText(value) || "<value>"}`);
+  }
+  return lines;
 }
 
 function currentStepHelperInstruction({
@@ -308,20 +322,23 @@ function currentStepHelperInstruction({
   return [
     "Vibe64 step completion contract:",
     "- Do not write Vibe64 workflow artifacts directly for this step.",
-    "- When this step is complete, call the current-step input helper with this JSON:",
-    promptActionDoneInstruction({
-      fields: doneFields,
+    "- Submit results with: node \"$VIBE64_CURRENT_STEP_INPUT_HELPER\" --json '<payload>'",
+    "- Build `<payload>` from the relevant payload fields below.",
+    ...helperPayloadInstruction("Ready", promptActionDonePayload({
+      kind: STEP_INPUT_KIND.READY,
       stepId,
-      stepStatus
-    }),
+      stepStatus,
+      fields: doneFields
+    })),
+    "- A terminal-visible response alone is not complete; always call the helper before ending the turn.",
     "- Include any additional `fields` explicitly requested by this prompt.",
     `- Meaning of ready: ${doneMeaning}`,
     "",
-    "- If you need user input before this step can continue, call the current-step input helper with this JSON:",
-    promptActionWaitingForInputInstruction({
+    "- If you need user input before this step can continue, submit the waiting payload instead.",
+    ...helperPayloadInstruction("Waiting", promptActionWaitingForInputPayload({
       stepId,
       stepStatus
-    }),
+    })),
     `- Meaning of waiting_for_input: ${waitingForInputMeaning}`,
     "- Before calling the helper for waiting_for_input, write the same question or blocker in normal Codex response text so Inspect users can read it directly in the terminal.",
     "- Keep the visible question text and the helper `message` equivalent; do not make the UI-only helper message more complete than the terminal-visible response.",

@@ -2452,8 +2452,9 @@ test("vibe64 runtime prompt actions render Codex handoff data without advancing"
     assert.match(afterAction.actionResult.prompt, /Run the Vibe64 prompt action: Make a plan/u);
     assert.doesNotMatch(afterAction.actionResult.prompt, /"scope": "unit test"/u);
     assert.match(afterAction.actionResult.prompt, /Vibe64 step completion contract:/u);
-    assert.match(afterAction.actionResult.prompt, /"kind": "ready"/u);
-    assert.match(afterAction.actionResult.prompt, /"stepStatus": "awaiting_agent_result"/u);
+    assert.match(afterAction.actionResult.prompt, /Submit results with: node "\$VIBE64_CURRENT_STEP_INPUT_HELPER" --json '<payload>'/u);
+    assert.ok(afterAction.actionResult.prompt.includes("Ready payload fields:\n  - kind: ready"));
+    assert.ok(afterAction.actionResult.prompt.includes("  - stepStatus: awaiting_agent_result"));
     assert.match(afterAction.actionResult.prompt, /Do not write workflow artifacts directly/u);
     assert.doesNotMatch(afterAction.actionResult.prompt, /VIBE64_AUTOPILOT_DONE/u);
     assert.equal(afterAction.actionResult.codexPromptHandoff.kind, "codex_prompt_handoff");
@@ -2523,9 +2524,11 @@ test("vibe64 pull request resolution prompt uses the current-step helper contrac
     assert.equal(afterAction.actionResult.status, "prompt_ready");
     assert.equal(afterAction.actionResult.promptId, "resolve_pull_request");
     assert.match(afterAction.actionResult.prompt, /Vibe64 current-step input helper/u);
-    assert.match(afterAction.actionResult.prompt, /"kind": "ready"/u);
-    assert.match(afterAction.actionResult.prompt, /"stepId": "create_and_merge_pull_request"/u);
-    assert.match(afterAction.actionResult.prompt, /"stepStatus": "awaiting_agent_result"/u);
+    assert.match(afterAction.actionResult.prompt, /Submit results with: node "\$VIBE64_CURRENT_STEP_INPUT_HELPER" --json '<payload>'/u);
+    assert.ok(afterAction.actionResult.prompt.includes("Ready payload fields:\n  - kind: ready"));
+    assert.ok(afterAction.actionResult.prompt.includes("  - stepId: create_and_merge_pull_request"));
+    assert.ok(afterAction.actionResult.prompt.includes("  - stepStatus: awaiting_agent_result"));
+    assert.ok(afterAction.actionResult.prompt.includes("Waiting payload fields:\n  - kind: waiting_for_input"));
     assert.match(afterAction.actionResult.prompt, /Do not write workflow artifacts directly/u);
     assert.match(afterAction.actionResult.prompt, /Vibe64 will show the current state/u);
     assert.doesNotMatch(afterAction.actionResult.prompt, /ask the user to reload the current step/u);
@@ -2567,8 +2570,8 @@ test("editable artifact review steps preserve user-origin and prompt-origin draf
     assert.equal(draftingIssue.actionResult.status, "prompt_ready");
     assert.equal(draftingIssue.actionResult.promptId, "draft_issue");
     assert.match(draftingIssue.actionResult.prompt, /Vibe64 step completion contract/u);
-    assert.match(draftingIssue.actionResult.prompt, /"title": "Concise work title\."/u);
-    assert.match(draftingIssue.actionResult.prompt, /"word": "Short Vibe64 session label\/word derived from the work title\."/u);
+    assert.ok(draftingIssue.actionResult.prompt.includes("fields.title: Concise work title."));
+    assert.ok(draftingIssue.actionResult.prompt.includes("fields.word: Short Vibe64 session label/word derived from the work title."));
 
     const confirmedIssue = await runtime.submitCurrentStepInput("editable_artifact_issue", {
       fields: {
@@ -3223,6 +3226,63 @@ test("vibe64 runtime prompt handoff shows the action input outside hidden termin
   });
 });
 
+test("vibe64 runtime renders compact conversation turns after the session briefing", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const promptPackRoot = path.join(targetRoot, "prompt-pack");
+    await mkdir(promptPackRoot, {
+      recursive: true
+    });
+    await writeFile(
+      path.join(promptPackRoot, "agent_conversation.txt"),
+      [
+        "Agent conversation"
+      ].join("\n"),
+      "utf8"
+    );
+
+    const runtime = new Vibe64SessionRuntime({
+      adapter: new PromptRendererFakeAdapter({
+        promptPackRoot
+      }),
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "maintenance_conversation",
+      metadata: {
+        ...worktreeMetadata(targetRoot, "compact_agent_prompt"),
+        agent_identity_conversation_id: "019e863d-6e7b-7f72-a3b5-51830ae9ccb0",
+        base_branch: "main",
+        base_commit: "736364f37a70719696df05668659cdefeb04b6eb",
+        codex_session_briefing_delivered: "yes",
+        dependencies_installed: "yes",
+        launch_target_open_href: "http://127.0.0.1:4103/home",
+        project_type: "jskit",
+        workflow_definition: "non_commit_maintenance"
+      },
+      sessionId: "compact_agent_prompt",
+      workflowDefinition: maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
+    });
+
+    const afterAction = await runtime.runAction("compact_agent_prompt", "agent_conversation", {
+      conversationRequest: "This is the first prompt"
+    });
+    const prompt = afterAction.actionResult.prompt;
+
+    assert.match(prompt, /Vibe64 interactive conversation turn:/u);
+    assert.doesNotMatch(prompt, /Vibe64 workflow context:/u);
+    assert.match(prompt, /Session briefing: Use the Vibe64 session briefing already provided/u);
+    assert.match(prompt, /User\/request input:\n- conversationRequest: This is the first prompt/u);
+    assert.match(prompt, /Current dynamic workflow facts:/u);
+    assert.match(prompt, /- launch_target_open_href: http:\/\/127\.0\.0\.1:4103\/home/u);
+    assert.match(prompt, /- dependencies_installed: yes/u);
+    assert.doesNotMatch(prompt, /agent_identity_conversation_id/u);
+    assert.doesNotMatch(prompt, /base_commit/u);
+    assert.doesNotMatch(prompt, /worktree path:/u);
+    assert.match(prompt, /Always submit the user-visible answer through the current-step input helper/u);
+    assert.match(prompt, /A terminal-visible response alone is not complete; always call the helper/u);
+  });
+});
+
 test("vibe64 runtime presents waiting_for_input as the same Codex conversation intent", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = new Vibe64SessionRuntime({
@@ -3404,6 +3464,10 @@ test("chat-with-ai step instructions make completion ownership explicit", () => 
     userDecidedInstruction,
     /The current Codex conversation turn is complete\. The user decides whether to ask another question or continue\./u
   );
+  assert.ok(userDecidedInstruction.includes(
+    "Waiting payload fields:\n  - kind: waiting_for_input\n  - stepId: maintenance_conversation\n  - stepStatus: ready\n  - message: The question or blocker for the user"
+  ));
+  assert.doesNotMatch(userDecidedInstruction, /"stepStatus": "ready",\n-/u);
   assert.match(
     aiDecidedInstruction,
     /You decide this AI discussion turn is complete only when: the requested focused tweak has either been made/u

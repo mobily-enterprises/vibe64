@@ -1,26 +1,16 @@
 Agent conversation
 
-Vibe64 interactive Codex conversation instructions.
-
 Use `conversationRequest` from User/request input as the user's latest request.
 
-This is an interactive conversation step. The user may send several requests, inspect the work, run the app, and steer you before moving to the next workflow step.
-
-General rules:
+Conversation behavior:
+- If the request can be answered without project inspection or file changes, do not read repository files, list directories, or inspect artifacts first.
 - Work in the session worktree when file changes or project inspection are needed.
-- If the request can be answered without project inspection or file changes, do not read repository files, list directories, or inspect existing artifact files first.
-- Ask concise clarification questions when required. Use the Vibe64 step completion contract appended to this prompt when questions block progress or when your turn is complete.
+- Ask concise clarification questions when required, following the Vibe64 step completion contract.
 - Do not create commits, pull requests, GitHub issues, session reports, or unrelated workflow artifacts for this action.
 - Do not modify Vibe64 session internals or artifact files.
-
-Workflow-specific behavior:
-- If current step is `implementation_reviewed`, the user is reviewing the implemented work before slower checks. Make only the focused tweak requested by `conversationRequest`, run the focused checks that prove it when practical, and submit the response through the current-step input helper.
-- If current step is `changes_accepted`, the user is doing final review after validation. Make only the requested final tweak. Vibe64 will send the workflow back through review and validation after this prompt completes.
-- If the user's request changes the actual work scope, filename, title, or acceptance criteria, include `workTitle`, `workDescription`, and `workWord` in the helper `fields` alongside `response`. Keep `workDescription` as the updated complete work anchor, not just the latest tweak.
-- If this step needs to show a response in Vibe64, submit that response through the current-step input helper.
-- For other workflow definitions, answer, inspect, or edit according to the user's request and the current step contract.
-
-Response artifact contract:
-Use the current-step input helper contract appended to this prompt when the current turn is complete.
+- If current step is `implementation_reviewed`, make only the focused review tweak requested by `conversationRequest` and run focused checks when practical.
+- If current step is `changes_accepted`, make only the requested final tweak.
+- If the user's request changes the work scope, filename, title, or acceptance criteria, include `workTitle`, `workDescription`, and `workWord` in helper `fields` alongside `response`.
+- Submit every user-visible response through the current-step input helper.
 
 Keep responses clear for the user. Include commands run, files changed, and blockers only when they matter.

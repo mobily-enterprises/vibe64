@@ -25,7 +25,7 @@ const MANAGED_SERVICE_POLICY = [
   "Do not inspect Docker, Docker Compose, container names, runtime networks, localhost sockets, getent, mysqladmin, mariadb-admin, pg_isready, or host port probes for normal managed-service work.",
   "If the listed client command cannot connect, report that the managed service is not ready or ask for the missing external detail; do not invent alternate credentials or infrastructure."
 ].join(" ");
-const STATIC_CONTEXT_REFERENCE = "Use the Vibe64 session briefing already provided for adapter prompt context, managed services, managed service policy, and project config.";
+const STATIC_CONTEXT_REFERENCE = "Use the Vibe64 session briefing already provided for adapter prompt context, managed services, managed service policy, project config, and missing-information policy.";
 const STATIC_CONTEXT_REFERENCE_MODE = "reference";
 const PROMPT_CONTEXT_BRIEFING_SECTIONS = Object.freeze([
   ["agent_guide_contract", "Agent guide contract"],
@@ -261,8 +261,9 @@ function currentStepInputHelperBriefing() {
     "- Command: node \"$VIBE64_CURRENT_STEP_INPUT_HELPER\"",
     "- Pass one JSON object on stdin or with --json.",
     "- Include `kind`, `stepId`, and `stepStatus` exactly for the current workflow state.",
-    "- The current values are listed in Vibe64 workflow context as current step and step status.",
+    "- The current values are listed in each Vibe64 prompt as current step and step status.",
     "- Use `fields` for structured form values, `message` for questions to the user, and `text` for plain user responses.",
+    "- In interactive Vibe64 conversation steps, submit every user-visible response through this helper; a terminal-only response is incomplete.",
     "- If the helper reports Reload state or a state mismatch, stop immediately; Vibe64 will show the current state."
   ].join("\n");
 }
@@ -455,6 +456,9 @@ function promptSessionBriefing(contextInput = {}) {
     "",
     "Managed service policy:",
     MANAGED_SERVICE_POLICY,
+    "",
+    "Missing information policy:",
+    missingInformationPolicyInstruction(),
     "",
     "Project config:",
     stableJson(briefingProjectConfig(context.config)),
