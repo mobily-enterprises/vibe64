@@ -2998,17 +2998,17 @@ async function expectActiveShellTerminalFocused(page: Page) {
 
 async function expectActiveShellTabsTouchTerminal(page: Page) {
   await expect.poll(async () => page.evaluate(() => {
-    const tabs = document.querySelector(".vibe64-shell-controls__terminal--active .vibe64-shell-controls__tabs");
+    const tab = document.querySelector(".vibe64-shell-controls__terminal--active .vibe64-shell-controls__tab--active");
     const host = document.querySelector(".vibe64-shell-controls__terminal--active .ai-command-terminal__host");
-    const tabsRect = tabs?.getBoundingClientRect?.();
+    const tabRect = tab?.getBoundingClientRect?.();
     const hostRect = host?.getBoundingClientRect?.();
-    if (!tabsRect || !hostRect) {
+    if (!tabRect || !hostRect) {
       return Number.POSITIVE_INFINITY;
     }
-    return hostRect.top - tabsRect.bottom;
+    return hostRect.top - tabRect.bottom;
   }), {
     timeout: 500
-  }).toBeLessThanOrEqual(8);
+  }).toBeLessThanOrEqual(1);
 }
 
 async function mockInspectTerminalSockets(page: Page) {

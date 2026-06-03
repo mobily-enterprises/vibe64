@@ -150,12 +150,12 @@
                         v-if="shellTab.running"
                         class="vibe64-shell-controls__tab-running"
                         :icon="mdiCircleSmall"
-                        size="18"
+                        :size="embedded ? 22 : 18"
                       />
                       <v-icon
                         :icon="mdiClose"
                         class="vibe64-shell-controls__tab-close"
-                        size="15"
+                        :size="embedded ? 20 : 15"
                         title="Close tab"
                         @pointerdown.stop
                         @click.stop="closeShellTab(shellTab.id)"
@@ -722,7 +722,7 @@ onBeforeUnmount(() => {
 }
 
 .vibe64-shell-controls__tabs {
-  align-items: flex-end;
+  align-items: center;
   cursor: default;
   display: flex;
   gap: 0.3rem;
@@ -733,8 +733,9 @@ onBeforeUnmount(() => {
 }
 
 .vibe64-shell-controls--embedded .vibe64-shell-controls__tabs {
-  gap: 0.18rem;
-  min-height: 1.5rem;
+  align-items: stretch;
+  gap: 0.2rem;
+  min-height: 48px;
 }
 
 .vibe64-shell-controls__tab-list {
@@ -751,15 +752,19 @@ onBeforeUnmount(() => {
   display: none;
 }
 
+.vibe64-shell-controls--embedded .vibe64-shell-controls__tab-list {
+  align-items: stretch;
+}
+
 .vibe64-shell-controls__new-tab {
   flex: 0 0 auto;
 }
 
 .vibe64-shell-controls--embedded .vibe64-shell-controls__new-tab {
-  height: 1.6rem;
-  min-height: 1.6rem;
-  min-width: 1.6rem;
-  width: 1.6rem;
+  height: 48px;
+  min-height: 48px;
+  min-width: 48px;
+  width: 48px;
 }
 
 .vibe64-shell-controls__tab {
@@ -781,11 +786,14 @@ onBeforeUnmount(() => {
 }
 
 .vibe64-shell-controls--embedded .vibe64-shell-controls__tab {
-  flex-basis: 4.1rem;
-  font-size: 0.72rem;
-  max-width: 6.8rem;
-  min-width: 2.8rem;
-  padding: 0.12rem 0.28rem 0.12rem 0.42rem;
+  border-radius: 6px 6px 0 0;
+  flex-basis: 6rem;
+  font-size: 0.92rem;
+  height: 48px;
+  max-width: 9rem;
+  min-height: 48px;
+  min-width: 5.6rem;
+  padding: 0.22rem 0.42rem 0.22rem 0.66rem;
 }
 
 .vibe64-shell-controls__tab:hover,
@@ -815,6 +823,16 @@ onBeforeUnmount(() => {
 .vibe64-shell-controls__tab-close:hover {
   background: rgba(var(--v-theme-on-surface), 0.12);
   opacity: 1;
+}
+
+.vibe64-shell-controls--embedded .vibe64-shell-controls__tab-running {
+  height: 1.35rem;
+  width: 1.35rem;
+}
+
+.vibe64-shell-controls--embedded .vibe64-shell-controls__tab-close {
+  height: 1.2rem;
+  width: 1.2rem;
 }
 
 .vibe64-shell-controls__terminal-stack {
@@ -855,13 +873,24 @@ onBeforeUnmount(() => {
 }
 
 .vibe64-shell-controls--embedded .vibe64-shell-controls__inline-panel :deep(.ai-command-terminal--shell) {
-  padding-top: 0.18rem;
+  padding-top: 0.12rem;
 }
 
 .vibe64-shell-controls--embedded .vibe64-shell-controls__inline-panel :deep(.ai-command-terminal--shell .ai-command-terminal__bar) {
   align-items: flex-end;
-  gap: 0.35rem;
-  margin-bottom: 0.12rem;
+  margin-bottom: 0;
+  margin-top: calc(30px + 0.1rem);
+}
+
+.vibe64-shell-controls--embedded .vibe64-shell-controls__inline-panel :deep(.ai-command-terminal--shell .ai-command-terminal__actions .v-btn) {
+  height: 48px;
+  min-height: 48px;
+  min-width: 48px;
+}
+
+.vibe64-shell-controls--embedded .vibe64-shell-controls__inline-panel :deep(.ai-command-terminal--shell .ai-command-terminal__actions .v-btn--icon) {
+  height: 48px;
+  width: 48px;
 }
 
 .vibe64-shell-controls__inline-panel :deep(.ai-command-terminal__host) {
