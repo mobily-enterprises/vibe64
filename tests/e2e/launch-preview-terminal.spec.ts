@@ -51,6 +51,52 @@ test("embedded preview retries when the first iframe load never reports ready", 
   await expect(page.locator(".vibe64-launch-controls__preview-overlay")).toHaveCount(0);
 });
 
+test("embedded preview stays mounted and does not reload while covered by dashboard", async ({ page }) => {
+  await mockLaunchTerminalSocket(page);
+  await mockLaunchSession(page, {
+    previewReadyLoadNumber: 99
+  });
+
+  await page.goto(`${BASE_URL}/home`);
+
+  const previewFrame = page.locator(".vibe64-launch-controls__preview-frame");
+  await expect(previewFrame).toHaveCount(1);
+  await expect(page.locator(".vibe64-launch-controls__preview-overlay")).toContainText("Opening preview.");
+
+  const initialSrc = await previewFrame.getAttribute("src");
+  await page.evaluate(() => {
+    const frame = document.querySelector(".vibe64-launch-controls__preview-frame");
+    const shellPane = document.querySelector(".shell-route-transition__pane");
+    (window as unknown as { __vibe64ShellPane?: Element | null }).__vibe64ShellPane = shellPane;
+    (window as unknown as { __vibe64PreviewFrame?: Element | null }).__vibe64PreviewFrame = frame;
+  });
+
+  await page.getByRole("tab", { name: "Dashboard" }).click();
+  await expect(page).toHaveURL(/\/home\/dashboard\/accounts\/?$/u);
+  await page.waitForTimeout(5500);
+
+  await expect(previewFrame).toHaveCount(1);
+  expect(await previewFrame.getAttribute("src")).toBe(initialSrc);
+  const identity = await page.evaluate(() => {
+    const frame = document.querySelector(".vibe64-launch-controls__preview-frame");
+    const shellPane = document.querySelector(".shell-route-transition__pane");
+    const refs = window as unknown as {
+      __vibe64PreviewFrame?: Element | null;
+      __vibe64ShellPane?: Element | null;
+    };
+    return {
+      frameSame: frame === refs.__vibe64PreviewFrame,
+      shellPaneSame: shellPane === refs.__vibe64ShellPane
+    };
+  });
+  console.log("preview identity after dashboard", identity);
+  expect(identity.frameSame).toBe(true);
+
+  await page.getByRole("tab", { name: "Preview" }).click();
+  await expect(previewFrame).toHaveCount(1);
+  expect(await previewFrame.getAttribute("src")).toBe(initialSrc);
+});
+
 test("embedded launch terminal can be shown and hidden again", async ({ page }) => {
   await mockLaunchTerminalSocket(page);
   await mockLaunchSession(page);

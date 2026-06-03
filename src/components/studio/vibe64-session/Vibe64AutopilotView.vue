@@ -478,6 +478,7 @@
             :busy="false"
             class="studio-autopilot__preview-launch"
             embedded-preview
+            :preview-displayed="rightPaneTab === 'preview'"
             :session="session"
             :window-displayed="props.active"
           />

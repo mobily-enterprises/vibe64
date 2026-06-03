@@ -11,9 +11,11 @@
       <p>Open a shell for this session.</p>
       <div class="vibe64-shell-controls__empty-actions">
         <v-btn
+          class="vibe64-shell-controls__empty-action"
           color="primary"
           :disabled="!canCreateWorktreeShell"
           :prepend-icon="mdiFolderOutline"
+          size="large"
           type="button"
           variant="tonal"
           @click="openShell('worktree')"
@@ -21,8 +23,10 @@
           Worktree shell
         </v-btn>
         <v-btn
+          class="vibe64-shell-controls__empty-action"
           :disabled="!canCreateMainShell"
           :prepend-icon="mdiSourceRepository"
+          size="large"
           type="button"
           variant="tonal"
           @click="openShell('main')"
@@ -158,16 +162,37 @@
                     </button>
                   </div>
 
-                  <v-btn
-                    class="vibe64-shell-controls__new-tab"
-                    :disabled="!canOpenNewTab"
-                    :icon="mdiPlus"
-                    size="small"
-                    :title="newShellTabTitle"
-                    variant="text"
-                    @pointerdown.stop
-                    @click="openNewShellTab"
-                  />
+                  <v-menu location="top end">
+                    <template #activator="{ props: newTabMenuProps }">
+                      <v-btn
+                        v-bind="newTabMenuProps"
+                        class="vibe64-shell-controls__new-tab"
+                        :disabled="!canOpenAnyNewTab"
+                        :icon="mdiPlus"
+                        size="small"
+                        :title="newShellTabTitle"
+                        variant="text"
+                        @pointerdown.stop
+                      />
+                    </template>
+
+                    <v-list class="vibe64-shell-controls__menu" density="compact">
+                      <v-list-item
+                        :disabled="!canCreateWorktreeShell"
+                        :prepend-icon="mdiFolderOutline"
+                        :subtitle="worktreeShellMenuSubtitle"
+                        title="Worktree shell"
+                        @click="openShell('worktree')"
+                      />
+                      <v-list-item
+                        :disabled="!canCreateMainShell"
+                        :prepend-icon="mdiSourceRepository"
+                        :subtitle="mainShellMenuSubtitle"
+                        title="Main repo shell"
+                        @click="openShell('main')"
+                      />
+                    </v-list>
+                  </v-menu>
                 </div>
               </template>
             </Vibe64CommandTerminal>
@@ -222,6 +247,7 @@ const props = defineProps({
 });
 
 const activeShellTabId = ref("");
+const lastShellTarget = ref("");
 const shellTabs = ref([]);
 const shellPanelCollapsed = ref(false);
 const shellPanelFrame = ref(null);
@@ -252,13 +278,13 @@ const shellTabLimitMessage = `Shell tabs are limited to ${MAX_SHELL_TABS}.`;
 const canCreateMainShell = computed(() => Boolean(!shellTabLimitReached.value && canOpenMainShell.value));
 const canCreateWorktreeShell = computed(() => Boolean(!shellTabLimitReached.value && canOpenWorktreeShell.value));
 const canOpenNewTab = computed(() => {
-  if (activeShellTab.value?.target) {
-    return targetCanOpen(activeShellTab.value.target);
-  }
-  return canCreateWorktreeShell.value || canCreateMainShell.value;
+  return targetCanOpen(defaultNewTabTarget());
 });
+const canOpenAnyNewTab = computed(() => canCreateWorktreeShell.value || canCreateMainShell.value);
 const mainShellMenuSubtitle = computed(() => (shellTabLimitReached.value ? shellTabLimitMessage : "Project root"));
-const newShellTabTitle = computed(() => (shellTabLimitReached.value ? shellTabLimitMessage : "New shell tab (Alt-N)"));
+const newShellTabTitle = computed(() => (
+  shellTabLimitReached.value ? shellTabLimitMessage : "New shell tab (Alt-N opens the last shell type)"
+));
 const shellTabsShortcutTitle = `Alt-N creates a tab. Alt-1 through Alt-${MAX_SHELL_TABS} switches tabs.`;
 const shellPanelTargetSelector = computed(() => vibe64ShellPanelTargetSelector(sessionId.value));
 const runningShellCount = computed(() => shellTabs.value.filter((tab) => tab.running).length);
@@ -295,11 +321,16 @@ const worktreeShellMenuSubtitle = computed(() => {
 });
 
 function shellTargetTitle(target = "") {
-  return target === "main" ? "Main repo shell" : "Worktree shell";
+  return target === "main" ? "Repo shell" : "Worktree shell";
 }
 
-function nextShellTabLabel() {
-  return `terminal ${shellTabSequence + 1}`;
+function shellTargetLabel(target = "") {
+  return target === "main" ? "repo" : "worktree";
+}
+
+function nextShellTabLabel(target = "") {
+  const normalizedTarget = target === "main" ? "main" : "worktree";
+  return shellTargetLabel(normalizedTarget);
 }
 
 function newShellTabId(target = "") {
@@ -308,7 +339,10 @@ function newShellTabId(target = "") {
 }
 
 function defaultNewTabTarget() {
-  if (activeShellTab.value?.target) {
+  if (lastShellTarget.value && targetCanOpen(lastShellTarget.value)) {
+    return lastShellTarget.value;
+  }
+  if (activeShellTab.value?.target && targetCanOpen(activeShellTab.value.target)) {
     return activeShellTab.value.target;
   }
   return canOpenWorktreeShell.value ? "worktree" : "main";
@@ -339,7 +373,7 @@ function createShellTab(target) {
   if (!targetCanOpen(target)) {
     return;
   }
-  const tabLabel = nextShellTabLabel();
+  const tabLabel = nextShellTabLabel(target);
   const tabId = newShellTabId(target);
   shellTabs.value = [
     ...shellTabs.value,
@@ -353,6 +387,7 @@ function createShellTab(target) {
       title: shellTargetTitle(target)
     }
   ];
+  lastShellTarget.value = target;
   activeShellTabId.value = tabId;
   shellPanelCollapsed.value = false;
   void focusShellTab(tabId);
@@ -374,6 +409,7 @@ function selectShellTab(tabId = "") {
 function closeShell() {
   shellTabs.value = [];
   activeShellTabId.value = "";
+  lastShellTarget.value = "";
   shellPanelCollapsed.value = false;
   shellTerminalRefs.clear();
 }
@@ -461,6 +497,9 @@ function handleShellShortcut(event) {
     return;
   }
   if (shortcut.type === "new-tab") {
+    if (!canOpenNewTab.value) {
+      return;
+    }
     consumeShellShortcutEvent(event);
     openNewShellTab();
     return;
@@ -617,6 +656,11 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
   gap: 0.55rem;
   justify-content: center;
+}
+
+.vibe64-shell-controls__empty-action {
+  min-height: 2.75rem;
+  padding-inline: 1.15rem;
 }
 
 .vibe64-shell-controls__menu {

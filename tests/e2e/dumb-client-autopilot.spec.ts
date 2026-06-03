@@ -1953,6 +1953,7 @@ test.describe("Autopilot dumb client contract", () => {
 
   test("focuses the selected shell terminal when switching shell tabs", async ({ page }) => {
     await mockInspectTerminalSockets(page);
+    const shellTerminalStarts: unknown[] = [];
     const session = sessionPayload({
       completedSteps: ["worktree_created"],
       metadata: {
@@ -1961,22 +1962,41 @@ test.describe("Autopilot dumb client contract", () => {
       sessionRoot: "/workspace/example-target-app/.vibe64/sessions/active/session-renderer",
       worktreeReady: true
     });
-    await mockVibe64Session(page, session);
+    await mockVibe64Session(page, session, {
+      onShellTerminalStart: (body) => {
+        shellTerminalStarts.push(body);
+        return {
+          id: `server-shell-terminal-${shellTerminalStarts.length}`
+        };
+      }
+    });
 
-    await page.goto(`${BASE_URL}/home?mode=inspect`);
-    await page.getByLabel("Open shell").click();
+    await page.goto(`${BASE_URL}/home`);
+    await page.getByLabel("Session tools").click();
+    await page.getByRole("button", { name: "Shell" }).click();
     await page.getByText("Worktree shell").click();
     await expect(page.locator(".vibe64-shell-controls__terminal--active .ai-command-terminal__host"))
       .toBeVisible();
-    await expectActiveShellTerminalFocused(page);
-
-    await page.getByTitle("New shell tab (Alt-N)").click();
-    await expect(page.locator(".vibe64-shell-controls__tab--active", { hasText: "terminal 2" }))
+    await expect(page.locator(".vibe64-shell-controls__tab--active", { hasText: "worktree" }))
       .toBeVisible();
     await expectActiveShellTerminalFocused(page);
 
-    await page.getByTitle("Alt-1: terminal 1").click();
-    await expect(page.locator(".vibe64-shell-controls__tab--active", { hasText: "terminal 1" }))
+    await page.getByTitle("New shell tab (Alt-N opens the last shell type)").click();
+    await page.getByText("Main repo shell").click();
+    await expect(page.locator(".vibe64-shell-controls__tab--active", { hasText: "repo" }))
+      .toBeVisible();
+    await expectActiveShellTerminalFocused(page);
+    await expect.poll(() => shellTerminalStarts.map((item) => String((item as { target?: string })?.target || "")))
+      .toEqual(["worktree", "main"]);
+
+    await page.keyboard.press("Alt+N");
+    await expect(page.locator(".vibe64-shell-controls__tab--active", { hasText: "repo" }))
+      .toBeVisible();
+    await expect.poll(() => shellTerminalStarts.map((item) => String((item as { target?: string })?.target || "")))
+      .toEqual(["worktree", "main", "main"]);
+
+    await page.getByTitle("Alt-1: worktree").click();
+    await expect(page.locator(".vibe64-shell-controls__tab--active", { hasText: "worktree" }))
       .toBeVisible();
     await expectActiveShellTerminalFocused(page);
   });
@@ -2715,6 +2735,7 @@ async function mockVibe64Session(
     onStepInput = () => undefined,
     onCodexTerminalStart = () => undefined,
     onShellTerminalClose = () => undefined,
+    onShellTerminalStart = () => undefined,
     sessionList = null,
     conversationLog = []
   }: {
@@ -2728,6 +2749,7 @@ async function mockVibe64Session(
     onIntent?: (body: unknown) => void;
     onSessionRead?: (session: Record<string, unknown>, pathname: string) => void;
     onShellTerminalClose?: () => void;
+    onShellTerminalStart?: (body?: Record<string, unknown>) => Record<string, unknown> | void;
     onStepInput?: (body: unknown) => void;
     sessionList?: Record<string, unknown>[] | null;
   } = {}
@@ -2755,11 +2777,13 @@ async function mockVibe64Session(
       return;
     }
     if (method === "POST" && url.pathname.endsWith("/shell-terminal")) {
+      const shellTerminal = onShellTerminalStart(request.postDataJSON() || {});
       await fulfillJson(route, {
         commandPreview: "bash",
         id: "server-shell-terminal",
         ok: true,
-        status: "running"
+        status: "running",
+        ...(shellTerminal && typeof shellTerminal === "object" ? shellTerminal : {})
       });
       return;
     }

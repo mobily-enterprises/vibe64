@@ -1,6 +1,6 @@
 <template>
   <div
-    v-if="visible"
+    v-if="embeddedPreview || visible"
     class="vibe64-launch-controls"
     :class="{
       'vibe64-launch-controls--embedded': embeddedPreview,
@@ -311,6 +311,10 @@ const props = defineProps({
   windowDisplayed: {
     type: Boolean,
     default: true
+  },
+  previewDisplayed: {
+    type: Boolean,
+    default: true
   }
 });
 
@@ -387,6 +391,7 @@ const previewDisplayedUrl = computed(() => (
   previewDisplayBaseUrl.value ||
   previewBaseUrl.value
 ));
+const previewPaneDisplayed = computed(() => props.previewDisplayed !== false);
 const previewUrl = computed(() => launchPreviewUrl({
   baseUrl: previewBaseUrl.value,
   ready: terminalLaunchReady.value,
@@ -435,7 +440,7 @@ async function copyPreviewUrl() {
 }
 
 function requestPreviewState() {
-  if (!previewFrame.value?.contentWindow || !previewUrl.value) {
+  if (!previewPaneDisplayed.value || !previewFrame.value?.contentWindow || !previewUrl.value) {
     return;
   }
   previewFrame.value.contentWindow.postMessage({
@@ -452,12 +457,13 @@ function stopPreviewReadyRetries() {
 }
 
 function schedulePreviewReadyRetry() {
-  if (previewReadyRetryTimer || typeof window === "undefined") {
+  if (previewReadyRetryTimer || !previewPaneDisplayed.value || typeof window === "undefined") {
     return;
   }
   previewReadyRetryTimer = window.setTimeout(() => {
     previewReadyRetryTimer = 0;
     if (
+      !previewPaneDisplayed.value ||
       !previewLoadingOverlayVisible.value ||
       !previewUrl.value ||
       previewReadyRetryCount >= PREVIEW_READY_RETRY_LIMIT
@@ -558,13 +564,24 @@ watch(previewUrl, (nextUrl, previousUrl) => {
 });
 
 watch(previewLoadingOverlayVisible, (visible) => {
-  if (visible) {
+  if (visible && previewPaneDisplayed.value) {
     schedulePreviewReadyRetry();
     return;
   }
   stopPreviewReadyRetries();
 }, {
   immediate: true
+});
+
+watch(previewPaneDisplayed, (displayed) => {
+  if (!displayed) {
+    stopPreviewReadyRetries();
+    return;
+  }
+  requestPreviewState();
+  if (previewLoadingOverlayVisible.value) {
+    schedulePreviewReadyRetry();
+  }
 });
 
 watch(previewDisplayBaseUrl, (baseUrl) => {
