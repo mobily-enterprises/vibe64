@@ -1947,7 +1947,6 @@ test.describe("Autopilot dumb client contract", () => {
     await visibleSessionTab("Beta").click();
     await page.getByLabel("Session tools").click();
     await page.getByRole("button", { name: "Shell" }).click();
-    await page.getByText("Worktree shell").click();
     await expect(page.locator(".vibe64-shell-controls__terminal--active .ai-command-terminal__host"))
       .toBeVisible();
     await expect.poll(() => shellTerminalStarts).toBe(1);
@@ -1986,18 +1985,19 @@ test.describe("Autopilot dumb client contract", () => {
     await page.goto(`${BASE_URL}/home`);
     await page.getByLabel("Session tools").click();
     await page.getByRole("button", { name: "Shell" }).click();
-    await page.getByText("Worktree shell").click();
     await expect(page.locator(".vibe64-shell-controls__terminal--active .ai-command-terminal__host"))
       .toBeVisible();
     await expect(page.getByTitle("Minimize terminal")).toHaveCount(0);
     await expect(page.locator(".vibe64-shell-controls__tab--active", { hasText: "worktree" }))
       .toBeVisible();
+    await expectActiveShellTabsTouchTerminal(page);
     await expectActiveShellTerminalFocused(page);
 
     await page.getByTitle("New shell tab (Alt-N opens the last shell type)").click();
     await page.getByText("Main repo shell").click();
     await expect(page.locator(".vibe64-shell-controls__tab--active", { hasText: "repo" }))
       .toBeVisible();
+    await expectActiveShellTabsTouchTerminal(page);
     await expectActiveShellTerminalFocused(page);
     await expect.poll(() => shellTerminalStarts.map((item) => String((item as { target?: string })?.target || "")))
       .toEqual(["worktree", "main"]);
@@ -2012,6 +2012,32 @@ test.describe("Autopilot dumb client contract", () => {
     await expect(page.locator(".vibe64-shell-controls__tab--active", { hasText: "worktree" }))
       .toBeVisible();
     await expectActiveShellTerminalFocused(page);
+  });
+
+  test("opens a main repo shell by default when the session has no worktree", async ({ page }) => {
+    await mockInspectTerminalSockets(page);
+    const shellTerminalStarts: unknown[] = [];
+    const session = sessionPayload({
+      completedSteps: [],
+      metadata: {},
+      sessionRoot: "/workspace/example-target-app/.vibe64/sessions/active/session-renderer",
+      worktreeReady: false
+    });
+    await mockVibe64Session(page, session, {
+      onShellTerminalStart: (body) => {
+        shellTerminalStarts.push(body);
+      }
+    });
+
+    await page.goto(`${BASE_URL}/home`);
+    await page.getByLabel("Session tools").click();
+    await page.getByRole("button", { name: "Shell" }).click();
+    await expect(page.locator(".vibe64-shell-controls__terminal--active .ai-command-terminal__host"))
+      .toBeVisible();
+    await expect(page.locator(".vibe64-shell-controls__tab--active", { hasText: "repo" }))
+      .toBeVisible();
+    await expect.poll(() => shellTerminalStarts.map((item) => String((item as { target?: string })?.target || "")))
+      .toEqual(["main"]);
   });
 
   test("restores and clears the active session tool per session", async ({ page }) => {
@@ -2030,10 +2056,14 @@ test.describe("Autopilot dumb client contract", () => {
     const sessionToolsButton = page.getByRole("button", { name: "Session tools" });
     await sessionToolsButton.click();
     await page.getByRole("button", { name: "Shell" }).click();
-    await expect(page.getByText("Open a shell for this session.")).toBeVisible();
+    await expect(page.locator(".vibe64-shell-controls__terminal--active .ai-command-terminal__host"))
+      .toBeVisible();
+    await expect(page.getByText("Open a shell for this session.")).toBeHidden();
 
     await page.reload();
-    await expect(page.getByText("Open a shell for this session.")).toBeVisible();
+    await expect(page.locator(".vibe64-shell-controls__terminal--active .ai-command-terminal__host"))
+      .toBeVisible();
+    await expect(page.getByText("Open a shell for this session.")).toBeHidden();
 
     const sessionToolsMenu = page.locator(".studio-autopilot__session-tools-menu");
     await sessionToolsButton.click();
@@ -2043,7 +2073,9 @@ test.describe("Autopilot dumb client contract", () => {
 
     await sessionToolsButton.click();
     await sessionToolsMenu.getByRole("button", { name: "Shell" }).click();
-    await expect(page.getByText("Open a shell for this session.")).toBeVisible();
+    await expect(page.locator(".vibe64-shell-controls__terminal--active .ai-command-terminal__host"))
+      .toBeVisible();
+    await expect(page.getByText("Open a shell for this session.")).toBeHidden();
 
     await sessionToolsButton.click();
     await expect(sessionToolsMenu.getByRole("button", { name: "Close session tool" })).toHaveCount(0);
@@ -2962,6 +2994,21 @@ async function expectActiveShellTerminalFocused(page: Page) {
   }), {
     timeout: 500
   }).toBe(true);
+}
+
+async function expectActiveShellTabsTouchTerminal(page: Page) {
+  await expect.poll(async () => page.evaluate(() => {
+    const tabs = document.querySelector(".vibe64-shell-controls__terminal--active .vibe64-shell-controls__tabs");
+    const host = document.querySelector(".vibe64-shell-controls__terminal--active .ai-command-terminal__host");
+    const tabsRect = tabs?.getBoundingClientRect?.();
+    const hostRect = host?.getBoundingClientRect?.();
+    if (!tabsRect || !hostRect) {
+      return Number.POSITIVE_INFINITY;
+    }
+    return hostRect.top - tabsRect.bottom;
+  }), {
+    timeout: 500
+  }).toBeLessThanOrEqual(8);
 }
 
 async function mockInspectTerminalSockets(page: Page) {

@@ -314,6 +314,15 @@ const shellPanelStyle = computed(() => {
   };
 });
 const showShellTargetMenu = computed(() => Boolean(props.showActivator && !hasShellTabs.value));
+const embeddedAutoShellTarget = computed(() => {
+  if (!props.embedded || !shellPanelAllowed.value || hasShellTabs.value) {
+    return "";
+  }
+  if (canOpenWorktreeShell.value) {
+    return "worktree";
+  }
+  return canOpenMainShell.value ? "main" : "";
+});
 const worktreeShellMenuSubtitle = computed(() => {
   if (shellTabLimitReached.value) {
     return shellTabLimitMessage;
@@ -595,6 +604,14 @@ watch(sessionId, () => {
   closeShell();
 });
 
+watch(embeddedAutoShellTarget, (target) => {
+  if (target) {
+    createShellTab(target);
+  }
+}, {
+  immediate: true
+});
+
 watch(shellShortcutsActive, (visible) => {
   if (visible) {
     startShellShortcuts();
@@ -705,7 +722,7 @@ onBeforeUnmount(() => {
 }
 
 .vibe64-shell-controls__tabs {
-  align-items: center;
+  align-items: flex-end;
   cursor: default;
   display: flex;
   gap: 0.3rem;
@@ -713,6 +730,11 @@ onBeforeUnmount(() => {
   min-width: 0;
   user-select: none;
   width: 100%;
+}
+
+.vibe64-shell-controls--embedded .vibe64-shell-controls__tabs {
+  gap: 0.18rem;
+  min-height: 1.5rem;
 }
 
 .vibe64-shell-controls__tab-list {
@@ -733,6 +755,13 @@ onBeforeUnmount(() => {
   flex: 0 0 auto;
 }
 
+.vibe64-shell-controls--embedded .vibe64-shell-controls__new-tab {
+  height: 1.6rem;
+  min-height: 1.6rem;
+  min-width: 1.6rem;
+  width: 1.6rem;
+}
+
 .vibe64-shell-controls__tab {
   align-items: center;
   background: transparent;
@@ -749,6 +778,14 @@ onBeforeUnmount(() => {
   max-width: 8rem;
   min-width: 3rem;
   padding: 0.25rem 0.32rem 0.25rem 0.5rem;
+}
+
+.vibe64-shell-controls--embedded .vibe64-shell-controls__tab {
+  flex-basis: 4.1rem;
+  font-size: 0.72rem;
+  max-width: 6.8rem;
+  min-width: 2.8rem;
+  padding: 0.12rem 0.28rem 0.12rem 0.42rem;
 }
 
 .vibe64-shell-controls__tab:hover,
@@ -814,12 +851,27 @@ onBeforeUnmount(() => {
 }
 
 .vibe64-shell-controls__inline-panel :deep(.ai-command-terminal--shell .ai-command-terminal__body) {
-  gap: 0.5rem;
+  gap: 0.24rem;
+}
+
+.vibe64-shell-controls--embedded .vibe64-shell-controls__inline-panel :deep(.ai-command-terminal--shell) {
+  padding-top: 0.18rem;
+}
+
+.vibe64-shell-controls--embedded .vibe64-shell-controls__inline-panel :deep(.ai-command-terminal--shell .ai-command-terminal__bar) {
+  align-items: flex-end;
+  gap: 0.35rem;
+  margin-bottom: 0.12rem;
 }
 
 .vibe64-shell-controls__inline-panel :deep(.ai-command-terminal__host) {
   height: 100%;
   min-height: 0;
+}
+
+.vibe64-shell-controls--embedded .vibe64-shell-controls__inline-panel :deep(.ai-command-terminal__host) {
+  height: 100%;
+  margin-top: 0;
 }
 
 @media (max-width: 980px) {

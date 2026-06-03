@@ -1,10 +1,5 @@
 <template>
   <section class="studio-ai-session-details-pane">
-    <header class="studio-ai-session-details-pane__header">
-      <h2>Session Details</h2>
-      <p>Current session status, worktree, branch, and runtime facts.</p>
-    </header>
-
     <Vibe64SessionFacts
       v-if="facts.length"
       :facts="facts"
@@ -49,40 +44,24 @@ function copyFact(value, label) {
 
 <style scoped>
 .studio-ai-session-details-pane {
+  align-content: start;
   display: grid;
   gap: 0.75rem;
+  min-height: 0;
   min-width: 0;
-  padding: 0.85rem;
+  overflow-y: auto;
+  padding: 2rem 0.85rem 0.85rem;
+  scrollbar-gutter: stable;
 }
 
-.studio-ai-session-details-pane__header {
-  border-bottom: 1px solid rgba(var(--v-theme-outline), 0.12);
-  padding-bottom: 0.65rem;
-}
-
-.studio-ai-session-details-pane__header h2,
-.studio-ai-session-details-pane__header p,
 .studio-ai-session-details-pane__empty h3,
 .studio-ai-session-details-pane__empty p {
   letter-spacing: 0;
   margin: 0;
 }
 
-.studio-ai-session-details-pane__header h2 {
-  color: rgb(var(--v-theme-on-surface));
-  font-size: 1rem;
-  font-weight: 760;
-  line-height: 1.15;
-}
-
-.studio-ai-session-details-pane__header p {
-  color: rgba(var(--v-theme-on-surface), 0.66);
-  font-size: 0.84rem;
-  line-height: 1.35;
-  margin-top: 0.18rem;
-}
-
 .studio-ai-session-details-pane :deep(.studio-ai-session-facts) {
+  align-self: start;
   width: 100%;
 }
 

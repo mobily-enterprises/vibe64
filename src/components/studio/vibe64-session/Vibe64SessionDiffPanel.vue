@@ -1,7 +1,7 @@
 <template>
   <section class="studio-ai-session-diff-panel">
     <header class="studio-ai-session-diff-panel__header">
-      <div>
+      <div class="studio-ai-session-diff-panel__title-row">
         <h2>Diff</h2>
         <p>{{ review.diffTitle || "Review changes in the session worktree." }}</p>
       </div>
@@ -80,7 +80,7 @@ watch(() => props.active, (active) => {
 <style scoped>
 .studio-ai-session-diff-panel {
   display: grid;
-  gap: 0.85rem;
+  gap: 0.55rem;
   height: 100%;
   min-height: 0;
   min-width: 0;
@@ -94,7 +94,15 @@ watch(() => props.active, (active) => {
   gap: 0.75rem;
   justify-content: space-between;
   min-width: 0;
-  padding-bottom: 0.75rem;
+  padding: 0.52rem 0 0.28rem;
+}
+
+.studio-ai-session-diff-panel__title-row {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  min-width: 0;
 }
 
 .studio-ai-session-diff-panel__header h2,
@@ -114,7 +122,6 @@ watch(() => props.active, (active) => {
   color: rgba(var(--v-theme-on-surface), 0.66);
   font-size: 0.84rem;
   line-height: 1.35;
-  margin-top: 0.18rem;
 }
 
 .studio-ai-session-diff-panel__actions {
@@ -135,6 +142,12 @@ watch(() => props.active, (active) => {
   .studio-ai-session-diff-panel__header {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .studio-ai-session-diff-panel__title-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.12rem;
   }
 
   .studio-ai-session-diff-panel__actions {

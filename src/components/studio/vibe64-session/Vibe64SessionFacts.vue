@@ -144,9 +144,11 @@ function toggleFact(fact = {}) {
 
 <style scoped>
 .studio-ai-session-facts {
+  align-content: start;
   display: grid;
   gap: 0.65rem;
-  padding: 0.7rem;
+  grid-auto-rows: max-content;
+  padding: 0.8rem;
 }
 
 .studio-ai-session-facts__header {
@@ -166,13 +168,16 @@ function toggleFact(fact = {}) {
 }
 
 .studio-ai-session-facts__grid {
+  align-items: start;
   display: grid;
   gap: 0.5rem;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: max-content;
 }
 
 .studio-ai-session-facts__item {
   align-items: flex-start;
+  align-self: start;
   background: rgb(var(--v-theme-surface));
   border: 1px solid rgba(var(--v-border-color), 0.28);
   border-radius: 8px;
@@ -180,7 +185,7 @@ function toggleFact(fact = {}) {
   gap: 0.48rem;
   grid-template-columns: 1.55rem minmax(0, 1fr) auto;
   min-width: 0;
-  padding: 0.56rem;
+  padding: 0.62rem;
 }
 
 .studio-ai-session-facts__item--expandable {

@@ -31,7 +31,7 @@
                   class="studio-autopilot__session-tools-button"
                   :class="{ 'studio-autopilot__session-tools-button--active': activeSessionTool }"
                   density="comfortable"
-                  :icon="activeSessionTool?.icon || mdiInformationOutline"
+                  :icon="activeSessionTool?.icon || mdiViewGridOutline"
                   size="small"
                   title="Session tools"
                   type="button"
@@ -534,7 +534,7 @@
 
         <div
           v-show="rightPaneTab === 'ai-terminal'"
-          class="studio-autopilot__right-pane-page"
+          class="studio-autopilot__right-pane-page studio-autopilot__ai-terminal-pane"
           role="tabpanel"
         >
           <slot name="ai-terminal" :active="rightPaneTab === 'ai-terminal'" />
@@ -564,7 +564,8 @@ import {
   mdiInformationOutline,
   mdiRefresh,
   mdiRobotOutline,
-  mdiStopCircleOutline
+  mdiStopCircleOutline,
+  mdiViewGridOutline
 } from "@mdi/js";
 import {
   VIBE64_ACTION_DISPATCH_ROUTES as ACTION_DISPATCH_ROUTES
@@ -1795,6 +1796,10 @@ watch(() => [
   overflow-y: auto;
   padding: 0.85rem;
   scrollbar-gutter: stable;
+}
+
+.studio-autopilot__ai-terminal-pane :deep(.studio-ai-sessions__terminals) {
+  transform: translateY(30px);
 }
 
 .studio-autopilot__preview-launch {
