@@ -42,7 +42,7 @@ const STARRED_TARGET_SCRIPTS_CONFIG = ".vibe64/config/starred_scripts";
 const TARGET_SCRIPT_TERMINAL_NAMESPACE = "current-app-target-script";
 const TARGET_SCRIPT_TERMINAL_NAMESPACE_PREFIX = `${TARGET_SCRIPT_TERMINAL_NAMESPACE}:`;
 const PROJECT_SCRIPT_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u;
-const CONNECTIONS_DASHBOARD_ROUTE = "/home/dashboard/connections";
+const ACCOUNTS_DASHBOARD_ROUTE = "/home/dashboard/accounts";
 const SETUP_DASHBOARD_ROUTE = "/home/dashboard/setup";
 
 function resolveCurrentAppRoot(appRoot) {
@@ -487,7 +487,7 @@ function createService({
     const aiReady = selectedAiProvider.ready === true;
     const githubReady = github.ready === true;
     const setupReady = setup.ready === true;
-    const connectionFix = dashboardFix(CONNECTIONS_DASHBOARD_ROUTE, "Open Connections");
+    const connectionFix = dashboardFix(ACCOUNTS_DASHBOARD_ROUTE, "Open Accounts");
     const setupFix = dashboardFix(SETUP_DASHBOARD_ROUTE, "Open Setup");
     const chatCapability = capability(
       aiReady && setupReady,

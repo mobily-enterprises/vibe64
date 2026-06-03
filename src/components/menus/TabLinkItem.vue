@@ -45,7 +45,7 @@ const props = defineProps({
 :deep(.v-btn),
 :deep(a),
 :deep(button) {
-  min-height: 48px;
+  min-height: 40px;
 }
 
 :deep(.v-btn--active) {

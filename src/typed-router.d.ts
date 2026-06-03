@@ -44,8 +44,8 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       Record<never, never>,
       | '/home/dashboard'
+      | '/home/dashboard/accounts/'
       | '/home/dashboard/configure/'
-      | '/home/dashboard/connections/'
       | '/home/dashboard/history/'
       | '/home/dashboard/remote/'
       | '/home/dashboard/run/'
@@ -56,23 +56,23 @@ declare module 'vue-router/auto-routes' {
       '/home/dashboard',
       Record<never, never>,
       Record<never, never>,
+      | '/home/dashboard/accounts/'
       | '/home/dashboard/configure/'
-      | '/home/dashboard/connections/'
       | '/home/dashboard/history/'
       | '/home/dashboard/remote/'
       | '/home/dashboard/run/'
       | '/home/dashboard/setup/'
     >,
-    '/home/dashboard/configure/': RouteRecordInfo<
-      '/home/dashboard/configure/',
-      '/home/dashboard/configure',
+    '/home/dashboard/accounts/': RouteRecordInfo<
+      '/home/dashboard/accounts/',
+      '/home/dashboard/accounts',
       Record<never, never>,
       Record<never, never>,
       | never
     >,
-    '/home/dashboard/connections/': RouteRecordInfo<
-      '/home/dashboard/connections/',
-      '/home/dashboard/connections',
+    '/home/dashboard/configure/': RouteRecordInfo<
+      '/home/dashboard/configure/',
+      '/home/dashboard/configure',
       Record<never, never>,
       Record<never, never>,
       | never
@@ -128,8 +128,8 @@ declare module 'vue-router/auto-routes' {
       routes:
         | '/home'
         | '/home/dashboard'
+        | '/home/dashboard/accounts/'
         | '/home/dashboard/configure/'
-        | '/home/dashboard/connections/'
         | '/home/dashboard/history/'
         | '/home/dashboard/remote/'
         | '/home/dashboard/run/'
@@ -140,8 +140,8 @@ declare module 'vue-router/auto-routes' {
     'src/pages/home/dashboard.vue': {
       routes:
         | '/home/dashboard'
+        | '/home/dashboard/accounts/'
         | '/home/dashboard/configure/'
-        | '/home/dashboard/connections/'
         | '/home/dashboard/history/'
         | '/home/dashboard/remote/'
         | '/home/dashboard/run/'
@@ -149,15 +149,15 @@ declare module 'vue-router/auto-routes' {
       views:
         | 'default'
     }
-    'src/pages/home/dashboard/configure/index.vue': {
+    'src/pages/home/dashboard/accounts/index.vue': {
       routes:
-        | '/home/dashboard/configure/'
+        | '/home/dashboard/accounts/'
       views:
         | never
     }
-    'src/pages/home/dashboard/connections/index.vue': {
+    'src/pages/home/dashboard/configure/index.vue': {
       routes:
-        | '/home/dashboard/connections/'
+        | '/home/dashboard/configure/'
       views:
         | never
     }

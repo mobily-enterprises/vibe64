@@ -76,7 +76,7 @@ function capabilitiesPayload({
   const setupReady = setup.ready === true;
   const aiReady = codex.connected === true;
   const githubReady = github.connected === true;
-  const connectionsRoute = "/home/dashboard/connections";
+  const accountsRoute = "/home/dashboard/accounts";
   const setupRoute = "/home/dashboard/setup";
   const fix = (route: string, label: string) => ({
     label,
@@ -84,7 +84,7 @@ function capabilitiesPayload({
   });
   const capability = (enabled: boolean, reason = "", route = "") => ({
     enabled,
-    fix: enabled || !route ? null : fix(route, route === connectionsRoute ? "Open Connections" : "Open Setup"),
+    fix: enabled || !route ? null : fix(route, route === accountsRoute ? "Open Accounts" : "Open Setup"),
     reason: enabled ? "" : reason
   });
   const setupReason = setup.message || "Finish automatic setup before using this capability.";
@@ -96,9 +96,9 @@ function capabilitiesPayload({
 
   return {
     capabilities: {
-      chat: capability(aiReady && setupReady, aiReady ? setupReason : "Choose and authenticate an AI provider before using chat.", aiReady ? setupRoute : connectionsRoute),
-      createSession: capability(aiReady && githubReady && setupReady, createSessionReason, aiReady && githubReady ? setupRoute : connectionsRoute),
-      githubWorkflow: capability(githubReady, "Connect GitHub before using GitHub issue, pull request, or merge actions.", connectionsRoute),
+      chat: capability(aiReady && setupReady, aiReady ? setupReason : "Choose and authenticate an AI provider before using chat.", aiReady ? setupRoute : accountsRoute),
+      createSession: capability(aiReady && githubReady && setupReady, createSessionReason, aiReady && githubReady ? setupRoute : accountsRoute),
+      githubWorkflow: capability(githubReady, "Connect GitHub before using GitHub issue, pull request, or merge actions.", accountsRoute),
       home: capability(true),
       preview: capability(setupReady, setupReason, setupRoute),
       runScripts: capability(setupReady, setupReason, setupRoute)

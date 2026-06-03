@@ -5,7 +5,7 @@ import { RouterView } from "vue-router";
 import SectionContainerShell from "/src/components/SectionContainerShell.vue";
 
 definePage({
-  redirect: redirectToChild("connections")
+  redirect: redirectToChild("accounts")
 });
 
 defineProps({

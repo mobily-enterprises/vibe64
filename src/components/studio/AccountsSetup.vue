@@ -215,11 +215,11 @@ defineProps({
     type: String
   },
   neededLabel: {
-    default: "Connections needed",
+    default: "Accounts needed",
     type: String
   },
   readyLabel: {
-    default: "Connections ready",
+    default: "Accounts ready",
     type: String
   },
   showContinue: {
@@ -227,7 +227,7 @@ defineProps({
     type: Boolean
   },
   title: {
-    default: "Connections",
+    default: "Accounts",
     type: String
   }
 });

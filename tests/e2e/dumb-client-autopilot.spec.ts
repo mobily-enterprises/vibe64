@@ -19,15 +19,15 @@ test.describe("Autopilot dumb client contract", () => {
     await expect(page.getByRole("button", { name: "Tools" })).toHaveCount(0);
 
     await page.getByRole("tab", { name: "Dashboard" }).click();
-    await expect(page).toHaveURL(/\/home\/dashboard\/connections\/?$/u);
+    await expect(page).toHaveURL(/\/home\/dashboard\/accounts\/?$/u);
     await expectNoAttentionRequired(page);
     await expect(page.getByRole("tab", { name: "Dashboard" })).toHaveAttribute("aria-selected", "true");
-    await expect(page.getByRole("heading", { name: "Connections", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Accounts", exact: true })).toBeVisible();
     await expect.poll(async () => page.locator(
       ".section-container-shell__nav .v-list-item-title"
     ).evaluateAll((nodes) => nodes.map((node) => String(node.textContent || "").trim()).filter(Boolean)))
       .toEqual([
-        "Connections",
+        "Accounts",
         "Configure",
         "Remote",
         "Run",
@@ -36,7 +36,7 @@ test.describe("Autopilot dumb client contract", () => {
       ]);
 
     for (const { label, routePath, selector, text } of [
-      { label: "Connections", routePath: "connections", selector: ".accounts-setup", text: "Connections" },
+      { label: "Accounts", routePath: "accounts", selector: ".accounts-setup", text: "Accounts" },
       { label: "Remote", routePath: "remote", selector: ".vibe64-project-tools--panel", text: "Project tools" },
       { label: "Run", routePath: "run", selector: ".target-scripts-panel", text: "" },
       { label: "Session History", routePath: "history", selector: ".vibe64-session-history-panel", text: "" },
@@ -70,9 +70,9 @@ test.describe("Autopilot dumb client contract", () => {
     await expect(page.getByRole("tab", { name: "Preview" })).toBeVisible();
 
     await page.getByRole("tab", { name: "Dashboard" }).click();
-    await expect(page).toHaveURL(/\/home\/dashboard\/connections\/?$/u);
+    await expect(page).toHaveURL(/\/home\/dashboard\/accounts\/?$/u);
     await expect(page.getByText("Checking setup", { exact: true })).toHaveCount(0);
-    await expect(page.getByRole("heading", { name: "Connections", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Accounts", exact: true })).toBeVisible();
     expect(setupReadinessRequests).toHaveLength(0);
   });
 
@@ -106,8 +106,8 @@ test.describe("Autopilot dumb client contract", () => {
     await page.goto(`${BASE_URL}/home`);
     await expect(page.getByText("Dashboard navigation should not reload this chat.")).toBeVisible();
     await page.getByRole("tab", { name: "Dashboard" }).click();
-    await expect(page).toHaveURL(/\/home\/dashboard\/connections\/?$/u);
-    await expect(page.getByRole("heading", { name: "Connections", exact: true })).toBeVisible();
+    await expect(page).toHaveURL(/\/home\/dashboard\/accounts\/?$/u);
+    await expect(page.getByRole("heading", { name: "Accounts", exact: true })).toBeVisible();
 
     const sessionReadsAfterDashboardOpen = sessionReadPaths.length;
     const conversationReadsAfterDashboardOpen = conversationLogReadPaths.length;
@@ -118,7 +118,7 @@ test.describe("Autopilot dumb client contract", () => {
       { label: "Run", routePath: "run" },
       { label: "Session History", routePath: "history" },
       { label: "Setup", routePath: "setup" },
-      { label: "Connections", routePath: "connections" }
+      { label: "Accounts", routePath: "accounts" }
     ]) {
       await page.locator(".section-container-shell__nav").getByText(label, { exact: true }).click();
       await expect(page).toHaveURL(new RegExp(`/home/dashboard/${routePath}/?$`, "u"));

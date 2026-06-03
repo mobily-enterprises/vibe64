@@ -39,9 +39,8 @@ const hasTabs = computed(() => Boolean(slots.tabs));
         >
           <v-list
             nav
-            density="comfortable"
+            density="compact"
             rounded="lg"
-            border
           >
             <slot name="tabs" />
           </v-list>
@@ -97,10 +96,38 @@ const hasTabs = computed(() => Boolean(slots.tabs));
   min-width: 0;
 }
 
+.section-container-shell__nav :deep(.v-list) {
+  padding: 0.35rem;
+}
+
+.section-container-shell__nav :deep(.v-list-item) {
+  min-height: 40px;
+  padding-inline: 0.6rem 0.7rem;
+}
+
+.section-container-shell__nav :deep(.v-list-item__prepend) {
+  margin-inline-end: 0;
+}
+
+.section-container-shell__nav :deep(.v-list-item__prepend > .v-icon) {
+  margin-inline-end: 0;
+}
+
+.section-container-shell__nav :deep(.v-list-item__spacer) {
+  min-width: 0.5rem;
+  width: 0.5rem;
+}
+
+.section-container-shell__nav :deep(.v-list-item-title) {
+  line-height: 1.2;
+}
+
 .section-container-shell__content {
+  border-left: 1px solid rgba(var(--v-theme-on-surface), 0.18);
   min-height: 0;
   min-width: 0;
   overflow-y: auto;
+  padding-left: 1rem;
   scrollbar-gutter: stable;
 }
 
@@ -118,7 +145,12 @@ const hasTabs = computed(() => Boolean(slots.tabs));
 
   .section-container-shell__nav :deep(.v-list-item) {
     flex: 0 0 auto;
-    min-height: 48px;
+    min-height: 40px;
+  }
+
+  .section-container-shell__content {
+    border-left: 0;
+    padding-left: 0;
   }
 }
 </style>

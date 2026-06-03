@@ -321,7 +321,7 @@ test("current-app reports connections separately from automatic setup capabiliti
     assert.equal(state.connections.github.ready, true);
     assert.equal(state.capabilities.home.enabled, true);
     assert.equal(state.capabilities.chat.enabled, false);
-    assert.equal(state.capabilities.chat.fix.route, "/home/dashboard/connections");
+    assert.equal(state.capabilities.chat.fix.route, "/home/dashboard/accounts");
     assert.match(state.capabilities.createSession.reason, /AI provider/u);
   });
 });

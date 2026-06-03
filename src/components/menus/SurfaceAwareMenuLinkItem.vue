@@ -43,7 +43,7 @@ const props = defineProps({
 
 <style>
 .v-list-item.v-list-item--nav {
-  min-height: 48px;
+  min-height: 40px;
 }
 </style>
 
@@ -51,7 +51,7 @@ const props = defineProps({
 :deep(.v-list-item),
 :deep(a),
 :deep(button) {
-  min-height: 48px;
+  min-height: 40px;
 }
 
 :deep(.v-list-item--active) {

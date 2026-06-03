@@ -1,4 +1,12 @@
 import { createPlacementRegistry } from "@jskit-ai/shell-web/client/placement";
+import {
+  mdiAccountKeyOutline,
+  mdiCloudUploadOutline,
+  mdiCogOutline,
+  mdiHistory,
+  mdiPlayBoxMultipleOutline,
+  mdiTune
+} from "@mdi/js";
 
 const registry = createPlacementRegistry();
 const { addPlacement } = registry;
@@ -18,22 +26,22 @@ addPlacement({
   componentToken: "realtime.web.connection.indicator"
 });
 
-// jskit:ui-generator.page.link:home:/dashboard/connections
+// jskit:ui-generator.page.link:home:/dashboard/accounts
 {
   addPlacement({
-    id: "ui-generator.page.home.dashboard.connections.link",
+    id: "ui-generator.page.home.dashboard.accounts.link",
     target: "page.section-nav",
     owner: "home-dashboard",
     kind: "link",
     surfaces: ["home"],
     order: 50,
     props: {
-      label: "Connections",
-      icon: "mdi-account-key-outline",
+      label: "Accounts",
+      icon: mdiAccountKeyOutline,
       surface: "home",
-      scopedSuffix: "/dashboard/connections",
-      unscopedSuffix: "/dashboard/connections",
-      to: "/home/dashboard/connections",
+      scopedSuffix: "/dashboard/accounts",
+      unscopedSuffix: "/dashboard/accounts",
+      to: "/home/dashboard/accounts",
     },
   });
 }
@@ -49,7 +57,7 @@ addPlacement({
     order: 100,
     props: {
       label: "Configure",
-      icon: "mdi-cog-outline",
+      icon: mdiCogOutline,
       surface: "home",
       scopedSuffix: "/dashboard/configure",
       unscopedSuffix: "/dashboard/configure",
@@ -68,7 +76,7 @@ addPlacement({
     order: 500,
     props: {
       label: "Run",
-      icon: "mdi-play-box-multiple-outline",
+      icon: mdiPlayBoxMultipleOutline,
       surface: "home",
       scopedSuffix: "/dashboard/run",
       unscopedSuffix: "/dashboard/run",
@@ -87,7 +95,7 @@ addPlacement({
     order: 400,
     props: {
       label: "Remote",
-      icon: "mdi-cloud-upload-outline",
+      icon: mdiCloudUploadOutline,
       surface: "home",
       scopedSuffix: "/dashboard/remote",
       unscopedSuffix: "/dashboard/remote",
@@ -106,7 +114,7 @@ addPlacement({
     order: 600,
     props: {
       label: "Session History",
-      icon: "mdi-history",
+      icon: mdiHistory,
       surface: "home",
       scopedSuffix: "/dashboard/history",
       unscopedSuffix: "/dashboard/history",
@@ -125,7 +133,7 @@ addPlacement({
     order: 700,
     props: {
       label: "Setup",
-      icon: "mdi-tune",
+      icon: mdiTune,
       surface: "home",
       scopedSuffix: "/dashboard/setup",
       unscopedSuffix: "/dashboard/setup",
