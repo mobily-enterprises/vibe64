@@ -7,6 +7,7 @@
       :autopilot-steps="autopilotNavigationSteps"
       :codex-terminal-attention="codexBootstrapNeedsTerminalAttention"
       :codex-thinking="autopilotInteractionLocked"
+      :chat-collapsed="props.chatCollapsed"
       :command-runner="autopilotCommandRunner"
       :conversation-log="conversationLog"
       :diff="dialogs.diff"
@@ -118,6 +119,10 @@ import {
 
 const props = defineProps({
   active: {
+    default: false,
+    type: Boolean
+  },
+  chatCollapsed: {
     default: false,
     type: Boolean
   },

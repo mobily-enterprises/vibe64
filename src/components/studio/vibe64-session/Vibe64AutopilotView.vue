@@ -1,6 +1,13 @@
 <template>
-  <section class="studio-autopilot">
-    <section class="studio-autopilot__chat-panel" aria-label="Session chat">
+  <section
+    class="studio-autopilot"
+    :class="{ 'studio-autopilot--chat-collapsed': chatCollapsed }"
+  >
+    <section
+      v-show="!chatCollapsed"
+      class="studio-autopilot__chat-panel"
+      aria-label="Session chat"
+    >
       <div class="studio-autopilot__session-header">
         <Vibe64SessionToolbar
           v-if="sessionToolbarVisible"
@@ -382,22 +389,7 @@
       </div>
     </section>
 
-    <section class="studio-autopilot__preview-panel" aria-label="App preview">
-      <div class="studio-autopilot__preview-tabs" role="tablist" aria-label="Session workspace">
-        <button
-          v-for="tab in rightPaneTabs"
-          :key="tab.id"
-          type="button"
-          class="studio-autopilot__preview-tab"
-          :class="{ 'studio-autopilot__preview-tab--active': rightPaneTab === tab.id }"
-          :aria-selected="rightPaneTab === tab.id ? 'true' : 'false'"
-          role="tab"
-          @click="selectRightPaneTab(tab.id)"
-        >
-          {{ tab.label }}
-        </button>
-      </div>
-
+    <section class="studio-autopilot__preview-panel" aria-label="Workspace">
       <div
         v-show="rightPaneTab === 'preview'"
         class="studio-autopilot__right-pane-page"
@@ -546,7 +538,6 @@
 
 <script setup>
 import { computed, nextTick, onMounted, proxyRefs, ref, watch } from "vue";
-import { useRoute, useRouter } from "vue-router";
 import {
   mdiAlertCircleOutline,
   mdiCheck,
@@ -622,8 +613,6 @@ import {
 // Autopilot workflow meaning belongs to the server. This component renders the
 // current presentation and dispatches the server-provided intents.
 const emit = defineEmits(["busy-change"]);
-const route = useRoute();
-const router = useRouter();
 
 const props = defineProps({
   actions: {
@@ -643,6 +632,10 @@ const props = defineProps({
     type: Array
   },
   codexThinking: {
+    default: false,
+    type: Boolean
+  },
+  chatCollapsed: {
     default: false,
     type: Boolean
   },
@@ -762,16 +755,7 @@ const {
 const commandSpyExpanded = ref(false);
 const sessionToolsMenuOpen = ref(false);
 const rightPaneTab = ref("preview");
-const rightPaneTabs = Object.freeze([
-  {
-    id: "preview",
-    label: "Preview"
-  },
-  {
-    id: "dashboard",
-    label: "Dashboard"
-  }
-]);
+const workspacePaneIds = Object.freeze(["preview", "dashboard"]);
 const sessionPaneIds = Object.freeze([
   "session-details",
   "diff",
@@ -790,8 +774,8 @@ const stepInput = proxyRefs(useVibe64StepInputForm({
 
 const screenKind = computed(() => screenState.value.kind);
 const sessionId = computed(() => String(props.session?.sessionId || ""));
+const chatCollapsed = computed(() => Boolean(props.chatCollapsed));
 const workspacePaneValue = computed(() => normalizeWorkspacePane(props.workspacePane));
-const dashboardRouteActive = computed(() => String(route.path || "").startsWith("/home/dashboard"));
 const dashboardSessionContext = computed(() => ({
   copyText: typeof props.page?.copyText === "function" ? props.page.copyText : null,
   facts: vibe64SessionFacts(props.session || {}),
@@ -1161,19 +1145,11 @@ function normalizeWorkspacePane(value = "") {
 }
 
 function rightPaneExists(tabId = "") {
-  return rightPaneTabs.some((tab) => tab.id === tabId) || sessionPaneIds.includes(tabId);
+  return workspacePaneIds.includes(tabId) || sessionPaneIds.includes(tabId);
 }
 
 function selectRightPaneTab(tabId = "") {
   if (!rightPaneExists(tabId)) {
-    return;
-  }
-  if (tabId === "dashboard" && !dashboardRouteActive.value) {
-    void router.push("/home/dashboard/accounts");
-    return;
-  }
-  if (tabId === "preview" && dashboardRouteActive.value) {
-    void router.push("/home");
     return;
   }
   rightPaneTab.value = tabId;
@@ -1659,48 +1635,8 @@ watch(workspacePaneValue, (pane) => {
 
 .studio-autopilot__preview-panel {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   position: relative;
-}
-
-.studio-autopilot__preview-tabs {
-  align-items: center;
-  border-bottom: 1px solid rgba(var(--v-theme-outline), 0.12);
-  display: flex;
-  gap: 0.35rem;
-  min-width: 0;
-  overflow-x: auto;
-  padding: 0.45rem 0.55rem;
-  scrollbar-width: none;
-}
-
-.studio-autopilot__preview-tabs::-webkit-scrollbar {
-  display: none;
-}
-
-.studio-autopilot__preview-tab {
-  background: transparent;
-  border: 0;
-  border-radius: 999px;
-  color: rgba(var(--v-theme-on-surface), 0.72);
-  cursor: pointer;
-  flex: 0 0 auto;
-  font: inherit;
-  font-size: 0.86rem;
-  font-weight: 720;
-  letter-spacing: 0;
-  line-height: 1.2;
-  padding: 0.38rem 0.78rem;
-}
-
-.studio-autopilot__preview-tab:hover {
-  background: rgba(var(--v-theme-primary), 0.08);
-  color: rgb(var(--v-theme-on-surface));
-}
-
-.studio-autopilot__preview-tab--active {
-  background: rgba(var(--v-theme-primary), 0.13);
-  color: rgb(var(--v-theme-primary));
 }
 
 .studio-autopilot__right-pane-page {
@@ -1805,11 +1741,19 @@ watch(workspacePaneValue, (pane) => {
     height: 100%;
     overflow: hidden;
   }
+
+  .studio-autopilot--chat-collapsed {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 @media (max-width: 980px) {
   .studio-autopilot {
     grid-template-rows: minmax(28rem, 52vh) minmax(24rem, 1fr);
+  }
+
+  .studio-autopilot--chat-collapsed {
+    grid-template-rows: minmax(24rem, 1fr);
   }
 }
 </style>

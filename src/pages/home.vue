@@ -11,7 +11,11 @@
 <script setup>
 import ShellLayout from "@/components/ShellLayout.vue";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { RouterView, useRoute } from "vue-router";
+import { RouterView, useRoute, useRouter } from "vue-router";
+import {
+  mdiChevronLeft,
+  mdiChevronRight
+} from "@mdi/js";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
 import {
@@ -30,9 +34,11 @@ import ProjectTypeGate from "@/components/studio/ProjectTypeGate.vue";
 import Vibe64SessionPanel from "@/components/studio/Vibe64SessionPanel.vue";
 
 const route = useRoute();
+const router = useRouter();
 const HOME_SHELL_CLASS = "studio-home-shell-active";
 const pageTitle = ref("");
 const pageError = ref("");
+const chatCollapsed = ref(false);
 const projectSelectionResource = useEndpointResource({
   client: studioHttpClient,
   fallbackLoadError: "Project selection could not load.",
@@ -44,6 +50,16 @@ const targetRoot = computed(() => String(projectSelectionResource.data.value?.ta
 const targetFolderName = computed(() => finalPathSegment(targetRoot.value));
 const dashboardRouteActive = computed(() => String(route.path || "").startsWith("/home/dashboard"));
 const workspacePane = computed(() => dashboardRouteActive.value ? "dashboard" : "preview");
+const workspaceTabs = Object.freeze([
+  {
+    id: "preview",
+    label: "Preview"
+  },
+  {
+    id: "dashboard",
+    label: "Dashboard"
+  }
+]);
 
 useStudioShellDrawer({
   hidden: true
@@ -70,6 +86,18 @@ function setPageTitle(title = "") {
 
 function emitPageTitle(title = "") {
   setPageTitle(title);
+}
+
+function selectWorkspacePane(pane = "") {
+  if (pane === "dashboard") {
+    void router.push("/home/dashboard/accounts");
+    return;
+  }
+  void router.push("/home");
+}
+
+function toggleChatCollapsed() {
+  chatCollapsed.value = !chatCollapsed.value;
 }
 
 function handleProjectTypeReady() {
@@ -144,6 +172,37 @@ onBeforeUnmount(() => {
           Sessions
         </span>
         -->
+
+        <div
+          class="studio-home-shell-workspace-tabs"
+          role="tablist"
+          aria-label="Workspace"
+        >
+          <button
+            v-for="tab in workspaceTabs"
+            :key="tab.id"
+            class="studio-home-shell-workspace-tab"
+            :class="{ 'studio-home-shell-workspace-tab--active': workspacePane === tab.id }"
+            role="tab"
+            type="button"
+            :aria-selected="workspacePane === tab.id ? 'true' : 'false'"
+            @click="selectWorkspacePane(tab.id)"
+          >
+            {{ tab.label }}
+          </button>
+        </div>
+
+        <v-btn
+          class="studio-home-shell-chat-toggle"
+          density="comfortable"
+          :icon="chatCollapsed ? mdiChevronRight : mdiChevronLeft"
+          size="small"
+          :title="chatCollapsed ? 'Show chat' : 'Collapse chat'"
+          type="button"
+          variant="tonal"
+          :aria-label="chatCollapsed ? 'Show chat' : 'Collapse chat'"
+          @click="toggleChatCollapsed"
+        />
       </div>
     </template>
     <section class="generated-ui-screen generated-ui-screen--studio studio-screen d-flex flex-column ga-3">
@@ -171,6 +230,7 @@ onBeforeUnmount(() => {
             >
               <template #default="projectGateSlotProps">
                 <Vibe64SessionPanel
+                  :chat-collapsed="chatCollapsed"
                   :workspace-pane="workspacePane"
                   @title-change="emitPageTitle"
                 >
@@ -213,7 +273,7 @@ onBeforeUnmount(() => {
 .studio-home-shell-heading {
   align-items: center;
   display: flex;
-  gap: 0.45rem;
+  gap: 0.8rem;
   min-width: 0;
   padding-left: 1rem;
 }
@@ -254,11 +314,48 @@ onBeforeUnmount(() => {
   font-weight: 760;
   line-height: 1.2;
   margin: 0;
-  max-width: min(44rem, 58vw);
+  max-width: min(30rem, 36vw);
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.studio-home-shell-workspace-tabs {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0.18rem;
+  min-width: 0;
+}
+
+.studio-home-shell-workspace-tab {
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  color: rgba(var(--v-theme-on-surface), 0.72);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 720;
+  letter-spacing: 0;
+  line-height: 1.15;
+  min-height: 2rem;
+  padding: 0.34rem 0.78rem;
+}
+
+.studio-home-shell-workspace-tab:hover {
+  background: rgba(var(--v-theme-primary), 0.08);
+  color: rgb(var(--v-theme-on-surface));
+}
+
+.studio-home-shell-workspace-tab--active {
+  background: rgba(var(--v-theme-primary), 0.13);
+  color: rgb(var(--v-theme-primary));
+}
+
+.studio-home-shell-chat-toggle {
+  flex: 0 0 auto;
 }
 
 .studio-home-shell-actions {
@@ -320,7 +417,18 @@ onBeforeUnmount(() => {
 
   .studio-home-shell-target-folder {
     font-size: 1.05rem;
-    max-width: calc(100vw - 16rem);
+    max-width: calc(100vw - 17rem);
+  }
+
+  .studio-home-shell-heading {
+    gap: 0.35rem;
+    padding-left: 0.35rem;
+  }
+
+  .studio-home-shell-workspace-tab {
+    font-size: 0.82rem;
+    min-height: 1.8rem;
+    padding-inline: 0.46rem;
   }
 
   .studio-home-shell-actions {

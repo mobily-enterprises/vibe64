@@ -57,6 +57,7 @@
         :session-data="sessionData"
         :session-id="selection.selectedSessionId"
         session-mode="autopilot"
+        :chat-collapsed="chatCollapsed"
         :workspace-pane="workspacePane"
         @busy-change="setRuntimeBusy"
         @page-error-change="setRuntimePageError"
@@ -88,6 +89,10 @@ import {
 
 const emit = defineEmits(["title-change"]);
 const props = defineProps({
+  chatCollapsed: {
+    default: false,
+    type: Boolean
+  },
   workspacePane: {
     default: "",
     type: String
@@ -127,6 +132,7 @@ const toolbar = proxyRefs({
 
 const workspacePane = computed(() => normalizeWorkspacePane(props.workspacePane || route.query.pane));
 const pageLoading = sessionData.pageLoading;
+const chatCollapsed = computed(() => Boolean(props.chatCollapsed));
 const panelSessionToolbarVisible = computed(() => Boolean(
   !selection.selectedSession
 ));
