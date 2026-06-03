@@ -58,20 +58,6 @@
                 >
                   {{ tool.label }}
                 </v-btn>
-                <template v-if="activeSessionTool">
-                  <v-divider />
-                  <v-btn
-                    class="studio-autopilot__session-tool"
-                    :prepend-icon="mdiClose"
-                    size="large"
-                    title="Close active session tool"
-                    type="button"
-                    variant="flat"
-                    @click="closeSessionTool"
-                  >
-                    Close session tool
-                  </v-btn>
-                </template>
               </div>
             </v-menu>
           </template>
@@ -404,6 +390,18 @@
 
     <section class="studio-autopilot__workspace-panel" aria-label="Workspace">
       <section class="studio-autopilot__preview-panel">
+        <v-btn
+          v-if="activeSessionTool"
+          aria-label="Close session tool"
+          class="studio-autopilot__right-pane-close"
+          :icon="mdiClose"
+          size="small"
+          title="Close session tool"
+          type="button"
+          variant="flat"
+          @click="closeSessionTool"
+        />
+
         <div
           v-show="rightPaneTab === 'preview'"
           class="studio-autopilot__right-pane-page"
@@ -1769,6 +1767,26 @@ watch(() => [
   min-height: 0;
   min-width: 0;
   position: relative;
+}
+
+.studio-autopilot__right-pane-close {
+  backdrop-filter: blur(4px);
+  background: rgba(var(--v-theme-surface), 0.68) !important;
+  border: 1px solid rgba(17, 24, 39, 0.08);
+  border-radius: 999px;
+  box-shadow: 0 0.25rem 0.7rem rgba(15, 23, 42, 0.08) !important;
+  color: var(--studio-control-text, #202124) !important;
+  left: -0.35rem;
+  opacity: 0.6;
+  position: absolute;
+  top: -0.85rem;
+  z-index: 5;
+}
+
+.studio-autopilot__right-pane-close:focus-visible,
+.studio-autopilot__right-pane-close:hover {
+  background: rgba(var(--v-theme-surface), 0.92) !important;
+  opacity: 1;
 }
 
 .studio-autopilot__dashboard-pane {

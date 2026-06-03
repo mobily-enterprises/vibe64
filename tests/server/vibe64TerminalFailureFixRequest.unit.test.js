@@ -98,17 +98,20 @@ test("project deploy Fix Codex prompts preserve configured command ownership", (
     output: "failing intentionally",
     terminalSessionId: "terminal-1",
     terminalStatus: "exited",
+    targetRoot: "/workspace/app",
     toolId: "push_to_production",
     toolLabel: "Push to production"
   }, {
     reportInstructions: "Report through the callback."
   });
 
+  assert.match(prompt, /main project checkout/u);
   assert.match(prompt, /exact Attempted command/u);
   assert.match(prompt, /Treat the exact Attempted command as authoritative/u);
   assert.match(prompt, /Do not replace or rewrite the saved deploy command/u);
   assert.match(prompt, /placeholder, intentionally failing command/u);
   assert.match(prompt, /Report `blocked`/u);
+  assert.match(prompt, /- Target root: \/workspace\/app/u);
   assert.match(prompt, /- Attempted command: bash -lc/u);
   assert.match(prompt, /failing intentionally/u);
 });

@@ -42,7 +42,24 @@ const props = defineProps({
 const emit = defineEmits(["closed"]);
 
 const jobId = computed(() => String(props.job?.id || props.terminal?.metadata?.fixJobId || ""));
-const subtitle = computed(() => String(props.job?.subject || "Ephemeral repair job"));
+const repairLocationLabel = computed(() => {
+  switch (String(props.job?.repairTarget || "")) {
+    case "main_checkout":
+      return "Main checkout";
+    case "session_worktree":
+      return "Session worktree";
+    case "repair_worktree":
+      return "Repair worktree";
+    default:
+      return "Ephemeral repair job";
+  }
+});
+const subtitle = computed(() => {
+  const subject = String(props.job?.subject || "").trim();
+  return subject
+    ? `${repairLocationLabel.value} - ${subject}`
+    : repairLocationLabel.value;
+});
 
 const terminalController = useCodexTerminalElement({
   webSocketUrl(terminalId) {

@@ -2046,7 +2046,9 @@ test.describe("Autopilot dumb client contract", () => {
     await expect(page.getByText("Open a shell for this session.")).toBeVisible();
 
     await sessionToolsButton.click();
-    await sessionToolsMenu.getByRole("button", { name: "Close session tool" }).click();
+    await expect(sessionToolsMenu.getByRole("button", { name: "Close session tool" })).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: "Close session tool" }).click();
     await expect(page.getByText("Open a shell for this session.")).toBeHidden();
 
     await page.reload();

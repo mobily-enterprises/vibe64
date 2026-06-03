@@ -296,6 +296,40 @@ test("Fix Codex jobs validate one-time report tokens", () => {
   }, /already been reported/u);
 });
 
+test("Fix Codex jobs expose the resolved repair target and workdir", () => {
+  const store = createFixCodexJobStore({
+    clock: () => new Date("2026-05-27T01:02:03.000Z")
+  });
+  const targetRoot = "/workspace/project";
+  const workdir = "/workspace/project/.vibe64/sessions/active/session-1/worktree";
+  const { job: sessionJob } = store.createJob({
+    repairTarget: "session_worktree",
+    scope: "session",
+    subject: "Build app",
+    targetRoot,
+    workdir
+  });
+  const { job: projectJob } = store.createJob({
+    repairTarget: "main_checkout",
+    scope: "project",
+    subject: "Deploy app",
+    targetRoot,
+    workdir: targetRoot
+  });
+
+  assert.equal(projectJob.repairTarget, "main_checkout");
+  assert.equal(projectJob.targetRoot, targetRoot);
+  assert.equal(projectJob.workdir, targetRoot);
+  assert.equal(sessionJob.repairTarget, "session_worktree");
+  assert.equal(sessionJob.targetRoot, targetRoot);
+  assert.equal(sessionJob.workdir, workdir);
+
+  const stored = store.readJob(sessionJob.id);
+  assert.equal(stored.repairTarget, "session_worktree");
+  assert.equal(stored.targetRoot, targetRoot);
+  assert.equal(stored.workdir, workdir);
+});
+
 test("Fix Codex report instructions expose the mounted helper command", () => {
   const instructions = fixCodexReportInstructions({
     job: {

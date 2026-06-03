@@ -32,12 +32,14 @@ function publicFixCodexJob(job = {}) {
     createdAt: job.createdAt || "",
     id: job.id || "",
     message: job.message || "",
+    repairTarget: job.repairTarget || "",
     scope: job.scope || "project",
     status: job.status || "running",
     subject: job.subject || "",
     targetRoot: job.targetRoot || "",
     terminalSessionId: job.terminalSessionId || "",
-    verificationSummary: job.verificationSummary || ""
+    verificationSummary: job.verificationSummary || "",
+    workdir: job.workdir || ""
   };
 }
 
@@ -59,9 +61,11 @@ function createFixCodexJobStore({
 
   function createJob({
     prompt = "",
+    repairTarget = "",
     scope = "project",
     subject = "",
-    targetRoot = ""
+    targetRoot = "",
+    workdir = ""
   } = {}) {
     const id = crypto.randomUUID();
     const token = crypto.randomBytes(32).toString("hex");
@@ -71,13 +75,15 @@ function createFixCodexJobStore({
       id,
       message: "",
       prompt: String(prompt || ""),
+      repairTarget: normalizeText(repairTarget),
       reportToken: token,
       scope: normalizeText(scope) || "project",
       status: "running",
       subject: normalizeText(subject),
       targetRoot: normalizeText(targetRoot),
       terminalSessionId: "",
-      verificationSummary: ""
+      verificationSummary: "",
+      workdir: normalizeText(workdir)
     };
     jobs.set(id, job);
     return {

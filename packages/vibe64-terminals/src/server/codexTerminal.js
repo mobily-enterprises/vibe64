@@ -218,6 +218,21 @@ async function globalCodexTargetRoot(projectService = {}, runtime = null) {
   }
 }
 
+function fixCodexRepairTarget({
+  scope = "project",
+  targetRoot = "",
+  workdir = ""
+} = {}) {
+  if (normalizeText(scope) === "session") {
+    return "session_worktree";
+  }
+  const resolvedTargetRoot = normalizeText(targetRoot) ? path.resolve(targetRoot) : "";
+  const resolvedWorkdir = normalizeText(workdir) ? path.resolve(workdir) : "";
+  return resolvedTargetRoot && resolvedWorkdir && resolvedTargetRoot !== resolvedWorkdir
+    ? "repair_worktree"
+    : "main_checkout";
+}
+
 function normalizeCodexThreadId(value) {
   const threadId = String(value || "").trim();
   if (!CODEX_THREAD_ID_PATTERN.test(threadId)) {
@@ -1547,11 +1562,19 @@ function createCodexTerminalController({
         error: `Fix Codex workdir does not exist: ${workdir}`
       });
     }
+    const scope = normalizeText(input.scope) || "project";
+    const repairTarget = fixCodexRepairTarget({
+      scope,
+      targetRoot,
+      workdir
+    });
     const jobSeed = fixJobStore.createJob({
       prompt: input.prompt,
-      scope: input.scope || "project",
+      repairTarget,
+      scope,
       subject: input.subject,
-      targetRoot
+      targetRoot,
+      workdir
     });
     const fullPrompt = [
       input.prompt,
