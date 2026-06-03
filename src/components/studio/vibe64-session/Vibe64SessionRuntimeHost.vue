@@ -1,5 +1,8 @@
 <template>
-  <section class="studio-ai-session-runtime">
+  <section
+    class="studio-ai-session-runtime"
+    :data-vibe64-session-runtime-id="props.sessionId"
+  >
     <Vibe64AutopilotView
       :actions="actions"
       :active="autopilotModeActive"

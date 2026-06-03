@@ -306,6 +306,7 @@ function handleInlineSubmitButton() {
 }
 
 .vibe64-workflow-control-form--inline-submit .vibe64-workflow-control-form__prompt-shell {
+  margin-top: 0.72rem;
   order: 2;
 }
 

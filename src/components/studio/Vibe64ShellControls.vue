@@ -108,6 +108,7 @@
               :finished-hold-ms="0"
               :reuse-running="false"
               :show-interrupt="false"
+              :show-expanded-toggle="false"
               terminal-kind="shell"
               :session="tab.session"
               :shell-target="tab.target"

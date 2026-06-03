@@ -25,7 +25,7 @@
     </div>
 
     <div
-      v-if="!selection.selectedSession"
+      v-if="emptyLayoutVisible"
       class="studio-ai-sessions__empty-layout"
       :class="{
         'studio-ai-sessions__empty-layout--dashboard': dashboardWorkspaceActive
@@ -50,12 +50,17 @@
       </div>
     </div>
 
-    <div v-else class="studio-ai-sessions__runtime-stack">
+    <div
+      v-show="runtimeHostSessionIds.length > 0"
+      class="studio-ai-sessions__runtime-stack"
+    >
       <Vibe64SessionRuntimeHost
-        :key="selection.selectedSessionId"
-        active
+        v-for="runtimeSessionId in runtimeHostSessionIds"
+        v-show="runtimeSessionId === selection.selectedSessionId"
+        :key="runtimeSessionId"
+        :active="runtimeSessionId === selection.selectedSessionId"
         :session-data="sessionData"
-        :session-id="selection.selectedSessionId"
+        :session-id="runtimeSessionId"
         session-mode="autopilot"
         :chat-collapsed="chatCollapsed"
         :workspace-pane="workspacePane"
@@ -75,7 +80,7 @@
 </template>
 
 <script setup>
-import { computed, proxyRefs, reactive, watch } from "vue";
+import { computed, proxyRefs, reactive, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import Vibe64SessionRuntimeHost from "@/components/studio/vibe64-session/Vibe64SessionRuntimeHost.vue";
 import Vibe64SessionToolbar from "@/components/studio/vibe64-session/Vibe64SessionToolbar.vue";
@@ -106,6 +111,7 @@ const fallbackAbandon = {
   },
   request: () => null
 };
+const mountedRuntimeSessionIds = ref([]);
 const runtimeStateBySessionId = reactive({});
 const sessionData = useVibe64SessionData({
   onTitleChange(title) {
@@ -143,6 +149,14 @@ const emptyStateText = computed(() => {
   return toolbar.sessions?.length > 0 ? "Selecting session..." : "No sessions yet.";
 });
 const selectedRuntimeState = computed(() => runtimeStateBySessionId[selection.selectedSessionId] || null);
+const runtimeHostSessionIds = computed(() => {
+  const visibleSessionIds = new Set((toolbar.sessions || []).map((session) => session.sessionId));
+  if (selection.selectedSession && selection.selectedSessionId) {
+    visibleSessionIds.add(selection.selectedSessionId);
+  }
+  return mountedRuntimeSessionIds.value.filter((sessionId) => visibleSessionIds.has(sessionId));
+});
+const emptyLayoutVisible = computed(() => Boolean(!selection.selectedSession && runtimeHostSessionIds.value.length < 1));
 const selectedAbandon = computed(() => selectedRuntimeState.value?.toolbarControls?.abandon || fallbackAbandon);
 const pageError = computed(() => blockingVibe64SessionPageError({
   runtimePageError: selectedRuntimeState.value?.pageError,
@@ -166,6 +180,18 @@ function ensureRuntimeState(sessionId = "") {
     };
   }
   return runtimeStateBySessionId[key];
+}
+
+function ensureRuntimeHost(sessionId = "") {
+  const key = String(sessionId || "");
+  if (!key || mountedRuntimeSessionIds.value.includes(key)) {
+    return;
+  }
+  mountedRuntimeSessionIds.value = [
+    ...mountedRuntimeSessionIds.value,
+    key
+  ];
+  ensureRuntimeState(key);
 }
 
 function setRuntimeToolbarControls({
@@ -206,11 +232,26 @@ function normalizeWorkspacePane(value = "") {
 
 watch(sessionData.sessions, (sessions = []) => {
   const visibleSessionIds = new Set(sessions.map((session) => session.sessionId));
+  mountedRuntimeSessionIds.value = mountedRuntimeSessionIds.value.filter((sessionId) => visibleSessionIds.has(sessionId));
   for (const sessionId of Object.keys(runtimeStateBySessionId)) {
     if (!visibleSessionIds.has(sessionId)) {
       delete runtimeStateBySessionId[sessionId];
     }
   }
+  if (selection.selectedSession) {
+    ensureRuntimeHost(selection.selectedSessionId);
+  }
+});
+
+watch(() => [
+  selection.selectedSessionId,
+  selection.selectedSession ? "selected" : "empty"
+].join("|"), () => {
+  if (selection.selectedSession) {
+    ensureRuntimeHost(selection.selectedSessionId);
+  }
+}, {
+  immediate: true
 });
 </script>
 

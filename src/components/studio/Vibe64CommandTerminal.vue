@@ -33,6 +33,7 @@
       <div class="ai-command-terminal__actions" @pointerdown.stop>
         <slot name="header-actions" />
         <v-btn
+          v-if="showExpandedToggle"
           :icon="expanded ? mdiChevronDown : mdiChevronUp"
           size="small"
           :title="expanded ? 'Minimize terminal' : 'Expand terminal'"
@@ -159,6 +160,10 @@ const props = defineProps({
     default: ""
   },
   showInterrupt: {
+    type: Boolean,
+    default: true
+  },
+  showExpandedToggle: {
     type: Boolean,
     default: true
   },

@@ -89,12 +89,56 @@ test("embedded preview stays mounted and does not reload while covered by dashbo
       shellPaneSame: shellPane === refs.__vibe64ShellPane
     };
   });
-  console.log("preview identity after dashboard", identity);
   expect(identity.frameSame).toBe(true);
 
   await page.getByRole("tab", { name: "Preview" }).click();
   await expect(previewFrame).toHaveCount(1);
   expect(await previewFrame.getAttribute("src")).toBe(initialSrc);
+});
+
+test("embedded preview stays mounted when switching selected sessions", async ({ page }) => {
+  await mockLaunchTerminalSocket(page);
+  const alphaSession = sessionPayload({
+    sessionId: "session-alpha",
+    title: "Alpha"
+  });
+  const betaSession = sessionPayload({
+    sessionId: "session-beta",
+    title: "Beta"
+  });
+  await mockLaunchSession(page, {
+    session: alphaSession,
+    sessionList: [alphaSession, betaSession]
+  });
+
+  await page.goto(`${BASE_URL}/home`);
+  const visibleSessionTab = (name: string) => page.locator(
+    ".studio-ai-session-runtime:not([style*='display: none']) .studio-ai-sessions__tab",
+    { hasText: name }
+  );
+  await visibleSessionTab("Alpha").click();
+
+  const alphaRuntime = page.locator("[data-vibe64-session-runtime-id='session-alpha']");
+  const alphaPreviewFrame = alphaRuntime.locator(".vibe64-launch-controls__preview-frame");
+  await expect(alphaPreviewFrame).toHaveCount(1);
+  const initialSrc = await alphaPreviewFrame.getAttribute("src");
+  await page.evaluate(() => {
+    const frame = document.querySelector("[data-vibe64-session-runtime-id='session-alpha'] .vibe64-launch-controls__preview-frame");
+    (window as unknown as { __vibe64AlphaPreviewFrame?: Element | null }).__vibe64AlphaPreviewFrame = frame;
+  });
+
+  await visibleSessionTab("Beta").click();
+  await expect(page.locator("[data-vibe64-session-runtime-id='session-beta']")).toBeVisible();
+
+  await visibleSessionTab("Alpha").click();
+  await expect(alphaRuntime).toBeVisible();
+  await expect(alphaPreviewFrame).toHaveCount(1);
+  expect(await alphaPreviewFrame.getAttribute("src")).toBe(initialSrc);
+  await expect.poll(async () => page.evaluate(() => {
+    const frame = document.querySelector("[data-vibe64-session-runtime-id='session-alpha'] .vibe64-launch-controls__preview-frame");
+    const refs = window as unknown as { __vibe64AlphaPreviewFrame?: Element | null };
+    return frame === refs.__vibe64AlphaPreviewFrame;
+  })).toBe(true);
 });
 
 test("embedded launch terminal can be shown and hidden again", async ({ page }) => {
@@ -131,13 +175,21 @@ test("embedded launch terminal can be shown and hidden again", async ({ page }) 
 
 async function mockLaunchSession(page: Page, {
   previewReadyDelayMs = 0,
-  previewReadyLoadNumber = 1
+  previewReadyLoadNumber = 1,
+  session = sessionPayload(),
+  sessionList = null
 }: {
   previewReadyDelayMs?: number;
   previewReadyLoadNumber?: number;
+  session?: ReturnType<typeof sessionPayload>;
+  sessionList?: ReturnType<typeof sessionPayload>[] | null;
 } = {}) {
-  const session = sessionPayload();
+  const listedSessions = Array.isArray(sessionList) ? sessionList : [session];
   let previewLoadCount = 0;
+  function sessionForRequest(pathname: string) {
+    const requestedSessionId = decodeURIComponent(pathname.split("/").at(-1) || "");
+    return listedSessions.find((item) => item.sessionId === requestedSessionId) || session;
+  }
   await mockStudioReady(page);
   await page.route("**/api/vibe64/sessions**", async (route) => {
     const request = route.request();
@@ -158,14 +210,14 @@ async function mockLaunchSession(page: Page, {
       await fulfillJson(route, {
         conversationLog: [],
         ok: true,
-        sessionId: SESSION_ID
+        sessionId: decodeURIComponent(url.pathname.split("/").at(-2) || "")
       });
       return;
     }
     if (method === "GET" && /\/sessions\/[^/]+$/u.test(url.pathname)) {
       await fulfillJson(route, {
         ok: true,
-        ...session
+        ...sessionForRequest(url.pathname)
       });
       return;
     }
@@ -175,7 +227,7 @@ async function mockLaunchSession(page: Page, {
         openSessionCount: 1
       },
       ok: true,
-      sessions: [session]
+      sessions: listedSessions
     });
   });
   await page.route("http://127.0.0.1:49000/**", async (route) => {
@@ -336,11 +388,17 @@ function launchStatusPayload() {
   };
 }
 
-function sessionPayload() {
+function sessionPayload({
+  sessionId = SESSION_ID,
+  title = "Renderer session"
+}: {
+  sessionId?: string;
+  title?: string;
+} = {}) {
   return {
     actionResults: [],
     actions: [],
-    artifactsRoot: `/workspace/example-target-app/.vibe64/sessions/active/${SESSION_ID}/artifacts`,
+    artifactsRoot: `/workspace/example-target-app/.vibe64/sessions/active/${sessionId}/artifacts`,
     completedSteps: ["worktree_created"],
     createdAt: "2026-05-24T00:00:00.000Z",
     currentStep: "maintenance_conversation",
@@ -350,7 +408,7 @@ function sessionPayload() {
     },
     intents: [],
     metadata: {
-      worktree_path: `/workspace/example-target-app/.vibe64/sessions/active/${SESSION_ID}/worktree`
+      worktree_path: `/workspace/example-target-app/.vibe64/sessions/active/${sessionId}/worktree`
     },
     next: {
       disabledReason: "",
@@ -379,7 +437,7 @@ function sessionPayload() {
         status: "ready"
       }
     },
-    sessionId: SESSION_ID,
+    sessionId,
     status: "active",
     stepDefinitions: [
       {
@@ -393,10 +451,10 @@ function sessionPayload() {
       stepId: "maintenance_conversation"
     },
     targetRoot: "/workspace/example-target-app",
-    title: "Renderer session",
+    title,
     updatedAt: "2026-05-24T00:00:00.000Z",
     workflowId: "test-workflow",
-    worktree: `/workspace/example-target-app/.vibe64/sessions/active/${SESSION_ID}/worktree`,
+    worktree: `/workspace/example-target-app/.vibe64/sessions/active/${sessionId}/worktree`,
     worktreeReady: true
   };
 }

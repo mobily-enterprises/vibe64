@@ -1908,6 +1908,7 @@ test.describe("Autopilot dumb client contract", () => {
 
   test("keeps each session shell terminal alive when switching selected sessions", async ({ page }) => {
     let shellTerminalCloses = 0;
+    let shellTerminalStarts = 0;
     await mockInspectTerminalSockets(page);
     const firstSession = sessionPayload({
       sessionId: "session-alpha",
@@ -1931,24 +1932,35 @@ test.describe("Autopilot dumb client contract", () => {
       onShellTerminalClose: () => {
         shellTerminalCloses += 1;
       },
+      onShellTerminalStart: () => {
+        shellTerminalStarts += 1;
+      },
       sessionList: [firstSession, secondSession]
     });
 
-    await page.goto(`${BASE_URL}/home?mode=inspect`);
-    await expect(page.locator(".studio-ai-sessions__tab", { hasText: "Beta" })).toBeVisible();
-    await page.getByLabel("Open shell").click();
+    await page.goto(`${BASE_URL}/home`);
+    const visibleSessionTab = (name: string) => page.locator(
+      ".studio-ai-session-runtime:not([style*='display: none']) .studio-ai-sessions__tab",
+      { hasText: name }
+    );
+    await expect(visibleSessionTab("Beta")).toBeVisible();
+    await visibleSessionTab("Beta").click();
+    await page.getByLabel("Session tools").click();
+    await page.getByRole("button", { name: "Shell" }).click();
     await page.getByText("Worktree shell").click();
     await expect(page.locator(".vibe64-shell-controls__terminal--active .ai-command-terminal__host"))
       .toBeVisible();
+    await expect.poll(() => shellTerminalStarts).toBe(1);
 
-    await page.locator(".studio-ai-sessions__tab", { hasText: "Alpha" }).click();
+    await visibleSessionTab("Alpha").click();
     await page.waitForTimeout(100);
     expect(shellTerminalCloses).toBe(0);
 
-    await page.locator(".studio-ai-sessions__tab", { hasText: "Beta" }).click();
+    await visibleSessionTab("Beta").click();
     await expect(page.locator(".vibe64-shell-controls__terminal--active .ai-command-terminal__host"))
       .toBeVisible();
     expect(shellTerminalCloses).toBe(0);
+    expect(shellTerminalStarts).toBe(1);
   });
 
   test("focuses the selected shell terminal when switching shell tabs", async ({ page }) => {
@@ -1977,6 +1989,7 @@ test.describe("Autopilot dumb client contract", () => {
     await page.getByText("Worktree shell").click();
     await expect(page.locator(".vibe64-shell-controls__terminal--active .ai-command-terminal__host"))
       .toBeVisible();
+    await expect(page.getByTitle("Minimize terminal")).toHaveCount(0);
     await expect(page.locator(".vibe64-shell-controls__tab--active", { hasText: "worktree" }))
       .toBeVisible();
     await expectActiveShellTerminalFocused(page);
@@ -1999,6 +2012,45 @@ test.describe("Autopilot dumb client contract", () => {
     await expect(page.locator(".vibe64-shell-controls__tab--active", { hasText: "worktree" }))
       .toBeVisible();
     await expectActiveShellTerminalFocused(page);
+  });
+
+  test("restores and clears the active session tool per session", async ({ page }) => {
+    await mockInspectTerminalSockets(page);
+    const session = sessionPayload({
+      completedSteps: ["worktree_created"],
+      metadata: {
+        worktree_path: "/workspace/example-target-app/.vibe64/sessions/active/session-renderer/worktree"
+      },
+      sessionRoot: "/workspace/example-target-app/.vibe64/sessions/active/session-renderer",
+      worktreeReady: true
+    });
+    await mockVibe64Session(page, session);
+
+    await page.goto(`${BASE_URL}/home`);
+    const sessionToolsButton = page.getByRole("button", { name: "Session tools" });
+    await sessionToolsButton.click();
+    await page.getByRole("button", { name: "Shell" }).click();
+    await expect(page.getByText("Open a shell for this session.")).toBeVisible();
+
+    await page.reload();
+    await expect(page.getByText("Open a shell for this session.")).toBeVisible();
+
+    const sessionToolsMenu = page.locator(".studio-autopilot__session-tools-menu");
+    await sessionToolsButton.click();
+    await sessionToolsMenu.getByRole("button", { exact: true, name: "Session" }).click();
+    await expect(page.getByRole("heading", { name: "Session Details" }).first()).toBeVisible();
+    await expect(page.getByText("Open a shell for this session.")).toBeHidden();
+
+    await sessionToolsButton.click();
+    await sessionToolsMenu.getByRole("button", { name: "Shell" }).click();
+    await expect(page.getByText("Open a shell for this session.")).toBeVisible();
+
+    await sessionToolsButton.click();
+    await sessionToolsMenu.getByRole("button", { name: "Close session tool" }).click();
+    await expect(page.getByText("Open a shell for this session.")).toBeHidden();
+
+    await page.reload();
+    await expect(page.getByText("Open a shell for this session.")).toBeHidden();
   });
 
   test("renders numbered questions as UI sugar and submits only the logical response field", async ({ page }) => {

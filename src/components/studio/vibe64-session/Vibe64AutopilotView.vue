@@ -58,6 +58,20 @@
                 >
                   {{ tool.label }}
                 </v-btn>
+                <template v-if="activeSessionTool">
+                  <v-divider />
+                  <v-btn
+                    class="studio-autopilot__session-tool"
+                    :prepend-icon="mdiClose"
+                    size="large"
+                    title="Close active session tool"
+                    type="button"
+                    variant="flat"
+                    @click="closeSessionTool"
+                  >
+                    Close session tool
+                  </v-btn>
+                </template>
               </div>
             </v-menu>
           </template>
@@ -611,6 +625,10 @@ import {
   vibe64SessionStatusColor,
   vibe64SessionStatusLabel
 } from "@/lib/vibe64SessionViewModel.js";
+import {
+  readLocalStorageJson,
+  writeLocalStorageJson
+} from "@/lib/browserLocalStorage.js";
 
 // Autopilot workflow meaning belongs to the server. This component renders the
 // current presentation and dispatches the server-provided intents.
@@ -757,6 +775,7 @@ const {
 const commandSpyExpanded = ref(false);
 const sessionToolsMenuOpen = ref(false);
 const rightPaneTab = ref("preview");
+const SESSION_TOOL_STORAGE_PREFIX = "vibe64.sessionTools.active";
 const workspacePaneIds = Object.freeze(["preview", "dashboard"]);
 const sessionPaneIds = Object.freeze([
   "session-details",
@@ -778,6 +797,9 @@ const screenKind = computed(() => screenState.value.kind);
 const sessionId = computed(() => String(props.session?.sessionId || ""));
 const chatCollapsed = computed(() => Boolean(props.chatCollapsed));
 const workspacePaneValue = computed(() => normalizeWorkspacePane(props.workspacePane));
+const sessionToolStorageKey = computed(() => (
+  sessionId.value ? `${SESSION_TOOL_STORAGE_PREFIX}:${sessionId.value}` : ""
+));
 const dashboardSessionContext = computed(() => ({
   copyText: typeof props.page?.copyText === "function" ? props.page.copyText : null,
   facts: vibe64SessionFacts(props.session || {}),
@@ -1150,18 +1172,58 @@ function rightPaneExists(tabId = "") {
   return workspacePaneIds.includes(tabId) || sessionPaneIds.includes(tabId);
 }
 
-function selectRightPaneTab(tabId = "") {
+function persistedSessionTool() {
+  const value = readLocalStorageJson(sessionToolStorageKey.value, "");
+  return sessionPaneIds.includes(value) ? value : "";
+}
+
+function persistSessionTool(tabId = "") {
+  if (!sessionToolStorageKey.value) {
+    return;
+  }
+  writeLocalStorageJson(sessionToolStorageKey.value, sessionPaneIds.includes(tabId) ? tabId : "");
+}
+
+function selectRightPaneTab(tabId = "", {
+  persist = true
+} = {}) {
   if (!rightPaneExists(tabId)) {
     return;
   }
   rightPaneTab.value = tabId;
+  if (persist) {
+    persistSessionTool(sessionPaneIds.includes(tabId) ? tabId : "");
+  }
 }
 
-function selectSessionTool(tabId = "") {
+function selectWorkspacePaneTab(tabId = "") {
+  selectRightPaneTab(tabId, {
+    persist: true
+  });
+}
+
+function restorePersistedSessionTool() {
+  const tabId = persistedSessionTool();
+  if (!tabId) {
+    selectRightPaneTab("preview", {
+      persist: false
+    });
+    return;
+  }
+  selectSessionTool(tabId, {
+    persist: false
+  });
+}
+
+function selectSessionTool(tabId = "", {
+  persist = true
+} = {}) {
   if (!sessionPaneIds.includes(tabId)) {
     return false;
   }
-  rightPaneTab.value = tabId;
+  selectRightPaneTab(tabId, {
+    persist
+  });
   if (tabId === "diff" && !props.diff?.payload && !props.diff?.loading && typeof props.diff?.load === "function") {
     void props.diff.load();
   }
@@ -1172,6 +1234,11 @@ function selectSessionToolFromMenu(tabId = "") {
   if (selectSessionTool(tabId)) {
     sessionToolsMenuOpen.value = false;
   }
+}
+
+function closeSessionTool() {
+  sessionToolsMenuOpen.value = false;
+  selectWorkspacePaneTab(workspacePaneValue.value === "dashboard" ? "dashboard" : "preview");
 }
 
 function emitBusyState() {
@@ -1414,12 +1481,16 @@ watch(() => props.codexTerminalAttention, (needsAttention) => {
   immediate: true
 });
 
-watch(workspacePaneValue, (pane) => {
+watch(() => [
+  workspacePaneValue.value,
+  sessionId.value
+].join("|"), () => {
+  const pane = workspacePaneValue.value;
   if (pane === "preview") {
-    selectRightPaneTab("preview");
+    restorePersistedSessionTool();
     return;
   }
-  selectRightPaneTab("dashboard");
+  selectWorkspacePaneTab("dashboard");
 }, {
   immediate: true
 });
