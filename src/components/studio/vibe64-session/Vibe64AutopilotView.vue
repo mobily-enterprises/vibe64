@@ -29,13 +29,13 @@
                   v-bind="menuProps"
                   aria-label="Session tools"
                   class="studio-autopilot__session-tools-button"
-                  :color="activeSessionTool ? 'primary' : undefined"
+                  :class="{ 'studio-autopilot__session-tools-button--active': activeSessionTool }"
                   density="comfortable"
                   :icon="activeSessionTool?.icon || mdiInformationOutline"
                   size="small"
                   title="Session tools"
                   type="button"
-                  :variant="activeSessionTool ? 'flat' : 'tonal'"
+                  variant="flat"
                 />
               </template>
 
@@ -47,13 +47,13 @@
                   v-for="tool in sessionToolControls"
                   :key="tool.id"
                   class="studio-autopilot__session-tool"
-                  :color="rightPaneTab === tool.id ? 'primary' : undefined"
+                  :class="{ 'studio-autopilot__session-tool--active': rightPaneTab === tool.id }"
                   :disabled="tool.disabled"
                   :prepend-icon="tool.icon"
                   size="large"
                   :title="tool.title"
                   type="button"
-                  :variant="rightPaneTab === tool.id ? 'flat' : 'tonal'"
+                  variant="flat"
                   @click="selectSessionToolFromMenu(tool.id)"
                 >
                   {{ tool.label }}
@@ -1092,7 +1092,7 @@ const {
 const workflowButtonControls = computed(() => {
   return screenControls.value.map((control) => ({
     ...control,
-    buttonColor: control.style === "primary" ? "primary" : undefined,
+    buttonColor: undefined,
     buttonVariant: control.style === "primary" ? "flat" : "tonal",
     disabled: controlDisabled(control),
     icon: controlIcon(control),
@@ -1506,6 +1506,11 @@ watch(workspacePaneValue, (pane) => {
 }
 
 .studio-autopilot__session-tools-button {
+  background: var(--studio-control-rest-bg, #f7f7f8) !important;
+  border: 1px solid transparent;
+  border-radius: var(--studio-control-radius, 7px);
+  box-shadow: none !important;
+  color: var(--studio-control-text, #202124) !important;
   height: 2rem;
   letter-spacing: 0;
   margin-left: auto;
@@ -1514,11 +1519,19 @@ watch(workspacePaneValue, (pane) => {
   width: 2rem;
 }
 
+.studio-autopilot__session-tools-button:hover {
+  background: var(--studio-control-active-bg, #e7e7e7) !important;
+}
+
+.studio-autopilot__session-tools-button--active {
+  background: var(--studio-control-active-bg, #e7e7e7) !important;
+}
+
 .studio-autopilot__session-tools-menu {
   background: rgb(var(--v-theme-surface));
-  border: 1px solid rgba(var(--v-theme-outline), 0.18);
+  border: 1px solid var(--studio-control-border, rgba(17, 24, 39, 0.12));
   border-radius: 8px;
-  box-shadow: 0 0.75rem 1.5rem rgba(15, 23, 42, 0.14);
+  box-shadow: 0 0.75rem 1.5rem rgba(15, 23, 42, 0.1);
   display: grid;
   gap: 0.42rem;
   min-width: 13rem;
@@ -1526,10 +1539,21 @@ watch(workspacePaneValue, (pane) => {
 }
 
 .studio-autopilot__session-tools-menu .studio-autopilot__session-tool {
+  background: var(--studio-control-bg, #fff) !important;
+  border: 1px solid var(--studio-control-border, rgba(17, 24, 39, 0.12));
+  border-radius: var(--studio-control-radius, 7px);
+  box-shadow: none !important;
+  color: var(--studio-control-text, #202124) !important;
   font-size: 0.96rem;
-  min-height: 2.65rem;
+  min-height: 2.4rem;
   justify-content: start;
   width: 100%;
+}
+
+.studio-autopilot__session-tools-menu .studio-autopilot__session-tool:hover,
+.studio-autopilot__session-tools-menu .studio-autopilot__session-tool--active {
+  background: var(--studio-control-active-bg, #e7e7e7) !important;
+  border-color: transparent;
 }
 
 .studio-autopilot__session-tool {
@@ -1539,6 +1563,30 @@ watch(workspacePaneValue, (pane) => {
 
 .studio-autopilot__actions {
   justify-content: flex-end;
+}
+
+.studio-autopilot__status-actions :deep(.v-btn),
+.studio-autopilot__actions :deep(.v-btn),
+.studio-autopilot__command-spy-actions :deep(.v-btn:not(.v-btn--icon)) {
+  background: var(--studio-control-bg, #fff) !important;
+  border: 1px solid var(--studio-control-border, rgba(17, 24, 39, 0.12));
+  border-radius: var(--studio-control-radius, 7px);
+  box-shadow: none !important;
+  color: var(--studio-control-text, #202124) !important;
+  font-weight: 500;
+  letter-spacing: 0;
+  min-height: 2rem;
+}
+
+.studio-autopilot__status-actions :deep(.v-btn:hover),
+.studio-autopilot__actions :deep(.v-btn:hover),
+.studio-autopilot__command-spy-actions :deep(.v-btn:not(.v-btn--icon):hover) {
+  background: var(--studio-control-rest-bg, #f7f7f8) !important;
+}
+
+.studio-autopilot__actions :deep(.v-btn--variant-flat) {
+  background: var(--studio-control-active-bg, #e7e7e7) !important;
+  border-color: transparent;
 }
 
 .studio-autopilot__composer {

@@ -7,10 +7,10 @@
       <v-chip
         v-for="sessionItem in visibleSessions"
         :key="sessionItem.sessionId"
-        :color="sessionItem.sessionId === selectedSessionId ? 'primary' : 'default'"
-        :variant="sessionItem.sessionId === selectedSessionId ? 'flat' : 'tonal'"
         class="studio-ai-sessions__tab"
+        :class="{ 'studio-ai-sessions__tab--active': sessionItem.sessionId === selectedSessionId }"
         :size="compact ? 'small' : 'large'"
+        variant="flat"
         @click="toolbar.selectSession(sessionItem.sessionId)"
       >
         <span
@@ -44,13 +44,12 @@
             v-bind="menuProps"
             aria-label="New session"
             class="studio-ai-sessions__create-button"
-            color="primary"
             :disabled="!toolbar.canCreateSession"
             :icon="mdiPlus"
             :loading="toolbar.createSessionCommand.isRunning"
             size="small"
             :title="toolbar.createSessionTitle"
-            variant="tonal"
+            variant="flat"
           />
         </template>
 
@@ -76,14 +75,13 @@
         v-else-if="createSessionVisible"
         aria-label="New session"
         class="studio-ai-sessions__create-button"
-        color="primary"
         :disabled="!toolbar.canCreateSession"
         :icon="mdiPlus"
         :loading="toolbar.createSessionCommand.isRunning"
         size="small"
         :title="toolbar.createSessionTitle"
         @click="toolbar.createSession()"
-        variant="tonal"
+        variant="flat"
       />
 
       <slot name="after-sessions" />
@@ -189,10 +187,33 @@ function createSessionFromDefinition(definitionId = "") {
 
 .studio-ai-sessions__tab {
   align-items: center;
+  background: var(--studio-control-rest-bg, #f7f7f8) !important;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  box-shadow: none !important;
+  color: var(--studio-control-text, #202124) !important;
+  font-weight: 500;
   max-width: 18rem;
 }
 
+.studio-ai-sessions__tab:hover {
+  border-color: var(--studio-control-border, rgba(17, 24, 39, 0.12));
+}
+
+.studio-ai-sessions__tab--active {
+  background: var(--studio-control-active-bg, #e7e7e7) !important;
+  border-color: transparent;
+  color: var(--studio-control-text, #202124) !important;
+  font-weight: 560;
+}
+
+.studio-ai-sessions__tab :deep(.v-chip__overlay),
+.studio-ai-sessions__tab :deep(.v-chip__underlay) {
+  display: none;
+}
+
 .studio-ai-sessions__tab-abandon {
+  color: var(--studio-control-muted-text, #5f6368) !important;
   margin-left: 0.3rem;
   min-height: 1.75rem;
   min-width: 1.75rem;
@@ -200,7 +221,8 @@ function createSessionFromDefinition(definitionId = "") {
 
 .studio-ai-sessions__tab-abandon:hover,
 .studio-ai-sessions__tab-abandon:focus-visible {
-  background: rgba(var(--v-theme-on-primary), 0.16);
+  background: rgba(17, 24, 39, 0.08) !important;
+  color: var(--studio-control-text, #202124) !important;
 }
 
 .studio-ai-sessions__tab-abandon :deep(.v-icon) {
@@ -208,10 +230,18 @@ function createSessionFromDefinition(definitionId = "") {
 }
 
 .studio-ai-sessions__create-button {
+  background: var(--studio-control-rest-bg, #f7f7f8) !important;
+  border: 1px solid transparent;
   border-radius: 999px;
+  box-shadow: none !important;
+  color: #1a73e8 !important;
   height: 3rem;
   min-height: 3rem;
   min-width: 3rem;
+}
+
+.studio-ai-sessions__create-button:hover {
+  background: var(--studio-control-active-bg, #e7e7e7) !important;
 }
 
 .studio-ai-sessions__definition-menu {

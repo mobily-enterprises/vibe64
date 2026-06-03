@@ -265,6 +265,14 @@ onBeforeUnmount(() => {
   --studio-home-chat-column-min-width: 24rem;
   --studio-home-chat-column-width: 30rem;
   --studio-home-workspace-gap: 0.75rem;
+  --studio-control-bg: #ffffff;
+  --studio-control-rest-bg: #f7f7f8;
+  --studio-control-active-bg: #e7e7e7;
+  --studio-control-border: rgba(17, 24, 39, 0.12);
+  --studio-control-border-strong: rgba(17, 24, 39, 0.18);
+  --studio-control-text: #202124;
+  --studio-control-muted-text: #5f6368;
+  --studio-control-radius: 7px;
 }
 
 .generated-ui-screen {
@@ -355,44 +363,57 @@ onBeforeUnmount(() => {
 
 .studio-home-shell-chat-toggle {
   flex: 0 0 auto;
+  background: var(--studio-control-rest-bg) !important;
+  border: 1px solid transparent;
+  box-shadow: none;
+  color: var(--studio-control-text) !important;
+  height: 2rem;
+  min-height: 2rem;
+  min-width: 2rem;
+  width: 2rem;
+}
+
+.studio-home-shell-chat-toggle:hover {
+  background: var(--studio-control-active-bg) !important;
 }
 
 .studio-home-shell-workspace-tabs {
   align-items: center;
-  background: rgba(var(--v-theme-surface-variant), 0.28);
-  border: 1px solid rgba(var(--v-theme-outline), 0.12);
-  border-radius: 8px;
+  background: var(--studio-control-rest-bg);
+  border: 1px solid var(--studio-control-border);
+  border-radius: var(--studio-control-radius);
   display: inline-flex;
   flex: 0 0 auto;
-  gap: 0.12rem;
+  gap: 0.08rem;
   min-width: 0;
-  padding: 0.12rem;
+  padding: 0.1rem;
 }
 
 .studio-home-shell-workspace-tab {
   background: transparent;
   border: 0;
-  border-radius: 6px;
-  color: rgba(var(--v-theme-on-surface), 0.68);
+  border-radius: 5px;
+  color: var(--studio-control-muted-text);
   cursor: pointer;
   flex: 0 0 auto;
   font: inherit;
   font-size: 0.92rem;
-  font-weight: 700;
+  font-weight: 500;
   letter-spacing: 0;
   line-height: 1.15;
-  min-height: 1.9rem;
-  padding: 0.28rem 0.78rem;
+  min-height: 1.75rem;
+  padding: 0.24rem 0.78rem;
 }
 
 .studio-home-shell-workspace-tab:hover {
-  color: rgb(var(--v-theme-on-surface));
+  color: var(--studio-control-text);
 }
 
 .studio-home-shell-workspace-tab--active {
-  background: rgb(var(--v-theme-surface));
-  box-shadow: 0 0.1rem 0.35rem rgba(15, 23, 42, 0.1);
-  color: rgb(var(--v-theme-on-surface));
+  background: var(--studio-control-bg);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+  color: var(--studio-control-text);
+  font-weight: 590;
 }
 
 .studio-home-shell-actions {

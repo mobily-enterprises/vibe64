@@ -370,6 +370,29 @@ function handleInlineSubmitButton() {
   width: 100%;
 }
 
+.vibe64-workflow-control-form__submit-actions :deep(.v-btn),
+.vibe64-workflow-control-form__workflow-actions :deep(.v-btn) {
+  background: var(--studio-control-bg, #fff) !important;
+  border: 1px solid var(--studio-control-border, rgba(17, 24, 39, 0.12));
+  border-radius: var(--studio-control-radius, 7px);
+  box-shadow: none !important;
+  color: var(--studio-control-text, #202124) !important;
+  font-weight: 500;
+  letter-spacing: 0;
+  min-height: 2rem;
+}
+
+.vibe64-workflow-control-form__submit-actions :deep(.v-btn:hover),
+.vibe64-workflow-control-form__workflow-actions :deep(.v-btn:hover) {
+  background: var(--studio-control-rest-bg, #f7f7f8) !important;
+}
+
+.vibe64-workflow-control-form__submit-actions :deep(.v-btn--variant-flat),
+.vibe64-workflow-control-form__workflow-actions :deep(.v-btn--variant-flat) {
+  background: var(--studio-control-active-bg, #e7e7e7) !important;
+  border-color: transparent;
+}
+
 .vibe64-workflow-control-form--inline-submit .vibe64-workflow-control-form__actions {
   order: 1;
 }

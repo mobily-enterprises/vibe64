@@ -84,7 +84,7 @@ const hasTabs = computed(() => Boolean(slots.tabs));
 
 .section-container-shell__body {
   display: grid;
-  gap: 0.85rem;
+  gap: 0.7rem;
   grid-template-columns: minmax(11rem, 13rem) minmax(0, 1fr);
   height: 100%;
   min-height: 0;
@@ -97,11 +97,12 @@ const hasTabs = computed(() => Boolean(slots.tabs));
 }
 
 .section-container-shell__nav :deep(.v-list) {
-  padding: 0.35rem;
+  padding: 0.15rem 0.3rem;
 }
 
 .section-container-shell__nav :deep(.v-list-item) {
-  min-height: 40px;
+  border-radius: var(--studio-control-radius, 7px);
+  min-height: 38px;
   padding-inline: 0.6rem 0.7rem;
 }
 
@@ -123,7 +124,7 @@ const hasTabs = computed(() => Boolean(slots.tabs));
 }
 
 .section-container-shell__content {
-  border-left: 1px solid rgba(var(--v-theme-on-surface), 0.18);
+  border-left: 1px solid var(--studio-control-border, rgba(17, 24, 39, 0.12));
   min-height: 0;
   min-width: 0;
   overflow-y: auto;

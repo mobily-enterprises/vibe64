@@ -33,18 +33,18 @@ const props = defineProps({
 :deep(.v-list-item),
 :deep(a),
 :deep(button) {
-  min-height: 40px;
+  min-height: 38px;
 }
 
 :deep(.v-list-item--active) {
-  background: rgba(var(--v-theme-primary), 0.12);
-  border-left: 3px solid rgb(var(--v-theme-primary));
-  color: rgb(var(--v-theme-primary));
-  font-weight: 700;
+  background: var(--studio-control-active-bg, #e7e7e7);
+  border-left: 0;
+  color: var(--studio-control-text, #202124);
+  font-weight: 560;
 }
 
 :deep(.v-list-item--active .v-list-item__prepend),
 :deep(.v-list-item--active .v-list-item-title) {
-  color: rgb(var(--v-theme-primary));
+  color: var(--studio-control-text, #202124);
 }
 </style>
