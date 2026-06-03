@@ -4,7 +4,6 @@
     :class="{ 'studio-autopilot--chat-collapsed': chatCollapsed }"
   >
     <section
-      v-show="!chatCollapsed"
       class="studio-autopilot__chat-panel"
       aria-label="Session chat"
     >
@@ -389,143 +388,145 @@
       </div>
     </section>
 
-    <section class="studio-autopilot__preview-panel" aria-label="Workspace">
-      <div
-        v-show="rightPaneTab === 'preview'"
-        class="studio-autopilot__right-pane-page"
-        role="tabpanel"
-      >
+    <section class="studio-autopilot__workspace-panel" aria-label="Workspace">
+      <section class="studio-autopilot__preview-panel">
         <div
-          v-if="commandSpyVisible"
-          class="studio-autopilot__command-spy"
-          :class="{ 'studio-autopilot__command-spy--expanded': commandSpyExpanded }"
+          v-show="rightPaneTab === 'preview'"
+          class="studio-autopilot__right-pane-page"
+          role="tabpanel"
         >
-          <div class="studio-autopilot__command-spy-header">
-            <div class="studio-autopilot__command-spy-title">
-              <v-icon :icon="mdiConsoleLine" size="18" />
-              <span>{{ commandOverlayTitle }}</span>
+          <div
+            v-if="commandSpyVisible"
+            class="studio-autopilot__command-spy"
+            :class="{ 'studio-autopilot__command-spy--expanded': commandSpyExpanded }"
+          >
+            <div class="studio-autopilot__command-spy-header">
+              <div class="studio-autopilot__command-spy-title">
+                <v-icon :icon="mdiConsoleLine" size="18" />
+                <span>{{ commandOverlayTitle }}</span>
+              </div>
+              <div class="studio-autopilot__command-spy-actions">
+                <v-btn
+                  v-if="commandRunning"
+                  :prepend-icon="mdiStopCircleOutline"
+                  size="small"
+                  type="button"
+                  variant="tonal"
+                  @click="stopCommandAction"
+                >
+                  Stop
+                </v-btn>
+                <v-btn
+                  v-if="commandTerminalFailed"
+                  :prepend-icon="mdiRefresh"
+                  size="small"
+                  type="button"
+                  variant="tonal"
+                  @click="retryFromCommandFailure"
+                >
+                  Retry
+                </v-btn>
+                <v-btn
+                  v-if="commandTerminalFailed"
+                  :prepend-icon="mdiRobotOutline"
+                  size="small"
+                  type="button"
+                  variant="tonal"
+                  @click="requestCommandAiFix"
+                >
+                  Fix
+                </v-btn>
+                <v-btn
+                  :icon="commandSpyExpanded ? mdiChevronUp : mdiChevronDown"
+                  size="small"
+                  :title="commandSpyExpanded ? 'Collapse command output' : 'Expand command output'"
+                  type="button"
+                  variant="text"
+                  @click="commandSpyExpanded = !commandSpyExpanded"
+                />
+              </div>
             </div>
-            <div class="studio-autopilot__command-spy-actions">
-              <v-btn
-                v-if="commandRunning"
-                :prepend-icon="mdiStopCircleOutline"
-                size="small"
-                type="button"
-                variant="tonal"
-                @click="stopCommandAction"
-              >
-                Stop
-              </v-btn>
-              <v-btn
-                v-if="commandTerminalFailed"
-                :prepend-icon="mdiRefresh"
-                size="small"
-                type="button"
-                variant="tonal"
-                @click="retryFromCommandFailure"
-              >
-                Retry
-              </v-btn>
-              <v-btn
-                v-if="commandTerminalFailed"
-                :prepend-icon="mdiRobotOutline"
-                size="small"
-                type="button"
-                variant="tonal"
-                @click="requestCommandAiFix"
-              >
-                Fix
-              </v-btn>
-              <v-btn
-                :icon="commandSpyExpanded ? mdiChevronUp : mdiChevronDown"
-                size="small"
-                :title="commandSpyExpanded ? 'Collapse command output' : 'Expand command output'"
-                type="button"
-                variant="text"
-                @click="commandSpyExpanded = !commandSpyExpanded"
-              />
-            </div>
+            <p v-if="!commandSpyExpanded" class="studio-autopilot__command-spy-summary">
+              {{ commandTerminalFailed ? commandFailureSummary : commandTerminalSummary }}
+            </p>
+            <Vibe64HeadlessCommandOutput
+              v-else
+              class="studio-autopilot__command-terminal-output"
+              :action-id="commandResult?.actionId || ''"
+              :action-label="commandResult?.actionLabel || ''"
+              :attempted-command="commandResult?.attemptedCommand || ''"
+              :command-preview="commandPreview"
+              compact
+              :error="commandTerminalError"
+              :exit-code="commandResult?.exitCode ?? null"
+              :failed="commandTerminalFailed"
+              :output="commandTerminalText"
+              :running="commandRunning"
+              :session-id="sessionId"
+              :status="commandStatus"
+              :terminal-session-id="commandResult?.terminalSessionId || ''"
+              title="Autopilot command"
+              @fix-requested="openFixCodexDialog"
+            />
           </div>
-          <p v-if="!commandSpyExpanded" class="studio-autopilot__command-spy-summary">
-            {{ commandTerminalFailed ? commandFailureSummary : commandTerminalSummary }}
-          </p>
-          <Vibe64HeadlessCommandOutput
-            v-else
-            class="studio-autopilot__command-terminal-output"
-            :action-id="commandResult?.actionId || ''"
-            :action-label="commandResult?.actionLabel || ''"
-            :attempted-command="commandResult?.attemptedCommand || ''"
-            :command-preview="commandPreview"
-            compact
-            :error="commandTerminalError"
-            :exit-code="commandResult?.exitCode ?? null"
-            :failed="commandTerminalFailed"
-            :output="commandTerminalText"
-            :running="commandRunning"
-            :session-id="sessionId"
-            :status="commandStatus"
-            :terminal-session-id="commandResult?.terminalSessionId || ''"
-            title="Autopilot command"
-            @fix-requested="openFixCodexDialog"
+
+          <Vibe64LaunchControls
+            auto-start-target-id="dev"
+            button-label="Run"
+            button-size="small"
+            button-variant="tonal"
+            :busy="false"
+            class="studio-autopilot__preview-launch"
+            embedded-preview
+            :session="session"
+            :window-displayed="props.active"
           />
         </div>
 
-        <Vibe64LaunchControls
-          auto-start-target-id="dev"
-          button-label="Run"
-          button-size="small"
-          button-variant="tonal"
-          :busy="false"
-          class="studio-autopilot__preview-launch"
-          embedded-preview
-          :session="session"
-          :window-displayed="props.active"
-        />
-      </div>
+        <div
+          v-show="rightPaneTab === 'dashboard'"
+          class="studio-autopilot__right-pane-page studio-autopilot__dashboard-pane"
+          role="tabpanel"
+        >
+          <slot name="dashboard" :dashboard-context="dashboardSessionContext" />
+        </div>
 
-      <div
-        v-show="rightPaneTab === 'dashboard'"
-        class="studio-autopilot__right-pane-page studio-autopilot__dashboard-pane"
-        role="tabpanel"
-      >
-        <slot name="dashboard" :dashboard-context="dashboardSessionContext" />
-      </div>
+        <div
+          v-show="rightPaneTab === 'session-details'"
+          class="studio-autopilot__right-pane-page"
+          role="tabpanel"
+        >
+          <Vibe64SessionDetailsPane :context="dashboardSessionContext" />
+        </div>
 
-      <div
-        v-show="rightPaneTab === 'session-details'"
-        class="studio-autopilot__right-pane-page"
-        role="tabpanel"
-      >
-        <Vibe64SessionDetailsPane :context="dashboardSessionContext" />
-      </div>
+        <div
+          v-show="rightPaneTab === 'diff'"
+          class="studio-autopilot__right-pane-page"
+          role="tabpanel"
+        >
+          <Vibe64SessionDiffPanel
+            :active="rightPaneTab === 'diff'"
+            :diff="diff"
+            :review="review"
+          />
+        </div>
 
-      <div
-        v-show="rightPaneTab === 'diff'"
-        class="studio-autopilot__right-pane-page"
-        role="tabpanel"
-      >
-        <Vibe64SessionDiffPanel
-          :active="rightPaneTab === 'diff'"
-          :diff="diff"
-          :review="review"
-        />
-      </div>
+        <div
+          v-show="rightPaneTab === 'shell'"
+          class="studio-autopilot__right-pane-page"
+          role="tabpanel"
+        >
+          <slot name="shell-terminal" :active="rightPaneTab === 'shell'" />
+        </div>
 
-      <div
-        v-show="rightPaneTab === 'shell'"
-        class="studio-autopilot__right-pane-page"
-        role="tabpanel"
-      >
-        <slot name="shell-terminal" :active="rightPaneTab === 'shell'" />
-      </div>
-
-      <div
-        v-show="rightPaneTab === 'ai-terminal'"
-        class="studio-autopilot__right-pane-page"
-        role="tabpanel"
-      >
-        <slot name="ai-terminal" :active="rightPaneTab === 'ai-terminal'" />
-      </div>
+        <div
+          v-show="rightPaneTab === 'ai-terminal'"
+          class="studio-autopilot__right-pane-page"
+          role="tabpanel"
+        >
+          <slot name="ai-terminal" :active="rightPaneTab === 'ai-terminal'" />
+        </div>
+      </section>
     </section>
 
     <Vibe64FixCodexDialog
@@ -1435,7 +1436,7 @@ watch(workspacePaneValue, (pane) => {
 }
 
 .studio-autopilot__chat-panel,
-.studio-autopilot__preview-panel {
+.studio-autopilot__workspace-panel {
   background: rgb(var(--v-theme-surface));
   border: 1px solid rgba(var(--v-theme-outline), 0.14);
   border-radius: 14px;
@@ -1446,14 +1447,16 @@ watch(workspacePaneValue, (pane) => {
 }
 
 .studio-autopilot__chat-panel {
-  overflow: visible;
-}
-
-.studio-autopilot__chat-panel {
   display: grid;
   gap: 0.16rem;
   grid-template-rows: auto minmax(0, 1fr) auto auto auto;
+  overflow: visible;
   padding: 0.05rem 0.65rem 0.18rem;
+}
+
+.studio-autopilot__workspace-panel {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
 }
 
 .studio-autopilot__session-header {
@@ -1636,6 +1639,8 @@ watch(workspacePaneValue, (pane) => {
 .studio-autopilot__preview-panel {
   display: grid;
   grid-template-rows: minmax(0, 1fr);
+  min-height: 0;
+  min-width: 0;
   position: relative;
 }
 
@@ -1737,7 +1742,12 @@ watch(workspacePaneValue, (pane) => {
 
 @media (min-width: 981px) {
   .studio-autopilot {
-    grid-template-columns: minmax(24rem, 30rem) minmax(0, 1fr);
+    grid-template-columns:
+      minmax(
+        var(--studio-home-chat-column-min-width, 24rem),
+        var(--studio-home-chat-column-width, 30rem)
+      )
+      minmax(0, 1fr);
     height: 100%;
     overflow: hidden;
   }
@@ -1745,15 +1755,19 @@ watch(workspacePaneValue, (pane) => {
   .studio-autopilot--chat-collapsed {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  .studio-autopilot--chat-collapsed .studio-autopilot__chat-panel {
+    display: none;
+  }
 }
 
 @media (max-width: 980px) {
   .studio-autopilot {
-    grid-template-rows: minmax(28rem, 52vh) minmax(24rem, 1fr);
+    grid-template-rows: minmax(0, 1fr);
   }
 
-  .studio-autopilot--chat-collapsed {
-    grid-template-rows: minmax(24rem, 1fr);
+  .studio-autopilot__workspace-panel {
+    display: none;
   }
 }
 </style>

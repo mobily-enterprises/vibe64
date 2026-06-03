@@ -96,8 +96,8 @@ function selectWorkspacePane(pane = "") {
   void router.push("/home");
 }
 
-function toggleChatCollapsed() {
-  chatCollapsed.value = !chatCollapsed.value;
+function setChatCollapsed(collapsed = false) {
+  chatCollapsed.value = Boolean(collapsed);
 }
 
 function handleProjectTypeReady() {
@@ -151,58 +151,65 @@ onBeforeUnmount(() => {
 <template>
   <ShellLayout>
     <template #top-left>
-      <div class="studio-home-shell-heading">
-        <h1
-          v-if="targetFolderName"
-          class="studio-home-shell-target-folder"
-          :title="targetRoot"
-        >
-          {{ targetFolderName }}
-        </h1>
-        <!--
-        <h1
-          v-if="pageTitle"
-          class="studio-home-shell-title"
-          :title="pageTitle"
-          aria-live="polite"
-        >
-          {{ pageTitle }}
-        </h1>
-        <span v-else class="studio-home-shell-surface-label">
-          Sessions
-        </span>
-        -->
-
-        <div
-          class="studio-home-shell-workspace-tabs"
-          role="tablist"
-          aria-label="Workspace"
-        >
-          <button
-            v-for="tab in workspaceTabs"
-            :key="tab.id"
-            class="studio-home-shell-workspace-tab"
-            :class="{ 'studio-home-shell-workspace-tab--active': workspacePane === tab.id }"
-            role="tab"
-            type="button"
-            :aria-selected="workspacePane === tab.id ? 'true' : 'false'"
-            @click="selectWorkspacePane(tab.id)"
+      <div
+        class="studio-home-shell-heading"
+        :class="{ 'studio-home-shell-heading--chat-collapsed': chatCollapsed }"
+      >
+        <div class="studio-home-shell-title-area">
+          <h1
+            v-if="targetFolderName"
+            class="studio-home-shell-target-folder"
+            :title="targetRoot"
           >
-            {{ tab.label }}
-          </button>
+            {{ targetFolderName }}
+          </h1>
+          <!--
+          <h1
+            v-if="pageTitle"
+            class="studio-home-shell-title"
+            :title="pageTitle"
+            aria-live="polite"
+          >
+            {{ pageTitle }}
+          </h1>
+          <span v-else class="studio-home-shell-surface-label">
+            Sessions
+          </span>
+          -->
         </div>
 
-        <v-btn
-          class="studio-home-shell-chat-toggle"
-          density="comfortable"
-          :icon="chatCollapsed ? mdiChevronRight : mdiChevronLeft"
-          size="small"
-          :title="chatCollapsed ? 'Show chat' : 'Collapse chat'"
-          type="button"
-          variant="tonal"
-          :aria-label="chatCollapsed ? 'Show chat' : 'Collapse chat'"
-          @click="toggleChatCollapsed"
-        />
+        <div class="studio-home-shell-workspace-controls">
+          <v-btn
+            class="studio-home-shell-chat-toggle"
+            density="comfortable"
+            :icon="chatCollapsed ? mdiChevronRight : mdiChevronLeft"
+            size="small"
+            :title="chatCollapsed ? 'Show chat' : 'Collapse chat'"
+            type="button"
+            variant="tonal"
+            :aria-label="chatCollapsed ? 'Show chat' : 'Collapse chat'"
+            @click="setChatCollapsed(!chatCollapsed)"
+          />
+
+          <div
+            class="studio-home-shell-workspace-tabs"
+            role="tablist"
+            aria-label="Workspace"
+          >
+            <button
+              v-for="tab in workspaceTabs"
+              :key="tab.id"
+              class="studio-home-shell-workspace-tab"
+              :class="{ 'studio-home-shell-workspace-tab--active': workspacePane === tab.id }"
+              role="tab"
+              type="button"
+              :aria-selected="workspacePane === tab.id ? 'true' : 'false'"
+              @click="selectWorkspacePane(tab.id)"
+            >
+              {{ tab.label }}
+            </button>
+          </div>
+        </div>
       </div>
     </template>
     <section class="generated-ui-screen generated-ui-screen--studio studio-screen d-flex flex-column ga-3">
@@ -254,6 +261,12 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+:global(body.studio-home-shell-active) {
+  --studio-home-chat-column-min-width: 24rem;
+  --studio-home-chat-column-width: 30rem;
+  --studio-home-workspace-gap: 0.75rem;
+}
+
 .generated-ui-screen {
   --generated-ui-screen-title-size: clamp(1.2rem, 1.7vw, 1.55rem);
   --generated-ui-screen-panel-padding: 0;
@@ -272,8 +285,19 @@ onBeforeUnmount(() => {
 
 .studio-home-shell-heading {
   align-items: center;
+  display: grid;
+  gap: var(--studio-home-workspace-gap);
+  grid-template-columns: var(--studio-home-chat-column-width) auto;
+  min-width: 0;
+}
+
+.studio-home-shell-heading--chat-collapsed {
+  grid-template-columns: auto auto;
+}
+
+.studio-home-shell-title-area {
+  align-items: center;
   display: flex;
-  gap: 0.8rem;
   min-width: 0;
   padding-left: 1rem;
 }
@@ -281,11 +305,11 @@ onBeforeUnmount(() => {
 .studio-home-shell-title {
   color: rgb(var(--v-theme-on-surface));
   font-size: 1.2rem;
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   font-weight: 720;
   line-height: 1.2;
   margin: 0;
-  max-width: min(44rem, 58vw);
+  max-width: 100%;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -295,7 +319,7 @@ onBeforeUnmount(() => {
 .studio-home-shell-surface-label {
   color: rgb(var(--v-theme-on-surface));
   display: block;
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   font-size: 0.95rem;
   font-weight: 650;
   line-height: 1.2;
@@ -309,53 +333,66 @@ onBeforeUnmount(() => {
 .studio-home-shell-target-folder {
   color: rgb(var(--v-theme-on-surface));
   display: block;
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   font-size: 1.2rem;
   font-weight: 760;
   line-height: 1.2;
   margin: 0;
-  max-width: min(30rem, 36vw);
+  max-width: 100%;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.studio-home-shell-workspace-tabs {
+.studio-home-shell-workspace-controls {
   align-items: center;
   display: flex;
   flex: 0 0 auto;
-  gap: 0.18rem;
+  gap: 0.45rem;
   min-width: 0;
+}
+
+.studio-home-shell-chat-toggle {
+  flex: 0 0 auto;
+}
+
+.studio-home-shell-workspace-tabs {
+  align-items: center;
+  background: rgba(var(--v-theme-surface-variant), 0.28);
+  border: 1px solid rgba(var(--v-theme-outline), 0.12);
+  border-radius: 8px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 0.12rem;
+  min-width: 0;
+  padding: 0.12rem;
 }
 
 .studio-home-shell-workspace-tab {
   background: transparent;
   border: 0;
-  border-radius: 999px;
-  color: rgba(var(--v-theme-on-surface), 0.72);
+  border-radius: 6px;
+  color: rgba(var(--v-theme-on-surface), 0.68);
   cursor: pointer;
+  flex: 0 0 auto;
   font: inherit;
   font-size: 0.92rem;
-  font-weight: 720;
+  font-weight: 700;
   letter-spacing: 0;
   line-height: 1.15;
-  min-height: 2rem;
-  padding: 0.34rem 0.78rem;
+  min-height: 1.9rem;
+  padding: 0.28rem 0.78rem;
 }
 
 .studio-home-shell-workspace-tab:hover {
-  background: rgba(var(--v-theme-primary), 0.08);
   color: rgb(var(--v-theme-on-surface));
 }
 
 .studio-home-shell-workspace-tab--active {
-  background: rgba(var(--v-theme-primary), 0.13);
-  color: rgb(var(--v-theme-primary));
-}
-
-.studio-home-shell-chat-toggle {
-  flex: 0 0 auto;
+  background: rgb(var(--v-theme-surface));
+  box-shadow: 0 0.1rem 0.35rem rgba(15, 23, 42, 0.1);
+  color: rgb(var(--v-theme-on-surface));
 }
 
 .studio-home-shell-actions {
@@ -409,6 +446,12 @@ onBeforeUnmount(() => {
   }
 }
 
+@media (max-width: 980px) {
+  .studio-home-shell-workspace-controls {
+    display: none;
+  }
+}
+
 @media (max-width: 600px) {
   .studio-home-shell-title {
     font-size: 1.05rem;
@@ -417,18 +460,16 @@ onBeforeUnmount(() => {
 
   .studio-home-shell-target-folder {
     font-size: 1.05rem;
-    max-width: calc(100vw - 17rem);
+    max-width: calc(100vw - 16rem);
   }
 
   .studio-home-shell-heading {
-    gap: 0.35rem;
-    padding-left: 0.35rem;
+    display: flex;
+    padding-left: 0.65rem;
   }
 
-  .studio-home-shell-workspace-tab {
-    font-size: 0.82rem;
-    min-height: 1.8rem;
-    padding-inline: 0.46rem;
+  .studio-home-shell-title-area {
+    padding-left: 0;
   }
 
   .studio-home-shell-actions {
