@@ -28,6 +28,7 @@
       :session-toolbar="autopilotSessionToolbar"
       :workspace-pane="props.workspacePane"
       @busy-change="setAutopilotBusy"
+      @workspace-attention="emitWorkspaceAttention"
       @workspace-pane-change="emitWorkspacePaneChange"
     >
       <template #shell-terminal="{ active: tabActive }">
@@ -152,6 +153,7 @@ const emit = defineEmits([
   "busy-change",
   "page-error-change",
   "toolbar-controls-ready",
+  "workspace-attention",
   "workspace-pane-change"
 ]);
 
@@ -200,6 +202,10 @@ const sessionScopedData = {
 
 function emitWorkspacePaneChange(pane = "") {
   emit("workspace-pane-change", pane);
+}
+
+function emitWorkspaceAttention() {
+  emit("workspace-attention");
 }
 const autopilotSessionToolbar = proxyRefs({
   canCreateSession: props.sessionData.canCreateSession,

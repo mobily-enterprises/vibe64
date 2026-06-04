@@ -67,6 +67,7 @@
         @busy-change="setRuntimeBusy"
         @page-error-change="setRuntimePageError"
         @toolbar-controls-ready="setRuntimeToolbarControls"
+        @workspace-attention="emitWorkspaceAttention"
         @workspace-pane-change="emitWorkspacePaneChange"
       >
         <template #dashboard="dashboardSlotProps">
@@ -93,7 +94,7 @@ import {
   useVibe64SessionData
 } from "@/composables/useVibe64SessionData.js";
 
-const emit = defineEmits(["title-change", "workspace-pane-change"]);
+const emit = defineEmits(["title-change", "workspace-attention", "workspace-pane-change"]);
 const props = defineProps({
   chatCollapsed: {
     default: false,
@@ -122,6 +123,10 @@ const sessionData = useVibe64SessionData({
 
 function emitWorkspacePaneChange(pane = "") {
   emit("workspace-pane-change", pane);
+}
+
+function emitWorkspaceAttention() {
+  emit("workspace-attention");
 }
 
 const selection = proxyRefs({

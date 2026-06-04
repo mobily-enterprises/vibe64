@@ -113,6 +113,12 @@ function selectWorkspacePane(pane = "") {
   void router.push("/home");
 }
 
+function showWorkspacePane() {
+  if (mobilePaneLayout.value) {
+    setChatCollapsed(true);
+  }
+}
+
 function setChatCollapsed(collapsed = false) {
   chatCollapsed.value = Boolean(collapsed);
 }
@@ -276,6 +282,7 @@ onBeforeUnmount(() => {
                   :chat-collapsed="chatCollapsed"
                   :workspace-pane="workspacePane"
                   @title-change="emitPageTitle"
+                  @workspace-attention="showWorkspacePane"
                   @workspace-pane-change="selectWorkspacePane"
                 >
                   <template #dashboard="dashboardSlotProps">

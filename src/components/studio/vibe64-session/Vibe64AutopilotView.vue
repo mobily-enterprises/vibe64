@@ -645,7 +645,7 @@ import {
 
 // Autopilot workflow meaning belongs to the server. This component renders the
 // current presentation and dispatches the server-provided intents.
-const emit = defineEmits(["busy-change", "workspace-pane-change"]);
+const emit = defineEmits(["busy-change", "workspace-attention", "workspace-pane-change"]);
 
 const props = defineProps({
   actions: {
@@ -1269,6 +1269,7 @@ function selectSessionTool(tabId = "", {
 function selectSessionToolFromMenu(tabId = "") {
   if (selectSessionTool(tabId)) {
     sessionToolsMenuOpen.value = false;
+    emit("workspace-attention");
   }
 }
 

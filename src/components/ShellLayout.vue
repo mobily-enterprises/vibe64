@@ -19,6 +19,17 @@ body.studio-shell-drawer-hidden [aria-label="Toggle navigation menu"] {
   display: none !important;
 }
 
+body.studio-shell-drawer-hidden [data-testid="jskit-shell-drawer"] {
+  display: none !important;
+  visibility: hidden !important;
+  width: 0 !important;
+}
+
+body.studio-shell-drawer-hidden .v-main {
+  --v-layout-left: 0px !important;
+  padding-left: 0 !important;
+}
+
 body.studio-shell-drawer-hidden .shell-layout__content {
   padding-inline: 0.75rem;
 }
