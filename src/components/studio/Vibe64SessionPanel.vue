@@ -67,6 +67,7 @@
         @busy-change="setRuntimeBusy"
         @page-error-change="setRuntimePageError"
         @toolbar-controls-ready="setRuntimeToolbarControls"
+        @workspace-pane-change="emitWorkspacePaneChange"
       >
         <template #dashboard="dashboardSlotProps">
           <slot
@@ -92,7 +93,7 @@ import {
   useVibe64SessionData
 } from "@/composables/useVibe64SessionData.js";
 
-const emit = defineEmits(["title-change"]);
+const emit = defineEmits(["title-change", "workspace-pane-change"]);
 const props = defineProps({
   chatCollapsed: {
     default: false,
@@ -118,6 +119,10 @@ const sessionData = useVibe64SessionData({
     emit("title-change", title);
   }
 });
+
+function emitWorkspacePaneChange(pane = "") {
+  emit("workspace-pane-change", pane);
+}
 
 const selection = proxyRefs({
   isClosed: sessionData.isSelectedSessionClosed,
@@ -259,7 +264,9 @@ watch(() => [
 .studio-ai-sessions {
   display: grid;
   gap: 0.85rem;
+  height: 100%;
   min-height: 0;
+  overflow: hidden;
 }
 
 .studio-ai-sessions--autopilot {
@@ -305,7 +312,9 @@ watch(() => [
 
 .studio-ai-sessions__runtime-stack {
   display: grid;
+  height: 100%;
   min-height: 0;
+  overflow: hidden;
 }
 
 .studio-ai-sessions--autopilot .studio-ai-sessions__runtime-stack {
@@ -315,8 +324,6 @@ watch(() => [
 @media (min-width: 981px) {
   .studio-ai-sessions {
     grid-template-rows: auto minmax(0, 1fr);
-    height: 100%;
-    overflow: hidden;
   }
 
   .studio-ai-sessions--autopilot {
@@ -328,9 +335,7 @@ watch(() => [
   }
 
   .studio-ai-sessions__runtime-stack {
-    height: 100%;
     min-height: 0;
-    overflow: hidden;
   }
 
   .studio-ai-sessions__empty-layout--dashboard {

@@ -22,6 +22,7 @@
       >
         <v-btn
           v-if="embeddedPreview"
+          class="vibe64-launch-controls__position-button"
           :disabled="previewToolbarPosition === 'left'"
           :icon="mdiChevronLeft"
           size="small"
@@ -147,6 +148,7 @@
 
         <v-btn
           v-if="embeddedPreview"
+          class="vibe64-launch-controls__position-button"
           :disabled="previewToolbarPosition === 'right'"
           :icon="mdiChevronRight"
           size="small"
@@ -847,6 +849,24 @@ onBeforeUnmount(() => {
 
 .vibe64-launch-controls__terminal :deep(.vibe64-terminal-frame__host) {
   height: calc(100% - 5rem);
+}
+
+@media (max-width: 760px) {
+  .vibe64-launch-controls--embedded .vibe64-launch-controls__toolbar,
+  .vibe64-launch-controls--embedded .vibe64-launch-controls__toolbar--left,
+  .vibe64-launch-controls--embedded .vibe64-launch-controls__toolbar--center,
+  .vibe64-launch-controls--embedded .vibe64-launch-controls__toolbar--right {
+    bottom: 0.85rem;
+    left: 50%;
+    opacity: 0.72;
+    right: auto;
+    top: auto;
+    transform: translateX(-50%);
+  }
+
+  .vibe64-launch-controls__position-button {
+    display: none;
+  }
 }
 
 @keyframes vibe64-launch-status-pulse {

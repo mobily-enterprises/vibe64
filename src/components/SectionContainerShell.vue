@@ -1,5 +1,12 @@
 <script setup>
-import { computed, useSlots } from "vue";
+import {
+  computed,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  useSlots
+} from "vue";
+import { useRoute, useRouter } from "vue-router";
 
 const props = defineProps({
   title: {
@@ -9,14 +16,100 @@ const props = defineProps({
   subtitle: {
     type: String,
     default: ""
+  },
+  mobileSectionLinks: {
+    type: Array,
+    default: () => []
   }
 });
 
+const MOBILE_SECTION_MEDIA_QUERY = "(max-width: 760px)";
 const slots = useSlots();
+const route = useRoute();
+const router = useRouter();
+const mobileSectionLayout = ref(initialMobileSectionLayout());
+let mobileSectionMediaQuery = null;
 const resolvedTitle = computed(() => String(props.title || "").trim());
 const resolvedSubtitle = computed(() => String(props.subtitle || "").trim());
 const hasHeading = computed(() => Boolean(resolvedTitle.value || resolvedSubtitle.value));
 const hasTabs = computed(() => Boolean(slots.tabs));
+const mobileSectionLinks = computed(() => {
+  return props.mobileSectionLinks
+    .map((link) => ({
+      disabled: link?.disabled === true,
+      icon: String(link?.icon || ""),
+      id: String(link?.id || link?.to || link?.label || ""),
+      label: String(link?.label || ""),
+      to: normalizePath(link?.to || "")
+    }))
+    .filter((link) => Boolean(link.id && link.label && link.to));
+});
+const mobileSectionsActive = computed(() => Boolean(
+  mobileSectionLayout.value &&
+  mobileSectionLinks.value.length
+));
+const activeMobileSection = computed(() => {
+  const routePath = normalizePath(route.path || "");
+  return mobileSectionLinks.value.find((link) => normalizePath(link.to) === routePath) || null;
+});
+const activeMobileSectionValue = computed(() => activeMobileSection.value?.to || null);
+
+function initialMobileSectionLayout() {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+    return false;
+  }
+  return window.matchMedia(MOBILE_SECTION_MEDIA_QUERY).matches;
+}
+
+function normalizePath(path = "") {
+  const value = String(path || "").trim();
+  if (!value || value === "/") {
+    return value || "/";
+  }
+  return value.replace(/\/+$/u, "");
+}
+
+function syncMobileSectionLayout() {
+  mobileSectionLayout.value = Boolean(mobileSectionMediaQuery?.matches);
+}
+
+function mobileSectionActive(link = {}) {
+  return normalizePath(link?.to || "") === normalizePath(route.path || "");
+}
+
+function selectMobileSection(value = "") {
+  const targetPath = normalizePath(value || "");
+  if (!targetPath || targetPath === activeMobileSectionValue.value) {
+    return;
+  }
+  const targetLink = mobileSectionLinks.value.find((link) => link.to === targetPath);
+  if (!targetLink || targetLink.disabled) {
+    return;
+  }
+  void router.push(targetLink.to);
+}
+
+onMounted(() => {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+    return;
+  }
+  mobileSectionMediaQuery = window.matchMedia(MOBILE_SECTION_MEDIA_QUERY);
+  syncMobileSectionLayout();
+  if (typeof mobileSectionMediaQuery.addEventListener === "function") {
+    mobileSectionMediaQuery.addEventListener("change", syncMobileSectionLayout);
+  } else {
+    mobileSectionMediaQuery.addListener?.(syncMobileSectionLayout);
+  }
+});
+
+onBeforeUnmount(() => {
+  if (typeof mobileSectionMediaQuery?.removeEventListener === "function") {
+    mobileSectionMediaQuery.removeEventListener("change", syncMobileSectionLayout);
+  } else {
+    mobileSectionMediaQuery?.removeListener?.(syncMobileSectionLayout);
+  }
+  mobileSectionMediaQuery = null;
+});
 </script>
 
 <template>
@@ -31,7 +124,42 @@ const hasTabs = computed(() => Boolean(slots.tabs));
       border
       class="section-container-shell__panel"
     >
-      <div class="section-container-shell__body">
+      <v-expansion-panels
+        v-if="mobileSectionsActive"
+        :model-value="activeMobileSectionValue"
+        class="section-container-shell__mobile-sections"
+        variant="accordion"
+        @update:model-value="selectMobileSection"
+      >
+        <v-expansion-panel
+          v-for="link in mobileSectionLinks"
+          :key="link.id"
+          class="section-container-shell__mobile-section"
+          :disabled="link.disabled"
+          :value="link.to"
+        >
+          <v-expansion-panel-title class="section-container-shell__mobile-section-title">
+            <span class="section-container-shell__mobile-section-label">
+              <v-icon
+                v-if="link.icon"
+                :icon="link.icon"
+                size="22"
+              />
+              <span>{{ link.label }}</span>
+            </span>
+          </v-expansion-panel-title>
+          <v-expansion-panel-text>
+            <div
+              v-if="mobileSectionActive(link)"
+              class="section-container-shell__mobile-section-content"
+            >
+              <slot />
+            </div>
+          </v-expansion-panel-text>
+        </v-expansion-panel>
+      </v-expansion-panels>
+
+      <div v-else class="section-container-shell__body">
         <nav
           v-if="hasTabs"
           class="section-container-shell__nav"
@@ -80,6 +208,51 @@ const hasTabs = computed(() => Boolean(slots.tabs));
   display: grid;
   min-height: 0;
   overflow: hidden;
+}
+
+.section-container-shell__mobile-sections {
+  display: block;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.75rem;
+  scrollbar-gutter: stable;
+}
+
+.section-container-shell__mobile-section {
+  border: 1px solid var(--studio-control-border, rgba(17, 24, 39, 0.12));
+  border-radius: var(--studio-control-radius, 7px) !important;
+  box-shadow: none !important;
+  overflow: hidden;
+}
+
+.section-container-shell__mobile-section + .section-container-shell__mobile-section {
+  margin-top: 0.55rem;
+}
+
+.section-container-shell__mobile-section-title {
+  min-height: 48px;
+}
+
+.section-container-shell__mobile-section-label {
+  align-items: center;
+  display: inline-flex;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.section-container-shell__mobile-section-label span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.section-container-shell__mobile-section-content {
+  min-width: 0;
+  padding-right: 0.15rem;
+}
+
+.section-container-shell__mobile-section-content :deep(.vibe64-dashboard-page) {
+  min-height: auto;
 }
 
 .section-container-shell__body {
@@ -135,18 +308,6 @@ const hasTabs = computed(() => Boolean(slots.tabs));
 @media (max-width: 760px) {
   .section-container-shell__body {
     grid-template-columns: 1fr;
-  }
-
-  .section-container-shell__nav :deep(.v-list) {
-    display: flex;
-    gap: 0.25rem;
-    overflow-x: auto;
-    scrollbar-width: thin;
-  }
-
-  .section-container-shell__nav :deep(.v-list-item) {
-    flex: 0 0 auto;
-    min-height: 40px;
   }
 
   .section-container-shell__content {

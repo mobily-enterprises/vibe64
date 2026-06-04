@@ -28,6 +28,7 @@
       :session-toolbar="autopilotSessionToolbar"
       :workspace-pane="props.workspacePane"
       @busy-change="setAutopilotBusy"
+      @workspace-pane-change="emitWorkspacePaneChange"
     >
       <template #shell-terminal="{ active: tabActive }">
         <Vibe64ShellControls
@@ -150,7 +151,8 @@ const props = defineProps({
 const emit = defineEmits([
   "busy-change",
   "page-error-change",
-  "toolbar-controls-ready"
+  "toolbar-controls-ready",
+  "workspace-pane-change"
 ]);
 
 const CODEX_QUIET_TERMINAL_POLL_MS = 1000;
@@ -195,6 +197,10 @@ const sessionScopedData = {
   timelineSteps,
   workflowDefinitions: props.sessionData.workflowDefinitions
 };
+
+function emitWorkspacePaneChange(pane = "") {
+  emit("workspace-pane-change", pane);
+}
 const autopilotSessionToolbar = proxyRefs({
   canCreateSession: props.sessionData.canCreateSession,
   createSession: props.sessionData.createSession,

@@ -27,7 +27,7 @@ describe("useCodexTerminalElement", () => {
     expect(normalizeTerminalSessionId({})).toBe("");
   });
 
-  it("creates the shared terminal with the Codex non-live resize contract", () => {
+  it("creates the shared terminal with the Codex debounced resize contract", () => {
     const fakeTerminal = createFakeStudioTerminal();
     const onOutput = vi.fn();
     const webSocketUrl = vi.fn();
@@ -40,9 +40,11 @@ describe("useCodexTerminalElement", () => {
     });
 
     expect(useStudioTerminalMock).toHaveBeenCalledWith(expect.objectContaining({
-      liveResize: false,
+      fitOnResize: true,
+      liveResize: true,
       onOutput,
       readOnly: true,
+      resizeReportDelayMs: 120,
       webSocketUrl
     }));
     expect(terminal.terminalSessionId).toBe(fakeTerminal.terminalSessionId);

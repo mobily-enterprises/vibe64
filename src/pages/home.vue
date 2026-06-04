@@ -39,6 +39,8 @@ const HOME_SHELL_CLASS = "studio-home-shell-active";
 const pageTitle = ref("");
 const pageError = ref("");
 const chatCollapsed = ref(false);
+const mobilePaneLayout = ref(false);
+let mobilePaneMediaQuery = null;
 const projectSelectionResource = useEndpointResource({
   client: studioHttpClient,
   fallbackLoadError: "Project selection could not load.",
@@ -50,6 +52,18 @@ const targetRoot = computed(() => String(projectSelectionResource.data.value?.ta
 const targetFolderName = computed(() => finalPathSegment(targetRoot.value));
 const dashboardRouteActive = computed(() => String(route.path || "").startsWith("/home/dashboard"));
 const workspacePane = computed(() => dashboardRouteActive.value ? "dashboard" : "preview");
+const chatToggleIcon = computed(() => {
+  if (mobilePaneLayout.value) {
+    return chatCollapsed.value ? mdiChevronLeft : mdiChevronRight;
+  }
+  return chatCollapsed.value ? mdiChevronRight : mdiChevronLeft;
+});
+const chatToggleTitle = computed(() => {
+  if (mobilePaneLayout.value) {
+    return chatCollapsed.value ? "Show chat" : "Show workspace";
+  }
+  return chatCollapsed.value ? "Show chat" : "Collapse chat";
+});
 const workspaceTabs = Object.freeze([
   {
     id: "preview",
@@ -89,6 +103,9 @@ function emitPageTitle(title = "") {
 }
 
 function selectWorkspacePane(pane = "") {
+  if (mobilePaneLayout.value) {
+    setChatCollapsed(true);
+  }
   if (pane === "dashboard") {
     void router.push("/home/dashboard/accounts");
     return;
@@ -98,6 +115,10 @@ function selectWorkspacePane(pane = "") {
 
 function setChatCollapsed(collapsed = false) {
   chatCollapsed.value = Boolean(collapsed);
+}
+
+function syncMobilePaneLayout() {
+  mobilePaneLayout.value = Boolean(mobilePaneMediaQuery?.matches);
 }
 
 function handleProjectTypeReady() {
@@ -141,10 +162,25 @@ watch(
 
 onMounted(() => {
   setHomeShellActive(true);
+  if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
+    mobilePaneMediaQuery = window.matchMedia("(max-width: 980px)");
+    syncMobilePaneLayout();
+    if (typeof mobilePaneMediaQuery.addEventListener === "function") {
+      mobilePaneMediaQuery.addEventListener("change", syncMobilePaneLayout);
+    } else {
+      mobilePaneMediaQuery.addListener?.(syncMobilePaneLayout);
+    }
+  }
 });
 
 onBeforeUnmount(() => {
   setHomeShellActive(false);
+  if (typeof mobilePaneMediaQuery?.removeEventListener === "function") {
+    mobilePaneMediaQuery.removeEventListener("change", syncMobilePaneLayout);
+  } else {
+    mobilePaneMediaQuery?.removeListener?.(syncMobilePaneLayout);
+  }
+  mobilePaneMediaQuery = null;
 });
 </script>
 
@@ -182,12 +218,12 @@ onBeforeUnmount(() => {
           <v-btn
             class="studio-home-shell-chat-toggle"
             density="comfortable"
-            :icon="chatCollapsed ? mdiChevronRight : mdiChevronLeft"
+            :icon="chatToggleIcon"
             size="small"
-            :title="chatCollapsed ? 'Show chat' : 'Collapse chat'"
+            :title="chatToggleTitle"
             type="button"
             variant="tonal"
-            :aria-label="chatCollapsed ? 'Show chat' : 'Collapse chat'"
+            :aria-label="chatToggleTitle"
             @click="setChatCollapsed(!chatCollapsed)"
           />
 
@@ -240,6 +276,7 @@ onBeforeUnmount(() => {
                   :chat-collapsed="chatCollapsed"
                   :workspace-pane="workspacePane"
                   @title-change="emitPageTitle"
+                  @workspace-pane-change="selectWorkspacePane"
                 >
                   <template #dashboard="dashboardSlotProps">
                     <RouterView
@@ -281,14 +318,45 @@ onBeforeUnmount(() => {
 }
 
 .studio-screen {
+  flex: 1 1 auto;
+  height: 100%;
   margin-inline: 0;
   max-width: none;
   min-height: 0;
+  overflow: hidden;
   width: 100%;
 }
 
 .studio-screen__panel {
   padding: var(--generated-ui-screen-panel-padding);
+}
+
+.studio-screen__gate-scroll {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.studio-screen__gate-scroll :deep(.project-type-gate),
+.studio-screen__gate-scroll :deep(.project-selection-gate) {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.studio-screen__gate-scroll :deep(.project-type-gate .studio-ai-sessions) {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.studio-screen__gate-scroll :deep(.project-type-setup),
+.studio-screen__gate-scroll :deep(.project-config-setup) {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .studio-home-shell-heading {
@@ -428,47 +496,24 @@ onBeforeUnmount(() => {
 }
 
 @media (min-width: 981px) {
-  .studio-screen {
-    flex: 1 1 auto;
-    height: 100%;
-    overflow: hidden;
-  }
-
-  .studio-screen__gate-scroll {
-    display: flex;
-    flex: 1 1 auto;
-    flex-direction: column;
-    min-height: 0;
-    overflow: hidden;
-  }
-
-  .studio-screen__gate-scroll :deep(.project-type-gate),
-  .studio-screen__gate-scroll :deep(.project-selection-gate) {
-    display: flex;
-    flex: 1 1 auto;
-    flex-direction: column;
-    min-height: 0;
-  }
-
-  .studio-screen__gate-scroll :deep(.project-type-gate .studio-ai-sessions) {
-    flex: 1 1 auto;
-    min-height: 0;
-  }
-
   .studio-screen__gate-scroll :deep(.project-type-gate .studio-ai-sessions--autopilot) {
     padding: 0;
-  }
-
-  .studio-screen__gate-scroll :deep(.project-type-setup),
-  .studio-screen__gate-scroll :deep(.project-config-setup) {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-y: auto;
   }
 }
 
 @media (max-width: 980px) {
+  .studio-home-shell-heading {
+    gap: 0.5rem;
+    grid-template-columns: minmax(0, 1fr) auto;
+    width: 100%;
+  }
+
   .studio-home-shell-workspace-controls {
+    display: flex;
+    margin-left: auto;
+  }
+
+  .studio-home-shell-workspace-tabs {
     display: none;
   }
 }
@@ -486,7 +531,9 @@ onBeforeUnmount(() => {
 
   .studio-home-shell-heading {
     display: flex;
+    gap: 0.35rem;
     padding-left: 0.65rem;
+    width: 100%;
   }
 
   .studio-home-shell-title-area {
@@ -496,6 +543,10 @@ onBeforeUnmount(() => {
   .studio-home-shell-actions {
     gap: 0.25rem;
     max-width: calc(100vw - 9rem);
+  }
+
+  .studio-home-shell-workspace-controls {
+    gap: 0.3rem;
   }
 
   .studio-screen {

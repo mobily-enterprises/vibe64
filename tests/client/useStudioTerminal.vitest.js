@@ -67,6 +67,7 @@ describe("useStudioTerminal", () => {
     globalThis.WebSocket = FakeWebSocket;
     globalThis.window = {
       addEventListener() {},
+      clearTimeout: globalThis.clearTimeout,
       removeEventListener() {},
       setTimeout: globalThis.setTimeout
     };
