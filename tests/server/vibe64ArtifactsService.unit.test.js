@@ -12,7 +12,6 @@ import {
   createService
 } from "../../packages/vibe64-artifacts/src/server/service.js";
 import {
-  helperSocketHostPath,
   prepareCurrentStepInputHelper
 } from "@local/vibe64-runtime/server/currentStepInputHelperServer";
 import {
@@ -475,6 +474,7 @@ test("Vibe64 current-step helper submits through the same server path", async ()
       },
       projectService,
       session,
+      socketMode: "host",
       targetRoot
     });
 
@@ -490,10 +490,7 @@ test("Vibe64 current-step helper submits through the same server path", async ()
         stepId: "issue_file_created",
         stepStatus: "awaiting_agent_result"
       })
-    ], {
-      ...helper.env,
-      VIBE64_CURRENT_STEP_INPUT_SOCKET: helperSocketHostPath(targetRoot)
-    });
+    ], helper.env);
 
     assert.equal(result.code, 0, result.stderr || result.stdout);
     const response = JSON.parse(result.stdout);
@@ -527,15 +524,13 @@ test("Vibe64 current-step helper accepts --json with stdin payload", async () =>
     const helper = await prepareCurrentStepInputHelper({
       projectService,
       session,
+      socketMode: "host",
       targetRoot
     });
 
     const result = await runNodeScript(helper.env.VIBE64_CURRENT_STEP_INPUT_HELPER, [
       "--json"
-    ], {
-      ...helper.env,
-      VIBE64_CURRENT_STEP_INPUT_SOCKET: helperSocketHostPath(targetRoot)
-    }, JSON.stringify({
+    ], helper.env, JSON.stringify({
       fields: {
         body: "Create a booking dashboard.",
         title: "Add booking dashboard",
@@ -577,6 +572,7 @@ test("Vibe64 terminal chat helper mirrors direct terminal exchanges into the con
       },
       projectService,
       session,
+      socketMode: "host",
       targetRoot
     });
 
@@ -586,10 +582,7 @@ test("Vibe64 terminal chat helper mirrors direct terminal exchanges into the con
         request: "This came from the Codex terminal.",
         response: "This answer should be mirrored into Vibe64 chat."
       })
-    ], {
-      ...helper.env,
-      VIBE64_TERMINAL_CHAT_SOCKET: helperSocketHostPath(targetRoot)
-    });
+    ], helper.env);
 
     assert.equal(result.code, 0, result.stderr || result.stdout);
     const response = JSON.parse(result.stdout);
@@ -628,6 +621,7 @@ test("Vibe64 current-step helper rejects stale state", async () => {
     const helper = await prepareCurrentStepInputHelper({
       projectService,
       session,
+      socketMode: "host",
       targetRoot
     });
 
@@ -643,10 +637,7 @@ test("Vibe64 current-step helper rejects stale state", async () => {
         stepId: "issue_file_created",
         stepStatus: "confirm_files"
       })
-    ], {
-      ...helper.env,
-      VIBE64_CURRENT_STEP_INPUT_SOCKET: helperSocketHostPath(targetRoot)
-    });
+    ], helper.env);
 
     assert.equal(result.code, 1);
     const response = JSON.parse(result.stdout);

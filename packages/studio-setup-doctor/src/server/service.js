@@ -39,6 +39,7 @@ const TOOLCHAIN_DOCKERFILE = "tooling/studio-setup/Dockerfile";
 const TOOLCHAIN_CONTEXT = "tooling/studio-setup";
 const TERMINAL_NAMESPACE = "studio-setup-doctor";
 const REINSTALL_CODEX_CLI_TERMINAL_PREVIEW = "Reinstall Codex CLI inside the managed Studio toolchain";
+const REINSTALL_OPENCODE_CLI_TERMINAL_PREVIEW = "Reinstall OpenCode CLI inside the managed Studio toolchain";
 
 const isStudioSetupReady = areDoctorChecksReady;
 
@@ -157,6 +158,49 @@ function reinstallCodexCliTerminalScript() {
     printTerminalLine("This can take a minute while npm downloads Codex and its native package."),
     commandPreview(args),
     printTerminalLine("Status: done. Codex CLI was reinstalled and verified."),
+    printTerminalLine("It is safe to close this terminal.")
+  ].join("\n");
+}
+
+function reinstallOpenCodeCliScript() {
+  return [
+    "set -e",
+    "OPENCODE_GLOBAL_PACKAGE_DIR=\"${NPM_CONFIG_PREFIX:?}/lib/node_modules/opencode-ai\"",
+    "echo '[studio] Removing broken OpenCode CLI install...'",
+    "rm -rf \"$OPENCODE_GLOBAL_PACKAGE_DIR\"",
+    "rm -rf \"${NPM_CONFIG_PREFIX:?}/lib/node_modules/.opencode-ai-\"*",
+    "echo '[studio] Reinstalling OpenCode CLI...'",
+    "npm install -g opencode-ai@latest",
+    "echo '[studio] Verifying OpenCode CLI...'",
+    "opencode --version"
+  ].join("\n");
+}
+
+function reinstallOpenCodeCliToolchainArgs() {
+  return buildDoctorToolchainArgs([
+    "bash",
+    "-lc",
+    reinstallOpenCodeCliScript()
+  ]);
+}
+
+function reinstallOpenCodeCliRepair() {
+  return createRepair({
+    actionId: "reinstall-opencode-cli",
+    command: commandPreview(reinstallOpenCodeCliToolchainArgs()),
+    label: "Reinstall OpenCode CLI"
+  });
+}
+
+function reinstallOpenCodeCliTerminalScript() {
+  const args = reinstallOpenCodeCliToolchainArgs();
+  return [
+    "set -e",
+    printTerminalLine("Vibe64 setup: reinstalling OpenCode CLI."),
+    printTerminalLine("Status: running. Keep this terminal open."),
+    printTerminalLine("This can take a minute while npm downloads OpenCode and its native package."),
+    commandPreview(args),
+    printTerminalLine("Status: done. OpenCode CLI was reinstalled and verified."),
     printTerminalLine("It is safe to close this terminal.")
   ].join("\n");
 }
@@ -560,6 +604,23 @@ function createStudioRuntimeDoctorPlugin({
           }
         },
         {
+          id: "opencode",
+          label: "OpenCode CLI",
+          run() {
+            return toolchainReady
+              ? checkToolchainCommand({
+                id: "opencode",
+                label: "OpenCode CLI",
+                commandArgs: ["opencode", "--version"],
+                expected: "OpenCode runs inside the managed base toolchain.",
+                explanation: "Studio uses OpenCode as the default multi-provider AI runtime.",
+                isValid: (output) => output.trim().length > 0,
+                repair: reinstallOpenCodeCliRepair()
+              })
+              : missingToolchainCheck("opencode", "OpenCode CLI");
+          }
+        },
+        {
           id: "codex-sandbox",
           label: "Codex sandbox",
           run() {
@@ -601,6 +662,16 @@ function createStudioRuntimeDoctorPlugin({
             commandDetails: reinstallCodexCliRepair().commandPreview
           },
           script: reinstallCodexCliTerminalScript()
+        });
+      }
+      if (actionId === "reinstall-opencode-cli") {
+        return startBashTerminal({
+          commandPreview: REINSTALL_OPENCODE_CLI_TERMINAL_PREVIEW,
+          cwd: studioRoot,
+          metadata: {
+            commandDetails: reinstallOpenCodeCliRepair().commandPreview
+          },
+          script: reinstallOpenCodeCliTerminalScript()
         });
       }
 
@@ -696,9 +767,13 @@ export {
   TOOLCHAIN_IMAGE,
   resolveStudioRoot,
   REINSTALL_CODEX_CLI_TERMINAL_PREVIEW,
+  REINSTALL_OPENCODE_CLI_TERMINAL_PREVIEW,
   reinstallCodexCliRepair,
   reinstallCodexCliScript,
   reinstallCodexCliTerminalScript,
+  reinstallOpenCodeCliRepair,
+  reinstallOpenCodeCliScript,
+  reinstallOpenCodeCliTerminalScript,
   isStudioSetupReady,
   createService
 };

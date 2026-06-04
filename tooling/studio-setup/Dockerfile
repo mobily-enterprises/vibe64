@@ -42,7 +42,7 @@ RUN corepack enable \
   && corepack prepare "pnpm@${PNPM_VERSION}" --activate \
   && corepack prepare "yarn@${YARN_VERSION}" --activate
 
-RUN npm install -g "bun@${BUN_VERSION}" @openai/codex "@playwright/test@${PLAYWRIGHT_VERSION}" \
+RUN npm install -g "bun@${BUN_VERSION}" @openai/codex opencode-ai "@playwright/test@${PLAYWRIGHT_VERSION}" \
   && playwright install --with-deps chromium \
   && node --version \
   && npm --version \
@@ -50,6 +50,8 @@ RUN npm install -g "bun@${BUN_VERSION}" @openai/codex "@playwright/test@${PLAYWR
   && corepack pnpm --version \
   && corepack yarn --version \
   && bun --version \
+  && codex --version \
+  && opencode --version \
   && chmod -R 0777 /ms-playwright
 
 WORKDIR /workspace

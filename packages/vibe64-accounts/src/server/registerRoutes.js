@@ -3,13 +3,17 @@ import {
   ACTION_LOGOUT_ACCOUNT,
   ACTION_READ_ACCOUNTS,
   ACTION_READ_ACCOUNT_AUTH_SESSION,
+  ACTION_SET_OPENCODE_PROVIDER_AUTH,
+  ACTION_START_OPENCODE_PROVIDER_OAUTH,
   ACTION_START_ACCOUNT_AUTH
 } from "./actions.js";
 import {
   accountIdInputValidator,
   accountAuthSessionInputValidator,
   accountAuthStartInputValidator,
-  accountsReadInputValidator
+  accountsReadInputValidator,
+  opencodeProviderAuthInputValidator,
+  opencodeProviderOAuthInputValidator
 } from "./inputSchemas.js";
 import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRoutes";
 
@@ -46,6 +50,20 @@ function registerRoutes(
     body: accountIdInputValidator,
     buildInput: routes.requestBody,
     summary: "Log out an Vibe64 account."
+  });
+
+  routes.actionRoute("POST", "/opencode/providers/auth", {
+    actionId: ACTION_SET_OPENCODE_PROVIDER_AUTH,
+    body: opencodeProviderAuthInputValidator,
+    buildInput: routes.requestBody,
+    summary: "Set an OpenCode provider API key."
+  });
+
+  routes.actionRoute("POST", "/opencode/providers/oauth", {
+    actionId: ACTION_START_OPENCODE_PROVIDER_OAUTH,
+    body: opencodeProviderOAuthInputValidator,
+    buildInput: routes.requestBody,
+    summary: "Start an OpenCode provider OAuth flow."
   });
 
   routes.actionRoute("GET", "/auth/:sessionId", {

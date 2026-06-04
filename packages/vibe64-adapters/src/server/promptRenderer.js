@@ -20,7 +20,7 @@ const TEMPLATE_TOKEN_PATTERN = /\{\{([A-Za-z0-9_.-]+)\}\}/gu;
 const MANAGED_SERVICE_POLICY = [
   "Use the Managed services section as the only source for Vibe64-managed database access.",
   "Run the listed non-interactive client command directly from the worktree terminal: mysql or mariadb for MySQL-compatible services, and psql for PostgreSQL services.",
-  "When checking connectivity or inspecting schema from Codex, use `checkCommand`, use `command` with a real SQL statement, or pipe SQL to the client; do not run a bare interactive database client that waits for input.",
+  "When checking connectivity or inspecting schema from the agent, use `checkCommand`, use `command` with a real SQL statement, or pipe SQL to the client; do not run a bare interactive database client that waits for input.",
   "When framework generators or CLIs ask for database connection tokens or flags, including commands such as `npx jskit ...`, pass the environment-variable references from `generatorTokenHints` instead of discovering replacement values.",
   "Do not inspect Docker, Docker Compose, container names, runtime networks, localhost sockets, getent, mysqladmin, mariadb-admin, pg_isready, or host port probes for normal managed-service work.",
   "If the listed client command cannot connect, report that the managed service is not ready or ask for the missing external detail; do not invent alternate credentials or infrastructure."
@@ -237,8 +237,8 @@ function contextWithStaticReferences(context = {}) {
     ...context,
     adapter: {
       ...context.adapter,
-      commands: staticJsonReference("Adapter commands are runtime-only Studio metadata and are not included in the Codex briefing."),
-      facts: staticJsonReference("Adapter project facts are runtime-only Studio metadata and are not included in the Codex briefing."),
+      commands: staticJsonReference("Adapter commands are runtime-only Studio metadata and are not included in the Vibe64 session briefing."),
+      facts: staticJsonReference("Adapter project facts are runtime-only Studio metadata and are not included in the Vibe64 session briefing."),
       managedServices: staticJsonReference("Managed service connection details and policy are in the Vibe64 session briefing."),
       promptContext: staticJsonReference("Adapter prompt context is in the Vibe64 session briefing.")
     },
@@ -250,7 +250,7 @@ function promptSessionBriefingReference() {
   return [
     "Session briefing:",
     STATIC_CONTEXT_REFERENCE,
-    "Do not ask the user to restate those static setup details. If this prompt includes an Vibe64 session briefing above, treat that briefing as the source of truth for this Codex session."
+    "Do not ask the user to restate those static setup details. If this prompt includes a Vibe64 session briefing above, treat that briefing as the source of truth for this agent session."
   ].join("\n");
 }
 
@@ -268,7 +268,7 @@ function currentStepInputHelperBriefing() {
     "",
     "Vibe64 terminal chat mirror helper:",
     "- Command: node \"$VIBE64_TERMINAL_CHAT_HELPER\"",
-    "- If you later receive a user prompt that does not include `VIBE64_ROUTED_TURN`, treat it as direct Codex terminal input.",
+    "- If you later receive a user prompt that does not include `VIBE64_ROUTED_TURN`, treat it as direct agent terminal input.",
     "- For direct terminal input, answer normally and best-effort call this helper with `request` and `response` fields.",
     "- This helper only mirrors the exchange into Vibe64 chat; it does not advance workflow state."
   ].join("\n");
@@ -442,7 +442,7 @@ function promptSessionBriefing(contextInput = {}) {
   return [
     "Vibe64 session briefing",
     "",
-    "This briefing is sent once at the start of this Codex session. Keep using it for later Vibe64 prompts in the same session instead of asking for or rediscovering these static setup facts.",
+    "This briefing is sent once at the start of this agent session. Keep using it for later Vibe64 prompts in the same session instead of asking for or rediscovering these static setup facts.",
     "",
     "Fixed session paths:",
     `- session id: ${context.session.id}`,
@@ -485,11 +485,11 @@ function promptTemplateTokens(contextInput) {
     "action.label": context.action.label,
     "action.promptId": context.action.promptId,
     "adapter.commands.json": referenceStaticContext
-      ? stableJson(staticJsonReference("Adapter commands are runtime-only Studio metadata and are not included in the Codex briefing."))
+      ? stableJson(staticJsonReference("Adapter commands are runtime-only Studio metadata and are not included in the Vibe64 session briefing."))
       : stableJson(context.adapter.commands),
     "adapter.detection.json": stableJson(context.adapter.detection),
     "adapter.facts.json": referenceStaticContext
-      ? stableJson(staticJsonReference("Adapter project facts are runtime-only Studio metadata and are not included in the Codex briefing."))
+      ? stableJson(staticJsonReference("Adapter project facts are runtime-only Studio metadata and are not included in the Vibe64 session briefing."))
       : stableJson(context.adapter.facts),
     "adapter.id": context.adapter.id,
     "adapter.label": context.adapter.label,

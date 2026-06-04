@@ -10,6 +10,8 @@ import {
   ACCOUNTS_AUTH_ENDPOINT,
   ACCOUNTS_ENDPOINT,
   ACCOUNTS_LOGOUT_ENDPOINT,
+  OPENCODE_PROVIDER_AUTH_ENDPOINT,
+  OPENCODE_PROVIDER_OAUTH_ENDPOINT,
   VIBE64_ACCOUNTS_AUTH_API_SUFFIX,
   accountsQueryKey
 } from "@/lib/studioGateApi.js";
@@ -76,6 +78,22 @@ function useVibe64Accounts() {
     });
   }
 
+  async function setOpenCodeProviderAuth(providerId, apiKey) {
+    const response = await studioHttpClient.post(OPENCODE_PROVIDER_AUTH_ENDPOINT, {
+      apiKey: String(apiKey || ""),
+      providerId: String(providerId || "")
+    });
+    await refresh();
+    return response;
+  }
+
+  async function startOpenCodeProviderOAuth(providerId, methodIndex) {
+    return studioHttpClient.post(OPENCODE_PROVIDER_OAUTH_ENDPOINT, {
+      methodIndex: String(methodIndex ?? ""),
+      providerId: String(providerId || "")
+    });
+  }
+
   async function refresh() {
     forceRefresh.value = true;
     try {
@@ -92,6 +110,8 @@ function useVibe64Accounts() {
     readAuthSession,
     refresh,
     logout,
+    setOpenCodeProviderAuth,
+    startOpenCodeProviderOAuth,
     startAuth,
     startAuthCommand,
     status: statusResource.data,

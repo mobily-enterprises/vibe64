@@ -75,6 +75,7 @@
         :display-mode="codexTerminalDisplayMode"
         :listen-when-hidden="codexListenWhenHidden"
         :read-only="codexReadOnly"
+        :runtime-id="agentRuntimeId"
         :scope="codexScope"
         :session="session"
         :terminal="codexTerminalState"
@@ -198,6 +199,10 @@ const props = defineProps({
   session: {
     default: null,
     type: Object
+  },
+  agentRuntimeId: {
+    default: "codex",
+    type: String
   }
 });
 const emit = defineEmits(["codex-activity-change", "codex-session-update"]);

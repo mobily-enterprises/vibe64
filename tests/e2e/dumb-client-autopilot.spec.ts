@@ -1609,6 +1609,65 @@ test.describe("Autopilot dumb client contract", () => {
     await expect(composerInput).toBeDisabled();
   });
 
+  test("shows OpenCode thinking without Codex-specific interrupt UI", async ({ page }) => {
+    const session = sessionPayload({
+      intents: [],
+      metadata: {
+        agent_runtime_id: "opencode"
+      },
+      presentation: {
+        auto: {
+          nextOperation: {
+            executable: false,
+            kind: "wait",
+            reason: "agent"
+          }
+        },
+        screen: {
+          kind: "conversation",
+          message: "Waiting for OpenCode.",
+          primaryIntentId: "",
+          sections: [
+            {
+              kind: "response_preview"
+            }
+          ],
+          title: "Waiting for OpenCode"
+        },
+        step: {
+          id: "server_step",
+          label: "Talk to OpenCode",
+          status: "awaiting_agent_result"
+        }
+      },
+      stepMachine: {
+        status: "awaiting_agent_result",
+        stepId: "server_step"
+      }
+    });
+    await mockVibe64Session(page, session, {
+      conversationLog: [
+        {
+          turnId: "turn-1",
+          user: {
+            at: "2026-05-25T01:02:00.000Z",
+            role: "user",
+            text: "Please inspect the current state."
+          }
+        }
+      ]
+    });
+
+    await page.goto(`${BASE_URL}/home`);
+
+    await expect(page.getByText("Thinking...", { exact: true })).toBeVisible();
+    const composerInput = page.getByLabel("What would you like to do?");
+    await expect(composerInput).toBeVisible();
+    await expect(composerInput).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Stop Codex" })).toHaveCount(0);
+    await expect(page.locator(".studio-ai-sessions__codex-thinking-overlay")).toHaveCount(0);
+  });
+
   test("keeps the Codex composer stable and interrupts the active turn from the inline button", async ({ page }) => {
     await mockCodexTerminalPreviewSocket(page);
     const intentRequests: unknown[] = [];

@@ -7,6 +7,13 @@ import {
   stripLocalhostCheckBypassArgs
 } from "@local/vibe64-core/server/localhostCheckBypass";
 import {
+  REMOTE_STUDIO_RUNTIME_ENV,
+  REMOTE_STUDIO_RUNTIME_FLAG,
+  isRemoteStudioRuntime,
+  stripRemoteStudioRuntimeArgs,
+  studioRuntimeLocation
+} from "@local/vibe64-core/server/studioRuntimeLocation";
+import {
   isLocalStudioRequest
 } from "@local/vibe64-core/server/localStudioRequest";
 
@@ -31,6 +38,40 @@ test("localhost check bypass flag is stripped before launching Vite", () => {
     "--host",
     "0.0.0.0",
     LOCALHOST_CHECK_BYPASS_FLAG,
+    "--port",
+    "5174"
+  ]), [
+    "--host",
+    "0.0.0.0",
+    "--port",
+    "5174"
+  ]);
+});
+
+test("Studio runtime location is remote only through the explicit CLI flag or environment variable", () => {
+  assert.equal(studioRuntimeLocation({
+    argv: ["node", "server.js", REMOTE_STUDIO_RUNTIME_FLAG],
+    env: {}
+  }), "remote");
+  assert.equal(isRemoteStudioRuntime({
+    argv: [],
+    env: {
+      [REMOTE_STUDIO_RUNTIME_ENV]: "1"
+    }
+  }), true);
+  assert.equal(studioRuntimeLocation({
+    argv: [],
+    env: {
+      [REMOTE_STUDIO_RUNTIME_ENV]: "0"
+    }
+  }), "local");
+});
+
+test("remote Studio runtime flag is stripped before launching Vite", () => {
+  assert.deepEqual(stripRemoteStudioRuntimeArgs([
+    "--host",
+    "0.0.0.0",
+    REMOTE_STUDIO_RUNTIME_FLAG,
     "--port",
     "5174"
   ]), [

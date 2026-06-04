@@ -48,9 +48,47 @@ const accountAuthSessionInputValidator = deepFreeze({
   mode: "patch"
 });
 
+const opencodeProviderAuthInputValidator = deepFreeze({
+  schema: createSchema({
+    apiKey: {
+      type: "string",
+      noTrim: false,
+      required: true,
+      minLength: 1
+    },
+    providerId: {
+      type: "string",
+      noTrim: false,
+      required: true,
+      minLength: 1
+    }
+  }),
+  mode: "patch"
+});
+
+const opencodeProviderOAuthInputValidator = deepFreeze({
+  schema: createSchema({
+    methodIndex: {
+      type: "string",
+      noTrim: false,
+      required: true,
+      minLength: 1
+    },
+    providerId: {
+      type: "string",
+      noTrim: false,
+      required: true,
+      minLength: 1
+    }
+  }),
+  mode: "patch"
+});
+
 export {
   accountIdInputValidator,
   accountAuthSessionInputValidator,
   accountAuthStartInputValidator,
-  accountsReadInputValidator
+  accountsReadInputValidator,
+  opencodeProviderAuthInputValidator,
+  opencodeProviderOAuthInputValidator
 };

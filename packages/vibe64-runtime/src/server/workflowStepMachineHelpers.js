@@ -340,7 +340,7 @@ function currentStepHelperInstruction({
       stepStatus
     })),
     `- Meaning of waiting_for_input: ${waitingForInputMeaning}`,
-    "- Before calling the helper for waiting_for_input, write the same question or blocker in normal Codex response text so Inspect users can read it directly in the terminal.",
+    "- Before calling the helper for waiting_for_input, write the same question or blocker in normal agent response text so Inspect users can read it directly in the terminal.",
     "- Keep the visible question text and the helper `message` equivalent; do not make the UI-only helper message more complete than the terminal-visible response.",
     ...questionPromptInstructionBullets(),
     "",
@@ -450,7 +450,7 @@ function chatWithAiPromptInstructionOptions({
   return {
     doneFields,
     doneMeaning: doneMeaning ||
-      "The current Codex conversation turn is complete. The user decides whether to ask another question or continue.",
+      "The current agent conversation turn is complete. The user decides whether to ask another question or continue.",
     waitingForInputMeaning
   };
 }

@@ -23,6 +23,10 @@ import {
   resolveStudioTargetRoot
 } from "@local/vibe64-core/server/studioRoots";
 import {
+  isRemoteStudioRuntime,
+  studioRuntimeLocation
+} from "@local/vibe64-core/server/studioRuntimeLocation";
+import {
   dockerCommand,
   runHostCommand,
   shellQuote
@@ -39,12 +43,27 @@ const ACCOUNT_DEFINITIONS = Object.freeze({
   codex: Object.freeze({
     id: "codex",
     label: "Codex",
-    required: true
+    required: false
   }),
   github: Object.freeze({
     id: "github",
     label: "GitHub",
     required: true
+  })
+});
+const AGENT_RUNTIME_DEFINITIONS = Object.freeze({
+  codex: Object.freeze({
+    id: "codex",
+    label: "Codex",
+    mode: "optional",
+    runtime: "codex"
+  }),
+  opencode: Object.freeze({
+    default: true,
+    id: "opencode",
+    label: "OpenCode",
+    mode: "free",
+    runtime: "opencode"
   })
 });
 
@@ -72,6 +91,14 @@ function cleanOutput(output = "") {
 function normalizedAccountId(value = "") {
   const accountId = String(value || "").trim().toLowerCase();
   return ACCOUNT_DEFINITIONS[accountId] ? accountId : "";
+}
+
+function accountDefinition(accountId = "") {
+  return ACCOUNT_DEFINITIONS[String(accountId || "").trim().toLowerCase()] || null;
+}
+
+function accountRequired(accountId = "") {
+  return accountDefinition(accountId)?.required === true;
 }
 
 function normalizedAuthMode(accountId, mode = "") {
@@ -196,7 +223,8 @@ function accountDisconnected({
   id,
   label,
   message,
-  observed = ""
+  observed = "",
+  required = accountRequired(id)
 }) {
   return {
     connected: false,
@@ -204,7 +232,7 @@ function accountDisconnected({
     label,
     message,
     observed,
-    required: true,
+    required,
     status: "not_connected"
   };
 }
@@ -214,6 +242,7 @@ function accountConnected({
   label,
   message,
   observed = "",
+  required = accountRequired(id),
   username = ""
 }) {
   return {
@@ -222,10 +251,75 @@ function accountConnected({
     label,
     message,
     observed,
-    required: true,
+    required,
     status: "connected",
     username
   };
+}
+
+function opencodeRuntimeStatus(runtimeStatus = null) {
+  const status = runtimeStatus && typeof runtimeStatus === "object" && !Array.isArray(runtimeStatus)
+    ? runtimeStatus
+    : null;
+  const ready = status ? status.ready === true : true;
+  const providers = Array.isArray(status?.providers) ? status.providers : [];
+  return {
+    ...AGENT_RUNTIME_DEFINITIONS.opencode,
+    available: ready,
+    connected: ready,
+    connectedProviderCount: Number(status?.connectedProviderCount || 0),
+    connectedProviders: Array.isArray(status?.connectedProviders) ? status.connectedProviders : [],
+    error: String(status?.error || ""),
+    healthy: status ? status.healthy === true : true,
+    message: ready
+      ? "OpenCode is available as Vibe64's default AI runtime."
+      : String(status?.error || "OpenCode is not available."),
+    providers,
+    ready,
+    remote: status?.remote === true,
+    runtimeLocation: String(status?.runtimeLocation || "local"),
+    server: status?.server || null,
+    status: ready ? "available" : "not_available",
+    version: String(status?.version || "")
+  };
+}
+
+function codexRuntimeStatus(codexAccount = {}) {
+  const connected = codexAccount.connected === true;
+  return {
+    ...AGENT_RUNTIME_DEFINITIONS.codex,
+    available: connected,
+    connected,
+    message: connected
+      ? "Codex is authenticated and available for Codex sessions."
+      : "Codex sessions are available after Codex authentication.",
+    ready: connected,
+    status: connected ? "available" : "not_connected"
+  };
+}
+
+function agentRuntimeStatus({
+  codex = {},
+  opencode = null
+} = {}) {
+  const runtimes = [
+    opencodeRuntimeStatus(opencode),
+    codexRuntimeStatus(codex)
+  ];
+  const defaultRuntime = runtimes.find((runtime) => runtime.default === true) || runtimes[0] || null;
+  return {
+    defaultRuntimeId: defaultRuntime?.id || "opencode",
+    ready: defaultRuntime?.ready === true,
+    runtimes
+  };
+}
+
+function aiBlockedReason(ai = {}) {
+  const runtimes = Array.isArray(ai.runtimes) ? ai.runtimes : [];
+  const defaultRuntime = runtimes.find((runtime) => runtime.id === ai.defaultRuntimeId)
+    || runtimes.find((runtime) => runtime.default === true)
+    || null;
+  return defaultRuntime?.message || "Default AI runtime is not available.";
 }
 
 async function runDefaultToolchain(commandArgs, options = {}) {
@@ -364,6 +458,7 @@ function publicAuthSession({
 }
 
 function createService({
+  agentRuntimeService = null,
   projectService = null,
   readyStatusCacheRoot = "",
   runToolchain = runDefaultToolchain,
@@ -403,21 +498,34 @@ function createService({
   }
 
   async function accountsStatus() {
-    const accounts = await Promise.all([
+    const [codex, github, opencode] = await Promise.all([
       readCodexStatus({
         runToolchain
       }),
       readGithubStatus({
         runToolchain
-      })
+      }),
+      typeof agentRuntimeService?.opencodeRuntimeStatus === "function"
+        ? agentRuntimeService.opencodeRuntimeStatus()
+        : Promise.resolve(null)
     ]);
-    const ready = accounts.every((account) => account.required !== true || account.connected === true);
+    const accounts = [codex, github];
+    const accountsReady = accounts.every((account) => account.required !== true || account.connected === true);
+    const ai = agentRuntimeStatus({
+      codex,
+      opencode
+    });
+    const ready = accountsReady && ai.ready === true;
 
     return {
+      agentRuntimes: ai.runtimes,
       accounts,
-      blockedReason: ready ? "" : blockedReason(accounts),
+      ai,
+      blockedReason: ready ? "" : blockedReason(accounts) || aiBlockedReason(ai),
       ok: true,
       ready,
+      remote: isRemoteStudioRuntime(),
+      runtimeLocation: studioRuntimeLocation(),
       targetRoot: currentTargetRoot(),
       updatedAt: new Date().toISOString()
     };
@@ -467,7 +575,7 @@ function createService({
           connected: false,
           id: metadata.accountId,
           label: ACCOUNT_DEFINITIONS[metadata.accountId].label,
-          required: true,
+          required: accountRequired(metadata.accountId),
           status: "authenticating"
         };
 
@@ -510,14 +618,16 @@ function createService({
   return Object.freeze({
     async getStatus(input = {}) {
       return accountsResult(async () => {
-        if (!refreshRequested(input)) {
+        const useReadyStatusCache = !agentRuntimeService;
+        if (useReadyStatusCache && !refreshRequested(input)) {
           const cache = readyStatusCache();
           const cachedStatus = await cache.read();
           if (cachedStatus) {
             return cachedStatus;
           }
         }
-        return readyStatusCache().remember(await accountsStatus());
+        const status = await accountsStatus();
+        return useReadyStatusCache ? readyStatusCache().remember(status) : status;
       });
     },
 
@@ -526,6 +636,9 @@ function createService({
         const accountId = normalizedAccountId(input.accountId);
         if (!accountId) {
           return authError("unknown_account", "Unknown account.");
+        }
+        if (isRemoteStudioRuntime()) {
+          return authError("oauth_remote_disabled", "OAuth account changes are disabled when Vibe64 runs with --remote.");
         }
 
         const mode = normalizedAuthMode(accountId, input.mode);
@@ -548,6 +661,9 @@ function createService({
         if (!accountId) {
           return authError("unknown_account", "Unknown account.");
         }
+        if (isRemoteStudioRuntime()) {
+          return authError("oauth_remote_disabled", "OAuth account changes are disabled when Vibe64 runs with --remote.");
+        }
 
         const result = await runToolchain(logoutCommandArgs(accountId), {
           timeout: 30_000
@@ -563,6 +679,46 @@ function createService({
           ok: result.ok,
           output: result.output
         };
+      });
+    },
+
+    async setOpenCodeProviderAuth(input = {}) {
+      return accountsResult(async () => {
+        const providerId = String(input.providerId || "").trim();
+        if (!providerId) {
+          return authError("unknown_opencode_provider", "Choose an OpenCode provider.");
+        }
+        if (typeof agentRuntimeService?.setOpenCodeProviderAuth !== "function") {
+          return authError("opencode_auth_unavailable", "OpenCode provider authentication is not available.");
+        }
+        const result = await agentRuntimeService.setOpenCodeProviderAuth(providerId, {
+          apiKey: input.apiKey
+        });
+        if (result?.ok !== false) {
+          await readyStatusCache().remember({
+            ready: false
+          });
+        }
+        return result;
+      });
+    },
+
+    async startOpenCodeProviderOAuth(input = {}) {
+      return accountsResult(async () => {
+        const providerId = String(input.providerId || "").trim();
+        const methodIndex = input.methodIndex == null ? "" : String(input.methodIndex).trim();
+        if (!providerId) {
+          return authError("unknown_opencode_provider", "Choose an OpenCode provider.");
+        }
+        if (!methodIndex) {
+          return authError("unknown_opencode_oauth_method", "Choose an OpenCode OAuth method.");
+        }
+        if (typeof agentRuntimeService?.startOpenCodeProviderOAuth !== "function") {
+          return authError("opencode_oauth_unavailable", "OpenCode OAuth login is not available.");
+        }
+        return agentRuntimeService.startOpenCodeProviderOAuth(providerId, {
+          methodIndex
+        });
       });
     },
 

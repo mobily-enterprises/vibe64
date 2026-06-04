@@ -1154,6 +1154,7 @@ test("open session list creates the first seed session automatically when seedin
   assert.deepEqual(createdInputs[0], {
     metadata: {
       adapter_id: "jskit",
+      agent_runtime_id: "opencode",
       project_type: "jskit"
     },
     workflowDefinition: VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION

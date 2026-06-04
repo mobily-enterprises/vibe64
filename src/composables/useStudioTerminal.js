@@ -5,6 +5,7 @@ import {
   reportableTerminalSize,
   terminalResizeErrorMessage
 } from "@/lib/studioTerminalSize.js";
+import { createStudioTerminalRenderOutputFilter } from "@/lib/studioTerminalRenderOutput.js";
 import "@xterm/xterm/css/xterm.css";
 
 function resolveCallback(callback, fallback) {
@@ -53,6 +54,7 @@ function useStudioTerminal({
   let terminalOutputOffset = 0;
   let terminalOutputVersion = 0;
   let terminalSetupPromise = null;
+  const terminalRenderOutputFilter = createStudioTerminalRenderOutputFilter();
 
   const notifyOutput = resolveCallback(onOutput, () => null);
   const notifySessionUpdate = resolveCallback(onSessionUpdate, () => null);
@@ -240,6 +242,7 @@ function useStudioTerminal({
     terminalFitAddon = null;
     terminalSetupPromise = null;
     terminalOutputOffset = 0;
+    terminalRenderOutputFilter.reset();
     terminalInitialFitDone = false;
     terminalFocused.value = false;
     terminalSelectedText.value = "";
@@ -256,6 +259,7 @@ function useStudioTerminal({
     terminalOutputOffset = 0;
     terminalOutputVersion = 0;
     terminalOutput.value = "";
+    terminalRenderOutputFilter.reset();
     resetReportedTerminalSize();
     resetInitialTerminalResize();
     terminalInstance?.reset?.();
@@ -293,6 +297,7 @@ function useStudioTerminal({
       }
       terminalInstance?.reset?.();
       terminalOutputOffset = 0;
+      terminalRenderOutputFilter.reset();
     }
     terminalLatestOutput = nextOutput;
     terminalOutputVersion = Math.max(terminalOutputVersion, nextOutputVersion);
@@ -312,8 +317,9 @@ function useStudioTerminal({
       terminalOutputOffset = 0;
     }
     const outputChunk = terminalLatestOutput.slice(terminalOutputOffset);
-    if (outputChunk) {
-      terminalInstance.write(outputChunk, scrollTerminalToBottom);
+    const renderChunk = terminalRenderOutputFilter.filter(outputChunk);
+    if (renderChunk) {
+      terminalInstance.write(renderChunk, scrollTerminalToBottom);
     }
     terminalOutputOffset = terminalLatestOutput.length;
     return true;
@@ -346,7 +352,10 @@ function useStudioTerminal({
     if (!terminalInstance) {
       return true;
     }
-    terminalInstance.write(outputChunk, scrollTerminalToBottom);
+    const renderChunk = terminalRenderOutputFilter.filter(outputChunk);
+    if (renderChunk) {
+      terminalInstance.write(renderChunk, scrollTerminalToBottom);
+    }
     terminalOutputOffset = terminalLatestOutput.length;
     return true;
   }

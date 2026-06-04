@@ -33,46 +33,8 @@
         />
       </v-chip>
 
-      <v-menu
-        v-if="showWorkflowDefinitionMenu"
-        v-model="workflowDefinitionMenuOpen"
-        location="bottom end"
-        transition="scale-transition"
-      >
-        <template #activator="{ props: menuProps }">
-          <v-btn
-            v-bind="menuProps"
-            aria-label="New session"
-            class="studio-ai-sessions__create-button"
-            :disabled="!toolbar.canCreateSession"
-            :icon="mdiPlus"
-            :loading="toolbar.createSessionCommand.isRunning"
-            size="small"
-            :title="toolbar.createSessionTitle"
-            variant="flat"
-          />
-        </template>
-
-        <v-list
-          class="studio-ai-sessions__definition-menu"
-          density="comfortable"
-          lines="two"
-          nav
-        >
-          <v-list-subheader>Session type</v-list-subheader>
-          <v-list-item
-            v-for="definition in workflowDefinitions"
-            :key="definition.id"
-            :disabled="toolbar.createSessionCommand.isRunning"
-            :subtitle="definition.description"
-            :title="definition.label"
-            @click="createSessionFromDefinition(definition.id)"
-          />
-        </v-list>
-      </v-menu>
-
       <v-btn
-        v-else-if="createSessionVisible"
+        v-if="createSessionVisible"
         aria-label="New session"
         class="studio-ai-sessions__create-button"
         :disabled="!toolbar.canCreateSession"
@@ -80,13 +42,77 @@
         :loading="toolbar.createSessionCommand.isRunning"
         size="small"
         :title="toolbar.createSessionTitle"
-        @click="toolbar.createSession()"
+        @click="openCreateSessionDialog"
         variant="flat"
       />
 
       <slot name="after-sessions" />
     </div>
   </div>
+
+  <v-dialog
+    v-model="createSessionDialogOpen"
+    max-width="42rem"
+  >
+    <v-card class="studio-ai-sessions__create-dialog">
+      <v-card-title>New session</v-card-title>
+      <v-card-text class="studio-ai-sessions__create-dialog-body">
+        <section class="studio-ai-sessions__create-section">
+          <h2 class="studio-ai-sessions__create-section-title">Workflow</h2>
+          <div class="studio-ai-sessions__choice-grid">
+            <button
+              v-for="definition in workflowOptions"
+              :key="definition.id || 'default'"
+              class="studio-ai-sessions__choice"
+              :class="{ 'studio-ai-sessions__choice--active': selectedWorkflowDefinition === definition.id }"
+              type="button"
+              :aria-pressed="selectedWorkflowDefinition === definition.id"
+              @click="selectedWorkflowDefinition = definition.id"
+            >
+              <strong>{{ definition.label }}</strong>
+              <span v-if="definition.description">{{ definition.description }}</span>
+            </button>
+          </div>
+        </section>
+
+        <section class="studio-ai-sessions__create-section">
+          <h2 class="studio-ai-sessions__create-section-title">AI runtime</h2>
+          <div class="studio-ai-sessions__runtime-grid">
+            <button
+              v-for="runtime in runtimeOptions"
+              :key="runtime.id"
+              class="studio-ai-sessions__runtime-choice"
+              :class="{ 'studio-ai-sessions__runtime-choice--active': selectedAgentRuntimeId === runtime.id }"
+              type="button"
+              :aria-pressed="selectedAgentRuntimeId === runtime.id"
+              @click="selectedAgentRuntimeId = runtime.id"
+            >
+              {{ runtime.label }}
+            </button>
+          </div>
+        </section>
+      </v-card-text>
+      <v-card-actions>
+        <v-spacer />
+        <v-btn
+          variant="text"
+          :disabled="toolbar.createSessionCommand.isRunning"
+          @click="createSessionDialogOpen = false"
+        >
+          Cancel
+        </v-btn>
+        <v-btn
+          color="primary"
+          variant="flat"
+          :disabled="!selectedAgentRuntimeId || !toolbar.canCreateSession"
+          :loading="toolbar.createSessionCommand.isRunning"
+          @click="createSelectedSession"
+        >
+          Create
+        </v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
 </template>
 
 <script setup>
@@ -134,6 +160,18 @@ function sessionTabLabel(sessionItem = {}) {
 const workflowDefinitions = computed(() => {
   return Array.isArray(props.toolbar.workflowDefinitions) ? props.toolbar.workflowDefinitions : [];
 });
+const agentRuntimes = computed(() => {
+  const runtimes = Array.isArray(props.toolbar.agentRuntimes) ? props.toolbar.agentRuntimes : [];
+  return runtimes.length
+    ? runtimes
+    : [
+        {
+          default: true,
+          id: "opencode",
+          label: "OpenCode"
+        }
+      ];
+});
 const allSessions = computed(() => Array.isArray(props.toolbar.sessions) ? props.toolbar.sessions : []);
 const sessionLimit = computed(() => Math.max(0, Number(props.maxVisibleSessions || 0)));
 const sessionLimitReached = computed(() => Boolean(
@@ -155,14 +193,55 @@ const visibleSessions = computed(() => {
     allSessions.value[selectedIndex]
   ];
 });
-const showWorkflowDefinitionMenu = computed(() => {
-  return createSessionVisible.value && props.toolbar.createSessionMode === "select" && workflowDefinitions.value.length > 0;
+const workflowOptions = computed(() => {
+  const definitions = props.toolbar.createSessionMode === "select" && workflowDefinitions.value.length > 0
+    ? workflowDefinitions.value
+    : [
+        {
+          description: "",
+          id: "",
+          label: "New session"
+        }
+      ];
+  return definitions.map((definition) => ({
+    description: String(definition.description || ""),
+    id: String(definition.id || ""),
+    label: String(definition.label || "New session")
+  }));
 });
-const workflowDefinitionMenuOpen = ref(false);
+const runtimeOptions = computed(() => agentRuntimes.value.map((runtime) => ({
+  default: runtime.default === true,
+  id: String(runtime.id || ""),
+  label: String(runtime.label || runtime.id || "AI runtime")
+})).filter((runtime) => runtime.id));
+const createSessionDialogOpen = ref(false);
+const selectedWorkflowDefinition = ref("");
+const selectedAgentRuntimeId = ref("");
 
-function createSessionFromDefinition(definitionId = "") {
-  workflowDefinitionMenuOpen.value = false;
-  props.toolbar.createSession?.(definitionId);
+function defaultRuntimeId() {
+  return runtimeOptions.value.find((runtime) => runtime.default)?.id || runtimeOptions.value[0]?.id || "";
+}
+
+function ensureCreateSelections() {
+  if (!workflowOptions.value.some((definition) => definition.id === selectedWorkflowDefinition.value)) {
+    selectedWorkflowDefinition.value = workflowOptions.value[0]?.id || "";
+  }
+  if (!runtimeOptions.value.some((runtime) => runtime.id === selectedAgentRuntimeId.value)) {
+    selectedAgentRuntimeId.value = defaultRuntimeId();
+  }
+}
+
+function openCreateSessionDialog() {
+  ensureCreateSelections();
+  createSessionDialogOpen.value = true;
+}
+
+function createSelectedSession() {
+  ensureCreateSelections();
+  createSessionDialogOpen.value = false;
+  props.toolbar.createSession?.(selectedWorkflowDefinition.value || "", {
+    agentRuntimeId: selectedAgentRuntimeId.value || defaultRuntimeId()
+  });
 }
 </script>
 
@@ -244,15 +323,6 @@ function createSessionFromDefinition(definitionId = "") {
   background: var(--studio-control-active-bg, #e7e7e7) !important;
 }
 
-.studio-ai-sessions__definition-menu {
-  max-width: min(28rem, calc(100vw - 2rem));
-  min-width: min(22rem, calc(100vw - 2rem));
-}
-
-.studio-ai-sessions__definition-menu :deep(.v-list-item-subtitle) {
-  white-space: normal;
-}
-
 .studio-ai-sessions__status-dot {
   background: rgb(var(--v-theme-primary));
   border-radius: 999px;
@@ -260,6 +330,81 @@ function createSessionFromDefinition(definitionId = "") {
   height: 0.52rem;
   margin-right: 0.42rem;
   width: 0.52rem;
+}
+
+.studio-ai-sessions__create-dialog-body {
+  display: grid;
+  gap: 1rem;
+}
+
+.studio-ai-sessions__create-section {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.studio-ai-sessions__create-section-title {
+  color: rgba(var(--v-theme-on-surface), 0.68);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.2;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.studio-ai-sessions__choice-grid {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.studio-ai-sessions__choice,
+.studio-ai-sessions__runtime-choice {
+  appearance: none;
+  background: rgb(var(--v-theme-surface));
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.16);
+  border-radius: 8px;
+  color: rgb(var(--v-theme-on-surface));
+  cursor: pointer;
+  font: inherit;
+  letter-spacing: 0;
+  text-align: left;
+}
+
+.studio-ai-sessions__choice {
+  display: grid;
+  gap: 0.2rem;
+  line-height: 1.25;
+  padding: 0.75rem 0.85rem;
+}
+
+.studio-ai-sessions__choice span {
+  color: rgba(var(--v-theme-on-surface), 0.62);
+  font-size: 0.88rem;
+  line-height: 1.35;
+}
+
+.studio-ai-sessions__runtime-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.studio-ai-sessions__runtime-choice {
+  min-height: 2.5rem;
+  min-width: 7rem;
+  padding: 0.55rem 0.85rem;
+  text-align: center;
+}
+
+.studio-ai-sessions__choice:hover,
+.studio-ai-sessions__runtime-choice:hover {
+  border-color: rgba(var(--v-theme-primary), 0.45);
+}
+
+.studio-ai-sessions__choice--active,
+.studio-ai-sessions__runtime-choice--active {
+  background: rgba(var(--v-theme-primary), 0.08);
+  border-color: rgb(var(--v-theme-primary));
 }
 
 .studio-ai-sessions__status-dot--abandoned,

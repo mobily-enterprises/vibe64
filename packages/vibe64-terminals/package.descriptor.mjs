@@ -3,7 +3,7 @@ export default Object.freeze({
   packageId: "@local/vibe64-terminals",
   version: "0.1.0",
   kind: "runtime",
-  description: "Owns Vibe64 Codex and command terminal lifecycle.",
+  description: "Owns Vibe64 agent, Codex, OpenCode, and command terminal lifecycle.",
   dependsOn: [
     "@jskit-ai/kernel",
     "@local/vibe64-adapters",
@@ -39,11 +39,11 @@ export default Object.freeze({
       surfaces: [
         {
           subpath: "./server/registerRoutes",
-          summary: "Registers Vibe64 terminal, attachment, and Codex handoff routes."
+          summary: "Registers Vibe64 terminal, attachment, and agent handoff routes."
         },
         {
           subpath: "./server/service",
-          summary: "Owns Codex and command terminal lifecycle, IO, and terminal result recording."
+          summary: "Owns OpenCode, Codex, and command terminal lifecycle, IO, and result recording."
         }
       ],
       containerTokens: {

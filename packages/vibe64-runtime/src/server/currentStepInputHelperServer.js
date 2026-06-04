@@ -51,6 +51,12 @@ function helperSocketContainerPath() {
   return path.posix.join(HELPER_SOCKET_CONTAINER_DIR, HELPER_SOCKET_NAME);
 }
 
+function helperSocketPath(targetRoot = "", socketMode = "container") {
+  return socketMode === "host"
+    ? helperSocketHostPath(targetRoot)
+    : helperSocketContainerPath();
+}
+
 function helperScriptHostPath(session = {}) {
   return path.join(path.resolve(session.sessionRoot), "helpers", HELPER_SCRIPT_NAME);
 }
@@ -286,17 +292,20 @@ try {
 `;
 }
 
-function helperEnvironment(session = {}, targetRoot = "") {
+function helperEnvironment(session = {}, targetRoot = "", {
+  socketMode = "container"
+} = {}) {
   const scriptPath = helperScriptHostPath(session);
   const terminalChatScriptPath = terminalChatHelperScriptHostPath(session);
+  const socketPath = helperSocketPath(targetRoot, socketMode);
   return {
     VIBE64_CURRENT_STEP_INPUT_HELPER: scriptPath,
     VIBE64_CURRENT_STEP_INPUT_SESSION: session.sessionId,
-    VIBE64_CURRENT_STEP_INPUT_SOCKET: helperSocketContainerPath(targetRoot),
+    VIBE64_CURRENT_STEP_INPUT_SOCKET: socketPath,
     VIBE64_CURRENT_STEP_INPUT_TOKEN: currentStepInputToken(session.sessionId),
     VIBE64_TERMINAL_CHAT_HELPER: terminalChatScriptPath,
     VIBE64_TERMINAL_CHAT_SESSION: session.sessionId,
-    VIBE64_TERMINAL_CHAT_SOCKET: helperSocketContainerPath(targetRoot),
+    VIBE64_TERMINAL_CHAT_SOCKET: socketPath,
     VIBE64_TERMINAL_CHAT_TOKEN: currentStepInputToken(session.sessionId)
   };
 }
@@ -410,6 +419,7 @@ async function prepareCurrentStepInputHelper({
   onSessionChanged = async () => null,
   projectService,
   session = {},
+  socketMode = "container",
   targetRoot = ""
 } = {}) {
   await ensureHelperServer({
@@ -420,7 +430,9 @@ async function prepareCurrentStepInputHelper({
   await writeHelperScript(session);
   await writeTerminalChatHelperScript(session);
   return {
-    env: helperEnvironment(session, targetRoot),
+    env: helperEnvironment(session, targetRoot, {
+      socketMode
+    }),
     mount: helperMount(targetRoot)
   };
 }
@@ -431,5 +443,6 @@ export {
   helperEnvironment,
   helperSocketHostPath,
   helperSocketContainerPath,
+  helperSocketPath,
   prepareCurrentStepInputHelper
 };

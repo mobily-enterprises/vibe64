@@ -80,7 +80,7 @@
               <v-icon :icon="mdiRobotOutline" size="16" />
             </span>
             <div class="studio-conversation-log__message-header">
-              <span>Codex</span>
+              <span>{{ assistantLabel }}</span>
             </div>
           </div>
           <div class="studio-conversation-log__message studio-conversation-log__message--assistant">
@@ -217,6 +217,10 @@ const props = defineProps({
   activityMessages: {
     default: () => [],
     type: Array
+  },
+  assistantLabel: {
+    default: "AI",
+    type: String
   },
   error: {
     default: "",

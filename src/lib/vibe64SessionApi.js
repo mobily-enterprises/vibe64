@@ -19,6 +19,11 @@ function vibe64CodexTerminalEndpoint(sessionId, terminalSessionId = "") {
   return terminalSessionId ? `${base}/${encodeURIComponent(terminalSessionId)}` : base;
 }
 
+function vibe64OpenCodeTerminalEndpoint(sessionId, terminalSessionId = "") {
+  const base = vibe64SessionEndpoint(sessionId, "/opencode-terminal");
+  return terminalSessionId ? `${base}/${encodeURIComponent(terminalSessionId)}` : base;
+}
+
 function vibe64CodexTerminalControlEndpoint(sessionId, terminalSessionId, suffix = "") {
   return `${vibe64CodexTerminalEndpoint(sessionId, terminalSessionId)}/control${suffix}`;
 }
@@ -98,6 +103,10 @@ function vibe64CodexTerminalWebSocketUrl(sessionId, terminalSessionId) {
   return resolveWebSocketUrl(`${vibe64CodexTerminalEndpoint(sessionId, terminalSessionId)}/ws`);
 }
 
+function vibe64OpenCodeTerminalWebSocketUrl(sessionId, terminalSessionId) {
+  return resolveWebSocketUrl(`${vibe64OpenCodeTerminalEndpoint(sessionId, terminalSessionId)}/ws`);
+}
+
 function vibe64GlobalCodexTerminalWebSocketUrl(_scopeId, terminalSessionId) {
   return resolveWebSocketUrl(`${vibe64GlobalCodexTerminalEndpoint(terminalSessionId)}/ws`);
 }
@@ -148,6 +157,10 @@ async function startVibe64CodexTerminal(sessionId) {
   return studioHttpClient.post(vibe64CodexTerminalEndpoint(sessionId), {});
 }
 
+async function startVibe64OpenCodeTerminal(sessionId) {
+  return studioHttpClient.post(vibe64OpenCodeTerminalEndpoint(sessionId), {});
+}
+
 async function returnVibe64AgentControl(sessionId) {
   return studioHttpClient.post(vibe64AgentControlReturnEndpoint(sessionId), {});
 }
@@ -162,6 +175,10 @@ async function readVibe64GlobalCodexTerminalState() {
 
 async function closeVibe64CodexTerminal(sessionId, terminalSessionId) {
   return studioHttpClient.delete(vibe64CodexTerminalEndpoint(sessionId, terminalSessionId));
+}
+
+async function closeVibe64OpenCodeTerminal(sessionId, terminalSessionId) {
+  return studioHttpClient.delete(vibe64OpenCodeTerminalEndpoint(sessionId, terminalSessionId));
 }
 
 async function closeVibe64GlobalCodexTerminal(_scopeId, terminalSessionId) {
@@ -281,6 +298,7 @@ async function startVibe64SessionTerminalFixJob(sessionId, input = {}) {
 
 export {
   vibe64CodexTerminalWebSocketUrl,
+  vibe64OpenCodeTerminalWebSocketUrl,
   vibe64GlobalCodexTerminalWebSocketUrl,
   vibe64CommandTerminalWebSocketUrl,
   vibe64FixCodexTerminalWebSocketUrl,
@@ -290,6 +308,7 @@ export {
   vibe64ShellTerminalWebSocketUrl,
   normalizeVibe64ProjectToolFixInput,
   closeVibe64CodexTerminal,
+  closeVibe64OpenCodeTerminal,
   closeVibe64FixCodexTerminal,
   closeVibe64GlobalCodexTerminal,
   closeVibe64CommandTerminal,
@@ -313,6 +332,7 @@ export {
   submitVibe64CurrentStepInput,
   returnVibe64AgentControl,
   startVibe64CodexTerminal,
+  startVibe64OpenCodeTerminal,
   startVibe64GlobalCodexTerminal,
   startVibe64CommandTerminal,
   startVibe64SessionTerminalFixJob,

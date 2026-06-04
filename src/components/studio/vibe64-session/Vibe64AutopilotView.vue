@@ -89,6 +89,7 @@
           <Vibe64ConversationLog
             class="studio-autopilot__conversation"
             :activity-messages="chatActivityMessages"
+            :assistant-label="assistantLabel"
             :error="conversationLog.error"
             :loading="conversationLog.loading"
             :scroll-key="conversationScrollKey"
@@ -650,6 +651,14 @@ const props = defineProps({
     default: () => [],
     type: Array
   },
+  agentThinking: {
+    default: false,
+    type: Boolean
+  },
+  assistantLabel: {
+    default: "AI",
+    type: String
+  },
   codexThinking: {
     default: false,
     type: Boolean
@@ -721,6 +730,10 @@ const props = defineProps({
   sessionToolbar: {
     default: () => ({}),
     type: Object
+  },
+  aiTerminalTitle: {
+    default: "Open the active session AI terminal",
+    type: String
   },
   workspacePane: {
     default: "preview",
@@ -871,20 +884,27 @@ const autopilotBusy = computed(() => Boolean(props.active && (
 )));
 const navigationBusy = computed(() => Boolean(props.page?.busy || autopilotBusy.value || props.rewindBusy));
 const workflowExecuting = computed(() => Boolean(
+  props.agentThinking ||
   props.codexThinking ||
   autopilotBusy.value ||
   commandRunning.value
 ));
-const composerInputLocked = computed(() => Boolean(
+const workflowSubmissionBusy = computed(() => Boolean(
+  props.agentThinking ||
   props.codexThinking ||
   running.value ||
   displayRunning.value ||
   commandRunning.value ||
   stepInput.saving ||
-  props.page?.busy
+  props.actions?.runActionCommand?.isRunning ||
+  props.actions?.runIntentCommand?.isRunning
+));
+const composerInputLocked = computed(() => Boolean(
+  workflowSubmissionBusy.value
 ));
 const codexInterruptVisible = computed(() => Boolean(props.codexThinking));
 const thinkingVisible = computed(() => Boolean(
+  props.agentThinking ||
   props.codexThinking ||
   running.value ||
   displayRunning.value ||
@@ -920,7 +940,7 @@ const sessionToolControls = computed(() => [
     icon: mdiRobotOutline,
     id: "ai-terminal",
     label: "AI Terminal",
-    title: "Open the active session Codex terminal"
+    title: props.aiTerminalTitle
   }
 ]);
 const activeSessionTool = computed(() => {
@@ -1411,10 +1431,7 @@ async function runClientControl(control = {}) {
 
 function controlDisabled(control = {}) {
   return Boolean(
-    props.page.busy ||
-    props.codexThinking ||
-    running.value ||
-    stepInput.saving ||
+    workflowSubmissionBusy.value ||
     control.enabled !== true ||
     controlStateActive(control, "disabledWhen")
   );
