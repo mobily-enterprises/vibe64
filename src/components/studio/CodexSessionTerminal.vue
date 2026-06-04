@@ -42,11 +42,12 @@
             @drop.prevent="handleAttachmentDrop"
           >
             <div
-              ref="terminalHost"
               class="codex-terminal__host"
               @click="focusTerminal"
               @pointerdown.capture="focusTerminal"
-            />
+            >
+              <div ref="terminalHost" class="codex-terminal__mount" />
+            </div>
             <div v-if="attachmentDragActive || attachmentUploading" class="codex-terminal__drop-overlay">
               <v-sheet class="codex-terminal__drop-card" rounded="lg" elevation="10">
                 <v-icon :icon="mdiPaperclip" size="28" />
@@ -704,6 +705,13 @@ defineExpose({
   padding: 0;
 }
 
+.codex-terminal--compact .codex-terminal__content {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .codex-terminal--compact .codex-terminal__body {
   display: flex;
   flex: 1 1 auto;
@@ -726,6 +734,11 @@ defineExpose({
 }
 
 .codex-terminal--compact .codex-terminal__host {
+  height: 100%;
+  min-height: 0;
+}
+
+.codex-terminal--compact .codex-terminal__mount {
   height: 100%;
   min-height: 0;
 }
@@ -775,6 +788,16 @@ defineExpose({
   overflow: hidden;
   padding: 0.35rem;
   transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.codex-terminal__mount {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.codex-terminal__mount :deep(.xterm) {
+  text-align: left;
 }
 
 .codex-terminal__stage {
@@ -879,6 +902,13 @@ defineExpose({
     overflow: hidden;
   }
 
+  .codex-terminal__content {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+  }
+
   .codex-terminal__body {
     display: flex;
     flex: 1 1 auto;
@@ -894,6 +924,11 @@ defineExpose({
   }
 
   .codex-terminal__host {
+    height: 100%;
+    min-height: 0;
+  }
+
+  .codex-terminal__mount {
     height: 100%;
     min-height: 0;
   }

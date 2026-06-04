@@ -24,12 +24,14 @@ function useCodexTerminalElement({
     terminalSessionId,
     ...terminal
   } = useStudioTerminal({
-    liveResize: false,
+    fitOnResize: true,
+    liveResize: true,
     onOutput,
     onSessionUpdate,
     onStatusUpdate,
     onUserData,
     readOnly,
+    resizeReportDelayMs: 120,
     webSocketUrl
   });
 

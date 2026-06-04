@@ -12,12 +12,14 @@ function resolveCallback(callback, fallback) {
 }
 
 function useStudioTerminal({
+  fitOnResize = null,
   liveResize = true,
   onOutput = null,
   onSessionUpdate = null,
   onStatusUpdate = null,
   onUserData = null,
   readOnly = false,
+  resizeReportDelayMs = 0,
   webSocketUrl = null
 } = {}) {
   const terminalHost = ref(null);
@@ -45,11 +47,11 @@ function useStudioTerminal({
   let terminalFocusOutHandler = null;
   let terminalWindowBlurHandler = null;
   let terminalResizeHandler = null;
+  let terminalResizeReportTimer = null;
   let terminalResizeObserver = null;
   let terminalReportedCols = 0;
   let terminalReportedRows = 0;
   let terminalInitialResizeReported = false;
-  let terminalInitialFitDone = false;
   let terminalLatestOutput = "";
   let terminalOutputOffset = 0;
   let terminalOutputVersion = 0;
@@ -69,6 +71,20 @@ function useStudioTerminal({
 
   function terminalLiveResize() {
     return Boolean(typeof liveResize === "function" ? liveResize() : unref(liveResize));
+  }
+
+  function terminalFitOnResize() {
+    if (fitOnResize === null || typeof fitOnResize === "undefined") {
+      return terminalLiveResize();
+    }
+    return Boolean(typeof fitOnResize === "function" ? fitOnResize() : unref(fitOnResize));
+  }
+
+  function terminalResizeReportDelay() {
+    const delay = Number(typeof resizeReportDelayMs === "function"
+      ? resizeReportDelayMs()
+      : unref(resizeReportDelayMs));
+    return Number.isFinite(delay) && delay > 0 ? delay : 0;
   }
 
   function normalizedOutputVersion(value) {
@@ -129,16 +145,10 @@ function useStudioTerminal({
     if (!terminalFitAddon || !terminalInstance) {
       return false;
     }
-    if (!terminalLiveResize() && terminalInitialFitDone) {
-      return true;
-    }
     terminalFitAddon.fit();
     terminalInstance.refresh?.(0, Math.max(0, terminalInstance.rows - 1));
     const size = terminalCurrentSize();
-    if (size) {
-      terminalInitialFitDone = true;
-    }
-    void sendTerminalResize();
+    scheduleTerminalResizeReport();
     return Boolean(size);
   }
 
@@ -200,10 +210,10 @@ function useStudioTerminal({
       terminalResizeHandler = () => {
         fitTerminalUi();
       };
-      if (terminalLiveResize()) {
+      if (terminalFitOnResize()) {
         window.addEventListener("resize", terminalResizeHandler);
       }
-      if (terminalLiveResize() && typeof ResizeObserver !== "undefined") {
+      if (terminalFitOnResize() && typeof ResizeObserver !== "undefined") {
         terminalResizeObserver = new ResizeObserver(() => {
           fitTerminalUi();
         });
@@ -257,12 +267,15 @@ function useStudioTerminal({
     }
     terminalResizeObserver?.disconnect?.();
     terminalResizeObserver = null;
+    if (terminalResizeReportTimer) {
+      window.clearTimeout(terminalResizeReportTimer);
+      terminalResizeReportTimer = null;
+    }
     terminalInstance?.dispose?.();
     terminalInstance = null;
     terminalFitAddon = null;
     terminalSetupPromise = null;
     terminalOutputOffset = 0;
-    terminalInitialFitDone = false;
     terminalFollowOutput = true;
     terminalFocused.value = false;
     terminalSelectedText.value = "";
@@ -563,6 +576,10 @@ function useStudioTerminal({
   }
 
   async function sendTerminalResize() {
+    if (terminalResizeReportTimer) {
+      window.clearTimeout(terminalResizeReportTimer);
+      terminalResizeReportTimer = null;
+    }
     if (!terminalSessionId.value || terminalStatus.value === "exited") {
       return false;
     }
@@ -587,6 +604,25 @@ function useStudioTerminal({
       terminalInitialResizeReported = true;
     }
     return true;
+  }
+
+  function scheduleTerminalResizeReport() {
+    if (!terminalReportedCols || !terminalReportedRows) {
+      void sendTerminalResize();
+      return;
+    }
+    const delay = terminalResizeReportDelay();
+    if (!delay) {
+      void sendTerminalResize();
+      return;
+    }
+    if (terminalResizeReportTimer) {
+      window.clearTimeout(terminalResizeReportTimer);
+    }
+    terminalResizeReportTimer = window.setTimeout(() => {
+      terminalResizeReportTimer = null;
+      void sendTerminalResize();
+    }, delay);
   }
 
   async function sendCtrlC() {
