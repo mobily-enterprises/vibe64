@@ -147,6 +147,12 @@ function registerRoutes(
     return terminalService().startCodexTerminal(request.params.sessionId);
   });
 
+  routes.serviceRoute("POST", "/sessions/:sessionId/opencode-terminal", {
+    summary: "Start an Vibe64 OpenCode terminal."
+  }, (request) => {
+    return terminalService().startOpenCodeTerminal(request.params.sessionId);
+  });
+
   routes.actionRoute("POST", "/sessions/:sessionId/codex-attachments", {
     actionId: ACTION_UPLOAD_CODEX_ATTACHMENT,
     body: codexAttachmentInputValidator,
@@ -180,6 +186,16 @@ function registerRoutes(
     readSummary: "Read an Vibe64 Codex terminal snapshot.",
     closeSummary: "Close an Vibe64 Codex terminal.",
     write: (sessionId, terminalSessionId, data) => terminalService().writeCodexTerminal(sessionId, terminalSessionId, data)
+  });
+
+  registerTerminalSnapshotRoutes(routes, {
+    close: (sessionId, terminalSessionId) => terminalService().closeOpenCodeTerminal(sessionId, terminalSessionId),
+    control: true,
+    path: "/sessions/:sessionId/opencode-terminal/:terminalSessionId",
+    read: (sessionId, terminalSessionId) => terminalService().readOpenCodeTerminal(sessionId, terminalSessionId),
+    readSummary: "Read an Vibe64 OpenCode terminal snapshot.",
+    closeSummary: "Close an Vibe64 OpenCode terminal.",
+    write: (sessionId, terminalSessionId, data) => terminalService().writeOpenCodeTerminal(sessionId, terminalSessionId, data)
   });
 
   registerGlobalTerminalSnapshotRoutes(routes, {
@@ -552,6 +568,21 @@ function registerVibe64TerminalWebSocketRoutes(app, routes) {
     },
     write(service, { data, sessionId, terminalSessionId }) {
       return service.writeCodexTerminal(sessionId, terminalSessionId, data);
+    }
+  });
+
+  registerTerminalWebSocketRoute(app, {
+    routePath: `${routes.routeBase}/sessions/:sessionId/opencode-terminal/:terminalSessionId/ws`,
+    serviceId: VIBE64_TERMINALS_SERVICE,
+    serviceUnavailableMessage: VIBE64_TERMINALS_UNAVAILABLE,
+    subscribe(service, { sessionId, subscriber, terminalSessionId }) {
+      return service.subscribeOpenCodeTerminal(sessionId, terminalSessionId, subscriber);
+    },
+    resize(service, { cols, rows, sessionId, terminalSessionId }) {
+      return service.resizeOpenCodeTerminal(sessionId, terminalSessionId, { cols, rows });
+    },
+    write(service, { data, sessionId, terminalSessionId }) {
+      return service.writeOpenCodeTerminal(sessionId, terminalSessionId, data);
     }
   });
 

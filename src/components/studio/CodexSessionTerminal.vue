@@ -27,7 +27,7 @@
         <div v-show="expanded" class="codex-terminal__body">
           <StudioErrorNotice
             v-if="terminalError"
-            title="Codex terminal needs attention"
+            :title="`${terminalLabel} terminal needs attention`"
             :error="terminalError"
             compact
             class="mb-2"
@@ -35,11 +35,11 @@
 
           <div
             class="codex-terminal__stage"
-            :class="{ 'codex-terminal__stage--dragging': attachmentDragActive }"
-            @dragenter.prevent="handleAttachmentDragEnter"
-            @dragover.prevent="handleAttachmentDragOver"
-            @dragleave.prevent="handleAttachmentDragLeave"
-            @drop.prevent="handleAttachmentDrop"
+            :class="{ 'codex-terminal__stage--dragging': attachmentsEnabled && attachmentDragActive }"
+            @dragenter.prevent="handleTerminalDragEnter"
+            @dragover.prevent="handleTerminalDragOver"
+            @dragleave.prevent="handleTerminalDragLeave"
+            @drop.prevent="handleTerminalDrop"
           >
             <div
               ref="terminalHost"
@@ -47,15 +47,15 @@
               @click="focusTerminal"
               @pointerdown.capture="focusTerminal"
             />
-            <div v-if="attachmentDragActive || attachmentUploading" class="codex-terminal__drop-overlay">
+            <div v-if="attachmentsEnabled && (attachmentDragActive || attachmentUploading)" class="codex-terminal__drop-overlay">
               <v-sheet class="codex-terminal__drop-card" rounded="lg" elevation="10">
                 <v-icon :icon="mdiPaperclip" size="28" />
-                <span>{{ attachmentUploading ? "Uploading temporary file..." : "Drop temporary files for Codex" }}</span>
+                <span>{{ attachmentUploading ? "Uploading temporary file..." : `Drop temporary files for ${terminalLabel}` }}</span>
               </v-sheet>
             </div>
             <div v-if="showTerminalStartPanel" class="codex-terminal__restart-panel">
               <v-sheet class="codex-terminal__restart-card" rounded="lg" elevation="8">
-                <span>{{ terminalExited ? "Codex exited." : "Codex is not running." }}</span>
+                <span>{{ terminalExited ? `${terminalLabel} exited.` : `${terminalLabel} is not running.` }}</span>
                 <v-btn
                   color="primary"
                   :loading="terminalStarting"
@@ -64,7 +64,7 @@
                   variant="flat"
                   @click="restartTerminal"
                 >
-                  {{ terminalExited ? "Restart Codex" : "Start Codex" }}
+                  {{ terminalExited ? `Restart ${terminalLabel}` : `Start ${terminalLabel}` }}
                 </v-btn>
               </v-sheet>
             </div>
@@ -122,10 +122,13 @@ import { useCodexTerminalElement } from "@/composables/useCodexTerminalElement.j
 import {
   vibe64CodexTerminalWebSocketUrl,
   vibe64GlobalCodexTerminalWebSocketUrl,
+  vibe64OpenCodeTerminalWebSocketUrl,
   closeVibe64CodexTerminal,
   closeVibe64GlobalCodexTerminal,
+  closeVibe64OpenCodeTerminal,
   startVibe64CodexTerminal,
-  startVibe64GlobalCodexTerminal
+  startVibe64GlobalCodexTerminal,
+  startVibe64OpenCodeTerminal
 } from "@/lib/vibe64SessionApi.js";
 import { useVibe64CodexCommands } from "@/composables/useVibe64CodexCommands.js";
 import { useCodexTerminalAttachments } from "@/composables/useCodexTerminalAttachments.js";
@@ -172,6 +175,10 @@ const props = defineProps({
   terminal: {
     type: Object,
     default: null
+  },
+  runtimeId: {
+    type: String,
+    default: "codex"
   }
 });
 const emit = defineEmits([
@@ -186,6 +193,9 @@ const componentMounted = ref(false);
 let terminalStartPromise = null;
 
 const globalScope = computed(() => props.scope === "global");
+const openCodeRuntime = computed(() => String(props.runtimeId || "").trim() === "opencode");
+const terminalLabel = computed(() => openCodeRuntime.value ? "OpenCode" : "Codex");
+const attachmentsEnabled = computed(() => Boolean(!openCodeRuntime.value && !globalScope.value));
 const sessionId = computed(() => props.session?.sessionId || "");
 const terminalScopeId = computed(() => (globalScope.value ? "global" : sessionId.value));
 const sessionWorktree = computed(() => vibe64SessionWorktreePath(props.session || {}));
@@ -194,11 +204,13 @@ const serverCodexTerminal = computed(() => {
   if (props.terminal && typeof props.terminal === "object" && !Array.isArray(props.terminal)) {
     return props.terminal;
   }
-  const terminal = props.session?.codexTerminal;
+  const terminal = openCodeRuntime.value ? props.session?.opencodeTerminal : props.session?.codexTerminal;
   if (terminal && typeof terminal === "object" && !Array.isArray(terminal)) {
     return terminal;
   }
-  const presentationTerminal = props.session?.presentation?.terminal?.codex;
+  const presentationTerminal = openCodeRuntime.value
+    ? props.session?.presentation?.terminal?.opencode
+    : props.session?.presentation?.terminal?.codex;
   return presentationTerminal && typeof presentationTerminal === "object" && !Array.isArray(presentationTerminal)
     ? presentationTerminal
     : {};
@@ -261,7 +273,7 @@ const terminalController = useCodexTerminalElement({
   onOutput: handleTerminalOutput,
   onStatusUpdate: handleTerminalStatusUpdate,
   onUserData: handleTerminalUserData,
-  readOnly: computed(() => props.readOnly),
+  readOnly: computed(() => props.readOnly && terminalDisplayActive.value),
   webSocketUrl(terminalId) {
     return webSocketUrlForScope(terminalScopeId.value, terminalId);
   }
@@ -341,7 +353,7 @@ async function copyTerminalSelection() {
 function ensureTerminalReady() {
   if (!canUseTerminal.value) {
     if (terminalCanStart.value) {
-      terminalError.value = "Create the session worktree before starting Codex.";
+      terminalError.value = `Create the session worktree before starting ${terminalLabel.value}.`;
     }
     return Promise.resolve(false);
   }
@@ -421,28 +433,61 @@ function handleTerminalUserData(data) {
 }
 
 function startTerminalSessionForScope(currentScopeId) {
+  if (openCodeRuntime.value) {
+    return startVibe64OpenCodeTerminal(currentScopeId);
+  }
   return globalScope.value
     ? startVibe64GlobalCodexTerminal()
     : startVibe64CodexTerminal(currentScopeId);
 }
 
 function closeTerminalSessionForScope(currentScopeId, terminalId) {
+  if (openCodeRuntime.value) {
+    return closeVibe64OpenCodeTerminal(currentScopeId, terminalId);
+  }
   return globalScope.value
     ? closeVibe64GlobalCodexTerminal(currentScopeId, terminalId)
     : closeVibe64CodexTerminal(currentScopeId, terminalId);
 }
 
 function webSocketUrlForScope(currentScopeId, terminalId) {
+  if (openCodeRuntime.value) {
+    return vibe64OpenCodeTerminalWebSocketUrl(currentScopeId, terminalId);
+  }
   return globalScope.value
     ? vibe64GlobalCodexTerminalWebSocketUrl(currentScopeId, terminalId)
     : vibe64CodexTerminalWebSocketUrl(currentScopeId, terminalId);
 }
 
 async function uploadAttachmentForScope(currentScopeId, file) {
-  if (globalScope.value) {
+  if (!attachmentsEnabled.value) {
     throw new Error("Temporary attachments are available in session Codex terminals.");
   }
   return codexCommands.uploadAttachment(currentScopeId, file);
+}
+
+function handleTerminalDragEnter(event) {
+  if (attachmentsEnabled.value) {
+    handleAttachmentDragEnter(event);
+  }
+}
+
+function handleTerminalDragOver(event) {
+  if (attachmentsEnabled.value) {
+    handleAttachmentDragOver(event);
+  }
+}
+
+function handleTerminalDragLeave(event) {
+  if (attachmentsEnabled.value) {
+    handleAttachmentDragLeave(event);
+  }
+}
+
+function handleTerminalDrop(event) {
+  if (attachmentsEnabled.value) {
+    handleAttachmentDrop(event);
+  }
 }
 
 async function sendTerminalData(data, {
@@ -514,6 +559,9 @@ async function focusWritableTerminalWhenShown(visible) {
 }
 
 async function connectAttachedTerminal() {
+  if (!terminalStreamActive.value) {
+    return false;
+  }
   void setupTerminalUi();
   if (!(await connectTerminalSocket())) {
     throw new Error("Terminal stream failed to connect.");
@@ -522,6 +570,9 @@ async function connectAttachedTerminal() {
 }
 
 async function startTerminalOnce() {
+  if (!terminalStreamActive.value) {
+    return false;
+  }
   void setupTerminalUi();
   if (terminalExited.value && terminalCanStart.value) {
     closeTerminalSocket();
@@ -541,10 +592,10 @@ async function startTerminalOnce() {
   try {
     const session = await startTerminalSessionForScope(terminalScopeId.value);
     if (session?.ok === false) {
-      throw new Error(session.error || session.errors?.[0]?.message || "Codex terminal failed to start.");
+      throw new Error(session.error || session.errors?.[0]?.message || `${terminalLabel.value} terminal failed to start.`);
     }
     if (!session?.id) {
-      throw new Error("Codex terminal failed to start.");
+      throw new Error(`${terminalLabel.value} terminal failed to start.`);
     }
     applyCodexTerminalSession(session, {
       fallbackStatus: "running"
@@ -552,7 +603,7 @@ async function startTerminalOnce() {
     emitTerminalSessionState();
     return connectAttachedTerminal();
   } catch (startError) {
-    terminalError.value = String(startError?.message || startError || "Codex terminal failed to start.");
+    terminalError.value = String(startError?.message || startError || `${terminalLabel.value} terminal failed to start.`);
     return false;
   } finally {
     terminalStarting.value = false;
@@ -567,6 +618,9 @@ function startTerminalWhenReady() {
 }
 
 async function attachTerminalSession(session = {}) {
+  if (openCodeRuntime.value && !terminalStreamActive.value) {
+    return Boolean(terminalSessionId.value);
+  }
   const attached = applyCodexTerminalSession(session, {
     fallbackStatus: "running"
   });
@@ -645,11 +699,20 @@ watch(terminalDisplayActive, (visible, previousVisible) => {
   immediate: true
 });
 
+watch(terminalStreamActive, (active) => {
+  if (active) {
+    void setupTerminalUi();
+    startTerminalWhenReady();
+  }
+}, {
+  flush: "post"
+});
+
 watch(terminalHost, (host) => {
   if (host && terminalDisplayActive.value && props.autoFocus && !props.readOnly) {
     void focusWritableTerminalWhenShown(true);
   }
-  if (host) {
+  if (host && terminalStreamActive.value) {
     void setupTerminalUi();
     startTerminalWhenReady();
   }

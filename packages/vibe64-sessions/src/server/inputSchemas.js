@@ -14,6 +14,11 @@ const sessionListInputValidator = deepFreeze({
 
 const sessionCreateInputValidator = deepFreeze({
   schema: createSchema({
+    agentRuntimeId: {
+      type: "string",
+      noTrim: false,
+      required: false
+    },
     workflowDefinition: {
       type: "string",
       noTrim: false,

@@ -125,6 +125,7 @@ const selection = proxyRefs({
   selectedSessionId: sessionData.selectedSessionId
 });
 const toolbar = proxyRefs({
+  agentRuntimes: sessionData.agentRuntimeOptions,
   canCreateSession: sessionData.canCreateSession,
   createSession: sessionData.createSession,
   createSessionCommand: sessionData.createSessionCommand,

@@ -2532,7 +2532,7 @@ test("vibe64 pull request resolution prompt uses the current-step helper contrac
     assert.match(afterAction.actionResult.prompt, /Do not write workflow artifacts directly/u);
     assert.match(afterAction.actionResult.prompt, /Vibe64 will show the current state/u);
     assert.doesNotMatch(afterAction.actionResult.prompt, /ask the user to reload the current step/u);
-    assert.match(afterAction.actionResult.prompt, /write the same question or blocker in normal Codex response text/u);
+    assert.match(afterAction.actionResult.prompt, /write the same question or blocker in normal agent response text/u);
     assert.match(afterAction.actionResult.prompt, /Keep the visible question text and the helper `message` equivalent/u);
     assert.ok(afterAction.actionResult.prompt.includes(questionBatchLimitInstruction()));
     assert.match(afterAction.actionResult.prompt, /format each question on its own line as `\[1\] Question text`/u);
@@ -3465,7 +3465,7 @@ test("chat-with-ai step instructions make completion ownership explicit", () => 
 
   assert.match(
     userDecidedInstruction,
-    /The current Codex conversation turn is complete\. The user decides whether to ask another question or continue\./u
+    /The current agent conversation turn is complete\. The user decides whether to ask another question or continue\./u
   );
   assert.ok(userDecidedInstruction.includes(
     "Waiting payload fields:\n  - kind: waiting_for_input\n  - stepId: maintenance_conversation\n  - stepStatus: ready\n  - message: The question or blocker for the user"

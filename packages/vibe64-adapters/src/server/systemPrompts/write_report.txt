@@ -12,4 +12,4 @@ This step runs after human review. The report is for the user and for later issu
 - Checks and reviews run.
 - Remaining risks, follow-ups, or unverified items.
 
-Use the current Codex conversation, Relevant workflow facts, issue, plan, worktree changes, and verification output as context. Keep the report factual and useful. Do not modify project files while writing the report.
+Use the current agent conversation, Relevant workflow facts, issue, plan, worktree changes, and verification output as context. Keep the report factual and useful. Do not modify project files while writing the report.

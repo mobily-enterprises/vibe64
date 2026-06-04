@@ -137,7 +137,11 @@ function useVibe64SessionData({
     apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
     buildRawPayload: (_model, { context }) => {
       const workflowDefinition = String(context?.workflowDefinition || "").trim();
-      return workflowDefinition ? { workflowDefinition } : {};
+      const agentRuntimeId = String(context?.agentRuntimeId || "").trim();
+      return {
+        ...(agentRuntimeId ? { agentRuntimeId } : {}),
+        ...(workflowDefinition ? { workflowDefinition } : {})
+      };
     },
     buildCommandOptions: () => ({
       options: LOCAL_STUDIO_COMMAND_OPTIONS
@@ -212,6 +216,17 @@ function useVibe64SessionData({
   const workflowDefinitions = computed(() => {
     const definitions = creationOptions.value.workflowDefinitions;
     return Array.isArray(definitions) ? definitions : [];
+  });
+  const agentRuntimeOptions = computed(() => {
+    const providers = capabilitiesResource.data.value?.connections?.ai?.providers;
+    return (Array.isArray(providers) ? providers : [])
+      .filter((runtime) => runtime?.ready === true)
+      .map((runtime) => ({
+        default: runtime.default === true,
+        id: String(runtime.id || runtime.runtime || "").trim(),
+        label: String(runtime.label || runtime.id || "").trim()
+      }))
+      .filter((runtime) => runtime.id && runtime.label);
   });
   const createSessionMode = computed(() => {
     return creationOptions.value.mode === "select" && workflowDefinitions.value.length > 0
@@ -322,17 +337,21 @@ function useVibe64SessionData({
     sessionSelection.clear();
   }
 
-  async function createSession(workflowDefinition = "") {
+  async function createSession(workflowDefinition = "", options = {}) {
     const startedAtMs = Date.now();
+    const agentRuntimeId = String(options?.agentRuntimeId || "").trim();
     vibe64SessionDebugLog("client.sessionData.createSession.start", {
+      agentRuntimeId,
       workflowDefinition: String(workflowDefinition || "")
     });
     try {
       const response = await createSessionCommand.run({
+        agentRuntimeId,
         workflowDefinition
       });
       vibe64SessionDebugLog("client.sessionData.createSession.done", {
         ...vibe64SessionDebugSummary(response || {}),
+        agentRuntimeId,
         code: String(response?.code || response?.errors?.[0]?.code || ""),
         durationMs: vibe64SessionDebugDurationMs(startedAtMs),
         ok: response?.ok !== false,
@@ -341,6 +360,7 @@ function useVibe64SessionData({
       return response;
     } catch (error) {
       vibe64SessionDebugLog("client.sessionData.createSession.error", {
+        agentRuntimeId,
         durationMs: vibe64SessionDebugDurationMs(startedAtMs),
         error: vibe64SessionDebugError(error),
         workflowDefinition: String(workflowDefinition || "")
@@ -423,6 +443,7 @@ function useVibe64SessionData({
     canCreateSession,
     capabilities: capabilitiesResource.data,
     capabilitiesResource,
+    agentRuntimeOptions,
     clearSelectedSession,
     createSession,
     createSessionCommand,

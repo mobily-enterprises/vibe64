@@ -14,6 +14,12 @@ test("home loads through a self-contained mocked Studio shell", async ({ page })
   await expect(page).toHaveURL(/\/home$/u);
   await expect(page.getByRole("button", { name: "Menu" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Tools" })).toHaveCount(0);
+  await page.goto("/home/dashboard/accounts");
+  await expect(page.getByRole("heading", { name: "Accounts", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "AI runtimes", exact: true })).toBeVisible();
+  await expect(page.getByText("OpenCode", { exact: true })).toBeVisible();
+  await expect(page.getByText("OpenAI", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Codex", exact: true })).toHaveCount(2);
   await page.goto("/home/dashboard/remote");
   await page.locator(".section-container-shell__nav").getByText("Remote", { exact: true }).click();
   await expect(page).toHaveURL(/\/home\/dashboard\/remote\/?$/u);
@@ -33,11 +39,13 @@ test("home loads through a self-contained mocked Studio shell", async ({ page })
   await expect(page).toHaveURL(/\/home$/u);
   await expect(page.getByRole("button", { name: "New Session" })).toBeVisible();
   await page.getByRole("button", { name: "New Session" }).click();
-  await expect(page.getByText("Session type")).toBeVisible();
-  await expect(page.getByText("Make improvements", { exact: true })).toBeVisible();
+  const newSessionDialog = page.getByRole("dialog").filter({ hasText: "New session" });
+  await expect(newSessionDialog).toBeVisible();
+  await expect(newSessionDialog.getByText("Make improvements", { exact: true })).toHaveCount(1);
+  await expect(newSessionDialog.getByRole("button", { name: /OpenCode/u })).toBeVisible();
   await expect(page.getByText("General coding", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Documentation/non code maintenance", { exact: true })).toHaveCount(0);
-  await expect(page.getByText("Non-commit maintenance", { exact: true })).toBeVisible();
+  await expect(newSessionDialog.getByText("Non-commit maintenance", { exact: true })).toHaveCount(1);
   await expect(page).toHaveURL(/\/home$/u);
 });
 
@@ -53,21 +61,82 @@ async function mockReadyStudioShell(page: Page) {
       resolve();
     };
   });
+  const opencodeRuntimePayload = {
+    available: true,
+    connected: true,
+    connectedProviderCount: 1,
+    connectedProviders: ["openai"],
+    default: true,
+    id: "opencode",
+    label: "OpenCode",
+    message: "OpenCode is ready.",
+    mode: "free",
+    providers: [
+      {
+        connected: true,
+        defaultModelId: "gpt-5",
+        id: "openai",
+        label: "OpenAI",
+        modelCount: 2,
+        models: [
+          {
+            id: "gpt-5",
+            label: "GPT-5"
+          },
+          {
+            id: "gpt-5-mini",
+            label: "GPT-5 mini"
+          }
+        ]
+      }
+    ],
+    ready: true,
+    runtime: "opencode",
+    status: "available",
+    version: "1.0.0"
+  };
+  const codexRuntimePayload = {
+    available: false,
+    connected: false,
+    default: false,
+    id: "codex",
+    label: "Codex",
+    message: "Authenticate Codex to start Codex sessions.",
+    mode: "optional",
+    ready: false,
+    runtime: "codex",
+    status: "auth_required"
+  };
   const accountsReadyPayload = {
     accounts: [
       {
-        connected: true,
+        connected: false,
         id: "codex",
         label: "Codex",
-        status: "connected"
+        required: false,
+        status: "auth_required"
       },
       {
         connected: true,
         id: "github",
         label: "GitHub",
+        required: true,
         status: "connected"
       }
     ],
+    agentRuntimes: [
+      opencodeRuntimePayload,
+      codexRuntimePayload
+    ],
+    ai: {
+      defaultRuntimeId: "opencode",
+      ready: true,
+      runtimes: [
+        opencodeRuntimePayload,
+        codexRuntimePayload
+      ],
+      selectedRuntimeId: "opencode"
+    },
     ok: true,
     ready: true
   };
@@ -104,17 +173,20 @@ async function mockReadyStudioShell(page: Page) {
     },
     connections: {
       accounts: accountsReadyPayload.accounts,
+      agentRuntimes: accountsReadyPayload.agentRuntimes,
       ai: {
-        message: "Codex is selected and authenticated.",
+        defaultRuntimeId: "opencode",
+        message: "OpenCode is selected.",
         providers: [
           {
-            ...accountsReadyPayload.accounts[0],
+            ...opencodeRuntimePayload,
             ready: true,
             selected: true
           }
         ],
         ready: true,
-        selectedProviderId: "codex"
+        selectedProviderId: "opencode",
+        selectedRuntimeId: "opencode"
       },
       github: {
         ...accountsReadyPayload.accounts[1],

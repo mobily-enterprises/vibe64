@@ -271,6 +271,29 @@ function buildCodexPromptHandoff(renderedPrompt) {
   };
 }
 
+function normalizeAgentRuntimeId(value = "") {
+  const runtimeId = normalizeText(value).toLowerCase();
+  return ["codex", "opencode"].includes(runtimeId) ? runtimeId : "codex";
+}
+
+function promptAgentRuntimeId(session = {}) {
+  return normalizeAgentRuntimeId(session.metadata?.agent_runtime_id);
+}
+
+function buildAgentPromptHandoff(renderedPrompt, {
+  session = {}
+} = {}) {
+  return {
+    kind: "agent_prompt_handoff",
+    modelId: normalizeText(session.metadata?.agent_model_id),
+    prompt: renderedPrompt.prompt,
+    promptId: renderedPrompt.promptId,
+    providerId: normalizeText(session.metadata?.agent_provider_id),
+    runtimeId: promptAgentRuntimeId(session),
+    terminalInput: renderedPrompt.prompt
+  };
+}
+
 function toDate(value) {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -1108,6 +1131,13 @@ class Vibe64SessionRuntime {
       session: promptSession
     });
     return {
+      agentPromptHandoff: buildAgentPromptHandoff({
+        ...renderedPrompt,
+        prompt,
+        visiblePrompt: visiblePromptForPromptAction(action, input)
+      }, {
+        session: promptSession
+      }),
       codexPromptHandoff: buildCodexPromptHandoff({
         ...renderedPrompt,
         prompt,
@@ -1646,5 +1676,6 @@ class Vibe64SessionRuntime {
 }
 
 export {
-  Vibe64SessionRuntime
+  Vibe64SessionRuntime,
+  normalizeAgentRuntimeId
 };

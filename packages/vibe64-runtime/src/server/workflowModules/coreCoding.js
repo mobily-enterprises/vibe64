@@ -1454,7 +1454,7 @@ const makePlanMachine = {
 
   promptInstruction() {
     return currentStepHelperInstruction({
-      doneMeaning: "The implementation plan has been written in the Codex response and is ready for execution.",
+      doneMeaning: "The implementation plan has been written in the agent response and is ready for execution.",
       waitingForInputMeaning: "You cannot make a useful plan without a user decision or clarification."
     });
   }
@@ -1478,7 +1478,7 @@ const seedPlanMadeMachine = {
 
   promptInstruction() {
     return currentStepHelperInstruction({
-      doneMeaning: "The seed implementation plan has been written in the Codex response and is ready for execution.",
+      doneMeaning: "The seed implementation plan has been written in the agent response and is ready for execution.",
       waitingForInputMeaning: "You cannot make a useful seed plan without a user decision or clarification."
     });
   }
@@ -1713,7 +1713,7 @@ const planAndExecuteMachine = {
           waitingForInputMeaning: "You cannot continue implementation without a user decision or missing project detail."
         })
       : currentStepHelperInstruction({
-          doneMeaning: "The implementation plan has been written in the Codex response and is ready for execution.",
+          doneMeaning: "The implementation plan has been written in the agent response and is ready for execution.",
           waitingForInputMeaning: "You cannot make a useful plan without a user decision or clarification."
         });
   }

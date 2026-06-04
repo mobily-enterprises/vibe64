@@ -2,6 +2,10 @@
 import open, { apps } from "open";
 import process from "node:process";
 import { startServer } from "../server.js";
+import {
+  REMOTE_STUDIO_RUNTIME_ENV,
+  hasRemoteStudioRuntimeArg
+} from "@local/vibe64-core/server/studioRuntimeLocation";
 
 function shouldOpenBrowser(args = process.argv.slice(2)) {
   for (const arg of args) {
@@ -35,6 +39,7 @@ function parseStartupArgs(args = process.argv.slice(2)) {
   }
   return {
     openOnStart: shouldOpenBrowser(args),
+    remoteStudioRuntime: hasRemoteStudioRuntimeArg(args),
     targetRoot
   };
 }
@@ -59,8 +64,12 @@ async function openBrowser(url) {
 try {
   const {
     openOnStart,
+    remoteStudioRuntime,
     targetRoot
   } = parseStartupArgs();
+  if (remoteStudioRuntime) {
+    process.env[REMOTE_STUDIO_RUNTIME_ENV] = "1";
+  }
   const app = await startServer({
     browserLifecycleShutdown: openOnStart,
     strictPort: Boolean(String(process.env.PORT || "").trim()),

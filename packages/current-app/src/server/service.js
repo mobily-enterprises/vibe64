@@ -160,6 +160,39 @@ function connectionRecord(account = {}) {
   };
 }
 
+function agentRuntimeRecord(runtimes = [], runtimeId = "", fallbackLabel = "") {
+  const runtime = runtimes.find((item) => String(item?.id || item?.runtime || "") === runtimeId);
+  if (runtime) {
+    return runtime;
+  }
+  return {
+    available: false,
+    connected: false,
+    id: runtimeId,
+    label: fallbackLabel || runtimeId,
+    message: `${fallbackLabel || runtimeId} is not available.`,
+    ready: false,
+    runtime: runtimeId,
+    status: "unknown"
+  };
+}
+
+function agentRuntimeConnectionRecord(runtime = {}) {
+  const ready = runtime.ready === true || runtime.available === true;
+  return {
+    available: ready,
+    connected: runtime.connected === true || ready,
+    default: runtime.default === true,
+    id: String(runtime.id || runtime.runtime || ""),
+    label: String(runtime.label || runtime.id || runtime.runtime || ""),
+    message: String(runtime.message || ""),
+    mode: String(runtime.mode || ""),
+    ready,
+    runtime: String(runtime.runtime || runtime.id || ""),
+    status: String(runtime.status || (ready ? "available" : "not_available"))
+  };
+}
+
 function firstBlockedCapability(capabilities = []) {
   return capabilities.find((item) => item.enabled !== true && item.reason) || null;
 }
@@ -478,13 +511,19 @@ function createService({
     setup = {}
   } = {}) {
     const accounts = Array.isArray(connections.accounts) ? connections.accounts : [];
+    const aiStatus = connections.ai && typeof connections.ai === "object" && !Array.isArray(connections.ai)
+      ? connections.ai
+      : {};
+    const agentRuntimes = Array.isArray(connections.agentRuntimes)
+      ? connections.agentRuntimes.map(agentRuntimeConnectionRecord)
+      : [];
     const github = connectionRecord(accountRecord(accounts, "github", "GitHub"));
-    const codex = connectionRecord(accountRecord(accounts, "codex", "Codex"));
-    const selectedAiProvider = {
-      ...codex,
+    const defaultRuntimeId = String(aiStatus.defaultRuntimeId || "opencode");
+    const selectedAiRuntime = {
+      ...agentRuntimeConnectionRecord(agentRuntimeRecord(agentRuntimes, defaultRuntimeId, "OpenCode")),
       selected: true
     };
-    const aiReady = selectedAiProvider.ready === true;
+    const aiReady = selectedAiRuntime.ready === true;
     const githubReady = github.ready === true;
     const setupReady = setup.ready === true;
     const connectionFix = dashboardFix(ACCOUNTS_DASHBOARD_ROUTE, "Open Accounts");
@@ -520,10 +559,12 @@ function createService({
       connections: {
         accounts,
         ai: {
-          message: aiReady ? "Codex is selected and authenticated." : selectedAiProvider.message,
-          providers: [selectedAiProvider],
+          defaultRuntimeId,
+          message: aiReady ? `${selectedAiRuntime.label} is selected.` : selectedAiRuntime.message,
+          providers: agentRuntimes,
           ready: aiReady,
-          selectedProviderId: "codex"
+          selectedProviderId: defaultRuntimeId,
+          selectedRuntimeId: defaultRuntimeId
         },
         github,
         ready: aiReady && githubReady

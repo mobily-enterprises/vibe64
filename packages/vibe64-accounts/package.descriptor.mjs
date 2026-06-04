@@ -8,6 +8,7 @@ export default Object.freeze({
     "@jskit-ai/kernel",
     "@local/vibe64-core",
     "@local/vibe64-project",
+    "@local/vibe64-terminals",
     "@local/setup-doctor-core",
     "@local/studio-terminal-core"
   ],
@@ -17,7 +18,8 @@ export default Object.freeze({
     ],
     requires: [
       "runtime.actions",
-      "feature.vibe64-project"
+      "feature.vibe64-project",
+      "feature.vibe64-terminals"
     ]
   },
   runtime: {
@@ -42,7 +44,7 @@ export default Object.freeze({
         },
         {
           subpath: "./server/service",
-          summary: "Owns GitHub and Codex auth status checks plus hidden CLI login sessions."
+          summary: "Owns GitHub and Codex auth status checks, OpenCode runtime readiness, and hidden CLI login sessions."
         }
       ],
       containerTokens: {

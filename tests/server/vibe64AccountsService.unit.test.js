@@ -50,20 +50,6 @@ function connectedToolchainResult(commandArgs) {
   throw new Error(`Unexpected toolchain command: ${commandArgs.join(" ")}`);
 }
 
-function disconnectedCodexToolchain(calls = []) {
-  return async function runToolchain(commandArgs) {
-    calls.push(commandArgs);
-    if (commandArgs[0] === "codex") {
-      return {
-        ok: false,
-        output: "Codex is not logged in.",
-        stdout: ""
-      };
-    }
-    return connectedToolchainResult(commandArgs);
-  };
-}
-
 function disconnectedGithubGitCredentialToolchain(calls = []) {
   return async function runToolchain(commandArgs) {
     calls.push(commandArgs);
@@ -121,7 +107,7 @@ test("Accounts refresh bypasses and clears a stale ready status", async () => {
     const disconnectedCalls = [];
     const refreshed = await createService({
       readyStatusCacheRoot,
-      runToolchain: disconnectedCodexToolchain(disconnectedCalls),
+      runToolchain: disconnectedGithubGitCredentialToolchain(disconnectedCalls),
       targetRoot
     }).getStatus({
       refresh: true
@@ -139,6 +125,41 @@ test("Accounts refresh bypasses and clears a stale ready status", async () => {
     assert.equal(afterClear.ok, true);
     assert.equal(afterClear.ready, true);
     assert.equal(connectedCalls.length, 4);
+  });
+});
+
+test("OpenCode provider OAuth accepts method index zero", async () => {
+  let forwarded = null;
+  const service = createService({
+    agentRuntimeService: {
+      async startOpenCodeProviderOAuth(providerId, input = {}) {
+        forwarded = {
+          input,
+          providerId
+        };
+        return {
+          authorization: {
+            url: "https://auth.example/openai"
+          },
+          ok: true
+        };
+      }
+    },
+    runToolchain: connectedToolchain(),
+    targetRoot: "/workspace/project"
+  });
+
+  const result = await service.startOpenCodeProviderOAuth({
+    methodIndex: 0,
+    providerId: "openai"
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(forwarded, {
+    input: {
+      methodIndex: "0"
+    },
+    providerId: "openai"
   });
 });
 

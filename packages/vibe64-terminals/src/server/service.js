@@ -4,6 +4,7 @@ import {
   createProjectToolTerminalController
 } from "./commandTerminal.js";
 import { createLaunchTargetTerminalController } from "./launchTargetTerminal.js";
+import { createOpenCodeController } from "./opencodeServer.js";
 import { createShellTerminalController } from "./shellTerminal.js";
 import {
   projectToolFailureFixPrompt,
@@ -28,6 +29,10 @@ function createService({
     projectService,
     publishPromptInjected: publishSessionChanged.codexPrompt,
     publishSessionChanged: publishSessionChanged.codexTerminal
+  });
+  const opencode = createOpenCodeController({
+    projectService,
+    publishSessionChanged: publishSessionChanged.agentPrompt
   });
   const command = createCommandTerminalController({
     afterSuccessfulCommand: async ({ metadata = {}, session = {} } = {}) => {
@@ -61,6 +66,7 @@ function createService({
       await Promise.all([
         launchTarget.closeAllForSession(sessionId),
         codex.closeAllForSession(sessionId),
+        opencode.closeTerminalSessionsForSession?.(sessionId),
         command.closeAllForSession(sessionId),
         shell.closeAllForSession(sessionId)
       ]);
@@ -72,6 +78,7 @@ function createService({
     async closeSessionNonCodexTerminals(sessionId) {
       await Promise.all([
         launchTarget.closeAllForSession(sessionId),
+        opencode.closeTerminalSessionsForSession?.(sessionId),
         command.closeAllForSession(sessionId),
         shell.closeAllForSession(sessionId)
       ]);
@@ -112,6 +119,13 @@ function createService({
       return codex.injectCodexPrompt(sessionId, handoff);
     },
 
+    injectAgentPrompt(sessionId, handoff = {}) {
+      if (String(handoff?.runtimeId || "").trim() === "opencode") {
+        return opencode.injectPrompt(sessionId, handoff);
+      }
+      return codex.injectCodexPrompt(sessionId, handoff?.codexPromptHandoff || handoff);
+    },
+
     injectGlobalCodexPrompt(handoff = {}) {
       return codex.injectGlobalCodexPrompt(handoff);
     },
@@ -122,6 +136,34 @@ function createService({
 
     codexTerminalState(sessionId) {
       return codex.terminalState(sessionId);
+    },
+
+    opencodeRuntimeStatus() {
+      return opencode.runtimeStatus();
+    },
+
+    opencodeSessionState(sessionId) {
+      return opencode.state(sessionId);
+    },
+
+    startOpenCodeTerminal(sessionId) {
+      return opencode.startTerminal(sessionId);
+    },
+
+    closeOpenCodeTerminal(sessionId, terminalSessionId) {
+      return opencode.closeTerminal(sessionId, terminalSessionId);
+    },
+
+    readOpenCodeTerminal(sessionId, terminalSessionId) {
+      return opencode.readTerminal(sessionId, terminalSessionId);
+    },
+
+    setOpenCodeProviderAuth(providerId, input = {}) {
+      return opencode.setProviderAuth(providerId, input);
+    },
+
+    startOpenCodeProviderOAuth(providerId, input = {}) {
+      return opencode.startProviderOAuth(providerId, input);
     },
 
     globalCodexTerminalState() {
@@ -245,6 +287,10 @@ function createService({
       return codex.subscribeTerminal(sessionId, terminalSessionId, subscriber);
     },
 
+    subscribeOpenCodeTerminal(sessionId, terminalSessionId, subscriber) {
+      return opencode.subscribeTerminal(sessionId, terminalSessionId, subscriber);
+    },
+
     subscribeGlobalCodexTerminal(terminalSessionId, subscriber) {
       return codex.subscribeGlobalTerminal(terminalSessionId, subscriber);
     },
@@ -277,6 +323,10 @@ function createService({
       return codex.writeTerminal(sessionId, terminalSessionId, data);
     },
 
+    writeOpenCodeTerminal(sessionId, terminalSessionId, data) {
+      return opencode.writeTerminal(sessionId, terminalSessionId, data);
+    },
+
     writeGlobalCodexTerminal(terminalSessionId, data) {
       return codex.writeGlobalTerminal(terminalSessionId, data);
     },
@@ -287,6 +337,10 @@ function createService({
 
     resizeCodexTerminal(sessionId, terminalSessionId, size) {
       return codex.resizeTerminal(sessionId, terminalSessionId, size);
+    },
+
+    resizeOpenCodeTerminal(sessionId, terminalSessionId, size) {
+      return opencode.resizeTerminal(sessionId, terminalSessionId, size);
     },
 
     resizeGlobalCodexTerminal(terminalSessionId, size) {

@@ -8,8 +8,11 @@
       :active="autopilotModeActive"
       :automation-enabled="autopilotAutomationEnabled"
       :autopilot-steps="autopilotNavigationSteps"
+      :assistant-label="selectedAgentRuntimeLabel"
       :codex-terminal-attention="codexBootstrapNeedsTerminalAttention"
-      :codex-thinking="autopilotInteractionLocked"
+      :codex-thinking="codexThinkingVisible"
+      :agent-thinking="agentThinkingVisible"
+      :ai-terminal-title="aiTerminalTitle"
       :chat-collapsed="props.chatCollapsed"
       :command-runner="autopilotCommandRunner"
       :conversation-log="conversationLog"
@@ -42,6 +45,7 @@
         <Vibe64SessionTerminals
           class="studio-ai-sessions__tab-terminal"
           :allow-codex-start="tabActive && codexTerminalCanStart"
+          :agent-runtime-id="selectedAgentRuntimeId"
           :codex-recovery="codexRecovery"
           :codex-terminal="codexTerminal"
           :codex-read-only="tabActive ? false : codexTerminalReadOnly"
@@ -168,6 +172,21 @@ const selectedSessionTitle = computed(() => {
   return vibe64SessionDisplayTitle(selectedSession.value || {}) ||
     `Session ${props.sessionData.shortSessionId(props.sessionId)}`;
 });
+const selectedAgentRuntimeId = computed(() => String(
+  selectedSession.value?.agentRuntimeId ||
+  selectedSession.value?.metadata?.agent_runtime_id ||
+  selectedSession.value?.actionResult?.agentPromptHandoff?.runtimeId ||
+  "codex"
+).trim() || "codex");
+const selectedAgentRuntimeLabel = computed(() => (
+  selectedAgentRuntimeId.value === "opencode" ? "OpenCode" : "Codex"
+));
+const selectedAgentRuntimeIsCodex = computed(() => selectedAgentRuntimeId.value !== "opencode");
+const aiTerminalTitle = computed(() => (
+  selectedAgentRuntimeId.value === "opencode"
+    ? "Open the active session OpenCode terminal"
+    : "Open the active session Codex terminal"
+));
 const isSelectedSessionClosed = computed(() => isClosedVibe64Session(selectedSession.value || {}));
 const sessionFacts = computed(() => vibe64SessionFacts(selectedSession.value || {}));
 const timelineSteps = computed(() => buildVibe64TimelineSteps(selectedSession.value));
@@ -196,6 +215,7 @@ const sessionScopedData = {
   workflowDefinitions: props.sessionData.workflowDefinitions
 };
 const autopilotSessionToolbar = proxyRefs({
+  agentRuntimes: props.sessionData.agentRuntimeOptions,
   canCreateSession: props.sessionData.canCreateSession,
   createSession: props.sessionData.createSession,
   createSessionCommand: props.sessionData.createSessionCommand,
@@ -386,9 +406,29 @@ const autopilotCodexWorkingVisible = computed(() => Boolean(
     )
   )
 ));
+const agentStepStatus = computed(() => String(
+  selectedSession.value?.stepMachine?.status ||
+  selectedSession.value?.presentation?.step?.status ||
+  ""
+).trim());
+const agentResultExpected = computed(() => Boolean(
+  props.active &&
+  ["attempting_execution", "awaiting_agent_result"].includes(agentStepStatus.value)
+));
 const autopilotInteractionLocked = computed(() => Boolean(
   props.active &&
-  autopilotCodexWorkingVisible.value
+  (
+    agentResultExpected.value ||
+    autopilotCodexWorkingVisible.value
+  )
+));
+const codexThinkingVisible = computed(() => Boolean(
+  selectedAgentRuntimeIsCodex.value &&
+  autopilotInteractionLocked.value
+));
+const agentThinkingVisible = computed(() => Boolean(
+  !selectedAgentRuntimeIsCodex.value &&
+  agentResultExpected.value
 ));
 const codexTerminalCanStart = computed(() => Boolean(
   props.active

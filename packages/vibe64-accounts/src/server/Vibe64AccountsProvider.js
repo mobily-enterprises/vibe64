@@ -9,7 +9,7 @@ import { registerRoutes } from "./registerRoutes.js";
 class Vibe64AccountsProvider {
   static id = "feature.vibe64-accounts";
 
-  static dependsOn = ["runtime.actions", "feature.vibe64-project"];
+  static dependsOn = ["runtime.actions", "feature.vibe64-project", "feature.vibe64-terminals"];
 
   register(app) {
     if (
@@ -24,6 +24,7 @@ class Vibe64AccountsProvider {
       "feature.vibe64-accounts.service",
       (scope) => {
         return createService({
+          agentRuntimeService: scope.make("feature.vibe64-terminals.service"),
           projectService: scope.make("feature.vibe64-project.service")
         });
       }

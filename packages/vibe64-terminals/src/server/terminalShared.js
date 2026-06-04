@@ -17,6 +17,7 @@ import {
 const CODEX_TERMINAL_NAMESPACE = "vibe64-codex";
 const CODEX_TERMINAL_NAMESPACE_PREFIX = `${CODEX_TERMINAL_NAMESPACE}:`;
 const GLOBAL_CODEX_TERMINAL_NAMESPACE = "vibe64-global-codex";
+const OPENCODE_TERMINAL_NAMESPACE = "vibe64-opencode";
 const COMMAND_TERMINAL_NAMESPACE = "vibe64-command";
 const LAUNCH_TARGET_TERMINAL_NAMESPACE = "vibe64-launch-target";
 const SHELL_TERMINAL_NAMESPACE = "vibe64-shell";
@@ -44,6 +45,10 @@ function fixCodexTerminalNamespace(jobId) {
 
 function commandTerminalNamespace(sessionId) {
   return `${COMMAND_TERMINAL_NAMESPACE}:${String(sessionId || "")}`;
+}
+
+function opencodeTerminalNamespace(sessionId) {
+  return `${OPENCODE_TERMINAL_NAMESPACE}:${String(sessionId || "")}`;
 }
 
 function toolTerminalNamespace(toolId) {
@@ -136,6 +141,7 @@ export {
   fixCodexTerminalNamespace,
   globalCodexTerminalNamespace,
   launchTargetTerminalNamespace,
+  opencodeTerminalNamespace,
   pathInsideOrEqual,
   shellTerminalNamespace,
   sessionTerminalCwd,

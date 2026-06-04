@@ -1,5 +1,6 @@
 import {
   VIBE64_SESSION_STATUS,
+  normalizeAgentRuntimeId,
   workflowDefinitionCreationOptions
 } from "@local/vibe64-runtime/server";
 import {
@@ -21,6 +22,7 @@ import { inspectSessionDiff } from "./sessionDiff.js";
 
 const MAX_OPEN_VIBE64_SESSIONS = 3;
 const CODEX_PROMPT_HANDOFF_DELIVERY_ENABLED = true;
+const DEFAULT_AGENT_RUNTIME_ID = "opencode";
 const CLOSED_SESSION_STATUSES = new Set(["abandoned", "finished"]);
 const SESSION_ARCHIVE_QUERY = Object.freeze({
   ABANDONED: "abandoned",
@@ -92,6 +94,22 @@ function codexPromptHandoffFromSession(session = {}) {
   return String(handoff.kind || "") === "codex_prompt_handoff" ? handoff : null;
 }
 
+function agentPromptHandoffFromSession(session = {}) {
+  const handoff = session?.actionResult?.agentPromptHandoff;
+  if (!handoff || typeof handoff !== "object" || Array.isArray(handoff)) {
+    return null;
+  }
+  return String(handoff.kind || "") === "agent_prompt_handoff" ? handoff : null;
+}
+
+function agentRuntimeIdFromSession(session = {}) {
+  return normalizeAgentRuntimeId(
+    session.agentRuntimeId ||
+    session.metadata?.agent_runtime_id ||
+    session.actionResult?.agentPromptHandoff?.runtimeId
+  );
+}
+
 function objectValue(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
@@ -143,6 +161,7 @@ async function sessionWithLatestRevision(runtime, session = {}) {
   }
   return {
     ...await runtime.getSession(session.sessionId),
+    agentPromptDelivery: session.agentPromptDelivery,
     actionResult: session.actionResult,
     codexPromptDelivery: session.codexPromptDelivery
   };
@@ -158,6 +177,114 @@ function codexTerminalPresentation(codexTerminal = null) {
     terminalSessionId,
     visible: false,
     visibleUntil: ""
+  };
+}
+
+function opencodeTerminalPresentation(opencodeTerminal = null) {
+  const terminal = objectValue(opencodeTerminal);
+  const terminalSessionId = String(terminal.id || "").trim();
+  return {
+    label: "",
+    readOnlyInAutopilot: true,
+    renderer: "opencode_terminal",
+    terminalSessionId,
+    visible: false,
+    visibleUntil: ""
+  };
+}
+
+function openCodeText(value = "") {
+  return String(value || "").replaceAll("Codex", "OpenCode");
+}
+
+function openCodeOptionalText(value) {
+  return value == null ? value : openCodeText(value);
+}
+
+function withOpenCodeInputFields(fields) {
+  return Array.isArray(fields)
+    ? fields.map((field) => ({
+        ...field,
+        label: openCodeOptionalText(field.label),
+        placeholder: openCodeOptionalText(field.placeholder),
+        requiredMessage: openCodeOptionalText(field.requiredMessage)
+      }))
+    : fields;
+}
+
+function withOpenCodeInputPresentation(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return input;
+  }
+  return {
+    ...input,
+    fields: withOpenCodeInputFields(input.fields),
+    message: openCodeOptionalText(input.message),
+    placeholder: openCodeOptionalText(input.placeholder),
+    prompt: openCodeOptionalText(input.prompt),
+    submitLabel: openCodeOptionalText(input.submitLabel),
+    title: openCodeOptionalText(input.title)
+  };
+}
+
+function withOpenCodeIntentText(intent = {}) {
+  if (!intent || typeof intent !== "object" || Array.isArray(intent)) {
+    return intent;
+  }
+  return {
+    ...intent,
+    auditMessage: openCodeOptionalText(intent.auditMessage),
+    disabledReason: openCodeOptionalText(intent.disabledReason),
+    input: withOpenCodeInputPresentation(intent.input),
+    inputFields: withOpenCodeInputFields(intent.inputFields),
+    label: openCodeOptionalText(intent.label)
+  };
+}
+
+function withOpenCodeActionText(action = {}) {
+  if (!action || typeof action !== "object" || Array.isArray(action)) {
+    return action;
+  }
+  return {
+    ...action,
+    auditMessage: openCodeOptionalText(action.auditMessage),
+    description: openCodeOptionalText(action.description),
+    disabledReason: openCodeOptionalText(action.disabledReason),
+    inputFields: withOpenCodeInputFields(action.inputFields),
+    label: openCodeOptionalText(action.label)
+  };
+}
+
+function withOpenCodePresentationText(presentation = {}) {
+  if (!presentation || typeof presentation !== "object" || Array.isArray(presentation)) {
+    return presentation;
+  }
+  const screen = objectValue(presentation.screen);
+  const prompt = objectValue(presentation.prompt);
+  return {
+    ...presentation,
+    intents: Array.isArray(presentation.intents)
+      ? presentation.intents.map(withOpenCodeIntentText)
+      : presentation.intents,
+    prompt: Object.keys(prompt).length
+      ? {
+          ...prompt,
+          inputPrompt: openCodeOptionalText(prompt.inputPrompt),
+          message: openCodeOptionalText(prompt.message),
+          statusText: openCodeOptionalText(prompt.statusText),
+          title: openCodeOptionalText(prompt.title)
+        }
+      : presentation.prompt,
+    screen: Object.keys(screen).length
+      ? {
+          ...screen,
+          input: withOpenCodeInputPresentation(screen.input),
+          message: openCodeOptionalText(screen.message),
+          primaryIntentId: screen.primaryIntentId,
+          statusText: openCodeOptionalText(screen.statusText),
+          title: openCodeOptionalText(screen.title)
+        }
+      : presentation.screen
   };
 }
 
@@ -185,6 +312,41 @@ function withCodexTerminalState(session = {}, terminalState = {}) {
       terminal: {
         ...objectValue(presentation.terminal),
         codex: codexTerminalPresentation(terminalState.codexTerminal || null)
+      }
+    }
+  };
+}
+
+function withOpenCodeState(session = {}, agentState = {}) {
+  if (!session || session.ok === false || !session.sessionId) {
+    return session;
+  }
+  const presentation = objectValue(session.presentation);
+  return {
+    ...session,
+    actions: Array.isArray(session.actions) ? session.actions.map(withOpenCodeActionText) : session.actions,
+    agentConversationId: agentState.agentConversationId || session.agentConversationId || "",
+    agentIdentity: agentState.agentIdentity || session.agentIdentity || null,
+    agentIdentityProvider: agentState.agentIdentityProvider || session.agentIdentityProvider || "opencode",
+    agentIdentityStatus: agentState.agentIdentityStatus || session.agentIdentityStatus || "",
+    agentResumeStrategy: agentState.agentResumeStrategy || session.agentResumeStrategy || "",
+    agentRuntimeId: "opencode",
+    agentWorkdir: agentState.agentWorkdir || session.agentWorkdir || "",
+    intents: Array.isArray(session.intents) ? session.intents.map(withOpenCodeIntentText) : session.intents,
+    next: session.next && typeof session.next === "object" && !Array.isArray(session.next)
+      ? {
+          ...session.next,
+          disabledReason: openCodeOptionalText(session.next.disabledReason),
+          label: openCodeOptionalText(session.next.label)
+        }
+      : session.next,
+    opencodeTerminal: agentState.opencodeTerminal || session.opencodeTerminal || null,
+    opencodeSessionId: agentState.opencodeSessionId || session.opencodeSessionId || "",
+    presentation: {
+      ...withOpenCodePresentationText(presentation),
+      terminal: {
+        ...objectValue(presentation.terminal),
+        opencode: opencodeTerminalPresentation(agentState.opencodeTerminal || session.opencodeTerminal || null)
       }
     }
   };
@@ -222,6 +384,94 @@ async function enrichSessionWithCodexTerminal(terminalService, session = {}) {
     durationMs: vibe64SessionDebugDurationMs(startedAtMs)
   });
   return enrichedSession;
+}
+
+async function enrichSessionWithAgentState(terminalService, session = {}) {
+  if (agentRuntimeIdFromSession(session) === "opencode") {
+    if (typeof terminalService?.opencodeSessionState !== "function") {
+      return withOpenCodeState(session, {});
+    }
+    const agentState = await terminalService.opencodeSessionState(session.sessionId);
+    if (agentState?.ok === false) {
+      throw new Error(agentState.error || "Vibe64 OpenCode session state could not be read.");
+    }
+    return withOpenCodeState(session, agentState || {});
+  }
+  return enrichSessionWithCodexTerminal(terminalService, session);
+}
+
+async function deliverAgentPromptIfNeeded(terminalService, session = {}) {
+  const handoff = agentPromptHandoffFromSession(session);
+  if (!handoff) {
+    return deliverCodexPromptIfNeeded(terminalService, session);
+  }
+  if (String(handoff.runtimeId || "").trim() !== "opencode") {
+    return deliverCodexPromptIfNeeded(terminalService, session);
+  }
+  if (typeof terminalService?.injectAgentPrompt !== "function") {
+    throw new Error("Vibe64 agent prompt delivery service is not available.");
+  }
+  const startedAtMs = Date.now();
+  vibe64SessionDebugLog("server.service.deliverAgentPrompt.start", {
+    promptId: String(handoff.promptId || ""),
+    runtimeId: String(handoff.runtimeId || ""),
+    sessionId: session.sessionId
+  });
+  const delivery = await terminalService.injectAgentPrompt(session.sessionId, handoff);
+  if (delivery?.ok === false) {
+    vibe64SessionDebugLog("server.service.deliverAgentPrompt.error", {
+      durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+      error: String(delivery.error || "Vibe64 agent prompt delivery failed."),
+      promptId: String(handoff.promptId || ""),
+      runtimeId: String(handoff.runtimeId || ""),
+      sessionId: session.sessionId
+    });
+    throw new Error(delivery.error || "Vibe64 agent prompt delivery failed.");
+  }
+  vibe64SessionDebugLog("server.service.deliverAgentPrompt.done", {
+    durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+    promptId: String(handoff.promptId || ""),
+    runtimeId: String(handoff.runtimeId || ""),
+    sessionId: session.sessionId
+  });
+  return {
+    ...session,
+    agentPromptDelivery: delivery
+  };
+}
+
+async function deliverAgentPromptWithRecovery(terminalService, runtime, session = {}) {
+  try {
+    return await deliverAgentPromptIfNeeded(terminalService, session);
+  } catch (error) {
+    const handoff = agentPromptHandoffFromSession(session);
+    if (
+      String(handoff?.runtimeId || "").trim() !== "opencode" ||
+      typeof runtime?.returnControlFromAgentWait !== "function"
+    ) {
+      throw error;
+    }
+    const message = String(error?.message || error || "OpenCode prompt delivery failed.");
+    vibe64SessionDebugLog("server.service.deliverAgentPrompt.recover", {
+      error: message,
+      promptId: String(handoff.promptId || ""),
+      runtimeId: String(handoff.runtimeId || ""),
+      sessionId: session.sessionId
+    });
+    const recoveredSession = await runtime.returnControlFromAgentWait(session.sessionId, {
+      inputPrompt: "OpenCode did not respond. What would you like to do?",
+      message: `${message} Vibe64 returned control so you can retry.`
+    });
+    return {
+      ...recoveredSession,
+      agentPromptDelivery: {
+        agentRuntimeId: "opencode",
+        error: message,
+        ok: false,
+        promptId: String(handoff.promptId || "")
+      }
+    };
+  }
 }
 
 async function deliverCodexPromptIfNeeded(terminalService, session = {}) {
@@ -382,17 +632,29 @@ function sessionProjectMetadata(projectType = {}) {
   };
 }
 
-function workflowSessionInput(projectType = {}, workflowDefinition = "") {
+function selectedAgentRuntimeId(input = {}) {
+  return normalizeAgentRuntimeId(input.agentRuntimeId || input.agent_runtime_id || DEFAULT_AGENT_RUNTIME_ID);
+}
+
+function workflowSessionInput(projectType = {}, workflowDefinition = "", {
+  agentRuntimeId = DEFAULT_AGENT_RUNTIME_ID
+} = {}) {
   return {
-    metadata: sessionProjectMetadata(projectType),
+    metadata: {
+      ...sessionProjectMetadata(projectType),
+      agent_runtime_id: normalizeAgentRuntimeId(agentRuntimeId)
+    },
     workflowDefinition
   };
 }
 
 async function createAndAdvanceWorkflowSession(runtime, projectType, workflowDefinition, {
+  agentRuntimeId = DEFAULT_AGENT_RUNTIME_ID,
   onCreated = null
 } = {}) {
-  const session = await runtime.createSession(workflowSessionInput(projectType, workflowDefinition));
+  const session = await runtime.createSession(workflowSessionInput(projectType, workflowDefinition, {
+    agentRuntimeId
+  }));
   await onCreated?.(session);
   return {
     advancedSession: await runtime.advance(session.sessionId),
@@ -497,7 +759,7 @@ function createService({
         try {
           const runtime = await projectService.createRuntime();
           const session = await runtime.advance(sessionId, expected);
-          const enrichedSession = await enrichSessionWithCodexTerminal(terminalService, session);
+          const enrichedSession = await enrichSessionWithAgentState(terminalService, session);
           vibe64SessionDebugLog("server.service.advanceSession.done", {
             ...sessionServiceDebugResponse(enrichedSession),
             durationMs: vibe64SessionDebugDurationMs(startedAtMs)
@@ -526,7 +788,7 @@ function createService({
           closeSessionTerminalsInBackground(terminalService, sessionId, {
             eventPrefix: "server.service.abandonSession.terminalCleanup"
           });
-          const enrichedSession = await enrichSessionWithCodexTerminal(terminalService, await runtime.getSession(sessionId));
+          const enrichedSession = await enrichSessionWithAgentState(terminalService, await runtime.getSession(sessionId));
           vibe64SessionDebugLog("server.service.abandonSession.done", {
             ...sessionServiceDebugResponse(enrichedSession),
             durationMs: vibe64SessionDebugDurationMs(startedAtMs)
@@ -639,6 +901,7 @@ function createService({
             advancedSession,
             session
           } = await createAndAdvanceWorkflowSession(runtime, projectType, definitionSelection.definitionId, {
+            agentRuntimeId: selectedAgentRuntimeId(input),
             onCreated(createdSession) {
               vibe64SessionDebugLog("server.service.createSession.runtimeCreate.done", {
                 ...sessionServiceDebugResponse(createdSession),
@@ -658,7 +921,7 @@ function createService({
             fromStepId: session.currentStep,
             workflowDefinition: definitionSelection.definitionId
           });
-          const enrichedSession = await enrichSessionWithCodexTerminal(terminalService, advancedSession);
+          const enrichedSession = await enrichSessionWithAgentState(terminalService, advancedSession);
           vibe64SessionDebugLog("server.service.createSession.done", {
             ...sessionServiceDebugResponse(enrichedSession),
             durationMs: vibe64SessionDebugDurationMs(startedAtMs),
@@ -684,7 +947,7 @@ function createService({
       return sessionResult(async () => {
         try {
           const runtime = await projectService.createRuntime();
-          const session = await enrichSessionWithCodexTerminal(terminalService, await runtime.getSession(sessionId));
+          const session = await enrichSessionWithAgentState(terminalService, await runtime.getSession(sessionId));
           vibe64SessionDebugLog("server.service.inspectSession.done", {
             ...sessionServiceDebugResponse(session),
             durationMs: vibe64SessionDebugDurationMs(startedAtMs)
@@ -782,7 +1045,7 @@ function createService({
           const runtime = await projectService.createRuntime();
           await terminalService?.closeSessionNonCodexTerminals?.(sessionId);
           const session = await runtime.recoverStuckStep(sessionId);
-          const enrichedSession = await enrichSessionWithCodexTerminal(terminalService, session);
+          const enrichedSession = await enrichSessionWithAgentState(terminalService, session);
           vibe64SessionDebugLog("server.service.recoverStuckSessionStep.done", {
             ...sessionServiceDebugResponse(enrichedSession),
             durationMs: vibe64SessionDebugDurationMs(startedAtMs)
@@ -808,7 +1071,7 @@ function createService({
         try {
           const runtime = await projectService.createRuntime();
           const session = await runtime.returnControlFromAgentWait(sessionId);
-          const enrichedSession = await enrichSessionWithCodexTerminal(terminalService, session);
+          const enrichedSession = await enrichSessionWithAgentState(terminalService, session);
           vibe64SessionDebugLog("server.service.returnAgentControl.done", {
             ...sessionServiceDebugResponse(enrichedSession),
             durationMs: vibe64SessionDebugDurationMs(startedAtMs)
@@ -907,9 +1170,9 @@ function createService({
             });
             return session;
           }
-          const enrichedSession = await enrichSessionWithCodexTerminal(
+          const enrichedSession = await enrichSessionWithAgentState(
             terminalService,
-            await deliverCodexPromptIfNeeded(terminalService, session)
+            await deliverAgentPromptWithRecovery(terminalService, runtime, session)
           );
           vibe64SessionDebugLog("server.service.runSessionAction.done", {
             ...sessionServiceDebugResponse(enrichedSession),
@@ -959,9 +1222,9 @@ function createService({
             });
             return session;
           }
-          const enrichedSession = await enrichSessionWithCodexTerminal(
+          const enrichedSession = await enrichSessionWithAgentState(
             terminalService,
-            await deliverCodexPromptIfNeeded(terminalService, session)
+            await deliverAgentPromptWithRecovery(terminalService, runtime, session)
           );
           vibe64SessionDebugLog("server.service.runSessionIntent.done", {
             ...sessionServiceDebugResponse(enrichedSession),
@@ -994,7 +1257,7 @@ function createService({
           const runtime = await projectService.createRuntime();
           const session = await runtime.rewind(sessionId, stepId);
           await terminalService?.closeSessionNonCodexTerminals?.(sessionId);
-          const enrichedSession = await enrichSessionWithCodexTerminal(terminalService, session);
+          const enrichedSession = await enrichSessionWithAgentState(terminalService, session);
           vibe64SessionDebugLog("server.service.rewindSession.done", {
             ...sessionServiceDebugResponse(enrichedSession),
             durationMs: vibe64SessionDebugDurationMs(startedAtMs),
