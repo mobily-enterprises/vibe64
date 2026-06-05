@@ -58,7 +58,6 @@ import {
   ghRepoCreateRepair,
   ghRepoCreateScript,
   gitCheckpointRepair,
-  gitIdentityRepair,
   gitCheckpointScript,
   gitInitRepair,
   githubBranchRefApiPath,
@@ -980,8 +979,7 @@ async function checkGitIdentity(targetRoot, context) {
       label: "Git identity",
       expected: "Git user.name and user.email are configured for the active Vibe64 user.",
       observed: [nameResult.output, emailResult.output].filter(Boolean).join("\n") || "Git identity is incomplete.",
-      explanation: "Vibe64 commits must use the logged-in user's Git identity, not a shared VPS identity.",
-      repair: gitIdentityRepair()
+      explanation: "Open Configure and set Git identity for the active Vibe64 user before continuing."
     });
   }
 

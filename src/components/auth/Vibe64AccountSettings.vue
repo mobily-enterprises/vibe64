@@ -3,6 +3,7 @@ import { reactive, ref } from "vue";
 import {
   mdiLockReset
 } from "@mdi/js";
+import AccountsSetup from "@/components/studio/AccountsSetup.vue";
 import {
   changePassword
 } from "@/lib/vibe64AuthApi.js";
@@ -35,6 +36,16 @@ async function submitPasswordChange() {
     <v-alert v-if="error" type="error" variant="tonal" density="compact">
       {{ error }}
     </v-alert>
+
+    <AccountsSetup
+      class="vibe64-account-settings__github"
+      lede="Sign in with GitHub or create a GitHub account. Vibe64 uses this identity for issues, pull requests, commits, and merge actions across your workspaces."
+      needed-label="GitHub required"
+      :provider-ids="['github']"
+      ready-label="GitHub connected"
+      :show-continue="false"
+      title="GitHub"
+    />
 
     <section class="vibe64-account-settings__section">
       <h2>
@@ -80,9 +91,17 @@ async function submitPasswordChange() {
   display: grid;
   gap: 1rem;
   margin: 0 auto;
-  max-width: 58rem;
+  max-width: 68rem;
   padding: 1rem;
   width: 100%;
+}
+
+.vibe64-account-settings__github {
+  width: 100%;
+}
+
+.vibe64-account-settings__github :deep(.accounts-setup__title) {
+  font-size: 1.15rem;
 }
 
 .vibe64-account-settings__section h2 {

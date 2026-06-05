@@ -91,14 +91,38 @@
         </div>
 
         <div class="accounts-setup__actions">
+          <div
+            v-if="requiresGitIdentity(account)"
+            class="accounts-setup__identity-fields"
+          >
+            <v-text-field
+              v-model="gitIdentityInput(account).name"
+              autocomplete="name"
+              density="compact"
+              hide-details="auto"
+              label="Git user.name"
+              required
+              variant="outlined"
+            />
+            <v-text-field
+              v-model="gitIdentityInput(account).email"
+              autocomplete="email"
+              density="compact"
+              hide-details="auto"
+              label="Git user.email"
+              required
+              type="email"
+              variant="outlined"
+            />
+          </div>
           <v-btn
             color="primary"
             variant="flat"
-            :disabled="authSessions.loginDisabled(account)"
+            :disabled="accountLoginDisabled(account)"
             :loading="authSessions.activeSessionFor(account.id)?.status === 'authenticating'"
-            @click="authSessions.startBrowserAuth(account.id)"
+            @click="startAccountAuth(account)"
           >
-            {{ account.authLabel || `Auth ${account.label}` }}
+            {{ primaryAuthLabel(account) }}
           </v-btn>
           <v-btn
             v-if="account.deviceAuth === true"
@@ -191,7 +215,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount } from "vue";
+import { computed, onBeforeUnmount, reactive, watch } from "vue";
 import {
   mdiAlertCircleOutline,
   mdiCheckCircle,
@@ -242,6 +266,7 @@ const props = defineProps({
 const emit = defineEmits(["back", "continue"]);
 
 const accountRows = computed(() => Array.isArray(props.accountRows) ? props.accountRows : []);
+const gitIdentityInputs = reactive({});
 const statusReady = computed(() => (
   accountRows.value.length > 0 &&
   accountRows.value.every((account) => account.connected === true)
@@ -253,6 +278,69 @@ const errorMessage = computed(() => authSessions.errorMessage);
 
 function accountStatusMessage(account = {}) {
   return account.connected ? `${account.label} is connected.` : `${account.label} is not connected.`;
+}
+
+function requiresGitIdentity(account = {}) {
+  return account.gitIdentityRequired === true;
+}
+
+function gitIdentityInput(account = {}) {
+  const accountId = String(account.id || "");
+  if (!accountId) {
+    return {
+      email: "",
+      name: ""
+    };
+  }
+  if (!gitIdentityInputs[accountId]) {
+    gitIdentityInputs[accountId] = {
+      email: String(account.gitIdentity?.email || ""),
+      name: String(account.gitIdentity?.name || "")
+    };
+  }
+  return gitIdentityInputs[accountId];
+}
+
+function syncGitIdentityInput(account = {}) {
+  if (!requiresGitIdentity(account)) {
+    return;
+  }
+  const input = gitIdentityInput(account);
+  if (!input.name && account.gitIdentity?.name) {
+    input.name = String(account.gitIdentity.name || "");
+  }
+  if (!input.email && account.gitIdentity?.email) {
+    input.email = String(account.gitIdentity.email || "");
+  }
+}
+
+function gitIdentityAuthOptions(account = {}) {
+  const input = gitIdentityInput(account);
+  return {
+    gitUserEmail: input.email,
+    gitUserName: input.name
+  };
+}
+
+function accountLoginDisabled(account = {}) {
+  return authSessions.loginDisabled(
+    account,
+    requiresGitIdentity(account) ? gitIdentityAuthOptions(account) : {}
+  );
+}
+
+function startAccountAuth(account = {}) {
+  void authSessions.startBrowserAuth(
+    account.id,
+    requiresGitIdentity(account) ? gitIdentityAuthOptions(account) : {}
+  );
+}
+
+function primaryAuthLabel(account = {}) {
+  if (requiresGitIdentity(account) && account.connected === true) {
+    return "Save Git identity";
+  }
+  return account.authLabel || `Auth ${account.label}`;
 }
 
 function sessionStatusMessage(session = {}) {
@@ -271,6 +359,19 @@ function sessionStatusMessage(session = {}) {
 onBeforeUnmount(() => {
   authSessions.stopPolling();
 });
+
+watch(
+  accountRows,
+  (rows) => {
+    for (const account of rows) {
+      syncGitIdentityInput(account);
+    }
+  },
+  {
+    deep: true,
+    immediate: true
+  }
+);
 </script>
 
 <style scoped>
@@ -295,6 +396,13 @@ onBeforeUnmount(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
+}
+
+.accounts-setup__identity-fields {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(2, minmax(12rem, 1fr));
+  min-width: min(32rem, 100%);
 }
 
 .accounts-setup__title {
@@ -404,6 +512,10 @@ onBeforeUnmount(() => {
   .accounts-setup__header {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .accounts-setup__identity-fields {
+    grid-template-columns: 1fr;
   }
 }
 </style>

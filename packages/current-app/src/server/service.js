@@ -44,7 +44,8 @@ const PROJECT_SCRIPTS_DIR = ".vibe64/scripts";
 const STARRED_TARGET_SCRIPTS_CONFIG = ".vibe64/config/starred_scripts";
 const TARGET_SCRIPT_TERMINAL_NAMESPACE = "current-app-target-script";
 const PROJECT_SCRIPT_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u;
-const ACCOUNTS_DASHBOARD_ROUTE = "/app/manage";
+const AI_ACCOUNTS_ROUTE = "/app/manage";
+const ACCOUNT_ROUTE = "/account";
 const SETUP_DASHBOARD_ROUTE = "/app/manage";
 
 function resolveCurrentAppRoot(appRoot) {
@@ -503,23 +504,24 @@ function createService({
     const aiReady = selectedAiProvider.ready === true;
     const githubReady = github.ready === true;
     const setupReady = setup.ready === true;
-    const connectionFix = dashboardFix(ACCOUNTS_DASHBOARD_ROUTE, "Open Accounts");
+    const aiConnectionFix = dashboardFix(AI_ACCOUNTS_ROUTE, "Open AI Accounts");
+    const githubConnectionFix = dashboardFix(ACCOUNT_ROUTE, "Open Account");
     const setupFix = dashboardFix(SETUP_DASHBOARD_ROUTE, "Open Setup");
     const chatCapability = capability(
       aiReady && setupReady,
       aiReady ? automaticSetupReason(setup) : "Choose and authenticate an AI provider before using chat.",
-      aiReady ? setupFix : connectionFix
+      aiReady ? setupFix : aiConnectionFix
     );
     const createSessionCapability = capability(
       aiReady && githubReady && setupReady,
       firstBlockedCapability([
-        capability(aiReady, "Choose and authenticate an AI provider before starting a session.", connectionFix),
-        capability(githubReady, "Connect GitHub before starting GitHub-backed session work.", connectionFix),
+        capability(aiReady, "Choose and authenticate an AI provider before starting a session.", aiConnectionFix),
+        capability(githubReady, "Connect GitHub before starting GitHub-backed session work.", githubConnectionFix),
         capability(setupReady, automaticSetupReason(setup), setupFix)
       ])?.reason || "",
       firstBlockedCapability([
-        capability(aiReady, "Choose and authenticate an AI provider before starting a session.", connectionFix),
-        capability(githubReady, "Connect GitHub before starting GitHub-backed session work.", connectionFix),
+        capability(aiReady, "Choose and authenticate an AI provider before starting a session.", aiConnectionFix),
+        capability(githubReady, "Connect GitHub before starting GitHub-backed session work.", githubConnectionFix),
         capability(setupReady, automaticSetupReason(setup), setupFix)
       ])?.fix || null
     );
@@ -528,7 +530,7 @@ function createService({
       capabilities: {
         chat: chatCapability,
         createSession: createSessionCapability,
-        githubWorkflow: capability(githubReady, "Connect GitHub before using GitHub issue, pull request, or merge actions.", connectionFix),
+        githubWorkflow: capability(githubReady, "Connect GitHub before using GitHub issue, pull request, or merge actions.", githubConnectionFix),
         app: capability(true),
         preview: capability(setupReady, automaticSetupReason(setup), setupFix),
         runScripts: capability(setupReady, automaticSetupReason(setup), setupFix)

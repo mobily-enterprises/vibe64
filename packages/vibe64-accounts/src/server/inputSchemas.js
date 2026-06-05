@@ -31,6 +31,14 @@ const accountAuthStartInputValidator = deepFreeze({
     mode: {
       type: "string",
       required: false
+    },
+    gitUserName: {
+      type: "string",
+      required: false
+    },
+    gitUserEmail: {
+      type: "string",
+      required: false
     }
   }),
   mode: "patch"

@@ -3,6 +3,11 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  closeTerminalSession,
+  startTerminalSession
+} from "@local/studio-terminal-core/server/terminalSessions";
+import {
+  ACCOUNT_AUTH_NAMESPACE,
   authTerminalMetadata,
   canReuseAuthTerminal,
   GITHUB_DEVICE_AUTH_URL,
@@ -10,6 +15,7 @@ import {
   USER_PROVIDER_SCOPE,
   parseAuthOutput,
   createService,
+  ghLoginCommandArgs,
   githubProviderHome,
   githubProviderUserKey
 } from "../../packages/vibe64-accounts/src/server/service.js";
@@ -60,11 +66,25 @@ function connectedToolchainResult(commandArgs) {
       stdout: "merc"
     };
   }
-  if (commandArgs[0] === "git" && commandArgs[1] === "config") {
+  if (commandArgs[0] === "git" && commandArgs.includes("--get-urlmatch")) {
     return {
       ok: true,
       output: "!/usr/bin/gh auth git-credential",
       stdout: "!/usr/bin/gh auth git-credential"
+    };
+  }
+  if (commandArgs[0] === "git" && commandArgs.includes("user.name")) {
+    return {
+      ok: true,
+      output: "Merc Mobily",
+      stdout: "Merc Mobily"
+    };
+  }
+  if (commandArgs[0] === "git" && commandArgs.includes("user.email")) {
+    return {
+      ok: true,
+      output: "12345+merc@users.noreply.github.com",
+      stdout: "12345+merc@users.noreply.github.com"
     };
   }
   throw new Error(`Unexpected toolchain command: ${commandArgs.join(" ")}`);
@@ -93,7 +113,24 @@ function disconnectedGithubGitCredentialToolchain(calls = []) {
       commandArgs,
       options
     });
-    if (commandArgs[0] === "git" && commandArgs[1] === "config") {
+    if (commandArgs[0] === "git" && commandArgs.includes("--get-urlmatch")) {
+      return {
+        ok: false,
+        output: "",
+        stdout: ""
+      };
+    }
+    return connectedToolchainResult(commandArgs);
+  };
+}
+
+function disconnectedGithubGitIdentityToolchain(calls = []) {
+  return async function runToolchain(commandArgs, options = {}) {
+    calls.push({
+      commandArgs,
+      options
+    });
+    if (commandArgs[0] === "git" && (commandArgs.includes("user.name") || commandArgs.includes("user.email"))) {
       return {
         ok: false,
         output: "",
@@ -136,12 +173,19 @@ test("Accounts status uses shared Codex auth and the active user's GitHub home",
       codex: APP_PROVIDER_SCOPE,
       github: USER_PROVIDER_SCOPE
     });
-    assert.equal(calls.length, 4);
+    assert.deepEqual(
+      status.accounts.find((account) => account.id === "github")?.gitIdentity,
+      {
+        email: "12345+merc@users.noreply.github.com",
+        name: "Merc Mobily"
+      }
+    );
+    assert.equal(calls.length, 6);
 
     const expectedGithubHome = githubProviderHome(providerHomesRoot, OWNER_USER);
     assert.equal(codexCalls(calls).length, 1);
     assert.equal(codexCalls(calls)[0].options.toolHomeSource || "", "");
-    assert.equal(githubCalls(calls).length, 3);
+    assert.equal(githubCalls(calls).length, 5);
     assert.deepEqual(new Set(githubCalls(calls).map((call) => call.options.toolHomeSource)), new Set([expectedGithubHome]));
   });
 });
@@ -184,7 +228,26 @@ test("Accounts status requires GitHub Git credential helper for remote operation
     assert.equal(status.ok, true);
     assert.equal(status.ready, false);
     assert.match(status.blockedReason, /Git credential helper is not configured/u);
-    assert.equal(calls.length, 4);
+    assert.equal(calls.length, 6);
+  });
+});
+
+test("Accounts status requires Git identity in the active user's GitHub home", async () => {
+  await withTemporaryRoot(async (root) => {
+    const targetRoot = path.join(root, "target");
+    const calls = [];
+    const status = await createService({
+      providerHomesRoot: path.join(root, "provider-homes"),
+      runToolchain: disconnectedGithubGitIdentityToolchain(calls),
+      targetRoot
+    }).getStatus(accountInput(OWNER_USER, {
+      refresh: true
+    }));
+
+    assert.equal(status.ok, true);
+    assert.equal(status.ready, false);
+    assert.match(status.blockedReason, /Git identity is not configured/u);
+    assert.equal(calls.length, 6);
   });
 });
 
@@ -208,7 +271,7 @@ test("Accounts status reads live Codex shared state instead of reusing provider 
     }).getStatus(accountInput(OWNER_USER));
     assert.equal(disconnected.ready, false);
     assert.match(disconnected.blockedReason, /Codex is not authenticated/u);
-    assert.equal(disconnectedCalls.length, 4);
+    assert.equal(disconnectedCalls.length, 6);
   });
 });
 
@@ -266,6 +329,80 @@ test("Codex auth terminal reuse is shared across Vibe64 users", () => {
   assert.equal(canReuse({
     metadata
   }), true);
+});
+
+test("GitHub auth sessions are recovered from terminal metadata for the same Vibe64 user only", async () => {
+  await withTemporaryRoot(async (root) => {
+    const providerHomesRoot = path.join(root, "provider-homes");
+    const terminal = startTerminalSession({
+      args: ["-e", "process.stdin.resume(); setInterval(() => {}, 1000);"],
+      command: process.execPath,
+      commandPreview: "node github-auth",
+      metadata: authTerminalMetadata("github", "browser", {
+        userKey: githubProviderUserKey(OWNER_USER)
+      }),
+      namespace: ACCOUNT_AUTH_NAMESPACE,
+      reuseRunning: false
+    });
+    assert.equal(terminal.ok, true);
+
+    try {
+      const ownerRead = await createService({
+        providerHomesRoot,
+        targetRoot: path.join(root, "target")
+      }).readAuthSession(accountInput(OWNER_USER, {
+        sessionId: terminal.id
+      }));
+
+      assert.equal(ownerRead.ok, true);
+      assert.equal(ownerRead.id, terminal.id);
+      assert.equal(ownerRead.account.id, "github");
+      assert.equal(ownerRead.status, "authenticating");
+
+      const friendRead = await createService({
+        providerHomesRoot,
+        targetRoot: path.join(root, "target")
+      }).readAuthSession(accountInput(FRIEND_USER, {
+        sessionId: terminal.id
+      }));
+
+      assert.equal(friendRead.ok, false);
+      assert.equal(friendRead.code, "unknown_auth_session");
+    } finally {
+      await closeTerminalSession(terminal.id, {
+        namespace: ACCOUNT_AUTH_NAMESPACE
+      });
+    }
+  });
+});
+
+test("GitHub auth start requires explicit Git identity fields", async () => {
+  await withTemporaryRoot(async (root) => {
+    const result = await createService({
+      providerHomesRoot: path.join(root, "provider-homes"),
+      targetRoot: path.join(root, "target")
+    }).startAuth(accountInput(OWNER_USER, {
+      accountId: "github"
+    }));
+
+    assert.equal(result.ok, false);
+    assert.equal(result.code, "github_git_identity_required");
+  });
+});
+
+test("GitHub browser auth command prefeeds the web prompt newline", () => {
+  const args = ghLoginCommandArgs({
+    email: "merc@example.com",
+    name: "Merc Mobily"
+  });
+  const script = args[2] || "";
+
+  assert.equal(args[0], "bash");
+  assert.equal(args[1], "-lc");
+  assert.match(script, /printf '\\n' \| gh auth login --hostname github\.com --git-protocol https --web --scopes repo,read:org,gist,workflow/u);
+  assert.doesNotMatch(script, /\n\s*gh auth login --hostname github\.com/u);
+  assert.match(script, /git config --global user\.name 'Merc Mobily'/u);
+  assert.match(script, /git config --global user\.email merc@example\.com/u);
 });
 
 test("Account routes inject the authenticated Vibe64 user into account actions", async () => {

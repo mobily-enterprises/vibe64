@@ -190,6 +190,61 @@ describe("account auth sessions", () => {
     expect(accounts.startAuth).not.toHaveBeenCalled();
   });
 
+  it("requires Git identity before starting GitHub auth", async () => {
+    const accounts = fakeAccounts();
+    const authSessions = useAccountAuthSessions(accounts, {
+      accountRows: ref([
+        {
+          connected: false,
+          gitIdentityRequired: true,
+          id: "github"
+        }
+      ]),
+      browserWindow: fakeBrowserWindow()
+    });
+
+    await authSessions.startBrowserAuth("github", {
+      gitUserEmail: "",
+      gitUserName: ""
+    });
+
+    expect(accounts.startAuth).not.toHaveBeenCalled();
+    expect(authSessions.errorMessage).toBe("Git user.name and user.email are required before GitHub login.");
+  });
+
+  it("passes Git identity when starting GitHub auth", async () => {
+    const accounts = fakeAccounts({
+      startAuth: async () => ({
+        account: {
+          id: "github",
+          label: "GitHub"
+        },
+        id: "auth-1",
+        status: "authenticating"
+      })
+    });
+    const authSessions = useAccountAuthSessions(accounts, {
+      accountRows: ref([
+        {
+          connected: true,
+          gitIdentityRequired: true,
+          id: "github"
+        }
+      ]),
+      browserWindow: fakeBrowserWindow()
+    });
+
+    await authSessions.startBrowserAuth("github", {
+      gitUserEmail: "ada@example.com",
+      gitUserName: "Ada Lovelace"
+    });
+
+    expect(accounts.startAuth).toHaveBeenCalledWith("github", "browser", {
+      gitUserEmail: "ada@example.com",
+      gitUserName: "Ada Lovelace"
+    });
+  });
+
   it("surfaces start failures and closes the prepared browser window", async () => {
     const accounts = fakeAccounts({
       startAuth: async () => {

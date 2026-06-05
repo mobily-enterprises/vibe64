@@ -42,6 +42,8 @@ function useVibe64Accounts() {
     }),
     buildRawPayload: (_model, { context }) => ({
       accountId: String(context.accountId || ""),
+      gitUserEmail: String(context.gitUserEmail || ""),
+      gitUserName: String(context.gitUserName || ""),
       mode: String(context.mode || "browser")
     }),
     fallbackRunError: "Account login could not start.",
@@ -55,9 +57,11 @@ function useVibe64Accounts() {
     writeMethod: "POST"
   });
 
-  async function startAuth(accountId, mode = "browser") {
+  async function startAuth(accountId, mode = "browser", options = {}) {
     return startAuthCommand.run({
       accountId,
+      gitUserEmail: options.gitUserEmail || options.email || "",
+      gitUserName: options.gitUserName || options.name || "",
       mode
     });
   }

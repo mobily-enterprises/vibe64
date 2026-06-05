@@ -19,7 +19,7 @@ import { computed, onMounted } from "vue";
 import ProviderAccountsSetup from "@/components/studio/ProviderAccountsSetup.vue";
 import { useVibe64Accounts } from "@/composables/useVibe64Accounts.js";
 
-defineProps({
+const props = defineProps({
   backLabel: {
     default: "",
     type: String
@@ -35,6 +35,10 @@ defineProps({
   neededLabel: {
     default: "Accounts needed",
     type: String
+  },
+  providerIds: {
+    default: () => ["codex", "github"],
+    type: Array
   },
   readyLabel: {
     default: "Accounts ready",
@@ -53,34 +57,47 @@ defineProps({
 const emit = defineEmits(["back", "continue"]);
 
 const accounts = useVibe64Accounts();
+const fallbackProviderRows = Object.freeze({
+  codex: {
+    connected: false,
+    id: "codex",
+    label: "Codex",
+    message: "Codex status has not loaded yet.",
+    status: "unknown"
+  },
+  github: {
+    connected: false,
+    id: "github",
+    label: "GitHub",
+    message: "GitHub status has not loaded yet.",
+    status: "unknown"
+  }
+});
+const enabledProviderIds = computed(() => {
+  return (Array.isArray(props.providerIds) ? props.providerIds : [])
+    .map((providerId) => normalizeProviderId(providerId))
+    .filter(Boolean);
+});
 const accountRows = computed(() => {
   const rows = Array.isArray(accounts.status?.accounts) ? accounts.status.accounts : [];
-  return rows.length
-    ? rows.map(providerAccountRow)
-    : [
-        providerAccountRow({
-          connected: false,
-          id: "codex",
-          label: "Codex",
-          message: "Codex status has not loaded yet.",
-          status: "unknown"
-        }),
-        providerAccountRow({
-          connected: false,
-          id: "github",
-          label: "GitHub",
-          message: "GitHub status has not loaded yet.",
-          status: "unknown"
-        })
-      ];
+  const rowsById = new Map(rows.map((account) => [normalizeProviderId(account?.id), account]));
+  return enabledProviderIds.value
+    .map((providerId) => rowsById.get(providerId) || fallbackProviderRows[providerId])
+    .filter(Boolean)
+    .map(providerAccountRow);
 });
+
+function normalizeProviderId(providerId = "") {
+  return String(providerId || "").trim().toLowerCase();
+}
 
 function providerAccountRow(account = {}) {
   const id = String(account.id || "");
   return {
     ...account,
-    authLabel: id === "github" ? "Auth GitHub" : "Auth Codex",
-    deviceAuth: id === "codex"
+    authLabel: id === "github" ? "Sign in or create GitHub account" : "Auth Codex",
+    deviceAuth: id === "codex",
+    gitIdentityRequired: id === "github"
   };
 }
 

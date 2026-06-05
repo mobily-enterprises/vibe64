@@ -130,7 +130,7 @@ function selectWorkspacePane(pane = "") {
     setChatCollapsed(true);
   }
   if (pane === "dashboard") {
-    void router.push(`${dashboardBasePath.value}/accounts`);
+    void router.push(`${dashboardBasePath.value}/configure`);
     return;
   }
   void router.push(developmentBasePath.value);

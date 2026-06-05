@@ -7,7 +7,7 @@ import SectionContainerShell from "/src/components/SectionContainerShell.vue";
 import getPlacements from "/src/placement.js";
 
 definePage({
-  redirect: redirectToChild("accounts")
+  redirect: redirectToChild("configure")
 });
 
 defineProps({

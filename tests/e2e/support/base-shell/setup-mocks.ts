@@ -133,7 +133,8 @@ function capabilitiesPayload({
   const setupReady = setup.ready === true;
   const aiReady = codex.connected === true;
   const githubReady = github.connected === true;
-  const accountsRoute = `${DASHBOARD_PATH}/accounts`;
+  const aiAccountsRoute = "/app/manage";
+  const githubAccountRoute = "/account";
   const setupRoute = `${DASHBOARD_PATH}/setup`;
   const fix = (route: string, label: string) => ({
     label,
@@ -141,7 +142,7 @@ function capabilitiesPayload({
   });
   const capability = (enabled: boolean, reason = "", route = "") => ({
     enabled,
-    fix: enabled || !route ? null : fix(route, route === accountsRoute ? "Open Accounts" : "Open Setup"),
+    fix: enabled || !route ? null : fix(route, route === githubAccountRoute ? "Open Account" : route === aiAccountsRoute ? "Open AI Accounts" : "Open Setup"),
     reason: enabled ? "" : reason
   });
   const setupReason = setup.message || "Finish automatic setup before using this capability.";
@@ -153,9 +154,9 @@ function capabilitiesPayload({
 
   return {
     capabilities: {
-      chat: capability(aiReady && setupReady, aiReady ? setupReason : "Choose and authenticate an AI provider before using chat.", aiReady ? setupRoute : accountsRoute),
-      createSession: capability(aiReady && githubReady && setupReady, createSessionReason, aiReady && githubReady ? setupRoute : accountsRoute),
-      githubWorkflow: capability(githubReady, "Connect GitHub before using GitHub issue, pull request, or merge actions.", accountsRoute),
+      chat: capability(aiReady && setupReady, aiReady ? setupReason : "Choose and authenticate an AI provider before using chat.", aiReady ? setupRoute : aiAccountsRoute),
+      createSession: capability(aiReady && githubReady && setupReady, createSessionReason, aiReady && githubReady ? setupRoute : aiReady ? githubAccountRoute : aiAccountsRoute),
+      githubWorkflow: capability(githubReady, "Connect GitHub before using GitHub issue, pull request, or merge actions.", githubAccountRoute),
       home: capability(true),
       preview: capability(setupReady, setupReason, setupRoute),
       runScripts: capability(setupReady, setupReason, setupRoute)

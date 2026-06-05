@@ -1,6 +1,17 @@
 import { computed, proxyRefs, reactive, ref, unref } from "vue";
 
 const DEFAULT_POLL_INTERVAL_MS = 1000;
+const AUTH_DEBUG_MARKER = "VIBE64_ACCOUNTS_DEBUG";
+const AUTH_DEBUG_OUTPUT_TAIL_LENGTH = 1200;
+
+function authDebug(event, fields = {}) {
+  console.debug(`[${AUTH_DEBUG_MARKER}] ${JSON.stringify({
+    marker: AUTH_DEBUG_MARKER,
+    timestamp: new Date().toISOString(),
+    event,
+    ...fields
+  })}`);
+}
 
 function useAccountAuthSessions(
   accounts,
@@ -42,36 +53,66 @@ function useAccountAuthSessions(
     return activeSessions[accountId] || null;
   }
 
-  function loginDisabled(account = {}) {
-    return authBusy.value || logoutBusy.value || account.connected === true;
+  function loginDisabled(account = {}, authOptions = {}) {
+    return authBusy.value ||
+      logoutBusy.value ||
+      (account.connected === true && account.gitIdentityRequired !== true) ||
+      (account.gitIdentityRequired === true && !validGitIdentity(authOptions));
   }
 
   async function refreshStatus() {
     await accounts.refresh();
   }
 
-  async function startBrowserAuth(accountId) {
-    await startAuth(accountId, "browser");
+  async function startBrowserAuth(accountId, authOptions = {}) {
+    await startAuth(accountId, "browser", authOptions);
   }
 
   async function startDeviceAuth(accountId = "codex") {
     await startAuth(accountId || "codex", "device");
   }
 
-  async function startAuth(accountId, mode = "browser") {
+  async function startAuth(accountId, mode = "browser", authOptions = {}) {
     localError.value = "";
-    if (accountFor(accountId)?.connected === true) {
+    authDebug("client.auth.start.request", {
+      accountId,
+      mode
+    });
+    const account = accountFor(accountId);
+    if (account?.gitIdentityRequired === true && !validGitIdentity(authOptions)) {
+      localError.value = "Git user.name and user.email are required before GitHub login.";
+      authDebug("client.auth.start.skip", {
+        accountId,
+        reason: "missing_git_identity"
+      });
+      return;
+    }
+    if (account?.connected === true && account.gitIdentityRequired !== true) {
+      authDebug("client.auth.start.skip", {
+        accountId,
+        reason: "already_connected"
+      });
       return;
     }
 
     try {
-      const session = await accounts.startAuth(accountId, mode);
+      const startArgs = [accountId, mode];
+      if (Object.keys(authOptions || {}).length) {
+        startArgs.push(authOptions);
+      }
+      const session = await accounts.startAuth(...startArgs);
+      authDebug("client.auth.start.response", authSessionDebugFields(session));
       if (!session?.id) {
         throw new Error("Login did not return an auth session.");
       }
       rememberAuthSession(session);
       startPolling();
     } catch (error) {
+      authDebug("client.auth.start.error", {
+        accountId,
+        message: String(error?.message || error || "Login could not start."),
+        mode
+      });
       localError.value = String(error?.message || error || "Login could not start.");
     }
   }
@@ -124,19 +165,32 @@ function useAccountAuthSessions(
     const sessions = Object.values(activeSessions).filter((session) => {
       return session?.id && session.status === "authenticating";
     });
+    authDebug("client.auth.poll.start", {
+      sessionCount: sessions.length
+    });
     if (!sessions.length) {
       stopPolling();
       return;
     }
 
     for (const session of sessions) {
-      const nextSession = await accounts.readAuthSession(session.id);
-      rememberAuthSession(nextSession);
-      if (nextSession.status === "connected") {
-        forgetSession(nextSession);
-        await refreshStatus();
-      } else if (nextSession.status === "failed") {
-        await refreshStatus();
+      try {
+        const nextSession = await accounts.readAuthSession(session.id);
+        authDebug("client.auth.poll.response", authSessionDebugFields(nextSession));
+        rememberAuthSession(nextSession);
+        if (nextSession.status === "connected") {
+          forgetSession(nextSession);
+          await refreshStatus();
+        } else if (nextSession.status === "failed") {
+          await refreshStatus();
+        }
+      } catch (error) {
+        authDebug("client.auth.poll.error", {
+          accountId: session.account?.id || session.account || "",
+          message: String(error?.message || error || "Login polling failed."),
+          sessionId: session.id
+        });
+        throw error;
       }
     }
 
@@ -145,8 +199,12 @@ function useAccountAuthSessions(
 
   function startPolling() {
     if (pollTimer) {
+      authDebug("client.auth.poll.reuse_timer", {});
       return;
     }
+    authDebug("client.auth.poll.start_timer", {
+      pollIntervalMs
+    });
     pollTimer = scheduler.setInterval(() => {
       void pollAuthSessions().catch((error) => {
         localError.value = String(error?.message || error || "Login polling failed.");
@@ -158,6 +216,7 @@ function useAccountAuthSessions(
     if (!pollTimer) {
       return;
     }
+    authDebug("client.auth.poll.stop_timer", {});
     scheduler.clearInterval(pollTimer);
     pollTimer = null;
   }
@@ -185,8 +244,14 @@ function useAccountAuthSessions(
   function rememberAuthSession(session = {}) {
     const accountId = session.account?.id || session.account || "";
     if (!accountId || !session.id) {
+      authDebug("client.auth.session.remember_skip", {
+        hasAccountId: Boolean(accountId),
+        hasSessionId: Boolean(session.id),
+        status: session.status || ""
+      });
       return;
     }
+    authDebug("client.auth.session.remember", authSessionDebugFields(session));
     activeSessions[accountId] = session;
   }
 
@@ -198,6 +263,10 @@ function useAccountAuthSessions(
     if (session.id) {
       delete authLinkCopyStatus[session.id];
     }
+    authDebug("client.auth.session.forget", {
+      accountId,
+      sessionId: session.id || ""
+    });
     delete activeSessions[accountId];
   }
 
@@ -222,6 +291,36 @@ function useAccountAuthSessions(
   });
 }
 
+function authSessionDebugFields(session = {}) {
+  return {
+    accountId: session.account?.id || session.account || "",
+    authUrl: session.authUrl || "",
+    exitCode: session.exitCode ?? null,
+    hasOutput: Boolean(session.output),
+    mode: session.mode || "",
+    outputLength: String(session.output || "").length,
+    outputTail: sanitizedAuthOutputTail(session.output),
+    sessionId: session.id || "",
+    status: session.status || "",
+    terminalStatus: session.terminalStatus || "",
+    userCodePresent: Boolean(session.userCode)
+  };
+}
+
+function sanitizedAuthOutputTail(output = "") {
+  return String(output || "")
+    .slice(-AUTH_DEBUG_OUTPUT_TAIL_LENGTH)
+    .replace(/https:\/\/[^\s"'<>]+/gu, (url) => {
+      try {
+        const parsed = new URL(url.replace(/[),.;]+$/u, ""));
+        return `${parsed.origin}${parsed.pathname}`;
+      } catch {
+        return "https://[redacted-url]";
+      }
+    })
+    .replace(/\b[A-Z0-9]{4}-[A-Z0-9]{4}\b/gu, "[redacted-code]");
+}
+
 function defaultBrowserWindow() {
   return typeof window === "undefined" ? null : window;
 }
@@ -239,6 +338,12 @@ function createScheduler({
     clearInterval: clearIntervalFn || browserWindow?.clearInterval?.bind(browserWindow) || globalThis.clearInterval,
     setInterval: setIntervalFn || browserWindow?.setInterval?.bind(browserWindow) || globalThis.setInterval
   };
+}
+
+function validGitIdentity(input = {}) {
+  const name = String(input.gitUserName || input.name || "").trim();
+  const email = String(input.gitUserEmail || input.email || "").trim();
+  return Boolean(name) && /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email);
 }
 
 export { useAccountAuthSessions };

@@ -33,55 +33,12 @@
         />
       </v-chip>
 
-      <v-menu
-        v-if="showWorkflowDefinitionMenu"
-        v-model="workflowDefinitionMenuOpen"
-        location="bottom end"
-        transition="scale-transition"
-      >
-        <template #activator="{ props: menuProps }">
-          <v-btn
-            v-bind="menuProps"
-            aria-label="New session"
-            class="studio-ai-sessions__create-button"
-            :disabled="!toolbar.canCreateSession"
-            :icon="mdiPlus"
-            :loading="toolbar.createSessionCommand.isRunning"
-            size="small"
-            :title="toolbar.createSessionTitle"
-            variant="flat"
-          />
-        </template>
-
-        <v-list
-          class="studio-ai-sessions__definition-menu"
-          density="comfortable"
-          lines="two"
-          nav
-        >
-          <v-list-subheader>Session type</v-list-subheader>
-          <v-list-item
-            v-for="definition in workflowDefinitions"
-            :key="definition.id"
-            :disabled="toolbar.createSessionCommand.isRunning"
-            :subtitle="definition.description"
-            :title="definition.label"
-            @click="createSessionFromDefinition(definition.id)"
-          />
-        </v-list>
-      </v-menu>
-
-      <v-btn
-        v-else-if="createSessionVisible"
+      <Vibe64CreateSessionButton
+        v-if="createSessionVisible"
         aria-label="New session"
-        class="studio-ai-sessions__create-button"
-        :disabled="!toolbar.canCreateSession"
-        :icon="mdiPlus"
-        :loading="toolbar.createSessionCommand.isRunning"
-        size="small"
-        :title="toolbar.createSessionTitle"
-        @click="toolbar.createSession()"
-        variant="flat"
+        button-class="studio-ai-sessions__create-button"
+        icon-only
+        :toolbar="toolbar"
       />
 
       <slot name="after-sessions" />
@@ -90,11 +47,11 @@
 </template>
 
 <script setup>
-import { computed, ref } from "vue";
+import { computed } from "vue";
 import {
-  mdiClose,
-  mdiPlus
+  mdiClose
 } from "@mdi/js";
+import Vibe64CreateSessionButton from "@/components/studio/vibe64-session/Vibe64CreateSessionButton.vue";
 
 const props = defineProps({
   abandon: {
@@ -131,9 +88,6 @@ function sessionTabLabel(sessionItem = {}) {
   return props.toolbar.shortSessionId?.(sessionItem.sessionId) || String(sessionItem.sessionId || "");
 }
 
-const workflowDefinitions = computed(() => {
-  return Array.isArray(props.toolbar.workflowDefinitions) ? props.toolbar.workflowDefinitions : [];
-});
 const allSessions = computed(() => Array.isArray(props.toolbar.sessions) ? props.toolbar.sessions : []);
 const sessionLimit = computed(() => Math.max(0, Number(props.maxVisibleSessions || 0)));
 const sessionLimitReached = computed(() => Boolean(
@@ -155,15 +109,6 @@ const visibleSessions = computed(() => {
     allSessions.value[selectedIndex]
   ];
 });
-const showWorkflowDefinitionMenu = computed(() => {
-  return createSessionVisible.value && props.toolbar.createSessionMode === "select" && workflowDefinitions.value.length > 0;
-});
-const workflowDefinitionMenuOpen = ref(false);
-
-function createSessionFromDefinition(definitionId = "") {
-  workflowDefinitionMenuOpen.value = false;
-  props.toolbar.createSession?.(definitionId);
-}
 </script>
 
 <style scoped>
@@ -242,15 +187,6 @@ function createSessionFromDefinition(definitionId = "") {
 
 .studio-ai-sessions__create-button:hover {
   background: var(--studio-control-active-bg, #e7e7e7) !important;
-}
-
-.studio-ai-sessions__definition-menu {
-  max-width: min(28rem, calc(100vw - 2rem));
-  min-width: min(22rem, calc(100vw - 2rem));
-}
-
-.studio-ai-sessions__definition-menu :deep(.v-list-item-subtitle) {
-  white-space: normal;
 }
 
 .studio-ai-sessions__status-dot {

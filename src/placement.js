@@ -1,6 +1,5 @@
 import { createPlacementRegistry } from "@jskit-ai/shell-web/client/placement";
 import {
-  mdiAccountKeyOutline,
   mdiCloudUploadOutline,
   mdiCogOutline,
   mdiHistory,
@@ -25,26 +24,6 @@ addPlacement({
   order: 950,
   componentToken: "realtime.web.connection.indicator"
 });
-
-// jskit:ui-generator.page.link:app:/dashboard/accounts
-{
-  addPlacement({
-    id: "ui-generator.page.app.dashboard.accounts.link",
-    target: "page.section-nav",
-    owner: "app-dashboard",
-    kind: "link",
-    surfaces: ["app"],
-    order: 50,
-    props: {
-      label: "Accounts",
-      icon: mdiAccountKeyOutline,
-      surface: "app",
-      scopedSuffix: "/[slug]/dashboard/accounts",
-      unscopedSuffix: "/[slug]/dashboard/accounts",
-      to: "",
-    },
-  });
-}
 
 // jskit:ui-generator.page.link:app:/dashboard/configure
 {

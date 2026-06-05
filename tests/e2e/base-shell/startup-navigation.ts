@@ -286,7 +286,7 @@ test.describe("studio startup navigation", () => {
   test("accounts live in the dashboard", async ({ page }) => {
     await mockStudioReady(page);
     await page.goto(`${BASE_URL}/home/dashboard/accounts`);
-    await expect(page.getByRole("heading", { name: "Accounts", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "GitHub Account", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Continue to Studio Setup" })).toHaveCount(0);
   });
 
@@ -306,7 +306,7 @@ test.describe("studio startup navigation", () => {
     await expect(page.getByRole("button", { name: "New session" })).toBeDisabled();
     await page.goto(`${BASE_URL}/home/dashboard/accounts`);
     await expect(page).toHaveURL(/\/home\/dashboard\/accounts\/?$/u);
-    await expect(page.getByRole("heading", { name: "Accounts", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "GitHub Account", exact: true })).toBeVisible();
   });
 
   test("ready continue moves from Adapter Setup to Project Setup tab", async ({ page }) => {

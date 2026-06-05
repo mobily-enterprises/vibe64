@@ -148,6 +148,15 @@ test("first-run owner setup reaches management and opens a slug-scoped workspace
   await expect(page.getByRole("heading", { name: "Codex", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "GitHub", exact: true })).toHaveCount(0);
 
+  await page.goto(`/account?returnTo=${encodeURIComponent(MANAGEMENT_PATH)}`);
+  await expect(page.getByRole("heading", { name: "Account", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "GitHub", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Password", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Codex", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Sign in or create GitHub account" })).toBeVisible();
+  await page.getByRole("button", { name: "Back" }).click();
+  await expect(page).toHaveURL(new RegExp(`${MANAGEMENT_PATH}$`, "u"));
+
   await page.getByRole("tab", { name: "Workspaces", exact: true }).click();
   await page.getByLabel("New slug").fill(SLUG);
   await page.getByRole("button", { name: "Create" }).click();
@@ -166,19 +175,22 @@ test("first-run owner setup reaches management and opens a slug-scoped workspace
   await expect(page).toHaveURL(new RegExp(`${DEVELOPMENT_PATH}$`, "u"));
   await expect(page.getByRole("tab", { name: "Preview", exact: true })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("tab", { name: "Dashboard", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "New Session" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Start session" })).toBeVisible();
 
-  await page.getByRole("button", { name: "New Session" }).click();
-  await page.getByRole("menuitem", { name: /Make improvements/u }).click();
+  await page.getByRole("button", { name: "Start session" }).click();
+  await page.getByRole("listitem").filter({ hasText: "Make improvements" }).click();
   await expect(page.getByText("Created session")).toBeVisible();
   await page.getByLabel("Abandon session").click();
   await expect(page.getByRole("dialog", { name: "Abandon session?" })).toBeVisible();
   await page.getByRole("dialog", { name: "Abandon session?" }).getByRole("button", { name: "Abandon session" }).click();
-  await expect(page.getByText("No sessions yet.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Start session" })).toBeVisible();
+  await expect(page.getByText("No sessions yet.")).toHaveCount(0);
 
   await page.getByRole("tab", { name: "Dashboard", exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`${DASHBOARD_PATH}/accounts/?$`, "u"));
-  await expect(page.getByRole("heading", { name: "Accounts", exact: true })).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`${DASHBOARD_PATH}/configure/?$`, "u"));
+  await expect(page.locator(".project-config-setup")).toBeVisible();
+  await expect(page.locator(".section-container-shell__nav").getByText("Accounts", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Codex", exact: true })).toHaveCount(0);
 
   await page.locator(".section-container-shell__nav").getByText("Setup", { exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${DASHBOARD_PATH}/setup\\?tab=project-setup$`, "u"));
@@ -195,6 +207,44 @@ test("first-run owner setup reaches management and opens a slug-scoped workspace
   expect(requests).not.toContain("GET /api/vibe64/sessions");
   expect(requests).not.toContain("POST /api/vibe64/sessions");
   expect(requests).not.toContain("GET /api/studio/current-app/capabilities");
+});
+
+test("authenticated users must connect GitHub on the account page before using the app", async ({ page }) => {
+  const requests: string[] = [];
+  await mockLifecycleSocket(page);
+  await page.route("**/api/**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const method = request.method().toUpperCase();
+    requests.push(`${method} ${url.pathname}`);
+
+    if (url.pathname === "/api/auth/state" && method === "GET") {
+      await fulfillJson(route, authenticatedState());
+      return;
+    }
+
+    if (url.pathname === "/api/vibe64/accounts" && method === "GET") {
+      await fulfillJson(route, githubMissingAccounts());
+      return;
+    }
+
+    if (url.pathname === "/api/bootstrap" && method === "GET") {
+      await fulfillJson(route, bootstrapPayload());
+      return;
+    }
+
+    throw new Error(`Unexpected API request in GitHub prerequisite smoke: ${method} ${url.pathname}`);
+  });
+
+  await page.goto(MANAGEMENT_PATH);
+
+  await expect(page).toHaveURL(/\/account\?returnTo=%2Fapp%2Fmanage$/u);
+  await expect(page.getByRole("heading", { name: "Account", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "GitHub", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Password", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Codex", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Sign in or create GitHub account" })).toBeVisible();
+  expect(requests).not.toContain("GET /api/vibe64/workspaces");
 });
 
 type WorkspaceRow = {
@@ -444,9 +494,27 @@ async function fulfillScopedDevelopmentApi(route: Route, suffix: string, method:
     return;
   }
 
+  const artifactPreviewMatch = /^\/vibe64\/sessions\/([^/]+)\/artifact-preview$/u.exec(suffix);
+  if (method === "GET" && artifactPreviewMatch) {
+    await fulfillJson(route, {
+      label: "",
+      ok: true,
+      previewId: "",
+      sessionId: artifactPreviewMatch[1],
+      text: ""
+    });
+    return;
+  }
+
   const artifactReadinessStreamMatch = /^\/vibe64\/sessions\/([^/]+)\/artifact-readiness\/stream$/u.exec(suffix);
   if (method === "GET" && artifactReadinessStreamMatch) {
     await fulfillArtifactReadinessSse(route, artifactReadinessStreamMatch[1]);
+    return;
+  }
+
+  const launchTargetsMatch = /^\/vibe64\/sessions\/([^/]+)\/launch-targets$/u.exec(suffix);
+  if (method === "GET" && launchTargetsMatch) {
+    await fulfillJson(route, emptyLaunchTargets());
     return;
   }
 
@@ -485,6 +553,53 @@ function accountsReady() {
     ],
     ok: true,
     ready: true
+  };
+}
+
+function githubMissingAccounts() {
+  return {
+    accounts: [
+      {
+        connected: true,
+        id: "codex",
+        label: "Codex",
+        status: "connected"
+      },
+      {
+        connected: false,
+        id: "github",
+        label: "GitHub",
+        message: "GitHub CLI is not authenticated for this Vibe64 user.",
+        status: "not_connected"
+      }
+    ],
+    blockedReason: "GitHub CLI is not authenticated for this Vibe64 user.",
+    ok: true,
+    ready: false
+  };
+}
+
+function emptyLaunchTargets() {
+  return {
+    activeTerminal: null,
+    launchTargets: [],
+    ok: true,
+    openTarget: {
+      available: false,
+      disabledReason: "No launch targets are available.",
+      href: "",
+      kind: "url",
+      label: "Open browser",
+      previewHref: ""
+    },
+    previewTarget: {
+      available: false,
+      disabledReason: "No launch targets are available.",
+      href: "",
+      kind: "url",
+      label: "Preview",
+      targetHref: ""
+    }
   };
 }
 
