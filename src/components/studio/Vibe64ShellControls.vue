@@ -869,7 +869,15 @@ onBeforeUnmount(() => {
 }
 
 .vibe64-shell-controls__inline-panel :deep(.ai-command-terminal--shell .ai-command-terminal__body) {
+  display: flex;
+  flex-direction: column;
   gap: 0.24rem;
+}
+
+.vibe64-shell-controls__inline-panel :deep(.ai-command-terminal--shell .ai-command-terminal__stage) {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .vibe64-shell-controls--embedded .vibe64-shell-controls__inline-panel :deep(.ai-command-terminal--shell) {

@@ -16,7 +16,6 @@ class Vibe64SessionsProvider {
     "feature.vibe64-accounts",
     "feature.vibe64-terminals",
     "feature.studio-setup-doctor",
-    "feature.adapter-setup-doctor",
     "feature.project-setup-doctor"
   ];
 
@@ -35,7 +34,6 @@ class Vibe64SessionsProvider {
         return createService({
           setupServices: {
             accountSetupService: scope.make("feature.vibe64-accounts.service"),
-            adapterSetupService: scope.make("feature.adapter-setup-doctor.service"),
             projectSetupService: scope.make("feature.project-setup-doctor.service"),
             studioSetupService: scope.make("feature.studio-setup-doctor.service")
           },
@@ -70,7 +68,7 @@ class Vibe64SessionsProvider {
   boot(app) {
     registerRoutes(app, {
       routeRelativePath: "vibe64",
-      routeSurface: "home"
+      routeSurface: "app"
     });
   }
 }

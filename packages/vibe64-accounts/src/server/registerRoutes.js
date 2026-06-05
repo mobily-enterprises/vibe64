@@ -16,14 +16,18 @@ import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRout
 function registerRoutes(
   app,
   {
+    projectContext = null,
     routeSurface = "",
-    routeRelativePath = ""
+    routeRelativePath = "",
+    workspaceScoped = true
   } = {}
 ) {
   const routes = createVibe64FeatureRoutes(app, {
     localRequestMessage: "Vibe64 account routes only accept loopback Studio requests.",
+    projectContext,
     routeRelativePath,
     routeSurface,
+    workspaceScoped,
     tags: ["studio", "vibe64-accounts"]
   });
 
@@ -37,14 +41,14 @@ function registerRoutes(
   routes.actionRoute("POST", "/auth", {
     actionId: ACTION_START_ACCOUNT_AUTH,
     body: accountAuthStartInputValidator,
-    buildInput: routes.requestBody,
+    buildInput: (request) => withVibe64User(request, routes.requestBody(request)),
     summary: "Start an Vibe64 account login flow."
   });
 
   routes.actionRoute("POST", "/logout", {
     actionId: ACTION_LOGOUT_ACCOUNT,
     body: accountIdInputValidator,
-    buildInput: routes.requestBody,
+    buildInput: (request) => withVibe64User(request, routes.requestBody(request)),
     summary: "Log out an Vibe64 account."
   });
 
@@ -64,12 +68,19 @@ function registerRoutes(
 }
 
 function queryInput(request) {
-  return request.input.query || {};
+  return withVibe64User(request, request.input.query || {});
 }
 
 function sessionInput(request) {
-  return {
+  return withVibe64User(request, {
     sessionId: request.params.sessionId
+  });
+}
+
+function withVibe64User(request, input = {}) {
+  return {
+    ...input,
+    vibe64User: request.vibe64User || null
   };
 }
 

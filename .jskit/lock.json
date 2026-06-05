@@ -97,29 +97,6 @@
       "installedAt": "2026-05-10T12:01:12.284Z",
       "migrationSyncVersion": "0.1.0"
     },
-    "@local/adapter-setup-doctor": {
-      "packageId": "@local/adapter-setup-doctor",
-      "version": "0.1.0",
-      "source": {
-        "type": "app-local-package",
-        "packagePath": "packages/adapter-setup-doctor",
-        "descriptorPath": "packages/adapter-setup-doctor/package.descriptor.mjs"
-      },
-      "managed": {
-        "packageJson": {
-          "dependencies": {},
-          "devDependencies": {},
-          "scripts": {}
-        },
-        "text": {},
-        "vite": {},
-        "files": [],
-        "migrations": []
-      },
-      "options": {},
-      "installedAt": "2026-05-11T01:48:06.407Z",
-      "migrationSyncVersion": "0.1.0"
-    },
     "@local/project-setup-doctor": {
       "packageId": "@local/project-setup-doctor",
       "version": "0.1.0",

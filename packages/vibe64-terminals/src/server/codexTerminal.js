@@ -34,11 +34,11 @@ import {
   createCodexAppServerAgentProvider
 } from "@local/vibe64-runtime/server/codexAppServerProvider";
 import {
+  codexAppServerHelperOverride,
   ensureCodexAppServerThreadForSession,
   sendCodexAppServerPromptForSession
 } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
 import {
-  vibe64SessionDebugDurationMs,
   vibe64SessionDebugError,
   vibe64SessionDebugLog
 } from "@local/vibe64-runtime/server/sessionDebugLog";
@@ -471,16 +471,24 @@ function sessionBriefingIsDelivered(session = {}) {
   return normalizeText(session.metadata?.codex_session_briefing_delivered) === "yes";
 }
 
-function codexAppServerDeveloperInstructions(session = {}) {
+function codexAppServerDeveloperInstructions(session = {}, {
+  helperCommands = {}
+} = {}) {
   const briefing = promptSessionBriefing({
     config: session.config,
     session
+  });
+  const helperOverride = codexAppServerHelperOverride({
+    currentStepInputCommand: helperCommands.currentStepInput,
+    terminalChatCommand: helperCommands.terminalChat
   });
   return [
     briefing,
     "",
     "Session briefing instruction:",
-    "Keep this Vibe64 briefing as the source of truth for this Codex session. Do not start project work from this briefing alone."
+    "Keep this Vibe64 briefing as the source of truth for this Codex session. Do not start project work from this briefing alone.",
+    "",
+    helperOverride
   ].join("\n").trim();
 }
 
@@ -1055,7 +1063,7 @@ function createCodexTerminalController({
         workdir
       },
       namespace,
-      onClose: async ({ id }) => {
+      onClose: async () => {
         await cleanupCodexAttachments(targetRoot, sessionId);
       },
       reuseRunning: (terminalSession) => {
@@ -1549,6 +1557,7 @@ function createCodexTerminalController({
     const {
       runtime,
       session,
+      targetRoot,
       workdir
     } = context;
 
@@ -1557,9 +1566,19 @@ function createCodexTerminalController({
       message: "Preparing Codex app-server for this session."
     });
     try {
+      const helper = await prepareCurrentStepInputHelper({
+        onSessionChanged: async (changedSessionId) => {
+          await handleCurrentStepInputHelperSessionChanged(changedSessionId);
+        },
+        projectService,
+        session,
+        targetRoot
+      });
       const provider = codexAppServerProviderForSession(sessionId);
       const promptSession = await runtime.promptSessionForAction(session);
-      const developerInstructions = codexAppServerDeveloperInstructions(promptSession);
+      const developerInstructions = codexAppServerDeveloperInstructions(promptSession, {
+        helperCommands: helper.host?.commands
+      });
       const thread = await ensureCodexAppServerThreadForSession({
         developerInstructions,
         provider,
@@ -1636,7 +1655,9 @@ function createCodexTerminalController({
       });
       const provider = codexAppServerProviderForSession(sessionId);
       const promptSession = await runtime.promptSessionForAction(session);
-      const developerInstructions = codexAppServerDeveloperInstructions(promptSession);
+      const developerInstructions = codexAppServerDeveloperInstructions(promptSession, {
+        helperCommands: helper.host?.commands
+      });
       const thread = await ensureCodexAppServerThreadForSession({
         bootstrapResumableThread: false,
         developerInstructions,

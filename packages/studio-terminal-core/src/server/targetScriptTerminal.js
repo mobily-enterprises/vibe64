@@ -23,6 +23,7 @@ import {
   normalizeText
 } from "@local/vibe64-core/server/core";
 import {
+  runtimeNetworkTargetHash,
   targetRuntimeNetworkDockerArgs
 } from "./runtimeContainers.js";
 
@@ -110,7 +111,7 @@ function targetScriptTerminalArgs({
     "--label",
     `vibe64.terminal=${terminalId}`,
     "--label",
-    `vibe64.target=${stableHash(targetRoot)}`,
+    `vibe64.target=${runtimeNetworkTargetHash(targetRoot)}`,
     ...gitToolchainMountArgs(targetRoot),
     "-v",
     `${targetRoot}:/workspace`,

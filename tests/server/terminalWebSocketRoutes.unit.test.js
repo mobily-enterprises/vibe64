@@ -1,4 +1,8 @@
 import assert from "node:assert/strict";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
 
 import {
@@ -7,6 +11,35 @@ import {
 import {
   registerTerminalWebSocketRoute
 } from "@local/vibe64-core/server/terminalWebSocketRoutes";
+import {
+  currentWorkspaceScopeKey
+} from "@local/vibe64-core/server/workspaceRequestContext";
+import {
+  createStudioProjectContext
+} from "@local/vibe64-core/server/studioProjectContext";
+
+async function withWorkspaceProjectContext(callback) {
+  const projectsRoot = await mkdtemp(path.join(tmpdir(), "vibe64-ws-projects-"));
+  const slug = "alpha_1";
+  await mkdir(path.join(projectsRoot, slug), {
+    recursive: true
+  });
+  try {
+    return await callback({
+      projectContext: createStudioProjectContext({
+        explicitProjectsRoot: projectsRoot,
+        env: {},
+        home: projectsRoot
+      }),
+      slug
+    });
+  } finally {
+    await rm(projectsRoot, {
+      force: true,
+      recursive: true
+    });
+  }
+}
 
 function testSocket() {
   const handlers = {};
@@ -31,10 +64,13 @@ function testSocket() {
   };
 }
 
-function waitForPromiseQueue() {
-  return new Promise((resolve) => {
-    setImmediate(resolve);
-  });
+async function waitForSocketMessages(socket, count) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (socket.sent.length >= count) {
+      return;
+    }
+    await delay(5);
+  }
 }
 
 test("terminal websocket routes register through JSKIT app ownership", async () => {
@@ -65,86 +101,187 @@ test("terminal websocket routes register through JSKIT app ownership", async () 
       }
     };
 
-    registerTerminalWebSocketRoute(app, {
-      routePath: "/api/unit/sessions/:sessionId/terminal/:terminalSessionId/ws",
-      serviceId: "feature.unit-terminal.service",
-      serviceUnavailableMessage: "Unit terminal service is unavailable.",
-      subscribe(resolvedService, { sessionId, subscriber, terminalSessionId }) {
-        assert.equal(resolvedService, service);
-        calls.push(["subscribe", sessionId, terminalSessionId]);
-        subscriber({
+    await withWorkspaceProjectContext(async ({ projectContext, slug }) => {
+      registerTerminalWebSocketRoute(app, {
+        projectContext,
+        routePath: "/api/app/:slug/unit/sessions/:sessionId/terminal/:terminalSessionId/ws",
+        serviceId: "feature.unit-terminal.service",
+        serviceUnavailableMessage: "Unit terminal service is unavailable.",
+        subscribe(resolvedService, { sessionId, subscriber, terminalSessionId }) {
+          assert.equal(resolvedService, service);
+          calls.push(["subscribe", sessionId, terminalSessionId, currentWorkspaceScopeKey()]);
+          subscriber({
+            line: "ready",
+            type: "terminal.output"
+          });
+          return {
+            terminalSessionId,
+            unsubscribe() {
+              calls.push(["unsubscribe"]);
+            }
+          };
+        },
+        resize(resolvedService, { cols, rows, sessionId, terminalSessionId }) {
+          assert.equal(resolvedService, service);
+          calls.push(["resize", sessionId, terminalSessionId, cols, rows, currentWorkspaceScopeKey()]);
+          return {
+            ok: true
+          };
+        },
+        write(resolvedService, { data, sessionId, terminalSessionId }) {
+          assert.equal(resolvedService, service);
+          calls.push(["write", sessionId, terminalSessionId, data, currentWorkspaceScopeKey()]);
+          return {
+            ok: true
+          };
+        }
+      });
+
+      assert.equal(fastify.registered.path, "/api/app/:slug/unit/sessions/:sessionId/terminal/:terminalSessionId/ws");
+      assert.deepEqual(fastify.registered.options, {
+        websocket: true
+      });
+
+      const socket = testSocket();
+      fastify.registered.handler(socket, {
+        headers: {},
+        ip: "10.0.0.8",
+        params: {
+          sessionId: "session-1",
+          slug,
+          terminalSessionId: "terminal-1"
+        }
+      });
+      await waitForSocketMessages(socket, 2);
+
+      assert.deepEqual(socket.sent, [
+        {
           line: "ready",
           type: "terminal.output"
-        });
-        return {
-          terminalSessionId,
-          unsubscribe() {
-            calls.push(["unsubscribe"]);
-          }
-        };
-      },
-      resize(resolvedService, { cols, rows, sessionId, terminalSessionId }) {
-        assert.equal(resolvedService, service);
-        calls.push(["resize", sessionId, terminalSessionId, cols, rows]);
-        return {
-          ok: true
-        };
-      },
-      write(resolvedService, { data, sessionId, terminalSessionId }) {
-        assert.equal(resolvedService, service);
-        calls.push(["write", sessionId, terminalSessionId, data]);
-        return {
-          ok: true
+        },
+        {
+          session: {
+            terminalSessionId: "terminal-1"
+          },
+          type: "snapshot"
+        }
+      ]);
+
+      await socket.handlers.message(Buffer.from(JSON.stringify({
+        data: "hello",
+        type: "input"
+      })));
+      await socket.handlers.message(Buffer.from(JSON.stringify({
+        cols: 120,
+        rows: 40,
+        type: "resize"
+      })));
+      socket.handlers.close();
+
+      assert.deepEqual(calls, [
+        ["subscribe", "session-1", "terminal-1", `workspace:${slug}`],
+        ["write", "session-1", "terminal-1", "hello", `workspace:${slug}`],
+        ["resize", "session-1", "terminal-1", 120, 40, `workspace:${slug}`],
+        ["unsubscribe"]
+      ]);
+    });
+  } finally {
+    if (previousBypass == null) {
+      delete process.env[LOCALHOST_CHECK_BYPASS_ENV];
+    } else {
+      process.env[LOCALHOST_CHECK_BYPASS_ENV] = previousBypass;
+    }
+  }
+});
+
+test("terminal websocket guard accepts authenticated non-loopback requests", async () => {
+  const previousBypass = process.env[LOCALHOST_CHECK_BYPASS_ENV];
+  delete process.env[LOCALHOST_CHECK_BYPASS_ENV];
+  try {
+    const fastify = {
+      registered: null,
+      get(path, options, handler) {
+        this.registered = {
+          handler,
+          options,
+          path
         };
       }
-    });
-
-    assert.equal(fastify.registered.path, "/api/unit/sessions/:sessionId/terminal/:terminalSessionId/ws");
-    assert.deepEqual(fastify.registered.options, {
-      websocket: true
-    });
-
-    const socket = testSocket();
-    fastify.registered.handler(socket, {
-      headers: {},
-      ip: "10.0.0.8",
-      params: {
-        sessionId: "session-1",
-        terminalSessionId: "terminal-1"
+    };
+    const app = {
+      make(token) {
+        if (token === "jskit.fastify") {
+          return fastify;
+        }
+        if (token === "feature.unit-terminal.service") {
+          return {};
+        }
+        throw new Error(`Unknown token ${token}.`);
       }
-    });
-    await waitForPromiseQueue();
+    };
 
-    assert.deepEqual(socket.sent, [
-      {
-        line: "ready",
-        type: "terminal.output"
-      },
-      {
-        session: {
+    await withWorkspaceProjectContext(async ({ projectContext, slug }) => {
+      registerTerminalWebSocketRoute(app, {
+        projectContext,
+        routePath: "/api/app/:slug/unit/sessions/:sessionId/terminal/:terminalSessionId/ws",
+        serviceId: "feature.unit-terminal.service",
+        serviceUnavailableMessage: "Unit terminal service is unavailable.",
+        subscribe(_service, { terminalSessionId }) {
+          return {
+            terminalSessionId,
+            unsubscribe() {}
+          };
+        },
+        write() {
+          return {
+            ok: true
+          };
+        }
+      });
+
+      const rejected = testSocket();
+      fastify.registered.handler(rejected, {
+        headers: {
+          host: "example.com",
+          origin: "https://example.com"
+        },
+        ip: "10.0.0.8",
+        params: {
+          sessionId: "session-1",
+          slug,
+          terminalSessionId: "terminal-1"
+        }
+      });
+      assert.equal(rejected.closed.code, 1008);
+
+      const accepted = testSocket();
+      fastify.registered.handler(accepted, {
+        headers: {
+          host: "example.com",
+          origin: "https://example.com"
+        },
+        ip: "10.0.0.8",
+        params: {
+          sessionId: "session-1",
+          slug,
           terminalSessionId: "terminal-1"
         },
-        type: "snapshot"
-      }
-    ]);
+        vibe64User: {
+          email: "owner@example.com"
+        }
+      });
+      await waitForSocketMessages(accepted, 1);
 
-    await socket.handlers.message(Buffer.from(JSON.stringify({
-      data: "hello",
-      type: "input"
-    })));
-    await socket.handlers.message(Buffer.from(JSON.stringify({
-      cols: 120,
-      rows: 40,
-      type: "resize"
-    })));
-    socket.handlers.close();
-
-    assert.deepEqual(calls, [
-      ["subscribe", "session-1", "terminal-1"],
-      ["write", "session-1", "terminal-1", "hello"],
-      ["resize", "session-1", "terminal-1", 120, 40],
-      ["unsubscribe"]
-    ]);
+      assert.equal(accepted.closed, null);
+      assert.deepEqual(accepted.sent, [
+        {
+          session: {
+            terminalSessionId: "terminal-1"
+          },
+          type: "snapshot"
+        }
+      ]);
+    });
   } finally {
     if (previousBypass == null) {
       delete process.env[LOCALHOST_CHECK_BYPASS_ENV];

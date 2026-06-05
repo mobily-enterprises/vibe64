@@ -27,9 +27,21 @@ import {
 import {
   stableLocalStorageKeyPart
 } from "@/lib/browserLocalStorage.js";
+import {
+  useVibe64WorkspaceSlug
+} from "@/composables/useVibe64WorkspaceScope.js";
+import {
+  scopedDevelopmentApiUrl,
+  studioHttpClient
+} from "@/lib/studioHttp.js";
+import {
+  currentWorkspaceSlugFromLocation,
+  vibe64ScopedStorageKey
+} from "@/lib/vibe64WorkspaceScope.js";
 
 const LAUNCH_BROWSER_WINDOW_FEATURES = "popup,width=1400,height=900,left=80,top=60";
 const LAUNCH_PREVIEW_TOOLBAR_POSITIONS = Object.freeze(["left", "center", "right"]);
+const LAUNCH_STATUS_POLL_INTERVAL_MS = 1000;
 const TERMINAL_STOP_POLL_INTERVAL_MS = 100;
 const TERMINAL_STOP_POLL_ATTEMPTS = 50;
 
@@ -37,17 +49,23 @@ function browserCanOpenTarget(target = {}) {
   return String(target.kind || "url") === "url" && Boolean(String(target.href || "").trim());
 }
 
-function launchBrowserTargetName(session = {}) {
+function launchBrowserTargetName(session = {}, workspaceSlug = currentWorkspaceSlugFromLocation()) {
   const source = session?.targetRoot || session?.worktree || session?.sessionRoot || session?.sessionId || "target";
-  return `vibe64-launch-${stableLocalStorageKeyPart(source)}`;
+  return `vibe64-launch-${stableLocalStorageKeyPart(`${workspaceSlug || ""}:${source}`)}`;
 }
 
-function launchTerminalStorageKey(session = {}) {
-  return `vibe64:floating-terminal:launch:${launchBrowserTargetName(session)}`;
+function launchTerminalStorageKey(session = {}, workspaceSlug = currentWorkspaceSlugFromLocation()) {
+  return vibe64ScopedStorageKey(
+    `vibe64:floating-terminal:launch:${launchBrowserTargetName(session, workspaceSlug)}`,
+    workspaceSlug
+  );
 }
 
-function launchPreviewToolbarStorageKey(session = {}) {
-  return `vibe64:launch-preview-toolbar:${launchBrowserTargetName(session)}`;
+function launchPreviewToolbarStorageKey(session = {}, workspaceSlug = currentWorkspaceSlugFromLocation()) {
+  return vibe64ScopedStorageKey(
+    `vibe64:launch-preview-toolbar:${launchBrowserTargetName(session, workspaceSlug)}`,
+    workspaceSlug
+  );
 }
 
 function normalizeLaunchPreviewToolbarPosition(value = "") {
@@ -66,7 +84,12 @@ function nextLaunchPreviewToolbarPosition(currentPosition = "center", direction 
   return LAUNCH_PREVIEW_TOOLBAR_POSITIONS[nextIndex] || "center";
 }
 
-function openLaunchBrowserTarget(target = {}, session = {}, browserWindow = null) {
+function openLaunchBrowserTarget(
+  target = {},
+  session = {},
+  browserWindow = null,
+  workspaceSlug = currentWorkspaceSlugFromLocation()
+) {
   if (!browserCanOpenTarget(target)) {
     return null;
   }
@@ -77,7 +100,7 @@ function openLaunchBrowserTarget(target = {}, session = {}, browserWindow = null
 
   const openedWindow = activeWindow.open(
     target.href,
-    launchBrowserTargetName(session),
+    launchBrowserTargetName(session, workspaceSlug),
     LAUNCH_BROWSER_WINDOW_FEATURES
   );
   if (!openedWindow) {
@@ -95,14 +118,18 @@ function openLaunchBrowserTarget(target = {}, session = {}, browserWindow = null
   return openedWindow;
 }
 
-function openPendingLaunchBrowserWindow(session = {}, browserWindow = null) {
+function openPendingLaunchBrowserWindow(
+  session = {},
+  browserWindow = null,
+  workspaceSlug = currentWorkspaceSlugFromLocation()
+) {
   const activeWindow = browserWindow || (typeof window !== "undefined" ? window : null);
   if (!activeWindow?.open) {
     return null;
   }
   const openedWindow = activeWindow.open(
     "about:blank",
-    launchBrowserTargetName(session),
+    launchBrowserTargetName(session, workspaceSlug),
     LAUNCH_BROWSER_WINDOW_FEATURES
   );
   if (!openedWindow) {
@@ -122,7 +149,12 @@ function openPendingLaunchBrowserWindow(session = {}, browserWindow = null) {
   return openedWindow;
 }
 
-function openReadyLaunchBrowserTarget(target = {}, session = {}, pendingWindow = null) {
+function openReadyLaunchBrowserTarget(
+  target = {},
+  session = {},
+  pendingWindow = null,
+  workspaceSlug = currentWorkspaceSlugFromLocation()
+) {
   if (!browserCanOpenTarget(target)) {
     return null;
   }
@@ -137,7 +169,7 @@ function openReadyLaunchBrowserTarget(target = {}, session = {}, pendingWindow =
       // Fall back to opening the named target below.
     }
   }
-  return openLaunchBrowserTarget(target, session);
+  return openLaunchBrowserTarget(target, session, null, workspaceSlug);
 }
 
 function launchTargetWorktreePath(session = {}) {
@@ -182,10 +214,12 @@ function useVibe64LaunchControls({
   windowDisplayed = () => true
 } = {}) {
   const paths = usePaths();
+  const workspaceSlug = useVibe64WorkspaceSlug();
   const operationBusy = ref(false);
   const terminalExpanded = ref(false);
   const autoStartKey = ref("");
   let attachedTerminalId = "";
+  let launchStatusPollTimer = 0;
 
   const selectedSession = computed(() => readRefOrGetterValue(session) || null);
   const sessionId = computed(() => String(selectedSession.value?.sessionId || ""));
@@ -200,7 +234,10 @@ function useVibe64LaunchControls({
   const launchTargetsPath = computed(() => {
     return sessionId.value ? vibe64LaunchTargetsPath(sessionsApiPath.value, sessionId.value) : "";
   });
-  const terminalWindowStorageKey = computed(() => launchTerminalStorageKey(selectedSession.value || {}));
+  const terminalWindowStorageKey = computed(() => launchTerminalStorageKey(
+    selectedSession.value || {},
+    workspaceSlug.value
+  ));
   const terminalDisplayed = computed(() => readRefOrGetterValue(windowDisplayed) !== false);
   const terminal = useStudioTerminal({
     webSocketUrl(terminalId) {
@@ -230,13 +267,15 @@ function useVibe64LaunchControls({
   } = terminal;
 
   const launchTargetsResource = useEndpointResource({
+    client: studioHttpClient,
     enabled: canLoadLaunchTargets,
     fallbackLoadError: "Launch targets could not be loaded.",
     path: launchTargetsPath,
     queryKey: computed(() => vibe64LaunchTargetsQueryKey(
       VIBE64_SURFACE_ID,
       ROUTE_VISIBILITY_PUBLIC,
-      sessionId.value
+      sessionId.value,
+      workspaceSlug.value
     )),
     refreshOnPull: true
   });
@@ -247,7 +286,7 @@ function useVibe64LaunchControls({
     buildCommandOptions: (_payload, { context }) => ({
       method: "POST",
       options: LOCAL_STUDIO_COMMAND_OPTIONS,
-      path: vibe64LaunchTerminalPath(sessionsApiPath.value, context.sessionId)
+      path: scopedDevelopmentApiUrl(vibe64LaunchTerminalPath(sessionsApiPath.value, context.sessionId))
     }),
     buildRawPayload: (_model, { context }) => ({
       launchTargetId: String(context.launchTargetId || "")
@@ -269,7 +308,7 @@ function useVibe64LaunchControls({
     buildCommandOptions: (_payload, { context }) => ({
       method: "POST",
       options: LOCAL_STUDIO_COMMAND_OPTIONS,
-      path: vibe64LaunchTerminalStopPath(sessionsApiPath.value, context.sessionId, context.terminalSessionId)
+      path: scopedDevelopmentApiUrl(vibe64LaunchTerminalStopPath(sessionsApiPath.value, context.sessionId, context.terminalSessionId))
     }),
     fallbackRunError: "Launch target could not be stopped.",
     messages: {
@@ -288,7 +327,7 @@ function useVibe64LaunchControls({
     buildCommandOptions: (_payload, { context }) => ({
       method: "DELETE",
       options: LOCAL_STUDIO_COMMAND_OPTIONS,
-      path: vibe64LaunchTerminalPath(sessionsApiPath.value, context.sessionId, context.terminalSessionId)
+      path: scopedDevelopmentApiUrl(vibe64LaunchTerminalPath(sessionsApiPath.value, context.sessionId, context.terminalSessionId))
     }),
     fallbackRunError: "Launch target terminal could not close.",
     messages: {
@@ -493,6 +532,44 @@ function useVibe64LaunchControls({
     return launchTargetsResource.reload();
   }
 
+  function clearLaunchStatusPoll() {
+    if (!launchStatusPollTimer) {
+      return;
+    }
+    window.clearTimeout(launchStatusPollTimer);
+    launchStatusPollTimer = 0;
+  }
+
+  function scheduleLaunchStatusPoll() {
+    if (typeof window === "undefined") {
+      return;
+    }
+    if (
+      !sessionId.value ||
+      !terminalVisible.value ||
+      !terminalIsRunning.value ||
+      terminalLaunchReady.value ||
+      launchTargetsResource.isLoading.value
+    ) {
+      clearLaunchStatusPoll();
+      return;
+    }
+    if (launchStatusPollTimer) {
+      return;
+    }
+    launchStatusPollTimer = window.setTimeout(async () => {
+      launchStatusPollTimer = 0;
+      if (!sessionId.value || terminalLaunchReady.value || !terminalVisible.value || !terminalIsRunning.value) {
+        return;
+      }
+      try {
+        await refresh();
+      } finally {
+        scheduleLaunchStatusPoll();
+      }
+    }, LAUNCH_STATUS_POLL_INTERVAL_MS);
+  }
+
   async function stopTerminal() {
     if (!sessionId.value || !terminalCanStop.value) {
       return false;
@@ -583,7 +660,7 @@ function useVibe64LaunchControls({
   }
 
   function openAction(action = {}) {
-    return openLaunchBrowserTarget(action, selectedSession.value);
+    return openLaunchBrowserTarget(action, selectedSession.value, null, workspaceSlug.value);
   }
 
   function setTerminalHost(element) {
@@ -642,6 +719,7 @@ function useVibe64LaunchControls({
   watch(sessionId, () => {
     attachedTerminalId = "";
     autoStartKey.value = "";
+    clearLaunchStatusPoll();
     closeTerminalSocket();
     disposeTerminalDisplay();
     resetTerminalSessionState();
@@ -656,6 +734,18 @@ function useVibe64LaunchControls({
     if (terminalLaunchReady.value) {
       void refresh();
     }
+  }, {
+    immediate: true
+  });
+
+  watch(() => [
+    sessionId.value,
+    terminalVisible.value ? "terminal-visible" : "terminal-hidden",
+    terminalIsRunning.value ? "running" : "stopped",
+    terminalLaunchReady.value ? "ready" : "not-ready",
+    launchTargetsResource.isLoading.value ? "loading" : "ready"
+  ].join("|"), () => {
+    scheduleLaunchStatusPoll();
   }, {
     immediate: true
   });
@@ -690,6 +780,7 @@ function useVibe64LaunchControls({
   });
 
   onBeforeUnmount(() => {
+    clearLaunchStatusPoll();
     disposeTerminalUi();
   });
 

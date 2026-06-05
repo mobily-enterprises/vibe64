@@ -1,9 +1,11 @@
 import path from "node:path";
 import process from "node:process";
+import os from "node:os";
 
 const VIBE64_APP_ROOT_ENV = "VIBE64_APP_ROOT";
 const VIBE64_TARGET_ROOT_ENV = "VIBE64_TARGET_ROOT";
 const VIBE64_PROJECTS_ROOT_ENV = "VIBE64_PROJECTS_ROOT";
+const VIBE64_DATA_ROOT_ENV = "VIBE64_DATA_ROOT";
 
 function normalizeRoot(value, fallbackRoot) {
   const root = String(value || "").trim();
@@ -62,11 +64,21 @@ function resolveExplicitStudioTargetRoot({
   });
 }
 
+function resolveVibe64DataRoot({
+  env = process.env,
+  explicitRoot = "",
+  home = os.homedir()
+} = {}) {
+  return normalizeRoot(explicitRoot || env[VIBE64_DATA_ROOT_ENV], path.join(home || process.cwd(), ".vibe64"));
+}
+
 export {
   VIBE64_APP_ROOT_ENV,
+  VIBE64_DATA_ROOT_ENV,
   VIBE64_PROJECTS_ROOT_ENV,
   VIBE64_TARGET_ROOT_ENV,
   resolveExplicitStudioTargetRoot,
+  resolveVibe64DataRoot,
   resolveStudioAppRoot,
   resolveStudioTargetRoot
 };

@@ -114,7 +114,8 @@
 <script setup>
 import { computed, watch } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
-import { useList } from "@jskit-ai/users-web/client/composables/useList";
+import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
+import { usePaths } from "@jskit-ai/users-web/client/composables/usePaths";
 import {
   mdiArchiveCancelOutline,
   mdiCheckCircle,
@@ -127,6 +128,12 @@ import {
   VIBE64_SURFACE_ID,
   vibe64SessionsQueryKey
 } from "@/lib/vibe64SessionRequestConfig.js";
+import {
+  studioHttpClient
+} from "@/lib/studioHttp.js";
+import {
+  useVibe64WorkspaceSlug
+} from "@/composables/useVibe64WorkspaceScope.js";
 import {
   enrichVibe64SessionForDisplay
 } from "@/lib/vibe64SessionPanelModel.js";
@@ -165,25 +172,36 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["loading-changed"]);
+const paths = usePaths();
+const workspaceSlug = useVibe64WorkspaceSlug();
+const sessionsApiPath = computed(() => paths.api(VIBE64_SESSIONS_API_SUFFIX, {
+  surface: VIBE64_SURFACE_ID
+}));
 
-const sessionList = useList({
-  access: "never",
-  apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
+const sessionListResource = useEndpointResource({
+  client: studioHttpClient,
   fallbackLoadError: "Archived sessions could not be loaded.",
-  ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-  placementSource: "vibe64.sessions.archive",
-  queryKeyFactory: vibe64SessionsQueryKey,
-  requestQueryParams: computed(() => ({
+  path: sessionsApiPath,
+  queryKey: computed(() => [
+    ...vibe64SessionsQueryKey(
+      VIBE64_SURFACE_ID,
+      ROUTE_VISIBILITY_PUBLIC,
+      workspaceSlug.value
+    ),
+    "archive",
+    props.archive
+  ]),
+  readQuery: computed(() => ({
     archive: props.archive
-  })),
-  selectItems: (payload) => Array.isArray(payload?.sessions) ? payload.sessions : [],
-  surfaceId: VIBE64_SURFACE_ID
+  }))
 });
 
-const loading = computed(() => Boolean(sessionList.isLoading));
-const error = computed(() => String(sessionList.loadError || ""));
+const loading = computed(() => Boolean(sessionListResource.isLoading.value));
+const error = computed(() => String(sessionListResource.loadError.value || ""));
 const sessions = computed(() => {
-  return (Array.isArray(sessionList.items) ? sessionList.items : [])
+  const payload = sessionListResource.data.value;
+  const items = Array.isArray(payload?.sessions) ? payload.sessions : [];
+  return items
     .map(enrichVibe64SessionForDisplay)
     .filter(sessionIsInArchive);
 });
@@ -229,7 +247,7 @@ function sessionIsInArchive(session = {}) {
 }
 
 async function loadSessions() {
-  await sessionList.reload();
+  await sessionListResource.reload();
 }
 
 defineExpose({

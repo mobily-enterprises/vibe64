@@ -47,16 +47,6 @@ function vibe64SessionLimits({
   };
 }
 
-function inspectDiffButtonVisible({
-  diff = {},
-  selectedSession = null,
-  sessionMode = ""
-} = {}) {
-  return sessionMode === "inspect" &&
-    selectedSession?.worktreeReady === true &&
-    typeof diff.openDialog === "function";
-}
-
 function blockingVibe64SessionPageError({
   runtimePageError = "",
   selectedSession = null,
@@ -252,7 +242,6 @@ export {
   commandMessage,
   currentStepDisabledReason,
   enrichVibe64SessionForDisplay,
-  inspectDiffButtonVisible,
   shortVibe64SessionId,
   visibleVibe64Sessions
 };

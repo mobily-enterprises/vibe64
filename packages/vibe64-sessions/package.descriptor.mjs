@@ -12,7 +12,6 @@ export default Object.freeze({
     "@local/vibe64-accounts",
     "@local/vibe64-terminals",
     "@local/studio-setup-doctor",
-    "@local/adapter-setup-doctor",
     "@local/project-setup-doctor"
   ],
   capabilities: {
@@ -24,7 +23,6 @@ export default Object.freeze({
       "feature.vibe64-accounts",
       "feature.vibe64-terminals",
       "feature.studio-setup-doctor",
-      "feature.adapter-setup-doctor",
       "feature.project-setup-doctor",
       "runtime.actions"
     ]

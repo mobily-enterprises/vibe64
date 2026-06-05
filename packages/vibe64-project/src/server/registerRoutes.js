@@ -20,12 +20,14 @@ import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRout
 function registerRoutes(
   app,
   {
+    projectContext = null,
     routeSurface = "",
     routeRelativePath = ""
   } = {}
 ) {
   const routes = createVibe64FeatureRoutes(app, {
     localRequestMessage: "Vibe64 project routes only accept loopback Studio requests.",
+    projectContext,
     routeRelativePath,
     routeSurface,
     tags: ["studio", "vibe64-project"]

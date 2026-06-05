@@ -1,4 +1,5 @@
 import {
+  DASHBOARD_PATH,
   abandonedArchiveSession,
   bootstrapPayload,
   blockedAppSetupPayload,
@@ -20,24 +21,80 @@ import {
 import {
   fulfillJson,
   fulfillSse,
+  routeApiEndpoint,
   setupReadinessPayload
 } from "./http";
+
+async function mockAuthenticatedApp(page) {
+  await page.route("**/api/auth/state", async (route) => {
+    await fulfillJson(route, {
+      authenticated: true,
+      ok: true,
+      setupRequired: false,
+      user: {
+        email: "owner@example.com",
+        gravatarUrl: "https://www.gravatar.com/avatar/00000000000000000000000000000000?d=identicon",
+        role: "owner"
+      }
+    });
+  });
+  await page.addInitScript(() => {
+    const OriginalWebSocket = window.WebSocket;
+
+    class MockLifecycleWebSocket extends EventTarget {
+      static CONNECTING = 0;
+      static OPEN = 1;
+      static CLOSING = 2;
+      static CLOSED = 3;
+      readyState = MockLifecycleWebSocket.CONNECTING;
+      url = "";
+
+      constructor(url) {
+        super();
+        this.url = String(url || "");
+        const pathname = new URL(this.url, window.location.href).pathname;
+        if (pathname !== "/api/studio/browser-lifecycle/ws") {
+          return new OriginalWebSocket(url);
+        }
+        window.setTimeout(() => {
+          this.readyState = MockLifecycleWebSocket.OPEN;
+          this.dispatchEvent(new Event("open"));
+          this.dispatchEvent(new MessageEvent("message", {
+            data: JSON.stringify({
+              state: "active",
+              type: "state"
+            })
+          }));
+        }, 0);
+      }
+
+      send() {}
+
+      close() {
+        this.readyState = MockLifecycleWebSocket.CLOSED;
+        this.dispatchEvent(new CloseEvent("close"));
+      }
+    }
+
+    window.WebSocket = MockLifecycleWebSocket as unknown as typeof WebSocket;
+  });
+}
 
 async function mockProjectTools(page) {
   const payload = {
     ok: true,
     tools: []
   };
-  await page.route("**/api/vibe64/tools", async (route) => {
+  await routeApiEndpoint(page, "/vibe64/tools", async (route) => {
     await fulfillJson(route, payload);
   });
-  await page.route("**/api/studio/vibe64/tools", async (route) => {
+  await routeApiEndpoint(page, "/studio/vibe64/tools", async (route) => {
     await fulfillJson(route, payload);
   });
 }
 
 async function mockEmptySessions(page) {
-  await page.route("**/api/vibe64/sessions**", async (route) => {
+  await routeApiEndpoint(page, "/vibe64/sessions", async (route) => {
     await fulfillJson(route, {
       limits: {
         maxOpenSessions: 5,
@@ -76,8 +133,8 @@ function capabilitiesPayload({
   const setupReady = setup.ready === true;
   const aiReady = codex.connected === true;
   const githubReady = github.connected === true;
-  const accountsRoute = "/home/dashboard/accounts";
-  const setupRoute = "/home/dashboard/setup";
+  const accountsRoute = `${DASHBOARD_PATH}/accounts`;
+  const setupRoute = `${DASHBOARD_PATH}/setup`;
   const fix = (route: string, label: string) => ({
     label,
     route
@@ -131,35 +188,46 @@ function capabilitiesPayload({
 }
 
 async function mockProjectGateReady(page) {
+  await mockAuthenticatedApp(page);
   await page.route("**/api/bootstrap", async (route) => {
     await fulfillJson(route, bootstrapPayload);
   });
-  await page.route("**/api/vibe64/projects", async (route) => {
+  await routeApiEndpoint(page, "/vibe64/workspaces", async (route) => {
+    await fulfillJson(route, {
+      ok: true,
+      projectsRoot: readyProjectSelectionPayload.projectsRoot,
+      workspaces: readyProjectSelectionPayload.projects.map((project) => ({
+        slug: project.slug,
+        workspaceRoot: project.workspaceRoot || project.path
+      }))
+    });
+  });
+  await routeApiEndpoint(page, "/vibe64/projects", async (route) => {
     await fulfillJson(route, readyProjectSelectionPayload);
   });
-  await page.route("**/api/studio/current-app", async (route) => {
+  await routeApiEndpoint(page, "/studio/current-app", async (route) => {
     await fulfillJson(route, currentAppPayload);
   });
-  await page.route("**/api/studio/current-app/capabilities", async (route) => {
+  await routeApiEndpoint(page, "/studio/current-app/capabilities", async (route) => {
     await fulfillJson(route, capabilitiesPayload());
   });
-  await page.route("**/api/vibe64/project-type", async (route) => {
+  await routeApiEndpoint(page, "/vibe64/project-type", async (route) => {
     await fulfillJson(route, readyProjectTypePayload);
   });
-  await page.route("**/api/vibe64/project-config", async (route) => {
+  await routeApiEndpoint(page, "/vibe64/project-config", async (route) => {
     await fulfillJson(route, readyProjectConfigPayload);
   });
-  await page.route("**/api/vibe64/accounts", async (route) => {
+  await routeApiEndpoint(page, "/vibe64/accounts", async (route) => {
     await fulfillJson(route, readyAccountsPayload);
   });
   await mockProjectTools(page);
 }
 
 async function mockSetupReadiness(page, payload) {
-  await page.route("**/api/studio/current-app/setup-readiness", async (route) => {
+  await routeApiEndpoint(page, "/studio/current-app/setup-readiness", async (route) => {
     await fulfillJson(route, payload);
   });
-  await page.route("**/api/studio/current-app/setup-readiness/stream", async (route) => {
+  await routeApiEndpoint(page, "/studio/current-app/setup-readiness/stream", async (route) => {
     await fulfillSse(route, payload, "stages");
   });
 }
@@ -172,13 +240,13 @@ async function mockSetupGateReady(page) {
       readyAppSetupPayload
     ]
   }));
-  await page.route("**/api/studio/studio-setup", async (route) => {
+  await routeApiEndpoint(page, "/studio/studio-setup", async (route) => {
     await fulfillJson(route, readyBootstrapPayload);
   });
-  await page.route("**/api/studio/adapter-setup", async (route) => {
+  await routeApiEndpoint(page, "/studio/adapter-setup", async (route) => {
     await fulfillJson(route, readyTargetAppPayload);
   });
-  await page.route("**/api/studio/project-setup", async (route) => {
+  await routeApiEndpoint(page, "/studio/project-setup", async (route) => {
     await fulfillJson(route, readyAppSetupPayload);
   });
 }
@@ -204,15 +272,15 @@ async function mockBootstrapBlocked(page) {
     ]
   });
   await mockSetupReadiness(page, setup);
-  await page.route("**/api/studio/current-app/capabilities", async (route) => {
+  await routeApiEndpoint(page, "/studio/current-app/capabilities", async (route) => {
     await fulfillJson(route, capabilitiesPayload({
       setup
     }));
   });
-  await page.route("**/api/studio/studio-setup", async (route) => {
+  await routeApiEndpoint(page, "/studio/studio-setup", async (route) => {
     await fulfillJson(route, blockedBootstrapPayload);
   });
-  await page.route("**/api/studio/studio-setup/stream", async (route) => {
+  await routeApiEndpoint(page, "/studio/studio-setup/stream", async (route) => {
     await fulfillSse(route, blockedBootstrapPayload);
   });
   await mockEmptySessions(page);
@@ -234,43 +302,43 @@ async function mockTargetAppBlocked(page) {
     ]
   });
   await mockSetupReadiness(page, setup);
-  await page.route("**/api/studio/current-app/capabilities", async (route) => {
+  await routeApiEndpoint(page, "/studio/current-app/capabilities", async (route) => {
     await fulfillJson(route, capabilitiesPayload({
       setup
     }));
   });
-  await page.route("**/api/studio/studio-setup", async (route) => {
+  await routeApiEndpoint(page, "/studio/studio-setup", async (route) => {
     await fulfillJson(route, readyBootstrapPayload);
   });
-  await page.route("**/api/studio/studio-setup/stream", async (route) => {
+  await routeApiEndpoint(page, "/studio/studio-setup/stream", async (route) => {
     await fulfillSse(route, readyBootstrapPayload);
   });
-  await page.route("**/api/studio/adapter-setup", async (route) => {
+  await routeApiEndpoint(page, "/studio/adapter-setup", async (route) => {
     await fulfillJson(route, blockedTargetAppPayload);
   });
-  await page.route("**/api/studio/adapter-setup/stream", async (route) => {
+  await routeApiEndpoint(page, "/studio/adapter-setup/stream", async (route) => {
     await fulfillSse(route, blockedTargetAppPayload);
   });
 }
 
 async function mockStudioReady(page) {
   await mockProjectGateReady(page);
-  await page.route("**/api/studio/studio-setup", async (route) => {
+  await routeApiEndpoint(page, "/studio/studio-setup", async (route) => {
     await fulfillJson(route, readyBootstrapPayload);
   });
-  await page.route("**/api/studio/studio-setup/stream", async (route) => {
+  await routeApiEndpoint(page, "/studio/studio-setup/stream", async (route) => {
     await fulfillSse(route, readyBootstrapPayload);
   });
-  await page.route("**/api/studio/adapter-setup", async (route) => {
+  await routeApiEndpoint(page, "/studio/adapter-setup", async (route) => {
     await fulfillJson(route, readyTargetAppPayload);
   });
-  await page.route("**/api/studio/adapter-setup/stream", async (route) => {
+  await routeApiEndpoint(page, "/studio/adapter-setup/stream", async (route) => {
     await fulfillSse(route, readyTargetAppPayload);
   });
-  await page.route("**/api/studio/project-setup/stream", async (route) => {
+  await routeApiEndpoint(page, "/studio/project-setup/stream", async (route) => {
     await fulfillSse(route, readyAppSetupPayload, "stages");
   });
-  await page.route("**/api/studio/project-setup", async (route) => {
+  await routeApiEndpoint(page, "/studio/project-setup", async (route) => {
     await fulfillJson(route, readyAppSetupPayload);
   });
   await mockCurrentAppInspection(page);
@@ -288,18 +356,18 @@ async function mockAccountsBlocked(page) {
       readyAppSetupPayload
     ]
   }));
-  await page.route("**/api/vibe64/accounts", async (route) => {
+  await routeApiEndpoint(page, "/vibe64/accounts", async (route) => {
     await fulfillJson(route, blockedAccountsPayload);
   });
-  await page.route("**/api/studio/current-app/capabilities", async (route) => {
+  await routeApiEndpoint(page, "/studio/current-app/capabilities", async (route) => {
     await fulfillJson(route, capabilitiesPayload({
       accounts: blockedAccountsPayload
     }));
   });
-  await page.route("**/api/studio/current-app", async (route) => {
+  await routeApiEndpoint(page, "/studio/current-app", async (route) => {
     await fulfillJson(route, currentAppPayload);
   });
-  await page.route("**/api/vibe64/sessions**", async (route) => {
+  await routeApiEndpoint(page, "/vibe64/sessions", async (route) => {
     await fulfillJson(route, {
       limits: {
         maxOpenSessions: 5,
@@ -314,10 +382,10 @@ async function mockAccountsBlocked(page) {
 
 async function mockCurrentAppInspection(page) {
   await mockProtectedRouteReady(page);
-  await page.route("**/api/studio/current-app", async (route) => {
+  await routeApiEndpoint(page, "/studio/current-app", async (route) => {
     await fulfillJson(route, currentAppPayload);
   });
-  await page.route("**/api/vibe64/sessions**", async (route) => {
+  await routeApiEndpoint(page, "/vibe64/sessions", async (route) => {
     await fulfillJson(route, {
       limits: {
         maxOpenSessions: 5,
@@ -428,10 +496,10 @@ async function mockTargetScripts(page, {
     };
   }
 
-  await page.route("**/api/studio/current-app/target-scripts**", async (route) => {
+  await routeApiEndpoint(page, "/studio/current-app/target-scripts", async (route) => {
     await fulfillJson(route, currentPayload);
-  });
-  await page.route("**/api/studio/current-app/target-scripts/starred**", async (route) => {
+  }, { prefix: true });
+  await routeApiEndpoint(page, "/studio/current-app/target-scripts/starred", async (route) => {
     if (route.request().method() === "DELETE") {
       currentPayload = JSON.parse(JSON.stringify(targetScriptsPayload));
       await fulfillJson(route, currentPayload);
@@ -439,8 +507,8 @@ async function mockTargetScripts(page, {
     }
     applyStars(route.request().postDataJSON().scriptIds || []);
     await fulfillJson(route, currentPayload);
-  });
-  await page.route("**/api/studio/current-app/target-script-terminal", async (route) => {
+  }, { prefix: true });
+  await routeApiEndpoint(page, "/studio/current-app/target-script-terminal", async (route) => {
     const scriptId = String(route.request().postDataJSON().scriptId || "");
     const script = currentPayload.scripts.find((item) => item.id === scriptId) || {};
     terminalStarts.push(scriptId);
@@ -452,20 +520,20 @@ async function mockTargetScripts(page, {
       output: ""
     });
   });
-  await page.route("**/api/studio/current-app/target-script-terminal/*", async (route) => {
+  await routeApiEndpoint(page, "/studio/current-app/target-script-terminal", async (route) => {
     await fulfillJson(route, {
       closed: true,
       ok: true
     });
-  });
+  }, { children: true });
 }
 
 async function mockSessionHistoryArchives(page, archiveRequests = []) {
   await mockProtectedRouteReady(page);
-  await page.route("**/api/studio/current-app", async (route) => {
+  await routeApiEndpoint(page, "/studio/current-app", async (route) => {
     await fulfillJson(route, currentAppPayload);
   });
-  await page.route("**/api/vibe64/sessions**", async (route) => {
+  await routeApiEndpoint(page, "/vibe64/sessions", async (route) => {
     const url = new URL(route.request().url());
     archiveRequests.push(`${url.pathname}${url.search}`);
     await fulfillJson(route, {
@@ -497,27 +565,27 @@ async function mockAppSetupBlocked(page) {
     ]
   });
   await mockSetupReadiness(page, setup);
-  await page.route("**/api/studio/current-app/capabilities", async (route) => {
+  await routeApiEndpoint(page, "/studio/current-app/capabilities", async (route) => {
     await fulfillJson(route, capabilitiesPayload({
       setup
     }));
   });
-  await page.route("**/api/studio/studio-setup", async (route) => {
+  await routeApiEndpoint(page, "/studio/studio-setup", async (route) => {
     await fulfillJson(route, readyBootstrapPayload);
   });
-  await page.route("**/api/studio/studio-setup/stream", async (route) => {
+  await routeApiEndpoint(page, "/studio/studio-setup/stream", async (route) => {
     await fulfillSse(route, readyBootstrapPayload);
   });
-  await page.route("**/api/studio/adapter-setup", async (route) => {
+  await routeApiEndpoint(page, "/studio/adapter-setup", async (route) => {
     await fulfillJson(route, readyTargetAppPayload);
   });
-  await page.route("**/api/studio/adapter-setup/stream", async (route) => {
+  await routeApiEndpoint(page, "/studio/adapter-setup/stream", async (route) => {
     await fulfillSse(route, readyTargetAppPayload);
   });
-  await page.route("**/api/studio/project-setup", async (route) => {
+  await routeApiEndpoint(page, "/studio/project-setup", async (route) => {
     await fulfillJson(route, blockedAppSetupPayload);
   });
-  await page.route("**/api/studio/project-setup/stream", async (route) => {
+  await routeApiEndpoint(page, "/studio/project-setup/stream", async (route) => {
     await fulfillSse(route, blockedAppSetupPayload, "stages");
   });
   await mockEmptySessions(page);

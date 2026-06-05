@@ -263,6 +263,50 @@ test("jskit launch targets expose app and built app actions", async () => {
   });
 });
 
+test("jskit launch targets use canonical session worktree when metadata path is stale", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "session-with-stale-path";
+    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
+    const worktreePath = path.join(sessionRoot, "worktree");
+    await writeProjectFile(worktreePath, "package.json", JSON.stringify({
+      scripts: {
+        dev: "vite",
+        server: "node server.js"
+      }
+    }, null, 2));
+
+    const session = {
+      completedSteps: ["session_created", "worktree_created"],
+      metadata: {
+        worktree_path: path.join(path.dirname(targetRoot), "old-workspace", ".vibe64", "sessions", "active", sessionId, "worktree")
+      },
+      sessionId,
+      sessionRoot,
+      targetRoot
+    };
+    const launchTargets = await listJskitLaunchTargets({
+      session
+    });
+
+    assert.deepEqual(launchTargets, [
+      {
+        defaultDisplay: "minimized",
+        id: "dev",
+        label: "Run app"
+      }
+    ]);
+
+    const spec = await createJskitLaunchTargetTerminalSpec({
+      launchTargetId: "dev",
+      session,
+      targetRoot
+    });
+
+    assert.equal(spec.ok, true);
+    assert.equal(spec.metadata.runRoot, worktreePath);
+  });
+});
+
 test("jskit built launch waits for the server readiness marker before opening", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await writeProjectFile(targetRoot, "package.json", JSON.stringify({

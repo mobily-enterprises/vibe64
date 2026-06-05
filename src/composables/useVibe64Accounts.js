@@ -18,7 +18,7 @@ import {
 } from "@/lib/studioHttp.js";
 
 function accountsResourceQueryKey() {
-  return computed(() => accountsQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC));
+  return computed(() => accountsQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC, ""));
 }
 
 function useVibe64Accounts() {

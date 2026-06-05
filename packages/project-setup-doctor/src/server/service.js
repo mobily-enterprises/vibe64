@@ -2,6 +2,7 @@ import { constants as fsConstants } from "node:fs";
 import {
   access,
   lstat,
+  mkdir,
   readFile,
   readdir
 } from "node:fs/promises";
@@ -48,6 +49,7 @@ import {
 } from "@local/vibe64-core/server/core";
 import {
   ADD_VIBE64_GITIGNORE_RULES_ACTION_ID,
+  GIT_IDENTITY_ACTION_ID,
   VIBE64_LOCAL_STATE_GITIGNORE_PATTERNS,
   CREATE_GIT_CHECKPOINT_ACTION_ID,
   MIRROR_REMOTE_BRANCH_ACTION_ID,
@@ -56,12 +58,14 @@ import {
   ghRepoCreateRepair,
   ghRepoCreateScript,
   gitCheckpointRepair,
+  gitIdentityRepair,
   gitCheckpointScript,
   gitInitRepair,
   githubBranchRefApiPath,
   hostWritableWorkspaceDockerArgs,
   linkGithubRemoteRepair,
   mirrorRemoteBranchRepair,
+  readGitIdentity,
   readGitLocalHead,
   readGitOriginRemote,
   readGitRepositoryShape,
@@ -72,11 +76,16 @@ import {
   remoteHeadIsAncestorOfLocalHead,
   startAddVibe64GitignoreRulesTerminal as startSharedAddVibe64GitignoreRulesTerminal,
   startGhCreateRepoTerminal as startSharedGhCreateRepoTerminal,
+  startGitIdentityTerminal as startSharedGitIdentityTerminal,
   startGitCheckpointTerminal as startSharedGitCheckpointTerminal,
   startGitInitTerminal as startSharedGitInitTerminal,
   startLinkGithubRemoteTerminal as startSharedLinkGithubRemoteTerminal,
   startMirrorRemoteBranchTerminal as startSharedMirrorRemoteBranchTerminal
 } from "@local/setup-doctor-core/server/setupDoctorGit";
+import {
+  githubProviderContext,
+  resolveProviderHomesRoot
+} from "@local/studio-terminal-core/server/providerHomes";
 
 const TERMINAL_NAMESPACE = "project-setup-doctor";
 const AUTOMATIC_REPAIR_MAX_ATTEMPTS = 12;
@@ -356,6 +365,45 @@ function projectGitInitRepair(targetRoot) {
   return gitInitRepair(targetRoot, {
     extraArgs: hostWritableWorkspaceDockerArgs()
   });
+}
+
+async function ensureGithubProviderHome(githubProvider = {}) {
+  if (!githubProvider?.ok || !githubProvider.toolHomeSource) {
+    return githubProvider;
+  }
+  await mkdir(githubProvider.toolHomeSource, {
+    mode: 0o700,
+    recursive: true
+  });
+  return githubProvider;
+}
+
+async function requireGithubProvider(context = {}) {
+  const githubProvider = await ensureGithubProviderHome(context.githubProvider || null);
+  return githubProvider?.ok ? githubProvider : {
+    code: githubProvider?.code || "vibe64_github_user_required",
+    error: githubProvider?.error || "Log in with GitHub in Accounts before running GitHub project setup.",
+    ok: false
+  };
+}
+
+function githubProviderBlockedCheck({
+  expected = "",
+  id = "",
+  label = "",
+  observed = ""
+} = {}) {
+  return blockedCheck({
+    id,
+    label,
+    expected,
+    observed,
+    explanation: "Project setup needs the active Vibe64 user's GitHub identity for repository access and commit publishing. Open management Accounts and authenticate GitHub for this user."
+  });
+}
+
+function githubToolHomeSource(context = {}) {
+  return context.githubProvider?.ok ? context.githubProvider.toolHomeSource : "";
 }
 
 function missingVibe64GitignorePatterns(gitignoreText = "") {
@@ -645,7 +693,9 @@ async function checkRemoteReady(targetRoot, context) {
       observed: result.output || "origin is missing.",
       explanation: "Create or link a GitHub repository before target-specific setup begins.",
       repairs: [
-        ghRepoCreateRepair(targetRoot),
+        ghRepoCreateRepair(targetRoot, {
+          toolHomeSource: githubToolHomeSource(context)
+        }),
         linkGithubRemoteRepair()
       ]
     });
@@ -662,7 +712,18 @@ async function checkRemoteReady(targetRoot, context) {
   }
 
   const repoSlug = repoSlugFromRemoteUrl(result.stdout);
-  const repoResult = await readGithubRepository(targetRoot, result.stdout);
+  const githubProvider = await requireGithubProvider(context);
+  if (!githubProvider.ok) {
+    return githubProviderBlockedCheck({
+      id: "remote-ready",
+      label: "Remote ready",
+      expected: "The active Vibe64 user's GitHub identity can inspect origin.",
+      observed: githubProvider.error
+    });
+  }
+  const repoResult = await readGithubRepository(targetRoot, result.stdout, {
+    toolHomeSource: githubProvider.toolHomeSource
+  });
 
   if (!repoResult.ok) {
     return hardStopCheck({
@@ -708,7 +769,9 @@ async function checkRemoteSync(targetRoot, context) {
     });
   }
 
-  const remoteHead = await readRemoteBranchShaWithGit(targetRoot, remoteBranch);
+  const remoteHead = await readRemoteBranchShaWithGit(targetRoot, remoteBranch, {
+    toolHomeSource: githubToolHomeSource(context)
+  });
   const remoteSha = remoteHead.sha;
 
   if (!remoteHead.ok) {
@@ -843,7 +906,18 @@ async function checkGitCheckpoint(targetRoot, context) {
     });
   }
 
-  const remoteHead = await readRemoteBranchShaWithGh(targetRoot, repoSlug, branch);
+  const githubProvider = await requireGithubProvider(context);
+  if (!githubProvider.ok) {
+    return githubProviderBlockedCheck({
+      id: "git-checkpoint",
+      label: "Git checkpoint",
+      expected: "The active Vibe64 user's GitHub identity can verify the published checkpoint.",
+      observed: githubProvider.error
+    });
+  }
+  const remoteHead = await readRemoteBranchShaWithGh(targetRoot, repoSlug, branch, {
+    toolHomeSource: githubProvider.toolHomeSource
+  });
   const remoteSha = remoteHead.sha;
   if (!remoteHead.ok || !remoteSha) {
     return blockedCheck({
@@ -880,6 +954,43 @@ async function checkGitCheckpoint(targetRoot, context) {
       status.stdout ? `Uncommitted work is present:\n${status.stdout.split(/\r?\n/u).slice(0, 40).join("\n")}` : "Working tree is clean."
     ].join("\n"),
     explanation: "The target has a published baseline commit. Uncommitted work can remain for normal development and later Studio sessions."
+  });
+}
+
+async function checkGitIdentity(targetRoot, context) {
+  const githubProvider = await requireGithubProvider(context);
+  if (!githubProvider.ok) {
+    return githubProviderBlockedCheck({
+      id: "git-identity",
+      label: "Git identity",
+      expected: "Git user.name and user.email are configured for the active Vibe64 user.",
+      observed: githubProvider.error
+    });
+  }
+
+  const {
+    emailResult,
+    nameResult
+  } = await readGitIdentity(targetRoot, {
+    toolHomeSource: githubProvider.toolHomeSource
+  });
+  if (!nameResult.ok || !nameResult.stdout || !emailResult.ok || !emailResult.stdout) {
+    return blockedCheck({
+      id: "git-identity",
+      label: "Git identity",
+      expected: "Git user.name and user.email are configured for the active Vibe64 user.",
+      observed: [nameResult.output, emailResult.output].filter(Boolean).join("\n") || "Git identity is incomplete.",
+      explanation: "Vibe64 commits must use the logged-in user's Git identity, not a shared VPS identity.",
+      repair: gitIdentityRepair()
+    });
+  }
+
+  return passCheck({
+    id: "git-identity",
+    label: "Git identity",
+    expected: "Git user.name and user.email are configured for the active Vibe64 user.",
+    observed: `${nameResult.stdout} <${emailResult.stdout}>`,
+    explanation: "Setup commits will use the active user's Git identity."
   });
 }
 
@@ -931,6 +1042,12 @@ function genericSetupChecks(targetRoot, context) {
 function finalSetupChecks(targetRoot, context) {
   return [
     {
+      expected: "Git user.name and user.email are configured for the active Vibe64 user.",
+      id: "git-identity",
+      label: "Git identity",
+      run: () => checkGitIdentity(targetRoot, context)
+    },
+    {
       expected: "A checkpoint commit exists and is pushed to origin.",
       id: "git-checkpoint",
       label: "Git checkpoint",
@@ -966,6 +1083,7 @@ async function runCoreSetupChecksOnce({
   config = {},
   configEnvironment = {},
   emit = null,
+  githubProvider = null,
   setupPlugins = [],
   studioRoot = "",
   targetRoot
@@ -974,6 +1092,7 @@ async function runCoreSetupChecksOnce({
   const context = {
     config,
     configEnvironment,
+    githubProvider,
     projectSetupCacheConfigKey: projectSetupCacheConfigKey(config),
     studioRoot,
     targetRoot: resolvedTargetRoot
@@ -1037,28 +1156,52 @@ async function startProjectSetupTerminalAction({
   studioRoot = "",
   targetRoot
 } = {}) {
+  const githubProvider = await ensureGithubProviderHome(setupRuntime.githubProvider || null);
+  const githubToolHome = githubProvider?.ok ? githubProvider.toolHomeSource : "";
+  const githubTerminalError = () => ({
+    error: githubProvider?.error || "Log in with GitHub in Accounts before starting this project setup terminal.",
+    ok: false
+  });
   if (actionId === "terminal-git-init") {
     return startGitInitTerminal(targetRoot, setupRuntime.configEnvironment);
   }
   if (actionId === "terminal-gh-create-repo") {
-    return startGhCreateRepoTerminal(targetRoot, setupRuntime.configEnvironment);
+    if (!githubProvider?.ok) {
+      return githubTerminalError();
+    }
+    return startGhCreateRepoTerminal(targetRoot, setupRuntime.configEnvironment, githubToolHome);
   }
   if (actionId === "terminal-link-github-remote") {
     return startLinkRemoteTerminal(targetRoot, inputs, setupRuntime.configEnvironment);
+  }
+  if (actionId === GIT_IDENTITY_ACTION_ID) {
+    if (!githubProvider?.ok) {
+      return githubTerminalError();
+    }
+    return startGitIdentityTerminal(targetRoot, inputs, setupRuntime.configEnvironment, githubToolHome);
   }
   if (actionId === ADD_VIBE64_GITIGNORE_RULES_ACTION_ID) {
     return startVibe64GitignoreTerminal(targetRoot, setupRuntime.configEnvironment);
   }
   if (actionId === MIRROR_REMOTE_BRANCH_ACTION_ID) {
-    return startMirrorRemoteBranchTerminal(targetRoot, inputs, setupRuntime.configEnvironment);
+    if (!githubProvider?.ok) {
+      return githubTerminalError();
+    }
+    return startMirrorRemoteBranchTerminal(targetRoot, inputs, setupRuntime.configEnvironment, githubToolHome);
   }
   if (actionId === CREATE_GIT_CHECKPOINT_ACTION_ID) {
-    return startGitCheckpointTerminal(targetRoot, inputs, setupRuntime.configEnvironment, {
+    if (!githubProvider?.ok) {
+      return githubTerminalError();
+    }
+    return startGitCheckpointTerminal(targetRoot, inputs, setupRuntime.configEnvironment, githubToolHome, {
       allowCreate: true
     });
   }
   if (actionId === PUSH_GIT_CHECKPOINT_ACTION_ID) {
-    return startGitCheckpointTerminal(targetRoot, inputs, setupRuntime.configEnvironment, {
+    if (!githubProvider?.ok) {
+      return githubTerminalError();
+    }
+    return startGitCheckpointTerminal(targetRoot, inputs, setupRuntime.configEnvironment, githubToolHome, {
       allowCreate: false
     });
   }
@@ -1087,6 +1230,7 @@ async function runAutomaticProjectSetupRepair(candidate, {
   config = {},
   configEnvironment = {},
   emit = null,
+  githubProvider = null,
   setupPlugins = [],
   startAutomaticRepair = null,
   studioRoot = "",
@@ -1114,6 +1258,7 @@ async function runAutomaticProjectSetupRepair(candidate, {
           setupRuntime: {
             config,
             configEnvironment,
+            githubProvider,
             setupPlugins
           },
           studioRoot,
@@ -1189,11 +1334,12 @@ function startGitInitTerminal(targetRoot, env = {}) {
   });
 }
 
-function startGhCreateRepoTerminal(targetRoot, env = {}) {
+function startGhCreateRepoTerminal(targetRoot, env = {}, toolHomeSource = "") {
   return startSharedGhCreateRepoTerminal({
     env,
     namespace: TERMINAL_NAMESPACE,
-    targetRoot
+    targetRoot,
+    toolHomeSource
   });
 }
 
@@ -1214,16 +1360,27 @@ function startVibe64GitignoreTerminal(targetRoot, env = {}) {
   });
 }
 
-function startMirrorRemoteBranchTerminal(targetRoot, input = {}, env = {}) {
+function startGitIdentityTerminal(targetRoot, input = {}, env = {}, toolHomeSource = "") {
+  return startSharedGitIdentityTerminal({
+    env,
+    inputs: input,
+    namespace: TERMINAL_NAMESPACE,
+    targetRoot,
+    toolHomeSource
+  });
+}
+
+function startMirrorRemoteBranchTerminal(targetRoot, input = {}, env = {}, toolHomeSource = "") {
   return startSharedMirrorRemoteBranchTerminal({
     env,
     input,
     namespace: TERMINAL_NAMESPACE,
-    targetRoot
+    targetRoot,
+    toolHomeSource
   });
 }
 
-function startGitCheckpointTerminal(targetRoot, input = {}, env = {}, {
+function startGitCheckpointTerminal(targetRoot, input = {}, env = {}, toolHomeSource = "", {
   allowCreate = true
 } = {}) {
   return startSharedGitCheckpointTerminal({
@@ -1231,16 +1388,25 @@ function startGitCheckpointTerminal(targetRoot, input = {}, env = {}, {
     env,
     input,
     namespace: TERMINAL_NAMESPACE,
-    targetRoot
+    targetRoot,
+    toolHomeSource
   });
 }
 
 function createService({
+  dataRoot = "",
+  env = process.env,
   projectService = null,
+  providerHomesRoot = "",
   studioRoot = "",
   targetRoot
 } = {}) {
   const resolvedStudioRoot = path.resolve(String(studioRoot || process.cwd()));
+  const resolvedProviderHomesRoot = resolveProviderHomesRoot({
+    dataRoot,
+    env,
+    explicitRoot: providerHomesRoot
+  });
 
   function currentTargetRoot() {
     const selectedTargetRoot = String(targetRoot || projectServiceTargetRoot(projectService)).trim();
@@ -1260,11 +1426,18 @@ function createService({
     };
   }
 
-  function readyStatusCache(targetRootValue) {
+  function readyStatusCache(targetRootValue, githubProvider = null) {
     return createRepositoryReadyStatusCache({
       doctorId: "project-setup",
+      scope: githubProvider?.userKey ? `github:${githubProvider.userKey}` : "github:unknown",
       studioRoot: resolvedStudioRoot,
       targetRoot: targetRootValue
+    });
+  }
+
+  function githubContextForInput(input = {}) {
+    return githubProviderContext(input, {
+      providerHomesRoot: resolvedProviderHomesRoot
     });
   }
 
@@ -1321,7 +1494,8 @@ function createService({
       if (!resolvedTargetRoot) {
         return noProjectSelectedStatus();
       }
-      const cache = readyStatusCache(resolvedTargetRoot);
+      const githubProvider = githubContextForInput(input);
+      const cache = readyStatusCache(resolvedTargetRoot, githubProvider);
       const useCache = !refreshRequested(input);
       if (useCache) {
         const cachedStatus = await readReusableProjectSetupStatus(cache, {
@@ -1336,6 +1510,7 @@ function createService({
       return cache.remember(await inspectProjectSetup({
         config: fullSetupRuntime.config,
         configEnvironment: fullSetupRuntime.configEnvironment,
+        githubProvider,
         setupPlugins: fullSetupRuntime.setupPlugins,
         studioRoot: resolvedStudioRoot,
         targetRoot: resolvedTargetRoot
@@ -1344,13 +1519,17 @@ function createService({
 
     async streamStatus({
       emit,
-      refresh = false
+      refresh = false,
+      vibe64User = null
     } = {}) {
       const resolvedTargetRoot = currentTargetRoot();
       if (!resolvedTargetRoot) {
         return noProjectSelectedStatus();
       }
-      const cache = readyStatusCache(resolvedTargetRoot);
+      const githubProvider = githubContextForInput({
+        vibe64User
+      });
+      const cache = readyStatusCache(resolvedTargetRoot, githubProvider);
       const useCache = !refreshRequested({ refresh });
       if (useCache) {
         const cachedStatus = await readReusableProjectSetupStatus(cache, {
@@ -1367,6 +1546,7 @@ function createService({
         config: fullSetupRuntime.config,
         configEnvironment: fullSetupRuntime.configEnvironment,
         emit,
+        githubProvider,
         setupPlugins: fullSetupRuntime.setupPlugins,
         studioRoot: resolvedStudioRoot,
         targetRoot: resolvedTargetRoot
@@ -1375,7 +1555,8 @@ function createService({
 
     async startTerminal({
       actionId,
-      inputs = {}
+      inputs = {},
+      vibe64User = null
     } = {}) {
       const resolvedTargetRoot = currentTargetRoot();
       if (!resolvedTargetRoot) {
@@ -1389,6 +1570,7 @@ function createService({
         "terminal-git-init",
         "terminal-gh-create-repo",
         "terminal-link-github-remote",
+        GIT_IDENTITY_ACTION_ID,
         ADD_VIBE64_GITIGNORE_RULES_ACTION_ID,
         MIRROR_REMOTE_BRANCH_ACTION_ID,
         CREATE_GIT_CHECKPOINT_ACTION_ID,
@@ -1409,7 +1591,12 @@ function createService({
       return startProjectSetupTerminalAction({
         actionId,
         inputs,
-        setupRuntime,
+        setupRuntime: {
+          ...setupRuntime,
+          githubProvider: githubContextForInput({
+            vibe64User
+          })
+        },
         studioRoot: resolvedStudioRoot,
         targetRoot: resolvedTargetRoot
       });

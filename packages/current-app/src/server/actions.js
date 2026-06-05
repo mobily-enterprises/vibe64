@@ -17,7 +17,7 @@ const featureActions = Object.freeze([
     version: 1,
     kind: "query",
     channels: ["api", "automation", "internal"],
-    surfaces: ["home"],
+    surfaces: ["app"],
     input: currentAppQueryInputValidator,
     output: null,
     idempotency: "none",
@@ -36,7 +36,7 @@ const featureActions = Object.freeze([
     version: 1,
     kind: "query",
     channels: ["api", "automation", "internal"],
-    surfaces: ["home"],
+    surfaces: ["app"],
     input: emptyInputValidator,
     output: null,
     idempotency: "none",
@@ -46,7 +46,7 @@ const featureActions = Object.freeze([
     observability: {},
     async execute(_input, context, deps) {
       void context;
-      return deps.featureService.inspectCapabilities();
+      return deps.featureService.inspectCapabilities(_input);
     }
   },
   {
@@ -54,7 +54,7 @@ const featureActions = Object.freeze([
     version: 1,
     kind: "query",
     channels: ["api", "automation", "internal"],
-    surfaces: ["home"],
+    surfaces: ["app"],
     input: emptyInputValidator,
     output: null,
     idempotency: "none",
@@ -64,7 +64,7 @@ const featureActions = Object.freeze([
     observability: {},
     async execute(_input, context, deps) {
       void context;
-      return deps.featureService.inspectSetupReadiness();
+      return deps.featureService.inspectSetupReadiness(_input);
     }
   },
   {
@@ -72,7 +72,7 @@ const featureActions = Object.freeze([
     version: 1,
     kind: "query",
     channels: ["api", "automation", "internal"],
-    surfaces: ["home"],
+    surfaces: ["app"],
     input: emptyInputValidator,
     output: null,
     idempotency: "none",
@@ -82,7 +82,7 @@ const featureActions = Object.freeze([
     observability: {},
     async execute(_input, context, deps) {
       void context;
-      return deps.featureService.listTargetScripts();
+      return deps.featureService.listTargetScripts(_input);
     }
   },
   {
@@ -90,7 +90,7 @@ const featureActions = Object.freeze([
     version: 1,
     kind: "command",
     channels: ["api", "automation", "internal"],
-    surfaces: ["home"],
+    surfaces: ["app"],
     input: starredTargetScriptsInputValidator,
     output: null,
     idempotency: "optional",
@@ -108,7 +108,7 @@ const featureActions = Object.freeze([
     version: 1,
     kind: "command",
     channels: ["api", "automation", "internal"],
-    surfaces: ["home"],
+    surfaces: ["app"],
     input: emptyInputValidator,
     output: null,
     idempotency: "optional",
@@ -118,7 +118,7 @@ const featureActions = Object.freeze([
     observability: {},
     async execute(_input, context, deps) {
       void context;
-      return deps.featureService.resetStarredTargetScripts();
+      return deps.featureService.resetStarredTargetScripts(_input);
     }
   }
 ]);

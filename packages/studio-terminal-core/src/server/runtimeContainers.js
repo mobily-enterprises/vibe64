@@ -25,6 +25,9 @@ import {
 import {
   normalizePlainObject
 } from "@local/vibe64-core/server/serverResponses";
+import {
+  targetRuntimeIdentity
+} from "@local/vibe64-core/server/workspaceRuntimeIdentity";
 
 const VIBE64_RUNTIME_HOST_ALIAS = "vibe64-host";
 const RUNTIME_CONTAINER_KIND = "runtime-container";
@@ -44,11 +47,11 @@ function dockerNamePart(value = "runtime") {
 }
 
 function runtimeNetworkName(targetRoot = "") {
-  return `vibe64-runtime-${stableHash(path.resolve(targetRoot || process.cwd()))}`;
+  return `vibe64-runtime-${runtimeNetworkTargetHash(targetRoot)}`;
 }
 
 function runtimeNetworkTargetHash(targetRoot = "") {
-  return stableHash(path.resolve(targetRoot || process.cwd()));
+  return stableHash(targetRuntimeIdentity(targetRoot));
 }
 
 function runtimeNetworkCreateArgs(targetRoot = "") {
@@ -71,7 +74,7 @@ function runtimeContainerName({
   targetRoot = ""
 } = {}) {
   const prefix = `vibe64-${dockerNamePart(adapterId)}-${dockerNamePart(containerId)}`;
-  return `${prefix.slice(0, 48)}-${stableHash(path.resolve(targetRoot || process.cwd()))}`;
+  return `${prefix.slice(0, 48)}-${runtimeNetworkTargetHash(targetRoot)}`;
 }
 
 function runtimeVolumeName({
@@ -85,7 +88,7 @@ function runtimeVolumeName({
     dockerNamePart(adapterId).replaceAll("-", "_"),
     dockerNamePart(containerId).replaceAll("-", "_"),
     dockerNamePart(volumeId).replaceAll("-", "_"),
-    stableHash(path.resolve(targetRoot || process.cwd()))
+    runtimeNetworkTargetHash(targetRoot)
   ].join("_");
 }
 
@@ -509,7 +512,7 @@ function runtimeContainerRunArgs(spec, {
     "--label",
     `${STUDIO_DAEMON_PID_LABEL}=${process.pid}`,
     "--label",
-    studioDockerLabel("target", stableHash(spec.targetRoot)),
+    studioDockerLabel("target", runtimeNetworkTargetHash(spec.targetRoot)),
     ...envDockerArgs(spec, {
       maskSecrets
     }),
@@ -907,6 +910,7 @@ export {
   runtimeContainerStartScript,
   runtimeNetworkCreateArgs,
   runtimeNetworkName,
+  runtimeNetworkTargetHash,
   targetRuntimeNetworkDockerArgs,
   targetRuntimeNetworkEnsureCommand
 };

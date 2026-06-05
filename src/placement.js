@@ -26,118 +26,118 @@ addPlacement({
   componentToken: "realtime.web.connection.indicator"
 });
 
-// jskit:ui-generator.page.link:home:/dashboard/accounts
+// jskit:ui-generator.page.link:app:/dashboard/accounts
 {
   addPlacement({
-    id: "ui-generator.page.home.dashboard.accounts.link",
+    id: "ui-generator.page.app.dashboard.accounts.link",
     target: "page.section-nav",
-    owner: "home-dashboard",
+    owner: "app-dashboard",
     kind: "link",
-    surfaces: ["home"],
+    surfaces: ["app"],
     order: 50,
     props: {
       label: "Accounts",
       icon: mdiAccountKeyOutline,
-      surface: "home",
-      scopedSuffix: "/dashboard/accounts",
-      unscopedSuffix: "/dashboard/accounts",
-      to: "/home/dashboard/accounts",
+      surface: "app",
+      scopedSuffix: "/[slug]/dashboard/accounts",
+      unscopedSuffix: "/[slug]/dashboard/accounts",
+      to: "",
     },
   });
 }
 
-// jskit:ui-generator.page.link:home:/dashboard/configure
+// jskit:ui-generator.page.link:app:/dashboard/configure
 {
   addPlacement({
-    id: "ui-generator.page.home.dashboard.configure.link",
+    id: "ui-generator.page.app.dashboard.configure.link",
     target: "page.section-nav",
-    owner: "home-dashboard",
+    owner: "app-dashboard",
     kind: "link",
-    surfaces: ["home"],
+    surfaces: ["app"],
     order: 100,
     props: {
       label: "Configure",
       icon: mdiCogOutline,
-      surface: "home",
-      scopedSuffix: "/dashboard/configure",
-      unscopedSuffix: "/dashboard/configure",
-      to: "/home/dashboard/configure",
+      surface: "app",
+      scopedSuffix: "/[slug]/dashboard/configure",
+      unscopedSuffix: "/[slug]/dashboard/configure",
+      to: "",
     },
   });
 }
-// jskit:ui-generator.page.link:home:/dashboard/run
+// jskit:ui-generator.page.link:app:/dashboard/run
 {
   addPlacement({
-    id: "ui-generator.page.home.dashboard.run.link",
+    id: "ui-generator.page.app.dashboard.run.link",
     target: "page.section-nav",
-    owner: "home-dashboard",
+    owner: "app-dashboard",
     kind: "link",
-    surfaces: ["home"],
+    surfaces: ["app"],
     order: 500,
     props: {
       label: "Run",
       icon: mdiPlayBoxMultipleOutline,
-      surface: "home",
-      scopedSuffix: "/dashboard/run",
-      unscopedSuffix: "/dashboard/run",
-      to: "/home/dashboard/run",
+      surface: "app",
+      scopedSuffix: "/[slug]/dashboard/run",
+      unscopedSuffix: "/[slug]/dashboard/run",
+      to: "",
     },
   });
 }
-// jskit:ui-generator.page.link:home:/dashboard/remote
+// jskit:ui-generator.page.link:app:/dashboard/remote
 {
   addPlacement({
-    id: "ui-generator.page.home.dashboard.remote.link",
+    id: "ui-generator.page.app.dashboard.remote.link",
     target: "page.section-nav",
-    owner: "home-dashboard",
+    owner: "app-dashboard",
     kind: "link",
-    surfaces: ["home"],
+    surfaces: ["app"],
     order: 400,
     props: {
       label: "Remote",
       icon: mdiCloudUploadOutline,
-      surface: "home",
-      scopedSuffix: "/dashboard/remote",
-      unscopedSuffix: "/dashboard/remote",
-      to: "/home/dashboard/remote",
+      surface: "app",
+      scopedSuffix: "/[slug]/dashboard/remote",
+      unscopedSuffix: "/[slug]/dashboard/remote",
+      to: "",
     },
   });
 }
-// jskit:ui-generator.page.link:home:/dashboard/history
+// jskit:ui-generator.page.link:app:/dashboard/history
 {
   addPlacement({
-    id: "ui-generator.page.home.dashboard.history.link",
+    id: "ui-generator.page.app.dashboard.history.link",
     target: "page.section-nav",
-    owner: "home-dashboard",
+    owner: "app-dashboard",
     kind: "link",
-    surfaces: ["home"],
+    surfaces: ["app"],
     order: 600,
     props: {
       label: "Session History",
       icon: mdiHistory,
-      surface: "home",
-      scopedSuffix: "/dashboard/history",
-      unscopedSuffix: "/dashboard/history",
-      to: "/home/dashboard/history",
+      surface: "app",
+      scopedSuffix: "/[slug]/dashboard/history",
+      unscopedSuffix: "/[slug]/dashboard/history",
+      to: "",
     },
   });
 }
-// jskit:ui-generator.page.link:home:/dashboard/setup
+// jskit:ui-generator.page.link:app:/dashboard/setup
 {
   addPlacement({
-    id: "ui-generator.page.home.dashboard.setup.link",
+    id: "ui-generator.page.app.dashboard.setup.link",
     target: "page.section-nav",
-    owner: "home-dashboard",
+    owner: "app-dashboard",
     kind: "link",
-    surfaces: ["home"],
+    surfaces: ["app"],
     order: 700,
     props: {
       label: "Setup",
       icon: mdiTune,
-      surface: "home",
-      scopedSuffix: "/dashboard/setup",
-      unscopedSuffix: "/dashboard/setup",
-      to: "/home/dashboard/setup",
+      surface: "app",
+      scopedSuffix: "/[slug]/dashboard/setup",
+      unscopedSuffix: "/[slug]/dashboard/setup",
+      to: "",
     },
   });
 }

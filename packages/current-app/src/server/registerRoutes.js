@@ -24,12 +24,14 @@ function getCurrentAppService(app) {
 function registerRoutes(
   app,
   {
+    projectContext = null,
     routeSurface = "",
     routeRelativePath = ""
   } = {}
 ) {
   const routes = createVibe64FeatureRoutes(app, {
     localRequestMessage: "Current-app Studio routes only accept loopback Studio requests.",
+    projectContext,
     routeRelativePath,
     routeSurface,
     tags: ["studio", "current-app"]
@@ -44,25 +46,29 @@ function registerRoutes(
 
   routes.actionRoute("GET", "/capabilities", {
     actionId: ACTION_READ_CAPABILITIES,
+    buildInput: withVibe64User,
     summary: "Read Studio capability state for the current app."
   });
 
   routes.actionRoute("GET", "/target-scripts", {
     actionId: ACTION_LIST_TARGET_SCRIPTS,
+    buildInput: withVibe64User,
     summary: "List target scripts for the current app."
   });
 
   routes.actionRoute("GET", "/setup-readiness", {
     actionId: ACTION_READ_SETUP_READINESS,
+    buildInput: withVibe64User,
     summary: "Read Vibe64 setup readiness for protected current-app routes."
   });
 
   routes.serviceRoute("GET", "/setup-readiness/stream", {
     summary: "Stream Vibe64 setup readiness for protected current-app routes."
-  }, async (_request, reply) => {
+  }, async (request, reply) => {
     await sendDoctorEventStream(reply, ({ emit }) => {
       return getCurrentAppService(app).streamSetupReadiness({
-        emit
+        emit,
+        vibe64User: request.vibe64User || null
       });
     });
   });
@@ -70,12 +76,13 @@ function registerRoutes(
   routes.actionRoute("PUT", "/target-scripts/starred", {
     actionId: ACTION_SAVE_STARRED_TARGET_SCRIPTS,
     body: starredTargetScriptsInputValidator,
-    buildInput: routes.requestBody,
+    buildInput: (request) => withVibe64User(request, routes.requestBody(request)),
     summary: "Persist starred target script shortcuts for the current app."
   });
 
   routes.actionRoute("DELETE", "/target-scripts/starred", {
     actionId: ACTION_RESET_STARRED_TARGET_SCRIPTS,
+    buildInput: withVibe64User,
     summary: "Reset starred target script shortcuts to the default set."
   });
 
@@ -83,7 +90,9 @@ function registerRoutes(
     body: targetScriptTerminalInputValidator,
     summary: "Start a target script terminal for the current app."
   }, (request) => {
-    return getCurrentAppService(app).startTargetScriptTerminal(routes.requestBody(request));
+    return getCurrentAppService(app).startTargetScriptTerminal(
+      withVibe64User(request, routes.requestBody(request))
+    );
   });
 
   routes.serviceRoute("DELETE", "/target-script-terminal/:terminalSessionId", {
@@ -95,15 +104,33 @@ function registerRoutes(
     );
   });
 
-  registerTargetScriptTerminalWebSocketRoute(app, routes);
+  registerTargetScriptTerminalWebSocketRoute(app, routes, {
+    projectContext
+  });
 }
 
 function queryInput(request) {
-  return request.input.query || {};
+  return withVibe64User(request, request.input.query || {});
 }
 
-function registerTargetScriptTerminalWebSocketRoute(app, routes) {
+function withVibe64User(request, input = {}) {
+  const vibe64User = request.vibe64User || null;
+  if (!vibe64User) {
+    return {
+      ...input
+    };
+  }
+  return {
+    ...input,
+    vibe64User
+  };
+}
+
+function registerTargetScriptTerminalWebSocketRoute(app, routes, {
+  projectContext = null
+} = {}) {
   registerTerminalWebSocketRoute(app, {
+    projectContext,
     routePath: `${routes.routeBase}/target-script-terminal/:terminalSessionId/ws`,
     serviceId: CURRENT_APP_SERVICE,
     serviceUnavailableMessage: "Current app service is unavailable.",

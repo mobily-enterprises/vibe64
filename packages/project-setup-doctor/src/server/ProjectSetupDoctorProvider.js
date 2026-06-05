@@ -47,7 +47,7 @@ class ProjectSetupDoctorProvider {
   boot(app) {
     registerRoutes(app, {
       routeRelativePath: "studio/project-setup",
-      routeSurface: "home"
+      routeSurface: "app"
     });
   }
 }

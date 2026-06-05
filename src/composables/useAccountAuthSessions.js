@@ -54,8 +54,8 @@ function useAccountAuthSessions(
     await startAuth(accountId, "browser");
   }
 
-  async function startDeviceAuth() {
-    await startAuth("codex", "device");
+  async function startDeviceAuth(accountId = "codex") {
+    await startAuth(accountId || "codex", "device");
   }
 
   async function startAuth(accountId, mode = "browser") {

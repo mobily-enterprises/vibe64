@@ -1,6 +1,10 @@
 import {
   isLocalStudioRequest
 } from "./localStudioRequest.js";
+import {
+  resolveWorkspaceRequestContext,
+  runWithWorkspaceRequestContext
+} from "./workspaceRequestContext.js";
 
 function sendSocketJson(socket, payload) {
   if (socket.readyState !== 1) {
@@ -31,6 +35,7 @@ function resolveFastify(app) {
 function registerTerminalWebSocketRoute(
   app,
   {
+    projectContext = null,
     routePath,
     resize,
     serviceId,
@@ -76,85 +81,106 @@ function registerTerminalWebSocketRoute(
         return;
       }
 
-      let service;
-      try {
-        service = app.make(serviceId);
-      } catch (error) {
-        closeWithError(1011, String(error?.message || error || serviceUnavailableMessage));
-        return;
-      }
-      const routeParams = request.params || {};
-      const sessionId = String(routeParams.sessionId || "");
-      const terminalSessionId = String(routeParams.terminalSessionId || "");
-      const toolId = String(routeParams.toolId || "");
-      const jobId = String(routeParams.jobId || "");
-
-      socket.on("message", async (rawMessage) => {
+      void (async () => {
+        let workspaceContext;
         try {
-          const message = JSON.parse(rawMessage.toString());
-          if (message?.type === "input") {
-            const response = await write(service, {
-              data: message.data,
-              jobId,
-              sessionId,
-              terminalSessionId,
-              toolId
-            });
-            if (response?.ok === false) {
-              sendSocketJson(socket, {
-                error: response.error || "Terminal input failed.",
-                type: "error"
-              });
-            }
-            return;
-          }
-          if (message?.type === "resize") {
-            const response = await resize?.(service, {
-              cols: message.cols,
-              jobId,
-              rows: message.rows,
-              sessionId,
-              terminalSessionId,
-              toolId
-            });
-            if (response?.ok === false) {
-              sendSocketJson(socket, {
-                error: response.error || "Terminal resize failed.",
-                type: "resize.error"
-              });
-            }
-          }
-        } catch (error) {
-          sendSocketJson(socket, {
-            error: String(error?.message || error || "Terminal socket message failed."),
-            type: "error"
+          workspaceContext = await resolveWorkspaceRequestContext({
+            projectContext,
+            request
           });
-        }
-      });
-
-      socket.on("close", closeSubscription);
-      socket.on("error", closeSubscription);
-
-      void Promise.resolve(subscribe(service, {
-        jobId,
-        sessionId,
-        subscriber: (message) => {
-          sendSocketJson(socket, message);
-        },
-        terminalSessionId,
-        toolId
-      })).then((result) => {
-        if (result?.ok === false) {
-          closeWithError(1008, result.error || "Terminal session not found.");
+        } catch (error) {
+          closeWithError(1008, String(error?.message || error || "Vibe64 workspace request failed."));
           return;
         }
-        subscription = result;
-        sendSocketJson(socket, {
-          session: publicTerminalSnapshot(result),
-          type: "snapshot"
+
+        const withWorkspaceContext = (operation) => {
+          return runWithWorkspaceRequestContext(workspaceContext, operation);
+        };
+
+        let service;
+        try {
+          service = app.make(serviceId);
+        } catch (error) {
+          closeWithError(1011, String(error?.message || error || serviceUnavailableMessage));
+          return;
+        }
+        const routeParams = request.params || {};
+        const sessionId = String(routeParams.sessionId || "");
+        const terminalSessionId = String(routeParams.terminalSessionId || "");
+        const toolId = String(routeParams.toolId || "");
+        const jobId = String(routeParams.jobId || "");
+
+        socket.on("message", async (rawMessage) => {
+          try {
+            await withWorkspaceContext(async () => {
+              const message = JSON.parse(rawMessage.toString());
+              if (message?.type === "input") {
+                const response = await write(service, {
+                  data: message.data,
+                  jobId,
+                  sessionId,
+                  terminalSessionId,
+                  toolId
+                });
+                if (response?.ok === false) {
+                  sendSocketJson(socket, {
+                    error: response.error || "Terminal input failed.",
+                    type: "error"
+                  });
+                }
+                return;
+              }
+              if (message?.type === "resize") {
+                const response = await resize?.(service, {
+                  cols: message.cols,
+                  jobId,
+                  rows: message.rows,
+                  sessionId,
+                  terminalSessionId,
+                  toolId
+                });
+                if (response?.ok === false) {
+                  sendSocketJson(socket, {
+                    error: response.error || "Terminal resize failed.",
+                    type: "resize.error"
+                  });
+                }
+              }
+            });
+          } catch (error) {
+            sendSocketJson(socket, {
+              error: String(error?.message || error || "Terminal socket message failed."),
+              type: "error"
+            });
+          }
         });
-      }).catch((error) => {
-        closeWithError(1011, String(error?.message || error || "Terminal stream failed."));
+
+        socket.on("close", closeSubscription);
+        socket.on("error", closeSubscription);
+
+        void withWorkspaceContext(() => Promise.resolve(subscribe(service, {
+          jobId,
+          sessionId,
+          subscriber: (message) => {
+            sendSocketJson(socket, message);
+          },
+          terminalSessionId,
+          toolId
+        }))).then((result) => {
+          if (result?.ok === false) {
+            closeWithError(1008, result.error || "Terminal session not found.");
+            return;
+          }
+          subscription = result;
+          sendSocketJson(socket, {
+            session: publicTerminalSnapshot(result),
+            type: "snapshot"
+          });
+        }).catch((error) => {
+          closeWithError(1011, String(error?.message || error || "Terminal stream failed."));
+        });
+      })().catch((error) => {
+        closeWithError(1008, String(error?.message || error || "Vibe64 workspace request failed."));
       });
     }
   );

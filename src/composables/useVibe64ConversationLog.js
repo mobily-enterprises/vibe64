@@ -3,6 +3,12 @@ import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibil
 import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
 import { usePaths } from "@jskit-ai/users-web/client/composables/usePaths";
 import {
+  useVibe64WorkspaceSlug
+} from "@/composables/useVibe64WorkspaceScope.js";
+import {
+  studioHttpClient
+} from "@/lib/studioHttp.js";
+import {
   VIBE64_SESSION_CHANGED_EVENT,
   VIBE64_SESSIONS_API_SUFFIX,
   VIBE64_SURFACE_ID,
@@ -75,6 +81,7 @@ function useVibe64ConversationLog({
   session
 } = {}) {
   const paths = usePaths();
+  const workspaceSlug = useVibe64WorkspaceSlug();
   const currentSession = computed(() => readRefOrGetterValue(session) || null);
   const sessionId = computed(() => String(currentSession.value?.sessionId || "").trim());
   const enabled = computed(() => Boolean(
@@ -85,6 +92,7 @@ function useVibe64ConversationLog({
     surface: VIBE64_SURFACE_ID
   }));
   const resource = useEndpointResource({
+    client: studioHttpClient,
     enabled,
     fallbackLoadError: "Conversation history could not be loaded.",
     path: computed(() => sessionId.value
@@ -94,7 +102,8 @@ function useVibe64ConversationLog({
       ...vibe64ConversationLogQueryKey(
         VIBE64_SURFACE_ID,
         ROUTE_VISIBILITY_PUBLIC,
-        sessionId.value
+        sessionId.value,
+        workspaceSlug.value
       ),
       String(currentSession.value?.revision || ""),
       String(currentSession.value?.stepRevision || "")

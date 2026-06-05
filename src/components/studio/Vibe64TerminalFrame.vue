@@ -20,15 +20,17 @@
       </div>
     </div>
 
-    <StudioErrorNotice
-      v-if="error"
-      title="Terminal needs attention"
-      :error="error"
-      compact
-      class="mb-2"
-    />
+    <div class="vibe64-terminal-frame__stage">
+      <StudioErrorNotice
+        v-if="error"
+        title="Terminal needs attention"
+        :error="error"
+        compact
+        overlay
+      />
 
-    <div :ref="terminalHostRef" class="vibe64-terminal-frame__host" />
+      <div :ref="terminalHostRef" class="vibe64-terminal-frame__host" />
+    </div>
 
     <div class="vibe64-terminal-frame__footer">
       <span>{{ commandPreview || "No command running." }}</span>
@@ -141,6 +143,10 @@ function startDrag(event) {
   border-radius: 0.45rem;
   height: clamp(18rem, 48vh, 34rem);
   overflow: hidden;
+}
+
+.vibe64-terminal-frame__stage {
+  position: relative;
 }
 
 .vibe64-terminal-frame__footer {

@@ -23,11 +23,30 @@ import {
   createStudioProjectContext,
   getStudioProjectContext
 } from "@local/vibe64-core/server/studioProjectContext";
+import {
+  currentWorkspaceRequestContext,
+  currentWorkspaceTargetRoot
+} from "@local/vibe64-core/server/workspaceRequestContext";
 
 function resolveVibe64TargetRoot(targetRoot) {
   return resolveStudioTargetRoot({
     explicitRoot: targetRoot
   });
+}
+
+function workspaceProjectRecord({
+  selected = false,
+  slug = "",
+  workspaceRoot = ""
+} = {}) {
+  return {
+    external: false,
+    name: slug,
+    path: workspaceRoot,
+    selected: Boolean(selected),
+    slug,
+    source: "managed"
+  };
 }
 
 function projectResult(operation) {
@@ -75,10 +94,49 @@ function createService({
   const adapterRegistry = createVibe64AdapterRegistry();
 
   function currentTargetRoot() {
-    return String(studioProjectContext.targetRoot || "").trim();
+    return String(currentWorkspaceTargetRoot() || studioProjectContext.targetRoot || "").trim();
+  }
+
+  async function listProjectSelectionState() {
+    const workspaceContext = currentWorkspaceRequestContext();
+    if (!workspaceContext?.targetRoot) {
+      return studioProjectContext.listProjects();
+    }
+
+    const listed = await studioProjectContext.listManagedWorkspaces();
+    const currentProject = workspaceProjectRecord({
+      selected: true,
+      slug: workspaceContext.slug,
+      workspaceRoot: workspaceContext.targetRoot
+    });
+    const projects = listed.workspaces
+      .map((workspace) => workspaceProjectRecord({
+        selected: workspace.slug === workspaceContext.slug,
+        slug: workspace.slug,
+        workspaceRoot: workspace.workspaceRoot
+      }))
+      .sort((left, right) => left.slug.localeCompare(right.slug));
+
+    if (!projects.some((project) => project.slug === currentProject.slug)) {
+      projects.push(currentProject);
+      projects.sort((left, right) => left.slug.localeCompare(right.slug));
+    }
+
+    return {
+      ok: true,
+      currentProject,
+      hasSelection: true,
+      projects,
+      projectsRoot: workspaceContext.projectsRoot || listed.projectsRoot,
+      targetRoot: workspaceContext.targetRoot
+    };
   }
 
   function requireSelectedTargetRoot() {
+    const workspaceTargetRoot = currentWorkspaceTargetRoot();
+    if (workspaceTargetRoot) {
+      return workspaceTargetRoot;
+    }
     return studioProjectContext.requireSelectedTargetRoot();
   }
 
@@ -481,7 +539,7 @@ function createService({
     },
 
     async listProjects() {
-      return projectResult(() => studioProjectContext.listProjects());
+      return projectResult(() => listProjectSelectionState());
     },
 
     async requireSelectedTargetRoot() {

@@ -71,6 +71,26 @@ function sessionListOptions(input = {}) {
   throw new Error(`Unknown Vibe64 session archive: ${archive}`);
 }
 
+function readinessOptions(input = {}) {
+  return {
+    input: {
+      vibe64User: input?.vibe64User || null,
+      refresh: input?.refresh === true
+    }
+  };
+}
+
+function stripInternalInput(input = {}) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return {};
+  }
+  const {
+    vibe64User: _vibe64User,
+    ...publicInput
+  } = input;
+  return publicInput;
+}
+
 async function listSessionSummaries(runtime, options = {}) {
   if (typeof runtime?.listSessionSummaries === "function") {
     return runtime.listSessionSummaries(options);
@@ -463,20 +483,6 @@ function isOpenSessionList(options = {}) {
   return options.runtimeOptions?.statusGroup === "open" && !Array.isArray(options.runtimeOptions?.statuses);
 }
 
-function shouldOpenSeedSession(options = {}, creationState = {}) {
-  return isOpenSessionList(options) &&
-    creationState.creation?.seedRequired === true &&
-    creationState.limits?.openSessionCount === 0 &&
-    Boolean(String(creationState.creation?.defaultWorkflowDefinition || "").trim());
-}
-
-function seedSessionOpenLockKey(projectService = {}) {
-  if (typeof projectService?.currentTargetRoot !== "function") {
-    return "default";
-  }
-  return String(projectService.currentTargetRoot() || "default");
-}
-
 function sessionServiceDebugResponse(response = {}) {
   if (!response || typeof response !== "object" || Array.isArray(response)) {
     return {
@@ -528,34 +534,20 @@ function createService({
   if (!projectService) {
     throw new TypeError("createService requires feature.vibe64-project.service.");
   }
-  const seedSessionOpenPromises = new Map();
-
-  async function openSeedSessionOnce(operation) {
-    const lockKey = seedSessionOpenLockKey(projectService);
-    const existingPromise = seedSessionOpenPromises.get(lockKey);
-    if (existingPromise) {
-      await existingPromise;
-      return;
-    }
-    const promise = operation().finally(() => {
-      seedSessionOpenPromises.delete(lockKey);
-    });
-    seedSessionOpenPromises.set(lockKey, promise);
-    await promise;
-  }
 
   return Object.freeze({
     async advanceSession(sessionId, expected = {}) {
+      const workflowExpected = stripInternalInput(expected);
       const startedAtMs = Date.now();
       vibe64SessionDebugLog("server.service.advanceSession.start", {
-        expectedStepId: String(expected?.stepId || ""),
-        expectedStepStatus: String(expected?.stepStatus || ""),
+        expectedStepId: String(workflowExpected?.stepId || ""),
+        expectedStepStatus: String(workflowExpected?.stepStatus || ""),
         sessionId
       });
       return sessionResult(async () => {
         try {
           const runtime = await projectService.createRuntime();
-          const session = await runtime.advance(sessionId, expected);
+          const session = await runtime.advance(sessionId, workflowExpected);
           const enrichedSession = await enrichSessionWithCodexTerminal(terminalService, session);
           vibe64SessionDebugLog("server.service.advanceSession.done", {
             ...sessionServiceDebugResponse(enrichedSession),
@@ -573,7 +565,8 @@ function createService({
       });
     },
 
-    async abandonSession(sessionId) {
+    async abandonSession(sessionId, input = {}) {
+      void input;
       const startedAtMs = Date.now();
       vibe64SessionDebugLog("server.service.abandonSession.start", {
         sessionId
@@ -585,12 +578,12 @@ function createService({
           closeSessionTerminalsInBackground(terminalService, sessionId, {
             eventPrefix: "server.service.abandonSession.terminalCleanup"
           });
-          const enrichedSession = await enrichSessionWithCodexTerminal(terminalService, await runtime.getSession(sessionId));
+          const abandonedSession = await runtime.getSession(sessionId);
           vibe64SessionDebugLog("server.service.abandonSession.done", {
-            ...sessionServiceDebugResponse(enrichedSession),
+            ...sessionServiceDebugResponse(abandonedSession),
             durationMs: vibe64SessionDebugDurationMs(startedAtMs)
           });
-          return enrichedSession;
+          return abandonedSession;
         } catch (error) {
           vibe64SessionDebugLog("server.service.abandonSession.error", {
             durationMs: vibe64SessionDebugDurationMs(startedAtMs),
@@ -610,7 +603,7 @@ function createService({
       return sessionResult(async () => {
         try {
           const projectType = await projectService.requireProjectType();
-          await assertVibe64WorkspaceReady(setupServices);
+          await assertVibe64WorkspaceReady(setupServices, readinessOptions(input));
           const runtime = await projectService.createRuntime();
           const existingOpenSessions = await listOpenSessionSummaries(runtime);
           const { creation, limits } = await sessionCreationState(runtime, existingOpenSessions);
@@ -831,14 +824,14 @@ function createService({
       });
     },
 
-    async recoverStuckSessionStep(sessionId) {
+    async recoverStuckSessionStep(sessionId, input = {}) {
       const startedAtMs = Date.now();
       vibe64SessionDebugLog("server.service.recoverStuckSessionStep.start", {
         sessionId
       });
       return sessionResult(async () => {
         try {
-          await assertVibe64WorkspaceReady(setupServices);
+          await assertVibe64WorkspaceReady(setupServices, readinessOptions(input));
           const runtime = await projectService.createRuntime();
           await terminalService?.closeSessionNonCodexTerminals?.(sessionId);
           const session = await runtime.recoverStuckStep(sessionId);
@@ -859,7 +852,8 @@ function createService({
       });
     },
 
-    async returnAgentControl(sessionId) {
+    async returnAgentControl(sessionId, input = {}) {
+      void input;
       const startedAtMs = Date.now();
       vibe64SessionDebugLog("server.service.returnAgentControl.start", {
         sessionId
@@ -894,34 +888,11 @@ function createService({
         try {
           const runtime = await projectService.createRuntime();
           const options = sessionListOptions(input);
-          let sessions = await listSessionSummaries(runtime, options.runtimeOptions);
-          let openSessions = isOpenSessionList(options)
+          const sessions = await listSessionSummaries(runtime, options.runtimeOptions);
+          const openSessions = isOpenSessionList(options)
             ? sessions
             : await listOpenSessionSummaries(runtime);
-          let creationState = await sessionCreationState(runtime, openSessions);
-          if (shouldOpenSeedSession(options, creationState)) {
-            const workflowDefinition = creationState.creation.defaultWorkflowDefinition;
-            await openSeedSessionOnce(async () => {
-              await assertVibe64WorkspaceReady(setupServices);
-              const projectType = await projectService.requireProjectType();
-              vibe64SessionDebugLog("server.service.listSessions.openSeedSession.start", {
-                durationMs: vibe64SessionDebugDurationMs(startedAtMs),
-                workflowDefinition
-              });
-              const { advancedSession } = await createAndAdvanceWorkflowSession(runtime, projectType, workflowDefinition);
-              vibe64SessionDebugLog("server.service.listSessions.openSeedSession.done", {
-                ...sessionServiceDebugResponse(advancedSession),
-                durationMs: vibe64SessionDebugDurationMs(startedAtMs),
-                workflowDefinition
-              });
-              await prepareCodexThreadForSession(terminalService, advancedSession);
-            });
-            sessions = await listSessionSummaries(runtime, options.runtimeOptions);
-            openSessions = isOpenSessionList(options)
-              ? sessions
-              : await listOpenSessionSummaries(runtime);
-            creationState = await sessionCreationState(runtime, openSessions);
-          }
+          const creationState = await sessionCreationState(runtime, openSessions);
           const response = sessionListResponse(sessions, creationState);
           vibe64SessionDebugLog("server.service.listSessions.done", {
             archive: String(input?.archive || ""),
@@ -942,6 +913,7 @@ function createService({
     },
 
     async runSessionAction(sessionId, actionId, input = {}) {
+      const workflowInput = stripInternalInput(input);
       const startedAtMs = Date.now();
       vibe64SessionDebugLog("server.service.runSessionAction.start", {
         actionId,
@@ -949,12 +921,12 @@ function createService({
       });
       return sessionResult(async () => {
         try {
-          await assertVibe64WorkspaceReady(setupServices);
+          await assertVibe64WorkspaceReady(setupServices, readinessOptions(input));
           const runtime = await projectService.createRuntime();
-          let session = await runtime.runAction(sessionId, actionId, input);
+          let session = await runtime.runAction(sessionId, actionId, workflowInput);
           const conversationTurn = await recordConversationMessage(runtime, sessionId, {
             actionResult: session.actionResult,
-            input
+            input: workflowInput
           });
           if (conversationTurn) {
             session = await sessionWithLatestRevision(runtime, session);
@@ -994,6 +966,7 @@ function createService({
     },
 
     async runSessionIntent(sessionId, intentId, input = {}) {
+      const workflowInput = stripInternalInput(input);
       const startedAtMs = Date.now();
       vibe64SessionDebugLog("server.service.runSessionIntent.start", {
         intentId,
@@ -1003,12 +976,12 @@ function createService({
       });
       return sessionResult(async () => {
         try {
-          await assertVibe64WorkspaceReady(setupServices);
+          await assertVibe64WorkspaceReady(setupServices, readinessOptions(input));
           const runtime = await projectService.createRuntime();
-          let session = await runtime.runIntent(sessionId, intentId, input);
+          let session = await runtime.runIntent(sessionId, intentId, workflowInput);
           const conversationTurn = await recordConversationMessage(runtime, sessionId, {
             actionResult: session.actionResult,
-            input
+            input: workflowInput
           });
           if (conversationTurn) {
             session = await sessionWithLatestRevision(runtime, session);
@@ -1047,7 +1020,7 @@ function createService({
       });
     },
 
-    async rewindSession(sessionId, stepId) {
+    async rewindSession(sessionId, stepId, input = {}) {
       const startedAtMs = Date.now();
       vibe64SessionDebugLog("server.service.rewindSession.start", {
         sessionId,
@@ -1055,7 +1028,7 @@ function createService({
       });
       return sessionResult(async () => {
         try {
-          await assertVibe64WorkspaceReady(setupServices);
+          await assertVibe64WorkspaceReady(setupServices, readinessOptions(input));
           const runtime = await projectService.createRuntime();
           const session = await runtime.rewind(sessionId, stepId);
           await terminalService?.closeSessionNonCodexTerminals?.(sessionId);

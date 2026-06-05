@@ -29,7 +29,7 @@ const featureActions = Object.freeze([
     version: 1,
     kind: "query",
     channels: ["api", "automation", "internal"],
-    surfaces: ["home"],
+    surfaces: ["app"],
     input: sessionListInputValidator,
     output: null,
     idempotency: "none",
@@ -47,7 +47,7 @@ const featureActions = Object.freeze([
     version: 1,
     kind: "command",
     channels: ["api", "automation", "internal"],
-    surfaces: ["home"],
+    surfaces: ["app"],
     input: sessionCreateInputValidator,
     output: null,
     idempotency: "optional",
@@ -65,7 +65,7 @@ const featureActions = Object.freeze([
     version: 1,
     kind: "query",
     channels: ["api", "automation", "internal"],
-    surfaces: ["home"],
+    surfaces: ["app"],
     input: sessionIdInputValidator,
     output: null,
     idempotency: "none",
@@ -83,7 +83,7 @@ const featureActions = Object.freeze([
     version: 1,
     kind: "query",
     channels: ["api", "automation", "internal"],
-    surfaces: ["home"],
+    surfaces: ["app"],
     input: sessionIdInputValidator,
     output: null,
     idempotency: "none",
@@ -101,7 +101,7 @@ const featureActions = Object.freeze([
     version: 1,
     kind: "query",
     channels: ["api", "automation", "internal"],
-    surfaces: ["home"],
+    surfaces: ["app"],
     input: sessionIdInputValidator,
     output: null,
     idempotency: "none",
@@ -119,7 +119,7 @@ const featureActions = Object.freeze([
     version: 1,
     kind: "command",
     channels: ["api", "automation", "internal"],
-    surfaces: ["home"],
+    surfaces: ["app"],
     input: sessionTerminalFailureFixInputValidator,
     output: null,
     idempotency: "optional",
@@ -140,7 +140,7 @@ const featureActions = Object.freeze([
     version: 1,
     kind: "command",
     channels: ["api", "automation", "internal"],
-    surfaces: ["home"],
+    surfaces: ["app"],
     input: sessionActionInputValidator,
     output: null,
     idempotency: "optional",
@@ -153,7 +153,10 @@ const featureActions = Object.freeze([
       return deps.featureService.runSessionAction(
         input.sessionId,
         input.actionId,
-        input.input || {}
+        {
+          ...(input.input || {}),
+          vibe64User: input.vibe64User || null
+        }
       );
     }
   },
@@ -162,7 +165,7 @@ const featureActions = Object.freeze([
     version: 1,
     kind: "command",
     channels: ["api", "automation", "internal"],
-    surfaces: ["home"],
+    surfaces: ["app"],
     input: sessionIntentInputValidator,
     output: null,
     idempotency: "optional",
@@ -178,7 +181,8 @@ const featureActions = Object.freeze([
         {
           fields: input.fields || input.input || {},
           stepId: input.stepId || "",
-          stepStatus: input.stepStatus || ""
+          stepStatus: input.stepStatus || "",
+          vibe64User: input.vibe64User || null
         }
       );
     }
@@ -188,7 +192,7 @@ const featureActions = Object.freeze([
     version: 1,
     kind: "command",
     channels: ["api", "automation", "internal"],
-    surfaces: ["home"],
+    surfaces: ["app"],
     input: sessionAdvanceInputValidator,
     output: null,
     idempotency: "optional",
@@ -200,7 +204,8 @@ const featureActions = Object.freeze([
       void context;
       return deps.featureService.advanceSession(input.sessionId, {
         stepId: input.stepId || "",
-        stepStatus: input.stepStatus || ""
+        stepStatus: input.stepStatus || "",
+        vibe64User: input.vibe64User || null
       });
     }
   },
@@ -209,7 +214,7 @@ const featureActions = Object.freeze([
     version: 1,
     kind: "command",
     channels: ["api", "automation", "internal"],
-    surfaces: ["home"],
+    surfaces: ["app"],
     input: sessionRewindInputValidator,
     output: null,
     idempotency: "optional",
@@ -219,7 +224,9 @@ const featureActions = Object.freeze([
     observability: {},
     async execute(input, context, deps) {
       void context;
-      return deps.featureService.rewindSession(input.sessionId, input.stepId);
+      return deps.featureService.rewindSession(input.sessionId, input.stepId, {
+        vibe64User: input.vibe64User || null
+      });
     }
   },
   {
@@ -227,7 +234,7 @@ const featureActions = Object.freeze([
     version: 1,
     kind: "command",
     channels: ["api", "automation", "internal"],
-    surfaces: ["home"],
+    surfaces: ["app"],
     input: sessionIdInputValidator,
     output: null,
     idempotency: "optional",
@@ -237,7 +244,9 @@ const featureActions = Object.freeze([
     observability: {},
     async execute(input, context, deps) {
       void context;
-      return deps.featureService.recoverStuckSessionStep(input.sessionId);
+      return deps.featureService.recoverStuckSessionStep(input.sessionId, {
+        vibe64User: input.vibe64User || null
+      });
     }
   },
   {
@@ -245,7 +254,7 @@ const featureActions = Object.freeze([
     version: 1,
     kind: "command",
     channels: ["api", "automation", "internal"],
-    surfaces: ["home"],
+    surfaces: ["app"],
     input: sessionIdInputValidator,
     output: null,
     idempotency: "optional",
@@ -255,7 +264,9 @@ const featureActions = Object.freeze([
     observability: {},
     async execute(input, context, deps) {
       void context;
-      return deps.featureService.returnAgentControl(input.sessionId);
+      return deps.featureService.returnAgentControl(input.sessionId, {
+        vibe64User: input.vibe64User || null
+      });
     }
   },
   {
@@ -263,7 +274,7 @@ const featureActions = Object.freeze([
     version: 1,
     kind: "command",
     channels: ["api", "automation", "internal"],
-    surfaces: ["home"],
+    surfaces: ["app"],
     input: sessionIdInputValidator,
     output: null,
     idempotency: "optional",
@@ -273,7 +284,9 @@ const featureActions = Object.freeze([
     observability: {},
     async execute(input, context, deps) {
       void context;
-      return deps.featureService.abandonSession(input.sessionId);
+      return deps.featureService.abandonSession(input.sessionId, {
+        vibe64User: input.vibe64User || null
+      });
     }
   }
 ]);

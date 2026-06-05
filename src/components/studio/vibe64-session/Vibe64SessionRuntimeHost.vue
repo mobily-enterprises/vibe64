@@ -133,10 +133,6 @@ const props = defineProps({
     required: true,
     type: String
   },
-  sessionMode: {
-    default: "autopilot",
-    type: String
-  },
   workspacePane: {
     default: "preview",
     type: String
@@ -426,7 +422,6 @@ watch(interactionBusy, emitBusy, {
 
 watch(() => [
   props.active ? "active" : "inactive",
-  props.sessionMode,
   props.sessionId,
   selectedSession.value?.currentStep || "",
   selectedSession.value?.stepMachine?.status || ""
@@ -434,8 +429,7 @@ watch(() => [
   vibe64SessionDebugLog("client.sessionRuntimeHost.state", {
     ...vibe64SessionDebugSummary(selectedSession.value || {}),
     active: props.active,
-    sessionId: props.sessionId,
-    sessionMode: props.sessionMode
+    sessionId: props.sessionId
   });
 }, {
   flush: "post",

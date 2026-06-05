@@ -5,13 +5,20 @@ import {
   vibe64StatusCode,
   requestBodyObject
 } from "./serverResponses.js";
+import {
+  VIBE64_WORKSPACE_ROUTE_BASE,
+  runWithResolvedWorkspaceRequestContext,
+  workspaceRequestErrorStatusCode
+} from "./workspaceRequestContext.js";
 
 function createVibe64FeatureRoutes(
   app,
   {
     localRequestMessage = "Vibe64 routes only accept loopback Studio requests.",
+    projectContext = null,
     routeRelativePath = "",
     routeSurface = "",
+    workspaceScoped = true,
     tags = []
   } = {}
 ) {
@@ -19,7 +26,7 @@ function createVibe64FeatureRoutes(
 
   const router = app.make("jskit.http.router");
   const routeBase = resolveScopedApiBasePath({
-    routeBase: "/",
+    routeBase: workspaceScoped ? VIBE64_WORKSPACE_ROUTE_BASE : "/",
     relativePath: routeRelativePath,
     strictParams: false
   });
@@ -57,7 +64,29 @@ function createVibe64FeatureRoutes(
           return;
         }
 
-        const response = await handler(request, reply);
+        let response;
+        try {
+          response = workspaceScoped
+            ? await runWithResolvedWorkspaceRequestContext({
+                projectContext,
+                request
+              }, () => handler(request, reply))
+            : await handler(request, reply);
+        } catch (error) {
+          if (isWorkspaceRequestError(error)) {
+            reply.code(workspaceRequestErrorStatusCode(error)).send({
+              ok: false,
+              errors: [
+                {
+                  code: error?.code || "vibe64_workspace_request_failed",
+                  message: String(error?.message || error || "Vibe64 workspace request failed.")
+                }
+              ]
+            });
+            return;
+          }
+          throw error;
+        }
         if (response === undefined) {
           return;
         }
@@ -73,6 +102,15 @@ function createVibe64FeatureRoutes(
     routeBase,
     serviceRoute
   };
+}
+
+function isWorkspaceRequestError(error = {}) {
+  return [
+    "vibe64_invalid_workspace_slug",
+    "vibe64_project_path_not_accessible",
+    "vibe64_project_path_not_directory",
+    "vibe64_project_path_symlink"
+  ].includes(error?.code);
 }
 
 function requireApplication(app) {

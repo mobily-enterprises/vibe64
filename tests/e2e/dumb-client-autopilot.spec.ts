@@ -1,25 +1,108 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 
-import { BASE_URL } from "./support/base-shell-data";
+import {
+  BASE_URL,
+  DASHBOARD_PATH,
+  DEVELOPMENT_PATH
+} from "./support/base-shell-data";
 import {
   mockStudioReady
 } from "./support/base-shell-mocks";
+import {
+  routeApiEndpoint
+} from "./support/base-shell/http";
 
 async function expectNoAttentionRequired(page: Page) {
   await expect(page.getByText("Attention required", { exact: true })).toHaveCount(0);
 }
 
+function escapedPathPattern(pathValue: string) {
+  return String(pathValue || "").replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
+
+function dashboardUrlPattern(routePath: string, suffix = "/?$") {
+  return new RegExp(`${escapedPathPattern(DASHBOARD_PATH)}/${routePath}${suffix}`, "u");
+}
+
 test.describe("Autopilot dumb client contract", () => {
+  test("keeps step labels out of the chat body and exposes icon hints on hover", async ({ page }) => {
+    await mockVibe64Session(page, sessionPayload({
+      currentStep: "talk_to_codex",
+      currentStepDefinition: {
+        id: "talk_to_codex",
+        label: "Talk to Codex"
+      },
+      presentation: {
+        auto: {
+          nextOperation: {
+            executable: false,
+            kind: "stop",
+            reason: "user"
+          }
+        },
+        screen: {
+          kind: "conversation",
+          message: "What would you like to do?",
+          sections: [
+            {
+              kind: "response_preview"
+            }
+          ],
+          title: "Talk to Codex",
+          variant: "guide"
+        },
+        step: {
+          id: "talk_to_codex",
+          label: "Talk to Codex",
+          status: "waiting_for_input"
+        }
+      },
+      stepDefinitions: [
+        {
+          done: true,
+          id: "worktree_created",
+          label: "Create worktree",
+          status: "done"
+        },
+        {
+          id: "talk_to_codex",
+          label: "Talk to Codex",
+          status: "current"
+        },
+        {
+          id: "implementation_reviewed",
+          label: "Initial human review",
+          status: "pending"
+        }
+      ],
+      stepMachine: {
+        status: "waiting_for_input",
+        stepId: "talk_to_codex"
+      }
+    }));
+
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+
+    await expect(page.locator(".studio-autopilot__screen-title")).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Talk to Codex", exact: true })).toHaveCount(0);
+    await expect(page.getByText("Initial human review", { exact: true })).toHaveCount(0);
+
+    const pendingStepIcon = page.getByLabel("Initial human review", { exact: true });
+    await expect(pendingStepIcon).toHaveCount(1);
+    await pendingStepIcon.hover();
+    await expect(page.getByText("Initial human review", { exact: true })).toBeVisible();
+  });
+
   test("routes workspace menu shortcuts and JSKIT dashboard subpages", async ({ page }) => {
     await mockVibe64Session(page, sessionPayload());
 
-    await page.goto(`${BASE_URL}/home`);
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
     await expect(page.getByRole("button", { name: "Menu" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Tools" })).toHaveCount(0);
 
     await page.getByRole("tab", { name: "Dashboard" }).click();
-    await expect(page).toHaveURL(/\/home\/dashboard\/accounts\/?$/u);
+    await expect(page).toHaveURL(dashboardUrlPattern("accounts"));
     await expectNoAttentionRequired(page);
     await expect(page.getByRole("tab", { name: "Dashboard" })).toHaveAttribute("aria-selected", "true");
     await expect(page.getByRole("heading", { name: "Accounts", exact: true })).toBeVisible();
@@ -44,7 +127,7 @@ test.describe("Autopilot dumb client contract", () => {
       { label: "Configure", routePath: "configure", selector: ".project-config-setup", text: "" }
     ]) {
       await page.locator(".section-container-shell__nav").getByText(label, { exact: true }).click();
-      await expect(page).toHaveURL(new RegExp(`/home/dashboard/${routePath}/?(?:\\?.*)?$`, "u"));
+      await expect(page).toHaveURL(dashboardUrlPattern(routePath, "/?(?:\\?.*)?$"));
       await expectNoAttentionRequired(page);
       await expect(page.getByRole("tab", { name: "Dashboard" })).toHaveAttribute("aria-selected", "true");
       const content = page.locator(selector);
@@ -56,7 +139,7 @@ test.describe("Autopilot dumb client contract", () => {
     const setupReadinessRequests: string[] = [];
     await mockVibe64Session(page, sessionPayload());
     await page.unroute("**/api/studio/current-app/setup-readiness");
-    await page.route("**/api/studio/current-app/setup-readiness", async (route) => {
+    await routeApiEndpoint(page, "/studio/current-app/setup-readiness", async (route) => {
       setupReadinessRequests.push(route.request().url());
       await fulfillJson(route, {
         currentStage: null,
@@ -66,11 +149,11 @@ test.describe("Autopilot dumb client contract", () => {
       });
     });
 
-    await page.goto(`${BASE_URL}/home`);
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
     await expect(page.getByRole("tab", { name: "Preview" })).toBeVisible();
 
     await page.getByRole("tab", { name: "Dashboard" }).click();
-    await expect(page).toHaveURL(/\/home\/dashboard\/accounts\/?$/u);
+    await expect(page).toHaveURL(dashboardUrlPattern("accounts"));
     await expect(page.getByText("Checking setup", { exact: true })).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "Accounts", exact: true })).toBeVisible();
     expect(setupReadinessRequests).toHaveLength(0);
@@ -103,10 +186,10 @@ test.describe("Autopilot dumb client contract", () => {
       }
     });
 
-    await page.goto(`${BASE_URL}/home`);
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
     await expect(page.getByText("Dashboard navigation should not reload this chat.")).toBeVisible();
     await page.getByRole("tab", { name: "Dashboard" }).click();
-    await expect(page).toHaveURL(/\/home\/dashboard\/accounts\/?$/u);
+    await expect(page).toHaveURL(dashboardUrlPattern("accounts"));
     await expect(page.getByRole("heading", { name: "Accounts", exact: true })).toBeVisible();
 
     const sessionReadsAfterDashboardOpen = sessionReadPaths.length;
@@ -121,7 +204,7 @@ test.describe("Autopilot dumb client contract", () => {
       { label: "Accounts", routePath: "accounts" }
     ]) {
       await page.locator(".section-container-shell__nav").getByText(label, { exact: true }).click();
-      await expect(page).toHaveURL(new RegExp(`/home/dashboard/${routePath}/?$`, "u"));
+      await expect(page).toHaveURL(dashboardUrlPattern(routePath));
       await expect(page.getByText("Dashboard navigation should not reload this chat.")).toBeVisible();
       expect(sessionReadPaths, `unexpected session reads after ${label}`).toHaveLength(sessionReadsAfterDashboardOpen);
       expect(conversationLogReadPaths, `unexpected conversation reads after ${label}`).toHaveLength(conversationReadsAfterDashboardOpen);
@@ -174,7 +257,7 @@ test.describe("Autopilot dumb client contract", () => {
       }
     });
 
-    await page.goto(`${BASE_URL}/home`);
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
     await expect.poll(() => actionRequests).toEqual([
       {
@@ -223,7 +306,7 @@ test.describe("Autopilot dumb client contract", () => {
       }
     });
 
-    await page.goto(`${BASE_URL}/home`);
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
     await expect(page.getByRole("heading", { name: "Server Blocked" })).toBeVisible();
     await expect.poll(() => commandTerminalStarts).toBe(0);
@@ -249,7 +332,7 @@ test.describe("Autopilot dumb client contract", () => {
       }
     });
 
-    await page.goto(`${BASE_URL}/home`);
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
     await page.getByRole("button", { exact: true, name: "Existing issue" }).click();
     await page.getByLabel("Issue URL or number").fill("404404");
     await page.getByRole("button", { exact: true, name: "Existing issue" }).click();
@@ -328,7 +411,7 @@ test.describe("Autopilot dumb client contract", () => {
       }
     });
 
-    await page.goto(`${BASE_URL}/home`);
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
     await page.getByRole("button", { exact: true, name: "Existing issue" }).click();
     await page.getByLabel("Issue URL or number").fill("123");
     await page.getByRole("button", { exact: true, name: "Existing issue" }).click();
@@ -346,7 +429,7 @@ test.describe("Autopilot dumb client contract", () => {
       }
     });
 
-    await page.goto(`${BASE_URL}/home`);
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
     await expect(page.getByText("What would you like this session to do? Choose New issue to start fresh and let Vibe64 create a GitHub issue for the work. Choose Existing issue if you already have an issue number or URL. Choose Existing PR to continue from a pull request that already exists. Choose No issue when you only want to describe the work in chat and do not need a GitHub issue."))
       .toBeVisible();
@@ -393,7 +476,7 @@ test.describe("Autopilot dumb client contract", () => {
       }
     });
 
-    await page.goto(`${BASE_URL}/home`);
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
     await page.getByRole("button", { name: "New issue" }).click();
 
@@ -418,7 +501,7 @@ test.describe("Autopilot dumb client contract", () => {
       }
     });
 
-    await page.goto(`${BASE_URL}/home`);
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
     await expect(page.getByRole("heading", { name: "Define work" })).toBeVisible();
     await expect.poll(() => advances).toEqual([]);
@@ -466,7 +549,7 @@ test.describe("Autopilot dumb client contract", () => {
       }
     });
 
-    await page.goto(`${BASE_URL}/home`);
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
     await expect.poll(() => advances).toEqual(["issue_file_created"]);
     await expect(page.getByRole("heading", { name: "Plan and execute" })).toBeVisible();
@@ -585,7 +668,7 @@ test.describe("Autopilot dumb client contract", () => {
       }
     });
 
-    await page.goto(`${BASE_URL}/home`);
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
     await expect.poll(() => advances.length).toBe(1);
     await expect(page.getByRole("heading", { name: "Next server step" })).toBeVisible();
@@ -703,7 +786,7 @@ test.describe("Autopilot dumb client contract", () => {
       }
     });
 
-    await page.goto(`${BASE_URL}/home`);
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
     await expect.poll(() => advances.length).toBe(1);
     await expect(page.getByRole("heading", { name: "Next server step" })).toBeVisible();
@@ -885,7 +968,7 @@ test.describe("Autopilot dumb client contract", () => {
       sessionList: [otherSession, commandSession]
     });
 
-    await page.goto(`${BASE_URL}/home`);
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
     await expect(page.locator(".studio-autopilot__command-terminal-overlay strong", {
       hasText: "Command running."
     })).toBeVisible();
@@ -978,7 +1061,7 @@ test.describe("Autopilot dumb client contract", () => {
       }
     });
 
-    await page.goto(`${BASE_URL}/home`);
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
     await expect(page.locator(".studio-ai-sessions__terminals--autopilot-preview")).toHaveCount(0);
     await expect(page.locator(".studio-ai-sessions__terminals--compact")).toHaveCount(0);
@@ -1075,7 +1158,7 @@ test.describe("Autopilot dumb client contract", () => {
     });
     await mockVibe64Session(page, session);
 
-    await page.goto(`${BASE_URL}/home`);
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
     await expect(page.getByText("Your agent needs attention")).toHaveCount(0);
     await expect(page.locator(".studio-ai-sessions__terminals--compact .codex-terminal__host")).toHaveCount(0);
@@ -1092,7 +1175,7 @@ test.describe("Autopilot dumb client contract", () => {
     await mockCodexTerminalPreviewSocket(page);
     let globalCodexStarts = 0;
     let sessionCodexStarts = 0;
-    await page.route("**/api/vibe64/codex-terminal", async (route) => {
+    await routeApiEndpoint(page, "/vibe64/codex-terminal", async (route) => {
       if (route.request().method() === "POST") {
         globalCodexStarts += 1;
         await fulfillJson(route, {
@@ -1127,7 +1210,7 @@ test.describe("Autopilot dumb client contract", () => {
       }
     });
 
-    await page.goto(`${BASE_URL}/home`);
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
     await expect(page.getByRole("button", { name: "Codex terminal" })).toHaveCount(0);
     await expect(page.locator(".studio-ai-sessions__terminals--autopilot-foreground .codex-terminal__host")).toHaveCount(0);
@@ -1141,7 +1224,7 @@ test.describe("Autopilot dumb client contract", () => {
     });
 
     await mockStudioReady(page);
-    await page.route("**/api/vibe64/sessions**", async (route) => {
+    await routeApiEndpoint(page, "/vibe64/sessions", async (route) => {
       await fulfillJson(route, {
         creation: {
           canCreate: true,
@@ -1158,7 +1241,7 @@ test.describe("Autopilot dumb client contract", () => {
       });
     });
 
-    await page.goto(`${BASE_URL}/home`);
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
     await expect(page.getByText("No sessions yet.")).toBeVisible();
     await expect(page.getByRole("button", { name: "Codex terminal" })).toHaveCount(0);
@@ -1226,7 +1309,7 @@ test.describe("Autopilot dumb client contract", () => {
     });
     await mockVibe64Session(page, session);
 
-    await page.goto(`${BASE_URL}/home`);
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
     await expect(page.getByLabel("Response")).toBeVisible();
     await expect(page.locator(".studio-ai-sessions__terminals--autopilot-preview")).toHaveCount(0);
@@ -1301,7 +1384,7 @@ test.describe("Autopilot dumb client contract", () => {
     });
     await mockVibe64Session(page, session);
 
-    await page.goto(`${BASE_URL}/home`);
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
     await expect(page.getByLabel("Response")).toBeVisible();
     await expect(page.locator(".studio-ai-sessions__terminals--autopilot-preview")).toHaveCount(0);
@@ -1361,7 +1444,7 @@ test.describe("Autopilot dumb client contract", () => {
     });
     await mockVibe64Session(page, session);
 
-    await page.goto(`${BASE_URL}/home`);
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
     await expect(page.getByLabel("Response")).toBeVisible();
     await expect(page.locator(".studio-ai-sessions__terminals--autopilot-preview")).toHaveCount(0);
@@ -1423,7 +1506,7 @@ test.describe("Autopilot dumb client contract", () => {
       }
     });
 
-    await page.goto(`${BASE_URL}/home`);
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
     await expect(page.getByRole("heading", { name: "Server Review" })).toBeVisible();
     await expect(page.getByText("This text came from the server.")).toBeVisible();
@@ -1525,7 +1608,7 @@ test.describe("Autopilot dumb client contract", () => {
       }
     });
 
-    await page.goto(`${BASE_URL}/home`);
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
     const composerInput = page.getByLabel("What do you want to ask Codex?");
     await expect(composerInput).toBeVisible();
@@ -1597,7 +1680,7 @@ test.describe("Autopilot dumb client contract", () => {
       ]
     });
 
-    await page.goto(`${BASE_URL}/home`);
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
     const composerInput = page.getByLabel("What would you like to do?");
     await expect(composerInput).toBeVisible();
@@ -1719,7 +1802,7 @@ test.describe("Autopilot dumb client contract", () => {
       }
     });
 
-    await page.goto(`${BASE_URL}/home`);
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
     const composerInput = page.getByLabel("What do you want to ask Codex?");
     await composerInput.fill("Please tighten this up.");
@@ -1809,96 +1892,12 @@ test.describe("Autopilot dumb client contract", () => {
       ]
     });
 
-    await page.goto(`${BASE_URL}/home`);
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
     await expect(page.getByLabel("What would you like to do?")).toBeVisible();
     await expect(page.locator(".studio-conversation-log__message-row--assistant", {
       hasText: "What would you like to do?"
     })).toHaveCount(0);
-  });
-
-  test("aligns the Inspect shell terminal bottom with the Codex terminal", async ({ page }) => {
-    await page.setViewportSize({
-      height: 948,
-      width: 2048
-    });
-    await mockInspectTerminalSockets(page);
-    const session = sessionPayload({
-      completedSteps: ["worktree_created"],
-      metadata: {
-        worktree_path: "/workspace/example-target-app/.vibe64/sessions/active/session-renderer/worktree"
-      },
-      sessionRoot: "/workspace/example-target-app/.vibe64/sessions/active/session-renderer",
-      worktreeReady: true
-    });
-    await mockVibe64Session(page, session);
-
-    await page.goto(`${BASE_URL}/home?mode=inspect`);
-    await expect(page.locator(".codex-terminal__host")).toBeVisible();
-    await page.getByLabel("Open shell").click();
-    await page.getByText("Worktree shell").click();
-    await expect(page.locator(".vibe64-shell-controls__terminal--active .ai-command-terminal__host"))
-      .toBeVisible();
-
-    const terminalBounds = await page.evaluate(() => {
-      function rectFor(selector: string) {
-        const element = document.querySelector(selector);
-        if (!element) {
-          return null;
-        }
-        const rect = element.getBoundingClientRect();
-        return {
-          bottom: rect.bottom,
-          height: rect.height,
-          top: rect.top
-        };
-      }
-      const shell = rectFor(".vibe64-shell-controls__terminal--active .ai-command-terminal__host");
-      const codex = rectFor(".codex-terminal__host");
-      return {
-        codex,
-        delta: shell && codex ? shell.bottom - codex.bottom : null,
-        shell
-      };
-    });
-
-    expect(terminalBounds.shell).toBeTruthy();
-    expect(terminalBounds.codex).toBeTruthy();
-    expect(Math.abs(terminalBounds.delta ?? Number.POSITIVE_INFINITY), JSON.stringify(terminalBounds, null, 2))
-      .toBeLessThanOrEqual(0.25);
-  });
-
-  test("keeps Inspect shell terminals alive when switching to Autopilot", async ({ page }) => {
-    let shellTerminalCloses = 0;
-    await mockInspectTerminalSockets(page);
-    const session = sessionPayload({
-      completedSteps: ["worktree_created"],
-      metadata: {
-        worktree_path: "/workspace/example-target-app/.vibe64/sessions/active/session-renderer/worktree"
-      },
-      sessionRoot: "/workspace/example-target-app/.vibe64/sessions/active/session-renderer",
-      worktreeReady: true
-    });
-    await mockVibe64Session(page, session, {
-      onShellTerminalClose: () => {
-        shellTerminalCloses += 1;
-      }
-    });
-
-    await page.goto(`${BASE_URL}/home?mode=inspect`);
-    await page.getByLabel("Open shell").click();
-    await page.getByText("Worktree shell").click();
-    await expect(page.locator(".vibe64-shell-controls__terminal--active .ai-command-terminal__host"))
-      .toBeVisible();
-
-    await page.getByRole("button", { name: "Autopilot" }).click();
-    await expect(page).toHaveURL(/\/home(?:\?|$)/u);
-    await page.waitForTimeout(100);
-    expect(shellTerminalCloses).toBe(0);
-
-    await page.getByRole("button", { name: "Inspect" }).click();
-    await expect(page.locator(".vibe64-shell-controls__terminal--active .ai-command-terminal__host"))
-      .toBeVisible();
   });
 
   test("keeps each session shell terminal alive when switching selected sessions", async ({ page }) => {
@@ -1933,7 +1932,7 @@ test.describe("Autopilot dumb client contract", () => {
       sessionList: [firstSession, secondSession]
     });
 
-    await page.goto(`${BASE_URL}/home`);
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
     const visibleSessionTab = (name: string) => page.locator(
       ".studio-ai-session-runtime:not([style*='display: none']) .studio-ai-sessions__tab",
       { hasText: name }
@@ -1944,6 +1943,7 @@ test.describe("Autopilot dumb client contract", () => {
     await page.getByRole("button", { name: "Shell" }).click();
     await expect(page.locator(".vibe64-shell-controls__terminal--active .ai-command-terminal__host"))
       .toBeVisible();
+    await expectActiveShellTerminalFillsPane(page);
     await expect.poll(() => shellTerminalStarts).toBe(1);
 
     await visibleSessionTab("Alpha").click();
@@ -1953,6 +1953,7 @@ test.describe("Autopilot dumb client contract", () => {
     await visibleSessionTab("Beta").click();
     await expect(page.locator(".vibe64-shell-controls__terminal--active .ai-command-terminal__host"))
       .toBeVisible();
+    await expectActiveShellTerminalFillsPane(page);
     expect(shellTerminalCloses).toBe(0);
     expect(shellTerminalStarts).toBe(1);
   });
@@ -1977,7 +1978,7 @@ test.describe("Autopilot dumb client contract", () => {
       }
     });
 
-    await page.goto(`${BASE_URL}/home`);
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
     await page.getByLabel("Session tools").click();
     await page.getByRole("button", { name: "Shell" }).click();
     await expect(page.locator(".vibe64-shell-controls__terminal--active .ai-command-terminal__host"))
@@ -2024,7 +2025,7 @@ test.describe("Autopilot dumb client contract", () => {
       }
     });
 
-    await page.goto(`${BASE_URL}/home`);
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
     await page.getByLabel("Session tools").click();
     await page.getByRole("button", { name: "Shell" }).click();
     await expect(page.locator(".vibe64-shell-controls__terminal--active .ai-command-terminal__host"))
@@ -2047,7 +2048,7 @@ test.describe("Autopilot dumb client contract", () => {
     });
     await mockVibe64Session(page, session);
 
-    await page.goto(`${BASE_URL}/home`);
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
     const sessionToolsButton = page.getByRole("button", { name: "Session tools" });
     await sessionToolsButton.click();
     await page.getByRole("button", { name: "Shell" }).click();
@@ -2129,7 +2130,7 @@ test.describe("Autopilot dumb client contract", () => {
       }
     });
 
-    await page.goto(`${BASE_URL}/home`);
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
     await expect(page.getByRole("heading", { name: "Server Questions" })).toBeVisible();
     await expect(page.locator("textarea")).toHaveCount(0);
@@ -2251,7 +2252,7 @@ test.describe("Autopilot dumb client contract", () => {
       }
     });
 
-    await page.goto(`${BASE_URL}/home`);
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
     const autopilot = page.locator(".studio-autopilot");
     await expect(autopilot.getByRole("heading", { name: "Define issue" })).toBeVisible();
@@ -2381,7 +2382,7 @@ test.describe("Autopilot dumb client contract", () => {
       }
     });
 
-    await page.goto(`${BASE_URL}/home`);
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
     const autopilot = page.locator(".studio-autopilot");
     await autopilot.getByLabel("Issue title").fill("Updated issue title");
@@ -2486,7 +2487,7 @@ test.describe("Autopilot dumb client contract", () => {
       }
     });
 
-    await page.goto(`${BASE_URL}/home`);
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
     const autopilot = page.locator(".studio-autopilot");
     await expect(autopilot.getByRole("button", { name: "Save draft" })).toBeVisible();
@@ -2630,7 +2631,7 @@ test.describe("Autopilot dumb client contract", () => {
       }
     });
 
-    await page.goto(`${BASE_URL}/home?mode=inspect`);
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}?mode=inspect`);
 
     const inspect = page.locator(".studio-ai-sessions__inspect-slot");
     await expect(inspect.getByLabel("Work title")).toHaveValue("Add empty a.txt to worktree root");
@@ -2772,7 +2773,7 @@ test.describe("Autopilot dumb client contract", () => {
       }
     });
 
-    await page.goto(`${BASE_URL}/home?mode=inspect`);
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}?mode=inspect`);
 
     const inspect = page.locator(".studio-ai-sessions__inspect-slot");
     await inspect.getByLabel("Issue title").fill("Updated issue title");
@@ -2842,7 +2843,7 @@ async function mockVibe64Session(
   }
 
   await mockStudioReady(page);
-  await page.route("**/api/vibe64/sessions**", async (route) => {
+  await routeApiEndpoint(page, "/vibe64/sessions", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const method = request.method();
@@ -2958,7 +2959,7 @@ async function mockVibe64Session(
       ok: true,
       sessions: listedSessions
     });
-  });
+  }, { prefix: true });
 }
 
 async function recordForbiddenText(page: Page, text: string) {
@@ -2989,6 +2990,23 @@ async function expectActiveShellTerminalFocused(page: Page) {
   }), {
     timeout: 500
   }).toBe(true);
+}
+
+async function expectActiveShellTerminalFillsPane(page: Page) {
+  await expect.poll(async () => page.evaluate(() => {
+    const terminal = document.querySelector(".vibe64-shell-controls__terminal--active.ai-command-terminal--shell");
+    const host = document.querySelector(".vibe64-shell-controls__terminal--active .ai-command-terminal__host");
+    const pane = terminal?.closest(".studio-autopilot__right-pane-page");
+    const terminalRect = terminal?.getBoundingClientRect?.();
+    const hostRect = host?.getBoundingClientRect?.();
+    const paneRect = pane?.getBoundingClientRect?.();
+    if (!terminalRect || !hostRect || !paneRect) {
+      return false;
+    }
+    return terminalRect.height >= paneRect.height * 0.95 &&
+      Math.abs(terminalRect.bottom - paneRect.bottom) <= 2 &&
+      hostRect.height >= paneRect.height * 0.72;
+  })).toBe(true);
 }
 
 async function expectActiveShellTabsTouchTerminal(page: Page) {

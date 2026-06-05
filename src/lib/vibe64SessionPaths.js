@@ -17,7 +17,7 @@ function vibe64SessionWorktreePath(session = {}) {
     session?.worktreePath ||
     ""
   ).trim();
-  return explicitPath || canonicalSessionWorktreePath(session);
+  return canonicalSessionWorktreePath(session) || explicitPath;
 }
 
 export {

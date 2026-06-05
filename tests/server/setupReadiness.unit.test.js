@@ -30,7 +30,6 @@ function serviceBlocked(blockedReason = "") {
 test("setup readiness checks automatic setup stages only", async () => {
   const readiness = await readVibe64SetupReadiness({
     accountSetupService: serviceReady(),
-    adapterSetupService: serviceReady(),
     projectSetupService: serviceReady(),
     studioSetupService: serviceReady()
   });
@@ -38,7 +37,6 @@ test("setup readiness checks automatic setup stages only", async () => {
   assert.equal(readiness.ready, true);
   assert.deepEqual(readiness.stages.map((stage) => stage.id), [
     "studio-setup",
-    "adapter-setup",
     "project-setup"
   ]);
 });
@@ -46,7 +44,6 @@ test("setup readiness checks automatic setup stages only", async () => {
 test("setup readiness reports Studio Setup as the first blocked automatic setup stage", async () => {
   const readiness = await readVibe64SetupReadiness({
     accountSetupService: serviceBlocked("Accounts missing."),
-    adapterSetupService: serviceReady(),
     projectSetupService: serviceReady(),
     studioSetupService: serviceBlocked("Studio missing.")
   });
@@ -60,7 +57,6 @@ test("setup readiness reports Studio Setup as the first blocked automatic setup 
 test("workspace readiness checks human connections before automatic setup", async () => {
   const readiness = await readVibe64WorkspaceReadiness({
     accountSetupService: serviceBlocked("Accounts missing."),
-    adapterSetupService: serviceReady(),
     projectSetupService: serviceReady(),
     studioSetupService: serviceBlocked("Studio missing.")
   });
@@ -69,4 +65,78 @@ test("workspace readiness checks human connections before automatic setup", asyn
   assert.equal(readiness.currentStage.id, "accounts");
   assert.equal(readiness.message, "Accounts missing.");
   assert.deepEqual(readiness.stages.map((stage) => stage.id), ["accounts"]);
+});
+
+test("workspace readiness forwards status input to every setup service", async () => {
+  const seen = [];
+  const service = (id) => ({
+    async getStatus(input) {
+      seen.push({
+        id,
+        input
+      });
+      return {
+        ready: true
+      };
+    }
+  });
+  const input = {
+    vibe64User: {
+      email: "owner@example.com"
+    }
+  };
+
+  const readiness = await readVibe64WorkspaceReadiness({
+    accountSetupService: service("accounts"),
+    projectSetupService: service("project-setup"),
+    studioSetupService: service("studio-setup")
+  }, {
+    input
+  });
+
+  assert.equal(readiness.ready, true);
+  assert.deepEqual(seen, [
+    {
+      id: "accounts",
+      input
+    },
+    {
+      id: "studio-setup",
+      input
+    },
+    {
+      id: "project-setup",
+      input
+    }
+  ]);
+});
+
+test("setup readiness message names the blocked nested project check", async () => {
+  const readiness = await readVibe64SetupReadiness({
+    projectSetupService: {
+      async getStatus() {
+        return {
+          ready: false,
+          stages: [
+            {
+              id: "directory",
+              label: "Directory",
+              status: "pass"
+            },
+            {
+              id: "remote-ready",
+              label: "Remote ready",
+              observed: "GitHub CLI is not authenticated.",
+              status: "hard-stop"
+            }
+          ]
+        };
+      }
+    },
+    studioSetupService: serviceReady()
+  });
+
+  assert.equal(readiness.ready, false);
+  assert.equal(readiness.currentStage.id, "project-setup");
+  assert.equal(readiness.message, "Remote ready: GitHub CLI is not authenticated.");
 });

@@ -37,7 +37,7 @@ async function vibe64Result(operation, options = {}) {
 }
 
 function vibe64StatusCode(response, { missingStatus = 404 } = {}) {
-  const code = response?.errors?.[0]?.code || "";
+  const code = response?.errors?.[0]?.code || response?.code || "";
   if (code === "vibe64_session_not_found") {
     return missingStatus;
   }
@@ -51,6 +51,7 @@ function vibe64StatusCode(response, { missingStatus = 404 } = {}) {
     code === "vibe64_project_config_missing" ||
     code === "vibe64_project_not_selected" ||
     code === "vibe64_setup_not_ready" ||
+    code === "vibe64_workspace_not_ready" ||
     code === "vibe64_step_input_state_changed" ||
     code === "vibe64_step_not_ready"
   ) {

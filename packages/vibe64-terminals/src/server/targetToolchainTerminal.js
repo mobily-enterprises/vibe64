@@ -1,6 +1,7 @@
 import process from "node:process";
 
 import {
+  runtimeNetworkTargetHash,
   targetRuntimeNetworkDockerArgs
 } from "@local/studio-terminal-core/server/runtimeContainers";
 import {
@@ -21,9 +22,6 @@ import {
 import {
   terminalEnvironmentDockerArgs
 } from "./terminalEnvironment.js";
-import {
-  stableHash
-} from "./terminalShared.js";
 
 function dockerMountArgs({
   readOnly = false,
@@ -71,7 +69,7 @@ function targetToolchainTerminalArgs({
       `${STUDIO_DAEMON_PID_LABEL}=${process.pid}`,
       sessionId ? studioDockerLabel("session", sessionId) : "",
       studioDockerLabel("terminal", terminalId),
-      studioDockerLabel("target", stableHash(targetRoot)),
+      studioDockerLabel("target", runtimeNetworkTargetHash(targetRoot)),
       ...extraLabels
     ]),
     ...studioToolHomeDockerArgs(),

@@ -23,10 +23,12 @@ function studioPlaywrightBrowsersDockerArgs() {
   ];
 }
 
-function studioToolHomeDockerArgs() {
+function studioToolHomeDockerArgs({
+  source = STUDIO_TOOL_HOME_VOLUME
+} = {}) {
   return [
     "-v",
-    `${STUDIO_TOOL_HOME_VOLUME}:${STUDIO_TOOL_HOME_PATH}`,
+    `${source || STUDIO_TOOL_HOME_VOLUME}:${STUDIO_TOOL_HOME_PATH}`,
     "-e",
     `HOME=${STUDIO_TOOL_HOME_PATH}`,
     "-e",

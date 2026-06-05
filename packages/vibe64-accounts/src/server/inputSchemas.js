@@ -1,8 +1,17 @@
 import { createSchema } from "json-rest-schema";
 import { deepFreeze } from "@jskit-ai/kernel/shared/support/deepFreeze";
 
+const vibe64UserInputSchema = {
+  vibe64User: {
+    type: "object",
+    additionalProperties: true,
+    required: false
+  }
+};
+
 const accountsReadInputValidator = deepFreeze({
   schema: createSchema({
+    ...vibe64UserInputSchema,
     refresh: {
       type: "boolean",
       required: false
@@ -13,6 +22,7 @@ const accountsReadInputValidator = deepFreeze({
 
 const accountAuthStartInputValidator = deepFreeze({
   schema: createSchema({
+    ...vibe64UserInputSchema,
     accountId: {
       type: "string",
       required: true,
@@ -28,6 +38,7 @@ const accountAuthStartInputValidator = deepFreeze({
 
 const accountIdInputValidator = deepFreeze({
   schema: createSchema({
+    ...vibe64UserInputSchema,
     accountId: {
       type: "string",
       required: true,
@@ -39,6 +50,7 @@ const accountIdInputValidator = deepFreeze({
 
 const accountAuthSessionInputValidator = deepFreeze({
   schema: createSchema({
+    ...vibe64UserInputSchema,
     sessionId: {
       type: "string",
       required: true,

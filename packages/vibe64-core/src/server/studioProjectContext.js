@@ -1,5 +1,5 @@
 import { constants as fsConstants } from "node:fs";
-import { access, mkdir, readdir, stat } from "node:fs/promises";
+import { access, lstat, mkdir, readdir, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
@@ -9,7 +9,7 @@ import {
   resolveExplicitStudioTargetRoot
 } from "./studioRoots.js";
 
-const PROJECT_SLUG_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u;
+const WORKSPACE_SLUG_PATTERN = /^[a-z0-9][a-z0-9_-]*$/u;
 
 let configuredContext = null;
 
@@ -35,22 +35,60 @@ function pathInsideOrEqual(parentPath = "", childPath = "") {
   return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
-function projectSlugFromName(value = "") {
+function workspaceSlugFromName(value = "") {
   return String(value || "")
     .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9._-]+/gu, "-")
+    .replace(/[^a-z0-9_-]+/gu, "-")
     .replace(/^-+|-+$/gu, "");
 }
 
-function normalizeProjectSlug(value = "") {
+function normalizeWorkspaceSlug(value = "") {
   const slug = String(value || "").trim();
-  if (!PROJECT_SLUG_PATTERN.test(slug) || slug === "." || slug === "..") {
-    const error = new Error("Project folder name must start with a letter or number and contain only letters, numbers, dots, underscores, or dashes.");
-    error.code = "vibe64_invalid_project_slug";
+  if (!WORKSPACE_SLUG_PATTERN.test(slug)) {
+    const error = new Error("Workspace slug must start with a lowercase letter or number and contain only lowercase letters, numbers, underscores, or dashes.");
+    error.code = "vibe64_invalid_workspace_slug";
     throw error;
   }
   return slug;
+}
+
+function projectSlugFromName(value = "") {
+  return workspaceSlugFromName(value);
+}
+
+function normalizeProjectSlug(value = "") {
+  try {
+    return normalizeWorkspaceSlug(value);
+  } catch (error) {
+    if (error?.code === "vibe64_invalid_workspace_slug") {
+      error.code = "vibe64_invalid_project_slug";
+    }
+    throw error;
+  }
+}
+
+function workspaceSlugFromInput(input = {}) {
+  const explicitSlug = String(input?.slug || input?.projectSlug || "").trim();
+  if (explicitSlug) {
+    return normalizeWorkspaceSlug(explicitSlug);
+  }
+  return normalizeWorkspaceSlug(workspaceSlugFromName(input?.name));
+}
+
+function resolveWorkspaceRoot({
+  projectsRoot = "",
+  slug = ""
+} = {}) {
+  const normalizedProjectsRoot = normalizeRoot(projectsRoot || resolveStudioProjectsRoot());
+  const normalizedSlug = normalizeWorkspaceSlug(slug);
+  const workspaceRoot = path.resolve(normalizedProjectsRoot, normalizedSlug);
+  if (!pathInsideOrEqual(normalizedProjectsRoot, workspaceRoot)) {
+    const error = new Error("Workspace root must be inside the Vibe64 workspace root.");
+    error.code = "vibe64_workspace_outside_root";
+    throw error;
+  }
+  return workspaceRoot;
 }
 
 async function directoryExists(directoryPath = "") {
@@ -66,6 +104,12 @@ async function directoryExists(directoryPath = "") {
 
 async function assertDirectoryUsable(directoryPath = "") {
   try {
+    const linkInfo = await lstat(directoryPath);
+    if (linkInfo.isSymbolicLink()) {
+      const error = new Error(`Project path must not be a symlink: ${directoryPath}`);
+      error.code = "vibe64_project_path_symlink";
+      throw error;
+    }
     const info = await stat(directoryPath);
     if (!info.isDirectory()) {
       const error = new Error(`Project path is not a directory: ${directoryPath}`);
@@ -83,6 +127,10 @@ async function assertDirectoryUsable(directoryPath = "") {
   }
 }
 
+async function assertWorkspaceDirectoryUsable(directoryPath = "") {
+  return assertDirectoryUsable(directoryPath);
+}
+
 function projectRecord({
   path: projectPath = "",
   projectsRoot = "",
@@ -98,6 +146,19 @@ function projectRecord({
     selected: selectedPath ? normalizeRoot(selectedPath) === resolvedPath : false,
     slug: path.basename(resolvedPath),
     source
+  };
+}
+
+function workspaceRecord({
+  path: workspacePath = "",
+  projectsRoot = ""
+} = {}) {
+  const resolvedPath = normalizeRoot(workspacePath);
+  return {
+    path: resolvedPath,
+    slug: path.basename(resolvedPath),
+    workspaceRoot: resolvedPath,
+    workspaceRootRelative: path.relative(normalizeRoot(projectsRoot), resolvedPath)
   };
 }
 
@@ -132,16 +193,10 @@ function createStudioProjectContext({
   }
 
   async function listProjects() {
-    await mkdir(projectsRoot, {
-      recursive: true
-    });
-    const entries = await readdir(projectsRoot, {
-      withFileTypes: true
-    });
-    const projects = entries
-      .filter((entry) => entry.isDirectory())
+    const listed = await listManagedWorkspaces();
+    const projects = listed.workspaces
       .map((entry) => projectRecord({
-        path: path.join(projectsRoot, entry.name),
+        path: entry.workspaceRoot,
         projectsRoot,
         selectedPath: selectedTargetRoot,
         source: "managed"
@@ -153,14 +208,69 @@ function createStudioProjectContext({
       currentProject: selected,
       hasSelection: Boolean(selected),
       projects,
-      projectsRoot,
+      projectsRoot: listed.projectsRoot,
       targetRoot: selectedTargetRoot
+    };
+  }
+
+  async function listManagedWorkspaces() {
+    await mkdir(projectsRoot, {
+      recursive: true
+    });
+    const entries = await readdir(projectsRoot, {
+      withFileTypes: true
+    });
+    const workspaces = entries
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => workspaceRecord({
+        path: path.join(projectsRoot, entry.name),
+        projectsRoot
+      }))
+      .filter((entry) => {
+        try {
+          normalizeWorkspaceSlug(entry.slug);
+          return true;
+        } catch {
+          return false;
+        }
+      })
+      .sort((left, right) => left.slug.localeCompare(right.slug));
+    return {
+      ok: true,
+      projectsRoot,
+      workspaces
+    };
+  }
+
+  async function createManagedWorkspace(input = {}) {
+    const slug = workspaceSlugFromInput(input);
+    const targetRoot = resolveWorkspaceRoot({
+      projectsRoot,
+      slug
+    });
+    if (await directoryExists(targetRoot)) {
+      await assertDirectoryUsable(targetRoot);
+    } else {
+      await mkdir(targetRoot, {
+        recursive: true
+      });
+    }
+    return {
+      ok: true,
+      projectsRoot,
+      workspace: workspaceRecord({
+        path: targetRoot,
+        projectsRoot
+      })
     };
   }
 
   async function selectManagedProject(input = {}) {
     const slug = normalizeProjectSlug(input?.slug || input?.projectSlug || input?.name);
-    const targetRoot = path.join(projectsRoot, slug);
+    const targetRoot = resolveWorkspaceRoot({
+      projectsRoot,
+      slug
+    });
     if (!pathInsideOrEqual(projectsRoot, targetRoot)) {
       const error = new Error("Project folder must be inside the Studio projects root.");
       error.code = "vibe64_project_outside_projects_root";
@@ -173,23 +283,16 @@ function createStudioProjectContext({
   }
 
   async function createManagedProject(input = {}) {
-    const slug = normalizeProjectSlug(projectSlugFromName(input?.slug || input?.name));
-    const targetRoot = path.join(projectsRoot, slug);
-    if (!pathInsideOrEqual(projectsRoot, targetRoot)) {
-      const error = new Error("Project folder must be inside the Studio projects root.");
-      error.code = "vibe64_project_outside_projects_root";
+    let created;
+    try {
+      created = await createManagedWorkspace(input);
+    } catch (error) {
+      if (error?.code === "vibe64_invalid_workspace_slug") {
+        error.code = "vibe64_invalid_project_slug";
+      }
       throw error;
     }
-    if (await directoryExists(targetRoot)) {
-      await assertDirectoryUsable(targetRoot);
-      selectedTargetRoot = targetRoot;
-      selectionSource = "managed";
-      return listProjects();
-    }
-    await mkdir(targetRoot, {
-      recursive: true
-    });
-    selectedTargetRoot = targetRoot;
+    selectedTargetRoot = created.workspace.workspaceRoot;
     selectionSource = "managed";
     return listProjects();
   }
@@ -205,6 +308,7 @@ function createStudioProjectContext({
 
   return Object.freeze({
     createManagedProject,
+    createManagedWorkspace,
     get projectsRoot() {
       return projectsRoot;
     },
@@ -218,6 +322,7 @@ function createStudioProjectContext({
       return Boolean(selectedTargetRoot);
     },
     listProjects,
+    listManagedWorkspaces,
     requireSelectedTargetRoot,
     selectManagedProject
   });
@@ -240,6 +345,11 @@ export {
   createStudioProjectContext,
   getStudioProjectContext,
   normalizeProjectSlug,
+  normalizeWorkspaceSlug,
+  pathInsideOrEqual,
   projectSlugFromName,
-  resolveStudioProjectsRoot
+  resolveStudioProjectsRoot,
+  resolveWorkspaceRoot,
+  assertWorkspaceDirectoryUsable,
+  workspaceSlugFromName
 };

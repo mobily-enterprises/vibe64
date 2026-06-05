@@ -3,6 +3,11 @@ import { normalizeSurfaceId, resolveScopedApiBasePath } from "@jskit-ai/kernel/s
 import { requestBodyObject } from "@local/vibe64-core/server/serverResponses";
 import { sendDoctorEventStream } from "./doctorStream.js";
 import { requireLocalStudioRequest } from "@local/vibe64-core/server/localStudioRequest";
+import {
+  VIBE64_WORKSPACE_ROUTE_BASE,
+  runWithResolvedWorkspaceRequestContext,
+  workspaceRequestErrorStatusCode
+} from "@local/vibe64-core/server/workspaceRequestContext";
 
 function requireApplication(app) {
   if (!app || typeof app.make !== "function") {
@@ -31,6 +36,7 @@ function registerDoctorRoutes(
   {
     actionId,
     closeTerminalSummary,
+    includeVibe64User = false,
     localRequestMessage,
     queryValidator,
     readTerminalSummary,
@@ -43,6 +49,7 @@ function registerDoctorRoutes(
     tags = [],
     terminalInputValidator,
     terminalStartInputValidator,
+    workspaceScoped = true,
     writeTerminalSummary
   } = {}
 ) {
@@ -51,11 +58,15 @@ function registerDoctorRoutes(
   const router = app.make("jskit.http.router");
   const normalizedRouteSurface = normalizeSurfaceId(routeSurface);
   const routeBase = resolveScopedApiBasePath({
-    routeBase: "/",
+    routeBase: workspaceScoped ? VIBE64_WORKSPACE_ROUTE_BASE : "/",
     relativePath: routeRelativePath,
     strictParams: false
   });
   const service = () => app.make(serviceToken);
+  const withDoctorRequest = workspaceScoped ? withWorkspaceDoctorRequest : withGlobalDoctorRequest;
+  const inputForRequest = (request, input = {}) => includeVibe64User
+    ? withVibe64User(request, input)
+    : input;
 
   router.register(
     "GET",
@@ -73,11 +84,13 @@ function registerDoctorRoutes(
       if (!requireLocalDoctorRequest(request, reply, localRequestMessage)) {
         return;
       }
-      const response = await request.executeAction({
-        actionId,
-        input: request.input.query || {}
+      await withDoctorRequest(request, reply, async () => {
+        const response = await request.executeAction({
+          actionId,
+          input: inputForRequest(request, request.input.query || {})
+        });
+        reply.code(200).send(response);
       });
-      reply.code(200).send(response);
     }
   );
 
@@ -97,10 +110,12 @@ function registerDoctorRoutes(
       if (!requireLocalDoctorRequest(request, reply, localRequestMessage)) {
         return;
       }
-      await sendDoctorEventStream(reply, ({ emit }) => {
-        return service().streamStatus({
-          ...requestQuery(request),
-          emit
+      await withDoctorRequest(request, reply, async () => {
+        await sendDoctorEventStream(reply, ({ emit }) => {
+          return service().streamStatus(inputForRequest(request, {
+            ...requestQuery(request),
+            emit
+          }));
         });
       });
     }
@@ -122,8 +137,10 @@ function registerDoctorRoutes(
       if (!requireLocalDoctorRequest(request, reply, localRequestMessage)) {
         return;
       }
-      const response = await service().startTerminal(requestBodyObject(request));
-      sendServiceResponse(reply, response);
+      await withDoctorRequest(request, reply, async () => {
+        const response = await service().startTerminal(inputForRequest(request, requestBodyObject(request)));
+        sendServiceResponse(reply, response);
+      });
     }
   );
 
@@ -142,9 +159,11 @@ function registerDoctorRoutes(
       if (!requireLocalDoctorRequest(request, reply, localRequestMessage)) {
         return;
       }
-      const response = await service().readTerminal(request.params.sessionId);
-      sendServiceResponse(reply, response, {
-        failureStatus: 404
+      await withDoctorRequest(request, reply, async () => {
+        const response = await service().readTerminal(request.params.sessionId);
+        sendServiceResponse(reply, response, {
+          failureStatus: 404
+        });
       });
     }
   );
@@ -165,12 +184,14 @@ function registerDoctorRoutes(
       if (!requireLocalDoctorRequest(request, reply, localRequestMessage)) {
         return;
       }
-      const response = await service().writeTerminal(
-        request.params.sessionId,
-        requestBodyObject(request).data || ""
-      );
-      sendServiceResponse(reply, response, {
-        failureStatus: 404
+      await withDoctorRequest(request, reply, async () => {
+        const response = await service().writeTerminal(
+          request.params.sessionId,
+          requestBodyObject(request).data || ""
+        );
+        sendServiceResponse(reply, response, {
+          failureStatus: 404
+        });
       });
     }
   );
@@ -190,10 +211,54 @@ function registerDoctorRoutes(
       if (!requireLocalDoctorRequest(request, reply, localRequestMessage)) {
         return;
       }
-      const response = await service().closeTerminal(request.params.sessionId);
-      reply.code(200).send(response);
+      await withDoctorRequest(request, reply, async () => {
+        const response = await service().closeTerminal(request.params.sessionId);
+        reply.code(200).send(response);
+      });
     }
   );
+}
+
+function withVibe64User(request, input = {}) {
+  return {
+    ...input,
+    vibe64User: request.vibe64User || null
+  };
+}
+
+async function withGlobalDoctorRequest(_request, _reply, operation) {
+  return operation();
+}
+
+async function withWorkspaceDoctorRequest(request, reply, operation) {
+  try {
+    return await runWithResolvedWorkspaceRequestContext({
+      request
+    }, operation);
+  } catch (error) {
+    if (isWorkspaceRequestError(error)) {
+      reply.code(workspaceRequestErrorStatusCode(error)).send({
+        ok: false,
+        errors: [
+          {
+            code: error?.code || "vibe64_workspace_request_failed",
+            message: String(error?.message || error || "Vibe64 workspace request failed.")
+          }
+        ]
+      });
+      return undefined;
+    }
+    throw error;
+  }
+}
+
+function isWorkspaceRequestError(error = {}) {
+  return [
+    "vibe64_invalid_workspace_slug",
+    "vibe64_project_path_not_accessible",
+    "vibe64_project_path_not_directory",
+    "vibe64_project_path_symlink"
+  ].includes(error?.code);
 }
 
 export {

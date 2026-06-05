@@ -32,6 +32,8 @@ describe("Vibe64 launch controls", () => {
 
     expect(launchBrowserTargetName(firstSession)).toBe(launchBrowserTargetName(secondSessionForSameProject));
     expect(launchBrowserTargetName(firstSession)).not.toBe(launchBrowserTargetName(differentProject));
+    expect(launchBrowserTargetName(firstSession, "alpha_1"))
+      .not.toBe(launchBrowserTargetName(firstSession, "beta_2"));
   });
 
   it("opens launch targets in the named browser target", () => {
@@ -96,12 +98,29 @@ describe("Vibe64 launch controls", () => {
     })).toBe("");
 
     expect(launchTargetWorktreePath({
+      completedSteps: ["worktree_created"],
+      sessionId: "session-1",
+      sessionRoot: "/workspace/.vibe64/sessions/active/session-1",
+      status: "active"
+    })).toBe("/workspace/.vibe64/sessions/active/session-1/worktree");
+
+    expect(launchTargetWorktreePath({
       metadata: {
         worktree_path: "/workspace/.vibe64/sessions/session-1/worktree"
       },
       sessionId: "session-1",
       worktreeReady: true
     })).toBe("/workspace/.vibe64/sessions/session-1/worktree");
+
+    expect(launchTargetWorktreePath({
+      completedSteps: ["worktree_created"],
+      metadata: {
+        worktree_path: "/old-workspace/.vibe64/sessions/active/session-1/worktree"
+      },
+      sessionId: "session-1",
+      sessionRoot: "/workspace/.vibe64/sessions/active/session-1",
+      worktreeReady: true
+    })).toBe("/workspace/.vibe64/sessions/active/session-1/worktree");
   });
 
   it("keeps the embedded preview URL blank until the launch preview is ready", () => {
@@ -178,6 +197,8 @@ describe("Vibe64 launch controls", () => {
       .toBe(launchPreviewToolbarStorageKey(secondSessionForSameProject));
     expect(launchPreviewToolbarStorageKey(firstSession))
       .not.toBe(launchPreviewToolbarStorageKey(differentProject));
+    expect(launchPreviewToolbarStorageKey(firstSession, "alpha_1"))
+      .not.toBe(launchPreviewToolbarStorageKey(firstSession, "beta_2"));
   });
 });
 

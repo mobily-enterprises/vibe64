@@ -47,7 +47,7 @@ class Vibe64ProjectProvider {
   boot(app) {
     registerRoutes(app, {
       routeRelativePath: "vibe64",
-      routeSurface: "home"
+      routeSurface: "app"
     });
   }
 }

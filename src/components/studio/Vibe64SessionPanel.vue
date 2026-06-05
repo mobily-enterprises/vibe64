@@ -4,17 +4,25 @@
     class="studio-ai-sessions studio-ai-sessions--autopilot studio-screen__panel"
     :class="{ 'studio-ai-sessions--with-header': panelHeaderVisible }"
   >
+    <Transition name="studio-ai-sessions-error">
+      <div
+        v-if="visiblePageError"
+        class="studio-ai-sessions__error-overlay"
+      >
+        <StudioErrorNotice
+          title="Vibe64 sessions could not load"
+          :error="pageError"
+          compact
+          dismissible
+          @dismiss="dismissPageError"
+        />
+      </div>
+    </Transition>
+
     <div
       v-if="panelHeaderVisible"
       class="studio-ai-sessions__header"
     >
-      <StudioErrorNotice
-        v-if="pageError"
-        title="Vibe64 sessions could not load"
-        :error="pageError"
-        compact
-      />
-
       <Vibe64SessionToolbar
         v-if="panelSessionToolbarVisible"
         :abandon="selectedAbandon"
@@ -61,7 +69,6 @@
         :active="runtimeSessionId === selection.selectedSessionId"
         :session-data="sessionData"
         :session-id="runtimeSessionId"
-        session-mode="autopilot"
         :chat-collapsed="chatCollapsed"
         :workspace-pane="workspacePane"
         @busy-change="setRuntimeBusy"
@@ -113,6 +120,7 @@ const fallbackAbandon = {
   },
   request: () => null
 };
+const dismissedPageError = ref("");
 const mountedRuntimeSessionIds = ref([]);
 const runtimeStateBySessionId = reactive({});
 const sessionData = useVibe64SessionData({
@@ -175,7 +183,15 @@ const pageError = computed(() => blockingVibe64SessionPageError({
   sessionListLoadError: sessionData.sessionList.loadError,
   sessions: toolbar.sessions || []
 }));
-const panelHeaderVisible = computed(() => Boolean(pageError.value || panelSessionToolbarVisible.value));
+const visiblePageError = computed(() => Boolean(
+  pageError.value &&
+  dismissedPageError.value !== pageError.value
+));
+const panelHeaderVisible = computed(() => Boolean(panelSessionToolbarVisible.value));
+
+function dismissPageError() {
+  dismissedPageError.value = String(pageError.value || "");
+}
 
 function ensureRuntimeState(sessionId = "") {
   const key = String(sessionId || "");
@@ -263,6 +279,12 @@ watch(() => [
 }, {
   immediate: true
 });
+
+watch(pageError, (error) => {
+  if (!error) {
+    dismissedPageError.value = "";
+  }
+});
 </script>
 
 <style scoped>
@@ -272,6 +294,7 @@ watch(() => [
   height: 100%;
   min-height: 0;
   overflow: hidden;
+  position: relative;
 }
 
 .studio-ai-sessions--autopilot {
@@ -313,6 +336,25 @@ watch(() => [
 .studio-ai-sessions__header {
   display: grid;
   gap: 0.65rem;
+}
+
+.studio-ai-sessions__error-overlay {
+  left: 0.85rem;
+  max-width: min(42rem, calc(100% - 1.7rem));
+  position: absolute;
+  top: 0.85rem;
+  z-index: 12;
+}
+
+.studio-ai-sessions-error-enter-active,
+.studio-ai-sessions-error-leave-active {
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.studio-ai-sessions-error-enter-from,
+.studio-ai-sessions-error-leave-to {
+  opacity: 0;
+  transform: translateY(-0.35rem);
 }
 
 .studio-ai-sessions__runtime-stack {

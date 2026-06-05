@@ -2,6 +2,9 @@ import {
   createVibe64WebLaunchTargetTerminalSpec
 } from "@local/studio-terminal-core/server/launchTargetTerminal";
 import {
+  sessionWorktreePath
+} from "@local/vibe64-core/server/sessionWorktreePath";
+import {
   selectedConfigValue
 } from "../../configValues.js";
 import {
@@ -41,7 +44,7 @@ function reviewLaunchTarget(mode = "production") {
 async function listVinextLaunchTargets({
   session = {}
 } = {}) {
-  const worktreePath = String(session.metadata?.worktree_path || "").trim();
+  const worktreePath = sessionWorktreePath(session);
   if (!worktreePath || !await readPackageJson(worktreePath)) {
     return [];
   }

@@ -127,7 +127,8 @@ test("codex app-server bridge appends host helper commands without changing the 
         "- Current-step input helper: node /repo/.vibe64/sessions/active/session/helpers/current-host.mjs",
         "- Terminal chat mirror helper: node /repo/.vibe64/sessions/active/session/helpers/chat-host.mjs",
         "- For direct terminal input, call the terminal chat mirror helper with a `response` field only; Vibe64 reads the user prompt from Codex app-server events.",
-        "- Use these commands when env-based helper command examples are unavailable in this app-server turn."
+        "- In Codex app-server turns, use these host helper commands instead of env-based helper examples.",
+        "- Do not run `node \"$VIBE64_CURRENT_STEP_INPUT_HELPER\"` or `node \"$VIBE64_TERMINAL_CHAT_HELPER\"` unless this specific turn says those environment variables are available."
       ].join("\n")
     ].join("\n\n")
   );

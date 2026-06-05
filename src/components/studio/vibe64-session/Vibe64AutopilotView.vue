@@ -417,8 +417,9 @@
         />
 
         <div
-          v-show="rightPaneTab === 'preview'"
           class="studio-autopilot__right-pane-page"
+          :class="{ 'studio-autopilot__right-pane-page--hidden': rightPaneTab !== 'preview' }"
+          :aria-hidden="rightPaneTab !== 'preview' ? 'true' : undefined"
           role="tabpanel"
         >
           <div
@@ -1821,9 +1822,18 @@ watch(() => [
 
 .studio-autopilot__right-pane-page {
   display: grid;
+  grid-area: 1 / 1;
   min-height: 0;
   min-width: 0;
   position: relative;
+  z-index: 1;
+}
+
+.studio-autopilot__right-pane-page--hidden {
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+  z-index: 0;
 }
 
 .studio-autopilot__right-pane-close {

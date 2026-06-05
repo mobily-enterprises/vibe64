@@ -7,6 +7,9 @@ import {
   stableHash
 } from "./terminalShared.js";
 import {
+  targetRuntimeIdentity
+} from "@local/vibe64-core/server/workspaceRuntimeIdentity";
+import {
   STUDIO_TEMP_DIR_NAME
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 
@@ -22,7 +25,7 @@ const ATTACHMENT_TTL_MS = 30 * 60 * 1000;
 const attachmentCleanupTimers = new Map();
 
 function attachmentSessionKey(targetRoot, sessionId) {
-  return path.join(stableHash(targetRoot), stableHash(sessionId));
+  return path.join(stableHash(targetRuntimeIdentity(targetRoot)), stableHash(sessionId));
 }
 
 function attachmentHostDirectory(targetRoot, sessionId, attachmentId = "") {
@@ -77,7 +80,7 @@ async function cleanupCodexAttachments(targetRoot, sessionId, attachmentId = "")
   const cleanupPath = attachmentId
     ? attachmentHostDirectory(targetRoot, sessionId, attachmentId)
     : attachmentHostDirectory(targetRoot, sessionId);
-  const timerKey = `${stableHash(targetRoot)}:${stableHash(sessionId)}:${attachmentId}`;
+  const timerKey = `${stableHash(targetRuntimeIdentity(targetRoot))}:${stableHash(sessionId)}:${attachmentId}`;
   const timer = attachmentCleanupTimers.get(timerKey);
   if (timer) {
     clearTimeout(timer);
@@ -90,7 +93,7 @@ async function cleanupCodexAttachments(targetRoot, sessionId, attachmentId = "")
 }
 
 function scheduleAttachmentCleanup(targetRoot, sessionId, attachmentId) {
-  const timerKey = `${stableHash(targetRoot)}:${stableHash(sessionId)}:${attachmentId}`;
+  const timerKey = `${stableHash(targetRuntimeIdentity(targetRoot))}:${stableHash(sessionId)}:${attachmentId}`;
   const existingTimer = attachmentCleanupTimers.get(timerKey);
   if (existingTimer) {
     clearTimeout(existingTimer);

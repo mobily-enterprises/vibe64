@@ -6,7 +6,10 @@ import test from "node:test";
 
 import {
   createStudioProjectContext,
-  projectSlugFromName
+  normalizeWorkspaceSlug,
+  projectSlugFromName,
+  resolveWorkspaceRoot,
+  workspaceSlugFromName
 } from "../../packages/vibe64-core/src/server/studioProjectContext.js";
 
 async function withTemporaryRoot(callback) {
@@ -75,6 +78,65 @@ test("Studio project context creates and selects managed project folders under t
     assert.equal(selected.hasSelection, true);
     assert.equal(selected.targetRoot, expectedTargetRoot);
     assert.equal(selected.currentProject.selected, true);
+  });
+});
+
+test("workspace slug contract resolves only canonical Vibe64 workspace roots", async () => {
+  await withTemporaryRoot(async (root) => {
+    const projectsRoot = path.join(root, "vibe64");
+
+    assert.equal(normalizeWorkspaceSlug("app_1-alpha"), "app_1-alpha");
+    assert.equal(workspaceSlugFromName("Example App"), "example-app");
+    assert.equal(workspaceSlugFromName("Example.App"), "example-app");
+    assert.equal(resolveWorkspaceRoot({
+      projectsRoot,
+      slug: "app_1-alpha"
+    }), path.join(projectsRoot, "app_1-alpha"));
+
+    for (const slug of ["", "Example", "app.dot", "../outside", "/tmp/app", "_hidden", "-dash", "app/slash"]) {
+      assert.throws(
+        () => normalizeWorkspaceSlug(slug),
+        {
+          code: "vibe64_invalid_workspace_slug"
+        },
+        `Expected invalid workspace slug: ${slug}`
+      );
+    }
+  });
+});
+
+test("Studio project context lists and creates workspaces without selecting one", async () => {
+  await withTemporaryRoot(async (root) => {
+    const projectsRoot = path.join(root, "projects");
+    const context = createStudioProjectContext({
+      explicitProjectsRoot: projectsRoot,
+      env: {},
+      home: root
+    });
+
+    const created = await context.createManagedWorkspace({
+      slug: "beta_2"
+    });
+    assert.equal(created.ok, true);
+    assert.equal(created.workspace.slug, "beta_2");
+    assert.equal(created.workspace.workspaceRoot, path.join(projectsRoot, "beta_2"));
+    assert.equal(context.targetRoot, "");
+    assert.equal(context.hasSelection(), false);
+
+    await context.createManagedWorkspace({
+      slug: "alpha"
+    });
+    const listed = await context.listManagedWorkspaces();
+    assert.deepEqual(listed.workspaces.map((workspace) => workspace.slug), ["alpha", "beta_2"]);
+
+    await assert.rejects(
+      () => context.createManagedWorkspace({
+        slug: "Bad.Slug"
+      }),
+      {
+        code: "vibe64_invalid_workspace_slug"
+      }
+    );
   });
 });
 

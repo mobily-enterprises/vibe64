@@ -1,7 +1,6 @@
 import { computed, proxyRefs, ref, unref } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
-import { usersWebHttpClient } from "@jskit-ai/users-web/client/lib/httpClient";
 import {
   VIBE64_ACTION_DISPATCH_ROUTES as ACTION_DISPATCH_ROUTES
 } from "@local/vibe64-core/shared";
@@ -25,6 +24,10 @@ import {
 import {
   vibe64SessionWorktreePath
 } from "@/lib/vibe64SessionPaths.js";
+import {
+  scopedDevelopmentApiUrl,
+  studioHttpClient
+} from "@/lib/studioHttp.js";
 import {
   readRefOrGetterBoolean
 } from "@/lib/vueRefOrGetterValue.js";
@@ -76,6 +79,12 @@ function useVibe64SessionActions({
   sessionsApiPath
 } = {}) {
   const activeActionId = ref("");
+  const runActionRunning = ref(false);
+  const runActionMessage = ref("");
+  const runActionMessageType = ref("success");
+  const runIntentRunning = ref(false);
+  const runIntentMessage = ref("");
+  const runIntentMessageType = ref("success");
   const advanceRunning = ref(false);
   const advanceMessage = ref("");
   const advanceMessageType = ref("success");
@@ -83,65 +92,18 @@ function useVibe64SessionActions({
   const recoverStuckStepMessage = ref("");
   const recoverStuckStepMessageType = ref("success");
 
-  const runActionCommand = useCommand({
-    access: "never",
-    apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
-    buildRawPayload: (_model, { context }) => commandInputFromContext(context),
-    buildCommandOptions: (_payload, { context }) => ({
-      method: "POST",
-      options: LOCAL_STUDIO_COMMAND_OPTIONS,
-      path: vibe64ActionPath(sessionsApiPath.value, context?.sessionId, context?.actionId)
-    }),
-    fallbackRunError: "Vibe64 action could not run.",
-    messages: {
-      error: "Vibe64 action could not run.",
-      success: "Vibe64 action completed."
-    },
-    onRunSuccess: async (response, { context } = {}) => {
-      vibe64SessionDebugLog("client.sessionActions.runAction.success", {
-        ...vibe64SessionDebugSummary(response || {}),
-        actionId: String(context?.actionId || ""),
-        actionResultStatus: String(response?.actionResult?.status || ""),
-        advanceOnSuccess: context?.advanceOnSuccess === true
-      });
-      await refreshSessionData();
-    },
-    ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "vibe64.sessions.action",
-    suppressSuccessMessage: true,
-    surfaceId: VIBE64_SURFACE_ID,
-    writeMethod: "POST"
+  const runActionCommand = proxyRefs({
+    isRunning: runActionRunning,
+    message: runActionMessage,
+    messageType: runActionMessageType,
+    run: runActionRequest
   });
 
-  const runIntentCommand = useCommand({
-    access: "never",
-    apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
-    buildRawPayload: (_model, { context }) => intentInputFromContext(context),
-    buildCommandOptions: (_payload, { context }) => ({
-      method: "POST",
-      options: LOCAL_STUDIO_COMMAND_OPTIONS,
-      path: vibe64IntentPath(sessionsApiPath.value, context?.sessionId, context?.intentId)
-    }),
-    fallbackRunError: "Vibe64 intent could not run.",
-    messages: {
-      error: "Vibe64 intent could not run.",
-      success: "Vibe64 intent completed."
-    },
-    onRunSuccess: async (response, { context } = {}) => {
-      vibe64SessionDebugLog("client.sessionActions.runIntent.success", {
-        ...vibe64SessionDebugSummary(response || {}),
-        actionResultStatus: String(response?.actionResult?.status || ""),
-        intentId: String(context?.intentId || ""),
-        requestedStepId: String(context?.stepId || ""),
-        requestedStepStatus: String(context?.stepStatus || "")
-      });
-      await refreshSessionData();
-    },
-    ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "vibe64.sessions.intent",
-    suppressSuccessMessage: true,
-    surfaceId: VIBE64_SURFACE_ID,
-    writeMethod: "POST"
+  const runIntentCommand = proxyRefs({
+    isRunning: runIntentRunning,
+    message: runIntentMessage,
+    messageType: runIntentMessageType,
+    run: runIntentRequest
   });
 
   const advanceCommand = proxyRefs({
@@ -166,7 +128,7 @@ function useVibe64SessionActions({
     buildCommandOptions: (_payload, { context }) => ({
       method: "POST",
       options: LOCAL_STUDIO_COMMAND_OPTIONS,
-      path: vibe64SessionPath(sessionsApiPath.value, context?.sessionId, "/rewind")
+      path: scopedDevelopmentApiUrl(vibe64SessionPath(sessionsApiPath.value, context?.sessionId, "/rewind"))
     }),
     fallbackRunError: "Vibe64 session could not rewind.",
     messages: {
@@ -245,6 +207,83 @@ function useVibe64SessionActions({
 
   function clear() {
     activeActionId.value = "";
+    clearSessionCommandMessages();
+  }
+
+  function clearSessionCommandMessages() {
+    runActionMessage.value = "";
+    runIntentMessage.value = "";
+  }
+
+  function requestErrorMessage(error = {}, fallback = "Request failed.") {
+    return String(error?.message || error?.error || error?.errors?.[0]?.message || fallback);
+  }
+
+  async function runActionRequest(context = {}) {
+    if (runActionRunning.value) {
+      return null;
+    }
+    runActionRunning.value = true;
+    runActionMessage.value = "";
+    runActionMessageType.value = "success";
+    try {
+      const response = await studioHttpClient.request(
+        scopedDevelopmentApiUrl(vibe64ActionPath(sessionsApiPath.value, context?.sessionId, context?.actionId)),
+        {
+          body: commandInputFromContext(context),
+          method: "POST",
+          ...LOCAL_STUDIO_COMMAND_OPTIONS
+        }
+      );
+      vibe64SessionDebugLog("client.sessionActions.runAction.success", {
+        ...vibe64SessionDebugSummary(response || {}),
+        actionId: String(context?.actionId || ""),
+        actionResultStatus: String(response?.actionResult?.status || ""),
+        advanceOnSuccess: context?.advanceOnSuccess === true
+      });
+      await refreshSessionData();
+      return response;
+    } catch (error) {
+      runActionMessageType.value = "error";
+      runActionMessage.value = requestErrorMessage(error, "Vibe64 action could not run.");
+      throw error;
+    } finally {
+      runActionRunning.value = false;
+    }
+  }
+
+  async function runIntentRequest(context = {}) {
+    if (runIntentRunning.value) {
+      return null;
+    }
+    runIntentRunning.value = true;
+    runIntentMessage.value = "";
+    runIntentMessageType.value = "success";
+    try {
+      const response = await studioHttpClient.request(
+        scopedDevelopmentApiUrl(vibe64IntentPath(sessionsApiPath.value, context?.sessionId, context?.intentId)),
+        {
+          body: intentInputFromContext(context),
+          method: "POST",
+          ...LOCAL_STUDIO_COMMAND_OPTIONS
+        }
+      );
+      vibe64SessionDebugLog("client.sessionActions.runIntent.success", {
+        ...vibe64SessionDebugSummary(response || {}),
+        actionResultStatus: String(response?.actionResult?.status || ""),
+        intentId: String(context?.intentId || ""),
+        requestedStepId: String(context?.stepId || ""),
+        requestedStepStatus: String(context?.stepStatus || "")
+      });
+      await refreshSessionData();
+      return response;
+    } catch (error) {
+      runIntentMessageType.value = "error";
+      runIntentMessage.value = requestErrorMessage(error, "Vibe64 intent could not run.");
+      throw error;
+    } finally {
+      runIntentRunning.value = false;
+    }
   }
 
   async function runAdvanceCommand({
@@ -260,7 +299,7 @@ function useVibe64SessionActions({
     advanceMessage.value = "";
     advanceMessageType.value = "success";
     try {
-      const response = await usersWebHttpClient.request(
+      const response = await studioHttpClient.request(
         vibe64SessionPath(sessionsApiPath.value, normalizedSessionId, "/advance"),
         {
           body: {
@@ -373,7 +412,7 @@ function useVibe64SessionActions({
     recoverStuckStepMessage.value = "";
     recoverStuckStepMessageType.value = "success";
     try {
-      const response = await usersWebHttpClient.request(
+      const response = await studioHttpClient.request(
         vibe64SessionPath(sessionsApiPath.value, normalizedSessionId, "/recover-stuck-step"),
         {
           method: "POST",

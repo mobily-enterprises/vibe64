@@ -324,8 +324,23 @@ function createLaunchTargetTerminalController({
     if (!targetHref || status.openTarget?.available === false) {
       return null;
     }
+    const terminalSessionId = String(status.activeTerminal?.id || "").trim();
+    if (!terminalSessionId) {
+      return {
+        available: false,
+        disabledReason: "Run a launch target first.",
+        href: "",
+        kind: "url",
+        label: "Preview",
+        targetHref
+      };
+    }
     try {
-      return await launchPreviewProxies.ensure(sessionId, targetHref);
+      return await launchPreviewProxies.ensure({
+        sessionId,
+        targetHref,
+        terminalSessionId
+      });
     } catch (error) {
       return {
         available: false,
@@ -340,12 +355,17 @@ function createLaunchTargetTerminalController({
 
   return Object.freeze({
     async closeAllForSession(sessionId) {
-      await launchPreviewProxies.close(sessionId);
+      await launchPreviewProxies.close({
+        sessionId
+      });
       return closeTerminalSessionsForNamespace(launchTargetTerminalNamespace(sessionId));
     },
 
     async closeTerminal(sessionId, terminalSessionId) {
-      await launchPreviewProxies.close(sessionId);
+      await launchPreviewProxies.close({
+        sessionId,
+        terminalSessionId
+      });
       return closeTerminalSession(terminalSessionId, {
         namespace: launchTargetTerminalNamespace(sessionId)
       });
@@ -475,8 +495,24 @@ function createLaunchTargetTerminalController({
           },
           namespace,
           namespaceLimitPrefix: namespace,
-          onClose: spec.onClose,
-          onStop: spec.onStop,
+          onClose: async (event) => {
+            await launchPreviewProxies.close({
+              sessionId,
+              terminalSessionId: event.id
+            });
+            if (typeof spec.onClose === "function") {
+              await spec.onClose(event);
+            }
+          },
+          onStop: async (event) => {
+            await launchPreviewProxies.close({
+              sessionId,
+              terminalSessionId: event.id
+            });
+            if (typeof spec.onStop === "function") {
+              await spec.onStop(event);
+            }
+          },
           onOutput: ({ output, session: runningTerminalSession, updateMetadata }) => {
             const actions = launchActionsFromOutput(output);
             if (actions.length > 0 && launchActionsChanged(runningTerminalSession.metadata?.actions, actions)) {
@@ -510,7 +546,10 @@ function createLaunchTargetTerminalController({
     },
 
     async stopTerminal(sessionId, terminalSessionId) {
-      await launchPreviewProxies.close(sessionId);
+      await launchPreviewProxies.close({
+        sessionId,
+        terminalSessionId
+      });
       return stopTerminalSession(terminalSessionId, {
         namespace: launchTargetTerminalNamespace(sessionId)
       });

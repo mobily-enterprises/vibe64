@@ -28,7 +28,46 @@ import {
 import {
   createManagedDatabaseRuntimeContainer
 } from "@local/studio-terminal-core/server/managedDatabases";
+import {
+  runWithWorkspaceRequestContext
+} from "@local/vibe64-core/server/workspaceRequestContext";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
+
+test("managed workspace runtime identity follows the slug instead of the absolute path", async () => {
+  await withTemporaryRoot(async (root) => {
+    const oldProjectsRoot = path.join(root, "old-root");
+    const newProjectsRoot = path.join(root, "new-root");
+    const oldTargetRoot = path.join(oldProjectsRoot, "beepollen");
+    const newTargetRoot = path.join(newProjectsRoot, "beepollen");
+
+    const oldRuntime = await runWithWorkspaceRequestContext({
+      projectsRoot: oldProjectsRoot,
+      slug: "beepollen",
+      targetRoot: oldTargetRoot
+    }, () => ({
+      containerName: runtimeContainerName({
+        adapterId: "jskit",
+        containerId: "jskit-mariadb",
+        targetRoot: oldTargetRoot
+      }),
+      networkName: runtimeNetworkName(oldTargetRoot)
+    }));
+    const newRuntime = await runWithWorkspaceRequestContext({
+      projectsRoot: newProjectsRoot,
+      slug: "beepollen",
+      targetRoot: newTargetRoot
+    }, () => ({
+      containerName: runtimeContainerName({
+        adapterId: "jskit",
+        containerId: "jskit-mariadb",
+        targetRoot: newTargetRoot
+      }),
+      networkName: runtimeNetworkName(newTargetRoot)
+    }));
+
+    assert.deepEqual(newRuntime, oldRuntime);
+  });
+});
 
 test("runtime container descriptors describe arbitrary containers without service catalog coupling", async () => {
   await withTemporaryRoot(async (targetRoot) => {

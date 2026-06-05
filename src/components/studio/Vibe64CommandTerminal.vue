@@ -82,15 +82,17 @@
 
     <v-expand-transition>
       <div v-show="expanded" class="ai-command-terminal__body">
-        <StudioErrorNotice
-          v-if="terminalError"
-          title="Terminal needs attention"
-          :error="terminalError"
-          compact
-          class="mb-2"
-        />
+        <div class="ai-command-terminal__stage">
+          <StudioErrorNotice
+            v-if="terminalError"
+            title="Terminal needs attention"
+            :error="terminalError"
+            compact
+            overlay
+          />
 
-        <div ref="terminalHost" class="ai-command-terminal__host" />
+          <div ref="terminalHost" class="ai-command-terminal__host" />
+        </div>
 
         <div class="ai-command-terminal__footer">
           <span>{{ terminalCommandPreview || "No command running." }}</span>
@@ -285,6 +287,10 @@ function startDrag(event) {
   gap: 0.5rem;
 }
 
+.ai-command-terminal__stage {
+  position: relative;
+}
+
 .ai-command-terminal__host {
   background: #101216;
   border: 2px solid rgba(var(--v-theme-outline), 0.38);
@@ -295,6 +301,10 @@ function startDrag(event) {
 }
 
 .ai-command-terminal--shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
   padding: 0.35rem;
 }
 
@@ -303,11 +313,25 @@ function startDrag(event) {
 }
 
 .ai-command-terminal--shell .ai-command-terminal__body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
   gap: 0.3rem;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.ai-command-terminal--shell .ai-command-terminal__stage {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .ai-command-terminal--shell .ai-command-terminal__host {
   border-width: 1px;
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
   padding: 0.18rem;
 }
 

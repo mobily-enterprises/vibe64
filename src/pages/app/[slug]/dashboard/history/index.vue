@@ -30,7 +30,7 @@ function normalizeArchive(value) {
 
 function replaceTabQuery(archive) {
   void router.replace({
-    path: "/home/dashboard/history",
+    path: route.path,
     query: {
       ...route.query,
       tab: archive

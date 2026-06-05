@@ -4,7 +4,10 @@
     rounded="lg"
     role="alert"
     class="studio-error-notice"
-    :class="{ 'studio-error-notice--compact': compact }"
+    :class="{
+      'studio-error-notice--compact': compact,
+      'studio-error-notice--overlay': overlay
+    }"
   >
     <div class="studio-error-notice__icon">
       <v-icon :icon="mdiAlertCircleOutline" size="22" />
@@ -21,11 +24,28 @@
         >
           {{ displayCode }}
         </v-chip>
+        <v-btn
+          v-if="dismissible"
+          :icon="mdiClose"
+          aria-label="Dismiss"
+          class="studio-error-notice__dismiss"
+          density="comfortable"
+          size="small"
+          variant="text"
+          @click="$emit('dismiss')"
+        />
       </div>
 
       <p v-if="displayMessage" class="studio-error-notice__message">
         {{ displayMessage }}
       </p>
+
+      <div
+        v-if="$slots.actions"
+        class="studio-error-notice__actions"
+      >
+        <slot name="actions" />
+      </div>
 
       <div v-if="displayRepairCommand" class="studio-error-notice__repair">
         <code>{{ displayRepairCommand }}</code>
@@ -69,8 +89,11 @@ import {
   mdiAlertCircleOutline,
   mdiChevronDown,
   mdiChevronUp,
+  mdiClose,
   mdiContentCopy
 } from "@mdi/js";
+
+defineEmits(["dismiss"]);
 
 const props = defineProps({
   code: {
@@ -85,6 +108,10 @@ const props = defineProps({
     type: [String, Object, Array],
     default: ""
   },
+  dismissible: {
+    type: Boolean,
+    default: false
+  },
   error: {
     type: [String, Object],
     default: ""
@@ -92,6 +119,10 @@ const props = defineProps({
   message: {
     type: String,
     default: ""
+  },
+  overlay: {
+    type: Boolean,
+    default: false
   },
   repairCommand: {
     type: String,
@@ -193,6 +224,16 @@ async function copyRepairCommand() {
   padding: 0.65rem;
 }
 
+.studio-error-notice--overlay {
+  left: 0.75rem;
+  max-height: calc(100% - 1.5rem);
+  overflow: auto;
+  position: absolute;
+  right: 0.75rem;
+  top: 0.75rem;
+  z-index: 8;
+}
+
 .studio-error-notice__icon {
   align-items: center;
   background: rgba(var(--v-theme-error), 0.14);
@@ -218,9 +259,9 @@ async function copyRepairCommand() {
 
 .studio-error-notice__header {
   align-items: center;
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   gap: 0.45rem;
+  grid-template-columns: minmax(0, auto) auto minmax(0, 1fr) auto;
   min-width: 0;
 }
 
@@ -228,6 +269,14 @@ async function copyRepairCommand() {
   font-size: 0.9rem;
   letter-spacing: 0;
   line-height: 1.25;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.studio-error-notice__dismiss {
+  grid-column: 4;
+  justify-self: end;
+  margin: -0.35rem -0.35rem -0.35rem 0;
 }
 
 .studio-error-notice__message {
@@ -246,6 +295,13 @@ async function copyRepairCommand() {
   gap: 0.4rem;
   grid-template-columns: minmax(0, 1fr) auto;
   padding: 0.45rem 0.45rem 0.45rem 0.6rem;
+}
+
+.studio-error-notice__actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
 .studio-error-notice__repair code,

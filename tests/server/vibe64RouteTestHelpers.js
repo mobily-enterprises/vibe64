@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
 import { LOCALHOST_CHECK_BYPASS_ENV } from "@local/vibe64-core/server/localhostCheckBypass";
+
+const TEST_WORKSPACE_SLUG = "unit_workspace";
 
 function testRouteApp() {
   const registeredRoutes = [];
@@ -60,9 +65,40 @@ async function withLocalRequestBypass(operation) {
   }
 }
 
+async function withRouteWorkspace(operation) {
+  const projectsRoot = await mkdtemp(path.join(tmpdir(), "vibe64-route-workspaces-"));
+  await mkdir(path.join(projectsRoot, TEST_WORKSPACE_SLUG), {
+    recursive: true
+  });
+  try {
+    await operation({
+      apiBase: `/api/app/${TEST_WORKSPACE_SLUG}`,
+      apiRouteBase: "/api/app/:slug",
+      projectContext: {
+        projectsRoot
+      },
+      slug: TEST_WORKSPACE_SLUG
+    });
+  } finally {
+    await rm(projectsRoot, {
+      force: true,
+      recursive: true
+    });
+  }
+}
+
+function routeWorkspaceParams(params = {}) {
+  return {
+    slug: TEST_WORKSPACE_SLUG,
+    ...params
+  };
+}
+
 export {
   findRegisteredRoute,
+  routeWorkspaceParams,
   testReply,
   testRouteApp,
-  withLocalRequestBypass
+  withLocalRequestBypass,
+  withRouteWorkspace
 };

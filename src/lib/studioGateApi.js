@@ -2,6 +2,9 @@ import {
   studioApiPath,
   studioHttpClient
 } from "@/lib/studioHttp.js";
+import {
+  vibe64WorkspaceQueryScope
+} from "@/lib/vibe64WorkspaceScope.js";
 
 const TARGET_PROJECT_API_SUFFIX = "/studio/current-app";
 const VIBE64_ACCOUNTS_AUTH_API_SUFFIX = "/vibe64/accounts/auth";
@@ -12,7 +15,6 @@ const VIBE64_PROJECT_TYPE_API_SUFFIX = "/vibe64/project-type";
 
 const ACCOUNTS_ENDPOINT = studioApiPath("vibe64/accounts");
 const STUDIO_SETUP_ENDPOINT = studioApiPath("studio/studio-setup");
-const ADAPTER_SETUP_ENDPOINT = studioApiPath("studio/adapter-setup");
 const PROJECT_SETUP_ENDPOINT = studioApiPath("studio/project-setup");
 const TARGET_PROJECT_ENDPOINT = studioApiPath("studio/current-app");
 const CAPABILITIES_ENDPOINT = `${TARGET_PROJECT_ENDPOINT}/capabilities`;
@@ -26,10 +28,8 @@ const ACCOUNTS_AUTH_ENDPOINT = `${ACCOUNTS_ENDPOINT}/auth`;
 const ACCOUNTS_LOGOUT_ENDPOINT = `${ACCOUNTS_ENDPOINT}/logout`;
 
 const STUDIO_SETUP_TERMINAL_ENDPOINT = `${STUDIO_SETUP_ENDPOINT}/terminal`;
-const ADAPTER_SETUP_TERMINAL_ENDPOINT = `${ADAPTER_SETUP_ENDPOINT}/terminal`;
 const PROJECT_SETUP_TERMINAL_ENDPOINT = `${PROJECT_SETUP_ENDPOINT}/terminal`;
 const STUDIO_SETUP_STREAM_ENDPOINT = `${STUDIO_SETUP_ENDPOINT}/stream`;
-const ADAPTER_SETUP_STREAM_ENDPOINT = `${ADAPTER_SETUP_ENDPOINT}/stream`;
 const PROJECT_SETUP_STREAM_ENDPOINT = `${PROJECT_SETUP_ENDPOINT}/stream`;
 
 function withRefreshQuery(endpoint, {
@@ -41,28 +41,28 @@ function withRefreshQuery(endpoint, {
   return `${endpoint}${endpoint.includes("?") ? "&" : "?"}refresh=true`;
 }
 
-function projectTypeQueryKey(surfaceId, ownershipFilter) {
-  return ["vibe64", surfaceId, ownershipFilter, "project-type"];
+function projectTypeQueryKey(surfaceId, ownershipFilter, workspaceSlug) {
+  return ["vibe64", ...vibe64WorkspaceQueryScope(workspaceSlug), surfaceId, ownershipFilter, "project-type"];
 }
 
-function projectSelectionQueryKey(surfaceId, ownershipFilter) {
-  return ["vibe64", surfaceId, ownershipFilter, "projects"];
+function projectSelectionQueryKey(surfaceId, ownershipFilter, workspaceSlug) {
+  return ["vibe64", ...vibe64WorkspaceQueryScope(workspaceSlug), surfaceId, ownershipFilter, "projects"];
 }
 
-function projectConfigQueryKey(surfaceId, ownershipFilter) {
-  return ["vibe64", surfaceId, ownershipFilter, "project-config"];
+function projectConfigQueryKey(surfaceId, ownershipFilter, workspaceSlug) {
+  return ["vibe64", ...vibe64WorkspaceQueryScope(workspaceSlug), surfaceId, ownershipFilter, "project-config"];
 }
 
-function targetProjectQueryKey(surfaceId, ownershipFilter) {
-  return ["vibe64", surfaceId, ownershipFilter, "target-project"];
+function targetProjectQueryKey(surfaceId, ownershipFilter, workspaceSlug) {
+  return ["vibe64", ...vibe64WorkspaceQueryScope(workspaceSlug), surfaceId, ownershipFilter, "target-project"];
 }
 
-function accountsQueryKey(surfaceId, ownershipFilter) {
-  return ["vibe64", surfaceId, ownershipFilter, "accounts"];
+function accountsQueryKey(surfaceId, ownershipFilter, workspaceSlug) {
+  return ["vibe64", ...vibe64WorkspaceQueryScope(workspaceSlug), surfaceId, ownershipFilter, "accounts"];
 }
 
-function capabilitiesQueryKey(surfaceId, ownershipFilter) {
-  return ["vibe64", surfaceId, ownershipFilter, "capabilities"];
+function capabilitiesQueryKey(surfaceId, ownershipFilter, workspaceSlug) {
+  return ["vibe64", ...vibe64WorkspaceQueryScope(workspaceSlug), surfaceId, ownershipFilter, "capabilities"];
 }
 
 async function readAccountsStatus(options = {}) {
@@ -75,10 +75,6 @@ async function readCapabilitiesStatus() {
 
 async function readStudioSetupStatus(options = {}) {
   return studioHttpClient.get(withRefreshQuery(STUDIO_SETUP_ENDPOINT, options));
-}
-
-async function readAdapterSetupStatus(options = {}) {
-  return studioHttpClient.get(withRefreshQuery(ADAPTER_SETUP_ENDPOINT, options));
 }
 
 async function readProjectSetupStatus(options = {}) {
@@ -110,8 +106,6 @@ export {
   STUDIO_SETUP_TERMINAL_ENDPOINT,
   TARGET_PROJECT_API_SUFFIX,
   TARGET_PROJECT_ENDPOINT,
-  ADAPTER_SETUP_STREAM_ENDPOINT,
-  ADAPTER_SETUP_TERMINAL_ENDPOINT,
   accountsQueryKey,
   capabilitiesQueryKey,
   projectConfigQueryKey,
@@ -122,6 +116,5 @@ export {
   readProjectSetupStatus,
   readSetupReadinessStatus,
   readStudioSetupStatus,
-  readAdapterSetupStatus,
   targetProjectQueryKey
 };

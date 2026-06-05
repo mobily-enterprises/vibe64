@@ -72,7 +72,7 @@
 </template>
 
 <script>
-let cachedProjectSelection = null;
+const cachedProjectSelections = new Map();
 </script>
 
 <script setup>
@@ -92,20 +92,25 @@ import {
   projectSelectionQueryKey
 } from "@/lib/studioGateApi.js";
 import {
+  scopedDevelopmentApiUrl,
   studioHttpClient
 } from "@/lib/studioHttp.js";
+import {
+  useVibe64WorkspaceSlug
+} from "@/composables/useVibe64WorkspaceScope.js";
 
 const emit = defineEmits(["missing", "ready", "error"]);
 
 const creating = ref(false);
 const selectingSlug = ref("");
 const newProjectName = ref("");
+const workspaceSlug = useVibe64WorkspaceSlug();
 
 const selectionResource = useEndpointResource({
   client: studioHttpClient,
   fallbackLoadError: "Projects could not load.",
   path: PROJECT_SELECTION_ENDPOINT,
-  queryKey: computed(() => projectSelectionQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC)),
+  queryKey: computed(() => projectSelectionQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC, workspaceSlug.value)),
   refreshOnPull: true
 });
 
@@ -121,7 +126,8 @@ const createProjectCommand = useCommand({
   apiSuffix: VIBE64_PROJECT_CREATE_API_SUFFIX,
   buildCommandOptions: () => ({
     method: "POST",
-    options: LOCAL_STUDIO_COMMAND_OPTIONS
+    options: LOCAL_STUDIO_COMMAND_OPTIONS,
+    path: scopedDevelopmentApiUrl(PROJECT_SELECTION_ENDPOINT)
   }),
   buildRawPayload: (_model, { context }) => ({
     name: context.name || ""
@@ -143,7 +149,8 @@ const selectProjectCommand = useCommand({
   apiSuffix: VIBE64_PROJECT_SELECT_API_SUFFIX,
   buildCommandOptions: () => ({
     method: "POST",
-    options: LOCAL_STUDIO_COMMAND_OPTIONS
+    options: LOCAL_STUDIO_COMMAND_OPTIONS,
+    path: scopedDevelopmentApiUrl(`${PROJECT_SELECTION_ENDPOINT}/select`)
   }),
   buildRawPayload: (_model, { context }) => ({
     slug: context.slug || ""
@@ -160,11 +167,12 @@ const selectProjectCommand = useCommand({
   writeMethod: "POST"
 });
 
-const projectSelection = computed(() => projectSelectionView.record || cachedProjectSelection || {});
+const cachedProjectSelection = computed(() => cachedProjectSelections.get(workspaceSlug.value) || null);
+const projectSelection = computed(() => projectSelectionView.record || cachedProjectSelection.value || {});
 const projects = computed(() => Array.isArray(projectSelection.value.projects) ? projectSelection.value.projects : []);
 const projectsRoot = computed(() => String(projectSelection.value.projectsRoot || "~/vibe64"));
 const hasSelection = computed(() => projectSelection.value.hasSelection === true);
-const selectionReady = computed(() => Boolean(projectSelectionView.record || cachedProjectSelection));
+const selectionReady = computed(() => Boolean(projectSelectionView.record || cachedProjectSelection.value));
 const busy = computed(() => creating.value || Boolean(selectingSlug.value));
 const saveError = computed(() => {
   if (createProjectCommand.messageType === "error") {
@@ -214,7 +222,7 @@ async function selectProject(slug) {
 
 watch(projectSelection, (selection) => {
   if (selection && Object.keys(selection).length > 0) {
-    cachedProjectSelection = selection;
+    cachedProjectSelections.set(workspaceSlug.value, selection);
   }
   if (selection?.hasSelection === true) {
     emit("ready", selection);

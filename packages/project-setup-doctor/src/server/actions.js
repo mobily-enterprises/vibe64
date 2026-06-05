@@ -10,7 +10,7 @@ const featureActions = Object.freeze([
     version: 1,
     kind: "query",
     channels: ["api", "automation", "internal"],
-    surfaces: ["home"],
+    surfaces: ["app"],
     input: statusQueryInputValidator,
     output: null,
     idempotency: "none",

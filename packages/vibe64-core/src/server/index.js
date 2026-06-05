@@ -7,6 +7,8 @@ export * from "./localStudioRequest.js";
 export * from "./projectServiceSelection.js";
 export * from "./serverResponses.js";
 export * from "./sessionRealtimeEvents.js";
+export * from "./sessionWorktreePath.js";
 export * from "./studioProjectContext.js";
 export * from "./studioRoots.js";
 export * from "./terminalWebSocketRoutes.js";
+export * from "./workspaceRuntimeIdentity.js";

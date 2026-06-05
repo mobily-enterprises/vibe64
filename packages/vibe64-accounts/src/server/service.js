@@ -1,3 +1,5 @@
+import { mkdir } from "node:fs/promises";
+
 import stripAnsi from "strip-ansi";
 
 import {
@@ -10,9 +12,6 @@ import {
   buildDoctorTerminalArgs,
   buildDoctorToolchainArgs
 } from "@local/setup-doctor-core/server/doctorToolchain";
-import {
-  createRepositoryReadyStatusCache
-} from "@local/setup-doctor-core/server/doctorStatusCache";
 import {
   vibe64Result
 } from "@local/vibe64-core/server/serverResponses";
@@ -27,6 +26,14 @@ import {
   runHostCommand,
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
+import {
+  APP_PROVIDER_SCOPE,
+  USER_PROVIDER_SCOPE,
+  githubProviderContext,
+  githubProviderHome,
+  githubProviderUserKey,
+  resolveProviderHomesRoot
+} from "@local/studio-terminal-core/server/providerHomes";
 
 const ACCOUNT_AUTH_NAMESPACE = "vibe64-accounts";
 const BROWSER_AUTH_MODE = "browser";
@@ -39,12 +46,14 @@ const ACCOUNT_DEFINITIONS = Object.freeze({
   codex: Object.freeze({
     id: "codex",
     label: "Codex",
-    required: true
+    required: true,
+    scope: APP_PROVIDER_SCOPE
   }),
   github: Object.freeze({
     id: "github",
     label: "GitHub",
-    required: true
+    required: true,
+    scope: USER_PROVIDER_SCOPE
   })
 });
 
@@ -54,15 +63,21 @@ function resolveVibe64AccountsRoot(targetRoot) {
   });
 }
 
+async function ensureToolHomeSource(context = {}) {
+  if (!context?.toolHomeSource) {
+    return;
+  }
+  await mkdir(context.toolHomeSource, {
+    mode: 0o700,
+    recursive: true
+  });
+}
+
 function accountsResult(operation) {
   return vibe64Result(operation, {
     fallbackCode: "vibe64_accounts_request_failed",
     fallbackMessage: "Vibe64 accounts request failed."
   });
-}
-
-function refreshRequested(input = {}) {
-  return input?.refresh === true || input?.refresh === "true" || input?.refresh === "1";
 }
 
 function cleanOutput(output = "") {
@@ -123,9 +138,9 @@ function logoutCommandArgs(accountId) {
     : ["codex", "logout"];
 }
 
-function terminalArgsForAuth(accountId, mode) {
+function terminalArgsForAuth(accountId, mode, toolchainOptions = {}) {
   if (accountId === "github") {
-    return buildDoctorTerminalArgs(ghLoginCommandArgs());
+    return buildDoctorTerminalArgs(ghLoginCommandArgs(), toolchainOptions);
   }
 
   const extraArgs = mode === BROWSER_AUTH_MODE ? ["--network", "host"] : [];
@@ -134,8 +149,8 @@ function terminalArgsForAuth(accountId, mode) {
   });
 }
 
-function statusArgs(commandArgs) {
-  return buildDoctorToolchainArgs(commandArgs);
+function statusArgs(commandArgs, toolchainOptions = {}) {
+  return buildDoctorToolchainArgs(commandArgs, toolchainOptions);
 }
 
 function firstMatchingUrl(output = "", predicate = () => true) {
@@ -196,7 +211,8 @@ function accountDisconnected({
   id,
   label,
   message,
-  observed = ""
+  observed = "",
+  scope = ""
 }) {
   return {
     connected: false,
@@ -205,6 +221,7 @@ function accountDisconnected({
     message,
     observed,
     required: true,
+    scope,
     status: "not_connected"
   };
 }
@@ -214,6 +231,7 @@ function accountConnected({
   label,
   message,
   observed = "",
+  scope = "",
   username = ""
 }) {
   return {
@@ -223,24 +241,32 @@ function accountConnected({
     message,
     observed,
     required: true,
+    scope,
     status: "connected",
     username
   };
 }
 
 async function runDefaultToolchain(commandArgs, options = {}) {
-  return runHostCommand("docker", statusArgs(commandArgs), {
+  return runHostCommand("docker", statusArgs(commandArgs, {
+    toolHomeSource: options.toolHomeSource || ""
+  }), {
     timeout: options.timeout || 20_000
   });
 }
 
 async function readGithubStatus({
+  githubContext,
   runToolchain = runDefaultToolchain
 } = {}) {
+  await ensureToolHomeSource(githubContext);
+  const toolchainOptions = {
+    toolHomeSource: githubContext?.toolHomeSource || ""
+  };
   const [statusResult, userResult, gitCredentialResult] = await Promise.all([
-    runToolchain(["gh", "auth", "status", "--hostname", "github.com"]),
-    runToolchain(["gh", "api", "user", "--jq", ".login"]),
-    runToolchain(["git", "config", "--global", "--get-urlmatch", "credential.helper", "https://github.com"])
+    runToolchain(["gh", "auth", "status", "--hostname", "github.com"], toolchainOptions),
+    runToolchain(["gh", "api", "user", "--jq", ".login"], toolchainOptions),
+    runToolchain(["git", "config", "--global", "--get-urlmatch", "credential.helper", "https://github.com"], toolchainOptions)
   ]);
   const output = [statusResult.output, userResult.output].filter(Boolean).join("\n");
   const missingScopes = REQUIRED_GITHUB_SCOPES.filter((scope) => !output.includes(scope));
@@ -257,16 +283,18 @@ async function readGithubStatus({
     return accountDisconnected({
       id: "github",
       label: "GitHub",
-      message: `GitHub CLI is not authenticated for Studio.${scopeMessage}${gitCredentialMessage}`,
-      observed: [output, credentialHelperOutput].filter(Boolean).join("\n")
+      message: `GitHub CLI is not authenticated for this Vibe64 user.${scopeMessage}${gitCredentialMessage}`,
+      observed: [output, credentialHelperOutput].filter(Boolean).join("\n"),
+      scope: USER_PROVIDER_SCOPE
     });
   }
 
   return accountConnected({
     id: "github",
     label: "GitHub",
-    message: "GitHub CLI is authenticated for Studio.",
+    message: "GitHub CLI is authenticated for this Vibe64 user.",
     observed: output,
+    scope: USER_PROVIDER_SCOPE,
     username: userResult.stdout
   });
 }
@@ -280,16 +308,18 @@ async function readCodexStatus({
     return accountDisconnected({
       id: "codex",
       label: "Codex",
-      message: "Codex is not authenticated for Studio.",
-      observed: result.output
+      message: "Codex is not authenticated for the shared Vibe64 app account.",
+      observed: result.output,
+      scope: APP_PROVIDER_SCOPE
     });
   }
 
   return accountConnected({
     id: "codex",
     label: "Codex",
-    message: "Codex is authenticated for Studio.",
-    observed: result.output
+    message: "Codex is authenticated for the shared Vibe64 app account.",
+    observed: result.output,
+    scope: APP_PROVIDER_SCOPE
   });
 }
 
@@ -313,16 +343,28 @@ function authError(code, message, extra = {}) {
   };
 }
 
-function authTerminalMetadata(accountId, mode) {
-  return {
+function authTerminalMetadata(accountId, mode, githubContext = null) {
+  const metadata = {
     accountId,
-    mode
+    mode,
+    providerScope: ACCOUNT_DEFINITIONS[accountId]?.scope || ""
   };
+  if (accountId === "github" && githubContext?.userKey) {
+    metadata.userKey = githubContext.userKey;
+  }
+  return metadata;
 }
 
-function canReuseAuthTerminal(accountId, mode) {
+function canReuseAuthTerminal(accountId, mode, githubContext = null) {
+  const expectedUserKey = accountId === "github" ? String(githubContext?.userKey || "") : "";
   return (session = {}) => {
-    return session.metadata?.accountId === accountId && session.metadata?.mode === mode;
+    if (session.metadata?.accountId !== accountId || session.metadata?.mode !== mode) {
+      return false;
+    }
+    if (accountId !== "github") {
+      return true;
+    }
+    return Boolean(expectedUserKey) && session.metadata?.userKey === expectedUserKey;
   };
 }
 
@@ -364,33 +406,44 @@ function publicAuthSession({
 }
 
 function createService({
+  dataRoot = "",
+  env = process.env,
   projectService = null,
-  readyStatusCacheRoot = "",
+  providerHomesRoot = "",
   runToolchain = runDefaultToolchain,
   targetRoot = ""
 } = {}) {
   const authSessions = new Map();
+  const resolvedProviderHomesRoot = resolveProviderHomesRoot({
+    dataRoot,
+    env,
+    explicitRoot: providerHomesRoot
+  });
 
   function currentTargetRoot() {
     const selectedTargetRoot = String(targetRoot || projectServiceTargetRoot(projectService)).trim();
     return selectedTargetRoot ? resolveVibe64AccountsRoot(selectedTargetRoot) : "";
   }
 
-  function readyStatusCache() {
-    return createRepositoryReadyStatusCache({
-      doctorId: "accounts",
-      stateRoot: readyStatusCacheRoot,
-      targetRoot: currentTargetRoot() || process.cwd()
-    });
-  }
-
   function authMetadata(sessionId = "") {
     return authSessions.get(sessionId) || null;
   }
 
-  async function accountStatus(accountId) {
+  function githubContextForInput(input = {}) {
+    return githubProviderContext(input, {
+      providerHomesRoot: resolvedProviderHomesRoot
+    });
+  }
+
+  async function accountStatus(accountId, {
+    githubContext = null
+  } = {}) {
     if (accountId === "github") {
+      if (!githubContext?.ok) {
+        return githubContext || authError("vibe64_user_required", "A logged-in Vibe64 user is required for GitHub account operations.");
+      }
       return readGithubStatus({
+        githubContext,
         runToolchain
       });
     }
@@ -402,12 +455,17 @@ function createService({
     throw new Error(`Unknown account: ${accountId}`);
   }
 
-  async function accountsStatus() {
+  async function accountsStatus(input = {}) {
+    const githubContext = githubContextForInput(input);
+    if (!githubContext.ok) {
+      return githubContext;
+    }
     const accounts = await Promise.all([
       readCodexStatus({
         runToolchain
       }),
       readGithubStatus({
+        githubContext,
         runToolchain
       })
     ]);
@@ -417,6 +475,10 @@ function createService({
       accounts,
       blockedReason: ready ? "" : blockedReason(accounts),
       ok: true,
+      providerScopes: {
+        codex: APP_PROVIDER_SCOPE,
+        github: USER_PROVIDER_SCOPE
+      },
       ready,
       targetRoot: currentTargetRoot(),
       updatedAt: new Date().toISOString()
@@ -441,9 +503,18 @@ function createService({
     metadata.enterSent = true;
   }
 
-  async function readSessionWithAccount(sessionId) {
+  function sessionVisibleToInput(input = {}, metadata = {}) {
+    if (metadata.accountId !== "github") {
+      return true;
+    }
+    const githubContext = githubContextForInput(input);
+    return githubContext.ok && metadata.userKey === githubContext.userKey;
+  }
+
+  async function readSessionWithAccount(input = {}) {
+    const sessionId = String(input?.sessionId || input || "");
     const metadata = authMetadata(sessionId);
-    if (!metadata) {
+    if (!metadata || !sessionVisibleToInput(input, metadata)) {
       return authError("unknown_auth_session", "Account auth session not found.");
     }
 
@@ -462,12 +533,15 @@ function createService({
     maybeContinueBrowserFlow(sessionId, terminal, parsed);
 
     const account = terminal.status === "exited"
-      ? await accountStatus(metadata.accountId)
+      ? await accountStatus(metadata.accountId, {
+          githubContext: metadata.githubContext || null
+        })
       : {
           connected: false,
           id: metadata.accountId,
           label: ACCOUNT_DEFINITIONS[metadata.accountId].label,
           required: true,
+          scope: ACCOUNT_DEFINITIONS[metadata.accountId].scope,
           status: "authenticating"
         };
 
@@ -479,8 +553,16 @@ function createService({
     });
   }
 
-  function startAuthTerminal(accountId, mode) {
-    const args = terminalArgsForAuth(accountId, mode);
+  async function startAuthTerminal(accountId, mode, githubContext = null) {
+    if (accountId === "github") {
+      await ensureToolHomeSource(githubContext);
+    }
+    const toolchainOptions = accountId === "github"
+      ? {
+          toolHomeSource: githubContext?.toolHomeSource || ""
+        }
+      : {};
+    const args = terminalArgsForAuth(accountId, mode, toolchainOptions);
     const authCwd = currentTargetRoot() || process.cwd();
     const terminal = startTerminalSession({
       args,
@@ -488,9 +570,9 @@ function createService({
       commandPreview: dockerCommand(args),
       cwd: authCwd,
       maxRunning: 1,
-      metadata: authTerminalMetadata(accountId, mode),
+      metadata: authTerminalMetadata(accountId, mode, githubContext),
       namespace: ACCOUNT_AUTH_NAMESPACE,
-      reuseRunning: canReuseAuthTerminal(accountId, mode)
+      reuseRunning: canReuseAuthTerminal(accountId, mode, githubContext)
     });
     if (terminal.ok === false) {
       return terminal;
@@ -500,6 +582,7 @@ function createService({
       authSessions.set(terminal.id, {
         accountId,
         enterSent: false,
+        githubContext: accountId === "github" ? githubContext : null,
         mode,
         startedAt: new Date().toISOString()
       });
@@ -510,14 +593,7 @@ function createService({
   return Object.freeze({
     async getStatus(input = {}) {
       return accountsResult(async () => {
-        if (!refreshRequested(input)) {
-          const cache = readyStatusCache();
-          const cachedStatus = await cache.read();
-          if (cachedStatus) {
-            return cachedStatus;
-          }
-        }
-        return readyStatusCache().remember(await accountsStatus());
+        return accountsStatus(input);
       });
     },
 
@@ -529,17 +605,24 @@ function createService({
         }
 
         const mode = normalizedAuthMode(accountId, input.mode);
-        const terminal = startAuthTerminal(accountId, mode);
+        const githubContext = accountId === "github" ? githubContextForInput(input) : null;
+        if (githubContext && !githubContext.ok) {
+          return githubContext;
+        }
+        const terminal = await startAuthTerminal(accountId, mode, githubContext);
         if (terminal.ok === false) {
           return terminal;
         }
 
-        return readSessionWithAccount(terminal.id);
+        return readSessionWithAccount({
+          ...input,
+          sessionId: terminal.id
+        });
       });
     },
 
-    async readAuthSession(sessionId) {
-      return accountsResult(() => readSessionWithAccount(String(sessionId || "")));
+    async readAuthSession(input = {}) {
+      return accountsResult(() => readSessionWithAccount(input));
     },
 
     async logout(input = {}) {
@@ -549,15 +632,20 @@ function createService({
           return authError("unknown_account", "Unknown account.");
         }
 
+        const githubContext = accountId === "github" ? githubContextForInput(input) : null;
+        if (githubContext && !githubContext.ok) {
+          return githubContext;
+        }
+        if (githubContext) {
+          await ensureToolHomeSource(githubContext);
+        }
         const result = await runToolchain(logoutCommandArgs(accountId), {
+          toolHomeSource: githubContext?.toolHomeSource || "",
           timeout: 30_000
         });
-        const account = await accountStatus(accountId);
-        if (result.ok && account.connected !== true) {
-          await readyStatusCache().remember({
-            ready: false
-          });
-        }
+        const account = await accountStatus(accountId, {
+          githubContext
+        });
         return {
           account,
           ok: result.ok,
@@ -566,9 +654,13 @@ function createService({
       });
     },
 
-    async cancelAuthSession(sessionId) {
+    async cancelAuthSession(input = {}) {
       return accountsResult(async () => {
-        const id = String(sessionId || "");
+        const id = String(input?.sessionId || input || "");
+        const metadata = authMetadata(id);
+        if (!metadata || !sessionVisibleToInput(input, metadata)) {
+          return authError("unknown_auth_session", "Account auth session not found.");
+        }
         const result = await closeTerminalSession(id, {
           namespace: ACCOUNT_AUTH_NAMESPACE
         });
@@ -584,13 +676,19 @@ function createService({
 
 export {
   ACCOUNT_AUTH_NAMESPACE,
+  APP_PROVIDER_SCOPE,
   canReuseAuthTerminal,
   GITHUB_DEVICE_AUTH_URL,
   GITHUB_GIT_CREDENTIAL_HELPER,
+  USER_PROVIDER_SCOPE,
   parseAuthOutput,
   REQUIRED_GITHUB_SCOPES,
   authTerminalMetadata,
   createService,
   ghLoginCommandArgs,
+  githubProviderContext,
+  githubProviderHome,
+  githubProviderUserKey,
+  resolveProviderHomesRoot,
   resolveVibe64AccountsRoot
 };

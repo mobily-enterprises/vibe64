@@ -24,6 +24,9 @@ import {
 import {
   terminalFailureFixRequest
 } from "@/lib/vibe64TerminalFailurePrompt.js";
+import {
+  scopedDevelopmentApiUrl
+} from "@/lib/studioHttp.js";
 
 const FINISHED_TERMINAL_HOLD_MS = 500;
 
@@ -148,7 +151,7 @@ function useVibe64CommandTerminalController(props, emit) {
     buildCommandOptions: (_payload, { context }) => ({
       method: "POST",
       options: LOCAL_STUDIO_COMMAND_OPTIONS,
-      path: terminalPath(context)
+      path: scopedDevelopmentApiUrl(terminalPath(context))
     }),
     buildRawPayload: (_model, { context }) => {
       if (context.terminalKind === "launch") {
@@ -193,7 +196,7 @@ function useVibe64CommandTerminalController(props, emit) {
     buildCommandOptions: (_payload, { context }) => ({
       method: "DELETE",
       options: LOCAL_STUDIO_COMMAND_OPTIONS,
-      path: terminalPath(context)
+      path: scopedDevelopmentApiUrl(terminalPath(context))
     }),
     fallbackRunError: "Terminal could not close.",
     messages: {

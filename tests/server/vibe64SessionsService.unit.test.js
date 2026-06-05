@@ -24,7 +24,6 @@ function readySetupServices() {
   };
   return {
     accountSetupService: readyService,
-    adapterSetupService: readyService,
     projectSetupService: readyService,
     studioSetupService: readyService
   };
@@ -178,6 +177,60 @@ test("session abandon does not wait for terminal cleanup", async () => {
     }
   ]);
   finishCleanup();
+});
+
+test("session abandon does not require live Codex terminal state after closing", async () => {
+  let codexTerminalStateCalls = 0;
+  const statusWrites = [];
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async getSession(sessionId) {
+            return {
+              sessionId,
+              status: VIBE64_SESSION_STATUS.ABANDONED
+            };
+          },
+          store: {
+            async writeStatus(sessionId, status) {
+              statusWrites.push({
+                sessionId,
+                status
+              });
+            }
+          }
+        };
+      }
+    },
+    setupServices: readySetupServices(),
+    terminalService: {
+      async closeSessionTerminals() {
+        return {
+          closed: 0,
+          ok: true
+        };
+      },
+      async codexTerminalState() {
+        codexTerminalStateCalls += 1;
+        return {
+          error: "Terminal session not found.",
+          ok: false
+        };
+      }
+    }
+  });
+
+  const result = await service.abandonSession("session-1");
+
+  assert.equal(result.status, VIBE64_SESSION_STATUS.ABANDONED);
+  assert.equal(codexTerminalStateCalls, 0);
+  assert.deepEqual(statusWrites, [
+    {
+      sessionId: "session-1",
+      status: VIBE64_SESSION_STATUS.ABANDONED
+    }
+  ]);
 });
 
 test("session prompt action injects the rendered Codex handoff from the server", async () => {
@@ -417,6 +470,85 @@ test("session prompt intent injects the rendered Codex handoff from the server",
       sessionId: "session-1"
     }
   ]);
+});
+
+test("session prompt intent uses Vibe64 user for readiness without leaking it to workflow input", async () => {
+  const statusInputs = [];
+  let runtimeInput = null;
+  const setupService = (id) => ({
+    async getStatus(input) {
+      statusInputs.push({
+        id,
+        input
+      });
+      return {
+        ready: true
+      };
+    }
+  });
+  const vibe64User = {
+    email: "owner@example.com"
+  };
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async runIntent(_sessionId, _intentId, input) {
+            runtimeInput = input;
+            return {
+              sessionId: "session-1",
+              status: VIBE64_SESSION_STATUS.FINISHED
+            };
+          }
+        };
+      }
+    },
+    setupServices: {
+      accountSetupService: setupService("accounts"),
+      projectSetupService: setupService("project-setup"),
+      studioSetupService: setupService("studio-setup")
+    }
+  });
+
+  await service.runSessionIntent("session-1", "accept_changes", {
+    fields: {
+      accepted: true
+    },
+    stepId: "implementation_reviewed",
+    stepStatus: "done",
+    vibe64User
+  });
+
+  assert.deepEqual(statusInputs, [
+    {
+      id: "accounts",
+      input: {
+        refresh: false,
+        vibe64User
+      }
+    },
+    {
+      id: "studio-setup",
+      input: {
+        refresh: false,
+        vibe64User
+      }
+    },
+    {
+      id: "project-setup",
+      input: {
+        refresh: false,
+        vibe64User
+      }
+    }
+  ]);
+  assert.deepEqual(runtimeInput, {
+    fields: {
+      accepted: true
+    },
+    stepId: "implementation_reviewed",
+    stepStatus: "done"
+  });
 });
 
 test("session service records conversation prompts from the action result contract", async () => {
@@ -1184,40 +1316,26 @@ test("archived session list asks for archived sessions and computes creation lim
   assert.equal(result.limits.openSessionCount, 1);
 });
 
-test("open session list creates the first seed session automatically when seeding is required", async () => {
-  const advancedSessions = [];
-  const createdInputs = [];
+test("open session list reports first seed creation state without starting it", async () => {
+  let advanceSessionCalled = false;
+  let createSessionCalled = false;
+  let requireProjectTypeCalled = false;
   const listCalls = [];
-  let openSessions = [];
   const service = createService({
     projectService: {
       async createRuntime() {
         return {
-          async advance(sessionId) {
-            advancedSessions.push(sessionId);
-            return {
-              currentStep: "worktree_created",
-              sessionId,
-              status: VIBE64_SESSION_STATUS.ACTIVE
-            };
+          async advance() {
+            advanceSessionCalled = true;
+            throw new Error("listSessions should not advance seed sessions.");
           },
-          async createSession(input = {}) {
-            createdInputs.push(input);
-            openSessions = [
-              {
-                sessionId: "seed-session",
-                status: VIBE64_SESSION_STATUS.ACTIVE
-              }
-            ];
-            return {
-              currentStep: "session_created",
-              sessionId: "seed-session",
-              status: VIBE64_SESSION_STATUS.ACTIVE
-            };
+          async createSession() {
+            createSessionCalled = true;
+            throw new Error("listSessions should not create seed sessions.");
           },
-          async listSessions(options = {}) {
+          async listSessionSummaries(options = {}) {
             listCalls.push(options);
-            return openSessions;
+            return [];
           },
           async workflowDefinitionCreationOptions() {
             return workflowDefinitionCreationOptions({
@@ -1227,48 +1345,52 @@ test("open session list creates the first seed session automatically when seedin
         };
       },
       async requireProjectType() {
-        return {
-          adapter: {
-            id: "jskit"
-          },
-          projectType: "jskit"
-        };
+        requireProjectTypeCalled = true;
+        throw new Error("listSessions should not require project type.");
       }
     },
-    setupServices: readySetupServices()
+    setupServices: {
+      accountSetupService: {
+        async getStatus() {
+          throw new Error("listSessions should not read account readiness.");
+        }
+      },
+      projectSetupService: {
+        async getStatus() {
+          throw new Error("listSessions should not read project readiness.");
+        }
+      },
+      studioSetupService: {
+        async getStatus() {
+          throw new Error("listSessions should not read studio readiness.");
+        }
+      }
+    }
   });
 
   const result = await service.listSessions();
 
   assert.equal(result.ok, true);
-  assert.equal(createdInputs.length, 1);
-  assert.deepEqual(createdInputs[0], {
-    metadata: {
-      adapter_id: "jskit",
-      project_type: "jskit"
-    },
-    workflowDefinition: VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION
-  });
-  assert.deepEqual(advancedSessions, ["seed-session"]);
+  assert.equal(createSessionCalled, false);
+  assert.equal(advanceSessionCalled, false);
+  assert.equal(requireProjectTypeCalled, false);
   assert.deepEqual(listCalls, [
-    {
-      statusGroup: "open"
-    },
     {
       statusGroup: "open"
     }
   ]);
-  assert.deepEqual(result.sessions.map((session) => session.sessionId), ["seed-session"]);
+  assert.deepEqual(result.sessions, []);
   assert.equal(result.creation.mode, "seed_required");
-  assert.equal(result.creation.canCreate, false);
+  assert.equal(result.creation.canCreate, true);
+  assert.equal(result.creation.defaultWorkflowDefinition, VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION);
   assert.equal(result.limits.maxOpenSessions, 1);
-  assert.equal(result.limits.openSessionCount, 1);
+  assert.equal(result.limits.openSessionCount, 0);
 });
 
-test("open session list serializes automatic seed session creation", async () => {
+test("concurrent open session list reads do not race to create seed sessions", async () => {
   let advancedCount = 0;
   let createCount = 0;
-  let openSessions = [];
+  let listCount = 0;
   const service = createService({
     projectService: {
       currentTargetRoot() {
@@ -1278,31 +1400,18 @@ test("open session list serializes automatic seed session creation", async () =>
         return {
           async advance(sessionId) {
             advancedCount += 1;
-            return {
-              currentStep: "worktree_created",
-              sessionId,
-              status: VIBE64_SESSION_STATUS.ACTIVE
-            };
+            throw new Error(`listSessions should not advance ${sessionId}.`);
           },
           async createSession() {
             createCount += 1;
+            throw new Error("listSessions should not create seed sessions.");
+          },
+          async listSessionSummaries() {
+            listCount += 1;
             await new Promise((resolve) => {
               setTimeout(resolve, 10);
             });
-            openSessions = [
-              {
-                sessionId: "seed-session",
-                status: VIBE64_SESSION_STATUS.ACTIVE
-              }
-            ];
-            return {
-              currentStep: "session_created",
-              sessionId: "seed-session",
-              status: VIBE64_SESSION_STATUS.ACTIVE
-            };
-          },
-          async listSessions() {
-            return openSessions;
+            return [];
           },
           async workflowDefinitionCreationOptions() {
             return workflowDefinitionCreationOptions({
@@ -1312,12 +1421,7 @@ test("open session list serializes automatic seed session creation", async () =>
         };
       },
       async requireProjectType() {
-        return {
-          adapter: {
-            id: "jskit"
-          },
-          projectType: "jskit"
-        };
+        throw new Error("listSessions should not require project type.");
       }
     },
     setupServices: readySetupServices()
@@ -1328,12 +1432,13 @@ test("open session list serializes automatic seed session creation", async () =>
     service.listSessions()
   ]);
 
-  assert.equal(createCount, 1);
-  assert.equal(advancedCount, 1);
-  assert.deepEqual(firstResult.sessions.map((session) => session.sessionId), ["seed-session"]);
-  assert.deepEqual(secondResult.sessions.map((session) => session.sessionId), ["seed-session"]);
-  assert.equal(firstResult.creation.canCreate, false);
-  assert.equal(secondResult.creation.canCreate, false);
+  assert.equal(createCount, 0);
+  assert.equal(advancedCount, 0);
+  assert.equal(listCount, 2);
+  assert.deepEqual(firstResult.sessions, []);
+  assert.deepEqual(secondResult.sessions, []);
+  assert.equal(firstResult.creation.canCreate, true);
+  assert.equal(secondResult.creation.canCreate, true);
 });
 
 test("session list limits unseeded targets to one open seed session", async () => {

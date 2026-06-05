@@ -1,6 +1,14 @@
 import { createSchema } from "json-rest-schema";
 import { deepFreeze } from "@jskit-ai/kernel/shared/support/deepFreeze";
 
+const vibe64UserInputSchema = {
+  vibe64User: {
+    type: "object",
+    additionalProperties: true,
+    required: false
+  }
+};
+
 const sessionListInputValidator = deepFreeze({
   schema: createSchema({
     archive: {
@@ -14,6 +22,7 @@ const sessionListInputValidator = deepFreeze({
 
 const sessionCreateInputValidator = deepFreeze({
   schema: createSchema({
+    ...vibe64UserInputSchema,
     workflowDefinition: {
       type: "string",
       noTrim: false,
@@ -25,6 +34,7 @@ const sessionCreateInputValidator = deepFreeze({
 
 const sessionIdInputValidator = deepFreeze({
   schema: createSchema({
+    ...vibe64UserInputSchema,
     sessionId: {
       type: "string",
       noTrim: false,
@@ -36,6 +46,7 @@ const sessionIdInputValidator = deepFreeze({
 
 const sessionAdvanceInputValidator = deepFreeze({
   schema: createSchema({
+    ...vibe64UserInputSchema,
     sessionId: {
       type: "string",
       noTrim: false,
@@ -57,6 +68,7 @@ const sessionAdvanceInputValidator = deepFreeze({
 
 const sessionActionInputValidator = deepFreeze({
   schema: createSchema({
+    ...vibe64UserInputSchema,
     actionId: {
       type: "string",
       noTrim: false,
@@ -78,6 +90,7 @@ const sessionActionInputValidator = deepFreeze({
 
 const sessionIntentInputValidator = deepFreeze({
   schema: createSchema({
+    ...vibe64UserInputSchema,
     fields: {
       type: "object",
       additionalProperties: true,
@@ -114,6 +127,7 @@ const sessionIntentInputValidator = deepFreeze({
 
 const sessionTerminalFailureFixInputValidator = deepFreeze({
   schema: createSchema({
+    ...vibe64UserInputSchema,
     actionId: {
       type: "string",
       noTrim: false,
@@ -205,6 +219,7 @@ const sessionTerminalFailureFixInputValidator = deepFreeze({
 
 const sessionRewindInputValidator = deepFreeze({
   schema: createSchema({
+    ...vibe64UserInputSchema,
     sessionId: {
       type: "string",
       noTrim: false,

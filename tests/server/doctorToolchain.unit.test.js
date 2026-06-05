@@ -79,3 +79,18 @@ test("doctor toolchain host-user commands use a temporary writable home", () => 
   assert.doesNotMatch(startupScript, /setpriv/u);
   assert.match(startupScript, /npm install/u);
 });
+
+test("doctor toolchain can mount an explicit managed tool home source", () => {
+  const toolHomeSource = "/tmp/vibe64-provider-home";
+  const args = buildDoctorToolchainArgs(["gh", "auth", "status"], {
+    toolHomeSource
+  });
+
+  assertDockerVolumeMount(args, toolHomeSource, STUDIO_TOOL_HOME_PATH);
+  assert.ok(args.includes(`HOME=${STUDIO_TOOL_HOME_PATH}`));
+  assert.ok(args.includes(`NPM_CONFIG_PREFIX=${STUDIO_TOOL_HOME_NPM_PREFIX}`));
+
+  const startupScript = args.at(-1);
+  assert.ok(startupScript.includes(`export HOME=${STUDIO_TOOL_HOME_PATH}`));
+  assert.match(startupScript, /gh auth status/u);
+});

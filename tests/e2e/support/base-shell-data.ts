@@ -1,6 +1,10 @@
 const PLAYWRIGHT_PORT = String(process.env.PLAYWRIGHT_PORT || "5173").trim() || "5173";
 const DEFAULT_BASE_URL = `http://127.0.0.1:${PLAYWRIGHT_PORT}`;
 const BASE_URL = String(process.env.PLAYWRIGHT_BASE_URL || DEFAULT_BASE_URL).replace(/\/+$/u, "");
+const WORKSPACE_SLUG = "example-target-app";
+const DEVELOPMENT_PATH = `/app/${WORKSPACE_SLUG}`;
+const DASHBOARD_PATH = `${DEVELOPMENT_PATH}/dashboard`;
+const SCOPED_API_PREFIX = `/api/app/${WORKSPACE_SLUG}`;
 
 const viewports = [
   { name: "compact", width: 390, height: 844 },
@@ -625,6 +629,10 @@ const abandonedArchiveSession = {
 
 export {
   BASE_URL,
+  DASHBOARD_PATH,
+  DEVELOPMENT_PATH,
+  SCOPED_API_PREFIX,
+  WORKSPACE_SLUG,
   targetRoot,
   viewports,
   readyProjectSelectionPayload,

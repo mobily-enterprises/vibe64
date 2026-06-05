@@ -79,7 +79,8 @@ function codexAppServerHelperOverride({
     terminalCommand
       ? "- For direct terminal input, call the terminal chat mirror helper with a `response` field only; Vibe64 reads the user prompt from Codex app-server events."
       : "",
-    "- Use these commands when env-based helper command examples are unavailable in this app-server turn."
+    "- In Codex app-server turns, use these host helper commands instead of env-based helper examples.",
+    "- Do not run `node \"$VIBE64_CURRENT_STEP_INPUT_HELPER\"` or `node \"$VIBE64_TERMINAL_CHAT_HELPER\"` unless this specific turn says those environment variables are available."
   ].filter(Boolean).join("\n");
 }
 

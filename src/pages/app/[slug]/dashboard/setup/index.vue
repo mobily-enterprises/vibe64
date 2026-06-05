@@ -13,8 +13,6 @@ import { useRoute, useRouter } from "vue-router";
 import Vibe64SetupPanel from "@/components/studio/Vibe64SetupPanel.vue";
 
 const tabs = [
-  { label: "Studio Setup", value: "studio-setup" },
-  { label: "Adapter Setup", value: "adapter-setup" },
   { label: "Project Setup", value: "project-setup" }
 ];
 
@@ -28,14 +26,14 @@ function normalizeTab(value) {
 }
 
 function fallbackTab() {
-  return "studio-setup";
+  return "project-setup";
 }
 
 const activeTab = computed(() => normalizeTab(route.query.tab) || fallbackTab());
 
 function tabRoute(tab) {
   return {
-    path: "/home/dashboard/setup",
+    path: route.path,
     query: {
       ...route.query,
       tab
@@ -46,7 +44,7 @@ function tabRoute(tab) {
 function selectTab(value, { replace = false } = {}) {
   const tab = normalizeTab(value) || fallbackTab();
 
-  if (route.path === "/home/dashboard/setup" && route.query.tab === tab) {
+  if (route.query.tab === tab) {
     return undefined;
   }
 

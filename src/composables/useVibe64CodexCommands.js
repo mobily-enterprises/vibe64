@@ -8,6 +8,9 @@ import {
   LOCAL_STUDIO_COMMAND_OPTIONS,
   vibe64CodexAttachmentPath
 } from "@/lib/vibe64SessionRequestConfig.js";
+import {
+  scopedDevelopmentApiUrl
+} from "@/lib/studioHttp.js";
 
 function normalizeSessionId(sessionId = "") {
   return String(sessionId || "").trim();
@@ -51,7 +54,7 @@ function useVibe64CodexCommands() {
     buildCommandOptions: (_payload, { context }) => ({
       method: "POST",
       options: LOCAL_STUDIO_COMMAND_OPTIONS,
-      path: vibe64CodexAttachmentPath(sessionsApiPath.value, context.sessionId)
+      path: scopedDevelopmentApiUrl(vibe64CodexAttachmentPath(sessionsApiPath.value, context.sessionId))
     }),
     buildRawPayload: (_model, { context }) => ({
       contentType: String(context.contentType || ""),

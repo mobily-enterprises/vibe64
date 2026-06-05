@@ -4,6 +4,9 @@ import {
   readVibe64ArtifactReadiness
 } from "@/lib/vibe64SessionApi.js";
 import { parseJsonStreamEvent } from "@/lib/streamEvents.js";
+import {
+  resolveStudioRequestUrl
+} from "@/lib/studioHttp.js";
 
 function emptyArtifactReadiness(sessionId = "") {
   return {
@@ -83,7 +86,7 @@ function useVibe64ArtifactReadiness({
       return false;
     }
 
-    const source = new EventSource(vibe64ArtifactReadinessStreamEndpoint(nextSessionId), {
+    const source = new EventSource(resolveStudioRequestUrl(vibe64ArtifactReadinessStreamEndpoint(nextSessionId)), {
       withCredentials: true
     });
     eventSource = source;

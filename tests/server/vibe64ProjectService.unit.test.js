@@ -13,6 +13,9 @@ import {
   createStudioProjectContext
 } from "../../packages/vibe64-core/src/server/studioProjectContext.js";
 import {
+  runWithWorkspaceRequestContext
+} from "../../packages/vibe64-core/src/server/workspaceRequestContext.js";
+import {
   JSKIT_ALLOW_SELF_TARGET_CONFIG
 } from "@local/vibe64-adapters/server/adapters/jskit/index";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
@@ -60,6 +63,48 @@ test("Vibe64 project service exposes project selection before project-specific s
     assert.equal(afterSelection.ok, true);
     assert.equal(afterSelection.projectType.status, "missing");
     assert.equal(afterSelection.projectType.targetRoot, path.join(projectsRoot, "example-app"));
+  });
+});
+
+test("Vibe64 project service treats workspace request slug as the selected project", async () => {
+  await withTemporaryRoot(async (root) => {
+    const projectsRoot = path.join(root, "projects");
+    const targetRoot = path.join(projectsRoot, "alpha_1");
+    await mkdir(targetRoot, {
+      recursive: true
+    });
+    await mkdir(path.join(projectsRoot, "beta"), {
+      recursive: true
+    });
+    const service = createService({
+      projectContext: createStudioProjectContext({
+        explicitProjectsRoot: projectsRoot,
+        env: {},
+        home: root
+      })
+    });
+
+    const listed = await runWithWorkspaceRequestContext({
+      projectsRoot,
+      slug: "alpha_1",
+      targetRoot
+    }, () => service.listProjects());
+
+    assert.equal(listed.ok, true);
+    assert.equal(listed.hasSelection, true);
+    assert.equal(listed.currentProject.slug, "alpha_1");
+    assert.equal(listed.currentProject.path, targetRoot);
+    assert.equal(listed.currentProject.selected, true);
+    assert.equal(listed.targetRoot, targetRoot);
+    assert.deepEqual(listed.projects.map((project) => [
+      project.slug,
+      project.selected
+    ]), [
+      ["alpha_1", true],
+      ["beta", false]
+    ]);
+    assert.equal(service.targetRoot, "");
+    assert.equal(service.currentTargetRoot(), "");
   });
 });
 

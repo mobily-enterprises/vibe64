@@ -25,14 +25,6 @@
 
       <v-expand-transition>
         <div v-show="expanded" class="codex-terminal__body">
-          <StudioErrorNotice
-            v-if="terminalError"
-            :title="terminalErrorTitle"
-            :error="terminalError"
-            compact
-            class="mb-2"
-          />
-
           <div
             class="codex-terminal__stage"
             :class="{ 'codex-terminal__stage--dragging': attachmentDragActive }"
@@ -41,6 +33,35 @@
             @dragleave.prevent="handleAttachmentDragLeave"
             @drop.prevent="handleAttachmentDrop"
           >
+            <StudioErrorNotice
+              v-if="terminalError"
+              :title="terminalErrorTitle"
+              :error="terminalError"
+              compact
+              overlay
+            >
+              <template #actions>
+                <v-btn
+                  v-if="terminalCanStart"
+                  color="primary"
+                  :loading="terminalStarting"
+                  :prepend-icon="mdiRestart"
+                  size="small"
+                  variant="flat"
+                  @click="restartTerminal"
+                >
+                  Restart Codex
+                </v-btn>
+                <v-btn
+                  :prepend-icon="mdiClose"
+                  size="small"
+                  variant="tonal"
+                  @click="closeTerminal"
+                >
+                  Close terminal
+                </v-btn>
+              </template>
+            </StudioErrorNotice>
             <div
               class="codex-terminal__host"
               @click="focusTerminal"
@@ -115,6 +136,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import {
   mdiChevronDown,
   mdiChevronUp,
+  mdiClose,
   mdiPaperclip,
   mdiRestart
 } from "@mdi/js";
@@ -184,6 +206,7 @@ const codexCommands = useVibe64CodexCommands();
 const copyStatus = ref("");
 const expanded = ref(true);
 const componentMounted = ref(false);
+const staleTerminalSessionIds = ref(new Set());
 let terminalStartPromise = null;
 
 const globalScope = computed(() => props.scope === "global");
@@ -191,7 +214,7 @@ const sessionId = computed(() => props.session?.sessionId || "");
 const terminalScopeId = computed(() => (globalScope.value ? "global" : sessionId.value));
 const sessionWorktree = computed(() => vibe64SessionWorktreePath(props.session || {}));
 const terminalDisplayActive = computed(() => props.visible && props.displayMode !== "headless");
-const serverCodexTerminal = computed(() => {
+const rawServerCodexTerminal = computed(() => {
   if (props.terminal && typeof props.terminal === "object" && !Array.isArray(props.terminal)) {
     return props.terminal;
   }
@@ -203,6 +226,19 @@ const serverCodexTerminal = computed(() => {
   return presentationTerminal && typeof presentationTerminal === "object" && !Array.isArray(presentationTerminal)
     ? presentationTerminal
     : {};
+});
+const serverCodexTerminal = computed(() => {
+  const terminal = rawServerCodexTerminal.value;
+  const terminalId = String(terminal.id || terminal.terminalSessionId || "").trim();
+  if (!terminalId || !staleTerminalSessionIds.value.has(terminalId)) {
+    return terminal;
+  }
+  return {
+    ...terminal,
+    id: "",
+    terminalSessionId: "",
+    status: ""
+  };
 });
 const serverTerminalSession = computed(() => ({
   commandPreview: String(serverCodexTerminal.value.commandPreview || ""),
@@ -529,7 +565,12 @@ async function focusWritableTerminalWhenShown(visible) {
 async function connectAttachedTerminal() {
   await setupTerminalUi();
   if (!(await connectTerminalSocket())) {
-    throw new Error("Terminal stream failed to connect.");
+    const message = String(terminalError.value || "Terminal stream failed to connect.");
+    if (terminalSessionMissingError(message)) {
+      markTerminalSessionStale(terminalSessionId.value || serverTerminalSession.value.id, message);
+      return false;
+    }
+    throw new Error(message);
   }
   return true;
 }
@@ -542,7 +583,7 @@ async function startTerminalOnce() {
     resetTerminalOutput();
   }
   if (terminalSessionId.value) {
-    return connectAttachedTerminal();
+    return await connectAttachedTerminal();
   }
   if (!terminalCanStart.value) {
     return false;
@@ -562,9 +603,9 @@ async function startTerminalOnce() {
       fallbackStatus: "running"
     });
     emitTerminalSessionState();
-    return connectAttachedTerminal();
+    return await connectAttachedTerminal();
   } catch (startError) {
-    terminalError.value = String(startError?.message || startError || "Codex terminal failed to start.");
+    terminalError.value = terminalError.value || String(startError?.message || startError || "Codex terminal failed to start.");
     return false;
   } finally {
     terminalStarting.value = false;
@@ -592,12 +633,30 @@ async function attachTerminalSession(session = {}) {
     return true;
   }
   try {
-    await connectAttachedTerminal();
-    return true;
+    return await connectAttachedTerminal();
   } catch (attachError) {
-    terminalError.value = String(attachError?.message || attachError || "Terminal stream failed to connect.");
+    terminalError.value = terminalError.value || String(attachError?.message || attachError || "Terminal stream failed to connect.");
     return false;
   }
+}
+
+function terminalSessionMissingError(message = "") {
+  return /terminal session not found/iu.test(String(message || ""));
+}
+
+function markTerminalSessionStale(terminalId = "", message = "Terminal session not found.") {
+  const normalizedTerminalId = String(terminalId || "").trim();
+  if (normalizedTerminalId) {
+    staleTerminalSessionIds.value = new Set([
+      ...staleTerminalSessionIds.value,
+      normalizedTerminalId
+    ]);
+  }
+  closeTerminalSocket();
+  resetTerminalSessionState();
+  resetTerminalDisplay();
+  resetTerminalOutput();
+  terminalError.value = String(message || "Terminal session not found.");
 }
 
 function detachTerminal() {
@@ -636,6 +695,7 @@ watch(sessionId, (nextSessionId, previousSessionId) => {
   if (previousSessionId && previousSessionId !== nextSessionId) {
     detachTerminal();
   }
+  staleTerminalSessionIds.value = new Set();
   resetAttachmentDragState();
   clearAttachmentStatus();
   expanded.value = defaultExpanded();

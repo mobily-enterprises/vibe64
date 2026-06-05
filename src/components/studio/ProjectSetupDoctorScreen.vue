@@ -17,8 +17,8 @@
     ready-title="Project Setup ready"
     quiet-title="Preparing your project"
     quiet-lede="Vibe64 is creating the starter files, installing dependencies, and checking the project before Autopilot starts."
-    continue-label="Continue to home"
-    continue-to="/home"
+    continue-label="Continue to workspace"
+    :continue-to="continueTo"
     doctor-class="project-setup-doctor"
     :always-repair-check-ids="['dependencies']"
     @refresh="loadProjectSetup"
@@ -28,27 +28,29 @@
 
 <script setup>
 import { computed, onMounted, ref } from "vue";
+import { useRoute } from "vue-router";
 
 import DoctorStatusPage from "./DoctorStatusPage.vue";
 import {
   PROJECT_SETUP_STREAM_ENDPOINT,
   PROJECT_SETUP_TERMINAL_ENDPOINT,
   readProjectSetupStatus,
-  readStudioSetupStatus,
-  readAdapterSetupStatus
+  readStudioSetupStatus
 } from "../../lib/studioGateApi.js";
 
-const emit = defineEmits(["select-tab"]);
+const route = useRoute();
 
 const projectSetup = ref(null);
 const loading = ref(false);
 const errorMessage = ref("");
 const streamEnabled = ref(false);
 const streamAutoStart = ref(true);
+const workspaceSlug = computed(() => firstRouteParam(route.params.slug));
+const continueTo = computed(() => workspaceSlug.value ? `/app/${encodeURIComponent(workspaceSlug.value)}` : "/app/manage");
 
 const lede = computed(() => {
   if (loading.value && !streamEnabled.value) {
-    return "Checking Studio Setup and Adapter Setup before Project Setup runs.";
+    return "Checking Studio Setup before Project Setup runs.";
   }
   if (projectSetup.value?.ready) {
     return `Project Setup is ready for: ${projectSetup.value.targetRoot || "selected project"}`;
@@ -69,14 +71,7 @@ async function loadProjectSetup({
     const studioSetup = await readStudioSetupStatus();
 
     if (studioSetup?.ready !== true) {
-      emit("select-tab", "studio-setup");
-      return;
-    }
-
-    const adapterSetup = await readAdapterSetupStatus();
-
-    if (adapterSetup?.ready !== true) {
-      emit("select-tab", "adapter-setup");
+      errorMessage.value = "Studio Setup is not ready. Open Management mode to complete Studio Setup.";
       return;
     }
 
@@ -97,6 +92,11 @@ async function loadProjectSetup({
 
 function handleProjectSetupUpdated(status) {
   projectSetup.value = status;
+}
+
+function firstRouteParam(value) {
+  const rawValue = Array.isArray(value) ? value[0] : value;
+  return String(rawValue || "").trim();
 }
 
 onMounted(() => {

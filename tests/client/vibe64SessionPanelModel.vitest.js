@@ -18,7 +18,6 @@ import {
   buildVibe64TimelineSteps,
   currentStepDisabledReason,
   enrichVibe64SessionForDisplay,
-  inspectDiffButtonVisible,
   visibleVibe64Sessions
 } from "../../src/lib/vibe64SessionPanelModel.js";
 
@@ -33,48 +32,6 @@ describe("Vibe64 session panel model", () => {
       "2026-05-16_00",
       "2026-05-16_02"
     ]);
-  });
-
-  it("shows the inspect diff button only for inspect sessions with a ready worktree and diff action", () => {
-    const openDialog = () => null;
-
-    expect(inspectDiffButtonVisible({
-      diff: {
-        openDialog
-      },
-      selectedSession: {
-        worktreeReady: true
-      },
-      sessionMode: "inspect"
-    })).toBe(true);
-
-    expect(inspectDiffButtonVisible({
-      diff: {
-        openDialog
-      },
-      selectedSession: {
-        worktreeReady: true
-      },
-      sessionMode: "autopilot"
-    })).toBe(false);
-
-    expect(inspectDiffButtonVisible({
-      diff: {
-        openDialog
-      },
-      selectedSession: {
-        worktreeReady: false
-      },
-      sessionMode: "inspect"
-    })).toBe(false);
-
-    expect(inspectDiffButtonVisible({
-      diff: {},
-      selectedSession: {
-        worktreeReady: true
-      },
-      sessionMode: "inspect"
-    })).toBe(false);
   });
 
   it("shows only blocking session page load errors", () => {

@@ -14,6 +14,7 @@
     "@local/vibe64-core": "0.1.0",
     "@local/setup-doctor-core": "0.1.0",
     "@local/studio-terminal-core": "0.1.0",
-    "strip-ansi": "^7.2.0"
+    "strip-ansi": "^7.2.0",
+    "ws": "^8.20.1"
   }
 }

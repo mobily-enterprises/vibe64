@@ -3,20 +3,24 @@ import test from "node:test";
 
 import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRoutes";
 import {
+  routeWorkspaceParams,
   testReply,
   testRouteApp,
-  withLocalRequestBypass
+  withLocalRequestBypass,
+  withRouteWorkspace
 } from "./vibe64RouteTestHelpers.js";
 
 test("Vibe64 feature routes centralize route metadata and action dispatch", async () => {
   await withLocalRequestBypass(async () => {
-    const app = testRouteApp();
-    const routes = createVibe64FeatureRoutes(app, {
-      localRequestMessage: "Local only.",
-      routeRelativePath: "vibe64",
-      routeSurface: "home",
-      tags: ["studio", "unit-test"]
-    });
+    await withRouteWorkspace(async ({ apiRouteBase, projectContext }) => {
+      const app = testRouteApp();
+      const routes = createVibe64FeatureRoutes(app, {
+        localRequestMessage: "Local only.",
+        projectContext,
+        routeRelativePath: "vibe64",
+        routeSurface: "app",
+        tags: ["studio", "unit-test"]
+      });
 
     routes.actionRoute("POST", "/sessions/:sessionId/action", {
       actionId: "unit.action",
@@ -34,9 +38,9 @@ test("Vibe64 feature routes centralize route metadata and action dispatch", asyn
     assert.equal(app.registeredRoutes.length, 1);
     const route = app.registeredRoutes[0];
     assert.equal(route.method, "POST");
-    assert.equal(route.path, "/api/vibe64/sessions/:sessionId/action");
+    assert.equal(route.path, `${apiRouteBase}/vibe64/sessions/:sessionId/action`);
     assert.equal(route.options.auth, "public");
-    assert.equal(route.options.surface, "home");
+    assert.equal(route.options.surface, "app");
     assert.deepEqual(route.options.meta, {
       summary: "Run a unit action.",
       tags: ["studio", "unit-test"]
@@ -54,9 +58,9 @@ test("Vibe64 feature routes centralize route metadata and action dispatch", asyn
           text: "from validator"
         }
       },
-      params: {
+      params: routeWorkspaceParams({
         sessionId: "session-1"
-      },
+      }),
       async executeAction(action) {
         return {
           action,
@@ -75,17 +79,20 @@ test("Vibe64 feature routes centralize route metadata and action dispatch", asyn
         sessionId: "session-1"
       }
     });
+    });
   });
 });
 
 test("Vibe64 feature routes support service response status overrides", async () => {
   await withLocalRequestBypass(async () => {
-    const app = testRouteApp();
-    const routes = createVibe64FeatureRoutes(app, {
-      routeRelativePath: "vibe64",
-      routeSurface: "home",
-      tags: ["studio", "unit-test"]
-    });
+    await withRouteWorkspace(async ({ projectContext }) => {
+      const app = testRouteApp();
+      const routes = createVibe64FeatureRoutes(app, {
+        projectContext,
+        routeRelativePath: "vibe64",
+        routeSurface: "app",
+        tags: ["studio", "unit-test"]
+      });
 
     routes.serviceRoute("GET", "/missing", {
       failureStatus: 404,
@@ -106,11 +113,54 @@ test("Vibe64 feature routes support service response status overrides", async ()
     });
 
     const missingReply = testReply();
-    await app.registeredRoutes[0].handler({}, missingReply);
+    await app.registeredRoutes[0].handler({
+      params: routeWorkspaceParams()
+    }, missingReply);
     assert.equal(missingReply.statusCode, 404);
 
     const closeReply = testReply();
-    await app.registeredRoutes[1].handler({}, closeReply);
+    await app.registeredRoutes[1].handler({
+      params: routeWorkspaceParams()
+    }, closeReply);
     assert.equal(closeReply.statusCode, 200);
+    });
+  });
+});
+
+test("Vibe64 feature routes can register global routes without workspace params", async () => {
+  await withLocalRequestBypass(async () => {
+    const app = testRouteApp();
+    const routes = createVibe64FeatureRoutes(app, {
+      routeRelativePath: "vibe64/accounts",
+      routeSurface: "app",
+      workspaceScoped: false
+    });
+
+    routes.actionRoute("GET", "", {
+      actionId: "unit.accounts.read",
+      summary: "Read global accounts."
+    });
+
+    assert.equal(app.registeredRoutes.length, 1);
+    const route = app.registeredRoutes[0];
+    assert.equal(route.method, "GET");
+    assert.equal(route.path, "/api/vibe64/accounts");
+
+    const reply = testReply();
+    await route.handler({
+      params: {},
+      async executeAction(action) {
+        return {
+          action,
+          ok: true
+        };
+      }
+    }, reply);
+
+    assert.equal(reply.statusCode, 200);
+    assert.deepEqual(reply.payload.action, {
+      actionId: "unit.accounts.read",
+      input: {}
+    });
   });
 });

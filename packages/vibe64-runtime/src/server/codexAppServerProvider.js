@@ -202,7 +202,7 @@ async function writeCodexAppServerMetadata(runtimeDir = "", metadata = {}) {
   await chmod(metadataPath, 0o600).catch(() => null);
 }
 
-async function codexAppServerMetadataIsLive(metadata = {}, options = {}) {
+async function codexAppServerMetadataIsLive(metadata = {}) {
   const normalized = normalizeCodexAppServerMetadata(metadata);
   if (!codexAppServerMetadataIsWellFormed(normalized)) {
     return false;

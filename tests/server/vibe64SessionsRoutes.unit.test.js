@@ -5,7 +5,8 @@ import {
   ACTION_ADVANCE_SESSION,
   ACTION_CREATE_SESSION,
   ACTION_LIST_SESSIONS,
-  ACTION_READ_SESSION_CONVERSATION_LOG
+  ACTION_READ_SESSION_CONVERSATION_LOG,
+  ACTION_RUN_SESSION_INTENT
 } from "../../packages/vibe64-sessions/src/server/actions.js";
 import {
   _testing as coreMaintenanceTesting
@@ -13,24 +14,28 @@ import {
 import { registerRoutes } from "../../packages/vibe64-sessions/src/server/registerRoutes.js";
 import {
   findRegisteredRoute,
+  routeWorkspaceParams,
   testReply,
   testRouteApp,
-  withLocalRequestBypass
+  withLocalRequestBypass,
+  withRouteWorkspace
 } from "./vibe64RouteTestHelpers.js";
 
 const maintenanceWorkflowDefinitionIds = coreMaintenanceTesting.workflowDefinitionIds;
 
 test("session creation route forwards the selected workflow definition", async () => {
   await withLocalRequestBypass(async () => {
-    const app = testRouteApp();
-    registerRoutes(app, {
-      routeRelativePath: "vibe64",
-      routeSurface: "home"
-    });
+    await withRouteWorkspace(async ({ apiRouteBase, projectContext }) => {
+      const app = testRouteApp();
+      registerRoutes(app, {
+        projectContext,
+        routeRelativePath: "vibe64",
+        routeSurface: "app"
+      });
 
     const route = findRegisteredRoute(app, {
       method: "POST",
-      path: "/api/vibe64/sessions"
+      path: `${apiRouteBase}/vibe64/sessions`
     });
     assert.ok(route);
 
@@ -42,6 +47,7 @@ test("session creation route forwards the selected workflow definition", async (
           workflowDefinition: maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
         }
       },
+      params: routeWorkspaceParams(),
       async executeAction(action) {
         executedAction = action;
         return {
@@ -57,20 +63,23 @@ test("session creation route forwards the selected workflow definition", async (
         workflowDefinition: maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
       }
     });
+    });
   });
 });
 
 test("session list route forwards the requested archive filter", async () => {
   await withLocalRequestBypass(async () => {
-    const app = testRouteApp();
-    registerRoutes(app, {
-      routeRelativePath: "vibe64",
-      routeSurface: "home"
-    });
+    await withRouteWorkspace(async ({ apiRouteBase, projectContext }) => {
+      const app = testRouteApp();
+      registerRoutes(app, {
+        projectContext,
+        routeRelativePath: "vibe64",
+        routeSurface: "app"
+      });
 
     const route = findRegisteredRoute(app, {
       method: "GET",
-      path: "/api/vibe64/sessions"
+      path: `${apiRouteBase}/vibe64/sessions`
     });
     assert.ok(route);
 
@@ -85,6 +94,7 @@ test("session list route forwards the requested archive filter", async () => {
       query: {
         archive: "abandoned"
       },
+      params: routeWorkspaceParams(),
       async executeAction(action) {
         executedAction = action;
         return {
@@ -101,29 +111,32 @@ test("session list route forwards the requested archive filter", async () => {
         archive: "abandoned"
       }
     });
+    });
   });
 });
 
 test("session conversation log route forwards the session id", async () => {
   await withLocalRequestBypass(async () => {
-    const app = testRouteApp();
-    registerRoutes(app, {
-      routeRelativePath: "vibe64",
-      routeSurface: "home"
-    });
+    await withRouteWorkspace(async ({ apiRouteBase, projectContext }) => {
+      const app = testRouteApp();
+      registerRoutes(app, {
+        projectContext,
+        routeRelativePath: "vibe64",
+        routeSurface: "app"
+      });
 
     const route = findRegisteredRoute(app, {
       method: "GET",
-      path: "/api/vibe64/sessions/:sessionId/conversation-log"
+      path: `${apiRouteBase}/vibe64/sessions/:sessionId/conversation-log`
     });
     assert.ok(route);
 
     let executedAction = null;
     const reply = testReply();
     await route.handler({
-      params: {
+      params: routeWorkspaceParams({
         sessionId: "session-1"
-      },
+      }),
       async executeAction(action) {
         executedAction = action;
         return {
@@ -140,20 +153,23 @@ test("session conversation log route forwards the session id", async () => {
         sessionId: "session-1"
       }
     });
+    });
   });
 });
 
 test("session advance route forwards the expected step state", async () => {
   await withLocalRequestBypass(async () => {
-    const app = testRouteApp();
-    registerRoutes(app, {
-      routeRelativePath: "vibe64",
-      routeSurface: "home"
-    });
+    await withRouteWorkspace(async ({ apiRouteBase, projectContext }) => {
+      const app = testRouteApp();
+      registerRoutes(app, {
+        projectContext,
+        routeRelativePath: "vibe64",
+        routeSurface: "app"
+      });
 
     const route = findRegisteredRoute(app, {
       method: "POST",
-      path: "/api/vibe64/sessions/:sessionId/advance"
+      path: `${apiRouteBase}/vibe64/sessions/:sessionId/advance`
     });
     assert.ok(route);
 
@@ -166,9 +182,9 @@ test("session advance route forwards the expected step state", async () => {
           stepStatus: "done"
         }
       },
-      params: {
+      params: routeWorkspaceParams({
         sessionId: "session-1"
-      },
+      }),
       async executeAction(action) {
         executedAction = action;
         return {
@@ -185,6 +201,69 @@ test("session advance route forwards the expected step state", async () => {
         stepId: "plan_and_execute",
         stepStatus: "done"
       }
+    });
+    });
+  });
+});
+
+test("session intent route forwards the authenticated Vibe64 user", async () => {
+  await withLocalRequestBypass(async () => {
+    await withRouteWorkspace(async ({ apiRouteBase, projectContext }) => {
+      const app = testRouteApp();
+      registerRoutes(app, {
+        projectContext,
+        routeRelativePath: "vibe64",
+        routeSurface: "app"
+      });
+
+    const route = findRegisteredRoute(app, {
+      method: "POST",
+      path: `${apiRouteBase}/vibe64/sessions/:sessionId/intents/:intentId`
+    });
+    assert.ok(route);
+
+    let executedAction = null;
+    const vibe64User = {
+      email: "owner@example.com"
+    };
+    const reply = testReply();
+    await route.handler({
+      input: {
+        body: {
+          fields: {
+            accepted: true
+          },
+          stepId: "implementation_reviewed",
+          stepStatus: "done"
+        }
+      },
+      params: routeWorkspaceParams({
+        intentId: "accept_changes",
+        sessionId: "session-1"
+      }),
+      vibe64User,
+      async executeAction(action) {
+        executedAction = action;
+        return {
+          ok: true
+        };
+      }
+    }, reply);
+
+    assert.equal(reply.statusCode, 200);
+    assert.deepEqual(executedAction, {
+      actionId: ACTION_RUN_SESSION_INTENT,
+      input: {
+        fields: {
+          accepted: true
+        },
+        intentId: "accept_changes",
+        sessionId: "session-1",
+        stepId: "implementation_reviewed",
+        stepStatus: "done",
+        vibe64User
+      }
+    });
     });
   });
 });

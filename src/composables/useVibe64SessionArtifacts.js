@@ -3,6 +3,12 @@ import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibil
 import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
 import { usePaths } from "@jskit-ai/users-web/client/composables/usePaths";
 import {
+  useVibe64WorkspaceSlug
+} from "@/composables/useVibe64WorkspaceScope.js";
+import {
+  studioHttpClient
+} from "@/lib/studioHttp.js";
+import {
   VIBE64_SESSIONS_API_SUFFIX,
   VIBE64_SURFACE_ID,
   vibe64ArtifactPreviewPath,
@@ -24,6 +30,7 @@ function artifactPreviewReadPath(sessionsApiPath = "", sessionId = "", previewId
 
 function useVibe64SessionArtifacts() {
   const paths = usePaths();
+  const workspaceSlug = useVibe64WorkspaceSlug();
   const previewId = ref("");
   const previewSessionId = ref("");
   const sessionsApiPath = computed(() => paths.api(VIBE64_SESSIONS_API_SUFFIX, {
@@ -31,6 +38,7 @@ function useVibe64SessionArtifacts() {
   }));
 
   const previewResource = useEndpointResource({
+    client: studioHttpClient,
     enabled: false,
     fallbackLoadError: "Artifact preview could not be loaded.",
     path: computed(() => previewSessionId.value
@@ -40,7 +48,8 @@ function useVibe64SessionArtifacts() {
       VIBE64_SURFACE_ID,
       ROUTE_VISIBILITY_PUBLIC,
       previewSessionId.value,
-      previewId.value
+      previewId.value,
+      workspaceSlug.value
     ))
   });
 

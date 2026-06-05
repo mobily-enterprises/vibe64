@@ -36,8 +36,16 @@ function hostFromOrigin(value = "") {
   }
 }
 
+function hasAuthenticatedVibe64User(request = {}) {
+  const user = request.vibe64User;
+  return Boolean(user && typeof user === "object" && String(user.email || "").trim());
+}
+
 function isLocalStudioRequest(request) {
   if (isLocalhostCheckBypassEnabled()) {
+    return true;
+  }
+  if (hasAuthenticatedVibe64User(request)) {
     return true;
   }
   const remoteAddress = request.ip || request.socket?.remoteAddress || request.raw?.socket?.remoteAddress || "";
@@ -66,6 +74,7 @@ function requireLocalStudioRequest(request, reply, {
 }
 
 export {
+  hasAuthenticatedVibe64User,
   isLocalStudioRequest,
   isLoopbackAddress,
   normalizeHostName,

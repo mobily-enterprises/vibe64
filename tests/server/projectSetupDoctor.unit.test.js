@@ -239,6 +239,7 @@ test("Project Setup rechecks the target instead of trusting stale ready cache", 
       try {
         await createRepositoryReadyStatusCache({
           doctorId: "project-setup",
+          scope: "github:unknown",
           studioRoot: targetRoot,
           targetRoot
         }).remember({
@@ -288,6 +289,7 @@ test("Project Setup reuses a validated ready cache until refresh is requested", 
 
         await createRepositoryReadyStatusCache({
           doctorId: "project-setup",
+          scope: "github:unknown",
           studioRoot: targetRoot,
           targetRoot
         }).remember({
@@ -356,6 +358,7 @@ test("Project Setup ready cache reuse does not require Docker or setup plugins",
 
         await createRepositoryReadyStatusCache({
           doctorId: "project-setup",
+          scope: "github:unknown",
           studioRoot: targetRoot,
           targetRoot
         }).remember({

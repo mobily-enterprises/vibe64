@@ -77,14 +77,12 @@
             v-if="embeddedTerminalVisible"
             aria-label="Hide launch terminal"
             class="vibe64-launch-controls__terminal-toggle--hide"
-            :prepend-icon="mdiClose"
+            :icon="mdiClose"
             size="small"
             title="Hide launch terminal"
             variant="text"
             @click="toggleTerminal"
-          >
-            Hide terminal
-          </v-btn>
+          />
 
           <v-btn
             v-else
@@ -97,7 +95,20 @@
           />
         </div>
 
-        <v-menu v-else-if="!terminalVisible && launchTargets.length > 0" location="bottom end">
+        <v-btn
+          v-else-if="embeddedAutoStartButtonVisible"
+          aria-label="Start preview"
+          class="vibe64-launch-controls__auto-start-button"
+          :disabled="launchButtonsDisabled || !embeddedAutoStartTarget"
+          :icon="mdiPlayCircleOutline"
+          :loading="loading || operationBusy"
+          size="small"
+          title="Start preview"
+          variant="text"
+          @click="run(embeddedAutoStartTarget)"
+        />
+
+        <v-menu v-else-if="manualLaunchMenuVisible" location="bottom end">
           <template #activator="{ props: menuProps }">
             <v-btn
               v-bind="menuProps"
@@ -170,7 +181,7 @@
         class="vibe64-launch-controls__preview-frame"
         :src="previewUrl"
         title="App preview"
-        @load="requestPreviewState"
+        @load="handlePreviewFrameLoad"
       />
       <div
         v-if="previewLoadingOverlayVisible"
@@ -272,6 +283,9 @@ import {
   readLocalStorageJson,
   writeLocalStorageJson
 } from "@/lib/browserLocalStorage.js";
+import {
+  useVibe64WorkspaceSlug
+} from "@/composables/useVibe64WorkspaceScope.js";
 
 const props = defineProps({
   buttonLabel: {
@@ -368,7 +382,7 @@ const PREVIEW_LOCATION_MESSAGE_TYPE = "vibe64:preview-location";
 const PREVIEW_QUERY_MESSAGE_TYPE = "vibe64:preview-query";
 const PREVIEW_READY_MESSAGE_TYPE = "vibe64:preview-ready";
 const PREVIEW_RELOAD_QUERY_PARAM = "vibe64_reload";
-// Vite may reload optimized dependencies after "ready"; the preview is ready only when the bridge reports rendered content.
+// A successful iframe load is the generic preview-ready boundary; bridge messages only enrich the displayed target URL.
 const PREVIEW_READY_RETRY_INTERVAL_MS = 5000;
 const PREVIEW_READY_RETRY_LIMIT = 30;
 const previewFrame = ref(null);
@@ -376,6 +390,7 @@ const previewReloadKey = ref(0);
 const previewReadyUrl = ref("");
 const previewVisitedUrl = ref("");
 const previewToolbarPosition = ref("center");
+const workspaceSlug = useVibe64WorkspaceSlug();
 let previewReadyRetryCount = 0;
 let previewReadyRetryTimer = 0;
 const toolbarTeleportTarget = computed(() => String(props.toolbarTeleportTarget || "").trim());
@@ -383,8 +398,25 @@ const embeddedTerminalVisible = computed(() => Boolean(props.embeddedPreview && 
 const launchToolbarDockVisible = computed(() => props.embeddedPreview
   ? terminalVisible.value
   : terminalDockVisible.value);
+const requestedAutoStartTargetId = computed(() => String(props.autoStartTargetId || "").trim());
+const embeddedAutoStartTarget = computed(() => {
+  if (!props.embeddedPreview || !requestedAutoStartTargetId.value) {
+    return null;
+  }
+  return launchTargets.value.find((target) => target.id === requestedAutoStartTargetId.value) || null;
+});
+const embeddedAutoStartButtonVisible = computed(() => Boolean(
+  props.embeddedPreview &&
+  requestedAutoStartTargetId.value &&
+  !terminalVisible.value
+));
+const manualLaunchMenuVisible = computed(() => Boolean(
+  !terminalVisible.value &&
+  launchTargets.value.length > 0 &&
+  !(props.embeddedPreview && requestedAutoStartTargetId.value)
+));
 const previewToolbarStorageKey = computed(() => props.embeddedPreview && props.session
-  ? launchPreviewToolbarStorageKey(props.session)
+  ? launchPreviewToolbarStorageKey(props.session, workspaceSlug.value)
   : "");
 const previewBaseUrl = computed(() => launchPreviewBaseUrl(launchActions.value));
 const previewDisplayBaseUrl = computed(() => launchPreviewDisplayUrl(launchActions.value));
@@ -450,6 +482,13 @@ function requestPreviewState() {
   }, "*");
 }
 
+function handlePreviewFrameLoad() {
+  if (previewUrl.value) {
+    previewReadyUrl.value = previewUrl.value;
+  }
+  requestPreviewState();
+}
+
 function stopPreviewReadyRetries() {
   if (!previewReadyRetryTimer) {
     return;
@@ -458,16 +497,27 @@ function stopPreviewReadyRetries() {
   previewReadyRetryTimer = 0;
 }
 
+function previewReadyRetryAllowed() {
+  return Boolean(
+    previewPaneDisplayed.value &&
+    previewLoadingOverlayVisible.value &&
+    previewUrl.value &&
+    typeof window !== "undefined"
+  );
+}
+
 function schedulePreviewReadyRetry() {
-  if (previewReadyRetryTimer || !previewPaneDisplayed.value || typeof window === "undefined") {
+  if (!previewReadyRetryAllowed()) {
+    stopPreviewReadyRetries();
+    return;
+  }
+  if (previewReadyRetryTimer) {
     return;
   }
   previewReadyRetryTimer = window.setTimeout(() => {
     previewReadyRetryTimer = 0;
     if (
-      !previewPaneDisplayed.value ||
-      !previewLoadingOverlayVisible.value ||
-      !previewUrl.value ||
+      !previewReadyRetryAllowed() ||
       previewReadyRetryCount >= PREVIEW_READY_RETRY_LIMIT
     ) {
       return;
@@ -584,6 +634,8 @@ watch(previewPaneDisplayed, (displayed) => {
   if (previewLoadingOverlayVisible.value) {
     schedulePreviewReadyRetry();
   }
+}, {
+  flush: "sync"
 });
 
 watch(previewDisplayBaseUrl, (baseUrl) => {

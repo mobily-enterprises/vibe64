@@ -127,27 +127,27 @@ addPlacementTopology({
   }
 });
 
-// jskit:ui-generator.topology:page.section-nav:home-dashboard
+// jskit:ui-generator.topology:page.section-nav:app-dashboard
 addPlacementTopology({
   id: "page.section-nav",
-  owner: "home-dashboard",
+  owner: "app-dashboard",
   description: "Navigation between child pages in this section.",
-  surfaces: ["home"],
+  surfaces: ["app"],
   variants: {
     compact: {
-      outlet: "home-dashboard:primary-menu",
+      outlet: "app-dashboard:primary-menu",
       renderers: {
         link: "local.main.ui.surface-aware-menu-link-item"
       }
     },
     medium: {
-      outlet: "home-dashboard:primary-menu",
+      outlet: "app-dashboard:primary-menu",
       renderers: {
         link: "local.main.ui.surface-aware-menu-link-item"
       }
     },
     expanded: {
-      outlet: "home-dashboard:primary-menu",
+      outlet: "app-dashboard:primary-menu",
       renderers: {
         link: "local.main.ui.surface-aware-menu-link-item"
       }

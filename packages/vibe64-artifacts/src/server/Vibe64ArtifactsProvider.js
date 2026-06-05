@@ -53,7 +53,7 @@ class Vibe64ArtifactsProvider {
   boot(app) {
     registerRoutes(app, {
       routeRelativePath: "vibe64",
-      routeSurface: "home"
+      routeSurface: "app"
     });
   }
 }

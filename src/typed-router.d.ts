@@ -38,69 +38,83 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       | never
     >,
-    '/home': RouteRecordInfo<
-      '/home',
-      '/home',
-      Record<never, never>,
-      Record<never, never>,
-      | '/home/dashboard'
-      | '/home/dashboard/accounts/'
-      | '/home/dashboard/configure/'
-      | '/home/dashboard/history/'
-      | '/home/dashboard/remote/'
-      | '/home/dashboard/run/'
-      | '/home/dashboard/setup/'
-    >,
-    '/home/dashboard': RouteRecordInfo<
-      '/home/dashboard',
-      '/home/dashboard',
-      Record<never, never>,
-      Record<never, never>,
-      | '/home/dashboard/accounts/'
-      | '/home/dashboard/configure/'
-      | '/home/dashboard/history/'
-      | '/home/dashboard/remote/'
-      | '/home/dashboard/run/'
-      | '/home/dashboard/setup/'
-    >,
-    '/home/dashboard/accounts/': RouteRecordInfo<
-      '/home/dashboard/accounts/',
-      '/home/dashboard/accounts',
+    '/account': RouteRecordInfo<
+      '/account',
+      '/account',
       Record<never, never>,
       Record<never, never>,
       | never
     >,
-    '/home/dashboard/configure/': RouteRecordInfo<
-      '/home/dashboard/configure/',
-      '/home/dashboard/configure',
-      Record<never, never>,
-      Record<never, never>,
+    '/app/[slug]': RouteRecordInfo<
+      '/app/[slug]',
+      '/app/:slug',
+      { slug: ParamValue<true> },
+      { slug: ParamValue<false> },
+      | '/app/[slug]/dashboard'
+      | '/app/[slug]/dashboard/accounts/'
+      | '/app/[slug]/dashboard/configure/'
+      | '/app/[slug]/dashboard/history/'
+      | '/app/[slug]/dashboard/remote/'
+      | '/app/[slug]/dashboard/run/'
+      | '/app/[slug]/dashboard/setup/'
+    >,
+    '/app/[slug]/dashboard': RouteRecordInfo<
+      '/app/[slug]/dashboard',
+      '/app/:slug/dashboard',
+      { slug: ParamValue<true> },
+      { slug: ParamValue<false> },
+      | '/app/[slug]/dashboard/accounts/'
+      | '/app/[slug]/dashboard/configure/'
+      | '/app/[slug]/dashboard/history/'
+      | '/app/[slug]/dashboard/remote/'
+      | '/app/[slug]/dashboard/run/'
+      | '/app/[slug]/dashboard/setup/'
+    >,
+    '/app/[slug]/dashboard/accounts/': RouteRecordInfo<
+      '/app/[slug]/dashboard/accounts/',
+      '/app/:slug/dashboard/accounts',
+      { slug: ParamValue<true> },
+      { slug: ParamValue<false> },
       | never
     >,
-    '/home/dashboard/history/': RouteRecordInfo<
-      '/home/dashboard/history/',
-      '/home/dashboard/history',
-      Record<never, never>,
-      Record<never, never>,
+    '/app/[slug]/dashboard/configure/': RouteRecordInfo<
+      '/app/[slug]/dashboard/configure/',
+      '/app/:slug/dashboard/configure',
+      { slug: ParamValue<true> },
+      { slug: ParamValue<false> },
       | never
     >,
-    '/home/dashboard/remote/': RouteRecordInfo<
-      '/home/dashboard/remote/',
-      '/home/dashboard/remote',
-      Record<never, never>,
-      Record<never, never>,
+    '/app/[slug]/dashboard/history/': RouteRecordInfo<
+      '/app/[slug]/dashboard/history/',
+      '/app/:slug/dashboard/history',
+      { slug: ParamValue<true> },
+      { slug: ParamValue<false> },
       | never
     >,
-    '/home/dashboard/run/': RouteRecordInfo<
-      '/home/dashboard/run/',
-      '/home/dashboard/run',
-      Record<never, never>,
-      Record<never, never>,
+    '/app/[slug]/dashboard/remote/': RouteRecordInfo<
+      '/app/[slug]/dashboard/remote/',
+      '/app/:slug/dashboard/remote',
+      { slug: ParamValue<true> },
+      { slug: ParamValue<false> },
       | never
     >,
-    '/home/dashboard/setup/': RouteRecordInfo<
-      '/home/dashboard/setup/',
-      '/home/dashboard/setup',
+    '/app/[slug]/dashboard/run/': RouteRecordInfo<
+      '/app/[slug]/dashboard/run/',
+      '/app/:slug/dashboard/run',
+      { slug: ParamValue<true> },
+      { slug: ParamValue<false> },
+      | never
+    >,
+    '/app/[slug]/dashboard/setup/': RouteRecordInfo<
+      '/app/[slug]/dashboard/setup/',
+      '/app/:slug/dashboard/setup',
+      { slug: ParamValue<true> },
+      { slug: ParamValue<false> },
+      | never
+    >,
+    '/app/manage': RouteRecordInfo<
+      '/app/manage',
+      '/app/manage',
       Record<never, never>,
       Record<never, never>,
       | never
@@ -124,64 +138,76 @@ declare module 'vue-router/auto-routes' {
       views:
         | never
     }
-    'src/pages/home.vue': {
+    'src/pages/account.vue': {
       routes:
-        | '/home'
-        | '/home/dashboard'
-        | '/home/dashboard/accounts/'
-        | '/home/dashboard/configure/'
-        | '/home/dashboard/history/'
-        | '/home/dashboard/remote/'
-        | '/home/dashboard/run/'
-        | '/home/dashboard/setup/'
+        | '/account'
+      views:
+        | never
+    }
+    'src/pages/app/[slug].vue': {
+      routes:
+        | '/app/[slug]'
+        | '/app/[slug]/dashboard'
+        | '/app/[slug]/dashboard/accounts/'
+        | '/app/[slug]/dashboard/configure/'
+        | '/app/[slug]/dashboard/history/'
+        | '/app/[slug]/dashboard/remote/'
+        | '/app/[slug]/dashboard/run/'
+        | '/app/[slug]/dashboard/setup/'
       views:
         | 'default'
     }
-    'src/pages/home/dashboard.vue': {
+    'src/pages/app/[slug]/dashboard.vue': {
       routes:
-        | '/home/dashboard'
-        | '/home/dashboard/accounts/'
-        | '/home/dashboard/configure/'
-        | '/home/dashboard/history/'
-        | '/home/dashboard/remote/'
-        | '/home/dashboard/run/'
-        | '/home/dashboard/setup/'
+        | '/app/[slug]/dashboard'
+        | '/app/[slug]/dashboard/accounts/'
+        | '/app/[slug]/dashboard/configure/'
+        | '/app/[slug]/dashboard/history/'
+        | '/app/[slug]/dashboard/remote/'
+        | '/app/[slug]/dashboard/run/'
+        | '/app/[slug]/dashboard/setup/'
       views:
         | 'default'
     }
-    'src/pages/home/dashboard/accounts/index.vue': {
+    'src/pages/app/[slug]/dashboard/accounts/index.vue': {
       routes:
-        | '/home/dashboard/accounts/'
+        | '/app/[slug]/dashboard/accounts/'
       views:
         | never
     }
-    'src/pages/home/dashboard/configure/index.vue': {
+    'src/pages/app/[slug]/dashboard/configure/index.vue': {
       routes:
-        | '/home/dashboard/configure/'
+        | '/app/[slug]/dashboard/configure/'
       views:
         | never
     }
-    'src/pages/home/dashboard/history/index.vue': {
+    'src/pages/app/[slug]/dashboard/history/index.vue': {
       routes:
-        | '/home/dashboard/history/'
+        | '/app/[slug]/dashboard/history/'
       views:
         | never
     }
-    'src/pages/home/dashboard/remote/index.vue': {
+    'src/pages/app/[slug]/dashboard/remote/index.vue': {
       routes:
-        | '/home/dashboard/remote/'
+        | '/app/[slug]/dashboard/remote/'
       views:
         | never
     }
-    'src/pages/home/dashboard/run/index.vue': {
+    'src/pages/app/[slug]/dashboard/run/index.vue': {
       routes:
-        | '/home/dashboard/run/'
+        | '/app/[slug]/dashboard/run/'
       views:
         | never
     }
-    'src/pages/home/dashboard/setup/index.vue': {
+    'src/pages/app/[slug]/dashboard/setup/index.vue': {
       routes:
-        | '/home/dashboard/setup/'
+        | '/app/[slug]/dashboard/setup/'
+      views:
+        | never
+    }
+    'src/pages/app/manage.vue': {
+      routes:
+        | '/app/manage'
       views:
         | never
     }

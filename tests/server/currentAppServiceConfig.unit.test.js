@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  TARGET_SCRIPT_TERMINAL_NAMESPACE,
   createService,
   resolveCurrentAppRoot
 } from "../../packages/current-app/src/server/service.js";
@@ -14,6 +15,13 @@ import {
 import {
   createStudioProjectContext
 } from "../../packages/vibe64-core/src/server/studioProjectContext.js";
+import {
+  runWithWorkspaceRequestContext
+} from "../../packages/vibe64-core/src/server/workspaceRequestContext.js";
+import {
+  closeTerminalSession,
+  readTerminalSession
+} from "@local/studio-terminal-core/server/terminalSessions";
 
 async function withTemporaryRoot(callback) {
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-current-app-"));
@@ -29,13 +37,6 @@ async function withTemporaryRoot(callback) {
 
 function readySetupServices() {
   return {
-    adapterSetupService: {
-      async getStatus() {
-        return {
-          ready: true
-        };
-      }
-    },
     accountSetupService: {
       async getStatus() {
         return {
@@ -319,9 +320,9 @@ test("current-app reports connections separately from automatic setup capabiliti
     assert.equal(state.connections.ready, false);
     assert.equal(state.connections.ai.ready, false);
     assert.equal(state.connections.github.ready, true);
-    assert.equal(state.capabilities.home.enabled, true);
+    assert.equal(state.capabilities.app.enabled, true);
     assert.equal(state.capabilities.chat.enabled, false);
-    assert.equal(state.capabilities.chat.fix.route, "/home/dashboard/accounts");
+    assert.equal(state.capabilities.chat.fix.route, "/app/manage");
     assert.match(state.capabilities.createSession.reason, /AI provider/u);
   });
 });
@@ -395,5 +396,39 @@ test("current-app rejects target script terminal starts before spawning unknown 
     });
     assert.equal(unknown.ok, false);
     assert.equal(unknown.errors[0].code, "invalid_target_script");
+  });
+});
+
+test("current-app target script terminal namespace includes the active workspace scope", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const service = createService({
+      appRoot: targetRoot,
+      projectService: fakeProjectService({
+        adapter: fakeAdapter(),
+        targetRoot
+      }),
+      setupServices: readySetupServices()
+    });
+    const namespace = `${TARGET_SCRIPT_TERMINAL_NAMESPACE}:workspace:alpha_1:target`;
+    const terminal = await runWithWorkspaceRequestContext({
+      slug: "alpha_1",
+      targetRoot
+    }, () => service.startTargetScriptTerminal({
+      scriptId: "adapter:build"
+    }));
+
+    try {
+      assert.equal(terminal.ok, true);
+      assert.equal(readTerminalSession(terminal.id, {
+        namespace
+      }).ok, true);
+      assert.equal(readTerminalSession(terminal.id, {
+        namespace: `${TARGET_SCRIPT_TERMINAL_NAMESPACE}:global:target`
+      }).ok, false);
+    } finally {
+      await closeTerminalSession(terminal.id, {
+        namespace
+      });
+    }
   });
 });

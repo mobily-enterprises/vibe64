@@ -20,11 +20,6 @@ const SETUP_STAGES = Object.freeze([
     serviceName: "studioSetupService"
   },
   {
-    id: "adapter-setup",
-    label: "Adapter Setup",
-    serviceName: "adapterSetupService"
-  },
-  {
     id: "project-setup",
     label: "Project Setup",
     serviceName: "projectSetupService"
@@ -37,7 +32,27 @@ const WORKSPACE_READINESS_STAGES = Object.freeze([
 ]);
 
 function stageNotReadyMessage(stage, status = {}) {
-  return status.blockedReason || `${stage.label} is not ready.`;
+  return status.blockedReason || nestedStageNotReadyMessage(status) || `${stage.label} is not ready.`;
+}
+
+function nestedStageNotReadyMessage(status = {}) {
+  const stages = Array.isArray(status.stages) ? status.stages : [];
+  const blockedStage = stages.find((item) => !stageCheckPassed(item));
+  if (!blockedStage) {
+    return "";
+  }
+
+  return [
+    String(blockedStage.label || blockedStage.id || "Setup check"),
+    String(blockedStage.observed || blockedStage.explanation || "")
+  ]
+    .filter(Boolean)
+    .join(": ");
+}
+
+function stageCheckPassed(stage = {}) {
+  const status = String(stage?.status || "").trim();
+  return stage?.ready === true || stage?.ok === true || status === "pass";
 }
 
 function missingServiceMessage(stage) {
@@ -45,9 +60,11 @@ function missingServiceMessage(stage) {
 }
 
 async function readSetupStageStatus(stage, services = {}, {
-  emit = null
+  emit = null,
+  input = {}
 } = {}) {
   const service = services[stage.serviceName];
+  const statusInput = plainObject(input);
   const readStatus = async () => {
     if (!service || typeof service.getStatus !== "function") {
       return {
@@ -61,7 +78,7 @@ async function readSetupStageStatus(stage, services = {}, {
     return {
       id: stage.id,
       label: stage.label,
-      ...await service.getStatus()
+      ...await service.getStatus(statusInput)
     };
   };
 
@@ -73,6 +90,12 @@ async function readSetupStageStatus(stage, services = {}, {
       run: readStatus
     })
     : readStatus();
+}
+
+function plainObject(value = {}) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value
+    : {};
 }
 
 async function readVibe64SetupReadiness(services = {}, options = {}) {
@@ -110,8 +133,8 @@ async function readReadinessStages(stagesToRead, services = {}, options = {}) {
   };
 }
 
-async function assertVibe64SetupReady(services = {}) {
-  const readiness = await readVibe64SetupReadiness(services);
+async function assertVibe64SetupReady(services = {}, options = {}) {
+  const readiness = await readVibe64SetupReadiness(services, options);
   if (readiness.ready === true) {
     return readiness;
   }
@@ -121,8 +144,8 @@ async function assertVibe64SetupReady(services = {}) {
   throw error;
 }
 
-async function assertVibe64WorkspaceReady(services = {}) {
-  const readiness = await readVibe64WorkspaceReadiness(services);
+async function assertVibe64WorkspaceReady(services = {}, options = {}) {
+  const readiness = await readVibe64WorkspaceReadiness(services, options);
   if (readiness.ready === true) {
     return readiness;
   }

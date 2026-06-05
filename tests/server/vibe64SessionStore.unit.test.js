@@ -184,7 +184,9 @@ test("vibe64 session store reads and writes metadata, artifacts, status, current
       hasPresentation: "presentation" in summary,
       metadata: summary.metadata,
       sessionId: summary.sessionId,
-      status: summary.status
+      sessionRoot: summary.sessionRoot,
+      status: summary.status,
+      targetRoot: summary.targetRoot
     }, {
       completedStepCount: 0,
       currentStep: "install_dependencies",
@@ -195,7 +197,9 @@ test("vibe64 session store reads and writes metadata, artifacts, status, current
         adapter: "cpp-cmake"
       },
       sessionId: "state_contract",
-      status: "blocked"
+      sessionRoot: path.join(targetRoot, ".vibe64", "sessions", "active", "state_contract"),
+      status: "blocked",
+      targetRoot
     });
   });
 });

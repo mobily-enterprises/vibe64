@@ -27,6 +27,10 @@ import {
   normalizeText
 } from "@local/vibe64-core/server/core";
 import {
+  sessionWorktreePath
+} from "@local/vibe64-core/server/sessionWorktreePath";
+import {
+  runtimeNetworkTargetHash,
   targetRuntimeNetworkDockerArgs
 } from "./runtimeContainers.js";
 
@@ -349,7 +353,7 @@ function launchTargetTerminalArgs({
     "--label",
     `vibe64.terminal=${terminalId}`,
     "--label",
-    `vibe64.target=${stableHash(targetRoot)}`,
+    `vibe64.target=${runtimeNetworkTargetHash(targetRoot)}`,
     "-p",
     `127.0.0.1:${port}:${port}`,
     ...gitToolchainMountArgs(targetRoot),
@@ -394,7 +398,7 @@ async function createVibe64WebLaunchTargetTerminalSpec({
   session = {},
   targetRoot = ""
 } = {}) {
-  const worktreePath = normalizeText(session.metadata?.worktree_path);
+  const worktreePath = sessionWorktreePath(session);
   if (!worktreePath) {
     return {
       ok: false,

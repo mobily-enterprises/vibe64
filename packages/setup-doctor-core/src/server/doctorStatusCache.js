@@ -78,11 +78,13 @@ function defaultDoctorStatusStateRoot({
 
 function readyStatusCacheIdentity({
   doctorId = "",
+  scope = "",
   studioRoot = "",
   targetRoot = ""
 } = {}) {
   return {
     doctorId: String(doctorId || "doctor").trim() || "doctor",
+    scope: String(scope || ""),
     studioRoot: studioRoot ? normalizeCacheRoot(studioRoot) : "",
     targetRoot: normalizeCacheRoot(targetRoot)
   };
@@ -91,6 +93,7 @@ function readyStatusCacheIdentity({
 function readyStatusCacheKey(identity) {
   return JSON.stringify({
     doctorId: identity.doctorId,
+    scope: identity.scope,
     studioRoot: identity.studioRoot,
     targetRoot: identity.targetRoot
   });
@@ -98,12 +101,14 @@ function readyStatusCacheKey(identity) {
 
 function readyStatusCachePath({
   doctorId = "",
+  scope = "",
   stateRoot = "",
   studioRoot = "",
   targetRoot = ""
 } = {}) {
   const identity = readyStatusCacheIdentity({
     doctorId,
+    scope,
     studioRoot,
     targetRoot
   });
@@ -163,6 +168,7 @@ async function writeReadyStatusRecord(filePath, record) {
 function createRepositoryReadyStatusCache({
   doctorId = "",
   recentNotReadyTtlMs = DEFAULT_RECENT_NOT_READY_STATUS_CACHE_TTL_MS,
+  scope = "",
   stateRoot = "",
   studioRoot = "",
   targetRoot = ""
@@ -174,6 +180,7 @@ function createRepositoryReadyStatusCache({
     identity
   } = readyStatusCachePath({
     doctorId,
+    scope,
     stateRoot,
     studioRoot,
     targetRoot

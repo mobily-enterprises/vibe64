@@ -215,15 +215,17 @@
         </v-toolbar>
 
         <v-card-text class="target-script-terminal__body">
-          <StudioErrorNotice
-            v-if="terminalError"
-            title="Target script terminal needs attention"
-            :error="terminalError"
-            compact
-            class="mb-2"
-          />
+          <div class="target-script-terminal__stage">
+            <StudioErrorNotice
+              v-if="terminalError"
+              title="Target script terminal needs attention"
+              :error="terminalError"
+              compact
+              overlay
+            />
 
-          <div ref="terminalHost" class="target-script-terminal__host" />
+            <div ref="terminalHost" class="target-script-terminal__host" />
+          </div>
 
           <div class="target-script-terminal__footer">
             <span>{{ terminalCommandPreview || "Ready." }}</span>
@@ -494,6 +496,14 @@ const {
   min-height: 0;
   min-width: 0;
   padding: 0.75rem;
+}
+
+.target-script-terminal__stage {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  position: relative;
 }
 
 .target-script-terminal__host {

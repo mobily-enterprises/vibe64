@@ -70,10 +70,14 @@ function hostUserToolchainStartupScript(commandArgs, {
   ].join("\n");
 }
 
-function toolchainHomeDockerArgs(extraArgs = []) {
+function toolchainHomeDockerArgs(extraArgs = [], {
+  toolHomeSource = ""
+} = {}) {
   if (!dockerUserSpecified(extraArgs)) {
     return [
-      ...studioToolHomeDockerArgs(),
+      ...studioToolHomeDockerArgs({
+        source: toolHomeSource
+      }),
       ...hostUserIdentityEnvArgs()
     ];
   }
@@ -98,7 +102,8 @@ function buildDoctorToolchainArgs(commandArgs, options = {}) {
   const {
     extraArgs = [],
     image = STUDIO_BASE_TOOLCHAIN_IMAGE,
-    targetRoot = ""
+    targetRoot = "",
+    toolHomeSource = ""
   } = normalizeToolchainOptions(options);
   const workspaceMountArgs = targetRoot
     ? [
@@ -110,7 +115,9 @@ function buildDoctorToolchainArgs(commandArgs, options = {}) {
   return [
     "run",
     "--rm",
-    ...toolchainHomeDockerArgs(extraArgs),
+    ...toolchainHomeDockerArgs(extraArgs, {
+      toolHomeSource
+    }),
     ...githubSshToHttpsGitDockerEnvArgs(),
     "--label",
     STUDIO_TOOLCHAIN_CONTAINER_LABEL,

@@ -92,7 +92,7 @@ class Vibe64TerminalsProvider {
   boot(app) {
     registerRoutes(app, {
       routeRelativePath: "vibe64",
-      routeSurface: "home"
+      routeSurface: "app"
     });
   }
 }

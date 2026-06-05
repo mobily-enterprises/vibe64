@@ -1,6 +1,9 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { loadAppConfigFromAppRoot } from "@jskit-ai/kernel/server/support";
+import {
+  sessionWorktreePath
+} from "@local/vibe64-core/server/sessionWorktreePath";
 
 import {
   createVibe64WebLaunchTargetTerminalSpec,
@@ -184,7 +187,7 @@ function shellQuotedNumber(value) {
 async function listJskitLaunchTargets({
   session = {}
 } = {}) {
-  const worktreePath = String(session.metadata?.worktree_path || "").trim();
+  const worktreePath = sessionWorktreePath(session);
   if (!worktreePath) {
     return [];
   }
@@ -296,7 +299,7 @@ async function createJskitLaunchTargetTerminalSpec({
     };
   }
   const launchTarget = context.launchTarget || jskitLaunchTarget(launchTargetId, launchTargetId);
-  const worktreePath = String(session.metadata?.worktree_path || "").trim();
+  const worktreePath = sessionWorktreePath(session);
   if (!worktreePath) {
     return {
       ok: false,

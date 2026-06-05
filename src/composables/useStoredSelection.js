@@ -1,4 +1,4 @@
-import { ref } from "vue";
+import { computed, ref, unref, watch } from "vue";
 
 function browserSessionStorage() {
   if (typeof window === "undefined" || !window.sessionStorage) {
@@ -33,14 +33,19 @@ function writeStoredValue(storageKey = "", value = "") {
   }
 }
 
+function readStorageKey(storageKey = "") {
+  return String(typeof storageKey === "function" ? storageKey() : unref(storageKey) || "").trim();
+}
+
 function useStoredSelection({
   storageKey = ""
 } = {}) {
-  const selectedId = ref(readStoredValue(storageKey));
+  const activeStorageKey = computed(() => readStorageKey(storageKey));
+  const selectedId = ref(readStoredValue(activeStorageKey.value));
 
   function select(id = "") {
     selectedId.value = String(id || "").trim();
-    writeStoredValue(storageKey, selectedId.value);
+    writeStoredValue(activeStorageKey.value, selectedId.value);
   }
 
   function clear() {
@@ -62,13 +67,17 @@ function useStoredSelection({
       return selectedId.value;
     }
 
-    const rememberedId = readStoredValue(storageKey);
+    const rememberedId = readStoredValue(activeStorageKey.value);
     const nextId = itemIds.includes(rememberedId)
       ? rememberedId
       : String(fallbackId || "").trim();
     select(nextId);
     return selectedId.value;
   }
+
+  watch(activeStorageKey, (nextStorageKey) => {
+    selectedId.value = readStoredValue(nextStorageKey);
+  });
 
   return {
     clear,

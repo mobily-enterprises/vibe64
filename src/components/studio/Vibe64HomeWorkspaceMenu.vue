@@ -52,7 +52,9 @@ const route = useRoute();
 const router = useRouter();
 const menuOpen = ref(false);
 
-const isHomeRoute = computed(() => route.path === "/home" || route.path === "/home/");
+const workspaceSlug = computed(() => firstRouteParam(route.params.slug));
+const workspaceBasePath = computed(() => workspaceSlug.value ? `/app/${encodeURIComponent(workspaceSlug.value)}` : "/app/manage");
+const isHomeRoute = computed(() => normalizePath(route.path) === normalizePath(workspaceBasePath.value));
 const isAutopilotHome = computed(() => Boolean(
   isHomeRoute.value &&
   route.query.configure !== "project"
@@ -103,12 +105,12 @@ function sharedItems() {
 
 function pathForItem(itemId = "") {
   if (itemId === "workspace") {
-    return "/home";
+    return workspaceBasePath.value;
   }
   if (itemId === "configure" || itemId === "run" || itemId === "history" || itemId === "setup") {
-    return `/home/dashboard/${itemId}`;
+    return `${workspaceBasePath.value}/dashboard/${itemId}`;
   }
-  return `/home/${itemId}`;
+  return `${workspaceBasePath.value}/${itemId}`;
 }
 
 function itemRoute(item = {}) {
@@ -128,6 +130,19 @@ function itemActive(item = {}) {
 function selectItem(item = {}) {
   menuOpen.value = false;
   void router.push(itemRoute(item));
+}
+
+function firstRouteParam(value) {
+  const rawValue = Array.isArray(value) ? value[0] : value;
+  return String(rawValue || "").trim();
+}
+
+function normalizePath(pathValue = "") {
+  const path = String(pathValue || "").trim();
+  if (!path || path === "/") {
+    return path || "/";
+  }
+  return path.replace(/\/+$/u, "");
 }
 </script>
 

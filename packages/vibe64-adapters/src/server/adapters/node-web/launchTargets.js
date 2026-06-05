@@ -2,6 +2,9 @@ import {
   createVibe64WebLaunchTargetTerminalSpec
 } from "@local/studio-terminal-core/server/launchTargetTerminal";
 import {
+  sessionWorktreePath
+} from "@local/vibe64-core/server/sessionWorktreePath";
+import {
   detectPackageManager,
   packageScript,
   readPackageJson,
@@ -25,7 +28,7 @@ function hasScript(packageJson = {}, scriptName = "") {
 async function listGenericNodeWebLaunchTargets({
   session = {}
 } = {}) {
-  const worktreePath = String(session.metadata?.worktree_path || "").trim();
+  const worktreePath = sessionWorktreePath(session);
   const packageJson = worktreePath ? await readPackageJson(worktreePath) : null;
   if (!packageJson) {
     return [];

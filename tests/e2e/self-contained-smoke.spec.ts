@@ -1,5 +1,11 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 
+import {
+  DASHBOARD_PATH,
+  DEVELOPMENT_PATH,
+  SCOPED_API_PREFIX
+} from "./support/base-shell-data";
+
 const targetRoot = "/workspace/example-target-app";
 const savedProjectConfigValues = {
   github_pr_merge_method: "merge",
@@ -9,14 +15,14 @@ const savedProjectConfigValues = {
 test("home loads through a self-contained mocked Studio shell", async ({ page }) => {
   await mockReadyStudioShell(page);
 
-  await page.goto("/home");
+  await page.goto(DEVELOPMENT_PATH);
 
-  await expect(page).toHaveURL(/\/home$/u);
+  await expect(page).toHaveURL(developmentUrlPattern());
   await expect(page.getByRole("button", { name: "Menu" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Tools" })).toHaveCount(0);
-  await page.goto("/home/dashboard/remote");
+  await page.goto(`${DASHBOARD_PATH}/remote`);
   await page.locator(".section-container-shell__nav").getByText("Remote", { exact: true }).click();
-  await expect(page).toHaveURL(/\/home\/dashboard\/remote\/?$/u);
+  await expect(page).toHaveURL(dashboardUrlPattern("remote"));
   await expect(page.getByText("Project tools")).toBeVisible();
   await expect(page.getByText("Push to staging", { exact: true })).toBeVisible();
   await expect(page.getByText("Parameterized smoke tool", { exact: true })).toBeVisible();
@@ -29,8 +35,8 @@ test("home loads through a self-contained mocked Studio shell", async ({ page })
   const confirmationDialog = page.getByRole("dialog").filter({ hasText: "Push to staging" });
   await expect(confirmationDialog.getByText("Deploy to staging from this checkout?")).toBeVisible();
   await confirmationDialog.getByRole("button", { name: "Cancel" }).click();
-  await page.goto("/home");
-  await expect(page).toHaveURL(/\/home$/u);
+  await page.goto(DEVELOPMENT_PATH);
+  await expect(page).toHaveURL(developmentUrlPattern());
   await expect(page.getByRole("button", { name: "New Session" })).toBeVisible();
   await page.getByRole("button", { name: "New Session" }).click();
   await expect(page.getByText("Session type")).toBeVisible();
@@ -38,8 +44,20 @@ test("home loads through a self-contained mocked Studio shell", async ({ page })
   await expect(page.getByText("General coding", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Documentation/non code maintenance", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Non-commit maintenance", { exact: true })).toBeVisible();
-  await expect(page).toHaveURL(/\/home$/u);
+  await expect(page).toHaveURL(developmentUrlPattern());
 });
+
+function escapedPathPattern(pathValue: string) {
+  return String(pathValue || "").replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
+
+function developmentUrlPattern() {
+  return new RegExp(`${escapedPathPattern(DEVELOPMENT_PATH)}$`, "u");
+}
+
+function dashboardUrlPattern(routePath: string) {
+  return new RegExp(`${escapedPathPattern(DASHBOARD_PATH)}/${routePath}/?$`, "u");
+}
 
 async function mockReadyStudioShell(page: Page) {
   let projectConfigResolved = false;
@@ -387,28 +405,95 @@ async function mockReadyStudioShell(page: Page) {
     ]
   ]);
 
+  await mockLifecycleSocket(page);
+
   await page.route("**/api/**", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const method = request.method().toUpperCase();
+    const apiPathname = unscopedApiPathname(url.pathname);
 
-    if (method !== "GET" || !apiPayloads.has(url.pathname)) {
+    if (url.pathname === "/api/auth/state" && method === "GET") {
+      await fulfillJson(route, {
+        authenticated: true,
+        ok: true,
+        setupRequired: false,
+        user: {
+          email: "owner@example.com",
+          gravatarUrl: "https://www.gravatar.com/avatar/00000000000000000000000000000000?d=identicon",
+          role: "owner"
+        }
+      });
+      return;
+    }
+
+    if (method !== "GET" || !apiPayloads.has(apiPathname)) {
       throw new Error(`Self-contained smoke spec does not mock ${method} ${url.pathname}.`);
     }
 
-    if (url.pathname === "/api/studio/current-app") {
+    if (apiPathname === "/api/studio/current-app") {
       await projectConfigReady;
     }
 
-    if (url.pathname.endsWith("/stream")) {
-      await fulfillSse(route, apiPayloads.get(url.pathname));
+    if (apiPathname.endsWith("/stream")) {
+      await fulfillSse(route, apiPayloads.get(apiPathname));
     } else {
-      await fulfillJson(route, apiPayloads.get(url.pathname));
+      await fulfillJson(route, apiPayloads.get(apiPathname));
     }
 
-    if (url.pathname === "/api/vibe64/project-config") {
+    if (apiPathname === "/api/vibe64/project-config") {
       markProjectConfigResolved();
     }
+  });
+}
+
+function unscopedApiPathname(pathname = "") {
+  if (!pathname.startsWith(SCOPED_API_PREFIX)) {
+    return pathname;
+  }
+  return `/api${pathname.slice(SCOPED_API_PREFIX.length)}`;
+}
+
+async function mockLifecycleSocket(page: Page) {
+  await page.addInitScript(() => {
+    const OriginalWebSocket = window.WebSocket;
+
+    class MockLifecycleWebSocket extends EventTarget {
+      static CONNECTING = 0;
+      static OPEN = 1;
+      static CLOSING = 2;
+      static CLOSED = 3;
+      readyState = MockLifecycleWebSocket.CONNECTING;
+      url = "";
+
+      constructor(url) {
+        super();
+        this.url = String(url || "");
+        const pathname = new URL(this.url, window.location.href).pathname;
+        if (pathname !== "/api/studio/browser-lifecycle/ws") {
+          return new OriginalWebSocket(url);
+        }
+        window.setTimeout(() => {
+          this.readyState = MockLifecycleWebSocket.OPEN;
+          this.dispatchEvent(new Event("open"));
+          this.dispatchEvent(new MessageEvent("message", {
+            data: JSON.stringify({
+              state: "active",
+              type: "state"
+            })
+          }));
+        }, 0);
+      }
+
+      send() {}
+
+      close() {
+        this.readyState = MockLifecycleWebSocket.CLOSED;
+        this.dispatchEvent(new CloseEvent("close"));
+      }
+    }
+
+    window.WebSocket = MockLifecycleWebSocket as unknown as typeof WebSocket;
   });
 }
 

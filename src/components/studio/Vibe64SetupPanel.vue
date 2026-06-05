@@ -28,16 +28,8 @@
       tabindex="0"
       :aria-labelledby="tabId(activeTab)"
     >
-      <StudioSetupDoctorScreen
-        v-if="activeTab === 'studio-setup'"
-        @select-tab="selectTab"
-      />
-      <AdapterSetupDoctorScreen
-        v-else-if="activeTab === 'adapter-setup'"
-        @select-tab="selectTab"
-      />
       <ProjectSetupDoctorScreen
-        v-else-if="activeTab === 'project-setup'"
+        v-if="activeTab === 'project-setup'"
         @select-tab="selectTab"
       />
     </div>
@@ -46,13 +38,9 @@
 
 <script setup>
 import { computed } from "vue";
-import AdapterSetupDoctorScreen from "@/components/studio/AdapterSetupDoctorScreen.vue";
 import ProjectSetupDoctorScreen from "@/components/studio/ProjectSetupDoctorScreen.vue";
-import StudioSetupDoctorScreen from "@/components/studio/StudioSetupDoctorScreen.vue";
 
 const tabs = [
-  { label: "Studio Setup", value: "studio-setup" },
-  { label: "Adapter Setup", value: "adapter-setup" },
   { label: "Project Setup", value: "project-setup" }
 ];
 
@@ -74,7 +62,7 @@ function normalizeTab(value) {
 }
 
 function fallbackTab() {
-  return "studio-setup";
+  return "project-setup";
 }
 
 function tabId(tab) {

@@ -17,7 +17,7 @@ const featureActions = Object.freeze([
     version: 1,
     kind: "query",
     channels: ["api", "automation", "internal"],
-    surfaces: ["home"],
+    surfaces: ["app"],
     input: accountsReadInputValidator,
     output: null,
     idempotency: "none",
@@ -35,7 +35,7 @@ const featureActions = Object.freeze([
     version: 1,
     kind: "command",
     channels: ["api", "automation", "internal"],
-    surfaces: ["home"],
+    surfaces: ["app"],
     input: accountIdInputValidator,
     output: null,
     idempotency: "optional",
@@ -53,7 +53,7 @@ const featureActions = Object.freeze([
     version: 1,
     kind: "command",
     channels: ["api", "automation", "internal"],
-    surfaces: ["home"],
+    surfaces: ["app"],
     input: accountAuthStartInputValidator,
     output: null,
     idempotency: "optional",
@@ -71,7 +71,7 @@ const featureActions = Object.freeze([
     version: 1,
     kind: "query",
     channels: ["api", "automation", "internal"],
-    surfaces: ["home"],
+    surfaces: ["app"],
     input: accountAuthSessionInputValidator,
     output: null,
     idempotency: "none",
@@ -81,7 +81,7 @@ const featureActions = Object.freeze([
     observability: {},
     async execute(input, context, deps) {
       void context;
-      return deps.featureService.readAuthSession(input.sessionId);
+      return deps.featureService.readAuthSession(input);
     }
   },
   {
@@ -89,7 +89,7 @@ const featureActions = Object.freeze([
     version: 1,
     kind: "command",
     channels: ["api", "automation", "internal"],
-    surfaces: ["home"],
+    surfaces: ["app"],
     input: accountAuthSessionInputValidator,
     output: null,
     idempotency: "optional",
@@ -99,7 +99,7 @@ const featureActions = Object.freeze([
     observability: {},
     async execute(input, context, deps) {
       void context;
-      return deps.featureService.cancelAuthSession(input.sessionId);
+      return deps.featureService.cancelAuthSession(input);
     }
   }
 ]);

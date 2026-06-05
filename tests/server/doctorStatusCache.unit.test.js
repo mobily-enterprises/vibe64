@@ -146,3 +146,42 @@ test("repository ready status cache keeps blocked statuses briefly in memory onl
     });
   }
 });
+
+test("repository ready status cache separates explicit scopes", async () => {
+  const stateRoot = await mkdtemp(path.join(tmpdir(), "vibe64-doctor-cache-"));
+
+  try {
+    const targetRoot = path.join(stateRoot, "target");
+    const readyStatus = {
+      checks: [],
+      ready: true
+    };
+    await createRepositoryReadyStatusCache({
+      doctorId: "project-setup",
+      scope: "github:user-a",
+      stateRoot,
+      targetRoot
+    }).remember(readyStatus);
+
+    const sameScope = createRepositoryReadyStatusCache({
+      doctorId: "project-setup",
+      scope: "github:user-a",
+      stateRoot,
+      targetRoot
+    });
+    const otherScope = createRepositoryReadyStatusCache({
+      doctorId: "project-setup",
+      scope: "github:user-b",
+      stateRoot,
+      targetRoot
+    });
+
+    assert.deepEqual(await sameScope.read(), readyStatus);
+    assert.equal(await otherScope.read(), null);
+  } finally {
+    await rm(stateRoot, {
+      force: true,
+      recursive: true
+    });
+  }
+});

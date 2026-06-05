@@ -16,9 +16,9 @@
     ready-title="Studio Setup ready"
     quiet-title="Checking your machine"
     quiet-lede="Vibe64 is checking Docker and local tools before it starts."
-    continue-label="Continue to Adapter Setup"
-    continue-emits
-    @continue="emit('select-tab', 'adapter-setup')"
+    :continue-label="continueLabel"
+    :continue-emits="continueEnabled"
+    @continue="emit('select-tab', 'project-setup')"
     @refresh="loadStudioSetup"
     @status-updated="handleStudioSetupUpdated"
   />
@@ -35,6 +35,16 @@ import {
 } from "../../lib/studioGateApi.js";
 
 const emit = defineEmits(["select-tab"]);
+defineProps({
+  continueEnabled: {
+    default: true,
+    type: Boolean
+  },
+  continueLabel: {
+    default: "Continue to Project Setup",
+    type: String
+  }
+});
 
 const studioSetup = ref(null);
 const loading = ref(false);
@@ -43,9 +53,9 @@ const streamAutoStart = ref(false);
 
 const lede = computed(() => {
   if (studioSetup.value?.ready) {
-    return "Machine runtime is ready. Continue to Adapter Setup.";
+    return "Machine runtime is ready.";
   }
-  return "Machine runtime must be ready before Studio can operate on the target project.";
+  return "Machine runtime must be ready before Vibe64 can operate on workspaces.";
 });
 
 async function loadStudioSetup({

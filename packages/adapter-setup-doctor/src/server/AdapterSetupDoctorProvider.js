@@ -47,7 +47,7 @@ class AdapterSetupDoctorProvider {
   boot(app) {
     registerRoutes(app, {
       routeRelativePath: "studio/adapter-setup",
-      routeSurface: "home"
+      routeSurface: "app"
     });
   }
 }

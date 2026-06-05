@@ -19,6 +19,9 @@ import {
   vibe64Result
 } from "@local/vibe64-core/server/serverResponses";
 import {
+  currentWorkspaceScopeKey
+} from "@local/vibe64-core/server/workspaceRequestContext";
+import {
   assertVibe64SetupReady,
   readVibe64SetupReadiness
 } from "@local/vibe64-runtime/server/setupReadiness";
@@ -40,10 +43,9 @@ const ADAPTER_SCRIPT_SOURCE = "adapter";
 const PROJECT_SCRIPTS_DIR = ".vibe64/scripts";
 const STARRED_TARGET_SCRIPTS_CONFIG = ".vibe64/config/starred_scripts";
 const TARGET_SCRIPT_TERMINAL_NAMESPACE = "current-app-target-script";
-const TARGET_SCRIPT_TERMINAL_NAMESPACE_PREFIX = `${TARGET_SCRIPT_TERMINAL_NAMESPACE}:`;
 const PROJECT_SCRIPT_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u;
-const ACCOUNTS_DASHBOARD_ROUTE = "/home/dashboard/accounts";
-const SETUP_DASHBOARD_ROUTE = "/home/dashboard/setup";
+const ACCOUNTS_DASHBOARD_ROUTE = "/app/manage";
+const SETUP_DASHBOARD_ROUTE = "/app/manage";
 
 function resolveCurrentAppRoot(appRoot) {
   return resolveStudioTargetRoot({
@@ -51,8 +53,12 @@ function resolveCurrentAppRoot(appRoot) {
   });
 }
 
+function targetScriptTerminalNamespacePrefix() {
+  return `${TARGET_SCRIPT_TERMINAL_NAMESPACE}:${currentWorkspaceScopeKey()}:`;
+}
+
 function targetScriptTerminalNamespace() {
-  return `${TARGET_SCRIPT_TERMINAL_NAMESPACE}:target`;
+  return `${targetScriptTerminalNamespacePrefix()}target`;
 }
 
 function emptyTargetScripts() {
@@ -451,14 +457,24 @@ function createService({
     return projectService.createRuntime();
   }
 
+  function setupStageInput(input = {}) {
+    return {
+      vibe64User: input?.vibe64User || null,
+      refresh: input?.refresh === true
+    };
+  }
+
   async function setupReadiness(options = {}) {
     if (!currentTargetRoot()) {
       return noProjectSelectedSetupReadiness();
     }
-    return readVibe64SetupReadiness(setupServices, options);
+    return readVibe64SetupReadiness(setupServices, {
+      ...options,
+      input: setupStageInput(options.input || options)
+    });
   }
 
-  async function connectionReadiness() {
+  async function connectionReadiness(input = {}) {
     const accountSetupService = setupServices.accountSetupService;
     if (!accountSetupService || typeof accountSetupService.getStatus !== "function") {
       return {
@@ -470,7 +486,7 @@ function createService({
         updatedAt: new Date().toISOString()
       };
     }
-    return accountSetupService.getStatus();
+    return accountSetupService.getStatus(setupStageInput(input));
   }
 
   function capabilityState({
@@ -513,7 +529,7 @@ function createService({
         chat: chatCapability,
         createSession: createSessionCapability,
         githubWorkflow: capability(githubReady, "Connect GitHub before using GitHub issue, pull request, or merge actions.", connectionFix),
-        home: capability(true),
+        app: capability(true),
         preview: capability(setupReady, automaticSetupReason(setup), setupFix),
         runScripts: capability(setupReady, automaticSetupReason(setup), setupFix)
       },
@@ -531,9 +547,11 @@ function createService({
     };
   }
 
-  async function requireSetupReady() {
+  async function requireSetupReady(input = {}) {
     requireTargetRoot();
-    return assertVibe64SetupReady(setupServices);
+    return assertVibe64SetupReady(setupServices, {
+      input: setupStageInput(input)
+    });
   }
 
   async function projectConfigEnvironment() {
@@ -616,7 +634,9 @@ function createService({
         if (projectConfig.ready !== true) {
           return currentAppBeforeProjectConfig(targetRoot, projectType, projectConfig);
         }
-        const setup = await setupReadiness();
+        const setup = await setupReadiness({
+          input
+        });
         if (setup.ready !== true) {
           return currentAppBeforeSetup(targetRoot, projectType, setup);
         }
@@ -643,15 +663,19 @@ function createService({
       });
     },
 
-    async inspectSetupReadiness() {
-      return currentAppResult(setupReadiness);
+    async inspectSetupReadiness(input = {}) {
+      return currentAppResult(() => setupReadiness({
+        input
+      }));
     },
 
-    async inspectCapabilities() {
+    async inspectCapabilities(input = {}) {
       return currentAppResult(async () => {
         const [setup, connections] = await Promise.all([
-          setupReadiness(),
-          connectionReadiness()
+          setupReadiness({
+            input
+          }),
+          connectionReadiness(input)
         ]);
         const state = capabilityState({
           connections,
@@ -668,13 +692,16 @@ function createService({
     },
 
     async streamSetupReadiness(options = {}) {
-      return currentAppResult(() => setupReadiness(options));
+      return currentAppResult(() => setupReadiness({
+        emit: options.emit || null,
+        input: setupStageInput(options)
+      }));
     },
 
-    async listTargetScripts() {
+    async listTargetScripts(input = {}) {
       return currentAppResult(async () => {
         const targetRoot = requireTargetRoot();
-        await requireSetupReady();
+        await requireSetupReady(input);
         const [availableScripts, config] = await Promise.all([
           listAvailableTargetScripts(),
           readStarredScriptConfig(targetRoot)
@@ -692,7 +719,7 @@ function createService({
     async saveStarredTargetScripts(input = {}) {
       return currentAppResult(async () => {
         const targetRoot = requireTargetRoot();
-        await requireSetupReady();
+        await requireSetupReady(input);
         const availableScripts = await listAvailableTargetScripts();
         if (availableScripts.ok === false) {
           return availableScripts;
@@ -709,10 +736,10 @@ function createService({
       });
     },
 
-    async resetStarredTargetScripts() {
+    async resetStarredTargetScripts(input = {}) {
       return currentAppResult(async () => {
         const targetRoot = requireTargetRoot();
-        await requireSetupReady();
+        await requireSetupReady(input);
         const availableScripts = await listAvailableTargetScripts();
         if (availableScripts.ok === false) {
           return availableScripts;
@@ -728,7 +755,7 @@ function createService({
     async startTargetScriptTerminal(input = {}) {
       return currentAppResult(async () => {
         const targetRoot = requireTargetRoot();
-        await requireSetupReady();
+        await requireSetupReady(input);
         const scriptId = normalizeScriptId(input?.scriptId);
         if (!scriptId) {
           return targetScriptError("missing_target_script", "scriptId must identify a target script.");
@@ -773,7 +800,7 @@ function createService({
           maxRunning: spec.maxRunning || 1,
           metadata: spec.metadata || {},
           namespace,
-          namespaceLimitPrefix: TARGET_SCRIPT_TERMINAL_NAMESPACE_PREFIX,
+          namespaceLimitPrefix: targetScriptTerminalNamespacePrefix(),
           onClose: spec.onClose,
           reuseRunning: spec.reuseRunning === true
         });

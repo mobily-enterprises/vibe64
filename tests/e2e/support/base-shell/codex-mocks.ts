@@ -8,7 +8,10 @@ import {
   currentAppPayload,
   secondCodexPromptSessionPayload
 } from "../base-shell-data";
-import { fulfillJson } from "./http";
+import {
+  fulfillJson,
+  routeApiEndpoint
+} from "./http";
 import {
   mockProtectedRouteReady,
   mockTargetScripts
@@ -139,10 +142,10 @@ async function mockCodexPromptSession(page, { stepPayloads = [], terminalInputs 
     },
     terminalInputs
   });
-  await page.route("**/api/studio/current-app", async (route) => {
+  await routeApiEndpoint(page, "/studio/current-app", async (route) => {
     await fulfillJson(route, currentAppPayload);
   });
-  await page.route("**/api/vibe64/sessions**", async (route) => {
+  await routeApiEndpoint(page, "/vibe64/sessions", async (route) => {
     await fulfillJson(route, {
       limits: {
         maxOpenSessions: 5,
@@ -154,10 +157,10 @@ async function mockCodexPromptSession(page, { stepPayloads = [], terminalInputs 
     });
   });
   await mockTargetScripts(page);
-  await page.route(`**/api/vibe64/sessions/${codexPromptSessionId}`, async (route) => {
+  await routeApiEndpoint(page, `/vibe64/sessions/${codexPromptSessionId}`, async (route) => {
     await fulfillJson(route, codexPromptSessionPayload);
   });
-  await page.route(`**/api/vibe64/sessions/${codexPromptSessionId}/step`, async (route) => {
+  await routeApiEndpoint(page, `/vibe64/sessions/${codexPromptSessionId}/step`, async (route) => {
     const payload = route.request().postDataJSON();
     stepPayloads.push(payload);
     stepRequestCount += 1;
@@ -187,7 +190,7 @@ async function mockCodexPromptSession(page, { stepPayloads = [], terminalInputs 
         : stepRequestCount === 2 ? createdPayload : planPromptPayload
     );
   });
-  await page.route(`**/api/vibe64/sessions/${codexPromptSessionId}/codex-terminal`, async (route) => {
+  await routeApiEndpoint(page, `/vibe64/sessions/${codexPromptSessionId}/codex-terminal`, async (route) => {
     await fulfillJson(route, {
       ok: true,
       id: "term-1",
@@ -235,10 +238,10 @@ async function mockCodexPromptSessions(page, sessionPayloads) {
     terminalInputs
   });
 
-  await page.route("**/api/studio/current-app", async (route) => {
+  await routeApiEndpoint(page, "/studio/current-app", async (route) => {
     await fulfillJson(route, currentAppPayload);
   });
-  await page.route("**/api/vibe64/sessions**", async (route) => {
+  await routeApiEndpoint(page, "/vibe64/sessions", async (route) => {
     await fulfillJson(route, {
       limits: {
         maxOpenSessions: 5,
@@ -252,10 +255,10 @@ async function mockCodexPromptSessions(page, sessionPayloads) {
   await mockTargetScripts(page);
 
   for (const sessionId of Object.keys(payloadsBySessionId)) {
-    await page.route(`**/api/vibe64/sessions/${sessionId}`, async (route) => {
+    await routeApiEndpoint(page, `/vibe64/sessions/${sessionId}`, async (route) => {
       await fulfillJson(route, payloadsBySessionId[sessionId]);
     });
-    await page.route(`**/api/vibe64/sessions/${sessionId}/abandon`, async (route) => {
+    await routeApiEndpoint(page, `/vibe64/sessions/${sessionId}/abandon`, async (route) => {
       terminalDeletes[sessionId] += 1;
       payloadsBySessionId[sessionId] = {
         ...payloadsBySessionId[sessionId],
@@ -266,7 +269,7 @@ async function mockCodexPromptSessions(page, sessionPayloads) {
       visibleSessionPayloads = visibleSessionPayloads.filter((session) => session.sessionId !== sessionId);
       await fulfillJson(route, payloadsBySessionId[sessionId]);
     });
-    await page.route(`**/api/vibe64/sessions/${sessionId}/codex-terminal`, async (route) => {
+    await routeApiEndpoint(page, `/vibe64/sessions/${sessionId}/codex-terminal`, async (route) => {
       terminalStarts[sessionId] += 1;
       await fulfillJson(route, {
         ok: true,

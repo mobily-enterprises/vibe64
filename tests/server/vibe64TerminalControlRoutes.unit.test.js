@@ -6,8 +6,10 @@ import {
 } from "../../packages/vibe64-terminals/src/server/registerRoutes.js";
 import {
   findRegisteredRoute,
+  routeWorkspaceParams,
   testReply,
-  withLocalRequestBypass
+  withLocalRequestBypass,
+  withRouteWorkspace
 } from "./vibe64RouteTestHelpers.js";
 
 function terminalControlRouteApp(service) {
@@ -71,53 +73,55 @@ async function runRoute(app, {
 
 test("terminal control routes expose snapshot, text checks, exact text, and narrow keys", async () => {
   await withLocalRequestBypass(async () => {
-    const writes = [];
-    let output = "ready prompt";
-    const createdAt = new Date(Date.now() - 4000).toISOString();
-    const service = {
-      closeShellTerminal() {
-        return {
-          closed: true,
-          ok: true
-        };
-      },
-      async readShellTerminal(_sessionId, terminalSessionId) {
-        return {
-          commandPreview: "bash",
-          createdAt,
-          id: terminalSessionId,
-          inputVersion: writes.length,
-          lastInputAt: "",
-          lastOutputAt: createdAt,
-          ok: true,
-          output,
-          outputVersion: 1,
-          status: "running"
-        };
-      },
-      async writeShellTerminal(_sessionId, terminalSessionId, data) {
-        writes.push({
-          data,
-          terminalSessionId
-        });
-        output += data;
-        return this.readShellTerminal(_sessionId, terminalSessionId);
-      }
-    };
-    const app = terminalControlRouteApp(service);
-    registerRoutes(app, {
-      routeRelativePath: "vibe64",
-      routeSurface: "home"
-    });
-    assert.equal(findRegisteredRoute(app, {
-      method: "POST",
-      path: "/api/vibe64/sessions/:sessionId/command-terminal/:terminalSessionId/control/text"
-    }), null);
-    const path = "/api/vibe64/sessions/:sessionId/shell-terminal/:terminalSessionId";
-    const params = {
-      sessionId: "session-1",
-      terminalSessionId: "terminal-1"
-    };
+    await withRouteWorkspace(async ({ apiRouteBase, projectContext }) => {
+      const writes = [];
+      let output = "ready prompt";
+      const createdAt = new Date(Date.now() - 4000).toISOString();
+      const service = {
+        closeShellTerminal() {
+          return {
+            closed: true,
+            ok: true
+          };
+        },
+        async readShellTerminal(_sessionId, terminalSessionId) {
+          return {
+            commandPreview: "bash",
+            createdAt,
+            id: terminalSessionId,
+            inputVersion: writes.length,
+            lastInputAt: "",
+            lastOutputAt: createdAt,
+            ok: true,
+            output,
+            outputVersion: 1,
+            status: "running"
+          };
+        },
+        async writeShellTerminal(_sessionId, terminalSessionId, data) {
+          writes.push({
+            data,
+            terminalSessionId
+          });
+          output += data;
+          return this.readShellTerminal(_sessionId, terminalSessionId);
+        }
+      };
+      const app = terminalControlRouteApp(service);
+      registerRoutes(app, {
+        projectContext,
+        routeRelativePath: "vibe64",
+        routeSurface: "app"
+      });
+      assert.equal(findRegisteredRoute(app, {
+        method: "POST",
+        path: `${apiRouteBase}/vibe64/sessions/:sessionId/command-terminal/:terminalSessionId/control/text`
+      }), null);
+      const path = `${apiRouteBase}/vibe64/sessions/:sessionId/shell-terminal/:terminalSessionId`;
+      const params = routeWorkspaceParams({
+        sessionId: "session-1",
+        terminalSessionId: "terminal-1"
+      });
 
     const quiet = await runRoute(app, {
       method: "GET",
@@ -166,6 +170,7 @@ test("terminal control routes expose snapshot, text checks, exact text, and narr
     assert.deepEqual(writes.at(-1), {
       data: "\u001b",
       terminalSessionId: "terminal-1"
+    });
     });
   });
 });

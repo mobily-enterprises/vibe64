@@ -1,11 +1,15 @@
 import { createTransientRetryHttpClient } from "@jskit-ai/http-runtime/client";
 import { resolveScopedApiBasePath } from "@jskit-ai/kernel/shared/surface";
+import {
+  currentWorkspaceSlugFromLocation
+} from "@/lib/vibe64WorkspaceScope.js";
 
 const studioHttpClient = createTransientRetryHttpClient({
   credentials: "include",
   csrf: {
     enabled: false
-  }
+  },
+  fetchImpl: vibe64StudioFetch
 });
 
 function studioApiPath(relativePath) {
@@ -16,13 +20,76 @@ function studioApiPath(relativePath) {
   });
 }
 
+function vibe64StudioFetch(url, options = {}) {
+  return fetch(resolveStudioRequestUrl(url), options);
+}
+
+function resolveStudioRequestUrl(url) {
+  return scopedDevelopmentApiUrl(url, currentWorkspaceSlugFromLocation());
+}
+
+function scopedDevelopmentApiUrl(url, slug = currentWorkspaceSlugFromLocation()) {
+  const workspaceSlug = String(slug || "").trim();
+  if (!workspaceSlug) {
+    return url;
+  }
+  const source = String(url || "").trim();
+  if (!source) {
+    return url;
+  }
+
+  const absolute = /^[a-z][a-z0-9+.-]*:\/\//iu.test(source);
+  const base = typeof window === "undefined" ? "http://vibe64.local" : window.location.origin;
+  const parsed = new URL(source, base);
+  const pathname = scopedDevelopmentApiPathname(parsed.pathname, workspaceSlug);
+  if (pathname === parsed.pathname) {
+    return url;
+  }
+  parsed.pathname = pathname;
+  return absolute ? parsed.toString() : `${parsed.pathname}${parsed.search}${parsed.hash}`;
+}
+
+function scopedDevelopmentApiPathname(pathname = "", slug = "") {
+  const normalizedPathname = String(pathname || "").trim();
+  if (
+    !slug ||
+    normalizedPathname.startsWith("/api/app/") ||
+    isGlobalApiPathname(normalizedPathname) ||
+    !isDevelopmentApiPathname(normalizedPathname)
+  ) {
+    return normalizedPathname;
+  }
+  return `/api/app/${encodeURIComponent(slug)}${normalizedPathname.slice("/api".length)}`;
+}
+
+function isGlobalApiPathname(pathname = "") {
+  return pathname === "/api/studio/studio-setup" ||
+    pathname.startsWith("/api/studio/studio-setup/") ||
+    pathname === "/api/studio/browser-lifecycle/ws" ||
+    pathname === "/api/vibe64/accounts" ||
+    pathname.startsWith("/api/vibe64/accounts/");
+}
+
+function isDevelopmentApiPathname(pathname = "") {
+  return (
+    pathname === "/api/studio" ||
+    pathname.startsWith("/api/studio/") ||
+    pathname === "/api/vibe64" ||
+    pathname.startsWith("/api/vibe64/")
+  );
+}
+
 function resolveWebSocketUrl(pathname, browserWindow = window) {
   const protocol = browserWindow.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${protocol}//${browserWindow.location.host}${pathname}`;
+  const scopedPathname = scopedDevelopmentApiUrl(pathname, currentWorkspaceSlugFromLocation());
+  return `${protocol}//${browserWindow.location.host}${scopedPathname}`;
 }
 
 export {
+  resolveStudioRequestUrl,
   resolveWebSocketUrl,
+  scopedDevelopmentApiPathname,
+  scopedDevelopmentApiUrl,
   studioApiPath,
   studioHttpClient
 };

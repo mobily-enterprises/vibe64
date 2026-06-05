@@ -1,5 +1,8 @@
 import { onBeforeUnmount, ref, watch } from "vue";
 import { parseJsonStreamEvent } from "@/lib/streamEvents.js";
+import {
+  resolveStudioRequestUrl
+} from "@/lib/studioHttp.js";
 
 function statusListKey(statusItemsKey = "checks", status = null) {
   if (statusItemsKey === "stages") {
@@ -91,6 +94,7 @@ function useDoctorStream({
     refresh = false
   } = {}) {
     const endpoint = withRefreshQuery(String(streamEndpoint() || ""), refresh);
+    const resolvedEndpoint = resolveStudioRequestUrl(endpoint);
     if (!endpoint || !streamEnabled()) {
       return false;
     }
@@ -98,7 +102,7 @@ function useDoctorStream({
       refreshFallback({ refresh });
       return false;
     }
-    if (!force && eventSource && streamRunning.value && eventSourceEndpoint === endpoint) {
+    if (!force && eventSource && streamRunning.value && eventSourceEndpoint === resolvedEndpoint) {
       return true;
     }
 
@@ -108,11 +112,11 @@ function useDoctorStream({
     streamRunning.value = true;
     liveStatus.value = cloneStatus(status(), statusItemsKey());
 
-    const source = new EventSource(endpoint, {
+    const source = new EventSource(resolvedEndpoint, {
       withCredentials: true
     });
     eventSource = source;
-    eventSourceEndpoint = endpoint;
+    eventSourceEndpoint = resolvedEndpoint;
 
     const isCurrentStream = () => source === eventSource;
 

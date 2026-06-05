@@ -19,11 +19,6 @@ import {
   createShellRouter
 } from "@jskit-ai/kernel/client";
 import { config } from "../config/public.js";
-import {
-  connectBrowserLifecycleSocket
-} from "./lib/browserLifecycle.js";
-
-connectBrowserLifecycleSocket();
 
 const surfaceRuntime = createSurfaceRuntime({
   allMode: config.surfaceModeAll,

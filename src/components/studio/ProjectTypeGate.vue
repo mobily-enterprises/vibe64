@@ -32,8 +32,8 @@
 </template>
 
 <script>
-let cachedProjectTypeRecord = null;
-let cachedProjectConfigRecord = null;
+const cachedProjectTypeRecords = new Map();
+const cachedProjectConfigRecords = new Map();
 </script>
 
 <script setup>
@@ -57,8 +57,12 @@ import {
   projectTypeQueryKey
 } from "@/lib/studioGateApi.js";
 import {
+  scopedDevelopmentApiUrl,
   studioHttpClient
 } from "@/lib/studioHttp.js";
+import {
+  useVibe64WorkspaceSlug
+} from "@/composables/useVibe64WorkspaceScope.js";
 
 const emit = defineEmits(["ready", "missing", "error"]);
 const props = defineProps({
@@ -70,9 +74,10 @@ const props = defineProps({
 
 const savingConfig = ref(false);
 const savingType = ref("");
+const workspaceSlug = useVibe64WorkspaceSlug();
 
 function projectQueryKey(queryKeyFactory) {
-  return computed(() => queryKeyFactory(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC));
+  return computed(() => queryKeyFactory(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC, workspaceSlug.value));
 }
 
 function useStudioEndpointView({
@@ -104,7 +109,8 @@ const projectTypeView = useStudioEndpointView({
   path: PROJECT_TYPE_ENDPOINT,
   queryKeyFactory: projectTypeQueryKey
 });
-const projectTypeRecord = computed(() => projectTypeView.record || cachedProjectTypeRecord || {});
+const cachedProjectTypeRecord = computed(() => cachedProjectTypeRecords.get(workspaceSlug.value) || null);
+const projectTypeRecord = computed(() => projectTypeView.record || cachedProjectTypeRecord.value || {});
 const projectType = computed(() => projectTypeRecord.value?.projectType || {});
 
 const projectConfigView = useStudioEndpointView({
@@ -119,7 +125,8 @@ const saveProjectTypeCommand = useCommand({
   apiSuffix: VIBE64_PROJECT_TYPE_API_SUFFIX,
   buildCommandOptions: () => ({
     method: "PUT",
-    options: LOCAL_STUDIO_COMMAND_OPTIONS
+    options: LOCAL_STUDIO_COMMAND_OPTIONS,
+    path: scopedDevelopmentApiUrl(PROJECT_TYPE_ENDPOINT)
   }),
   buildRawPayload: (_model, { context }) => ({
     projectType: String(context.projectType || "")
@@ -141,7 +148,8 @@ const saveProjectConfigCommand = useCommand({
   apiSuffix: VIBE64_PROJECT_CONFIG_API_SUFFIX,
   buildCommandOptions: () => ({
     method: "PUT",
-    options: LOCAL_STUDIO_COMMAND_OPTIONS
+    options: LOCAL_STUDIO_COMMAND_OPTIONS,
+    path: scopedDevelopmentApiUrl(PROJECT_CONFIG_ENDPOINT)
   }),
   buildRawPayload: (_model, { context }) => ({
     values: context.values || {}
@@ -158,7 +166,8 @@ const saveProjectConfigCommand = useCommand({
   writeMethod: "PUT"
 });
 
-const projectConfigRecord = computed(() => projectConfigView.record || cachedProjectConfigRecord || {});
+const cachedProjectConfigRecord = computed(() => cachedProjectConfigRecords.get(workspaceSlug.value) || null);
+const projectConfigRecord = computed(() => projectConfigView.record || cachedProjectConfigRecord.value || {});
 const projectConfig = computed(() => projectConfigRecord.value?.config || {});
 const projectTypeLoaded = computed(() => Boolean(projectTypeRecord.value?.projectType));
 const projectConfigLoaded = computed(() => Boolean(projectConfigRecord.value?.config));
@@ -221,17 +230,17 @@ async function saveProjectConfig(values) {
   }
 }
 
-watch(projectTypeRecord, (record) => {
+watch(() => projectTypeView.record, (record) => {
   if (record?.projectType) {
-    cachedProjectTypeRecord = record;
+    cachedProjectTypeRecords.set(workspaceSlug.value, record);
   }
 }, {
   immediate: true
 });
 
-watch(projectConfigRecord, (record) => {
+watch(() => projectConfigView.record, (record) => {
   if (record?.config) {
-    cachedProjectConfigRecord = record;
+    cachedProjectConfigRecords.set(workspaceSlug.value, record);
   }
 }, {
   immediate: true

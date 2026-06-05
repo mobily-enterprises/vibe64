@@ -1,16 +1,17 @@
-import { computed, proxyRefs, watch } from "vue";
+import { computed, proxyRefs, ref, watch } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
-import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
 import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
-import { useList } from "@jskit-ai/users-web/client/composables/useList";
 import { usePaths } from "@jskit-ai/users-web/client/composables/usePaths";
 import { useStoredSelection } from "@/composables/useStoredSelection.js";
+import {
+  useVibe64WorkspaceSlug
+} from "@/composables/useVibe64WorkspaceScope.js";
 import {
   VIBE64_SESSION_CHANGED_EVENT,
   VIBE64_SESSIONS_API_SUFFIX,
   VIBE64_SURFACE_ID,
   LOCAL_STUDIO_COMMAND_OPTIONS,
-  SELECTED_SESSION_STORAGE_KEY,
+  selectedSessionStorageKey,
   vibe64SessionQueryKey,
   vibe64SessionsQueryKey
 } from "@/lib/vibe64SessionRequestConfig.js";
@@ -96,9 +97,10 @@ function useVibe64SessionData({
   onTitleChange = null
 } = {}) {
   const notifyTitleChange = typeof onTitleChange === "function" ? onTitleChange : () => null;
+  const workspaceSlug = useVibe64WorkspaceSlug();
   const paths = usePaths();
   const sessionSelection = useStoredSelection({
-    storageKey: SELECTED_SESSION_STORAGE_KEY
+    storageKey: computed(() => selectedSessionStorageKey(workspaceSlug.value))
   });
 
   const selectedSessionId = sessionSelection.selectedId;
@@ -110,17 +112,22 @@ function useVibe64SessionData({
     return sessionId ? `${sessionsApiPath.value}/${encodeURIComponent(sessionId)}` : "";
   });
   const selectedSessionQueryKey = computed(() => [
-    ...vibe64SessionQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC),
+    ...vibe64SessionQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC, workspaceSlug.value),
     String(selectedSessionId.value || "").trim()
   ]);
 
-  const sessionList = useList({
-    access: "never",
-    apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
+  const sessionListResource = useEndpointResource({
+    client: studioHttpClient,
     fallbackLoadError: "Vibe64 sessions could not be loaded.",
-    ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "vibe64.sessions.list",
-    queryKeyFactory: vibe64SessionsQueryKey,
+    path: sessionsApiPath,
+    queryKey: computed(() => vibe64SessionsQueryKey(
+      VIBE64_SURFACE_ID,
+      ROUTE_VISIBILITY_PUBLIC,
+      workspaceSlug.value
+    )),
+    readQuery: {
+      limit: 20
+    },
     realtime: {
       event: VIBE64_SESSION_CHANGED_EVENT
     },
@@ -128,37 +135,61 @@ function useVibe64SessionData({
       refetchOnMount: false,
       refetchOnWindowFocus: false
     },
-    selectItems: (payload) => Array.isArray(payload?.sessions) ? payload.sessions : [],
-    surfaceId: VIBE64_SURFACE_ID
   });
-
-  const createSessionCommand = useCommand({
-    access: "never",
-    apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
-    buildRawPayload: (_model, { context }) => {
-      const workflowDefinition = String(context?.workflowDefinition || "").trim();
-      return workflowDefinition ? { workflowDefinition } : {};
-    },
-    buildCommandOptions: () => ({
-      options: LOCAL_STUDIO_COMMAND_OPTIONS
+  const sessionList = proxyRefs({
+    items: computed(() => {
+      const payload = sessionListResource.data.value || {};
+      return Array.isArray(payload.sessions) ? payload.sessions : [];
     }),
-    fallbackRunError: "Vibe64 session could not be created.",
-    messages: {
-      error: "Vibe64 session could not be created.",
-      success: "Vibe64 session created."
-    },
-    onRunSuccess: async (response) => {
-      if (response?.sessionId) {
-        selectSessionId(response.sessionId);
+    loadError: sessionListResource.loadError,
+    isInitialLoading: sessionListResource.isInitialLoading,
+    isLoading: sessionListResource.isLoading,
+    pages: computed(() => {
+      const payload = sessionListResource.data.value;
+      return payload && typeof payload === "object" && !Array.isArray(payload) ? [payload] : [];
+    }),
+    reload: sessionListResource.reload,
+    resource: sessionListResource
+  });
+  const createSessionRunning = ref(false);
+  const createSessionMessage = ref("");
+  const createSessionMessageType = ref("");
+  const createSessionCommand = proxyRefs({
+    isRunning: createSessionRunning,
+    message: createSessionMessage,
+    messageType: createSessionMessageType,
+    async run(context = {}) {
+      if (createSessionRunning.value) {
+        return null;
       }
-      await refreshSessionData();
-    },
-    ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "vibe64.sessions.create",
-    surfaceId: VIBE64_SURFACE_ID,
-    writeMethod: "POST"
+      createSessionRunning.value = true;
+      createSessionMessage.value = "";
+      createSessionMessageType.value = "";
+      try {
+        const workflowDefinition = String(context?.workflowDefinition || "").trim();
+        const response = await studioHttpClient.post(
+          sessionsApiPath.value,
+          workflowDefinition ? { workflowDefinition } : {},
+          LOCAL_STUDIO_COMMAND_OPTIONS
+        );
+        if (response?.sessionId) {
+          selectSessionId(response.sessionId);
+        }
+        await refreshSessionData();
+        createSessionMessage.value = "Vibe64 session created.";
+        createSessionMessageType.value = "success";
+        return response;
+      } catch (error) {
+        createSessionMessage.value = String(error?.message || error || "Vibe64 session could not be created.");
+        createSessionMessageType.value = "error";
+        throw error;
+      } finally {
+        createSessionRunning.value = false;
+      }
+    }
   });
   const selectedSessionResource = useEndpointResource({
+    client: studioHttpClient,
     enabled: computed(() => Boolean(selectedSessionId.value)),
     fallbackLoadError: "Vibe64 session could not be loaded.",
     path: selectedSessionPath,
@@ -181,7 +212,7 @@ function useVibe64SessionData({
     client: studioHttpClient,
     fallbackLoadError: "Studio capabilities could not be loaded.",
     path: CAPABILITIES_ENDPOINT,
-    queryKey: computed(() => capabilitiesQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC)),
+    queryKey: computed(() => capabilitiesQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC, workspaceSlug.value)),
     queryOptions: {
       refetchOnMount: false,
       refetchOnWindowFocus: false

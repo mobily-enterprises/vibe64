@@ -2,17 +2,19 @@
 {
   "meta": {
     "jskit": {
-      "surface": "home"
+      "surface": "app"
     }
   }
 }
 </route>
 
 <script setup>
-import ShellLayout from "@/components/ShellLayout.vue";
+import StudioAppShellLayout from "@/components/StudioAppShellLayout.vue";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { RouterView, useRoute, useRouter } from "vue-router";
 import {
+  mdiApps,
+  mdiChevronDown,
   mdiChevronLeft,
   mdiChevronRight
 } from "@mdi/js";
@@ -32,6 +34,8 @@ import { useStudioShellDrawer } from "@/composables/useStudioShellDrawer.js";
 import ProjectSelectionGate from "@/components/studio/ProjectSelectionGate.vue";
 import ProjectTypeGate from "@/components/studio/ProjectTypeGate.vue";
 import Vibe64SessionPanel from "@/components/studio/Vibe64SessionPanel.vue";
+import Vibe64AccountMenu from "@/components/auth/Vibe64AccountMenu.vue";
+import { readWorkspaces } from "@/lib/vibe64WorkspaceApi.js";
 
 const route = useRoute();
 const router = useRouter();
@@ -40,18 +44,24 @@ const pageTitle = ref("");
 const pageError = ref("");
 const chatCollapsed = ref(false);
 const mobilePaneLayout = ref(false);
+const workspaceLoadError = ref("");
+const workspaces = ref([]);
 let mobilePaneMediaQuery = null;
+const workspaceSlug = computed(() => firstRouteParam(route.params.slug));
 const projectSelectionResource = useEndpointResource({
   client: studioHttpClient,
   fallbackLoadError: "Project selection could not load.",
   path: PROJECT_SELECTION_ENDPOINT,
-  queryKey: computed(() => projectSelectionQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC)),
+  queryKey: computed(() => projectSelectionQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC, workspaceSlug.value)),
   refreshOnPull: true
 });
 const targetRoot = computed(() => String(projectSelectionResource.data.value?.targetRoot || "").trim());
-const targetFolderName = computed(() => finalPathSegment(targetRoot.value));
-const dashboardRouteActive = computed(() => String(route.path || "").startsWith("/home/dashboard"));
+const targetFolderName = computed(() => workspaceSlug.value || finalPathSegment(targetRoot.value));
+const developmentBasePath = computed(() => workspaceSlug.value ? `/app/${encodeURIComponent(workspaceSlug.value)}` : "/app/manage");
+const dashboardBasePath = computed(() => `${developmentBasePath.value}/dashboard`);
+const dashboardRouteActive = computed(() => normalizedPath(route.path).startsWith(`${dashboardBasePath.value}/`));
 const workspacePane = computed(() => dashboardRouteActive.value ? "dashboard" : "preview");
+const sortedWorkspaces = computed(() => [...workspaces.value].sort((left, right) => left.slug.localeCompare(right.slug)));
 const chatToggleIcon = computed(() => {
   if (mobilePaneLayout.value) {
     return chatCollapsed.value ? mdiChevronLeft : mdiChevronRight;
@@ -94,6 +104,19 @@ function finalPathSegment(pathValue = "") {
   return normalizedPath.split(/[\\/]+/u).filter(Boolean).at(-1) || "";
 }
 
+function firstRouteParam(value) {
+  const rawValue = Array.isArray(value) ? value[0] : value;
+  return String(rawValue || "").trim();
+}
+
+function normalizedPath(pathValue = "") {
+  const path = String(pathValue || "").trim();
+  if (!path || path === "/") {
+    return path || "/";
+  }
+  return path.replace(/\/+$/u, "");
+}
+
 function setPageTitle(title = "") {
   pageTitle.value = String(title || "").trim();
 }
@@ -107,10 +130,38 @@ function selectWorkspacePane(pane = "") {
     setChatCollapsed(true);
   }
   if (pane === "dashboard") {
-    void router.push("/home/dashboard/accounts");
+    void router.push(`${dashboardBasePath.value}/accounts`);
     return;
   }
-  void router.push("/home");
+  void router.push(developmentBasePath.value);
+}
+
+async function loadWorkspaces() {
+  workspaceLoadError.value = "";
+  try {
+    const response = await readWorkspaces();
+    if (response.ok === false) {
+      workspaceLoadError.value = String(response.errors?.[0]?.message || "Workspaces could not load.");
+      workspaces.value = [];
+      return;
+    }
+    workspaces.value = Array.isArray(response.workspaces) ? response.workspaces : [];
+  } catch (error) {
+    workspaceLoadError.value = String(error?.message || error || "Workspaces could not load.");
+    workspaces.value = [];
+  }
+}
+
+function openManagement() {
+  void router.push("/app/manage");
+}
+
+function openWorkspace(workspace = {}) {
+  const slug = String(workspace.slug || "").trim();
+  if (!slug || slug === workspaceSlug.value) {
+    return;
+  }
+  void router.push(`/app/${encodeURIComponent(slug)}`);
 }
 
 function showWorkspacePane() {
@@ -159,7 +210,7 @@ function handleProjectTypeError(error) {
 watch(
   () => route.path,
   (path) => {
-    if (path !== "/home" && path !== "/home/") {
+    if (normalizedPath(path) !== normalizedPath(developmentBasePath.value)) {
       setPageTitle();
     }
   },
@@ -167,6 +218,7 @@ watch(
 );
 
 onMounted(() => {
+  void loadWorkspaces();
   setHomeShellActive(true);
   if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
     mobilePaneMediaQuery = window.matchMedia("(max-width: 980px)");
@@ -191,20 +243,46 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <ShellLayout>
+  <StudioAppShellLayout>
     <template #top-left>
       <div
         class="studio-home-shell-heading"
         :class="{ 'studio-home-shell-heading--chat-collapsed': chatCollapsed }"
       >
         <div class="studio-home-shell-title-area">
-          <h1
-            v-if="targetFolderName"
-            class="studio-home-shell-target-folder"
-            :title="targetRoot"
-          >
-            {{ targetFolderName }}
-          </h1>
+          <v-menu location="bottom start">
+            <template #activator="{ props: menuProps }">
+              <v-btn
+                class="studio-home-shell-workspace-selector"
+                variant="text"
+                v-bind="menuProps"
+              >
+                <span>{{ targetFolderName || "Workspace" }}</span>
+                <v-icon :icon="mdiChevronDown" size="18" />
+              </v-btn>
+            </template>
+            <v-list density="compact" min-width="240">
+              <v-list-item
+                :prepend-icon="mdiApps"
+                title="Management"
+                @click="openManagement"
+              />
+              <v-divider />
+              <v-list-item
+                v-for="workspace in sortedWorkspaces"
+                :key="workspace.slug"
+                :active="workspace.slug === workspaceSlug"
+                :title="workspace.slug"
+                :subtitle="workspace.workspaceRoot"
+                @click="openWorkspace(workspace)"
+              />
+              <v-list-item
+                v-if="sortedWorkspaces.length === 0"
+                :subtitle="workspaceLoadError || 'No workspaces found.'"
+                title="Workspaces"
+              />
+            </v-list>
+          </v-menu>
           <!--
           <h1
             v-if="pageTitle"
@@ -254,6 +332,9 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </template>
+    <template #top-right>
+      <Vibe64AccountMenu />
+    </template>
     <section class="generated-ui-screen generated-ui-screen--studio studio-screen d-flex flex-column ga-3">
       <v-alert
         v-if="pageError"
@@ -267,6 +348,7 @@ onBeforeUnmount(() => {
 
       <div class="studio-screen__gate-scroll">
         <ProjectSelectionGate
+          :key="workspaceSlug"
           @error="handleProjectSelectionError"
           @missing="handleProjectSelectionMissing"
           @ready="handleProjectSelectionReady"
@@ -301,7 +383,7 @@ onBeforeUnmount(() => {
         </ProjectSelectionGate>
       </div>
     </section>
-  </ShellLayout>
+  </StudioAppShellLayout>
 </template>
 
 <style scoped>
@@ -383,6 +465,33 @@ onBeforeUnmount(() => {
   display: flex;
   min-width: 0;
   padding-left: 1rem;
+}
+
+.studio-home-shell-workspace-selector {
+  border-radius: 6px;
+  color: rgb(var(--v-theme-on-surface)) !important;
+  flex: 1 1 auto;
+  font-size: 1rem;
+  font-weight: 720;
+  justify-content: start;
+  letter-spacing: 0;
+  line-height: 1.2;
+  max-width: 100%;
+  min-width: 0;
+  padding-inline: 0.45rem;
+  text-transform: none;
+}
+
+.studio-home-shell-workspace-selector :deep(.v-btn__content) {
+  min-width: 0;
+}
+
+.studio-home-shell-workspace-selector span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .studio-home-shell-title {
@@ -545,6 +654,11 @@ onBeforeUnmount(() => {
 
   .studio-home-shell-title-area {
     padding-left: 0;
+  }
+
+  .studio-home-shell-workspace-selector {
+    font-size: 0.95rem;
+    max-width: calc(100vw - 16rem);
   }
 
   .studio-home-shell-actions {

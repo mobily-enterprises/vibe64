@@ -5,7 +5,7 @@ config.tenancyMode = "none";
 
 
 config.surfaceModeAll = "all";
-config.surfaceDefaultId = "home";
+config.surfaceDefaultId = "app";
 config.webRootAllowed = "yes";
 config.surfaceAccessPolicies = surfaceAccessPolicies;
 config.mobile = {
@@ -30,10 +30,10 @@ config.mobile = {
   }
 };
 config.surfaceDefinitions = {};
-config.surfaceDefinitions.home = {
-  id: "home",
+config.surfaceDefinitions.app = {
+  id: "app",
   label: "Sessions",
-  pagesRoot: "home",
+  pagesRoot: "app",
   enabled: true,
   requiresAuth: false,
   requiresWorkspace: false,

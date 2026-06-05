@@ -1,4 +1,4 @@
-const VIBE64_SURFACE_ID = "home";
+const VIBE64_SURFACE_ID = "app";
 
 const LOCAL_STUDIO_COMMAND_OPTIONS = Object.freeze({
   headers: Object.freeze({

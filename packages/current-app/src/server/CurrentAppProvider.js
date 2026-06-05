@@ -14,7 +14,6 @@ class CurrentAppProvider {
     "feature.vibe64-project",
     "feature.vibe64-accounts",
     "feature.studio-setup-doctor",
-    "feature.adapter-setup-doctor",
     "feature.project-setup-doctor"
   ];
 
@@ -35,7 +34,6 @@ class CurrentAppProvider {
           projectService: scope.make("feature.vibe64-project.service"),
           setupServices: {
             accountSetupService: scope.make("feature.vibe64-accounts.service"),
-            adapterSetupService: scope.make("feature.adapter-setup-doctor.service"),
             projectSetupService: scope.make("feature.project-setup-doctor.service"),
             studioSetupService: scope.make("feature.studio-setup-doctor.service")
           }
@@ -56,7 +54,7 @@ class CurrentAppProvider {
   boot(app) {
     registerRoutes(app, {
       routeRelativePath: "studio/current-app",
-      routeSurface: "home"
+      routeSurface: "app"
     });
   }
 }

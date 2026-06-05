@@ -1373,8 +1373,10 @@ function createVibe64SessionStore({
       revision: revisionNumber(manifest.revision),
       sessionId: sessionPaths.sessionId,
       sessionName,
+      sessionRoot: sessionPaths.sessionRoot,
       status,
       stepRevision: stepRevisionNumber(manifest.stepRevision),
+      targetRoot: sessionPaths.targetRoot,
       updatedAt: normalizeText(manifest.updatedAt || manifest.createdAt)
     };
   }

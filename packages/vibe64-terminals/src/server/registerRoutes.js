@@ -41,12 +41,14 @@ function getTerminalService(app) {
 function registerRoutes(
   app,
   {
+    projectContext = null,
     routeSurface = "",
     routeRelativePath = ""
   } = {}
 ) {
   const routes = createVibe64FeatureRoutes(app, {
     localRequestMessage: "Vibe64 terminal routes only accept loopback Studio requests.",
+    projectContext,
     routeRelativePath,
     routeSurface,
     tags: ["studio", "vibe64-terminals"]
@@ -236,7 +238,9 @@ function registerRoutes(
     write: (sessionId, terminalSessionId, data) => terminalService().writeShellTerminal(sessionId, terminalSessionId, data)
   });
 
-  registerVibe64TerminalWebSocketRoutes(app, routes);
+  registerVibe64TerminalWebSocketRoutes(app, routes, {
+    projectContext
+  });
 }
 
 function bodyWithSessionId(routes) {
@@ -500,8 +504,11 @@ function registerTerminalControlRoutes(routes, {
   });
 }
 
-function registerVibe64TerminalWebSocketRoutes(app, routes) {
+function registerVibe64TerminalWebSocketRoutes(app, routes, {
+  projectContext = null
+} = {}) {
   registerTerminalWebSocketRoute(app, {
+    projectContext,
     routePath: `${routes.routeBase}/codex-terminal/:terminalSessionId/ws`,
     serviceId: VIBE64_TERMINALS_SERVICE,
     serviceUnavailableMessage: VIBE64_TERMINALS_UNAVAILABLE,
@@ -517,6 +524,7 @@ function registerVibe64TerminalWebSocketRoutes(app, routes) {
   });
 
   registerTerminalWebSocketRoute(app, {
+    projectContext,
     routePath: `${routes.routeBase}/fix-codex-jobs/:jobId/terminal/:terminalSessionId/ws`,
     serviceId: VIBE64_TERMINALS_SERVICE,
     serviceUnavailableMessage: VIBE64_TERMINALS_UNAVAILABLE,
@@ -532,6 +540,7 @@ function registerVibe64TerminalWebSocketRoutes(app, routes) {
   });
 
   registerTerminalWebSocketRoute(app, {
+    projectContext,
     routePath: `${routes.routeBase}/tools/:toolId/terminal/:terminalSessionId/ws`,
     serviceId: VIBE64_TERMINALS_SERVICE,
     serviceUnavailableMessage: VIBE64_TERMINALS_UNAVAILABLE,
@@ -547,6 +556,7 @@ function registerVibe64TerminalWebSocketRoutes(app, routes) {
   });
 
   registerTerminalWebSocketRoute(app, {
+    projectContext,
     routePath: `${routes.routeBase}/sessions/:sessionId/codex-terminal/:terminalSessionId/ws`,
     serviceId: VIBE64_TERMINALS_SERVICE,
     serviceUnavailableMessage: VIBE64_TERMINALS_UNAVAILABLE,
@@ -562,6 +572,7 @@ function registerVibe64TerminalWebSocketRoutes(app, routes) {
   });
 
   registerTerminalWebSocketRoute(app, {
+    projectContext,
     routePath: `${routes.routeBase}/sessions/:sessionId/command-terminal/:terminalSessionId/ws`,
     serviceId: VIBE64_TERMINALS_SERVICE,
     serviceUnavailableMessage: VIBE64_TERMINALS_UNAVAILABLE,
@@ -577,6 +588,7 @@ function registerVibe64TerminalWebSocketRoutes(app, routes) {
   });
 
   registerTerminalWebSocketRoute(app, {
+    projectContext,
     routePath: `${routes.routeBase}/sessions/:sessionId/launch-terminal/:terminalSessionId/ws`,
     serviceId: VIBE64_TERMINALS_SERVICE,
     serviceUnavailableMessage: VIBE64_TERMINALS_UNAVAILABLE,
@@ -592,6 +604,7 @@ function registerVibe64TerminalWebSocketRoutes(app, routes) {
   });
 
   registerTerminalWebSocketRoute(app, {
+    projectContext,
     routePath: `${routes.routeBase}/sessions/:sessionId/shell-terminal/:terminalSessionId/ws`,
     serviceId: VIBE64_TERMINALS_SERVICE,
     serviceUnavailableMessage: VIBE64_TERMINALS_UNAVAILABLE,

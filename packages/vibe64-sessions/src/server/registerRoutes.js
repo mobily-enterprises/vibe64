@@ -18,12 +18,14 @@ import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRout
 function registerRoutes(
   app,
   {
+    projectContext = null,
     routeSurface = "",
     routeRelativePath = ""
   } = {}
 ) {
   const routes = createVibe64FeatureRoutes(app, {
     localRequestMessage: "Vibe64 session routes only accept loopback Studio requests.",
+    projectContext,
     routeRelativePath,
     routeSurface,
     tags: ["studio", "vibe64-sessions"]
@@ -37,7 +39,7 @@ function registerRoutes(
 
   routes.actionRoute("POST", "/sessions", {
     actionId: ACTION_CREATE_SESSION,
-    buildInput: routes.requestBody,
+    buildInput: (request) => withVibe64User(request, routes.requestBody(request)),
     summary: "Create an Vibe64 session."
   });
 
@@ -62,10 +64,10 @@ function registerRoutes(
   routes.actionRoute("POST", "/sessions/:sessionId/terminal-failure-fix-request", {
     actionId: ACTION_BUILD_TERMINAL_FAILURE_FIX_REQUEST,
     buildInput(request) {
-      return {
+      return withVibe64User(request, {
         ...routes.requestBody(request),
         sessionId: request.params.sessionId
-      };
+      });
     },
     summary: "Build an Vibe64 terminal failure repair prompt."
   });
@@ -73,11 +75,11 @@ function registerRoutes(
   routes.actionRoute("POST", "/sessions/:sessionId/actions/:actionId", {
     actionId: ACTION_RUN_SESSION_ACTION,
     buildInput(request) {
-      return {
+      return withVibe64User(request, {
         actionId: request.params.actionId,
         input: routes.requestBody(request),
         sessionId: request.params.sessionId
-      };
+      });
     },
     summary: "Run an Vibe64 session action."
   });
@@ -86,13 +88,13 @@ function registerRoutes(
     actionId: ACTION_RUN_SESSION_INTENT,
     buildInput(request) {
       const body = routes.requestBody(request);
-      return {
+      return withVibe64User(request, {
         fields: body.fields || body.input || {},
         intentId: request.params.intentId,
         sessionId: request.params.sessionId,
         stepId: body.stepId,
         stepStatus: body.stepStatus
-      };
+      });
     },
     summary: "Run an Vibe64 session intent."
   });
@@ -101,11 +103,11 @@ function registerRoutes(
     actionId: ACTION_ADVANCE_SESSION,
     buildInput(request) {
       const body = routes.requestBody(request);
-      return {
+      return withVibe64User(request, {
         sessionId: request.params.sessionId,
         stepId: body.stepId,
         stepStatus: body.stepStatus
-      };
+      });
     },
     summary: "Advance an Vibe64 session."
   });
@@ -113,10 +115,10 @@ function registerRoutes(
   routes.actionRoute("POST", "/sessions/:sessionId/rewind", {
     actionId: ACTION_REWIND_SESSION,
     buildInput(request) {
-      return {
+      return withVibe64User(request, {
         sessionId: request.params.sessionId,
         stepId: routes.requestBody(request).stepId
-      };
+      });
     },
     summary: "Rewind an Vibe64 session."
   });
@@ -141,14 +143,27 @@ function registerRoutes(
 }
 
 function sessionInput(request) {
-  return {
+  return withVibe64User(request, {
     sessionId: request.params.sessionId
-  };
+  });
 }
 
 function sessionsQueryInput(request) {
   return {
     archive: request.query?.archive || request.input?.query?.archive || ""
+  };
+}
+
+function withVibe64User(request, input = {}) {
+  const vibe64User = request.vibe64User || null;
+  if (!vibe64User) {
+    return {
+      ...input
+    };
+  }
+  return {
+    ...input,
+    vibe64User
   };
 }
 

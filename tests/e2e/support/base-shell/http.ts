@@ -39,12 +39,26 @@ async function fulfillJson(route, payload) {
   });
 }
 
+function apiEndpointPattern(pathSuffix, {
+  children = false,
+  prefix = false
+} = {}) {
+  const suffix = `/${String(pathSuffix || "").trim().replace(/^\/+|\/+$/gu, "")}`;
+  const escapedSuffix = suffix.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  const trailingPattern = children ? "(?:/.*)" : prefix ? "(?:/.*)?" : "";
+  return new RegExp(`/api(?:/app/[^/]+)?${escapedSuffix}${trailingPattern}(?:\\?.*)?$`, "u");
+}
+
+async function routeApiEndpoint(page, pathSuffix, handler, options = {}) {
+  await page.route(apiEndpointPattern(pathSuffix, options), handler);
+}
+
 function trackStudioApiRequests(page) {
   const requests: string[] = [];
 
   page.on("request", (request) => {
     const pathname = new URL(request.url()).pathname;
-    if (pathname.includes("/api/studio/")) {
+    if (pathname.includes("/api/studio/") || /\/api\/app\/[^/]+\/studio\//u.test(pathname)) {
       requests.push(pathname);
     }
   });
@@ -72,8 +86,10 @@ function setupReadinessPayload({
 }
 
 export {
+  apiEndpointPattern,
   fulfillJson,
   fulfillSse,
+  routeApiEndpoint,
   setupReadinessPayload,
   trackStudioApiRequests
 };

@@ -12,6 +12,9 @@ import {
 import {
   registerRoutes
 } from "../../packages/vibe64-terminals/src/server/registerRoutes.js";
+import {
+  runWithWorkspaceRequestContext
+} from "../../packages/vibe64-core/src/server/workspaceRequestContext.js";
 
 test("Codex attachment route opts into the attachment upload body limit", () => {
   const app = testApp();
@@ -52,6 +55,59 @@ test("Codex attachments are not rejected by the old 25 MB product cap", async ()
     }
   } finally {
     await rm(targetRoot, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
+test("Codex attachment namespace follows the workspace slug instead of the absolute path", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "vibe64-attachment-scope-test-"));
+  const sessionId = "attachment-scope-session";
+  const dataBase64 = Buffer.from("hello").toString("base64");
+  const oldProjectsRoot = path.join(root, "old-root");
+  const newProjectsRoot = path.join(root, "new-root");
+  const oldTargetRoot = path.join(oldProjectsRoot, "beepollen");
+  const newTargetRoot = path.join(newProjectsRoot, "beepollen");
+  try {
+    const oldResult = await runWithWorkspaceRequestContext({
+      projectsRoot: oldProjectsRoot,
+      slug: "beepollen",
+      targetRoot: oldTargetRoot
+    }, () => storeCodexAttachment({
+      input: {
+        dataBase64,
+        fileName: "old.txt"
+      },
+      sessionId,
+      targetRoot: oldTargetRoot
+    }));
+    const newResult = await runWithWorkspaceRequestContext({
+      projectsRoot: newProjectsRoot,
+      slug: "beepollen",
+      targetRoot: newTargetRoot
+    }, () => storeCodexAttachment({
+      input: {
+        dataBase64,
+        fileName: "new.txt"
+      },
+      sessionId,
+      targetRoot: newTargetRoot
+    }));
+
+    try {
+      assert.equal(oldResult.ok, true);
+      assert.equal(newResult.ok, true);
+      assert.equal(
+        path.posix.dirname(path.posix.dirname(oldResult.containerPath)),
+        path.posix.dirname(path.posix.dirname(newResult.containerPath))
+      );
+    } finally {
+      await cleanupCodexAttachments(oldTargetRoot, sessionId, oldResult.attachmentId);
+      await cleanupCodexAttachments(newTargetRoot, sessionId, newResult.attachmentId);
+    }
+  } finally {
+    await rm(root, {
       force: true,
       recursive: true
     });

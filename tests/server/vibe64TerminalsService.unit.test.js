@@ -57,7 +57,6 @@ import {
 import {
   closeTerminalSession,
   countRunningTerminalSessions,
-  readTerminalSession,
   startTerminalSession
 } from "@local/studio-terminal-core/server/terminalSessions";
 import {
@@ -225,21 +224,6 @@ async function waitForNoRunningTerminals(namespace, timeoutMs = POST_COMMIT_TEST
     await delay(5);
   }
   assert.equal(countRunningTerminalSessions({ namespace }), 0);
-}
-
-async function waitForTerminalOutput(terminalId, namespace, pattern, timeoutMs = POST_COMMIT_TEST_TIMEOUT_MS) {
-  const deadline = Date.now() + timeoutMs;
-  let snapshot = readTerminalSession(terminalId, {
-    namespace
-  });
-  while (!pattern.test(String(snapshot.output || "")) && Date.now() < deadline) {
-    await delay(5);
-    snapshot = readTerminalSession(terminalId, {
-      namespace
-    });
-  }
-  assert.match(String(snapshot.output || ""), pattern);
-  return snapshot;
 }
 
 function runNodeScript(scriptPath = "", args = [], env = {}, stdin = "") {
@@ -793,6 +777,8 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     assert.equal(providerCalls.startThread[0].model, "gpt-5.5");
     assert.equal(providerCalls.startThread[0].sandbox, "danger-full-access");
     assert.match(providerCalls.startThread[0].developerInstructions, /Vibe64 session briefing/u);
+    assert.match(providerCalls.startThread[0].developerInstructions, /Vibe64 app-server helper commands/u);
+    assert.match(providerCalls.startThread[0].developerInstructions, /vibe64-terminal-chat-host\.mjs/u);
     assert.equal(providerCalls.sendTurn[0].threadId, "00000000-0000-4000-8000-000000000004");
     assert.equal(providerCalls.sendTurn[0].params.cwd, worktree);
     assert.equal(providerCalls.sendTurn[0].params.effort, "xhigh");

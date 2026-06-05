@@ -30,18 +30,33 @@
           class="studio-autopilot-nav__step"
           :class="`studio-autopilot-nav__step--${step.state}`"
           :aria-current="step.current ? 'step' : undefined"
-          :title="step.label"
         >
-          <span class="studio-autopilot-nav__step-icon">
-            <v-icon :icon="stepIcon(step)" size="16" />
-          </span>
-          <span
-            v-if="step.state === 'done'"
-            class="studio-autopilot-nav__step-done-check"
-            aria-hidden="true"
+          <v-tooltip
+            :disabled="!stepHint(step)"
+            location="bottom"
+            :open-delay="1000"
+            :text="stepHint(step)"
           >
-            <v-icon :icon="mdiCheck" size="10" />
-          </span>
+            <template #activator="{ props: tooltipProps }">
+              <span
+                class="studio-autopilot-nav__step-hitbox"
+                tabindex="0"
+                :aria-label="stepHint(step)"
+                v-bind="tooltipProps"
+              >
+                <span class="studio-autopilot-nav__step-icon">
+                  <v-icon :icon="stepIcon(step)" size="16" />
+                </span>
+                <span
+                  v-if="step.state === 'done'"
+                  class="studio-autopilot-nav__step-done-check"
+                  aria-hidden="true"
+                >
+                  <v-icon :icon="mdiCheck" size="10" />
+                </span>
+              </span>
+            </template>
+          </v-tooltip>
           <v-btn
             v-if="step.canRewind && !step.current"
             class="studio-autopilot-nav__step-rewind"
@@ -49,14 +64,11 @@
             :disabled="busy"
             :icon="mdiUndoVariant"
             size="x-small"
-            :title="`Rewind to ${step.rewindLabel || step.label}`"
+            title="Rewind to this step"
             type="button"
             variant="text"
             @click.stop="requestRewind(step)"
           />
-          <span class="studio-autopilot-nav__step-label">
-            {{ step.label }}
-          </span>
         </li>
       </ol>
     </div>
@@ -68,7 +80,7 @@
       <v-card>
         <v-card-title>Rewind?</v-card-title>
         <v-card-text>
-          Rewind this session to {{ pendingStepLabel }}. Later Autopilot progress will be discarded.
+          Rewind this session to the selected step. Later Autopilot progress will be discarded.
         </v-card-text>
         <v-card-actions>
           <v-spacer />
@@ -135,9 +147,8 @@ const confirmationOpen = ref(false);
 
 const railLayout = computed(() => props.layout === "rail");
 const currentStep = computed(() => props.steps.find((step) => step.current) || props.steps[0] || null);
-const currentStepLabel = computed(() => currentStep.value?.label || "Steps");
-const mobileToggleLabel = computed(() => `Steps: ${currentStepLabel.value}`);
-const pendingStepLabel = computed(() => pendingStep.value?.rewindLabel || pendingStep.value?.label || "this point");
+const currentStepIndex = computed(() => Math.max(0, props.steps.findIndex((step) => step.id === currentStep.value?.id)));
+const mobileToggleLabel = computed(() => `Step ${currentStepIndex.value + 1} of ${props.steps.length}`);
 
 function toggleMobileSteps() {
   mobileStepsOpen.value = !mobileStepsOpen.value;
@@ -178,13 +189,17 @@ function stepIcon(step = {}) {
   return mdiCircleOutline;
 }
 
+function stepHint(step = {}) {
+  return String(step.label || step.id || "").trim();
+}
+
 watch(confirmationOpen, (open) => {
   if (!open) {
     pendingStep.value = null;
   }
 });
 
-watch(currentStepLabel, () => {
+watch(currentStepIndex, () => {
   mobileStepsOpen.value = false;
 });
 </script>
@@ -246,13 +261,18 @@ watch(currentStepLabel, () => {
   flex: 0 0 auto;
 }
 
-.studio-autopilot-nav__step-label {
-  color: rgb(var(--v-theme-on-surface));
-  font-size: 0.78rem;
-  font-weight: 650;
-  line-height: 1.1;
-  min-width: 0;
-  overflow-wrap: anywhere;
+.studio-autopilot-nav__step-hitbox {
+  align-items: center;
+  display: inline-flex;
+  flex: 0 0 auto;
+  justify-content: center;
+  outline: none;
+  position: relative;
+}
+
+.studio-autopilot-nav__step-hitbox:focus-visible {
+  border-radius: 999px;
+  box-shadow: 0 0 0 2px rgba(var(--v-theme-primary), 0.35);
 }
 
 .studio-autopilot-nav--rail {
@@ -304,8 +324,9 @@ watch(currentStepLabel, () => {
   width: 1.9rem;
 }
 
-.studio-autopilot-nav--icons .studio-autopilot-nav__step-label {
-  display: none;
+.studio-autopilot-nav--icons .studio-autopilot-nav__step-hitbox {
+  height: 100%;
+  width: 100%;
 }
 
 .studio-autopilot-nav--icons .studio-autopilot-nav__step--done {

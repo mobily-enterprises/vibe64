@@ -18,7 +18,8 @@ import {
   VIBE64_PROJECTS_ROOT_ENV
 } from "@local/vibe64-core/server/studioRoots";
 import {
-  configureStudioProjectContext
+  configureStudioProjectContext,
+  normalizeWorkspaceSlug
 } from "@local/vibe64-core/server/studioProjectContext";
 import {
   closeTerminalSessionsForNamespacePrefix
@@ -33,6 +34,14 @@ import {
   createBrowserLifecycleMonitor,
   registerBrowserLifecycleWebSocketRoute
 } from "./server/lib/browserLifecycle.js";
+import {
+  createVibe64Auth,
+  registerVibe64AuthGate,
+  registerVibe64AuthRoutes
+} from "./server/lib/auth/index.js";
+import {
+  registerVibe64WorkspaceRoutes
+} from "./server/lib/workspaceRoutes.js";
 import {
   VIBE64_APP_ROOT_ENV,
   VIBE64_SKIP_STALE_TERMINAL_CLEANUP_ENV,
@@ -129,12 +138,19 @@ function preferredPortRange(port) {
   return portNumbers(requestedPort, Math.min(65535, requestedPort + DEFAULT_PORT_SEARCH_LIMIT - 1));
 }
 
-function browserUrlForListenAddress(address = "") {
+function startupBrowserPath({
+  startupSlug = ""
+} = {}) {
+  const slug = String(startupSlug || "").trim();
+  return slug ? `/app/${encodeURIComponent(normalizeWorkspaceSlug(slug))}` : "/app/manage";
+}
+
+function browserUrlForListenAddress(address = "", options = {}) {
   const url = new URL(address);
   if (["0.0.0.0", "[::]"].includes(url.hostname)) {
     url.hostname = "127.0.0.1";
   }
-  return `${url.origin}/home`;
+  return `${url.origin}${startupBrowserPath(options)}`;
 }
 
 async function createServer(options = {}) {
@@ -154,6 +170,14 @@ async function createServer(options = {}) {
     });
   }
   await app.register(fastifyWebsocket);
+
+  const auth = createVibe64Auth({
+    dataRoot: options.authDataRoot,
+    env: process.env
+  });
+  app.vibe64Auth = auth;
+  registerVibe64AuthRoutes(app, auth);
+  registerVibe64AuthGate(app, auth);
 
   const browserLifecycleMonitor = createBrowserLifecycleMonitor({
     logger: app.log,
@@ -189,6 +213,7 @@ async function createServer(options = {}) {
     explicitProjectsRoot: options.projectsRoot,
     explicitTargetRoot: options.targetRoot
   });
+  registerVibe64WorkspaceRoutes(app, projectContext);
   const targetRoot = projectContext.targetRoot || "";
   const distRoot = path.resolve(appRoot, "dist");
   const hasWebBuild = existsSync(path.resolve(distRoot, SPA_INDEX_FILE));
@@ -313,6 +338,7 @@ async function startServer(options = {}) {
   const strictPort = options?.strictPort ?? Boolean(options?.port || String(process.env.PORT || "").trim());
   const app = await createServer({
     appRoot: options?.appRoot,
+    authDataRoot: options?.authDataRoot,
     browserLifecycleShutdownDelayMs: options?.browserLifecycleShutdownDelayMs,
     projectsRoot: options?.projectsRoot,
     targetRoot: options?.targetRoot
@@ -348,8 +374,10 @@ async function startServer(options = {}) {
     host,
     port: selectedPort
   });
-  app.vibe64Url = browserUrlForListenAddress(listenAddress);
+  app.vibe64Url = browserUrlForListenAddress(listenAddress, {
+    startupSlug: options?.startupSlug
+  });
   return app;
 }
 
-export { createServer, startServer };
+export { browserUrlForListenAddress, createServer, startServer, startupBrowserPath };

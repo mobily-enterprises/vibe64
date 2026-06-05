@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import test from "node:test";
+import WebSocket, { WebSocketServer } from "ws";
 
 import {
   PREVIEW_BRIDGE_MESSAGE_TYPE,
@@ -8,10 +9,19 @@ import {
   PREVIEW_READY_MESSAGE_TYPE
 } from "../../packages/vibe64-terminals/src/server/launchPreviewBridge.js";
 import {
+  runWithWorkspaceRequestContext
+} from "../../packages/vibe64-core/src/server/workspaceRequestContext.js";
+import {
+  PREVIEW_PROXY_PORT_END,
+  PREVIEW_PROXY_PORT_START,
+  PREVIEW_PROXY_TOKEN_QUERY_PARAM,
+  appendPreviewTokenQueryParam,
   createLaunchPreviewProxyRegistry,
   injectLaunchPreviewBridge,
   normalizePreviewTargetHref,
-  proxiedLocation
+  previewTokenCookieName,
+  proxiedLocation,
+  stripPreviewTokenQueryParam
 } from "../../packages/vibe64-terminals/src/server/launchPreviewProxy.js";
 
 test("launch preview bridge injects once and reports target URLs", () => {
@@ -47,7 +57,23 @@ test("launch preview proxy injects HTML and proxies app-relative requests", asyn
 
       assert.equal(preview.available, true);
       assert.equal(preview.targetHref, `${target.origin}/home?mode=dev`);
-      assert.match(preview.href, /^http:\/\/127\.0\.0\.1:\d+\/home\?mode=dev$/u);
+      const previewUrl = new URL(preview.href);
+      assert.equal(previewUrl.hostname, "127.0.0.1");
+      assert.ok(Number(previewUrl.port) >= PREVIEW_PROXY_PORT_START);
+      assert.ok(Number(previewUrl.port) <= PREVIEW_PROXY_PORT_END);
+      assert.equal(previewUrl.pathname, "/home");
+      assert.equal(previewUrl.searchParams.get("mode"), "dev");
+      assert.ok(previewUrl.searchParams.get(PREVIEW_PROXY_TOKEN_QUERY_PARAM));
+
+      const missingToken = new URL(preview.href);
+      missingToken.searchParams.delete(PREVIEW_PROXY_TOKEN_QUERY_PARAM);
+      const missingTokenResponse = await fetch(missingToken);
+      assert.equal(missingTokenResponse.status, 403);
+
+      const wrongToken = new URL(preview.href);
+      wrongToken.searchParams.set(PREVIEW_PROXY_TOKEN_QUERY_PARAM, "wrong-token");
+      const wrongTokenResponse = await fetch(wrongToken);
+      assert.equal(wrongTokenResponse.status, 403);
 
       const htmlResponse = await fetch(preview.href);
       const html = await htmlResponse.text();
@@ -55,15 +81,123 @@ test("launch preview proxy injects HTML and proxies app-relative requests", asyn
       assert.match(html, /Target home/u);
       assert.match(html, /data-vibe64-preview-bridge="1"/u);
       assert.match(html, new RegExp(target.origin.replaceAll(".", "\\."), "u"));
+      const previewCookieName = previewTokenCookieName(previewUrl.origin);
+      const previewCookie = htmlResponse.headers.get("set-cookie");
+      assert.match(previewCookie, /target_cookie=target/u);
+      assert.match(previewCookie, new RegExp(`${previewCookieName}=`, "u"));
 
-      const apiResponse = await fetch(new URL("/api/ping", preview.href));
+      const apiResponse = await fetch(previewPath(preview.href, "/api/ping"));
       assert.equal(apiResponse.status, 200);
       assert.deepEqual(await apiResponse.json(), {
         ok: true
       });
 
+      const cookieOnlyResponse = await fetch(new URL("/api/ping", previewUrl.origin), {
+        headers: {
+          Cookie: previewCookiePair(previewCookie, previewCookieName)
+        }
+      });
+      assert.equal(cookieOnlyResponse.status, 200);
+      assert.deepEqual(await cookieOnlyResponse.json(), {
+        ok: true
+      });
+
+      const cookieEchoResponse = await fetch(new URL("/echo-cookie", previewUrl.origin), {
+        headers: {
+          Cookie: `${previewCookiePair(previewCookie, previewCookieName)}; target_cookie=target`
+        }
+      });
+      assert.equal(cookieEchoResponse.status, 200);
+      assert.deepEqual(await cookieEchoResponse.json(), {
+        cookie: "target_cookie=target"
+      });
+
+      const secondPreview = await registry.ensure("session-2", `${target.origin}/home`);
+      assert.notEqual(
+        previewTokenCookieName(new URL(secondPreview.href).origin),
+        previewCookieName
+      );
+
       const again = await registry.ensure("session-1", `${target.origin}/home?mode=dev`);
       assert.equal(again.href, preview.href);
+    } finally {
+      await registry.closeAll();
+    }
+  });
+});
+
+test("launch preview proxy scopes tokens by workspace, session, and terminal", async () => {
+  await withTargetServer(async (target) => {
+    const registry = createLaunchPreviewProxyRegistry();
+    try {
+      const alpha = await runWithWorkspaceRequestContext({
+        slug: "alpha_1",
+        targetRoot: "/tmp/vibe64/alpha_1"
+      }, () => registry.ensure({
+        sessionId: "same-session",
+        targetHref: `${target.origin}/alpha`,
+        terminalSessionId: "same-terminal"
+      }));
+      const beta = await runWithWorkspaceRequestContext({
+        slug: "beta_2",
+        targetRoot: "/tmp/vibe64/beta_2"
+      }, () => registry.ensure({
+        sessionId: "same-session",
+        targetHref: `${target.origin}/beta`,
+        terminalSessionId: "same-terminal"
+      }));
+
+      assert.notEqual(new URL(alpha.href).origin, new URL(beta.href).origin);
+
+      const alphaToken = new URL(alpha.href).searchParams.get(PREVIEW_PROXY_TOKEN_QUERY_PARAM);
+      const betaWithAlphaToken = new URL(beta.href);
+      betaWithAlphaToken.searchParams.set(PREVIEW_PROXY_TOKEN_QUERY_PARAM, alphaToken);
+
+      const wrongScopeResponse = await fetch(betaWithAlphaToken);
+      assert.equal(wrongScopeResponse.status, 403);
+
+      const betaResponse = await fetch(beta.href);
+      assert.equal(betaResponse.status, 200);
+    } finally {
+      await registry.closeAll();
+    }
+  });
+});
+
+test("launch preview proxy forwards tokenized WebSocket upgrades without leaking token material", async () => {
+  await withWebSocketTargetServer(async (target) => {
+    const registry = createLaunchPreviewProxyRegistry();
+    try {
+      const preview = await registry.ensure({
+        sessionId: "session-websocket",
+        targetHref: `${target.origin}/hmr?definePage&vue&lang.tsx`,
+        terminalSessionId: "terminal-websocket"
+      });
+      assert.match(preview.href, /\?definePage&vue&lang\.tsx&vibe64_preview_token=/u);
+
+      const accepted = await connectWebSocket(previewWebSocketHref(preview.href));
+      assert.equal(accepted.ok, true);
+      const reply = await sendWebSocketMessage(accepted.socket, "ping");
+      assert.equal(reply, "echo:ping");
+      accepted.socket.close();
+
+      assert.equal(target.upgradeRequests.length, 1);
+      assert.equal(target.upgradeRequests[0].url, "/hmr?definePage&vue&lang.tsx");
+      assert.equal(target.upgradeRequests[0].cookie, "target_cookie=target");
+
+      const missingTokenHref = previewWebSocketHref(preview.href, {
+        token: ""
+      });
+      const missing = await connectWebSocket(missingTokenHref);
+      assert.equal(missing.ok, false);
+      assert.equal(missing.statusCode, 403);
+
+      const wrongTokenHref = previewWebSocketHref(preview.href, {
+        token: "wrong-token"
+      });
+      const wrong = await connectWebSocket(wrongTokenHref);
+      assert.equal(wrong.ok, false);
+      assert.equal(wrong.statusCode, 403);
     } finally {
       await registry.closeAll();
     }
@@ -87,6 +221,52 @@ test("launch preview proxy rewrites same-origin redirects to the proxy origin", 
   );
 });
 
+test("launch preview proxy strips only its token while preserving app query flags", async () => {
+  await withTargetServer(async (target) => {
+    const registry = createLaunchPreviewProxyRegistry();
+    try {
+      const preview = await registry.ensure("session-query-flags", `${target.origin}/home`);
+      const previewUrl = new URL(preview.href);
+      const token = previewUrl.searchParams.get(PREVIEW_PROXY_TOKEN_QUERY_PARAM);
+      const proxiedModuleUrl = `${previewUrl.origin}/echo-url?definePage&vue&lang.tsx&${PREVIEW_PROXY_TOKEN_QUERY_PARAM}=${encodeURIComponent(token)}`;
+
+      const response = await fetch(proxiedModuleUrl);
+      assert.equal(response.status, 200);
+      assert.deepEqual(await response.json(), {
+        url: "/echo-url?definePage&vue&lang.tsx"
+      });
+    } finally {
+      await registry.closeAll();
+    }
+  });
+});
+
+test("launch preview token stripping preserves valueless query parameters", () => {
+  assert.equal(
+    stripPreviewTokenQueryParam("?definePage&vue&lang.tsx&vibe64_preview_token=abc"),
+    "?definePage&vue&lang.tsx"
+  );
+  assert.equal(
+    stripPreviewTokenQueryParam("?vibe64_preview_token=abc&definePage&vue&lang.tsx"),
+    "?definePage&vue&lang.tsx"
+  );
+  assert.equal(
+    stripPreviewTokenQueryParam("?definePage=&vue=&lang.tsx=&vibe64_preview_token=abc"),
+    "?definePage=&vue=&lang.tsx="
+  );
+});
+
+test("launch preview token appending preserves valueless query parameters", () => {
+  assert.equal(
+    appendPreviewTokenQueryParam("?definePage&vue&lang.tsx", "abc"),
+    "?definePage&vue&lang.tsx&vibe64_preview_token=abc"
+  );
+  assert.equal(
+    appendPreviewTokenQueryParam("", "abc"),
+    "?vibe64_preview_token=abc"
+  );
+});
+
 test("launch preview proxy keeps HTML previews retrying while the target is unavailable", async () => {
   const registry = createLaunchPreviewProxyRegistry();
   try {
@@ -102,7 +282,7 @@ test("launch preview proxy keeps HTML previews retrying while the target is unav
     assert.match(html, /Starting preview\./u);
     assert.match(html, /http-equiv="refresh"/u);
 
-    const apiResponse = await fetch(new URL("/api/ping", preview.href), {
+    const apiResponse = await fetch(previewPath(preview.href, "/api/ping"), {
       headers: {
         Accept: "application/json"
       }
@@ -125,8 +305,27 @@ async function withTargetServer(callback) {
       }));
       return;
     }
+    if (String(request.url || "").startsWith("/echo-url")) {
+      response.writeHead(200, {
+        "Content-Type": "application/json"
+      });
+      response.end(JSON.stringify({
+        url: request.url
+      }));
+      return;
+    }
+    if (request.url === "/echo-cookie") {
+      response.writeHead(200, {
+        "Content-Type": "application/json"
+      });
+      response.end(JSON.stringify({
+        cookie: request.headers.cookie || ""
+      }));
+      return;
+    }
     response.writeHead(200, {
-      "Content-Type": "text/html; charset=utf-8"
+      "Content-Type": "text/html; charset=utf-8",
+      "Set-Cookie": "target_cookie=target; Path=/"
     });
     response.end("<!doctype html><html><head><title>Target</title></head><body>Target home</body></html>");
   });
@@ -147,4 +346,120 @@ async function withTargetServer(callback) {
       server.close(() => resolve());
     });
   }
+}
+
+async function withWebSocketTargetServer(callback) {
+  const upgradeRequests = [];
+  const server = createServer((request, response) => {
+    response.writeHead(404, {
+      "Content-Type": "text/plain; charset=utf-8"
+    });
+    response.end("Not found");
+  });
+  const websocketServer = new WebSocketServer({
+    noServer: true
+  });
+  websocketServer.on("connection", (socket) => {
+    socket.on("message", (message) => {
+      socket.send(`echo:${message.toString()}`);
+    });
+  });
+  server.on("upgrade", (request, socket, head) => {
+    upgradeRequests.push({
+      cookie: request.headers.cookie || "",
+      url: request.url
+    });
+    websocketServer.handleUpgrade(request, socket, head, (websocket) => {
+      websocketServer.emit("connection", websocket, request);
+    });
+  });
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      server.off("error", reject);
+      resolve();
+    });
+  });
+  const address = server.address();
+  try {
+    await callback({
+      origin: `http://127.0.0.1:${address.port}`,
+      upgradeRequests
+    });
+  } finally {
+    websocketServer.close();
+    await new Promise((resolve) => {
+      server.close(() => resolve());
+    });
+  }
+}
+
+function previewPath(previewHref = "", pathname = "/") {
+  const previewUrl = new URL(previewHref);
+  const nextUrl = new URL(pathname, previewUrl.origin);
+  nextUrl.searchParams.set(
+    PREVIEW_PROXY_TOKEN_QUERY_PARAM,
+    previewUrl.searchParams.get(PREVIEW_PROXY_TOKEN_QUERY_PARAM)
+  );
+  return nextUrl;
+}
+
+function previewWebSocketHref(previewHref = "", {
+  token = undefined
+} = {}) {
+  const previewUrl = new URL(previewHref);
+  const targetToken = token === undefined
+    ? previewUrl.searchParams.get(PREVIEW_PROXY_TOKEN_QUERY_PARAM)
+    : token;
+  const search = stripPreviewTokenQueryParam(previewUrl.search);
+  previewUrl.protocol = "ws:";
+  previewUrl.search = targetToken
+    ? appendPreviewTokenQueryParam(search, targetToken)
+    : search;
+  return previewUrl.toString();
+}
+
+function previewCookiePair(setCookieHeader = "", cookieName = "") {
+  const match = new RegExp(`(?:^|,\\s*)(${cookieName}=[^;,]+)`, "u").exec(String(setCookieHeader || ""));
+  assert.ok(match, `Expected preview cookie ${cookieName}.`);
+  return match[1];
+}
+
+function connectWebSocket(href = "", options = {}) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const socket = new WebSocket(href, {
+      headers: {
+        Cookie: "target_cookie=target",
+        ...options.headers
+      }
+    });
+    const finish = (result) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      resolve(result);
+    };
+    socket.once("open", () => finish({
+      ok: true,
+      socket
+    }));
+    socket.once("unexpected-response", (_request, response) => finish({
+      ok: false,
+      statusCode: response.statusCode
+    }));
+    socket.once("error", (error) => finish({
+      error,
+      ok: false
+    }));
+  });
+}
+
+function sendWebSocketMessage(socket, message = "") {
+  return new Promise((resolve, reject) => {
+    socket.once("message", (data) => resolve(data.toString()));
+    socket.once("error", reject);
+    socket.send(message);
+  });
 }
