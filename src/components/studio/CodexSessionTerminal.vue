@@ -27,7 +27,7 @@
         <div v-show="expanded" class="codex-terminal__body">
           <StudioErrorNotice
             v-if="terminalError"
-            title="Codex terminal needs attention"
+            :title="terminalErrorTitle"
             :error="terminalError"
             compact
             class="mb-2"
@@ -218,6 +218,10 @@ const terminalStreamActive = computed(() => Boolean(
   terminalDisplayActive.value ||
   hiddenTerminalListenActive.value
 ));
+const hasTerminalSession = computed(() => Boolean(
+  terminalSessionId.value ||
+  serverTerminalSession.value.id
+));
 
 const canUseTerminal = computed(() => {
   if (globalScope.value) {
@@ -287,6 +291,11 @@ const {
   terminalStarting,
   terminalStatus
 } = terminalController;
+const terminalErrorTitle = computed(() => {
+  return String(terminalError.value || "").includes("app-server")
+    ? "Codex app-server is not available"
+    : "Codex terminal needs attention";
+});
 const {
   attachmentDragActive,
   attachmentStatus,
@@ -490,6 +499,9 @@ function toggleExpanded() {
 }
 
 async function focusTerminal() {
+  if (!hasTerminalSession.value) {
+    return false;
+  }
   if (!expanded.value) {
     expanded.value = true;
     await nextTick();
@@ -498,7 +510,7 @@ async function focusTerminal() {
 }
 
 async function focusWritableTerminalWhenShown(visible) {
-  if (!visible || props.readOnly) {
+  if (!visible || props.readOnly || !hasTerminalSession.value) {
     return;
   }
   await nextTick();
@@ -515,7 +527,7 @@ async function focusWritableTerminalWhenShown(visible) {
 }
 
 async function connectAttachedTerminal() {
-  void setupTerminalUi();
+  await setupTerminalUi();
   if (!(await connectTerminalSocket())) {
     throw new Error("Terminal stream failed to connect.");
   }
@@ -523,7 +535,6 @@ async function connectAttachedTerminal() {
 }
 
 async function startTerminalOnce() {
-  void setupTerminalUi();
   if (terminalExited.value && terminalCanStart.value) {
     closeTerminalSocket();
     resetTerminalSessionState();
@@ -650,7 +661,7 @@ watch(terminalHost, (host) => {
   if (host && terminalDisplayActive.value && props.autoFocus && !props.readOnly) {
     void focusWritableTerminalWhenShown(true);
   }
-  if (host) {
+  if (host && hasTerminalSession.value) {
     void setupTerminalUi();
     startTerminalWhenReady();
   }

@@ -771,15 +771,15 @@ test("vibe64 runtime presentation exposes durable background task status", async
     await runtime.createSession({
       sessionId: "presentation_background_task"
     });
-    await runtime.store.writeBackgroundTaskEvent("presentation_background_task", "codex_bootstrap", {
+    await runtime.store.writeBackgroundTaskEvent("presentation_background_task", "codex_app_server", {
       event: {
         kind: "failed"
       },
       patch: {
         error: "Create the session worktree before starting Codex.",
-        kind: "codex_bootstrap",
-        label: "Codex bootstrap",
-        message: "Codex bootstrap failed.",
+        kind: "codex_app_server",
+        label: "Codex app-server",
+        message: "Codex app-server preparation failed.",
         retry: {
           control: {
             action: VIBE64_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL
@@ -795,10 +795,10 @@ test("vibe64 runtime presentation exposes durable background task status", async
       {
         error: "Create the session worktree before starting Codex.",
         finishedAt: session.presentation.backgroundTasks[0].finishedAt,
-        id: "codex_bootstrap",
-        kind: "codex_bootstrap",
-        label: "Codex bootstrap",
-        message: "Codex bootstrap failed.",
+        id: "codex_app_server",
+        kind: "codex_app_server",
+        label: "Codex app-server",
+        message: "Codex app-server preparation failed.",
         retry: null,
         startedAt: session.presentation.backgroundTasks[0].startedAt,
         status: "failed",
@@ -811,15 +811,15 @@ test("vibe64 runtime presentation exposes durable background task status", async
       metadata: worktreeMetadata(targetRoot, "presentation_background_task_retryable"),
       sessionId: "presentation_background_task_retryable"
     });
-    await runtime.store.writeBackgroundTaskEvent("presentation_background_task_retryable", "codex_bootstrap", {
+    await runtime.store.writeBackgroundTaskEvent("presentation_background_task_retryable", "codex_app_server", {
       event: {
         kind: "failed"
       },
       patch: {
         error: "Terminal session not found.",
-        kind: "codex_bootstrap",
-        label: "Codex bootstrap",
-        message: "Codex bootstrap failed.",
+        kind: "codex_app_server",
+        label: "Codex app-server",
+        message: "Codex app-server preparation failed.",
         retry: {
           control: {
             action: VIBE64_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL
@@ -854,7 +854,7 @@ test("vibe64 runtime presentation emits only declared client controls", async ()
       metadata: worktreeMetadata(targetRoot, "presentation_client_controls"),
       sessionId: "presentation_client_controls"
     });
-    await runtime.store.writeBackgroundTaskEvent("presentation_client_controls", "codex_bootstrap", {
+    await runtime.store.writeBackgroundTaskEvent("presentation_client_controls", "codex_app_server", {
       event: {
         kind: "failed"
       },
@@ -3281,7 +3281,7 @@ test("vibe64 runtime renders compact conversation turns after the session briefi
     assert.doesNotMatch(prompt, /worktree path:/u);
     assert.match(prompt, /Always submit the user-visible answer through the current-step input helper/u);
     assert.match(prompt, /A terminal-visible response alone is not complete; always call the helper/u);
-    assert.match(prompt, /Direct terminal fallback: if a later user prompt does not include `VIBE64_ROUTED_TURN`/u);
+    assert.match(prompt, /Direct terminal input routing: if a later user prompt does not include `VIBE64_ROUTED_TURN`/u);
     assert.match(prompt, /VIBE64_TERMINAL_CHAT_HELPER/u);
   });
 });

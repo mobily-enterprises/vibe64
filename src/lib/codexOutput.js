@@ -25,8 +25,6 @@ const C1_TERMINAL_STRING_PATTERN = new RegExp(`[${C1_TERMINAL_STRING_START_CHARA
 const C1_CSI_PATTERN = new RegExp(`${C1_CSI_CHARACTER}[0-?]*[ -/]*[@-~]`, "gu");
 const ESCAPE_SEQUENCE_PATTERN = new RegExp(`${ESCAPE_CHARACTER}[ -/]*[@-~]`, "gu");
 const STANDALONE_TERMINAL_CONTROL_PATTERN = new RegExp(`[${STANDALONE_TERMINAL_CONTROL_CHARACTERS}]`, "gu");
-const CODEX_THREAD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
-const CODEX_THREAD_ID_TOKEN_PATTERN = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/giu;
 function stripTerminalControlSequences(value) {
   const source = String(value || "")
     .replace(OSC_PATTERN, "")
@@ -39,36 +37,6 @@ function stripTerminalControlSequences(value) {
     .replace(STANDALONE_TERMINAL_CONTROL_PATTERN, "");
 }
 
-function isCodexThreadId(value) {
-  return CODEX_THREAD_ID_PATTERN.test(String(value || "").trim());
-}
-
-function extractCodexThreadId(output) {
-  const lines = stripTerminalControlSequences(output)
-    .split(/\r?\n/u)
-    .map((line) => line.trim())
-    .filter(Boolean);
-
-  for (let lineIndex = lines.length - 1; lineIndex >= 0; lineIndex -= 1) {
-    if (!lines[lineIndex].includes("CODEX_THREAD_ID")) {
-      continue;
-    }
-    for (const nextLine of lines.slice(lineIndex + 1, lineIndex + 8)) {
-      CODEX_THREAD_ID_TOKEN_PATTERN.lastIndex = 0;
-      const token = [...nextLine.matchAll(CODEX_THREAD_ID_TOKEN_PATTERN)]
-        .map((match) => match[0])
-        .find(isCodexThreadId);
-      if (token) {
-        return token.toLowerCase();
-      }
-    }
-  }
-
-  return "";
-}
-
 export {
-  extractCodexThreadId,
-  isCodexThreadId,
   stripTerminalControlSequences
 };

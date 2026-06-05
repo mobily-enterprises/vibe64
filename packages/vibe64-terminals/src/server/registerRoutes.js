@@ -147,6 +147,12 @@ function registerRoutes(
     return terminalService().startCodexTerminal(request.params.sessionId);
   });
 
+  routes.serviceRoute("POST", "/sessions/:sessionId/codex-turn/interrupt", {
+    summary: "Interrupt the active Vibe64 Codex app-server turn."
+  }, (request) => {
+    return terminalService().interruptCodexTurn(request.params.sessionId);
+  });
+
   routes.actionRoute("POST", "/sessions/:sessionId/codex-attachments", {
     actionId: ACTION_UPLOAD_CODEX_ATTACHMENT,
     body: codexAttachmentInputValidator,

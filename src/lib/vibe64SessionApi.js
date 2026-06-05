@@ -72,8 +72,8 @@ function vibe64TerminalFailureFixEndpoint(sessionId) {
   return vibe64SessionEndpoint(sessionId, "/terminal-failure-fix");
 }
 
-function vibe64AgentControlReturnEndpoint(sessionId) {
-  return vibe64SessionEndpoint(sessionId, "/agent-control/return");
+function vibe64CodexTurnInterruptEndpoint(sessionId) {
+  return vibe64SessionEndpoint(sessionId, "/codex-turn/interrupt");
 }
 
 function vibe64ArtifactReadinessStreamEndpoint(sessionId) {
@@ -148,8 +148,8 @@ async function startVibe64CodexTerminal(sessionId) {
   return studioHttpClient.post(vibe64CodexTerminalEndpoint(sessionId), {});
 }
 
-async function returnVibe64AgentControl(sessionId) {
-  return studioHttpClient.post(vibe64AgentControlReturnEndpoint(sessionId), {});
+async function interruptVibe64CodexTurn(sessionId) {
+  return studioHttpClient.post(vibe64CodexTurnInterruptEndpoint(sessionId), {});
 }
 
 async function startVibe64GlobalCodexTerminal() {
@@ -172,10 +172,6 @@ async function readVibe64CodexTerminalControlSnapshot(sessionId, terminalSession
   return studioHttpClient.get(vibe64CodexTerminalControlEndpoint(sessionId, terminalSessionId, "/snapshot"));
 }
 
-async function readVibe64CodexTerminalQuiet(sessionId, terminalSessionId) {
-  return studioHttpClient.get(vibe64CodexTerminalControlEndpoint(sessionId, terminalSessionId, "/quiet"));
-}
-
 async function checkVibe64CodexTerminalText(sessionId, terminalSessionId, text = "") {
   return studioHttpClient.post(vibe64CodexTerminalControlEndpoint(sessionId, terminalSessionId, "/check-text"), {
     text: String(text || "")
@@ -185,12 +181,6 @@ async function checkVibe64CodexTerminalText(sessionId, terminalSessionId, text =
 async function sendVibe64CodexTerminalText(sessionId, terminalSessionId, text = "") {
   return studioHttpClient.post(vibe64CodexTerminalControlEndpoint(sessionId, terminalSessionId, "/text"), {
     text: String(text || "")
-  });
-}
-
-async function sendVibe64CodexTerminalKey(sessionId, terminalSessionId, key = "") {
-  return studioHttpClient.post(vibe64CodexTerminalControlEndpoint(sessionId, terminalSessionId, "/key"), {
-    key: String(key || "")
   });
 }
 
@@ -297,21 +287,19 @@ export {
   checkVibe64CodexTerminalText,
   checkVibe64ShellTerminalText,
   buildVibe64TerminalFailureFixRequest,
+  interruptVibe64CodexTurn,
   readVibe64CodexTerminalControlSnapshot,
   readVibe64GlobalCodexTerminalState,
-  readVibe64CodexTerminalQuiet,
   readVibe64ArtifactReadiness,
   readVibe64SessionDiff,
   readVibe64ProjectTools,
   readVibe64ShellTerminalControlSnapshot,
   readVibe64ShellTerminalQuiet,
   runVibe64ProjectTool,
-  sendVibe64CodexTerminalKey,
   sendVibe64CodexTerminalText,
   sendVibe64ShellTerminalKey,
   sendVibe64ShellTerminalText,
   submitVibe64CurrentStepInput,
-  returnVibe64AgentControl,
   startVibe64CodexTerminal,
   startVibe64GlobalCodexTerminal,
   startVibe64CommandTerminal,

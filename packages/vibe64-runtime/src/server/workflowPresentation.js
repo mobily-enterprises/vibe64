@@ -36,7 +36,7 @@ const INTENT_IDS = Object.freeze({
 });
 
 const COMMAND_RECOVERY_DELAY_MS = 5000;
-const CODEX_BOOTSTRAP_TASK_ID = "codex_bootstrap";
+const CODEX_APP_SERVER_TASK_ID = "codex_app_server";
 const COMMAND_LIFECYCLE_RUNNING_PHASES = Object.freeze(new Set([
   "starting",
   "started"
@@ -950,7 +950,7 @@ function promptPresentation(session = {}) {
 
 function backgroundTaskRetryPresentation(task = {}, session = {}) {
   if (
-    normalizeText(task.id) === CODEX_BOOTSTRAP_TASK_ID &&
+    normalizeText(task.id) === CODEX_APP_SERVER_TASK_ID &&
     normalizeText(task.status) === "failed" &&
     !sessionHasWorktree(session)
   ) {

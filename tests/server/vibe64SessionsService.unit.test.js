@@ -230,12 +230,18 @@ test("session prompt action injects the rendered Codex handoff from the server",
       },
       async codexTerminalState(sessionId) {
         return {
+          codexAgentTurn: {
+            active: true,
+            state: "active",
+            status: "inProgress",
+            turnId: "codex-app-server-turn-1"
+          },
+          codexAgentTurnActive: true,
           codexTerminal: {
             commandPreview: "codex",
             id: "codex-terminal-1",
             ...recentTerminalActivity(),
-            status: "running",
-            transmitting: true
+            status: "running"
           },
           ok: true,
           sessionId
@@ -255,7 +261,10 @@ test("session prompt action injects the rendered Codex handoff from the server",
   assert.ok(Date.parse(session.codexTerminal.lastInputAt));
   assert.equal(session.codexTerminal.lastInputBytes, 24);
   assert.equal(session.codexTerminal.status, "running");
-  assert.equal(session.codexTerminal.transmitting, true);
+  assert.equal(session.codexTerminal.transmitting, undefined);
+  assert.equal(session.codexAgentTurnActive, true);
+  assert.equal(session.codexAgentTurn.state, "active");
+  assert.equal(session.codexAgentTurn.status, "inProgress");
   assertCodexPreviewHidden(session.presentation.terminal.codex, "codex-terminal-1");
   assert.deepEqual(deliveries, [
     {
@@ -269,6 +278,74 @@ test("session prompt action injects the rendered Codex handoff from the server",
       sessionId: "session-1"
     }
   ]);
+});
+
+test("session prompt action returns the app-server turn state from prompt delivery", async () => {
+  const handoff = {
+    kind: "codex_prompt_handoff",
+    terminalInput: "Ask Codex from the server."
+  };
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async runAction(sessionId, actionId, input) {
+            return {
+              actionResult: {
+                actionId,
+                codexPromptHandoff: handoff,
+                input,
+                status: "prompt_ready"
+              },
+              presentation: {
+                screen: {
+                  kind: "codex_running"
+                }
+              },
+              sessionId,
+              status: VIBE64_SESSION_STATUS.ACTIVE
+            };
+          }
+        };
+      }
+    },
+    setupServices: readySetupServices(),
+    terminalService: {
+      async injectCodexPrompt() {
+        return {
+          codexAgentTurn: {
+            active: true,
+            state: "active",
+            status: "inProgress",
+            threadId: "codex-app-server-thread-1",
+            turnId: "codex-app-server-turn-1"
+          },
+          codexAgentTurnActive: true,
+          codexPromptInjected: true,
+          ok: true,
+          terminalSessionId: ""
+        };
+      },
+      async codexTerminalState(sessionId) {
+        return {
+          codexTerminal: null,
+          ok: true,
+          sessionId
+        };
+      }
+    }
+  });
+
+  const session = await service.runSessionAction("session-1", "agent_conversation", {
+    conversationRequest: "Explain this codebase."
+  });
+
+  assert.equal(session.codexPromptDelivery.codexPromptInjected, true);
+  assert.equal(session.codexAgentTurnActive, true);
+  assert.equal(session.codexAgentTurn.state, "active");
+  assert.equal(session.codexAgentTurn.status, "inProgress");
+  assert.equal(session.codexAgentTurn.threadId, "codex-app-server-thread-1");
+  assert.equal(session.codexAgentTurn.turnId, "codex-app-server-turn-1");
 });
 
 test("session prompt intent injects the rendered Codex handoff from the server", async () => {
@@ -576,7 +653,7 @@ test("session prompt action fails visibly when server-side Codex delivery fails"
     terminalService: {
       async injectCodexPrompt() {
         return {
-          error: "Codex terminal is not running.",
+          error: "Codex app-server control is unavailable.",
           ok: false
         };
       }
@@ -586,7 +663,7 @@ test("session prompt action fails visibly when server-side Codex delivery fails"
   const result = await service.runSessionAction("session-1", "agent_conversation");
 
   assert.equal(result.ok, false);
-  assert.equal(result.error, "Codex terminal is not running.");
+  assert.equal(result.error, "Codex app-server control is unavailable.");
 });
 
 test("session presentation exposes the Codex terminal without using turn state for preview visibility", async () => {
@@ -611,12 +688,18 @@ test("session presentation exposes the Codex terminal without using turn state f
     terminalService: {
       async codexTerminalState(sessionId) {
         return {
+          codexAgentTurn: {
+            active: true,
+            state: "active",
+            status: "inProgress",
+            turnId: "codex-app-server-turn-2"
+          },
+          codexAgentTurnActive: true,
           codexTerminal: {
             commandPreview: "codex",
             id: "codex-terminal-active",
             ...recentTerminalActivity(),
-            status: "running",
-            transmitting: true
+            status: "running"
           },
           ok: true,
           sessionId
@@ -628,7 +711,9 @@ test("session presentation exposes the Codex terminal without using turn state f
   const session = await service.inspectSession("session-1");
 
   assert.equal(session.codexTerminal.id, "codex-terminal-active");
-  assert.equal(session.codexTerminal.transmitting, true);
+  assert.equal(session.codexTerminal.transmitting, undefined);
+  assert.equal(session.codexAgentTurnActive, true);
+  assert.equal(session.codexAgentTurn.turnId, "codex-app-server-turn-2");
   assert.ok(Date.parse(session.codexTerminal.lastInputAt));
   assertCodexPreviewHidden(session.presentation.terminal.codex, "codex-terminal-active");
 });
@@ -669,8 +754,7 @@ test("session inspect reads existing Codex terminal state without preparing it",
           codexTerminal: {
             commandPreview: "codex",
             id: "codex-terminal-restored",
-            status: "running",
-            transmitting: false
+            status: "running"
           },
           ok: true,
           sessionId
@@ -685,7 +769,7 @@ test("session inspect reads existing Codex terminal state without preparing it",
   assert.equal(session.codexTerminal.id, "codex-terminal-restored");
 });
 
-test("session presentation hides the Codex preview when there is no transmitting turn", async () => {
+test("session presentation hides the Codex preview when the app-server turn is idle", async () => {
   const service = createService({
     projectService: {
       async createRuntime() {
@@ -707,11 +791,15 @@ test("session presentation hides the Codex preview when there is no transmitting
     terminalService: {
       async codexTerminalState(sessionId) {
         return {
+          codexAgentTurn: {
+            active: false,
+            state: "idle"
+          },
+          codexAgentTurnActive: false,
           codexTerminal: {
             commandPreview: "codex",
             id: "codex-terminal-idle",
-            status: "running",
-            transmitting: false
+            status: "running"
           },
           ok: true,
           sessionId
@@ -759,8 +847,7 @@ test("session presentation ignores Codex output activity for terminal preview vi
             id: "codex-terminal-output-only",
             lastOutputAt: new Date().toISOString(),
             lastOutputBytes: 128,
-            status: "running",
-            transmitting: false
+            status: "running"
           },
           ok: true,
           sessionId
@@ -781,7 +868,7 @@ test("session presentation ignores Codex output activity for terminal preview vi
   });
 });
 
-test("session presentation ignores Codex turn state for preview visibility", async () => {
+test("session presentation ignores app-server Codex turn state for preview visibility", async () => {
   const service = createService({
     projectService: {
       async createRuntime() {
@@ -803,13 +890,18 @@ test("session presentation ignores Codex turn state for preview visibility", asy
     terminalService: {
       async codexTerminalState(sessionId) {
         return {
+          codexAgentTurn: {
+            active: true,
+            state: "active",
+            status: "inProgress",
+            turnId: "codex-app-server-turn-3"
+          },
+          codexAgentTurnActive: true,
           codexTerminal: {
-            activityLabel: "Codex is thinking...",
             commandPreview: "codex",
             id: "codex-terminal-old-input",
             ...oldTerminalActivity(),
-            status: "running",
-            transmitting: true
+            status: "running"
           },
           ok: true,
           sessionId
@@ -820,11 +912,12 @@ test("session presentation ignores Codex turn state for preview visibility", asy
 
   const session = await service.inspectSession("session-1");
 
-  assert.equal(session.codexTerminal.transmitting, true);
+  assert.equal(session.codexTerminal.transmitting, undefined);
+  assert.equal(session.codexAgentTurnActive, true);
   assertCodexPreviewHidden(session.presentation.terminal.codex, "codex-terminal-old-input");
 });
 
-test("session presentation does not show the Codex terminal preview for stale non-transmitting waits", async () => {
+test("session presentation does not show the Codex terminal preview for stale workflow waits", async () => {
   const waitStartedAt = new Date().toISOString();
   const service = createService({
     projectService: {
@@ -858,13 +951,11 @@ test("session presentation does not show the Codex terminal preview for stale no
       async codexTerminalState(sessionId) {
         return {
           codexTerminal: {
-            activityStartedAt: waitStartedAt,
             commandPreview: "codex",
             id: "codex-terminal-fresh-wait",
             lastInputAt: waitStartedAt,
             lastInputBytes: 9,
-            status: "running",
-            transmitting: false
+            status: "running"
           },
           ok: true,
           sessionId

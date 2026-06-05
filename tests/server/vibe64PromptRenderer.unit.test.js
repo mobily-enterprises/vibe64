@@ -606,7 +606,8 @@ test("vibe64 session briefing contains the static adapter setup once", () => {
   assert.match(briefing, /Vibe64 terminal chat mirror helper:/u);
   assert.match(briefing, /Command: node "\$VIBE64_TERMINAL_CHAT_HELPER"/u);
   assert.match(briefing, /does not include `VIBE64_ROUTED_TURN`/u);
-  assert.match(briefing, /only mirrors the exchange into Vibe64 chat/u);
+  assert.match(briefing, /response` field only/u);
+  assert.match(briefing, /only mirrors the assistant response into Vibe64 chat/u);
 });
 
 test("vibe64 prompt templates reject unknown tokens", () => {

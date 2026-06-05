@@ -174,6 +174,8 @@ function withCodexTerminalState(session = {}, terminalState = {}) {
     agentIdentityStatus: terminalState.agentIdentityStatus || session.agentIdentityStatus || "",
     agentResumeStrategy: terminalState.agentResumeStrategy || session.agentResumeStrategy || "",
     agentWorkdir: terminalState.agentWorkdir || session.agentWorkdir || "",
+    codexAgentTurn: terminalState.codexAgentTurn || session.codexAgentTurn || null,
+    codexAgentTurnActive: terminalState.codexAgentTurnActive ?? session.codexAgentTurnActive ?? false,
     codexTerminal: terminalState.codexTerminal || null,
     codexWorkdir: terminalState.codexWorkdir || session.codexWorkdir || "",
     codexPromptHandoffOutputStart: terminalState.codexPromptHandoffOutputStart ?? session.codexPromptHandoffOutputStart,
@@ -188,6 +190,35 @@ function withCodexTerminalState(session = {}, terminalState = {}) {
       }
     }
   };
+}
+
+const CODEX_PROMPT_DELIVERY_SESSION_FIELDS = Object.freeze([
+  "agentConversationId",
+  "agentIdentity",
+  "agentIdentityProvider",
+  "agentIdentityStatus",
+  "agentResumeStrategy",
+  "agentWorkdir",
+  "codexAgentTurn",
+  "codexAgentTurnActive",
+  "codexPromptHandoffOutputStart",
+  "codexPromptHandoffSignature",
+  "codexTerminal",
+  "codexThreadId",
+  "codexWorkdir"
+]);
+
+function codexPromptDeliverySessionState(delivery = {}) {
+  const state = {};
+  if (!delivery || typeof delivery !== "object" || Array.isArray(delivery)) {
+    return state;
+  }
+  for (const field of CODEX_PROMPT_DELIVERY_SESSION_FIELDS) {
+    if (delivery[field] !== undefined) {
+      state[field] = delivery[field];
+    }
+  }
+  return state;
 }
 
 async function enrichSessionWithCodexTerminal(terminalService, session = {}) {
@@ -224,7 +255,40 @@ async function enrichSessionWithCodexTerminal(terminalService, session = {}) {
   return enrichedSession;
 }
 
-async function deliverCodexPromptIfNeeded(terminalService, session = {}) {
+async function prepareCodexThreadForSession(terminalService, session = {}) {
+  if (!session || session.ok === false || !session.sessionId) {
+    return session;
+  }
+  if (typeof terminalService?.ensureCodexThread !== "function") {
+    vibe64SessionDebugLog("server.service.ensureCodexThread.skipped", {
+      reason: "service_unavailable",
+      sessionId: session.sessionId
+    });
+    return session;
+  }
+  const startedAtMs = Date.now();
+  vibe64SessionDebugLog("server.service.ensureCodexThread.start", {
+    sessionId: session.sessionId
+  });
+  const result = await terminalService.ensureCodexThread(session.sessionId);
+  if (result?.ok === false) {
+    vibe64SessionDebugLog("server.service.ensureCodexThread.error", {
+      durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+      error: String(result.error || "Vibe64 Codex app-server thread could not be prepared."),
+      sessionId: session.sessionId
+    });
+    return session;
+  }
+  vibe64SessionDebugLog("server.service.ensureCodexThread.done", {
+    durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+    sessionId: session.sessionId
+  });
+  return session;
+}
+
+async function deliverCodexPromptIfNeeded(terminalService, session = {}, {
+  runtime = null
+} = {}) {
   const handoff = codexPromptHandoffFromSession(session);
   if (!handoff) {
     vibe64SessionDebugLog("server.service.deliverCodexPrompt.skipped", {
@@ -261,15 +325,6 @@ async function deliverCodexPromptIfNeeded(terminalService, session = {}) {
       promptId: String(handoff.promptId || ""),
       sessionId: session.sessionId
     });
-    if (
-      delivery.attentionRequired === true ||
-      String(delivery.terminalSessionId || delivery.id || "").trim()
-    ) {
-      return {
-        ...session,
-        codexPromptDelivery: delivery
-      };
-    }
     throw new Error(delivery.error || "Vibe64 Codex prompt delivery failed.");
   }
   vibe64SessionDebugLog("server.service.deliverCodexPrompt.done", {
@@ -278,8 +333,12 @@ async function deliverCodexPromptIfNeeded(terminalService, session = {}) {
     sessionId: session.sessionId,
     terminalSessionId: String(delivery?.terminalSessionId || "")
   });
+  const latestSession = runtime
+    ? await sessionWithLatestRevision(runtime, session)
+    : session;
   return {
-    ...session,
+    ...latestSession,
+    ...codexPromptDeliverySessionState(delivery),
     codexPromptDelivery: delivery
   };
 }
@@ -658,6 +717,7 @@ function createService({
             fromStepId: session.currentStep,
             workflowDefinition: definitionSelection.definitionId
           });
+          await prepareCodexThreadForSession(terminalService, advancedSession);
           const enrichedSession = await enrichSessionWithCodexTerminal(terminalService, advancedSession);
           vibe64SessionDebugLog("server.service.createSession.done", {
             ...sessionServiceDebugResponse(enrichedSession),
@@ -854,6 +914,7 @@ function createService({
                 durationMs: vibe64SessionDebugDurationMs(startedAtMs),
                 workflowDefinition
               });
+              await prepareCodexThreadForSession(terminalService, advancedSession);
             });
             sessions = await listSessionSummaries(runtime, options.runtimeOptions);
             openSessions = isOpenSessionList(options)
@@ -909,7 +970,9 @@ function createService({
           }
           const enrichedSession = await enrichSessionWithCodexTerminal(
             terminalService,
-            await deliverCodexPromptIfNeeded(terminalService, session)
+            await deliverCodexPromptIfNeeded(terminalService, session, {
+              runtime
+            })
           );
           vibe64SessionDebugLog("server.service.runSessionAction.done", {
             ...sessionServiceDebugResponse(enrichedSession),
@@ -961,7 +1024,9 @@ function createService({
           }
           const enrichedSession = await enrichSessionWithCodexTerminal(
             terminalService,
-            await deliverCodexPromptIfNeeded(terminalService, session)
+            await deliverCodexPromptIfNeeded(terminalService, session, {
+              runtime
+            })
           );
           vibe64SessionDebugLog("server.service.runSessionIntent.done", {
             ...sessionServiceDebugResponse(enrichedSession),

@@ -210,24 +210,24 @@ test("vibe64 session store persists background task status with retry metadata",
       sessionId: "background_task_status"
     });
 
-    await store.writeBackgroundTaskEvent("background_task_status", "codex_bootstrap", {
+    await store.writeBackgroundTaskEvent("background_task_status", "codex_app_server", {
       event: {
         kind: "started"
       },
       patch: {
-        kind: "codex_bootstrap",
-        label: "Codex bootstrap",
+        kind: "codex_app_server",
+        label: "Codex app-server",
         message: "Preparing Codex.",
         status: "running"
       }
     });
-    await store.writeBackgroundTaskEvent("background_task_status", "codex_bootstrap", {
+    await store.writeBackgroundTaskEvent("background_task_status", "codex_app_server", {
       event: {
         kind: "failed"
       },
       patch: {
         error: "Create the session worktree before starting Codex.",
-        message: "Codex bootstrap failed.",
+        message: "Codex app-server preparation failed.",
         retry: {
           clientAction: VIBE64_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL,
           label: "Retry Codex"
@@ -236,7 +236,7 @@ test("vibe64 session store persists background task status with retry metadata",
       }
     });
 
-    const task = await store.readBackgroundTask("background_task_status", "codex_bootstrap");
+    const task = await store.readBackgroundTask("background_task_status", "codex_app_server");
     assert.deepEqual({
       error: task.error,
       eventKinds: task.events.map((event) => event.kind),
@@ -247,8 +247,8 @@ test("vibe64 session store persists background task status with retry metadata",
     }, {
       error: "Create the session worktree before starting Codex.",
       eventKinds: ["started", "failed"],
-      id: "codex_bootstrap",
-      label: "Codex bootstrap",
+      id: "codex_app_server",
+      label: "Codex app-server",
       retry: {
         clientAction: VIBE64_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL,
         label: "Retry Codex"
@@ -256,7 +256,7 @@ test("vibe64 session store persists background task status with retry metadata",
       status: "failed"
     });
     assert.deepEqual((await store.readSession("background_task_status")).backgroundTasks.map((entry) => entry.id), [
-      "codex_bootstrap"
+      "codex_app_server"
     ]);
   });
 });

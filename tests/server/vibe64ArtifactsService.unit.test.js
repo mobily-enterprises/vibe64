@@ -558,6 +558,56 @@ test("Vibe64 current-step helper accepts --json with stdin payload", async () =>
   });
 });
 
+test("Vibe64 current-step helper exposes host wrapper commands for app-server turns", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "issue_file_created",
+      metadata: worktreeMetadata(targetRoot, "step_input_helper_host"),
+      sessionId: "step_input_helper_host"
+    });
+    await runtime.runAction("step_input_helper_host", "draft_issue", {
+      conversationRequest: "Create a booking dashboard."
+    });
+    const projectService = projectServiceForRuntime(runtime);
+    const session = await runtime.getSession("step_input_helper_host");
+    const helper = await prepareCurrentStepInputHelper({
+      projectService,
+      session,
+      targetRoot
+    });
+
+    assert.equal(helper.hostEnv.VIBE64_CURRENT_STEP_INPUT_SOCKET, helperSocketHostPath(targetRoot));
+    assert.match(helper.host.commands.currentStepInput, /^node /u);
+
+    const result = await runNodeScript(helper.host.currentStepInputHelper, [
+      "--json",
+      JSON.stringify({
+        fields: {
+          body: "Create a booking dashboard.",
+          title: "Add booking dashboard",
+          word: "Booking"
+        },
+        kind: "ready",
+        stepId: "issue_file_created",
+        stepStatus: "awaiting_agent_result"
+      })
+    ]);
+
+    assert.equal(result.code, 0, result.stderr || result.stdout);
+    const response = JSON.parse(result.stdout);
+    assert.deepEqual(response, {
+      ok: true,
+      sessionId: "step_input_helper_host",
+      currentStep: "issue_file_created",
+      stepStatus: "confirm_files",
+      status: "active"
+    });
+  });
+});
+
 test("Vibe64 terminal chat helper mirrors direct terminal exchanges into the conversation log", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = new Vibe64SessionRuntime({
@@ -611,6 +661,56 @@ test("Vibe64 terminal chat helper mirrors direct terminal exchanges into the con
       ]
     ]);
     assert.deepEqual(changedSessionIds, ["terminal_chat_helper"]);
+  });
+});
+
+test("Vibe64 terminal chat helper accepts response-only terminal chat payloads", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "maintenance_conversation",
+      sessionId: "terminal_chat_helper_response_only",
+      workflowDefinition: maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
+    });
+    await runtime.store.writeConversationUserMessage("terminal_chat_helper_response_only", {
+      text: "This came from a Codex app-server userMessage event."
+    });
+    const projectService = projectServiceForRuntime(runtime);
+    const session = await runtime.getSession("terminal_chat_helper_response_only");
+    const changedSessionIds = [];
+    const helper = await prepareCurrentStepInputHelper({
+      onSessionChanged: async (sessionId) => {
+        changedSessionIds.push(sessionId);
+      },
+      projectService,
+      session,
+      targetRoot
+    });
+
+    const result = await runNodeScript(helper.env.VIBE64_TERMINAL_CHAT_HELPER, [
+      "--json",
+      JSON.stringify({
+        response: "This answer should complete the existing terminal-origin turn."
+      })
+    ], {
+      ...helper.env,
+      VIBE64_TERMINAL_CHAT_SOCKET: helperSocketHostPath(targetRoot)
+    });
+
+    assert.equal(result.code, 0, result.stderr || result.stdout);
+    const conversationLog = await runtime.store.readConversationLog("terminal_chat_helper_response_only");
+    assert.deepEqual(conversationLog.map((turn) => [
+      turn.user?.text,
+      turn.assistant?.text
+    ]), [
+      [
+        "This came from a Codex app-server userMessage event.",
+        "This answer should complete the existing terminal-origin turn."
+      ]
+    ]);
+    assert.deepEqual(changedSessionIds, ["terminal_chat_helper_response_only"]);
   });
 });
 

@@ -269,8 +269,8 @@ function currentStepInputHelperBriefing() {
     "Vibe64 terminal chat mirror helper:",
     "- Command: node \"$VIBE64_TERMINAL_CHAT_HELPER\"",
     "- If you later receive a user prompt that does not include `VIBE64_ROUTED_TURN`, treat it as direct Codex terminal input.",
-    "- For direct terminal input, answer normally and best-effort call this helper with `request` and `response` fields.",
-    "- This helper only mirrors the exchange into Vibe64 chat; it does not advance workflow state."
+    "- For direct terminal input, answer normally and best-effort call this helper with a `response` field only.",
+    "- Vibe64 mirrors the terminal user prompt from Codex app-server events; this helper only mirrors the assistant response into Vibe64 chat and does not advance workflow state."
   ].join("\n");
 }
 

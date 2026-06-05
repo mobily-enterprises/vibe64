@@ -577,7 +577,7 @@ function promptWithConversationTurnContext({
       "- Always submit the user-visible answer through the current-step input helper.",
       "- A terminal-only answer is incomplete.",
       "- If the helper reports Reload state or a state mismatch, stop immediately; Vibe64 will show the current state.",
-      "- Direct terminal fallback: if a later user prompt does not include `VIBE64_ROUTED_TURN`, answer normally and best-effort call `node \"$VIBE64_TERMINAL_CHAT_HELPER\"` with `request` and `response`; this only mirrors the exchange into Vibe64 chat."
+      "- Direct terminal input routing: if a later user prompt does not include `VIBE64_ROUTED_TURN`, answer normally and best-effort call `node \"$VIBE64_TERMINAL_CHAT_HELPER\"` with a `response` field only. Vibe64 mirrors the terminal user prompt from Codex app-server events."
     ].join("\n"),
     String(prompt || "").trim()
   ]

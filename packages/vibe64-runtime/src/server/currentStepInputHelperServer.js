@@ -13,6 +13,8 @@ const HELPER_SOCKET_CONTAINER_DIR = "/vibe64-helper";
 const HELPER_SOCKET_NAME = `current-step-input-${process.pid}.sock`;
 const HELPER_SCRIPT_NAME = "vibe64-current-step-input.mjs";
 const TERMINAL_CHAT_HELPER_SCRIPT_NAME = "vibe64-terminal-chat.mjs";
+const HOST_HELPER_SCRIPT_NAME = "vibe64-current-step-input-host.mjs";
+const HOST_TERMINAL_CHAT_HELPER_SCRIPT_NAME = "vibe64-terminal-chat-host.mjs";
 const MAX_HELPER_BODY_BYTES = 128 * 1024;
 const TOKEN_SECRET = randomBytes(32);
 const helperServers = new Map();
@@ -57,6 +59,14 @@ function helperScriptHostPath(session = {}) {
 
 function terminalChatHelperScriptHostPath(session = {}) {
   return path.join(path.resolve(session.sessionRoot), "helpers", TERMINAL_CHAT_HELPER_SCRIPT_NAME);
+}
+
+function hostHelperScriptHostPath(session = {}) {
+  return path.join(path.resolve(session.sessionRoot), "helpers", HOST_HELPER_SCRIPT_NAME);
+}
+
+function hostTerminalChatHelperScriptHostPath(session = {}) {
+  return path.join(path.resolve(session.sessionRoot), "helpers", HOST_TERMINAL_CHAT_HELPER_SCRIPT_NAME);
 }
 
 function helperRequestToken(request) {
@@ -224,7 +234,7 @@ function parsePayload(text) {
     const parsed = JSON.parse(String(text || "").trim() || "{}");
     return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
   } catch {
-    throw new Error("Usage: vibe64-terminal-chat --json '{\\"request\\":\\"...\\",\\"response\\":\\"...\\"}' or pipe JSON on stdin.");
+    throw new Error("Usage: vibe64-terminal-chat --json '{\\"response\\":\\"...\\"}' or pipe JSON on stdin.");
   }
 }
 
@@ -286,19 +296,27 @@ try {
 `;
 }
 
-function helperEnvironment(session = {}, targetRoot = "") {
+function helperEnvironment(session = {}, targetRoot = "", {
+  socketPath = helperSocketContainerPath(targetRoot)
+} = {}) {
   const scriptPath = helperScriptHostPath(session);
   const terminalChatScriptPath = terminalChatHelperScriptHostPath(session);
   return {
     VIBE64_CURRENT_STEP_INPUT_HELPER: scriptPath,
     VIBE64_CURRENT_STEP_INPUT_SESSION: session.sessionId,
-    VIBE64_CURRENT_STEP_INPUT_SOCKET: helperSocketContainerPath(targetRoot),
+    VIBE64_CURRENT_STEP_INPUT_SOCKET: socketPath,
     VIBE64_CURRENT_STEP_INPUT_TOKEN: currentStepInputToken(session.sessionId),
     VIBE64_TERMINAL_CHAT_HELPER: terminalChatScriptPath,
     VIBE64_TERMINAL_CHAT_SESSION: session.sessionId,
-    VIBE64_TERMINAL_CHAT_SOCKET: helperSocketContainerPath(targetRoot),
+    VIBE64_TERMINAL_CHAT_SOCKET: socketPath,
     VIBE64_TERMINAL_CHAT_TOKEN: currentStepInputToken(session.sessionId)
   };
+}
+
+function hostHelperEnvironment(session = {}, targetRoot = "") {
+  return helperEnvironment(session, targetRoot, {
+    socketPath: helperSocketHostPath(targetRoot)
+  });
 }
 
 function helperMount(targetRoot = "") {
@@ -326,6 +344,55 @@ async function writeTerminalChatHelperScript(session = {}) {
   await writeFile(scriptPath, terminalChatHelperScriptSource(), "utf8");
   await chmod(scriptPath, 0o755);
   return scriptPath;
+}
+
+function hostHelperWrapperScriptSource({
+  delegateScriptPath = "",
+  env = {}
+} = {}) {
+  return `#!/usr/bin/env node
+import { pathToFileURL } from "node:url";
+
+${Object.entries(env).map(([name, value]) => (
+    `process.env.${name} = ${JSON.stringify(String(value || ""))};`
+  )).join("\n")}
+
+await import(pathToFileURL(${JSON.stringify(delegateScriptPath)}).href);
+`;
+}
+
+async function writeHostHelperWrapperScript({
+  delegateScriptPath = "",
+  env = {},
+  scriptPath = ""
+} = {}) {
+  await mkdir(path.dirname(scriptPath), {
+    recursive: true
+  });
+  await writeFile(scriptPath, hostHelperWrapperScriptSource({
+    delegateScriptPath,
+    env
+  }), "utf8");
+  await chmod(scriptPath, 0o755);
+  return scriptPath;
+}
+
+function shellQuote(value = "") {
+  const text = String(value || "");
+  if (/^[A-Za-z0-9_./:=@+-]+$/u.test(text)) {
+    return text;
+  }
+  return `'${text.replaceAll("'", "'\"'\"'")}'`;
+}
+
+function hostHelperCommands({
+  currentStepInputHelper = "",
+  terminalChatHelper = ""
+} = {}) {
+  return {
+    currentStepInput: currentStepInputHelper ? `node ${shellQuote(currentStepInputHelper)}` : "",
+    terminalChat: terminalChatHelper ? `node ${shellQuote(terminalChatHelper)}` : ""
+  };
 }
 
 async function ensureHelperServer({
@@ -417,10 +484,38 @@ async function prepareCurrentStepInputHelper({
     projectService,
     targetRoot
   });
-  await writeHelperScript(session);
-  await writeTerminalChatHelperScript(session);
+  const currentStepInputHelper = await writeHelperScript(session);
+  const terminalChatHelper = await writeTerminalChatHelperScript(session);
+  const hostEnv = hostHelperEnvironment(session, targetRoot);
+  const hostCurrentStepInputHelper = await writeHostHelperWrapperScript({
+    delegateScriptPath: currentStepInputHelper,
+    env: {
+      VIBE64_CURRENT_STEP_INPUT_SESSION: hostEnv.VIBE64_CURRENT_STEP_INPUT_SESSION,
+      VIBE64_CURRENT_STEP_INPUT_SOCKET: hostEnv.VIBE64_CURRENT_STEP_INPUT_SOCKET,
+      VIBE64_CURRENT_STEP_INPUT_TOKEN: hostEnv.VIBE64_CURRENT_STEP_INPUT_TOKEN
+    },
+    scriptPath: hostHelperScriptHostPath(session)
+  });
+  const hostTerminalChatHelper = await writeHostHelperWrapperScript({
+    delegateScriptPath: terminalChatHelper,
+    env: {
+      VIBE64_TERMINAL_CHAT_SESSION: hostEnv.VIBE64_TERMINAL_CHAT_SESSION,
+      VIBE64_TERMINAL_CHAT_SOCKET: hostEnv.VIBE64_TERMINAL_CHAT_SOCKET,
+      VIBE64_TERMINAL_CHAT_TOKEN: hostEnv.VIBE64_TERMINAL_CHAT_TOKEN
+    },
+    scriptPath: hostTerminalChatHelperScriptHostPath(session)
+  });
   return {
     env: helperEnvironment(session, targetRoot),
+    host: {
+      commands: hostHelperCommands({
+        currentStepInputHelper: hostCurrentStepInputHelper,
+        terminalChatHelper: hostTerminalChatHelper
+      }),
+      currentStepInputHelper: hostCurrentStepInputHelper,
+      terminalChatHelper: hostTerminalChatHelper
+    },
+    hostEnv,
     mount: helperMount(targetRoot)
   };
 }
@@ -431,5 +526,6 @@ export {
   helperEnvironment,
   helperSocketHostPath,
   helperSocketContainerPath,
+  hostHelperEnvironment,
   prepareCurrentStepInputHelper
 };

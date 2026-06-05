@@ -27,8 +27,8 @@ describe("useVibe64BackgroundTasks", () => {
         backgroundTasks: [
           {
             error: "  no worktree  ",
-            id: "codex_bootstrap",
-            label: "Codex bootstrap",
+            id: "codex_app_server",
+            label: "Codex app-server",
             message: "failed",
             retry: {
               control: {
@@ -48,8 +48,8 @@ describe("useVibe64BackgroundTasks", () => {
     })).toEqual([
       {
         error: "no worktree",
-        id: "codex_bootstrap",
-        label: "Codex bootstrap",
+        id: "codex_app_server",
+        label: "Codex app-server",
         message: "failed",
         retry: {
           control: {
@@ -73,7 +73,7 @@ describe("useVibe64BackgroundTasks", () => {
       presentation: {
         backgroundTasks: [
           {
-            id: "codex_bootstrap",
+            id: "codex_app_server",
             retry: {
               control: {
                 action: VIBE64_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL

@@ -26,19 +26,6 @@
         </div>
         <div class="studio-ai-sessions__codex-attention-actions">
           <v-btn
-            v-if="codexRecoveryAvailable"
-            class="studio-ai-sessions__codex-attention-action"
-            color="primary"
-            :loading="codexRecoveryBusy"
-            :prepend-icon="mdiPlayCircleOutline"
-            size="small"
-            type="button"
-            variant="flat"
-            @click="resumeCodexFromAttention"
-          >
-            Continue agent
-          </v-btn>
-          <v-btn
             v-if="compactTerminalCollapsed"
             class="studio-ai-sessions__codex-attention-action"
             :prepend-icon="mdiConsoleLine"
@@ -61,9 +48,6 @@
           />
         </div>
       </header>
-      <div v-if="compactMode && codexRecoveryError" class="studio-ai-sessions__codex-attention-error">
-        {{ codexRecoveryError }}
-      </div>
       <CodexSessionTerminal
         class="studio-ai-sessions__codex-terminal"
         ref="codexTerminalComponent"
@@ -139,7 +123,6 @@ import { computed, nextTick, ref, watch } from "vue";
 import {
   mdiClose,
   mdiConsoleLine,
-  mdiPlayCircleOutline,
   mdiRobotOutline
 } from "@mdi/js";
 import Vibe64FixCodexDialog from "@/components/studio/Vibe64FixCodexDialog.vue";
@@ -172,10 +155,6 @@ const props = defineProps({
     type: String
   },
   codexTerminalState: {
-    default: null,
-    type: Object
-  },
-  codexRecovery: {
     default: null,
     type: Object
   },
@@ -237,9 +216,6 @@ const codexListenWhenHidden = computed(() => Boolean(
     )
   )
 ));
-const codexRecoveryAvailable = computed(() => typeof props.codexRecovery?.resume === "function");
-const codexRecoveryBusy = computed(() => Boolean(props.codexRecovery?.running));
-const codexRecoveryError = computed(() => String(props.codexRecovery?.error || ""));
 const terminalRootStyle = computed(() => {
   return compactMode.value && compactTerminalCollapsed.value
     ? { height: "auto" }
@@ -291,22 +267,6 @@ async function interruptCodexTerminal() {
     return false;
   }
   return await terminal.sendEscape();
-}
-
-async function resumeCodexFromAttention() {
-  if (!codexRecoveryAvailable.value || codexRecoveryBusy.value) {
-    return;
-  }
-  hideCompactTerminal();
-  try {
-    const result = await props.codexRecovery.resume();
-    if (result?.ok === false) {
-      showCompactTerminal();
-    }
-  } catch (error) {
-    showCompactTerminal();
-    throw error;
-  }
 }
 
 function focusCodexTerminalSoon() {

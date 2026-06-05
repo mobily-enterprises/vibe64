@@ -17,6 +17,7 @@ import {
 const CODEX_AFTER_COMMAND_THREAD_PREP_ENABLED = false;
 
 function createService({
+  codexTerminalController = {},
   projectService,
   publishSessionChanged = {}
 } = {}) {
@@ -25,6 +26,7 @@ function createService({
   }
 
   const codex = createCodexTerminalController({
+    ...codexTerminalController,
     projectService,
     publishPromptInjected: publishSessionChanged.codexPrompt,
     publishSessionChanged: publishSessionChanged.codexTerminal
@@ -110,6 +112,10 @@ function createService({
 
     injectCodexPrompt(sessionId, handoff = {}) {
       return codex.injectCodexPrompt(sessionId, handoff);
+    },
+
+    interruptCodexTurn(sessionId) {
+      return codex.interruptTurn(sessionId);
     },
 
     injectGlobalCodexPrompt(handoff = {}) {

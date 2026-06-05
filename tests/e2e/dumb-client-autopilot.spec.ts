@@ -919,15 +919,21 @@ test.describe("Autopilot dumb client contract", () => {
     await expect.poll(() => commandTerminalStarts).toBe(2);
   });
 
-  test("asks the server to continue Codex before surfacing a quiet terminal", async ({ page }) => {
+  test("uses app-server turn state for Codex thinking without opening the terminal", async ({ page }) => {
     await mockCodexTerminalPreviewSocket(page);
     let codexTerminalStartRequests = 0;
     const session = sessionPayload({
+      codexAgentTurn: {
+        active: true,
+        state: "active",
+        status: "inProgress",
+        turnId: "codex-app-server-turn"
+      },
+      codexAgentTurnActive: true,
       codexTerminal: {
         commandPreview: "codex",
         id: "server-codex-terminal",
-        status: "running",
-        transmitting: true
+        status: "running"
       },
       presentation: {
         auto: {
@@ -982,21 +988,20 @@ test.describe("Autopilot dumb client contract", () => {
     await expect.poll(async () => page.evaluate(() => (
       (window as unknown as { __vibe64CodexTerminalInputs?: string[] }).__vibe64CodexTerminalInputs || []
     ))).toEqual([]);
-    await page.waitForTimeout(5100);
-    await expect.poll(() => codexTerminalStartRequests).toBe(1);
+    await page.waitForTimeout(700);
+    await expect.poll(() => codexTerminalStartRequests).toBe(0);
     await expect(page.locator(".studio-ai-sessions__terminals--compact .codex-terminal__host")).toHaveCount(0);
     await expect(page.getByText("Your agent needs attention")).toHaveCount(0);
     await expect(page.locator(".studio-ai-sessions__codex-thinking-overlay")).toBeVisible();
   });
 
-  test("surfaces a failed Codex bootstrap terminal even when the workflow is waiting for user input", async ({ page }) => {
+  test("does not surface Codex app-server preparation failure as terminal control", async ({ page }) => {
     await mockCodexTerminalPreviewSocket(page);
     const session = sessionPayload({
       codexTerminal: {
         commandPreview: "codex",
         id: "server-codex-terminal",
-        status: "running",
-        transmitting: false
+        status: "running"
       },
       currentStepDefinition: {
         id: "server_step",
@@ -1012,11 +1017,11 @@ test.describe("Autopilot dumb client contract", () => {
         },
         backgroundTasks: [
           {
-            error: "Codex is waiting for terminal input.",
-            id: "codex_bootstrap",
-            kind: "codex_bootstrap",
-            label: "Codex bootstrap",
-            message: "Codex bootstrap failed.",
+            error: "Codex app-server preparation failed.",
+            id: "codex_app_server",
+            kind: "codex_app_server",
+            label: "Codex app-server",
+            message: "Codex app-server preparation failed.",
             retry: {
               control: {
                 action: "start_codex_terminal"
@@ -1072,23 +1077,15 @@ test.describe("Autopilot dumb client contract", () => {
 
     await page.goto(`${BASE_URL}/home`);
 
-    await expect(page.getByText("Your agent needs attention")).toBeVisible();
-    await expect(page.locator(".studio-ai-sessions__terminals--compact .codex-terminal__host")).toBeVisible();
+    await expect(page.getByText("Your agent needs attention")).toHaveCount(0);
+    await expect(page.locator(".studio-ai-sessions__terminals--compact .codex-terminal__host")).toHaveCount(0);
     await expect(page.locator(".studio-autopilot")).not.toHaveAttribute("inert", "");
     await expect.poll(async () => page.evaluate(() => (
       (window as unknown as { __vibe64CodexTerminalSocketCount?: () => number }).__vibe64CodexTerminalSocketCount?.() || 0
-    ))).toBe(1);
-    await expect.poll(async () => page.evaluate(() => {
-      const host = document.querySelector(".studio-ai-sessions__terminals--compact .codex-terminal__host");
-      const activeElement = document.activeElement;
-      return Boolean(host && activeElement && host.contains(activeElement));
-    })).toBe(true);
-
-    await page.keyboard.type("yes");
-    await page.keyboard.press("Enter");
+    ))).toBe(0);
     await expect.poll(async () => page.evaluate(() => (
       ((window as unknown as { __vibe64CodexTerminalInputs?: string[] }).__vibe64CodexTerminalInputs || []).join("")
-    ))).toContain("yes");
+    ))).toBe("");
   });
 
   test("does not expose the selected session Codex terminal from Autopilot", async ({ page }) => {
@@ -1173,8 +1170,7 @@ test.describe("Autopilot dumb client contract", () => {
       codexTerminal: {
         commandPreview: "codex",
         id: "server-codex-terminal",
-        status: "running",
-        transmitting: true
+        status: "running"
       },
       currentStepDefinition: {
         id: "server_step",
@@ -1258,8 +1254,7 @@ test.describe("Autopilot dumb client contract", () => {
         id: "server-codex-terminal",
         lastInputAt: new Date().toISOString(),
         lastInputBytes: 2048,
-        status: "running",
-        transmitting: false
+        status: "running"
       },
       presentation: {
         auto: {

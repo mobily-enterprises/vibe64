@@ -672,10 +672,6 @@ const props = defineProps({
     default: false,
     type: Boolean
   },
-  codexTerminalAttention: {
-    default: false,
-    type: Boolean
-  },
   commandRunner: {
     default: null,
     type: Object
@@ -1507,14 +1503,6 @@ watch(() => [
   }
 }, {
   flush: "post",
-  immediate: true
-});
-
-watch(() => props.codexTerminalAttention, (needsAttention) => {
-  if (needsAttention) {
-    selectRightPaneTab("ai-terminal");
-  }
-}, {
   immediate: true
 });
 

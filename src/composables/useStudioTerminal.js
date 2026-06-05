@@ -633,7 +633,12 @@ function useStudioTerminal({
     if (!(await setupTerminalUi())) {
       return false;
     }
-    terminalInstance?.focus?.();
+    try {
+      terminalInstance?.focus?.();
+    } catch (error) {
+      terminalError.value = String(error?.message || error || "Terminal focus failed.");
+      return false;
+    }
     syncTerminalFocus();
     return true;
   }
