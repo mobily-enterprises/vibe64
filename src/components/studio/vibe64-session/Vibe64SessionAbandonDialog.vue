@@ -1,12 +1,16 @@
 <template>
   <v-dialog
+    aria-labelledby="vibe64-session-abandon-dialog-title"
     :model-value="abandon.open"
     max-width="520"
     persistent
     @update:model-value="updateOpen"
   >
     <v-card class="studio-ai-session-abandon-dialog">
-      <v-card-title class="studio-ai-session-abandon-dialog__title">
+      <v-card-title
+        id="vibe64-session-abandon-dialog-title"
+        class="studio-ai-session-abandon-dialog__title"
+      >
         <v-icon :icon="mdiAlertCircleOutline" color="warning" />
         Abandon session?
       </v-card-title>

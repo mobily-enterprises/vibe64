@@ -6,6 +6,17 @@ function registerVibe64WorkspaceRoutes(app, projectContext) {
   });
 
   app.post(WORKSPACE_API_BASE, async (request, reply) => {
+    if (request.vibe64User?.role !== "owner") {
+      return reply.code(403).send({
+        ok: false,
+        errors: [
+          {
+            code: "vibe64_owner_required",
+            message: "Only owners can create Vibe64 workspaces."
+          }
+        ]
+      });
+    }
     return workspaceRouteResult(
       () => projectContext.createManagedWorkspace(request.body || {}),
       reply

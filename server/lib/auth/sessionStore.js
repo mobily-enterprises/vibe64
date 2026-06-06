@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const DEFAULT_SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
@@ -32,6 +32,7 @@ function createFileSessionStore({
       email: String(user.email || ""),
       expiresAt: new Date(now.getTime() + ttl * 1000).toISOString(),
       id,
+      supabaseUserId: String(user.supabaseUserId || ""),
       tokenHash: tokenDigest(token),
       version: 1
     };
@@ -68,6 +69,41 @@ function createFileSessionStore({
     });
   }
 
+  async function destroySessionsForUser({
+    email = "",
+    supabaseUserId = ""
+  } = {}) {
+    await ensureRoot();
+    const normalizedEmail = String(email || "").trim().toLowerCase();
+    const normalizedSupabaseUserId = String(supabaseUserId || "").trim();
+    if (!normalizedEmail && !normalizedSupabaseUserId) {
+      return 0;
+    }
+    const entries = await readdir(root, {
+      withFileTypes: true
+    });
+    let destroyed = 0;
+    for (const entry of entries) {
+      if (!entry.isFile() || !entry.name.endsWith(".json")) {
+        continue;
+      }
+      const record = await readSessionRecord(entry.name.slice(0, -".json".length));
+      if (!record) {
+        continue;
+      }
+      const recordEmail = String(record.email || "").trim().toLowerCase();
+      const recordSupabaseUserId = String(record.supabaseUserId || "").trim();
+      if (
+        (normalizedSupabaseUserId && recordSupabaseUserId === normalizedSupabaseUserId) ||
+        (normalizedEmail && recordEmail === normalizedEmail)
+      ) {
+        await destroySession(record.id);
+        destroyed += 1;
+      }
+    }
+    return destroyed;
+  }
+
   async function writeSession(record = {}) {
     const filePath = sessionPath(record.id);
     const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
@@ -96,6 +132,7 @@ function createFileSessionStore({
   return Object.freeze({
     createSession,
     destroySession,
+    destroySessionsForUser,
     readSession,
     sessionsRoot: root,
     ttlSeconds: ttl

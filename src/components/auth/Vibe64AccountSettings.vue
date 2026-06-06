@@ -1,15 +1,21 @@
 <script setup>
-import { reactive, ref } from "vue";
+import { computed, reactive, ref } from "vue";
 import {
   mdiLockReset
 } from "@mdi/js";
 import AccountsSetup from "@/components/studio/AccountsSetup.vue";
 import {
-  changePassword
-} from "@/lib/vibe64AuthApi.js";
+  useVibe64AppAuth
+} from "@/composables/useVibe64AppAuth.js";
+import {
+  passwordResetRedirectTo,
+  vibe64SupabaseClient
+} from "@/lib/vibe64SupabaseAuth.js";
 
 const passwordStatus = ref("");
 const error = ref("");
+const auth = useVibe64AppAuth();
+const user = computed(() => auth?.state?.user || null);
 const passwordForm = reactive({
   oldPassword: "",
   password: "",
@@ -19,15 +25,47 @@ const passwordForm = reactive({
 async function submitPasswordChange() {
   passwordStatus.value = "";
   error.value = "";
-  const response = await changePassword(passwordForm);
-  if (response.ok === false) {
-    error.value = response.error || response.message || "Password change failed.";
+  if (passwordForm.password !== passwordForm.passwordConfirmation) {
+    error.value = "Passwords do not match.";
     return;
   }
-  passwordForm.oldPassword = "";
-  passwordForm.password = "";
-  passwordForm.passwordConfirmation = "";
-  passwordStatus.value = "Password changed.";
+  try {
+    const supabase = await vibe64SupabaseClient();
+    const { error: updateError } = await supabase.auth.updateUser({
+      currentPassword: passwordForm.oldPassword,
+      password: passwordForm.password
+    });
+    if (updateError) {
+      throw updateError;
+    }
+    passwordForm.oldPassword = "";
+    passwordForm.password = "";
+    passwordForm.passwordConfirmation = "";
+    passwordStatus.value = "Password changed.";
+  } catch (updateError) {
+    error.value = String(updateError?.message || updateError || "Password change failed.");
+  }
+}
+
+async function sendPasswordResetEmail() {
+  passwordStatus.value = "";
+  error.value = "";
+  try {
+    const email = String(user.value?.email || "").trim();
+    if (!email) {
+      throw new Error("Current user email is unavailable.");
+    }
+    const supabase = await vibe64SupabaseClient();
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: passwordResetRedirectTo()
+    });
+    if (resetError) {
+      throw resetError;
+    }
+    passwordStatus.value = "Password reset email sent.";
+  } catch (resetError) {
+    error.value = String(resetError?.message || resetError || "Password reset failed.");
+  }
 }
 </script>
 
@@ -79,6 +117,7 @@ async function submitPasswordChange() {
         />
         <div class="vibe64-account-settings__actions">
           <v-btn color="primary" type="submit" variant="flat">Change password</v-btn>
+          <v-btn type="button" variant="text" @click="sendPasswordResetEmail">Send reset email</v-btn>
           <span v-if="passwordStatus">{{ passwordStatus }}</span>
         </div>
       </form>

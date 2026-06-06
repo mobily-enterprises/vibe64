@@ -51,19 +51,10 @@ async function withTargetRoot(_targetRoot, workspace, callback) {
   try {
     app = await createServer({
       authDataRoot,
-      projectsRoot: workspace.projectsRoot
+      projectsRoot: workspace.projectsRoot,
+      verifySupabaseAccessToken: fakeVerifySupabaseAccessToken
     });
-    const setup = await app.inject({
-      method: "POST",
-      payload: {
-        email: "owner@example.com",
-        password: "owner-password",
-        passwordConfirmation: "owner-password"
-      },
-      url: "/api/auth/setup-owner"
-    });
-    assert.equal(setup.statusCode, 200);
-    const cookie = setup.headers["set-cookie"];
+    const cookie = await authenticateOwner(app);
     const authHeaders = {
       cookie: Array.isArray(cookie) ? cookie[0] : cookie
     };
@@ -109,7 +100,8 @@ test("GET /api/health returns built-in health response", async () => {
 test("protected API routes require Vibe64 login", async () => {
   const authDataRoot = await mkdtemp(path.join(tmpdir(), "vibe64-auth-required-"));
   const app = await createServer({
-    authDataRoot
+    authDataRoot,
+    verifySupabaseAccessToken: fakeVerifySupabaseAccessToken
   });
   try {
     const response = await app.inject({
@@ -130,7 +122,8 @@ test("protected API routes require Vibe64 login", async () => {
 test("browser lifecycle WebSocket requires Vibe64 login", async () => {
   const authDataRoot = await mkdtemp(path.join(tmpdir(), "vibe64-auth-ws-"));
   const app = await createServer({
-    authDataRoot
+    authDataRoot,
+    verifySupabaseAccessToken: fakeVerifySupabaseAccessToken
   });
   try {
     await app.listen({
@@ -144,17 +137,7 @@ test("browser lifecycle WebSocket requires Vibe64 login", async () => {
     assert.equal(rejected.ok, false);
     assert.equal(rejected.statusCode, 401);
 
-    const setup = await app.inject({
-      method: "POST",
-      payload: {
-        email: "owner@example.com",
-        password: "owner-password",
-        passwordConfirmation: "owner-password"
-      },
-      url: "/api/auth/setup-owner"
-    });
-    assert.equal(setup.statusCode, 200);
-    const cookie = setup.headers["set-cookie"];
+    const cookie = await authenticateOwner(app);
     const accepted = await connectWebSocket(socketUrl, {
       headers: {
         Cookie: Array.isArray(cookie) ? cookie[0] : cookie
@@ -180,7 +163,8 @@ test("management workspace API lists and creates slugs without global selection"
   const projectsRoot = await mkdtemp(path.join(tmpdir(), "vibe64-workspaces-"));
   const app = await createServer({
     authDataRoot,
-    projectsRoot
+    projectsRoot,
+    verifySupabaseAccessToken: fakeVerifySupabaseAccessToken
   });
   try {
     const blocked = await app.inject({
@@ -189,20 +173,32 @@ test("management workspace API lists and creates slugs without global selection"
     });
     assert.equal(blocked.statusCode, 401);
 
-    const setup = await app.inject({
-      method: "POST",
-      payload: {
-        email: "owner@example.com",
-        password: "owner-password",
-        passwordConfirmation: "owner-password"
-      },
-      url: "/api/auth/setup-owner"
-    });
-    assert.equal(setup.statusCode, 200);
-    const cookie = setup.headers["set-cookie"];
+    const cookie = await authenticateOwner(app);
     const authHeaders = {
       cookie: Array.isArray(cookie) ? cookie[0] : cookie
     };
+    const memberCookie = await authenticateMember(app);
+    const memberHeaders = {
+      cookie: Array.isArray(memberCookie) ? memberCookie[0] : memberCookie
+    };
+
+    const memberListed = await app.inject({
+      headers: memberHeaders,
+      method: "GET",
+      url: WORKSPACE_API_BASE
+    });
+    assert.equal(memberListed.statusCode, 200);
+
+    const memberCreate = await app.inject({
+      headers: memberHeaders,
+      method: "POST",
+      payload: {
+        slug: "member_workspace"
+      },
+      url: WORKSPACE_API_BASE
+    });
+    assert.equal(memberCreate.statusCode, 403);
+    assert.equal(memberCreate.json().errors[0].code, "vibe64_owner_required");
 
     const created = await app.inject({
       headers: authHeaders,
@@ -303,6 +299,52 @@ test("started server publishes management mode as the browser entry URL", async 
     await app.close();
   }
 });
+
+async function authenticateOwner(app) {
+  const response = await app.inject({
+    method: "POST",
+    payload: {
+      accessToken: "owner-token"
+    },
+    url: "/api/auth/supabase-session"
+  });
+  assert.equal(response.statusCode, 200);
+  return response.headers["set-cookie"];
+}
+
+async function authenticateMember(app) {
+  const invite = await app.vibe64Auth.users.inviteUser({
+    email: "member@example.com"
+  });
+  assert.equal(invite.status, "invited");
+  const response = await app.inject({
+    method: "POST",
+    payload: {
+      accessToken: "member-token"
+    },
+    url: "/api/auth/supabase-session"
+  });
+  assert.equal(response.statusCode, 200);
+  return response.headers["set-cookie"];
+}
+
+async function fakeVerifySupabaseAccessToken(token = "") {
+  if (token === "owner-token") {
+    return {
+      email: "owner@example.com",
+      id: "supabase-owner"
+    };
+  }
+  if (token === "member-token") {
+    return {
+      email: "member@example.com",
+      id: "supabase-member"
+    };
+  }
+  const error = new Error("Unknown test token.");
+  error.code = "vibe64_supabase_user_verification_failed";
+  throw error;
+}
 
 function connectWebSocket(url, options = {}) {
   return new Promise((resolve, reject) => {

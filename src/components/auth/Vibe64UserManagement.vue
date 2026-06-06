@@ -1,17 +1,22 @@
 <script setup>
 import { onMounted, reactive, ref } from "vue";
 import {
+  mdiAccountCancelOutline,
+  mdiAccountMinusOutline,
   mdiAccountPlusOutline
 } from "@mdi/js";
 import {
+  cancelInvite,
   inviteUser,
-  readUsers
+  readUsers,
+  revokeUser
 } from "@/lib/vibe64AuthApi.js";
 
 const users = ref([]);
 const loadingUsers = ref(false);
 const inviteStatus = ref("");
 const error = ref("");
+const actionBusy = ref("");
 const inviteForm = reactive({
   email: ""
 });
@@ -35,16 +40,72 @@ async function loadUsers() {
 async function submitInvite() {
   inviteStatus.value = "";
   error.value = "";
-  const response = await inviteUser({
-    email: inviteForm.email
-  });
-  if (response.ok === false) {
-    error.value = response.error || response.message || "Invite failed.";
+  actionBusy.value = "invite";
+  try {
+    const response = await inviteUser({
+      email: inviteForm.email
+    });
+    if (response.ok === false) {
+      error.value = response.error || response.message || "Invite failed.";
+      return;
+    }
+    inviteForm.email = "";
+    inviteStatus.value = "User invited.";
+    await loadUsers();
+  } finally {
+    actionBusy.value = "";
+  }
+}
+
+async function cancelUserInvite(row = {}) {
+  await runUserAction(row, cancelInvite, "Invite canceled.");
+}
+
+async function removeUser(row = {}) {
+  await runUserAction(row, revokeUser, "User removed.");
+}
+
+async function inviteAgain(row = {}) {
+  await runUserAction(row, inviteUser, "User invited.");
+}
+
+async function runUserAction(row = {}, action, successMessage = "") {
+  inviteStatus.value = "";
+  error.value = "";
+  const email = String(row.email || "").trim();
+  if (!email) {
     return;
   }
-  inviteForm.email = "";
-  inviteStatus.value = "User invited.";
-  await loadUsers();
+  actionBusy.value = email;
+  try {
+    const response = await action({
+      email
+    });
+    if (response.ok === false) {
+      error.value = response.error || response.message || "User update failed.";
+      return;
+    }
+    inviteStatus.value = successMessage;
+    await loadUsers();
+  } finally {
+    actionBusy.value = "";
+  }
+}
+
+function statusLabel(row = {}) {
+  if (row.status === "active") {
+    return row.identityLinked ? "Active" : "Active, identity pending";
+  }
+  if (row.status === "invited") {
+    return "Invited";
+  }
+  if (row.status === "canceled") {
+    return "Canceled";
+  }
+  if (row.status === "revoked") {
+    return "Removed";
+  }
+  return row.status || "Unknown";
 }
 
 onMounted(loadUsers);
@@ -74,7 +135,14 @@ onMounted(loadUsers);
           type="email"
           variant="outlined"
         />
-        <v-btn color="primary" type="submit" variant="flat">Invite</v-btn>
+        <v-btn
+          color="primary"
+          :loading="actionBusy === 'invite'"
+          type="submit"
+          variant="flat"
+        >
+          Invite
+        </v-btn>
       </form>
       <span v-if="inviteStatus" class="vibe64-user-management__status">{{ inviteStatus }}</span>
 
@@ -83,17 +151,56 @@ onMounted(loadUsers);
           <tr>
             <th>Email</th>
             <th>Role</th>
-            <th>Password</th>
+            <th>Status</th>
+            <th>Identity</th>
+            <th class="text-right">Actions</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="row in users" :key="row.email">
             <td>{{ row.email }}</td>
             <td>{{ row.role }}</td>
-            <td>{{ row.passwordSet ? "Set" : "Invited" }}</td>
+            <td>{{ statusLabel(row) }}</td>
+            <td>{{ row.identityLinked ? "Linked" : "Waiting" }}</td>
+            <td class="vibe64-user-management__row-actions">
+              <v-btn
+                v-if="row.status === 'invited'"
+                :prepend-icon="mdiAccountCancelOutline"
+                size="small"
+                type="button"
+                variant="text"
+                :loading="actionBusy === row.email"
+                @click="cancelUserInvite(row)"
+              >
+                Cancel invite
+              </v-btn>
+              <v-btn
+                v-if="row.status === 'active' && row.role !== 'owner'"
+                color="error"
+                :prepend-icon="mdiAccountMinusOutline"
+                size="small"
+                type="button"
+                variant="text"
+                :loading="actionBusy === row.email"
+                @click="removeUser(row)"
+              >
+                Remove
+              </v-btn>
+              <v-btn
+                v-if="row.status === 'canceled' || row.status === 'revoked'"
+                :prepend-icon="mdiAccountPlusOutline"
+                size="small"
+                type="button"
+                variant="text"
+                :loading="actionBusy === row.email"
+                @click="inviteAgain(row)"
+              >
+                Invite again
+              </v-btn>
+            </td>
           </tr>
           <tr v-if="!loadingUsers && users.length === 0">
-            <td colspan="3">No users.</td>
+            <td colspan="5">No users.</td>
           </tr>
         </tbody>
       </v-table>
@@ -147,6 +254,12 @@ onMounted(loadUsers);
 .vibe64-user-management__status {
   color: rgb(var(--v-theme-success));
   font-size: 0.9rem;
+}
+
+.vibe64-user-management__row-actions {
+  display: flex;
+  gap: 0.35rem;
+  justify-content: flex-end;
 }
 
 @media (max-width: 720px) {

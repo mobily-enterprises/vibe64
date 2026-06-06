@@ -2,13 +2,9 @@ import { mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import crypto from "node:crypto";
 import path from "node:path";
 
-import {
-  hashPassword,
-  verifyPassword
-} from "./passwords.js";
-
-const USER_RECORD_VERSION = 1;
+const USER_RECORD_VERSION = 2;
 const EMAIL_PATTERN = /^[^\s@/\\]+@[^\s@/\\]+\.[^\s@/\\]+$/u;
+const ACTIVE_USER_STATUSES = new Set(["active", "invited"]);
 
 function canonicalUserEmail(value = "") {
   const email = String(value || "").trim().toLowerCase();
@@ -21,15 +17,20 @@ function canonicalUserEmail(value = "") {
 }
 
 function publicUser(record = {}) {
+  const normalized = normalizeUserRecord(record);
   return {
-    createdAt: String(record.createdAt || ""),
-    email: String(record.email || ""),
-    gravatarUrl: gravatarUrl(record.email),
-    invitedAt: String(record.invitedAt || ""),
-    owner: record.role === "owner",
-    passwordSet: Boolean(record.passwordHash),
-    role: String(record.role || "member"),
-    updatedAt: String(record.updatedAt || "")
+    acceptedAt: normalized.acceptedAt,
+    canceledAt: normalized.canceledAt,
+    createdAt: normalized.createdAt,
+    email: normalized.email,
+    gravatarUrl: gravatarUrl(normalized.email),
+    identityLinked: Boolean(normalized.supabaseUserId),
+    invitedAt: normalized.invitedAt,
+    owner: normalized.role === "owner",
+    revokedAt: normalized.revokedAt,
+    role: normalized.role,
+    status: normalized.status,
+    updatedAt: normalized.updatedAt
   };
 }
 
@@ -93,150 +94,278 @@ function createFileUserStore({
     return users.sort((left, right) => left.email.localeCompare(right.email));
   }
 
-  async function setupOwner(input = {}) {
-    const existingUsers = await listUsers();
-    if (existingUsers.length > 0) {
-      const error = new Error("Owner setup has already been completed.");
-      error.code = "vibe64_owner_already_exists";
+  async function setupRequired() {
+    const users = await listUsers();
+    return !users.some((user) => user.role === "owner" && ACTIVE_USER_STATUSES.has(user.status));
+  }
+
+  async function ownerInvitePending() {
+    const users = await listUsers();
+    return (
+      !users.some((user) => user.role === "owner" && user.status === "active") &&
+      users.some((user) => user.role === "owner" && user.status === "invited" && !user.supabaseUserId)
+    );
+  }
+
+  async function acceptSupabaseIdentity(identity = {}) {
+    const email = canonicalUserEmail(identity.email);
+    const supabaseUserId = canonicalSupabaseUserId(identity.id || identity.sub);
+    const now = new Date().toISOString();
+    const users = await listUsers();
+    const linked = users.find((user) => user.supabaseUserId === supabaseUserId);
+    if (linked) {
+      return activateLinkedUser(linked, {
+        email,
+        now,
+        supabaseUserId
+      });
+    }
+
+    const existing = await readUser(email);
+    if (existing) {
+      return activateExistingUser(existing, {
+        now,
+        supabaseUserId
+      });
+    }
+
+    if (!users.some((user) => user.role === "owner" && ACTIVE_USER_STATUSES.has(user.status))) {
+      return writeUser({
+        acceptedAt: now,
+        createdAt: now,
+        email,
+        role: "owner",
+        status: "active",
+        supabaseUserId,
+        updatedAt: now,
+        version: USER_RECORD_VERSION
+      });
+    }
+
+    const error = new Error("This Supabase user is not invited to this Vibe64 instance.");
+    error.code = "vibe64_user_not_invited";
+    throw error;
+  }
+
+  async function activateLinkedUser(user, {
+    email = "",
+    now = new Date().toISOString(),
+    supabaseUserId = ""
+  } = {}) {
+    if (user.status === "revoked") {
+      const error = new Error("This user has been removed from this Vibe64 instance.");
+      error.code = "vibe64_user_revoked";
       throw error;
     }
-    const email = canonicalUserEmail(input.email);
-    const password = matchingPassword(input);
-    const now = new Date().toISOString();
+    if (user.status === "canceled") {
+      const error = new Error("This invite has been canceled.");
+      error.code = "vibe64_invite_canceled";
+      throw error;
+    }
+    if (email !== user.email) {
+      const error = new Error("Supabase email does not match this local Vibe64 member.");
+      error.code = "vibe64_supabase_email_mismatch";
+      throw error;
+    }
     return writeUser({
-      createdAt: now,
-      email,
-      passwordHash: await hashPassword(password),
-      role: "owner",
-      updatedAt: now,
-      version: USER_RECORD_VERSION
+      ...user,
+      acceptedAt: user.acceptedAt || now,
+      status: "active",
+      supabaseUserId,
+      updatedAt: now
+    });
+  }
+
+  async function activateExistingUser(user, {
+    now = new Date().toISOString(),
+    supabaseUserId = ""
+  } = {}) {
+    if (user.status === "revoked") {
+      const error = new Error("This user has been removed from this Vibe64 instance.");
+      error.code = "vibe64_user_revoked";
+      throw error;
+    }
+    if (user.status === "canceled") {
+      const error = new Error("This invite has been canceled.");
+      error.code = "vibe64_invite_canceled";
+      throw error;
+    }
+    if (user.supabaseUserId && user.supabaseUserId !== supabaseUserId) {
+      const error = new Error("This email is already linked to another Supabase user.");
+      error.code = "vibe64_supabase_user_mismatch";
+      throw error;
+    }
+    return writeUser({
+      ...user,
+      acceptedAt: user.acceptedAt || now,
+      status: "active",
+      supabaseUserId,
+      updatedAt: now
     });
   }
 
   async function inviteUser(input = {}) {
     const email = canonicalUserEmail(input.email);
     const existing = await readUser(email);
-    if (existing) {
+    const now = new Date().toISOString();
+    if (existing?.status === "active") {
       return existing;
     }
-    const now = new Date().toISOString();
     return writeUser({
-      createdAt: now,
+      ...(existing || {}),
+      acceptedAt: "",
+      canceledAt: "",
+      createdAt: existing?.createdAt || now,
       email,
       invitedAt: now,
-      passwordHash: "",
+      revokedAt: "",
       role: "member",
+      status: "invited",
+      supabaseUserId: "",
       updatedAt: now,
       version: USER_RECORD_VERSION
     });
   }
 
-  async function claimInvite(input = {}) {
+  async function cancelInvite(input = {}) {
     const email = canonicalUserEmail(input.email);
+    const user = await requireUser(email);
+    if (user.status !== "invited") {
+      const error = new Error("Only pending invites can be canceled.");
+      error.code = "vibe64_invite_not_pending";
+      throw error;
+    }
+    const now = new Date().toISOString();
+    return writeUser({
+      ...user,
+      canceledAt: now,
+      status: "canceled",
+      updatedAt: now
+    });
+  }
+
+  async function revokeUser(input = {}, actor = {}) {
+    const email = canonicalUserEmail(input.email);
+    const actorEmail = actor?.email ? canonicalUserEmail(actor.email) : "";
+    if (actorEmail && email === actorEmail) {
+      const error = new Error("You cannot remove your own Vibe64 user.");
+      error.code = "vibe64_cannot_revoke_self";
+      throw error;
+    }
+    const user = await requireUser(email);
+    if (user.status === "invited") {
+      return cancelInvite(input);
+    }
+    if (user.status !== "active") {
+      return user;
+    }
+    if (user.role === "owner") {
+      const activeOwners = (await listUsers()).filter((item) => (
+        item.role === "owner" &&
+        item.status === "active" &&
+        item.email !== email
+      ));
+      if (activeOwners.length === 0) {
+        const error = new Error("You cannot remove the last active owner.");
+        error.code = "vibe64_cannot_revoke_last_owner";
+        throw error;
+      }
+    }
+    const now = new Date().toISOString();
+    return writeUser({
+      ...user,
+      revokedAt: now,
+      status: "revoked",
+      updatedAt: now
+    });
+  }
+
+  async function userForSession(session = {}) {
+    const supabaseUserId = String(session.supabaseUserId || "").trim();
+    if (!supabaseUserId) {
+      return null;
+    }
+    const users = await listUsers();
+    const user = users.find((item) => item.supabaseUserId === supabaseUserId);
+    if (!user || user.status !== "active") {
+      return null;
+    }
+    if (user.supabaseUserId !== supabaseUserId) {
+      return null;
+    }
+    return user;
+  }
+
+  async function requireUser(email = "") {
     const user = await readUser(email);
     if (!user) {
-      const error = new Error("Invited user was not found.");
+      const error = new Error("Vibe64 user was not found.");
       error.code = "vibe64_user_not_found";
       throw error;
     }
-    if (user.passwordHash) {
-      const error = new Error("This user already has a password.");
-      error.code = "vibe64_user_password_already_set";
-      throw error;
-    }
-    const password = matchingPassword(input);
-    return writeUser({
-      ...user,
-      passwordHash: await hashPassword(password),
-      updatedAt: new Date().toISOString()
-    });
-  }
-
-  async function authenticate(input = {}) {
-    const email = canonicalUserEmail(input.email);
-    const user = await readUser(email);
-    if (!user) {
-      return {
-        ok: false,
-        code: "vibe64_invalid_credentials",
-        message: "Email or password is incorrect."
-      };
-    }
-    if (!user.passwordHash) {
-      return {
-        ok: false,
-        claimRequired: true,
-        code: "vibe64_user_password_not_set",
-        email: user.email,
-        message: "Set a password for this invited user."
-      };
-    }
-    if (!await verifyPassword(input.password, user.passwordHash)) {
-      return {
-        ok: false,
-        code: "vibe64_invalid_credentials",
-        message: "Email or password is incorrect."
-      };
-    }
-    return {
-      ok: true,
-      user
-    };
-  }
-
-  async function changePassword(email = "", input = {}) {
-    const user = await readUser(email);
-    if (!user || !user.passwordHash) {
-      const error = new Error("User password is not set.");
-      error.code = "vibe64_user_password_not_set";
-      throw error;
-    }
-    if (!await verifyPassword(input.oldPassword, user.passwordHash)) {
-      const error = new Error("Old password is incorrect.");
-      error.code = "vibe64_invalid_old_password";
-      throw error;
-    }
-    const password = matchingPassword(input);
-    return writeUser({
-      ...user,
-      passwordHash: await hashPassword(password),
-      updatedAt: new Date().toISOString()
-    });
+    return user;
   }
 
   return Object.freeze({
-    authenticate,
-    changePassword,
-    claimInvite,
+    acceptSupabaseIdentity,
+    cancelInvite,
     inviteUser,
     listUsers,
+    ownerInvitePending,
     publicUser,
     readUser,
-    setupOwner,
+    revokeUser,
+    setupRequired,
+    userForSession,
     usersRoot: root
   });
 }
 
-function matchingPassword(input = {}) {
-  const password = String(input.password || "");
-  const confirmation = String(input.passwordConfirmation || input.confirmPassword || "");
-  if (password !== confirmation) {
-    const error = new Error("Passwords do not match.");
-    error.code = "vibe64_password_mismatch";
+function canonicalSupabaseUserId(value = "") {
+  const id = String(value || "").trim();
+  if (!id) {
+    const error = new Error("Supabase user id is missing.");
+    error.code = "vibe64_invalid_supabase_user";
     throw error;
   }
-  return password;
+  return id;
+}
+
+function normalizeStatus(record = {}) {
+  const status = String(record.status || "").trim().toLowerCase();
+  if (["active", "invited", "canceled", "revoked"].includes(status)) {
+    return status;
+  }
+  if (record.revokedAt) {
+    return "revoked";
+  }
+  if (record.canceledAt) {
+    return "canceled";
+  }
+  if (record.passwordHash) {
+    return "active";
+  }
+  if (record.invitedAt) {
+    return "invited";
+  }
+  return "active";
 }
 
 function normalizeUserRecord(record = {}) {
   const email = canonicalUserEmail(record.email);
+  const now = new Date().toISOString();
+  const status = normalizeStatus(record);
   return {
-    createdAt: String(record.createdAt || ""),
+    acceptedAt: String(record.acceptedAt || (status === "active" ? record.updatedAt || record.createdAt || "" : "")),
+    canceledAt: String(record.canceledAt || ""),
+    createdAt: String(record.createdAt || now),
     email,
     invitedAt: String(record.invitedAt || ""),
-    passwordHash: String(record.passwordHash || ""),
+    revokedAt: String(record.revokedAt || ""),
     role: record.role === "owner" ? "owner" : "member",
-    updatedAt: String(record.updatedAt || ""),
+    status,
+    supabaseUserId: String(record.supabaseUserId || ""),
+    updatedAt: String(record.updatedAt || record.createdAt || now),
     version: USER_RECORD_VERSION
   };
 }

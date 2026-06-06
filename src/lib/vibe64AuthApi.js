@@ -4,22 +4,38 @@ async function readAuthState() {
   return authRequest(`${AUTH_API_BASE}/state`);
 }
 
-async function setupOwner(input = {}) {
-  return authRequest(`${AUTH_API_BASE}/setup-owner`, {
+async function readSupabaseConfig() {
+  return authRequest(`${AUTH_API_BASE}/supabase-config`);
+}
+
+async function establishSupabaseSession(input = {}) {
+  return authRequest(`${AUTH_API_BASE}/supabase-session`, {
     body: input,
     method: "POST"
   });
+}
+
+async function setupOwner(input = {}) {
+  return establishSupabaseSession(input);
 }
 
 async function login(input = {}) {
-  return authRequest(`${AUTH_API_BASE}/login`, {
+  return establishSupabaseSession(input);
+}
+
+async function claimInvite(input = {}) {
+  return establishSupabaseSession(input);
+}
+
+async function cancelInvite(input = {}) {
+  return authRequest(`${AUTH_API_BASE}/invite/cancel`, {
     body: input,
     method: "POST"
   });
 }
 
-async function claimInvite(input = {}) {
-  return authRequest(`${AUTH_API_BASE}/claim`, {
+async function revokeUser(input = {}) {
+  return authRequest(`${AUTH_API_BASE}/users/revoke`, {
     body: input,
     method: "POST"
   });
@@ -74,12 +90,16 @@ async function authRequest(path, {
 }
 
 export {
+  cancelInvite,
   changePassword,
   claimInvite,
+  establishSupabaseSession,
   inviteUser,
   login,
   logout,
   readAuthState,
+  readSupabaseConfig,
   readUsers,
+  revokeUser,
   setupOwner
 };

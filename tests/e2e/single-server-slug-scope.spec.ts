@@ -6,11 +6,12 @@ const MANAGEMENT_PATH = "/app/manage";
 const DEVELOPMENT_PATH = `/app/${SLUG}`;
 const DASHBOARD_PATH = `${DEVELOPMENT_PATH}/dashboard`;
 const SCOPED_API_PREFIX = `/api/app/${SLUG}`;
-
 const ownerUser = {
   email: "owner@example.com",
   gravatarUrl: "https://www.gravatar.com/avatar/00000000000000000000000000000000?d=identicon",
-  role: "owner"
+  identityLinked: true,
+  role: "owner",
+  status: "active"
 };
 
 test("first-run owner setup reaches management and opens a slug-scoped workspace", async ({ page }) => {
@@ -20,12 +21,13 @@ test("first-run owner setup reaches management and opens a slug-scoped workspace
   const users = [
     {
       ...ownerUser,
-      passwordSet: true
+      supabaseUserId: "supabase-owner"
     }
   ];
   let authenticated = false;
 
   await mockLifecycleSocket(page);
+  await mockSupabaseAuth(page);
   await page.route("**/api/**", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -38,17 +40,26 @@ test("first-run owner setup reaches management and opens a slug-scoped workspace
         : {
             authenticated: false,
             ok: true,
+            supabase: supabaseConfig(),
             setupRequired: true,
             user: null
           });
       return;
     }
 
-    if (url.pathname === "/api/auth/setup-owner" && method === "POST") {
+    if (url.pathname === "/api/auth/supabase-config" && method === "GET") {
+      await fulfillJson(route, {
+        ok: true,
+        supabase: supabaseConfig()
+      });
+      return;
+    }
+
+    if (url.pathname === "/api/auth/supabase-session" && method === "POST") {
       authenticated = true;
       await fulfillJson(route, {
-        ...authenticatedState(),
-        ok: true
+        ok: true,
+        user: ownerUser
       });
       return;
     }
@@ -66,8 +77,10 @@ test("first-run owner setup reaches management and opens a slug-scoped workspace
       users.push({
         email: String(body.email || "").toLowerCase(),
         gravatarUrl: "",
-        passwordSet: false,
-        role: "user"
+        identityLinked: false,
+        role: "member",
+        status: "invited",
+        supabaseUserId: ""
       });
       await fulfillJson(route, {
         ok: true
@@ -150,10 +163,11 @@ test("first-run owner setup reaches management and opens a slug-scoped workspace
 
   await page.goto(`/account?returnTo=${encodeURIComponent(MANAGEMENT_PATH)}`);
   await expect(page.getByRole("heading", { name: "Account", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "GitHub", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "GitHub", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Password", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Codex", exact: true })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Sign in or create GitHub account" })).toBeVisible();
+  await expect(page.getByText("GitHub connected", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Logout", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Back" }).click();
   await expect(page).toHaveURL(new RegExp(`${MANAGEMENT_PATH}$`, "u"));
 
@@ -240,7 +254,7 @@ test("authenticated users must connect GitHub on the account page before using t
 
   await expect(page).toHaveURL(/\/account\?returnTo=%2Fapp%2Fmanage$/u);
   await expect(page.getByRole("heading", { name: "Account", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "GitHub", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "GitHub", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Password", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Codex", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Sign in or create GitHub account" })).toBeVisible();
@@ -301,8 +315,44 @@ function authenticatedState() {
   return {
     authenticated: true,
     ok: true,
+    supabase: supabaseConfig(),
     setupRequired: false,
     user: ownerUser
+  };
+}
+
+function supabaseConfig() {
+  return {
+    configured: true,
+    publishableKey: "sb_publishable_test",
+    url: "https://zfszwwusouczybrsxxyh.supabase.co"
+  };
+}
+
+async function mockSupabaseAuth(page: Page) {
+  await page.route("**/auth/v1/**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith("/user")) {
+      await fulfillJson(route, supabaseSessionPayload().user);
+      return;
+    }
+    await fulfillJson(route, supabaseSessionPayload());
+  });
+}
+
+function supabaseSessionPayload() {
+  return {
+    access_token: "owner-access-token",
+    expires_at: Math.floor(Date.now() / 1000) + 3600,
+    expires_in: 3600,
+    refresh_token: "owner-refresh-token",
+    token_type: "bearer",
+    user: {
+      aud: "authenticated",
+      email: ownerUser.email,
+      id: "supabase-owner",
+      role: "authenticated"
+    }
   };
 }
 

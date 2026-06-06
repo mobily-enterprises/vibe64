@@ -173,7 +173,8 @@ async function createServer(options = {}) {
 
   const auth = createVibe64Auth({
     dataRoot: options.authDataRoot,
-    env: process.env
+    env: process.env,
+    verifySupabaseAccessToken: options.verifySupabaseAccessToken
   });
   app.vibe64Auth = auth;
   registerVibe64AuthRoutes(app, auth);
@@ -341,7 +342,8 @@ async function startServer(options = {}) {
     authDataRoot: options?.authDataRoot,
     browserLifecycleShutdownDelayMs: options?.browserLifecycleShutdownDelayMs,
     projectsRoot: options?.projectsRoot,
-    targetRoot: options?.targetRoot
+    targetRoot: options?.targetRoot,
+    verifySupabaseAccessToken: options?.verifySupabaseAccessToken
   });
   let closing = false;
   const closeAndExit = async (signal) => {

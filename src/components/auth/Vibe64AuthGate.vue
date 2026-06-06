@@ -10,6 +10,9 @@ import {
   readAuthState
 } from "@/lib/vibe64AuthApi.js";
 import {
+  vibe64SupabaseClient
+} from "@/lib/vibe64SupabaseAuth.js";
+import {
   connectBrowserLifecycleSocket
 } from "@/lib/browserLifecycle.js";
 import {
@@ -22,6 +25,7 @@ const loading = ref(true);
 const loadError = ref("");
 const state = reactive({
   authenticated: false,
+  ownerInvitePending: false,
   setupRequired: false,
   user: null
 });
@@ -58,6 +62,12 @@ async function refresh() {
 }
 
 async function signOut() {
+  try {
+    const supabase = await vibe64SupabaseClient();
+    await supabase.auth.signOut();
+  } catch {
+    // Local logout still clears the Vibe64 session.
+  }
   await logout();
   applyState(await readAuthState());
 }
@@ -66,6 +76,7 @@ function applyState(nextState = {}) {
   const previousUserEmail = String(state.user?.email || "");
   const nextUserEmail = String(nextState.user?.email || "");
   state.authenticated = nextState.authenticated === true;
+  state.ownerInvitePending = nextState.ownerInvitePending === true;
   state.setupRequired = nextState.setupRequired === true;
   state.user = nextState.user || null;
   if (!state.authenticated || previousUserEmail !== nextUserEmail) {
@@ -77,6 +88,7 @@ function applyState(nextState = {}) {
 function applyAuthenticated(response = {}) {
   applyState({
     authenticated: true,
+    ownerInvitePending: false,
     setupRequired: false,
     user: response.user || null
   });
@@ -206,6 +218,7 @@ void refresh();
   </main>
   <Vibe64AuthScreen
     v-else-if="!authenticated"
+    :owner-invite-pending="state.ownerInvitePending"
     :setup-required="state.setupRequired"
     @authenticated="applyAuthenticated"
   />

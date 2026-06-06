@@ -53,8 +53,9 @@ function serializeAuthCookie(value, options = {}) {
   return serializeCookie(AUTH_COOKIE_NAME, value, options);
 }
 
-function serializeClearedAuthCookie() {
+function serializeClearedAuthCookie(options = {}) {
   return serializeAuthCookie("", {
+    ...options,
     maxAge: 0
   });
 }
