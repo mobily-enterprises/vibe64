@@ -77,11 +77,13 @@ const chatToggleTitle = computed(() => {
 const workspaceTabs = Object.freeze([
   {
     id: "preview",
-    label: "Preview"
+    label: "Preview",
+    mobileLabel: "Go to preview"
   },
   {
     id: "dashboard",
-    label: "Dashboard"
+    label: "Dashboard",
+    mobileLabel: "Go to dashboard"
   }
 ]);
 
@@ -134,6 +136,11 @@ function selectWorkspacePane(pane = "") {
     return;
   }
   void router.push(developmentBasePath.value);
+}
+
+function workspaceTabLabel(tab = {}) {
+  const label = mobilePaneLayout.value ? tab.mobileLabel : tab.label;
+  return String(label || tab.label || "").trim();
 }
 
 async function loadWorkspaces() {
@@ -326,7 +333,7 @@ onBeforeUnmount(() => {
               :aria-selected="workspacePane === tab.id ? 'true' : 'false'"
               @click="selectWorkspacePane(tab.id)"
             >
-              {{ tab.label }}
+              {{ workspaceTabLabel(tab) }}
             </button>
           </div>
         </div>
@@ -630,7 +637,12 @@ onBeforeUnmount(() => {
   }
 
   .studio-home-shell-workspace-tabs {
-    display: none;
+    display: inline-flex;
+  }
+
+  .studio-home-shell-workspace-tab {
+    font-size: 0.86rem;
+    padding-inline: 0.58rem;
   }
 }
 
@@ -650,6 +662,16 @@ onBeforeUnmount(() => {
     gap: 0.35rem;
     padding-left: 0.65rem;
     width: 100%;
+  }
+
+  .studio-home-shell-workspace-controls {
+    gap: 0.28rem;
+  }
+
+  .studio-home-shell-workspace-tab {
+    font-size: 0.78rem;
+    min-height: 1.65rem;
+    padding: 0.2rem 0.38rem;
   }
 
   .studio-home-shell-title-area {

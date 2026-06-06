@@ -44,12 +44,24 @@ const dashboardSectionLinks = computed(() => getPlacements()
     icon: placement?.props?.icon || "",
     id: placement?.id || "",
     label: placement?.props?.label || "",
-    to: `${workspaceBasePath.value}${placement?.props?.scopedSuffix || placement?.props?.unscopedSuffix || ""}`
+    to: `${workspaceBasePath.value}${dashboardSectionSuffix(placement)}`
   })));
 
 function firstRouteParam(value) {
   const rawValue = Array.isArray(value) ? value[0] : value;
   return String(rawValue || "").trim();
+}
+
+function dashboardSectionSuffix(placement = {}) {
+  const suffix = String(placement?.props?.scopedSuffix || placement?.props?.unscopedSuffix || "").trim();
+  if (!suffix) {
+    return "";
+  }
+  const workspaceRelativeSuffix = suffix
+    .replace(/^\/+/u, "")
+    .replace(/^\[slug\](?=\/|$)/u, "")
+    .replace(/^\/+/u, "");
+  return workspaceRelativeSuffix ? `/${workspaceRelativeSuffix}` : "";
 }
 </script>
 

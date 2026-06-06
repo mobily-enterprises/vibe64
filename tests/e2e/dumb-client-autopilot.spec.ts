@@ -1253,7 +1253,7 @@ test.describe("Autopilot dumb client contract", () => {
 
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
-    await expect(page.getByRole("button", { name: "Start session" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Create session" })).toBeVisible();
     await expect(page.getByText("No sessions yet.")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Codex terminal" })).toHaveCount(0);
   });

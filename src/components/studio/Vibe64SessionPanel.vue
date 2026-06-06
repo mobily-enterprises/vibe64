@@ -2,7 +2,6 @@
   <v-sheet
     rounded="lg"
     class="studio-ai-sessions studio-ai-sessions--autopilot studio-screen__panel"
-    :class="{ 'studio-ai-sessions--with-header': panelHeaderVisible }"
   >
     <Transition name="studio-ai-sessions-error">
       <div
@@ -20,55 +19,97 @@
     </Transition>
 
     <div
-      v-if="panelHeaderVisible"
-      class="studio-ai-sessions__header"
-    >
-      <Vibe64SessionToolbar
-        v-if="panelSessionToolbarVisible"
-        :abandon="selectedAbandon"
-        :selected-session-id="selection.selectedSessionId"
-        :selection-closed="selection.isClosed"
-        :toolbar="toolbar"
-      />
-    </div>
-
-    <div
       v-if="emptyLayoutVisible"
       class="studio-ai-sessions__empty-layout"
       :class="{
+        'studio-ai-sessions__empty-layout--chat-collapsed': chatCollapsed,
         'studio-ai-sessions__empty-layout--dashboard': dashboardWorkspaceActive
       }"
     >
-      <div class="studio-ai-sessions__empty-main">
-        <div
-          v-if="emptyStateVisible"
-          class="studio-ai-sessions__empty"
-        >
-          <Vibe64CreateSessionButton
-            aria-label="Start session"
-            button-class="studio-ai-sessions__empty-create"
-            :block="false"
-            :icon-only="false"
-            label="Start session"
-            menu-location="bottom center"
-            size="large"
+      <section
+        class="studio-ai-sessions__empty-main"
+        aria-label="Session chat"
+      >
+        <div class="studio-ai-sessions__empty-session-header">
+          <Vibe64SessionToolbar
+            :abandon="selectedAbandon"
+            compact
+            :create-attention="emptyCreateAttention"
+            :create-visible="!emptyStateLoading"
+            :max-visible-sessions="3"
+            :selected-session-id="selection.selectedSessionId"
+            :selection-closed="selection.isClosed"
             :toolbar="toolbar"
           />
-          <p
-            v-if="emptyCreateReasonVisible"
-            class="studio-ai-sessions__empty-reason text-body-2 text-medium-emphasis"
-          >
-            {{ toolbar.createSessionTitle }}
-          </p>
         </div>
-      </div>
+        <div class="studio-ai-sessions__empty-chat-body">
+          <div
+            v-if="emptyChatHintText"
+            class="studio-ai-sessions__empty-hint"
+            role="status"
+          >
+            {{ emptyChatHintText }}
+          </div>
+        </div>
+        <div
+          class="studio-ai-sessions__empty-thinking studio-ai-sessions__empty-thinking--empty"
+          aria-hidden="true"
+        >
+          <span class="studio-ai-sessions__empty-thinking-mark" />
+          <span>Thinking...</span>
+        </div>
+        <div class="studio-ai-sessions__empty-runtime-status" />
+        <div class="studio-ai-sessions__empty-composer" />
+      </section>
 
-      <div
-        v-if="dashboardWorkspaceActive"
-        class="studio-ai-sessions__dashboard-empty-pane"
+      <section
+        class="studio-ai-sessions__empty-workspace-panel"
+        aria-label="Workspace"
       >
-        <slot name="dashboard" :dashboard-context="emptyDashboardContext" />
-      </div>
+        <div
+          v-if="dashboardWorkspaceActive"
+          class="studio-ai-sessions__dashboard-empty-pane"
+        >
+          <slot name="dashboard" :dashboard-context="emptyDashboardContext" />
+        </div>
+        <div
+          v-else
+          class="studio-ai-sessions__preview-empty-pane"
+        >
+          <div class="studio-ai-sessions__preview-empty-content">
+            <p class="studio-ai-sessions__preview-empty-title">
+              {{ emptyPreviewTitleText }}
+            </p>
+            <p
+              v-if="emptyPreviewDetailText"
+              class="studio-ai-sessions__preview-empty-detail"
+            >
+              {{ emptyPreviewDetailText }}
+            </p>
+            <div
+              v-if="emptyStateLoading"
+              class="studio-ai-sessions__preview-empty-loading"
+              role="status"
+            >
+              <v-progress-circular
+                indeterminate
+                size="20"
+                width="2"
+              />
+              <span>Loading sessions.</span>
+            </div>
+            <Vibe64CreateSessionButton
+              v-else
+              aria-label="Create session"
+              button-class="studio-ai-sessions__preview-create-button"
+              :icon-only="false"
+              label="Create session"
+              menu-location="bottom center"
+              :toolbar="toolbar"
+            />
+          </div>
+        </div>
+      </section>
     </div>
 
     <div
@@ -169,15 +210,32 @@ const toolbar = proxyRefs({
 });
 
 const workspacePane = computed(() => normalizeWorkspacePane(props.workspacePane || route.query.pane));
-const pageLoading = sessionData.pageLoading;
 const chatCollapsed = computed(() => Boolean(props.chatCollapsed));
-const panelSessionToolbarVisible = computed(() => Boolean(
-  !selection.selectedSession
-));
 const dashboardWorkspaceActive = computed(() => workspacePane.value === "dashboard");
 const emptyDashboardContext = Object.freeze({});
-const emptyStateVisible = computed(() => Boolean(!pageLoading.value || (toolbar.sessions || []).length > 0));
-const emptyCreateReasonVisible = computed(() => Boolean(!toolbar.canCreateSession && toolbar.createSessionTitle));
+const emptyBlockedReason = computed(() => String(
+  !toolbar.canCreateSession && toolbar.createSessionTitle ? toolbar.createSessionTitle : ""
+).trim());
+const emptyChatHintText = computed(() => {
+  if (emptyStateLoading.value) {
+    return "Loading sessions.";
+  }
+  return emptyBlockedReason.value || "Use the + button to start a session.";
+});
+const emptyPreviewTitleText = computed(() => {
+  return emptyStateLoading.value ? "Loading session." : "Create a session to start preview.";
+});
+const emptyPreviewDetailText = computed(() => {
+  if (emptyStateLoading.value) {
+    return "";
+  }
+  return emptyBlockedReason.value;
+});
+const emptyCreateAttention = computed(() => Boolean(
+  !emptyStateLoading.value &&
+  toolbar.canCreateSession &&
+  (toolbar.sessions || []).length < 1
+));
 const selectedRuntimeState = computed(() => runtimeStateBySessionId[selection.selectedSessionId] || null);
 const runtimeHostSessionIds = computed(() => {
   const visibleSessionIds = new Set((toolbar.sessions || []).map((session) => session.sessionId));
@@ -186,6 +244,11 @@ const runtimeHostSessionIds = computed(() => {
   }
   return mountedRuntimeSessionIds.value.filter((sessionId) => visibleSessionIds.has(sessionId));
 });
+const emptyStateLoading = computed(() => Boolean(
+  sessionData.sessionList.isInitialLoading &&
+  !selection.selectedSession &&
+  runtimeHostSessionIds.value.length < 1
+));
 const emptyLayoutVisible = computed(() => Boolean(!selection.selectedSession && runtimeHostSessionIds.value.length < 1));
 const selectedAbandon = computed(() => selectedRuntimeState.value?.toolbarControls?.abandon || fallbackAbandon);
 const pageError = computed(() => blockingVibe64SessionPageError({
@@ -199,7 +262,6 @@ const visiblePageError = computed(() => Boolean(
   pageError.value &&
   dismissedPageError.value !== pageError.value
 ));
-const panelHeaderVisible = computed(() => Boolean(panelSessionToolbarVisible.value));
 
 function dismissPageError() {
   dismissedPageError.value = String(pageError.value || "");
@@ -318,54 +380,146 @@ watch(pageError, (error) => {
   padding: 0;
 }
 
-.studio-ai-sessions--autopilot.studio-ai-sessions--with-header {
-  grid-template-rows: auto minmax(0, 1fr);
-}
-
-.studio-ai-sessions__empty-main {
-  align-self: center;
-  justify-self: center;
-  min-width: 0;
-  width: min(100%, 26rem);
-}
-
 .studio-ai-sessions__empty-layout {
-  --studio-ai-sessions-codex-terminal-column: minmax(30rem, 1.22fr);
-  --studio-ai-sessions-main-column: minmax(18rem, 0.78fr);
   --studio-ai-sessions-layout-gap: 0.9rem;
   display: grid;
   gap: var(--studio-ai-sessions-layout-gap);
   height: 100%;
   min-height: 0;
+  min-width: 0;
+  overflow: hidden;
 }
 
-.studio-ai-sessions__empty {
-  align-items: center;
-  display: grid;
-  gap: 0.75rem;
-  justify-items: center;
-  min-height: 14rem;
-  padding: 1rem;
-}
-
-.studio-ai-sessions__empty-create {
-  min-width: 11rem;
-}
-
-.studio-ai-sessions__empty-reason {
-  margin: 0;
-  max-width: 24rem;
-  text-align: center;
-}
-
-.studio-ai-sessions__dashboard-empty-pane {
+.studio-ai-sessions__empty-main,
+.studio-ai-sessions__empty-workspace-panel {
+  background: rgb(var(--v-theme-surface));
+  border: 1px solid rgba(var(--v-theme-outline), 0.14);
+  border-radius: 14px;
+  box-shadow: 0 0.75rem 2rem rgba(15, 23, 42, 0.06);
   min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.studio-ai-sessions__empty-main,
+.studio-ai-sessions__empty-workspace-panel,
+.studio-ai-sessions__preview-empty-pane {
+  display: grid;
+}
+
+.studio-ai-sessions__empty-main {
+  gap: 0.16rem;
+  grid-template-rows: auto minmax(0, 1fr) auto auto auto;
+  overflow: visible;
+  padding: 0.05rem 0.65rem 0.18rem;
+}
+
+.studio-ai-sessions__empty-session-header {
+  display: grid;
+  gap: 0.28rem;
   min-width: 0;
 }
 
-.studio-ai-sessions__header {
+.studio-ai-sessions__empty-chat-body {
+  align-items: start;
+  display: grid;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0.25rem 0.1rem 0 0;
+  scrollbar-gutter: stable;
+}
+
+.studio-ai-sessions__empty-hint {
+  background: rgba(var(--v-theme-primary), 0.08);
+  border: 1px solid rgba(var(--v-theme-primary), 0.16);
+  border-radius: 10px;
+  color: rgba(var(--v-theme-on-surface), 0.76);
+  font-size: 0.86rem;
+  line-height: 1.35;
+  max-width: 100%;
+  padding: 0.55rem 0.65rem;
+}
+
+.studio-ai-sessions__empty-thinking {
+  align-items: center;
+  color: rgba(var(--v-theme-on-surface), 0.72);
+  display: flex;
+  font-size: 0.86rem;
+  gap: 0.38rem;
+  min-height: 1.35rem;
+}
+
+.studio-ai-sessions__empty-thinking--empty {
+  visibility: hidden;
+}
+
+.studio-ai-sessions__empty-thinking-mark {
+  background: rgb(var(--v-theme-primary));
+  border-radius: 999px;
+  box-shadow: 0 0 0 0.24rem rgba(var(--v-theme-primary), 0.12);
+  height: 0.48rem;
+  width: 0.48rem;
+}
+
+.studio-ai-sessions__empty-runtime-status {
+  display: none;
+}
+
+.studio-ai-sessions__empty-composer {
+  min-height: 0.35rem;
+  min-width: 0;
+}
+
+.studio-ai-sessions__dashboard-empty-pane {
+  align-content: start;
+  display: grid;
+  gap: 0.75rem;
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 0.85rem;
+  scrollbar-gutter: stable;
+}
+
+.studio-ai-sessions__preview-empty-pane {
+  align-items: center;
+  justify-items: center;
+  min-height: 0;
+  min-width: 0;
+  padding: 1rem;
+}
+
+.studio-ai-sessions__preview-empty-content {
+  align-items: center;
   display: grid;
   gap: 0.65rem;
+  justify-items: center;
+  max-width: min(100%, 26rem);
+  text-align: center;
+}
+
+.studio-ai-sessions__preview-empty-title {
+  color: rgba(var(--v-theme-on-surface), 0.78);
+  font-size: 0.98rem;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.studio-ai-sessions__preview-empty-detail {
+  color: rgba(var(--v-theme-on-surface), 0.62);
+  font-size: 0.86rem;
+  line-height: 1.35;
+  margin: -0.25rem 0 0;
+  max-width: 24rem;
+}
+
+.studio-ai-sessions__preview-empty-loading {
+  align-items: center;
+  color: rgba(var(--v-theme-on-surface), 0.62);
+  display: inline-flex;
+  font-size: 0.86rem;
+  gap: 0.55rem;
+  justify-content: center;
 }
 
 .studio-ai-sessions__error-overlay {
@@ -407,8 +561,21 @@ watch(pageError, (error) => {
     grid-template-rows: minmax(0, 1fr);
   }
 
-  .studio-ai-sessions--autopilot.studio-ai-sessions--with-header {
-    grid-template-rows: auto minmax(0, 1fr);
+  .studio-ai-sessions__empty-layout {
+    grid-template-columns:
+      minmax(
+        var(--studio-home-chat-column-min-width, 24rem),
+        var(--studio-home-chat-column-width, 30rem)
+      )
+      minmax(0, 1fr);
+  }
+
+  .studio-ai-sessions__empty-layout--chat-collapsed {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .studio-ai-sessions__empty-layout--chat-collapsed .studio-ai-sessions__empty-main {
+    display: none;
   }
 
   .studio-ai-sessions__runtime-stack {
@@ -416,25 +583,27 @@ watch(pageError, (error) => {
   }
 
   .studio-ai-sessions__empty-layout--dashboard {
-    --studio-ai-sessions-codex-terminal-column: minmax(30rem, 1fr);
-    --studio-ai-sessions-main-column: minmax(13rem, 18rem);
     align-items: stretch;
-    grid-template-columns: var(--studio-ai-sessions-main-column) var(--studio-ai-sessions-codex-terminal-column);
     height: 100%;
     overflow: hidden;
   }
+}
 
-  .studio-ai-sessions__empty-layout--dashboard .studio-ai-sessions__empty-main {
-    width: min(100%, 16rem);
+@media (max-width: 980px) {
+  .studio-ai-sessions__empty-layout {
+    grid-template-rows: minmax(0, 1fr);
   }
 
-  .studio-ai-sessions__empty-layout--dashboard .studio-ai-sessions__empty {
-    min-height: 10rem;
-    padding: 0.75rem;
+  .studio-ai-sessions__empty-workspace-panel {
+    display: none;
   }
 
-  .studio-ai-sessions__empty-layout--dashboard .studio-ai-sessions__empty-create {
-    min-width: 9rem;
+  .studio-ai-sessions__empty-layout--chat-collapsed .studio-ai-sessions__empty-main {
+    display: none;
+  }
+
+  .studio-ai-sessions__empty-layout--chat-collapsed .studio-ai-sessions__empty-workspace-panel {
+    display: grid;
   }
 }
 </style>

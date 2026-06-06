@@ -34,9 +34,9 @@
       </v-chip>
 
       <Vibe64CreateSessionButton
-        v-if="createSessionVisible"
+        v-if="createVisible"
         aria-label="New session"
-        button-class="studio-ai-sessions__create-button"
+        :button-class="createSessionButtonClass"
         icon-only
         :toolbar="toolbar"
       />
@@ -74,6 +74,14 @@ const props = defineProps({
     default: false,
     type: Boolean
   },
+  createAttention: {
+    default: false,
+    type: Boolean
+  },
+  createVisible: {
+    default: true,
+    type: Boolean
+  },
   maxVisibleSessions: {
     default: 3,
     type: Number
@@ -90,11 +98,12 @@ function sessionTabLabel(sessionItem = {}) {
 
 const allSessions = computed(() => Array.isArray(props.toolbar.sessions) ? props.toolbar.sessions : []);
 const sessionLimit = computed(() => Math.max(0, Number(props.maxVisibleSessions || 0)));
-const sessionLimitReached = computed(() => Boolean(
-  sessionLimit.value > 0 &&
-  allSessions.value.length >= sessionLimit.value
-));
-const createSessionVisible = computed(() => !sessionLimitReached.value);
+const createSessionButtonClass = computed(() => [
+  "studio-ai-sessions__create-button",
+  {
+    "studio-ai-sessions__create-button--attention": props.createAttention
+  }
+]);
 const visibleSessions = computed(() => {
   const limit = sessionLimit.value;
   if (limit < 1 || allSessions.value.length <= limit) {
@@ -174,21 +183,6 @@ const visibleSessions = computed(() => {
   font-size: 1.15rem;
 }
 
-.studio-ai-sessions__create-button {
-  background: var(--studio-control-rest-bg, #f7f7f8) !important;
-  border: 1px solid transparent;
-  border-radius: 999px;
-  box-shadow: none !important;
-  color: #1a73e8 !important;
-  height: 3rem;
-  min-height: 3rem;
-  min-width: 3rem;
-}
-
-.studio-ai-sessions__create-button:hover {
-  background: var(--studio-control-active-bg, #e7e7e7) !important;
-}
-
 .studio-ai-sessions__status-dot {
   background: rgb(var(--v-theme-primary));
   border-radius: 999px;
@@ -240,13 +234,6 @@ const visibleSessions = computed(() => {
 
 .studio-ai-sessions__toolbar--compact .studio-ai-sessions__tab-abandon :deep(.v-icon) {
   font-size: 1.15rem;
-}
-
-.studio-ai-sessions__toolbar--compact .studio-ai-sessions__create-button {
-  height: 2rem;
-  min-height: 2rem;
-  min-width: 2rem;
-  width: 2rem;
 }
 
 @media (max-width: 640px) {

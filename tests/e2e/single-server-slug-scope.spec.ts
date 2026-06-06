@@ -175,15 +175,15 @@ test("first-run owner setup reaches management and opens a slug-scoped workspace
   await expect(page).toHaveURL(new RegExp(`${DEVELOPMENT_PATH}$`, "u"));
   await expect(page.getByRole("tab", { name: "Preview", exact: true })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("tab", { name: "Dashboard", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Start session" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Create session" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Start session" }).click();
+  await page.getByRole("button", { name: "Create session" }).click();
   await page.getByRole("listitem").filter({ hasText: "Make improvements" }).click();
   await expect(page.getByText("Created session")).toBeVisible();
   await page.getByLabel("Abandon session").click();
   await expect(page.getByRole("dialog", { name: "Abandon session?" })).toBeVisible();
   await page.getByRole("dialog", { name: "Abandon session?" }).getByRole("button", { name: "Abandon session" }).click();
-  await expect(page.getByRole("button", { name: "Start session" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Create session" })).toBeVisible();
   await expect(page.getByText("No sessions yet.")).toHaveCount(0);
 
   await page.getByRole("tab", { name: "Dashboard", exact: true }).click();

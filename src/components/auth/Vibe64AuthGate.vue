@@ -209,12 +209,6 @@ void refresh();
     :setup-required="state.setupRequired"
     @authenticated="applyAuthenticated"
   />
-  <main
-    v-else-if="githubPrerequisite.checking && !githubPrerequisiteRouteActive"
-    class="vibe64-auth-gate__loading"
-  >
-    <v-progress-circular indeterminate color="primary" />
-  </main>
   <slot v-else />
 </template>
 

@@ -355,6 +355,7 @@ const {
   terminalDisplayed,
   terminalDockVisible,
   terminalError,
+  terminalExpanded,
   terminalIndicatorLabel,
   terminalIndicatorState,
   terminalIsRunning,
@@ -394,9 +395,13 @@ const workspaceSlug = useVibe64WorkspaceSlug();
 let previewReadyRetryCount = 0;
 let previewReadyRetryTimer = 0;
 const toolbarTeleportTarget = computed(() => String(props.toolbarTeleportTarget || "").trim());
-const embeddedTerminalVisible = computed(() => Boolean(props.embeddedPreview && terminalWindowVisible.value));
+const embeddedTerminalVisible = computed(() => Boolean(
+  props.embeddedPreview &&
+  terminalDisplayed.value &&
+  terminalExpanded.value
+));
 const launchToolbarDockVisible = computed(() => props.embeddedPreview
-  ? terminalVisible.value
+  ? Boolean(terminalVisible.value || embeddedTerminalVisible.value)
   : terminalDockVisible.value);
 const requestedAutoStartTargetId = computed(() => String(props.autoStartTargetId || "").trim());
 const embeddedAutoStartTarget = computed(() => {
@@ -861,9 +866,17 @@ onBeforeUnmount(() => {
 }
 
 .vibe64-launch-controls__terminal--embedded {
+  align-self: start;
   border-radius: 12px;
   box-shadow: none;
-  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  height: clamp(37rem, 72vh, 56rem);
+  justify-self: stretch;
+  margin: 0.65rem;
+  max-height: calc(100% - 1.3rem);
+  min-height: 24rem;
+  overflow: hidden;
   z-index: 2;
 }
 
@@ -899,8 +912,20 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
-.vibe64-launch-controls__terminal :deep(.vibe64-terminal-frame__host) {
+.vibe64-launch-controls__terminal:not(.vibe64-launch-controls__terminal--embedded) :deep(.vibe64-terminal-frame__host) {
   height: calc(100% - 5rem);
+}
+
+.vibe64-launch-controls__terminal--embedded :deep(.vibe64-terminal-frame__host) {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+}
+
+.vibe64-launch-controls__terminal--embedded :deep(.vibe64-terminal-frame__stage) {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 @media (max-width: 760px) {
@@ -918,6 +943,16 @@ onBeforeUnmount(() => {
 
   .vibe64-launch-controls__position-button {
     display: none;
+  }
+
+  .vibe64-launch-controls__terminal--embedded {
+    height: clamp(24rem, 68vh, 40rem);
+    min-height: 20rem;
+  }
+
+  .vibe64-launch-controls__terminal--embedded :deep(.vibe64-terminal-frame__host) {
+    height: auto;
+    min-height: 0;
   }
 }
 

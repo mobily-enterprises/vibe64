@@ -193,7 +193,7 @@ test("embedded preview stays mounted and does not reload while covered by dashbo
   });
 
   await page.getByRole("tab", { name: "Dashboard" }).click();
-  await expect(page).toHaveURL(new RegExp(`${escapeRegExp(DASHBOARD_PATH)}/accounts/?$`, "u"));
+  await expect(page).toHaveURL(new RegExp(`${escapeRegExp(DASHBOARD_PATH)}/configure/?$`, "u"));
   await page.waitForTimeout(5500);
 
   await expect(previewFrame).toHaveCount(1);
@@ -248,6 +248,75 @@ test("embedded preview stays mounted when switching selected sessions", async ({
     const refs = window as unknown as { __vibe64AlphaPreviewFrame?: Element | null };
     return frame === refs.__vibe64AlphaPreviewFrame;
   })).toBe(true);
+});
+
+test("mobile workspace tabs use action labels", async ({ page }) => {
+  await page.setViewportSize({
+    height: 844,
+    width: 390
+  });
+  await mockLaunchTerminalSocket(page);
+  await mockLaunchSession(page);
+
+  await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+
+  await expect(page.getByRole("tab", {
+    exact: true,
+    name: "Go to preview"
+  })).toBeVisible();
+  await expect(page.getByRole("tab", {
+    exact: true,
+    name: "Go to dashboard"
+  })).toBeVisible();
+  await expect(page.getByRole("tab", {
+    exact: true,
+    name: "Preview"
+  })).toHaveCount(0);
+  await expect(page.getByRole("tab", {
+    exact: true,
+    name: "Dashboard"
+  })).toHaveCount(0);
+});
+
+test("mobile dashboard section links keep the active workspace slug", async ({ page }) => {
+  await page.setViewportSize({
+    height: 844,
+    width: 390
+  });
+  await mockLaunchTerminalSocket(page);
+  await mockLaunchSession(page);
+
+  await page.goto(`${BASE_URL}${DASHBOARD_PATH}/configure`);
+  await page.getByRole("button", {
+    name: "Show workspace"
+  }).click();
+  await page.locator(".section-container-shell__mobile-section-title", {
+    hasText: "Run"
+  }).click();
+
+  await expect(page).toHaveURL(`${BASE_URL}${DASHBOARD_PATH}/run`);
+  expect(page.url()).not.toContain("[slug]");
+});
+
+test("session panel shows loading feedback instead of empty create state while sessions load", async ({ page }) => {
+  await mockLaunchTerminalSocket(page);
+  await mockLaunchSession(page, {
+    sessionListDelayMs: 3000
+  });
+
+  await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+
+  await expect(page.getByText("Loading sessions.").first()).toBeVisible();
+  await expect(page.getByText("Create a session to start preview.")).toHaveCount(0);
+  await expect(page.getByRole("button", {
+    name: "Create session"
+  })).toHaveCount(0);
+  await expect(page.getByRole("button", {
+    name: "New session"
+  })).toHaveCount(0);
+
+  await expect(page.locator(".vibe64-launch-controls__preview-frame")).toBeVisible();
+  await expect(page.getByText("Create a session to start preview.")).toHaveCount(0);
 });
 
 test("embedded launch terminal can be shown and hidden again", async ({ page }) => {
@@ -313,6 +382,32 @@ test("embedded launch terminal errors do not push the terminal host down", async
   expect(Math.abs(hostTopAfter - hostTopBefore)).toBeLessThan(1);
 });
 
+test("embedded launch terminal stays expanded after the launch exits", async ({ page }) => {
+  await mockLaunchTerminalSocket(page, {
+    terminalExitCode: 1,
+    terminalExitDelayMs: 120
+  });
+  await mockLaunchSession(page);
+
+  await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+  await page.getByRole("button", {
+    name: "Show launch terminal"
+  }).click();
+
+  const terminal = page.locator(".vibe64-launch-controls__terminal--embedded");
+  const terminalHost = terminal.locator(".vibe64-terminal-frame__host");
+  await expect(terminalHost).toBeVisible();
+  const hostHeightBefore = await terminalHost.evaluate((element) => element.getBoundingClientRect().height);
+
+  await expect(page.getByText("Exited with code 1")).toBeVisible();
+  await expect(terminal).toBeVisible();
+  const hostHeightAfter = await terminalHost.evaluate((element) => element.getBoundingClientRect().height);
+
+  expect(hostHeightBefore).toBeGreaterThan(320);
+  expect(hostHeightAfter).toBeGreaterThan(320);
+  expect(Math.abs(hostHeightAfter - hostHeightBefore)).toBeLessThan(1);
+});
+
 async function mockLaunchSession(page: Page, {
   initialLaunchStatus = null,
   launchTargetsDelayMs = 0,
@@ -321,7 +416,8 @@ async function mockLaunchSession(page: Page, {
   previewReadyLoadNumber = 1,
   previewResponseDelayMs = 0,
   session = sessionPayload(),
-  sessionList = null
+  sessionList = null,
+  sessionListDelayMs = 0
 }: {
   initialLaunchStatus?: ReturnType<typeof launchStatusPayload> | null;
   launchTargetsDelayMs?: number;
@@ -331,6 +427,7 @@ async function mockLaunchSession(page: Page, {
   previewResponseDelayMs?: number;
   session?: ReturnType<typeof sessionPayload>;
   sessionList?: ReturnType<typeof sessionPayload>[] | null;
+  sessionListDelayMs?: number;
 } = {}) {
   const listedSessions = Array.isArray(sessionList) ? sessionList : [session];
   const launchStartPayloads: unknown[] = [];
@@ -385,6 +482,11 @@ async function mockLaunchSession(page: Page, {
         ...sessionForRequest(url.pathname)
       });
       return;
+    }
+    if (sessionListDelayMs > 0) {
+      await new Promise((resolve) => {
+        setTimeout(resolve, sessionListDelayMs);
+      });
     }
     await fulfillJson(route, {
       limits: {
@@ -461,11 +563,20 @@ setTimeout(() => postReady("rendered"), ${readyDelay});
 }
 
 async function mockLaunchTerminalSocket(page: Page, {
-  terminalErrorDelayMs = 0
+  terminalErrorDelayMs = 0,
+  terminalExitCode = 0,
+  terminalExitDelayMs = 0
 }: {
   terminalErrorDelayMs?: number;
+  terminalExitCode?: number;
+  terminalExitDelayMs?: number;
 } = {}) {
-  await page.addInitScript(({ targetAppUrl, terminalErrorDelayMs: errorDelayMs }) => {
+  await page.addInitScript(({
+    targetAppUrl,
+    terminalErrorDelayMs: errorDelayMs,
+    terminalExitCode: exitCode,
+    terminalExitDelayMs: exitDelayMs
+  }) => {
     const OriginalWebSocket = window.WebSocket;
 
     class MockWebSocket extends EventTarget {
@@ -521,6 +632,17 @@ async function mockLaunchTerminalSocket(page: Page, {
               }));
             }, errorDelayMs);
           }
+          if (exitDelayMs > 0) {
+            window.setTimeout(() => {
+              this.dispatchEvent(new MessageEvent("message", {
+                data: JSON.stringify({
+                  exitCode,
+                  status: "exited",
+                  type: "status"
+                })
+              }));
+            }, exitDelayMs);
+          }
         }, 0);
       }
 
@@ -535,7 +657,9 @@ async function mockLaunchTerminalSocket(page: Page, {
     window.WebSocket = MockWebSocket as unknown as typeof WebSocket;
   }, {
     targetAppUrl: TARGET_APP_URL,
-    terminalErrorDelayMs
+    terminalErrorDelayMs,
+    terminalExitCode,
+    terminalExitDelayMs
   });
 }
 
