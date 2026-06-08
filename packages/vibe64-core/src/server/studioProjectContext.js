@@ -1,5 +1,5 @@
 import { constants as fsConstants } from "node:fs";
-import { access, lstat, mkdir, readdir, stat } from "node:fs/promises";
+import { access, lstat, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
@@ -10,6 +10,7 @@ import {
 } from "./studioRoots.js";
 
 const WORKSPACE_SLUG_PATTERN = /^[a-z0-9][a-z0-9_-]*$/u;
+const WORKSPACE_METADATA_PATH = [".vibe64", "workspace.json"];
 
 let configuredContext = null;
 
@@ -150,16 +151,92 @@ function projectRecord({
 }
 
 function workspaceRecord({
+  metadata = {},
   path: workspacePath = "",
   projectsRoot = ""
 } = {}) {
   const resolvedPath = normalizeRoot(workspacePath);
   return {
+    githubRepository: normalizeWorkspaceGithubRepository(metadata?.githubRepository),
     path: resolvedPath,
     slug: path.basename(resolvedPath),
     workspaceRoot: resolvedPath,
     workspaceRootRelative: path.relative(normalizeRoot(projectsRoot), resolvedPath)
   };
+}
+
+function workspaceMetadataPath(workspaceRoot = "") {
+  return path.join(normalizeRoot(workspaceRoot), ...WORKSPACE_METADATA_PATH);
+}
+
+function normalizeWorkspaceGithubRepository(value = {}) {
+  const fullName = String(value?.fullName || "").trim();
+  const owner = String(value?.owner || "").trim();
+  const name = String(value?.name || "").trim();
+  if (!fullName && (!owner || !name)) {
+    return null;
+  }
+  const normalizedFullName = fullName || `${owner}/${name}`;
+  return {
+    canPush: value?.canPush === true,
+    cloneUrl: String(value?.cloneUrl || "").trim(),
+    defaultBranch: String(value?.defaultBranch || "").trim(),
+    fullName: normalizedFullName,
+    isPrivate: value?.isPrivate === true,
+    name: name || normalizedFullName.split("/").pop() || "",
+    owner: owner || normalizedFullName.split("/")[0] || "",
+    source: String(value?.source || "").trim(),
+    url: String(value?.url || "").trim(),
+    viewerPermission: String(value?.viewerPermission || "").trim().toUpperCase(),
+    visibility: String(value?.visibility || "").trim().toLowerCase()
+  };
+}
+
+function workspaceMetadataFromInput(input = {}) {
+  const githubRepository = normalizeWorkspaceGithubRepository(input?.githubRepository);
+  return githubRepository
+    ? {
+        githubRepository
+      }
+    : {};
+}
+
+async function readWorkspaceMetadata(workspaceRoot = "") {
+  try {
+    return JSON.parse(await readFile(workspaceMetadataPath(workspaceRoot), "utf8"));
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return {};
+    }
+    if (error instanceof SyntaxError) {
+      return {};
+    }
+    throw error;
+  }
+}
+
+async function writeWorkspaceMetadata(workspaceRoot = "", metadata = {}) {
+  const normalizedMetadata = workspaceMetadataFromInput(metadata);
+  await mkdir(path.dirname(workspaceMetadataPath(workspaceRoot)), {
+    recursive: true
+  });
+  await writeFile(
+    workspaceMetadataPath(workspaceRoot),
+    `${JSON.stringify(normalizedMetadata, null, 2)}\n`,
+    "utf8"
+  );
+  return normalizedMetadata;
+}
+
+async function workspaceRecordForPath({
+  path: workspacePath = "",
+  projectsRoot = ""
+} = {}) {
+  return workspaceRecord({
+    metadata: await readWorkspaceMetadata(workspacePath),
+    path: workspacePath,
+    projectsRoot
+  });
 }
 
 function createStudioProjectContext({
@@ -220,20 +297,21 @@ function createStudioProjectContext({
     const entries = await readdir(projectsRoot, {
       withFileTypes: true
     });
-    const workspaces = entries
+    const workspacePaths = entries
       .filter((entry) => entry.isDirectory())
-      .map((entry) => workspaceRecord({
-        path: path.join(projectsRoot, entry.name),
-        projectsRoot
-      }))
+      .map((entry) => path.join(projectsRoot, entry.name))
       .filter((entry) => {
         try {
-          normalizeWorkspaceSlug(entry.slug);
+          normalizeWorkspaceSlug(path.basename(entry));
           return true;
         } catch {
           return false;
         }
-      })
+      });
+    const workspaces = (await Promise.all(workspacePaths.map((workspacePath) => workspaceRecordForPath({
+      path: workspacePath,
+      projectsRoot
+    }))))
       .sort((left, right) => left.slug.localeCompare(right.slug));
     return {
       ok: true,
@@ -255,10 +333,32 @@ function createStudioProjectContext({
         recursive: true
       });
     }
+    const metadata = workspaceMetadataFromInput(input);
+    if (Object.keys(metadata).length > 0) {
+      await writeWorkspaceMetadata(targetRoot, metadata);
+    }
     return {
       ok: true,
       projectsRoot,
-      workspace: workspaceRecord({
+      workspace: await workspaceRecordForPath({
+        path: targetRoot,
+        projectsRoot
+      })
+    };
+  }
+
+  async function updateManagedWorkspaceMetadata(input = {}) {
+    const slug = workspaceSlugFromInput(input);
+    const targetRoot = resolveWorkspaceRoot({
+      projectsRoot,
+      slug
+    });
+    await assertDirectoryUsable(targetRoot);
+    await writeWorkspaceMetadata(targetRoot, input);
+    return {
+      ok: true,
+      projectsRoot,
+      workspace: await workspaceRecordForPath({
         path: targetRoot,
         projectsRoot
       })
@@ -324,7 +424,8 @@ function createStudioProjectContext({
     listProjects,
     listManagedWorkspaces,
     requireSelectedTargetRoot,
-    selectManagedProject
+    selectManagedProject,
+    updateManagedWorkspaceMetadata
   });
 }
 

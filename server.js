@@ -214,7 +214,12 @@ async function createServer(options = {}) {
     explicitProjectsRoot: options.projectsRoot,
     explicitTargetRoot: options.targetRoot
   });
-  registerVibe64WorkspaceRoutes(app, projectContext);
+  registerVibe64WorkspaceRoutes(app, projectContext, {
+    dataRoot: options.authDataRoot,
+    env: runtimeEnv,
+    providerHomesRoot: options.providerHomesRoot,
+    runGithubToolchain: options.runGithubToolchain
+  });
   const targetRoot = projectContext.targetRoot || "";
   const distRoot = path.resolve(appRoot, "dist");
   const hasWebBuild = existsSync(path.resolve(distRoot, SPA_INDEX_FILE));

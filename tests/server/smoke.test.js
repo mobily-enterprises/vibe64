@@ -8,7 +8,7 @@ import WebSocket from "ws";
 import { createServer, startServer } from "../../server.js";
 import { BROWSER_LIFECYCLE_WEBSOCKET_PATH } from "../../server/lib/browserLifecycle.js";
 import { resolveRuntimeEnv } from "../../server/lib/runtimeEnv.js";
-import { WORKSPACE_API_BASE } from "../../server/lib/workspaceRoutes.js";
+import { GITHUB_API_BASE, WORKSPACE_API_BASE } from "../../server/lib/workspaceRoutes.js";
 
 async function withTemporaryPackageRoot(packageName, callback) {
   const projectsRoot = await mkdtemp(path.join(tmpdir(), "vibe64-projects-"));
@@ -285,6 +285,132 @@ test("management workspace API lists and creates slugs without global selection"
   }
 });
 
+test("only owners can add GitHub-backed projects", async () => {
+  const authDataRoot = await mkdtemp(path.join(tmpdir(), "vibe64-auth-github-workspaces-"));
+  const projectsRoot = await mkdtemp(path.join(tmpdir(), "vibe64-github-workspaces-"));
+  const calls = [];
+  const app = await createServer({
+    authDataRoot,
+    projectsRoot,
+    runGithubToolchain: fakeGithubWorkspaceToolchain(calls),
+    verifySupabaseAccessToken: fakeVerifySupabaseAccessToken
+  });
+  try {
+    const ownerCookie = await authenticateOwner(app);
+    const ownerHeaders = {
+      cookie: Array.isArray(ownerCookie) ? ownerCookie[0] : ownerCookie
+    };
+    const memberCookie = await authenticateMember(app);
+    const memberHeaders = {
+      cookie: Array.isArray(memberCookie) ? memberCookie[0] : memberCookie
+    };
+
+    const memberOwners = await app.inject({
+      headers: memberHeaders,
+      method: "GET",
+      url: `${GITHUB_API_BASE}/repository-owners`
+    });
+    assert.equal(memberOwners.statusCode, 200);
+
+    const owners = await app.inject({
+      headers: ownerHeaders,
+      method: "GET",
+      url: `${GITHUB_API_BASE}/repository-owners`
+    });
+    assert.equal(owners.statusCode, 200);
+    assert.deepEqual(owners.json().owners.map((owner) => owner.login), ["octocat", "vibe64-org", "readonly-org"]);
+
+    const repositoryList = await app.inject({
+      headers: memberHeaders,
+      method: "GET",
+      url: `${GITHUB_API_BASE}/repositories/search?owner=vibe64-org`
+    });
+    assert.equal(repositoryList.statusCode, 200);
+    assert.deepEqual(
+      repositoryList.json().repositories.map((repository) => repository.fullName),
+      ["vibe64-org/mickeymouse", "vibe64-org/donald"]
+    );
+
+    const memberOpen = await app.inject({
+      headers: memberHeaders,
+      method: "POST",
+      payload: {
+        repository: "vibe64-org/mickeymouse",
+        slug: "member_opened"
+      },
+      url: `${WORKSPACE_API_BASE}/from-repository`
+    });
+    assert.equal(memberOpen.statusCode, 403);
+    assert.equal(memberOpen.json().errors[0].code, "vibe64_owner_required");
+
+    const memberCreate = await app.inject({
+      headers: memberHeaders,
+      method: "POST",
+      payload: {
+        name: "member-repo",
+        owner: "vibe64-org",
+        slug: "member_repo",
+        visibility: "private"
+      },
+      url: `${WORKSPACE_API_BASE}/create-repository`
+    });
+    assert.equal(memberCreate.statusCode, 403);
+
+    const opened = await app.inject({
+      headers: ownerHeaders,
+      method: "POST",
+      payload: {
+        repository: "vibe64-org/mickeymouse",
+        slug: "beepollen"
+      },
+      url: `${WORKSPACE_API_BASE}/from-repository`
+    });
+    assert.equal(opened.statusCode, 200);
+    assert.equal(opened.json().workspace.slug, "beepollen");
+    assert.equal(opened.json().workspace.githubRepository.fullName, "vibe64-org/mickeymouse");
+    assert.equal(opened.json().workspace.githubRepository.canPush, false);
+
+    const created = await app.inject({
+      headers: ownerHeaders,
+      method: "POST",
+      payload: {
+        name: "new-repo",
+        owner: "vibe64-org",
+        slug: "new_workspace",
+        visibility: "private"
+      },
+      url: `${WORKSPACE_API_BASE}/create-repository`
+    });
+    assert.equal(created.statusCode, 200);
+    assert.equal(created.json().workspace.slug, "new_workspace");
+    assert.equal(created.json().workspace.githubRepository.fullName, "vibe64-org/new-repo");
+
+    const listed = await app.inject({
+      headers: ownerHeaders,
+      method: "GET",
+      url: WORKSPACE_API_BASE
+    });
+    assert.deepEqual(
+      listed.json().workspaces.map((workspace) => workspace.githubRepository?.fullName),
+      ["vibe64-org/mickeymouse", "vibe64-org/new-repo"]
+    );
+    assert.ok(calls.some((call) => call.command.join(" ") === "gh repo clone vibe64-org/mickeymouse ."));
+    assert.ok(calls.some((call) => call.command.join(" ") === "git init -b main"));
+    assert.ok(calls.some((call) => call.command.join(" ") === "gh repo create vibe64-org/new-repo --private --source=. --remote=origin"));
+    assert.ok(calls.some((call) => call.command.join(" ") === "gh repo list vibe64-org --limit 1000 --json name,nameWithOwner,description,isPrivate,isArchived,url,sshUrl,defaultBranchRef,pushedAt,viewerPermission,owner"));
+  } finally {
+    await app.close();
+    await rm(authDataRoot, {
+      force: true,
+      recursive: true
+    });
+    await rm(projectsRoot, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
 test("started server publishes management mode as the browser entry URL", async () => {
   const app = await startServer({
     host: "127.0.0.1",
@@ -344,6 +470,143 @@ async function fakeVerifySupabaseAccessToken(token = "") {
   const error = new Error("Unknown test token.");
   error.code = "vibe64_supabase_user_verification_failed";
   throw error;
+}
+
+function fakeGithubWorkspaceToolchain(calls) {
+  return async function runGithubToolchain(command, options = {}) {
+    calls.push({
+      command,
+      targetRoot: options.targetRoot || ""
+    });
+    const joined = command.join(" ");
+    if (joined.startsWith("gh api graphql")) {
+      return toolchainJson({
+        data: {
+          viewer: {
+            avatarUrl: "https://github.com/octocat.png",
+            login: "octocat",
+            organizations: {
+              nodes: [
+                {
+                  avatarUrl: "https://github.com/vibe64-org.png",
+                  login: "vibe64-org",
+                  name: "Vibe64 Org",
+                  viewerCanCreateRepositories: true
+                },
+                {
+                  avatarUrl: "https://github.com/readonly-org.png",
+                  login: "readonly-org",
+                  name: "Read Only Org",
+                  viewerCanCreateRepositories: false
+                }
+              ]
+            }
+          }
+        }
+      });
+    }
+    if (joined === "gh repo view vibe64-org/mickeymouse --json name,nameWithOwner,description,visibility,isPrivate,owner,defaultBranchRef,url,sshUrl,viewerPermission,isArchived") {
+      return toolchainJson(githubRepositoryView({
+        name: "mickeymouse",
+        nameWithOwner: "vibe64-org/mickeymouse",
+        viewerPermission: "READ"
+      }));
+    }
+    if (joined === "gh repo view vibe64-org/new-repo --json name,nameWithOwner,description,visibility,isPrivate,owner,defaultBranchRef,url,sshUrl,viewerPermission,isArchived") {
+      return toolchainJson(githubRepositoryView({
+        name: "new-repo",
+        nameWithOwner: "vibe64-org/new-repo",
+        viewerPermission: "ADMIN"
+      }));
+    }
+    if (joined === "gh repo list vibe64-org --limit 1000 --json name,nameWithOwner,description,isPrivate,isArchived,url,sshUrl,defaultBranchRef,pushedAt,viewerPermission,owner") {
+      return toolchainJson([
+        githubRepositoryListItem({
+          name: "mickeymouse",
+          nameWithOwner: "vibe64-org/mickeymouse",
+          viewerPermission: "READ"
+        }),
+        githubRepositoryListItem({
+          name: "donald",
+          nameWithOwner: "vibe64-org/donald",
+          viewerPermission: "WRITE"
+        })
+      ]);
+    }
+    if (
+      joined === "gh repo clone vibe64-org/mickeymouse ." ||
+      joined === "git init -b main" ||
+      joined === "gh repo create vibe64-org/new-repo --private --source=. --remote=origin"
+    ) {
+      return {
+        ok: true,
+        output: "",
+        stdout: ""
+      };
+    }
+    return {
+      ok: false,
+      output: `Unexpected fake GitHub command: ${joined}`,
+      stdout: ""
+    };
+  };
+}
+
+function githubRepositoryView({
+  name,
+  nameWithOwner,
+  viewerPermission
+}) {
+  return {
+    defaultBranchRef: {
+      name: "main"
+    },
+    description: "A repository",
+    isArchived: false,
+    isPrivate: true,
+    name,
+    nameWithOwner,
+    owner: {
+      login: nameWithOwner.split("/")[0]
+    },
+    sshUrl: `git@github.com:${nameWithOwner}.git`,
+    url: `https://github.com/${nameWithOwner}`,
+    viewerPermission,
+    visibility: "PRIVATE"
+  };
+}
+
+function githubRepositoryListItem({
+  name,
+  nameWithOwner,
+  viewerPermission
+}) {
+  return {
+    defaultBranchRef: {
+      name: "main"
+    },
+    description: "A repository",
+    isArchived: false,
+    isPrivate: true,
+    name,
+    nameWithOwner,
+    owner: {
+      login: nameWithOwner.split("/")[0]
+    },
+    pushedAt: "2026-06-07T00:00:00Z",
+    sshUrl: `git@github.com:${nameWithOwner}.git`,
+    url: `https://github.com/${nameWithOwner}`,
+    viewerPermission
+  };
+}
+
+function toolchainJson(payload) {
+  const stdout = JSON.stringify(payload);
+  return {
+    ok: true,
+    output: stdout,
+    stdout
+  };
 }
 
 function connectWebSocket(url, options = {}) {

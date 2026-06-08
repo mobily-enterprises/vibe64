@@ -13,33 +13,39 @@ import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import {
   mdiArrowRight,
+  mdiGithub,
   mdiPlus
 } from "@mdi/js";
 import ShellLayout from "@/components/ShellLayout.vue";
 import Vibe64AccountMenu from "@/components/auth/Vibe64AccountMenu.vue";
 import Vibe64UserManagement from "@/components/auth/Vibe64UserManagement.vue";
+import Vibe64AddProjectWizard from "@/components/manage/Vibe64AddProjectWizard.vue";
 import AIAccountsSetup from "@/components/studio/AIAccountsSetup.vue";
 import StudioSetupDoctorScreen from "@/components/studio/StudioSetupDoctorScreen.vue";
+import {
+  useVibe64AppAuth
+} from "@/composables/useVibe64AppAuth.js";
 import { useStudioShellDrawer } from "@/composables/useStudioShellDrawer.js";
 import {
-  createWorkspace,
   readWorkspaces
 } from "@/lib/vibe64WorkspaceApi.js";
 
 const router = useRouter();
+const auth = useVibe64AppAuth();
 const loading = ref(true);
-const saving = ref(false);
 const loadError = ref("");
-const formError = ref("");
 const projectsRoot = ref("");
-const slug = ref("");
 const workspaces = ref([]);
+const addProjectDialogOpen = ref(false);
 const activeManagementView = ref("workspaces");
 const sortedWorkspaces = computed(() => [...workspaces.value].sort((left, right) => left.slug.localeCompare(right.slug)));
-const slugHint = computed(() => slug.value.trim() ? "Lowercase letters, numbers, dashes, and underscores." : "");
+const canManageWorkspaces = computed(() => auth?.state?.user?.owner === true || auth?.state?.user?.role === "owner");
+const emptyProjectsMessage = computed(() => canManageWorkspaces.value
+  ? "No projects yet. Add a project to create the first one."
+  : "No projects yet.");
 const managementViews = Object.freeze([
   {
-    label: "Workspaces",
+    label: "Projects",
     value: "workspaces"
   },
   {
@@ -64,36 +70,29 @@ onMounted(() => {
   void loadWorkspaces();
 });
 
-async function loadWorkspaces() {
-  loading.value = true;
+async function loadWorkspaces({
+  quiet = false
+} = {}) {
+  if (!quiet) {
+    loading.value = true;
+  }
   loadError.value = "";
   try {
     applyWorkspaceState(await readWorkspaces());
   } catch (error) {
     loadError.value = String(error?.message || error || "Workspaces could not load.");
   } finally {
-    loading.value = false;
+    if (!quiet) {
+      loading.value = false;
+    }
   }
 }
 
-async function submitWorkspace() {
-  saving.value = true;
-  formError.value = "";
-  try {
-    const response = await createWorkspace({
-      slug: slug.value
-    });
-    if (response.ok === false) {
-      formError.value = workspaceError(response);
-      return;
-    }
-    slug.value = "";
-    await loadWorkspaces();
-  } catch (error) {
-    formError.value = String(error?.message || error || "Workspace could not be created.");
-  } finally {
-    saving.value = false;
-  }
+async function refreshWorkspacesAfterCreate() {
+  await loadWorkspaces({
+    quiet: true
+  });
+  addProjectDialogOpen.value = false;
 }
 
 function applyWorkspaceState(response = {}) {
@@ -115,6 +114,14 @@ function openWorkspace(workspace = {}) {
     return;
   }
   void router.push(`/app/${workspaceSlug}`);
+}
+
+function workspaceRepositoryLabel(workspace = {}) {
+  return workspace.githubRepository?.fullName || "No GitHub repository linked";
+}
+
+function openAddProjectDialog() {
+  addProjectDialogOpen.value = true;
 }
 
 function viewTabId(value) {
@@ -143,35 +150,16 @@ function viewPanelId(value) {
             {{ projectsRoot }}
           </p>
         </div>
-
-        <form
-          v-if="activeManagementView === 'workspaces'"
-          class="vibe64-manage__create"
-          @submit.prevent="submitWorkspace"
+        <v-btn
+          v-if="activeManagementView === 'workspaces' && canManageWorkspaces"
+          color="primary"
+          type="button"
+          variant="flat"
+          @click="openAddProjectDialog"
         >
-          <v-text-field
-            v-model="slug"
-            autocomplete="off"
-            density="compact"
-            :error-messages="formError"
-            :hint="slugHint"
-            label="New slug"
-            persistent-hint
-            required
-            variant="outlined"
-          />
-          <v-btn
-            color="primary"
-            :disabled="!slug.trim()"
-            :loading="saving"
-            size="small"
-            type="submit"
-            variant="flat"
-          >
-            <v-icon :icon="mdiPlus" />
-            Create
-          </v-btn>
-        </form>
+          <v-icon :icon="mdiPlus" />
+          Add project
+        </v-btn>
       </section>
 
       <nav class="vibe64-manage__tabs">
@@ -210,24 +198,34 @@ function viewPanelId(value) {
             <v-progress-circular color="primary" indeterminate />
           </div>
 
-          <section v-else class="vibe64-manage__list" aria-label="Workspaces">
-            <button
-              v-for="workspace in sortedWorkspaces"
-              :key="workspace.slug"
-              class="vibe64-manage__workspace"
-              type="button"
-              @click="openWorkspace(workspace)"
-            >
-              <span>
-                <strong>{{ workspace.slug }}</strong>
-                <small>{{ workspace.workspaceRoot }}</small>
-              </span>
-              <v-icon :icon="mdiArrowRight" />
-            </button>
-            <p v-if="sortedWorkspaces.length === 0" class="vibe64-manage__empty">
-              No workspaces yet.
-            </p>
-          </section>
+          <template v-else>
+            <section class="vibe64-manage__list" aria-label="Projects">
+              <div class="vibe64-manage__list-heading">
+                <h3>Projects</h3>
+                <span>{{ sortedWorkspaces.length }}</span>
+              </div>
+              <button
+                v-for="workspace in sortedWorkspaces"
+                :key="workspace.slug"
+                class="vibe64-manage__workspace"
+                type="button"
+                @click="openWorkspace(workspace)"
+              >
+                <span>
+                  <strong>{{ workspace.slug }}</strong>
+                  <small>{{ workspace.workspaceRoot }}</small>
+                  <small class="vibe64-manage__repository">
+                    <v-icon :icon="mdiGithub" />
+                    {{ workspaceRepositoryLabel(workspace) }}
+                  </small>
+                </span>
+                <v-icon :icon="mdiArrowRight" />
+              </button>
+              <p v-if="sortedWorkspaces.length === 0" class="vibe64-manage__empty">
+                {{ emptyProjectsMessage }}
+              </p>
+            </section>
+          </template>
         </template>
 
         <StudioSetupDoctorScreen
@@ -243,6 +241,18 @@ function viewPanelId(value) {
         <Vibe64UserManagement v-else />
       </section>
     </main>
+
+    <v-dialog
+      v-model="addProjectDialogOpen"
+      class="vibe64-manage__project-dialog"
+    >
+      <Vibe64AddProjectWizard
+        v-if="addProjectDialogOpen"
+        closable
+        @cancel="addProjectDialogOpen = false"
+        @created="refreshWorkspacesAfterCreate"
+      />
+    </v-dialog>
   </ShellLayout>
 </template>
 
@@ -274,10 +284,15 @@ function viewPanelId(value) {
 }
 
 .vibe64-manage__bar {
-  align-items: start;
+  align-items: center;
   display: grid;
   gap: 1rem;
-  grid-template-columns: minmax(0, 1fr) minmax(18rem, 25rem);
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.vibe64-manage__bar .v-btn {
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .vibe64-manage__heading h2 {
@@ -295,13 +310,6 @@ function viewPanelId(value) {
   margin: 0.35rem 0 0;
   max-width: 100%;
   overflow-wrap: anywhere;
-}
-
-.vibe64-manage__create {
-  align-items: start;
-  display: grid;
-  gap: 0.65rem;
-  grid-template-columns: minmax(0, 1fr) auto;
 }
 
 .vibe64-manage__tabs {
@@ -334,6 +342,33 @@ function viewPanelId(value) {
   display: grid;
   gap: 0.6rem;
   grid-auto-rows: minmax(3.6rem, auto);
+}
+
+.vibe64-manage__list-heading {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.vibe64-manage__list-heading h3 {
+  font-size: 1rem;
+  font-weight: 720;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.vibe64-manage__list-heading span {
+  align-items: center;
+  background: #e2e8f0;
+  border-radius: 999px;
+  color: #334155;
+  display: inline-flex;
+  font-size: 0.78rem;
+  font-weight: 720;
+  justify-content: center;
+  min-height: 1.5rem;
+  min-width: 1.5rem;
+  padding: 0 0.45rem;
 }
 
 .vibe64-manage__panel :deep(.vibe64-account-settings) {
@@ -403,6 +438,18 @@ function viewPanelId(value) {
   margin-top: 0.25rem;
 }
 
+.vibe64-manage__repository {
+  align-items: center;
+  display: flex !important;
+  font-family: inherit !important;
+  gap: 0.35rem;
+}
+
+.vibe64-manage__repository .v-icon {
+  color: #334155;
+  font-size: 0.95rem;
+}
+
 .vibe64-manage__empty {
   color: #64748b;
   margin: 2rem 0;
@@ -410,9 +457,33 @@ function viewPanelId(value) {
 }
 
 @media (max-width: 760px) {
-  .vibe64-manage__bar,
-  .vibe64-manage__create {
+  .vibe64-manage__bar {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.vibe64-manage__project-dialog {
+  align-items: stretch;
+  justify-content: flex-end;
+  margin: 0;
+}
+
+.vibe64-manage__project-dialog :deep(.v-overlay__content) {
+  bottom: 0;
+  height: 100dvh;
+  left: auto;
+  margin: 0 0 0 auto;
+  max-height: 100dvh;
+  max-width: min(34rem, 100vw);
+  right: 0;
+  top: 0;
+  width: min(34rem, 100vw);
+}
+
+@media (max-width: 640px) {
+  .vibe64-manage__project-dialog :deep(.v-overlay__content) {
+    max-width: 100vw;
+    width: 100vw;
   }
 }
 </style>

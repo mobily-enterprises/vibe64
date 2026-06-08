@@ -1,4 +1,5 @@
 const WORKSPACE_API_BASE = "/api/vibe64/workspaces";
+const GITHUB_API_BASE = "/api/vibe64/github";
 
 async function readWorkspaces() {
   return workspaceRequest(WORKSPACE_API_BASE);
@@ -9,6 +10,43 @@ async function createWorkspace(input = {}) {
     body: input,
     method: "POST"
   });
+}
+
+async function createRepositoryWorkspace(input = {}) {
+  return workspaceRequest(`${WORKSPACE_API_BASE}/create-repository`, {
+    body: input,
+    method: "POST"
+  });
+}
+
+async function openRepositoryWorkspace(input = {}) {
+  return workspaceRequest(`${WORKSPACE_API_BASE}/from-repository`, {
+    body: input,
+    method: "POST"
+  });
+}
+
+async function readGithubRepositoryOwners() {
+  return workspaceRequest(`${GITHUB_API_BASE}/repository-owners`);
+}
+
+async function resolveGithubRepository(repository = "") {
+  const params = new URLSearchParams({
+    repository
+  });
+  return workspaceRequest(`${GITHUB_API_BASE}/repositories/resolve?${params.toString()}`);
+}
+
+async function searchGithubRepositories(query = "", {
+  owner = ""
+} = {}) {
+  const params = new URLSearchParams({
+    q: query
+  });
+  if (owner) {
+    params.set("owner", owner);
+  }
+  return workspaceRequest(`${GITHUB_API_BASE}/repositories/search?${params.toString()}`);
 }
 
 async function workspaceRequest(path, {
@@ -40,6 +78,11 @@ async function workspaceRequest(path, {
 }
 
 export {
+  createRepositoryWorkspace,
   createWorkspace,
+  openRepositoryWorkspace,
+  readGithubRepositoryOwners,
+  resolveGithubRepository,
+  searchGithubRepositories,
   readWorkspaces
 };
