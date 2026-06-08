@@ -54,6 +54,9 @@ test("Studio project context creates and selects managed project folders under t
     });
 
     const created = await context.createManagedProject({
+      githubRepository: {
+        fullName: "example/example-app"
+      },
       name: "Example App"
     });
     const expectedTargetRoot = path.join(projectsRoot, "example-app");
@@ -115,6 +118,9 @@ test("Studio project context lists and creates workspaces without selecting one"
     });
 
     const created = await context.createManagedWorkspace({
+      githubRepository: {
+        fullName: "example/beta_2"
+      },
       slug: "beta_2"
     });
     assert.equal(created.ok, true);
@@ -124,6 +130,9 @@ test("Studio project context lists and creates workspaces without selecting one"
     assert.equal(context.hasSelection(), false);
 
     await context.createManagedWorkspace({
+      githubRepository: {
+        fullName: "example/alpha"
+      },
       slug: "alpha"
     });
     const listed = await context.listManagedWorkspaces();

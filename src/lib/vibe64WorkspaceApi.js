@@ -49,6 +49,23 @@ async function searchGithubRepositories(query = "", {
   return workspaceRequest(`${GITHUB_API_BASE}/repositories/search?${params.toString()}`);
 }
 
+async function syncGithubIdentity() {
+  return workspaceRequest(`${GITHUB_API_BASE}/identity/sync`, {
+    method: "POST"
+  });
+}
+
+async function readProjectAccess(slug = "") {
+  return workspaceRequest(`${WORKSPACE_API_BASE}/${encodeURIComponent(slug)}/access`);
+}
+
+async function inviteProjectAccess(slug = "", input = {}) {
+  return workspaceRequest(`${WORKSPACE_API_BASE}/${encodeURIComponent(slug)}/access/invite`, {
+    body: input,
+    method: "POST"
+  });
+}
+
 async function workspaceRequest(path, {
   body = null,
   method = "GET"
@@ -80,9 +97,12 @@ async function workspaceRequest(path, {
 export {
   createRepositoryWorkspace,
   createWorkspace,
+  inviteProjectAccess,
   openRepositoryWorkspace,
   readGithubRepositoryOwners,
+  readProjectAccess,
   resolveGithubRepository,
   searchGithubRepositories,
+  syncGithubIdentity,
   readWorkspaces
 };

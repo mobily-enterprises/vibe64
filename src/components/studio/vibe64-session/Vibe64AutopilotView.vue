@@ -389,20 +389,6 @@
     </section>
 
     <section class="studio-autopilot__workspace-panel" aria-label="Workspace">
-      <nav
-        class="studio-autopilot__mobile-workspace-switcher"
-        aria-label="Workspace sections"
-      >
-        <button
-          :key="alternateWorkspacePaneControl.id"
-          class="studio-autopilot__mobile-workspace-button"
-          type="button"
-          @click="requestWorkspacePaneTab(alternateWorkspacePaneControl.id)"
-        >
-          {{ alternateWorkspacePaneControl.label }}
-        </button>
-      </nav>
-
       <section class="studio-autopilot__preview-panel">
         <v-btn
           v-if="activeSessionTool"
@@ -786,17 +772,10 @@ const commandSpyExpanded = ref(false);
 const sessionToolsMenuOpen = ref(false);
 const rightPaneTab = ref("preview");
 const SESSION_TOOL_STORAGE_PREFIX = "vibe64.sessionTools.active";
-const workspacePaneControls = Object.freeze([
-  {
-    id: "preview",
-    label: "Preview"
-  },
-  {
-    id: "dashboard",
-    label: "Dashboard"
-  }
+const workspacePaneIds = Object.freeze([
+  "preview",
+  "dashboard"
 ]);
-const workspacePaneIds = Object.freeze(["preview", "dashboard"]);
 const sessionPaneIds = Object.freeze([
   "session-details",
   "diff",
@@ -813,11 +792,6 @@ const stepInput = proxyRefs(useVibe64StepInputForm({
   session: computed(() => props.session)
 }));
 
-const alternateWorkspacePaneControl = computed(() => (
-  rightPaneTab.value === "dashboard"
-    ? workspacePaneControls[0]
-    : workspacePaneControls[1]
-));
 const screenKind = computed(() => screenState.value.kind);
 const sessionId = computed(() => String(props.session?.sessionId || ""));
 const chatCollapsed = computed(() => Boolean(props.chatCollapsed));
@@ -1225,14 +1199,6 @@ function selectWorkspacePaneTab(tabId = "") {
   selectRightPaneTab(tabId, {
     persist: true
   });
-}
-
-function requestWorkspacePaneTab(tabId = "") {
-  if (!workspacePaneIds.includes(tabId)) {
-    return;
-  }
-  selectWorkspacePaneTab(tabId);
-  emit("workspace-pane-change", tabId);
 }
 
 function restorePersistedSessionTool() {
@@ -1790,36 +1756,6 @@ watch(() => [
   position: relative;
 }
 
-.studio-autopilot__mobile-workspace-switcher {
-  display: none;
-}
-
-.studio-autopilot__mobile-workspace-button {
-  background: transparent;
-  border: 0;
-  border-radius: 7px;
-  color: var(--studio-control-muted-text, #5f6368);
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.88rem;
-  font-weight: 560;
-  letter-spacing: 0;
-  line-height: 1.2;
-  min-height: 2.2rem;
-  padding: 0.45rem 0.7rem;
-  text-align: left;
-}
-
-.studio-autopilot__mobile-workspace-button:hover {
-  color: var(--studio-control-text, #202124);
-}
-
-.studio-autopilot__mobile-workspace-button--active {
-  background: var(--studio-control-bg, #fff);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
-  color: var(--studio-control-text, #202124);
-}
-
 .studio-autopilot__right-pane-page {
   display: grid;
   grid-area: 1 / 1;
@@ -1987,17 +1923,7 @@ watch(() => [
 
   .studio-autopilot--chat-collapsed .studio-autopilot__workspace-panel {
     display: grid;
-    grid-template-rows: auto minmax(0, 1fr);
-  }
-
-  .studio-autopilot__mobile-workspace-switcher {
-    background: var(--studio-control-rest-bg, #f7f7f8);
-    border: 1px solid var(--studio-control-border, rgba(17, 24, 39, 0.12));
-    border-radius: var(--studio-control-radius, 7px);
-    display: grid;
-    gap: 0.16rem;
-    margin: 0.55rem 0.55rem 0;
-    padding: 0.18rem;
+    grid-template-rows: minmax(0, 1fr);
   }
 }
 </style>

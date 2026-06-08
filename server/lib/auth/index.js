@@ -19,13 +19,13 @@ import {
 const API_AUTH_BASE = "/api/auth";
 const VIBE64_SUPABASE_URL_ENV = "VIBE64_SUPABASE_URL";
 const VIBE64_SUPABASE_PUBLISHABLE_KEY_ENV = "VIBE64_SUPABASE_PUBLISHABLE_KEY";
-const DEFAULT_SUPABASE_URL = "https://zfszwwusouczybrsxxyh.supabase.co";
-const DEFAULT_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_bh4HEW-6pWSCpAyP7hOBVQ_0q2YQBPR";
+const VIBE64_SUPABASE_SECRET_KEY_ENV = "VIBE64_SUPABASE_SECRET_KEY";
 
 function createVibe64Auth({
   dataRoot = "",
   env = process.env,
   supabasePublishableKey = "",
+  supabaseSecretKey = "",
   supabaseUrl = "",
   verifySupabaseAccessToken = null
 } = {}) {
@@ -42,6 +42,7 @@ function createVibe64Auth({
   const supabase = resolveSupabaseConfig({
     env,
     publishableKey: supabasePublishableKey,
+    secretKey: supabaseSecretKey,
     url: supabaseUrl
   });
   const verifyAccessToken = typeof verifySupabaseAccessToken === "function"
@@ -239,13 +240,17 @@ function registerVibe64AuthGate(app, auth) {
 function resolveSupabaseConfig({
   env = process.env,
   publishableKey = "",
+  secretKey = "",
   url = ""
 } = {}) {
-  const resolvedUrl = String(url || env[VIBE64_SUPABASE_URL_ENV] || DEFAULT_SUPABASE_URL || "").trim().replace(/\/+$/u, "");
-  const resolvedPublishableKey = String(publishableKey || env[VIBE64_SUPABASE_PUBLISHABLE_KEY_ENV] || DEFAULT_SUPABASE_PUBLISHABLE_KEY || "").trim();
+  const resolvedUrl = String(url || env[VIBE64_SUPABASE_URL_ENV] || "").trim().replace(/\/+$/u, "");
+  const resolvedPublishableKey = String(publishableKey || env[VIBE64_SUPABASE_PUBLISHABLE_KEY_ENV] || "").trim();
+  const resolvedSecretKey = String(secretKey || env[VIBE64_SUPABASE_SECRET_KEY_ENV] || "").trim();
   return Object.freeze({
+    adminConfigured: Boolean(resolvedUrl && resolvedSecretKey),
     configured: Boolean(resolvedUrl && resolvedPublishableKey),
     publishableKey: resolvedPublishableKey,
+    secretKey: resolvedSecretKey,
     url: resolvedUrl
   });
 }
@@ -388,7 +393,8 @@ function authErrorStatusCode(error = {}) {
   if (
     error?.code === "vibe64_supabase_user_mismatch" ||
     error?.code === "vibe64_supabase_email_mismatch" ||
-    error?.code === "vibe64_invite_not_pending"
+    error?.code === "vibe64_invite_not_pending" ||
+    error?.code === "vibe64_tenant_user_limit_reached"
   ) {
     return 409;
   }
@@ -408,6 +414,7 @@ function requestIsSecure(request = {}) {
 export {
   VIBE64_DATA_ROOT_ENV,
   VIBE64_SUPABASE_PUBLISHABLE_KEY_ENV,
+  VIBE64_SUPABASE_SECRET_KEY_ENV,
   VIBE64_SUPABASE_URL_ENV,
   createVibe64Auth,
   registerVibe64AuthGate,

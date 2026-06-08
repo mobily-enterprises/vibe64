@@ -1,4 +1,7 @@
 import {
+  createGithubProjectAccessService
+} from "./githubProjectAccessService.js";
+import {
   createGithubWorkspaceService
 } from "./githubWorkspaceService.js";
 
@@ -7,6 +10,14 @@ const GITHUB_API_BASE = "/api/vibe64/github";
 
 function registerVibe64WorkspaceRoutes(app, projectContext, options = {}) {
   const githubWorkspaceService = createGithubWorkspaceService({
+    dataRoot: options.dataRoot,
+    env: options.env,
+    projectContext,
+    providerHomesRoot: options.providerHomesRoot,
+    runToolchain: options.runGithubToolchain
+  });
+  const githubProjectAccessService = createGithubProjectAccessService({
+    auth: options.auth || null,
     dataRoot: options.dataRoot,
     env: options.env,
     projectContext,
@@ -29,11 +40,55 @@ function registerVibe64WorkspaceRoutes(app, projectContext, options = {}) {
     );
   });
 
+  app.get(`${WORKSPACE_API_BASE}/:slug/access`, async (request, reply) => {
+    const ownerBlock = ownerRequired(request, reply, "Only owners can manage GitHub project access.");
+    if (ownerBlock) {
+      return ownerBlock;
+    }
+    return workspaceRouteResult(
+      () => githubProjectAccessService.projectAccessStatus({
+        slug: request.params?.slug || "",
+        vibe64User: request.vibe64User || null
+      }),
+      reply
+    );
+  });
+
+  app.post(`${WORKSPACE_API_BASE}/:slug/access/invite`, async (request, reply) => {
+    const ownerBlock = ownerRequired(request, reply, "Only owners can manage GitHub project access.");
+    if (ownerBlock) {
+      return ownerBlock;
+    }
+    return workspaceRouteResult(
+      () => githubProjectAccessService.inviteTenantUser({
+        ...(request.body || {}),
+        slug: request.params?.slug || "",
+        vibe64User: request.vibe64User || null
+      }),
+      reply
+    );
+  });
+
   app.get(`${GITHUB_API_BASE}/repository-owners`, async (request, reply) => {
     return workspaceRouteResult(
       () => githubWorkspaceService.repositoryOwners({
         vibe64User: request.vibe64User || null
       }),
+      reply
+    );
+  });
+
+  app.post(`${GITHUB_API_BASE}/identity/sync`, async (request, reply) => {
+    return workspaceRouteResult(
+      async () => {
+        const user = await githubProjectAccessService.syncCurrentGithubIdentity(request.vibe64User || null);
+        return {
+          ok: true,
+          user: user && options.auth?.users
+            ? options.auth.users.publicUser(user)
+            : null
+        };
+      },
       reply
     );
   });
@@ -117,14 +172,27 @@ function workspaceErrorStatusCode(error = {}) {
   if (
     error?.code === "vibe64_project_path_not_accessible" ||
     error?.code === "vibe64_project_path_not_directory" ||
-    error?.code === "vibe64_project_path_symlink"
+    error?.code === "vibe64_project_path_symlink" ||
+    error?.code === "vibe64_github_identity_required"
   ) {
     return 409;
+  }
+  if (error?.code === "vibe64_workspace_not_github_backed") {
+    return 404;
+  }
+  if (error?.code === "vibe64_user_not_found") {
+    return 404;
+  }
+  if (
+    error?.code === "vibe64_github_access_manage_forbidden" ||
+    error?.code === "vibe64_owner_required"
+  ) {
+    return 403;
   }
   return 400;
 }
 
-function ownerRequired(request, reply) {
+function ownerRequired(request, reply, message = "Only owners can add Vibe64 projects.") {
   if (request.vibe64User?.role === "owner") {
     return null;
   }
@@ -133,7 +201,7 @@ function ownerRequired(request, reply) {
     errors: [
       {
         code: "vibe64_owner_required",
-        message: "Only owners can add Vibe64 projects."
+        message
       }
     ]
   });

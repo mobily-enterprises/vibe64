@@ -204,6 +204,9 @@ test("management workspace API lists and creates slugs without global selection"
       headers: authHeaders,
       method: "POST",
       payload: {
+        githubRepository: {
+          fullName: "example/alpha_1"
+        },
         slug: "alpha_1"
       },
       url: WORKSPACE_API_BASE
@@ -216,6 +219,9 @@ test("management workspace API lists and creates slugs without global selection"
       headers: authHeaders,
       method: "POST",
       payload: {
+        githubRepository: {
+          fullName: "example/beta_2"
+        },
         slug: "beta_2"
       },
       url: WORKSPACE_API_BASE
@@ -304,6 +310,28 @@ test("only owners can add GitHub-backed projects", async () => {
     const memberHeaders = {
       cookie: Array.isArray(memberCookie) ? memberCookie[0] : memberCookie
     };
+
+    const memberUsers = await app.inject({
+      headers: memberHeaders,
+      method: "GET",
+      url: "/api/auth/users"
+    });
+    assert.equal(memberUsers.statusCode, 200);
+    assert.deepEqual(
+      memberUsers.json().users.map((user) => user.email),
+      ["member@example.com", "owner@example.com"]
+    );
+
+    const memberInvite = await app.inject({
+      headers: memberHeaders,
+      method: "POST",
+      payload: {
+        email: "second-member@example.com"
+      },
+      url: "/api/auth/invite"
+    });
+    assert.equal(memberInvite.statusCode, 403);
+    assert.equal(memberInvite.json().code, "vibe64_owner_required");
 
     const memberOwners = await app.inject({
       headers: memberHeaders,
@@ -398,6 +426,51 @@ test("only owners can add GitHub-backed projects", async () => {
     assert.ok(calls.some((call) => call.command.join(" ") === "git init -b main"));
     assert.ok(calls.some((call) => call.command.join(" ") === "gh repo create vibe64-org/new-repo --private --source=. --remote=origin"));
     assert.ok(calls.some((call) => call.command.join(" ") === "gh repo list vibe64-org --limit 1000 --json name,nameWithOwner,description,isPrivate,isArchived,url,sshUrl,defaultBranchRef,pushedAt,viewerPermission,owner"));
+
+    await app.vibe64Auth.users.updateGithubIdentity({
+      email: "member@example.com"
+    }, {
+      id: 456,
+      login: "memberhub"
+    });
+
+    const linkedMemberUsers = await app.inject({
+      headers: memberHeaders,
+      method: "GET",
+      url: "/api/auth/users"
+    });
+    assert.equal(linkedMemberUsers.statusCode, 200);
+    assert.equal(
+      linkedMemberUsers.json().users.find((user) => user.email === "member@example.com")?.github?.login,
+      "memberhub"
+    );
+
+    const memberAccess = await app.inject({
+      headers: memberHeaders,
+      method: "GET",
+      url: `${WORKSPACE_API_BASE}/new_workspace/access`
+    });
+    assert.equal(memberAccess.statusCode, 403);
+
+    const projectAccess = await app.inject({
+      headers: ownerHeaders,
+      method: "GET",
+      url: `${WORKSPACE_API_BASE}/new_workspace/access`
+    });
+    assert.equal(projectAccess.statusCode, 200);
+    assert.equal(projectAccess.json().currentUserCanManageAccess, true);
+    assert.equal(projectAccess.json().users.find((user) => user.email === "member@example.com")?.github?.login, "memberhub");
+
+    const inviteAccess = await app.inject({
+      headers: ownerHeaders,
+      method: "POST",
+      payload: {
+        email: "member@example.com"
+      },
+      url: `${WORKSPACE_API_BASE}/new_workspace/access/invite`
+    });
+    assert.equal(inviteAccess.statusCode, 200);
+    assert.ok(calls.some((call) => call.command.join(" ") === "gh api -X PUT repos/vibe64-org/new-repo/collaborators/memberhub -f permission=push"));
   } finally {
     await app.close();
     await rm(authDataRoot, {
@@ -504,6 +577,37 @@ function fakeGithubWorkspaceToolchain(calls) {
           }
         }
       });
+    }
+    if (joined === "gh api user") {
+      return toolchainJson({
+        avatar_url: "https://github.com/octocat.png",
+        id: 123,
+        login: "octocat"
+      });
+    }
+    if (joined === "gh repo view vibe64-org/new-repo --json viewerPermission") {
+      return toolchainJson({
+        viewerPermission: "ADMIN"
+      });
+    }
+    if (joined === "gh api repos/vibe64-org/new-repo/collaborators/octocat/permission") {
+      return toolchainJson({
+        permission: "admin"
+      });
+    }
+    if (joined === "gh api repos/vibe64-org/new-repo/collaborators/memberhub/permission") {
+      return {
+        ok: false,
+        output: "Not Found",
+        stdout: ""
+      };
+    }
+    if (joined === "gh api -X PUT repos/vibe64-org/new-repo/collaborators/memberhub -f permission=push") {
+      return {
+        ok: true,
+        output: "",
+        stdout: "{}"
+      };
     }
     if (joined === "gh repo view vibe64-org/mickeymouse --json name,nameWithOwner,description,visibility,isPrivate,owner,defaultBranchRef,url,sshUrl,viewerPermission,isArchived") {
       return toolchainJson(githubRepositoryView({

@@ -53,11 +53,15 @@ function createPrOnGhScript(session = {}) {
   const sourcePrNumber = normalizeText(session.metadata?.source_pr_number);
   const sourcePrUrl = normalizeText(session.metadata?.source_pr_url);
   const branch = normalizeText(session.metadata?.branch);
+  const branchPushRemote = normalizeText(session.metadata?.branch_push_remote) || "origin";
+  const prHeadOwner = normalizeText(session.metadata?.pr_head_owner);
   const baseBranch = normalizeText(session.metadata?.base_branch) ||
     normalizeText(session.metadata?.source_pr_head_ref) ||
     "main";
   const quotedBaseBranch = shellQuote(baseBranch);
+  const quotedBranchPushRemote = shellQuote(branchPushRemote);
   const quotedBranch = shellQuote(branch);
+  const quotedPrHeadOwner = shellQuote(prHeadOwner);
   return [
     "set -e",
     stepArtifactShellLibrary(session, stepId),
@@ -70,6 +74,13 @@ function createPrOnGhScript(session = {}) {
     "fi",
     `EXPECTED_BRANCH=${quotedBranch}`,
     `BASE_BRANCH=${quotedBaseBranch}`,
+    `BRANCH_PUSH_REMOTE=${quotedBranchPushRemote}`,
+    `PR_HEAD_OWNER=${quotedPrHeadOwner}`,
+    "if [ -n \"$PR_HEAD_OWNER\" ]; then",
+    "  PR_HEAD=\"$PR_HEAD_OWNER:$EXPECTED_BRANCH\"",
+    "else",
+    "  PR_HEAD=\"$EXPECTED_BRANCH\"",
+    "fi",
     "CURRENT_BRANCH=\"$(git branch --show-current)\"",
     "if [ \"$CURRENT_BRANCH\" != \"$EXPECTED_BRANCH\" ]; then",
     "  printf '[studio] Worktree is on branch %s, expected %s.\\n' \"$CURRENT_BRANCH\" \"$EXPECTED_BRANCH\" >&2",
@@ -105,8 +116,8 @@ function createPrOnGhScript(session = {}) {
     "  printf '[studio] No commits exist between %s and %s. Commit and push changes before creating the pull request.\\n' \"$BASE_REF\" \"$EXPECTED_BRANCH\" >&2",
     "  exit 1",
     "fi",
-    "if ! git ls-remote --exit-code --heads origin \"$EXPECTED_BRANCH\" >/dev/null 2>&1; then",
-    "  printf '[studio] Branch %s is not pushed to origin. Run Commit and push changes before creating the pull request.\\n' \"$EXPECTED_BRANCH\" >&2",
+    "if ! git ls-remote --exit-code --heads \"$BRANCH_PUSH_REMOTE\" \"$EXPECTED_BRANCH\" >/dev/null 2>&1; then",
+    "  printf '[studio] Branch %s is not pushed to %s. Run Commit and push changes before creating the pull request.\\n' \"$EXPECTED_BRANCH\" \"$BRANCH_PUSH_REMOTE\" >&2",
     "  exit 1",
     "fi",
     `SOURCE_PR_URL=${shellQuote(sourcePrUrl)}`,
@@ -122,7 +133,7 @@ function createPrOnGhScript(session = {}) {
     "  printf '\\n\\nStacks on existing pull request: %s\\n' \"$SOURCE_PR_URL\" >> \"$PR_BODY_FILE\"",
     "fi",
     "find_existing_pull_request_url() {",
-    "  gh pr list --head \"$EXPECTED_BRANCH\" --base \"$BASE_BRANCH\" --state open --json url --jq '.[0].url' 2>/dev/null | head -n 1 | sed 's/[[:space:]]*$//'",
+    "  gh pr list --head \"$PR_HEAD\" --base \"$BASE_BRANCH\" --state open --json url --jq '.[0].url' 2>/dev/null | head -n 1 | sed 's/[[:space:]]*$//'",
     "}",
     "PR_URL=\"$(find_existing_pull_request_url)\"",
     "if [ -n \"$PR_URL\" ]; then",
@@ -138,7 +149,7 @@ function createPrOnGhScript(session = {}) {
     "  exit 0",
     "fi",
     "printf '[studio] Creating GitHub pull request: %s\\n' \"$PR_TITLE\"",
-    "if ! PR_URL=\"$(gh pr create --base \"$BASE_BRANCH\" --head \"$EXPECTED_BRANCH\" --title \"$PR_TITLE\" --body-file \"$PR_BODY_FILE\")\"; then",
+    "if ! PR_URL=\"$(gh pr create --base \"$BASE_BRANCH\" --head \"$PR_HEAD\" --title \"$PR_TITLE\" --body-file \"$PR_BODY_FILE\")\"; then",
     "  PR_URL=\"$(find_existing_pull_request_url)\"",
     "  if [ -z \"$PR_URL\" ]; then",
     "    exit 1",

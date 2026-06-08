@@ -1,7 +1,9 @@
-import { createRequire } from "node:module";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { surfaceRuntime } from "./surfaceRuntime.js";
 
-const require = createRequire(import.meta.url);
+const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const APP_ENV_FILE = path.join(APP_ROOT, ".env");
 
 function toPort(value, fallback = 3000) {
   const parsed = Number.parseInt(String(value || "").trim(), 10);
@@ -18,13 +20,11 @@ function ensureRuntimeEnvLoaded() {
     return;
   }
   try {
-    const dotenvModule = require("dotenv");
-    const loadDotEnv = dotenvModule?.config;
-    if (typeof loadDotEnv === "function") {
-      loadDotEnv();
+    process.loadEnvFile(APP_ENV_FILE);
+  } catch (error) {
+    if (error?.code !== "ENOENT") {
+      throw error;
     }
-  } catch {
-    // dotenv is optional in base-shell; bundles can add it when needed.
   }
   envLoaded = true;
 }

@@ -70,18 +70,25 @@ test("Vibe64 project service treats workspace request slug as the selected proje
   await withTemporaryRoot(async (root) => {
     const projectsRoot = path.join(root, "projects");
     const targetRoot = path.join(projectsRoot, "alpha_1");
-    await mkdir(targetRoot, {
-      recursive: true
+    const projectContext = createStudioProjectContext({
+      explicitProjectsRoot: projectsRoot,
+      env: {},
+      home: root
     });
-    await mkdir(path.join(projectsRoot, "beta"), {
-      recursive: true
+    await projectContext.createManagedWorkspace({
+      githubRepository: {
+        fullName: "example/alpha_1"
+      },
+      slug: "alpha_1"
+    });
+    await projectContext.createManagedWorkspace({
+      githubRepository: {
+        fullName: "example/beta"
+      },
+      slug: "beta"
     });
     const service = createService({
-      projectContext: createStudioProjectContext({
-        explicitProjectsRoot: projectsRoot,
-        env: {},
-        home: root
-      })
+      projectContext
     });
 
     const listed = await runWithWorkspaceRequestContext({

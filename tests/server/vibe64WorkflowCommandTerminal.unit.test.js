@@ -50,7 +50,7 @@ test("create PR command treats an existing branch pull request as success", asyn
     assert.ok(lookupIndex > -1);
     assert.ok(createIndex > -1);
     assert.ok(lookupIndex < createIndex);
-    assert.match(script, /gh pr list --head "\$EXPECTED_BRANCH" --base "\$BASE_BRANCH" --state open/u);
+    assert.match(script, /gh pr list --head "\$PR_HEAD" --base "\$BASE_BRANCH" --state open/u);
     assert.match(script, /GitHub pull request already exists/u);
     assert.match(script, /\.vibe64\/artifacts\/tmp\/create_and_merge_pull_request\.title\.txt/u);
     assert.match(script, /\.vibe64\/artifacts\/tmp\/create_and_merge_pull_request\.body\.md/u);
@@ -97,7 +97,7 @@ test("create PR command stacks new pull requests on selected existing PRs", asyn
     assert.match(script, /gh pr view "\$SOURCE_PR_NUMBER" --json headRefOid/u);
     assert.match(script, /PR_SOURCE=stacked/u);
     assert.match(script, /Stacks on existing pull request: %s/u);
-    assert.match(script, /gh pr create --base "\$BASE_BRANCH" --head "\$EXPECTED_BRANCH"/u);
+    assert.match(script, /gh pr create --base "\$BASE_BRANCH" --head "\$PR_HEAD"/u);
     assert.doesNotMatch(script, /PR_SOURCE=replacement/u);
     assert.doesNotMatch(script, /Continues existing pull request/u);
   });
@@ -130,10 +130,44 @@ test("commit command always pushes the session branch for existing PR sessions",
     const script = spec.args.at(-1);
     assert.match(script, /BASE_BRANCH=feature-base/u);
     assert.match(script, /git push -u origin "\$CURRENT_BRANCH"/u);
+    assert.match(script, /gh repo fork "\$UPSTREAM_REPOSITORY" --clone=false --remote=false/u);
+    assert.match(script, /git push -u vibe64-fork "\$CURRENT_BRANCH"/u);
     assert.match(script, /VIBE64_COMMAND_FACT_VALUE="\$CURRENT_BRANCH"/u);
     assert.match(script, /fact:set\\t%s\\t%s\\n' branch_pushed/u);
-    assert.doesNotMatch(script, /vibe64-pr-head/u);
+    assert.match(script, /fact:set\\t%s\\t%s\\n' branch_push_remote/u);
+    assert.match(script, /fact:set\\t%s\\t%s\\n' pr_head_owner/u);
     assert.doesNotMatch(script, /HEAD:refs\/heads\/\$SOURCE_PR_HEAD_REF/u);
+  });
+});
+
+test("create PR command uses fork head metadata when the branch was pushed to a fork", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createGitRepository(targetRoot);
+
+    const spec = await createPrOnGhTerminalSpec({
+      session: {
+        artifactsRoot: path.join(targetRoot, ".vibe64", "artifacts"),
+        metadata: {
+          base_branch: "main",
+          branch: "vibe64/test-session",
+          branch_push_remote: "vibe64-fork",
+          pr_head_owner: "octocat",
+          worktree_path: targetRoot
+        },
+        metadataRoot: path.join(targetRoot, ".vibe64", "metadata"),
+        sessionId: "test-session",
+        targetRoot
+      }
+    });
+
+    assert.equal(spec.ok, true);
+
+    const script = spec.args.at(-1);
+    assert.match(script, /BRANCH_PUSH_REMOTE=vibe64-fork/u);
+    assert.match(script, /PR_HEAD_OWNER=octocat/u);
+    assert.match(script, /PR_HEAD="\$PR_HEAD_OWNER:\$EXPECTED_BRANCH"/u);
+    assert.match(script, /git ls-remote --exit-code --heads "\$BRANCH_PUSH_REMOTE" "\$EXPECTED_BRANCH"/u);
+    assert.match(script, /gh pr create --base "\$BASE_BRANCH" --head "\$PR_HEAD"/u);
   });
 });
 

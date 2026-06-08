@@ -1,8 +1,10 @@
 import { constants as fsConstants } from "node:fs";
+import { execFile } from "node:child_process";
 import { access, lstat, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
+import { promisify } from "node:util";
 
 import {
   VIBE64_PROJECTS_ROOT_ENV,
@@ -11,6 +13,7 @@ import {
 
 const WORKSPACE_SLUG_PATTERN = /^[a-z0-9][a-z0-9_-]*$/u;
 const WORKSPACE_METADATA_PATH = [".vibe64", "workspace.json"];
+const execFileAsync = promisify(execFile);
 
 let configuredContext = null;
 
@@ -230,13 +233,112 @@ async function writeWorkspaceMetadata(workspaceRoot = "", metadata = {}) {
 
 async function workspaceRecordForPath({
   path: workspacePath = "",
-  projectsRoot = ""
+  projectsRoot = "",
+  writeDerivedMetadata = false
 } = {}) {
+  const metadata = await workspaceMetadataWithGitRemote(workspacePath, {
+    writeDerivedMetadata
+  });
   return workspaceRecord({
-    metadata: await readWorkspaceMetadata(workspacePath),
+    metadata,
     path: workspacePath,
     projectsRoot
   });
+}
+
+async function workspaceMetadataWithGitRemote(workspacePath = "", {
+  writeDerivedMetadata = false
+} = {}) {
+  const metadata = await readWorkspaceMetadata(workspacePath);
+  if (normalizeWorkspaceGithubRepository(metadata?.githubRepository)) {
+    return metadata;
+  }
+  const githubRepository = await githubRepositoryFromOrigin(workspacePath);
+  if (!githubRepository) {
+    return metadata;
+  }
+  const derivedMetadata = {
+    ...metadata,
+    githubRepository
+  };
+  if (writeDerivedMetadata) {
+    await writeWorkspaceMetadata(workspacePath, derivedMetadata);
+  }
+  return derivedMetadata;
+}
+
+async function githubRepositoryFromOrigin(workspacePath = "") {
+  const insideGit = await runGit(workspacePath, ["rev-parse", "--is-inside-work-tree"]);
+  if (insideGit !== "true") {
+    return null;
+  }
+  const originUrl = await runGit(workspacePath, ["remote", "get-url", "origin"]);
+  const parsed = parseGithubRemote(originUrl);
+  if (!parsed) {
+    return null;
+  }
+  return {
+    canPush: false,
+    cloneUrl: `https://github.com/${parsed.fullName}.git`,
+    defaultBranch: "",
+    fullName: parsed.fullName,
+    isPrivate: false,
+    name: parsed.name,
+    owner: parsed.owner,
+    source: "git-remote",
+    url: `https://github.com/${parsed.fullName}`,
+    viewerPermission: "",
+    visibility: ""
+  };
+}
+
+async function runGit(cwd = "", args = []) {
+  try {
+    const result = await execFileAsync("git", args, {
+      cwd: normalizeRoot(cwd),
+      timeout: 5000
+    });
+    return String(result.stdout || "").trim();
+  } catch {
+    return "";
+  }
+}
+
+function parseGithubRemote(value = "") {
+  const rawValue = String(value || "").trim();
+  if (!rawValue) {
+    return null;
+  }
+  const sshMatch = rawValue.match(/^git@github\.com:([^/\s]+)\/([^/\s]+?)(?:\.git)?$/iu);
+  if (sshMatch) {
+    return githubRemoteRecord(sshMatch[1], sshMatch[2]);
+  }
+  try {
+    const url = new URL(rawValue);
+    if (url.hostname.toLowerCase() !== "github.com") {
+      return null;
+    }
+    const [owner, repository] = url.pathname
+      .replace(/^\/+|\/+$/gu, "")
+      .replace(/\.git$/iu, "")
+      .split("/");
+    return githubRemoteRecord(owner, repository);
+  } catch {
+    return null;
+  }
+}
+
+function githubRemoteRecord(owner = "", repository = "") {
+  const normalizedOwner = String(owner || "").trim();
+  const normalizedRepository = String(repository || "").trim();
+  if (!normalizedOwner || !normalizedRepository) {
+    return null;
+  }
+  return {
+    fullName: `${normalizedOwner}/${normalizedRepository}`,
+    name: normalizedRepository,
+    owner: normalizedOwner
+  };
 }
 
 function createStudioProjectContext({
@@ -312,6 +414,7 @@ function createStudioProjectContext({
       path: workspacePath,
       projectsRoot
     }))))
+      .filter((workspace) => workspace.githubRepository)
       .sort((left, right) => left.slug.localeCompare(right.slug));
     return {
       ok: true,
@@ -344,6 +447,29 @@ function createStudioProjectContext({
         path: targetRoot,
         projectsRoot
       })
+    };
+  }
+
+  async function readManagedWorkspace(input = {}) {
+    const slug = workspaceSlugFromInput(input);
+    const targetRoot = resolveWorkspaceRoot({
+      projectsRoot,
+      slug
+    });
+    await assertDirectoryUsable(targetRoot);
+    const workspace = await workspaceRecordForPath({
+      path: targetRoot,
+      projectsRoot
+    });
+    if (!workspace.githubRepository) {
+      const error = new Error("Vibe64 projects must be linked to a GitHub repository.");
+      error.code = "vibe64_workspace_not_github_backed";
+      throw error;
+    }
+    return {
+      ok: true,
+      projectsRoot,
+      workspace
     };
   }
 
@@ -423,6 +549,7 @@ function createStudioProjectContext({
     },
     listProjects,
     listManagedWorkspaces,
+    readManagedWorkspace,
     requireSelectedTargetRoot,
     selectManagedProject,
     updateManagedWorkspaceMetadata

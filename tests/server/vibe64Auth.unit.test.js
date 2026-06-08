@@ -5,8 +5,15 @@ import path from "node:path";
 import test from "node:test";
 
 import {
-  createVibe64Auth
+  createVibe64Auth,
+  resolveSupabaseConfig
 } from "../../server/lib/auth/index.js";
+
+const FAKE_SUPABASE_ENV = Object.freeze({
+  VIBE64_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test",
+  VIBE64_SUPABASE_SECRET_KEY: "sb_secret_test",
+  VIBE64_SUPABASE_URL: "https://example.supabase.co"
+});
 
 test("Vibe64 auth binds the first Supabase identity as owner", async () => {
   await withAuth(async (auth) => {
@@ -23,7 +30,7 @@ test("Vibe64 auth binds the first Supabase identity as owner", async () => {
     assert.equal(owner.status, "active");
     assert.equal(owner.supabaseUserId, "supabase-owner");
 
-    const source = await readFile(path.join(auth.dataRoot, "users", "owner@example.com.json"), "utf8");
+    const source = await readFile(path.join(auth.dataRoot, "users", "supabase-owner.json"), "utf8");
     assert.match(source, /owner@example\.com/u);
     assert.match(source, /supabase-owner/u);
     assert.doesNotMatch(source, /passwordHash|owner-password|scrypt/u);
@@ -50,6 +57,26 @@ test("Vibe64 auth binds the first Supabase identity as owner", async () => {
     });
     assert.equal(legacyState.authenticated, false);
   });
+});
+
+test("Vibe64 auth has no hardcoded Supabase fallback", () => {
+  const missing = resolveSupabaseConfig({
+    env: {}
+  });
+  assert.equal(missing.configured, false);
+  assert.equal(missing.adminConfigured, false);
+  assert.equal(missing.url, "");
+  assert.equal(missing.publishableKey, "");
+  assert.equal(missing.secretKey, "");
+
+  const configured = resolveSupabaseConfig({
+    env: FAKE_SUPABASE_ENV
+  });
+  assert.equal(configured.configured, true);
+  assert.equal(configured.adminConfigured, true);
+  assert.equal(configured.url, "https://example.supabase.co");
+  assert.equal(configured.publishableKey, "sb_publishable_test");
+  assert.equal(configured.secretKey, "sb_secret_test");
 });
 
 test("Vibe64 auth reports pending owner invite setup separately", async () => {
@@ -114,6 +141,14 @@ test("Vibe64 auth invite acceptance keeps identity fixed", async () => {
     assert.equal(accepted.email, "friend@example.com");
     assert.equal(accepted.status, "active");
     assert.equal(accepted.supabaseUserId, "supabase-friend");
+    await assert.rejects(
+      () => readFile(path.join(auth.dataRoot, "users", "friend@example.com.json"), "utf8"),
+      {
+        code: "ENOENT"
+      }
+    );
+    const acceptedSource = await readFile(path.join(auth.dataRoot, "users", "supabase-friend.json"), "utf8");
+    assert.match(acceptedSource, /friend@example\.com/u);
 
     await assert.rejects(
       () => auth.authenticateSupabaseSession({
@@ -121,6 +156,35 @@ test("Vibe64 auth invite acceptance keeps identity fixed", async () => {
       }),
       /already linked/u
     );
+  });
+});
+
+test("Vibe64 auth ignores accepted users stored under email filenames", async () => {
+  await withAuth(async (auth) => {
+    await writeUserRecord(auth, {
+      acceptedAt: "2026-06-06T00:00:00.000Z",
+      createdAt: "2026-06-06T00:00:00.000Z",
+      email: "owner@example.com",
+      role: "owner",
+      status: "active",
+      supabaseUserId: "supabase-owner",
+      updatedAt: "2026-06-06T00:00:00.000Z",
+      version: 2
+    });
+
+    const users = await auth.users.listUsers();
+    assert.deepEqual(users, []);
+
+    const state = await auth.stateForRequest({});
+    assert.equal(state.setupRequired, true);
+
+    const owner = await auth.authenticateSupabaseSession({
+      accessToken: "owner-token"
+    });
+    assert.equal(owner.role, "owner");
+    assert.equal(owner.supabaseUserId, "supabase-owner");
+    const source = await readFile(path.join(auth.dataRoot, "users", "supabase-owner.json"), "utf8");
+    assert.match(source, /owner@example\.com/u);
   });
 });
 
@@ -138,18 +202,18 @@ test("Vibe64 auth supports canceling invites and revoking active users", async (
     });
     assert.equal(canceledInvite.status, "canceled");
     assert.notEqual(canceledInvite.canceledAt, "");
+    assert.equal(await auth.users.readUser("friend@example.com"), null);
     await assert.rejects(
       () => auth.authenticateSupabaseSession({
         accessToken: "friend-token"
       }),
-      /canceled/u
+      /not invited/u
     );
 
     const reinvited = await auth.users.inviteUser({
       email: "friend@example.com"
     });
     assert.equal(reinvited.status, "invited");
-    assert.equal(reinvited.canceledAt, "");
     assert.equal(reinvited.supabaseUserId, "");
     const activeFriend = await auth.authenticateSupabaseSession({
       accessToken: "friend-token"
@@ -159,6 +223,7 @@ test("Vibe64 auth supports canceling invites and revoking active users", async (
     await auth.users.revokeUser({
       email: "friend@example.com"
     }, owner);
+    assert.equal(await auth.users.readUser("friend@example.com"), null);
     await auth.sessions.destroySessionsForUser({
       email: activeFriend.email,
       supabaseUserId: activeFriend.supabaseUserId
@@ -174,15 +239,13 @@ test("Vibe64 auth supports canceling invites and revoking active users", async (
       () => auth.authenticateSupabaseSession({
         accessToken: "friend-token"
       }),
-      /removed/u
+      /not invited/u
     );
 
     const reinvitedRevokedUser = await auth.users.inviteUser({
       email: "friend@example.com"
     });
     assert.equal(reinvitedRevokedUser.status, "invited");
-    assert.equal(reinvitedRevokedUser.acceptedAt, "");
-    assert.equal(reinvitedRevokedUser.revokedAt, "");
     assert.equal(reinvitedRevokedUser.supabaseUserId, "");
 
     const reacceptedFriend = await auth.authenticateSupabaseSession({
@@ -193,11 +256,44 @@ test("Vibe64 auth supports canceling invites and revoking active users", async (
   });
 });
 
+test("Vibe64 auth enforces tenant user capacity and stores GitHub identity", async () => {
+  await withAuth(async (auth) => {
+    const owner = await auth.authenticateSupabaseSession({
+      accessToken: "owner-token"
+    });
+    const linkedOwner = await auth.users.updateGithubIdentity({
+      email: owner.email
+    }, {
+      avatarUrl: "https://github.com/octocat.png",
+      id: 123,
+      login: "octocat"
+    });
+    assert.equal(linkedOwner.github.login, "octocat");
+    assert.equal(auth.users.publicUser(linkedOwner).github.login, "octocat");
+
+    for (let index = 1; index < auth.users.userLimit; index += 1) {
+      await auth.users.inviteUser({
+        email: `user-${index}@example.com`
+      });
+    }
+
+    await assert.rejects(
+      () => auth.users.inviteUser({
+        email: "overflow@example.com"
+      }),
+      {
+        code: "vibe64_tenant_user_limit_reached"
+      }
+    );
+  });
+});
+
 async function withAuth(callback) {
   const dataRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-auth-"));
   try {
     return await callback(createVibe64Auth({
       dataRoot,
+      env: FAKE_SUPABASE_ENV,
       verifySupabaseAccessToken: fakeVerifySupabaseAccessToken
     }));
   } finally {

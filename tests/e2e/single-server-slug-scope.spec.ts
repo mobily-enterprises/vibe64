@@ -325,7 +325,7 @@ function supabaseConfig() {
   return {
     configured: true,
     publishableKey: "sb_publishable_test",
-    url: "https://zfszwwusouczybrsxxyh.supabase.co"
+    url: "https://example.supabase.co"
   };
 }
 

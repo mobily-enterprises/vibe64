@@ -1,10 +1,12 @@
-import { mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import crypto from "node:crypto";
 import path from "node:path";
 
 const USER_RECORD_VERSION = 2;
+const MAX_TENANT_USERS = 10;
 const EMAIL_PATTERN = /^[^\s@/\\]+@[^\s@/\\]+\.[^\s@/\\]+$/u;
 const ACTIVE_USER_STATUSES = new Set(["active", "invited"]);
+const SAFE_FILE_STEM_PATTERN = /^[A-Za-z0-9_.:-]+$/u;
 
 function canonicalUserEmail(value = "") {
   const email = String(value || "").trim().toLowerCase();
@@ -24,6 +26,7 @@ function publicUser(record = {}) {
     createdAt: normalized.createdAt,
     email: normalized.email,
     gravatarUrl: gravatarUrl(normalized.email),
+    github: normalized.github,
     identityLinked: Boolean(normalized.supabaseUserId),
     invitedAt: normalized.invitedAt,
     owner: normalized.role === "owner",
@@ -53,28 +56,53 @@ function createFileUserStore({
     });
   }
 
-  function userPath(email = "") {
+  function emailUserPath(email = "") {
     return path.join(root, `${canonicalUserEmail(email)}.json`);
   }
 
+  function userRecordPath(record = {}) {
+    const normalized = normalizeUserRecord(record);
+    const stem = normalized.supabaseUserId
+      ? canonicalUserFileStem(normalized.supabaseUserId)
+      : canonicalUserEmail(normalized.email);
+    return path.join(root, `${stem}.json`);
+  }
+
+  async function readUserFile(filePath = "") {
+    const record = normalizeUserRecord(JSON.parse(await readFile(filePath, "utf8")));
+    return canonicalStoredUserRecord(filePath, record);
+  }
+
   async function readUser(email = "") {
-    try {
-      return normalizeUserRecord(JSON.parse(await readFile(userPath(email), "utf8")));
-    } catch (error) {
-      if (error?.code === "ENOENT") {
-        return null;
-      }
-      throw error;
-    }
+    const normalizedEmail = canonicalUserEmail(email);
+    return (await listUsers()).find((user) => user.email === normalizedEmail) || null;
   }
 
   async function writeUser(record = {}) {
     await ensureRoot();
     const normalized = normalizeUserRecord(record);
-    const filePath = userPath(normalized.email);
+    const filePath = userRecordPath(normalized);
     const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
     await writeFile(tempPath, `${JSON.stringify(normalized, null, 2)}\n`, "utf8");
     await rename(tempPath, filePath);
+    const invitePath = emailUserPath(normalized.email);
+    if (invitePath !== filePath) {
+      await rm(invitePath, {
+        force: true
+      });
+    }
+    return normalized;
+  }
+
+  async function deleteUserRecord(record = {}) {
+    await ensureRoot();
+    const normalized = normalizeUserRecord(record);
+    await rm(userRecordPath(normalized), {
+      force: true
+    });
+    await rm(emailUserPath(normalized.email), {
+      force: true
+    });
     return normalized;
   }
 
@@ -83,15 +111,18 @@ function createFileUserStore({
     const entries = await readdir(root, {
       withFileTypes: true
     });
-    const users = [];
+    const usersByKey = new Map();
     for (const entry of entries) {
       if (!entry.isFile() || !entry.name.endsWith(".json")) {
         continue;
       }
-      const source = await readFile(path.join(root, entry.name), "utf8");
-      users.push(normalizeUserRecord(JSON.parse(source)));
+      const user = await readUserFile(path.join(root, entry.name));
+      if (!user) {
+        continue;
+      }
+      usersByKey.set(user.supabaseUserId || user.email, user);
     }
-    return users.sort((left, right) => left.email.localeCompare(right.email));
+    return [...usersByKey.values()].sort((left, right) => left.email.localeCompare(right.email));
   }
 
   async function setupRequired() {
@@ -211,7 +242,8 @@ function createFileUserStore({
     if (existing?.status === "active") {
       return existing;
     }
-    return writeUser({
+    await assertTenantUserCapacity(email);
+    const invited = await writeUser({
       ...(existing || {}),
       acceptedAt: "",
       canceledAt: "",
@@ -225,6 +257,12 @@ function createFileUserStore({
       updatedAt: now,
       version: USER_RECORD_VERSION
     });
+    if (existing?.supabaseUserId) {
+      await rm(userRecordPath(existing), {
+        force: true
+      });
+    }
+    return invited;
   }
 
   async function cancelInvite(input = {}) {
@@ -236,7 +274,8 @@ function createFileUserStore({
       throw error;
     }
     const now = new Date().toISOString();
-    return writeUser({
+    await deleteUserRecord(user);
+    return normalizeUserRecord({
       ...user,
       canceledAt: now,
       status: "canceled",
@@ -257,7 +296,7 @@ function createFileUserStore({
       return cancelInvite(input);
     }
     if (user.status !== "active") {
-      return user;
+      return deleteUserRecord(user);
     }
     if (user.role === "owner") {
       const activeOwners = (await listUsers()).filter((item) => (
@@ -272,7 +311,8 @@ function createFileUserStore({
       }
     }
     const now = new Date().toISOString();
-    return writeUser({
+    await deleteUserRecord(user);
+    return normalizeUserRecord({
       ...user,
       revokedAt: now,
       status: "revoked",
@@ -306,6 +346,37 @@ function createFileUserStore({
     return user;
   }
 
+  async function updateGithubIdentity(input = {}, identity = {}) {
+    const email = canonicalUserEmail(input.email);
+    const user = await requireUser(email);
+    if (user.status !== "active") {
+      const error = new Error("GitHub identity can only be linked to an active Vibe64 user.");
+      error.code = "vibe64_user_not_active";
+      throw error;
+    }
+    return writeUser({
+      ...user,
+      github: normalizeGithubIdentity({
+        ...identity,
+        connectedAt: identity.connectedAt || new Date().toISOString()
+      }),
+      updatedAt: new Date().toISOString()
+    });
+  }
+
+  async function assertTenantUserCapacity(email = "") {
+    const normalizedEmail = canonicalUserEmail(email);
+    const activeOrInvited = (await listUsers()).filter((user) => (
+      ACTIVE_USER_STATUSES.has(user.status) &&
+      user.email !== normalizedEmail
+    ));
+    if (activeOrInvited.length >= MAX_TENANT_USERS) {
+      const error = new Error(`This tenant already has ${MAX_TENANT_USERS} active or invited users.`);
+      error.code = "vibe64_tenant_user_limit_reached";
+      throw error;
+    }
+  }
+
   return Object.freeze({
     acceptSupabaseIdentity,
     cancelInvite,
@@ -316,7 +387,9 @@ function createFileUserStore({
     readUser,
     revokeUser,
     setupRequired,
+    updateGithubIdentity,
     userForSession,
+    userLimit: MAX_TENANT_USERS,
     usersRoot: root
   });
 }
@@ -331,6 +404,16 @@ function canonicalSupabaseUserId(value = "") {
   return id;
 }
 
+function canonicalUserFileStem(value = "") {
+  const stem = String(value || "").trim();
+  if (!stem || !SAFE_FILE_STEM_PATTERN.test(stem)) {
+    const error = new Error("User file id is invalid.");
+    error.code = "vibe64_invalid_user_file_id";
+    throw error;
+  }
+  return stem;
+}
+
 function normalizeStatus(record = {}) {
   const status = String(record.status || "").trim().toLowerCase();
   if (["active", "invited", "canceled", "revoked"].includes(status)) {
@@ -341,9 +424,6 @@ function normalizeStatus(record = {}) {
   }
   if (record.canceledAt) {
     return "canceled";
-  }
-  if (record.passwordHash) {
-    return "active";
   }
   if (record.invitedAt) {
     return "invited";
@@ -360,6 +440,7 @@ function normalizeUserRecord(record = {}) {
     canceledAt: String(record.canceledAt || ""),
     createdAt: String(record.createdAt || now),
     email,
+    github: normalizeGithubIdentity(record.github),
     invitedAt: String(record.invitedAt || ""),
     revokedAt: String(record.revokedAt || ""),
     role: record.role === "owner" ? "owner" : "member",
@@ -367,6 +448,33 @@ function normalizeUserRecord(record = {}) {
     supabaseUserId: String(record.supabaseUserId || ""),
     updatedAt: String(record.updatedAt || record.createdAt || now),
     version: USER_RECORD_VERSION
+  };
+}
+
+function canonicalStoredUserRecord(filePath = "", record = {}) {
+  if (!ACTIVE_USER_STATUSES.has(record.status)) {
+    return null;
+  }
+  const stem = path.basename(filePath, ".json");
+  if (record.supabaseUserId) {
+    return stem === canonicalUserFileStem(record.supabaseUserId) ? record : null;
+  }
+  if (record.status !== "invited") {
+    return null;
+  }
+  return stem === canonicalUserEmail(record.email) ? record : null;
+}
+
+function normalizeGithubIdentity(value = {}) {
+  const login = String(value?.login || "").trim();
+  if (!login) {
+    return null;
+  }
+  return {
+    avatarUrl: String(value.avatarUrl || value.avatar_url || ""),
+    connectedAt: String(value.connectedAt || ""),
+    id: Number.isFinite(Number(value.id)) ? Number(value.id) : null,
+    login
   };
 }
 

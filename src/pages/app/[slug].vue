@@ -77,15 +77,27 @@ const chatToggleTitle = computed(() => {
 const workspaceTabs = Object.freeze([
   {
     id: "preview",
-    label: "Preview",
-    mobileLabel: "Go to preview"
+    label: "Preview"
   },
   {
     id: "dashboard",
-    label: "Dashboard",
-    mobileLabel: "Go to dashboard"
+    label: "Dashboard"
   }
 ]);
+const mobileWorkspaceAction = computed(() => (
+  workspacePane.value === "dashboard"
+    ? {
+        ariaLabel: "Go to preview",
+        label: "Preview",
+        pane: "preview"
+      }
+    : {
+        ariaLabel: "Go to dashboard",
+        label: "Dashboard",
+        pane: "dashboard"
+      }
+));
+const mobileWorkspaceActionVisible = computed(() => mobilePaneLayout.value && chatCollapsed.value);
 
 useStudioShellDrawer({
   hidden: true
@@ -136,11 +148,6 @@ function selectWorkspacePane(pane = "") {
     return;
   }
   void router.push(developmentBasePath.value);
-}
-
-function workspaceTabLabel(tab = {}) {
-  const label = mobilePaneLayout.value ? tab.mobileLabel : tab.label;
-  return String(label || tab.label || "").trim();
 }
 
 async function loadWorkspaces() {
@@ -319,7 +326,7 @@ onBeforeUnmount(() => {
           />
 
           <div
-            class="studio-home-shell-workspace-tabs"
+            class="studio-home-shell-workspace-tabs studio-home-shell-workspace-tabs--desktop"
             role="tablist"
             aria-label="Workspace"
           >
@@ -333,9 +340,19 @@ onBeforeUnmount(() => {
               :aria-selected="workspacePane === tab.id ? 'true' : 'false'"
               @click="selectWorkspacePane(tab.id)"
             >
-              {{ workspaceTabLabel(tab) }}
+              {{ tab.label }}
             </button>
           </div>
+          <button
+            v-if="mobileWorkspaceActionVisible"
+            class="studio-home-shell-workspace-mobile-action"
+            type="button"
+            :aria-label="mobileWorkspaceAction.ariaLabel"
+            @click="selectWorkspacePane(mobileWorkspaceAction.pane)"
+          >
+            {{ mobileWorkspaceAction.label }}
+            <v-icon :icon="mdiChevronRight" size="15" />
+          </button>
         </div>
       </div>
     </template>
@@ -607,6 +624,32 @@ onBeforeUnmount(() => {
   font-weight: 590;
 }
 
+.studio-home-shell-workspace-mobile-action {
+  align-items: center;
+  background: var(--studio-control-rest-bg);
+  border: 1px solid var(--studio-control-border);
+  border-radius: var(--studio-control-radius);
+  color: var(--studio-control-text);
+  cursor: pointer;
+  display: none;
+  flex: 0 0 auto;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 590;
+  gap: 0.2rem;
+  justify-content: center;
+  letter-spacing: 0;
+  line-height: 1.15;
+  min-height: 2rem;
+  min-width: 4.25rem;
+  padding: 0.28rem 0.62rem;
+  white-space: nowrap;
+}
+
+.studio-home-shell-workspace-mobile-action:hover {
+  background: var(--studio-control-active-bg);
+}
+
 .studio-home-shell-actions {
   align-items: center;
   display: flex;
@@ -636,7 +679,11 @@ onBeforeUnmount(() => {
     margin-left: auto;
   }
 
-  .studio-home-shell-workspace-tabs {
+  .studio-home-shell-workspace-tabs--desktop {
+    display: none;
+  }
+
+  .studio-home-shell-workspace-mobile-action {
     display: inline-flex;
   }
 
@@ -672,6 +719,13 @@ onBeforeUnmount(() => {
     font-size: 0.78rem;
     min-height: 1.65rem;
     padding: 0.2rem 0.38rem;
+  }
+
+  .studio-home-shell-workspace-mobile-action {
+    font-size: 0.82rem;
+    min-height: 1.85rem;
+    min-width: 3.85rem;
+    padding: 0.22rem 0.5rem;
   }
 
   .studio-home-shell-title-area {

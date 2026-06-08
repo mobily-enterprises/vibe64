@@ -14,12 +14,14 @@ import { useRouter } from "vue-router";
 import {
   mdiArrowRight,
   mdiGithub,
-  mdiPlus
+  mdiPlus,
+  mdiShieldAccountOutline
 } from "@mdi/js";
 import ShellLayout from "@/components/ShellLayout.vue";
 import Vibe64AccountMenu from "@/components/auth/Vibe64AccountMenu.vue";
 import Vibe64UserManagement from "@/components/auth/Vibe64UserManagement.vue";
 import Vibe64AddProjectWizard from "@/components/manage/Vibe64AddProjectWizard.vue";
+import Vibe64ProjectAccessPanel from "@/components/manage/Vibe64ProjectAccessPanel.vue";
 import AIAccountsSetup from "@/components/studio/AIAccountsSetup.vue";
 import StudioSetupDoctorScreen from "@/components/studio/StudioSetupDoctorScreen.vue";
 import {
@@ -37,6 +39,8 @@ const loadError = ref("");
 const projectsRoot = ref("");
 const workspaces = ref([]);
 const addProjectDialogOpen = ref(false);
+const projectAccessDialogOpen = ref(false);
+const projectAccessWorkspace = ref(null);
 const activeManagementView = ref("workspaces");
 const sortedWorkspaces = computed(() => [...workspaces.value].sort((left, right) => left.slug.localeCompare(right.slug)));
 const canManageWorkspaces = computed(() => auth?.state?.user?.owner === true || auth?.state?.user?.role === "owner");
@@ -124,6 +128,18 @@ function openAddProjectDialog() {
   addProjectDialogOpen.value = true;
 }
 
+function canOpenProjectAccess(workspace = {}) {
+  if (!canManageWorkspaces.value) {
+    return false;
+  }
+  return Boolean(workspace.githubRepository?.fullName);
+}
+
+function openProjectAccess(workspace = {}) {
+  projectAccessWorkspace.value = workspace;
+  projectAccessDialogOpen.value = true;
+}
+
 function viewTabId(value) {
   return `manage-tab-${value}`;
 }
@@ -204,23 +220,42 @@ function viewPanelId(value) {
                 <h3>Projects</h3>
                 <span>{{ sortedWorkspaces.length }}</span>
               </div>
-              <button
+              <article
                 v-for="workspace in sortedWorkspaces"
                 :key="workspace.slug"
                 class="vibe64-manage__workspace"
-                type="button"
-                @click="openWorkspace(workspace)"
               >
-                <span>
+                <button
+                  class="vibe64-manage__workspace-main"
+                  type="button"
+                  @click="openWorkspace(workspace)"
+                >
                   <strong>{{ workspace.slug }}</strong>
                   <small>{{ workspace.workspaceRoot }}</small>
                   <small class="vibe64-manage__repository">
                     <v-icon :icon="mdiGithub" />
                     {{ workspaceRepositoryLabel(workspace) }}
                   </small>
-                </span>
-                <v-icon :icon="mdiArrowRight" />
-              </button>
+                </button>
+                <v-btn
+                  v-if="canOpenProjectAccess(workspace)"
+                  class="vibe64-manage__access"
+                  size="small"
+                  type="button"
+                  variant="text"
+                  @click="openProjectAccess(workspace)"
+                >
+                  <v-icon :icon="mdiShieldAccountOutline" />
+                  Access
+                </v-btn>
+                <v-btn
+                  :icon="mdiArrowRight"
+                  aria-label="Open project"
+                  type="button"
+                  variant="text"
+                  @click="openWorkspace(workspace)"
+                />
+              </article>
               <p v-if="sortedWorkspaces.length === 0" class="vibe64-manage__empty">
                 {{ emptyProjectsMessage }}
               </p>
@@ -251,6 +286,17 @@ function viewPanelId(value) {
         closable
         @cancel="addProjectDialogOpen = false"
         @created="refreshWorkspacesAfterCreate"
+      />
+    </v-dialog>
+
+    <v-dialog
+      v-model="projectAccessDialogOpen"
+      class="vibe64-manage__project-dialog"
+    >
+      <Vibe64ProjectAccessPanel
+        v-if="projectAccessDialogOpen && projectAccessWorkspace"
+        :workspace="projectAccessWorkspace"
+        @close="projectAccessDialogOpen = false"
       />
     </v-dialog>
   </ShellLayout>
@@ -405,17 +451,27 @@ function viewPanelId(value) {
   border: 1px solid rgba(15, 23, 42, 0.12);
   border-radius: 8px;
   color: inherit;
-  cursor: pointer;
   display: grid;
   gap: 1rem;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   min-height: 3.6rem;
   padding: 0.7rem 0.85rem;
   text-align: left;
 }
 
+.vibe64-manage__workspace:focus-within,
 .vibe64-manage__workspace:hover {
   border-color: rgba(var(--v-theme-primary), 0.55);
+}
+
+.vibe64-manage__workspace-main {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  min-width: 0;
+  padding: 0;
+  text-align: left;
 }
 
 .vibe64-manage__workspace strong,
@@ -429,6 +485,12 @@ function viewPanelId(value) {
 .vibe64-manage__workspace strong {
   font-size: 0.98rem;
   font-weight: 720;
+}
+
+.vibe64-manage__workspace .v-btn,
+.vibe64-manage__access {
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .vibe64-manage__workspace small {
@@ -459,6 +521,15 @@ function viewPanelId(value) {
 @media (max-width: 760px) {
   .vibe64-manage__bar {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .vibe64-manage__workspace {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .vibe64-manage__access {
+    grid-column: 1 / -1;
+    justify-self: start;
   }
 }
 

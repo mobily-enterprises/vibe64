@@ -15,9 +15,12 @@
 </template>
 
 <script setup>
-import { computed, onMounted } from "vue";
+import { computed, onMounted, watch } from "vue";
 import ProviderAccountsSetup from "@/components/studio/ProviderAccountsSetup.vue";
 import { useVibe64Accounts } from "@/composables/useVibe64Accounts.js";
+import {
+  syncGithubIdentity
+} from "@/lib/vibe64WorkspaceApi.js";
 
 const props = defineProps({
   backLabel: {
@@ -57,6 +60,7 @@ const props = defineProps({
 const emit = defineEmits(["back", "continue"]);
 
 const accounts = useVibe64Accounts();
+const syncedGithubUsers = new Set();
 const fallbackProviderRows = Object.freeze({
   codex: {
     connected: false,
@@ -103,5 +107,19 @@ function providerAccountRow(account = {}) {
 
 onMounted(() => {
   void accounts.refresh();
+});
+
+watch(accountRows, (rows) => {
+  const github = rows.find((row) => row.id === "github" && row.connected === true);
+  const username = String(github?.username || "").trim();
+  if (!username || syncedGithubUsers.has(username)) {
+    return;
+  }
+  syncedGithubUsers.add(username);
+  void syncGithubIdentity().catch(() => {
+    syncedGithubUsers.delete(username);
+  });
+}, {
+  immediate: true
 });
 </script>

@@ -14,8 +14,8 @@
     ready-label="Studio Setup ready"
     blocked-title="Studio Setup blocked"
     ready-title="Studio Setup ready"
-    quiet-title="Checking your machine"
-    quiet-lede="Vibe64 is checking Docker and local tools before it starts."
+    quiet-title="Checking your environment"
+    quiet-lede="Vibe64 is checking Docker and runtime tools before it starts."
     :continue-label="continueLabel"
     :continue-emits="continueEnabled"
     @continue="emit('select-tab', 'project-setup')"
@@ -53,9 +53,9 @@ const streamAutoStart = ref(false);
 
 const lede = computed(() => {
   if (studioSetup.value?.ready) {
-    return "Machine runtime is ready.";
+    return "Environment runtime is ready.";
   }
-  return "Machine runtime must be ready before Vibe64 can operate on workspaces.";
+  return "Environment runtime must be ready before Vibe64 can operate on workspaces.";
 });
 
 async function loadStudioSetup({

@@ -1,7 +1,8 @@
 <script setup>
-import { onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
 import {
   mdiAccountCancelOutline,
+  mdiAccountGroupOutline,
   mdiAccountMinusOutline,
   mdiAccountPlusOutline
 } from "@mdi/js";
@@ -11,7 +12,11 @@ import {
   readUsers,
   revokeUser
 } from "@/lib/vibe64AuthApi.js";
+import {
+  useVibe64AppAuth
+} from "@/composables/useVibe64AppAuth.js";
 
+const auth = useVibe64AppAuth();
 const users = ref([]);
 const loadingUsers = ref(false);
 const inviteStatus = ref("");
@@ -20,6 +25,7 @@ const actionBusy = ref("");
 const inviteForm = reactive({
   email: ""
 });
+const canManageUsers = computed(() => auth?.state?.user?.owner === true || auth?.state?.user?.role === "owner");
 
 async function loadUsers() {
   loadingUsers.value = true;
@@ -38,6 +44,10 @@ async function loadUsers() {
 }
 
 async function submitInvite() {
+  if (!canManageUsers.value) {
+    error.value = "Only owners can invite Vibe64 users.";
+    return;
+  }
   inviteStatus.value = "";
   error.value = "";
   actionBusy.value = "invite";
@@ -65,11 +75,11 @@ async function removeUser(row = {}) {
   await runUserAction(row, revokeUser, "User removed.");
 }
 
-async function inviteAgain(row = {}) {
-  await runUserAction(row, inviteUser, "User invited.");
-}
-
 async function runUserAction(row = {}, action, successMessage = "") {
+  if (!canManageUsers.value) {
+    error.value = "Only owners can manage Vibe64 users.";
+    return;
+  }
   inviteStatus.value = "";
   error.value = "";
   const email = String(row.email || "").trim();
@@ -99,13 +109,12 @@ function statusLabel(row = {}) {
   if (row.status === "invited") {
     return "Invited";
   }
-  if (row.status === "canceled") {
-    return "Canceled";
-  }
-  if (row.status === "revoked") {
-    return "Removed";
-  }
   return row.status || "Unknown";
+}
+
+function githubLabel(row = {}) {
+  const login = String(row.github?.login || "").trim();
+  return login ? `@${login}` : "Not linked";
 }
 
 onMounted(loadUsers);
@@ -122,11 +131,20 @@ onMounted(loadUsers);
     </v-alert>
 
     <section class="vibe64-user-management__section">
-      <h2>
+      <h2 v-if="canManageUsers">
         <v-icon :icon="mdiAccountPlusOutline" size="20" />
         Invite users
       </h2>
-      <form class="vibe64-user-management__invite" @submit.prevent="submitInvite">
+      <h2 v-else>
+        <v-icon :icon="mdiAccountGroupOutline" size="20" />
+        Workspace users
+      </h2>
+
+      <form
+        v-if="canManageUsers"
+        class="vibe64-user-management__invite"
+        @submit.prevent="submitInvite"
+      >
         <v-text-field
           v-model="inviteForm.email"
           autocomplete="email"
@@ -150,19 +168,19 @@ onMounted(loadUsers);
         <thead>
           <tr>
             <th>Email</th>
+            <th>GitHub</th>
             <th>Role</th>
             <th>Status</th>
-            <th>Identity</th>
-            <th class="text-right">Actions</th>
+            <th v-if="canManageUsers" class="text-right">Actions</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="row in users" :key="row.email">
             <td>{{ row.email }}</td>
+            <td>{{ githubLabel(row) }}</td>
             <td>{{ row.role }}</td>
             <td>{{ statusLabel(row) }}</td>
-            <td>{{ row.identityLinked ? "Linked" : "Waiting" }}</td>
-            <td class="vibe64-user-management__row-actions">
+            <td v-if="canManageUsers" class="vibe64-user-management__row-actions">
               <v-btn
                 v-if="row.status === 'invited'"
                 :prepend-icon="mdiAccountCancelOutline"
@@ -186,21 +204,10 @@ onMounted(loadUsers);
               >
                 Remove
               </v-btn>
-              <v-btn
-                v-if="row.status === 'canceled' || row.status === 'revoked'"
-                :prepend-icon="mdiAccountPlusOutline"
-                size="small"
-                type="button"
-                variant="text"
-                :loading="actionBusy === row.email"
-                @click="inviteAgain(row)"
-              >
-                Invite again
-              </v-btn>
             </td>
           </tr>
           <tr v-if="!loadingUsers && users.length === 0">
-            <td colspan="5">No users.</td>
+            <td :colspan="canManageUsers ? 5 : 4">No users.</td>
           </tr>
         </tbody>
       </v-table>
