@@ -4,10 +4,10 @@ import { requestBodyObject } from "@local/vibe64-core/server/serverResponses";
 import { sendDoctorEventStream } from "./doctorStream.js";
 import { requireLocalStudioRequest } from "@local/vibe64-core/server/localStudioRequest";
 import {
-  VIBE64_WORKSPACE_ROUTE_BASE,
-  runWithResolvedWorkspaceRequestContext,
-  workspaceRequestErrorStatusCode
-} from "@local/vibe64-core/server/workspaceRequestContext";
+  VIBE64_PROJECT_ROUTE_BASE,
+  runWithResolvedProjectRequestContext,
+  projectRequestErrorStatusCode
+} from "@local/vibe64-core/server/projectRequestContext";
 
 function requireApplication(app) {
   if (!app || typeof app.make !== "function") {
@@ -49,7 +49,7 @@ function registerDoctorRoutes(
     tags = [],
     terminalInputValidator,
     terminalStartInputValidator,
-    workspaceScoped = true,
+    projectScoped = true,
     writeTerminalSummary
   } = {}
 ) {
@@ -58,12 +58,12 @@ function registerDoctorRoutes(
   const router = app.make("jskit.http.router");
   const normalizedRouteSurface = normalizeSurfaceId(routeSurface);
   const routeBase = resolveScopedApiBasePath({
-    routeBase: workspaceScoped ? VIBE64_WORKSPACE_ROUTE_BASE : "/",
+    routeBase: projectScoped ? VIBE64_PROJECT_ROUTE_BASE : "/",
     relativePath: routeRelativePath,
     strictParams: false
   });
   const service = () => app.make(serviceToken);
-  const withDoctorRequest = workspaceScoped ? withWorkspaceDoctorRequest : withGlobalDoctorRequest;
+  const withDoctorRequest = projectScoped ? withProjectDoctorRequest : withGlobalDoctorRequest;
   const inputForRequest = (request, input = {}) => includeVibe64User
     ? withVibe64User(request, input)
     : input;
@@ -230,19 +230,19 @@ async function withGlobalDoctorRequest(_request, _reply, operation) {
   return operation();
 }
 
-async function withWorkspaceDoctorRequest(request, reply, operation) {
+async function withProjectDoctorRequest(request, reply, operation) {
   try {
-    return await runWithResolvedWorkspaceRequestContext({
+    return await runWithResolvedProjectRequestContext({
       request
     }, operation);
   } catch (error) {
-    if (isWorkspaceRequestError(error)) {
-      reply.code(workspaceRequestErrorStatusCode(error)).send({
+    if (isProjectRequestError(error)) {
+      reply.code(projectRequestErrorStatusCode(error)).send({
         ok: false,
         errors: [
           {
-            code: error?.code || "vibe64_workspace_request_failed",
-            message: String(error?.message || error || "Vibe64 workspace request failed.")
+            code: error?.code || "vibe64_project_request_failed",
+            message: String(error?.message || error || "Vibe64 project request failed.")
           }
         ]
       });
@@ -252,9 +252,9 @@ async function withWorkspaceDoctorRequest(request, reply, operation) {
   }
 }
 
-function isWorkspaceRequestError(error = {}) {
+function isProjectRequestError(error = {}) {
   return [
-    "vibe64_invalid_workspace_slug",
+    "vibe64_invalid_project_slug",
     "vibe64_project_path_not_accessible",
     "vibe64_project_path_not_directory",
     "vibe64_project_path_symlink"

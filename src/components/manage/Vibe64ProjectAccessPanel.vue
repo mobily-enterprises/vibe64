@@ -10,10 +10,10 @@ import {
 import {
   inviteProjectAccess,
   readProjectAccess
-} from "@/lib/vibe64WorkspaceApi.js";
+} from "@/lib/vibe64ProjectApi.js";
 
 const props = defineProps({
-  workspace: {
+  project: {
     default: () => ({}),
     type: Object
   }
@@ -29,7 +29,7 @@ const status = ref(null);
 
 const repositoryName = computed(() => (
   status.value?.repository?.fullName ||
-  props.workspace?.githubRepository?.fullName ||
+  props.project?.githubRepository?.fullName ||
   ""
 ));
 const users = computed(() => Array.isArray(status.value?.users) ? status.value.users : []);
@@ -53,7 +53,7 @@ async function loadAccess({
   }
   error.value = "";
   try {
-    const response = await readProjectAccess(props.workspace?.slug || "");
+    const response = await readProjectAccess(props.project?.slug || "");
     if (response.ok === false) {
       throw new Error(response.errors?.[0]?.message || response.error || "Project access could not load.");
     }
@@ -74,7 +74,7 @@ async function inviteUser(row = {}) {
   actionBusy.value = email;
   error.value = "";
   try {
-    const response = await inviteProjectAccess(props.workspace?.slug || "", {
+    const response = await inviteProjectAccess(props.project?.slug || "", {
       email,
       permission: "push"
     });
@@ -135,7 +135,7 @@ function canInvite(row = {}) {
     <header class="project-access__header">
       <div>
         <p>Project Access</p>
-        <h2>{{ workspace.slug }}</h2>
+        <h2>{{ project.slug }}</h2>
         <span v-if="repositoryName">
           <v-icon :icon="mdiGithub" />
           {{ repositoryName }}

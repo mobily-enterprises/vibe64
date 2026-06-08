@@ -348,6 +348,7 @@ test("Fix Codex report instructions expose the mounted helper command", () => {
 
 test("Fix Codex report helper accepts --json with stdin payload", async () => {
   await withTemporaryRoot(async (targetRoot) => {
+    const stateRoot = path.join(targetRoot, "server-state");
     const store = createFixCodexJobStore({
       clock: () => new Date("2026-05-27T01:02:03.000Z")
     });
@@ -359,7 +360,7 @@ test("Fix Codex report helper accepts --json with stdin payload", async () => {
     const helper = await prepareFixCodexReportHelper({
       fixJobStore: store,
       jobId: job.id,
-      targetRoot,
+      stateRoot,
       token
     });
     const socketPath = path.join(

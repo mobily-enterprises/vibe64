@@ -45,9 +45,6 @@ import {
   projectServiceTargetRoot
 } from "@local/vibe64-core/server/projectServiceSelection";
 import {
-  VIBE64_STATE_DIR
-} from "@local/vibe64-core/server/core";
-import {
   ADD_VIBE64_GITIGNORE_RULES_ACTION_ID,
   GIT_IDENTITY_ACTION_ID,
   VIBE64_LOCAL_STATE_GITIGNORE_PATTERNS,
@@ -91,15 +88,12 @@ const AUTOMATIC_REPAIR_MAX_ATTEMPTS = 12;
 const AUTOMATIC_REPAIR_TIMEOUT_MS = 30 * 60 * 1000;
 const AUTOMATIC_REPAIR_POLL_MS = 250;
 const REPAIRABLE_STATUSES = Object.freeze(["blocked", "fail", "hard-stop"]);
-const STUDIO_OWNED_BOOTSTRAP_ENTRIES = new Set([
-  VIBE64_STATE_DIR
-]);
+const STUDIO_OWNED_BOOTSTRAP_ENTRIES = new Set([]);
 const REMOTE_MIRROR_ALLOWED_BOOTSTRAP_ENTRIES = new Set([
   ".gitignore"
 ]);
 const READY_CACHE_NON_PROJECT_ENTRIES = new Set([
   ".git",
-  VIBE64_STATE_DIR,
   "node_modules"
 ]);
 

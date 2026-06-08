@@ -29,18 +29,18 @@ import {
   createManagedDatabaseRuntimeContainer
 } from "@local/studio-terminal-core/server/managedDatabases";
 import {
-  runWithWorkspaceRequestContext
-} from "@local/vibe64-core/server/workspaceRequestContext";
+  runWithProjectRequestContext
+} from "@local/vibe64-core/server/projectRequestContext";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
-test("managed workspace runtime identity follows the slug instead of the absolute path", async () => {
+test("managed project runtime identity follows the slug instead of the absolute path", async () => {
   await withTemporaryRoot(async (root) => {
     const oldProjectsRoot = path.join(root, "old-root");
     const newProjectsRoot = path.join(root, "new-root");
     const oldTargetRoot = path.join(oldProjectsRoot, "beepollen");
     const newTargetRoot = path.join(newProjectsRoot, "beepollen");
 
-    const oldRuntime = await runWithWorkspaceRequestContext({
+    const oldRuntime = await runWithProjectRequestContext({
       projectsRoot: oldProjectsRoot,
       slug: "beepollen",
       targetRoot: oldTargetRoot
@@ -52,7 +52,7 @@ test("managed workspace runtime identity follows the slug instead of the absolut
       }),
       networkName: runtimeNetworkName(oldTargetRoot)
     }));
-    const newRuntime = await runWithWorkspaceRequestContext({
+    const newRuntime = await runWithProjectRequestContext({
       projectsRoot: newProjectsRoot,
       slug: "beepollen",
       targetRoot: newTargetRoot

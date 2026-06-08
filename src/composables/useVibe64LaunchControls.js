@@ -28,16 +28,16 @@ import {
   stableLocalStorageKeyPart
 } from "@/lib/browserLocalStorage.js";
 import {
-  useVibe64WorkspaceSlug
-} from "@/composables/useVibe64WorkspaceScope.js";
+  useVibe64ProjectSlug
+} from "@/composables/useVibe64ProjectScope.js";
 import {
   scopedDevelopmentApiUrl,
   studioHttpClient
 } from "@/lib/studioHttp.js";
 import {
-  currentWorkspaceSlugFromLocation,
-  vibe64ScopedStorageKey
-} from "@/lib/vibe64WorkspaceScope.js";
+  currentProjectSlugFromLocation,
+  vibe64ProjectScopedStorageKey
+} from "@/lib/vibe64ProjectScope.js";
 
 const LAUNCH_BROWSER_WINDOW_FEATURES = "popup,width=1400,height=900,left=80,top=60";
 const LAUNCH_PREVIEW_TOOLBAR_POSITIONS = Object.freeze(["left", "center", "right"]);
@@ -49,22 +49,22 @@ function browserCanOpenTarget(target = {}) {
   return String(target.kind || "url") === "url" && Boolean(String(target.href || "").trim());
 }
 
-function launchBrowserTargetName(session = {}, workspaceSlug = currentWorkspaceSlugFromLocation()) {
+function launchBrowserTargetName(session = {}, projectSlug = currentProjectSlugFromLocation()) {
   const source = session?.targetRoot || session?.worktree || session?.sessionRoot || session?.sessionId || "target";
-  return `vibe64-launch-${stableLocalStorageKeyPart(`${workspaceSlug || ""}:${source}`)}`;
+  return `vibe64-launch-${stableLocalStorageKeyPart(`${projectSlug || ""}:${source}`)}`;
 }
 
-function launchTerminalStorageKey(session = {}, workspaceSlug = currentWorkspaceSlugFromLocation()) {
-  return vibe64ScopedStorageKey(
-    `vibe64:floating-terminal:launch:${launchBrowserTargetName(session, workspaceSlug)}`,
-    workspaceSlug
+function launchTerminalStorageKey(session = {}, projectSlug = currentProjectSlugFromLocation()) {
+  return vibe64ProjectScopedStorageKey(
+    `vibe64:floating-terminal:launch:${launchBrowserTargetName(session, projectSlug)}`,
+    projectSlug
   );
 }
 
-function launchPreviewToolbarStorageKey(session = {}, workspaceSlug = currentWorkspaceSlugFromLocation()) {
-  return vibe64ScopedStorageKey(
-    `vibe64:launch-preview-toolbar:${launchBrowserTargetName(session, workspaceSlug)}`,
-    workspaceSlug
+function launchPreviewToolbarStorageKey(session = {}, projectSlug = currentProjectSlugFromLocation()) {
+  return vibe64ProjectScopedStorageKey(
+    `vibe64:launch-preview-toolbar:${launchBrowserTargetName(session, projectSlug)}`,
+    projectSlug
   );
 }
 
@@ -88,7 +88,7 @@ function openLaunchBrowserTarget(
   target = {},
   session = {},
   browserWindow = null,
-  workspaceSlug = currentWorkspaceSlugFromLocation()
+  projectSlug = currentProjectSlugFromLocation()
 ) {
   if (!browserCanOpenTarget(target)) {
     return null;
@@ -100,7 +100,7 @@ function openLaunchBrowserTarget(
 
   const openedWindow = activeWindow.open(
     target.href,
-    launchBrowserTargetName(session, workspaceSlug),
+    launchBrowserTargetName(session, projectSlug),
     LAUNCH_BROWSER_WINDOW_FEATURES
   );
   if (!openedWindow) {
@@ -121,7 +121,7 @@ function openLaunchBrowserTarget(
 function openPendingLaunchBrowserWindow(
   session = {},
   browserWindow = null,
-  workspaceSlug = currentWorkspaceSlugFromLocation()
+  projectSlug = currentProjectSlugFromLocation()
 ) {
   const activeWindow = browserWindow || (typeof window !== "undefined" ? window : null);
   if (!activeWindow?.open) {
@@ -129,7 +129,7 @@ function openPendingLaunchBrowserWindow(
   }
   const openedWindow = activeWindow.open(
     "about:blank",
-    launchBrowserTargetName(session, workspaceSlug),
+    launchBrowserTargetName(session, projectSlug),
     LAUNCH_BROWSER_WINDOW_FEATURES
   );
   if (!openedWindow) {
@@ -153,7 +153,7 @@ function openReadyLaunchBrowserTarget(
   target = {},
   session = {},
   pendingWindow = null,
-  workspaceSlug = currentWorkspaceSlugFromLocation()
+  projectSlug = currentProjectSlugFromLocation()
 ) {
   if (!browserCanOpenTarget(target)) {
     return null;
@@ -169,7 +169,7 @@ function openReadyLaunchBrowserTarget(
       // Fall back to opening the named target below.
     }
   }
-  return openLaunchBrowserTarget(target, session, null, workspaceSlug);
+  return openLaunchBrowserTarget(target, session, null, projectSlug);
 }
 
 function launchTargetWorktreePath(session = {}) {
@@ -184,9 +184,21 @@ function launchTerminalIsReady(metadata = {}) {
   return metadata?.launchReady === true || metadata?.launchReady === "true";
 }
 
-function launchPreviewBaseUrl(actions = []) {
+function localPreviewBrowserHref() {
+  if (typeof window === "undefined") {
+    return "";
+  }
+  return String(window.location?.href || "");
+}
+
+function launchPreviewBaseUrl(actions = [], {
+  studioHref = localPreviewBrowserHref()
+} = {}) {
   const previewAction = Array.isArray(actions) ? actions.find((action) => browserCanOpenTarget(action)) : null;
-  return String(previewAction?.previewHref || previewAction?.href || "");
+  return sameSiteLoopbackPreviewUrl(
+    String(previewAction?.previewHref || previewAction?.href || ""),
+    studioHref
+  );
 }
 
 function launchPreviewDisplayUrl(actions = []) {
@@ -207,6 +219,38 @@ function launchPreviewUrl({
   return `${normalizedBaseUrl}${separator}vibe64_reload=${reloadKey}`;
 }
 
+function sameSiteLoopbackPreviewUrl(previewHref = "", studioHref = "") {
+  const previewText = String(previewHref || "").trim();
+  const studioText = String(studioHref || "").trim();
+  if (!previewText || !studioText) {
+    return previewText;
+  }
+  try {
+    const previewUrl = new URL(previewText);
+    const studioUrl = new URL(studioText);
+    if (
+      previewUrl.protocol !== studioUrl.protocol ||
+      !isLoopbackBrowserHost(previewUrl.hostname) ||
+      !isLoopbackBrowserHost(studioUrl.hostname) ||
+      previewUrl.hostname === studioUrl.hostname
+    ) {
+      return previewText;
+    }
+    previewUrl.hostname = studioUrl.hostname;
+    return previewUrl.toString();
+  } catch {
+    return previewText;
+  }
+}
+
+function isLoopbackBrowserHost(hostname = "") {
+  const normalized = String(hostname || "").trim().toLowerCase();
+  return normalized === "localhost" ||
+    normalized === "127.0.0.1" ||
+    normalized === "::1" ||
+    normalized === "[::1]";
+}
+
 function useVibe64LaunchControls({
   autoStartTargetId = () => "",
   busy = () => false,
@@ -214,7 +258,7 @@ function useVibe64LaunchControls({
   windowDisplayed = () => true
 } = {}) {
   const paths = usePaths();
-  const workspaceSlug = useVibe64WorkspaceSlug();
+  const projectSlug = useVibe64ProjectSlug();
   const operationBusy = ref(false);
   const terminalExpanded = ref(false);
   const autoStartKey = ref("");
@@ -236,7 +280,7 @@ function useVibe64LaunchControls({
   });
   const terminalWindowStorageKey = computed(() => launchTerminalStorageKey(
     selectedSession.value || {},
-    workspaceSlug.value
+    projectSlug.value
   ));
   const terminalDisplayed = computed(() => readRefOrGetterValue(windowDisplayed) !== false);
   const terminal = useStudioTerminal({
@@ -275,7 +319,7 @@ function useVibe64LaunchControls({
       VIBE64_SURFACE_ID,
       ROUTE_VISIBILITY_PUBLIC,
       sessionId.value,
-      workspaceSlug.value
+      projectSlug.value
     )),
     refreshOnPull: true
   });
@@ -660,7 +704,7 @@ function useVibe64LaunchControls({
   }
 
   function openAction(action = {}) {
-    return openLaunchBrowserTarget(action, selectedSession.value, null, workspaceSlug.value);
+    return openLaunchBrowserTarget(action, selectedSession.value, null, projectSlug.value);
   }
 
   function setTerminalHost(element) {
@@ -850,5 +894,6 @@ export {
   openLaunchBrowserTarget,
   openPendingLaunchBrowserWindow,
   openReadyLaunchBrowserTarget,
+  sameSiteLoopbackPreviewUrl,
   useVibe64LaunchControls
 };

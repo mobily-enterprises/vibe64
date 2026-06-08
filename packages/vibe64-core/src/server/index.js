@@ -11,4 +11,5 @@ export * from "./sessionWorktreePath.js";
 export * from "./studioProjectContext.js";
 export * from "./studioRoots.js";
 export * from "./terminalWebSocketRoutes.js";
-export * from "./workspaceRuntimeIdentity.js";
+export * from "./projectState.js";
+export * from "./projectRuntimeIdentity.js";

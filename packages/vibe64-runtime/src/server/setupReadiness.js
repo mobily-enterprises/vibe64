@@ -26,7 +26,7 @@ const SETUP_STAGES = Object.freeze([
   }
 ]);
 
-const WORKSPACE_READINESS_STAGES = Object.freeze([
+const PROJECT_READINESS_STAGES = Object.freeze([
   ...CONNECTION_STAGES,
   ...SETUP_STAGES
 ]);
@@ -102,8 +102,8 @@ async function readVibe64SetupReadiness(services = {}, options = {}) {
   return readReadinessStages(SETUP_STAGES, services, options);
 }
 
-async function readVibe64WorkspaceReadiness(services = {}, options = {}) {
-  return readReadinessStages(WORKSPACE_READINESS_STAGES, services, options);
+async function readVibe64ProjectReadiness(services = {}, options = {}) {
+  return readReadinessStages(PROJECT_READINESS_STAGES, services, options);
 }
 
 async function readReadinessStages(stagesToRead, services = {}, options = {}) {
@@ -144,13 +144,13 @@ async function assertVibe64SetupReady(services = {}, options = {}) {
   throw error;
 }
 
-async function assertVibe64WorkspaceReady(services = {}, options = {}) {
-  const readiness = await readVibe64WorkspaceReadiness(services, options);
+async function assertVibe64ProjectReady(services = {}, options = {}) {
+  const readiness = await readVibe64ProjectReadiness(services, options);
   if (readiness.ready === true) {
     return readiness;
   }
 
-  const error = vibe64Error(readiness.message, "vibe64_workspace_not_ready");
+  const error = vibe64Error(readiness.message, "vibe64_project_not_ready");
   error.setup = readiness;
   throw error;
 }
@@ -158,9 +158,9 @@ async function assertVibe64WorkspaceReady(services = {}, options = {}) {
 export {
   CONNECTION_STAGES,
   SETUP_STAGES,
-  WORKSPACE_READINESS_STAGES,
+  PROJECT_READINESS_STAGES,
   assertVibe64SetupReady,
-  assertVibe64WorkspaceReady,
-  readVibe64WorkspaceReadiness,
+  assertVibe64ProjectReady,
+  readVibe64ProjectReadiness,
   readVibe64SetupReadiness
 };

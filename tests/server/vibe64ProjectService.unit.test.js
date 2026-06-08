@@ -13,8 +13,8 @@ import {
   createStudioProjectContext
 } from "../../packages/vibe64-core/src/server/studioProjectContext.js";
 import {
-  runWithWorkspaceRequestContext
-} from "../../packages/vibe64-core/src/server/workspaceRequestContext.js";
+  runWithProjectRequestContext
+} from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 import {
   JSKIT_ALLOW_SELF_TARGET_CONFIG
 } from "@local/vibe64-adapters/server/adapters/jskit/index";
@@ -66,7 +66,7 @@ test("Vibe64 project service exposes project selection before project-specific s
   });
 });
 
-test("Vibe64 project service treats workspace request slug as the selected project", async () => {
+test("Vibe64 project service treats project request slug as the selected project", async () => {
   await withTemporaryRoot(async (root) => {
     const projectsRoot = path.join(root, "projects");
     const targetRoot = path.join(projectsRoot, "alpha_1");
@@ -75,13 +75,13 @@ test("Vibe64 project service treats workspace request slug as the selected proje
       env: {},
       home: root
     });
-    await projectContext.createManagedWorkspace({
+    await projectContext.createManagedProjectRecord({
       githubRepository: {
         fullName: "example/alpha_1"
       },
       slug: "alpha_1"
     });
-    await projectContext.createManagedWorkspace({
+    await projectContext.createManagedProjectRecord({
       githubRepository: {
         fullName: "example/beta"
       },
@@ -91,7 +91,7 @@ test("Vibe64 project service treats workspace request slug as the selected proje
       projectContext
     });
 
-    const listed = await runWithWorkspaceRequestContext({
+    const listed = await runWithProjectRequestContext({
       projectsRoot,
       slug: "alpha_1",
       targetRoot
@@ -102,13 +102,15 @@ test("Vibe64 project service treats workspace request slug as the selected proje
     assert.equal(listed.currentProject.slug, "alpha_1");
     assert.equal(listed.currentProject.path, targetRoot);
     assert.equal(listed.currentProject.selected, true);
+    assert.equal(listed.currentProject.githubRepository.fullName, "example/alpha_1");
     assert.equal(listed.targetRoot, targetRoot);
     assert.deepEqual(listed.projects.map((project) => [
       project.slug,
+      project.githubRepository.fullName,
       project.selected
     ]), [
-      ["alpha_1", true],
-      ["beta", false]
+      ["alpha_1", "example/alpha_1", true],
+      ["beta", "example/beta", false]
     ]);
     assert.equal(service.targetRoot, "");
     assert.equal(service.currentTargetRoot(), "");
@@ -120,6 +122,7 @@ test("Vibe64 project service saves project type and plain-file configuration", a
     const service = createService({
       targetRoot
     });
+    const stateRoot = service.currentProjectStateRoot();
 
     const missingType = await service.readProjectType();
     assert.equal(missingType.ok, true);
@@ -167,7 +170,7 @@ test("Vibe64 project service saves project type and plain-file configuration", a
     assert.equal(savedType.projectType.adapter.id, "jskit");
     assert.equal(savedType.projectType.targetRoot, targetRoot);
     assert.equal(
-      await readFile(path.join(targetRoot, ".vibe64", "project_type"), "utf8"),
+      await readFile(path.join(stateRoot, "project_type"), "utf8"),
       "jskit\n"
     );
 
@@ -195,13 +198,13 @@ test("Vibe64 project service saves project type and plain-file configuration", a
     assert.equal(savedConfig.config.values.github_pr_merge_method, "rebase");
     assert.equal(savedConfig.config.values[JSKIT_ALLOW_SELF_TARGET_CONFIG], true);
     assert.equal(
-      await readFile(path.join(targetRoot, ".vibe64", "config", "jskit_database_runtime"), "utf8"),
+      await readFile(path.join(stateRoot, "config", "jskit_database_runtime"), "utf8"),
       "postgres\n"
     );
 
     const environment = await service.projectConfigEnvironment();
-    assert.equal(environment.VIBE64_CONFIG_DIR, path.join(targetRoot, ".vibe64", "config"));
-    assert.equal(environment.VIBE64_CONFIG_SH, path.join(targetRoot, ".vibe64", "runtime", "vibe64-config.sh"));
+    assert.equal(environment.VIBE64_CONFIG_DIR, path.join(stateRoot, "config"));
+    assert.equal(environment.VIBE64_CONFIG_SH, path.join(stateRoot, "runtime", "vibe64-config.sh"));
 
     const runtime = await service.createRuntime();
     assert.equal(runtime.adapter.id, "jskit");
@@ -259,16 +262,17 @@ test("Vibe64 project service loads invalid saved config as editable not ready st
     const service = createService({
       targetRoot
     });
+    const stateRoot = service.currentProjectStateRoot();
 
     await service.saveProjectType({
       projectType: "jskit"
     });
-    await mkdir(path.join(targetRoot, ".vibe64", "config"), {
+    await mkdir(path.join(stateRoot, "config"), {
       recursive: true
     });
-    await writeFile(path.join(targetRoot, ".vibe64", "config", "github_pr_merge_method"), "merge\n", "utf8");
-    await writeFile(path.join(targetRoot, ".vibe64", "config", JSKIT_ALLOW_SELF_TARGET_CONFIG), "false\n", "utf8");
-    await writeFile(path.join(targetRoot, ".vibe64", "config", "jskit_database_runtime"), "mysql\n", "utf8");
+    await writeFile(path.join(stateRoot, "config", "github_pr_merge_method"), "merge\n", "utf8");
+    await writeFile(path.join(stateRoot, "config", JSKIT_ALLOW_SELF_TARGET_CONFIG), "false\n", "utf8");
+    await writeFile(path.join(stateRoot, "config", "jskit_database_runtime"), "mysql\n", "utf8");
 
     const config = await service.readProjectConfig();
     assert.equal(config.ok, true);

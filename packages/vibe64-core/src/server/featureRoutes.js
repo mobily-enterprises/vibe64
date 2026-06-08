@@ -6,10 +6,10 @@ import {
   requestBodyObject
 } from "./serverResponses.js";
 import {
-  VIBE64_WORKSPACE_ROUTE_BASE,
-  runWithResolvedWorkspaceRequestContext,
-  workspaceRequestErrorStatusCode
-} from "./workspaceRequestContext.js";
+  VIBE64_PROJECT_ROUTE_BASE,
+  runWithResolvedProjectRequestContext,
+  projectRequestErrorStatusCode
+} from "./projectRequestContext.js";
 
 function createVibe64FeatureRoutes(
   app,
@@ -18,7 +18,7 @@ function createVibe64FeatureRoutes(
     projectContext = null,
     routeRelativePath = "",
     routeSurface = "",
-    workspaceScoped = true,
+    projectScoped = true,
     tags = []
   } = {}
 ) {
@@ -26,7 +26,7 @@ function createVibe64FeatureRoutes(
 
   const router = app.make("jskit.http.router");
   const routeBase = resolveScopedApiBasePath({
-    routeBase: workspaceScoped ? VIBE64_WORKSPACE_ROUTE_BASE : "/",
+    routeBase: projectScoped ? VIBE64_PROJECT_ROUTE_BASE : "/",
     relativePath: routeRelativePath,
     strictParams: false
   });
@@ -66,20 +66,20 @@ function createVibe64FeatureRoutes(
 
         let response;
         try {
-          response = workspaceScoped
-            ? await runWithResolvedWorkspaceRequestContext({
+          response = projectScoped
+            ? await runWithResolvedProjectRequestContext({
                 projectContext,
                 request
               }, () => handler(request, reply))
             : await handler(request, reply);
         } catch (error) {
-          if (isWorkspaceRequestError(error)) {
-            reply.code(workspaceRequestErrorStatusCode(error)).send({
+          if (isProjectRequestError(error)) {
+            reply.code(projectRequestErrorStatusCode(error)).send({
               ok: false,
               errors: [
                 {
-                  code: error?.code || "vibe64_workspace_request_failed",
-                  message: String(error?.message || error || "Vibe64 workspace request failed.")
+                  code: error?.code || "vibe64_project_request_failed",
+                  message: String(error?.message || error || "Vibe64 project request failed.")
                 }
               ]
             });
@@ -104,9 +104,9 @@ function createVibe64FeatureRoutes(
   };
 }
 
-function isWorkspaceRequestError(error = {}) {
+function isProjectRequestError(error = {}) {
   return [
-    "vibe64_invalid_workspace_slug",
+    "vibe64_invalid_project_slug",
     "vibe64_project_path_not_accessible",
     "vibe64_project_path_not_directory",
     "vibe64_project_path_symlink"

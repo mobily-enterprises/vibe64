@@ -41,12 +41,35 @@ function bearerToken(headerValue = "") {
   return normalizeText(match?.[1]);
 }
 
-function helperRuntimeHostDir(targetRoot = "") {
-  return path.join(path.resolve(targetRoot), ".vibe64", "runtime");
+function helperStateRoot({
+  session = {},
+  stateRoot = ""
+} = {}) {
+  const resolvedStateRoot = normalizeText(stateRoot || session.stateRoot);
+  if (!resolvedStateRoot) {
+    throw new Error("Vibe64 helper state root is required.");
+  }
+  return path.resolve(resolvedStateRoot);
 }
 
-function helperSocketHostPath(targetRoot = "") {
-  return path.join(helperRuntimeHostDir(targetRoot), HELPER_SOCKET_NAME);
+function helperRuntimeHostDir({
+  session = {},
+  stateRoot = ""
+} = {}) {
+  return path.join(helperStateRoot({
+    session,
+    stateRoot
+  }), "runtime", "current-step-input");
+}
+
+function helperSocketHostPath({
+  session = {},
+  stateRoot = ""
+} = {}) {
+  return path.join(helperRuntimeHostDir({
+    session,
+    stateRoot
+  }), HELPER_SOCKET_NAME);
 }
 
 function helperSocketContainerPath() {
@@ -296,8 +319,8 @@ try {
 `;
 }
 
-function helperEnvironment(session = {}, targetRoot = "", {
-  socketPath = helperSocketContainerPath(targetRoot)
+function helperEnvironment(session = {}, {
+  socketPath = helperSocketContainerPath()
 } = {}) {
   const scriptPath = helperScriptHostPath(session);
   const terminalChatScriptPath = terminalChatHelperScriptHostPath(session);
@@ -313,15 +336,26 @@ function helperEnvironment(session = {}, targetRoot = "", {
   };
 }
 
-function hostHelperEnvironment(session = {}, targetRoot = "") {
-  return helperEnvironment(session, targetRoot, {
-    socketPath: helperSocketHostPath(targetRoot)
+function hostHelperEnvironment(session = {}, {
+  stateRoot = ""
+} = {}) {
+  return helperEnvironment(session, {
+    socketPath: helperSocketHostPath({
+      session,
+      stateRoot
+    })
   });
 }
 
-function helperMount(targetRoot = "") {
+function helperMount({
+  session = {},
+  stateRoot = ""
+} = {}) {
   return {
-    source: helperRuntimeHostDir(targetRoot),
+    source: helperRuntimeHostDir({
+      session,
+      stateRoot
+    }),
     target: HELPER_SOCKET_CONTAINER_DIR
   };
 }
@@ -398,9 +432,15 @@ function hostHelperCommands({
 async function ensureHelperServer({
   onSessionChanged = async () => null,
   projectService,
+  session = {},
+  stateRoot = "",
   targetRoot = ""
 } = {}) {
-  const socketPath = helperSocketHostPath(targetRoot);
+  void targetRoot;
+  const socketPath = helperSocketHostPath({
+    session,
+    stateRoot
+  });
   const existingServer = helperServers.get(socketPath);
   if (existingServer) {
     return existingServer;
@@ -477,16 +517,21 @@ async function prepareCurrentStepInputHelper({
   onSessionChanged = async () => null,
   projectService,
   session = {},
+  stateRoot = "",
   targetRoot = ""
 } = {}) {
   await ensureHelperServer({
     onSessionChanged,
     projectService,
+    session,
+    stateRoot,
     targetRoot
   });
   const currentStepInputHelper = await writeHelperScript(session);
   const terminalChatHelper = await writeTerminalChatHelperScript(session);
-  const hostEnv = hostHelperEnvironment(session, targetRoot);
+  const hostEnv = hostHelperEnvironment(session, {
+    stateRoot
+  });
   const hostCurrentStepInputHelper = await writeHostHelperWrapperScript({
     delegateScriptPath: currentStepInputHelper,
     env: {
@@ -506,7 +551,7 @@ async function prepareCurrentStepInputHelper({
     scriptPath: hostTerminalChatHelperScriptHostPath(session)
   });
   return {
-    env: helperEnvironment(session, targetRoot),
+    env: helperEnvironment(session),
     host: {
       commands: hostHelperCommands({
         currentStepInputHelper: hostCurrentStepInputHelper,
@@ -516,7 +561,10 @@ async function prepareCurrentStepInputHelper({
       terminalChatHelper: hostTerminalChatHelper
     },
     hostEnv,
-    mount: helperMount(targetRoot)
+    mount: helperMount({
+      session,
+      stateRoot
+    })
   };
 }
 

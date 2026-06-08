@@ -47,7 +47,7 @@ class Vibe64AccountsProvider {
     registerRoutes(app, {
       routeRelativePath: "vibe64/accounts",
       routeSurface: "app",
-      workspaceScoped: false
+      projectScoped: false
     });
   }
 }

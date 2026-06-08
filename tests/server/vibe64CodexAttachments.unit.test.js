@@ -13,8 +13,8 @@ import {
   registerRoutes
 } from "../../packages/vibe64-terminals/src/server/registerRoutes.js";
 import {
-  runWithWorkspaceRequestContext
-} from "../../packages/vibe64-core/src/server/workspaceRequestContext.js";
+  runWithProjectRequestContext
+} from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 
 test("Codex attachment route opts into the attachment upload body limit", () => {
   const app = testApp();
@@ -61,7 +61,7 @@ test("Codex attachments are not rejected by the old 25 MB product cap", async ()
   }
 });
 
-test("Codex attachment namespace follows the workspace slug instead of the absolute path", async () => {
+test("Codex attachment namespace follows the project slug instead of the absolute path", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-attachment-scope-test-"));
   const sessionId = "attachment-scope-session";
   const dataBase64 = Buffer.from("hello").toString("base64");
@@ -70,7 +70,7 @@ test("Codex attachment namespace follows the workspace slug instead of the absol
   const oldTargetRoot = path.join(oldProjectsRoot, "beepollen");
   const newTargetRoot = path.join(newProjectsRoot, "beepollen");
   try {
-    const oldResult = await runWithWorkspaceRequestContext({
+    const oldResult = await runWithProjectRequestContext({
       projectsRoot: oldProjectsRoot,
       slug: "beepollen",
       targetRoot: oldTargetRoot
@@ -82,7 +82,7 @@ test("Codex attachment namespace follows the workspace slug instead of the absol
       sessionId,
       targetRoot: oldTargetRoot
     }));
-    const newResult = await runWithWorkspaceRequestContext({
+    const newResult = await runWithProjectRequestContext({
       projectsRoot: newProjectsRoot,
       slug: "beepollen",
       targetRoot: newTargetRoot

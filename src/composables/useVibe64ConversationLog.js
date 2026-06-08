@@ -3,8 +3,8 @@ import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibil
 import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
 import { usePaths } from "@jskit-ai/users-web/client/composables/usePaths";
 import {
-  useVibe64WorkspaceSlug
-} from "@/composables/useVibe64WorkspaceScope.js";
+  useVibe64ProjectSlug
+} from "@/composables/useVibe64ProjectScope.js";
 import {
   studioHttpClient
 } from "@/lib/studioHttp.js";
@@ -81,7 +81,7 @@ function useVibe64ConversationLog({
   session
 } = {}) {
   const paths = usePaths();
-  const workspaceSlug = useVibe64WorkspaceSlug();
+  const projectSlug = useVibe64ProjectSlug();
   const currentSession = computed(() => readRefOrGetterValue(session) || null);
   const sessionId = computed(() => String(currentSession.value?.sessionId || "").trim());
   const enabled = computed(() => Boolean(
@@ -103,7 +103,7 @@ function useVibe64ConversationLog({
         VIBE64_SURFACE_ID,
         ROUTE_VISIBILITY_PUBLIC,
         sessionId.value,
-        workspaceSlug.value
+        projectSlug.value
       ),
       String(currentSession.value?.revision || ""),
       String(currentSession.value?.stepRevision || "")

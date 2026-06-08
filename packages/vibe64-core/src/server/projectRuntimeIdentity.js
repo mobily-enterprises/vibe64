@@ -2,19 +2,19 @@ import path from "node:path";
 import process from "node:process";
 
 import {
-  currentWorkspaceRequestContext
-} from "./workspaceRequestContext.js";
+  currentProjectRequestContext
+} from "./projectRequestContext.js";
 import {
-  normalizeWorkspaceSlug,
+  normalizeProjectSlug,
   pathInsideOrEqual,
   resolveStudioProjectsRoot
 } from "./studioProjectContext.js";
 
-function workspaceRuntimeIdentity(slug = "") {
-  return `workspace:${normalizeWorkspaceSlug(slug)}`;
+function projectRuntimeIdentity(slug = "") {
+  return `project:${normalizeProjectSlug(slug)}`;
 }
 
-function managedWorkspaceSlugFromTargetRoot(targetRoot = "", {
+function managedProjectSlugFromTargetRoot(targetRoot = "", {
   projectsRoot = ""
 } = {}) {
   const resolvedTargetRoot = path.resolve(String(targetRoot || "").trim() || process.cwd());
@@ -29,7 +29,7 @@ function managedWorkspaceSlugFromTargetRoot(targetRoot = "", {
     return "";
   }
   try {
-    return normalizeWorkspaceSlug(candidateSlug);
+    return normalizeProjectSlug(candidateSlug);
   } catch {
     return "";
   }
@@ -37,26 +37,26 @@ function managedWorkspaceSlugFromTargetRoot(targetRoot = "", {
 
 function targetRuntimeIdentity(targetRoot = "") {
   const resolvedTargetRoot = path.resolve(String(targetRoot || "").trim() || process.cwd());
-  const workspaceContext = currentWorkspaceRequestContext();
-  const contextSlug = String(workspaceContext?.slug || "").trim();
-  const contextTargetRoot = String(workspaceContext?.targetRoot || "").trim();
+  const projectContext = currentProjectRequestContext();
+  const contextSlug = String(projectContext?.slug || "").trim();
+  const contextTargetRoot = String(projectContext?.targetRoot || "").trim();
   if (
     contextSlug &&
     (!contextTargetRoot || pathInsideOrEqual(contextTargetRoot, resolvedTargetRoot))
   ) {
-    return workspaceRuntimeIdentity(contextSlug);
+    return projectRuntimeIdentity(contextSlug);
   }
 
-  const managedSlug = managedWorkspaceSlugFromTargetRoot(resolvedTargetRoot);
+  const managedSlug = managedProjectSlugFromTargetRoot(resolvedTargetRoot);
   if (managedSlug) {
-    return workspaceRuntimeIdentity(managedSlug);
+    return projectRuntimeIdentity(managedSlug);
   }
 
   return `path:${resolvedTargetRoot}`;
 }
 
 export {
-  managedWorkspaceSlugFromTargetRoot,
+  managedProjectSlugFromTargetRoot,
   targetRuntimeIdentity,
-  workspaceRuntimeIdentity
+  projectRuntimeIdentity
 };

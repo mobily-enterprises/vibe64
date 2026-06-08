@@ -25,10 +25,10 @@
       :session="selection.selectedSession"
       :session-selection-closed="selection.isClosed"
       :session-toolbar="autopilotSessionToolbar"
-      :workspace-pane="props.workspacePane"
+      :project-pane="props.projectPane"
       @busy-change="setAutopilotBusy"
-      @workspace-attention="emitWorkspaceAttention"
-      @workspace-pane-change="emitWorkspacePaneChange"
+      @project-attention="emitProjectAttention"
+      @project-pane-change="emitProjectPaneChange"
     >
       <template #shell-terminal="{ active: tabActive }">
         <Vibe64ShellControls
@@ -133,7 +133,7 @@ const props = defineProps({
     required: true,
     type: String
   },
-  workspacePane: {
+  projectPane: {
     default: "preview",
     type: String
   }
@@ -143,8 +143,8 @@ const emit = defineEmits([
   "busy-change",
   "page-error-change",
   "toolbar-controls-ready",
-  "workspace-attention",
-  "workspace-pane-change"
+  "project-attention",
+  "project-pane-change"
 ]);
 
 const selectedSessionId = computed(() => props.sessionId);
@@ -188,12 +188,12 @@ const sessionScopedData = {
   workflowDefinitions: props.sessionData.workflowDefinitions
 };
 
-function emitWorkspacePaneChange(pane = "") {
-  emit("workspace-pane-change", pane);
+function emitProjectPaneChange(pane = "") {
+  emit("project-pane-change", pane);
 }
 
-function emitWorkspaceAttention() {
-  emit("workspace-attention");
+function emitProjectAttention() {
+  emit("project-attention");
 }
 const autopilotSessionToolbar = proxyRefs({
   canCreateSession: props.sessionData.canCreateSession,

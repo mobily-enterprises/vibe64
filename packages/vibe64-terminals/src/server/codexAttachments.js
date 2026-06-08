@@ -8,7 +8,7 @@ import {
 } from "./terminalShared.js";
 import {
   targetRuntimeIdentity
-} from "@local/vibe64-core/server/workspaceRuntimeIdentity";
+} from "@local/vibe64-core/server/projectRuntimeIdentity";
 import {
   STUDIO_TEMP_DIR_NAME
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";

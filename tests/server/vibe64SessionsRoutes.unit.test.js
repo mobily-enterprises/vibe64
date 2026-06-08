@@ -14,18 +14,18 @@ import {
 import { registerRoutes } from "../../packages/vibe64-sessions/src/server/registerRoutes.js";
 import {
   findRegisteredRoute,
-  routeWorkspaceParams,
+  routeProjectParams,
   testReply,
   testRouteApp,
   withLocalRequestBypass,
-  withRouteWorkspace
+  withRouteProject
 } from "./vibe64RouteTestHelpers.js";
 
 const maintenanceWorkflowDefinitionIds = coreMaintenanceTesting.workflowDefinitionIds;
 
 test("session creation route forwards the selected workflow definition", async () => {
   await withLocalRequestBypass(async () => {
-    await withRouteWorkspace(async ({ apiRouteBase, projectContext }) => {
+    await withRouteProject(async ({ apiRouteBase, projectContext }) => {
       const app = testRouteApp();
       registerRoutes(app, {
         projectContext,
@@ -47,7 +47,7 @@ test("session creation route forwards the selected workflow definition", async (
           workflowDefinition: maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
         }
       },
-      params: routeWorkspaceParams(),
+      params: routeProjectParams(),
       async executeAction(action) {
         executedAction = action;
         return {
@@ -69,7 +69,7 @@ test("session creation route forwards the selected workflow definition", async (
 
 test("session list route forwards the requested archive filter", async () => {
   await withLocalRequestBypass(async () => {
-    await withRouteWorkspace(async ({ apiRouteBase, projectContext }) => {
+    await withRouteProject(async ({ apiRouteBase, projectContext }) => {
       const app = testRouteApp();
       registerRoutes(app, {
         projectContext,
@@ -94,7 +94,7 @@ test("session list route forwards the requested archive filter", async () => {
       query: {
         archive: "abandoned"
       },
-      params: routeWorkspaceParams(),
+      params: routeProjectParams(),
       async executeAction(action) {
         executedAction = action;
         return {
@@ -117,7 +117,7 @@ test("session list route forwards the requested archive filter", async () => {
 
 test("session conversation log route forwards the session id", async () => {
   await withLocalRequestBypass(async () => {
-    await withRouteWorkspace(async ({ apiRouteBase, projectContext }) => {
+    await withRouteProject(async ({ apiRouteBase, projectContext }) => {
       const app = testRouteApp();
       registerRoutes(app, {
         projectContext,
@@ -134,7 +134,7 @@ test("session conversation log route forwards the session id", async () => {
     let executedAction = null;
     const reply = testReply();
     await route.handler({
-      params: routeWorkspaceParams({
+      params: routeProjectParams({
         sessionId: "session-1"
       }),
       async executeAction(action) {
@@ -159,7 +159,7 @@ test("session conversation log route forwards the session id", async () => {
 
 test("session advance route forwards the expected step state", async () => {
   await withLocalRequestBypass(async () => {
-    await withRouteWorkspace(async ({ apiRouteBase, projectContext }) => {
+    await withRouteProject(async ({ apiRouteBase, projectContext }) => {
       const app = testRouteApp();
       registerRoutes(app, {
         projectContext,
@@ -182,7 +182,7 @@ test("session advance route forwards the expected step state", async () => {
           stepStatus: "done"
         }
       },
-      params: routeWorkspaceParams({
+      params: routeProjectParams({
         sessionId: "session-1"
       }),
       async executeAction(action) {
@@ -208,7 +208,7 @@ test("session advance route forwards the expected step state", async () => {
 
 test("session intent route forwards the authenticated Vibe64 user", async () => {
   await withLocalRequestBypass(async () => {
-    await withRouteWorkspace(async ({ apiRouteBase, projectContext }) => {
+    await withRouteProject(async ({ apiRouteBase, projectContext }) => {
       const app = testRouteApp();
       registerRoutes(app, {
         projectContext,
@@ -237,7 +237,7 @@ test("session intent route forwards the authenticated Vibe64 user", async () => 
           stepStatus: "done"
         }
       },
-      params: routeWorkspaceParams({
+      params: routeProjectParams({
         intentId: "accept_changes",
         sessionId: "session-1"
       }),

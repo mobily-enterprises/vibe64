@@ -138,10 +138,10 @@ test("embedded preview shows the start control while launch targets are still lo
   ]);
 });
 
-test("embedded preview clears the opening overlay when iframe content loads", async ({ page }) => {
+test("embedded preview clears the opening overlay when bridge reports rendered content", async ({ page }) => {
   await mockLaunchTerminalSocket(page);
   await mockLaunchSession(page, {
-    previewReadyLoadNumber: 99,
+    previewReadyDelayMs: 100,
     previewResponseDelayMs: 1000
   });
 
@@ -154,28 +154,28 @@ test("embedded preview clears the opening overlay when iframe content loads", as
   await expect(page.locator(".vibe64-launch-controls__preview-overlay")).toHaveCount(0);
 });
 
-test("embedded preview does not reload a loaded iframe while waiting for bridge messages", async ({ page }) => {
+test("embedded preview retries when iframe loads without a rendered-content bridge message", async ({ page }) => {
   await mockLaunchTerminalSocket(page);
   const launchSession = await mockLaunchSession(page, {
-    previewReadyLoadNumber: 99
+    previewReadyLoadNumber: 2
   });
 
   await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
   const previewFrame = page.locator(".vibe64-launch-controls__preview-frame");
   await expect(page.frameLocator(".vibe64-launch-controls__preview-frame").getByText("Preview app")).toBeVisible();
-  await expect(page.locator(".vibe64-launch-controls__preview-overlay")).toHaveCount(0);
   const initialSrc = await previewFrame.getAttribute("src");
-  await page.waitForTimeout(5500);
-  expect(await previewFrame.getAttribute("src")).toBe(initialSrc);
-  expect(launchSession.getPreviewLoadCount()).toBe(1);
+  await expect(page.locator(".vibe64-launch-controls__preview-overlay")).toContainText("Opening preview.");
+  await expect.poll(() => launchSession.getPreviewLoadCount(), {
+    timeout: 7000
+  }).toBe(2);
+  expect(await previewFrame.getAttribute("src")).not.toBe(initialSrc);
+  await expect(page.locator(".vibe64-launch-controls__preview-overlay")).toHaveCount(0);
 });
 
 test("embedded preview stays mounted and does not reload while covered by dashboard", async ({ page }) => {
   await mockLaunchTerminalSocket(page);
-  const launchSession = await mockLaunchSession(page, {
-    previewReadyLoadNumber: 99
-  });
+  const launchSession = await mockLaunchSession(page);
 
   await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
@@ -250,7 +250,7 @@ test("embedded preview stays mounted when switching selected sessions", async ({
   })).toBe(true);
 });
 
-test("mobile workspace tabs use action labels", async ({ page }) => {
+test("mobile project tabs use action labels", async ({ page }) => {
   await page.setViewportSize({
     height: 844,
     width: 390
@@ -278,7 +278,7 @@ test("mobile workspace tabs use action labels", async ({ page }) => {
   })).toHaveCount(0);
 });
 
-test("mobile dashboard section links keep the active workspace slug", async ({ page }) => {
+test("mobile dashboard section links keep the active project slug", async ({ page }) => {
   await page.setViewportSize({
     height: 844,
     width: 390
@@ -288,7 +288,7 @@ test("mobile dashboard section links keep the active workspace slug", async ({ p
 
   await page.goto(`${BASE_URL}${DASHBOARD_PATH}/configure`);
   await page.getByRole("button", {
-    name: "Show workspace"
+    name: "Show project"
   }).click();
   await page.locator(".section-container-shell__mobile-section-title", {
     hasText: "Run"

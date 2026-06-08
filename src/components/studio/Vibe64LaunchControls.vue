@@ -284,8 +284,11 @@ import {
   writeLocalStorageJson
 } from "@/lib/browserLocalStorage.js";
 import {
-  useVibe64WorkspaceSlug
-} from "@/composables/useVibe64WorkspaceScope.js";
+  vibe64SessionDebugLog
+} from "@/lib/vibe64SessionDebugLog.js";
+import {
+  useVibe64ProjectSlug
+} from "@/composables/useVibe64ProjectScope.js";
 
 const props = defineProps({
   buttonLabel: {
@@ -383,7 +386,6 @@ const PREVIEW_LOCATION_MESSAGE_TYPE = "vibe64:preview-location";
 const PREVIEW_QUERY_MESSAGE_TYPE = "vibe64:preview-query";
 const PREVIEW_READY_MESSAGE_TYPE = "vibe64:preview-ready";
 const PREVIEW_RELOAD_QUERY_PARAM = "vibe64_reload";
-// A successful iframe load is the generic preview-ready boundary; bridge messages only enrich the displayed target URL.
 const PREVIEW_READY_RETRY_INTERVAL_MS = 5000;
 const PREVIEW_READY_RETRY_LIMIT = 30;
 const previewFrame = ref(null);
@@ -391,7 +393,7 @@ const previewReloadKey = ref(0);
 const previewReadyUrl = ref("");
 const previewVisitedUrl = ref("");
 const previewToolbarPosition = ref("center");
-const workspaceSlug = useVibe64WorkspaceSlug();
+const projectSlug = useVibe64ProjectSlug();
 let previewReadyRetryCount = 0;
 let previewReadyRetryTimer = 0;
 const toolbarTeleportTarget = computed(() => String(props.toolbarTeleportTarget || "").trim());
@@ -421,7 +423,7 @@ const manualLaunchMenuVisible = computed(() => Boolean(
   !(props.embeddedPreview && requestedAutoStartTargetId.value)
 ));
 const previewToolbarStorageKey = computed(() => props.embeddedPreview && props.session
-  ? launchPreviewToolbarStorageKey(props.session, workspaceSlug.value)
+  ? launchPreviewToolbarStorageKey(props.session, projectSlug.value)
   : "");
 const previewBaseUrl = computed(() => launchPreviewBaseUrl(launchActions.value));
 const previewDisplayBaseUrl = computed(() => launchPreviewDisplayUrl(launchActions.value));
@@ -454,10 +456,45 @@ const previewEmptyText = computed(() => {
   return "Run the app to show the preview.";
 });
 
+function previewClientDebugEnabled() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  try {
+    return window.localStorage?.getItem("vibe64:preview-debug") === "1" ||
+      new URL(window.location.href).searchParams.has("vibe64_preview_debug");
+  } catch {
+    return false;
+  }
+}
+
+function previewDebugLog(event = "", details = {}) {
+  if (!previewClientDebugEnabled()) {
+    return;
+  }
+  vibe64SessionDebugLog(`client.launchPreview.${event}`, {
+    frameSrc: String(previewFrame.value?.src || ""),
+    overlayVisible: previewLoadingOverlayVisible.value,
+    previewBaseUrl: previewBaseUrl.value,
+    previewDisplayBaseUrl: previewDisplayBaseUrl.value,
+    previewReadyUrl: previewUrlWithoutReload(previewReadyUrl.value),
+    previewUrl: previewUrlWithoutReload(previewUrl.value),
+    projectSlug: projectSlug.value,
+    reloadKey: previewReloadKey.value,
+    retryCount: previewReadyRetryCount,
+    sessionId: String(props.session?.sessionId || ""),
+    terminalLaunchReady: terminalLaunchReady.value,
+    ...(details && typeof details === "object" && !Array.isArray(details) ? details : {})
+  });
+}
+
 async function reloadPreview() {
   await refreshLaunchTargets();
   previewReadyRetryCount = 0;
   previewReloadKey.value += 1;
+  previewDebugLog("manualReload", {
+    nextReloadKey: previewReloadKey.value
+  });
 }
 
 function movePreviewToolbar(direction = 0) {
@@ -480,17 +517,22 @@ async function copyPreviewUrl() {
 
 function requestPreviewState() {
   if (!previewPaneDisplayed.value || !previewFrame.value?.contentWindow || !previewUrl.value) {
+    if (previewUrl.value) {
+      previewDebugLog("query.skipped", {
+        hasContentWindow: Boolean(previewFrame.value?.contentWindow),
+        previewPaneDisplayed: previewPaneDisplayed.value
+      });
+    }
     return;
   }
+  previewDebugLog("query.post");
   previewFrame.value.contentWindow.postMessage({
     type: PREVIEW_QUERY_MESSAGE_TYPE
   }, "*");
 }
 
 function handlePreviewFrameLoad() {
-  if (previewUrl.value) {
-    previewReadyUrl.value = previewUrl.value;
-  }
+  previewDebugLog("iframe.load");
   requestPreviewState();
 }
 
@@ -500,6 +542,7 @@ function stopPreviewReadyRetries() {
   }
   window.clearTimeout(previewReadyRetryTimer);
   previewReadyRetryTimer = 0;
+  previewDebugLog("retry.stop");
 }
 
 function previewReadyRetryAllowed() {
@@ -519,16 +562,26 @@ function schedulePreviewReadyRetry() {
   if (previewReadyRetryTimer) {
     return;
   }
+  previewDebugLog("retry.schedule", {
+    intervalMs: PREVIEW_READY_RETRY_INTERVAL_MS
+  });
   previewReadyRetryTimer = window.setTimeout(() => {
     previewReadyRetryTimer = 0;
     if (
       !previewReadyRetryAllowed() ||
       previewReadyRetryCount >= PREVIEW_READY_RETRY_LIMIT
     ) {
+      previewDebugLog("retry.skip", {
+        limit: PREVIEW_READY_RETRY_LIMIT,
+        retryAllowed: previewReadyRetryAllowed()
+      });
       return;
     }
     previewReadyRetryCount += 1;
     previewReloadKey.value += 1;
+    previewDebugLog("retry.reload", {
+      nextReloadKey: previewReloadKey.value
+    });
     schedulePreviewReadyRetry();
   }, PREVIEW_READY_RETRY_INTERVAL_MS);
 }
@@ -596,16 +649,51 @@ function previewMessageOriginAllowed(event) {
   return origins.length < 1 || origins.includes(String(event?.origin || ""));
 }
 
+function previewMessageType(value = {}) {
+  return String(value?.type || "");
+}
+
+function isPreviewBridgeMessage(value = {}) {
+  return [
+    PREVIEW_LOCATION_MESSAGE_TYPE,
+    PREVIEW_READY_MESSAGE_TYPE
+  ].includes(previewMessageType(value));
+}
+
 function handlePreviewLocationMessage(event) {
-  if (
-    event?.source !== previewFrame.value?.contentWindow ||
-    !previewMessageOriginAllowed(event)
-  ) {
+  if (!isPreviewBridgeMessage(event?.data)) {
+    return;
+  }
+  if (event?.source !== previewFrame.value?.contentWindow) {
+    previewDebugLog("message.ignored", {
+      messageType: previewMessageType(event?.data),
+      origin: String(event?.origin || ""),
+      reason: "source_mismatch"
+    });
+    return;
+  }
+  if (!previewMessageOriginAllowed(event)) {
+    previewDebugLog("message.ignored", {
+      messageType: previewMessageType(event?.data),
+      origin: String(event?.origin || ""),
+      reason: "origin_not_allowed"
+    });
     return;
   }
   const frameUrl = previewMessageUrl(event.data);
+  previewDebugLog("message.received", {
+    frameUrl,
+    href: String(event?.data?.href || event?.data?.url || ""),
+    messageType: previewMessageType(event?.data),
+    origin: String(event?.origin || ""),
+    reason: String(event?.data?.reason || "")
+  });
   if (frameUrl && event.data?.type === PREVIEW_READY_MESSAGE_TYPE) {
     previewReadyUrl.value = previewUrl.value;
+    previewDebugLog("ready.accepted", {
+      frameUrl,
+      reason: String(event?.data?.reason || "")
+    });
   }
   if (frameUrl) {
     previewVisitedUrl.value = frameUrl;
@@ -613,6 +701,10 @@ function handlePreviewLocationMessage(event) {
 }
 
 watch(previewUrl, (nextUrl, previousUrl) => {
+  previewDebugLog("url.changed", {
+    nextUrl: previewUrlWithoutReload(nextUrl),
+    previousUrl: previewUrlWithoutReload(previousUrl)
+  });
   if (previewUrlWithoutReload(nextUrl) !== previewUrlWithoutReload(previousUrl)) {
     previewReadyRetryCount = 0;
   }

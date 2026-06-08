@@ -52,6 +52,7 @@ import {
   dockerCommand,
   fixCodexTerminalNamespace,
   globalCodexTerminalNamespace,
+  pathInsideOrEqual,
   stableHash,
   terminalTargetRoot,
   terminalWorktreePath
@@ -202,6 +203,25 @@ function fixCodexRepairTarget({
   return resolvedTargetRoot && resolvedWorkdir && resolvedTargetRoot !== resolvedWorkdir
     ? "repair_worktree"
     : "main_checkout";
+}
+
+function codexSessionWorkdirAllowed({
+  session = {},
+  targetRoot = "",
+  workdir = ""
+} = {}) {
+  if (!workdir) {
+    return false;
+  }
+  if (containerWorkspacePath(targetRoot, workdir)) {
+    return true;
+  }
+  const sessionWorktree = terminalWorktreePath(session);
+  if (!sessionWorktree || path.resolve(sessionWorktree) !== path.resolve(workdir)) {
+    return false;
+  }
+  const sessionRoot = String(session.sessionRoot || "").trim();
+  return Boolean(sessionRoot) && pathInsideOrEqual(sessionRoot, workdir);
 }
 
 function normalizeCodexThreadId(value) {
@@ -519,6 +539,7 @@ function codexTerminalArgs({
   helperMount = null,
   image = STUDIO_BASE_TOOLCHAIN_IMAGE,
   mounts = [],
+  session = {},
   sessionId,
   targetRoot,
   terminalId,
@@ -546,6 +567,7 @@ function codexTerminalArgs({
         target: CODEX_ATTACHMENT_CONTAINER_ROOT
       },
       ...[helperMount].filter(Boolean),
+      ...sessionExchangeMounts(session),
       ...mounts.filter(Boolean)
     ],
     sessionId,
@@ -553,6 +575,19 @@ function codexTerminalArgs({
     terminalId,
     workdir: worktree
   });
+}
+
+function sessionExchangeMounts(session = {}) {
+  return [
+    session.artifactsRoot,
+    session.metadataRoot
+  ]
+    .map((source) => normalizeText(source))
+    .filter(Boolean)
+    .map((source) => ({
+      source,
+      target: source
+    }));
 }
 
 function codexContainerName({
@@ -960,7 +995,11 @@ function createCodexTerminalController({
       });
     }
     const workdir = terminalWorktreePath(session);
-    if (!workdir || !containerWorkspacePath(targetRoot, workdir)) {
+    if (!codexSessionWorkdirAllowed({
+      session,
+      targetRoot,
+      workdir
+    })) {
       return retryableTerminalFailure({
         ok: false,
         error: workdir
@@ -1005,6 +1044,7 @@ function createCodexTerminalController({
       },
       projectService,
       session,
+      stateRoot: runtime.stateRoot,
       targetRoot
     });
     const codexThreadId = codexConversationIdForWorkdir(session, workdir);
@@ -1045,6 +1085,7 @@ function createCodexTerminalController({
         mounts: [
           appServerRuntimeMount
         ].filter(Boolean),
+        session,
         sessionId,
         targetRoot,
         terminalId: id,
@@ -1312,7 +1353,19 @@ function createCodexTerminalController({
       });
     }
     const workdir = path.resolve(normalizeText(input.workdir) || targetRoot);
-    if (!containerWorkspacePath(targetRoot, workdir)) {
+    const scope = normalizeText(input.scope) || "project";
+    const session = {
+      metadata: {
+        worktree_path: workdir
+      },
+      sessionRoot: normalizeText(input.sessionRoot),
+      targetRoot
+    };
+    if (!containerWorkspacePath(targetRoot, workdir) && (scope !== "session" || !codexSessionWorkdirAllowed({
+      session,
+      targetRoot,
+      workdir
+    }))) {
       return retryableTerminalFailure({
         ok: false,
         error: "Fix Codex workdir is outside the target root."
@@ -1324,7 +1377,6 @@ function createCodexTerminalController({
         error: `Fix Codex workdir does not exist: ${workdir}`
       });
     }
-    const scope = normalizeText(input.scope) || "project";
     const repairTarget = fixCodexRepairTarget({
       scope,
       targetRoot,
@@ -1345,12 +1397,6 @@ function createCodexTerminalController({
     ].join("\n").trim();
     const jobId = jobSeed.job.id;
     const namespace = fixCodexTerminalNamespace(jobId);
-    const session = {
-      metadata: {
-        worktree_path: workdir
-      },
-      targetRoot
-    };
     const imageResult = await resolveTerminalToolchainImage({
       runtime,
       session,
@@ -1365,7 +1411,7 @@ function createCodexTerminalController({
     const reportHelper = await prepareFixCodexReportHelper({
       fixJobStore,
       jobId,
-      targetRoot,
+      stateRoot: runtime.stateRoot,
       token: jobSeed.token
     });
     await ensureTargetRuntimeNetwork(targetRoot);
@@ -1396,6 +1442,7 @@ function createCodexTerminalController({
         },
         helperMount: reportHelper.mount,
         image: imageResult.image,
+        session,
         sessionId: "",
         targetRoot,
         terminalId: id,
@@ -1526,7 +1573,11 @@ function createCodexTerminalController({
       });
     }
     const workdir = terminalWorktreePath(session);
-    if (!workdir || !containerWorkspacePath(targetRoot, workdir)) {
+    if (!codexSessionWorkdirAllowed({
+      session,
+      targetRoot,
+      workdir
+    })) {
       return retryableTerminalFailure({
         ok: false,
         error: workdir
@@ -1572,6 +1623,7 @@ function createCodexTerminalController({
         },
         projectService,
         session,
+        stateRoot: runtime.stateRoot,
         targetRoot
       });
       const provider = codexAppServerProviderForSession(sessionId);
@@ -1651,6 +1703,7 @@ function createCodexTerminalController({
         },
         projectService,
         session,
+        stateRoot: runtime.stateRoot,
         targetRoot
       });
       const provider = codexAppServerProviderForSession(sessionId);

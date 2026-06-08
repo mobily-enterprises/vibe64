@@ -1,16 +1,18 @@
 import assert from "node:assert/strict";
-import { access, mkdir, mkdtemp, rm } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
 import {
   createStudioProjectContext,
-  normalizeWorkspaceSlug,
+  normalizeProjectSlug,
   projectSlugFromName,
-  resolveWorkspaceRoot,
-  workspaceSlugFromName
+  resolveProjectRoot,
 } from "../../packages/vibe64-core/src/server/studioProjectContext.js";
+import {
+  resolveProjectRequestContext
+} from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 
 async function withTemporaryRoot(callback) {
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-project-context-"));
@@ -22,6 +24,13 @@ async function withTemporaryRoot(callback) {
       recursive: true
     });
   }
+}
+
+async function writeTestFile(filePath, text = "") {
+  await mkdir(path.dirname(filePath), {
+    recursive: true
+  });
+  await writeFile(filePath, text, "utf8");
 }
 
 test("Studio project context starts without a selected project when no explicit target is provided", async () => {
@@ -84,31 +93,31 @@ test("Studio project context creates and selects managed project folders under t
   });
 });
 
-test("workspace slug contract resolves only canonical Vibe64 workspace roots", async () => {
+test("project slug contract resolves only canonical Vibe64 project roots", async () => {
   await withTemporaryRoot(async (root) => {
     const projectsRoot = path.join(root, "vibe64");
 
-    assert.equal(normalizeWorkspaceSlug("app_1-alpha"), "app_1-alpha");
-    assert.equal(workspaceSlugFromName("Example App"), "example-app");
-    assert.equal(workspaceSlugFromName("Example.App"), "example-app");
-    assert.equal(resolveWorkspaceRoot({
+    assert.equal(normalizeProjectSlug("app_1-alpha"), "app_1-alpha");
+    assert.equal(projectSlugFromName("Example App"), "example-app");
+    assert.equal(projectSlugFromName("Example.App"), "example-app");
+    assert.equal(resolveProjectRoot({
       projectsRoot,
       slug: "app_1-alpha"
     }), path.join(projectsRoot, "app_1-alpha"));
 
     for (const slug of ["", "Example", "app.dot", "../outside", "/tmp/app", "_hidden", "-dash", "app/slash"]) {
       assert.throws(
-        () => normalizeWorkspaceSlug(slug),
+        () => normalizeProjectSlug(slug),
         {
-          code: "vibe64_invalid_workspace_slug"
+          code: "vibe64_invalid_project_slug"
         },
-        `Expected invalid workspace slug: ${slug}`
+        `Expected invalid project slug: ${slug}`
       );
     }
   });
 });
 
-test("Studio project context lists and creates workspaces without selecting one", async () => {
+test("Studio project context lists and creates projects without selecting one", async () => {
   await withTemporaryRoot(async (root) => {
     const projectsRoot = path.join(root, "projects");
     const context = createStudioProjectContext({
@@ -117,33 +126,36 @@ test("Studio project context lists and creates workspaces without selecting one"
       home: root
     });
 
-    const created = await context.createManagedWorkspace({
+    const created = await context.createManagedProjectRecord({
       githubRepository: {
         fullName: "example/beta_2"
       },
       slug: "beta_2"
     });
     assert.equal(created.ok, true);
-    assert.equal(created.workspace.slug, "beta_2");
-    assert.equal(created.workspace.workspaceRoot, path.join(projectsRoot, "beta_2"));
+    assert.equal(created.project.slug, "beta_2");
+    assert.equal(created.project.projectRoot, path.join(projectsRoot, "beta_2"));
     assert.equal(context.targetRoot, "");
     assert.equal(context.hasSelection(), false);
 
-    await context.createManagedWorkspace({
+    await context.createManagedProjectRecord({
       githubRepository: {
         fullName: "example/alpha"
       },
       slug: "alpha"
     });
-    const listed = await context.listManagedWorkspaces();
-    assert.deepEqual(listed.workspaces.map((workspace) => workspace.slug), ["alpha", "beta_2"]);
+    const listed = await context.listManagedProjects();
+    assert.deepEqual(listed.projects.map((project) => project.slug), ["alpha", "beta_2"]);
+
+    const selectionList = await context.listProjects();
+    assert.equal(selectionList.projects[0].githubRepository.fullName, "example/alpha");
 
     await assert.rejects(
-      () => context.createManagedWorkspace({
+      () => context.createManagedProjectRecord({
         slug: "Bad.Slug"
       }),
       {
-        code: "vibe64_invalid_workspace_slug"
+        code: "vibe64_invalid_project_slug"
       }
     );
   });
@@ -199,5 +211,74 @@ test("Studio project context rejects empty or escaping project folder names", as
         code: "vibe64_invalid_project_slug"
       }
     );
+  });
+});
+
+test("Studio project context ignores project-local Vibe64 state and reads canonical project state", async () => {
+  await withTemporaryRoot(async (root) => {
+    const dataRoot = path.join(root, "data");
+    const projectsRoot = path.join(root, "projects");
+    const projectRoot = path.join(projectsRoot, "canonical-app");
+    const legacyStateRoot = path.join(projectRoot, ".vibe64");
+    const context = createStudioProjectContext({
+      explicitDataRoot: dataRoot,
+      explicitProjectsRoot: projectsRoot,
+      env: {},
+      home: root
+    });
+    const stateRoot = context.projectStateRootForSlug("canonical-app");
+    await Promise.all([
+      writeTestFile(path.join(legacyStateRoot, "project.json"), `${JSON.stringify({
+        githubRepository: {
+          fullName: "example/legacy-state"
+        }
+      }, null, 2)}\n`),
+      writeTestFile(path.join(stateRoot, "project.json"), `${JSON.stringify({
+        githubRepository: {
+          fullName: "example/canonical-app"
+        }
+      }, null, 2)}\n`),
+      writeTestFile(path.join(legacyStateRoot, "project_type"), "jskit\n"),
+      writeTestFile(path.join(stateRoot, "project_type"), "node-web\n")
+    ]);
+
+    const listed = await context.listManagedProjects();
+
+    assert.deepEqual(listed.projects.map((project) => project.slug), ["canonical-app"]);
+    assert.equal(listed.projects[0].githubRepository.fullName, "example/canonical-app");
+    assert.equal(await readFile(path.join(stateRoot, "project_type"), "utf8"), "node-web\n");
+    assert.equal(await readFile(path.join(legacyStateRoot, "project_type"), "utf8"), "jskit\n");
+  });
+});
+
+test("project request context ensures canonical state without migrating project-local state", async () => {
+  await withTemporaryRoot(async (root) => {
+    const dataRoot = path.join(root, "data");
+    const projectsRoot = path.join(root, "projects");
+    const projectRoot = path.join(projectsRoot, "direct-app");
+    await writeTestFile(path.join(projectRoot, ".vibe64", "project_type"), "jskit\n");
+    const projectContext = createStudioProjectContext({
+      explicitDataRoot: dataRoot,
+      explicitProjectsRoot: projectsRoot,
+      env: {},
+      home: root
+    });
+
+    const context = await resolveProjectRequestContext({
+      projectContext,
+      request: {
+        params: {
+          slug: "direct-app"
+        }
+      }
+    });
+
+    assert.equal(context.projectStateRoot, projectContext.projectStateRootForSlug("direct-app"));
+    await access(context.projectStateRoot);
+    await access(path.join(projectRoot, ".vibe64"));
+    await assert.rejects(() => access(path.join(context.projectStateRoot, "project_type")), {
+      code: "ENOENT"
+    });
+    assert.equal(await readFile(path.join(projectRoot, ".vibe64", "project_type"), "utf8"), "jskit\n");
   });
 });

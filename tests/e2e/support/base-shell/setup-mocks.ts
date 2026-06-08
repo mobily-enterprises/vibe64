@@ -193,18 +193,15 @@ async function mockProjectGateReady(page) {
   await page.route("**/api/bootstrap", async (route) => {
     await fulfillJson(route, bootstrapPayload);
   });
-  await routeApiEndpoint(page, "/vibe64/workspaces", async (route) => {
+  await routeApiEndpoint(page, "/vibe64/projects", async (route) => {
     await fulfillJson(route, {
       ok: true,
       projectsRoot: readyProjectSelectionPayload.projectsRoot,
-      workspaces: readyProjectSelectionPayload.projects.map((project) => ({
-        slug: project.slug,
-        workspaceRoot: project.workspaceRoot || project.path
+      projects: readyProjectSelectionPayload.projects.map((project) => ({
+        projectRoot: project.projectRoot || project.path,
+        slug: project.slug
       }))
     });
-  });
-  await routeApiEndpoint(page, "/vibe64/projects", async (route) => {
-    await fulfillJson(route, readyProjectSelectionPayload);
   });
   await routeApiEndpoint(page, "/studio/current-app", async (route) => {
     await fulfillJson(route, currentAppPayload);

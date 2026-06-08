@@ -3,9 +3,9 @@ import {
   LOCAL_STUDIO_COMMAND_OPTIONS
 } from "@/lib/vibe64RequestConfig.js";
 import {
-  vibe64ScopedStorageKey,
-  vibe64WorkspaceQueryScope
-} from "@/lib/vibe64WorkspaceScope.js";
+  vibe64ProjectScopedStorageKey,
+  vibe64ProjectQueryScope
+} from "@/lib/vibe64ProjectScope.js";
 
 const VIBE64_SESSIONS_API_SUFFIX = "/vibe64/sessions";
 const VIBE64_API_SUFFIX = "/vibe64";
@@ -13,16 +13,16 @@ const VIBE64_SESSION_CHANGED_EVENT = "vibe64.session.changed";
 const DEFAULT_MAX_OPEN_SESSIONS = 3;
 const SELECTED_SESSION_STORAGE_KEY = "vibe64:selected-session-id";
 
-function selectedSessionStorageKey(workspaceSlug) {
-  return vibe64ScopedStorageKey(SELECTED_SESSION_STORAGE_KEY, workspaceSlug);
+function selectedSessionStorageKey(projectSlug) {
+  return vibe64ProjectScopedStorageKey(SELECTED_SESSION_STORAGE_KEY, projectSlug);
 }
 
-function vibe64SessionsQueryKey(surfaceId, ownershipFilter, workspaceSlug) {
-  return ["vibe64", ...vibe64WorkspaceQueryScope(workspaceSlug), surfaceId, ownershipFilter, "sessions"];
+function vibe64SessionsQueryKey(surfaceId, ownershipFilter, projectSlug) {
+  return ["vibe64", ...vibe64ProjectQueryScope(projectSlug), surfaceId, ownershipFilter, "sessions"];
 }
 
-function vibe64SessionQueryKey(surfaceId, ownershipFilter, workspaceSlug) {
-  return ["vibe64", ...vibe64WorkspaceQueryScope(workspaceSlug), surfaceId, ownershipFilter, "session"];
+function vibe64SessionQueryKey(surfaceId, ownershipFilter, projectSlug) {
+  return ["vibe64", ...vibe64ProjectQueryScope(projectSlug), surfaceId, ownershipFilter, "session"];
 }
 
 function encodePathSegment(value = "") {
@@ -117,10 +117,10 @@ function vibe64ShellTerminalPath(sessionsApiPath = "", sessionId = "", terminalS
   );
 }
 
-function vibe64ArtifactPreviewQueryKey(surfaceId, ownershipFilter, sessionId = "", previewId = "", workspaceSlug) {
+function vibe64ArtifactPreviewQueryKey(surfaceId, ownershipFilter, sessionId = "", previewId = "", projectSlug) {
   const key = [
     "vibe64",
-    ...vibe64WorkspaceQueryScope(workspaceSlug),
+    ...vibe64ProjectQueryScope(projectSlug),
     surfaceId,
     ownershipFilter,
     "artifact-preview",
@@ -133,10 +133,10 @@ function vibe64ArtifactPreviewQueryKey(surfaceId, ownershipFilter, sessionId = "
   return key;
 }
 
-function vibe64ConversationLogQueryKey(surfaceId, ownershipFilter, sessionId = "", workspaceSlug) {
+function vibe64ConversationLogQueryKey(surfaceId, ownershipFilter, sessionId = "", projectSlug) {
   return [
     "vibe64",
-    ...vibe64WorkspaceQueryScope(workspaceSlug),
+    ...vibe64ProjectQueryScope(projectSlug),
     surfaceId,
     ownershipFilter,
     "conversation-log",
@@ -144,10 +144,10 @@ function vibe64ConversationLogQueryKey(surfaceId, ownershipFilter, sessionId = "
   ];
 }
 
-function vibe64LaunchTargetsQueryKey(surfaceId, ownershipFilter, sessionId = "", workspaceSlug) {
+function vibe64LaunchTargetsQueryKey(surfaceId, ownershipFilter, sessionId = "", projectSlug) {
   return [
     "vibe64",
-    ...vibe64WorkspaceQueryScope(workspaceSlug),
+    ...vibe64ProjectQueryScope(projectSlug),
     surfaceId,
     ownershipFilter,
     "launch-targets",

@@ -39,6 +39,7 @@ import {
   pathInsideOrEqual,
   stableHash,
   terminalTargetRoot,
+  terminalWorktreePath,
   toolTerminalNamespace
 } from "./terminalShared.js";
 import {
@@ -177,6 +178,7 @@ function commandTerminalArgs({
   image,
   mounts = [],
   resultFile = {},
+  session = {},
   sessionId = "",
   targetRoot = "",
   terminalId = "",
@@ -200,6 +202,7 @@ function commandTerminalArgs({
         source: resultFile.directory,
         target: resultFile.directory
       },
+      ...sessionExchangeMounts(session),
       ...mounts
     ],
     sessionId,
@@ -207,6 +210,35 @@ function commandTerminalArgs({
     terminalId,
     workdir
   });
+}
+
+function sessionExchangeMounts(session = {}) {
+  return [
+    session.artifactsRoot,
+    session.metadataRoot
+  ]
+    .map((source) => String(source || "").trim())
+    .filter(Boolean)
+    .map((source) => ({
+      source,
+      target: source
+    }));
+}
+
+function commandWorkdirAllowed({
+  session = {},
+  targetRoot = "",
+  workdir = ""
+} = {}) {
+  if (pathInsideOrEqual(targetRoot, workdir)) {
+    return true;
+  }
+  const worktreePath = terminalWorktreePath(session);
+  if (!worktreePath || path.resolve(worktreePath) !== path.resolve(workdir)) {
+    return false;
+  }
+  const sessionRoot = String(session.sessionRoot || "").trim();
+  return Boolean(sessionRoot) && pathInsideOrEqual(sessionRoot, workdir);
 }
 
 async function writeActionTerminalResult({
@@ -617,7 +649,11 @@ async function startCommandTerminalProcess({
   targetRoot = ""
 } = {}) {
   const workdir = resolveCommandWorkdir(targetRoot, spec.cwd);
-  if (!pathInsideOrEqual(targetRoot, workdir)) {
+  if (!commandWorkdirAllowed({
+    session,
+    targetRoot,
+    workdir
+  })) {
     return {
       ok: false,
       error: "Vibe64 command workdir is outside the target root."
@@ -673,6 +709,7 @@ async function startCommandTerminalProcess({
         image: imageResult.image,
         mounts: Array.isArray(spec.mounts) ? spec.mounts : [],
         resultFile: activeResultFile,
+        session,
         sessionId: session.sessionId || "",
         targetRoot,
         terminalId: terminalContext.id,
@@ -823,7 +860,11 @@ function createCommandTerminalController({
           }
 
           const workdir = resolveCommandWorkdir(targetRoot, spec.cwd);
-          if (!pathInsideOrEqual(targetRoot, workdir)) {
+          if (!commandWorkdirAllowed({
+            session,
+            targetRoot,
+            workdir
+          })) {
             vibe64SessionDebugLog("server.commandTerminal.start.blocked", {
               ...vibe64SessionDebugSummary(session),
               actionId,
@@ -920,6 +961,7 @@ function createCommandTerminalController({
                   image: imageResult.image,
                   mounts: Array.isArray(spec.mounts) ? spec.mounts : [],
                   resultFile: activeResultFile,
+                  session,
                   sessionId,
                   targetRoot,
                   terminalId: terminalContext.id,

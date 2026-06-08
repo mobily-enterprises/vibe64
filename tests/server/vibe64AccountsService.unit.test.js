@@ -411,7 +411,7 @@ test("Account routes inject the authenticated Vibe64 user into account actions",
     registerAccountRoutes(app, {
       routeRelativePath: "vibe64/accounts",
       routeSurface: "app",
-      workspaceScoped: false
+      projectScoped: false
     });
 
     const route = app.registeredRoutes.find((candidate) => {

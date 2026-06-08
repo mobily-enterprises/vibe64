@@ -2,7 +2,6 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  VIBE64_STATE_DIR,
   vibe64Error,
   isMissingPathError,
   isPlainObject,
@@ -77,19 +76,19 @@ function promptTemplatePath(promptPackRoot, promptId) {
   return path.join(promptPackRoot, `${assertPromptId(promptId)}.txt`);
 }
 
-function promptOverrideRoot(targetRoot = "") {
-  const normalizedTargetRoot = normalizeText(targetRoot);
-  return normalizedTargetRoot
-    ? path.join(path.resolve(normalizedTargetRoot), VIBE64_STATE_DIR, PROMPT_OVERRIDES_DIR)
+function promptOverrideRoot(stateRoot = "") {
+  const normalizedStateRoot = normalizeText(stateRoot);
+  return normalizedStateRoot
+    ? path.join(path.resolve(normalizedStateRoot), PROMPT_OVERRIDES_DIR)
     : "";
 }
 
 function promptOverrideTemplatePath({
   adapterId = "",
   promptId = "",
-  targetRoot = ""
+  stateRoot = ""
 } = {}) {
-  const overrideRoot = promptOverrideRoot(targetRoot);
+  const overrideRoot = promptOverrideRoot(stateRoot);
   const normalizedAdapterId = assertPromptId(adapterId);
   return path.join(overrideRoot, normalizedAdapterId, `${assertPromptId(promptId)}.txt`);
 }
@@ -122,15 +121,15 @@ async function readPromptTemplate(promptPackRoot, promptId) {
 }
 
 async function readPromptOverrideTemplate(context) {
-  const targetRoot = context.session.targetRoot;
+  const stateRoot = context.session.stateRoot;
   const adapterId = context.adapter.id;
-  if (!targetRoot || !adapterId) {
+  if (!stateRoot || !adapterId) {
     return null;
   }
   const filePath = promptOverrideTemplatePath({
     adapterId,
     promptId: context.action.promptId || DEFAULT_PROMPT_ID,
-    targetRoot
+    stateRoot
   });
   try {
     return {
@@ -196,6 +195,7 @@ function normalizePromptContext(context = {}) {
       metadataRoot: normalizeText(context.session?.metadataRoot),
       metadata: isPlainObject(context.session?.metadata) ? context.session.metadata : {},
       sessionRoot: normalizeText(context.session?.sessionRoot),
+      stateRoot: normalizeText(context.session?.stateRoot),
       stepMachine: isPlainObject(context.session?.stepMachine) ? context.session.stepMachine : null,
       status: normalizeText(context.session?.status),
       targetRoot: normalizeText(context.session?.targetRoot),
@@ -215,6 +215,7 @@ function sessionPromptContext(session = {}) {
     metadata: session.metadata,
     promptStaticContextMode: session.promptStaticContextMode,
     sessionRoot: session.sessionRoot,
+    stateRoot: session.stateRoot,
     stepMachine: session.stepMachine,
     status: session.status,
     targetRoot: session.targetRoot,

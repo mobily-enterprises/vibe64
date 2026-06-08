@@ -55,7 +55,7 @@ const lede = computed(() => {
   if (studioSetup.value?.ready) {
     return "Environment runtime is ready.";
   }
-  return "Environment runtime must be ready before Vibe64 can operate on workspaces.";
+  return "Environment runtime must be ready before Vibe64 can operate on projects.";
 });
 
 async function loadStudioSetup({

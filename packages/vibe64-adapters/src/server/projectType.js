@@ -11,8 +11,11 @@ import {
 
 const VIBE64_PROJECT_TYPE_FILE = "project_type";
 
-function projectTypePath(targetRoot = process.cwd()) {
-  return path.join(normalizeTargetRoot(targetRoot), VIBE64_STATE_DIR, VIBE64_PROJECT_TYPE_FILE);
+function projectTypePath(targetRoot = process.cwd(), {
+  stateRoot = ""
+} = {}) {
+  const normalizedTargetRoot = normalizeTargetRoot(targetRoot);
+  return path.join(stateRoot ? path.resolve(stateRoot) : path.join(normalizedTargetRoot, VIBE64_STATE_DIR), VIBE64_PROJECT_TYPE_FILE);
 }
 
 async function readProjectTypeFile(filePath) {
@@ -27,10 +30,13 @@ async function readProjectTypeFile(filePath) {
 }
 
 function createVibe64ProjectTypeStore({
+  stateRoot = "",
   targetRoot = process.cwd()
 } = {}) {
   const normalizedTargetRoot = normalizeTargetRoot(targetRoot);
-  const filePath = projectTypePath(normalizedTargetRoot);
+  const filePath = projectTypePath(normalizedTargetRoot, {
+    stateRoot
+  });
 
   async function readProjectType() {
     return readProjectTypeFile(filePath);

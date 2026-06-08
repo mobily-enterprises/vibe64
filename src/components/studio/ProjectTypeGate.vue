@@ -61,8 +61,8 @@ import {
   studioHttpClient
 } from "@/lib/studioHttp.js";
 import {
-  useVibe64WorkspaceSlug
-} from "@/composables/useVibe64WorkspaceScope.js";
+  useVibe64ProjectSlug
+} from "@/composables/useVibe64ProjectScope.js";
 
 const emit = defineEmits(["ready", "missing", "error"]);
 const props = defineProps({
@@ -74,10 +74,10 @@ const props = defineProps({
 
 const savingConfig = ref(false);
 const savingType = ref("");
-const workspaceSlug = useVibe64WorkspaceSlug();
+const projectSlug = useVibe64ProjectSlug();
 
 function projectQueryKey(queryKeyFactory) {
-  return computed(() => queryKeyFactory(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC, workspaceSlug.value));
+  return computed(() => queryKeyFactory(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC, projectSlug.value));
 }
 
 function useStudioEndpointView({
@@ -109,7 +109,7 @@ const projectTypeView = useStudioEndpointView({
   path: PROJECT_TYPE_ENDPOINT,
   queryKeyFactory: projectTypeQueryKey
 });
-const cachedProjectTypeRecord = computed(() => cachedProjectTypeRecords.get(workspaceSlug.value) || null);
+const cachedProjectTypeRecord = computed(() => cachedProjectTypeRecords.get(projectSlug.value) || null);
 const projectTypeRecord = computed(() => projectTypeView.record || cachedProjectTypeRecord.value || {});
 const projectType = computed(() => projectTypeRecord.value?.projectType || {});
 
@@ -166,7 +166,7 @@ const saveProjectConfigCommand = useCommand({
   writeMethod: "PUT"
 });
 
-const cachedProjectConfigRecord = computed(() => cachedProjectConfigRecords.get(workspaceSlug.value) || null);
+const cachedProjectConfigRecord = computed(() => cachedProjectConfigRecords.get(projectSlug.value) || null);
 const projectConfigRecord = computed(() => projectConfigView.record || cachedProjectConfigRecord.value || {});
 const projectConfig = computed(() => projectConfigRecord.value?.config || {});
 const projectTypeLoaded = computed(() => Boolean(projectTypeRecord.value?.projectType));
@@ -232,7 +232,7 @@ async function saveProjectConfig(values) {
 
 watch(() => projectTypeView.record, (record) => {
   if (record?.projectType) {
-    cachedProjectTypeRecords.set(workspaceSlug.value, record);
+    cachedProjectTypeRecords.set(projectSlug.value, record);
   }
 }, {
   immediate: true
@@ -240,7 +240,7 @@ watch(() => projectTypeView.record, (record) => {
 
 watch(() => projectConfigView.record, (record) => {
   if (record?.config) {
-    cachedProjectConfigRecords.set(workspaceSlug.value, record);
+    cachedProjectConfigRecords.set(projectSlug.value, record);
   }
 }, {
   immediate: true

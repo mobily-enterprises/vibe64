@@ -16,8 +16,8 @@ import {
   createStudioProjectContext
 } from "../../packages/vibe64-core/src/server/studioProjectContext.js";
 import {
-  runWithWorkspaceRequestContext
-} from "../../packages/vibe64-core/src/server/workspaceRequestContext.js";
+  runWithProjectRequestContext
+} from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 import {
   closeTerminalSession,
   readTerminalSession
@@ -65,12 +65,16 @@ function fakeProjectService({
   adapter = {},
   configReady = true,
   projectTypeReady = true,
-  targetRoot
+  targetRoot,
+  stateRoot = path.join(path.dirname(targetRoot), ".vibe64", "projects", "current-app-test")
 } = {}) {
   return {
     targetRoot,
     currentTargetRoot() {
       return targetRoot;
+    },
+    currentProjectStateRoot() {
+      return stateRoot;
     },
     async createRuntime() {
       return {
@@ -85,7 +89,7 @@ function fakeProjectService({
     },
     async projectConfigEnvironment() {
       return {
-        VIBE64_CONFIG_DIR: path.join(targetRoot, ".vibe64", "config")
+        VIBE64_CONFIG_DIR: path.join(stateRoot, "config")
       };
     },
     async readProjectConfig() {
@@ -329,6 +333,7 @@ test("current-app reports connections separately from automatic setup capabiliti
 
 test("current-app merges adapter scripts with project scripts and stores starred target script ids", async () => {
   await withTemporaryRoot(async (targetRoot) => {
+    const stateRoot = path.join(path.dirname(targetRoot), ".vibe64", "projects", "current-app-test");
     await mkdir(path.join(targetRoot, ".vibe64", "scripts"), {
       recursive: true
     });
@@ -357,7 +362,7 @@ test("current-app merges adapter scripts with project scripts and stores starred
     assert.equal(saved.ok, true);
     assert.deepEqual(saved.starredScriptIds, ["adapter:verify", "project:local-check"]);
     assert.equal(
-      await readFile(path.join(targetRoot, ".vibe64", "config", "starred_scripts"), "utf8"),
+      await readFile(path.join(stateRoot, "config", "starred_scripts"), "utf8"),
       "adapter:verify,project:local-check\n"
     );
 
@@ -370,7 +375,7 @@ test("current-app merges adapter scripts with project scripts and stores starred
     const reset = await service.resetStarredTargetScripts();
     assert.equal(reset.ok, true);
     assert.deepEqual(reset.starredScriptIds, ["adapter:build"]);
-    await assert.rejects(access(path.join(targetRoot, ".vibe64", "config", "starred_scripts")), {
+    await assert.rejects(access(path.join(stateRoot, "config", "starred_scripts")), {
       code: "ENOENT"
     });
   });
@@ -399,7 +404,7 @@ test("current-app rejects target script terminal starts before spawning unknown 
   });
 });
 
-test("current-app target script terminal namespace includes the active workspace scope", async () => {
+test("current-app target script terminal namespace includes the active project scope", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const service = createService({
       appRoot: targetRoot,
@@ -409,8 +414,8 @@ test("current-app target script terminal namespace includes the active workspace
       }),
       setupServices: readySetupServices()
     });
-    const namespace = `${TARGET_SCRIPT_TERMINAL_NAMESPACE}:workspace:alpha_1:target`;
-    const terminal = await runWithWorkspaceRequestContext({
+    const namespace = `${TARGET_SCRIPT_TERMINAL_NAMESPACE}:project:alpha_1:target`;
+    const terminal = await runWithProjectRequestContext({
       slug: "alpha_1",
       targetRoot
     }, () => service.startTargetScriptTerminal({

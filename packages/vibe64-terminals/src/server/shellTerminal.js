@@ -20,9 +20,9 @@ import {
 import {
   vibe64Result,
   directoryExists,
-  pathInsideOrEqual,
   shellTerminalNamespace,
   stableHash,
+  pathInsideOrEqual,
   terminalTargetRoot,
   terminalWorktreePath
 } from "./terminalShared.js";
@@ -220,10 +220,11 @@ async function resolveShellTerminalCwd({
       error: "Create the session worktree before opening a worktree shell."
     };
   }
-  if (!pathInsideOrEqual(targetRoot, worktreePath)) {
+  const sessionRoot = String(session.sessionRoot || "").trim();
+  if (!pathInsideOrEqual(targetRoot, worktreePath) && (!sessionRoot || !pathInsideOrEqual(sessionRoot, worktreePath))) {
     return {
       ok: false,
-      error: "Vibe64 shell worktree is outside the target root."
+      error: "Session worktree directory is outside the target root and session state root."
     };
   }
   if (!await directoryExists(worktreePath)) {

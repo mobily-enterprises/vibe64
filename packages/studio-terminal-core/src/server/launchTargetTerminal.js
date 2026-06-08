@@ -6,9 +6,6 @@ import process from "node:process";
 import { promisify } from "node:util";
 
 import {
-  containerWorkspacePath
-} from "./containerRuntime.js";
-import {
   gitToolchainMountArgs
 } from "./gitToolchainMounts.js";
 import {
@@ -315,6 +312,28 @@ function hostDockerArgs(enabled = false) {
   return args;
 }
 
+function pathInsideOrEqual(rootPath = "", candidatePath = "") {
+  if (!rootPath || !candidatePath) {
+    return false;
+  }
+  const relativePath = path.relative(path.resolve(rootPath), path.resolve(candidatePath));
+  return relativePath === "" || (!relativePath.startsWith("..") && !path.isAbsolute(relativePath));
+}
+
+function workdirMountArgs({
+  targetRoot = "",
+  workdir = ""
+} = {}) {
+  const normalizedWorkdir = String(workdir || "").trim();
+  if (!normalizedWorkdir || pathInsideOrEqual(targetRoot, normalizedWorkdir)) {
+    return [];
+  }
+  return [
+    "-v",
+    `${path.resolve(normalizedWorkdir)}:${path.resolve(normalizedWorkdir)}`
+  ];
+}
+
 function launchContainerName({
   adapterId = "generic",
   sessionId = "",
@@ -361,6 +380,10 @@ function launchTargetTerminalArgs({
     `${targetRoot}:/workspace`,
     "-v",
     `${targetRoot}:${targetRoot}`,
+    ...workdirMountArgs({
+      targetRoot,
+      workdir
+    }),
     ...targetRuntimeNetworkDockerArgs(targetRoot),
     ...extraDockerArgs,
     ...hostUserIdentityEnvArgs(),
@@ -407,13 +430,6 @@ async function createVibe64WebLaunchTargetTerminalSpec({
   }
 
   const resolvedTargetRoot = path.resolve(targetRoot || session.targetRoot || process.cwd());
-  if (!containerWorkspacePath(resolvedTargetRoot, worktreePath)) {
-    return {
-      ok: false,
-      message: "The session worktree is outside the target root."
-    };
-  }
-
   const port = await findAvailableWebLaunchTargetPort(preferredPort);
   const generatedReadinessMarker = launchReadinessMarker({
     adapterId,

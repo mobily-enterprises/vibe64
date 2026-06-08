@@ -208,6 +208,7 @@ function createService({
           worktreePath
         }),
         scope: "session",
+        sessionRoot: session.sessionRoot || "",
         subject: input.actionLabel || input.launchTargetLabel || input.actionId || input.launchTargetId || sessionId,
         targetRoot,
         workdir: worktreePath || targetRoot

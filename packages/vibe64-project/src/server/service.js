@@ -24,9 +24,13 @@ import {
   getStudioProjectContext
 } from "@local/vibe64-core/server/studioProjectContext";
 import {
-  currentWorkspaceRequestContext,
-  currentWorkspaceTargetRoot
-} from "@local/vibe64-core/server/workspaceRequestContext";
+  currentProjectRequestContext,
+  currentProjectStateRoot,
+  currentProjectTargetRoot
+} from "@local/vibe64-core/server/projectRequestContext";
+import {
+  resolveExternalProjectStateRoot
+} from "@local/vibe64-core/server/projectState";
 
 function resolveVibe64TargetRoot(targetRoot) {
   return resolveStudioTargetRoot({
@@ -34,19 +38,25 @@ function resolveVibe64TargetRoot(targetRoot) {
   });
 }
 
-function workspaceProjectRecord({
+function projectSelectionRecord({
+  githubRepository = null,
   selected = false,
   slug = "",
-  workspaceRoot = ""
+  projectRoot = ""
 } = {}) {
-  return {
+  const record = {
     external: false,
     name: slug,
-    path: workspaceRoot,
+    path: projectRoot,
+    projectRoot,
     selected: Boolean(selected),
     slug,
     source: "managed"
   };
+  if (githubRepository) {
+    record.githubRepository = githubRepository;
+  }
+  return record;
 }
 
 function projectResult(operation) {
@@ -94,26 +104,46 @@ function createService({
   const adapterRegistry = createVibe64AdapterRegistry();
 
   function currentTargetRoot() {
-    return String(currentWorkspaceTargetRoot() || studioProjectContext.targetRoot || "").trim();
+    return String(currentProjectTargetRoot() || studioProjectContext.targetRoot || "").trim();
+  }
+
+  function projectStateRoot(targetRootValue = currentTargetRoot()) {
+    const projectStateRootValue = currentProjectStateRoot();
+    if (projectStateRootValue) {
+      return projectStateRootValue;
+    }
+    if (!targetRootValue) {
+      return "";
+    }
+    if (typeof studioProjectContext.projectStateRootForTarget === "function" && targetRootValue) {
+      return studioProjectContext.projectStateRootForTarget(targetRootValue);
+    }
+    return resolveExternalProjectStateRoot({
+      dataRoot: studioProjectContext.dataRoot || "",
+      targetRoot: targetRootValue || resolveVibe64TargetRoot(targetRootValue)
+    });
   }
 
   async function listProjectSelectionState() {
-    const workspaceContext = currentWorkspaceRequestContext();
-    if (!workspaceContext?.targetRoot) {
+    const projectContextValue = currentProjectRequestContext();
+    if (!projectContextValue?.targetRoot) {
       return studioProjectContext.listProjects();
     }
 
-    const listed = await studioProjectContext.listManagedWorkspaces();
-    const currentProject = workspaceProjectRecord({
+    const listed = await studioProjectContext.listManagedProjects();
+    const currentManagedProject = listed.projects.find((project) => project.slug === projectContextValue.slug) || null;
+    const currentProject = projectSelectionRecord({
+      githubRepository: currentManagedProject?.githubRepository || null,
       selected: true,
-      slug: workspaceContext.slug,
-      workspaceRoot: workspaceContext.targetRoot
+      slug: projectContextValue.slug,
+      projectRoot: projectContextValue.targetRoot
     });
-    const projects = listed.workspaces
-      .map((workspace) => workspaceProjectRecord({
-        selected: workspace.slug === workspaceContext.slug,
-        slug: workspace.slug,
-        workspaceRoot: workspace.workspaceRoot
+    const projects = listed.projects
+      .map((project) => projectSelectionRecord({
+        githubRepository: project.githubRepository,
+        selected: project.slug === projectContextValue.slug,
+        slug: project.slug,
+        projectRoot: project.projectRoot
       }))
       .sort((left, right) => left.slug.localeCompare(right.slug));
 
@@ -127,28 +157,32 @@ function createService({
       currentProject,
       hasSelection: true,
       projects,
-      projectsRoot: workspaceContext.projectsRoot || listed.projectsRoot,
-      targetRoot: workspaceContext.targetRoot
+      projectsRoot: projectContextValue.projectsRoot || listed.projectsRoot,
+      targetRoot: projectContextValue.targetRoot
     };
   }
 
   function requireSelectedTargetRoot() {
-    const workspaceTargetRoot = currentWorkspaceTargetRoot();
-    if (workspaceTargetRoot) {
-      return workspaceTargetRoot;
+    const projectTargetRoot = currentProjectTargetRoot();
+    if (projectTargetRoot) {
+      return projectTargetRoot;
     }
     return studioProjectContext.requireSelectedTargetRoot();
   }
 
   function projectStores(targetRootValue = requireSelectedTargetRoot()) {
     const resolvedTargetRoot = resolveVibe64TargetRoot(targetRootValue);
+    const resolvedProjectStateRoot = projectStateRoot(resolvedTargetRoot);
     return {
       projectConfigStore: createVibe64ProjectConfigStore({
+        stateRoot: resolvedProjectStateRoot,
         targetRoot: resolvedTargetRoot
       }),
       projectTypeStore: createVibe64ProjectTypeStore({
+        stateRoot: resolvedProjectStateRoot,
         targetRoot: resolvedTargetRoot
       }),
+      resolvedProjectStateRoot,
       resolvedTargetRoot
     };
   }
@@ -471,6 +505,7 @@ function createService({
     return new Vibe64SessionRuntime({
       adapter,
       projectConfig,
+      stateRoot: projectStateRoot(resolvedTargetRoot),
       targetRoot: resolvedTargetRoot,
       workflowRegistry
     });
@@ -479,6 +514,10 @@ function createService({
   return Object.freeze({
     currentTargetRoot() {
       return currentTargetRoot();
+    },
+
+    currentProjectStateRoot() {
+      return projectStateRoot();
     },
 
     get targetRoot() {

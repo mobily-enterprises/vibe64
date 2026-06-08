@@ -694,6 +694,7 @@ class Vibe64SessionRuntime {
     clock = undefined,
     defaultHandler = defaultActionHandler,
     projectConfig = {},
+    stateRoot = "",
     store = undefined,
     targetRoot = process.cwd(),
     workflow = null,
@@ -718,9 +719,11 @@ class Vibe64SessionRuntime {
         })
       : null;
     this.workflowMachines = new Map();
+    this.stateRoot = stateRoot;
     this.targetRoot = targetRoot;
     this.store = store || createVibe64SessionStore({
       clock,
+      stateRoot,
       targetRoot
     });
     this.now = createClockNow(clock);

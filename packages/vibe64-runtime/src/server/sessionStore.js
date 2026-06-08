@@ -391,11 +391,12 @@ function isoFromConversationTimestamp(timestamp = "") {
 
 function resolveVibe64SessionPaths({
   sessionId = "",
+  stateRoot = "",
   targetRoot = process.cwd()
 } = {}) {
   const normalizedTargetRoot = normalizeTargetRoot(targetRoot);
-  const stateRoot = path.join(normalizedTargetRoot, VIBE64_STATE_DIR);
-  const sessionsRoot = path.join(stateRoot, "sessions");
+  const resolvedStateRoot = stateRoot ? path.resolve(stateRoot) : path.join(normalizedTargetRoot, VIBE64_STATE_DIR);
+  const sessionsRoot = path.join(resolvedStateRoot, "sessions");
   const activeSessionsRoot = path.join(sessionsRoot, "active");
   const normalizedSessionId = normalizeText(sessionId);
   const sessionRoot = normalizedSessionId ? path.join(activeSessionsRoot, assertValidVibe64SessionId(normalizedSessionId)) : "";
@@ -415,7 +416,7 @@ function resolveVibe64SessionPaths({
     sessionId: normalizedSessionId,
     sessionRoot,
     sessionsRoot,
-    stateRoot,
+    stateRoot: resolvedStateRoot,
     statusPath: sessionRoot ? path.join(sessionRoot, "status") : "",
     stepStatesRoot: sessionRoot ? path.join(sessionRoot, "step-state") : "",
     stepsRoot: sessionRoot ? path.join(sessionRoot, "steps") : "",
@@ -532,14 +533,17 @@ function nextConversationTurnId(turnIds = []) {
 
 function createVibe64SessionStore({
   clock = undefined,
+  stateRoot = "",
   targetRoot = process.cwd()
 } = {}) {
   const normalizedTargetRoot = normalizeTargetRoot(targetRoot);
+  const normalizedStateRoot = stateRoot ? path.resolve(stateRoot) : "";
   const now = createClockNow(clock);
 
   function paths(sessionId = "") {
     return resolveVibe64SessionPaths({
       sessionId,
+      stateRoot: normalizedStateRoot,
       targetRoot: normalizedTargetRoot
     });
   }
@@ -1374,6 +1378,7 @@ function createVibe64SessionStore({
       sessionId: sessionPaths.sessionId,
       sessionName,
       sessionRoot: sessionPaths.sessionRoot,
+      stateRoot: sessionPaths.stateRoot,
       status,
       stepRevision: stepRevisionNumber(manifest.stepRevision),
       targetRoot: sessionPaths.targetRoot,

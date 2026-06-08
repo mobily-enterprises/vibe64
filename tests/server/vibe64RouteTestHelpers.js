@@ -5,7 +5,7 @@ import path from "node:path";
 
 import { LOCALHOST_CHECK_BYPASS_ENV } from "@local/vibe64-core/server/localhostCheckBypass";
 
-const TEST_WORKSPACE_SLUG = "unit_workspace";
+const TEST_PROJECT_SLUG = "unit_project";
 
 function testRouteApp() {
   const registeredRoutes = [];
@@ -65,19 +65,19 @@ async function withLocalRequestBypass(operation) {
   }
 }
 
-async function withRouteWorkspace(operation) {
-  const projectsRoot = await mkdtemp(path.join(tmpdir(), "vibe64-route-workspaces-"));
-  await mkdir(path.join(projectsRoot, TEST_WORKSPACE_SLUG), {
+async function withRouteProject(operation) {
+  const projectsRoot = await mkdtemp(path.join(tmpdir(), "vibe64-route-projects-"));
+  await mkdir(path.join(projectsRoot, TEST_PROJECT_SLUG), {
     recursive: true
   });
   try {
     await operation({
-      apiBase: `/api/app/${TEST_WORKSPACE_SLUG}`,
+      apiBase: `/api/app/${TEST_PROJECT_SLUG}`,
       apiRouteBase: "/api/app/:slug",
       projectContext: {
         projectsRoot
       },
-      slug: TEST_WORKSPACE_SLUG
+      slug: TEST_PROJECT_SLUG
     });
   } finally {
     await rm(projectsRoot, {
@@ -87,18 +87,18 @@ async function withRouteWorkspace(operation) {
   }
 }
 
-function routeWorkspaceParams(params = {}) {
+function routeProjectParams(params = {}) {
   return {
-    slug: TEST_WORKSPACE_SLUG,
+    slug: TEST_PROJECT_SLUG,
     ...params
   };
 }
 
 export {
   findRegisteredRoute,
-  routeWorkspaceParams,
+  routeProjectParams,
   testReply,
   testRouteApp,
   withLocalRequestBypass,
-  withRouteWorkspace
+  withRouteProject
 };

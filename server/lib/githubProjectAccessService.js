@@ -105,10 +105,10 @@ function createGithubProjectAccessService({
     vibe64User = null
   } = {}) {
     await syncCurrentGithubIdentity(vibe64User).catch(() => null);
-    const workspaceResult = await projectContext.readManagedWorkspace({
+    const projectResult = await projectContext.readManagedProject({
       slug
     });
-    const repository = workspaceResult.workspace.githubRepository;
+    const repository = projectResult.project.githubRepository;
     const repositoryStatus = await currentViewerRepositoryStatus(repository.fullName, {
       vibe64User
     });
@@ -126,10 +126,10 @@ function createGithubProjectAccessService({
         ...repository,
         currentViewerPermission: repositoryStatus.permission
       },
+      project: projectResult.project,
       updatedAt: new Date().toISOString(),
       userLimit: auth?.users?.userLimit || null,
-      users: rows,
-      workspace: workspaceResult.workspace
+      users: rows
     };
   }
 
@@ -210,10 +210,10 @@ function createGithubProjectAccessService({
     slug = "",
     vibe64User = null
   } = {}) {
-    const workspaceResult = await projectContext.readManagedWorkspace({
+    const projectResult = await projectContext.readManagedProject({
       slug
     });
-    const repository = workspaceResult.workspace.githubRepository;
+    const repository = projectResult.project.githubRepository;
     const viewer = await currentViewerRepositoryStatus(repository.fullName, {
       vibe64User
     });

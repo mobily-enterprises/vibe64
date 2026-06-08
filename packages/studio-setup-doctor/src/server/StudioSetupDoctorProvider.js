@@ -47,7 +47,7 @@ class StudioSetupDoctorProvider {
     registerRoutes(app, {
       routeRelativePath: "studio/studio-setup",
       routeSurface: "app",
-      workspaceScoped: false
+      projectScoped: false
     });
   }
 }

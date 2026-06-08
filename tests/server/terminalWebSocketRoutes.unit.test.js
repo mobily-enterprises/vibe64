@@ -12,13 +12,13 @@ import {
   registerTerminalWebSocketRoute
 } from "@local/vibe64-core/server/terminalWebSocketRoutes";
 import {
-  currentWorkspaceScopeKey
-} from "@local/vibe64-core/server/workspaceRequestContext";
+  currentProjectScopeKey
+} from "@local/vibe64-core/server/projectRequestContext";
 import {
   createStudioProjectContext
 } from "@local/vibe64-core/server/studioProjectContext";
 
-async function withWorkspaceProjectContext(callback) {
+async function withProjectRequestContext(callback) {
   const projectsRoot = await mkdtemp(path.join(tmpdir(), "vibe64-ws-projects-"));
   const slug = "alpha_1";
   await mkdir(path.join(projectsRoot, slug), {
@@ -101,7 +101,7 @@ test("terminal websocket routes register through JSKIT app ownership", async () 
       }
     };
 
-    await withWorkspaceProjectContext(async ({ projectContext, slug }) => {
+    await withProjectRequestContext(async ({ projectContext, slug }) => {
       registerTerminalWebSocketRoute(app, {
         projectContext,
         routePath: "/api/app/:slug/unit/sessions/:sessionId/terminal/:terminalSessionId/ws",
@@ -109,7 +109,7 @@ test("terminal websocket routes register through JSKIT app ownership", async () 
         serviceUnavailableMessage: "Unit terminal service is unavailable.",
         subscribe(resolvedService, { sessionId, subscriber, terminalSessionId }) {
           assert.equal(resolvedService, service);
-          calls.push(["subscribe", sessionId, terminalSessionId, currentWorkspaceScopeKey()]);
+          calls.push(["subscribe", sessionId, terminalSessionId, currentProjectScopeKey()]);
           subscriber({
             line: "ready",
             type: "terminal.output"
@@ -123,14 +123,14 @@ test("terminal websocket routes register through JSKIT app ownership", async () 
         },
         resize(resolvedService, { cols, rows, sessionId, terminalSessionId }) {
           assert.equal(resolvedService, service);
-          calls.push(["resize", sessionId, terminalSessionId, cols, rows, currentWorkspaceScopeKey()]);
+          calls.push(["resize", sessionId, terminalSessionId, cols, rows, currentProjectScopeKey()]);
           return {
             ok: true
           };
         },
         write(resolvedService, { data, sessionId, terminalSessionId }) {
           assert.equal(resolvedService, service);
-          calls.push(["write", sessionId, terminalSessionId, data, currentWorkspaceScopeKey()]);
+          calls.push(["write", sessionId, terminalSessionId, data, currentProjectScopeKey()]);
           return {
             ok: true
           };
@@ -179,9 +179,9 @@ test("terminal websocket routes register through JSKIT app ownership", async () 
       socket.handlers.close();
 
       assert.deepEqual(calls, [
-        ["subscribe", "session-1", "terminal-1", `workspace:${slug}`],
-        ["write", "session-1", "terminal-1", "hello", `workspace:${slug}`],
-        ["resize", "session-1", "terminal-1", 120, 40, `workspace:${slug}`],
+        ["subscribe", "session-1", "terminal-1", `project:${slug}`],
+        ["write", "session-1", "terminal-1", "hello", `project:${slug}`],
+        ["resize", "session-1", "terminal-1", 120, 40, `project:${slug}`],
         ["unsubscribe"]
       ]);
     });
@@ -220,7 +220,7 @@ test("terminal websocket guard accepts authenticated non-loopback requests", asy
       }
     };
 
-    await withWorkspaceProjectContext(async ({ projectContext, slug }) => {
+    await withProjectRequestContext(async ({ projectContext, slug }) => {
       registerTerminalWebSocketRoute(app, {
         projectContext,
         routePath: "/api/app/:slug/unit/sessions/:sessionId/terminal/:terminalSessionId/ws",

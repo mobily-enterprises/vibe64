@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  readVibe64WorkspaceReadiness,
+  readVibe64ProjectReadiness,
   readVibe64SetupReadiness
 } from "../../packages/vibe64-runtime/src/server/setupReadiness.js";
 
@@ -54,8 +54,8 @@ test("setup readiness reports Studio Setup as the first blocked automatic setup 
   assert.deepEqual(readiness.stages.map((stage) => stage.id), ["studio-setup"]);
 });
 
-test("workspace readiness checks human connections before automatic setup", async () => {
-  const readiness = await readVibe64WorkspaceReadiness({
+test("project readiness checks human connections before automatic setup", async () => {
+  const readiness = await readVibe64ProjectReadiness({
     accountSetupService: serviceBlocked("Accounts missing."),
     projectSetupService: serviceReady(),
     studioSetupService: serviceBlocked("Studio missing.")
@@ -67,7 +67,7 @@ test("workspace readiness checks human connections before automatic setup", asyn
   assert.deepEqual(readiness.stages.map((stage) => stage.id), ["accounts"]);
 });
 
-test("workspace readiness forwards status input to every setup service", async () => {
+test("project readiness forwards status input to every setup service", async () => {
   const seen = [];
   const service = (id) => ({
     async getStatus(input) {
@@ -86,7 +86,7 @@ test("workspace readiness forwards status input to every setup service", async (
     }
   };
 
-  const readiness = await readVibe64WorkspaceReadiness({
+  const readiness = await readVibe64ProjectReadiness({
     accountSetupService: service("accounts"),
     projectSetupService: service("project-setup"),
     studioSetupService: service("studio-setup")

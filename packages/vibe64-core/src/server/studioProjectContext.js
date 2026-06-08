@@ -8,11 +8,16 @@ import { promisify } from "node:util";
 
 import {
   VIBE64_PROJECTS_ROOT_ENV,
+  resolveVibe64DataRoot,
   resolveExplicitStudioTargetRoot
 } from "./studioRoots.js";
+import {
+  resolveExternalProjectStateRoot,
+  resolveProjectStateRoot
+} from "./projectState.js";
 
-const WORKSPACE_SLUG_PATTERN = /^[a-z0-9][a-z0-9_-]*$/u;
-const WORKSPACE_METADATA_PATH = [".vibe64", "workspace.json"];
+const PROJECT_SLUG_PATTERN = /^[a-z0-9][a-z0-9_-]*$/u;
+const PROJECT_METADATA_FILE = "project.json";
 const execFileAsync = promisify(execFile);
 
 let configuredContext = null;
@@ -39,7 +44,7 @@ function pathInsideOrEqual(parentPath = "", childPath = "") {
   return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
-function workspaceSlugFromName(value = "") {
+function projectSlugFromName(value = "") {
   return String(value || "")
     .trim()
     .toLowerCase()
@@ -47,52 +52,37 @@ function workspaceSlugFromName(value = "") {
     .replace(/^-+|-+$/gu, "");
 }
 
-function normalizeWorkspaceSlug(value = "") {
+function normalizeProjectSlug(value = "") {
   const slug = String(value || "").trim();
-  if (!WORKSPACE_SLUG_PATTERN.test(slug)) {
-    const error = new Error("Workspace slug must start with a lowercase letter or number and contain only lowercase letters, numbers, underscores, or dashes.");
-    error.code = "vibe64_invalid_workspace_slug";
+  if (!PROJECT_SLUG_PATTERN.test(slug)) {
+    const error = new Error("Project slug must start with a lowercase letter or number and contain only lowercase letters, numbers, underscores, or dashes.");
+    error.code = "vibe64_invalid_project_slug";
     throw error;
   }
   return slug;
 }
 
-function projectSlugFromName(value = "") {
-  return workspaceSlugFromName(value);
-}
-
-function normalizeProjectSlug(value = "") {
-  try {
-    return normalizeWorkspaceSlug(value);
-  } catch (error) {
-    if (error?.code === "vibe64_invalid_workspace_slug") {
-      error.code = "vibe64_invalid_project_slug";
-    }
-    throw error;
-  }
-}
-
-function workspaceSlugFromInput(input = {}) {
+function projectSlugFromInput(input = {}) {
   const explicitSlug = String(input?.slug || input?.projectSlug || "").trim();
   if (explicitSlug) {
-    return normalizeWorkspaceSlug(explicitSlug);
+    return normalizeProjectSlug(explicitSlug);
   }
-  return normalizeWorkspaceSlug(workspaceSlugFromName(input?.name));
+  return normalizeProjectSlug(projectSlugFromName(input?.name));
 }
 
-function resolveWorkspaceRoot({
+function resolveProjectRoot({
   projectsRoot = "",
   slug = ""
 } = {}) {
   const normalizedProjectsRoot = normalizeRoot(projectsRoot || resolveStudioProjectsRoot());
-  const normalizedSlug = normalizeWorkspaceSlug(slug);
-  const workspaceRoot = path.resolve(normalizedProjectsRoot, normalizedSlug);
-  if (!pathInsideOrEqual(normalizedProjectsRoot, workspaceRoot)) {
-    const error = new Error("Workspace root must be inside the Vibe64 workspace root.");
-    error.code = "vibe64_workspace_outside_root";
+  const normalizedSlug = normalizeProjectSlug(slug);
+  const projectRoot = path.resolve(normalizedProjectsRoot, normalizedSlug);
+  if (!pathInsideOrEqual(normalizedProjectsRoot, projectRoot)) {
+    const error = new Error("Project root must be inside the Vibe64 projects root.");
+    error.code = "vibe64_project_outside_root";
     throw error;
   }
-  return workspaceRoot;
+  return projectRoot;
 }
 
 async function directoryExists(directoryPath = "") {
@@ -131,7 +121,7 @@ async function assertDirectoryUsable(directoryPath = "") {
   }
 }
 
-async function assertWorkspaceDirectoryUsable(directoryPath = "") {
+async function assertProjectDirectoryUsable(directoryPath = "") {
   return assertDirectoryUsable(directoryPath);
 }
 
@@ -153,26 +143,26 @@ function projectRecord({
   };
 }
 
-function workspaceRecord({
+function managedProjectRecord({
   metadata = {},
-  path: workspacePath = "",
+  path: projectPath = "",
   projectsRoot = ""
 } = {}) {
-  const resolvedPath = normalizeRoot(workspacePath);
+  const resolvedPath = normalizeRoot(projectPath);
   return {
-    githubRepository: normalizeWorkspaceGithubRepository(metadata?.githubRepository),
+    githubRepository: normalizeProjectGithubRepository(metadata?.githubRepository),
     path: resolvedPath,
-    slug: path.basename(resolvedPath),
-    workspaceRoot: resolvedPath,
-    workspaceRootRelative: path.relative(normalizeRoot(projectsRoot), resolvedPath)
+    projectRoot: resolvedPath,
+    projectRootRelative: path.relative(normalizeRoot(projectsRoot), resolvedPath),
+    slug: path.basename(resolvedPath)
   };
 }
 
-function workspaceMetadataPath(workspaceRoot = "") {
-  return path.join(normalizeRoot(workspaceRoot), ...WORKSPACE_METADATA_PATH);
+function projectMetadataPath(projectStateRoot = "") {
+  return path.join(normalizeRoot(projectStateRoot), PROJECT_METADATA_FILE);
 }
 
-function normalizeWorkspaceGithubRepository(value = {}) {
+function normalizeProjectGithubRepository(value = {}) {
   const fullName = String(value?.fullName || "").trim();
   const owner = String(value?.owner || "").trim();
   const name = String(value?.name || "").trim();
@@ -195,8 +185,8 @@ function normalizeWorkspaceGithubRepository(value = {}) {
   };
 }
 
-function workspaceMetadataFromInput(input = {}) {
-  const githubRepository = normalizeWorkspaceGithubRepository(input?.githubRepository);
+function projectMetadataFromInput(input = {}) {
+  const githubRepository = normalizeProjectGithubRepository(input?.githubRepository);
   return githubRepository
     ? {
         githubRepository
@@ -204,9 +194,9 @@ function workspaceMetadataFromInput(input = {}) {
     : {};
 }
 
-async function readWorkspaceMetadata(workspaceRoot = "") {
+async function readJsonFile(filePath = "") {
   try {
-    return JSON.parse(await readFile(workspaceMetadataPath(workspaceRoot), "utf8"));
+    return JSON.parse(await readFile(filePath, "utf8"));
   } catch (error) {
     if (error?.code === "ENOENT") {
       return {};
@@ -218,42 +208,59 @@ async function readWorkspaceMetadata(workspaceRoot = "") {
   }
 }
 
-async function writeWorkspaceMetadata(workspaceRoot = "", metadata = {}) {
-  const normalizedMetadata = workspaceMetadataFromInput(metadata);
-  await mkdir(path.dirname(workspaceMetadataPath(workspaceRoot)), {
+async function readProjectMetadata({
+  projectStateRoot = ""
+} = {}) {
+  if (!projectStateRoot) {
+    return {};
+  }
+  return readJsonFile(projectMetadataPath(projectStateRoot));
+}
+
+async function writeProjectMetadata(projectStateRoot = "", metadata = {}) {
+  if (!projectStateRoot) {
+    throw new Error("writeProjectMetadata requires projectStateRoot.");
+  }
+  const normalizedMetadata = projectMetadataFromInput(metadata);
+  await mkdir(path.dirname(projectMetadataPath(projectStateRoot)), {
     recursive: true
   });
   await writeFile(
-    workspaceMetadataPath(workspaceRoot),
+    projectMetadataPath(projectStateRoot),
     `${JSON.stringify(normalizedMetadata, null, 2)}\n`,
     "utf8"
   );
   return normalizedMetadata;
 }
 
-async function workspaceRecordForPath({
-  path: workspacePath = "",
+async function managedProjectRecordForPath({
+  path: projectPath = "",
   projectsRoot = "",
+  projectStateRoot = "",
   writeDerivedMetadata = false
 } = {}) {
-  const metadata = await workspaceMetadataWithGitRemote(workspacePath, {
+  const metadata = await projectMetadataWithGitRemote(projectPath, {
+    projectStateRoot,
     writeDerivedMetadata
   });
-  return workspaceRecord({
+  return managedProjectRecord({
     metadata,
-    path: workspacePath,
+    path: projectPath,
     projectsRoot
   });
 }
 
-async function workspaceMetadataWithGitRemote(workspacePath = "", {
+async function projectMetadataWithGitRemote(projectPath = "", {
+  projectStateRoot = "",
   writeDerivedMetadata = false
 } = {}) {
-  const metadata = await readWorkspaceMetadata(workspacePath);
-  if (normalizeWorkspaceGithubRepository(metadata?.githubRepository)) {
+  const metadata = await readProjectMetadata({
+    projectStateRoot
+  });
+  if (normalizeProjectGithubRepository(metadata?.githubRepository)) {
     return metadata;
   }
-  const githubRepository = await githubRepositoryFromOrigin(workspacePath);
+  const githubRepository = await githubRepositoryFromOrigin(projectPath);
   if (!githubRepository) {
     return metadata;
   }
@@ -262,17 +269,17 @@ async function workspaceMetadataWithGitRemote(workspacePath = "", {
     githubRepository
   };
   if (writeDerivedMetadata) {
-    await writeWorkspaceMetadata(workspacePath, derivedMetadata);
+    await writeProjectMetadata(projectStateRoot, derivedMetadata);
   }
   return derivedMetadata;
 }
 
-async function githubRepositoryFromOrigin(workspacePath = "") {
-  const insideGit = await runGit(workspacePath, ["rev-parse", "--is-inside-work-tree"]);
+async function githubRepositoryFromOrigin(projectPath = "") {
+  const insideGit = await runGit(projectPath, ["rev-parse", "--is-inside-work-tree"]);
   if (insideGit !== "true") {
     return null;
   }
-  const originUrl = await runGit(workspacePath, ["remote", "get-url", "origin"]);
+  const originUrl = await runGit(projectPath, ["remote", "get-url", "origin"]);
   const parsed = parseGithubRemote(originUrl);
   if (!parsed) {
     return null;
@@ -343,11 +350,17 @@ function githubRemoteRecord(owner = "", repository = "") {
 
 function createStudioProjectContext({
   cwd = process.cwd(),
+  explicitDataRoot = "",
   env = process.env,
   explicitProjectsRoot = "",
   explicitTargetRoot = "",
   home = os.homedir()
 } = {}) {
+  const dataRoot = resolveVibe64DataRoot({
+    env,
+    explicitRoot: explicitDataRoot,
+    home
+  });
   const projectsRoot = resolveStudioProjectsRoot({
     env,
     explicitRoot: explicitProjectsRoot,
@@ -359,6 +372,48 @@ function createStudioProjectContext({
     explicitRoot: explicitTargetRoot
   });
   let selectionSource = selectedTargetRoot ? "explicit" : "";
+
+  function projectStateRootForSlug(slug = "") {
+    return resolveProjectStateRoot({
+      dataRoot,
+      env,
+      home,
+      slug
+    });
+  }
+
+  function projectStateRootForTarget(targetRoot = "") {
+    const normalizedTargetRoot = normalizeRoot(targetRoot);
+    if (pathInsideOrEqual(projectsRoot, normalizedTargetRoot)) {
+      try {
+        return projectStateRootForSlug(path.basename(normalizedTargetRoot));
+      } catch {
+        // Explicit/dev targets inside the projects root can still have non-project names.
+      }
+    }
+    return resolveExternalProjectStateRoot({
+      dataRoot,
+      env,
+      home,
+      targetRoot: normalizedTargetRoot
+    });
+  }
+
+  async function ensureProjectStateForSlug(slug = "") {
+    const normalizedSlug = normalizeProjectSlug(slug);
+    const targetRoot = resolveProjectRoot({
+      projectsRoot,
+      slug: normalizedSlug
+    });
+    const projectStateRoot = projectStateRootForSlug(normalizedSlug);
+    await mkdir(projectStateRoot, {
+      recursive: true
+    });
+    return {
+      projectStateRoot,
+      targetRoot
+    };
+  }
 
   function selectedProject() {
     return selectedTargetRoot
@@ -372,16 +427,26 @@ function createStudioProjectContext({
   }
 
   async function listProjects() {
-    const listed = await listManagedWorkspaces();
-    const projects = listed.workspaces
-      .map((entry) => projectRecord({
-        path: entry.workspaceRoot,
-        projectsRoot,
-        selectedPath: selectedTargetRoot,
-        source: "managed"
-      }))
+    const listed = await listManagedProjects();
+    const projects = listed.projects
+      .map((entry) => {
+        const selectionRecord = projectRecord({
+          path: entry.projectRoot,
+          projectsRoot,
+          selectedPath: selectedTargetRoot,
+          source: "managed"
+        });
+        return {
+          ...selectionRecord,
+          ...entry,
+          external: selectionRecord.external,
+          name: selectionRecord.name,
+          selected: selectionRecord.selected,
+          source: "managed"
+        };
+      })
       .sort((left, right) => left.slug.localeCompare(right.slug));
-    const selected = selectedProject();
+    const selected = projects.find((project) => project.selected) || selectedProject();
     return {
       ok: true,
       currentProject: selected,
@@ -392,40 +457,41 @@ function createStudioProjectContext({
     };
   }
 
-  async function listManagedWorkspaces() {
+  async function listManagedProjects() {
     await mkdir(projectsRoot, {
       recursive: true
     });
     const entries = await readdir(projectsRoot, {
       withFileTypes: true
     });
-    const workspacePaths = entries
+    const projectPaths = entries
       .filter((entry) => entry.isDirectory())
       .map((entry) => path.join(projectsRoot, entry.name))
       .filter((entry) => {
         try {
-          normalizeWorkspaceSlug(path.basename(entry));
+          normalizeProjectSlug(path.basename(entry));
           return true;
         } catch {
           return false;
         }
       });
-    const workspaces = (await Promise.all(workspacePaths.map((workspacePath) => workspaceRecordForPath({
-      path: workspacePath,
-      projectsRoot
+    const projects = (await Promise.all(projectPaths.map((projectPath) => managedProjectRecordForPath({
+      path: projectPath,
+      projectsRoot,
+      projectStateRoot: projectStateRootForTarget(projectPath)
     }))))
-      .filter((workspace) => workspace.githubRepository)
+      .filter((project) => project.githubRepository)
       .sort((left, right) => left.slug.localeCompare(right.slug));
     return {
       ok: true,
-      projectsRoot,
-      workspaces
+      projects,
+      projectsRoot
     };
   }
 
-  async function createManagedWorkspace(input = {}) {
-    const slug = workspaceSlugFromInput(input);
-    const targetRoot = resolveWorkspaceRoot({
+  async function createManagedProjectRecord(input = {}) {
+    const slug = projectSlugFromInput(input);
+    const targetRoot = resolveProjectRoot({
       projectsRoot,
       slug
     });
@@ -436,64 +502,69 @@ function createStudioProjectContext({
         recursive: true
       });
     }
-    const metadata = workspaceMetadataFromInput(input);
+    const metadata = projectMetadataFromInput(input);
     if (Object.keys(metadata).length > 0) {
-      await writeWorkspaceMetadata(targetRoot, metadata);
+      await writeProjectMetadata(projectStateRootForSlug(slug), metadata);
     }
+    const project = await managedProjectRecordForPath({
+      path: targetRoot,
+      projectsRoot,
+      projectStateRoot: projectStateRootForSlug(slug)
+    });
     return {
       ok: true,
-      projectsRoot,
-      workspace: await workspaceRecordForPath({
-        path: targetRoot,
-        projectsRoot
-      })
+      project,
+      projectsRoot
     };
   }
 
-  async function readManagedWorkspace(input = {}) {
-    const slug = workspaceSlugFromInput(input);
-    const targetRoot = resolveWorkspaceRoot({
+  async function readManagedProject(input = {}) {
+    const slug = projectSlugFromInput(input);
+    const targetRoot = resolveProjectRoot({
       projectsRoot,
       slug
     });
     await assertDirectoryUsable(targetRoot);
-    const workspace = await workspaceRecordForPath({
+    const project = await managedProjectRecordForPath({
       path: targetRoot,
-      projectsRoot
+      projectsRoot,
+      projectStateRoot: projectStateRootForSlug(slug)
     });
-    if (!workspace.githubRepository) {
+    if (!project.githubRepository) {
       const error = new Error("Vibe64 projects must be linked to a GitHub repository.");
-      error.code = "vibe64_workspace_not_github_backed";
+      error.code = "vibe64_project_not_github_backed";
       throw error;
     }
     return {
       ok: true,
-      projectsRoot,
-      workspace
+      project,
+      projectsRoot
     };
   }
 
-  async function updateManagedWorkspaceMetadata(input = {}) {
-    const slug = workspaceSlugFromInput(input);
-    const targetRoot = resolveWorkspaceRoot({
+  async function updateManagedProjectMetadata(input = {}) {
+    const slug = projectSlugFromInput(input);
+    const targetRoot = resolveProjectRoot({
       projectsRoot,
       slug
     });
     await assertDirectoryUsable(targetRoot);
-    await writeWorkspaceMetadata(targetRoot, input);
+    await writeProjectMetadata(projectStateRootForSlug(slug), input);
+    const project = await managedProjectRecordForPath({
+      path: targetRoot,
+      projectsRoot,
+      projectStateRoot: projectStateRootForSlug(slug)
+    });
     return {
       ok: true,
-      projectsRoot,
-      workspace: await workspaceRecordForPath({
-        path: targetRoot,
-        projectsRoot
-      })
+      project,
+      projectsRoot
     };
   }
 
   async function selectManagedProject(input = {}) {
     const slug = normalizeProjectSlug(input?.slug || input?.projectSlug || input?.name);
-    const targetRoot = resolveWorkspaceRoot({
+    const targetRoot = resolveProjectRoot({
       projectsRoot,
       slug
     });
@@ -509,16 +580,8 @@ function createStudioProjectContext({
   }
 
   async function createManagedProject(input = {}) {
-    let created;
-    try {
-      created = await createManagedWorkspace(input);
-    } catch (error) {
-      if (error?.code === "vibe64_invalid_workspace_slug") {
-        error.code = "vibe64_invalid_project_slug";
-      }
-      throw error;
-    }
-    selectedTargetRoot = created.workspace.workspaceRoot;
+    const created = await createManagedProjectRecord(input);
+    selectedTargetRoot = created.project.projectRoot;
     selectionSource = "managed";
     return listProjects();
   }
@@ -534,10 +597,14 @@ function createStudioProjectContext({
 
   return Object.freeze({
     createManagedProject,
-    createManagedWorkspace,
+    createManagedProjectRecord,
+    get dataRoot() {
+      return dataRoot;
+    },
     get projectsRoot() {
       return projectsRoot;
     },
+    ensureProjectStateForSlug,
     get selectedProject() {
       return selectedProject();
     },
@@ -548,11 +615,13 @@ function createStudioProjectContext({
       return Boolean(selectedTargetRoot);
     },
     listProjects,
-    listManagedWorkspaces,
-    readManagedWorkspace,
+    listManagedProjects,
+    readManagedProject,
     requireSelectedTargetRoot,
     selectManagedProject,
-    updateManagedWorkspaceMetadata
+    updateManagedProjectMetadata,
+    projectStateRootForSlug,
+    projectStateRootForTarget
   });
 }
 
@@ -573,11 +642,9 @@ export {
   createStudioProjectContext,
   getStudioProjectContext,
   normalizeProjectSlug,
-  normalizeWorkspaceSlug,
   pathInsideOrEqual,
   projectSlugFromName,
   resolveStudioProjectsRoot,
-  resolveWorkspaceRoot,
-  assertWorkspaceDirectoryUsable,
-  workspaceSlugFromName
+  resolveProjectRoot,
+  assertProjectDirectoryUsable
 };

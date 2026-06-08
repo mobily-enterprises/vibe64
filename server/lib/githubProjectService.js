@@ -12,9 +12,9 @@ import {
   resolveProviderHomesRoot
 } from "@local/studio-terminal-core/server/providerHomes";
 import {
-  normalizeWorkspaceSlug,
-  resolveWorkspaceRoot,
-  workspaceSlugFromName
+  normalizeProjectSlug,
+  resolveProjectRoot,
+  projectSlugFromName
 } from "@local/vibe64-core/server/studioProjectContext";
 
 const GITHUB_READ_TIMEOUT_MS = 20_000;
@@ -25,7 +25,7 @@ const GITHUB_PUSH_PERMISSIONS = new Set(["ADMIN", "MAINTAIN", "WRITE"]);
 const REPOSITORY_OWNER_LIST_LIMIT = 1000;
 const REPOSITORY_SEARCH_LIMIT = 12;
 
-function createGithubWorkspaceService({
+function createGithubProjectService({
   env = process.env,
   dataRoot = "",
   projectContext,
@@ -323,16 +323,16 @@ function createGithubWorkspaceService({
     return repositoryViewRecord(payload);
   }
 
-  async function openRepositoryWorkspace(input = {}) {
+  async function openRepositoryProject(input = {}) {
     const repository = await repositoryDetails(input);
-    const slug = normalizeWorkspaceSlug(input?.slug || workspaceSlugFromName(repository.name));
-    const targetRoot = await prepareEmptyWorkspaceDirectory(slug);
+    const slug = normalizeProjectSlug(input?.slug || projectSlugFromName(repository.name));
+    const targetRoot = await prepareEmptyProjectDirectory(slug);
     await runGh(["repo", "clone", repository.fullName, "."], {
       targetRoot,
       timeout: GITHUB_WRITE_TIMEOUT_MS,
       vibe64User: input.vibe64User || null
     });
-    const updated = await projectContext.updateManagedWorkspaceMetadata({
+    const updated = await projectContext.updateManagedProjectMetadata({
       githubRepository: {
         ...repository,
         source: "github-existing"
@@ -341,18 +341,18 @@ function createGithubWorkspaceService({
     });
     return {
       ok: true,
+      project: updated.project,
       projectsRoot: updated.projectsRoot,
-      repository,
-      workspace: updated.workspace
+      repository
     };
   }
 
-  async function createRepositoryWorkspace(input = {}) {
+  async function createRepositoryProject(input = {}) {
     const owner = normalizeGithubOwner(input?.owner);
     const name = normalizeGithubRepositoryName(input?.name);
     const visibility = normalizeRepositoryVisibility(input?.visibility);
-    const slug = normalizeWorkspaceSlug(input?.slug || workspaceSlugFromName(name));
-    const targetRoot = await prepareEmptyWorkspaceDirectory(slug);
+    const slug = normalizeProjectSlug(input?.slug || projectSlugFromName(name));
+    const targetRoot = await prepareEmptyProjectDirectory(slug);
     await runTool(["git", "init", "-b", "main"], {
       targetRoot,
       timeout: GITHUB_READ_TIMEOUT_MS,
@@ -367,7 +367,7 @@ function createGithubWorkspaceService({
       repository: `${owner}/${name}`,
       vibe64User: input.vibe64User || null
     });
-    const updated = await projectContext.updateManagedWorkspaceMetadata({
+    const updated = await projectContext.updateManagedProjectMetadata({
       githubRepository: {
         ...repository,
         source: "github-created"
@@ -376,14 +376,14 @@ function createGithubWorkspaceService({
     });
     return {
       ok: true,
+      project: updated.project,
       projectsRoot: updated.projectsRoot,
-      repository,
-      workspace: updated.workspace
+      repository
     };
   }
 
-  async function prepareEmptyWorkspaceDirectory(slug = "") {
-    const targetRoot = resolveWorkspaceRoot({
+  async function prepareEmptyProjectDirectory(slug = "") {
+    const targetRoot = resolveProjectRoot({
       projectsRoot: projectContext.projectsRoot,
       slug
     });
@@ -397,7 +397,7 @@ function createGithubWorkspaceService({
     }
     if (entries.length > 0) {
       throw githubServiceError(
-        "vibe64_workspace_slug_exists",
+        "vibe64_project_slug_exists",
         "Project name already has a local folder. Choose a different project name.",
         409
       );
@@ -409,8 +409,8 @@ function createGithubWorkspaceService({
   }
 
   return Object.freeze({
-    createRepositoryWorkspace,
-    openRepositoryWorkspace,
+    createRepositoryProject,
+    openRepositoryProject,
     repositoryDetails,
     repositoryOwners,
     searchRepositories
@@ -619,7 +619,7 @@ function githubServiceError(code = "", message = "", statusCode = 400) {
 }
 
 export {
-  createGithubWorkspaceService,
+  createGithubProjectService,
   parseRepositoryIdentifier,
   repositoryViewRecord
 };

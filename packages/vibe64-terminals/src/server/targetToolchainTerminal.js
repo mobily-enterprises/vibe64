@@ -1,3 +1,4 @@
+import path from "node:path";
 import process from "node:process";
 
 import {
@@ -43,6 +44,28 @@ function dockerLabelArgs(labels = []) {
     .flatMap((label) => ["--label", label]);
 }
 
+function pathInsideOrEqual(rootPath = "", candidatePath = "") {
+  if (!rootPath || !candidatePath) {
+    return false;
+  }
+  const relativePath = path.relative(path.resolve(rootPath), path.resolve(candidatePath));
+  return relativePath === "" || (!relativePath.startsWith("..") && !path.isAbsolute(relativePath));
+}
+
+function workdirMountArgs({
+  targetRoot = "",
+  workdir = ""
+} = {}) {
+  const normalizedWorkdir = String(workdir || "").trim();
+  if (!normalizedWorkdir || pathInsideOrEqual(targetRoot, normalizedWorkdir)) {
+    return [];
+  }
+  return dockerMountArgs({
+    source: path.resolve(normalizedWorkdir),
+    target: path.resolve(normalizedWorkdir)
+  });
+}
+
 function targetToolchainTerminalArgs({
   commandArgs = [],
   containerName = "",
@@ -81,6 +104,10 @@ function targetToolchainTerminalArgs({
     `${targetRoot}:/workspace`,
     "-v",
     `${targetRoot}:${targetRoot}`,
+    ...workdirMountArgs({
+      targetRoot,
+      workdir
+    }),
     ...mounts.flatMap(dockerMountArgs),
     ...targetRuntimeNetworkDockerArgs(targetRoot),
     "-w",

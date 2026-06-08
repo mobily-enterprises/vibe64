@@ -137,7 +137,7 @@ onMounted(loadUsers);
       </h2>
       <h2 v-else>
         <v-icon :icon="mdiAccountGroupOutline" size="20" />
-        Workspace users
+        Project users
       </h2>
 
       <form

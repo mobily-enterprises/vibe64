@@ -12,8 +12,8 @@ import {
   sessionWorktreePath as sharedSessionWorktreePath
 } from "@local/vibe64-core/server/sessionWorktreePath";
 import {
-  currentWorkspaceScopeKey
-} from "@local/vibe64-core/server/workspaceRequestContext";
+  currentProjectScopeKey
+} from "@local/vibe64-core/server/projectRequestContext";
 import {
   dockerCommand,
   shellQuote,
@@ -35,14 +35,14 @@ function vibe64Result(operation) {
   });
 }
 
-function terminalWorkspaceScopeKey() {
-  return currentWorkspaceScopeKey();
+function terminalProjectScopeKey() {
+  return currentProjectScopeKey();
 }
 
 function terminalNamespace(base = "", ...parts) {
   return [
     String(base || "").trim(),
-    terminalWorkspaceScopeKey(),
+    terminalProjectScopeKey(),
     ...parts.map((part) => String(part || "").trim())
   ].join(":");
 }
@@ -141,7 +141,7 @@ export {
   terminalNamespace,
   terminalTargetRoot,
   terminalWorktreePath,
-  terminalWorkspaceScopeKey,
+  terminalProjectScopeKey,
   toolTerminalNamespace,
   dockerCommand,
   normalizePlainObject,

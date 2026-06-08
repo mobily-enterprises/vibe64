@@ -109,7 +109,7 @@ test("Project Setup blocks an empty directory at Git initialization", async () =
   });
 });
 
-test("Project Setup treats .vibe64 as bootstrap state in an otherwise empty directory", async () => {
+test("Project Setup treats project-local .vibe64 as unexpected checkout content", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await mkdir(path.join(targetRoot, ".vibe64", "config"), {
       recursive: true
@@ -121,11 +121,11 @@ test("Project Setup treats .vibe64 as bootstrap state in an otherwise empty dire
     });
 
     assert.equal(status.ready, false);
-    assert.equal(status.hardStop, false);
-    assert.equal(status.stages[0].status, "pass");
+    assert.equal(status.hardStop, true);
+    assert.equal(status.currentStageId, "directory");
+    assert.equal(status.stages[0].status, "hard-stop");
     assert.match(status.stages[0].observed, /\.vibe64/u);
-    assert.equal(status.currentStageId, "git-ready");
-    assert.equal(status.stages.find((stage) => stage.id === "git-ready")?.repair?.actionId, "terminal-git-init");
+    assert.equal(status.stages.find((stage) => stage.id === "git-ready")?.status, "pending");
   });
 });
 
@@ -141,7 +141,7 @@ test("Project Setup admits linked Git worktrees before Git safety checks", async
   });
 });
 
-test("Project Setup blocks before remote setup when Vibe64 ignore rules are missing", async () => {
+test("Project Setup continues to remote setup without project-local Vibe64 ignore rules", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createGitRepository(targetRoot);
 
@@ -150,14 +150,9 @@ test("Project Setup blocks before remote setup when Vibe64 ignore rules are miss
     });
 
     const ignoreStage = status.stages.find((stage) => stage.id === "vibe64-gitignore");
-    assert.equal(status.currentStageId, "vibe64-gitignore");
-    assert.equal(ignoreStage?.status, "blocked");
-    assert.equal(ignoreStage?.repair?.actionId, ADD_VIBE64_GITIGNORE_RULES_ACTION_ID);
-    for (const pattern of VIBE64_LOCAL_STATE_GITIGNORE_PATTERNS) {
-      assert.match(ignoreStage?.observed || "", new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"), "u"));
-      assert.match(ignoreStage?.repair?.commandPreview || "", new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"), "u"));
-    }
-    assert.equal(status.stages.find((stage) => stage.id === "remote-ready")?.status, "pending");
+    assert.equal(status.currentStageId, "remote-ready");
+    assert.equal(ignoreStage?.status, "pass");
+    assert.equal(status.stages.find((stage) => stage.id === "remote-ready")?.status, "blocked");
   });
 });
 
@@ -198,11 +193,7 @@ test("Project Setup retries automatic repairs when the same check reports a new 
       targetRoot
     });
 
-    assert.deepEqual(attempts, [
-      ADD_VIBE64_GITIGNORE_RULES_ACTION_ID,
-      ADD_VIBE64_GITIGNORE_RULES_ACTION_ID,
-      "terminal-gh-create-repo"
-    ]);
+    assert.deepEqual(attempts, ["terminal-gh-create-repo"]);
     assert.equal(status.stages.find((stage) => stage.id === "vibe64-gitignore")?.status, "pass");
     assert.equal(status.currentStageId, "remote-ready");
     assert.equal(status.stages.find((stage) => stage.id === "remote-ready")?.status, "blocked");
@@ -222,9 +213,9 @@ test("Project Setup status reads are passive so setup gates do not auto-repair",
       refresh: true
     });
 
-    assert.equal(status.currentStageId, "vibe64-gitignore");
-    assert.equal(status.stages.find((stage) => stage.id === "vibe64-gitignore")?.status, "blocked");
-    assert.equal(status.stages.find((stage) => stage.id === "remote-ready")?.status, "pending");
+    assert.equal(status.currentStageId, "remote-ready");
+    assert.equal(status.stages.find((stage) => stage.id === "vibe64-gitignore")?.status, "pass");
+    assert.equal(status.stages.find((stage) => stage.id === "remote-ready")?.status, "blocked");
     await assert.rejects(readFile(path.join(targetRoot, ".gitignore"), "utf8"), {
       code: "ENOENT"
     });
@@ -324,11 +315,11 @@ test("Project Setup reuses a validated ready cache until refresh is requested", 
           refresh: true
         });
         assert.equal(refreshed.ready, false);
-        assert.equal(refreshed.currentStageId, "vibe64-gitignore");
+        assert.equal(refreshed.currentStageId, "remote-ready");
 
         const afterRefresh = await service.getStatus();
         assert.equal(afterRefresh.ready, false);
-        assert.equal(afterRefresh.currentStageId, "vibe64-gitignore");
+        assert.equal(afterRefresh.currentStageId, "remote-ready");
       } finally {
         if (previousCacheRoot == null) {
           delete process.env.VIBE64_DOCTOR_STATUS_ROOT;

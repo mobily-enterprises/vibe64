@@ -4,8 +4,8 @@ import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useE
 import { usePaths } from "@jskit-ai/users-web/client/composables/usePaths";
 import { useStudioTerminal } from "@/composables/useStudioTerminal.js";
 import {
-  useVibe64WorkspaceSlug
-} from "@/composables/useVibe64WorkspaceScope.js";
+  useVibe64ProjectSlug
+} from "@/composables/useVibe64ProjectScope.js";
 import {
   VIBE64_SURFACE_ID,
   LOCAL_STUDIO_COMMAND_OPTIONS
@@ -24,7 +24,7 @@ function useTargetScripts({
   showAllScripts = true
 } = {}) {
   const paths = usePaths();
-  const workspaceSlug = useVibe64WorkspaceSlug();
+  const projectSlug = useVibe64ProjectSlug();
   const starBusyId = ref("");
   const runBusyId = ref("");
   const terminalVisible = ref(false);
@@ -45,7 +45,7 @@ function useTargetScripts({
     queryKey: computed(() => targetScriptsQueryKey(
       VIBE64_SURFACE_ID,
       ROUTE_VISIBILITY_PUBLIC,
-      workspaceSlug.value
+      projectSlug.value
     ))
   });
 

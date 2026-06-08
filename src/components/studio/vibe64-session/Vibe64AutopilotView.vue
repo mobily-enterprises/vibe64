@@ -388,7 +388,7 @@
       </div>
     </section>
 
-    <section class="studio-autopilot__workspace-panel" aria-label="Workspace">
+    <section class="studio-autopilot__project-panel" aria-label="Project">
       <section class="studio-autopilot__preview-panel">
         <v-btn
           v-if="activeSessionTool"
@@ -632,7 +632,7 @@ import {
 
 // Autopilot workflow meaning belongs to the server. This component renders the
 // current presentation and dispatches the server-provided intents.
-const emit = defineEmits(["busy-change", "workspace-attention", "workspace-pane-change"]);
+const emit = defineEmits(["busy-change", "project-attention", "project-pane-change"]);
 
 const props = defineProps({
   actions: {
@@ -719,7 +719,7 @@ const props = defineProps({
     default: () => ({}),
     type: Object
   },
-  workspacePane: {
+  projectPane: {
     default: "preview",
     type: String
   }
@@ -772,7 +772,7 @@ const commandSpyExpanded = ref(false);
 const sessionToolsMenuOpen = ref(false);
 const rightPaneTab = ref("preview");
 const SESSION_TOOL_STORAGE_PREFIX = "vibe64.sessionTools.active";
-const workspacePaneIds = Object.freeze([
+const projectPaneIds = Object.freeze([
   "preview",
   "dashboard"
 ]);
@@ -795,7 +795,7 @@ const stepInput = proxyRefs(useVibe64StepInputForm({
 const screenKind = computed(() => screenState.value.kind);
 const sessionId = computed(() => String(props.session?.sessionId || ""));
 const chatCollapsed = computed(() => Boolean(props.chatCollapsed));
-const workspacePaneValue = computed(() => normalizeWorkspacePane(props.workspacePane));
+const projectPaneValue = computed(() => normalizeProjectPane(props.projectPane));
 const sessionToolStorageKey = computed(() => (
   sessionId.value ? `${SESSION_TOOL_STORAGE_PREFIX}:${sessionId.value}` : ""
 ));
@@ -1161,14 +1161,14 @@ function activityMessage({
   };
 }
 
-function normalizeWorkspacePane(value = "") {
+function normalizeProjectPane(value = "") {
   return ["configure", "dashboard", "history", "preview", "run", "setup"].includes(value)
     ? value
     : "preview";
 }
 
 function rightPaneExists(tabId = "") {
-  return workspacePaneIds.includes(tabId) || sessionPaneIds.includes(tabId);
+  return projectPaneIds.includes(tabId) || sessionPaneIds.includes(tabId);
 }
 
 function persistedSessionTool() {
@@ -1195,7 +1195,7 @@ function selectRightPaneTab(tabId = "", {
   }
 }
 
-function selectWorkspacePaneTab(tabId = "") {
+function selectProjectPaneTab(tabId = "") {
   selectRightPaneTab(tabId, {
     persist: true
   });
@@ -1232,13 +1232,13 @@ function selectSessionTool(tabId = "", {
 function selectSessionToolFromMenu(tabId = "") {
   if (selectSessionTool(tabId)) {
     sessionToolsMenuOpen.value = false;
-    emit("workspace-attention");
+    emit("project-attention");
   }
 }
 
 function closeSessionTool() {
   sessionToolsMenuOpen.value = false;
-  selectWorkspacePaneTab(workspacePaneValue.value === "dashboard" ? "dashboard" : "preview");
+  selectProjectPaneTab(projectPaneValue.value === "dashboard" ? "dashboard" : "preview");
 }
 
 function emitBusyState() {
@@ -1474,15 +1474,15 @@ watch(() => [
 });
 
 watch(() => [
-  workspacePaneValue.value,
+  projectPaneValue.value,
   sessionId.value
 ].join("|"), () => {
-  const pane = workspacePaneValue.value;
+  const pane = projectPaneValue.value;
   if (pane === "preview") {
     restorePersistedSessionTool();
     return;
   }
-  selectWorkspacePaneTab("dashboard");
+  selectProjectPaneTab("dashboard");
 }, {
   immediate: true
 });
@@ -1500,7 +1500,7 @@ watch(() => [
 }
 
 .studio-autopilot__chat-panel,
-.studio-autopilot__workspace-panel {
+.studio-autopilot__project-panel {
   background: rgb(var(--v-theme-surface));
   border: 1px solid rgba(var(--v-theme-outline), 0.14);
   border-radius: 14px;
@@ -1518,7 +1518,7 @@ watch(() => [
   padding: 0.05rem 0.65rem 0.18rem;
 }
 
-.studio-autopilot__workspace-panel {
+.studio-autopilot__project-panel {
   display: grid;
   grid-template-rows: minmax(0, 1fr);
 }
@@ -1913,7 +1913,7 @@ watch(() => [
     overflow: hidden;
   }
 
-  .studio-autopilot__workspace-panel {
+  .studio-autopilot__project-panel {
     display: none;
   }
 
@@ -1921,7 +1921,7 @@ watch(() => [
     display: none;
   }
 
-  .studio-autopilot--chat-collapsed .studio-autopilot__workspace-panel {
+  .studio-autopilot--chat-collapsed .studio-autopilot__project-panel {
     display: grid;
     grid-template-rows: minmax(0, 1fr);
   }

@@ -4,8 +4,8 @@ import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useE
 import { usePaths } from "@jskit-ai/users-web/client/composables/usePaths";
 import { useStoredSelection } from "@/composables/useStoredSelection.js";
 import {
-  useVibe64WorkspaceSlug
-} from "@/composables/useVibe64WorkspaceScope.js";
+  useVibe64ProjectSlug
+} from "@/composables/useVibe64ProjectScope.js";
 import {
   VIBE64_SESSION_CHANGED_EVENT,
   VIBE64_SESSIONS_API_SUFFIX,
@@ -97,10 +97,10 @@ function useVibe64SessionData({
   onTitleChange = null
 } = {}) {
   const notifyTitleChange = typeof onTitleChange === "function" ? onTitleChange : () => null;
-  const workspaceSlug = useVibe64WorkspaceSlug();
+  const projectSlug = useVibe64ProjectSlug();
   const paths = usePaths();
   const sessionSelection = useStoredSelection({
-    storageKey: computed(() => selectedSessionStorageKey(workspaceSlug.value))
+    storageKey: computed(() => selectedSessionStorageKey(projectSlug.value))
   });
 
   const selectedSessionId = sessionSelection.selectedId;
@@ -112,7 +112,7 @@ function useVibe64SessionData({
     return sessionId ? `${sessionsApiPath.value}/${encodeURIComponent(sessionId)}` : "";
   });
   const selectedSessionQueryKey = computed(() => [
-    ...vibe64SessionQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC, workspaceSlug.value),
+    ...vibe64SessionQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC, projectSlug.value),
     String(selectedSessionId.value || "").trim()
   ]);
 
@@ -123,7 +123,7 @@ function useVibe64SessionData({
     queryKey: computed(() => vibe64SessionsQueryKey(
       VIBE64_SURFACE_ID,
       ROUTE_VISIBILITY_PUBLIC,
-      workspaceSlug.value
+      projectSlug.value
     )),
     readQuery: {
       limit: 20
@@ -212,7 +212,7 @@ function useVibe64SessionData({
     client: studioHttpClient,
     fallbackLoadError: "Studio capabilities could not be loaded.",
     path: CAPABILITIES_ENDPOINT,
-    queryKey: computed(() => capabilitiesQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC, workspaceSlug.value)),
+    queryKey: computed(() => capabilitiesQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC, projectSlug.value)),
     queryOptions: {
       refetchOnMount: false,
       refetchOnWindowFocus: false

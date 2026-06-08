@@ -132,8 +132,8 @@ import {
   studioHttpClient
 } from "@/lib/studioHttp.js";
 import {
-  useVibe64WorkspaceSlug
-} from "@/composables/useVibe64WorkspaceScope.js";
+  useVibe64ProjectSlug
+} from "@/composables/useVibe64ProjectScope.js";
 import {
   enrichVibe64SessionForDisplay
 } from "@/lib/vibe64SessionPanelModel.js";
@@ -173,7 +173,7 @@ const props = defineProps({
 
 const emit = defineEmits(["loading-changed"]);
 const paths = usePaths();
-const workspaceSlug = useVibe64WorkspaceSlug();
+const projectSlug = useVibe64ProjectSlug();
 const sessionsApiPath = computed(() => paths.api(VIBE64_SESSIONS_API_SUFFIX, {
   surface: VIBE64_SURFACE_ID
 }));
@@ -186,7 +186,7 @@ const sessionListResource = useEndpointResource({
     ...vibe64SessionsQueryKey(
       VIBE64_SURFACE_ID,
       ROUTE_VISIBILITY_PUBLIC,
-      workspaceSlug.value
+      projectSlug.value
     ),
     "archive",
     props.archive

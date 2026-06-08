@@ -1,40 +1,44 @@
-const WORKSPACE_API_BASE = "/api/vibe64/workspaces";
+import {
+  resolveStudioRequestUrl
+} from "@/lib/studioHttp.js";
+
+const PROJECT_API_BASE = "/api/vibe64/projects";
 const GITHUB_API_BASE = "/api/vibe64/github";
 
-async function readWorkspaces() {
-  return workspaceRequest(WORKSPACE_API_BASE);
+async function readProjects() {
+  return projectRequest(PROJECT_API_BASE);
 }
 
-async function createWorkspace(input = {}) {
-  return workspaceRequest(WORKSPACE_API_BASE, {
+async function createProject(input = {}) {
+  return projectRequest(PROJECT_API_BASE, {
     body: input,
     method: "POST"
   });
 }
 
-async function createRepositoryWorkspace(input = {}) {
-  return workspaceRequest(`${WORKSPACE_API_BASE}/create-repository`, {
+async function createRepositoryProject(input = {}) {
+  return projectRequest(`${PROJECT_API_BASE}/create-repository`, {
     body: input,
     method: "POST"
   });
 }
 
-async function openRepositoryWorkspace(input = {}) {
-  return workspaceRequest(`${WORKSPACE_API_BASE}/from-repository`, {
+async function openRepositoryProject(input = {}) {
+  return projectRequest(`${PROJECT_API_BASE}/from-repository`, {
     body: input,
     method: "POST"
   });
 }
 
 async function readGithubRepositoryOwners() {
-  return workspaceRequest(`${GITHUB_API_BASE}/repository-owners`);
+  return projectRequest(`${GITHUB_API_BASE}/repository-owners`);
 }
 
 async function resolveGithubRepository(repository = "") {
   const params = new URLSearchParams({
     repository
   });
-  return workspaceRequest(`${GITHUB_API_BASE}/repositories/resolve?${params.toString()}`);
+  return projectRequest(`${GITHUB_API_BASE}/repositories/resolve?${params.toString()}`);
 }
 
 async function searchGithubRepositories(query = "", {
@@ -46,31 +50,31 @@ async function searchGithubRepositories(query = "", {
   if (owner) {
     params.set("owner", owner);
   }
-  return workspaceRequest(`${GITHUB_API_BASE}/repositories/search?${params.toString()}`);
+  return projectRequest(`${GITHUB_API_BASE}/repositories/search?${params.toString()}`);
 }
 
 async function syncGithubIdentity() {
-  return workspaceRequest(`${GITHUB_API_BASE}/identity/sync`, {
+  return projectRequest(`${GITHUB_API_BASE}/identity/sync`, {
     method: "POST"
   });
 }
 
 async function readProjectAccess(slug = "") {
-  return workspaceRequest(`${WORKSPACE_API_BASE}/${encodeURIComponent(slug)}/access`);
+  return projectRequest(`${PROJECT_API_BASE}/${encodeURIComponent(slug)}/access`);
 }
 
 async function inviteProjectAccess(slug = "", input = {}) {
-  return workspaceRequest(`${WORKSPACE_API_BASE}/${encodeURIComponent(slug)}/access/invite`, {
+  return projectRequest(`${PROJECT_API_BASE}/${encodeURIComponent(slug)}/access/invite`, {
     body: input,
     method: "POST"
   });
 }
 
-async function workspaceRequest(path, {
+async function projectRequest(path, {
   body = null,
   method = "GET"
 } = {}) {
-  const response = await fetch(path, {
+  const response = await fetch(resolveStudioRequestUrl(path), {
     body: body == null ? null : JSON.stringify(body),
     credentials: "include",
     headers: body == null
@@ -83,8 +87,8 @@ async function workspaceRequest(path, {
   const payload = await response.json().catch(() => ({
     ok: false,
     errors: [
-      {
-        message: "Vibe64 workspace response was not JSON."
+          {
+            message: "Vibe64 project response was not JSON."
       }
     ]
   }));
@@ -95,14 +99,14 @@ async function workspaceRequest(path, {
 }
 
 export {
-  createRepositoryWorkspace,
-  createWorkspace,
+  createProject,
+  createRepositoryProject,
   inviteProjectAccess,
-  openRepositoryWorkspace,
+  openRepositoryProject,
   readGithubRepositoryOwners,
   readProjectAccess,
+  readProjects,
   resolveGithubRepository,
   searchGithubRepositories,
-  syncGithubIdentity,
-  readWorkspaces
+  syncGithubIdentity
 };

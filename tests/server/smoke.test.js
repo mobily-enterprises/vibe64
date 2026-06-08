@@ -8,11 +8,11 @@ import WebSocket from "ws";
 import { createServer, startServer } from "../../server.js";
 import { BROWSER_LIFECYCLE_WEBSOCKET_PATH } from "../../server/lib/browserLifecycle.js";
 import { resolveRuntimeEnv } from "../../server/lib/runtimeEnv.js";
-import { GITHUB_API_BASE, WORKSPACE_API_BASE } from "../../server/lib/workspaceRoutes.js";
+import { GITHUB_API_BASE, PROJECT_API_BASE } from "../../server/lib/projectRoutes.js";
 
 async function withTemporaryPackageRoot(packageName, callback) {
   const projectsRoot = await mkdtemp(path.join(tmpdir(), "vibe64-projects-"));
-  const slug = "smoke_workspace";
+  const slug = "smoke_project";
   const root = path.join(projectsRoot, slug);
   await mkdir(root, {
     recursive: true
@@ -44,21 +44,21 @@ async function withTemporaryPackageRoot(packageName, callback) {
   }
 }
 
-async function withTargetRoot(_targetRoot, workspace, callback) {
+async function withTargetRoot(_targetRoot, projectFixture, callback) {
   const authDataRoot = await mkdtemp(path.join(tmpdir(), "vibe64-auth-smoke-"));
 
   let app;
   try {
     app = await createServer({
       authDataRoot,
-      projectsRoot: workspace.projectsRoot,
+      projectsRoot: projectFixture.projectsRoot,
       verifySupabaseAccessToken: fakeVerifySupabaseAccessToken
     });
     const cookie = await authenticateOwner(app);
     const authHeaders = {
       cookie: Array.isArray(cookie) ? cookie[0] : cookie
     };
-    return await callback(app, authHeaders, workspace.apiBase);
+    return await callback(app, authHeaders, projectFixture.apiBase, authDataRoot);
   } finally {
     if (app) {
       await app.close();
@@ -158,9 +158,9 @@ test("browser lifecycle WebSocket requires Vibe64 login", async () => {
   }
 });
 
-test("management workspace API lists and creates slugs without global selection", async () => {
-  const authDataRoot = await mkdtemp(path.join(tmpdir(), "vibe64-auth-workspaces-"));
-  const projectsRoot = await mkdtemp(path.join(tmpdir(), "vibe64-workspaces-"));
+test("management project API lists and creates slugs without global selection", async () => {
+  const authDataRoot = await mkdtemp(path.join(tmpdir(), "vibe64-auth-projects-"));
+  const projectsRoot = await mkdtemp(path.join(tmpdir(), "vibe64-projects-"));
   const app = await createServer({
     authDataRoot,
     projectsRoot,
@@ -169,7 +169,7 @@ test("management workspace API lists and creates slugs without global selection"
   try {
     const blocked = await app.inject({
       method: "GET",
-      url: WORKSPACE_API_BASE
+      url: PROJECT_API_BASE
     });
     assert.equal(blocked.statusCode, 401);
 
@@ -185,7 +185,7 @@ test("management workspace API lists and creates slugs without global selection"
     const memberListed = await app.inject({
       headers: memberHeaders,
       method: "GET",
-      url: WORKSPACE_API_BASE
+      url: PROJECT_API_BASE
     });
     assert.equal(memberListed.statusCode, 200);
 
@@ -193,9 +193,9 @@ test("management workspace API lists and creates slugs without global selection"
       headers: memberHeaders,
       method: "POST",
       payload: {
-        slug: "member_workspace"
+        slug: "member_project"
       },
-      url: WORKSPACE_API_BASE
+      url: PROJECT_API_BASE
     });
     assert.equal(memberCreate.statusCode, 403);
     assert.equal(memberCreate.json().errors[0].code, "vibe64_owner_required");
@@ -209,10 +209,10 @@ test("management workspace API lists and creates slugs without global selection"
         },
         slug: "alpha_1"
       },
-      url: WORKSPACE_API_BASE
+      url: PROJECT_API_BASE
     });
     assert.equal(created.statusCode, 200);
-    assert.equal(created.json().workspace.workspaceRoot, path.join(projectsRoot, "alpha_1"));
+    assert.equal(created.json().project.projectRoot, path.join(projectsRoot, "alpha_1"));
     await access(path.join(projectsRoot, "alpha_1"));
 
     const secondCreated = await app.inject({
@@ -224,10 +224,10 @@ test("management workspace API lists and creates slugs without global selection"
         },
         slug: "beta_2"
       },
-      url: WORKSPACE_API_BASE
+      url: PROJECT_API_BASE
     });
     assert.equal(secondCreated.statusCode, 200);
-    assert.equal(secondCreated.json().workspace.workspaceRoot, path.join(projectsRoot, "beta_2"));
+    assert.equal(secondCreated.json().project.projectRoot, path.join(projectsRoot, "beta_2"));
 
     const invalid = await app.inject({
       headers: authHeaders,
@@ -235,18 +235,18 @@ test("management workspace API lists and creates slugs without global selection"
       payload: {
         slug: "Bad.Slug"
       },
-      url: WORKSPACE_API_BASE
+      url: PROJECT_API_BASE
     });
     assert.equal(invalid.statusCode, 422);
-    assert.equal(invalid.json().errors[0].code, "vibe64_invalid_workspace_slug");
+    assert.equal(invalid.json().errors[0].code, "vibe64_invalid_project_slug");
 
     const listed = await app.inject({
       headers: authHeaders,
       method: "GET",
-      url: WORKSPACE_API_BASE
+      url: PROJECT_API_BASE
     });
     assert.equal(listed.statusCode, 200);
-    assert.deepEqual(listed.json().workspaces.map((workspace) => workspace.slug), ["alpha_1", "beta_2"]);
+    assert.deepEqual(listed.json().projects.map((project) => project.slug), ["alpha_1", "beta_2"]);
 
     const projectType = await app.inject({
       headers: authHeaders,
@@ -274,9 +274,9 @@ test("management workspace API lists and creates slugs without global selection"
     });
     assert.equal(betaProjectType.statusCode, 200);
     assert.equal(betaProjectType.json().projectType.status, "missing");
-    await access(path.join(projectsRoot, "alpha_1", ".vibe64", "project_type"));
+    await access(path.join(authDataRoot, "projects", "alpha_1", "project_type"));
     await assert.rejects(
-      access(path.join(projectsRoot, "beta_2", ".vibe64", "project_type"))
+      access(path.join(authDataRoot, "projects", "beta_2", "project_type"))
     );
   } finally {
     await app.close();
@@ -292,13 +292,13 @@ test("management workspace API lists and creates slugs without global selection"
 });
 
 test("only owners can add GitHub-backed projects", async () => {
-  const authDataRoot = await mkdtemp(path.join(tmpdir(), "vibe64-auth-github-workspaces-"));
-  const projectsRoot = await mkdtemp(path.join(tmpdir(), "vibe64-github-workspaces-"));
+  const authDataRoot = await mkdtemp(path.join(tmpdir(), "vibe64-auth-github-projects-"));
+  const projectsRoot = await mkdtemp(path.join(tmpdir(), "vibe64-github-projects-"));
   const calls = [];
   const app = await createServer({
     authDataRoot,
     projectsRoot,
-    runGithubToolchain: fakeGithubWorkspaceToolchain(calls),
+    runGithubToolchain: fakeGithubProjectToolchain(calls),
     verifySupabaseAccessToken: fakeVerifySupabaseAccessToken
   });
   try {
@@ -366,7 +366,7 @@ test("only owners can add GitHub-backed projects", async () => {
         repository: "vibe64-org/mickeymouse",
         slug: "member_opened"
       },
-      url: `${WORKSPACE_API_BASE}/from-repository`
+      url: `${PROJECT_API_BASE}/from-repository`
     });
     assert.equal(memberOpen.statusCode, 403);
     assert.equal(memberOpen.json().errors[0].code, "vibe64_owner_required");
@@ -380,7 +380,7 @@ test("only owners can add GitHub-backed projects", async () => {
         slug: "member_repo",
         visibility: "private"
       },
-      url: `${WORKSPACE_API_BASE}/create-repository`
+      url: `${PROJECT_API_BASE}/create-repository`
     });
     assert.equal(memberCreate.statusCode, 403);
 
@@ -391,12 +391,12 @@ test("only owners can add GitHub-backed projects", async () => {
         repository: "vibe64-org/mickeymouse",
         slug: "beepollen"
       },
-      url: `${WORKSPACE_API_BASE}/from-repository`
+      url: `${PROJECT_API_BASE}/from-repository`
     });
     assert.equal(opened.statusCode, 200);
-    assert.equal(opened.json().workspace.slug, "beepollen");
-    assert.equal(opened.json().workspace.githubRepository.fullName, "vibe64-org/mickeymouse");
-    assert.equal(opened.json().workspace.githubRepository.canPush, false);
+    assert.equal(opened.json().project.slug, "beepollen");
+    assert.equal(opened.json().project.githubRepository.fullName, "vibe64-org/mickeymouse");
+    assert.equal(opened.json().project.githubRepository.canPush, false);
 
     const created = await app.inject({
       headers: ownerHeaders,
@@ -404,22 +404,22 @@ test("only owners can add GitHub-backed projects", async () => {
       payload: {
         name: "new-repo",
         owner: "vibe64-org",
-        slug: "new_workspace",
+        slug: "new_project",
         visibility: "private"
       },
-      url: `${WORKSPACE_API_BASE}/create-repository`
+      url: `${PROJECT_API_BASE}/create-repository`
     });
     assert.equal(created.statusCode, 200);
-    assert.equal(created.json().workspace.slug, "new_workspace");
-    assert.equal(created.json().workspace.githubRepository.fullName, "vibe64-org/new-repo");
+    assert.equal(created.json().project.slug, "new_project");
+    assert.equal(created.json().project.githubRepository.fullName, "vibe64-org/new-repo");
 
     const listed = await app.inject({
       headers: ownerHeaders,
       method: "GET",
-      url: WORKSPACE_API_BASE
+      url: PROJECT_API_BASE
     });
     assert.deepEqual(
-      listed.json().workspaces.map((workspace) => workspace.githubRepository?.fullName),
+      listed.json().projects.map((project) => project.githubRepository?.fullName),
       ["vibe64-org/mickeymouse", "vibe64-org/new-repo"]
     );
     assert.ok(calls.some((call) => call.command.join(" ") === "gh repo clone vibe64-org/mickeymouse ."));
@@ -448,14 +448,14 @@ test("only owners can add GitHub-backed projects", async () => {
     const memberAccess = await app.inject({
       headers: memberHeaders,
       method: "GET",
-      url: `${WORKSPACE_API_BASE}/new_workspace/access`
+      url: `${PROJECT_API_BASE}/new_project/access`
     });
     assert.equal(memberAccess.statusCode, 403);
 
     const projectAccess = await app.inject({
       headers: ownerHeaders,
       method: "GET",
-      url: `${WORKSPACE_API_BASE}/new_workspace/access`
+      url: `${PROJECT_API_BASE}/new_project/access`
     });
     assert.equal(projectAccess.statusCode, 200);
     assert.equal(projectAccess.json().currentUserCanManageAccess, true);
@@ -467,7 +467,7 @@ test("only owners can add GitHub-backed projects", async () => {
       payload: {
         email: "member@example.com"
       },
-      url: `${WORKSPACE_API_BASE}/new_workspace/access/invite`
+      url: `${PROJECT_API_BASE}/new_project/access/invite`
     });
     assert.equal(inviteAccess.statusCode, 200);
     assert.ok(calls.some((call) => call.command.join(" ") === "gh api -X PUT repos/vibe64-org/new-repo/collaborators/memberhub -f permission=push"));
@@ -545,7 +545,7 @@ async function fakeVerifySupabaseAccessToken(token = "") {
   throw error;
 }
 
-function fakeGithubWorkspaceToolchain(calls) {
+function fakeGithubProjectToolchain(calls) {
   return async function runGithubToolchain(command, options = {}) {
     calls.push({
       command,
@@ -743,8 +743,8 @@ function connectWebSocket(url, options = {}) {
 }
 
 test("current-app route reports the selected target root before project type setup", async () => {
-  await withTemporaryPackageRoot("external-target-app", async (targetRoot, workspace) => {
-    await withTargetRoot(targetRoot, workspace, async (app, authHeaders, apiBase) => {
+  await withTemporaryPackageRoot("external-target-app", async (targetRoot, projectFixture) => {
+    await withTargetRoot(targetRoot , projectFixture, async (app, authHeaders, apiBase) => {
       const remoteHost = await app.inject({
         headers: {
           ...authHeaders,
@@ -772,8 +772,9 @@ test("current-app route reports the selected target root before project type set
 });
 
 test("Vibe64 project routes persist project type and plain-file config", async () => {
-  await withTemporaryPackageRoot("configured-target-app", async (targetRoot, workspace) => {
-    await withTargetRoot(targetRoot, workspace, async (app, authHeaders, apiBase) => {
+  await withTemporaryPackageRoot("configured-target-app", async (targetRoot, projectFixture) => {
+    await withTargetRoot(targetRoot , projectFixture, async (app, authHeaders, apiBase, dataRoot) => {
+      const stateRoot = path.join(dataRoot, "projects", projectFixture.slug);
       const beforeType = await app.inject({
         headers: authHeaders,
         method: "GET",
@@ -794,7 +795,7 @@ test("Vibe64 project routes persist project type and plain-file config", async (
       assert.equal(savedType.statusCode, 200);
       assert.equal(savedType.json().projectType.ready, true);
       assert.equal(
-        await readFile(path.join(targetRoot, ".vibe64", "project_type"), "utf8"),
+        await readFile(path.join(stateRoot, "project_type"), "utf8"),
         "jskit\n"
       );
 
@@ -821,7 +822,7 @@ test("Vibe64 project routes persist project type and plain-file config", async (
       assert.equal(savedConfig.statusCode, 200);
       assert.equal(savedConfig.json().config.ready, true);
       assert.equal(
-        await readFile(path.join(targetRoot, ".vibe64", "config", "github_pr_merge_method"), "utf8"),
+        await readFile(path.join(stateRoot, "config", "github_pr_merge_method"), "utf8"),
         "squash\n"
       );
     });
@@ -829,8 +830,8 @@ test("Vibe64 project routes persist project type and plain-file config", async (
 });
 
 test("Vibe64 session creation returns a setup gate and removed issue-session routes stay unavailable", async () => {
-  await withTemporaryPackageRoot("session-target-app", async (targetRoot, workspace) => {
-    await withTargetRoot(targetRoot, workspace, async (app, authHeaders, apiBase) => {
+  await withTemporaryPackageRoot("session-target-app", async (targetRoot, projectFixture) => {
+    await withTargetRoot(targetRoot , projectFixture, async (app, authHeaders, apiBase) => {
       const removedIssueSessionRoute = await app.inject({
         headers: authHeaders,
         method: "POST",

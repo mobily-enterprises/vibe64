@@ -20,7 +20,7 @@ import ProviderAccountsSetup from "@/components/studio/ProviderAccountsSetup.vue
 import { useVibe64Accounts } from "@/composables/useVibe64Accounts.js";
 import {
   syncGithubIdentity
-} from "@/lib/vibe64WorkspaceApi.js";
+} from "@/lib/vibe64ProjectApi.js";
 
 const props = defineProps({
   backLabel: {

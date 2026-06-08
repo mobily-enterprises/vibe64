@@ -269,17 +269,18 @@ function assertKnownConfigInputValues(fields = [], inputValues = {}) {
 }
 
 function resolveVibe64ConfigPaths({
+  stateRoot = "",
   targetRoot = process.cwd()
 } = {}) {
   const normalizedTargetRoot = normalizeTargetRoot(targetRoot);
-  const stateRoot = path.join(normalizedTargetRoot, VIBE64_STATE_DIR);
-  const configRoot = path.join(stateRoot, VIBE64_CONFIG_DIR);
-  const runtimeRoot = path.join(stateRoot, VIBE64_RUNTIME_DIR);
+  const resolvedStateRoot = stateRoot ? path.resolve(stateRoot) : path.join(normalizedTargetRoot, VIBE64_STATE_DIR);
+  const configRoot = path.join(resolvedStateRoot, VIBE64_CONFIG_DIR);
+  const runtimeRoot = path.join(resolvedStateRoot, VIBE64_RUNTIME_DIR);
   return {
     configRoot,
     helperPath: path.join(runtimeRoot, VIBE64_CONFIG_HELPER_FILE),
     runtimeRoot,
-    stateRoot,
+    stateRoot: resolvedStateRoot,
     targetRoot: normalizedTargetRoot
   };
 }
@@ -419,9 +420,11 @@ function normalizeConfigDefinition({
 }
 
 function createVibe64ProjectConfigStore({
+  stateRoot = "",
   targetRoot = process.cwd()
 } = {}) {
   const paths = resolveVibe64ConfigPaths({
+    stateRoot,
     targetRoot
   });
 

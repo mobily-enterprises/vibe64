@@ -3,8 +3,8 @@ import {
   studioApiPath
 } from "@/lib/studioHttp.js";
 import {
-  vibe64WorkspaceQueryScope
-} from "@/lib/vibe64WorkspaceScope.js";
+  vibe64ProjectQueryScope
+} from "@/lib/vibe64ProjectScope.js";
 
 const TARGET_SCRIPTS_API_SUFFIX = "/studio/current-app/target-scripts";
 const TARGET_SCRIPT_TERMINAL_API_SUFFIX = "/studio/current-app/target-script-terminal";
@@ -20,8 +20,8 @@ function targetScriptTerminalWebSocketUrl(terminalSessionId) {
   return resolveWebSocketUrl(`${targetScriptTerminalEndpoint(terminalSessionId)}/ws`);
 }
 
-function targetScriptsQueryKey(surfaceId, ownershipFilter, workspaceSlug) {
-  return ["vibe64", ...vibe64WorkspaceQueryScope(workspaceSlug), surfaceId, ownershipFilter, "target-scripts"];
+function targetScriptsQueryKey(surfaceId, ownershipFilter, projectSlug) {
+  return ["vibe64", ...vibe64ProjectQueryScope(projectSlug), surfaceId, ownershipFilter, "target-scripts"];
 }
 
 export {

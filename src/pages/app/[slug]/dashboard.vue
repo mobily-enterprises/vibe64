@@ -30,8 +30,8 @@ defineProps({
 });
 
 const route = useRoute();
-const workspaceSlug = computed(() => firstRouteParam(route.params.slug));
-const workspaceBasePath = computed(() => workspaceSlug.value ? `/app/${encodeURIComponent(workspaceSlug.value)}` : "/app/manage");
+const projectSlug = computed(() => firstRouteParam(route.params.slug));
+const projectBasePath = computed(() => projectSlug.value ? `/app/${encodeURIComponent(projectSlug.value)}` : "/app/manage");
 const dashboardSectionLinks = computed(() => getPlacements()
   .filter((placement) => (
     placement?.kind === "link" &&
@@ -44,7 +44,7 @@ const dashboardSectionLinks = computed(() => getPlacements()
     icon: placement?.props?.icon || "",
     id: placement?.id || "",
     label: placement?.props?.label || "",
-    to: `${workspaceBasePath.value}${dashboardSectionSuffix(placement)}`
+    to: `${projectBasePath.value}${dashboardSectionSuffix(placement)}`
   })));
 
 function firstRouteParam(value) {
@@ -57,11 +57,11 @@ function dashboardSectionSuffix(placement = {}) {
   if (!suffix) {
     return "";
   }
-  const workspaceRelativeSuffix = suffix
+  const projectRelativeSuffix = suffix
     .replace(/^\/+/u, "")
     .replace(/^\[slug\](?=\/|$)/u, "")
     .replace(/^\/+/u, "");
-  return workspaceRelativeSuffix ? `/${workspaceRelativeSuffix}` : "";
+  return projectRelativeSuffix ? `/${projectRelativeSuffix}` : "";
 }
 </script>
 

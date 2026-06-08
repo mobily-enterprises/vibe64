@@ -492,7 +492,9 @@ test("Vibe64 current-step helper submits through the same server path", async ()
       })
     ], {
       ...helper.env,
-      VIBE64_CURRENT_STEP_INPUT_SOCKET: helperSocketHostPath(targetRoot)
+      VIBE64_CURRENT_STEP_INPUT_SOCKET: helperSocketHostPath({
+        session
+      })
     });
 
     assert.equal(result.code, 0, result.stderr || result.stdout);
@@ -534,7 +536,9 @@ test("Vibe64 current-step helper accepts --json with stdin payload", async () =>
       "--json"
     ], {
       ...helper.env,
-      VIBE64_CURRENT_STEP_INPUT_SOCKET: helperSocketHostPath(targetRoot)
+      VIBE64_CURRENT_STEP_INPUT_SOCKET: helperSocketHostPath({
+        session
+      })
     }, JSON.stringify({
       fields: {
         body: "Create a booking dashboard.",
@@ -579,7 +583,9 @@ test("Vibe64 current-step helper exposes host wrapper commands for app-server tu
       targetRoot
     });
 
-    assert.equal(helper.hostEnv.VIBE64_CURRENT_STEP_INPUT_SOCKET, helperSocketHostPath(targetRoot));
+    assert.equal(helper.hostEnv.VIBE64_CURRENT_STEP_INPUT_SOCKET, helperSocketHostPath({
+      session
+    }));
     assert.match(helper.host.commands.currentStepInput, /^node /u);
 
     const result = await runNodeScript(helper.host.currentStepInputHelper, [
@@ -638,7 +644,9 @@ test("Vibe64 terminal chat helper mirrors direct terminal exchanges into the con
       })
     ], {
       ...helper.env,
-      VIBE64_TERMINAL_CHAT_SOCKET: helperSocketHostPath(targetRoot)
+      VIBE64_TERMINAL_CHAT_SOCKET: helperSocketHostPath({
+        session
+      })
     });
 
     assert.equal(result.code, 0, result.stderr || result.stdout);
@@ -696,7 +704,9 @@ test("Vibe64 terminal chat helper accepts response-only terminal chat payloads",
       })
     ], {
       ...helper.env,
-      VIBE64_TERMINAL_CHAT_SOCKET: helperSocketHostPath(targetRoot)
+      VIBE64_TERMINAL_CHAT_SOCKET: helperSocketHostPath({
+        session
+      })
     });
 
     assert.equal(result.code, 0, result.stderr || result.stdout);
@@ -745,7 +755,9 @@ test("Vibe64 current-step helper rejects stale state", async () => {
       })
     ], {
       ...helper.env,
-      VIBE64_CURRENT_STEP_INPUT_SOCKET: helperSocketHostPath(targetRoot)
+      VIBE64_CURRENT_STEP_INPUT_SOCKET: helperSocketHostPath({
+        session
+      })
     });
 
     assert.equal(result.code, 1);

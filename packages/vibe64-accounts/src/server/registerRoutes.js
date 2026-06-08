@@ -19,7 +19,7 @@ function registerRoutes(
     projectContext = null,
     routeSurface = "",
     routeRelativePath = "",
-    workspaceScoped = true
+    projectScoped = true
   } = {}
 ) {
   const routes = createVibe64FeatureRoutes(app, {
@@ -27,7 +27,7 @@ function registerRoutes(
     projectContext,
     routeRelativePath,
     routeSurface,
-    workspaceScoped,
+    projectScoped,
     tags: ["studio", "vibe64-accounts"]
   });
 

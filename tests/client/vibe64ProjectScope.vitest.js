@@ -13,31 +13,34 @@ import {
   targetScriptsQueryKey
 } from "../../src/lib/targetScriptsRequestConfig.js";
 import {
-  vibe64ScopedStorageKey,
-  vibe64WorkspaceQueryScope,
-  workspaceSlugFromPathname
-} from "../../src/lib/vibe64WorkspaceScope.js";
+  readProjects
+} from "../../src/lib/vibe64ProjectApi.js";
+import {
+  vibe64ProjectScopedStorageKey,
+  vibe64ProjectQueryScope,
+  projectSlugFromPathname
+} from "../../src/lib/vibe64ProjectScope.js";
 
-describe("Vibe64 workspace client scope", () => {
+describe("Vibe64 project client scope", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it("derives workspace scope from development paths", () => {
-    expect(workspaceSlugFromPathname("/app/alpha_1")).toBe("alpha_1");
-    expect(workspaceSlugFromPathname("/app/beta-2/dashboard/run")).toBe("beta-2");
-    expect(workspaceSlugFromPathname("/app/manage")).toBe("");
+  it("derives project scope from development paths", () => {
+    expect(projectSlugFromPathname("/app/alpha_1")).toBe("alpha_1");
+    expect(projectSlugFromPathname("/app/beta-2/dashboard/run")).toBe("beta-2");
+    expect(projectSlugFromPathname("/app/manage")).toBe("");
   });
 
-  it("adds workspace scope to query and storage keys", () => {
-    expect(vibe64WorkspaceQueryScope("alpha_1")).toEqual(["workspace", "alpha_1"]);
-    expect(vibe64WorkspaceQueryScope()).toEqual(["workspace", "unscoped"]);
-    expect(vibe64ScopedStorageKey("vibe64:selected-session-id", "alpha_1"))
-      .toBe("vibe64:selected-session-id:workspace:alpha_1");
+  it("adds project scope to query and storage keys", () => {
+    expect(vibe64ProjectQueryScope("alpha_1")).toEqual(["project", "alpha_1"]);
+    expect(vibe64ProjectQueryScope()).toEqual(["project", "unscoped"]);
+    expect(vibe64ProjectScopedStorageKey("vibe64:selected-session-id", "alpha_1"))
+      .toBe("vibe64:selected-session-id:project:alpha_1");
 
     expect(projectTypeQueryKey("app", "public", "alpha_1")).toEqual([
       "vibe64",
-      "workspace",
+      "project",
       "alpha_1",
       "app",
       "public",
@@ -45,7 +48,7 @@ describe("Vibe64 workspace client scope", () => {
     ]);
     expect(targetScriptsQueryKey("app", "public", "beta_2")).toEqual([
       "vibe64",
-      "workspace",
+      "project",
       "beta_2",
       "app",
       "public",
@@ -53,7 +56,7 @@ describe("Vibe64 workspace client scope", () => {
     ]);
   });
 
-  it("does not rewrite global Studio setup API paths into workspace API paths", () => {
+  it("does not rewrite global Studio setup API paths into project API paths", () => {
     expect(scopedDevelopmentApiPathname("/api/studio/studio-setup", "alpha_1"))
       .toBe("/api/studio/studio-setup");
     expect(scopedDevelopmentApiPathname("/api/studio/studio-setup/stream", "alpha_1"))
@@ -68,7 +71,7 @@ describe("Vibe64 workspace client scope", () => {
       .toBe("/api/app/alpha_1/studio/project-setup");
   });
 
-  it("resolves direct browser transport URLs through the current workspace scope", () => {
+  it("resolves direct browser transport URLs through the current project scope", () => {
     vi.stubGlobal("window", {
       location: {
         host: "127.0.0.1:5173",
@@ -87,7 +90,7 @@ describe("Vibe64 workspace client scope", () => {
       .toBe("/api/vibe64/accounts");
   });
 
-  it("scopes direct command URLs through the current workspace scope", () => {
+  it("scopes direct command URLs through the current project scope", () => {
     vi.stubGlobal("window", {
       location: {
         origin: "http://127.0.0.1:5173",
@@ -97,5 +100,31 @@ describe("Vibe64 workspace client scope", () => {
 
     expect(scopedDevelopmentApiUrl("/api/vibe64/sessions/session-1/launch-terminal"))
       .toBe("/api/app/beepollen/vibe64/sessions/session-1/launch-terminal");
+  });
+
+  it("scopes project API requests on project pages", async () => {
+    const requestedUrls = [];
+    vi.stubGlobal("window", {
+      location: {
+        origin: "http://127.0.0.1:5173",
+        pathname: "/app/beepollen"
+      }
+    });
+    vi.stubGlobal("fetch", vi.fn(async (url) => {
+      requestedUrls.push(url);
+      return {
+        json: async () => ({
+          ok: true,
+          projects: []
+        }),
+        status: 200
+      };
+    }));
+
+    await readProjects();
+
+    expect(requestedUrls).toEqual([
+      "/api/app/beepollen/vibe64/projects"
+    ]);
   });
 });

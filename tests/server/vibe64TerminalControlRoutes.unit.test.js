@@ -6,10 +6,10 @@ import {
 } from "../../packages/vibe64-terminals/src/server/registerRoutes.js";
 import {
   findRegisteredRoute,
-  routeWorkspaceParams,
+  routeProjectParams,
   testReply,
   withLocalRequestBypass,
-  withRouteWorkspace
+  withRouteProject
 } from "./vibe64RouteTestHelpers.js";
 
 function terminalControlRouteApp(service) {
@@ -73,7 +73,7 @@ async function runRoute(app, {
 
 test("terminal control routes expose snapshot, text checks, exact text, and narrow keys", async () => {
   await withLocalRequestBypass(async () => {
-    await withRouteWorkspace(async ({ apiRouteBase, projectContext }) => {
+    await withRouteProject(async ({ apiRouteBase, projectContext }) => {
       const writes = [];
       let output = "ready prompt";
       const createdAt = new Date(Date.now() - 4000).toISOString();
@@ -118,7 +118,7 @@ test("terminal control routes expose snapshot, text checks, exact text, and narr
         path: `${apiRouteBase}/vibe64/sessions/:sessionId/command-terminal/:terminalSessionId/control/text`
       }), null);
       const path = `${apiRouteBase}/vibe64/sessions/:sessionId/shell-terminal/:terminalSessionId`;
-      const params = routeWorkspaceParams({
+      const params = routeProjectParams({
         sessionId: "session-1",
         terminalSessionId: "terminal-1"
       });

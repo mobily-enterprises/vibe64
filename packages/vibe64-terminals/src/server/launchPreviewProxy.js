@@ -12,8 +12,13 @@ import {
   isLoopbackAddress
 } from "@local/vibe64-core/server/localStudioRequest";
 import {
-  currentWorkspaceScopeKey
-} from "@local/vibe64-core/server/workspaceRequestContext";
+  currentProjectScopeKey
+} from "@local/vibe64-core/server/projectRequestContext";
+import {
+  vibe64SessionDebugDurationMs,
+  vibe64SessionDebugError,
+  vibe64SessionDebugLog
+} from "@local/vibe64-runtime/server/sessionDebugLog";
 
 import {
   injectLaunchPreviewBridge
@@ -28,6 +33,7 @@ const PREVIEW_PROXY_TOKEN_QUERY_PARAM = "vibe64_preview_token";
 const PREVIEW_PROXY_TOKEN_COOKIE = "vibe64_preview_token";
 const PREVIEW_PROXY_HOST_ENV = "VIBE64_PREVIEW_PROXY_HOST";
 const PREVIEW_PROXY_PUBLIC_HOST_ENV = "VIBE64_PREVIEW_PROXY_PUBLIC_HOST";
+const PREVIEW_PROXY_DEBUG_ENV = "VIBE64_PREVIEW_DEBUG";
 
 function normalizePreviewTargetHref(value = "") {
   const text = String(value || "").trim();
@@ -100,10 +106,10 @@ function previewTokenScopeMaterial({
   sessionId = "",
   targetHref = "",
   terminalSessionId = "",
-  workspaceScope = ""
+  projectScope = ""
 } = {}) {
   return JSON.stringify([
-    String(workspaceScope || "").trim(),
+    String(projectScope || "").trim(),
     String(sessionId || "").trim(),
     String(terminalSessionId || "").trim(),
     String(targetHref || "").trim()
@@ -132,6 +138,29 @@ function previewRequestToken(request, requestUrl, {
   return requestUrl.searchParams.get(PREVIEW_PROXY_TOKEN_QUERY_PARAM) ||
     cookies[previewTokenCookieName(proxyOrigin)] ||
     "";
+}
+
+function previewRequestTokenDiagnostics(request, requestUrl, {
+  proxyOrigin = ""
+} = {}) {
+  const cookieName = previewTokenCookieName(proxyOrigin);
+  const cookies = parseCookies(request.headers?.cookie || "");
+  return {
+    cookieName,
+    hasCookieToken: Boolean(cookies[cookieName]),
+    hasQueryToken: requestUrl.searchParams.has(PREVIEW_PROXY_TOKEN_QUERY_PARAM)
+  };
+}
+
+function previewProxyDebugEnabled(env = process.env) {
+  return /^(1|true|yes|on)$/iu.test(String(env?.[PREVIEW_PROXY_DEBUG_ENV] || "").trim());
+}
+
+function previewProxyDebugLog(event = "", details = {}) {
+  if (!previewProxyDebugEnabled()) {
+    return null;
+  }
+  return vibe64SessionDebugLog(event, details);
 }
 
 function previewTokenCookieName(proxyOrigin = "") {
@@ -380,8 +409,27 @@ async function proxyPreviewRequest(request, response, {
   tokenHash = "",
   targetOrigin = ""
 } = {}) {
+  const startedAtMs = Date.now();
   const requestUrl = new URL(String(request.url || "/"), proxyOrigin || targetOrigin);
+  const tokenDiagnostics = previewRequestTokenDiagnostics(request, requestUrl, {
+    proxyOrigin
+  });
+  const requestDetails = {
+    ...tokenDiagnostics,
+    method: String(request.method || "GET").toUpperCase(),
+    pathname: requestUrl.pathname,
+    proxyOrigin,
+    search: requestUrl.search,
+    sessionId: String(tokenScope.sessionId || ""),
+    targetOrigin,
+    terminalSessionId: String(tokenScope.terminalSessionId || "")
+  };
   if (!tokenMatches(previewRequestToken(request, requestUrl, { proxyOrigin }), tokenHash, tokenScope)) {
+    previewProxyDebugLog("server.launchPreviewProxy.request.rejected", {
+      ...requestDetails,
+      durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+      reason: "preview_token_invalid"
+    });
     rejectPreviewRequest(response);
     return;
   }
@@ -404,6 +452,7 @@ async function proxyPreviewRequest(request, response, {
     if (HTML_CONTENT_TYPE_PATTERN.test(contentType)) {
       const html = await targetResponse.text();
       const body = injectLaunchPreviewBridge(html, {
+        debug: previewProxyDebugEnabled(),
         targetOrigin
       });
       response.writeHead(targetResponse.status, previewResponseHeaders(targetResponse, {
@@ -413,6 +462,14 @@ async function proxyPreviewRequest(request, response, {
         token
       }));
       response.end(body);
+      previewProxyDebugLog("server.launchPreviewProxy.request.done", {
+        ...requestDetails,
+        contentType,
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+        injectedBridge: body !== html,
+        responseStatus: targetResponse.status,
+        targetHref: targetUrl.toString()
+      });
       return;
     }
 
@@ -421,6 +478,14 @@ async function proxyPreviewRequest(request, response, {
       targetOrigin,
       token
     }));
+    previewProxyDebugLog("server.launchPreviewProxy.request.done", {
+      ...requestDetails,
+      contentType,
+      durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+      injectedBridge: false,
+      responseStatus: targetResponse.status,
+      targetHref: targetUrl.toString()
+    });
     if (targetResponse.body) {
       Readable.fromWeb(targetResponse.body).pipe(response);
     } else {
@@ -435,6 +500,11 @@ async function proxyPreviewRequest(request, response, {
         "Set-Cookie": previewTokenCookie(token, { proxyOrigin })
       });
       response.end(previewStartingHtml());
+      previewProxyDebugLog("server.launchPreviewProxy.request.startingHtml", {
+        ...requestDetails,
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+        error: vibe64SessionDebugError(error)
+      });
       return;
     }
     response.writeHead(502, {
@@ -442,6 +512,11 @@ async function proxyPreviewRequest(request, response, {
       "Content-Type": "text/plain; charset=utf-8"
     });
     response.end(`Launch preview proxy failed: ${String(error?.message || error)}`);
+    previewProxyDebugLog("server.launchPreviewProxy.request.error", {
+      ...requestDetails,
+      durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+      error: vibe64SessionDebugError(error)
+    });
   }
 }
 
@@ -534,7 +609,24 @@ function createLaunchPreviewProxyRegistry() {
     const targetUrl = normalizePreviewTargetHref(scope.targetHref);
     const key = previewProxyKey(scope);
     const existing = proxies.get(key);
+    previewProxyDebugLog("server.launchPreviewProxy.ensure", {
+      existingProxy: Boolean(existing),
+      existingTargetHref: String(existing?.targetHref || ""),
+      key,
+      projectScope: String(scope.projectScope || ""),
+      sessionId: String(scope.sessionId || ""),
+      targetHref: targetUrl.toString(),
+      terminalSessionId: String(scope.terminalSessionId || "")
+    });
     if (existing && existing.targetHref === targetUrl.toString()) {
+      previewProxyDebugLog("server.launchPreviewProxy.reuse", {
+        key,
+        projectScope: String(scope.projectScope || ""),
+        proxyOrigin: String(existing.origin || ""),
+        sessionId: String(scope.sessionId || ""),
+        targetHref: targetUrl.toString(),
+        terminalSessionId: String(scope.terminalSessionId || "")
+      });
       return proxyDescriptor(existing, targetUrl);
     }
     await close(scope);
@@ -550,10 +642,23 @@ function createLaunchPreviewProxyRegistry() {
   async function close(input = {}) {
     const scope = previewProxyScope(input);
     const closeEntries = [...proxies.entries()].filter(([, proxy]) => {
-      return proxy.scope.workspaceScope === scope.workspaceScope &&
+      return proxy.scope.projectScope === scope.projectScope &&
         proxy.scope.sessionId === scope.sessionId &&
         (!scope.terminalSessionId || proxy.scope.terminalSessionId === scope.terminalSessionId);
     });
+    if (closeEntries.length > 0) {
+      previewProxyDebugLog("server.launchPreviewProxy.close", {
+        count: closeEntries.length,
+        projectScope: String(scope.projectScope || ""),
+        sessionId: String(scope.sessionId || ""),
+        terminalSessionId: String(scope.terminalSessionId || ""),
+        targets: closeEntries.map(([, proxy]) => ({
+          proxyOrigin: String(proxy.origin || ""),
+          targetHref: String(proxy.targetHref || ""),
+          terminalSessionId: String(proxy.scope?.terminalSessionId || "")
+        }))
+      });
+    }
     await Promise.all(closeEntries.map(async ([key, proxy]) => {
       proxies.delete(key);
       await proxy.close();
@@ -562,6 +667,18 @@ function createLaunchPreviewProxyRegistry() {
 
   async function closeAll() {
     const closeEntries = [...proxies.entries()];
+    if (closeEntries.length > 0) {
+      previewProxyDebugLog("server.launchPreviewProxy.closeAll", {
+        count: closeEntries.length,
+        targets: closeEntries.map(([, proxy]) => ({
+          projectScope: String(proxy.scope?.projectScope || ""),
+          proxyOrigin: String(proxy.origin || ""),
+          sessionId: String(proxy.scope?.sessionId || ""),
+          targetHref: String(proxy.targetHref || ""),
+          terminalSessionId: String(proxy.scope?.terminalSessionId || "")
+        }))
+      });
+    }
     await Promise.all(closeEntries.map(async ([key, proxy]) => {
       proxies.delete(key);
       await proxy.close();
@@ -583,20 +700,20 @@ function previewProxyScope(input = {}, {
       sessionId: String(input.sessionId || "").trim(),
       targetHref: String(input.targetHref || targetHref || "").trim(),
       terminalSessionId: String(input.terminalSessionId || "").trim(),
-      workspaceScope: String(input.workspaceScope || currentWorkspaceScopeKey()).trim() || "global"
+      projectScope: String(input.projectScope || currentProjectScopeKey()).trim() || "global"
     };
   }
   return {
     sessionId: String(input || "").trim(),
     targetHref: String(targetHref || "").trim(),
     terminalSessionId: "",
-    workspaceScope: currentWorkspaceScopeKey()
+    projectScope: currentProjectScopeKey()
   };
 }
 
 function previewProxyKey(scope = {}) {
   return [
-    scope.workspaceScope,
+    scope.projectScope,
     `session:${scope.sessionId}`,
     `terminal:${scope.terminalSessionId || "default"}`
   ].join(":");
@@ -633,6 +750,14 @@ async function startLaunchPreviewProxy(targetUrl, scope = {}) {
 
   server.unref();
   proxyOrigin = `http://${listen.publicHost}:${listen.port}`;
+  previewProxyDebugLog("server.launchPreviewProxy.started", {
+    port: listen.port,
+    projectScope: String(scope.projectScope || ""),
+    proxyOrigin,
+    sessionId: String(scope.sessionId || ""),
+    targetHref: targetUrl.toString(),
+    terminalSessionId: String(scope.terminalSessionId || "")
+  });
   return {
     close: () => new Promise((resolve) => {
       server.close(() => resolve());
@@ -641,7 +766,7 @@ async function startLaunchPreviewProxy(targetUrl, scope = {}) {
     scope: Object.freeze({
       sessionId: String(scope.sessionId || "").trim(),
       terminalSessionId: String(scope.terminalSessionId || "").trim(),
-      workspaceScope: String(scope.workspaceScope || "").trim()
+      projectScope: String(scope.projectScope || "").trim()
     }),
     token,
     targetHref: targetUrl.toString()

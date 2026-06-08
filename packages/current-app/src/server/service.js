@@ -19,8 +19,8 @@ import {
   vibe64Result
 } from "@local/vibe64-core/server/serverResponses";
 import {
-  currentWorkspaceScopeKey
-} from "@local/vibe64-core/server/workspaceRequestContext";
+  currentProjectScopeKey
+} from "@local/vibe64-core/server/projectRequestContext";
 import {
   assertVibe64SetupReady,
   readVibe64SetupReadiness
@@ -41,7 +41,7 @@ import {
 const PROJECT_SCRIPT_SOURCE = "project";
 const ADAPTER_SCRIPT_SOURCE = "adapter";
 const PROJECT_SCRIPTS_DIR = ".vibe64/scripts";
-const STARRED_TARGET_SCRIPTS_CONFIG = ".vibe64/config/starred_scripts";
+const STARRED_TARGET_SCRIPTS_CONFIG = "config/starred_scripts";
 const TARGET_SCRIPT_TERMINAL_NAMESPACE = "current-app-target-script";
 const PROJECT_SCRIPT_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u;
 const AI_ACCOUNTS_ROUTE = "/app/manage";
@@ -55,7 +55,7 @@ function resolveCurrentAppRoot(appRoot) {
 }
 
 function targetScriptTerminalNamespacePrefix() {
-  return `${TARGET_SCRIPT_TERMINAL_NAMESPACE}:${currentWorkspaceScopeKey()}:`;
+  return `${TARGET_SCRIPT_TERMINAL_NAMESPACE}:${currentProjectScopeKey()}:`;
 }
 
 function targetScriptTerminalNamespace() {
@@ -235,9 +235,9 @@ function sortedUniqueScriptIds(scriptIds = []) {
     .sort((left, right) => left.localeCompare(right));
 }
 
-async function readStarredScriptConfig(targetRoot) {
+async function readStarredScriptConfig(stateRoot) {
   try {
-    const source = await readFile(path.join(targetRoot, STARRED_TARGET_SCRIPTS_CONFIG), "utf8");
+    const source = await readFile(path.join(stateRoot, STARRED_TARGET_SCRIPTS_CONFIG), "utf8");
     return {
       exists: true,
       scriptIds: sortedUniqueScriptIds(source.split(/[,\r\n]+/gu))
@@ -253,8 +253,8 @@ async function readStarredScriptConfig(targetRoot) {
   }
 }
 
-async function writeStarredScriptConfig(targetRoot, scriptIds = []) {
-  const configPath = path.join(targetRoot, STARRED_TARGET_SCRIPTS_CONFIG);
+async function writeStarredScriptConfig(stateRoot, scriptIds = []) {
+  const configPath = path.join(stateRoot, STARRED_TARGET_SCRIPTS_CONFIG);
   await mkdir(path.dirname(configPath), {
     recursive: true
   });
@@ -266,8 +266,8 @@ async function writeStarredScriptConfig(targetRoot, scriptIds = []) {
   };
 }
 
-async function removeStarredScriptConfig(targetRoot) {
-  await rm(path.join(targetRoot, STARRED_TARGET_SCRIPTS_CONFIG), {
+async function removeStarredScriptConfig(stateRoot) {
+  await rm(path.join(stateRoot, STARRED_TARGET_SCRIPTS_CONFIG), {
     force: true
   });
   return {
@@ -426,6 +426,18 @@ function createService({
       throw error;
     }
     return targetRoot;
+  }
+
+  function requireProjectStateRoot() {
+    const stateRoot = typeof projectService.currentProjectStateRoot === "function"
+      ? String(projectService.currentProjectStateRoot() || "").trim()
+      : "";
+    if (!stateRoot) {
+      const error = new Error("Choose a project before using current-app tools.");
+      error.code = "vibe64_project_not_selected";
+      throw error;
+    }
+    return stateRoot;
   }
 
   function noProjectSelectedSetupReadiness() {
@@ -643,6 +655,7 @@ function createService({
           return currentAppBeforeSetup(targetRoot, projectType, setup);
         }
         const runtime = await createRuntime();
+        const stateRoot = requireProjectStateRoot();
         const inspectCurrentApp = await requireAdapterMethod("inspectCurrentApp");
         const [currentApp, availableScripts, scriptConfig] = await Promise.all([
           inspectCurrentApp({
@@ -651,7 +664,7 @@ function createService({
             targetRoot
           }),
           listAvailableTargetScripts(),
-          readStarredScriptConfig(targetRoot)
+          readStarredScriptConfig(stateRoot)
         ]);
         return {
           ...currentApp,
@@ -702,11 +715,11 @@ function createService({
 
     async listTargetScripts(input = {}) {
       return currentAppResult(async () => {
-        const targetRoot = requireTargetRoot();
+        const stateRoot = requireProjectStateRoot();
         await requireSetupReady(input);
         const [availableScripts, config] = await Promise.all([
           listAvailableTargetScripts(),
-          readStarredScriptConfig(targetRoot)
+          readStarredScriptConfig(stateRoot)
         ]);
         if (availableScripts.ok === false) {
           return availableScripts;
@@ -720,7 +733,7 @@ function createService({
 
     async saveStarredTargetScripts(input = {}) {
       return currentAppResult(async () => {
-        const targetRoot = requireTargetRoot();
+        const stateRoot = requireProjectStateRoot();
         await requireSetupReady(input);
         const availableScripts = await listAvailableTargetScripts();
         if (availableScripts.ok === false) {
@@ -730,7 +743,7 @@ function createService({
         if (validation.ok === false) {
           return validation;
         }
-        const config = await writeStarredScriptConfig(targetRoot, validation.scriptIds);
+        const config = await writeStarredScriptConfig(stateRoot, validation.scriptIds);
         return targetScriptsResponse({
           config,
           scripts: availableScripts.scripts
@@ -740,13 +753,13 @@ function createService({
 
     async resetStarredTargetScripts(input = {}) {
       return currentAppResult(async () => {
-        const targetRoot = requireTargetRoot();
+        const stateRoot = requireProjectStateRoot();
         await requireSetupReady(input);
         const availableScripts = await listAvailableTargetScripts();
         if (availableScripts.ok === false) {
           return availableScripts;
         }
-        const config = await removeStarredScriptConfig(targetRoot);
+        const config = await removeStarredScriptConfig(stateRoot);
         return targetScriptsResponse({
           config,
           scripts: availableScripts.scripts

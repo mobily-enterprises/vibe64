@@ -1,8 +1,8 @@
 import { createTransientRetryHttpClient } from "@jskit-ai/http-runtime/client";
 import { resolveScopedApiBasePath } from "@jskit-ai/kernel/shared/surface";
 import {
-  currentWorkspaceSlugFromLocation
-} from "@/lib/vibe64WorkspaceScope.js";
+  currentProjectSlugFromLocation
+} from "@/lib/vibe64ProjectScope.js";
 
 const studioHttpClient = createTransientRetryHttpClient({
   credentials: "include",
@@ -25,12 +25,12 @@ function vibe64StudioFetch(url, options = {}) {
 }
 
 function resolveStudioRequestUrl(url) {
-  return scopedDevelopmentApiUrl(url, currentWorkspaceSlugFromLocation());
+  return scopedDevelopmentApiUrl(url, currentProjectSlugFromLocation());
 }
 
-function scopedDevelopmentApiUrl(url, slug = currentWorkspaceSlugFromLocation()) {
-  const workspaceSlug = String(slug || "").trim();
-  if (!workspaceSlug) {
+function scopedDevelopmentApiUrl(url, slug = currentProjectSlugFromLocation()) {
+  const projectSlug = String(slug || "").trim();
+  if (!projectSlug) {
     return url;
   }
   const source = String(url || "").trim();
@@ -41,7 +41,7 @@ function scopedDevelopmentApiUrl(url, slug = currentWorkspaceSlugFromLocation())
   const absolute = /^[a-z][a-z0-9+.-]*:\/\//iu.test(source);
   const base = typeof window === "undefined" ? "http://vibe64.local" : window.location.origin;
   const parsed = new URL(source, base);
-  const pathname = scopedDevelopmentApiPathname(parsed.pathname, workspaceSlug);
+  const pathname = scopedDevelopmentApiPathname(parsed.pathname, projectSlug);
   if (pathname === parsed.pathname) {
     return url;
   }
@@ -81,7 +81,7 @@ function isDevelopmentApiPathname(pathname = "") {
 
 function resolveWebSocketUrl(pathname, browserWindow = window) {
   const protocol = browserWindow.location.protocol === "https:" ? "wss:" : "ws:";
-  const scopedPathname = scopedDevelopmentApiUrl(pathname, currentWorkspaceSlugFromLocation());
+  const scopedPathname = scopedDevelopmentApiUrl(pathname, currentProjectSlugFromLocation());
   return `${protocol}//${browserWindow.location.host}${scopedPathname}`;
 }
 

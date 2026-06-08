@@ -3,8 +3,8 @@ import {
   studioHttpClient
 } from "@/lib/studioHttp.js";
 import {
-  vibe64WorkspaceQueryScope
-} from "@/lib/vibe64WorkspaceScope.js";
+  vibe64ProjectQueryScope
+} from "@/lib/vibe64ProjectScope.js";
 
 const TARGET_PROJECT_API_SUFFIX = "/studio/current-app";
 const VIBE64_ACCOUNTS_AUTH_API_SUFFIX = "/vibe64/accounts/auth";
@@ -41,28 +41,28 @@ function withRefreshQuery(endpoint, {
   return `${endpoint}${endpoint.includes("?") ? "&" : "?"}refresh=true`;
 }
 
-function projectTypeQueryKey(surfaceId, ownershipFilter, workspaceSlug) {
-  return ["vibe64", ...vibe64WorkspaceQueryScope(workspaceSlug), surfaceId, ownershipFilter, "project-type"];
+function projectTypeQueryKey(surfaceId, ownershipFilter, projectSlug) {
+  return ["vibe64", ...vibe64ProjectQueryScope(projectSlug), surfaceId, ownershipFilter, "project-type"];
 }
 
-function projectSelectionQueryKey(surfaceId, ownershipFilter, workspaceSlug) {
-  return ["vibe64", ...vibe64WorkspaceQueryScope(workspaceSlug), surfaceId, ownershipFilter, "projects"];
+function projectSelectionQueryKey(surfaceId, ownershipFilter, projectSlug) {
+  return ["vibe64", ...vibe64ProjectQueryScope(projectSlug), surfaceId, ownershipFilter, "projects"];
 }
 
-function projectConfigQueryKey(surfaceId, ownershipFilter, workspaceSlug) {
-  return ["vibe64", ...vibe64WorkspaceQueryScope(workspaceSlug), surfaceId, ownershipFilter, "project-config"];
+function projectConfigQueryKey(surfaceId, ownershipFilter, projectSlug) {
+  return ["vibe64", ...vibe64ProjectQueryScope(projectSlug), surfaceId, ownershipFilter, "project-config"];
 }
 
-function targetProjectQueryKey(surfaceId, ownershipFilter, workspaceSlug) {
-  return ["vibe64", ...vibe64WorkspaceQueryScope(workspaceSlug), surfaceId, ownershipFilter, "target-project"];
+function targetProjectQueryKey(surfaceId, ownershipFilter, projectSlug) {
+  return ["vibe64", ...vibe64ProjectQueryScope(projectSlug), surfaceId, ownershipFilter, "target-project"];
 }
 
-function accountsQueryKey(surfaceId, ownershipFilter, workspaceSlug) {
-  return ["vibe64", ...vibe64WorkspaceQueryScope(workspaceSlug), surfaceId, ownershipFilter, "accounts"];
+function accountsQueryKey(surfaceId, ownershipFilter, projectSlug) {
+  return ["vibe64", ...vibe64ProjectQueryScope(projectSlug), surfaceId, ownershipFilter, "accounts"];
 }
 
-function capabilitiesQueryKey(surfaceId, ownershipFilter, workspaceSlug) {
-  return ["vibe64", ...vibe64WorkspaceQueryScope(workspaceSlug), surfaceId, ownershipFilter, "capabilities"];
+function capabilitiesQueryKey(surfaceId, ownershipFilter, projectSlug) {
+  return ["vibe64", ...vibe64ProjectQueryScope(projectSlug), surfaceId, ownershipFilter, "capabilities"];
 }
 
 async function readAccountsStatus(options = {}) {

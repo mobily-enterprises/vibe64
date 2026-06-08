@@ -14,12 +14,13 @@ import {
 import { matchesPathPrefix, normalizePathname } from "@jskit-ai/kernel/shared/surface/paths";
 import { surfaceRuntime } from "./server/lib/surfaceRuntime.js";
 import {
+  VIBE64_DATA_ROOT_ENV,
   resolveStudioAppRoot,
   VIBE64_PROJECTS_ROOT_ENV
 } from "@local/vibe64-core/server/studioRoots";
 import {
   configureStudioProjectContext,
-  normalizeWorkspaceSlug
+  normalizeProjectSlug
 } from "@local/vibe64-core/server/studioProjectContext";
 import {
   closeTerminalSessionsForNamespacePrefix
@@ -40,8 +41,8 @@ import {
   registerVibe64AuthRoutes
 } from "./server/lib/auth/index.js";
 import {
-  registerVibe64WorkspaceRoutes
-} from "./server/lib/workspaceRoutes.js";
+  registerVibe64ProjectRoutes
+} from "./server/lib/projectRoutes.js";
 import {
   VIBE64_APP_ROOT_ENV,
   VIBE64_SKIP_STALE_TERMINAL_CLEANUP_ENV,
@@ -142,7 +143,7 @@ function startupBrowserPath({
   startupSlug = ""
 } = {}) {
   const slug = String(startupSlug || "").trim();
-  return slug ? `/app/${encodeURIComponent(normalizeWorkspaceSlug(slug))}` : "/app/manage";
+  return slug ? `/app/${encodeURIComponent(normalizeProjectSlug(slug))}` : "/app/manage";
 }
 
 function browserUrlForListenAddress(address = "", options = {}) {
@@ -211,10 +212,11 @@ async function createServer(options = {}) {
   const projectContext = configureStudioProjectContext({
     cwd: process.cwd(),
     env: runtimeEnv,
+    explicitDataRoot: options.authDataRoot,
     explicitProjectsRoot: options.projectsRoot,
     explicitTargetRoot: options.targetRoot
   });
-  registerVibe64WorkspaceRoutes(app, projectContext, {
+  registerVibe64ProjectRoutes(app, projectContext, {
     auth,
     dataRoot: options.authDataRoot,
     env: runtimeEnv,
@@ -227,13 +229,18 @@ async function createServer(options = {}) {
   const providerEnv = {
     ...runtimeEnv,
     [VIBE64_APP_ROOT_ENV]: appRoot,
+    ...(options.authDataRoot ? { [VIBE64_DATA_ROOT_ENV]: options.authDataRoot } : {}),
     [VIBE64_PROJECTS_ROOT_ENV]: projectContext.projectsRoot,
     ...(targetRoot ? { [VIBE64_TARGET_ROOT_ENV]: targetRoot } : {})
   };
   const previousStudioAppRoot = process.env[VIBE64_APP_ROOT_ENV];
+  const previousVibe64DataRoot = process.env[VIBE64_DATA_ROOT_ENV];
   const previousStudioProjectsRoot = process.env[VIBE64_PROJECTS_ROOT_ENV];
   const previousStudioTargetRoot = process.env[VIBE64_TARGET_ROOT_ENV];
   process.env[VIBE64_APP_ROOT_ENV] = appRoot;
+  if (options.authDataRoot) {
+    process.env[VIBE64_DATA_ROOT_ENV] = options.authDataRoot;
+  }
   process.env[VIBE64_PROJECTS_ROOT_ENV] = projectContext.projectsRoot;
   if (targetRoot) {
     process.env[VIBE64_TARGET_ROOT_ENV] = targetRoot;
@@ -257,6 +264,11 @@ async function createServer(options = {}) {
       delete process.env[VIBE64_APP_ROOT_ENV];
     } else {
       process.env[VIBE64_APP_ROOT_ENV] = previousStudioAppRoot;
+    }
+    if (previousVibe64DataRoot == null) {
+      delete process.env[VIBE64_DATA_ROOT_ENV];
+    } else {
+      process.env[VIBE64_DATA_ROOT_ENV] = previousVibe64DataRoot;
     }
     if (previousStudioProjectsRoot == null) {
       delete process.env[VIBE64_PROJECTS_ROOT_ENV];

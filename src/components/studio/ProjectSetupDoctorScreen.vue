@@ -17,7 +17,7 @@
     ready-title="Project Setup ready"
     quiet-title="Preparing your project"
     quiet-lede="Vibe64 is creating the starter files, installing dependencies, and checking the project before Autopilot starts."
-    continue-label="Continue to workspace"
+    continue-label="Continue to project"
     :continue-to="continueTo"
     doctor-class="project-setup-doctor"
     :always-repair-check-ids="['dependencies']"
@@ -45,8 +45,8 @@ const loading = ref(false);
 const errorMessage = ref("");
 const streamEnabled = ref(false);
 const streamAutoStart = ref(true);
-const workspaceSlug = computed(() => firstRouteParam(route.params.slug));
-const continueTo = computed(() => workspaceSlug.value ? `/app/${encodeURIComponent(workspaceSlug.value)}` : "/app/manage");
+const projectSlug = computed(() => firstRouteParam(route.params.slug));
+const continueTo = computed(() => projectSlug.value ? `/app/${encodeURIComponent(projectSlug.value)}` : "/app/manage");
 
 const lede = computed(() => {
   if (loading.value && !streamEnabled.value) {

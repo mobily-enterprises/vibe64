@@ -24,7 +24,7 @@ test("server CLI starts management mode with no slug", () => {
   );
 });
 
-test("server CLI accepts one workspace slug and opens development mode", () => {
+test("server CLI accepts one project slug and opens development mode", () => {
   assert.deepEqual(parseStartupArgs(["alpha_1"]), {
     openOnStart: false,
     startupSlug: "alpha_1"

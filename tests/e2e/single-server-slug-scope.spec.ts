@@ -1,7 +1,8 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 
 const SLUG = "alpha_1";
-const WORKSPACE_ROOT = `/home/vibe64/${SLUG}`;
+const PROJECT_ROOT = `/home/vibe64/${SLUG}`;
+const PROJECT_REPOSITORY = `example/${SLUG}`;
 const MANAGEMENT_PATH = "/app/manage";
 const DEVELOPMENT_PATH = `/app/${SLUG}`;
 const DASHBOARD_PATH = `${DEVELOPMENT_PATH}/dashboard`;
@@ -14,10 +15,10 @@ const ownerUser = {
   status: "active"
 };
 
-test("first-run owner setup reaches management and opens a slug-scoped workspace", async ({ page }) => {
+test("first-run owner setup reaches management and opens a slug-scoped project", async ({ page }) => {
   const requests: string[] = [];
   const sessions: SessionRow[] = [];
-  const workspaces: WorkspaceRow[] = [];
+  const projects: ProjectRow[] = [];
   const users = [
     {
       ...ownerUser,
@@ -88,13 +89,59 @@ test("first-run owner setup reaches management and opens a slug-scoped workspace
       return;
     }
 
-    if (url.pathname === "/api/vibe64/workspaces") {
+    if (url.pathname === "/api/vibe64/github/repository-owners" && method === "GET") {
+      await fulfillJson(route, {
+        ok: true,
+        owners: [
+          {
+            canCreateRepository: true,
+            login: "example",
+            type: "user"
+          }
+        ]
+      });
+      return;
+    }
+
+    if (url.pathname === "/api/vibe64/github/repositories/search" && method === "GET") {
+      await fulfillJson(route, {
+        ok: true,
+        repositories: [
+          {
+            canPush: true,
+            description: "Example project repository",
+            fullName: PROJECT_REPOSITORY,
+            isPrivate: false,
+            name: SLUG,
+            owner: "example",
+            visibility: "public"
+          }
+        ]
+      });
+      return;
+    }
+
+    if (url.pathname === "/api/vibe64/projects/from-repository" && method === "POST") {
+      const body = request.postDataJSON() as { repository?: string; slug?: string };
+      const slug = String(body.slug || "").trim();
+      const repository = String(body.repository || PROJECT_REPOSITORY).trim();
+      const project = projectRow(slug, repository);
+      projects.push(project);
+      await fulfillJson(route, {
+        ok: true,
+        project,
+        repository: project.githubRepository
+      });
+      return;
+    }
+
+    if (url.pathname === "/api/vibe64/projects") {
       if (method === "POST") {
         const body = request.postDataJSON() as { slug?: string };
         const slug = String(body.slug || "").trim();
-        workspaces.push(workspaceRow(slug));
+        projects.push(projectRow(slug));
       }
-      await fulfillJson(route, workspaceList(workspaces));
+      await fulfillJson(route, projectList(projects));
       return;
     }
 
@@ -140,11 +187,11 @@ test("first-run owner setup reaches management and opens a slug-scoped workspace
 
   await expect(page).toHaveURL(new RegExp(`${MANAGEMENT_PATH}$`, "u"));
   await expect(page.getByRole("heading", { name: "Management", exact: true })).toBeVisible();
-  await expect(page.getByRole("tab", { name: "Workspaces", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tab", { name: "Projects", exact: true })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("tab", { name: "Studio setup", exact: true })).toBeVisible();
   await expect(page.getByRole("tab", { name: "AI Accounts", exact: true })).toBeVisible();
   await expect(page.getByRole("tab", { name: "Users", exact: true })).toBeVisible();
-  await expect(page.getByText("No workspaces yet.")).toBeVisible();
+  await expect(page.getByText("No projects yet.")).toBeVisible();
 
   await page.getByRole("tab", { name: "Studio setup", exact: true }).click();
   await expect(page.getByRole("tab", { name: "Studio setup", exact: true })).toHaveAttribute("aria-selected", "true");
@@ -171,12 +218,18 @@ test("first-run owner setup reaches management and opens a slug-scoped workspace
   await page.getByRole("button", { name: "Back" }).click();
   await expect(page).toHaveURL(new RegExp(`${MANAGEMENT_PATH}$`, "u"));
 
-  await page.getByRole("tab", { name: "Workspaces", exact: true }).click();
-  await page.getByLabel("New slug").fill(SLUG);
-  await page.getByRole("button", { name: "Create" }).click();
-  const workspacesRegion = page.getByRole("region", { name: "Workspaces", exact: true });
-  const workspaceButton = workspacesRegion.getByRole("button", { name: new RegExp(SLUG, "u") });
-  await expect(workspaceButton).toBeVisible();
+  await page.getByRole("tab", { name: "Projects", exact: true }).click();
+  await page.getByRole("button", { name: "Add project", exact: true }).click();
+  const addProjectWizard = page.locator(".project-wizard");
+  await expect(addProjectWizard.getByRole("heading", { name: "Add project", exact: true })).toBeVisible();
+  await addProjectWizard.getByLabel("Project name").fill(SLUG);
+  await addProjectWizard.getByRole("button", { name: "Continue", exact: true }).click();
+  await addProjectWizard.getByLabel("Repository name").fill(SLUG);
+  await addProjectWizard.getByRole("button", { name: PROJECT_REPOSITORY }).click();
+  await addProjectWizard.getByRole("button", { name: "Add project", exact: true }).click();
+  const projectsRegion = page.getByRole("region", { name: "Projects", exact: true });
+  const projectButton = projectsRegion.getByRole("button", { name: new RegExp(SLUG, "u") });
+  await expect(projectButton).toBeVisible();
 
   await page.getByRole("tab", { name: "Users", exact: true }).click();
   await page.getByLabel("Invite email").fill("friend@example.com");
@@ -184,8 +237,8 @@ test("first-run owner setup reaches management and opens a slug-scoped workspace
   await expect(page.getByText("friend@example.com")).toBeVisible();
   await expect(page.getByRole("cell", { name: "Invited", exact: true })).toBeVisible();
 
-  await page.getByRole("tab", { name: "Workspaces", exact: true }).click();
-  await workspaceButton.click();
+  await page.getByRole("tab", { name: "Projects", exact: true }).click();
+  await projectButton.click();
   await expect(page).toHaveURL(new RegExp(`${DEVELOPMENT_PATH}$`, "u"));
   await expect(page.getByRole("tab", { name: "Preview", exact: true })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("tab", { name: "Dashboard", exact: true })).toBeVisible();
@@ -217,7 +270,6 @@ test("first-run owner setup reaches management and opens a slug-scoped workspace
   expect(requests).toContain(`GET ${SCOPED_API_PREFIX}/studio/current-app/capabilities`);
   expect(requests).toContain(`POST ${SCOPED_API_PREFIX}/vibe64/sessions`);
   expect(requests).toContain(`POST ${SCOPED_API_PREFIX}/vibe64/sessions/session-1/abandon`);
-  expect(requests).not.toContain("GET /api/vibe64/projects");
   expect(requests).not.toContain("GET /api/vibe64/sessions");
   expect(requests).not.toContain("POST /api/vibe64/sessions");
   expect(requests).not.toContain("GET /api/studio/current-app/capabilities");
@@ -258,12 +310,25 @@ test("authenticated users must connect GitHub on the account page before using t
   await expect(page.getByRole("heading", { name: "Password", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Codex", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Sign in or create GitHub account" })).toBeVisible();
-  expect(requests).not.toContain("GET /api/vibe64/workspaces");
+  expect(requests).not.toContain("GET /api/vibe64/projects");
 });
 
-type WorkspaceRow = {
+type ProjectRow = {
+  githubRepository: {
+    canPush: boolean;
+    cloneUrl: string;
+    defaultBranch: string;
+    fullName: string;
+    isPrivate: boolean;
+    name: string;
+    owner: string;
+    source: string;
+    url: string;
+    viewerPermission: string;
+    visibility: string;
+  };
   slug: string;
-  workspaceRoot: string;
+  projectRoot: string;
 };
 
 type SessionRow = {
@@ -304,10 +369,24 @@ type SessionRow = {
   };
 };
 
-function workspaceRow(slug: string): WorkspaceRow {
+function projectRow(slug: string, repository = `example/${slug}`): ProjectRow {
+  const [owner = "example", name = slug] = repository.split("/");
   return {
+    githubRepository: {
+      canPush: true,
+      cloneUrl: `https://github.com/${owner}/${name}.git`,
+      defaultBranch: "main",
+      fullName: `${owner}/${name}`,
+      isPrivate: false,
+      name,
+      owner,
+      source: "github",
+      url: `https://github.com/${owner}/${name}`,
+      viewerPermission: "WRITE",
+      visibility: "public"
+    },
     slug,
-    workspaceRoot: `/home/vibe64/${slug}`
+    projectRoot: `/home/vibe64/${slug}`
   };
 }
 
@@ -356,11 +435,11 @@ function supabaseSessionPayload() {
   };
 }
 
-function workspaceList(workspaces: WorkspaceRow[]) {
+function projectList(projects: ProjectRow[]) {
   return {
     ok: true,
     projectsRoot: "/home/vibe64",
-    workspaces
+    projects
   };
 }
 
@@ -394,7 +473,7 @@ async function fulfillScopedDevelopmentApi(route: Route, suffix: string, method:
       currentProject: {
         external: false,
         name: SLUG,
-        path: WORKSPACE_ROOT,
+        path: PROJECT_ROOT,
         selected: true,
         slug: SLUG,
         source: "managed"
@@ -405,14 +484,14 @@ async function fulfillScopedDevelopmentApi(route: Route, suffix: string, method:
         {
           external: false,
           name: SLUG,
-          path: WORKSPACE_ROOT,
+          path: PROJECT_ROOT,
           selected: true,
           slug: SLUG,
           source: "managed"
         }
       ],
       projectsRoot: "/home/vibe64",
-      targetRoot: WORKSPACE_ROOT
+      targetRoot: PROJECT_ROOT
     });
     return;
   }
@@ -434,11 +513,11 @@ async function fulfillScopedDevelopmentApi(route: Route, suffix: string, method:
         ],
         errorCode: "",
         message: "",
-        path: `${WORKSPACE_ROOT}/.vibe64/project_type`,
+        path: `${PROJECT_ROOT}/.vibe64/project_type`,
         projectType: "jskit",
         ready: true,
         status: "ready",
-        targetRoot: WORKSPACE_ROOT
+        targetRoot: PROJECT_ROOT
       }
     });
     return;
@@ -451,17 +530,17 @@ async function fulfillScopedDevelopmentApi(route: Route, suffix: string, method:
           id: "jskit",
           label: "JSKIT target adapter"
         },
-        configRoot: `${WORKSPACE_ROOT}/.vibe64/config`,
+        configRoot: `${PROJECT_ROOT}/.vibe64/config`,
         defaults: {},
         fields: [],
         fieldValues: {},
-        helperPath: `${WORKSPACE_ROOT}/.vibe64/runtime/vibe64-config.sh`,
+        helperPath: `${PROJECT_ROOT}/.vibe64/runtime/vibe64-config.sh`,
         invalid: [],
         message: "",
         missing: [],
         projectType: "jskit",
         ready: true,
-        runtimeRoot: `${WORKSPACE_ROOT}/.vibe64/runtime`,
+        runtimeRoot: `${PROJECT_ROOT}/.vibe64/runtime`,
         sections: [],
         values: {}
       },
@@ -709,7 +788,7 @@ function projectSetupReady() {
         status: "pass"
       }
     ],
-    targetRoot: WORKSPACE_ROOT
+    targetRoot: PROJECT_ROOT
   };
 }
 
@@ -727,7 +806,7 @@ function currentAppReady() {
     },
     ok: true,
     ready: true,
-    rootPath: WORKSPACE_ROOT
+    rootPath: PROJECT_ROOT
   };
 }
 
@@ -763,7 +842,7 @@ function capabilitiesReady() {
     },
     ok: true,
     setup: setupReadinessReady(),
-    targetRoot: WORKSPACE_ROOT,
+    targetRoot: PROJECT_ROOT,
     updatedAt: "2026-06-05T00:00:00.000Z"
   };
 }
@@ -800,7 +879,7 @@ function sessionPayload(sessionId: string): SessionRow {
     currentStep: "work_definition",
     metadata: {
       issue_word: "Created session",
-      worktree_path: `${WORKSPACE_ROOT}/.vibe64/sessions/active/${sessionId}/worktree`
+      worktree_path: `${PROJECT_ROOT}/.vibe64/sessions/active/${sessionId}/worktree`
     },
     presentation: {
       intents: [],

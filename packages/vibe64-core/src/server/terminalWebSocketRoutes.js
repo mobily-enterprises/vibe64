@@ -2,9 +2,9 @@ import {
   isLocalStudioRequest
 } from "./localStudioRequest.js";
 import {
-  resolveWorkspaceRequestContext,
-  runWithWorkspaceRequestContext
-} from "./workspaceRequestContext.js";
+  resolveProjectRequestContext,
+  runWithProjectRequestContext
+} from "./projectRequestContext.js";
 
 function sendSocketJson(socket, payload) {
   if (socket.readyState !== 1) {
@@ -82,19 +82,19 @@ function registerTerminalWebSocketRoute(
       }
 
       void (async () => {
-        let workspaceContext;
+        let projectContextValue;
         try {
-          workspaceContext = await resolveWorkspaceRequestContext({
+          projectContextValue = await resolveProjectRequestContext({
             projectContext,
             request
           });
         } catch (error) {
-          closeWithError(1008, String(error?.message || error || "Vibe64 workspace request failed."));
+          closeWithError(1008, String(error?.message || error || "Vibe64 project request failed."));
           return;
         }
 
-        const withWorkspaceContext = (operation) => {
-          return runWithWorkspaceRequestContext(workspaceContext, operation);
+        const withProjectContext = (operation) => {
+          return runWithProjectRequestContext(projectContextValue, operation);
         };
 
         let service;
@@ -112,7 +112,7 @@ function registerTerminalWebSocketRoute(
 
         socket.on("message", async (rawMessage) => {
           try {
-            await withWorkspaceContext(async () => {
+            await withProjectContext(async () => {
               const message = JSON.parse(rawMessage.toString());
               if (message?.type === "input") {
                 const response = await write(service, {
@@ -158,7 +158,7 @@ function registerTerminalWebSocketRoute(
         socket.on("close", closeSubscription);
         socket.on("error", closeSubscription);
 
-        void withWorkspaceContext(() => Promise.resolve(subscribe(service, {
+        void withProjectContext(() => Promise.resolve(subscribe(service, {
           jobId,
           sessionId,
           subscriber: (message) => {
@@ -180,7 +180,7 @@ function registerTerminalWebSocketRoute(
           closeWithError(1011, String(error?.message || error || "Terminal stream failed."));
         });
       })().catch((error) => {
-        closeWithError(1008, String(error?.message || error || "Vibe64 workspace request failed."));
+        closeWithError(1008, String(error?.message || error || "Vibe64 project request failed."));
       });
     }
   );

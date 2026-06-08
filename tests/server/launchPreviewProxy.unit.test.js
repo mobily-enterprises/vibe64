@@ -9,8 +9,8 @@ import {
   PREVIEW_READY_MESSAGE_TYPE
 } from "../../packages/vibe64-terminals/src/server/launchPreviewBridge.js";
 import {
-  runWithWorkspaceRequestContext
-} from "../../packages/vibe64-core/src/server/workspaceRequestContext.js";
+  runWithProjectRequestContext
+} from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 import {
   PREVIEW_PROXY_PORT_END,
   PREVIEW_PROXY_PORT_START,
@@ -126,11 +126,11 @@ test("launch preview proxy injects HTML and proxies app-relative requests", asyn
   });
 });
 
-test("launch preview proxy scopes tokens by workspace, session, and terminal", async () => {
+test("launch preview proxy scopes tokens by project, session, and terminal", async () => {
   await withTargetServer(async (target) => {
     const registry = createLaunchPreviewProxyRegistry();
     try {
-      const alpha = await runWithWorkspaceRequestContext({
+      const alpha = await runWithProjectRequestContext({
         slug: "alpha_1",
         targetRoot: "/tmp/vibe64/alpha_1"
       }, () => registry.ensure({
@@ -138,7 +138,7 @@ test("launch preview proxy scopes tokens by workspace, session, and terminal", a
         targetHref: `${target.origin}/alpha`,
         terminalSessionId: "same-terminal"
       }));
-      const beta = await runWithWorkspaceRequestContext({
+      const beta = await runWithProjectRequestContext({
         slug: "beta_2",
         targetRoot: "/tmp/vibe64/beta_2"
       }, () => registry.ensure({

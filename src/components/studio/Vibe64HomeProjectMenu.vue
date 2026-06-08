@@ -18,7 +18,7 @@
     </template>
 
     <v-list
-      class="vibe64-home-workspace-menu"
+      class="vibe64-home-project-menu"
       density="comfortable"
       nav
     >
@@ -52,9 +52,9 @@ const route = useRoute();
 const router = useRouter();
 const menuOpen = ref(false);
 
-const workspaceSlug = computed(() => firstRouteParam(route.params.slug));
-const workspaceBasePath = computed(() => workspaceSlug.value ? `/app/${encodeURIComponent(workspaceSlug.value)}` : "/app/manage");
-const isHomeRoute = computed(() => normalizePath(route.path) === normalizePath(workspaceBasePath.value));
+const projectSlug = computed(() => firstRouteParam(route.params.slug));
+const projectBasePath = computed(() => projectSlug.value ? `/app/${encodeURIComponent(projectSlug.value)}` : "/app/manage");
+const isHomeRoute = computed(() => normalizePath(route.path) === normalizePath(projectBasePath.value));
 const isAutopilotHome = computed(() => Boolean(
   isHomeRoute.value &&
   route.query.configure !== "project"
@@ -65,10 +65,10 @@ const menuItems = computed(() => {
   }
   return [
     {
-      description: "Return to the active session workspace.",
+      description: "Return to the active session project.",
       icon: mdiMonitorDashboard,
-      id: "workspace",
-      label: "Workspace"
+      id: "project",
+      label: "Project"
     },
     ...sharedItems()
   ];
@@ -104,13 +104,13 @@ function sharedItems() {
 }
 
 function pathForItem(itemId = "") {
-  if (itemId === "workspace") {
-    return workspaceBasePath.value;
+  if (itemId === "project") {
+    return projectBasePath.value;
   }
   if (itemId === "configure" || itemId === "run" || itemId === "history" || itemId === "setup") {
-    return `${workspaceBasePath.value}/dashboard/${itemId}`;
+    return `${projectBasePath.value}/dashboard/${itemId}`;
   }
-  return `${workspaceBasePath.value}/${itemId}`;
+  return `${projectBasePath.value}/${itemId}`;
 }
 
 function itemRoute(item = {}) {
@@ -121,7 +121,7 @@ function itemRoute(item = {}) {
 }
 
 function itemActive(item = {}) {
-  if (item.id === "workspace") {
+  if (item.id === "project") {
     return isHomeRoute.value && route.query.configure !== "project";
   }
   return route.path === pathForItem(item.id);
@@ -147,7 +147,7 @@ function normalizePath(pathValue = "") {
 </script>
 
 <style scoped>
-.vibe64-home-workspace-menu {
+.vibe64-home-project-menu {
   max-width: min(24rem, calc(100vw - 2rem));
   min-width: min(18rem, calc(100vw - 2rem));
 }

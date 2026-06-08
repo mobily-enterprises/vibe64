@@ -27,7 +27,7 @@ import {
 } from "@local/vibe64-core/server/serverResponses";
 import {
   targetRuntimeIdentity
-} from "@local/vibe64-core/server/workspaceRuntimeIdentity";
+} from "@local/vibe64-core/server/projectRuntimeIdentity";
 
 const VIBE64_RUNTIME_HOST_ALIAS = "vibe64-host";
 const RUNTIME_CONTAINER_KIND = "runtime-container";

@@ -4,9 +4,11 @@ const PREVIEW_READY_MESSAGE_TYPE = "vibe64:preview-ready";
 const PREVIEW_BRIDGE_VERSION = 1;
 
 function launchPreviewBridgeScript({
+  debug = false,
   targetOrigin = ""
 } = {}) {
   const config = JSON.stringify({
+    debug: debug === true,
     messageType: PREVIEW_BRIDGE_MESSAGE_TYPE,
     queryMessageType: PREVIEW_QUERY_MESSAGE_TYPE,
     readyMessageType: PREVIEW_READY_MESSAGE_TYPE,
@@ -21,6 +23,22 @@ function launchPreviewBridgeScript({
   }
   let lastHref = "";
   let readyPublished = false;
+  function debugLog(event, details = {}) {
+    if (config.debug !== true) {
+      return;
+    }
+    const entry = {
+      marker: "VIBE64_SESSION_DEBUG",
+      timestamp: new Date().toISOString(),
+      event: "browser.launchPreviewBridge." + String(event || ""),
+      ...details
+    };
+    try {
+      console.info("[VIBE64_SESSION_DEBUG] " + JSON.stringify(entry));
+    } catch {
+      console.info("[VIBE64_SESSION_DEBUG] " + entry.timestamp + " " + entry.event);
+    }
+  }
   function targetHref() {
     try {
       const current = new URL(window.location.href);
@@ -42,6 +60,10 @@ function launchPreviewBridgeScript({
       return;
     }
     lastHref = href;
+    debugLog("location.publish", {
+      href,
+      reason: String(reason || "location")
+    });
     window.parent.postMessage({
       href,
       reason: String(reason || "location"),
@@ -52,24 +74,63 @@ function launchPreviewBridgeScript({
   function appRoot() {
     return document.querySelector("#app") || document.body || null;
   }
-  function appHasRenderedDom() {
+  function renderedState() {
     const root = appRoot();
     if (!root) {
-      return false;
+      return {
+        childElementCount: 0,
+        rendered: false,
+        rootId: "",
+        rootTagName: "",
+        textLength: 0
+      };
     }
+    const textLength = String(root.textContent || "").trim().length;
     if (root.id === "app") {
-      return root.childElementCount > 0 || String(root.textContent || "").trim().length > 0;
+      return {
+        childElementCount: root.childElementCount,
+        rendered: root.childElementCount > 0 || textLength > 0,
+        rootId: root.id,
+        rootTagName: root.tagName,
+        textLength
+      };
     }
-    return Array.from(root.children || []).some((child) => {
+    const rendered = Array.from(root.children || []).some((child) => {
       return child.tagName !== "SCRIPT" && child.tagName !== "STYLE";
     });
+    return {
+      childElementCount: root.childElementCount,
+      rendered,
+      rootId: root.id || "",
+      rootTagName: root.tagName,
+      textLength
+    };
+  }
+  function appHasRenderedDom() {
+    return renderedState().rendered;
   }
   function publishReady(reason, options = {}) {
     const force = options && options.force === true;
-    if ((!force && readyPublished) || !appHasRenderedDom()) {
+    const state = renderedState();
+    if ((!force && readyPublished) || !state.rendered) {
+      if (force || !readyPublished) {
+        debugLog("ready.blocked", {
+          alreadyPublished: readyPublished,
+          force,
+          href: targetHref(),
+          reason: String(reason || "rendered"),
+          ...state
+        });
+      }
       return false;
     }
     readyPublished = true;
+    debugLog("ready.publish", {
+      force,
+      href: targetHref(),
+      reason: String(reason || "rendered"),
+      ...state
+    });
     window.parent.postMessage({
       href: targetHref(),
       reason: String(reason || "rendered"),
@@ -96,6 +157,12 @@ function launchPreviewBridgeScript({
       subtree: true
     });
     window.setTimeout(() => {
+      if (!readyPublished) {
+        debugLog("ready.timeout", {
+          href: targetHref(),
+          ...renderedState()
+        });
+      }
       observer.disconnect();
     }, 30000);
   }
@@ -118,6 +185,9 @@ function launchPreviewBridgeScript({
     if (event.source !== window.parent || event.data?.type !== config.queryMessageType) {
       return;
     }
+    debugLog("query.received", {
+      href: targetHref()
+    });
     publishLocation("query");
     publishReady("query", {
       force: true
@@ -139,6 +209,12 @@ function launchPreviewBridgeScript({
     publishLocation("ready");
     watchPreviewReady();
   }
+  debugLog("init", {
+    href: targetHref(),
+    readyState: document.readyState,
+    targetOrigin: config.targetOrigin,
+    version: config.version
+  });
 })();</script>`;
 }
 

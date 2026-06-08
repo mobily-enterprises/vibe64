@@ -12,13 +12,13 @@ import {
   testRouteApp
 } from "./vibe64RouteTestHelpers.js";
 
-test("Studio setup doctor routes are global while project setup remains workspace-scoped", () => {
+test("Studio setup doctor routes are global while project setup remains project-scoped", () => {
   const app = testRouteApp();
 
   registerStudioSetupRoutes(app, {
     routeRelativePath: "studio/studio-setup",
     routeSurface: "app",
-    workspaceScoped: false
+    projectScoped: false
   });
   registerProjectSetupRoutes(app, {
     routeRelativePath: "studio/project-setup",

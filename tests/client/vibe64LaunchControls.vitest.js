@@ -12,7 +12,8 @@ import {
   normalizeLaunchPreviewToolbarPosition,
   openLaunchBrowserTarget,
   openPendingLaunchBrowserWindow,
-  openReadyLaunchBrowserTarget
+  openReadyLaunchBrowserTarget,
+  sameSiteLoopbackPreviewUrl
 } from "../../src/composables/useVibe64LaunchControls.js";
 
 describe("Vibe64 launch controls", () => {
@@ -161,6 +162,23 @@ describe("Vibe64 launch controls", () => {
 
     expect(launchPreviewBaseUrl(actions)).toBe("http://127.0.0.1:4188/home");
     expect(launchPreviewDisplayUrl(actions)).toBe("http://127.0.0.1:4103/home");
+  });
+
+  it("keeps embedded loopback preview URLs same-site with the Studio page", () => {
+    expect(sameSiteLoopbackPreviewUrl(
+      "http://127.0.0.1:4188/home?vibe64_preview_token=abc",
+      "http://localhost:3000/app/beepollen"
+    )).toBe("http://localhost:4188/home?vibe64_preview_token=abc");
+
+    expect(sameSiteLoopbackPreviewUrl(
+      "http://localhost:4188/home?vibe64_preview_token=abc",
+      "http://127.0.0.1:3000/app/beepollen"
+    )).toBe("http://127.0.0.1:4188/home?vibe64_preview_token=abc");
+
+    expect(sameSiteLoopbackPreviewUrl(
+      "https://preview.example.test/home?vibe64_preview_token=abc",
+      "https://studio.example.test/app/beepollen"
+    )).toBe("https://preview.example.test/home?vibe64_preview_token=abc");
   });
 
   it("uses center as the default embedded preview toolbar position", () => {

@@ -23,7 +23,7 @@
       class="studio-ai-sessions__empty-layout"
       :class="{
         'studio-ai-sessions__empty-layout--chat-collapsed': chatCollapsed,
-        'studio-ai-sessions__empty-layout--dashboard': dashboardWorkspaceActive
+        'studio-ai-sessions__empty-layout--dashboard': dashboardProjectActive
       }"
     >
       <section
@@ -63,11 +63,11 @@
       </section>
 
       <section
-        class="studio-ai-sessions__empty-workspace-panel"
-        aria-label="Workspace"
+        class="studio-ai-sessions__empty-project-panel"
+        aria-label="Project"
       >
         <div
-          v-if="dashboardWorkspaceActive"
+          v-if="dashboardProjectActive"
           class="studio-ai-sessions__dashboard-empty-pane"
         >
           <slot name="dashboard" :dashboard-context="emptyDashboardContext" />
@@ -124,12 +124,12 @@
         :session-data="sessionData"
         :session-id="runtimeSessionId"
         :chat-collapsed="chatCollapsed"
-        :workspace-pane="workspacePane"
+        :project-pane="projectPane"
         @busy-change="setRuntimeBusy"
         @page-error-change="setRuntimePageError"
         @toolbar-controls-ready="setRuntimeToolbarControls"
-        @workspace-attention="emitWorkspaceAttention"
-        @workspace-pane-change="emitWorkspacePaneChange"
+        @project-attention="emitProjectAttention"
+        @project-pane-change="emitProjectPaneChange"
       >
         <template #dashboard="dashboardSlotProps">
           <slot
@@ -156,13 +156,13 @@ import {
   useVibe64SessionData
 } from "@/composables/useVibe64SessionData.js";
 
-const emit = defineEmits(["title-change", "workspace-attention", "workspace-pane-change"]);
+const emit = defineEmits(["title-change", "project-attention", "project-pane-change"]);
 const props = defineProps({
   chatCollapsed: {
     default: false,
     type: Boolean
   },
-  workspacePane: {
+  projectPane: {
     default: "",
     type: String
   }
@@ -184,12 +184,12 @@ const sessionData = useVibe64SessionData({
   }
 });
 
-function emitWorkspacePaneChange(pane = "") {
-  emit("workspace-pane-change", pane);
+function emitProjectPaneChange(pane = "") {
+  emit("project-pane-change", pane);
 }
 
-function emitWorkspaceAttention() {
-  emit("workspace-attention");
+function emitProjectAttention() {
+  emit("project-attention");
 }
 
 const selection = proxyRefs({
@@ -209,9 +209,9 @@ const toolbar = proxyRefs({
   workflowDefinitions: sessionData.workflowDefinitions
 });
 
-const workspacePane = computed(() => normalizeWorkspacePane(props.workspacePane || route.query.pane));
+const projectPane = computed(() => normalizeProjectPane(props.projectPane || route.query.pane));
 const chatCollapsed = computed(() => Boolean(props.chatCollapsed));
-const dashboardWorkspaceActive = computed(() => workspacePane.value === "dashboard");
+const dashboardProjectActive = computed(() => projectPane.value === "dashboard");
 const emptyDashboardContext = Object.freeze({});
 const emptyBlockedReason = computed(() => String(
   !toolbar.canCreateSession && toolbar.createSessionTitle ? toolbar.createSessionTitle : ""
@@ -324,7 +324,7 @@ function setRuntimePageError({
   }
 }
 
-function normalizeWorkspacePane(value = "") {
+function normalizeProjectPane(value = "") {
   return ["configure", "dashboard", "history", "preview", "run", "setup"].includes(value)
     ? value
     : "preview";
@@ -391,7 +391,7 @@ watch(pageError, (error) => {
 }
 
 .studio-ai-sessions__empty-main,
-.studio-ai-sessions__empty-workspace-panel {
+.studio-ai-sessions__empty-project-panel {
   background: rgb(var(--v-theme-surface));
   border: 1px solid rgba(var(--v-theme-outline), 0.14);
   border-radius: 14px;
@@ -402,7 +402,7 @@ watch(pageError, (error) => {
 }
 
 .studio-ai-sessions__empty-main,
-.studio-ai-sessions__empty-workspace-panel,
+.studio-ai-sessions__empty-project-panel,
 .studio-ai-sessions__preview-empty-pane {
   display: grid;
 }
@@ -594,7 +594,7 @@ watch(pageError, (error) => {
     grid-template-rows: minmax(0, 1fr);
   }
 
-  .studio-ai-sessions__empty-workspace-panel {
+  .studio-ai-sessions__empty-project-panel {
     display: none;
   }
 
@@ -602,7 +602,7 @@ watch(pageError, (error) => {
     display: none;
   }
 
-  .studio-ai-sessions__empty-layout--chat-collapsed .studio-ai-sessions__empty-workspace-panel {
+  .studio-ai-sessions__empty-layout--chat-collapsed .studio-ai-sessions__empty-project-panel {
     display: grid;
   }
 }

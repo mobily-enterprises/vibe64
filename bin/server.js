@@ -5,7 +5,7 @@ import open, { apps } from "open";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import {
-  normalizeWorkspaceSlug
+  normalizeProjectSlug
 } from "@local/vibe64-core/server/studioProjectContext";
 import { startServer } from "../server.js";
 
@@ -73,7 +73,7 @@ function parseStartupArgs(args = process.argv.slice(2)) {
       throw unsupportedStartupArg(arg);
     }
     try {
-      startupSlug = normalizeWorkspaceSlug(arg);
+      startupSlug = normalizeProjectSlug(arg);
     } catch (error) {
       error.message = `Vibe64 startup slug is invalid: ${error.message}`;
       throw error;

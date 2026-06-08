@@ -3,16 +3,16 @@ import test from "node:test";
 
 import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRoutes";
 import {
-  routeWorkspaceParams,
+  routeProjectParams,
   testReply,
   testRouteApp,
   withLocalRequestBypass,
-  withRouteWorkspace
+  withRouteProject
 } from "./vibe64RouteTestHelpers.js";
 
 test("Vibe64 feature routes centralize route metadata and action dispatch", async () => {
   await withLocalRequestBypass(async () => {
-    await withRouteWorkspace(async ({ apiRouteBase, projectContext }) => {
+    await withRouteProject(async ({ apiRouteBase, projectContext }) => {
       const app = testRouteApp();
       const routes = createVibe64FeatureRoutes(app, {
         localRequestMessage: "Local only.",
@@ -58,7 +58,7 @@ test("Vibe64 feature routes centralize route metadata and action dispatch", asyn
           text: "from validator"
         }
       },
-      params: routeWorkspaceParams({
+      params: routeProjectParams({
         sessionId: "session-1"
       }),
       async executeAction(action) {
@@ -85,7 +85,7 @@ test("Vibe64 feature routes centralize route metadata and action dispatch", asyn
 
 test("Vibe64 feature routes support service response status overrides", async () => {
   await withLocalRequestBypass(async () => {
-    await withRouteWorkspace(async ({ projectContext }) => {
+    await withRouteProject(async ({ projectContext }) => {
       const app = testRouteApp();
       const routes = createVibe64FeatureRoutes(app, {
         projectContext,
@@ -114,26 +114,26 @@ test("Vibe64 feature routes support service response status overrides", async ()
 
     const missingReply = testReply();
     await app.registeredRoutes[0].handler({
-      params: routeWorkspaceParams()
+      params: routeProjectParams()
     }, missingReply);
     assert.equal(missingReply.statusCode, 404);
 
     const closeReply = testReply();
     await app.registeredRoutes[1].handler({
-      params: routeWorkspaceParams()
+      params: routeProjectParams()
     }, closeReply);
     assert.equal(closeReply.statusCode, 200);
     });
   });
 });
 
-test("Vibe64 feature routes can register global routes without workspace params", async () => {
+test("Vibe64 feature routes can register global routes without project params", async () => {
   await withLocalRequestBypass(async () => {
     const app = testRouteApp();
     const routes = createVibe64FeatureRoutes(app, {
       routeRelativePath: "vibe64/accounts",
       routeSurface: "app",
-      workspaceScoped: false
+      projectScoped: false
     });
 
     routes.actionRoute("GET", "", {

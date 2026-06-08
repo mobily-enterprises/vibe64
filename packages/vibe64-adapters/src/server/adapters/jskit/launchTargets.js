@@ -28,12 +28,6 @@ const DEFAULT_LAUNCH_PORT = 4100;
 const BUILT_LAUNCH_COMMAND_CONFIG = ".jskit/config/testrun_command";
 const BUILT_LAUNCH_PORT_CONFIG = ".jskit/config/server_port_for_user_review";
 const DEV_SERVER_COMMAND_CONFIG = "config/dev_server_command";
-const JSKIT_ALLOW_SELF_TARGET_CONFIG_PATH = `.vibe64/config/${JSKIT_ALLOW_SELF_TARGET_CONFIG}`;
-
-function enabledConfigValue(value) {
-  const normalized = String(value || "").trim().toLowerCase();
-  return Boolean(normalized) && !["0", "false", "no", "off"].includes(normalized);
-}
 
 async function readOptionalConfigFile(root, relativePath, fallback = "") {
   try {
@@ -65,12 +59,11 @@ async function configFileHasValue(root, relativePath) {
   return Boolean(await readOptionalConfigFile(root, relativePath, ""));
 }
 
-async function resolveHostDockerConfig(root) {
-  const selfTargetValue = await readOptionalConfigFile(root, JSKIT_ALLOW_SELF_TARGET_CONFIG_PATH, "");
-  const enabled = enabledConfigValue(selfTargetValue);
+function resolveHostDockerConfig(config = {}) {
+  const enabled = config?.values?.[JSKIT_ALLOW_SELF_TARGET_CONFIG] === true;
   return {
     enabled,
-    source: enabled ? JSKIT_ALLOW_SELF_TARGET_CONFIG_PATH : ""
+    source: enabled ? JSKIT_ALLOW_SELF_TARGET_CONFIG : ""
   };
 }
 
@@ -81,10 +74,12 @@ function normalizePort(value) {
     : DEFAULT_LAUNCH_PORT;
 }
 
-async function resolveBuiltLaunchConfig(worktreePath) {
+async function resolveBuiltLaunchConfig(worktreePath, {
+  adapterConfig = {}
+} = {}) {
   const [configuredBuiltCommand, hostDocker, portValue] = await Promise.all([
     readOptionalConfigFile(worktreePath, BUILT_LAUNCH_COMMAND_CONFIG, ""),
-    resolveHostDockerConfig(worktreePath),
+    resolveHostDockerConfig(adapterConfig),
     readOptionalConfigFile(worktreePath, BUILT_LAUNCH_PORT_CONFIG, String(DEFAULT_LAUNCH_PORT))
   ]);
   if (configuredBuiltCommand) {
@@ -114,11 +109,13 @@ async function resolveBuiltLaunchConfig(worktreePath) {
   };
 }
 
-async function resolveDevLaunchConfig(worktreePath) {
+async function resolveDevLaunchConfig(worktreePath, {
+  adapterConfig = {}
+} = {}) {
   const [devCommand, backendCommand, hostDocker, portValue] = await Promise.all([
     readOptionalConfigFile(worktreePath, DEV_SERVER_COMMAND_CONFIG, ""),
     readOptionalConfigFile(worktreePath, "config/server_command", DEFAULT_DEV_BACKEND_COMMAND),
-    resolveHostDockerConfig(worktreePath),
+    resolveHostDockerConfig(adapterConfig),
     readOptionalConfigFile(worktreePath, BUILT_LAUNCH_PORT_CONFIG, String(DEFAULT_LAUNCH_PORT))
   ]);
   return {
@@ -317,11 +314,16 @@ async function createJskitLaunchTargetTerminalSpec({
   }
 
   const launchTargetRoot = targetRoot || session.targetRoot || "";
+  const adapterConfig = context.config || {};
   const [databaseHost, config] = await Promise.all([
     readDatabaseHostFromDotEnv(worktreePath),
     launchTargetId === "dev"
-      ? resolveDevLaunchConfig(worktreePath)
-      : resolveBuiltLaunchConfig(worktreePath)
+      ? resolveDevLaunchConfig(worktreePath, {
+          adapterConfig
+        })
+      : resolveBuiltLaunchConfig(worktreePath, {
+          adapterConfig
+        })
   ]);
   const descriptorFactory = launchTargetId === "dev"
     ? createJskitDevLaunchDescriptor
@@ -350,6 +352,5 @@ export {
   listJskitLaunchTargets,
   BUILT_LAUNCH_COMMAND_CONFIG,
   BUILT_LAUNCH_PORT_CONFIG,
-  DEV_SERVER_COMMAND_CONFIG,
-  JSKIT_ALLOW_SELF_TARGET_CONFIG_PATH
+  DEV_SERVER_COMMAND_CONFIG
 };

@@ -591,7 +591,8 @@ test("Vibe64 Codex control has no terminal fallback when app-server control is d
 test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_prompt";
-    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
+    const stateRoot = path.join(targetRoot, "server-state");
+    const sessionRoot = path.join(stateRoot, "sessions", "active", sessionId);
     const worktree = path.join(sessionRoot, "worktree");
     await mkdir(worktree, {
       recursive: true
@@ -613,6 +614,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       },
       sessionId,
       sessionRoot,
+      stateRoot,
       status: "active",
       stepMachine: {
         status: "awaiting_agent_result"
@@ -622,6 +624,8 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     const backgroundTasks = new Map();
     const conversationLog = [];
     const runtime = {
+      stateRoot,
+      targetRoot,
       async getSession() {
         return session;
       },
@@ -697,13 +701,13 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       },
       async ensureRuntime() {
         providerCalls.ensureRuntime += 1;
-        return {
-          containerEndpoint: "unix:///vibe64-codex-app-server/app-server.sock",
-          containerRuntimeDir: "/vibe64-codex-app-server",
-          containerSocketPath: "/vibe64-codex-app-server/app-server.sock",
-          endpoint: `unix://${path.join(targetRoot, ".vibe64", "runtime", "codex-app-server", "app-server.sock")}`,
-          runtimeDir: path.join(targetRoot, ".vibe64", "runtime", "codex-app-server"),
-          socketPath: path.join(targetRoot, ".vibe64", "runtime", "codex-app-server", "app-server.sock"),
+          return {
+            containerEndpoint: "unix:///vibe64-codex-app-server/app-server.sock",
+            containerRuntimeDir: "/vibe64-codex-app-server",
+            containerSocketPath: "/vibe64-codex-app-server/app-server.sock",
+          endpoint: `unix://${path.join(stateRoot, "runtime", "codex-app-server", "app-server.sock")}`,
+          runtimeDir: path.join(stateRoot, "runtime", "codex-app-server"),
+          socketPath: path.join(stateRoot, "runtime", "codex-app-server", "app-server.sock"),
           transport: "unix"
         };
       },
@@ -797,12 +801,12 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     assert.equal(session.metadata.agent_identity_workdir, worktree);
     assert.equal(session.metadata.agent_identity_resume_strategy, "provider-native");
     assert.equal(session.metadata.codex_thread_id, "00000000-0000-4000-8000-000000000004");
-    assert.equal(session.metadata.codex_app_server_endpoint, `unix://${path.join(targetRoot, ".vibe64", "runtime", "codex-app-server", "app-server.sock")}`);
+    assert.equal(session.metadata.codex_app_server_endpoint, `unix://${path.join(stateRoot, "runtime", "codex-app-server", "app-server.sock")}`);
     assert.equal(session.metadata.codex_app_server_container_endpoint, "unix:///vibe64-codex-app-server/app-server.sock");
     assert.equal(session.metadata.codex_app_server_transport, "unix");
     assert.equal(
       session.metadata.codex_cli_resume_command,
-      `codex --remote unix://${path.join(targetRoot, ".vibe64", "runtime", "codex-app-server", "app-server.sock")} resume 00000000-0000-4000-8000-000000000004`
+      `codex --remote unix://${path.join(stateRoot, "runtime", "codex-app-server", "app-server.sock")} resume 00000000-0000-4000-8000-000000000004`
     );
     assert.equal(
       session.metadata.codex_container_cli_resume_command,
@@ -2233,6 +2237,7 @@ test("Fix Codex report closes the ephemeral Codex terminal", async () => {
 
 test("Fix Codex helper report closes the ephemeral Codex terminal", async () => {
   await withTemporaryRoot(async (targetRoot) => {
+    const stateRoot = path.join(targetRoot, "server-state");
     const fixJobStore = createFixCodexJobStore();
     const { job, token } = fixJobStore.createJob({
       scope: "project",
@@ -2255,7 +2260,7 @@ test("Fix Codex helper report closes the ephemeral Codex terminal", async () => 
     const helper = await prepareFixCodexReportHelper({
       fixJobStore,
       jobId: job.id,
-      targetRoot,
+      stateRoot,
       token
     });
     const socketPath = path.join(

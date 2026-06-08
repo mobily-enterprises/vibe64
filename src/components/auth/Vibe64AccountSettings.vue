@@ -77,7 +77,7 @@ async function sendPasswordResetEmail() {
 
     <AccountsSetup
       class="vibe64-account-settings__github"
-      lede="Sign in with GitHub or create a GitHub account. Vibe64 uses this identity for issues, pull requests, commits, and merge actions across your workspaces."
+      lede="Sign in with GitHub or create a GitHub account. Vibe64 uses this identity for issues, pull requests, commits, and merge actions across your projects."
       needed-label="GitHub required"
       :provider-ids="['github']"
       ready-label="GitHub connected"

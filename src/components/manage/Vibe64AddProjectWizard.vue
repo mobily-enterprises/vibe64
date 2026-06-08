@@ -13,11 +13,11 @@ import {
   mdiSourceRepository
 } from "@mdi/js";
 import {
-  createRepositoryWorkspace,
-  openRepositoryWorkspace,
+  createRepositoryProject,
+  openRepositoryProject,
   readGithubRepositoryOwners,
   searchGithubRepositories
-} from "@/lib/vibe64WorkspaceApi.js";
+} from "@/lib/vibe64ProjectApi.js";
 
 const props = defineProps({
   closable: {
@@ -51,8 +51,8 @@ const formError = ref("");
 const success = ref(null);
 const openRepositoryLoadPromises = new Map();
 
-const normalizedProjectSlug = computed(() => normalizeWorkspaceSlug(projectSlug.value));
-const projectSlugValid = computed(() => workspaceSlugIsValid(normalizedProjectSlug.value));
+const normalizedProjectSlug = computed(() => normalizeProjectSlug(projectSlug.value));
+const projectSlugValid = computed(() => projectSlugIsValid(normalizedProjectSlug.value));
 const stepLabel = computed(() => step.value === "project" ? "Step 1 of 2" : "Step 2 of 2");
 const sourceHeading = computed(() => repositoryMode.value === "create"
   ? "Create new GitHub repository"
@@ -100,7 +100,7 @@ onBeforeUnmount(() => {
 
 watch(projectSlug, (value) => {
   if (!createNameEdited.value) {
-    createName.value = normalizeWorkspaceSlug(value);
+    createName.value = normalizeProjectSlug(value);
   }
 });
 
@@ -197,7 +197,7 @@ async function loadOwnerRepositories(owner) {
 }
 
 function editProjectSlug(value) {
-  projectSlug.value = normalizeWorkspaceSlug(value);
+  projectSlug.value = normalizeProjectSlug(value);
 }
 
 function editCreateName(value) {
@@ -251,11 +251,11 @@ async function submitExistingRepositoryProject() {
   formError.value = "";
   success.value = null;
   try {
-    const response = await openRepositoryWorkspace({
+    const response = await openRepositoryProject({
       repository: selectedRepositoryFullName.value,
       slug: normalizedProjectSlug.value
     });
-    handleWorkspaceResponse(response);
+    handleProjectResponse(response);
   } catch (error) {
     formError.value = String(error?.message || error || "Project could not be added.");
   } finally {
@@ -268,14 +268,14 @@ async function submitNewRepositoryProject() {
   formError.value = "";
   success.value = null;
   try {
-    const response = await createRepositoryWorkspace({
+    const response = await createRepositoryProject({
       description: createDescription.value,
       name: createName.value.trim(),
       owner: createOwner.value,
       slug: normalizedProjectSlug.value,
       visibility: createVisibility.value
     });
-    handleWorkspaceResponse(response);
+    handleProjectResponse(response);
   } catch (error) {
     formError.value = String(error?.message || error || "Project could not be added.");
   } finally {
@@ -283,14 +283,14 @@ async function submitNewRepositoryProject() {
   }
 }
 
-function handleWorkspaceResponse(response = {}) {
+function handleProjectResponse(response = {}) {
   if (response.ok === false) {
     formError.value = apiError(response);
     return;
   }
   success.value = {
-    repository: response.repository || response.workspace?.githubRepository || null,
-    workspace: response.workspace || null
+    project: response.project || null,
+    repository: response.repository || response.project?.githubRepository || null
   };
   emit("created", response);
 }
@@ -347,7 +347,7 @@ function permissionLabel(repository = {}) {
   return "Visible to you";
 }
 
-function normalizeWorkspaceSlug(value = "") {
+function normalizeProjectSlug(value = "") {
   return String(value || "")
     .trim()
     .toLowerCase()
@@ -362,7 +362,7 @@ function normalizeGithubRepositoryName(value = "") {
     .replace(/^-+|-+$/gu, "");
 }
 
-function workspaceSlugIsValid(value = "") {
+function projectSlugIsValid(value = "") {
   return /^[a-z0-9][a-z0-9_-]*$/u.test(String(value || ""));
 }
 
@@ -408,7 +408,7 @@ function apiError(response = {}) {
         {{ formError }}
       </v-alert>
       <v-alert v-if="success" type="success" variant="tonal">
-        {{ success.workspace?.slug }} is linked to {{ success.repository?.fullName }}.
+        {{ success.project?.slug }} is linked to {{ success.repository?.fullName }}.
       </v-alert>
 
       <section v-if="step === 'project'" class="project-wizard__body" aria-label="Project details">
@@ -426,12 +426,12 @@ function apiError(response = {}) {
         />
 
         <p class="project-wizard__field-note">
-          This becomes the workspace slug and the Studio URL for the project.
+          This becomes the project slug and the Studio URL for the project.
         </p>
 
         <div v-if="projectSlugValid" class="project-wizard__derived">
           <span>
-            <small>Workspace slug</small>
+            <small>Project slug</small>
             <strong>{{ normalizedProjectSlug }}</strong>
           </span>
           <span>

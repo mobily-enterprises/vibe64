@@ -26,7 +26,7 @@ describe("Vibe64 session request config", () => {
     expect(VIBE64_SESSION_CHANGED_EVENT).toBe("vibe64.session.changed");
     expect(vibe64SessionsQueryKey("home", "public")).toEqual([
       "vibe64",
-      "workspace",
+      "project",
       "unscoped",
       "home",
       "public",
@@ -34,7 +34,7 @@ describe("Vibe64 session request config", () => {
     ]);
     expect(vibe64SessionQueryKey("home", "public")).toEqual([
       "vibe64",
-      "workspace",
+      "project",
       "unscoped",
       "home",
       "public",
@@ -42,7 +42,7 @@ describe("Vibe64 session request config", () => {
     ]);
     expect(vibe64ArtifactPreviewQueryKey("home", "public", "2026-05-16_01:two")).toEqual([
       "vibe64",
-      "workspace",
+      "project",
       "unscoped",
       "home",
       "public",
@@ -51,7 +51,7 @@ describe("Vibe64 session request config", () => {
     ]);
     expect(vibe64ArtifactPreviewQueryKey("home", "public", "2026-05-16_01:two", "issue report")).toEqual([
       "vibe64",
-      "workspace",
+      "project",
       "unscoped",
       "home",
       "public",
@@ -61,7 +61,7 @@ describe("Vibe64 session request config", () => {
     ]);
     expect(vibe64ConversationLogQueryKey("home", "public", "2026-05-16_01:two")).toEqual([
       "vibe64",
-      "workspace",
+      "project",
       "unscoped",
       "home",
       "public",
@@ -70,13 +70,13 @@ describe("Vibe64 session request config", () => {
     ]);
     expect(vibe64SessionsQueryKey("app", "public", "alpha_1")).toEqual([
       "vibe64",
-      "workspace",
+      "project",
       "alpha_1",
       "app",
       "public",
       "sessions"
     ]);
-    expect(selectedSessionStorageKey("alpha_1")).toBe("vibe64:selected-session-id:workspace:alpha_1");
+    expect(selectedSessionStorageKey("alpha_1")).toBe("vibe64:selected-session-id:project:alpha_1");
     expect(selectedSessionStorageKey("beta_2")).not.toBe(selectedSessionStorageKey("alpha_1"));
   });
 

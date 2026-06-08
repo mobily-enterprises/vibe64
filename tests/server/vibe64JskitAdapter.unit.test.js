@@ -17,9 +17,6 @@ import {
   listJskitLaunchTargets
 } from "@local/vibe64-adapters/server/adapters/jskit/index";
 import {
-  JSKIT_ALLOW_SELF_TARGET_CONFIG_PATH
-} from "@local/vibe64-adapters/server/adapters/jskit/launchTargets";
-import {
   jskitAutomatedChecksHook,
   jskitCodeIndexHook
 } from "@local/vibe64-adapters/server/adapters/jskit/adapter";
@@ -197,17 +194,21 @@ test("jskit adapter exposes explicit self-target config policy", async () => {
 
 test("jskit self-target config enables host Docker for recursive Studio launch", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    await Promise.all([
-      writeProjectFile(targetRoot, "package.json", JSON.stringify({
-        scripts: {
-          dev: "vite",
-          server: "node server.js"
-        }
-      }, null, 2)),
-      writeProjectFile(targetRoot, JSKIT_ALLOW_SELF_TARGET_CONFIG_PATH, "true\n")
-    ]);
+    await writeProjectFile(targetRoot, "package.json", JSON.stringify({
+      scripts: {
+        dev: "vite",
+        server: "node server.js"
+      }
+    }, null, 2));
 
     const spec = await createJskitLaunchTargetTerminalSpec({
+      context: {
+        config: {
+          values: {
+            [JSKIT_ALLOW_SELF_TARGET_CONFIG]: true
+          }
+        }
+      },
       launchTargetId: "dev",
       session: {
         metadata: {
@@ -221,7 +222,7 @@ test("jskit self-target config enables host Docker for recursive Studio launch",
 
     assert.equal(spec.ok, true);
     assert.equal(spec.metadata.hostDocker, true);
-    assert.equal(spec.metadata.hostDockerSource, JSKIT_ALLOW_SELF_TARGET_CONFIG_PATH);
+    assert.equal(spec.metadata.hostDockerSource, JSKIT_ALLOW_SELF_TARGET_CONFIG);
     const args = spec.args({
       id: "unit-terminal"
     });

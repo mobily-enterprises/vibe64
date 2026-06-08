@@ -96,21 +96,21 @@ import {
   studioHttpClient
 } from "@/lib/studioHttp.js";
 import {
-  useVibe64WorkspaceSlug
-} from "@/composables/useVibe64WorkspaceScope.js";
+  useVibe64ProjectSlug
+} from "@/composables/useVibe64ProjectScope.js";
 
 const emit = defineEmits(["missing", "ready", "error"]);
 
 const creating = ref(false);
 const selectingSlug = ref("");
 const newProjectName = ref("");
-const workspaceSlug = useVibe64WorkspaceSlug();
+const projectSlug = useVibe64ProjectSlug();
 
 const selectionResource = useEndpointResource({
   client: studioHttpClient,
   fallbackLoadError: "Projects could not load.",
   path: PROJECT_SELECTION_ENDPOINT,
-  queryKey: computed(() => projectSelectionQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC, workspaceSlug.value)),
+  queryKey: computed(() => projectSelectionQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC, projectSlug.value)),
   refreshOnPull: true
 });
 
@@ -167,7 +167,7 @@ const selectProjectCommand = useCommand({
   writeMethod: "POST"
 });
 
-const cachedProjectSelection = computed(() => cachedProjectSelections.get(workspaceSlug.value) || null);
+const cachedProjectSelection = computed(() => cachedProjectSelections.get(projectSlug.value) || null);
 const projectSelection = computed(() => projectSelectionView.record || cachedProjectSelection.value || {});
 const projects = computed(() => Array.isArray(projectSelection.value.projects) ? projectSelection.value.projects : []);
 const projectsRoot = computed(() => String(projectSelection.value.projectsRoot || "~/vibe64"));
@@ -222,7 +222,7 @@ async function selectProject(slug) {
 
 watch(projectSelection, (selection) => {
   if (selection && Object.keys(selection).length > 0) {
-    cachedProjectSelections.set(workspaceSlug.value, selection);
+    cachedProjectSelections.set(projectSlug.value, selection);
   }
   if (selection?.hasSelection === true) {
     emit("ready", selection);

@@ -4,9 +4,9 @@ import { useRoute, useRouter } from "vue-router";
 
 const route = useRoute();
 const router = useRouter();
-const workspaceSlug = computed(() => firstRouteParam(route.params.slug));
-const returnTo = computed(() => workspaceSlug.value
-  ? `/app/${encodeURIComponent(workspaceSlug.value)}/dashboard/configure`
+const projectSlug = computed(() => firstRouteParam(route.params.slug));
+const returnTo = computed(() => projectSlug.value
+  ? `/app/${encodeURIComponent(projectSlug.value)}/dashboard/configure`
   : "/app/manage");
 
 function firstRouteParam(value) {

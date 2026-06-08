@@ -29,28 +29,28 @@ import {
 } from "@/composables/useVibe64AppAuth.js";
 import { useStudioShellDrawer } from "@/composables/useStudioShellDrawer.js";
 import {
-  readWorkspaces
-} from "@/lib/vibe64WorkspaceApi.js";
+  readProjects
+} from "@/lib/vibe64ProjectApi.js";
 
 const router = useRouter();
 const auth = useVibe64AppAuth();
 const loading = ref(true);
 const loadError = ref("");
 const projectsRoot = ref("");
-const workspaces = ref([]);
+const projects = ref([]);
 const addProjectDialogOpen = ref(false);
 const projectAccessDialogOpen = ref(false);
-const projectAccessWorkspace = ref(null);
-const activeManagementView = ref("workspaces");
-const sortedWorkspaces = computed(() => [...workspaces.value].sort((left, right) => left.slug.localeCompare(right.slug)));
-const canManageWorkspaces = computed(() => auth?.state?.user?.owner === true || auth?.state?.user?.role === "owner");
-const emptyProjectsMessage = computed(() => canManageWorkspaces.value
+const projectAccessProject = ref(null);
+const activeManagementView = ref("projects");
+const sortedProjects = computed(() => [...projects.value].sort((left, right) => left.slug.localeCompare(right.slug)));
+const canManageProjects = computed(() => auth?.state?.user?.owner === true || auth?.state?.user?.role === "owner");
+const emptyProjectsMessage = computed(() => canManageProjects.value
   ? "No projects yet. Add a project to create the first one."
   : "No projects yet.");
 const managementViews = Object.freeze([
   {
     label: "Projects",
-    value: "workspaces"
+    value: "projects"
   },
   {
     label: "Studio setup",
@@ -71,10 +71,10 @@ useStudioShellDrawer({
 });
 
 onMounted(() => {
-  void loadWorkspaces();
+  void loadProjects();
 });
 
-async function loadWorkspaces({
+async function loadProjects({
   quiet = false
 } = {}) {
   if (!quiet) {
@@ -82,9 +82,9 @@ async function loadWorkspaces({
   }
   loadError.value = "";
   try {
-    applyWorkspaceState(await readWorkspaces());
+    applyProjectState(await readProjects());
   } catch (error) {
-    loadError.value = String(error?.message || error || "Workspaces could not load.");
+    loadError.value = String(error?.message || error || "Projects could not load.");
   } finally {
     if (!quiet) {
       loading.value = false;
@@ -92,51 +92,51 @@ async function loadWorkspaces({
   }
 }
 
-async function refreshWorkspacesAfterCreate() {
-  await loadWorkspaces({
+async function refreshProjectsAfterCreate() {
+  await loadProjects({
     quiet: true
   });
   addProjectDialogOpen.value = false;
 }
 
-function applyWorkspaceState(response = {}) {
+function applyProjectState(response = {}) {
   if (response.ok === false) {
-    loadError.value = workspaceError(response);
+    loadError.value = projectError(response);
     return;
   }
   projectsRoot.value = String(response.projectsRoot || "");
-  workspaces.value = Array.isArray(response.workspaces) ? response.workspaces : [];
+  projects.value = Array.isArray(response.projects) ? response.projects : [];
 }
 
-function workspaceError(response = {}) {
-  return String(response.errors?.[0]?.message || response.error || "Vibe64 workspace request failed.");
+function projectError(response = {}) {
+  return String(response.errors?.[0]?.message || response.error || "Vibe64 project request failed.");
 }
 
-function openWorkspace(workspace = {}) {
-  const workspaceSlug = String(workspace.slug || "").trim();
-  if (!workspaceSlug) {
+function openProject(project = {}) {
+  const projectSlug = String(project.slug || "").trim();
+  if (!projectSlug) {
     return;
   }
-  void router.push(`/app/${workspaceSlug}`);
+  void router.push(`/app/${projectSlug}`);
 }
 
-function workspaceRepositoryLabel(workspace = {}) {
-  return workspace.githubRepository?.fullName || "No GitHub repository linked";
+function projectRepositoryLabel(project = {}) {
+  return project.githubRepository?.fullName || "No GitHub repository linked";
 }
 
 function openAddProjectDialog() {
   addProjectDialogOpen.value = true;
 }
 
-function canOpenProjectAccess(workspace = {}) {
-  if (!canManageWorkspaces.value) {
+function canOpenProjectAccess(project = {}) {
+  if (!canManageProjects.value) {
     return false;
   }
-  return Boolean(workspace.githubRepository?.fullName);
+  return Boolean(project.githubRepository?.fullName);
 }
 
-function openProjectAccess(workspace = {}) {
-  projectAccessWorkspace.value = workspace;
+function openProjectAccess(project = {}) {
+  projectAccessProject.value = project;
   projectAccessDialogOpen.value = true;
 }
 
@@ -167,7 +167,7 @@ function viewPanelId(value) {
           </p>
         </div>
         <v-btn
-          v-if="activeManagementView === 'workspaces' && canManageWorkspaces"
+          v-if="activeManagementView === 'projects' && canManageProjects"
           color="primary"
           type="button"
           variant="flat"
@@ -205,7 +205,7 @@ function viewPanelId(value) {
         tabindex="0"
         :aria-labelledby="viewTabId(activeManagementView)"
       >
-        <template v-if="activeManagementView === 'workspaces'">
+        <template v-if="activeManagementView === 'projects'">
           <v-alert v-if="loadError" type="error" variant="tonal">
             {{ loadError }}
           </v-alert>
@@ -218,32 +218,32 @@ function viewPanelId(value) {
             <section class="vibe64-manage__list" aria-label="Projects">
               <div class="vibe64-manage__list-heading">
                 <h3>Projects</h3>
-                <span>{{ sortedWorkspaces.length }}</span>
+                <span>{{ sortedProjects.length }}</span>
               </div>
               <article
-                v-for="workspace in sortedWorkspaces"
-                :key="workspace.slug"
-                class="vibe64-manage__workspace"
+                v-for="project in sortedProjects"
+                :key="project.slug"
+                class="vibe64-manage__project"
               >
                 <button
-                  class="vibe64-manage__workspace-main"
+                  class="vibe64-manage__project-main"
                   type="button"
-                  @click="openWorkspace(workspace)"
+                  @click="openProject(project)"
                 >
-                  <strong>{{ workspace.slug }}</strong>
-                  <small>{{ workspace.workspaceRoot }}</small>
+                  <strong>{{ project.slug }}</strong>
+                  <small>{{ project.projectRoot }}</small>
                   <small class="vibe64-manage__repository">
                     <v-icon :icon="mdiGithub" />
-                    {{ workspaceRepositoryLabel(workspace) }}
+                    {{ projectRepositoryLabel(project) }}
                   </small>
                 </button>
                 <v-btn
-                  v-if="canOpenProjectAccess(workspace)"
+                  v-if="canOpenProjectAccess(project)"
                   class="vibe64-manage__access"
                   size="small"
                   type="button"
                   variant="text"
-                  @click="openProjectAccess(workspace)"
+                  @click="openProjectAccess(project)"
                 >
                   <v-icon :icon="mdiShieldAccountOutline" />
                   Access
@@ -253,10 +253,10 @@ function viewPanelId(value) {
                   aria-label="Open project"
                   type="button"
                   variant="text"
-                  @click="openWorkspace(workspace)"
+                  @click="openProject(project)"
                 />
               </article>
-              <p v-if="sortedWorkspaces.length === 0" class="vibe64-manage__empty">
+              <p v-if="sortedProjects.length === 0" class="vibe64-manage__empty">
                 {{ emptyProjectsMessage }}
               </p>
             </section>
@@ -285,7 +285,7 @@ function viewPanelId(value) {
         v-if="addProjectDialogOpen"
         closable
         @cancel="addProjectDialogOpen = false"
-        @created="refreshWorkspacesAfterCreate"
+        @created="refreshProjectsAfterCreate"
       />
     </v-dialog>
 
@@ -294,8 +294,8 @@ function viewPanelId(value) {
       class="vibe64-manage__project-dialog"
     >
       <Vibe64ProjectAccessPanel
-        v-if="projectAccessDialogOpen && projectAccessWorkspace"
-        :workspace="projectAccessWorkspace"
+        v-if="projectAccessDialogOpen && projectAccessProject"
+        :project="projectAccessProject"
         @close="projectAccessDialogOpen = false"
       />
     </v-dialog>
@@ -445,7 +445,7 @@ function viewPanelId(value) {
   width: 100%;
 }
 
-.vibe64-manage__workspace {
+.vibe64-manage__project {
   align-items: center;
   background: #ffffff;
   border: 1px solid rgba(15, 23, 42, 0.12);
@@ -459,12 +459,12 @@ function viewPanelId(value) {
   text-align: left;
 }
 
-.vibe64-manage__workspace:focus-within,
-.vibe64-manage__workspace:hover {
+.vibe64-manage__project:focus-within,
+.vibe64-manage__project:hover {
   border-color: rgba(var(--v-theme-primary), 0.55);
 }
 
-.vibe64-manage__workspace-main {
+.vibe64-manage__project-main {
   background: transparent;
   border: 0;
   color: inherit;
@@ -474,26 +474,26 @@ function viewPanelId(value) {
   text-align: left;
 }
 
-.vibe64-manage__workspace strong,
-.vibe64-manage__workspace small {
+.vibe64-manage__project strong,
+.vibe64-manage__project small {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.vibe64-manage__workspace strong {
+.vibe64-manage__project strong {
   font-size: 0.98rem;
   font-weight: 720;
 }
 
-.vibe64-manage__workspace .v-btn,
+.vibe64-manage__project .v-btn,
 .vibe64-manage__access {
   letter-spacing: 0;
   text-transform: none;
 }
 
-.vibe64-manage__workspace small {
+.vibe64-manage__project small {
   color: #64748b;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   font-size: 0.78rem;
@@ -523,7 +523,7 @@ function viewPanelId(value) {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .vibe64-manage__workspace {
+  .vibe64-manage__project {
     grid-template-columns: minmax(0, 1fr) auto;
   }
 

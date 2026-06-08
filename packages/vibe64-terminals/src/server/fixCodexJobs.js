@@ -160,25 +160,32 @@ async function reportFixCodexJob({
   return fixJob;
 }
 
-function helperRuntimeHostDir(targetRoot = "") {
-  return path.join(path.resolve(targetRoot), ".vibe64", "runtime");
+function helperRuntimeHostDir(stateRoot = "") {
+  const normalizedStateRoot = normalizeText(stateRoot);
+  if (!normalizedStateRoot) {
+    throw vibe64Error(
+      "Fix Codex helper requires a Vibe64 workspace state root.",
+      "vibe64_fix_codex_state_root_missing"
+    );
+  }
+  return path.join(path.resolve(normalizedStateRoot), "runtime", "fix-codex");
 }
 
-function helperSocketHostPath(targetRoot = "") {
-  return path.join(helperRuntimeHostDir(targetRoot), FIX_CODEX_HELPER_SOCKET_NAME);
+function helperSocketHostPath(stateRoot = "") {
+  return path.join(helperRuntimeHostDir(stateRoot), FIX_CODEX_HELPER_SOCKET_NAME);
 }
 
 function helperSocketContainerPath() {
   return path.posix.join(FIX_CODEX_HELPER_SOCKET_CONTAINER_DIR, FIX_CODEX_HELPER_SOCKET_NAME);
 }
 
-function helperScriptHostPath(targetRoot = "") {
-  return path.join(helperRuntimeHostDir(targetRoot), FIX_CODEX_HELPER_SCRIPT_NAME);
+function helperScriptHostPath(stateRoot = "") {
+  return path.join(helperRuntimeHostDir(stateRoot), FIX_CODEX_HELPER_SCRIPT_NAME);
 }
 
-function helperMount(targetRoot = "") {
+function helperMount(stateRoot = "") {
   return {
-    source: helperRuntimeHostDir(targetRoot),
+    source: helperRuntimeHostDir(stateRoot),
     target: FIX_CODEX_HELPER_SOCKET_CONTAINER_DIR
   };
 }
@@ -303,19 +310,19 @@ try {
 
 function helperEnvironment({
   jobId = "",
-  targetRoot = "",
+  stateRoot = "",
   token = ""
 } = {}) {
   return {
     VIBE64_FIX_CODEX_JOB_ID: normalizeText(jobId),
-    VIBE64_FIX_CODEX_REPORT_HELPER: helperScriptHostPath(targetRoot),
+    VIBE64_FIX_CODEX_REPORT_HELPER: helperScriptHostPath(stateRoot),
     VIBE64_FIX_CODEX_REPORT_SOCKET: helperSocketContainerPath(),
     VIBE64_FIX_CODEX_TOKEN: normalizeText(token)
   };
 }
 
-async function writeHelperScript(targetRoot = "") {
-  const scriptPath = helperScriptHostPath(targetRoot);
+async function writeHelperScript(stateRoot = "") {
+  const scriptPath = helperScriptHostPath(stateRoot);
   await mkdir(path.dirname(scriptPath), {
     recursive: true
   });
@@ -326,9 +333,9 @@ async function writeHelperScript(targetRoot = "") {
 
 async function ensureFixCodexHelperServer({
   fixJobStore,
-  targetRoot = ""
+  stateRoot = ""
 } = {}) {
-  const socketPath = helperSocketHostPath(targetRoot);
+  const socketPath = helperSocketHostPath(stateRoot);
   const existing = helperServers.get(socketPath);
   if (existing?.fixJobStore === fixJobStore) {
     return existing.server;
@@ -399,21 +406,21 @@ async function ensureFixCodexHelperServer({
 async function prepareFixCodexReportHelper({
   fixJobStore,
   jobId = "",
-  targetRoot = "",
+  stateRoot = "",
   token = ""
 } = {}) {
   await ensureFixCodexHelperServer({
     fixJobStore,
-    targetRoot
+    stateRoot
   });
-  await writeHelperScript(targetRoot);
+  await writeHelperScript(stateRoot);
   return {
     env: helperEnvironment({
       jobId,
-      targetRoot,
+      stateRoot,
       token
     }),
-    mount: helperMount(targetRoot)
+    mount: helperMount(stateRoot)
   };
 }
 
