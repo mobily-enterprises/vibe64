@@ -154,6 +154,7 @@ function browserUrlForListenAddress(address = "", options = {}) {
 }
 
 async function createServer(options = {}) {
+  const runtimeEnv = resolveRuntimeEnv();
   const app = Fastify({
     logger: true,
     ajv: {
@@ -162,7 +163,7 @@ async function createServer(options = {}) {
       }
     }
   });
-  if (isTruthyEnvValue(process.env[VIBE64_SKIP_STALE_TERMINAL_CLEANUP_ENV])) {
+  if (isTruthyEnvValue(runtimeEnv[VIBE64_SKIP_STALE_TERMINAL_CLEANUP_ENV])) {
     app.log.warn("Skipping stale Studio terminal cleanup for this process.");
   } else {
     await cleanupStaleStudioTerminals({
@@ -173,7 +174,7 @@ async function createServer(options = {}) {
 
   const auth = createVibe64Auth({
     dataRoot: options.authDataRoot,
-    env: process.env,
+    env: runtimeEnv,
     verifySupabaseAccessToken: options.verifySupabaseAccessToken
   });
   app.vibe64Auth = auth;
@@ -199,7 +200,6 @@ async function createServer(options = {}) {
       app: "vibe64"
     };
   });
-  const runtimeEnv = resolveRuntimeEnv();
   if (isLocalhostCheckBypassEnabled({ env: runtimeEnv })) {
     app.log.warn("Studio localhost request checks are bypassed for this process.");
   }
@@ -215,6 +215,7 @@ async function createServer(options = {}) {
     explicitTargetRoot: options.targetRoot
   });
   registerVibe64WorkspaceRoutes(app, projectContext, {
+    auth,
     dataRoot: options.authDataRoot,
     env: runtimeEnv,
     providerHomesRoot: options.providerHomesRoot,
