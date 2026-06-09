@@ -425,7 +425,7 @@ test("agent conversation prompt keeps simple conversation out of project preflig
   assert.match(rendered.prompt, /do not read repository files, list directories, or inspect artifacts first/u);
   assert.match(rendered.prompt, /finish every routed user-visible response with the Vibe64 agent result envelope/u);
   assert.match(rendered.prompt, /Write the normal user-facing response first/u);
-  assert.match(rendered.prompt, /keep the visible response text and `fields\.response` equivalent/u);
+  assert.match(rendered.prompt, /Keep the normal response text and the envelope `fields\.response` equivalent/u);
   assert.doesNotMatch(rendered.prompt, /This is an interactive conversation step/u);
   assert.doesNotMatch(rendered.prompt, /input_format\.json/u);
 });

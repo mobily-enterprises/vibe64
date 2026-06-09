@@ -42,13 +42,17 @@ function normalizeConversationTurn(turn = {}, index = 0) {
   const user = normalizeConversationMessage(turn.user);
   const assistant = normalizeConversationMessage(turn.assistant);
   const system = normalizeConversationMessage(turn.system);
-  if (!system && !user && !assistant) {
+  const thinking = Array.isArray(turn.thinking)
+    ? turn.thinking.map(normalizeConversationMessage).filter(Boolean)
+    : [];
+  if (!system && !user && !assistant && !thinking.length) {
     return null;
   }
   return {
     assistant,
-    messages: [system, user, assistant].filter(Boolean),
+    messages: [system, user, ...thinking, assistant].filter(Boolean),
     ...(system ? { system } : {}),
+    thinking,
     turnId: String(turn.turnId || index + 1).trim(),
     user
   };

@@ -72,6 +72,25 @@
         </div>
 
         <div
+          v-if="turn.thinking.length"
+          class="studio-conversation-log__thinking"
+        >
+          <div class="studio-conversation-log__thinking-label">
+            Thinking
+          </div>
+          <div
+            v-for="message in turn.thinking"
+            :key="`${message.at}:${message.text}`"
+            class="studio-conversation-log__thinking-message"
+          >
+            <LongTextPreviewBlocks
+              compact
+              :blocks="message.blocks"
+            />
+          </div>
+        </div>
+
+        <div
           v-if="turn.assistant"
           class="studio-conversation-log__message-row studio-conversation-log__message-row--assistant"
         >
@@ -285,12 +304,15 @@ const displayTurns = computed(() => (Array.isArray(props.turns) ? props.turns : 
       allowNumberedQuestions: true
     }),
     system: displayMessage(turn.system),
+    thinking: Array.isArray(turn.thinking)
+      ? turn.thinking.map((message) => displayMessage(message)).filter(Boolean)
+      : [],
     turnId: String(turn.turnId || index + 1),
     user: displayMessage(turn.user, {
       preserveParagraphLineBreaks: true
     })
   }))
-  .filter((turn) => turn.system || turn.user || turn.assistant));
+  .filter((turn) => turn.system || turn.user || turn.thinking.length || turn.assistant));
 
 function displayActivityMessage(message = {}, index = 0) {
   if (!message || typeof message !== "object" || Array.isArray(message)) {
@@ -340,6 +362,7 @@ function turnScrollKey(turn = {}) {
     turn.turnId,
     messageScrollKey(turn.system),
     messageScrollKey(turn.user),
+    turn.thinking.map(messageScrollKey).join(","),
     messageScrollKey(turn.assistant)
   ].join(":");
 }
@@ -492,6 +515,36 @@ watch(scrollTrigger, () => {
   background: rgb(var(--v-theme-surface));
   color: rgb(var(--v-theme-on-surface));
   padding: 0;
+}
+
+.studio-conversation-log__thinking {
+  color: rgba(var(--v-theme-on-surface), 0.58);
+  display: grid;
+  font-size: 0.78rem;
+  gap: 0.18rem;
+  justify-self: start;
+  line-height: 1.42;
+  margin-left: 2.15rem;
+  max-width: min(34rem, 86%);
+  min-width: 0;
+}
+
+.studio-conversation-log__thinking-label {
+  color: rgba(var(--v-theme-on-surface), 0.48);
+  font-size: 0.72rem;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.studio-conversation-log__thinking-message :deep(.studio-long-text-review__blocks) {
+  color: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.studio-conversation-log__thinking-message :deep(.studio-long-text-review__paragraph) {
+  font-size: inherit;
+  margin-block: 0;
 }
 
 .studio-conversation-log__message--activity {

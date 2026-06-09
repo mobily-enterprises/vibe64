@@ -317,6 +317,9 @@ test("vibe64 session store persists conversation turns as one file per message",
     await store.writeConversationUserMessage("conversation_log", {
       text: "What should we change?"
     });
+    await store.writeConversationThinkingMessage("conversation_log", {
+      text: "Checked the current form structure."
+    });
     await store.writeConversationAssistantMessage("conversation_log", {
       text: "Change the form layout."
     });
@@ -336,6 +339,7 @@ test("vibe64 session store persists conversation turns as one file per message",
     assert.deepEqual(turnIds.sort(), ["000001", "000002", "000003"]);
     assert.deepEqual((await readdir(path.join(paths.conversationLogRoot, "000001"))).sort(), [
       "assistant.20260516T010203456Z.md",
+      "thinking.20260516T010203456Z.md",
       "user.20260516T010203456Z.md"
     ]);
     assert.deepEqual(await store.readConversationLog("conversation_log"), [
@@ -353,8 +357,20 @@ test("vibe64 session store persists conversation turns as one file per message",
           },
           {
             at: "2026-05-16T01:02:03.456Z",
+            role: "thinking",
+            text: "Checked the current form structure."
+          },
+          {
+            at: "2026-05-16T01:02:03.456Z",
             role: "assistant",
             text: "Change the form layout."
+          }
+        ],
+        thinking: [
+          {
+            at: "2026-05-16T01:02:03.456Z",
+            role: "thinking",
+            text: "Checked the current form structure."
           }
         ],
         turnId: "000001",
@@ -373,6 +389,7 @@ test("vibe64 session store persists conversation turns as one file per message",
             text: "Keep it simple."
           }
         ],
+        thinking: [],
         turnId: "000002",
         user: {
           at: "2026-05-16T01:02:03.456Z",
@@ -394,6 +411,7 @@ test("vibe64 session store persists conversation turns as one file per message",
           role: "system",
           text: "Worktree created."
         },
+        thinking: [],
         turnId: "000003",
         user: null
       }

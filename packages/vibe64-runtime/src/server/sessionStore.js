@@ -37,7 +37,13 @@ const ACTION_ATTEMPT_FILE_PATTERN = /^(\d{6})-([A-Za-z0-9][A-Za-z0-9_-]{0,127})\
 const ARTIFACT_PATH_SEGMENT_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/u;
 const BACKGROUND_TASK_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,191}$/u;
 const COMMAND_LIFECYCLE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,191}$/u;
-const CONVERSATION_MESSAGE_FILE_PATTERN = /^(user|assistant|system)\.(\d{8}T\d{9}Z)\.md$/u;
+const CONVERSATION_MESSAGE_ROLES = deepFreeze([
+  "assistant",
+  "system",
+  "thinking",
+  "user"
+]);
+const CONVERSATION_MESSAGE_FILE_PATTERN = /^(user|assistant|system|thinking)\.(\d{8}T\d{9}Z)\.md$/u;
 const CONVERSATION_TURN_ID_PATTERN = /^\d{6}$/u;
 const METADATA_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/u;
 const SESSION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
@@ -515,7 +521,7 @@ function conversationTurnRoot(sessionPaths, turnId) {
 
 function conversationMessageFileName(role = "", date) {
   const normalizedRole = normalizeText(role);
-  if (!["assistant", "system", "user"].includes(normalizedRole)) {
+  if (!CONVERSATION_MESSAGE_ROLES.includes(normalizedRole)) {
     throw vibe64Error(`Invalid vibe64 conversation role: ${normalizedRole || "(empty)"}`, "vibe64_invalid_conversation_role");
   }
   return `${normalizedRole}.${timestampForConversationFile(date)}.md`;
@@ -960,10 +966,12 @@ function createVibe64SessionStore({
     const user = messages.find((message) => message.role === "user") || null;
     const assistant = messages.find((message) => message.role === "assistant") || null;
     const system = messages.find((message) => message.role === "system") || null;
+    const thinking = messages.filter((message) => message.role === "thinking");
     return {
       assistant,
-      messages: [system, user, assistant].filter(Boolean),
+      messages: [system, user, ...thinking, assistant].filter(Boolean),
       ...(system ? { system } : {}),
+      thinking,
       turnId,
       user
     };
@@ -991,7 +999,7 @@ function createVibe64SessionStore({
     const sessionPaths = await ensureSessionRoot(sessionId);
     const turnIds = await conversationTurnIds(sessionPaths);
     const turns = await Promise.all(turnIds.map((turnId) => readConversationTurn(sessionPaths, turnId)));
-    return turns.filter((turn) => turn.system || turn.user || turn.assistant);
+    return turns.filter((turn) => turn.system || turn.user || turn.assistant || turn.thinking.length);
   }
 
   async function writeConversationUserMessage(sessionId, {
@@ -1025,6 +1033,25 @@ function createVibe64SessionStore({
       const createdAt = now();
       await writeTextFile(
         path.join(conversationTurnRoot(sessionPaths, turnId), conversationMessageFileName("assistant", createdAt)),
+        `${messageText}\n`
+      );
+      return readConversationTurn(sessionPaths, turnId);
+    });
+  }
+
+  async function writeConversationThinkingMessage(sessionId, {
+    text = ""
+  } = {}) {
+    const messageText = normalizeText(text);
+    if (!messageText) {
+      return null;
+    }
+    return mutateSession(sessionId, async (sessionPaths) => {
+      const turnId = await latestOpenConversationTurnId(sessionPaths) ||
+        nextConversationTurnId(await conversationTurnIds(sessionPaths));
+      const createdAt = now();
+      await writeTextFile(
+        path.join(conversationTurnRoot(sessionPaths, turnId), conversationMessageFileName("thinking", createdAt)),
         `${messageText}\n`
       );
       return readConversationTurn(sessionPaths, turnId);
@@ -1541,6 +1568,7 @@ function createVibe64SessionStore({
     writeCompletedStep,
     writeConversationAssistantMessage,
     writeConversationSystemMessage,
+    writeConversationThinkingMessage,
     writeConversationUserMessage,
     writeCurrentStep,
     writeIssueWordMetadata,

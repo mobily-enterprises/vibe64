@@ -608,6 +608,7 @@ function createCodexTerminalController({
   const codexAppServerCompletedTurns = new Set();
   const codexAppServerMirroredUserItems = new Set();
   const codexAppServerAssistantTurns = new Map();
+  const codexAppServerReasoningTurns = new Map();
 
   function codexAppServerProviderForSession(sessionId = "", options = {}) {
     const normalizedSessionId = normalizeText(sessionId);
@@ -860,6 +861,74 @@ function createCodexTerminalController({
     codexAppServerAssistantTurns.delete(codexAppServerAssistantTurnKey(threadId, "*"));
   }
 
+  function codexAppServerReasoningTurnKey(threadId = "", turnId = "") {
+    return codexAppServerTurnKey(threadId, turnId || "*");
+  }
+
+  function codexAppServerReasoningTurnState(threadId = "", turnId = "") {
+    const key = codexAppServerReasoningTurnKey(threadId, turnId);
+    const existing = codexAppServerReasoningTurns.get(key);
+    if (existing) {
+      return existing;
+    }
+    const created = {
+      summaries: new Map()
+    };
+    codexAppServerReasoningTurns.set(key, created);
+    return created;
+  }
+
+  function codexAppServerReasoningSummaryKey(notification = {}) {
+    const params = codexAppServerNotificationParams(notification);
+    const item = codexAppServerNotificationItem(notification);
+    const itemId = normalizeText(params.itemId || item?.id || "summary");
+    const summaryIndex = String(params.summaryIndex ?? params.index ?? 0).trim() || "0";
+    return `${itemId}:${summaryIndex}`;
+  }
+
+  function recordCodexAppServerReasoningNotification(threadId = "", notification = {}) {
+    const method = normalizeText(notification.method);
+    if (method !== "item/reasoning/summaryPartAdded" && method !== "item/reasoning/summaryTextDelta") {
+      return;
+    }
+    const normalizedThreadId = normalizeText(threadId);
+    const turnId = codexAppServerNotificationTurnId(notification);
+    if (!normalizedThreadId) {
+      return;
+    }
+    const state = codexAppServerReasoningTurnState(normalizedThreadId, turnId);
+    const summaryKey = codexAppServerReasoningSummaryKey(notification);
+    const summary = state.summaries.get(summaryKey) || {
+      chunks: []
+    };
+    if (method === "item/reasoning/summaryTextDelta") {
+      const params = codexAppServerNotificationParams(notification);
+      const delta = codexAppServerContentText(params.delta || params.text);
+      if (delta) {
+        summary.chunks.push(delta);
+      }
+    }
+    state.summaries.set(summaryKey, summary);
+  }
+
+  function readCodexAppServerReasoningText(threadId = "", turnId = "") {
+    const state = codexAppServerReasoningTurns.get(codexAppServerReasoningTurnKey(threadId, turnId)) ||
+      codexAppServerReasoningTurns.get(codexAppServerReasoningTurnKey(threadId, "*"));
+    if (!state) {
+      return "";
+    }
+    return [...state.summaries.values()]
+      .map((summary) => summary.chunks.join("").trim())
+      .filter(Boolean)
+      .join("\n\n")
+      .trim();
+  }
+
+  function cleanupCodexAppServerReasoningTurn(threadId = "", turnId = "") {
+    codexAppServerReasoningTurns.delete(codexAppServerReasoningTurnKey(threadId, turnId));
+    codexAppServerReasoningTurns.delete(codexAppServerReasoningTurnKey(threadId, "*"));
+  }
+
   function codexAppServerUserMessageIsVibe64Routed(text = "") {
     const message = normalizeText(text);
     return message.includes("VIBE64_ROUTED_TURN: yes") ||
@@ -936,11 +1005,23 @@ function createCodexTerminalController({
   async function submitCodexAppServerAssistantResult(sessionId = "", threadId = "", turnId = "") {
     const normalizedSessionId = normalizeText(sessionId);
     const assistantText = readCodexAppServerAssistantText(threadId, turnId);
-    if (!normalizedSessionId || !assistantText) {
+    const reasoningText = readCodexAppServerReasoningText(threadId, turnId);
+    if (!normalizedSessionId || !assistantText && !reasoningText) {
       return;
     }
     try {
       const runtime = await projectService.createRuntime();
+      if (reasoningText) {
+        await runtime.store.writeConversationThinkingMessage(normalizedSessionId, {
+          text: reasoningText
+        });
+        await publishSessionChanged(normalizedSessionId, {
+          reason: "codex-app-server-reasoning-summary"
+        });
+      }
+      if (!assistantText) {
+        return;
+      }
       const session = await runtime.getSession(normalizedSessionId);
       if (!codexAppServerSessionIsWaitingForAgent(session)) {
         const visibleText = stripAgentTurnResultEnvelope(assistantText);
@@ -1005,6 +1086,7 @@ function createCodexTerminalController({
       });
     } finally {
       cleanupCodexAppServerAssistantTurn(threadId, turnId);
+      cleanupCodexAppServerReasoningTurn(threadId, turnId);
     }
   }
 
@@ -1122,6 +1204,7 @@ function createCodexTerminalController({
       if (notificationThreadId && notificationThreadId !== normalizedThreadId) {
         return;
       }
+      recordCodexAppServerReasoningNotification(normalizedThreadId, notification);
       recordCodexAppServerAssistantNotification(normalizedThreadId, notification);
       if (method === "item/started" || method === "item/completed") {
         const item = codexAppServerNotificationItem(notification);

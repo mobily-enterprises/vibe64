@@ -15,6 +15,13 @@ describe("useVibe64ConversationLog", () => {
             role: "assistant",
             text: "Done."
           },
+          thinking: [
+            {
+              at: "2026-05-25T01:02:30.000Z",
+              role: "thinking",
+              text: "Checked the current form state."
+            }
+          ],
           turnId: "000001",
           user: {
             at: "2026-05-25T01:02:00.000Z",
@@ -45,9 +52,21 @@ describe("useVibe64ConversationLog", () => {
             text: "Please check this."
           },
           {
+            at: "2026-05-25T01:02:30.000Z",
+            role: "thinking",
+            text: "Checked the current form state."
+          },
+          {
             at: "2026-05-25T01:03:00.000Z",
             role: "assistant",
             text: "Done."
+          }
+        ],
+        thinking: [
+          {
+            at: "2026-05-25T01:02:30.000Z",
+            role: "thinking",
+            text: "Checked the current form state."
           }
         ],
         turnId: "000001",
@@ -124,6 +143,7 @@ describe("useVibe64ConversationLog", () => {
             text: "Make the file name lower case."
           }
         ],
+        thinking: [],
         turnId: "000001",
         user: {
           at: "",
@@ -160,6 +180,7 @@ describe("useVibe64ConversationLog", () => {
           role: "system",
           text: "Worktree created."
         },
+        thinking: [],
         turnId: "000001",
         user: null
       }
