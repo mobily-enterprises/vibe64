@@ -62,6 +62,7 @@ const MODULE_APP_ROOT = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_PORT_SEARCH_LIMIT = 50;
 const DEFAULT_SOCKET_FILE_NAME = "server.sock";
 const DEFAULT_SHUTDOWN_TIMEOUT_MS = 8000;
+const SOCKET_IO_PATH = "/socket.io";
 const STATIC_GLOBAL_UI_PATHS = Object.freeze([
   "/assets",
   "/favicon.svg",
@@ -86,6 +87,23 @@ function toRequestPathname(urlValue) {
 
 function isApiPath(pathname) {
   return matchesPathPrefix(pathname, API_BASE_PATH);
+}
+
+function isSocketIoPath(pathname) {
+  return normalizePathname(pathname) === SOCKET_IO_PATH;
+}
+
+function registerSocketIoUpgradeHandoff(app) {
+  app.addHook("onRequest", async (request, reply) => {
+    if (request?.ws !== true) {
+      return;
+    }
+    if (!isSocketIoPath(toRequestPathname(request?.raw?.url || request?.url))) {
+      return;
+    }
+
+    reply.hijack();
+  });
 }
 
 function hasFileExtension(pathname) {
@@ -372,6 +390,7 @@ async function createServer(options = {}) {
     });
   }
   await app.register(fastifyWebsocket);
+  registerSocketIoUpgradeHandoff(app);
 
   const accountService = createVibe64AccountsService({
     dataRoot: options.authDataRoot,
