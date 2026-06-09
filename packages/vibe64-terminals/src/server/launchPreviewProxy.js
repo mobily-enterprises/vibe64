@@ -447,6 +447,21 @@ async function proxyPreviewRequest(request, response, {
     return;
   }
   try {
+    if (isPreviewSessionRequest(request, requestUrl)) {
+      response.writeHead(200, {
+        "Cache-Control": "no-store",
+        "Connection": "close",
+        "Content-Type": "application/json; charset=utf-8",
+        "Set-Cookie": previewTokenCookie(token, { proxyOrigin })
+      });
+      response.end(JSON.stringify(previewSessionPayload()));
+      previewProxyDebugLog("server.launchPreviewProxy.request.previewSession", {
+        ...requestDetails,
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+        responseStatus: 200
+      });
+      return;
+    }
     const targetUrl = targetRequestUrl(request.url, targetOrigin);
     const method = String(request.method || "GET").toUpperCase();
     const fetchOptions = {
@@ -531,6 +546,22 @@ async function proxyPreviewRequest(request, response, {
       error: vibe64SessionDebugError(error)
     });
   }
+}
+
+function isPreviewSessionRequest(request, requestUrl) {
+  return String(request?.method || "GET").toUpperCase() === "GET" && requestUrl.pathname === "/api/session";
+}
+
+function previewSessionPayload() {
+  return {
+    authenticated: true,
+    username: "Vibe64 Preview",
+    email: "preview@vibe64.local",
+    permissions: [],
+    csrfToken: "",
+    oauthProviders: [],
+    oauthDefaultProvider: null
+  };
 }
 
 function proxyPreviewUpgrade(request, socket, head, {

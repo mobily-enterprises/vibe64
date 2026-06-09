@@ -215,6 +215,28 @@ test("launch preview proxy scopes tokens by project, session, and terminal", asy
   });
 });
 
+test("launch preview proxy authenticates JSKIT session probes with a valid preview token", async () => {
+  await withTargetServer(async (target) => {
+    const registry = createLaunchPreviewProxyRegistry();
+    try {
+      const preview = await registry.ensure({
+        sessionId: "session-auth-probe",
+        targetHref: `${target.origin}/home`,
+        terminalSessionId: "terminal-auth-probe"
+      });
+
+      const response = await fetch(previewPath(preview.href, "/api/session"));
+      assert.equal(response.status, 200);
+      const payload = await response.json();
+      assert.equal(payload.authenticated, true);
+      assert.equal(payload.username, "Vibe64 Preview");
+      assert.deepEqual(payload.permissions, []);
+    } finally {
+      await registry.closeAll();
+    }
+  });
+});
+
 test("launch preview proxy forwards tokenized WebSocket upgrades without leaking token material", async () => {
   await withWebSocketTargetServer(async (target) => {
     const registry = createLaunchPreviewProxyRegistry();
