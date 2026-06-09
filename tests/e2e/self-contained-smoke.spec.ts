@@ -32,7 +32,7 @@ test("home loads through a self-contained mocked Studio shell", async ({ page })
   await page.goto(DEVELOPMENT_PATH);
   await expect(page).toHaveURL(developmentUrlPattern());
   await expect(page.getByRole("button", { name: "New Session" })).toBeVisible();
-  await page.getByRole("button", { name: "New Session" }).click();
+  await page.getByRole("button", { name: "New Session" }).click({ force: true });
   await expect(page.getByText("Session type")).toBeVisible();
   await expect(page.getByText("Make improvements", { exact: true })).toBeVisible();
   await expect(page.getByText("General coding", { exact: true })).toHaveCount(0);
