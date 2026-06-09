@@ -318,12 +318,11 @@ test.describe("studio startup navigation", () => {
     await expect(page.getByRole("heading", { name: "Preparing your project", exact: true })).toBeVisible();
   });
 
-  test("ready continue moves from Project Setup to home", async ({ page }) => {
+  test("ready Project Setup does not show a continue button", async ({ page }) => {
     await mockStudioReady(page);
     await page.goto(`${BASE_URL}/home/dashboard/setup?tab=project-setup`);
-    await page.getByRole("link", { name: "Continue to home" }).click();
-    await expect(page).toHaveURL(/\/home$/u);
-    await expectSessionsRoute(page);
+    await expect(page.getByRole("link", { name: /^Continue to/u })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^Continue to/u })).toHaveCount(0);
   });
 
   test("removed setup routes stay unsupported", async ({ page }) => {

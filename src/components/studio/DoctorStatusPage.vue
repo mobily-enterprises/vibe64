@@ -248,6 +248,10 @@ const props = defineProps({
     type: Boolean,
     default: false
   },
+  showContinue: {
+    type: Boolean,
+    default: true
+  },
   doctorClass: {
     type: String,
     default: ""
@@ -375,7 +379,7 @@ const ready = computed(() => {
 });
 
 const showContinue = computed(() => {
-  return Boolean(props.continueTo) || props.continueEmits;
+  return props.showContinue && (Boolean(props.continueTo) || props.continueEmits);
 });
 
 function handleContinue() {
