@@ -878,8 +878,10 @@ function normalizePreviewAuth(value = {}, {
   }
   return {
     kind,
+    profilePath: String(value.profilePath || ""),
     projectScope: String(value.projectScope || ""),
     sessionId: String(value.sessionId || ""),
+    sessionRoot: String(value.sessionRoot || ""),
     targetHref: String(value.targetHref || targetHref || ""),
     targetRoot: String(value.targetRoot || ""),
     terminalSessionId: String(value.terminalSessionId || "")
@@ -892,8 +894,10 @@ function previewAuthFingerprint(value = null) {
   }
   return JSON.stringify([
     value.kind,
+    value.profilePath,
     value.projectScope,
     value.sessionId,
+    value.sessionRoot,
     value.targetHref,
     value.targetRoot,
     value.terminalSessionId

@@ -19,7 +19,8 @@ import {
   normalizeHostName
 } from "@local/vibe64-core/server/localStudioRequest";
 import {
-  normalizePreviewAuthKind
+  normalizePreviewAuthKind,
+  previewAuthProfilePath
 } from "@local/vibe64-core/server/previewAuth";
 import {
   commandInvocation,
@@ -215,7 +216,14 @@ function previewAuthForLaunchTerminal(terminal = {}, {
   }
   return {
     kind,
+    profilePath: previewAuthProfilePath({
+      sessionRoot: metadata.sessionRoot,
+      targetRoot: metadata.targetRoot || metadata.runRoot || "",
+      sessionId,
+      terminalSessionId: terminal.id
+    }),
     sessionId,
+    sessionRoot: String(metadata.sessionRoot || ""),
     targetHref,
     targetRoot: String(metadata.targetRoot || metadata.runRoot || ""),
     terminalSessionId: String(terminal.id || "")

@@ -392,6 +392,7 @@ test("jskit built launch waits for the server readiness marker before opening", 
     });
     assert.ok(args.includes("AUTH_DEV_BYPASS_ENABLED=true"));
     assert.ok(args.some((arg) => /^AUTH_DEV_BYPASS_SECRET=[a-f0-9]{64}$/u.test(arg)));
+    assert.ok(args.some((arg) => /^VIBE64_PREVIEW_AUTH_PROFILE_FILE=.+\/profile\.json$/u.test(arg)));
     assert.ok(args.includes("AUTH_DEV_ACCESS_TTL_SECONDS=3600"));
     assert.ok(args.includes("AUTH_DEV_REFRESH_TTL_SECONDS=43200"));
     assert.doesNotMatch(spec.commandPreview({ args }), /AUTH_DEV_BYPASS_SECRET=[a-f0-9]{64}/u);
@@ -399,12 +400,15 @@ test("jskit built launch waits for the server readiness marker before opening", 
     const startupScript = args.at(-1);
     const buildIndex = startupScript.indexOf("npm run build");
     const migrateIndex = startupScript.indexOf("npm run db:migrate");
+    const previewAuthIndex = startupScript.indexOf("Preparing preview auth user");
     const serverIndex = startupScript.indexOf("npm run server");
     assert.notEqual(buildIndex, -1);
     assert.notEqual(migrateIndex, -1);
+    assert.notEqual(previewAuthIndex, -1);
     assert.notEqual(serverIndex, -1);
     assert.ok(buildIndex < migrateIndex);
-    assert.ok(migrateIndex < serverIndex);
+    assert.ok(migrateIndex < previewAuthIndex);
+    assert.ok(previewAuthIndex < serverIndex);
     assert.match(startupScript, /action:%s/u);
     assert.match(startupScript, /VIBE64_LAUNCH_READY_V1/u);
   });
@@ -447,6 +451,7 @@ test("jskit dev launch starts backend and Vite together", async () => {
     });
     assert.ok(args.includes("AUTH_DEV_BYPASS_ENABLED=true"));
     assert.ok(args.some((arg) => /^AUTH_DEV_BYPASS_SECRET=[a-f0-9]{64}$/u.test(arg)));
+    assert.ok(args.some((arg) => /^VIBE64_PREVIEW_AUTH_PROFILE_FILE=.+\/profile\.json$/u.test(arg)));
     assert.ok(args.includes("AUTH_DEV_ACCESS_TTL_SECONDS=3600"));
     assert.ok(args.includes("AUTH_DEV_REFRESH_TTL_SECONDS=43200"));
     assert.doesNotMatch(spec.commandPreview({ args }), /AUTH_DEV_BYPASS_SECRET=[a-f0-9]{64}/u);
@@ -454,10 +459,13 @@ test("jskit dev launch starts backend and Vite together", async () => {
     const startupScript = args.at(-1);
     assert.match(startupScript, /VIBE64_JSKIT_BACKEND_PORT=\\?"?3000/u);
     const migrateIndex = startupScript.indexOf("npm run db:migrate");
+    const previewAuthIndex = startupScript.indexOf("Preparing preview auth user");
     const serverIndex = startupScript.indexOf("npm run server");
     assert.notEqual(migrateIndex, -1);
+    assert.notEqual(previewAuthIndex, -1);
     assert.notEqual(serverIndex, -1);
-    assert.ok(migrateIndex < serverIndex);
+    assert.ok(migrateIndex < previewAuthIndex);
+    assert.ok(previewAuthIndex < serverIndex);
     assert.match(startupScript, /VITE_API_PROXY_TARGET="http:\/\/127\.0\.0\.1:\$VIBE64_JSKIT_BACKEND_PORT"/u);
     assert.match(startupScript, /npm run dev -- --host 0\.0\.0\.0 --port "\$PORT"/u);
     assert.match(startupScript, /VIBE64_LAUNCH_READY_V1/u);

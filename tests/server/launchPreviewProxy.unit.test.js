@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { request as httpRequest } from "node:http";
 import os from "node:os";
@@ -216,12 +216,23 @@ test("launch preview proxy scopes tokens by project, session, and terminal", asy
 });
 
 test("launch preview proxy injects JSKIT preview auth cookies after token validation", async () => {
+  const profileRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-auth-profile-"));
+  const profilePath = path.join(profileRoot, "profile.json");
+  await writeFile(profilePath, JSON.stringify({
+    authProvider: "vibe64-preview",
+    authProviderUserSid: "vibe64-preview",
+    displayName: "Preview Tester",
+    email: "preview-tester@example.test",
+    id: "42",
+    username: "preview-tester"
+  }), "utf8");
   await withTargetServer(async (target) => {
     const registry = createLaunchPreviewProxyRegistry();
     try {
       const preview = await registry.ensure({
         previewAuth: {
           kind: "jskit-dev",
+          profilePath,
           sessionId: "session-auth-probe",
           targetHref: `${target.origin}/home`,
           targetRoot: "/tmp/vibe64-preview-project",
@@ -243,8 +254,23 @@ test("launch preview proxy injects JSKIT preview auth cookies after token valida
       assert.match(payload.cookie, /sb_access_token=jskit-dev\./u);
       assert.match(payload.cookie, /sb_refresh_token=jskit-dev\./u);
       assert.doesNotMatch(payload.cookie, /vibe64_preview_token/u);
+      assert.deepEqual(jskitDevCookiePayload(payload.cookie), {
+        aud: "authenticated",
+        authProvider: "vibe64-preview",
+        authProviderUserSid: "vibe64-preview",
+        displayName: "Preview Tester",
+        email: "preview-tester@example.test",
+        iss: "jskit:dev-auth",
+        kind: "access",
+        sub: "42",
+        username: "preview-tester"
+      });
     } finally {
       await registry.closeAll();
+      await rm(profileRoot, {
+        force: true,
+        recursive: true
+      });
     }
   });
 });
@@ -519,6 +545,20 @@ function previewCookiePair(setCookieHeader = "", cookieName = "") {
   const match = new RegExp(`(?:^|,\\s*)(${cookieName}=[^;,]+)`, "u").exec(String(setCookieHeader || ""));
   assert.ok(match, `Expected preview cookie ${cookieName}.`);
   return match[1];
+}
+
+function cookieValue(cookieHeader = "", cookieName = "") {
+  const match = new RegExp(`(?:^|;\\s*)${cookieName}=([^;]+)`, "u").exec(String(cookieHeader || ""));
+  assert.ok(match, `Expected cookie ${cookieName}.`);
+  return decodeURIComponent(match[1]);
+}
+
+function jskitDevCookiePayload(cookieHeader = "") {
+  const token = cookieValue(cookieHeader, "sb_access_token").replace(/^jskit-dev\./u, "");
+  const payload = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString("utf8"));
+  delete payload.exp;
+  delete payload.iat;
+  return payload;
 }
 
 function connectWebSocket(href = "", options = {}) {

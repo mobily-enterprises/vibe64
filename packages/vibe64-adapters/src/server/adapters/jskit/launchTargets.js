@@ -5,8 +5,12 @@ import {
   sessionWorktreePath
 } from "@local/vibe64-core/server/sessionWorktreePath";
 import {
-  JSKIT_PREVIEW_AUTH_KIND
+  JSKIT_PREVIEW_AUTH_KIND,
+  PREVIEW_AUTH_PROFILE
 } from "@local/vibe64-core/server/previewAuth";
+import {
+  shellQuote
+} from "@local/studio-terminal-core/server/shellCommands";
 
 import {
   createVibe64WebLaunchTargetTerminalSpec,
@@ -33,6 +37,116 @@ const BUILT_LAUNCH_COMMAND_CONFIG = ".jskit/config/testrun_command";
 const BUILT_LAUNCH_PORT_CONFIG = ".jskit/config/server_port_for_user_review";
 const DEV_SERVER_COMMAND_CONFIG = "config/dev_server_command";
 const MIGRATION_SCRIPT_NAME = "db:migrate";
+
+function createJskitPreviewAuthProfileCommand() {
+  const script = `
+const profileFile = String(process.env.VIBE64_PREVIEW_AUTH_PROFILE_FILE || "").trim();
+const profile = ${JSON.stringify(PREVIEW_AUTH_PROFILE)};
+
+function isDuplicateError(error) {
+  return ["23505", "ER_DUP_ENTRY", "SQLITE_CONSTRAINT", "SQLITE_CONSTRAINT_UNIQUE"].includes(String(error?.code || "")) ||
+    Number(error?.errno) === 1062;
+}
+
+async function main() {
+  if (!profileFile) {
+    return;
+  }
+  const fs = await import("node:fs/promises");
+  const path = await import("node:path");
+  const { pathToFileURL } = await import("node:url");
+  const knexfilePath = path.resolve(process.cwd(), "knexfile.js");
+  try {
+    await fs.access(knexfilePath);
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      console.log("[studio] Preview auth profile skipped: knexfile.js was not found.");
+      return;
+    }
+    throw error;
+  }
+  const [{ default: createKnex }, knexfileModule] = await Promise.all([
+    import("knex"),
+    import(pathToFileURL(knexfilePath).href)
+  ]);
+  const knexfile = knexfileModule.default || knexfileModule;
+  const environment = String(process.env.NODE_ENV || "development");
+  const knexConfig = knexfile[environment] || knexfile;
+  const db = createKnex(knexConfig);
+  try {
+    const hasUsersTable = await db.schema.hasTable("users");
+    if (!hasUsersTable) {
+      console.log("[studio] Preview auth profile skipped: users table was not found.");
+      return;
+    }
+    const record = {
+      auth_provider: profile.authProvider,
+      auth_provider_user_sid: profile.authProviderUserSid,
+      email: profile.email,
+      username: profile.username,
+      display_name: profile.displayName
+    };
+    const findByIdentity = () => db("users")
+      .where({
+        auth_provider: record.auth_provider,
+        auth_provider_user_sid: record.auth_provider_user_sid
+      })
+      .first();
+    let user = await findByIdentity();
+    if (!user) {
+      try {
+        await db("users").insert(record);
+      } catch (error) {
+        if (!isDuplicateError(error)) {
+          throw error;
+        }
+      }
+      user = await findByIdentity();
+    }
+    if (!user) {
+      user = await db("users")
+        .where({ email: record.email })
+        .orWhere({ username: record.username })
+        .first();
+      if (!user) {
+        throw new Error("Preview auth profile could not be inserted or found.");
+      }
+    }
+    await db("users")
+      .where({ id: user.id })
+      .update(record);
+    user = await db("users")
+      .where({ id: user.id })
+      .first();
+    await fs.mkdir(path.dirname(profileFile), {
+      recursive: true
+    });
+    await fs.writeFile(profileFile, JSON.stringify({
+      authProvider: record.auth_provider,
+      authProviderUserSid: record.auth_provider_user_sid,
+      displayName: record.display_name,
+      email: record.email,
+      id: String(user.id || ""),
+      username: record.username
+    }, null, 2) + "\\n", "utf8");
+    console.log(\`[studio] Preview auth user is ready: \${record.email} (\${user.id}).\`);
+  } finally {
+    await db.destroy();
+  }
+}
+
+main().catch((error) => {
+  console.error(\`[studio] Preview auth profile failed: \${String(error?.message || error)}\`);
+  process.exit(1);
+});
+`.trim();
+  return [
+    "node",
+    "--input-type=module",
+    "-e",
+    shellQuote(script)
+  ].join(" ");
+}
 
 async function readOptionalConfigFile(root, relativePath, fallback = "") {
   try {
@@ -180,7 +294,8 @@ function createJskitDevCommand({
   backendCommand = DEFAULT_DEV_BACKEND_COMMAND,
   backendPort = DEFAULT_DEV_BACKEND_PORT,
   frontendCommand = DEFAULT_DEV_FRONTEND_COMMAND,
-  migrationCommand = ""
+  migrationCommand = "",
+  previewAuthProfileCommand = createJskitPreviewAuthProfileCommand()
 } = {}) {
   return [
     "set -e",
@@ -191,6 +306,8 @@ function createJskitDevCommand({
           migrationCommand
         ]
       : []),
+    "printf '\\n[studio] Preparing preview auth user.\\n'",
+    previewAuthProfileCommand,
     "cleanup_vibe64_jskit_dev() {",
     "  kill \"$vibe64_jskit_backend_pid\" \"$vibe64_jskit_frontend_pid\" 2>/dev/null || true",
     "}",
@@ -261,6 +378,11 @@ async function createJskitBuiltLaunchDescriptor({
         networkEnv: true
       }
     : null;
+  const previewAuthProfileCommand = {
+    command: createJskitPreviewAuthProfileCommand(),
+    label: "Preparing preview auth user.",
+    networkEnv: true
+  };
 
   return {
     commands: config.buildCommand || config.serverCommand
@@ -273,6 +395,7 @@ async function createJskitBuiltLaunchDescriptor({
               }
             : null,
           migrationCommand,
+          previewAuthProfileCommand,
           config.serverCommand
             ? {
                 command: config.serverCommand,
@@ -283,6 +406,7 @@ async function createJskitBuiltLaunchDescriptor({
         ].filter(Boolean)
       : [
           migrationCommand,
+          previewAuthProfileCommand,
           {
             command: config.testrunCommand,
             label: "Starting JSKIT built app.",
@@ -297,6 +421,7 @@ async function createJskitBuiltLaunchDescriptor({
       hostDocker: config.hostDocker,
       hostDockerSource: config.hostDockerSource,
       migrationCommand: config.migrationCommand,
+      previewAuthProfileCommand: "enabled",
       serverCommand: config.serverCommand,
       testrunCommand: config.testrunCommand
     },
@@ -315,7 +440,8 @@ async function createJskitDevLaunchDescriptor({
       backendCommand: config.backendCommand,
       backendPort: config.backendPort,
       frontendCommand: config.frontendCommand,
-      migrationCommand: config.migrationCommand
+      migrationCommand: config.migrationCommand,
+      previewAuthProfileCommand: createJskitPreviewAuthProfileCommand()
     }),
     hostDocker: config.hostDocker,
     metadata: {
@@ -327,7 +453,8 @@ async function createJskitDevLaunchDescriptor({
       hostDocker: config.hostDocker,
       hostDockerSource: config.hostDockerSource,
       migrationCommand: config.migrationCommand,
-      mode: "dev"
+      mode: "dev",
+      previewAuthProfileCommand: "enabled"
     },
     previewAuth: JSKIT_PREVIEW_AUTH_KIND,
     urlPath: await defaultAppPath(worktreePath)

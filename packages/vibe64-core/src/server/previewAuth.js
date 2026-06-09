@@ -1,4 +1,6 @@
 import crypto from "node:crypto";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 
 const JSKIT_PREVIEW_AUTH_KIND = "jskit-dev";
 const JSKIT_DEV_AUTH_TOKEN_PREFIX = "jskit-dev.";
@@ -73,6 +75,7 @@ function previewAuthEnvironment({
 
 function previewAuthCookieHeader({
   kind = "",
+  profilePath = "",
   projectScope = "",
   sessionId = "",
   targetHref = "",
@@ -90,7 +93,7 @@ function previewAuthCookieHeader({
     terminalSessionId
   });
   const session = createJskitDevAuthSession({
-    profile: PREVIEW_AUTH_PROFILE,
+    profile: readPreviewAuthProfile(profilePath) || PREVIEW_AUTH_PROFILE,
     secret
   });
   return [
@@ -152,10 +155,73 @@ function base64urlJson(value) {
   return Buffer.from(JSON.stringify(value)).toString("base64url");
 }
 
+function previewAuthProfilePath({
+  sessionRoot = "",
+  targetRoot = "",
+  sessionId = "",
+  terminalSessionId = ""
+} = {}) {
+  const normalizedTerminalSessionId = String(terminalSessionId || "").trim();
+  if (!normalizedTerminalSessionId) {
+    return "";
+  }
+  const normalizedSessionRoot = String(sessionRoot || "").trim();
+  const normalizedTargetRoot = String(targetRoot || "").trim();
+  const normalizedSessionId = String(sessionId || "").trim();
+  const root = normalizedSessionRoot || (normalizedTargetRoot && normalizedSessionId
+    ? path.join(normalizedTargetRoot, ".vibe64", "sessions", "active", normalizedSessionId)
+    : "");
+  if (!root) {
+    return "";
+  }
+  return path.join(root, "runtime", "preview-auth", normalizedTerminalSessionId, "profile.json");
+}
+
+function readPreviewAuthProfile(profilePath = "") {
+  const normalizedPath = String(profilePath || "").trim();
+  if (!normalizedPath) {
+    return null;
+  }
+  let payload;
+  try {
+    payload = JSON.parse(readFileSync(normalizedPath, "utf8"));
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return null;
+    }
+    throw new Error(`Cannot read preview auth profile: ${String(error?.message || error)}`);
+  }
+  return normalizePreviewAuthProfile(payload);
+}
+
+function normalizePreviewAuthProfile(value = {}) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Preview auth profile must be an object.");
+  }
+  const profile = {
+    id: String(value.id || "").trim(),
+    email: String(value.email || "").trim().toLowerCase(),
+    username: String(value.username || PREVIEW_AUTH_PROFILE.username).trim().toLowerCase(),
+    displayName: String(value.displayName || value.display_name || PREVIEW_AUTH_PROFILE.displayName).trim(),
+    authProvider: String(value.authProvider || value.auth_provider || PREVIEW_AUTH_PROFILE.authProvider).trim().toLowerCase(),
+    authProviderUserSid: String(
+      value.authProviderUserSid ||
+      value.auth_provider_user_sid ||
+      PREVIEW_AUTH_PROFILE.authProviderUserSid
+    ).trim()
+  };
+  if (!profile.id || !profile.email) {
+    throw new Error("Preview auth profile requires id and email.");
+  }
+  return profile;
+}
+
 export {
   JSKIT_PREVIEW_AUTH_KIND,
+  PREVIEW_AUTH_PROFILE,
   normalizePreviewAuthKind,
   previewAuthCookieHeader,
   previewAuthEnvironment,
+  previewAuthProfilePath,
   previewAuthSecret
 };

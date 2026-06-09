@@ -26,7 +26,8 @@ import {
 } from "@local/vibe64-core/server/core";
 import {
   normalizePreviewAuthKind,
-  previewAuthEnvironment
+  previewAuthEnvironment,
+  previewAuthProfilePath
 } from "@local/vibe64-core/server/previewAuth";
 import {
   sessionWorktreePath
@@ -319,6 +320,7 @@ function hostDockerArgs(enabled = false) {
 
 function previewAuthDockerArgs({
   kind = "",
+  profilePath = "",
   projectScope = "",
   sessionId = "",
   targetHref = "",
@@ -333,7 +335,11 @@ function previewAuthDockerArgs({
     targetRoot,
     terminalSessionId
   });
-  return Object.entries(env).flatMap(([name, value]) => [
+  const entries = Object.entries(env);
+  if (entries.length > 0 && profilePath) {
+    entries.push(["VIBE64_PREVIEW_AUTH_PROFILE_FILE", profilePath]);
+  }
+  return entries.flatMap(([name, value]) => [
     "-e",
     `${name}=${value}`
   ]);
@@ -522,6 +528,7 @@ async function createVibe64WebLaunchTargetTerminalSpec({
     runRoot: workdir,
     scope: "session",
     sessionId: session.sessionId || "",
+    sessionRoot: String(session.sessionRoot || ""),
     targetRoot: resolvedTargetRoot,
     targetUrl,
     urlPath,
@@ -540,6 +547,12 @@ async function createVibe64WebLaunchTargetTerminalSpec({
         ...extraDockerArgs,
         ...previewAuthDockerArgs({
           kind: previewAuthKind,
+          profilePath: previewAuthProfilePath({
+            sessionRoot: session.sessionRoot || "",
+            targetRoot: resolvedTargetRoot,
+            sessionId: session.sessionId || "",
+            terminalSessionId: id
+          }),
           projectScope: launch.projectScope,
           sessionId: session.sessionId || "",
           targetHref: targetUrl,
