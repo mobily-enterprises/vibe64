@@ -90,6 +90,7 @@ import {
 } from "@local/vibe64-adapters/server/adapters/laravel/toolchainIdentity";
 import {
   STUDIO_BASE_TOOLCHAIN_IMAGE,
+  STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS,
   STUDIO_PLAYWRIGHT_BROWSERS_PATH,
   STUDIO_PLAYWRIGHT_BROWSERS_VOLUME,
   STUDIO_TOOL_HOME_BIN_PATH,
@@ -275,6 +276,10 @@ test("Vibe64 Codex terminal joins the target runtime network before the image", 
     worktree: "/workspace/project/.vibe64/sessions/active/unit/worktree"
   });
 
+  assert.deepEqual(args.slice(0, 1 + STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS.length), [
+    "run",
+    ...STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS
+  ]);
   assertPlaywrightBrowserCache(args);
   const networkIndex = args.indexOf("--network");
   assert.notEqual(networkIndex, -1);
@@ -1109,8 +1114,7 @@ test("Vibe64 terminals use declared adapter toolchain images", async () => {
         async getTerminalToolchainSpec() {
           return {
             image: "adapter-toolchain:1.0.0",
-            label: "Adapter toolchain",
-            setupActionLabel: "Build adapter toolchain"
+            label: "Adapter toolchain"
           };
         }
       },
@@ -1131,8 +1135,7 @@ test("Vibe64 terminals fail clearly when a declared adapter image is missing", a
         async getTerminalToolchainSpec() {
           return {
             image: "missing-adapter-toolchain:1.0.0",
-            label: "Missing adapter toolchain",
-            setupActionLabel: "Build missing adapter toolchain"
+            label: "Missing adapter toolchain"
           };
         }
       },
@@ -1143,7 +1146,7 @@ test("Vibe64 terminals fail clearly when a declared adapter image is missing", a
   assert.equal(result.ok, false);
   assert.equal(result.image, "missing-adapter-toolchain:1.0.0");
   assert.match(result.error, /Missing adapter toolchain image missing-adapter-toolchain:1\.0\.0 is missing/u);
-  assert.match(result.error, /Build missing adapter toolchain/u);
+  assert.match(result.error, /host was not provisioned/u);
 });
 
 test("adapters with managed toolchains declare their terminal toolchain image", async () => {

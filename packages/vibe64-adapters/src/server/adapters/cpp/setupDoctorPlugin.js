@@ -8,8 +8,6 @@ import {
   createDoctorPluginToolkit
 } from "@local/setup-doctor-core/server/doctorPluginToolkit";
 import {
-  adapterToolchainBuildRepair,
-  adapterToolchainBuildScript,
   checkAdapterToolchainImage,
   missingAdapterToolchainCheck
 } from "../../adapterToolchains.js";
@@ -23,27 +21,6 @@ import {
 import {
   CPP_TOOLCHAIN_IMAGE
 } from "./toolchainIdentity.js";
-
-const CPP_TOOLCHAIN_DOCKERFILE = "tooling/adapters/cpp/Dockerfile";
-const CPP_TOOLCHAIN_CONTEXT = "tooling/adapters/cpp";
-
-function cppToolchainBuildRepair() {
-  return adapterToolchainBuildRepair({
-    actionId: "build-cpp-toolchain",
-    context: CPP_TOOLCHAIN_CONTEXT,
-    dockerfile: CPP_TOOLCHAIN_DOCKERFILE,
-    image: CPP_TOOLCHAIN_IMAGE,
-    label: "Build C++ toolchain"
-  });
-}
-
-function cppToolchainBuildTerminalScript() {
-  return adapterToolchainBuildScript({
-    context: CPP_TOOLCHAIN_CONTEXT,
-    dockerfile: CPP_TOOLCHAIN_DOCKERFILE,
-    image: CPP_TOOLCHAIN_IMAGE
-  });
-}
 
 function seedCppProjectRepair(config = {}) {
   return {
@@ -159,7 +136,6 @@ function cppToolchainCommandCheckItem(toolkit, context, isToolchainReady, {
           label
         }).run(context)
       : missingAdapterToolchainCheck({
-          buildRepair: cppToolchainBuildRepair(),
           expected,
           id,
           label
@@ -218,14 +194,6 @@ function createCppSetupDoctorPlugin({
     terminalEnv: configEnvironment,
     terminalNamespace
   });
-  const buildToolchainTerminal = toolkit.shellTerminalAction({
-    actionId: "build-cpp-toolchain",
-    autoRun: true,
-    commandPreview: () => cppToolchainBuildRepair().commandPreview,
-    cwd: studioRoot,
-    label: "Build C++ toolchain",
-    script: cppToolchainBuildTerminalScript
-  });
   const seedProjectTerminal = toolkit.toolchainTerminalAction({
     actionId: "terminal-seed-cpp-project",
     autoRun: true,
@@ -249,8 +217,7 @@ function createCppSetupDoctorPlugin({
           label: "C++ toolchain image",
           run: async () => {
             const result = await checkAdapterToolchainImage(toolkit, {
-              buildRepair: cppToolchainBuildRepair(),
-              explanation: "Build the C++ adapter toolchain before running compiler, CMake, Make, Meson, target scripts, or workflow checks.",
+              explanation: "The published C++ adapter toolchain must be installed by host provisioning before tenants run compiler, CMake, Make, Meson, target scripts, or workflow checks.",
               id: "cpp-toolchain-image",
               image: CPP_TOOLCHAIN_IMAGE,
               label: "C++ toolchain image"
@@ -275,13 +242,11 @@ function createCppSetupDoctorPlugin({
       ];
     },
     terminalActions: [
-      buildToolchainTerminal,
       seedProjectTerminal
     ]
   });
 }
 
 export {
-  createCppSetupDoctorPlugin,
-  cppToolchainBuildRepair
+  createCppSetupDoctorPlugin
 };

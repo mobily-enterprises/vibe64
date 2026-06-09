@@ -12,7 +12,7 @@ function baseTerminalToolchainSpec() {
     image: STUDIO_BASE_TOOLCHAIN_IMAGE,
     label: BASE_TERMINAL_TOOLCHAIN_LABEL,
     required: false,
-    setupActionLabel: "Build managed base toolchain"
+    setupActionLabel: ""
   };
 }
 
@@ -31,12 +31,9 @@ function normalizeTerminalToolchainSpec(spec = {}) {
 
 function missingTerminalToolchainImageError(spec = baseTerminalToolchainSpec()) {
   if (spec.required) {
-    const setupHint = spec.setupActionLabel
-      ? ` Open Setup and run ${spec.setupActionLabel}.`
-      : " Open Setup and build the adapter toolchain.";
-    return `${spec.label} image ${spec.image} is missing.${setupHint}`;
+    return `${spec.label} image ${spec.image} is missing. This Vibe64 host was not provisioned with the required adapter toolchain image.`;
   }
-  return `Managed base toolchain image ${spec.image} is missing. Open Setup and run Build managed base toolchain.`;
+  return `Managed base toolchain image ${spec.image} is missing. This Vibe64 host was not provisioned with the required managed base toolchain image.`;
 }
 
 async function resolveTerminalToolchainImage({

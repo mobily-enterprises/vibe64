@@ -465,8 +465,7 @@ class CppTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       id: "cpp",
       terminalToolchain: {
         image: CPP_TOOLCHAIN_IMAGE,
-        label: "C++ toolchain",
-        setupActionLabel: "Build C++ toolchain"
+        label: "C++ toolchain"
       },
       label: "C++ target adapter",
       projectFacts: cppFacts,

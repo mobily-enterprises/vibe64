@@ -377,8 +377,7 @@ class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       id: "jskit",
       terminalToolchain: {
         image: JSKIT_TOOLCHAIN_IMAGE,
-        label: "JSKIT toolchain",
-        setupActionLabel: "Build JSKIT toolchain"
+        label: "JSKIT toolchain"
       },
       label: "JSKIT target adapter",
       prepareWorktreeScriptPath: JSKIT_PREPARE_WORKTREE_SCRIPT_PATH,

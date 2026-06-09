@@ -1,58 +1,9 @@
 import {
-  createDoctorRepair,
-  failDoctorCheck as failCheck,
+  hardStopDoctorCheck as hardStopCheck,
   passDoctorCheck as passCheck
 } from "@local/vibe64-core/server/doctorCheckItems";
-import {
-  dockerCommand
-} from "@local/studio-terminal-core/server/shellCommands";
-import {
-  STUDIO_BASE_TOOLCHAIN_IMAGE
-} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
-
-function adapterToolchainBuildArgs({
-  baseImage = STUDIO_BASE_TOOLCHAIN_IMAGE,
-  context = "",
-  dockerfile = "",
-  image = ""
-} = {}) {
-  return [
-    "build",
-    "-t",
-    image,
-    "--build-arg",
-    `VIBE64_BASE_IMAGE=${baseImage}`,
-    "-f",
-    dockerfile,
-    context
-  ];
-}
-
-function adapterToolchainBuildScript(options = {}) {
-  const args = adapterToolchainBuildArgs(options);
-  return [
-    "set -e",
-    `echo '$ ${dockerCommand(args)}'`,
-    dockerCommand(args)
-  ].join("\n");
-}
-
-function adapterToolchainBuildRepair({
-  actionId = "",
-  label = "",
-  ...options
-} = {}) {
-  return createDoctorRepair({
-    actionId,
-    autoRun: true,
-    command: dockerCommand(adapterToolchainBuildArgs(options)),
-    kind: "terminal",
-    label
-  });
-}
 
 async function checkAdapterToolchainImage(toolkit, {
-  buildRepair = null,
   expected = "",
   explanation = "",
   id = "",
@@ -70,13 +21,12 @@ async function checkAdapterToolchainImage(toolkit, {
   });
 
   if (!result.ok) {
-    return failCheck({
+    return hardStopCheck({
       id,
       label,
       expected: expected || `${image} exists locally.`,
       observed: result.output,
-      explanation,
-      repair: buildRepair
+      explanation
     });
   }
 
@@ -90,25 +40,20 @@ async function checkAdapterToolchainImage(toolkit, {
 }
 
 function missingAdapterToolchainCheck({
-  buildRepair = null,
   expected = "",
   id = "",
   label = ""
 } = {}) {
-  return failCheck({
+  return hardStopCheck({
     id,
     label,
     expected,
     observed: `${label} is missing.`,
-    explanation: `Build ${label} first.`,
-    repair: buildRepair
+    explanation: `${label} is managed host infrastructure. This Vibe64 host was not provisioned with the required toolchain image.`
   });
 }
 
 export {
-  adapterToolchainBuildArgs,
-  adapterToolchainBuildRepair,
-  adapterToolchainBuildScript,
   checkAdapterToolchainImage,
   missingAdapterToolchainCheck
 };

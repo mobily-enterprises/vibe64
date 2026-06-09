@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   browserUrlForListenAddress,
+  browserUrlForPublicOrigin,
   startupBrowserPath
 } from "../../server.js";
 import {
@@ -21,6 +22,10 @@ test("server CLI starts management mode with no slug", () => {
   assert.equal(
     browserUrlForListenAddress("http://127.0.0.1:3001"),
     "http://127.0.0.1:3001/app/manage"
+  );
+  assert.equal(
+    browserUrlForPublicOrigin("https://tonymobily.vibe64.dev"),
+    "https://tonymobily.vibe64.dev/app/manage"
   );
 });
 
@@ -45,6 +50,12 @@ test("server CLI accepts one project slug and opens development mode", () => {
       startupSlug: "beta-2"
     }),
     "http://127.0.0.1:3001/app/beta-2"
+  );
+  assert.equal(
+    browserUrlForPublicOrigin("https://tonymobily.vibe64.dev/", {
+      startupSlug: "beta-2"
+    }),
+    "https://tonymobily.vibe64.dev/app/beta-2"
   );
 });
 

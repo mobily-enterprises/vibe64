@@ -67,6 +67,7 @@
     "test:e2e:live": "npm run build && VIBE64_LIVE_E2E=1 playwright test --config playwright.config.ts tests/e2e/live-vibe64-workflow.spec.ts",
     "verify": "npx jskit app verify && npm run verify:packages && npm run --if-present verify:app",
     "verify:packages": "node ./tooling/verify-package-boundaries.mjs",
+    "host:pull-toolchain-images": "node ./bin/pull-toolchain-images.js",
     "smoke:package": "node ./tooling/package-install-smoke.mjs",
     "release": "node ./scripts/npm-release.js",
     "jskit:release": "npx jskit app release",

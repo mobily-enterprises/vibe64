@@ -18,7 +18,8 @@ import {
 import {
   VIBE64_SKIP_STALE_TERMINAL_CLEANUP_ENV,
   STUDIO_BASE_TOOLCHAIN_IMAGE,
-  STUDIO_DAEMON_PID_LABEL
+  STUDIO_DAEMON_PID_LABEL,
+  STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS
 } from "./studioRuntimeIdentity.js";
 import {
   normalizeText
@@ -357,6 +358,7 @@ function launchTargetTerminalArgs({
 } = {}) {
   return [
     "run",
+    ...STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS,
     "--rm",
     "-it",
     "--name",

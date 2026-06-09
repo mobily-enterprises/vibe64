@@ -389,8 +389,7 @@ class LaravelTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       id: "laravel",
       terminalToolchain: {
         image: LARAVEL_TOOLCHAIN_IMAGE,
-        label: "Laravel toolchain",
-        setupActionLabel: "Build Laravel toolchain"
+        label: "Laravel toolchain"
       },
       label: "Laravel target adapter",
       prepareWorktreeScriptPath: LARAVEL_PREPARE_WORKTREE_SCRIPT_PATH,

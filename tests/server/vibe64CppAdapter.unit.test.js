@@ -261,7 +261,7 @@ test("cpp setup checks the full C++ toolchain inside the adapter image", async (
     }
 
     assert.equal(dockerCalls[0].command, "docker");
-    assert.match(dockerCalls[0].args.join(" "), /image inspect vibe64-cpp-toolchain:0\.1\.0/u);
+    assert.ok(dockerCalls[0].args.includes(CPP_TOOLCHAIN_IMAGE));
     assert.ok(dockerCalls.some((call) => /c\+\+ --version/u.test(call.args.join(" "))));
     assert.ok(dockerCalls.some((call) => /cmake --version/u.test(call.args.join(" "))));
     assert.ok(dockerCalls.some((call) => /ninja --version/u.test(call.args.join(" "))));

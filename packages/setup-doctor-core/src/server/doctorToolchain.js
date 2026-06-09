@@ -12,6 +12,7 @@ import {
 import {
   STUDIO_DAEMON_PID_LABEL,
   STUDIO_BASE_TOOLCHAIN_IMAGE,
+  STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS,
   studioDockerLabel
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
@@ -114,6 +115,7 @@ function buildDoctorToolchainArgs(commandArgs, options = {}) {
     : [];
   return [
     "run",
+    ...STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS,
     "--rm",
     ...toolchainHomeDockerArgs(extraArgs, {
       toolHomeSource

@@ -26,6 +26,7 @@ import {
 import {
   createDoctorRepair,
   failDoctorCheck as failCheck,
+  hardStopDoctorCheck as hardStopCheck,
   passDoctorCheck as passCheck
 } from "@local/vibe64-core/server/doctorCheckItems";
 import {
@@ -35,8 +36,6 @@ import {
   packageManagerAvailabilityScript
 } from "@local/vibe64-adapters/server/nodePackage";
 
-const TOOLCHAIN_DOCKERFILE = "tooling/studio-setup/Dockerfile";
-const TOOLCHAIN_CONTEXT = "tooling/studio-setup";
 const TERMINAL_NAMESPACE = "studio-setup-doctor";
 const REINSTALL_CODEX_CLI_TERMINAL_PREVIEW = "Reinstall Codex CLI inside the managed Studio toolchain";
 
@@ -44,10 +43,6 @@ const isStudioSetupReady = areDoctorChecksReady;
 
 function commandPreview(args) {
   return dockerCommand(args);
-}
-
-function printCommandPreviewLine(command) {
-  return `printf '%s\\n' ${shellQuote(`$ ${command}`)}`;
 }
 
 function printTerminalLine(message) {
@@ -58,23 +53,6 @@ function createRepair(options = {}) {
   return createDoctorRepair({
     ...options
   });
-}
-
-function buildToolchainScript() {
-  const args = [
-    "build",
-    "-t",
-    TOOLCHAIN_IMAGE,
-    "-f",
-    TOOLCHAIN_DOCKERFILE,
-    TOOLCHAIN_CONTEXT
-  ];
-
-  return [
-    "set -e",
-    printCommandPreviewLine(commandPreview(args)),
-    commandPreview(args)
-  ].join("\n");
 }
 
 function startBashTerminal({
@@ -99,22 +77,6 @@ function manualDockerRepair() {
     command: "docker version",
     kind: "manual",
     label: "Install and start Docker"
-  });
-}
-
-function buildToolchainRepair() {
-  return createRepair({
-    actionId: "build-toolchain",
-    autoRun: true,
-    command: commandPreview([
-      "build",
-      "-t",
-      TOOLCHAIN_IMAGE,
-      "-f",
-      TOOLCHAIN_DOCKERFILE,
-      TOOLCHAIN_CONTEXT
-    ]),
-    label: "Build managed base toolchain"
   });
 }
 
@@ -250,13 +212,12 @@ async function checkToolchainImage(dockerReady) {
   });
 
   if (!result.ok) {
-    return failCheck({
+    return hardStopCheck({
       id: "toolchain-image",
       label: "Managed base toolchain image",
       expected: `${TOOLCHAIN_IMAGE} exists locally.`,
       observed: result.output,
-      explanation: "Build the managed base toolchain before checking git, GH, Codex, and Studio automation tools.",
-      repair: buildToolchainRepair()
+      explanation: "This Vibe64 host was not provisioned with the required managed base toolchain image. Host deployment must pull the published GHCR image before tenants use Studio Setup."
     });
   }
 
@@ -270,13 +231,12 @@ async function checkToolchainImage(dockerReady) {
 }
 
 function missingToolchainCheck(id, label) {
-  return failCheck({
+  return hardStopCheck({
     id,
     label,
     expected: "Runs inside the managed base toolchain image.",
     observed: "Managed base toolchain image is missing.",
-    explanation: "Build the managed base toolchain image first.",
-    repair: buildToolchainRepair()
+    explanation: "This Vibe64 host was not provisioned with the required managed base toolchain image."
   });
 }
 
@@ -294,7 +254,8 @@ async function checkToolchainCommand({
   });
 
   if (!result.ok || !isValid(result.output)) {
-    return failCheck({
+    const failedCheck = repair ? failCheck : hardStopCheck;
+    return failedCheck({
       id,
       label,
       expected,
@@ -379,8 +340,7 @@ function createStudioRuntimeDoctorPlugin({
                 commandArgs: ["node", "--version"],
                 expected: "Node.js runs inside the managed base toolchain.",
                 explanation: "Studio uses Node.js for JavaScript and TypeScript project setup, scripts, and framework CLIs.",
-                isValid: (output) => /^v\d+\./u.test(output.trim()),
-                repair: buildToolchainRepair()
+                isValid: (output) => /^v\d+\./u.test(output.trim())
               })
               : missingToolchainCheck("node", "Node.js");
           }
@@ -396,8 +356,7 @@ function createStudioRuntimeDoctorPlugin({
                 commandArgs: ["bash", "-lc", packageManagerAvailabilityScript("npm")],
                 expected: "npm runs inside the managed base toolchain.",
                 explanation: "npm is the baseline Node package manager and backs npx-based project seed commands.",
-                isValid: (output) => /^\d+\./u.test(output.trim()),
-                repair: buildToolchainRepair()
+                isValid: (output) => /^\d+\./u.test(output.trim())
               })
               : missingToolchainCheck("npm", "npm");
           }
@@ -413,8 +372,7 @@ function createStudioRuntimeDoctorPlugin({
                 commandArgs: ["bash", "-lc", "command -v corepack >/dev/null 2>&1 && corepack --version"],
                 expected: "Corepack runs inside the managed base toolchain.",
                 explanation: "Studio uses Corepack to run pnpm and Yarn consistently in Node project worktrees.",
-                isValid: (output) => /^\d+\./u.test(output.trim()),
-                repair: buildToolchainRepair()
+                isValid: (output) => /^\d+\./u.test(output.trim())
               })
               : missingToolchainCheck("corepack", "Corepack");
           }
@@ -430,8 +388,7 @@ function createStudioRuntimeDoctorPlugin({
                 commandArgs: ["bash", "-lc", packageManagerAvailabilityScript("pnpm")],
                 expected: "pnpm runs through Corepack inside the managed base toolchain.",
                 explanation: "Adapters can select pnpm without owning package-manager installation.",
-                isValid: (output) => /^\d+\./u.test(output.trim()),
-                repair: buildToolchainRepair()
+                isValid: (output) => /^\d+\./u.test(output.trim())
               })
               : missingToolchainCheck("pnpm", "pnpm");
           }
@@ -447,8 +404,7 @@ function createStudioRuntimeDoctorPlugin({
                 commandArgs: ["bash", "-lc", packageManagerAvailabilityScript("yarn")],
                 expected: "Yarn runs through Corepack inside the managed base toolchain.",
                 explanation: "Adapters can select Yarn without owning package-manager installation.",
-                isValid: (output) => /^\d+\./u.test(output.trim()),
-                repair: buildToolchainRepair()
+                isValid: (output) => /^\d+\./u.test(output.trim())
               })
               : missingToolchainCheck("yarn", "Yarn");
           }
@@ -464,8 +420,7 @@ function createStudioRuntimeDoctorPlugin({
                 commandArgs: ["bash", "-lc", packageManagerAvailabilityScript("bun")],
                 expected: "Bun runs inside the managed base toolchain.",
                 explanation: "Adapters can select Bun without owning package-manager installation.",
-                isValid: (output) => /^\d+\./u.test(output.trim()),
-                repair: buildToolchainRepair()
+                isValid: (output) => /^\d+\./u.test(output.trim())
               })
               : missingToolchainCheck("bun", "Bun");
           }
@@ -481,8 +436,7 @@ function createStudioRuntimeDoctorPlugin({
                 commandArgs: ["git", "--version"],
                 expected: "git runs inside the managed base toolchain.",
                 explanation: "Studio uses git for status, diffs, commits, and deployments.",
-                isValid: (output) => output.includes("git version"),
-                repair: buildToolchainRepair()
+                isValid: (output) => output.includes("git version")
               })
               : missingToolchainCheck("git", "git");
           }
@@ -498,8 +452,7 @@ function createStudioRuntimeDoctorPlugin({
                 commandArgs: ["rg", "--version"],
                 expected: "ripgrep runs inside the managed base toolchain.",
                 explanation: "Codex uses rg for fast local codebase search inside the managed base toolchain container.",
-                isValid: (output) => output.toLowerCase().includes("ripgrep"),
-                repair: buildToolchainRepair()
+                isValid: (output) => output.toLowerCase().includes("ripgrep")
               })
               : missingToolchainCheck("ripgrep", "ripgrep");
           }
@@ -519,8 +472,7 @@ function createStudioRuntimeDoctorPlugin({
                 ],
                 expected: "Playwright and Chromium run inside the managed base toolchain.",
                 explanation: "Studio uses Playwright for local UI verification without reinstalling browsers in every session worktree.",
-                isValid: (output) => output.includes("Version ") && output.includes("/ms-playwright/"),
-                repair: buildToolchainRepair()
+                isValid: (output) => output.includes("Version ") && output.includes("/ms-playwright/")
               })
               : missingToolchainCheck("playwright", "Playwright");
           }
@@ -536,8 +488,7 @@ function createStudioRuntimeDoctorPlugin({
                 commandArgs: ["gh", "--version"],
                 expected: "gh runs inside the managed base toolchain.",
                 explanation: "Studio uses GitHub CLI for repository and deploy-adjacent workflows.",
-                isValid: (output) => output.toLowerCase().includes("gh version"),
-                repair: buildToolchainRepair()
+                isValid: (output) => output.toLowerCase().includes("gh version")
               })
               : missingToolchainCheck("gh", "GitHub CLI");
           }
@@ -574,8 +525,7 @@ function createStudioRuntimeDoctorPlugin({
                 ],
                 expected: "bubblewrap is available inside the managed base toolchain.",
                 explanation: "Codex uses bubblewrap for sandboxing inside the managed base toolchain container.",
-                isValid: (output) => output.includes("bwrap") || output.toLowerCase().includes("bubblewrap"),
-                repair: buildToolchainRepair()
+                isValid: (output) => output.includes("bwrap") || output.toLowerCase().includes("bubblewrap")
               })
               : missingToolchainCheck("codex-sandbox", "Codex sandbox");
           }
@@ -586,13 +536,6 @@ function createStudioRuntimeDoctorPlugin({
     startTerminal({
       actionId = ""
     } = {}) {
-      if (actionId === "build-toolchain") {
-        return startBashTerminal({
-          commandPreview: buildToolchainRepair().commandPreview,
-          cwd: studioRoot,
-          script: buildToolchainScript()
-        });
-      }
       if (actionId === "reinstall-codex-cli") {
         return startBashTerminal({
           commandPreview: REINSTALL_CODEX_CLI_TERMINAL_PREVIEW,

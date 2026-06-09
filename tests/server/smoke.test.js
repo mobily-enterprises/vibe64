@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import WebSocket from "ws";
 
-import { createServer, startServer } from "../../server.js";
+import { createServer, resolveListenTarget, startServer } from "../../server.js";
 import { BROWSER_LIFECYCLE_WEBSOCKET_PATH } from "../../server/lib/browserLifecycle.js";
 import { resolveRuntimeEnv } from "../../server/lib/runtimeEnv.js";
 import { GITHUB_API_BASE, PROJECT_API_BASE } from "../../server/lib/projectRoutes.js";
@@ -72,14 +72,23 @@ async function withTargetRoot(_targetRoot, projectFixture, callback) {
 
 test("server defaults to loopback host", () => {
   const previousHost = process.env.HOST;
+  const previousPort = process.env.PORT;
   delete process.env.HOST;
+  delete process.env.PORT;
   try {
     assert.equal(resolveRuntimeEnv().HOST, "127.0.0.1");
+    assert.equal(resolveRuntimeEnv().PORT, null);
+    assert.equal(resolveListenTarget().transport, "socket");
   } finally {
     if (previousHost == null) {
       delete process.env.HOST;
     } else {
       process.env.HOST = previousHost;
+    }
+    if (previousPort == null) {
+      delete process.env.PORT;
+    } else {
+      process.env.PORT = previousPort;
     }
   }
 });
@@ -487,6 +496,7 @@ test("only owners can add GitHub-backed projects", async () => {
 test("started server publishes management mode as the browser entry URL", async () => {
   const app = await startServer({
     host: "127.0.0.1",
+    port: 0,
     strictPort: false
   });
 
@@ -496,6 +506,36 @@ test("started server publishes management mode as the browser entry URL", async 
     assert.equal(url.pathname, "/app/manage");
   } finally {
     await app.close();
+  }
+});
+
+test("started server defaults to Unix socket when PORT is not set", async () => {
+  const previousPort = process.env.PORT;
+  const socketRoot = await mkdtemp(path.join(tmpdir(), "vibe64-listen-socket-"));
+  const socketPath = path.join(socketRoot, "server.sock");
+  delete process.env.PORT;
+  const app = await startServer({
+    listenSocket: socketPath,
+    publicOrigin: "https://tonymobily.vibe64.dev",
+    startupSlug: "beepollen"
+  });
+
+  try {
+    assert.equal(app.vibe64Listen.transport, "socket");
+    assert.equal(app.vibe64Listen.socketPath, socketPath);
+    assert.equal(app.vibe64Url, "https://tonymobily.vibe64.dev/app/beepollen");
+    await access(socketPath);
+  } finally {
+    await app.close();
+    await rm(socketRoot, {
+      force: true,
+      recursive: true
+    });
+    if (previousPort == null) {
+      delete process.env.PORT;
+    } else {
+      process.env.PORT = previousPort;
+    }
   }
 });
 

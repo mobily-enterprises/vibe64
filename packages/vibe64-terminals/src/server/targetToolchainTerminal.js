@@ -14,6 +14,7 @@ import {
 import {
   STUDIO_BASE_TOOLCHAIN_IMAGE,
   STUDIO_DAEMON_PID_LABEL,
+  STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS,
   studioDockerLabel
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
@@ -82,6 +83,7 @@ function targetToolchainTerminalArgs({
 } = {}) {
   return [
     "run",
+    ...STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS,
     "--rm",
     "-it",
     "--name",

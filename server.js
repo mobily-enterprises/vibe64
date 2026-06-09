@@ -2,8 +2,14 @@ import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
 import fastifyWebsocket from "@fastify/websocket";
 import getPort, { portNumbers } from "get-port";
-import { resolveRuntimeEnv } from "./server/lib/runtimeEnv.js";
+import {
+  VIBE64_LISTEN_SOCKET_ENV,
+  VIBE64_PUBLIC_ORIGIN_ENV,
+  resolveRuntimeEnv
+} from "./server/lib/runtimeEnv.js";
 import { existsSync, readFileSync } from "node:fs";
+import { lstat, mkdir, rm } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -53,6 +59,7 @@ const SPA_INDEX_FILE = "index.html";
 const API_BASE_PATH = "/api";
 const MODULE_APP_ROOT = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_PORT_SEARCH_LIMIT = 50;
+const DEFAULT_SOCKET_FILE_NAME = "server.sock";
 const STATIC_GLOBAL_UI_PATHS = Object.freeze([
   "/assets",
   "/favicon.svg",
@@ -139,6 +146,88 @@ function preferredPortRange(port) {
   return portNumbers(requestedPort, Math.min(65535, requestedPort + DEFAULT_PORT_SEARCH_LIMIT - 1));
 }
 
+function hasOwnOption(options = {}, name = "") {
+  return Object.prototype.hasOwnProperty.call(options, name);
+}
+
+function explicitOptionValue(options = {}, name = "") {
+  return hasOwnOption(options, name) ? options[name] : undefined;
+}
+
+function hasExplicitPortOption(options = {}) {
+  if (!hasOwnOption(options, "port")) {
+    return false;
+  }
+  return String(options.port ?? "").trim() !== "";
+}
+
+function defaultListenSocketPath({
+  env = process.env
+} = {}) {
+  const runtimeDir = String(env.XDG_RUNTIME_DIR || "").trim();
+  if (runtimeDir) {
+    return path.join(runtimeDir, "vibe64", DEFAULT_SOCKET_FILE_NAME);
+  }
+  const uid = typeof process.getuid === "function" ? String(process.getuid()) : "user";
+  return path.join(os.tmpdir(), `vibe64-${uid}`, DEFAULT_SOCKET_FILE_NAME);
+}
+
+function resolveListenTarget({
+  options = {},
+  runtimeEnv = resolveRuntimeEnv()
+} = {}) {
+  const portRequested = hasExplicitPortOption(options) || runtimeEnv.PORT_CONFIGURED === true;
+  if (portRequested) {
+    const port = Number(explicitOptionValue(options, "port") ?? runtimeEnv.PORT);
+    return {
+      host: String(explicitOptionValue(options, "host") || runtimeEnv.HOST).trim() || "127.0.0.1",
+      port: Number.isFinite(port) ? port : 3000,
+      transport: "tcp"
+    };
+  }
+
+  const socketPath = String(
+    explicitOptionValue(options, "listenSocket") ||
+    runtimeEnv[VIBE64_LISTEN_SOCKET_ENV] ||
+    defaultListenSocketPath({ env: runtimeEnv })
+  ).trim();
+  return {
+    socketPath: path.resolve(socketPath),
+    transport: "socket"
+  };
+}
+
+async function removeStaleSocket(socketPath = "") {
+  try {
+    const info = await lstat(socketPath);
+    if (!info.isSocket()) {
+      const error = new Error(`Refusing to remove non-socket listen path: ${socketPath}`);
+      error.code = "vibe64_listen_path_not_socket";
+      throw error;
+    }
+    await rm(socketPath, {
+      force: true
+    });
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return;
+    }
+    throw error;
+  }
+}
+
+async function prepareListenSocket(socketPath = "") {
+  if (!socketPath) {
+    const error = new Error("Vibe64 listen socket path is required.");
+    error.code = "vibe64_listen_socket_required";
+    throw error;
+  }
+  await mkdir(path.dirname(socketPath), {
+    recursive: true
+  });
+  await removeStaleSocket(socketPath);
+}
+
 function startupBrowserPath({
   startupSlug = ""
 } = {}) {
@@ -151,6 +240,15 @@ function browserUrlForListenAddress(address = "", options = {}) {
   if (["0.0.0.0", "[::]"].includes(url.hostname)) {
     url.hostname = "127.0.0.1";
   }
+  return `${url.origin}${startupBrowserPath(options)}`;
+}
+
+function browserUrlForPublicOrigin(origin = "", options = {}) {
+  const normalizedOrigin = String(origin || "").trim();
+  if (!normalizedOrigin) {
+    return "";
+  }
+  const url = new URL(normalizedOrigin);
   return `${url.origin}${startupBrowserPath(options)}`;
 }
 
@@ -352,9 +450,14 @@ async function createServer(options = {}) {
 
 async function startServer(options = {}) {
   const runtimeEnv = resolveRuntimeEnv();
-  const port = Number(options?.port) || runtimeEnv.PORT;
-  const host = String(options?.host || "").trim() || runtimeEnv.HOST;
-  const strictPort = options?.strictPort ?? Boolean(options?.port || String(process.env.PORT || "").trim());
+  const listenTarget = resolveListenTarget({
+    options,
+    runtimeEnv
+  });
+  const strictPort = options?.strictPort ?? (
+    listenTarget.transport === "tcp" &&
+    (hasExplicitPortOption(options) || runtimeEnv.PORT_CONFIGURED === true)
+  );
   const app = await createServer({
     appRoot: options?.appRoot,
     authDataRoot: options?.authDataRoot,
@@ -387,17 +490,51 @@ async function startServer(options = {}) {
   if (options?.browserLifecycleShutdown === true) {
     app.browserLifecycleMonitor?.enableShutdown(closeAndExit);
   }
-  const selectedPort = strictPort ? port : await getPort({
-    port: preferredPortRange(port)
-  });
-  const listenAddress = await app.listen({
-    host,
-    port: selectedPort
-  });
-  app.vibe64Url = browserUrlForListenAddress(listenAddress, {
-    startupSlug: options?.startupSlug
-  });
+  let listenAddress = "";
+  if (listenTarget.transport === "socket") {
+    await prepareListenSocket(listenTarget.socketPath);
+    listenAddress = await app.listen({
+      path: listenTarget.socketPath
+    });
+    app.vibe64Listen = {
+      address: listenAddress,
+      socketPath: listenTarget.socketPath,
+      transport: "socket"
+    };
+  } else {
+    const selectedPort = strictPort ? listenTarget.port : await getPort({
+      port: preferredPortRange(listenTarget.port)
+    });
+    listenAddress = await app.listen({
+      host: listenTarget.host,
+      port: selectedPort
+    });
+    app.vibe64Listen = {
+      address: listenAddress,
+      host: listenTarget.host,
+      port: selectedPort,
+      transport: "tcp"
+    };
+  }
+  const publicOrigin = String(options?.publicOrigin || runtimeEnv[VIBE64_PUBLIC_ORIGIN_ENV] || "").trim();
+  app.vibe64Url = publicOrigin
+    ? browserUrlForPublicOrigin(publicOrigin, {
+      startupSlug: options?.startupSlug
+    })
+    : listenTarget.transport === "tcp"
+      ? browserUrlForListenAddress(listenAddress, {
+        startupSlug: options?.startupSlug
+      })
+      : "";
   return app;
 }
 
-export { browserUrlForListenAddress, createServer, startServer, startupBrowserPath };
+export {
+  browserUrlForListenAddress,
+  browserUrlForPublicOrigin,
+  createServer,
+  defaultListenSocketPath,
+  resolveListenTarget,
+  startServer,
+  startupBrowserPath
+};

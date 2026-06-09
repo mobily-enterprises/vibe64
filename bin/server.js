@@ -127,6 +127,13 @@ async function main() {
     if (openOnStart) {
       await openBrowser(url);
     }
+    return;
+  }
+  if (app.vibe64Listen?.transport === "socket") {
+    console.log(`Vibe64 is listening on Unix socket ${app.vibe64Listen.socketPath}`);
+    if (openOnStart) {
+      console.warn("Cannot open a browser for a Unix socket listener. Set VIBE64_PUBLIC_ORIGIN or PORT.");
+    }
   }
 }
 

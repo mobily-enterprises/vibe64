@@ -10,6 +10,7 @@ import {
 } from "@local/studio-terminal-core/server/gitGithubTransport";
 import {
   STUDIO_BASE_TOOLCHAIN_IMAGE,
+  STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS,
   STUDIO_PLAYWRIGHT_BROWSERS_PATH,
   STUDIO_PLAYWRIGHT_BROWSERS_VOLUME,
   STUDIO_TOOL_HOME_BIN_PATH,
@@ -36,6 +37,10 @@ function assertGithubSshTransportRewrite(args) {
 test("doctor toolchain commands run with the shared Studio tool-home ownership contract", () => {
   const args = buildDoctorToolchainArgs(["npm", "prefix", "-g"]);
 
+  assert.deepEqual(args.slice(0, 1 + STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS.length), [
+    "run",
+    ...STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS
+  ]);
   assertPlaywrightBrowserCache(args);
   assertGithubSshTransportRewrite(args);
   assert.ok(args.includes(`HOME=${STUDIO_TOOL_HOME_PATH}`));

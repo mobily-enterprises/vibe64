@@ -12,11 +12,6 @@ import {
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
-  STUDIO_BASE_TOOLCHAIN_IMAGE
-} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
-import {
-  adapterToolchainBuildRepair,
-  adapterToolchainBuildScript,
   checkAdapterToolchainImage,
   missingAdapterToolchainCheck
 } from "../../adapterToolchains.js";
@@ -54,8 +49,6 @@ import {
   LARAVEL_TOOLCHAIN_IMAGE
 } from "./toolchainIdentity.js";
 
-const LARAVEL_TOOLCHAIN_DOCKERFILE = "tooling/adapters/laravel/Dockerfile";
-const LARAVEL_TOOLCHAIN_CONTEXT = "tooling/adapters/laravel";
 const LARAVEL_MARKERS = Object.freeze([
   "artisan",
   "bootstrap/app.php",
@@ -67,26 +60,6 @@ const LARAVEL_WRITABLE_DOCKER_ENV = Object.freeze({
   COMPOSER_CACHE_DIR: "/tmp/composer-cache",
   npm_config_cache: "/tmp/npm-cache"
 });
-
-function buildLaravelToolchainRepair() {
-  return adapterToolchainBuildRepair({
-    actionId: "build-laravel-toolchain",
-    baseImage: STUDIO_BASE_TOOLCHAIN_IMAGE,
-    context: LARAVEL_TOOLCHAIN_CONTEXT,
-    dockerfile: LARAVEL_TOOLCHAIN_DOCKERFILE,
-    image: LARAVEL_TOOLCHAIN_IMAGE,
-    label: "Build Laravel toolchain"
-  });
-}
-
-function buildLaravelToolchainScript() {
-  return adapterToolchainBuildScript({
-    baseImage: STUDIO_BASE_TOOLCHAIN_IMAGE,
-    context: LARAVEL_TOOLCHAIN_CONTEXT,
-    dockerfile: LARAVEL_TOOLCHAIN_DOCKERFILE,
-    image: LARAVEL_TOOLCHAIN_IMAGE
-  });
-}
 
 function laravelNewPackageManagerFlag(packageManager = "npm") {
   return {
@@ -174,8 +147,7 @@ function composerUsesLaravel(composerJson = {}) {
 
 async function checkLaravelToolchainImage(toolkit) {
   return checkAdapterToolchainImage(toolkit, {
-    buildRepair: buildLaravelToolchainRepair(),
-    explanation: "Build the Laravel adapter toolchain before running PHP, Composer, Laravel setup, target scripts, or launch targets.",
+    explanation: "The published Laravel adapter toolchain must be installed by host provisioning before tenants run Laravel setup, target scripts, or launch targets.",
     id: "laravel-toolchain-image",
     image: LARAVEL_TOOLCHAIN_IMAGE,
     label: "Laravel toolchain image"
@@ -204,7 +176,6 @@ function missingLaravelToolchainCheck({
   label = ""
 } = {}) {
   return missingAdapterToolchainCheck({
-    buildRepair: buildLaravelToolchainRepair(),
     expected,
     id,
     label
@@ -470,14 +441,6 @@ function createLaravelSetupDoctorPlugin({
     terminalEnv: configEnvironment,
     terminalNamespace
   });
-  const buildToolchainTerminal = toolkit.shellTerminalAction({
-    actionId: "build-laravel-toolchain",
-    autoRun: true,
-    commandPreview: () => buildLaravelToolchainRepair().commandPreview,
-    cwd: studioRoot,
-    label: "Build Laravel toolchain",
-    script: buildLaravelToolchainScript
-  });
   return toolkit.plugin({
     id: "laravel-target-runtime",
     label: "Laravel target runtime",
@@ -520,7 +483,6 @@ function createLaravelSetupDoctorPlugin({
                 id: "laravel-php-toolchain",
                 image: LARAVEL_TOOLCHAIN_IMAGE,
                 label: "PHP",
-                repair: buildLaravelToolchainRepair(),
                 validate: (output) => /^PHP\s+/u.test(output.trim())
               }).run()
             : missingLaravelToolchainCheck({
@@ -541,7 +503,6 @@ function createLaravelSetupDoctorPlugin({
                 id: "laravel-composer-toolchain",
                 image: LARAVEL_TOOLCHAIN_IMAGE,
                 label: "Composer",
-                repair: buildLaravelToolchainRepair(),
                 validate: (output) => /Composer/iu.test(output)
               }).run()
             : missingLaravelToolchainCheck({
@@ -562,7 +523,6 @@ function createLaravelSetupDoctorPlugin({
                 id: "laravel-installer-toolchain",
                 image: LARAVEL_TOOLCHAIN_IMAGE,
                 label: "Laravel installer",
-                repair: buildLaravelToolchainRepair(),
                 validate: (output) => /Laravel Installer/iu.test(output)
               }).run()
             : missingLaravelToolchainCheck({
@@ -606,7 +566,6 @@ function createLaravelSetupDoctorPlugin({
     },
     terminalActions(context = {}) {
       return [
-        buildToolchainTerminal,
         toolkit.shellTerminalAction({
           actionId: "terminal-seed-laravel-db-env",
           autoRun: true,
@@ -640,7 +599,6 @@ function createLaravelSetupDoctorPlugin({
 }
 
 export {
-  buildLaravelToolchainScript,
   createLaravelAppRepair,
   createLaravelAppScript,
   createLaravelSetupDoctorPlugin,

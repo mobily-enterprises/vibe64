@@ -2,11 +2,6 @@ import {
   createDoctorPluginToolkit
 } from "@local/setup-doctor-core/server/doctorPluginToolkit";
 import {
-  STUDIO_BASE_TOOLCHAIN_IMAGE
-} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
-import {
-  adapterToolchainBuildRepair,
-  adapterToolchainBuildScript,
   checkAdapterToolchainImage,
   missingAdapterToolchainCheck
 } from "../../adapterToolchains.js";
@@ -27,33 +22,9 @@ import {
   JSKIT_TOOLCHAIN_IMAGE
 } from "./toolchainIdentity.js";
 
-const JSKIT_TOOLCHAIN_DOCKERFILE = "tooling/adapters/jskit/Dockerfile";
-const JSKIT_TOOLCHAIN_CONTEXT = "tooling/adapters/jskit";
-
-function buildJskitToolchainScript() {
-  return adapterToolchainBuildScript({
-    baseImage: STUDIO_BASE_TOOLCHAIN_IMAGE,
-    context: JSKIT_TOOLCHAIN_CONTEXT,
-    dockerfile: JSKIT_TOOLCHAIN_DOCKERFILE,
-    image: JSKIT_TOOLCHAIN_IMAGE
-  });
-}
-
-function buildJskitToolchainRepair() {
-  return adapterToolchainBuildRepair({
-    actionId: "build-jskit-toolchain",
-    baseImage: STUDIO_BASE_TOOLCHAIN_IMAGE,
-    context: JSKIT_TOOLCHAIN_CONTEXT,
-    dockerfile: JSKIT_TOOLCHAIN_DOCKERFILE,
-    image: JSKIT_TOOLCHAIN_IMAGE,
-    label: "Build JSKIT toolchain"
-  });
-}
-
 async function checkJskitToolchainImage(toolkit) {
   return checkAdapterToolchainImage(toolkit, {
-    buildRepair: buildJskitToolchainRepair(),
-    explanation: "Build the JSKIT adapter toolchain before running JSKIT setup commands.",
+    explanation: "The published JSKIT adapter toolchain must be installed by host provisioning before tenants run JSKIT setup commands.",
     id: "jskit-toolchain-image",
     image: JSKIT_TOOLCHAIN_IMAGE,
     label: "JSKIT toolchain image",
@@ -66,7 +37,6 @@ function missingJskitToolchainCheck({
   label = ""
 } = {}) {
   return missingAdapterToolchainCheck({
-    buildRepair: buildJskitToolchainRepair(),
     id,
     label,
     expected
@@ -86,15 +56,6 @@ function createJskitSetupDoctorPlugin({
     targetRoot,
     terminalEnv: configEnvironment,
     terminalNamespace
-  });
-  const buildToolchainTerminal = toolkit.shellTerminalAction({
-    actionId: "build-jskit-toolchain",
-    autoRun: true,
-    commandPreview: () => buildJskitToolchainRepair().commandPreview,
-    cwd: ({ targetRoot = "" } = {}) => studioRoot || targetRoot,
-    env: configEnvironment,
-    label: "Build JSKIT toolchain",
-    script: buildJskitToolchainScript
   });
   const mariaDbContainer = createJskitMariaDbRuntimeContainer({
     required: async (context = {}) => {
@@ -126,7 +87,6 @@ function createJskitSetupDoctorPlugin({
         expected: "Node 22 runs inside the JSKIT adapter toolchain.",
         explanation: "JSKIT Project Setup runs package scripts through Node.",
         image: JSKIT_TOOLCHAIN_IMAGE,
-        repair: buildJskitToolchainRepair(),
         validate: (output) => /^v22\./u.test(output.trim())
       });
       const npmCheck = toolkit.toolchainCommandCheck({
@@ -135,8 +95,7 @@ function createJskitSetupDoctorPlugin({
         commandArgs: ["npm", "--version"],
         expected: "npm runs inside the JSKIT adapter toolchain.",
         explanation: "JSKIT Project Setup uses npm for installs and package scripts.",
-        image: JSKIT_TOOLCHAIN_IMAGE,
-        repair: buildJskitToolchainRepair()
+        image: JSKIT_TOOLCHAIN_IMAGE
       });
       const mariaDbClientCheck = toolkit.toolchainCommandCheck({
         id: "mariadb-client",
@@ -145,7 +104,6 @@ function createJskitSetupDoctorPlugin({
         expected: "MariaDB CLI runs inside the JSKIT adapter toolchain.",
         explanation: "JSKIT Project Setup uses the MariaDB CLI to validate whichever database endpoint .env selects.",
         image: JSKIT_TOOLCHAIN_IMAGE,
-        repair: buildJskitToolchainRepair(),
         validate: (output) => /mariadb/iu.test(output)
       });
 
@@ -217,7 +175,6 @@ function createJskitSetupDoctorPlugin({
     terminalActions(context = {}) {
       return [
         ...runtimeContainers.terminalActions,
-        buildToolchainTerminal,
         ...createJskitProjectSetupTerminalActions({
           targetRoot: context.targetRoot || targetRoot,
           toolkit
@@ -228,7 +185,6 @@ function createJskitSetupDoctorPlugin({
 }
 
 export {
-  buildJskitToolchainRepair,
   createJskitSetupDoctorPlugin,
   JSKIT_TOOLCHAIN_IMAGE
 };

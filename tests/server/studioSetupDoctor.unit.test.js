@@ -53,7 +53,7 @@ test("Studio Setup resolves the Studio implementation root separately", () => {
   try {
     assert.equal(resolveStudioRoot(), envRoot);
     assert.equal(resolveStudioRoot(explicitRoot), explicitRoot);
-    assert.match(TOOLCHAIN_IMAGE, /^vibe64-base-toolchain:/u);
+    assert.equal(TOOLCHAIN_IMAGE, "ghcr.io/mobily-enterprises/vibe64-base-toolchain:0.1.0");
   } finally {
     if (previousStudioRoot == null) {
       delete process.env.VIBE64_APP_ROOT;
