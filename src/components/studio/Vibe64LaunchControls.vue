@@ -629,7 +629,38 @@ function previewMessageUrl(data = {}) {
   try {
     const url = new URL(href, baseUrl);
     const baseOrigin = new URL(baseUrl).origin;
-    return url.origin === baseOrigin ? previewUrlWithoutReload(url.toString()) : "";
+    if (url.origin === baseOrigin) {
+      return previewUrlWithoutReload(url.toString());
+    }
+    const mappedUrl = previewMessageTargetUrlToPreviewUrl(url);
+    return mappedUrl ? previewUrlWithoutReload(mappedUrl) : "";
+  } catch {
+    return "";
+  }
+}
+
+function previewMessageTargetUrlToPreviewUrl(targetUrl) {
+  const previewBase = String(previewBaseUrl.value || "").trim();
+  if (!previewBase || !targetUrl) {
+    return "";
+  }
+  const matchingAction = launchActions.value.find((action) => {
+    try {
+      return new URL(String(action?.href || "")).origin === targetUrl.origin &&
+        String(action?.previewHref || "").trim();
+    } catch {
+      return false;
+    }
+  });
+  if (!matchingAction) {
+    return "";
+  }
+  try {
+    const previewUrl = new URL(previewBase);
+    previewUrl.pathname = targetUrl.pathname;
+    previewUrl.search = targetUrl.search;
+    previewUrl.hash = targetUrl.hash;
+    return previewUrl.toString();
   } catch {
     return "";
   }
