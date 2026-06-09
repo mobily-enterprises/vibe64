@@ -162,8 +162,8 @@ function createService({
       return shell.readTerminal(sessionId, terminalSessionId);
     },
 
-    launchTargetStatus(sessionId) {
-      return launchTarget.launchStatus(sessionId);
+    launchTargetStatus(sessionId, options = {}) {
+      return launchTarget.launchStatus(sessionId, options);
     },
 
     openLaunchTarget(sessionId) {

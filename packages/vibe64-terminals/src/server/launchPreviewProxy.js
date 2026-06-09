@@ -6,6 +6,12 @@ import {
   request as httpsRequest
 } from "node:https";
 import crypto from "node:crypto";
+import {
+  chmod,
+  mkdir,
+  unlink
+} from "node:fs/promises";
+import path from "node:path";
 import { Readable } from "node:stream";
 
 import {
@@ -33,7 +39,9 @@ const PREVIEW_PROXY_TOKEN_QUERY_PARAM = "vibe64_preview_token";
 const PREVIEW_PROXY_TOKEN_COOKIE = "vibe64_preview_token";
 const PREVIEW_PROXY_HOST_ENV = "VIBE64_PREVIEW_PROXY_HOST";
 const PREVIEW_PROXY_PUBLIC_HOST_ENV = "VIBE64_PREVIEW_PROXY_PUBLIC_HOST";
+const PREVIEW_PROXY_SOCKET_DIR_ENV = "VIBE64_PREVIEW_PROXY_SOCKET_DIR";
 const PREVIEW_PROXY_DEBUG_ENV = "VIBE64_PREVIEW_DEBUG";
+const PREVIEW_PROXY_SOCKET_DIR = "/run/vibe64/apps";
 
 function normalizePreviewTargetHref(value = "") {
   const text = String(value || "").trim();
@@ -599,7 +607,9 @@ function upgradeResponseHead(response) {
   return headers.join("\r\n");
 }
 
-function createLaunchPreviewProxyRegistry() {
+function createLaunchPreviewProxyRegistry({
+  env = process.env
+} = {}) {
   const proxies = new Map();
 
   async function ensure(input = {}, targetHref = "") {
@@ -609,16 +619,18 @@ function createLaunchPreviewProxyRegistry() {
     const targetUrl = normalizePreviewTargetHref(scope.targetHref);
     const key = previewProxyKey(scope);
     const existing = proxies.get(key);
+    const publicOrigin = normalizePreviewPublicOrigin(input.previewPublicOrigin);
     previewProxyDebugLog("server.launchPreviewProxy.ensure", {
       existingProxy: Boolean(existing),
       existingTargetHref: String(existing?.targetHref || ""),
       key,
       projectScope: String(scope.projectScope || ""),
+      publicOrigin,
       sessionId: String(scope.sessionId || ""),
       targetHref: targetUrl.toString(),
       terminalSessionId: String(scope.terminalSessionId || "")
     });
-    if (existing && existing.targetHref === targetUrl.toString()) {
+    if (existing && existing.targetHref === targetUrl.toString() && existing.publicOrigin === publicOrigin) {
       previewProxyDebugLog("server.launchPreviewProxy.reuse", {
         key,
         projectScope: String(scope.projectScope || ""),
@@ -634,6 +646,9 @@ function createLaunchPreviewProxyRegistry() {
     const proxy = await startLaunchPreviewProxy(targetUrl, {
       ...scope,
       targetHref: targetUrl.toString()
+    }, {
+      env,
+      publicOrigin
     });
     proxies.set(key, proxy);
     return proxyDescriptor(proxy, targetUrl);
@@ -719,7 +734,10 @@ function previewProxyKey(scope = {}) {
   ].join(":");
 }
 
-async function startLaunchPreviewProxy(targetUrl, scope = {}) {
+async function startLaunchPreviewProxy(targetUrl, scope = {}, {
+  env = process.env,
+  publicOrigin = ""
+} = {}) {
   const server = createServer();
   const token = crypto.randomBytes(32).toString("base64url");
   const tokenScope = {
@@ -746,23 +764,38 @@ async function startLaunchPreviewProxy(targetUrl, scope = {}) {
     });
   });
 
-  const listen = await listenOnPreviewPort(server);
+  const listen = publicOrigin
+    ? await listenOnPreviewSocket(server, {
+        env,
+        publicOrigin
+      })
+    : await listenOnPreviewPort(server, {
+        env
+      });
 
   server.unref();
-  proxyOrigin = `http://${listen.publicHost}:${listen.port}`;
+  proxyOrigin = listen.origin;
   previewProxyDebugLog("server.launchPreviewProxy.started", {
+    listenKind: listen.kind,
     port: listen.port,
     projectScope: String(scope.projectScope || ""),
     proxyOrigin,
     sessionId: String(scope.sessionId || ""),
+    socketPath: listen.socketPath || "",
     targetHref: targetUrl.toString(),
     terminalSessionId: String(scope.terminalSessionId || "")
   });
   return {
     close: () => new Promise((resolve) => {
-      server.close(() => resolve());
+      server.close(async () => {
+        if (listen.socketPath) {
+          await unlinkIfExists(listen.socketPath);
+        }
+        resolve();
+      });
     }),
     origin: proxyOrigin,
+    publicOrigin,
     scope: Object.freeze({
       sessionId: String(scope.sessionId || "").trim(),
       terminalSessionId: String(scope.terminalSessionId || "").trim(),
@@ -785,12 +818,85 @@ async function listenOnPreviewPort(server, {
     if (listened) {
       return {
         host,
+        kind: "port",
+        origin: `http://${publicHost}:${port}`,
         port,
         publicHost
       };
     }
   }
   throw new Error(`No launch preview proxy port is available in ${portStart}-${portEnd}.`);
+}
+
+async function listenOnPreviewSocket(server, {
+  env = process.env,
+  publicOrigin = ""
+} = {}) {
+  const socketPath = previewPublicSocketPath(publicOrigin, env);
+  await mkdir(path.dirname(socketPath), {
+    recursive: true
+  });
+  await unlinkIfExists(socketPath);
+  await new Promise((resolve, reject) => {
+    const onError = (error) => {
+      server.off("listening", onListening);
+      reject(error);
+    };
+    const onListening = () => {
+      server.off("error", onError);
+      resolve();
+    };
+    server.once("error", onError);
+    server.once("listening", onListening);
+    server.listen(socketPath);
+  });
+  await chmod(socketPath, 0o660);
+  return {
+    kind: "socket",
+    origin: publicOrigin,
+    port: "",
+    publicHost: new URL(publicOrigin).host,
+    socketPath
+  };
+}
+
+async function unlinkIfExists(targetPath = "") {
+  if (!targetPath) {
+    return;
+  }
+  try {
+    await unlink(targetPath);
+  } catch (error) {
+    if (error?.code !== "ENOENT") {
+      throw error;
+    }
+  }
+}
+
+function normalizePreviewPublicOrigin(value = "") {
+  const text = String(value || "").trim();
+  if (!text) {
+    return "";
+  }
+  const url = new URL(text);
+  if (url.protocol !== "https:") {
+    throw new Error("Launch preview public origin must use HTTPS.");
+  }
+  url.pathname = "/";
+  url.search = "";
+  url.hash = "";
+  return url.origin;
+}
+
+function previewPublicSocketPath(publicOrigin = "", env = process.env) {
+  const origin = normalizePreviewPublicOrigin(publicOrigin);
+  const host = new URL(origin).hostname;
+  const match = /^([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)--([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\.|$)/u.exec(host);
+  if (!match) {
+    throw new Error("Launch preview public origin must use the <preview>--<tenant> host format.");
+  }
+  const socketDir = String(env[PREVIEW_PROXY_SOCKET_DIR_ENV] || PREVIEW_PROXY_SOCKET_DIR).trim() || PREVIEW_PROXY_SOCKET_DIR;
+  return path.join(socketDir, `${match[1]}--${match[2]}.sock`);
 }
 
 function tryListen(server, port, host) {
@@ -866,6 +972,7 @@ export {
   injectLaunchPreviewBridge,
   listenOnPreviewPort,
   normalizePreviewTargetHref,
+  previewPublicSocketPath,
   previewProxyListenHost,
   previewTokenCookieName,
   proxiedLocation,

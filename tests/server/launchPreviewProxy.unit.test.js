@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:http";
+import { request as httpRequest } from "node:http";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 import WebSocket, { WebSocketServer } from "ws";
 
@@ -19,6 +23,7 @@ import {
   createLaunchPreviewProxyRegistry,
   injectLaunchPreviewBridge,
   normalizePreviewTargetHref,
+  previewPublicSocketPath,
   previewTokenCookieName,
   proxiedLocation,
   stripPreviewTokenQueryParam
@@ -122,6 +127,52 @@ test("launch preview proxy injects HTML and proxies app-relative requests", asyn
       assert.equal(again.href, preview.href);
     } finally {
       await registry.closeAll();
+    }
+  });
+});
+
+test("launch preview proxy can expose previews through a Caddy-compatible Unix socket origin", async () => {
+  const socketDir = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-sockets-"));
+  await withTargetServer(async (target) => {
+    const publicOrigin = "https://v64preview-abcd1234--tenant.vibe64.dev";
+    const registry = createLaunchPreviewProxyRegistry({
+      env: {
+        VIBE64_PREVIEW_PROXY_SOCKET_DIR: socketDir
+      }
+    });
+    try {
+      const preview = await registry.ensure({
+        previewPublicOrigin: publicOrigin,
+        sessionId: "session-public",
+        targetHref: `${target.origin}/home?mode=dev`,
+        terminalSessionId: "terminal-public"
+      });
+
+      assert.equal(preview.available, true);
+      assert.equal(new URL(preview.href).origin, publicOrigin);
+      assert.equal(
+        previewPublicSocketPath(publicOrigin, {
+          VIBE64_PREVIEW_PROXY_SOCKET_DIR: socketDir
+        }),
+        path.join(socketDir, "v64preview-abcd1234--tenant.sock")
+      );
+
+      const response = await requestUnixSocket({
+        headers: {
+          Host: "v64preview-abcd1234--tenant.vibe64.dev"
+        },
+        path: `${new URL(preview.href).pathname}${new URL(preview.href).search}`,
+        socketPath: path.join(socketDir, "v64preview-abcd1234--tenant.sock")
+      });
+      assert.equal(response.statusCode, 200);
+      assert.match(response.body, /Target home/u);
+      assert.match(response.body, /data-vibe64-preview-bridge="1"/u);
+    } finally {
+      await registry.closeAll();
+      await rm(socketDir, {
+        force: true,
+        recursive: true
+      });
     }
   });
 });
@@ -453,6 +504,36 @@ function connectWebSocket(href = "", options = {}) {
       error,
       ok: false
     }));
+  });
+}
+
+function requestUnixSocket({
+  headers = {},
+  path: requestPath = "/",
+  socketPath = ""
+} = {}) {
+  return new Promise((resolve, reject) => {
+    const request = httpRequest({
+      headers,
+      method: "GET",
+      path: requestPath,
+      socketPath
+    }, (response) => {
+      let body = "";
+      response.setEncoding("utf8");
+      response.on("data", (chunk) => {
+        body += chunk;
+      });
+      response.on("end", () => {
+        resolve({
+          body,
+          headers: response.headers,
+          statusCode: response.statusCode
+        });
+      });
+    });
+    request.once("error", reject);
+    request.end();
   });
 }
 

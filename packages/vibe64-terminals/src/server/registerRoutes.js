@@ -113,7 +113,10 @@ function registerRoutes(
   routes.serviceRoute("GET", "/sessions/:sessionId/launch-targets", {
     summary: "Read Vibe64 launch target status."
   }, (request) => {
-    return terminalService().launchTargetStatus(request.params.sessionId);
+    return terminalService().launchTargetStatus(request.params.sessionId, {
+      publicHost: firstForwardedHeader(request.headers?.["x-forwarded-host"]) || request.headers?.host || "",
+      publicProtocol: firstForwardedHeader(request.headers?.["x-forwarded-proto"]) || request.protocol || ""
+    });
   });
 
   routes.actionRoute("POST", "/sessions/:sessionId/launch-terminal", {
@@ -256,6 +259,11 @@ function sessionInput(request) {
   return {
     sessionId: request.params.sessionId
   };
+}
+
+function firstForwardedHeader(value = "") {
+  const rawValue = Array.isArray(value) ? value[0] : value;
+  return String(rawValue || "").split(",")[0]?.trim() || "";
 }
 
 function terminalRouteInput(request) {

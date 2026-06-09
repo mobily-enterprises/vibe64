@@ -15,10 +15,15 @@ import {
   ensureTargetRuntimeNetwork
 } from "@local/studio-terminal-core/server/runtimeContainers";
 import {
+  isLoopbackAddress,
+  normalizeHostName
+} from "@local/vibe64-core/server/localStudioRequest";
+import {
   commandInvocation,
   vibe64Result,
   launchTargetTerminalNamespace,
   sessionTerminalCwd,
+  terminalProjectScopeKey,
   stableHash
 } from "./terminalShared.js";
 import {
@@ -41,6 +46,7 @@ const LAUNCH_METADATA = Object.freeze({
   startedAt: "launch_target_started_at"
 });
 const MAX_LAUNCH_ACTION_SCAN_LINES = 10;
+const PREVIEW_PUBLIC_HOST_PREFIX = "v64preview";
 
 function normalizeLaunchTargetId(value = "") {
   return String(value || "").trim();
@@ -319,7 +325,7 @@ function createLaunchTargetTerminalController({
 } = {}) {
   const launchPreviewProxies = createLaunchPreviewProxyRegistry();
 
-  async function previewTargetForStatus(sessionId = "", status = {}) {
+  async function previewTargetForStatus(sessionId = "", status = {}, options = {}) {
     const targetHref = String(status.openTarget?.href || "").trim();
     if (!targetHref || status.openTarget?.available === false) {
       return null;
@@ -337,6 +343,13 @@ function createLaunchTargetTerminalController({
     }
     try {
       return await launchPreviewProxies.ensure({
+        previewPublicOrigin: previewPublicOriginForLaunch({
+          publicHost: options.publicHost,
+          publicProtocol: options.publicProtocol,
+          sessionId,
+          targetHref,
+          terminalSessionId
+        }),
         sessionId,
         targetHref,
         terminalSessionId
@@ -371,7 +384,7 @@ function createLaunchTargetTerminalController({
       });
     },
 
-    async launchStatus(sessionId) {
+    async launchStatus(sessionId, options = {}) {
       return vibe64Result(async () => {
         const context = await createLaunchContext(projectService, sessionId);
         const status = launchStatusResponse({
@@ -379,7 +392,7 @@ function createLaunchTargetTerminalController({
           session: context.session,
           terminal: latestLaunchTerminal(sessionId)
         });
-        const previewTarget = await previewTargetForStatus(sessionId, status);
+        const previewTarget = await previewTargetForStatus(sessionId, status, options);
         return launchStatusResponse({
           launchTargets: status.launchTargets,
           previewTarget,
@@ -575,8 +588,39 @@ function createLaunchTargetTerminalController({
   });
 }
 
+function previewPublicOriginForLaunch({
+  publicHost = "",
+  publicProtocol = "",
+  sessionId = "",
+  targetHref = "",
+  terminalSessionId = ""
+} = {}) {
+  const hostname = normalizeHostName(String(publicHost || "").trim());
+  if (!hostname || isLoopbackAddress(hostname)) {
+    return "";
+  }
+  const studioHostMatch = /^([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)\.([a-z0-9][a-z0-9.-]*[a-z0-9])$/u.exec(hostname);
+  if (!studioHostMatch) {
+    return "";
+  }
+  const tenant = studioHostMatch[1];
+  const baseDomain = studioHostMatch[2];
+  const hash = stableHash([
+    terminalProjectScopeKey(),
+    sessionId,
+    terminalSessionId,
+    targetHref
+  ].join("\n")).replace(/[^a-z0-9]/giu, "").toLowerCase().slice(0, 16);
+  if (!hash) {
+    return "";
+  }
+  void publicProtocol;
+  return `https://${PREVIEW_PUBLIC_HOST_PREFIX}-${hash}--${tenant}.${baseDomain}`;
+}
+
 export {
   LAUNCH_METADATA,
   launchActionsFromOutput,
+  previewPublicOriginForLaunch,
   createLaunchTargetTerminalController
 };

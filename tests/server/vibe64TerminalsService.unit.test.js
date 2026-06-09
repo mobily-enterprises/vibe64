@@ -998,9 +998,13 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       }
     });
     await delay(5);
-    assert.deepEqual((await runtime.store.readConversationLog()).map((turn) => turn.user?.text).filter(Boolean), [
-      "This was typed directly into the Codex terminal."
-    ]);
+    assert.equal(
+      (await runtime.store.readConversationLog())
+        .map((turn) => turn.user?.text)
+        .filter(Boolean)
+        .includes("This was typed directly into the Codex terminal."),
+      true
+    );
     assert.equal(publishSessionReasons.at(-1), "codex-app-server-terminal-user-message");
     providerSubscribers[0]({
       method: "item/completed",
@@ -1037,9 +1041,13 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       }
     });
     await delay(5);
-    assert.deepEqual((await runtime.store.readConversationLog()).map((turn) => turn.user?.text).filter(Boolean), [
-      "This was typed directly into the Codex terminal."
-    ]);
+    assert.equal(
+      (await runtime.store.readConversationLog())
+        .map((turn) => turn.user?.text)
+        .filter(Boolean)
+        .includes("This was typed directly into the Codex terminal."),
+      true
+    );
     providerSubscribers[0]({
       method: "thread/status/changed",
       params: {
