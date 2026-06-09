@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { statSync } from "node:fs";
+import { chmodSync, mkdirSync, statSync } from "node:fs";
 import { createServer as createNetServer } from "node:net";
 import path from "node:path";
 import process from "node:process";
@@ -345,6 +345,21 @@ function previewAuthDockerArgs({
   ]);
 }
 
+function ensurePreviewAuthProfilePath(profilePath = "") {
+  const normalizedPath = normalizeText(profilePath);
+  if (!normalizedPath) {
+    return "";
+  }
+  const profileDir = path.dirname(normalizedPath);
+  mkdirSync(profileDir, {
+    recursive: true
+  });
+  // Launch containers can run with a remapped user. Keep only the terminal-scoped
+  // runtime directory writable; tenant-private parent directories still gate access.
+  chmodSync(profileDir, 0o777);
+  return normalizedPath;
+}
+
 function redactLaunchTargetTerminalArgs(args = []) {
   return (Array.isArray(args) ? args : []).map((arg) => {
     const text = String(arg || "");
@@ -547,12 +562,12 @@ async function createVibe64WebLaunchTargetTerminalSpec({
         ...extraDockerArgs,
         ...previewAuthDockerArgs({
           kind: previewAuthKind,
-          profilePath: previewAuthProfilePath({
+          profilePath: ensurePreviewAuthProfilePath(previewAuthProfilePath({
             sessionRoot: session.sessionRoot || "",
             targetRoot: resolvedTargetRoot,
             sessionId: session.sessionId || "",
             terminalSessionId: id
-          }),
+          })),
           projectScope: launch.projectScope,
           sessionId: session.sessionId || "",
           targetHref: targetUrl,
