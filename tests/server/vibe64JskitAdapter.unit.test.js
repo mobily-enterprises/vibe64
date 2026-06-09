@@ -414,6 +414,8 @@ test("jskit built launch waits for the server readiness marker before opening", 
     assert.ok(previewAuthIndex < serverIndex);
     assert.match(startupScript, /action:%s/u);
     assert.match(startupScript, /VIBE64_LAUNCH_READY_V1/u);
+    assert.match(startupScript, /fetch\(href/u);
+    assert.match(startupScript, /Launch target did not become ready at/u);
   });
 });
 
@@ -475,6 +477,8 @@ test("jskit dev launch starts backend and Vite together", async () => {
     assert.match(startupScript, /VITE_API_PROXY_TARGET="http:\/\/127\.0\.0\.1:\$VIBE64_JSKIT_BACKEND_PORT"/u);
     assert.match(startupScript, /npm run dev -- --host 0\.0\.0\.0 --port "\$PORT"/u);
     assert.match(startupScript, /VIBE64_LAUNCH_READY_V1/u);
+    assert.match(startupScript, /fetch\(href/u);
+    assert.match(startupScript, /Launch target did not become ready at/u);
   });
 });
 

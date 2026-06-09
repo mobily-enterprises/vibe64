@@ -183,11 +183,58 @@ function tcpReadinessProbeCommand({
   ].join(" ");
 }
 
-function commandWithTcpReadiness({
-  command = "",
-  host = "127.0.0.1",
+function httpReadinessProbeCommand({
+  href = "",
   marker = "",
-  port,
+  timeoutSeconds = 90
+} = {}) {
+  const script = [
+    "const href = process.argv[1];",
+    "const marker = process.argv[2];",
+    "const timeoutMs = Number(process.argv[3]) * 1000;",
+    "const deadline = Date.now() + timeoutMs;",
+    "async function retry() {",
+    "  if (Date.now() >= deadline) {",
+    "    console.error(`[studio] Launch target did not become ready at ${href}.`);",
+    "    process.exit(1);",
+    "  }",
+    "  await new Promise((resolve) => setTimeout(resolve, 250));",
+    "  await probe();",
+    "}",
+    "async function probe() {",
+    "  const controller = new AbortController();",
+    "  const timeout = setTimeout(() => controller.abort(), 1000);",
+    "  try {",
+    "    const response = await fetch(href, {",
+    "      redirect: 'manual',",
+    "      signal: controller.signal",
+    "    });",
+    "    clearTimeout(timeout);",
+    "    if (response.status < 500) {",
+    "      console.log(marker);",
+    "      return;",
+    "    }",
+    "  } catch {",
+    "    clearTimeout(timeout);",
+    "  }",
+    "  await retry();",
+    "}",
+    "probe();"
+  ].join("\n");
+  return [
+    "node",
+    "-e",
+    shellQuote(script),
+    shellQuote(href),
+    shellQuote(marker),
+    shellQuote(String(timeoutSeconds))
+  ].join(" ");
+}
+
+function commandWithHttpReadiness({
+  command = "",
+  href = "",
+  marker = "",
   timeoutSeconds = 90
 } = {}) {
   return [
@@ -199,10 +246,9 @@ function commandWithTcpReadiness({
     "    kill \"$vibe64_launch_pid\" 2>/dev/null || true",
     "  }",
     "  trap cleanup_vibe64_launch EXIT INT TERM",
-    `  ${tcpReadinessProbeCommand({
-      host,
+    `  ${httpReadinessProbeCommand({
+      href,
       marker,
-      port,
       timeoutSeconds
     })}`,
     "  wait \"$vibe64_launch_pid\"",
@@ -211,11 +257,11 @@ function commandWithTcpReadiness({
 }
 
 function addReadinessMarkerToLaunchCommands(commands = [], {
+  href = "",
   marker = "",
-  port,
   waitForReadiness = true
 } = {}) {
-  if (!waitForReadiness || !marker) {
+  if (!waitForReadiness || !marker || !href) {
     return {
       commands,
       readinessMarker: ""
@@ -232,10 +278,10 @@ function addReadinessMarkerToLaunchCommands(commands = [], {
     commands: commands.map((entry, index) => index === serverCommandIndex
       ? {
           ...entry,
-          command: commandWithTcpReadiness({
+          command: commandWithHttpReadiness({
             command: entry.command,
-            marker,
-            port
+            href,
+            marker
           })
         }
       : entry),
@@ -508,9 +554,16 @@ async function createVibe64WebLaunchTargetTerminalSpec({
     targetRoot: resolvedTargetRoot,
     worktreePath
   });
+  const urlPath = normalizeUrlPath(launch.urlPath || "/");
+  const targetUrl = `http://127.0.0.1:${port}${urlPath}`;
+  const openTarget = normalizeOpenTarget({
+    href: launch.openTarget?.href || targetUrl,
+    kind: launch.openTarget?.kind || "url",
+    label: launch.openTarget?.label || launch.openLabel || "Open browser"
+  });
   const readiness = addReadinessMarkerToLaunchCommands(normalizeLaunchCommands(launch), {
+    href: openTarget.href || targetUrl,
     marker: generatedReadinessMarker,
-    port,
     waitForReadiness: launch.waitForReadiness !== false
   });
   const startupCommands = readiness.commands;
@@ -521,13 +574,6 @@ async function createVibe64WebLaunchTargetTerminalSpec({
     };
   }
 
-  const urlPath = normalizeUrlPath(launch.urlPath || "/");
-  const targetUrl = `http://127.0.0.1:${port}${urlPath}`;
-  const openTarget = normalizeOpenTarget({
-    href: launch.openTarget?.href || targetUrl,
-    kind: launch.openTarget?.kind || "url",
-    label: launch.openTarget?.label || launch.openLabel || "Open browser"
-  });
   const workdir = normalizeText(launch.workdir) || worktreePath;
   const extraDockerArgs = [
     ...(Array.isArray(launch.extraDockerArgs) ? launch.extraDockerArgs : []),
@@ -610,7 +656,8 @@ export {
   DEFAULT_WEB_LAUNCH_TARGET_PORT,
   createVibe64WebLaunchTargetTerminalSpec,
   findAvailableWebLaunchTargetPort,
-  commandWithTcpReadiness,
+  commandWithHttpReadiness,
+  httpReadinessProbeCommand,
   launchReadinessMarker,
   tcpReadinessProbeCommand,
   webLaunchTargetStartupScript
