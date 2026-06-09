@@ -13,6 +13,9 @@ import {
   createFileSessionStore
 } from "./sessionStore.js";
 import {
+  createFileSetupStore
+} from "./setupStore.js";
+import {
   createFileUserStore
 } from "./userStore.js";
 
@@ -22,6 +25,7 @@ const VIBE64_SUPABASE_PUBLISHABLE_KEY_ENV = "VIBE64_SUPABASE_PUBLISHABLE_KEY";
 const VIBE64_SUPABASE_SECRET_KEY_ENV = "VIBE64_SUPABASE_SECRET_KEY";
 
 function createVibe64Auth({
+  codexConnectedVerifier = null,
   dataRoot = "",
   env = process.env,
   supabasePublishableKey = "",
@@ -36,6 +40,9 @@ function createVibe64Auth({
   const users = createFileUserStore({
     usersRoot: path.join(root, "users")
   });
+  const setup = createFileSetupStore({
+    setupPath: path.join(root, "setup.json")
+  });
   const sessions = createFileSessionStore({
     sessionsRoot: path.join(root, "auth-sessions")
   });
@@ -48,6 +55,9 @@ function createVibe64Auth({
   const verifyAccessToken = typeof verifySupabaseAccessToken === "function"
     ? verifySupabaseAccessToken
     : (accessToken) => verifySupabaseUser(accessToken, supabase);
+  const verifyCodexConnected = typeof codexConnectedVerifier === "function"
+    ? codexConnectedVerifier
+    : null;
 
   async function stateForRequest(request = {}) {
     const user = await userForRequest(request);
@@ -56,6 +66,7 @@ function createVibe64Auth({
       authenticated: Boolean(user),
       authProvider: "supabase",
       dataRoot: root,
+      firstLoginCodexSetupPending: await setup.firstLoginCodexSetupPending(),
       ownerInvitePending: await users.ownerInvitePending(),
       setupRequired: await users.setupRequired(),
       supabase: publicSupabaseConfig(supabase),
@@ -97,11 +108,37 @@ function createVibe64Auth({
     return users.acceptSupabaseIdentity(identity);
   }
 
+  async function codexConnectedForSetup() {
+    if (!verifyCodexConnected) {
+      return {
+        ok: false,
+        code: "vibe64_accounts_service_unavailable",
+        error: "Vibe64 account service is unavailable."
+      };
+    }
+    const result = await verifyCodexConnected();
+    if (result === true) {
+      return {
+        connected: true,
+        ok: true
+      };
+    }
+    if (result?.ok === false) {
+      return result;
+    }
+    return {
+      connected: result?.connected === true,
+      ok: true
+    };
+  }
+
   return Object.freeze({
     authenticateSupabaseSession,
     clearUserSession,
+    codexConnectedForSetup,
     dataRoot: root,
     sessions,
+    setup,
     startUserSession,
     stateForRequest,
     supabase,
@@ -210,6 +247,18 @@ function registerVibe64AuthRoutes(app, auth) {
     });
   });
 
+  app.post(`${API_AUTH_BASE}/setup/codex-complete`, async (request, reply) => {
+    return requireOwnerResult(auth, request, reply, async () => {
+      await assertCodexConnectedForSetup(auth);
+      const setup = await auth.setup.markFirstLoginCodexSetupComplete();
+      return {
+        ok: true,
+        firstLoginCodexSetupPending: false,
+        setup
+      };
+    });
+  });
+
   app.post(`${API_AUTH_BASE}/password`, async (_request, reply) => {
     return reply.code(410).send({
       ok: false,
@@ -217,6 +266,22 @@ function registerVibe64AuthRoutes(app, auth) {
       error: "Password changes are handled by Supabase."
     });
   });
+}
+
+async function assertCodexConnectedForSetup(auth) {
+  const status = await auth.codexConnectedForSetup();
+  if (status?.ok === false) {
+    throw authError(
+      status.code || "vibe64_codex_status_failed",
+      status.error || "Codex status could not be verified."
+    );
+  }
+  if (status?.connected !== true) {
+    throw authError(
+      "vibe64_codex_setup_incomplete",
+      "Connect Codex before completing first-login setup."
+    );
+  }
 }
 
 function registerVibe64AuthGate(app, auth) {
@@ -370,6 +435,12 @@ async function authRouteResult(operation, reply) {
   }
 }
 
+function authError(code, message) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+
 function authErrorStatusCode(error = {}) {
   if (
     error?.code === "vibe64_invalid_user_email" ||
@@ -394,7 +465,8 @@ function authErrorStatusCode(error = {}) {
     error?.code === "vibe64_supabase_user_mismatch" ||
     error?.code === "vibe64_supabase_email_mismatch" ||
     error?.code === "vibe64_invite_not_pending" ||
-    error?.code === "vibe64_tenant_user_limit_reached"
+    error?.code === "vibe64_tenant_user_limit_reached" ||
+    error?.code === "vibe64_codex_setup_incomplete"
   ) {
     return 409;
   }

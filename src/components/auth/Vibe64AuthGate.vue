@@ -1,11 +1,12 @@
 <script setup>
 import { computed, onBeforeUnmount, provide, reactive, ref, watch } from "vue";
-import { useRoute, useRouter } from "vue-router";
 import Vibe64AuthScreen from "./Vibe64AuthScreen.vue";
+import Vibe64PrerequisiteSetup from "./Vibe64PrerequisiteSetup.vue";
 import {
   VIBE64_APP_AUTH_KEY
 } from "@/composables/useVibe64AppAuth.js";
 import {
+  markFirstLoginCodexSetupComplete,
   logout,
   readAuthState
 } from "@/lib/vibe64AuthApi.js";
@@ -16,26 +17,25 @@ import {
   connectBrowserLifecycleSocket
 } from "@/lib/browserLifecycle.js";
 import {
-  readAccountsStatus
-} from "@/lib/studioGateApi.js";
-
-const route = useRoute();
-const router = useRouter();
+  syncGithubIdentity
+} from "@/lib/vibe64ProjectApi.js";
 const loading = ref(true);
 const loadError = ref("");
 const state = reactive({
   authenticated: false,
+  firstLoginCodexSetupPending: false,
   ownerInvitePending: false,
   setupRequired: false,
   user: null
 });
-const githubPrerequisite = reactive({
-  checking: false
+const prerequisite = reactive({
+  checked: false,
+  checking: false,
+  error: "",
+  step: ""
 });
-const githubPrerequisiteChecked = ref(false);
-const githubPrerequisiteSatisfied = ref(false);
 let lifecycleConnection = null;
-let githubPrerequisiteRun = 0;
+let prerequisiteRun = 0;
 
 const authContext = {
   state,
@@ -43,21 +43,29 @@ const authContext = {
   signOut
 };
 const authenticated = computed(() => state.authenticated === true && state.user);
-const accountRouteActive = computed(() => normalizedPath(route.path) === "/account");
-const configureRouteActive = computed(() => dashboardConfigurePath(normalizedPath(route.path)));
-const githubPrerequisiteRouteActive = computed(() => accountRouteActive.value || configureRouteActive.value);
+const prerequisitesSatisfied = computed(() => (
+  prerequisite.checked === true &&
+  !prerequisite.step &&
+  !prerequisite.error
+));
 
 provide(VIBE64_APP_AUTH_KEY, authContext);
 
-async function refresh() {
-  loading.value = true;
+async function refresh({
+  quiet = false
+} = {}) {
+  if (!quiet) {
+    loading.value = true;
+  }
   loadError.value = "";
   try {
     applyState(await readAuthState());
   } catch (error) {
     loadError.value = String(error?.message || error || "Auth state could not load.");
   } finally {
-    loading.value = false;
+    if (!quiet) {
+      loading.value = false;
+    }
   }
 }
 
@@ -76,109 +84,119 @@ function applyState(nextState = {}) {
   const previousUserEmail = String(state.user?.email || "");
   const nextUserEmail = String(nextState.user?.email || "");
   state.authenticated = nextState.authenticated === true;
+  state.firstLoginCodexSetupPending = nextState.firstLoginCodexSetupPending === true;
   state.ownerInvitePending = nextState.ownerInvitePending === true;
   state.setupRequired = nextState.setupRequired === true;
   state.user = nextState.user || null;
   if (!state.authenticated || previousUserEmail !== nextUserEmail) {
-    githubPrerequisiteChecked.value = false;
-    githubPrerequisiteSatisfied.value = false;
+    resetPrerequisiteState();
   }
 }
 
-function applyAuthenticated(response = {}) {
-  applyState({
-    authenticated: true,
-    ownerInvitePending: false,
-    setupRequired: false,
-    user: response.user || null
-  });
+async function applyAuthenticated() {
+  await refresh();
 }
 
-function normalizedPath(pathValue = "") {
-  const path = String(pathValue || "").trim();
-  if (!path || path === "/") {
-    return path || "/";
-  }
-  return path.replace(/\/+$/u, "");
+function currentUserIsOwner() {
+  return state.user?.owner === true || state.user?.role === "owner";
 }
 
-function dashboardConfigurePath(pathValue = "") {
-  return /^\/app\/[^/]+\/dashboard\/configure$/u.test(String(pathValue || ""));
+function currentUserHasGithubIdentity() {
+  return Boolean(String(state.user?.github?.login || "").trim());
 }
 
-function currentReturnPath() {
-  const current = String(route.fullPath || route.path || "/app/manage/projects").trim();
-  if (!current || current === "/account" || current.startsWith("/account?")) {
-    return "/app/manage/projects";
-  }
-  return current;
+function resetPrerequisiteState() {
+  prerequisiteRun += 1;
+  prerequisite.checked = false;
+  prerequisite.checking = false;
+  prerequisite.error = "";
+  prerequisite.step = "";
 }
 
-function firstRouteParam(value) {
-  const rawValue = Array.isArray(value) ? value[0] : value;
-  return String(rawValue || "").trim();
-}
-
-function githubConfigurationPath() {
-  const slug = firstRouteParam(route.params.slug);
-  return slug ? `/app/${encodeURIComponent(slug)}/dashboard/configure` : "/account";
-}
-
-function githubConnected(status = {}) {
-  const accounts = Array.isArray(status.accounts) ? status.accounts : [];
-  return accounts.some((account) => (
-    String(account?.id || "").toLowerCase() === "github" &&
-    account?.connected === true
-  ));
-}
-
-async function ensureGithubPrerequisite() {
+async function ensurePrerequisites({
+  verifyCodexCompletion = false
+} = {}) {
   if (!authenticated.value) {
-    githubPrerequisite.checking = false;
-    return;
-  }
-  if (githubPrerequisiteRouteActive.value) {
-    githubPrerequisite.checking = false;
-    githubPrerequisiteChecked.value = false;
-    return;
-  }
-  if (githubPrerequisiteChecked.value && githubPrerequisiteSatisfied.value) {
+    resetPrerequisiteState();
     return;
   }
 
-  const runId = githubPrerequisiteRun + 1;
-  githubPrerequisiteRun = runId;
-  githubPrerequisite.checking = true;
+  const runId = prerequisiteRun + 1;
+  prerequisiteRun = runId;
+  prerequisite.checking = verifyCodexCompletion;
+  prerequisite.error = "";
 
   try {
-    const status = await readAccountsStatus();
-    if (runId !== githubPrerequisiteRun) {
+    if (
+      state.firstLoginCodexSetupPending === true &&
+      currentUserIsOwner()
+    ) {
+      if (!verifyCodexCompletion) {
+        prerequisite.step = "codex";
+        prerequisite.checked = true;
+        return;
+      }
+      const completeResponse = await markFirstLoginCodexSetupComplete();
+      if (runId !== prerequisiteRun) {
+        return;
+      }
+      if (completeResponse.ok === false) {
+        throw new Error(completeResponse.error || "Codex setup could not be completed.");
+      }
+      await refresh({
+        quiet: true
+      });
+      if (runId !== prerequisiteRun) {
+        return;
+      }
+    }
+
+    if (!currentUserHasGithubIdentity()) {
+      prerequisite.step = "github";
+      prerequisite.checked = true;
       return;
     }
-    githubPrerequisiteChecked.value = true;
-    githubPrerequisiteSatisfied.value = githubConnected(status);
-    if (!githubPrerequisiteSatisfied.value) {
-      await router.replace({
-        path: githubConfigurationPath(),
-        query: {
-          returnTo: currentReturnPath()
-        }
+
+    prerequisite.step = "";
+    prerequisite.checked = true;
+  } catch (error) {
+    if (runId !== prerequisiteRun) {
+      return;
+    }
+    prerequisite.error = String(error?.message || error || "Setup status could not load.");
+    prerequisite.step = "";
+    prerequisite.checked = true;
+  } finally {
+    if (runId === prerequisiteRun) {
+      prerequisite.checking = false;
+    }
+  }
+}
+
+async function continuePrerequisiteSetup() {
+  const completedStep = prerequisite.step;
+  prerequisite.checked = false;
+  prerequisite.checking = true;
+  prerequisite.error = "";
+  try {
+    if (completedStep === "github") {
+      const syncResponse = await syncGithubIdentity();
+      if (syncResponse?.ok === false) {
+        const firstError = Array.isArray(syncResponse.errors) ? syncResponse.errors[0] : null;
+        throw new Error(firstError?.message || syncResponse.error || "GitHub identity could not be saved.");
+      }
+      await refresh({
+        quiet: true
       });
     }
-  } catch {
-    if (runId !== githubPrerequisiteRun) {
-      return;
-    }
-    await router.replace({
-      path: githubConfigurationPath(),
-      query: {
-        returnTo: currentReturnPath()
-      }
+    await ensurePrerequisites({
+      verifyCodexCompletion: completedStep === "codex"
     });
-  } finally {
-    if (runId === githubPrerequisiteRun) {
-      githubPrerequisite.checking = false;
-    }
+  } catch (error) {
+    prerequisite.error = String(error?.message || error || "Setup status could not load.");
+    prerequisite.step = completedStep;
+    prerequisite.checked = true;
+    prerequisite.checking = false;
   }
 }
 
@@ -190,9 +208,9 @@ watch(authenticated, (active) => {
 });
 
 watch(
-  [authenticated, () => route.fullPath],
+  authenticated,
   () => {
-    void ensureGithubPrerequisite();
+    void ensurePrerequisites();
   },
   {
     immediate: true
@@ -221,6 +239,20 @@ void refresh();
     :owner-invite-pending="state.ownerInvitePending"
     :setup-required="state.setupRequired"
     @authenticated="applyAuthenticated"
+  />
+  <main
+    v-else-if="!prerequisite.checked && !prerequisite.error"
+    class="vibe64-auth-gate__loading"
+  >
+    <v-progress-circular indeterminate color="primary" />
+  </main>
+  <Vibe64PrerequisiteSetup
+    v-else-if="!prerequisitesSatisfied"
+    :checking="prerequisite.checking"
+    :error="prerequisite.error"
+    :step="prerequisite.step"
+    @continue="continuePrerequisiteSetup"
+    @retry="continuePrerequisiteSetup"
   />
   <slot v-else />
 </template>

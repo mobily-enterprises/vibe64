@@ -35,7 +35,9 @@ const addProjectDialogOpen = ref(false);
 const projectAccessDialogOpen = ref(false);
 const projectAccessProject = ref(null);
 const sortedProjects = computed(() => [...projects.value].sort((left, right) => left.slug.localeCompare(right.slug)));
-const canManageProjects = computed(() => auth?.state?.user?.owner === true || auth?.state?.user?.role === "owner");
+const isOwner = computed(() => auth?.state?.user?.owner === true || auth?.state?.user?.role === "owner");
+const canManageProjects = computed(() => isOwner.value);
+const canManageStudioSetup = computed(() => isOwner.value);
 const emptyProjectsMessage = computed(() => canManageProjects.value
   ? "No projects yet. Add a project to create the first one."
   : "No projects yet.");
@@ -302,11 +304,15 @@ function viewPanelId(value) {
 
         <StudioSetupDoctorScreen
           v-else-if="activeManagementView === 'studio-setup'"
+          :actions-enabled="canManageStudioSetup"
+          actions-disabled-message="Only the Vibe64 owner can run Studio setup actions."
           :continue-enabled="false"
         />
 
         <AIAccountsSetup
           v-else-if="activeManagementView === 'accounts'"
+          :actions-enabled="canManageProjects"
+          actions-disabled-message="Only the Vibe64 owner can manage the shared Codex account."
           :show-continue="false"
         />
 
@@ -476,6 +482,7 @@ function viewPanelId(value) {
 .vibe64-manage__panel :deep(.doctor-status__quiet),
 .vibe64-manage__panel :deep(.doctor-status),
 .vibe64-manage__panel :deep(.accounts-setup__header),
+.vibe64-manage__panel :deep(.accounts-setup__notice),
 .vibe64-manage__panel :deep(.accounts-setup__items) {
   margin-inline: auto;
   max-width: 54rem;

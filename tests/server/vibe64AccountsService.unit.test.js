@@ -32,7 +32,8 @@ import {
 } from "./vibe64RouteTestHelpers.js";
 
 const OWNER_USER = Object.freeze({
-  email: "Owner@Example.com"
+  email: "Owner@Example.com",
+  role: "owner"
 });
 const LINKED_OWNER_USER = Object.freeze({
   email: "Owner@Example.com",
@@ -44,7 +45,8 @@ const LINKED_OWNER_USER = Object.freeze({
   })
 });
 const FRIEND_USER = Object.freeze({
-  email: "friend@example.com"
+  email: "friend@example.com",
+  role: "member"
 });
 
 function connectedToolchain(calls = []) {
@@ -238,6 +240,28 @@ test("Accounts status uses shared Codex auth and the active user's GitHub home",
     assert.equal(codexCalls(calls)[0].options.toolHomeSource || "", "");
     assert.equal(githubCalls(calls).length, 5);
     assert.deepEqual(new Set(githubCalls(calls).map((call) => call.options.toolHomeSource)), new Set([expectedGithubHome]));
+  });
+});
+
+test("Codex status can be checked without requiring a GitHub user context", async () => {
+  await withTemporaryRoot(async (root) => {
+    const calls = [];
+    const status = await createService({
+      runToolchain: connectedToolchain(calls),
+      targetRoot: path.join(root, "target")
+    }).getCodexStatus();
+
+    assert.equal(status.ok, true);
+    assert.equal(status.account.id, "codex");
+    assert.equal(status.account.connected, true);
+    assert.equal(calls.length, 1);
+    assert.deepEqual(calls[0].commandArgs, [
+      "codex",
+      "-c",
+      "check_for_update_on_startup=false",
+      "login",
+      "status"
+    ]);
   });
 });
 
@@ -487,6 +511,61 @@ test("Codex API key auth requires a submitted key", async () => {
     assert.equal(result.ok, false);
     assert.equal(result.code, "codex_api_key_required");
     assert.match(result.error, /OpenAI API key is required/u);
+  });
+});
+
+test("Codex setup actions require the Vibe64 owner", async () => {
+  await withTemporaryRoot(async (root) => {
+    const service = createService({
+      targetRoot: path.join(root, "target")
+    });
+    const startResult = await service.startAuth(accountInput(FRIEND_USER, {
+      accountId: "codex",
+      mode: "device"
+    }));
+    assert.equal(startResult.ok, false);
+    assert.equal(startResult.code, "vibe64_owner_required");
+
+    const logoutResult = await service.logout(accountInput(FRIEND_USER, {
+      accountId: "codex"
+    }));
+    assert.equal(logoutResult.ok, false);
+    assert.equal(logoutResult.code, "vibe64_owner_required");
+  });
+});
+
+test("Codex auth terminal I/O is restricted to the Vibe64 owner", async () => {
+  await withTemporaryRoot(async (root) => {
+    const service = createService({
+      targetRoot: path.join(root, "target")
+    });
+    const terminal = startTerminalSession({
+      args: ["-e", "process.stdin.resume(); setInterval(() => {}, 1000);"],
+      command: process.execPath,
+      commandPreview: "node codex-auth",
+      metadata: authTerminalMetadata("codex", "device"),
+      namespace: ACCOUNT_AUTH_NAMESPACE,
+      reuseRunning: false
+    });
+    assert.equal(terminal.ok, true);
+
+    try {
+      const ownerSubscribe = service.subscribeAuthTerminal(accountInput(OWNER_USER, {
+        sessionId: terminal.id
+      }), () => null);
+      assert.equal(ownerSubscribe.ok, true);
+      ownerSubscribe.unsubscribe();
+
+      const friendSubscribe = service.subscribeAuthTerminal(accountInput(FRIEND_USER, {
+        sessionId: terminal.id
+      }), () => null);
+      assert.equal(friendSubscribe.ok, false);
+      assert.equal(friendSubscribe.code, "unknown_auth_session");
+    } finally {
+      await closeTerminalSession(terminal.id, {
+        namespace: ACCOUNT_AUTH_NAMESPACE
+      });
+    }
   });
 });
 

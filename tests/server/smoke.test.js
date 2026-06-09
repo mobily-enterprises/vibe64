@@ -195,6 +195,55 @@ test("protected API routes require Vibe64 login", async () => {
   }
 });
 
+test("first-login Codex setup completion uses the configured account verifier", async () => {
+  const authDataRoot = await mkdtemp(path.join(tmpdir(), "vibe64-auth-codex-setup-"));
+  let codexConnected = false;
+  const app = await createServer({
+    authDataRoot,
+    codexConnectedVerifier: async () => ({
+      connected: codexConnected,
+      ok: true
+    }),
+    verifySupabaseAccessToken: fakeVerifySupabaseAccessToken
+  });
+  try {
+    const cookie = await authenticateOwner(app);
+    const headers = {
+      cookie: Array.isArray(cookie) ? cookie[0] : cookie
+    };
+    const blocked = await app.inject({
+      headers,
+      method: "POST",
+      url: "/api/auth/setup/codex-complete"
+    });
+    assert.equal(blocked.statusCode, 409);
+    assert.equal(blocked.json().code, "vibe64_codex_setup_incomplete");
+
+    codexConnected = true;
+    const completed = await app.inject({
+      headers,
+      method: "POST",
+      url: "/api/auth/setup/codex-complete"
+    });
+    assert.equal(completed.statusCode, 200);
+    assert.equal(completed.json().firstLoginCodexSetupPending, false);
+
+    const state = await app.inject({
+      headers,
+      method: "GET",
+      url: "/api/auth/state"
+    });
+    assert.equal(state.statusCode, 200);
+    assert.equal(state.json().firstLoginCodexSetupPending, false);
+  } finally {
+    await app.close();
+    await rm(authDataRoot, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
 test("browser lifecycle WebSocket requires Vibe64 login", async () => {
   const authDataRoot = await mkdtemp(path.join(tmpdir(), "vibe64-auth-ws-"));
   const app = await createServer({

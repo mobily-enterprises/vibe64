@@ -55,6 +55,22 @@ function createRepair(options = {}) {
   });
 }
 
+function ownerRequired(input = {}) {
+  if (input?.vibe64User?.role === "owner") {
+    return null;
+  }
+  return {
+    error: "Only the Vibe64 owner can run Studio setup actions.",
+    errors: [
+      {
+        code: "vibe64_owner_required",
+        message: "Only the Vibe64 owner can run Studio setup actions."
+      }
+    ],
+    ok: false
+  };
+}
+
 function startBashTerminal({
   commandPreview,
   cwd = "",
@@ -580,20 +596,29 @@ function createService({
           return cachedStatus;
         }
       }
+      const ownerError = ownerRequired(input);
+      if (ownerError) {
+        return ownerError;
+      }
       return readyStatusCache.remember(await inspectStudioSetup({
         plugins
       }));
     },
 
-    async streamStatus({
-      emit,
-      refresh = false
-    } = {}) {
+    async streamStatus(input = {}) {
+      const {
+        emit,
+        refresh = false
+      } = input;
       if (!refreshRequested({ refresh })) {
         const cachedStatus = await readyStatusCache.read();
         if (cachedStatus) {
           return cachedStatus;
         }
+      }
+      const ownerError = ownerRequired(input);
+      if (ownerError) {
+        return ownerError;
       }
       return readyStatusCache.remember(await inspectStudioSetup({
         emit,
@@ -602,6 +627,11 @@ function createService({
     },
 
     async startTerminal(input = {}) {
+      const ownerError = ownerRequired(input);
+      if (ownerError) {
+        return ownerError;
+      }
+
       const actionId = String(input.actionId || "");
       const terminal = await startDoctorPluginTerminal({
         actionId,
@@ -621,15 +651,30 @@ function createService({
       };
     },
 
-    readTerminal(sessionId) {
+    readTerminal(sessionId, input = {}) {
+      const ownerError = ownerRequired(input);
+      if (ownerError) {
+        return ownerError;
+      }
+
       return readTerminalSession(sessionId, { namespace: TERMINAL_NAMESPACE });
     },
 
-    writeTerminal(sessionId, data) {
+    writeTerminal(sessionId, data, input = {}) {
+      const ownerError = ownerRequired(input);
+      if (ownerError) {
+        return ownerError;
+      }
+
       return writeTerminalSession(sessionId, data, { namespace: TERMINAL_NAMESPACE });
     },
 
-    closeTerminal(sessionId) {
+    closeTerminal(sessionId, input = {}) {
+      const ownerError = ownerRequired(input);
+      if (ownerError) {
+        return ownerError;
+      }
+
       return closeTerminalSession(sessionId, { namespace: TERMINAL_NAMESPACE });
     }
   });

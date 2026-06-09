@@ -476,6 +476,16 @@ function authError(code, message, extra = {}) {
   };
 }
 
+function ownerRequiredForCodex(input = {}) {
+  if (input?.vibe64User?.role === "owner") {
+    return null;
+  }
+  return authError(
+    "vibe64_owner_required",
+    "Only the Vibe64 owner can manage the shared Codex account."
+  );
+}
+
 function authTerminalMetadata(accountId, mode, githubContext = null) {
   const metadata = {
     accountId,
@@ -667,6 +677,9 @@ function createService({
   }
 
   function sessionVisibleToInput(input = {}, metadata = {}) {
+    if (metadata.accountId === "codex") {
+      return input?.vibe64User?.role === "owner";
+    }
     if (metadata.accountId !== "github") {
       return true;
     }
@@ -819,6 +832,15 @@ function createService({
       });
     },
 
+    async getCodexStatus() {
+      return accountsResult(async () => {
+        return {
+          account: await accountStatus("codex"),
+          ok: true
+        };
+      });
+    },
+
     async startAuth(input = {}) {
       return accountsResult(async () => {
         const accountId = normalizedAccountId(input.accountId);
@@ -829,6 +851,12 @@ function createService({
         });
         if (!accountId) {
           return authError("unknown_account", "Unknown account.");
+        }
+        if (accountId === "codex") {
+          const ownerError = ownerRequiredForCodex(input);
+          if (ownerError) {
+            return ownerError;
+          }
         }
 
         const mode = normalizedAuthMode(accountId, input.mode);
@@ -881,6 +909,12 @@ function createService({
         const accountId = normalizedAccountId(input.accountId);
         if (!accountId) {
           return authError("unknown_account", "Unknown account.");
+        }
+        if (accountId === "codex") {
+          const ownerError = ownerRequiredForCodex(input);
+          if (ownerError) {
+            return ownerError;
+          }
         }
 
         const githubContext = accountId === "github" ? githubContextForInput(input) : null;

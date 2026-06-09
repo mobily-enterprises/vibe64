@@ -45,11 +45,22 @@
 
     <v-alert
       v-if="errorMessage"
+      class="accounts-setup__notice"
       type="error"
       variant="tonal"
       border="start"
     >
       {{ errorMessage }}
+    </v-alert>
+
+    <v-alert
+      v-if="!actionsEnabled && actionsDisabledMessage"
+      class="accounts-setup__notice"
+      type="info"
+      variant="tonal"
+      border="start"
+    >
+      {{ actionsDisabledMessage }}
     </v-alert>
 
     <v-progress-linear
@@ -64,10 +75,10 @@
       <v-sheet
         v-for="account in accountRows"
         :key="account.id"
-          rounded="lg"
-          border
-          :class="[
-            'accounts-setup__item',
+        rounded="lg"
+        border
+        :class="[
+          'accounts-setup__item',
           account.connected ? 'accounts-setup__item--connected' : 'accounts-setup__item--missing',
           !accountsReadyForActions ? 'accounts-setup__item--busy' : ''
         ]"
@@ -409,6 +420,14 @@ const props = defineProps({
     required: true,
     type: Object
   },
+  actionsDisabledMessage: {
+    default: "",
+    type: String
+  },
+  actionsEnabled: {
+    default: true,
+    type: Boolean
+  },
   accountRows: {
     default: () => [],
     type: Array
@@ -450,6 +469,8 @@ const props = defineProps({
 const emit = defineEmits(["back", "continue"]);
 
 const CHATGPT_SECURITY_SETTINGS_URL = "https://chatgpt.com/#settings/Security";
+const ANSI_ESCAPE_PATTERN = new RegExp("\\u001b\\[[0-?]*[ -/]*[@-~]", "gu");
+const VISIBLE_ANSI_ESCAPE_PATTERN = /\u00a4\[[0-?]*[ -/]*[@-~]/gu;
 
 const accountRows = computed(() => Array.isArray(props.accountRows) ? props.accountRows : []);
 const gitIdentityInputs = reactive({});
@@ -460,7 +481,7 @@ const statusReady = computed(() => (
   accountRows.value.every((account) => account.connected === true)
 ));
 const accountsReadyForActions = computed(() => {
-  return props.statusLoaded === true && !unref(props.accounts.isLoading);
+  return props.actionsEnabled === true && props.statusLoaded === true && !unref(props.accounts.isLoading);
 });
 const authSessions = useAccountAuthSessions(props.accounts, {
   accountRows
@@ -702,8 +723,8 @@ function closeAuthTerminal() {
 
 function cleanAuthOutput(output = "") {
   return String(output || "")
-    .replace(/\u001b\[[0-?]*[ -/]*[@-~]/gu, "")
-    .replace(/\u00a4\[[0-?]*[ -/]*[@-~]/gu, "");
+    .replace(ANSI_ESCAPE_PATTERN, "")
+    .replace(VISIBLE_ANSI_ESCAPE_PATTERN, "");
 }
 
 function authSessionUserCode(session = {}) {
@@ -812,8 +833,15 @@ watch(
 .accounts-setup {
   display: grid;
   gap: 0.9rem;
+  width: 100%;
+}
+
+.accounts-setup__header,
+.accounts-setup__notice,
+.accounts-setup__items {
   margin-inline: auto;
   max-width: 68rem;
+  width: 100%;
 }
 
 .accounts-setup__header {

@@ -16,6 +16,7 @@ function registerRoutes(app, options = {}) {
     ...options,
     actionId: ACTION_READ_STUDIO_SETUP,
     closeTerminalSummary: "Close a Studio Setup Doctor terminal session.",
+    includeVibe64User: true,
     localRequestMessage: "Studio Setup Doctor routes only accept loopback Studio requests.",
     queryValidator: studioSetupQueryInputValidator,
     readTerminalSummary: "Read a Studio Setup Doctor terminal session.",

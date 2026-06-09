@@ -49,6 +49,7 @@ function useDoctorRepairs({
   isLoading = () => false,
   openTerminal = null,
   ready = () => false,
+  repairsEnabled = () => true,
   streamRunning = () => false,
   terminalCloseError = () => "",
   terminalDialogOpen = () => false,
@@ -66,6 +67,10 @@ function useDoctorRepairs({
   const repairRunning = ref(false);
   const attemptedAutomaticRepairKeys = ref([]);
 
+  function repairsAreEnabled() {
+    return readRefOrGetterValue(repairsEnabled) !== false;
+  }
+
   const repairDialogOpen = computed({
     get() {
       return Boolean(confirmRepair.value);
@@ -78,7 +83,7 @@ function useDoctorRepairs({
   });
 
   const automaticRepairAvailable = computed(() => {
-    return Boolean(firstAutomaticRepair());
+    return repairsAreEnabled() && Boolean(firstAutomaticRepair());
   });
 
   const confirmRepairFields = computed(() => {
@@ -146,6 +151,9 @@ function useDoctorRepairs({
   }
 
   function visibleCheckRepairs(check) {
+    if (!repairsAreEnabled()) {
+      return [];
+    }
     const repairs = repairsForCheck(check);
     if (REPAIRABLE_STATUSES.includes(check?.status)) {
       return repairs;
@@ -194,6 +202,9 @@ function useDoctorRepairs({
   }
 
   function firstAutomaticRepair() {
+    if (!repairsAreEnabled()) {
+      return null;
+    }
     for (const check of readRefOrGetterValue(checks)) {
       if (!REPAIRABLE_STATUSES.includes(check?.status)) {
         continue;
@@ -221,6 +232,12 @@ function useDoctorRepairs({
     visible = true,
     waitForExit = false
   } = {}) {
+    if (!repairsAreEnabled()) {
+      return {
+        error: "Setup actions are disabled.",
+        ok: false
+      };
+    }
     if (!repair?.actionId || typeof openTerminal !== "function") {
       return null;
     }
@@ -336,6 +353,7 @@ function useDoctorRepairs({
   watch(
     () => [
       readRefOrGetterValue(autoRepairEnabled),
+      readRefOrGetterValue(repairsEnabled),
       readRefOrGetterValue(ready),
       readRefOrGetterValue(isLoading),
       readRefOrGetterValue(streamRunning),

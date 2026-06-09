@@ -47,6 +47,12 @@ async function logout() {
   });
 }
 
+async function markFirstLoginCodexSetupComplete() {
+  return authRequest(`${AUTH_API_BASE}/setup/codex-complete`, {
+    method: "POST"
+  });
+}
+
 async function readUsers() {
   return authRequest(`${AUTH_API_BASE}/users`);
 }
@@ -97,6 +103,7 @@ export {
   inviteUser,
   login,
   logout,
+  markFirstLoginCodexSetupComplete,
   readAuthState,
   readSupabaseConfig,
   readUsers,

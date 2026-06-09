@@ -6,8 +6,12 @@ import test from "node:test";
 
 import {
   createVibe64Auth,
+  registerVibe64AuthRoutes,
   resolveSupabaseConfig
 } from "../../server/lib/auth/index.js";
+import {
+  testReply
+} from "./vibe64RouteTestHelpers.js";
 
 const FAKE_SUPABASE_ENV = Object.freeze({
   VIBE64_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test",
@@ -18,6 +22,7 @@ const FAKE_SUPABASE_ENV = Object.freeze({
 test("Vibe64 auth binds the first Supabase identity as owner", async () => {
   await withAuth(async (auth) => {
     const state = await auth.stateForRequest({});
+    assert.equal(state.firstLoginCodexSetupPending, true);
     assert.equal(state.ownerInvitePending, false);
     assert.equal(state.setupRequired, true);
     assert.equal(state.supabase.configured, true);
@@ -42,6 +47,7 @@ test("Vibe64 auth binds the first Supabase identity as owner", async () => {
       }
     });
     assert.equal(requestState.authenticated, true);
+    assert.equal(requestState.firstLoginCodexSetupPending, true);
     assert.equal(requestState.setupRequired, false);
     assert.equal(requestState.user.email, "owner@example.com");
     assert.equal(requestState.user.identityLinked, true);
@@ -56,6 +62,87 @@ test("Vibe64 auth binds the first Supabase identity as owner", async () => {
       }
     });
     assert.equal(legacyState.authenticated, false);
+  });
+});
+
+test("Vibe64 auth tracks first-login Codex setup in tenant-local state", async () => {
+  await withAuth(async (auth) => {
+    const owner = await auth.authenticateSupabaseSession({
+      accessToken: "owner-token"
+    });
+    const session = await auth.sessions.createSession(owner);
+    const request = {
+      headers: {
+        cookie: `vibe64_session=${encodeURIComponent(session.cookieValue)}`
+      }
+    };
+
+    const before = await auth.stateForRequest(request);
+    assert.equal(before.firstLoginCodexSetupPending, true);
+
+    const setupState = await auth.setup.markFirstLoginCodexSetupComplete();
+    assert.notEqual(setupState.firstLoginCodexCompletedAt, "");
+
+    const after = await auth.stateForRequest(request);
+    assert.equal(after.firstLoginCodexSetupPending, false);
+  });
+});
+
+test("Vibe64 auth route only completes first-login Codex setup after Codex is connected", async () => {
+  let codexConnected = false;
+  await withAuth(async (auth) => {
+    const owner = await auth.authenticateSupabaseSession({
+      accessToken: "owner-token"
+    });
+    const session = await auth.sessions.createSession(owner);
+    const routes = [];
+    const app = {
+      get(pathname, handler) {
+        routes.push({
+          handler,
+          method: "GET",
+          pathname
+        });
+      },
+      post(pathname, handler) {
+        routes.push({
+          handler,
+          method: "POST",
+          pathname
+        });
+      }
+    };
+    registerVibe64AuthRoutes(app, auth);
+
+    const route = routes.find((candidate) => (
+      candidate.method === "POST" &&
+      candidate.pathname === "/api/auth/setup/codex-complete"
+    ));
+    assert.ok(route);
+    const request = {
+      headers: {
+        cookie: `vibe64_session=${encodeURIComponent(session.cookieValue)}`
+      }
+    };
+
+    const blockedReply = testReply();
+    await route.handler(request, blockedReply);
+    assert.equal(blockedReply.statusCode, 409);
+    assert.equal(blockedReply.payload.code, "vibe64_codex_setup_incomplete");
+
+    codexConnected = true;
+    const successReply = testReply();
+    const returned = await route.handler(request, successReply);
+    const response = successReply.payload || returned;
+    assert.equal(response.ok, true);
+    assert.equal(response.firstLoginCodexSetupPending, false);
+    const after = await auth.stateForRequest(request);
+    assert.equal(after.firstLoginCodexSetupPending, false);
+  }, {
+    codexConnectedVerifier: async () => ({
+      connected: codexConnected,
+      ok: true
+    })
   });
 });
 
@@ -288,10 +375,11 @@ test("Vibe64 auth enforces tenant user capacity and stores GitHub identity", asy
   });
 });
 
-async function withAuth(callback) {
+async function withAuth(callback, options = {}) {
   const dataRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-auth-"));
   try {
     return await callback(createVibe64Auth({
+      codexConnectedVerifier: options.codexConnectedVerifier,
       dataRoot,
       env: FAKE_SUPABASE_ENV,
       verifySupabaseAccessToken: fakeVerifySupabaseAccessToken

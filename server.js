@@ -36,6 +36,9 @@ import {
   cleanupStaleStudioTerminals
 } from "@local/studio-terminal-core/server/studioTerminalCleanup";
 import {
+  createService as createVibe64AccountsService
+} from "@local/vibe64-accounts/server/service";
+import {
   createBrowserLifecycleMonitor,
   registerBrowserLifecycleWebSocketRoute
 } from "./server/lib/browserLifecycle.js";
@@ -324,6 +327,32 @@ function browserUrlForPublicOrigin(origin = "", options = {}) {
   return `${url.origin}${startupBrowserPath(options)}`;
 }
 
+function createCodexConnectedVerifier({
+  dataRoot = "",
+  env = process.env,
+  providerHomesRoot = ""
+} = {}) {
+  const accountService = createVibe64AccountsService({
+    dataRoot,
+    env,
+    providerHomesRoot
+  });
+  return async function verifyCodexConnected() {
+    const status = await accountService.getCodexStatus();
+    if (status?.ok === false) {
+      return {
+        ok: false,
+        code: status.code || "vibe64_codex_status_failed",
+        error: status.error || "Codex status could not be verified."
+      };
+    }
+    return {
+      connected: status?.account?.connected === true,
+      ok: true
+    };
+  };
+}
+
 async function createServer(options = {}) {
   const runtimeEnv = resolveRuntimeEnv();
   const app = Fastify({
@@ -343,7 +372,15 @@ async function createServer(options = {}) {
   }
   await app.register(fastifyWebsocket);
 
+  const codexConnectedVerifier = typeof options.codexConnectedVerifier === "function"
+    ? options.codexConnectedVerifier
+    : createCodexConnectedVerifier({
+        dataRoot: options.authDataRoot,
+        env: runtimeEnv,
+        providerHomesRoot: options.providerHomesRoot
+      });
   const auth = createVibe64Auth({
+    codexConnectedVerifier,
     dataRoot: options.authDataRoot,
     env: runtimeEnv,
     verifySupabaseAccessToken: options.verifySupabaseAccessToken

@@ -38,6 +38,7 @@
         <v-btn
           variant="tonal"
           color="primary"
+          :disabled="!statusRefreshEnabled"
           :loading="isLoading || automaticRepairRunning"
           :prepend-icon="mdiRefresh"
           class="studio-screen__action-button"
@@ -56,6 +57,16 @@
       class="studio-screen__alert"
     >
       {{ displayError }}
+    </v-alert>
+
+    <v-alert
+      v-if="actionsDisabledNotice"
+      type="info"
+      variant="tonal"
+      border="start"
+      class="studio-screen__alert"
+    >
+      {{ actionsDisabledNotice }}
     </v-alert>
 
     <v-alert
@@ -205,6 +216,14 @@ const props = defineProps({
     type: Array,
     default: () => []
   },
+  actionsDisabledMessage: {
+    type: String,
+    default: ""
+  },
+  actionsEnabled: {
+    type: Boolean,
+    default: true
+  },
   autoRepairEnabled: {
     type: Boolean,
     default: false
@@ -314,7 +333,7 @@ const {
   status: () => props.status,
   statusItemsKey: () => props.statusItemsKey,
   streamAutoStart: () => props.streamAutoStart,
-  streamEnabled: () => props.streamEnabled,
+  streamEnabled: () => props.streamEnabled && props.actionsEnabled,
   streamEndpoint: () => props.streamEndpoint
 });
 
@@ -366,6 +385,9 @@ function handleContinue() {
 }
 
 function refreshDoctorStatusForUser() {
+  if (!statusRefreshEnabled.value) {
+    return;
+  }
   clearRepairMessages();
   refreshDoctorStatus();
 }
@@ -402,11 +424,12 @@ const {
   visibleCheckRepairs
 } = useDoctorRepairs({
   alwaysRepairCheckIds: () => props.alwaysRepairCheckIds,
-  autoRepairEnabled: () => props.autoRepairEnabled,
+  autoRepairEnabled: () => props.autoRepairEnabled && props.actionsEnabled,
   checks: () => checks.value,
   isLoading: () => isLoading.value,
   openTerminal,
   ready: () => ready.value,
+  repairsEnabled: () => props.actionsEnabled,
   streamRunning: () => streamRunning.value,
   terminalCloseError: () => terminalCloseError.value,
   terminalDialogOpen: () => terminalDialogOpen.value,
@@ -420,6 +443,17 @@ const displayError = computed(() => {
     return "";
   }
   return props.error || streamError.value;
+});
+
+const statusRefreshEnabled = computed(() => {
+  return props.actionsEnabled;
+});
+
+const actionsDisabledNotice = computed(() => {
+  if (props.actionsEnabled) {
+    return "";
+  }
+  return props.actionsDisabledMessage || "You can review this setup status, but only the Vibe64 owner can run setup actions.";
 });
 
 const currentOperation = computed(() => {

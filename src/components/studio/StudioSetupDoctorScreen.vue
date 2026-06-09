@@ -16,6 +16,8 @@
     ready-title="Studio Setup ready"
     quiet-title="Checking your environment"
     quiet-lede="Vibe64 is checking Docker and runtime tools before it starts."
+    :actions-enabled="actionsEnabled"
+    :actions-disabled-message="actionsDisabledMessage"
     :continue-label="continueLabel"
     :continue-emits="continueEnabled"
     @continue="emit('select-tab', 'project-setup')"
@@ -35,7 +37,15 @@ import {
 } from "../../lib/studioGateApi.js";
 
 const emit = defineEmits(["select-tab"]);
-defineProps({
+const props = defineProps({
+  actionsDisabledMessage: {
+    default: "",
+    type: String
+  },
+  actionsEnabled: {
+    default: true,
+    type: Boolean
+  },
   continueEnabled: {
     default: true,
     type: Boolean
@@ -65,9 +75,15 @@ async function loadStudioSetup({
   errorMessage.value = "";
 
   try {
-    studioSetup.value = await readStudioSetupStatus({
+    const response = await readStudioSetupStatus({
       refresh
     });
+    if (response?.ok === false) {
+      studioSetup.value = null;
+      errorMessage.value = String(response.errors?.[0]?.message || response.error || "Studio Setup check failed.");
+      return;
+    }
+    studioSetup.value = response;
   } catch (error) {
     errorMessage.value = String(error?.message || error || "Studio Setup check failed.");
   } finally {
@@ -80,6 +96,10 @@ function handleStudioSetupUpdated(status) {
 }
 
 onMounted(() => {
-  streamAutoStart.value = true;
+  if (props.actionsEnabled) {
+    streamAutoStart.value = true;
+    return;
+  }
+  void loadStudioSetup();
 });
 </script>

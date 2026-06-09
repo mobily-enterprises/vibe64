@@ -1,6 +1,8 @@
 <template>
   <ProviderAccountsSetup
     :accounts="accounts"
+    :actions-disabled-message="actionsDisabledMessage"
+    :actions-enabled="actionsEnabled"
     :account-rows="aiAccountRows"
     :back-label="backLabel"
     :continue-label="continueLabel"
@@ -21,6 +23,14 @@ import ProviderAccountsSetup from "@/components/studio/ProviderAccountsSetup.vue
 import { useVibe64Accounts } from "@/composables/useVibe64Accounts.js";
 
 defineProps({
+  actionsDisabledMessage: {
+    default: "",
+    type: String
+  },
+  actionsEnabled: {
+    default: true,
+    type: Boolean
+  },
   backLabel: {
     default: "",
     type: String

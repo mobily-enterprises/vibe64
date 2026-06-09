@@ -4,6 +4,8 @@ const DEFAULT_POLL_INTERVAL_MS = 1000;
 const AUTH_DEBUG_MARKER = "VIBE64_ACCOUNTS_DEBUG";
 const AUTH_DEBUG_OUTPUT_TAIL_LENGTH = 1200;
 const CODEX_DEVICE_AUTH_URL = "https://auth.openai.com/codex/device";
+const ANSI_ESCAPE_PATTERN = new RegExp("\\u001b\\[[0-?]*[ -/]*[@-~]", "gu");
+const VISIBLE_ANSI_ESCAPE_PATTERN = /\u00a4\[[0-?]*[ -/]*[@-~]/gu;
 const DEVICE_USER_CODE_PATTERN = /\b([A-Z0-9]{4}-[A-Z0-9]{4,8})\b/iu;
 
 function authDebug(event, fields = {}) {
@@ -356,8 +358,8 @@ function sanitizedAuthOutputTail(output = "") {
 
 function cleanAuthOutput(output = "") {
   return String(output || "")
-    .replace(/\u001b\[[0-?]*[ -/]*[@-~]/gu, "")
-    .replace(/\u00a4\[[0-?]*[ -/]*[@-~]/gu, "");
+    .replace(ANSI_ESCAPE_PATTERN, "")
+    .replace(VISIBLE_ANSI_ESCAPE_PATTERN, "");
 }
 
 function authSessionUserCode(session = {}) {

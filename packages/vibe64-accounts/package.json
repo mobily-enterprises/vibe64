@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./server/actions": "./src/server/actions.js"
+    "./server/actions": "./src/server/actions.js",
+    "./server/service": "./src/server/service.js"
   },
   "dependencies": {
     "@jskit-ai/kernel": "0.x",

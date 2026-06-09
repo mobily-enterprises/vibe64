@@ -160,7 +160,10 @@ function registerDoctorRoutes(
         return;
       }
       await withDoctorRequest(request, reply, async () => {
-        const response = await service().readTerminal(request.params.sessionId);
+        const response = await service().readTerminal(
+          request.params.sessionId,
+          inputForRequest(request)
+        );
         sendServiceResponse(reply, response, {
           failureStatus: 404
         });
@@ -187,7 +190,8 @@ function registerDoctorRoutes(
       await withDoctorRequest(request, reply, async () => {
         const response = await service().writeTerminal(
           request.params.sessionId,
-          requestBodyObject(request).data || ""
+          requestBodyObject(request).data || "",
+          inputForRequest(request)
         );
         sendServiceResponse(reply, response, {
           failureStatus: 404
@@ -212,7 +216,10 @@ function registerDoctorRoutes(
         return;
       }
       await withDoctorRequest(request, reply, async () => {
-        const response = await service().closeTerminal(request.params.sessionId);
+        const response = await service().closeTerminal(
+          request.params.sessionId,
+          inputForRequest(request)
+        );
         reply.code(200).send(response);
       });
     }
