@@ -16,6 +16,7 @@ SupplementaryGroups=docker
 ExecStartPre=+/usr/bin/install -d -o %i -g vibe64 -m 2750 /run/vibe64-%i
 ExecStartPre=+/usr/bin/install -d -o %i -g vibe64 -m 2750 /run/vibe64-%i/vibe64
 ExecStart=/usr/bin/env node /opt/vibe64/current/bin/server.js --no-open
+TimeoutStopSec=15s
 Restart=always
 RestartSec=3
 

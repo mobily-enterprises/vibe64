@@ -53,7 +53,7 @@ const resolvedTo = computed(() => {
   return {
     path: target,
     query: {
-      returnTo: route.fullPath || route.path || "/app/manage"
+      returnTo: route.fullPath || route.path || "/app/manage/projects"
     }
   };
 });

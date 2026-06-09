@@ -570,7 +570,7 @@ test("started server publishes management mode as the browser entry URL", async 
   try {
     const url = new URL(app.vibe64Url);
     assert.equal(url.hostname, "127.0.0.1");
-    assert.equal(url.pathname, "/app/manage");
+    assert.equal(url.pathname, "/app/manage/projects");
   } finally {
     await app.close();
   }

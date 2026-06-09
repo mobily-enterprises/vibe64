@@ -118,6 +118,7 @@ function registerTerminalWebSocketRoute(
                 const response = await write(service, {
                   data: message.data,
                   jobId,
+                  request,
                   sessionId,
                   terminalSessionId,
                   toolId
@@ -134,6 +135,7 @@ function registerTerminalWebSocketRoute(
                 const response = await resize?.(service, {
                   cols: message.cols,
                   jobId,
+                  request,
                   rows: message.rows,
                   sessionId,
                   terminalSessionId,
@@ -160,6 +162,7 @@ function registerTerminalWebSocketRoute(
 
         void withProjectContext(() => Promise.resolve(subscribe(service, {
           jobId,
+          request,
           sessionId,
           subscriber: (message) => {
             sendSocketJson(socket, message);

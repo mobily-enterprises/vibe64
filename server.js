@@ -58,6 +58,7 @@ const API_BASE_PATH = "/api";
 const MODULE_APP_ROOT = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_PORT_SEARCH_LIMIT = 50;
 const DEFAULT_SOCKET_FILE_NAME = "server.sock";
+const DEFAULT_SHUTDOWN_TIMEOUT_MS = 8000;
 const STATIC_GLOBAL_UI_PATHS = Object.freeze([
   "/assets",
   "/favicon.svg",
@@ -194,6 +195,80 @@ function resolveListenTarget({
   };
 }
 
+function resolveShutdownTimeoutMs(value = DEFAULT_SHUTDOWN_TIMEOUT_MS) {
+  const timeoutMs = Math.floor(Number(value));
+  if (!Number.isFinite(timeoutMs) || timeoutMs < 1000) {
+    return DEFAULT_SHUTDOWN_TIMEOUT_MS;
+  }
+  return timeoutMs;
+}
+
+function forceCloseServerConnections(server = null) {
+  try {
+    server?.closeIdleConnections?.();
+  } catch {
+    // Shutdown is already failing; continue with the stronger close below.
+  }
+  try {
+    server?.closeAllConnections?.();
+  } catch {
+    // The process exits immediately after this in the signal path.
+  }
+}
+
+function createSignalShutdownHandler({
+  app,
+  clearTimeoutFn = clearTimeout,
+  exitProcess = process.exit.bind(process),
+  setTimeoutFn = setTimeout,
+  shutdownTimeoutMs = DEFAULT_SHUTDOWN_TIMEOUT_MS
+} = {}) {
+  if (!app || typeof app.close !== "function") {
+    throw new Error("createSignalShutdownHandler requires a Fastify app.");
+  }
+
+  const timeoutMs = resolveShutdownTimeoutMs(shutdownTimeoutMs);
+  let closing = false;
+  let exited = false;
+
+  function exitOnce(code) {
+    if (exited) {
+      return;
+    }
+    exited = true;
+    exitProcess(code);
+  }
+
+  return async function closeAndExit(signal) {
+    if (closing) {
+      return;
+    }
+    closing = true;
+    app.log?.info?.({ signal }, "Stopping vibe64 server.");
+
+    const timeout = setTimeoutFn(() => {
+      app.log?.error?.({
+        signal,
+        shutdownTimeoutMs: timeoutMs
+      }, "Vibe64 server shutdown timed out; forcing process exit.");
+      forceCloseServerConnections(app.server);
+      exitOnce(1);
+    }, timeoutMs);
+    timeout?.unref?.();
+
+    try {
+      await app.close();
+      clearTimeoutFn(timeout);
+      app.log?.info?.({ signal }, "Stopped vibe64 server.");
+      exitOnce(0);
+    } catch (error) {
+      clearTimeoutFn(timeout);
+      app.log?.error?.({ error }, "Failed to stop vibe64 server cleanly.");
+      exitOnce(1);
+    }
+  };
+}
+
 async function removeStaleSocket(socketPath = "") {
   try {
     const info = await lstat(socketPath);
@@ -229,7 +304,7 @@ function startupBrowserPath({
   startupSlug = ""
 } = {}) {
   const slug = String(startupSlug || "").trim();
-  return slug ? `/app/${encodeURIComponent(normalizeProjectSlug(slug))}` : "/app/manage";
+  return slug ? `/app/${encodeURIComponent(normalizeProjectSlug(slug))}` : "/app/manage/projects";
 }
 
 function browserUrlForListenAddress(address = "", options = {}) {
@@ -463,21 +538,10 @@ async function startServer(options = {}) {
     targetRoot: options?.targetRoot,
     verifySupabaseAccessToken: options?.verifySupabaseAccessToken
   });
-  let closing = false;
-  const closeAndExit = async (signal) => {
-    if (closing) {
-      return;
-    }
-    closing = true;
-    app.log.info({ signal }, "Stopping vibe64 server.");
-    try {
-      await app.close();
-      process.exitCode = 0;
-    } catch (error) {
-      app.log.error({ error }, "Failed to stop vibe64 server cleanly.");
-      process.exitCode = 1;
-    }
-  };
+  const closeAndExit = createSignalShutdownHandler({
+    app,
+    shutdownTimeoutMs: options?.shutdownTimeoutMs
+  });
   process.once("SIGINT", closeAndExit);
   process.once("SIGTERM", closeAndExit);
   app.addHook("onClose", async () => {
@@ -530,7 +594,10 @@ export {
   browserUrlForListenAddress,
   browserUrlForPublicOrigin,
   createServer,
+  createSignalShutdownHandler,
+  DEFAULT_SHUTDOWN_TIMEOUT_MS,
   defaultListenSocketPath,
+  forceCloseServerConnections,
   resolveListenTarget,
   startServer,
   startupBrowserPath

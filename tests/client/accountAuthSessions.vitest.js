@@ -90,17 +90,19 @@ describe("account auth sessions", () => {
     expect(authSessions.authBusy).toBe(false);
   });
 
-  it("copies an auth session URL after the login link is available", async () => {
+  it("starts Codex device auth and copies the one-time code after it is available", async () => {
     const accounts = fakeAccounts({
       startAuth: async () => ({
         account: {
           id: "codex",
           label: "Codex"
         },
-        authUrl: "https://chatgpt.com/auth/codex",
+        authUrl: "https://auth.openai.com/codex/device",
         id: "auth-codex-1",
+        mode: "device",
         status: "authenticating",
-        terminalStatus: "running"
+        terminalStatus: "running",
+        userCode: "CKVC-RY1P4"
       })
     });
     const clipboard = {
@@ -117,11 +119,86 @@ describe("account auth sessions", () => {
       clipboard
     });
 
-    await authSessions.startBrowserAuth("codex");
-    await authSessions.copyAuthUrl(authSessions.activeSessionFor("codex"));
+    await authSessions.startDeviceAuth("codex");
+    await authSessions.copyAuthCode(authSessions.activeSessionFor("codex"));
 
-    expect(clipboard.writeText).toHaveBeenCalledWith("https://chatgpt.com/auth/codex");
-    expect(authSessions.authLinkCopyStatus["auth-codex-1"]).toBe("Auth link copied.");
+    expect(accounts.startAuth).toHaveBeenCalledWith("codex", "device");
+    expect(clipboard.writeText).toHaveBeenCalledWith("CKVC-RY1P4");
+    expect(authSessions.authCopyStatus["auth-codex-1"]).toBe("One-time code copied.");
+  });
+
+  it("starts Codex API key auth without opening a browser", async () => {
+    const accounts = fakeAccounts({
+      startAuth: async () => ({
+        account: {
+          id: "codex",
+          label: "Codex"
+        },
+        id: "auth-codex-api-key-1",
+        mode: "api_key",
+        status: "authenticating",
+        terminalStatus: "running"
+      })
+    });
+    const browserWindow = fakeBrowserWindow();
+    const authSessions = useAccountAuthSessions(accounts, {
+      accountRows: ref([
+        {
+          connected: false,
+          id: "codex"
+        }
+      ]),
+      browserWindow
+    });
+
+    await authSessions.startApiKeyAuth("codex", "sk-test-secret");
+
+    expect(accounts.startAuth).toHaveBeenCalledWith("codex", "api_key", {
+      apiKey: "sk-test-secret"
+    });
+    expect(browserWindow.open).not.toHaveBeenCalled();
+    expect(authSessions.activeSessionFor("codex")).toMatchObject({
+      id: "auth-codex-api-key-1",
+      mode: "api_key"
+    });
+  });
+
+  it("derives Codex device codes from auth output when polling has not parsed them yet", async () => {
+    const accounts = fakeAccounts({
+      startAuth: async () => ({
+        account: {
+          id: "codex",
+          label: "Codex"
+        },
+        authUrl: "https://auth.openai.com/codex/device",
+        id: "auth-codex-1",
+        mode: "device",
+        output: [
+          "Follow these steps to sign in with ChatGPT using device code authorization:",
+          "   ¤[94mhttps://auth.openai.com/codex/device¤[0m",
+          "2. Enter this one-time code ¤[90m(expires in 15 minutes)¤[0m",
+          "   ¤[94mCK13-6J2ZT¤[0m"
+        ].join("\n"),
+        status: "authenticating",
+        terminalStatus: "running"
+      })
+    });
+    const authSessions = useAccountAuthSessions(accounts, {
+      accountRows: ref([
+        {
+          connected: false,
+          id: "codex"
+        }
+      ]),
+      browserWindow: fakeBrowserWindow()
+    });
+
+    await authSessions.startDeviceAuth("codex");
+
+    expect(authSessions.activeSessionFor("codex")).toMatchObject({
+      authUrl: "https://auth.openai.com/codex/device",
+      userCode: "CK13-6J2ZT"
+    });
   });
 
   it("keeps failed auth sessions visible and stops polling them", async () => {

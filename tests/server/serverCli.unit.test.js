@@ -18,14 +18,14 @@ test("server CLI starts management mode with no slug", () => {
     openOnStart: false,
     startupSlug: ""
   });
-  assert.equal(startupBrowserPath(), "/app/manage");
+  assert.equal(startupBrowserPath(), "/app/manage/projects");
   assert.equal(
     browserUrlForListenAddress("http://127.0.0.1:3001"),
-    "http://127.0.0.1:3001/app/manage"
+    "http://127.0.0.1:3001/app/manage/projects"
   );
   assert.equal(
     browserUrlForPublicOrigin("https://tonymobily.vibe64.dev"),
-    "https://tonymobily.vibe64.dev/app/manage"
+    "https://tonymobily.vibe64.dev/app/manage/projects"
   );
 });
 

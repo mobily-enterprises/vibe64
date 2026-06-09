@@ -44,9 +44,9 @@ const PROJECT_SCRIPTS_DIR = ".vibe64/scripts";
 const STARRED_TARGET_SCRIPTS_CONFIG = "config/starred_scripts";
 const TARGET_SCRIPT_TERMINAL_NAMESPACE = "current-app-target-script";
 const PROJECT_SCRIPT_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u;
-const AI_ACCOUNTS_ROUTE = "/app/manage";
+const AI_ACCOUNTS_ROUTE = "/app/manage/accounts";
 const ACCOUNT_ROUTE = "/account";
-const SETUP_DASHBOARD_ROUTE = "/app/manage";
+const SETUP_DASHBOARD_ROUTE = "/app/manage/studio-setup";
 
 function resolveCurrentAppRoot(appRoot) {
   return resolveStudioTargetRoot({

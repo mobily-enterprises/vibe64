@@ -8,8 +8,11 @@ import {
 } from "@local/studio-terminal-core/server/terminalSessions";
 import {
   ACCOUNT_AUTH_NAMESPACE,
+  API_KEY_AUTH_MODE,
   authTerminalMetadata,
   canReuseAuthTerminal,
+  CODEX_API_KEY_ENV,
+  codexApiKeyLoginCommandArgs,
   GITHUB_DEVICE_AUTH_URL,
   APP_PROVIDER_SCOPE,
   USER_PROVIDER_SCOPE,
@@ -17,7 +20,8 @@ import {
   createService,
   ghLoginCommandArgs,
   githubProviderHome,
-  githubProviderUserKey
+  githubProviderUserKey,
+  terminalArgsForAuth
 } from "../../packages/vibe64-accounts/src/server/service.js";
 import { registerRoutes as registerAccountRoutes } from "../../packages/vibe64-accounts/src/server/registerRoutes.js";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
@@ -224,6 +228,13 @@ test("Accounts status uses shared Codex auth and the active user's GitHub home",
 
     const expectedGithubHome = githubProviderHome(providerHomesRoot, OWNER_USER);
     assert.equal(codexCalls(calls).length, 1);
+    assert.deepEqual(codexCalls(calls)[0].commandArgs, [
+      "codex",
+      "-c",
+      "check_for_update_on_startup=false",
+      "login",
+      "status"
+    ]);
     assert.equal(codexCalls(calls)[0].options.toolHomeSource || "", "");
     assert.equal(githubCalls(calls).length, 5);
     assert.deepEqual(new Set(githubCalls(calls).map((call) => call.options.toolHomeSource)), new Set([expectedGithubHome]));
@@ -358,6 +369,40 @@ test("GitHub auth output falls back to the device URL when gh only prints a code
   assert.equal(parsed.userCode, "A1B2-C3D4");
 });
 
+test("Codex device auth parses current five-character code suffixes", () => {
+  const parsed = parseAuthOutput({
+    accountId: "codex",
+    mode: "device",
+    output: [
+      "Follow these steps to sign in with ChatGPT using device code authorization:",
+      "1. Open this link in your browser and sign in to your account",
+      "   https://auth.openai.com/codex/device",
+      "2. Enter this one-time code (expires in 15 minutes)",
+      "   CIKQ-R107I"
+    ].join("\n")
+  });
+
+  assert.equal(parsed.authUrl, "https://auth.openai.com/codex/device");
+  assert.equal(parsed.userCode, "CIKQ-R107I");
+});
+
+test("Codex device auth parses visible ANSI-wrapped code output", () => {
+  const parsed = parseAuthOutput({
+    accountId: "codex",
+    mode: "device",
+    output: [
+      "Follow these steps to sign in with ChatGPT using device code authorization:",
+      "1. Open this link in your browser and sign in to your account",
+      "   ¤[94mhttps://auth.openai.com/codex/device¤[0m",
+      "2. Enter this one-time code ¤[90m(expires in 15 minutes)¤[0m",
+      "   ¤[94mCJ5L-3L4MG¤[0m"
+    ].join("\n")
+  });
+
+  assert.equal(parsed.authUrl, "https://auth.openai.com/codex/device");
+  assert.equal(parsed.userCode, "CJ5L-3L4MG");
+});
+
 test("Account auth terminal reuse is scoped to the requested account and mode", () => {
   const githubContext = {
     userKey: githubProviderUserKey(OWNER_USER)
@@ -375,7 +420,7 @@ test("Account auth terminal reuse is scoped to the requested account and mode", 
     metadata
   }), true);
   assert.equal(canReuse({
-    metadata: authTerminalMetadata("codex", "browser")
+    metadata: authTerminalMetadata("codex", "device")
   }), false);
   assert.equal(canReuse({
     metadata: authTerminalMetadata("github", "device")
@@ -388,17 +433,75 @@ test("Account auth terminal reuse is scoped to the requested account and mode", 
 });
 
 test("Codex auth terminal reuse is shared across Vibe64 users", () => {
-  const metadata = authTerminalMetadata("codex", "browser");
-  const canReuse = canReuseAuthTerminal("codex", "browser");
+  const metadata = authTerminalMetadata("codex", "device");
+  const canReuse = canReuseAuthTerminal("codex", "device");
 
   assert.deepEqual(metadata, {
     accountId: "codex",
-    mode: "browser",
+    mode: "device",
     providerScope: APP_PROVIDER_SCOPE
   });
   assert.equal(canReuse({
     metadata
   }), true);
+});
+
+test("Codex API key auth is never reused between submissions", () => {
+  const metadata = authTerminalMetadata("codex", API_KEY_AUTH_MODE);
+  const canReuse = canReuseAuthTerminal("codex", API_KEY_AUTH_MODE);
+
+  assert.deepEqual(metadata, {
+    accountId: "codex",
+    mode: API_KEY_AUTH_MODE,
+    providerScope: APP_PROVIDER_SCOPE
+  });
+  assert.equal(canReuse({
+    metadata
+  }), false);
+});
+
+test("Codex browser auth is rejected on hosted Vibe64", async () => {
+  await withTemporaryRoot(async (root) => {
+    const result = await createService({
+      targetRoot: path.join(root, "target")
+    }).startAuth(accountInput(OWNER_USER, {
+      accountId: "codex",
+      mode: "browser"
+    }));
+
+    assert.equal(result.ok, false);
+    assert.equal(result.code, "unsupported_auth_mode");
+    assert.match(result.error, /device code authentication/u);
+  });
+});
+
+test("Codex API key auth requires a submitted key", async () => {
+  await withTemporaryRoot(async (root) => {
+    const result = await createService({
+      targetRoot: path.join(root, "target")
+    }).startAuth(accountInput(OWNER_USER, {
+      accountId: "codex",
+      mode: API_KEY_AUTH_MODE
+    }));
+
+    assert.equal(result.ok, false);
+    assert.equal(result.code, "codex_api_key_required");
+    assert.match(result.error, /OpenAI API key is required/u);
+  });
+});
+
+test("Codex API key auth command reads the key from stdin via inherited Docker env", () => {
+  const commandArgs = codexApiKeyLoginCommandArgs();
+  const script = commandArgs[2] || "";
+  const terminalArgs = terminalArgsForAuth("codex", API_KEY_AUTH_MODE);
+
+  assert.equal(commandArgs[0], "bash");
+  assert.equal(commandArgs[1], "-lc");
+  assert.match(script, /codex -c check_for_update_on_startup=false login --with-api-key/u);
+  assert.match(script, new RegExp(`printf '%s\\\\n' "\\$${CODEX_API_KEY_ENV}"`, "u"));
+  assert.ok(terminalArgs.includes("-e"));
+  assert.ok(terminalArgs.includes(CODEX_API_KEY_ENV));
+  assert.doesNotMatch(terminalArgs.join(" "), /sk-test-secret/u);
 });
 
 test("GitHub auth sessions are recovered from terminal metadata for the same Vibe64 user only", async () => {
@@ -438,6 +541,51 @@ test("GitHub auth sessions are recovered from terminal metadata for the same Vib
 
       assert.equal(friendRead.ok, false);
       assert.equal(friendRead.code, "unknown_auth_session");
+    } finally {
+      await closeTerminalSession(terminal.id, {
+        namespace: ACCOUNT_AUTH_NAMESPACE
+      });
+    }
+  });
+});
+
+test("GitHub auth terminal I/O is restricted to the same Vibe64 user", async () => {
+  await withTemporaryRoot(async (root) => {
+    const providerHomesRoot = path.join(root, "provider-homes");
+    const service = createService({
+      providerHomesRoot,
+      targetRoot: path.join(root, "target")
+    });
+    const terminal = startTerminalSession({
+      args: ["-e", "process.stdin.resume(); setInterval(() => {}, 1000);"],
+      command: process.execPath,
+      commandPreview: "node github-auth",
+      metadata: authTerminalMetadata("github", "browser", {
+        userKey: githubProviderUserKey(OWNER_USER)
+      }),
+      namespace: ACCOUNT_AUTH_NAMESPACE,
+      reuseRunning: false
+    });
+    assert.equal(terminal.ok, true);
+
+    try {
+      const ownerSubscribe = service.subscribeAuthTerminal(accountInput(OWNER_USER, {
+        sessionId: terminal.id
+      }), () => null);
+      assert.equal(ownerSubscribe.ok, true);
+      ownerSubscribe.unsubscribe();
+
+      const friendSubscribe = service.subscribeAuthTerminal(accountInput(FRIEND_USER, {
+        sessionId: terminal.id
+      }), () => null);
+      assert.equal(friendSubscribe.ok, false);
+      assert.equal(friendSubscribe.code, "unknown_auth_session");
+
+      const friendWrite = service.writeAuthTerminal(accountInput(FRIEND_USER, {
+        sessionId: terminal.id
+      }), "\r");
+      assert.equal(friendWrite.ok, false);
+      assert.equal(friendWrite.code, "unknown_auth_session");
     } finally {
       await closeTerminalSession(terminal.id, {
         namespace: ACCOUNT_AUTH_NAMESPACE

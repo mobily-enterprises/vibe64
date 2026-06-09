@@ -7,7 +7,7 @@ const router = useRouter();
 const projectSlug = computed(() => firstRouteParam(route.params.slug));
 const returnTo = computed(() => projectSlug.value
   ? `/app/${encodeURIComponent(projectSlug.value)}/dashboard/configure`
-  : "/app/manage");
+  : "/app/manage/projects");
 
 function firstRouteParam(value) {
   const rawValue = Array.isArray(value) ? value[0] : value;

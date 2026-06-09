@@ -3,7 +3,7 @@ import { expect, test, type Page, type Route } from "@playwright/test";
 const SLUG = "alpha_1";
 const PROJECT_ROOT = `/home/vibe64/${SLUG}`;
 const PROJECT_REPOSITORY = `example/${SLUG}`;
-const MANAGEMENT_PATH = "/app/manage";
+const MANAGEMENT_PATH = "/app/manage/projects";
 const DEVELOPMENT_PATH = `/app/${SLUG}`;
 const DASHBOARD_PATH = `${DEVELOPMENT_PATH}/dashboard`;
 const SCOPED_API_PREFIX = `/api/app/${SLUG}`;
@@ -304,7 +304,7 @@ test("authenticated users must connect GitHub on the account page before using t
 
   await page.goto(MANAGEMENT_PATH);
 
-  await expect(page).toHaveURL(/\/account\?returnTo=%2Fapp%2Fmanage$/u);
+  await expect(page).toHaveURL(new RegExp(`/account\\?returnTo=${encodeURIComponent(MANAGEMENT_PATH)}$`, "u"));
   await expect(page.getByRole("heading", { name: "Account", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { level: 1, name: "GitHub", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Password", exact: true })).toBeVisible();

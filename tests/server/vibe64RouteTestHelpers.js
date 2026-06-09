@@ -12,6 +12,18 @@ function testRouteApp() {
   return {
     registeredRoutes,
     make(token) {
+      if (token === "jskit.fastify") {
+        return {
+          get(path, options, handler) {
+            registeredRoutes.push({
+              handler,
+              method: "GET",
+              options,
+              path
+            });
+          }
+        };
+      }
       assert.equal(token, "jskit.http.router");
       return {
         register(method, path, options, handler) {

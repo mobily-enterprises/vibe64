@@ -31,7 +31,7 @@ defineProps({
 
 const route = useRoute();
 const projectSlug = computed(() => firstRouteParam(route.params.slug));
-const projectBasePath = computed(() => projectSlug.value ? `/app/${encodeURIComponent(projectSlug.value)}` : "/app/manage");
+const projectBasePath = computed(() => projectSlug.value ? `/app/${encodeURIComponent(projectSlug.value)}` : "/app/manage/projects");
 const dashboardSectionLinks = computed(() => getPlacements()
   .filter((placement) => (
     placement?.kind === "link" &&

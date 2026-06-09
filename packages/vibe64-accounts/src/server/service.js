@@ -4,8 +4,11 @@ import stripAnsi from "strip-ansi";
 
 import {
   closeTerminalSession,
+  resizeTerminalSession,
   readTerminalSession,
-  startTerminalSession
+  startTerminalSession,
+  subscribeTerminalSession,
+  writeTerminalSession
 } from "@local/studio-terminal-core/server/terminalSessions";
 import {
   buildDoctorTerminalArgs,
@@ -40,11 +43,18 @@ import {
 const ACCOUNT_AUTH_NAMESPACE = "vibe64-accounts";
 const BROWSER_AUTH_MODE = "browser";
 const DEVICE_AUTH_MODE = "device";
+const API_KEY_AUTH_MODE = "api_key";
+const CODEX_DEVICE_AUTH_URL = "https://auth.openai.com/codex/device";
 const GITHUB_DEVICE_AUTH_URL = "https://github.com/login/device";
 const GITHUB_GIT_CREDENTIAL_HELPER = "gh auth git-credential";
+const CODEX_API_KEY_ENV = "VIBE64_CODEX_API_KEY";
 const REQUIRED_GITHUB_SCOPES = Object.freeze(["repo", "read:org", "gist", "workflow"]);
 const AUTH_DEBUG_MARKER = "VIBE64_ACCOUNTS_DEBUG";
 const AUTH_DEBUG_OUTPUT_TAIL_LENGTH = 1200;
+const DEVICE_USER_CODE_PATTERN = /\b([A-Z0-9]{4}-[A-Z0-9]{4,8})\b/iu;
+const DEVICE_USER_CODE_REDACTION_PATTERN = /\b[A-Z0-9]{4}-[A-Z0-9]{4,8}\b/gu;
+const OPENAI_API_KEY_REDACTION_PATTERN = /\bsk-[A-Za-z0-9_-]{16,}\b/gu;
+const VISIBLE_ANSI_ESCAPE_PATTERN = /\u00a4\[[0-?]*[ -/]*[@-~]/gu;
 
 const ACCOUNT_DEFINITIONS = Object.freeze({
   codex: Object.freeze({
@@ -85,7 +95,7 @@ function accountsResult(operation) {
 }
 
 function cleanOutput(output = "") {
-  return stripAnsi(String(output || ""));
+  return stripAnsi(String(output || "")).replace(VISIBLE_ANSI_ESCAPE_PATTERN, "");
 }
 
 function sanitizedAuthOutputTail(output = "") {
@@ -99,7 +109,8 @@ function sanitizedAuthOutputTail(output = "") {
         return "https://[redacted-url]";
       }
     })
-    .replace(/\b[A-Z0-9]{4}-[A-Z0-9]{4}\b/gu, "[redacted-code]");
+    .replace(DEVICE_USER_CODE_REDACTION_PATTERN, "[redacted-code]")
+    .replace(OPENAI_API_KEY_REDACTION_PATTERN, "[redacted-openai-api-key]");
 }
 
 function authDebug(event, fields = {}) {
@@ -121,6 +132,9 @@ function normalizedAuthMode(accountId, mode = "") {
   const requestedMode = String(mode || "").trim().toLowerCase();
   if (accountId === "codex" && requestedMode === DEVICE_AUTH_MODE) {
     return DEVICE_AUTH_MODE;
+  }
+  if (accountId === "codex" && requestedMode === API_KEY_AUTH_MODE) {
+    return API_KEY_AUTH_MODE;
   }
   return BROWSER_AUTH_MODE;
 }
@@ -170,9 +184,28 @@ function githubGitIdentityFromInput(input = {}) {
 }
 
 function codexLoginCommandArgs(mode = BROWSER_AUTH_MODE) {
+  if (mode === API_KEY_AUTH_MODE) {
+    return codexApiKeyLoginCommandArgs();
+  }
   return mode === DEVICE_AUTH_MODE
-    ? ["codex", "login", "--device-auth"]
-    : ["codex", "login"];
+    ? ["codex", "-c", "check_for_update_on_startup=false", "login", "--device-auth"]
+    : ["codex", "-c", "check_for_update_on_startup=false", "login"];
+}
+
+function codexApiKeyLoginCommandArgs() {
+  return [
+    "bash",
+    "-lc",
+    [
+      "set -e",
+      `if [ -z "\${${CODEX_API_KEY_ENV}:-}" ]; then`,
+      "  printf '%s\\n' 'OpenAI API key is required.' >&2",
+      "  exit 2",
+      "fi",
+      `printf '%s\\n' "$${CODEX_API_KEY_ENV}" | codex -c check_for_update_on_startup=false login --with-api-key`,
+      `unset ${CODEX_API_KEY_ENV}`
+    ].join("\n")
+  ];
 }
 
 function logoutCommandArgs(accountId) {
@@ -186,7 +219,10 @@ function terminalArgsForAuth(accountId, mode, toolchainOptions = {}, gitIdentity
     return buildDoctorTerminalArgs(ghLoginCommandArgs(gitIdentity), toolchainOptions);
   }
 
-  const extraArgs = mode === BROWSER_AUTH_MODE ? ["--network", "host"] : [];
+  const extraArgs = [
+    ...(mode === BROWSER_AUTH_MODE ? ["--network", "host"] : []),
+    ...(mode === API_KEY_AUTH_MODE ? ["-e", CODEX_API_KEY_ENV] : [])
+  ];
   return buildDoctorTerminalArgs(codexLoginCommandArgs(mode), {
     extraArgs
   });
@@ -209,15 +245,15 @@ function firstMatchingUrl(output = "", predicate = () => true) {
 
 function parseGithubUserCode(output = "") {
   const normalizedOutput = cleanOutput(output);
-  const labelledMatch = normalizedOutput.match(/one-time code:\s*([A-Z0-9]{4}-[A-Z0-9]{4})/iu);
+  const labelledMatch = normalizedOutput.match(/one-time code:\s*([A-Z0-9]{4}-[A-Z0-9]{4,8})/iu);
   if (labelledMatch) {
     return labelledMatch[1].toUpperCase();
   }
-  return normalizedOutput.match(/\b([A-Z0-9]{4}-[A-Z0-9]{4})\b/u)?.[1]?.toUpperCase() || "";
+  return normalizedOutput.match(DEVICE_USER_CODE_PATTERN)?.[1]?.toUpperCase() || "";
 }
 
 function parseCodexUserCode(output = "") {
-  return cleanOutput(output).match(/\b([A-Z0-9]{4}-[A-Z0-9]{4})\b/u)?.[1]?.toUpperCase() || "";
+  return cleanOutput(output).match(DEVICE_USER_CODE_PATTERN)?.[1]?.toUpperCase() || "";
 }
 
 function parseAuthOutput({
@@ -234,9 +270,17 @@ function parseAuthOutput({
   }
 
   if (mode === DEVICE_AUTH_MODE) {
+    const userCode = parseCodexUserCode(output);
     return {
-      authUrl: firstMatchingUrl(output, (url) => url.includes("openai.com/") || url.includes("chatgpt.com/")),
-      userCode: parseCodexUserCode(output)
+      authUrl: firstMatchingUrl(output, (url) => url.includes("openai.com/") || url.includes("chatgpt.com/")) || (userCode ? CODEX_DEVICE_AUTH_URL : ""),
+      userCode
+    };
+  }
+
+  if (mode === API_KEY_AUTH_MODE) {
+    return {
+      authUrl: "",
+      userCode: ""
     };
   }
 
@@ -391,7 +435,7 @@ function rememberedGithubIdentity(value = {}) {
 async function readCodexStatus({
   runToolchain = runDefaultToolchain
 } = {}) {
-  const result = await runToolchain(["codex", "login", "status"]);
+  const result = await runToolchain(["codex", "-c", "check_for_update_on_startup=false", "login", "status"]);
 
   if (!result.ok) {
     return accountDisconnected({
@@ -444,7 +488,20 @@ function authTerminalMetadata(accountId, mode, githubContext = null) {
   return metadata;
 }
 
+function unsupportedAuthMode(accountId, mode) {
+  if (accountId === "codex" && mode !== DEVICE_AUTH_MODE && mode !== API_KEY_AUTH_MODE) {
+    return authError(
+      "unsupported_auth_mode",
+      "Codex login on hosted Vibe64 uses device code authentication or OpenAI API key authentication. Browser link login is not available for Codex."
+    );
+  }
+  return null;
+}
+
 function canReuseAuthTerminal(accountId, mode, githubContext = null) {
+  if (accountId === "codex" && mode === API_KEY_AUTH_MODE) {
+    return () => false;
+  }
   const expectedUserKey = accountId === "github" ? String(githubContext?.userKey || "") : "";
   return (session = {}) => {
     if (session.metadata?.accountId !== accountId || session.metadata?.mode !== mode) {
@@ -476,6 +533,8 @@ function publicAuthSession({
   parsed,
   terminal
 } = {}) {
+  const output = cleanOutput(terminal.output)
+    .replace(OPENAI_API_KEY_REDACTION_PATTERN, "[redacted-openai-api-key]");
   return {
     account,
     authUrl: parsed.authUrl,
@@ -484,7 +543,7 @@ function publicAuthSession({
     id: terminal.id,
     mode,
     ok: true,
-    output: terminal.output,
+    output,
     status: authSessionStatus({
       account,
       terminal
@@ -682,7 +741,19 @@ function createService({
     });
   }
 
-  async function startAuthTerminal(accountId, mode, githubContext = null, gitIdentity = {}) {
+  function requireVisibleAuthTerminal(input = {}) {
+    const sessionId = String(input?.terminalSessionId || input?.sessionId || input || "");
+    const metadata = authMetadata(sessionId, input);
+    if (!metadata || !sessionVisibleToInput(input, metadata)) {
+      return authError("unknown_auth_session", "Account auth session not found.");
+    }
+    return {
+      metadata,
+      sessionId
+    };
+  }
+
+  async function startAuthTerminal(accountId, mode, githubContext = null, gitIdentity = {}, authSecrets = {}) {
     if (accountId === "github") {
       await ensureToolHomeSource(githubContext);
     }
@@ -706,6 +777,7 @@ function createService({
       command: "docker",
       commandPreview: dockerCommand(args),
       cwd: authCwd,
+      env: authSecrets,
       maxRunning: 1,
       metadata: authTerminalMetadata(accountId, mode, githubContext),
       namespace: ACCOUNT_AUTH_NAMESPACE,
@@ -760,6 +832,14 @@ function createService({
         }
 
         const mode = normalizedAuthMode(accountId, input.mode);
+        const unsupportedMode = unsupportedAuthMode(accountId, mode);
+        if (unsupportedMode) {
+          authDebug("server.auth.start.unsupported_mode", {
+            accountId,
+            mode
+          });
+          return unsupportedMode;
+        }
         const githubContext = accountId === "github" ? githubContextForInput(input) : null;
         if (githubContext && !githubContext.ok) {
           authDebug("server.auth.start.github_context_error", {
@@ -772,7 +852,15 @@ function createService({
         if (accountId === "github" && !gitIdentity.ok) {
           return authError("github_git_identity_required", gitIdentity.error || "Git identity is required before GitHub login.");
         }
-        const terminal = await startAuthTerminal(accountId, mode, githubContext, gitIdentity);
+        const authSecrets = {};
+        if (mode === API_KEY_AUTH_MODE) {
+          const apiKey = String(input.apiKey || "").trim();
+          if (!apiKey) {
+            return authError("codex_api_key_required", "OpenAI API key is required.");
+          }
+          authSecrets[CODEX_API_KEY_ENV] = apiKey;
+        }
+        const terminal = await startAuthTerminal(accountId, mode, githubContext, gitIdentity, authSecrets);
         if (terminal.ok === false) {
           return terminal;
         }
@@ -833,14 +921,47 @@ function createService({
           ok: true
         };
       });
+    },
+
+    subscribeAuthTerminal(input = {}, subscriber) {
+      const visible = requireVisibleAuthTerminal(input);
+      if (visible.ok === false) {
+        return visible;
+      }
+      return subscribeTerminalSession(visible.sessionId, subscriber, {
+        namespace: ACCOUNT_AUTH_NAMESPACE
+      });
+    },
+
+    writeAuthTerminal(input = {}, data = "") {
+      const visible = requireVisibleAuthTerminal(input);
+      if (visible.ok === false) {
+        return visible;
+      }
+      return writeTerminalSession(visible.sessionId, data, {
+        namespace: ACCOUNT_AUTH_NAMESPACE
+      });
+    },
+
+    resizeAuthTerminal(input = {}, size = {}) {
+      const visible = requireVisibleAuthTerminal(input);
+      if (visible.ok === false) {
+        return visible;
+      }
+      return resizeTerminalSession(visible.sessionId, size, {
+        namespace: ACCOUNT_AUTH_NAMESPACE
+      });
     }
   });
 }
 
 export {
   ACCOUNT_AUTH_NAMESPACE,
+  API_KEY_AUTH_MODE,
   APP_PROVIDER_SCOPE,
   canReuseAuthTerminal,
+  CODEX_API_KEY_ENV,
+  codexApiKeyLoginCommandArgs,
   GITHUB_DEVICE_AUTH_URL,
   GITHUB_GIT_CREDENTIAL_HELPER,
   USER_PROVIDER_SCOPE,
@@ -849,6 +970,7 @@ export {
   authTerminalMetadata,
   createService,
   ghLoginCommandArgs,
+  terminalArgsForAuth,
   githubProviderContext,
   githubProviderHome,
   githubProviderUserKey,

@@ -46,7 +46,7 @@ const errorMessage = ref("");
 const streamEnabled = ref(false);
 const streamAutoStart = ref(true);
 const projectSlug = computed(() => firstRouteParam(route.params.slug));
-const continueTo = computed(() => projectSlug.value ? `/app/${encodeURIComponent(projectSlug.value)}` : "/app/manage");
+const continueTo = computed(() => projectSlug.value ? `/app/${encodeURIComponent(projectSlug.value)}` : "/app/manage/projects");
 
 const lede = computed(() => {
   if (loading.value && !streamEnabled.value) {

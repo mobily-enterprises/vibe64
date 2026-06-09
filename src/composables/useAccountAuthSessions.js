@@ -3,6 +3,8 @@ import { computed, proxyRefs, reactive, ref, unref } from "vue";
 const DEFAULT_POLL_INTERVAL_MS = 1000;
 const AUTH_DEBUG_MARKER = "VIBE64_ACCOUNTS_DEBUG";
 const AUTH_DEBUG_OUTPUT_TAIL_LENGTH = 1200;
+const CODEX_DEVICE_AUTH_URL = "https://auth.openai.com/codex/device";
+const DEVICE_USER_CODE_PATTERN = /\b([A-Z0-9]{4}-[A-Z0-9]{4,8})\b/iu;
 
 function authDebug(event, fields = {}) {
   console.debug(`[${AUTH_DEBUG_MARKER}] ${JSON.stringify({
@@ -25,7 +27,7 @@ function useAccountAuthSessions(
   } = {}
 ) {
   const activeSessions = reactive({});
-  const authLinkCopyStatus = reactive({});
+  const authCopyStatus = reactive({});
   const localError = ref("");
   const logoutAccountId = ref("");
   const scheduler = createScheduler({
@@ -70,6 +72,12 @@ function useAccountAuthSessions(
 
   async function startDeviceAuth(accountId = "codex") {
     await startAuth(accountId || "codex", "device");
+  }
+
+  async function startApiKeyAuth(accountId = "codex", apiKey = "") {
+    await startAuth(accountId || "codex", "api_key", {
+      apiKey
+    });
   }
 
   async function startAuth(accountId, mode = "browser", authOptions = {}) {
@@ -153,10 +161,31 @@ function useAccountAuthSessions(
 
     try {
       await clipboard.writeText(url);
-      authLinkCopyStatus[sessionId] = "Auth link copied.";
+      authCopyStatus[sessionId] = "Auth link copied.";
       return true;
     } catch (error) {
       localError.value = String(error?.message || error || "Auth link could not be copied.");
+      return false;
+    }
+  }
+
+  async function copyAuthCode(session = {}) {
+    const sessionId = String(session.id || "");
+    const userCode = authSessionUserCode(session);
+    if (!sessionId || !userCode) {
+      return false;
+    }
+    if (typeof clipboard?.writeText !== "function") {
+      localError.value = "One-time code could not be copied because clipboard access is unavailable.";
+      return false;
+    }
+
+    try {
+      await clipboard.writeText(userCode);
+      authCopyStatus[sessionId] = "One-time code copied.";
+      return true;
+    } catch (error) {
+      localError.value = String(error?.message || error || "One-time code could not be copied.");
       return false;
     }
   }
@@ -242,17 +271,18 @@ function useAccountAuthSessions(
   }
 
   function rememberAuthSession(session = {}) {
-    const accountId = session.account?.id || session.account || "";
-    if (!accountId || !session.id) {
+    const enrichedSession = enrichAuthSession(session);
+    const accountId = enrichedSession.account?.id || enrichedSession.account || "";
+    if (!accountId || !enrichedSession.id) {
       authDebug("client.auth.session.remember_skip", {
         hasAccountId: Boolean(accountId),
-        hasSessionId: Boolean(session.id),
-        status: session.status || ""
+        hasSessionId: Boolean(enrichedSession.id),
+        status: enrichedSession.status || ""
       });
       return;
     }
-    authDebug("client.auth.session.remember", authSessionDebugFields(session));
-    activeSessions[accountId] = session;
+    authDebug("client.auth.session.remember", authSessionDebugFields(enrichedSession));
+    activeSessions[accountId] = enrichedSession;
   }
 
   function forgetSession(session = {}) {
@@ -261,7 +291,7 @@ function useAccountAuthSessions(
       return;
     }
     if (session.id) {
-      delete authLinkCopyStatus[session.id];
+      delete authCopyStatus[session.id];
     }
     authDebug("client.auth.session.forget", {
       accountId,
@@ -272,9 +302,11 @@ function useAccountAuthSessions(
 
   return proxyRefs({
     activeSessionFor,
-    authLinkCopyStatus,
+    authCopyStatus,
+    authLinkCopyStatus: authCopyStatus,
     authBusy,
     cancelSession,
+    copyAuthCode,
     copyAuthUrl,
     errorMessage,
     localError,
@@ -287,6 +319,7 @@ function useAccountAuthSessions(
     refreshStatus,
     startBrowserAuth,
     startDeviceAuth,
+    startApiKeyAuth,
     stopPolling
   });
 }
@@ -308,7 +341,7 @@ function authSessionDebugFields(session = {}) {
 }
 
 function sanitizedAuthOutputTail(output = "") {
-  return String(output || "")
+  return cleanAuthOutput(output)
     .slice(-AUTH_DEBUG_OUTPUT_TAIL_LENGTH)
     .replace(/https:\/\/[^\s"'<>]+/gu, (url) => {
       try {
@@ -318,7 +351,39 @@ function sanitizedAuthOutputTail(output = "") {
         return "https://[redacted-url]";
       }
     })
-    .replace(/\b[A-Z0-9]{4}-[A-Z0-9]{4}\b/gu, "[redacted-code]");
+    .replace(/\b[A-Z0-9]{4}-[A-Z0-9]{4,8}\b/gu, "[redacted-code]");
+}
+
+function cleanAuthOutput(output = "") {
+  return String(output || "")
+    .replace(/\u001b\[[0-?]*[ -/]*[@-~]/gu, "")
+    .replace(/\u00a4\[[0-?]*[ -/]*[@-~]/gu, "");
+}
+
+function authSessionUserCode(session = {}) {
+  const existing = String(session.userCode || "").trim();
+  if (existing) {
+    return existing.toUpperCase();
+  }
+  if (session.mode !== "device") {
+    return "";
+  }
+  return cleanAuthOutput(session.output).match(DEVICE_USER_CODE_PATTERN)?.[1]?.toUpperCase() || "";
+}
+
+function enrichAuthSession(session = {}) {
+  if (!session || typeof session !== "object" || Array.isArray(session)) {
+    return session;
+  }
+  const userCode = authSessionUserCode(session);
+  if (!userCode) {
+    return session;
+  }
+  return {
+    ...session,
+    authUrl: String(session.authUrl || "").trim() || CODEX_DEVICE_AUTH_URL,
+    userCode
+  };
 }
 
 function defaultBrowserWindow() {

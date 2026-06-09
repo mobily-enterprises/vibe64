@@ -8,6 +8,7 @@
     :needed-label="neededLabel"
     :ready-label="readyLabel"
     :show-continue="showContinue"
+    :status-loaded="statusLoaded"
     :title="title"
     @back="emit('back')"
     @continue="emit('continue')"
@@ -52,6 +53,9 @@ defineProps({
 
 const emit = defineEmits(["back", "continue"]);
 const accounts = useVibe64Accounts();
+const statusLoaded = computed(() => {
+  return Boolean(accounts.status && Array.isArray(accounts.status.accounts));
+});
 const aiAccountRows = computed(() => {
   const rows = Array.isArray(accounts.status?.accounts) ? accounts.status.accounts : [];
   const codex = rows.find((account) => String(account.id || "") === "codex");
@@ -69,7 +73,8 @@ const aiAccountRows = computed(() => {
 function aiProviderRow(account = {}) {
   return {
     ...account,
-    authLabel: "Auth Codex",
+    authLabel: "Login with ChatGPT",
+    authMode: "device",
     deviceAuth: true
   };
 }

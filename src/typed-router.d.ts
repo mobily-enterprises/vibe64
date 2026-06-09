@@ -117,6 +117,13 @@ declare module 'vue-router/auto-routes' {
       '/app/manage',
       Record<never, never>,
       Record<never, never>,
+      | '/app/manage/[view]'
+    >,
+    '/app/manage/[view]': RouteRecordInfo<
+      '/app/manage/[view]',
+      '/app/manage/:view',
+      { view: ParamValue<true> },
+      { view: ParamValue<false> },
       | never
     >,
   }
@@ -208,6 +215,13 @@ declare module 'vue-router/auto-routes' {
     'src/pages/app/manage.vue': {
       routes:
         | '/app/manage'
+        | '/app/manage/[view]'
+      views:
+        | 'default'
+    }
+    'src/pages/app/manage/[view].vue': {
+      routes:
+        | '/app/manage/[view]'
       views:
         | never
     }

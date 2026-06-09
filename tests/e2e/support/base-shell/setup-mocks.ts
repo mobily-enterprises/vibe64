@@ -133,7 +133,7 @@ function capabilitiesPayload({
   const setupReady = setup.ready === true;
   const aiReady = codex.connected === true;
   const githubReady = github.connected === true;
-  const aiAccountsRoute = "/app/manage";
+  const aiAccountsRoute = "/app/manage/accounts";
   const githubAccountRoute = "/account";
   const setupRoute = `${DASHBOARD_PATH}/setup`;
   const fix = (route: string, label: string) => ({

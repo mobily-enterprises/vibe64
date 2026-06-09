@@ -12,6 +12,7 @@ import {
   accountsReadInputValidator
 } from "./inputSchemas.js";
 import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRoutes";
+import { registerTerminalWebSocketRoute } from "@local/vibe64-core/server/terminalWebSocketRoutes";
 
 function registerRoutes(
   app,
@@ -64,6 +65,31 @@ function registerRoutes(
     buildInput: sessionInput,
     params: accountAuthSessionInputValidator,
     summary: "Cancel an Vibe64 account login session."
+  });
+
+  registerTerminalWebSocketRoute(app, {
+    projectContext,
+    resize(service, { cols, request, rows, terminalSessionId }) {
+      return service.resizeAuthTerminal(withVibe64User(request, {
+        sessionId: terminalSessionId
+      }), {
+        cols,
+        rows
+      });
+    },
+    routePath: `${routes.routeBase}/auth/:terminalSessionId/ws`,
+    serviceId: "feature.vibe64-accounts.service",
+    serviceUnavailableMessage: "Vibe64 account service is unavailable.",
+    subscribe(service, { request, subscriber, terminalSessionId }) {
+      return service.subscribeAuthTerminal(withVibe64User(request, {
+        sessionId: terminalSessionId
+      }), subscriber);
+    },
+    write(service, { data, request, terminalSessionId }) {
+      return service.writeAuthTerminal(withVibe64User(request, {
+        sessionId: terminalSessionId
+      }), data);
+    }
   });
 }
 

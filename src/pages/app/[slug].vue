@@ -57,7 +57,7 @@ const projectSelectionResource = useEndpointResource({
 });
 const targetRoot = computed(() => String(projectSelectionResource.data.value?.targetRoot || "").trim());
 const targetFolderName = computed(() => projectSlug.value || finalPathSegment(targetRoot.value));
-const developmentBasePath = computed(() => projectSlug.value ? `/app/${encodeURIComponent(projectSlug.value)}` : "/app/manage");
+const developmentBasePath = computed(() => projectSlug.value ? `/app/${encodeURIComponent(projectSlug.value)}` : "/app/manage/projects");
 const dashboardBasePath = computed(() => `${developmentBasePath.value}/dashboard`);
 const dashboardRouteActive = computed(() => normalizedPath(route.path).startsWith(`${dashboardBasePath.value}/`));
 const projectPane = computed(() => dashboardRouteActive.value ? "dashboard" : "preview");
@@ -167,7 +167,7 @@ async function loadProjects() {
 }
 
 function openManagement() {
-  void router.push("/app/manage");
+  void router.push("/app/manage/projects");
 }
 
 function openProject(project = {}) {

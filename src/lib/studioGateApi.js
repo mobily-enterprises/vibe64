@@ -1,4 +1,5 @@
 import {
+  resolveWebSocketUrl,
   studioApiPath,
   studioHttpClient
 } from "@/lib/studioHttp.js";
@@ -69,6 +70,10 @@ async function readAccountsStatus(options = {}) {
   return studioHttpClient.get(withRefreshQuery(ACCOUNTS_ENDPOINT, options));
 }
 
+function accountAuthTerminalWebSocketUrl(sessionId = "") {
+  return resolveWebSocketUrl(`${ACCOUNTS_AUTH_ENDPOINT}/${encodeURIComponent(String(sessionId || ""))}/ws`);
+}
+
 async function readCapabilitiesStatus() {
   return studioHttpClient.get(CAPABILITIES_ENDPOINT);
 }
@@ -106,6 +111,7 @@ export {
   STUDIO_SETUP_TERMINAL_ENDPOINT,
   TARGET_PROJECT_API_SUFFIX,
   TARGET_PROJECT_ENDPOINT,
+  accountAuthTerminalWebSocketUrl,
   accountsQueryKey,
   capabilitiesQueryKey,
   projectConfigQueryKey,

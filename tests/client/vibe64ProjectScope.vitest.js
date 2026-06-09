@@ -30,6 +30,7 @@ describe("Vibe64 project client scope", () => {
     expect(projectSlugFromPathname("/app/alpha_1")).toBe("alpha_1");
     expect(projectSlugFromPathname("/app/beta-2/dashboard/run")).toBe("beta-2");
     expect(projectSlugFromPathname("/app/manage")).toBe("");
+    expect(projectSlugFromPathname("/app/manage/accounts")).toBe("");
   });
 
   it("adds project scope to query and storage keys", () => {

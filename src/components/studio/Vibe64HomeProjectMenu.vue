@@ -53,7 +53,7 @@ const router = useRouter();
 const menuOpen = ref(false);
 
 const projectSlug = computed(() => firstRouteParam(route.params.slug));
-const projectBasePath = computed(() => projectSlug.value ? `/app/${encodeURIComponent(projectSlug.value)}` : "/app/manage");
+const projectBasePath = computed(() => projectSlug.value ? `/app/${encodeURIComponent(projectSlug.value)}` : "/app/manage/projects");
 const isHomeRoute = computed(() => normalizePath(route.path) === normalizePath(projectBasePath.value));
 const isAutopilotHome = computed(() => Boolean(
   isHomeRoute.value &&

@@ -107,9 +107,9 @@ function dashboardConfigurePath(pathValue = "") {
 }
 
 function currentReturnPath() {
-  const current = String(route.fullPath || route.path || "/app/manage").trim();
+  const current = String(route.fullPath || route.path || "/app/manage/projects").trim();
   if (!current || current === "/account" || current.startsWith("/account?")) {
-    return "/app/manage";
+    return "/app/manage/projects";
   }
   return current;
 }

@@ -34,6 +34,7 @@
         <v-btn
           v-if="statusReady && showContinue"
           color="primary"
+          :disabled="!accountsReadyForActions"
           variant="flat"
           @click="emit('continue')"
         >
@@ -63,11 +64,12 @@
       <v-sheet
         v-for="account in accountRows"
         :key="account.id"
-        rounded="lg"
-        border
-        :class="[
-          'accounts-setup__item',
-          account.connected ? 'accounts-setup__item--connected' : 'accounts-setup__item--missing'
+          rounded="lg"
+          border
+          :class="[
+            'accounts-setup__item',
+          account.connected ? 'accounts-setup__item--connected' : 'accounts-setup__item--missing',
+          !accountsReadyForActions ? 'accounts-setup__item--busy' : ''
         ]"
       >
         <div class="accounts-setup__item-main">
@@ -94,9 +96,34 @@
               Previously linked: @{{ account.previousUsername }}
             </p>
           </div>
+          <div
+            v-if="accountActiveSession(account)"
+            class="accounts-setup__session-header-actions"
+          >
+            <v-btn
+              color="primary"
+              :disabled="!accountsReadyForActions || !authTerminalAvailable(accountActiveSession(account))"
+              variant="tonal"
+              :prepend-icon="mdiConsoleLine"
+              @click="toggleAuthTerminal(accountActiveSession(account))"
+            >
+              {{ authTerminalVisible(accountActiveSession(account)) ? 'Hide terminal' : 'View terminal' }}
+            </v-btn>
+            <v-btn
+              color="warning"
+              variant="tonal"
+              :disabled="!accountsReadyForActions || !accountActiveSession(account)?.id"
+              @click="authSessions.cancelSession(accountActiveSession(account))"
+            >
+              Cancel login
+            </v-btn>
+          </div>
         </div>
 
-        <div class="accounts-setup__actions">
+        <div
+          v-if="!accountActiveSession(account)"
+          class="accounts-setup__actions"
+        >
           <div
             v-if="requiresGitIdentity(account)"
             class="accounts-setup__identity-fields"
@@ -108,6 +135,7 @@
               hide-details="auto"
               label="Git user.name"
               required
+              :disabled="!accountsReadyForActions"
               variant="outlined"
             />
             <v-text-field
@@ -118,102 +146,239 @@
               label="Git user.email"
               required
               type="email"
+              :disabled="!accountsReadyForActions"
               variant="outlined"
             />
           </div>
           <v-btn
             color="primary"
             variant="flat"
-            :disabled="accountLoginDisabled(account)"
-            :loading="authSessions.activeSessionFor(account.id)?.status === 'authenticating'"
+            :disabled="!accountsReadyForActions || accountLoginDisabled(account)"
+            :loading="accountActiveSession(account)?.status === 'authenticating'"
             @click="startAccountAuth(account)"
           >
             {{ primaryAuthLabel(account) }}
           </v-btn>
           <v-btn
-            v-if="account.deviceAuth === true"
-            color="primary"
-            variant="tonal"
-            :disabled="authSessions.loginDisabled(account)"
-            @click="authSessions.startDeviceAuth(account.id)"
-          >
-            Use code login
-          </v-btn>
-          <v-btn
             color="warning"
             variant="tonal"
-            :disabled="authSessions.authBusy || !account.connected"
+            :disabled="!accountsReadyForActions || authSessions.authBusy || !account.connected"
             :loading="authSessions.logoutAccountId === account.id"
             @click="authSessions.logoutAccount(account.id)"
           >
             Logout
           </v-btn>
+          <v-btn
+            v-if="accountSupportsApiKeyAuth(account)"
+            color="primary"
+            variant="tonal"
+            :disabled="!accountsReadyForActions || authSessions.authBusy"
+            @click="toggleApiKeyForm(account)"
+          >
+            Use OpenAI API key
+          </v-btn>
+          <div
+            v-if="accountSupportsApiKeyAuth(account) && apiKeyFormVisible(account)"
+            class="accounts-setup__api-key-form"
+          >
+            <v-text-field
+              v-model="apiKeyInput(account).value"
+              autocomplete="off"
+              density="compact"
+              hide-details="auto"
+              label="OpenAI API key"
+              required
+              type="password"
+              :disabled="!accountsReadyForActions"
+              variant="outlined"
+            />
+            <v-btn
+              color="primary"
+              variant="flat"
+              :disabled="!accountsReadyForActions || apiKeyLoginDisabled(account)"
+              @click="startAccountApiKeyAuth(account)"
+            >
+              Login with API key
+            </v-btn>
+          </div>
         </div>
 
         <div
-          v-if="authSessions.activeSessionFor(account.id)"
+          v-if="accountActiveSession(account)"
           class="accounts-setup__session"
         >
           <div
-            v-if="authSessions.activeSessionFor(account.id)?.userCode"
-            class="accounts-setup__code-block"
+            v-if="codexSettingsStepVisible(accountActiveSession(account))"
+            class="accounts-setup__codex-instructions"
           >
-            <p class="accounts-setup__code-label">One-time code</p>
-            <p class="accounts-setup__code">{{ authSessions.activeSessionFor(account.id).userCode }}</p>
-            <p
-              v-if="authSessions.activeSessionFor(account.id)?.mode === 'device'"
-              class="accounts-setup__code-help"
+            <div class="accounts-setup__codex-instruction-copy">
+              <p class="accounts-setup__codex-instruction-title">Before starting code login</p>
+              <div class="accounts-setup__codex-settings-step">
+                <span class="accounts-setup__step-number">1</span>
+                <div class="accounts-setup__step-body">
+                  <p class="accounts-setup__step-title">Open Codex settings</p>
+                  <p class="accounts-setup__code-help">
+                    Turn on Enable device code authorization for Codex.
+                  </p>
+                  <v-btn
+                    class="accounts-setup__codex-settings-link"
+                    color="primary"
+                    :href="CHATGPT_SECURITY_SETTINGS_URL"
+                    :prepend-icon="mdiOpenInNew"
+                    rel="noopener"
+                    size="small"
+                    target="_blank"
+                    variant="tonal"
+                  >
+                    Open Codex settings
+                  </v-btn>
+                </div>
+              </div>
+              <p class="accounts-setup__code-help">
+                If your ChatGPT workspace manages this setting, ask a workspace admin to enable device code authorization.
+              </p>
+              <div class="accounts-setup__step-footer">
+                <span aria-hidden="true" />
+                <div class="accounts-setup__step-actions accounts-setup__step-actions--next">
+                  <v-btn
+                    color="primary"
+                    :disabled="!accountsReadyForActions"
+                    variant="flat"
+                    @click="setCodexAuthStep(accountActiveSession(account), 'authorize')"
+                  >
+                    Next step
+                  </v-btn>
+                </div>
+              </div>
+            </div>
+            <img
+              alt="ChatGPT Settings Security screen with Enable device code authorization for Codex switched on"
+              class="accounts-setup__codex-instruction-image"
+              :src="codexDeviceSettingsImage"
             >
-              Enable code login in ChatGPT settings or workspace permissions, then enter this code on the login page.
-            </p>
           </div>
 
-          <div class="accounts-setup__session-actions">
-            <v-btn
-              v-if="authSessions.activeSessionFor(account.id)?.authUrl"
-              color="primary"
-              variant="tonal"
-              @click="authSessions.openAuthUrl(authSessions.activeSessionFor(account.id))"
+          <div
+            v-else
+            class="accounts-setup__codex-instructions"
+          >
+            <div class="accounts-setup__codex-instruction-copy">
+              <div
+                v-if="authSessionUserCode(accountActiveSession(account))"
+                class="accounts-setup__code-block"
+              >
+                <p class="accounts-setup__code-label">One-time code</p>
+                <p class="accounts-setup__code">{{ authSessionUserCode(accountActiveSession(account)) }}</p>
+                <p
+                  v-if="accountActiveSession(account)?.mode === 'device'"
+                  class="accounts-setup__code-help"
+                >
+                  Copy this code, then finalise authorization in your browser. Keep this page open until Vibe64 shows the account as connected.
+                </p>
+              </div>
+
+              <div class="accounts-setup__session-actions accounts-setup__session-actions--primary">
+                <v-btn
+                  v-if="authSessionUserCode(accountActiveSession(account))"
+                  color="primary"
+                  :disabled="!accountsReadyForActions"
+                  variant="tonal"
+                  :prepend-icon="mdiContentCopy"
+                  @click="authSessions.copyAuthCode(accountActiveSession(account))"
+                >
+                  <span class="accounts-setup__button-step">2</span>
+                  <span>Copy one-time code</span>
+                </v-btn>
+                <v-btn
+                  v-if="accountActiveSession(account)?.authUrl"
+                  color="primary"
+                  :disabled="!accountsReadyForActions"
+                  variant="tonal"
+                  :prepend-icon="mdiOpenInNew"
+                  @click="authSessions.openAuthUrl(accountActiveSession(account))"
+                >
+                  <span class="accounts-setup__button-step">3</span>
+                  <span>Finalise authorization</span>
+                </v-btn>
+              </div>
+
+              <p
+                v-if="authSessions.authCopyStatus[accountActiveSession(account)?.id]"
+                class="accounts-setup__copy-status"
+              >
+                {{ authSessions.authCopyStatus[accountActiveSession(account).id] }}
+              </p>
+
+              <p class="accounts-setup__session-status">
+                {{ sessionStatusMessage(accountActiveSession(account)) }}
+              </p>
+
+              <div
+                v-if="codexAuthorizeStepVisible(accountActiveSession(account))"
+                class="accounts-setup__step-footer"
+              >
+                <div class="accounts-setup__step-actions">
+                  <v-btn
+                    color="primary"
+                    :disabled="!accountsReadyForActions"
+                    variant="flat"
+                    @click="setCodexAuthStep(accountActiveSession(account), 'settings')"
+                  >
+                    Previous step
+                  </v-btn>
+                </div>
+                <span aria-hidden="true" />
+              </div>
+
+              <details
+                v-if="loginOutputVisible(accountActiveSession(account))"
+                class="accounts-setup__logs"
+                :open="accountActiveSession(account)?.status === 'failed'"
+              >
+                <summary>Show login output</summary>
+                <pre>{{ accountActiveSession(account).output }}</pre>
+              </details>
+            </div>
+
+            <img
+              v-if="codexAuthorizeStepVisible(accountActiveSession(account))"
+              alt="Codex CLI device authorization page with one-time code entry fields"
+              class="accounts-setup__codex-instruction-image"
+              :src="codexDeviceAuthorizeImage"
             >
-              Open browser
-            </v-btn>
-            <v-btn
-              v-if="authSessions.activeSessionFor(account.id)?.authUrl"
-              color="primary"
-              variant="tonal"
-              :prepend-icon="mdiContentCopy"
-              @click="authSessions.copyAuthUrl(authSessions.activeSessionFor(account.id))"
-            >
-              Copy auth link
-            </v-btn>
-            <v-btn
-              variant="tonal"
-              :disabled="authSessions.activeSessionFor(account.id)?.terminalStatus !== 'running'"
-              @click="authSessions.cancelSession(authSessions.activeSessionFor(account.id))"
-            >
-              Cancel
-            </v-btn>
           </div>
 
-          <p
-            v-if="authSessions.authLinkCopyStatus[authSessions.activeSessionFor(account.id)?.id]"
-            class="accounts-setup__copy-status"
+          <div
+            v-if="authTerminalVisible(accountActiveSession(account))"
+            class="accounts-setup__terminal"
           >
-            {{ authSessions.authLinkCopyStatus[authSessions.activeSessionFor(account.id).id] }}
-          </p>
-
-          <p class="accounts-setup__session-status">
-            {{ sessionStatusMessage(authSessions.activeSessionFor(account.id)) }}
-          </p>
-
-          <details
-            v-if="authSessions.activeSessionFor(account.id)?.status === 'failed'"
-            class="accounts-setup__logs"
-            open
-          >
-            <summary>Show login logs</summary>
-            <pre>{{ authSessions.activeSessionFor(account.id).output }}</pre>
-          </details>
+            <Vibe64TerminalFrame
+              :command-preview="authTerminal.terminalCommandPreview"
+              :error="authTerminalError(accountActiveSession(account))"
+              :status="authTerminal.terminalStatus"
+              subtitle="Use this only if Codex asks for terminal input."
+              :terminal-host-ref="setAuthTerminalHost"
+              title="Codex login terminal"
+            >
+              <template #actions>
+                <v-btn
+                  :disabled="!authTerminal.terminalSessionId || authTerminal.terminalExited"
+                  size="small"
+                  variant="text"
+                  @click="authTerminal.sendCtrlC"
+                >
+                  Ctrl-C
+                </v-btn>
+                <v-btn
+                  size="small"
+                  variant="text"
+                  @click="closeAuthTerminal"
+                >
+                  Hide
+                </v-btn>
+              </template>
+            </Vibe64TerminalFrame>
+          </div>
         </div>
       </v-sheet>
     </div>
@@ -221,14 +386,23 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, reactive, watch } from "vue";
+import { computed, onBeforeUnmount, reactive, ref, unref, watch } from "vue";
 import {
   mdiAlertCircleOutline,
   mdiCheckCircle,
+  mdiConsoleLine,
   mdiContentCopy,
+  mdiOpenInNew,
   mdiRefresh
 } from "@mdi/js";
+import codexDeviceAuthorizeImage from "@/assets/codex-device-code-authorize.png";
+import codexDeviceSettingsImage from "@/assets/codex-device-code-settings.png";
+import Vibe64TerminalFrame from "@/components/studio/Vibe64TerminalFrame.vue";
 import { useAccountAuthSessions } from "@/composables/useAccountAuthSessions.js";
+import { useStudioTerminal } from "@/composables/useStudioTerminal.js";
+import {
+  accountAuthTerminalWebSocketUrl
+} from "@/lib/studioGateApi.js";
 
 const props = defineProps({
   accounts: {
@@ -263,6 +437,10 @@ const props = defineProps({
     default: true,
     type: Boolean
   },
+  statusLoaded: {
+    default: true,
+    type: Boolean
+  },
   title: {
     default: "Accounts",
     type: String
@@ -271,19 +449,51 @@ const props = defineProps({
 
 const emit = defineEmits(["back", "continue"]);
 
+const CHATGPT_SECURITY_SETTINGS_URL = "https://chatgpt.com/#settings/Security";
+
 const accountRows = computed(() => Array.isArray(props.accountRows) ? props.accountRows : []);
 const gitIdentityInputs = reactive({});
+const apiKeyInputs = reactive({});
+const apiKeyFormsVisible = reactive({});
 const statusReady = computed(() => (
   accountRows.value.length > 0 &&
   accountRows.value.every((account) => account.connected === true)
 ));
+const accountsReadyForActions = computed(() => {
+  return props.statusLoaded === true && !unref(props.accounts.isLoading);
+});
 const authSessions = useAccountAuthSessions(props.accounts, {
   accountRows
 });
 const errorMessage = computed(() => authSessions.errorMessage);
+const codexAuthStepsBySessionId = reactive({});
+const authTerminalSessionId = ref("");
+const authTerminal = useStudioTerminal({
+  resizeReportDelayMs: 120,
+  webSocketUrl: accountAuthTerminalWebSocketUrl
+});
+const authTerminalSession = computed(() => {
+  if (!authTerminalSessionId.value) {
+    return null;
+  }
+  for (const account of accountRows.value) {
+    const session = authSessions.activeSessionFor(account.id);
+    if (session?.id === authTerminalSessionId.value) {
+      return session;
+    }
+  }
+  return null;
+});
 
 function accountStatusMessage(account = {}) {
   return account.connected ? `${account.label} is connected.` : `${account.label} is not connected.`;
+}
+
+function accountActiveSession(account = {}) {
+  if (account.connected === true && account.gitIdentityRequired !== true) {
+    return null;
+  }
+  return authSessions.activeSessionFor(account.id);
 }
 
 function requiresGitIdentity(account = {}) {
@@ -335,11 +545,25 @@ function accountLoginDisabled(account = {}) {
   );
 }
 
+function primaryAuthMode(account = {}) {
+  const mode = String(account.authMode || "").trim().toLowerCase();
+  if (mode) {
+    return mode;
+  }
+  return account.deviceAuth === true ? "device" : "browser";
+}
+
 function startAccountAuth(account = {}) {
-  void authSessions.startBrowserAuth(
-    account.id,
-    requiresGitIdentity(account) ? gitIdentityAuthOptions(account) : {}
-  );
+  if (!accountsReadyForActions.value) {
+    return;
+  }
+  const mode = primaryAuthMode(account);
+  const options = requiresGitIdentity(account) ? gitIdentityAuthOptions(account) : {};
+  if (mode === "device") {
+    void authSessions.startDeviceAuth(account.id);
+    return;
+  }
+  void authSessions.startBrowserAuth(account.id, options);
 }
 
 function primaryAuthLabel(account = {}) {
@@ -349,12 +573,179 @@ function primaryAuthLabel(account = {}) {
   return account.authLabel || `Auth ${account.label}`;
 }
 
+function accountSupportsApiKeyAuth(account = {}) {
+  return String(account.id || "") === "codex" && account.connected !== true;
+}
+
+function apiKeyInput(account = {}) {
+  const accountId = String(account.id || "");
+  if (!accountId) {
+    return {
+      value: ""
+    };
+  }
+  if (!apiKeyInputs[accountId]) {
+    apiKeyInputs[accountId] = {
+      value: ""
+    };
+  }
+  return apiKeyInputs[accountId];
+}
+
+function apiKeyFormVisible(account = {}) {
+  return Boolean(apiKeyFormsVisible[String(account.id || "")]);
+}
+
+function toggleApiKeyForm(account = {}) {
+  if (!accountsReadyForActions.value) {
+    return;
+  }
+  const accountId = String(account.id || "");
+  if (!accountId) {
+    return;
+  }
+  apiKeyFormsVisible[accountId] = !apiKeyFormsVisible[accountId];
+}
+
+function apiKeyLoginDisabled(account = {}) {
+  return authSessions.authBusy || !apiKeyInput(account).value.trim();
+}
+
+async function startAccountApiKeyAuth(account = {}) {
+  if (!accountsReadyForActions.value) {
+    return;
+  }
+  const input = apiKeyInput(account);
+  const apiKey = input.value.trim();
+  if (!apiKey) {
+    return;
+  }
+  try {
+    await authSessions.startApiKeyAuth(account.id, apiKey);
+  } finally {
+    input.value = "";
+  }
+}
+
+function isCodexDeviceSession(session = {}) {
+  return String(session?.account?.id || "") === "codex" &&
+    session?.mode === "device";
+}
+
+function codexAuthStep(session = {}) {
+  if (!isCodexDeviceSession(session) || !session?.id) {
+    return "authorize";
+  }
+  return codexAuthStepsBySessionId[session.id] || "settings";
+}
+
+function setCodexAuthStep(session = {}, step = "settings") {
+  if (!isCodexDeviceSession(session) || !session?.id) {
+    return;
+  }
+  codexAuthStepsBySessionId[session.id] = step === "authorize" ? "authorize" : "settings";
+}
+
+function codexSettingsStepVisible(session = {}) {
+  return isCodexDeviceSession(session) && codexAuthStep(session) === "settings";
+}
+
+function codexAuthorizeStepVisible(session = {}) {
+  return isCodexDeviceSession(session) && codexAuthStep(session) === "authorize";
+}
+
+function loginOutputVisible(session = {}) {
+  return Boolean(session?.output) && (
+    session.status === "failed" ||
+    (session.mode === "device" && !authSessionUserCode(session))
+  );
+}
+
+function authTerminalAvailable(session = {}) {
+  return Boolean(session?.id);
+}
+
+function authTerminalVisible(session = {}) {
+  return Boolean(session?.id && authTerminalSessionId.value === session.id);
+}
+
+function setAuthTerminalHost(element) {
+  authTerminal.terminalHost.value = element;
+}
+
+async function toggleAuthTerminal(session = {}) {
+  if (!session?.id) {
+    return;
+  }
+  if (authTerminalVisible(session)) {
+    closeAuthTerminal();
+    return;
+  }
+  await openAuthTerminal(session);
+}
+
+async function openAuthTerminal(session = {}) {
+  if (!session?.id) {
+    return;
+  }
+  authTerminalSessionId.value = session.id;
+  authTerminal.applyTerminalSession(session);
+  await authTerminal.setupTerminalUi();
+  await authTerminal.connectTerminalSocket();
+  await authTerminal.focusTerminal();
+}
+
+function closeAuthTerminal() {
+  authTerminalSessionId.value = "";
+  authTerminal.disposeTerminalUi();
+}
+
+function cleanAuthOutput(output = "") {
+  return String(output || "")
+    .replace(/\u001b\[[0-?]*[ -/]*[@-~]/gu, "")
+    .replace(/\u00a4\[[0-?]*[ -/]*[@-~]/gu, "");
+}
+
+function authSessionUserCode(session = {}) {
+  const existing = String(session?.userCode || "").trim();
+  if (existing) {
+    return existing.toUpperCase();
+  }
+  if (session?.mode !== "device") {
+    return "";
+  }
+  const output = [
+    session?.output || "",
+    authTerminalVisible(session) ? authTerminal.terminalOutput.value : ""
+  ].join("\n");
+  return cleanAuthOutput(output).match(/\b([A-Z0-9]{4}-[A-Z0-9]{4,8})\b/iu)?.[1]?.toUpperCase() || "";
+}
+
+function authTerminalError(session = {}) {
+  if (authSessionUserCode(session)) {
+    return "";
+  }
+  return authTerminal.terminalError.value;
+}
+
 function sessionStatusMessage(session = {}) {
   if (session.status === "connected") {
     return `${session.account?.label || "Account"} is connected.`;
   }
   if (session.status === "failed") {
     return "Login did not finish cleanly. Review the logs and try again.";
+  }
+  if (session.mode === "api_key") {
+    return "Signing in with the OpenAI API key. Open the terminal if Vibe64 needs more details.";
+  }
+  if (session.mode === "device" && authSessionUserCode(session)) {
+    return "Copy the one-time code, then finalise authorization in your browser.";
+  }
+  if (session.mode === "device" && session.authUrl) {
+    return "Waiting for Codex to print the one-time code.";
+  }
+  if (session.mode === "device") {
+    return "Starting code login and waiting for Codex to print a device code.";
   }
   if (session.authUrl) {
     return "Browser login is open. Complete authorization there, then Studio will continue.";
@@ -364,7 +755,27 @@ function sessionStatusMessage(session = {}) {
 
 onBeforeUnmount(() => {
   authSessions.stopPolling();
+  authTerminal.disposeTerminalUi();
 });
+
+watch(
+  authTerminalSession,
+  (session) => {
+    if (!authTerminalSessionId.value) {
+      return;
+    }
+    if (!session) {
+      closeAuthTerminal();
+      return;
+    }
+    authTerminal.applyTerminalSession(session, {
+      preserveOutput: true
+    });
+  },
+  {
+    deep: true
+  }
+);
 
 watch(
   accountRows,
@@ -376,6 +787,23 @@ watch(
   {
     deep: true,
     immediate: true
+  }
+);
+
+watch(
+  () => accountRows.value
+    .map((account) => authSessions.activeSessionFor(account.id)?.id)
+    .filter(Boolean),
+  (activeSessionIds) => {
+    const activeSessionIdSet = new Set(activeSessionIds);
+    for (const sessionId of Object.keys(codexAuthStepsBySessionId)) {
+      if (!activeSessionIdSet.has(sessionId)) {
+        delete codexAuthStepsBySessionId[sessionId];
+      }
+    }
+  },
+  {
+    deep: true
   }
 );
 </script>
@@ -409,6 +837,15 @@ watch(
   gap: 0.5rem;
   grid-template-columns: repeat(2, minmax(12rem, 1fr));
   min-width: min(32rem, 100%);
+}
+
+.accounts-setup__api-key-form {
+  align-items: start;
+  display: grid;
+  flex-basis: 100%;
+  gap: 0.5rem;
+  grid-template-columns: minmax(14rem, 1fr) auto;
+  max-width: 42rem;
 }
 
 .accounts-setup__title {
@@ -457,7 +894,15 @@ watch(
   align-items: start;
   display: grid;
   gap: 0.75rem;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.accounts-setup__session-header-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-self: end;
 }
 
 .accounts-setup__item-title {
@@ -478,6 +923,108 @@ watch(
   display: grid;
   gap: 0.65rem;
   padding-top: 0.75rem;
+}
+
+.accounts-setup__codex-instructions {
+  align-items: start;
+  background: rgba(var(--v-theme-primary), 0.04);
+  border: 1px solid rgba(var(--v-theme-primary), 0.16);
+  border-radius: 8px;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr) minmax(14rem, 21rem);
+  padding: 0.85rem;
+}
+
+.accounts-setup__codex-instruction-copy {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.accounts-setup__codex-instruction-title {
+  font-size: 0.92rem;
+  font-weight: 750;
+  line-height: 1.25;
+  margin: 0;
+}
+
+.accounts-setup__codex-settings-step {
+  align-items: start;
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.accounts-setup__step-number,
+.accounts-setup__button-step {
+  align-items: center;
+  background: rgba(var(--v-theme-primary), 0.14);
+  border-radius: 999px;
+  color: rgb(var(--v-theme-primary));
+  display: inline-flex;
+  font-weight: 800;
+  height: 1.65rem;
+  justify-content: center;
+  line-height: 1;
+  width: 1.65rem;
+}
+
+.accounts-setup__button-step {
+  background: rgba(var(--v-theme-on-primary), 0.18);
+  color: currentColor;
+  height: 1.35rem;
+  margin-inline-end: 0.35rem;
+  width: 1.35rem;
+}
+
+.accounts-setup__step-body {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.accounts-setup__step-title {
+  font-size: 0.92rem;
+  font-weight: 760;
+  line-height: 1.25;
+  margin: 0;
+}
+
+.accounts-setup__codex-settings-link {
+  justify-self: start;
+}
+
+.accounts-setup__step-actions,
+.accounts-setup__step-nav {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.accounts-setup__step-footer {
+  align-items: center;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+  margin-top: 0.3rem;
+}
+
+.accounts-setup__step-actions--next {
+  grid-column: 1;
+  justify-content: flex-end;
+}
+
+.accounts-setup__step-nav--previous {
+  justify-content: flex-start;
+}
+
+.accounts-setup__codex-instruction-image {
+  align-self: start;
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.18);
+  border-radius: 8px;
+  display: block;
+  max-width: 100%;
+  width: 21rem;
 }
 
 .accounts-setup__code-block {
@@ -503,6 +1050,10 @@ watch(
   margin: 0;
 }
 
+.accounts-setup__session-actions--primary {
+  align-items: stretch;
+}
+
 .accounts-setup__logs pre {
   background: #111318;
   border-radius: 6px;
@@ -514,6 +1065,14 @@ watch(
   white-space: pre-wrap;
 }
 
+.accounts-setup__terminal {
+  min-width: 0;
+}
+
+.accounts-setup__terminal :deep(.vibe64-terminal-frame__host) {
+  height: clamp(16rem, 42vh, 30rem);
+}
+
 @media (max-width: 760px) {
   .accounts-setup__header {
     align-items: stretch;
@@ -522,6 +1081,32 @@ watch(
 
   .accounts-setup__identity-fields {
     grid-template-columns: 1fr;
+  }
+
+  .accounts-setup__api-key-form {
+    grid-template-columns: 1fr;
+  }
+
+  .accounts-setup__codex-instructions {
+    grid-template-columns: 1fr;
+  }
+
+  .accounts-setup__codex-instruction-image {
+    width: min(100%, 18rem);
+  }
+
+  .accounts-setup__item-main {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .accounts-setup__session-header-actions {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .accounts-setup__step-footer {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 </style>

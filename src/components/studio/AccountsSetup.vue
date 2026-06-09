@@ -8,6 +8,7 @@
     :needed-label="neededLabel"
     :ready-label="readyLabel"
     :show-continue="showContinue"
+    :status-loaded="statusLoaded"
     :title="title"
     @back="emit('back')"
     @continue="emit('continue')"
@@ -61,6 +62,9 @@ const emit = defineEmits(["back", "continue"]);
 
 const accounts = useVibe64Accounts();
 const syncedGithubUsers = new Set();
+const statusLoaded = computed(() => {
+  return Boolean(accounts.status && Array.isArray(accounts.status.accounts));
+});
 const fallbackProviderRows = Object.freeze({
   codex: {
     connected: false,
@@ -99,7 +103,8 @@ function providerAccountRow(account = {}) {
   const id = String(account.id || "");
   return {
     ...account,
-    authLabel: id === "github" ? "Sign in or create GitHub account" : "Auth Codex",
+    authLabel: id === "github" ? "Sign in or create GitHub account" : "Login with ChatGPT",
+    authMode: id === "codex" ? "device" : "browser",
     deviceAuth: id === "codex",
     gitIdentityRequired: id === "github"
   };

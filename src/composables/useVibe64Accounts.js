@@ -58,6 +58,13 @@ function useVibe64Accounts() {
   });
 
   async function startAuth(accountId, mode = "browser", options = {}) {
+    if (mode === "api_key") {
+      return studioHttpClient.post(ACCOUNTS_AUTH_ENDPOINT, {
+        accountId: String(accountId || ""),
+        apiKey: String(options.apiKey || ""),
+        mode
+      });
+    }
     return startAuthCommand.run({
       accountId,
       gitUserEmail: options.gitUserEmail || options.email || "",

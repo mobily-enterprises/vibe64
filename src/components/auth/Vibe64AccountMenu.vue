@@ -18,7 +18,7 @@ async function openAccount() {
   await router.push({
     path: "/account",
     query: {
-      returnTo: route.fullPath || route.path || "/app/manage"
+      returnTo: route.fullPath || route.path || "/app/manage/projects"
     }
   });
 }
