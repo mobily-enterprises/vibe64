@@ -11,8 +11,6 @@ import {
   createService
 } from "../../packages/vibe64-project/src/server/service.js";
 import {
-  VIBE64_DEPLOY_PRODUCTION_COMMAND_CONFIG,
-  VIBE64_DEPLOY_STAGING_COMMAND_CONFIG,
   createVibe64ProjectConfigStore
 } from "@local/vibe64-adapters/server/configStore";
 import {
@@ -149,62 +147,6 @@ test("optional project config fields do not block readiness", async () => {
   });
 });
 
-test("deploy project tools are disabled without saved command config", async () => {
-  await withTemporaryRoot(async (targetRoot) => {
-    const service = createService({
-      targetRoot
-    });
-    await service.saveProjectType({
-      projectType: "jskit"
-    });
-    await service.saveProjectConfig({
-      values: {
-        github_pr_merge_method: "merge",
-        jskit_allow_self_target: false,
-        jskit_database_runtime: "none"
-      }
-    });
-
-    const response = await service.listProjectTools();
-    const production = response.tools.find((tool) => tool.id === "push_to_production");
-    const staging = response.tools.find((tool) => tool.id === "push_to_staging");
-
-    assert.equal(response.ok, true);
-    assert.equal(production.enabled, false);
-    assert.match(production.disabledReason, /deploy_production_command/u);
-    assert.equal(staging.enabled, false);
-    assert.match(staging.disabledReason, /deploy_staging_command/u);
-  });
-});
-
-test("deploy project tool specs use saved config commands", async () => {
-  await withTemporaryRoot(async (targetRoot) => {
-    const service = createService({
-      targetRoot
-    });
-    await service.saveProjectType({
-      projectType: "jskit"
-    });
-    await service.saveProjectConfig({
-      values: {
-        [VIBE64_DEPLOY_PRODUCTION_COMMAND_CONFIG]: "npm run deploy:prod",
-        [VIBE64_DEPLOY_STAGING_COMMAND_CONFIG]: "npm run deploy:stage",
-        github_pr_merge_method: "merge",
-        jskit_allow_self_target: false,
-        jskit_database_runtime: "none"
-      }
-    });
-
-    const production = await service.prepareProjectToolRun("push_to_production");
-    const staging = await service.prepareProjectToolRun("push_to_staging");
-
-    assert.equal(production.ok, true);
-    assert.equal(production.spec.commandPreview, "npm run deploy:prod");
-    assert.deepEqual(production.spec.args, ["-lc", "npm run deploy:prod"]);
-    assert.equal(staging.spec.commandPreview, "npm run deploy:stage");
-  });
-});
-
 test("sync main project tool does not require session merge metadata", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const service = createService({
@@ -215,7 +157,6 @@ test("sync main project tool does not require session merge metadata", async () 
     });
     await service.saveProjectConfig({
       values: {
-        github_pr_merge_method: "merge",
         jskit_allow_self_target: false,
         jskit_database_runtime: "none"
       }
@@ -240,7 +181,6 @@ test("Laravel MySQL project tool is gated by compatible managed database runtime
     });
     await service.saveProjectConfig({
       values: {
-        github_pr_merge_method: "merge",
         [LARAVEL_DATABASE_RUNTIME_CONFIG]: "sqlite"
       }
     });
@@ -250,7 +190,6 @@ test("Laravel MySQL project tool is gated by compatible managed database runtime
 
     await service.saveProjectConfig({
       values: {
-        github_pr_merge_method: "merge",
         [LARAVEL_DATABASE_RUNTIME_CONFIG]: "mysql"
       }
     });

@@ -1,13 +1,5 @@
 <template>
   <section class="vibe64-dashboard-page">
-    <AccountsSetup
-      lede="Connect GitHub and set the Git identity Studio will use for commits, pull requests, and merge actions."
-      needed-label="GitHub configuration required"
-      :provider-ids="['github']"
-      ready-label="GitHub configured"
-      :show-continue="false"
-      title="GitHub"
-    />
     <ProjectConfigSetup
       :saving="savingProjectConfig"
       :state="projectConfig"
@@ -18,7 +10,6 @@
 
 <script setup>
 import { computed } from "vue";
-import AccountsSetup from "@/components/studio/AccountsSetup.vue";
 import ProjectConfigSetup from "@/components/studio/ProjectConfigSetup.vue";
 
 const props = defineProps({

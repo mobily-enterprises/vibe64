@@ -127,18 +127,6 @@ function terminalFailureFixRequest(input = {}) {
   };
 }
 
-function projectToolDeployRepairInstructions(toolId = "") {
-  if (!["push_to_production", "push_to_staging"].includes(normalizeText(toolId))) {
-    return [];
-  }
-  return [
-    "This deploy tool runs a command saved in Vibe64 project configuration.",
-    "Treat the exact Attempted command as authoritative. Do not replace or rewrite the saved deploy command just because it exited non-zero.",
-    "Only change repository files when the attempted command failed because of a clear repository-owned defect.",
-    "If the attempted command itself is a placeholder, intentionally failing command, missing external credentials, remote access issue, or otherwise needs user intent, report `blocked` through the callback instead of editing config/code."
-  ];
-}
-
 function sessionTerminalFailureFixPrompt(input = {}) {
   const outputTail = terminalFailureOutputTail(input.output);
   const subject = describeTerminalFailureSubject({
@@ -218,7 +206,6 @@ function projectToolFailureFixPrompt(input = {}, {
     "This is an ephemeral repair job, not a chat. Do not use or modify Vibe64 session state unless the failure itself requires a repository code/config change.",
     "The Terminal context includes the exact Attempted command. Start from that command, not from the tool label alone.",
     "If the exact Attempted command is itself invalid, intentionally failing, or depends on missing external/user configuration, do not guess a replacement command. Report `blocked` with the command and the reason.",
-    ...projectToolDeployRepairInstructions(toolId),
     "",
     reportInstructions,
     "",

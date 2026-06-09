@@ -973,7 +973,7 @@ async function checkGitIdentity(targetRoot, context) {
       label: "Git identity",
       expected: "Git user.name and user.email are configured for the active Vibe64 user.",
       observed: [nameResult.output, emailResult.output].filter(Boolean).join("\n") || "Git identity is incomplete.",
-      explanation: "Open Configure and set Git identity for the active Vibe64 user before continuing."
+      explanation: "Open Account and connect GitHub with a Git identity for the active Vibe64 user before continuing."
     });
   }
 

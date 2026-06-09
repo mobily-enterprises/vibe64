@@ -1021,14 +1021,13 @@ test("Vibe64 project routes persist project type and plain-file config", async (
       });
       assert.equal(defaults.statusCode, 200);
       assert.equal(defaults.json().defaults.projectType, "jskit");
-      assert.equal(defaults.json().defaults.defaults.github_pr_merge_method, "merge");
+      assert.equal(Object.hasOwn(defaults.json().defaults.defaults, "github_pr_merge_method"), false);
 
       const savedConfig = await app.inject({
         headers: authHeaders,
         method: "PUT",
         payload: {
           values: {
-            github_pr_merge_method: "squash",
             jskit_database_runtime: "mysql"
           }
         },
@@ -1037,8 +1036,8 @@ test("Vibe64 project routes persist project type and plain-file config", async (
       assert.equal(savedConfig.statusCode, 200);
       assert.equal(savedConfig.json().config.ready, true);
       assert.equal(
-        await readFile(path.join(stateRoot, "config", "github_pr_merge_method"), "utf8"),
-        "squash\n"
+        await readFile(path.join(stateRoot, "config", "jskit_database_runtime"), "utf8"),
+        "mysql\n"
       );
     });
   });

@@ -8,7 +8,6 @@ import {
 
 const targetRoot = "/workspace/example-target-app";
 const savedProjectConfigValues = {
-  github_pr_merge_method: "merge",
   jskit_database_runtime: "none"
 };
 
@@ -24,17 +23,12 @@ test("home loads through a self-contained mocked Studio shell", async ({ page })
   await page.locator(".section-container-shell__nav").getByText("Remote", { exact: true }).click();
   await expect(page).toHaveURL(dashboardUrlPattern("remote"));
   await expect(page.getByText("Project tools")).toBeVisible();
-  await expect(page.getByText("Push to staging", { exact: true })).toBeVisible();
   await expect(page.getByText("Parameterized smoke tool", { exact: true })).toBeVisible();
   await page.getByText("Parameterized smoke tool", { exact: true }).click();
   const parameterDialog = page.getByRole("dialog").filter({ hasText: "Parameterized smoke tool" });
   await expect(parameterDialog).toBeVisible();
   await expect(parameterDialog.getByLabel("Scope")).toBeVisible();
   await parameterDialog.getByRole("button", { name: "Cancel" }).click();
-  await page.getByText("Push to staging", { exact: true }).click();
-  const confirmationDialog = page.getByRole("dialog").filter({ hasText: "Push to staging" });
-  await expect(confirmationDialog.getByText("Deploy to staging from this checkout?")).toBeVisible();
-  await confirmationDialog.getByRole("button", { name: "Cancel" }).click();
   await page.goto(DEVELOPMENT_PATH);
   await expect(page).toHaveURL(developmentUrlPattern());
   await expect(page.getByRole("button", { name: "New Session" })).toBeVisible();
@@ -148,17 +142,6 @@ async function mockReadyStudioShell(page: Page) {
   const projectToolsPayload = {
     ok: true,
     tools: [
-      {
-        confirmationMessage: "Deploy to staging from this checkout?",
-        description: "Run the configured staging deploy command.",
-        disabledReason: "",
-        enabled: true,
-        id: "push_to_staging",
-        label: "Push to staging",
-        parameters: [],
-        requiresConfirmation: true,
-        type: "command"
-      },
       {
         confirmationMessage: "",
         description: "Exercise parameter collection without starting a terminal.",

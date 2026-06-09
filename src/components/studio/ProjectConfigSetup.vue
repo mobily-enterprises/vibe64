@@ -1,13 +1,5 @@
 <template>
   <v-sheet class="project-config-setup">
-    <div class="project-config-setup__heading">
-      <p class="project-config-setup__eyebrow">Vibe64</p>
-      <h2 class="project-config-setup__title">Configure project</h2>
-      <p class="project-config-setup__message">
-        {{ message }}
-      </p>
-    </div>
-
     <div class="project-config-setup__sections">
       <section
         v-for="section in sections"
@@ -115,14 +107,6 @@ const fields = computed(() => {
 const sections = computed(() => {
   return Array.isArray(props.state?.sections) ? props.state.sections : [];
 });
-const message = computed(() => {
-  if (props.state?.message) {
-    return props.state.message;
-  }
-  return props.state?.ready === true
-    ? "Project configuration is saved."
-    : "Save these values before Studio prepares the target project.";
-});
 
 function valueForField(field = {}) {
   if (Object.hasOwn(props.state?.values || {}, field.id)) {
@@ -191,36 +175,6 @@ watch(
   display: grid;
   gap: 1rem;
   padding: 1rem;
-}
-
-.project-config-setup__heading {
-  display: grid;
-  gap: 0.25rem;
-}
-
-.project-config-setup__eyebrow {
-  color: rgba(var(--v-theme-on-surface), 0.62);
-  font-size: 0.72rem;
-  font-weight: 750;
-  letter-spacing: 0;
-  line-height: 1.1;
-  margin: 0;
-  text-transform: uppercase;
-}
-
-.project-config-setup__title {
-  font-size: 1.18rem;
-  font-weight: 760;
-  letter-spacing: 0;
-  line-height: 1.16;
-  margin: 0;
-}
-
-.project-config-setup__message {
-  color: rgba(var(--v-theme-on-surface), 0.68);
-  font-size: 0.9rem;
-  line-height: 1.35;
-  margin: 0;
 }
 
 .project-config-setup__sections {

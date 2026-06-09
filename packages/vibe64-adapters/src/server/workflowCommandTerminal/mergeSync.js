@@ -110,7 +110,7 @@ async function mergePrTerminalSpec({
     },
     script: mergePrScript({
       beforeMergeScript,
-      mergeMethod: values.github_pr_merge_method,
+      mergeMethod: values.github_pr_merge_method || "merge",
       session
     }),
     session

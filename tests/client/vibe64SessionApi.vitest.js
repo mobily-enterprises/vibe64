@@ -7,8 +7,8 @@ import {
 describe("vibe64SessionApi", () => {
   it("strips session-only terminal context from project tool fix payloads", () => {
     expect(normalizeVibe64ProjectToolFixInput({
-      actionId: "push_to_production",
-      actionLabel: "Push to production",
+      actionId: "sync_main_with_main",
+      actionLabel: "Sync main with main",
       attemptedCommand: "bash -lc false",
       closeError: "exit 1",
       commandPreview: "false",
@@ -20,11 +20,11 @@ describe("vibe64SessionApi", () => {
       terminalKind: "tool",
       terminalSessionId: "terminal-1",
       terminalStatus: "exited",
-      toolId: "push_to_production",
-      toolLabel: "Push to production"
+      toolId: "sync_main_with_main",
+      toolLabel: "Sync main with main"
     })).toEqual({
-      actionId: "push_to_production",
-      actionLabel: "Push to production",
+      actionId: "sync_main_with_main",
+      actionLabel: "Sync main with main",
       attemptedCommand: "bash -lc false",
       closeError: "exit 1",
       commandPreview: "false",
@@ -32,8 +32,8 @@ describe("vibe64SessionApi", () => {
       output: "failed",
       terminalSessionId: "terminal-1",
       terminalStatus: "exited",
-      toolId: "push_to_production",
-      toolLabel: "Push to production",
+      toolId: "sync_main_with_main",
+      toolLabel: "Sync main with main",
       userMessage: ""
     });
   });

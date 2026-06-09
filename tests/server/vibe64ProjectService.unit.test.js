@@ -176,26 +176,23 @@ test("Vibe64 project service saves project type and plain-file configuration", a
 
     const defaults = await service.readProjectConfigDefaults();
     assert.equal(defaults.ok, true);
-    assert.equal(defaults.defaults.defaults.github_pr_merge_method, "merge");
+    assert.equal(Object.hasOwn(defaults.defaults.defaults, "github_pr_merge_method"), false);
     assert.equal(defaults.defaults.defaults[JSKIT_ALLOW_SELF_TARGET_CONFIG], false);
     assert.equal(defaults.defaults.defaults.jskit_database_runtime, "none");
-    const mergeMethodField = defaults.defaults.fields.find((field) => field.id === "github_pr_merge_method");
     const databaseRuntimeField = defaults.defaults.fields.find((field) => field.id === "jskit_database_runtime");
-    assert.match(mergeMethodField.description, /merge completed pull requests/u);
-    assert.match(mergeMethodField.options.find((option) => option.value === "squash").description, /one clean commit/u);
+    assert.equal(defaults.defaults.fields.some((field) => field.id.includes("github")), false);
     assert.match(databaseRuntimeField.description, /Database service Studio should prepare/u);
     assert.match(databaseRuntimeField.options.find((option) => option.value === "mysql").description, /MariaDB/u);
 
     const savedConfig = await service.saveProjectConfig({
       values: {
-        github_pr_merge_method: "rebase",
         [JSKIT_ALLOW_SELF_TARGET_CONFIG]: true,
         jskit_database_runtime: "postgres"
       }
     });
     assert.equal(savedConfig.ok, true);
     assert.equal(savedConfig.config.ready, true);
-    assert.equal(savedConfig.config.values.github_pr_merge_method, "rebase");
+    assert.equal(Object.hasOwn(savedConfig.config.values, "github_pr_merge_method"), false);
     assert.equal(savedConfig.config.values[JSKIT_ALLOW_SELF_TARGET_CONFIG], true);
     assert.equal(
       await readFile(path.join(stateRoot, "config", "jskit_database_runtime"), "utf8"),
@@ -226,7 +223,6 @@ test("Vibe64 project service injects the app workflow registry into runtimes", a
     });
     await service.saveProjectConfig({
       values: {
-        github_pr_merge_method: "merge",
         [JSKIT_ALLOW_SELF_TARGET_CONFIG]: false,
         jskit_database_runtime: "none"
       }

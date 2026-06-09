@@ -184,7 +184,6 @@ test("Adapter Setup allows JSKIT self-targeting only when adapter config opts in
     });
     await projectService.saveProjectConfig({
       values: {
-        github_pr_merge_method: "merge",
         [JSKIT_ALLOW_SELF_TARGET_CONFIG]: false,
         jskit_database_runtime: "none"
       }
@@ -199,7 +198,6 @@ test("Adapter Setup allows JSKIT self-targeting only when adapter config opts in
 
     await projectService.saveProjectConfig({
       values: {
-        github_pr_merge_method: "merge",
         [JSKIT_ALLOW_SELF_TARGET_CONFIG]: true,
         jskit_database_runtime: "none"
       }

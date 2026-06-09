@@ -90,7 +90,7 @@ test("session Fix Codex prompts use ephemeral job reporting instead of session h
   assert.doesNotMatch(prompt, /consider_resolved/u);
 });
 
-test("project deploy Fix Codex prompts preserve configured command ownership", () => {
+test("project tool Fix Codex prompts preserve attempted command ownership", () => {
   const prompt = projectToolFailureFixPrompt({
     attemptedCommand: "bash -lc 'sh -c '\\''echo \"failing intentionally\"; exit 1'\\'''",
     commandPreview: "sh -c 'echo \"failing intentionally\"; exit 1'",
@@ -99,17 +99,15 @@ test("project deploy Fix Codex prompts preserve configured command ownership", (
     terminalSessionId: "terminal-1",
     terminalStatus: "exited",
     targetRoot: "/workspace/app",
-    toolId: "push_to_production",
-    toolLabel: "Push to production"
+    toolId: "sync_main_with_main",
+    toolLabel: "Sync main with main"
   }, {
     reportInstructions: "Report through the callback."
   });
 
   assert.match(prompt, /main project checkout/u);
   assert.match(prompt, /exact Attempted command/u);
-  assert.match(prompt, /Treat the exact Attempted command as authoritative/u);
-  assert.match(prompt, /Do not replace or rewrite the saved deploy command/u);
-  assert.match(prompt, /placeholder, intentionally failing command/u);
+  assert.match(prompt, /do not guess a replacement command/u);
   assert.match(prompt, /Report `blocked`/u);
   assert.match(prompt, /- Target root: \/workspace\/app/u);
   assert.match(prompt, /- Attempted command: bash -lc/u);

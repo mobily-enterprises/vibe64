@@ -213,7 +213,7 @@ function handleProjectSelectionError(error) {
 
 function handleProjectTypeMissing(project = {}) {
   pageError.value = "";
-  emitPageTitle(project?.projectType?.ready === true ? "Configure project" : "Choose project type");
+  emitPageTitle(project?.projectType?.ready === true ? "Project setup" : "Choose project type");
 }
 
 function handleProjectTypeError(error) {
