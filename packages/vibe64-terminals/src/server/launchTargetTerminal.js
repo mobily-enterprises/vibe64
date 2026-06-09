@@ -19,6 +19,9 @@ import {
   normalizeHostName
 } from "@local/vibe64-core/server/localStudioRequest";
 import {
+  normalizePreviewAuthKind
+} from "@local/vibe64-core/server/previewAuth";
+import {
   commandInvocation,
   vibe64Result,
   launchTargetTerminalNamespace,
@@ -199,6 +202,26 @@ function launchTerminalStatus(terminal = {}, {
   };
 }
 
+function previewAuthForLaunchTerminal(terminal = {}, {
+  sessionId = "",
+  targetHref = ""
+} = {}) {
+  const metadata = terminal.metadata && typeof terminal.metadata === "object" && !Array.isArray(terminal.metadata)
+    ? terminal.metadata
+    : {};
+  const kind = normalizePreviewAuthKind(metadata.previewAuth);
+  if (!kind) {
+    return null;
+  }
+  return {
+    kind,
+    sessionId,
+    targetHref,
+    targetRoot: String(metadata.targetRoot || metadata.runRoot || ""),
+    terminalSessionId: String(terminal.id || "")
+  };
+}
+
 function launchActionsWithPreviewTarget(actions = [], previewTarget = null) {
   const entries = Array.isArray(actions) ? actions : [];
   if (!previewTarget?.href || !previewTarget.targetHref) {
@@ -349,6 +372,10 @@ function createLaunchTargetTerminalController({
           sessionId,
           targetHref,
           terminalSessionId
+        }),
+        previewAuth: previewAuthForLaunchTerminal(status.activeTerminal, {
+          sessionId,
+          targetHref
         }),
         sessionId,
         targetHref,

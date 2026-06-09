@@ -21,6 +21,10 @@ import {
   currentProjectScopeKey
 } from "@local/vibe64-core/server/projectRequestContext";
 import {
+  normalizePreviewAuthKind,
+  previewAuthCookieHeader
+} from "@local/vibe64-core/server/previewAuth";
+import {
   vibe64SessionDebugDurationMs,
   vibe64SessionDebugError,
   vibe64SessionDebugLog
@@ -59,6 +63,7 @@ function normalizePreviewTargetHref(value = "") {
 }
 
 function proxyRequestHeaders(headers = {}, targetUrl, {
+  previewAuth = null,
   proxyOrigin = ""
 } = {}) {
   const nextHeaders = { ...headers };
@@ -69,6 +74,7 @@ function proxyRequestHeaders(headers = {}, targetUrl, {
   nextHeaders.cookie = stripPreviewTokenCookie(nextHeaders.cookie, {
     proxyOrigin
   });
+  nextHeaders.cookie = mergeCookieHeaders(nextHeaders.cookie, previewAuthCookieHeader(previewAuth || {}));
   if (!nextHeaders.cookie) {
     delete nextHeaders.cookie;
   }
@@ -77,12 +83,14 @@ function proxyRequestHeaders(headers = {}, targetUrl, {
 }
 
 function proxyUpgradeHeaders(headers = {}, targetUrl, {
+  previewAuth = null,
   proxyOrigin = ""
 } = {}) {
   const nextHeaders = { ...headers };
   nextHeaders.cookie = stripPreviewTokenCookie(nextHeaders.cookie, {
     proxyOrigin
   });
+  nextHeaders.cookie = mergeCookieHeaders(nextHeaders.cookie, previewAuthCookieHeader(previewAuth || {}));
   if (!nextHeaders.cookie) {
     delete nextHeaders.cookie;
   }
@@ -203,6 +211,36 @@ function stripPreviewTokenCookie(header = "", {
       return name !== cookieName;
     })
     .join("; ");
+}
+
+function mergeCookieHeaders(header = "", injectedHeader = "") {
+  const injectedNames = new Set(cookieNames(injectedHeader));
+  const existing = String(header || "")
+    .split(";")
+    .map((part) => part.trim())
+    .filter((part) => {
+      if (!part) {
+        return false;
+      }
+      const separatorIndex = part.indexOf("=");
+      const name = separatorIndex < 0 ? part : part.slice(0, separatorIndex).trim();
+      return !injectedNames.has(name);
+    });
+  const injected = String(injectedHeader || "")
+    .split(";")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return [...existing, ...injected].join("; ");
+}
+
+function cookieNames(header = "") {
+  return String(header || "")
+    .split(";")
+    .map((part) => {
+      const separatorIndex = part.indexOf("=");
+      return (separatorIndex < 0 ? part : part.slice(0, separatorIndex)).trim();
+    })
+    .filter(Boolean);
 }
 
 function rejectPreviewRequest(response) {
@@ -416,6 +454,7 @@ function queryParamName(rawName = "") {
 }
 
 async function proxyPreviewRequest(request, response, {
+  previewAuth = null,
   proxyOrigin = "",
   tokenScope = {},
   token = "",
@@ -447,25 +486,11 @@ async function proxyPreviewRequest(request, response, {
     return;
   }
   try {
-    if (isPreviewSessionRequest(request, requestUrl)) {
-      response.writeHead(200, {
-        "Cache-Control": "no-store",
-        "Connection": "close",
-        "Content-Type": "application/json; charset=utf-8",
-        "Set-Cookie": previewTokenCookie(token, { proxyOrigin })
-      });
-      response.end(JSON.stringify(previewSessionPayload()));
-      previewProxyDebugLog("server.launchPreviewProxy.request.previewSession", {
-        ...requestDetails,
-        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
-        responseStatus: 200
-      });
-      return;
-    }
     const targetUrl = targetRequestUrl(request.url, targetOrigin);
     const method = String(request.method || "GET").toUpperCase();
     const fetchOptions = {
       headers: proxyRequestHeaders(request.headers, targetUrl, {
+        previewAuth,
         proxyOrigin
       }),
       method,
@@ -548,23 +573,8 @@ async function proxyPreviewRequest(request, response, {
   }
 }
 
-function isPreviewSessionRequest(request, requestUrl) {
-  return String(request?.method || "GET").toUpperCase() === "GET" && requestUrl.pathname === "/api/session";
-}
-
-function previewSessionPayload() {
-  return {
-    authenticated: true,
-    username: "Vibe64 Preview",
-    email: "preview@vibe64.local",
-    permissions: [],
-    csrfToken: "",
-    oauthProviders: [],
-    oauthDefaultProvider: null
-  };
-}
-
 function proxyPreviewUpgrade(request, socket, head, {
+  previewAuth = null,
   proxyOrigin = "",
   tokenScope = {},
   tokenHash = "",
@@ -592,6 +602,7 @@ function proxyPreviewUpgrade(request, socket, head, {
   const requestFactory = targetUrl.protocol === "https:" ? httpsRequest : httpRequest;
   const upstreamRequest = requestFactory(targetUrl, {
     headers: proxyUpgradeHeaders(request.headers, targetUrl, {
+      previewAuth,
       proxyOrigin
     }),
     method: request.method || "GET"
@@ -656,6 +667,9 @@ function createLaunchPreviewProxyRegistry({
     const key = previewProxyKey(scope);
     const existing = proxies.get(key);
     const publicOrigin = normalizePreviewPublicOrigin(input.previewPublicOrigin);
+    const previewAuth = normalizePreviewAuth(input.previewAuth, {
+      targetHref: targetUrl.toString()
+    });
     previewProxyDebugLog("server.launchPreviewProxy.ensure", {
       existingProxy: Boolean(existing),
       existingTargetHref: String(existing?.targetHref || ""),
@@ -666,7 +680,12 @@ function createLaunchPreviewProxyRegistry({
       targetHref: targetUrl.toString(),
       terminalSessionId: String(scope.terminalSessionId || "")
     });
-    if (existing && existing.targetHref === targetUrl.toString() && existing.publicOrigin === publicOrigin) {
+    if (
+      existing &&
+      existing.targetHref === targetUrl.toString() &&
+      existing.publicOrigin === publicOrigin &&
+      previewAuthFingerprint(existing.previewAuth) === previewAuthFingerprint(previewAuth)
+    ) {
       previewProxyDebugLog("server.launchPreviewProxy.reuse", {
         key,
         projectScope: String(scope.projectScope || ""),
@@ -684,6 +703,7 @@ function createLaunchPreviewProxyRegistry({
       targetHref: targetUrl.toString()
     }, {
       env,
+      previewAuth,
       publicOrigin
     });
     proxies.set(key, proxy);
@@ -772,6 +792,7 @@ function previewProxyKey(scope = {}) {
 
 async function startLaunchPreviewProxy(targetUrl, scope = {}, {
   env = process.env,
+  previewAuth = null,
   publicOrigin = ""
 } = {}) {
   const server = createServer();
@@ -784,6 +805,7 @@ async function startLaunchPreviewProxy(targetUrl, scope = {}, {
   let proxyOrigin = "";
   server.on("request", (request, response) => {
     void proxyPreviewRequest(request, response, {
+      previewAuth,
       proxyOrigin,
       token,
       tokenScope,
@@ -793,6 +815,7 @@ async function startLaunchPreviewProxy(targetUrl, scope = {}, {
   });
   server.on("upgrade", (request, socket, head) => {
     proxyPreviewUpgrade(request, socket, head, {
+      previewAuth,
       proxyOrigin,
       tokenScope,
       tokenHash,
@@ -832,6 +855,7 @@ async function startLaunchPreviewProxy(targetUrl, scope = {}, {
     }),
     origin: proxyOrigin,
     publicOrigin,
+    previewAuth,
     scope: Object.freeze({
       sessionId: String(scope.sessionId || "").trim(),
       terminalSessionId: String(scope.terminalSessionId || "").trim(),
@@ -840,6 +864,40 @@ async function startLaunchPreviewProxy(targetUrl, scope = {}, {
     token,
     targetHref: targetUrl.toString()
   };
+}
+
+function normalizePreviewAuth(value = {}, {
+  targetHref = ""
+} = {}) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const kind = normalizePreviewAuthKind(value.kind);
+  if (!kind) {
+    return null;
+  }
+  return {
+    kind,
+    projectScope: String(value.projectScope || ""),
+    sessionId: String(value.sessionId || ""),
+    targetHref: String(value.targetHref || targetHref || ""),
+    targetRoot: String(value.targetRoot || ""),
+    terminalSessionId: String(value.terminalSessionId || "")
+  };
+}
+
+function previewAuthFingerprint(value = null) {
+  if (!value) {
+    return "";
+  }
+  return JSON.stringify([
+    value.kind,
+    value.projectScope,
+    value.sessionId,
+    value.targetHref,
+    value.targetRoot,
+    value.terminalSessionId
+  ]);
 }
 
 async function listenOnPreviewPort(server, {

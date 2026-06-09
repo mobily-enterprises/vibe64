@@ -25,6 +25,10 @@ import {
   normalizeText
 } from "@local/vibe64-core/server/core";
 import {
+  normalizePreviewAuthKind,
+  previewAuthEnvironment
+} from "@local/vibe64-core/server/previewAuth";
+import {
   sessionWorktreePath
 } from "@local/vibe64-core/server/sessionWorktreePath";
 import {
@@ -313,6 +317,38 @@ function hostDockerArgs(enabled = false) {
   return args;
 }
 
+function previewAuthDockerArgs({
+  kind = "",
+  projectScope = "",
+  sessionId = "",
+  targetHref = "",
+  targetRoot = "",
+  terminalSessionId = ""
+} = {}) {
+  const env = previewAuthEnvironment({
+    kind,
+    projectScope,
+    sessionId,
+    targetHref,
+    targetRoot,
+    terminalSessionId
+  });
+  return Object.entries(env).flatMap(([name, value]) => [
+    "-e",
+    `${name}=${value}`
+  ]);
+}
+
+function redactLaunchTargetTerminalArgs(args = []) {
+  return (Array.isArray(args) ? args : []).map((arg) => {
+    const text = String(arg || "");
+    if (text.startsWith("AUTH_DEV_BYPASS_SECRET=")) {
+      return "AUTH_DEV_BYPASS_SECRET=(redacted)";
+    }
+    return arg;
+  });
+}
+
 function pathInsideOrEqual(rootPath = "", candidatePath = "") {
   if (!rootPath || !candidatePath) {
     return false;
@@ -472,6 +508,7 @@ async function createVibe64WebLaunchTargetTerminalSpec({
     ...(Array.isArray(launch.extraDockerArgs) ? launch.extraDockerArgs : []),
     ...hostDockerArgs(launch.hostDocker === true)
   ];
+  const previewAuthKind = normalizePreviewAuthKind(launch.previewAuth);
   const metadata = {
     adapterId,
     defaultDisplay: normalizeText(launch.defaultDisplay || launchTarget.defaultDisplay),
@@ -479,11 +516,13 @@ async function createVibe64WebLaunchTargetTerminalSpec({
     launchTargetLabel: normalizeText(launchTarget.label),
     openTarget,
     port,
+    previewAuth: previewAuthKind,
     readinessMarker: readiness.readinessMarker,
     launchReady: !readiness.readinessMarker,
     runRoot: workdir,
     scope: "session",
     sessionId: session.sessionId || "",
+    targetRoot: resolvedTargetRoot,
     targetUrl,
     urlPath,
     ...(launch.metadata || {})
@@ -497,7 +536,17 @@ async function createVibe64WebLaunchTargetTerminalSpec({
         sessionId: session.sessionId,
         terminalId: id
       }),
-      extraDockerArgs,
+      extraDockerArgs: [
+        ...extraDockerArgs,
+        ...previewAuthDockerArgs({
+          kind: previewAuthKind,
+          projectScope: launch.projectScope,
+          sessionId: session.sessionId || "",
+          targetHref: targetUrl,
+          targetRoot: resolvedTargetRoot,
+          terminalSessionId: id
+        })
+      ],
       image,
       launchActions: openTarget.href
         ? [
@@ -516,7 +565,7 @@ async function createVibe64WebLaunchTargetTerminalSpec({
       workdir
     }),
     command: "docker",
-    commandPreview: ({ args }) => dockerCommand(args),
+    commandPreview: ({ args }) => dockerCommand(redactLaunchTargetTerminalArgs(args)),
     cwd: resolvedTargetRoot,
     metadata,
     ok: true,

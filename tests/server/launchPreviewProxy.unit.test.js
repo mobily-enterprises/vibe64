@@ -215,22 +215,34 @@ test("launch preview proxy scopes tokens by project, session, and terminal", asy
   });
 });
 
-test("launch preview proxy authenticates JSKIT session probes with a valid preview token", async () => {
+test("launch preview proxy injects JSKIT preview auth cookies after token validation", async () => {
   await withTargetServer(async (target) => {
     const registry = createLaunchPreviewProxyRegistry();
     try {
       const preview = await registry.ensure({
+        previewAuth: {
+          kind: "jskit-dev",
+          sessionId: "session-auth-probe",
+          targetHref: `${target.origin}/home`,
+          targetRoot: "/tmp/vibe64-preview-project",
+          terminalSessionId: "terminal-auth-probe"
+        },
         sessionId: "session-auth-probe",
         targetHref: `${target.origin}/home`,
         terminalSessionId: "terminal-auth-probe"
       });
 
-      const response = await fetch(previewPath(preview.href, "/api/session"));
+      const response = await fetch(previewPath(preview.href, "/echo-cookie"), {
+        headers: {
+          Cookie: `${previewTokenCookieName(new URL(preview.href).origin)}=should-be-stripped; target_cookie=target`
+        }
+      });
       assert.equal(response.status, 200);
       const payload = await response.json();
-      assert.equal(payload.authenticated, true);
-      assert.equal(payload.username, "Vibe64 Preview");
-      assert.deepEqual(payload.permissions, []);
+      assert.match(payload.cookie, /target_cookie=target/u);
+      assert.match(payload.cookie, /sb_access_token=jskit-dev\./u);
+      assert.match(payload.cookie, /sb_refresh_token=jskit-dev\./u);
+      assert.doesNotMatch(payload.cookie, /vibe64_preview_token/u);
     } finally {
       await registry.closeAll();
     }

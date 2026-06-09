@@ -22,6 +22,7 @@
     "./server/projectState": "./src/server/projectState.js",
     "./server/projectRuntimeIdentity": "./src/server/projectRuntimeIdentity.js",
     "./server/projectRequestContext": "./src/server/projectRequestContext.js",
+    "./server/previewAuth": "./src/server/previewAuth.js",
     "./shared": "./src/shared/index.js"
   },
   "dependencies": {

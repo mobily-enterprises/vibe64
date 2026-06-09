@@ -9,6 +9,9 @@ import {
   Vibe64SessionRuntime
 } from "@local/vibe64-runtime/server";
 import {
+  JSKIT_PREVIEW_AUTH_KIND
+} from "@local/vibe64-core/server/previewAuth";
+import {
   JSKIT_VIBE64_COMMANDS,
   JSKIT_ALLOW_SELF_TARGET_CONFIG,
   JSKIT_CONFIG_FIELDS,
@@ -380,10 +383,17 @@ test("jskit built launch waits for the server readiness marker before opening", 
     assert.equal(spec.metadata.defaultDisplay, "minimized");
     assert.equal(spec.metadata.buildCommand, "npm run build");
     assert.equal(spec.metadata.serverCommand, "npm run server");
+    assert.equal(spec.metadata.previewAuth, JSKIT_PREVIEW_AUTH_KIND);
 
     const args = spec.args({
       id: "unit-terminal"
     });
+    assert.ok(args.includes("AUTH_DEV_BYPASS_ENABLED=true"));
+    assert.ok(args.some((arg) => /^AUTH_DEV_BYPASS_SECRET=[a-f0-9]{64}$/u.test(arg)));
+    assert.ok(args.includes("AUTH_DEV_ACCESS_TTL_SECONDS=3600"));
+    assert.ok(args.includes("AUTH_DEV_REFRESH_TTL_SECONDS=43200"));
+    assert.doesNotMatch(spec.commandPreview({ args }), /AUTH_DEV_BYPASS_SECRET=[a-f0-9]{64}/u);
+    assert.match(spec.commandPreview({ args }), /'AUTH_DEV_BYPASS_SECRET=\(redacted\)'/u);
     const startupScript = args.at(-1);
     assert.match(startupScript, /npm run build/u);
     assert.match(startupScript, /npm run server/u);
@@ -419,11 +429,18 @@ test("jskit dev launch starts backend and Vite together", async () => {
     assert.equal(spec.metadata.backendPort, 3000);
     assert.equal(spec.metadata.defaultDisplay, "minimized");
     assert.equal(spec.metadata.frontendCommand, "npm run dev -- --host 0.0.0.0 --port \"$PORT\"");
+    assert.equal(spec.metadata.previewAuth, JSKIT_PREVIEW_AUTH_KIND);
     assert.match(spec.metadata.readinessMarker, /^\[\[VIBE64_LAUNCH_READY_V1:/u);
 
     const args = spec.args({
       id: "unit-terminal"
     });
+    assert.ok(args.includes("AUTH_DEV_BYPASS_ENABLED=true"));
+    assert.ok(args.some((arg) => /^AUTH_DEV_BYPASS_SECRET=[a-f0-9]{64}$/u.test(arg)));
+    assert.ok(args.includes("AUTH_DEV_ACCESS_TTL_SECONDS=3600"));
+    assert.ok(args.includes("AUTH_DEV_REFRESH_TTL_SECONDS=43200"));
+    assert.doesNotMatch(spec.commandPreview({ args }), /AUTH_DEV_BYPASS_SECRET=[a-f0-9]{64}/u);
+    assert.match(spec.commandPreview({ args }), /'AUTH_DEV_BYPASS_SECRET=\(redacted\)'/u);
     const startupScript = args.at(-1);
     assert.match(startupScript, /VIBE64_JSKIT_BACKEND_PORT=\\?"?3000/u);
     assert.match(startupScript, /npm run server/u);

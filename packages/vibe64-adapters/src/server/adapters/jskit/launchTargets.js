@@ -4,6 +4,9 @@ import { loadAppConfigFromAppRoot } from "@jskit-ai/kernel/server/support";
 import {
   sessionWorktreePath
 } from "@local/vibe64-core/server/sessionWorktreePath";
+import {
+  JSKIT_PREVIEW_AUTH_KIND
+} from "@local/vibe64-core/server/previewAuth";
 
 import {
   createVibe64WebLaunchTargetTerminalSpec,
@@ -267,6 +270,7 @@ async function createJskitBuiltLaunchDescriptor({
       serverCommand: config.serverCommand,
       testrunCommand: config.testrunCommand
     },
+    previewAuth: JSKIT_PREVIEW_AUTH_KIND,
     urlPath: await defaultAppPath(worktreePath)
   };
 }
@@ -293,6 +297,7 @@ async function createJskitDevLaunchDescriptor({
       hostDockerSource: config.hostDockerSource,
       mode: "dev"
     },
+    previewAuth: JSKIT_PREVIEW_AUTH_KIND,
     urlPath: await defaultAppPath(worktreePath)
   };
 }
