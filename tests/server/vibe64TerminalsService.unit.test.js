@@ -727,6 +727,20 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
           });
           return conversationLog.at(-1);
         },
+        async writeConversationThinkingMessage(_sessionId, {
+          text = ""
+        } = {}) {
+          conversationLog.push({
+            assistant: null,
+            thinking: [
+              {
+                text: String(text || "").trim()
+              }
+            ],
+            user: null
+          });
+          return conversationLog.at(-1);
+        },
         async readConversationLog() {
           return conversationLog;
         }
@@ -830,6 +844,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     assert.equal(providerCalls.sendTurn[0].threadId, "00000000-0000-4000-8000-000000000004");
     assert.equal(providerCalls.sendTurn[0].params.cwd, worktree);
     assert.equal(providerCalls.sendTurn[0].params.effort, "xhigh");
+    assert.equal(providerCalls.sendTurn[0].params.summary, "concise");
     assert.deepEqual(providerCalls.sendTurn[0].params.sandboxPolicy, {
       type: "dangerFullAccess"
     });
@@ -870,6 +885,25 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       "codex-app-server-ready"
     ]);
     assert.equal(providerSubscribers.length, 1);
+    providerSubscribers[0]({
+      method: "item/reasoning/summaryPartAdded",
+      params: {
+        itemId: "reasoning-summary-1",
+        summaryIndex: 0,
+        threadId: "00000000-0000-4000-8000-000000000004",
+        turnId: "codex-app-server-turn-1"
+      }
+    });
+    providerSubscribers[0]({
+      method: "item/reasoning/summaryTextDelta",
+      params: {
+        delta: "Checked the app-server prompt delivery result.",
+        itemId: "reasoning-summary-1",
+        summaryIndex: 0,
+        threadId: "00000000-0000-4000-8000-000000000004",
+        turnId: "codex-app-server-turn-1"
+      }
+    });
     providerSubscribers[0]({
       method: "item/completed",
       params: {
@@ -923,6 +957,9 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     assert.equal(session.stepMachine.status, "done");
     assert.deepEqual((await runtime.store.readConversationLog()).map((turn) => turn.assistant?.text).filter(Boolean), [
       "The app-server turn is complete."
+    ]);
+    assert.deepEqual((await runtime.store.readConversationLog()).flatMap((turn) => (turn.thinking || []).map((message) => message.text)).filter(Boolean), [
+      "Checked the app-server prompt delivery result."
     ]);
     providerSubscribers[0]({
       method: "item/started",

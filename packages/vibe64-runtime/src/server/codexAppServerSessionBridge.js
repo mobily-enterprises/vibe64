@@ -9,6 +9,7 @@ import {
 const CODEX_SESSION_AGENT_PROVIDER = "codex";
 const CODEX_SESSION_MODEL = "gpt-5.5";
 const CODEX_SESSION_REASONING_EFFORT = "xhigh";
+const CODEX_SESSION_REASONING_SUMMARY = "concise";
 const CODEX_SESSION_APPROVAL_POLICY = "never";
 const CODEX_SESSION_SANDBOX = "danger-full-access";
 const CODEX_APP_SERVER_BOOTSTRAP_TIMEOUT_MS = 60000;
@@ -55,7 +56,8 @@ function codexAppServerTurnSettings({
     model,
     sandboxPolicy: {
       type: "dangerFullAccess"
-    }
+    },
+    summary: CODEX_SESSION_REASONING_SUMMARY
   };
 }
 
@@ -418,6 +420,7 @@ export {
   CODEX_SESSION_APPROVAL_POLICY,
   CODEX_SESSION_MODEL,
   CODEX_SESSION_REASONING_EFFORT,
+  CODEX_SESSION_REASONING_SUMMARY,
   CODEX_SESSION_SANDBOX,
   codexAppServerIdentityMetadata,
   codexAppServerThreadIdForSession,

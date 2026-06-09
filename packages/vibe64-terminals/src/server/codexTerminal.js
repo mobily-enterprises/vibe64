@@ -609,6 +609,7 @@ function createCodexTerminalController({
   const codexAppServerMirroredUserItems = new Set();
   const codexAppServerAssistantTurns = new Map();
   const codexAppServerReasoningTurns = new Map();
+  const codexAppServerReasoningPersistQueues = new Map();
 
   function codexAppServerProviderForSession(sessionId = "", options = {}) {
     const normalizedSessionId = normalizeText(sessionId);
@@ -872,10 +873,17 @@ function createCodexTerminalController({
       return existing;
     }
     const created = {
+      createdAt: new Date().toISOString(),
+      persistedText: "",
       summaries: new Map()
     };
     codexAppServerReasoningTurns.set(key, created);
     return created;
+  }
+
+  function codexAppServerReasoningExistingTurnState(threadId = "", turnId = "") {
+    return codexAppServerReasoningTurns.get(codexAppServerReasoningTurnKey(threadId, turnId)) ||
+      codexAppServerReasoningTurns.get(codexAppServerReasoningTurnKey(threadId, "*"));
   }
 
   function codexAppServerReasoningSummaryKey(notification = {}) {
@@ -889,12 +897,12 @@ function createCodexTerminalController({
   function recordCodexAppServerReasoningNotification(threadId = "", notification = {}) {
     const method = normalizeText(notification.method);
     if (method !== "item/reasoning/summaryPartAdded" && method !== "item/reasoning/summaryTextDelta") {
-      return;
+      return false;
     }
     const normalizedThreadId = normalizeText(threadId);
     const turnId = codexAppServerNotificationTurnId(notification);
     if (!normalizedThreadId) {
-      return;
+      return false;
     }
     const state = codexAppServerReasoningTurnState(normalizedThreadId, turnId);
     const summaryKey = codexAppServerReasoningSummaryKey(notification);
@@ -906,14 +914,16 @@ function createCodexTerminalController({
       const delta = codexAppServerContentText(params.delta || params.text);
       if (delta) {
         summary.chunks.push(delta);
+        state.summaries.set(summaryKey, summary);
+        return true;
       }
     }
     state.summaries.set(summaryKey, summary);
+    return false;
   }
 
   function readCodexAppServerReasoningText(threadId = "", turnId = "") {
-    const state = codexAppServerReasoningTurns.get(codexAppServerReasoningTurnKey(threadId, turnId)) ||
-      codexAppServerReasoningTurns.get(codexAppServerReasoningTurnKey(threadId, "*"));
+    const state = codexAppServerReasoningExistingTurnState(threadId, turnId);
     if (!state) {
       return "";
     }
@@ -922,6 +932,65 @@ function createCodexTerminalController({
       .filter(Boolean)
       .join("\n\n")
       .trim();
+  }
+
+  function codexAppServerReasoningPersistKey(sessionId = "", threadId = "", turnId = "") {
+    return [
+      normalizeText(sessionId),
+      normalizeText(threadId),
+      normalizeText(turnId) || "*"
+    ].filter(Boolean).join(":");
+  }
+
+  async function persistCodexAppServerReasoningSummary(sessionId = "", threadId = "", turnId = "") {
+    const normalizedSessionId = normalizeText(sessionId);
+    const state = codexAppServerReasoningExistingTurnState(threadId, turnId);
+    const reasoningText = readCodexAppServerReasoningText(threadId, turnId);
+    if (!normalizedSessionId || !state || !reasoningText || state.persistedText === reasoningText) {
+      return;
+    }
+    const runtime = await projectService.createRuntime();
+    const written = await runtime.store.writeConversationThinkingMessage(normalizedSessionId, {
+      at: state.createdAt,
+      requireOpenTurn: true,
+      text: reasoningText
+    });
+    if (!written) {
+      return;
+    }
+    state.persistedText = reasoningText;
+    await publishSessionChanged(normalizedSessionId, {
+      reason: "codex-app-server-reasoning-summary"
+    });
+  }
+
+  function queueCodexAppServerReasoningPersist(sessionId = "", threadId = "", turnId = "") {
+    const key = codexAppServerReasoningPersistKey(sessionId, threadId, turnId);
+    if (!key) {
+      return Promise.resolve();
+    }
+    const previous = codexAppServerReasoningPersistQueues.get(key) || Promise.resolve();
+    const next = previous
+      .catch(() => null)
+      .then(() => persistCodexAppServerReasoningSummary(sessionId, threadId, turnId));
+    codexAppServerReasoningPersistQueues.set(key, next);
+    next
+      .finally(() => {
+        if (codexAppServerReasoningPersistQueues.get(key) === next) {
+          codexAppServerReasoningPersistQueues.delete(key);
+        }
+      })
+      .catch(() => null);
+    return next;
+  }
+
+  async function flushCodexAppServerReasoningPersist(sessionId = "", threadId = "", turnId = "") {
+    const key = codexAppServerReasoningPersistKey(sessionId, threadId, turnId);
+    const queued = key ? codexAppServerReasoningPersistQueues.get(key) : null;
+    if (queued) {
+      await queued.catch(() => null);
+    }
+    await persistCodexAppServerReasoningSummary(sessionId, threadId, turnId);
   }
 
   function cleanupCodexAppServerReasoningTurn(threadId = "", turnId = "") {
@@ -1012,12 +1081,7 @@ function createCodexTerminalController({
     try {
       const runtime = await projectService.createRuntime();
       if (reasoningText) {
-        await runtime.store.writeConversationThinkingMessage(normalizedSessionId, {
-          text: reasoningText
-        });
-        await publishSessionChanged(normalizedSessionId, {
-          reason: "codex-app-server-reasoning-summary"
-        });
+        await flushCodexAppServerReasoningPersist(normalizedSessionId, threadId, turnId);
       }
       if (!assistantText) {
         return;
@@ -1204,7 +1268,13 @@ function createCodexTerminalController({
       if (notificationThreadId && notificationThreadId !== normalizedThreadId) {
         return;
       }
-      recordCodexAppServerReasoningNotification(normalizedThreadId, notification);
+      if (recordCodexAppServerReasoningNotification(normalizedThreadId, notification)) {
+        void queueCodexAppServerReasoningPersist(
+          normalizedSessionId,
+          normalizedThreadId,
+          codexAppServerNotificationTurnId(notification)
+        );
+      }
       recordCodexAppServerAssistantNotification(normalizedThreadId, notification);
       if (method === "item/started" || method === "item/completed") {
         const item = codexAppServerNotificationItem(notification);

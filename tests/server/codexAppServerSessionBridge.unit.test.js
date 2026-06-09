@@ -107,7 +107,8 @@ test("codex app-server bridge uses the current Vibe64 Codex execution settings",
     model: "gpt-5.5",
     sandboxPolicy: {
       type: "dangerFullAccess"
-    }
+    },
+    summary: "concise"
   });
 });
 

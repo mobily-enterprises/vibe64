@@ -1040,6 +1040,8 @@ function createVibe64SessionStore({
   }
 
   async function writeConversationThinkingMessage(sessionId, {
+    at = "",
+    requireOpenTurn = false,
     text = ""
   } = {}) {
     const messageText = normalizeText(text);
@@ -1047,9 +1049,12 @@ function createVibe64SessionStore({
       return null;
     }
     return mutateSession(sessionId, async (sessionPaths) => {
-      const turnId = await latestOpenConversationTurnId(sessionPaths) ||
-        nextConversationTurnId(await conversationTurnIds(sessionPaths));
-      const createdAt = now();
+      const openTurnId = await latestOpenConversationTurnId(sessionPaths);
+      if (requireOpenTurn && !openTurnId) {
+        return null;
+      }
+      const turnId = openTurnId || nextConversationTurnId(await conversationTurnIds(sessionPaths));
+      const createdAt = at ? toDate(at) : now();
       await writeTextFile(
         path.join(conversationTurnRoot(sessionPaths, turnId), conversationMessageFileName("thinking", createdAt)),
         `${messageText}\n`
