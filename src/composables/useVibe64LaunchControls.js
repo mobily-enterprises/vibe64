@@ -195,8 +195,16 @@ function launchPreviewBaseUrl(actions = [], {
   studioHref = localPreviewBrowserHref()
 } = {}) {
   const previewAction = Array.isArray(actions) ? actions.find((action) => browserCanOpenTarget(action)) : null;
+  const previewHref = String(previewAction?.previewHref || "").trim();
+  if (previewHref) {
+    return sameSiteLoopbackPreviewUrl(previewHref, studioHref);
+  }
+  const targetHref = String(previewAction?.href || "").trim();
+  if (remoteStudioCannotEmbedLoopbackTarget(targetHref, studioHref)) {
+    return "";
+  }
   return sameSiteLoopbackPreviewUrl(
-    String(previewAction?.previewHref || previewAction?.href || ""),
+    targetHref,
     studioHref
   );
 }
@@ -240,6 +248,21 @@ function sameSiteLoopbackPreviewUrl(previewHref = "", studioHref = "") {
     return previewUrl.toString();
   } catch {
     return previewText;
+  }
+}
+
+function remoteStudioCannotEmbedLoopbackTarget(previewHref = "", studioHref = "") {
+  const previewText = String(previewHref || "").trim();
+  const studioText = String(studioHref || "").trim();
+  if (!previewText || !studioText) {
+    return false;
+  }
+  try {
+    const previewUrl = new URL(previewText);
+    const studioUrl = new URL(studioText);
+    return isLoopbackBrowserHost(previewUrl.hostname) && !isLoopbackBrowserHost(studioUrl.hostname);
+  } catch {
+    return false;
   }
 }
 

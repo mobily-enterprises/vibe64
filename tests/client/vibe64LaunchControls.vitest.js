@@ -164,6 +164,25 @@ describe("Vibe64 launch controls", () => {
     expect(launchPreviewDisplayUrl(actions)).toBe("http://127.0.0.1:4103/home");
   });
 
+  it("does not embed raw loopback launch URLs from a public Studio host", () => {
+    const actions = [
+      {
+        href: "http://127.0.0.1:4103/home",
+        kind: "url"
+      }
+    ];
+
+    expect(launchPreviewBaseUrl(actions, {
+      studioHref: "https://tonymobily.vibe64.dev/app/beepollen"
+    })).toBe("");
+    expect(launchPreviewBaseUrl([{
+      ...actions[0],
+      previewHref: "https://v64preview-abc123--tonymobily.vibe64.dev/home"
+    }], {
+      studioHref: "https://tonymobily.vibe64.dev/app/beepollen"
+    })).toBe("https://v64preview-abc123--tonymobily.vibe64.dev/home");
+  });
+
   it("keeps embedded loopback preview URLs same-site with the Studio page", () => {
     expect(sameSiteLoopbackPreviewUrl(
       "http://127.0.0.1:4188/home?vibe64_preview_token=abc",

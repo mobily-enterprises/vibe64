@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import { createHash } from "node:crypto";
-import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import {
@@ -227,7 +227,20 @@ async function writeTextFile(filePath, text) {
 }
 
 async function writeJsonFile(filePath, value) {
-  await writeTextFile(filePath, `${JSON.stringify(value, null, 2)}\n`);
+  const directory = path.dirname(filePath);
+  const tempPath = path.join(directory, `.${path.basename(filePath)}.${process.pid}.${randomUUID()}.tmp`);
+  await mkdir(directory, {
+    recursive: true
+  });
+  try {
+    await writeFile(tempPath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+    await rename(tempPath, filePath);
+  } catch (error) {
+    await rm(tempPath, {
+      force: true
+    });
+    throw error;
+  }
 }
 
 function revisionNumber(value) {
