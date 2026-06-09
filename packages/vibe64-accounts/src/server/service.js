@@ -252,7 +252,10 @@ function accountDisconnected({
   label,
   message,
   observed = "",
-  scope = ""
+  previousGithub = null,
+  previousUsername = "",
+  scope = "",
+  status = "not_connected"
 }) {
   return {
     connected: false,
@@ -261,9 +264,12 @@ function accountDisconnected({
     gitIdentity,
     message,
     observed,
+    previousGithub,
+    previousUsername,
+    previouslyLinked: Boolean(previousUsername),
     required: true,
     scope,
-    status: "not_connected"
+    status
   };
 }
 
@@ -300,6 +306,7 @@ async function runDefaultToolchain(commandArgs, options = {}) {
 
 async function readGithubStatus({
   githubContext,
+  previousGithub = null,
   runToolchain = runDefaultToolchain
 } = {}) {
   await ensureToolHomeSource(githubContext);
@@ -324,6 +331,20 @@ async function readGithubStatus({
   };
 
   if (!statusResult.ok || !userResult.ok || !userResult.stdout || missingScopes.length > 0 || missingGitCredentialHelper || missingGitIdentity) {
+    const previousGithubIdentity = rememberedGithubIdentity(previousGithub);
+    if (previousGithubIdentity) {
+      return accountDisconnected({
+        id: "github",
+        gitIdentity,
+        label: "GitHub",
+        message: `GitHub was previously linked as @${previousGithubIdentity.login}, but this host is not authenticated. Reconnect GitHub to continue.`,
+        observed: [output, credentialHelperOutput, gitNameResult.output, gitEmailResult.output].filter(Boolean).join("\n"),
+        previousGithub: previousGithubIdentity,
+        previousUsername: previousGithubIdentity.login,
+        scope: USER_PROVIDER_SCOPE,
+        status: "reconnect_required"
+      });
+    }
     const scopeMessage = missingScopes.length
       ? ` Missing scopes: ${missingScopes.join(", ")}.`
       : "";
@@ -352,6 +373,19 @@ async function readGithubStatus({
     scope: USER_PROVIDER_SCOPE,
     username: userResult.stdout
   });
+}
+
+function rememberedGithubIdentity(value = {}) {
+  const login = String(value?.login || "").trim();
+  if (!login) {
+    return null;
+  }
+  return {
+    avatarUrl: String(value.avatarUrl || ""),
+    connectedAt: String(value.connectedAt || ""),
+    id: Number.isFinite(Number(value.id)) ? Number(value.id) : 0,
+    login
+  };
 }
 
 async function readCodexStatus({
@@ -521,7 +555,8 @@ function createService({
   }
 
   async function accountStatus(accountId, {
-    githubContext = null
+    githubContext = null,
+    previousGithub = null
   } = {}) {
     if (accountId === "github") {
       if (!githubContext?.ok) {
@@ -529,6 +564,7 @@ function createService({
       }
       return readGithubStatus({
         githubContext,
+        previousGithub,
         runToolchain
       });
     }
@@ -551,6 +587,7 @@ function createService({
       }),
       readGithubStatus({
         githubContext,
+        previousGithub: input?.vibe64User?.github || null,
         runToolchain
       })
     ]);
@@ -625,7 +662,8 @@ function createService({
 
     const account = terminal.status === "exited"
       ? await accountStatus(metadata.accountId, {
-          githubContext: metadata.githubContext || null
+          githubContext: metadata.githubContext || null,
+          previousGithub: input?.vibe64User?.github || null
         })
       : {
           connected: false,

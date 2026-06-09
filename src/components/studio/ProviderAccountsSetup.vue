@@ -87,6 +87,12 @@
             >
               {{ account.username }}
             </p>
+            <p
+              v-else-if="account.previousUsername"
+              class="accounts-setup__identity"
+            >
+              Previously linked: @{{ account.previousUsername }}
+            </p>
           </div>
         </div>
 

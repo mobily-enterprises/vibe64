@@ -30,6 +30,15 @@ import {
 const OWNER_USER = Object.freeze({
   email: "Owner@Example.com"
 });
+const LINKED_OWNER_USER = Object.freeze({
+  email: "Owner@Example.com",
+  github: Object.freeze({
+    avatarUrl: "https://github.com/merc.png",
+    connectedAt: "2026-06-08T04:33:06.965Z",
+    id: 2128734,
+    login: "mercmobily"
+  })
+});
 const FRIEND_USER = Object.freeze({
   email: "friend@example.com"
 });
@@ -228,6 +237,36 @@ test("Accounts status requires GitHub Git credential helper for remote operation
     assert.equal(status.ok, true);
     assert.equal(status.ready, false);
     assert.match(status.blockedReason, /Git credential helper is not configured/u);
+    assert.equal(calls.length, 6);
+  });
+});
+
+test("Accounts status shows reconnect required for remembered GitHub identities without live auth", async () => {
+  await withTemporaryRoot(async (root) => {
+    const targetRoot = path.join(root, "target");
+    const calls = [];
+    const status = await createService({
+      providerHomesRoot: path.join(root, "provider-homes"),
+      runToolchain: disconnectedGithubGitCredentialToolchain(calls),
+      targetRoot
+    }).getStatus(accountInput(LINKED_OWNER_USER, {
+      refresh: true
+    }));
+
+    const github = status.accounts.find((account) => account.id === "github");
+    assert.equal(status.ok, true);
+    assert.equal(status.ready, false);
+    assert.equal(status.blockedReason, "GitHub was previously linked as @mercmobily, but this host is not authenticated. Reconnect GitHub to continue.");
+    assert.equal(github.status, "reconnect_required");
+    assert.equal(github.connected, false);
+    assert.equal(github.previouslyLinked, true);
+    assert.equal(github.previousUsername, "mercmobily");
+    assert.deepEqual(github.previousGithub, {
+      avatarUrl: "https://github.com/merc.png",
+      connectedAt: "2026-06-08T04:33:06.965Z",
+      id: 2128734,
+      login: "mercmobily"
+    });
     assert.equal(calls.length, 6);
   });
 });
