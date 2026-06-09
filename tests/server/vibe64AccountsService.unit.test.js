@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 
@@ -194,6 +195,46 @@ function accountInput(user = OWNER_USER, input = {}) {
   };
 }
 
+async function writeTextFile(filePath = "", text = "") {
+  await mkdir(path.dirname(filePath), {
+    recursive: true
+  });
+  await writeFile(filePath, text, "utf8");
+}
+
+async function writeCodexStatusMarker(dataRoot = "") {
+  await writeTextFile(
+    path.join(dataRoot, "provider-homes", "codex", "status.json"),
+    `${JSON.stringify({
+      connected: true,
+      updatedAt: "2026-06-09T00:00:00.000Z",
+      version: 1
+    }, null, 2)}\n`
+  );
+}
+
+async function writeGithubProviderHome(providerHomesRoot = "", user = OWNER_USER, {
+  email = "12345+merc@users.noreply.github.com",
+  name = "Merc Mobily",
+  username = "merc"
+} = {}) {
+  const home = githubProviderHome(providerHomesRoot, user);
+  await writeTextFile(path.join(home, ".config", "gh", "hosts.yml"), [
+    "github.com:",
+    `    oauth_token: local-token-${username}`,
+    `    user: ${username}`,
+    "    git_protocol: https"
+  ].join("\n"));
+  await writeTextFile(path.join(home, ".gitconfig"), [
+    "[credential \"https://github.com\"]",
+    "    helper = !/usr/bin/gh auth git-credential",
+    "[user]",
+    `    name = ${name}`,
+    `    email = ${email}`
+  ].join("\n"));
+  return home;
+}
+
 function githubCalls(calls = []) {
   return calls.filter((call) => call.commandArgs[0] === "gh" || call.commandArgs[0] === "git");
 }
@@ -202,16 +243,75 @@ function codexCalls(calls = []) {
   return calls.filter((call) => call.commandArgs[0] === "codex");
 }
 
-test("Accounts status uses shared Codex auth and the active user's GitHub home", async () => {
+test("Accounts status reads local provider state by default", async () => {
+  await withTemporaryRoot(async (root) => {
+    const dataRoot = path.join(root, "data");
+    const providerHomesRoot = path.join(dataRoot, "provider-homes");
+    const calls = [];
+    await writeCodexStatusMarker(dataRoot);
+    await writeGithubProviderHome(providerHomesRoot, OWNER_USER);
+
+    const status = await createService({
+      dataRoot,
+      providerHomesRoot,
+      runToolchain: connectedToolchain(calls),
+      targetRoot: path.join(root, "target")
+    }).getStatus(accountInput(OWNER_USER));
+
+    assert.equal(status.ok, true);
+    assert.equal(status.ready, true);
+    assert.equal(calls.length, 0);
+    assert.deepEqual(status.providerScopes, {
+      codex: APP_PROVIDER_SCOPE,
+      github: USER_PROVIDER_SCOPE
+    });
+    const github = status.accounts.find((account) => account.id === "github");
+    assert.equal(github.username, "merc");
+    assert.deepEqual(github.gitIdentity, {
+      email: "12345+merc@users.noreply.github.com",
+      name: "Merc Mobily"
+    });
+  });
+});
+
+test("Accounts status blocks a remembered GitHub identity when the local provider home is not configured", async () => {
+  await withTemporaryRoot(async (root) => {
+    const dataRoot = path.join(root, "data");
+    const providerHomesRoot = path.join(dataRoot, "provider-homes");
+    const calls = [];
+    await writeCodexStatusMarker(dataRoot);
+
+    const status = await createService({
+      dataRoot,
+      providerHomesRoot,
+      runToolchain: connectedToolchain(calls),
+      targetRoot: path.join(root, "target")
+    }).getStatus(accountInput(LINKED_OWNER_USER));
+
+    const github = status.accounts.find((account) => account.id === "github");
+    assert.equal(status.ok, true);
+    assert.equal(status.ready, false);
+    assert.equal(calls.length, 0);
+    assert.equal(github.connected, false);
+    assert.equal(github.status, "reconnect_required");
+    assert.equal(github.previousUsername, "mercmobily");
+    assert.match(status.blockedReason, /previously linked as @mercmobily/u);
+  });
+});
+
+test("Accounts status uses shared Codex auth and the active user's GitHub home when refreshed", async () => {
   await withTemporaryRoot(async (root) => {
     const targetRoot = path.join(root, "target");
     const providerHomesRoot = path.join(root, "provider-homes");
     const calls = [];
     const status = await createService({
+      dataRoot: path.join(root, "data"),
       providerHomesRoot,
       runToolchain: connectedToolchain(calls),
       targetRoot
-    }).getStatus(accountInput(OWNER_USER));
+    }).getStatus(accountInput(OWNER_USER, {
+      refresh: true
+    }));
 
     assert.equal(status.ok, true);
     assert.equal(status.ready, true);
@@ -247,6 +347,7 @@ test("Codex status can be checked without requiring a GitHub user context", asyn
   await withTemporaryRoot(async (root) => {
     const calls = [];
     const status = await createService({
+      dataRoot: path.join(root, "data"),
       runToolchain: connectedToolchain(calls),
       targetRoot: path.join(root, "target")
     }).getCodexStatus();
@@ -270,13 +371,18 @@ test("GitHub provider homes are keyed per Vibe64 user while Codex remains shared
     const providerHomesRoot = path.join(root, "provider-homes");
     const calls = [];
     const service = createService({
+      dataRoot: path.join(root, "data"),
       providerHomesRoot,
       runToolchain: connectedToolchain(calls),
       targetRoot: path.join(root, "target")
     });
 
-    await service.getStatus(accountInput(OWNER_USER));
-    await service.getStatus(accountInput(FRIEND_USER));
+    await service.getStatus(accountInput(OWNER_USER, {
+      refresh: true
+    }));
+    await service.getStatus(accountInput(FRIEND_USER, {
+      refresh: true
+    }));
 
     const githubHomes = new Set(githubCalls(calls).map((call) => call.options.toolHomeSource));
     assert.deepEqual(githubHomes, new Set([
@@ -293,6 +399,7 @@ test("Accounts status requires GitHub Git credential helper for remote operation
     const targetRoot = path.join(root, "target");
     const calls = [];
     const status = await createService({
+      dataRoot: path.join(root, "data"),
       providerHomesRoot: path.join(root, "provider-homes"),
       runToolchain: disconnectedGithubGitCredentialToolchain(calls),
       targetRoot
@@ -312,6 +419,7 @@ test("Accounts status shows reconnect required for remembered GitHub identities 
     const targetRoot = path.join(root, "target");
     const calls = [];
     const status = await createService({
+      dataRoot: path.join(root, "data"),
       providerHomesRoot: path.join(root, "provider-homes"),
       runToolchain: disconnectedGithubAuthToolchain(calls),
       targetRoot
@@ -342,6 +450,7 @@ test("Accounts status requires Git identity in the active user's GitHub home", a
     const targetRoot = path.join(root, "target");
     const calls = [];
     const status = await createService({
+      dataRoot: path.join(root, "data"),
       providerHomesRoot: path.join(root, "provider-homes"),
       runToolchain: disconnectedGithubGitIdentityToolchain(calls),
       targetRoot
@@ -363,17 +472,23 @@ test("Accounts status reads live Codex shared state instead of reusing provider 
     const disconnectedCalls = [];
 
     const connected = await createService({
+      dataRoot: path.join(root, "connected-data"),
       providerHomesRoot,
       runToolchain: connectedToolchain(connectedCalls),
       targetRoot: path.join(root, "target")
-    }).getStatus(accountInput(OWNER_USER));
+    }).getStatus(accountInput(OWNER_USER, {
+      refresh: true
+    }));
     assert.equal(connected.ready, true);
 
     const disconnected = await createService({
+      dataRoot: path.join(root, "disconnected-data"),
       providerHomesRoot,
       runToolchain: disconnectedCodexToolchain(disconnectedCalls),
       targetRoot: path.join(root, "target")
-    }).getStatus(accountInput(OWNER_USER));
+    }).getStatus(accountInput(OWNER_USER, {
+      refresh: true
+    }));
     assert.equal(disconnected.ready, false);
     assert.match(disconnected.blockedReason, /Codex is not authenticated/u);
     assert.equal(disconnectedCalls.length, 6);

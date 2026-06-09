@@ -469,7 +469,7 @@ const props = defineProps({
 const emit = defineEmits(["back", "continue"]);
 
 const CHATGPT_SECURITY_SETTINGS_URL = "https://chatgpt.com/#settings/Security";
-const ANSI_ESCAPE_PATTERN = new RegExp("\\u001b\\[[0-?]*[ -/]*[@-~]", "gu");
+const ANSI_ESCAPE_PATTERN = new RegExp(`${String.fromCharCode(27)}\\[[0-?]*[ -/]*[@-~]`, "gu");
 const VISIBLE_ANSI_ESCAPE_PATTERN = /\u00a4\[[0-?]*[ -/]*[@-~]/gu;
 
 const accountRows = computed(() => Array.isArray(props.accountRows) ? props.accountRows : []);

@@ -20,6 +20,18 @@ import {
 } from "./userStore.js";
 
 const API_AUTH_BASE = "/api/auth";
+const API_VIBE64_ACCOUNTS_BASE = "/api/vibe64/accounts";
+const PUBLIC_AUTH_PATHS = Object.freeze(new Set([
+  `${API_AUTH_BASE}/state`,
+  `${API_AUTH_BASE}/supabase-config`,
+  `${API_AUTH_BASE}/supabase-session`,
+  `${API_AUTH_BASE}/setup-owner`,
+  `${API_AUTH_BASE}/login`,
+  `${API_AUTH_BASE}/claim`,
+  `${API_AUTH_BASE}/logout`,
+  `${API_AUTH_BASE}/setup/codex-complete`,
+  `${API_AUTH_BASE}/password`
+]));
 const VIBE64_SUPABASE_URL_ENV = "VIBE64_SUPABASE_URL";
 const VIBE64_SUPABASE_PUBLISHABLE_KEY_ENV = "VIBE64_SUPABASE_PUBLISHABLE_KEY";
 const VIBE64_SUPABASE_SECRET_KEY_ENV = "VIBE64_SUPABASE_SECRET_KEY";
@@ -284,7 +296,9 @@ async function assertCodexConnectedForSetup(auth) {
   }
 }
 
-function registerVibe64AuthGate(app, auth) {
+function registerVibe64AuthGate(app, auth, {
+  accountService = null
+} = {}) {
   app.addHook("preHandler", async (request, reply) => {
     if (isAuthPublicRequest(request)) {
       return;
@@ -292,6 +306,13 @@ function registerVibe64AuthGate(app, auth) {
     const user = await auth.userForRequest(request);
     if (user) {
       request.vibe64User = auth.users.publicUser(user);
+      if (isGithubPrerequisiteRequest(request)) {
+        return;
+      }
+      const githubGateResponse = await requireGithubReadyForRequest(accountService, request.vibe64User);
+      if (githubGateResponse) {
+        return reply.code(githubGateResponse.statusCode).send(githubGateResponse.body);
+      }
       return;
     }
     return reply.code(401).send({
@@ -300,6 +321,62 @@ function registerVibe64AuthGate(app, auth) {
       error: "Log in to Vibe64."
     });
   });
+}
+
+async function requireGithubReadyForRequest(accountService, vibe64User = {}) {
+  if (!accountService || typeof accountService.getStatus !== "function") {
+    return {
+      body: {
+        ok: false,
+        code: "vibe64_accounts_service_unavailable",
+        error: "Vibe64 account service is unavailable."
+      },
+      statusCode: 503
+    };
+  }
+
+  try {
+    const status = await accountService.getStatus({
+      vibe64User
+    });
+    if (status?.ok === false) {
+      return {
+        body: {
+          ok: false,
+          code: status.code || "vibe64_accounts_status_failed",
+          error: status.error || "GitHub account status could not be verified."
+        },
+        statusCode: 503
+      };
+    }
+
+    const github = githubAccountFromStatus(status);
+    if (github?.connected === true) {
+      return null;
+    }
+    return {
+      body: {
+        ok: false,
+        code: "vibe64_github_required",
+        error: github?.message || "Connect GitHub before using Vibe64."
+      },
+      statusCode: 403
+    };
+  } catch (error) {
+    return {
+      body: {
+        ok: false,
+        code: error?.code || "vibe64_accounts_status_failed",
+        error: String(error?.message || error || "GitHub account status could not be verified.")
+      },
+      statusCode: 503
+    };
+  }
+}
+
+function githubAccountFromStatus(status = {}) {
+  const accounts = Array.isArray(status?.accounts) ? status.accounts : [];
+  return accounts.find((account) => account?.id === "github") || null;
 }
 
 function resolveSupabaseConfig({
@@ -364,7 +441,7 @@ function isAuthPublicRequest(request = {}) {
   const pathname = requestPathname(request);
   if (
     pathname === "/api/health" ||
-    pathname.startsWith(`${API_AUTH_BASE}/`) ||
+    PUBLIC_AUTH_PATHS.has(pathname) ||
     pathname.startsWith("/assets/") ||
     pathname === "/favicon.svg" ||
     pathname === "/favicon.ico" ||
@@ -377,6 +454,12 @@ function isAuthPublicRequest(request = {}) {
     return true;
   }
   return false;
+}
+
+function isGithubPrerequisiteRequest(request = {}) {
+  const pathname = requestPathname(request);
+  return pathname === API_VIBE64_ACCOUNTS_BASE ||
+    pathname.startsWith(`${API_VIBE64_ACCOUNTS_BASE}/`);
 }
 
 function requestPathname(request = {}) {

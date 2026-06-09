@@ -11,14 +11,14 @@ import {
   readAuthState
 } from "@/lib/vibe64AuthApi.js";
 import {
+  readAccountsStatus
+} from "@/lib/studioGateApi.js";
+import {
   vibe64SupabaseClient
 } from "@/lib/vibe64SupabaseAuth.js";
 import {
   connectBrowserLifecycleSocket
 } from "@/lib/browserLifecycle.js";
-import {
-  syncGithubIdentity
-} from "@/lib/vibe64ProjectApi.js";
 const loading = ref(true);
 const loadError = ref("");
 const state = reactive({
@@ -101,10 +101,6 @@ function currentUserIsOwner() {
   return state.user?.owner === true || state.user?.role === "owner";
 }
 
-function currentUserHasGithubIdentity() {
-  return Boolean(String(state.user?.github?.login || "").trim());
-}
-
 function resetPrerequisiteState() {
   prerequisiteRun += 1;
   prerequisite.checked = false;
@@ -113,9 +109,12 @@ function resetPrerequisiteState() {
   prerequisite.step = "";
 }
 
-async function ensurePrerequisites({
-  verifyCodexCompletion = false
-} = {}) {
+function accountConnected(status = {}, accountId = "") {
+  const accounts = Array.isArray(status?.accounts) ? status.accounts : [];
+  return accounts.some((account) => account?.id === accountId && account.connected === true);
+}
+
+async function ensurePrerequisites() {
   if (!authenticated.value) {
     resetPrerequisiteState();
     return;
@@ -123,15 +122,23 @@ async function ensurePrerequisites({
 
   const runId = prerequisiteRun + 1;
   prerequisiteRun = runId;
-  prerequisite.checking = verifyCodexCompletion;
+  prerequisite.checking = true;
   prerequisite.error = "";
 
   try {
+    const accountsStatus = await readAccountsStatus();
+    if (runId !== prerequisiteRun) {
+      return;
+    }
+    if (accountsStatus?.ok === false) {
+      throw new Error(accountsStatus.error || "Account status could not load.");
+    }
+
     if (
       state.firstLoginCodexSetupPending === true &&
       currentUserIsOwner()
     ) {
-      if (!verifyCodexCompletion) {
+      if (!accountConnected(accountsStatus, "codex")) {
         prerequisite.step = "codex";
         prerequisite.checked = true;
         return;
@@ -151,7 +158,7 @@ async function ensurePrerequisites({
       }
     }
 
-    if (!currentUserHasGithubIdentity()) {
+    if (!accountConnected(accountsStatus, "github")) {
       prerequisite.step = "github";
       prerequisite.checked = true;
       return;
@@ -179,19 +186,7 @@ async function continuePrerequisiteSetup() {
   prerequisite.checking = true;
   prerequisite.error = "";
   try {
-    if (completedStep === "github") {
-      const syncResponse = await syncGithubIdentity();
-      if (syncResponse?.ok === false) {
-        const firstError = Array.isArray(syncResponse.errors) ? syncResponse.errors[0] : null;
-        throw new Error(firstError?.message || syncResponse.error || "GitHub identity could not be saved.");
-      }
-      await refresh({
-        quiet: true
-      });
-    }
-    await ensurePrerequisites({
-      verifyCodexCompletion: completedStep === "codex"
-    });
+    await ensurePrerequisites();
   } catch (error) {
     prerequisite.error = String(error?.message || error || "Setup status could not load.");
     prerequisite.step = completedStep;
@@ -200,7 +195,7 @@ async function continuePrerequisiteSetup() {
   }
 }
 
-watch(authenticated, (active) => {
+watch(() => authenticated.value && prerequisitesSatisfied.value, (active) => {
   lifecycleConnection?.close?.();
   lifecycleConnection = active ? connectBrowserLifecycleSocket() : null;
 }, {

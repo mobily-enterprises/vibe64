@@ -328,17 +328,18 @@ function browserUrlForPublicOrigin(origin = "", options = {}) {
 }
 
 function createCodexConnectedVerifier({
+  accountService = null,
   dataRoot = "",
   env = process.env,
   providerHomesRoot = ""
 } = {}) {
-  const accountService = createVibe64AccountsService({
+  const service = accountService || createVibe64AccountsService({
     dataRoot,
     env,
     providerHomesRoot
   });
   return async function verifyCodexConnected() {
-    const status = await accountService.getCodexStatus();
+    const status = await service.getCodexStatus();
     if (status?.ok === false) {
       return {
         ok: false,
@@ -372,9 +373,15 @@ async function createServer(options = {}) {
   }
   await app.register(fastifyWebsocket);
 
+  const accountService = createVibe64AccountsService({
+    dataRoot: options.authDataRoot,
+    env: runtimeEnv,
+    providerHomesRoot: options.providerHomesRoot
+  });
   const codexConnectedVerifier = typeof options.codexConnectedVerifier === "function"
     ? options.codexConnectedVerifier
     : createCodexConnectedVerifier({
+        accountService,
         dataRoot: options.authDataRoot,
         env: runtimeEnv,
         providerHomesRoot: options.providerHomesRoot
@@ -387,7 +394,9 @@ async function createServer(options = {}) {
   });
   app.vibe64Auth = auth;
   registerVibe64AuthRoutes(app, auth);
-  registerVibe64AuthGate(app, auth);
+  registerVibe64AuthGate(app, auth, {
+    accountService
+  });
 
   const browserLifecycleMonitor = createBrowserLifecycleMonitor({
     logger: app.log,

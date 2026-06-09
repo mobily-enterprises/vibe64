@@ -18,7 +18,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted } from "vue";
+import { computed } from "vue";
 import ProviderAccountsSetup from "@/components/studio/ProviderAccountsSetup.vue";
 import { useVibe64Accounts } from "@/composables/useVibe64Accounts.js";
 
@@ -88,8 +88,4 @@ function aiProviderRow(account = {}) {
     deviceAuth: true
   };
 }
-
-onMounted(() => {
-  void accounts.refresh();
-});
 </script>

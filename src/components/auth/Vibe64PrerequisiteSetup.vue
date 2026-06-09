@@ -76,6 +76,7 @@ useStudioShellDrawer({
 
       <AccountsSetup
         v-else-if="step === 'github'"
+        auto-continue-when-ready
         continue-label="Continue"
         lede="Connect your GitHub account before using Vibe64. Vibe64 uses this identity for commits, branches, pull requests, and merge actions."
         needed-label="GitHub required"

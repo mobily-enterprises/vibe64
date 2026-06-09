@@ -5,6 +5,9 @@ import path from "node:path";
 import test from "node:test";
 import WebSocket from "ws";
 
+import {
+  githubProviderHome
+} from "@local/studio-terminal-core/server/providerHomes";
 import { createServer, resolveListenTarget, startServer } from "../../server.js";
 import { BROWSER_LIFECYCLE_WEBSOCKET_PATH } from "../../server/lib/browserLifecycle.js";
 import { loadRuntimeEnvFiles, resolveRuntimeEnv } from "../../server/lib/runtimeEnv.js";
@@ -655,7 +658,10 @@ test("started server defaults to Unix socket when PORT is not set", async () => 
   }
 });
 
-async function authenticateOwner(app) {
+async function authenticateOwner(app, {
+  githubLogin = "octocat",
+  linkGithub = true
+} = {}) {
   const response = await app.inject({
     method: "POST",
     payload: {
@@ -664,10 +670,20 @@ async function authenticateOwner(app) {
     url: "/api/auth/supabase-session"
   });
   assert.equal(response.statusCode, 200);
+  if (linkGithub) {
+    await writeReadyGithubProviderHome(app.vibe64Auth.dataRoot, {
+      email: "owner@example.com",
+      githubLogin,
+      gitUserName: "Owner Example"
+    });
+  }
   return response.headers["set-cookie"];
 }
 
-async function authenticateMember(app) {
+async function authenticateMember(app, {
+  githubLogin = "memberhub",
+  linkGithub = true
+} = {}) {
   const invite = await app.vibe64Auth.users.inviteUser({
     email: "member@example.com"
   });
@@ -680,7 +696,50 @@ async function authenticateMember(app) {
     url: "/api/auth/supabase-session"
   });
   assert.equal(response.statusCode, 200);
+  if (linkGithub) {
+    await writeReadyGithubProviderHome(app.vibe64Auth.dataRoot, {
+      email: "member@example.com",
+      githubLogin,
+      gitUserName: "Member Example"
+    });
+  }
   return response.headers["set-cookie"];
+}
+
+async function writeReadyGithubProviderHome(dataRoot, {
+  email = "",
+  githubLogin = "",
+  gitUserName = ""
+} = {}) {
+  const home = githubProviderHome(path.join(dataRoot, "provider-homes"), {
+    email
+  });
+  await mkdir(path.join(home, ".config", "gh"), {
+    mode: 0o700,
+    recursive: true
+  });
+  await writeFile(
+    path.join(home, ".config", "gh", "hosts.yml"),
+    [
+      "github.com:",
+      "    oauth_token: test-token",
+      `    user: ${githubLogin}`,
+      ""
+    ].join("\n"),
+    "utf8"
+  );
+  await writeFile(
+    path.join(home, ".gitconfig"),
+    [
+      "[credential \"https://github.com\"]",
+      "\thelper = gh auth git-credential",
+      "[user]",
+      `\tname = ${gitUserName}`,
+      `\temail = ${email}`,
+      ""
+    ].join("\n"),
+    "utf8"
+  );
 }
 
 async function fakeVerifySupabaseAccessToken(token = "") {

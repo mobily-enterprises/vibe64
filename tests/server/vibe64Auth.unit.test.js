@@ -6,6 +6,7 @@ import test from "node:test";
 
 import {
   createVibe64Auth,
+  registerVibe64AuthGate,
   registerVibe64AuthRoutes,
   resolveSupabaseConfig
 } from "../../server/lib/auth/index.js";
@@ -375,6 +376,149 @@ test("Vibe64 auth enforces tenant user capacity and stores GitHub identity", asy
   });
 });
 
+test("Vibe64 auth gate blocks protected APIs until GitHub is connected", async () => {
+  await withAuth(async (auth) => {
+    const owner = await auth.authenticateSupabaseSession({
+      accessToken: "owner-token"
+    });
+    const session = await auth.sessions.createSession(owner);
+    const hook = registerAuthGateTestHook(auth, {
+      accountService: {
+        async getStatus(input = {}) {
+          assert.equal(input.vibe64User.email, "owner@example.com");
+          return {
+            accounts: [
+              {
+                connected: false,
+                id: "github",
+                message: "Reconnect GitHub to continue.",
+                required: true
+              }
+            ],
+            ok: true,
+            ready: false
+          };
+        }
+      }
+    });
+
+    const reply = testReply();
+    await hook({
+      headers: sessionCookieHeader(session),
+      method: "GET",
+      url: "/api/app/beepollen/session"
+    }, reply);
+
+    assert.equal(reply.statusCode, 403);
+    assert.equal(reply.payload.ok, false);
+    assert.equal(reply.payload.code, "vibe64_github_required");
+    assert.equal(reply.payload.error, "Reconnect GitHub to continue.");
+  });
+});
+
+test("Vibe64 auth gate allows account setup APIs before GitHub is connected", async () => {
+  await withAuth(async (auth) => {
+    const owner = await auth.authenticateSupabaseSession({
+      accessToken: "owner-token"
+    });
+    const session = await auth.sessions.createSession(owner);
+    const hook = registerAuthGateTestHook(auth, {
+      accountService: {
+        async getStatus() {
+          throw new Error("GitHub gate should not run for account setup routes.");
+        }
+      }
+    });
+
+    const request = {
+      headers: sessionCookieHeader(session),
+      method: "GET",
+      url: "/api/vibe64/accounts"
+    };
+    const reply = testReply();
+    await hook(request, reply);
+
+    assert.equal(reply.statusCode, null);
+    assert.equal(reply.payload, null);
+    assert.equal(request.vibe64User.email, "owner@example.com");
+  });
+});
+
+test("Vibe64 auth gate applies GitHub readiness to tenant management APIs", async () => {
+  await withAuth(async (auth) => {
+    const owner = await auth.authenticateSupabaseSession({
+      accessToken: "owner-token"
+    });
+    const session = await auth.sessions.createSession(owner);
+    const hook = registerAuthGateTestHook(auth, {
+      accountService: {
+        async getStatus() {
+          return {
+            accounts: [
+              {
+                connected: false,
+                id: "github",
+                message: "Connect GitHub before using Vibe64.",
+                required: true
+              }
+            ],
+            ok: true,
+            ready: false
+          };
+        }
+      }
+    });
+
+    const reply = testReply();
+    await hook({
+      headers: sessionCookieHeader(session),
+      method: "POST",
+      url: "/api/auth/invite"
+    }, reply);
+
+    assert.equal(reply.statusCode, 403);
+    assert.equal(reply.payload.code, "vibe64_github_required");
+  });
+});
+
+test("Vibe64 auth gate allows protected APIs after GitHub is connected", async () => {
+  await withAuth(async (auth) => {
+    const owner = await auth.authenticateSupabaseSession({
+      accessToken: "owner-token"
+    });
+    const session = await auth.sessions.createSession(owner);
+    const hook = registerAuthGateTestHook(auth, {
+      accountService: {
+        async getStatus() {
+          return {
+            accounts: [
+              {
+                connected: true,
+                id: "github",
+                required: true
+              }
+            ],
+            ok: true,
+            ready: true
+          };
+        }
+      }
+    });
+
+    const request = {
+      headers: sessionCookieHeader(session),
+      method: "GET",
+      url: "/api/app/beepollen/session"
+    };
+    const reply = testReply();
+    await hook(request, reply);
+
+    assert.equal(reply.statusCode, null);
+    assert.equal(reply.payload, null);
+    assert.equal(request.vibe64User.email, "owner@example.com");
+  });
+});
+
 async function withAuth(callback, options = {}) {
   const dataRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-auth-"));
   try {
@@ -390,6 +534,24 @@ async function withAuth(callback, options = {}) {
       recursive: true
     });
   }
+}
+
+function registerAuthGateTestHook(auth, options = {}) {
+  const hooks = [];
+  registerVibe64AuthGate({
+    addHook(name, handler) {
+      assert.equal(name, "preHandler");
+      hooks.push(handler);
+    }
+  }, auth, options);
+  assert.equal(hooks.length, 1);
+  return hooks[0];
+}
+
+function sessionCookieHeader(session = {}) {
+  return {
+    cookie: `vibe64_session=${encodeURIComponent(session.cookieValue)}`
+  };
 }
 
 async function writeUserRecord(auth, record = {}) {

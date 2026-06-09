@@ -1,4 +1,5 @@
-import { mkdir } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import path from "node:path";
 
 import stripAnsi from "strip-ansi";
 
@@ -24,7 +25,8 @@ import {
   projectServiceTargetRoot
 } from "@local/vibe64-core/server/projectServiceSelection";
 import {
-  resolveStudioTargetRoot
+  resolveStudioTargetRoot,
+  resolveVibe64DataRoot
 } from "@local/vibe64-core/server/studioRoots";
 import {
   dockerCommand,
@@ -55,6 +57,9 @@ const DEVICE_USER_CODE_PATTERN = /\b([A-Z0-9]{4}-[A-Z0-9]{4,8})\b/iu;
 const DEVICE_USER_CODE_REDACTION_PATTERN = /\b[A-Z0-9]{4}-[A-Z0-9]{4,8}\b/gu;
 const OPENAI_API_KEY_REDACTION_PATTERN = /\bsk-[A-Za-z0-9_-]{16,}\b/gu;
 const VISIBLE_ANSI_ESCAPE_PATTERN = /\u00a4\[[0-?]*[ -/]*[@-~]/gu;
+const CODEX_AUTH_MARKER_RELATIVE_PATH = Object.freeze(["provider-homes", "codex", "status.json"]);
+const GITHUB_HOSTS_RELATIVE_PATH = Object.freeze([".config", "gh", "hosts.yml"]);
+const GITHUB_GITCONFIG_RELATIVE_PATH = Object.freeze([".gitconfig"]);
 
 const ACCOUNT_DEFINITIONS = Object.freeze({
   codex: Object.freeze({
@@ -91,6 +96,46 @@ function accountsResult(operation) {
   return vibe64Result(operation, {
     fallbackCode: "vibe64_accounts_request_failed",
     fallbackMessage: "Vibe64 accounts request failed."
+  });
+}
+
+function refreshRequested(input = {}) {
+  return input?.refresh === true || input?.refresh === "true" || input?.refresh === "1";
+}
+
+async function readOptionalText(filePath = "") {
+  if (!filePath) {
+    return "";
+  }
+  try {
+    return await readFile(filePath, "utf8");
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return "";
+    }
+    throw error;
+  }
+}
+
+async function readOptionalJson(filePath = "") {
+  const text = await readOptionalText(filePath);
+  if (!text) {
+    return null;
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+async function writeJsonFile(filePath = "", value = {}) {
+  await mkdir(path.dirname(filePath), {
+    mode: 0o700,
+    recursive: true
+  });
+  await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, {
+    mode: 0o600
   });
 }
 
@@ -340,6 +385,123 @@ function accountConnected({
   };
 }
 
+function codexAuthMarkerPath(dataRoot = "") {
+  return path.join(dataRoot, ...CODEX_AUTH_MARKER_RELATIVE_PATH);
+}
+
+async function readCodexLocalStatus({
+  dataRoot = ""
+} = {}) {
+  const marker = await readOptionalJson(codexAuthMarkerPath(dataRoot));
+  if (marker?.connected === true) {
+    return accountConnected({
+      id: "codex",
+      label: "Codex",
+      message: "Codex is authenticated for the shared Vibe64 app account.",
+      observed: "Local Codex authentication marker is present.",
+      scope: APP_PROVIDER_SCOPE
+    });
+  }
+
+  return accountDisconnected({
+    id: "codex",
+    label: "Codex",
+    message: "Codex is not authenticated for the shared Vibe64 app account.",
+    observed: "Local Codex authentication marker is missing.",
+    scope: APP_PROVIDER_SCOPE
+  });
+}
+
+function parseGithubHosts(hostsText = "") {
+  const hasGithubHost = /^\s*github\.com\s*:/mu.test(hostsText);
+  return {
+    tokenPresent: hasGithubHost && /^\s*oauth_token\s*:\s*\S+/mu.test(hostsText),
+    username: String(hostsText.match(/^\s*user\s*:\s*([^\s#]+)/mu)?.[1] || "").trim()
+  };
+}
+
+function parseGitIdentity(gitConfigText = "") {
+  return {
+    email: String(gitConfigText.match(/^\s*email\s*=\s*(.+?)\s*$/mu)?.[1] || "").trim(),
+    name: String(gitConfigText.match(/^\s*name\s*=\s*(.+?)\s*$/mu)?.[1] || "").trim()
+  };
+}
+
+function gitCredentialHelperConfigured(gitConfigText = "") {
+  return gitConfigText.includes(GITHUB_GIT_CREDENTIAL_HELPER);
+}
+
+function githubLocalObserved({
+  gitIdentity = {},
+  helperConfigured = false,
+  tokenPresent = false
+} = {}) {
+  return [
+    `Local GitHub token: ${tokenPresent ? "present" : "missing"}.`,
+    `Git credential helper: ${helperConfigured ? "present" : "missing"}.`,
+    `Git identity: ${gitIdentity.name && gitIdentity.email ? "present" : "missing"}.`
+  ].join(" ");
+}
+
+async function readGithubLocalStatus({
+  githubContext,
+  previousGithub = null
+} = {}) {
+  const toolHomeSource = String(githubContext?.toolHomeSource || "");
+  const [hostsText, gitConfigText] = await Promise.all([
+    readOptionalText(toolHomeSource ? path.join(toolHomeSource, ...GITHUB_HOSTS_RELATIVE_PATH) : ""),
+    readOptionalText(toolHomeSource ? path.join(toolHomeSource, ...GITHUB_GITCONFIG_RELATIVE_PATH) : "")
+  ]);
+  const hosts = parseGithubHosts(hostsText);
+  const gitIdentity = parseGitIdentity(gitConfigText);
+  const helperConfigured = gitCredentialHelperConfigured(gitConfigText);
+  const missingGitIdentity = !gitIdentity.name || !gitIdentity.email;
+  const observed = githubLocalObserved({
+    gitIdentity,
+    helperConfigured,
+    tokenPresent: hosts.tokenPresent
+  });
+
+  if (!hosts.tokenPresent || !helperConfigured || missingGitIdentity) {
+    const previousGithubIdentity = rememberedGithubIdentity(previousGithub);
+    if (previousGithubIdentity) {
+      return accountDisconnected({
+        id: "github",
+        gitIdentity,
+        label: "GitHub",
+        message: `GitHub was previously linked as @${previousGithubIdentity.login}, but this host is not ready to use it. Reconnect GitHub to continue.`,
+        observed,
+        previousGithub: previousGithubIdentity,
+        previousUsername: previousGithubIdentity.login,
+        scope: USER_PROVIDER_SCOPE,
+        status: "reconnect_required"
+      });
+    }
+
+    const tokenMessage = hosts.tokenPresent ? "" : " GitHub token is not configured.";
+    const gitCredentialMessage = helperConfigured ? "" : " Git credential helper is not configured.";
+    const gitIdentityMessage = missingGitIdentity ? " Git identity is not configured." : "";
+    return accountDisconnected({
+      id: "github",
+      gitIdentity,
+      label: "GitHub",
+      message: `GitHub CLI is not ready for this Vibe64 user.${tokenMessage}${gitCredentialMessage}${gitIdentityMessage}`,
+      observed,
+      scope: USER_PROVIDER_SCOPE
+    });
+  }
+
+  return accountConnected({
+    id: "github",
+    gitIdentity,
+    label: "GitHub",
+    message: "GitHub CLI is configured for this Vibe64 user.",
+    observed,
+    scope: USER_PROVIDER_SCOPE,
+    username: hosts.username || rememberedGithubIdentity(previousGithub)?.login || ""
+  });
+}
+
 async function runDefaultToolchain(commandArgs, options = {}) {
   return runHostCommand("docker", statusArgs(commandArgs, {
     toolHomeSource: options.toolHomeSource || ""
@@ -572,11 +734,38 @@ function createService({
   targetRoot = ""
 } = {}) {
   const authSessions = new Map();
+  const resolvedDataRoot = resolveVibe64DataRoot({
+    env,
+    explicitRoot: dataRoot
+  });
   const resolvedProviderHomesRoot = resolveProviderHomesRoot({
-    dataRoot,
+    dataRoot: resolvedDataRoot,
     env,
     explicitRoot: providerHomesRoot
   });
+
+  async function rememberCodexStatus(account = {}) {
+    const markerPath = codexAuthMarkerPath(resolvedDataRoot);
+    if (account?.connected === true) {
+      await writeJsonFile(markerPath, {
+        connected: true,
+        updatedAt: new Date().toISOString(),
+        version: 1
+      });
+      return;
+    }
+    await rm(markerPath, {
+      force: true
+    });
+  }
+
+  async function readLiveCodexStatus() {
+    const account = await readCodexStatus({
+      runToolchain
+    });
+    await rememberCodexStatus(account);
+    return account;
+  }
 
   function currentTargetRoot() {
     const selectedTargetRoot = String(targetRoot || projectServiceTargetRoot(projectService)).trim();
@@ -638,9 +827,7 @@ function createService({
       });
     }
     if (accountId === "codex") {
-      return readCodexStatus({
-        runToolchain
-      });
+      return readLiveCodexStatus();
     }
     throw new Error(`Unknown account: ${accountId}`);
   }
@@ -650,16 +837,24 @@ function createService({
     if (!githubContext.ok) {
       return githubContext;
     }
-    const accounts = await Promise.all([
-      readCodexStatus({
-        runToolchain
-      }),
-      readGithubStatus({
-        githubContext,
-        previousGithub: input?.vibe64User?.github || null,
-        runToolchain
-      })
-    ]);
+    const accounts = refreshRequested(input)
+      ? await Promise.all([
+          readLiveCodexStatus(),
+          readGithubStatus({
+            githubContext,
+            previousGithub: input?.vibe64User?.github || null,
+            runToolchain
+          })
+        ])
+      : await Promise.all([
+          readCodexLocalStatus({
+            dataRoot: resolvedDataRoot
+          }),
+          readGithubLocalStatus({
+            githubContext,
+            previousGithub: input?.vibe64User?.github || null
+          })
+        ]);
     const ready = accounts.every((account) => account.required !== true || account.connected === true);
 
     return {

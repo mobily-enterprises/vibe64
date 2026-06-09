@@ -16,7 +16,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import ProviderAccountsSetup from "@/components/studio/ProviderAccountsSetup.vue";
 import { useVibe64Accounts } from "@/composables/useVibe64Accounts.js";
 import {
@@ -27,6 +27,10 @@ const props = defineProps({
   backLabel: {
     default: "",
     type: String
+  },
+  autoContinueWhenReady: {
+    default: false,
+    type: Boolean
   },
   continueLabel: {
     default: "Continue to Project Setup",
@@ -62,6 +66,7 @@ const emit = defineEmits(["back", "continue"]);
 
 const accounts = useVibe64Accounts();
 const syncedGithubUsers = new Set();
+const autoContinueStarted = ref(false);
 const statusLoaded = computed(() => {
   return Boolean(accounts.status && Array.isArray(accounts.status.accounts));
 });
@@ -94,6 +99,9 @@ const accountRows = computed(() => {
     .filter(Boolean)
     .map(providerAccountRow);
 });
+const allEnabledProvidersConnected = computed(() => {
+  return accountRows.value.length > 0 && accountRows.value.every((row) => row.connected === true);
+});
 
 function normalizeProviderId(providerId = "") {
   return String(providerId || "").trim().toLowerCase();
@@ -110,20 +118,20 @@ function providerAccountRow(account = {}) {
   };
 }
 
-onMounted(() => {
-  void accounts.refresh();
-});
-
 watch(accountRows, (rows) => {
   const github = rows.find((row) => row.id === "github" && row.connected === true);
   const username = String(github?.username || "").trim();
-  if (!username || syncedGithubUsers.has(username)) {
-    return;
+  if (username && !syncedGithubUsers.has(username)) {
+    syncedGithubUsers.add(username);
+    void syncGithubIdentity().catch(() => {
+      syncedGithubUsers.delete(username);
+    });
   }
-  syncedGithubUsers.add(username);
-  void syncGithubIdentity().catch(() => {
-    syncedGithubUsers.delete(username);
-  });
+
+  if (props.autoContinueWhenReady && allEnabledProvidersConnected.value && !autoContinueStarted.value) {
+    autoContinueStarted.value = true;
+    emit("continue");
+  }
 }, {
   immediate: true
 });
