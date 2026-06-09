@@ -209,9 +209,16 @@ function launchPreviewBaseUrl(actions = [], {
   );
 }
 
-function launchPreviewDisplayUrl(actions = []) {
+function launchPreviewDisplayUrl(actions = [], {
+  studioHref = localPreviewBrowserHref()
+} = {}) {
   const previewAction = Array.isArray(actions) ? actions.find((action) => browserCanOpenTarget(action)) : null;
-  return String(previewAction?.href || "");
+  const targetHref = String(previewAction?.href || "").trim();
+  const previewHref = String(previewAction?.previewHref || "").trim();
+  if (previewHref && remoteStudioCannotEmbedLoopbackTarget(targetHref, studioHref)) {
+    return sameSiteLoopbackPreviewUrl(previewHref, studioHref);
+  }
+  return targetHref;
 }
 
 function launchPreviewUrl({
