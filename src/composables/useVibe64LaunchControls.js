@@ -197,6 +197,9 @@ function launchPreviewBaseUrl(actions = [], {
   const previewAction = Array.isArray(actions) ? actions.find((action) => browserCanOpenTarget(action)) : null;
   const previewHref = String(previewAction?.previewHref || "").trim();
   if (previewHref) {
+    if (remoteStudioCannotEmbedLoopbackTarget(previewHref, studioHref)) {
+      return "";
+    }
     return sameSiteLoopbackPreviewUrl(previewHref, studioHref);
   }
   const targetHref = String(previewAction?.href || "").trim();
