@@ -728,18 +728,29 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
           return conversationLog.at(-1);
         },
         async writeConversationThinkingMessage(_sessionId, {
+          at = "",
           text = ""
         } = {}) {
-          conversationLog.push({
-            assistant: null,
-            thinking: [
-              {
-                text: String(text || "").trim()
-              }
-            ],
-            user: null
-          });
-          return conversationLog.at(-1);
+          const messageText = String(text || "").trim();
+          const messageAt = String(at || "").trim();
+          const turn = conversationLog.find((entry) => entry.user && !entry.assistant) || null;
+          if (!turn) {
+            return null;
+          }
+          const thinking = Array.isArray(turn.thinking) ? turn.thinking : [];
+          const existing = messageAt
+            ? thinking.find((message) => message.at === messageAt)
+            : null;
+          if (existing) {
+            existing.text = messageText;
+          } else {
+            thinking.push({
+              ...(messageAt ? { at: messageAt } : {}),
+              text: messageText
+            });
+          }
+          turn.thinking = thinking;
+          return turn;
         },
         async readConversationLog() {
           return conversationLog;
@@ -885,6 +896,9 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       "codex-app-server-ready"
     ]);
     assert.equal(providerSubscribers.length, 1);
+    await runtime.store.writeConversationUserMessage(sessionId, {
+      text: "Verify app-server prompt delivery."
+    });
     providerSubscribers[0]({
       method: "item/reasoning/summaryPartAdded",
       params: {
@@ -904,6 +918,11 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
         turnId: "codex-app-server-turn-1"
       }
     });
+    await delay(5);
+    assert.deepEqual((await runtime.store.readConversationLog()).flatMap((turn) => (turn.thinking || []).map((message) => message.text)).filter(Boolean), [
+      "Checked the app-server prompt delivery result."
+    ]);
+    assert.equal(publishSessionReasons.at(-1), "codex-app-server-reasoning-summary");
     providerSubscribers[0]({
       method: "item/completed",
       params: {

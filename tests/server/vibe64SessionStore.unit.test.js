@@ -419,6 +419,54 @@ test("vibe64 session store persists conversation turns as one file per message",
   });
 });
 
+test("vibe64 session store updates streaming thinking on the open user turn", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const store = createVibe64SessionStore({
+      clock: () => new Date("2026-05-16T01:02:03.456Z"),
+      targetRoot
+    });
+    await store.createSession({
+      sessionId: "streaming_thinking"
+    });
+
+    assert.equal(
+      await store.writeConversationThinkingMessage("streaming_thinking", {
+        requireOpenTurn: true,
+        text: "No user turn exists yet."
+      }),
+      null
+    );
+    assert.deepEqual(await store.readConversationLog("streaming_thinking"), []);
+
+    await store.writeConversationUserMessage("streaming_thinking", {
+      text: "What did you check?"
+    });
+    await store.writeConversationThinkingMessage("streaming_thinking", {
+      at: "2026-05-16T01:02:04.000Z",
+      requireOpenTurn: true,
+      text: "Checked package metadata."
+    });
+    await store.writeConversationThinkingMessage("streaming_thinking", {
+      at: "2026-05-16T01:02:04.000Z",
+      requireOpenTurn: true,
+      text: "Checked package metadata and routes."
+    });
+
+    const paths = resolveVibe64SessionPaths({
+      sessionId: "streaming_thinking",
+      targetRoot
+    });
+    assert.deepEqual((await readdir(path.join(paths.conversationLogRoot, "000001"))).sort(), [
+      "thinking.20260516T010204000Z.md",
+      "user.20260516T010203456Z.md"
+    ]);
+    assert.equal(
+      await readFile(path.join(paths.conversationLogRoot, "000001", "thinking.20260516T010204000Z.md"), "utf8"),
+      "Checked package metadata and routes.\n"
+    );
+  });
+});
+
 test("vibe64 session store serializes per-session mutations and bumps revision once per committed boundary", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const storeA = createVibe64SessionStore({
