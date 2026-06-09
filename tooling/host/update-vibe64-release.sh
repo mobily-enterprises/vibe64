@@ -39,6 +39,7 @@ release="$releases_dir/$(date -u +%Y%m%d%H%M%S)-$short"
 cd "$install_root"
 mv "$tmp" "$release"
 tmp=""
+chmod -R a+rX "$release"
 ln -sfn "$release" "$current_link"
 
 echo "[vibe64] Current release:"

@@ -11,9 +11,10 @@ WorkingDirectory=/home/%i
 EnvironmentFile=-/etc/vibe64/vibe64.env
 Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 Environment=XDG_RUNTIME_DIR=/run/vibe64-%i
-RuntimeDirectory=vibe64-%i
-RuntimeDirectoryMode=0750
+UMask=0007
 SupplementaryGroups=docker
+ExecStartPre=+/usr/bin/install -d -o %i -g vibe64 -m 2750 /run/vibe64-%i
+ExecStartPre=+/usr/bin/install -d -o %i -g vibe64 -m 2750 /run/vibe64-%i/vibe64
 ExecStart=/usr/bin/env node /opt/vibe64/current/bin/server.js --no-open
 Restart=always
 RestartSec=3
