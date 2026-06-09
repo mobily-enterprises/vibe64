@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   readVibe64ProjectReadiness,
+  readVibe64SessionReadiness,
   readVibe64SetupReadiness
 } from "../../packages/vibe64-runtime/src/server/setupReadiness.js";
 
@@ -106,6 +107,54 @@ test("project readiness forwards status input to every setup service", async () 
     },
     {
       id: "project-setup",
+      input
+    }
+  ]);
+});
+
+test("session readiness excludes project setup diagnostics", async () => {
+  const seen = [];
+  const service = (id) => ({
+    async getStatus(input) {
+      seen.push({
+        id,
+        input
+      });
+      return {
+        ready: true
+      };
+    }
+  });
+  const input = {
+    vibe64User: {
+      email: "owner@example.com"
+    }
+  };
+
+  const readiness = await readVibe64SessionReadiness({
+    accountSetupService: service("accounts"),
+    projectSetupService: {
+      async getStatus() {
+        throw new Error("Project setup should not gate session readiness.");
+      }
+    },
+    studioSetupService: service("studio-setup")
+  }, {
+    input
+  });
+
+  assert.equal(readiness.ready, true);
+  assert.deepEqual(readiness.stages.map((stage) => stage.id), [
+    "accounts",
+    "studio-setup"
+  ]);
+  assert.deepEqual(seen, [
+    {
+      id: "accounts",
+      input
+    },
+    {
+      id: "studio-setup",
       input
     }
   ]);

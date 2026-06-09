@@ -23,6 +23,7 @@ import {
 } from "@local/vibe64-core/server/projectRequestContext";
 import {
   assertVibe64SetupReady,
+  readVibe64SessionReadiness,
   readVibe64SetupReadiness
 } from "@local/vibe64-runtime/server/setupReadiness";
 import {
@@ -504,6 +505,7 @@ function createService({
 
   function capabilityState({
     connections = {},
+    sessionSetup = {},
     setup = {}
   } = {}) {
     const accounts = Array.isArray(connections.accounts) ? connections.accounts : [];
@@ -516,25 +518,26 @@ function createService({
     const aiReady = selectedAiProvider.ready === true;
     const githubReady = github.ready === true;
     const setupReady = setup.ready === true;
+    const sessionSetupReady = sessionSetup.ready === true;
     const aiConnectionFix = dashboardFix(AI_ACCOUNTS_ROUTE, "Open AI Accounts");
     const githubConnectionFix = dashboardFix(ACCOUNT_ROUTE, "Open Account");
     const setupFix = dashboardFix(SETUP_DASHBOARD_ROUTE, "Open Setup");
     const chatCapability = capability(
-      aiReady && setupReady,
-      aiReady ? automaticSetupReason(setup) : "Choose and authenticate an AI provider before using chat.",
+      aiReady && sessionSetupReady,
+      aiReady ? automaticSetupReason(sessionSetup) : "Choose and authenticate an AI provider before using chat.",
       aiReady ? setupFix : aiConnectionFix
     );
     const createSessionCapability = capability(
-      aiReady && githubReady && setupReady,
+      aiReady && githubReady && sessionSetupReady,
       firstBlockedCapability([
         capability(aiReady, "Choose and authenticate an AI provider before starting a session.", aiConnectionFix),
         capability(githubReady, "Connect GitHub before starting GitHub-backed session work.", githubConnectionFix),
-        capability(setupReady, automaticSetupReason(setup), setupFix)
+        capability(sessionSetupReady, automaticSetupReason(sessionSetup), setupFix)
       ])?.reason || "",
       firstBlockedCapability([
         capability(aiReady, "Choose and authenticate an AI provider before starting a session.", aiConnectionFix),
         capability(githubReady, "Connect GitHub before starting GitHub-backed session work.", githubConnectionFix),
-        capability(setupReady, automaticSetupReason(setup), setupFix)
+        capability(sessionSetupReady, automaticSetupReason(sessionSetup), setupFix)
       ])?.fix || null
     );
 
@@ -565,6 +568,16 @@ function createService({
     requireTargetRoot();
     return assertVibe64SetupReady(setupServices, {
       input: setupStageInput(input)
+    });
+  }
+
+  async function sessionReadiness(options = {}) {
+    if (!currentTargetRoot()) {
+      return noProjectSelectedSetupReadiness();
+    }
+    return readVibe64SessionReadiness(setupServices, {
+      ...options,
+      input: setupStageInput(options.input || options)
     });
   }
 
@@ -686,14 +699,18 @@ function createService({
 
     async inspectCapabilities(input = {}) {
       return currentAppResult(async () => {
-        const [setup, connections] = await Promise.all([
+        const [setup, sessionSetup, connections] = await Promise.all([
           setupReadiness({
+            input
+          }),
+          sessionReadiness({
             input
           }),
           connectionReadiness(input)
         ]);
         const state = capabilityState({
           connections,
+          sessionSetup,
           setup
         });
         return {

@@ -331,6 +331,67 @@ test("current-app reports connections separately from automatic setup capabiliti
   });
 });
 
+test("current-app allows session capabilities when project setup diagnostics are blocked", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const service = createService({
+      appRoot: targetRoot,
+      projectService: fakeProjectService({
+        targetRoot
+      }),
+      setupServices: {
+        accountSetupService: {
+          async getStatus() {
+            return {
+              accounts: [
+                {
+                  connected: true,
+                  id: "codex",
+                  label: "Codex",
+                  ready: true,
+                  status: "connected"
+                },
+                {
+                  connected: true,
+                  id: "github",
+                  label: "GitHub",
+                  ready: true,
+                  status: "connected"
+                }
+              ],
+              ok: true,
+              ready: true
+            };
+          }
+        },
+        projectSetupService: {
+          async getStatus() {
+            return {
+              blockedReason: "Dependencies runnable: Missing node_modules packages.",
+              ready: false
+            };
+          }
+        },
+        studioSetupService: {
+          async getStatus() {
+            return {
+              ready: true
+            };
+          }
+        }
+      }
+    });
+
+    const state = await service.inspectCapabilities();
+
+    assert.equal(state.ok, true);
+    assert.equal(state.setup.ready, false);
+    assert.match(state.setup.message, /Missing node_modules/u);
+    assert.equal(state.capabilities.chat.enabled, true);
+    assert.equal(state.capabilities.createSession.enabled, true);
+    assert.equal(state.capabilities.preview.enabled, false);
+  });
+});
+
 test("current-app merges adapter scripts with project scripts and stores starred target script ids", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const stateRoot = path.join(path.dirname(targetRoot), ".vibe64", "projects", "current-app-test");

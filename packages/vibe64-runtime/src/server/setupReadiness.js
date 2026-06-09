@@ -31,6 +31,15 @@ const PROJECT_READINESS_STAGES = Object.freeze([
   ...SETUP_STAGES
 ]);
 
+const SESSION_READINESS_STAGES = Object.freeze([
+  ...CONNECTION_STAGES,
+  {
+    id: "studio-setup",
+    label: "Studio Setup",
+    serviceName: "studioSetupService"
+  }
+]);
+
 function stageNotReadyMessage(stage, status = {}) {
   return status.blockedReason || nestedStageNotReadyMessage(status) || `${stage.label} is not ready.`;
 }
@@ -106,6 +115,10 @@ async function readVibe64ProjectReadiness(services = {}, options = {}) {
   return readReadinessStages(PROJECT_READINESS_STAGES, services, options);
 }
 
+async function readVibe64SessionReadiness(services = {}, options = {}) {
+  return readReadinessStages(SESSION_READINESS_STAGES, services, options);
+}
+
 async function readReadinessStages(stagesToRead, services = {}, options = {}) {
   const stages = [];
 
@@ -155,12 +168,26 @@ async function assertVibe64ProjectReady(services = {}, options = {}) {
   throw error;
 }
 
+async function assertVibe64SessionReady(services = {}, options = {}) {
+  const readiness = await readVibe64SessionReadiness(services, options);
+  if (readiness.ready === true) {
+    return readiness;
+  }
+
+  const error = vibe64Error(readiness.message, "vibe64_session_not_ready");
+  error.setup = readiness;
+  throw error;
+}
+
 export {
   CONNECTION_STAGES,
   SETUP_STAGES,
   PROJECT_READINESS_STAGES,
+  SESSION_READINESS_STAGES,
   assertVibe64SetupReady,
   assertVibe64ProjectReady,
+  assertVibe64SessionReady,
   readVibe64ProjectReadiness,
+  readVibe64SessionReadiness,
   readVibe64SetupReadiness
 };

@@ -116,6 +116,39 @@ test("session action keeps terminals when the session remains active", async () 
   assert.deepEqual(closedSessionIds, []);
 });
 
+test("session action is gated by session readiness, not project setup diagnostics", async () => {
+  let runActionCalled = false;
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async runAction(sessionId) {
+            runActionCalled = true;
+            return {
+              sessionId,
+              status: VIBE64_SESSION_STATUS.ACTIVE
+            };
+          }
+        };
+      }
+    },
+    setupServices: {
+      ...readySetupServices(),
+      projectSetupService: {
+        async getStatus() {
+          throw new Error("Project setup should not gate session actions.");
+        }
+      }
+    }
+  });
+
+  const session = await service.runSessionAction("session-1", "record_action");
+
+  assert.equal(session.sessionId, "session-1");
+  assert.equal(session.status, VIBE64_SESSION_STATUS.ACTIVE);
+  assert.equal(runActionCalled, true);
+});
+
 test("session abandon does not wait for terminal cleanup", async () => {
   let finishCleanup = null;
   let markCleanupStarted = null;
@@ -505,7 +538,11 @@ test("session prompt intent uses Vibe64 user for readiness without leaking it to
     },
     setupServices: {
       accountSetupService: setupService("accounts"),
-      projectSetupService: setupService("project-setup"),
+      projectSetupService: {
+        async getStatus() {
+          throw new Error("Project setup should not gate session prompt intents.");
+        }
+      },
       studioSetupService: setupService("studio-setup")
     }
   });
@@ -529,13 +566,6 @@ test("session prompt intent uses Vibe64 user for readiness without leaking it to
     },
     {
       id: "studio-setup",
-      input: {
-        refresh: false,
-        vibe64User
-      }
-    },
-    {
-      id: "project-setup",
       input: {
         refresh: false,
         vibe64User
@@ -1560,6 +1590,65 @@ test("session creation uses the selected workflow definition after seeding", asy
       }
     },
     setupServices: readySetupServices()
+  });
+
+  const result = await service.createSession({
+    workflowDefinition: maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.workflowDefinition.id, maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE);
+  assert.equal(selectedWorkflowDefinitionId, maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE);
+});
+
+test("session creation is gated by session readiness, not project setup diagnostics", async () => {
+  let selectedWorkflowDefinitionId = "";
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async advance(sessionId) {
+            return {
+              ok: true,
+              sessionId,
+              workflowDefinition: {
+                id: selectedWorkflowDefinitionId
+              }
+            };
+          },
+          async createSession(input = {}) {
+            selectedWorkflowDefinitionId = input.workflowDefinition;
+            return {
+              sessionId: "new-session"
+            };
+          },
+          async listSessions() {
+            return [];
+          },
+          async workflowDefinitionCreationOptions() {
+            return workflowDefinitionCreationOptions({
+              seedRequired: false
+            });
+          }
+        };
+      },
+      async requireProjectType() {
+        return {
+          adapter: {
+            id: "jskit"
+          },
+          projectType: "jskit"
+        };
+      }
+    },
+    setupServices: {
+      ...readySetupServices(),
+      projectSetupService: {
+        async getStatus() {
+          throw new Error("Project setup should not gate session creation.");
+        }
+      }
+    }
   });
 
   const result = await service.createSession({
