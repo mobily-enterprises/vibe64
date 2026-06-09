@@ -272,6 +272,17 @@ test("launch preview proxy rewrites same-origin redirects to the proxy origin", 
   );
 });
 
+test("launch preview proxy preserves its token across target redirects", () => {
+  assert.equal(
+    proxiedLocation("/auth/login?returnTo=/home%3Fmode%3Ddev", {
+      proxyOrigin: "https://v64preview-abcd--tenant.vibe64.dev",
+      targetOrigin: "http://127.0.0.1:4100",
+      token: "preview-token"
+    }),
+    "https://v64preview-abcd--tenant.vibe64.dev/auth/login?returnTo=/home%3Fmode%3Ddev&vibe64_preview_token=preview-token"
+  );
+});
+
 test("launch preview proxy strips only its token while preserving app query flags", async () => {
   await withTargetServer(async (target) => {
     const registry = createLaunchPreviewProxyRegistry();

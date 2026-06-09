@@ -244,6 +244,7 @@ async function requestBody(request) {
 function responseHeaders(response, {
   injected = false,
   proxyOrigin = "",
+  token = "",
   targetOrigin = ""
 } = {}) {
   const headers = {};
@@ -257,6 +258,7 @@ function responseHeaders(response, {
   if (headers.location && proxyOrigin && targetOrigin) {
     headers.location = proxiedLocation(headers.location, {
       proxyOrigin,
+      token,
       targetOrigin
     });
   }
@@ -346,6 +348,7 @@ function previewStartingHtml() {
 
 function proxiedLocation(location = "", {
   proxyOrigin = "",
+  token = "",
   targetOrigin = ""
 } = {}) {
   const text = String(location || "").trim();
@@ -359,7 +362,9 @@ function proxiedLocation(location = "", {
     }
     const proxy = new URL(proxyOrigin);
     proxy.pathname = target.pathname;
-    proxy.search = target.search;
+    proxy.search = token
+      ? appendPreviewTokenQueryParam(stripPreviewTokenQueryParam(target.search), token)
+      : target.search;
     proxy.hash = target.hash;
     return proxy.toString();
   } catch {
