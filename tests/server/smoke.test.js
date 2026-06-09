@@ -7,7 +7,7 @@ import WebSocket from "ws";
 
 import { createServer, resolveListenTarget, startServer } from "../../server.js";
 import { BROWSER_LIFECYCLE_WEBSOCKET_PATH } from "../../server/lib/browserLifecycle.js";
-import { resolveRuntimeEnv } from "../../server/lib/runtimeEnv.js";
+import { loadRuntimeEnvFiles, resolveRuntimeEnv } from "../../server/lib/runtimeEnv.js";
 import { GITHUB_API_BASE, PROJECT_API_BASE } from "../../server/lib/projectRoutes.js";
 
 async function withTemporaryPackageRoot(packageName, callback) {
@@ -90,6 +90,73 @@ test("server defaults to loopback host", () => {
     } else {
       process.env.PORT = previousPort;
     }
+  }
+});
+
+test("runtime env files load broadly while runtime config stays explicit", async () => {
+  const keys = [
+    "HOST",
+    "PORT",
+    "VIBE64_DATA_ROOT",
+    "VIBE64_LISTEN_SOCKET",
+    "VIBE64_SUPABASE_PUBLISHABLE_KEY",
+    "VIBE64_SUPABASE_SECRET_KEY",
+    "VIBE64_SUPABASE_URL"
+  ];
+  const previous = new Map(keys.map((key) => [key, process.env[key]]));
+  const envRoot = await mkdtemp(path.join(tmpdir(), "vibe64-runtime-env-"));
+  const appEnvFile = path.join(envRoot, ".env");
+  const hostEnvFile = path.join(envRoot, "vibe64.env");
+
+  try {
+    for (const key of keys) {
+      delete process.env[key];
+    }
+    await writeFile(appEnvFile, [
+      "VIBE64_SUPABASE_PUBLISHABLE_KEY=repo-publishable",
+      "VIBE64_SUPABASE_URL=https://repo.example.supabase.co",
+      "HOST=0.0.0.0",
+      "PORT=3939",
+      "VIBE64_LISTEN_SOCKET=/tmp/vibe64-file.sock"
+    ].join("\n"), "utf8");
+    await writeFile(hostEnvFile, [
+      "VIBE64_SUPABASE_PUBLISHABLE_KEY=host-publishable",
+      "VIBE64_SUPABASE_SECRET_KEY=host-secret",
+      "VIBE64_SUPABASE_URL=https://host.example.supabase.co",
+      "VIBE64_DATA_ROOT=/tmp/vibe64-file-data-root"
+    ].join("\n"), "utf8");
+
+    loadRuntimeEnvFiles({
+      appEnvFile,
+      hostEnvFile
+    });
+
+    assert.equal(process.env.VIBE64_SUPABASE_PUBLISHABLE_KEY, "repo-publishable");
+    assert.equal(process.env.VIBE64_SUPABASE_SECRET_KEY, "host-secret");
+    assert.equal(process.env.VIBE64_SUPABASE_URL, "https://repo.example.supabase.co");
+    assert.equal(process.env.HOST, "0.0.0.0");
+    assert.equal(process.env.PORT, "3939");
+    assert.equal(process.env.VIBE64_DATA_ROOT, "/tmp/vibe64-file-data-root");
+    assert.equal(process.env.VIBE64_LISTEN_SOCKET, "/tmp/vibe64-file.sock");
+
+    const runtimeEnv = resolveRuntimeEnv();
+    assert.equal(runtimeEnv.HOST, "0.0.0.0");
+    assert.equal(runtimeEnv.PORT, 3939);
+    assert.equal(runtimeEnv.VIBE64_SUPABASE_SECRET_KEY, "host-secret");
+    assert.equal(runtimeEnv.VIBE64_DATA_ROOT, undefined);
+    assert.equal(runtimeEnv.VIBE64_LISTEN_SOCKET, undefined);
+  } finally {
+    for (const [key, value] of previous.entries()) {
+      if (value == null) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+    await rm(envRoot, {
+      force: true,
+      recursive: true
+    });
   }
 });
 

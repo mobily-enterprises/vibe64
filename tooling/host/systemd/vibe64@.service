@@ -1,0 +1,22 @@
+[Unit]
+Description=Vibe64 tenant daemon for %i
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=%i
+WorkingDirectory=/home/%i
+EnvironmentFile=-/etc/vibe64/vibe64.env
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=XDG_RUNTIME_DIR=/run/vibe64-%i
+RuntimeDirectory=vibe64-%i
+RuntimeDirectoryMode=0750
+SupplementaryGroups=docker
+ExecStart=/usr/bin/env node /opt/vibe64/current/bin/server.js --no-open
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

@@ -3,8 +3,6 @@ import fastifyStatic from "@fastify/static";
 import fastifyWebsocket from "@fastify/websocket";
 import getPort, { portNumbers } from "get-port";
 import {
-  VIBE64_LISTEN_SOCKET_ENV,
-  VIBE64_PUBLIC_ORIGIN_ENV,
   resolveRuntimeEnv
 } from "./server/lib/runtimeEnv.js";
 import { existsSync, readFileSync } from "node:fs";
@@ -188,8 +186,7 @@ function resolveListenTarget({
 
   const socketPath = String(
     explicitOptionValue(options, "listenSocket") ||
-    runtimeEnv[VIBE64_LISTEN_SOCKET_ENV] ||
-    defaultListenSocketPath({ env: runtimeEnv })
+    defaultListenSocketPath()
   ).trim();
   return {
     socketPath: path.resolve(socketPath),
@@ -262,7 +259,7 @@ async function createServer(options = {}) {
       }
     }
   });
-  if (isTruthyEnvValue(runtimeEnv[VIBE64_SKIP_STALE_TERMINAL_CLEANUP_ENV])) {
+  if (isTruthyEnvValue(process.env[VIBE64_SKIP_STALE_TERMINAL_CLEANUP_ENV])) {
     app.log.warn("Skipping stale Studio terminal cleanup for this process.");
   } else {
     await cleanupStaleStudioTerminals({
@@ -299,7 +296,7 @@ async function createServer(options = {}) {
       app: "vibe64"
     };
   });
-  if (isLocalhostCheckBypassEnabled({ env: runtimeEnv })) {
+  if (isLocalhostCheckBypassEnabled()) {
     app.log.warn("Studio localhost request checks are bypassed for this process.");
   }
   const appRoot = resolveStudioAppRoot({
@@ -516,7 +513,7 @@ async function startServer(options = {}) {
       transport: "tcp"
     };
   }
-  const publicOrigin = String(options?.publicOrigin || runtimeEnv[VIBE64_PUBLIC_ORIGIN_ENV] || "").trim();
+  const publicOrigin = String(options?.publicOrigin || "").trim();
   app.vibe64Url = publicOrigin
     ? browserUrlForPublicOrigin(publicOrigin, {
       startupSlug: options?.startupSlug

@@ -4,8 +4,10 @@ import { surfaceRuntime } from "./surfaceRuntime.js";
 
 const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const APP_ENV_FILE = path.join(APP_ROOT, ".env");
-const VIBE64_LISTEN_SOCKET_ENV = "VIBE64_LISTEN_SOCKET";
-const VIBE64_PUBLIC_ORIGIN_ENV = "VIBE64_PUBLIC_ORIGIN";
+const HOST_ENV_FILE = "/etc/vibe64/vibe64.env";
+const VIBE64_SUPABASE_URL_ENV = "VIBE64_SUPABASE_URL";
+const VIBE64_SUPABASE_PUBLISHABLE_KEY_ENV = "VIBE64_SUPABASE_PUBLISHABLE_KEY";
+const VIBE64_SUPABASE_SECRET_KEY_ENV = "VIBE64_SUPABASE_SECRET_KEY";
 
 function toPort(value, fallback = 3000) {
   const parsed = Number.parseInt(String(value || "").trim(), 10);
@@ -17,17 +19,30 @@ function toPort(value, fallback = 3000) {
 
 let envLoaded = false;
 
-function ensureRuntimeEnvLoaded() {
-  if (envLoaded) {
-    return;
-  }
+function loadEnvFileIfPresent(filePath, loadEnvFile = process.loadEnvFile) {
   try {
-    process.loadEnvFile(APP_ENV_FILE);
+    loadEnvFile(filePath);
   } catch (error) {
     if (error?.code !== "ENOENT") {
       throw error;
     }
   }
+}
+
+function loadRuntimeEnvFiles({
+  appEnvFile = APP_ENV_FILE,
+  hostEnvFile = HOST_ENV_FILE,
+  loadEnvFile = process.loadEnvFile
+} = {}) {
+  loadEnvFileIfPresent(appEnvFile, loadEnvFile);
+  loadEnvFileIfPresent(hostEnvFile, loadEnvFile);
+}
+
+function ensureRuntimeEnvLoaded() {
+  if (envLoaded) {
+    return;
+  }
+  loadRuntimeEnvFiles();
   envLoaded = true;
 }
 
@@ -38,9 +53,9 @@ function resolveRuntimeEnv() {
   );
   const rawPort = String(process.env.PORT || "").trim();
   return {
-    ...process.env,
-    [VIBE64_LISTEN_SOCKET_ENV]: String(process.env[VIBE64_LISTEN_SOCKET_ENV] || "").trim(),
-    [VIBE64_PUBLIC_ORIGIN_ENV]: String(process.env[VIBE64_PUBLIC_ORIGIN_ENV] || "").trim().replace(/\/+$/u, ""),
+    [VIBE64_SUPABASE_URL_ENV]: String(process.env[VIBE64_SUPABASE_URL_ENV] || "").trim().replace(/\/+$/u, ""),
+    [VIBE64_SUPABASE_PUBLISHABLE_KEY_ENV]: String(process.env[VIBE64_SUPABASE_PUBLISHABLE_KEY_ENV] || "").trim(),
+    [VIBE64_SUPABASE_SECRET_KEY_ENV]: String(process.env[VIBE64_SUPABASE_SECRET_KEY_ENV] || "").trim(),
     SERVER_SURFACE: serverSurface,
     PORT: rawPort ? toPort(rawPort, 3000) : null,
     PORT_CONFIGURED: Boolean(rawPort),
@@ -48,4 +63,12 @@ function resolveRuntimeEnv() {
   };
 }
 
-export { VIBE64_LISTEN_SOCKET_ENV, VIBE64_PUBLIC_ORIGIN_ENV, resolveRuntimeEnv };
+export {
+  APP_ENV_FILE,
+  HOST_ENV_FILE,
+  VIBE64_SUPABASE_PUBLISHABLE_KEY_ENV,
+  VIBE64_SUPABASE_SECRET_KEY_ENV,
+  VIBE64_SUPABASE_URL_ENV,
+  loadRuntimeEnvFiles,
+  resolveRuntimeEnv
+};
