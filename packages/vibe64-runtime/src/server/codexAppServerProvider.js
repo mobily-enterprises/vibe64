@@ -17,6 +17,26 @@ import process from "node:process";
 import WebSocket from "ws";
 
 import {
+  gitToolchainMountArgs
+} from "@local/studio-terminal-core/server/gitToolchainMounts";
+import {
+  targetRuntimeNetworkDockerArgs
+} from "@local/studio-terminal-core/server/runtimeContainers";
+import {
+  hostUserIdentityEnvArgs,
+  stableHash
+} from "@local/studio-terminal-core/server/shellCommands";
+import {
+  STUDIO_BASE_TOOLCHAIN_IMAGE,
+  STUDIO_DAEMON_PID_LABEL,
+  STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS,
+  studioDockerLabel
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
+import {
+  studioToolHomeDockerArgs,
+  studioUserStartupScript
+} from "@local/studio-terminal-core/server/studioToolHome";
+import {
   AGENT_PROVIDER_IDS,
   normalizeAgentText,
   normalizeAgentThread,
@@ -29,6 +49,7 @@ const CODEX_APP_SERVER_TRANSPORT = Object.freeze({
   UNIX: "unix"
 });
 const CODEX_APP_SERVER_RUNTIME_DIR_NAME = "codex-app-server";
+const CODEX_APP_SERVER_CONTAINER_PREFIX = "vibe64-codex-app-server";
 const CODEX_APP_SERVER_METADATA_FILE = "runtime.json";
 const CODEX_APP_SERVER_LOG_FILE = "app-server.log";
 const CODEX_APP_SERVER_SOCKET_FILE = "app-server.sock";
@@ -94,8 +115,24 @@ function codexAppServerRuntimeBaseDir({
   return path.join(os.tmpdir(), `vibe64-${processUid()}`, "agent-providers");
 }
 
+function codexAppServerRuntimeScope({
+  targetRoot = "",
+  workdir = ""
+} = {}) {
+  const normalizedTargetRoot = normalizeAgentText(targetRoot);
+  if (normalizedTargetRoot) {
+    return path.resolve(normalizedTargetRoot);
+  }
+  const normalizedWorkdir = normalizeAgentText(workdir);
+  return normalizedWorkdir ? path.resolve(normalizedWorkdir) : "";
+}
+
 function codexAppServerRuntimeDir(options = {}) {
-  return path.join(codexAppServerRuntimeBaseDir(options), CODEX_APP_SERVER_RUNTIME_DIR_NAME);
+  const scope = codexAppServerRuntimeScope(options);
+  const dirName = scope
+    ? `${CODEX_APP_SERVER_RUNTIME_DIR_NAME}-${stableHash(scope)}`
+    : CODEX_APP_SERVER_RUNTIME_DIR_NAME;
+  return path.join(codexAppServerRuntimeBaseDir(options), dirName);
 }
 
 function codexAppServerMetadataPath(runtimeDir = "") {
@@ -124,6 +161,108 @@ function codexAppServerContainerSocketPath() {
 
 function codexAppServerContainerEndpoint() {
   return codexAppServerUnixEndpoint(codexAppServerContainerSocketPath());
+}
+
+function dockerMountArgs({
+  readOnly = false,
+  source = "",
+  target = ""
+} = {}) {
+  const normalizedSource = normalizeAgentText(source);
+  const normalizedTarget = normalizeAgentText(target);
+  if (!normalizedSource || !normalizedTarget) {
+    return [];
+  }
+  return [
+    "-v",
+    `${normalizedSource}:${normalizedTarget}${readOnly ? ":ro" : ""}`
+  ];
+}
+
+function pathInsideOrEqual(rootPath = "", candidatePath = "") {
+  if (!rootPath || !candidatePath) {
+    return false;
+  }
+  const relativePath = path.relative(path.resolve(rootPath), path.resolve(candidatePath));
+  return relativePath === "" || (!relativePath.startsWith("..") && !path.isAbsolute(relativePath));
+}
+
+function workdirMountArgs({
+  targetRoot = "",
+  workdir = ""
+} = {}) {
+  const normalizedWorkdir = normalizeAgentText(workdir);
+  if (!normalizedWorkdir || pathInsideOrEqual(targetRoot, normalizedWorkdir)) {
+    return [];
+  }
+  return dockerMountArgs({
+    source: path.resolve(normalizedWorkdir),
+    target: path.resolve(normalizedWorkdir)
+  });
+}
+
+function codexAppServerContainerName(runtimeDir = "") {
+  return `${CODEX_APP_SERVER_CONTAINER_PREFIX}-${stableHash(path.resolve(runtimeDir))}`;
+}
+
+function codexAppServerDockerArgs({
+  containerEndpoint = codexAppServerContainerEndpoint(),
+  image = STUDIO_BASE_TOOLCHAIN_IMAGE,
+  runtimeDir = "",
+  targetRoot = "",
+  workdir = ""
+} = {}) {
+  const normalizedRuntimeDir = path.resolve(runtimeDir);
+  const normalizedTargetRoot = normalizeAgentText(targetRoot) ? path.resolve(targetRoot) : "";
+  const normalizedWorkdir = normalizeAgentText(workdir) ? path.resolve(workdir) : "";
+  const command = [
+    "codex",
+    "app-server",
+    "--listen",
+    containerEndpoint
+  ];
+  return [
+    "run",
+    ...STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS,
+    "--rm",
+    "--name",
+    codexAppServerContainerName(normalizedRuntimeDir),
+    "--label",
+    studioDockerLabel("kind", "codex-app-server"),
+    "--label",
+    `${STUDIO_DAEMON_PID_LABEL}=${process.pid}`,
+    "--label",
+    studioDockerLabel("target", stableHash(normalizedTargetRoot || normalizedWorkdir || normalizedRuntimeDir)),
+    ...studioToolHomeDockerArgs(),
+    ...hostUserIdentityEnvArgs(),
+    ...gitToolchainMountArgs(normalizedTargetRoot),
+    ...dockerMountArgs({
+      source: normalizedRuntimeDir,
+      target: CODEX_APP_SERVER_CONTAINER_RUNTIME_DIR
+    }),
+    ...(normalizedTargetRoot
+      ? [
+          "-v",
+          `${normalizedTargetRoot}:/workspace`,
+          "-v",
+          `${normalizedTargetRoot}:${normalizedTargetRoot}`,
+          ...targetRuntimeNetworkDockerArgs(normalizedTargetRoot)
+        ]
+      : []),
+    ...workdirMountArgs({
+      targetRoot: normalizedTargetRoot,
+      workdir: normalizedWorkdir
+    }),
+    ...(normalizedWorkdir ? ["-w", normalizedWorkdir] : []),
+    image,
+    "bash",
+    "-lc",
+    studioUserStartupScript(command, {
+      setupLines: [
+        `mkdir -p ${shellQuote(CODEX_APP_SERVER_CONTAINER_RUNTIME_DIR)}`
+      ]
+    })
+  ];
 }
 
 function socketPathFromCodexAppServerEndpoint(endpoint = "") {
@@ -305,9 +444,17 @@ async function waitForCodexAppServer(endpoint = "", {
 async function startCodexAppServerProcess({
   codexCommand = "codex",
   env = process.env,
+  image = STUDIO_BASE_TOOLCHAIN_IMAGE,
   readyTimeoutMs = CODEX_APP_SERVER_READY_TIMEOUT_MS,
-  runtimeDir = codexAppServerRuntimeDir({ env }),
-  spawn = defaultSpawn
+  spawn = defaultSpawn,
+  targetRoot = "",
+  workdir = "",
+  runtimeDir = codexAppServerRuntimeDir({
+    env,
+    targetRoot,
+    workdir
+  }),
+  useDocker = true
 } = {}) {
   await ensurePrivateDirectory(runtimeDir);
   const socketPath = codexAppServerSocketPath(runtimeDir);
@@ -320,14 +467,37 @@ async function startCodexAppServerProcess({
   const logHandle = await open(logPath, "a", 0o600);
   let child = null;
   try {
-    child = spawn(codexCommand, [
-      "app-server",
-      "--listen",
-      endpoint
-    ], {
+    const spawnCommand = useDocker ? "docker" : codexCommand;
+    const spawnArgs = useDocker
+      ? codexAppServerDockerArgs({
+          containerEndpoint,
+          image,
+          runtimeDir,
+          targetRoot,
+          workdir
+        })
+      : [
+          "app-server",
+          "--listen",
+          endpoint
+        ];
+    child = spawn(spawnCommand, spawnArgs, {
       detached: true,
       env,
       stdio: ["ignore", logHandle.fd, logHandle.fd]
+    });
+    await new Promise((resolve, reject) => {
+      let settled = false;
+      const settle = (callback, value) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        callback(value);
+      };
+      child.once?.("spawn", () => settle(resolve));
+      child.once?.("error", (error) => settle(reject, error));
+      setImmediate(() => settle(resolve));
     });
     child.unref?.();
   } finally {

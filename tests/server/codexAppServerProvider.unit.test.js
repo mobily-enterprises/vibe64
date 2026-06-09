@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { writeFileSync } from "node:fs";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -14,6 +14,7 @@ import {
   codexAppServerContainerSocketPath,
   codexAppServerEndpointForTarget,
   codexAppServerRuntimeBaseDir,
+  codexAppServerRuntimeDir,
   codexCliResumeCommand,
   codexTurnInput,
   ensureCodexAppServerRuntime
@@ -76,6 +77,26 @@ test("codex provider runtime base uses explicit Vibe64 runtime directory", () =>
   );
 });
 
+test("codex provider scopes default runtime directory by target root", () => {
+  const env = {
+    VIBE64_AGENT_RUNTIME_DIR: "/tmp/vibe64-agent-runtime"
+  };
+  const first = codexAppServerRuntimeDir({
+    env,
+    targetRoot: "/home/tenant/vibe64/beepollen",
+    workdir: "/home/tenant/vibe64/beepollen/.vibe64/sessions/active/one/worktree"
+  });
+  const second = codexAppServerRuntimeDir({
+    env,
+    targetRoot: "/home/tenant/vibe64/dogandgroom",
+    workdir: "/home/tenant/vibe64/dogandgroom/.vibe64/sessions/active/one/worktree"
+  });
+
+  assert.match(first, /^\/tmp\/vibe64-agent-runtime\/codex-app-server-[a-f0-9]{12}$/u);
+  assert.match(second, /^\/tmp\/vibe64-agent-runtime\/codex-app-server-[a-f0-9]{12}$/u);
+  assert.notEqual(first, second);
+});
+
 test("codex provider reuses a live app-server runtime from Vibe64 metadata", async () => {
   await withTemporaryDirectory(async (runtimeDir) => {
     const metadata = metadataForRuntime(runtimeDir);
@@ -97,6 +118,60 @@ test("codex provider reuses a live app-server runtime from Vibe64 metadata", asy
 
 test("codex provider starts one app-server and stores reusable runtime metadata", async () => {
   await withTemporaryDirectory(async (runtimeDir) => {
+    const targetRoot = path.join(runtimeDir, "target");
+    const workdir = path.join(targetRoot, ".vibe64", "sessions", "active", "session-1", "worktree");
+    await mkdir(workdir, {
+      recursive: true
+    });
+    const spawnCalls = [];
+    const runtime = await ensureCodexAppServerRuntime({
+      image: "test-codex-toolchain:latest",
+      readyTimeoutMs: 2000,
+      runtimeDir,
+      spawn(command, args, options) {
+        writeFileSync(socketPathForRuntime(runtimeDir), "");
+        spawnCalls.push({
+          args,
+          command,
+          options
+        });
+        return {
+          pid: 12345,
+          unref() {}
+        };
+      },
+      targetRoot,
+      workdir
+    });
+
+    assert.equal(runtime.reused, false);
+    assert.equal(runtime.endpoint, unixEndpointForRuntime(runtimeDir));
+    assert.equal(runtime.containerEndpoint, codexAppServerContainerEndpoint());
+    assert.equal(spawnCalls.length, 1);
+    assert.equal(spawnCalls[0].command, "docker");
+    assert.equal(spawnCalls[0].args[0], "run");
+    assert.ok(spawnCalls[0].args.includes("--pull"));
+    assert.ok(spawnCalls[0].args.includes("never"));
+    assert.ok(spawnCalls[0].args.includes("--rm"));
+    assert.ok(spawnCalls[0].args.includes(`${runtimeDir}:/vibe64-codex-app-server`));
+    assert.ok(spawnCalls[0].args.includes(`${targetRoot}:/workspace`));
+    assert.ok(spawnCalls[0].args.includes(`${targetRoot}:${targetRoot}`));
+    assert.ok(spawnCalls[0].args.includes(workdir));
+    assert.ok(spawnCalls[0].args.includes("test-codex-toolchain:latest"));
+    assert.equal(spawnCalls[0].args.at(-3), "bash");
+    assert.equal(spawnCalls[0].args.at(-2), "-lc");
+    assert.match(spawnCalls[0].args.at(-1), /codex app-server --listen unix:\/\/\/vibe64-codex-app-server\/app-server\.sock/u);
+
+    const stored = JSON.parse(await readFile(path.join(runtimeDir, "runtime.json"), "utf8"));
+    assert.equal(stored.endpoint, unixEndpointForRuntime(runtimeDir));
+    assert.equal(stored.containerEndpoint, codexAppServerContainerEndpoint());
+    assert.equal(stored.provider, CODEX_APP_SERVER_PROVIDER_ID);
+    assert.equal(stored.transport, CODEX_APP_SERVER_TRANSPORT.UNIX);
+  });
+});
+
+test("codex provider can still start a native app-server when explicitly requested", async () => {
+  await withTemporaryDirectory(async (runtimeDir) => {
     const spawnCalls = [];
     const runtime = await ensureCodexAppServerRuntime({
       readyTimeoutMs: 2000,
@@ -112,21 +187,15 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
           pid: 12345,
           unref() {}
         };
-      }
+      },
+      useDocker: false
     });
 
     assert.equal(runtime.reused, false);
     assert.equal(runtime.endpoint, unixEndpointForRuntime(runtimeDir));
-    assert.equal(runtime.containerEndpoint, codexAppServerContainerEndpoint());
     assert.equal(spawnCalls.length, 1);
     assert.equal(spawnCalls[0].command, "codex");
     assert.deepEqual(spawnCalls[0].args, ["app-server", "--listen", unixEndpointForRuntime(runtimeDir)]);
-
-    const stored = JSON.parse(await readFile(path.join(runtimeDir, "runtime.json"), "utf8"));
-    assert.equal(stored.endpoint, unixEndpointForRuntime(runtimeDir));
-    assert.equal(stored.containerEndpoint, codexAppServerContainerEndpoint());
-    assert.equal(stored.provider, CODEX_APP_SERVER_PROVIDER_ID);
-    assert.equal(stored.transport, CODEX_APP_SERVER_TRANSPORT.UNIX);
   });
 });
 

@@ -616,7 +616,7 @@ function createCodexTerminalController({
   const codexAppServerCompletedTurns = new Set();
   const codexAppServerMirroredUserItems = new Set();
 
-  function codexAppServerProviderForSession(sessionId = "") {
+  function codexAppServerProviderForSession(sessionId = "", options = {}) {
     const normalizedSessionId = normalizeText(sessionId);
     if (!normalizedSessionId) {
       throw new Error("Vibe64 session ID is required.");
@@ -625,16 +625,16 @@ function createCodexTerminalController({
     if (existing) {
       return existing;
     }
-    const provider = codexAppServerProviderFactory();
+    const provider = codexAppServerProviderFactory(options);
     codexAppServerProviders.set(normalizedSessionId, provider);
     return provider;
   }
 
-  async function codexAppServerRuntimeForVisibleTerminal(sessionId = "", threadId = "") {
+  async function codexAppServerRuntimeForVisibleTerminal(sessionId = "", threadId = "", options = {}) {
     if (!normalizeText(threadId)) {
       return null;
     }
-    const provider = codexAppServerProviderForSession(sessionId);
+    const provider = codexAppServerProviderForSession(sessionId, options);
     return provider.ensureRuntime();
   }
 
@@ -1051,7 +1051,10 @@ function createCodexTerminalController({
     let appServerRuntime = null;
     if (codexThreadId) {
       try {
-        appServerRuntime = await codexAppServerRuntimeForVisibleTerminal(sessionId, codexThreadId);
+        appServerRuntime = await codexAppServerRuntimeForVisibleTerminal(sessionId, codexThreadId, {
+          targetRoot,
+          workdir
+        });
       } catch (error) {
         return retryableTerminalFailure({
           ok: false,
@@ -1626,7 +1629,11 @@ function createCodexTerminalController({
         stateRoot: runtime.stateRoot,
         targetRoot
       });
-      const provider = codexAppServerProviderForSession(sessionId);
+      await ensureTargetRuntimeNetwork(targetRoot);
+      const provider = codexAppServerProviderForSession(sessionId, {
+        targetRoot,
+        workdir
+      });
       const promptSession = await runtime.promptSessionForAction(session);
       const developerInstructions = codexAppServerDeveloperInstructions(promptSession, {
         helperCommands: helper.host?.commands
@@ -1706,7 +1713,11 @@ function createCodexTerminalController({
         stateRoot: runtime.stateRoot,
         targetRoot
       });
-      const provider = codexAppServerProviderForSession(sessionId);
+      await ensureTargetRuntimeNetwork(targetRoot);
+      const provider = codexAppServerProviderForSession(sessionId, {
+        targetRoot,
+        workdir
+      });
       const promptSession = await runtime.promptSessionForAction(session);
       const developerInstructions = codexAppServerDeveloperInstructions(promptSession, {
         helperCommands: helper.host?.commands
@@ -1834,6 +1845,7 @@ function createCodexTerminalController({
     }
     const {
       session,
+      targetRoot,
       workdir
     } = context;
     const threadId = codexThreadIdForWorkdir(session, workdir);
@@ -1849,7 +1861,10 @@ function createCodexTerminalController({
         error: "No active Codex app-server turn is available to interrupt."
       };
     }
-    const provider = codexAppServerProviderForSession(sessionId);
+    const provider = codexAppServerProviderForSession(sessionId, {
+      targetRoot,
+      workdir
+    });
     const result = await provider.interruptTurn(threadId, turnId);
     await markCodexAppServerTurnIdle(sessionId, {
       status: "interrupted",
