@@ -360,6 +360,7 @@ test("jskit built launch waits for the server readiness marker before opening", 
     await writeProjectFile(targetRoot, "package.json", JSON.stringify({
       scripts: {
         build: "vite build",
+        "db:migrate": "knex migrate:latest",
         server: "node server.js"
       }
     }, null, 2));
@@ -382,6 +383,7 @@ test("jskit built launch waits for the server readiness marker before opening", 
     assert.equal(spec.metadata.launchReady, false);
     assert.equal(spec.metadata.defaultDisplay, "minimized");
     assert.equal(spec.metadata.buildCommand, "npm run build");
+    assert.equal(spec.metadata.migrationCommand, "npm run db:migrate");
     assert.equal(spec.metadata.serverCommand, "npm run server");
     assert.equal(spec.metadata.previewAuth, JSKIT_PREVIEW_AUTH_KIND);
 
@@ -395,8 +397,14 @@ test("jskit built launch waits for the server readiness marker before opening", 
     assert.doesNotMatch(spec.commandPreview({ args }), /AUTH_DEV_BYPASS_SECRET=[a-f0-9]{64}/u);
     assert.match(spec.commandPreview({ args }), /'AUTH_DEV_BYPASS_SECRET=\(redacted\)'/u);
     const startupScript = args.at(-1);
-    assert.match(startupScript, /npm run build/u);
-    assert.match(startupScript, /npm run server/u);
+    const buildIndex = startupScript.indexOf("npm run build");
+    const migrateIndex = startupScript.indexOf("npm run db:migrate");
+    const serverIndex = startupScript.indexOf("npm run server");
+    assert.notEqual(buildIndex, -1);
+    assert.notEqual(migrateIndex, -1);
+    assert.notEqual(serverIndex, -1);
+    assert.ok(buildIndex < migrateIndex);
+    assert.ok(migrateIndex < serverIndex);
     assert.match(startupScript, /action:%s/u);
     assert.match(startupScript, /VIBE64_LAUNCH_READY_V1/u);
   });
@@ -406,6 +414,7 @@ test("jskit dev launch starts backend and Vite together", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await writeProjectFile(targetRoot, "package.json", JSON.stringify({
       scripts: {
+        "db:migrate": "knex migrate:latest",
         dev: "vite",
         server: "node server.js"
       }
@@ -429,6 +438,7 @@ test("jskit dev launch starts backend and Vite together", async () => {
     assert.equal(spec.metadata.backendPort, 3000);
     assert.equal(spec.metadata.defaultDisplay, "minimized");
     assert.equal(spec.metadata.frontendCommand, "npm run dev -- --host 0.0.0.0 --port \"$PORT\"");
+    assert.equal(spec.metadata.migrationCommand, "npm run db:migrate");
     assert.equal(spec.metadata.previewAuth, JSKIT_PREVIEW_AUTH_KIND);
     assert.match(spec.metadata.readinessMarker, /^\[\[VIBE64_LAUNCH_READY_V1:/u);
 
@@ -443,7 +453,11 @@ test("jskit dev launch starts backend and Vite together", async () => {
     assert.match(spec.commandPreview({ args }), /'AUTH_DEV_BYPASS_SECRET=\(redacted\)'/u);
     const startupScript = args.at(-1);
     assert.match(startupScript, /VIBE64_JSKIT_BACKEND_PORT=\\?"?3000/u);
-    assert.match(startupScript, /npm run server/u);
+    const migrateIndex = startupScript.indexOf("npm run db:migrate");
+    const serverIndex = startupScript.indexOf("npm run server");
+    assert.notEqual(migrateIndex, -1);
+    assert.notEqual(serverIndex, -1);
+    assert.ok(migrateIndex < serverIndex);
     assert.match(startupScript, /VITE_API_PROXY_TARGET="http:\/\/127\.0\.0\.1:\$VIBE64_JSKIT_BACKEND_PORT"/u);
     assert.match(startupScript, /npm run dev -- --host 0\.0\.0\.0 --port "\$PORT"/u);
     assert.match(startupScript, /VIBE64_LAUNCH_READY_V1/u);

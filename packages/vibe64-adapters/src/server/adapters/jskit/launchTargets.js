@@ -26,11 +26,13 @@ const DEFAULT_BUILT_LAUNCH_BUILD_COMMAND = "npm run build";
 const DEFAULT_BUILT_LAUNCH_SERVER_COMMAND = "npm run server";
 const DEFAULT_DEV_BACKEND_COMMAND = "npm run server";
 const DEFAULT_DEV_FRONTEND_COMMAND = "npm run dev -- --host 0.0.0.0 --port \"$PORT\"";
+const DEFAULT_MIGRATION_COMMAND = "npm run db:migrate";
 const DEFAULT_DEV_BACKEND_PORT = 3000;
 const DEFAULT_LAUNCH_PORT = 4100;
 const BUILT_LAUNCH_COMMAND_CONFIG = ".jskit/config/testrun_command";
 const BUILT_LAUNCH_PORT_CONFIG = ".jskit/config/server_port_for_user_review";
 const DEV_SERVER_COMMAND_CONFIG = "config/dev_server_command";
+const MIGRATION_SCRIPT_NAME = "db:migrate";
 
 async function readOptionalConfigFile(root, relativePath, fallback = "") {
   try {
@@ -62,6 +64,11 @@ async function configFileHasValue(root, relativePath) {
   return Boolean(await readOptionalConfigFile(root, relativePath, ""));
 }
 
+async function resolveMigrationCommand(root) {
+  const scripts = await readPackageJsonScripts(root);
+  return scripts[MIGRATION_SCRIPT_NAME] ? DEFAULT_MIGRATION_COMMAND : "";
+}
+
 function resolveHostDockerConfig(config = {}) {
   const enabled = config?.values?.[JSKIT_ALLOW_SELF_TARGET_CONFIG] === true;
   return {
@@ -80,9 +87,10 @@ function normalizePort(value) {
 async function resolveBuiltLaunchConfig(worktreePath, {
   adapterConfig = {}
 } = {}) {
-  const [configuredBuiltCommand, hostDocker, portValue] = await Promise.all([
+  const [configuredBuiltCommand, hostDocker, migrationCommand, portValue] = await Promise.all([
     readOptionalConfigFile(worktreePath, BUILT_LAUNCH_COMMAND_CONFIG, ""),
     resolveHostDockerConfig(adapterConfig),
+    resolveMigrationCommand(worktreePath),
     readOptionalConfigFile(worktreePath, BUILT_LAUNCH_PORT_CONFIG, String(DEFAULT_LAUNCH_PORT))
   ]);
   if (configuredBuiltCommand) {
@@ -91,6 +99,7 @@ async function resolveBuiltLaunchConfig(worktreePath, {
       commandSource: BUILT_LAUNCH_COMMAND_CONFIG,
       hostDocker: hostDocker.enabled,
       hostDockerSource: hostDocker.source,
+      migrationCommand,
       preferredPort: normalizePort(portValue),
       serverCommand: "",
       testrunCommand: configuredBuiltCommand
@@ -106,6 +115,7 @@ async function resolveBuiltLaunchConfig(worktreePath, {
     commandSource: "default_build_and_server_commands",
     hostDocker: hostDocker.enabled,
     hostDockerSource: hostDocker.source,
+    migrationCommand,
     preferredPort: normalizePort(portValue),
     serverCommand,
     testrunCommand: `${buildCommand} && ${serverCommand}`
@@ -115,10 +125,11 @@ async function resolveBuiltLaunchConfig(worktreePath, {
 async function resolveDevLaunchConfig(worktreePath, {
   adapterConfig = {}
 } = {}) {
-  const [devCommand, backendCommand, hostDocker, portValue] = await Promise.all([
+  const [devCommand, backendCommand, hostDocker, migrationCommand, portValue] = await Promise.all([
     readOptionalConfigFile(worktreePath, DEV_SERVER_COMMAND_CONFIG, ""),
     readOptionalConfigFile(worktreePath, "config/server_command", DEFAULT_DEV_BACKEND_COMMAND),
     resolveHostDockerConfig(adapterConfig),
+    resolveMigrationCommand(worktreePath),
     readOptionalConfigFile(worktreePath, BUILT_LAUNCH_PORT_CONFIG, String(DEFAULT_LAUNCH_PORT))
   ]);
   return {
@@ -128,6 +139,7 @@ async function resolveDevLaunchConfig(worktreePath, {
     frontendCommand: devCommand || DEFAULT_DEV_FRONTEND_COMMAND,
     hostDocker: hostDocker.enabled,
     hostDockerSource: hostDocker.source,
+    migrationCommand,
     preferredPort: normalizePort(portValue)
   };
 }
@@ -167,11 +179,18 @@ function markLaunchTargetDependencyBlocked(launchTarget) {
 function createJskitDevCommand({
   backendCommand = DEFAULT_DEV_BACKEND_COMMAND,
   backendPort = DEFAULT_DEV_BACKEND_PORT,
-  frontendCommand = DEFAULT_DEV_FRONTEND_COMMAND
+  frontendCommand = DEFAULT_DEV_FRONTEND_COMMAND,
+  migrationCommand = ""
 } = {}) {
   return [
     "set -e",
     `export VIBE64_JSKIT_BACKEND_PORT=${shellQuotedNumber(backendPort)}`,
+    ...(migrationCommand
+      ? [
+          "printf '\\n[studio] Applying database migrations.\\n'",
+          migrationCommand
+        ]
+      : []),
     "cleanup_vibe64_jskit_dev() {",
     "  kill \"$vibe64_jskit_backend_pid\" \"$vibe64_jskit_frontend_pid\" 2>/dev/null || true",
     "}",
@@ -235,6 +254,14 @@ async function createJskitBuiltLaunchDescriptor({
   databaseHost = "",
   worktreePath = ""
 } = {}) {
+  const migrationCommand = config.migrationCommand
+    ? {
+        command: config.migrationCommand,
+        label: "Applying database migrations.",
+        networkEnv: true
+      }
+    : null;
+
   return {
     commands: config.buildCommand || config.serverCommand
       ? [
@@ -245,6 +272,7 @@ async function createJskitBuiltLaunchDescriptor({
                 networkEnv: false
               }
             : null,
+          migrationCommand,
           config.serverCommand
             ? {
                 command: config.serverCommand,
@@ -254,12 +282,13 @@ async function createJskitBuiltLaunchDescriptor({
             : null
         ].filter(Boolean)
       : [
+          migrationCommand,
           {
             command: config.testrunCommand,
             label: "Starting JSKIT built app.",
             networkEnv: true
           }
-        ],
+        ].filter(Boolean),
     hostDocker: config.hostDocker,
     metadata: {
       buildCommand: config.buildCommand,
@@ -267,6 +296,7 @@ async function createJskitBuiltLaunchDescriptor({
       databaseHost,
       hostDocker: config.hostDocker,
       hostDockerSource: config.hostDockerSource,
+      migrationCommand: config.migrationCommand,
       serverCommand: config.serverCommand,
       testrunCommand: config.testrunCommand
     },
@@ -284,7 +314,8 @@ async function createJskitDevLaunchDescriptor({
     command: createJskitDevCommand({
       backendCommand: config.backendCommand,
       backendPort: config.backendPort,
-      frontendCommand: config.frontendCommand
+      frontendCommand: config.frontendCommand,
+      migrationCommand: config.migrationCommand
     }),
     hostDocker: config.hostDocker,
     metadata: {
@@ -295,6 +326,7 @@ async function createJskitDevLaunchDescriptor({
       frontendCommand: config.frontendCommand,
       hostDocker: config.hostDocker,
       hostDockerSource: config.hostDockerSource,
+      migrationCommand: config.migrationCommand,
       mode: "dev"
     },
     previewAuth: JSKIT_PREVIEW_AUTH_KIND,
