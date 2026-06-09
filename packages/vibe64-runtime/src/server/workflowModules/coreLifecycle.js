@@ -20,7 +20,7 @@ import {
   commandFailureInteraction,
   commandStepView,
   commandSucceeded,
-  currentStepHelperInstruction,
+  currentStepAgentResultInstruction,
   disableAction,
   machineState,
   markCommandActionStarted,
@@ -1282,14 +1282,14 @@ const createAndMergePullRequestMachine = {
 
   promptInstruction({ action = {} } = {}) {
     return normalizeText(action.id) === "prepare_for_merge"
-      ? currentStepHelperInstruction({
+      ? currentStepAgentResultInstruction({
           doneFields: {
             mergePreparationSummary: "Markdown summary of extra merge-preparation work performed after pull request creation. Leave empty when no extra work was needed."
           },
           doneMeaning: "The pull request and main checkout are ready for the merge command.",
           waitingForInputMeaning: "The merge preparation found a blocker that needs user input."
         })
-      : currentStepHelperInstruction({
+      : currentStepAgentResultInstruction({
           doneFields: {
             body: "Markdown pull request body",
             title: "Pull request title"

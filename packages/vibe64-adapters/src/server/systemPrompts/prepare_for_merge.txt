@@ -12,6 +12,6 @@ Check the PR state, identify merge blockers, resolve blockers that can be fixed 
 
 Also inspect the main checkout at the target root. Confirm the base branch can be fetched, checked out, and fast-forwarded after the PR merge. If the main checkout has dirty user changes, untracked files that would be overwritten, a detached or unexpected branch state, or another local condition that makes syncing unsafe, fix only the safe mechanical blockers. Do not discard or overwrite user work. If user-owned changes block the sync, report the blocker clearly.
 
-When you complete this step, include `fields.mergePreparationSummary` in the current-step input helper result. If no extra merge-preparation work was needed after pull request creation, set it to an empty string. If you changed files, created commits, adjusted repository state, fixed merge blockers, or performed any other extra work after pull request creation, set it to a concise Markdown summary of that work.
+When you complete this step, include `fields.mergePreparationSummary` in the Vibe64 agent result envelope. If no extra merge-preparation work was needed after pull request creation, set it to an empty string. If you changed files, created commits, adjusted repository state, fixed merge blockers, or performed any other extra work after pull request creation, set it to a concise Markdown summary of that work.
 
 Report whether the PR is ready to merge, whether the main checkout is ready to sync, and what remains blocked.

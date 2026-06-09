@@ -5,6 +5,9 @@ import {
 import {
   normalizeText
 } from "@local/vibe64-core/server/core";
+import {
+  agentTurnResultEnvelopeExample
+} from "./agentTurnResults.js";
 
 const DEFAULT_TERMINAL_FAILURE_TAIL_LINES = 200;
 
@@ -87,22 +90,22 @@ function terminalFailureFixPrompt({
   return [
     "A terminal script failed in Vibe64. Diagnose the failure from the repository and the terminal output, then attempt to fix the underlying cause in the current worktree.",
     "",
-    "When you believe the failed command should be retried, call the Vibe64 current-step input helper with:",
-    JSON.stringify({
+    "When you believe the failed command should be retried, finish with this Vibe64 agent result envelope:",
+    agentTurnResultEnvelopeExample({
       kind: "consider_resolved",
       stepId: currentStep || "{{session.currentStep}}",
       stepStatus: stepStatus || "{{session.stepMachine.status}}",
       text: "Briefly describe what you fixed or why retrying is now reasonable."
-    }, null, 2),
+    }),
     "",
-    "If you need user input before the command can be retried, call the helper with:",
-    JSON.stringify({
+    "If you need user input before the command can be retried, finish with this Vibe64 agent result envelope:",
+    agentTurnResultEnvelopeExample({
       kind: "waiting_for_input",
       stepId: currentStep || "{{session.currentStep}}",
       stepStatus: stepStatus || "{{session.stepMachine.status}}",
       message: "The question or blocker for the user"
-    }, null, 2),
-    "Before calling that helper, write the same question or blocker in normal Codex response text so Inspect users can read it directly in the terminal.",
+    }),
+    "Before the waiting_for_input envelope, write the same question or blocker in normal response text so Inspect users can read it directly in the terminal.",
     ...questionPromptInstructions(),
     "",
     "Terminal context:",

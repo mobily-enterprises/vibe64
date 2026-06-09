@@ -2,7 +2,7 @@ Write report
 
 Vibe64 standard session-report instructions.
 
-Write a concise Markdown report and submit it through the current-step input helper. Do not write the report artifact directly.
+Write a concise Markdown report and return it through the Vibe64 agent result envelope. Do not write the report artifact directly.
 
 This step runs after human review. The report is for the user and for later issue or pull request context. Include:
 - The requested outcome.

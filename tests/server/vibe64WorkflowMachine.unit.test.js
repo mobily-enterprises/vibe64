@@ -2489,8 +2489,8 @@ test("vibe64 runtime prompt actions render Codex handoff data without advancing"
     assert.match(afterAction.actionResult.prompt, /User\/request input:\n- scope: unit test/u);
     assert.match(afterAction.actionResult.prompt, /Run the Vibe64 prompt action: Make a plan/u);
     assert.doesNotMatch(afterAction.actionResult.prompt, /"scope": "unit test"/u);
-    assert.match(afterAction.actionResult.prompt, /Vibe64 step completion contract:/u);
-    assert.match(afterAction.actionResult.prompt, /Submit results with: node "\$VIBE64_CURRENT_STEP_INPUT_HELPER" --json '<payload>'/u);
+    assert.match(afterAction.actionResult.prompt, /Vibe64 agent result contract:/u);
+    assert.match(afterAction.actionResult.prompt, /VIBE64_AGENT_RESULT_BEGIN/u);
     assert.ok(afterAction.actionResult.prompt.includes("Ready payload fields:\n  - kind: ready"));
     assert.ok(afterAction.actionResult.prompt.includes("  - stepStatus: awaiting_agent_result"));
     assert.match(afterAction.actionResult.prompt, /Do not write workflow artifacts directly/u);
@@ -2529,7 +2529,7 @@ test("vibe64 runtime prompt actions render Codex handoff data without advancing"
   });
 });
 
-test("vibe64 pull request resolution prompt uses the current-step helper contract", async () => {
+test("vibe64 pull request resolution prompt uses the agent result contract", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const promptPackRoot = path.join(targetRoot, "prompt-pack");
     await mkdir(promptPackRoot, {
@@ -2561,17 +2561,17 @@ test("vibe64 pull request resolution prompt uses the current-step helper contrac
     assert.equal(afterAction.currentStep, "create_and_merge_pull_request");
     assert.equal(afterAction.actionResult.status, "prompt_ready");
     assert.equal(afterAction.actionResult.promptId, "resolve_pull_request");
-    assert.match(afterAction.actionResult.prompt, /Vibe64 current-step input helper/u);
-    assert.match(afterAction.actionResult.prompt, /Submit results with: node "\$VIBE64_CURRENT_STEP_INPUT_HELPER" --json '<payload>'/u);
+    assert.match(afterAction.actionResult.prompt, /Vibe64 agent result contract/u);
+    assert.match(afterAction.actionResult.prompt, /VIBE64_AGENT_RESULT_BEGIN/u);
     assert.ok(afterAction.actionResult.prompt.includes("Ready payload fields:\n  - kind: ready"));
     assert.ok(afterAction.actionResult.prompt.includes("  - stepId: create_and_merge_pull_request"));
     assert.ok(afterAction.actionResult.prompt.includes("  - stepStatus: awaiting_agent_result"));
     assert.ok(afterAction.actionResult.prompt.includes("Waiting payload fields:\n  - kind: waiting_for_input"));
     assert.match(afterAction.actionResult.prompt, /Do not write workflow artifacts directly/u);
-    assert.match(afterAction.actionResult.prompt, /Vibe64 will show the current state/u);
+    assert.match(afterAction.actionResult.prompt, /state changed/u);
     assert.doesNotMatch(afterAction.actionResult.prompt, /ask the user to reload the current step/u);
-    assert.match(afterAction.actionResult.prompt, /write the same question or blocker in normal Codex response text/u);
-    assert.match(afterAction.actionResult.prompt, /Keep the visible question text and the helper `message` equivalent/u);
+    assert.match(afterAction.actionResult.prompt, /write the same question or blocker in normal response text/u);
+    assert.match(afterAction.actionResult.prompt, /Keep the visible question text and the envelope `message` equivalent/u);
     assert.ok(afterAction.actionResult.prompt.includes(questionBatchLimitInstruction()));
     assert.match(afterAction.actionResult.prompt, /format each question on its own line as `\[1\] Question text`/u);
   });
@@ -2607,7 +2607,7 @@ test("editable artifact review steps preserve user-origin and prompt-origin draf
     assert.equal(draftingIssue.stepMachine.status, "awaiting_agent_result");
     assert.equal(draftingIssue.actionResult.status, "prompt_ready");
     assert.equal(draftingIssue.actionResult.promptId, "draft_issue");
-    assert.match(draftingIssue.actionResult.prompt, /Vibe64 step completion contract/u);
+    assert.match(draftingIssue.actionResult.prompt, /Vibe64 agent result contract/u);
     assert.ok(draftingIssue.actionResult.prompt.includes("fields.title: Concise work title."));
     assert.ok(draftingIssue.actionResult.prompt.includes("fields.word: Short Vibe64 session label/word derived from the work title."));
 
@@ -3317,10 +3317,9 @@ test("vibe64 runtime renders compact conversation turns after the session briefi
     assert.doesNotMatch(prompt, /agent_identity_conversation_id/u);
     assert.doesNotMatch(prompt, /base_commit/u);
     assert.doesNotMatch(prompt, /worktree path:/u);
-    assert.match(prompt, /Always submit the user-visible answer through the current-step input helper/u);
-    assert.match(prompt, /A terminal-visible response alone is not complete; always call the helper/u);
+    assert.match(prompt, /Finish this routed workflow turn with the Vibe64 agent result envelope/u);
+    assert.match(prompt, /A terminal-only answer is incomplete for routed workflow turns/u);
     assert.match(prompt, /Direct terminal input routing: if a later user prompt does not include `VIBE64_ROUTED_TURN`/u);
-    assert.match(prompt, /VIBE64_TERMINAL_CHAT_HELPER/u);
   });
 });
 

@@ -40,7 +40,7 @@ import {
   artifactText,
   commandFailureInteraction,
   commandSucceeded,
-  currentStepHelperInstruction,
+  currentStepAgentResultInstruction,
   disableAction,
   handleStandardPromptInput,
   machineState,
@@ -1034,7 +1034,7 @@ function seedDefinitionConversationInteraction(state = {}) {
 }
 
 function seedDefinitionPromptInstruction() {
-  return currentStepHelperInstruction({
+  return currentStepAgentResultInstruction({
     doneFields: {
       body: "Markdown seed description with selected setup choices, useful context, and acceptance criteria.",
       title: "Concise seed title.",
@@ -1402,7 +1402,7 @@ const workDefinitionMachine = {
   },
 
   promptInstruction() {
-    return currentStepHelperInstruction({
+    return currentStepAgentResultInstruction({
       doneFields: {
         body: "Markdown work description with the requested change, context, and acceptance criteria.",
         title: "Concise work title.",
@@ -1453,7 +1453,7 @@ const makePlanMachine = {
   },
 
   promptInstruction() {
-    return currentStepHelperInstruction({
+    return currentStepAgentResultInstruction({
       doneMeaning: "The implementation plan has been written in the Codex response and is ready for execution.",
       waitingForInputMeaning: "You cannot make a useful plan without a user decision or clarification."
     });
@@ -1477,7 +1477,7 @@ const seedPlanMadeMachine = {
   },
 
   promptInstruction() {
-    return currentStepHelperInstruction({
+    return currentStepAgentResultInstruction({
       doneMeaning: "The seed implementation plan has been written in the Codex response and is ready for execution.",
       waitingForInputMeaning: "You cannot make a useful seed plan without a user decision or clarification."
     });
@@ -1523,7 +1523,7 @@ const executePlanMachine = {
   },
 
   promptInstruction() {
-    return currentStepHelperInstruction({
+    return currentStepAgentResultInstruction({
       doneMeaning: "The implementation work is complete enough to continue to review.",
       waitingForInputMeaning: "You cannot continue implementation without a user decision or missing project detail."
     });
@@ -1708,11 +1708,11 @@ const planAndExecuteMachine = {
 
   promptInstruction({ action = {} } = {}) {
     return normalizeText(action.id) === "execute_plan"
-      ? currentStepHelperInstruction({
+      ? currentStepAgentResultInstruction({
           doneMeaning: "The implementation work is complete enough to continue to review.",
           waitingForInputMeaning: "You cannot continue implementation without a user decision or missing project detail."
         })
-      : currentStepHelperInstruction({
+      : currentStepAgentResultInstruction({
           doneMeaning: "The implementation plan has been written in the Codex response and is ready for execution.",
           waitingForInputMeaning: "You cannot make a useful plan without a user decision or clarification."
         });
@@ -1736,7 +1736,7 @@ const seedPlanExecutedMachine = {
   },
 
   promptInstruction() {
-    return currentStepHelperInstruction({
+    return currentStepAgentResultInstruction({
       doneMeaning: "The seed implementation work is complete enough to continue.",
       waitingForInputMeaning: "You cannot continue seeding without a user decision or missing project detail."
     });
@@ -1760,7 +1760,7 @@ const deepUiCheckMachine = {
   },
 
   promptInstruction() {
-    return currentStepHelperInstruction({
+    return currentStepAgentResultInstruction({
       doneMeaning: "The deep UI check has been completed or intentionally found no required fix.",
       waitingForInputMeaning: "You cannot complete the UI check without a user decision."
     });
@@ -1962,7 +1962,7 @@ const reviewAndValidateMachine = {
   },
 
   promptInstruction() {
-    return currentStepHelperInstruction({
+    return currentStepAgentResultInstruction({
       doneMeaning: "The review/deslop loop has completed and only acceptable low-risk findings remain.",
       waitingForInputMeaning: "You cannot complete review/deslop without a user decision."
     });
@@ -2107,11 +2107,11 @@ const reportAndKnowledgeUpdatedMachine = {
 
   promptInstruction({ action = {} } = {}) {
     return normalizeText(action.id) === "update_project_knowledge"
-      ? currentStepHelperInstruction({
+      ? currentStepAgentResultInstruction({
           doneMeaning: "Project knowledge has been updated or there is no adapter-supported project knowledge to update.",
           waitingForInputMeaning: "You cannot update project knowledge without a user decision."
         })
-      : currentStepHelperInstruction({
+      : currentStepAgentResultInstruction({
           doneFields: {
             response: "Markdown session report"
           },

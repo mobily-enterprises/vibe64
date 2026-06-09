@@ -574,10 +574,10 @@ function promptWithConversationTurnContext({
       : "",
     [
       "Response routing:",
-      "- Always submit the user-visible answer through the current-step input helper.",
-      "- A terminal-only answer is incomplete.",
-      "- If the helper reports Reload state or a state mismatch, stop immediately; Vibe64 will show the current state.",
-      "- Direct terminal input routing: if a later user prompt does not include `VIBE64_ROUTED_TURN`, answer normally and best-effort call `node \"$VIBE64_TERMINAL_CHAT_HELPER\"` with a `response` field only. Vibe64 mirrors the terminal user prompt from Codex app-server events."
+      "- Finish this routed workflow turn with the Vibe64 agent result envelope described in the completion contract.",
+      "- A terminal-only answer is incomplete for routed workflow turns.",
+      "- If the current state no longer matches this prompt, say that Vibe64 state changed and stop.",
+      "- Direct terminal input routing: if a later user prompt does not include `VIBE64_ROUTED_TURN`, answer normally. Direct terminal input does not advance Vibe64 workflow state unless Vibe64 explicitly routes the turn."
     ].join("\n"),
     String(prompt || "").trim()
   ]

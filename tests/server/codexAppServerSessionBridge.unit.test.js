@@ -111,26 +111,12 @@ test("codex app-server bridge uses the current Vibe64 Codex execution settings",
   });
 });
 
-test("codex app-server bridge appends host helper commands without changing the user prompt", () => {
+test("codex app-server bridge sends the user prompt unchanged", () => {
   assert.equal(
     codexAppServerTurnPrompt({
-      helperCommands: {
-        currentStepInput: "node /repo/.vibe64/sessions/active/session/helpers/current-host.mjs",
-        terminalChat: "node /repo/.vibe64/sessions/active/session/helpers/chat-host.mjs"
-      },
       prompt: "Vibe64 interactive conversation turn:\nUser/request input:\n- conversationRequest: Hello"
     }),
-    [
-      "Vibe64 interactive conversation turn:\nUser/request input:\n- conversationRequest: Hello",
-      [
-        "Vibe64 app-server helper commands:",
-        "- Current-step input helper: node /repo/.vibe64/sessions/active/session/helpers/current-host.mjs",
-        "- Terminal chat mirror helper: node /repo/.vibe64/sessions/active/session/helpers/chat-host.mjs",
-        "- For direct terminal input, call the terminal chat mirror helper with a `response` field only; Vibe64 reads the user prompt from Codex app-server events.",
-        "- In Codex app-server turns, use these host helper commands instead of env-based helper examples.",
-        "- Do not run `node \"$VIBE64_CURRENT_STEP_INPUT_HELPER\"` or `node \"$VIBE64_TERMINAL_CHAT_HELPER\"` unless this specific turn says those environment variables are available."
-      ].join("\n")
-    ].join("\n\n")
+    "Vibe64 interactive conversation turn:\nUser/request input:\n- conversationRequest: Hello"
   );
 });
 
@@ -423,7 +409,7 @@ test("codex app-server bridge starts a new thread instead of resuming old termin
   assert.equal(metadataValue(runtime, "codex_app_server_provider"), "codex_app_server");
 });
 
-test("codex app-server bridge sends turns with app-server text input and host helper override", async () => {
+test("codex app-server bridge sends turns with app-server text input only", async () => {
   const providerCalls = [];
   const provider = {
     async sendTurn(threadId, input, params) {
@@ -439,9 +425,6 @@ test("codex app-server bridge sends turns with app-server text input and host he
   };
 
   const result = await sendCodexAppServerPromptForSession({
-    helperCommands: {
-      currentStepInput: "node /repo/helper-host.mjs"
-    },
     prompt: "Do the work.",
     provider,
     threadId: "thread-1",
@@ -449,8 +432,7 @@ test("codex app-server bridge sends turns with app-server text input and host he
   });
 
   assert.equal(result.turn.id, "turn-1");
-  assert.match(result.input, /Do the work/u);
-  assert.match(result.input, /node \/repo\/helper-host\.mjs/u);
+  assert.equal(result.input, "Do the work.");
   assert.equal(providerCalls[0].threadId, "thread-1");
   assert.deepEqual(providerCalls[0].params.sandboxPolicy, {
     type: "dangerFullAccess"

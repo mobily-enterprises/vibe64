@@ -69,7 +69,6 @@ Confirmed Wave 1 scope additions:
 
 - Include `server/lib/vibe64/sessionStore.js`; it is the durable write boundary.
 - Include `server/lib/vibe64/sessionRealtimeEvents.js`; event publication needs to align with the mutation contract.
-- Include `server/lib/vibe64/currentStepInputHelperServer.js`; it is another mutation ingress.
 - Include package providers/services for sessions, artifacts, and terminals because their read/status paths can invoke session views and their event paths are split.
 - Include command, Codex, launch, shell terminal controllers as mutation/event participants.
 

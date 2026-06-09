@@ -27,17 +27,17 @@ import {
   ensureTargetRuntimeNetwork
 } from "@local/studio-terminal-core/server/runtimeContainers";
 import {
-  prepareCurrentStepInputHelper
-} from "@local/vibe64-runtime/server/currentStepInputHelperServer";
-import {
   codexAppServerEndpointForTarget,
   createCodexAppServerAgentProvider
 } from "@local/vibe64-runtime/server/codexAppServerProvider";
 import {
-  codexAppServerHelperOverride,
   ensureCodexAppServerThreadForSession,
   sendCodexAppServerPromptForSession
 } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
+import {
+  parseAgentTurnResultEnvelope,
+  stripAgentTurnResultEnvelope
+} from "@local/vibe64-runtime/server/agentTurnResults";
 import {
   vibe64SessionDebugError,
   vibe64SessionDebugLog
@@ -491,24 +491,16 @@ function sessionBriefingIsDelivered(session = {}) {
   return normalizeText(session.metadata?.codex_session_briefing_delivered) === "yes";
 }
 
-function codexAppServerDeveloperInstructions(session = {}, {
-  helperCommands = {}
-} = {}) {
+function codexAppServerDeveloperInstructions(session = {}) {
   const briefing = promptSessionBriefing({
     config: session.config,
     session
-  });
-  const helperOverride = codexAppServerHelperOverride({
-    currentStepInputCommand: helperCommands.currentStepInput,
-    terminalChatCommand: helperCommands.terminalChat
   });
   return [
     briefing,
     "",
     "Session briefing instruction:",
-    "Keep this Vibe64 briefing as the source of truth for this Codex session. Do not start project work from this briefing alone.",
-    "",
-    helperOverride
+    "Keep this Vibe64 briefing as the source of truth for this Codex session. Do not start project work from this briefing alone."
   ].join("\n").trim();
 }
 
@@ -615,6 +607,7 @@ function createCodexTerminalController({
   const codexAppServerEventSubscriptions = new Map();
   const codexAppServerCompletedTurns = new Set();
   const codexAppServerMirroredUserItems = new Set();
+  const codexAppServerAssistantTurns = new Map();
 
   function codexAppServerProviderForSession(sessionId = "", options = {}) {
     const normalizedSessionId = normalizeText(sessionId);
@@ -750,6 +743,123 @@ function createCodexTerminalController({
       .join("\n\n");
   }
 
+  function codexAppServerContentText(value = null) {
+    if (typeof value === "string") {
+      return value;
+    }
+    if (Array.isArray(value)) {
+      return value.map((entry) => codexAppServerContentText(entry)).filter(Boolean).join("");
+    }
+    if (!value || typeof value !== "object") {
+      return "";
+    }
+    if (typeof value.text === "string") {
+      return value.text;
+    }
+    if (typeof value.value === "string") {
+      return value.value;
+    }
+    if (typeof value.content === "string" || Array.isArray(value.content)) {
+      return codexAppServerContentText(value.content);
+    }
+    if (typeof value.message === "string" || Array.isArray(value.message)) {
+      return codexAppServerContentText(value.message);
+    }
+    if (value.message && typeof value.message === "object") {
+      return codexAppServerContentText(value.message.content || value.message.text);
+    }
+    return "";
+  }
+
+  function codexAppServerAssistantItemText(item = {}) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      return "";
+    }
+    const type = normalizeText(item.type);
+    const role = normalizeText(item.role || item.author?.role);
+    const isAssistant = role === "assistant" ||
+      type === "agentMessage" ||
+      type === "assistantMessage" ||
+      type === "assistant_message" ||
+      type === "outputMessage" ||
+      type === "message" && role === "assistant";
+    if (!isAssistant) {
+      return "";
+    }
+    return normalizeText(
+      codexAppServerContentText(item.content) ||
+      codexAppServerContentText(item.text) ||
+      codexAppServerContentText(item.message)
+    );
+  }
+
+  function codexAppServerNotificationAssistantText(notification = {}) {
+    const params = codexAppServerNotificationParams(notification);
+    const itemText = codexAppServerAssistantItemText(codexAppServerNotificationItem(notification));
+    if (itemText) {
+      return itemText;
+    }
+    return normalizeText(
+      codexAppServerContentText(params.delta) ||
+      codexAppServerContentText(params.text) ||
+      codexAppServerContentText(params.output) ||
+      codexAppServerContentText(params.response)
+    );
+  }
+
+  function codexAppServerAssistantTurnKey(threadId = "", turnId = "") {
+    return codexAppServerTurnKey(threadId, turnId || "*");
+  }
+
+  function codexAppServerAssistantTurnState(threadId = "", turnId = "") {
+    const key = codexAppServerAssistantTurnKey(threadId, turnId);
+    const existing = codexAppServerAssistantTurns.get(key);
+    if (existing) {
+      return existing;
+    }
+    const created = {
+      chunks: [],
+      items: new Map()
+    };
+    codexAppServerAssistantTurns.set(key, created);
+    return created;
+  }
+
+  function recordCodexAppServerAssistantNotification(threadId = "", notification = {}) {
+    const normalizedThreadId = normalizeText(threadId);
+    const turnId = codexAppServerNotificationTurnId(notification);
+    const text = codexAppServerNotificationAssistantText(notification);
+    if (!normalizedThreadId || !text) {
+      return;
+    }
+    const state = codexAppServerAssistantTurnState(normalizedThreadId, turnId);
+    const item = codexAppServerNotificationItem(notification);
+    const itemId = normalizeText(item?.id);
+    if (itemId) {
+      state.items.set(itemId, text);
+      return;
+    }
+    state.chunks.push(text);
+  }
+
+  function readCodexAppServerAssistantText(threadId = "", turnId = "") {
+    const state = codexAppServerAssistantTurns.get(codexAppServerAssistantTurnKey(threadId, turnId)) ||
+      codexAppServerAssistantTurns.get(codexAppServerAssistantTurnKey(threadId, "*"));
+    if (!state) {
+      return "";
+    }
+    const itemText = [...state.items.values()].filter(Boolean).join("\n\n").trim();
+    if (itemText) {
+      return itemText;
+    }
+    return state.chunks.join("").trim();
+  }
+
+  function cleanupCodexAppServerAssistantTurn(threadId = "", turnId = "") {
+    codexAppServerAssistantTurns.delete(codexAppServerAssistantTurnKey(threadId, turnId));
+    codexAppServerAssistantTurns.delete(codexAppServerAssistantTurnKey(threadId, "*"));
+  }
+
   function codexAppServerUserMessageIsVibe64Routed(text = "") {
     const message = normalizeText(text);
     return message.includes("VIBE64_ROUTED_TURN: yes") ||
@@ -812,6 +922,89 @@ function createCodexTerminalController({
         sessionId: normalizedSessionId,
         threadId: normalizedThreadId
       });
+    }
+  }
+
+  function codexAppServerSessionIsWaitingForAgent(session = {}) {
+    return normalizeText(session.stepMachine?.status) === "awaiting_agent_result";
+  }
+
+  function codexAppServerSessionAcceptsPlainAgentResponse(session = {}) {
+    return normalizeText(session.currentStepDefinition?.autopilot?.kind) === "agent_conversation";
+  }
+
+  async function submitCodexAppServerAssistantResult(sessionId = "", threadId = "", turnId = "") {
+    const normalizedSessionId = normalizeText(sessionId);
+    const assistantText = readCodexAppServerAssistantText(threadId, turnId);
+    if (!normalizedSessionId || !assistantText) {
+      return;
+    }
+    try {
+      const runtime = await projectService.createRuntime();
+      const session = await runtime.getSession(normalizedSessionId);
+      if (!codexAppServerSessionIsWaitingForAgent(session)) {
+        const visibleText = stripAgentTurnResultEnvelope(assistantText);
+        if (visibleText) {
+          await runtime.store.writeConversationAssistantMessage(normalizedSessionId, {
+            text: visibleText
+          });
+          await publishSessionChanged(normalizedSessionId, {
+            reason: "codex-app-server-terminal-assistant-message"
+          });
+        }
+        return;
+      }
+
+      const parsed = parseAgentTurnResultEnvelope(assistantText, {
+        source: "codex"
+      });
+      if (parsed.ok) {
+        await runtime.submitCurrentStepInput(normalizedSessionId, parsed.input);
+        await publishSessionChanged(normalizedSessionId, {
+          reason: "codex-app-server-agent-result"
+        });
+        return;
+      }
+
+      const visibleText = stripAgentTurnResultEnvelope(assistantText);
+      if (visibleText && codexAppServerSessionAcceptsPlainAgentResponse(session)) {
+        await runtime.submitCurrentStepInput(normalizedSessionId, {
+          fields: {
+            response: visibleText
+          },
+          kind: "ready",
+          source: "codex",
+          stepId: normalizeText(session.currentStep),
+          stepStatus: normalizeText(session.stepMachine?.status)
+        });
+        await publishSessionChanged(normalizedSessionId, {
+          reason: "codex-app-server-agent-result"
+        });
+        return;
+      }
+
+      await runtime.returnControlFromAgentWait(normalizedSessionId, {
+        inputPrompt: "The agent response did not include the Vibe64 result envelope. Retry the step.",
+        message: parsed.error
+      });
+      await publishSessionChanged(normalizedSessionId, {
+        reason: "codex-app-server-agent-result-invalid"
+      });
+      vibe64SessionDebugLog("server.codexTerminal.appServerAgentResult.invalid", {
+        error: parsed.error,
+        sessionId: normalizedSessionId,
+        threadId: normalizeText(threadId),
+        turnId: normalizeText(turnId)
+      });
+    } catch (error) {
+      vibe64SessionDebugLog("server.codexTerminal.appServerAgentResult.error", {
+        error: vibe64SessionDebugError(error),
+        sessionId: normalizedSessionId,
+        threadId: normalizeText(threadId),
+        turnId: normalizeText(turnId)
+      });
+    } finally {
+      cleanupCodexAppServerAssistantTurn(threadId, turnId);
     }
   }
 
@@ -929,6 +1122,7 @@ function createCodexTerminalController({
       if (notificationThreadId && notificationThreadId !== normalizedThreadId) {
         return;
       }
+      recordCodexAppServerAssistantNotification(normalizedThreadId, notification);
       if (method === "item/started" || method === "item/completed") {
         const item = codexAppServerNotificationItem(notification);
         if (normalizeText(item?.type) === "userMessage") {
@@ -954,6 +1148,7 @@ function createCodexTerminalController({
           threadId: normalizedThreadId,
           turnId
         });
+        void submitCodexAppServerAssistantResult(normalizedSessionId, normalizedThreadId, turnId);
         return;
       }
       if (method === "thread/status/changed") {
@@ -967,21 +1162,17 @@ function createCodexTerminalController({
           return;
         }
         if (codexAppServerTurnStatusIsComplete(status)) {
+          const turnId = codexAppServerNotificationTurnId(notification);
           void markCodexAppServerTurnIdle(normalizedSessionId, {
             status,
             threadId: normalizedThreadId,
-            turnId: codexAppServerNotificationTurnId(notification)
+            turnId
           });
+          void submitCodexAppServerAssistantResult(normalizedSessionId, normalizedThreadId, turnId);
         }
       }
     });
     codexAppServerEventSubscriptions.set(key, unsubscribe);
-  }
-
-  async function handleCurrentStepInputHelperSessionChanged(changedSessionId = "") {
-    await markCodexAppServerTurnIdle(changedSessionId, {
-      status: "completed"
-    });
   }
 
   async function startCodexTerminalSession(sessionId) {
@@ -1038,15 +1229,6 @@ function createCodexTerminalController({
       target: "codex",
       targetRoot
     });
-    const currentStepInputHelper = await prepareCurrentStepInputHelper({
-      onSessionChanged: async (changedSessionId) => {
-        await handleCurrentStepInputHelperSessionChanged(changedSessionId);
-      },
-      projectService,
-      session,
-      stateRoot: runtime.stateRoot,
-      targetRoot
-    });
     const codexThreadId = codexConversationIdForWorkdir(session, workdir);
     let appServerRuntime = null;
     if (codexThreadId) {
@@ -1068,10 +1250,7 @@ function createCodexTerminalController({
           target: appServerRuntime.containerRuntimeDir
         }
       : null;
-    const terminalEnv = {
-      ...baseTerminalEnv,
-      ...currentStepInputHelper.env
-    };
+    const terminalEnv = baseTerminalEnv;
     const terminalEnvHash = terminalEnvironmentFingerprint(terminalEnv);
     const namespace = codexTerminalNamespace(sessionId);
     const terminalResponse = startTerminalSession({
@@ -1083,7 +1262,6 @@ function createCodexTerminalController({
           terminalId: id
         }),
         env: terminalEnv,
-        helperMount: currentStepInputHelper.mount,
         image: imageResult.image,
         mounts: [
           appServerRuntimeMount
@@ -1620,24 +1798,13 @@ function createCodexTerminalController({
       message: "Preparing Codex app-server for this session."
     });
     try {
-      const helper = await prepareCurrentStepInputHelper({
-        onSessionChanged: async (changedSessionId) => {
-          await handleCurrentStepInputHelperSessionChanged(changedSessionId);
-        },
-        projectService,
-        session,
-        stateRoot: runtime.stateRoot,
-        targetRoot
-      });
       await ensureTargetRuntimeNetwork(targetRoot);
       const provider = codexAppServerProviderForSession(sessionId, {
         targetRoot,
         workdir
       });
       const promptSession = await runtime.promptSessionForAction(session);
-      const developerInstructions = codexAppServerDeveloperInstructions(promptSession, {
-        helperCommands: helper.host?.commands
-      });
+      const developerInstructions = codexAppServerDeveloperInstructions(promptSession);
       const thread = await ensureCodexAppServerThreadForSession({
         developerInstructions,
         provider,
@@ -1704,24 +1871,13 @@ function createCodexTerminalController({
       message: "Preparing Codex app-server for this session."
     });
     try {
-      const helper = await prepareCurrentStepInputHelper({
-        onSessionChanged: async (changedSessionId) => {
-          await handleCurrentStepInputHelperSessionChanged(changedSessionId);
-        },
-        projectService,
-        session,
-        stateRoot: runtime.stateRoot,
-        targetRoot
-      });
       await ensureTargetRuntimeNetwork(targetRoot);
       const provider = codexAppServerProviderForSession(sessionId, {
         targetRoot,
         workdir
       });
       const promptSession = await runtime.promptSessionForAction(session);
-      const developerInstructions = codexAppServerDeveloperInstructions(promptSession, {
-        helperCommands: helper.host?.commands
-      });
+      const developerInstructions = codexAppServerDeveloperInstructions(promptSession);
       const thread = await ensureCodexAppServerThreadForSession({
         bootstrapResumableThread: false,
         developerInstructions,
@@ -1740,7 +1896,6 @@ function createCodexTerminalController({
       let delivery = null;
       try {
         delivery = await sendCodexAppServerPromptForSession({
-          helperCommands: helper.host?.commands,
           prompt: terminalInput,
           provider,
           threadId: thread.threadId,

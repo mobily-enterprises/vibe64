@@ -543,7 +543,7 @@ test("jskit seed issue definition uses the current-step input contract before is
     assert.match(afterPrompt.actionResult.prompt, /normal app owner/u);
     assert.match(afterPrompt.actionResult.prompt, /what the answer changes in the app/u);
     assert.match(afterPrompt.actionResult.prompt, /Do not make the user choose from framework module names/u);
-    assert.match(afterPrompt.actionResult.prompt, /Vibe64 step completion contract/u);
+    assert.match(afterPrompt.actionResult.prompt, /Vibe64 agent result contract/u);
 
     const afterInput = await runtime.submitCurrentStepInput("jskit_seed_prompt", {
       fields: {

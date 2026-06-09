@@ -14,7 +14,7 @@ const CODEX_SESSION_SANDBOX = "danger-full-access";
 const CODEX_APP_SERVER_BOOTSTRAP_TIMEOUT_MS = 60000;
 const CODEX_APP_SERVER_BOOTSTRAP_PROMPT = [
   "VIBE64_SESSION_BOOTSTRAP: create a resumable Codex session for Vibe64.",
-  "Do not inspect files, run commands, or call helper commands.",
+  "Do not inspect files, run commands, or submit workflow results.",
   "Reply exactly: Vibe64 Codex session ready."
 ].join("\n");
 
@@ -59,44 +59,10 @@ function codexAppServerTurnSettings({
   };
 }
 
-function codexAppServerHelperOverride({
-  currentStepInputCommand = "",
-  terminalChatCommand = ""
-} = {}) {
-  const currentStepCommand = normalizeAgentText(currentStepInputCommand);
-  const terminalCommand = normalizeAgentText(terminalChatCommand);
-  if (!currentStepCommand && !terminalCommand) {
-    return "";
-  }
-  return [
-    "Vibe64 app-server helper commands:",
-    currentStepCommand
-      ? `- Current-step input helper: ${currentStepCommand}`
-      : "",
-    terminalCommand
-      ? `- Terminal chat mirror helper: ${terminalCommand}`
-      : "",
-    terminalCommand
-      ? "- For direct terminal input, call the terminal chat mirror helper with a `response` field only; Vibe64 reads the user prompt from Codex app-server events."
-      : "",
-    "- In Codex app-server turns, use these host helper commands instead of env-based helper examples.",
-    "- Do not run `node \"$VIBE64_CURRENT_STEP_INPUT_HELPER\"` or `node \"$VIBE64_TERMINAL_CHAT_HELPER\"` unless this specific turn says those environment variables are available."
-  ].filter(Boolean).join("\n");
-}
-
 function codexAppServerTurnPrompt({
-  helperCommands = {},
   prompt = ""
 } = {}) {
-  const normalizedPrompt = String(prompt || "").trim();
-  const helperOverride = codexAppServerHelperOverride({
-    currentStepInputCommand: helperCommands.currentStepInput,
-    terminalChatCommand: helperCommands.terminalChat
-  });
-  return [
-    normalizedPrompt,
-    helperOverride
-  ].filter(Boolean).join("\n\n");
+  return String(prompt || "").trim();
 }
 
 function codexAppServerRuntimeMetadata(runtime = {}) {
@@ -427,14 +393,12 @@ async function ensureCodexAppServerThreadForSession({
 }
 
 async function sendCodexAppServerPromptForSession({
-  helperCommands = {},
   provider,
   prompt = "",
   threadId = "",
   workdir = ""
 } = {}) {
   const input = codexAppServerTurnPrompt({
-    helperCommands,
     prompt
   });
   if (!input) {
@@ -455,7 +419,6 @@ export {
   CODEX_SESSION_MODEL,
   CODEX_SESSION_REASONING_EFFORT,
   CODEX_SESSION_SANDBOX,
-  codexAppServerHelperOverride,
   codexAppServerIdentityMetadata,
   codexAppServerThreadIdForSession,
   codexAppServerThreadSettings,

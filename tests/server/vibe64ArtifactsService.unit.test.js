@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
 import test from "node:test";
 
 import {
@@ -11,10 +10,6 @@ import {
 import {
   createService
 } from "../../packages/vibe64-artifacts/src/server/service.js";
-import {
-  helperSocketHostPath,
-  prepareCurrentStepInputHelper
-} from "@local/vibe64-runtime/server/currentStepInputHelperServer";
 import {
   _testing as coreMaintenanceTesting
 } from "@local/vibe64-runtime/server/workflowModules/coreMaintenance";
@@ -28,44 +23,6 @@ function projectServiceForRuntime(runtime) {
       return runtime;
     }
   };
-}
-
-function runNodeScript(scriptPath = "", args = [], env = {}, stdin = "") {
-  return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [
-      scriptPath,
-      ...args
-    ], {
-      env: {
-        ...process.env,
-        ...env
-      },
-      stdio: [
-        "pipe",
-        "pipe",
-        "pipe"
-      ]
-    });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.setEncoding("utf8");
-    child.stderr.setEncoding("utf8");
-    child.stdout.on("data", (chunk) => {
-      stdout += chunk;
-    });
-    child.stderr.on("data", (chunk) => {
-      stderr += chunk;
-    });
-    child.stdin.end(stdin);
-    child.once("error", reject);
-    child.once("exit", (code) => {
-      resolve({
-        code,
-        stderr,
-        stdout
-      });
-    });
-  });
 }
 
 test("Vibe64 artifacts service saves semantic issue step input", async () => {
@@ -211,7 +168,7 @@ test("Vibe64 artifacts service saves semantic pull request step input", async ()
   });
 });
 
-test("Vibe64 artifacts service appends helper responses to the conversation log", async () => {
+test("Vibe64 artifacts service appends agent responses to the conversation log", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = new Vibe64SessionRuntime({
       adapter: new FakeTargetAdapter(),
@@ -219,10 +176,10 @@ test("Vibe64 artifacts service appends helper responses to the conversation log"
     });
     await runtime.createSession({
       initialStep: "maintenance_conversation",
-      sessionId: "helper_conversation_log",
+      sessionId: "agent_conversation_log",
       workflowDefinition: maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
     });
-    await runtime.store.writeConversationUserMessage("helper_conversation_log", {
+    await runtime.store.writeConversationUserMessage("agent_conversation_log", {
       text: "What should we improve?"
     });
 
@@ -230,7 +187,7 @@ test("Vibe64 artifacts service appends helper responses to the conversation log"
       projectService: projectServiceForRuntime(runtime)
     });
 
-    const saved = await service.submitCurrentStepInput("helper_conversation_log", {
+    const saved = await service.submitCurrentStepInput("agent_conversation_log", {
       fields: {
         response: "Tighten the Autopilot conversation panel."
       },
@@ -240,7 +197,7 @@ test("Vibe64 artifacts service appends helper responses to the conversation log"
       stepStatus: "ready"
     });
 
-    const conversationLog = await runtime.store.readConversationLog("helper_conversation_log");
+    const conversationLog = await runtime.store.readConversationLog("agent_conversation_log");
     assert.equal(saved.ok, true);
     assert.deepEqual(conversationLog.map((turn) => [
       turn.user?.text || "",
@@ -254,7 +211,7 @@ test("Vibe64 artifacts service appends helper responses to the conversation log"
   });
 });
 
-test("Vibe64 artifacts service closes structured Codex helper turns in the conversation log", async () => {
+test("Vibe64 artifacts service closes structured Codex agent turns in the conversation log", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = new Vibe64SessionRuntime({
       adapter: new FakeTargetAdapter(),
@@ -262,13 +219,13 @@ test("Vibe64 artifacts service closes structured Codex helper turns in the conve
     });
     await runtime.createSession({
       initialStep: "issue_file_created",
-      metadata: worktreeMetadata(targetRoot, "structured_helper_conversation_log"),
-      sessionId: "structured_helper_conversation_log"
+      metadata: worktreeMetadata(targetRoot, "structured_agent_conversation_log"),
+      sessionId: "structured_agent_conversation_log"
     });
-    await runtime.runAction("structured_helper_conversation_log", "draft_issue", {
+    await runtime.runAction("structured_agent_conversation_log", "draft_issue", {
       conversationRequest: "Create a file called P.txt in the project root."
     });
-    await runtime.store.writeConversationUserMessage("structured_helper_conversation_log", {
+    await runtime.store.writeConversationUserMessage("structured_agent_conversation_log", {
       text: "Create a file called P.txt in the project root."
     });
 
@@ -276,7 +233,7 @@ test("Vibe64 artifacts service closes structured Codex helper turns in the conve
       projectService: projectServiceForRuntime(runtime)
     });
 
-    const saved = await service.submitCurrentStepInput("structured_helper_conversation_log", {
+    const saved = await service.submitCurrentStepInput("structured_agent_conversation_log", {
       fields: {
         body: "Create an empty file named p.txt in the project root.",
         title: "Create lowercase p.txt",
@@ -288,7 +245,7 @@ test("Vibe64 artifacts service closes structured Codex helper turns in the conve
       stepStatus: "awaiting_agent_result"
     });
 
-    const conversationLog = await runtime.store.readConversationLog("structured_helper_conversation_log");
+    const conversationLog = await runtime.store.readConversationLog("structured_agent_conversation_log");
     assert.equal(saved.ok, true);
     assert.deepEqual(conversationLog.map((turn) => [
       turn.user?.text || "",
@@ -388,7 +345,7 @@ test("Vibe64 artifacts service rejects UI input while a step waits for Codex", a
 
     assert.equal(saved.ok, false);
     assert.equal(saved.errors[0].code, "vibe64_step_input_state_changed");
-    assert.match(saved.errors[0].message, /waiting for Codex/u);
+    assert.match(saved.errors[0].message, /waiting for the agent/u);
   });
 });
 
@@ -450,321 +407,6 @@ test("Vibe64 artifacts service rejects stale current-step input", async () => {
     assert.equal(saved.currentStep, "issue_file_created");
     assert.equal(saved.stepStatus, "ready");
     assert.equal(saved.expectedInput, null);
-  });
-});
-
-test("Vibe64 current-step helper submits through the same server path", async () => {
-  await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new Vibe64SessionRuntime({
-      targetRoot
-    });
-    await runtime.createSession({
-      initialStep: "issue_file_created",
-      metadata: worktreeMetadata(targetRoot, "step_input_helper"),
-      sessionId: "step_input_helper"
-    });
-    await runtime.runAction("step_input_helper", "draft_issue", {
-      conversationRequest: "Create a booking dashboard."
-    });
-    const projectService = projectServiceForRuntime(runtime);
-    const session = await runtime.getSession("step_input_helper");
-    const changedSessionIds = [];
-    const helper = await prepareCurrentStepInputHelper({
-      onSessionChanged: async (sessionId) => {
-        changedSessionIds.push(sessionId);
-      },
-      projectService,
-      session,
-      targetRoot
-    });
-
-    const result = await runNodeScript(helper.env.VIBE64_CURRENT_STEP_INPUT_HELPER, [
-      "--json",
-      JSON.stringify({
-        fields: {
-          body: "Create a booking dashboard.",
-          title: "Add booking dashboard",
-          word: "Booking"
-        },
-        kind: "ready",
-        stepId: "issue_file_created",
-        stepStatus: "awaiting_agent_result"
-      })
-    ], {
-      ...helper.env,
-      VIBE64_CURRENT_STEP_INPUT_SOCKET: helperSocketHostPath({
-        session
-      })
-    });
-
-    assert.equal(result.code, 0, result.stderr || result.stdout);
-    const response = JSON.parse(result.stdout);
-    assert.deepEqual(response, {
-      ok: true,
-      sessionId: "step_input_helper",
-      currentStep: "issue_file_created",
-      stepStatus: "confirm_files",
-      status: "active"
-    });
-    assert.equal(await runtime.store.readArtifact("step_input_helper", "issue_title"), "Add booking dashboard\n");
-    assert.deepEqual(changedSessionIds, ["step_input_helper"]);
-  });
-});
-
-test("Vibe64 current-step helper accepts --json with stdin payload", async () => {
-  await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new Vibe64SessionRuntime({
-      targetRoot
-    });
-    await runtime.createSession({
-      initialStep: "issue_file_created",
-      metadata: worktreeMetadata(targetRoot, "step_input_helper_stdin"),
-      sessionId: "step_input_helper_stdin"
-    });
-    await runtime.runAction("step_input_helper_stdin", "draft_issue", {
-      conversationRequest: "Create a booking dashboard."
-    });
-    const projectService = projectServiceForRuntime(runtime);
-    const session = await runtime.getSession("step_input_helper_stdin");
-    const helper = await prepareCurrentStepInputHelper({
-      projectService,
-      session,
-      targetRoot
-    });
-
-    const result = await runNodeScript(helper.env.VIBE64_CURRENT_STEP_INPUT_HELPER, [
-      "--json"
-    ], {
-      ...helper.env,
-      VIBE64_CURRENT_STEP_INPUT_SOCKET: helperSocketHostPath({
-        session
-      })
-    }, JSON.stringify({
-      fields: {
-        body: "Create a booking dashboard.",
-        title: "Add booking dashboard",
-        word: "Booking"
-      },
-      kind: "ready",
-      stepId: "issue_file_created",
-      stepStatus: "awaiting_agent_result"
-    }));
-
-    assert.equal(result.code, 0, result.stderr || result.stdout);
-    const response = JSON.parse(result.stdout);
-    assert.deepEqual(response, {
-      ok: true,
-      sessionId: "step_input_helper_stdin",
-      currentStep: "issue_file_created",
-      stepStatus: "confirm_files",
-      status: "active"
-    });
-  });
-});
-
-test("Vibe64 current-step helper exposes host wrapper commands for app-server turns", async () => {
-  await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new Vibe64SessionRuntime({
-      targetRoot
-    });
-    await runtime.createSession({
-      initialStep: "issue_file_created",
-      metadata: worktreeMetadata(targetRoot, "step_input_helper_host"),
-      sessionId: "step_input_helper_host"
-    });
-    await runtime.runAction("step_input_helper_host", "draft_issue", {
-      conversationRequest: "Create a booking dashboard."
-    });
-    const projectService = projectServiceForRuntime(runtime);
-    const session = await runtime.getSession("step_input_helper_host");
-    const helper = await prepareCurrentStepInputHelper({
-      projectService,
-      session,
-      targetRoot
-    });
-
-    assert.equal(helper.hostEnv.VIBE64_CURRENT_STEP_INPUT_SOCKET, helperSocketHostPath({
-      session
-    }));
-    assert.match(helper.host.commands.currentStepInput, /^node /u);
-
-    const result = await runNodeScript(helper.host.currentStepInputHelper, [
-      "--json",
-      JSON.stringify({
-        fields: {
-          body: "Create a booking dashboard.",
-          title: "Add booking dashboard",
-          word: "Booking"
-        },
-        kind: "ready",
-        stepId: "issue_file_created",
-        stepStatus: "awaiting_agent_result"
-      })
-    ]);
-
-    assert.equal(result.code, 0, result.stderr || result.stdout);
-    const response = JSON.parse(result.stdout);
-    assert.deepEqual(response, {
-      ok: true,
-      sessionId: "step_input_helper_host",
-      currentStep: "issue_file_created",
-      stepStatus: "confirm_files",
-      status: "active"
-    });
-  });
-});
-
-test("Vibe64 terminal chat helper mirrors direct terminal exchanges into the conversation log", async () => {
-  await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new Vibe64SessionRuntime({
-      targetRoot
-    });
-    await runtime.createSession({
-      initialStep: "maintenance_conversation",
-      sessionId: "terminal_chat_helper",
-      workflowDefinition: maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
-    });
-    const projectService = projectServiceForRuntime(runtime);
-    const session = await runtime.getSession("terminal_chat_helper");
-    const changedSessionIds = [];
-    const helper = await prepareCurrentStepInputHelper({
-      onSessionChanged: async (sessionId) => {
-        changedSessionIds.push(sessionId);
-      },
-      projectService,
-      session,
-      targetRoot
-    });
-
-    const result = await runNodeScript(helper.env.VIBE64_TERMINAL_CHAT_HELPER, [
-      "--json",
-      JSON.stringify({
-        request: "This came from the Codex terminal.",
-        response: "This answer should be mirrored into Vibe64 chat."
-      })
-    ], {
-      ...helper.env,
-      VIBE64_TERMINAL_CHAT_SOCKET: helperSocketHostPath({
-        session
-      })
-    });
-
-    assert.equal(result.code, 0, result.stderr || result.stdout);
-    const response = JSON.parse(result.stdout);
-    assert.deepEqual(response, {
-      ok: true,
-      sessionId: "terminal_chat_helper",
-      currentStep: "maintenance_conversation",
-      stepStatus: "ready",
-      status: "active"
-    });
-    const conversationLog = await runtime.store.readConversationLog("terminal_chat_helper");
-    assert.deepEqual(conversationLog.map((turn) => [
-      turn.user?.text,
-      turn.assistant?.text
-    ]), [
-      [
-        "This came from the Codex terminal.",
-        "This answer should be mirrored into Vibe64 chat."
-      ]
-    ]);
-    assert.deepEqual(changedSessionIds, ["terminal_chat_helper"]);
-  });
-});
-
-test("Vibe64 terminal chat helper accepts response-only terminal chat payloads", async () => {
-  await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new Vibe64SessionRuntime({
-      targetRoot
-    });
-    await runtime.createSession({
-      initialStep: "maintenance_conversation",
-      sessionId: "terminal_chat_helper_response_only",
-      workflowDefinition: maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
-    });
-    await runtime.store.writeConversationUserMessage("terminal_chat_helper_response_only", {
-      text: "This came from a Codex app-server userMessage event."
-    });
-    const projectService = projectServiceForRuntime(runtime);
-    const session = await runtime.getSession("terminal_chat_helper_response_only");
-    const changedSessionIds = [];
-    const helper = await prepareCurrentStepInputHelper({
-      onSessionChanged: async (sessionId) => {
-        changedSessionIds.push(sessionId);
-      },
-      projectService,
-      session,
-      targetRoot
-    });
-
-    const result = await runNodeScript(helper.env.VIBE64_TERMINAL_CHAT_HELPER, [
-      "--json",
-      JSON.stringify({
-        response: "This answer should complete the existing terminal-origin turn."
-      })
-    ], {
-      ...helper.env,
-      VIBE64_TERMINAL_CHAT_SOCKET: helperSocketHostPath({
-        session
-      })
-    });
-
-    assert.equal(result.code, 0, result.stderr || result.stdout);
-    const conversationLog = await runtime.store.readConversationLog("terminal_chat_helper_response_only");
-    assert.deepEqual(conversationLog.map((turn) => [
-      turn.user?.text,
-      turn.assistant?.text
-    ]), [
-      [
-        "This came from a Codex app-server userMessage event.",
-        "This answer should complete the existing terminal-origin turn."
-      ]
-    ]);
-    assert.deepEqual(changedSessionIds, ["terminal_chat_helper_response_only"]);
-  });
-});
-
-test("Vibe64 current-step helper rejects stale state", async () => {
-  await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new Vibe64SessionRuntime({
-      targetRoot
-    });
-    await runtime.createSession({
-      initialStep: "issue_file_created",
-      sessionId: "step_input_helper_stale"
-    });
-    const projectService = projectServiceForRuntime(runtime);
-    const session = await runtime.getSession("step_input_helper_stale");
-    const helper = await prepareCurrentStepInputHelper({
-      projectService,
-      session,
-      targetRoot
-    });
-
-    const result = await runNodeScript(helper.env.VIBE64_CURRENT_STEP_INPUT_HELPER, [
-      "--json",
-      JSON.stringify({
-        fields: {
-          body: "Body",
-          title: "Title",
-          word: "Title"
-        },
-        kind: "ready",
-        stepId: "issue_file_created",
-        stepStatus: "confirm_files"
-      })
-    ], {
-      ...helper.env,
-      VIBE64_CURRENT_STEP_INPUT_SOCKET: helperSocketHostPath({
-        session
-      })
-    });
-
-    assert.equal(result.code, 1);
-    const response = JSON.parse(result.stdout);
-    assert.equal(response.ok, false);
-    assert.equal(response.errors[0].code, "vibe64_step_input_state_changed");
-    assert.match(response.errors[0].message, /Reload state/u);
   });
 });
 

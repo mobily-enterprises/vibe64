@@ -50,7 +50,7 @@ test("terminal failure fix requests are built from server session state", () => 
   assert.match(request.prompt, /"stepId": "review_and_validate"/u);
   assert.match(request.prompt, /"stepStatus": "waiting_for_input"/u);
   assert.match(request.prompt, /"kind": "waiting_for_input"/u);
-  assert.match(request.prompt, /write the same question or blocker in normal Codex response text/u);
+  assert.match(request.prompt, /write the same question or blocker in normal response text/u);
   assert.match(request.prompt, new RegExp(escapeRegExp(questionBatchLimitInstruction()), "u"));
   assert.match(request.prompt, /format each question on its own line as `\[1\] Question text`/u);
   assert.match(request.prompt, /- Session: session-1/u);
@@ -61,7 +61,7 @@ test("terminal failure fix requests are built from server session state", () => 
   assert.match(request.prompt, /latest failure/u);
 });
 
-test("session Fix Codex prompts use ephemeral job reporting instead of session helpers", () => {
+test("session Fix Codex prompts use ephemeral job reporting", () => {
   const prompt = sessionTerminalFailureFixPrompt({
     actionId: "build",
     actionLabel: "Build app",
@@ -86,7 +86,7 @@ test("session Fix Codex prompts use ephemeral job reporting instead of session h
   assert.match(prompt, /- Worktree: \/workspace\/app\/\.vibe64\/sessions\/active\/session-1\/worktree/u);
   assert.match(prompt, /- Attempted command: bash -lc 'npm run build'/u);
   assert.match(prompt, /latest failure/u);
-  assert.doesNotMatch(prompt, /current-step input helper/u);
+  assert.match(prompt, /Fix Codex callback helper/u);
   assert.doesNotMatch(prompt, /consider_resolved/u);
 });
 

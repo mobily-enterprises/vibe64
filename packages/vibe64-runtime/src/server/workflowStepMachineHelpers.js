@@ -14,6 +14,9 @@ import {
   WORK_TITLE_ARTIFACT,
   WORK_WORD_ARTIFACT
 } from "./workflowArtifacts.js";
+import {
+  agentTurnResultInstruction
+} from "./agentTurnResults.js";
 
 const STEP_STATE_SCHEMA_VERSION = 1;
 
@@ -180,17 +183,17 @@ function stateChangedError(session = {}, input = {}) {
   );
 }
 
-function inputWasSubmittedByCodex(input = {}) {
-  return normalizeText(input.source) === "codex";
+function inputWasSubmittedByAgent(input = {}) {
+  return ["agent", "codex"].includes(normalizeText(input.source));
 }
 
 function assertAgentResultSource(session = {}, input = {}) {
-  if (inputWasSubmittedByCodex(input)) {
+  if (inputWasSubmittedByAgent(input)) {
     return;
   }
 
   throw vibe64Error(
-    `Reload state. The current workflow state is ${session.currentStep || "(no current step)"}:${session.stepMachine?.status || "(no machine status)"}, and it is waiting for Codex to submit the next result.`,
+    `Reload state. The current workflow state is ${session.currentStep || "(no current step)"}:${session.stepMachine?.status || "(no machine status)"}, and it is waiting for the agent to submit the next result.`,
     "vibe64_step_input_state_changed"
   );
 }
@@ -298,21 +301,7 @@ function promptActionWaitingForInputPayload({
   };
 }
 
-function helperPayloadInstruction(title = "", payload = {}) {
-  const lines = [`- ${title} payload fields:`];
-  for (const [name, value] of Object.entries(payload || {})) {
-    if (name === "fields" && value && typeof value === "object" && !Array.isArray(value)) {
-      for (const [fieldName, fieldValue] of Object.entries(value)) {
-        lines.push(`  - fields.${normalizeText(fieldName)}: ${normalizeText(fieldValue) || "<value>"}`);
-      }
-      continue;
-    }
-    lines.push(`  - ${normalizeText(name)}: ${normalizeText(value) || "<value>"}`);
-  }
-  return lines;
-}
-
-function currentStepHelperInstruction({
+function currentStepAgentResultInstruction({
   doneFields = {},
   doneMeaning = "The step is complete.",
   waitingForInputMeaning = "You need more information from the user.",
@@ -320,31 +309,23 @@ function currentStepHelperInstruction({
   stepStatus = "{{session.stepMachine.status}}"
 } = {}) {
   return [
-    "Vibe64 step completion contract:",
-    "- Do not write Vibe64 workflow artifacts directly for this step.",
-    "- Submit results with: node \"$VIBE64_CURRENT_STEP_INPUT_HELPER\" --json '<payload>'",
-    "- Build `<payload>` from the relevant payload fields below.",
-    ...helperPayloadInstruction("Ready", promptActionDonePayload({
-      kind: STEP_INPUT_KIND.READY,
-      stepId,
-      stepStatus,
-      fields: doneFields
-    })),
-    "- A terminal-visible response alone is not complete; always call the helper before ending the turn.",
-    "- Include any additional `fields` explicitly requested by this prompt.",
-    `- Meaning of ready: ${doneMeaning}`,
+    agentTurnResultInstruction({
+      doneFields,
+      doneMeaning,
+      readyPayload: promptActionDonePayload({
+        kind: STEP_INPUT_KIND.READY,
+        stepId,
+        stepStatus,
+        fields: doneFields
+      }),
+      waitingForInputMeaning,
+      waitingPayload: promptActionWaitingForInputPayload({
+        stepId,
+        stepStatus
+      })
+    }),
     "",
-    "- If you need user input before this step can continue, submit the waiting payload instead.",
-    ...helperPayloadInstruction("Waiting", promptActionWaitingForInputPayload({
-      stepId,
-      stepStatus
-    })),
-    `- Meaning of waiting_for_input: ${waitingForInputMeaning}`,
-    "- Before calling the helper for waiting_for_input, write the same question or blocker in normal Codex response text so Inspect users can read it directly in the terminal.",
-    "- Keep the visible question text and the helper `message` equivalent; do not make the UI-only helper message more complete than the terminal-visible response.",
-    ...questionPromptInstructionBullets(),
-    "",
-    "After the helper reports success, stop. Do not write workflow artifacts directly for this step."
+    ...questionPromptInstructionBullets()
   ].join("\n");
 }
 
@@ -518,7 +499,7 @@ function createChatWithAiMachine({
     },
 
     promptInstruction() {
-      return currentStepHelperInstruction(chatWithAiPromptInstructionOptions(completionPolicy));
+      return currentStepAgentResultInstruction(chatWithAiPromptInstructionOptions(completionPolicy));
     }
   };
 }
@@ -1026,7 +1007,7 @@ export {
   commandSucceeded,
   createChatWithAiMachine,
   createEditableArtifactReviewMachine,
-  currentStepHelperInstruction,
+  currentStepAgentResultInstruction,
   disableAction,
   handleStandardPromptInput,
   machineState,
