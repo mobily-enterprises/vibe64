@@ -21,7 +21,34 @@ const VIBE64_CONFIG_HELPER_FILE = "vibe64-config.sh";
 const CONFIG_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/u;
 const CONFIG_FIELD_TYPES = new Set(["boolean", "path", "select", "string"]);
 
-const VIBE64_GENERAL_CONFIG_FIELDS = deepFreeze([]);
+const VIBE64_GENERAL_CONFIG_FIELDS = deepFreeze([
+  {
+    defaultValue: "merge",
+    description: "How Vibe64 should merge completed pull requests when you choose to merge at the end of a session.",
+    id: "github_pr_merge_method",
+    label: "Pull request merge method",
+    options: [
+      {
+        description: "Keep every commit from the session branch and add one merge commit on the main branch.",
+        label: "Merge commit",
+        value: "merge"
+      },
+      {
+        description: "Combine the session branch into one clean commit on the main branch.",
+        label: "Squash",
+        value: "squash"
+      },
+      {
+        description: "Replay the session commits on top of the main branch without a merge commit.",
+        label: "Rebase",
+        value: "rebase"
+      }
+    ],
+    sectionId: "pull_requests",
+    sectionLabel: "Pull requests",
+    type: "select"
+  }
+]);
 
 function assertConfigName(name = "") {
   const normalizedName = normalizeText(name);

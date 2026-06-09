@@ -1021,13 +1021,22 @@ test("Vibe64 project routes persist project type and plain-file config", async (
       });
       assert.equal(defaults.statusCode, 200);
       assert.equal(defaults.json().defaults.projectType, "jskit");
-      assert.equal(Object.hasOwn(defaults.json().defaults.defaults, "github_pr_merge_method"), false);
+      assert.equal(defaults.json().defaults.defaults.github_pr_merge_method, "merge");
+      assert.equal(
+        defaults.json().defaults.fields.some((field) => field.id === "deploy_production_command"),
+        false
+      );
+      assert.equal(
+        defaults.json().defaults.fields.some((field) => field.id === "deploy_staging_command"),
+        false
+      );
 
       const savedConfig = await app.inject({
         headers: authHeaders,
         method: "PUT",
         payload: {
           values: {
+            github_pr_merge_method: "rebase",
             jskit_database_runtime: "mysql"
           }
         },
@@ -1035,6 +1044,10 @@ test("Vibe64 project routes persist project type and plain-file config", async (
       });
       assert.equal(savedConfig.statusCode, 200);
       assert.equal(savedConfig.json().config.ready, true);
+      assert.equal(
+        await readFile(path.join(stateRoot, "config", "github_pr_merge_method"), "utf8"),
+        "rebase\n"
+      );
       assert.equal(
         await readFile(path.join(stateRoot, "config", "jskit_database_runtime"), "utf8"),
         "mysql\n"
