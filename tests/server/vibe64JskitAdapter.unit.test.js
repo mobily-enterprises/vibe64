@@ -212,6 +212,7 @@ test("jskit self-target config enables host Docker for recursive Studio launch",
       launchTargetId: "dev",
       session: {
         metadata: {
+          dependencies_installed: "yes",
           worktree_path: targetRoot
         },
         sessionId: "recursive_studio_launch",
@@ -244,6 +245,7 @@ test("jskit launch targets expose app and built app actions", async () => {
     const launchTargets = await listJskitLaunchTargets({
       session: {
         metadata: {
+          dependencies_installed: "yes",
           worktree_path: targetRoot
         }
       }
@@ -264,6 +266,47 @@ test("jskit launch targets expose app and built app actions", async () => {
   });
 });
 
+test("jskit launch targets wait for dependency installation", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await writeProjectFile(targetRoot, "package.json", JSON.stringify({
+      scripts: {
+        dev: "vite",
+        server: "node server.js"
+      }
+    }, null, 2));
+
+    const session = {
+      metadata: {
+        worktree_path: targetRoot
+      },
+      sessionId: "jskit_launch_before_dependencies",
+      targetRoot
+    };
+    const launchTargets = await listJskitLaunchTargets({
+      session
+    });
+
+    assert.deepEqual(launchTargets, [
+      {
+        available: false,
+        defaultDisplay: "minimized",
+        disabledReason: "Install dependencies before running the app.",
+        id: "dev",
+        label: "Run app"
+      }
+    ]);
+
+    const spec = await createJskitLaunchTargetTerminalSpec({
+      launchTargetId: "dev",
+      session,
+      targetRoot
+    });
+
+    assert.equal(spec.ok, false);
+    assert.equal(spec.message, "Install dependencies before running the app.");
+  });
+});
+
 test("jskit launch targets use canonical session worktree when metadata path is stale", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "session-with-stale-path";
@@ -279,6 +322,7 @@ test("jskit launch targets use canonical session worktree when metadata path is 
     const session = {
       completedSteps: ["session_created", "worktree_created"],
       metadata: {
+        dependencies_installed: "yes",
         worktree_path: path.join(path.dirname(targetRoot), "old-workspace", ".vibe64", "sessions", "active", sessionId, "worktree")
       },
       sessionId,
@@ -321,6 +365,7 @@ test("jskit built launch waits for the server readiness marker before opening", 
       launchTargetId: "built",
       session: {
         metadata: {
+          dependencies_installed: "yes",
           worktree_path: targetRoot
         },
         sessionId: "jskit_built_launch",
@@ -360,6 +405,7 @@ test("jskit dev launch starts backend and Vite together", async () => {
       launchTargetId: "dev",
       session: {
         metadata: {
+          dependencies_installed: "yes",
           worktree_path: targetRoot
         },
         sessionId: "jskit_dev_launch",

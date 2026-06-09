@@ -149,6 +149,18 @@ function jskitLaunchTarget(id, label) {
   };
 }
 
+function jskitDependenciesReady(session = {}) {
+  return String(session.metadata?.dependencies_installed || "").trim().toLowerCase() === "yes";
+}
+
+function markLaunchTargetDependencyBlocked(launchTarget) {
+  return {
+    ...launchTarget,
+    available: false,
+    disabledReason: "Install dependencies before running the app."
+  };
+}
+
 function createJskitDevCommand({
   backendCommand = DEFAULT_DEV_BACKEND_COMMAND,
   backendPort = DEFAULT_DEV_BACKEND_PORT,
@@ -210,7 +222,9 @@ async function listJskitLaunchTargets({
   if ((hasDevCommandConfig || scripts.dev) && (hasServerCommandConfig || scripts.server)) {
     launchTargets.push(jskitLaunchTarget("dev", "Run app"));
   }
-  return launchTargets;
+  return jskitDependenciesReady(session)
+    ? launchTargets
+    : launchTargets.map(markLaunchTargetDependencyBlocked);
 }
 
 async function createJskitBuiltLaunchDescriptor({
@@ -301,6 +315,12 @@ async function createJskitLaunchTargetTerminalSpec({
     return {
       ok: false,
       message: "Create the worktree before running the app."
+    };
+  }
+  if (!jskitDependenciesReady(session)) {
+    return {
+      ok: false,
+      message: "Install dependencies before running the app."
     };
   }
   const availableLaunchTargets = await listJskitLaunchTargets({
