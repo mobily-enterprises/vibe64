@@ -133,6 +133,37 @@ function disconnectedGithubGitCredentialToolchain(calls = []) {
   };
 }
 
+function disconnectedGithubAuthToolchain(calls = []) {
+  return async function runToolchain(commandArgs, options = {}) {
+    calls.push({
+      commandArgs,
+      options
+    });
+    if (commandArgs[0] === "gh") {
+      return {
+        ok: false,
+        output: "You are not logged into any GitHub hosts.",
+        stdout: ""
+      };
+    }
+    if (commandArgs[0] === "git" && commandArgs.includes("--get-urlmatch")) {
+      return {
+        ok: false,
+        output: "",
+        stdout: ""
+      };
+    }
+    if (commandArgs[0] === "git" && (commandArgs.includes("user.name") || commandArgs.includes("user.email"))) {
+      return {
+        ok: false,
+        output: "",
+        stdout: ""
+      };
+    }
+    return connectedToolchainResult(commandArgs);
+  };
+}
+
 function disconnectedGithubGitIdentityToolchain(calls = []) {
   return async function runToolchain(commandArgs, options = {}) {
     calls.push({
@@ -247,7 +278,7 @@ test("Accounts status shows reconnect required for remembered GitHub identities 
     const calls = [];
     const status = await createService({
       providerHomesRoot: path.join(root, "provider-homes"),
-      runToolchain: disconnectedGithubGitCredentialToolchain(calls),
+      runToolchain: disconnectedGithubAuthToolchain(calls),
       targetRoot
     }).getStatus(accountInput(LINKED_OWNER_USER, {
       refresh: true
@@ -256,7 +287,7 @@ test("Accounts status shows reconnect required for remembered GitHub identities 
     const github = status.accounts.find((account) => account.id === "github");
     assert.equal(status.ok, true);
     assert.equal(status.ready, false);
-    assert.equal(status.blockedReason, "GitHub was previously linked as @mercmobily, but this host is not authenticated. Reconnect GitHub to continue.");
+    assert.equal(status.blockedReason, "GitHub was previously linked as @mercmobily, but this host is not ready to use it. Reconnect GitHub to continue.");
     assert.equal(github.status, "reconnect_required");
     assert.equal(github.connected, false);
     assert.equal(github.previouslyLinked, true);

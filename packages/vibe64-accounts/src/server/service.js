@@ -337,7 +337,7 @@ async function readGithubStatus({
         id: "github",
         gitIdentity,
         label: "GitHub",
-        message: `GitHub was previously linked as @${previousGithubIdentity.login}, but this host is not authenticated. Reconnect GitHub to continue.`,
+        message: `GitHub was previously linked as @${previousGithubIdentity.login}, but this host is not ready to use it. Reconnect GitHub to continue.`,
         observed: [output, credentialHelperOutput, gitNameResult.output, gitEmailResult.output].filter(Boolean).join("\n"),
         previousGithub: previousGithubIdentity,
         previousUsername: previousGithubIdentity.login,
