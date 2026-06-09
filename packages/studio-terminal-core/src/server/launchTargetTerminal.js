@@ -336,13 +336,17 @@ function previewAuthDockerArgs({
     terminalSessionId
   });
   const entries = Object.entries(env);
+  const args = [];
   if (entries.length > 0 && profilePath) {
+    const profileDir = path.dirname(path.resolve(profilePath));
+    args.push("-v", `${profileDir}:${profileDir}`);
     entries.push(["VIBE64_PREVIEW_AUTH_PROFILE_FILE", profilePath]);
   }
-  return entries.flatMap(([name, value]) => [
+  args.push(...entries.flatMap(([name, value]) => [
     "-e",
     `${name}=${value}`
-  ]);
+  ]));
+  return args;
 }
 
 function ensurePreviewAuthProfilePath(profilePath = "") {

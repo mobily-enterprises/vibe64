@@ -392,7 +392,10 @@ test("jskit built launch waits for the server readiness marker before opening", 
     });
     assert.ok(args.includes("AUTH_DEV_BYPASS_ENABLED=true"));
     assert.ok(args.some((arg) => /^AUTH_DEV_BYPASS_SECRET=[a-f0-9]{64}$/u.test(arg)));
-    assert.ok(args.some((arg) => /^VIBE64_PREVIEW_AUTH_PROFILE_FILE=.+\/profile\.json$/u.test(arg)));
+    const profileEnvArg = args.find((arg) => /^VIBE64_PREVIEW_AUTH_PROFILE_FILE=.+\/profile\.json$/u.test(arg));
+    assert.ok(profileEnvArg);
+    const profilePath = profileEnvArg.replace(/^VIBE64_PREVIEW_AUTH_PROFILE_FILE=/u, "");
+    assert.ok(args.includes(`${path.dirname(profilePath)}:${path.dirname(profilePath)}`));
     assert.ok(args.includes("AUTH_DEV_ACCESS_TTL_SECONDS=3600"));
     assert.ok(args.includes("AUTH_DEV_REFRESH_TTL_SECONDS=43200"));
     assert.doesNotMatch(spec.commandPreview({ args }), /AUTH_DEV_BYPASS_SECRET=[a-f0-9]{64}/u);
@@ -451,7 +454,10 @@ test("jskit dev launch starts backend and Vite together", async () => {
     });
     assert.ok(args.includes("AUTH_DEV_BYPASS_ENABLED=true"));
     assert.ok(args.some((arg) => /^AUTH_DEV_BYPASS_SECRET=[a-f0-9]{64}$/u.test(arg)));
-    assert.ok(args.some((arg) => /^VIBE64_PREVIEW_AUTH_PROFILE_FILE=.+\/profile\.json$/u.test(arg)));
+    const profileEnvArg = args.find((arg) => /^VIBE64_PREVIEW_AUTH_PROFILE_FILE=.+\/profile\.json$/u.test(arg));
+    assert.ok(profileEnvArg);
+    const profilePath = profileEnvArg.replace(/^VIBE64_PREVIEW_AUTH_PROFILE_FILE=/u, "");
+    assert.ok(args.includes(`${path.dirname(profilePath)}:${path.dirname(profilePath)}`));
     assert.ok(args.includes("AUTH_DEV_ACCESS_TTL_SECONDS=3600"));
     assert.ok(args.includes("AUTH_DEV_REFRESH_TTL_SECONDS=43200"));
     assert.doesNotMatch(spec.commandPreview({ args }), /AUTH_DEV_BYPASS_SECRET=[a-f0-9]{64}/u);
