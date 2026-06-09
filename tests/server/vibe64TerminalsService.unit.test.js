@@ -1092,6 +1092,42 @@ test("Vibe64 command terminal joins the target runtime network before the image"
   assert.match(startupScript, /setpriv .* bash -lc 'npm test'/u);
 });
 
+test("Vibe64 command terminal mounts the session root for worktree creation outside the repo", () => {
+  const targetRoot = "/home/tenant/vibe64/beepollen";
+  const sessionRoot = "/home/tenant/.vibe64/projects/beepollen/sessions/active/unit";
+  const resultDirectory = "/tmp/vibe64-command-unit";
+  const args = commandTerminalArgs({
+    args: [
+      "-lc",
+      `git worktree add ${sessionRoot}/worktree`
+    ],
+    command: "bash",
+    containerName: "vibe64-command-unit",
+    env: {
+      [COMMAND_RESULT_ENV]: `${resultDirectory}/result.tsv`
+    },
+    image: "adapter-toolchain:1.0.0",
+    resultFile: {
+      directory: resultDirectory,
+      path: `${resultDirectory}/result.tsv`
+    },
+    session: {
+      artifactsRoot: `${sessionRoot}/artifacts`,
+      metadataRoot: `${sessionRoot}/metadata`,
+      sessionRoot
+    },
+    sessionId: "unit-session",
+    targetRoot,
+    terminalId: "unit-terminal",
+    workdir: targetRoot
+  });
+
+  assert.ok(args.includes(`${targetRoot}:${targetRoot}`));
+  assert.ok(args.includes(`${sessionRoot}:${sessionRoot}`));
+  assert.equal(args.includes(`${sessionRoot}/artifacts:${sessionRoot}/artifacts`), false);
+  assert.equal(args.includes(`${sessionRoot}/metadata:${sessionRoot}/metadata`), false);
+});
+
 test("Vibe64 terminals use the base image when the adapter does not declare one", async () => {
   const result = await resolveTerminalToolchainImage({
     imageExists: async (image) => image === STUDIO_BASE_TOOLCHAIN_IMAGE,

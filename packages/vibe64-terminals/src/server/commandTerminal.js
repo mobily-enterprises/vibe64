@@ -213,6 +213,15 @@ function commandTerminalArgs({
 }
 
 function sessionExchangeMounts(session = {}) {
+  const sessionRoot = normalizeText(session.sessionRoot);
+  if (sessionRoot) {
+    return [
+      {
+        source: sessionRoot,
+        target: sessionRoot
+      }
+    ];
+  }
   return [
     session.artifactsRoot,
     session.metadataRoot

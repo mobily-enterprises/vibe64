@@ -659,7 +659,6 @@ const worktreeCreatedMachine = {
       case STEP_STATUS.WAITING_FOR_INPUT:
         if (state.from === STEP_STATUS.ATTEMPTING_EXECUTION) {
           return {
-            actions: disableAction(context.session, "create_worktree", "Resolve the worktree command failure before retrying."),
             interaction: commandFailureInteraction({
               prompt: state.message || "The worktree command failed. Explain what should happen, then retry the command.",
               title: "Worktree command needs attention"

@@ -2326,6 +2326,44 @@ test("vibe64 runtime shows current-step actions from the workflow", async () => 
   });
 });
 
+test("vibe64 runtime keeps failed worktree creation retryable", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new Vibe64SessionRuntime({
+      adapter: new FakeTargetAdapter({
+        capabilities: {
+          create_worktree: true
+        }
+      }),
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "worktree_created",
+      metadata: {
+        work_source: "new_issue"
+      },
+      sessionId: "worktree_retry"
+    });
+
+    const ready = await runtime.getSession("worktree_retry");
+    assert.equal(ready.actions.find((action) => action.id === "create_worktree")?.enabled, true);
+    await recordStepMachineActionStarted(runtime, ready, "create_worktree");
+    const attempting = await runtime.getSession("worktree_retry");
+    await recordStepMachineActionFinished(runtime, attempting, "create_worktree", {
+      message: "Create worktree failed with exit code 128.",
+      output: "fatal: could not create leading directories",
+      status: "blocked"
+    });
+
+    const failed = await runtime.getSession("worktree_retry");
+    const createWorktree = failed.actions.find((action) => action.id === "create_worktree");
+    assert.equal(failed.stepMachine.status, "waiting_for_input");
+    assert.equal(failed.currentStepDefinition.interaction.kind, "command_failure_response");
+    assert.equal(createWorktree?.enabled, true);
+    assert.equal(createWorktree?.disabledReason, "");
+    assert.equal(failed.next.enabled, false);
+  });
+});
+
 test("vibe64 runtime runAction records non-command action results without advancing", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = new Vibe64SessionRuntime({
