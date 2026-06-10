@@ -732,7 +732,9 @@ function createService({
   env = process.env,
   projectService = null,
   providerHomesRoot = "",
+  publishAccountChanged = async () => null,
   runToolchain = runDefaultToolchain,
+  startTerminalSessionFn = startTerminalSession,
   targetRoot = ""
 } = {}) {
   const authSessions = new Map();
@@ -963,7 +965,41 @@ function createService({
     };
   }
 
-  async function startAuthTerminal(accountId, mode, githubContext = null, gitIdentity = {}, authSecrets = {}) {
+  function createAuthTerminalCloseHandler({
+    accountId,
+    githubContext = null,
+    previousGithub = null
+  } = {}) {
+    return async function handleAuthTerminalClose({
+      id = "",
+      reason = ""
+    } = {}) {
+      authDebug("server.auth.terminal.finalize.start", {
+        accountId,
+        reason,
+        sessionId: id
+      });
+      const account = await accountStatus(accountId, {
+        githubContext,
+        previousGithub
+      });
+      await publishAccountChanged(accountId, {
+        account,
+        authSessionId: id,
+        reason: reason || "terminal-close",
+        status: account?.status || ""
+      });
+      authDebug("server.auth.terminal.finalize.done", {
+        accountId,
+        connected: account?.connected === true,
+        reason,
+        sessionId: id,
+        status: account?.status || ""
+      });
+    };
+  }
+
+  async function startAuthTerminal(accountId, mode, githubContext = null, gitIdentity = {}, authSecrets = {}, options = {}) {
     if (accountId === "github") {
       await ensureToolHomeSource(githubContext);
     }
@@ -982,7 +1018,7 @@ function createService({
       toolHomeSource: accountId === "github" ? githubContext?.toolHomeSource || "" : "",
       userKey: accountId === "github" ? String(githubContext?.userKey || "") : ""
     });
-    const terminal = startTerminalSession({
+    const terminal = startTerminalSessionFn({
       args,
       command: "docker",
       commandPreview: dockerCommand(args),
@@ -991,6 +1027,11 @@ function createService({
       maxRunning: 1,
       metadata: authTerminalMetadata(accountId, mode, githubContext),
       namespace: ACCOUNT_AUTH_NAMESPACE,
+      onClose: createAuthTerminalCloseHandler({
+        accountId,
+        githubContext,
+        previousGithub: options.previousGithub || null
+      }),
       reuseRunning: canReuseAuthTerminal(accountId, mode, githubContext)
     });
     if (terminal.ok === false) {
@@ -1085,7 +1126,9 @@ function createService({
           }
           authSecrets[CODEX_API_KEY_ENV] = apiKey;
         }
-        const terminal = await startAuthTerminal(accountId, mode, githubContext, gitIdentity, authSecrets);
+        const terminal = await startAuthTerminal(accountId, mode, githubContext, gitIdentity, authSecrets, {
+          previousGithub: input?.vibe64User?.github || null
+        });
         if (terminal.ok === false) {
           return terminal;
         }

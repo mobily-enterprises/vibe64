@@ -10,6 +10,7 @@ import {
   ACCOUNTS_AUTH_ENDPOINT,
   ACCOUNTS_ENDPOINT,
   ACCOUNTS_LOGOUT_ENDPOINT,
+  VIBE64_ACCOUNTS_CHANGED_EVENT,
   VIBE64_ACCOUNTS_AUTH_API_SUFFIX,
   accountsQueryKey
 } from "@/lib/studioGateApi.js";
@@ -30,6 +31,9 @@ function useVibe64Accounts() {
     path: ACCOUNTS_ENDPOINT,
     queryKey: accountsResourceQueryKey(),
     readQuery: computed(() => forceRefresh.value ? { refresh: true } : null),
+    realtime: {
+      event: VIBE64_ACCOUNTS_CHANGED_EVENT
+    },
     refreshOnPull: true
   });
 

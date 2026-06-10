@@ -5,6 +5,12 @@ import {
 } from "./service.js";
 import { featureActions } from "./actions.js";
 import { registerRoutes } from "./registerRoutes.js";
+import {
+  createVibe64AccountsChangedPublisher,
+  vibe64AccountsChangedServiceEvent
+} from "@local/vibe64-core/server/accountRealtimeEvents";
+
+const VIBE64_ACCOUNTS_SERVICE = "feature.vibe64-accounts.service";
 
 class Vibe64AccountsProvider {
   static id = "feature.vibe64-accounts";
@@ -21,11 +27,26 @@ class Vibe64AccountsProvider {
     }
 
     app.service(
-      "feature.vibe64-accounts.service",
+      VIBE64_ACCOUNTS_SERVICE,
       (scope) => {
+        const domainEvents = typeof scope.has === "function" && scope.has("domainEvents")
+          ? scope.make("domainEvents")
+          : null;
         return createService({
-          projectService: scope.make("feature.vibe64-project.service")
+          projectService: scope.make("feature.vibe64-project.service"),
+          publishAccountChanged: createVibe64AccountsChangedPublisher({
+            domainEvents,
+            methodName: "readAuthSession",
+            serviceToken: VIBE64_ACCOUNTS_SERVICE
+          })
         });
+      },
+      {
+        events: {
+          logout: [vibe64AccountsChangedServiceEvent()],
+          readAuthSession: [vibe64AccountsChangedServiceEvent()],
+          startAuth: [vibe64AccountsChangedServiceEvent()]
+        }
       }
     );
 
@@ -33,7 +54,7 @@ class Vibe64AccountsProvider {
       withActionDefaults(featureActions, {
         domain: "feature",
         dependencies: {
-          featureService: "feature.vibe64-accounts.service"
+          featureService: VIBE64_ACCOUNTS_SERVICE
         }
       })
     );

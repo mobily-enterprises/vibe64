@@ -17,6 +17,7 @@ import {
 } from "@/lib/vibe64SessionRequestConfig.js";
 import {
   CAPABILITIES_ENDPOINT,
+  VIBE64_ACCOUNTS_CHANGED_EVENT,
   capabilitiesQueryKey
 } from "@/lib/studioGateApi.js";
 import {
@@ -218,6 +219,12 @@ function useVibe64SessionData({
       refetchOnWindowFocus: false
     },
     readMethod: "GET",
+    realtime: {
+      events: [
+        VIBE64_SESSION_CHANGED_EVENT,
+        VIBE64_ACCOUNTS_CHANGED_EVENT
+      ]
+    },
     refreshOnPull: true
   });
   const selectedSessionView = proxyRefs({

@@ -1,4 +1,5 @@
 export * from "./core.js";
+export * from "./accountRealtimeEvents.js";
 export * from "./deepFreeze.js";
 export * from "./doctorCheckItems.js";
 export * from "./featureRoutes.js";

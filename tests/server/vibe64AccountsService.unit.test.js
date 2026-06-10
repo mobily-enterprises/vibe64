@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 
@@ -742,6 +742,63 @@ test("Codex API key auth command reads the key from stdin via inherited Docker e
   assert.ok(terminalArgs.includes("-e"));
   assert.ok(terminalArgs.includes(CODEX_API_KEY_ENV));
   assert.doesNotMatch(terminalArgs.join(" "), /sk-test-secret/u);
+});
+
+test("Codex auth terminal finalization writes the shared marker and publishes an account change", async () => {
+  await withTemporaryRoot(async (root) => {
+    const dataRoot = path.join(root, "data");
+    const published = [];
+    const calls = [];
+    const service = createService({
+      dataRoot,
+      publishAccountChanged: async (accountId, event = {}) => {
+        published.push({
+          accountId,
+          event
+        });
+      },
+      runToolchain: connectedToolchain(calls),
+      startTerminalSessionFn(options = {}) {
+        setTimeout(() => {
+          void options.onClose?.({
+            exitCode: 0,
+            id: "auth-session-1",
+            output: "",
+            reason: "exit",
+            status: "closing"
+          });
+        }, 0);
+        return {
+          id: "auth-session-1",
+          inputVersion: 0,
+          ok: true,
+          output: "",
+          outputVersion: 0,
+          status: "running"
+        };
+      },
+      targetRoot: path.join(root, "target")
+    });
+
+    await service.startAuth(accountInput(OWNER_USER, {
+      accountId: "codex",
+      apiKey: "sk-test-auth-finalization",
+      mode: API_KEY_AUTH_MODE
+    }));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    const marker = JSON.parse(await readFile(
+      path.join(dataRoot, "provider-homes", "codex", "status.json"),
+      "utf8"
+    ));
+    assert.equal(marker.connected, true);
+    assert.equal(published.length, 1);
+    assert.equal(published[0].accountId, "codex");
+    assert.equal(published[0].event.authSessionId, "auth-session-1");
+    assert.equal(published[0].event.account.connected, true);
+    assert.equal(published[0].event.reason, "exit");
+    assert.equal(codexCalls(calls).length, 1);
+  });
 });
 
 test("GitHub auth sessions are recovered from terminal metadata for the same Vibe64 user only", async () => {

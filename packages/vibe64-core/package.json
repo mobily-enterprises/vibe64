@@ -13,6 +13,7 @@
     "./server/localhostCheckBypass": "./src/server/localhostCheckBypass.js",
     "./server/localStudioRequest": "./src/server/localStudioRequest.js",
     "./server/projectServiceSelection": "./src/server/projectServiceSelection.js",
+    "./server/accountRealtimeEvents": "./src/server/accountRealtimeEvents.js",
     "./server/serverResponses": "./src/server/serverResponses.js",
     "./server/sessionRealtimeEvents": "./src/server/sessionRealtimeEvents.js",
     "./server/sessionWorktreePath": "./src/server/sessionWorktreePath.js",

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  VIBE64_ACCOUNTS_CHANGED_EVENT,
   projectTypeQueryKey
 } from "../../src/lib/studioGateApi.js";
 import {
@@ -34,6 +35,7 @@ describe("Vibe64 project client scope", () => {
   });
 
   it("adds project scope to query and storage keys", () => {
+    expect(VIBE64_ACCOUNTS_CHANGED_EVENT).toBe("vibe64.accounts.changed");
     expect(vibe64ProjectQueryScope("alpha_1")).toEqual(["project", "alpha_1"]);
     expect(vibe64ProjectQueryScope()).toEqual(["project", "unscoped"]);
     expect(vibe64ProjectScopedStorageKey("vibe64:selected-session-id", "alpha_1"))

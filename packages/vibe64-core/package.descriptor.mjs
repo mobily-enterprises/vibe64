@@ -38,6 +38,10 @@ export default Object.freeze({
         {
           subpath: "./server/sessionRealtimeEvents",
           summary: "Shared Vibe64 session realtime event descriptors."
+        },
+        {
+          subpath: "./server/accountRealtimeEvents",
+          summary: "Shared Vibe64 account realtime event descriptors."
         }
       ]
     }
