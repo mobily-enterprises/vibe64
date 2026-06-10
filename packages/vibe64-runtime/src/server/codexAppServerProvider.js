@@ -20,6 +20,9 @@ import {
   gitToolchainMountArgs
 } from "@local/studio-terminal-core/server/gitToolchainMounts";
 import {
+  codexAuthStateSignature
+} from "@local/vibe64-core/server/codexAuthState";
+import {
   runtimeTargetName,
   targetRuntimeNetworkDockerArgs
 } from "@local/studio-terminal-core/server/runtimeContainers";
@@ -48,7 +51,7 @@ import {
   prepareCodexAttachmentRoot
 } from "./codexAttachmentPaths.js";
 
-const CODEX_APP_SERVER_METADATA_SCHEMA_VERSION = 4;
+const CODEX_APP_SERVER_METADATA_SCHEMA_VERSION = 5;
 const CODEX_APP_SERVER_PROVIDER_ID = AGENT_PROVIDER_IDS.CODEX_APP_SERVER;
 const CODEX_APP_SERVER_TRANSPORT = Object.freeze({
   UNIX: "unix"
@@ -166,6 +169,17 @@ function codexAppServerContainerSocketPath() {
 
 function codexAppServerContainerEndpoint() {
   return codexAppServerUnixEndpoint(codexAppServerContainerSocketPath());
+}
+
+async function currentCodexAuthStateSignature(options = {}) {
+  const signature = normalizeAgentText(options.authStateSignature);
+  if (signature) {
+    return signature;
+  }
+  return codexAuthStateSignature({
+    dataRoot: options.dataRoot,
+    env: options.env
+  });
 }
 
 function dockerMountArgs({
@@ -391,12 +405,23 @@ function codexAppServerEndpointForTarget(endpoint = "", {
   return normalizedEndpoint;
 }
 
+function codexAppServerRuntimeIdentity(runtime = {}) {
+  return [
+    normalizeAgentText(runtime.authStateSignature),
+    normalizeAgentText(runtime.endpoint),
+    normalizeAgentText(runtime.socketPath),
+    normalizeAgentText(runtime.startedAt),
+    normalizeAgentText(runtime.pid)
+  ].join("\0");
+}
+
 function normalizeCodexAppServerMetadata(metadata = {}) {
   const normalized = isPlainObject(metadata) ? metadata : {};
   const endpoint = normalizeAgentText(normalized.endpoint);
   return {
     attachmentContainerRoot: normalizeAgentText(normalized.attachmentContainerRoot),
     attachmentHostRoot: normalizeAgentText(normalized.attachmentHostRoot),
+    authStateSignature: normalizeAgentText(normalized.authStateSignature),
     containerEndpoint: normalizeAgentText(normalized.containerEndpoint),
     containerRuntimeDir: normalizeAgentText(normalized.containerRuntimeDir),
     containerSocketPath: normalizeAgentText(normalized.containerSocketPath),
@@ -420,6 +445,7 @@ function codexAppServerMetadataIsWellFormed(metadata = {}) {
     metadata.schemaVersion === CODEX_APP_SERVER_METADATA_SCHEMA_VERSION &&
     metadata.attachmentContainerRoot === attachmentMount.target &&
     metadata.attachmentHostRoot === attachmentMount.source &&
+    metadata.authStateSignature &&
     metadata.provider === CODEX_APP_SERVER_PROVIDER_ID &&
     metadata.transport === CODEX_APP_SERVER_TRANSPORT.UNIX &&
     metadata.endpoint &&
@@ -448,9 +474,13 @@ async function writeCodexAppServerMetadata(runtimeDir = "", metadata = {}) {
   await chmod(metadataPath, 0o600).catch(() => null);
 }
 
-async function codexAppServerMetadataIsLive(metadata = {}) {
+async function codexAppServerMetadataIsLive(metadata = {}, options = {}) {
   const normalized = normalizeCodexAppServerMetadata(metadata);
   if (!codexAppServerMetadataIsWellFormed(normalized)) {
+    return false;
+  }
+  const authStateSignature = await currentCodexAuthStateSignature(options);
+  if (normalized.authStateSignature !== authStateSignature) {
     return false;
   }
   return processIsAlive(normalized.pid) && await fileExists(normalized.socketPath);
@@ -550,7 +580,9 @@ async function waitForCodexAppServer(endpoint = "", {
 }
 
 async function startCodexAppServerProcess({
+  authStateSignature = "",
   codexCommand = "codex",
+  dataRoot = "",
   env = process.env,
   image = STUDIO_BASE_TOOLCHAIN_IMAGE,
   readyTimeoutMs = CODEX_APP_SERVER_READY_TIMEOUT_MS,
@@ -565,6 +597,11 @@ async function startCodexAppServerProcess({
   useDocker = true
 } = {}) {
   await ensurePrivateDirectory(runtimeDir);
+  const resolvedAuthStateSignature = await currentCodexAuthStateSignature({
+    authStateSignature,
+    dataRoot,
+    env
+  });
   const socketPath = codexAppServerSocketPath(runtimeDir);
   const endpoint = codexAppServerUnixEndpoint(socketPath);
   const containerEndpoint = codexAppServerContainerEndpoint();
@@ -626,6 +663,7 @@ async function startCodexAppServerProcess({
   return {
     attachmentContainerRoot: codexAttachmentMount().target,
     attachmentHostRoot: codexAttachmentMount().source,
+    authStateSignature: resolvedAuthStateSignature,
     containerEndpoint,
     containerRuntimeDir: CODEX_APP_SERVER_CONTAINER_RUNTIME_DIR,
     containerSocketPath: codexAppServerContainerSocketPath(),
@@ -645,20 +683,25 @@ async function startCodexAppServerProcess({
 
 async function ensureCodexAppServerRuntime(options = {}) {
   const runtimeDir = options.runtimeDir || codexAppServerRuntimeDir(options);
+  const authStateSignature = await currentCodexAuthStateSignature(options);
+  const runtimeOptions = {
+    ...options,
+    authStateSignature
+  };
   await ensurePrivateDirectory(runtimeDir);
 
   const existing = await readCodexAppServerMetadata(runtimeDir);
-  if (existing && await codexAppServerMetadataIsLive(existing, options)) {
+  if (existing && await codexAppServerMetadataIsLive(existing, runtimeOptions)) {
     return {
       ...existing,
       reused: true
     };
   }
 
-  const releaseLock = await acquireRuntimeLock(runtimeDir, options);
+  const releaseLock = await acquireRuntimeLock(runtimeDir, runtimeOptions);
   try {
     const afterLock = await readCodexAppServerMetadata(runtimeDir);
-    if (afterLock && await codexAppServerMetadataIsLive(afterLock, options)) {
+    if (afterLock && await codexAppServerMetadataIsLive(afterLock, runtimeOptions)) {
       return {
         ...afterLock,
         reused: true
@@ -666,12 +709,12 @@ async function ensureCodexAppServerRuntime(options = {}) {
     }
 
     await removeCodexAppServerContainer({
-      ...options,
+      ...runtimeOptions,
       runtimeDir
     });
 
     const started = await startCodexAppServerProcess({
-      ...options,
+      ...runtimeOptions,
       runtimeDir
     });
     await writeCodexAppServerMetadata(runtimeDir, started);
@@ -921,12 +964,29 @@ class CodexAppServerAgentProvider {
   }
 
   async ensureRuntime() {
-    this.runtime = await ensureCodexAppServerRuntime(this.options);
+    const previousRuntime = this.runtime;
+    const nextRuntime = await ensureCodexAppServerRuntime(this.options);
+    if (
+      this.client &&
+      previousRuntime &&
+      codexAppServerRuntimeIdentity(previousRuntime) !== codexAppServerRuntimeIdentity(nextRuntime)
+    ) {
+      this.client.close();
+      this.client = null;
+    }
+    this.runtime = nextRuntime;
     return this.runtime;
   }
 
   async connect() {
-    const runtime = this.runtime || await this.ensureRuntime();
+    const runtime = await this.ensureRuntime();
+    if (this.client) {
+      return {
+        initializeResult: null,
+        reusedClient: true,
+        runtime
+      };
+    }
     this.client = new CodexAppServerJsonRpcClient({
       endpoint: runtime.endpoint,
       requestTimeoutMs: this.options.requestTimeoutMs,
@@ -941,6 +1001,7 @@ class CodexAppServerAgentProvider {
   }
 
   async activeClient() {
+    await this.ensureRuntime();
     if (!this.client) {
       await this.connect();
     }

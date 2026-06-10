@@ -6,9 +6,13 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  codexAuthStateSignature
+} from "@local/vibe64-core/server/codexAuthState";
+import {
   CODEX_APP_SERVER_METADATA_SCHEMA_VERSION,
   CODEX_APP_SERVER_PROVIDER_ID,
   CODEX_APP_SERVER_TRANSPORT,
+  CodexAppServerAgentProvider,
   CodexAppServerJsonRpcClient,
   codexAppServerContainerEndpoint,
   codexAppServerContainerSocketPath,
@@ -36,8 +40,42 @@ async function withTemporaryDirectory(callback) {
   }
 }
 
+function delay(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+async function waitForCondition(condition, message = "Timed out waiting for condition.") {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < 1000) {
+    if (condition()) {
+      return;
+    }
+    await delay(5);
+  }
+  throw new Error(message);
+}
+
 async function writeMetadata(runtimeDir, metadata) {
   await writeFile(path.join(runtimeDir, "runtime.json"), `${JSON.stringify(metadata, null, 2)}\n`, {
+    mode: 0o600
+  });
+}
+
+async function writeCodexAuthMarker(dataRoot, {
+  connected = true,
+  updatedAt = "2026-06-04T00:00:00.000Z"
+} = {}) {
+  const markerPath = path.join(dataRoot, "provider-homes", "codex", "status.json");
+  await mkdir(path.dirname(markerPath), {
+    recursive: true
+  });
+  await writeFile(markerPath, `${JSON.stringify({
+    connected,
+    updatedAt,
+    version: 1
+  }, null, 2)}\n`, {
     mode: 0o600
   });
 }
@@ -50,11 +88,14 @@ function unixEndpointForRuntime(runtimeDir) {
   return `unix://${socketPathForRuntime(runtimeDir)}`;
 }
 
-function metadataForRuntime(runtimeDir) {
+function metadataForRuntime(runtimeDir, {
+  authStateSignature = "test-auth-state-signature"
+} = {}) {
   const socketPath = socketPathForRuntime(runtimeDir);
   return {
     attachmentContainerRoot: CODEX_ATTACHMENT_CONTAINER_ROOT,
     attachmentHostRoot: CODEX_ATTACHMENT_HOST_ROOT,
+    authStateSignature,
     containerEndpoint: codexAppServerContainerEndpoint(),
     containerRuntimeDir: "/vibe64-codex-app-server",
     containerSocketPath: codexAppServerContainerSocketPath(),
@@ -133,6 +174,7 @@ test("codex provider reuses a live app-server runtime from Vibe64 metadata", asy
     await writeFile(metadata.socketPath, "");
     await writeMetadata(runtimeDir, metadata);
     const runtime = await ensureCodexAppServerRuntime({
+      authStateSignature: metadata.authStateSignature,
       runtimeDir,
       spawn() {
         throw new Error("spawn must not be called when metadata is live");
@@ -155,6 +197,7 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
     });
     const spawnCalls = [];
     const runtime = await ensureCodexAppServerRuntime({
+      authStateSignature: "test-auth-state-signature",
       image: "test-codex-toolchain:latest",
       readyTimeoutMs: 2000,
       runtimeDir,
@@ -203,6 +246,7 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
     const stored = JSON.parse(await readFile(path.join(runtimeDir, "runtime.json"), "utf8"));
     assert.equal(stored.attachmentContainerRoot, CODEX_ATTACHMENT_CONTAINER_ROOT);
     assert.equal(stored.attachmentHostRoot, CODEX_ATTACHMENT_HOST_ROOT);
+    assert.equal(stored.authStateSignature, "test-auth-state-signature");
     assert.equal(stored.endpoint, unixEndpointForRuntime(runtimeDir));
     assert.equal(stored.containerEndpoint, codexAppServerContainerEndpoint());
     assert.equal(stored.provider, CODEX_APP_SERVER_PROVIDER_ID);
@@ -221,6 +265,7 @@ test("codex provider removes stale app-server container before replacing old run
     await writeMetadata(runtimeDir, staleMetadata);
     const spawnCalls = [];
     const runtime = await ensureCodexAppServerRuntime({
+      authStateSignature: "test-auth-state-signature",
       readyTimeoutMs: 2000,
       runtimeDir,
       spawn(command, args, options) {
@@ -250,6 +295,62 @@ test("codex provider removes stale app-server container before replacing old run
     assert.equal(stored.schemaVersion, CODEX_APP_SERVER_METADATA_SCHEMA_VERSION);
     assert.equal(stored.attachmentContainerRoot, CODEX_ATTACHMENT_CONTAINER_ROOT);
     assert.equal(stored.attachmentHostRoot, CODEX_ATTACHMENT_HOST_ROOT);
+    assert.equal(stored.authStateSignature, "test-auth-state-signature");
+  });
+});
+
+test("codex provider replaces a live app-server when Codex auth state changes", async () => {
+  await withTemporaryDirectory(async (runtimeDir) => {
+    const dataRoot = path.join(runtimeDir, "data");
+    await writeCodexAuthMarker(dataRoot, {
+      updatedAt: "2026-06-04T00:00:00.000Z"
+    });
+    const oldAuthStateSignature = await codexAuthStateSignature({
+      dataRoot
+    });
+    const metadata = metadataForRuntime(runtimeDir, {
+      authStateSignature: oldAuthStateSignature
+    });
+    await writeFile(metadata.socketPath, "");
+    await writeMetadata(runtimeDir, metadata);
+
+    await writeCodexAuthMarker(dataRoot, {
+      updatedAt: "2026-06-04T00:01:00.000Z"
+    });
+    const newAuthStateSignature = await codexAuthStateSignature({
+      dataRoot
+    });
+    const spawnCalls = [];
+    const runtime = await ensureCodexAppServerRuntime({
+      dataRoot,
+      readyTimeoutMs: 2000,
+      runtimeDir,
+      spawn(command, args, options) {
+        if (command === "docker" && args[0] === "run") {
+          writeFileSync(socketPathForRuntime(runtimeDir), "");
+        }
+        spawnCalls.push({
+          args,
+          command,
+          options
+        });
+        return fakeChild({
+          emitClose: command !== "docker" || args[0] !== "run"
+        });
+      }
+    });
+
+    assert.notEqual(oldAuthStateSignature, newAuthStateSignature);
+    assert.equal(runtime.reused, false);
+    assert.equal(runtime.authStateSignature, newAuthStateSignature);
+    assert.equal(spawnCalls.length, 2);
+    assert.equal(spawnCalls[0].command, "docker");
+    assert.deepEqual(spawnCalls[0].args.slice(0, 2), ["rm", "-f"]);
+    assert.equal(spawnCalls[1].command, "docker");
+    assert.equal(spawnCalls[1].args[0], "run");
+
+    const stored = JSON.parse(await readFile(path.join(runtimeDir, "runtime.json"), "utf8"));
+    assert.equal(stored.authStateSignature, newAuthStateSignature);
   });
 });
 
@@ -257,6 +358,7 @@ test("codex provider can still start a native app-server when explicitly request
   await withTemporaryDirectory(async (runtimeDir) => {
     const spawnCalls = [];
     const runtime = await ensureCodexAppServerRuntime({
+      authStateSignature: "test-auth-state-signature",
       readyTimeoutMs: 2000,
       runtimeDir,
       spawn(command, args, options) {
@@ -279,6 +381,70 @@ test("codex provider can still start a native app-server when explicitly request
     assert.equal(spawnCalls.length, 1);
     assert.equal(spawnCalls[0].command, "codex");
     assert.deepEqual(spawnCalls[0].args, ["app-server", "--listen", unixEndpointForRuntime(runtimeDir)]);
+  });
+});
+
+test("codex provider closes a connected client when Codex auth state changes", async () => {
+  await withTemporaryDirectory(async (runtimeDir) => {
+    FakeWebSocket.instances = [];
+    const dataRoot = path.join(runtimeDir, "data");
+    await writeCodexAuthMarker(dataRoot, {
+      updatedAt: "2026-06-04T00:00:00.000Z"
+    });
+    const spawnCalls = [];
+    const provider = new CodexAppServerAgentProvider({
+      dataRoot,
+      readyTimeoutMs: 2000,
+      requestTimeoutMs: 1000,
+      runtimeDir,
+      spawn(command, args, options) {
+        if (command === "docker" && args[0] === "run") {
+          writeFileSync(socketPathForRuntime(runtimeDir), "");
+        }
+        spawnCalls.push({
+          args,
+          command,
+          options
+        });
+        return fakeChild({
+          emitClose: command !== "docker" || args[0] !== "run"
+        });
+      },
+      WebSocketImpl: FakeWebSocket
+    });
+
+    const connect = provider.connect();
+    await waitForCondition(() => FakeWebSocket.instances.length === 1, "Codex app-server client was not opened.");
+    const socket = FakeWebSocket.instances[0];
+    socket.emit("open");
+    await waitForCondition(() => socket.sent.length === 1, "Codex app-server initialize was not sent.");
+    socket.emit("message", {
+      data: JSON.stringify({
+        id: socket.sent[0].id,
+        result: {
+          platformOs: "linux"
+        }
+      })
+    });
+    await connect;
+
+    assert.ok(provider.client);
+    assert.equal(socket.closed, false);
+    assert.equal(spawnCalls.length, 2);
+
+    await writeCodexAuthMarker(dataRoot, {
+      updatedAt: "2026-06-04T00:01:00.000Z"
+    });
+    const runtime = await provider.ensureRuntime();
+
+    assert.equal(runtime.reused, false);
+    assert.equal(provider.client, null);
+    assert.equal(socket.closed, true);
+    assert.equal(spawnCalls.length, 4);
+    assert.equal(spawnCalls[2].command, "docker");
+    assert.deepEqual(spawnCalls[2].args.slice(0, 2), ["rm", "-f"]);
+    assert.equal(spawnCalls[3].command, "docker");
+    assert.equal(spawnCalls[3].args[0], "run");
   });
 });
 
@@ -340,6 +506,7 @@ class FakeWebSocket {
   static instances = [];
 
   constructor(url, options = {}) {
+    this.closed = false;
     this.listeners = new Map();
     this.options = options;
     this.sent = [];
@@ -369,6 +536,7 @@ class FakeWebSocket {
   }
 
   close() {
+    this.closed = true;
     this.emit("close");
   }
 }

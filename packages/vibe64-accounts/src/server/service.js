@@ -22,6 +22,9 @@ import {
   vibe64Result
 } from "@local/vibe64-core/server/serverResponses";
 import {
+  codexAuthMarkerPath
+} from "@local/vibe64-core/server/codexAuthState";
+import {
   projectServiceTargetRoot
 } from "@local/vibe64-core/server/projectServiceSelection";
 import {
@@ -57,7 +60,6 @@ const DEVICE_USER_CODE_PATTERN = /\b([A-Z0-9]{4}-[A-Z0-9]{4,8})\b/iu;
 const DEVICE_USER_CODE_REDACTION_PATTERN = /\b[A-Z0-9]{4}-[A-Z0-9]{4,8}\b/gu;
 const OPENAI_API_KEY_REDACTION_PATTERN = /\bsk-[A-Za-z0-9_-]{16,}\b/gu;
 const VISIBLE_ANSI_ESCAPE_PATTERN = /\u00a4\[[0-?]*[ -/]*[@-~]/gu;
-const CODEX_AUTH_MARKER_RELATIVE_PATH = Object.freeze(["provider-homes", "codex", "status.json"]);
 const GITHUB_HOSTS_RELATIVE_PATH = Object.freeze([".config", "gh", "hosts.yml"]);
 const GITHUB_GITCONFIG_RELATIVE_PATH = Object.freeze([".gitconfig"]);
 
@@ -399,10 +401,6 @@ function accountConnected({
     status: "connected",
     username
   };
-}
-
-function codexAuthMarkerPath(dataRoot = "") {
-  return path.join(dataRoot, ...CODEX_AUTH_MARKER_RELATIVE_PATH);
 }
 
 async function readCodexLocalStatus({
