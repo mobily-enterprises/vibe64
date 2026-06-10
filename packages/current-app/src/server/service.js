@@ -27,6 +27,9 @@ import {
   readVibe64SetupReadiness
 } from "@local/vibe64-runtime/server/setupReadiness";
 import {
+  vibe64SessionDebugLog
+} from "@local/vibe64-runtime/server/sessionDebugLog";
+import {
   resolveStudioTargetRoot
 } from "@local/vibe64-core/server/studioRoots";
 import {
@@ -166,6 +169,23 @@ function connectionRecord(account = {}) {
     status: String(account.status || (connected ? "connected" : "not_connected")),
     username: String(account.username || "")
   };
+}
+
+function connectionDebugSummary(connection = {}) {
+  return {
+    connected: connection.connected === true,
+    id: String(connection.id || ""),
+    message: String(connection.message || ""),
+    ready: connection.ready === true,
+    status: String(connection.status || ""),
+    username: String(connection.username || "")
+  };
+}
+
+function accountConnectionDebugSummary(accounts = []) {
+  return Array.isArray(accounts)
+    ? accounts.map((account) => connectionDebugSummary(connectionRecord(account)))
+    : [];
 }
 
 function firstBlockedCapability(capabilities = []) {
@@ -491,6 +511,9 @@ function createService({
   async function connectionReadiness(input = {}) {
     const accountSetupService = setupServices.accountSetupService;
     if (!accountSetupService || typeof accountSetupService.getStatus !== "function") {
+      vibe64SessionDebugLog("server.currentApp.connectionReadiness.unavailable", {
+        targetRoot: currentTargetRoot()
+      });
       return {
         accounts: [],
         blockedReason: "Connection status service is not available.",
@@ -500,7 +523,19 @@ function createService({
         updatedAt: new Date().toISOString()
       };
     }
-    return accountSetupService.getStatus(setupStageInput(input));
+    vibe64SessionDebugLog("server.currentApp.connectionReadiness.start", {
+      refresh: input?.refresh === true || String(input?.refresh || "") === "true",
+      targetRoot: currentTargetRoot()
+    });
+    const result = await accountSetupService.getStatus(setupStageInput(input));
+    vibe64SessionDebugLog("server.currentApp.connectionReadiness.done", {
+      accounts: accountConnectionDebugSummary(result.accounts),
+      blockedReason: String(result.blockedReason || ""),
+      ok: result.ok !== false,
+      ready: result.ready === true,
+      targetRoot: currentTargetRoot()
+    });
+    return result;
   }
 
   function capabilityState({
@@ -699,6 +734,9 @@ function createService({
 
     async inspectCapabilities(input = {}) {
       return currentAppResult(async () => {
+        vibe64SessionDebugLog("server.currentApp.capabilities.inspect.start", {
+          targetRoot: currentTargetRoot()
+        });
         const [setup, sessionSetup, connections] = await Promise.all([
           setupReadiness({
             input
@@ -712,6 +750,19 @@ function createService({
           connections,
           sessionSetup,
           setup
+        });
+        vibe64SessionDebugLog("server.currentApp.capabilities.inspect.done", {
+          accounts: accountConnectionDebugSummary(connections.accounts),
+          aiReady: state.connections.ai.ready === true,
+          blockedReason: String(connections.blockedReason || ""),
+          chatEnabled: state.capabilities.chat.enabled === true,
+          createSessionEnabled: state.capabilities.createSession.enabled === true,
+          createSessionReason: String(state.capabilities.createSession.reason || ""),
+          githubReady: state.connections.github.ready === true,
+          previewEnabled: state.capabilities.preview.enabled === true,
+          sessionSetupReady: sessionSetup.ready === true,
+          setupReady: setup.ready === true,
+          targetRoot: currentTargetRoot()
         });
         return {
           ...state,

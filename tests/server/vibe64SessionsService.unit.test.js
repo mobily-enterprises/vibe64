@@ -149,6 +149,56 @@ test("session action is gated by session readiness, not project setup diagnostic
   assert.equal(runActionCalled, true);
 });
 
+test("session advance is gated by session readiness", async () => {
+  let createRuntimeCalled = false;
+  let advanceCalled = false;
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        createRuntimeCalled = true;
+        return {
+          async advance() {
+            advanceCalled = true;
+            return {
+              sessionId: "session-1",
+              status: VIBE64_SESSION_STATUS.ACTIVE
+            };
+          }
+        };
+      }
+    },
+    setupServices: {
+      accountSetupService: {
+        async getStatus() {
+          return {
+            blockedReason: "Codex is not authenticated for the shared Vibe64 app account.",
+            ready: false
+          };
+        }
+      },
+      studioSetupService: {
+        async getStatus() {
+          return {
+            ready: true
+          };
+        }
+      }
+    }
+  });
+
+  const result = await service.advanceSession("session-1", {
+    vibe64User: {
+      email: "owner@example.com"
+    }
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.code, "vibe64_session_not_ready");
+  assert.equal(result.error, "Codex is not authenticated for the shared Vibe64 app account.");
+  assert.equal(createRuntimeCalled, false);
+  assert.equal(advanceCalled, false);
+});
+
 test("session abandon does not wait for terminal cleanup", async () => {
   let finishCleanup = null;
   let markCleanupStarted = null;
@@ -999,6 +1049,137 @@ test("session inspect reads existing Codex terminal state without preparing it",
 
   assert.deepEqual(preparedSessions, []);
   assert.equal(session.codexTerminal.id, "codex-terminal-restored");
+});
+
+test("session inspect disables controls when session readiness is blocked", async () => {
+  let accountStatusInput = null;
+  let runtimeOptions = null;
+  const disabledReason = "Codex is not authenticated for the shared Vibe64 app account.";
+  const service = createService({
+    projectService: {
+      async createRuntime(options = {}) {
+        runtimeOptions = options;
+        return {
+          async getSession(sessionId) {
+            return {
+              actions: [
+                {
+                  enabled: true,
+                  id: "agent_conversation",
+                  label: "Ask Codex"
+                }
+              ],
+              intents: [
+                {
+                  actionId: "agent_conversation",
+                  enabled: true,
+                  id: "talk_to_codex",
+                  label: "Ask Codex"
+                }
+              ],
+              next: {
+                enabled: true,
+                label: "Next step",
+                stepId: "local_session_finished",
+                visible: true
+              },
+              presentation: {
+                auto: {
+                  nextOperation: {
+                    actionId: "agent_conversation",
+                    executable: true,
+                    id: "session_action:agent_conversation",
+                    kind: "action",
+                    label: "Ask Codex",
+                    route: "session_action"
+                  }
+                },
+                intents: [
+                  {
+                    actionId: "agent_conversation",
+                    enabled: true,
+                    id: "talk_to_codex",
+                    label: "Ask Codex"
+                  },
+                  {
+                    enabled: true,
+                    id: "continue_step",
+                    label: "Next step"
+                  }
+                ],
+                next: {
+                  enabled: true,
+                  label: "Next step",
+                  stepId: "local_session_finished",
+                  visible: true
+                },
+                screen: {
+                  kind: "input"
+                }
+              },
+              sessionId,
+              status: VIBE64_SESSION_STATUS.ACTIVE
+            };
+          }
+        };
+      }
+    },
+    setupServices: {
+      accountSetupService: {
+        async getStatus(input = {}) {
+          accountStatusInput = input;
+          return {
+            blockedReason: disabledReason,
+            ready: false
+          };
+        }
+      },
+      studioSetupService: {
+        async getStatus() {
+          return {
+            ready: true
+          };
+        }
+      }
+    }
+  });
+
+  const session = await service.inspectSession("session-1", {
+    vibe64User: {
+      email: "owner@example.com"
+    }
+  });
+
+  assert.deepEqual(accountStatusInput, {
+    refresh: false,
+    vibe64User: {
+      email: "owner@example.com"
+    }
+  });
+  assert.equal(typeof runtimeOptions.actionReadiness, "function");
+  assert.deepEqual(runtimeOptions.actionReadiness({
+    action: {
+      id: "agent_conversation"
+    },
+    session: {}
+  }), {
+    disabledReason,
+    enabled: false
+  });
+  assert.equal(session.actions[0].enabled, false);
+  assert.equal(session.actions[0].disabledReason, disabledReason);
+  assert.equal(session.intents[0].enabled, false);
+  assert.equal(session.intents[0].disabledReason, disabledReason);
+  assert.equal(session.next.enabled, false);
+  assert.equal(session.next.disabledReason, disabledReason);
+  assert.equal(session.presentation.intents[0].enabled, false);
+  assert.equal(session.presentation.intents[0].disabledReason, disabledReason);
+  assert.equal(session.presentation.intents[1].enabled, false);
+  assert.equal(session.presentation.intents[1].disabledReason, disabledReason);
+  assert.equal(session.presentation.next.enabled, false);
+  assert.equal(session.presentation.auto.nextOperation.executable, false);
+  assert.equal(session.presentation.auto.nextOperation.kind, "stop");
+  assert.equal(session.presentation.auto.nextOperation.reason, disabledReason);
 });
 
 test("session presentation hides the Codex preview when the app-server turn is idle", async () => {

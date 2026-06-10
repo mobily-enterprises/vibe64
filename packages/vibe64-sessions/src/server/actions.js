@@ -75,7 +75,9 @@ const featureActions = Object.freeze([
     observability: {},
     async execute(input, context, deps) {
       void context;
-      return deps.featureService.inspectSession(input.sessionId);
+      return deps.featureService.inspectSession(input.sessionId, {
+        vibe64User: input.vibe64User || null
+      });
     }
   },
   {

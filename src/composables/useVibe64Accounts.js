@@ -1,5 +1,6 @@
 import { computed, proxyRefs, ref } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
+import { useQueryClient } from "@tanstack/vue-query";
 import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
 import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
 import {
@@ -17,12 +18,16 @@ import {
 import {
   studioHttpClient
 } from "@/lib/studioHttp.js";
+import {
+  invalidateVibe64CapabilitiesQueryClient
+} from "@/lib/vibe64CapabilitiesInvalidation.js";
 
 function accountsResourceQueryKey() {
   return computed(() => accountsQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC, ""));
 }
 
 function useVibe64Accounts() {
+  const queryClient = useQueryClient();
   const forceRefresh = ref(false);
   const statusResource = useEndpointResource({
     client: studioHttpClient,
@@ -100,8 +105,16 @@ function useVibe64Accounts() {
     }
   }
 
+  function invalidateCapabilities(context = {}) {
+    return invalidateVibe64CapabilitiesQueryClient(queryClient, {
+      debugEventPrefix: "client.auth.capabilities.invalidate",
+      ...context
+    });
+  }
+
   return proxyRefs({
     cancelAuthSession,
+    invalidateCapabilities,
     isLoading: statusResource.isLoading,
     loadError: statusResource.loadError,
     readAuthSession,

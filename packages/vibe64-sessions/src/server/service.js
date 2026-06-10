@@ -15,7 +15,8 @@ import {
   vibe64SessionDebugSummary
 } from "@local/vibe64-runtime/server/sessionDebugLog";
 import {
-  assertVibe64SessionReady
+  assertVibe64SessionReady,
+  readVibe64SessionReadiness
 } from "@local/vibe64-runtime/server/setupReadiness";
 import {
   terminalFailureFixRequestForSession
@@ -46,6 +47,10 @@ function isOpenVibe64Session(session = {}) {
 
 function normalizedInputText(value = "") {
   return String(value || "").trim();
+}
+
+function isPlainObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value);
 }
 
 function sessionListOptions(input = {}) {
@@ -139,7 +144,94 @@ function codexPromptHandoffFromSession(session = {}) {
 }
 
 function objectValue(value) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  return isPlainObject(value) ? value : {};
+}
+
+function sessionReadinessDisabledReason(readiness = {}) {
+  return normalizedInputText(readiness?.message) || "Vibe64 session setup is not ready.";
+}
+
+function sessionReadinessActionReadiness(readiness = {}) {
+  if (readiness?.ready === true) {
+    return undefined;
+  }
+  const disabledReason = sessionReadinessDisabledReason(readiness);
+  return () => ({
+    disabledReason,
+    enabled: false
+  });
+}
+
+function disabledBySessionReadiness(control = {}, disabledReason = "") {
+  const value = objectValue(control);
+  return {
+    ...value,
+    disabledReason: normalizedInputText(value.disabledReason) || disabledReason,
+    enabled: false
+  };
+}
+
+function blockedSessionOperation(operation = {}, disabledReason = "") {
+  const value = objectValue(operation);
+  if (value.executable !== true) {
+    return operation;
+  }
+  return {
+    executable: false,
+    kind: "stop",
+    reason: disabledReason
+  };
+}
+
+function sessionViewWithReadiness(session = {}, readiness = {}) {
+  if (readiness?.ready === true || !isPlainObject(session) || session.ok === false) {
+    return session;
+  }
+
+  const disabledReason = sessionReadinessDisabledReason(readiness);
+  const presentation = objectValue(session.presentation);
+  const presentationAuto = objectValue(presentation.auto);
+  const actions = Array.isArray(session.actions)
+    ? session.actions.map((action) => disabledBySessionReadiness(action, disabledReason))
+    : session.actions;
+  const intents = Array.isArray(session.intents)
+    ? session.intents.map((intent) => disabledBySessionReadiness(intent, disabledReason))
+    : session.intents;
+  const next = isPlainObject(session.next)
+    ? disabledBySessionReadiness(session.next, disabledReason)
+    : session.next;
+  const presentationIntents = Array.isArray(presentation.intents)
+    ? presentation.intents.map((intent) => disabledBySessionReadiness(intent, disabledReason))
+    : presentation.intents;
+  const presentationNext = isPlainObject(presentation.next)
+    ? disabledBySessionReadiness(presentation.next, disabledReason)
+    : presentation.next;
+
+  return {
+    ...session,
+    actions,
+    intents,
+    next,
+    presentation: {
+      ...presentation,
+      auto: {
+        ...presentationAuto,
+        nextOperation: blockedSessionOperation(presentationAuto.nextOperation, disabledReason)
+      },
+      intents: presentationIntents,
+      next: presentationNext
+    }
+  };
+}
+
+async function createRuntimeForSessionInspection(projectService, setupServices = {}, input = {}) {
+  const readiness = await readVibe64SessionReadiness(setupServices, readinessOptions(input));
+  return {
+    readiness,
+    runtime: await projectService.createRuntime({
+      actionReadiness: sessionReadinessActionReadiness(readiness)
+    })
+  };
 }
 
 function conversationRequestText(input = {}) {
@@ -663,6 +755,7 @@ function createService({
       });
       return sessionResult(async () => {
         try {
+          await assertVibe64SessionReady(setupServices, readinessOptions(expected));
           const runtime = await projectService.createRuntime();
           const session = await runtime.advance(sessionId, workflowExpected);
           const enrichedSession = await enrichSessionWithCodexTerminal(terminalService, session, {
@@ -850,17 +943,22 @@ function createService({
       });
     },
 
-    async inspectSession(sessionId) {
+    async inspectSession(sessionId, input = {}) {
       const startedAtMs = Date.now();
       vibe64SessionDebugLog("server.service.inspectSession.start", {
         sessionId
       });
       return sessionResult(async () => {
         try {
-          const runtime = await projectService.createRuntime();
-          const session = await enrichSessionWithCodexTerminal(terminalService, await runtime.getSession(sessionId), {
+          const {
+            readiness,
+            runtime
+          } = await createRuntimeForSessionInspection(projectService, setupServices, input);
+          const runtimeSession = await runtime.getSession(sessionId);
+          const enrichedSession = await enrichSessionWithCodexTerminal(terminalService, runtimeSession, {
             runtime
           });
+          const session = sessionViewWithReadiness(enrichedSession, readiness);
           vibe64SessionDebugLog("server.service.inspectSession.done", {
             ...sessionServiceDebugResponse(session),
             durationMs: vibe64SessionDebugDurationMs(startedAtMs)

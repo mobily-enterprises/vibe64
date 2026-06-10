@@ -498,11 +498,12 @@ function createService({
     });
   }
 
-  async function createRuntime() {
+  async function createRuntime(options = {}) {
     const resolvedTargetRoot = requireSelectedTargetRoot();
     const { adapter, projectType } = await createProjectAdapter();
     const projectConfig = await requireProjectConfigForAdapter(adapter, projectType);
     return new Vibe64SessionRuntime({
+      actionReadiness: options.actionReadiness,
       adapter,
       projectConfig,
       stateRoot: projectStateRoot(resolvedTargetRoot),
@@ -532,8 +533,8 @@ function createService({
       return projectResult(() => studioProjectContext.createManagedProject(input));
     },
 
-    async createRuntime() {
-      return createRuntime();
+    async createRuntime(options = {}) {
+      return createRuntime(options);
     },
 
     async readProjectType() {

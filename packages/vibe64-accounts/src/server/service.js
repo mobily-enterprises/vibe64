@@ -168,6 +168,22 @@ function authDebug(event, fields = {}) {
   console.info(`[${AUTH_DEBUG_MARKER}] ${JSON.stringify(payload)}`);
 }
 
+function accountDebugSummary(account = {}) {
+  return {
+    code: String(account?.code || ""),
+    connected: account?.connected === true,
+    id: String(account?.id || ""),
+    message: String(account?.message || account?.error || ""),
+    ok: account?.ok !== false,
+    status: String(account?.status || ""),
+    username: String(account?.username || "")
+  };
+}
+
+function accountsDebugSummary(accounts = []) {
+  return Array.isArray(accounts) ? accounts.map((account) => accountDebugSummary(account)) : [];
+}
+
 function normalizedAccountId(value = "") {
   const accountId = String(value || "").trim().toLowerCase();
   return ACCOUNT_DEFINITIONS[accountId] ? accountId : "";
@@ -751,6 +767,10 @@ function createService({
   async function rememberCodexStatus(account = {}) {
     const markerPath = codexAuthMarkerPath(resolvedDataRoot);
     if (account?.connected === true) {
+      authDebug("server.auth.codex_marker.write", {
+        account: accountDebugSummary(account),
+        markerPath
+      });
       await writeJsonFile(markerPath, {
         connected: true,
         updatedAt: new Date().toISOString(),
@@ -758,16 +778,24 @@ function createService({
       });
       return;
     }
+    authDebug("server.auth.codex_marker.remove", {
+      account: accountDebugSummary(account),
+      markerPath
+    });
     await rm(markerPath, {
       force: true
     });
   }
 
   async function readLiveCodexStatus() {
+    authDebug("server.auth.codex_status.live.start", {});
     const account = await readCodexStatus({
       runToolchain
     });
     await rememberCodexStatus(account);
+    authDebug("server.auth.codex_status.live.done", {
+      account: accountDebugSummary(account)
+    });
     return account;
   }
 
@@ -820,28 +848,58 @@ function createService({
     githubContext = null,
     previousGithub = null
   } = {}) {
+    authDebug("server.auth.account_status.start", {
+      accountId,
+      githubContextOk: githubContext ? githubContext.ok === true : null,
+      previousGithubPresent: Boolean(previousGithub)
+    });
+    let account;
     if (accountId === "github") {
       if (!githubContext?.ok) {
-        return githubContext || authError("vibe64_user_required", "A logged-in Vibe64 user is required for GitHub account operations.");
+        account = githubContext || authError("vibe64_user_required", "A logged-in Vibe64 user is required for GitHub account operations.");
+        authDebug("server.auth.account_status.done", {
+          account: accountDebugSummary(account),
+          accountId
+        });
+        return account;
       }
-      return readGithubStatus({
+      account = await readGithubStatus({
         githubContext,
         previousGithub,
         runToolchain
       });
+      authDebug("server.auth.account_status.done", {
+        account: accountDebugSummary(account),
+        accountId
+      });
+      return account;
     }
     if (accountId === "codex") {
-      return readLiveCodexStatus();
+      account = await readLiveCodexStatus();
+      authDebug("server.auth.account_status.done", {
+        account: accountDebugSummary(account),
+        accountId
+      });
+      return account;
     }
     throw new Error(`Unknown account: ${accountId}`);
   }
 
   async function accountsStatus(input = {}) {
+    const refresh = refreshRequested(input);
+    authDebug("server.auth.accounts_status.start", {
+      refresh,
+      vibe64UserEmail: input?.vibe64User?.email || ""
+    });
     const githubContext = githubContextForInput(input);
     if (!githubContext.ok) {
+      authDebug("server.auth.accounts_status.github_context_error", {
+        code: githubContext.code || "",
+        error: githubContext.error || ""
+      });
       return githubContext;
     }
-    const accounts = refreshRequested(input)
+    const accounts = refresh
       ? await Promise.all([
           readLiveCodexStatus(),
           readGithubStatus({
@@ -860,6 +918,13 @@ function createService({
           })
         ]);
     const ready = accounts.every((account) => account.required !== true || account.connected === true);
+    authDebug("server.auth.accounts_status.done", {
+      accounts: accountsDebugSummary(accounts),
+      blockedReason: ready ? "" : blockedReason(accounts),
+      ready,
+      refresh,
+      targetRoot: currentTargetRoot()
+    });
 
     return {
       accounts,
@@ -944,6 +1009,12 @@ function createService({
           scope: ACCOUNT_DEFINITIONS[metadata.accountId].scope,
           status: "authenticating"
         };
+    authDebug("server.auth.read.account_status", {
+      account: accountDebugSummary(account),
+      accountId: metadata.accountId,
+      sessionId,
+      terminalStatus: terminal.status
+    });
 
     return publicAuthSession({
       account,
@@ -983,11 +1054,23 @@ function createService({
         githubContext,
         previousGithub
       });
-      await publishAccountChanged(accountId, {
+      authDebug("server.auth.account_changed.publish.start", {
+        account: accountDebugSummary(account),
+        accountId,
+        reason: reason || "terminal-close",
+        sessionId: id
+      });
+      const publishResult = await publishAccountChanged(accountId, {
         account,
         authSessionId: id,
         reason: reason || "terminal-close",
         status: account?.status || ""
+      });
+      authDebug("server.auth.account_changed.publish.done", {
+        accountId,
+        publishResultPresent: Boolean(publishResult),
+        reason: reason || "terminal-close",
+        sessionId: id
       });
       authDebug("server.auth.terminal.finalize.done", {
         accountId,
@@ -1147,6 +1230,10 @@ function createService({
     async logout(input = {}) {
       return accountsResult(async () => {
         const accountId = normalizedAccountId(input.accountId);
+        authDebug("server.auth.logout.start", {
+          accountId: accountId || String(input.accountId || ""),
+          vibe64UserEmail: input?.vibe64User?.email || ""
+        });
         if (!accountId) {
           return authError("unknown_account", "Unknown account.");
         }
@@ -1168,8 +1255,19 @@ function createService({
           toolHomeSource: githubContext?.toolHomeSource || "",
           timeout: 30_000
         });
+        authDebug("server.auth.logout.toolchain_done", {
+          accountId,
+          ok: result.ok === true,
+          outputLength: cleanOutput(result.output).length,
+          outputTail: sanitizedAuthOutputTail(result.output)
+        });
         const account = await accountStatus(accountId, {
           githubContext
+        });
+        authDebug("server.auth.logout.done", {
+          account: accountDebugSummary(account),
+          accountId,
+          ok: result.ok === true
         });
         return {
           account,

@@ -21,6 +21,7 @@ import {
   capabilitiesQueryKey
 } from "@/lib/studioGateApi.js";
 import {
+  scopedDevelopmentApiUrl,
   studioHttpClient
 } from "@/lib/studioHttp.js";
 import {
@@ -99,15 +100,28 @@ function useVibe64SessionData({
 } = {}) {
   const notifyTitleChange = typeof onTitleChange === "function" ? onTitleChange : () => null;
   const projectSlug = useVibe64ProjectSlug();
+  const requestProjectSlug = ref("");
   const paths = usePaths();
   const sessionSelection = useStoredSelection({
     storageKey: computed(() => selectedSessionStorageKey(projectSlug.value))
+  });
+  watch(projectSlug, (slug) => {
+    const normalizedSlug = String(slug || "").trim();
+    if (normalizedSlug) {
+      requestProjectSlug.value = normalizedSlug;
+    }
+  }, {
+    immediate: true
   });
 
   const selectedSessionId = sessionSelection.selectedId;
   const sessionsApiPath = computed(() => paths.api(VIBE64_SESSIONS_API_SUFFIX, {
     surface: VIBE64_SURFACE_ID
   }));
+  const capabilitiesApiPath = computed(() => scopedDevelopmentApiUrl(
+    CAPABILITIES_ENDPOINT,
+    requestProjectSlug.value
+  ));
   const selectedSessionPath = computed(() => {
     const sessionId = String(selectedSessionId.value || "").trim();
     return sessionId ? `${sessionsApiPath.value}/${encodeURIComponent(sessionId)}` : "";
@@ -212,7 +226,7 @@ function useVibe64SessionData({
   const capabilitiesResource = useEndpointResource({
     client: studioHttpClient,
     fallbackLoadError: "Studio capabilities could not be loaded.",
-    path: CAPABILITIES_ENDPOINT,
+    path: capabilitiesApiPath,
     queryKey: computed(() => capabilitiesQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC, projectSlug.value)),
     queryOptions: {
       refetchOnMount: false,
@@ -293,6 +307,37 @@ function useVibe64SessionData({
       return `Studio allows up to ${limits.value.maxOpenSessions} active sessions.`;
     }
     return "Create a new Vibe64 session";
+  });
+  const capabilitiesDebugState = computed(() => {
+    const payload = capabilitiesResource.data.value || {};
+    const connections = payload.connections && typeof payload.connections === "object" && !Array.isArray(payload.connections)
+      ? payload.connections
+      : {};
+    const aiConnection = connections.ai && typeof connections.ai === "object" && !Array.isArray(connections.ai)
+      ? connections.ai
+      : {};
+    const githubConnection = connections.github && typeof connections.github === "object" && !Array.isArray(connections.github)
+      ? connections.github
+      : {};
+    return {
+      aiReady: aiConnection.ready === true,
+      canCreateSession: canCreateSession.value,
+      capabilitiesLoaded: Boolean(payload.capabilities),
+      createSessionCapabilityEnabled: createSessionCapability.value?.enabled === true,
+      createSessionCapabilityReason: String(createSessionCapability.value?.reason || ""),
+      createSessionMode: createSessionMode.value,
+      createSessionTitle: createSessionTitle.value,
+      creationCanCreate: typeof creationOptions.value.canCreate === "boolean" ? creationOptions.value.canCreate : null,
+      creationDisabledReason: String(creationOptions.value.disabledReason || ""),
+      githubReady: githubConnection.ready === true,
+      isFetching: Boolean(capabilitiesResource.isFetching.value),
+      isLoading: Boolean(capabilitiesResource.isLoading.value),
+      loadError: String(capabilitiesResource.loadError.value || ""),
+      maxOpenSessions: limits.value.maxOpenSessions,
+      openSessionCount: limits.value.openSessionCount,
+      projectSlug: String(projectSlug.value || ""),
+      selectedProviderId: String(aiConnection.selectedProviderId || "")
+    };
   });
   const selectedSessionTitle = computed(() => {
     return vibe64SessionDisplayTitle(selectedSession.value || {}) ||
@@ -422,6 +467,12 @@ function useVibe64SessionData({
       fallbackId: nextSessions.at(-1)?.sessionId || "",
       getId: (session) => session.sessionId
     });
+  }, {
+    immediate: true
+  });
+
+  watch(capabilitiesDebugState, (state) => {
+    vibe64SessionDebugLog("client.sessionData.capabilities.changed", state);
   }, {
     immediate: true
   });

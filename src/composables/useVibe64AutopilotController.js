@@ -1,7 +1,4 @@
-import { computed, getCurrentInstance, nextTick, ref, watch } from "vue";
-import {
-  useShellWebErrorRuntime
-} from "@jskit-ai/shell-web/client/error";
+import { computed, nextTick, ref, watch } from "vue";
 import {
   VIBE64_OPERATION_ROUTES as OPERATION_ROUTES
 } from "@local/vibe64-core/shared";
@@ -234,10 +231,8 @@ function useVibe64AutopilotController({
   commandRunner = useVibe64HeadlessCommandRunner(),
   enabled = true,
   refreshSessionData = async () => null,
-  session,
-  shouldReportFailure = null
+  session
 } = {}) {
-  const errorRuntime = getCurrentInstance() ? useShellWebErrorRuntime() : null;
   const active = ref(false);
   const activeStage = ref("");
   const failure = ref(null);
@@ -417,40 +412,6 @@ function useVibe64AutopilotController({
       // Console diagnostics must never interfere with session state updates.
     }
 
-    if (
-      typeof shouldReportFailure === "function" &&
-      shouldReportFailure({
-        cause,
-        details,
-        result
-      }) === false
-    ) {
-      return;
-    }
-
-    try {
-      errorRuntime?.report({
-        source: "vibe64.autopilot.failure",
-        channel: "silent",
-        message: String(result.error || result.message || errorDetails.message || "Autopilot action failed."),
-        cause: cause || result?.cause || null,
-        severity: "error",
-        dedupeKey: [
-          "vibe64.autopilot.failure",
-          failedSessionId,
-          result.actionId || "",
-          result.source || "",
-          String(result.error || result.message || errorDetails.message || "")
-        ].join(":"),
-        dedupeWindowMs: 1000,
-        details
-      });
-    } catch (reportError) {
-      vibe64SessionDebugLog("client.autopilot.failure.jskitReport.error", {
-        error: vibe64SessionDebugError(reportError),
-        sessionId: failedSessionId
-      });
-    }
   }
 
   function stopWithFailure(result = {}) {

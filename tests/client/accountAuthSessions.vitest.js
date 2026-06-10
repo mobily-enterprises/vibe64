@@ -89,8 +89,43 @@ describe("account auth sessions", () => {
 
     expect(accounts.readAuthSession).toHaveBeenCalledWith("auth-1");
     expect(accounts.refresh).toHaveBeenCalledTimes(1);
+    expect(accounts.invalidateCapabilities).toHaveBeenCalledWith({
+      event: "client.auth.session.connected",
+      payload: {
+        accountId: "github",
+        authSessionId: "auth-1",
+        connected: true,
+        status: "connected"
+      }
+    });
     expect(authSessions.activeSessionFor("github")).toBeNull();
     expect(authSessions.authBusy).toBe(false);
+  });
+
+  it("refreshes status and invalidates capabilities after logout", async () => {
+    const accounts = fakeAccounts();
+    const authSessions = useAccountAuthSessions(accounts, {
+      accountRows: ref([
+        {
+          connected: true,
+          id: "codex"
+        }
+      ]),
+      browserWindow: fakeBrowserWindow()
+    });
+
+    await authSessions.logoutAccount("codex");
+
+    expect(accounts.logout).toHaveBeenCalledWith("codex");
+    expect(accounts.refresh).toHaveBeenCalledTimes(1);
+    expect(accounts.invalidateCapabilities).toHaveBeenCalledWith({
+      event: "client.auth.logout.completed",
+      payload: {
+        accountId: "codex",
+        connected: false,
+        status: "not_connected"
+      }
+    });
   });
 
   it("starts Codex device auth and copies the one-time code after it is available", async () => {
@@ -408,6 +443,7 @@ describe("account auth sessions", () => {
 function fakeAccounts(overrides = {}) {
   const accounts = {
     cancelAuthSession: vi.fn(async () => ({})),
+    invalidateCapabilities: vi.fn(async () => null),
     loadError: "",
     logout: vi.fn(async () => ({})),
     readAuthSession: vi.fn(async () => ({})),

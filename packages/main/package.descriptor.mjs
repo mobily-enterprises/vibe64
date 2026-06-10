@@ -5,7 +5,8 @@ export default Object.freeze({
   kind: "runtime",
   description: "App-local main composition and glue scaffold.",
   dependsOn: [
-    "@jskit-ai/kernel"
+    "@jskit-ai/kernel",
+    "@jskit-ai/realtime"
   ],
   capabilities: {
     provides: [],
@@ -58,7 +59,9 @@ export default Object.freeze({
   },
   mutations: {
     dependencies: {
-      runtime: {},
+      runtime: {
+        "@jskit-ai/realtime": "0.x"
+      },
       dev: {}
     },
     packageJson: {

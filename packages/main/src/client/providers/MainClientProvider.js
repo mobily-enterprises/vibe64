@@ -2,6 +2,9 @@ import MenuLinkItem from "/src/components/menus/MenuLinkItem.vue";
 import SurfaceAwareMenuLinkItem from "/src/components/menus/SurfaceAwareMenuLinkItem.vue";
 import TabLinkItem from "/src/components/menus/TabLinkItem.vue";
 import TopActionLinkItem from "/src/components/menus/TopActionLinkItem.vue";
+import {
+  registerVibe64CapabilitiesRealtimeListener
+} from "../vibe64CapabilitiesRealtime.js";
 
 const mainClientComponents = [];
 
@@ -16,6 +19,7 @@ class MainClientProvider {
     for (const { token, resolveComponent } of mainClientComponents) {
       app.singleton(token, resolveComponent);
     }
+    registerVibe64CapabilitiesRealtimeListener(app);
   }
 }
 

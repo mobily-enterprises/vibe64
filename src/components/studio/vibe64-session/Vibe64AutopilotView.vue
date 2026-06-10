@@ -777,8 +777,7 @@ const {
   enabled: computed(() => props.automationEnabled),
   agentSettings: requestAgentSettings,
   refreshSessionData: () => props.refreshSessionData(),
-  session: computed(() => props.session),
-  shouldReportFailure: shouldReportAutopilotFailure
+  session: computed(() => props.session)
 });
 
 const {
@@ -1279,10 +1278,6 @@ function openCodexTerminalForRecovery() {
     emit("project-attention");
   }
   return opened;
-}
-
-function shouldReportAutopilotFailure() {
-  return !codexTerminalAttentionSignature.value;
 }
 
 function selectSessionToolFromMenu(tabId = "") {

@@ -359,6 +359,91 @@ test.describe("Autopilot dumb client contract", () => {
     await expect.poll(() => commandTerminalStarts).toBe(0);
   });
 
+  test("keeps Codex conversation controls non-dispatchable when session readiness is blocked", async ({ page }) => {
+    const disabledReason = "Codex is not authenticated for the shared Vibe64 app account.";
+    const actionRequests: unknown[] = [];
+    const intentRequests: unknown[] = [];
+    const disabledIntent = {
+      actionId: "agent_conversation",
+      disabledReason,
+      enabled: false,
+      id: "talk_to_codex",
+      inputFields: [
+        {
+          kind: "textarea",
+          label: "What would you like to do?",
+          name: "conversationRequest",
+          placeholder: "Ask Codex.",
+          requiredMessage: "Ask Codex what to do."
+        }
+      ],
+      label: "Ask Codex",
+      style: "primary"
+    };
+    await mockVibe64Session(page, sessionPayload({
+      actions: [
+        {
+          disabledReason,
+          enabled: false,
+          id: "agent_conversation",
+          label: "Ask Codex"
+        }
+      ],
+      intents: [disabledIntent],
+      presentation: {
+        auto: {
+          nextOperation: {
+            executable: false,
+            kind: "stop",
+            reason: disabledReason
+          }
+        },
+        intents: [disabledIntent],
+        screen: {
+          kind: "conversation",
+          message: "What would you like to do?",
+          sections: [
+            {
+              kind: "response_preview"
+            }
+          ],
+          title: "Talk to Codex",
+          variant: "guide"
+        },
+        step: {
+          id: "talk_to_codex",
+          label: "Talk to Codex",
+          status: "waiting_for_input"
+        }
+      },
+      stepMachine: {
+        status: "waiting_for_input",
+        stepId: "talk_to_codex"
+      }
+    }), {
+      onAction: (actionId, body) => {
+        actionRequests.push({
+          actionId,
+          body
+        });
+      },
+      onIntent: (body) => {
+        intentRequests.push(body);
+      }
+    });
+
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+
+    const composerInput = page.locator(".studio-autopilot-prompt-textarea__input");
+    await expect(composerInput).toBeVisible();
+    await expect(composerInput).toBeDisabled();
+    const submitButton = page.locator(".vibe64-workflow-control-form__inline-submit");
+    await expect(submitButton).toBeDisabled();
+    await expectNoAttentionRequired(page);
+    await expect.poll(() => actionRequests).toEqual([]);
+    await expect.poll(() => intentRequests).toEqual([]);
+  });
+
   test("shows blocked intent action results as errors and keeps issue input retryable", async ({ page }) => {
     const intentRequests: unknown[] = [];
     const session = workSourceSession();
