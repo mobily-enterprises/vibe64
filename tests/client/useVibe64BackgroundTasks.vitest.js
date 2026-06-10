@@ -2,7 +2,7 @@ import { ref } from "vue";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  startVibe64CodexTerminal
+  ensureVibe64CodexThread
 } from "@/lib/vibe64SessionApi.js";
 import {
   VIBE64_CLIENT_CONTROL_ACTIONS
@@ -13,12 +13,12 @@ import {
 } from "../../src/composables/useVibe64BackgroundTasks.js";
 
 vi.mock("@/lib/vibe64SessionApi.js", () => ({
-  startVibe64CodexTerminal: vi.fn()
+  ensureVibe64CodexThread: vi.fn()
 }));
 
 describe("useVibe64BackgroundTasks", () => {
   beforeEach(() => {
-    vi.mocked(startVibe64CodexTerminal).mockReset();
+    vi.mocked(ensureVibe64CodexThread).mockReset();
   });
 
   it("normalizes presentation background tasks for the UI", () => {
@@ -65,7 +65,7 @@ describe("useVibe64BackgroundTasks", () => {
 
   it("retries background tasks through server-declared retry controls", async () => {
     const refreshSessionData = vi.fn();
-    vi.mocked(startVibe64CodexTerminal).mockResolvedValue({
+    vi.mocked(ensureVibe64CodexThread).mockResolvedValue({
       ok: true
     });
     const session = ref({
@@ -93,7 +93,7 @@ describe("useVibe64BackgroundTasks", () => {
     await expect(backgroundTasks.retryBackgroundTask(backgroundTasks.backgroundTasks.value[0]))
       .resolves.toBe(true);
 
-    expect(startVibe64CodexTerminal).toHaveBeenCalledWith("session_123");
+    expect(ensureVibe64CodexThread).toHaveBeenCalledWith("session_123");
     expect(refreshSessionData).toHaveBeenCalledTimes(1);
   });
 });

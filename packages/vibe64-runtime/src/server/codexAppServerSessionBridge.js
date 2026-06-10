@@ -5,10 +5,15 @@ import {
 import {
   normalizeAgentText
 } from "./agentProviders.js";
+import {
+  VIBE64_CODEX_DEFAULT_MODEL,
+  VIBE64_CODEX_DEFAULT_THINKING,
+  effectiveVibe64AgentSettings
+} from "../shared/agentSettings.js";
 
 const CODEX_SESSION_AGENT_PROVIDER = "codex";
-const CODEX_SESSION_MODEL = "gpt-5.5";
-const CODEX_SESSION_REASONING_EFFORT = "xhigh";
+const CODEX_SESSION_MODEL = VIBE64_CODEX_DEFAULT_MODEL;
+const CODEX_SESSION_REASONING_EFFORT = VIBE64_CODEX_DEFAULT_THINKING;
 const CODEX_SESSION_REASONING_SUMMARY = "concise";
 const CODEX_SESSION_APPROVAL_POLICY = "never";
 const CODEX_SESSION_SANDBOX = "danger-full-access";
@@ -23,37 +28,46 @@ function normalizeWorkdir(value = "") {
   return normalizeAgentText(value);
 }
 
+function codexEffectiveAgentSettings(agentSettings = {}) {
+  return effectiveVibe64AgentSettings(agentSettings);
+}
+
 function codexAppServerThreadSettings({
+  agentSettings = {},
   cwd = "",
   developerInstructions = "",
-  model = CODEX_SESSION_MODEL
+  model = ""
 } = {}) {
   const normalizedCwd = normalizeWorkdir(cwd);
   if (!normalizedCwd) {
     throw new Error("Codex app-server thread requires a working directory.");
   }
+  const effectiveSettings = codexEffectiveAgentSettings(agentSettings);
   return {
     approvalPolicy: CODEX_SESSION_APPROVAL_POLICY,
     cwd: normalizedCwd,
     developerInstructions: normalizeAgentText(developerInstructions) || null,
-    model,
+    model: normalizeAgentText(model) || effectiveSettings.model,
     sandbox: CODEX_SESSION_SANDBOX
   };
 }
 
 function codexAppServerTurnSettings({
+  agentSettings = {},
   cwd = "",
-  model = CODEX_SESSION_MODEL
+  effort = "",
+  model = ""
 } = {}) {
   const normalizedCwd = normalizeWorkdir(cwd);
   if (!normalizedCwd) {
     throw new Error("Codex app-server turn requires a working directory.");
   }
+  const effectiveSettings = codexEffectiveAgentSettings(agentSettings);
   return {
     approvalPolicy: CODEX_SESSION_APPROVAL_POLICY,
     cwd: normalizedCwd,
-    effort: CODEX_SESSION_REASONING_EFFORT,
-    model,
+    effort: normalizeAgentText(effort) || effectiveSettings.thinking,
+    model: normalizeAgentText(model) || effectiveSettings.model,
     sandboxPolicy: {
       type: "dangerFullAccess"
     },
@@ -276,6 +290,7 @@ function createCodexAppServerTurnCompletionWatcher(provider, threadId = "", {
 }
 
 async function sendCodexAppServerBootstrapTurn({
+  agentSettings = {},
   provider,
   threadId = "",
   workdir = ""
@@ -290,6 +305,7 @@ async function sendCodexAppServerBootstrapTurn({
       normalizedThreadId,
       CODEX_APP_SERVER_BOOTSTRAP_PROMPT,
       codexAppServerTurnSettings({
+        agentSettings,
         cwd: workdir
       })
     );
@@ -328,6 +344,7 @@ async function writeCodexAppServerReplacementMetadata({
 }
 
 async function ensureCodexAppServerThreadForSession({
+  agentSettings = {},
   bootstrapResumableThread = true,
   developerInstructions = "",
   provider,
@@ -339,6 +356,7 @@ async function ensureCodexAppServerThreadForSession({
   const appServerRuntime = await provider.ensureRuntime();
   const existingThreadId = codexAppServerThreadIdForSession(session, normalizedWorkdir);
   const threadSettings = codexAppServerThreadSettings({
+    agentSettings,
     cwd: normalizedWorkdir,
     developerInstructions
   });
@@ -366,6 +384,7 @@ async function ensureCodexAppServerThreadForSession({
   }
   const bootstrap = bootstrapResumableThread && startedNewThread
     ? await sendCodexAppServerBootstrapTurn({
+        agentSettings,
         provider,
         threadId,
         workdir: normalizedWorkdir
@@ -395,6 +414,7 @@ async function ensureCodexAppServerThreadForSession({
 }
 
 async function sendCodexAppServerPromptForSession({
+  agentSettings = {},
   provider,
   prompt = "",
   threadId = "",
@@ -407,6 +427,7 @@ async function sendCodexAppServerPromptForSession({
     throw new Error("Codex app-server prompt is empty.");
   }
   const turn = await provider.sendTurn(threadId, input, codexAppServerTurnSettings({
+    agentSettings,
     cwd: workdir
   }));
   return {

@@ -3,6 +3,9 @@ import {
   workflowDefinitionCreationOptions
 } from "@local/vibe64-runtime/server";
 import {
+  normalizeVibe64AgentSettings
+} from "@local/vibe64-runtime/shared";
+import {
   vibe64Result
 } from "@local/vibe64-core/server/serverResponses";
 import {
@@ -21,6 +24,8 @@ import { inspectSessionDiff } from "./sessionDiff.js";
 
 const MAX_OPEN_VIBE64_SESSIONS = 3;
 const CODEX_PROMPT_HANDOFF_DELIVERY_ENABLED = true;
+const CODEX_APP_SERVER_TASK_ID = "codex_app_server";
+const STEP_STATUS_AWAITING_AGENT_RESULT = "awaiting_agent_result";
 const CLOSED_SESSION_STATUSES = new Set(["abandoned", "finished"]);
 const SESSION_ARCHIVE_QUERY = Object.freeze({
   ABANDONED: "abandoned",
@@ -85,10 +90,31 @@ function stripInternalInput(input = {}) {
     return {};
   }
   const {
+    agentSettings: _agentSettings,
+    displayFields: _displayFields,
+    displayInput: _displayInput,
     vibe64User: _vibe64User,
     ...publicInput
   } = input;
   return publicInput;
+}
+
+function agentSettingsInput(input = {}) {
+  return normalizeVibe64AgentSettings(input?.agentSettings);
+}
+
+function conversationDisplayInput(input = {}) {
+  const displayInput = objectValue(input?.displayInput);
+  if (Object.keys(displayInput).length > 0) {
+    return displayInput;
+  }
+  const displayFields = objectValue(input?.displayFields);
+  if (Object.keys(displayFields).length > 0) {
+    return {
+      fields: displayFields
+    };
+  }
+  return null;
 }
 
 async function listSessionSummaries(runtime, options = {}) {
@@ -241,7 +267,63 @@ function codexPromptDeliverySessionState(delivery = {}) {
   return state;
 }
 
-async function enrichSessionWithCodexTerminal(terminalService, session = {}) {
+function sessionAwaitsAgentResult(session = {}) {
+  return normalizedInputText(session.stepMachine?.status) === STEP_STATUS_AWAITING_AGENT_RESULT;
+}
+
+function sessionBackgroundTasks(session = {}) {
+  return [
+    ...(Array.isArray(session.backgroundTasks) ? session.backgroundTasks : []),
+    ...(Array.isArray(session.presentation?.backgroundTasks) ? session.presentation.backgroundTasks : [])
+  ].filter((task) => task && typeof task === "object" && !Array.isArray(task));
+}
+
+function codexAppServerDeliveryRunning(session = {}) {
+  return sessionBackgroundTasks(session).some((task) => (
+    normalizedInputText(task.id) === CODEX_APP_SERVER_TASK_ID &&
+    normalizedInputText(task.status) === "running"
+  ));
+}
+
+function terminalStateHasActiveCodexTurn(terminalState = {}) {
+  return terminalState.codexAgentTurnActive === true ||
+    terminalState.codexAgentTurn?.active === true;
+}
+
+async function recoverAgentWaitWithoutCodex(runtime, session = {}, terminalState = {}) {
+  if (
+    !sessionAwaitsAgentResult(session) ||
+    terminalStateHasActiveCodexTurn(terminalState) ||
+    codexAppServerDeliveryRunning(session)
+  ) {
+    return session;
+  }
+  if (typeof runtime?.returnControlFromAgentWait !== "function") {
+    return session;
+  }
+  vibe64SessionDebugLog("server.service.agentWait.recover.start", {
+    reason: "no_active_codex_turn",
+    sessionId: session.sessionId
+  });
+  const recovered = await runtime.returnControlFromAgentWait(session.sessionId, {
+    inputPrompt: "What would you like to do?",
+    message: "Codex is not running for this turn, so Vibe64 returned control to you."
+  });
+  vibe64SessionDebugLog("server.service.agentWait.recover.done", {
+    ...vibe64SessionDebugSummary(recovered),
+    reason: "no_active_codex_turn"
+  });
+  return recovered;
+}
+
+async function recoverAgentWaitAfterCodexTerminalStateFailure(runtime, session = {}) {
+  const recoveredSession = await recoverAgentWaitWithoutCodex(runtime, session, {});
+  return sessionAwaitsAgentResult(recoveredSession) ? null : recoveredSession;
+}
+
+async function enrichSessionWithCodexTerminal(terminalService, session = {}, {
+  runtime = null
+} = {}) {
   if (!session || session.ok === false || !session.sessionId) {
     return session;
   }
@@ -250,14 +332,38 @@ async function enrichSessionWithCodexTerminal(terminalService, session = {}) {
       reason: "service_unavailable",
       sessionId: session.sessionId
     });
-    return withCodexTerminalState(session, {});
+    const recoveredSession = await recoverAgentWaitWithoutCodex(runtime, session, {});
+    return withCodexTerminalState(recoveredSession, {});
   }
   const startedAtMs = Date.now();
   vibe64SessionDebugLog("server.service.codexTerminalState.start", {
     sessionId: session.sessionId
   });
-  const terminalState = await terminalService.codexTerminalState(session.sessionId);
+  let terminalState = null;
+  try {
+    terminalState = await terminalService.codexTerminalState(session.sessionId);
+  } catch (error) {
+    const recoveredSession = await recoverAgentWaitAfterCodexTerminalStateFailure(runtime, session);
+    if (recoveredSession) {
+      vibe64SessionDebugLog("server.service.codexTerminalState.recovered", {
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+        error: vibe64SessionDebugError(error),
+        sessionId: session.sessionId
+      });
+      return withCodexTerminalState(recoveredSession, {});
+    }
+    throw error;
+  }
   if (terminalState?.ok === false) {
+    const recoveredSession = await recoverAgentWaitAfterCodexTerminalStateFailure(runtime, session);
+    if (recoveredSession) {
+      vibe64SessionDebugLog("server.service.codexTerminalState.recovered", {
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+        error: String(terminalState.error || "Vibe64 Codex terminal state could not be read."),
+        sessionId: session.sessionId
+      });
+      return withCodexTerminalState(recoveredSession, {});
+    }
     vibe64SessionDebugLog("server.service.codexTerminalState.error", {
       durationMs: vibe64SessionDebugDurationMs(startedAtMs),
       error: String(terminalState.error || "Vibe64 Codex terminal state could not be read."),
@@ -265,7 +371,8 @@ async function enrichSessionWithCodexTerminal(terminalService, session = {}) {
     });
     throw new Error(terminalState.error || "Vibe64 Codex terminal state could not be read.");
   }
-  const enrichedSession = withCodexTerminalState(session, terminalState || {});
+  const recoveredSession = await recoverAgentWaitWithoutCodex(runtime, session, terminalState || {});
+  const enrichedSession = withCodexTerminalState(recoveredSession, terminalState || {});
   vibe64SessionDebugLog("server.service.codexTerminalState.done", {
     ...vibe64SessionDebugSummary(enrichedSession),
     codexTerminalId: String(enrichedSession.codexTerminal?.id || ""),
@@ -307,6 +414,7 @@ async function prepareCodexThreadForSession(terminalService, session = {}) {
 }
 
 async function deliverCodexPromptIfNeeded(terminalService, session = {}, {
+  agentSettings = {},
   runtime = null
 } = {}) {
   const handoff = codexPromptHandoffFromSession(session);
@@ -337,7 +445,15 @@ async function deliverCodexPromptIfNeeded(terminalService, session = {}, {
     promptId: String(handoff.promptId || ""),
     sessionId: session.sessionId
   });
-  const delivery = await terminalService.injectCodexPrompt(session.sessionId, handoff);
+  let delivery = null;
+  try {
+    delivery = await terminalService.injectCodexPrompt(session.sessionId, handoff, {
+      agentSettings
+    });
+  } catch (error) {
+    await recoverAgentWaitWithoutCodex(runtime, session, {});
+    throw error;
+  }
   if (delivery?.ok === false) {
     vibe64SessionDebugLog("server.service.deliverCodexPrompt.error", {
       durationMs: vibe64SessionDebugDurationMs(startedAtMs),
@@ -345,6 +461,7 @@ async function deliverCodexPromptIfNeeded(terminalService, session = {}, {
       promptId: String(handoff.promptId || ""),
       sessionId: session.sessionId
     });
+    await recoverAgentWaitWithoutCodex(runtime, session, {});
     throw new Error(delivery.error || "Vibe64 Codex prompt delivery failed.");
   }
   vibe64SessionDebugLog("server.service.deliverCodexPrompt.done", {
@@ -548,7 +665,9 @@ function createService({
         try {
           const runtime = await projectService.createRuntime();
           const session = await runtime.advance(sessionId, workflowExpected);
-          const enrichedSession = await enrichSessionWithCodexTerminal(terminalService, session);
+          const enrichedSession = await enrichSessionWithCodexTerminal(terminalService, session, {
+            runtime
+          });
           vibe64SessionDebugLog("server.service.advanceSession.done", {
             ...sessionServiceDebugResponse(enrichedSession),
             durationMs: vibe64SessionDebugDurationMs(startedAtMs)
@@ -711,7 +830,9 @@ function createService({
             workflowDefinition: definitionSelection.definitionId
           });
           await prepareCodexThreadForSession(terminalService, advancedSession);
-          const enrichedSession = await enrichSessionWithCodexTerminal(terminalService, advancedSession);
+          const enrichedSession = await enrichSessionWithCodexTerminal(terminalService, advancedSession, {
+            runtime
+          });
           vibe64SessionDebugLog("server.service.createSession.done", {
             ...sessionServiceDebugResponse(enrichedSession),
             durationMs: vibe64SessionDebugDurationMs(startedAtMs),
@@ -737,7 +858,9 @@ function createService({
       return sessionResult(async () => {
         try {
           const runtime = await projectService.createRuntime();
-          const session = await enrichSessionWithCodexTerminal(terminalService, await runtime.getSession(sessionId));
+          const session = await enrichSessionWithCodexTerminal(terminalService, await runtime.getSession(sessionId), {
+            runtime
+          });
           vibe64SessionDebugLog("server.service.inspectSession.done", {
             ...sessionServiceDebugResponse(session),
             durationMs: vibe64SessionDebugDurationMs(startedAtMs)
@@ -835,7 +958,9 @@ function createService({
           const runtime = await projectService.createRuntime();
           await terminalService?.closeSessionNonCodexTerminals?.(sessionId);
           const session = await runtime.recoverStuckStep(sessionId);
-          const enrichedSession = await enrichSessionWithCodexTerminal(terminalService, session);
+          const enrichedSession = await enrichSessionWithCodexTerminal(terminalService, session, {
+            runtime
+          });
           vibe64SessionDebugLog("server.service.recoverStuckSessionStep.done", {
             ...sessionServiceDebugResponse(enrichedSession),
             durationMs: vibe64SessionDebugDurationMs(startedAtMs)
@@ -862,7 +987,9 @@ function createService({
         try {
           const runtime = await projectService.createRuntime();
           const session = await runtime.returnControlFromAgentWait(sessionId);
-          const enrichedSession = await enrichSessionWithCodexTerminal(terminalService, session);
+          const enrichedSession = await enrichSessionWithCodexTerminal(terminalService, session, {
+            runtime
+          });
           vibe64SessionDebugLog("server.service.returnAgentControl.done", {
             ...sessionServiceDebugResponse(enrichedSession),
             durationMs: vibe64SessionDebugDurationMs(startedAtMs)
@@ -914,6 +1041,8 @@ function createService({
 
     async runSessionAction(sessionId, actionId, input = {}) {
       const workflowInput = stripInternalInput(input);
+      const agentSettings = agentSettingsInput(input);
+      const displayInput = conversationDisplayInput(input);
       const startedAtMs = Date.now();
       vibe64SessionDebugLog("server.service.runSessionAction.start", {
         actionId,
@@ -926,7 +1055,7 @@ function createService({
           let session = await runtime.runAction(sessionId, actionId, workflowInput);
           const conversationTurn = await recordConversationMessage(runtime, sessionId, {
             actionResult: session.actionResult,
-            input: workflowInput
+            input: displayInput || workflowInput
           });
           if (conversationTurn) {
             session = await sessionWithLatestRevision(runtime, session);
@@ -943,8 +1072,12 @@ function createService({
           const enrichedSession = await enrichSessionWithCodexTerminal(
             terminalService,
             await deliverCodexPromptIfNeeded(terminalService, session, {
+              agentSettings,
               runtime
-            })
+            }),
+            {
+              runtime
+            }
           );
           vibe64SessionDebugLog("server.service.runSessionAction.done", {
             ...sessionServiceDebugResponse(enrichedSession),
@@ -967,6 +1100,8 @@ function createService({
 
     async runSessionIntent(sessionId, intentId, input = {}) {
       const workflowInput = stripInternalInput(input);
+      const agentSettings = agentSettingsInput(input);
+      const displayInput = conversationDisplayInput(input);
       const startedAtMs = Date.now();
       vibe64SessionDebugLog("server.service.runSessionIntent.start", {
         intentId,
@@ -981,7 +1116,7 @@ function createService({
           let session = await runtime.runIntent(sessionId, intentId, workflowInput);
           const conversationTurn = await recordConversationMessage(runtime, sessionId, {
             actionResult: session.actionResult,
-            input: workflowInput
+            input: displayInput || workflowInput
           });
           if (conversationTurn) {
             session = await sessionWithLatestRevision(runtime, session);
@@ -998,8 +1133,12 @@ function createService({
           const enrichedSession = await enrichSessionWithCodexTerminal(
             terminalService,
             await deliverCodexPromptIfNeeded(terminalService, session, {
+              agentSettings,
               runtime
-            })
+            }),
+            {
+              runtime
+            }
           );
           vibe64SessionDebugLog("server.service.runSessionIntent.done", {
             ...sessionServiceDebugResponse(enrichedSession),
@@ -1032,7 +1171,9 @@ function createService({
           const runtime = await projectService.createRuntime();
           const session = await runtime.rewind(sessionId, stepId);
           await terminalService?.closeSessionNonCodexTerminals?.(sessionId);
-          const enrichedSession = await enrichSessionWithCodexTerminal(terminalService, session);
+          const enrichedSession = await enrichSessionWithCodexTerminal(terminalService, session, {
+            runtime
+          });
           vibe64SessionDebugLog("server.service.rewindSession.done", {
             ...sessionServiceDebugResponse(enrichedSession),
             durationMs: vibe64SessionDebugDurationMs(startedAtMs),

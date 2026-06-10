@@ -155,10 +155,32 @@ function vibe64LaunchTargetsQueryKey(surfaceId, ownershipFilter, sessionId = "",
   ];
 }
 
+function agentSettingsInputFromContext(context = {}) {
+  return context?.agentSettings && typeof context.agentSettings === "object" && !Array.isArray(context.agentSettings)
+    ? {
+        agentSettings: context.agentSettings
+      }
+    : {};
+}
+
+function displayInputFromContext(context = {}) {
+  return context?.displayInput && typeof context.displayInput === "object" && !Array.isArray(context.displayInput) &&
+    Object.keys(context.displayInput).length > 0
+    ? {
+        displayInput: context.displayInput
+      }
+    : {};
+}
+
 function commandInputFromContext(context = {}) {
-  return context?.input && typeof context.input === "object" && !Array.isArray(context.input)
+  const input = context?.input && typeof context.input === "object" && !Array.isArray(context.input)
     ? context.input
     : {};
+  return {
+    ...input,
+    ...agentSettingsInputFromContext(context),
+    ...displayInputFromContext(context)
+  };
 }
 
 export {
@@ -192,5 +214,6 @@ export {
   vibe64SessionsQueryKey,
   vibe64TerminalFailureFixRequestPath,
   vibe64TerminalFailureFixPath,
+  agentSettingsInputFromContext,
   commandInputFromContext
 };

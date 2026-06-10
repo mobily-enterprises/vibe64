@@ -19,6 +19,7 @@
         :class="{ 'vibe64-workflow-control-form__prompt-shell--inline-submit': inlineSubmitForField(field) }"
       >
         <Vibe64AutopilotPromptTextarea
+          ref="promptTextareaRef"
           :model-value="selectedControlValues[field.name] || ''"
           :attachments-enabled="attachmentsEnabled"
           class="vibe64-workflow-control-form__input"
@@ -28,6 +29,7 @@
           :rows="field.rows || textareaRows"
           :session-id="sessionId"
           variant="outlined"
+          @attachments-change="updateFieldAttachments(field.name, $event)"
           @update:model-value="$emit('update-value', field.name, $event)"
         />
 
@@ -47,6 +49,132 @@
         >
           <v-icon :icon="interruptVisible ? mdiStop : mdiSend" size="20" />
         </v-btn>
+
+        <div
+          v-if="inlineSubmitForField(field)"
+          class="vibe64-workflow-control-form__composer-toolbar"
+        >
+          <div class="vibe64-workflow-control-form__composer-tools">
+            <v-menu
+              v-if="agentControlsVisible"
+              v-model="agentMenuOpen"
+              :close-on-content-click="false"
+              location="top start"
+              transition="scale-transition"
+            >
+              <template #activator="{ props: menuProps }">
+                <v-btn
+                  v-bind="menuProps"
+                  aria-label="AI parameters"
+                  class="vibe64-workflow-control-form__tool-button"
+                  density="comfortable"
+                  :icon="mdiCogOutline"
+                  size="small"
+                  :title="agentControlsTitle"
+                  type="button"
+                  variant="flat"
+                />
+              </template>
+
+              <div
+                class="vibe64-workflow-control-form__ai-menu"
+                aria-label="AI controls"
+              >
+                <div class="vibe64-workflow-control-form__ai-menu-header">
+                  <v-icon :icon="mdiBrain" size="20" />
+                  <div class="vibe64-workflow-control-form__ai-menu-heading">
+                    <strong>AI Controls</strong>
+                    <span>{{ agentProviderLabel }} · {{ agentSummary }}</span>
+                  </div>
+                </div>
+
+                <section
+                  v-for="parameter in agentParameters"
+                  :key="parameter.id"
+                  class="vibe64-workflow-control-form__ai-menu-section"
+                >
+                  <div class="vibe64-workflow-control-form__ai-menu-label">
+                    {{ parameter.label }}
+                  </div>
+                  <div class="vibe64-workflow-control-form__ai-options">
+                    <button
+                      v-for="option in parameter.options"
+                      :key="`${parameter.id}:${option.value}`"
+                      class="vibe64-workflow-control-form__ai-option"
+                      :class="{ 'vibe64-workflow-control-form__ai-option--active': agentParameterSelected(parameter.id, option.value) }"
+                      type="button"
+                      :aria-pressed="agentParameterSelected(parameter.id, option.value)"
+                      @click="updateAgentParameter(parameter.id, option.value)"
+                    >
+                      <span>{{ option.label }}</span>
+                      <v-icon
+                        v-if="agentParameterSelected(parameter.id, option.value)"
+                        :icon="mdiCheck"
+                        size="15"
+                      />
+                    </button>
+                  </div>
+                </section>
+              </div>
+            </v-menu>
+
+            <v-menu
+              v-model="attachmentMenuOpen"
+              location="top start"
+              transition="scale-transition"
+            >
+              <template #activator="{ props: menuProps }">
+                <v-btn
+                  v-bind="menuProps"
+                  aria-label="Attachment menu"
+                  class="vibe64-workflow-control-form__tool-button"
+                  density="comfortable"
+                  :icon="mdiPlus"
+                  size="small"
+                  title="Attachment menu"
+                  type="button"
+                  variant="flat"
+                />
+              </template>
+
+              <div
+                class="vibe64-workflow-control-form__attachment-menu"
+                aria-label="Attachment actions"
+              >
+                <button
+                  class="vibe64-workflow-control-form__attachment-menu-item"
+                  :disabled="attachmentToolDisabled"
+                  type="button"
+                  @click="chooseAttachmentFiles"
+                >
+                  <v-icon :icon="mdiFileUploadOutline" size="18" />
+                  <span>Attach files</span>
+                </button>
+              </div>
+            </v-menu>
+
+            <div
+              v-if="workflowControls.length"
+              class="vibe64-workflow-control-form__workflow-actions vibe64-workflow-control-form__workflow-actions--toolbar"
+            >
+              <v-btn
+                v-for="control in workflowControls"
+                :key="control.id"
+                :color="control.buttonColor"
+                :disabled="control.disabled"
+                :loading="control.loading"
+                :prepend-icon="control.icon"
+                size="small"
+                :title="control.disabledReason || control.label"
+                type="button"
+                :variant="control.buttonVariant"
+                @click="$emit('activate-control', control.sourceControl || control)"
+              >
+                {{ control.label }}
+              </v-btn>
+            </div>
+          </div>
+        </div>
       </div>
       <v-textarea
         v-else-if="field.kind === 'textarea'"
@@ -134,12 +262,22 @@
 </template>
 
 <script setup>
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import {
+  mdiBrain,
+  mdiCheck,
   mdiClose,
+  mdiCogOutline,
+  mdiFileUploadOutline,
+  mdiPlus,
   mdiSend,
   mdiStop
 } from "@mdi/js";
+import {
+  VIBE64_AGENT_PROVIDERS,
+  displayVibe64AgentSetting,
+  normalizeVibe64AgentSettings
+} from "@local/vibe64-runtime/shared";
 import Vibe64AutopilotPromptTextarea from "@/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue";
 
 const emit = defineEmits([
@@ -147,10 +285,19 @@ const emit = defineEmits([
   "cancel",
   "interrupt",
   "submit",
+  "update-agent-setting",
   "update-value"
 ]);
 
 const props = defineProps({
+  agentControlsVisible: {
+    default: false,
+    type: Boolean
+  },
+  agentSettings: {
+    default: () => ({}),
+    type: Object
+  },
   asForm: {
     default: false,
     type: Boolean
@@ -230,6 +377,10 @@ const props = defineProps({
   }
 });
 
+const agentMenuOpen = ref(false);
+const attachmentMenuOpen = ref(false);
+const fieldAttachments = ref({});
+const promptTextareaRef = ref(null);
 const rootTag = computed(() => props.asForm ? "form" : "div");
 const fieldsDisabled = computed(() => Boolean(props.running || props.inputDisabled));
 const inlineSubmitActive = computed(() => Boolean(
@@ -239,8 +390,7 @@ const inlineSubmitActive = computed(() => Boolean(
 ));
 const actionsVisible = computed(() => Boolean(
   !inlineSubmitActive.value ||
-  props.cancelVisible ||
-  props.workflowControls.length
+  props.cancelVisible
 ));
 const inlineSubmitButtonLabel = computed(() => (
   props.interruptVisible ? props.interruptLabel : props.selectedControl.label
@@ -258,6 +408,31 @@ const inlineSubmitFieldName = computed(() => {
   const field = props.selectedControlFields.find((candidate) => candidate?.kind === "textarea");
   return String(field?.name || "");
 });
+const currentAgentSettings = computed(() => normalizeVibe64AgentSettings(props.agentSettings));
+const agentProvider = computed(() => (
+  VIBE64_AGENT_PROVIDERS.find((provider) => provider.id === currentAgentSettings.value.providerId) ||
+  VIBE64_AGENT_PROVIDERS[0]
+));
+const agentProviderLabel = computed(() => agentProvider.value?.label || "AI");
+const agentParameters = computed(() => (
+  Array.isArray(agentProvider.value?.parameters) ? agentProvider.value.parameters : []
+));
+const agentSummary = computed(() => {
+  const summary = agentParameters.value
+    .map((parameter) => displayVibe64AgentSetting(
+      currentAgentSettings.value.providerId,
+      parameter.id,
+      agentParameterValue(parameter.id)
+    ))
+    .filter(Boolean)
+    .join(" / ");
+  return summary || "Automatic";
+});
+const agentControlsTitle = computed(() => `AI controls: ${agentSummary.value}`);
+const attachmentToolDisabled = computed(() => Boolean(
+  !props.attachmentsEnabled ||
+  fieldsDisabled.value
+));
 
 function inlineSubmitForField(field = {}) {
   return Boolean(
@@ -267,11 +442,11 @@ function inlineSubmitForField(field = {}) {
 }
 
 function submitFromForm() {
-  emit("submit");
+  emit("submit", submissionOptions());
 }
 
 function submitFromButton() {
-  emit("submit");
+  emit("submit", submissionOptions());
 }
 
 function handleInlineSubmitButton() {
@@ -281,6 +456,67 @@ function handleInlineSubmitButton() {
   }
   submitFromButton();
 }
+
+function agentParameterValue(parameterId = "") {
+  return String(currentAgentSettings.value?.[parameterId] || "");
+}
+
+function agentParameterSelected(parameterId = "", value = "") {
+  return agentParameterValue(parameterId) === String(value || "");
+}
+
+function updateAgentParameter(parameterId = "", value = "") {
+  emit("update-agent-setting", parameterId, value);
+}
+
+function updateFieldAttachments(fieldName = "", attachments = []) {
+  const name = String(fieldName || "").trim();
+  if (!name) {
+    return;
+  }
+  fieldAttachments.value = {
+    ...fieldAttachments.value,
+    [name]: Array.isArray(attachments) ? attachments : []
+  };
+}
+
+function submissionOptions() {
+  const attachmentFields = Object.fromEntries(Object.entries(fieldAttachments.value)
+    .filter((entry) => Array.isArray(entry[1]) && entry[1].length > 0)
+    .map(([fieldName, attachments]) => [fieldName, attachments]));
+  if (Object.keys(attachmentFields).length < 1) {
+    return {};
+  }
+  return {
+    attachmentFields
+  };
+}
+
+function promptTextareaComponents() {
+  return Array.isArray(promptTextareaRef.value)
+    ? promptTextareaRef.value
+    : [promptTextareaRef.value].filter(Boolean);
+}
+
+function promptTextareaComponent() {
+  return promptTextareaComponents()[0] || null;
+}
+
+function chooseAttachmentFiles() {
+  attachmentMenuOpen.value = false;
+  promptTextareaComponent()?.openFilePicker?.();
+}
+
+function clearAttachments() {
+  fieldAttachments.value = {};
+  for (const component of promptTextareaComponents()) {
+    component?.clearAttachments?.();
+  }
+}
+
+defineExpose({
+  clearAttachments
+});
 </script>
 
 <style scoped>
@@ -342,6 +578,7 @@ function handleInlineSubmitButton() {
 }
 
 .vibe64-workflow-control-form__prompt-shell--inline-submit :deep(.studio-autopilot-prompt-textarea .v-field__input) {
+  padding-bottom: 3rem;
   padding-right: 3.2rem;
 }
 
@@ -364,6 +601,156 @@ function handleInlineSubmitButton() {
   display: flex;
   flex-wrap: wrap;
   gap: 0.36rem;
+}
+
+.vibe64-workflow-control-form__composer-toolbar {
+  align-items: center;
+  bottom: 0.55rem;
+  display: flex;
+  left: 0.55rem;
+  min-width: 0;
+  pointer-events: none;
+  position: absolute;
+  right: 3.05rem;
+  z-index: 2;
+}
+
+.vibe64-workflow-control-form__composer-tools {
+  align-items: center;
+  display: flex;
+  gap: 0.34rem;
+  min-width: 0;
+  overflow: hidden;
+  pointer-events: auto;
+  width: 100%;
+}
+
+.vibe64-workflow-control-form__tool-button {
+  background: var(--studio-control-bg, #fff) !important;
+  border: 1px solid var(--studio-control-border, rgba(17, 24, 39, 0.12));
+  border-radius: 7px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08) !important;
+  color: var(--studio-control-text, #202124) !important;
+  flex: 0 0 2.15rem;
+  height: 2.15rem;
+  letter-spacing: 0;
+  min-height: 2.15rem;
+  min-width: 2.15rem;
+  width: 2.15rem;
+}
+
+.vibe64-workflow-control-form__tool-button:hover {
+  background: var(--studio-control-rest-bg, #f7f7f8) !important;
+}
+
+.vibe64-workflow-control-form__ai-menu,
+.vibe64-workflow-control-form__attachment-menu {
+  background: rgb(var(--v-theme-surface));
+  border: 1px solid rgba(var(--v-theme-outline), 0.18);
+  border-radius: 8px;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.16);
+  color: rgb(var(--v-theme-on-surface));
+  min-width: min(20rem, calc(100vw - 2rem));
+  padding: 0.55rem;
+}
+
+.vibe64-workflow-control-form__ai-menu {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.vibe64-workflow-control-form__ai-menu-header {
+  align-items: center;
+  border-bottom: 1px solid rgba(var(--v-theme-outline), 0.12);
+  display: flex;
+  gap: 0.55rem;
+  padding: 0.18rem 0.12rem 0.55rem;
+}
+
+.vibe64-workflow-control-form__ai-menu-heading {
+  display: grid;
+  gap: 0.08rem;
+  min-width: 0;
+}
+
+.vibe64-workflow-control-form__ai-menu-heading strong {
+  font-size: 0.9rem;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.vibe64-workflow-control-form__ai-menu-heading span {
+  color: rgba(var(--v-theme-on-surface), 0.62);
+  font-size: 0.78rem;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vibe64-workflow-control-form__ai-menu-section {
+  display: grid;
+  gap: 0.32rem;
+}
+
+.vibe64-workflow-control-form__ai-menu-label {
+  color: rgba(var(--v-theme-on-surface), 0.68);
+  font-size: 0.72rem;
+  font-weight: 650;
+  line-height: 1.2;
+  padding-inline: 0.12rem;
+  text-transform: uppercase;
+}
+
+.vibe64-workflow-control-form__ai-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.28rem;
+}
+
+.vibe64-workflow-control-form__ai-option,
+.vibe64-workflow-control-form__attachment-menu-item {
+  align-items: center;
+  background: rgb(var(--v-theme-surface));
+  border: 1px solid rgba(var(--v-theme-outline), 0.16);
+  border-radius: 7px;
+  color: rgb(var(--v-theme-on-surface));
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 0.82rem;
+  gap: 0.34rem;
+  letter-spacing: 0;
+  line-height: 1.2;
+  min-height: 2rem;
+  padding: 0.34rem 0.52rem;
+  text-align: left;
+}
+
+.vibe64-workflow-control-form__ai-option:hover,
+.vibe64-workflow-control-form__attachment-menu-item:hover {
+  background: rgba(var(--v-theme-primary), 0.06);
+}
+
+.vibe64-workflow-control-form__ai-option--active {
+  background: rgba(var(--v-theme-primary), 0.09);
+  border-color: rgba(var(--v-theme-primary), 0.36);
+  color: rgb(var(--v-theme-primary));
+  font-weight: 650;
+}
+
+.vibe64-workflow-control-form__attachment-menu {
+  min-width: min(14rem, calc(100vw - 2rem));
+}
+
+.vibe64-workflow-control-form__attachment-menu-item {
+  justify-content: flex-start;
+  width: 100%;
+}
+
+.vibe64-workflow-control-form__attachment-menu-item:disabled {
+  cursor: default;
+  opacity: 0.48;
 }
 
 .vibe64-workflow-control-form__actions {
@@ -435,6 +822,31 @@ function handleInlineSubmitButton() {
   flex: 1 1 auto;
   justify-content: flex-start;
   order: 1;
+}
+
+.vibe64-workflow-control-form__workflow-actions--toolbar {
+  flex: 1 1 auto;
+  flex-wrap: nowrap;
+  gap: 0.34rem;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.vibe64-workflow-control-form__workflow-actions--toolbar::-webkit-scrollbar {
+  display: none;
+}
+
+.vibe64-workflow-control-form__workflow-actions--toolbar :deep(.v-btn) {
+  flex: 0 0 auto;
+  max-width: min(9.5rem, 34vw);
+  min-height: 2.15rem;
+}
+
+.vibe64-workflow-control-form__workflow-actions--toolbar :deep(.v-btn__content) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .vibe64-workflow-control-form--sticky-actions .vibe64-workflow-control-form__actions {

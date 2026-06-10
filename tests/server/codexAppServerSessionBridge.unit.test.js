@@ -110,6 +110,21 @@ test("codex app-server bridge uses the current Vibe64 Codex execution settings",
     },
     summary: "concise"
   });
+  assert.deepEqual(codexAppServerTurnSettings({
+    agentSettings: {
+      thinking: "high"
+    },
+    cwd: "/repo/.vibe64/sessions/active/session/worktree"
+  }), {
+    approvalPolicy: "never",
+    cwd: "/repo/.vibe64/sessions/active/session/worktree",
+    effort: "high",
+    model: "gpt-5.5",
+    sandboxPolicy: {
+      type: "dangerFullAccess"
+    },
+    summary: "concise"
+  });
 });
 
 test("codex app-server bridge sends the user prompt unchanged", () => {

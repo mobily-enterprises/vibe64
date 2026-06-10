@@ -46,6 +46,10 @@ const PREVIEW_PROXY_PUBLIC_HOST_ENV = "VIBE64_PREVIEW_PROXY_PUBLIC_HOST";
 const PREVIEW_PROXY_SOCKET_DIR_ENV = "VIBE64_PREVIEW_PROXY_SOCKET_DIR";
 const PREVIEW_PROXY_DEBUG_ENV = "VIBE64_PREVIEW_DEBUG";
 const PREVIEW_PROXY_SOCKET_DIR = "/run/vibe64/apps";
+const JSKIT_AUTH_COOKIE_NAMES = Object.freeze([
+  "sb_access_token",
+  "sb_refresh_token"
+]);
 
 function normalizePreviewTargetHref(value = "") {
   const text = String(value || "").trim();
@@ -74,7 +78,10 @@ function proxyRequestHeaders(headers = {}, targetUrl, {
   nextHeaders.cookie = stripPreviewTokenCookie(nextHeaders.cookie, {
     proxyOrigin
   });
-  nextHeaders.cookie = mergeCookieHeaders(nextHeaders.cookie, previewAuthCookieHeader(previewAuth || {}));
+  nextHeaders.cookie = mergeCookieHeaders(
+    nextHeaders.cookie,
+    previewAuthCookieHeaderForRequest(nextHeaders.cookie, previewAuth)
+  );
   if (!nextHeaders.cookie) {
     delete nextHeaders.cookie;
   }
@@ -90,7 +97,10 @@ function proxyUpgradeHeaders(headers = {}, targetUrl, {
   nextHeaders.cookie = stripPreviewTokenCookie(nextHeaders.cookie, {
     proxyOrigin
   });
-  nextHeaders.cookie = mergeCookieHeaders(nextHeaders.cookie, previewAuthCookieHeader(previewAuth || {}));
+  nextHeaders.cookie = mergeCookieHeaders(
+    nextHeaders.cookie,
+    previewAuthCookieHeaderForRequest(nextHeaders.cookie, previewAuth)
+  );
   if (!nextHeaders.cookie) {
     delete nextHeaders.cookie;
   }
@@ -241,6 +251,18 @@ function cookieNames(header = "") {
       return (separatorIndex < 0 ? part : part.slice(0, separatorIndex)).trim();
     })
     .filter(Boolean);
+}
+
+function hasJskitAuthCookie(header = "") {
+  const names = new Set(cookieNames(header));
+  return JSKIT_AUTH_COOKIE_NAMES.some((cookieName) => names.has(cookieName));
+}
+
+function previewAuthCookieHeaderForRequest(header = "", previewAuth = null) {
+  if (hasJskitAuthCookie(header)) {
+    return "";
+  }
+  return previewAuthCookieHeader(previewAuth || {});
 }
 
 function rejectPreviewRequest(response) {

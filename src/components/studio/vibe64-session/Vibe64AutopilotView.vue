@@ -317,6 +317,9 @@
 
           <Vibe64WorkflowControlForm
             v-if="selectedScreenControlVisible"
+            ref="screenControlFormRef"
+            :agent-controls-visible="true"
+            :agent-settings="currentAgentSettings"
             as-form
             attach-textarea
             class="studio-autopilot__control-form"
@@ -335,12 +338,15 @@
             @activate-control="activateControl"
             @cancel="clearSelectedControl"
             @interrupt="requestCodexInterrupt"
-            @submit="submitSelectedControl"
+            @submit="submitScreenComposerControl"
+            @update-agent-setting="updateAgentSetting"
             @update-value="updateSelectedControlValue"
           />
 
           <Vibe64WorkflowControlForm
             v-else-if="passiveComposerVisible"
+            :agent-controls-visible="true"
+            :agent-settings="currentAgentSettings"
             as-form
             attach-textarea
             :attachments-enabled="false"
@@ -361,6 +367,7 @@
             @activate-control="activateControl"
             @interrupt="requestCodexInterrupt"
             @submit="submitPassiveComposer"
+            @update-agent-setting="updateAgentSetting"
             @update-value="updatePassiveComposer"
           />
 
@@ -571,6 +578,9 @@ import {
 import {
   VIBE64_ACTION_DISPATCH_ROUTES as ACTION_DISPATCH_ROUTES
 } from "@local/vibe64-core/shared";
+import {
+  VIBE64_DEFAULT_AGENT_PROVIDER_ID
+} from "@local/vibe64-runtime/shared";
 import Vibe64FixCodexDialog from "@/components/studio/Vibe64FixCodexDialog.vue";
 import Vibe64LaunchControls from "@/components/studio/Vibe64LaunchControls.vue";
 import Vibe64BackgroundTasks from "@/components/studio/vibe64-session/Vibe64BackgroundTasks.vue";
@@ -592,6 +602,9 @@ import {
 import {
   useVibe64BackgroundTasks
 } from "@/composables/useVibe64BackgroundTasks.js";
+import {
+  useVibe64AgentSettings
+} from "@/composables/useVibe64AgentSettings.js";
 import { useVibe64StepInputForm } from "@/composables/useVibe64StepInputForm.js";
 import {
   stripTerminalControlSequences
@@ -725,6 +738,16 @@ const props = defineProps({
   }
 });
 
+const agentSettings = useVibe64AgentSettings();
+const currentAgentSettings = computed(() => agentSettings.settings.value);
+const requestAgentSettings = computed(() => {
+  const settings = currentAgentSettings.value || {};
+  return String(settings.providerId || "") !== VIBE64_DEFAULT_AGENT_PROVIDER_ID ||
+    String(settings.model || "") ||
+    String(settings.thinking || "")
+    ? settings
+    : null;
+});
 const {
   canDispatchNextOperation,
   clearFailure,
@@ -749,6 +772,7 @@ const {
   actions: props.actions,
   commandRunner: props.commandRunner || undefined,
   enabled: computed(() => props.automationEnabled),
+  agentSettings: requestAgentSettings,
   refreshSessionData: () => props.refreshSessionData(),
   session: computed(() => props.session)
 });
@@ -770,6 +794,7 @@ const {
 } = useVibe64FixCodexDialog();
 const commandSpyExpanded = ref(false);
 const sessionToolsMenuOpen = ref(false);
+const screenControlFormRef = ref(null);
 const rightPaneTab = ref("preview");
 const SESSION_TOOL_STORAGE_PREFIX = "vibe64.sessionTools.active";
 const projectPaneIds = Object.freeze([
@@ -1286,11 +1311,22 @@ async function activateWorkflowButtonControl(control = {}) {
   return activateControl(control);
 }
 
-async function submitSelectedWorkflowControl() {
+async function submitSelectedWorkflowControl(options = {}) {
   if (await saveCurrentStepInputForControl(selectedControl.value) === false) {
     return false;
   }
-  return submitSelectedControl();
+  return submitSelectedControl({
+    ...(options && typeof options === "object" && !Array.isArray(options) ? options : {}),
+    agentSettings: requestAgentSettings.value
+  });
+}
+
+async function submitScreenComposerControl(options = {}) {
+  const accepted = await submitSelectedControl(options);
+  if (accepted) {
+    screenControlFormRef.value?.clearAttachments?.();
+  }
+  return accepted;
 }
 
 function submitPassiveComposer() {
@@ -1316,27 +1352,44 @@ async function runActionAfterStepInput(action = {}) {
   if (String(action.dispatchRoute || "") === ACTION_DISPATCH_ROUTES.COMMAND_TERMINAL) {
     return runCommandAction(action);
   }
-  return props.actions.runAction(action);
+  return props.actions.runAction(action, {
+    agentSettings: requestAgentSettings.value
+  });
 }
 
 async function runWorkflowControl(control = {}, options = {}) {
+  const runOptions = {
+    ...(options && typeof options === "object" && !Array.isArray(options) ? options : {}),
+    agentSettings: requestAgentSettings.value
+  };
   const sourceAction = workflowControlSourceAction(control);
   if (!sourceAction) {
-    return runPresentedIntent(control, options);
+    return runPresentedIntent(control, runOptions);
   }
   if (String(sourceAction.dispatchRoute || "") === ACTION_DISPATCH_ROUTES.COMMAND_TERMINAL) {
     return runCommandAction(sourceAction);
   }
-  const fields = options?.fields && typeof options.fields === "object" && !Array.isArray(options.fields)
-    ? options.fields
+  const fields = runOptions.fields && typeof runOptions.fields === "object" && !Array.isArray(runOptions.fields)
+    ? runOptions.fields
+    : {};
+  const displayFields = runOptions.displayFields && typeof runOptions.displayFields === "object" && !Array.isArray(runOptions.displayFields)
+    ? runOptions.displayFields
     : {};
   const response = await props.actions.runAction(sourceAction, {
+    agentSettings: runOptions.agentSettings,
+    displayInput: displayFields,
     input: fields
   });
   await props.refreshSessionData();
   await nextTick();
   await runNextOperation();
   return response !== false;
+}
+
+function updateAgentSetting(parameterId = "", value = "") {
+  agentSettings.update({
+    [String(parameterId || "")]: String(value || "")
+  });
 }
 
 async function retryFromCommandFailure() {

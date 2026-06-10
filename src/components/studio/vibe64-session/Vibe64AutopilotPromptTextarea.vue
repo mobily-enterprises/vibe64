@@ -1,12 +1,48 @@
 <template>
   <div
     class="studio-autopilot-prompt-textarea"
-    :class="{ 'studio-autopilot-prompt-textarea--dragging': dragActive }"
+    :class="{
+      'studio-autopilot-prompt-textarea--dragging': dragActive,
+      'studio-autopilot-prompt-textarea--has-attachments': uploadedAttachments.length
+    }"
     @dragenter.prevent="handleDragEnter"
     @dragover.prevent="handleDragOver"
     @dragleave.prevent="handleDragLeave"
     @drop.prevent="handleDrop"
   >
+    <input
+      ref="fileInput"
+      class="studio-autopilot-prompt-textarea__file-input"
+      :disabled="!canUseFilePicker"
+      multiple
+      type="file"
+      @change="handleFileInputChange"
+    >
+
+    <div
+      v-if="uploadedAttachments.length"
+      class="studio-autopilot-prompt-textarea__attachments"
+      aria-label="Attached files"
+    >
+      <v-chip
+        v-for="attachment in uploadedAttachments"
+        :key="attachment.attachmentId"
+        class="studio-autopilot-prompt-textarea__attachment"
+        closable
+        :close-icon="mdiClose"
+        :disabled="attachmentUploading"
+        density="comfortable"
+        :prepend-icon="mdiFileOutline"
+        size="small"
+        variant="outlined"
+        @click:close="removeUploadedAttachment(attachment)"
+      >
+        <span class="studio-autopilot-prompt-textarea__attachment-name">
+          {{ attachment.fileName }}
+        </span>
+      </v-chip>
+    </div>
+
     <v-textarea
       :model-value="modelValue"
       :auto-grow="autoGrow"
@@ -22,28 +58,14 @@
       :variant="variant"
       @update:model-value="$emit('update:modelValue', String($event || ''))"
     />
-
-    <div
-      v-if="uploadedAttachments.length"
-      class="studio-autopilot-prompt-textarea__attachments"
-    >
-      <v-chip
-        v-for="attachment in uploadedAttachments"
-        :key="attachment.attachmentId"
-        :prepend-icon="mdiPaperclip"
-        size="small"
-        variant="tonal"
-      >
-        {{ attachment.fileName }}
-      </v-chip>
-    </div>
   </div>
 </template>
 
 <script setup>
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import {
-  mdiPaperclip
+  mdiClose,
+  mdiFileOutline
 } from "@mdi/js";
 import {
   useVibe64CodexCommands
@@ -51,11 +73,11 @@ import {
 import {
   useCodexAttachments
 } from "@/composables/useCodexAttachments.js";
-import {
-  appendPromptAttachmentReferences
-} from "@/lib/vibe64PromptAttachments.js";
 
-const emit = defineEmits(["update:modelValue"]);
+const emit = defineEmits([
+  "attachments-change",
+  "update:modelValue"
+]);
 
 const props = defineProps({
   attachmentsEnabled: {
@@ -117,14 +139,21 @@ const uploadAttachment = codexCommands?.uploadAttachment || (async () => ({
 }));
 const attachments = useCodexAttachments({
   canUpload: () => props.attachmentsEnabled && !props.disabled,
-  onUploaded: async (uploaded = []) => {
-    updatePromptWithAttachments(uploaded);
+  onUploaded: async () => {
+    emitAttachmentsChanged();
   },
   sessionId: computed(() => props.sessionId),
   uploadAttachment
 });
 const dragActive = attachments.dragActive;
 const uploadedAttachments = attachments.attachments;
+const attachmentUploading = attachments.uploading;
+const fileInput = ref(null);
+const canUseFilePicker = computed(() => Boolean(
+  props.attachmentsEnabled &&
+  !props.disabled &&
+  !attachmentUploading.value
+));
 const combinedErrorMessages = computed(() => {
   const parentMessages = Array.isArray(props.errorMessages)
     ? props.errorMessages
@@ -134,26 +163,60 @@ const combinedErrorMessages = computed(() => {
     : parentMessages;
 });
 
-function updatePromptWithAttachments(uploadedAttachments = []) {
-  emit(
-    "update:modelValue",
-    appendPromptAttachmentReferences(props.modelValue, uploadedAttachments)
-  );
+function emitAttachmentsChanged() {
+  emit("attachments-change", [...uploadedAttachments.value]);
+}
+
+function removeUploadedAttachment(attachment = {}) {
+  const removed = attachments.removeAttachment(attachment);
+  if (!removed.length) {
+    return;
+  }
+  emitAttachmentsChanged();
+}
+
+function clearAttachments() {
+  if (!uploadedAttachments.value.length) {
+    return false;
+  }
+  attachments.clearAttachments();
+  emitAttachmentsChanged();
+  return true;
+}
+
+async function handleFileInputChange(event = {}) {
+  await attachments.uploadFiles(event?.target?.files);
+  if (event?.target) {
+    event.target.value = "";
+  }
 }
 
 function handleDrop(event) {
   void attachments.handleDrop(event);
 }
 
+function openFilePicker() {
+  if (!canUseFilePicker.value) {
+    return false;
+  }
+  fileInput.value?.click();
+  return true;
+}
+
 const handleDragEnter = attachments.handleDragEnter;
 const handleDragOver = attachments.handleDragOver;
 const handleDragLeave = attachments.handleDragLeave;
+
+defineExpose({
+  clearAttachments,
+  openFilePicker
+});
 </script>
 
 <style scoped>
 .studio-autopilot-prompt-textarea {
   display: grid;
-  gap: 0.45rem;
+  gap: 0;
   position: relative;
   text-align: left;
 }
@@ -163,10 +226,59 @@ const handleDragLeave = attachments.handleDragLeave;
   outline-offset: 4px;
 }
 
+.studio-autopilot-prompt-textarea__file-input {
+  display: none;
+}
+
 .studio-autopilot-prompt-textarea__attachments {
   align-items: center;
+  background: rgba(var(--v-theme-surface), 0.96);
+  border: 1px solid rgba(var(--v-theme-outline), 0.18);
+  border-bottom: 0;
+  border-radius: 10px 10px 0 0;
+  box-shadow: inset 0 -1px 0 rgba(var(--v-theme-outline), 0.06);
   display: flex;
   flex-wrap: wrap;
-  gap: 0.45rem;
+  gap: 0.38rem;
+  padding: 0.58rem 0.62rem 0.34rem;
+  position: relative;
+  z-index: 1;
+}
+
+.studio-autopilot-prompt-textarea--has-attachments :deep(.v-field) {
+  border-top-left-radius: 0 !important;
+  border-top-right-radius: 0 !important;
+  margin-top: -1px;
+}
+
+.studio-autopilot-prompt-textarea__attachment {
+  background: rgba(var(--v-theme-primary), 0.05) !important;
+  border-color: rgba(var(--v-theme-primary), 0.24) !important;
+  border-radius: 999px !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  color: rgb(var(--v-theme-on-surface)) !important;
+  max-width: min(19rem, 100%);
+  min-width: 0;
+}
+
+.studio-autopilot-prompt-textarea__attachment :deep(.v-chip__prepend) {
+  color: rgb(var(--v-theme-primary));
+  opacity: 0.88;
+}
+
+.studio-autopilot-prompt-textarea__attachment :deep(.v-chip__close) {
+  color: rgba(var(--v-theme-on-surface), 0.62);
+}
+
+.studio-autopilot-prompt-textarea__attachment:hover {
+  background: rgba(var(--v-theme-primary), 0.08) !important;
+  border-color: rgba(var(--v-theme-primary), 0.34) !important;
+}
+
+.studio-autopilot-prompt-textarea__attachment-name {
+  display: inline-block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

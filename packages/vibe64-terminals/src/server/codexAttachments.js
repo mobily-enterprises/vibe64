@@ -1,6 +1,5 @@
 import crypto from "node:crypto";
 import { mkdir, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
@@ -10,16 +9,11 @@ import {
   targetRuntimeIdentity
 } from "@local/vibe64-core/server/projectRuntimeIdentity";
 import {
-  STUDIO_TEMP_DIR_NAME
-} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
-
-const CODEX_ATTACHMENT_CONTAINER_ROOT = "/studio-attachments";
-const CODEX_ATTACHMENT_HOST_ROOT = path.join(
-  tmpdir(),
-  STUDIO_TEMP_DIR_NAME,
-  "attachments",
-  crypto.randomUUID()
-);
+  CODEX_ATTACHMENT_CONTAINER_ROOT,
+  CODEX_ATTACHMENT_HOST_ROOT,
+  codexAttachmentMount,
+  prepareCodexAttachmentRoot
+} from "@local/vibe64-runtime/server/codexAttachmentPaths";
 const CODEX_ATTACHMENT_UPLOAD_BODY_LIMIT_BYTES = Number.MAX_SAFE_INTEGER;
 const ATTACHMENT_TTL_MS = 30 * 60 * 1000;
 const attachmentCleanupTimers = new Map();
@@ -68,12 +62,6 @@ function decodeAttachmentData(value = "") {
     return null;
   }
   return Buffer.from(normalized, "base64");
-}
-
-async function prepareCodexAttachmentRoot() {
-  await mkdir(CODEX_ATTACHMENT_HOST_ROOT, {
-    recursive: true
-  });
 }
 
 async function cleanupCodexAttachments(targetRoot, sessionId, attachmentId = "") {
@@ -144,6 +132,7 @@ export {
   CODEX_ATTACHMENT_CONTAINER_ROOT,
   CODEX_ATTACHMENT_HOST_ROOT,
   CODEX_ATTACHMENT_UPLOAD_BODY_LIMIT_BYTES,
+  codexAttachmentMount,
   cleanupCodexAttachments,
   prepareCodexAttachmentRoot,
   storeCodexAttachment

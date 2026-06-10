@@ -191,6 +191,15 @@
           <v-icon :icon="mdiWebClock" size="46" />
         </div>
         <span>Opening preview.</span>
+        <v-btn
+          v-if="embeddedRecoveryButtonVisible"
+          :disabled="operationBusy"
+          :icon="mdiPlayCircleOutline"
+          size="small"
+          title="Start preview"
+          variant="tonal"
+          @click="recoverEmbeddedPreview"
+        />
       </div>
       <div
         v-else-if="!previewUrl"
@@ -417,6 +426,12 @@ const embeddedAutoStartButtonVisible = computed(() => Boolean(
   requestedAutoStartTargetId.value &&
   !terminalVisible.value
 ));
+const embeddedRecoveryButtonVisible = computed(() => Boolean(
+  props.embeddedPreview &&
+  embeddedAutoStartTarget.value &&
+  terminalVisible.value &&
+  !terminalIsRunning.value
+));
 const manualLaunchMenuVisible = computed(() => Boolean(
   !terminalVisible.value &&
   launchTargets.value.length > 0 &&
@@ -534,6 +549,18 @@ function requestPreviewState() {
 function handlePreviewFrameLoad() {
   previewDebugLog("iframe.load");
   requestPreviewState();
+}
+
+async function recoverEmbeddedPreview() {
+  if (!embeddedAutoStartTarget.value || operationBusy.value) {
+    return false;
+  }
+  if (terminalCanRetry.value) {
+    return retryTerminal();
+  }
+  return run(embeddedAutoStartTarget.value, {
+    applyDefaultDisplay: false
+  });
 }
 
 function stopPreviewReadyRetries() {

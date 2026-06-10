@@ -42,8 +42,12 @@ import {
   normalizeAgentThread,
   normalizeAgentTurn
 } from "./agentProviders.js";
+import {
+  codexAttachmentMount,
+  prepareCodexAttachmentRoot
+} from "./codexAttachmentPaths.js";
 
-const CODEX_APP_SERVER_METADATA_SCHEMA_VERSION = 3;
+const CODEX_APP_SERVER_METADATA_SCHEMA_VERSION = 4;
 const CODEX_APP_SERVER_PROVIDER_ID = AGENT_PROVIDER_IDS.CODEX_APP_SERVER;
 const CODEX_APP_SERVER_TRANSPORT = Object.freeze({
   UNIX: "unix"
@@ -58,6 +62,7 @@ const CODEX_APP_SERVER_CONTAINER_RUNTIME_DIR = "/vibe64-codex-app-server";
 const CODEX_APP_SERVER_READY_TIMEOUT_MS = 15000;
 const CODEX_APP_SERVER_LOCK_TIMEOUT_MS = 10000;
 const CODEX_APP_SERVER_LOCK_STALE_MS = 120000;
+const CODEX_APP_SERVER_CONTAINER_REMOVE_TIMEOUT_MS = 5000;
 const CODEX_APP_SERVER_REQUEST_TIMEOUT_MS = 60000;
 const CODEX_APP_SERVER_CLIENT_VERSION = "0.1.0";
 
@@ -205,6 +210,83 @@ function codexAppServerContainerName(runtimeDir = "") {
   return `${CODEX_APP_SERVER_CONTAINER_PREFIX}-${stableHash(path.resolve(runtimeDir))}`;
 }
 
+function waitForSpawnedProcessClose(child, {
+  timeoutMs = CODEX_APP_SERVER_CONTAINER_REMOVE_TIMEOUT_MS
+} = {}) {
+  if (!child || typeof child.once !== "function") {
+    return Promise.resolve({
+      ok: true
+    });
+  }
+  return new Promise((resolve) => {
+    let settled = false;
+    let timeout = null;
+    const settle = (result) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timeout);
+      resolve(result);
+    };
+    timeout = setTimeout(() => {
+      settle({
+        ok: false,
+        timedOut: true
+      });
+      child.kill?.("SIGTERM");
+    }, timeoutMs);
+    timeout.unref?.();
+    child.once("error", (error) => settle({
+      error,
+      ok: false
+    }));
+    child.once("close", (code, signal) => settle({
+      code,
+      ok: code === 0,
+      signal
+    }));
+    child.once("exit", (code, signal) => settle({
+      code,
+      ok: code === 0,
+      signal
+    }));
+  });
+}
+
+async function removeCodexAppServerContainer({
+  runtimeDir = "",
+  spawn = defaultSpawn,
+  timeoutMs = CODEX_APP_SERVER_CONTAINER_REMOVE_TIMEOUT_MS,
+  useDocker = true
+} = {}) {
+  if (!useDocker) {
+    return {
+      removed: false
+    };
+  }
+  const containerName = codexAppServerContainerName(runtimeDir);
+  try {
+    const child = spawn("docker", ["rm", "-f", containerName], {
+      stdio: "ignore"
+    });
+    const result = await waitForSpawnedProcessClose(child, {
+      timeoutMs
+    });
+    return {
+      ...result,
+      containerName,
+      removed: result.ok === true
+    };
+  } catch (error) {
+    return {
+      containerName,
+      error,
+      removed: false
+    };
+  }
+}
+
 function codexAppServerDockerArgs({
   containerEndpoint = codexAppServerContainerEndpoint(),
   image = STUDIO_BASE_TOOLCHAIN_IMAGE,
@@ -240,6 +322,7 @@ function codexAppServerDockerArgs({
       source: normalizedRuntimeDir,
       target: CODEX_APP_SERVER_CONTAINER_RUNTIME_DIR
     }),
+    ...dockerMountArgs(codexAttachmentMount()),
     ...(normalizedTargetRoot
       ? [
           "-v",
@@ -293,6 +376,8 @@ function normalizeCodexAppServerMetadata(metadata = {}) {
   const normalized = isPlainObject(metadata) ? metadata : {};
   const endpoint = normalizeAgentText(normalized.endpoint);
   return {
+    attachmentContainerRoot: normalizeAgentText(normalized.attachmentContainerRoot),
+    attachmentHostRoot: normalizeAgentText(normalized.attachmentHostRoot),
     containerEndpoint: normalizeAgentText(normalized.containerEndpoint),
     containerRuntimeDir: normalizeAgentText(normalized.containerRuntimeDir),
     containerSocketPath: normalizeAgentText(normalized.containerSocketPath),
@@ -311,8 +396,11 @@ function normalizeCodexAppServerMetadata(metadata = {}) {
 }
 
 function codexAppServerMetadataIsWellFormed(metadata = {}) {
+  const attachmentMount = codexAttachmentMount();
   return Boolean(
     metadata.schemaVersion === CODEX_APP_SERVER_METADATA_SCHEMA_VERSION &&
+    metadata.attachmentContainerRoot === attachmentMount.target &&
+    metadata.attachmentHostRoot === attachmentMount.source &&
     metadata.provider === CODEX_APP_SERVER_PROVIDER_ID &&
     metadata.transport === CODEX_APP_SERVER_TRANSPORT.UNIX &&
     metadata.endpoint &&
@@ -387,6 +475,7 @@ async function lockIsStale(lockDir = "") {
 async function acquireRuntimeLock(runtimeDir = "", {
   timeoutMs = CODEX_APP_SERVER_LOCK_TIMEOUT_MS
 } = {}) {
+  await prepareCodexAttachmentRoot();
   await ensurePrivateDirectory(runtimeDir);
   const lockDir = codexAppServerLockDir(runtimeDir);
   const startedAt = Date.now();
@@ -516,6 +605,8 @@ async function startCodexAppServerProcess({
   }
 
   return {
+    attachmentContainerRoot: codexAttachmentMount().target,
+    attachmentHostRoot: codexAttachmentMount().source,
     containerEndpoint,
     containerRuntimeDir: CODEX_APP_SERVER_CONTAINER_RUNTIME_DIR,
     containerSocketPath: codexAppServerContainerSocketPath(),
@@ -554,6 +645,11 @@ async function ensureCodexAppServerRuntime(options = {}) {
         reused: true
       };
     }
+
+    await removeCodexAppServerContainer({
+      ...options,
+      runtimeDir
+    });
 
     const started = await startCodexAppServerProcess({
       ...options,

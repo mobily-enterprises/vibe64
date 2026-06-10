@@ -19,6 +19,10 @@ import {
   codexTurnInput,
   ensureCodexAppServerRuntime
 } from "@local/vibe64-runtime/server/codexAppServerProvider";
+import {
+  CODEX_ATTACHMENT_CONTAINER_ROOT,
+  CODEX_ATTACHMENT_HOST_ROOT
+} from "@local/vibe64-runtime/server/codexAttachmentPaths";
 
 async function withTemporaryDirectory(callback) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "vibe64-codex-provider-"));
@@ -49,6 +53,8 @@ function unixEndpointForRuntime(runtimeDir) {
 function metadataForRuntime(runtimeDir) {
   const socketPath = socketPathForRuntime(runtimeDir);
   return {
+    attachmentContainerRoot: CODEX_ATTACHMENT_CONTAINER_ROOT,
+    attachmentHostRoot: CODEX_ATTACHMENT_HOST_ROOT,
     containerEndpoint: codexAppServerContainerEndpoint(),
     containerRuntimeDir: "/vibe64-codex-app-server",
     containerSocketPath: codexAppServerContainerSocketPath(),
@@ -64,6 +70,30 @@ function metadataForRuntime(runtimeDir) {
     startedAt: "2026-06-04T00:00:00.000Z",
     transport: CODEX_APP_SERVER_TRANSPORT.UNIX
   };
+}
+
+function fakeChild({
+  closeCode = 0,
+  emitClose = true,
+  pid = 12345
+} = {}) {
+  const listeners = new Map();
+  const child = {
+    kill() {},
+    once(eventName, listener) {
+      listeners.set(eventName, listener);
+      return child;
+    },
+    pid,
+    unref() {}
+  };
+  queueMicrotask(() => {
+    listeners.get("spawn")?.();
+    if (emitClose) {
+      listeners.get("close")?.(closeCode, null);
+    }
+  });
+  return child;
 }
 
 test("codex provider runtime base uses explicit Vibe64 runtime directory", () => {
@@ -129,16 +159,17 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
       readyTimeoutMs: 2000,
       runtimeDir,
       spawn(command, args, options) {
-        writeFileSync(socketPathForRuntime(runtimeDir), "");
+        if (command === "docker" && args[0] === "run") {
+          writeFileSync(socketPathForRuntime(runtimeDir), "");
+        }
         spawnCalls.push({
           args,
           command,
           options
         });
-        return {
-          pid: 12345,
-          unref() {}
-        };
+        return fakeChild({
+          emitClose: command !== "docker" || args[0] !== "run"
+        });
       },
       targetRoot,
       workdir
@@ -147,26 +178,77 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
     assert.equal(runtime.reused, false);
     assert.equal(runtime.endpoint, unixEndpointForRuntime(runtimeDir));
     assert.equal(runtime.containerEndpoint, codexAppServerContainerEndpoint());
-    assert.equal(spawnCalls.length, 1);
+    assert.equal(spawnCalls.length, 2);
     assert.equal(spawnCalls[0].command, "docker");
-    assert.equal(spawnCalls[0].args[0], "run");
-    assert.ok(spawnCalls[0].args.includes("--pull"));
-    assert.ok(spawnCalls[0].args.includes("never"));
-    assert.ok(spawnCalls[0].args.includes("--rm"));
-    assert.ok(spawnCalls[0].args.includes(`${runtimeDir}:/vibe64-codex-app-server`));
-    assert.ok(spawnCalls[0].args.includes(`${targetRoot}:/workspace`));
-    assert.ok(spawnCalls[0].args.includes(`${targetRoot}:${targetRoot}`));
-    assert.ok(spawnCalls[0].args.includes(workdir));
-    assert.ok(spawnCalls[0].args.includes("test-codex-toolchain:latest"));
-    assert.equal(spawnCalls[0].args.at(-3), "bash");
-    assert.equal(spawnCalls[0].args.at(-2), "-lc");
-    assert.match(spawnCalls[0].args.at(-1), /codex app-server --listen unix:\/\/\/vibe64-codex-app-server\/app-server\.sock/u);
+    assert.deepEqual(spawnCalls[0].args.slice(0, 2), ["rm", "-f"]);
+
+    const runCall = spawnCalls[1];
+    assert.equal(runCall.command, "docker");
+    assert.equal(runCall.args[0], "run");
+    assert.equal(spawnCalls[0].args[2], runCall.args[runCall.args.indexOf("--name") + 1]);
+    assert.ok(runCall.args.includes("--pull"));
+    assert.ok(runCall.args.includes("never"));
+    assert.ok(runCall.args.includes("--rm"));
+    assert.ok(runCall.args.includes(`${runtimeDir}:/vibe64-codex-app-server`));
+    assert.ok(runCall.args.includes(`${CODEX_ATTACHMENT_HOST_ROOT}:${CODEX_ATTACHMENT_CONTAINER_ROOT}:ro`));
+    assert.ok(runCall.args.includes(`${targetRoot}:/workspace`));
+    assert.ok(runCall.args.includes(`${targetRoot}:${targetRoot}`));
+    assert.ok(runCall.args.includes(workdir));
+    assert.ok(runCall.args.includes("test-codex-toolchain:latest"));
+    assert.equal(runCall.args.at(-3), "bash");
+    assert.equal(runCall.args.at(-2), "-lc");
+    assert.match(runCall.args.at(-1), /codex app-server --listen unix:\/\/\/vibe64-codex-app-server\/app-server\.sock/u);
 
     const stored = JSON.parse(await readFile(path.join(runtimeDir, "runtime.json"), "utf8"));
+    assert.equal(stored.attachmentContainerRoot, CODEX_ATTACHMENT_CONTAINER_ROOT);
+    assert.equal(stored.attachmentHostRoot, CODEX_ATTACHMENT_HOST_ROOT);
     assert.equal(stored.endpoint, unixEndpointForRuntime(runtimeDir));
     assert.equal(stored.containerEndpoint, codexAppServerContainerEndpoint());
     assert.equal(stored.provider, CODEX_APP_SERVER_PROVIDER_ID);
     assert.equal(stored.transport, CODEX_APP_SERVER_TRANSPORT.UNIX);
+  });
+});
+
+test("codex provider removes stale app-server container before replacing old runtime metadata", async () => {
+  await withTemporaryDirectory(async (runtimeDir) => {
+    const staleMetadata = {
+      ...metadataForRuntime(runtimeDir),
+      attachmentContainerRoot: "",
+      attachmentHostRoot: "",
+      schemaVersion: CODEX_APP_SERVER_METADATA_SCHEMA_VERSION - 1
+    };
+    await writeMetadata(runtimeDir, staleMetadata);
+    const spawnCalls = [];
+    const runtime = await ensureCodexAppServerRuntime({
+      readyTimeoutMs: 2000,
+      runtimeDir,
+      spawn(command, args, options) {
+        if (command === "docker" && args[0] === "run") {
+          writeFileSync(socketPathForRuntime(runtimeDir), "");
+        }
+        spawnCalls.push({
+          args,
+          command,
+          options
+        });
+        return fakeChild({
+          emitClose: command !== "docker" || args[0] !== "run"
+        });
+      }
+    });
+
+    assert.equal(runtime.reused, false);
+    assert.equal(spawnCalls.length, 2);
+    assert.equal(spawnCalls[0].command, "docker");
+    assert.deepEqual(spawnCalls[0].args.slice(0, 2), ["rm", "-f"]);
+    assert.equal(spawnCalls[1].command, "docker");
+    assert.equal(spawnCalls[1].args[0], "run");
+    assert.equal(spawnCalls[0].args[2], spawnCalls[1].args[spawnCalls[1].args.indexOf("--name") + 1]);
+
+    const stored = JSON.parse(await readFile(path.join(runtimeDir, "runtime.json"), "utf8"));
+    assert.equal(stored.schemaVersion, CODEX_APP_SERVER_METADATA_SCHEMA_VERSION);
+    assert.equal(stored.attachmentContainerRoot, CODEX_ATTACHMENT_CONTAINER_ROOT);
+    assert.equal(stored.attachmentHostRoot, CODEX_ATTACHMENT_HOST_ROOT);
   });
 });
 

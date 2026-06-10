@@ -10,6 +10,10 @@ import {
 import {
   controlHasClientAction
 } from "@/lib/vibe64PresentationControls.js";
+import {
+  appendPromptAttachmentFileNames,
+  appendPromptAttachmentReferences
+} from "@/lib/vibe64PromptAttachments.js";
 
 function controlHasInputFields(control = {}) {
   return Boolean(control && Array.isArray(control.inputFields) && control.inputFields.length > 0);
@@ -50,6 +54,40 @@ function selectedControlQuestionSugar(control = {}) {
 
 function requiredFieldIsMissing(field = {}, values = {}) {
   return field.required !== false && !String(values[field.name] || "").trim();
+}
+
+function plainObject(value = {}) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function attachmentFieldsFromOptions(options = {}) {
+  return plainObject(options?.attachmentFields);
+}
+
+function withAttachmentReferences(fields = {}, attachmentFields = {}) {
+  const nextFields = {
+    ...plainObject(fields)
+  };
+  for (const [fieldName, attachments] of Object.entries(attachmentFields)) {
+    if (!Array.isArray(attachments) || attachments.length < 1) {
+      continue;
+    }
+    nextFields[fieldName] = appendPromptAttachmentReferences(nextFields[fieldName], attachments);
+  }
+  return nextFields;
+}
+
+function withAttachmentDisplayNames(fields = {}, attachmentFields = {}) {
+  const nextFields = {
+    ...plainObject(fields)
+  };
+  for (const [fieldName, attachments] of Object.entries(attachmentFields)) {
+    if (!Array.isArray(attachments) || attachments.length < 1) {
+      continue;
+    }
+    nextFields[fieldName] = appendPromptAttachmentFileNames(nextFields[fieldName], attachments);
+  }
+  return nextFields;
 }
 
 function useVibe64AutopilotComposer({
@@ -186,13 +224,30 @@ function useVibe64AutopilotComposer({
     clearSelectedControl();
   }
 
-  async function submitSelectedControl() {
+  async function submitSelectedControl(options = {}) {
     if (!canSubmitSelectedControl.value) {
       return false;
     }
     const control = selectedControl.value;
+    const normalizedOptions = options && typeof options === "object" && !Array.isArray(options) ? options : {};
+    const {
+      attachmentFields: _attachmentFields,
+      ...runOptions
+    } = normalizedOptions;
+    const submissionFields = selectedControlSubmissionFields();
+    const attachmentFields = attachmentFieldsFromOptions(normalizedOptions);
+    const attachmentFieldCount = Object.values(attachmentFields)
+      .filter((attachments) => Array.isArray(attachments) && attachments.length > 0)
+      .length;
+    const submissionOptions = {
+      ...runOptions,
+      fields: withAttachmentReferences(submissionFields, attachmentFields)
+    };
+    if (attachmentFieldCount > 0) {
+      submissionOptions.displayFields = withAttachmentDisplayNames(submissionFields, attachmentFields);
+    }
     const accepted = await onRunControl(control, {
-      fields: selectedControlSubmissionFields()
+      ...submissionOptions
     });
     if (!accepted) {
       return false;

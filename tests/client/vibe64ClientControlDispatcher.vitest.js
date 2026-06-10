@@ -7,16 +7,16 @@ import {
   runVibe64ClientControl
 } from "../../src/lib/vibe64ClientControlDispatcher.js";
 import {
-  startVibe64CodexTerminal
+  ensureVibe64CodexThread
 } from "@/lib/vibe64SessionApi.js";
 
 vi.mock("@/lib/vibe64SessionApi.js", () => ({
-  startVibe64CodexTerminal: vi.fn()
+  ensureVibe64CodexThread: vi.fn()
 }));
 
 describe("vibe64ClientControlDispatcher", () => {
   beforeEach(() => {
-    vi.mocked(startVibe64CodexTerminal).mockReset();
+    vi.mocked(ensureVibe64CodexThread).mockReset();
   });
 
   it("dispatches the open diff control through the shared action contract", async () => {
@@ -54,9 +54,9 @@ describe("vibe64ClientControlDispatcher", () => {
     expect(openDialog).not.toHaveBeenCalled();
   });
 
-  it("dispatches Codex terminal retry controls without workflow-specific UI checks", async () => {
+  it("dispatches Codex retry controls through app-server thread preparation", async () => {
     const refreshSessionData = vi.fn();
-    vi.mocked(startVibe64CodexTerminal).mockResolvedValue({
+    vi.mocked(ensureVibe64CodexThread).mockResolvedValue({
       ok: true
     });
 
@@ -69,7 +69,7 @@ describe("vibe64ClientControlDispatcher", () => {
       sessionId: "session_123"
     })).resolves.toBe(true);
 
-    expect(startVibe64CodexTerminal).toHaveBeenCalledWith("session_123");
+    expect(ensureVibe64CodexThread).toHaveBeenCalledWith("session_123");
     expect(refreshSessionData).toHaveBeenCalledTimes(1);
   });
 

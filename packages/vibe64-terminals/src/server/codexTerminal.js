@@ -35,6 +35,9 @@ import {
   sendCodexAppServerPromptForSession
 } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
 import {
+  effectiveVibe64AgentSettings
+} from "@local/vibe64-runtime/shared";
+import {
   parseAgentTurnResultEnvelope,
   stripAgentTurnResultEnvelope
 } from "@local/vibe64-runtime/server/agentTurnResults";
@@ -58,8 +61,7 @@ import {
   terminalWorktreePath
 } from "./terminalShared.js";
 import {
-  CODEX_ATTACHMENT_CONTAINER_ROOT,
-  CODEX_ATTACHMENT_HOST_ROOT,
+  codexAttachmentMount,
   cleanupCodexAttachments,
   prepareCodexAttachmentRoot,
   storeCodexAttachment
@@ -98,8 +100,6 @@ const DEBUG_PROMPTS_ENABLED = String(process.env.DEBUG_PROMPTS || "").trim() ===
 const CODEX_PROMPT_SUBMIT_PAUSE_MS = 20;
 const TERMINAL_BRACKETED_PASTE_START = "\u001b[200~";
 const TERMINAL_BRACKETED_PASTE_END = "\u001b[201~";
-const CODEX_SESSION_MODEL = "gpt-5.5";
-const CODEX_SESSION_REASONING_EFFORT = "xhigh";
 const CODEX_APP_SERVER_TASK_ID = "codex_app_server";
 const START_CODEX_TERMINAL_CONTROL_ACTION = "start_codex_terminal";
 const MAX_OPEN_CODEX_TERMINALS = 3;
@@ -112,6 +112,19 @@ const CODEX_APP_SERVER_TURN_STATE = Object.freeze({
 
 function normalizeText(value) {
   return String(value || "").trim();
+}
+
+function codexEffectiveAgentSettings(agentSettings = {}) {
+  return effectiveVibe64AgentSettings(agentSettings);
+}
+
+function codexAgentSettingsFromSession(session = {}) {
+  const metadata = session.metadata || {};
+  return {
+    model: normalizeText(metadata.codex_agent_settings_model),
+    providerId: normalizeText(metadata.codex_agent_settings_provider),
+    thinking: normalizeText(metadata.codex_agent_settings_thinking)
+  };
 }
 
 function errorMessage(value, fallback = "Codex could not be prepared.") {
@@ -505,16 +518,18 @@ function codexAppServerDeveloperInstructions(session = {}) {
 }
 
 function codexStartupScript(codexThreadId = "", {
+  agentSettings = {},
   remoteEndpoint = ""
 } = {}) {
   const normalizedThreadId = normalizeCodexThreadId(codexThreadId);
   const normalizedRemoteEndpoint = normalizeText(remoteEndpoint);
-  const codexReasoningConfig = `model_reasoning_effort="${CODEX_SESSION_REASONING_EFFORT}"`;
+  const effectiveSettings = codexEffectiveAgentSettings(agentSettings);
+  const codexReasoningConfig = `model_reasoning_effort="${effectiveSettings.thinking}"`;
   const codexCommand = [
     "codex",
     ...(normalizedRemoteEndpoint ? ["--remote", normalizedRemoteEndpoint] : []),
     "--model",
-    CODEX_SESSION_MODEL,
+    effectiveSettings.model,
     "-c",
     codexReasoningConfig,
     "--dangerously-bypass-approvals-and-sandbox",
@@ -524,6 +539,7 @@ function codexStartupScript(codexThreadId = "", {
 }
 
 function codexTerminalArgs({
+  agentSettings = {},
   codexRemoteEndpoint = "",
   codexThreadId,
   containerName,
@@ -542,6 +558,7 @@ function codexTerminalArgs({
       "bash",
       "-lc",
       codexStartupScript(codexThreadId, {
+        agentSettings,
         remoteEndpoint: codexRemoteEndpoint
       })
     ],
@@ -553,11 +570,7 @@ function codexTerminalArgs({
     image,
     kind: "codex-terminal",
     mounts: [
-      {
-        readOnly: true,
-        source: CODEX_ATTACHMENT_HOST_ROOT,
-        target: CODEX_ATTACHMENT_CONTAINER_ROOT
-      },
+      codexAttachmentMount(),
       ...[helperMount].filter(Boolean),
       ...sessionExchangeMounts(session),
       ...mounts.filter(Boolean)
@@ -1408,6 +1421,7 @@ function createCodexTerminalController({
     const namespace = codexTerminalNamespace(sessionId);
     const terminalResponse = startTerminalSession({
       args: ({ id }) => codexTerminalArgs({
+        agentSettings: codexAgentSettingsFromSession(session),
         codexRemoteEndpoint: appServerRuntime?.containerEndpoint || codexRemoteEndpointForWorkdir(session, workdir),
         codexThreadId,
         containerName: codexContainerName({
@@ -1934,7 +1948,9 @@ function createCodexTerminalController({
     };
   }
 
-  async function ensureCodexAppServerThreadReady(sessionId) {
+  async function ensureCodexAppServerThreadReady(sessionId, {
+    agentSettings = {}
+  } = {}) {
     const context = await codexAppServerSessionContext(sessionId);
     if (context.ok === false) {
       return context;
@@ -1959,6 +1975,7 @@ function createCodexTerminalController({
       const promptSession = await runtime.promptSessionForAction(session);
       const developerInstructions = codexAppServerDeveloperInstructions(promptSession);
       const thread = await ensureCodexAppServerThreadForSession({
+        agentSettings,
         developerInstructions,
         provider,
         runtime,
@@ -1999,7 +2016,9 @@ function createCodexTerminalController({
     }
   }
 
-  async function injectPromptIntoCodexAppServer(sessionId, handoff = {}) {
+  async function injectPromptIntoCodexAppServer(sessionId, handoff = {}, {
+    agentSettings = {}
+  } = {}) {
     const terminalInput = codexPromptHandoffTerminalInput(handoff);
     if (!terminalInput) {
       return {
@@ -2029,9 +2048,11 @@ function createCodexTerminalController({
         targetRoot,
         workdir
       });
+      const effectiveSettings = codexEffectiveAgentSettings(agentSettings);
       const promptSession = await runtime.promptSessionForAction(session);
       const developerInstructions = codexAppServerDeveloperInstructions(promptSession);
       const thread = await ensureCodexAppServerThreadForSession({
+        agentSettings,
         bootstrapResumableThread: false,
         developerInstructions,
         provider,
@@ -2049,6 +2070,7 @@ function createCodexTerminalController({
       let delivery = null;
       try {
         delivery = await sendCodexAppServerPromptForSession({
+          agentSettings,
           prompt: terminalInput,
           provider,
           threadId: thread.threadId,
@@ -2091,6 +2113,9 @@ function createCodexTerminalController({
           runtime.store.writeMetadataValue(sessionId, "codex_prompt_handoff_terminal_id", ""),
           runtime.store.writeMetadataValue(sessionId, "codex_prompt_handoff_delivery", "app_server"),
           runtime.store.writeMetadataValue(sessionId, "codex_app_server_turn_id", deliveredTurnId),
+          runtime.store.writeMetadataValue(sessionId, "codex_agent_settings_model", effectiveSettings.model),
+          runtime.store.writeMetadataValue(sessionId, "codex_agent_settings_provider", effectiveSettings.providerId),
+          runtime.store.writeMetadataValue(sessionId, "codex_agent_settings_thinking", effectiveSettings.thinking),
           ...(handoffId ? [
             runtime.store.writeMetadataValue(sessionId, "codex_prompt_handoff_id", handoffId)
           ] : []),
@@ -2248,12 +2273,12 @@ function createCodexTerminalController({
       });
     },
 
-    async injectCodexPrompt(sessionId, handoff = {}) {
+    async injectCodexPrompt(sessionId, handoff = {}, options = {}) {
       return vibe64Result(async () => {
         if (!codexAppServerPromptDeliveryEnabled) {
           return writeCodexAppServerControlDisabledFailure(sessionId);
         }
-        return injectPromptIntoCodexAppServer(sessionId, handoff);
+        return injectPromptIntoCodexAppServer(sessionId, handoff, options);
       });
     },
 

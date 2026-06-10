@@ -28,6 +28,15 @@ function attachmentUploadError(attachment = {}) {
   return attachment?.error || attachment?.errors?.[0]?.message || "";
 }
 
+function attachmentIdentity(attachment = {}) {
+  return String(
+    attachment?.attachmentId ||
+    attachment?.containerPath ||
+    attachment?.fileName ||
+    ""
+  );
+}
+
 async function deliverUploadedAttachments(onUploaded, uploaded = []) {
   if (uploaded.length > 0) {
     await onUploaded(uploaded);
@@ -52,6 +61,12 @@ function useCodexAttachments({
 
   function clearStatus() {
     status.value = "";
+  }
+
+  function clearAttachments() {
+    const cleared = [...attachments.value];
+    attachments.value = [];
+    return cleared;
   }
 
   function handleDragEnter(event) {
@@ -121,14 +136,26 @@ function useCodexAttachments({
     return uploadFiles(codexAttachmentFilesFromDropEvent(event));
   }
 
+  function removeAttachment(attachment = {}) {
+    const id = attachmentIdentity(attachment);
+    if (!id) {
+      return [];
+    }
+    const removed = attachments.value.filter((candidate) => attachmentIdentity(candidate) === id);
+    attachments.value = attachments.value.filter((candidate) => attachmentIdentity(candidate) !== id);
+    return removed;
+  }
+
   return {
     attachments,
+    clearAttachments,
     clearStatus,
     dragActive,
     handleDragEnter,
     handleDragLeave,
     handleDragOver,
     handleDrop,
+    removeAttachment,
     resetDragState,
     status,
     uploading,

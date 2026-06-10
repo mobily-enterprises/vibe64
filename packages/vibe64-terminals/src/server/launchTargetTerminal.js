@@ -598,9 +598,19 @@ function createLaunchTargetTerminalController({
         sessionId,
         terminalSessionId
       });
-      return stopTerminalSession(terminalSessionId, {
+      const result = stopTerminalSession(terminalSessionId, {
         namespace: launchTargetTerminalNamespace(sessionId)
       });
+      if (result?.ok === false && /terminal session not found/iu.test(String(result.error || ""))) {
+        return {
+          ok: true,
+          id: String(terminalSessionId || ""),
+          running: false,
+          stale: true,
+          status: "exited"
+        };
+      }
+      return result;
     },
 
     subscribeTerminal(sessionId, terminalSessionId, subscriber) {

@@ -65,6 +65,50 @@ describe("useCodexAttachments", () => {
     expect(onUploaded).toHaveBeenCalledWith(uploaded);
   });
 
+  it("removes uploaded attachment records by id", async () => {
+    const attachments = useCodexAttachments({
+      sessionId: ref("session-1"),
+      uploadAttachment: async (_sessionId, file) => ({
+        ok: true,
+        attachmentId: file.name,
+        containerPath: `/studio-attachments/session-1/${file.name}`,
+        fileName: file.name,
+        size: file.size
+      })
+    });
+
+    await attachments.uploadFiles([
+      testFile("one.txt"),
+      testFile("two.txt")
+    ]);
+
+    expect(attachments.removeAttachment({
+      attachmentId: "one.txt"
+    }).map((attachment) => attachment.fileName)).toEqual(["one.txt"]);
+    expect(attachments.attachments.value.map((attachment) => attachment.fileName)).toEqual(["two.txt"]);
+  });
+
+  it("clears uploaded attachment records after a prompt is accepted", async () => {
+    const attachments = useCodexAttachments({
+      sessionId: ref("session-1"),
+      uploadAttachment: async (_sessionId, file) => ({
+        ok: true,
+        attachmentId: file.name,
+        containerPath: `/studio-attachments/session-1/${file.name}`,
+        fileName: file.name,
+        size: file.size
+      })
+    });
+
+    await attachments.uploadFiles([
+      testFile("one.txt"),
+      testFile("two.txt")
+    ]);
+
+    expect(attachments.clearAttachments().map((attachment) => attachment.fileName)).toEqual(["one.txt", "two.txt"]);
+    expect(attachments.attachments.value).toEqual([]);
+  });
+
   it("respects a caller-provided upload gate", async () => {
     const uploadAttachment = vi.fn();
     const attachments = useCodexAttachments({

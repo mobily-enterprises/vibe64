@@ -184,6 +184,10 @@ function launchTerminalIsReady(metadata = {}) {
   return metadata?.launchReady === true || metadata?.launchReady === "true";
 }
 
+function terminalSessionMissingError(message = "") {
+  return /terminal session not found/iu.test(String(message || ""));
+}
+
 function localPreviewBrowserHref() {
   if (typeof window === "undefined") {
     return "";
@@ -439,6 +443,7 @@ function useVibe64LaunchControls({
   const activeLaunchTargetId = computed(() => String(
     terminalMetadata.value.launchTargetId ||
     activeTerminal.value?.metadata?.launchTargetId ||
+    status.value.lastLaunchTarget?.id ||
     ""
   ));
   const activeLaunchTarget = computed(() => {
@@ -505,7 +510,6 @@ function useVibe64LaunchControls({
     (terminalExited.value || activeTerminal.value?.status === "exited")
   ));
   const terminalCanRetry = computed(() => Boolean(
-    terminalSessionId.value &&
     !terminalIsRunning.value &&
     activeLaunchTargetId.value
   ));
@@ -617,6 +621,13 @@ function useVibe64LaunchControls({
     launchStatusPollTimer = 0;
   }
 
+  function clearStaleLaunchTerminal() {
+    attachedTerminalId = "";
+    closeTerminalSocket();
+    resetTerminalSessionState();
+    resetTerminalDisplay();
+  }
+
   function scheduleLaunchStatusPoll() {
     if (typeof window === "undefined") {
       return;
@@ -648,7 +659,7 @@ function useVibe64LaunchControls({
   }
 
   async function stopTerminal() {
-    if (!sessionId.value || !terminalCanStop.value) {
+    if (!sessionId.value || (!terminalCanStop.value && !terminalSessionId.value)) {
       return false;
     }
     operationBusy.value = true;
@@ -753,9 +764,7 @@ function useVibe64LaunchControls({
 
   watch(activeTerminal, (nextTerminal) => {
     if (!nextTerminal?.id) {
-      if (!terminalSessionId.value) {
-        attachedTerminalId = "";
-      }
+      clearStaleLaunchTerminal();
       return;
     }
     if (nextTerminal.id !== attachedTerminalId) {
@@ -769,6 +778,14 @@ function useVibe64LaunchControls({
     void connectLaunchTerminal();
   }, {
     immediate: true
+  });
+
+  watch(terminalError, (message) => {
+    if (!terminalSessionMissingError(message)) {
+      return;
+    }
+    clearStaleLaunchTerminal();
+    void refresh();
   });
 
   watch(terminalExpanded, async (expanded) => {

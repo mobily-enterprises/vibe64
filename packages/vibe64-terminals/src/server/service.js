@@ -110,8 +110,8 @@ function createService({
       return shell.closeTerminal(sessionId, terminalSessionId);
     },
 
-    injectCodexPrompt(sessionId, handoff = {}) {
-      return codex.injectCodexPrompt(sessionId, handoff);
+    injectCodexPrompt(sessionId, handoff = {}, options = {}) {
+      return codex.injectCodexPrompt(sessionId, handoff, options);
     },
 
     interruptCodexTurn(sessionId) {

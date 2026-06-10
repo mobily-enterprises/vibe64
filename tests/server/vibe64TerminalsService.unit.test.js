@@ -48,6 +48,7 @@ import {
   createCommandTerminalController
 } from "../../packages/vibe64-terminals/src/server/commandTerminal.js";
 import {
+  createLaunchTargetTerminalController,
   launchActionsFromOutput
 } from "../../packages/vibe64-terminals/src/server/launchTargetTerminal.js";
 import {
@@ -198,6 +199,17 @@ test("launch terminal actions are parsed only from the first output lines", () =
   assert.match(actions[0].id, /^url-/u);
   assert.equal(actions[0].kind, "url");
   assert.equal(actions[0].label, "127.0.0.1:4100");
+});
+
+test("launch terminal stop treats a missing terminal session as recovered stale state", async () => {
+  const controller = createLaunchTargetTerminalController({});
+  const stopped = await controller.stopTerminal("session-1", "missing-terminal");
+
+  assert.equal(stopped.ok, true);
+  assert.equal(stopped.id, "missing-terminal");
+  assert.equal(stopped.running, false);
+  assert.equal(stopped.stale, true);
+  assert.equal(stopped.status, "exited");
 });
 
 function assertPlaywrightBrowserCache(args) {
@@ -408,6 +420,22 @@ test("Vibe64 Codex terminal startup only renders the resumable CLI", () => {
     /resume 00000000-0000-4000-8000-000000000001/u
   );
   assert.doesNotMatch(resumedArgs.at(-1), /Vibe64 session briefing/u);
+
+  const customReasoningArgs = codexTerminalArgs({
+    agentSettings: {
+      thinking: "medium"
+    },
+    codexThreadId: "",
+    containerName: "vibe64-codex-startup-custom-reasoning",
+    sessionId: "startup_prompt",
+    targetRoot: "/workspace/project",
+    terminalId: "startup-terminal",
+    worktree: "/workspace/project/.vibe64/sessions/active/startup_prompt/worktree"
+  });
+  assert.match(
+    customReasoningArgs.at(-1),
+    /model_reasoning_effort="medium"/u
+  );
 
   const remoteResumedArgs = codexTerminalArgs({
     codexRemoteEndpoint: "unix:///vibe64-codex-app-server/app-server.sock",

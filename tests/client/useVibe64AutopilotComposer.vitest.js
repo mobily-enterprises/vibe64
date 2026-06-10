@@ -222,6 +222,47 @@ describe("useVibe64AutopilotComposer", () => {
     expect(composer.selectedControl.value).toBeNull();
   });
 
+  it("adds attachment references to submitted fields without changing the visible input value", async () => {
+    let submitted = null;
+    const composer = useVibe64AutopilotComposer({
+      controls: ref([conversationControl()]),
+      conversationLog: ref({}),
+      onRunControl: async (_control, options) => {
+        submitted = options;
+        return true;
+      },
+      primaryIntentId: ref("talk_to_codex"),
+      running: ref(false)
+    });
+
+    await nextTick();
+    composer.updateSelectedControlValue("conversationRequest", "Please read this.");
+
+    expect(await composer.submitSelectedControl({
+      attachmentFields: {
+        conversationRequest: [
+          {
+            containerPath: "/studio-attachments/session/file.pdf",
+            fileName: "file.pdf",
+            size: 2048
+          }
+        ]
+      }
+    })).toBe(true);
+
+    expect(submitted.fields.conversationRequest).toBe([
+      "Please read this.",
+      "",
+      "Attached files for Codex:",
+      "- file.pdf (2.0 KB): /studio-attachments/session/file.pdf"
+    ].join("\n"));
+    expect(submitted.displayFields.conversationRequest).toBe([
+      "Please read this.",
+      "",
+      "file.pdf"
+    ].join("\n"));
+  });
+
   it("does not infer numbered question behavior without server input metadata", async () => {
     const composer = useVibe64AutopilotComposer({
       controls: ref([conversationControl({

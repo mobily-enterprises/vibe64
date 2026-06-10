@@ -9,6 +9,30 @@ const vibe64UserInputSchema = {
   }
 };
 
+const agentSettingsInputSchema = {
+  agentSettings: {
+    type: "object",
+    additionalProperties: true,
+    required: false
+  }
+};
+
+const displayInputSchema = {
+  displayInput: {
+    type: "object",
+    additionalProperties: true,
+    required: false
+  }
+};
+
+const displayFieldsInputSchema = {
+  displayFields: {
+    type: "object",
+    additionalProperties: true,
+    required: false
+  }
+};
+
 const sessionListInputValidator = deepFreeze({
   schema: createSchema({
     archive: {
@@ -68,6 +92,8 @@ const sessionAdvanceInputValidator = deepFreeze({
 
 const sessionActionInputValidator = deepFreeze({
   schema: createSchema({
+    ...agentSettingsInputSchema,
+    ...displayInputSchema,
     ...vibe64UserInputSchema,
     actionId: {
       type: "string",
@@ -90,6 +116,8 @@ const sessionActionInputValidator = deepFreeze({
 
 const sessionIntentInputValidator = deepFreeze({
   schema: createSchema({
+    ...agentSettingsInputSchema,
+    ...displayFieldsInputSchema,
     ...vibe64UserInputSchema,
     fields: {
       type: "object",

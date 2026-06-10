@@ -58,6 +58,23 @@ function operationInput(operation = {}) {
   return input && typeof input === "object" && !Array.isArray(input) ? input : {};
 }
 
+function agentSettingsRequestOptions(agentSettings = null) {
+  return agentSettings && typeof agentSettings === "object" && !Array.isArray(agentSettings)
+    ? {
+        agentSettings
+      }
+    : {};
+}
+
+function displayFieldsRequestOptions(displayFields = null) {
+  return displayFields && typeof displayFields === "object" && !Array.isArray(displayFields) &&
+    Object.keys(displayFields).length > 0
+    ? {
+        displayFields
+      }
+    : {};
+}
+
 function currentCommandPresentation(session = {}) {
   const command = currentPresentation(session).command;
   return command && typeof command === "object" && !Array.isArray(command)
@@ -211,6 +228,7 @@ function persistedCommandFailureResult(session = {}) {
 
 function useVibe64AutopilotController({
   actions = {},
+  agentSettings = null,
   commandCompletionRefreshAttempts = COMMAND_COMPLETION_REFRESH_ATTEMPTS,
   commandCompletionRefreshDelayMs = COMMAND_COMPLETION_REFRESH_DELAY_MS,
   commandRunner = useVibe64HeadlessCommandRunner(),
@@ -232,6 +250,10 @@ function useVibe64AutopilotController({
   let stopRequested = false;
 
   const autopilotEnabled = computed(() => readRefOrGetterValue(enabled) !== false);
+  const currentAgentSettings = computed(() => {
+    const value = readRefOrGetterValue(agentSettings);
+    return value && typeof value === "object" && !Array.isArray(value) ? value : null;
+  });
   const currentSession = computed(() => readSession(session));
   const nextOperation = computed(() => currentOperation(currentSession.value));
   const currentSessionId = computed(() => String(currentSession.value?.sessionId || ""));
@@ -718,6 +740,7 @@ function useVibe64AutopilotController({
 
   async function dispatchSessionIntentOperation(operation = {}) {
     await actions.runIntentById?.({
+      ...agentSettingsRequestOptions(currentAgentSettings.value),
       fields: operationInput(operation),
       intentId: operation.intentId,
       sessionId: currentSession.value?.sessionId || "",
@@ -729,6 +752,7 @@ function useVibe64AutopilotController({
 
   async function dispatchSessionActionOperation(operation = {}) {
     await actions.runActionById?.({
+      ...agentSettingsRequestOptions(currentAgentSettings.value),
       actionId: operation.actionId,
       advanceOnSuccess: operation.advanceOnSuccess === true,
       input: operationInput(operation),
@@ -738,7 +762,9 @@ function useVibe64AutopilotController({
   }
 
   async function runPresentedIntent(intent = {}, {
+    agentSettings: requestedAgentSettings = null,
     continueAfterCompletion = true,
+    displayFields = {},
     fields = {}
   } = {}) {
     if (!canRunPresentedIntent(intent)) {
@@ -749,6 +775,8 @@ function useVibe64AutopilotController({
     activeStage.value = intent.label || "Run intent";
     try {
       const response = await actions.runIntentById?.({
+        ...agentSettingsRequestOptions(requestedAgentSettings || currentAgentSettings.value),
+        ...displayFieldsRequestOptions(displayFields),
         fields,
         intentId: intent.id,
         sessionId: currentSession.value?.sessionId || "",

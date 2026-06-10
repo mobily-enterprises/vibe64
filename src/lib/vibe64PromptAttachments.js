@@ -38,6 +38,16 @@ function promptAttachmentReferences(attachments = []) {
     .filter(Boolean);
 }
 
+function promptAttachmentFileNames(attachments = []) {
+  return attachments
+    .map(attachmentFileName)
+    .filter(Boolean);
+}
+
+function escapeRegExp(value = "") {
+  return String(value || "").replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
+
 function appendPromptAttachmentReferences(promptText = "", attachments = []) {
   const references = promptAttachmentReferences(attachments);
   if (references.length < 1) {
@@ -59,9 +69,41 @@ function appendPromptAttachmentReferences(promptText = "", attachments = []) {
   ].filter(Boolean).join("\n\n");
 }
 
+function appendPromptAttachmentFileNames(promptText = "", attachments = []) {
+  const fileNames = promptAttachmentFileNames(attachments);
+  if (fileNames.length < 1) {
+    return String(promptText || "");
+  }
+
+  return [
+    String(promptText || "").trimEnd(),
+    fileNames.join("\n")
+  ].filter(Boolean).join("\n\n");
+}
+
+function removePromptAttachmentReferences(promptText = "", attachments = []) {
+  const references = new Set(promptAttachmentReferences(attachments));
+  if (references.size < 1) {
+    return String(promptText || "");
+  }
+
+  const textWithoutReferences = String(promptText || "")
+    .split("\n")
+    .filter((line) => !references.has(line.trimEnd()))
+    .join("\n");
+  const trailingEmptySectionPattern = new RegExp(
+    `\\n{0,2}${escapeRegExp(ATTACHMENT_SECTION_HEADING)}\\n*$`,
+    "u"
+  );
+  return textWithoutReferences.replace(trailingEmptySectionPattern, "").trimEnd();
+}
+
 export {
   ATTACHMENT_SECTION_HEADING,
+  appendPromptAttachmentFileNames,
   appendPromptAttachmentReferences,
+  promptAttachmentFileNames,
   promptAttachmentReference,
-  promptAttachmentReferences
+  promptAttachmentReferences,
+  removePromptAttachmentReferences
 };

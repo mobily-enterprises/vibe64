@@ -104,10 +104,24 @@ describe("Vibe64 session request config", () => {
 
   it("normalizes command input payloads from command context", () => {
     expect(commandInputFromContext({
+      agentSettings: {
+        providerId: "codex",
+        thinking: "high"
+      },
+      displayInput: {
+        issueRequest: "Add reports\n\nreport.pdf"
+      },
       input: {
         issueRequest: "Add reports"
       }
     })).toEqual({
+      agentSettings: {
+        providerId: "codex",
+        thinking: "high"
+      },
+      displayInput: {
+        issueRequest: "Add reports\n\nreport.pdf"
+      },
       issueRequest: "Add reports"
     });
     expect(commandInputFromContext({

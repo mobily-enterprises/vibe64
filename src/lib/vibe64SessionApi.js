@@ -19,6 +19,10 @@ function vibe64CodexTerminalEndpoint(sessionId, terminalSessionId = "") {
   return terminalSessionId ? `${base}/${encodeURIComponent(terminalSessionId)}` : base;
 }
 
+function vibe64CodexThreadEndpoint(sessionId) {
+  return vibe64SessionEndpoint(sessionId, "/codex-thread");
+}
+
 function vibe64CodexTerminalControlEndpoint(sessionId, terminalSessionId, suffix = "") {
   return `${vibe64CodexTerminalEndpoint(sessionId, terminalSessionId)}/control${suffix}`;
 }
@@ -146,6 +150,10 @@ async function readVibe64SessionDiff(sessionId) {
 
 async function startVibe64CodexTerminal(sessionId) {
   return studioHttpClient.post(vibe64CodexTerminalEndpoint(sessionId), {});
+}
+
+async function ensureVibe64CodexThread(sessionId) {
+  return studioHttpClient.post(vibe64CodexThreadEndpoint(sessionId), {});
 }
 
 async function interruptVibe64CodexTurn(sessionId) {
@@ -287,6 +295,7 @@ export {
   checkVibe64CodexTerminalText,
   checkVibe64ShellTerminalText,
   buildVibe64TerminalFailureFixRequest,
+  ensureVibe64CodexThread,
   interruptVibe64CodexTurn,
   readVibe64CodexTerminalControlSnapshot,
   readVibe64GlobalCodexTerminalState,

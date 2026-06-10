@@ -19,6 +19,7 @@ import {
   vibe64ActionPath,
   vibe64IntentPath,
   vibe64SessionPath,
+  agentSettingsInputFromContext,
   commandInputFromContext
 } from "@/lib/vibe64SessionRequestConfig.js";
 import {
@@ -49,7 +50,15 @@ function displayableActionResultMessage(result = {}) {
 }
 
 function intentInputFromContext(context = {}) {
+  const displayFields = context?.displayFields && typeof context.displayFields === "object" && !Array.isArray(context.displayFields)
+    && Object.keys(context.displayFields).length > 0
+    ? {
+        displayFields: context.displayFields
+      }
+    : {};
   return {
+    ...agentSettingsInputFromContext(context),
+    ...displayFields,
     fields: context?.fields && typeof context.fields === "object" && !Array.isArray(context.fields)
       ? context.fields
       : {},
@@ -347,6 +356,8 @@ function useVibe64SessionActions({
   async function runActionById({
     actionId = "",
     advanceOnSuccess = false,
+    agentSettings = null,
+    displayInput = null,
     input = {},
     sessionId = unref(selectedSessionId)
   } = {}) {
@@ -376,6 +387,8 @@ function useVibe64SessionActions({
       const response = await runActionCommand.run({
         actionId: normalizedActionId,
         advanceOnSuccess: advanceOnSuccess === true,
+        agentSettings,
+        displayInput,
         input: input && typeof input === "object" && !Array.isArray(input) ? input : {},
         sessionId: normalizedSessionId
       });
@@ -477,6 +490,8 @@ function useVibe64SessionActions({
   }
 
   async function runIntentById({
+    agentSettings = null,
+    displayFields = null,
     fields = {},
     intentId = "",
     sessionId = unref(selectedSessionId),
@@ -508,6 +523,8 @@ function useVibe64SessionActions({
     activeActionId.value = normalizedIntentId;
     try {
       const response = await runIntentCommand.run({
+        agentSettings,
+        displayFields,
         fields: fields && typeof fields === "object" && !Array.isArray(fields) ? fields : {},
         intentId: normalizedIntentId,
         sessionId: normalizedSessionId,
@@ -617,6 +634,8 @@ function useVibe64SessionActions({
     return runActionById({
       actionId: action.id,
       advanceOnSuccess: action.advanceOnSuccess === true,
+      agentSettings: options.agentSettings,
+      displayInput: options.displayInput,
       input: providedInput || {}
     });
   }
@@ -637,6 +656,8 @@ function useVibe64SessionActions({
       return;
     }
     return runIntentById({
+      agentSettings: options.agentSettings,
+      displayFields: options.displayFields,
       fields: options.fields,
       intentId: intent.id
     });
