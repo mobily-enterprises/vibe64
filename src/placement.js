@@ -73,7 +73,7 @@ addPlacement({
     surfaces: ["app"],
     order: 400,
     props: {
-      label: "Remote",
+      label: "Github repository",
       icon: mdiCloudUploadOutline,
       surface: "app",
       scopedSuffix: "/[slug]/dashboard/remote",

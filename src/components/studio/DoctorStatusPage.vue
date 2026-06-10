@@ -3,10 +3,10 @@
     <header class="studio-screen__header d-flex flex-column flex-md-row ga-3 align-md-end justify-space-between">
       <div>
         <h1 class="studio-screen__title">{{ pageTitle }}</h1>
-        <p class="text-body-2 text-medium-emphasis mb-0 studio-screen__lede">{{ pageLede }}</p>
+        <p v-if="pageLede" class="text-body-2 text-medium-emphasis mb-0 studio-screen__lede">{{ pageLede }}</p>
       </div>
 
-      <div class="d-flex ga-2 align-center flex-wrap">
+      <div class="studio-screen__actions d-flex ga-2 align-center">
         <v-chip
           v-if="displayStatus && detailsAreVisible"
           :color="summary.color"
@@ -661,6 +661,16 @@ function toggleDetails() {
 .studio-screen__lede,
 .doctor-status__command {
   overflow-wrap: anywhere;
+}
+
+.studio-screen__header > :first-child {
+  min-width: 0;
+}
+
+.studio-screen__actions {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  white-space: nowrap;
 }
 
 .studio-screen__action-button {

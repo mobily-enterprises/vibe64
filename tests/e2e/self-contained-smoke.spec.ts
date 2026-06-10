@@ -20,8 +20,10 @@ test("home loads through a self-contained mocked Studio shell", async ({ page })
   await expect(page.getByRole("button", { name: "Menu" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Tools" })).toHaveCount(0);
   await page.goto(`${DASHBOARD_PATH}/remote`);
-  await page.locator(".section-container-shell__nav").getByText("Remote", { exact: true }).click();
+  await page.locator(".section-container-shell__nav").getByText("Github repository", { exact: true }).click();
   await expect(page).toHaveURL(dashboardUrlPattern("remote"));
+  await expect(page.getByRole("heading", { level: 1, name: "Github repository", exact: true })).toBeVisible();
+  await expect(page.getByText("Run configured remote project actions from the main checkout.", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Project tools")).toBeVisible();
   await expect(page.getByText("Parameterized smoke tool", { exact: true })).toBeVisible();
   await page.getByText("Parameterized smoke tool", { exact: true }).click();
@@ -29,6 +31,9 @@ test("home loads through a self-contained mocked Studio shell", async ({ page })
   await expect(parameterDialog).toBeVisible();
   await expect(parameterDialog.getByLabel("Scope")).toBeVisible();
   await parameterDialog.getByRole("button", { name: "Cancel" }).click();
+  await page.goto(`${DASHBOARD_PATH}/history`);
+  await expect(page.getByRole("heading", { level: 1, name: "Session History", exact: true })).toBeVisible();
+  await expect(page.getByText("Review completed and abandoned Vibe64 sessions.", { exact: true })).toHaveCount(0);
   await page.goto(DEVELOPMENT_PATH);
   await expect(page).toHaveURL(developmentUrlPattern());
   await expect(page.getByRole("button", { name: "New Session" })).toBeVisible();

@@ -15,8 +15,8 @@
     ready-label="Project Setup ready"
     blocked-title="Project Setup blocked"
     ready-title="Project Setup ready"
-    quiet-title="Preparing your project"
-    quiet-lede="Vibe64 is creating the starter files, installing dependencies, and checking the project before Autopilot starts."
+    quiet-title="Project Setup"
+    quiet-lede=""
     :show-continue="false"
     doctor-class="project-setup-doctor"
     :always-repair-check-ids="['dependencies']"
@@ -47,9 +47,9 @@ const lede = computed(() => {
     return "Checking Studio Setup before Project Setup runs.";
   }
   if (projectSetup.value?.ready) {
-    return `Project Setup is ready for: ${projectSetup.value.targetRoot || "selected project"}`;
+    return "";
   }
-  return `Checking Project Setup for: ${projectSetup.value?.targetRoot || "selected project"}`;
+  return "Checking Project Setup.";
 });
 
 async function loadProjectSetup({

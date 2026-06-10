@@ -79,7 +79,7 @@ test.describe("setup tabbed doctor responsive smoke", () => {
       await mockAppSetupBlocked(page);
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       await page.goto(`${BASE_URL}/home/dashboard/setup?tab=project-setup`);
-      await expect(page.getByRole("tab", { name: "Project Setup", exact: true })).toHaveAttribute("aria-selected", "true");
+      await expect(page.getByRole("tab", { name: "Project Setup", exact: true })).toHaveCount(0);
       await expect(page.getByRole("heading", { name: "Project Setup", exact: true })).toBeVisible();
       await expect(page.getByText("Project Setup blocked").first()).toBeVisible();
       await expect(page.getByText("Directory admissibility").first()).toBeVisible();

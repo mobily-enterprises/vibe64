@@ -314,8 +314,10 @@ test.describe("studio startup navigation", () => {
     await page.goto(`${BASE_URL}/home/dashboard/setup?tab=adapter-setup`);
     await page.getByRole("button", { name: "Continue to Project Setup" }).click();
     await expect(page).toHaveURL(/\/home\/dashboard\/setup\?tab=project-setup$/u);
-    await expect(page.getByRole("tab", { name: "Project Setup", exact: true })).toHaveAttribute("aria-selected", "true");
-    await expect(page.getByRole("heading", { name: "Preparing your project", exact: true })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Project Setup", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Project Setup", exact: true })).toBeVisible();
+    await expect(page.getByText(/Project Setup is ready for:/iu)).toHaveCount(0);
+    await expect(page.getByText("Project Setup is ready.", { exact: true })).toHaveCount(0);
   });
 
   test("ready Project Setup does not show a continue button", async ({ page }) => {

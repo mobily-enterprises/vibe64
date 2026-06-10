@@ -40,7 +40,8 @@ async function expectVisibleTapTargets(page) {
 async function expectSessionHistoryRoute(page, archive) {
   const tabName = archive === "abandoned" ? "Abandoned" : "Completed";
 
-  await expect(page.getByRole("heading", { name: "Session History", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Session History", exact: true })).toBeVisible();
+  await expect(page.getByText("Review completed and abandoned Vibe64 sessions.", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("tab", { name: "Completed", exact: true })).toBeVisible();
   await expect(page.getByRole("tab", { name: "Abandoned", exact: true })).toBeVisible();
   await expect(page.getByRole("tab", { name: tabName, exact: true })).toHaveAttribute("aria-selected", "true");

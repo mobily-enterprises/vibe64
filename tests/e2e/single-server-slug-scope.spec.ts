@@ -261,9 +261,11 @@ test("first-run owner setup reaches management and opens a slug-scoped project",
 
   await page.locator(".section-container-shell__nav").getByText("Setup", { exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${DASHBOARD_PATH}/setup\\?tab=project-setup$`, "u"));
-  await expect(page.getByRole("tab", { name: "Project Setup", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tab", { name: "Project Setup", exact: true })).toHaveCount(0);
   await expect(page.getByRole("tab", { name: "Adapter Setup", exact: true })).toHaveCount(0);
-  await expect(page.getByRole("heading", { name: "Preparing your project", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Project Setup", exact: true })).toBeVisible();
+  await expect(page.getByText(/Project Setup is ready for:/iu)).toHaveCount(0);
+  await expect(page.getByText("Project Setup is ready.", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Ready", exact: true })).toBeVisible();
 
   expect(requests).toContain(`GET ${SCOPED_API_PREFIX}/vibe64/projects`);

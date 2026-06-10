@@ -1,6 +1,6 @@
 <template>
   <section class="vibe64-setup-panel">
-    <div class="vibe64-setup-panel__tabs">
+    <div v-if="hasMultipleTabs" class="vibe64-setup-panel__tabs">
       <v-tabs
         :model-value="activeTab"
         aria-label="Setup sections"
@@ -24,9 +24,9 @@
     <div
       :id="panelId(activeTab)"
       class="vibe64-setup-panel__body"
-      role="tabpanel"
-      tabindex="0"
-      :aria-labelledby="tabId(activeTab)"
+      :role="hasMultipleTabs ? 'tabpanel' : undefined"
+      :tabindex="hasMultipleTabs ? 0 : undefined"
+      :aria-labelledby="hasMultipleTabs ? tabId(activeTab) : undefined"
     >
       <ProjectSetupDoctorScreen
         v-if="activeTab === 'project-setup'"
@@ -56,6 +56,7 @@ const props = defineProps({
 const emit = defineEmits(["update:modelValue"]);
 
 const activeTab = computed(() => normalizeTab(props.modelValue) || fallbackTab());
+const hasMultipleTabs = computed(() => tabs.length > 1);
 
 function normalizeTab(value) {
   return typeof value === "string" && tabValues.has(value) ? value : "";
