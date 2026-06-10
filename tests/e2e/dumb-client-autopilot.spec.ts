@@ -24,6 +24,43 @@ function dashboardUrlPattern(routePath: string, suffix = "/?$") {
   return new RegExp(`${escapedPathPattern(DASHBOARD_PATH)}/${routePath}${suffix}`, "u");
 }
 
+async function composerMetrics(page: Page) {
+  return await page.locator(".studio-autopilot-prompt-textarea").evaluate((root) => {
+    function rectFor(selector: string) {
+      const element = root.querySelector(selector);
+      if (!element) {
+        throw new Error(`Missing composer element: ${selector}`);
+      }
+      const rect = element.getBoundingClientRect();
+      return {
+        bottom: rect.bottom,
+        height: rect.height,
+        left: rect.left,
+        right: rect.right,
+        top: rect.top,
+        width: rect.width
+      };
+    }
+
+    const input = root.querySelector(".studio-autopilot-prompt-textarea__input");
+    if (!(input instanceof HTMLTextAreaElement)) {
+      throw new Error("Missing composer textarea.");
+    }
+    return {
+      field: rectFor(".studio-autopilot-prompt-textarea__field"),
+      footer: rectFor(".studio-autopilot-prompt-textarea__footer"),
+      input: {
+        ...rectFor(".studio-autopilot-prompt-textarea__input"),
+        clientHeight: input.clientHeight,
+        overflowY: window.getComputedStyle(input).overflowY,
+        scrollHeight: input.scrollHeight
+      },
+      send: rectFor(".vibe64-workflow-control-form__inline-submit"),
+      toolbar: rectFor(".vibe64-workflow-control-form__composer-toolbar")
+    };
+  });
+}
+
 test.describe("Autopilot dumb client contract", () => {
   test("keeps step labels out of the chat body and exposes icon hints on hover", async ({ page }) => {
     await mockVibe64Session(page, sessionPayload({
@@ -1643,6 +1680,106 @@ test.describe("Autopilot dumb client contract", () => {
       }
     ]);
     expect(advances).toBe(0);
+  });
+
+  test("grows the Codex composer above its internal controls", async ({ page }) => {
+    const session = sessionPayload({
+      intents: [
+        {
+          enabled: true,
+          id: "talk_to_codex",
+          inputFields: [
+            {
+              kind: "textarea",
+              label: "What do you want to ask Codex?",
+              name: "conversationRequest"
+            }
+          ],
+          label: "Ask Codex",
+          style: "primary"
+        },
+        {
+          enabled: true,
+          id: "continue_workflow",
+          label: "Next step",
+          style: "primary"
+        }
+      ],
+      presentation: {
+        auto: {
+          nextOperation: {
+            executable: false,
+            kind: "stop",
+            reason: "user"
+          }
+        },
+        screen: {
+          kind: "conversation",
+          message: "Ask Codex for changes.",
+          primaryIntentId: "talk_to_codex",
+          sections: [
+            {
+              kind: "response_preview"
+            }
+          ],
+          title: "Talk to Codex"
+        },
+        step: {
+          id: "server_step",
+          label: "Talk to Codex",
+          status: "waiting_for_input"
+        }
+      },
+      stepMachine: {
+        status: "waiting_for_input",
+        stepId: "server_step"
+      }
+    });
+    await mockVibe64Session(page, session, {
+      conversationLog: [
+        {
+          assistant: {
+            at: "2026-05-25T01:03:00.000Z",
+            role: "assistant",
+            text: Array.from({ length: 16 }, (_value, index) => `Codex line ${index + 1}.`).join("\n")
+          },
+          turnId: "turn-1",
+          user: {
+            at: "2026-05-25T01:02:00.000Z",
+            role: "user",
+            text: "Please inspect the current state."
+          }
+        }
+      ]
+    });
+    await page.setViewportSize({
+      height: 768,
+      width: 730
+    });
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+
+    const composerInput = page.getByLabel("What do you want to ask Codex?");
+    await expect(composerInput).toBeVisible();
+    await expect(page.getByRole("button", { name: "Ask Codex" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Next step" })).toBeVisible();
+
+    await composerInput.fill("1\n2");
+    const twoLineMetrics = await composerMetrics(page);
+
+    await composerInput.fill("1\n2\n3");
+    const threeLineMetrics = await composerMetrics(page);
+
+    await composerInput.fill("1\n2\n3\n4\n5\n6\n7");
+    const sevenLineMetrics = await composerMetrics(page);
+
+    expect(threeLineMetrics.input.height).toBeGreaterThan(twoLineMetrics.input.height + 8);
+    expect(sevenLineMetrics.input.height).toBeGreaterThan(threeLineMetrics.input.height + 40);
+    expect(sevenLineMetrics.input.clientHeight).toBeGreaterThanOrEqual(sevenLineMetrics.input.scrollHeight - 2);
+    expect(sevenLineMetrics.input.overflowY).toBe("hidden");
+    expect(sevenLineMetrics.footer.top).toBeGreaterThanOrEqual(sevenLineMetrics.input.bottom - 1);
+    expect(sevenLineMetrics.send.top).toBeGreaterThanOrEqual(sevenLineMetrics.input.bottom - 1);
+    expect(sevenLineMetrics.field.bottom).toBeGreaterThanOrEqual(sevenLineMetrics.send.bottom - 1);
+    expect(sevenLineMetrics.field.bottom).toBeGreaterThanOrEqual(sevenLineMetrics.toolbar.bottom - 1);
   });
 
   test("keeps a disabled composer visible when the session is temporarily not accepting input", async ({ page }) => {

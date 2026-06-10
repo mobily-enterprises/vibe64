@@ -3,9 +3,6 @@ import path from "node:path";
 import {
   resolveVibe64DataRoot
 } from "@local/vibe64-core/server/studioRoots";
-import {
-  stableHash
-} from "./shellCommands.js";
 
 const APP_PROVIDER_SCOPE = "app";
 const USER_PROVIDER_SCOPE = "user";
@@ -30,7 +27,7 @@ function canonicalVibe64UserEmail(user = {}) {
 
 function providerUserKey(user = {}) {
   const email = canonicalVibe64UserEmail(user);
-  return email ? stableHash(email) : "";
+  return email && !email.includes("/") && !email.includes("\\") ? email : "";
 }
 
 function providerHome(providerId = "", providerHomesRoot = "", user = {}) {

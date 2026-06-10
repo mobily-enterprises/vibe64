@@ -147,6 +147,146 @@ test("Vibe64 auth route only completes first-login Codex setup after Codex is co
   });
 });
 
+test("Vibe64 auth invite route sends a Supabase invite email with a localhost redirect", async () => {
+  const sentInvites = [];
+  await withAuth(async (auth) => {
+    const owner = await auth.authenticateSupabaseSession({
+      accessToken: "owner-token"
+    });
+    const session = await auth.sessions.createSession(owner);
+    const route = registeredAuthRoute(auth, {
+      method: "POST",
+      pathname: "/api/auth/invite"
+    });
+    const reply = testReply();
+    const returned = await route.handler({
+      body: {
+        email: "Friend@Example.com"
+      },
+      headers: {
+        ...sessionCookieHeader(session),
+        host: "localhost:5174"
+      },
+      protocol: "http",
+      url: "/api/auth/invite"
+    }, reply);
+    const response = reply.payload || returned;
+
+    assert.equal(response.ok, true);
+    assert.equal(response.user.email, "friend@example.com");
+    assert.equal(response.user.status, "invited");
+    assert.equal(response.inviteEmail.ok, true);
+    assert.equal(response.inviteEmail.attempted, true);
+    assert.equal(response.inviteEmail.redirectTo, "http://localhost:5174/account?mode=signup");
+    assert.equal(sentInvites.length, 1);
+    assert.equal(sentInvites[0].email, "friend@example.com");
+    assert.equal(sentInvites[0].redirectTo, "http://localhost:5174/account?mode=signup");
+    assert.equal(sentInvites[0].data.host, "http://localhost:5174");
+    assert.equal(sentInvites[0].data.invited_by, "owner@example.com");
+    assert.equal(sentInvites[0].data.invite_url, "http://localhost:5174/account?mode=signup");
+  }, {
+    async sendSupabaseInviteEmail(input) {
+      sentInvites.push(input);
+      return {
+        supabaseUserId: "supabase-invited-friend"
+      };
+    }
+  });
+});
+
+test("Vibe64 auth invite route keeps the local invite when Supabase email fails", async () => {
+  await withAuth(async (auth) => {
+    const owner = await auth.authenticateSupabaseSession({
+      accessToken: "owner-token"
+    });
+    const session = await auth.sessions.createSession(owner);
+    const route = registeredAuthRoute(auth, {
+      method: "POST",
+      pathname: "/api/auth/invite"
+    });
+    const reply = testReply();
+    const returned = await route.handler({
+      body: {
+        email: "friend@example.com"
+      },
+      headers: {
+        ...sessionCookieHeader(session),
+        host: "localhost:5174"
+      },
+      protocol: "http",
+      url: "/api/auth/invite"
+    }, reply);
+    const response = reply.payload || returned;
+
+    assert.equal(response.ok, true);
+    assert.equal(response.user.email, "friend@example.com");
+    assert.equal(response.user.status, "invited");
+    assert.equal(response.inviteEmail.ok, false);
+    assert.equal(response.inviteEmail.attempted, true);
+    assert.equal(response.inviteEmail.code, "smtp_unavailable");
+    assert.equal(response.inviteEmail.error, "SMTP is unavailable.");
+    assert.equal((await auth.users.readUser("friend@example.com")).status, "invited");
+  }, {
+    async sendSupabaseInviteEmail() {
+      const error = new Error("SMTP is unavailable.");
+      error.code = "smtp_unavailable";
+      throw error;
+    }
+  });
+});
+
+test("Vibe64 auth invite route emails an existing Supabase user with a magic link", async () => {
+  const sentInvites = [];
+  await withAuth(async (auth) => {
+    const owner = await auth.authenticateSupabaseSession({
+      accessToken: "owner-token"
+    });
+    const session = await auth.sessions.createSession(owner);
+    const route = registeredAuthRoute(auth, {
+      method: "POST",
+      pathname: "/api/auth/invite"
+    });
+    const reply = testReply();
+    const returned = await route.handler({
+      body: {
+        email: "friend@example.com"
+      },
+      headers: {
+        ...sessionCookieHeader(session),
+        host: "localhost:3001"
+      },
+      protocol: "http",
+      url: "/api/auth/invite"
+    }, reply);
+    const response = reply.payload || returned;
+
+    assert.equal(response.ok, true);
+    assert.equal(response.user.email, "friend@example.com");
+    assert.equal(response.user.status, "invited");
+    assert.equal(response.inviteEmail.ok, true);
+    assert.equal(response.inviteEmail.attempted, true);
+    assert.equal(response.inviteEmail.mode, "magiclink");
+    assert.equal(response.inviteEmail.redirectTo, "http://localhost:3001/account?mode=signup");
+    assert.deepEqual(
+      sentInvites.map((invite) => invite.type),
+      ["invite", "magiclink"]
+    );
+    assert.equal(sentInvites[1].email, "friend@example.com");
+    assert.equal(sentInvites[1].redirectTo, "http://localhost:3001/account?mode=signup");
+    assert.equal(sentInvites[1].data.invite_url, "http://localhost:3001/account?mode=signup");
+  }, {
+    async sendSupabaseInviteEmail(input) {
+      sentInvites.push(input);
+      if (input.type === "invite") {
+        const error = new Error("A user with this email address has already been registered");
+        error.code = "email_exists";
+        throw error;
+      }
+      return {};
+    }
+  });
+});
+
 test("Vibe64 auth has no hardcoded Supabase fallback", () => {
   const missing = resolveSupabaseConfig({
     env: {}
@@ -526,6 +666,7 @@ async function withAuth(callback, options = {}) {
       codexConnectedVerifier: options.codexConnectedVerifier,
       dataRoot,
       env: FAKE_SUPABASE_ENV,
+      sendSupabaseInviteEmail: options.sendSupabaseInviteEmail,
       verifySupabaseAccessToken: fakeVerifySupabaseAccessToken
     }));
   } finally {
@@ -534,6 +675,36 @@ async function withAuth(callback, options = {}) {
       recursive: true
     });
   }
+}
+
+function registeredAuthRoute(auth, {
+  method = "",
+  pathname = ""
+} = {}) {
+  const routes = [];
+  const app = {
+    get(routePathname, handler) {
+      routes.push({
+        handler,
+        method: "GET",
+        pathname: routePathname
+      });
+    },
+    post(routePathname, handler) {
+      routes.push({
+        handler,
+        method: "POST",
+        pathname: routePathname
+      });
+    }
+  };
+  registerVibe64AuthRoutes(app, auth);
+  const route = routes.find((candidate) => (
+    candidate.method === method &&
+    candidate.pathname === pathname
+  ));
+  assert.ok(route);
+  return route;
 }
 
 function registerAuthGateTestHook(auth, options = {}) {

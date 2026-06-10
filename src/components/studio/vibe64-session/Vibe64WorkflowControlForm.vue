@@ -558,64 +558,12 @@ defineExpose({
   order: 2;
 }
 
-.vibe64-workflow-control-form :deep(.v-input),
-.vibe64-workflow-control-form :deep(.v-field) {
-  overflow: visible;
-}
-
-.vibe64-workflow-control-form :deep(.v-field__input textarea) {
-  min-height: 5.4rem;
-}
-
-.vibe64-workflow-control-form :deep(.studio-autopilot-prompt-textarea .v-field) {
-  border-radius: 18px;
-}
-
-.vibe64-workflow-control-form :deep(.studio-autopilot-prompt-textarea .v-field-label) {
-  color: rgba(var(--v-theme-on-surface), 0.82);
-  opacity: 1;
-}
-
-.vibe64-workflow-control-form :deep(.studio-autopilot-prompt-textarea .v-input--disabled) {
-  opacity: 1;
-}
-
-.vibe64-workflow-control-form :deep(.studio-autopilot-prompt-textarea .v-field__field) {
-  color: rgb(var(--v-theme-on-surface));
-}
-
-.vibe64-workflow-control-form :deep(.studio-autopilot-prompt-textarea .v-field__input) {
-  align-items: flex-start;
-  min-height: 2.9rem;
-  overflow-y: hidden;
-  padding-block: 0.64rem 0.56rem;
-}
-
-.vibe64-workflow-control-form__prompt-shell--inline-submit :deep(.studio-autopilot-prompt-textarea .v-field__input) {
-  padding-bottom: 0.56rem;
-  padding-right: 1rem;
-}
-
-.vibe64-workflow-control-form :deep(.studio-autopilot-prompt-textarea textarea.v-field__input) {
-  color: rgb(var(--v-theme-on-surface));
-  line-height: 1.4;
-  min-height: 2rem;
-  opacity: 1;
-  overflow-y: hidden;
-  resize: none;
-}
-
-.vibe64-workflow-control-form :deep(.studio-autopilot-prompt-textarea textarea.v-field__input::placeholder) {
-  color: rgba(var(--v-theme-on-surface), 0.62);
-  opacity: 1;
-}
-
 .vibe64-workflow-control-form :deep(.studio-autopilot-prompt-textarea--has-footer) {
   gap: 0;
 }
 
-.vibe64-workflow-control-form :deep(.studio-autopilot-prompt-textarea--has-footer .v-field__input) {
-  padding-bottom: 0.18rem;
+.vibe64-workflow-control-form :deep(.studio-autopilot-prompt-textarea__input) {
+  color: rgb(var(--v-theme-on-surface));
 }
 
 .vibe64-workflow-control-form__actions,

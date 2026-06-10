@@ -20,6 +20,7 @@ const auth = useVibe64AppAuth();
 const users = ref([]);
 const loadingUsers = ref(false);
 const inviteStatus = ref("");
+const inviteWarning = ref("");
 const error = ref("");
 const actionBusy = ref("");
 const inviteForm = reactive({
@@ -49,6 +50,7 @@ async function submitInvite() {
     return;
   }
   inviteStatus.value = "";
+  inviteWarning.value = "";
   error.value = "";
   actionBusy.value = "invite";
   try {
@@ -60,7 +62,17 @@ async function submitInvite() {
       return;
     }
     inviteForm.email = "";
-    inviteStatus.value = "User invited.";
+    const inviteEmail = response.inviteEmail || {};
+    if (response.user?.status === "active") {
+      inviteStatus.value = "User is already active.";
+    } else if (inviteEmail.ok === true && inviteEmail.attempted === true) {
+      inviteStatus.value = "User invited and email sent.";
+    } else if (inviteEmail.ok === false) {
+      inviteStatus.value = "User invited.";
+      inviteWarning.value = `Supabase invite email was not sent: ${inviteEmail.error || "unknown error"}`;
+    } else {
+      inviteStatus.value = "User invited.";
+    }
     await loadUsers();
   } finally {
     actionBusy.value = "";
@@ -81,6 +93,7 @@ async function runUserAction(row = {}, action, successMessage = "") {
     return;
   }
   inviteStatus.value = "";
+  inviteWarning.value = "";
   error.value = "";
   const email = String(row.email || "").trim();
   if (!email) {
@@ -128,6 +141,9 @@ onMounted(loadUsers);
 
     <v-alert v-if="error" type="error" variant="tonal" density="compact">
       {{ error }}
+    </v-alert>
+    <v-alert v-if="inviteWarning" type="warning" variant="tonal" density="compact">
+      {{ inviteWarning }}
     </v-alert>
 
     <section class="vibe64-user-management__section">

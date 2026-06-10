@@ -235,6 +235,18 @@ async function writeGithubProviderHome(providerHomesRoot = "", user = OWNER_USER
   return home;
 }
 
+test("GitHub provider homes use normalized email folder names", () => {
+  const providerHomesRoot = path.join("/tmp", "provider-homes");
+  assert.equal(githubProviderUserKey(OWNER_USER), "owner@example.com");
+  assert.equal(
+    githubProviderHome(providerHomesRoot, OWNER_USER),
+    path.join(providerHomesRoot, "github", "owner@example.com")
+  );
+  assert.equal(githubProviderUserKey({
+    email: "bad/path@example.com"
+  }), "");
+});
+
 function githubCalls(calls = []) {
   return calls.filter((call) => call.commandArgs[0] === "gh" || call.commandArgs[0] === "git");
 }

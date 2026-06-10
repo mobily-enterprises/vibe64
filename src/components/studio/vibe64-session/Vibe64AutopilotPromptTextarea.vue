@@ -44,33 +44,60 @@
       </v-chip>
     </div>
 
-    <v-textarea
-      :model-value="modelValue"
-      :auto-grow="autoGrow"
-      class="studio-autopilot-prompt-textarea__input"
-      :disabled="disabled"
-      :error-messages="combinedErrorMessages"
-      hide-details="auto"
-      :hint="hint"
-      :label="label"
-      :persistent-hint="persistentHint"
-      :placeholder="placeholder"
-      :rows="rows"
-      :variant="variant"
-      @update:model-value="$emit('update:modelValue', String($event || ''))"
-    />
+    <div
+      class="studio-autopilot-prompt-textarea__field"
+      :class="{ 'studio-autopilot-prompt-textarea__field--disabled': disabled }"
+    >
+      <label
+        v-if="label"
+        class="studio-autopilot-prompt-textarea__label"
+        :for="textareaId"
+      >
+        {{ label }}
+      </label>
+
+      <textarea
+        :id="textareaId"
+        ref="textareaRef"
+        class="studio-autopilot-prompt-textarea__input"
+        :disabled="disabled"
+        :placeholder="placeholder"
+        :rows="rows"
+        :value="modelValue"
+        @input="handleTextareaInput"
+      />
+
+      <div
+        v-if="$slots.footer"
+        class="studio-autopilot-prompt-textarea__footer"
+      >
+        <slot name="footer" />
+      </div>
+    </div>
 
     <div
-      v-if="$slots.footer"
-      class="studio-autopilot-prompt-textarea__footer"
+      v-if="detailsVisible"
+      class="studio-autopilot-prompt-textarea__details"
     >
-      <slot name="footer" />
+      <div
+        v-for="message in combinedErrorMessages"
+        :key="message"
+        class="studio-autopilot-prompt-textarea__error"
+      >
+        {{ message }}
+      </div>
+      <div
+        v-if="hintVisible"
+        class="studio-autopilot-prompt-textarea__hint"
+      >
+        {{ hint }}
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed, ref } from "vue";
+import { computed, nextTick, onMounted, ref, useId, watch } from "vue";
 import {
   mdiClose,
   mdiFileOutline
@@ -157,6 +184,8 @@ const dragActive = attachments.dragActive;
 const uploadedAttachments = attachments.attachments;
 const attachmentUploading = attachments.uploading;
 const fileInput = ref(null);
+const textareaRef = ref(null);
+const textareaId = `studio-autopilot-prompt-${useId()}`;
 const canUseFilePicker = computed(() => Boolean(
   props.attachmentsEnabled &&
   !props.disabled &&
@@ -170,9 +199,40 @@ const combinedErrorMessages = computed(() => {
     ? [...parentMessages, attachments.status.value]
     : parentMessages;
 });
+const hintVisible = computed(() => Boolean(
+  props.hint &&
+  (props.persistentHint || combinedErrorMessages.value.length < 1)
+));
+const detailsVisible = computed(() => Boolean(
+  combinedErrorMessages.value.length ||
+  hintVisible.value
+));
 
 function emitAttachmentsChanged() {
   emit("attachments-change", [...uploadedAttachments.value]);
+}
+
+function resizeTextarea() {
+  if (!props.autoGrow) {
+    return;
+  }
+  const textarea = textareaRef.value;
+  if (!textarea) {
+    return;
+  }
+  const style = window.getComputedStyle(textarea);
+  const minHeight = Number.parseFloat(style.minHeight) || 0;
+  textarea.style.height = "auto";
+  textarea.style.height = `${Math.max(textarea.scrollHeight, minHeight)}px`;
+}
+
+function queueResizeTextarea() {
+  void nextTick(resizeTextarea);
+}
+
+function handleTextareaInput(event = {}) {
+  emit("update:modelValue", String(event?.target?.value || ""));
+  resizeTextarea();
 }
 
 function removeUploadedAttachment(attachment = {}) {
@@ -215,6 +275,14 @@ const handleDragEnter = attachments.handleDragEnter;
 const handleDragOver = attachments.handleDragOver;
 const handleDragLeave = attachments.handleDragLeave;
 
+onMounted(queueResizeTextarea);
+
+watch(() => [
+  props.autoGrow,
+  props.modelValue,
+  props.rows
+], queueResizeTextarea);
+
 defineExpose({
   clearAttachments,
   openFilePicker
@@ -230,52 +298,85 @@ defineExpose({
   text-align: left;
 }
 
-.studio-autopilot-prompt-textarea :deep(.v-input),
-.studio-autopilot-prompt-textarea :deep(.v-field),
-.studio-autopilot-prompt-textarea :deep(.v-field__field),
-.studio-autopilot-prompt-textarea :deep(.v-field__input) {
-  min-width: 0;
-}
-
-.studio-autopilot-prompt-textarea :deep(.v-field__input) {
-  align-items: flex-start;
-}
-
-.studio-autopilot-prompt-textarea :deep(textarea.v-field__input) {
-  max-height: none;
-  overflow-y: hidden;
-  resize: none;
-}
-
-.studio-autopilot-prompt-textarea--has-footer {
+.studio-autopilot-prompt-textarea__field {
   background: rgb(var(--v-theme-surface));
   border: 1px solid rgba(var(--v-theme-outline), 0.42);
   border-radius: 18px;
+  display: grid;
+  min-width: 0;
+  padding-top: 0.01rem;
 }
 
-.studio-autopilot-prompt-textarea--has-footer:focus-within {
+.studio-autopilot-prompt-textarea__field:focus-within {
   border-color: rgb(var(--v-theme-primary));
   box-shadow: 0 0 0 1px rgb(var(--v-theme-primary));
 }
 
-.studio-autopilot-prompt-textarea--has-footer :deep(.v-field) {
-  background: transparent;
-  border-radius: 17px 17px 0 0;
-  box-shadow: none;
+.studio-autopilot-prompt-textarea__field--disabled {
+  opacity: 0.64;
 }
 
-.studio-autopilot-prompt-textarea--has-footer :deep(.v-field__outline) {
-  display: none;
-}
-
-.studio-autopilot-prompt-textarea--has-footer :deep(.v-field-label--floating) {
+.studio-autopilot-prompt-textarea__label {
+  align-self: start;
   background: rgb(var(--v-theme-surface));
-  padding-inline: 0.25rem;
+  color: rgba(var(--v-theme-on-surface), 0.82);
+  font-size: 0.78rem;
+  line-height: 1.1;
+  margin: -0.5rem 0 0 0.9rem;
+  max-width: calc(100% - 1.8rem);
+  overflow: hidden;
+  padding-inline: 0.24rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: fit-content;
+  z-index: 1;
+}
+
+.studio-autopilot-prompt-textarea__input {
+  background: transparent;
+  border: 0;
+  color: rgb(var(--v-theme-on-surface));
+  display: block;
+  font: inherit;
+  line-height: 1.4;
+  max-height: calc(100dvh - 9.5rem);
+  min-height: 3.55rem;
+  min-width: 0;
+  outline: 0;
+  overflow-x: hidden;
+  overflow-y: hidden;
+  padding: 0.5rem 1rem 0.2rem;
+  resize: none;
+  width: 100%;
+  word-break: break-word;
+}
+
+.studio-autopilot-prompt-textarea__input::placeholder {
+  color: rgba(var(--v-theme-on-surface), 0.58);
+  opacity: 1;
+}
+
+.studio-autopilot-prompt-textarea__input:disabled {
+  cursor: default;
 }
 
 .studio-autopilot-prompt-textarea__footer {
   min-width: 0;
   padding: 0 0.55rem 0.55rem;
+}
+
+.studio-autopilot-prompt-textarea__details {
+  color: rgba(var(--v-theme-on-surface), 0.62);
+  display: grid;
+  font-size: 0.76rem;
+  gap: 0.12rem;
+  line-height: 1.3;
+  min-width: 0;
+  padding: 0.32rem 0.75rem 0;
+}
+
+.studio-autopilot-prompt-textarea__error {
+  color: rgb(var(--v-theme-error));
 }
 
 .studio-autopilot-prompt-textarea--dragging {
@@ -302,9 +403,9 @@ defineExpose({
   z-index: 1;
 }
 
-.studio-autopilot-prompt-textarea--has-attachments :deep(.v-field) {
-  border-top-left-radius: 0 !important;
-  border-top-right-radius: 0 !important;
+.studio-autopilot-prompt-textarea--has-attachments .studio-autopilot-prompt-textarea__field {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
   margin-top: -1px;
 }
 

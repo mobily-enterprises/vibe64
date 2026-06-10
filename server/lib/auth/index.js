@@ -1,4 +1,5 @@
 import path from "node:path";
+import { createClient } from "@supabase/supabase-js";
 
 import {
   VIBE64_DATA_ROOT_ENV,
@@ -40,6 +41,7 @@ function createVibe64Auth({
   codexConnectedVerifier = null,
   dataRoot = "",
   env = process.env,
+  sendSupabaseInviteEmail = null,
   supabasePublishableKey = "",
   supabaseSecretKey = "",
   supabaseUrl = "",
@@ -70,6 +72,10 @@ function createVibe64Auth({
   const verifyCodexConnected = typeof codexConnectedVerifier === "function"
     ? codexConnectedVerifier
     : null;
+  const sendInviteEmail = createInviteEmailSender({
+    sendSupabaseInviteEmail,
+    supabase
+  });
 
   async function stateForRequest(request = {}) {
     const user = await userForRequest(request);
@@ -151,6 +157,7 @@ function createVibe64Auth({
     dataRoot: root,
     sessions,
     setup,
+    sendInviteEmail,
     startUserSession,
     stateForRequest,
     supabase,
@@ -226,9 +233,14 @@ function registerVibe64AuthRoutes(app, auth) {
   });
 
   app.post(`${API_AUTH_BASE}/invite`, async (request, reply) => {
-    return requireOwnerResult(auth, request, reply, async () => {
+    return requireOwnerResult(auth, request, reply, async (currentUser) => {
       const user = await auth.users.inviteUser(request.body || {});
+      const inviteEmail = await auth.sendInviteEmail(user, {
+        invitedBy: currentUser,
+        request
+      });
       return {
+        inviteEmail,
         ok: true,
         user: auth.users.publicUser(user)
       };
@@ -403,6 +415,247 @@ function publicSupabaseConfig(config = {}) {
     publishableKey: String(config.publishableKey || ""),
     url: String(config.url || "")
   };
+}
+
+function createInviteEmailSender({
+  sendSupabaseInviteEmail = null,
+  supabase = {}
+} = {}) {
+  const customSender = typeof sendSupabaseInviteEmail === "function"
+    ? sendSupabaseInviteEmail
+    : null;
+  return async function sendInviteEmail(user = {}, {
+    invitedBy = {},
+    request = {}
+  } = {}) {
+    if (user.status !== "invited") {
+      return {
+        attempted: false,
+        code: "vibe64_invite_email_not_needed",
+        ok: true,
+        provider: "supabase"
+      };
+    }
+    if (supabase.adminConfigured !== true) {
+      return {
+        attempted: false,
+        code: "vibe64_supabase_admin_not_configured",
+        error: "Supabase Admin invite email is not configured.",
+        ok: false,
+        provider: "supabase"
+      };
+    }
+    const redirectTo = inviteRedirectToForRequest(request);
+    if (!redirectTo) {
+      return {
+        attempted: false,
+        code: "vibe64_invite_redirect_unavailable",
+        error: "Vibe64 could not determine an invite redirect URL.",
+        ok: false,
+        provider: "supabase"
+      };
+    }
+    const payload = {
+      data: inviteEmailData({
+        invitedBy,
+        redirectTo,
+        request
+      }),
+      email: String(user.email || "").trim().toLowerCase(),
+      redirectTo
+    };
+    try {
+      const response = customSender
+        ? await customSender({
+          ...payload,
+          type: "invite"
+        })
+        : await sendDefaultSupabaseInviteEmail(payload, {
+          supabase
+        });
+      return {
+        attempted: true,
+        mode: "invite",
+        ok: true,
+        provider: "supabase",
+        redirectTo,
+        supabaseUserId: String(response?.supabaseUserId || response?.data?.user?.id || "")
+      };
+    } catch (error) {
+      if (supabaseInviteUserAlreadyExists(error)) {
+        return sendExistingSupabaseUserInviteEmail(payload, {
+          customSender,
+          supabase
+        });
+      }
+      return {
+        attempted: true,
+        code: error?.code || "vibe64_supabase_invite_email_failed",
+        error: String(error?.message || error || "Supabase invite email failed."),
+        ok: false,
+        provider: "supabase",
+        redirectTo
+      };
+    }
+  };
+}
+
+async function sendExistingSupabaseUserInviteEmail(payload = {}, {
+  customSender = null,
+  supabase = {}
+} = {}) {
+  try {
+    const response = customSender
+      ? await customSender({
+        ...payload,
+        type: "magiclink"
+      })
+      : await sendDefaultSupabaseMagicLinkEmail(payload, {
+        supabase
+      });
+    return {
+      attempted: true,
+      mode: "magiclink",
+      ok: true,
+      provider: "supabase",
+      redirectTo: payload.redirectTo,
+      supabaseUserId: String(response?.supabaseUserId || response?.data?.user?.id || "")
+    };
+  } catch (error) {
+    return {
+      attempted: true,
+      code: error?.code || "vibe64_supabase_existing_user_email_failed",
+      error: String(error?.message || error || "Supabase existing-user invite email failed."),
+      mode: "magiclink",
+      ok: false,
+      provider: "supabase",
+      redirectTo: payload.redirectTo
+    };
+  }
+}
+
+async function sendDefaultSupabaseInviteEmail({
+  data = {},
+  email = "",
+  redirectTo = ""
+} = {}, {
+  supabase = {}
+} = {}) {
+  const client = createClient(supabase.url, supabase.secretKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  });
+  const result = await client.auth.admin.inviteUserByEmail(email, {
+    data,
+    redirectTo
+  });
+  if (result.error) {
+    throw result.error;
+  }
+  return {
+    data: result.data,
+    supabaseUserId: String(result.data?.user?.id || "")
+  };
+}
+
+async function sendDefaultSupabaseMagicLinkEmail({
+  data = {},
+  email = "",
+  redirectTo = ""
+} = {}, {
+  supabase = {}
+} = {}) {
+  if (supabase.configured !== true) {
+    const error = new Error("Supabase publishable key is required to email existing users.");
+    error.code = "vibe64_supabase_not_configured";
+    throw error;
+  }
+  const client = createClient(supabase.url, supabase.publishableKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  });
+  const result = await client.auth.signInWithOtp({
+    email,
+    options: {
+      data,
+      emailRedirectTo: redirectTo,
+      shouldCreateUser: false
+    }
+  });
+  if (result.error) {
+    throw result.error;
+  }
+  return {
+    data: result.data
+  };
+}
+
+function supabaseInviteUserAlreadyExists(error = {}) {
+  const code = String(error?.code || "").trim().toLowerCase();
+  const message = String(error?.message || "").trim().toLowerCase();
+  return code === "email_exists" ||
+    message.includes("already been registered") ||
+    message.includes("already registered");
+}
+
+function inviteEmailData({
+  invitedBy = {},
+  redirectTo = "",
+  request = {}
+} = {}) {
+  const origin = requestPublicOrigin(request);
+  const invitedByEmail = String(invitedBy.email || "");
+  return {
+    app: "Vibe64",
+    host: origin,
+    host_url: origin,
+    invite_url: redirectTo,
+    invite_message: invitedByEmail
+      ? `${invitedByEmail} invited you to Vibe64.`
+      : "You were invited to Vibe64.",
+    invited_by: invitedByEmail,
+    invitedBy: invitedByEmail,
+    redirect_to: redirectTo,
+    redirectTo,
+    sign_in_url: redirectTo,
+    signInUrl: redirectTo
+  };
+}
+
+function inviteRedirectToForRequest(request = {}) {
+  const origin = requestPublicOrigin(request);
+  if (!origin) {
+    return "";
+  }
+  try {
+    return new URL("/account?mode=signup", origin).href;
+  } catch {
+    return "";
+  }
+}
+
+function requestPublicOrigin(request = {}) {
+  const headers = request.headers || {};
+  const host = firstForwardedHeader(headers["x-forwarded-host"]) ||
+    String(headers.host || request.hostname || "").trim();
+  if (!host) {
+    return "";
+  }
+  const protocol = firstForwardedHeader(headers["x-forwarded-proto"]) ||
+    String(request.protocol || (requestIsSecure(request) ? "https" : "http") || "http").trim();
+  try {
+    return new URL(`${protocol}://${host}`).origin;
+  } catch {
+    return "";
+  }
+}
+
+function firstForwardedHeader(value = "") {
+  return String(value || "").split(",")[0].trim();
 }
 
 async function verifySupabaseUser(accessToken = "", supabase = {}) {

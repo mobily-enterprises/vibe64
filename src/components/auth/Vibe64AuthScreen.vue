@@ -99,11 +99,17 @@ const submitLabel = computed(() => {
 });
 
 function initialMode() {
-  return String(route.query.mode || "") === "reset-password"
-    ? "reset"
-    : props.setupRequired || props.ownerInvitePending
-      ? "signup"
-      : "login";
+  const requestedMode = String(route.query.mode || "").trim();
+  if (requestedMode === "reset-password") {
+    return "reset";
+  }
+  if (props.setupRequired || props.ownerInvitePending) {
+    return "signup";
+  }
+  if (["login", "recovery", "signup"].includes(requestedMode)) {
+    return requestedMode;
+  }
+  return "login";
 }
 
 async function submit() {
