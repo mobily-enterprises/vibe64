@@ -2,7 +2,7 @@
 X In /dashboard/setup, the "continue to project" button must be deleted
 
 1)
-  I invited chiaramobily@gmail.com -- I thought we had done the thing where supabase is meant to send an email invite out. How
+X  I invited chiaramobily@gmail.com -- I thought we had done the thing where supabase is meant to send an email invite out. How
   come the email invite is not being sent?
 
 2)

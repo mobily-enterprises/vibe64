@@ -23,6 +23,9 @@ import {
   jskitAutomatedChecksHook,
   jskitCodeIndexHook
 } from "@local/vibe64-adapters/server/adapters/jskit/adapter";
+import {
+  createJskitSetupDoctorPlugin
+} from "@local/vibe64-adapters/server/adapters/jskit/setupDoctorPlugin";
 import { withTemporaryRoot, worktreeMetadata } from "./vibe64TestHelpers.js";
 
 async function writeProjectFile(root, relativePath, text = "") {
@@ -193,6 +196,21 @@ test("jskit adapter exposes explicit self-target config policy", async () => {
       }
     }
   }), true);
+});
+
+test("jskit project setup checks project database readiness but not tenant container ownership", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const plugin = createJskitSetupDoctorPlugin({
+      targetRoot
+    });
+    const checks = await plugin.checks({
+      targetRoot
+    });
+    const checkIds = checks.map((check) => check.id);
+
+    assert.ok(checkIds.includes("runtime-services"));
+    assert.equal(checkIds.includes("jskit-mariadb"), false);
+  });
 });
 
 test("jskit self-target config enables host Docker for recursive Studio launch", async () => {

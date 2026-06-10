@@ -90,6 +90,7 @@ async function checkManagedMariaDbDatabase(toolkit, {
   rootPassword = "",
   startRepair = null,
   targetRoot = "",
+  unreachableExplanation = "Start the managed MariaDB runtime before database apps can proceed.",
   validateDatabaseName = defaultValidateDatabaseName
 } = {}) {
   const envMismatches = expectedEnvMismatches(database.rawEnv || {}, expectedEnv, {
@@ -124,7 +125,7 @@ async function checkManagedMariaDbDatabase(toolkit, {
       label,
       expected: "Studio-managed MariaDB is reachable.",
       observed: ping.output,
-      explanation: "Start the managed MariaDB runtime before database apps can proceed.",
+      explanation: unreachableExplanation,
       repair: startRepair
     });
   }

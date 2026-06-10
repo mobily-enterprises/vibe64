@@ -7,6 +7,7 @@ import {
   REINSTALL_CODEX_CLI_TERMINAL_PREVIEW,
   TOOLCHAIN_IMAGE,
   createService,
+  createStudioTenantRuntimeDoctorPlugin,
   isStudioSetupReady,
   reinstallCodexCliRepair,
   reinstallCodexCliScript,
@@ -29,6 +30,9 @@ import {
   testRouteApp,
   withLocalRequestBypass
 } from "./vibe64RouteTestHelpers.js";
+import {
+  withTemporaryRoot
+} from "./vibe64TestHelpers.js";
 
 test("Studio Setup readiness requires every required check to pass", () => {
   assert.equal(isStudioSetupReady([
@@ -169,6 +173,37 @@ test("Studio Setup resolves the Studio implementation root separately", () => {
       process.env.VIBE64_APP_ROOT = previousStudioRoot;
     }
   }
+});
+
+test("Studio Setup owns the shared tenant JSKIT MariaDB runtime", async () => {
+  await withTemporaryRoot(async (studioRoot) => {
+    const plugin = createStudioTenantRuntimeDoctorPlugin({
+      runCommand: async () => ({
+        ok: false,
+        output: "No such container",
+        stdout: ""
+      }),
+      studioRoot,
+      tenantId: "tonymobily"
+    });
+    const checks = await plugin.checks({
+      studioRoot
+    });
+    const mariaDbCheck = checks.find((check) => check.id === "jskit-mariadb");
+
+    assert.ok(mariaDbCheck);
+    assert.equal(mariaDbCheck.label, "JSKIT MariaDB");
+
+    const result = await mariaDbCheck.run({
+      studioRoot
+    });
+
+    assert.equal(result.status, "blocked");
+    assert.equal(result.repair.actionId, "start-runtime-container-jskit-mariadb");
+    assert.match(result.repair.commandPreview, /--name vibe64-jskit-mariadb-tonymobily/u);
+    assert.match(result.repair.commandPreview, /-v vibe64_jskit_mariadb_data_tonymobily:\/var\/lib\/mysql/u);
+    assert.doesNotMatch(result.repair.commandPreview, /MARIADB_DATABASE=/u);
+  });
 });
 
 test("Studio Setup Codex repair reinstalls Codex in the managed tool home", () => {

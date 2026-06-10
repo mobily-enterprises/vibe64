@@ -6,15 +6,6 @@ import {
   missingAdapterToolchainCheck
 } from "../../adapterToolchains.js";
 import {
-  createJskitMariaDbRuntimeContainer,
-  JSKIT_MARIADB_HOST,
-  readDatabaseHostFromDotEnv,
-  targetWantsJskitMariaDb
-} from "./setupMariaDbRuntime.js";
-import {
-  createRuntimeContainerDoctorEntries
-} from "@local/studio-terminal-core/server/runtimeContainers";
-import {
   createJskitProjectSetupTerminalActions,
   createJskitProjectSetupChecks
 } from "./setupProjectChecks.js";
@@ -57,20 +48,6 @@ function createJskitSetupDoctorPlugin({
     terminalEnv: configEnvironment,
     terminalNamespace
   });
-  const mariaDbContainer = createJskitMariaDbRuntimeContainer({
-    required: async (context = {}) => {
-      const checkTargetRoot = context.targetRoot || targetRoot;
-      return await targetWantsJskitMariaDb(checkTargetRoot, toolkit) &&
-        await readDatabaseHostFromDotEnv(checkTargetRoot) === JSKIT_MARIADB_HOST;
-    },
-    targetRoot
-  });
-  const runtimeContainers = createRuntimeContainerDoctorEntries(toolkit, [
-    mariaDbContainer
-  ], {
-    adapterId: "jskit",
-    targetRoot
-  });
 
   return toolkit.plugin({
     id: "jskit-target-runtime",
@@ -79,7 +56,6 @@ function createJskitSetupDoctorPlugin({
     checks() {
       let jskitToolchainReady = false;
       const projectSetupChecks = createJskitProjectSetupChecks(toolkit);
-      const [mariaDbContainerCheck] = runtimeContainers.checks;
       const nodeCheck = toolkit.toolchainCommandCheck({
         id: "node",
         label: "Node",
@@ -162,19 +138,12 @@ function createJskitSetupDoctorPlugin({
         },
         projectSetupChecks.scaffold,
         projectSetupChecks.dependencies,
-        {
-          expected: "Managed JSKIT MariaDB is ready when the target declares a MySQL-compatible runtime.",
-          id: "jskit-mariadb",
-          label: "JSKIT MariaDB",
-          run: mariaDbContainerCheck.run
-        },
         projectSetupChecks.runtimeServices,
         projectSetupChecks.verificationCommand
       ];
     },
     terminalActions(context = {}) {
       return [
-        ...runtimeContainers.terminalActions,
         ...createJskitProjectSetupTerminalActions({
           targetRoot: context.targetRoot || targetRoot,
           toolkit

@@ -1,3 +1,5 @@
+import os from "node:os";
+
 import {
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
@@ -6,8 +8,7 @@ import {
 } from "@local/studio-terminal-core/server/managedDatabases";
 import {
   VIBE64_RUNTIME_HOST_ALIAS,
-  createRuntimeContainerRepair,
-  runtimeContainerName
+  createRuntimeContainerRepair
 } from "@local/studio-terminal-core/server/runtimeContainers";
 import {
   readDatabaseHostFromEnvFile
@@ -31,6 +32,7 @@ const JSKIT_MARIADB_PROBE_TABLE = "capability_probe";
 const JSKIT_HOST_DATABASE_HOST = VIBE64_RUNTIME_HOST_ALIAS;
 const JSKIT_MARIADB_PROBE_SQL_VARIABLE = "@vibe64_jskit_probe_sql";
 const JSKIT_MARIADB_PROBE_STATEMENT = "vibe64_jskit_probe_statement";
+const JSKIT_MARIADB_TENANT_ENV = "VIBE64_TENANT";
 
 async function targetWantsJskitMariaDb(targetRoot = "", toolkit) {
   const lockJsonResult = await toolkit.readTargetJson(".jskit/lock.json", {
@@ -88,13 +90,69 @@ function jskitMariaDbDatabaseName(targetRoot = "") {
   });
 }
 
+function normalizeJskitMariaDbTenantSlug(value = "") {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/gu, "_")
+    .replace(/^_+|_+$/gu, "") || "user";
+}
+
+function defaultJskitMariaDbTenantSlug({
+  env = process.env,
+  userInfo = os.userInfo
+} = {}) {
+  const explicitTenant = String(env[JSKIT_MARIADB_TENANT_ENV] || "").trim();
+  if (explicitTenant) {
+    return normalizeJskitMariaDbTenantSlug(explicitTenant);
+  }
+  let userInfoName = "";
+  try {
+    userInfoName = userInfo?.().username || "";
+  } catch {
+    userInfoName = "";
+  }
+  return normalizeJskitMariaDbTenantSlug(
+    env.USER ||
+    env.LOGNAME ||
+    userInfoName ||
+    ""
+  );
+}
+
+function jskitMariaDbTenantSlug(tenantId = "") {
+  return tenantId
+    ? normalizeJskitMariaDbTenantSlug(tenantId)
+    : defaultJskitMariaDbTenantSlug();
+}
+
+function jskitMariaDbContainerName(targetRootOrOptions = "", options = {}) {
+  const containerOptions = targetRootOrOptions && typeof targetRootOrOptions === "object"
+    ? targetRootOrOptions
+    : options;
+  const tenantId = containerOptions.tenantId || "";
+  return `vibe64-jskit-mariadb-${jskitMariaDbTenantSlug(tenantId).replaceAll("_", "-")}`;
+}
+
+function jskitMariaDbVolumeName({
+  tenantId = ""
+} = {}) {
+  return `vibe64_jskit_mariadb_data_${jskitMariaDbTenantSlug(tenantId)}`;
+}
+
 function createJskitMariaDbRuntimeContainer({
   databaseName = "",
+  ensureProjectDatabase = false,
+  manageProjectDatabase = true,
   required = true,
+  tenantId = "",
   targetRoot = ""
 } = {}) {
   const configuredDatabaseName = String(databaseName || "").trim();
   const terminalDatabaseName = (contextTargetRoot = "") => {
+    if (!manageProjectDatabase) {
+      return "";
+    }
     return configuredDatabaseName || jskitMariaDbDatabaseName(targetRoot || contextTargetRoot);
   };
   return {
@@ -102,13 +160,17 @@ function createJskitMariaDbRuntimeContainer({
       JSKIT_MARIADB_HOST
     ],
     checkId: "jskit-mariadb",
+    containerName: jskitMariaDbContainerName(targetRoot, {
+      tenantId
+    }),
     env: ({ targetRoot: contextTargetRoot = "" } = {}) => {
+      const appDatabaseName = terminalDatabaseName(contextTargetRoot);
       return {
-        MARIADB_DATABASE: terminalDatabaseName(contextTargetRoot),
+        ...(ensureProjectDatabase && appDatabaseName ? { MARIADB_DATABASE: appDatabaseName } : {}),
         MARIADB_ROOT_PASSWORD: JSKIT_MARIADB_ROOT_PASSWORD
       };
     },
-    expected: "Managed JSKIT MariaDB is ready when the target declares a MySQL-compatible runtime.",
+    expected: "Shared tenant JSKIT MariaDB is ready for JSKIT project databases.",
     health: {
       command: [
         "mariadb-admin",
@@ -133,23 +195,30 @@ function createJskitMariaDbRuntimeContainer({
         `-p${JSKIT_MARIADB_ROOT_PASSWORD}`,
         "-e",
         mariaDbCapabilitySql({
-          appDatabaseName: terminalDatabaseName()
+          appDatabaseName: ensureProjectDatabase ? terminalDatabaseName() : ""
         })
       ],
-      expected: "Managed JSKIT MariaDB can create the app database and create/drop a temporary probe database.",
+      expected: ensureProjectDatabase
+        ? "Managed JSKIT MariaDB can create the app database and create/drop a temporary probe database."
+        : "Shared tenant JSKIT MariaDB can create/drop a temporary probe database.",
       explanation: "The MariaDB container is reachable, but Studio could not prove DDL rights.",
-      observed: "App database is present. Probe database and table created and dropped successfully."
+      observed: ensureProjectDatabase
+        ? "App database is present. Probe database and table created and dropped successfully."
+        : "Probe database and table created and dropped successfully."
     },
-    readyExplanation: "The JSKIT managed MariaDB runtime is ready for target database setup.",
+    readyExplanation: manageProjectDatabase
+      ? "The JSKIT managed MariaDB runtime is ready for target database setup."
+      : "The shared JSKIT MariaDB runtime is ready for tenant project databases.",
     required,
     secretEnv: [
       "MARIADB_ROOT_PASSWORD",
       "MYSQL_PWD"
     ],
     terminalEnv: ({ targetRoot: contextTargetRoot = "" } = {}) => {
+      const appDatabaseName = terminalDatabaseName(contextTargetRoot);
       return {
         VIBE64_MYSQL_USER: "root",
-        MYSQL_DATABASE: terminalDatabaseName(contextTargetRoot),
+        ...(appDatabaseName ? { MYSQL_DATABASE: appDatabaseName } : {}),
         MYSQL_HOST: JSKIT_MARIADB_HOST,
         MYSQL_PWD: JSKIT_MARIADB_ROOT_PASSWORD,
         MYSQL_TCP_PORT: "3306"
@@ -158,17 +227,19 @@ function createJskitMariaDbRuntimeContainer({
     volumes: [
       {
         id: "data",
+        source: jskitMariaDbVolumeName({
+          tenantId
+        }),
         target: "/var/lib/mysql"
       }
     ]
   };
 }
 
-function jskitMariaDbContainerName(targetRoot = "") {
-  return runtimeContainerName({
-    adapterId: "jskit",
-    containerId: JSKIT_MARIADB_CONTAINER_ID,
-    targetRoot
+function createJskitTenantMariaDbRuntimeContainer(options = {}) {
+  return createJskitMariaDbRuntimeContainer({
+    ...options,
+    manageProjectDatabase: false
   });
 }
 
@@ -211,10 +282,13 @@ async function readDatabaseHostFromDotEnv(targetRoot = "") {
 
 export {
   createJskitMariaDbRuntimeContainer,
+  createJskitTenantMariaDbRuntimeContainer,
   createManagedDatabaseDockerArgs,
   createManagedDatabaseRepair,
   jskitMariaDbDatabaseName,
   jskitMariaDbContainerName,
+  jskitMariaDbTenantSlug,
+  jskitMariaDbVolumeName,
   JSKIT_HOST_DATABASE_HOST,
   JSKIT_MARIADB_CONTAINER_ID,
   JSKIT_MARIADB_HOST,

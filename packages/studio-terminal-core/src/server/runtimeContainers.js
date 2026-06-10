@@ -195,7 +195,7 @@ function normalizeRuntimeContainerDescriptor(descriptor = {}, {
     adapterId,
     aliases,
     checkId: normalizeText(descriptor.checkId || id),
-    containerName: runtimeContainerName({
+    containerName: normalizeText(descriptor.containerName) || runtimeContainerName({
       adapterId,
       containerId: id,
       targetRoot: resolvedTargetRoot

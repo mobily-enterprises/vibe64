@@ -6,7 +6,6 @@ import {
   JSKIT_MARIADB_ROOT_PASSWORD,
   jskitMariaDbContainerName,
   managedMariaDbAccessInstructions,
-  startJskitMariaDbRepair,
   validateDatabaseName
 } from "./setupMariaDbRuntime.js";
 import {
@@ -149,11 +148,7 @@ async function checkJskitDatabaseRuntime(toolkit, {
       expected: ".env declares the database connection that Studio containers should use.",
       observed: "No database settings were found in .env.",
       explanation: "The JSKIT adapter uses .env as the database source of truth. Seed defaults to use Studio-managed MariaDB, or create .env manually for an existing database.",
-      repair: seedRepair,
-      repairs: [
-        seedRepair,
-        startJskitMariaDbRepair(targetRoot)
-      ]
+      repair: seedRepair
     },
     hostAlias: `DB_HOST=${JSKIT_HOST_DATABASE_HOST}`,
     id: "runtime-services",
@@ -164,7 +159,8 @@ async function checkJskitDatabaseRuntime(toolkit, {
       createDatabaseRepair: createManagedDatabaseRepair,
       expectedEnv: defaultDatabaseEnv(targetRoot),
       rootPassword: JSKIT_MARIADB_ROOT_PASSWORD,
-      startRepair: startJskitMariaDbRepair(targetRoot)
+      startRepair: null,
+      unreachableExplanation: "Run Studio Setup to start the shared tenant JSKIT MariaDB runtime before project database checks continue."
     },
     managedHost: JSKIT_MARIADB_HOST,
     targetRoot,

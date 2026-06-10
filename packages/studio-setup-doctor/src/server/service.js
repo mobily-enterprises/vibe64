@@ -18,6 +18,12 @@ import {
   startDoctorPluginTerminal
 } from "@local/setup-doctor-core/server/doctorPlugins";
 import {
+  createDoctorPluginToolkit
+} from "@local/setup-doctor-core/server/doctorPluginToolkit";
+import {
+  createRuntimeContainerDoctorEntries
+} from "@local/studio-terminal-core/server/runtimeContainers";
+import {
   STUDIO_BASE_TOOLCHAIN_IMAGE as TOOLCHAIN_IMAGE
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
@@ -35,9 +41,13 @@ import {
 import {
   packageManagerAvailabilityScript
 } from "@local/vibe64-adapters/server/nodePackage";
+import {
+  createJskitTenantMariaDbRuntimeContainer
+} from "@local/vibe64-adapters/server/adapters/jskit/setupMariaDbRuntime";
 
 const TERMINAL_NAMESPACE = "studio-setup-doctor";
 const REINSTALL_CODEX_CLI_TERMINAL_PREVIEW = "Reinstall Codex CLI inside the managed Studio toolchain";
+const STUDIO_SETUP_CACHE_SCOPE = "studio-setup-tenant-runtime-v1";
 
 const isStudioSetupReady = areDoctorChecksReady;
 
@@ -568,6 +578,37 @@ function createStudioRuntimeDoctorPlugin({
   });
 }
 
+function createStudioTenantRuntimeDoctorPlugin({
+  runCommand,
+  studioRoot = "",
+  tenantId = ""
+} = {}) {
+  const toolkit = createDoctorPluginToolkit({
+    runCommand,
+    startTerminalSession,
+    studioRoot,
+    targetRoot: studioRoot,
+    terminalNamespace: TERMINAL_NAMESPACE
+  });
+  const mariaDbContainer = createJskitTenantMariaDbRuntimeContainer({
+    targetRoot: studioRoot,
+    tenantId
+  });
+  const runtimeContainers = createRuntimeContainerDoctorEntries(toolkit, [
+    mariaDbContainer
+  ], {
+    adapterId: "jskit",
+    targetRoot: studioRoot
+  });
+
+  return toolkit.plugin({
+    id: "studio-tenant-runtime",
+    label: "Tenant runtime",
+    checks: runtimeContainers.checks,
+    terminalActions: runtimeContainers.terminalActions
+  });
+}
+
 function refreshRequested(input = {}) {
   return input?.refresh === true || input?.refresh === "true" || input?.refresh === "1";
 }
@@ -579,11 +620,15 @@ function createService({
   const resolvedStudioRoot = resolveStudioRoot(studioRoot);
   const readyStatusCache = createRepositoryReadyStatusCache({
     doctorId: "studio-setup",
+    scope: STUDIO_SETUP_CACHE_SCOPE,
     studioRoot: resolvedStudioRoot,
     targetRoot: targetRoot || resolvedStudioRoot
   });
   const plugins = [
     createStudioRuntimeDoctorPlugin({
+      studioRoot: resolvedStudioRoot
+    }),
+    createStudioTenantRuntimeDoctorPlugin({
       studioRoot: resolvedStudioRoot
     })
   ];
@@ -687,6 +732,7 @@ export {
   reinstallCodexCliRepair,
   reinstallCodexCliScript,
   reinstallCodexCliTerminalScript,
+  createStudioTenantRuntimeDoctorPlugin,
   isStudioSetupReady,
   createService
 };

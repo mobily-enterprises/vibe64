@@ -21,6 +21,9 @@ import {
 } from "@local/studio-terminal-core/server/runtimeContainers";
 import {
   createJskitMariaDbRuntimeContainer,
+  createJskitTenantMariaDbRuntimeContainer,
+  jskitMariaDbContainerName,
+  jskitMariaDbVolumeName,
   managedMariaDbAccessInstructions,
   mariaDbCapabilitySql,
   startJskitMariaDbRepair
@@ -196,8 +199,7 @@ test("jskit declares MariaDB through the generic runtime container layer", async
 
     assert.equal(repair.actionId, "start-runtime-container-jskit-mariadb");
     assert.match(repair.commandPreview, /mariadb:12\.0\.2/u);
-    assert.match(repair.commandPreview, /MARIADB_DATABASE=/u);
-    assert.match(repair.commandPreview, new RegExp(path.basename(targetRoot).replace(/[^A-Za-z0-9_]+/gu, "_"), "u"));
+    assert.doesNotMatch(repair.commandPreview, /MARIADB_DATABASE=/u);
     assert.match(repair.commandPreview, /MARIADB_ROOT_PASSWORD=\*\*\*\*\*/u);
     assert.doesNotMatch(repair.commandPreview, /vibe64_jskit_root/u);
     assert.doesNotMatch(repair.commandPreview, /127\.0\.0\.1:13306:3306/u);
@@ -220,6 +222,73 @@ test("jskit declares MariaDB through the generic runtime container layer", async
       MYSQL_PWD: "vibe64_jskit_root",
       MYSQL_TCP_PORT: "3306"
     });
+  });
+});
+
+test("jskit MariaDB runtime is tenant-scoped while databases remain project-scoped", async () => {
+  await withTemporaryRoot(async (root) => {
+    const beepollenRoot = path.join(root, "beepollen");
+    const dogandgroomRoot = path.join(root, "dogandgroom");
+    const tenantId = "tonymobily";
+    const beepollenDescriptor = createJskitMariaDbRuntimeContainer({
+      tenantId,
+      targetRoot: beepollenRoot
+    });
+    const dogandgroomDescriptor = createJskitMariaDbRuntimeContainer({
+      tenantId,
+      targetRoot: dogandgroomRoot
+    });
+    const beepollenEnv = await runtimeContainerTerminalEnv(beepollenDescriptor, {
+      adapterId: "jskit",
+      targetRoot: beepollenRoot
+    });
+    const dogandgroomEnv = await runtimeContainerTerminalEnv(dogandgroomDescriptor, {
+      adapterId: "jskit",
+      targetRoot: dogandgroomRoot
+    });
+    const script = runtimeContainerStartScript(beepollenDescriptor, {
+      adapterId: "jskit",
+      targetRoot: beepollenRoot
+    });
+
+    assert.equal(
+      jskitMariaDbContainerName(beepollenRoot, {
+        tenantId
+      }),
+      jskitMariaDbContainerName(dogandgroomRoot, {
+        tenantId
+      })
+    );
+    assert.equal(jskitMariaDbVolumeName({
+      tenantId
+    }), "vibe64_jskit_mariadb_data_tonymobily");
+    assert.match(script, /--name vibe64-jskit-mariadb-tonymobily/u);
+    assert.match(script, /-v vibe64_jskit_mariadb_data_tonymobily:\/var\/lib\/mysql/u);
+    assert.equal(beepollenEnv.MYSQL_DATABASE, "beepollen");
+    assert.equal(dogandgroomEnv.MYSQL_DATABASE, "dogandgroom");
+  });
+});
+
+test("jskit tenant MariaDB runtime probes without creating a project database", async () => {
+  await withTemporaryRoot(async (root) => {
+    const descriptor = createJskitTenantMariaDbRuntimeContainer({
+      targetRoot: root,
+      tenantId: "tonymobily"
+    });
+    const script = runtimeContainerStartScript(descriptor, {
+      adapterId: "jskit",
+      targetRoot: root
+    });
+    const terminalEnv = await runtimeContainerTerminalEnv(descriptor, {
+      adapterId: "jskit",
+      targetRoot: root
+    });
+
+    assert.match(script, /--name vibe64-jskit-mariadb-tonymobily/u);
+    assert.match(script, /-v vibe64_jskit_mariadb_data_tonymobily:\/var\/lib\/mysql/u);
+    assert.doesNotMatch(script, /MARIADB_DATABASE=/u);
+    assert.doesNotMatch(script, /CREATE DATABASE IF NOT EXISTS/u);
+    assert.equal(Object.hasOwn(terminalEnv, "MYSQL_DATABASE"), false);
   });
 });
 
@@ -565,7 +634,6 @@ test("target runtime network shell command tolerates concurrent network creation
 
 test("runtime container start script safely displays shell-quoted commands", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const databaseName = path.basename(targetRoot).replace(/[^A-Za-z0-9_]+/gu, "_");
     const script = runtimeContainerStartScript(createJskitMariaDbRuntimeContainer({
       targetRoot
     }), {
@@ -581,12 +649,12 @@ test("runtime container start script safely displays shell-quoted commands", asy
     assert.match(script, /printf '%s\\n'/u);
     assert.doesNotMatch(script, /echo '\\$ docker run/u);
     assert.doesNotMatch(script, /127\.0\.0\.1:13306:3306/u);
-    assert.match(script, new RegExp(`MARIADB_DATABASE=${databaseName}`, "u"));
-    assert.match(script, new RegExp(`CREATE DATABASE IF NOT EXISTS .${databaseName}.`, "u"));
-    assert.match(script, /timeout 15s docker exec vibe64-jskit-jskit-mariadb-/u);
-    assert.match(script, /if ! docker start vibe64-jskit-jskit-mariadb-/u);
+    assert.doesNotMatch(script, /MARIADB_DATABASE=/u);
+    assert.doesNotMatch(script, /CREATE DATABASE IF NOT EXISTS/u);
+    assert.match(script, /timeout 15s docker exec vibe64-jskit-mariadb-/u);
+    assert.match(script, /if ! docker start vibe64-jskit-mariadb-/u);
     assert.match(script, /container could not start\. Recreating the container while keeping managed volumes\./u);
-    assert.match(script, /docker rm -f vibe64-jskit-jskit-mariadb-/u);
+    assert.match(script, /docker rm -f vibe64-jskit-mariadb-/u);
   });
 });
 
