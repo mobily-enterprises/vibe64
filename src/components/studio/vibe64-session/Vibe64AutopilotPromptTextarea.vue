@@ -3,7 +3,8 @@
     class="studio-autopilot-prompt-textarea"
     :class="{
       'studio-autopilot-prompt-textarea--dragging': dragActive,
-      'studio-autopilot-prompt-textarea--has-attachments': uploadedAttachments.length
+      'studio-autopilot-prompt-textarea--has-attachments': uploadedAttachments.length,
+      'studio-autopilot-prompt-textarea--has-footer': $slots.footer
     }"
     @dragenter.prevent="handleDragEnter"
     @dragover.prevent="handleDragOver"
@@ -58,6 +59,13 @@
       :variant="variant"
       @update:model-value="$emit('update:modelValue', String($event || ''))"
     />
+
+    <div
+      v-if="$slots.footer"
+      class="studio-autopilot-prompt-textarea__footer"
+    >
+      <slot name="footer" />
+    </div>
   </div>
 </template>
 
@@ -217,8 +225,57 @@ defineExpose({
 .studio-autopilot-prompt-textarea {
   display: grid;
   gap: 0;
+  min-width: 0;
   position: relative;
   text-align: left;
+}
+
+.studio-autopilot-prompt-textarea :deep(.v-input),
+.studio-autopilot-prompt-textarea :deep(.v-field),
+.studio-autopilot-prompt-textarea :deep(.v-field__field),
+.studio-autopilot-prompt-textarea :deep(.v-field__input) {
+  min-width: 0;
+}
+
+.studio-autopilot-prompt-textarea :deep(.v-field__input) {
+  align-items: flex-start;
+}
+
+.studio-autopilot-prompt-textarea :deep(textarea.v-field__input) {
+  max-height: none;
+  overflow-y: hidden;
+  resize: none;
+}
+
+.studio-autopilot-prompt-textarea--has-footer {
+  background: rgb(var(--v-theme-surface));
+  border: 1px solid rgba(var(--v-theme-outline), 0.42);
+  border-radius: 18px;
+}
+
+.studio-autopilot-prompt-textarea--has-footer:focus-within {
+  border-color: rgb(var(--v-theme-primary));
+  box-shadow: 0 0 0 1px rgb(var(--v-theme-primary));
+}
+
+.studio-autopilot-prompt-textarea--has-footer :deep(.v-field) {
+  background: transparent;
+  border-radius: 17px 17px 0 0;
+  box-shadow: none;
+}
+
+.studio-autopilot-prompt-textarea--has-footer :deep(.v-field__outline) {
+  display: none;
+}
+
+.studio-autopilot-prompt-textarea--has-footer :deep(.v-field-label--floating) {
+  background: rgb(var(--v-theme-surface));
+  padding-inline: 0.25rem;
+}
+
+.studio-autopilot-prompt-textarea__footer {
+  min-width: 0;
+  padding: 0 0.55rem 0.55rem;
 }
 
 .studio-autopilot-prompt-textarea--dragging {

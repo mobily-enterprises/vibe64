@@ -79,6 +79,10 @@ function headingTag(level) {
   display: grid;
   gap: 0.36rem;
   line-height: 1.4;
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .studio-long-text-review__blocks--compact {
@@ -91,6 +95,8 @@ function headingTag(level) {
   letter-spacing: 0;
   line-height: 1.15;
   margin: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 h3.studio-long-text-review__heading {
@@ -109,6 +115,7 @@ h5.studio-long-text-review__heading {
   font-size: 0.88rem;
   margin: 0;
   overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .studio-long-text-review__blocks--compact .studio-long-text-review__paragraph {
@@ -119,13 +126,18 @@ h5.studio-long-text-review__heading {
   display: grid;
   gap: 0.16rem;
   margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
   padding-inline-start: 1.3rem;
 }
 
 .studio-long-text-review__list li {
   font-size: 0.92rem;
   line-height: 1.36;
+  min-width: 0;
+  overflow-wrap: anywhere;
   padding-inline-start: 0.1rem;
+  word-break: break-word;
 }
 
 .studio-long-text-review__blocks--compact .studio-long-text-review__list li {
@@ -140,6 +152,8 @@ h5.studio-long-text-review__heading {
   font-size: 0.82rem;
   line-height: 1.36;
   margin: 0;
+  max-width: 100%;
+  min-width: 0;
   overflow: auto;
   padding: 0.46rem 0.55rem;
   white-space: pre;

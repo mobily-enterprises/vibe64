@@ -27,8 +27,10 @@ Make this work on a local directory, creating containers etc. This is crucial fo
 5b)
 Make jskit open jskit properly. this depends on the item above too
 
-6)
-Test seeding
+6) Make seeding look a LOT better
+
+6a)
+Test seeding,
 
 7)
 ABILITY TO ADD USER
@@ -40,3 +42,5 @@ ABILITY TO PROVISION SERVER
 Ability to actually deploy, with OWN domain if needed, using the same DB container.
 
 
+3)
+Change any mention of "studio" into "vibe64" -- studio is the old name. Change the variables too.

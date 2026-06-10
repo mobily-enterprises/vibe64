@@ -426,7 +426,9 @@ watch(scrollTrigger, () => {
   flex-direction: column;
   gap: 1.15rem;
   min-height: 0;
-  overflow: auto;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding-right: 0.15rem;
 }
 
@@ -440,13 +442,16 @@ watch(scrollTrigger, () => {
   flex-direction: column;
   gap: 1.15rem;
   min-height: 0;
+  min-width: 0;
 }
 
 .studio-conversation-log__message-row {
   align-items: start;
   display: grid;
   gap: 0.65rem;
+  max-width: 100%;
   min-width: 0;
+  overflow-x: hidden;
 }
 
 .studio-conversation-log__message-row--user {
@@ -477,7 +482,10 @@ watch(scrollTrigger, () => {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+  max-width: 100%;
   min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .studio-conversation-log__avatar {
@@ -507,6 +515,7 @@ watch(scrollTrigger, () => {
   color: #202936;
   gap: 0.75rem;
   justify-content: space-between;
+  overflow-x: auto;
   padding: 0.75rem 1rem 0.72rem;
   width: fit-content;
 }
@@ -527,6 +536,7 @@ watch(scrollTrigger, () => {
   margin-left: 2.15rem;
   max-width: min(34rem, 86%);
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .studio-conversation-log__thinking-label {
@@ -607,6 +617,7 @@ watch(scrollTrigger, () => {
   display: grid;
   gap: 0.1rem;
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .studio-conversation-log__system-meta {
@@ -637,6 +648,8 @@ watch(scrollTrigger, () => {
   align-items: center;
   display: flex;
   gap: 0.25rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .studio-conversation-log__message-header time {
@@ -668,6 +681,8 @@ watch(scrollTrigger, () => {
   color: inherit;
   font-size: 0.94rem;
   line-height: 1.5;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .studio-conversation-log__message--assistant :deep(.studio-long-text-review__paragraph),

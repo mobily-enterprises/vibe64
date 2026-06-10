@@ -34,6 +34,14 @@ code {
   border-radius: 4px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   font-size: 0.92em;
+  overflow-wrap: anywhere;
   padding: 0.05rem 0.22rem;
+  word-break: break-word;
+}
+
+span,
+strong {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 </style>

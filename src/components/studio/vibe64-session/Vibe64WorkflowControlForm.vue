@@ -31,150 +31,157 @@
           variant="outlined"
           @attachments-change="updateFieldAttachments(field.name, $event)"
           @update:model-value="$emit('update-value', field.name, $event)"
-        />
-
-        <v-btn
-          v-if="inlineSubmitForField(field)"
-          :aria-label="inlineSubmitButtonLabel"
-          class="vibe64-workflow-control-form__inline-submit"
-          :class="{ 'vibe64-workflow-control-form__inline-submit--interrupt': interruptVisible }"
-          :color="interruptVisible ? 'error' : 'primary'"
-          :disabled="inlineSubmitButtonDisabled"
-          icon
-          :loading="inlineSubmitButtonLoading"
-          :title="inlineSubmitButtonLabel"
-          type="button"
-          variant="flat"
-          @click="handleInlineSubmitButton"
         >
-          <v-icon :icon="interruptVisible ? mdiStop : mdiSend" size="20" />
-        </v-btn>
-
-        <div
-          v-if="inlineSubmitForField(field)"
-          class="vibe64-workflow-control-form__composer-toolbar"
-        >
-          <div class="vibe64-workflow-control-form__composer-tools">
-            <v-menu
-              v-if="agentControlsVisible"
-              v-model="agentMenuOpen"
-              :close-on-content-click="false"
-              location="top start"
-              transition="scale-transition"
-            >
-              <template #activator="{ props: menuProps }">
-                <v-btn
-                  v-bind="menuProps"
-                  aria-label="AI parameters"
-                  class="vibe64-workflow-control-form__tool-button"
-                  density="comfortable"
-                  :icon="mdiCogOutline"
-                  size="small"
-                  :title="agentControlsTitle"
-                  type="button"
-                  variant="flat"
-                />
-              </template>
+          <template
+            v-if="inlineSubmitForField(field)"
+            #footer
+          >
+            <div class="vibe64-workflow-control-form__composer-footer">
+              <v-btn
+                v-if="inlineSubmitForField(field)"
+                :aria-label="inlineSubmitButtonLabel"
+                class="vibe64-workflow-control-form__inline-submit"
+                :class="{ 'vibe64-workflow-control-form__inline-submit--interrupt': interruptVisible }"
+                :color="interruptVisible ? 'error' : 'primary'"
+                :disabled="inlineSubmitButtonDisabled"
+                icon
+                :loading="inlineSubmitButtonLoading"
+                :title="inlineSubmitButtonLabel"
+                type="button"
+                variant="flat"
+                @click="handleInlineSubmitButton"
+              >
+                <v-icon :icon="interruptVisible ? mdiStop : mdiSend" size="20" />
+              </v-btn>
 
               <div
-                class="vibe64-workflow-control-form__ai-menu"
-                aria-label="AI controls"
+                v-if="inlineSubmitForField(field)"
+                class="vibe64-workflow-control-form__composer-toolbar"
               >
-                <div class="vibe64-workflow-control-form__ai-menu-header">
-                  <v-icon :icon="mdiBrain" size="20" />
-                  <div class="vibe64-workflow-control-form__ai-menu-heading">
-                    <strong>AI Controls</strong>
-                    <span>{{ agentProviderLabel }} · {{ agentSummary }}</span>
+                <div class="vibe64-workflow-control-form__composer-tools">
+                  <v-menu
+                    v-if="agentControlsVisible"
+                    v-model="agentMenuOpen"
+                    :close-on-content-click="false"
+                    location="top start"
+                    transition="scale-transition"
+                  >
+                    <template #activator="{ props: menuProps }">
+                      <v-btn
+                        v-bind="menuProps"
+                        aria-label="AI parameters"
+                        class="vibe64-workflow-control-form__tool-button"
+                        density="comfortable"
+                        :icon="mdiCogOutline"
+                        size="small"
+                        :title="agentControlsTitle"
+                        type="button"
+                        variant="flat"
+                      />
+                    </template>
+
+                    <div
+                      class="vibe64-workflow-control-form__ai-menu"
+                      aria-label="AI controls"
+                    >
+                      <div class="vibe64-workflow-control-form__ai-menu-header">
+                        <v-icon :icon="mdiBrain" size="20" />
+                        <div class="vibe64-workflow-control-form__ai-menu-heading">
+                          <strong>AI Controls</strong>
+                          <span>{{ agentProviderLabel }} · {{ agentSummary }}</span>
+                        </div>
+                      </div>
+
+                      <section
+                        v-for="parameter in agentParameters"
+                        :key="parameter.id"
+                        class="vibe64-workflow-control-form__ai-menu-section"
+                      >
+                        <div class="vibe64-workflow-control-form__ai-menu-label">
+                          {{ parameter.label }}
+                        </div>
+                        <div class="vibe64-workflow-control-form__ai-options">
+                          <button
+                            v-for="option in parameter.options"
+                            :key="`${parameter.id}:${option.value}`"
+                            class="vibe64-workflow-control-form__ai-option"
+                            :class="{ 'vibe64-workflow-control-form__ai-option--active': agentParameterSelected(parameter.id, option.value) }"
+                            type="button"
+                            :aria-pressed="agentParameterSelected(parameter.id, option.value)"
+                            @click="updateAgentParameter(parameter.id, option.value)"
+                          >
+                            <span>{{ option.label }}</span>
+                            <v-icon
+                              v-if="agentParameterSelected(parameter.id, option.value)"
+                              :icon="mdiCheck"
+                              size="15"
+                            />
+                          </button>
+                        </div>
+                      </section>
+                    </div>
+                  </v-menu>
+
+                  <v-menu
+                    v-model="attachmentMenuOpen"
+                    location="top start"
+                    transition="scale-transition"
+                  >
+                    <template #activator="{ props: menuProps }">
+                      <v-btn
+                        v-bind="menuProps"
+                        aria-label="Attachment menu"
+                        class="vibe64-workflow-control-form__tool-button"
+                        density="comfortable"
+                        :icon="mdiPlus"
+                        size="small"
+                        title="Attachment menu"
+                        type="button"
+                        variant="flat"
+                      />
+                    </template>
+
+                    <div
+                      class="vibe64-workflow-control-form__attachment-menu"
+                      aria-label="Attachment actions"
+                    >
+                      <button
+                        class="vibe64-workflow-control-form__attachment-menu-item"
+                        :disabled="attachmentToolDisabled"
+                        type="button"
+                        @click="chooseAttachmentFiles"
+                      >
+                        <v-icon :icon="mdiFileUploadOutline" size="18" />
+                        <span>Attach files</span>
+                      </button>
+                    </div>
+                  </v-menu>
+
+                  <div
+                    v-if="workflowControls.length"
+                    class="vibe64-workflow-control-form__workflow-actions vibe64-workflow-control-form__workflow-actions--toolbar"
+                  >
+                    <v-btn
+                      v-for="control in workflowControls"
+                      :key="control.id"
+                      :color="control.buttonColor"
+                      :disabled="control.disabled"
+                      :loading="control.loading"
+                      :prepend-icon="control.icon"
+                      size="small"
+                      :title="control.disabledReason || control.label"
+                      type="button"
+                      :variant="control.buttonVariant"
+                      @click="$emit('activate-control', control.sourceControl || control)"
+                    >
+                      {{ control.label }}
+                    </v-btn>
                   </div>
                 </div>
-
-                <section
-                  v-for="parameter in agentParameters"
-                  :key="parameter.id"
-                  class="vibe64-workflow-control-form__ai-menu-section"
-                >
-                  <div class="vibe64-workflow-control-form__ai-menu-label">
-                    {{ parameter.label }}
-                  </div>
-                  <div class="vibe64-workflow-control-form__ai-options">
-                    <button
-                      v-for="option in parameter.options"
-                      :key="`${parameter.id}:${option.value}`"
-                      class="vibe64-workflow-control-form__ai-option"
-                      :class="{ 'vibe64-workflow-control-form__ai-option--active': agentParameterSelected(parameter.id, option.value) }"
-                      type="button"
-                      :aria-pressed="agentParameterSelected(parameter.id, option.value)"
-                      @click="updateAgentParameter(parameter.id, option.value)"
-                    >
-                      <span>{{ option.label }}</span>
-                      <v-icon
-                        v-if="agentParameterSelected(parameter.id, option.value)"
-                        :icon="mdiCheck"
-                        size="15"
-                      />
-                    </button>
-                  </div>
-                </section>
               </div>
-            </v-menu>
-
-            <v-menu
-              v-model="attachmentMenuOpen"
-              location="top start"
-              transition="scale-transition"
-            >
-              <template #activator="{ props: menuProps }">
-                <v-btn
-                  v-bind="menuProps"
-                  aria-label="Attachment menu"
-                  class="vibe64-workflow-control-form__tool-button"
-                  density="comfortable"
-                  :icon="mdiPlus"
-                  size="small"
-                  title="Attachment menu"
-                  type="button"
-                  variant="flat"
-                />
-              </template>
-
-              <div
-                class="vibe64-workflow-control-form__attachment-menu"
-                aria-label="Attachment actions"
-              >
-                <button
-                  class="vibe64-workflow-control-form__attachment-menu-item"
-                  :disabled="attachmentToolDisabled"
-                  type="button"
-                  @click="chooseAttachmentFiles"
-                >
-                  <v-icon :icon="mdiFileUploadOutline" size="18" />
-                  <span>Attach files</span>
-                </button>
-              </div>
-            </v-menu>
-
-            <div
-              v-if="workflowControls.length"
-              class="vibe64-workflow-control-form__workflow-actions vibe64-workflow-control-form__workflow-actions--toolbar"
-            >
-              <v-btn
-                v-for="control in workflowControls"
-                :key="control.id"
-                :color="control.buttonColor"
-                :disabled="control.disabled"
-                :loading="control.loading"
-                :prepend-icon="control.icon"
-                size="small"
-                :title="control.disabledReason || control.label"
-                type="button"
-                :variant="control.buttonVariant"
-                @click="$emit('activate-control', control.sourceControl || control)"
-              >
-                {{ control.label }}
-              </v-btn>
             </div>
-          </div>
-        </div>
+          </template>
+        </Vibe64AutopilotPromptTextarea>
       </div>
       <v-textarea
         v-else-if="field.kind === 'textarea'"
@@ -538,7 +545,12 @@ defineExpose({
 }
 
 .vibe64-workflow-control-form__prompt-shell {
+  min-width: 0;
   position: relative;
+}
+
+.vibe64-workflow-control-form__prompt-shell--inline-submit {
+  display: block;
 }
 
 .vibe64-workflow-control-form--inline-submit .vibe64-workflow-control-form__prompt-shell {
@@ -573,25 +585,37 @@ defineExpose({
 }
 
 .vibe64-workflow-control-form :deep(.studio-autopilot-prompt-textarea .v-field__input) {
+  align-items: flex-start;
   min-height: 2.9rem;
+  overflow-y: hidden;
   padding-block: 0.64rem 0.56rem;
 }
 
 .vibe64-workflow-control-form__prompt-shell--inline-submit :deep(.studio-autopilot-prompt-textarea .v-field__input) {
-  padding-bottom: 3rem;
-  padding-right: 3.2rem;
+  padding-bottom: 0.56rem;
+  padding-right: 1rem;
 }
 
-.vibe64-workflow-control-form :deep(.studio-autopilot-prompt-textarea .v-field__input textarea) {
+.vibe64-workflow-control-form :deep(.studio-autopilot-prompt-textarea textarea.v-field__input) {
   color: rgb(var(--v-theme-on-surface));
   line-height: 1.4;
   min-height: 2rem;
   opacity: 1;
+  overflow-y: hidden;
+  resize: none;
 }
 
-.vibe64-workflow-control-form :deep(.studio-autopilot-prompt-textarea .v-field__input textarea::placeholder) {
+.vibe64-workflow-control-form :deep(.studio-autopilot-prompt-textarea textarea.v-field__input::placeholder) {
   color: rgba(var(--v-theme-on-surface), 0.62);
   opacity: 1;
+}
+
+.vibe64-workflow-control-form :deep(.studio-autopilot-prompt-textarea--has-footer) {
+  gap: 0;
+}
+
+.vibe64-workflow-control-form :deep(.studio-autopilot-prompt-textarea--has-footer .v-field__input) {
+  padding-bottom: 0.18rem;
 }
 
 .vibe64-workflow-control-form__actions,
@@ -603,16 +627,21 @@ defineExpose({
   gap: 0.36rem;
 }
 
+.vibe64-workflow-control-form__composer-footer {
+  align-items: center;
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-width: 0;
+}
+
 .vibe64-workflow-control-form__composer-toolbar {
   align-items: center;
-  bottom: 0.55rem;
   display: flex;
-  left: 0.55rem;
+  grid-column: 1;
+  grid-row: 1;
   min-width: 0;
-  pointer-events: none;
-  position: absolute;
-  right: 3.05rem;
-  z-index: 2;
+  pointer-events: auto;
 }
 
 .vibe64-workflow-control-form__composer-tools {
@@ -620,9 +649,15 @@ defineExpose({
   display: flex;
   gap: 0.34rem;
   min-width: 0;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
   pointer-events: auto;
+  scrollbar-width: none;
   width: 100%;
+}
+
+.vibe64-workflow-control-form__composer-tools::-webkit-scrollbar {
+  display: none;
 }
 
 .vibe64-workflow-control-form__tool-button {
@@ -804,14 +839,14 @@ defineExpose({
 }
 
 .vibe64-workflow-control-form__inline-submit {
-  bottom: 0.55rem;
+  align-self: center;
+  grid-column: 2;
+  grid-row: 1;
   height: 2.15rem;
+  justify-self: end;
   min-height: 2.15rem;
   min-width: 2.15rem;
-  position: absolute;
-  right: 0.55rem;
   width: 2.15rem;
-  z-index: 2;
 }
 
 .vibe64-workflow-control-form__inline-submit--interrupt {

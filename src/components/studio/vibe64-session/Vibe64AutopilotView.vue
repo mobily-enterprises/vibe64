@@ -1606,7 +1606,7 @@ watch(() => [
   align-self: stretch;
   display: grid;
   flex: 1 1 auto;
-  min-height: min(16rem, 40vh);
+  min-height: 0;
 }
 
 .studio-autopilot__artifact :deep(.studio-report-preview__body) {
@@ -1729,6 +1729,16 @@ watch(() => [
 .studio-autopilot__input {
   text-align: left;
   width: 100%;
+}
+
+.studio-autopilot__input :deep(.v-field__input) {
+  align-items: flex-start;
+  overflow-y: hidden;
+}
+
+.studio-autopilot__input :deep(textarea.v-field__input) {
+  overflow-y: hidden;
+  resize: none;
 }
 
 .studio-autopilot__screen-actions {
