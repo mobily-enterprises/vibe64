@@ -4,6 +4,9 @@ import {
   clientControlHasDispatcher,
   runVibe64ClientControl
 } from "@/lib/vibe64ClientControlDispatcher.js";
+import {
+  VIBE64_CODEX_APP_SERVER_TASK_ID
+} from "@/lib/vibe64CodexTerminalAttention.js";
 
 const VISIBLE_BACKGROUND_TASK_STATUSES = new Set(["failed", "running"]);
 
@@ -31,7 +34,12 @@ function taskRetryErrorMessage(error) {
   return String(error?.message || error || "Background task retry failed.").trim();
 }
 
+function taskNeedsCodexTerminalRecovery(task = {}) {
+  return String(task?.id || "").trim() === VIBE64_CODEX_APP_SERVER_TASK_ID;
+}
+
 function useVibe64BackgroundTasks({
+  openCodexTerminal = null,
   refreshSessionData = async () => null,
   session
 } = {}) {
@@ -63,11 +71,22 @@ function useVibe64BackgroundTasks({
       }
       return true;
     } catch (error) {
+      await openCodexTerminalForTask(task);
       backgroundTaskError.value = taskRetryErrorMessage(error);
       return false;
     } finally {
       retryingBackgroundTaskId.value = "";
     }
+  }
+
+  async function openCodexTerminalForTask(task = {}) {
+    if (!taskNeedsCodexTerminalRecovery(task) || typeof openCodexTerminal !== "function") {
+      return false;
+    }
+    return await openCodexTerminal({
+      source: "background_task",
+      task
+    });
   }
 
   return {

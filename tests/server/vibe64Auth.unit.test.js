@@ -182,8 +182,56 @@ test("Vibe64 auth invite route sends a Supabase invite email with a localhost re
     assert.equal(sentInvites[0].email, "friend@example.com");
     assert.equal(sentInvites[0].redirectTo, "http://localhost:5174/account?mode=signup");
     assert.equal(sentInvites[0].data.host, "http://localhost:5174");
+    assert.equal(sentInvites[0].data.tenant_name, "localhost");
+    assert.equal(sentInvites[0].data.host_label, "localhost");
     assert.equal(sentInvites[0].data.invited_by, "owner@example.com");
     assert.equal(sentInvites[0].data.invite_url, "http://localhost:5174/account?mode=signup");
+    assert.equal(sentInvites[0].data.invite_message, "owner@example.com invited you to localhost on Vibe64.");
+  }, {
+    async sendSupabaseInviteEmail(input) {
+      sentInvites.push(input);
+      return {
+        supabaseUserId: "supabase-invited-friend"
+      };
+    }
+  });
+});
+
+test("Vibe64 auth invite route sends a tenant name from the public host", async () => {
+  const sentInvites = [];
+  await withAuth(async (auth) => {
+    const owner = await auth.authenticateSupabaseSession({
+      accessToken: "owner-token"
+    });
+    const session = await auth.sessions.createSession(owner);
+    const route = registeredAuthRoute(auth, {
+      method: "POST",
+      pathname: "/api/auth/invite"
+    });
+    const reply = testReply();
+    const returned = await route.handler({
+      body: {
+        email: "Friend@Example.com"
+      },
+      headers: {
+        ...sessionCookieHeader(session),
+        host: "127.0.0.1:3001",
+        "x-forwarded-host": "tonymobily.vibe64.dev",
+        "x-forwarded-proto": "https"
+      },
+      protocol: "http",
+      url: "/api/auth/invite"
+    }, reply);
+    const response = reply.payload || returned;
+
+    assert.equal(response.ok, true);
+    assert.equal(sentInvites.length, 1);
+    assert.equal(sentInvites[0].redirectTo, "https://tonymobily.vibe64.dev/account?mode=signup");
+    assert.equal(sentInvites[0].data.host, "https://tonymobily.vibe64.dev");
+    assert.equal(sentInvites[0].data.host_url, "https://tonymobily.vibe64.dev");
+    assert.equal(sentInvites[0].data.tenant_name, "tonymobily");
+    assert.equal(sentInvites[0].data.tenantName, "tonymobily");
+    assert.equal(sentInvites[0].data.invite_message, "owner@example.com invited you to tonymobily on Vibe64.");
   }, {
     async sendSupabaseInviteEmail(input) {
       sentInvites.push(input);

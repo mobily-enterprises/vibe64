@@ -272,6 +272,10 @@ function useAccountAuthSessions(
     browserWindow?.open?.(url, "_blank", "noopener");
   }
 
+  function authSessionNeedsTerminalAttention(session = {}) {
+    return codexAuthSessionNeedsTerminalAttention(session);
+  }
+
   function rememberAuthSession(session = {}) {
     const enrichedSession = enrichAuthSession(session);
     const accountId = enrichedSession.account?.id || enrichedSession.account || "";
@@ -307,6 +311,7 @@ function useAccountAuthSessions(
     authCopyStatus,
     authLinkCopyStatus: authCopyStatus,
     authBusy,
+    authSessionNeedsTerminalAttention,
     cancelSession,
     copyAuthCode,
     copyAuthUrl,
@@ -373,6 +378,30 @@ function authSessionUserCode(session = {}) {
   return cleanAuthOutput(session.output).match(DEVICE_USER_CODE_PATTERN)?.[1]?.toUpperCase() || "";
 }
 
+function authSessionAccountId(session = {}) {
+  return String(session?.account?.id || session?.account || "").trim();
+}
+
+function codexAuthSessionNeedsTerminalAttention(session = {}) {
+  if (authSessionAccountId(session) !== "codex" || !session?.id || session.status === "connected") {
+    return false;
+  }
+  if (session.status === "failed" || session.terminalStatus === "exited") {
+    return true;
+  }
+  if (session.error || session.closeError || session.terminalError) {
+    return true;
+  }
+  const output = cleanAuthOutput(session.output).trim();
+  if (!output) {
+    return false;
+  }
+  if (session.mode === "device") {
+    return !authSessionUserCode(session);
+  }
+  return session.mode === "api_key";
+}
+
 function enrichAuthSession(session = {}) {
   if (!session || typeof session !== "object" || Array.isArray(session)) {
     return session;
@@ -413,4 +442,7 @@ function validGitIdentity(input = {}) {
   return Boolean(name) && /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email);
 }
 
-export { useAccountAuthSessions };
+export {
+  codexAuthSessionNeedsTerminalAttention,
+  useAccountAuthSessions
+};

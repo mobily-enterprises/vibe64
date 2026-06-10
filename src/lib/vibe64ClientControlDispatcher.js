@@ -21,6 +21,7 @@ function openDiffControl({
 }
 
 async function prepareCodexThreadControl({
+  openCodexTerminal = null,
   refreshSessionData = async () => null,
   session = {},
   sessionId = ""
@@ -31,6 +32,12 @@ async function prepareCodexThreadControl({
   }
   const result = await ensureVibe64CodexThread(normalizedSessionId);
   if (result?.ok === false) {
+    if (typeof openCodexTerminal === "function") {
+      await openCodexTerminal({
+        result,
+        source: "client_control"
+      });
+    }
     return result;
   }
   await refreshSessionData();

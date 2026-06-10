@@ -48,6 +48,7 @@ function vibe64SessionLimits({
 }
 
 function blockingVibe64SessionPageError({
+  hasMountedRuntime = false,
   runtimePageError = "",
   selectedSession = null,
   selectedSessionLoadError = "",
@@ -61,12 +62,12 @@ function blockingVibe64SessionPageError({
 
   const hasSelectedSession = Boolean(selectedSession?.sessionId || selectedSession);
   const listError = String(sessionListLoadError || "").trim();
-  if (listError && !hasSelectedSession && sessions.length < 1) {
+  if (listError && !hasMountedRuntime && !hasSelectedSession && sessions.length < 1) {
     return listError;
   }
 
   const selectedError = String(selectedSessionLoadError || "").trim();
-  if (selectedError && !hasSelectedSession) {
+  if (selectedError && !hasMountedRuntime && !hasSelectedSession) {
     return selectedError;
   }
 

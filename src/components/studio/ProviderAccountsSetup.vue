@@ -488,6 +488,7 @@ const authSessions = useAccountAuthSessions(props.accounts, {
 });
 const errorMessage = computed(() => authSessions.errorMessage);
 const codexAuthStepsBySessionId = reactive({});
+const authTerminalAttentionOpenedSessionIds = new Set();
 const authTerminalSessionId = ref("");
 const authTerminal = useStudioTerminal({
   resizeReportDelayMs: 120,
@@ -515,6 +516,12 @@ function accountActiveSession(account = {}) {
     return null;
   }
   return authSessions.activeSessionFor(account.id);
+}
+
+function activeAuthSessions() {
+  return accountRows.value
+    .map((account) => accountActiveSession(account))
+    .filter(Boolean);
 }
 
 function requiresGitIdentity(account = {}) {
@@ -682,6 +689,10 @@ function loginOutputVisible(session = {}) {
   );
 }
 
+function authSessionNeedsTerminalAttention(session = {}) {
+  return authSessions.authSessionNeedsTerminalAttention(session);
+}
+
 function authTerminalAvailable(session = {}) {
   return Boolean(session?.id);
 }
@@ -714,6 +725,18 @@ async function openAuthTerminal(session = {}) {
   await authTerminal.setupTerminalUi();
   await authTerminal.connectTerminalSocket();
   await authTerminal.focusTerminal();
+}
+
+async function openAuthTerminalForAttention(session = {}) {
+  if (
+    !authSessionNeedsTerminalAttention(session) ||
+    authTerminalVisible(session) ||
+    authTerminalAttentionOpenedSessionIds.has(session.id)
+  ) {
+    return;
+  }
+  authTerminalAttentionOpenedSessionIds.add(session.id);
+  await openAuthTerminal(session);
 }
 
 function closeAuthTerminal() {
@@ -752,6 +775,9 @@ function authTerminalError(session = {}) {
 function sessionStatusMessage(session = {}) {
   if (session.status === "connected") {
     return `${session.account?.label || "Account"} is connected.`;
+  }
+  if (authSessionNeedsTerminalAttention(session)) {
+    return "Codex needs attention in the terminal. Review the terminal output and respond there.";
   }
   if (session.status === "failed") {
     return "Login did not finish cleanly. Review the logs and try again.";
@@ -825,6 +851,34 @@ watch(
   },
   {
     deep: true
+  }
+);
+
+watch(
+  () => activeAuthSessions().map((session) => [
+    session.id,
+    session.account?.id || session.account || "",
+    session.mode || "",
+    session.status || "",
+    session.terminalStatus || "",
+    session.outputVersion || 0,
+    String(session.output || "").length,
+    String(session.userCode || ""),
+    String(session.closeError || session.error || session.terminalError || "")
+  ].join(":")),
+  () => {
+    const activeSessionIdSet = new Set(activeAuthSessions().map((session) => session.id).filter(Boolean));
+    for (const sessionId of Array.from(authTerminalAttentionOpenedSessionIds)) {
+      if (!activeSessionIdSet.has(sessionId)) {
+        authTerminalAttentionOpenedSessionIds.delete(sessionId);
+      }
+    }
+    for (const session of activeAuthSessions()) {
+      void openAuthTerminalForAttention(session);
+    }
+  },
+  {
+    immediate: true
   }
 );
 </script>

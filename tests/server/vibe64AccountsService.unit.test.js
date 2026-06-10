@@ -696,6 +696,40 @@ test("Codex auth terminal I/O is restricted to the Vibe64 owner", async () => {
   });
 });
 
+test("Codex auth session exposes terminal output state for attention recovery", async () => {
+  await withTemporaryRoot(async (root) => {
+    const service = createService({
+      targetRoot: path.join(root, "target")
+    });
+    const terminal = startTerminalSession({
+      args: ["-e", "console.log('Codex needs terminal input.'); setInterval(() => {}, 1000);"],
+      command: process.execPath,
+      commandPreview: "node codex-auth",
+      metadata: authTerminalMetadata("codex", "device"),
+      namespace: ACCOUNT_AUTH_NAMESPACE,
+      reuseRunning: false
+    });
+    assert.equal(terminal.ok, true);
+
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      const session = await service.readAuthSession(accountInput(OWNER_USER, {
+        sessionId: terminal.id
+      }));
+
+      assert.equal(session.ok, true);
+      assert.equal(session.id, terminal.id);
+      assert.match(session.output, /Codex needs terminal input/u);
+      assert.ok(session.outputVersion > 0);
+      assert.equal(session.closeError, "");
+    } finally {
+      await closeTerminalSession(terminal.id, {
+        namespace: ACCOUNT_AUTH_NAMESPACE
+      });
+    }
+  });
+});
+
 test("Codex API key auth command reads the key from stdin via inherited Docker env", () => {
   const commandArgs = codexApiKeyLoginCommandArgs();
   const script = commandArgs[2] || "";

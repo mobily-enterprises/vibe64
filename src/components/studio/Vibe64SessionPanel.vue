@@ -9,7 +9,7 @@
         class="studio-ai-sessions__error-overlay"
       >
         <StudioErrorNotice
-          title="Vibe64 sessions could not load"
+          title="Session data could not refresh"
           :error="pageError"
           compact
           dismissible
@@ -237,10 +237,19 @@ const emptyCreateAttention = computed(() => Boolean(
   (toolbar.sessions || []).length < 1
 ));
 const selectedRuntimeState = computed(() => runtimeStateBySessionId[selection.selectedSessionId] || null);
+const sessionLoadError = computed(() => Boolean(
+  sessionData.sessionList.loadError ||
+  sessionData.selectedSessionView?.loadError
+));
 const runtimeHostSessionIds = computed(() => {
   const visibleSessionIds = new Set((toolbar.sessions || []).map((session) => session.sessionId));
   if (selection.selectedSession && selection.selectedSessionId) {
     visibleSessionIds.add(selection.selectedSessionId);
+  }
+  if (sessionLoadError.value) {
+    for (const mountedSessionId of mountedRuntimeSessionIds.value) {
+      visibleSessionIds.add(mountedSessionId);
+    }
   }
   return mountedRuntimeSessionIds.value.filter((sessionId) => visibleSessionIds.has(sessionId));
 });
@@ -251,13 +260,15 @@ const emptyStateLoading = computed(() => Boolean(
 ));
 const emptyLayoutVisible = computed(() => Boolean(!selection.selectedSession && runtimeHostSessionIds.value.length < 1));
 const selectedAbandon = computed(() => selectedRuntimeState.value?.toolbarControls?.abandon || fallbackAbandon);
-const pageError = computed(() => blockingVibe64SessionPageError({
+const rawPageError = computed(() => blockingVibe64SessionPageError({
+  hasMountedRuntime: runtimeHostSessionIds.value.length > 0,
   runtimePageError: selectedRuntimeState.value?.pageError,
   selectedSession: selection.selectedSession,
   selectedSessionLoadError: sessionData.selectedSessionView?.loadError,
   sessionListLoadError: sessionData.sessionList.loadError,
   sessions: toolbar.sessions || []
 }));
+const pageError = computed(() => sessionPanelPageErrorMessage(rawPageError.value));
 const visiblePageError = computed(() => Boolean(
   pageError.value &&
   dismissedPageError.value !== pageError.value
@@ -330,7 +341,21 @@ function normalizeProjectPane(value = "") {
     : "preview";
 }
 
+function sessionPanelPageErrorMessage(error = "") {
+  const message = String(error || "").trim();
+  if (/^request failed\.?$/iu.test(message)) {
+    return "The session API request failed. Check that the Vibe64 server is running, then refresh the session.";
+  }
+  return message;
+}
+
 watch(sessionData.sessions, (sessions = []) => {
+  if (sessionLoadError.value) {
+    if (selection.selectedSession) {
+      ensureRuntimeHost(selection.selectedSessionId);
+    }
+    return;
+  }
   const visibleSessionIds = new Set(sessions.map((session) => session.sessionId));
   mountedRuntimeSessionIds.value = mountedRuntimeSessionIds.value.filter((sessionId) => visibleSessionIds.has(sessionId));
   for (const sessionId of Object.keys(runtimeStateBySessionId)) {

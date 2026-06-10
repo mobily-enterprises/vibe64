@@ -613,6 +613,9 @@ import {
   runVibe64ClientControl
 } from "@/lib/vibe64ClientControlDispatcher.js";
 import {
+  vibe64CodexTerminalAttentionSignature
+} from "@/lib/vibe64CodexTerminalAttention.js";
+import {
   useVibe64FixCodexDialog
 } from "@/composables/useVibe64FixCodexDialog.js";
 import {
@@ -774,7 +777,8 @@ const {
   enabled: computed(() => props.automationEnabled),
   agentSettings: requestAgentSettings,
   refreshSessionData: () => props.refreshSessionData(),
-  session: computed(() => props.session)
+  session: computed(() => props.session),
+  shouldReportFailure: shouldReportAutopilotFailure
 });
 
 const {
@@ -783,6 +787,7 @@ const {
   retryingBackgroundTaskId,
   visibleBackgroundTasks
 } = useVibe64BackgroundTasks({
+  openCodexTerminal: openCodexTerminalForRecovery,
   refreshSessionData: () => props.refreshSessionData(),
   session: computed(() => props.session)
 });
@@ -796,6 +801,7 @@ const commandSpyExpanded = ref(false);
 const sessionToolsMenuOpen = ref(false);
 const screenControlFormRef = ref(null);
 const rightPaneTab = ref("preview");
+const openedCodexTerminalAttentionSignature = ref("");
 const SESSION_TOOL_STORAGE_PREFIX = "vibe64.sessionTools.active";
 const projectPaneIds = Object.freeze([
   "preview",
@@ -823,6 +829,9 @@ const chatCollapsed = computed(() => Boolean(props.chatCollapsed));
 const projectPaneValue = computed(() => normalizeProjectPane(props.projectPane));
 const sessionToolStorageKey = computed(() => (
   sessionId.value ? `${SESSION_TOOL_STORAGE_PREFIX}:${sessionId.value}` : ""
+));
+const codexTerminalAttentionSignature = computed(() => (
+  props.active ? vibe64CodexTerminalAttentionSignature(props.session || {}) : ""
 ));
 const dashboardSessionContext = computed(() => ({
   copyText: typeof props.page?.copyText === "function" ? props.page.copyText : null,
@@ -1074,6 +1083,14 @@ const chatActivityMessages = computed(() => [
 ].filter(Boolean));
 const chatTimelineVisible = computed(() => Boolean(!chatTakeoverVisible.value));
 const runtimeNoticeMessages = computed(() => [
+  codexTerminalAttentionSignature.value
+    ? {
+        icon: mdiRobotOutline,
+        id: "codex-terminal-attention",
+        text: "Codex needs attention in the AI Terminal.",
+        tone: "warning"
+      }
+    : null,
   actionResultNoticeVisible.value
     ? {
         icon: actionResultType.value === "success" ? mdiCheckCircleOutline : mdiAlertCircleOutline,
@@ -1252,6 +1269,20 @@ function selectSessionTool(tabId = "", {
     void props.diff.load();
   }
   return true;
+}
+
+function openCodexTerminalForRecovery() {
+  const opened = selectSessionTool("ai-terminal", {
+    persist: false
+  });
+  if (opened) {
+    emit("project-attention");
+  }
+  return opened;
+}
+
+function shouldReportAutopilotFailure() {
+  return !codexTerminalAttentionSignature.value;
 }
 
 function selectSessionToolFromMenu(tabId = "") {
@@ -1447,6 +1478,7 @@ async function runClientControl(control = {}) {
   try {
     const result = await runVibe64ClientControl(control, {
       diff: props.diff,
+      openCodexTerminal: openCodexTerminalForRecovery,
       openDiffPane: () => selectSessionTool("diff"),
       refreshSessionData: props.refreshSessionData,
       session: props.session,
@@ -1537,6 +1569,21 @@ watch(() => [
   }
   selectProjectPaneTab("dashboard");
 }, {
+  immediate: true
+});
+
+watch(codexTerminalAttentionSignature, (signature) => {
+  if (!signature) {
+    openedCodexTerminalAttentionSignature.value = "";
+    return;
+  }
+  if (openedCodexTerminalAttentionSignature.value === signature) {
+    return;
+  }
+  openedCodexTerminalAttentionSignature.value = signature;
+  openCodexTerminalForRecovery();
+}, {
+  flush: "post",
   immediate: true
 });
 

@@ -8,6 +8,9 @@ import {
   runHostCommand
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
+  ensureTargetRuntimeNetwork
+} from "@local/studio-terminal-core/server/runtimeContainers";
+import {
   githubProviderContext,
   resolveProviderHomesRoot
 } from "@local/studio-terminal-core/server/providerHomes";
@@ -418,11 +421,16 @@ function createGithubProjectService({
 }
 
 async function runDefaultGithubToolchain(commandArgs = [], {
+  ensureRuntimeNetwork = ensureTargetRuntimeNetwork,
+  runCommand = runHostCommand,
   targetRoot = "",
   timeout = GITHUB_READ_TIMEOUT_MS,
   toolHomeSource = ""
 } = {}) {
-  return runHostCommand("docker", buildDoctorToolchainArgs(commandArgs, {
+  if (targetRoot) {
+    await ensureRuntimeNetwork(targetRoot);
+  }
+  return runCommand("docker", buildDoctorToolchainArgs(commandArgs, {
     targetRoot,
     toolHomeSource
   }), {
@@ -621,5 +629,6 @@ function githubServiceError(code = "", message = "", statusCode = 400) {
 export {
   createGithubProjectService,
   parseRepositoryIdentifier,
-  repositoryViewRecord
+  repositoryViewRecord,
+  runDefaultGithubToolchain
 };

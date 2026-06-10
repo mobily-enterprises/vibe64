@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { ref } from "vue";
 
-import { useAccountAuthSessions } from "../../src/composables/useAccountAuthSessions.js";
+import {
+  codexAuthSessionNeedsTerminalAttention,
+  useAccountAuthSessions
+} from "../../src/composables/useAccountAuthSessions.js";
 
 describe("account auth sessions", () => {
   it("starts browser auth without opening the link until the user chooses to", async () => {
@@ -199,6 +202,62 @@ describe("account auth sessions", () => {
       authUrl: "https://auth.openai.com/codex/device",
       userCode: "CK13-6J2ZT"
     });
+  });
+
+  it("uses the terminal as the recovery surface when Codex prints output without a device code", async () => {
+    const session = {
+      account: {
+        id: "codex",
+        label: "Codex"
+      },
+      id: "auth-codex-attention",
+      mode: "device",
+      output: [
+        "Welcome to Codex [v0.136.0]",
+        "Codex needs terminal input before it can continue."
+      ].join("\n"),
+      status: "authenticating",
+      terminalStatus: "running"
+    };
+
+    expect(codexAuthSessionNeedsTerminalAttention(session)).toBe(true);
+  });
+
+  it("does not require terminal attention after Codex prints a usable device code", () => {
+    const session = {
+      account: {
+        id: "codex",
+        label: "Codex"
+      },
+      id: "auth-codex-code",
+      mode: "device",
+      output: [
+        "Open this link in your browser",
+        "https://auth.openai.com/codex/device",
+        "Enter this one-time code",
+        "CKVC-RY1P4"
+      ].join("\n"),
+      status: "authenticating",
+      terminalStatus: "running"
+    };
+
+    expect(codexAuthSessionNeedsTerminalAttention(session)).toBe(false);
+  });
+
+  it("uses the terminal as the recovery surface for failed Codex auth", () => {
+    const session = {
+      account: {
+        id: "codex",
+        label: "Codex"
+      },
+      id: "auth-codex-failed",
+      mode: "device",
+      output: "Codex login failed.",
+      status: "failed",
+      terminalStatus: "exited"
+    };
+
+    expect(codexAuthSessionNeedsTerminalAttention(session)).toBe(true);
   });
 
   it("keeps failed auth sessions visible and stops polling them", async () => {

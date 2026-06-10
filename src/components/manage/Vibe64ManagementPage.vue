@@ -204,16 +204,6 @@ function viewPanelId(value) {
             {{ projectsRoot }}
           </p>
         </div>
-        <v-btn
-          v-if="activeManagementView === 'projects' && canManageProjects"
-          color="primary"
-          type="button"
-          variant="flat"
-          @click="openAddProjectDialog"
-        >
-          <v-icon :icon="mdiPlus" />
-          Add project
-        </v-btn>
       </section>
 
       <nav class="vibe64-manage__tabs">
@@ -256,8 +246,22 @@ function viewPanelId(value) {
           <template v-else>
             <section class="vibe64-manage__list" aria-label="Projects">
               <div class="vibe64-manage__list-heading">
-                <h3>Projects</h3>
-                <span>{{ sortedProjects.length }}</span>
+                <div class="vibe64-manage__list-title">
+                  <h3>Projects</h3>
+                  <span>({{ sortedProjects.length }})</span>
+                </div>
+                <v-btn
+                  v-if="canManageProjects"
+                  class="vibe64-manage__add-project"
+                  color="primary"
+                  :prepend-icon="mdiPlus"
+                  size="large"
+                  type="button"
+                  variant="flat"
+                  @click="openAddProjectDialog"
+                >
+                  Add project
+                </v-btn>
               </div>
               <article
                 v-for="project in sortedProjects"
@@ -376,10 +380,11 @@ function viewPanelId(value) {
   align-items: center;
   display: grid;
   gap: 1rem;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
 }
 
-.vibe64-manage__bar .v-btn {
+.vibe64-manage__bar .v-btn,
+.vibe64-manage__list-heading .v-btn {
   letter-spacing: 0;
   text-transform: none;
 }
@@ -436,28 +441,37 @@ function viewPanelId(value) {
 .vibe64-manage__list-heading {
   align-items: center;
   display: flex;
+  gap: 1rem;
   justify-content: space-between;
+  min-width: 0;
 }
 
-.vibe64-manage__list-heading h3 {
+.vibe64-manage__list-title {
+  align-items: baseline;
+  display: flex;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.vibe64-manage__list-title h3 {
   font-size: 1rem;
   font-weight: 720;
   line-height: 1.2;
   margin: 0;
 }
 
-.vibe64-manage__list-heading span {
-  align-items: center;
-  background: #e2e8f0;
-  border-radius: 999px;
-  color: #334155;
-  display: inline-flex;
-  font-size: 0.78rem;
-  font-weight: 720;
-  justify-content: center;
-  min-height: 1.5rem;
-  min-width: 1.5rem;
-  padding: 0 0.45rem;
+.vibe64-manage__list-title span {
+  color: #64748b;
+  font-size: 0.9rem;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.vibe64-manage__add-project {
+  font-size: 0.98rem;
+  font-weight: 650;
+  min-height: 2.65rem;
+  padding-inline: 1rem 1.15rem;
 }
 
 .vibe64-manage__panel :deep(.vibe64-account-settings) {
@@ -565,6 +579,15 @@ function viewPanelId(value) {
 @media (max-width: 760px) {
   .vibe64-manage__bar {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .vibe64-manage__list-heading {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+
+  .vibe64-manage__list-heading .v-btn {
+    margin-left: auto;
   }
 
   .vibe64-manage__project {

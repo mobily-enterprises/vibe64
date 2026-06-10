@@ -56,6 +56,7 @@ describe("vibe64ClientControlDispatcher", () => {
 
   it("dispatches Codex retry controls through app-server thread preparation", async () => {
     const refreshSessionData = vi.fn();
+    const openCodexTerminal = vi.fn();
     vi.mocked(ensureVibe64CodexThread).mockResolvedValue({
       ok: true
     });
@@ -65,12 +66,42 @@ describe("vibe64ClientControlDispatcher", () => {
         action: VIBE64_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL
       }
     }, {
+      openCodexTerminal,
       refreshSessionData,
       sessionId: "session_123"
     })).resolves.toBe(true);
 
     expect(ensureVibe64CodexThread).toHaveBeenCalledWith("session_123");
     expect(refreshSessionData).toHaveBeenCalledTimes(1);
+    expect(openCodexTerminal).not.toHaveBeenCalled();
+  });
+
+  it("opens the Codex terminal surface when app-server thread preparation fails", async () => {
+    const openCodexTerminal = vi.fn(() => true);
+    vi.mocked(ensureVibe64CodexThread).mockResolvedValue({
+      error: "Codex app-server preparation failed.",
+      ok: false
+    });
+
+    await expect(runVibe64ClientControl({
+      control: {
+        action: VIBE64_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL
+      }
+    }, {
+      openCodexTerminal,
+      sessionId: "session_123"
+    })).resolves.toEqual({
+      error: "Codex app-server preparation failed.",
+      ok: false
+    });
+
+    expect(openCodexTerminal).toHaveBeenCalledWith({
+      result: {
+        error: "Codex app-server preparation failed.",
+        ok: false
+      },
+      source: "client_control"
+    });
   });
 
 });

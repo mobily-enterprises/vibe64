@@ -711,11 +711,13 @@ function publicAuthSession({
     account,
     authUrl: parsed.authUrl,
     commandPreview: terminal.commandPreview,
+    closeError: terminal.closeError || "",
     exitCode: terminal.exitCode,
     id: terminal.id,
     mode,
     ok: true,
     output,
+    outputVersion: terminal.outputVersion || 0,
     status: authSessionStatus({
       account,
       terminal

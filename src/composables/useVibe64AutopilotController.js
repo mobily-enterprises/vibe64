@@ -234,7 +234,8 @@ function useVibe64AutopilotController({
   commandRunner = useVibe64HeadlessCommandRunner(),
   enabled = true,
   refreshSessionData = async () => null,
-  session
+  session,
+  shouldReportFailure = null
 } = {}) {
   const errorRuntime = getCurrentInstance() ? useShellWebErrorRuntime() : null;
   const active = ref(false);
@@ -414,6 +415,17 @@ function useVibe64AutopilotController({
       }
     } catch {
       // Console diagnostics must never interfere with session state updates.
+    }
+
+    if (
+      typeof shouldReportFailure === "function" &&
+      shouldReportFailure({
+        cause,
+        details,
+        result
+      }) === false
+    ) {
+      return;
     }
 
     try {

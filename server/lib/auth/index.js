@@ -608,22 +608,42 @@ function inviteEmailData({
   request = {}
 } = {}) {
   const origin = requestPublicOrigin(request);
+  const tenantName = tenantNameForOrigin(origin);
   const invitedByEmail = String(invitedBy.email || "");
   return {
     app: "Vibe64",
     host: origin,
+    host_label: tenantName,
+    hostLabel: tenantName,
     host_url: origin,
     invite_url: redirectTo,
     invite_message: invitedByEmail
-      ? `${invitedByEmail} invited you to Vibe64.`
-      : "You were invited to Vibe64.",
+      ? `${invitedByEmail} invited you to ${tenantName || "this host"} on Vibe64.`
+      : `You were invited to ${tenantName || "this host"} on Vibe64.`,
     invited_by: invitedByEmail,
     invitedBy: invitedByEmail,
     redirect_to: redirectTo,
     redirectTo,
     sign_in_url: redirectTo,
-    signInUrl: redirectTo
+    signInUrl: redirectTo,
+    tenant_name: tenantName,
+    tenantName
   };
+}
+
+function tenantNameForOrigin(origin = "") {
+  try {
+    const hostname = new URL(origin).hostname.toLowerCase();
+    if (!hostname) {
+      return "";
+    }
+    if (hostname.endsWith(".vibe64.dev")) {
+      return hostname.slice(0, -".vibe64.dev".length);
+    }
+    return hostname;
+  } catch {
+    return "";
+  }
 }
 
 function inviteRedirectToForRequest(request = {}) {

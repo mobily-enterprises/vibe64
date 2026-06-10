@@ -63,6 +63,13 @@ describe("Vibe64 session panel model", () => {
       selectedSessionLoadError: "Selected session failed.",
       sessions: [{ sessionId: "session-1" }]
     })).toBe("Selected session failed.");
+
+    expect(blockingVibe64SessionPageError({
+      hasMountedRuntime: true,
+      selectedSessionLoadError: "Request failed.",
+      sessionListLoadError: "Request failed.",
+      sessions: []
+    })).toBe("");
   });
 
   it("builds timeline rows with current, pending, done, and rewind state", () => {
