@@ -1,5 +1,3 @@
-import os from "node:os";
-
 import {
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
@@ -32,7 +30,6 @@ const JSKIT_MARIADB_PROBE_TABLE = "capability_probe";
 const JSKIT_HOST_DATABASE_HOST = VIBE64_RUNTIME_HOST_ALIAS;
 const JSKIT_MARIADB_PROBE_SQL_VARIABLE = "@vibe64_jskit_probe_sql";
 const JSKIT_MARIADB_PROBE_STATEMENT = "vibe64_jskit_probe_statement";
-const JSKIT_MARIADB_TENANT_ENV = "VIBE64_TENANT";
 
 async function targetWantsJskitMariaDb(targetRoot = "", toolkit) {
   const lockJsonResult = await toolkit.readTargetJson(".jskit/lock.json", {
@@ -90,54 +87,12 @@ function jskitMariaDbDatabaseName(targetRoot = "") {
   });
 }
 
-function normalizeJskitMariaDbTenantSlug(value = "") {
-  return String(value || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9_]+/gu, "_")
-    .replace(/^_+|_+$/gu, "") || "user";
+function jskitMariaDbContainerName() {
+  return "vibe64-jskit-mariadb";
 }
 
-function defaultJskitMariaDbTenantSlug({
-  env = process.env,
-  userInfo = os.userInfo
-} = {}) {
-  const explicitTenant = String(env[JSKIT_MARIADB_TENANT_ENV] || "").trim();
-  if (explicitTenant) {
-    return normalizeJskitMariaDbTenantSlug(explicitTenant);
-  }
-  let userInfoName = "";
-  try {
-    userInfoName = userInfo?.().username || "";
-  } catch {
-    userInfoName = "";
-  }
-  return normalizeJskitMariaDbTenantSlug(
-    env.USER ||
-    env.LOGNAME ||
-    userInfoName ||
-    ""
-  );
-}
-
-function jskitMariaDbTenantSlug(tenantId = "") {
-  return tenantId
-    ? normalizeJskitMariaDbTenantSlug(tenantId)
-    : defaultJskitMariaDbTenantSlug();
-}
-
-function jskitMariaDbContainerName(targetRootOrOptions = "", options = {}) {
-  const containerOptions = targetRootOrOptions && typeof targetRootOrOptions === "object"
-    ? targetRootOrOptions
-    : options;
-  const tenantId = containerOptions.tenantId || "";
-  return `vibe64-jskit-mariadb-${jskitMariaDbTenantSlug(tenantId).replaceAll("_", "-")}`;
-}
-
-function jskitMariaDbVolumeName({
-  tenantId = ""
-} = {}) {
-  return `vibe64_jskit_mariadb_data_${jskitMariaDbTenantSlug(tenantId)}`;
+function jskitMariaDbVolumeName() {
+  return "vibe64_jskit_mariadb_data";
 }
 
 function createJskitMariaDbRuntimeContainer({
@@ -145,7 +100,6 @@ function createJskitMariaDbRuntimeContainer({
   ensureProjectDatabase = false,
   manageProjectDatabase = true,
   required = true,
-  tenantId = "",
   targetRoot = ""
 } = {}) {
   const configuredDatabaseName = String(databaseName || "").trim();
@@ -160,9 +114,7 @@ function createJskitMariaDbRuntimeContainer({
       JSKIT_MARIADB_HOST
     ],
     checkId: "jskit-mariadb",
-    containerName: jskitMariaDbContainerName(targetRoot, {
-      tenantId
-    }),
+    containerName: jskitMariaDbContainerName(),
     env: ({ targetRoot: contextTargetRoot = "" } = {}) => {
       const appDatabaseName = terminalDatabaseName(contextTargetRoot);
       return {
@@ -227,9 +179,7 @@ function createJskitMariaDbRuntimeContainer({
     volumes: [
       {
         id: "data",
-        source: jskitMariaDbVolumeName({
-          tenantId
-        }),
+        source: jskitMariaDbVolumeName(),
         target: "/var/lib/mysql"
       }
     ]
@@ -252,26 +202,26 @@ function startJskitMariaDbRepair(targetRoot = "") {
   });
 }
 
-function createManagedDatabaseDockerArgs(databaseName, targetRoot = "") {
+function createManagedDatabaseDockerArgs(databaseName) {
   return mariaDbCreateDatabaseDockerArgs({
-    containerName: jskitMariaDbContainerName(targetRoot),
+    containerName: jskitMariaDbContainerName(),
     databaseName,
     rootPassword: JSKIT_MARIADB_ROOT_PASSWORD
   });
 }
 
-function createManagedDatabaseRepair(databaseName, targetRoot = "") {
+function createManagedDatabaseRepair(databaseName) {
   return mariaDbCreateDatabaseRepair({
-    containerName: jskitMariaDbContainerName(targetRoot),
+    containerName: jskitMariaDbContainerName(),
     databaseName,
     rootPassword: JSKIT_MARIADB_ROOT_PASSWORD
   });
 }
 
-function managedMariaDbAccessInstructions(databaseName = "", targetRoot = "") {
+function managedMariaDbAccessInstructions(databaseName = "") {
   const database = String(databaseName || "").trim();
   const databaseArg = database ? ` ${shellQuote(database)}` : "";
-  return `Container: docker exec -it ${jskitMariaDbContainerName(targetRoot)} mariadb -uroot -p${databaseArg}`;
+  return `Container: docker exec -it ${jskitMariaDbContainerName()} mariadb -uroot -p${databaseArg}`;
 }
 
 async function readDatabaseHostFromDotEnv(targetRoot = "") {
@@ -287,7 +237,6 @@ export {
   createManagedDatabaseRepair,
   jskitMariaDbDatabaseName,
   jskitMariaDbContainerName,
-  jskitMariaDbTenantSlug,
   jskitMariaDbVolumeName,
   JSKIT_HOST_DATABASE_HOST,
   JSKIT_MARIADB_CONTAINER_ID,

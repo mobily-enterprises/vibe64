@@ -27,9 +27,9 @@ Make jskit open jskit properly. this depends on the item above too
 
 
 
-6a)
-Test seeding,
 
+6a)
+Test seeding
 
 
 

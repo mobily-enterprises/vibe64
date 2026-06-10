@@ -16,6 +16,7 @@ import {
   resolveProjectStateRoot
 } from "./projectState.js";
 
+const PROJECT_SLUG_MAX_LENGTH = 48;
 const PROJECT_SLUG_PATTERN = /^[a-z0-9][a-z0-9_-]*$/u;
 const PROJECT_METADATA_FILE = "project.json";
 const execFileAsync = promisify(execFile);
@@ -56,6 +57,11 @@ function normalizeProjectSlug(value = "") {
   const slug = String(value || "").trim();
   if (!PROJECT_SLUG_PATTERN.test(slug)) {
     const error = new Error("Project slug must start with a lowercase letter or number and contain only lowercase letters, numbers, underscores, or dashes.");
+    error.code = "vibe64_invalid_project_slug";
+    throw error;
+  }
+  if (slug.length > PROJECT_SLUG_MAX_LENGTH) {
+    const error = new Error(`Project slug must be ${PROJECT_SLUG_MAX_LENGTH} characters or fewer.`);
     error.code = "vibe64_invalid_project_slug";
     throw error;
   }
@@ -638,6 +644,7 @@ function getStudioProjectContext() {
 }
 
 export {
+  PROJECT_SLUG_MAX_LENGTH,
   configureStudioProjectContext,
   createStudioProjectContext,
   getStudioProjectContext,

@@ -37,7 +37,7 @@ import {
   commandTerminalNamespace,
   normalizePlainObject,
   pathInsideOrEqual,
-  stableHash,
+  terminalContainerName,
   terminalTargetRoot,
   terminalWorktreePath,
   toolTerminalNamespace
@@ -86,16 +86,26 @@ async function recordCommandSystemMessage(runtime, sessionId = "", message = "")
 
 function commandTerminalContainerName({
   sessionId = "",
+  targetRoot = "",
   terminalId = ""
 } = {}) {
-  return `vibe64-command-${stableHash(sessionId)}-${stableHash(terminalId)}`;
+  return terminalContainerName({
+    kind: "command",
+    parts: [sessionId, terminalId],
+    targetRoot
+  });
 }
 
 function toolTerminalContainerName({
+  targetRoot = "",
   terminalId = "",
   toolId = ""
 } = {}) {
-  return `vibe64-tool-${stableHash(toolId)}-${stableHash(terminalId)}`;
+  return terminalContainerName({
+    kind: "tool",
+    parts: [toolId, terminalId],
+    targetRoot
+  });
 }
 
 function sessionRevision(value) {
@@ -960,6 +970,7 @@ function createCommandTerminalController({
                   command: spec.command,
                   containerName: commandTerminalContainerName({
                     sessionId,
+                    targetRoot,
                     terminalId: terminalContext.id
                   }),
                   env: {
@@ -1201,6 +1212,7 @@ function createProjectToolTerminalController({
     };
     return startCommandTerminalProcess({
       containerName: ({ id }) => toolTerminalContainerName({
+        targetRoot,
         terminalId: id,
         toolId: tool.id
       }),

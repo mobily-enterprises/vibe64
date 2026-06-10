@@ -175,7 +175,7 @@ test("Studio Setup resolves the Studio implementation root separately", () => {
   }
 });
 
-test("Studio Setup owns the shared tenant JSKIT MariaDB runtime", async () => {
+test("Studio Setup owns the shared JSKIT MariaDB runtime", async () => {
   await withTemporaryRoot(async (studioRoot) => {
     const plugin = createStudioTenantRuntimeDoctorPlugin({
       runCommand: async () => ({
@@ -183,8 +183,7 @@ test("Studio Setup owns the shared tenant JSKIT MariaDB runtime", async () => {
         output: "No such container",
         stdout: ""
       }),
-      studioRoot,
-      tenantId: "tonymobily"
+      studioRoot
     });
     const checks = await plugin.checks({
       studioRoot
@@ -200,8 +199,8 @@ test("Studio Setup owns the shared tenant JSKIT MariaDB runtime", async () => {
 
     assert.equal(result.status, "blocked");
     assert.equal(result.repair.actionId, "start-runtime-container-jskit-mariadb");
-    assert.match(result.repair.commandPreview, /--name vibe64-jskit-mariadb-tonymobily/u);
-    assert.match(result.repair.commandPreview, /-v vibe64_jskit_mariadb_data_tonymobily:\/var\/lib\/mysql/u);
+    assert.match(result.repair.commandPreview, /--name vibe64-jskit-mariadb/u);
+    assert.match(result.repair.commandPreview, /-v vibe64_jskit_mariadb_data:\/var\/lib\/mysql/u);
     assert.doesNotMatch(result.repair.commandPreview, /MARIADB_DATABASE=/u);
   });
 });

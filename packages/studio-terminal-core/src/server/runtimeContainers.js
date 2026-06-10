@@ -9,8 +9,7 @@ import {
 import {
   dockerCommand,
   runHostCommand,
-  shellQuote,
-  stableHash
+  shellQuote
 } from "./shellCommands.js";
 import {
   STUDIO_DAEMON_PID_LABEL,
@@ -26,7 +25,7 @@ import {
   normalizePlainObject
 } from "@local/vibe64-core/server/serverResponses";
 import {
-  targetRuntimeIdentity
+  targetRuntimeProjectSlug
 } from "@local/vibe64-core/server/projectRuntimeIdentity";
 
 const VIBE64_RUNTIME_HOST_ALIAS = "vibe64-host";
@@ -46,12 +45,16 @@ function dockerNamePart(value = "runtime") {
   return normalized || "runtime";
 }
 
-function runtimeNetworkName(targetRoot = "") {
-  return `vibe64-runtime-${runtimeNetworkTargetHash(targetRoot)}`;
+function dockerVolumePart(value = "runtime") {
+  return dockerNamePart(value).replaceAll("-", "_");
 }
 
-function runtimeNetworkTargetHash(targetRoot = "") {
-  return stableHash(targetRuntimeIdentity(targetRoot));
+function runtimeTargetName(targetRoot = "") {
+  return targetRuntimeProjectSlug(targetRoot);
+}
+
+function runtimeNetworkName(targetRoot = "") {
+  return `vibe64-${dockerNamePart(runtimeTargetName(targetRoot))}-network`;
 }
 
 function runtimeNetworkCreateArgs(targetRoot = "") {
@@ -63,7 +66,7 @@ function runtimeNetworkCreateArgs(targetRoot = "") {
     "--label",
     `${STUDIO_DAEMON_PID_LABEL}=${process.pid}`,
     "--label",
-    studioDockerLabel("target", runtimeNetworkTargetHash(targetRoot)),
+    studioDockerLabel("target", runtimeTargetName(targetRoot)),
     runtimeNetworkName(targetRoot)
   ];
 }
@@ -73,8 +76,14 @@ function runtimeContainerName({
   containerId = "runtime",
   targetRoot = ""
 } = {}) {
-  const prefix = `vibe64-${dockerNamePart(adapterId)}-${dockerNamePart(containerId)}`;
-  return `${prefix.slice(0, 48)}-${runtimeNetworkTargetHash(targetRoot)}`;
+  const adapterPart = dockerNamePart(adapterId);
+  const containerPart = dockerNamePart(containerId);
+  return [
+    "vibe64",
+    dockerNamePart(runtimeTargetName(targetRoot)),
+    adapterPart,
+    ...(containerPart.startsWith(`${adapterPart}-`) ? [containerPart.slice(adapterPart.length + 1)] : [containerPart])
+  ].filter(Boolean).join("-");
 }
 
 function runtimeVolumeName({
@@ -83,12 +92,14 @@ function runtimeVolumeName({
   targetRoot = "",
   volumeId = "data"
 } = {}) {
+  const adapterPart = dockerVolumePart(adapterId);
+  const containerPart = dockerVolumePart(containerId);
   return [
     "vibe64",
-    dockerNamePart(adapterId).replaceAll("-", "_"),
-    dockerNamePart(containerId).replaceAll("-", "_"),
-    dockerNamePart(volumeId).replaceAll("-", "_"),
-    runtimeNetworkTargetHash(targetRoot)
+    dockerVolumePart(runtimeTargetName(targetRoot)),
+    adapterPart,
+    ...(containerPart.startsWith(`${adapterPart}_`) ? [containerPart.slice(adapterPart.length + 1)] : [containerPart]),
+    dockerVolumePart(volumeId)
   ].join("_");
 }
 
@@ -512,7 +523,7 @@ function runtimeContainerRunArgs(spec, {
     "--label",
     `${STUDIO_DAEMON_PID_LABEL}=${process.pid}`,
     "--label",
-    studioDockerLabel("target", runtimeNetworkTargetHash(spec.targetRoot)),
+    studioDockerLabel("target", runtimeTargetName(spec.targetRoot)),
     ...envDockerArgs(spec, {
       maskSecrets
     }),
@@ -910,7 +921,7 @@ export {
   runtimeContainerStartScript,
   runtimeNetworkCreateArgs,
   runtimeNetworkName,
-  runtimeNetworkTargetHash,
+  runtimeTargetName,
   targetRuntimeNetworkDockerArgs,
   targetRuntimeNetworkEnsureCommand
 };

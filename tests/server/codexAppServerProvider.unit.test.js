@@ -186,6 +186,7 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
     assert.equal(runCall.command, "docker");
     assert.equal(runCall.args[0], "run");
     assert.equal(spawnCalls[0].args[2], runCall.args[runCall.args.indexOf("--name") + 1]);
+    assert.equal(runCall.args[runCall.args.indexOf("--name") + 1], "vibe64-target-codex-app-server");
     assert.ok(runCall.args.includes("--pull"));
     assert.ok(runCall.args.includes("never"));
     assert.ok(runCall.args.includes("--rm"));

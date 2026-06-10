@@ -14,7 +14,6 @@ import {
 } from "@local/studio-terminal-core/server/terminalSessions";
 import {
   STUDIO_BASE_TOOLCHAIN_IMAGE,
-  STUDIO_CODEX_CONTAINER_PREFIX,
   studioDockerLabel
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
@@ -57,6 +56,7 @@ import {
   globalCodexTerminalNamespace,
   pathInsideOrEqual,
   stableHash,
+  terminalContainerName,
   terminalTargetRoot,
   terminalWorktreePath
 } from "./terminalShared.js";
@@ -598,10 +598,15 @@ function sessionExchangeMounts(session = {}) {
 function codexContainerName({
   scope = "",
   sessionId = "",
+  targetRoot = "",
   terminalId = ""
 } = {}) {
   const containerScope = normalizeText(scope || sessionId || GLOBAL_CODEX_TERMINAL_SCOPE);
-  return `${STUDIO_CODEX_CONTAINER_PREFIX}-${stableHash(containerScope)}-${stableHash(terminalId)}`;
+  return terminalContainerName({
+    kind: "codex",
+    parts: [containerScope, terminalId],
+    targetRoot
+  });
 }
 
 function maskedCodexTerminalDockerArgs(args = []) {
@@ -1426,6 +1431,7 @@ function createCodexTerminalController({
         codexThreadId,
         containerName: codexContainerName({
           sessionId,
+          targetRoot,
           terminalId: id
         }),
         env: terminalEnv,
@@ -1516,6 +1522,7 @@ function createCodexTerminalController({
         codexThreadId: "",
         containerName: codexContainerName({
           scope: GLOBAL_CODEX_TERMINAL_SCOPE,
+          targetRoot,
           terminalId: id
         }),
         env: terminalEnv,
@@ -1782,6 +1789,7 @@ function createCodexTerminalController({
         codexThreadId: "",
         containerName: codexContainerName({
           scope: `fix:${jobId}`,
+          targetRoot,
           terminalId: id
         }),
         env: {

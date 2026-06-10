@@ -69,6 +69,10 @@ test("managed project runtime identity follows the slug instead of the absolute 
     }));
 
     assert.deepEqual(newRuntime, oldRuntime);
+    assert.deepEqual(oldRuntime, {
+      containerName: "vibe64-beepollen-jskit-mariadb",
+      networkName: "vibe64-beepollen-network"
+    });
   });
 });
 
@@ -225,17 +229,14 @@ test("jskit declares MariaDB through the generic runtime container layer", async
   });
 });
 
-test("jskit MariaDB runtime is tenant-scoped while databases remain project-scoped", async () => {
+test("jskit MariaDB runtime is shared while databases remain project-scoped", async () => {
   await withTemporaryRoot(async (root) => {
     const beepollenRoot = path.join(root, "beepollen");
     const dogandgroomRoot = path.join(root, "dogandgroom");
-    const tenantId = "tonymobily";
     const beepollenDescriptor = createJskitMariaDbRuntimeContainer({
-      tenantId,
       targetRoot: beepollenRoot
     });
     const dogandgroomDescriptor = createJskitMariaDbRuntimeContainer({
-      tenantId,
       targetRoot: dogandgroomRoot
     });
     const beepollenEnv = await runtimeContainerTerminalEnv(beepollenDescriptor, {
@@ -252,28 +253,21 @@ test("jskit MariaDB runtime is tenant-scoped while databases remain project-scop
     });
 
     assert.equal(
-      jskitMariaDbContainerName(beepollenRoot, {
-        tenantId
-      }),
-      jskitMariaDbContainerName(dogandgroomRoot, {
-        tenantId
-      })
+      jskitMariaDbContainerName(beepollenRoot),
+      jskitMariaDbContainerName(dogandgroomRoot)
     );
-    assert.equal(jskitMariaDbVolumeName({
-      tenantId
-    }), "vibe64_jskit_mariadb_data_tonymobily");
-    assert.match(script, /--name vibe64-jskit-mariadb-tonymobily/u);
-    assert.match(script, /-v vibe64_jskit_mariadb_data_tonymobily:\/var\/lib\/mysql/u);
+    assert.equal(jskitMariaDbVolumeName(), "vibe64_jskit_mariadb_data");
+    assert.match(script, /--name vibe64-jskit-mariadb/u);
+    assert.match(script, /-v vibe64_jskit_mariadb_data:\/var\/lib\/mysql/u);
     assert.equal(beepollenEnv.MYSQL_DATABASE, "beepollen");
     assert.equal(dogandgroomEnv.MYSQL_DATABASE, "dogandgroom");
   });
 });
 
-test("jskit tenant MariaDB runtime probes without creating a project database", async () => {
+test("shared jskit MariaDB runtime probes without creating a project database", async () => {
   await withTemporaryRoot(async (root) => {
     const descriptor = createJskitTenantMariaDbRuntimeContainer({
-      targetRoot: root,
-      tenantId: "tonymobily"
+      targetRoot: root
     });
     const script = runtimeContainerStartScript(descriptor, {
       adapterId: "jskit",
@@ -284,8 +278,8 @@ test("jskit tenant MariaDB runtime probes without creating a project database", 
       targetRoot: root
     });
 
-    assert.match(script, /--name vibe64-jskit-mariadb-tonymobily/u);
-    assert.match(script, /-v vibe64_jskit_mariadb_data_tonymobily:\/var\/lib\/mysql/u);
+    assert.match(script, /--name vibe64-jskit-mariadb/u);
+    assert.match(script, /-v vibe64_jskit_mariadb_data:\/var\/lib\/mysql/u);
     assert.doesNotMatch(script, /MARIADB_DATABASE=/u);
     assert.doesNotMatch(script, /CREATE DATABASE IF NOT EXISTS/u);
     assert.equal(Object.hasOwn(terminalEnv, "MYSQL_DATABASE"), false);
@@ -597,7 +591,7 @@ test("target runtime network preparation creates the shared network only when mi
           "--label",
           `vibe64.daemon-pid=${process.pid}`,
           "--label",
-          `vibe64.target=${networkName.replace("vibe64-runtime-", "")}`,
+          "vibe64.target=test-project",
           networkName
         ]
       ]
@@ -627,7 +621,7 @@ test("target runtime network shell command tolerates concurrent network creation
 
     assert.equal(command.split(" || ").filter((part) => part === inspectCommand).length, 2);
     assert.ok(command.includes(`docker network create --label vibe64.kind=runtime-network`));
-    assert.ok(command.includes(`--label vibe64.target=${networkName.replace("vibe64-runtime-", "")}`));
+    assert.ok(command.includes("--label vibe64.target=test-project"));
     assert.ok(command.includes(`${networkName} >/dev/null`));
   });
 });
@@ -651,10 +645,10 @@ test("runtime container start script safely displays shell-quoted commands", asy
     assert.doesNotMatch(script, /127\.0\.0\.1:13306:3306/u);
     assert.doesNotMatch(script, /MARIADB_DATABASE=/u);
     assert.doesNotMatch(script, /CREATE DATABASE IF NOT EXISTS/u);
-    assert.match(script, /timeout 15s docker exec vibe64-jskit-mariadb-/u);
-    assert.match(script, /if ! docker start vibe64-jskit-mariadb-/u);
+    assert.match(script, /timeout 15s docker exec vibe64-jskit-mariadb/u);
+    assert.match(script, /if ! docker start vibe64-jskit-mariadb/u);
     assert.match(script, /container could not start\. Recreating the container while keeping managed volumes\./u);
-    assert.match(script, /docker rm -f vibe64-jskit-mariadb-/u);
+    assert.match(script, /docker rm -f vibe64-jskit-mariadb/u);
   });
 });
 

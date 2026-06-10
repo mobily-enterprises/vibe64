@@ -20,6 +20,7 @@ import {
   gitToolchainMountArgs
 } from "@local/studio-terminal-core/server/gitToolchainMounts";
 import {
+  runtimeTargetName,
   targetRuntimeNetworkDockerArgs
 } from "@local/studio-terminal-core/server/runtimeContainers";
 import {
@@ -53,7 +54,6 @@ const CODEX_APP_SERVER_TRANSPORT = Object.freeze({
   UNIX: "unix"
 });
 const CODEX_APP_SERVER_RUNTIME_DIR_NAME = "codex-app-server";
-const CODEX_APP_SERVER_CONTAINER_PREFIX = "vibe64-codex-app-server";
 const CODEX_APP_SERVER_METADATA_FILE = "runtime.json";
 const CODEX_APP_SERVER_LOG_FILE = "app-server.log";
 const CODEX_APP_SERVER_SOCKET_FILE = "app-server.sock";
@@ -206,8 +206,20 @@ function workdirMountArgs({
   });
 }
 
-function codexAppServerContainerName(runtimeDir = "") {
-  return `${CODEX_APP_SERVER_CONTAINER_PREFIX}-${stableHash(path.resolve(runtimeDir))}`;
+function dockerNamePart(value = "", fallback = "runtime") {
+  const normalized = normalizeAgentText(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9_.-]+/gu, "-")
+    .replace(/^-+|-+$/gu, "");
+  return normalized || fallback;
+}
+
+function codexAppServerContainerNameForTarget({
+  runtimeDir = "",
+  targetRoot = ""
+} = {}) {
+  const project = normalizeAgentText(targetRoot) ? runtimeTargetName(targetRoot) : dockerNamePart(path.basename(path.resolve(runtimeDir)));
+  return `vibe64-${project}-codex-app-server`;
 }
 
 function waitForSpawnedProcessClose(child, {
@@ -257,6 +269,7 @@ function waitForSpawnedProcessClose(child, {
 async function removeCodexAppServerContainer({
   runtimeDir = "",
   spawn = defaultSpawn,
+  targetRoot = "",
   timeoutMs = CODEX_APP_SERVER_CONTAINER_REMOVE_TIMEOUT_MS,
   useDocker = true
 } = {}) {
@@ -265,7 +278,10 @@ async function removeCodexAppServerContainer({
       removed: false
     };
   }
-  const containerName = codexAppServerContainerName(runtimeDir);
+  const containerName = codexAppServerContainerNameForTarget({
+    runtimeDir,
+    targetRoot
+  });
   try {
     const child = spawn("docker", ["rm", "-f", containerName], {
       stdio: "ignore"
@@ -308,13 +324,16 @@ function codexAppServerDockerArgs({
     ...STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS,
     "--rm",
     "--name",
-    codexAppServerContainerName(normalizedRuntimeDir),
+    codexAppServerContainerNameForTarget({
+      runtimeDir: normalizedRuntimeDir,
+      targetRoot: normalizedTargetRoot
+    }),
     "--label",
     studioDockerLabel("kind", "codex-app-server"),
     "--label",
     `${STUDIO_DAEMON_PID_LABEL}=${process.pid}`,
     "--label",
-    studioDockerLabel("target", stableHash(normalizedTargetRoot || normalizedWorkdir || normalizedRuntimeDir)),
+    studioDockerLabel("target", normalizedTargetRoot ? runtimeTargetName(normalizedTargetRoot) : dockerNamePart(path.basename(normalizedRuntimeDir))),
     ...studioToolHomeDockerArgs(),
     ...hostUserIdentityEnvArgs(),
     ...gitToolchainMountArgs(normalizedTargetRoot),

@@ -36,6 +36,10 @@ function managedProjectSlugFromTargetRoot(targetRoot = "", {
 }
 
 function targetRuntimeIdentity(targetRoot = "") {
+  return projectRuntimeIdentity(targetRuntimeProjectSlug(targetRoot));
+}
+
+function targetRuntimeProjectSlug(targetRoot = "") {
   const resolvedTargetRoot = path.resolve(String(targetRoot || "").trim() || process.cwd());
   const projectContext = currentProjectRequestContext();
   const contextSlug = String(projectContext?.slug || "").trim();
@@ -44,19 +48,20 @@ function targetRuntimeIdentity(targetRoot = "") {
     contextSlug &&
     (!contextTargetRoot || pathInsideOrEqual(contextTargetRoot, resolvedTargetRoot))
   ) {
-    return projectRuntimeIdentity(contextSlug);
+    return normalizeProjectSlug(contextSlug);
   }
 
   const managedSlug = managedProjectSlugFromTargetRoot(resolvedTargetRoot);
   if (managedSlug) {
-    return projectRuntimeIdentity(managedSlug);
+    return managedSlug;
   }
 
-  return `path:${resolvedTargetRoot}`;
+  return normalizeProjectSlug(path.basename(resolvedTargetRoot));
 }
 
 export {
   managedProjectSlugFromTargetRoot,
+  targetRuntimeProjectSlug,
   targetRuntimeIdentity,
   projectRuntimeIdentity
 };

@@ -21,7 +21,7 @@ import {
   vibe64Result,
   directoryExists,
   shellTerminalNamespace,
-  stableHash,
+  terminalContainerName,
   pathInsideOrEqual,
   terminalTargetRoot,
   terminalWorktreePath
@@ -127,10 +127,15 @@ function shellRcFileSetupLines() {
 
 function shellContainerName({
   sessionId = "",
+  targetRoot = "",
   target = "",
   terminalId = ""
 } = {}) {
-  return `vibe64-shell-${stableHash(sessionId)}-${stableHash(target)}-${stableHash(terminalId)}`;
+  return terminalContainerName({
+    kind: "shell",
+    parts: [target, sessionId, terminalId],
+    targetRoot
+  });
 }
 
 function shellContainerHostname(target = "") {
@@ -310,6 +315,7 @@ function createShellTerminalController({ projectService } = {}) {
           args: ({ id }) => shellTerminalArgs({
             containerName: shellContainerName({
               sessionId,
+              targetRoot,
               target,
               terminalId: id
             }),

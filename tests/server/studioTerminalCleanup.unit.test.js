@@ -67,9 +67,9 @@ test("Studio runtime network cleanup removes only unused Studio networks", async
     if (command === "docker" && args[0] === "network" && args[1] === "ls") {
       return {
         stdout: [
-          "network-unused\tvibe64-runtime-aaaaaaaaaaaa\truntime-network\t999",
-          "network-active\tvibe64-runtime-cccccccccccc\truntime-network\t999",
-          "network-current\tvibe64-runtime-dddddddddddd\truntime-network\t123",
+          "network-unused\tvibe64-alpha-network\truntime-network\t999",
+          "network-active\tvibe64-beta-network\truntime-network\t999",
+          "network-current\tvibe64-current-network\truntime-network\t123",
           "network-other\tordinary-network\t<no value>\t<no value>"
         ].join("\n")
       };
@@ -90,14 +90,14 @@ test("Studio runtime network cleanup removes only unused Studio networks", async
   };
 
   assert.deepEqual(parseDockerNetworkRows([
-    "network-id\tvibe64-runtime-aaaaaaaaaaaa\truntime-network\t999",
+    "network-id\tvibe64-alpha-network\truntime-network\t999",
     "ordinary-id\tordinary-network\t<no value>\t<no value>"
   ].join("\n")), [
     {
       daemonPid: 999,
       id: "network-id",
       kind: "runtime-network",
-      name: "vibe64-runtime-aaaaaaaaaaaa"
+      name: "vibe64-alpha-network"
     },
     {
       daemonPid: 0,
@@ -116,7 +116,7 @@ test("Studio runtime network cleanup removes only unused Studio networks", async
   });
 
   assert.deepEqual(removed, [
-    "vibe64-runtime-aaaaaaaaaaaa"
+    "vibe64-alpha-network"
   ]);
   assert.deepEqual(calls.filter(([, args]) => args[0] === "network" && args[1] === "rm"), [
     ["docker", ["network", "rm", "network-unused"]]

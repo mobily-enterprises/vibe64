@@ -15,6 +15,9 @@ import {
   currentProjectScopeKey
 } from "@local/vibe64-core/server/projectRequestContext";
 import {
+  targetRuntimeProjectSlug
+} from "@local/vibe64-core/server/projectRuntimeIdentity";
+import {
   dockerCommand,
   shellQuote,
   stableHash
@@ -90,6 +93,28 @@ function commandInvocation({
   ].map(shellQuote).join(" ");
 }
 
+function dockerNamePart(value = "", fallback = "item") {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_.-]+/gu, "-")
+    .replace(/^-+|-+$/gu, "");
+  return normalized || fallback;
+}
+
+function terminalContainerName({
+  kind = "terminal",
+  parts = [],
+  targetRoot = ""
+} = {}) {
+  return [
+    "vibe64",
+    targetRuntimeProjectSlug(targetRoot),
+    dockerNamePart(kind, "terminal"),
+    ...parts.map((part, index) => dockerNamePart(part, `part-${index + 1}`))
+  ].join("-");
+}
+
 async function directoryExists(filePath = "") {
   try {
     return (await stat(filePath)).isDirectory();
@@ -139,6 +164,7 @@ export {
   shellTerminalNamespace,
   sessionTerminalCwd,
   terminalNamespace,
+  terminalContainerName,
   terminalTargetRoot,
   terminalWorktreePath,
   terminalProjectScopeKey,

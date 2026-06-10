@@ -9,8 +9,7 @@ import {
 } from "./gitToolchainMounts.js";
 import {
   hostUserIdentityEnvArgs,
-  shellQuote,
-  stableHash
+  shellQuote
 } from "./shellCommands.js";
 import {
   studioPlaywrightBrowsersDockerArgs
@@ -23,7 +22,7 @@ import {
   normalizeText
 } from "@local/vibe64-core/server/core";
 import {
-  runtimeNetworkTargetHash,
+  runtimeTargetName,
   targetRuntimeNetworkDockerArgs
 } from "./runtimeContainers.js";
 
@@ -78,9 +77,10 @@ function targetScriptStartupScript(command = "", {
 
 function targetScriptContainerName({
   adapterId = "generic",
+  targetRoot = "",
   terminalId = ""
 } = {}) {
-  return `vibe64-${adapterId}-target-script-${stableHash(terminalId)}`;
+  return `vibe64-${runtimeTargetName(targetRoot)}-${adapterId}-target-script-${terminalId}`;
 }
 
 function targetScriptTerminalArgs({
@@ -111,7 +111,7 @@ function targetScriptTerminalArgs({
     "--label",
     `vibe64.terminal=${terminalId}`,
     "--label",
-    `vibe64.target=${runtimeNetworkTargetHash(targetRoot)}`,
+    `vibe64.target=${runtimeTargetName(targetRoot)}`,
     ...gitToolchainMountArgs(targetRoot),
     "-v",
     `${targetRoot}:/workspace`,
@@ -178,6 +178,7 @@ async function createVibe64TargetScriptTerminalSpec({
       command,
       containerName: targetScriptContainerName({
         adapterId,
+        targetRoot: normalizedTargetRoot,
         terminalId: id
       }),
       extraDockerArgs,

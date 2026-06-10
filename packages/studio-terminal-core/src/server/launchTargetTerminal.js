@@ -33,7 +33,7 @@ import {
   sessionWorktreePath
 } from "@local/vibe64-core/server/sessionWorktreePath";
 import {
-  runtimeNetworkTargetHash,
+  runtimeTargetName,
   targetRuntimeNetworkDockerArgs
 } from "./runtimeContainers.js";
 
@@ -445,9 +445,10 @@ function workdirMountArgs({
 function launchContainerName({
   adapterId = "generic",
   sessionId = "",
+  targetRoot = "",
   terminalId = ""
 } = {}) {
-  return `vibe64-${adapterId}-launch-${stableHash(sessionId)}-${stableHash(terminalId)}`;
+  return `vibe64-${runtimeTargetName(targetRoot)}-${adapterId}-launch-${sessionId}-${terminalId}`;
 }
 
 function launchTargetTerminalArgs({
@@ -481,7 +482,7 @@ function launchTargetTerminalArgs({
     "--label",
     `vibe64.terminal=${terminalId}`,
     "--label",
-    `vibe64.target=${runtimeNetworkTargetHash(targetRoot)}`,
+    `vibe64.target=${runtimeTargetName(targetRoot)}`,
     "-p",
     `127.0.0.1:${port}:${port}`,
     ...gitToolchainMountArgs(targetRoot),
@@ -606,6 +607,7 @@ async function createVibe64WebLaunchTargetTerminalSpec({
       containerName: launchContainerName({
         adapterId,
         sessionId: session.sessionId,
+        targetRoot: resolvedTargetRoot,
         terminalId: id
       }),
       extraDockerArgs: [

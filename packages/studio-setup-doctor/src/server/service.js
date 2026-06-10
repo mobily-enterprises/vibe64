@@ -580,8 +580,7 @@ function createStudioRuntimeDoctorPlugin({
 
 function createStudioTenantRuntimeDoctorPlugin({
   runCommand,
-  studioRoot = "",
-  tenantId = ""
+  studioRoot = ""
 } = {}) {
   const toolkit = createDoctorPluginToolkit({
     runCommand,
@@ -591,8 +590,7 @@ function createStudioTenantRuntimeDoctorPlugin({
     terminalNamespace: TERMINAL_NAMESPACE
   });
   const mariaDbContainer = createJskitTenantMariaDbRuntimeContainer({
-    targetRoot: studioRoot,
-    tenantId
+    targetRoot: studioRoot
   });
   const runtimeContainers = createRuntimeContainerDoctorEntries(toolkit, [
     mariaDbContainer

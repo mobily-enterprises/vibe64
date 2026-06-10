@@ -2,7 +2,7 @@ import path from "node:path";
 import process from "node:process";
 
 import {
-  runtimeNetworkTargetHash,
+  runtimeTargetName,
   targetRuntimeNetworkDockerArgs
 } from "@local/studio-terminal-core/server/runtimeContainers";
 import {
@@ -94,7 +94,7 @@ function targetToolchainTerminalArgs({
       `${STUDIO_DAEMON_PID_LABEL}=${process.pid}`,
       sessionId ? studioDockerLabel("session", sessionId) : "",
       studioDockerLabel("terminal", terminalId),
-      studioDockerLabel("target", runtimeNetworkTargetHash(targetRoot)),
+      studioDockerLabel("target", runtimeTargetName(targetRoot)),
       ...extraLabels
     ]),
     ...studioToolHomeDockerArgs(),

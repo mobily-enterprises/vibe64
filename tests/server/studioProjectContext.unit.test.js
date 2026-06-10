@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  PROJECT_SLUG_MAX_LENGTH,
   createStudioProjectContext,
   normalizeProjectSlug,
   projectSlugFromName,
@@ -105,7 +106,9 @@ test("project slug contract resolves only canonical Vibe64 project roots", async
       slug: "app_1-alpha"
     }), path.join(projectsRoot, "app_1-alpha"));
 
-    for (const slug of ["", "Example", "app.dot", "../outside", "/tmp/app", "_hidden", "-dash", "app/slash"]) {
+    assert.equal(normalizeProjectSlug("a".repeat(PROJECT_SLUG_MAX_LENGTH)), "a".repeat(PROJECT_SLUG_MAX_LENGTH));
+
+    for (const slug of ["", "Example", "app.dot", "../outside", "/tmp/app", "_hidden", "-dash", "app/slash", "a".repeat(PROJECT_SLUG_MAX_LENGTH + 1)]) {
       assert.throws(
         () => normalizeProjectSlug(slug),
         {
