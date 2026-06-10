@@ -9,15 +9,17 @@
 
     <ProjectTypeSetup
       v-if="needsProjectType"
-      :saving-type="savingType"
       :state="projectType"
-      @select="saveProjectType"
+      @select="selectDraftProjectType"
     />
 
     <ProjectConfigSetup
       v-else-if="needsProjectConfig"
+      :can-change-project-type="hasDraftProjectType"
       :saving="savingConfig"
+      :setup-summary="projectConfigSetupSummary"
       :state="projectConfig"
+      @change-project-type="clearDraftProjectType"
       @save="saveProjectConfig"
     />
 
@@ -50,7 +52,6 @@ import {
 } from "@/lib/vibe64RequestConfig.js";
 import {
   VIBE64_PROJECT_CONFIG_API_SUFFIX,
-  VIBE64_PROJECT_TYPE_API_SUFFIX,
   PROJECT_CONFIG_ENDPOINT,
   PROJECT_TYPE_ENDPOINT,
   projectConfigQueryKey,
@@ -73,7 +74,8 @@ const props = defineProps({
 });
 
 const savingConfig = ref(false);
-const savingType = ref("");
+const draftApplicationTypeId = ref("");
+const draftProjectTypeId = ref("");
 const projectSlug = useVibe64ProjectSlug();
 
 function projectQueryKey(queryKeyFactory) {
@@ -84,6 +86,7 @@ function useStudioEndpointView({
   enabled = true,
   fallbackLoadError = "Request failed.",
   path,
+  readQuery = null,
   queryKeyFactory
 }) {
   const resource = useEndpointResource({
@@ -92,6 +95,7 @@ function useStudioEndpointView({
     fallbackLoadError,
     path,
     queryKey: projectQueryKey(queryKeyFactory),
+    readQuery,
     refreshOnPull: true
   });
 
@@ -112,35 +116,30 @@ const projectTypeView = useStudioEndpointView({
 const cachedProjectTypeRecord = computed(() => cachedProjectTypeRecords.get(projectSlug.value) || null);
 const projectTypeRecord = computed(() => projectTypeView.record || cachedProjectTypeRecord.value || {});
 const projectType = computed(() => projectTypeRecord.value?.projectType || {});
+const hasDraftProjectType = computed(() => Boolean(draftProjectTypeId.value));
 
-const projectConfigView = useStudioEndpointView({
-  enabled: computed(() => projectType.value.ready === true),
-  fallbackLoadError: "Project config could not load.",
-  path: PROJECT_CONFIG_ENDPOINT,
-  queryKeyFactory: projectConfigQueryKey
+function projectConfigQueryKeyWithDraft(surfaceId, ownershipFilter, slug) {
+  return [
+    ...projectConfigQueryKey(surfaceId, ownershipFilter, slug),
+    "draft-project-type",
+    draftProjectTypeId.value || ""
+  ];
+}
+
+const draftProjectConfigQuery = computed(() => {
+  return hasDraftProjectType.value
+    ? {
+        projectType: draftProjectTypeId.value
+      }
+    : null;
 });
 
-const saveProjectTypeCommand = useCommand({
-  access: "never",
-  apiSuffix: VIBE64_PROJECT_TYPE_API_SUFFIX,
-  buildCommandOptions: () => ({
-    method: "PUT",
-    options: LOCAL_STUDIO_COMMAND_OPTIONS,
-    path: scopedDevelopmentApiUrl(PROJECT_TYPE_ENDPOINT)
-  }),
-  buildRawPayload: (_model, { context }) => ({
-    projectType: String(context.projectType || "")
-  }),
-  fallbackRunError: "Project type could not be saved.",
-  messages: {
-    error: "Project type could not be saved.",
-    success: "Project type saved."
-  },
-  onRunSuccess: loadProjectState,
-  ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-  placementSource: "vibe64.project-type.save",
-  surfaceId: VIBE64_SURFACE_ID,
-  writeMethod: "PUT"
+const projectConfigView = useStudioEndpointView({
+  enabled: computed(() => projectType.value.ready === true || hasDraftProjectType.value),
+  fallbackLoadError: "Project config could not load.",
+  path: PROJECT_CONFIG_ENDPOINT,
+  queryKeyFactory: projectConfigQueryKeyWithDraft,
+  readQuery: draftProjectConfigQuery
 });
 
 const saveProjectConfigCommand = useCommand({
@@ -152,6 +151,7 @@ const saveProjectConfigCommand = useCommand({
     path: scopedDevelopmentApiUrl(PROJECT_CONFIG_ENDPOINT)
   }),
   buildRawPayload: (_model, { context }) => ({
+    projectType: String(context.projectType || ""),
     values: context.values || {}
   }),
   fallbackRunError: "Project config could not be saved.",
@@ -166,9 +166,33 @@ const saveProjectConfigCommand = useCommand({
   writeMethod: "PUT"
 });
 
-const cachedProjectConfigRecord = computed(() => cachedProjectConfigRecords.get(projectSlug.value) || null);
+const projectConfigCacheKey = computed(() => {
+  return `${projectSlug.value || "unscoped"}:${draftProjectTypeId.value || "saved"}`;
+});
+const cachedProjectConfigRecord = computed(() => cachedProjectConfigRecords.get(projectConfigCacheKey.value) || null);
 const projectConfigRecord = computed(() => projectConfigView.record || cachedProjectConfigRecord.value || {});
 const projectConfig = computed(() => projectConfigRecord.value?.config || {});
+const draftProjectType = computed(() => findProjectType(draftProjectTypeId.value));
+const savedProjectType = computed(() => findProjectType(projectType.value?.projectType));
+const draftApplicationType = computed(() => findApplicationType(draftApplicationTypeId.value));
+const currentProjectTypeLabel = computed(() => {
+  return draftProjectType.value?.label ||
+    savedProjectType.value?.label ||
+    projectType.value?.adapter?.label ||
+    "";
+});
+const currentApplicationTypeLabel = computed(() => {
+  return draftApplicationType.value?.label ||
+    draftProjectType.value?.applicationTypes?.[0]?.label ||
+    "";
+});
+const projectConfigSetupSummary = computed(() => {
+  const labels = [
+    currentApplicationTypeLabel.value,
+    currentProjectTypeLabel.value
+  ].filter(Boolean);
+  return labels.join(" / ");
+});
 const projectTypeLoaded = computed(() => Boolean(projectTypeRecord.value?.projectType));
 const projectConfigLoaded = computed(() => Boolean(projectConfigRecord.value?.config));
 const projectReady = computed(() => projectType.value.ready === true && projectConfig.value.ready === true);
@@ -178,17 +202,14 @@ const projectState = computed(() => ({
 }));
 
 const needsProjectType = computed(() => {
-  return projectTypeLoaded.value && projectType.value.ready !== true;
+  return projectTypeLoaded.value && projectType.value.ready !== true && !hasDraftProjectType.value;
 });
 const needsProjectConfig = computed(() => {
-  return projectType.value.ready === true &&
+  return (hasDraftProjectType.value || projectType.value.ready === true) &&
     projectConfigLoaded.value &&
-    (props.configureProject || projectConfig.value.ready !== true);
+    (hasDraftProjectType.value || props.configureProject || projectConfig.value.ready !== true);
 });
 const saveError = computed(() => {
-  if (saveProjectTypeCommand.messageType === "error") {
-    return String(saveProjectTypeCommand.message || "");
-  }
   if (saveProjectConfigCommand.messageType === "error") {
     return String(saveProjectConfigCommand.message || "");
   }
@@ -208,23 +229,48 @@ async function loadProjectState() {
   }
 }
 
-async function saveProjectType(projectTypeId) {
-  savingType.value = String(projectTypeId || "");
-  try {
-    await saveProjectTypeCommand.run({
-      projectType: savingType.value
-    });
-  } finally {
-    savingType.value = "";
+function findProjectType(projectTypeId = "") {
+  const normalizedProjectTypeId = String(projectTypeId || "");
+  if (!normalizedProjectTypeId) {
+    return null;
   }
+  return (Array.isArray(projectType.value?.availableProjectTypes) ? projectType.value.availableProjectTypes : [])
+    .find((availableProjectType) => String(availableProjectType.id || "") === normalizedProjectTypeId) || null;
+}
+
+function findApplicationType(applicationTypeId = "") {
+  const normalizedApplicationTypeId = String(applicationTypeId || "");
+  if (!normalizedApplicationTypeId) {
+    return null;
+  }
+  return (Array.isArray(projectType.value?.availableApplicationTypes) ? projectType.value.availableApplicationTypes : [])
+    .find((availableApplicationType) => String(availableApplicationType.id || "") === normalizedApplicationTypeId) || null;
+}
+
+function selectDraftProjectType(selection) {
+  if (selection && typeof selection === "object" && !Array.isArray(selection)) {
+    draftApplicationTypeId.value = String(selection.applicationTypeId || "");
+    draftProjectTypeId.value = String(selection.projectType || "");
+    return;
+  }
+  draftApplicationTypeId.value = "";
+  draftProjectTypeId.value = String(selection || "");
+}
+
+function clearDraftProjectType() {
+  draftApplicationTypeId.value = "";
+  draftProjectTypeId.value = "";
 }
 
 async function saveProjectConfig(values) {
   savingConfig.value = true;
   try {
     await saveProjectConfigCommand.run({
+      projectType: draftProjectTypeId.value,
       values: values || {}
     });
+    draftApplicationTypeId.value = "";
+    draftProjectTypeId.value = "";
   } finally {
     savingConfig.value = false;
   }
@@ -240,7 +286,7 @@ watch(() => projectTypeView.record, (record) => {
 
 watch(() => projectConfigView.record, (record) => {
   if (record?.config) {
-    cachedProjectConfigRecords.set(projectSlug.value, record);
+    cachedProjectConfigRecords.set(projectConfigCacheKey.value, record);
   }
 }, {
   immediate: true

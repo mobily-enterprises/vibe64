@@ -1,5 +1,6 @@
 import {
   projectConfigInputValidator,
+  projectConfigReadInputValidator,
   projectCreateInputValidator,
   projectSelectInputValidator,
   projectTypeInputValidator
@@ -71,11 +72,15 @@ function registerRoutes(
 
   routes.actionRoute("GET", "/project-config", {
     actionId: ACTION_READ_PROJECT_CONFIG,
+    buildInput: queryInput,
+    query: projectConfigReadInputValidator,
     summary: "Read the Vibe64 project configuration."
   });
 
   routes.actionRoute("GET", "/project-config/defaults", {
     actionId: ACTION_READ_PROJECT_CONFIG_DEFAULTS,
+    buildInput: queryInput,
+    query: projectConfigReadInputValidator,
     summary: "Read default Vibe64 project configuration values."
   });
 
@@ -85,6 +90,10 @@ function registerRoutes(
     buildInput: routes.requestBody,
     summary: "Save the Vibe64 project configuration."
   });
+}
+
+function queryInput(request) {
+  return request.input.query || {};
 }
 
 export { registerRoutes };

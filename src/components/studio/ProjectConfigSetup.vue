@@ -1,5 +1,26 @@
 <template>
   <v-sheet class="project-config-setup">
+    <div
+      v-if="setupSummary"
+      class="project-config-setup__summary"
+    >
+      <v-btn
+        v-if="canChangeProjectType"
+        class="project-config-setup__summary-change"
+        color="primary"
+        :prepend-icon="mdiArrowLeft"
+        size="large"
+        variant="outlined"
+        @click="emit('change-project-type')"
+      >
+        Change app type
+      </v-btn>
+      <div class="project-config-setup__summary-copy">
+        <p class="project-config-setup__summary-kicker">Setup</p>
+        <p class="project-config-setup__summary-text">{{ setupSummary }}</p>
+      </div>
+    </div>
+
     <div class="project-config-setup__sections">
       <section
         v-for="section in sections"
@@ -86,11 +107,20 @@
 
 <script setup>
 import { computed, reactive, watch } from "vue";
+import { mdiArrowLeft } from "@mdi/js";
 
 const props = defineProps({
+  canChangeProjectType: {
+    type: Boolean,
+    default: false
+  },
   saving: {
     type: Boolean,
     default: false
+  },
+  setupSummary: {
+    type: String,
+    default: ""
   },
   state: {
     type: Object,
@@ -98,7 +128,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(["save"]);
+const emit = defineEmits(["change-project-type", "save"]);
 const formValues = reactive({});
 
 const fields = computed(() => {
@@ -175,6 +205,43 @@ watch(
   display: grid;
   gap: 1rem;
   padding: 1rem;
+}
+
+.project-config-setup__summary {
+  align-items: start;
+  background: rgba(var(--v-theme-primary), 0.055);
+  border: 1px solid rgba(var(--v-theme-primary), 0.22);
+  border-radius: 8px;
+  display: grid;
+  gap: 0.85rem;
+  justify-content: start;
+  padding: 0.95rem;
+}
+
+.project-config-setup__summary-change {
+  flex: 0 0 auto;
+}
+
+.project-config-setup__summary-copy {
+  min-width: 0;
+}
+
+.project-config-setup__summary-kicker {
+  color: rgba(var(--v-theme-on-surface), 0.56);
+  font-size: 0.72rem;
+  font-weight: 760;
+  letter-spacing: 0.05em;
+  line-height: 1.1;
+  margin: 0 0 0.18rem;
+  text-transform: uppercase;
+}
+
+.project-config-setup__summary-text {
+  color: rgb(var(--v-theme-on-surface));
+  font-size: 0.95rem;
+  font-weight: 720;
+  line-height: 1.3;
+  margin: 0;
 }
 
 .project-config-setup__sections {
@@ -255,6 +322,15 @@ watch(
 }
 
 @media (max-width: 720px) {
+  .project-config-setup__summary {
+    align-items: stretch;
+    display: grid;
+  }
+
+  .project-config-setup__summary-change {
+    justify-self: start;
+  }
+
   .project-config-setup__field {
     grid-template-columns: 1fr;
   }

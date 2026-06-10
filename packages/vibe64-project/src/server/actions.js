@@ -144,9 +144,8 @@ const featureActions = Object.freeze([
     },
     observability: {},
     async execute(input, context, deps) {
-      void input;
       void context;
-      return deps.featureService.readProjectConfig();
+      return deps.featureService.readProjectConfig(input);
     }
   },
   {
@@ -163,9 +162,8 @@ const featureActions = Object.freeze([
     },
     observability: {},
     async execute(input, context, deps) {
-      void input;
       void context;
-      return deps.featureService.readProjectConfigDefaults();
+      return deps.featureService.readProjectConfigDefaults(input);
     }
   },
   {

@@ -274,8 +274,45 @@ function createService({
     return readProjectTypeState();
   }
 
-  async function createProjectAdapter() {
-    const projectType = await requireProjectType();
+  function draftProjectType(input = {}) {
+    return String(input?.projectType || "").trim();
+  }
+
+  async function readDraftProjectTypeState(projectTypeValue = "") {
+    const targetRootValue = currentTargetRoot();
+    const {
+      projectTypeStore,
+      resolvedTargetRoot
+    } = projectStores(targetRootValue);
+    const definition = adapterRegistry.requireImplementedProjectType(projectTypeValue);
+    return {
+      adapter: {
+        id: definition.id,
+        label: definition.label
+      },
+      availableApplicationTypes: adapterRegistry.availableApplicationTypes(),
+      availableProjectTypes: adapterRegistry.availableProjectTypes(),
+      draft: true,
+      errorCode: "",
+      message: "",
+      path: projectTypeStore.path,
+      projectType: definition.id,
+      ready: true,
+      status: "draft",
+      targetRoot: resolvedTargetRoot
+    };
+  }
+
+  async function resolveProjectTypeForConfig(input = {}) {
+    const projectType = draftProjectType(input);
+    if (projectType) {
+      return readDraftProjectTypeState(projectType);
+    }
+    return requireProjectType();
+  }
+
+  async function createProjectAdapter(input = {}) {
+    const projectType = await resolveProjectTypeForConfig(input);
     const adapter = await adapterRegistry.createAdapter(projectType.projectType);
     return {
       adapter,
@@ -451,16 +488,16 @@ function createService({
     return config;
   }
 
-  async function readProjectConfigState() {
+  async function readProjectConfigState(input = {}) {
     if (!currentTargetRoot()) {
       return noProjectSelectedConfigState();
     }
-    const { adapter, projectType } = await createProjectAdapter();
+    const { adapter, projectType } = await createProjectAdapter(input);
     return readProjectConfigForAdapter(adapter, projectType);
   }
 
-  async function readProjectConfigDefaultsState() {
-    const { adapter, projectType } = await createProjectAdapter();
+  async function readProjectConfigDefaultsState(input = {}) {
+    const { adapter, projectType } = await createProjectAdapter(input);
     const targetRootValue = requireSelectedTargetRoot();
     const {
       projectConfigStore
@@ -482,15 +519,19 @@ function createService({
   }
 
   async function saveProjectConfigState(input = {}) {
-    const { adapter, projectType } = await createProjectAdapter();
+    const { adapter, projectType } = await createProjectAdapter(input);
     const targetRootValue = requireSelectedTargetRoot();
     const {
+      projectTypeStore,
       projectConfigStore
     } = projectStores(targetRootValue);
     const config = await projectConfigStore.saveConfig({
       definition: await projectConfigDefinition(adapter, projectType, targetRootValue),
       values: input?.values || {}
     });
+    if (projectType.draft === true) {
+      await projectTypeStore.writeProjectType(projectType.projectType);
+    }
     return configResponse({
       adapter,
       config,
@@ -546,19 +587,19 @@ function createService({
       });
     },
 
-    async readProjectConfig() {
+    async readProjectConfig(input = {}) {
       return projectResult(async () => {
         return {
-          config: await readProjectConfigState(),
+          config: await readProjectConfigState(input),
           ok: true
         };
       });
     },
 
-    async readProjectConfigDefaults() {
+    async readProjectConfigDefaults(input = {}) {
       return projectResult(async () => {
         return {
-          defaults: await readProjectConfigDefaultsState(),
+          defaults: await readProjectConfigDefaultsState(input),
           ok: true
         };
       });

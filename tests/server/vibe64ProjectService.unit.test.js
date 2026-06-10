@@ -220,6 +220,48 @@ test("Vibe64 project service saves project type and plain-file configuration", a
   });
 });
 
+test("Vibe64 project service can preview and save config with a draft project type", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const service = createService({
+      targetRoot
+    });
+    const stateRoot = service.currentProjectStateRoot();
+
+    const draftConfig = await service.readProjectConfig({
+      projectType: "jskit"
+    });
+    assert.equal(draftConfig.ok, true);
+    assert.equal(draftConfig.config.projectType, "jskit");
+    assert.equal(draftConfig.config.adapter.id, "jskit");
+    await assert.rejects(
+      () => readFile(path.join(stateRoot, "project_type"), "utf8"),
+      {
+        code: "ENOENT"
+      }
+    );
+
+    const savedConfig = await service.saveProjectConfig({
+      projectType: "jskit",
+      values: {
+        github_pr_merge_method: "rebase",
+        [JSKIT_ALLOW_SELF_TARGET_CONFIG]: false,
+        jskit_database_runtime: "mysql"
+      }
+    });
+    assert.equal(savedConfig.ok, true);
+    assert.equal(savedConfig.config.ready, true);
+    assert.equal(savedConfig.config.projectType, "jskit");
+    assert.equal(
+      await readFile(path.join(stateRoot, "project_type"), "utf8"),
+      "jskit\n"
+    );
+    assert.equal(
+      await readFile(path.join(stateRoot, "config", "github_pr_merge_method"), "utf8"),
+      "rebase\n"
+    );
+  });
+});
+
 test("Vibe64 project service injects the app workflow registry into runtimes", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const workflowRegistry = createCoreWorkflowRegistry();

@@ -1,20 +1,12 @@
 <template>
   <section class="project-type-setup">
-    <div class="project-type-setup__heading">
-      <p class="project-type-setup__eyebrow">Vibe64</p>
-      <h2 class="project-type-setup__title">What do you want to build?</h2>
-      <p class="project-type-setup__message">
-        {{ headingMessage }}
-      </p>
-    </div>
-
     <section
-      v-if="hasApplicationTypes"
-      class="project-type-setup__application-section"
+      v-if="currentStep === 'application' && hasApplicationTypes"
+      class="project-type-setup__step"
       :aria-labelledby="applicationHeadingId"
     >
       <div class="project-type-setup__application-heading">
-        <p class="project-type-setup__section-kicker">Step 1</p>
+        <p class="project-type-setup__section-kicker">App type</p>
         <h3 :id="applicationHeadingId">Choose app type</h3>
       </div>
 
@@ -48,48 +40,59 @@
           </svg>
           <span class="project-type-setup__application-label">{{ applicationType.label }}</span>
           <span class="project-type-setup__application-summary">{{ applicationType.summary }}</span>
-          <v-chip
-            class="project-type-setup__application-count"
-            density="comfortable"
-            size="small"
-            variant="tonal"
-          >
-            {{ applicationType.adapters.length }} {{ applicationType.adapters.length === 1 ? "option" : "options" }}
-          </v-chip>
         </button>
+      </div>
+
+      <div class="project-type-setup__step-actions">
+        <v-btn
+          class="project-type-setup__next-button"
+          color="primary"
+          size="large"
+          variant="flat"
+          :disabled="!selectedApplicationType"
+          @click="continueToTechnology"
+        >
+          Next
+        </v-btn>
       </div>
     </section>
 
     <section
+      v-else
       class="project-type-setup__technology-section"
-      :aria-labelledby="selectedApplicationType ? technologyHeadingId : undefined"
+      :aria-labelledby="recommendedAdapter ? technologyHeadingId : undefined"
     >
-      <div
-        v-if="selectedApplicationType"
-        class="project-type-setup__technology-heading"
-      >
+      <div class="project-type-setup__technology-heading">
+        <v-btn
+          v-if="hasApplicationTypes"
+          class="project-type-setup__back-button"
+          color="primary"
+          :prepend-icon="mdiArrowLeft"
+          size="large"
+          variant="outlined"
+          @click="returnToApplication"
+        >
+          Back to app type
+        </v-btn>
         <div class="project-type-setup__technology-copy">
-          <p class="project-type-setup__section-kicker">Step 2</p>
-          <h3 :id="technologyHeadingId">Choose technology for {{ selectedApplicationType.label }}</h3>
-          <p class="project-type-setup__technology-description">{{ selectedApplicationType.description }}</p>
-        </div>
-        <div class="project-type-setup__selected-type">
-          <span class="project-type-setup__selected-type-label">Selected app type</span>
-          <span class="project-type-setup__selected-type-name">{{ selectedApplicationType.label }}</span>
+          <p class="project-type-setup__section-kicker">Technology</p>
+          <h3 :id="technologyHeadingId">{{ recommendedTechnologyHeading }}</h3>
+          <p class="project-type-setup__technology-description">{{ recommendedTechnologyDescription }}</p>
         </div>
       </div>
 
-      <div class="project-type-setup__options">
+      <div
+        v-if="recommendedAdapter"
+        class="project-type-setup__recommended"
+      >
         <article
-          v-for="projectType in adapterChoices"
-          :key="projectType.id"
-          class="project-type-setup__option"
-          :title="projectType.label"
+          class="project-type-setup__default-option"
+          :title="recommendedAdapter.label"
         >
           <div class="project-type-setup__option-top">
             <div>
-              <p class="project-type-setup__option-kicker">{{ projectType.id }}</p>
-              <h3 class="project-type-setup__option-title">{{ projectType.label }}</h3>
+              <p class="project-type-setup__option-kicker">{{ recommendedAdapter.id }}</p>
+              <h3 class="project-type-setup__option-title">{{ recommendedAdapter.label }}</h3>
             </div>
             <v-chip
               color="success"
@@ -97,51 +100,69 @@
               size="small"
               variant="tonal"
             >
-              Ready
+              Default
             </v-chip>
           </div>
 
           <p class="project-type-setup__summary">
-            {{ adapterSummary(projectType) }}
+            {{ adapterSummary(recommendedAdapter) }}
           </p>
 
-          <dl class="project-type-setup__details">
-            <div>
-              <dt>Best for</dt>
-              <dd>{{ projectType.bestFor || "Project-specific Vibe64 workflows." }}</dd>
-            </div>
-            <div>
-              <dt>End result</dt>
-              <dd>{{ projectType.outcome || "Studio will use this adapter once it is implemented." }}</dd>
-            </div>
-          </dl>
-
-          <div
-            v-if="projectType.techStack.length"
-            class="project-type-setup__stack"
-            aria-label="Technology stack"
-          >
-            <v-chip
-              v-for="tech in projectType.techStack"
-              :key="tech"
-              class="project-type-setup__stack-chip"
+          <div class="project-type-setup__details-shell">
+            <v-btn
+              class="project-type-setup__details-toggle"
+              color="primary"
               density="comfortable"
-              size="small"
-              variant="tonal"
+              :append-icon="showRecommendedDetails ? mdiChevronUp : mdiChevronDown"
+              variant="text"
+              @click="showRecommendedDetails = !showRecommendedDetails"
             >
-              {{ tech }}
-            </v-chip>
+              {{ showRecommendedDetails ? "Hide details" : "Details" }}
+            </v-btn>
+
+            <div
+              v-if="showRecommendedDetails"
+              class="project-type-setup__details-panel"
+            >
+              <dl class="project-type-setup__details">
+                <div>
+                  <dt>Best for</dt>
+                  <dd>{{ recommendedAdapter.bestFor || "Project-specific Vibe64 workflows." }}</dd>
+                </div>
+                <div>
+                  <dt>End result</dt>
+                  <dd>{{ recommendedAdapter.outcome || "Studio will use this adapter once it is implemented." }}</dd>
+                </div>
+              </dl>
+
+              <div
+                v-if="recommendedAdapter.techStack.length"
+                class="project-type-setup__stack"
+                aria-label="Technology stack"
+              >
+                <v-chip
+                  v-for="tech in recommendedAdapter.techStack"
+                  :key="tech"
+                  class="project-type-setup__stack-chip"
+                  density="comfortable"
+                  size="small"
+                  variant="tonal"
+                >
+                  {{ tech }}
+                </v-chip>
+              </div>
+            </div>
           </div>
 
           <div class="project-type-setup__option-actions">
             <a
-              v-if="projectType.projectUrl"
+              v-if="recommendedAdapter.projectUrl"
               class="project-type-setup__project-link"
-              :href="projectType.projectUrl"
+              :href="recommendedAdapter.projectUrl"
               rel="noreferrer"
               target="_blank"
             >
-              <span>{{ projectType.projectUrlLabel || "Open project" }}</span>
+              <span>{{ recommendedAdapter.projectUrlLabel || "Open project" }}</span>
               <v-icon :icon="mdiOpenInNew" size="16" />
             </a>
             <span v-else class="project-type-setup__project-link project-type-setup__project-link--empty">
@@ -152,13 +173,101 @@
               color="primary"
               variant="flat"
               :disabled="saving"
-              :loading="savingType === projectType.id"
-              @click="emit('select', projectType.id)"
+              :loading="savingType === recommendedAdapter.id"
+              @click="selectProjectType(recommendedAdapter.id)"
             >
-              Use {{ projectType.label }}
+              Use {{ recommendedAdapter.label }}
             </v-btn>
           </div>
         </article>
+      </div>
+
+      <div
+        v-if="alternativeAdapters.length"
+        class="project-type-setup__alternatives"
+      >
+        <v-btn
+          class="project-type-setup__alternatives-toggle"
+          color="primary"
+          :append-icon="showAlternatives ? mdiChevronUp : mdiChevronDown"
+          variant="outlined"
+          @click="showAlternatives = !showAlternatives"
+        >
+          {{ showAlternatives ? "Hide alternatives" : `Alternatives (${alternativeAdapters.length})` }}
+        </v-btn>
+
+        <div
+          v-if="showAlternatives"
+          class="project-type-setup__options"
+        >
+          <article
+            v-for="projectType in alternativeAdapters"
+            :key="projectType.id"
+            class="project-type-setup__option"
+            :title="projectType.label"
+          >
+            <div class="project-type-setup__option-top">
+              <div>
+                <p class="project-type-setup__option-kicker">{{ projectType.id }}</p>
+                <h3 class="project-type-setup__option-title">{{ projectType.label }}</h3>
+              </div>
+              <v-chip
+                density="comfortable"
+                size="small"
+                variant="tonal"
+              >
+                Alternative
+              </v-chip>
+            </div>
+
+            <p class="project-type-setup__summary">
+              {{ adapterSummary(projectType) }}
+            </p>
+
+            <div
+              v-if="projectType.techStack.length"
+              class="project-type-setup__stack"
+              aria-label="Technology stack"
+            >
+              <v-chip
+                v-for="tech in projectType.techStack.slice(0, 5)"
+                :key="tech"
+                class="project-type-setup__stack-chip"
+                density="comfortable"
+                size="small"
+                variant="tonal"
+              >
+                {{ tech }}
+              </v-chip>
+            </div>
+
+            <div class="project-type-setup__option-actions">
+              <a
+                v-if="projectType.projectUrl"
+                class="project-type-setup__project-link"
+                :href="projectType.projectUrl"
+                rel="noreferrer"
+                target="_blank"
+              >
+                <span>{{ projectType.projectUrlLabel || "Open project" }}</span>
+                <v-icon :icon="mdiOpenInNew" size="16" />
+              </a>
+              <span v-else class="project-type-setup__project-link project-type-setup__project-link--empty">
+                Project link coming later
+              </span>
+
+              <v-btn
+                color="primary"
+                variant="outlined"
+                :disabled="saving"
+                :loading="savingType === projectType.id"
+                @click="selectProjectType(projectType.id)"
+              >
+                Use {{ projectType.label }}
+              </v-btn>
+            </div>
+          </article>
+        </div>
       </div>
     </section>
   </section>
@@ -167,6 +276,9 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import {
+  mdiArrowLeft,
+  mdiChevronDown,
+  mdiChevronUp,
   mdiOpenInNew
 } from "@mdi/js";
 
@@ -182,18 +294,14 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["select"]);
+const currentStep = ref("application");
 const selectedApplicationTypeId = ref("");
+const showAlternatives = ref(false);
+const showRecommendedDetails = ref(false);
 const applicationHeadingId = "project-type-setup-application-heading";
 const technologyHeadingId = "project-type-setup-technology-heading";
 
 const saving = computed(() => Boolean(props.savingType));
-const headingMessage = computed(() => {
-  if (props.state?.status && props.state.status !== "missing" && props.state.message) {
-    return props.state.message;
-  }
-  return "Choose the kind of app first, then pick the technology Studio and Codex should use for it.";
-});
-
 const projectTypes = computed(() => {
   return Array.isArray(props.state?.availableProjectTypes)
     ? props.state.availableProjectTypes
@@ -219,6 +327,20 @@ const adapterChoices = computed(() => {
   return selectedApplicationType.value
     ? selectedApplicationType.value.adapters
     : projectTypes.value;
+});
+const recommendedAdapter = computed(() => adapterChoices.value[0] || null);
+const alternativeAdapters = computed(() => adapterChoices.value.slice(1));
+const recommendedTechnologyHeading = computed(() => {
+  if (!recommendedAdapter.value) {
+    return selectedApplicationType.value ? `No ready technologies for ${selectedApplicationType.value.label}` : "Choose a technology";
+  }
+  return `${recommendedAdapter.value.label} is the default`;
+});
+const recommendedTechnologyDescription = computed(() => {
+  if (selectedApplicationType.value?.label) {
+    return `Recommended for ${selectedApplicationType.value.label}.`;
+  }
+  return "Use the recommended adapter unless this project needs a specific framework or runtime.";
 });
 
 function normalizeProjectType(projectType = {}) {
@@ -250,6 +372,30 @@ function adapterSummary(projectType = {}) {
 
 function selectApplicationType(applicationTypeId) {
   selectedApplicationTypeId.value = String(applicationTypeId || "");
+  showAlternatives.value = false;
+  showRecommendedDetails.value = false;
+}
+
+function continueToTechnology() {
+  if (!selectedApplicationType.value && hasApplicationTypes.value) {
+    return;
+  }
+  showAlternatives.value = false;
+  showRecommendedDetails.value = false;
+  currentStep.value = "technology";
+}
+
+function returnToApplication() {
+  showAlternatives.value = false;
+  showRecommendedDetails.value = false;
+  currentStep.value = "application";
+}
+
+function selectProjectType(projectTypeId = "") {
+  emit("select", {
+    applicationTypeId: selectedApplicationType.value?.id || "",
+    projectType: String(projectTypeId || "")
+  });
 }
 
 watch(applicationTypes, (nextApplicationTypes) => {
@@ -262,23 +408,23 @@ watch(applicationTypes, (nextApplicationTypes) => {
 }, {
   immediate: true
 });
+
+watch(hasApplicationTypes, (nextHasApplicationTypes) => {
+  if (!nextHasApplicationTypes) {
+    currentStep.value = "technology";
+  }
+}, {
+  immediate: true
+});
 </script>
 
 <style scoped>
 .project-type-setup {
   display: grid;
-  gap: 1rem;
   margin-inline: auto;
-  max-width: 82rem;
+  max-width: 88rem;
 }
 
-.project-type-setup__heading {
-  display: grid;
-  gap: 0.25rem;
-  max-width: 58rem;
-}
-
-.project-type-setup__eyebrow,
 .project-type-setup__section-kicker,
 .project-type-setup__option-kicker {
   color: rgba(var(--v-theme-on-surface), 0.56);
@@ -290,15 +436,6 @@ watch(applicationTypes, (nextApplicationTypes) => {
   text-transform: uppercase;
 }
 
-.project-type-setup__title {
-  font-size: clamp(1.55rem, 2.4vw, 2.2rem);
-  font-weight: 760;
-  letter-spacing: 0;
-  line-height: 1.08;
-  margin: 0;
-}
-
-.project-type-setup__message,
 .project-type-setup__technology-description {
   color: rgba(var(--v-theme-on-surface), 0.68);
   font-size: 0.98rem;
@@ -306,18 +443,19 @@ watch(applicationTypes, (nextApplicationTypes) => {
   margin: 0;
 }
 
-.project-type-setup__application-section {
+.project-type-setup__step,
+.project-type-setup__technology-section {
   display: grid;
-  gap: 0.75rem;
+  gap: 1.25rem;
 }
 
 .project-type-setup__application-heading {
   display: grid;
-  gap: 0.2rem;
+  gap: 0.35rem;
 }
 
 .project-type-setup__application-heading h3 {
-  font-size: 1.1rem;
+  font-size: clamp(1.25rem, 2.2vw, 1.6rem);
   font-weight: 760;
   letter-spacing: 0;
   line-height: 1.12;
@@ -326,12 +464,12 @@ watch(applicationTypes, (nextApplicationTypes) => {
 
 .project-type-setup__application-grid {
   display: grid;
-  gap: 0.75rem;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  gap: 0.85rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .project-type-setup__application-card {
-  align-content: start;
+  align-items: center;
   background: rgb(var(--v-theme-surface));
   border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   border-radius: 8px;
@@ -339,61 +477,67 @@ watch(applicationTypes, (nextApplicationTypes) => {
   cursor: pointer;
   display: grid;
   font: inherit;
-  gap: 0.55rem;
-  min-height: 13.5rem;
-  padding: 1rem;
+  gap: 0.35rem 1rem;
+  grid-template-columns: auto 1fr;
+  min-height: 7rem;
+  padding: 1.05rem 1.2rem;
   text-align: left;
 }
 
-.project-type-setup__application-card:hover,
-.project-type-setup__application-card--selected {
-  border-color: rgba(var(--v-theme-primary), 0.56);
+.project-type-setup__application-card:hover {
+  border-color: rgba(var(--v-theme-on-surface), 0.34);
 }
 
 .project-type-setup__application-card--selected {
-  background: rgba(var(--v-theme-primary), 0.06);
+  background: rgba(var(--v-theme-primary), 0.055);
+  border-color: rgba(var(--v-theme-on-surface), 0.92);
+  box-shadow: inset 0 0 0 1px rgba(var(--v-theme-on-surface), 0.92);
 }
 
 .project-type-setup__application-icon {
   color: rgb(var(--v-theme-primary));
-  height: 4.8rem;
-  width: 4.8rem;
+  grid-row: span 2;
+  height: 3rem;
+  width: 3rem;
 }
 
 .project-type-setup__application-label {
-  font-size: 1.1rem;
+  font-size: clamp(1.1rem, 1.8vw, 1.3rem);
   font-weight: 760;
   line-height: 1.15;
 }
 
 .project-type-setup__application-summary {
   color: rgba(var(--v-theme-on-surface), 0.68);
-  font-size: 0.88rem;
+  font-size: 0.84rem;
   line-height: 1.35;
 }
 
-.project-type-setup__application-count {
-  justify-self: start;
+.project-type-setup__step-actions {
+  align-items: center;
+  border-top: 1px solid rgba(var(--v-theme-primary), 0.26);
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 1.1rem;
+}
+
+.project-type-setup__next-button {
+  min-width: 11rem;
 }
 
 .project-type-setup__technology-section {
-  background: rgba(var(--v-theme-primary), 0.035);
-  border-top: 3px solid rgba(var(--v-theme-primary), 0.34);
   display: grid;
-  gap: 0.9rem;
-  margin-top: 0.35rem;
-  padding: 1rem 0 0;
+  gap: 1rem;
 }
 
 .project-type-setup__technology-heading {
   align-items: start;
-  display: flex;
-  gap: 1rem;
-  justify-content: space-between;
+  display: grid;
+  gap: 0.55rem;
 }
 
 .project-type-setup__technology-heading h3 {
-  font-size: 1.25rem;
+  font-size: clamp(1.35rem, 2.4vw, 1.9rem);
   font-weight: 760;
   letter-spacing: 0;
   line-height: 1.12;
@@ -402,51 +546,38 @@ watch(applicationTypes, (nextApplicationTypes) => {
 
 .project-type-setup__technology-copy {
   display: grid;
-  gap: 0.2rem;
-  max-width: 54rem;
+  gap: 0.25rem;
+  max-width: 60rem;
 }
 
-.project-type-setup__selected-type {
-  background: rgb(var(--v-theme-surface));
-  border: 1px solid rgba(var(--v-theme-primary), 0.32);
-  border-radius: 8px;
+.project-type-setup__recommended,
+.project-type-setup__alternatives {
   display: grid;
-  gap: 0.18rem;
-  min-width: 13rem;
-  padding: 0.7rem 0.85rem;
-}
-
-.project-type-setup__selected-type-label {
-  color: rgba(var(--v-theme-on-surface), 0.56);
-  font-size: 0.72rem;
-  font-weight: 760;
-  letter-spacing: 0.04em;
-  line-height: 1.15;
-  text-transform: uppercase;
-}
-
-.project-type-setup__selected-type-name {
-  color: rgb(var(--v-theme-primary));
-  font-size: 1rem;
-  font-weight: 780;
-  line-height: 1.2;
+  gap: 0.7rem;
 }
 
 .project-type-setup__options {
   display: grid;
-  gap: 0.85rem;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
+  gap: 0.7rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
 }
 
+.project-type-setup__default-option,
 .project-type-setup__option {
   align-content: start;
   background: rgb(var(--v-theme-surface));
   border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   border-radius: 8px;
   display: grid;
-  gap: 0.8rem;
+  gap: 0.85rem;
   min-height: 100%;
-  padding: 1rem;
+  padding: 1.05rem;
+}
+
+.project-type-setup__default-option {
+  border-color: rgba(var(--v-theme-primary), 0.42);
+  box-shadow: 0 1px 0 rgba(var(--v-theme-primary), 0.08), inset 3px 0 0 rgb(var(--v-theme-primary));
+  max-width: 46rem;
 }
 
 .project-type-setup__option-top,
@@ -473,9 +604,27 @@ watch(applicationTypes, (nextApplicationTypes) => {
   margin: 0;
 }
 
+.project-type-setup__details-shell {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.project-type-setup__details-toggle {
+  justify-self: start;
+  margin-inline-start: -0.25rem;
+}
+
+.project-type-setup__details-panel {
+  border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  display: grid;
+  gap: 0.75rem;
+  padding-top: 0.75rem;
+}
+
 .project-type-setup__details {
   display: grid;
   gap: 0.65rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   margin: 0;
 }
 
@@ -529,13 +678,42 @@ watch(applicationTypes, (nextApplicationTypes) => {
   color: rgba(var(--v-theme-on-surface), 0.5);
 }
 
-@media (max-width: 700px) {
-  .project-type-setup__technology-heading {
-    display: grid;
+.project-type-setup__back-button,
+.project-type-setup__alternatives-toggle {
+  justify-self: start;
+}
+
+@media (max-width: 900px) {
+  .project-type-setup__application-grid {
+    grid-template-columns: 1fr;
   }
 
-  .project-type-setup__selected-type {
-    min-width: 0;
+  .project-type-setup__step-actions {
+    justify-content: stretch;
+  }
+
+  .project-type-setup__next-button {
+    inline-size: 100%;
+  }
+}
+
+@media (max-width: 700px) {
+  .project-type-setup {
+    max-width: none;
+  }
+
+  .project-type-setup__application-card {
+    min-height: 5.8rem;
+    padding: 0.9rem;
+  }
+
+  .project-type-setup__application-icon {
+    height: 2.35rem;
+    width: 2.35rem;
+  }
+
+  .project-type-setup__details {
+    grid-template-columns: 1fr;
   }
 
   .project-type-setup__option-actions {

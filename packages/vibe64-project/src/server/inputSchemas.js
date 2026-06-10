@@ -7,7 +7,12 @@ const projectTypeReadInputValidator = deepFreeze({
 });
 
 const projectConfigReadInputValidator = deepFreeze({
-  schema: createSchema({}),
+  schema: createSchema({
+    projectType: {
+      type: "string",
+      noTrim: false
+    }
+  }),
   mode: "patch"
 });
 
@@ -43,6 +48,10 @@ const projectSelectInputValidator = deepFreeze({
 
 const projectConfigInputValidator = deepFreeze({
   schema: createSchema({
+    projectType: {
+      type: "string",
+      noTrim: false
+    },
     values: {
       type: "object",
       additionalProperties: true,
