@@ -21,13 +21,13 @@ X MUCH MUCH PRETTIER project tech picker
 
 
 6b)
-Make dead sure that node_modules is DELETED when archiving a session, ONLY and ONLY active sessions must have node_modules
+X Make dead sure that node_modules is DELETED when archiving a session, ONLY and ONLY active sessions must have node_modules
 
 
-6c) Make sure that images are not packed into built, kept out
+X 6c) Make sure that images are not packed into built, kept out
 
 
-
+RECURSIVENESS:
 
 5a)
 Make this work on a local directory, creating containers etc. This is crucial for local development and testing.
@@ -36,8 +36,14 @@ Make this work on a local directory, creating containers etc. This is crucial fo
 Make jskit open jskit properly (recursive). this depends on the item above too
 
 
+
+FINAL PRODUCT TEST:
+
 6a)
 Test seeding
+
+6b)
+Make sure the correct buttons are displayed at every stage
 
 
 

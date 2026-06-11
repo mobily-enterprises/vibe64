@@ -251,6 +251,10 @@ class TargetAdapter {
     };
   }
 
+  async worktreeArchiveExclusions() {
+    return [];
+  }
+
   async runSessionAction({
     action = {}
   } = {}) {

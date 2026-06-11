@@ -80,6 +80,9 @@ function enrichVibe64SessionForDisplay(session = null) {
   }
   const metadata = session.metadata || {};
   const worktree = vibe64SessionWorktreePath(session);
+  const worktreeRemoved = String(metadata.worktree_removed || "").trim().toLowerCase() === "yes";
+  const worktreeRecoverable = worktreeRemoved && String(metadata.worktree_recovery_saved || "").trim().toLowerCase() === "yes" &&
+    Boolean(metadata.worktree_recovery_branch || metadata.worktree_recovery_head);
   return {
     ...session,
     branch: session.branch || metadata.branch || metadata.session_branch || "",
@@ -93,7 +96,10 @@ function enrichVibe64SessionForDisplay(session = null) {
     sourcePrUrl: metadata.source_pr_url || "",
     workSource: metadata.work_source || "",
     worktree,
-    worktreeReady: session.worktreeReady === true || Boolean(worktree)
+    worktreeRecoverable,
+    worktreeRecoveryName: metadata.worktree_recovery_session_name || session.sessionName || metadata.issue_word || "",
+    worktreeRemoved,
+    worktreeReady: !worktreeRemoved && (session.worktreeReady === true || Boolean(worktree))
   };
 }
 

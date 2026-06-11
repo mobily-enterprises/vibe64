@@ -326,6 +326,17 @@ class GenericNodeWebTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       }
     });
   }
+
+  async worktreeArchiveExclusions() {
+    return [
+      ".cache",
+      ".turbo",
+      "build",
+      "coverage",
+      "dist",
+      "node_modules"
+    ];
+  }
 }
 
 export {

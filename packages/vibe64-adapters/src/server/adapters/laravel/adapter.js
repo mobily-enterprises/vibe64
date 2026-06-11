@@ -419,6 +419,13 @@ class LaravelTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
   async listProjectTools(context = {}) {
     return listLaravelDatabaseProjectTools(context);
   }
+
+  async worktreeArchiveExclusions() {
+    return [
+      "node_modules",
+      "vendor"
+    ];
+  }
 }
 
 export {

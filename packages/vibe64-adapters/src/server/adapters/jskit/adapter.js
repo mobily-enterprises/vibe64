@@ -436,6 +436,16 @@ class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
   } = {}) {
     return jskitConfigAllowsStudioSelfTarget(config);
   }
+
+  async worktreeArchiveExclusions() {
+    return [
+      ".jskit/cache",
+      ".turbo",
+      "coverage",
+      "dist",
+      "node_modules"
+    ];
+  }
 }
 
 export {

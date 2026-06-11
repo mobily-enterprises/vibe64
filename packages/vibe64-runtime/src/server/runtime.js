@@ -53,6 +53,10 @@ import {
   sessionHasWorktree
 } from "./sessionWorktreeState.js";
 import {
+  archiveSessionWorktree,
+  recoverSessionWorktree
+} from "./sessionWorktreeArchive.js";
+import {
   vibe64SessionDebugDurationMs,
   vibe64SessionDebugError,
   vibe64SessionDebugLog,
@@ -1171,6 +1175,9 @@ class Vibe64SessionRuntime {
     if (result.status !== "completed") {
       return result;
     }
+    await this.archiveSessionWorktree(session, {
+      reason: "finished"
+    });
     return {
       ...result,
       metadata: {
@@ -1179,6 +1186,28 @@ class Vibe64SessionRuntime {
       },
       sessionStatus: VIBE64_SESSION_STATUS.FINISHED
     };
+  }
+
+  async archiveSessionWorktree(session = {}, {
+    reason = "archive"
+  } = {}) {
+    return archiveSessionWorktree({
+      adapter: this.adapter,
+      reason,
+      session,
+      store: this.store
+    });
+  }
+
+  async recoverSessionWorktree(sessionId = "") {
+    return this.store.mutateSession(sessionId, async () => {
+      const session = await this.getSession(sessionId);
+      await recoverSessionWorktree({
+        session,
+        store: this.store
+      });
+      return this.getSession(sessionId);
+    });
   }
 
   async runAction(sessionId, actionId, input = {}) {

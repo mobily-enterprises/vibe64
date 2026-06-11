@@ -327,6 +327,16 @@ class NextjsTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       }
     });
   }
+
+  async worktreeArchiveExclusions() {
+    return [
+      ".next",
+      ".turbo",
+      "coverage",
+      "node_modules",
+      "out"
+    ];
+  }
 }
 
 export {

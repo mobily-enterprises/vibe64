@@ -218,6 +218,11 @@ test("session abandon does not wait for terminal cleanup", async () => {
     projectService: {
       async createRuntime() {
         return {
+          async archiveSessionWorktree() {
+            return {
+              ok: true
+            };
+          },
           async getSession(sessionId) {
             return {
               sessionId,
@@ -269,6 +274,11 @@ test("session abandon does not require live Codex terminal state after closing",
     projectService: {
       async createRuntime() {
         return {
+          async archiveSessionWorktree() {
+            return {
+              ok: true
+            };
+          },
           async getSession(sessionId) {
             return {
               sessionId,
@@ -313,6 +323,85 @@ test("session abandon does not require live Codex terminal state after closing",
       sessionId: "session-1",
       status: VIBE64_SESSION_STATUS.ABANDONED
     }
+  ]);
+});
+
+test("session worktree recovery delegates to the runtime recovery path", async () => {
+  const calls = [];
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async recoverSessionWorktree(sessionId) {
+            calls.push(sessionId);
+            return {
+              metadata: {
+                worktree_removed: "no"
+              },
+              sessionId,
+              status: VIBE64_SESSION_STATUS.ABANDONED
+            };
+          }
+        };
+      }
+    },
+    setupServices: readySetupServices(),
+    terminalService: {}
+  });
+
+  const result = await service.recoverSessionWorktree("session-1");
+
+  assert.equal(result.sessionId, "session-1");
+  assert.equal(result.metadata.worktree_removed, "no");
+  assert.deepEqual(calls, ["session-1"]);
+});
+
+test("session abandon archives the worktree before marking the session abandoned", async () => {
+  const operations = [];
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async archiveSessionWorktree(session, options = {}) {
+            operations.push(`archive:${session.sessionId}:${options.reason}`);
+            return {
+              ok: true
+            };
+          },
+          async getSession(sessionId) {
+            return {
+              sessionId,
+              status: operations.includes(`status:${sessionId}`)
+                ? VIBE64_SESSION_STATUS.ABANDONED
+                : VIBE64_SESSION_STATUS.ACTIVE
+            };
+          },
+          store: {
+            async writeStatus(sessionId, status) {
+              operations.push(`status:${sessionId}`);
+              assert.equal(status, VIBE64_SESSION_STATUS.ABANDONED);
+            }
+          }
+        };
+      }
+    },
+    setupServices: readySetupServices(),
+    terminalService: {
+      async closeSessionTerminals() {
+        return {
+          closed: 0,
+          ok: true
+        };
+      }
+    }
+  });
+
+  const result = await service.abandonSession("session-1");
+
+  assert.equal(result.status, VIBE64_SESSION_STATUS.ABANDONED);
+  assert.deepEqual(operations.slice(0, 2), [
+    "archive:session-1:abandoned",
+    "status:session-1"
   ]);
 });
 

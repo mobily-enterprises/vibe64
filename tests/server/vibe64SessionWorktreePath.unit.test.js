@@ -38,3 +38,21 @@ test("session worktree path keeps explicit metadata before canonical creation st
   assert.equal(sessionWorktreePath(session), metadataPath);
   assert.equal(sessionHasWorktree(session), true);
 });
+
+test("session worktree path treats removed worktree metadata as authoritative", () => {
+  const sessionRoot = "/workspace/app/.vibe64/sessions/active/session-1";
+  const session = {
+    completedSteps: ["session_created", "worktree_created"],
+    metadata: {
+      worktree_path: path.join(sessionRoot, "worktree"),
+      worktree_removed: "yes"
+    },
+    sessionRoot,
+    worktreeReady: true
+  };
+
+  assert.equal(explicitSessionWorktreePath(session), "");
+  assert.equal(canonicalSessionWorktreePath(session), "");
+  assert.equal(sessionWorktreePath(session), "");
+  assert.equal(sessionHasWorktree(session), false);
+});

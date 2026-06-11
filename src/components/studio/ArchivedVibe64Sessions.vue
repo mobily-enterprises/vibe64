@@ -22,6 +22,14 @@
       </v-btn>
     </div>
 
+    <v-alert v-if="recoverMessage" type="success" variant="tonal" density="comfortable">
+      {{ recoverMessage }}
+    </v-alert>
+
+    <v-alert v-if="recoverError" type="error" variant="tonal" density="comfortable">
+      {{ recoverError }}
+    </v-alert>
+
     <v-alert v-if="error" type="error" variant="tonal" density="comfortable">
       {{ error }}
     </v-alert>
@@ -61,6 +69,12 @@
                 <v-chip size="x-small" variant="tonal">
                   {{ completedStepCount(session) }} steps
                 </v-chip>
+                <v-chip v-if="session.worktreeRemoved" color="warning" size="x-small" variant="tonal">
+                  worktree removed
+                </v-chip>
+                <v-chip v-else-if="session.worktreeReady" color="success" size="x-small" variant="tonal">
+                  worktree restored
+                </v-chip>
               </div>
             </div>
           </div>
@@ -92,6 +106,22 @@
             </a>
           </div>
 
+          <div v-if="session.worktreeRecoverable || session.worktreeReady" class="studio-archived-sessions__actions">
+            <v-btn
+              v-if="session.worktreeRecoverable"
+              :loading="sessionIsRecovering(session.sessionId)"
+              :prepend-icon="mdiRestore"
+              size="small"
+              variant="tonal"
+              @click="recoverWorktree(session)"
+            >
+              Recover worktree
+            </v-btn>
+            <span v-else class="studio-archived-sessions__recovered-path">
+              {{ session.worktree }}
+            </span>
+          </div>
+
           <v-expansion-panels
             v-if="hasDetails(session)"
             class="studio-archived-sessions__details"
@@ -112,7 +142,7 @@
 </template>
 
 <script setup>
-import { computed, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
 import { usePaths } from "@jskit-ai/users-web/client/composables/usePaths";
@@ -121,11 +151,14 @@ import {
   mdiCheckCircle,
   mdiGithub,
   mdiRefresh,
+  mdiRestore,
   mdiSourceBranch
 } from "@mdi/js";
 import {
+  LOCAL_STUDIO_COMMAND_OPTIONS,
   VIBE64_SESSIONS_API_SUFFIX,
   VIBE64_SURFACE_ID,
+  vibe64SessionPath,
   vibe64SessionsQueryKey
 } from "@/lib/vibe64SessionRequestConfig.js";
 import {
@@ -174,6 +207,9 @@ const props = defineProps({
 const emit = defineEmits(["loading-changed"]);
 const paths = usePaths();
 const projectSlug = useVibe64ProjectSlug();
+const recoverError = ref("");
+const recoverMessage = ref("");
+const recoveringSessionIds = ref(new Set());
 const sessionsApiPath = computed(() => paths.api(VIBE64_SESSIONS_API_SUFFIX, {
   surface: VIBE64_SURFACE_ID
 }));
@@ -248,6 +284,44 @@ function sessionIsInArchive(session = {}) {
 
 async function loadSessions() {
   await sessionListResource.reload();
+}
+
+function sessionIsRecovering(sessionId = "") {
+  return recoveringSessionIds.value.has(String(sessionId || ""));
+}
+
+function setSessionRecovering(sessionId = "", recovering = false) {
+  const next = new Set(recoveringSessionIds.value);
+  if (recovering) {
+    next.add(sessionId);
+  } else {
+    next.delete(sessionId);
+  }
+  recoveringSessionIds.value = next;
+}
+
+async function recoverWorktree(session = {}) {
+  const sessionId = String(session.sessionId || "");
+  if (!sessionId || sessionIsRecovering(sessionId)) {
+    return;
+  }
+  recoverError.value = "";
+  recoverMessage.value = "";
+  setSessionRecovering(sessionId, true);
+  try {
+    const recovered = await studioHttpClient.post(
+      vibe64SessionPath(sessionsApiPath.value, sessionId, "/worktree/recover"),
+      {},
+      LOCAL_STUDIO_COMMAND_OPTIONS
+    );
+    const name = recovered?.sessionName || session.worktreeRecoveryName || shortSessionId(sessionId);
+    recoverMessage.value = `Recovered worktree for ${name}.`;
+    await loadSessions();
+  } catch (error) {
+    recoverError.value = String(error?.message || error || "Worktree could not be recovered.");
+  } finally {
+    setSessionRecovering(sessionId, false);
+  }
 }
 
 defineExpose({
@@ -382,6 +456,20 @@ watch(loading, (isLoading) => {
 .studio-archived-sessions__quick-link:focus-visible {
   border-color: rgba(var(--v-theme-primary), 0.42);
   text-decoration: underline;
+}
+
+.studio-archived-sessions__actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.studio-archived-sessions__recovered-path {
+  color: rgba(var(--v-theme-on-surface), 0.72);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
 }
 
 .studio-archived-sessions__details {

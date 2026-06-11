@@ -10,6 +10,9 @@ function normalizedSessionPath(value = "") {
 }
 
 function sessionHasCreatedWorktree(session = {}) {
+  if (normalizeText(session?.metadata?.worktree_removed).toLowerCase() === "yes") {
+    return false;
+  }
   return session?.worktreeReady === true ||
     (Array.isArray(session?.completedSteps) && session.completedSteps.includes("worktree_created"));
 }
@@ -22,6 +25,9 @@ function canonicalSessionWorktreePath(session = {}) {
 }
 
 function explicitSessionWorktreePath(session = {}) {
+  if (normalizeText(session?.metadata?.worktree_removed).toLowerCase() === "yes") {
+    return "";
+  }
   return normalizedSessionPath(
     session.metadata?.worktree_path ||
     session.metadata?.worktree ||

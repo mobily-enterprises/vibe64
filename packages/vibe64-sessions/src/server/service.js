@@ -786,6 +786,10 @@ function createService({
       return sessionResult(async () => {
         try {
           const runtime = await projectService.createRuntime();
+          const session = await runtime.getSession(sessionId);
+          await runtime.archiveSessionWorktree(session, {
+            reason: "abandoned"
+          });
           await runtime.store.writeStatus(sessionId, VIBE64_SESSION_STATUS.ABANDONED);
           closeSessionTerminalsInBackground(terminalService, sessionId, {
             eventPrefix: "server.service.abandonSession.terminalCleanup"
@@ -798,6 +802,32 @@ function createService({
           return abandonedSession;
         } catch (error) {
           vibe64SessionDebugLog("server.service.abandonSession.error", {
+            durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+            error: vibe64SessionDebugError(error),
+            sessionId
+          });
+          throw error;
+        }
+      });
+    },
+
+    async recoverSessionWorktree(sessionId, input = {}) {
+      void input;
+      const startedAtMs = Date.now();
+      vibe64SessionDebugLog("server.service.recoverSessionWorktree.start", {
+        sessionId
+      });
+      return sessionResult(async () => {
+        try {
+          const runtime = await projectService.createRuntime();
+          const recoveredSession = await runtime.recoverSessionWorktree(sessionId);
+          vibe64SessionDebugLog("server.service.recoverSessionWorktree.done", {
+            ...sessionServiceDebugResponse(recoveredSession),
+            durationMs: vibe64SessionDebugDurationMs(startedAtMs)
+          });
+          return recoveredSession;
+        } catch (error) {
+          vibe64SessionDebugLog("server.service.recoverSessionWorktree.error", {
             durationMs: vibe64SessionDebugDurationMs(startedAtMs),
             error: vibe64SessionDebugError(error),
             sessionId

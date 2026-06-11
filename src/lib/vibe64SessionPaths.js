@@ -1,4 +1,7 @@
 function sessionHasCreatedWorktree(session = {}) {
+  if (String(session?.metadata?.worktree_removed || "").trim().toLowerCase() === "yes") {
+    return false;
+  }
   return session?.worktreeReady === true ||
     (Array.isArray(session?.completedSteps) && session.completedSteps.includes("worktree_created"));
 }
@@ -10,6 +13,9 @@ function canonicalSessionWorktreePath(session = {}) {
 
 function vibe64SessionWorktreePath(session = {}) {
   const metadata = session?.metadata || {};
+  if (String(metadata.worktree_removed || "").trim().toLowerCase() === "yes") {
+    return "";
+  }
   const explicitPath = String(
     metadata.worktree_path ||
     metadata.worktree ||

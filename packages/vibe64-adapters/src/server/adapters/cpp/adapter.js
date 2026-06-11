@@ -484,6 +484,13 @@ class CppTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       }
     });
   }
+
+  async worktreeArchiveExclusions() {
+    return [
+      "build",
+      "cmake-build-*"
+    ];
+  }
 }
 
 export {
