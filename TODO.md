@@ -51,6 +51,8 @@ Test seeding
 6b)
 Make sure the correct buttons are displayed at every stage
 
+6c)
+Make test accounts for Pete Dave Andrea (applicom) Massimo (digi) Matt (beepollen) Ship Agency Luca's friend Andrei
 
 
 *****ALLOWING DEPLOYMENT  AND FINAL TOUCHES:

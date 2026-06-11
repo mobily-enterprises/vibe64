@@ -84,20 +84,31 @@ function createGithubProjectAccessService({
   }
 
   async function syncCurrentGithubIdentity(vibe64User = null) {
-    if (!auth?.users || !vibe64User?.email) {
+    if (!vibe64User?.email) {
       return null;
     }
     const payload = await runGhJson(["api", "user"], {
       vibe64User
     });
-    return auth.users.updateGithubIdentity({
-      email: vibe64User.email
-    }, {
+    const github = {
       avatarUrl: payload.avatar_url,
       connectedAt: new Date().toISOString(),
       id: payload.id,
       login: payload.login
-    });
+    };
+    if (auth?.runtimeProfile?.local === true || auth?.runtimeProfile?.mode === "local") {
+      return {
+        ...vibe64User,
+        github,
+        updatedAt: github.connectedAt
+      };
+    }
+    if (!auth?.users) {
+      return null;
+    }
+    return auth.users.updateGithubIdentity({
+      email: vibe64User.email
+    }, github);
   }
 
   async function projectAccessStatus({
