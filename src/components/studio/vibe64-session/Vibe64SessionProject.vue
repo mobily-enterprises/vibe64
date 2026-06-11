@@ -15,6 +15,7 @@
           :refresh-session-data="refreshSessionData"
           :review="review"
           :session="selection.selectedSession"
+          :sessions-api-path="sessionsApiPath"
           :step-input="stepInput"
         />
       </template>
@@ -98,6 +99,10 @@ defineProps({
   selection: {
     default: () => ({}),
     type: Object
+  },
+  sessionsApiPath: {
+    default: "",
+    type: [String, Object, Function]
   },
   stepInput: {
     default: () => ({}),

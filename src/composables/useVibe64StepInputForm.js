@@ -1,7 +1,11 @@
 import { computed, ref, watch } from "vue";
+import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
+import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
 import {
-  submitVibe64CurrentStepInput
-} from "@/lib/vibe64SessionApi.js";
+  VIBE64_SESSIONS_API_SUFFIX,
+  VIBE64_SURFACE_ID,
+  vibe64SessionPath
+} from "@/lib/vibe64SessionRequestConfig.js";
 import {
   numberedQuestionInputFields,
   numberedQuestionSubmissionFields,
@@ -33,9 +37,47 @@ function requiredFieldIsMissing(field = {}, values = {}) {
 
 function useVibe64StepInputForm({
   onSaved = async () => null,
-  submitCurrentStepInput = submitVibe64CurrentStepInput,
+  sessionsApiPath = () => "",
+  submitCurrentStepInput = null,
   session
 } = {}) {
+  const customSubmitCurrentStepInput = typeof submitCurrentStepInput === "function"
+    ? submitCurrentStepInput
+    : null;
+  const submitCurrentStepInputCommand = customSubmitCurrentStepInput
+    ? null
+    : useCommand({
+        access: "never",
+        apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
+        buildCommandOptions: (_payload, { context }) => {
+          const basePath = String(context?.sessionsApiPath || "").trim();
+          if (!basePath) {
+            throw new Error("Session API path is unavailable.");
+          }
+          return {
+            method: "POST",
+            path: vibe64SessionPath(basePath, context?.sessionId, "/current-step/input")
+          };
+        },
+        buildRawPayload: (_model, { context }) => {
+          const payload = context?.input && typeof context.input === "object" && !Array.isArray(context.input)
+            ? context.input
+            : {};
+          return {
+            ...payload,
+            kind: payload.kind || "ready"
+          };
+        },
+        fallbackRunError: "Step input could not be saved.",
+        messages: {
+          error: "Step input could not be saved."
+        },
+        ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
+        placementSource: "vibe64.sessions.current-step-input",
+        suppressSuccessMessage: true,
+        surfaceId: VIBE64_SURFACE_ID,
+        writeMethod: "POST"
+      });
   const values = ref({});
   const error = ref("");
   const saving = ref(false);
@@ -94,13 +136,14 @@ function useVibe64StepInputForm({
     saving.value = true;
     error.value = "";
     try {
-      const response = await submitCurrentStepInput(sessionId.value, {
+      const input = {
         fields: submissionFields(),
         kind: interaction.value?.submitKind || "ready",
         source: "ui",
         stepId: currentSession.value?.currentStep || "",
         stepStatus: currentSession.value?.stepMachine?.status || ""
-      });
+      };
+      const response = await runSubmitCurrentStepInput(input);
       if (response?.ok === false) {
         if (response.errors?.[0]?.code === "vibe64_step_input_state_changed") {
           await onSaved(response);
@@ -120,6 +163,17 @@ function useVibe64StepInputForm({
     } finally {
       saving.value = false;
     }
+  }
+
+  async function runSubmitCurrentStepInput(input = {}) {
+    if (customSubmitCurrentStepInput) {
+      return customSubmitCurrentStepInput(sessionId.value, input);
+    }
+    return submitCurrentStepInputCommand.run({
+      input,
+      sessionId: sessionId.value,
+      sessionsApiPath: readRefOrGetterValue(sessionsApiPath)
+    });
   }
 
   watch(() => [

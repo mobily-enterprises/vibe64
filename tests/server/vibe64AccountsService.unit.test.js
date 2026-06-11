@@ -712,10 +712,7 @@ test("Codex auth session exposes terminal output state for attention recovery", 
     assert.equal(terminal.ok, true);
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      const session = await service.readAuthSession(accountInput(OWNER_USER, {
-        sessionId: terminal.id
-      }));
+      const session = await readAuthSessionUntilOutput(service, terminal.id, /Codex needs terminal input/u);
 
       assert.equal(session.ok, true);
       assert.equal(session.id, terminal.id);
@@ -729,6 +726,28 @@ test("Codex auth session exposes terminal output state for attention recovery", 
     }
   });
 });
+
+async function readAuthSessionUntilOutput(service, sessionId, outputPattern, {
+  intervalMs = 25,
+  timeoutMs = 2_000
+} = {}) {
+  const startedAt = Date.now();
+  let latestSession = null;
+
+  while (Date.now() - startedAt < timeoutMs) {
+    latestSession = await service.readAuthSession(accountInput(OWNER_USER, {
+      sessionId
+    }));
+    if (outputPattern.test(String(latestSession.output || "")) && Number(latestSession.outputVersion) > 0) {
+      return latestSession;
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+
+  return latestSession || service.readAuthSession(accountInput(OWNER_USER, {
+    sessionId
+  }));
+}
 
 test("Codex API key auth command reads the key from stdin via inherited Docker env", () => {
   const commandArgs = codexApiKeyLoginCommandArgs();

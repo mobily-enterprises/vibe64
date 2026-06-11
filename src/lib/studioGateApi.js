@@ -1,8 +1,7 @@
 import {
   resolveWebSocketUrl,
-  studioApiPath,
-  studioHttpClient
-} from "@/lib/studioHttp.js";
+  studioApiPath
+} from "@/lib/studioUrls.js";
 import {
   vibe64ProjectQueryScope
 } from "@/lib/vibe64ProjectScope.js";
@@ -34,15 +33,6 @@ const PROJECT_SETUP_TERMINAL_ENDPOINT = `${PROJECT_SETUP_ENDPOINT}/terminal`;
 const STUDIO_SETUP_STREAM_ENDPOINT = `${STUDIO_SETUP_ENDPOINT}/stream`;
 const PROJECT_SETUP_STREAM_ENDPOINT = `${PROJECT_SETUP_ENDPOINT}/stream`;
 
-function withRefreshQuery(endpoint, {
-  refresh = false
-} = {}) {
-  if (!refresh) {
-    return endpoint;
-  }
-  return `${endpoint}${endpoint.includes("?") ? "&" : "?"}refresh=true`;
-}
-
 function projectTypeQueryKey(surfaceId, ownershipFilter, projectSlug) {
   return ["vibe64", ...vibe64ProjectQueryScope(projectSlug), surfaceId, ownershipFilter, "project-type"];
 }
@@ -67,28 +57,8 @@ function capabilitiesQueryKey(surfaceId, ownershipFilter, projectSlug) {
   return ["vibe64", ...vibe64ProjectQueryScope(projectSlug), surfaceId, ownershipFilter, "capabilities"];
 }
 
-async function readAccountsStatus(options = {}) {
-  return studioHttpClient.get(withRefreshQuery(ACCOUNTS_ENDPOINT, options));
-}
-
 function accountAuthTerminalWebSocketUrl(sessionId = "") {
   return resolveWebSocketUrl(`${ACCOUNTS_AUTH_ENDPOINT}/${encodeURIComponent(String(sessionId || ""))}/ws`);
-}
-
-async function readCapabilitiesStatus() {
-  return studioHttpClient.get(CAPABILITIES_ENDPOINT);
-}
-
-async function readStudioSetupStatus(options = {}) {
-  return studioHttpClient.get(withRefreshQuery(STUDIO_SETUP_ENDPOINT, options));
-}
-
-async function readProjectSetupStatus(options = {}) {
-  return studioHttpClient.get(withRefreshQuery(PROJECT_SETUP_ENDPOINT, options));
-}
-
-async function readSetupReadinessStatus() {
-  return studioHttpClient.get(SETUP_READINESS_ENDPOINT);
 }
 
 export {
@@ -103,12 +73,14 @@ export {
   VIBE64_PROJECT_SELECT_API_SUFFIX,
   VIBE64_PROJECT_TYPE_API_SUFFIX,
   PROJECT_CONFIG_ENDPOINT,
+  PROJECT_SETUP_ENDPOINT,
   PROJECT_SELECTION_ENDPOINT,
   PROJECT_TYPE_ENDPOINT,
   PROJECT_SETUP_STREAM_ENDPOINT,
   PROJECT_SETUP_TERMINAL_ENDPOINT,
   SETUP_READINESS_ENDPOINT,
   SETUP_READINESS_STREAM_ENDPOINT,
+  STUDIO_SETUP_ENDPOINT,
   STUDIO_SETUP_STREAM_ENDPOINT,
   STUDIO_SETUP_TERMINAL_ENDPOINT,
   TARGET_PROJECT_API_SUFFIX,
@@ -119,10 +91,5 @@ export {
   projectConfigQueryKey,
   projectSelectionQueryKey,
   projectTypeQueryKey,
-  readAccountsStatus,
-  readCapabilitiesStatus,
-  readProjectSetupStatus,
-  readSetupReadinessStatus,
-  readStudioSetupStatus,
   targetProjectQueryKey
 };

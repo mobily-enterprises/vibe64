@@ -2,7 +2,7 @@ import { onBeforeUnmount, ref, watch } from "vue";
 import { parseJsonStreamEvent } from "@/lib/streamEvents.js";
 import {
   resolveStudioRequestUrl
-} from "@/lib/studioHttp.js";
+} from "@/lib/studioUrls.js";
 
 function statusListKey(statusItemsKey = "checks", status = null) {
   if (statusItemsKey === "stages") {

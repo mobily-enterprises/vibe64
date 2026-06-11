@@ -1,23 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import {
-  mdiAlertCircle,
-  mdiArrowLeft,
-  mdiCheckCircle,
-  mdiClose,
-  mdiEarth,
-  mdiFolderOpen,
-  mdiLock,
-  mdiMagnify,
-  mdiPlus,
-  mdiSourceRepository
-} from "@mdi/js";
-import {
-  createRepositoryProject,
-  openRepositoryProject,
-  readGithubRepositoryOwners,
-  searchGithubRepositories
-} from "@/lib/vibe64ProjectApi.js";
+import { useVibe64AddProjectWizard } from "@/composables/useVibe64AddProjectWizard.js";
 
 const props = defineProps({
   closable: {
@@ -28,351 +10,61 @@ const props = defineProps({
 
 const emit = defineEmits(["cancel", "created"]);
 
-const step = ref("project");
-const repositoryMode = ref("existing");
-const autocompleteRoot = ref(null);
-const owners = ref([]);
-const ownersLoading = ref(false);
-const ownersError = ref("");
-const projectSlug = ref("");
-const openOwner = ref("");
-const openName = ref("");
-const openRepositoriesByOwner = ref({});
-const openResultsExpanded = ref(false);
-const openSelectedRepository = ref(null);
-const openSearching = ref(false);
-const createOwner = ref("");
-const createName = ref("");
-const createDescription = ref("");
-const createNameEdited = ref(false);
-const createVisibility = ref("private");
-const saving = ref(false);
-const formError = ref("");
-const success = ref(null);
-const openRepositoryLoadPromises = new Map();
-
-const normalizedProjectSlug = computed(() => normalizeProjectSlug(projectSlug.value));
-const projectSlugValid = computed(() => projectSlugIsValid(normalizedProjectSlug.value));
-const stepLabel = computed(() => step.value === "project" ? "Step 1 of 2" : "Step 2 of 2");
-const sourceHeading = computed(() => repositoryMode.value === "create"
-  ? "Create new GitHub repository"
-  : "Use existing GitHub repository");
-const canContinueToRepository = computed(() => projectSlugValid.value && !saving.value);
-const ownerSelectItems = computed(() => owners.value.map((owner) => ({
-  ...owner,
-  title: owner.login,
-  value: owner.login
-})));
-const createOwnerSelectItems = computed(() => ownerSelectItems.value.filter((owner) => owner.canCreateRepository !== false));
-const selectedCreateOwner = computed(() => owners.value.find((owner) => owner.login === createOwner.value) || null);
-const createAllowed = computed(() => selectedCreateOwner.value?.canCreateRepository !== false);
-const openOwnerRepositories = computed(() => {
-  return Array.isArray(openRepositoriesByOwner.value[openOwner.value])
-    ? openRepositoriesByOwner.value[openOwner.value]
-    : [];
+const {
+  autocompleteRoot,
+  canAddExistingProject,
+  canContinueToRepository,
+  canCreateRepositoryProject,
+  createAllowed,
+  createDescription,
+  createName,
+  createOwner,
+  createOwnerSelectItems,
+  createVisibility,
+  editCreateName,
+  editProjectSlug,
+  closeOpenResults,
+  continueToRepository,
+  mdiAlertCircle,
+  mdiArrowLeft,
+  mdiCheckCircle,
+  mdiClose,
+  mdiEarth,
+  mdiFolderOpen,
+  mdiLock,
+  mdiMagnify,
+  mdiPlus,
+  mdiSourceRepository,
+  normalizedProjectSlug,
+  openName,
+  openOwner,
+  openResults,
+  openSearching,
+  openSelectedRepository,
+  ownerSelectItems,
+  ownersError,
+  ownersLoading,
+  permissionLabel,
+  projectSlug,
+  projectSlugValid,
+  repositoryMode,
+  repositoryVisibilityIcon,
+  saving,
+  selectRepository,
+  selectRepositoryMode,
+  selectedCreateOwner,
+  showOpenResults,
+  showOpenResultsPanel,
+  sourceHeading,
+  step,
+  stepLabel,
+  submitExistingRepositoryProject,
+  submitNewRepositoryProject,
+  success,
+  visibleFormError
+} = useVibe64AddProjectWizard({
+  onCreated: (response) => emit("created", response)
 });
-const openResults = computed(() => matchingRepositories(openOwnerRepositories.value, openOwner.value, openName.value));
-const showOpenResultsPanel = computed(() => {
-  return step.value === "repository" &&
-    repositoryMode.value === "existing" &&
-    openResultsExpanded.value &&
-    Boolean(openOwner.value) &&
-    (openSearching.value || openOwnerRepositories.value.length > 0 || openName.value.trim());
-});
-const selectedRepositoryFullName = computed(() => {
-  return openSelectedRepository.value?.fullName || "";
-});
-const canAddExistingProject = computed(() => {
-  return Boolean(projectSlugValid.value && selectedRepositoryFullName.value && !saving.value);
-});
-const canCreateRepositoryProject = computed(() => {
-  return Boolean(projectSlugValid.value && createOwner.value && createName.value.trim() && createAllowed.value && !saving.value);
-});
-
-onMounted(() => {
-  void loadRepositoryOwners();
-  document.addEventListener("pointerdown", handleDocumentPointerDown);
-});
-
-onBeforeUnmount(() => {
-  document.removeEventListener("pointerdown", handleDocumentPointerDown);
-});
-
-watch(projectSlug, (value) => {
-  if (!createNameEdited.value) {
-    createName.value = normalizeProjectSlug(value);
-  }
-});
-
-watch(owners, (value) => {
-  if (!openOwner.value && value.length > 0) {
-    openOwner.value = value[0].login;
-  }
-  if (!createOwner.value && value.length > 0) {
-    createOwner.value = value.find((owner) => owner.canCreateRepository !== false)?.login || value[0].login;
-  }
-});
-
-watch(repositoryMode, () => {
-  formError.value = "";
-  success.value = null;
-  closeOpenResults();
-  if (repositoryMode.value === "existing" && openOwner.value) {
-    void loadOwnerRepositories(openOwner.value);
-  }
-});
-
-watch([step, openOwner], ([currentStep, owner]) => {
-  formError.value = "";
-  success.value = null;
-  openSelectedRepository.value = null;
-  openName.value = "";
-  closeOpenResults();
-  if (currentStep === "repository" && repositoryMode.value === "existing" && owner) {
-    void loadOwnerRepositories(owner);
-  }
-});
-
-watch(openName, (value) => {
-  formError.value = "";
-  success.value = null;
-  const repositoryName = String(value || "").trim();
-  if (openSelectedRepository.value?.fullName !== repositoryFullName(openOwner.value, repositoryName)) {
-    openSelectedRepository.value = null;
-    if (repositoryName) {
-      openResultsExpanded.value = true;
-    }
-  }
-});
-
-async function loadRepositoryOwners() {
-  ownersLoading.value = true;
-  ownersError.value = "";
-  try {
-    const response = await readGithubRepositoryOwners();
-    if (response.ok === false) {
-      ownersError.value = apiError(response);
-      return;
-    }
-    owners.value = Array.isArray(response.owners) ? response.owners : [];
-  } catch (error) {
-    ownersError.value = String(error?.message || error || "GitHub owners could not load.");
-  } finally {
-    ownersLoading.value = false;
-  }
-}
-
-async function loadOwnerRepositories(owner) {
-  if (!owner || openRepositoriesByOwner.value[owner] || openRepositoryLoadPromises.has(owner)) {
-    return;
-  }
-  openSearching.value = true;
-  const request = searchGithubRepositories("", {
-    owner
-  });
-  openRepositoryLoadPromises.set(owner, request);
-  try {
-    const response = await request;
-    if (openOwner.value !== owner) {
-      return;
-    }
-    if (response.ok === false) {
-      formError.value = apiError(response);
-      return;
-    }
-    openRepositoriesByOwner.value = {
-      ...openRepositoriesByOwner.value,
-      [owner]: Array.isArray(response.repositories) ? response.repositories : []
-    };
-  } catch (error) {
-    if (openOwner.value === owner) {
-      formError.value = String(error?.message || error || "Repository list failed.");
-    }
-  } finally {
-    openRepositoryLoadPromises.delete(owner);
-    if (openOwner.value === owner) {
-      openSearching.value = false;
-    }
-  }
-}
-
-function editProjectSlug(value) {
-  projectSlug.value = normalizeProjectSlug(value);
-}
-
-function editCreateName(value) {
-  createNameEdited.value = true;
-  createName.value = normalizeGithubRepositoryName(value);
-}
-
-function continueToRepository() {
-  if (!canContinueToRepository.value) {
-    return;
-  }
-  step.value = "repository";
-  if (repositoryMode.value === "existing" && openOwner.value) {
-    void loadOwnerRepositories(openOwner.value);
-  }
-}
-
-function selectRepositoryMode(value) {
-  repositoryMode.value = value === "create" ? "create" : "existing";
-}
-
-function selectRepository(repository = {}) {
-  openSelectedRepository.value = repository;
-  openOwner.value = repository.owner || repository.fullName?.split("/")[0] || openOwner.value;
-  openName.value = repository.name || repository.fullName?.split("/")[1] || "";
-  closeOpenResults();
-}
-
-function showOpenResults() {
-  if (step.value === "repository" && repositoryMode.value === "existing" && openOwner.value) {
-    openResultsExpanded.value = true;
-    void loadOwnerRepositories(openOwner.value);
-  }
-}
-
-function closeOpenResults() {
-  openResultsExpanded.value = false;
-}
-
-function handleDocumentPointerDown(event) {
-  if (!openResultsExpanded.value || !autocompleteRoot.value) {
-    return;
-  }
-  if (!autocompleteRoot.value.contains(event.target)) {
-    closeOpenResults();
-  }
-}
-
-async function submitExistingRepositoryProject() {
-  saving.value = true;
-  formError.value = "";
-  success.value = null;
-  try {
-    const response = await openRepositoryProject({
-      repository: selectedRepositoryFullName.value,
-      slug: normalizedProjectSlug.value
-    });
-    handleProjectResponse(response);
-  } catch (error) {
-    formError.value = String(error?.message || error || "Project could not be added.");
-  } finally {
-    saving.value = false;
-  }
-}
-
-async function submitNewRepositoryProject() {
-  saving.value = true;
-  formError.value = "";
-  success.value = null;
-  try {
-    const response = await createRepositoryProject({
-      description: createDescription.value,
-      name: createName.value.trim(),
-      owner: createOwner.value,
-      slug: normalizedProjectSlug.value,
-      visibility: createVisibility.value
-    });
-    handleProjectResponse(response);
-  } catch (error) {
-    formError.value = String(error?.message || error || "Project could not be added.");
-  } finally {
-    saving.value = false;
-  }
-}
-
-function handleProjectResponse(response = {}) {
-  if (response.ok === false) {
-    formError.value = apiError(response);
-    return;
-  }
-  success.value = {
-    project: response.project || null,
-    repository: response.repository || response.project?.githubRepository || null
-  };
-  emit("created", response);
-}
-
-function matchingRepositories(repositories = [], owner = "", query = "") {
-  const normalizedQuery = String(query || "").trim().toLowerCase();
-  if (!normalizedQuery) {
-    return repositories.slice(0, 12);
-  }
-  const normalizedOwner = String(owner || "").trim().toLowerCase();
-  const ownerPrefix = normalizedOwner ? `${normalizedOwner}/` : "";
-  const repositoryQuery = normalizedQuery.startsWith(ownerPrefix)
-    ? normalizedQuery.slice(ownerPrefix.length)
-    : normalizedQuery;
-  return repositories
-    .filter((repository) => repositoryMatchesQuery(repository, normalizedQuery, repositoryQuery))
-    .sort((left, right) => repositoryMatchRank(left, normalizedQuery, repositoryQuery) - repositoryMatchRank(right, normalizedQuery, repositoryQuery))
-    .slice(0, 12);
-}
-
-function repositoryMatchesQuery(repository = {}, normalizedQuery = "", repositoryQuery = "") {
-  return (
-    String(repository.name || "").toLowerCase().includes(repositoryQuery) ||
-    String(repository.fullName || "").toLowerCase().includes(normalizedQuery)
-  );
-}
-
-function repositoryMatchRank(repository = {}, normalizedQuery = "", repositoryQuery = "") {
-  const name = String(repository.name || "").toLowerCase();
-  const fullName = String(repository.fullName || "").toLowerCase();
-  if (name === repositoryQuery || fullName === normalizedQuery) {
-    return 0;
-  }
-  if (name.startsWith(repositoryQuery)) {
-    return 1;
-  }
-  if (fullName.startsWith(normalizedQuery)) {
-    return 2;
-  }
-  return 10;
-}
-
-function repositoryVisibilityIcon(repository = {}) {
-  return repository.isPrivate || repository.visibility === "private" ? mdiLock : mdiEarth;
-}
-
-function permissionLabel(repository = {}) {
-  if (repository.canPush === true) {
-    return "Can push";
-  }
-  if (repository.canPush === false) {
-    return "Read only";
-  }
-  return "Visible to you";
-}
-
-function normalizeProjectSlug(value = "") {
-  return String(value || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/gu, "-")
-    .replace(/^-+|-+$/gu, "");
-}
-
-function normalizeGithubRepositoryName(value = "") {
-  return String(value || "")
-    .trim()
-    .replace(/[^A-Za-z0-9_.-]+/gu, "-")
-    .replace(/^-+|-+$/gu, "");
-}
-
-function projectSlugIsValid(value = "") {
-  return /^[a-z0-9][a-z0-9_-]*$/u.test(String(value || ""));
-}
-
-function repositoryFullName(owner = "", name = "") {
-  return `${String(owner || "").trim()}/${String(name || "").trim()}`;
-}
-
-function apiError(response = {}) {
-  return String(response.errors?.[0]?.message || response.error || "Vibe64 request failed.");
-}
 </script>
 
 <template>
@@ -404,8 +96,8 @@ function apiError(response = {}) {
     </div>
 
     <div class="project-wizard__content">
-      <v-alert v-if="formError" type="error" variant="tonal">
-        {{ formError }}
+      <v-alert v-if="visibleFormError" type="error" variant="tonal">
+        {{ visibleFormError }}
       </v-alert>
       <v-alert v-if="success" type="success" variant="tonal">
         {{ success.project?.slug }} is linked to {{ success.repository?.fullName }}.

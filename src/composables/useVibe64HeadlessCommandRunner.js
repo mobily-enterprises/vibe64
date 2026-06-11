@@ -1,9 +1,8 @@
 import { getCurrentInstance, onBeforeUnmount, ref } from "vue";
 import {
-  vibe64CommandTerminalWebSocketUrl,
-  closeVibe64CommandTerminal,
-  startVibe64CommandTerminal
+  vibe64CommandTerminalWebSocketUrl
 } from "@/lib/vibe64SessionApi.js";
+import { useVibe64TerminalCommands } from "@/composables/useVibe64TerminalCommands.js";
 import {
   vibe64SessionDebugDurationMs,
   vibe64SessionDebugError,
@@ -143,10 +142,19 @@ function commandStopped({
 }
 
 function useVibe64HeadlessCommandRunner({
-  closeCommandTerminal = closeVibe64CommandTerminal,
-  startCommandTerminal = startVibe64CommandTerminal,
+  closeCommandTerminal = null,
+  startCommandTerminal = null,
   webSocketUrl = vibe64CommandTerminalWebSocketUrl
 } = {}) {
+  const needsTerminalCommands = typeof closeCommandTerminal !== "function" ||
+    typeof startCommandTerminal !== "function";
+  const terminalCommands = needsTerminalCommands ? useVibe64TerminalCommands() : null;
+  const runCloseCommandTerminal = typeof closeCommandTerminal === "function"
+    ? closeCommandTerminal
+    : terminalCommands.closeCommandTerminal;
+  const runStartCommandTerminal = typeof startCommandTerminal === "function"
+    ? startCommandTerminal
+    : terminalCommands.startCommandTerminal;
   const commandPreview = ref("");
   const activeSessionId = ref("");
   const output = ref("");
@@ -193,7 +201,7 @@ function useVibe64HeadlessCommandRunner({
     output.value = "";
     status.value = "";
     try {
-      const terminalSession = await startCommandTerminal(normalizedSessionId, {
+      const terminalSession = await runStartCommandTerminal(normalizedSessionId, {
         advanceOnSuccess: advanceOnSuccess === true,
         actionId,
         input: normalizePlainObject(input)
@@ -479,7 +487,7 @@ function useVibe64HeadlessCommandRunner({
     if (!terminal?.sessionId || !terminal?.terminalSessionId) {
       return;
     }
-    await closeCommandTerminal(terminal.sessionId, terminal.terminalSessionId).catch(() => null);
+    await runCloseCommandTerminal(terminal.sessionId, terminal.terminalSessionId).catch(() => null);
   }
 
   registerUnmountCleanup(() => {

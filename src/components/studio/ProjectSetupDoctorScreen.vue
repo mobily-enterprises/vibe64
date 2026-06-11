@@ -26,69 +26,21 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from "vue";
-
 import DoctorStatusPage from "./DoctorStatusPage.vue";
 import {
+  useProjectSetupDoctorScreen
+} from "@/composables/useProjectSetupDoctorScreen.js";
+
+const {
+  errorMessage,
+  handleProjectSetupUpdated,
+  lede,
+  loadProjectSetup,
+  loading,
   PROJECT_SETUP_STREAM_ENDPOINT,
   PROJECT_SETUP_TERMINAL_ENDPOINT,
-  readProjectSetupStatus,
-  readStudioSetupStatus
-} from "../../lib/studioGateApi.js";
-
-const projectSetup = ref(null);
-const loading = ref(false);
-const errorMessage = ref("");
-const streamEnabled = ref(false);
-const streamAutoStart = ref(true);
-
-const lede = computed(() => {
-  if (loading.value && !streamEnabled.value) {
-    return "Checking Studio Setup before Project Setup runs.";
-  }
-  if (projectSetup.value?.ready) {
-    return "";
-  }
-  return "Checking Project Setup.";
-});
-
-async function loadProjectSetup({
-  autoStart = true,
-  refresh = false
-} = {}) {
-  loading.value = true;
-  errorMessage.value = "";
-  streamEnabled.value = false;
-  streamAutoStart.value = autoStart;
-
-  try {
-    const studioSetup = await readStudioSetupStatus();
-
-    if (studioSetup?.ready !== true) {
-      errorMessage.value = "Studio Setup is not ready. Open Management mode to complete Studio Setup.";
-      return;
-    }
-
-    if (refresh && typeof EventSource !== "function") {
-      projectSetup.value = await readProjectSetupStatus({
-        refresh: true
-      });
-      return;
-    }
-
-    streamEnabled.value = true;
-  } catch (error) {
-    errorMessage.value = String(error?.message || error || "Project Setup check failed.");
-  } finally {
-    loading.value = false;
-  }
-}
-
-function handleProjectSetupUpdated(status) {
-  projectSetup.value = status;
-}
-
-onMounted(() => {
-  void loadProjectSetup();
-});
+  projectSetup,
+  streamAutoStart,
+  streamEnabled
+} = useProjectSetupDoctorScreen();
 </script>

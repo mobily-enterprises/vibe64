@@ -2,15 +2,13 @@ import { computed } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
 import { usePaths } from "@jskit-ai/users-web/client/composables/usePaths";
+import { useVibe64TerminalCommands } from "@/composables/useVibe64TerminalCommands.js";
 import {
+  VIBE64_API_SUFFIX,
   VIBE64_SESSIONS_API_SUFFIX,
   VIBE64_SURFACE_ID,
-  LOCAL_STUDIO_COMMAND_OPTIONS,
   vibe64CodexAttachmentPath
 } from "@/lib/vibe64SessionRequestConfig.js";
-import {
-  scopedDevelopmentApiUrl
-} from "@/lib/studioHttp.js";
 
 function normalizeSessionId(sessionId = "") {
   return String(sessionId || "").trim();
@@ -47,14 +45,20 @@ function useVibe64CodexCommands() {
   const sessionsApiPath = computed(() => paths.api(VIBE64_SESSIONS_API_SUFFIX, {
     surface: VIBE64_SURFACE_ID
   }));
+  const vibe64ApiPath = computed(() => paths.api(VIBE64_API_SUFFIX, {
+    surface: VIBE64_SURFACE_ID
+  }));
+  const terminalCommands = useVibe64TerminalCommands({
+    sessionsApiPath,
+    vibe64ApiPath
+  });
 
   const uploadAttachmentCommand = useCommand({
     access: "never",
     apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
     buildCommandOptions: (_payload, { context }) => ({
       method: "POST",
-      options: LOCAL_STUDIO_COMMAND_OPTIONS,
-      path: scopedDevelopmentApiUrl(vibe64CodexAttachmentPath(sessionsApiPath.value, context.sessionId))
+      path: vibe64CodexAttachmentPath(sessionsApiPath.value, context.sessionId)
     }),
     buildRawPayload: (_model, { context }) => ({
       contentType: String(context.contentType || ""),
@@ -95,6 +99,10 @@ function useVibe64CodexCommands() {
   }
 
   return {
+    closeCodexTerminal: terminalCommands.closeCodexTerminal,
+    closeGlobalCodexTerminal: terminalCommands.closeGlobalCodexTerminal,
+    startCodexTerminal: terminalCommands.startCodexTerminal,
+    startGlobalCodexTerminal: terminalCommands.startGlobalCodexTerminal,
     uploadAttachment,
     uploadAttachmentCommand
   };

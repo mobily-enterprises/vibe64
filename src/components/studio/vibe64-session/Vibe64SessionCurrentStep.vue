@@ -277,8 +277,8 @@ import {
   useVibe64BackgroundTasks
 } from "@/composables/useVibe64BackgroundTasks.js";
 import {
-  runVibe64ClientControl
-} from "@/lib/vibe64ClientControlDispatcher.js";
+  useVibe64ClientControls
+} from "@/composables/useVibe64ClientControls.js";
 import {
   controlSavesCurrentStepInputBeforeRun,
   currentStepInputHasDecisionControls
@@ -327,6 +327,10 @@ const props = defineProps({
     default: null,
     type: Object
   },
+  sessionsApiPath: {
+    default: "",
+    type: [String, Object, Function]
+  },
   stepInput: {
     default: () => ({}),
     type: Object
@@ -336,6 +340,9 @@ const props = defineProps({
 const stepInputHasWorkflowIntents = computed(() => (
   currentStepInputHasDecisionControls(props.session, props.stepInput.interaction)
 ));
+const clientControls = useVibe64ClientControls({
+  sessionsApiPath: () => props.sessionsApiPath
+});
 const workflowClientControlError = ref("");
 const workflowControls = computed(() => {
   return currentStepWorkflowControls({
@@ -439,7 +446,7 @@ function workflowControlIcon(control = {}) {
 async function runWorkflowClientControl(control = {}) {
   workflowClientControlError.value = "";
   try {
-    const result = await runVibe64ClientControl(control, {
+    const result = await clientControls.runClientControl(control, {
       diff: props.diff,
       refreshSessionData: props.refreshSessionData,
       session: props.session,
@@ -531,6 +538,7 @@ const {
   visibleBackgroundTasks
 } = useVibe64BackgroundTasks({
   refreshSessionData: () => props.refreshSessionData(),
+  runClientControl: clientControls.runClientControl,
   session: computed(() => props.session)
 });
 </script>

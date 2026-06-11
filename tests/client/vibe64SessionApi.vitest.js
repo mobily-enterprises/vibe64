@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   normalizeVibe64ProjectToolFixInput
-} from "../../src/lib/vibe64SessionApi.js";
+} from "../../src/lib/vibe64SessionRequestConfig.js";
 
-describe("vibe64SessionApi", () => {
+describe("Vibe64 session request config payloads", () => {
   it("strips session-only terminal context from project tool fix payloads", () => {
     expect(normalizeVibe64ProjectToolFixInput({
       actionId: "sync_main_with_main",

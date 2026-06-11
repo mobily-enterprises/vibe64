@@ -397,7 +397,6 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, reactive, ref, unref, watch } from "vue";
 import {
   mdiAlertCircleOutline,
   mdiCheckCircle,
@@ -409,11 +408,9 @@ import {
 import codexDeviceAuthorizeImage from "@/assets/codex-device-code-authorize.png";
 import codexDeviceSettingsImage from "@/assets/codex-device-code-settings.png";
 import Vibe64TerminalFrame from "@/components/studio/Vibe64TerminalFrame.vue";
-import { useAccountAuthSessions } from "@/composables/useAccountAuthSessions.js";
-import { useStudioTerminal } from "@/composables/useStudioTerminal.js";
 import {
-  accountAuthTerminalWebSocketUrl
-} from "@/lib/studioGateApi.js";
+  useProviderAccountsSetup
+} from "@/composables/useProviderAccountsSetup.js";
 
 const props = defineProps({
   accounts: {
@@ -468,419 +465,40 @@ const props = defineProps({
 
 const emit = defineEmits(["back", "continue"]);
 
-const CHATGPT_SECURITY_SETTINGS_URL = "https://chatgpt.com/#settings/Security";
-const ANSI_ESCAPE_PATTERN = new RegExp(`${String.fromCharCode(27)}\\[[0-?]*[ -/]*[@-~]`, "gu");
-const VISIBLE_ANSI_ESCAPE_PATTERN = /\u00a4\[[0-?]*[ -/]*[@-~]/gu;
-
-const accountRows = computed(() => Array.isArray(props.accountRows) ? props.accountRows : []);
-const gitIdentityInputs = reactive({});
-const apiKeyInputs = reactive({});
-const apiKeyFormsVisible = reactive({});
-const statusReady = computed(() => (
-  accountRows.value.length > 0 &&
-  accountRows.value.every((account) => account.connected === true)
-));
-const accountsReadyForActions = computed(() => {
-  return props.actionsEnabled === true && props.statusLoaded === true && !unref(props.accounts.isLoading);
-});
-const authSessions = useAccountAuthSessions(props.accounts, {
-  accountRows
-});
-const errorMessage = computed(() => authSessions.errorMessage);
-const codexAuthStepsBySessionId = reactive({});
-const authTerminalAttentionOpenedSessionIds = new Set();
-const authTerminalSessionId = ref("");
-const authTerminal = useStudioTerminal({
-  resizeReportDelayMs: 120,
-  webSocketUrl: accountAuthTerminalWebSocketUrl
-});
-const authTerminalSession = computed(() => {
-  if (!authTerminalSessionId.value) {
-    return null;
-  }
-  for (const account of accountRows.value) {
-    const session = authSessions.activeSessionFor(account.id);
-    if (session?.id === authTerminalSessionId.value) {
-      return session;
-    }
-  }
-  return null;
-});
-
-function accountStatusMessage(account = {}) {
-  return account.connected ? `${account.label} is connected.` : `${account.label} is not connected.`;
-}
-
-function accountActiveSession(account = {}) {
-  if (account.connected === true && account.gitIdentityRequired !== true) {
-    return null;
-  }
-  return authSessions.activeSessionFor(account.id);
-}
-
-function activeAuthSessions() {
-  return accountRows.value
-    .map((account) => accountActiveSession(account))
-    .filter(Boolean);
-}
-
-function requiresGitIdentity(account = {}) {
-  return account.gitIdentityRequired === true;
-}
-
-function gitIdentityInput(account = {}) {
-  const accountId = String(account.id || "");
-  if (!accountId) {
-    return {
-      email: "",
-      name: ""
-    };
-  }
-  if (!gitIdentityInputs[accountId]) {
-    gitIdentityInputs[accountId] = {
-      email: String(account.gitIdentity?.email || ""),
-      name: String(account.gitIdentity?.name || "")
-    };
-  }
-  return gitIdentityInputs[accountId];
-}
-
-function syncGitIdentityInput(account = {}) {
-  if (!requiresGitIdentity(account)) {
-    return;
-  }
-  const input = gitIdentityInput(account);
-  if (!input.name && account.gitIdentity?.name) {
-    input.name = String(account.gitIdentity.name || "");
-  }
-  if (!input.email && account.gitIdentity?.email) {
-    input.email = String(account.gitIdentity.email || "");
-  }
-}
-
-function gitIdentityAuthOptions(account = {}) {
-  const input = gitIdentityInput(account);
-  return {
-    gitUserEmail: input.email,
-    gitUserName: input.name
-  };
-}
-
-function accountLoginDisabled(account = {}) {
-  return authSessions.loginDisabled(
-    account,
-    requiresGitIdentity(account) ? gitIdentityAuthOptions(account) : {}
-  );
-}
-
-function primaryAuthMode(account = {}) {
-  const mode = String(account.authMode || "").trim().toLowerCase();
-  if (mode) {
-    return mode;
-  }
-  return account.deviceAuth === true ? "device" : "browser";
-}
-
-function startAccountAuth(account = {}) {
-  if (!accountsReadyForActions.value) {
-    return;
-  }
-  const mode = primaryAuthMode(account);
-  const options = requiresGitIdentity(account) ? gitIdentityAuthOptions(account) : {};
-  if (mode === "device") {
-    void authSessions.startDeviceAuth(account.id);
-    return;
-  }
-  void authSessions.startBrowserAuth(account.id, options);
-}
-
-function primaryAuthLabel(account = {}) {
-  if (requiresGitIdentity(account) && account.connected === true) {
-    return "Save Git identity";
-  }
-  return account.authLabel || `Auth ${account.label}`;
-}
-
-function accountSupportsApiKeyAuth(account = {}) {
-  return String(account.id || "") === "codex" && account.connected !== true;
-}
-
-function apiKeyInput(account = {}) {
-  const accountId = String(account.id || "");
-  if (!accountId) {
-    return {
-      value: ""
-    };
-  }
-  if (!apiKeyInputs[accountId]) {
-    apiKeyInputs[accountId] = {
-      value: ""
-    };
-  }
-  return apiKeyInputs[accountId];
-}
-
-function apiKeyFormVisible(account = {}) {
-  return Boolean(apiKeyFormsVisible[String(account.id || "")]);
-}
-
-function toggleApiKeyForm(account = {}) {
-  if (!accountsReadyForActions.value) {
-    return;
-  }
-  const accountId = String(account.id || "");
-  if (!accountId) {
-    return;
-  }
-  apiKeyFormsVisible[accountId] = !apiKeyFormsVisible[accountId];
-}
-
-function apiKeyLoginDisabled(account = {}) {
-  return authSessions.authBusy || !apiKeyInput(account).value.trim();
-}
-
-async function startAccountApiKeyAuth(account = {}) {
-  if (!accountsReadyForActions.value) {
-    return;
-  }
-  const input = apiKeyInput(account);
-  const apiKey = input.value.trim();
-  if (!apiKey) {
-    return;
-  }
-  try {
-    await authSessions.startApiKeyAuth(account.id, apiKey);
-  } finally {
-    input.value = "";
-  }
-}
-
-function isCodexDeviceSession(session = {}) {
-  return String(session?.account?.id || "") === "codex" &&
-    session?.mode === "device";
-}
-
-function codexAuthStep(session = {}) {
-  if (!isCodexDeviceSession(session) || !session?.id) {
-    return "authorize";
-  }
-  return codexAuthStepsBySessionId[session.id] || "settings";
-}
-
-function setCodexAuthStep(session = {}, step = "settings") {
-  if (!isCodexDeviceSession(session) || !session?.id) {
-    return;
-  }
-  codexAuthStepsBySessionId[session.id] = step === "authorize" ? "authorize" : "settings";
-}
-
-function codexSettingsStepVisible(session = {}) {
-  return isCodexDeviceSession(session) && codexAuthStep(session) === "settings";
-}
-
-function codexAuthorizeStepVisible(session = {}) {
-  return isCodexDeviceSession(session) && codexAuthStep(session) === "authorize";
-}
-
-function loginOutputVisible(session = {}) {
-  return Boolean(session?.output) && (
-    session.status === "failed" ||
-    (session.mode === "device" && !authSessionUserCode(session))
-  );
-}
-
-function authSessionNeedsTerminalAttention(session = {}) {
-  return authSessions.authSessionNeedsTerminalAttention(session);
-}
-
-function authTerminalAvailable(session = {}) {
-  return Boolean(session?.id);
-}
-
-function authTerminalVisible(session = {}) {
-  return Boolean(session?.id && authTerminalSessionId.value === session.id);
-}
-
-function setAuthTerminalHost(element) {
-  authTerminal.terminalHost.value = element;
-}
-
-async function toggleAuthTerminal(session = {}) {
-  if (!session?.id) {
-    return;
-  }
-  if (authTerminalVisible(session)) {
-    closeAuthTerminal();
-    return;
-  }
-  await openAuthTerminal(session);
-}
-
-async function openAuthTerminal(session = {}) {
-  if (!session?.id) {
-    return;
-  }
-  authTerminalSessionId.value = session.id;
-  authTerminal.applyTerminalSession(session);
-  await authTerminal.setupTerminalUi();
-  await authTerminal.connectTerminalSocket();
-  await authTerminal.focusTerminal();
-}
-
-async function openAuthTerminalForAttention(session = {}) {
-  if (
-    !authSessionNeedsTerminalAttention(session) ||
-    authTerminalVisible(session) ||
-    authTerminalAttentionOpenedSessionIds.has(session.id)
-  ) {
-    return;
-  }
-  authTerminalAttentionOpenedSessionIds.add(session.id);
-  await openAuthTerminal(session);
-}
-
-function closeAuthTerminal() {
-  authTerminalSessionId.value = "";
-  authTerminal.disposeTerminalUi();
-}
-
-function cleanAuthOutput(output = "") {
-  return String(output || "")
-    .replace(ANSI_ESCAPE_PATTERN, "")
-    .replace(VISIBLE_ANSI_ESCAPE_PATTERN, "");
-}
-
-function authSessionUserCode(session = {}) {
-  const existing = String(session?.userCode || "").trim();
-  if (existing) {
-    return existing.toUpperCase();
-  }
-  if (session?.mode !== "device") {
-    return "";
-  }
-  const output = [
-    session?.output || "",
-    authTerminalVisible(session) ? authTerminal.terminalOutput.value : ""
-  ].join("\n");
-  return cleanAuthOutput(output).match(/\b([A-Z0-9]{4}-[A-Z0-9]{4,8})\b/iu)?.[1]?.toUpperCase() || "";
-}
-
-function authTerminalError(session = {}) {
-  if (authSessionUserCode(session)) {
-    return "";
-  }
-  return authTerminal.terminalError.value;
-}
-
-function sessionStatusMessage(session = {}) {
-  if (session.status === "connected") {
-    return `${session.account?.label || "Account"} is connected.`;
-  }
-  if (authSessionNeedsTerminalAttention(session)) {
-    return "Codex needs attention in the terminal. Review the terminal output and respond there.";
-  }
-  if (session.status === "failed") {
-    return "Login did not finish cleanly. Review the logs and try again.";
-  }
-  if (session.mode === "api_key") {
-    return "Signing in with the OpenAI API key. Open the terminal if Vibe64 needs more details.";
-  }
-  if (session.mode === "device" && authSessionUserCode(session)) {
-    return "Copy the one-time code, then finalise authorization in your browser.";
-  }
-  if (session.mode === "device" && session.authUrl) {
-    return "Waiting for Codex to print the one-time code.";
-  }
-  if (session.mode === "device") {
-    return "Starting code login and waiting for Codex to print a device code.";
-  }
-  if (session.authUrl) {
-    return "Browser login is open. Complete authorization there, then Studio will continue.";
-  }
-  return "Starting login and waiting for the browser URL.";
-}
-
-onBeforeUnmount(() => {
-  authSessions.stopPolling();
-  authTerminal.disposeTerminalUi();
-});
-
-watch(
-  authTerminalSession,
-  (session) => {
-    if (!authTerminalSessionId.value) {
-      return;
-    }
-    if (!session) {
-      closeAuthTerminal();
-      return;
-    }
-    authTerminal.applyTerminalSession(session, {
-      preserveOutput: true
-    });
-  },
-  {
-    deep: true
-  }
-);
-
-watch(
+const {
+  CHATGPT_SECURITY_SETTINGS_URL,
+  accountActiveSession,
+  accountLoginDisabled,
   accountRows,
-  (rows) => {
-    for (const account of rows) {
-      syncGitIdentityInput(account);
-    }
-  },
-  {
-    deep: true,
-    immediate: true
-  }
-);
-
-watch(
-  () => accountRows.value
-    .map((account) => authSessions.activeSessionFor(account.id)?.id)
-    .filter(Boolean),
-  (activeSessionIds) => {
-    const activeSessionIdSet = new Set(activeSessionIds);
-    for (const sessionId of Object.keys(codexAuthStepsBySessionId)) {
-      if (!activeSessionIdSet.has(sessionId)) {
-        delete codexAuthStepsBySessionId[sessionId];
-      }
-    }
-  },
-  {
-    deep: true
-  }
-);
-
-watch(
-  () => activeAuthSessions().map((session) => [
-    session.id,
-    session.account?.id || session.account || "",
-    session.mode || "",
-    session.status || "",
-    session.terminalStatus || "",
-    session.outputVersion || 0,
-    String(session.output || "").length,
-    String(session.userCode || ""),
-    String(session.closeError || session.error || session.terminalError || "")
-  ].join(":")),
-  () => {
-    const activeSessionIdSet = new Set(activeAuthSessions().map((session) => session.id).filter(Boolean));
-    for (const sessionId of Array.from(authTerminalAttentionOpenedSessionIds)) {
-      if (!activeSessionIdSet.has(sessionId)) {
-        authTerminalAttentionOpenedSessionIds.delete(sessionId);
-      }
-    }
-    for (const session of activeAuthSessions()) {
-      void openAuthTerminalForAttention(session);
-    }
-  },
-  {
-    immediate: true
-  }
-);
+  accountStatusMessage,
+  accountSupportsApiKeyAuth,
+  accountsReadyForActions,
+  apiKeyFormVisible,
+  apiKeyInput,
+  apiKeyLoginDisabled,
+  authSessionUserCode,
+  authSessions,
+  authTerminal,
+  authTerminalAvailable,
+  authTerminalError,
+  authTerminalVisible,
+  closeAuthTerminal,
+  codexAuthorizeStepVisible,
+  codexSettingsStepVisible,
+  errorMessage,
+  gitIdentityInput,
+  loginOutputVisible,
+  primaryAuthLabel,
+  requiresGitIdentity,
+  sessionStatusMessage,
+  setAuthTerminalHost,
+  setCodexAuthStep,
+  startAccountApiKeyAuth,
+  startAccountAuth,
+  statusReady,
+  toggleApiKeyForm,
+  toggleAuthTerminal
+} = useProviderAccountsSetup(props);
 </script>
 
 <style scoped>

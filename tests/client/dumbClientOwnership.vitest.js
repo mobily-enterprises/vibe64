@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 const AUTOPILOT_RUNTIME_FILES = Object.freeze([
   "src/components/studio/vibe64-session/Vibe64AutopilotView.vue",
+  "src/composables/useVibe64AutopilotView.js",
   "src/composables/useVibe64AutopilotController.js",
   "src/composables/useVibe64SessionData.js",
   "src/composables/useVibe64SessionActions.js",
@@ -47,21 +48,22 @@ describe("dumb Autopilot client ownership", () => {
   });
 
   it("keeps direct step-input advancement owned by the server autopilot operation", () => {
-    const source = readFileSync("src/components/studio/vibe64-session/Vibe64AutopilotView.vue", "utf8");
+    const source = readFileSync("src/composables/useVibe64AutopilotView.js", "utf8");
     expect(source).not.toContain("props.actions.goNext");
   });
 
   it("keeps Autopilot conversation history outside normal input and runtime state", () => {
-    const source = readFileSync("src/components/studio/vibe64-session/Vibe64AutopilotView.vue", "utf8");
-    expect(source).toContain(":activity-messages=\"chatActivityMessages\"");
-    expect(source).toContain("const chatTakeoverVisible = computed(() => Boolean(reportPreviewVisible.value));");
-    expect(source).not.toContain("const chatTakeoverVisible = computed(() => Boolean(stepInputFormVisible.value");
-    expect(source).not.toContain("v-else-if=\"responsePreviewVisible\"");
+    const templateSource = readFileSync("src/components/studio/vibe64-session/Vibe64AutopilotView.vue", "utf8");
+    const viewModelSource = readFileSync("src/composables/useVibe64AutopilotView.js", "utf8");
+    expect(templateSource).toContain(":activity-messages=\"chatActivityMessages\"");
+    expect(viewModelSource).toContain("const chatTakeoverVisible = computed(() => Boolean(reportPreviewVisible.value));");
+    expect(viewModelSource).not.toContain("const chatTakeoverVisible = computed(() => Boolean(stepInputFormVisible.value");
+    expect(templateSource).not.toContain("v-else-if=\"responsePreviewVisible\"");
   });
 
   it("keeps the transient command spy tied to live or failed commands", () => {
-    const source = readFileSync("src/components/studio/vibe64-session/Vibe64AutopilotView.vue", "utf8");
-    const commandSpyVisible = source.match(/const commandSpyVisible = computed\(\(\) => Boolean\(([\s\S]*?)\n\)\);/u)?.[1] || "";
+    const source = readFileSync("src/composables/useVibe64AutopilotView.js", "utf8");
+    const commandSpyVisible = source.match(/const commandSpyVisible = computed\(\(\) => Boolean\(([\s\S]*?)\n\s*\)\);/u)?.[1] || "";
     expect(commandSpyVisible).toContain("commandTerminalVisible.value");
     expect(commandSpyVisible).toContain("commandRunning.value");
     expect(commandSpyVisible).toContain("commandTerminalFailed.value");

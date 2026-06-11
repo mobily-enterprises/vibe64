@@ -1,16 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
-import {
-  mdiAccountAlertOutline,
-  mdiAccountCheckOutline,
-  mdiClose,
-  mdiGithub,
-  mdiRefresh
-} from "@mdi/js";
-import {
-  inviteProjectAccess,
-  readProjectAccess
-} from "@/lib/vibe64ProjectApi.js";
+import { useVibe64ProjectAccessPanel } from "@/composables/useVibe64ProjectAccessPanel.js";
 
 const props = defineProps({
   project: {
@@ -21,113 +10,21 @@ const props = defineProps({
 
 const emit = defineEmits(["close"]);
 
-const loading = ref(true);
-const refreshing = ref(false);
-const actionBusy = ref("");
-const error = ref("");
-const status = ref(null);
-
-const repositoryName = computed(() => (
-  status.value?.repository?.fullName ||
-  props.project?.githubRepository?.fullName ||
-  ""
-));
-const users = computed(() => Array.isArray(status.value?.users) ? status.value.users : []);
-const canManageAccess = computed(() => status.value?.currentUserCanManageAccess === true);
-const tenantCountLabel = computed(() => {
-  const limit = status.value?.userLimit;
-  return limit ? `${users.value.length} / ${limit}` : String(users.value.length);
-});
-
-onMounted(() => {
-  void loadAccess();
-});
-
-async function loadAccess({
-  quiet = false
-} = {}) {
-  if (quiet) {
-    refreshing.value = true;
-  } else {
-    loading.value = true;
-  }
-  error.value = "";
-  try {
-    const response = await readProjectAccess(props.project?.slug || "");
-    if (response.ok === false) {
-      throw new Error(response.errors?.[0]?.message || response.error || "Project access could not load.");
-    }
-    status.value = response;
-  } catch (loadError) {
-    error.value = String(loadError?.message || loadError || "Project access could not load.");
-  } finally {
-    loading.value = false;
-    refreshing.value = false;
-  }
-}
-
-async function inviteUser(row = {}) {
-  const email = String(row.email || "").trim();
-  if (!email) {
-    return;
-  }
-  actionBusy.value = email;
-  error.value = "";
-  try {
-    const response = await inviteProjectAccess(props.project?.slug || "", {
-      email,
-      permission: "push"
-    });
-    if (response.ok === false) {
-      throw new Error(response.errors?.[0]?.message || response.error || "GitHub invite failed.");
-    }
-    await loadAccess({
-      quiet: true
-    });
-  } catch (inviteError) {
-    error.value = String(inviteError?.message || inviteError || "GitHub invite failed.");
-  } finally {
-    actionBusy.value = "";
-  }
-}
-
-function accessLabel(row = {}) {
-  const access = row.access || {};
-  if (access.status === "github-not-connected") {
-    return "Connect GitHub";
-  }
-  if (access.status === "inactive") {
-    return "Inactive";
-  }
-  if (access.status === "no-access") {
-    return "No access";
-  }
-  if (access.permission) {
-    return access.permission.toLowerCase();
-  }
-  return "Unknown";
-}
-
-function accessColor(row = {}) {
-  const access = row.access || {};
-  if (access.canPush) {
-    return "success";
-  }
-  if (access.canRead) {
-    return "info";
-  }
-  if (access.status === "no-access") {
-    return "warning";
-  }
-  return "default";
-}
-
-function canInvite(row = {}) {
-  return canManageAccess.value &&
-    row.status === "active" &&
-    row.github?.login &&
-    row.access?.canPush !== true;
-}
+const {
+  accessColor,
+  accessLabel,
+  actionBusy,
+  canInvite,
+  error,
+  inviteUser,
+  mdiAccountAlertOutline,
+  mdiAccountCheckOutline,
+  mdiClose,
+  mdiGithub,
+  mdiRefresh,
+  projectAccess,
+  repositoryName
+} = useVibe64ProjectAccessPanel(() => props.project);
 </script>
 
 <template>
@@ -155,13 +52,13 @@ function canInvite(row = {}) {
       {{ error }}
     </v-alert>
 
-    <div v-if="loading" class="project-access__loading">
+    <div v-if="projectAccess.isInitialLoading" class="project-access__loading">
       <v-progress-circular color="primary" indeterminate />
     </div>
 
     <template v-else>
       <v-alert
-        v-if="!canManageAccess"
+        v-if="!projectAccess.canManageAccess"
         type="info"
         variant="tonal"
         density="compact"
@@ -172,14 +69,14 @@ function canInvite(row = {}) {
       <section class="project-access__summary" aria-label="Access summary">
         <div>
           <span>Tenant users</span>
-          <strong>{{ tenantCountLabel }}</strong>
+          <strong>{{ projectAccess.tenantCountLabel }}</strong>
         </div>
         <v-btn
-          :loading="refreshing"
+          :loading="projectAccess.isRefetching"
           size="small"
           type="button"
           variant="text"
-          @click="loadAccess({ quiet: true })"
+          @click="projectAccess.reload"
         >
           <v-icon :icon="mdiRefresh" />
           Refresh
@@ -188,7 +85,7 @@ function canInvite(row = {}) {
 
       <section class="project-access__users" aria-label="Tenant users">
         <article
-          v-for="row in users"
+          v-for="row in projectAccess.users"
           :key="row.email"
           class="project-access__user"
         >

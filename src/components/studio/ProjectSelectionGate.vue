@@ -71,173 +71,27 @@
   </div>
 </template>
 
-<script>
-const cachedProjectSelections = new Map();
-</script>
-
 <script setup>
-import { computed, proxyRefs, ref, watch } from "vue";
-import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
-import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
-import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
-import {
-  VIBE64_SURFACE_ID,
-  LOCAL_STUDIO_COMMAND_OPTIONS
-} from "@/lib/vibe64RequestConfig.js";
-import {
-  PROJECT_SELECTION_ENDPOINT,
-  VIBE64_PROJECT_CREATE_API_SUFFIX,
-  VIBE64_PROJECT_SELECT_API_SUFFIX,
-  projectSelectionQueryKey
-} from "@/lib/studioGateApi.js";
-import {
-  scopedDevelopmentApiUrl,
-  studioHttpClient
-} from "@/lib/studioHttp.js";
-import {
-  useVibe64ProjectSlug
-} from "@/composables/useVibe64ProjectScope.js";
+import { useProjectSelectionGate } from "@/composables/useProjectSelectionGate.js";
 
 const emit = defineEmits(["missing", "ready", "error"]);
 
-const creating = ref(false);
-const selectingSlug = ref("");
-const newProjectName = ref("");
-const projectSlug = useVibe64ProjectSlug();
-
-const selectionResource = useEndpointResource({
-  client: studioHttpClient,
-  fallbackLoadError: "Projects could not load.",
-  path: PROJECT_SELECTION_ENDPOINT,
-  queryKey: computed(() => projectSelectionQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC, projectSlug.value)),
-  refreshOnPull: true
-});
-
-const projectSelectionView = proxyRefs({
-  isLoading: selectionResource.isLoading,
-  loadError: selectionResource.loadError,
-  record: selectionResource.data,
-  refresh: selectionResource.reload
-});
-
-const createProjectCommand = useCommand({
-  access: "never",
-  apiSuffix: VIBE64_PROJECT_CREATE_API_SUFFIX,
-  buildCommandOptions: () => ({
-    method: "POST",
-    options: LOCAL_STUDIO_COMMAND_OPTIONS,
-    path: scopedDevelopmentApiUrl(PROJECT_SELECTION_ENDPOINT)
-  }),
-  buildRawPayload: (_model, { context }) => ({
-    name: context.name || ""
-  }),
-  fallbackRunError: "Project could not be created.",
-  messages: {
-    error: "Project could not be created.",
-    success: "Project created."
-  },
-  onRunSuccess: loadProjectSelection,
-  ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-  placementSource: "vibe64.projects.create",
-  surfaceId: VIBE64_SURFACE_ID,
-  writeMethod: "POST"
-});
-
-const selectProjectCommand = useCommand({
-  access: "never",
-  apiSuffix: VIBE64_PROJECT_SELECT_API_SUFFIX,
-  buildCommandOptions: () => ({
-    method: "POST",
-    options: LOCAL_STUDIO_COMMAND_OPTIONS,
-    path: scopedDevelopmentApiUrl(`${PROJECT_SELECTION_ENDPOINT}/select`)
-  }),
-  buildRawPayload: (_model, { context }) => ({
-    slug: context.slug || ""
-  }),
-  fallbackRunError: "Project could not be selected.",
-  messages: {
-    error: "Project could not be selected.",
-    success: "Project selected."
-  },
-  onRunSuccess: loadProjectSelection,
-  ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-  placementSource: "vibe64.projects.select",
-  surfaceId: VIBE64_SURFACE_ID,
-  writeMethod: "POST"
-});
-
-const cachedProjectSelection = computed(() => cachedProjectSelections.get(projectSlug.value) || null);
-const projectSelection = computed(() => projectSelectionView.record || cachedProjectSelection.value || {});
-const projects = computed(() => Array.isArray(projectSelection.value.projects) ? projectSelection.value.projects : []);
-const projectsRoot = computed(() => String(projectSelection.value.projectsRoot || "~/vibe64"));
-const hasSelection = computed(() => projectSelection.value.hasSelection === true);
-const selectionReady = computed(() => Boolean(projectSelectionView.record || cachedProjectSelection.value));
-const busy = computed(() => creating.value || Boolean(selectingSlug.value));
-const saveError = computed(() => {
-  if (createProjectCommand.messageType === "error") {
-    return String(createProjectCommand.message || "");
-  }
-  if (selectProjectCommand.messageType === "error") {
-    return String(selectProjectCommand.message || "");
-  }
-  return "";
-});
-const errorMessage = computed(() => String(
-  projectSelectionView.loadError ||
-  saveError.value ||
-  ""
-));
-
-async function loadProjectSelection() {
-  await projectSelectionView.refresh();
-}
-
-async function createProject() {
-  const name = newProjectName.value.trim();
-  if (!name) {
-    return;
-  }
-  creating.value = true;
-  try {
-    await createProjectCommand.run({
-      name
-    });
-    newProjectName.value = "";
-  } finally {
-    creating.value = false;
-  }
-}
-
-async function selectProject(slug) {
-  selectingSlug.value = String(slug || "");
-  try {
-    await selectProjectCommand.run({
-      slug: selectingSlug.value
-    });
-  } finally {
-    selectingSlug.value = "";
-  }
-}
-
-watch(projectSelection, (selection) => {
-  if (selection && Object.keys(selection).length > 0) {
-    cachedProjectSelections.set(projectSlug.value, selection);
-  }
-  if (selection?.hasSelection === true) {
-    emit("ready", selection);
-    return;
-  }
-  emit("missing", selection || {});
-}, {
-  immediate: true
-});
-
-watch(errorMessage, (message) => {
-  if (message) {
-    emit("error", message);
-  }
-});
+const {
+  busy,
+  createProject,
+  creating,
+  errorMessage,
+  hasSelection,
+  loadProjectSelection,
+  newProjectName,
+  projectSelection,
+  projects,
+  projectsRoot,
+  selectProject,
+  selectingSlug,
+  selectionReady
+} = useProjectSelectionGate(emit);
 </script>
 
 <style scoped>

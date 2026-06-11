@@ -6,9 +6,6 @@ import {
   useVibe64ProjectSlug
 } from "@/composables/useVibe64ProjectScope.js";
 import {
-  studioHttpClient
-} from "@/lib/studioHttp.js";
-import {
   VIBE64_SESSION_CHANGED_EVENT,
   VIBE64_SESSIONS_API_SUFFIX,
   VIBE64_SURFACE_ID,
@@ -96,7 +93,6 @@ function useVibe64ConversationLog({
     surface: VIBE64_SURFACE_ID
   }));
   const resource = useEndpointResource({
-    client: studioHttpClient,
     enabled,
     fallbackLoadError: "Conversation history could not be loaded.",
     path: computed(() => sessionId.value
@@ -118,6 +114,7 @@ function useVibe64ConversationLog({
     },
     readMethod: "GET",
     refreshOnPull: true,
+    requestRecoveryLabel: "Conversation history",
     realtime: {
       event: VIBE64_SESSION_CHANGED_EVENT,
       matches: ({ payload = {} } = {}) => {

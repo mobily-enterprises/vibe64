@@ -24,8 +24,8 @@
 import { computed, onBeforeUnmount, watch } from "vue";
 import Vibe64TerminalFrame from "@/components/studio/Vibe64TerminalFrame.vue";
 import { useCodexTerminalElement } from "@/composables/useCodexTerminalElement.js";
+import { useVibe64TerminalCommands } from "@/composables/useVibe64TerminalCommands.js";
 import {
-  closeVibe64FixCodexTerminal,
   vibe64FixCodexTerminalWebSocketUrl
 } from "@/lib/vibe64SessionApi.js";
 
@@ -40,6 +40,7 @@ const props = defineProps({
   }
 });
 const emit = defineEmits(["closed"]);
+const terminalCommands = useVibe64TerminalCommands();
 
 const jobId = computed(() => String(props.job?.id || props.terminal?.metadata?.fixJobId || ""));
 const repairLocationLabel = computed(() => {
@@ -102,7 +103,7 @@ async function closeTerminal() {
   const currentTerminalId = terminalSessionId.value;
   closeTerminalSocket();
   if (currentJobId && currentTerminalId) {
-    await closeVibe64FixCodexTerminal(currentJobId, currentTerminalId).catch(() => null);
+    await terminalCommands.closeFixCodexTerminal(currentJobId, currentTerminalId).catch(() => null);
   }
   emit("closed");
 }

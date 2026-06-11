@@ -1,6 +1,6 @@
 import {
   resolveWebSocketUrl
-} from "@/lib/studioHttp.js";
+} from "@/lib/studioUrls.js";
 
 const BROWSER_LIFECYCLE_WEBSOCKET_PATH = "/api/studio/browser-lifecycle/ws";
 

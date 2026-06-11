@@ -46,6 +46,31 @@ test("home loads through a self-contained mocked Studio shell", async ({ page })
   await expect(page).toHaveURL(developmentUrlPattern());
 });
 
+test("safe read failures use JSKIT shell recovery retry", async ({ page }) => {
+  await mockReadyStudioShell(page, {
+    failInitialGetCounts: {
+      "/api/vibe64/projects": 9
+    }
+  });
+
+  await page.goto(DEVELOPMENT_PATH);
+
+  const recoveryMessage = "Projects could not reach the server or network. Check the connection and try again.";
+  const recoveryBanner = page.locator(".shell-error-host__banner").filter({
+    hasText: recoveryMessage
+  });
+  await expect(recoveryBanner).toBeVisible({
+    timeout: 15_000
+  });
+
+  await recoveryBanner.getByRole("button", { name: "Retry" }).click();
+
+  await expect(page.getByRole("button", { name: "New Session" })).toBeVisible({
+    timeout: 15_000
+  });
+  await expect(recoveryBanner).toHaveCount(0);
+});
+
 function escapedPathPattern(pathValue: string) {
   return String(pathValue || "").replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
@@ -58,7 +83,12 @@ function dashboardUrlPattern(routePath: string) {
   return new RegExp(`${escapedPathPattern(DASHBOARD_PATH)}/${routePath}/?$`, "u");
 }
 
-async function mockReadyStudioShell(page: Page) {
+type MockReadyStudioShellOptions = {
+  failInitialGetCounts?: Record<string, number>;
+};
+
+async function mockReadyStudioShell(page: Page, options: MockReadyStudioShellOptions = {}) {
+  const failInitialGetCounts = new Map(Object.entries(options.failInitialGetCounts || {}));
   let projectConfigResolved = false;
   let markProjectConfigResolved = () => undefined;
   const projectConfigReady = new Promise<void>((resolve) => {
@@ -417,6 +447,13 @@ async function mockReadyStudioShell(page: Page) {
 
     if (method !== "GET" || !apiPayloads.has(apiPathname)) {
       throw new Error(`Self-contained smoke spec does not mock ${method} ${url.pathname}.`);
+    }
+
+    const remainingFailureCount = Number(failInitialGetCounts.get(apiPathname) || 0);
+    if (remainingFailureCount > 0) {
+      failInitialGetCounts.set(apiPathname, remainingFailureCount - 1);
+      await route.abort("failed");
+      return;
     }
 
     if (apiPathname === "/api/studio/current-app") {

@@ -18,7 +18,7 @@
           size="small"
           type="button"
           variant="tonal"
-          @click="loadTools"
+          @click="refreshTools"
         >
           Tools
         </v-btn>
@@ -166,134 +166,43 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from "vue";
-import {
-  mdiChevronDown,
-  mdiTools
-} from "@mdi/js";
 import Vibe64CommandTerminal from "@/components/studio/Vibe64CommandTerminal.vue";
 import Vibe64FixCodexDialog from "@/components/studio/Vibe64FixCodexDialog.vue";
 import {
-  useVibe64FixCodexDialog
-} from "@/composables/useVibe64FixCodexDialog.js";
-import {
-  readVibe64ProjectTools,
-  runVibe64ProjectTool
-} from "@/lib/vibe64SessionApi.js";
+  useVibe64ProjectTools,
+  vibe64ProjectToolsEmits,
+  vibe64ProjectToolsProps
+} from "@/composables/useVibe64ProjectTools.js";
 
-const emit = defineEmits([
-  "global-codex-open",
-  "global-codex-update"
-]);
-const props = defineProps({
-  displayMode: {
-    default: "menu",
-    type: String
-  }
-});
+const emit = defineEmits(vibe64ProjectToolsEmits);
+const props = defineProps(vibe64ProjectToolsProps);
 
-const loading = ref(false);
-const menuOpen = ref(false);
-const tools = ref([]);
-const selectedTool = ref(null);
-const parametersDialogOpen = ref(false);
-const confirmationDialogOpen = ref(false);
-const terminalDialogOpen = ref(false);
-const terminalTool = ref(null);
-const terminalStartKey = ref("");
-const runParameters = ref({});
-const parameterValues = reactive({});
 const {
+  confirmationDialogOpen,
+  confirmRun,
+  displayMode,
   fixDialogOpen,
   fixJob,
   fixTerminal,
-  openFixCodexDialog
-} = useVibe64FixCodexDialog();
-
-const selectedToolParameters = computed(() => (
-  Array.isArray(selectedTool.value?.parameters) ? selectedTool.value.parameters : []
-));
-const displayMode = computed(() => props.displayMode === "panel" ? "panel" : "menu");
-const menuMode = computed(() => displayMode.value === "menu");
-
-async function loadTools() {
-  if (loading.value) {
-    return;
-  }
-  loading.value = true;
-  try {
-    const response = await readVibe64ProjectTools();
-    tools.value = Array.isArray(response?.tools) ? response.tools : [];
-  } finally {
-    loading.value = false;
-  }
-}
-
-function resetParameterValues(tool = {}) {
-  for (const key of Object.keys(parameterValues)) {
-    delete parameterValues[key];
-  }
-  for (const parameter of Array.isArray(tool.parameters) ? tool.parameters : []) {
-    parameterValues[parameter.id] = parameter.defaultValue ?? "";
-  }
-}
-
-function selectTool(tool = {}) {
-  if (tool.enabled !== true) {
-    return;
-  }
-  selectedTool.value = tool;
-  resetParameterValues(tool);
-  menuOpen.value = false;
-  if (selectedToolParameters.value.length) {
-    parametersDialogOpen.value = true;
-    return;
-  }
-  queueRun({});
-}
-
-function submitParameters() {
-  parametersDialogOpen.value = false;
-  queueRun({ ...parameterValues });
-}
-
-function queueRun(parameters = {}) {
-  runParameters.value = parameters;
-  if (selectedTool.value?.requiresConfirmation) {
-    confirmationDialogOpen.value = true;
-    return;
-  }
-  void runSelectedTool();
-}
-
-function confirmRun() {
-  confirmationDialogOpen.value = false;
-  void runSelectedTool();
-}
-
-async function runSelectedTool() {
-  const tool = selectedTool.value;
-  if (!tool?.id) {
-    return;
-  }
-  if (tool.type === "prompt") {
-    const response = await runVibe64ProjectTool(tool.id, {
-      parameters: runParameters.value
-    });
-    if (response?.ok !== false) {
-      emit("global-codex-update", response);
-      emit("global-codex-open");
-    }
-    return;
-  }
-  terminalTool.value = tool;
-  terminalStartKey.value = `${tool.id}:${Date.now()}`;
-  terminalDialogOpen.value = true;
-}
-
-const handleFixRequested = openFixCodexDialog;
-
-onMounted(loadTools);
+  handleFixRequested,
+  loading,
+  mdiChevronDown,
+  mdiTools,
+  menuMode,
+  menuOpen,
+  parameterValues,
+  parametersDialogOpen,
+  refreshTools,
+  runParameters,
+  selectedTool,
+  selectedToolParameters,
+  selectTool,
+  submitParameters,
+  terminalDialogOpen,
+  terminalStartKey,
+  terminalTool,
+  tools
+} = useVibe64ProjectTools(props, emit);
 </script>
 
 <style scoped>

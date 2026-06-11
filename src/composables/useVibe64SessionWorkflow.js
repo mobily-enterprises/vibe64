@@ -78,6 +78,7 @@ function useVibe64SessionWorkflow({
 
   workflow.stepInput = useVibe64StepInputForm({
     onSaved: refreshSessionData,
+    sessionsApiPath,
     session: selectedSession
   });
 

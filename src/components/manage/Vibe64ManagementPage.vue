@@ -1,12 +1,4 @@
 <script setup>
-import { computed, onMounted, ref, watch } from "vue";
-import { useRoute, useRouter } from "vue-router";
-import {
-  mdiArrowRight,
-  mdiGithub,
-  mdiPlus,
-  mdiShieldAccountOutline
-} from "@mdi/js";
 import ShellLayout from "@/components/ShellLayout.vue";
 import Vibe64AccountMenu from "@/components/auth/Vibe64AccountMenu.vue";
 import Vibe64UserManagement from "@/components/auth/Vibe64UserManagement.vue";
@@ -14,177 +6,32 @@ import Vibe64AddProjectWizard from "@/components/manage/Vibe64AddProjectWizard.v
 import Vibe64ProjectAccessPanel from "@/components/manage/Vibe64ProjectAccessPanel.vue";
 import AIAccountsSetup from "@/components/studio/AIAccountsSetup.vue";
 import StudioSetupDoctorScreen from "@/components/studio/StudioSetupDoctorScreen.vue";
-import {
-  useVibe64AppAuth
-} from "@/composables/useVibe64AppAuth.js";
-import { useStudioShellDrawer } from "@/composables/useStudioShellDrawer.js";
-import {
-  readProjects
-} from "@/lib/vibe64ProjectApi.js";
+import { useVibe64ManagementPage } from "@/composables/useVibe64ManagementPage.js";
 
-const MANAGEMENT_DEFAULT_VIEW = "projects";
-
-const route = useRoute();
-const router = useRouter();
-const auth = useVibe64AppAuth();
-const loading = ref(true);
-const loadError = ref("");
-const projectsRoot = ref("");
-const projects = ref([]);
-const addProjectDialogOpen = ref(false);
-const projectAccessDialogOpen = ref(false);
-const projectAccessProject = ref(null);
-const sortedProjects = computed(() => [...projects.value].sort((left, right) => left.slug.localeCompare(right.slug)));
-const isOwner = computed(() => auth?.state?.user?.owner === true || auth?.state?.user?.role === "owner");
-const canManageProjects = computed(() => isOwner.value);
-const canManageStudioSetup = computed(() => isOwner.value);
-const emptyProjectsMessage = computed(() => canManageProjects.value
-  ? "No projects yet. Add a project to create the first one."
-  : "No projects yet.");
-const managementViews = Object.freeze([
-  {
-    label: "Projects",
-    path: "/app/manage/projects",
-    value: "projects"
-  },
-  {
-    label: "Studio setup",
-    path: "/app/manage/studio-setup",
-    value: "studio-setup"
-  },
-  {
-    label: "AI Accounts",
-    path: "/app/manage/accounts",
-    value: "accounts"
-  },
-  {
-    label: "Users",
-    path: "/app/manage/users",
-    value: "users"
-  }
-]);
-const managementViewValues = new Set(managementViews.map((view) => view.value));
-const activeManagementView = computed(() => {
-  return normalizeManagementView(route.params.view) || MANAGEMENT_DEFAULT_VIEW;
-});
-
-useStudioShellDrawer({
-  hidden: true
-});
-
-onMounted(() => {
-  void loadProjects();
-});
-
-watch(
-  () => [
-    route.path,
-    route.params.view
-  ],
-  () => {
-    ensureManagementViewRoute();
-  },
-  {
-    immediate: true
-  }
-);
-
-function normalizeManagementView(value = "") {
-  const rawValue = Array.isArray(value) ? value[0] : value;
-  const normalized = String(rawValue || "").trim().toLowerCase();
-  return managementViewValues.has(normalized) ? normalized : "";
-}
-
-function managementViewPath(value = MANAGEMENT_DEFAULT_VIEW) {
-  const normalized = normalizeManagementView(value) || MANAGEMENT_DEFAULT_VIEW;
-  const view = managementViews.find((candidate) => candidate.value === normalized);
-  return view?.path || "/app/manage/projects";
-}
-
-function ensureManagementViewRoute() {
-  const routeView = normalizeManagementView(route.params.view);
-  if (route.path === "/app/manage" || !routeView) {
-    void router.replace({
-      hash: route.hash,
-      path: managementViewPath(MANAGEMENT_DEFAULT_VIEW),
-      query: route.query
-    });
-  }
-}
-
-async function loadProjects({
-  quiet = false
-} = {}) {
-  if (!quiet) {
-    loading.value = true;
-  }
-  loadError.value = "";
-  try {
-    applyProjectState(await readProjects());
-  } catch (error) {
-    loadError.value = String(error?.message || error || "Projects could not load.");
-  } finally {
-    if (!quiet) {
-      loading.value = false;
-    }
-  }
-}
-
-async function refreshProjectsAfterCreate() {
-  await loadProjects({
-    quiet: true
-  });
-  addProjectDialogOpen.value = false;
-}
-
-function applyProjectState(response = {}) {
-  if (response.ok === false) {
-    loadError.value = projectError(response);
-    return;
-  }
-  projectsRoot.value = String(response.projectsRoot || "");
-  projects.value = Array.isArray(response.projects) ? response.projects : [];
-}
-
-function projectError(response = {}) {
-  return String(response.errors?.[0]?.message || response.error || "Vibe64 project request failed.");
-}
-
-function openProject(project = {}) {
-  const projectSlug = String(project.slug || "").trim();
-  if (!projectSlug) {
-    return;
-  }
-  void router.push(`/app/${projectSlug}`);
-}
-
-function projectRepositoryLabel(project = {}) {
-  return project.githubRepository?.fullName || "No GitHub repository linked";
-}
-
-function openAddProjectDialog() {
-  addProjectDialogOpen.value = true;
-}
-
-function canOpenProjectAccess(project = {}) {
-  if (!canManageProjects.value) {
-    return false;
-  }
-  return Boolean(project.githubRepository?.fullName);
-}
-
-function openProjectAccess(project = {}) {
-  projectAccessProject.value = project;
-  projectAccessDialogOpen.value = true;
-}
-
-function viewTabId(value) {
-  return `manage-tab-${value}`;
-}
-
-function viewPanelId(value) {
-  return `manage-panel-${value}`;
-}
+const {
+  activeManagementView,
+  addProjectDialogOpen,
+  canManageProjects,
+  canManageStudioSetup,
+  canOpenProjectAccess,
+  emptyProjectsMessage,
+  managementViews,
+  mdiArrowRight,
+  mdiGithub,
+  mdiPlus,
+  mdiShieldAccountOutline,
+  openAddProjectDialog,
+  openProject,
+  openProjectAccess,
+  projectAccessDialogOpen,
+  projectAccessProject,
+  projectList,
+  projectRepositoryLabel,
+  refreshProjectsAfterCreate,
+  sortedProjects,
+  viewPanelId,
+  viewTabId
+} = useVibe64ManagementPage();
 </script>
 
 <template>
@@ -200,8 +47,8 @@ function viewPanelId(value) {
       <section class="vibe64-manage__bar">
         <div class="vibe64-manage__heading">
           <h2>Management</h2>
-          <p v-if="projectsRoot" :title="projectsRoot">
-            {{ projectsRoot }}
+          <p v-if="projectList.projectsRoot" :title="projectList.projectsRoot">
+            {{ projectList.projectsRoot }}
           </p>
         </div>
       </section>
@@ -235,11 +82,11 @@ function viewPanelId(value) {
         :aria-labelledby="viewTabId(activeManagementView)"
       >
         <template v-if="activeManagementView === 'projects'">
-          <v-alert v-if="loadError" type="error" variant="tonal">
-            {{ loadError }}
+          <v-alert v-if="projectList.loadError" type="error" variant="tonal">
+            {{ projectList.loadError }}
           </v-alert>
 
-          <div v-if="loading" class="vibe64-manage__loading">
+          <div v-if="projectList.isInitialLoading" class="vibe64-manage__loading">
             <v-progress-circular color="primary" indeterminate />
           </div>
 

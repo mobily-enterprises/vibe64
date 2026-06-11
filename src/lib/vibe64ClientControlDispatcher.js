@@ -2,9 +2,6 @@ import {
   VIBE64_CLIENT_CONTROL_ACTIONS,
   controlClientAction
 } from "@/lib/vibe64PresentationControls.js";
-import {
-  ensureVibe64CodexThread
-} from "@/lib/vibe64SessionApi.js";
 
 function openDiffControl({
   diff = {},
@@ -21,6 +18,7 @@ function openDiffControl({
 }
 
 async function prepareCodexThreadControl({
+  ensureCodexThread = null,
   openCodexTerminal = null,
   refreshSessionData = async () => null,
   session = {},
@@ -30,7 +28,10 @@ async function prepareCodexThreadControl({
   if (!normalizedSessionId) {
     return false;
   }
-  const result = await ensureVibe64CodexThread(normalizedSessionId);
+  if (typeof ensureCodexThread !== "function") {
+    throw new Error("Codex thread preparation is unavailable.");
+  }
+  const result = await ensureCodexThread(normalizedSessionId);
   if (result?.ok === false) {
     if (typeof openCodexTerminal === "function") {
       await openCodexTerminal({

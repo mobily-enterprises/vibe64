@@ -1,11 +1,20 @@
-import { nextTick, onBeforeUnmount, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref } from "vue";
 import { isDynamicImportError } from "@jskit-ai/kernel/client/asyncModuleRecovery";
+import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import {
   useShellAsyncModuleRecoveryRuntime
 } from "@jskit-ai/shell-web/client/asyncModuleRecovery";
+import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
+import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
 import { writeClipboardText } from "@/lib/clipboard.js";
-import { studioHttpClient } from "@/lib/studioHttp.js";
 import { loadXtermModules } from "@/lib/xtermModuleLoader.js";
+import {
+  VIBE64_SURFACE_ID
+} from "@/lib/vibe64RequestConfig.js";
+
+function plainObject(value = {}) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
 
 function useDoctorTerminal({
   onTerminalSettled = null,
@@ -24,6 +33,7 @@ function useDoctorTerminal({
   const terminalOutput = ref("");
   const terminalSelectedText = ref("");
   const terminalCopyStatus = ref("");
+  const terminalReadPath = ref("");
 
   let terminalInstance = null;
   let terminalFitAddon = null;
@@ -40,6 +50,59 @@ function useDoctorTerminal({
     ? onTerminalSettled
     : () => null;
   const asyncModuleRecoveryRuntime = useShellAsyncModuleRecoveryRuntime();
+  const terminalPollResource = useEndpointResource({
+    enabled: false,
+    fallbackLoadError: "Terminal status could not load.",
+    path: computed(() => terminalReadPath.value),
+    queryKey: computed(() => [
+      "vibe64",
+      "doctor-terminal",
+      terminalReadPath.value
+    ]),
+    requestRecoveryLabel: "Setup terminal"
+  });
+  const terminalInputResource = useEndpointResource({
+    enabled: false,
+    fallbackSaveError: "Terminal input failed.",
+    path: computed(() => terminalEndpoint()),
+    queryKey: ["vibe64", "doctor-terminal", "input"],
+    requestRecovery: false
+  });
+  const startTerminalCommand = useCommand({
+    access: "never",
+    apiSuffix: "/studio",
+    buildCommandOptions: (_payload, { context }) => ({
+      method: "POST",
+      path: String(context.path || "")
+    }),
+    buildRawPayload: (_model, { context }) => plainObject(context.payload),
+    fallbackRunError: "Terminal start failed.",
+    messages: {
+      error: "Terminal start failed."
+    },
+    ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
+    placementSource: "vibe64.doctor-terminal.start",
+    suppressSuccessMessage: true,
+    surfaceId: VIBE64_SURFACE_ID,
+    writeMethod: "POST"
+  });
+  const closeTerminalCommand = useCommand({
+    access: "never",
+    apiSuffix: "/studio",
+    buildCommandOptions: (_payload, { context }) => ({
+      method: "DELETE",
+      path: String(context.path || "")
+    }),
+    fallbackRunError: "Terminal could not close.",
+    messages: {
+      error: "Terminal could not close."
+    },
+    ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
+    placementSource: "vibe64.doctor-terminal.close",
+    suppressSuccessMessage: true,
+    surfaceId: VIBE64_SURFACE_ID,
+    writeMethod: "DELETE"
+  });
 
   function terminalUrl(path = "") {
     return `${terminalEndpoint()}${path}`;
@@ -201,7 +264,10 @@ function useDoctorTerminal({
     }
 
     try {
-      const session = await studioHttpClient.get(terminalUrl(`/${encodeURIComponent(terminalSessionId.value)}`));
+      terminalReadPath.value = terminalUrl(`/${encodeURIComponent(terminalSessionId.value)}`);
+      await nextTick();
+      const result = await terminalPollResource.reload();
+      const session = result?.data || terminalPollResource.data.value || {};
       terminalCloseError.value = session.closeError || "";
       terminalExitCode.value = Number.isInteger(session.exitCode) ? session.exitCode : null;
       terminalOutput.value = session.output || "";
@@ -229,8 +295,11 @@ function useDoctorTerminal({
     }
 
     try {
-      await studioHttpClient.post(terminalUrl(`/${encodeURIComponent(terminalSessionId.value)}/input`), {
+      await terminalInputResource.save({
         data
+      }, {
+        method: "POST",
+        path: terminalUrl(`/${encodeURIComponent(terminalSessionId.value)}/input`)
       });
     } catch (sendError) {
       terminalError.value = String(sendError?.message || sendError || "Terminal input failed.");
@@ -270,10 +339,16 @@ function useDoctorTerminal({
           throw new Error(terminalError.value || "Terminal module could not load.");
         }
       }
-      const session = await studioHttpClient.post(terminalEndpoint(), {
-        actionId: repair.actionId,
-        inputs
+      const session = await startTerminalCommand.run({
+        path: terminalEndpoint(),
+        payload: {
+          actionId: repair.actionId,
+          inputs
+        }
       });
+      if (!session) {
+        throw new Error("Terminal start failed.");
+      }
       if (session.ok === false) {
         throw new Error(session.error || "Terminal start failed.");
       }
@@ -316,7 +391,9 @@ function useDoctorTerminal({
     terminalSessionId.value = "";
     terminalStatus.value = "";
     if (sessionId) {
-      await studioHttpClient.delete(terminalUrl(`/${encodeURIComponent(sessionId)}`)).catch(() => null);
+      await closeTerminalCommand.run({
+        path: terminalUrl(`/${encodeURIComponent(sessionId)}`)
+      }).catch(() => null);
     }
     disposeTerminalUi();
     notifyTerminalSettledOnce();

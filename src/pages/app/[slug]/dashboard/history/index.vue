@@ -12,51 +12,12 @@
 </template>
 
 <script setup>
-import { computed, watch } from "vue";
-import { useRoute, useRouter } from "vue-router";
 import Vibe64SessionHistoryPanel from "@/components/studio/Vibe64SessionHistoryPanel.vue";
+import {
+  useVibe64DashboardHistoryPage
+} from "@/composables/useVibe64DashboardHistoryPage.js";
 
-const route = useRoute();
-const router = useRouter();
-
-function firstQueryValue(value) {
-  return Array.isArray(value) ? value[0] : value;
-}
-
-function normalizeArchive(value) {
-  return value === "abandoned" ? "abandoned" : "completed";
-}
-
-function replaceTabQuery(archive) {
-  void router.replace({
-    path: route.path,
-    query: {
-      ...route.query,
-      tab: archive
-    }
-  });
-}
-
-const selectedArchive = computed({
-  get() {
-    return normalizeArchive(firstQueryValue(route.query.tab));
-  },
-  set(value) {
-    replaceTabQuery(normalizeArchive(value));
-  }
-});
-
-watch(
-  () => route.query.tab,
-  (tab) => {
-    const rawTab = firstQueryValue(tab);
-    const normalizedTab = normalizeArchive(rawTab);
-    if (rawTab !== normalizedTab) {
-      replaceTabQuery(normalizedTab);
-    }
-  },
-  { immediate: true }
-);
+const { selectedArchive } = useVibe64DashboardHistoryPage();
 </script>
 
 <style scoped>

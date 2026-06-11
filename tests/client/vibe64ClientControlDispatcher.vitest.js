@@ -6,17 +6,12 @@ import {
 import {
   runVibe64ClientControl
 } from "../../src/lib/vibe64ClientControlDispatcher.js";
-import {
-  ensureVibe64CodexThread
-} from "@/lib/vibe64SessionApi.js";
-
-vi.mock("@/lib/vibe64SessionApi.js", () => ({
-  ensureVibe64CodexThread: vi.fn()
-}));
 
 describe("vibe64ClientControlDispatcher", () => {
+  let ensureCodexThread;
+
   beforeEach(() => {
-    vi.mocked(ensureVibe64CodexThread).mockReset();
+    ensureCodexThread = vi.fn();
   });
 
   it("dispatches the open diff control through the shared action contract", async () => {
@@ -57,7 +52,7 @@ describe("vibe64ClientControlDispatcher", () => {
   it("dispatches Codex retry controls through app-server thread preparation", async () => {
     const refreshSessionData = vi.fn();
     const openCodexTerminal = vi.fn();
-    vi.mocked(ensureVibe64CodexThread).mockResolvedValue({
+    ensureCodexThread.mockResolvedValue({
       ok: true
     });
 
@@ -67,18 +62,19 @@ describe("vibe64ClientControlDispatcher", () => {
       }
     }, {
       openCodexTerminal,
+      ensureCodexThread,
       refreshSessionData,
       sessionId: "session_123"
     })).resolves.toBe(true);
 
-    expect(ensureVibe64CodexThread).toHaveBeenCalledWith("session_123");
+    expect(ensureCodexThread).toHaveBeenCalledWith("session_123");
     expect(refreshSessionData).toHaveBeenCalledTimes(1);
     expect(openCodexTerminal).not.toHaveBeenCalled();
   });
 
   it("opens the Codex terminal surface when app-server thread preparation fails", async () => {
     const openCodexTerminal = vi.fn(() => true);
-    vi.mocked(ensureVibe64CodexThread).mockResolvedValue({
+    ensureCodexThread.mockResolvedValue({
       error: "Codex app-server preparation failed.",
       ok: false
     });
@@ -89,6 +85,7 @@ describe("vibe64ClientControlDispatcher", () => {
       }
     }, {
       openCodexTerminal,
+      ensureCodexThread,
       sessionId: "session_123"
     })).resolves.toEqual({
       error: "Codex app-server preparation failed.",

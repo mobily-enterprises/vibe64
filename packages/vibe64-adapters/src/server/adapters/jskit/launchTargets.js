@@ -65,8 +65,9 @@ async function main() {
     }
     throw error;
   }
+  const knexPackageName = "knex";
   const [{ default: createKnex }, knexfileModule] = await Promise.all([
-    import("knex"),
+    import(knexPackageName),
     import(pathToFileURL(knexfilePath).href)
   ]);
   const knexfile = knexfileModule.default || knexfileModule;

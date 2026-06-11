@@ -6,9 +6,6 @@ import {
   useVibe64ProjectSlug
 } from "@/composables/useVibe64ProjectScope.js";
 import {
-  studioHttpClient
-} from "@/lib/studioHttp.js";
-import {
   VIBE64_SESSIONS_API_SUFFIX,
   VIBE64_SURFACE_ID,
   vibe64ArtifactPreviewPath,
@@ -38,7 +35,6 @@ function useVibe64SessionArtifacts() {
   }));
 
   const previewResource = useEndpointResource({
-    client: studioHttpClient,
     enabled: false,
     fallbackLoadError: "Artifact preview could not be loaded.",
     path: computed(() => previewSessionId.value
@@ -50,7 +46,8 @@ function useVibe64SessionArtifacts() {
       previewSessionId.value,
       previewId.value,
       projectSlug.value
-    ))
+    )),
+    requestRecoveryLabel: "Artifact preview"
   });
 
   async function readArtifactPreview(sessionId = "", nextPreviewId = "") {

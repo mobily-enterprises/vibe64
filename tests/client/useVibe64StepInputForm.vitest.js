@@ -32,6 +32,15 @@ function promptResponseSession(prompt) {
   };
 }
 
+function stepInputForm(options = {}) {
+  return useVibe64StepInputForm({
+    submitCurrentStepInput: async () => ({
+      ok: true
+    }),
+    ...options
+  });
+}
+
 describe("useVibe64StepInputForm", () => {
   it("does not treat server-owned Codex conversation input as a direct step input form", () => {
     const session = ref({
@@ -58,7 +67,7 @@ describe("useVibe64StepInputForm", () => {
         status: "waiting_for_input"
       }
     });
-    const form = useVibe64StepInputForm({
+    const form = stepInputForm({
       session
     });
 
@@ -71,7 +80,7 @@ describe("useVibe64StepInputForm", () => {
       "[1] What filename should I create?",
       "[2] What contents should it have?"
     ].join("\n")));
-    const form = useVibe64StepInputForm({
+    const form = stepInputForm({
       session,
       submitCurrentStepInput: async (_sessionId, input) => {
         submittedInput = input;
@@ -108,7 +117,7 @@ describe("useVibe64StepInputForm", () => {
 
   it("keeps the normal response textarea when the prompt is not a clean question list", () => {
     const session = ref(promptResponseSession("What should happen next?"));
-    const form = useVibe64StepInputForm({
+    const form = stepInputForm({
       session
     });
 
@@ -151,7 +160,7 @@ describe("useVibe64StepInputForm", () => {
         status: "waiting_for_input"
       }
     });
-    const form = useVibe64StepInputForm({
+    const form = stepInputForm({
       session
     });
 
@@ -167,7 +176,7 @@ describe("useVibe64StepInputForm", () => {
       "[1] What filename should I create?",
       "[3] What contents should it have?"
     ].join("\n")));
-    const form = useVibe64StepInputForm({
+    const form = stepInputForm({
       session
     });
 
@@ -184,7 +193,7 @@ describe("useVibe64StepInputForm", () => {
       "[1] Which file should change?",
       "[2] What should it contain?"
     ].join("\n")));
-    const form = useVibe64StepInputForm({
+    const form = stepInputForm({
       session
     });
 

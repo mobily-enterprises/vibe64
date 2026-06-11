@@ -43,8 +43,8 @@ import {
   stripTerminalControlSequences
 } from "@/lib/codexOutput.js";
 import {
-  terminalFailureFixRequest
-} from "@/lib/vibe64TerminalFailurePrompt.js";
+  useVibe64TerminalFailureFixCommand
+} from "@/composables/useVibe64TerminalFailureFixCommand.js";
 
 const props = defineProps({
   actionId: {
@@ -109,6 +109,7 @@ const props = defineProps({
   }
 });
 const emit = defineEmits(["fix-requested"]);
+const terminalFailureFix = useVibe64TerminalFailureFixCommand();
 
 const outputElement = ref(null);
 const terminalText = computed(() => {
@@ -146,7 +147,7 @@ async function requestAiFix() {
   if (!canRequestAiFix.value) {
     return;
   }
-  emit("fix-requested", await terminalFailureFixRequest({
+  emit("fix-requested", await terminalFailureFix.request({
     actionId: props.actionId,
     actionLabel: props.actionLabel,
     attemptedCommand: props.attemptedCommand,

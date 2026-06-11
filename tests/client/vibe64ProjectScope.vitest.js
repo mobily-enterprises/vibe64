@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  configureUsersWebHttpClient,
+  getUsersWebHttpClient,
+  resetUsersWebHttpClientForTests
+} from "@jskit-ai/users-web/client/lib/httpClient";
 
 import {
+  PROJECT_SELECTION_ENDPOINT,
   VIBE64_ACCOUNTS_CHANGED_EVENT,
   projectTypeQueryKey
 } from "../../src/lib/studioGateApi.js";
@@ -9,13 +15,10 @@ import {
   resolveStudioRequestUrl,
   scopedDevelopmentApiUrl,
   scopedDevelopmentApiPathname
-} from "../../src/lib/studioHttp.js";
+} from "../../src/lib/studioUrls.js";
 import {
   targetScriptsQueryKey
 } from "../../src/lib/targetScriptsRequestConfig.js";
-import {
-  readProjects
-} from "../../src/lib/vibe64ProjectApi.js";
 import {
   vibe64ProjectScopedStorageKey,
   vibe64ProjectQueryScope,
@@ -24,6 +27,7 @@ import {
 
 describe("Vibe64 project client scope", () => {
   afterEach(() => {
+    resetUsersWebHttpClientForTests();
     vi.unstubAllGlobals();
   });
 
@@ -105,8 +109,16 @@ describe("Vibe64 project client scope", () => {
       .toBe("/api/app/beepollen/vibe64/sessions/session-1/launch-terminal");
   });
 
-  it("scopes project API requests on project pages", async () => {
+  it("scopes JSKIT HTTP client project API requests on project pages", async () => {
     const requestedUrls = [];
+    configureUsersWebHttpClient({
+      csrf: {
+        enabled: false
+      },
+      resolveRequestUrl(url) {
+        return resolveStudioRequestUrl(url);
+      }
+    });
     vi.stubGlobal("window", {
       location: {
         origin: "http://127.0.0.1:5173",
@@ -116,15 +128,19 @@ describe("Vibe64 project client scope", () => {
     vi.stubGlobal("fetch", vi.fn(async (url) => {
       requestedUrls.push(url);
       return {
+        headers: {
+          get: () => "application/json"
+        },
         json: async () => ({
           ok: true,
           projects: []
         }),
+        ok: true,
         status: 200
       };
     }));
 
-    await readProjects();
+    await getUsersWebHttpClient().get(PROJECT_SELECTION_ENDPOINT);
 
     expect(requestedUrls).toEqual([
       "/api/app/beepollen/vibe64/projects"

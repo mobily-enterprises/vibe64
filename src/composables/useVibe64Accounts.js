@@ -4,20 +4,15 @@ import { useQueryClient } from "@tanstack/vue-query";
 import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
 import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
 import {
-  VIBE64_SURFACE_ID,
-  LOCAL_STUDIO_COMMAND_OPTIONS
+  VIBE64_SURFACE_ID
 } from "@/lib/vibe64RequestConfig.js";
 import {
   ACCOUNTS_AUTH_ENDPOINT,
   ACCOUNTS_ENDPOINT,
-  ACCOUNTS_LOGOUT_ENDPOINT,
   VIBE64_ACCOUNTS_CHANGED_EVENT,
   VIBE64_ACCOUNTS_AUTH_API_SUFFIX,
   accountsQueryKey
 } from "@/lib/studioGateApi.js";
-import {
-  studioHttpClient
-} from "@/lib/studioHttp.js";
 import {
   invalidateVibe64CapabilitiesQueryClient
 } from "@/lib/vibe64CapabilitiesInvalidation.js";
@@ -29,8 +24,8 @@ function accountsResourceQueryKey() {
 function useVibe64Accounts() {
   const queryClient = useQueryClient();
   const forceRefresh = ref(false);
+  const authSessionReadId = ref("");
   const statusResource = useEndpointResource({
-    client: studioHttpClient,
     enabled: true,
     fallbackLoadError: "Account status could not load.",
     path: ACCOUNTS_ENDPOINT,
@@ -39,18 +34,35 @@ function useVibe64Accounts() {
     realtime: {
       event: VIBE64_ACCOUNTS_CHANGED_EVENT
     },
-    refreshOnPull: true
+    refreshOnPull: true,
+    requestRecoveryLabel: "Account status"
+  });
+  const authSessionResource = useEndpointResource({
+    enabled: false,
+    fallbackLoadError: "Account login session could not load.",
+    path: computed(() => authSessionReadId.value
+      ? `${ACCOUNTS_AUTH_ENDPOINT}/${encodeURIComponent(authSessionReadId.value)}`
+      : ""),
+    queryKey: computed(() => [
+      "vibe64",
+      "accounts",
+      "auth-session",
+      authSessionReadId.value
+    ]),
+    requestRecoveryLabel: "Account login session"
   });
 
   const startAuthCommand = useCommand({
     access: "never",
     apiSuffix: VIBE64_ACCOUNTS_AUTH_API_SUFFIX,
     buildCommandOptions: () => ({
-      method: "POST",
-      options: LOCAL_STUDIO_COMMAND_OPTIONS
+      method: "POST"
     }),
     buildRawPayload: (_model, { context }) => ({
       accountId: String(context.accountId || ""),
+      ...(String(context.mode || "") === "api_key" ? {
+        apiKey: String(context.apiKey || "")
+      } : {}),
       gitUserEmail: String(context.gitUserEmail || ""),
       gitUserName: String(context.gitUserName || ""),
       mode: String(context.mode || "browser")
@@ -66,16 +78,45 @@ function useVibe64Accounts() {
     writeMethod: "POST"
   });
 
+  const cancelAuthSessionCommand = useCommand({
+    access: "never",
+    apiSuffix: VIBE64_ACCOUNTS_AUTH_API_SUFFIX,
+    buildCommandOptions: (_payload, { context }) => ({
+      method: "DELETE",
+      path: `${ACCOUNTS_AUTH_ENDPOINT}/${encodeURIComponent(String(context?.sessionId || ""))}`
+    }),
+    fallbackRunError: "Account login could not be cancelled.",
+    messages: {
+      error: "Account login could not be cancelled."
+    },
+    ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
+    placementSource: "vibe64.accounts.auth.cancel",
+    suppressSuccessMessage: true,
+    surfaceId: VIBE64_SURFACE_ID,
+    writeMethod: "DELETE"
+  });
+
+  const logoutCommand = useCommand({
+    access: "never",
+    apiSuffix: "/vibe64/accounts/logout",
+    buildRawPayload: (_model, { context }) => ({
+      accountId: String(context?.accountId || "")
+    }),
+    fallbackRunError: "Account logout failed.",
+    messages: {
+      error: "Account logout failed."
+    },
+    ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
+    placementSource: "vibe64.accounts.logout",
+    suppressSuccessMessage: true,
+    surfaceId: VIBE64_SURFACE_ID,
+    writeMethod: "POST"
+  });
+
   async function startAuth(accountId, mode = "browser", options = {}) {
-    if (mode === "api_key") {
-      return studioHttpClient.post(ACCOUNTS_AUTH_ENDPOINT, {
-        accountId: String(accountId || ""),
-        apiKey: String(options.apiKey || ""),
-        mode
-      });
-    }
     return startAuthCommand.run({
       accountId,
+      apiKey: options.apiKey || "",
       gitUserEmail: options.gitUserEmail || options.email || "",
       gitUserName: options.gitUserName || options.name || "",
       mode
@@ -83,16 +124,23 @@ function useVibe64Accounts() {
   }
 
   async function readAuthSession(sessionId) {
-    return studioHttpClient.get(`${ACCOUNTS_AUTH_ENDPOINT}/${encodeURIComponent(sessionId)}`);
+    authSessionReadId.value = String(sessionId || "").trim();
+    if (!authSessionReadId.value) {
+      return null;
+    }
+    const result = await authSessionResource.reload();
+    return result?.data || authSessionResource.data.value || null;
   }
 
   async function cancelAuthSession(sessionId) {
-    return studioHttpClient.delete(`${ACCOUNTS_AUTH_ENDPOINT}/${encodeURIComponent(sessionId)}`);
+    return cancelAuthSessionCommand.run({
+      sessionId
+    });
   }
 
   async function logout(accountId) {
-    return studioHttpClient.post(ACCOUNTS_LOGOUT_ENDPOINT, {
-      accountId: String(accountId || "")
+    return logoutCommand.run({
+      accountId
     });
   }
 
@@ -117,12 +165,15 @@ function useVibe64Accounts() {
     invalidateCapabilities,
     isLoading: statusResource.isLoading,
     loadError: statusResource.loadError,
+    logoutCommand,
     readAuthSession,
     refresh,
     logout,
+    cancelAuthSessionCommand,
     startAuth,
     startAuthCommand,
     status: statusResource.data,
+    authSessionResource,
     statusResource
   });
 }

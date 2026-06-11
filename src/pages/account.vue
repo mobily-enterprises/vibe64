@@ -9,53 +9,16 @@
 </route>
 
 <script setup>
-import { computed } from "vue";
-import { useRoute, useRouter } from "vue-router";
 import {
   mdiArrowLeft
 } from "@mdi/js";
 import ShellLayout from "@/components/ShellLayout.vue";
 import Vibe64AccountSettings from "@/components/auth/Vibe64AccountSettings.vue";
-import { useStudioShellDrawer } from "@/composables/useStudioShellDrawer.js";
+import {
+  useVibe64AccountPage
+} from "@/composables/useVibe64AccountPage.js";
 
-const route = useRoute();
-const router = useRouter();
-
-useStudioShellDrawer({
-  hidden: true
-});
-
-const returnPath = computed(() => safeReturnPath(route.query.returnTo));
-
-function firstQueryValue(value) {
-  return Array.isArray(value) ? value[0] : value;
-}
-
-function safeReturnPath(value) {
-  const target = String(firstQueryValue(value) || "").trim();
-  if (!target || !target.startsWith("/") || target.startsWith("//")) {
-    return "/app/manage/projects";
-  }
-  if (target === "/account" || target.startsWith("/account?")) {
-    return "/app/manage/projects";
-  }
-  if (
-    target === "/app/manage" ||
-    target.startsWith("/app/manage/") ||
-    target.startsWith("/app/manage?")
-  ) {
-    return target;
-  }
-  const match = /^\/app\/([^/?#]+)(?:[/?#]|$)/u.exec(target);
-  if (match && match[1] !== "manage") {
-    return target;
-  }
-  return "/app/manage/projects";
-}
-
-async function goBack() {
-  await router.push(returnPath.value);
-}
+const { goBack } = useVibe64AccountPage();
 </script>
 
 <template>

@@ -239,7 +239,7 @@ test.describe("Autopilot dumb client contract", () => {
       { label: "Setup", routePath: "setup" }
     ]) {
       await page.locator(".section-container-shell__nav").getByText(label, { exact: true }).click();
-      await expect(page).toHaveURL(dashboardUrlPattern(routePath));
+      await expect(page).toHaveURL(dashboardUrlPattern(routePath, "/?(?:\\?.*)?$"));
       await expect(page.getByText("Dashboard navigation should not reload this chat.")).toBeVisible();
       expect(sessionReadPaths, `unexpected session reads after ${label}`).toHaveLength(sessionReadsAfterDashboardOpen);
       expect(conversationLogReadPaths, `unexpected conversation reads after ${label}`).toHaveLength(conversationReadsAfterDashboardOpen);
@@ -252,10 +252,11 @@ test.describe("Autopilot dumb client contract", () => {
     await page.goto(`${BASE_URL}/account?returnTo=${encodeURIComponent(DEVELOPMENT_PATH)}`);
 
     await expect(page.getByRole("heading", { name: "Account", exact: true })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "GitHub", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2, name: "GitHub", exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Password", exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Codex", exact: true })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Sign in or create GitHub account" })).toBeVisible();
+    await expect(page.getByText("GitHub is connected.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Save Git identity" })).toBeVisible();
   });
 
   test("auto-dispatches the server operation without rendering a manual start override", async ({ page }) => {
@@ -1101,23 +1102,23 @@ test.describe("Autopilot dumb client contract", () => {
     });
 
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
-    await expect(page.locator(".studio-autopilot__command-terminal-overlay strong", {
+    await expect(page.locator(".studio-autopilot__command-spy-title", {
       hasText: "Command running."
     })).toBeVisible();
 
-    await page.locator(".studio-ai-sessions__tab", { hasText: "Beta" }).click();
+    await page.locator(".studio-ai-sessions__tab:visible", { hasText: "Beta" }).click();
     await page.waitForTimeout(30);
     expect(commandTerminalCloses).toBe(0);
     await expect(page.getByRole("heading", { name: "Other session" })).toBeVisible();
     await expect.poll(() => commandTerminalCloses).toBe(1);
 
-    await page.locator(".studio-ai-sessions__tab", { hasText: "Alpha" }).click();
-    await expect(page.locator(".studio-autopilot__command-terminal-overlay strong", {
+    await page.locator(".studio-ai-sessions__tab:visible", { hasText: "Alpha" }).click();
+    await expect(page.locator(".studio-autopilot__command-spy-title", {
       hasText: "Command needs attention."
     })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Get AI to fix it" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Fix" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Retry command" })).toBeVisible();
-    await expect(page.getByLabel("Retry note")).toBeHidden();
+    await expect(page.getByLabel("Retry note")).toBeVisible();
 
     await page.getByRole("button", { name: "Retry command" }).click();
 
@@ -1197,7 +1198,7 @@ test.describe("Autopilot dumb client contract", () => {
 
     await expect(page.locator(".studio-ai-sessions__terminals--autopilot-preview")).toHaveCount(0);
     await expect(page.locator(".studio-ai-sessions__terminals--compact")).toHaveCount(0);
-    await expect(page.locator(".studio-ai-sessions__codex-thinking-overlay")).toBeVisible();
+    await expect(page.locator(".studio-autopilot__thinking:not(.studio-autopilot__thinking--empty)")).toBeVisible();
     await expect(page.getByRole("heading", { name: "Codex is thinking..." })).toHaveCount(0);
     await expect.poll(() => codexTerminalStartRequests).toBe(0);
     await expect.poll(async () => page.evaluate(() => (
@@ -1207,10 +1208,10 @@ test.describe("Autopilot dumb client contract", () => {
     await expect.poll(() => codexTerminalStartRequests).toBe(0);
     await expect(page.locator(".studio-ai-sessions__terminals--compact .codex-terminal__host")).toHaveCount(0);
     await expect(page.getByText("Your agent needs attention")).toHaveCount(0);
-    await expect(page.locator(".studio-ai-sessions__codex-thinking-overlay")).toBeVisible();
+    await expect(page.locator(".studio-autopilot__thinking:not(.studio-autopilot__thinking--empty)")).toBeVisible();
   });
 
-  test("does not surface Codex app-server preparation failure as terminal control", async ({ page }) => {
+  test("opens the AI Terminal for Codex app-server preparation failures without sending input", async ({ page }) => {
     await mockCodexTerminalPreviewSocket(page);
     const session = sessionPayload({
       codexTerminal: {
@@ -1293,11 +1294,12 @@ test.describe("Autopilot dumb client contract", () => {
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
     await expect(page.getByText("Your agent needs attention")).toHaveCount(0);
-    await expect(page.locator(".studio-ai-sessions__terminals--compact .codex-terminal__host")).toHaveCount(0);
+    await expect(page.getByText("Codex needs attention in the AI Terminal.")).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Terminal input" })).toHaveCount(1);
     await expect(page.locator(".studio-autopilot")).not.toHaveAttribute("inert", "");
     await expect.poll(async () => page.evaluate(() => (
       (window as unknown as { __vibe64CodexTerminalSocketCount?: () => number }).__vibe64CodexTerminalSocketCount?.() || 0
-    ))).toBe(0);
+    ))).toBe(1);
     await expect.poll(async () => page.evaluate(() => (
       ((window as unknown as { __vibe64CodexTerminalInputs?: string[] }).__vibe64CodexTerminalInputs || []).join("")
     ))).toBe("");
@@ -1451,11 +1453,11 @@ test.describe("Autopilot dumb client contract", () => {
     ))).toBe(0);
 
     await expect(page.locator(".studio-ai-sessions__terminals--autopilot-preview")).toHaveCount(0);
-    await expect(page.locator(".studio-ai-sessions__codex-thinking-overlay")).toHaveCount(0);
+    await expect(page.locator(".studio-autopilot__thinking:not(.studio-autopilot__thinking--empty)")).toHaveCount(0);
     await expect(page.locator(".studio-autopilot")).not.toHaveAttribute("inert", "");
     await page.waitForTimeout(700);
     await expect(page.locator(".studio-ai-sessions__terminals--autopilot-preview")).toHaveCount(0);
-    await expect(page.locator(".studio-ai-sessions__codex-thinking-overlay")).toHaveCount(0);
+    await expect(page.locator(".studio-autopilot__thinking:not(.studio-autopilot__thinking--empty)")).toHaveCount(0);
     await expect(page.locator(".studio-autopilot")).not.toHaveAttribute("inert", "");
     await expect.poll(async () => page.evaluate(() => (
       (window as unknown as { __vibe64CodexTerminalInputs?: string[] }).__vibe64CodexTerminalInputs || []
@@ -1588,7 +1590,7 @@ test.describe("Autopilot dumb client contract", () => {
 
     await expect(page.locator(".studio-ai-sessions__terminals--autopilot-preview")).toHaveCount(0);
     await expect(page.locator(".studio-autopilot")).not.toHaveAttribute("inert", "");
-    await expect(page.locator(".studio-ai-sessions__codex-thinking-overlay")).toHaveCount(0);
+    await expect(page.locator(".studio-autopilot__thinking:not(.studio-autopilot__thinking--empty)")).toHaveCount(0);
 
     await page.waitForTimeout(700);
     await expect(page.locator(".studio-ai-sessions__terminals--autopilot-preview")).toHaveCount(0);
@@ -1923,6 +1925,7 @@ test.describe("Autopilot dumb client contract", () => {
   test("keeps the Codex composer stable and interrupts the active turn from the inline button", async ({ page }) => {
     await mockCodexTerminalPreviewSocket(page);
     const intentRequests: unknown[] = [];
+    let interruptRequests = 0;
     const session = sessionPayload({
       intents: [
         {
@@ -2032,6 +2035,9 @@ test.describe("Autopilot dumb client contract", () => {
             stepId: "server_step"
           }
         });
+      },
+      onCodexTurnInterrupt: () => {
+        interruptRequests += 1;
       }
     });
 
@@ -2048,15 +2054,13 @@ test.describe("Autopilot dumb client contract", () => {
     await expect(page.getByRole("button", { name: "Next step" })).toHaveCount(0);
     const stopButton = page.getByRole("button", { name: "Stop Codex" });
     await expect(stopButton).toBeVisible();
-    await expect.poll(async () => page.evaluate(() => (
-      (window as unknown as { __vibe64CodexTerminalSocketCount?: () => number }).__vibe64CodexTerminalSocketCount?.() || 0
-    ))).toBeGreaterThan(0);
 
     await stopButton.click();
 
+    await expect.poll(() => interruptRequests).toBe(1);
     await expect.poll(async () => page.evaluate(() => (
       (window as unknown as { __vibe64CodexTerminalInputs?: string[] }).__vibe64CodexTerminalInputs || []
-    ))).toContain("\u001b");
+    ))).toEqual([]);
   });
 
   test("does not repeat the conversation starter after real chat history exists", async ({ page }) => {
@@ -2866,7 +2870,7 @@ test.describe("Autopilot dumb client contract", () => {
 
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}?mode=inspect`);
 
-    const inspect = page.locator(".studio-ai-sessions__inspect-slot");
+    const inspect = page.locator(".studio-autopilot__composer");
     await expect(inspect.getByLabel("Work title")).toHaveValue("Add empty a.txt to worktree root");
     await expect(inspect.getByLabel("Session label")).toHaveValue("a-txt");
     await expect(inspect.getByLabel("Work description")).toHaveValue("Create an empty file named `a.txt` in the active Vibe64 worktree root.");
@@ -3008,7 +3012,7 @@ test.describe("Autopilot dumb client contract", () => {
 
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}?mode=inspect`);
 
-    const inspect = page.locator(".studio-ai-sessions__inspect-slot");
+    const inspect = page.locator(".studio-autopilot__composer");
     await inspect.getByLabel("Issue title").fill("Updated issue title");
     await inspect.getByRole("button", { name: "Create GitHub issue" }).click();
 
@@ -3044,6 +3048,7 @@ async function mockVibe64Session(
     onAdvance = () => undefined,
     onCommandTerminalClose = () => undefined,
     onCommandTerminalStart = () => undefined,
+    onCodexTurnInterrupt = () => undefined,
     onConversationLogRead = () => undefined,
     onIntent = () => undefined,
     onSessionRead = () => undefined,
@@ -3060,6 +3065,7 @@ async function mockVibe64Session(
     onCommandTerminalClose?: () => void;
     onCommandTerminalStart?: (body?: Record<string, unknown>) => Record<string, unknown> | void;
     onCodexTerminalStart?: () => Record<string, unknown> | void;
+    onCodexTurnInterrupt?: (body?: Record<string, unknown>) => void;
     onConversationLogRead?: (pathname: string) => void;
     onIntent?: (body: unknown) => void;
     onSessionRead?: (session: Record<string, unknown>, pathname: string) => void;
@@ -3088,6 +3094,15 @@ async function mockVibe64Session(
         ok: true,
         status: "running",
         ...(codexTerminal && typeof codexTerminal === "object" ? codexTerminal : {})
+      });
+      return;
+    }
+    if (method === "POST" && url.pathname.endsWith("/codex-turn/interrupt")) {
+      onCodexTurnInterrupt(request.postDataJSON() || {});
+      await fulfillJson(route, {
+        interrupted: true,
+        ok: true,
+        ...session
       });
       return;
     }

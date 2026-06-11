@@ -1,4 +1,6 @@
-import { computed, proxyRefs, ref, unref } from "vue";
+import { computed, ref, unref } from "vue";
+import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
+import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
 import {
   useVibe64DiffDialog
 } from "@/composables/useVibe64DiffDialog.js";
@@ -8,15 +10,14 @@ import {
   requiredActionInputMissing
 } from "@/lib/vibe64ActionInputModel.js";
 import {
-  LOCAL_STUDIO_COMMAND_OPTIONS,
+  VIBE64_SESSIONS_API_SUFFIX,
+  VIBE64_SURFACE_ID,
   vibe64SessionPath
 } from "@/lib/vibe64SessionRequestConfig.js";
 import {
-  readRefOrGetterBoolean
+  readRefOrGetterBoolean,
+  readRefOrGetterValue
 } from "@/lib/vueRefOrGetterValue.js";
-import {
-  studioHttpClient
-} from "@/lib/studioHttp.js";
 
 function useVibe64SessionDialogs({
   activeActionId,
@@ -33,14 +34,12 @@ function useVibe64SessionDialogs({
   const abandonDialogOpen = ref(false);
   const abandonDialogSessionId = ref("");
   const abandonDialogSessionTitle = ref("");
-  const abandonRunning = ref(false);
-  const abandonMessage = ref("");
-  const abandonMessageType = ref("");
   const inputDialogAction = ref(null);
   const inputDialogError = ref("");
   const inputDialogOpen = ref(false);
   const inputDialogSubmitting = ref(false);
   const inputDialogValues = ref({});
+  const resolvedSessionsApiPath = computed(() => String(readRefOrGetterValue(sessionsApiPath) || ""));
 
   const {
     clearDiffDialog,
@@ -56,11 +55,27 @@ function useVibe64SessionDialogs({
     selectedSessionId
   });
 
-  const abandonCommand = proxyRefs({
-    isRunning: abandonRunning,
-    message: abandonMessage,
-    messageType: abandonMessageType,
-    run: runAbandonCommand
+  const abandonCommand = useCommand({
+    access: "never",
+    apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
+    buildCommandOptions: (_payload, { context }) => ({
+      method: "POST",
+      path: vibe64SessionPath(resolvedSessionsApiPath.value, context?.sessionId, "/abandon")
+    }),
+    fallbackRunError: "Vibe64 session could not be abandoned.",
+    messages: {
+      error: "Vibe64 session could not be abandoned.",
+      success: "Vibe64 session abandoned."
+    },
+    onRunSuccess: async () => {
+      clearAbandonDialog();
+      onAbandoned();
+      await refreshSessionData();
+    },
+    ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
+    placementSource: "vibe64.sessions.abandon",
+    surfaceId: VIBE64_SURFACE_ID,
+    writeMethod: "POST"
   });
 
   const inputDialogFields = computed(() => normalizeActionInputFields(inputDialogAction.value?.inputFields));
@@ -105,37 +120,6 @@ function useVibe64SessionDialogs({
     await abandonCommand.run({
       sessionId: abandonDialogSessionId.value
     });
-  }
-
-  async function runAbandonCommand({
-    sessionId = ""
-  } = {}) {
-    const normalizedSessionId = String(sessionId || "").trim();
-    if (!normalizedSessionId || abandonRunning.value) {
-      return null;
-    }
-    abandonRunning.value = true;
-    abandonMessage.value = "";
-    abandonMessageType.value = "";
-    try {
-      const response = await studioHttpClient.post(
-        vibe64SessionPath(sessionsApiPath.value, normalizedSessionId, "/abandon"),
-        {},
-        LOCAL_STUDIO_COMMAND_OPTIONS
-      );
-      abandonMessage.value = "Vibe64 session abandoned.";
-      abandonMessageType.value = "success";
-      clearAbandonDialog();
-      onAbandoned();
-      await refreshSessionData();
-      return response;
-    } catch (error) {
-      abandonMessage.value = String(error?.message || error || "Vibe64 session could not be abandoned.");
-      abandonMessageType.value = "error";
-      throw error;
-    } finally {
-      abandonRunning.value = false;
-    }
   }
 
   function openInputDialog(action = {}) {

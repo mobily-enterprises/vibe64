@@ -4,29 +4,26 @@ import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
 import { usePaths } from "@jskit-ai/users-web/client/composables/usePaths";
 import { useStudioTerminal } from "@/composables/useStudioTerminal.js";
 import {
+  useVibe64TerminalFailureFixCommand
+} from "@/composables/useVibe64TerminalFailureFixCommand.js";
+import {
   vibe64CommandTerminalWebSocketUrl,
   vibe64LaunchTerminalWebSocketUrl,
   vibe64ProjectToolTerminalWebSocketUrl,
-  vibe64ShellTerminalWebSocketUrl,
-  startVibe64ProjectToolFixJob
+  vibe64ShellTerminalWebSocketUrl
 } from "@/lib/vibe64SessionApi.js";
 import {
   VIBE64_API_SUFFIX,
   VIBE64_SESSIONS_API_SUFFIX,
   VIBE64_SURFACE_ID,
-  LOCAL_STUDIO_COMMAND_OPTIONS,
+  normalizeVibe64ProjectToolFixInput,
   vibe64CommandTerminalPath,
   vibe64LaunchTerminalPath,
+  vibe64ProjectToolFixPath,
   vibe64ProjectToolRunPath,
   vibe64ProjectToolTerminalPath,
   vibe64ShellTerminalPath
 } from "@/lib/vibe64SessionRequestConfig.js";
-import {
-  terminalFailureFixRequest
-} from "@/lib/vibe64TerminalFailurePrompt.js";
-import {
-  scopedDevelopmentApiUrl
-} from "@/lib/studioHttp.js";
 
 const FINISHED_TERMINAL_HOLD_MS = 500;
 
@@ -77,6 +74,9 @@ function useVibe64CommandTerminalController(props, emit) {
   const vibe64ApiPath = computed(() => paths.api(VIBE64_API_SUFFIX, {
     surface: VIBE64_SURFACE_ID
   }));
+  const terminalFailureFix = useVibe64TerminalFailureFixCommand({
+    sessionsApiPath
+  });
   const launchTerminal = computed(() => props.terminalKind === "launch");
   const shellTerminal = computed(() => props.terminalKind === "shell");
   const projectToolTerminal = computed(() => props.terminalKind === "tool");
@@ -150,8 +150,7 @@ function useVibe64CommandTerminalController(props, emit) {
     apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
     buildCommandOptions: (_payload, { context }) => ({
       method: "POST",
-      options: LOCAL_STUDIO_COMMAND_OPTIONS,
-      path: scopedDevelopmentApiUrl(terminalPath(context))
+      path: terminalPath(context)
     }),
     buildRawPayload: (_model, { context }) => {
       if (context.terminalKind === "launch") {
@@ -195,8 +194,7 @@ function useVibe64CommandTerminalController(props, emit) {
     apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
     buildCommandOptions: (_payload, { context }) => ({
       method: "DELETE",
-      options: LOCAL_STUDIO_COMMAND_OPTIONS,
-      path: scopedDevelopmentApiUrl(terminalPath(context))
+      path: terminalPath(context)
     }),
     fallbackRunError: "Terminal could not close.",
     messages: {
@@ -207,6 +205,27 @@ function useVibe64CommandTerminalController(props, emit) {
     suppressSuccessMessage: true,
     surfaceId: VIBE64_SURFACE_ID,
     writeMethod: "DELETE"
+  });
+  const requestProjectToolFixCommand = useCommand({
+    access: "never",
+    apiSuffix: VIBE64_API_SUFFIX,
+    buildCommandOptions: (_payload, { context }) => ({
+      method: "POST",
+      path: vibe64ProjectToolFixPath(vibe64ApiPath.value, context.toolId || context.actionId)
+    }),
+    buildRawPayload: (_model, { context }) => normalizeVibe64ProjectToolFixInput({
+      ...context,
+      toolId: context.toolId || context.actionId
+    }),
+    fallbackRunError: "Project tool fix could not start.",
+    messages: {
+      error: "Project tool fix could not start."
+    },
+    ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
+    placementSource: "vibe64.project-tool.fix",
+    suppressSuccessMessage: true,
+    surfaceId: VIBE64_SURFACE_ID,
+    writeMethod: "POST"
   });
 
   const terminal = useStudioTerminal({
@@ -483,12 +502,10 @@ function useVibe64CommandTerminalController(props, emit) {
       toolLabel: activeActionLabel.value
     };
     if (projectToolTerminal.value) {
-      emit("fix-requested", await startVibe64ProjectToolFixJob(actionId.value, context));
+      emit("fix-requested", await requestProjectToolFixCommand.run(context));
       return;
     }
-    emit("fix-requested", await terminalFailureFixRequest({
-      ...context
-    }));
+    emit("fix-requested", await terminalFailureFix.request(context));
   }
 
   function closeCurrentServerTerminalSession(selectedSessionId = sessionId.value) {

@@ -137,7 +137,7 @@ test.describe("non-commit maintenance agent chat", () => {
     await expect(page.getByText("Install dependencies finished.")).toBeVisible();
     await page.getByRole("button", { name: "Next step" }).click();
 
-    const inspect = page.locator(".studio-ai-sessions__inspect-slot");
+    const inspect = page.locator(".studio-autopilot__composer");
     await inspect.getByLabel("What would you like to do?").fill("Explain this local maintenance task.");
     await inspect.getByRole("button", { name: "Ask Codex" }).click();
 

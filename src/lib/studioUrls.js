@@ -1,16 +1,7 @@
-import { createTransientRetryHttpClient } from "@jskit-ai/http-runtime/client";
 import { resolveScopedApiBasePath } from "@jskit-ai/kernel/shared/surface";
 import {
   currentProjectSlugFromLocation
 } from "@/lib/vibe64ProjectScope.js";
-
-const studioHttpClient = createTransientRetryHttpClient({
-  credentials: "include",
-  csrf: {
-    enabled: false
-  },
-  fetchImpl: vibe64StudioFetch
-});
 
 function studioApiPath(relativePath) {
   return resolveScopedApiBasePath({
@@ -18,10 +9,6 @@ function studioApiPath(relativePath) {
     relativePath,
     strictParams: false
   });
-}
-
-function vibe64StudioFetch(url, options = {}) {
-  return fetch(resolveStudioRequestUrl(url), options);
 }
 
 function resolveStudioRequestUrl(url) {
@@ -90,6 +77,5 @@ export {
   resolveWebSocketUrl,
   scopedDevelopmentApiPathname,
   scopedDevelopmentApiUrl,
-  studioApiPath,
-  studioHttpClient
+  studioApiPath
 };

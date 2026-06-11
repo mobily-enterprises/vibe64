@@ -1,7 +1,7 @@
 import { unref } from "vue";
 
 function readRefOrGetterValue(value) {
-  return typeof value === "function" ? value() : unref(value);
+  return unref(typeof value === "function" ? value() : value);
 }
 
 function readRefOrGetterBoolean(value) {

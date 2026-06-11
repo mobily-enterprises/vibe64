@@ -18,7 +18,18 @@ import {
   bootstrapClientShellApp,
   createShellRouter
 } from "@jskit-ai/kernel/client";
+import { configureUsersWebHttpClient } from "@jskit-ai/users-web/client/lib/httpClient";
 import { config } from "../config/public.js";
+import { resolveStudioRequestUrl } from "./lib/studioUrls.js";
+
+configureUsersWebHttpClient({
+  csrf: {
+    enabled: false
+  },
+  resolveRequestUrl(url) {
+    return resolveStudioRequestUrl(url);
+  }
+});
 
 const surfaceRuntime = createSurfaceRuntime({
   allMode: config.surfaceModeAll,

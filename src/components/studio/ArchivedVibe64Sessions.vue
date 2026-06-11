@@ -142,196 +142,39 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from "vue";
-import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
-import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
-import { usePaths } from "@jskit-ai/users-web/client/composables/usePaths";
 import {
-  mdiArchiveCancelOutline,
-  mdiCheckCircle,
+  archivedVibe64SessionsEmits,
+  archivedVibe64SessionsProps,
+  useArchivedVibe64Sessions
+} from "@/composables/useArchivedVibe64Sessions.js";
+
+const props = defineProps(archivedVibe64SessionsProps);
+const emit = defineEmits(archivedVibe64SessionsEmits);
+
+const {
+  archiveIcon,
+  completedStepCount,
+  error,
+  githubLabel,
+  hasDetails,
+  loadSessions,
+  loading,
   mdiGithub,
   mdiRefresh,
   mdiRestore,
-  mdiSourceBranch
-} from "@mdi/js";
-import {
-  LOCAL_STUDIO_COMMAND_OPTIONS,
-  VIBE64_SESSIONS_API_SUFFIX,
-  VIBE64_SURFACE_ID,
-  vibe64SessionPath,
-  vibe64SessionsQueryKey
-} from "@/lib/vibe64SessionRequestConfig.js";
-import {
-  studioHttpClient
-} from "@/lib/studioHttp.js";
-import {
-  useVibe64ProjectSlug
-} from "@/composables/useVibe64ProjectScope.js";
-import {
-  enrichVibe64SessionForDisplay
-} from "@/lib/vibe64SessionPanelModel.js";
-import {
-  vibe64SessionStatusColor,
-  vibe64SessionStatusLabel,
-  parseGithubSessionLink,
-  shortVibe64SessionId
-} from "@/lib/vibe64SessionViewModel.js";
-
-const props = defineProps({
-  archive: {
-    required: true,
-    type: String
-  },
-  description: {
-    default: "",
-    type: String
-  },
-  emptyText: {
-    default: "",
-    type: String
-  },
-  emptyTitle: {
-    default: "No sessions",
-    type: String
-  },
-  showRefresh: {
-    default: true,
-    type: Boolean
-  },
-  title: {
-    default: "",
-    type: String
-  }
-});
-
-const emit = defineEmits(["loading-changed"]);
-const paths = usePaths();
-const projectSlug = useVibe64ProjectSlug();
-const recoverError = ref("");
-const recoverMessage = ref("");
-const recoveringSessionIds = ref(new Set());
-const sessionsApiPath = computed(() => paths.api(VIBE64_SESSIONS_API_SUFFIX, {
-  surface: VIBE64_SURFACE_ID
-}));
-
-const sessionListResource = useEndpointResource({
-  client: studioHttpClient,
-  fallbackLoadError: "Archived sessions could not be loaded.",
-  path: sessionsApiPath,
-  queryKey: computed(() => [
-    ...vibe64SessionsQueryKey(
-      VIBE64_SURFACE_ID,
-      ROUTE_VISIBILITY_PUBLIC,
-      projectSlug.value
-    ),
-    "archive",
-    props.archive
-  ]),
-  readQuery: computed(() => ({
-    archive: props.archive
-  }))
-});
-
-const loading = computed(() => Boolean(sessionListResource.isLoading.value));
-const error = computed(() => String(sessionListResource.loadError.value || ""));
-const sessions = computed(() => {
-  const payload = sessionListResource.data.value;
-  const items = Array.isArray(payload?.sessions) ? payload.sessions : [];
-  return items
-    .map(enrichVibe64SessionForDisplay)
-    .filter(sessionIsInArchive);
-});
-
-const archiveIcon = computed(() => {
-  return props.archive === "completed" ? mdiCheckCircle : mdiArchiveCancelOutline;
-});
-
-function completedStepCount(session = {}) {
-  const count = Number(session.completedStepCount);
-  if (Number.isSafeInteger(count) && count >= 0) {
-    return count;
-  }
-  return Array.isArray(session.completedSteps) ? session.completedSteps.length : 0;
-}
-
-function shortSessionId(sessionId) {
-  return shortVibe64SessionId(sessionId);
-}
-
-function statusLabel(status) {
-  return vibe64SessionStatusLabel(status);
-}
-
-function statusColor(status) {
-  return vibe64SessionStatusColor(status);
-}
-
-function githubLabel(url, fallback) {
-  return parseGithubSessionLink(url, fallback === "PR" ? "pr" : "issue").label;
-}
-
-function hasDetails(session = {}) {
-  return Boolean(session.finalReportText);
-}
-
-function sessionIsInArchive(session = {}) {
-  const status = String(session.status || "");
-  if (props.archive === "abandoned") {
-    return status === "abandoned";
-  }
-  return status === "finished" || status === "completed";
-}
-
-async function loadSessions() {
-  await sessionListResource.reload();
-}
-
-function sessionIsRecovering(sessionId = "") {
-  return recoveringSessionIds.value.has(String(sessionId || ""));
-}
-
-function setSessionRecovering(sessionId = "", recovering = false) {
-  const next = new Set(recoveringSessionIds.value);
-  if (recovering) {
-    next.add(sessionId);
-  } else {
-    next.delete(sessionId);
-  }
-  recoveringSessionIds.value = next;
-}
-
-async function recoverWorktree(session = {}) {
-  const sessionId = String(session.sessionId || "");
-  if (!sessionId || sessionIsRecovering(sessionId)) {
-    return;
-  }
-  recoverError.value = "";
-  recoverMessage.value = "";
-  setSessionRecovering(sessionId, true);
-  try {
-    const recovered = await studioHttpClient.post(
-      vibe64SessionPath(sessionsApiPath.value, sessionId, "/worktree/recover"),
-      {},
-      LOCAL_STUDIO_COMMAND_OPTIONS
-    );
-    const name = recovered?.sessionName || session.worktreeRecoveryName || shortSessionId(sessionId);
-    recoverMessage.value = `Recovered worktree for ${name}.`;
-    await loadSessions();
-  } catch (error) {
-    recoverError.value = String(error?.message || error || "Worktree could not be recovered.");
-  } finally {
-    setSessionRecovering(sessionId, false);
-  }
-}
+  mdiSourceBranch,
+  recoverError,
+  recoverMessage,
+  recoverWorktree,
+  sessions,
+  sessionIsRecovering,
+  shortSessionId,
+  statusColor,
+  statusLabel
+} = useArchivedVibe64Sessions(props, emit);
 
 defineExpose({
   refresh: loadSessions
-});
-
-watch(loading, (isLoading) => {
-  emit("loading-changed", isLoading);
-}, {
-  immediate: true
 });
 </script>
 

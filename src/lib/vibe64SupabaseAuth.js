@@ -1,19 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
-import {
-  readSupabaseConfig
-} from "@/lib/vibe64AuthApi.js";
 
-let clientPromise = null;
-
-async function vibe64SupabaseClient() {
-  if (!clientPromise) {
-    clientPromise = createVibe64SupabaseClient();
-  }
-  return clientPromise;
-}
-
-async function createVibe64SupabaseClient() {
-  const response = await readSupabaseConfig();
+function createVibe64SupabaseClient(response = {}) {
   const config = response.supabase || {};
   if (response.ok === false || config.configured !== true || !config.url || !config.publishableKey) {
     throw new Error(response.error || "Supabase auth is not configured.");
@@ -36,7 +23,7 @@ function emailRedirectTo(browserWindow = window) {
 }
 
 export {
+  createVibe64SupabaseClient,
   emailRedirectTo,
-  passwordResetRedirectTo,
-  vibe64SupabaseClient
+  passwordResetRedirectTo
 };

@@ -1,6 +1,7 @@
-import { computed, proxyRefs, ref, watch } from "vue";
+import { computed, proxyRefs, watch } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
+import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
 import { usePaths } from "@jskit-ai/users-web/client/composables/usePaths";
 import { useStoredSelection } from "@/composables/useStoredSelection.js";
 import {
@@ -10,7 +11,6 @@ import {
   VIBE64_SESSION_CHANGED_EVENT,
   VIBE64_SESSIONS_API_SUFFIX,
   VIBE64_SURFACE_ID,
-  LOCAL_STUDIO_COMMAND_OPTIONS,
   selectedSessionStorageKey,
   vibe64SessionQueryKey,
   vibe64SessionsQueryKey
@@ -20,10 +20,6 @@ import {
   VIBE64_ACCOUNTS_CHANGED_EVENT,
   capabilitiesQueryKey
 } from "@/lib/studioGateApi.js";
-import {
-  scopedDevelopmentApiUrl,
-  studioHttpClient
-} from "@/lib/studioHttp.js";
 import {
   vibe64SessionFacts,
   vibe64SessionLimits,
@@ -100,28 +96,16 @@ function useVibe64SessionData({
 } = {}) {
   const notifyTitleChange = typeof onTitleChange === "function" ? onTitleChange : () => null;
   const projectSlug = useVibe64ProjectSlug();
-  const requestProjectSlug = ref("");
   const paths = usePaths();
   const sessionSelection = useStoredSelection({
     storageKey: computed(() => selectedSessionStorageKey(projectSlug.value))
-  });
-  watch(projectSlug, (slug) => {
-    const normalizedSlug = String(slug || "").trim();
-    if (normalizedSlug) {
-      requestProjectSlug.value = normalizedSlug;
-    }
-  }, {
-    immediate: true
   });
 
   const selectedSessionId = sessionSelection.selectedId;
   const sessionsApiPath = computed(() => paths.api(VIBE64_SESSIONS_API_SUFFIX, {
     surface: VIBE64_SURFACE_ID
   }));
-  const capabilitiesApiPath = computed(() => scopedDevelopmentApiUrl(
-    CAPABILITIES_ENDPOINT,
-    requestProjectSlug.value
-  ));
+  const capabilitiesApiPath = computed(() => CAPABILITIES_ENDPOINT);
   const selectedSessionPath = computed(() => {
     const sessionId = String(selectedSessionId.value || "").trim();
     return sessionId ? `${sessionsApiPath.value}/${encodeURIComponent(sessionId)}` : "";
@@ -132,7 +116,6 @@ function useVibe64SessionData({
   ]);
 
   const sessionListResource = useEndpointResource({
-    client: studioHttpClient,
     fallbackLoadError: "Vibe64 sessions could not be loaded.",
     path: sessionsApiPath,
     queryKey: computed(() => vibe64SessionsQueryKey(
@@ -150,6 +133,7 @@ function useVibe64SessionData({
       refetchOnMount: false,
       refetchOnWindowFocus: false
     },
+    requestRecoveryLabel: "Vibe64 sessions"
   });
   const sessionList = proxyRefs({
     items: computed(() => {
@@ -166,45 +150,30 @@ function useVibe64SessionData({
     reload: sessionListResource.reload,
     resource: sessionListResource
   });
-  const createSessionRunning = ref(false);
-  const createSessionMessage = ref("");
-  const createSessionMessageType = ref("");
-  const createSessionCommand = proxyRefs({
-    isRunning: createSessionRunning,
-    message: createSessionMessage,
-    messageType: createSessionMessageType,
-    async run(context = {}) {
-      if (createSessionRunning.value) {
-        return null;
+  const createSessionCommand = useCommand({
+    access: "never",
+    apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
+    buildRawPayload: (_model, { context }) => {
+      const workflowDefinition = String(context?.workflowDefinition || "").trim();
+      return workflowDefinition ? { workflowDefinition } : {};
+    },
+    fallbackRunError: "Vibe64 session could not be created.",
+    messages: {
+      error: "Vibe64 session could not be created.",
+      success: "Vibe64 session created."
+    },
+    onRunSuccess: async (response) => {
+      if (response?.sessionId) {
+        selectSessionId(response.sessionId);
       }
-      createSessionRunning.value = true;
-      createSessionMessage.value = "";
-      createSessionMessageType.value = "";
-      try {
-        const workflowDefinition = String(context?.workflowDefinition || "").trim();
-        const response = await studioHttpClient.post(
-          sessionsApiPath.value,
-          workflowDefinition ? { workflowDefinition } : {},
-          LOCAL_STUDIO_COMMAND_OPTIONS
-        );
-        if (response?.sessionId) {
-          selectSessionId(response.sessionId);
-        }
-        await refreshSessionData();
-        createSessionMessage.value = "Vibe64 session created.";
-        createSessionMessageType.value = "success";
-        return response;
-      } catch (error) {
-        createSessionMessage.value = String(error?.message || error || "Vibe64 session could not be created.");
-        createSessionMessageType.value = "error";
-        throw error;
-      } finally {
-        createSessionRunning.value = false;
-      }
-    }
+      await refreshSessionData();
+    },
+    ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
+    placementSource: "vibe64.sessions.create",
+    surfaceId: VIBE64_SURFACE_ID,
+    writeMethod: "POST"
   });
   const selectedSessionResource = useEndpointResource({
-    client: studioHttpClient,
     enabled: computed(() => Boolean(selectedSessionId.value)),
     fallbackLoadError: "Vibe64 session could not be loaded.",
     path: selectedSessionPath,
@@ -214,6 +183,7 @@ function useVibe64SessionData({
       refetchOnMount: false,
       refetchOnWindowFocus: false
     },
+    requestRecoveryLabel: "Vibe64 session",
     refreshOnPull: true,
     realtime: {
       event: VIBE64_SESSION_CHANGED_EVENT,
@@ -224,7 +194,6 @@ function useVibe64SessionData({
     }
   });
   const capabilitiesResource = useEndpointResource({
-    client: studioHttpClient,
     fallbackLoadError: "Studio capabilities could not be loaded.",
     path: capabilitiesApiPath,
     queryKey: computed(() => capabilitiesQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC, projectSlug.value)),
@@ -233,6 +202,7 @@ function useVibe64SessionData({
       refetchOnWindowFocus: false
     },
     readMethod: "GET",
+    requestRecoveryLabel: "Studio capabilities",
     realtime: {
       events: [
         VIBE64_SESSION_CHANGED_EVENT,

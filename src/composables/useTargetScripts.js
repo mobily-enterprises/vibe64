@@ -1,14 +1,14 @@
 import { computed, onBeforeUnmount, ref, unref } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
+import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
 import { usePaths } from "@jskit-ai/users-web/client/composables/usePaths";
 import { useStudioTerminal } from "@/composables/useStudioTerminal.js";
 import {
   useVibe64ProjectSlug
 } from "@/composables/useVibe64ProjectScope.js";
 import {
-  VIBE64_SURFACE_ID,
-  LOCAL_STUDIO_COMMAND_OPTIONS
+  VIBE64_SURFACE_ID
 } from "@/lib/vibe64RequestConfig.js";
 import {
   TARGET_SCRIPT_TERMINAL_API_SUFFIX,
@@ -16,9 +16,6 @@ import {
   targetScriptTerminalWebSocketUrl,
   targetScriptsQueryKey
 } from "@/lib/targetScriptsRequestConfig.js";
-import {
-  studioHttpClient
-} from "@/lib/studioHttp.js";
 
 function useTargetScripts({
   showAllScripts = true
@@ -39,26 +36,100 @@ function useTargetScripts({
   }));
 
   const scriptListResource = useEndpointResource({
-    client: studioHttpClient,
     fallbackLoadError: "Target scripts could not be loaded.",
     path: targetScriptsApiPath,
     queryKey: computed(() => targetScriptsQueryKey(
       VIBE64_SURFACE_ID,
       ROUTE_VISIBILITY_PUBLIC,
       projectSlug.value
-    ))
+    )),
+    requestRecoveryLabel: "Target scripts"
   });
-
-  const resetStarredRunning = ref(false);
-  const saveStarredError = ref("");
-  const resetStarredError = ref("");
-  const startTerminalError = ref("");
-  const closeTerminalError = ref("");
 
   const terminal = useStudioTerminal({
     webSocketUrl(terminalSessionId) {
       return targetScriptTerminalWebSocketUrl(terminalSessionId);
     }
+  });
+
+  const saveStarredCommand = useCommand({
+    access: "never",
+    apiSuffix: TARGET_SCRIPTS_API_SUFFIX,
+    buildRawPayload: (_model, { context }) => ({
+      scriptIds: Array.isArray(context?.scriptIds) ? context.scriptIds : []
+    }),
+    buildCommandOptions: () => ({
+      method: "PUT",
+      path: `${targetScriptsApiPath.value}/starred`
+    }),
+    fallbackRunError: "Could not update starred target scripts.",
+    messages: {
+      error: "Could not update starred target scripts."
+    },
+    onRunSuccess: refreshScripts,
+    ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
+    placementSource: "vibe64.target-scripts.starred.save",
+    suppressSuccessMessage: true,
+    surfaceId: VIBE64_SURFACE_ID,
+    writeMethod: "PUT"
+  });
+
+  const resetStarredCommand = useCommand({
+    access: "never",
+    apiSuffix: TARGET_SCRIPTS_API_SUFFIX,
+    buildCommandOptions: () => ({
+      method: "DELETE",
+      path: `${targetScriptsApiPath.value}/starred`
+    }),
+    fallbackRunError: "Could not reset starred target scripts.",
+    messages: {
+      error: "Could not reset starred target scripts."
+    },
+    onRunSuccess: refreshScripts,
+    ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
+    placementSource: "vibe64.target-scripts.starred.reset",
+    suppressSuccessMessage: true,
+    surfaceId: VIBE64_SURFACE_ID,
+    writeMethod: "DELETE"
+  });
+
+  const startTerminalCommand = useCommand({
+    access: "never",
+    apiSuffix: TARGET_SCRIPT_TERMINAL_API_SUFFIX,
+    buildRawPayload: (_model, { context }) => ({
+      scriptId: String(context?.scriptId || "")
+    }),
+    buildCommandOptions: () => ({
+      method: "POST",
+      path: targetScriptTerminalApiPath.value
+    }),
+    fallbackRunError: "Target script terminal failed to start.",
+    messages: {
+      error: "Target script terminal failed to start."
+    },
+    ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
+    placementSource: "vibe64.target-scripts.terminal.start",
+    suppressSuccessMessage: true,
+    surfaceId: VIBE64_SURFACE_ID,
+    writeMethod: "POST"
+  });
+
+  const closeTerminalCommand = useCommand({
+    access: "never",
+    apiSuffix: TARGET_SCRIPT_TERMINAL_API_SUFFIX,
+    buildCommandOptions: (_payload, { context }) => ({
+      method: "DELETE",
+      path: `${targetScriptTerminalApiPath.value}/${encodeURIComponent(String(context?.terminalSessionId || ""))}`
+    }),
+    fallbackRunError: "Target script terminal could not close.",
+    messages: {
+      error: "Target script terminal could not close."
+    },
+    ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
+    placementSource: "vibe64.target-scripts.terminal.close",
+    suppressSuccessMessage: true,
+    surfaceId: VIBE64_SURFACE_ID,
+    writeMethod: "DELETE"
   });
 
   const latestScriptsPayload = computed(() => {
@@ -113,16 +184,20 @@ function useTargetScripts({
       Boolean(currentTerminalScriptId.value);
   });
   const loading = computed(() => Boolean(scriptListResource.isLoading.value));
-  const resetBusy = computed(() => Boolean(resetStarredRunning.value));
+  const resetBusy = computed(() => Boolean(resetStarredCommand.isRunning));
   const starBusy = computed(() => Boolean(starBusyId.value));
   const loadError = computed(() => String(
     scriptListResource.loadError.value ||
-    saveStarredError.value ||
-    resetStarredError.value ||
-    startTerminalError.value ||
-    closeTerminalError.value ||
+    commandErrorMessage(saveStarredCommand) ||
+    commandErrorMessage(resetStarredCommand) ||
+    commandErrorMessage(startTerminalCommand) ||
+    commandErrorMessage(closeTerminalCommand) ||
     ""
   ));
+
+  function commandErrorMessage(command = {}) {
+    return command.messageType === "error" ? String(command.message || "") : "";
+  }
 
   function isStarred(scriptId) {
     return starredSet.value.has(scriptId);
@@ -142,21 +217,15 @@ function useTargetScripts({
       return;
     }
     starBusyId.value = scriptId;
-    saveStarredError.value = "";
     try {
       const nextScriptIds = isStarred(scriptId)
         ? starredScriptIds.value.filter((id) => id !== scriptId)
         : [...starredScriptIds.value, scriptId];
-      await studioHttpClient.request(`${targetScriptsApiPath.value}/starred`, {
-        ...LOCAL_STUDIO_COMMAND_OPTIONS,
-        body: {
-          scriptIds: nextScriptIds
-        },
-        method: "PUT"
+      await saveStarredCommand.run({
+        scriptIds: nextScriptIds
       });
-      await refreshScripts();
-    } catch (error) {
-      saveStarredError.value = String(error?.message || error || "Could not update starred target scripts.");
+    } catch {
+      return;
     } finally {
       starBusyId.value = "";
     }
@@ -166,18 +235,10 @@ function useTargetScripts({
     if (resetBusy.value) {
       return;
     }
-    resetStarredRunning.value = true;
-    resetStarredError.value = "";
     try {
-      await studioHttpClient.request(`${targetScriptsApiPath.value}/starred`, {
-        ...LOCAL_STUDIO_COMMAND_OPTIONS,
-        method: "DELETE"
-      });
-      await refreshScripts();
-    } catch (error) {
-      resetStarredError.value = String(error?.message || error || "Could not reset starred target scripts.");
-    } finally {
-      resetStarredRunning.value = false;
+      await resetStarredCommand.run();
+    } catch {
+      return;
     }
   }
 
@@ -185,12 +246,8 @@ function useTargetScripts({
     const existingTerminalId = terminal.terminalSessionId.value;
     terminal.closeTerminalSocket();
     if (existingTerminalId) {
-      closeTerminalError.value = "";
-      await studioHttpClient.request(`${targetScriptTerminalApiPath.value}/${encodeURIComponent(existingTerminalId)}`, {
-        ...LOCAL_STUDIO_COMMAND_OPTIONS,
-        method: "DELETE"
-      }).catch((error) => {
-        closeTerminalError.value = String(error?.message || error || "Target script terminal could not close.");
+      await closeTerminalCommand.run({
+        terminalSessionId: existingTerminalId
       }).catch(() => null);
     }
   }
@@ -206,7 +263,6 @@ function useTargetScripts({
     currentTerminalScriptId.value = scriptId;
     currentTerminalScriptLabel.value = String(script?.label || script?.name || scriptId);
     terminal.terminalError.value = "";
-    startTerminalError.value = "";
     try {
       await closeRunningTerminalOnly();
       terminal.resetTerminalSessionState();
@@ -214,12 +270,8 @@ function useTargetScripts({
       if (!(await terminal.setupTerminalUi())) {
         throw new Error("Terminal view is not ready yet.");
       }
-      const session = await studioHttpClient.request(targetScriptTerminalApiPath.value, {
-        ...LOCAL_STUDIO_COMMAND_OPTIONS,
-        body: {
-          scriptId
-        },
-        method: "POST"
+      const session = await startTerminalCommand.run({
+        scriptId
       });
       if (!session) {
         return false;
@@ -231,7 +283,6 @@ function useTargetScripts({
       return true;
     } catch (error) {
       terminal.terminalError.value = String(error?.message || error || "Target script terminal failed to start.");
-      startTerminalError.value = terminal.terminalError.value;
       return false;
     } finally {
       terminal.terminalStarting.value = false;

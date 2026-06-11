@@ -1,6 +1,5 @@
 import {
-  VIBE64_SURFACE_ID,
-  LOCAL_STUDIO_COMMAND_OPTIONS
+  VIBE64_SURFACE_ID
 } from "@/lib/vibe64RequestConfig.js";
 import {
   vibe64ProjectScopedStorageKey,
@@ -69,12 +68,27 @@ function vibe64CodexAttachmentPath(sessionsApiPath = "", sessionId = "") {
   return vibe64SessionPath(sessionsApiPath, sessionId, "/codex-attachments");
 }
 
+function vibe64CodexTerminalPath(sessionsApiPath = "", sessionId = "", terminalSessionId = "") {
+  return vibe64SessionPath(
+    sessionsApiPath,
+    sessionId,
+    terminalSessionId ? `/codex-terminal/${encodePathSegment(terminalSessionId)}` : "/codex-terminal"
+  );
+}
+
+function vibe64GlobalCodexTerminalPath(vibe64ApiPath = "", terminalSessionId = "") {
+  return terminalSessionId
+    ? `${vibe64ApiPath}/codex-terminal/${encodePathSegment(terminalSessionId)}`
+    : `${vibe64ApiPath}/codex-terminal`;
+}
+
 function vibe64ConversationLogPath(sessionsApiPath = "", sessionId = "") {
   return vibe64SessionPath(sessionsApiPath, sessionId, "/conversation-log");
 }
 
-function vibe64TerminalFailureFixRequestPath(sessionsApiPath = "", sessionId = "") {
-  return vibe64SessionPath(sessionsApiPath, sessionId, "/terminal-failure-fix-request");
+function vibe64FixCodexTerminalPath(vibe64ApiPath = "", jobId = "", terminalSessionId = "") {
+  const base = `${vibe64ApiPath}/fix-codex-jobs/${encodePathSegment(jobId)}/terminal`;
+  return terminalSessionId ? `${base}/${encodePathSegment(terminalSessionId)}` : base;
 }
 
 function vibe64TerminalFailureFixPath(sessionsApiPath = "", sessionId = "") {
@@ -183,21 +197,41 @@ function commandInputFromContext(context = {}) {
   };
 }
 
+function normalizeVibe64ProjectToolFixInput(input = {}) {
+  const source = input && typeof input === "object" && !Array.isArray(input) ? input : {};
+  return {
+    actionId: String(source.actionId || ""),
+    actionLabel: String(source.actionLabel || ""),
+    attemptedCommand: String(source.attemptedCommand || ""),
+    closeError: String(source.closeError || ""),
+    commandPreview: String(source.commandPreview || ""),
+    exitCode: source.exitCode == null ? "" : String(source.exitCode),
+    output: String(source.output || ""),
+    terminalSessionId: String(source.terminalSessionId || ""),
+    terminalStatus: String(source.terminalStatus || ""),
+    toolId: String(source.toolId || ""),
+    toolLabel: String(source.toolLabel || ""),
+    userMessage: String(source.userMessage || "")
+  };
+}
+
 export {
   VIBE64_SESSION_CHANGED_EVENT,
   VIBE64_API_SUFFIX,
   VIBE64_SESSIONS_API_SUFFIX,
   VIBE64_SURFACE_ID,
   DEFAULT_MAX_OPEN_SESSIONS,
-  LOCAL_STUDIO_COMMAND_OPTIONS,
   SELECTED_SESSION_STORAGE_KEY,
   vibe64ActionPath,
   vibe64ArtifactPreviewPath,
   vibe64ArtifactPreviewQueryKey,
   vibe64CodexAttachmentPath,
+  vibe64CodexTerminalPath,
   vibe64CommandTerminalPath,
   vibe64ConversationLogPath,
   vibe64ConversationLogQueryKey,
+  vibe64FixCodexTerminalPath,
+  vibe64GlobalCodexTerminalPath,
   vibe64IntentPath,
   vibe64LaunchTargetOpenPath,
   vibe64LaunchTargetsPath,
@@ -212,8 +246,8 @@ export {
   selectedSessionStorageKey,
   vibe64ShellTerminalPath,
   vibe64SessionsQueryKey,
-  vibe64TerminalFailureFixRequestPath,
   vibe64TerminalFailureFixPath,
+  normalizeVibe64ProjectToolFixInput,
   agentSettingsInputFromContext,
   commandInputFromContext
 };

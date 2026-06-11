@@ -6,7 +6,6 @@ import { usePaths } from "@jskit-ai/users-web/client/composables/usePaths";
 import {
   VIBE64_SESSIONS_API_SUFFIX,
   VIBE64_SURFACE_ID,
-  LOCAL_STUDIO_COMMAND_OPTIONS,
   vibe64LaunchTargetsPath,
   vibe64LaunchTargetsQueryKey,
   vibe64LaunchTerminalPath,
@@ -30,10 +29,6 @@ import {
 import {
   useVibe64ProjectSlug
 } from "@/composables/useVibe64ProjectScope.js";
-import {
-  scopedDevelopmentApiUrl,
-  studioHttpClient
-} from "@/lib/studioHttp.js";
 import {
   currentProjectSlugFromLocation,
   vibe64ProjectScopedStorageKey
@@ -348,7 +343,6 @@ function useVibe64LaunchControls({
   } = terminal;
 
   const launchTargetsResource = useEndpointResource({
-    client: studioHttpClient,
     enabled: canLoadLaunchTargets,
     fallbackLoadError: "Launch targets could not be loaded.",
     path: launchTargetsPath,
@@ -358,7 +352,8 @@ function useVibe64LaunchControls({
       sessionId.value,
       projectSlug.value
     )),
-    refreshOnPull: true
+    refreshOnPull: true,
+    requestRecoveryLabel: "Launch targets"
   });
 
   const startTerminalCommand = useCommand({
@@ -366,8 +361,7 @@ function useVibe64LaunchControls({
     apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
     buildCommandOptions: (_payload, { context }) => ({
       method: "POST",
-      options: LOCAL_STUDIO_COMMAND_OPTIONS,
-      path: scopedDevelopmentApiUrl(vibe64LaunchTerminalPath(sessionsApiPath.value, context.sessionId))
+      path: vibe64LaunchTerminalPath(sessionsApiPath.value, context.sessionId)
     }),
     buildRawPayload: (_model, { context }) => ({
       launchTargetId: String(context.launchTargetId || "")
@@ -388,8 +382,7 @@ function useVibe64LaunchControls({
     apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
     buildCommandOptions: (_payload, { context }) => ({
       method: "POST",
-      options: LOCAL_STUDIO_COMMAND_OPTIONS,
-      path: scopedDevelopmentApiUrl(vibe64LaunchTerminalStopPath(sessionsApiPath.value, context.sessionId, context.terminalSessionId))
+      path: vibe64LaunchTerminalStopPath(sessionsApiPath.value, context.sessionId, context.terminalSessionId)
     }),
     fallbackRunError: "Launch target could not be stopped.",
     messages: {
@@ -407,8 +400,7 @@ function useVibe64LaunchControls({
     apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
     buildCommandOptions: (_payload, { context }) => ({
       method: "DELETE",
-      options: LOCAL_STUDIO_COMMAND_OPTIONS,
-      path: scopedDevelopmentApiUrl(vibe64LaunchTerminalPath(sessionsApiPath.value, context.sessionId, context.terminalSessionId))
+      path: vibe64LaunchTerminalPath(sessionsApiPath.value, context.sessionId, context.terminalSessionId)
     }),
     fallbackRunError: "Launch target terminal could not close.",
     messages: {

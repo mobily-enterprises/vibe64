@@ -1,0 +1,1203 @@
+import { computed, nextTick, onMounted, proxyRefs, ref, watch } from "vue";
+import {
+  mdiAlertCircleOutline,
+  mdiCheck,
+  mdiCheckCircleOutline,
+  mdiChevronDown,
+  mdiChevronUp,
+  mdiClose,
+  mdiConsoleLine,
+  mdiFileCompare,
+  mdiInformationOutline,
+  mdiRefresh,
+  mdiRobotOutline,
+  mdiStopCircleOutline,
+  mdiViewGridOutline
+} from "@mdi/js";
+import {
+  VIBE64_ACTION_DISPATCH_ROUTES as ACTION_DISPATCH_ROUTES
+} from "@local/vibe64-core/shared";
+import {
+  VIBE64_DEFAULT_AGENT_PROVIDER_ID
+} from "@local/vibe64-runtime/shared";
+import {
+  useVibe64AutopilotComposer
+} from "@/composables/useVibe64AutopilotComposer.js";
+import {
+  useVibe64AutopilotController
+} from "@/composables/useVibe64AutopilotController.js";
+import {
+  useVibe64BackgroundTasks
+} from "@/composables/useVibe64BackgroundTasks.js";
+import {
+  useVibe64ClientControls
+} from "@/composables/useVibe64ClientControls.js";
+import {
+  useVibe64AgentSettings
+} from "@/composables/useVibe64AgentSettings.js";
+import { useVibe64StepInputForm } from "@/composables/useVibe64StepInputForm.js";
+import {
+  stripTerminalControlSequences
+} from "@/lib/codexOutput.js";
+import {
+  vibe64CodexTerminalAttentionSignature
+} from "@/lib/vibe64CodexTerminalAttention.js";
+import {
+  useVibe64FixCodexDialog
+} from "@/composables/useVibe64FixCodexDialog.js";
+import {
+  useVibe64TerminalFailureFixCommand
+} from "@/composables/useVibe64TerminalFailureFixCommand.js";
+import {
+  controlSavesCurrentStepInputBeforeRun,
+  currentStepInputHasDecisionControls
+} from "@/lib/vibe64CurrentStepInputDecision.js";
+import {
+  VIBE64_CLIENT_CONTROL_ICON_TOKENS,
+  controlIconToken,
+  controlStateActive as presentationControlStateActive
+} from "@/lib/vibe64PresentationControls.js";
+import {
+  currentStepWorkflowControls,
+  workflowControlSourceAction
+} from "@/lib/vibe64WorkflowControlModel.js";
+import {
+  vibe64SessionFacts
+} from "@/lib/vibe64SessionPanelModel.js";
+import {
+  defineVibe64AsyncComponent
+} from "@/lib/vibe64AsyncComponent.js";
+import {
+  vibe64SessionStatusColor,
+  vibe64SessionStatusLabel
+} from "@/lib/vibe64SessionViewModel.js";
+import {
+  readLocalStorageJson,
+  writeLocalStorageJson
+} from "@/lib/browserLocalStorage.js";
+
+const vibe64AutopilotViewEmits = ["busy-change", "project-attention", "project-pane-change"];
+const vibe64AutopilotViewProps = {
+  actions: {
+    default: () => ({}),
+    type: Object
+  },
+  active: {
+    default: true,
+    type: Boolean
+  },
+  automationEnabled: {
+    default: true,
+    type: Boolean
+  },
+  autopilotSteps: {
+    default: () => [],
+    type: Array
+  },
+  codexThinking: {
+    default: false,
+    type: Boolean
+  },
+  chatCollapsed: {
+    default: false,
+    type: Boolean
+  },
+  commandRunner: {
+    default: null,
+    type: Object
+  },
+  conversationLog: {
+    default: () => ({}),
+    type: Object
+  },
+  diff: {
+    default: () => ({}),
+    type: Object
+  },
+  humanInputResponsePreview: {
+    default: () => ({}),
+    type: Object
+  },
+  interruptCodexTurn: {
+    default: async () => false,
+    type: Function
+  },
+  page: {
+    default: () => ({}),
+    type: Object
+  },
+  reportPreview: {
+    default: () => ({}),
+    type: Object
+  },
+  review: {
+    default: () => ({}),
+    type: Object
+  },
+  refreshSessionData: {
+    default: async () => null,
+    type: Function
+  },
+  rewindBusy: {
+    default: false,
+    type: Boolean
+  },
+  rewindToStep: {
+    default: null,
+    type: Function
+  },
+  sessionAbandon: {
+    default: () => ({}),
+    type: Object
+  },
+  session: {
+    default: null,
+    type: Object
+  },
+  sessionsApiPath: {
+    default: "",
+    type: [String, Object, Function]
+  },
+  sessionSelectionClosed: {
+    default: false,
+    type: Boolean
+  },
+  sessionToolbar: {
+    default: () => ({}),
+    type: Object
+  },
+  projectPane: {
+    default: "preview",
+    type: String
+  }
+};
+
+function useVibe64AutopilotView(props, emit) {
+  const Vibe64FixCodexDialog = defineVibe64AsyncComponent({
+    label: "Fix Codex dialog",
+    loader: () => import("@/components/studio/Vibe64FixCodexDialog.vue"),
+    minHeight: "12rem"
+  });
+  const Vibe64LaunchControls = defineVibe64AsyncComponent({
+    label: "Launch controls",
+    loader: () => import("@/components/studio/Vibe64LaunchControls.vue"),
+    minHeight: "10rem"
+  });
+  const Vibe64SessionDiffPanel = defineVibe64AsyncComponent({
+    label: "Diff viewer",
+    loader: () => import("@/components/studio/vibe64-session/Vibe64SessionDiffPanel.vue"),
+    minHeight: "14rem"
+  });
+
+  const agentSettings = useVibe64AgentSettings();
+  const currentAgentSettings = computed(() => agentSettings.settings.value);
+  const requestAgentSettings = computed(() => {
+    const settings = currentAgentSettings.value || {};
+    return String(settings.providerId || "") !== VIBE64_DEFAULT_AGENT_PROVIDER_ID ||
+      String(settings.model || "") ||
+      String(settings.thinking || "")
+      ? settings
+      : null;
+  });
+  const {
+    canDispatchNextOperation,
+    clearFailure,
+    commandOutput,
+    commandPreview,
+    commandResult,
+    commandRunning,
+    failure,
+    nextOperationKey,
+    recoverStuckStep,
+    retry,
+    runCommandAction,
+    runNextOperation,
+    runPresentedIntent,
+    running,
+    screenState,
+    stop,
+    stopCommandAction,
+    stuckRecoveryAvailable,
+    stuckRecoveryRunning
+  } = useVibe64AutopilotController({
+    actions: props.actions,
+    commandRunner: props.commandRunner || undefined,
+    enabled: computed(() => props.automationEnabled),
+    agentSettings: requestAgentSettings,
+    refreshSessionData: () => props.refreshSessionData(),
+    session: computed(() => props.session)
+  });
+
+  const clientControls = useVibe64ClientControls({
+    sessionsApiPath: () => props.sessionsApiPath
+  });
+  const {
+    backgroundTaskError,
+    retryBackgroundTask,
+    retryingBackgroundTaskId,
+    visibleBackgroundTasks
+  } = useVibe64BackgroundTasks({
+    openCodexTerminal: openCodexTerminalForRecovery,
+    refreshSessionData: () => props.refreshSessionData(),
+    runClientControl: clientControls.runClientControl,
+    session: computed(() => props.session)
+  });
+  const {
+    fixDialogOpen,
+    fixJob,
+    fixTerminal,
+    openFixCodexDialog
+  } = useVibe64FixCodexDialog();
+  const terminalFailureFix = useVibe64TerminalFailureFixCommand({
+    sessionsApiPath: () => props.sessionsApiPath
+  });
+  const commandSpyExpanded = ref(false);
+  const sessionToolsMenuOpen = ref(false);
+  const screenControlFormRef = ref(null);
+  const rightPaneTab = ref("preview");
+  const mountedRightPaneTabs = ref(["preview"]);
+  const openedCodexTerminalAttentionSignature = ref("");
+  const SESSION_TOOL_STORAGE_PREFIX = "vibe64.sessionTools.active";
+  const projectPaneIds = Object.freeze([
+    "preview",
+    "dashboard"
+  ]);
+  const sessionPaneIds = Object.freeze([
+    "session-details",
+    "diff",
+    "shell",
+    "ai-terminal"
+  ]);
+
+  const stepInput = proxyRefs(useVibe64StepInputForm({
+    onSaved: async () => {
+      await props.refreshSessionData();
+      await nextTick();
+      await runNextOperation();
+    },
+    sessionsApiPath: () => props.sessionsApiPath,
+    session: computed(() => props.session)
+  }));
+
+  const screenKind = computed(() => screenState.value.kind);
+  const sessionId = computed(() => String(props.session?.sessionId || ""));
+  const chatCollapsed = computed(() => Boolean(props.chatCollapsed));
+  const projectPaneValue = computed(() => normalizeProjectPane(props.projectPane));
+  const sessionToolStorageKey = computed(() => (
+    sessionId.value ? `${SESSION_TOOL_STORAGE_PREFIX}:${sessionId.value}` : ""
+  ));
+  const codexTerminalAttentionSignature = computed(() => (
+    props.active ? vibe64CodexTerminalAttentionSignature(props.session || {}) : ""
+  ));
+  const dashboardSessionContext = computed(() => ({
+    copyText: typeof props.page?.copyText === "function" ? props.page.copyText : null,
+    facts: vibe64SessionFacts(props.session || {}),
+    session: props.session || null,
+    sessionId: sessionId.value,
+    statusColor: vibe64SessionStatusColor(props.session?.status),
+    statusLabel: vibe64SessionStatusLabel(props.session?.status)
+  }));
+  const screenMessage = computed(() => String(screenState.value.message || ""));
+  const screenSections = computed(() => Array.isArray(screenState.value.sections) ? screenState.value.sections : []);
+  const primaryIntentId = computed(() => props.active ? String(screenState.value.primaryIntentId || "") : "");
+  const displayStatusText = computed(() => {
+    if (stepInput.visible) {
+      return stepInput.interaction?.title || screenState.value.title;
+    }
+    return screenState.value.title;
+  });
+  const displayRunning = computed(() => Boolean(
+    screenState.value.showProgress &&
+    screenKind.value !== "codex_running"
+  ));
+  const commandTerminalFailed = computed(() => commandResult.value?.ok === false);
+  const commandTerminalVisible = computed(() => Boolean(screenKind.value === "command"));
+  const stepInputFormVisible = computed(() => Boolean(
+    stepInput.visible &&
+    !displayRunning.value
+  ));
+  const stepInputHasWorkflowIntents = computed(() => Boolean(
+    currentStepInputHasDecisionControls(props.session, stepInput.interaction)
+  ));
+  const selectedStepInputControlVisible = computed(() => Boolean(
+    props.active &&
+    stepInputFormVisible.value &&
+    selectedControl.value &&
+    selectedControlFields.value.length
+  ));
+  const selectedScreenControlVisible = computed(() => Boolean(
+    props.active &&
+    selectedControl.value
+  ));
+  const commandStatus = computed(() => commandRunning.value ? "running" : "");
+  const commandTerminalError = computed(() => {
+    if (commandResult.value?.ok === false) {
+      return String(commandResult.value.error || "");
+    }
+    return "";
+  });
+  const commandFailureSummary = computed(() => (
+    commandTerminalError.value ||
+    failure.value?.error ||
+    "The command did not finish properly."
+  ));
+  const commandOverlayTitle = computed(() => {
+    return commandTerminalFailed.value
+      ? "Command needs attention."
+      : "Command running.";
+  });
+  const commandTerminalSummary = computed(() => commandPreview.value || displayStatusText.value || "Running command.");
+  const commandTerminalText = computed(() => {
+    const output = stripTerminalControlSequences(commandOutput.value);
+    const resultOutput = stripTerminalControlSequences(commandResult.value?.output || "");
+    const preview = stripTerminalControlSequences(commandPreview.value);
+    return tailCommandText(output || resultOutput || preview || "Starting command...");
+  });
+  const autopilotBusy = computed(() => Boolean(props.active && (
+    running.value ||
+    displayRunning.value ||
+    commandRunning.value ||
+    stepInput.saving
+  )));
+  const navigationBusy = computed(() => Boolean(props.page?.busy || autopilotBusy.value || props.rewindBusy));
+  const workflowExecuting = computed(() => Boolean(
+    props.codexThinking ||
+    autopilotBusy.value ||
+    commandRunning.value
+  ));
+  const composerInputLocked = computed(() => Boolean(
+    props.codexThinking ||
+    running.value ||
+    displayRunning.value ||
+    commandRunning.value ||
+    stepInput.saving ||
+    props.page?.busy
+  ));
+  const codexInterruptVisible = computed(() => Boolean(props.codexThinking));
+  const thinkingVisible = computed(() => Boolean(
+    props.codexThinking ||
+    running.value ||
+    displayRunning.value ||
+    commandRunning.value ||
+    stepInput.saving
+  ));
+  const sessionToolbarVisible = computed(() => Boolean(
+    Array.isArray(props.sessionToolbar?.sessions) &&
+    props.sessionToolbar.sessions.length
+  ));
+  const sessionToolsVisible = computed(() => Boolean(props.session));
+  const sessionToolControls = computed(() => [
+    {
+      icon: mdiInformationOutline,
+      id: "session-details",
+      label: "Session",
+      title: "Show active session details"
+    },
+    {
+      disabled: props.review?.diffDisabled === true,
+      icon: mdiFileCompare,
+      id: "diff",
+      label: "Diff",
+      title: props.review?.diffTitle || "Review changes in the session worktree"
+    },
+    {
+      icon: mdiConsoleLine,
+      id: "shell",
+      label: "Shell",
+      title: "Open the session worktree terminal"
+    },
+    {
+      icon: mdiRobotOutline,
+      id: "ai-terminal",
+      label: "AI Terminal",
+      title: "Open the active session Codex terminal"
+    }
+  ]);
+  const activeSessionTool = computed(() => {
+    return sessionToolControls.value.find((tool) => tool.id === rightPaneTab.value) || null;
+  });
+
+  function rightPaneTabMounted(tabId) {
+    return mountedRightPaneTabs.value.includes(String(tabId || ""));
+  }
+
+  watch(rightPaneTab, (tabId) => {
+    const nextTabId = String(tabId || "");
+    if (!nextTabId || mountedRightPaneTabs.value.includes(nextTabId)) {
+      return;
+    }
+    mountedRightPaneTabs.value = [
+      ...mountedRightPaneTabs.value,
+      nextTabId
+    ];
+  }, {
+    immediate: true
+  });
+  const commandSpyVisible = computed(() => Boolean(
+    commandTerminalVisible.value ||
+    commandRunning.value ||
+    commandTerminalFailed.value
+  ));
+  const screenStopAction = computed(() => String(screenState.value.stopAction || ""));
+  const responsePreviewText = computed(() => String(props.humanInputResponsePreview?.text || ""));
+  const responsePreviewError = computed(() => String(props.humanInputResponsePreview?.error || ""));
+  const responsePreviewLoading = computed(() => Boolean(props.humanInputResponsePreview?.loading));
+  const reportPreviewVisible = computed(() => Boolean(sectionVisible("report_preview") && props.reportPreview?.visible));
+  const conversationLogVisible = computed(() => Boolean(
+    sectionVisible("response_preview") &&
+    props.conversationLog?.visible
+  ));
+  const responsePreviewVisible = computed(() => Boolean(
+    sectionVisible("response_preview") &&
+    (
+      responsePreviewText.value.trim() ||
+      responsePreviewError.value ||
+      responsePreviewLoading.value
+    )
+  ));
+  const chatTakeoverVisible = computed(() => Boolean(reportPreviewVisible.value));
+  const conversationLogReady = computed(() => Boolean(
+    !props.conversationLog?.loading
+  ));
+  const conversationHasTurns = computed(() => Boolean(
+    Array.isArray(props.conversationLog?.turns) &&
+    props.conversationLog.turns.length
+  ));
+  const screenMessageIsGuidance = computed(() => String(screenState.value.variant || "") === "guide");
+  const guidanceScreenVisible = computed(() => Boolean(
+    !chatTakeoverVisible.value &&
+    screenMessageIsGuidance.value &&
+    conversationLogReady.value &&
+    !conversationHasTurns.value &&
+    screenMessage.value &&
+    !commandTerminalVisible.value
+  ));
+  const guidanceActivityMessage = computed(() => {
+    if (!guidanceScreenVisible.value) {
+      return null;
+    }
+    const title = screenKind.value === "conversation" ? "" : displayStatusText.value;
+    if (screenKind.value === "work_source") {
+      return activityMessage({
+        appearance: "assistant",
+        icon: mdiInformationOutline,
+        id: "screen-guidance",
+        label: "Vibe64",
+        text: screenMessage.value,
+        title
+      });
+    }
+    return activityMessage({
+      appearance: "assistant",
+      icon: mdiRobotOutline,
+      id: "screen-guidance",
+      label: "Codex",
+      text: screenMessage.value,
+      title
+    });
+  });
+  const screenActivityMessage = computed(() => {
+    const title = String(displayStatusText.value || "").trim();
+    if (
+      !title ||
+      chatTakeoverVisible.value ||
+      screenMessageIsGuidance.value ||
+      displayRunning.value ||
+      screenKind.value === "codex_running" ||
+      commandTerminalVisible.value
+    ) {
+      return null;
+    }
+    return activityMessage({
+      icon: screenKind.value === "blocked" || screenKind.value === "failure"
+        ? mdiAlertCircleOutline
+        : mdiInformationOutline,
+      id: "screen-status",
+      label: "Vibe64",
+      text: screenMessage.value,
+      title,
+      tone: screenKind.value === "blocked" || screenKind.value === "failure" ? "warning" : "info"
+    });
+  });
+  const responsePreviewActivityMessage = computed(() => {
+    if (!responsePreviewVisible.value || conversationLogVisible.value) {
+      return null;
+    }
+    return activityMessage({
+      icon: mdiRobotOutline,
+      id: "codex-response-preview",
+      label: "Assistant",
+      loading: responsePreviewLoading.value,
+      text: responsePreviewError.value || responsePreviewText.value || "Reply is not ready yet.",
+      tone: responsePreviewError.value ? "warning" : "info"
+    });
+  });
+  const actionResultNoticeVisible = computed(() => Boolean(
+    props.actions?.actionResultMessage
+  ));
+  const actionResultType = computed(() => String(props.actions?.actionResultType || "info"));
+  const clientControlError = ref("");
+  const clientControlErrorVisible = computed(() => Boolean(clientControlError.value));
+  const statusActionsVisible = computed(() => Boolean(
+    !chatTakeoverVisible.value &&
+    (
+      screenStopAction.value ||
+      stuckRecoveryAvailable.value
+    )
+  ));
+  const composerVisible = computed(() => Boolean(
+    !chatTakeoverVisible.value &&
+    props.active &&
+    props.session
+  ));
+  const passiveComposerVisible = computed(() => Boolean(
+    !stepInputFormVisible.value &&
+    !selectedScreenControlVisible.value
+  ));
+  const passiveComposerBusy = computed(() => Boolean(
+    composerInputLocked.value ||
+    thinkingVisible.value
+  ));
+  const passiveComposerFields = computed(() => [
+    {
+      kind: "textarea",
+      label: "What would you like to do?",
+      name: "message",
+      required: false,
+      value: ""
+    }
+  ]);
+  const passiveComposerControl = computed(() => ({
+    id: "passive_composer",
+    inputFields: passiveComposerFields.value,
+    label: "Send",
+    style: "primary"
+  }));
+  const passiveComposerValues = computed(() => ({
+    message: ""
+  }));
+  const chatActivityMessages = computed(() => [
+    screenActivityMessage.value,
+    guidanceActivityMessage.value,
+    responsePreviewActivityMessage.value
+  ].filter(Boolean));
+  const chatTimelineVisible = computed(() => Boolean(!chatTakeoverVisible.value));
+  const runtimeNoticeMessages = computed(() => [
+    codexTerminalAttentionSignature.value
+      ? {
+          icon: mdiRobotOutline,
+          id: "codex-terminal-attention",
+          text: "Codex needs attention in the AI Terminal.",
+          tone: "warning"
+        }
+      : null,
+    actionResultNoticeVisible.value
+      ? {
+          icon: actionResultType.value === "success" ? mdiCheckCircleOutline : mdiAlertCircleOutline,
+          id: "action-result",
+          text: String(props.actions.actionResultMessage || ""),
+          tone: ["success", "warning", "error"].includes(actionResultType.value) ? actionResultType.value : "info"
+        }
+      : null,
+    clientControlErrorVisible.value
+      ? {
+          icon: mdiAlertCircleOutline,
+          id: "client-control-error",
+          text: clientControlError.value,
+          tone: "warning"
+        }
+      : null
+  ].filter(Boolean));
+  const runtimeStatusVisible = computed(() => Boolean(
+    visibleBackgroundTasks.value.length ||
+    backgroundTaskError.value ||
+    runtimeNoticeMessages.value.length
+  ));
+  const conversationScrollKey = computed(() => [
+    sessionId.value,
+    chatTimelineVisible.value ? "conversation-visible" : "conversation-hidden",
+    selectedControl.value?.id || "",
+    selectedControlFields.value.map((field) => field.name).join("|"),
+    chatActivityMessages.value.map((message) => [
+      message.id,
+      message.appearance,
+      message.loading ? "loading" : "ready",
+      message.text,
+      message.title
+    ].join(":")).join("|")
+  ].join(":"));
+  const allScreenControls = computed(() => {
+    return currentStepWorkflowControls({
+      actions: props.actions?.currentActions || [],
+      interaction: stepInput.interaction,
+      session: props.session
+    });
+  });
+  const {
+    activateControl,
+    canSubmitSelectedControl,
+    clearSelectedControl,
+    screenControls,
+    selectedControl,
+    selectedControlFields,
+    selectedControlIsPrimary,
+    selectedControlValues,
+    submitSelectedControl,
+    updateSelectedControlValue
+  } = useVibe64AutopilotComposer({
+    conversationLog: computed(() => props.conversationLog),
+    controls: allScreenControls,
+    isControlDisabled: controlDisabled,
+    onRunClientControl: runClientControl,
+    onRunControl: runWorkflowControl,
+    primaryIntentId,
+    running: composerInputLocked
+  });
+  const workflowButtonControls = computed(() => {
+    return screenControls.value.map((control) => ({
+      ...control,
+      buttonColor: undefined,
+      buttonVariant: control.style === "primary" ? "flat" : "tonal",
+      disabled: controlDisabled(control),
+      icon: controlIcon(control),
+      loading: controlLoading(control),
+      sourceControl: control
+    }));
+  });
+  const activeComposerWorkflowControls = computed(() => (
+    codexInterruptVisible.value ? [] : workflowButtonControls.value
+  ));
+  const stepInputActionHandlers = computed(() => ({
+    ...props.actions,
+    runAction: runActionAfterStepInput
+  }));
+
+  function sectionVisible(kind = "") {
+    return screenSections.value.some((section) => section?.kind === kind);
+  }
+
+  function activityMessage({
+    appearance = "activity",
+    icon = "",
+    id = "",
+    label = "Vibe64",
+    loading = false,
+    text = "",
+    title = "",
+    tone = "info"
+  } = {}) {
+    const messageText = String(text || "").trim();
+    const messageTitle = String(title || "").trim();
+    if (!messageText && !messageTitle && loading !== true) {
+      return null;
+    }
+    return {
+      appearance,
+      icon,
+      id,
+      label,
+      loading: loading === true,
+      text: messageText,
+      title: messageTitle,
+      tone
+    };
+  }
+
+  function normalizeProjectPane(value = "") {
+    return ["configure", "dashboard", "history", "preview", "run", "setup"].includes(value)
+      ? value
+      : "preview";
+  }
+
+  function rightPaneExists(tabId = "") {
+    return projectPaneIds.includes(tabId) || sessionPaneIds.includes(tabId);
+  }
+
+  function persistedSessionTool() {
+    const value = readLocalStorageJson(sessionToolStorageKey.value, "");
+    return sessionPaneIds.includes(value) ? value : "";
+  }
+
+  function persistSessionTool(tabId = "") {
+    if (!sessionToolStorageKey.value) {
+      return;
+    }
+    writeLocalStorageJson(sessionToolStorageKey.value, sessionPaneIds.includes(tabId) ? tabId : "");
+  }
+
+  function selectRightPaneTab(tabId = "", {
+    persist = true
+  } = {}) {
+    if (!rightPaneExists(tabId)) {
+      return;
+    }
+    rightPaneTab.value = tabId;
+    if (persist) {
+      persistSessionTool(sessionPaneIds.includes(tabId) ? tabId : "");
+    }
+  }
+
+  function selectProjectPaneTab(tabId = "") {
+    selectRightPaneTab(tabId, {
+      persist: true
+    });
+  }
+
+  function restorePersistedSessionTool() {
+    const tabId = persistedSessionTool();
+    if (!tabId) {
+      selectRightPaneTab("preview", {
+        persist: false
+      });
+      return;
+    }
+    selectSessionTool(tabId, {
+      persist: false
+    });
+  }
+
+  function selectSessionTool(tabId = "", {
+    persist = true
+  } = {}) {
+    if (!sessionPaneIds.includes(tabId)) {
+      return false;
+    }
+    selectRightPaneTab(tabId, {
+      persist
+    });
+    if (tabId === "diff" && !props.diff?.payload && !props.diff?.loading && typeof props.diff?.load === "function") {
+      void props.diff.load();
+    }
+    return true;
+  }
+
+  function openCodexTerminalForRecovery() {
+    const opened = selectSessionTool("ai-terminal", {
+      persist: false
+    });
+    if (opened) {
+      emit("project-attention");
+    }
+    return opened;
+  }
+
+  function selectSessionToolFromMenu(tabId = "") {
+    if (selectSessionTool(tabId)) {
+      sessionToolsMenuOpen.value = false;
+      emit("project-attention");
+    }
+  }
+
+  function closeSessionTool() {
+    sessionToolsMenuOpen.value = false;
+    selectProjectPaneTab(projectPaneValue.value === "dashboard" ? "dashboard" : "preview");
+  }
+
+  function emitBusyState() {
+    emit("busy-change", autopilotBusy.value);
+  }
+
+  function submitStepInputForm() {
+    if (selectedStepInputControlVisible.value) {
+      submitSelectedWorkflowControl();
+      return;
+    }
+    if (stepInputHasWorkflowIntents.value) {
+      return;
+    }
+    if (stepInput.interaction?.kind === "command_failure_response") {
+      void submitCommandFailureResponse();
+      return;
+    }
+    submitStepInput();
+  }
+
+  function tailCommandText(value = "") {
+    const text = String(value || "");
+    const maxLength = 12000;
+    if (text.length <= maxLength) {
+      return text;
+    }
+    return text.slice(text.length - maxLength);
+  }
+
+  async function submitStepInput() {
+    await stepInput.submit();
+  }
+
+  async function submitCommandFailureResponse() {
+    const saved = await stepInput.submit();
+    if (saved) {
+      await retry();
+    }
+  }
+
+  async function saveCurrentStepInputForControl(control = {}) {
+    if (
+      !stepInputFormVisible.value ||
+      !controlSavesCurrentStepInputBeforeRun(control)
+    ) {
+      return true;
+    }
+    return await stepInput.submit();
+  }
+
+  async function activateWorkflowButtonControl(control = {}) {
+    if (await saveCurrentStepInputForControl(control) === false) {
+      return false;
+    }
+    return activateControl(control);
+  }
+
+  async function submitSelectedWorkflowControl(options = {}) {
+    if (await saveCurrentStepInputForControl(selectedControl.value) === false) {
+      return false;
+    }
+    return submitSelectedControl({
+      ...(options && typeof options === "object" && !Array.isArray(options) ? options : {}),
+      agentSettings: requestAgentSettings.value
+    });
+  }
+
+  async function submitScreenComposerControl(options = {}) {
+    const accepted = await submitSelectedControl(options);
+    if (accepted) {
+      screenControlFormRef.value?.clearAttachments?.();
+    }
+    return accepted;
+  }
+
+  function submitPassiveComposer() {
+    return false;
+  }
+
+  function updatePassiveComposer() {
+    return false;
+  }
+
+  async function requestCodexInterrupt() {
+    if (!codexInterruptVisible.value) {
+      return false;
+    }
+    return await props.interruptCodexTurn();
+  }
+
+  async function runActionFromStepInput(action = {}) {
+    return saveCurrentStepInputForControl(action);
+  }
+
+  async function runActionAfterStepInput(action = {}) {
+    if (String(action.dispatchRoute || "") === ACTION_DISPATCH_ROUTES.COMMAND_TERMINAL) {
+      return runCommandAction(action);
+    }
+    return props.actions.runAction(action, {
+      agentSettings: requestAgentSettings.value
+    });
+  }
+
+  async function runWorkflowControl(control = {}, options = {}) {
+    const runOptions = {
+      ...(options && typeof options === "object" && !Array.isArray(options) ? options : {}),
+      agentSettings: requestAgentSettings.value
+    };
+    const sourceAction = workflowControlSourceAction(control);
+    if (!sourceAction) {
+      return runPresentedIntent(control, runOptions);
+    }
+    if (String(sourceAction.dispatchRoute || "") === ACTION_DISPATCH_ROUTES.COMMAND_TERMINAL) {
+      return runCommandAction(sourceAction);
+    }
+    const fields = runOptions.fields && typeof runOptions.fields === "object" && !Array.isArray(runOptions.fields)
+      ? runOptions.fields
+      : {};
+    const displayFields = runOptions.displayFields && typeof runOptions.displayFields === "object" && !Array.isArray(runOptions.displayFields)
+      ? runOptions.displayFields
+      : {};
+    const response = await props.actions.runAction(sourceAction, {
+      agentSettings: runOptions.agentSettings,
+      displayInput: displayFields,
+      input: fields
+    });
+    await props.refreshSessionData();
+    await nextTick();
+    await runNextOperation();
+    return response !== false;
+  }
+
+  function updateAgentSetting(parameterId = "", value = "") {
+    agentSettings.update({
+      [String(parameterId || "")]: String(value || "")
+    });
+  }
+
+  async function retryFromCommandFailure() {
+    if (stepInput.interaction?.kind === "command_failure_response" && stepInput.visible) {
+      clearFailure({
+        clearCommandResult: true
+      });
+      await submitCommandFailureResponse();
+      return;
+    }
+    await retry();
+  }
+
+  async function requestCommandAiFix() {
+    if (!commandTerminalFailed.value) {
+      return;
+    }
+    openFixCodexDialog(await terminalFailureFix.request({
+      actionId: commandResult.value?.actionId || "",
+      actionLabel: commandResult.value?.actionLabel || "",
+      attemptedCommand: commandResult.value?.attemptedCommand || "",
+      closeError: commandTerminalError.value,
+      commandPreview: commandPreview.value,
+      exitCode: commandResult.value?.exitCode ?? "",
+      output: commandTerminalText.value,
+      sessionId: sessionId.value,
+      terminalKind: "command",
+      terminalSessionId: commandResult.value?.terminalSessionId || "",
+      terminalStatus: commandStatus.value
+    }));
+  }
+
+  function stopScreenAction() {
+    stop();
+  }
+
+  async function rewindToAutopilotStep(step = {}) {
+    if (navigationBusy.value || step.canRewind !== true || typeof props.rewindToStep !== "function") {
+      return;
+    }
+    clearFailure();
+    clearSelectedControl();
+    await props.rewindToStep(step);
+  }
+
+  function controlStateActive(control = {}, field = "") {
+    return presentationControlStateActive(control, field, {
+      diff: props.diff,
+      review: props.review
+    });
+  }
+
+  async function runClientControl(control = {}) {
+    clientControlError.value = "";
+    try {
+      const result = await clientControls.runClientControl(control, {
+        diff: props.diff,
+        openCodexTerminal: openCodexTerminalForRecovery,
+        openDiffPane: () => selectSessionTool("diff"),
+        refreshSessionData: props.refreshSessionData,
+        session: props.session,
+        sessionId: sessionId.value
+      });
+      if (result?.ok === false) {
+        clientControlError.value = String(result.error || "The requested control could not run.");
+        return false;
+      }
+      return result;
+    } catch (error) {
+      clientControlError.value = String(error?.message || error || "The requested control could not run.");
+      return false;
+    }
+  }
+
+  function controlDisabled(control = {}) {
+    return Boolean(
+      props.page.busy ||
+      props.codexThinking ||
+      running.value ||
+      stepInput.saving ||
+      control.enabled !== true ||
+      controlStateActive(control, "disabledWhen")
+    );
+  }
+
+  function controlLoading(control = {}) {
+    const sourceAction = workflowControlSourceAction(control);
+    if (sourceAction) {
+      return Boolean(
+        props.actions.runActionCommand?.isRunning &&
+        props.actions.activeActionId === sourceAction.id
+      );
+    }
+    return Boolean(running.value || stepInput.saving || controlStateActive(control, "loadingWhen"));
+  }
+
+  function controlIcon(control = {}) {
+    const sourceAction = workflowControlSourceAction(control);
+    if (sourceAction && typeof props.actions.actionIcon === "function") {
+      return props.actions.actionIcon(sourceAction);
+    }
+    if (controlIconToken(control) === VIBE64_CLIENT_CONTROL_ICON_TOKENS.DIFF) {
+      return mdiFileCompare;
+    }
+    if (control.style === "primary") {
+      return mdiCheck;
+    }
+    return mdiRefresh;
+  }
+
+  onMounted(emitBusyState);
+
+  watch(autopilotBusy, () => {
+    emitBusyState();
+  }, {
+    flush: "post"
+  });
+
+  watch(() => props.active, () => {
+    emitBusyState();
+  }, {
+    flush: "post"
+  });
+
+  watch(() => [
+    props.active ? "active" : "inactive",
+    canDispatchNextOperation.value ? "dispatchable" : "idle",
+    nextOperationKey.value
+  ].join(":"), () => {
+    if (props.active && canDispatchNextOperation.value) {
+      void runNextOperation();
+    }
+  }, {
+    flush: "post",
+    immediate: true
+  });
+
+  watch(() => [
+    projectPaneValue.value,
+    sessionId.value
+  ].join("|"), () => {
+    const pane = projectPaneValue.value;
+    if (pane === "preview") {
+      restorePersistedSessionTool();
+      return;
+    }
+    selectProjectPaneTab("dashboard");
+  }, {
+    immediate: true
+  });
+
+  watch(codexTerminalAttentionSignature, (signature) => {
+    if (!signature) {
+      openedCodexTerminalAttentionSignature.value = "";
+      return;
+    }
+    if (openedCodexTerminalAttentionSignature.value === signature) {
+      return;
+    }
+    openedCodexTerminalAttentionSignature.value = signature;
+    openCodexTerminalForRecovery();
+  }, {
+    flush: "post",
+    immediate: true
+  });
+
+    return {
+    Vibe64FixCodexDialog,
+    Vibe64LaunchControls,
+    Vibe64SessionDiffPanel,
+    activateControl,
+    activateWorkflowButtonControl,
+    activeComposerWorkflowControls,
+    activeSessionTool,
+    backgroundTaskError,
+    canSubmitSelectedControl,
+    chatActivityMessages,
+    chatCollapsed,
+    chatTakeoverVisible,
+    chatTimelineVisible,
+    clearSelectedControl,
+    closeSessionTool,
+    codexInterruptVisible,
+    commandFailureSummary,
+    commandOverlayTitle,
+    commandPreview,
+    commandResult,
+    commandRunning,
+    commandSpyExpanded,
+    commandSpyVisible,
+    commandStatus,
+    commandTerminalError,
+    commandTerminalFailed,
+    commandTerminalSummary,
+    commandTerminalText,
+    composerInputLocked,
+    composerVisible,
+    conversationScrollKey,
+    currentAgentSettings,
+    dashboardSessionContext,
+    fixDialogOpen,
+    fixJob,
+    fixTerminal,
+    mdiCheck,
+    mdiChevronDown,
+    mdiChevronUp,
+    mdiClose,
+    mdiConsoleLine,
+    mdiRefresh,
+    mdiRobotOutline,
+    mdiStopCircleOutline,
+    mdiViewGridOutline,
+    navigationBusy,
+    openFixCodexDialog,
+    passiveComposerBusy,
+    passiveComposerControl,
+    passiveComposerFields,
+    passiveComposerValues,
+    passiveComposerVisible,
+    recoverStuckStep,
+    reportPreviewVisible,
+    requestCodexInterrupt,
+    requestCommandAiFix,
+    retryBackgroundTask,
+    retryFromCommandFailure,
+    retryingBackgroundTaskId,
+    rewindToAutopilotStep,
+    rightPaneTab,
+    rightPaneTabMounted,
+    runActionFromStepInput,
+    runtimeNoticeMessages,
+    runtimeStatusVisible,
+    screenStopAction,
+    selectSessionToolFromMenu,
+    selectedControl,
+    selectedControlFields,
+    selectedControlIsPrimary,
+    selectedControlValues,
+    selectedScreenControlVisible,
+    selectedStepInputControlVisible,
+    sessionId,
+    sessionToolControls,
+    sessionToolbarVisible,
+    sessionToolsMenuOpen,
+    sessionToolsVisible,
+    statusActionsVisible,
+    stepInput,
+    stepInputActionHandlers,
+    stepInputFormVisible,
+    stepInputHasWorkflowIntents,
+    stopCommandAction,
+    stopScreenAction,
+    stuckRecoveryAvailable,
+    stuckRecoveryRunning,
+    submitPassiveComposer,
+    submitScreenComposerControl,
+    submitSelectedWorkflowControl,
+    submitStepInputForm,
+    thinkingVisible,
+    updateAgentSetting,
+    updatePassiveComposer,
+    updateSelectedControlValue,
+    visibleBackgroundTasks,
+    workflowButtonControls,
+    workflowExecuting
+    };
+}
+
+export {
+  useVibe64AutopilotView,
+  vibe64AutopilotViewEmits,
+  vibe64AutopilotViewProps
+};

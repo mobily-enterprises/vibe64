@@ -2,8 +2,10 @@ import { computed, ref, unref } from "vue";
 
 import {
   clientControlHasDispatcher,
-  runVibe64ClientControl
 } from "@/lib/vibe64ClientControlDispatcher.js";
+import {
+  useVibe64ClientControls
+} from "@/composables/useVibe64ClientControls.js";
 import {
   VIBE64_CODEX_APP_SERVER_TASK_ID
 } from "@/lib/vibe64CodexTerminalAttention.js";
@@ -41,8 +43,14 @@ function taskNeedsCodexTerminalRecovery(task = {}) {
 function useVibe64BackgroundTasks({
   openCodexTerminal = null,
   refreshSessionData = async () => null,
+  runClientControl = null,
+  sessionsApiPath = null,
   session
 } = {}) {
+  const customRunClientControl = typeof runClientControl === "function" ? runClientControl : null;
+  const clientControls = customRunClientControl ? null : useVibe64ClientControls({
+    sessionsApiPath
+  });
   const retryingBackgroundTaskId = ref("");
   const backgroundTaskError = ref("");
   const backgroundTasks = computed(() => normalizeBackgroundTasks(unref(session) || {}));
@@ -58,7 +66,7 @@ function useVibe64BackgroundTasks({
     backgroundTaskError.value = "";
     retryingBackgroundTaskId.value = task.id;
     try {
-      const result = await runVibe64ClientControl(task.retry, {
+      const result = await (customRunClientControl || clientControls.runClientControl)(task.retry, {
         refreshSessionData,
         session: unref(session),
         sessionId

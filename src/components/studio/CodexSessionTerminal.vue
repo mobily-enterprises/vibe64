@@ -144,11 +144,7 @@ import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
 import { useCodexTerminalElement } from "@/composables/useCodexTerminalElement.js";
 import {
   vibe64CodexTerminalWebSocketUrl,
-  vibe64GlobalCodexTerminalWebSocketUrl,
-  closeVibe64CodexTerminal,
-  closeVibe64GlobalCodexTerminal,
-  startVibe64CodexTerminal,
-  startVibe64GlobalCodexTerminal
+  vibe64GlobalCodexTerminalWebSocketUrl
 } from "@/lib/vibe64SessionApi.js";
 import { useVibe64CodexCommands } from "@/composables/useVibe64CodexCommands.js";
 import { useCodexTerminalAttachments } from "@/composables/useCodexTerminalAttachments.js";
@@ -468,14 +464,14 @@ function handleTerminalUserData(data) {
 
 function startTerminalSessionForScope(currentScopeId) {
   return globalScope.value
-    ? startVibe64GlobalCodexTerminal()
-    : startVibe64CodexTerminal(currentScopeId);
+    ? codexCommands.startGlobalCodexTerminal()
+    : codexCommands.startCodexTerminal(currentScopeId);
 }
 
 function closeTerminalSessionForScope(currentScopeId, terminalId) {
   return globalScope.value
-    ? closeVibe64GlobalCodexTerminal(currentScopeId, terminalId)
-    : closeVibe64CodexTerminal(currentScopeId, terminalId);
+    ? codexCommands.closeGlobalCodexTerminal(currentScopeId, terminalId)
+    : codexCommands.closeCodexTerminal(currentScopeId, terminalId);
 }
 
 function webSocketUrlForScope(currentScopeId, terminalId) {

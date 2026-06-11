@@ -37,16 +37,6 @@ Make jskit open jskit properly (recursive). this depends on the item above too
 
 
 
-*****FINAL PRODUCT TEST:
-
-6a)
-Test seeding
-
-6b)
-Make sure the correct buttons are displayed at every stage
-
-
-
 *****SERVER WORK:
 
 7)
@@ -57,6 +47,15 @@ ABILITY TO PROVISION SERVER
 
 8b)
 MOVABILITY: Ability to create a tgz of the full contents of a repository: vibe64 and .vibe64. Maybe consider placing them into .vibe64
+
+
+*****FINAL PRODUCT TEST:
+
+6a)
+Test seeding
+
+6b)
+Make sure the correct buttons are displayed at every stage
 
 
 *****USERS WORK:

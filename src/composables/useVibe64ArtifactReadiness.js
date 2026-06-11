@@ -1,12 +1,20 @@
-import { onBeforeUnmount, ref, unref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, unref, watch } from "vue";
+import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
+import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
 import {
   vibe64ArtifactReadinessStreamEndpoint,
-  readVibe64ArtifactReadiness
+  vibe64ArtifactReadinessEndpoint
 } from "@/lib/vibe64SessionApi.js";
+import {
+  VIBE64_SURFACE_ID
+} from "@/lib/vibe64RequestConfig.js";
+import {
+  useVibe64ProjectSlug
+} from "@/composables/useVibe64ProjectScope.js";
 import { parseJsonStreamEvent } from "@/lib/streamEvents.js";
 import {
   resolveStudioRequestUrl
-} from "@/lib/studioHttp.js";
+} from "@/lib/studioUrls.js";
 
 function emptyArtifactReadiness(sessionId = "") {
   return {
@@ -18,11 +26,28 @@ function emptyArtifactReadiness(sessionId = "") {
 
 function useVibe64ArtifactReadiness({
   active = true,
-  readReadiness = readVibe64ArtifactReadiness,
   sessionId = () => ""
 } = {}) {
+  const projectSlug = useVibe64ProjectSlug();
   const readiness = ref(emptyArtifactReadiness());
   const streamError = ref("");
+  const readinessResource = useEndpointResource({
+    enabled: false,
+    fallbackLoadError: "Artifact readiness could not be read.",
+    path: computed(() => {
+      const nextSessionId = currentSessionId();
+      return nextSessionId ? vibe64ArtifactReadinessEndpoint(nextSessionId) : "";
+    }),
+    queryKey: computed(() => [
+      "vibe64",
+      projectSlug.value || "",
+      VIBE64_SURFACE_ID,
+      ROUTE_VISIBILITY_PUBLIC,
+      "artifact-readiness",
+      currentSessionId()
+    ]),
+    requestRecoveryLabel: "Artifact readiness"
+  });
 
   let eventSource = null;
   let eventSourceSessionId = "";
@@ -59,7 +84,8 @@ function useVibe64ArtifactReadiness({
       readiness.value = emptyArtifactReadiness();
       return readiness.value;
     }
-    const response = await readReadiness(nextSessionId);
+    const result = await readinessResource.reload();
+    const response = result?.data || readinessResource.data.value || emptyArtifactReadiness(nextSessionId);
     applyReadiness(response);
     return response;
   }
@@ -126,6 +152,7 @@ function useVibe64ArtifactReadiness({
   return {
     closeStream,
     readiness,
+    readinessResource,
     refresh,
     startStream,
     streamError

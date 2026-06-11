@@ -1,5 +1,4 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from "vue";
 import {
   mdiAccountCancelOutline,
   mdiAccountGroupOutline,
@@ -7,130 +6,23 @@ import {
   mdiAccountPlusOutline
 } from "@mdi/js";
 import {
-  cancelInvite,
-  inviteUser,
-  readUsers,
-  revokeUser
-} from "@/lib/vibe64AuthApi.js";
-import {
-  useVibe64AppAuth
-} from "@/composables/useVibe64AppAuth.js";
+  useVibe64UserManagement
+} from "@/composables/useVibe64Users.js";
 
-const auth = useVibe64AppAuth();
-const users = ref([]);
-const loadingUsers = ref(false);
-const inviteStatus = ref("");
-const inviteWarning = ref("");
-const error = ref("");
-const actionBusy = ref("");
-const inviteForm = reactive({
-  email: ""
-});
-const canManageUsers = computed(() => auth?.state?.user?.owner === true || auth?.state?.user?.role === "owner");
-
-async function loadUsers() {
-  loadingUsers.value = true;
-  error.value = "";
-  try {
-    const response = await readUsers();
-    if (response.ok === false) {
-      throw new Error(response.error || response.message || "Users could not load.");
-    }
-    users.value = Array.isArray(response.users) ? response.users : [];
-  } catch (loadError) {
-    error.value = String(loadError?.message || loadError);
-  } finally {
-    loadingUsers.value = false;
-  }
-}
-
-async function submitInvite() {
-  if (!canManageUsers.value) {
-    error.value = "Only owners can invite Vibe64 users.";
-    return;
-  }
-  inviteStatus.value = "";
-  inviteWarning.value = "";
-  error.value = "";
-  actionBusy.value = "invite";
-  try {
-    const response = await inviteUser({
-      email: inviteForm.email
-    });
-    if (response.ok === false) {
-      error.value = response.error || response.message || "Invite failed.";
-      return;
-    }
-    inviteForm.email = "";
-    const inviteEmail = response.inviteEmail || {};
-    if (response.user?.status === "active") {
-      inviteStatus.value = "User is already active.";
-    } else if (inviteEmail.ok === true && inviteEmail.attempted === true) {
-      inviteStatus.value = "User invited and email sent.";
-    } else if (inviteEmail.ok === false) {
-      inviteStatus.value = "User invited.";
-      inviteWarning.value = `Supabase invite email was not sent: ${inviteEmail.error || "unknown error"}`;
-    } else {
-      inviteStatus.value = "User invited.";
-    }
-    await loadUsers();
-  } finally {
-    actionBusy.value = "";
-  }
-}
-
-async function cancelUserInvite(row = {}) {
-  await runUserAction(row, cancelInvite, "Invite canceled.");
-}
-
-async function removeUser(row = {}) {
-  await runUserAction(row, revokeUser, "User removed.");
-}
-
-async function runUserAction(row = {}, action, successMessage = "") {
-  if (!canManageUsers.value) {
-    error.value = "Only owners can manage Vibe64 users.";
-    return;
-  }
-  inviteStatus.value = "";
-  inviteWarning.value = "";
-  error.value = "";
-  const email = String(row.email || "").trim();
-  if (!email) {
-    return;
-  }
-  actionBusy.value = email;
-  try {
-    const response = await action({
-      email
-    });
-    if (response.ok === false) {
-      error.value = response.error || response.message || "User update failed.";
-      return;
-    }
-    inviteStatus.value = successMessage;
-    await loadUsers();
-  } finally {
-    actionBusy.value = "";
-  }
-}
-
-function statusLabel(row = {}) {
-  if (row.status === "active") {
-    return row.identityLinked ? "Active" : "Active, identity pending";
-  }
-  if (row.status === "invited") {
-    return "Invited";
-  }
-  return row.status || "Unknown";
-}
-
-function githubLabel(row = {}) {
-  const login = String(row.github?.login || "").trim();
-  return login ? `@${login}` : "Not linked";
-}
-
-onMounted(loadUsers);
+const {
+  actionBusy,
+  cancelUserInvite,
+  canManageUsers,
+  error,
+  githubLabel,
+  inviteForm,
+  inviteStatus,
+  inviteWarning,
+  removeUser,
+  statusLabel,
+  submitInvite,
+  userList
+} = useVibe64UserManagement();
 </script>
 
 <template>
@@ -191,7 +83,7 @@ onMounted(loadUsers);
           </tr>
         </thead>
         <tbody>
-          <tr v-for="row in users" :key="row.email">
+          <tr v-for="row in userList.users" :key="row.email">
             <td>{{ row.email }}</td>
             <td>{{ githubLabel(row) }}</td>
             <td>{{ row.role }}</td>
@@ -222,7 +114,7 @@ onMounted(loadUsers);
               </v-btn>
             </td>
           </tr>
-          <tr v-if="!loadingUsers && users.length === 0">
+          <tr v-if="!userList.isInitialLoading && userList.users.length === 0">
             <td :colspan="canManageUsers ? 5 : 4">No users.</td>
           </tr>
         </tbody>

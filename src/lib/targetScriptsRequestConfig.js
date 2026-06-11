@@ -1,7 +1,7 @@
 import {
   resolveWebSocketUrl,
   studioApiPath
-} from "@/lib/studioHttp.js";
+} from "@/lib/studioUrls.js";
 import {
   vibe64ProjectQueryScope
 } from "@/lib/vibe64ProjectScope.js";
