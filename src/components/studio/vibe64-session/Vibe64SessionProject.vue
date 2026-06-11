@@ -39,12 +39,12 @@
     <Vibe64ReportPreview
       v-if="humanInputResponsePreview.visible"
       class="studio-ai-sessions__report"
-      empty-text="Codex response is not ready yet."
+      empty-text="Reply is not ready yet."
       :error="humanInputResponsePreview.error"
       :loading="humanInputResponsePreview.loading"
       :text="humanInputResponsePreview.text"
       :title-icon="mdiRobotOutline"
-      title="Codex"
+      title="Assistant reply"
     />
   </section>
 </template>

@@ -3428,7 +3428,7 @@ test("vibe64 presentation omits unavailable continue controls while Codex waits 
         inputFields: [
           {
             kind: "textarea",
-            label: "Response",
+            label: "Message",
             name: "conversationRequest"
           }
         ],
@@ -3442,7 +3442,7 @@ test("vibe64 presentation omits unavailable continue controls while Codex waits 
         fields: [
           {
             kind: "textarea",
-            label: "Response",
+            label: "Message",
             name: "conversationRequest"
           }
         ],

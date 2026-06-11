@@ -1,10 +1,10 @@
 import { nextTick, onBeforeUnmount, ref } from "vue";
+import { isDynamicImportError } from "@jskit-ai/kernel/client/asyncModuleRecovery";
+import {
+  useShellAsyncModuleRecoveryRuntime
+} from "@jskit-ai/shell-web/client/asyncModuleRecovery";
 import { writeClipboardText } from "@/lib/clipboard.js";
 import { studioHttpClient } from "@/lib/studioHttp.js";
-import {
-  isVibe64AsyncImportError,
-  notifyVibe64AsyncModuleError
-} from "@/lib/vibe64AsyncModuleCore.js";
 import { loadXtermModules } from "@/lib/xtermModuleLoader.js";
 
 function useDoctorTerminal({
@@ -39,6 +39,7 @@ function useDoctorTerminal({
   const notifyTerminalSettled = typeof onTerminalSettled === "function"
     ? onTerminalSettled
     : () => null;
+  const asyncModuleRecoveryRuntime = useShellAsyncModuleRecoveryRuntime();
 
   function terminalUrl(path = "") {
     return `${terminalEndpoint()}${path}`;
@@ -146,10 +147,9 @@ function useDoctorTerminal({
       terminalLibrary = await loadXtermModules();
     } catch (error) {
       terminalError.value = "Terminal module could not load. Check your connection and retry.";
-      notifyVibe64AsyncModuleError(error, {
+      asyncModuleRecoveryRuntime?.notify?.(error, {
         label: "Terminal",
-        retry: setupTerminalUi,
-        stale: isVibe64AsyncImportError(error)
+        stale: isDynamicImportError(error)
       });
       return false;
     }

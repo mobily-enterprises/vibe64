@@ -255,10 +255,10 @@ function promptWaitingForInputInteraction({
     fields: [
       {
         kind: "textarea",
-        label: "Response",
+        label: "Message",
         name: "conversationRequest",
         required: true,
-        requiredMessage: "Response is required.",
+        requiredMessage: "Message is required.",
         value: ""
       }
     ],

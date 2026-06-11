@@ -28,13 +28,13 @@ const workflowDefinitionIds = deepFreeze({
 const coreMaintenanceStepDefinitionsById = deepFreeze({
   maintenance_conversation: buildAgentConversationStepDefinition({
     actionLabel: "Ask Codex",
-    description: "Ask Codex for local maintenance help and save the answer as an editable AI response artifact.",
+    description: "Ask Codex for local maintenance help and save the answer as an editable assistant reply.",
     id: "maintenance_conversation",
     inputLabel: "What would you like to do?",
     label: "Talk to Codex",
     message: "What would you like to do?",
     next: {
-      disabledReason: "Ask Codex and save an AI response before finishing.",
+      disabledReason: "Ask Codex and save an assistant reply before finishing.",
       enabledWhen: [when.artifactReady(HUMAN_INPUT_RESPONSE_ARTIFACT)]
     },
     responseArtifact: HUMAN_INPUT_RESPONSE_ARTIFACT

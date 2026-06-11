@@ -1077,9 +1077,9 @@ const responsePreviewActivityMessage = computed(() => {
   return activityMessage({
     icon: mdiRobotOutline,
     id: "codex-response-preview",
-    label: "Codex",
+    label: "Assistant",
     loading: responsePreviewLoading.value,
-    text: responsePreviewError.value || responsePreviewText.value || "Codex response is not ready yet.",
+    text: responsePreviewError.value || responsePreviewText.value || "Reply is not ready yet.",
     tone: responsePreviewError.value ? "warning" : "info"
   });
 });

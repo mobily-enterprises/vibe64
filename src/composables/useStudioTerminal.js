@@ -1,12 +1,12 @@
 import { computed, nextTick, ref, unref } from "vue";
+import { isDynamicImportError } from "@jskit-ai/kernel/client/asyncModuleRecovery";
+import {
+  useShellAsyncModuleRecoveryRuntime
+} from "@jskit-ai/shell-web/client/asyncModuleRecovery";
 import {
   reportableTerminalSize,
   terminalResizeErrorMessage
 } from "@/lib/studioTerminalSize.js";
-import {
-  isVibe64AsyncImportError,
-  notifyVibe64AsyncModuleError
-} from "@/lib/vibe64AsyncModuleCore.js";
 import { loadXtermModules } from "@/lib/xtermModuleLoader.js";
 
 function resolveCallback(callback, fallback) {
@@ -65,6 +65,7 @@ function useStudioTerminal({
   const notifyStatusUpdate = resolveCallback(onStatusUpdate, () => null);
   const notifyUserData = resolveCallback(onUserData, () => null);
   const resolveWebSocketUrl = resolveCallback(webSocketUrl, () => "");
+  const asyncModuleRecoveryRuntime = useShellAsyncModuleRecoveryRuntime();
   const terminalExited = computed(() => terminalStatus.value === "exited");
 
   function terminalReadOnly() {
@@ -178,10 +179,9 @@ function useStudioTerminal({
         terminalLibrary = await loadXtermModules();
       } catch (error) {
         terminalError.value = "Terminal module could not load. Check your connection and retry.";
-        notifyVibe64AsyncModuleError(error, {
+        asyncModuleRecoveryRuntime?.notify?.(error, {
           label: "Terminal",
-          retry: setupTerminalUi,
-          stale: isVibe64AsyncImportError(error)
+          stale: isDynamicImportError(error)
         });
         return false;
       }

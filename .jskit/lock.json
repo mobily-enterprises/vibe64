@@ -20,7 +20,7 @@
       },
       "options": {},
       "installedAt": "2026-05-10T00:00:00.000Z",
-      "migrationSyncVersion": "0.1.82"
+      "migrationSyncVersion": "0.1.87"
     },
     "@local/main": {
       "packageId": "@local/main",
@@ -316,7 +316,7 @@
         "realtime-redis-url": ""
       },
       "installedAt": "2026-05-24T07:02:06.012Z",
-      "migrationSyncVersion": "0.1.82"
+      "migrationSyncVersion": "0.1.87"
     },
     "@local/vibe64-core": {
       "packageId": "@local/vibe64-core",
@@ -344,7 +344,8 @@
         "migrations": []
       },
       "options": {},
-      "installedAt": "2026-05-26T05:00:29.741Z"
+      "installedAt": "2026-05-26T05:00:29.741Z",
+      "migrationSyncVersion": "0.1.0"
     },
     "@local/vibe64-adapters": {
       "packageId": "@local/vibe64-adapters",
@@ -372,7 +373,8 @@
         "migrations": []
       },
       "options": {},
-      "installedAt": "2026-05-26T05:55:02.827Z"
+      "installedAt": "2026-05-26T05:55:02.827Z",
+      "migrationSyncVersion": "0.1.0"
     },
     "@local/vibe64-runtime": {
       "packageId": "@local/vibe64-runtime",
@@ -400,7 +402,8 @@
         "migrations": []
       },
       "options": {},
-      "installedAt": "2026-05-26T05:55:03.282Z"
+      "installedAt": "2026-05-26T05:55:03.282Z",
+      "migrationSyncVersion": "0.1.0"
     },
     "@local/studio-terminal-core": {
       "packageId": "@local/studio-terminal-core",
@@ -428,7 +431,8 @@
         "migrations": []
       },
       "options": {},
-      "installedAt": "2026-05-26T05:55:03.906Z"
+      "installedAt": "2026-05-26T05:55:03.906Z",
+      "migrationSyncVersion": "0.1.0"
     },
     "@local/setup-doctor-core": {
       "packageId": "@local/setup-doctor-core",
@@ -456,7 +460,8 @@
         "migrations": []
       },
       "options": {},
-      "installedAt": "2026-05-26T05:55:04.558Z"
+      "installedAt": "2026-05-26T05:55:04.558Z",
+      "migrationSyncVersion": "0.1.0"
     }
   }
 }

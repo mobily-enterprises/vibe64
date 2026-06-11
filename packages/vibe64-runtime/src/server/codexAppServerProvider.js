@@ -1044,6 +1044,21 @@ class CodexAppServerAgentProvider {
     };
   }
 
+  async readThread(threadId = "") {
+    const client = await this.activeClient();
+    const response = await client.request("thread/read", {
+      threadId: normalizeAgentText(threadId)
+    });
+    return {
+      ...normalizeAgentThread({
+        id: response?.thread?.id || threadId,
+        provider: CODEX_APP_SERVER_PROVIDER_ID,
+        raw: response?.thread || response
+      }),
+      response
+    };
+  }
+
   async sendTurn(threadId = "", input = [], params = {}) {
     const client = await this.activeClient();
     const response = await client.request("turn/start", {

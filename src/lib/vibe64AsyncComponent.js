@@ -1,11 +1,12 @@
+import {
+  dynamicImportErrorMessage,
+  isDynamicImportError
+} from "@jskit-ai/kernel/client/asyncModuleRecovery";
+import {
+  useShellAsyncModuleRecoveryRuntime
+} from "@jskit-ai/shell-web/client/asyncModuleRecovery";
 import { defineComponent, h, markRaw, onBeforeUnmount, ref, shallowRef } from "vue";
 import Vibe64AsyncModuleState from "@/components/common/Vibe64AsyncModuleState.vue";
-import {
-  isVibe64AsyncImportError,
-  notifyVibe64AsyncModuleError,
-  reloadVibe64App,
-  vibe64AsyncModuleErrorMessage
-} from "@/lib/vibe64AsyncModuleCore.js";
 
 function resolvedModuleComponent(moduleValue) {
   return moduleValue?.default || moduleValue;
@@ -27,6 +28,7 @@ function defineVibe64AsyncComponent({
       const component = shallowRef(null);
       const error = ref(null);
       const loading = ref(false);
+      const asyncModuleRecoveryRuntime = useShellAsyncModuleRecoveryRuntime();
       let disposed = false;
       let requestId = 0;
 
@@ -48,10 +50,9 @@ function defineVibe64AsyncComponent({
           }
           component.value = null;
           error.value = loadError;
-          notifyVibe64AsyncModuleError(loadError, {
+          asyncModuleRecoveryRuntime?.notify?.(loadError, {
             label,
-            retry: load,
-            stale: isVibe64AsyncImportError(loadError)
+            stale: isDynamicImportError(loadError)
           });
           return false;
         } finally {
@@ -73,21 +74,21 @@ function defineVibe64AsyncComponent({
           return h(component.value, context.attrs, context.slots);
         }
         const errorValue = error.value;
-        const stale = isVibe64AsyncImportError(errorValue);
+        const stale = isDynamicImportError(errorValue);
         return h(Vibe64AsyncModuleState, {
           class: context.attrs.class,
           style: context.attrs.style,
           label,
           loading: loading.value,
           message: errorValue
-            ? vibe64AsyncModuleErrorMessage(errorValue, {
+            ? dynamicImportErrorMessage(errorValue, {
                 label,
                 stale
               })
             : `Loading ${label}.`,
           minHeight,
           stale,
-          onReload: reloadVibe64App,
+          onReload: () => asyncModuleRecoveryRuntime?.reload?.(),
           onRetry: load
         });
       };

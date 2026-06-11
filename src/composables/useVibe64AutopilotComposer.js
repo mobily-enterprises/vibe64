@@ -287,20 +287,20 @@ function useVibe64AutopilotComposer({
       selectControl(control);
     }
   }, {
-    flush: "post",
+    flush: "sync",
     immediate: true
   });
 
   watch(currentControls, () => {
     syncSelectedControlWithCurrentControls();
   }, {
-    flush: "post"
+    flush: "sync"
   });
 
   watch(isRunning, () => {
     syncSelectedControlWithCurrentControls();
   }, {
-    flush: "post"
+    flush: "sync"
   });
 
   return {

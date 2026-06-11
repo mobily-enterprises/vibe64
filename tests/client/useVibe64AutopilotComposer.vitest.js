@@ -48,11 +48,42 @@ describe("useVibe64AutopilotComposer", () => {
       running: ref(false)
     });
 
+    expect(composer.selectedControl.value?.id).toBe("talk_to_codex");
+    expect(composer.selectedControlFields.value.map((field) => field.name)).toEqual(["conversationRequest"]);
+
     await nextTick();
 
     expect(composer.selectedControl.value?.id).toBe("talk_to_codex");
     expect(composer.selectedControlFields.value.map((field) => field.name)).toEqual(["conversationRequest"]);
     expect(composer.screenControls.value.map((control) => control.id)).toEqual(["retry"]);
+  });
+
+  it("selects a newly available primary input control before the next render tick", async () => {
+    const controls = ref([]);
+    const composer = useVibe64AutopilotComposer({
+      controls,
+      conversationLog: ref({}),
+      primaryIntentId: ref("talk_to_codex"),
+      running: ref(false)
+    });
+
+    expect(composer.selectedControl.value).toBeNull();
+
+    controls.value = [
+      conversationControl(),
+      {
+        enabled: true,
+        id: "retry",
+        label: "Retry"
+      }
+    ];
+
+    expect(composer.selectedControl.value?.id).toBe("talk_to_codex");
+    expect(composer.screenControls.value.map((control) => control.id)).toEqual(["retry"]);
+
+    await nextTick();
+
+    expect(composer.selectedControl.value?.id).toBe("talk_to_codex");
   });
 
   it("selects the only enabled input control when no primary intent is provided", async () => {

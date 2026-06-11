@@ -27,7 +27,7 @@ X Make dead sure that node_modules is DELETED when archiving a session, ONLY and
 X 6c) Make sure that images are not packed into built, kept out
 
 
-RECURSIVENESS:
+*****RECURSIVENESS:
 
 5a)
 Make this work on a local directory, creating containers etc. This is crucial for local development and testing.
@@ -37,7 +37,7 @@ Make jskit open jskit properly (recursive). this depends on the item above too
 
 
 
-FINAL PRODUCT TEST:
+*****FINAL PRODUCT TEST:
 
 6a)
 Test seeding
@@ -47,7 +47,7 @@ Make sure the correct buttons are displayed at every stage
 
 
 
-SERVER WORK:
+*****SERVER WORK:
 
 7)
 ABILITY TO ADD USER
@@ -59,13 +59,23 @@ ABILITY TO PROVISION SERVER
 MOVABILITY: Ability to create a tgz of the full contents of a repository: vibe64 and .vibe64. Maybe consider placing them into .vibe64
 
 
-DEPLOYMENT WORK:
+*****USERS WORK:
+
+8c)
+Billing. Port the billing system over in jskit-ai, and use it. Interface with Stripe.
+
+
+8d)
+Website and signup. Make up plans, and allow people to sign up
+
+
+*****DEPLOYMENT WORK:
 
 9)
 Ability to actually deploy, with OWN domain if needed, using the same DB container.
 
 
-FINAL TOUCHES:
+*****FINAL TOUCHES:
 
 10)
 Change any mention of "studio" into "vibe64" -- studio is the old name. Change the variables too.

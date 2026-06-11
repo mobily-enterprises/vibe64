@@ -114,6 +114,10 @@ function normalizeText(value) {
   return String(value || "").trim();
 }
 
+function isRecord(value) {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
 function codexEffectiveAgentSettings(agentSettings = {}) {
   return effectiveVibe64AgentSettings(agentSettings);
 }
@@ -148,6 +152,36 @@ function normalizeCodexAppServerTurnState(value = "") {
   return normalizeText(value) === CODEX_APP_SERVER_TURN_STATE.ACTIVE
     ? CODEX_APP_SERVER_TURN_STATE.ACTIVE
     : CODEX_APP_SERVER_TURN_STATE.IDLE;
+}
+
+function codexAppServerStatusFromValue(status = null) {
+  if (typeof status === "string") {
+    const normalized = normalizeText(status);
+    if (normalized === "idle" || normalized === "notLoaded") {
+      return "completed";
+    }
+    if (normalized === "systemError") {
+      return "failed";
+    }
+    return normalized;
+  }
+  if (!isRecord(status)) {
+    return "";
+  }
+  const type = normalizeText(status.type);
+  if (type === "active") {
+    return "inProgress";
+  }
+  if (type === "idle" || type === "notLoaded" || type === "completed") {
+    return "completed";
+  }
+  if (type === "systemError" || type === "failed") {
+    return "failed";
+  }
+  if (type === "interrupted") {
+    return "interrupted";
+  }
+  return type;
 }
 
 function codexAppServerPromptDeliveryEnabledByDefault({
@@ -643,6 +677,70 @@ function createCodexTerminalController({
     return provider;
   }
 
+  function codexAppServerRuntimeOptionsFromSession(session = {}) {
+    const metadata = session.metadata || {};
+    return {
+      runtimeDir: normalizeText(metadata.codex_app_server_runtime_dir),
+      targetRoot: terminalTargetRoot(session, projectService),
+      workdir: terminalWorktreePath(session)
+    };
+  }
+
+  function sessionHasCodexAppServerRuntime(session = {}) {
+    const metadata = session.metadata || {};
+    return Boolean(
+      normalizeText(metadata.codex_app_server_endpoint) ||
+      normalizeText(metadata.codex_app_server_runtime_dir) ||
+      normalizeText(metadata.codex_app_server_socket_path)
+    );
+  }
+
+  function codexAppServerThreadStatus(thread = {}) {
+    let rawThread = thread;
+    if (isRecord(thread.raw)) {
+      rawThread = thread.raw;
+    } else if (isRecord(thread.response?.thread)) {
+      rawThread = thread.response.thread;
+    }
+    return codexAppServerStatusFromValue(rawThread.status || thread.status);
+  }
+
+  async function reconcileCodexAppServerActiveTurn(session = {}) {
+    const sessionId = normalizeText(session.sessionId);
+    const turn = codexAppServerTurnState(session);
+    if (!sessionId || !turn.active || !turn.threadId || !sessionHasCodexAppServerRuntime(session)) {
+      return session;
+    }
+    const provider = codexAppServerProviderForSession(
+      sessionId,
+      codexAppServerRuntimeOptionsFromSession(session)
+    );
+    if (typeof provider?.readThread !== "function") {
+      return session;
+    }
+    const thread = await provider.readThread(turn.threadId);
+    const status = codexAppServerThreadStatus(thread);
+    if (!status || codexAppServerTurnStatusIsActive(status)) {
+      return session;
+    }
+    if (!codexAppServerTurnStatusIsComplete(status)) {
+      return session;
+    }
+    vibe64SessionDebugLog("server.codexTerminal.appServerTurn.reconcile.idle", {
+      sessionId,
+      status,
+      threadId: turn.threadId,
+      turnId: turn.turnId
+    });
+    await markCodexAppServerTurnIdle(sessionId, {
+      status,
+      threadId: turn.threadId,
+      turnId: turn.turnId
+    });
+    const runtime = await projectService.createRuntime();
+    return runtime.getSession(sessionId);
+  }
+
   async function codexAppServerRuntimeForVisibleTerminal(sessionId = "", threadId = "", options = {}) {
     if (!normalizeText(threadId)) {
       return null;
@@ -718,22 +816,7 @@ function createCodexTerminalController({
     if (turnStatus) {
       return turnStatus;
     }
-    if (typeof params.status === "string") {
-      return normalizeText(params.status);
-    }
-    if (params.status && typeof params.status === "object" && !Array.isArray(params.status)) {
-      const statusType = normalizeText(params.status.type);
-      if (statusType === "active") {
-        return "inProgress";
-      }
-      if (statusType === "idle" || statusType === "notLoaded") {
-        return "completed";
-      }
-      if (statusType === "systemError") {
-        return "failed";
-      }
-    }
-    return "";
+    return codexAppServerStatusFromValue(params.status);
   }
 
   function codexAppServerNotificationItem(notification = {}) {
@@ -2337,7 +2420,9 @@ function createCodexTerminalController({
     async terminalState(sessionId) {
       return vibe64Result(async () => {
         const runtime = await projectService.createRuntime();
-        const session = await runtime.getSession(sessionId);
+        const session = await reconcileCodexAppServerActiveTurn(
+          await runtime.getSession(sessionId)
+        );
         return {
           ok: true,
           sessionId,

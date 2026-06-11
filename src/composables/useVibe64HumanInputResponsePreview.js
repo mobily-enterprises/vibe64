@@ -7,7 +7,7 @@ const HUMAN_INPUT_RESPONSE_PREVIEW_ID = "ai_response";
 function useVibe64HumanInputResponsePreview(options = {}) {
   return useVibe64ArtifactPreview({
     ...options,
-    loadErrorMessage: "AI response could not be loaded.",
+    loadErrorMessage: "Reply could not be loaded.",
     previewId: HUMAN_INPUT_RESPONSE_PREVIEW_ID
   });
 }
