@@ -12,6 +12,7 @@ const {
   passwordForm,
   passwordStatus,
   sendPasswordResetEmail,
+  supabaseControlsEnabled,
   submitPasswordChange
 } = useVibe64AccountSettings();
 </script>
@@ -32,7 +33,10 @@ const {
       title="GitHub"
     />
 
-    <section class="vibe64-account-settings__section">
+    <section
+      v-if="supabaseControlsEnabled"
+      class="vibe64-account-settings__section"
+    >
       <h2>
         <v-icon :icon="mdiLockReset" size="20" />
         Password

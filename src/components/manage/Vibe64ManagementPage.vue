@@ -12,9 +12,12 @@ const {
   activeManagementView,
   addProjectDialogOpen,
   canManageProjects,
+  canManageProjectAccess,
   canManageStudioSetup,
+  canManageUsers,
   canOpenProjectAccess,
   emptyProjectsMessage,
+  localProject,
   managementViews,
   mdiArrowRight,
   mdiGithub,
@@ -81,6 +84,32 @@ const {
         tabindex="0"
         :aria-labelledby="viewTabId(activeManagementView)"
       >
+        <template v-if="activeManagementView === 'local-project'">
+          <section class="vibe64-manage__local-project" aria-label="Local project">
+            <div class="vibe64-manage__local-main">
+              <p class="vibe64-manage__eyebrow">Local project</p>
+              <h3>{{ localProject?.name || localProject?.slug || 'Current folder' }}</h3>
+              <p v-if="localProject?.path" class="vibe64-manage__path" :title="localProject.path">
+                {{ localProject.path }}
+              </p>
+              <p v-if="localProject?.githubRepository?.fullName" class="vibe64-manage__repository">
+                <v-icon :icon="mdiGithub" />
+                {{ localProject.githubRepository.fullName }}
+              </p>
+            </div>
+            <v-btn
+              v-if="localProject?.slug"
+              color="primary"
+              :append-icon="mdiArrowRight"
+              type="button"
+              variant="flat"
+              @click="openProject(localProject)"
+            >
+              Open project
+            </v-btn>
+          </section>
+        </template>
+
         <template v-if="activeManagementView === 'projects'">
           <v-alert v-if="projectList.loadError" type="error" variant="tonal">
             {{ projectList.loadError }}
@@ -167,11 +196,12 @@ const {
           :show-continue="false"
         />
 
-        <Vibe64UserManagement v-else />
+        <Vibe64UserManagement v-else-if="canManageUsers" />
       </section>
     </main>
 
     <v-dialog
+      v-if="canManageProjects"
       v-model="addProjectDialogOpen"
       class="vibe64-manage__project-dialog"
     >
@@ -184,6 +214,7 @@ const {
     </v-dialog>
 
     <v-dialog
+      v-if="canManageProjectAccess"
       v-model="projectAccessDialogOpen"
       class="vibe64-manage__project-dialog"
     >
@@ -276,6 +307,44 @@ const {
   display: flex;
   justify-content: center;
   min-height: 14rem;
+}
+
+.vibe64-manage__local-project {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 8px;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  padding: 1rem;
+}
+
+.vibe64-manage__local-main {
+  min-width: 0;
+}
+
+.vibe64-manage__eyebrow {
+  color: #64748b;
+  font-size: 0.76rem;
+  font-weight: 720;
+  letter-spacing: 0;
+  margin: 0 0 0.2rem;
+  text-transform: uppercase;
+}
+
+.vibe64-manage__local-main h3 {
+  font-size: 1.15rem;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.vibe64-manage__path {
+  color: #64748b;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.82rem;
+  margin: 0.35rem 0 0;
+  overflow-wrap: anywhere;
 }
 
 .vibe64-manage__list {

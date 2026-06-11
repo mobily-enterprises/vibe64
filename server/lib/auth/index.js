@@ -6,6 +6,11 @@ import {
   resolveVibe64DataRoot
 } from "@local/vibe64-core/server/studioRoots";
 import {
+  VIBE64_RUNTIME_MODE_LOCAL,
+  createVibe64RuntimeProfile,
+  publicRuntimeProfile
+} from "../runtimeProfile.js";
+import {
   authCookieValue,
   serializeAuthCookie,
   serializeClearedAuthCookie
@@ -45,8 +50,10 @@ function createVibe64Auth({
   supabasePublishableKey = "",
   supabaseSecretKey = "",
   supabaseUrl = "",
+  runtimeProfile = null,
   verifySupabaseAccessToken = null
 } = {}) {
+  const profile = createVibe64RuntimeProfile(runtimeProfile || {});
   const root = resolveVibe64DataRoot({
     env,
     explicitRoot: dataRoot
@@ -82,17 +89,21 @@ function createVibe64Auth({
     return {
       ok: true,
       authenticated: Boolean(user),
-      authProvider: "supabase",
+      authProvider: profile.mode === VIBE64_RUNTIME_MODE_LOCAL ? "local" : "supabase",
       dataRoot: root,
-      firstLoginCodexSetupPending: await setup.firstLoginCodexSetupPending(),
-      ownerInvitePending: await users.ownerInvitePending(),
-      setupRequired: await users.setupRequired(),
+      firstLoginCodexSetupPending: profile.mode === VIBE64_RUNTIME_MODE_LOCAL ? false : await setup.firstLoginCodexSetupPending(),
+      ownerInvitePending: profile.mode === VIBE64_RUNTIME_MODE_LOCAL ? false : await users.ownerInvitePending(),
+      runtime: publicRuntimeProfile(profile),
+      setupRequired: profile.mode === VIBE64_RUNTIME_MODE_LOCAL ? false : await users.setupRequired(),
       supabase: publicSupabaseConfig(supabase),
       user: user ? users.publicUser(user) : null
     };
   }
 
   async function userForRequest(request = {}) {
+    if (profile.mode === VIBE64_RUNTIME_MODE_LOCAL) {
+      return localOwnerUser();
+    }
     const session = await sessions.readSession(authCookieValue(request));
     if (!session?.supabaseUserId) {
       return null;
@@ -161,9 +172,23 @@ function createVibe64Auth({
     startUserSession,
     stateForRequest,
     supabase,
+    runtimeProfile: profile,
     userForRequest,
     users
   });
+}
+
+function localOwnerUser() {
+  const now = "1970-01-01T00:00:00.000Z";
+  return {
+    acceptedAt: now,
+    createdAt: now,
+    email: "local@vibe64.local",
+    role: "owner",
+    status: "active",
+    supabaseUserId: "local:vibe64",
+    updatedAt: now
+  };
 }
 
 function registerVibe64AuthRoutes(app, auth) {
@@ -223,6 +248,9 @@ function registerVibe64AuthRoutes(app, auth) {
   });
 
   app.get(`${API_AUTH_BASE}/users`, async (request, reply) => {
+    if (auth.runtimeProfile?.mode === VIBE64_RUNTIME_MODE_LOCAL) {
+      return localTenantUsersUnavailable(reply);
+    }
     return requireAuthResult(auth, request, reply, async () => {
       const users = await auth.users.listUsers();
       return {
@@ -233,6 +261,9 @@ function registerVibe64AuthRoutes(app, auth) {
   });
 
   app.post(`${API_AUTH_BASE}/invite`, async (request, reply) => {
+    if (auth.runtimeProfile?.mode === VIBE64_RUNTIME_MODE_LOCAL) {
+      return localTenantUsersUnavailable(reply);
+    }
     return requireOwnerResult(auth, request, reply, async (currentUser) => {
       const user = await auth.users.inviteUser(request.body || {});
       const inviteEmail = await auth.sendInviteEmail(user, {
@@ -248,6 +279,9 @@ function registerVibe64AuthRoutes(app, auth) {
   });
 
   app.post(`${API_AUTH_BASE}/invite/cancel`, async (request, reply) => {
+    if (auth.runtimeProfile?.mode === VIBE64_RUNTIME_MODE_LOCAL) {
+      return localTenantUsersUnavailable(reply);
+    }
     return requireOwnerResult(auth, request, reply, async () => {
       const user = await auth.users.cancelInvite(request.body || {});
       return {
@@ -258,6 +292,9 @@ function registerVibe64AuthRoutes(app, auth) {
   });
 
   app.post(`${API_AUTH_BASE}/users/revoke`, async (request, reply) => {
+    if (auth.runtimeProfile?.mode === VIBE64_RUNTIME_MODE_LOCAL) {
+      return localTenantUsersUnavailable(reply);
+    }
     return requireOwnerResult(auth, request, reply, async (currentUser) => {
       const user = await auth.users.revokeUser(request.body || {}, currentUser);
       await auth.sessions.destroySessionsForUser({
@@ -289,6 +326,14 @@ function registerVibe64AuthRoutes(app, auth) {
       code: "vibe64_password_managed_by_supabase",
       error: "Password changes are handled by Supabase."
     });
+  });
+}
+
+function localTenantUsersUnavailable(reply) {
+  return reply.code(404).send({
+    ok: false,
+    code: "vibe64_tenant_users_unavailable",
+    error: "Tenant users are not available in local editor mode."
   });
 }
 

@@ -139,14 +139,20 @@ function projectRecord({
 } = {}) {
   const resolvedPath = normalizeRoot(projectPath);
   const insideProjectsRoot = pathInsideOrEqual(projectsRoot, resolvedPath);
+  const basename = path.basename(resolvedPath);
   return {
     external: !insideProjectsRoot,
-    name: path.basename(resolvedPath),
+    name: basename,
     path: resolvedPath,
     selected: selectedPath ? normalizeRoot(selectedPath) === resolvedPath : false,
-    slug: path.basename(resolvedPath),
+    slug: insideProjectsRoot ? basename : localProjectSlugFromTargetRoot(resolvedPath),
     source
   };
+}
+
+function localProjectSlugFromTargetRoot(targetRoot = "") {
+  const slug = projectSlugFromName(path.basename(normalizeRoot(targetRoot)));
+  return slug ? normalizeProjectSlug(slug) : "local-project";
 }
 
 function managedProjectRecord({
@@ -360,7 +366,8 @@ function createStudioProjectContext({
   env = process.env,
   explicitProjectsRoot = "",
   explicitTargetRoot = "",
-  home = os.homedir()
+  home = os.homedir(),
+  runtimeProfile = null
 } = {}) {
   const dataRoot = resolveVibe64DataRoot({
     env,
@@ -613,6 +620,12 @@ function createStudioProjectContext({
     ensureProjectStateForSlug,
     get selectedProject() {
       return selectedProject();
+    },
+    get selectionSource() {
+      return selectionSource;
+    },
+    get runtimeProfile() {
+      return runtimeProfile;
     },
     get targetRoot() {
       return selectedTargetRoot;

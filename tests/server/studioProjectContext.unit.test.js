@@ -184,7 +184,20 @@ test("Studio project context accepts explicit targets without treating them as m
     assert.equal(listed.hasSelection, true);
     assert.equal(listed.currentProject.path, externalTarget);
     assert.equal(listed.currentProject.external, true);
+    assert.equal(listed.currentProject.slug, "external-app");
     assert.deepEqual(listed.projects, []);
+
+    const requestContext = await resolveProjectRequestContext({
+      projectContext: context,
+      request: {
+        params: {
+          slug: "external-app"
+        }
+      }
+    });
+    assert.equal(requestContext.targetRoot, externalTarget);
+    assert.equal(requestContext.projectStateRoot, context.projectStateRootForTarget(externalTarget));
+    await access(requestContext.projectStateRoot);
   });
 });
 

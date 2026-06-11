@@ -37,19 +37,13 @@ Make jskit open jskit properly (recursive). this depends on the item above too
 
 
 
-*****SERVER WORK:
+
+
+
+*****TENANT MANAGEMENT APP (WITH TESTING IT ALL OUT):
 
 7)
-ABILITY TO ADD USER
-
-8)
-ABILITY TO PROVISION SERVER
-
-8b)
-MOVABILITY: Ability to create a tgz of the full contents of a repository: vibe64 and .vibe64. Maybe consider placing them into .vibe64
-
-
-*****FINAL PRODUCT TEST:
+App with list of VPS and tenants, with ability to add a tenant and monitor VPSes
 
 6a)
 Test seeding
@@ -58,24 +52,37 @@ Test seeding
 Make sure the correct buttons are displayed at every stage
 
 
-*****USERS WORK:
 
-8c)
-Billing. Port the billing system over in jskit-ai, and use it. Interface with Stripe.
-
-
-8d)
-Website and signup. Make up plans, and allow people to sign up
-
-
-*****DEPLOYMENT WORK:
+*****ALLOWING DEPLOYMENT  AND FINAL TOUCHES:
 
 9)
 Ability to actually deploy, with OWN domain if needed, using the same DB container.
 
 
-*****FINAL TOUCHES:
-
 10)
 Change any mention of "studio" into "vibe64" -- studio is the old name. Change the variables too.
+
+
+
+
+
+
+
+
+
+
+
+*****WEBSITE, USERS AND BILLING:
+
+8)
+Make app which will actually be the main web site, with ability to sign up and manage billing (port from jskit-ai)
+
+8b)
+ABILITY TO PROVISION SERVER
+
+8c)
+MOVABILITY: Ability to create a tgz of the full contents of a repository: vibe64 and .vibe64. Maybe consider placing them into .vibe64
+
+
+
 

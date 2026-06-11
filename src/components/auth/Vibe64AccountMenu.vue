@@ -13,6 +13,7 @@ const router = useRouter();
 const route = useRoute();
 const auth = useVibe64AppAuth();
 const user = computed(() => auth?.state?.user || null);
+const localMode = computed(() => auth?.state?.runtime?.local === true || auth?.state?.runtime?.mode === "local");
 
 async function openAccount() {
   await router.push({
@@ -47,12 +48,21 @@ async function signOut() {
     </template>
     <v-list density="compact">
       <v-list-item
+        v-if="localMode"
+        :prepend-icon="mdiAccountCircleOutline"
+        subtitle="Local editor mode"
+        title="Account setup"
+        @click="openAccount"
+      />
+      <v-list-item
+        v-else
         :prepend-icon="mdiAccountCircleOutline"
         :subtitle="user.email"
         title="Account"
         @click="openAccount"
       />
       <v-list-item
+        v-if="!localMode"
         :prepend-icon="mdiLogoutVariant"
         title="Log out"
         @click="signOut"

@@ -26,6 +26,9 @@ import {
 import {
   vibe64ResourceResponseError
 } from "@/lib/vibe64ApiResponses.js";
+import {
+  prerequisiteAccountStatusReadQuery
+} from "@/lib/vibe64AuthGatePrerequisites.js";
 
 const Vibe64AuthScreen = defineVibe64AsyncComponent({
   label: "Authentication screen",
@@ -45,6 +48,7 @@ function useVibe64AuthGate() {
     authenticated: false,
     firstLoginCodexSetupPending: false,
     ownerInvitePending: false,
+    runtime: null,
     setupRequired: false,
     user: null
   });
@@ -72,6 +76,7 @@ function useVibe64AuthGate() {
     fallbackLoadError: "Account status could not load.",
     path: ACCOUNTS_ENDPOINT,
     queryKey: ["vibe64", "auth", "prerequisite-account-status"],
+    readQuery: computed(prerequisiteAccountStatusReadQuery),
     refreshOnPull: true,
     requestRecoveryLabel: "Account status"
   });
@@ -178,6 +183,7 @@ function useVibe64AuthGate() {
     state.authenticated = nextState.authenticated === true;
     state.firstLoginCodexSetupPending = nextState.firstLoginCodexSetupPending === true;
     state.ownerInvitePending = nextState.ownerInvitePending === true;
+    state.runtime = nextState.runtime || null;
     state.setupRequired = nextState.setupRequired === true;
     state.user = nextState.user || null;
     if (!state.authenticated || previousUserEmail !== nextUserEmail) {

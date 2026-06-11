@@ -15,7 +15,13 @@ import {
 } from "@/composables/useVibe64ProjectManagement.js";
 
 const MANAGEMENT_DEFAULT_VIEW = "projects";
-const managementViews = Object.freeze([
+const MANAGEMENT_LOCAL_DEFAULT_VIEW = "local-project";
+const allManagementViews = Object.freeze([
+  {
+    label: "Local project",
+    path: "/app/manage/local-project",
+    value: "local-project"
+  },
   {
     label: "Projects",
     path: "/app/manage/projects",
@@ -37,7 +43,6 @@ const managementViews = Object.freeze([
     value: "users"
   }
 ]);
-const managementViewValues = new Set(managementViews.map((view) => view.value));
 
 function useVibe64ManagementPage() {
   const route = useRoute();
@@ -47,15 +52,21 @@ function useVibe64ManagementPage() {
   const addProjectDialogOpen = ref(false);
   const projectAccessDialogOpen = ref(false);
   const projectAccessProject = ref(null);
+  const runtime = computed(() => auth?.state?.runtime || null);
+  const localMode = computed(() => runtime.value?.local === true || runtime.value?.mode === "local");
+  const managementViews = computed(() => managementViewsForRuntime(runtime.value));
   const sortedProjects = computed(() => [...projectList.projects].sort((left, right) => left.slug.localeCompare(right.slug)));
   const isOwner = computed(() => auth?.state?.user?.owner === true || auth?.state?.user?.role === "owner");
-  const canManageProjects = computed(() => isOwner.value);
+  const canManageProjects = computed(() => isOwner.value && capabilityEnabled("managedProjectsEnabled", true));
   const canManageStudioSetup = computed(() => isOwner.value);
+  const canManageUsers = computed(() => isOwner.value && capabilityEnabled("tenantUsersEnabled", true));
+  const canManageProjectAccess = computed(() => isOwner.value && capabilityEnabled("projectAccessManagementEnabled", true));
+  const localProject = computed(() => projectList.currentProject || null);
   const emptyProjectsMessage = computed(() => canManageProjects.value
     ? "No projects yet. Add a project to create the first one."
     : "No projects yet.");
   const activeManagementView = computed(() => {
-    return normalizeManagementView(route.params.view) || MANAGEMENT_DEFAULT_VIEW;
+    return normalizeManagementView(route.params.view) || defaultManagementView();
   });
 
   useStudioShellDrawer({
@@ -79,7 +90,9 @@ function useVibe64ManagementPage() {
     activeManagementView,
     addProjectDialogOpen,
     canManageProjects,
+    canManageProjectAccess,
     canManageStudioSetup,
+    canManageUsers,
     canOpenProjectAccess,
     emptyProjectsMessage,
     managementViews,
@@ -90,6 +103,8 @@ function useVibe64ManagementPage() {
     openAddProjectDialog,
     openProject,
     openProjectAccess,
+    localMode,
+    localProject,
     projectAccessDialogOpen,
     projectAccessProject,
     projectList,
@@ -101,9 +116,9 @@ function useVibe64ManagementPage() {
   };
 
   function managementViewPath(value = MANAGEMENT_DEFAULT_VIEW) {
-    const normalized = normalizeManagementView(value) || MANAGEMENT_DEFAULT_VIEW;
-    const view = managementViews.find((candidate) => candidate.value === normalized);
-    return view?.path || "/app/manage/projects";
+    const normalized = normalizeManagementView(value) || defaultManagementView();
+    const view = managementViews.value.find((candidate) => candidate.value === normalized);
+    return view?.path || managementViews.value[0]?.path || "/app/manage/projects";
   }
 
   function ensureManagementViewRoute() {
@@ -135,7 +150,7 @@ function useVibe64ManagementPage() {
   }
 
   function canOpenProjectAccess(project = {}) {
-    if (!canManageProjects.value) {
+    if (!canManageProjectAccess.value) {
       return false;
     }
     return Boolean(project.githubRepository?.fullName);
@@ -145,12 +160,41 @@ function useVibe64ManagementPage() {
     projectAccessProject.value = project;
     projectAccessDialogOpen.value = true;
   }
+
+  function defaultManagementView() {
+    return localMode.value ? MANAGEMENT_LOCAL_DEFAULT_VIEW : MANAGEMENT_DEFAULT_VIEW;
+  }
+
+  function capabilityEnabled(key = "", defaultValue = true) {
+    return runtimeCapabilityEnabled(runtime.value, key, defaultValue);
+  }
+
+  function normalizeManagementView(value = "") {
+    const rawValue = Array.isArray(value) ? value[0] : value;
+    const normalized = String(rawValue || "").trim().toLowerCase();
+    return managementViews.value.some((view) => view.value === normalized) ? normalized : "";
+  }
 }
 
-function normalizeManagementView(value = "") {
-  const rawValue = Array.isArray(value) ? value[0] : value;
-  const normalized = String(rawValue || "").trim().toLowerCase();
-  return managementViewValues.has(normalized) ? normalized : "";
+function managementViewsForRuntime(runtime = null) {
+  const local = runtime?.local === true || runtime?.mode === "local";
+  return allManagementViews.filter((view) => {
+    if (view.value === "local-project") {
+      return local;
+    }
+    if (view.value === "projects") {
+      return runtimeCapabilityEnabled(runtime, "managedProjectsEnabled", true);
+    }
+    if (view.value === "users") {
+      return runtimeCapabilityEnabled(runtime, "tenantUsersEnabled", true);
+    }
+    return true;
+  });
+}
+
+function runtimeCapabilityEnabled(runtime = null, key = "", defaultValue = true) {
+  const capabilities = runtime?.capabilities || {};
+  return Object.hasOwn(capabilities, key) ? capabilities[key] === true : defaultValue;
 }
 
 function projectRepositoryLabel(project = {}) {
@@ -166,5 +210,7 @@ function viewPanelId(value) {
 }
 
 export {
+  managementViewsForRuntime,
+  runtimeCapabilityEnabled,
   useVibe64ManagementPage
 };

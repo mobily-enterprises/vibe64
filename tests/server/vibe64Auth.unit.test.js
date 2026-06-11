@@ -20,12 +20,60 @@ const FAKE_SUPABASE_ENV = Object.freeze({
   VIBE64_SUPABASE_URL: "https://example.supabase.co"
 });
 
+test("Vibe64 local auth mode synthesizes an authenticated owner", async () => {
+  await withAuth(async (auth) => {
+    const state = await auth.stateForRequest({});
+    assert.equal(state.authenticated, true);
+    assert.equal(state.authProvider, "local");
+    assert.equal(state.runtime.mode, "local");
+    assert.equal(state.runtime.authRequired, false);
+    assert.equal(state.runtime.billingEnabled, false);
+    assert.equal(state.runtime.capabilities.tenantUsersEnabled, false);
+    assert.equal(state.runtime.capabilities.managedProjectsEnabled, false);
+    assert.equal(state.runtime.capabilities.supabaseAccountManagementEnabled, false);
+    assert.equal(state.user.email, "local@vibe64.local");
+    assert.equal(state.user.owner, true);
+
+    const hook = registerAuthGateTestHook(auth, {
+      accountService: {
+        async getStatus() {
+          return {
+            ok: true,
+            accounts: [
+              {
+                connected: true,
+                id: "github"
+              }
+            ]
+          };
+        }
+      }
+    });
+    const request = {
+      method: "GET",
+      url: "/api/vibe64/projects"
+    };
+    const reply = testReply();
+    await hook(request, reply);
+
+    assert.equal(reply.statusCode, null);
+    assert.equal(request.vibe64User.email, "local@vibe64.local");
+    assert.equal(request.vibe64User.owner, true);
+  }, {
+    runtimeProfile: {
+      mode: "local",
+      singleTargetRoot: "/tmp/local-project"
+    }
+  });
+});
+
 test("Vibe64 auth binds the first Supabase identity as owner", async () => {
   await withAuth(async (auth) => {
     const state = await auth.stateForRequest({});
     assert.equal(state.firstLoginCodexSetupPending, true);
     assert.equal(state.ownerInvitePending, false);
     assert.equal(state.setupRequired, true);
+    assert.equal(state.runtime.capabilities.supabaseAccountManagementEnabled, true);
     assert.equal(state.supabase.configured, true);
 
     const owner = await auth.authenticateSupabaseSession({
@@ -714,6 +762,7 @@ async function withAuth(callback, options = {}) {
       codexConnectedVerifier: options.codexConnectedVerifier,
       dataRoot,
       env: FAKE_SUPABASE_ENV,
+      runtimeProfile: options.runtimeProfile,
       sendSupabaseInviteEmail: options.sendSupabaseInviteEmail,
       verifySupabaseAccessToken: fakeVerifySupabaseAccessToken
     }));

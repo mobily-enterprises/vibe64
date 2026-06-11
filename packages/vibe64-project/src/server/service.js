@@ -571,6 +571,9 @@ function createService({
     },
 
     async createProject(input = {}) {
+      if (studioProjectContext.runtimeProfile?.managedProjectsEnabled === false) {
+        return managedProjectsUnavailable();
+      }
       return projectResult(() => studioProjectContext.createManagedProject(input));
     },
 
@@ -664,9 +667,24 @@ function createService({
     },
 
     async selectProject(input = {}) {
+      if (studioProjectContext.runtimeProfile?.managedProjectsEnabled === false) {
+        return managedProjectsUnavailable();
+      }
       return projectResult(() => studioProjectContext.selectManagedProject(input));
     }
   });
+}
+
+function managedProjectsUnavailable() {
+  return {
+    ok: false,
+    errors: [
+      {
+        code: "vibe64_managed_projects_unavailable",
+        message: "Managed project operations are not available in local editor mode."
+      }
+    ]
+  };
 }
 
 export {

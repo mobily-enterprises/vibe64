@@ -26,10 +26,16 @@ function registerVibe64ProjectRoutes(app, projectContext, options = {}) {
   });
 
   app.get(PROJECT_API_BASE, async () => {
+    if (options.auth?.runtimeProfile?.local === true) {
+      return projectContext.listProjects();
+    }
     return projectContext.listManagedProjects();
   });
 
   app.post(PROJECT_API_BASE, async (request, reply) => {
+    if (options.auth?.runtimeProfile?.local === true) {
+      return localManagedProjectsUnavailable(reply);
+    }
     const ownerBlock = ownerRequired(request, reply);
     if (ownerBlock) {
       return ownerBlock;
@@ -41,6 +47,9 @@ function registerVibe64ProjectRoutes(app, projectContext, options = {}) {
   });
 
   app.get(`${PROJECT_API_BASE}/:slug/access`, async (request, reply) => {
+    if (options.auth?.runtimeProfile?.local === true) {
+      return localManagedProjectsUnavailable(reply);
+    }
     const ownerBlock = ownerRequired(request, reply, "Only owners can manage GitHub project access.");
     if (ownerBlock) {
       return ownerBlock;
@@ -55,6 +64,9 @@ function registerVibe64ProjectRoutes(app, projectContext, options = {}) {
   });
 
   app.post(`${PROJECT_API_BASE}/:slug/access/invite`, async (request, reply) => {
+    if (options.auth?.runtimeProfile?.local === true) {
+      return localManagedProjectsUnavailable(reply);
+    }
     const ownerBlock = ownerRequired(request, reply, "Only owners can manage GitHub project access.");
     if (ownerBlock) {
       return ownerBlock;
@@ -118,6 +130,9 @@ function registerVibe64ProjectRoutes(app, projectContext, options = {}) {
   });
 
   app.post(`${PROJECT_API_BASE}/from-repository`, async (request, reply) => {
+    if (options.auth?.runtimeProfile?.local === true) {
+      return localManagedProjectsUnavailable(reply);
+    }
     const ownerBlock = ownerRequired(request, reply);
     if (ownerBlock) {
       return ownerBlock;
@@ -132,6 +147,9 @@ function registerVibe64ProjectRoutes(app, projectContext, options = {}) {
   });
 
   app.post(`${PROJECT_API_BASE}/create-repository`, async (request, reply) => {
+    if (options.auth?.runtimeProfile?.local === true) {
+      return localManagedProjectsUnavailable(reply);
+    }
     const ownerBlock = ownerRequired(request, reply);
     if (ownerBlock) {
       return ownerBlock;
@@ -143,6 +161,18 @@ function registerVibe64ProjectRoutes(app, projectContext, options = {}) {
       }),
       reply
     );
+  });
+}
+
+function localManagedProjectsUnavailable(reply) {
+  return reply.code(404).send({
+    ok: false,
+    errors: [
+      {
+        code: "vibe64_managed_projects_unavailable",
+        message: "Managed project operations are not available in local editor mode."
+      }
+    ]
   });
 }
 

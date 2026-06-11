@@ -5,16 +5,32 @@ import open, { apps } from "open";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import {
-  normalizeProjectSlug
+  normalizeProjectSlug,
+  projectSlugFromName
 } from "@local/vibe64-core/server/studioProjectContext";
 import { startServer } from "../server.js";
+import {
+  VIBE64_RUNTIME_MODE_HOSTED,
+  VIBE64_RUNTIME_MODE_LOCAL
+} from "../server/lib/runtimeProfile.js";
 
 const SERVER_ENTRYPOINT = fileURLToPath(import.meta.url);
+const DEFAULT_LOCAL_EDITOR_BROWSER_PORT = 3001;
 
 function shouldOpenBrowser(args = process.argv.slice(2)) {
   for (const arg of args) {
     const normalized = String(arg || "").trim().toLowerCase();
     if (normalized === "--open" || normalized === "--open=true" || normalized === "--open=1") {
+      return true;
+    }
+  }
+  return false;
+}
+
+function shouldSuppressBrowserOpen(args = process.argv.slice(2)) {
+  for (const arg of args) {
+    const normalized = String(arg || "").trim().toLowerCase();
+    if (normalized === "--no-open" || normalized === "--open=false" || normalized === "--open=0") {
       return true;
     }
   }
@@ -50,6 +66,7 @@ function unsupportedStartupArg(arg = "") {
 
 function parseStartupArgs(args = process.argv.slice(2)) {
   let startupSlug = "";
+  let targetRoot = "";
   for (let index = 0; index < args.length; index += 1) {
     const arg = String(args[index] || "").trim();
     if (!arg) {
@@ -66,23 +83,84 @@ function parseStartupArgs(args = process.argv.slice(2)) {
     ) {
       continue;
     }
+    if (normalized === "--project") {
+      const slugArg = String(args[index + 1] || "").trim();
+      if (!slugArg) {
+        throw unsupportedStartupArg(arg);
+      }
+      if (startupSlug || targetRoot) {
+        throw unsupportedStartupArg(slugArg);
+      }
+      startupSlug = normalizeStartupSlug(slugArg);
+      index += 1;
+      continue;
+    }
+    if (normalized.startsWith("--project=")) {
+      const slugArg = arg.slice("--project=".length).trim();
+      if (!slugArg || startupSlug || targetRoot) {
+        throw unsupportedStartupArg(arg);
+      }
+      startupSlug = normalizeStartupSlug(slugArg);
+      continue;
+    }
     if (arg.startsWith("-")) {
       throw unsupportedStartupArg(arg);
     }
-    if (startupSlug) {
+    if (startupSlug || targetRoot) {
       throw unsupportedStartupArg(arg);
     }
-    try {
-      startupSlug = normalizeProjectSlug(arg);
-    } catch (error) {
-      error.message = `Vibe64 startup slug is invalid: ${error.message}`;
-      throw error;
+    if (isStartupPathArgument(arg)) {
+      targetRoot = path.resolve(arg);
+      startupSlug = localStartupSlugForTargetRoot(targetRoot);
+    } else {
+      startupSlug = normalizeStartupSlug(arg);
     }
   }
   return {
-    openOnStart: shouldOpenBrowser(args),
-    startupSlug
+    openOnStart: shouldOpenStartupBrowser(args, {
+      targetRoot
+    }),
+    runtimeMode: targetRoot ? VIBE64_RUNTIME_MODE_LOCAL : VIBE64_RUNTIME_MODE_HOSTED,
+    startupSlug,
+    targetRoot
   };
+}
+
+function shouldOpenStartupBrowser(args = process.argv.slice(2), {
+  targetRoot = ""
+} = {}) {
+  if (shouldSuppressBrowserOpen(args)) {
+    return false;
+  }
+  if (shouldOpenBrowser(args)) {
+    return true;
+  }
+  return Boolean(String(targetRoot || "").trim());
+}
+
+function normalizeStartupSlug(value = "") {
+  try {
+    return normalizeProjectSlug(value);
+  } catch (error) {
+    error.message = `Vibe64 startup slug is invalid: ${error.message}`;
+    throw error;
+  }
+}
+
+function isStartupPathArgument(value = "") {
+  const arg = String(value || "").trim();
+  return arg === "." ||
+    arg === ".." ||
+    arg.startsWith("./") ||
+    arg.startsWith("../") ||
+    arg.startsWith("~/") ||
+    path.isAbsolute(arg) ||
+    /[\\/]/u.test(arg);
+}
+
+function localStartupSlugForTargetRoot(targetRoot = "") {
+  const slug = projectSlugFromName(path.basename(path.resolve(targetRoot)));
+  return slug ? normalizeProjectSlug(slug) : "local-project";
 }
 
 async function openBrowser(url) {
@@ -104,22 +182,35 @@ async function openBrowser(url) {
 
 function serverStartOptions({
   env = process.env,
-  startupSlug = ""
+  openOnStart = false,
+  runtimeMode = VIBE64_RUNTIME_MODE_HOSTED,
+  startupSlug = "",
+  targetRoot = ""
 } = {}) {
+  const localBrowserOpen = runtimeMode === VIBE64_RUNTIME_MODE_LOCAL && openOnStart === true;
+  const envPortConfigured = Boolean(String(env.PORT || "").trim());
   return {
-    browserLifecycleShutdown: false,
-    strictPort: Boolean(String(env.PORT || "").trim()),
-    startupSlug
+    browserLifecycleShutdown: runtimeMode === VIBE64_RUNTIME_MODE_LOCAL,
+    port: localBrowserOpen && !envPortConfigured ? DEFAULT_LOCAL_EDITOR_BROWSER_PORT : undefined,
+    runtimeMode,
+    strictPort: envPortConfigured,
+    startupSlug,
+    targetRoot
   };
 }
 
 async function main() {
   const {
     openOnStart,
-    startupSlug
+    runtimeMode,
+    startupSlug,
+    targetRoot
   } = parseStartupArgs();
   const app = await startServer(serverStartOptions({
-    startupSlug
+    openOnStart,
+    runtimeMode,
+    startupSlug,
+    targetRoot
   }));
   const url = app.vibe64Url;
   if (url) {

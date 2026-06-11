@@ -23,6 +23,7 @@ import {
   VIBE64_PROJECTS_ROOT_ENV
 } from "@local/vibe64-core/server/studioRoots";
 import {
+  assertProjectDirectoryUsable,
   configureStudioProjectContext,
   normalizeProjectSlug
 } from "@local/vibe64-core/server/studioProjectContext";
@@ -55,6 +56,10 @@ import {
   VIBE64_SKIP_STALE_TERMINAL_CLEANUP_ENV,
   VIBE64_TARGET_ROOT_ENV
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
+import {
+  assertSafeLocalModeListenTarget,
+  createVibe64RuntimeProfile
+} from "./server/lib/runtimeProfile.js";
 
 const SPA_INDEX_FILE = "index.html";
 const API_BASE_PATH = "/api";
@@ -374,6 +379,18 @@ function createCodexConnectedVerifier({
 
 async function createServer(options = {}) {
   const runtimeEnv = resolveRuntimeEnv();
+  const runtimeProfile = createVibe64RuntimeProfile({
+    mode: options.runtimeMode,
+    targetRoot: options.targetRoot
+  });
+  if (runtimeProfile.local) {
+    if (!runtimeProfile.singleTargetRoot) {
+      const error = new Error("Local editor mode requires a target directory.");
+      error.code = "vibe64_local_mode_target_required";
+      throw error;
+    }
+    await assertProjectDirectoryUsable(runtimeProfile.singleTargetRoot);
+  }
   const app = Fastify({
     logger: true,
     ajv: {
@@ -409,12 +426,14 @@ async function createServer(options = {}) {
     codexConnectedVerifier,
     dataRoot: options.authDataRoot,
     env: runtimeEnv,
+    runtimeProfile,
     verifySupabaseAccessToken: options.verifySupabaseAccessToken
   });
   app.vibe64Auth = auth;
   registerVibe64AuthRoutes(app, auth);
   registerVibe64AuthGate(app, auth, {
-    accountService
+    accountService,
+    runtimeProfile
   });
 
   const browserLifecycleMonitor = createBrowserLifecycleMonitor({
@@ -449,7 +468,8 @@ async function createServer(options = {}) {
     env: runtimeEnv,
     explicitDataRoot: options.authDataRoot,
     explicitProjectsRoot: options.projectsRoot,
-    explicitTargetRoot: options.targetRoot
+    explicitTargetRoot: options.targetRoot,
+    runtimeProfile
   });
   registerVibe64ProjectRoutes(app, projectContext, {
     auth,
@@ -591,6 +611,13 @@ async function startServer(options = {}) {
     options,
     runtimeEnv
   });
+  const runtimeProfile = createVibe64RuntimeProfile({
+    mode: options?.runtimeMode,
+    targetRoot: options?.targetRoot
+  });
+  assertSafeLocalModeListenTarget(runtimeProfile, listenTarget, {
+    env: runtimeEnv
+  });
   const strictPort = options?.strictPort ?? (
     listenTarget.transport === "tcp" &&
     (hasExplicitPortOption(options) || runtimeEnv.PORT_CONFIGURED === true)
@@ -600,6 +627,7 @@ async function startServer(options = {}) {
     authDataRoot: options?.authDataRoot,
     browserLifecycleShutdownDelayMs: options?.browserLifecycleShutdownDelayMs,
     projectsRoot: options?.projectsRoot,
+    runtimeMode: runtimeProfile.mode,
     targetRoot: options?.targetRoot,
     verifySupabaseAccessToken: options?.verifySupabaseAccessToken
   });

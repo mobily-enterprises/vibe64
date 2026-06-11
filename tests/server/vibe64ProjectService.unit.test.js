@@ -70,6 +70,47 @@ test("Vibe64 project service exposes project selection before project-specific s
   });
 });
 
+test("Vibe64 project service treats local editor target as the selected project", async () => {
+  await withTemporaryRoot(async (root) => {
+    const targetRoot = path.join(root, "External App");
+    await mkdir(targetRoot, {
+      recursive: true
+    });
+    const service = createService({
+      projectContext: createStudioProjectContext({
+        explicitTargetRoot: targetRoot,
+        env: {},
+        home: root,
+        runtimeProfile: {
+          managedProjectsEnabled: false,
+          mode: "local",
+          singleTargetRoot: targetRoot
+        }
+      })
+    });
+
+    const listed = await service.listProjects();
+    assert.equal(listed.ok, true);
+    assert.equal(listed.hasSelection, true);
+    assert.equal(listed.currentProject.external, true);
+    assert.equal(listed.currentProject.name, "External App");
+    assert.equal(listed.currentProject.slug, "external-app");
+    assert.equal(listed.targetRoot, targetRoot);
+
+    const created = await service.createProject({
+      name: "another"
+    });
+    assert.equal(created.ok, false);
+    assert.equal(created.errors[0].code, "vibe64_managed_projects_unavailable");
+
+    const selected = await service.selectProject({
+      slug: "another"
+    });
+    assert.equal(selected.ok, false);
+    assert.equal(selected.errors[0].code, "vibe64_managed_projects_unavailable");
+  });
+});
+
 test("Vibe64 project service treats project request slug as the selected project", async () => {
   await withTemporaryRoot(async (root) => {
     const projectsRoot = path.join(root, "projects");

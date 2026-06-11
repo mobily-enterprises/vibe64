@@ -40,11 +40,13 @@ function useVibe64ProjectsResource({
     requestRecoveryLabel: requestRecoveryLabel
   });
   const loadError = computed(() => vibe64ResourceResponseError(resource.data.value, fallbackLoadError) || resource.loadError.value);
+  const currentProject = computed(() => resource.data.value?.currentProject || null);
   const projectsRoot = computed(() => String(resource.data.value?.projectsRoot || ""));
   const targetRoot = computed(() => String(resource.data.value?.targetRoot || ""));
   const projects = computed(() => Array.isArray(resource.data.value?.projects) ? resource.data.value.projects : []);
 
   return proxyRefs({
+    currentProject,
     data: resource.data,
     isFetching: resource.isFetching,
     isInitialLoading: resource.isInitialLoading,

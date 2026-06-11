@@ -6,6 +6,9 @@ import {
   useVibe64SupabaseAuth
 } from "@/composables/useVibe64SupabaseAuth.js";
 import {
+  supabaseAccountControlsEnabled
+} from "@/lib/vibe64AccountSettingsCapabilities.js";
+import {
   passwordResetRedirectTo
 } from "@/lib/vibe64SupabaseAuth.js";
 
@@ -17,6 +20,7 @@ function useVibe64AccountSettings() {
     vibe64SupabaseClient
   } = useVibe64SupabaseAuth();
   const user = computed(() => auth?.state?.user || null);
+  const supabaseControlsEnabled = computed(() => supabaseAccountControlsEnabled(auth?.state?.runtime || null));
   const passwordForm = reactive({
     oldPassword: "",
     password: "",
@@ -74,6 +78,7 @@ function useVibe64AccountSettings() {
     passwordForm,
     passwordStatus,
     sendPasswordResetEmail,
+    supabaseControlsEnabled,
     submitPasswordChange
   };
 }

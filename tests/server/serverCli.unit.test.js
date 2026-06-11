@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import path from "node:path";
 import test from "node:test";
 
 import {
@@ -16,7 +17,9 @@ import {
 test("server CLI starts management mode with no slug", () => {
   assert.deepEqual(parseStartupArgs([]), {
     openOnStart: false,
-    startupSlug: ""
+    runtimeMode: "hosted",
+    startupSlug: "",
+    targetRoot: ""
   });
   assert.equal(startupBrowserPath(), "/app/manage/projects");
   assert.equal(
@@ -32,15 +35,33 @@ test("server CLI starts management mode with no slug", () => {
 test("server CLI accepts one project slug and opens development mode", () => {
   assert.deepEqual(parseStartupArgs(["alpha_1"]), {
     openOnStart: false,
-    startupSlug: "alpha_1"
+    runtimeMode: "hosted",
+    startupSlug: "alpha_1",
+    targetRoot: ""
   });
   assert.deepEqual(parseStartupArgs(["--no-open", "beta-2"]), {
     openOnStart: false,
-    startupSlug: "beta-2"
+    runtimeMode: "hosted",
+    startupSlug: "beta-2",
+    targetRoot: ""
   });
   assert.deepEqual(parseStartupArgs(["--open", "beta-2"]), {
     openOnStart: true,
-    startupSlug: "beta-2"
+    runtimeMode: "hosted",
+    startupSlug: "beta-2",
+    targetRoot: ""
+  });
+  assert.deepEqual(parseStartupArgs(["--project", "beta-2"]), {
+    openOnStart: false,
+    runtimeMode: "hosted",
+    startupSlug: "beta-2",
+    targetRoot: ""
+  });
+  assert.deepEqual(parseStartupArgs(["--project=beta-2"]), {
+    openOnStart: false,
+    runtimeMode: "hosted",
+    startupSlug: "beta-2",
+    targetRoot: ""
   });
   assert.equal(startupBrowserPath({
     startupSlug: "alpha_1"
@@ -59,10 +80,35 @@ test("server CLI accepts one project slug and opens development mode", () => {
   );
 });
 
-test("server CLI rejects target paths and unsupported startup flags", () => {
+test("server CLI accepts target paths as local editor mode", () => {
+  assert.deepEqual(parseStartupArgs(["."]), {
+    openOnStart: true,
+    runtimeMode: "local",
+    startupSlug: "vibe64",
+    targetRoot: path.resolve(".")
+  });
+  assert.deepEqual(parseStartupArgs(["/tmp/My App"]), {
+    openOnStart: true,
+    runtimeMode: "local",
+    startupSlug: "my-app",
+    targetRoot: path.resolve("/tmp/My App")
+  });
+  assert.deepEqual(parseStartupArgs(["--no-open", "."]), {
+    openOnStart: false,
+    runtimeMode: "local",
+    startupSlug: "vibe64",
+    targetRoot: path.resolve(".")
+  });
+  assert.deepEqual(parseStartupArgs(["--open", "../app"]), {
+    openOnStart: true,
+    runtimeMode: "local",
+    startupSlug: "app",
+    targetRoot: path.resolve("../app")
+  });
+});
+
+test("server CLI rejects invalid slugs and unsupported startup flags", () => {
   for (const args of [
-    ["/tmp/app"],
-    ["../app"],
     ["Example"],
     ["alpha", "beta"],
     ["--target", "/tmp/app"],
@@ -87,16 +133,64 @@ test("server CLI browser-open flags are explicit", () => {
   assert.equal(shouldOpenBrowser(["--open=0", "alpha"]), false);
 });
 
-test("server CLI never enables shutdown from browser lifecycle", () => {
+test("server CLI enables browser lifecycle shutdown only for local editor mode", () => {
   assert.deepEqual(serverStartOptions({
     env: {
       PORT: "3000"
     },
+    runtimeMode: "hosted",
     startupSlug: "alpha_1"
   }), {
     browserLifecycleShutdown: false,
+    port: undefined,
+    runtimeMode: "hosted",
     startupSlug: "alpha_1",
-    strictPort: true
+    strictPort: true,
+    targetRoot: ""
+  });
+  assert.deepEqual(serverStartOptions({
+    env: {},
+    openOnStart: true,
+    runtimeMode: "local",
+    startupSlug: "vibe64",
+    targetRoot: "/workspace/vibe64"
+  }), {
+    browserLifecycleShutdown: true,
+    port: 3001,
+    runtimeMode: "local",
+    startupSlug: "vibe64",
+    strictPort: false,
+    targetRoot: "/workspace/vibe64"
+  });
+  assert.deepEqual(serverStartOptions({
+    env: {},
+    openOnStart: false,
+    runtimeMode: "local",
+    startupSlug: "vibe64",
+    targetRoot: "/workspace/vibe64"
+  }), {
+    browserLifecycleShutdown: true,
+    port: undefined,
+    runtimeMode: "local",
+    startupSlug: "vibe64",
+    strictPort: false,
+    targetRoot: "/workspace/vibe64"
+  });
+  assert.deepEqual(serverStartOptions({
+    env: {
+      PORT: "4567"
+    },
+    openOnStart: true,
+    runtimeMode: "local",
+    startupSlug: "vibe64",
+    targetRoot: "/workspace/vibe64"
+  }), {
+    browserLifecycleShutdown: true,
+    port: undefined,
+    runtimeMode: "local",
+    startupSlug: "vibe64",
+    strictPort: true,
+    targetRoot: "/workspace/vibe64"
   });
 });
 
