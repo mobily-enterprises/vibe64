@@ -351,12 +351,12 @@ class Vibe64DescribedWorkflowTargetAdapter extends Vibe64WorkflowTargetAdapter {
     return resolveValue(this.setupDoctorPluginsFactory, context) || [];
   }
 
-  async getConfigFields() {
-    return resolveValue(this.configFields) || [];
+  async getConfigFields(context = {}) {
+    return resolveValue(this.configFields, context) || [];
   }
 
-  async getDefaultConfig() {
-    return resolveValue(this.defaultConfig) || {};
+  async getDefaultConfig(context = {}) {
+    return resolveValue(this.defaultConfig, context) || {};
   }
 
   async getTerminalToolchainSpec(context = {}) {

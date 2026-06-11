@@ -20,6 +20,10 @@ import {
 } from "@local/vibe64-adapters/server/adapters/jskit/index";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
+async function writePackageJson(root, packageJson = {}) {
+  await writeFile(path.join(root, "package.json"), `${JSON.stringify(packageJson, null, 2)}\n`, "utf8");
+}
+
 test("Vibe64 project service exposes project selection before project-specific state", async () => {
   await withTemporaryRoot(async (root) => {
     const projectsRoot = path.join(root, "projects");
@@ -177,10 +181,11 @@ test("Vibe64 project service saves project type and plain-file configuration", a
     const defaults = await service.readProjectConfigDefaults();
     assert.equal(defaults.ok, true);
     assert.equal(defaults.defaults.defaults.github_pr_merge_method, "merge");
-    assert.equal(defaults.defaults.defaults[JSKIT_ALLOW_SELF_TARGET_CONFIG], false);
-    assert.equal(defaults.defaults.defaults.jskit_database_runtime, "none");
+    assert.equal(Object.hasOwn(defaults.defaults.defaults, JSKIT_ALLOW_SELF_TARGET_CONFIG), false);
+    assert.equal(defaults.defaults.defaults.jskit_database_runtime, "mysql");
     const mergeMethodField = defaults.defaults.fields.find((field) => field.id === "github_pr_merge_method");
     const databaseRuntimeField = defaults.defaults.fields.find((field) => field.id === "jskit_database_runtime");
+    assert.equal(defaults.defaults.fields.some((field) => field.id === JSKIT_ALLOW_SELF_TARGET_CONFIG), false);
     assert.equal(defaults.defaults.fields.some((field) => field.id === "deploy_production_command"), false);
     assert.equal(defaults.defaults.fields.some((field) => field.id === "deploy_staging_command"), false);
     assert.equal(mergeMethodField.sectionLabel, "Pull requests");
@@ -192,14 +197,13 @@ test("Vibe64 project service saves project type and plain-file configuration", a
     const savedConfig = await service.saveProjectConfig({
       values: {
         github_pr_merge_method: "squash",
-        [JSKIT_ALLOW_SELF_TARGET_CONFIG]: true,
         jskit_database_runtime: "postgres"
       }
     });
     assert.equal(savedConfig.ok, true);
     assert.equal(savedConfig.config.ready, true);
     assert.equal(savedConfig.config.values.github_pr_merge_method, "squash");
-    assert.equal(savedConfig.config.values[JSKIT_ALLOW_SELF_TARGET_CONFIG], true);
+    assert.equal(Object.hasOwn(savedConfig.config.values, JSKIT_ALLOW_SELF_TARGET_CONFIG), false);
     assert.equal(
       await readFile(path.join(stateRoot, "config", "github_pr_merge_method"), "utf8"),
       "squash\n"
@@ -215,8 +219,43 @@ test("Vibe64 project service saves project type and plain-file configuration", a
 
     const runtime = await service.createRuntime();
     assert.equal(runtime.adapter.id, "jskit");
-    assert.equal(runtime.projectConfig.values[JSKIT_ALLOW_SELF_TARGET_CONFIG], true);
+    assert.equal(Object.hasOwn(runtime.projectConfig.values, JSKIT_ALLOW_SELF_TARGET_CONFIG), false);
     assert.equal(runtime.projectConfig.values.jskit_database_runtime, "postgres");
+  });
+});
+
+test("Vibe64 project service exposes JSKIT self-target config only for Vibe64 itself", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await writePackageJson(targetRoot, {
+      name: "vibe64"
+    });
+    const service = createService({
+      targetRoot
+    });
+    const stateRoot = service.currentProjectStateRoot();
+
+    await service.saveProjectType({
+      projectType: "jskit"
+    });
+
+    const defaults = await service.readProjectConfigDefaults();
+    assert.equal(defaults.ok, true);
+    assert.equal(defaults.defaults.defaults[JSKIT_ALLOW_SELF_TARGET_CONFIG], false);
+    assert.equal(defaults.defaults.fields.some((field) => field.id === JSKIT_ALLOW_SELF_TARGET_CONFIG), true);
+
+    const savedConfig = await service.saveProjectConfig({
+      values: {
+        github_pr_merge_method: "merge",
+        [JSKIT_ALLOW_SELF_TARGET_CONFIG]: true,
+        jskit_database_runtime: "mysql"
+      }
+    });
+    assert.equal(savedConfig.ok, true);
+    assert.equal(savedConfig.config.values[JSKIT_ALLOW_SELF_TARGET_CONFIG], true);
+    assert.equal(
+      await readFile(path.join(stateRoot, "config", JSKIT_ALLOW_SELF_TARGET_CONFIG), "utf8"),
+      "true\n"
+    );
   });
 });
 
@@ -244,7 +283,6 @@ test("Vibe64 project service can preview and save config with a draft project ty
       projectType: "jskit",
       values: {
         github_pr_merge_method: "rebase",
-        [JSKIT_ALLOW_SELF_TARGET_CONFIG]: false,
         jskit_database_runtime: "mysql"
       }
     });
@@ -275,7 +313,6 @@ test("Vibe64 project service injects the app workflow registry into runtimes", a
     });
     await service.saveProjectConfig({
       values: {
-        [JSKIT_ALLOW_SELF_TARGET_CONFIG]: false,
         jskit_database_runtime: "none"
       }
     });

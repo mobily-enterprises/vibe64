@@ -26,7 +26,7 @@ function configOptionValues(options = []) {
 function defaultConfigFromFields(fields = []) {
   return Object.fromEntries(fields.map((field) => [
     field.id,
-    field.defaultValue || ""
+    Object.hasOwn(field, "defaultValue") ? field.defaultValue : ""
   ]));
 }
 

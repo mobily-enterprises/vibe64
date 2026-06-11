@@ -24,6 +24,9 @@ import {
   inspectDescribedProject
 } from "../../workflowAdapter.js";
 import {
+  defaultConfigFromFields
+} from "../../configValues.js";
+import {
   normalizeText
 } from "@local/vibe64-core/server/core";
 import { deepFreeze } from "@local/vibe64-core/server/deepFreeze";
@@ -113,7 +116,7 @@ const JSKIT_CONFIG_FIELDS = deepFreeze([
     type: "boolean"
   },
   {
-    defaultValue: "none",
+    defaultValue: "mysql",
     description: "Database service Studio should prepare for local JSKIT runs. Choose None when the app does not need a database.",
     id: JSKIT_DATABASE_RUNTIME_CONFIG,
     label: "Database runtime",
@@ -137,10 +140,7 @@ const JSKIT_CONFIG_FIELDS = deepFreeze([
     type: "select"
   }
 ]);
-const JSKIT_DEFAULT_CONFIG = deepFreeze(Object.fromEntries(JSKIT_CONFIG_FIELDS.map((field) => [
-  field.id,
-  field.defaultValue
-])));
+const JSKIT_DEFAULT_CONFIG = deepFreeze(defaultConfigFromFields(JSKIT_CONFIG_FIELDS));
 
 function allMarkersExist(markers) {
   return markers.every((marker) => marker.exists);
@@ -174,6 +174,36 @@ function selectedJskitConfigValue(config, fieldId) {
     return fallback;
   }
   return rawValue || fallback;
+}
+
+async function jskitTargetPackageName({
+  targetRoot = ""
+} = {}) {
+  const targetRootValue = normalizeText(targetRoot);
+  if (!targetRootValue) {
+    return "";
+  }
+  const packageJson = await readPackageJson(targetRootValue);
+  return normalizeText(packageJson?.name);
+}
+
+async function isVibe64SelfTarget({
+  targetRoot = ""
+} = {}) {
+  return await jskitTargetPackageName({
+    targetRoot
+  }) === "vibe64";
+}
+
+async function jskitConfigFields(context = {}) {
+  const includeSelfTargetConfig = await isVibe64SelfTarget(context);
+  return JSKIT_CONFIG_FIELDS.filter((field) => {
+    return includeSelfTargetConfig || field.id !== JSKIT_ALLOW_SELF_TARGET_CONFIG;
+  });
+}
+
+async function jskitDefaultConfig(context = {}) {
+  return defaultConfigFromFields(await jskitConfigFields(context));
 }
 
 function jskitDatabaseContract(databaseRuntime) {
@@ -371,9 +401,9 @@ class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
     super({
       commandTerminalSpecFactory,
       commands,
-      configFields: JSKIT_CONFIG_FIELDS,
+      configFields: jskitConfigFields,
       currentAppInspector: inspectJskitCurrentApp,
-      defaultConfig: JSKIT_DEFAULT_CONFIG,
+      defaultConfig: jskitDefaultConfig,
       id: "jskit",
       terminalToolchain: {
         image: JSKIT_TOOLCHAIN_IMAGE,

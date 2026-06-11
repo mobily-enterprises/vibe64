@@ -202,8 +202,9 @@ watch(
 
 <style scoped>
 .project-config-setup {
+  align-content: start;
   display: grid;
-  gap: 1rem;
+  gap: 0.8rem;
   padding: 1rem;
 }
 
@@ -213,9 +214,9 @@ watch(
   border: 1px solid rgba(var(--v-theme-primary), 0.22);
   border-radius: 8px;
   display: grid;
-  gap: 0.85rem;
+  gap: 0.7rem;
   justify-content: start;
-  padding: 0.95rem;
+  padding: 0.75rem 0.8rem;
 }
 
 .project-config-setup__summary-change {
@@ -228,19 +229,19 @@ watch(
 
 .project-config-setup__summary-kicker {
   color: rgba(var(--v-theme-on-surface), 0.56);
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   font-weight: 760;
   letter-spacing: 0.05em;
   line-height: 1.1;
-  margin: 0 0 0.18rem;
+  margin: 0 0 0.2rem;
   text-transform: uppercase;
 }
 
 .project-config-setup__summary-text {
   color: rgb(var(--v-theme-on-surface));
-  font-size: 0.95rem;
+  font-size: clamp(1.15rem, 1.8vw, 1.42rem);
   font-weight: 720;
-  line-height: 1.3;
+  line-height: 1.16;
   margin: 0;
 }
 

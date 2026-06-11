@@ -120,7 +120,7 @@ test("jskit adapter exposes selected-project facts, commands, and prompt context
     assert.doesNotMatch(promptContext.generator_discovery_commands, /generate .* help/u);
     assert.match(promptContext.placement_contract, /agent-friendly placement docs/u);
     assert.match(promptContext.placement_contract, /node_modules\/@jskit-ai\/agent-docs\/patterns\/placements\.md/u);
-    assert.match(promptContext.database_contract, /Configured database runtime: none/u);
+    assert.match(promptContext.database_contract, /Configured database runtime: mysql/u);
     assert.equal(Object.hasOwn(promptContext, "environment_blueprint"), false);
     assert.equal(Object.hasOwn(promptContext, "seed_issue_guidance"), false);
     assert.equal(promptContext.valid_jskit_markers, "true");
@@ -162,7 +162,7 @@ test("jskit adapter reflects configured database runtime in prompt context", asy
       targetRoot
     });
 
-    assert.equal(invalidPromptContext.database_runtime, "none");
+    assert.equal(invalidPromptContext.database_runtime, "mysql");
     assert.equal(Object.hasOwn(invalidPromptContext, "seed_issue_guidance"), false);
 
     await withTemporaryRoot(async (unseededRoot) => {
@@ -173,6 +173,36 @@ test("jskit adapter reflects configured database runtime in prompt context", asy
       assert.equal(seedPromptContext.valid_jskit_markers, "false");
       assert.match(seedPromptContext.seed_issue_guidance, /tenancy\/workspaces/u);
     });
+  });
+});
+
+test("jskit adapter computes config fields and defaults from target package identity", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const adapter = createJskitTargetAdapter();
+
+    const missingPackageFields = await adapter.getConfigFields({
+      targetRoot
+    });
+    const missingPackageDefaults = await adapter.getDefaultConfig({
+      targetRoot
+    });
+    assert.equal(missingPackageFields.some((field) => field.id === JSKIT_ALLOW_SELF_TARGET_CONFIG), false);
+    assert.equal(Object.hasOwn(missingPackageDefaults, JSKIT_ALLOW_SELF_TARGET_CONFIG), false);
+    assert.equal(missingPackageDefaults.jskit_database_runtime, "mysql");
+
+    await writeProjectFile(targetRoot, "package.json", JSON.stringify({
+      name: "vibe64"
+    }, null, 2));
+
+    const vibe64Fields = await adapter.getConfigFields({
+      targetRoot
+    });
+    const vibe64Defaults = await adapter.getDefaultConfig({
+      targetRoot
+    });
+    assert.equal(vibe64Fields.some((field) => field.id === JSKIT_ALLOW_SELF_TARGET_CONFIG), true);
+    assert.equal(vibe64Defaults[JSKIT_ALLOW_SELF_TARGET_CONFIG], false);
+    assert.equal(vibe64Defaults.jskit_database_runtime, "mysql");
   });
 });
 

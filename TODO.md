@@ -13,8 +13,18 @@ X Add ability to change codex paramters (model, thinking) from chat input box
 4)
 X Add a new project, the Plus must be lower down.
 
+
 5)
-MUCH MUCH PRETTIER project tech picker
+X MUCH MUCH PRETTIER project tech picker
+
+
+
+
+6b)
+Make dead sure that node_modules is DELETED when archiving a session, ONLY and ONLY active sessions must have node_modules
+
+
+6c) Make sure that images are not packed into built, kept out
 
 
 
@@ -23,9 +33,7 @@ MUCH MUCH PRETTIER project tech picker
 Make this work on a local directory, creating containers etc. This is crucial for local development and testing.
 
 5b)
-Make jskit open jskit properly. this depends on the item above too
-
-
+Make jskit open jskit properly (recursive). this depends on the item above too
 
 
 6a)
@@ -33,7 +41,7 @@ Test seeding
 
 
 
-
+SERVER WORK:
 
 7)
 ABILITY TO ADD USER
@@ -41,13 +49,18 @@ ABILITY TO ADD USER
 8)
 ABILITY TO PROVISION SERVER
 
+8b)
+MOVABILITY: Ability to create a tgz of the full contents of a repository: vibe64 and .vibe64. Maybe consider placing them into .vibe64
+
+
+DEPLOYMENT WORK:
+
 9)
 Ability to actually deploy, with OWN domain if needed, using the same DB container.
 
 
-3)
+FINAL TOUCHES:
+
+10)
 Change any mention of "studio" into "vibe64" -- studio is the old name. Change the variables too.
 
-
-3)
-Change any mention of "studio" into "vibe64" -- studio is the old name. Change the variables too.

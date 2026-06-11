@@ -42,6 +42,8 @@ test("empty project setup shows the recommended technology before alternatives",
 
   await page.goto(`${DEVELOPMENT_PATH}?vibe64_e2e=1`);
 
+  await expect(page.getByRole("tab", { name: "Preview" })).toHaveCount(0);
+  await expect(page.getByRole("tab", { name: "Dashboard" })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Choose app type" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Web application Build something people use in a browser." })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("button", { name: "Next" })).toBeVisible();
@@ -80,6 +82,8 @@ test("empty project setup shows the recommended technology before alternatives",
 
   await expect(page.locator(".project-config-setup")).toBeVisible();
   await expect(page.getByText("Phone app / JSKIT AI")).toBeVisible();
+  const setupSummaryBox = await page.locator(".project-config-setup__summary").boundingBox();
+  expect(setupSummaryBox?.height).toBeLessThan(150);
   expect(projectTypePutCount).toBe(0);
   expect(configReadProjectTypes).toContain("jskit");
 
@@ -94,6 +98,8 @@ test("empty project setup shows the recommended technology before alternatives",
     projectType: "jskit"
   });
   expect(projectTypePutCount).toBe(0);
+  await expect(page.getByRole("tab", { name: "Preview" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Dashboard" })).toBeVisible();
 });
 
 function savedProjectTypePayload() {

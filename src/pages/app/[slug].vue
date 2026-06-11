@@ -45,6 +45,7 @@ const pageError = ref("");
 const chatCollapsed = ref(false);
 const mobilePaneLayout = ref(false);
 const projectLoadError = ref("");
+const savedProjectTypeReady = ref(false);
 const projects = ref([]);
 let mobilePaneMediaQuery = null;
 const projectSlug = computed(() => firstRouteParam(route.params.slug));
@@ -97,7 +98,8 @@ const mobileProjectAction = computed(() => (
         pane: "dashboard"
       }
 ));
-const mobileProjectActionVisible = computed(() => mobilePaneLayout.value && chatCollapsed.value);
+const projectPaneNavigationVisible = computed(() => savedProjectTypeReady.value);
+const mobileProjectActionVisible = computed(() => projectPaneNavigationVisible.value && mobilePaneLayout.value && chatCollapsed.value);
 
 useStudioShellDrawer({
   hidden: true
@@ -194,30 +196,36 @@ function syncMobilePaneLayout() {
 
 function handleProjectTypeReady() {
   pageError.value = "";
+  savedProjectTypeReady.value = true;
 }
 
 function handleProjectSelectionReady() {
   pageError.value = "";
+  savedProjectTypeReady.value = false;
   emitPageTitle();
 }
 
 function handleProjectSelectionMissing() {
   pageError.value = "";
+  savedProjectTypeReady.value = false;
   emitPageTitle("Choose project");
 }
 
 function handleProjectSelectionError(error) {
   pageError.value = String(error || "");
+  savedProjectTypeReady.value = false;
   emitPageTitle();
 }
 
 function handleProjectTypeMissing(project = {}) {
   pageError.value = "";
+  savedProjectTypeReady.value = project?.projectType?.ready === true;
   emitPageTitle(project?.projectType?.ready === true ? "Project setup" : "Choose project type");
 }
 
 function handleProjectTypeError(error) {
   pageError.value = String(error || "");
+  savedProjectTypeReady.value = false;
   emitPageTitle();
 }
 
@@ -326,6 +334,7 @@ onBeforeUnmount(() => {
           />
 
           <div
+            v-if="projectPaneNavigationVisible"
             class="studio-home-shell-project-tabs studio-home-shell-project-tabs--desktop"
             role="tablist"
             aria-label="Project"
