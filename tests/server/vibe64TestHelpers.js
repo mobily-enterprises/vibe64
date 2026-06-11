@@ -11,7 +11,8 @@ import {
 
 async function withTemporaryRoot(callback) {
   const tempRoot = await mkdtemp(path.join(tmpdir(), "vibe64-test-"));
-  const root = path.join(tempRoot, "test-project");
+  const tempId = path.basename(tempRoot).replace(/[^A-Za-z0-9_.-]+/gu, "-");
+  const root = path.join(tempRoot, `target-${tempId}`);
   await mkdir(root, {
     recursive: true
   });

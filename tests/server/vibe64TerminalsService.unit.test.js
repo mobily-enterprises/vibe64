@@ -1433,11 +1433,14 @@ test("Vibe64 terminal env includes JSKIT managed MariaDB client defaults when co
 
 test("Vibe64 terminal env skips JSKIT MariaDB client defaults when unmanaged", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    await writeFile(path.join(targetRoot, ".env"), "DB_HOST=localhost\n", "utf8");
     const env = await projectTerminalEnvironment({
       runtime: {
         adapter: new JskitTargetAdapter(),
-        projectConfig: {}
+        projectConfig: {
+          values: {
+            jskit_database_runtime: "none"
+          }
+        }
       },
       session: {
         targetRoot

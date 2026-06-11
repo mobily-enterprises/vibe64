@@ -176,18 +176,24 @@ test("Adapter Setup blocks dependent checks when target directory is unavailable
 
 test("Adapter Setup allows JSKIT self-targeting only when adapter config opts in", async () => {
   await withTemporaryRoot(async (targetRoot) => {
+    await writeFile(path.join(targetRoot, "package.json"), JSON.stringify({
+      name: "vibe64"
+    }), "utf8");
+
     const projectService = createProjectService({
       targetRoot
     });
     await projectService.saveProjectType({
       projectType: "jskit"
     });
-    await projectService.saveProjectConfig({
+    const blockedConfig = await projectService.saveProjectConfig({
       values: {
+        github_pr_merge_method: "merge",
         [JSKIT_ALLOW_SELF_TARGET_CONFIG]: false,
         jskit_database_runtime: "none"
       }
     });
+    assert.equal(blockedConfig.ok, true);
 
     const blocked = await inspectAdapterSetup({
       projectService,
@@ -196,12 +202,14 @@ test("Adapter Setup allows JSKIT self-targeting only when adapter config opts in
     });
     assert.equal(blocked.checks.find((check) => check.id === "target-identity")?.status, "fail");
 
-    await projectService.saveProjectConfig({
+    const allowedConfig = await projectService.saveProjectConfig({
       values: {
+        github_pr_merge_method: "merge",
         [JSKIT_ALLOW_SELF_TARGET_CONFIG]: true,
         jskit_database_runtime: "none"
       }
     });
+    assert.equal(allowedConfig.ok, true);
 
     const allowed = await inspectAdapterSetup({
       projectService,

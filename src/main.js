@@ -19,6 +19,9 @@ import {
   createShellRouter
 } from "@jskit-ai/kernel/client";
 import { config } from "../config/public.js";
+import {
+  installVibe64AsyncModuleErrorHandlers
+} from "@/lib/vibe64AsyncModuleCore.js";
 
 const surfaceRuntime = createSurfaceRuntime({
   allMode: config.surfaceModeAll,
@@ -39,6 +42,10 @@ const { router, fallbackRoute } = createShellRouter({
     defaultSurfaceId: config.surfaceDefaultId,
     webRootAllowed: config.webRootAllowed
   }
+});
+
+installVibe64AsyncModuleErrorHandlers({
+  router
 });
 
 const vuetify = createVuetify({

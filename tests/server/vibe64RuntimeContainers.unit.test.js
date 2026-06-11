@@ -34,6 +34,9 @@ import {
 import {
   runWithProjectRequestContext
 } from "@local/vibe64-core/server/projectRequestContext";
+import {
+  targetRuntimeProjectSlug
+} from "@local/vibe64-core/server/projectRuntimeIdentity";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 test("managed project runtime identity follows the slug instead of the absolute path", async () => {
@@ -73,6 +76,19 @@ test("managed project runtime identity follows the slug instead of the absolute 
       containerName: "vibe64-beepollen-jskit-mariadb",
       networkName: "vibe64-beepollen-network"
     });
+  });
+});
+
+test("unmanaged project runtime identity slugifies local folder names", async () => {
+  await withTemporaryRoot(async (root) => {
+    assert.equal(
+      targetRuntimeProjectSlug(path.join(root, "Example Target App")),
+      "example-target-app"
+    );
+    assert.equal(
+      targetRuntimeProjectSlug(path.join(root, "vibe64-attachment-test-A1B2C3")),
+      "vibe64-attachment-test-a1b2c3"
+    );
   });
 });
 
@@ -578,6 +594,7 @@ test("target runtime network preparation creates the shared network only when mi
       }
     });
 
+    const targetLabel = `vibe64.target=${targetRuntimeProjectSlug(targetRoot)}`;
     assert.equal(result, networkName);
     assert.deepEqual(calls, [
       ["docker", ["network", "inspect", networkName]],
@@ -591,7 +608,7 @@ test("target runtime network preparation creates the shared network only when mi
           "--label",
           `vibe64.daemon-pid=${process.pid}`,
           "--label",
-          "vibe64.target=test-project",
+          targetLabel,
           networkName
         ]
       ]
@@ -618,10 +635,11 @@ test("target runtime network shell command tolerates concurrent network creation
     const command = targetRuntimeNetworkEnsureCommand(targetRoot);
     const networkName = runtimeNetworkName(targetRoot);
     const inspectCommand = `docker network inspect ${networkName} >/dev/null 2>&1`;
+    const targetLabel = `vibe64.target=${targetRuntimeProjectSlug(targetRoot)}`;
 
     assert.equal(command.split(" || ").filter((part) => part === inspectCommand).length, 2);
     assert.ok(command.includes(`docker network create --label vibe64.kind=runtime-network`));
-    assert.ok(command.includes("--label vibe64.target=test-project"));
+    assert.ok(command.includes(`--label ${targetLabel}`));
     assert.ok(command.includes(`${networkName} >/dev/null`));
   });
 });

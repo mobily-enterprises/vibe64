@@ -509,7 +509,11 @@
           class="studio-autopilot__right-pane-page studio-autopilot__dashboard-pane"
           role="tabpanel"
         >
-          <slot name="dashboard" :dashboard-context="dashboardSessionContext" />
+          <slot
+            v-if="rightPaneTabMounted('dashboard')"
+            name="dashboard"
+            :dashboard-context="dashboardSessionContext"
+          />
         </div>
 
         <div
@@ -517,7 +521,10 @@
           class="studio-autopilot__right-pane-page"
           role="tabpanel"
         >
-          <Vibe64SessionDetailsPane :context="dashboardSessionContext" />
+          <Vibe64SessionDetailsPane
+            v-if="rightPaneTabMounted('session-details')"
+            :context="dashboardSessionContext"
+          />
         </div>
 
         <div
@@ -526,6 +533,7 @@
           role="tabpanel"
         >
           <Vibe64SessionDiffPanel
+            v-if="rightPaneTabMounted('diff')"
             :active="rightPaneTab === 'diff'"
             :diff="diff"
             :review="review"
@@ -537,7 +545,11 @@
           class="studio-autopilot__right-pane-page"
           role="tabpanel"
         >
-          <slot name="shell-terminal" :active="rightPaneTab === 'shell'" />
+          <slot
+            v-if="rightPaneTabMounted('shell')"
+            name="shell-terminal"
+            :active="rightPaneTab === 'shell'"
+          />
         </div>
 
         <div
@@ -545,12 +557,17 @@
           class="studio-autopilot__right-pane-page studio-autopilot__ai-terminal-pane"
           role="tabpanel"
         >
-          <slot name="ai-terminal" :active="rightPaneTab === 'ai-terminal'" />
+          <slot
+            v-if="rightPaneTabMounted('ai-terminal')"
+            name="ai-terminal"
+            :active="rightPaneTab === 'ai-terminal'"
+          />
         </div>
       </section>
     </section>
 
     <Vibe64FixCodexDialog
+      v-if="fixDialogOpen || fixJob || fixTerminal"
       v-model="fixDialogOpen"
       :job="fixJob"
       :terminal="fixTerminal"
@@ -581,8 +598,6 @@ import {
 import {
   VIBE64_DEFAULT_AGENT_PROVIDER_ID
 } from "@local/vibe64-runtime/shared";
-import Vibe64FixCodexDialog from "@/components/studio/Vibe64FixCodexDialog.vue";
-import Vibe64LaunchControls from "@/components/studio/Vibe64LaunchControls.vue";
 import Vibe64BackgroundTasks from "@/components/studio/vibe64-session/Vibe64BackgroundTasks.vue";
 import Vibe64AutopilotNavigation from "@/components/studio/vibe64-session/Vibe64AutopilotNavigation.vue";
 import Vibe64ConversationLog from "@/components/studio/vibe64-session/Vibe64ConversationLog.vue";
@@ -590,7 +605,6 @@ import Vibe64HeadlessCommandOutput from "@/components/studio/vibe64-session/Vibe
 import Vibe64ReportPreview from "@/components/studio/vibe64-session/Vibe64ReportPreview.vue";
 import Vibe64SessionActionButton from "@/components/studio/vibe64-session/Vibe64SessionActionButton.vue";
 import Vibe64SessionDetailsPane from "@/components/studio/vibe64-session/Vibe64SessionDetailsPane.vue";
-import Vibe64SessionDiffPanel from "@/components/studio/vibe64-session/Vibe64SessionDiffPanel.vue";
 import Vibe64SessionToolbar from "@/components/studio/vibe64-session/Vibe64SessionToolbar.vue";
 import Vibe64WorkflowControlForm from "@/components/studio/vibe64-session/Vibe64WorkflowControlForm.vue";
 import {
@@ -637,6 +651,9 @@ import {
 import {
   vibe64SessionFacts
 } from "@/lib/vibe64SessionPanelModel.js";
+import {
+  defineVibe64AsyncComponent
+} from "@/lib/vibe64AsyncComponent.js";
 import {
   vibe64SessionStatusColor,
   vibe64SessionStatusLabel
@@ -741,6 +758,22 @@ const props = defineProps({
   }
 });
 
+const Vibe64FixCodexDialog = defineVibe64AsyncComponent({
+  label: "Fix Codex dialog",
+  loader: () => import("@/components/studio/Vibe64FixCodexDialog.vue"),
+  minHeight: "12rem"
+});
+const Vibe64LaunchControls = defineVibe64AsyncComponent({
+  label: "Launch controls",
+  loader: () => import("@/components/studio/Vibe64LaunchControls.vue"),
+  minHeight: "10rem"
+});
+const Vibe64SessionDiffPanel = defineVibe64AsyncComponent({
+  label: "Diff viewer",
+  loader: () => import("@/components/studio/vibe64-session/Vibe64SessionDiffPanel.vue"),
+  minHeight: "14rem"
+});
+
 const agentSettings = useVibe64AgentSettings();
 const currentAgentSettings = computed(() => agentSettings.settings.value);
 const requestAgentSettings = computed(() => {
@@ -800,6 +833,7 @@ const commandSpyExpanded = ref(false);
 const sessionToolsMenuOpen = ref(false);
 const screenControlFormRef = ref(null);
 const rightPaneTab = ref("preview");
+const mountedRightPaneTabs = ref(["preview"]);
 const openedCodexTerminalAttentionSignature = ref("");
 const SESSION_TOOL_STORAGE_PREFIX = "vibe64.sessionTools.active";
 const projectPaneIds = Object.freeze([
@@ -958,6 +992,23 @@ const sessionToolControls = computed(() => [
 ]);
 const activeSessionTool = computed(() => {
   return sessionToolControls.value.find((tool) => tool.id === rightPaneTab.value) || null;
+});
+
+function rightPaneTabMounted(tabId) {
+  return mountedRightPaneTabs.value.includes(String(tabId || ""));
+}
+
+watch(rightPaneTab, (tabId) => {
+  const nextTabId = String(tabId || "");
+  if (!nextTabId || mountedRightPaneTabs.value.includes(nextTabId)) {
+    return;
+  }
+  mountedRightPaneTabs.value = [
+    ...mountedRightPaneTabs.value,
+    nextTabId
+  ];
+}, {
+  immediate: true
 });
 const commandSpyVisible = computed(() => Boolean(
   commandTerminalVisible.value ||

@@ -155,12 +155,13 @@ test("sync main project tool does not require session merge metadata", async () 
     await service.saveProjectType({
       projectType: "jskit"
     });
-    await service.saveProjectConfig({
+    const config = await service.saveProjectConfig({
       values: {
-        jskit_allow_self_target: false,
+        github_pr_merge_method: "merge",
         jskit_database_runtime: "none"
       }
     });
+    assert.equal(config.ok, true);
 
     const run = await service.prepareProjectToolRun("sync_main_with_main");
 

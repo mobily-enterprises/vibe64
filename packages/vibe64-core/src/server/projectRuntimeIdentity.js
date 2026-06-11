@@ -7,6 +7,7 @@ import {
 import {
   normalizeProjectSlug,
   pathInsideOrEqual,
+  projectSlugFromName,
   resolveStudioProjectsRoot
 } from "./studioProjectContext.js";
 
@@ -56,7 +57,7 @@ function targetRuntimeProjectSlug(targetRoot = "") {
     return managedSlug;
   }
 
-  return normalizeProjectSlug(path.basename(resolvedTargetRoot));
+  return normalizeProjectSlug(projectSlugFromName(path.basename(resolvedTargetRoot)));
 }
 
 export {

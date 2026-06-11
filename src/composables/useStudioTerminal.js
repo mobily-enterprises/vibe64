@@ -1,11 +1,13 @@
 import { computed, nextTick, ref, unref } from "vue";
-import { FitAddon } from "@xterm/addon-fit";
-import { Terminal } from "@xterm/xterm";
 import {
   reportableTerminalSize,
   terminalResizeErrorMessage
 } from "@/lib/studioTerminalSize.js";
-import "@xterm/xterm/css/xterm.css";
+import {
+  isVibe64AsyncImportError,
+  notifyVibe64AsyncModuleError
+} from "@/lib/vibe64AsyncModuleCore.js";
+import { loadXtermModules } from "@/lib/xtermModuleLoader.js";
 
 function resolveCallback(callback, fallback) {
   return typeof callback === "function" ? callback : fallback;
@@ -171,8 +173,20 @@ function useStudioTerminal({
       if (!terminalHost.value) {
         return false;
       }
+      let terminalLibrary;
+      try {
+        terminalLibrary = await loadXtermModules();
+      } catch (error) {
+        terminalError.value = "Terminal module could not load. Check your connection and retry.";
+        notifyVibe64AsyncModuleError(error, {
+          label: "Terminal",
+          retry: setupTerminalUi,
+          stale: isVibe64AsyncImportError(error)
+        });
+        return false;
+      }
       terminalHost.value.replaceChildren();
-      terminalInstance = new Terminal({
+      terminalInstance = new terminalLibrary.Terminal({
         cursorBlink: false,
         disableStdin: false,
         fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
@@ -182,7 +196,7 @@ function useStudioTerminal({
           foreground: "#f5f7fb"
         }
       });
-      terminalFitAddon = new FitAddon();
+      terminalFitAddon = new terminalLibrary.FitAddon();
       terminalInstance.loadAddon(terminalFitAddon);
       terminalInstance.open(terminalHost.value);
       fitTerminalUi();

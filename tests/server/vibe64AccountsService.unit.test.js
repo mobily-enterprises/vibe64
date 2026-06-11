@@ -748,14 +748,20 @@ test("Codex auth terminal finalization writes the shared marker and publishes an
   await withTemporaryRoot(async (root) => {
     const dataRoot = path.join(root, "data");
     const published = [];
+    let resolvePublished;
+    const publishedEvent = new Promise((resolve) => {
+      resolvePublished = resolve;
+    });
     const calls = [];
     const service = createService({
       dataRoot,
       publishAccountChanged: async (accountId, event = {}) => {
-        published.push({
+        const record = {
           accountId,
           event
-        });
+        };
+        published.push(record);
+        resolvePublished(record);
       },
       runToolchain: connectedToolchain(calls),
       startTerminalSessionFn(options = {}) {
@@ -785,7 +791,12 @@ test("Codex auth terminal finalization writes the shared marker and publishes an
       apiKey: "sk-test-auth-finalization",
       mode: API_KEY_AUTH_MODE
     }));
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await Promise.race([
+      publishedEvent,
+      new Promise((_, reject) => {
+        setTimeout(() => reject(new Error("Timed out waiting for Codex auth finalization.")), 2_000);
+      })
+    ]);
 
     const marker = JSON.parse(await readFile(
       path.join(dataRoot, "provider-homes", "codex", "status.json"),

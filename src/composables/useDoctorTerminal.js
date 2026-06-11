@@ -1,9 +1,11 @@
 import { nextTick, onBeforeUnmount, ref } from "vue";
-import { FitAddon } from "@xterm/addon-fit";
-import { Terminal } from "@xterm/xterm";
 import { writeClipboardText } from "@/lib/clipboard.js";
 import { studioHttpClient } from "@/lib/studioHttp.js";
-import "@xterm/xterm/css/xterm.css";
+import {
+  isVibe64AsyncImportError,
+  notifyVibe64AsyncModuleError
+} from "@/lib/vibe64AsyncModuleCore.js";
+import { loadXtermModules } from "@/lib/xtermModuleLoader.js";
 
 function useDoctorTerminal({
   onTerminalSettled = null,
@@ -139,7 +141,20 @@ function useDoctorTerminal({
       throw new Error("Terminal view is not ready yet.");
     }
 
-    terminalInstance = new Terminal({
+    let terminalLibrary;
+    try {
+      terminalLibrary = await loadXtermModules();
+    } catch (error) {
+      terminalError.value = "Terminal module could not load. Check your connection and retry.";
+      notifyVibe64AsyncModuleError(error, {
+        label: "Terminal",
+        retry: setupTerminalUi,
+        stale: isVibe64AsyncImportError(error)
+      });
+      return false;
+    }
+
+    terminalInstance = new terminalLibrary.Terminal({
       cursorBlink: true,
       fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
       fontSize: 13,
@@ -148,7 +163,7 @@ function useDoctorTerminal({
         foreground: "#f4f6fb"
       }
     });
-    terminalFitAddon = new FitAddon();
+    terminalFitAddon = new terminalLibrary.FitAddon();
     terminalInstance.loadAddon(terminalFitAddon);
     terminalInstance.open(terminalHost.value);
     terminalFitAddon.fit();
@@ -250,7 +265,10 @@ function useDoctorTerminal({
 
     try {
       if (visible) {
-        await setupTerminalUi();
+        const terminalUiReady = await setupTerminalUi();
+        if (!terminalUiReady) {
+          throw new Error(terminalError.value || "Terminal module could not load.");
+        }
       }
       const session = await studioHttpClient.post(terminalEndpoint(), {
         actionId: repair.actionId,

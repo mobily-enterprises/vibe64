@@ -76,8 +76,6 @@
 import { computed, onMounted, proxyRefs, ref, unref, watch } from "vue";
 import Vibe64AutopilotView from "@/components/studio/vibe64-session/Vibe64AutopilotView.vue";
 import Vibe64SessionDialogs from "@/components/studio/vibe64-session/Vibe64SessionDialogs.vue";
-import Vibe64SessionTerminals from "@/components/studio/vibe64-session/Vibe64SessionTerminals.vue";
-import Vibe64ShellControls from "@/components/studio/Vibe64ShellControls.vue";
 import {
   useVibe64HeadlessCommandRunner
 } from "@/composables/useVibe64HeadlessCommandRunner.js";
@@ -115,6 +113,20 @@ import {
 import {
   interruptVibe64CodexTurn
 } from "@/lib/vibe64SessionApi.js";
+import {
+  defineVibe64AsyncComponent
+} from "@/lib/vibe64AsyncComponent.js";
+
+const Vibe64SessionTerminals = defineVibe64AsyncComponent({
+  label: "AI Terminal",
+  loader: () => import("@/components/studio/vibe64-session/Vibe64SessionTerminals.vue"),
+  minHeight: "16rem"
+});
+const Vibe64ShellControls = defineVibe64AsyncComponent({
+  label: "Shell terminal",
+  loader: () => import("@/components/studio/Vibe64ShellControls.vue"),
+  minHeight: "16rem"
+});
 
 const props = defineProps({
   active: {

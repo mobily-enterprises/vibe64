@@ -1,10 +1,11 @@
 <script setup>
 import { computed, onBeforeUnmount, provide, reactive, ref, watch } from "vue";
-import Vibe64AuthScreen from "./Vibe64AuthScreen.vue";
-import Vibe64PrerequisiteSetup from "./Vibe64PrerequisiteSetup.vue";
 import {
   VIBE64_APP_AUTH_KEY
 } from "@/composables/useVibe64AppAuth.js";
+import {
+  defineVibe64AsyncComponent
+} from "@/lib/vibe64AsyncComponent.js";
 import {
   markFirstLoginCodexSetupComplete,
   logout,
@@ -19,6 +20,18 @@ import {
 import {
   connectBrowserLifecycleSocket
 } from "@/lib/browserLifecycle.js";
+
+const Vibe64AuthScreen = defineVibe64AsyncComponent({
+  label: "Authentication screen",
+  loader: () => import("./Vibe64AuthScreen.vue"),
+  minHeight: "100dvh"
+});
+const Vibe64PrerequisiteSetup = defineVibe64AsyncComponent({
+  label: "Setup screen",
+  loader: () => import("./Vibe64PrerequisiteSetup.vue"),
+  minHeight: "100dvh"
+});
+
 const loading = ref(true);
 const loadError = ref("");
 const state = reactive({
