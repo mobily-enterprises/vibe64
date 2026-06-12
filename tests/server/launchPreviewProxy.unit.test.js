@@ -384,6 +384,62 @@ test("launch preview proxy preserves existing JSKIT auth cookies", async () => {
   });
 });
 
+test("launch preview proxy replaces existing synthetic JSKIT preview auth cookies", async () => {
+  const profileRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-auth-profile-"));
+  const profilePath = path.join(profileRoot, "profile.json");
+  await writeFile(profilePath, JSON.stringify({
+    authProvider: "vibe64-preview",
+    authProviderUserSid: "vibe64-preview",
+    displayName: "Preview Tester",
+    email: "preview-tester@example.test",
+    id: "42",
+    username: "preview-tester"
+  }), "utf8");
+  await withTargetServer(async (target) => {
+    const registry = createLaunchPreviewProxyRegistry();
+    try {
+      const preview = await registry.ensure({
+        previewAuth: {
+          kind: "jskit-dev",
+          profilePath,
+          sessionId: "session-replace-preview-auth",
+          targetHref: `${target.origin}/home`,
+          targetRoot: "/tmp/vibe64-preview-project",
+          terminalSessionId: "terminal-replace-preview-auth"
+        },
+        sessionId: "session-replace-preview-auth",
+        targetHref: `${target.origin}/home`,
+        terminalSessionId: "terminal-replace-preview-auth"
+      });
+
+      const response = await fetch(previewPath(preview.href, "/echo-cookie"), {
+        headers: {
+          Cookie: [
+            `${previewTokenCookieName(new URL(preview.href).origin)}=should-be-stripped`,
+            "target_cookie=target",
+            "sb_access_token=jskit-dev.stale-access",
+            "sb_refresh_token=jskit-dev.stale-refresh"
+          ].join("; ")
+        }
+      });
+      assert.equal(response.status, 200);
+      const payload = await response.json();
+      assert.match(payload.cookie, /target_cookie=target/u);
+      assert.match(payload.cookie, /sb_access_token=jskit-dev\./u);
+      assert.match(payload.cookie, /sb_refresh_token=jskit-dev\./u);
+      assert.doesNotMatch(payload.cookie, /stale-access/u);
+      assert.doesNotMatch(payload.cookie, /stale-refresh/u);
+      assert.equal(jskitDevCookiePayload(payload.cookie).email, "preview-tester@example.test");
+    } finally {
+      await registry.closeAll();
+      await rm(profileRoot, {
+        force: true,
+        recursive: true
+      });
+    }
+  });
+});
+
 test("launch preview proxy forwards tokenized WebSocket upgrades without leaking token material", async () => {
   await withWebSocketTargetServer(async (target) => {
     const registry = createLaunchPreviewProxyRegistry();

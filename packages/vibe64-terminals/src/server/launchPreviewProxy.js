@@ -266,8 +266,16 @@ function hasJskitAuthCookie(header = "") {
   return JSKIT_AUTH_COOKIE_NAMES.some((cookieName) => names.has(cookieName));
 }
 
+function hasRealJskitAuthCookie(header = "") {
+  const cookies = parseCookies(header);
+  return JSKIT_AUTH_COOKIE_NAMES.some((cookieName) => {
+    const value = String(cookies[cookieName] || "");
+    return value && !value.startsWith("jskit-dev.");
+  });
+}
+
 function previewAuthCookieHeaderForRequest(header = "", previewAuth = null) {
-  if (hasJskitAuthCookie(header)) {
+  if (hasJskitAuthCookie(header) && hasRealJskitAuthCookie(header)) {
     return "";
   }
   return previewAuthCookieHeader(previewAuth || {});
