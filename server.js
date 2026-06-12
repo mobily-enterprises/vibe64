@@ -20,6 +20,7 @@ import { surfaceRuntime } from "./server/lib/surfaceRuntime.js";
 import {
   resolveStudioAppRoot,
   VIBE64_PROJECTS_ROOT_ENV,
+  VIBE64_PROVIDER_HOMES_ROOT_ENV,
   VIBE64_SYSTEM_ROOT_ENV,
   resolveVibe64Roots
 } from "@local/vibe64-core/server/studioRoots";
@@ -32,6 +33,9 @@ import {
 import {
   closeTerminalSessionsForNamespacePrefix
 } from "@local/studio-terminal-core/server/terminalSessions";
+import {
+  resolveProviderHomesRoot
+} from "@local/studio-terminal-core/server/providerHomes";
 import {
   isLocalhostCheckBypassEnabled
 } from "@local/vibe64-core/server/localhostCheckBypass";
@@ -423,10 +427,17 @@ async function createServer(options = {}) {
     targetRoot: runtimeProfile.singleTargetRoot
   });
   const systemRoot = rootContract.systemRoot;
+  const providerHomesRoot = resolveProviderHomesRoot({
+    env: runtimeEnv,
+    explicitRoot: options.providerHomesRoot,
+    projectsRoot,
+    runtimeProfile,
+    systemRoot
+  });
 
   const accountService = createVibe64AccountsService({
     env: runtimeEnv,
-    providerHomesRoot: options.providerHomesRoot,
+    providerHomesRoot,
     systemRoot
   });
   const codexConnectedVerifier = typeof options.codexConnectedVerifier === "function"
@@ -434,7 +445,7 @@ async function createServer(options = {}) {
     : createCodexConnectedVerifier({
         accountService,
         env: runtimeEnv,
-        providerHomesRoot: options.providerHomesRoot,
+        providerHomesRoot,
         systemRoot
       });
   const auth = createVibe64Auth({
@@ -489,7 +500,7 @@ async function createServer(options = {}) {
   registerVibe64ProjectRoutes(app, projectContext, {
     auth,
     env: runtimeEnv,
-    providerHomesRoot: options.providerHomesRoot,
+    providerHomesRoot,
     systemRoot,
     runGithubToolchain: options.runGithubToolchain
   });
@@ -500,15 +511,18 @@ async function createServer(options = {}) {
     ...runtimeEnv,
     [VIBE64_APP_ROOT_ENV]: appRoot,
     [VIBE64_PROJECTS_ROOT_ENV]: projectContext.projectsRoot,
+    [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot,
     [VIBE64_SYSTEM_ROOT_ENV]: systemRoot,
     ...(targetRoot ? { [VIBE64_TARGET_ROOT_ENV]: targetRoot } : {})
   };
   const previousStudioAppRoot = process.env[VIBE64_APP_ROOT_ENV];
   const previousVibe64SystemRoot = process.env[VIBE64_SYSTEM_ROOT_ENV];
+  const previousProviderHomesRoot = process.env[VIBE64_PROVIDER_HOMES_ROOT_ENV];
   const previousStudioProjectsRoot = process.env[VIBE64_PROJECTS_ROOT_ENV];
   const previousStudioTargetRoot = process.env[VIBE64_TARGET_ROOT_ENV];
   process.env[VIBE64_APP_ROOT_ENV] = appRoot;
   process.env[VIBE64_PROJECTS_ROOT_ENV] = projectContext.projectsRoot;
+  process.env[VIBE64_PROVIDER_HOMES_ROOT_ENV] = providerHomesRoot;
   process.env[VIBE64_SYSTEM_ROOT_ENV] = systemRoot;
   if (targetRoot) {
     process.env[VIBE64_TARGET_ROOT_ENV] = targetRoot;
@@ -542,6 +556,11 @@ async function createServer(options = {}) {
       delete process.env[VIBE64_PROJECTS_ROOT_ENV];
     } else {
       process.env[VIBE64_PROJECTS_ROOT_ENV] = previousStudioProjectsRoot;
+    }
+    if (previousProviderHomesRoot == null) {
+      delete process.env[VIBE64_PROVIDER_HOMES_ROOT_ENV];
+    } else {
+      process.env[VIBE64_PROVIDER_HOMES_ROOT_ENV] = previousProviderHomesRoot;
     }
     if (previousStudioTargetRoot == null) {
       delete process.env[VIBE64_TARGET_ROOT_ENV];
@@ -607,6 +626,7 @@ async function createServer(options = {}) {
         routeCount: runtime.routeCount,
         surface: surfaceRuntime.normalizeSurfaceMode(runtimeEnv.SERVER_SURFACE),
         projectsRoot: projectContext.projectsRoot,
+        providerHomesRoot,
         systemRoot,
         targetRoot: projectContext.targetRoot || "",
         providerPackages: runtime.providerPackageOrder,
@@ -639,6 +659,7 @@ async function startServer(options = {}) {
   const app = await createServer({
     appRoot: options?.appRoot,
     browserLifecycleShutdownDelayMs: options?.browserLifecycleShutdownDelayMs,
+    providerHomesRoot: options?.providerHomesRoot,
     projectsRoot: options?.projectsRoot,
     runtimeMode: runtimeProfile.mode,
     systemRoot: options?.systemRoot,

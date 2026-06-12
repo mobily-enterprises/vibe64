@@ -12,6 +12,13 @@ import {
   JSKIT_PREVIEW_AUTH_KIND
 } from "@local/vibe64-core/server/previewAuth";
 import {
+  VIBE64_PROJECTS_ROOT_ENV,
+  VIBE64_PROVIDER_HOMES_ROOT_ENV,
+  VIBE64_RECURSIVE_HACK_SYSTEM_ROOT_ENV,
+  VIBE64_SYSTEM_DIR,
+  VIBE64_SYSTEM_ROOT_ENV
+} from "@local/vibe64-core/server/studioRoots";
+import {
   JSKIT_VIBE64_COMMANDS,
   JSKIT_ALLOW_SELF_TARGET_CONFIG,
   JSKIT_CONFIG_FIELDS,
@@ -34,6 +41,7 @@ import {
 } from "@local/vibe64-adapters/server/launchPreviewOptions";
 import { withTemporaryRoot, worktreeMetadata } from "./vibe64TestHelpers.js";
 import {
+  assertDockerEnv,
   assertDockerVolumeMount
 } from "./dockerArgsTestHelpers.js";
 
@@ -51,6 +59,24 @@ async function withRuntimeNamespace(namespace, fn) {
       delete process.env[VIBE64_RUNTIME_NAMESPACE_ENV];
     } else {
       process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = previous;
+    }
+  }
+}
+
+async function withProviderHomesRoot(root, fn) {
+  const previous = process.env[VIBE64_PROVIDER_HOMES_ROOT_ENV];
+  if (root) {
+    process.env[VIBE64_PROVIDER_HOMES_ROOT_ENV] = root;
+  } else {
+    delete process.env[VIBE64_PROVIDER_HOMES_ROOT_ENV];
+  }
+  try {
+    return await fn();
+  } finally {
+    if (previous === undefined) {
+      delete process.env[VIBE64_PROVIDER_HOMES_ROOT_ENV];
+    } else {
+      process.env[VIBE64_PROVIDER_HOMES_ROOT_ENV] = previous;
     }
   }
 }
@@ -271,9 +297,13 @@ test("jskit project setup checks project database readiness but not tenant conta
 });
 
 test("jskit self-target config enables host Docker for recursive Studio launch", async () => {
-  await withRuntimeNamespace("", async () => withTemporaryRoot(async (targetRoot) => {
+  await withRuntimeNamespace("", async () => withProviderHomesRoot("", async () => withTemporaryRoot(async (targetRoot) => {
+    const projectsRoot = path.dirname(targetRoot);
+    const providerHomesRoot = path.join(projectsRoot, VIBE64_SYSTEM_DIR, "provider-homes");
+    const parentSystemRoot = path.join(projectsRoot, VIBE64_SYSTEM_DIR);
     const sessionId = "recursive_studio_launch";
     const sessionRoot = path.join(targetRoot, ".vibe64-local", "sessions", "active", sessionId);
+    const recursiveSystemRoot = path.join(sessionRoot, "runtime", "recursive-system-root");
     await writeProjectFile(targetRoot, "package.json", JSON.stringify({
       scripts: {
         dev: "vite",
@@ -287,7 +317,8 @@ test("jskit self-target config enables host Docker for recursive Studio launch",
           values: {
             [JSKIT_ALLOW_SELF_TARGET_CONFIG]: true
           }
-        }
+        },
+        projectsRoot
       },
       launchTargetId: "dev",
       session: {
@@ -310,17 +341,30 @@ test("jskit self-target config enables host Docker for recursive Studio launch",
       id: "unit-terminal"
     });
     assert.ok(args.includes("DOCKER_HOST=unix:///var/run/docker.sock"));
-    assert.ok(args.includes("VIBE64_RUNTIME_NAMESPACE=self"));
+    assertDockerEnv(args, VIBE64_RUNTIME_NAMESPACE_ENV, "self");
+    assertDockerEnv(args, VIBE64_PROJECTS_ROOT_ENV, projectsRoot);
+    assertDockerEnv(args, VIBE64_PROVIDER_HOMES_ROOT_ENV, providerHomesRoot);
+    assertDockerEnv(args, VIBE64_SYSTEM_ROOT_ENV, recursiveSystemRoot);
+    assertDockerEnv(args, VIBE64_RECURSIVE_HACK_SYSTEM_ROOT_ENV, "1");
     assert.ok(args.includes("/var/run/docker.sock:/var/run/docker.sock"));
+    assertDockerVolumeMount(args, projectsRoot, projectsRoot);
+    assertDockerVolumeMount(args, providerHomesRoot, providerHomesRoot);
+    assertDockerVolumeMount(args, recursiveSystemRoot, recursiveSystemRoot);
+    assert.notEqual(recursiveSystemRoot, parentSystemRoot);
+    assert.equal(spec.metadata.vibe64RecursiveHack, "vibe64 recursive hack: shared projects and provider homes");
+    assert.equal(spec.metadata.vibe64RecursiveHackProjectsRoot, projectsRoot);
+    assert.equal(spec.metadata.vibe64RecursiveHackProviderHomesRoot, providerHomesRoot);
+    assert.equal(spec.metadata.vibe64RecursiveHackSystemRoot, recursiveSystemRoot);
     const launchHome = path.join(sessionRoot, "runtime", "launch-home", "unit-terminal");
     assertDockerVolumeMount(args, launchHome, launchHome);
     assert.ok(args.at(-1).includes(`HOME=${launchHome}`));
     assert.doesNotMatch(args.at(-1), /HOME=\/tmp\/studio-home/u);
-  }));
+  })));
 });
 
 test("jskit self-target namespace extends the current namespace for deeper recursive Studio launch", async () => {
-  await withRuntimeNamespace("self", async () => withTemporaryRoot(async (targetRoot) => {
+  await withRuntimeNamespace("self", async () => withProviderHomesRoot("", async () => withTemporaryRoot(async (targetRoot) => {
+    const projectsRoot = path.dirname(targetRoot);
     await writeProjectFile(targetRoot, "package.json", JSON.stringify({
       scripts: {
         dev: "vite",
@@ -334,7 +378,8 @@ test("jskit self-target namespace extends the current namespace for deeper recur
           values: {
             [JSKIT_ALLOW_SELF_TARGET_CONFIG]: true
           }
-        }
+        },
+        projectsRoot
       },
       launchTargetId: "dev",
       session: {
@@ -353,8 +398,8 @@ test("jskit self-target namespace extends the current namespace for deeper recur
     const args = spec.args({
       id: "unit-terminal"
     });
-    assert.ok(args.includes("VIBE64_RUNTIME_NAMESPACE=self-self"));
-  }));
+    assertDockerEnv(args, VIBE64_RUNTIME_NAMESPACE_ENV, "self-self");
+  })));
 });
 
 test("jskit launch targets expose app and built app actions", async () => {

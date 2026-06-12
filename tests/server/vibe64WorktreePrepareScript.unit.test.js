@@ -41,7 +41,19 @@ function runCommand(command, args, {
   cwd,
   env = {}
 } = {}) {
-  const result = spawnSync(command, args, {
+  const result = runCommandResult(command, args, {
+    cwd,
+    env
+  });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  return result.stdout.trim();
+}
+
+function runCommandResult(command, args, {
+  cwd,
+  env = {}
+} = {}) {
+  return spawnSync(command, args, {
     cwd,
     encoding: "utf8",
     env: {
@@ -49,8 +61,6 @@ function runCommand(command, args, {
       ...env
     }
   });
-  assert.equal(result.status, 0, result.stderr || result.stdout);
-  return result.stdout.trim();
 }
 
 function runGit(cwd, args) {
@@ -208,6 +218,34 @@ test("create worktree creates an initial commit for unborn seeded repositories",
     });
     assert.equal(factMetadata.metadata.base_branch, "main");
     assert.equal(factMetadata.metadata.base_commit, baseCommit);
+  });
+});
+
+test("create worktree rejects ordinary directories nested under the target repository", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createGitTarget(targetRoot);
+    const sessionRoot = path.join(targetRoot, ".vibe64-local", "sessions", "active", "ordinary-directory");
+    const worktreePath = path.join(sessionRoot, "worktree");
+    await writeProjectFile(worktreePath, "src/typed-router.d.ts", "declare module 'typed-router';\n");
+
+    const session = {
+      metadata: {},
+      sessionId: "ordinary-directory",
+      sessionRoot,
+      targetRoot
+    };
+    const spec = await createCppTargetAdapter().createCommandTerminalSpec("create_worktree", {
+      session,
+      targetRoot
+    });
+    assert.equal(spec.ok, true);
+
+    const result = runCommandResult(spec.command, spec.args, {
+      cwd: spec.cwd
+    });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /Worktree path exists but is not a Git worktree/u);
+    assert.doesNotMatch(runGit(targetRoot, ["worktree", "list", "--porcelain"]), new RegExp(worktreePath, "u"));
   });
 });
 

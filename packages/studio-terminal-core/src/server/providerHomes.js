@@ -1,7 +1,8 @@
 import path from "node:path";
 
 import {
-  resolveVibe64SystemRoot
+  VIBE64_PROVIDER_HOMES_ROOT_ENV,
+  resolveVibe64ProviderHomesRoot
 } from "@local/vibe64-core/server/studioRoots";
 
 const APP_PROVIDER_SCOPE = "app";
@@ -14,15 +15,13 @@ function resolveProviderHomesRoot({
   runtimeProfile = null,
   systemRoot = ""
 } = {}) {
-  if (String(explicitRoot || "").trim()) {
-    return path.resolve(String(explicitRoot || ""));
-  }
-  return path.join(resolveVibe64SystemRoot({
+  return resolveVibe64ProviderHomesRoot({
     env,
-    explicitRoot: systemRoot,
+    explicitRoot,
     projectsRoot,
-    runtimeProfile
-  }), "provider-homes");
+    runtimeProfile,
+    systemRoot
+  });
 }
 
 function canonicalVibe64UserEmail(user = {}) {
@@ -84,6 +83,7 @@ function githubProviderContext(input = {}, {
 export {
   APP_PROVIDER_SCOPE,
   USER_PROVIDER_SCOPE,
+  VIBE64_PROVIDER_HOMES_ROOT_ENV,
   canonicalVibe64UserEmail,
   githubProviderContext,
   githubProviderHome,

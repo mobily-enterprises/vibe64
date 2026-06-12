@@ -153,6 +153,50 @@ async function readWorktreeGitFact(worktreePath, args = [], fallback = "") {
   return result.ok ? normalizeText(result.stdout || result.output) : fallback;
 }
 
+function sameResolvedPath(left = "", right = "") {
+  return Boolean(left && right) && path.resolve(left) === path.resolve(right);
+}
+
+async function isExactGitWorktree(worktreePath = "") {
+  if (!await pathExists(worktreePath)) {
+    return false;
+  }
+  const result = await runGit(worktreePath, ["rev-parse", "--show-toplevel"], {
+    timeout: 15_000
+  });
+  return result.ok && sameResolvedPath(normalizeText(result.stdout || result.output), worktreePath);
+}
+
+function sessionOwnsWorktreePath(session = {}, worktreePath = "") {
+  return sameResolvedPath(sessionWorktreePath(session), worktreePath);
+}
+
+async function removeSessionOwnedWorktreeDirectory({
+  session = {},
+  worktreePath = ""
+} = {}) {
+  if (!await pathExists(worktreePath)) {
+    return {
+      ok: true,
+      removed: false
+    };
+  }
+  if (!sessionOwnsWorktreePath(session, worktreePath)) {
+    throw vibe64Error(
+      `Refusing to remove non-worktree path outside the session-owned worktree location: ${worktreePath}`,
+      "vibe64_worktree_remove_path_not_session_owned"
+    );
+  }
+  await rm(worktreePath, {
+    force: true,
+    recursive: true
+  });
+  return {
+    ok: true,
+    removed: true
+  };
+}
+
 async function writeDirtyRecoveryArtifacts({
   artifactsRoot = "",
   disposablePaths = [],
@@ -283,6 +327,12 @@ async function removeGitWorktree({
       removed: false
     };
   }
+  if (!await isExactGitWorktree(worktreePath)) {
+    throw vibe64Error(
+      `Cannot remove session worktree because the path is not the Git worktree root: ${worktreePath}`,
+      "vibe64_worktree_remove_not_git_root"
+    );
+  }
   const removeResult = await runGit(targetRoot, ["worktree", "remove", "--force", worktreePath], {
     timeout: SNAPSHOT_TIMEOUT_MS
   });
@@ -318,13 +368,22 @@ async function archiveSessionWorktree({
   }
 
   const worktreeExists = await pathExists(worktreePath);
+  const worktreeIsGitWorktree = worktreeExists
+    ? await isExactGitWorktree(worktreePath)
+    : false;
+  if (worktreeExists && !worktreeIsGitWorktree && !sessionOwnsWorktreePath(session, worktreePath)) {
+    throw vibe64Error(
+      `Cannot archive session worktree because the path exists but is not the session-owned Git worktree: ${worktreePath}`,
+      "vibe64_worktree_archive_path_not_session_owned"
+    );
+  }
   const targetRoot = normalizeText(session.targetRoot);
   const sessionId = normalizeText(session.sessionId);
   const sessionName = recoverySessionName(session);
-  const branch = worktreeExists
+  const branch = worktreeIsGitWorktree
     ? await readWorktreeGitFact(worktreePath, ["branch", "--show-current"], metadataValue(session, "branch"))
-    : metadataValue(session, "worktree_recovery_branch") || metadataValue(session, "branch");
-  const head = worktreeExists
+    : metadataValue(session, "branch") || metadataValue(session, "worktree_recovery_branch");
+  const head = worktreeIsGitWorktree
     ? await readWorktreeGitFact(worktreePath, ["rev-parse", "--verify", "HEAD"], metadataValue(session, "worktree_recovery_head"))
     : metadataValue(session, "worktree_recovery_head");
   const disposablePaths = await adapterDisposableWorktreePaths(adapter, {
@@ -333,7 +392,7 @@ async function archiveSessionWorktree({
     targetRoot,
     worktreePath
   });
-  const dirtyArtifacts = worktreeExists
+  const dirtyArtifacts = worktreeIsGitWorktree
     ? await writeDirtyRecoveryArtifacts({
       artifactsRoot: session.artifactsRoot,
       disposablePaths,
@@ -365,10 +424,15 @@ async function archiveSessionWorktree({
     worktree_recovery_worktree_path: worktreePath
   });
 
-  const removal = await removeGitWorktree({
-    targetRoot,
-    worktreePath
-  });
+  const removal = worktreeIsGitWorktree
+    ? await removeGitWorktree({
+      targetRoot,
+      worktreePath
+    })
+    : await removeSessionOwnedWorktreeDirectory({
+      session,
+      worktreePath
+    });
   await writeMetadataValues(store, sessionId, {
     worktree_removed: "yes",
     worktree_removed_at: new Date().toISOString(),
@@ -377,7 +441,7 @@ async function archiveSessionWorktree({
   return {
     ...removal,
     dirty: dirtyArtifacts.dirty,
-    recoverable: Boolean(branch || head),
+    recoverable: worktreeIsGitWorktree && Boolean(branch || head),
     worktreePath
   };
 }

@@ -5,6 +5,8 @@ import os from "node:os";
 const VIBE64_APP_ROOT_ENV = "VIBE64_APP_ROOT";
 const VIBE64_TARGET_ROOT_ENV = "VIBE64_TARGET_ROOT";
 const VIBE64_PROJECTS_ROOT_ENV = "VIBE64_PROJECTS_ROOT";
+const VIBE64_PROVIDER_HOMES_ROOT_ENV = "VIBE64_PROVIDER_HOMES_ROOT";
+const VIBE64_RECURSIVE_HACK_SYSTEM_ROOT_ENV = "VIBE64_RECURSIVE_HACK_SYSTEM_ROOT";
 const VIBE64_SYSTEM_ROOT_ENV = "VIBE64_SYSTEM_ROOT";
 const VIBE64_SYSTEM_DIR = ".vibe64-demon";
 const VIBE64_PROJECT_SHARED_DIR = ".vibe64";
@@ -88,6 +90,27 @@ function resolveVibe64SystemRoot({
   return normalizeRoot(path.join(projectsRoot || path.join(home || process.cwd(), "vibe64"), VIBE64_SYSTEM_DIR));
 }
 
+function resolveVibe64ProviderHomesRoot({
+  env = process.env,
+  explicitRoot = "",
+  home = os.homedir(),
+  projectsRoot = "",
+  runtimeProfile = null,
+  systemRoot = ""
+} = {}) {
+  const explicitProviderHomesRoot = explicitRoot || env[VIBE64_PROVIDER_HOMES_ROOT_ENV];
+  if (String(explicitProviderHomesRoot || "").trim()) {
+    return normalizeRoot(explicitProviderHomesRoot);
+  }
+  return path.join(resolveVibe64SystemRoot({
+    env,
+    explicitRoot: systemRoot,
+    home,
+    projectsRoot,
+    runtimeProfile
+  }), "provider-homes");
+}
+
 function resolveVibe64ProjectSharedRoot(targetRoot = process.cwd()) {
   return path.join(normalizeRoot(targetRoot, process.cwd()), VIBE64_PROJECT_SHARED_DIR);
 }
@@ -130,10 +153,13 @@ export {
   VIBE64_PROJECT_LOCAL_DIR,
   VIBE64_PROJECT_SHARED_DIR,
   VIBE64_PROJECTS_ROOT_ENV,
+  VIBE64_PROVIDER_HOMES_ROOT_ENV,
+  VIBE64_RECURSIVE_HACK_SYSTEM_ROOT_ENV,
   VIBE64_SYSTEM_DIR,
   VIBE64_SYSTEM_ROOT_ENV,
   VIBE64_TARGET_ROOT_ENV,
   resolveExplicitStudioTargetRoot,
+  resolveVibe64ProviderHomesRoot,
   resolveVibe64ProjectLocalRoot,
   resolveVibe64ProjectSharedRoot,
   resolveVibe64Roots,

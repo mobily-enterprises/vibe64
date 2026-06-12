@@ -116,6 +116,7 @@ async function createLaunchContext(projectService, sessionId) {
   const session = await runtime.getSession(sessionId);
   return {
     config: runtime.projectConfig,
+    projectsRoot: projectService?.selectedProject?.projectsRoot || "",
     runtime,
     session,
     store: runtime.store,

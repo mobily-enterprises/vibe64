@@ -30,6 +30,9 @@ import {
 import {
   VIBE64_RUNTIME_NAMESPACE_ENV
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
+import {
+  VIBE64_PROVIDER_HOMES_ROOT_ENV
+} from "@local/vibe64-core/server/studioRoots";
 
 async function withTemporaryDirectory(callback) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "vibe64-codex-provider-"));
@@ -89,6 +92,23 @@ async function writeCodexAuthMarker(systemRoot, {
   updatedAt = "2026-06-04T00:00:00.000Z"
 } = {}) {
   const markerPath = path.join(systemRoot, "provider-homes", "codex", "status.json");
+  await mkdir(path.dirname(markerPath), {
+    recursive: true
+  });
+  await writeFile(markerPath, `${JSON.stringify({
+    connected,
+    updatedAt,
+    version: 1
+  }, null, 2)}\n`, {
+    mode: 0o600
+  });
+}
+
+async function writeProviderCodexAuthMarker(providerHomesRoot, {
+  connected = true,
+  updatedAt = "2026-06-04T00:00:00.000Z"
+} = {}) {
+  const markerPath = path.join(providerHomesRoot, "codex", "status.json");
   await mkdir(path.dirname(markerPath), {
     recursive: true
   });
@@ -410,6 +430,31 @@ test("codex provider replaces a live app-server when Codex auth state changes", 
 
     const stored = JSON.parse(await readFile(path.join(runtimeDir, "runtime.json"), "utf8"));
     assert.equal(stored.authStateSignature, newAuthStateSignature);
+  });
+});
+
+test("codex auth state signature can use explicit provider homes root", async () => {
+  await withTemporaryDirectory(async (runtimeDir) => {
+    const providerHomesRoot = path.join(runtimeDir, "provider-homes");
+    const systemRoot = path.join(runtimeDir, "system");
+    const env = {
+      [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
+    };
+    const missingSignature = await codexAuthStateSignature({
+      env,
+      systemRoot
+    });
+
+    await writeProviderCodexAuthMarker(providerHomesRoot, {
+      updatedAt: "2026-06-04T00:01:00.000Z"
+    });
+
+    const presentSignature = await codexAuthStateSignature({
+      env,
+      systemRoot
+    });
+
+    assert.notEqual(presentSignature, missingSignature);
   });
 });
 

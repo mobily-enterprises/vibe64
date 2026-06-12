@@ -404,9 +404,12 @@ function accountConnected({
 }
 
 async function readCodexLocalStatus({
+  providerHomesRoot = "",
   systemRoot = ""
 } = {}) {
-  const marker = await readOptionalJson(codexAuthMarkerPath(systemRoot));
+  const marker = await readOptionalJson(codexAuthMarkerPath(systemRoot, {
+    providerHomesRoot
+  }));
   if (marker?.connected === true) {
     return accountConnected({
       id: "codex",
@@ -763,7 +766,9 @@ function createService({
   });
 
   async function rememberCodexStatus(account = {}) {
-    const markerPath = codexAuthMarkerPath(resolvedSystemRoot);
+    const markerPath = codexAuthMarkerPath(resolvedSystemRoot, {
+      providerHomesRoot: resolvedProviderHomesRoot
+    });
     if (account?.connected === true) {
       authDebug("server.auth.codex_marker.write", {
         account: accountDebugSummary(account),
@@ -908,6 +913,7 @@ function createService({
         ])
       : await Promise.all([
           readCodexLocalStatus({
+            providerHomesRoot: resolvedProviderHomesRoot,
             systemRoot: resolvedSystemRoot
           }),
           readGithubLocalStatus({

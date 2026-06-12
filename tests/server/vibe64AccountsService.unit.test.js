@@ -202,9 +202,14 @@ async function writeTextFile(filePath = "", text = "") {
   await writeFile(filePath, text, "utf8");
 }
 
-async function writeCodexStatusMarker(systemRoot = "") {
+async function writeCodexStatusMarker(systemRoot = "", {
+  providerHomesRoot = ""
+} = {}) {
+  const markerPath = providerHomesRoot
+    ? path.join(providerHomesRoot, "codex", "status.json")
+    : path.join(systemRoot, "provider-homes", "codex", "status.json");
   await writeTextFile(
-    path.join(systemRoot, "provider-homes", "codex", "status.json"),
+    markerPath,
     `${JSON.stringify({
       connected: true,
       updatedAt: "2026-06-09T00:00:00.000Z",
@@ -283,6 +288,30 @@ test("Accounts status reads local provider state by default", async () => {
       email: "12345+merc@users.noreply.github.com",
       name: "Merc Mobily"
     });
+  });
+});
+
+test("Accounts status reads local Codex marker from explicit provider homes root", async () => {
+  await withTemporaryRoot(async (root) => {
+    const systemRoot = path.join(root, "data");
+    const providerHomesRoot = path.join(root, "provider-homes");
+    const calls = [];
+    await writeCodexStatusMarker(systemRoot, {
+      providerHomesRoot
+    });
+    await writeGithubProviderHome(providerHomesRoot, OWNER_USER);
+
+    const status = await createService({
+      systemRoot,
+      providerHomesRoot,
+      runToolchain: connectedToolchain(calls),
+      targetRoot: path.join(root, "target")
+    }).getStatus(accountInput(OWNER_USER));
+
+    assert.equal(status.ok, true);
+    assert.equal(status.ready, true);
+    assert.equal(calls.length, 0);
+    assert.equal(status.accounts.find((account) => account.id === "codex")?.connected, true);
   });
 });
 
@@ -766,6 +795,7 @@ test("Codex API key auth command reads the key from stdin via inherited Docker e
 test("Codex auth terminal finalization writes the shared marker and publishes an account change", async () => {
   await withTemporaryRoot(async (root) => {
     const systemRoot = path.join(root, "data");
+    const providerHomesRoot = path.join(root, "provider-homes");
     const published = [];
     let resolvePublished;
     const publishedEvent = new Promise((resolve) => {
@@ -773,6 +803,7 @@ test("Codex auth terminal finalization writes the shared marker and publishes an
     });
     const calls = [];
     const service = createService({
+      providerHomesRoot,
       systemRoot,
       publishAccountChanged: async (accountId, event = {}) => {
         const record = {
@@ -818,7 +849,7 @@ test("Codex auth terminal finalization writes the shared marker and publishes an
     ]);
 
     const marker = JSON.parse(await readFile(
-      path.join(systemRoot, "provider-homes", "codex", "status.json"),
+      path.join(providerHomesRoot, "codex", "status.json"),
       "utf8"
     ));
     assert.equal(marker.connected, true);

@@ -12,6 +12,9 @@ import {
   VIBE64_RUNTIME_NAMESPACE_ENV
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
+  VIBE64_PROJECTS_ROOT_ENV,
+  VIBE64_PROVIDER_HOMES_ROOT_ENV,
+  VIBE64_RECURSIVE_HACK_SYSTEM_ROOT_ENV,
   VIBE64_SYSTEM_ROOT_ENV
 } from "@local/vibe64-core/server/studioRoots";
 import { createServer, resolveListenTarget, startServer } from "../../server.js";
@@ -106,6 +109,9 @@ test("runtime env files load broadly while runtime config stays explicit", async
   const keys = [
     "HOST",
     "PORT",
+    VIBE64_PROJECTS_ROOT_ENV,
+    VIBE64_PROVIDER_HOMES_ROOT_ENV,
+    VIBE64_RECURSIVE_HACK_SYSTEM_ROOT_ENV,
     VIBE64_SYSTEM_ROOT_ENV,
     "VIBE64_LISTEN_SOCKET",
     "VIBE64_SUPABASE_PUBLISHABLE_KEY",
@@ -126,12 +132,14 @@ test("runtime env files load broadly while runtime config stays explicit", async
       "VIBE64_SUPABASE_URL=https://repo.example.supabase.co",
       "HOST=0.0.0.0",
       "PORT=3939",
+      `${VIBE64_PROJECTS_ROOT_ENV}=/tmp/vibe64-file-projects-root`,
       "VIBE64_LISTEN_SOCKET=/tmp/vibe64-file.sock"
     ].join("\n"), "utf8");
     await writeFile(hostEnvFile, [
       "VIBE64_SUPABASE_PUBLISHABLE_KEY=host-publishable",
       "VIBE64_SUPABASE_SECRET_KEY=host-secret",
       "VIBE64_SUPABASE_URL=https://host.example.supabase.co",
+      `${VIBE64_PROVIDER_HOMES_ROOT_ENV}=/tmp/vibe64-file-provider-homes-root`,
       `${VIBE64_SYSTEM_ROOT_ENV}=/tmp/vibe64-file-system-root`
     ].join("\n"), "utf8");
 
@@ -145,6 +153,8 @@ test("runtime env files load broadly while runtime config stays explicit", async
     assert.equal(process.env.VIBE64_SUPABASE_URL, "https://repo.example.supabase.co");
     assert.equal(process.env.HOST, "0.0.0.0");
     assert.equal(process.env.PORT, "3939");
+    assert.equal(process.env[VIBE64_PROJECTS_ROOT_ENV], "/tmp/vibe64-file-projects-root");
+    assert.equal(process.env[VIBE64_PROVIDER_HOMES_ROOT_ENV], "/tmp/vibe64-file-provider-homes-root");
     assert.equal(process.env[VIBE64_SYSTEM_ROOT_ENV], "/tmp/vibe64-file-system-root");
     assert.equal(process.env.VIBE64_LISTEN_SOCKET, "/tmp/vibe64-file.sock");
 
@@ -152,8 +162,14 @@ test("runtime env files load broadly while runtime config stays explicit", async
     assert.equal(runtimeEnv.HOST, "0.0.0.0");
     assert.equal(runtimeEnv.PORT, 3939);
     assert.equal(runtimeEnv.VIBE64_SUPABASE_SECRET_KEY, "host-secret");
+    assert.equal(runtimeEnv[VIBE64_PROJECTS_ROOT_ENV], "/tmp/vibe64-file-projects-root");
+    assert.equal(runtimeEnv[VIBE64_PROVIDER_HOMES_ROOT_ENV], "/tmp/vibe64-file-provider-homes-root");
     assert.equal(runtimeEnv[VIBE64_SYSTEM_ROOT_ENV], undefined);
     assert.equal(runtimeEnv.VIBE64_LISTEN_SOCKET, undefined);
+
+    process.env[VIBE64_RECURSIVE_HACK_SYSTEM_ROOT_ENV] = "1";
+    const recursiveRuntimeEnv = resolveRuntimeEnv();
+    assert.equal(recursiveRuntimeEnv[VIBE64_SYSTEM_ROOT_ENV], "/tmp/vibe64-file-system-root");
   } finally {
     for (const [key, value] of previous.entries()) {
       if (value == null) {

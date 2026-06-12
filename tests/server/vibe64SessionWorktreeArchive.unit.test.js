@@ -119,3 +119,41 @@ test("archives, removes, and reinstates dirty worktrees with adapter-owned dispo
     assert.equal(await pathExists(path.join(worktreePath, "node_modules/huge.js")), false);
   });
 });
+
+test("archive removes a session-owned ordinary worktree directory without reading the parent repo", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const baseCommit = await createGitProject(targetRoot);
+    const runtime = new Vibe64SessionRuntime({
+      adapter: new ArchiveTestAdapter(),
+      targetRoot
+    });
+    const session = await runtime.createSession({
+      metadata: {
+        base_branch: "main",
+        base_commit: baseCommit,
+        branch: "vibe64/ordinary_directory"
+      },
+      sessionId: "ordinary_directory"
+    });
+    const worktreePath = path.join(session.sessionRoot, "worktree");
+    await writeProjectFile(worktreePath, "src/typed-router.d.ts", "declare module 'typed-router';\n");
+    await runtime.store.writeMetadataValue("ordinary_directory", "worktree_path", worktreePath);
+    await runtime.store.writeCompletedStep("ordinary_directory", "worktree_created", {
+      message: "Worktree created."
+    });
+
+    const archiveSession = await runtime.getSession("ordinary_directory");
+    const archiveResult = await runtime.archiveSessionWorktree(archiveSession, {
+      reason: "abandoned"
+    });
+    assert.equal(archiveResult.removed, true);
+    assert.equal(archiveResult.recoverable, false);
+    assert.equal(await pathExists(worktreePath), false);
+
+    const archivedMetadata = await runtime.store.readMetadata("ordinary_directory");
+    assert.equal(archivedMetadata.worktree_removed, "yes");
+    assert.equal(archivedMetadata.worktree_recovery_branch, "vibe64/ordinary_directory");
+    assert.equal(archivedMetadata.worktree_recovery_head, "");
+    assert.equal(archivedMetadata.worktree_recovery_dirty, "no");
+  });
+});

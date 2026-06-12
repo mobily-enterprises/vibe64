@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import path from "node:path";
 import { promisify } from "node:util";
 
 import {
@@ -78,7 +79,8 @@ async function isGitWorktree(worktreePath) {
   if (!await pathExists(worktreePath)) {
     return false;
   }
-  return gitCommandSucceeds(worktreePath, ["rev-parse", "--is-inside-work-tree"]);
+  const result = await gitResult(worktreePath, ["rev-parse", "--show-toplevel"]);
+  return result.ok && path.resolve(result.output) === path.resolve(worktreePath);
 }
 
 function completedMetadataSpec({
