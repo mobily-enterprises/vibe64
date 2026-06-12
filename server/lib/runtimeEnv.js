@@ -7,7 +7,7 @@ import {
 import {
   VIBE64_PROJECTS_ROOT_ENV,
   VIBE64_PROVIDER_HOMES_ROOT_ENV,
-  VIBE64_RECURSIVE_HACK_SYSTEM_ROOT_ENV,
+  VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV,
   VIBE64_SYSTEM_ROOT_ENV
 } from "@local/vibe64-core/server/studioRoots";
 import { surfaceRuntime } from "./surfaceRuntime.js";
@@ -67,7 +67,7 @@ function resolveRuntimeEnv() {
     process.env.JSKIT_SERVER_SURFACE || process.env.SERVER_SURFACE
   );
   const rawPort = String(process.env.PORT || "").trim();
-  const recursiveSystemRoot = isTruthyEnvValue(process.env[VIBE64_RECURSIVE_HACK_SYSTEM_ROOT_ENV])
+  const selfTargetSystemRoot = isTruthyEnvValue(process.env[VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV])
     ? String(process.env[VIBE64_SYSTEM_ROOT_ENV] || "").trim()
     : "";
   return {
@@ -79,7 +79,7 @@ function resolveRuntimeEnv() {
     }),
     [VIBE64_PROJECTS_ROOT_ENV]: String(process.env[VIBE64_PROJECTS_ROOT_ENV] || "").trim(),
     [VIBE64_PROVIDER_HOMES_ROOT_ENV]: String(process.env[VIBE64_PROVIDER_HOMES_ROOT_ENV] || "").trim(),
-    [VIBE64_SYSTEM_ROOT_ENV]: recursiveSystemRoot || undefined,
+    [VIBE64_SYSTEM_ROOT_ENV]: selfTargetSystemRoot || undefined,
     SERVER_SURFACE: serverSurface,
     PORT: rawPort ? toPort(rawPort, 3000) : null,
     PORT_CONFIGURED: Boolean(rawPort),

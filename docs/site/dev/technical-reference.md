@@ -117,7 +117,7 @@ Adapters decide the scope of each config field.
 Examples:
 
 - Pull request merge method is shared project config.
-- Local recursive Vibe64 development toggles are local config.
+- Local launch command overrides are local config.
 - Absolute local paths are local config.
 
 ## Root resolution
@@ -162,36 +162,42 @@ JSKIT MariaDB volume     vibe64_jskit_mariadb_data
 The default runtime namespace is empty. That is deliberate: existing Docker
 names stay unchanged unless a runtime explicitly opts into namespacing.
 
-When `VIBE64_RUNTIME_NAMESPACE=self` is set, the same project uses names such as:
+When `VIBE64_RUNTIME_NAMESPACE=tonymobily` is set, the same project uses names
+such as:
 
 ```text
-runtime network          vibe64-self-beepollen-network
-runtime container        vibe64-self-beepollen-<adapter>-<container>
-runtime volume           vibe64_self_beepollen_<adapter>_<container>_<volume>
-JSKIT MariaDB container  vibe64-self-jskit-mariadb
-JSKIT MariaDB volume     vibe64_self_jskit_mariadb_data
+runtime network          vibe64-tonymobily-beepollen-network
+runtime container        vibe64-tonymobily-beepollen-<adapter>-<container>
+runtime volume           vibe64_tonymobily_beepollen_<adapter>_<container>_<volume>
+JSKIT MariaDB container  vibe64-tonymobily-jskit-mariadb
+JSKIT MariaDB volume     vibe64_tonymobily_jskit_mariadb_data
 ```
 
-The namespace is sanitized to lowercase Docker-safe name parts. It exists for
-the special recursive Vibe64 case where Vibe64 opens Vibe64, and that nested
-Vibe64 may open Vibe64 again. For normal projects the namespace should remain
-empty.
+The namespace is sanitized to lowercase Docker-safe name parts. It is an
+explicit deployment/runtime partition; self-targeting Vibe64 does not create a
+new project runtime namespace.
 
-## Recursive Vibe64 self-targeting
+## Vibe64 self-targeting
 
-Recursive self-targeting is intentionally narrow. It exists only so the Vibe64
-repository can be opened by Vibe64 itself without Docker name collisions.
+Self-targeting is intentionally narrow. It exists only so the Vibe64 repository
+can be opened by Vibe64 itself while still seeing the same managed projects,
+provider homes, and project runtime services as the parent Studio.
 
-The JSKIT adapter exposes the local-only `jskit_allow_self_target` setting only
-when the target package is named `vibe64`. When enabled, JSKIT launch targets
-pass a runtime namespace into the nested Vibe64 process:
+The JSKIT adapter detects the target package name `vibe64`. When the target is
+Vibe64, JSKIT launch targets preserve the current `VIBE64_RUNTIME_NAMESPACE`
+and pass shared project roots into the nested Vibe64 process:
 
 ```text
-first nested run   VIBE64_RUNTIME_NAMESPACE=self
-next nested run    VIBE64_RUNTIME_NAMESPACE=self-self
+outer Studio runtime namespace  ""
+inner Studio runtime namespace  ""
+
+outer Studio runtime namespace  tonymobily
+inner Studio runtime namespace  tonymobily
 ```
 
-That preserves the normal default Docker names for every other project.
+The inner Studio still receives its own `VIBE64_SYSTEM_ROOT`; auth cookies,
+session stores, and terminal runtime state remain isolated from the parent
+Studio.
 
 ## Docker labels
 
@@ -201,4 +207,3 @@ runtime id, and daemon process where applicable.
 
 Cleanup should rely on those labels and deterministic names, not on ad hoc
 searches for arbitrary containers.
-

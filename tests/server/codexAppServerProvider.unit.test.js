@@ -297,7 +297,7 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
 
 test("codex provider namespaces app-server Docker container only when runtime namespace is set", async () => {
   await withTemporaryDirectory(async (runtimeDir) => {
-    await withRuntimeNamespace("self", async () => {
+    await withRuntimeNamespace("tenant-a", async () => {
       const targetRoot = path.join(runtimeDir, "target");
       const workdir = path.join(targetRoot, ".vibe64", "sessions", "active", "session-1", "worktree");
       await mkdir(workdir, {
@@ -327,8 +327,8 @@ test("codex provider namespaces app-server Docker container only when runtime na
 
       const removeCall = spawnCalls[0];
       const runCall = spawnCalls[1];
-      assert.equal(removeCall.args[2], "vibe64-self-target-codex-app-server");
-      assert.equal(runCall.args[runCall.args.indexOf("--name") + 1], "vibe64-self-target-codex-app-server");
+      assert.equal(removeCall.args[2], "vibe64-tenant-a-target-codex-app-server");
+      assert.equal(runCall.args[runCall.args.indexOf("--name") + 1], "vibe64-tenant-a-target-codex-app-server");
     });
   });
 });

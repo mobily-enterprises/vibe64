@@ -117,7 +117,7 @@ test("Vibe64 auth binds the first Supabase identity as owner", async () => {
   });
 });
 
-test("Vibe64 auth scopes browser sessions only for namespaced recursive runtimes", async () => {
+test("Vibe64 auth scopes browser sessions only for namespaced runtimes", async () => {
   await withAuth(async (mainAuth) => {
     await withAuth(async (nestedAuth) => {
       assert.equal(mainAuth.cookieName, "vibe64_session");
@@ -183,7 +183,7 @@ test("Vibe64 auth scopes browser sessions only for namespaced recursive runtimes
       assert.equal(nestedRequestState.user.email, "owner@example.com");
     }, {
       env: {
-        [VIBE64_RUNTIME_NAMESPACE_ENV]: "self"
+        [VIBE64_RUNTIME_NAMESPACE_ENV]: "tenant-a"
       }
     });
   });

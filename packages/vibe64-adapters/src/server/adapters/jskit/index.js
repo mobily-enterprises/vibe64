@@ -1,12 +1,10 @@
 import {
-  JSKIT_ALLOW_SELF_TARGET_CONFIG,
   JSKIT_CONFIG_FIELDS,
   JSKIT_DEFAULT_CONFIG,
   JSKIT_MARKERS,
   JSKIT_PROMPT_PACK_ROOT,
   JSKIT_PREPARE_WORKTREE_SCRIPT_PATH,
-  JskitTargetAdapter,
-  jskitConfigAllowsStudioSelfTarget
+  JskitTargetAdapter
 } from "./adapter.js";
 import {
   deepFreeze
@@ -48,13 +46,11 @@ export {
   createJskitVibe64CommandTerminalSpec,
   createJskitLaunchTargetTerminalSpec,
   listJskitLaunchTargets,
-  JSKIT_ALLOW_SELF_TARGET_CONFIG,
   JSKIT_CONFIG_FIELDS,
   JSKIT_DEFAULT_CONFIG,
   JSKIT_MARKERS,
   JSKIT_PROMPT_PACK_ROOT,
   JSKIT_PREPARE_WORKTREE_SCRIPT_PATH,
   JSKIT_VIBE64_COMMANDS,
-  JskitTargetAdapter,
-  jskitConfigAllowsStudioSelfTarget
+  JskitTargetAdapter
 };

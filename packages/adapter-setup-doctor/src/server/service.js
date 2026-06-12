@@ -182,9 +182,9 @@ async function checkTargetIdentity({
     return failCheck({
       id: "target-identity",
       label: "Target identity",
-      expected: "Target root is separate from Studio unless the selected adapter explicitly allows self-targeting.",
+      expected: "Target root is separate from Studio unless the selected adapter supports this self-target.",
       observed,
-      explanation: "Studio is targeting itself, but the selected adapter configuration has not enabled that mode."
+      explanation: "Studio is targeting itself, but the selected adapter does not support this target as a self-development project."
     });
   }
 

@@ -27,9 +27,6 @@ import {
   createService as createProjectService
 } from "../../packages/vibe64-project/src/server/service.js";
 import {
-  JSKIT_ALLOW_SELF_TARGET_CONFIG
-} from "@local/vibe64-adapters/server/adapters/jskit/index";
-import {
   gitSafeDirectoryArgs,
   gitToolchainMountArgs,
   linkedGitMetadataMountSource,
@@ -174,7 +171,7 @@ test("Adapter Setup blocks dependent checks when target directory is unavailable
   assert.equal(status.checks.find((check) => check.id === "github-issues-prs")?.observed, "Target directory is not ready.");
 });
 
-test("Adapter Setup allows JSKIT self-targeting only when adapter config opts in", async () => {
+test("Adapter Setup allows JSKIT self-targeting when the target package is Vibe64", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await writeFile(path.join(targetRoot, "package.json"), JSON.stringify({
       name: "vibe64"
@@ -186,30 +183,13 @@ test("Adapter Setup allows JSKIT self-targeting only when adapter config opts in
     await projectService.saveProjectType({
       projectType: "jskit"
     });
-    const blockedConfig = await projectService.saveProjectConfig({
+    const config = await projectService.saveProjectConfig({
       values: {
         github_pr_merge_method: "merge",
-        [JSKIT_ALLOW_SELF_TARGET_CONFIG]: false,
         jskit_database_runtime: "none"
       }
     });
-    assert.equal(blockedConfig.ok, true);
-
-    const blocked = await inspectAdapterSetup({
-      projectService,
-      studioRoot: targetRoot,
-      targetRoot
-    });
-    assert.equal(blocked.checks.find((check) => check.id === "target-identity")?.status, "fail");
-
-    const allowedConfig = await projectService.saveProjectConfig({
-      values: {
-        github_pr_merge_method: "merge",
-        [JSKIT_ALLOW_SELF_TARGET_CONFIG]: true,
-        jskit_database_runtime: "none"
-      }
-    });
-    assert.equal(allowedConfig.ok, true);
+    assert.equal(config.ok, true);
 
     const allowed = await inspectAdapterSetup({
       projectService,

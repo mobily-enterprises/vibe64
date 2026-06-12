@@ -8,7 +8,7 @@ import {
 import {
   VIBE64_PROJECTS_ROOT_ENV,
   VIBE64_PROVIDER_HOMES_ROOT_ENV,
-  VIBE64_RECURSIVE_HACK_SYSTEM_ROOT_ENV,
+  VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV,
   VIBE64_SYSTEM_ROOT_ENV
 } from "@local/vibe64-core/server/studioRoots";
 import {
@@ -34,9 +34,6 @@ import {
   resolveProviderHomesRoot
 } from "@local/studio-terminal-core/server/providerHomes";
 import {
-  JSKIT_ALLOW_SELF_TARGET_CONFIG
-} from "./adapter.js";
-import {
   commandWithStartupArgs,
   launchTargetWithStartupArgsOption,
   startupArgsFromLaunchInput
@@ -53,9 +50,9 @@ const DEFAULT_BUILT_LAUNCH_SERVER_COMMAND = "npm run server";
 const DEFAULT_DEV_BACKEND_COMMAND = "npm run server";
 const DEFAULT_DEV_FRONTEND_COMMAND = "npm run dev -- --host 0.0.0.0 --port \"$PORT\"";
 const DEFAULT_MIGRATION_COMMAND = "npm run db:migrate";
-const JSKIT_SELF_TARGET_RUNTIME_NAMESPACE = "self";
 const DEFAULT_DEV_BACKEND_PORT = 3000;
 const DEFAULT_LAUNCH_PORT = 4100;
+const JSKIT_SELF_TARGET_SOURCE = "target_package:vibe64";
 const BUILT_LAUNCH_COMMAND_CONFIG = ".jskit/config/testrun_command";
 const BUILT_LAUNCH_PORT_CONFIG = ".jskit/config/server_port_for_user_review";
 const DEV_SERVER_COMMAND_CONFIG = "config/dev_server_command";
@@ -207,21 +204,31 @@ async function resolveMigrationCommand(root) {
   return scripts[MIGRATION_SCRIPT_NAME] ? DEFAULT_MIGRATION_COMMAND : "";
 }
 
-function jskitSelfTargetRuntimeNamespace() {
-  // This exists only for recursive Vibe64 self-targeting: Vibe64 can open
-  // Vibe64, which can then open Vibe64 again without Docker name collisions.
-  return [
-    runtimeNamespace(),
-    JSKIT_SELF_TARGET_RUNTIME_NAMESPACE
-  ].filter(Boolean).join("-");
+async function readPackageJsonName(root = "") {
+  try {
+    const packageJson = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
+    return String(packageJson?.name || "").trim();
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return "";
+    }
+    throw new Error(`Cannot read package.json name: ${String(error?.message || error)}`);
+  }
 }
 
-function resolveHostDockerConfig(config = {}) {
-  const enabled = config?.values?.[JSKIT_ALLOW_SELF_TARGET_CONFIG] === true;
+async function isJskitSelfTargetRoot(root = "") {
+  return await readPackageJsonName(root) === "vibe64";
+}
+
+async function resolveHostDockerConfig({
+  targetRoot = "",
+  worktreePath = ""
+} = {}) {
+  const enabled = await isJskitSelfTargetRoot(targetRoot || worktreePath);
   return {
     enabled,
-    runtimeNamespace: enabled ? jskitSelfTargetRuntimeNamespace() : "",
-    source: enabled ? JSKIT_ALLOW_SELF_TARGET_CONFIG : ""
+    runtimeNamespace: enabled ? runtimeNamespace() : "",
+    source: enabled ? JSKIT_SELF_TARGET_SOURCE : ""
   };
 }
 
@@ -256,7 +263,7 @@ function dockerRootEnvArgs(envName = "", rootPath = "", {
     : [];
 }
 
-function jskitRecursiveHackSystemRoot({
+function jskitSelfTargetSystemRoot({
   session = {},
   worktreePath = ""
 } = {}) {
@@ -265,10 +272,10 @@ function jskitRecursiveHackSystemRoot({
     ? path.dirname(worktreePath)
     : "";
   const root = sessionRoot || derivedSessionRoot;
-  return root ? path.join(root, "runtime", "recursive-system-root") : "";
+  return root ? path.join(root, "runtime", "self-target-system-root") : "";
 }
 
-function jskitRecursiveHackRootConfig({
+function jskitSelfTargetRootConfig({
   enabled = false,
   projectsRoot = "",
   systemRoot = ""
@@ -308,7 +315,7 @@ function jskitRecursiveHackRootConfig({
       ...(resolvedSystemRoot
         ? [
             "-e",
-            `${VIBE64_RECURSIVE_HACK_SYSTEM_ROOT_ENV}=1`
+            `${VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV}=1`
           ]
         : [])
     ],
@@ -319,19 +326,19 @@ function jskitRecursiveHackRootConfig({
   };
 }
 
-function jskitRecursiveHackDockerArgs(config = {}) {
+function jskitSelfTargetDockerArgs(config = {}) {
   return Array.isArray(config?.dockerArgs) ? config.dockerArgs : [];
 }
 
-function jskitRecursiveHackMetadata(config = {}) {
+function jskitSelfTargetMetadata(config = {}) {
   if (config?.enabled !== true) {
     return {};
   }
   return {
-    vibe64RecursiveHack: "vibe64 recursive hack: shared projects and provider homes",
-    vibe64RecursiveHackProjectsRoot: config.projectsRoot,
-    vibe64RecursiveHackProviderHomesRoot: config.providerHomesRoot,
-    vibe64RecursiveHackSystemRoot: config.systemRoot
+    vibe64SelfTarget: "Vibe64 self-target: shared projects and provider homes with isolated Studio state",
+    vibe64SelfTargetProjectsRoot: config.projectsRoot,
+    vibe64SelfTargetProviderHomesRoot: config.providerHomesRoot,
+    vibe64SelfTargetSystemRoot: config.systemRoot
   };
 }
 
@@ -343,11 +350,14 @@ function normalizePort(value) {
 }
 
 async function resolveBuiltLaunchConfig(worktreePath, {
-  adapterConfig = {}
+  targetRoot = ""
 } = {}) {
   const [configuredBuiltCommand, hostDocker, migrationCommand, portValue] = await Promise.all([
     readOptionalConfigFile(worktreePath, BUILT_LAUNCH_COMMAND_CONFIG, ""),
-    resolveHostDockerConfig(adapterConfig),
+    resolveHostDockerConfig({
+      targetRoot,
+      worktreePath
+    }),
     resolveMigrationCommand(worktreePath),
     readOptionalConfigFile(worktreePath, BUILT_LAUNCH_PORT_CONFIG, String(DEFAULT_LAUNCH_PORT))
   ]);
@@ -383,12 +393,15 @@ async function resolveBuiltLaunchConfig(worktreePath, {
 }
 
 async function resolveDevLaunchConfig(worktreePath, {
-  adapterConfig = {}
+  targetRoot = ""
 } = {}) {
   const [devCommand, backendCommand, hostDocker, migrationCommand, portValue] = await Promise.all([
     readOptionalConfigFile(worktreePath, DEV_SERVER_COMMAND_CONFIG, ""),
     readOptionalConfigFile(worktreePath, "config/server_command", DEFAULT_DEV_BACKEND_COMMAND),
-    resolveHostDockerConfig(adapterConfig),
+    resolveHostDockerConfig({
+      targetRoot,
+      worktreePath
+    }),
     resolveMigrationCommand(worktreePath),
     readOptionalConfigFile(worktreePath, BUILT_LAUNCH_PORT_CONFIG, String(DEFAULT_LAUNCH_PORT))
   ]);
@@ -525,7 +538,7 @@ async function createJskitBuiltLaunchDescriptor({
   config,
   databaseHost = "",
   launchInput = {},
-  recursiveHack = null,
+  selfTarget = null,
   worktreePath = ""
 } = {}) {
   const startupArgs = startupArgsFromLaunchInput(launchInput);
@@ -577,7 +590,7 @@ async function createJskitBuiltLaunchDescriptor({
         ].filter(Boolean),
     extraDockerArgs: [
       ...runtimeNamespaceDockerArgs(config.runtimeNamespace),
-      ...jskitRecursiveHackDockerArgs(recursiveHack)
+      ...jskitSelfTargetDockerArgs(selfTarget)
     ],
     hostDocker: config.hostDocker,
     metadata: {
@@ -591,7 +604,7 @@ async function createJskitBuiltLaunchDescriptor({
       previewAuthProfileCommand: "enabled",
       serverCommand: config.serverCommand,
       testrunCommand: config.testrunCommand,
-      ...jskitRecursiveHackMetadata(recursiveHack)
+      ...jskitSelfTargetMetadata(selfTarget)
     },
     previewAuth: JSKIT_PREVIEW_AUTH_KIND,
     urlPath: await defaultAppPath(worktreePath)
@@ -602,7 +615,7 @@ async function createJskitDevLaunchDescriptor({
   config,
   databaseHost = "",
   launchInput = {},
-  recursiveHack = null,
+  selfTarget = null,
   worktreePath = ""
 } = {}) {
   const startupArgs = startupArgsFromLaunchInput(launchInput);
@@ -617,7 +630,7 @@ async function createJskitDevLaunchDescriptor({
     }),
     extraDockerArgs: [
       ...runtimeNamespaceDockerArgs(config.runtimeNamespace),
-      ...jskitRecursiveHackDockerArgs(recursiveHack)
+      ...jskitSelfTargetDockerArgs(selfTarget)
     ],
     hostDocker: config.hostDocker,
     metadata: {
@@ -632,7 +645,7 @@ async function createJskitDevLaunchDescriptor({
       mode: "dev",
       runtimeNamespace: config.runtimeNamespace,
       previewAuthProfileCommand: "enabled",
-      ...jskitRecursiveHackMetadata(recursiveHack)
+      ...jskitSelfTargetMetadata(selfTarget)
     },
     previewAuth: JSKIT_PREVIEW_AUTH_KIND,
     urlPath: await defaultAppPath(worktreePath)
@@ -680,28 +693,27 @@ async function createJskitLaunchTargetTerminalSpec({
   }
 
   const launchTargetRoot = targetRoot || session.targetRoot || "";
-  const adapterConfig = context.config || {};
   const [databaseHost, config] = await Promise.all([
     readDatabaseHostFromDotEnv(worktreePath),
     launchTargetId === "dev"
       ? resolveDevLaunchConfig(worktreePath, {
-          adapterConfig
+          targetRoot: launchTargetRoot
         })
       : resolveBuiltLaunchConfig(worktreePath, {
-          adapterConfig
+          targetRoot: launchTargetRoot
         })
   ]);
   const descriptorFactory = launchTargetId === "dev"
     ? createJskitDevLaunchDescriptor
     : createJskitBuiltLaunchDescriptor;
-  // vibe64 recursive hack: when Vibe64 launches Vibe64 through the JSKIT
-  // self-target path, the inner app needs the same project list and provider
-  // credentials. Keep VIBE64_SYSTEM_ROOT session-private because it owns auth
-  // cookies, session stores, and terminal runtime state.
-  const recursiveHack = jskitRecursiveHackRootConfig({
+  // Vibe64 self-targeting is special: the inner Studio needs the same project
+  // list, provider credentials, and runtime namespace. Keep VIBE64_SYSTEM_ROOT
+  // session-private because it owns auth cookies, session stores, and terminal
+  // runtime state.
+  const selfTarget = jskitSelfTargetRootConfig({
     enabled: config.hostDocker,
     projectsRoot: context.projectsRoot || "",
-    systemRoot: jskitRecursiveHackSystemRoot({
+    systemRoot: jskitSelfTargetSystemRoot({
       session,
       worktreePath
     })
@@ -716,7 +728,7 @@ async function createJskitLaunchTargetTerminalSpec({
       config,
       databaseHost,
       launchInput,
-      recursiveHack,
+      selfTarget,
       targetRoot: launchTargetRoot,
       worktreePath: launchWorktreePath
     }),

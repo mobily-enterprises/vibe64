@@ -79,7 +79,6 @@ const JSKIT_MARKERS = deepFreeze([
 const JSKIT_BLUEPRINT_RELATIVE_PATH = ".jskit/APP_BLUEPRINT.md";
 const JSKIT_PROMPT_PACK_ROOT = fileURLToPath(new URL("./prompts", import.meta.url));
 const JSKIT_PREPARE_WORKTREE_SCRIPT_PATH = fileURLToPath(new URL("./prepareWorktree.sh", import.meta.url));
-const JSKIT_ALLOW_SELF_TARGET_CONFIG = "jskit_allow_self_target";
 const JSKIT_DATABASE_RUNTIME_CONFIG = "jskit_database_runtime";
 const JSKIT_TOOLING_CONTRACT = [
   "Use `npx jskit ...` from the repository root for JSKIT inspection, modules, generators, and verification.",
@@ -108,14 +107,6 @@ const JSKIT_GENERATOR_DISCOVERY_COMMANDS = [
   "npx jskit list-placements --json"
 ].join("\n");
 const JSKIT_CONFIG_FIELDS = deepFreeze([
-  {
-    defaultValue: false,
-    description: "Only turn this on when developing Vibe64 itself. It lets a Studio instance open another Studio session against this checkout.",
-    id: JSKIT_ALLOW_SELF_TARGET_CONFIG,
-    label: "Allow Studio self-targeting",
-    scope: "local",
-    type: "boolean"
-  },
   {
     defaultValue: "mysql",
     description: "Database service Studio should prepare for local JSKIT runs. Choose None when the app does not need a database.",
@@ -196,11 +187,8 @@ async function isVibe64SelfTarget({
   }) === "vibe64";
 }
 
-async function jskitConfigFields(context = {}) {
-  const includeSelfTargetConfig = await isVibe64SelfTarget(context);
-  return JSKIT_CONFIG_FIELDS.filter((field) => {
-    return includeSelfTargetConfig || field.id !== JSKIT_ALLOW_SELF_TARGET_CONFIG;
-  });
+async function jskitConfigFields() {
+  return JSKIT_CONFIG_FIELDS;
 }
 
 async function jskitDefaultConfig(context = {}) {
@@ -230,10 +218,6 @@ function jskitAdapterCapabilities({
   adapter = null
 } = {}) {
   return adapter?.workflowCapabilities() || {};
-}
-
-function jskitConfigAllowsStudioSelfTarget(config = {}) {
-  return config?.values?.[JSKIT_ALLOW_SELF_TARGET_CONFIG] === true;
 }
 
 function jskitPromptContext({
@@ -433,9 +417,11 @@ class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
   }
 
   async allowsStudioSelfTarget({
-    config = {}
+    targetRoot = ""
   } = {}) {
-    return jskitConfigAllowsStudioSelfTarget(config);
+    return isVibe64SelfTarget({
+      targetRoot
+    });
   }
 
   async worktreeArchiveExclusions() {
@@ -450,7 +436,6 @@ class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
 }
 
 export {
-  JSKIT_ALLOW_SELF_TARGET_CONFIG,
   JSKIT_DEFAULT_CONFIG,
   JSKIT_MARKERS,
   JSKIT_CONFIG_FIELDS,
@@ -458,7 +443,6 @@ export {
   JSKIT_PREPARE_WORKTREE_SCRIPT_PATH,
   JskitTargetAdapter,
   jskitCodeIndexHook,
-  jskitConfigAllowsStudioSelfTarget,
   jskitAutomatedChecksHook,
   inspectJskitProject
 };

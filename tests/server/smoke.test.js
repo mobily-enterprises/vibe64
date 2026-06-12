@@ -14,7 +14,7 @@ import {
 import {
   VIBE64_PROJECTS_ROOT_ENV,
   VIBE64_PROVIDER_HOMES_ROOT_ENV,
-  VIBE64_RECURSIVE_HACK_SYSTEM_ROOT_ENV,
+  VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV,
   VIBE64_SYSTEM_ROOT_ENV
 } from "@local/vibe64-core/server/studioRoots";
 import { createServer, resolveListenTarget, startServer } from "../../server.js";
@@ -111,7 +111,7 @@ test("runtime env files load broadly while runtime config stays explicit", async
     "PORT",
     VIBE64_PROJECTS_ROOT_ENV,
     VIBE64_PROVIDER_HOMES_ROOT_ENV,
-    VIBE64_RECURSIVE_HACK_SYSTEM_ROOT_ENV,
+    VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV,
     VIBE64_SYSTEM_ROOT_ENV,
     "VIBE64_LISTEN_SOCKET",
     "VIBE64_SUPABASE_PUBLISHABLE_KEY",
@@ -167,9 +167,9 @@ test("runtime env files load broadly while runtime config stays explicit", async
     assert.equal(runtimeEnv[VIBE64_SYSTEM_ROOT_ENV], undefined);
     assert.equal(runtimeEnv.VIBE64_LISTEN_SOCKET, undefined);
 
-    process.env[VIBE64_RECURSIVE_HACK_SYSTEM_ROOT_ENV] = "1";
-    const recursiveRuntimeEnv = resolveRuntimeEnv();
-    assert.equal(recursiveRuntimeEnv[VIBE64_SYSTEM_ROOT_ENV], "/tmp/vibe64-file-system-root");
+    process.env[VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV] = "1";
+    const selfTargetRuntimeEnv = resolveRuntimeEnv();
+    assert.equal(selfTargetRuntimeEnv[VIBE64_SYSTEM_ROOT_ENV], "/tmp/vibe64-file-system-root");
   } finally {
     for (const [key, value] of previous.entries()) {
       if (value == null) {
@@ -191,8 +191,8 @@ test("runtime namespace reaches auth cookie naming through server startup", asyn
   let app;
 
   try {
-    process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "self";
-    assert.equal(resolveRuntimeEnv()[VIBE64_RUNTIME_NAMESPACE_ENV], "self");
+    process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "tenant-a";
+    assert.equal(resolveRuntimeEnv()[VIBE64_RUNTIME_NAMESPACE_ENV], "tenant-a");
 
     app = await createServer({
       systemRoot,

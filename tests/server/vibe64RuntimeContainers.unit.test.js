@@ -125,23 +125,23 @@ test("runtime namespace is opt-in and leaves default Docker names unchanged", as
       assert.equal(jskitMariaDbVolumeName(), "vibe64_jskit_mariadb_data");
     });
 
-    await withRuntimeNamespace("self", async () => {
-      assert.equal(runtimeDockerNamePrefix(targetRoot), "vibe64-self-beepollen");
-      assert.equal(runtimeDockerVolumePrefix(targetRoot), "vibe64_self_beepollen");
-      assert.equal(runtimeNetworkName(targetRoot), "vibe64-self-beepollen-network");
+    await withRuntimeNamespace("tenant-a", async () => {
+      assert.equal(runtimeDockerNamePrefix(targetRoot), "vibe64-tenant-a-beepollen");
+      assert.equal(runtimeDockerVolumePrefix(targetRoot), "vibe64_tenant_a_beepollen");
+      assert.equal(runtimeNetworkName(targetRoot), "vibe64-tenant-a-beepollen-network");
       assert.equal(runtimeContainerName({
         adapterId: "jskit",
         containerId: "jskit-mariadb",
         targetRoot
-      }), "vibe64-self-beepollen-jskit-mariadb");
+      }), "vibe64-tenant-a-beepollen-jskit-mariadb");
       assert.equal(runtimeVolumeName({
         adapterId: "jskit",
         containerId: "jskit-mariadb",
         targetRoot,
         volumeId: "data"
-      }), "vibe64_self_beepollen_jskit_mariadb_data");
-      assert.equal(jskitMariaDbContainerName(), "vibe64-self-jskit-mariadb");
-      assert.equal(jskitMariaDbVolumeName(), "vibe64_self_jskit_mariadb_data");
+      }), "vibe64_tenant_a_beepollen_jskit_mariadb_data");
+      assert.equal(jskitMariaDbContainerName(), "vibe64-tenant-a-jskit-mariadb");
+      assert.equal(jskitMariaDbVolumeName(), "vibe64_tenant_a_jskit_mariadb_data");
     });
   });
 });
