@@ -5,6 +5,9 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  VIBE64_RUNTIME_NAMESPACE_ENV
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
+import {
   createVibe64Auth,
   registerVibe64AuthGate,
   registerVibe64AuthRoutes,
@@ -111,6 +114,78 @@ test("Vibe64 auth binds the first Supabase identity as owner", async () => {
       }
     });
     assert.equal(legacyState.authenticated, false);
+  });
+});
+
+test("Vibe64 auth scopes browser sessions only for namespaced recursive runtimes", async () => {
+  await withAuth(async (mainAuth) => {
+    await withAuth(async (nestedAuth) => {
+      assert.equal(mainAuth.cookieName, "vibe64_session");
+      assert.match(nestedAuth.cookieName, /^vibe64_session_[0-9a-f]{16}$/u);
+      assert.notEqual(mainAuth.cookieName, nestedAuth.cookieName);
+
+      const mainOwner = await mainAuth.authenticateSupabaseSession({
+        accessToken: "owner-token"
+      });
+      const nestedOwner = await nestedAuth.authenticateSupabaseSession({
+        accessToken: "owner-token"
+      });
+      const mainReply = headerCaptureReply();
+      const nestedReply = headerCaptureReply();
+      const mainSession = await mainAuth.startUserSession(mainReply, mainOwner);
+      const nestedSession = await nestedAuth.startUserSession(nestedReply, nestedOwner);
+      assert.match(mainReply.headers["Set-Cookie"], /^vibe64_session=/u);
+      assert.match(nestedReply.headers["Set-Cookie"], new RegExp(`^${nestedAuth.cookieName}=`, "u"));
+
+      const mainOnlyState = await mainAuth.stateForRequest({
+        headers: {
+          cookie: `vibe64_session=${encodeURIComponent(mainSession.cookieValue)}`
+        }
+      });
+      assert.equal(mainOnlyState.authenticated, true);
+      assert.equal(mainOnlyState.user.email, "owner@example.com");
+
+      const nestedWrongNameState = await nestedAuth.stateForRequest({
+        headers: {
+          cookie: `vibe64_session=${encodeURIComponent(nestedSession.cookieValue)}`
+        }
+      });
+      assert.equal(nestedWrongNameState.authenticated, false);
+
+      const nestedOnlyState = await nestedAuth.stateForRequest({
+        headers: {
+          cookie: `${nestedAuth.cookieName}=${encodeURIComponent(nestedSession.cookieValue)}`
+        }
+      });
+      assert.equal(nestedOnlyState.authenticated, true);
+      assert.equal(nestedOnlyState.user.email, "owner@example.com");
+
+      const mainRequestState = await mainAuth.stateForRequest({
+        headers: {
+          cookie: [
+            `vibe64_session=${encodeURIComponent(mainSession.cookieValue)}`,
+            `${nestedAuth.cookieName}=${encodeURIComponent(nestedSession.cookieValue)}`
+          ].join("; ")
+        }
+      });
+      assert.equal(mainRequestState.authenticated, true);
+      assert.equal(mainRequestState.user.email, "owner@example.com");
+
+      const nestedRequestState = await nestedAuth.stateForRequest({
+        headers: {
+          cookie: [
+            `vibe64_session=${encodeURIComponent(mainSession.cookieValue)}`,
+            `${nestedAuth.cookieName}=${encodeURIComponent(nestedSession.cookieValue)}`
+          ].join("; ")
+        }
+      });
+      assert.equal(nestedRequestState.authenticated, true);
+      assert.equal(nestedRequestState.user.email, "owner@example.com");
+    }, {
+      env: {
+        [VIBE64_RUNTIME_NAMESPACE_ENV]: "self"
+      }
+    });
   });
 });
 
@@ -761,7 +836,10 @@ async function withAuth(callback, options = {}) {
     return await callback(createVibe64Auth({
       codexConnectedVerifier: options.codexConnectedVerifier,
       systemRoot,
-      env: FAKE_SUPABASE_ENV,
+      env: {
+        ...FAKE_SUPABASE_ENV,
+        ...(options.env || {})
+      },
       runtimeProfile: options.runtimeProfile,
       sendSupabaseInviteEmail: options.sendSupabaseInviteEmail,
       verifySupabaseAccessToken: fakeVerifySupabaseAccessToken
@@ -819,6 +897,16 @@ function registerAuthGateTestHook(auth, options = {}) {
 function sessionCookieHeader(session = {}) {
   return {
     cookie: `vibe64_session=${encodeURIComponent(session.cookieValue)}`
+  };
+}
+
+function headerCaptureReply() {
+  return {
+    headers: {},
+    header(name, value) {
+      this.headers[name] = value;
+      return this;
+    }
   };
 }
 

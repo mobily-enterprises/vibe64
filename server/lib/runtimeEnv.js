@@ -1,5 +1,9 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  VIBE64_RUNTIME_NAMESPACE_ENV,
+  runtimeNamespace
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import { surfaceRuntime } from "./surfaceRuntime.js";
 
 const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -56,6 +60,9 @@ function resolveRuntimeEnv() {
     [VIBE64_SUPABASE_URL_ENV]: String(process.env[VIBE64_SUPABASE_URL_ENV] || "").trim().replace(/\/+$/u, ""),
     [VIBE64_SUPABASE_PUBLISHABLE_KEY_ENV]: String(process.env[VIBE64_SUPABASE_PUBLISHABLE_KEY_ENV] || "").trim(),
     [VIBE64_SUPABASE_SECRET_KEY_ENV]: String(process.env[VIBE64_SUPABASE_SECRET_KEY_ENV] || "").trim(),
+    [VIBE64_RUNTIME_NAMESPACE_ENV]: runtimeNamespace({
+      env: process.env
+    }),
     SERVER_SURFACE: serverSurface,
     PORT: rawPort ? toPort(rawPort, 3000) : null,
     PORT_CONFIGURED: Boolean(rawPort),

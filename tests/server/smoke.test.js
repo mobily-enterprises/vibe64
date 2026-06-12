@@ -9,6 +9,9 @@ import {
   githubProviderHome
 } from "@local/studio-terminal-core/server/providerHomes";
 import {
+  VIBE64_RUNTIME_NAMESPACE_ENV
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
+import {
   VIBE64_SYSTEM_ROOT_ENV
 } from "@local/vibe64-core/server/studioRoots";
 import { createServer, resolveListenTarget, startServer } from "../../server.js";
@@ -160,6 +163,60 @@ test("runtime env files load broadly while runtime config stays explicit", async
       }
     }
     await rm(envRoot, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
+test("runtime namespace reaches auth cookie naming through server startup", async () => {
+  const previousNamespace = process.env[VIBE64_RUNTIME_NAMESPACE_ENV];
+  const systemRoot = await mkdtemp(path.join(tmpdir(), "vibe64-runtime-namespace-auth-"));
+  let app;
+
+  try {
+    process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "self";
+    assert.equal(resolveRuntimeEnv()[VIBE64_RUNTIME_NAMESPACE_ENV], "self");
+
+    app = await createServer({
+      systemRoot,
+      verifySupabaseAccessToken: fakeVerifySupabaseAccessToken
+    });
+
+    assert.match(app.vibe64Auth.cookieName, /^vibe64_session_[0-9a-f]{16}$/u);
+    assert.notEqual(app.vibe64Auth.cookieName, "vibe64_session");
+
+    const loginResponse = await app.inject({
+      method: "POST",
+      payload: {
+        accessToken: "owner-token"
+      },
+      url: "/api/auth/supabase-session"
+    });
+    assert.equal(loginResponse.statusCode, 200);
+    assert.match(loginResponse.headers["set-cookie"], new RegExp(`^${app.vibe64Auth.cookieName}=`, "u"));
+    assert.doesNotMatch(loginResponse.headers["set-cookie"], /^vibe64_session=/u);
+
+    const response = await app.inject({
+      headers: {
+        cookie: loginResponse.headers["set-cookie"]
+      },
+      method: "POST",
+      url: "/api/auth/logout"
+    });
+    assert.equal(response.statusCode, 200);
+    assert.match(response.headers["set-cookie"], new RegExp(`^${app.vibe64Auth.cookieName}=`, "u"));
+    assert.doesNotMatch(response.headers["set-cookie"], /^vibe64_session=/u);
+  } finally {
+    if (app) {
+      await app.close();
+    }
+    if (previousNamespace == null) {
+      delete process.env[VIBE64_RUNTIME_NAMESPACE_ENV];
+    } else {
+      process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = previousNamespace;
+    }
+    await rm(systemRoot, {
       force: true,
       recursive: true
     });

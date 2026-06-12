@@ -1,4 +1,7 @@
+import crypto from "node:crypto";
+
 const AUTH_COOKIE_NAME = "vibe64_session";
+const AUTH_COOKIE_NAME_PREFIX = "vibe64_session_";
 
 function parseCookies(header = "") {
   const cookies = {};
@@ -49,8 +52,21 @@ function serializeCookie(name, value, {
   return parts.join("; ");
 }
 
+function scopedAuthCookieName(scope = "") {
+  const normalizedScope = String(scope || "").trim();
+  if (!normalizedScope) {
+    return AUTH_COOKIE_NAME;
+  }
+  const digest = crypto
+    .createHash("sha256")
+    .update(normalizedScope)
+    .digest("hex")
+    .slice(0, 16);
+  return `${AUTH_COOKIE_NAME_PREFIX}${digest}`;
+}
+
 function serializeAuthCookie(value, options = {}) {
-  return serializeCookie(AUTH_COOKIE_NAME, value, options);
+  return serializeCookie(authCookieName(options), value, options);
 }
 
 function serializeClearedAuthCookie(options = {}) {
@@ -60,13 +76,19 @@ function serializeClearedAuthCookie(options = {}) {
   });
 }
 
-function authCookieValue(request = {}) {
-  return parseCookies(request.headers?.cookie || "")[AUTH_COOKIE_NAME] || "";
+function authCookieName(options = {}) {
+  return String(options.cookieName || "").trim() || AUTH_COOKIE_NAME;
+}
+
+function authCookieValue(request = {}, options = {}) {
+  const cookies = parseCookies(request.headers?.cookie || "");
+  return cookies[authCookieName(options)] || "";
 }
 
 export {
   AUTH_COOKIE_NAME,
   authCookieValue,
+  scopedAuthCookieName,
   parseCookies,
   serializeAuthCookie,
   serializeClearedAuthCookie,

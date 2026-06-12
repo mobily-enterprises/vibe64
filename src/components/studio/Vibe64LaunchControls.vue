@@ -191,6 +191,7 @@
       <iframe
         v-if="previewUrl"
         ref="previewFrame"
+        allow="clipboard-write"
         :key="previewUrl"
         class="vibe64-launch-controls__preview-frame"
         :src="previewUrl"

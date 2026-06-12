@@ -33,6 +33,9 @@ import {
   startupArgsPreviewOption
 } from "@local/vibe64-adapters/server/launchPreviewOptions";
 import { withTemporaryRoot, worktreeMetadata } from "./vibe64TestHelpers.js";
+import {
+  assertDockerVolumeMount
+} from "./dockerArgsTestHelpers.js";
 
 async function withRuntimeNamespace(namespace, fn) {
   const previous = process.env[VIBE64_RUNTIME_NAMESPACE_ENV];
@@ -269,6 +272,8 @@ test("jskit project setup checks project database readiness but not tenant conta
 
 test("jskit self-target config enables host Docker for recursive Studio launch", async () => {
   await withRuntimeNamespace("", async () => withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "recursive_studio_launch";
+    const sessionRoot = path.join(targetRoot, ".vibe64-local", "sessions", "active", sessionId);
     await writeProjectFile(targetRoot, "package.json", JSON.stringify({
       scripts: {
         dev: "vite",
@@ -290,7 +295,8 @@ test("jskit self-target config enables host Docker for recursive Studio launch",
           dependencies_installed: "yes",
           worktree_path: targetRoot
         },
-        sessionId: "recursive_studio_launch",
+        sessionId,
+        sessionRoot,
         targetRoot
       },
       targetRoot
@@ -306,6 +312,10 @@ test("jskit self-target config enables host Docker for recursive Studio launch",
     assert.ok(args.includes("DOCKER_HOST=unix:///var/run/docker.sock"));
     assert.ok(args.includes("VIBE64_RUNTIME_NAMESPACE=self"));
     assert.ok(args.includes("/var/run/docker.sock:/var/run/docker.sock"));
+    const launchHome = path.join(sessionRoot, "runtime", "launch-home", "unit-terminal");
+    assertDockerVolumeMount(args, launchHome, launchHome);
+    assert.ok(args.at(-1).includes(`HOME=${launchHome}`));
+    assert.doesNotMatch(args.at(-1), /HOME=\/tmp\/studio-home/u);
   }));
 });
 

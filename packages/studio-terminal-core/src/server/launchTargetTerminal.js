@@ -311,9 +311,11 @@ function launchActionLines(actions = []) {
 
 function webLaunchTargetStartupScript({
   commands = [],
+  home = "/tmp/studio-home",
   launchActions = [],
   port
 } = {}) {
+  const homePath = normalizeText(home) || "/tmp/studio-home";
   const runCommand = [
     "set -e",
     "export HOST=0.0.0.0",
@@ -324,9 +326,9 @@ function webLaunchTargetStartupScript({
 
   return [
     "set -e",
-    "mkdir -p /tmp/studio-home",
+    `mkdir -p ${shellQuote(homePath)}`,
     "if [ \"$(id -u)\" = \"0\" ] && [ -n \"${VIBE64_HOST_UID:-}\" ] && [ -n \"${VIBE64_HOST_GID:-}\" ] && command -v setpriv >/dev/null 2>&1; then",
-    "  chown -R \"$VIBE64_HOST_UID:$VIBE64_HOST_GID\" /tmp/studio-home",
+    `  chown -R "$VIBE64_HOST_UID:$VIBE64_HOST_GID" ${shellQuote(homePath)}`,
     "  docker_group_args=\"--clear-groups\"",
     "  if [ -S /var/run/docker.sock ]; then",
     "    docker_sock_gid=\"$(stat -c '%g' /var/run/docker.sock 2>/dev/null || true)\"",
@@ -334,9 +336,9 @@ function webLaunchTargetStartupScript({
     "      docker_group_args=\"--groups $docker_sock_gid\"",
     "    fi",
     "  fi",
-    `  exec setpriv --reuid "$VIBE64_HOST_UID" --regid "$VIBE64_HOST_GID" $docker_group_args env HOME=/tmp/studio-home bash -lc ${shellQuote(runCommand)}`,
+    `  exec setpriv --reuid "$VIBE64_HOST_UID" --regid "$VIBE64_HOST_GID" $docker_group_args env HOME=${shellQuote(homePath)} bash -lc ${shellQuote(runCommand)}`,
     "fi",
-    `exec env HOME=/tmp/studio-home bash -lc ${shellQuote(runCommand)}`
+    `exec env HOME=${shellQuote(homePath)} bash -lc ${shellQuote(runCommand)}`
   ].join("\n");
 }
 
@@ -443,6 +445,51 @@ function workdirMountArgs({
   ];
 }
 
+function launchHomePath({
+  sessionRoot = "",
+  terminalId = "",
+  worktreePath = ""
+} = {}) {
+  const resolvedSessionRoot = normalizeText(sessionRoot)
+    ? path.resolve(sessionRoot)
+    : "";
+  const resolvedWorktreePath = normalizeText(worktreePath)
+    ? path.resolve(worktreePath)
+    : "";
+  const derivedSessionRoot = !resolvedSessionRoot && path.basename(resolvedWorktreePath) === "worktree"
+    ? path.dirname(resolvedWorktreePath)
+    : "";
+  const root = resolvedSessionRoot || derivedSessionRoot;
+  if (!root) {
+    return "";
+  }
+  const safeTerminalId = normalizeText(terminalId)
+    .replace(/[^a-z0-9_.-]+/giu, "-")
+    .replace(/^-+|-+$/gu, "") || stableHash(terminalId || "launch");
+  return path.join(root, "runtime", "launch-home", safeTerminalId);
+}
+
+function ensureLaunchHomePath(home = "") {
+  const resolvedHome = normalizeText(home) ? path.resolve(home) : "";
+  if (!resolvedHome) {
+    return "";
+  }
+  mkdirSync(resolvedHome, {
+    recursive: true
+  });
+  return resolvedHome;
+}
+
+function launchHomeDockerArgs(home = "") {
+  const resolvedHome = normalizeText(home) ? path.resolve(home) : "";
+  return resolvedHome
+    ? [
+        "-v",
+        `${resolvedHome}:${resolvedHome}`
+      ]
+    : [];
+}
+
 function launchContainerName({
   adapterId = "generic",
   sessionId = "",
@@ -467,10 +514,13 @@ function launchTargetTerminalArgs({
   sessionId = "",
   startupCommands = [],
   launchActions = [],
+  launchHome = "",
   targetRoot = "",
   terminalId = "",
   workdir = ""
 } = {}) {
+  const resolvedLaunchHome = ensureLaunchHomePath(launchHome);
+  const home = resolvedLaunchHome || "/tmp/studio-home";
   return [
     "run",
     ...STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS,
@@ -501,6 +551,7 @@ function launchTargetTerminalArgs({
       targetRoot,
       workdir
     }),
+    ...launchHomeDockerArgs(resolvedLaunchHome),
     ...targetRuntimeNetworkDockerArgs(targetRoot),
     ...extraDockerArgs,
     ...hostUserIdentityEnvArgs(),
@@ -511,6 +562,7 @@ function launchTargetTerminalArgs({
     "-lc",
     webLaunchTargetStartupScript({
       commands: startupCommands,
+      home,
       launchActions,
       port
     })
@@ -644,6 +696,11 @@ async function createVibe64WebLaunchTargetTerminalSpec({
             }
           ]
         : [],
+      launchHome: launchHomePath({
+        sessionRoot: session.sessionRoot || "",
+        terminalId: id,
+        worktreePath
+      }),
       port,
       sessionId: session.sessionId,
       startupCommands,

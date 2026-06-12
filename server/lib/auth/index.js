@@ -6,12 +6,16 @@ import {
   resolveVibe64SystemRoot
 } from "@local/vibe64-core/server/studioRoots";
 import {
+  runtimeNamespace
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
+import {
   VIBE64_RUNTIME_MODE_LOCAL,
   createVibe64RuntimeProfile,
   publicRuntimeProfile
 } from "../runtimeProfile.js";
 import {
   authCookieValue,
+  scopedAuthCookieName,
   serializeAuthCookie,
   serializeClearedAuthCookie
 } from "./cookies.js";
@@ -59,6 +63,10 @@ function createVibe64Auth({
     explicitRoot: systemRoot,
     runtimeProfile: profile
   });
+  const cookieName = authCookieNameForRuntime({
+    env,
+    systemRoot: root
+  });
   const users = createFileUserStore({
     usersRoot: path.join(root, "users")
   });
@@ -105,7 +113,9 @@ function createVibe64Auth({
     if (profile.mode === VIBE64_RUNTIME_MODE_LOCAL) {
       return localOwnerUser();
     }
-    const session = await sessions.readSession(authCookieValue(request));
+    const session = await sessions.readSession(authCookieValue(request, {
+      cookieName
+    }));
     if (!session?.supabaseUserId) {
       return null;
     }
@@ -117,6 +127,7 @@ function createVibe64Auth({
   } = {}) {
     const session = await sessions.createSession(user);
     reply.header("Set-Cookie", serializeAuthCookie(session.cookieValue, {
+      cookieName,
       maxAge: session.maxAge,
       secure: requestIsSecure(request)
     }));
@@ -124,11 +135,14 @@ function createVibe64Auth({
   }
 
   async function clearUserSession(request, reply) {
-    const session = await sessions.readSession(authCookieValue(request));
+    const session = await sessions.readSession(authCookieValue(request, {
+      cookieName
+    }));
     if (session?.id) {
       await sessions.destroySession(session.id);
     }
     reply.header("Set-Cookie", serializeClearedAuthCookie({
+      cookieName,
       secure: requestIsSecure(request)
     }));
   }
@@ -166,6 +180,7 @@ function createVibe64Auth({
     authenticateSupabaseSession,
     clearUserSession,
     codexConnectedForSetup,
+    cookieName,
     sessions,
     setup,
     sendInviteEmail,
@@ -883,6 +898,16 @@ function requestIsSecure(request = {}) {
   return forwardedProto === "https" ||
     request.protocol === "https" ||
     request.socket?.encrypted === true;
+}
+
+function authCookieNameForRuntime({
+  env = process.env,
+  systemRoot = ""
+} = {}) {
+  const namespace = runtimeNamespace({ env });
+  return namespace
+    ? scopedAuthCookieName(`${namespace}:${path.resolve(systemRoot || "")}`)
+    : scopedAuthCookieName("");
 }
 
 export {
