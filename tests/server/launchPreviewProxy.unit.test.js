@@ -501,6 +501,38 @@ test("launch preview proxy keeps HTML previews retrying while the target is unav
   }
 });
 
+test("launch preview proxy handles aborted upstream response bodies", async () => {
+  const server = createServer((_request, response) => {
+    response.writeHead(200, {
+      "Content-Type": "application/octet-stream"
+    });
+    response.write("partial");
+    response.socket.destroy();
+  });
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      server.off("error", reject);
+      resolve();
+    });
+  });
+  const registry = createLaunchPreviewProxyRegistry();
+  try {
+    const address = server.address();
+    const preview = await registry.ensure("session-aborted-body", `http://127.0.0.1:${address.port}/stream`);
+    await fetch(preview.href).then(async (response) => {
+      await response.arrayBuffer();
+    }).catch(() => null);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.ok(true);
+  } finally {
+    await registry.closeAll();
+    await new Promise((resolve) => {
+      server.close(() => resolve());
+    });
+  }
+});
+
 async function withTargetServer(callback) {
   const server = createServer((request, response) => {
     if (request.url === "/api/ping") {

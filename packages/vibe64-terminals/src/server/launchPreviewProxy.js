@@ -566,7 +566,7 @@ async function proxyPreviewRequest(request, response, {
       targetHref: targetUrl.toString()
     });
     if (targetResponse.body) {
-      Readable.fromWeb(targetResponse.body).pipe(response);
+      pipePreviewResponseBody(targetResponse.body, response);
     } else {
       response.end();
     }
@@ -597,6 +597,22 @@ async function proxyPreviewRequest(request, response, {
       error: vibe64SessionDebugError(error)
     });
   }
+}
+
+function pipePreviewResponseBody(body, response) {
+  const stream = Readable.fromWeb(body);
+  stream.once("error", (error) => {
+    if (!response.destroyed) {
+      response.destroy(error);
+    }
+  });
+  response.once("error", () => {
+    stream.destroy();
+  });
+  response.once("close", () => {
+    stream.destroy();
+  });
+  stream.pipe(response);
 }
 
 function proxyPreviewUpgrade(request, socket, head, {
