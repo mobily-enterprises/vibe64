@@ -42,6 +42,7 @@ const BUILT_LAUNCH_COMMAND_CONFIG = ".jskit/config/testrun_command";
 const BUILT_LAUNCH_PORT_CONFIG = ".jskit/config/server_port_for_user_review";
 const DEV_SERVER_COMMAND_CONFIG = "config/dev_server_command";
 const MIGRATION_SCRIPT_NAME = "db:migrate";
+const JSKIT_STARTUP_ARGS_OPTION = "startupArgs";
 
 function createJskitPreviewAuthProfileCommand() {
   const script = `
@@ -217,6 +218,31 @@ function runtimeNamespaceDockerArgs(namespace = "") {
     : [];
 }
 
+function normalizeLaunchInputValues(launchInput = {}) {
+  return launchInput && typeof launchInput === "object" && !Array.isArray(launchInput) &&
+    launchInput.values && typeof launchInput.values === "object" && !Array.isArray(launchInput.values)
+    ? launchInput.values
+    : {};
+}
+
+function startupArgsFromLaunchInput(launchInput = {}) {
+  const value = normalizeLaunchInputValues(launchInput)[JSKIT_STARTUP_ARGS_OPTION];
+  return (Array.isArray(value) ? value : [])
+    .map((entry) => String(entry || "").trim())
+    .filter(Boolean);
+}
+
+function commandWithStartupArgs(command = "", startupArgs = []) {
+  const normalizedCommand = String(command || "").trim();
+  const normalizedArgs = (Array.isArray(startupArgs) ? startupArgs : [])
+    .map((entry) => String(entry || "").trim())
+    .filter(Boolean);
+  if (!normalizedCommand || normalizedArgs.length < 1) {
+    return normalizedCommand;
+  }
+  return `${normalizedCommand} -- ${normalizedArgs.map(shellQuote).join(" ")}`;
+}
+
 function normalizePort(value) {
   const port = Number.parseInt(String(value || ""), 10);
   return Number.isInteger(port) && port >= 1024 && port <= 65535
@@ -307,6 +333,36 @@ function jskitLaunchTarget(id, label) {
   };
 }
 
+function jskitLaunchTargetPreviewOptions({
+  config = {},
+  launchTargetId = ""
+} = {}) {
+  if (launchTargetId !== "dev" || config?.values?.[JSKIT_ALLOW_SELF_TARGET_CONFIG] !== true) {
+    return [];
+  }
+  return [
+    {
+      defaultValue: [],
+      description: "Arguments passed to the backend command when previewing this self-targeted Vibe64 instance.",
+      id: JSKIT_STARTUP_ARGS_OPTION,
+      label: "Startup arguments",
+      placeholder: ".",
+      type: "string-list"
+    }
+  ];
+}
+
+function jskitLaunchTargetWithPreviewOptions(id, label, context = {}) {
+  const previewOptions = jskitLaunchTargetPreviewOptions({
+    config: context.config,
+    launchTargetId: id
+  });
+  return {
+    ...jskitLaunchTarget(id, label),
+    ...(previewOptions.length > 0 ? { previewOptions } : {})
+  };
+}
+
 function jskitDependenciesReady(session = {}) {
   return String(session.metadata?.dependencies_installed || "").trim().toLowerCase() === "yes";
 }
@@ -324,8 +380,10 @@ function createJskitDevCommand({
   backendPort = DEFAULT_DEV_BACKEND_PORT,
   frontendCommand = DEFAULT_DEV_FRONTEND_COMMAND,
   migrationCommand = "",
-  previewAuthProfileCommand = createJskitPreviewAuthProfileCommand()
+  previewAuthProfileCommand = createJskitPreviewAuthProfileCommand(),
+  startupArgs = []
 } = {}) {
+  const backendCommandWithArgs = commandWithStartupArgs(backendCommand, startupArgs);
   return [
     "set -e",
     `export VIBE64_JSKIT_BACKEND_PORT=${shellQuotedNumber(backendPort)}`,
@@ -341,7 +399,7 @@ function createJskitDevCommand({
     "  kill \"$vibe64_jskit_backend_pid\" \"$vibe64_jskit_frontend_pid\" 2>/dev/null || true",
     "}",
     "trap cleanup_vibe64_jskit_dev EXIT INT TERM",
-    `(export PORT="$VIBE64_JSKIT_BACKEND_PORT"; ${backendCommand}) &`,
+    `(export PORT="$VIBE64_JSKIT_BACKEND_PORT"; ${backendCommandWithArgs}) &`,
     "vibe64_jskit_backend_pid=$!",
     tcpReadinessProbeCommand({
       marker: "[studio] JSKIT backend is ready.",
@@ -362,6 +420,7 @@ function shellQuotedNumber(value) {
 }
 
 async function listJskitLaunchTargets({
+  config = {},
   session = {}
 } = {}) {
   const worktreePath = sessionWorktreePath(session);
@@ -385,10 +444,14 @@ async function listJskitLaunchTargets({
 
   const launchTargets = [];
   if (hasTestrunCommand || (hasBuildCommandConfig && hasServerCommandConfig) || (scripts.build && scripts.server)) {
-    launchTargets.push(jskitLaunchTarget("built", "Run built app"));
+    launchTargets.push(jskitLaunchTargetWithPreviewOptions("built", "Run built app", {
+      config
+    }));
   }
   if ((hasDevCommandConfig || scripts.dev) && (hasServerCommandConfig || scripts.server)) {
-    launchTargets.push(jskitLaunchTarget("dev", "Run app"));
+    launchTargets.push(jskitLaunchTargetWithPreviewOptions("dev", "Run app", {
+      config
+    }));
   }
   return jskitDependenciesReady(session)
     ? launchTargets
@@ -398,8 +461,10 @@ async function listJskitLaunchTargets({
 async function createJskitBuiltLaunchDescriptor({
   config,
   databaseHost = "",
+  launchInput = {},
   worktreePath = ""
 } = {}) {
+  const startupArgs = startupArgsFromLaunchInput(launchInput);
   const migrationCommand = config.migrationCommand
     ? {
         command: config.migrationCommand,
@@ -427,7 +492,7 @@ async function createJskitBuiltLaunchDescriptor({
           previewAuthProfileCommand,
           config.serverCommand
             ? {
-                command: config.serverCommand,
+                command: commandWithStartupArgs(config.serverCommand, startupArgs),
                 label: "Starting JSKIT app server.",
                 networkEnv: true
               }
@@ -437,7 +502,7 @@ async function createJskitBuiltLaunchDescriptor({
           migrationCommand,
           previewAuthProfileCommand,
           {
-            command: config.testrunCommand,
+            command: commandWithStartupArgs(config.testrunCommand, startupArgs),
             label: "Starting JSKIT built app.",
             networkEnv: true
           }
@@ -464,15 +529,18 @@ async function createJskitBuiltLaunchDescriptor({
 async function createJskitDevLaunchDescriptor({
   config,
   databaseHost = "",
+  launchInput = {},
   worktreePath = ""
 } = {}) {
+  const startupArgs = startupArgsFromLaunchInput(launchInput);
   return {
     command: createJskitDevCommand({
       backendCommand: config.backendCommand,
       backendPort: config.backendPort,
       frontendCommand: config.frontendCommand,
       migrationCommand: config.migrationCommand,
-      previewAuthProfileCommand: createJskitPreviewAuthProfileCommand()
+      previewAuthProfileCommand: createJskitPreviewAuthProfileCommand(),
+      startupArgs
     }),
     extraDockerArgs: runtimeNamespaceDockerArgs(config.runtimeNamespace),
     hostDocker: config.hostDocker,
@@ -496,6 +564,7 @@ async function createJskitDevLaunchDescriptor({
 
 async function createJskitLaunchTargetTerminalSpec({
   context = {},
+  launchInput = {},
   launchTargetId = "",
   session = {},
   targetRoot = ""
@@ -506,7 +575,9 @@ async function createJskitLaunchTargetTerminalSpec({
       message: `Unknown JSKIT launch target: ${launchTargetId || "(empty)"}.`
     };
   }
-  const launchTarget = context.launchTarget || jskitLaunchTarget(launchTargetId, launchTargetId);
+  const launchTarget = context.launchTarget || jskitLaunchTargetWithPreviewOptions(launchTargetId, launchTargetId, {
+    config: context.config || {}
+  });
   const worktreePath = sessionWorktreePath(session);
   if (!worktreePath) {
     return {
@@ -521,6 +592,7 @@ async function createJskitLaunchTargetTerminalSpec({
     };
   }
   const availableLaunchTargets = await listJskitLaunchTargets({
+    config: context.config || {},
     session
   });
   if (!availableLaunchTargets.some((availableTarget) => availableTarget.id === launchTargetId)) {
@@ -554,6 +626,7 @@ async function createJskitLaunchTargetTerminalSpec({
     resolveLaunch: ({ worktreePath: launchWorktreePath }) => descriptorFactory({
       config,
       databaseHost,
+      launchInput,
       targetRoot: launchTargetRoot,
       worktreePath: launchWorktreePath
     }),

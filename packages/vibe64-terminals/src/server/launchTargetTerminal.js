@@ -318,6 +318,14 @@ function readinessMarkerFromSpec(spec = {}) {
   return String(spec.readinessMarker || spec.metadata?.readinessMarker || "").trim();
 }
 
+function normalizeLaunchInput(input = {}) {
+  return input && typeof input === "object" && !Array.isArray(input) ? input : {};
+}
+
+function launchInputFingerprint(input = {}) {
+  return stableHash(JSON.stringify(normalizeLaunchInput(input)));
+}
+
 function launchTerminalIsReady(terminalSession = {}, readinessMarker = "") {
   if (!readinessMarker) {
     return true;
@@ -467,6 +475,8 @@ function createLaunchTargetTerminalController({
       return vibe64Result(async () => {
         const context = await createLaunchContext(projectService, sessionId);
         const cwd = sessionTerminalCwd(context.session, projectService);
+        const launchInput = normalizeLaunchInput(input.launchInput);
+        const launchInputHash = launchInputFingerprint(launchInput);
         if (!cwd) {
           return {
             ok: false,
@@ -492,8 +502,10 @@ function createLaunchTargetTerminalController({
         const spec = await context.runtime.adapter.createLaunchTargetTerminalSpec({
           context: {
             ...context,
+            launchInput,
             launchTarget
           },
+          launchInput,
           launchTargetId: launchTarget.id
         });
         if (spec?.ok === false) {
@@ -537,6 +549,8 @@ function createLaunchTargetTerminalController({
             ...(spec.metadata || {}),
             attemptedCommand: commandInvocation(spec),
             envHash: launchEnvHash,
+            launchInput,
+            launchInputHash,
             launchTargetId: launchTarget.id,
             launchTargetLabel: launchTarget.label,
             sessionId
@@ -583,6 +597,7 @@ function createLaunchTargetTerminalController({
           reuseRunning: (runningSession) => {
             return spec.reuseRunning !== false &&
               runningSession.metadata?.envHash === launchEnvHash &&
+              runningSession.metadata?.launchInputHash === launchInputHash &&
               runningSession.metadata?.launchTargetId === launchTarget.id;
           }
         });

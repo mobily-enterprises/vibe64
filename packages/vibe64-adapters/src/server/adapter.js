@@ -46,6 +46,20 @@ function normalizeLaunchTargetDisplay(value = "") {
   return display === "minimized" || display === "expanded" ? display : "";
 }
 
+function normalizePreviewOption(input = {}) {
+  const type = normalizeText(input.type);
+  return {
+    defaultValue: Array.isArray(input.defaultValue)
+      ? input.defaultValue.map(normalizeText).filter(Boolean)
+      : normalizeText(input.defaultValue),
+    description: normalizeText(input.description),
+    id: assertCommandId(input.id),
+    label: normalizeText(input.label || input.id),
+    placeholder: normalizeText(input.placeholder),
+    type: type === "string-list" ? type : "text"
+  };
+}
+
 function normalizeCapabilityMap(capabilities = {}) {
   if (Array.isArray(capabilities)) {
     return Object.fromEntries(
@@ -91,12 +105,16 @@ function adapterCommand(input = {}) {
 }
 
 function adapterLaunchTarget(input = {}) {
+  const previewOptions = Array.isArray(input.previewOptions)
+    ? input.previewOptions.map(normalizePreviewOption)
+    : [];
   return {
     available: input.available !== false,
     defaultDisplay: normalizeLaunchTargetDisplay(input.defaultDisplay),
     disabledReason: normalizeText(input.disabledReason),
     id: assertLaunchTargetId(input.id),
-    label: normalizeText(input.label || input.id)
+    label: normalizeText(input.label || input.id),
+    ...(previewOptions.length > 0 ? { previewOptions } : {})
   };
 }
 
@@ -243,8 +261,10 @@ class TargetAdapter {
   }
 
   async createLaunchTargetTerminalSpec({
+    launchInput = {},
     launchTargetId = ""
   } = {}) {
+    void launchInput;
     return {
       ok: false,
       message: `${this.label} does not provide launch target ${assertLaunchTargetId(launchTargetId)}.`

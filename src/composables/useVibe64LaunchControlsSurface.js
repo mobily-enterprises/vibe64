@@ -18,12 +18,19 @@ import {
 import {
   useVibe64ProjectSlug
 } from "@/composables/useVibe64ProjectScope.js";
+import {
+  previewInputFromFormValues,
+  previewOptionFormValue,
+  previewOptionsForTarget
+} from "@/lib/vibe64PreviewOptions.js";
 
 function useVibe64LaunchControlsSurface(props) {
   const {
+    activeLaunchTarget,
     expandTerminal,
     launchActions,
     launchButtonsDisabled,
+    launchInputForTarget,
     launchTargets,
     loading,
     loadError,
@@ -34,6 +41,7 @@ function useVibe64LaunchControlsSurface(props) {
     restartTerminal,
     retryTerminal,
     run,
+    savePreviewInput,
     setTerminalHost,
     terminalCanRestart,
     terminalCanRetry,
@@ -52,6 +60,7 @@ function useVibe64LaunchControlsSurface(props) {
     terminalVisible,
     terminalWindowVisible,
     terminalWindowStorageKey,
+    previewInputIsRemembered,
     visible
   } = useVibe64LaunchControls({
     autoStartTargetId: () => props.autoStartTargetId,
@@ -72,6 +81,9 @@ function useVibe64LaunchControlsSurface(props) {
   const PREVIEW_READY_RETRY_INTERVAL_MS = 5000;
   const PREVIEW_READY_RETRY_LIMIT = 30;
   const previewFrame = ref(null);
+  const previewOptionsDialogVisible = ref(false);
+  const previewOptionsFormValues = ref({});
+  const previewOptionsRemember = ref(false);
   const previewReloadKey = ref(0);
   const previewReadyUrl = ref("");
   const previewVisitedUrl = ref("");
@@ -114,6 +126,10 @@ function useVibe64LaunchControlsSurface(props) {
   const previewToolbarStorageKey = computed(() => props.embeddedPreview && props.session
     ? launchPreviewToolbarStorageKey(props.session, projectSlug.value)
     : "");
+  const previewOptionsTarget = computed(() => embeddedAutoStartTarget.value || activeLaunchTarget.value || null);
+  const previewOptions = computed(() => previewOptionsForTarget(previewOptionsTarget.value));
+  const previewOptionsAvailable = computed(() => previewOptions.value.length > 0);
+  const previewOptionsPrimaryLabel = computed(() => terminalIsRunning.value ? "Save and restart preview" : "Save");
   const previewBaseUrl = computed(() => launchPreviewBaseUrl(launchActions.value));
   const previewDisplayBaseUrl = computed(() => launchPreviewDisplayUrl(launchActions.value));
   const previewDisplayedUrl = computed(() => (
@@ -235,6 +251,44 @@ function useVibe64LaunchControlsSurface(props) {
     return run(embeddedAutoStartTarget.value, {
       applyDefaultDisplay: false
     });
+  }
+
+  function openPreviewOptions() {
+    const target = previewOptionsTarget.value;
+    if (!target || !previewOptionsAvailable.value) {
+      return false;
+    }
+    const input = launchInputForTarget(target);
+    previewOptionsFormValues.value = Object.fromEntries(previewOptions.value.map((option) => [
+      option.id,
+      previewOptionFormValue(option, input)
+    ]));
+    previewOptionsRemember.value = previewInputIsRemembered(target);
+    previewOptionsDialogVisible.value = true;
+    return true;
+  }
+
+  async function savePreviewOptions({
+    restart = false
+  } = {}) {
+    const target = previewOptionsTarget.value;
+    if (!target) {
+      previewOptionsDialogVisible.value = false;
+      return false;
+    }
+    savePreviewInput(
+      target,
+      previewInputFromFormValues(target, previewOptionsFormValues.value),
+      {
+        remember: previewOptionsRemember.value
+      }
+    );
+    previewOptionsDialogVisible.value = false;
+    if (restart && terminalIsRunning.value) {
+      await restartTerminal();
+      return true;
+    }
+    return true;
   }
   
   function stopPreviewReadyRetries() {
@@ -511,12 +565,20 @@ function useVibe64LaunchControlsSurface(props) {
     previewEmptyText,
     previewFrame,
     previewLoadingOverlayVisible,
+    previewOptions,
+    previewOptionsAvailable,
+    previewOptionsDialogVisible,
+    previewOptionsFormValues,
+    previewOptionsPrimaryLabel,
+    previewOptionsRemember,
     previewStarting,
     previewToolbarPosition,
     previewUrl,
     copyPreviewUrl,
+    openPreviewOptions,
     recoverEmbeddedPreview,
     reloadPreview,
+    savePreviewOptions,
     restartTerminal,
     retryTerminal,
     run,

@@ -378,15 +378,18 @@ class Vibe64DescribedWorkflowTargetAdapter extends Vibe64WorkflowTargetAdapter {
 
   async createLaunchTargetTerminalSpec({
     context = {},
+    launchInput = {},
     launchTargetId = ""
   } = {}) {
     if (!this.launchTargetTerminalSpecFactory) {
       return super.createLaunchTargetTerminalSpec({
+        launchInput,
         launchTargetId
       });
     }
     return this.launchTargetTerminalSpecFactory({
       context,
+      launchInput,
       launchTargetId,
       session: context.session || {},
       targetRoot: context.session?.targetRoot || context.targetRoot || ""

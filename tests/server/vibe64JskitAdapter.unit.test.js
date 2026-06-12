@@ -378,6 +378,44 @@ test("jskit launch targets expose app and built app actions", async () => {
   });
 });
 
+test("jskit self-target dev launch exposes startup argument preview options", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await writeProjectFile(targetRoot, "package.json", JSON.stringify({
+      scripts: {
+        build: "vite build",
+        dev: "vite",
+        server: "node server.js"
+      }
+    }, null, 2));
+
+    const launchTargets = await listJskitLaunchTargets({
+      config: {
+        values: {
+          [JSKIT_ALLOW_SELF_TARGET_CONFIG]: true
+        }
+      },
+      session: {
+        metadata: {
+          dependencies_installed: "yes",
+          worktree_path: targetRoot
+        }
+      }
+    });
+
+    assert.equal(launchTargets.find((target) => target.id === "built").previewOptions, undefined);
+    assert.deepEqual(launchTargets.find((target) => target.id === "dev").previewOptions, [
+      {
+        defaultValue: [],
+        description: "Arguments passed to the backend command when previewing this self-targeted Vibe64 instance.",
+        id: "startupArgs",
+        label: "Startup arguments",
+        placeholder: ".",
+        type: "string-list"
+      }
+    ]);
+  });
+});
+
 test("jskit launch targets wait for dependency installation", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await writeProjectFile(targetRoot, "package.json", JSON.stringify({
@@ -588,6 +626,55 @@ test("jskit dev launch starts backend and Vite together", async () => {
     assert.match(startupScript, /VIBE64_LAUNCH_READY_V1/u);
     assert.match(startupScript, /fetch\(href/u);
     assert.match(startupScript, /Launch target did not become ready at/u);
+  });
+});
+
+test("jskit dev launch applies preview startup arguments to the backend command", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await writeProjectFile(targetRoot, "package.json", JSON.stringify({
+      scripts: {
+        dev: "vite",
+        server: "node server.js"
+      }
+    }, null, 2));
+
+    const spec = await createJskitLaunchTargetTerminalSpec({
+      context: {
+        config: {
+          values: {
+            [JSKIT_ALLOW_SELF_TARGET_CONFIG]: true
+          }
+        }
+      },
+      launchInput: {
+        values: {
+          startupArgs: [
+            ".",
+            "--profile local editor"
+          ]
+        }
+      },
+      launchTargetId: "dev",
+      session: {
+        metadata: {
+          dependencies_installed: "yes",
+          worktree_path: targetRoot
+        },
+        sessionId: "jskit_dev_launch_with_startup_args",
+        targetRoot
+      },
+      targetRoot
+    });
+
+    assert.equal(spec.ok, true);
+    const startupScript = spec.args({
+      id: "unit-terminal"
+    }).at(-1);
+    assert.match(startupScript, /\(export PORT="\$VIBE64_JSKIT_BACKEND_PORT"; npm run server -- \. .*--profile local editor/u);
+    assert.match(
+      startupScript,
+      /\(export VITE_API_PROXY_TARGET="http:\/\/127\.0\.0\.1:\$VIBE64_JSKIT_BACKEND_PORT"; npm run dev -- --host 0\.0\.0\.0 --port "\$PORT"\) &/u
+    );
   });
 });
 

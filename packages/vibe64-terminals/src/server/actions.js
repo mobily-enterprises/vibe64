@@ -134,6 +134,7 @@ const featureActions = Object.freeze([
     async execute(input, context, deps) {
       void context;
       return deps.featureService.startLaunchTargetTerminal(input.sessionId, {
+        launchInput: input.launchInput || {},
         launchTargetId: input.launchTargetId
       });
     }

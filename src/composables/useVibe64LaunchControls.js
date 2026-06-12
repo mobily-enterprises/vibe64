@@ -24,7 +24,9 @@ import {
   useStudioTerminal
 } from "@/composables/useStudioTerminal.js";
 import {
-  stableLocalStorageKeyPart
+  readLocalStorageJson,
+  stableLocalStorageKeyPart,
+  writeLocalStorageJson
 } from "@/lib/browserLocalStorage.js";
 import {
   useVibe64ProjectSlug
@@ -33,6 +35,10 @@ import {
   currentProjectSlugFromLocation,
   vibe64ProjectScopedStorageKey
 } from "@/lib/vibe64ProjectScope.js";
+import {
+  normalizePreviewInput,
+  previewInputHasValues
+} from "@/lib/vibe64PreviewOptions.js";
 
 const LAUNCH_BROWSER_WINDOW_FEATURES = "popup,width=1400,height=900,left=80,top=60";
 const LAUNCH_PREVIEW_TOOLBAR_POSITIONS = Object.freeze(["left", "center", "right"]);
@@ -59,6 +65,18 @@ function launchTerminalStorageKey(session = {}, projectSlug = currentProjectSlug
 function launchPreviewToolbarStorageKey(session = {}, projectSlug = currentProjectSlugFromLocation()) {
   return vibe64ProjectScopedStorageKey(
     `vibe64:launch-preview-toolbar:${launchBrowserTargetName(session, projectSlug)}`,
+    projectSlug
+  );
+}
+
+function launchPreviewOptionsStorageKey(
+  session = {},
+  projectSlug = currentProjectSlugFromLocation(),
+  launchTargetId = ""
+) {
+  const targetId = stableLocalStorageKeyPart(String(launchTargetId || ""));
+  return vibe64ProjectScopedStorageKey(
+    `vibe64:launch-preview-options:${launchBrowserTargetName(session, projectSlug)}:${targetId}`,
     projectSlug
   );
 }
@@ -294,6 +312,7 @@ function useVibe64LaunchControls({
   const operationBusy = ref(false);
   const terminalExpanded = ref(false);
   const autoStartKey = ref("");
+  const previewInputOverrides = ref({});
   let attachedTerminalId = "";
   let launchStatusPollTimer = 0;
 
@@ -364,6 +383,7 @@ function useVibe64LaunchControls({
       path: vibe64LaunchTerminalPath(sessionsApiPath.value, context.sessionId)
     }),
     buildRawPayload: (_model, { context }) => ({
+      launchInput: context.launchInput || {},
       launchTargetId: String(context.launchTargetId || "")
     }),
     fallbackRunError: "Launch target could not be started.",
@@ -540,8 +560,53 @@ function useVibe64LaunchControls({
       (launchTargets.value.length > 0 || launchTargetsResource.loadError.value || terminalVisible.value)
   ));
 
+  function previewOptionsStorageKeyForTarget(launchTarget = {}) {
+    return launchPreviewOptionsStorageKey(
+      selectedSession.value || {},
+      projectSlug.value,
+      launchTarget.id
+    );
+  }
+
+  function storedLaunchInputForTarget(launchTarget = {}) {
+    return readLocalStorageJson(previewOptionsStorageKeyForTarget(launchTarget), null);
+  }
+
+  function previewInputIsRemembered(launchTarget = {}) {
+    return storedLaunchInputForTarget(launchTarget) !== null;
+  }
+
+  function launchInputForTarget(launchTarget = {}) {
+    const targetId = String(launchTarget?.id || "");
+    const override = targetId ? previewInputOverrides.value[targetId] : null;
+    return normalizePreviewInput(
+      launchTarget,
+      override || storedLaunchInputForTarget(launchTarget) || {}
+    );
+  }
+
+  function savePreviewInput(launchTarget = {}, launchInput = {}, {
+    remember = false
+  } = {}) {
+    const targetId = String(launchTarget?.id || "");
+    if (!targetId) {
+      return normalizePreviewInput(launchTarget, launchInput);
+    }
+    const normalizedInput = normalizePreviewInput(launchTarget, launchInput);
+    previewInputOverrides.value = {
+      ...previewInputOverrides.value,
+      [targetId]: normalizedInput
+    };
+    writeLocalStorageJson(
+      previewOptionsStorageKeyForTarget(launchTarget),
+      remember && previewInputHasValues(normalizedInput) ? normalizedInput : null
+    );
+    return normalizedInput;
+  }
+
   async function run(launchTarget = {}, {
-    applyDefaultDisplay = true
+    applyDefaultDisplay = true,
+    launchInput = null
   } = {}) {
     if (!sessionId.value || launchButtonsDisabled.value || launchTarget.available === false || !launchTarget.id) {
       return false;
@@ -552,6 +617,7 @@ function useVibe64LaunchControls({
     operationBusy.value = true;
     try {
       const terminalSession = await startTerminalCommand.run({
+        launchInput: normalizePreviewInput(launchTarget, launchInput || launchInputForTarget(launchTarget)),
         launchTargetId: launchTarget.id,
         sessionId: sessionId.value
       });
@@ -805,6 +871,7 @@ function useVibe64LaunchControls({
   watch(sessionId, () => {
     attachedTerminalId = "";
     autoStartKey.value = "";
+    previewInputOverrides.value = {};
     clearLaunchStatusPoll();
     closeTerminalSocket();
     disposeTerminalDisplay();
@@ -879,16 +946,19 @@ function useVibe64LaunchControls({
     expandTerminal,
     launchActions,
     launchButtonsDisabled,
+    launchInputForTarget,
     launchTargets,
     loading: launchTargetsResource.isLoading,
     loadError: launchTargetsResource.loadError,
     minimizeTerminal,
     openAction,
     operationBusy,
+    previewInputIsRemembered,
     refresh,
     restartTerminal,
     retryTerminal,
     run,
+    savePreviewInput,
     sendCtrlC,
     setTerminalHost,
     stopTerminal,
@@ -917,8 +987,8 @@ function useVibe64LaunchControls({
     terminalSubtitle,
     terminalTitle,
     terminalVisible,
-    terminalWindowVisible,
     terminalWindowStorageKey,
+    terminalWindowVisible,
     visible
   };
 }
@@ -928,6 +998,7 @@ export {
   launchBrowserTargetName,
   launchPreviewBaseUrl,
   launchPreviewDisplayUrl,
+  launchPreviewOptionsStorageKey,
   launchPreviewToolbarStorageKey,
   launchPreviewUrl,
   launchTargetWorktreePath,

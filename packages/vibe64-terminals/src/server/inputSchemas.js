@@ -227,6 +227,11 @@ const fixCodexReportFields = {
 };
 
 const launchTargetFields = {
+  launchInput: {
+    type: "object",
+    additionalProperties: true,
+    required: false
+  },
   launchTargetId: {
     type: "string",
     noTrim: false,

@@ -74,6 +74,16 @@
           />
 
           <v-btn
+            v-if="previewOptionsAvailable"
+            :disabled="operationBusy"
+            :icon="mdiCogOutline"
+            size="small"
+            title="Preview options"
+            variant="text"
+            @click="openPreviewOptions"
+          />
+
+          <v-btn
             v-if="embeddedTerminalVisible"
             aria-label="Hide launch terminal"
             class="vibe64-launch-controls__terminal-toggle--hide"
@@ -95,18 +105,32 @@
           />
         </div>
 
-        <v-btn
+        <div
           v-else-if="embeddedAutoStartButtonVisible"
-          aria-label="Start preview"
-          class="vibe64-launch-controls__auto-start-button"
-          :disabled="launchButtonsDisabled || !embeddedAutoStartTarget"
-          :icon="mdiPlayCircleOutline"
-          :loading="loading || operationBusy"
-          size="small"
-          title="Start preview"
-          variant="text"
-          @click="run(embeddedAutoStartTarget)"
-        />
+          class="vibe64-launch-controls__auto-start-actions"
+        >
+          <v-btn
+            aria-label="Start preview"
+            class="vibe64-launch-controls__auto-start-button"
+            :disabled="launchButtonsDisabled || !embeddedAutoStartTarget"
+            :icon="mdiPlayCircleOutline"
+            :loading="loading || operationBusy"
+            size="small"
+            title="Start preview"
+            variant="text"
+            @click="run(embeddedAutoStartTarget)"
+          />
+
+          <v-btn
+            v-if="previewOptionsAvailable"
+            :disabled="operationBusy"
+            :icon="mdiCogOutline"
+            size="small"
+            title="Preview options"
+            variant="text"
+            @click="openPreviewOptions"
+          />
+        </div>
 
         <v-menu v-else-if="manualLaunchMenuVisible" location="bottom end">
           <template #activator="{ props: menuProps }">
@@ -260,6 +284,55 @@
         />
       </template>
     </Vibe64FloatingTerminalWindow>
+
+    <v-dialog
+      v-model="previewOptionsDialogVisible"
+      max-width="520"
+    >
+      <v-card class="vibe64-launch-controls__options-card">
+        <v-card-title>Preview options</v-card-title>
+
+        <v-card-text>
+          <v-textarea
+            v-for="option in previewOptions"
+            :key="option.id"
+            v-model="previewOptionsFormValues[option.id]"
+            auto-grow
+            density="comfortable"
+            :hint="option.description || (option.type === 'string-list' ? 'One value per line.' : '')"
+            :label="option.label"
+            :placeholder="option.placeholder"
+            persistent-hint
+            rows="3"
+            variant="outlined"
+          />
+
+          <v-checkbox
+            v-model="previewOptionsRemember"
+            density="compact"
+            hide-details
+            label="Remember for this project"
+          />
+        </v-card-text>
+
+        <v-card-actions>
+          <v-spacer />
+          <v-btn
+            variant="text"
+            @click="previewOptionsDialogVisible = false"
+          >
+            Cancel
+          </v-btn>
+          <v-btn
+            color="primary"
+            variant="flat"
+            @click="savePreviewOptions({ restart: true })"
+          >
+            {{ previewOptionsPrimaryLabel }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </div>
 </template>
 
@@ -268,6 +341,7 @@ import {
   mdiChevronLeft,
   mdiChevronRight,
   mdiClose,
+  mdiCogOutline,
   mdiConsoleLine,
   mdiContentCopy,
   mdiOpenInNew,
@@ -334,6 +408,7 @@ const {
   embeddedAutoStartTarget,
   embeddedRecoveryButtonVisible,
   embeddedTerminalVisible,
+  copyPreviewUrl,
   handlePreviewFrameLoad,
   launchActions,
   launchButtonsDisabled,
@@ -345,16 +420,24 @@ const {
   movePreviewToolbar,
   openAction,
   operationBusy,
+  openPreviewOptions,
   previewBaseUrl,
   previewDisplayedUrl,
   previewEmptyText,
   previewFrame,
   previewLoadingOverlayVisible,
+  previewOptions,
+  previewOptionsAvailable,
+  previewOptionsDialogVisible,
+  previewOptionsFormValues,
+  previewOptionsPrimaryLabel,
+  previewOptionsRemember,
   previewStarting,
   previewToolbarPosition,
   previewUrl,
   recoverEmbeddedPreview,
   reloadPreview,
+  savePreviewOptions,
   restartTerminal,
   retryTerminal,
   run,
@@ -469,6 +552,12 @@ const {
   font-size: 1.55rem;
 }
 
+.vibe64-launch-controls__auto-start-actions {
+  align-items: center;
+  display: flex;
+  gap: 0.12rem;
+}
+
 .vibe64-launch-controls__dock {
   align-items: center;
   background: rgba(var(--v-theme-primary), 0.08);
@@ -513,6 +602,11 @@ const {
 .vibe64-launch-controls__menu {
   max-width: min(20rem, 92vw);
   min-width: min(14rem, 92vw);
+}
+
+.vibe64-launch-controls__options-card :deep(.v-card-text) {
+  display: grid;
+  gap: 1rem;
 }
 
 .vibe64-launch-controls__preview {
