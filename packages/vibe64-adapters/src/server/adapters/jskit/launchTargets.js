@@ -595,6 +595,7 @@ async function createJskitBuiltLaunchDescriptor({
   databaseHost = "",
   launchInput = {},
   selfTarget = null,
+  workdir = "",
   worktreePath = ""
 } = {}) {
   const startupArgs = startupArgsFromLaunchInput(launchInput);
@@ -663,7 +664,8 @@ async function createJskitBuiltLaunchDescriptor({
       ...jskitSelfTargetMetadata(selfTarget)
     },
     previewAuth: JSKIT_PREVIEW_AUTH_KIND,
-    urlPath: await defaultAppPath(worktreePath)
+    urlPath: await defaultAppPath(worktreePath),
+    ...(workdir ? { workdir } : {})
   };
 }
 
@@ -672,6 +674,7 @@ async function createJskitDevLaunchDescriptor({
   databaseHost = "",
   launchInput = {},
   selfTarget = null,
+  workdir = "",
   worktreePath = ""
 } = {}) {
   const startupArgs = startupArgsFromLaunchInput(launchInput);
@@ -704,7 +707,8 @@ async function createJskitDevLaunchDescriptor({
       ...jskitSelfTargetMetadata(selfTarget)
     },
     previewAuth: JSKIT_PREVIEW_AUTH_KIND,
-    urlPath: await defaultAppPath(worktreePath)
+    urlPath: await defaultAppPath(worktreePath),
+    ...(workdir ? { workdir } : {})
   };
 }
 
@@ -749,13 +753,17 @@ async function createJskitLaunchTargetTerminalSpec({
   }
 
   const launchTargetRoot = targetRoot || session.targetRoot || "";
+  const selfTargetCodeRoot = await isJskitSelfTargetRoot(launchTargetRoot)
+    ? launchTargetRoot
+    : "";
+  const launchConfigRoot = selfTargetCodeRoot || worktreePath;
   const [databaseHost, config] = await Promise.all([
-    readDatabaseHostFromDotEnv(worktreePath),
+    readDatabaseHostFromDotEnv(launchConfigRoot),
     launchTargetId === "dev"
-      ? resolveDevLaunchConfig(worktreePath, {
+      ? resolveDevLaunchConfig(launchConfigRoot, {
           targetRoot: launchTargetRoot
         })
-      : resolveBuiltLaunchConfig(worktreePath, {
+      : resolveBuiltLaunchConfig(launchConfigRoot, {
           targetRoot: launchTargetRoot
         })
   ]);
@@ -771,10 +779,12 @@ async function createJskitLaunchTargetTerminalSpec({
       port,
       worktreePath: launchWorktreePath
     }) => {
+      const descriptorWorktreePath = selfTargetCodeRoot || launchWorktreePath;
       // Vibe64 self-targeting is special: the inner Studio needs the same project
       // list, provider credentials, runtime namespace, and host-reachable preview
-      // proxy range. Keep VIBE64_SYSTEM_ROOT session-private because it owns auth
-      // cookies, session stores, and terminal runtime state.
+      // proxy range. Run the selected checkout as the inner Studio code, while
+      // keeping VIBE64_SYSTEM_ROOT session-private for auth, sessions, and
+      // terminal runtime state.
       const selfTarget = jskitSelfTargetRootConfig({
         enabled: config.hostDocker,
         launchPort: port,
@@ -790,7 +800,8 @@ async function createJskitLaunchTargetTerminalSpec({
         launchInput,
         selfTarget,
         targetRoot: launchTargetRoot,
-        worktreePath: launchWorktreePath
+        workdir: selfTargetCodeRoot,
+        worktreePath: descriptorWorktreePath
       });
     },
     session,

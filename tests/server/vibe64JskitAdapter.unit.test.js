@@ -567,6 +567,60 @@ test("jskit launch targets use canonical session worktree when metadata path is 
   });
 });
 
+test("jskit Vibe64 self-target launch uses the selected checkout instead of a stale session worktree", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "self-target-stale-worktree";
+    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
+    const worktreePath = path.join(sessionRoot, "worktree");
+    await writeProjectFile(targetRoot, "package.json", JSON.stringify({
+      name: "vibe64",
+      scripts: {
+        dev: "vite",
+        server: "node current-server.js"
+      }
+    }, null, 2));
+    await writeProjectFile(worktreePath, "package.json", JSON.stringify({
+      name: "vibe64",
+      scripts: {
+        dev: "vite",
+        server: "node stale-server.js"
+      }
+    }, null, 2));
+    await writeProjectFile(targetRoot, "config/server_command", "node current-server.js\n");
+    await writeProjectFile(worktreePath, "config/server_command", "node stale-server.js\n");
+
+    const spec = await createJskitLaunchTargetTerminalSpec({
+      context: {
+        projectsRoot: path.dirname(targetRoot)
+      },
+      launchTargetId: "dev",
+      session: {
+        completedSteps: ["session_created", "worktree_created"],
+        metadata: {
+          dependencies_installed: "yes",
+          worktree_path: worktreePath
+        },
+        sessionId,
+        sessionRoot,
+        targetRoot
+      },
+      targetRoot
+    });
+
+    assert.equal(spec.ok, true);
+    assert.equal(spec.metadata.backendCommand, "node current-server.js");
+    assert.equal(spec.metadata.runRoot, targetRoot);
+    assert.equal(spec.metadata.vibe64SelfTargetProjectsRoot, path.dirname(targetRoot));
+    const args = spec.args({
+      id: "unit-terminal"
+    });
+    assert.equal(args[args.indexOf("-w") + 1], targetRoot);
+    const startupScript = args.at(-1);
+    assert.match(startupScript, /node current-server\.js/u);
+    assert.doesNotMatch(startupScript, /stale-server/u);
+  });
+});
+
 test("jskit built launch waits for the server readiness marker before opening", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await writeProjectFile(targetRoot, "package.json", JSON.stringify({
