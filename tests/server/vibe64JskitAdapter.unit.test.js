@@ -12,6 +12,12 @@ import {
   JSKIT_PREVIEW_AUTH_KIND
 } from "@local/vibe64-core/server/previewAuth";
 import {
+  PREVIEW_PROXY_HOST_ENV,
+  PREVIEW_PROXY_PORT_END_ENV,
+  PREVIEW_PROXY_PORT_START_ENV,
+  PREVIEW_PROXY_PUBLIC_HOST_ENV
+} from "@local/vibe64-core/server/launchPreviewProxyEnv";
+import {
   VIBE64_PROJECTS_ROOT_ENV,
   VIBE64_PROVIDER_HOMES_ROOT_ENV,
   VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV,
@@ -40,7 +46,8 @@ import {
 import { withTemporaryRoot, worktreeMetadata } from "./vibe64TestHelpers.js";
 import {
   assertDockerEnv,
-  assertDockerVolumeMount
+  assertDockerVolumeMount,
+  dockerEnvValue
 } from "./dockerArgsTestHelpers.js";
 
 async function withRuntimeNamespace(namespace, fn) {
@@ -334,6 +341,16 @@ test("jskit Vibe64 self-target enables host Docker with shared project runtime d
     assertDockerEnv(args, VIBE64_PROVIDER_HOMES_ROOT_ENV, providerHomesRoot);
     assertDockerEnv(args, VIBE64_SYSTEM_ROOT_ENV, selfTargetSystemRoot);
     assertDockerEnv(args, VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV, "1");
+    assertDockerEnv(args, PREVIEW_PROXY_HOST_ENV, "0.0.0.0");
+    assertDockerEnv(args, PREVIEW_PROXY_PUBLIC_HOST_ENV, "127.0.0.1");
+    const previewProxyPortStart = dockerEnvValue(args, PREVIEW_PROXY_PORT_START_ENV);
+    const previewProxyPortEnd = dockerEnvValue(args, PREVIEW_PROXY_PORT_END_ENV);
+    assert.match(previewProxyPortStart, /^\d+$/u);
+    assert.match(previewProxyPortEnd, /^\d+$/u);
+    assert.equal(Number(previewProxyPortEnd), Number(previewProxyPortStart) + 99);
+    assert.ok(args.includes(
+      `127.0.0.1:${previewProxyPortStart}-${previewProxyPortEnd}:${previewProxyPortStart}-${previewProxyPortEnd}`
+    ));
     assert.ok(args.includes("/var/run/docker.sock:/var/run/docker.sock"));
     assertDockerVolumeMount(args, projectsRoot, projectsRoot);
     assertDockerVolumeMount(args, providerHomesRoot, providerHomesRoot);
@@ -346,6 +363,10 @@ test("jskit Vibe64 self-target enables host Docker with shared project runtime d
     assert.equal(spec.metadata.vibe64SelfTargetProjectsRoot, projectsRoot);
     assert.equal(spec.metadata.vibe64SelfTargetProviderHomesRoot, providerHomesRoot);
     assert.equal(spec.metadata.vibe64SelfTargetSystemRoot, selfTargetSystemRoot);
+    assert.equal(
+      spec.metadata.vibe64SelfTargetPreviewProxyPortRange,
+      `${previewProxyPortStart}-${previewProxyPortEnd}`
+    );
     const launchHome = path.join(sessionRoot, "runtime", "launch-home", "unit-terminal");
     assertDockerVolumeMount(args, launchHome, launchHome);
     assert.ok(args.at(-1).includes(`HOME=${launchHome}`));

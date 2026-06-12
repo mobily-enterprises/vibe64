@@ -18,6 +18,13 @@ import {
   isLoopbackAddress
 } from "@local/vibe64-core/server/localStudioRequest";
 import {
+  PREVIEW_PROXY_HOST_ENV,
+  PREVIEW_PROXY_PORT_END,
+  PREVIEW_PROXY_PORT_START,
+  PREVIEW_PROXY_PUBLIC_HOST_ENV,
+  previewProxyPortRange
+} from "@local/vibe64-core/server/launchPreviewProxyEnv";
+import {
   currentProjectScopeKey
 } from "@local/vibe64-core/server/projectRequestContext";
 import {
@@ -37,12 +44,8 @@ import {
 const LOOPBACK_HOST = "127.0.0.1";
 const HTML_CONTENT_TYPE_PATTERN = /\btext\/html\b/iu;
 const REQUEST_BODY_METHODS = new Set(["PATCH", "POST", "PUT"]);
-const PREVIEW_PROXY_PORT_START = 49100;
-const PREVIEW_PROXY_PORT_END = 49999;
 const PREVIEW_PROXY_TOKEN_QUERY_PARAM = "vibe64_preview_token";
 const PREVIEW_PROXY_TOKEN_COOKIE = "vibe64_preview_token";
-const PREVIEW_PROXY_HOST_ENV = "VIBE64_PREVIEW_PROXY_HOST";
-const PREVIEW_PROXY_PUBLIC_HOST_ENV = "VIBE64_PREVIEW_PROXY_PUBLIC_HOST";
 const PREVIEW_PROXY_SOCKET_DIR_ENV = "VIBE64_PREVIEW_PROXY_SOCKET_DIR";
 const PREVIEW_PROXY_DEBUG_ENV = "VIBE64_PREVIEW_DEBUG";
 const PREVIEW_PROXY_SOCKET_DIR = "/run/vibe64/apps";
@@ -929,11 +932,14 @@ function previewAuthFingerprint(value = null) {
 async function listenOnPreviewPort(server, {
   env = process.env,
   host = previewProxyListenHost(env),
-  portEnd = PREVIEW_PROXY_PORT_END,
-  portStart = PREVIEW_PROXY_PORT_START
+  portEnd = undefined,
+  portStart = undefined
 } = {}) {
+  const configuredRange = previewProxyPortRange(env);
+  const firstPort = portStart || configuredRange.start;
+  const lastPort = portEnd || configuredRange.end;
   const publicHost = previewProxyPublicHost(host, env);
-  for (let port = portStart; port <= portEnd; port += 1) {
+  for (let port = firstPort; port <= lastPort; port += 1) {
     const listened = await tryListen(server, port, host);
     if (listened) {
       return {
@@ -945,7 +951,7 @@ async function listenOnPreviewPort(server, {
       };
     }
   }
-  throw new Error(`No launch preview proxy port is available in ${portStart}-${portEnd}.`);
+  throw new Error(`No launch preview proxy port is available in ${firstPort}-${lastPort}.`);
 }
 
 async function listenOnPreviewSocket(server, {

@@ -12,6 +12,7 @@
     "./server/doctorCheckItems": "./src/server/doctorCheckItems.js",
     "./server/featureRoutes": "./src/server/featureRoutes.js",
     "./server/localhostCheckBypass": "./src/server/localhostCheckBypass.js",
+    "./server/launchPreviewProxyEnv": "./src/server/launchPreviewProxyEnv.js",
     "./server/localStudioRequest": "./src/server/localStudioRequest.js",
     "./server/projectServiceSelection": "./src/server/projectServiceSelection.js",
     "./server/accountRealtimeEvents": "./src/server/accountRealtimeEvents.js",

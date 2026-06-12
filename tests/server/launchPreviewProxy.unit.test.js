@@ -16,6 +16,10 @@ import {
   runWithProjectRequestContext
 } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 import {
+  PREVIEW_PROXY_PORT_END_ENV,
+  PREVIEW_PROXY_PORT_START_ENV
+} from "../../packages/vibe64-core/src/server/launchPreviewProxyEnv.js";
+import {
   PREVIEW_PROXY_PORT_END,
   PREVIEW_PROXY_PORT_START,
   PREVIEW_PROXY_TOKEN_QUERY_PARAM,
@@ -125,6 +129,27 @@ test("launch preview proxy injects HTML and proxies app-relative requests", asyn
 
       const again = await registry.ensure("session-1", `${target.origin}/home?mode=dev`);
       assert.equal(again.href, preview.href);
+    } finally {
+      await registry.closeAll();
+    }
+  });
+});
+
+test("launch preview proxy uses the configured local port range", async () => {
+  const port = await unusedLocalPort();
+  await withTargetServer(async (target) => {
+    const registry = createLaunchPreviewProxyRegistry({
+      env: {
+        [PREVIEW_PROXY_PORT_END_ENV]: String(port),
+        [PREVIEW_PROXY_PORT_START_ENV]: String(port)
+      }
+    });
+    try {
+      const preview = await registry.ensure("session-range", `${target.origin}/home`);
+      const previewUrl = new URL(preview.href);
+
+      assert.equal(previewUrl.port, String(port));
+      assert.equal((await fetch(preview.href)).status, 200);
     } finally {
       await registry.closeAll();
     }
@@ -594,6 +619,18 @@ function previewWebSocketHref(previewHref = "", {
     ? appendPreviewTokenQueryParam(search, targetToken)
     : search;
   return previewUrl.toString();
+}
+
+function unusedLocalPort() {
+  const server = createServer();
+  return new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      server.off("error", reject);
+      const port = server.address().port;
+      server.close(() => resolve(port));
+    });
+  });
 }
 
 function previewCookiePair(setCookieHeader = "", cookieName = "") {
