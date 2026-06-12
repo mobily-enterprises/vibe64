@@ -72,9 +72,11 @@ function normalizePreviewTargetHref(value = "") {
 
 function proxyRequestHeaders(headers = {}, targetUrl, {
   previewAuth = null,
-  proxyOrigin = ""
+  proxyOrigin = "",
+  targetHost = ""
 } = {}) {
   const nextHeaders = { ...headers };
+  delete nextHeaders["accept-encoding"];
   delete nextHeaders.connection;
   delete nextHeaders["content-length"];
   delete nextHeaders.host;
@@ -89,13 +91,15 @@ function proxyRequestHeaders(headers = {}, targetUrl, {
   if (!nextHeaders.cookie) {
     delete nextHeaders.cookie;
   }
-  nextHeaders.host = targetUrl.host;
+  nextHeaders["accept-encoding"] = "identity";
+  nextHeaders.host = targetHost || targetUrl.host;
   return nextHeaders;
 }
 
 function proxyUpgradeHeaders(headers = {}, targetUrl, {
   previewAuth = null,
-  proxyOrigin = ""
+  proxyOrigin = "",
+  targetHost = ""
 } = {}) {
   const nextHeaders = { ...headers };
   nextHeaders.cookie = stripPreviewTokenCookie(nextHeaders.cookie, {
@@ -108,7 +112,7 @@ function proxyUpgradeHeaders(headers = {}, targetUrl, {
   if (!nextHeaders.cookie) {
     delete nextHeaders.cookie;
   }
-  nextHeaders.host = targetUrl.host;
+  nextHeaders.host = targetHost || targetUrl.host;
   return nextHeaders;
 }
 
@@ -312,9 +316,17 @@ function responseHeaders(response, {
   targetOrigin = ""
 } = {}) {
   const headers = {};
-  response.headers.forEach((value, key) => {
-    headers[key] = value;
-  });
+  if (typeof response.headers?.forEach === "function") {
+    response.headers.forEach((value, key) => {
+      headers[key] = value;
+    });
+  } else {
+    for (const [key, value] of Object.entries(response.headers || {})) {
+      if (value !== undefined) {
+        headers[key] = value;
+      }
+    }
+  }
   delete headers["content-length"];
   if (injected) {
     delete headers["content-encoding"];
@@ -480,11 +492,13 @@ function queryParamName(rawName = "") {
 }
 
 async function proxyPreviewRequest(request, response, {
+  connectOrigin = "",
   previewAuth = null,
   proxyOrigin = "",
   tokenScope = {},
   token = "",
   tokenHash = "",
+  targetHost = "",
   targetOrigin = ""
 } = {}) {
   const startedAtMs = Date.now();
@@ -499,6 +513,7 @@ async function proxyPreviewRequest(request, response, {
     proxyOrigin,
     search: requestUrl.search,
     sessionId: String(tokenScope.sessionId || ""),
+    connectOrigin,
     targetOrigin,
     terminalSessionId: String(tokenScope.terminalSessionId || "")
   };
@@ -512,12 +527,13 @@ async function proxyPreviewRequest(request, response, {
     return;
   }
   try {
-    const targetUrl = targetRequestUrl(request.url, targetOrigin);
+    const targetUrl = targetRequestUrl(request.url, connectOrigin || targetOrigin);
     const method = String(request.method || "GET").toUpperCase();
     const fetchOptions = {
       headers: proxyRequestHeaders(request.headers, targetUrl, {
         previewAuth,
-        proxyOrigin
+        proxyOrigin,
+        targetHost
       }),
       method,
       redirect: "manual"
@@ -526,15 +542,15 @@ async function proxyPreviewRequest(request, response, {
       fetchOptions.body = await requestBody(request);
     }
 
-    const targetResponse = await fetch(targetUrl, fetchOptions);
-    const contentType = String(targetResponse.headers.get("content-type") || "");
+    const targetResponse = await requestPreviewTarget(targetUrl, fetchOptions);
+    const contentType = String(targetResponse.headers["content-type"] || "");
     if (HTML_CONTENT_TYPE_PATTERN.test(contentType)) {
-      const html = await targetResponse.text();
+      const html = await streamText(targetResponse);
       const body = injectLaunchPreviewBridge(html, {
         debug: previewProxyDebugEnabled(),
         targetOrigin
       });
-      response.writeHead(targetResponse.status, previewResponseHeaders(targetResponse, {
+      response.writeHead(targetResponse.statusCode || 200, previewResponseHeaders(targetResponse, {
         injected: true,
         proxyOrigin,
         targetOrigin,
@@ -546,13 +562,13 @@ async function proxyPreviewRequest(request, response, {
         contentType,
         durationMs: vibe64SessionDebugDurationMs(startedAtMs),
         injectedBridge: body !== html,
-        responseStatus: targetResponse.status,
+        responseStatus: targetResponse.statusCode || 200,
         targetHref: targetUrl.toString()
       });
       return;
     }
 
-    response.writeHead(targetResponse.status, previewResponseHeaders(targetResponse, {
+    response.writeHead(targetResponse.statusCode || 200, previewResponseHeaders(targetResponse, {
       proxyOrigin,
       targetOrigin,
       token
@@ -562,14 +578,10 @@ async function proxyPreviewRequest(request, response, {
       contentType,
       durationMs: vibe64SessionDebugDurationMs(startedAtMs),
       injectedBridge: false,
-      responseStatus: targetResponse.status,
+      responseStatus: targetResponse.statusCode || 200,
       targetHref: targetUrl.toString()
     });
-    if (targetResponse.body) {
-      pipePreviewResponseBody(targetResponse.body, response);
-    } else {
-      response.end();
-    }
+    pipePreviewResponseBody(targetResponse, response);
   } catch (error) {
     if (String(request.method || "GET").toUpperCase() === "GET" && requestAcceptsHtml(request)) {
       response.writeHead(503, {
@@ -599,8 +611,38 @@ async function proxyPreviewRequest(request, response, {
   }
 }
 
+function requestPreviewTarget(targetUrl, {
+  body = null,
+  headers = {},
+  method = "GET"
+} = {}) {
+  const requestFactory = targetUrl.protocol === "https:" ? httpsRequest : httpRequest;
+  return new Promise((resolve, reject) => {
+    const upstreamRequest = requestFactory(targetUrl, {
+      headers,
+      method
+    }, (upstreamResponse) => {
+      resolve(upstreamResponse);
+    });
+    upstreamRequest.once("error", reject);
+    if (body) {
+      upstreamRequest.end(body);
+      return;
+    }
+    upstreamRequest.end();
+  });
+}
+
+async function streamText(stream) {
+  const chunks = [];
+  for await (const chunk of stream) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
 function pipePreviewResponseBody(body, response) {
-  const stream = Readable.fromWeb(body);
+  const stream = typeof body?.getReader === "function" ? Readable.fromWeb(body) : body;
   stream.once("error", (error) => {
     if (!response.destroyed) {
       response.destroy(error);
@@ -616,10 +658,12 @@ function pipePreviewResponseBody(body, response) {
 }
 
 function proxyPreviewUpgrade(request, socket, head, {
+  connectOrigin = "",
   previewAuth = null,
   proxyOrigin = "",
   tokenScope = {},
   tokenHash = "",
+  targetHost = "",
   targetOrigin = ""
 } = {}) {
   const requestUrl = new URL(String(request.url || "/"), proxyOrigin || targetOrigin);
@@ -630,7 +674,7 @@ function proxyPreviewUpgrade(request, socket, head, {
 
   let targetUrl;
   try {
-    targetUrl = targetRequestUrl(request.url, targetOrigin);
+    targetUrl = targetRequestUrl(request.url, connectOrigin || targetOrigin);
   } catch (error) {
     rejectPreviewUpgrade(socket, {
       message: String(error?.message || error),
@@ -645,7 +689,8 @@ function proxyPreviewUpgrade(request, socket, head, {
   const upstreamRequest = requestFactory(targetUrl, {
     headers: proxyUpgradeHeaders(request.headers, targetUrl, {
       previewAuth,
-      proxyOrigin
+      proxyOrigin,
+      targetHost
     }),
     method: request.method || "GET"
   });
@@ -701,11 +746,12 @@ function createLaunchPreviewProxyRegistry({
 } = {}) {
   const proxies = new Map();
 
-  async function ensure(input = {}, targetHref = "") {
+  async function ensure(input = {}, connectHref = "") {
     const scope = previewProxyScope(input, {
-      targetHref
+      targetHref: connectHref
     });
     const targetUrl = normalizePreviewTargetHref(scope.targetHref);
+    const connectUrl = normalizePreviewTargetHref(connectHref || targetUrl.toString());
     const key = previewProxyKey(scope);
     const existing = proxies.get(key);
     const publicOrigin = normalizePreviewPublicOrigin(input.previewPublicOrigin);
@@ -714,7 +760,9 @@ function createLaunchPreviewProxyRegistry({
     });
     previewProxyDebugLog("server.launchPreviewProxy.ensure", {
       existingProxy: Boolean(existing),
+      existingConnectHref: String(existing?.connectHref || ""),
       existingTargetHref: String(existing?.targetHref || ""),
+      connectHref: connectUrl.toString(),
       key,
       projectScope: String(scope.projectScope || ""),
       publicOrigin,
@@ -724,6 +772,7 @@ function createLaunchPreviewProxyRegistry({
     });
     if (
       existing &&
+      existing.connectHref === connectUrl.toString() &&
       existing.targetHref === targetUrl.toString() &&
       existing.publicOrigin === publicOrigin &&
       previewAuthFingerprint(existing.previewAuth) === previewAuthFingerprint(previewAuth)
@@ -733,6 +782,7 @@ function createLaunchPreviewProxyRegistry({
         projectScope: String(scope.projectScope || ""),
         proxyOrigin: String(existing.origin || ""),
         sessionId: String(scope.sessionId || ""),
+        connectHref: connectUrl.toString(),
         targetHref: targetUrl.toString(),
         terminalSessionId: String(scope.terminalSessionId || "")
       });
@@ -740,7 +790,10 @@ function createLaunchPreviewProxyRegistry({
     }
     await close(scope);
 
-    const proxy = await startLaunchPreviewProxy(targetUrl, {
+    const proxy = await startLaunchPreviewProxy({
+      connectUrl,
+      targetUrl
+    }, {
       ...scope,
       targetHref: targetUrl.toString()
     }, {
@@ -766,6 +819,7 @@ function createLaunchPreviewProxyRegistry({
         sessionId: String(scope.sessionId || ""),
         terminalSessionId: String(scope.terminalSessionId || ""),
         targets: closeEntries.map(([, proxy]) => ({
+          connectHref: String(proxy.connectHref || ""),
           proxyOrigin: String(proxy.origin || ""),
           targetHref: String(proxy.targetHref || ""),
           terminalSessionId: String(proxy.scope?.terminalSessionId || "")
@@ -784,6 +838,7 @@ function createLaunchPreviewProxyRegistry({
       previewProxyDebugLog("server.launchPreviewProxy.closeAll", {
         count: closeEntries.length,
         targets: closeEntries.map(([, proxy]) => ({
+          connectHref: String(proxy.connectHref || ""),
           projectScope: String(proxy.scope?.projectScope || ""),
           proxyOrigin: String(proxy.origin || ""),
           sessionId: String(proxy.scope?.sessionId || ""),
@@ -832,7 +887,10 @@ function previewProxyKey(scope = {}) {
   ].join(":");
 }
 
-async function startLaunchPreviewProxy(targetUrl, scope = {}, {
+async function startLaunchPreviewProxy({
+  connectUrl,
+  targetUrl
+} = {}, scope = {}, {
   env = process.env,
   previewAuth = null,
   publicOrigin = ""
@@ -843,24 +901,29 @@ async function startLaunchPreviewProxy(targetUrl, scope = {}, {
     ...scope,
     targetHref: targetUrl.toString()
   };
+  const connectOrigin = connectUrl.origin;
   const tokenHash = previewTokenHash(token, tokenScope);
   let proxyOrigin = "";
   server.on("request", (request, response) => {
     void proxyPreviewRequest(request, response, {
+      connectOrigin,
       previewAuth,
       proxyOrigin,
       token,
       tokenScope,
       tokenHash,
+      targetHost: targetUrl.host,
       targetOrigin: targetUrl.origin
     });
   });
   server.on("upgrade", (request, socket, head) => {
     proxyPreviewUpgrade(request, socket, head, {
+      connectOrigin,
       previewAuth,
       proxyOrigin,
       tokenScope,
       tokenHash,
+      targetHost: targetUrl.host,
       targetOrigin: targetUrl.origin
     });
   });
@@ -877,6 +940,7 @@ async function startLaunchPreviewProxy(targetUrl, scope = {}, {
   server.unref();
   proxyOrigin = listen.origin;
   previewProxyDebugLog("server.launchPreviewProxy.started", {
+    connectHref: connectUrl.toString(),
     listenKind: listen.kind,
     port: listen.port,
     projectScope: String(scope.projectScope || ""),
@@ -896,6 +960,7 @@ async function startLaunchPreviewProxy(targetUrl, scope = {}, {
       });
     }),
     origin: proxyOrigin,
+    connectHref: connectUrl.toString(),
     publicOrigin,
     previewAuth,
     scope: Object.freeze({

@@ -161,6 +161,30 @@ test("launch preview proxy uses the configured local port range", async () => {
   });
 });
 
+test("launch preview proxy preserves the canonical target host when using an alternate connect URL", async () => {
+  await withTargetServer(async (target) => {
+    const registry = createLaunchPreviewProxyRegistry();
+    const canonicalHref = "http://127.0.0.1:4101/home?mode=dev";
+    try {
+      const preview = await registry.ensure({
+        sessionId: "session-alternate-connect",
+        targetHref: canonicalHref,
+        terminalSessionId: "terminal-alternate-connect"
+      }, `${target.origin}/home?mode=dev`);
+
+      assert.equal(preview.available, true);
+      assert.equal(preview.targetHref, canonicalHref);
+
+      const response = await fetch(preview.href);
+      assert.equal(response.status, 200);
+      assert.match(await response.text(), /Target home/u);
+      assert.equal(target.requests.at(-1)?.host, "127.0.0.1:4101");
+    } finally {
+      await registry.closeAll();
+    }
+  });
+});
+
 test("launch preview proxy can expose previews through a Caddy-compatible Unix socket origin", async () => {
   const socketDir = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-sockets-"));
   await withTargetServer(async (target) => {
@@ -534,7 +558,12 @@ test("launch preview proxy handles aborted upstream response bodies", async () =
 });
 
 async function withTargetServer(callback) {
+  const requests = [];
   const server = createServer((request, response) => {
+    requests.push({
+      host: request.headers.host || "",
+      url: request.url || ""
+    });
     if (request.url === "/api/ping") {
       response.writeHead(200, {
         "Content-Type": "application/json"
@@ -578,7 +607,8 @@ async function withTargetServer(callback) {
   const address = server.address();
   try {
     await callback({
-      origin: `http://127.0.0.1:${address.port}`
+      origin: `http://127.0.0.1:${address.port}`,
+      requests
     });
   } finally {
     await new Promise((resolve) => {

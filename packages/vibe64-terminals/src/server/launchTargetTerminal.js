@@ -400,6 +400,7 @@ function createLaunchTargetTerminalController({
           targetHref
         }),
         sessionId,
+        targetHref,
         terminalSessionId
       }, proxyTargetHref);
       return {
