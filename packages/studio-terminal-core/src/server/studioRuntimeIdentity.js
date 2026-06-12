@@ -9,6 +9,7 @@ const VIBE64_TOOLCHAIN_IMAGE_REGISTRY = "ghcr.io/mobily-enterprises";
 const VIBE64_TOOLCHAIN_IMAGE_VERSION = "0.1.0";
 
 const VIBE64_BYPASS_LOCALHOST_CHECK_ENV = "VIBE64_BYPASS_LOCALHOST_CHECK";
+const VIBE64_RUNTIME_NAMESPACE_ENV = "VIBE64_RUNTIME_NAMESPACE";
 const VIBE64_SKIP_STALE_TERMINAL_CLEANUP_ENV = "VIBE64_SKIP_STALE_TERMINAL_CLEANUP";
 const VIBE64_BASE_TOOLCHAIN_IMAGE_ENV = "VIBE64_BASE_TOOLCHAIN_IMAGE";
 const VIBE64_JSKIT_TOOLCHAIN_IMAGE_ENV = "VIBE64_JSKIT_TOOLCHAIN_IMAGE";
@@ -36,6 +37,16 @@ function vibe64ToolchainImage(name = "", envName = "") {
   return override || `${VIBE64_TOOLCHAIN_IMAGE_REGISTRY}/${name}:${VIBE64_TOOLCHAIN_IMAGE_VERSION}`;
 }
 
+function runtimeNamespace({
+  env = process.env
+} = {}) {
+  return String(env[VIBE64_RUNTIME_NAMESPACE_ENV] || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_.-]+/gu, "-")
+    .replace(/^-+|-+$/gu, "");
+}
+
 const STUDIO_BASE_TOOLCHAIN_IMAGE = vibe64ToolchainImage("vibe64-base-toolchain", VIBE64_BASE_TOOLCHAIN_IMAGE_ENV);
 
 function studioDockerLabel(name = "", value = undefined) {
@@ -51,6 +62,7 @@ export {
   VIBE64_JSKIT_TOOLCHAIN_IMAGE_ENV,
   VIBE64_LARAVEL_TOOLCHAIN_IMAGE_ENV,
   VIBE64_RUNTIME_NAME,
+  VIBE64_RUNTIME_NAMESPACE_ENV,
   VIBE64_SKIP_STALE_TERMINAL_CLEANUP_ENV,
   VIBE64_TARGET_ROOT_ENV,
   VIBE64_TOOLCHAIN_IMAGE_REGISTRY,
@@ -68,6 +80,7 @@ export {
   STUDIO_TOOL_HOME_PATH,
   STUDIO_TEMP_DIR_NAME,
   STUDIO_TOOL_HOME_VOLUME,
+  runtimeNamespace,
   vibe64ToolchainImage,
   studioDockerLabel
 };

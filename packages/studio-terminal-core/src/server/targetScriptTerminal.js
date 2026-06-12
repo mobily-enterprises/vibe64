@@ -22,6 +22,7 @@ import {
   normalizeText
 } from "@local/vibe64-core/server/core";
 import {
+  runtimeDockerNamePrefix,
   runtimeTargetName,
   targetRuntimeNetworkDockerArgs
 } from "./runtimeContainers.js";
@@ -80,7 +81,12 @@ function targetScriptContainerName({
   targetRoot = "",
   terminalId = ""
 } = {}) {
-  return `vibe64-${runtimeTargetName(targetRoot)}-${adapterId}-target-script-${terminalId}`;
+  return [
+    runtimeDockerNamePrefix(targetRoot),
+    adapterId,
+    "target-script",
+    terminalId
+  ].filter(Boolean).join("-");
 }
 
 function targetScriptTerminalArgs({

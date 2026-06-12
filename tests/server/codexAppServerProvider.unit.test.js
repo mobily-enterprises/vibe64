@@ -27,6 +27,9 @@ import {
   CODEX_ATTACHMENT_CONTAINER_ROOT,
   CODEX_ATTACHMENT_HOST_ROOT
 } from "@local/vibe64-runtime/server/codexAttachmentPaths";
+import {
+  VIBE64_RUNTIME_NAMESPACE_ENV
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 
 async function withTemporaryDirectory(callback) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "vibe64-codex-provider-"));
@@ -37,6 +40,24 @@ async function withTemporaryDirectory(callback) {
       force: true,
       recursive: true
     });
+  }
+}
+
+async function withRuntimeNamespace(namespace, callback) {
+  const previous = process.env[VIBE64_RUNTIME_NAMESPACE_ENV];
+  if (namespace) {
+    process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = namespace;
+  } else {
+    delete process.env[VIBE64_RUNTIME_NAMESPACE_ENV];
+  }
+  try {
+    return await callback();
+  } finally {
+    if (previous === undefined) {
+      delete process.env[VIBE64_RUNTIME_NAMESPACE_ENV];
+    } else {
+      process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = previous;
+    }
   }
 }
 
@@ -251,6 +272,44 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
     assert.equal(stored.containerEndpoint, codexAppServerContainerEndpoint());
     assert.equal(stored.provider, CODEX_APP_SERVER_PROVIDER_ID);
     assert.equal(stored.transport, CODEX_APP_SERVER_TRANSPORT.UNIX);
+  });
+});
+
+test("codex provider namespaces app-server Docker container only when runtime namespace is set", async () => {
+  await withTemporaryDirectory(async (runtimeDir) => {
+    await withRuntimeNamespace("self", async () => {
+      const targetRoot = path.join(runtimeDir, "target");
+      const workdir = path.join(targetRoot, ".vibe64", "sessions", "active", "session-1", "worktree");
+      await mkdir(workdir, {
+        recursive: true
+      });
+      const spawnCalls = [];
+      await ensureCodexAppServerRuntime({
+        authStateSignature: "test-auth-state-signature",
+        readyTimeoutMs: 2000,
+        runtimeDir,
+        spawn(command, args, options) {
+          if (command === "docker" && args[0] === "run") {
+            writeFileSync(socketPathForRuntime(runtimeDir), "");
+          }
+          spawnCalls.push({
+            args,
+            command,
+            options
+          });
+          return fakeChild({
+            emitClose: command !== "docker" || args[0] !== "run"
+          });
+        },
+        targetRoot,
+        workdir
+      });
+
+      const removeCall = spawnCalls[0];
+      const runCall = spawnCalls[1];
+      assert.equal(removeCall.args[2], "vibe64-self-target-codex-app-server");
+      assert.equal(runCall.args[runCall.args.indexOf("--name") + 1], "vibe64-self-target-codex-app-server");
+    });
   });
 });
 

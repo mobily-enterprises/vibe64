@@ -22,6 +22,9 @@ import {
   shellQuote,
   stableHash
 } from "@local/studio-terminal-core/server/shellCommands";
+import {
+  runtimeNamespace
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 
 const CODEX_TERMINAL_NAMESPACE = "vibe64-codex";
 const GLOBAL_CODEX_TERMINAL_NAMESPACE = "vibe64-global-codex";
@@ -102,6 +105,11 @@ function dockerNamePart(value = "", fallback = "item") {
   return normalized || fallback;
 }
 
+function terminalRuntimeNamespacePart() {
+  const namespace = runtimeNamespace();
+  return namespace ? dockerNamePart(namespace, "") : "";
+}
+
 function terminalContainerName({
   kind = "terminal",
   parts = [],
@@ -109,6 +117,7 @@ function terminalContainerName({
 } = {}) {
   return [
     "vibe64",
+    terminalRuntimeNamespacePart(),
     targetRuntimeProjectSlug(targetRoot),
     dockerNamePart(kind, "terminal"),
     ...parts.map((part, index) => dockerNamePart(part, `part-${index + 1}`))

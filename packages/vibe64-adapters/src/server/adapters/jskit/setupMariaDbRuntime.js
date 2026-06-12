@@ -9,6 +9,9 @@ import {
   createRuntimeContainerRepair
 } from "@local/studio-terminal-core/server/runtimeContainers";
 import {
+  runtimeNamespace
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
+import {
   readDatabaseHostFromEnvFile
 } from "../../adapterHelpers/setupDatabaseConnections.js";
 import {
@@ -87,12 +90,31 @@ function jskitMariaDbDatabaseName(targetRoot = "") {
   });
 }
 
+function jskitRuntimeNamespaceNamePart() {
+  return runtimeNamespace();
+}
+
+function jskitRuntimeNamespaceVolumePart() {
+  return jskitRuntimeNamespaceNamePart().replaceAll("-", "_");
+}
+
 function jskitMariaDbContainerName() {
-  return "vibe64-jskit-mariadb";
+  return [
+    "vibe64",
+    jskitRuntimeNamespaceNamePart(),
+    "jskit",
+    "mariadb"
+  ].filter(Boolean).join("-");
 }
 
 function jskitMariaDbVolumeName() {
-  return "vibe64_jskit_mariadb_data";
+  return [
+    "vibe64",
+    jskitRuntimeNamespaceVolumePart(),
+    "jskit",
+    "mariadb",
+    "data"
+  ].filter(Boolean).join("_");
 }
 
 function createJskitMariaDbRuntimeContainer({

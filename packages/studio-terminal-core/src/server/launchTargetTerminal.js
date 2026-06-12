@@ -33,6 +33,7 @@ import {
   sessionWorktreePath
 } from "@local/vibe64-core/server/sessionWorktreePath";
 import {
+  runtimeDockerNamePrefix,
   runtimeTargetName,
   targetRuntimeNetworkDockerArgs
 } from "./runtimeContainers.js";
@@ -448,7 +449,13 @@ function launchContainerName({
   targetRoot = "",
   terminalId = ""
 } = {}) {
-  return `vibe64-${runtimeTargetName(targetRoot)}-${adapterId}-launch-${sessionId}-${terminalId}`;
+  return [
+    runtimeDockerNamePrefix(targetRoot),
+    adapterId,
+    "launch",
+    sessionId,
+    terminalId
+  ].filter(Boolean).join("-");
 }
 
 function launchTargetTerminalArgs({

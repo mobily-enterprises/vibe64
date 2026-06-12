@@ -34,6 +34,7 @@ import {
   STUDIO_BASE_TOOLCHAIN_IMAGE,
   STUDIO_DAEMON_PID_LABEL,
   STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS,
+  runtimeNamespace,
   studioDockerLabel
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
@@ -228,12 +229,22 @@ function dockerNamePart(value = "", fallback = "runtime") {
   return normalized || fallback;
 }
 
+function codexAppServerRuntimeNamespacePart() {
+  const namespace = runtimeNamespace();
+  return namespace ? dockerNamePart(namespace, "") : "";
+}
+
 function codexAppServerContainerNameForTarget({
   runtimeDir = "",
   targetRoot = ""
 } = {}) {
   const project = normalizeAgentText(targetRoot) ? runtimeTargetName(targetRoot) : dockerNamePart(path.basename(path.resolve(runtimeDir)));
-  return `vibe64-${project}-codex-app-server`;
+  return [
+    "vibe64",
+    codexAppServerRuntimeNamespacePart(),
+    project,
+    "codex-app-server"
+  ].filter(Boolean).join("-");
 }
 
 function waitForSpawnedProcessClose(child, {

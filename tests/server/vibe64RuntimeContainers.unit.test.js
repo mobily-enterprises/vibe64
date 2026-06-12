@@ -7,6 +7,8 @@ import {
   createRuntimeContainerCheck,
   ensureRuntimeContainers,
   ensureTargetRuntimeNetwork,
+  runtimeDockerNamePrefix,
+  runtimeDockerVolumePrefix,
   runtimeContainerCommandPreview,
   runtimeContainerManagedServicesPromptFacts,
   runtimeContainerName,
@@ -16,9 +18,13 @@ import {
   runtimeContainerTerminalEnv,
   runtimeContainersTerminalEnv,
   runtimeNetworkName,
+  runtimeVolumeName,
   targetRuntimeNetworkDockerArgs,
   targetRuntimeNetworkEnsureCommand
 } from "@local/studio-terminal-core/server/runtimeContainers";
+import {
+  VIBE64_RUNTIME_NAMESPACE_ENV
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
   createJskitMariaDbRuntimeContainer,
   createJskitTenantMariaDbRuntimeContainer,
@@ -38,6 +44,24 @@ import {
   targetRuntimeProjectSlug
 } from "@local/vibe64-core/server/projectRuntimeIdentity";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
+
+async function withRuntimeNamespace(namespace, fn) {
+  const previous = process.env[VIBE64_RUNTIME_NAMESPACE_ENV];
+  if (namespace) {
+    process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = namespace;
+  } else {
+    delete process.env[VIBE64_RUNTIME_NAMESPACE_ENV];
+  }
+  try {
+    return await fn();
+  } finally {
+    if (previous === undefined) {
+      delete process.env[VIBE64_RUNTIME_NAMESPACE_ENV];
+    } else {
+      process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = previous;
+    }
+  }
+}
 
 test("managed project runtime identity follows the slug instead of the absolute path", async () => {
   await withTemporaryRoot(async (root) => {
@@ -75,6 +99,49 @@ test("managed project runtime identity follows the slug instead of the absolute 
     assert.deepEqual(oldRuntime, {
       containerName: "vibe64-beepollen-jskit-mariadb",
       networkName: "vibe64-beepollen-network"
+    });
+  });
+});
+
+test("runtime namespace is opt-in and leaves default Docker names unchanged", async () => {
+  await withTemporaryRoot(async (root) => {
+    const targetRoot = path.join(root, "beepollen");
+    await withRuntimeNamespace("", async () => {
+      assert.equal(runtimeDockerNamePrefix(targetRoot), "vibe64-beepollen");
+      assert.equal(runtimeDockerVolumePrefix(targetRoot), "vibe64_beepollen");
+      assert.equal(runtimeNetworkName(targetRoot), "vibe64-beepollen-network");
+      assert.equal(runtimeContainerName({
+        adapterId: "jskit",
+        containerId: "jskit-mariadb",
+        targetRoot
+      }), "vibe64-beepollen-jskit-mariadb");
+      assert.equal(runtimeVolumeName({
+        adapterId: "jskit",
+        containerId: "jskit-mariadb",
+        targetRoot,
+        volumeId: "data"
+      }), "vibe64_beepollen_jskit_mariadb_data");
+      assert.equal(jskitMariaDbContainerName(), "vibe64-jskit-mariadb");
+      assert.equal(jskitMariaDbVolumeName(), "vibe64_jskit_mariadb_data");
+    });
+
+    await withRuntimeNamespace("self", async () => {
+      assert.equal(runtimeDockerNamePrefix(targetRoot), "vibe64-self-beepollen");
+      assert.equal(runtimeDockerVolumePrefix(targetRoot), "vibe64_self_beepollen");
+      assert.equal(runtimeNetworkName(targetRoot), "vibe64-self-beepollen-network");
+      assert.equal(runtimeContainerName({
+        adapterId: "jskit",
+        containerId: "jskit-mariadb",
+        targetRoot
+      }), "vibe64-self-beepollen-jskit-mariadb");
+      assert.equal(runtimeVolumeName({
+        adapterId: "jskit",
+        containerId: "jskit-mariadb",
+        targetRoot,
+        volumeId: "data"
+      }), "vibe64_self_beepollen_jskit_mariadb_data");
+      assert.equal(jskitMariaDbContainerName(), "vibe64-self-jskit-mariadb");
+      assert.equal(jskitMariaDbVolumeName(), "vibe64_self_jskit_mariadb_data");
     });
   });
 });

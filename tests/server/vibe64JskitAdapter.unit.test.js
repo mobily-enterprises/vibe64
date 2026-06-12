@@ -26,7 +26,28 @@ import {
 import {
   createJskitSetupDoctorPlugin
 } from "@local/vibe64-adapters/server/adapters/jskit/setupDoctorPlugin";
+import {
+  VIBE64_RUNTIME_NAMESPACE_ENV
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import { withTemporaryRoot, worktreeMetadata } from "./vibe64TestHelpers.js";
+
+async function withRuntimeNamespace(namespace, fn) {
+  const previous = process.env[VIBE64_RUNTIME_NAMESPACE_ENV];
+  if (namespace) {
+    process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = namespace;
+  } else {
+    delete process.env[VIBE64_RUNTIME_NAMESPACE_ENV];
+  }
+  try {
+    return await fn();
+  } finally {
+    if (previous === undefined) {
+      delete process.env[VIBE64_RUNTIME_NAMESPACE_ENV];
+    } else {
+      process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = previous;
+    }
+  }
+}
 
 async function writeProjectFile(root, relativePath, text = "") {
   const filePath = path.join(root, relativePath);
@@ -244,7 +265,7 @@ test("jskit project setup checks project database readiness but not tenant conta
 });
 
 test("jskit self-target config enables host Docker for recursive Studio launch", async () => {
-  await withTemporaryRoot(async (targetRoot) => {
+  await withRuntimeNamespace("", async () => withTemporaryRoot(async (targetRoot) => {
     await writeProjectFile(targetRoot, "package.json", JSON.stringify({
       scripts: {
         dev: "vite",
@@ -275,12 +296,52 @@ test("jskit self-target config enables host Docker for recursive Studio launch",
     assert.equal(spec.ok, true);
     assert.equal(spec.metadata.hostDocker, true);
     assert.equal(spec.metadata.hostDockerSource, JSKIT_ALLOW_SELF_TARGET_CONFIG);
+    assert.equal(spec.metadata.runtimeNamespace, "self");
     const args = spec.args({
       id: "unit-terminal"
     });
     assert.ok(args.includes("DOCKER_HOST=unix:///var/run/docker.sock"));
+    assert.ok(args.includes("VIBE64_RUNTIME_NAMESPACE=self"));
     assert.ok(args.includes("/var/run/docker.sock:/var/run/docker.sock"));
-  });
+  }));
+});
+
+test("jskit self-target namespace extends the current namespace for deeper recursive Studio launch", async () => {
+  await withRuntimeNamespace("self", async () => withTemporaryRoot(async (targetRoot) => {
+    await writeProjectFile(targetRoot, "package.json", JSON.stringify({
+      scripts: {
+        dev: "vite",
+        server: "node server.js"
+      }
+    }, null, 2));
+
+    const spec = await createJskitLaunchTargetTerminalSpec({
+      context: {
+        config: {
+          values: {
+            [JSKIT_ALLOW_SELF_TARGET_CONFIG]: true
+          }
+        }
+      },
+      launchTargetId: "dev",
+      session: {
+        metadata: {
+          dependencies_installed: "yes",
+          worktree_path: targetRoot
+        },
+        sessionId: "recursive_studio_launch_third_level",
+        targetRoot
+      },
+      targetRoot
+    });
+
+    assert.equal(spec.ok, true);
+    assert.equal(spec.metadata.runtimeNamespace, "self-self");
+    const args = spec.args({
+      id: "unit-terminal"
+    });
+    assert.ok(args.includes("VIBE64_RUNTIME_NAMESPACE=self-self"));
+  }));
 });
 
 test("jskit launch targets expose app and built app actions", async () => {

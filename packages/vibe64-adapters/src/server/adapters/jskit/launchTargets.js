@@ -17,6 +17,10 @@ import {
   tcpReadinessProbeCommand
 } from "@local/studio-terminal-core/server/launchTargetTerminal";
 import {
+  VIBE64_RUNTIME_NAMESPACE_ENV,
+  runtimeNamespace
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
+import {
   JSKIT_ALLOW_SELF_TARGET_CONFIG
 } from "./adapter.js";
 import {
@@ -31,6 +35,7 @@ const DEFAULT_BUILT_LAUNCH_SERVER_COMMAND = "npm run server";
 const DEFAULT_DEV_BACKEND_COMMAND = "npm run server";
 const DEFAULT_DEV_FRONTEND_COMMAND = "npm run dev -- --host 0.0.0.0 --port \"$PORT\"";
 const DEFAULT_MIGRATION_COMMAND = "npm run db:migrate";
+const JSKIT_SELF_TARGET_RUNTIME_NAMESPACE = "self";
 const DEFAULT_DEV_BACKEND_PORT = 3000;
 const DEFAULT_LAUNCH_PORT = 4100;
 const BUILT_LAUNCH_COMMAND_CONFIG = ".jskit/config/testrun_command";
@@ -184,12 +189,32 @@ async function resolveMigrationCommand(root) {
   return scripts[MIGRATION_SCRIPT_NAME] ? DEFAULT_MIGRATION_COMMAND : "";
 }
 
+function jskitSelfTargetRuntimeNamespace() {
+  // This exists only for recursive Vibe64 self-targeting: Vibe64 can open
+  // Vibe64, which can then open Vibe64 again without Docker name collisions.
+  return [
+    runtimeNamespace(),
+    JSKIT_SELF_TARGET_RUNTIME_NAMESPACE
+  ].filter(Boolean).join("-");
+}
+
 function resolveHostDockerConfig(config = {}) {
   const enabled = config?.values?.[JSKIT_ALLOW_SELF_TARGET_CONFIG] === true;
   return {
     enabled,
+    runtimeNamespace: enabled ? jskitSelfTargetRuntimeNamespace() : "",
     source: enabled ? JSKIT_ALLOW_SELF_TARGET_CONFIG : ""
   };
+}
+
+function runtimeNamespaceDockerArgs(namespace = "") {
+  const normalizedNamespace = String(namespace || "").trim();
+  return normalizedNamespace
+    ? [
+        "-e",
+        `${VIBE64_RUNTIME_NAMESPACE_ENV}=${normalizedNamespace}`
+      ]
+    : [];
 }
 
 function normalizePort(value) {
@@ -216,6 +241,7 @@ async function resolveBuiltLaunchConfig(worktreePath, {
       hostDockerSource: hostDocker.source,
       migrationCommand,
       preferredPort: normalizePort(portValue),
+      runtimeNamespace: hostDocker.runtimeNamespace,
       serverCommand: "",
       testrunCommand: configuredBuiltCommand
     };
@@ -232,6 +258,7 @@ async function resolveBuiltLaunchConfig(worktreePath, {
     hostDockerSource: hostDocker.source,
     migrationCommand,
     preferredPort: normalizePort(portValue),
+    runtimeNamespace: hostDocker.runtimeNamespace,
     serverCommand,
     testrunCommand: `${buildCommand} && ${serverCommand}`
   };
@@ -255,7 +282,8 @@ async function resolveDevLaunchConfig(worktreePath, {
     hostDocker: hostDocker.enabled,
     hostDockerSource: hostDocker.source,
     migrationCommand,
-    preferredPort: normalizePort(portValue)
+    preferredPort: normalizePort(portValue),
+    runtimeNamespace: hostDocker.runtimeNamespace
   };
 }
 
@@ -414,6 +442,7 @@ async function createJskitBuiltLaunchDescriptor({
             networkEnv: true
           }
         ].filter(Boolean),
+    extraDockerArgs: runtimeNamespaceDockerArgs(config.runtimeNamespace),
     hostDocker: config.hostDocker,
     metadata: {
       buildCommand: config.buildCommand,
@@ -422,6 +451,7 @@ async function createJskitBuiltLaunchDescriptor({
       hostDocker: config.hostDocker,
       hostDockerSource: config.hostDockerSource,
       migrationCommand: config.migrationCommand,
+      runtimeNamespace: config.runtimeNamespace,
       previewAuthProfileCommand: "enabled",
       serverCommand: config.serverCommand,
       testrunCommand: config.testrunCommand
@@ -444,6 +474,7 @@ async function createJskitDevLaunchDescriptor({
       migrationCommand: config.migrationCommand,
       previewAuthProfileCommand: createJskitPreviewAuthProfileCommand()
     }),
+    extraDockerArgs: runtimeNamespaceDockerArgs(config.runtimeNamespace),
     hostDocker: config.hostDocker,
     metadata: {
       backendCommand: config.backendCommand,
@@ -455,6 +486,7 @@ async function createJskitDevLaunchDescriptor({
       hostDockerSource: config.hostDockerSource,
       migrationCommand: config.migrationCommand,
       mode: "dev",
+      runtimeNamespace: config.runtimeNamespace,
       previewAuthProfileCommand: "enabled"
     },
     previewAuth: JSKIT_PREVIEW_AUTH_KIND,

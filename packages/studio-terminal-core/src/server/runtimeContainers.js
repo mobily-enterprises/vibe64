@@ -13,6 +13,7 @@ import {
 } from "./shellCommands.js";
 import {
   STUDIO_DAEMON_PID_LABEL,
+  runtimeNamespace,
   studioDockerLabel
 } from "./studioRuntimeIdentity.js";
 import {
@@ -49,12 +50,41 @@ function dockerVolumePart(value = "runtime") {
   return dockerNamePart(value).replaceAll("-", "_");
 }
 
+function runtimeNamespaceNamePart() {
+  const namespace = runtimeNamespace();
+  return namespace ? dockerNamePart(namespace) : "";
+}
+
+function runtimeNamespaceVolumePart() {
+  const namespace = runtimeNamespaceNamePart();
+  return namespace ? dockerVolumePart(namespace) : "";
+}
+
 function runtimeTargetName(targetRoot = "") {
   return targetRuntimeProjectSlug(targetRoot);
 }
 
+function runtimeDockerNamePrefix(targetRoot = "") {
+  return [
+    "vibe64",
+    runtimeNamespaceNamePart(),
+    dockerNamePart(runtimeTargetName(targetRoot))
+  ].filter(Boolean).join("-");
+}
+
+function runtimeDockerVolumePrefix(targetRoot = "") {
+  return [
+    "vibe64",
+    runtimeNamespaceVolumePart(),
+    dockerVolumePart(runtimeTargetName(targetRoot))
+  ].filter(Boolean).join("_");
+}
+
 function runtimeNetworkName(targetRoot = "") {
-  return `vibe64-${dockerNamePart(runtimeTargetName(targetRoot))}-network`;
+  return [
+    runtimeDockerNamePrefix(targetRoot),
+    "network"
+  ].filter(Boolean).join("-");
 }
 
 function runtimeNetworkCreateArgs(targetRoot = "") {
@@ -79,8 +109,7 @@ function runtimeContainerName({
   const adapterPart = dockerNamePart(adapterId);
   const containerPart = dockerNamePart(containerId);
   return [
-    "vibe64",
-    dockerNamePart(runtimeTargetName(targetRoot)),
+    runtimeDockerNamePrefix(targetRoot),
     adapterPart,
     ...(containerPart.startsWith(`${adapterPart}-`) ? [containerPart.slice(adapterPart.length + 1)] : [containerPart])
   ].filter(Boolean).join("-");
@@ -95,8 +124,7 @@ function runtimeVolumeName({
   const adapterPart = dockerVolumePart(adapterId);
   const containerPart = dockerVolumePart(containerId);
   return [
-    "vibe64",
-    dockerVolumePart(runtimeTargetName(targetRoot)),
+    runtimeDockerVolumePrefix(targetRoot),
     adapterPart,
     ...(containerPart.startsWith(`${adapterPart}_`) ? [containerPart.slice(adapterPart.length + 1)] : [containerPart]),
     dockerVolumePart(volumeId)
@@ -910,6 +938,8 @@ export {
   ensureTargetRuntimeNetwork,
   ensureRuntimeContainers,
   normalizeRuntimeContainerDescriptor,
+  runtimeDockerNamePrefix,
+  runtimeDockerVolumePrefix,
   runtimeContainerManagedServicesPromptFacts,
   runtimeContainerPromptFacts,
   runtimeContainerTerminalEnv,
@@ -922,6 +952,7 @@ export {
   runtimeNetworkCreateArgs,
   runtimeNetworkName,
   runtimeTargetName,
+  runtimeVolumeName,
   targetRuntimeNetworkDockerArgs,
   targetRuntimeNetworkEnsureCommand
 };
