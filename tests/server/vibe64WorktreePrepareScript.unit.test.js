@@ -38,11 +38,16 @@ import {
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 function runCommand(command, args, {
-  cwd
+  cwd,
+  env = {}
 } = {}) {
   const result = spawnSync(command, args, {
     cwd,
-    encoding: "utf8"
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      ...env
+    }
   });
   assert.equal(result.status, 0, result.stderr || result.stdout);
   return result.stdout.trim();
@@ -66,6 +71,16 @@ async function writeProjectFile(root, relativePath, text = "") {
     recursive: true
   });
   await writeFile(filePath, text, "utf8");
+}
+
+function decodeCommandFacts(text = "") {
+  return Object.fromEntries(text.split(/\r?\n/u)
+    .map((line) => line.split("\t"))
+    .filter(([operation, name, value]) => operation === "fact:set" && name && value)
+    .map(([, name, value]) => [
+      name,
+      Buffer.from(value, "base64").toString("utf8")
+    ]));
 }
 
 async function createGitTarget(root) {
@@ -135,6 +150,64 @@ test("create worktree terminal specs mount adapter preparation scripts", async (
           ]
         : []);
     }
+  });
+});
+
+test("create worktree creates an initial commit for unborn seeded repositories", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    runGit(targetRoot, ["init", "-b", "main"]);
+    runGit(targetRoot, ["config", "user.name", "Studio Test"]);
+    runGit(targetRoot, ["config", "user.email", "studio-test@example.com"]);
+    await Promise.all([
+      writeProjectFile(targetRoot, ".gitignore", [
+        ".vibe64/",
+        ".vibe64-local/"
+      ].join("\n")),
+      writeProjectFile(targetRoot, "README.md", "# Seeded target\n")
+    ]);
+
+    const sessionRoot = path.join(targetRoot, ".vibe64-local", "sessions", "active", "unborn-seed");
+    const worktreePath = path.join(sessionRoot, "worktree");
+    const resultFile = path.join(path.dirname(targetRoot), "command-result.tsv");
+    const session = {
+      metadata: {},
+      sessionId: "unborn-seed",
+      sessionRoot,
+      targetRoot
+    };
+    const spec = await createCppTargetAdapter().createCommandTerminalSpec("create_worktree", {
+      session,
+      targetRoot
+    });
+
+    assert.equal(spec.ok, true);
+    assert.equal(spec.successMetadata.base_branch, "main");
+    assert.equal(spec.successMetadata.base_commit, "");
+
+    runCommand(spec.command, spec.args, {
+      cwd: spec.cwd,
+      env: {
+        VIBE64_COMMAND_RESULT_FILE: resultFile
+      }
+    });
+
+    const baseCommit = runGit(targetRoot, ["rev-parse", "--verify", "HEAD"]);
+    const facts = decodeCommandFacts(await readFile(resultFile, "utf8"));
+    assert.equal(facts.base_branch, "main");
+    assert.equal(facts.base_commit, baseCommit);
+    assert.equal(runGit(worktreePath, ["rev-parse", "--verify", "HEAD"]), baseCommit);
+    assert.equal(runGit(worktreePath, ["branch", "--show-current"]), "vibe64/unborn-seed");
+    assert.deepEqual(runGit(targetRoot, ["show", "--name-only", "--format=", "HEAD"]).split("\n").filter(Boolean).sort(), [
+      ".gitignore",
+      "README.md"
+    ]);
+
+    const factMetadata = spec.applySuccessFacts({
+      facts,
+      session
+    });
+    assert.equal(factMetadata.metadata.base_branch, "main");
+    assert.equal(factMetadata.metadata.base_commit, baseCommit);
   });
 });
 

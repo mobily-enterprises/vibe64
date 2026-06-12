@@ -67,6 +67,13 @@ async function readCurrentCommit(targetRoot) {
   });
 }
 
+async function readCurrentCommitIfPresent(targetRoot) {
+  const result = await gitResult(targetRoot, ["rev-parse", "--verify", "HEAD"], {
+    timeout: 15_000
+  });
+  return result.ok ? result.output : "";
+}
+
 async function isGitWorktree(worktreePath) {
   if (!await pathExists(worktreePath)) {
     return false;
@@ -198,6 +205,7 @@ export {
   normalizeHookCommandResult,
   readCurrentBranch,
   readCurrentCommit,
+  readCurrentCommitIfPresent,
   requiredHookCommand,
   worktreeCommandSpec
 };

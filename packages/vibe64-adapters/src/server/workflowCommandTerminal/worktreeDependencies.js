@@ -17,7 +17,7 @@ import {
 import {
   isGitWorktree,
   readCurrentBranch,
-  readCurrentCommit,
+  readCurrentCommitIfPresent,
   requiredHookCommand,
   worktreeCommandSpec
 } from "./shellHelpers.js";
@@ -73,7 +73,6 @@ function createWorktreeScript({
     "  fi",
     "}",
     `printf '[studio] Preparing worktree %s\\n' ${quotedWorktreePath}`,
-    `mkdir -p "$(dirname ${quotedWorktreePath})"`,
     `if [ -e ${quotedWorktreePath} ]; then`,
     `  if git -C ${quotedWorktreePath} rev-parse --is-inside-work-tree >/dev/null 2>&1; then`,
     "    printf '[studio] Reusing existing worktree.\\n'",
@@ -104,6 +103,7 @@ function createWorktreeScript({
       "  printf '[studio] Existing PR #%s moved from %s to %s. Start a new session from the updated PR.\\n' \"$SOURCE_PR_NUMBER\" \"$SOURCE_PR_HEAD_SHA\" \"$FETCHED_PR_SHA\" >&2",
       "  exit 1",
       "fi",
+      `mkdir -p "$(dirname ${quotedWorktreePath})"`,
       `if git -C ${quotedTargetRoot} show-ref --verify --quiet ${quotedBranchRef}; then`,
       `  git -C ${quotedTargetRoot} worktree add ${quotedWorktreePath} ${quotedBranch}`,
       "else",
@@ -114,6 +114,16 @@ function createWorktreeScript({
       recordCommandFactScript("source_pr_update_mode", "stacked"),
       "exit 0"
     ] : []),
+    `if ! git -C ${quotedTargetRoot} rev-parse --verify HEAD >/dev/null 2>&1; then`,
+    "  printf '[studio] Creating initial commit for seeded repository.\\n'",
+    `  git -C ${quotedTargetRoot} add -A`,
+    `  git -C ${quotedTargetRoot} commit --allow-empty -m "Initial commit"`,
+    "fi",
+    "BASE_BRANCH=\"$(git -C " + quotedTargetRoot + " branch --show-current)\"",
+    "BASE_COMMIT=\"$(git -C " + quotedTargetRoot + " rev-parse --verify HEAD)\"",
+    recordCommandFactScript("base_branch", "\"$BASE_BRANCH\""),
+    recordCommandFactScript("base_commit", "\"$BASE_COMMIT\""),
+    `mkdir -p "$(dirname ${quotedWorktreePath})"`,
     `if git -C ${quotedTargetRoot} show-ref --verify --quiet ${quotedBranchRef}; then`,
     `  git -C ${quotedTargetRoot} worktree add ${quotedWorktreePath} ${quotedBranch}`,
     "else",
@@ -139,7 +149,7 @@ async function createWorktreeTerminalSpec({
   }
   const [baseBranch, baseCommit] = await Promise.all([
     readCurrentBranch(resolvedTargetRoot),
-    readCurrentCommit(resolvedTargetRoot)
+    readCurrentCommitIfPresent(resolvedTargetRoot)
   ]);
   const workSource = normalizeText(session.metadata?.work_source) || "new_issue";
   const metadataBaseBranch = workSource === "existing_pr"

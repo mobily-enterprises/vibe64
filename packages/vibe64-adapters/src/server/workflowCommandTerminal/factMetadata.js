@@ -33,14 +33,22 @@ function worktreeMetadata({
 }
 
 function createWorktreeSuccessMetadataFromFacts({ facts = {}, session = {} } = {}) {
+  const baseMetadata = metadataFromFacts(facts, [
+    "base_branch",
+    "base_commit"
+  ]);
   if (normalizeText(session.metadata?.work_source) !== "existing_pr") {
-    return commandMetadataResult();
+    return commandMetadataResult({
+      metadata: baseMetadata
+    });
   }
 
   const updateMode = normalizeText(facts.source_pr_update_mode) ||
     normalizeText(session.metadata?.source_pr_update_mode);
   if (updateMode !== "stacked" && !normalizeText(session.metadata?.source_pr_url)) {
-    return commandMetadataResult();
+    return commandMetadataResult({
+      metadata: baseMetadata
+    });
   }
 
   const sessionPrUrl = normalizeText(session.metadata?.pr_url);
@@ -51,6 +59,7 @@ function createWorktreeSuccessMetadataFromFacts({ facts = {}, session = {} } = {
   return commandMetadataResult({
     deleteMetadata: deletePrMetadata,
     metadata: {
+      ...baseMetadata,
       source_pr_update_mode: "stacked"
     }
   });
