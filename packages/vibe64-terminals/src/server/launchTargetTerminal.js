@@ -12,6 +12,8 @@ import {
   writeTerminalSession
 } from "@local/studio-terminal-core/server/terminalSessions";
 import {
+  currentProcessIsDockerContainer,
+  ensureCurrentContainerConnectedToRuntimeNetwork,
   ensureTargetRuntimeNetwork
 } from "@local/studio-terminal-core/server/runtimeContainers";
 import {
@@ -381,8 +383,11 @@ function createLaunchTargetTerminalController({
         targetHref
       };
     }
+    const proxyTargetHref = await previewProxyTargetHrefForTerminal(status.activeTerminal, {
+      targetHref
+    });
     try {
-      return await launchPreviewProxies.ensure({
+      const previewTarget = await launchPreviewProxies.ensure({
         previewPublicOrigin: previewPublicOriginForLaunch({
           publicHost: options.publicHost,
           publicProtocol: options.publicProtocol,
@@ -395,9 +400,12 @@ function createLaunchTargetTerminalController({
           targetHref
         }),
         sessionId,
-        targetHref,
         terminalSessionId
-      });
+      }, proxyTargetHref);
+      return {
+        ...previewTarget,
+        targetHref
+      };
     } catch (error) {
       return {
         available: false,
@@ -408,6 +416,18 @@ function createLaunchTargetTerminalController({
         targetHref
       };
     }
+  }
+
+  async function previewProxyTargetHrefForTerminal(terminal = {}, {
+    targetHref = ""
+  } = {}) {
+    if (!await currentProcessIsDockerContainer()) {
+      return targetHref;
+    }
+    const metadata = terminal.metadata && typeof terminal.metadata === "object" && !Array.isArray(terminal.metadata)
+      ? terminal.metadata
+      : {};
+    return String(metadata.previewProxyTargetHref || targetHref || "").trim();
   }
 
   return Object.freeze({
@@ -517,6 +537,7 @@ function createLaunchTargetTerminalController({
         }
 
         await ensureTargetRuntimeNetwork(context.targetRoot);
+        await ensureCurrentContainerConnectedToRuntimeNetwork(context.targetRoot);
         await ensureAdapterRuntimeContainers({
           runtime: context.runtime,
           session: context.session,

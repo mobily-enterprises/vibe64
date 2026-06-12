@@ -33,6 +33,7 @@ import {
   sessionWorktreePath
 } from "@local/vibe64-core/server/sessionWorktreePath";
 import {
+  currentProcessIsDockerContainer,
   runtimeDockerNamePrefix,
   runtimeTargetName,
   targetRuntimeNetworkDockerArgs
@@ -505,6 +506,25 @@ function launchContainerName({
   ].filter(Boolean).join("-");
 }
 
+function launchContainerNetworkAlias({
+  adapterId = "generic",
+  launchTargetId = "",
+  sessionId = ""
+} = {}) {
+  return `vibe64-launch-${stableHash([
+    adapterId,
+    launchTargetId,
+    sessionId
+  ].join(":"))}`;
+}
+
+function networkAliasDockerArgs(aliases = []) {
+  return [...new Set((Array.isArray(aliases) ? aliases : [])
+    .map(normalizeText)
+    .filter((alias) => /^vibe64-launch-[a-f0-9]{12}$/u.test(alias)))]
+    .flatMap((alias) => ["--network-alias", alias]);
+}
+
 function launchTargetTerminalArgs({
   adapterId = "generic",
   containerName = "",
@@ -515,6 +535,7 @@ function launchTargetTerminalArgs({
   startupCommands = [],
   launchActions = [],
   launchHome = "",
+  networkAliases = [],
   targetRoot = "",
   terminalId = "",
   workdir = ""
@@ -553,6 +574,7 @@ function launchTargetTerminalArgs({
     }),
     ...launchHomeDockerArgs(resolvedLaunchHome),
     ...targetRuntimeNetworkDockerArgs(targetRoot),
+    ...networkAliasDockerArgs(networkAliases),
     ...extraDockerArgs,
     ...hostUserIdentityEnvArgs(),
     "-w",
@@ -635,6 +657,12 @@ async function createVibe64WebLaunchTargetTerminalSpec({
   }
 
   const workdir = normalizeText(launch.workdir) || worktreePath;
+  const previewProxyAlias = launchContainerNetworkAlias({
+    adapterId,
+    launchTargetId: launchTarget.id,
+    sessionId: session.sessionId || ""
+  });
+  const containerizedStudio = await currentProcessIsDockerContainer();
   const extraDockerArgs = [
     ...(Array.isArray(launch.extraDockerArgs) ? launch.extraDockerArgs : []),
     ...hostDockerArgs(launch.hostDocker === true)
@@ -650,6 +678,7 @@ async function createVibe64WebLaunchTargetTerminalSpec({
     previewAuth: previewAuthKind,
     readinessMarker: readiness.readinessMarker,
     launchReady: !readiness.readinessMarker,
+    ...(containerizedStudio ? { previewProxyTargetHref: `http://${previewProxyAlias}:${port}${urlPath}` } : {}),
     runRoot: workdir,
     scope: "session",
     sessionId: session.sessionId || "",
@@ -701,6 +730,7 @@ async function createVibe64WebLaunchTargetTerminalSpec({
         terminalId: id,
         worktreePath
       }),
+      networkAliases: [previewProxyAlias],
       port,
       sessionId: session.sessionId,
       startupCommands,

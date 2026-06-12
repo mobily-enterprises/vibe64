@@ -54,8 +54,13 @@ test("launch preview target URLs are constrained to loopback HTTP origins", () =
     normalizePreviewTargetHref("http://127.0.0.1:4103/home").toString(),
     "http://127.0.0.1:4103/home"
   );
+  assert.equal(
+    normalizePreviewTargetHref("http://vibe64-launch-abcdef123456:4103/home").toString(),
+    "http://vibe64-launch-abcdef123456:4103/home"
+  );
   assert.throws(() => normalizePreviewTargetHref("file:///tmp/index.html"), /must use HTTP/u);
   assert.throws(() => normalizePreviewTargetHref("https://example.com"), /must be loopback/u);
+  assert.throws(() => normalizePreviewTargetHref("http://vibe64-launch-notvalid:4103/home"), /must be loopback/u);
 });
 
 test("launch preview proxy injects HTML and proxies app-relative requests", async () => {

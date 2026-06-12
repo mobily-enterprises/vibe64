@@ -53,6 +53,7 @@ const JSKIT_AUTH_COOKIE_NAMES = Object.freeze([
   "sb_access_token",
   "sb_refresh_token"
 ]);
+const VIBE64_LAUNCH_ALIAS_PATTERN = /^vibe64-launch-[a-f0-9]{12}$/u;
 
 function normalizePreviewTargetHref(value = "") {
   const text = String(value || "").trim();
@@ -63,7 +64,7 @@ function normalizePreviewTargetHref(value = "") {
   if (!["http:", "https:"].includes(url.protocol)) {
     throw new Error("Launch preview target URL must use HTTP.");
   }
-  if (!isLoopbackAddress(url.hostname)) {
+  if (!isLoopbackAddress(url.hostname) && !VIBE64_LAUNCH_ALIAS_PATTERN.test(url.hostname)) {
     throw new Error("Launch preview target URL must be loopback.");
   }
   return url;

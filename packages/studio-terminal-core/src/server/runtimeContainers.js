@@ -1,3 +1,4 @@
+import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 
@@ -925,6 +926,75 @@ async function ensureTargetRuntimeNetwork(targetRoot = "", {
   throw new Error(`Could not prepare Vibe64 runtime network ${networkName}: ${create.output || inspect.output}`);
 }
 
+async function currentDockerContainerId() {
+  try {
+    await access("/.dockerenv");
+  } catch {
+    return "";
+  }
+  try {
+    return String(await readFile("/etc/hostname", "utf8")).trim();
+  } catch {
+    return "";
+  }
+}
+
+async function currentProcessIsDockerContainer() {
+  return Boolean(await currentDockerContainerId());
+}
+
+async function ensureCurrentContainerConnectedToRuntimeNetwork(targetRoot = "", {
+  runCommand = runHostCommand
+} = {}) {
+  const containerId = await currentDockerContainerId();
+  if (!containerId) {
+    return {
+      connected: false,
+      reason: "not_container"
+    };
+  }
+  const networkName = runtimeNetworkName(targetRoot);
+  await ensureTargetRuntimeNetwork(targetRoot, {
+    runCommand
+  });
+  const inspect = await runCommand("docker", [
+    "inspect",
+    "--format",
+    "{{json .NetworkSettings.Networks}}",
+    containerId
+  ], {
+    timeout: 5000
+  });
+  if (inspect.ok && String(inspect.stdout || inspect.output || "").includes(`"${networkName}"`)) {
+    return {
+      connected: true,
+      containerId,
+      networkName
+    };
+  }
+  const connect = await runCommand("docker", [
+    "network",
+    "connect",
+    networkName,
+    containerId
+  ], {
+    timeout: 5000
+  });
+  if (
+    !connect.ok &&
+    !/already (?:exists|connected)|is already connected/iu.test(String(connect.output || connect.stderr || ""))
+  ) {
+    const error = new Error(`Could not connect Studio container to runtime network ${networkName}: ${connect.output || connect.stderr || "docker network connect failed"}`);
+    error.code = "vibe64_studio_network_connect_failed";
+    throw error;
+  }
+  return {
+    connected: true,
+    containerId,
+    networkName
+  };
+}
+
 export {
   VIBE64_RUNTIME_HOST_ALIAS,
   RUNTIME_CONTAINER_KIND,
@@ -935,6 +1005,8 @@ export {
   createRuntimeContainerDoctorEntries,
   createRuntimeContainerRepair,
   createRuntimeContainerTerminalAction,
+  currentProcessIsDockerContainer,
+  ensureCurrentContainerConnectedToRuntimeNetwork,
   ensureTargetRuntimeNetwork,
   ensureRuntimeContainers,
   normalizeRuntimeContainerDescriptor,
