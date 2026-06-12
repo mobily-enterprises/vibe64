@@ -236,6 +236,11 @@ const launchTargetFields = {
     type: "string",
     noTrim: false,
     required: true
+  },
+  vibe64User: {
+    type: "object",
+    additionalProperties: true,
+    required: false
   }
 };
 

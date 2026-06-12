@@ -122,7 +122,7 @@ function registerRoutes(
   routes.actionRoute("POST", "/sessions/:sessionId/launch-terminal", {
     actionId: ACTION_START_LAUNCH_TARGET_TERMINAL,
     body: launchTargetInputValidator,
-    buildInput: bodyWithSessionId(routes),
+    buildInput: (request) => withVibe64User(request, bodyWithSessionId(routes)(request)),
     summary: "Start an Vibe64 launch target terminal."
   });
 
@@ -264,6 +264,13 @@ function bodyWithSessionId(routes) {
 function sessionInput(request) {
   return {
     sessionId: request.params.sessionId
+  };
+}
+
+function withVibe64User(request, input = {}) {
+  return {
+    ...input,
+    vibe64User: request.vibe64User || null
   };
 }
 

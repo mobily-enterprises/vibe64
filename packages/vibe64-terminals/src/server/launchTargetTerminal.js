@@ -525,7 +525,8 @@ function createLaunchTargetTerminalController({
           context: {
             ...context,
             launchInput,
-            launchTarget
+            launchTarget,
+            vibe64User: input.vibe64User || null
           },
           launchInput,
           launchTargetId: launchTarget.id

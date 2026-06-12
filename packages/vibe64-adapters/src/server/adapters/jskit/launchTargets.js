@@ -66,14 +66,46 @@ const BUILT_LAUNCH_PORT_CONFIG = ".jskit/config/server_port_for_user_review";
 const DEV_SERVER_COMMAND_CONFIG = "config/dev_server_command";
 const MIGRATION_SCRIPT_NAME = "db:migrate";
 
-function createJskitPreviewAuthProfileCommand() {
+function previewAuthProfileSeed(vibe64User = null) {
+  const email = String(vibe64User?.email || "").trim().toLowerCase();
+  if (!email) {
+    return PREVIEW_AUTH_PROFILE;
+  }
+  const username = String(vibe64User?.github?.login || email.split("@")[0] || PREVIEW_AUTH_PROFILE.username)
+    .trim()
+    .toLowerCase();
+  const displayName = String(vibe64User?.displayName || vibe64User?.name || username || email).trim();
+  return {
+    ...PREVIEW_AUTH_PROFILE,
+    email,
+    username,
+    displayName,
+    authProvider: "vibe64-preview",
+    authProviderUserSid: `vibe64:${email}`
+  };
+}
+
+function createJskitPreviewAuthProfileCommand({
+  vibe64User = null
+} = {}) {
   const script = `
 const profileFile = String(process.env.VIBE64_PREVIEW_AUTH_PROFILE_FILE || "").trim();
-const profile = ${JSON.stringify(PREVIEW_AUTH_PROFILE)};
+const profile = ${JSON.stringify(previewAuthProfileSeed(vibe64User))};
 
 function isDuplicateError(error) {
   return ["23505", "ER_DUP_ENTRY", "SQLITE_CONSTRAINT", "SQLITE_CONSTRAINT_UNIQUE"].includes(String(error?.code || "")) ||
     Number(error?.errno) === 1062;
+}
+
+function profileFromUser(user, fallback) {
+  return {
+    authProvider: String(user.auth_provider || fallback.authProvider || "dev").trim().toLowerCase(),
+    authProviderUserSid: String(user.auth_provider_user_sid || fallback.authProviderUserSid || user.id || "").trim(),
+    displayName: String(user.display_name || fallback.displayName || user.email || "").trim(),
+    email: String(user.email || fallback.email || "").trim().toLowerCase(),
+    id: String(user.id || ""),
+    username: String(user.username || fallback.username || "").trim().toLowerCase()
+  };
 }
 
 async function main() {
@@ -115,50 +147,52 @@ async function main() {
       username: profile.username,
       display_name: profile.displayName
     };
+    const findByEmail = () => record.email
+      ? db("users")
+        .where({ email: record.email })
+        .first()
+      : null;
     const findByIdentity = () => db("users")
       .where({
         auth_provider: record.auth_provider,
         auth_provider_user_sid: record.auth_provider_user_sid
       })
       .first();
-    let user = await findByIdentity();
+    let user = await findByEmail();
     if (!user) {
-      try {
-        await db("users").insert(record);
-      } catch (error) {
-        if (!isDuplicateError(error)) {
-          throw error;
+      user = await findByIdentity();
+      if (!user) {
+        try {
+          await db("users").insert(record);
+        } catch (error) {
+          if (!isDuplicateError(error)) {
+            throw error;
+          }
+        }
+        user = await findByIdentity();
+      }
+      if (!user) {
+        user = await db("users")
+          .where({ email: record.email })
+          .orWhere({ username: record.username })
+          .first();
+        if (!user) {
+          throw new Error("Preview auth profile could not be inserted or found.");
         }
       }
-      user = await findByIdentity();
-    }
-    if (!user) {
+      await db("users")
+        .where({ id: user.id })
+        .update(record);
       user = await db("users")
-        .where({ email: record.email })
-        .orWhere({ username: record.username })
+        .where({ id: user.id })
         .first();
-      if (!user) {
-        throw new Error("Preview auth profile could not be inserted or found.");
-      }
     }
-    await db("users")
-      .where({ id: user.id })
-      .update(record);
-    user = await db("users")
-      .where({ id: user.id })
-      .first();
+    const authProfile = profileFromUser(user, profile);
     await fs.mkdir(path.dirname(profileFile), {
       recursive: true
     });
-    await fs.writeFile(profileFile, JSON.stringify({
-      authProvider: record.auth_provider,
-      authProviderUserSid: record.auth_provider_user_sid,
-      displayName: record.display_name,
-      email: record.email,
-      id: String(user.id || ""),
-      username: record.username
-    }, null, 2) + "\\n", "utf8");
-    console.log(\`[studio] Preview auth user is ready: \${record.email} (\${user.id}).\`);
+    await fs.writeFile(profileFile, JSON.stringify(authProfile, null, 2) + "\\n", "utf8");
+    console.log(\`[studio] Preview auth user is ready: \${authProfile.email} (\${authProfile.id}).\`);
   } finally {
     await db.destroy();
   }
@@ -595,6 +629,7 @@ async function createJskitBuiltLaunchDescriptor({
   databaseHost = "",
   launchInput = {},
   selfTarget = null,
+  vibe64User = null,
   workdir = "",
   worktreePath = ""
 } = {}) {
@@ -607,7 +642,9 @@ async function createJskitBuiltLaunchDescriptor({
       }
     : null;
   const previewAuthProfileCommand = {
-    command: createJskitPreviewAuthProfileCommand(),
+    command: createJskitPreviewAuthProfileCommand({
+      vibe64User
+    }),
     label: "Preparing preview auth user.",
     networkEnv: true
   };
@@ -674,6 +711,7 @@ async function createJskitDevLaunchDescriptor({
   databaseHost = "",
   launchInput = {},
   selfTarget = null,
+  vibe64User = null,
   workdir = "",
   worktreePath = ""
 } = {}) {
@@ -684,7 +722,9 @@ async function createJskitDevLaunchDescriptor({
       backendPort: config.backendPort,
       frontendCommand: config.frontendCommand,
       migrationCommand: config.migrationCommand,
-      previewAuthProfileCommand: createJskitPreviewAuthProfileCommand(),
+      previewAuthProfileCommand: createJskitPreviewAuthProfileCommand({
+        vibe64User
+      }),
       startupArgs
     }),
     extraDockerArgs: [
@@ -800,6 +840,7 @@ async function createJskitLaunchTargetTerminalSpec({
         launchInput,
         selfTarget,
         targetRoot: launchTargetRoot,
+        vibe64User: context.vibe64User || null,
         workdir: selfTargetCodeRoot,
         worktreePath: descriptorWorktreePath
       });

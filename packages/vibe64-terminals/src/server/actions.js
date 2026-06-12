@@ -135,7 +135,8 @@ const featureActions = Object.freeze([
       void context;
       return deps.featureService.startLaunchTargetTerminal(input.sessionId, {
         launchInput: input.launchInput || {},
-        launchTargetId: input.launchTargetId
+        launchTargetId: input.launchTargetId,
+        vibe64User: input.vibe64User || null
       });
     }
   },
