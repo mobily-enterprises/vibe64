@@ -373,7 +373,7 @@ function createLaunchTargetTerminalController({
       return null;
     }
     const terminalSessionId = String(status.activeTerminal?.id || "").trim();
-    if (!terminalSessionId) {
+    if (!terminalSessionId || status.activeTerminal?.running !== true) {
       return {
         available: false,
         disabledReason: "Run a launch target first.",

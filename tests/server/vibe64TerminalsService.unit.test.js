@@ -54,7 +54,8 @@ import {
 import {
   codexTerminalNamespace,
   fixCodexTerminalNamespace,
-  globalCodexTerminalNamespace
+  globalCodexTerminalNamespace,
+  launchTargetTerminalNamespace
 } from "../../packages/vibe64-terminals/src/server/terminalShared.js";
 import {
   resolveShellTerminalCwd,
@@ -210,6 +211,69 @@ test("launch terminal stop treats a missing terminal session as recovered stale 
   assert.equal(stopped.running, false);
   assert.equal(stopped.stale, true);
   assert.equal(stopped.status, "exited");
+});
+
+test("launch status does not expose a preview for an exited launch terminal", async () => {
+  const sessionId = "launch-exited-session";
+  const namespace = launchTargetTerminalNamespace(sessionId);
+  startTerminalSession({
+    command: "node",
+    args: [
+      "-e",
+      "process.exit(0)"
+    ],
+    metadata: {
+      launchTargetId: "dev",
+      openTarget: {
+        href: "http://127.0.0.1:4100/app",
+        kind: "url",
+        label: "Open browser"
+      }
+    },
+    namespace
+  });
+  await waitForNoRunningTerminals(namespace);
+
+  const controller = createLaunchTargetTerminalController({
+    projectService: {
+      async createRuntime() {
+        return {
+          adapter: {
+            async listLaunchTargets() {
+              return [
+                {
+                  id: "dev",
+                  label: "Run app"
+                }
+              ];
+            }
+          },
+          async getSession() {
+            return {
+              id: sessionId,
+              metadata: {
+                launch_target_id: "dev",
+                launch_target_label: "Run app",
+                launch_target_open_href: "http://127.0.0.1:4100/app",
+                launch_target_open_kind: "url",
+                launch_target_open_label: "Open browser"
+              },
+              targetRoot: "/tmp/vibe64-launch-exited"
+            };
+          },
+          projectConfig: {}
+        };
+      }
+    }
+  });
+
+  const status = await controller.launchStatus(sessionId);
+
+  assert.equal(status.ok, true);
+  assert.equal(status.activeTerminal.running, false);
+  assert.equal(status.previewTarget.available, false);
+  assert.equal(status.previewTarget.href, "");
+  assert.equal(status.openTarget.previewHref, "");
 });
 
 function assertPlaywrightBrowserCache(args) {
