@@ -113,6 +113,7 @@ const JSKIT_CONFIG_FIELDS = deepFreeze([
     description: "Only turn this on when developing Vibe64 itself. It lets a Studio instance open another Studio session against this checkout.",
     id: JSKIT_ALLOW_SELF_TARGET_CONFIG,
     label: "Allow Studio self-targeting",
+    scope: "local",
     type: "boolean"
   },
   {

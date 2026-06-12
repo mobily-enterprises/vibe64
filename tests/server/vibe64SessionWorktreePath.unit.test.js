@@ -10,8 +10,8 @@ import {
 } from "@local/vibe64-core/server/sessionWorktreePath";
 
 test("session worktree path prefers the canonical session-root worktree after creation", () => {
-  const sessionRoot = "/workspace/app/.vibe64/sessions/active/session-1";
-  const staleMetadataPath = "/old/app/.vibe64/sessions/active/session-1/worktree";
+  const sessionRoot = "/workspace/app/.vibe64-local/sessions/active/session-1";
+  const staleMetadataPath = "/old/app/.vibe64-local/sessions/active/session-1/worktree";
   const session = {
     completedSteps: ["session_created", "worktree_created"],
     metadata: {
@@ -27,12 +27,12 @@ test("session worktree path prefers the canonical session-root worktree after cr
 });
 
 test("session worktree path keeps explicit metadata before canonical creation state exists", () => {
-  const metadataPath = "/workspace/app/.vibe64/sessions/active/session-1/worktree";
+  const metadataPath = "/workspace/app/.vibe64-local/sessions/active/session-1/worktree";
   const session = {
     metadata: {
       worktree_path: metadataPath
     },
-    sessionRoot: "/workspace/app/.vibe64/sessions/active/session-1"
+    sessionRoot: "/workspace/app/.vibe64-local/sessions/active/session-1"
   };
 
   assert.equal(sessionWorktreePath(session), metadataPath);
@@ -40,7 +40,7 @@ test("session worktree path keeps explicit metadata before canonical creation st
 });
 
 test("session worktree path treats removed worktree metadata as authoritative", () => {
-  const sessionRoot = "/workspace/app/.vibe64/sessions/active/session-1";
+  const sessionRoot = "/workspace/app/.vibe64-local/sessions/active/session-1";
   const session = {
     completedSteps: ["session_created", "worktree_created"],
     metadata: {

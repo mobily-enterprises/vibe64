@@ -76,7 +76,7 @@ function useVibe64AuthGate() {
     fallbackLoadError: "Account status could not load.",
     path: ACCOUNTS_ENDPOINT,
     queryKey: ["vibe64", "auth", "prerequisite-account-status"],
-    readQuery: computed(prerequisiteAccountStatusReadQuery),
+    readQuery: computed(() => prerequisiteAccountStatusReadQuery(state.runtime)),
     refreshOnPull: true,
     requestRecoveryLabel: "Account status"
   });

@@ -84,11 +84,11 @@ async function writeMetadata(runtimeDir, metadata) {
   });
 }
 
-async function writeCodexAuthMarker(dataRoot, {
+async function writeCodexAuthMarker(systemRoot, {
   connected = true,
   updatedAt = "2026-06-04T00:00:00.000Z"
 } = {}) {
-  const markerPath = path.join(dataRoot, "provider-homes", "codex", "status.json");
+  const markerPath = path.join(systemRoot, "provider-homes", "codex", "status.json");
   await mkdir(path.dirname(markerPath), {
     recursive: true
   });
@@ -176,12 +176,12 @@ test("codex provider scopes default runtime directory by target root", () => {
   const first = codexAppServerRuntimeDir({
     env,
     targetRoot: "/home/tenant/vibe64/beepollen",
-    workdir: "/home/tenant/vibe64/beepollen/.vibe64/sessions/active/one/worktree"
+    workdir: "/home/tenant/vibe64/beepollen/.vibe64-local/sessions/active/one/worktree"
   });
   const second = codexAppServerRuntimeDir({
     env,
     targetRoot: "/home/tenant/vibe64/dogandgroom",
-    workdir: "/home/tenant/vibe64/dogandgroom/.vibe64/sessions/active/one/worktree"
+    workdir: "/home/tenant/vibe64/dogandgroom/.vibe64-local/sessions/active/one/worktree"
   });
 
   assert.match(first, /^\/tmp\/vibe64-agent-runtime\/codex-app-server-[a-f0-9]{12}$/u);
@@ -360,12 +360,12 @@ test("codex provider removes stale app-server container before replacing old run
 
 test("codex provider replaces a live app-server when Codex auth state changes", async () => {
   await withTemporaryDirectory(async (runtimeDir) => {
-    const dataRoot = path.join(runtimeDir, "data");
-    await writeCodexAuthMarker(dataRoot, {
+    const systemRoot = path.join(runtimeDir, "system");
+    await writeCodexAuthMarker(systemRoot, {
       updatedAt: "2026-06-04T00:00:00.000Z"
     });
     const oldAuthStateSignature = await codexAuthStateSignature({
-      dataRoot
+      systemRoot
     });
     const metadata = metadataForRuntime(runtimeDir, {
       authStateSignature: oldAuthStateSignature
@@ -373,17 +373,17 @@ test("codex provider replaces a live app-server when Codex auth state changes", 
     await writeFile(metadata.socketPath, "");
     await writeMetadata(runtimeDir, metadata);
 
-    await writeCodexAuthMarker(dataRoot, {
+    await writeCodexAuthMarker(systemRoot, {
       updatedAt: "2026-06-04T00:01:00.000Z"
     });
     const newAuthStateSignature = await codexAuthStateSignature({
-      dataRoot
+      systemRoot
     });
     const spawnCalls = [];
     const runtime = await ensureCodexAppServerRuntime({
-      dataRoot,
       readyTimeoutMs: 2000,
       runtimeDir,
+      systemRoot,
       spawn(command, args, options) {
         if (command === "docker" && args[0] === "run") {
           writeFileSync(socketPathForRuntime(runtimeDir), "");
@@ -446,13 +446,12 @@ test("codex provider can still start a native app-server when explicitly request
 test("codex provider closes a connected client when Codex auth state changes", async () => {
   await withTemporaryDirectory(async (runtimeDir) => {
     FakeWebSocket.instances = [];
-    const dataRoot = path.join(runtimeDir, "data");
-    await writeCodexAuthMarker(dataRoot, {
+    const systemRoot = path.join(runtimeDir, "system");
+    await writeCodexAuthMarker(systemRoot, {
       updatedAt: "2026-06-04T00:00:00.000Z"
     });
     const spawnCalls = [];
     const provider = new CodexAppServerAgentProvider({
-      dataRoot,
       readyTimeoutMs: 2000,
       requestTimeoutMs: 1000,
       runtimeDir,
@@ -469,6 +468,7 @@ test("codex provider closes a connected client when Codex auth state changes", a
           emitClose: command !== "docker" || args[0] !== "run"
         });
       },
+      systemRoot,
       WebSocketImpl: FakeWebSocket
     });
 
@@ -491,7 +491,7 @@ test("codex provider closes a connected client when Codex auth state changes", a
     assert.equal(socket.closed, false);
     assert.equal(spawnCalls.length, 2);
 
-    await writeCodexAuthMarker(dataRoot, {
+    await writeCodexAuthMarker(systemRoot, {
       updatedAt: "2026-06-04T00:01:00.000Z"
     });
     const runtime = await provider.ensureRuntime();

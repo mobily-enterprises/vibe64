@@ -202,9 +202,9 @@ async function writeTextFile(filePath = "", text = "") {
   await writeFile(filePath, text, "utf8");
 }
 
-async function writeCodexStatusMarker(dataRoot = "") {
+async function writeCodexStatusMarker(systemRoot = "") {
   await writeTextFile(
-    path.join(dataRoot, "provider-homes", "codex", "status.json"),
+    path.join(systemRoot, "provider-homes", "codex", "status.json"),
     `${JSON.stringify({
       connected: true,
       updatedAt: "2026-06-09T00:00:00.000Z",
@@ -257,14 +257,14 @@ function codexCalls(calls = []) {
 
 test("Accounts status reads local provider state by default", async () => {
   await withTemporaryRoot(async (root) => {
-    const dataRoot = path.join(root, "data");
-    const providerHomesRoot = path.join(dataRoot, "provider-homes");
+    const systemRoot = path.join(root, "data");
+    const providerHomesRoot = path.join(systemRoot, "provider-homes");
     const calls = [];
-    await writeCodexStatusMarker(dataRoot);
+    await writeCodexStatusMarker(systemRoot);
     await writeGithubProviderHome(providerHomesRoot, OWNER_USER);
 
     const status = await createService({
-      dataRoot,
+      systemRoot,
       providerHomesRoot,
       runToolchain: connectedToolchain(calls),
       targetRoot: path.join(root, "target")
@@ -288,13 +288,13 @@ test("Accounts status reads local provider state by default", async () => {
 
 test("Accounts status blocks a remembered GitHub identity when the local provider home is not configured", async () => {
   await withTemporaryRoot(async (root) => {
-    const dataRoot = path.join(root, "data");
-    const providerHomesRoot = path.join(dataRoot, "provider-homes");
+    const systemRoot = path.join(root, "data");
+    const providerHomesRoot = path.join(systemRoot, "provider-homes");
     const calls = [];
-    await writeCodexStatusMarker(dataRoot);
+    await writeCodexStatusMarker(systemRoot);
 
     const status = await createService({
-      dataRoot,
+      systemRoot,
       providerHomesRoot,
       runToolchain: connectedToolchain(calls),
       targetRoot: path.join(root, "target")
@@ -317,7 +317,7 @@ test("Accounts status uses shared Codex auth and the active user's GitHub home w
     const providerHomesRoot = path.join(root, "provider-homes");
     const calls = [];
     const status = await createService({
-      dataRoot: path.join(root, "data"),
+      systemRoot: path.join(root, "data"),
       providerHomesRoot,
       runToolchain: connectedToolchain(calls),
       targetRoot
@@ -359,7 +359,7 @@ test("Codex status can be checked without requiring a GitHub user context", asyn
   await withTemporaryRoot(async (root) => {
     const calls = [];
     const status = await createService({
-      dataRoot: path.join(root, "data"),
+      systemRoot: path.join(root, "data"),
       runToolchain: connectedToolchain(calls),
       targetRoot: path.join(root, "target")
     }).getCodexStatus();
@@ -383,7 +383,7 @@ test("GitHub provider homes are keyed per Vibe64 user while Codex remains shared
     const providerHomesRoot = path.join(root, "provider-homes");
     const calls = [];
     const service = createService({
-      dataRoot: path.join(root, "data"),
+      systemRoot: path.join(root, "data"),
       providerHomesRoot,
       runToolchain: connectedToolchain(calls),
       targetRoot: path.join(root, "target")
@@ -411,7 +411,7 @@ test("Accounts status requires GitHub Git credential helper for remote operation
     const targetRoot = path.join(root, "target");
     const calls = [];
     const status = await createService({
-      dataRoot: path.join(root, "data"),
+      systemRoot: path.join(root, "data"),
       providerHomesRoot: path.join(root, "provider-homes"),
       runToolchain: disconnectedGithubGitCredentialToolchain(calls),
       targetRoot
@@ -431,7 +431,7 @@ test("Accounts status shows reconnect required for remembered GitHub identities 
     const targetRoot = path.join(root, "target");
     const calls = [];
     const status = await createService({
-      dataRoot: path.join(root, "data"),
+      systemRoot: path.join(root, "data"),
       providerHomesRoot: path.join(root, "provider-homes"),
       runToolchain: disconnectedGithubAuthToolchain(calls),
       targetRoot
@@ -462,7 +462,7 @@ test("Accounts status requires Git identity in the active user's GitHub home", a
     const targetRoot = path.join(root, "target");
     const calls = [];
     const status = await createService({
-      dataRoot: path.join(root, "data"),
+      systemRoot: path.join(root, "data"),
       providerHomesRoot: path.join(root, "provider-homes"),
       runToolchain: disconnectedGithubGitIdentityToolchain(calls),
       targetRoot
@@ -484,7 +484,7 @@ test("Accounts status reads live Codex shared state instead of reusing provider 
     const disconnectedCalls = [];
 
     const connected = await createService({
-      dataRoot: path.join(root, "connected-data"),
+      systemRoot: path.join(root, "connected-data"),
       providerHomesRoot,
       runToolchain: connectedToolchain(connectedCalls),
       targetRoot: path.join(root, "target")
@@ -494,7 +494,7 @@ test("Accounts status reads live Codex shared state instead of reusing provider 
     assert.equal(connected.ready, true);
 
     const disconnected = await createService({
-      dataRoot: path.join(root, "disconnected-data"),
+      systemRoot: path.join(root, "disconnected-data"),
       providerHomesRoot,
       runToolchain: disconnectedCodexToolchain(disconnectedCalls),
       targetRoot: path.join(root, "target")
@@ -765,7 +765,7 @@ test("Codex API key auth command reads the key from stdin via inherited Docker e
 
 test("Codex auth terminal finalization writes the shared marker and publishes an account change", async () => {
   await withTemporaryRoot(async (root) => {
-    const dataRoot = path.join(root, "data");
+    const systemRoot = path.join(root, "data");
     const published = [];
     let resolvePublished;
     const publishedEvent = new Promise((resolve) => {
@@ -773,7 +773,7 @@ test("Codex auth terminal finalization writes the shared marker and publishes an
     });
     const calls = [];
     const service = createService({
-      dataRoot,
+      systemRoot,
       publishAccountChanged: async (accountId, event = {}) => {
         const record = {
           accountId,
@@ -818,7 +818,7 @@ test("Codex auth terminal finalization writes the shared marker and publishes an
     ]);
 
     const marker = JSON.parse(await readFile(
-      path.join(dataRoot, "provider-homes", "codex", "status.json"),
+      path.join(systemRoot, "provider-homes", "codex", "status.json"),
       "utf8"
     ));
     assert.equal(marker.connected, true);

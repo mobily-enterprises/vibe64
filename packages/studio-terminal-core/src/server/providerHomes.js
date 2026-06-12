@@ -1,23 +1,27 @@
 import path from "node:path";
 
 import {
-  resolveVibe64DataRoot
+  resolveVibe64SystemRoot
 } from "@local/vibe64-core/server/studioRoots";
 
 const APP_PROVIDER_SCOPE = "app";
 const USER_PROVIDER_SCOPE = "user";
 
 function resolveProviderHomesRoot({
-  dataRoot = "",
   env = process.env,
-  explicitRoot = ""
+  explicitRoot = "",
+  projectsRoot = "",
+  runtimeProfile = null,
+  systemRoot = ""
 } = {}) {
   if (String(explicitRoot || "").trim()) {
     return path.resolve(String(explicitRoot || ""));
   }
-  return path.join(resolveVibe64DataRoot({
+  return path.join(resolveVibe64SystemRoot({
     env,
-    explicitRoot: dataRoot
+    explicitRoot: systemRoot,
+    projectsRoot,
+    runtimeProfile
   }), "provider-homes");
 }
 

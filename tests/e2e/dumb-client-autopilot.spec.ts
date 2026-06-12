@@ -1333,9 +1333,9 @@ test.describe("Autopilot dumb client contract", () => {
     });
     const session = sessionPayload({
       metadata: {
-        worktree_path: "/workspace/example-target-app/.vibe64/sessions/active/session-renderer/worktree"
+        worktree_path: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer/worktree"
       },
-      worktree: "/workspace/example-target-app/.vibe64/sessions/active/session-renderer/worktree",
+      worktree: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer/worktree",
       worktreeReady: true
     });
     await mockVibe64Session(page, session, {
@@ -1575,7 +1575,7 @@ test.describe("Autopilot dumb client contract", () => {
         status: "waiting_for_input",
         stepId: "server_step"
       },
-      worktree: "/workspace/example-target-app/.vibe64/sessions/active/session-renderer/worktree"
+      worktree: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer/worktree"
     });
     await mockVibe64Session(page, session);
 
@@ -2145,18 +2145,18 @@ test.describe("Autopilot dumb client contract", () => {
       sessionId: "session-alpha",
       sessionName: "Alpha",
       metadata: {
-        worktree_path: "/workspace/example-target-app/.vibe64/sessions/active/session-alpha/worktree"
+        worktree_path: "/workspace/example-target-app/.vibe64-local/sessions/active/session-alpha/worktree"
       },
-      sessionRoot: "/workspace/example-target-app/.vibe64/sessions/active/session-alpha",
+      sessionRoot: "/workspace/example-target-app/.vibe64-local/sessions/active/session-alpha",
       worktreeReady: true
     });
     const secondSession = sessionPayload({
       sessionId: "session-beta",
       sessionName: "Beta",
       metadata: {
-        worktree_path: "/workspace/example-target-app/.vibe64/sessions/active/session-beta/worktree"
+        worktree_path: "/workspace/example-target-app/.vibe64-local/sessions/active/session-beta/worktree"
       },
-      sessionRoot: "/workspace/example-target-app/.vibe64/sessions/active/session-beta",
+      sessionRoot: "/workspace/example-target-app/.vibe64-local/sessions/active/session-beta",
       worktreeReady: true
     });
     await mockVibe64Session(page, secondSession, {
@@ -2201,9 +2201,9 @@ test.describe("Autopilot dumb client contract", () => {
     const session = sessionPayload({
       completedSteps: ["worktree_created"],
       metadata: {
-        worktree_path: "/workspace/example-target-app/.vibe64/sessions/active/session-renderer/worktree"
+        worktree_path: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer/worktree"
       },
-      sessionRoot: "/workspace/example-target-app/.vibe64/sessions/active/session-renderer",
+      sessionRoot: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer",
       worktreeReady: true
     });
     await mockVibe64Session(page, session, {
@@ -2253,7 +2253,7 @@ test.describe("Autopilot dumb client contract", () => {
     const session = sessionPayload({
       completedSteps: [],
       metadata: {},
-      sessionRoot: "/workspace/example-target-app/.vibe64/sessions/active/session-renderer",
+      sessionRoot: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer",
       worktreeReady: false
     });
     await mockVibe64Session(page, session, {
@@ -2278,9 +2278,9 @@ test.describe("Autopilot dumb client contract", () => {
     const session = sessionPayload({
       completedSteps: ["worktree_created"],
       metadata: {
-        worktree_path: "/workspace/example-target-app/.vibe64/sessions/active/session-renderer/worktree"
+        worktree_path: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer/worktree"
       },
-      sessionRoot: "/workspace/example-target-app/.vibe64/sessions/active/session-renderer",
+      sessionRoot: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer",
       worktreeReady: true
     });
     await mockVibe64Session(page, session);
@@ -3547,7 +3547,7 @@ function sessionPayload(overrides: Record<string, unknown> = {}) {
   return {
     actionResults: [],
     actions: [],
-    artifactsRoot: "/workspace/example-target-app/.vibe64/sessions/active/session-renderer/artifacts",
+    artifactsRoot: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer/artifacts",
     completedSteps: [],
     createdAt: "2026-05-24T00:00:00.000Z",
     currentStep: "server_step",

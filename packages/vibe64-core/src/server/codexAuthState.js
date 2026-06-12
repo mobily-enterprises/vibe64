@@ -4,14 +4,14 @@ import path from "node:path";
 import process from "node:process";
 
 import {
-  resolveVibe64DataRoot
+  resolveVibe64SystemRoot
 } from "./studioRoots.js";
 
 const CODEX_AUTH_MARKER_RELATIVE_PATH = Object.freeze(["provider-homes", "codex", "status.json"]);
 const CODEX_AUTH_STATE_SIGNATURE_VERSION = 1;
 
-function codexAuthMarkerPath(dataRoot = "") {
-  return path.join(dataRoot, ...CODEX_AUTH_MARKER_RELATIVE_PATH);
+function codexAuthMarkerPath(systemRoot = "") {
+  return path.join(systemRoot, ...CODEX_AUTH_MARKER_RELATIVE_PATH);
 }
 
 function hashCodexAuthState(value = "") {
@@ -30,18 +30,22 @@ async function readCodexAuthMarkerText(markerPath = "") {
 }
 
 async function codexAuthStateSignature({
-  dataRoot = "",
-  env = process.env
+  env = process.env,
+  projectsRoot = "",
+  runtimeProfile = null,
+  systemRoot = ""
 } = {}) {
-  const resolvedDataRoot = resolveVibe64DataRoot({
+  const resolvedSystemRoot = resolveVibe64SystemRoot({
     env,
-    explicitRoot: dataRoot
+    explicitRoot: systemRoot,
+    projectsRoot,
+    runtimeProfile
   });
-  const markerPath = codexAuthMarkerPath(resolvedDataRoot);
+  const markerPath = codexAuthMarkerPath(resolvedSystemRoot);
   const markerText = await readCodexAuthMarkerText(markerPath);
   const state = markerText
-    ? `present\0${resolvedDataRoot}\0${markerText}`
-    : `missing\0${resolvedDataRoot}`;
+    ? `present\0${resolvedSystemRoot}\0${markerText}`
+    : `missing\0${resolvedSystemRoot}`;
   return `v${CODEX_AUTH_STATE_SIGNATURE_VERSION}:${hashCodexAuthState(state)}`;
 }
 

@@ -24,13 +24,11 @@ import {
   getStudioProjectContext
 } from "@local/vibe64-core/server/studioProjectContext";
 import {
+  currentProjectLocalRoot,
   currentProjectRequestContext,
   currentProjectStateRoot,
   currentProjectTargetRoot
 } from "@local/vibe64-core/server/projectRequestContext";
-import {
-  resolveExternalProjectStateRoot
-} from "@local/vibe64-core/server/projectState";
 
 function resolveVibe64TargetRoot(targetRoot) {
   return resolveStudioTargetRoot({
@@ -118,10 +116,21 @@ function createService({
     if (typeof studioProjectContext.projectStateRootForTarget === "function" && targetRootValue) {
       return studioProjectContext.projectStateRootForTarget(targetRootValue);
     }
-    return resolveExternalProjectStateRoot({
-      dataRoot: studioProjectContext.dataRoot || "",
-      targetRoot: targetRootValue || resolveVibe64TargetRoot(targetRootValue)
-    });
+    return "";
+  }
+
+  function projectLocalRoot(targetRootValue = currentTargetRoot()) {
+    const projectLocalRootValue = currentProjectLocalRoot();
+    if (projectLocalRootValue) {
+      return projectLocalRootValue;
+    }
+    if (!targetRootValue) {
+      return "";
+    }
+    if (typeof studioProjectContext.projectLocalRootForTarget === "function" && targetRootValue) {
+      return studioProjectContext.projectLocalRootForTarget(targetRootValue);
+    }
+    return "";
   }
 
   async function listProjectSelectionState() {
@@ -173,15 +182,18 @@ function createService({
   function projectStores(targetRootValue = requireSelectedTargetRoot()) {
     const resolvedTargetRoot = resolveVibe64TargetRoot(targetRootValue);
     const resolvedProjectStateRoot = projectStateRoot(resolvedTargetRoot);
+    const resolvedProjectLocalRoot = projectLocalRoot(resolvedTargetRoot);
     return {
       projectConfigStore: createVibe64ProjectConfigStore({
-        stateRoot: resolvedProjectStateRoot,
+        projectLocalRoot: resolvedProjectLocalRoot,
+        projectSharedRoot: resolvedProjectStateRoot,
         targetRoot: resolvedTargetRoot
       }),
       projectTypeStore: createVibe64ProjectTypeStore({
-        stateRoot: resolvedProjectStateRoot,
+        projectSharedRoot: resolvedProjectStateRoot,
         targetRoot: resolvedTargetRoot
       }),
+      resolvedProjectLocalRoot,
       resolvedProjectStateRoot,
       resolvedTargetRoot
     };
@@ -547,7 +559,7 @@ function createService({
       actionReadiness: options.actionReadiness,
       adapter,
       projectConfig,
-      stateRoot: projectStateRoot(resolvedTargetRoot),
+      projectLocalRoot: projectLocalRoot(resolvedTargetRoot),
       targetRoot: resolvedTargetRoot,
       workflowRegistry
     });
@@ -560,6 +572,10 @@ function createService({
 
     currentProjectStateRoot() {
       return projectStateRoot();
+    },
+
+    currentProjectLocalRoot() {
+      return projectLocalRoot();
     },
 
     get targetRoot() {

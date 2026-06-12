@@ -536,13 +536,13 @@ async function fulfillScopedDevelopmentApi(route: Route, suffix: string, method:
         defaults: {},
         fields: [],
         fieldValues: {},
-        helperPath: `${PROJECT_ROOT}/.vibe64/runtime/vibe64-config.sh`,
+        helperPath: `${PROJECT_ROOT}/.vibe64-local/runtime/vibe64-config.sh`,
         invalid: [],
         message: "",
         missing: [],
         projectType: "jskit",
         ready: true,
-        runtimeRoot: `${PROJECT_ROOT}/.vibe64/runtime`,
+        runtimeRoot: `${PROJECT_ROOT}/.vibe64-local/runtime`,
         sections: [],
         values: {}
       },
@@ -881,7 +881,7 @@ function sessionPayload(sessionId: string): SessionRow {
     currentStep: "work_definition",
     metadata: {
       issue_word: "Created session",
-      worktree_path: `${PROJECT_ROOT}/.vibe64/sessions/active/${sessionId}/worktree`
+      worktree_path: `${PROJECT_ROOT}/.vibe64-local/sessions/active/${sessionId}/worktree`
     },
     presentation: {
       intents: [],

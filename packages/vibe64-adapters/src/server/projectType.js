@@ -2,20 +2,21 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import {
-  VIBE64_STATE_DIR,
   vibe64Error,
   isMissingPathError,
-  normalizeTargetRoot,
   normalizeText
 } from "@local/vibe64-core/server/core";
 
 const VIBE64_PROJECT_TYPE_FILE = "project_type";
 
-function projectTypePath(targetRoot = process.cwd(), {
-  stateRoot = ""
+function projectTypePath({
+  projectSharedRoot = ""
 } = {}) {
-  const normalizedTargetRoot = normalizeTargetRoot(targetRoot);
-  return path.join(stateRoot ? path.resolve(stateRoot) : path.join(normalizedTargetRoot, VIBE64_STATE_DIR), VIBE64_PROJECT_TYPE_FILE);
+  const resolvedProjectSharedRoot = String(projectSharedRoot || "").trim();
+  if (!resolvedProjectSharedRoot) {
+    throw vibe64Error("Project type store requires projectSharedRoot.", "vibe64_project_shared_root_required");
+  }
+  return path.join(path.resolve(resolvedProjectSharedRoot), VIBE64_PROJECT_TYPE_FILE);
 }
 
 async function readProjectTypeFile(filePath) {
@@ -30,12 +31,12 @@ async function readProjectTypeFile(filePath) {
 }
 
 function createVibe64ProjectTypeStore({
-  stateRoot = "",
+  projectSharedRoot = "",
   targetRoot = process.cwd()
 } = {}) {
-  const normalizedTargetRoot = normalizeTargetRoot(targetRoot);
-  const filePath = projectTypePath(normalizedTargetRoot, {
-    stateRoot
+  const normalizedTargetRoot = path.resolve(String(targetRoot || process.cwd()).trim() || process.cwd());
+  const filePath = projectTypePath({
+    projectSharedRoot
   });
 
   async function readProjectType() {

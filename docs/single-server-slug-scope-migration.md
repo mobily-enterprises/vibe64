@@ -59,8 +59,8 @@ No published runtime code may depend on a repo-local or machine-specific path.
 - Server-side development state is request-scoped by slug, not process-global.
 - The old process-global selected project must not be used for development APIs.
 - Management mode can list and create workspaces without selecting one globally.
-- Session truth remains under the workspace root:
-  `~/vibe64/<slug>/.vibe64/sessions/active/<session_id>/`.
+- Session truth remains under the workspace root private state:
+  `~/vibe64/<slug>/.vibe64-local/sessions/active/<session_id>/`.
 - Terminal, preview, Codex, and fix-job namespaces include the workspace scope.
 - GitHub identity is not workspace-global or environment-global. GitHub
   authentication belongs to the authenticated Vibe64 user.
@@ -138,10 +138,11 @@ User records:
 - Are deterministic text files so they can be inspected, backed up, and moved
   with the VPS home directory.
 
-Auth data:
+Auth/system data:
 
-- Defaults to `~/.vibe64`.
-- Can be overridden for deployments with `VIBE64_DATA_ROOT`.
+- Defaults to `<projectsRoot>/.vibe64-demon` in managed daemon mode.
+- Defaults to `~/.local/share/vibe64-local-editor` in local editor mode.
+- Can be overridden for deployments with `VIBE64_SYSTEM_ROOT`.
 - Stores user records under `users/`.
 - Stores login sessions under `auth-sessions/`.
 - Login sessions are file-backed, survive server restarts, and expire after 30
@@ -246,10 +247,10 @@ Implementation direction:
 
 - Prefer isolating GitHub CLI state by Vibe64 user instead of parsing and
   storing GitHub tokens directly in app-owned user records.
-- The clean version-0 shape is a per-user GitHub tool home under app data, for
-  example `~/.vibe64/provider-homes/github/<stable-user-id>/`, with GitHub and
-  Git commands launched using that directory as `HOME` or equivalent provider
-  config root.
+- The clean version-0 shape is a per-user GitHub tool home under Vibe64 system
+  state, for example `<projectsRoot>/.vibe64-demon/provider-homes/github/<stable-user-id>/`,
+  with GitHub and Git commands launched using that directory as `HOME` or
+  equivalent provider config root.
 - GitHub CLI can then store its own auth material in the per-user GitHub home,
   while Vibe64 stores only user metadata and password hashes in `users/`.
 - Codex CLI uses the shared managed toolchain home/account state. It must not
@@ -262,15 +263,16 @@ Implementation direction:
   user's GitHub provider home.
 - Codex runtime actions and Codex terminals use shared Codex auth, while their
   runtime/session namespaces remain workspace-scoped.
-- Session/workspace truth remains under `~/vibe64/<slug>/.vibe64/...`; provider
-  credentials do not.
+- Session/workspace truth remains under `~/vibe64/<slug>/.vibe64-local/...`;
+  provider credentials do not.
 
 Current implementation note:
 
 - The account service now treats Codex as shared app-level auth and GitHub as
   per-user auth.
 - GitHub status, login terminals, logout, and Git credential-helper checks use
-  `~/.vibe64/provider-homes/github/<stable-user-id>/` as the managed tool home.
+  `<projectsRoot>/.vibe64-demon/provider-homes/github/<stable-user-id>/` as
+  the managed tool home.
 - Codex status, login, logout, and Codex runtime auth continue to use the
   shared managed tool home.
 - Accounts status is read live instead of using persisted ready caches, because
@@ -854,8 +856,8 @@ Implemented:
   selection when launched without a slug.
 - CLI startup opens `/app/manage` by default and `/app/<slug>` for one validated
   slug argument.
-- File-backed auth data defaults to `~/.vibe64` and can be relocated with
-  `VIBE64_DATA_ROOT`.
+- File-backed auth/system data defaults to `<projectsRoot>/.vibe64-demon` and
+  can be relocated with `VIBE64_SYSTEM_ROOT`.
 - Managed workspaces default to `~/vibe64/<slug>`.
 - API and WebSocket behavior requires an authenticated Vibe64 session except for
   explicit bootstrap/auth, health, static, SPA shell, and tokenized preview
@@ -1041,8 +1043,8 @@ Known remaining verification gap:
 - The earlier no-password/no-protection assumption is superseded. Version 0 now
   requires app authentication.
 - Authentication is file-backed; no database is required.
-- Auth data defaults to `~/.vibe64`, with `VIBE64_DATA_ROOT` as the deployment
-  override.
+- Auth/system data defaults to `<projectsRoot>/.vibe64-demon`, with
+  `VIBE64_SYSTEM_ROOT` as the deployment override.
 - User records are stored as `users/<canonical-lowercase-email>.json`.
 - First run creates the owner user from email and password.
 - Invites create user records without passwords; invited users claim the fixed

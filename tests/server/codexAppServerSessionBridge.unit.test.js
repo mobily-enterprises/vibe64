@@ -89,20 +89,20 @@ function bootstrapProviderParts(providerCalls) {
 
 test("codex app-server bridge uses the current Vibe64 Codex execution settings", () => {
   assert.deepEqual(codexAppServerThreadSettings({
-    cwd: "/repo/.vibe64/sessions/active/session/worktree",
+    cwd: "/repo/.vibe64-local/sessions/active/session/worktree",
     developerInstructions: "Vibe64 briefing"
   }), {
     approvalPolicy: "never",
-    cwd: "/repo/.vibe64/sessions/active/session/worktree",
+    cwd: "/repo/.vibe64-local/sessions/active/session/worktree",
     developerInstructions: "Vibe64 briefing",
     model: "gpt-5.5",
     sandbox: "danger-full-access"
   });
   assert.deepEqual(codexAppServerTurnSettings({
-    cwd: "/repo/.vibe64/sessions/active/session/worktree"
+    cwd: "/repo/.vibe64-local/sessions/active/session/worktree"
   }), {
     approvalPolicy: "never",
-    cwd: "/repo/.vibe64/sessions/active/session/worktree",
+    cwd: "/repo/.vibe64-local/sessions/active/session/worktree",
     effort: "xhigh",
     model: "gpt-5.5",
     sandboxPolicy: {
@@ -114,10 +114,10 @@ test("codex app-server bridge uses the current Vibe64 Codex execution settings",
     agentSettings: {
       thinking: "high"
     },
-    cwd: "/repo/.vibe64/sessions/active/session/worktree"
+    cwd: "/repo/.vibe64-local/sessions/active/session/worktree"
   }), {
     approvalPolicy: "never",
-    cwd: "/repo/.vibe64/sessions/active/session/worktree",
+    cwd: "/repo/.vibe64-local/sessions/active/session/worktree",
     effort: "high",
     model: "gpt-5.5",
     sandboxPolicy: {
@@ -140,7 +140,7 @@ test("codex app-server bridge records host and container CLI resume commands for
   const metadata = codexAppServerIdentityMetadata({
     appServerRuntime: appServerRuntime(),
     threadId: "019e865d-8108-7740-912b-42ece83a5c73",
-    workdir: "/repo/.vibe64/sessions/active/session/worktree"
+    workdir: "/repo/.vibe64-local/sessions/active/session/worktree"
   });
 
   assert.equal(metadata.agent_identity_conversation_id, "019e865d-8108-7740-912b-42ece83a5c73");

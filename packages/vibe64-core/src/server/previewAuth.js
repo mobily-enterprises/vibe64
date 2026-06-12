@@ -2,6 +2,10 @@ import crypto from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import {
+  VIBE64_PROJECT_LOCAL_DIR
+} from "./studioRoots.js";
+
 const JSKIT_PREVIEW_AUTH_KIND = "jskit-dev";
 const JSKIT_DEV_AUTH_TOKEN_PREFIX = "jskit-dev.";
 const JSKIT_DEV_AUTH_ISSUER = "jskit:dev-auth";
@@ -169,7 +173,7 @@ function previewAuthProfilePath({
   const normalizedTargetRoot = String(targetRoot || "").trim();
   const normalizedSessionId = String(sessionId || "").trim();
   const root = normalizedSessionRoot || (normalizedTargetRoot && normalizedSessionId
-    ? path.join(normalizedTargetRoot, ".vibe64", "sessions", "active", normalizedSessionId)
+    ? path.join(normalizedTargetRoot, VIBE64_PROJECT_LOCAL_DIR, "sessions", "active", normalizedSessionId)
     : "");
   if (!root) {
     return "";

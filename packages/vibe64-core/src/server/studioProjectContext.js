@@ -8,17 +8,18 @@ import { promisify } from "node:util";
 
 import {
   VIBE64_PROJECTS_ROOT_ENV,
-  resolveVibe64DataRoot,
+  resolveVibe64Roots,
   resolveExplicitStudioTargetRoot
 } from "./studioRoots.js";
 import {
-  resolveExternalProjectStateRoot,
+  resolveProjectLocalRoot,
   resolveProjectStateRoot
 } from "./projectState.js";
 
 const PROJECT_SLUG_MAX_LENGTH = 48;
 const PROJECT_SLUG_PATTERN = /^[a-z0-9][a-z0-9_-]*$/u;
 const PROJECT_METADATA_FILE = "project.json";
+const PROJECT_LOCAL_GITIGNORE_ENTRY = ".vibe64-local/";
 const execFileAsync = promisify(execFile);
 
 let configuredContext = null;
@@ -245,6 +246,26 @@ async function writeProjectMetadata(projectStateRoot = "", metadata = {}) {
   return normalizedMetadata;
 }
 
+async function ensureProjectLocalGitignore(targetRoot = "") {
+  const gitignorePath = path.join(normalizeRoot(targetRoot), ".gitignore");
+  let current = "";
+  try {
+    current = await readFile(gitignorePath, "utf8");
+  } catch (error) {
+    if (error?.code !== "ENOENT") {
+      throw error;
+    }
+  }
+
+  const lines = current.split(/\r?\n/u).map((line) => line.trim());
+  if (lines.includes(PROJECT_LOCAL_GITIGNORE_ENTRY) || lines.includes(".vibe64-local")) {
+    return;
+  }
+
+  const separator = current && !current.endsWith("\n") ? "\n" : "";
+  await writeFile(gitignorePath, `${current}${separator}${PROJECT_LOCAL_GITIGNORE_ENTRY}\n`, "utf8");
+}
+
 async function managedProjectRecordForPath({
   path: projectPath = "",
   projectsRoot = "",
@@ -362,23 +383,25 @@ function githubRemoteRecord(owner = "", repository = "") {
 
 function createStudioProjectContext({
   cwd = process.cwd(),
-  explicitDataRoot = "",
+  explicitSystemRoot = "",
   env = process.env,
   explicitProjectsRoot = "",
   explicitTargetRoot = "",
   home = os.homedir(),
   runtimeProfile = null
 } = {}) {
-  const dataRoot = resolveVibe64DataRoot({
-    env,
-    explicitRoot: explicitDataRoot,
-    home
-  });
   const projectsRoot = resolveStudioProjectsRoot({
     env,
     explicitRoot: explicitProjectsRoot,
     home
   });
+  const systemRoot = resolveVibe64Roots({
+    env,
+    explicitSystemRoot,
+    home,
+    projectsRoot,
+    runtimeProfile
+  }).systemRoot;
   let selectedTargetRoot = resolveExplicitStudioTargetRoot({
     cwd,
     env,
@@ -387,28 +410,34 @@ function createStudioProjectContext({
   let selectionSource = selectedTargetRoot ? "explicit" : "";
 
   function projectStateRootForSlug(slug = "") {
+    const targetRoot = resolveProjectRoot({
+      projectsRoot,
+      slug: normalizeProjectSlug(slug)
+    });
     return resolveProjectStateRoot({
-      dataRoot,
-      env,
-      home,
-      slug
+      targetRoot
+    });
+  }
+
+  function projectLocalRootForSlug(slug = "") {
+    const targetRoot = resolveProjectRoot({
+      projectsRoot,
+      slug: normalizeProjectSlug(slug)
+    });
+    return resolveProjectLocalRoot({
+      targetRoot
     });
   }
 
   function projectStateRootForTarget(targetRoot = "") {
-    const normalizedTargetRoot = normalizeRoot(targetRoot);
-    if (pathInsideOrEqual(projectsRoot, normalizedTargetRoot)) {
-      try {
-        return projectStateRootForSlug(path.basename(normalizedTargetRoot));
-      } catch {
-        // Explicit/dev targets inside the projects root can still have non-project names.
-      }
-    }
-    return resolveExternalProjectStateRoot({
-      dataRoot,
-      env,
-      home,
-      targetRoot: normalizedTargetRoot
+    return resolveProjectStateRoot({
+      targetRoot: normalizeRoot(targetRoot)
+    });
+  }
+
+  function projectLocalRootForTarget(targetRoot = "") {
+    return resolveProjectLocalRoot({
+      targetRoot: normalizeRoot(targetRoot)
     });
   }
 
@@ -422,7 +451,13 @@ function createStudioProjectContext({
     await mkdir(projectStateRoot, {
       recursive: true
     });
+    const projectLocalRoot = projectLocalRootForSlug(normalizedSlug);
+    await mkdir(projectLocalRoot, {
+      recursive: true
+    });
+    await ensureProjectLocalGitignore(targetRoot);
     return {
+      projectLocalRoot,
       projectStateRoot,
       targetRoot
     };
@@ -519,6 +554,7 @@ function createStudioProjectContext({
     if (Object.keys(metadata).length > 0) {
       await writeProjectMetadata(projectStateRootForSlug(slug), metadata);
     }
+    await ensureProjectStateForSlug(slug);
     const project = await managedProjectRecordForPath({
       path: targetRoot,
       projectsRoot,
@@ -611,11 +647,11 @@ function createStudioProjectContext({
   return Object.freeze({
     createManagedProject,
     createManagedProjectRecord,
-    get dataRoot() {
-      return dataRoot;
-    },
     get projectsRoot() {
       return projectsRoot;
+    },
+    get systemRoot() {
+      return systemRoot;
     },
     ensureProjectStateForSlug,
     get selectedProject() {
@@ -639,6 +675,8 @@ function createStudioProjectContext({
     requireSelectedTargetRoot,
     selectManagedProject,
     updateManagedProjectMetadata,
+    projectLocalRootForSlug,
+    projectLocalRootForTarget,
     projectStateRootForSlug,
     projectStateRootForTarget
   });
@@ -657,9 +695,11 @@ function getStudioProjectContext() {
 }
 
 export {
+  PROJECT_LOCAL_GITIGNORE_ENTRY,
   PROJECT_SLUG_MAX_LENGTH,
   configureStudioProjectContext,
   createStudioProjectContext,
+  ensureProjectLocalGitignore,
   getStudioProjectContext,
   normalizeProjectSlug,
   pathInsideOrEqual,

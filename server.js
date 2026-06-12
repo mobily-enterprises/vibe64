@@ -18,14 +18,16 @@ import {
 import { matchesPathPrefix, normalizePathname } from "@jskit-ai/kernel/shared/surface/paths";
 import { surfaceRuntime } from "./server/lib/surfaceRuntime.js";
 import {
-  VIBE64_DATA_ROOT_ENV,
   resolveStudioAppRoot,
-  VIBE64_PROJECTS_ROOT_ENV
+  VIBE64_PROJECTS_ROOT_ENV,
+  VIBE64_SYSTEM_ROOT_ENV,
+  resolveVibe64Roots
 } from "@local/vibe64-core/server/studioRoots";
 import {
   assertProjectDirectoryUsable,
   configureStudioProjectContext,
-  normalizeProjectSlug
+  normalizeProjectSlug,
+  resolveStudioProjectsRoot
 } from "@local/vibe64-core/server/studioProjectContext";
 import {
   closeTerminalSessionsForNamespacePrefix
@@ -352,14 +354,14 @@ function browserUrlForPublicOrigin(origin = "", options = {}) {
 
 function createCodexConnectedVerifier({
   accountService = null,
-  dataRoot = "",
   env = process.env,
-  providerHomesRoot = ""
+  providerHomesRoot = "",
+  systemRoot = ""
 } = {}) {
   const service = accountService || createVibe64AccountsService({
-    dataRoot,
     env,
-    providerHomesRoot
+    providerHomesRoot,
+    systemRoot
   });
   return async function verifyCodexConnected() {
     const status = await service.getCodexStatus();
@@ -409,24 +411,37 @@ async function createServer(options = {}) {
   await app.register(fastifyWebsocket);
   registerSocketIoUpgradeHandoff(app);
 
-  const accountService = createVibe64AccountsService({
-    dataRoot: options.authDataRoot,
+  const projectsRoot = resolveStudioProjectsRoot({
     env: runtimeEnv,
-    providerHomesRoot: options.providerHomesRoot
+    explicitRoot: options.projectsRoot
+  });
+  const rootContract = resolveVibe64Roots({
+    env: runtimeEnv,
+    explicitSystemRoot: options.systemRoot,
+    projectsRoot,
+    runtimeProfile,
+    targetRoot: runtimeProfile.singleTargetRoot
+  });
+  const systemRoot = rootContract.systemRoot;
+
+  const accountService = createVibe64AccountsService({
+    env: runtimeEnv,
+    providerHomesRoot: options.providerHomesRoot,
+    systemRoot
   });
   const codexConnectedVerifier = typeof options.codexConnectedVerifier === "function"
     ? options.codexConnectedVerifier
     : createCodexConnectedVerifier({
         accountService,
-        dataRoot: options.authDataRoot,
         env: runtimeEnv,
-        providerHomesRoot: options.providerHomesRoot
+        providerHomesRoot: options.providerHomesRoot,
+        systemRoot
       });
   const auth = createVibe64Auth({
     codexConnectedVerifier,
-    dataRoot: options.authDataRoot,
     env: runtimeEnv,
     runtimeProfile,
+    systemRoot,
     verifySupabaseAccessToken: options.verifySupabaseAccessToken
   });
   app.vibe64Auth = auth;
@@ -466,16 +481,16 @@ async function createServer(options = {}) {
   const projectContext = configureStudioProjectContext({
     cwd: process.cwd(),
     env: runtimeEnv,
-    explicitDataRoot: options.authDataRoot,
-    explicitProjectsRoot: options.projectsRoot,
+    explicitProjectsRoot: projectsRoot,
+    explicitSystemRoot: systemRoot,
     explicitTargetRoot: options.targetRoot,
     runtimeProfile
   });
   registerVibe64ProjectRoutes(app, projectContext, {
     auth,
-    dataRoot: options.authDataRoot,
     env: runtimeEnv,
     providerHomesRoot: options.providerHomesRoot,
+    systemRoot,
     runGithubToolchain: options.runGithubToolchain
   });
   const targetRoot = projectContext.targetRoot || "";
@@ -484,19 +499,17 @@ async function createServer(options = {}) {
   const providerEnv = {
     ...runtimeEnv,
     [VIBE64_APP_ROOT_ENV]: appRoot,
-    ...(options.authDataRoot ? { [VIBE64_DATA_ROOT_ENV]: options.authDataRoot } : {}),
     [VIBE64_PROJECTS_ROOT_ENV]: projectContext.projectsRoot,
+    [VIBE64_SYSTEM_ROOT_ENV]: systemRoot,
     ...(targetRoot ? { [VIBE64_TARGET_ROOT_ENV]: targetRoot } : {})
   };
   const previousStudioAppRoot = process.env[VIBE64_APP_ROOT_ENV];
-  const previousVibe64DataRoot = process.env[VIBE64_DATA_ROOT_ENV];
+  const previousVibe64SystemRoot = process.env[VIBE64_SYSTEM_ROOT_ENV];
   const previousStudioProjectsRoot = process.env[VIBE64_PROJECTS_ROOT_ENV];
   const previousStudioTargetRoot = process.env[VIBE64_TARGET_ROOT_ENV];
   process.env[VIBE64_APP_ROOT_ENV] = appRoot;
-  if (options.authDataRoot) {
-    process.env[VIBE64_DATA_ROOT_ENV] = options.authDataRoot;
-  }
   process.env[VIBE64_PROJECTS_ROOT_ENV] = projectContext.projectsRoot;
+  process.env[VIBE64_SYSTEM_ROOT_ENV] = systemRoot;
   if (targetRoot) {
     process.env[VIBE64_TARGET_ROOT_ENV] = targetRoot;
   } else {
@@ -520,10 +533,10 @@ async function createServer(options = {}) {
     } else {
       process.env[VIBE64_APP_ROOT_ENV] = previousStudioAppRoot;
     }
-    if (previousVibe64DataRoot == null) {
-      delete process.env[VIBE64_DATA_ROOT_ENV];
+    if (previousVibe64SystemRoot == null) {
+      delete process.env[VIBE64_SYSTEM_ROOT_ENV];
     } else {
-      process.env[VIBE64_DATA_ROOT_ENV] = previousVibe64DataRoot;
+      process.env[VIBE64_SYSTEM_ROOT_ENV] = previousVibe64SystemRoot;
     }
     if (previousStudioProjectsRoot == null) {
       delete process.env[VIBE64_PROJECTS_ROOT_ENV];
@@ -594,6 +607,7 @@ async function createServer(options = {}) {
         routeCount: runtime.routeCount,
         surface: surfaceRuntime.normalizeSurfaceMode(runtimeEnv.SERVER_SURFACE),
         projectsRoot: projectContext.projectsRoot,
+        systemRoot,
         targetRoot: projectContext.targetRoot || "",
         providerPackages: runtime.providerPackageOrder,
         packageOrder: runtime.packageOrder
@@ -624,10 +638,10 @@ async function startServer(options = {}) {
   );
   const app = await createServer({
     appRoot: options?.appRoot,
-    authDataRoot: options?.authDataRoot,
     browserLifecycleShutdownDelayMs: options?.browserLifecycleShutdownDelayMs,
     projectsRoot: options?.projectsRoot,
     runtimeMode: runtimeProfile.mode,
+    systemRoot: options?.systemRoot,
     targetRoot: options?.targetRoot,
     verifySupabaseAccessToken: options?.verifySupabaseAccessToken
   });

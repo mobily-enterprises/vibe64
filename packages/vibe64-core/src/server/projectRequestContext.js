@@ -4,6 +4,7 @@ import { mkdir } from "node:fs/promises";
 import {
   assertProjectDirectoryUsable,
   getStudioProjectContext,
+  ensureProjectLocalGitignore,
   normalizeProjectSlug,
   resolveStudioProjectsRoot,
   resolveProjectRoot
@@ -31,6 +32,12 @@ async function resolveProjectRequestContext({
         recursive: true
       });
     }
+    if (explicitContext.projectLocalRoot) {
+      await mkdir(explicitContext.projectLocalRoot, {
+        recursive: true
+      });
+    }
+    await ensureProjectLocalGitignore(explicitContext.targetRoot);
     return explicitContext;
   }
   const targetRoot = resolveProjectRoot({
@@ -44,11 +51,15 @@ async function resolveProjectRequestContext({
   const projectStateRoot = typeof resolvedProjectContext.projectStateRootForSlug === "function"
     ? resolvedProjectContext.projectStateRootForSlug(slug)
     : "";
+  const projectLocalRoot = typeof resolvedProjectContext.projectLocalRootForSlug === "function"
+    ? resolvedProjectContext.projectLocalRootForSlug(slug)
+    : "";
   return Object.freeze({
-    dataRoot: String(resolvedProjectContext?.dataRoot || "").trim(),
+    projectLocalRoot,
     projectStateRoot,
     projectsRoot,
     slug,
+    systemRoot: String(resolvedProjectContext?.systemRoot || "").trim(),
     targetRoot
   });
 }
@@ -66,11 +77,15 @@ function explicitProjectRequestContextForSlug(projectContext = {}, slug = "", pr
   const projectStateRoot = typeof projectContext.projectStateRootForTarget === "function"
     ? projectContext.projectStateRootForTarget(targetRoot)
     : "";
+  const projectLocalRoot = typeof projectContext.projectLocalRootForTarget === "function"
+    ? projectContext.projectLocalRootForTarget(targetRoot)
+    : "";
   return Object.freeze({
-    dataRoot: String(projectContext?.dataRoot || "").trim(),
+    projectLocalRoot,
     projectStateRoot,
     projectsRoot,
     slug,
+    systemRoot: String(projectContext?.systemRoot || "").trim(),
     targetRoot
   });
 }
@@ -85,6 +100,10 @@ function currentProjectTargetRoot() {
 
 function currentProjectStateRoot() {
   return String(currentProjectRequestContext()?.projectStateRoot || "").trim();
+}
+
+function currentProjectLocalRoot() {
+  return String(currentProjectRequestContext()?.projectLocalRoot || "").trim();
 }
 
 function currentProjectScopeKey({
@@ -127,6 +146,7 @@ function projectRequestErrorStatusCode(error = {}) {
 
 export {
   VIBE64_PROJECT_ROUTE_BASE,
+  currentProjectLocalRoot,
   currentProjectRequestContext,
   currentProjectScopeKey,
   currentProjectTargetRoot,

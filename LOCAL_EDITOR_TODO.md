@@ -17,7 +17,7 @@ In this mode, Vibe64 opens that directory as the project target directly. It byp
 
 - `server.js` already accepts `options.targetRoot` and passes it into `configureStudioProjectContext({ explicitTargetRoot })`.
 - Lower project/session/runtime layers already understand `targetRoot`.
-- `packages/vibe64-core/src/server/studioProjectContext.js` already has external project state support via `projectStateRootForTarget()`.
+- Project state now uses the target directory directly: shared state in `<target>/.vibe64` and private runtime state in `<target>/.vibe64-local`.
 - `bin/server.js` currently parses a positional argument as a managed project slug through `normalizeProjectSlug()`, so `vibe64 .` does not currently mean "open this folder".
 - `src/App.vue` wraps the app in `Vibe64AuthGate`.
 - `src/components/auth/Vibe64AuthGate.vue` currently assumes Supabase/Vibe64 auth and then checks setup prerequisites.
@@ -161,7 +161,9 @@ Local mode should operate on exactly one target project: the CLI directory.
 
 Open question for implementation: the URL slug can be derived from the folder basename, but the server must not use that slug to resolve the project root. The authoritative target is the explicit `targetRoot`.
 
-State should continue to use external project state support, so Vibe64 can store local project state without requiring the target to live under the managed projects root.
+State should not use an external state registry. Vibe64 stores local project state in the target itself: shared configuration under `.vibe64` and private runtime/session state under `.vibe64-local`.
+
+See [Technical reference](docs/site/dev/technical-reference.md) for the full managed-mode and local-editor directory contract.
 
 ## Management UI
 
@@ -234,4 +236,3 @@ At minimum:
 - hosted mode still uses managed projects.
 - hosted mode still shows Users and project access management.
 - local mode refuses unsafe public no-auth binding.
-

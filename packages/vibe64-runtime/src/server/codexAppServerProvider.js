@@ -178,8 +178,8 @@ async function currentCodexAuthStateSignature(options = {}) {
     return signature;
   }
   return codexAuthStateSignature({
-    dataRoot: options.dataRoot,
-    env: options.env
+    env: options.env,
+    systemRoot: options.systemRoot
   });
 }
 
@@ -593,11 +593,11 @@ async function waitForCodexAppServer(endpoint = "", {
 async function startCodexAppServerProcess({
   authStateSignature = "",
   codexCommand = "codex",
-  dataRoot = "",
   env = process.env,
   image = STUDIO_BASE_TOOLCHAIN_IMAGE,
   readyTimeoutMs = CODEX_APP_SERVER_READY_TIMEOUT_MS,
   spawn = defaultSpawn,
+  systemRoot = "",
   targetRoot = "",
   workdir = "",
   runtimeDir = codexAppServerRuntimeDir({
@@ -610,8 +610,8 @@ async function startCodexAppServerProcess({
   await ensurePrivateDirectory(runtimeDir);
   const resolvedAuthStateSignature = await currentCodexAuthStateSignature({
     authStateSignature,
-    dataRoot,
-    env
+    env,
+    systemRoot
   });
   const socketPath = codexAppServerSocketPath(runtimeDir);
   const endpoint = codexAppServerUnixEndpoint(socketPath);

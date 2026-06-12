@@ -23,7 +23,7 @@ test("GitHub identity sync returns a synthetic local user without tenant persist
           }
         }
       },
-      dataRoot: root,
+      systemRoot: root,
       projectContext: {},
       runToolchain: async (args) => {
         calls.push(args);
@@ -79,7 +79,7 @@ test("GitHub identity sync persists hosted tenant user identity", async () => {
           }
         }
       },
-      dataRoot: root,
+      systemRoot: root,
       projectContext: {},
       runToolchain: async () => ({
         ok: true,

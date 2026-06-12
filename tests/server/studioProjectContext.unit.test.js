@@ -54,6 +54,21 @@ test("Studio project context starts without a selected project when no explicit 
   });
 });
 
+test("Studio project context uses a visibly local-editor system root in local mode", async () => {
+  await withTemporaryRoot(async (root) => {
+    const context = createStudioProjectContext({
+      env: {},
+      home: root,
+      runtimeProfile: {
+        local: true,
+        mode: "local"
+      }
+    });
+
+    assert.equal(context.systemRoot, path.join(root, ".local", "share", "vibe64-local-editor"));
+  });
+});
+
 test("Studio project context creates and selects managed project folders under the projects root", async () => {
   await withTemporaryRoot(async (root) => {
     const projectsRoot = path.join(root, "projects");
@@ -230,32 +245,25 @@ test("Studio project context rejects empty or escaping project folder names", as
   });
 });
 
-test("Studio project context ignores project-local Vibe64 state and reads canonical project state", async () => {
+test("Studio project context reads shared project state and ignores private local state", async () => {
   await withTemporaryRoot(async (root) => {
-    const dataRoot = path.join(root, "data");
     const projectsRoot = path.join(root, "projects");
     const projectRoot = path.join(projectsRoot, "canonical-app");
-    const legacyStateRoot = path.join(projectRoot, ".vibe64");
     const context = createStudioProjectContext({
-      explicitDataRoot: dataRoot,
       explicitProjectsRoot: projectsRoot,
       env: {},
       home: root
     });
     const stateRoot = context.projectStateRootForSlug("canonical-app");
+    const localRoot = context.projectLocalRootForSlug("canonical-app");
     await Promise.all([
-      writeTestFile(path.join(legacyStateRoot, "project.json"), `${JSON.stringify({
-        githubRepository: {
-          fullName: "example/legacy-state"
-        }
-      }, null, 2)}\n`),
       writeTestFile(path.join(stateRoot, "project.json"), `${JSON.stringify({
         githubRepository: {
           fullName: "example/canonical-app"
         }
       }, null, 2)}\n`),
-      writeTestFile(path.join(legacyStateRoot, "project_type"), "jskit\n"),
-      writeTestFile(path.join(stateRoot, "project_type"), "node-web\n")
+      writeTestFile(path.join(stateRoot, "project_type"), "node-web\n"),
+      writeTestFile(path.join(localRoot, "project_type"), "jskit\n")
     ]);
 
     const listed = await context.listManagedProjects();
@@ -263,18 +271,16 @@ test("Studio project context ignores project-local Vibe64 state and reads canoni
     assert.deepEqual(listed.projects.map((project) => project.slug), ["canonical-app"]);
     assert.equal(listed.projects[0].githubRepository.fullName, "example/canonical-app");
     assert.equal(await readFile(path.join(stateRoot, "project_type"), "utf8"), "node-web\n");
-    assert.equal(await readFile(path.join(legacyStateRoot, "project_type"), "utf8"), "jskit\n");
+    assert.equal(await readFile(path.join(localRoot, "project_type"), "utf8"), "jskit\n");
   });
 });
 
-test("project request context ensures canonical state without migrating project-local state", async () => {
+test("project request context ensures shared and local roots without migrating private state", async () => {
   await withTemporaryRoot(async (root) => {
-    const dataRoot = path.join(root, "data");
     const projectsRoot = path.join(root, "projects");
     const projectRoot = path.join(projectsRoot, "direct-app");
-    await writeTestFile(path.join(projectRoot, ".vibe64", "project_type"), "jskit\n");
+    await writeTestFile(path.join(projectRoot, ".vibe64-local", "project_type"), "jskit\n");
     const projectContext = createStudioProjectContext({
-      explicitDataRoot: dataRoot,
       explicitProjectsRoot: projectsRoot,
       env: {},
       home: root
@@ -290,11 +296,12 @@ test("project request context ensures canonical state without migrating project-
     });
 
     assert.equal(context.projectStateRoot, projectContext.projectStateRootForSlug("direct-app"));
+    assert.equal(context.projectLocalRoot, projectContext.projectLocalRootForSlug("direct-app"));
     await access(context.projectStateRoot);
-    await access(path.join(projectRoot, ".vibe64"));
+    await access(context.projectLocalRoot);
     await assert.rejects(() => access(path.join(context.projectStateRoot, "project_type")), {
       code: "ENOENT"
     });
-    assert.equal(await readFile(path.join(projectRoot, ".vibe64", "project_type"), "utf8"), "jskit\n");
+    assert.equal(await readFile(path.join(projectRoot, ".vibe64-local", "project_type"), "utf8"), "jskit\n");
   });
 });

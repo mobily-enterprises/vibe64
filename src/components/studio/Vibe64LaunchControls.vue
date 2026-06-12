@@ -74,16 +74,6 @@
           />
 
           <v-btn
-            v-if="previewOptionsAvailable"
-            :disabled="operationBusy"
-            :icon="mdiCogOutline"
-            size="small"
-            title="Preview options"
-            variant="text"
-            @click="openPreviewOptions"
-          />
-
-          <v-btn
             v-if="embeddedTerminalVisible"
             aria-label="Hide launch terminal"
             class="vibe64-launch-controls__terminal-toggle--hide"
@@ -119,16 +109,6 @@
             title="Start preview"
             variant="text"
             @click="run(embeddedAutoStartTarget)"
-          />
-
-          <v-btn
-            v-if="previewOptionsAvailable"
-            :disabled="operationBusy"
-            :icon="mdiCogOutline"
-            size="small"
-            title="Preview options"
-            variant="text"
-            @click="openPreviewOptions"
           />
         </div>
 
@@ -190,6 +170,16 @@
           title="Move controls right"
           variant="text"
           @click="movePreviewToolbar(1)"
+        />
+
+        <v-btn
+          v-if="previewOptionsAvailable"
+          :disabled="operationBusy"
+          :icon="mdiCogOutline"
+          size="small"
+          title="Preview options"
+          variant="text"
+          @click="openPreviewOptions"
         />
       </div>
     </Teleport>

@@ -17,12 +17,17 @@ import {
 import {
   LARAVEL_TOOLCHAIN_IMAGE
 } from "./toolchainIdentity.js";
+import {
+  commandWithStartupArgs,
+  launchTargetWithStartupArgsOption,
+  startupArgsFromLaunchInput
+} from "../../launchPreviewOptions.js";
 
 function laravelLaunchTarget(id, label) {
-  return {
+  return launchTargetWithStartupArgsOption({
     id,
     label
-  };
+  });
 }
 
 async function listLaravelLaunchTargets({
@@ -39,6 +44,7 @@ async function listLaravelLaunchTargets({
 }
 
 async function createLaravelLaunchDescriptor({
+  launchInput = {},
   mode = "built",
   port,
   worktreePath = ""
@@ -51,9 +57,10 @@ async function createLaravelLaunchDescriptor({
   const hasBuildScript = packageScript(packageJson || {}, "build");
   const buildCommand = hasBuildScript ? runScriptCommand(packageManager.name, "build") : "";
   const hasServeScript = Boolean(composerScript(composerJson || {}, "serve"));
-  const serverCommand = hasServeScript
+  const serverCommandBase = hasServeScript
     ? `composer run serve -- --host=0.0.0.0 --port ${port}`
     : `php artisan serve --host=0.0.0.0 --port ${port}`;
+  const serverCommand = commandWithStartupArgs(serverCommandBase, startupArgsFromLaunchInput(launchInput));
 
   return {
     commands: [
@@ -83,6 +90,7 @@ async function createLaravelLaunchDescriptor({
 
 function createLaravelLaunchTargetTerminalSpec({
   context = {},
+  launchInput = {},
   launchTargetId = "",
   session = {},
   targetRoot = ""
@@ -101,6 +109,7 @@ function createLaravelLaunchTargetTerminalSpec({
     preferredPort: 8000,
     resolveLaunch: ({ port, worktreePath }) => createLaravelLaunchDescriptor({
       config: context.config || session.config || {},
+      launchInput,
       mode: launchTargetId,
       port,
       targetRoot: launchTargetRoot,

@@ -13,11 +13,15 @@ import {
   GENERIC_NODE_WEB_VIBE64_COMMANDS,
   GENERIC_NODE_WEB_CLIENT_LIBRARY_CONFIG,
   createGenericNodeWebLaunchDescriptor,
-  createGenericNodeWebTargetAdapter
+  createGenericNodeWebTargetAdapter,
+  listGenericNodeWebLaunchTargets
 } from "@local/vibe64-adapters/server/adapters/node-web/index";
 import {
   createGenericNodeWebSetupDoctorPlugin
 } from "@local/vibe64-adapters/server/adapters/node-web/setupDoctorPlugin";
+import {
+  startupArgsPreviewOption
+} from "@local/vibe64-adapters/server/launchPreviewOptions";
 import { withTemporaryRoot, worktreeMetadata } from "./vibe64TestHelpers.js";
 
 async function writeProjectFile(root, relativePath, text = "") {
@@ -294,6 +298,14 @@ test("generic Node web launch descriptor uses build and start package scripts", 
     });
 
     const descriptor = await createGenericNodeWebLaunchDescriptor({
+      launchInput: {
+        values: {
+          startupArgs: [
+            "--profile",
+            "preview"
+          ]
+        }
+      },
       launchTargetId: "built",
       port: 4199,
       worktreePath: targetRoot
@@ -301,7 +313,7 @@ test("generic Node web launch descriptor uses build and start package scripts", 
 
     assert.deepEqual(descriptor.commands.map((command) => command.command), [
       "npm run build",
-      "npm run start -- --host 0.0.0.0 --port 4199"
+      "npm run start -- --host 0.0.0.0 --port 4199 --profile preview"
     ]);
     assert.equal(descriptor.metadata.commandSource, "package-script");
     assert.equal(descriptor.metadata.packageManager, "npm");
@@ -313,6 +325,17 @@ test("generic Node web launch descriptor uses build and start package scripts", 
     });
     assert.deepEqual(descriptorWithoutPort.commands.map((command) => command.command), [
       "npm run dev"
+    ]);
+
+    const launchTargets = await listGenericNodeWebLaunchTargets({
+      session: {
+        metadata: {
+          worktree_path: targetRoot
+        }
+      }
+    });
+    assert.deepEqual(launchTargets.find((target) => target.id === "built").previewOptions, [
+      startupArgsPreviewOption()
     ]);
   });
 });

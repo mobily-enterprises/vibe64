@@ -1098,7 +1098,7 @@ test("session inspect reads existing Codex terminal state without preparing it",
           async getSession(sessionId) {
             return {
               metadata: {
-                worktree_path: "/workspace/project/.vibe64/sessions/active/session-1/worktree"
+                worktree_path: "/workspace/project/.vibe64-local/sessions/active/session-1/worktree"
               },
               presentation: {
                 screen: {

@@ -168,6 +168,7 @@ test("Vibe64 project service saves project type and plain-file configuration", a
       targetRoot
     });
     const stateRoot = service.currentProjectStateRoot();
+    const localRoot = service.currentProjectLocalRoot();
 
     const missingType = await service.readProjectType();
     assert.equal(missingType.ok, true);
@@ -256,7 +257,8 @@ test("Vibe64 project service saves project type and plain-file configuration", a
 
     const environment = await service.projectConfigEnvironment();
     assert.equal(environment.VIBE64_CONFIG_DIR, path.join(stateRoot, "config"));
-    assert.equal(environment.VIBE64_CONFIG_SH, path.join(stateRoot, "runtime", "vibe64-config.sh"));
+    assert.equal(environment.VIBE64_CONFIG_LOCAL_DIR, path.join(localRoot, "config"));
+    assert.equal(environment.VIBE64_CONFIG_SH, path.join(localRoot, "runtime", "vibe64-config.sh"));
 
     const runtime = await service.createRuntime();
     assert.equal(runtime.adapter.id, "jskit");
@@ -273,7 +275,7 @@ test("Vibe64 project service exposes JSKIT self-target config only for Vibe64 it
     const service = createService({
       targetRoot
     });
-    const stateRoot = service.currentProjectStateRoot();
+    const localRoot = service.currentProjectLocalRoot();
 
     await service.saveProjectType({
       projectType: "jskit"
@@ -294,7 +296,7 @@ test("Vibe64 project service exposes JSKIT self-target config only for Vibe64 it
     assert.equal(savedConfig.ok, true);
     assert.equal(savedConfig.config.values[JSKIT_ALLOW_SELF_TARGET_CONFIG], true);
     assert.equal(
-      await readFile(path.join(stateRoot, "config", JSKIT_ALLOW_SELF_TARGET_CONFIG), "utf8"),
+      await readFile(path.join(localRoot, "config", JSKIT_ALLOW_SELF_TARGET_CONFIG), "utf8"),
       "true\n"
     );
   });

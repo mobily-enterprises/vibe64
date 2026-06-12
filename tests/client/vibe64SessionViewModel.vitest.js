@@ -67,10 +67,10 @@ describe("Vibe64 session view model", () => {
         outcome: "merged"
       },
       prUrl: "https://github.com/example/app/pull/34",
-      reportPath: "/workspace/.vibe64/sessions/active/session/artifacts/report.md",
+      reportPath: "/workspace/.vibe64-local/sessions/active/session/artifacts/report.md",
       sessionId: "2026-05-12_13-07-36",
-      sessionRoot: "/workspace/.vibe64/sessions/active/2026-05-12_13-07-36",
-      worktree: "/workspace/.vibe64/sessions/active/2026-05-12_13-07-36/worktree",
+      sessionRoot: "/workspace/.vibe64-local/sessions/active/2026-05-12_13-07-36",
+      worktree: "/workspace/.vibe64-local/sessions/active/2026-05-12_13-07-36/worktree",
       worktreeReady: true
     }, [
       { id: "session_created", index: 0, label: "Create session" },
@@ -96,7 +96,7 @@ describe("Vibe64 session view model", () => {
     expect(facts.find((fact) => fact.key === "blueprint")?.href)
       .toBe("file:///workspace/.jskit/APP_BLUEPRINT.md");
     expect(facts.find((fact) => fact.key === "session-report")?.href)
-      .toBe("file:///workspace/.vibe64/sessions/active/session/artifacts/report.md");
+      .toBe("file:///workspace/.vibe64-local/sessions/active/session/artifacts/report.md");
     expect(facts.find((fact) => fact.key === "pr-outcome")?.value).toBe("merged");
   });
 

@@ -29,7 +29,7 @@ import {
 } from "@local/vibe64-core/server/projectServiceSelection";
 import {
   resolveStudioTargetRoot,
-  resolveVibe64DataRoot
+  resolveVibe64SystemRoot
 } from "@local/vibe64-core/server/studioRoots";
 import {
   dockerCommand,
@@ -404,9 +404,9 @@ function accountConnected({
 }
 
 async function readCodexLocalStatus({
-  dataRoot = ""
+  systemRoot = ""
 } = {}) {
-  const marker = await readOptionalJson(codexAuthMarkerPath(dataRoot));
+  const marker = await readOptionalJson(codexAuthMarkerPath(systemRoot));
   if (marker?.connected === true) {
     return accountConnected({
       id: "codex",
@@ -742,28 +742,28 @@ function publicAuthSession({
 }
 
 function createService({
-  dataRoot = "",
   env = process.env,
   projectService = null,
   providerHomesRoot = "",
   publishAccountChanged = async () => null,
   runToolchain = runDefaultToolchain,
   startTerminalSessionFn = startTerminalSession,
+  systemRoot = "",
   targetRoot = ""
 } = {}) {
   const authSessions = new Map();
-  const resolvedDataRoot = resolveVibe64DataRoot({
+  const resolvedSystemRoot = resolveVibe64SystemRoot({
     env,
-    explicitRoot: dataRoot
+    explicitRoot: systemRoot
   });
   const resolvedProviderHomesRoot = resolveProviderHomesRoot({
-    dataRoot: resolvedDataRoot,
     env,
-    explicitRoot: providerHomesRoot
+    explicitRoot: providerHomesRoot,
+    systemRoot: resolvedSystemRoot
   });
 
   async function rememberCodexStatus(account = {}) {
-    const markerPath = codexAuthMarkerPath(resolvedDataRoot);
+    const markerPath = codexAuthMarkerPath(resolvedSystemRoot);
     if (account?.connected === true) {
       authDebug("server.auth.codex_marker.write", {
         account: accountDebugSummary(account),
@@ -908,7 +908,7 @@ function createService({
         ])
       : await Promise.all([
           readCodexLocalStatus({
-            dataRoot: resolvedDataRoot
+            systemRoot: resolvedSystemRoot
           }),
           readGithubLocalStatus({
             githubContext,

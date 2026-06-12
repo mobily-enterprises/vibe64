@@ -20,16 +20,16 @@ const GITHUB_REPO_READ_PERMISSIONS = new Set(["ADMIN", "MAINTAIN", "WRITE", "TRI
 
 function createGithubProjectAccessService({
   auth = null,
-  dataRoot = "",
   env = process.env,
   projectContext,
   providerHomesRoot = "",
-  runToolchain = runDefaultGithubToolchain
+  runToolchain = runDefaultGithubToolchain,
+  systemRoot = ""
 } = {}) {
   const resolvedProviderHomesRoot = resolveProviderHomesRoot({
-    dataRoot,
     env,
-    explicitRoot: providerHomesRoot
+    explicitRoot: providerHomesRoot,
+    systemRoot
   });
 
   async function githubContext(vibe64User = null) {

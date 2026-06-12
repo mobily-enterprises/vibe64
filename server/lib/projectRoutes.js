@@ -10,18 +10,18 @@ const GITHUB_API_BASE = "/api/vibe64/github";
 
 function registerVibe64ProjectRoutes(app, projectContext, options = {}) {
   const githubProjectService = createGithubProjectService({
-    dataRoot: options.dataRoot,
     env: options.env,
     projectContext,
     providerHomesRoot: options.providerHomesRoot,
+    systemRoot: options.systemRoot,
     runToolchain: options.runGithubToolchain
   });
   const githubProjectAccessService = createGithubProjectAccessService({
     auth: options.auth || null,
-    dataRoot: options.dataRoot,
     env: options.env,
     projectContext,
     providerHomesRoot: options.providerHomesRoot,
+    systemRoot: options.systemRoot,
     runToolchain: options.runGithubToolchain
   });
 

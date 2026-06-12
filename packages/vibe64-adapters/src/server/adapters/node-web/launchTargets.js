@@ -13,12 +13,16 @@ import {
 import {
   preferredLaunchScriptNames
 } from "./projectDetection.js";
+import {
+  launchTargetWithStartupArgsOption,
+  startupArgsFromLaunchInput
+} from "../../launchPreviewOptions.js";
 
 function launchTarget(id, label) {
-  return {
+  return launchTargetWithStartupArgsOption({
     id,
     label
-  };
+  });
 }
 
 function hasScript(packageJson = {}, scriptName = "") {
@@ -60,15 +64,21 @@ function knownCliNetworkArgs(command = "", port = "") {
 }
 
 function serverScriptCommand(packageJson = {}, packageManagerName = "npm", scriptName = "", {
-  port = ""
+  port = "",
+  startupArgs = []
 } = {}) {
   const script = packageScript(packageJson, scriptName);
+  const extraArgs = [
+    ...knownCliNetworkArgs(script, port),
+    ...startupArgs
+  ];
   return scriptName
-    ? runScriptCommand(packageManagerName, scriptName, knownCliNetworkArgs(script, port))
+    ? runScriptCommand(packageManagerName, scriptName, extraArgs)
     : "";
 }
 
 async function createGenericNodeWebLaunchDescriptor({
+  launchInput = {},
   launchTargetId = "dev",
   port,
   worktreePath = ""
@@ -83,8 +93,10 @@ async function createGenericNodeWebLaunchDescriptor({
     preview: scripts.preview,
     start: scripts.start
   }[launchTargetId] || "";
+  const startupArgs = startupArgsFromLaunchInput(launchInput);
   const serverCommand = serverScriptCommand(packageJson || {}, packageManager.name, serverScript, {
-    port
+    port,
+    startupArgs
   });
   const buildCommand = launchTargetId === "built" && buildScript
     ? runScriptCommand(packageManager.name, buildScript)
@@ -121,6 +133,7 @@ async function createGenericNodeWebLaunchDescriptor({
 
 function createGenericNodeWebLaunchTargetTerminalSpec({
   context = {},
+  launchInput = {},
   launchTargetId = "",
   session = {},
   targetRoot = ""
@@ -136,6 +149,7 @@ function createGenericNodeWebLaunchTargetTerminalSpec({
     adapterId: "node-web",
     launchTarget: context.launchTarget || launchTarget(launchTargetId, launchTargetId),
     resolveLaunch: ({ port, worktreePath }) => createGenericNodeWebLaunchDescriptor({
+      launchInput,
       launchTargetId,
       port,
       worktreePath

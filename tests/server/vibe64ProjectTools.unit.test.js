@@ -116,6 +116,8 @@ test("project tool registry validates models and lists tools deterministically",
 test("optional project config fields do not block readiness", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const store = createVibe64ProjectConfigStore({
+      projectLocalRoot: path.join(targetRoot, ".vibe64-local"),
+      projectSharedRoot: path.join(targetRoot, ".vibe64"),
       targetRoot
     });
     const configRoot = path.join(targetRoot, ".vibe64", "config");
@@ -241,7 +243,7 @@ test("Fix Codex jobs expose the resolved repair target and workdir", () => {
     clock: () => new Date("2026-05-27T01:02:03.000Z")
   });
   const targetRoot = "/workspace/project";
-  const workdir = "/workspace/project/.vibe64/sessions/active/session-1/worktree";
+  const workdir = "/workspace/project/.vibe64-local/sessions/active/session-1/worktree";
   const { job: sessionJob } = store.createJob({
     repairTarget: "session_worktree",
     scope: "session",

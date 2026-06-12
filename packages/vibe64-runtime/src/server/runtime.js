@@ -14,6 +14,9 @@ import {
   normalizeText
 } from "@local/vibe64-core/server/core";
 import {
+  resolveVibe64ProjectLocalRoot
+} from "@local/vibe64-core/server/studioRoots";
+import {
   promptSessionBriefing
 } from "@local/vibe64-adapters/server/promptRenderer";
 import {
@@ -698,6 +701,7 @@ class Vibe64SessionRuntime {
     clock = undefined,
     defaultHandler = defaultActionHandler,
     projectConfig = {},
+    projectLocalRoot = "",
     stateRoot = "",
     store = undefined,
     targetRoot = process.cwd(),
@@ -723,11 +727,11 @@ class Vibe64SessionRuntime {
         })
       : null;
     this.workflowMachines = new Map();
-    this.stateRoot = stateRoot;
+    this.stateRoot = projectLocalRoot || stateRoot || resolveVibe64ProjectLocalRoot(targetRoot);
     this.targetRoot = targetRoot;
     this.store = store || createVibe64SessionStore({
       clock,
-      stateRoot,
+      projectLocalRoot: this.stateRoot,
       targetRoot
     });
     this.now = createClockNow(clock);

@@ -30,15 +30,15 @@ const REPOSITORY_SEARCH_LIMIT = 12;
 
 function createGithubProjectService({
   env = process.env,
-  dataRoot = "",
   projectContext,
   providerHomesRoot = "",
-  runToolchain = runDefaultGithubToolchain
+  runToolchain = runDefaultGithubToolchain,
+  systemRoot = ""
 } = {}) {
   const resolvedProviderHomesRoot = resolveProviderHomesRoot({
-    dataRoot,
     env,
-    explicitRoot: providerHomesRoot
+    explicitRoot: providerHomesRoot,
+    systemRoot
   });
 
   async function githubContext(vibe64User = null) {

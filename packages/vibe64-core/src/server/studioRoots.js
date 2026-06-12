@@ -5,11 +5,18 @@ import os from "node:os";
 const VIBE64_APP_ROOT_ENV = "VIBE64_APP_ROOT";
 const VIBE64_TARGET_ROOT_ENV = "VIBE64_TARGET_ROOT";
 const VIBE64_PROJECTS_ROOT_ENV = "VIBE64_PROJECTS_ROOT";
-const VIBE64_DATA_ROOT_ENV = "VIBE64_DATA_ROOT";
+const VIBE64_SYSTEM_ROOT_ENV = "VIBE64_SYSTEM_ROOT";
+const VIBE64_SYSTEM_DIR = ".vibe64-demon";
+const VIBE64_PROJECT_SHARED_DIR = ".vibe64";
+const VIBE64_PROJECT_LOCAL_DIR = ".vibe64-local";
 
 function normalizeRoot(value, fallbackRoot) {
   const root = String(value || "").trim();
   return path.resolve(root || fallbackRoot || process.cwd());
+}
+
+function runtimeProfileIsLocal(runtimeProfile = {}) {
+  return runtimeProfile?.local === true || String(runtimeProfile?.mode || "").trim() === "local";
 }
 
 function resolveStudioAppRoot({
@@ -64,21 +71,73 @@ function resolveExplicitStudioTargetRoot({
   });
 }
 
-function resolveVibe64DataRoot({
+function resolveVibe64SystemRoot({
   env = process.env,
   explicitRoot = "",
-  home = os.homedir()
+  home = os.homedir(),
+  projectsRoot = "",
+  runtimeProfile = null
 } = {}) {
-  return normalizeRoot(explicitRoot || env[VIBE64_DATA_ROOT_ENV], path.join(home || process.cwd(), ".vibe64"));
+  const explicitSystemRoot = explicitRoot || env[VIBE64_SYSTEM_ROOT_ENV];
+  if (String(explicitSystemRoot || "").trim()) {
+    return normalizeRoot(explicitSystemRoot);
+  }
+  if (runtimeProfileIsLocal(runtimeProfile)) {
+    return normalizeRoot(path.join(home || process.cwd(), ".local", "share", "vibe64-local-editor"));
+  }
+  return normalizeRoot(path.join(projectsRoot || path.join(home || process.cwd(), "vibe64"), VIBE64_SYSTEM_DIR));
+}
+
+function resolveVibe64ProjectSharedRoot(targetRoot = process.cwd()) {
+  return path.join(normalizeRoot(targetRoot, process.cwd()), VIBE64_PROJECT_SHARED_DIR);
+}
+
+function resolveVibe64ProjectLocalRoot(targetRoot = process.cwd()) {
+  return path.join(normalizeRoot(targetRoot, process.cwd()), VIBE64_PROJECT_LOCAL_DIR);
+}
+
+function resolveVibe64Roots({
+  env = process.env,
+  explicitSystemRoot = "",
+  home = os.homedir(),
+  projectsRoot = "",
+  runtimeProfile = null,
+  targetRoot = ""
+} = {}) {
+  const resolvedProjectsRoot = projectsRoot
+    ? normalizeRoot(projectsRoot)
+    : normalizeRoot(path.join(home || process.cwd(), "vibe64"));
+  const resolvedTargetRoot = String(targetRoot || "").trim()
+    ? normalizeRoot(targetRoot)
+    : "";
+  return Object.freeze({
+    projectLocalRoot: resolvedTargetRoot ? resolveVibe64ProjectLocalRoot(resolvedTargetRoot) : "",
+    projectSharedRoot: resolvedTargetRoot ? resolveVibe64ProjectSharedRoot(resolvedTargetRoot) : "",
+    projectsRoot: resolvedProjectsRoot,
+    systemRoot: resolveVibe64SystemRoot({
+      env,
+      explicitRoot: explicitSystemRoot,
+      home,
+      projectsRoot: resolvedProjectsRoot,
+      runtimeProfile
+    }),
+    targetRoot: resolvedTargetRoot
+  });
 }
 
 export {
   VIBE64_APP_ROOT_ENV,
-  VIBE64_DATA_ROOT_ENV,
+  VIBE64_PROJECT_LOCAL_DIR,
+  VIBE64_PROJECT_SHARED_DIR,
   VIBE64_PROJECTS_ROOT_ENV,
+  VIBE64_SYSTEM_DIR,
+  VIBE64_SYSTEM_ROOT_ENV,
   VIBE64_TARGET_ROOT_ENV,
   resolveExplicitStudioTargetRoot,
-  resolveVibe64DataRoot,
+  resolveVibe64ProjectLocalRoot,
+  resolveVibe64ProjectSharedRoot,
+  resolveVibe64Roots,
+  resolveVibe64SystemRoot,
   resolveStudioAppRoot,
   resolveStudioTargetRoot
 };

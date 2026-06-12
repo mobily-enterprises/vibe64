@@ -11,6 +11,10 @@ import {
   readPackageJson,
   runScriptCommand
 } from "../../nodePackage.js";
+import {
+  launchTargetWithStartupArgsOption,
+  startupArgsFromLaunchInput
+} from "../../launchPreviewOptions.js";
 function launchModeForTarget(launchTargetId = "") {
   return launchTargetId === "dev" ? "development" : "production";
 }
@@ -26,10 +30,10 @@ function nextCommandOrPackageScript(packageJson = {}, packageManagerName = "npm"
 }
 
 function nextjsLaunchTarget(id, label) {
-  return {
+  return launchTargetWithStartupArgsOption({
     id,
     label
-  };
+  });
 }
 
 async function listNextjsLaunchTargets({
@@ -46,6 +50,7 @@ async function listNextjsLaunchTargets({
 }
 
 async function createNextjsLaunchDescriptor({
+  launchInput = {},
   mode = "production",
   port,
   worktreePath = ""
@@ -55,7 +60,13 @@ async function createNextjsLaunchDescriptor({
   const buildCommand = nextCommandOrPackageScript(packageJson || {}, packageManager.name, {
     scriptName: "build"
   });
-  const serverArgs = ["-H", "0.0.0.0", "-p", String(port)];
+  const serverArgs = [
+    "-H",
+    "0.0.0.0",
+    "-p",
+    String(port),
+    ...startupArgsFromLaunchInput(launchInput)
+  ];
   const serverCommand = mode === "development"
     ? nextCommandOrPackageScript(packageJson || {}, packageManager.name, {
         args: serverArgs,
@@ -94,6 +105,7 @@ async function createNextjsLaunchDescriptor({
 
 function createNextjsLaunchTargetTerminalSpec({
   context = {},
+  launchInput = {},
   launchTargetId = "",
   session = {},
   targetRoot = ""
@@ -110,6 +122,7 @@ function createNextjsLaunchTargetTerminalSpec({
     launchTarget: context.launchTarget || nextjsLaunchTarget(launchTargetId, launchTargetId),
     resolveLaunch: ({ port, worktreePath }) => createNextjsLaunchDescriptor({
       config: context.config || session.config || {},
+      launchInput,
       mode: launchModeForTarget(launchTargetId),
       port,
       targetRoot: launchTargetRoot,

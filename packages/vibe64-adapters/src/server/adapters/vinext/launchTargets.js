@@ -15,16 +15,20 @@ import {
   packageBinCommand,
   readPackageJson
 } from "./packageManager.js";
+import {
+  launchTargetWithStartupArgsOption,
+  startupArgsFromLaunchInput
+} from "../../launchPreviewOptions.js";
 
 function launchModeForTarget(launchTargetId = "") {
   return launchTargetId === "dev" ? "development" : "production";
 }
 
 function vinextLaunchTarget(id, label) {
-  return {
+  return launchTargetWithStartupArgsOption({
     id,
     label
-  };
+  });
 }
 
 function reviewMode(config = {}) {
@@ -55,6 +59,7 @@ async function listVinextLaunchTargets({
 }
 
 async function createVinextLaunchDescriptor({
+  launchInput = {},
   mode = "production",
   port,
   worktreePath = ""
@@ -62,9 +67,10 @@ async function createVinextLaunchDescriptor({
   const packageJson = await readPackageJson(worktreePath);
   const packageManager = await detectPackageManager(worktreePath, packageJson || {});
   const buildCommand = packageBinCommand(packageManager.name, "vinext", ["build"]);
+  const startupArgs = startupArgsFromLaunchInput(launchInput);
   const serverCommand = mode === "development"
-    ? packageBinCommand(packageManager.name, "vinext", ["dev", "--hostname", "0.0.0.0", "--port", String(port)])
-    : packageBinCommand(packageManager.name, "vinext", ["start", "--hostname", "0.0.0.0", "--port", String(port)]);
+    ? packageBinCommand(packageManager.name, "vinext", ["dev", "--hostname", "0.0.0.0", "--port", String(port), ...startupArgs])
+    : packageBinCommand(packageManager.name, "vinext", ["start", "--hostname", "0.0.0.0", "--port", String(port), ...startupArgs]);
 
   return {
     commands: [
@@ -94,10 +100,12 @@ async function createVinextLaunchDescriptor({
 
 async function createVinextReviewDescriptor({
   config = {},
+  launchInput = {},
   port,
   worktreePath = ""
 } = {}) {
   const descriptor = await createVinextLaunchDescriptor({
+    launchInput,
     mode: reviewMode(config),
     port,
     worktreePath
@@ -115,6 +123,7 @@ async function createVinextReviewDescriptor({
 
 function createVinextLaunchTargetTerminalSpec({
   context = {},
+  launchInput = {},
   launchTargetId = "",
   session = {},
   targetRoot = ""
@@ -129,6 +138,7 @@ function createVinextLaunchTargetTerminalSpec({
     adapterId: "vinext",
     launchTarget: context.launchTarget || vinextLaunchTarget(launchTargetId, launchTargetId),
     resolveLaunch: ({ port, worktreePath }) => createVinextLaunchDescriptor({
+      launchInput,
       mode: launchModeForTarget(launchTargetId),
       port,
       worktreePath
@@ -140,6 +150,7 @@ function createVinextLaunchTargetTerminalSpec({
 
 async function createVinextAppReviewTerminalSpec({
   context = {},
+  launchInput = {},
   session = {},
   targetRoot = ""
 } = {}) {
@@ -150,6 +161,7 @@ async function createVinextAppReviewTerminalSpec({
     launchTarget: reviewLaunchTarget(mode),
     resolveLaunch: ({ port, worktreePath }) => createVinextReviewDescriptor({
       config,
+      launchInput,
       port,
       worktreePath
     }),

@@ -310,13 +310,13 @@ async function mockReadyStudioShell(page: Page, options: MockReadyStudioShellOpt
               }
             ])
           ),
-          helperPath: `${targetRoot}/.vibe64/runtime/vibe64-config.sh`,
+          helperPath: `${targetRoot}/.vibe64-local/runtime/vibe64-config.sh`,
           invalid: [],
           message: "",
           missing: [],
           projectType: "jskit",
           ready: true,
-          runtimeRoot: `${targetRoot}/.vibe64/runtime`,
+          runtimeRoot: `${targetRoot}/.vibe64-local/runtime`,
           sections: [],
           values: savedProjectConfigValues
         },

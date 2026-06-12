@@ -2,8 +2,8 @@ import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
 
 import {
-  VIBE64_DATA_ROOT_ENV,
-  resolveVibe64DataRoot
+  VIBE64_SYSTEM_ROOT_ENV,
+  resolveVibe64SystemRoot
 } from "@local/vibe64-core/server/studioRoots";
 import {
   VIBE64_RUNTIME_MODE_LOCAL,
@@ -44,9 +44,9 @@ const VIBE64_SUPABASE_SECRET_KEY_ENV = "VIBE64_SUPABASE_SECRET_KEY";
 
 function createVibe64Auth({
   codexConnectedVerifier = null,
-  dataRoot = "",
   env = process.env,
   sendSupabaseInviteEmail = null,
+  systemRoot = "",
   supabasePublishableKey = "",
   supabaseSecretKey = "",
   supabaseUrl = "",
@@ -54,9 +54,10 @@ function createVibe64Auth({
   verifySupabaseAccessToken = null
 } = {}) {
   const profile = createVibe64RuntimeProfile(runtimeProfile || {});
-  const root = resolveVibe64DataRoot({
+  const root = resolveVibe64SystemRoot({
     env,
-    explicitRoot: dataRoot
+    explicitRoot: systemRoot,
+    runtimeProfile: profile
   });
   const users = createFileUserStore({
     usersRoot: path.join(root, "users")
@@ -90,7 +91,7 @@ function createVibe64Auth({
       ok: true,
       authenticated: Boolean(user),
       authProvider: profile.mode === VIBE64_RUNTIME_MODE_LOCAL ? "local" : "supabase",
-      dataRoot: root,
+      systemRoot: root,
       firstLoginCodexSetupPending: profile.mode === VIBE64_RUNTIME_MODE_LOCAL ? false : await setup.firstLoginCodexSetupPending(),
       ownerInvitePending: profile.mode === VIBE64_RUNTIME_MODE_LOCAL ? false : await users.ownerInvitePending(),
       runtime: publicRuntimeProfile(profile),
@@ -165,13 +166,13 @@ function createVibe64Auth({
     authenticateSupabaseSession,
     clearUserSession,
     codexConnectedForSetup,
-    dataRoot: root,
     sessions,
     setup,
     sendInviteEmail,
     startUserSession,
     stateForRequest,
     supabase,
+    systemRoot: root,
     runtimeProfile: profile,
     userForRequest,
     users
@@ -885,7 +886,7 @@ function requestIsSecure(request = {}) {
 }
 
 export {
-  VIBE64_DATA_ROOT_ENV,
+  VIBE64_SYSTEM_ROOT_ENV,
   VIBE64_SUPABASE_PUBLISHABLE_KEY_ENV,
   VIBE64_SUPABASE_SECRET_KEY_ENV,
   VIBE64_SUPABASE_URL_ENV,
@@ -893,5 +894,5 @@ export {
   registerVibe64AuthGate,
   registerVibe64AuthRoutes,
   resolveSupabaseConfig,
-  resolveVibe64DataRoot
+  resolveVibe64SystemRoot
 };

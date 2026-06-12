@@ -1,0 +1,184 @@
+• Final Plan
+
+  We make the directory model explicit and remove state-location decisions from scattered code.
+
+  1. New Directory Contract
+
+  Managed daemon mode:
+
+  <projectsRoot>/
+    .vibe64-demon/
+      auth-sessions/
+      provider-homes/
+      users/
+      logs/
+      db-backups/
+      setup.json
+
+    beepollen/
+      .vibe64/
+      .vibe64-local/
+
+    vibe64/
+      .vibe64/
+      .vibe64-local/
+
+  Local editor mode:
+
+  ~/.local/share/vibe64-local-editor/
+    auth-sessions/
+    provider-homes/
+    users/
+    logs/
+    setup.json
+
+  <opened-folder>/
+    .vibe64/
+    .vibe64-local/
+
+  Project shared state:
+
+  <project>/.vibe64/
+    project.json
+    project_type
+    config/
+
+  Project private/runtime state:
+
+  <project>/.vibe64-local/
+    sessions/
+    runtime/
+    logs/
+    preview/
+    cache/
+    config/
+
+  Every project gets:
+
+  .vibe64-local/
+
+  2. Root Resolution Becomes Centralized
+
+  Add one resolver that is the only authority:
+
+  resolveVibe64Roots(runtimeProfile, projectsRoot, targetRoot)
+
+  It returns:
+
+  {
+    systemRoot,
+    projectsRoot,
+    targetRoot,
+    projectSharedRoot,
+    projectLocalRoot
+  }
+
+  Rules:
+
+  managed daemon:
+    systemRoot = <projectsRoot>/.vibe64-demon
+
+  local editor:
+    systemRoot = ~/.local/share/vibe64-local-editor
+
+  projectSharedRoot:
+    <targetRoot>/.vibe64
+
+  projectLocalRoot:
+    <targetRoot>/.vibe64-local
+
+  Keep an explicit override only as an escape hatch, probably renamed to VIBE64_SYSTEM_ROOT. The common path should be automatic.
+
+  3. Remove Drift-Prone Fallbacks
+
+  Stores become dumb. They do not decide paths.
+
+  Bad current pattern:
+
+  stateRoot || targetRoot/.vibe64
+
+  New pattern:
+
+  createProjectTypeStore({ projectSharedRoot })
+  createProjectConfigStore({ projectSharedRoot, projectLocalRoot })
+  createSessionStore({ projectLocalRoot })
+
+  No store computes policy. No service recomputes paths. Routes resolve the project context once, then pass it through.
+
+  4. Config Split
+
+  Shared config:
+
+  .vibe64/config/
+
+  Local overrides:
+
+  .vibe64-local/config/
+
+  Read order:
+
+  shared config first
+  local config overlays it
+
+  Machine-specific values, absolute paths, recursive local checkout paths, preview options, and user-only toggles go local.
+
+  5. Migration
+
+  One V0 migration, no compatibility shim.
+
+  For managed projects:
+
+  ~/.vibe64/projects/<slug>/project.json       -> ~/vibe64/<slug>/.vibe64/project.json
+  ~/.vibe64/projects/<slug>/project_type       -> ~/vibe64/<slug>/.vibe64/project_type
+  ~/.vibe64/projects/<slug>/config/shared      -> ~/vibe64/<slug>/.vibe64/config/
+  ~/.vibe64/projects/<slug>/config/local       -> ~/vibe64/<slug>/.vibe64-local/config/
+  ~/.vibe64/projects/<slug>/sessions           -> ~/vibe64/<slug>/.vibe64-local/sessions
+  ~/.vibe64/projects/<slug>/runtime            -> ~/vibe64/<slug>/.vibe64-local/runtime
+
+  Global system data:
+
+  ~/.vibe64/auth-sessions   -> <projectsRoot>/.vibe64-demon/auth-sessions
+  ~/.vibe64/provider-homes  -> <projectsRoot>/.vibe64-demon/provider-homes
+  ~/.vibe64/users           -> <projectsRoot>/.vibe64-demon/users
+  ~/.vibe64/logs            -> <projectsRoot>/.vibe64-demon/logs
+  ~/.vibe64/db-backups      -> <projectsRoot>/.vibe64-demon/db-backups
+  ~/.vibe64/setup.json      -> <projectsRoot>/.vibe64-demon/setup.json
+
+  Then stop using:
+
+  ~/.vibe64/projects
+  ~/.vibe64/external-projects
+
+  6. Tests
+
+  Add contract tests that make drift obvious:
+
+  - managed /app/beepollen reads ~/vibe64/beepollen/.vibe64
+  - managed sessions write to ~/vibe64/beepollen/.vibe64-local/sessions
+  - local editor mode reads /some/folder/.vibe64
+  - local editor system state uses ~/.local/share/vibe64-local-editor
+  - managed daemon system state uses <projectsRoot>/.vibe64-demon
+  - stores cannot be constructed without resolved roots
+  - .vibe64-local/ is added to generated project .gitignore
+  - migration moves sessions/runtime to local state, not shared state
+  - conflicting old/new state stops with a clear error
+
+  7. Immediate Outcome For Your Machine
+
+  After migration:
+
+  ~/vibe64/vibe64/.vibe64
+
+  is the real shared Vibe64 project setup.
+
+  ~/vibe64/vibe64/.vibe64-local
+
+  has Vibe64 project sessions/runtime/local config.
+
+  ~/vibe64/.vibe64-demon
+
+  has daemon/user/provider/system data for this managed Vibe64 installation.
+
+  And ~/.vibe64 should eventually disappear or be left only as an old backup after migration.
+
+

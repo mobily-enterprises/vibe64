@@ -102,27 +102,27 @@ describe("Vibe64 launch controls", () => {
     expect(launchTargetWorktreePath({
       completedSteps: ["worktree_created"],
       sessionId: "session-1",
-      sessionRoot: "/workspace/.vibe64/sessions/active/session-1",
+      sessionRoot: "/workspace/.vibe64-local/sessions/active/session-1",
       status: "active"
-    })).toBe("/workspace/.vibe64/sessions/active/session-1/worktree");
+    })).toBe("/workspace/.vibe64-local/sessions/active/session-1/worktree");
 
     expect(launchTargetWorktreePath({
       metadata: {
-        worktree_path: "/workspace/.vibe64/sessions/session-1/worktree"
+        worktree_path: "/workspace/.vibe64-local/sessions/session-1/worktree"
       },
       sessionId: "session-1",
       worktreeReady: true
-    })).toBe("/workspace/.vibe64/sessions/session-1/worktree");
+    })).toBe("/workspace/.vibe64-local/sessions/session-1/worktree");
 
     expect(launchTargetWorktreePath({
       completedSteps: ["worktree_created"],
       metadata: {
-        worktree_path: "/old-workspace/.vibe64/sessions/active/session-1/worktree"
+        worktree_path: "/old-workspace/.vibe64-local/sessions/active/session-1/worktree"
       },
       sessionId: "session-1",
-      sessionRoot: "/workspace/.vibe64/sessions/active/session-1",
+      sessionRoot: "/workspace/.vibe64-local/sessions/active/session-1",
       worktreeReady: true
-    })).toBe("/workspace/.vibe64/sessions/active/session-1/worktree");
+    })).toBe("/workspace/.vibe64-local/sessions/active/session-1/worktree");
   });
 
   it("keeps the embedded preview URL blank until the launch preview is ready", () => {

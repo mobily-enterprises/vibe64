@@ -13,7 +13,8 @@ import {
   NEXTJS_VIBE64_COMMANDS,
   createNextjsLaunchDescriptor,
   createNextjsLaunchTargetTerminalSpec,
-  createNextjsTargetAdapter
+  createNextjsTargetAdapter,
+  listNextjsLaunchTargets
 } from "@local/vibe64-adapters/server/adapters/nextjs/index";
 import {
   expectedNextjsDatabaseUrl,
@@ -24,6 +25,9 @@ import {
   createNextAppScript,
   createNextjsSetupDoctorPlugin
 } from "@local/vibe64-adapters/server/adapters/nextjs/setupDoctorPlugin";
+import {
+  startupArgsPreviewOption
+} from "@local/vibe64-adapters/server/launchPreviewOptions";
 import { withTemporaryRoot, worktreeMetadata } from "./vibe64TestHelpers.js";
 
 async function writeProjectFile(root, relativePath, text = "") {
@@ -258,6 +262,14 @@ test("nextjs launch target describes Next.js commands and uses the shared termin
     await createNextjsProject(targetRoot);
 
     const descriptor = await createNextjsLaunchDescriptor({
+      launchInput: {
+        values: {
+          startupArgs: [
+            "--profile",
+            "preview"
+          ]
+        }
+      },
       mode: "production",
       port: 4199,
       targetRoot,
@@ -266,9 +278,20 @@ test("nextjs launch target describes Next.js commands and uses the shared termin
 
     assert.deepEqual(descriptor.commands.map((command) => command.command), [
       "npm run build",
-      "npm run start -- -H 0.0.0.0 -p 4199"
+      "npm run start -- -H 0.0.0.0 -p 4199 --profile preview"
     ]);
     assert.equal(descriptor.metadata.mode, "production");
+
+    const launchTargets = await listNextjsLaunchTargets({
+      session: {
+        metadata: {
+          worktree_path: targetRoot
+        }
+      }
+    });
+    assert.deepEqual(launchTargets.find((target) => target.id === "built").previewOptions, [
+      startupArgsPreviewOption()
+    ]);
 
     const spec = await createNextjsLaunchTargetTerminalSpec({
       launchTargetId: "built",

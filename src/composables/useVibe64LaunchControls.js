@@ -622,7 +622,7 @@ function useVibe64LaunchControls({
         sessionId: sessionId.value
       });
       applyLaunchTerminalSession(terminalSession);
-      await connectLaunchTerminal();
+      void connectLaunchTerminal();
       await refresh();
       return true;
     } catch {

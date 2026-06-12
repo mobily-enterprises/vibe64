@@ -14,7 +14,8 @@ import {
   LARAVEL_VIBE64_COMMANDS,
   createLaravelLaunchDescriptor,
   createLaravelLaunchTargetTerminalSpec,
-  createLaravelTargetAdapter
+  createLaravelTargetAdapter,
+  listLaravelLaunchTargets
 } from "@local/vibe64-adapters/server/adapters/laravel/index";
 import {
   LARAVEL_MARIADB_HOST_PORT,
@@ -34,6 +35,9 @@ import {
 import {
   LARAVEL_TOOLCHAIN_IMAGE
 } from "@local/vibe64-adapters/server/adapters/laravel/toolchainIdentity";
+import {
+  startupArgsPreviewOption
+} from "@local/vibe64-adapters/server/launchPreviewOptions";
 import { withTemporaryRoot, worktreeMetadata } from "./vibe64TestHelpers.js";
 
 async function writeProjectFile(root, relativePath, text = "") {
@@ -312,6 +316,14 @@ test("laravel launch target describes Artisan serve and uses the Laravel toolcha
     await createLaravelProject(targetRoot);
 
     const descriptor = await createLaravelLaunchDescriptor({
+      launchInput: {
+        values: {
+          startupArgs: [
+            "--profile",
+            "preview"
+          ]
+        }
+      },
       mode: "built",
       port: 4199,
       targetRoot,
@@ -320,10 +332,21 @@ test("laravel launch target describes Artisan serve and uses the Laravel toolcha
 
     assert.deepEqual(descriptor.commands.map((command) => command.command), [
       "npm run build",
-      "php artisan serve --host=0.0.0.0 --port 4199"
+      "php artisan serve --host=0.0.0.0 --port 4199 --profile preview"
     ]);
     assert.equal(descriptor.metadata.commandSource, "artisan");
     assert.equal(descriptor.metadata.mode, "built");
+
+    const launchTargets = await listLaravelLaunchTargets({
+      session: {
+        metadata: {
+          worktree_path: targetRoot
+        }
+      }
+    });
+    assert.deepEqual(launchTargets.find((target) => target.id === "built").previewOptions, [
+      startupArgsPreviewOption()
+    ]);
 
     const spec = await createLaravelLaunchTargetTerminalSpec({
       launchTargetId: "built",

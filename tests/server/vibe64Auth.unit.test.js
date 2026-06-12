@@ -84,7 +84,7 @@ test("Vibe64 auth binds the first Supabase identity as owner", async () => {
     assert.equal(owner.status, "active");
     assert.equal(owner.supabaseUserId, "supabase-owner");
 
-    const source = await readFile(path.join(auth.dataRoot, "users", "supabase-owner.json"), "utf8");
+    const source = await readFile(path.join(auth.systemRoot, "users", "supabase-owner.json"), "utf8");
     assert.match(source, /owner@example\.com/u);
     assert.match(source, /supabase-owner/u);
     assert.doesNotMatch(source, /passwordHash|owner-password|scrypt/u);
@@ -466,12 +466,12 @@ test("Vibe64 auth invite acceptance keeps identity fixed", async () => {
     assert.equal(accepted.status, "active");
     assert.equal(accepted.supabaseUserId, "supabase-friend");
     await assert.rejects(
-      () => readFile(path.join(auth.dataRoot, "users", "friend@example.com.json"), "utf8"),
+      () => readFile(path.join(auth.systemRoot, "users", "friend@example.com.json"), "utf8"),
       {
         code: "ENOENT"
       }
     );
-    const acceptedSource = await readFile(path.join(auth.dataRoot, "users", "supabase-friend.json"), "utf8");
+    const acceptedSource = await readFile(path.join(auth.systemRoot, "users", "supabase-friend.json"), "utf8");
     assert.match(acceptedSource, /friend@example\.com/u);
 
     await assert.rejects(
@@ -507,7 +507,7 @@ test("Vibe64 auth ignores accepted users stored under email filenames", async ()
     });
     assert.equal(owner.role, "owner");
     assert.equal(owner.supabaseUserId, "supabase-owner");
-    const source = await readFile(path.join(auth.dataRoot, "users", "supabase-owner.json"), "utf8");
+    const source = await readFile(path.join(auth.systemRoot, "users", "supabase-owner.json"), "utf8");
     assert.match(source, /owner@example\.com/u);
   });
 });
@@ -756,18 +756,18 @@ test("Vibe64 auth gate allows protected APIs after GitHub is connected", async (
 });
 
 async function withAuth(callback, options = {}) {
-  const dataRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-auth-"));
+  const systemRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-auth-"));
   try {
     return await callback(createVibe64Auth({
       codexConnectedVerifier: options.codexConnectedVerifier,
-      dataRoot,
+      systemRoot,
       env: FAKE_SUPABASE_ENV,
       runtimeProfile: options.runtimeProfile,
       sendSupabaseInviteEmail: options.sendSupabaseInviteEmail,
       verifySupabaseAccessToken: fakeVerifySupabaseAccessToken
     }));
   } finally {
-    await rm(dataRoot, {
+    await rm(systemRoot, {
       force: true,
       recursive: true
     });
@@ -823,7 +823,7 @@ function sessionCookieHeader(session = {}) {
 }
 
 async function writeUserRecord(auth, record = {}) {
-  const usersRoot = path.join(auth.dataRoot, "users");
+  const usersRoot = path.join(auth.systemRoot, "users");
   await mkdir(usersRoot, {
     recursive: true
   });

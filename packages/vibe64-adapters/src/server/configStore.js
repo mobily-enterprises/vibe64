@@ -1,9 +1,8 @@
-import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 
 import {
-  VIBE64_STATE_DIR,
   vibe64Error,
   isMissingPathError,
   isPlainObject,
@@ -20,6 +19,7 @@ const VIBE64_RUNTIME_DIR = "runtime";
 const VIBE64_CONFIG_HELPER_FILE = "vibe64-config.sh";
 const CONFIG_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/u;
 const CONFIG_FIELD_TYPES = new Set(["boolean", "path", "select", "string"]);
+const CONFIG_FIELD_SCOPES = new Set(["shared", "local"]);
 
 const VIBE64_GENERAL_CONFIG_FIELDS = deepFreeze([
   {
@@ -172,6 +172,15 @@ function normalizeConfigField(field = {}, {
   sectionLabel = "Studio"
 } = {}) {
   const type = normalizeFieldType(field.type);
+  const scope = field.local === true
+    ? "local"
+    : normalizeText(field.scope || "shared");
+  if (!CONFIG_FIELD_SCOPES.has(scope)) {
+    throw vibe64Error(
+      `Invalid Vibe64 config field scope: ${scope || "(empty)"}`,
+      "vibe64_invalid_config_field_scope"
+    );
+  }
   const normalizedField = {
     defaultValue: field.defaultValue,
     description: normalizeText(field.description),
@@ -180,6 +189,7 @@ function normalizeConfigField(field = {}, {
     required: field.required !== false,
     sectionId: normalizeText(field.sectionId || sectionId),
     sectionLabel: normalizeText(field.sectionLabel || sectionLabel),
+    scope,
     type
   };
 
@@ -253,18 +263,32 @@ function assertKnownConfigInputValues(fields = [], inputValues = {}) {
 }
 
 function resolveVibe64ConfigPaths({
-  stateRoot = "",
+  projectLocalRoot = "",
+  projectSharedRoot = "",
   targetRoot = process.cwd()
 } = {}) {
   const normalizedTargetRoot = normalizeTargetRoot(targetRoot);
-  const resolvedStateRoot = stateRoot ? path.resolve(stateRoot) : path.join(normalizedTargetRoot, VIBE64_STATE_DIR);
-  const configRoot = path.join(resolvedStateRoot, VIBE64_CONFIG_DIR);
-  const runtimeRoot = path.join(resolvedStateRoot, VIBE64_RUNTIME_DIR);
+  const resolvedProjectSharedRoot = String(projectSharedRoot || "").trim();
+  const resolvedProjectLocalRoot = String(projectLocalRoot || "").trim();
+  if (!resolvedProjectSharedRoot) {
+    throw vibe64Error("Project config store requires projectSharedRoot.", "vibe64_project_shared_root_required");
+  }
+  if (!resolvedProjectLocalRoot) {
+    throw vibe64Error("Project config store requires projectLocalRoot.", "vibe64_project_local_root_required");
+  }
+  const sharedRoot = path.resolve(resolvedProjectSharedRoot);
+  const localRoot = path.resolve(resolvedProjectLocalRoot);
+  const sharedConfigRoot = path.join(sharedRoot, VIBE64_CONFIG_DIR);
+  const localConfigRoot = path.join(localRoot, VIBE64_CONFIG_DIR);
+  const runtimeRoot = path.join(localRoot, VIBE64_RUNTIME_DIR);
   return {
-    configRoot,
+    configRoot: sharedConfigRoot,
     helperPath: path.join(runtimeRoot, VIBE64_CONFIG_HELPER_FILE),
+    localConfigRoot,
+    localRoot,
+    sharedConfigRoot,
+    sharedRoot,
     runtimeRoot,
-    stateRoot: resolvedStateRoot,
     targetRoot: normalizedTargetRoot
   };
 }
@@ -302,6 +326,20 @@ function configSections(fields = []) {
   return sections;
 }
 
+function configRootForField(paths, field = {}) {
+  return field.scope === "local" ? paths.localConfigRoot : paths.sharedConfigRoot;
+}
+
+function configPathForField(paths, field = {}) {
+  return configValuePath(configRootForField(paths, field), field.id);
+}
+
+async function removeConfigValueIfExists(filePath = "") {
+  await rm(filePath, {
+    force: true
+  });
+}
+
 function configHelperScript() {
   return `#!/usr/bin/env bash
 
@@ -309,34 +347,56 @@ vibe64_config_dir() {
   printf '%s\\n' "\${VIBE64_CONFIG_DIR:-}"
 }
 
-vibe64_config_path() {
+vibe64_config_local_dir() {
+  printf '%s\\n' "\${VIBE64_CONFIG_LOCAL_DIR:-}"
+}
+
+vibe64_config_safe_name() {
   local name="\${1:-}"
   case "$name" in
     ''|*/*|*'..'*)
       return 2
       ;;
   esac
-  local dir
-  dir="$(vibe64_config_dir)"
+  printf '%s\\n' "$name"
+}
+
+vibe64_config_path_in_dir() {
+  local dir="\${1:-}"
+  local name
+  name="$(vibe64_config_safe_name "\${2:-}")" || return 2
   if [ -z "$dir" ]; then
     return 2
   fi
   printf '%s/%s\\n' "$dir" "$name"
 }
 
+vibe64_config_path() {
+  local dir
+  dir="$(vibe64_config_dir)"
+  vibe64_config_path_in_dir "$dir" "\${1:-}"
+}
+
 vibe64_config_value() {
   local name="\${1:-}"
   local default_value="\${2:-}"
+  local local_dir
+  local shared_dir
   local file_path
-  file_path="$(vibe64_config_path "$name")" || {
-    printf '%s\\n' "$default_value"
-    return 0
-  }
-  if [ ! -f "$file_path" ]; then
+  local_dir="$(vibe64_config_local_dir)"
+  shared_dir="$(vibe64_config_dir)"
+  if ! vibe64_config_safe_name "$name" >/dev/null; then
     printf '%s\\n' "$default_value"
     return 0
   fi
-  head -n 1 "$file_path" | sed 's/[[:space:]]*$//'
+  for dir in "$local_dir" "$shared_dir"; do
+    file_path="$(vibe64_config_path_in_dir "$dir" "$name")" || continue
+    if [ -f "$file_path" ]; then
+      head -n 1 "$file_path" | sed 's/[[:space:]]*$//'
+      return 0
+    fi
+  done
+  printf '%s\\n' "$default_value"
 }
 
 vibe64_config_bool() {
@@ -404,11 +464,13 @@ function normalizeConfigDefinition({
 }
 
 function createVibe64ProjectConfigStore({
-  stateRoot = "",
+  projectLocalRoot = "",
+  projectSharedRoot = "",
   targetRoot = process.cwd()
 } = {}) {
   const paths = resolveVibe64ConfigPaths({
-    stateRoot,
+    projectLocalRoot,
+    projectSharedRoot,
     targetRoot
   });
 
@@ -421,8 +483,16 @@ function createVibe64ProjectConfigStore({
     await ensureRuntimeFiles();
 
     const entries = await Promise.all(normalizedDefinition.fields.map(async (field) => {
-      const filePath = configValuePath(paths.configRoot, field.id);
-      const saved = await pathExists(filePath);
+      const sharedPath = configValuePath(paths.sharedConfigRoot, field.id);
+      const localPath = configValuePath(paths.localConfigRoot, field.id);
+      const localSaved = await pathExists(localPath);
+      const sharedSaved = await pathExists(sharedPath);
+      const saved = localSaved || sharedSaved;
+      const filePath = localSaved
+        ? localPath
+        : sharedSaved
+          ? sharedPath
+          : configPathForField(paths, field);
       const rawValue = saved ? await readConfigFile(filePath) : normalizedDefinition.defaults[field.id];
       const defaultValue = normalizedDefinition.defaults[field.id];
       let value = defaultValue;
@@ -444,6 +514,7 @@ function createVibe64ProjectConfigStore({
         filePath,
         invalid: null,
         saved,
+        source: localSaved ? "local" : sharedSaved ? "shared" : "",
         value
       }];
     }));
@@ -470,6 +541,7 @@ function createVibe64ProjectConfigStore({
       fieldValues,
       helperPath: paths.helperPath,
       invalid,
+      localConfigRoot: paths.localConfigRoot,
       message: configReadinessMessage({
         invalid,
         missing
@@ -492,15 +564,25 @@ function createVibe64ProjectConfigStore({
       return [field.id, fieldValueFromInput(field, values, normalizedDefinition.defaults)];
     }));
 
-    await mkdir(paths.configRoot, {
-      recursive: true
-    });
-    await Promise.all(normalizedDefinition.fields.map((field) => {
-      return writeFile(
-        configValuePath(paths.configRoot, field.id),
+    await Promise.all([
+      mkdir(paths.sharedConfigRoot, {
+        recursive: true
+      }),
+      mkdir(paths.localConfigRoot, {
+        recursive: true
+      })
+    ]);
+    await Promise.all(normalizedDefinition.fields.map(async (field) => {
+      const targetPath = configPathForField(paths, field);
+      const stalePath = field.scope === "local"
+        ? configValuePath(paths.sharedConfigRoot, field.id)
+        : configValuePath(paths.localConfigRoot, field.id);
+      await writeFile(
+        targetPath,
         `${valueForFile(normalizedValues[field.id], field)}\n`,
         "utf8"
       );
+      await removeConfigValueIfExists(stalePath);
     }));
     await ensureRuntimeFiles();
     return readConfig({
@@ -513,6 +595,7 @@ function createVibe64ProjectConfigStore({
     await ensureRuntimeFiles();
     return {
       VIBE64_CONFIG_DIR: paths.configRoot,
+      VIBE64_CONFIG_LOCAL_DIR: paths.localConfigRoot,
       VIBE64_CONFIG_SH: paths.helperPath
     };
   }
@@ -521,6 +604,7 @@ function createVibe64ProjectConfigStore({
     configRoot: paths.configRoot,
     environment,
     helperPath: paths.helperPath,
+    localConfigRoot: paths.localConfigRoot,
     readConfig,
     runtimeRoot: paths.runtimeRoot,
     saveConfig

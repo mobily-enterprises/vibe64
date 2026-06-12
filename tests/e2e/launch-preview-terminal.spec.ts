@@ -86,6 +86,9 @@ test("embedded preview auto-starts the dev target without exposing the target pi
 
   await expect.poll(() => launchSession.getLaunchStartPayloads()).toEqual([
     {
+      launchInput: {
+        values: {}
+      },
       launchTargetId: "dev"
     }
   ]);
@@ -133,6 +136,9 @@ test("embedded preview shows the start control while launch targets are still lo
   await expect(startButton).toBeDisabled();
   await expect.poll(() => launchSession.getLaunchStartPayloads()).toEqual([
     {
+      launchInput: {
+        values: {}
+      },
       launchTargetId: "dev"
     }
   ]);
@@ -250,7 +256,58 @@ test("embedded preview stays mounted when switching selected sessions", async ({
   })).toBe(true);
 });
 
-test("mobile project tabs use action labels", async ({ page }) => {
+test("embedded preview options restart does not wait on the terminal stream", async ({ page }) => {
+  await mockLaunchTerminalSocket(page, {
+    terminalSocketNeverSettles: true
+  });
+  const launchSession = await mockLaunchSession(page, {
+    launchTargetPreviewOptions: [
+      {
+        defaultValue: [],
+        description: "Arguments passed to the app server command when previewing this app.",
+        id: "startupArgs",
+        label: "Startup arguments",
+        placeholder: "--flag\nvalue",
+        type: "string-list"
+      }
+    ]
+  });
+
+  await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+
+  const previewOptionsButton = page.getByRole("button", {
+    name: "Preview options"
+  });
+  await expect(previewOptionsButton).toBeVisible();
+  await expect(previewOptionsButton).toBeEnabled();
+  await expect.poll(() => page.locator(".vibe64-launch-controls__toolbar button").last().getAttribute("title"))
+    .toBe("Preview options");
+  const startCountBeforeRestart = launchSession.getLaunchStartPayloads().length;
+
+  await previewOptionsButton.click();
+  await page.getByLabel("Startup arguments").fill(".\n--debug");
+  await page.getByRole("button", {
+    name: "Save and restart preview"
+  }).click();
+
+  await expect.poll(() => launchSession.getLaunchStartPayloads().slice(startCountBeforeRestart)).toEqual([
+    {
+      launchInput: {
+        values: {
+          startupArgs: [
+            ".",
+            "--debug"
+          ]
+        }
+      },
+      launchTargetId: "dev"
+    }
+  ]);
+  await expect(previewOptionsButton).toBeEnabled();
+  await expect(page.locator("button[title='Restart']")).toBeEnabled();
+});
+
+test("mobile project navigation uses action labels after showing the project pane", async ({ page }) => {
   await page.setViewportSize({
     height: 844,
     width: 390
@@ -260,13 +317,8 @@ test("mobile project tabs use action labels", async ({ page }) => {
 
   await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
-  await expect(page.getByRole("tab", {
-    exact: true,
-    name: "Go to preview"
-  })).toBeVisible();
-  await expect(page.getByRole("tab", {
-    exact: true,
-    name: "Go to dashboard"
+  await expect(page.getByRole("button", {
+    name: "Show project"
   })).toBeVisible();
   await expect(page.getByRole("tab", {
     exact: true,
@@ -276,6 +328,23 @@ test("mobile project tabs use action labels", async ({ page }) => {
     exact: true,
     name: "Dashboard"
   })).toHaveCount(0);
+
+  await page.getByRole("button", {
+    name: "Show project"
+  }).click();
+
+  await expect(page.getByRole("tab", {
+    exact: true,
+    name: "Go to preview"
+  })).toHaveCount(0);
+  await expect(page.getByRole("tab", {
+    exact: true,
+    name: "Go to dashboard"
+  })).toHaveCount(0);
+  await expect(page.getByRole("button", {
+    exact: true,
+    name: "Go to dashboard"
+  })).toBeVisible();
 });
 
 test("mobile dashboard section links keep the active project slug", async ({ page }) => {
@@ -376,7 +445,7 @@ test("embedded launch terminal errors do not push the terminal host down", async
   await expect(terminalHost).toBeVisible();
   const hostTopBefore = await terminalHost.evaluate((element) => element.getBoundingClientRect().top);
 
-  await expect(page.getByText("Terminal session not found.")).toBeVisible();
+  await expect(page.getByText("No command running.")).toBeVisible();
   const hostTopAfter = await terminalHost.evaluate((element) => element.getBoundingClientRect().top);
 
   expect(Math.abs(hostTopAfter - hostTopBefore)).toBeLessThan(1);
@@ -410,6 +479,7 @@ test("embedded launch terminal stays expanded after the launch exits", async ({ 
 
 async function mockLaunchSession(page: Page, {
   initialLaunchStatus = null,
+  launchTargetPreviewOptions = [],
   launchTargetsDelayMs = 0,
   launchTerminalDelayMs = 0,
   previewReadyDelayMs = 0,
@@ -420,6 +490,7 @@ async function mockLaunchSession(page: Page, {
   sessionListDelayMs = 0
 }: {
   initialLaunchStatus?: ReturnType<typeof launchStatusPayload> | null;
+  launchTargetPreviewOptions?: unknown[];
   launchTargetsDelayMs?: number;
   launchTerminalDelayMs?: number;
   previewReadyDelayMs?: number;
@@ -432,9 +503,18 @@ async function mockLaunchSession(page: Page, {
   const listedSessions = Array.isArray(sessionList) ? sessionList : [session];
   const launchStartPayloads: unknown[] = [];
   let launchStarted = !initialLaunchStatus || Boolean(initialLaunchStatus.activeTerminal);
+  let initialLaunchStatusActive = true;
   let previewLoadCount = 0;
   function currentLaunchStatus() {
-    return launchStarted ? launchStatusPayload() : initialLaunchStatus || launchStatusPayload();
+    if (initialLaunchStatusActive && initialLaunchStatus) {
+      return initialLaunchStatus;
+    }
+    return launchStatusPayload(launchStarted
+      ? { launchTargetPreviewOptions }
+      : {
+          activeTerminal: null,
+          launchTargetPreviewOptions
+        });
   }
   function sessionForRequest(pathname: string) {
     const requestedSessionId = decodeURIComponent(pathname.split("/").at(-1) || "");
@@ -461,10 +541,24 @@ async function mockLaunchSession(page: Page, {
           setTimeout(resolve, launchTerminalDelayMs);
         });
       }
+      initialLaunchStatusActive = false;
       launchStarted = true;
       await fulfillJson(route, {
         ok: true,
-        ...launchStatusPayload().activeTerminal
+        ...launchStatusPayload({
+          launchTargetPreviewOptions
+        }).activeTerminal
+      });
+      return;
+    }
+    if (method === "POST" && /\/launch-terminal\/[^/]+\/stop$/u.test(url.pathname)) {
+      initialLaunchStatusActive = false;
+      launchStarted = false;
+      await fulfillJson(route, {
+        id: "server-launch-terminal",
+        ok: true,
+        running: false,
+        status: "exited"
       });
       return;
     }
@@ -565,17 +659,20 @@ setTimeout(() => postReady("rendered"), ${readyDelay});
 async function mockLaunchTerminalSocket(page: Page, {
   terminalErrorDelayMs = 0,
   terminalExitCode = 0,
-  terminalExitDelayMs = 0
+  terminalExitDelayMs = 0,
+  terminalSocketNeverSettles = false
 }: {
   terminalErrorDelayMs?: number;
   terminalExitCode?: number;
   terminalExitDelayMs?: number;
+  terminalSocketNeverSettles?: boolean;
 } = {}) {
   await page.addInitScript(({
     targetAppUrl,
     terminalErrorDelayMs: errorDelayMs,
     terminalExitCode: exitCode,
-    terminalExitDelayMs: exitDelayMs
+    terminalExitDelayMs: exitDelayMs,
+    terminalSocketNeverSettles: neverSettles
   }) => {
     const OriginalWebSocket = window.WebSocket;
 
@@ -593,6 +690,9 @@ async function mockLaunchTerminalSocket(page: Page, {
         const pathname = new URL(this.url, window.location.href).pathname;
         if (!pathname.includes("/launch-terminal/")) {
           return new OriginalWebSocket(url);
+        }
+        if (neverSettles) {
+          return;
         }
         window.setTimeout(() => {
           this.readyState = MockWebSocket.OPEN;
@@ -659,38 +759,48 @@ async function mockLaunchTerminalSocket(page: Page, {
     targetAppUrl: TARGET_APP_URL,
     terminalErrorDelayMs,
     terminalExitCode,
-    terminalExitDelayMs
+    terminalExitDelayMs,
+    terminalSocketNeverSettles
   });
 }
 
-function launchStatusPayload() {
+function launchStatusPayload(options: {
+  activeTerminal?: unknown;
+  launchTargetPreviewOptions?: unknown[];
+} = {}) {
+  const launchTargetPreviewOptions = options.launchTargetPreviewOptions || [];
+  const terminal = Object.hasOwn(options, "activeTerminal")
+    ? options.activeTerminal
+    : {
+        commandPreview: "npm run dev",
+        id: "server-launch-terminal",
+        metadata: {
+          actions: [
+            {
+              href: TARGET_APP_URL,
+              id: "url-dev",
+              kind: "url",
+              label: "Open browser"
+            }
+          ],
+          launchReady: true,
+          launchTargetId: "dev",
+          launchTargetLabel: "Run app"
+        },
+        output: `action:url:${TARGET_APP_URL}\nready`,
+        running: true,
+        status: "running"
+      };
+  const devLaunchTarget = {
+    available: true,
+    id: "dev",
+    label: "Run app",
+    ...(launchTargetPreviewOptions.length > 0 ? { previewOptions: launchTargetPreviewOptions } : {})
+  };
   return {
-    activeTerminal: {
-      commandPreview: "npm run dev",
-      id: "server-launch-terminal",
-      metadata: {
-        actions: [
-          {
-            href: TARGET_APP_URL,
-            id: "url-dev",
-            kind: "url",
-            label: "Open browser"
-          }
-        ],
-        launchReady: true,
-        launchTargetId: "dev",
-        launchTargetLabel: "Run app"
-      },
-      output: `action:url:${TARGET_APP_URL}\nready`,
-      running: true,
-      status: "running"
-    },
+    activeTerminal: terminal,
     launchTargets: [
-      {
-        available: true,
-        id: "dev",
-        label: "Run app"
-      }
+      devLaunchTarget
     ],
     ok: true,
     openTarget: {
@@ -760,7 +870,7 @@ function sessionPayload({
       }
     },
     sessionId,
-    sessionRoot: `/workspace/example-target-app/.vibe64/sessions/active/${sessionId}`,
+    sessionRoot: `/workspace/example-target-app/.vibe64-local/sessions/active/${sessionId}`,
     status: "active",
     stepDefinitions: [
       {
@@ -783,12 +893,12 @@ function sessionPayload({
   }
   return {
     ...session,
-    artifactsRoot: `/workspace/example-target-app/.vibe64/sessions/active/${sessionId}/artifacts`,
+    artifactsRoot: `/workspace/example-target-app/.vibe64-local/sessions/active/${sessionId}/artifacts`,
     metadata: {
-      worktree_path: `/workspace/example-target-app/.vibe64/sessions/active/${sessionId}/worktree`
+      worktree_path: `/workspace/example-target-app/.vibe64-local/sessions/active/${sessionId}/worktree`
     },
     targetRoot: "/workspace/example-target-app",
-    worktree: `/workspace/example-target-app/.vibe64/sessions/active/${sessionId}/worktree`,
+    worktree: `/workspace/example-target-app/.vibe64-local/sessions/active/${sessionId}/worktree`,
     worktreeReady: true
   };
 }

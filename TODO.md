@@ -55,6 +55,14 @@ Make sure the correct buttons are displayed at every stage
 Make test accounts for Pete Dave Andrea (applicom) Massimo (digi) Matt (beepollen) Ship Agency Luca's friend Andrei
 
 
+
+
+
+
+
+
+
+
 *****ALLOWING DEPLOYMENT  AND FINAL TOUCHES:
 
 9)
@@ -83,7 +91,7 @@ Make app which will actually be the main web site, with ability to sign up and m
 ABILITY TO PROVISION SERVER
 
 8c)
-MOVABILITY: Ability to create a tgz of the full contents of a repository: vibe64 and .vibe64. Maybe consider placing them into .vibe64
+MOVABILITY: Ability to create a tgz of the full contents of a tenancy
 
 
 

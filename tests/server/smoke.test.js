@@ -8,6 +8,9 @@ import WebSocket from "ws";
 import {
   githubProviderHome
 } from "@local/studio-terminal-core/server/providerHomes";
+import {
+  VIBE64_SYSTEM_ROOT_ENV
+} from "@local/vibe64-core/server/studioRoots";
 import { createServer, resolveListenTarget, startServer } from "../../server.js";
 import { BROWSER_LIFECYCLE_WEBSOCKET_PATH } from "../../server/lib/browserLifecycle.js";
 import { loadRuntimeEnvFiles, resolveRuntimeEnv } from "../../server/lib/runtimeEnv.js";
@@ -48,25 +51,25 @@ async function withTemporaryPackageRoot(packageName, callback) {
 }
 
 async function withTargetRoot(_targetRoot, projectFixture, callback) {
-  const authDataRoot = await mkdtemp(path.join(tmpdir(), "vibe64-auth-smoke-"));
+  const systemRoot = await mkdtemp(path.join(tmpdir(), "vibe64-demon-smoke-"));
 
   let app;
   try {
     app = await createServer({
-      authDataRoot,
       projectsRoot: projectFixture.projectsRoot,
+      systemRoot,
       verifySupabaseAccessToken: fakeVerifySupabaseAccessToken
     });
     const cookie = await authenticateOwner(app);
     const authHeaders = {
       cookie: Array.isArray(cookie) ? cookie[0] : cookie
     };
-    return await callback(app, authHeaders, projectFixture.apiBase, authDataRoot);
+    return await callback(app, authHeaders, projectFixture.apiBase, systemRoot);
   } finally {
     if (app) {
       await app.close();
     }
-    await rm(authDataRoot, {
+    await rm(systemRoot, {
       force: true,
       recursive: true
     });
@@ -100,7 +103,7 @@ test("runtime env files load broadly while runtime config stays explicit", async
   const keys = [
     "HOST",
     "PORT",
-    "VIBE64_DATA_ROOT",
+    VIBE64_SYSTEM_ROOT_ENV,
     "VIBE64_LISTEN_SOCKET",
     "VIBE64_SUPABASE_PUBLISHABLE_KEY",
     "VIBE64_SUPABASE_SECRET_KEY",
@@ -126,7 +129,7 @@ test("runtime env files load broadly while runtime config stays explicit", async
       "VIBE64_SUPABASE_PUBLISHABLE_KEY=host-publishable",
       "VIBE64_SUPABASE_SECRET_KEY=host-secret",
       "VIBE64_SUPABASE_URL=https://host.example.supabase.co",
-      "VIBE64_DATA_ROOT=/tmp/vibe64-file-data-root"
+      `${VIBE64_SYSTEM_ROOT_ENV}=/tmp/vibe64-file-system-root`
     ].join("\n"), "utf8");
 
     loadRuntimeEnvFiles({
@@ -139,14 +142,14 @@ test("runtime env files load broadly while runtime config stays explicit", async
     assert.equal(process.env.VIBE64_SUPABASE_URL, "https://repo.example.supabase.co");
     assert.equal(process.env.HOST, "0.0.0.0");
     assert.equal(process.env.PORT, "3939");
-    assert.equal(process.env.VIBE64_DATA_ROOT, "/tmp/vibe64-file-data-root");
+    assert.equal(process.env[VIBE64_SYSTEM_ROOT_ENV], "/tmp/vibe64-file-system-root");
     assert.equal(process.env.VIBE64_LISTEN_SOCKET, "/tmp/vibe64-file.sock");
 
     const runtimeEnv = resolveRuntimeEnv();
     assert.equal(runtimeEnv.HOST, "0.0.0.0");
     assert.equal(runtimeEnv.PORT, 3939);
     assert.equal(runtimeEnv.VIBE64_SUPABASE_SECRET_KEY, "host-secret");
-    assert.equal(runtimeEnv.VIBE64_DATA_ROOT, undefined);
+    assert.equal(runtimeEnv[VIBE64_SYSTEM_ROOT_ENV], undefined);
     assert.equal(runtimeEnv.VIBE64_LISTEN_SOCKET, undefined);
   } finally {
     for (const [key, value] of previous.entries()) {
@@ -177,9 +180,9 @@ test("GET /api/health returns built-in health response", async () => {
 });
 
 test("protected API routes require Vibe64 login", async () => {
-  const authDataRoot = await mkdtemp(path.join(tmpdir(), "vibe64-auth-required-"));
+  const systemRoot = await mkdtemp(path.join(tmpdir(), "vibe64-auth-required-"));
   const app = await createServer({
-    authDataRoot,
+    systemRoot,
     verifySupabaseAccessToken: fakeVerifySupabaseAccessToken
   });
   try {
@@ -191,7 +194,7 @@ test("protected API routes require Vibe64 login", async () => {
     assert.equal(response.json().code, "vibe64_auth_required");
   } finally {
     await app.close();
-    await rm(authDataRoot, {
+    await rm(systemRoot, {
       force: true,
       recursive: true
     });
@@ -199,10 +202,10 @@ test("protected API routes require Vibe64 login", async () => {
 });
 
 test("first-login Codex setup completion uses the configured account verifier", async () => {
-  const authDataRoot = await mkdtemp(path.join(tmpdir(), "vibe64-auth-codex-setup-"));
+  const systemRoot = await mkdtemp(path.join(tmpdir(), "vibe64-auth-codex-setup-"));
   let codexConnected = false;
   const app = await createServer({
-    authDataRoot,
+    systemRoot,
     codexConnectedVerifier: async () => ({
       connected: codexConnected,
       ok: true
@@ -240,7 +243,7 @@ test("first-login Codex setup completion uses the configured account verifier", 
     assert.equal(state.json().firstLoginCodexSetupPending, false);
   } finally {
     await app.close();
-    await rm(authDataRoot, {
+    await rm(systemRoot, {
       force: true,
       recursive: true
     });
@@ -248,9 +251,9 @@ test("first-login Codex setup completion uses the configured account verifier", 
 });
 
 test("browser lifecycle WebSocket requires Vibe64 login", async () => {
-  const authDataRoot = await mkdtemp(path.join(tmpdir(), "vibe64-auth-ws-"));
+  const systemRoot = await mkdtemp(path.join(tmpdir(), "vibe64-auth-ws-"));
   const app = await createServer({
-    authDataRoot,
+    systemRoot,
     verifySupabaseAccessToken: fakeVerifySupabaseAccessToken
   });
   try {
@@ -279,7 +282,7 @@ test("browser lifecycle WebSocket requires Vibe64 login", async () => {
     }
   } finally {
     await app.close();
-    await rm(authDataRoot, {
+    await rm(systemRoot, {
       force: true,
       recursive: true
     });
@@ -287,10 +290,10 @@ test("browser lifecycle WebSocket requires Vibe64 login", async () => {
 });
 
 test("management project API lists and creates slugs without global selection", async () => {
-  const authDataRoot = await mkdtemp(path.join(tmpdir(), "vibe64-auth-projects-"));
+  const systemRoot = await mkdtemp(path.join(tmpdir(), "vibe64-auth-projects-"));
   const projectsRoot = await mkdtemp(path.join(tmpdir(), "vibe64-projects-"));
   const app = await createServer({
-    authDataRoot,
+    systemRoot,
     projectsRoot,
     verifySupabaseAccessToken: fakeVerifySupabaseAccessToken
   });
@@ -402,13 +405,13 @@ test("management project API lists and creates slugs without global selection", 
     });
     assert.equal(betaProjectType.statusCode, 200);
     assert.equal(betaProjectType.json().projectType.status, "missing");
-    await access(path.join(authDataRoot, "projects", "alpha_1", "project_type"));
+    await access(path.join(projectsRoot, "alpha_1", ".vibe64", "project_type"));
     await assert.rejects(
-      access(path.join(authDataRoot, "projects", "beta_2", "project_type"))
+      access(path.join(projectsRoot, "beta_2", ".vibe64", "project_type"))
     );
   } finally {
     await app.close();
-    await rm(authDataRoot, {
+    await rm(systemRoot, {
       force: true,
       recursive: true
     });
@@ -420,11 +423,11 @@ test("management project API lists and creates slugs without global selection", 
 });
 
 test("only owners can add GitHub-backed projects", async () => {
-  const authDataRoot = await mkdtemp(path.join(tmpdir(), "vibe64-auth-github-projects-"));
+  const systemRoot = await mkdtemp(path.join(tmpdir(), "vibe64-auth-github-projects-"));
   const projectsRoot = await mkdtemp(path.join(tmpdir(), "vibe64-github-projects-"));
   const calls = [];
   const app = await createServer({
-    authDataRoot,
+    systemRoot,
     projectsRoot,
     runGithubToolchain: fakeGithubProjectToolchain(calls),
     verifySupabaseAccessToken: fakeVerifySupabaseAccessToken
@@ -601,7 +604,7 @@ test("only owners can add GitHub-backed projects", async () => {
     assert.ok(calls.some((call) => call.command.join(" ") === "gh api -X PUT repos/vibe64-org/new-repo/collaborators/memberhub -f permission=push"));
   } finally {
     await app.close();
-    await rm(authDataRoot, {
+    await rm(systemRoot, {
       force: true,
       recursive: true
     });
@@ -671,7 +674,7 @@ async function authenticateOwner(app, {
   });
   assert.equal(response.statusCode, 200);
   if (linkGithub) {
-    await writeReadyGithubProviderHome(app.vibe64Auth.dataRoot, {
+    await writeReadyGithubProviderHome(app.vibe64Auth.systemRoot, {
       email: "owner@example.com",
       githubLogin,
       gitUserName: "Owner Example"
@@ -697,7 +700,7 @@ async function authenticateMember(app, {
   });
   assert.equal(response.statusCode, 200);
   if (linkGithub) {
-    await writeReadyGithubProviderHome(app.vibe64Auth.dataRoot, {
+    await writeReadyGithubProviderHome(app.vibe64Auth.systemRoot, {
       email: "member@example.com",
       githubLogin,
       gitUserName: "Member Example"
@@ -706,12 +709,12 @@ async function authenticateMember(app, {
   return response.headers["set-cookie"];
 }
 
-async function writeReadyGithubProviderHome(dataRoot, {
+async function writeReadyGithubProviderHome(systemRoot, {
   email = "",
   githubLogin = "",
   gitUserName = ""
 } = {}) {
-  const home = githubProviderHome(path.join(dataRoot, "provider-homes"), {
+  const home = githubProviderHome(path.join(systemRoot, "provider-homes"), {
     email
   });
   await mkdir(path.join(home, ".config", "gh"), {
@@ -988,8 +991,8 @@ test("current-app route reports the selected target root before project type set
 
 test("Vibe64 project routes persist project type and plain-file config", async () => {
   await withTemporaryPackageRoot("configured-target-app", async (targetRoot, projectFixture) => {
-    await withTargetRoot(targetRoot , projectFixture, async (app, authHeaders, apiBase, dataRoot) => {
-      const stateRoot = path.join(dataRoot, "projects", projectFixture.slug);
+    await withTargetRoot(targetRoot , projectFixture, async (app, authHeaders, apiBase) => {
+      const stateRoot = path.join(targetRoot, ".vibe64");
       const beforeType = await app.inject({
         headers: authHeaders,
         method: "GET",

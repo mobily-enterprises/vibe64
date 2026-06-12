@@ -10,11 +10,15 @@ import {
   VINEXT_VIBE64_COMMANDS,
   createVinextLaunchDescriptor,
   createVinextLaunchTargetTerminalSpec,
-  createVinextTargetAdapter
+  createVinextTargetAdapter,
+  listVinextLaunchTargets
 } from "@local/vibe64-adapters/server/adapters/vinext/index";
 import {
   createVinextSetupDoctorPlugin
 } from "@local/vibe64-adapters/server/adapters/vinext/setupDoctorPlugin";
+import {
+  startupArgsPreviewOption
+} from "@local/vibe64-adapters/server/launchPreviewOptions";
 import { withTemporaryRoot, worktreeMetadata } from "./vibe64TestHelpers.js";
 
 async function writeProjectFile(root, relativePath, text = "") {
@@ -135,6 +139,14 @@ test("vinext launch target describes Vinext commands and uses the shared launch 
     await createVinextProject(targetRoot);
 
     const descriptor = await createVinextLaunchDescriptor({
+      launchInput: {
+        values: {
+          startupArgs: [
+            "--profile",
+            "preview"
+          ]
+        }
+      },
       mode: "production",
       port: 4199,
       worktreePath: targetRoot
@@ -142,9 +154,20 @@ test("vinext launch target describes Vinext commands and uses the shared launch 
 
     assert.deepEqual(descriptor.commands.map((command) => command.command), [
       "npx --no-install vinext build",
-      "npx --no-install vinext start --hostname 0.0.0.0 --port 4199"
+      "npx --no-install vinext start --hostname 0.0.0.0 --port 4199 --profile preview"
     ]);
     assert.equal(descriptor.metadata.mode, "production");
+
+    const launchTargets = await listVinextLaunchTargets({
+      session: {
+        metadata: {
+          worktree_path: targetRoot
+        }
+      }
+    });
+    assert.deepEqual(launchTargets.find((target) => target.id === "built").previewOptions, [
+      startupArgsPreviewOption()
+    ]);
 
     const spec = await createVinextLaunchTargetTerminalSpec({
       launchTargetId: "built",

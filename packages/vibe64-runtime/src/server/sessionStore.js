@@ -13,6 +13,9 @@ import {
   plainClone,
   pathExists
 } from "@local/vibe64-core/server/core";
+import {
+  VIBE64_PROJECT_LOCAL_DIR
+} from "@local/vibe64-core/server/studioRoots";
 import { deepFreeze } from "@local/vibe64-core/server/deepFreeze";
 
 const VIBE64_SESSION_SCHEMA_VERSION = 1;
@@ -414,7 +417,7 @@ function resolveVibe64SessionPaths({
   targetRoot = process.cwd()
 } = {}) {
   const normalizedTargetRoot = normalizeTargetRoot(targetRoot);
-  const resolvedStateRoot = stateRoot ? path.resolve(stateRoot) : path.join(normalizedTargetRoot, VIBE64_STATE_DIR);
+  const resolvedStateRoot = stateRoot ? path.resolve(stateRoot) : path.join(normalizedTargetRoot, VIBE64_PROJECT_LOCAL_DIR);
   const sessionsRoot = path.join(resolvedStateRoot, "sessions");
   const activeSessionsRoot = path.join(sessionsRoot, "active");
   const normalizedSessionId = normalizeText(sessionId);
@@ -552,11 +555,16 @@ function nextConversationTurnId(turnIds = []) {
 
 function createVibe64SessionStore({
   clock = undefined,
+  projectLocalRoot = "",
   stateRoot = "",
   targetRoot = process.cwd()
 } = {}) {
   const normalizedTargetRoot = normalizeTargetRoot(targetRoot);
-  const normalizedStateRoot = stateRoot ? path.resolve(stateRoot) : "";
+  const resolvedProjectLocalRoot = String(projectLocalRoot || stateRoot || "").trim();
+  if (!resolvedProjectLocalRoot) {
+    throw vibe64Error("Vibe64 session store requires projectLocalRoot.", "vibe64_project_local_root_required");
+  }
+  const normalizedStateRoot = path.resolve(resolvedProjectLocalRoot);
   const now = createClockNow(clock);
 
   function paths(sessionId = "") {

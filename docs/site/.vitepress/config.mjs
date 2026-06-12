@@ -14,6 +14,7 @@ const vibeNav = [
 const devNav = [
   { text: "Why Vibe64", link: "/dev/" },
   { text: "Supported tech", link: "/dev/supported-tech" },
+  { text: "Technical reference", link: "/dev/technical-reference" },
   { text: "Pricing", link: "/dev/pricing" },
   { text: "Vibe Site", link: "/" },
   { text: "Start Building", link: "/dev/start-building" }

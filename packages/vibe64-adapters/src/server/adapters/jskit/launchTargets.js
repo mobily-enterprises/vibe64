@@ -24,6 +24,11 @@ import {
   JSKIT_ALLOW_SELF_TARGET_CONFIG
 } from "./adapter.js";
 import {
+  commandWithStartupArgs,
+  launchTargetWithStartupArgsOption,
+  startupArgsFromLaunchInput
+} from "../../launchPreviewOptions.js";
+import {
   JSKIT_TOOLCHAIN_IMAGE
 } from "./toolchainIdentity.js";
 import {
@@ -42,7 +47,6 @@ const BUILT_LAUNCH_COMMAND_CONFIG = ".jskit/config/testrun_command";
 const BUILT_LAUNCH_PORT_CONFIG = ".jskit/config/server_port_for_user_review";
 const DEV_SERVER_COMMAND_CONFIG = "config/dev_server_command";
 const MIGRATION_SCRIPT_NAME = "db:migrate";
-const JSKIT_STARTUP_ARGS_OPTION = "startupArgs";
 
 function createJskitPreviewAuthProfileCommand() {
   const script = `
@@ -218,31 +222,6 @@ function runtimeNamespaceDockerArgs(namespace = "") {
     : [];
 }
 
-function normalizeLaunchInputValues(launchInput = {}) {
-  return launchInput && typeof launchInput === "object" && !Array.isArray(launchInput) &&
-    launchInput.values && typeof launchInput.values === "object" && !Array.isArray(launchInput.values)
-    ? launchInput.values
-    : {};
-}
-
-function startupArgsFromLaunchInput(launchInput = {}) {
-  const value = normalizeLaunchInputValues(launchInput)[JSKIT_STARTUP_ARGS_OPTION];
-  return (Array.isArray(value) ? value : [])
-    .map((entry) => String(entry || "").trim())
-    .filter(Boolean);
-}
-
-function commandWithStartupArgs(command = "", startupArgs = []) {
-  const normalizedCommand = String(command || "").trim();
-  const normalizedArgs = (Array.isArray(startupArgs) ? startupArgs : [])
-    .map((entry) => String(entry || "").trim())
-    .filter(Boolean);
-  if (!normalizedCommand || normalizedArgs.length < 1) {
-    return normalizedCommand;
-  }
-  return `${normalizedCommand} -- ${normalizedArgs.map(shellQuote).join(" ")}`;
-}
-
 function normalizePort(value) {
   const port = Number.parseInt(String(value || ""), 10);
   return Number.isInteger(port) && port >= 1024 && port <= 65535
@@ -333,34 +312,8 @@ function jskitLaunchTarget(id, label) {
   };
 }
 
-function jskitLaunchTargetPreviewOptions({
-  config = {},
-  launchTargetId = ""
-} = {}) {
-  if (launchTargetId !== "dev" || config?.values?.[JSKIT_ALLOW_SELF_TARGET_CONFIG] !== true) {
-    return [];
-  }
-  return [
-    {
-      defaultValue: [],
-      description: "Arguments passed to the backend command when previewing this self-targeted Vibe64 instance.",
-      id: JSKIT_STARTUP_ARGS_OPTION,
-      label: "Startup arguments",
-      placeholder: ".",
-      type: "string-list"
-    }
-  ];
-}
-
-function jskitLaunchTargetWithPreviewOptions(id, label, context = {}) {
-  const previewOptions = jskitLaunchTargetPreviewOptions({
-    config: context.config,
-    launchTargetId: id
-  });
-  return {
-    ...jskitLaunchTarget(id, label),
-    ...(previewOptions.length > 0 ? { previewOptions } : {})
-  };
+function jskitLaunchTargetWithPreviewOptions(id, label) {
+  return launchTargetWithStartupArgsOption(jskitLaunchTarget(id, label));
 }
 
 function jskitDependenciesReady(session = {}) {
@@ -383,7 +336,9 @@ function createJskitDevCommand({
   previewAuthProfileCommand = createJskitPreviewAuthProfileCommand(),
   startupArgs = []
 } = {}) {
-  const backendCommandWithArgs = commandWithStartupArgs(backendCommand, startupArgs);
+  const backendCommandWithArgs = commandWithStartupArgs(backendCommand, startupArgs, {
+    separator: "--"
+  });
   return [
     "set -e",
     `export VIBE64_JSKIT_BACKEND_PORT=${shellQuotedNumber(backendPort)}`,
@@ -420,7 +375,6 @@ function shellQuotedNumber(value) {
 }
 
 async function listJskitLaunchTargets({
-  config = {},
   session = {}
 } = {}) {
   const worktreePath = sessionWorktreePath(session);
@@ -444,14 +398,10 @@ async function listJskitLaunchTargets({
 
   const launchTargets = [];
   if (hasTestrunCommand || (hasBuildCommandConfig && hasServerCommandConfig) || (scripts.build && scripts.server)) {
-    launchTargets.push(jskitLaunchTargetWithPreviewOptions("built", "Run built app", {
-      config
-    }));
+    launchTargets.push(jskitLaunchTargetWithPreviewOptions("built", "Run built app"));
   }
   if ((hasDevCommandConfig || scripts.dev) && (hasServerCommandConfig || scripts.server)) {
-    launchTargets.push(jskitLaunchTargetWithPreviewOptions("dev", "Run app", {
-      config
-    }));
+    launchTargets.push(jskitLaunchTargetWithPreviewOptions("dev", "Run app"));
   }
   return jskitDependenciesReady(session)
     ? launchTargets
@@ -492,7 +442,9 @@ async function createJskitBuiltLaunchDescriptor({
           previewAuthProfileCommand,
           config.serverCommand
             ? {
-                command: commandWithStartupArgs(config.serverCommand, startupArgs),
+                command: commandWithStartupArgs(config.serverCommand, startupArgs, {
+                  separator: "--"
+                }),
                 label: "Starting JSKIT app server.",
                 networkEnv: true
               }
@@ -502,7 +454,9 @@ async function createJskitBuiltLaunchDescriptor({
           migrationCommand,
           previewAuthProfileCommand,
           {
-            command: commandWithStartupArgs(config.testrunCommand, startupArgs),
+            command: commandWithStartupArgs(config.testrunCommand, startupArgs, {
+              separator: "--"
+            }),
             label: "Starting JSKIT built app.",
             networkEnv: true
           }

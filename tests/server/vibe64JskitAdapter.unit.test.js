@@ -29,6 +29,9 @@ import {
 import {
   VIBE64_RUNTIME_NAMESPACE_ENV
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
+import {
+  startupArgsPreviewOption
+} from "@local/vibe64-adapters/server/launchPreviewOptions";
 import { withTemporaryRoot, worktreeMetadata } from "./vibe64TestHelpers.js";
 
 async function withRuntimeNamespace(namespace, fn) {
@@ -367,18 +370,24 @@ test("jskit launch targets expose app and built app actions", async () => {
       {
         defaultDisplay: "minimized",
         id: "built",
-        label: "Run built app"
+        label: "Run built app",
+        previewOptions: [
+          startupArgsPreviewOption()
+        ]
       },
       {
         defaultDisplay: "minimized",
         id: "dev",
-        label: "Run app"
+        label: "Run app",
+        previewOptions: [
+          startupArgsPreviewOption()
+        ]
       }
     ]);
   });
 });
 
-test("jskit self-target dev launch exposes startup argument preview options", async () => {
+test("jskit launch targets expose startup argument preview options", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await writeProjectFile(targetRoot, "package.json", JSON.stringify({
       scripts: {
@@ -389,11 +398,6 @@ test("jskit self-target dev launch exposes startup argument preview options", as
     }, null, 2));
 
     const launchTargets = await listJskitLaunchTargets({
-      config: {
-        values: {
-          [JSKIT_ALLOW_SELF_TARGET_CONFIG]: true
-        }
-      },
       session: {
         metadata: {
           dependencies_installed: "yes",
@@ -402,16 +406,8 @@ test("jskit self-target dev launch exposes startup argument preview options", as
       }
     });
 
-    assert.equal(launchTargets.find((target) => target.id === "built").previewOptions, undefined);
     assert.deepEqual(launchTargets.find((target) => target.id === "dev").previewOptions, [
-      {
-        defaultValue: [],
-        description: "Arguments passed to the backend command when previewing this self-targeted Vibe64 instance.",
-        id: "startupArgs",
-        label: "Startup arguments",
-        placeholder: ".",
-        type: "string-list"
-      }
+      startupArgsPreviewOption()
     ]);
   });
 });
@@ -442,7 +438,10 @@ test("jskit launch targets wait for dependency installation", async () => {
         defaultDisplay: "minimized",
         disabledReason: "Install dependencies before running the app.",
         id: "dev",
-        label: "Run app"
+        label: "Run app",
+        previewOptions: [
+          startupArgsPreviewOption()
+        ]
       }
     ]);
 
@@ -487,7 +486,10 @@ test("jskit launch targets use canonical session worktree when metadata path is 
       {
         defaultDisplay: "minimized",
         id: "dev",
-        label: "Run app"
+        label: "Run app",
+        previewOptions: [
+          startupArgsPreviewOption()
+        ]
       }
     ]);
 

@@ -1386,18 +1386,18 @@ function startGitCheckpointTerminal(targetRoot, input = {}, env = {}, toolHomeSo
 }
 
 function createService({
-  dataRoot = "",
   env = process.env,
   projectService = null,
   providerHomesRoot = "",
   studioRoot = "",
+  systemRoot = "",
   targetRoot
 } = {}) {
   const resolvedStudioRoot = path.resolve(String(studioRoot || process.cwd()));
   const resolvedProviderHomesRoot = resolveProviderHomesRoot({
-    dataRoot,
     env,
-    explicitRoot: providerHomesRoot
+    explicitRoot: providerHomesRoot,
+    systemRoot
   });
 
   function currentTargetRoot() {

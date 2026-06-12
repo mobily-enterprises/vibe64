@@ -290,7 +290,7 @@ test("Vibe64 Codex terminal joins the target runtime network before the image", 
     sessionId: "unit-session",
     targetRoot,
     terminalId: "unit-terminal",
-    worktree: "/workspace/project/.vibe64/sessions/active/unit/worktree"
+    worktree: "/workspace/project/.vibe64-local/sessions/active/unit/worktree"
   });
 
   assert.deepEqual(args.slice(0, 1 + STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS.length), [
@@ -322,7 +322,7 @@ test("Vibe64 Codex terminal joins the target runtime network before the image", 
     sessionId: "unit-session",
     targetRoot,
     terminalId: "adapter-terminal",
-    worktree: "/workspace/project/.vibe64/sessions/active/unit/worktree"
+    worktree: "/workspace/project/.vibe64-local/sessions/active/unit/worktree"
   });
   assertPlaywrightBrowserCache(adapterImageArgs);
   assert.ok(adapterImageArgs.indexOf("--network") < adapterImageArgs.indexOf("adapter-toolchain:1.0.0"));
@@ -399,7 +399,7 @@ test("Vibe64 Codex terminal startup only renders the resumable CLI", () => {
     sessionId: "startup_prompt",
     targetRoot: "/workspace/project",
     terminalId: "startup-terminal",
-    worktree: "/workspace/project/.vibe64/sessions/active/startup_prompt/worktree"
+    worktree: "/workspace/project/.vibe64-local/sessions/active/startup_prompt/worktree"
   });
   const startupScript = args.at(-1);
   assert.match(startupScript, /codex/u);
@@ -413,7 +413,7 @@ test("Vibe64 Codex terminal startup only renders the resumable CLI", () => {
     sessionId: "startup_prompt",
     targetRoot: "/workspace/project",
     terminalId: "startup-terminal",
-    worktree: "/workspace/project/.vibe64/sessions/active/startup_prompt/worktree"
+    worktree: "/workspace/project/.vibe64-local/sessions/active/startup_prompt/worktree"
   });
   assert.match(
     resumedArgs.at(-1),
@@ -430,7 +430,7 @@ test("Vibe64 Codex terminal startup only renders the resumable CLI", () => {
     sessionId: "startup_prompt",
     targetRoot: "/workspace/project",
     terminalId: "startup-terminal",
-    worktree: "/workspace/project/.vibe64/sessions/active/startup_prompt/worktree"
+    worktree: "/workspace/project/.vibe64-local/sessions/active/startup_prompt/worktree"
   });
   assert.match(
     customReasoningArgs.at(-1),
@@ -450,7 +450,7 @@ test("Vibe64 Codex terminal startup only renders the resumable CLI", () => {
         target: "/vibe64-codex-app-server"
       }
     ],
-    worktree: "/workspace/project/.vibe64/sessions/active/startup_prompt/worktree"
+    worktree: "/workspace/project/.vibe64-local/sessions/active/startup_prompt/worktree"
   });
   assert.match(
     remoteResumedArgs.at(-1),
@@ -464,13 +464,13 @@ test("Vibe64 Codex terminal startup only renders the resumable CLI", () => {
     sessionId: "startup_prompt",
     targetRoot: "/workspace/project",
     terminalId: "startup-terminal",
-    worktree: "/workspace/project/.vibe64/sessions/active/startup_prompt/worktree"
+    worktree: "/workspace/project/.vibe64-local/sessions/active/startup_prompt/worktree"
   });
   assert.doesNotMatch(invalidThreadArgs.at(-1), /resume [0-9a-f-]{36}/u);
 });
 
 test("Vibe64 Codex terminal resumes the app-server thread for the same workdir", () => {
-  const workdir = "/workspace/project/.vibe64/sessions/active/session-1/worktree";
+  const workdir = "/workspace/project/.vibe64-local/sessions/active/session-1/worktree";
   const session = {
     metadata: {
       agent_identity_conversation_id: "00000000-0000-4000-8000-000000000005",
@@ -1243,7 +1243,7 @@ test("Vibe64 Codex app-server preparation failure is persisted as a visible back
 
 test("Vibe64 shell terminal joins the target runtime network before the image", () => {
   const targetRoot = "/workspace/project";
-  const worktree = "/workspace/project/.vibe64/sessions/active/unit/worktree";
+  const worktree = "/workspace/project/.vibe64-local/sessions/active/unit/worktree";
   const args = shellTerminalArgs({
     containerName: "vibe64-shell-unit",
     env: {
@@ -1300,7 +1300,7 @@ test("Vibe64 shell terminal joins the target runtime network before the image", 
 
 test("Vibe64 command terminal joins the target runtime network before the image", () => {
   const targetRoot = "/workspace/project";
-  const worktree = "/workspace/project/.vibe64/sessions/active/unit/worktree";
+  const worktree = "/workspace/project/.vibe64-local/sessions/active/unit/worktree";
   const resultDirectory = "/tmp/vibe64-command-unit";
   const supportDirectory = "/opt/vibe64-support";
   const args = commandTerminalArgs({
@@ -1357,7 +1357,7 @@ test("Vibe64 command terminal joins the target runtime network before the image"
 
 test("Vibe64 command terminal mounts the session root for worktree creation outside the repo", () => {
   const targetRoot = "/home/tenant/vibe64/beepollen";
-  const sessionRoot = "/home/tenant/.vibe64/projects/beepollen/sessions/active/unit";
+  const sessionRoot = "/home/tenant/vibe64/beepollen/.vibe64-local/sessions/active/unit";
   const resultDirectory = "/tmp/vibe64-command-unit";
   const args = commandTerminalArgs({
     args: [
