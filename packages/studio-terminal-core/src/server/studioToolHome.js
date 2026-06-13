@@ -27,12 +27,24 @@ function studioToolHomeDockerArgs({
   source = STUDIO_TOOL_HOME_VOLUME
 } = {}) {
   return [
-    "-v",
-    `${source || STUDIO_TOOL_HOME_VOLUME}:${STUDIO_TOOL_HOME_PATH}`,
+    ...studioToolHomeVolumeDockerArgs({
+      source
+    }),
     "-e",
     `HOME=${STUDIO_TOOL_HOME_PATH}`,
     "-e",
     `NPM_CONFIG_PREFIX=${STUDIO_TOOL_HOME_NPM_PREFIX}`
+  ];
+}
+
+function studioToolHomeVolumeDockerArgs({
+  readOnly = false,
+  source = STUDIO_TOOL_HOME_VOLUME,
+  target = STUDIO_TOOL_HOME_PATH
+} = {}) {
+  return [
+    "-v",
+    `${source || STUDIO_TOOL_HOME_VOLUME}:${target}${readOnly ? ":ro" : ""}`
   ];
 }
 
@@ -104,5 +116,6 @@ export {
   studioUserCommand,
   studioToolHomeDockerArgs,
   studioToolHomeSetupLines,
+  studioToolHomeVolumeDockerArgs,
   studioUserStartupScript
 };

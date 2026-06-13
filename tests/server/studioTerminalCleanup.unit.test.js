@@ -161,6 +161,11 @@ test("Studio terminal cleanup removes only dead-daemon containers and processes"
   const execFileImpl = async (command, args) => {
     calls.push([command, args]);
     if (command === "docker" && args[0] === "ps") {
+      if (args.some((arg) => String(arg).includes("codex-app-server"))) {
+        return {
+          stdout: "container-app-server-dead\t996\n"
+        };
+      }
       if (args.some((arg) => String(arg).includes("target-script-terminal"))) {
         return {
           stdout: "container-target-script-dead\t998\n"
@@ -222,6 +227,7 @@ test("Studio terminal cleanup removes only dead-daemon containers and processes"
   });
 
   assert.deepEqual(result.removedContainers, [
+    "container-app-server-dead",
     "container-dead",
     "container-target-script-dead",
     "container-launch-target-dead"
@@ -238,7 +244,7 @@ test("Studio terminal cleanup removes only dead-daemon containers and processes"
       "ps",
       "-a",
       "--filter",
-      "label=vibe64.kind=codex-terminal",
+      "label=vibe64.kind=codex-app-server",
       "--format",
       "{{.ID}}\t{{.Label \"vibe64.daemon-pid\"}}\t{{.Label \"vibe64.daemon-id\"}}"
     ]
@@ -249,7 +255,7 @@ test("Studio terminal cleanup removes only dead-daemon containers and processes"
       "ps",
       "-a",
       "--filter",
-      "label=vibe64.kind=target-script-terminal",
+      "label=vibe64.kind=codex-terminal",
       "--format",
       "{{.ID}}\t{{.Label \"vibe64.daemon-pid\"}}\t{{.Label \"vibe64.daemon-id\"}}"
     ]
@@ -260,7 +266,7 @@ test("Studio terminal cleanup removes only dead-daemon containers and processes"
       "ps",
       "-a",
       "--filter",
-      "label=vibe64.kind=toolchain",
+      "label=vibe64.kind=target-script-terminal",
       "--format",
       "{{.ID}}\t{{.Label \"vibe64.daemon-pid\"}}\t{{.Label \"vibe64.daemon-id\"}}"
     ]
@@ -271,14 +277,25 @@ test("Studio terminal cleanup removes only dead-daemon containers and processes"
       "ps",
       "-a",
       "--filter",
-      "label=vibe64.kind=launch-target-terminal",
+      "label=vibe64.kind=toolchain",
       "--format",
       "{{.ID}}\t{{.Label \"vibe64.daemon-pid\"}}\t{{.Label \"vibe64.daemon-id\"}}"
     ]
   ]);
   assert.deepEqual(calls[4], [
     "docker",
-    ["rm", "-f", "container-dead", "container-target-script-dead", "container-launch-target-dead"]
+    [
+      "ps",
+      "-a",
+      "--filter",
+      "label=vibe64.kind=launch-target-terminal",
+      "--format",
+      "{{.ID}}\t{{.Label \"vibe64.daemon-pid\"}}\t{{.Label \"vibe64.daemon-id\"}}"
+    ]
+  ]);
+  assert.deepEqual(calls[5], [
+    "docker",
+    ["rm", "-f", "container-app-server-dead", "container-dead", "container-target-script-dead", "container-launch-target-dead"]
   ]);
 });
 

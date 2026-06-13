@@ -178,6 +178,114 @@ function fakeChild({
   return child;
 }
 
+class FakeWebSocket {
+  static instances = [];
+
+  constructor(url, options = {}) {
+    this.closed = false;
+    this.listeners = new Map();
+    this.options = options;
+    this.sent = [];
+    this.url = url;
+    FakeWebSocket.instances.push(this);
+  }
+
+  addEventListener(eventName, listener) {
+    const listeners = this.listeners.get(eventName) || [];
+    listeners.push(listener);
+    this.listeners.set(eventName, listeners);
+  }
+
+  removeEventListener(eventName, listener) {
+    const listeners = this.listeners.get(eventName) || [];
+    this.listeners.set(eventName, listeners.filter((entry) => entry !== listener));
+  }
+
+  emit(eventName, event = {}) {
+    for (const listener of this.listeners.get(eventName) || []) {
+      listener(event);
+    }
+  }
+
+  send(payload) {
+    this.sent.push(JSON.parse(payload));
+  }
+
+  close() {
+    this.closed = true;
+    this.emit("close");
+  }
+}
+
+class ResponsiveFakeWebSocket extends FakeWebSocket {
+  constructor(...args) {
+    super(...args);
+    queueMicrotask(() => this.emit("open"));
+  }
+
+  send(payload) {
+    super.send(payload);
+    const message = this.sent.at(-1);
+    if (message?.id && message.method === "initialize") {
+      queueMicrotask(() => this.emit("message", {
+        data: JSON.stringify({
+          id: message.id,
+          result: {
+            platformOs: "linux"
+          }
+        })
+      }));
+    }
+  }
+}
+
+class FirstErrorThenResponsiveFakeWebSocket extends FakeWebSocket {
+  static constructorCount = 0;
+
+  constructor(...args) {
+    super(...args);
+    this.shouldFail = FirstErrorThenResponsiveFakeWebSocket.constructorCount < 2;
+    FirstErrorThenResponsiveFakeWebSocket.constructorCount += 1;
+    queueMicrotask(() => {
+      if (this.shouldFail) {
+        this.emit("error", new Error("unresponsive"));
+        return;
+      }
+      this.emit("open");
+    });
+  }
+
+  send(payload) {
+    super.send(payload);
+    const message = this.sent.at(-1);
+    if (!this.shouldFail && message?.id && message.method === "initialize") {
+      queueMicrotask(() => this.emit("message", {
+        data: JSON.stringify({
+          id: message.id,
+          result: {
+            platformOs: "linux"
+          }
+        })
+      }));
+    }
+  }
+}
+
+async function completeInitialize(socket) {
+  socket.emit("open");
+  await waitForCondition(() => socket.sent.length >= 1, "Codex app-server initialize was not sent.");
+  const initializeRequest = socket.sent.find((entry) => entry.method === "initialize" && entry.id);
+  assert.ok(initializeRequest);
+  socket.emit("message", {
+    data: JSON.stringify({
+      id: initializeRequest.id,
+      result: {
+        platformOs: "linux"
+      }
+    })
+  });
+}
+
 test("codex provider runtime base uses explicit Vibe64 runtime directory", () => {
   assert.equal(
     codexAppServerRuntimeBaseDir({
@@ -209,6 +317,16 @@ test("codex provider scopes default runtime directory by target root", () => {
   assert.notEqual(first, second);
 });
 
+test("codex provider fallback runtime base stays under the target root when XDG runtime is unavailable", () => {
+  assert.equal(
+    codexAppServerRuntimeBaseDir({
+      env: {},
+      targetRoot: "/home/tenant/vibe64/beepollen"
+    }),
+    "/home/tenant/vibe64/beepollen/.vibe64/runtime/agent-providers"
+  );
+});
+
 test("codex provider reuses a live app-server runtime from Vibe64 metadata", async () => {
   await withTemporaryDirectory(async (runtimeDir) => {
     const metadata = metadataForRuntime(runtimeDir);
@@ -219,13 +337,51 @@ test("codex provider reuses a live app-server runtime from Vibe64 metadata", asy
       runtimeDir,
       spawn() {
         throw new Error("spawn must not be called when metadata is live");
-      }
+      },
+      WebSocketImpl: ResponsiveFakeWebSocket
     });
 
     assert.equal(runtime.reused, true);
     assert.equal(runtime.endpoint, metadata.endpoint);
     assert.equal(runtime.provider, CODEX_APP_SERVER_PROVIDER_ID);
     assert.equal(runtime.transport, CODEX_APP_SERVER_TRANSPORT.UNIX);
+  });
+});
+
+test("codex provider replaces a runtime whose socket exists but does not answer", async () => {
+  await withTemporaryDirectory(async (runtimeDir) => {
+    FirstErrorThenResponsiveFakeWebSocket.constructorCount = 0;
+    const metadata = metadataForRuntime(runtimeDir);
+    await writeFile(metadata.socketPath, "");
+    await writeMetadata(runtimeDir, metadata);
+    const spawnCalls = [];
+    const runtime = await ensureCodexAppServerRuntime({
+      authStateSignature: metadata.authStateSignature,
+      readyTimeoutMs: 2000,
+      runtimeDir,
+      spawn(command, args, options) {
+        if (command === "docker" && args[0] === "run") {
+          writeFileSync(socketPathForRuntime(runtimeDir), "");
+        }
+        spawnCalls.push({
+          args,
+          command,
+          options
+        });
+        return fakeChild({
+          emitClose: command !== "docker" || args[0] !== "run"
+        });
+      },
+      WebSocketImpl: FirstErrorThenResponsiveFakeWebSocket
+    });
+
+    assert.equal(runtime.reused, false);
+    assert.equal(spawnCalls.length, 2);
+    assert.equal(spawnCalls[0].command, "docker");
+    assert.deepEqual(spawnCalls[0].args.slice(0, 2), ["rm", "-f"]);
+    assert.equal(spawnCalls[1].command, "docker");
+    assert.equal(spawnCalls[1].args[0], "run");
+    assert.equal(FirstErrorThenResponsiveFakeWebSocket.constructorCount, 3);
   });
 });
 
@@ -256,6 +412,7 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
         });
       },
       targetRoot,
+      WebSocketImpl: ResponsiveFakeWebSocket,
       workdir
     });
 
@@ -322,6 +479,7 @@ test("codex provider namespaces app-server Docker container only when runtime na
           });
         },
         targetRoot,
+        WebSocketImpl: ResponsiveFakeWebSocket,
         workdir
       });
 
@@ -359,7 +517,8 @@ test("codex provider removes stale app-server container before replacing old run
         return fakeChild({
           emitClose: command !== "docker" || args[0] !== "run"
         });
-      }
+      },
+      WebSocketImpl: ResponsiveFakeWebSocket
     });
 
     assert.equal(runtime.reused, false);
@@ -416,7 +575,8 @@ test("codex provider replaces a live app-server when Codex auth state changes", 
         return fakeChild({
           emitClose: command !== "docker" || args[0] !== "run"
         });
-      }
+      },
+      WebSocketImpl: ResponsiveFakeWebSocket
     });
 
     assert.notEqual(oldAuthStateSignature, newAuthStateSignature);
@@ -477,7 +637,8 @@ test("codex provider can still start a native app-server when explicitly request
           unref() {}
         };
       },
-      useDocker: false
+      useDocker: false,
+      WebSocketImpl: ResponsiveFakeWebSocket
     });
 
     assert.equal(runtime.reused, false);
@@ -518,18 +679,11 @@ test("codex provider closes a connected client when Codex auth state changes", a
     });
 
     const connect = provider.connect();
-    await waitForCondition(() => FakeWebSocket.instances.length === 1, "Codex app-server client was not opened.");
-    const socket = FakeWebSocket.instances[0];
-    socket.emit("open");
-    await waitForCondition(() => socket.sent.length === 1, "Codex app-server initialize was not sent.");
-    socket.emit("message", {
-      data: JSON.stringify({
-        id: socket.sent[0].id,
-        result: {
-          platformOs: "linux"
-        }
-      })
-    });
+    await waitForCondition(() => FakeWebSocket.instances.length === 1, "Codex app-server liveness client was not opened.");
+    await completeInitialize(FakeWebSocket.instances[0]);
+    await waitForCondition(() => FakeWebSocket.instances.length === 2, "Codex app-server client was not opened.");
+    const socket = FakeWebSocket.instances[1];
+    await completeInitialize(socket);
     await connect;
 
     assert.ok(provider.client);
@@ -539,7 +693,10 @@ test("codex provider closes a connected client when Codex auth state changes", a
     await writeCodexAuthMarker(systemRoot, {
       updatedAt: "2026-06-04T00:01:00.000Z"
     });
-    const runtime = await provider.ensureRuntime();
+    const ensure = provider.ensureRuntime();
+    await waitForCondition(() => FakeWebSocket.instances.length === 3, "Replacement Codex app-server liveness client was not opened.");
+    await completeInitialize(FakeWebSocket.instances[2]);
+    const runtime = await ensure;
 
     assert.equal(runtime.reused, false);
     assert.equal(provider.client, null);
@@ -605,45 +762,6 @@ test("codex turn input uses the app-server text input shape", () => {
     }
   ]);
 });
-
-class FakeWebSocket {
-  static instances = [];
-
-  constructor(url, options = {}) {
-    this.closed = false;
-    this.listeners = new Map();
-    this.options = options;
-    this.sent = [];
-    this.url = url;
-    FakeWebSocket.instances.push(this);
-  }
-
-  addEventListener(eventName, listener) {
-    const listeners = this.listeners.get(eventName) || [];
-    listeners.push(listener);
-    this.listeners.set(eventName, listeners);
-  }
-
-  removeEventListener(eventName, listener) {
-    const listeners = this.listeners.get(eventName) || [];
-    this.listeners.set(eventName, listeners.filter((entry) => entry !== listener));
-  }
-
-  emit(eventName, event = {}) {
-    for (const listener of this.listeners.get(eventName) || []) {
-      listener(event);
-    }
-  }
-
-  send(payload) {
-    this.sent.push(JSON.parse(payload));
-  }
-
-  close() {
-    this.closed = true;
-    this.emit("close");
-  }
-}
 
 test("codex JSON-RPC client sends initialize and turn/start over WebSocket", async () => {
   FakeWebSocket.instances = [];

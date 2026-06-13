@@ -648,6 +648,7 @@ function maskedCodexTerminalDockerArgs(args = []) {
 }
 
 function createCodexTerminalController({
+  codexAppServerProviderOptions = {},
   codexAppServerProviderFactory = createCodexAppServerAgentProvider,
   codexAppServerPromptDeliveryEnabled = CODEX_APP_SERVER_PROMPT_DELIVERY_ENABLED,
   fixJobStore = defaultFixCodexJobStore,
@@ -680,6 +681,7 @@ function createCodexTerminalController({
   function codexAppServerRuntimeOptionsFromSession(session = {}) {
     const metadata = session.metadata || {};
     return {
+      ...codexAppServerProviderOptions,
       runtimeDir: normalizeText(metadata.codex_app_server_runtime_dir),
       targetRoot: terminalTargetRoot(session, projectService),
       workdir: terminalWorktreePath(session)
@@ -693,6 +695,10 @@ function createCodexTerminalController({
       normalizeText(metadata.codex_app_server_runtime_dir) ||
       normalizeText(metadata.codex_app_server_socket_path)
     );
+  }
+
+  function codexAppServerProviderUsesDocker() {
+    return codexAppServerProviderOptions.useDocker !== false;
   }
 
   function codexAppServerThreadStatus(thread = {}) {
@@ -2058,8 +2064,11 @@ function createCodexTerminalController({
       message: "Preparing Codex app-server for this session."
     });
     try {
-      await ensureTargetRuntimeNetwork(targetRoot);
+      if (codexAppServerProviderUsesDocker()) {
+        await ensureTargetRuntimeNetwork(targetRoot);
+      }
       const provider = codexAppServerProviderForSession(sessionId, {
+        ...codexAppServerProviderOptions,
         targetRoot,
         workdir
       });
@@ -2134,8 +2143,11 @@ function createCodexTerminalController({
       message: "Preparing Codex app-server for this session."
     });
     try {
-      await ensureTargetRuntimeNetwork(targetRoot);
+      if (codexAppServerProviderUsesDocker()) {
+        await ensureTargetRuntimeNetwork(targetRoot);
+      }
       const provider = codexAppServerProviderForSession(sessionId, {
+        ...codexAppServerProviderOptions,
         targetRoot,
         workdir
       });

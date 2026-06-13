@@ -1,4 +1,5 @@
 import { createCodexTerminalController } from "./codexTerminal.js";
+import process from "node:process";
 import {
   createCommandTerminalController,
   createProjectToolTerminalController
@@ -13,11 +14,35 @@ import {
   terminalTargetRoot,
   terminalWorktreePath
 } from "./terminalShared.js";
+import {
+  VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV
+} from "@local/vibe64-core/server/studioRoots";
 
 const CODEX_AFTER_COMMAND_THREAD_PREP_ENABLED = false;
 
+function truthyEnvFlag(value = "") {
+  return /^(1|true|yes|on)$/iu.test(String(value || "").trim());
+}
+
+function selfTargetCodexAppServerProviderOptions({
+  codexTerminalController = {},
+  env = process.env
+} = {}) {
+  const existing = {
+    ...(codexTerminalController.codexAppServerProviderOptions || {})
+  };
+  if (
+    truthyEnvFlag(env[VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV]) &&
+    existing.useDocker === undefined
+  ) {
+    existing.useDocker = false;
+  }
+  return existing;
+}
+
 function createService({
   codexTerminalController = {},
+  env = process.env,
   projectService,
   publishSessionChanged = {}
 } = {}) {
@@ -27,6 +52,10 @@ function createService({
 
   const codex = createCodexTerminalController({
     ...codexTerminalController,
+    codexAppServerProviderOptions: selfTargetCodexAppServerProviderOptions({
+      codexTerminalController,
+      env
+    }),
     projectService,
     publishPromptInjected: publishSessionChanged.codexPrompt,
     publishSessionChanged: publishSessionChanged.codexTerminal

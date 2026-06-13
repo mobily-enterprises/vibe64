@@ -35,9 +35,13 @@ import {
 } from "@local/studio-terminal-core/server/launchTargetTerminal";
 import {
   VIBE64_RUNTIME_NAMESPACE_ENV,
+  STUDIO_TOOL_HOME_PATH,
   runtimeNamespace,
   studioDaemonDockerEnvArgs
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
+import {
+  studioToolHomeVolumeDockerArgs
+} from "@local/studio-terminal-core/server/studioToolHome";
 import {
   resolveProviderHomesRoot
 } from "@local/studio-terminal-core/server/providerHomes";
@@ -63,6 +67,7 @@ const DEFAULT_LAUNCH_PORT = 4100;
 const JSKIT_SELF_TARGET_SOURCE = "target_package:vibe64";
 const JSKIT_SELF_TARGET_PREVIEW_PROXY_PORT_BASE = 50000;
 const JSKIT_SELF_TARGET_PREVIEW_PROXY_PORT_SPAN = 100;
+const JSKIT_SELF_TARGET_CODEX_HOME = path.posix.join(STUDIO_TOOL_HOME_PATH, ".codex");
 const VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT_ENV = "VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT";
 const BUILT_LAUNCH_COMMAND_CONFIG = ".jskit/config/testrun_command";
 const BUILT_LAUNCH_PORT_CONFIG = ".jskit/config/server_port_for_user_review";
@@ -577,6 +582,14 @@ function jskitSelfTargetReproDockerArgs(env = process.env) {
     : [];
 }
 
+function jskitSelfTargetCodexDockerArgs() {
+  return [
+    ...studioToolHomeVolumeDockerArgs(),
+    "-e",
+    `CODEX_HOME=${JSKIT_SELF_TARGET_CODEX_HOME}`
+  ];
+}
+
 function jskitSelfTargetRootConfig({
   enabled = false,
   launchPort = DEFAULT_LAUNCH_PORT,
@@ -613,6 +626,7 @@ function jskitSelfTargetRootConfig({
       ...dockerRootEnvArgs(VIBE64_PROVIDER_HOMES_ROOT_ENV, resolvedProviderHomesRoot, {
         ensure: true
       }),
+      ...jskitSelfTargetCodexDockerArgs(),
       ...dockerRootEnvArgs(VIBE64_SYSTEM_ROOT_ENV, resolvedSystemRoot, {
         ensure: true
       }),

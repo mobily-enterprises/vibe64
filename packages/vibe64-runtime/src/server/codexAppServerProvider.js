@@ -505,7 +505,7 @@ async function readCodexAppServerMetadata(runtimeDir = "") {
 }
 
 async function writeCodexAppServerMetadata(runtimeDir = "", metadata = {}) {
-  await ensurePrivateDirectory(runtimeDir);
+  await ensureWritablePrivateDirectory(runtimeDir);
   const metadataPath = codexAppServerMetadataPath(runtimeDir);
   const tempPath = `${metadataPath}.${process.pid}.${randomUUID()}.tmp`;
   await writeFile(tempPath, `${JSON.stringify(metadata, null, 2)}\n`, {
@@ -514,6 +514,44 @@ async function writeCodexAppServerMetadata(runtimeDir = "", metadata = {}) {
   await chmod(tempPath, 0o600).catch(() => null);
   await rename(tempPath, metadataPath);
   await chmod(metadataPath, 0o600).catch(() => null);
+}
+
+async function codexAppServerEndpointIsResponsive(endpoint = "", {
+  timeoutMs = CODEX_APP_SERVER_LIVENESS_TIMEOUT_MS,
+  WebSocketImpl = WebSocket
+} = {}) {
+  const normalizedEndpoint = normalizeAgentText(endpoint);
+  const socketPath = socketPathFromCodexAppServerEndpoint(normalizedEndpoint);
+  if (!socketPath || !await fileExists(socketPath)) {
+    return false;
+  }
+  const normalizedTimeoutMs = normalizePositiveInteger(timeoutMs, CODEX_APP_SERVER_LIVENESS_TIMEOUT_MS);
+  const client = new CodexAppServerJsonRpcClient({
+    endpoint: normalizedEndpoint,
+    requestTimeoutMs: normalizedTimeoutMs,
+    WebSocketImpl
+  });
+  let timeout = null;
+  const probe = (async () => {
+    await client.connect();
+    await client.initialize();
+    return true;
+  })();
+  probe.catch(() => null);
+  try {
+    return await Promise.race([
+      probe,
+      new Promise((resolve) => {
+        timeout = setTimeout(() => resolve(false), normalizedTimeoutMs);
+        timeout.unref?.();
+      })
+    ]) === true;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timeout);
+    client.close();
+  }
 }
 
 async function codexAppServerMetadataIsLive(metadata = {}, options = {}) {
@@ -525,7 +563,10 @@ async function codexAppServerMetadataIsLive(metadata = {}, options = {}) {
   if (normalized.authStateSignature !== authStateSignature) {
     return false;
   }
-  return processIsAlive(normalized.pid) && await fileExists(normalized.socketPath);
+  if (!processIsAlive(normalized.pid)) {
+    return false;
+  }
+  return codexAppServerEndpointIsResponsive(normalized.endpoint, options);
 }
 
 async function fileExists(filePath = "") {
@@ -567,7 +608,7 @@ async function acquireRuntimeLock(runtimeDir = "", {
   timeoutMs = CODEX_APP_SERVER_LOCK_TIMEOUT_MS
 } = {}) {
   await prepareCodexAttachmentRoot();
-  await ensurePrivateDirectory(runtimeDir);
+  await ensureWritablePrivateDirectory(runtimeDir);
   const lockDir = codexAppServerLockDir(runtimeDir);
   const startedAt = Date.now();
   while (Date.now() - startedAt <= timeoutMs) {
@@ -605,7 +646,8 @@ async function acquireRuntimeLock(runtimeDir = "", {
 }
 
 async function waitForCodexAppServer(endpoint = "", {
-  timeoutMs = CODEX_APP_SERVER_READY_TIMEOUT_MS
+  timeoutMs = CODEX_APP_SERVER_READY_TIMEOUT_MS,
+  WebSocketImpl = WebSocket
 } = {}) {
   const socketPath = socketPathFromCodexAppServerEndpoint(endpoint);
   if (!socketPath) {
@@ -613,7 +655,11 @@ async function waitForCodexAppServer(endpoint = "", {
   }
   const startedAt = Date.now();
   while (Date.now() - startedAt <= timeoutMs) {
-    if (await fileExists(socketPath)) {
+    const remainingMs = Math.max(1, timeoutMs - (Date.now() - startedAt));
+    if (await codexAppServerEndpointIsResponsive(endpoint, {
+      timeoutMs: Math.min(CODEX_APP_SERVER_LIVENESS_TIMEOUT_MS, remainingMs),
+      WebSocketImpl
+    })) {
       return true;
     }
     await delay(100);
@@ -630,6 +676,7 @@ async function startCodexAppServerProcess({
   spawn = defaultSpawn,
   systemRoot = "",
   targetRoot = "",
+  WebSocketImpl = WebSocket,
   workdir = "",
   runtimeDir = codexAppServerRuntimeDir({
     env,
@@ -638,7 +685,7 @@ async function startCodexAppServerProcess({
   }),
   useDocker = true
 } = {}) {
-  await ensurePrivateDirectory(runtimeDir);
+  await ensureWritablePrivateDirectory(runtimeDir);
   const resolvedAuthStateSignature = await currentCodexAuthStateSignature({
     authStateSignature,
     env,
@@ -692,7 +739,8 @@ async function startCodexAppServerProcess({
   }
 
   const ready = await waitForCodexAppServer(endpoint, {
-    timeoutMs: readyTimeoutMs
+    timeoutMs: readyTimeoutMs,
+    WebSocketImpl
   });
   if (!ready) {
     const logTail = await tailTextFile(logPath);
@@ -730,7 +778,7 @@ async function ensureCodexAppServerRuntime(options = {}) {
     ...options,
     authStateSignature
   };
-  await ensurePrivateDirectory(runtimeDir);
+  await ensureWritablePrivateDirectory(runtimeDir);
 
   const existing = await readCodexAppServerMetadata(runtimeDir);
   if (existing && await codexAppServerMetadataIsLive(existing, runtimeOptions)) {

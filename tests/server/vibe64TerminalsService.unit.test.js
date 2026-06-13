@@ -115,6 +115,9 @@ import {
 import {
   runtimeNetworkName
 } from "@local/studio-terminal-core/server/runtimeContainers";
+import {
+  VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV
+} from "@local/vibe64-core/server/studioRoots";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 import {
   assertDockerEnv,
@@ -1603,6 +1606,72 @@ test("Vibe64 Codex app-server preparation failure is persisted as a visible back
     assert.deepEqual(publishReasons.map((entry) => entry.reason), [
       "codex-app-server-failed"
     ]);
+  });
+});
+
+test("Vibe64 self-target Codex app-server uses native provider control", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "self_target_native_codex_app_server";
+    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
+    const worktree = path.join(sessionRoot, "worktree");
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "worktree_created",
+      metadata: {
+        worktree_path: worktree
+      },
+      sessionId
+    });
+    await mkdir(worktree, {
+      recursive: true
+    });
+
+    const providerOptions = [];
+    const terminalService = createService({
+      codexTerminalController: {
+        codexAppServerProviderFactory(options = {}) {
+          providerOptions.push(options);
+          return {
+            ensureRuntime: async () => ({
+              containerEndpoint: "unix:///tmp/vibe64-self-target-test.sock",
+              endpoint: "unix:///tmp/vibe64-self-target-test.sock",
+              runtimeDir: path.join(targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server-test"),
+              socketPath: "/tmp/vibe64-self-target-test.sock",
+              transport: "unix"
+            }),
+            sendTurn: async () => ({
+              id: "turn-1",
+              status: "completed"
+            }),
+            startThread: async () => ({
+              id: "00000000-0000-4000-8000-000000000005",
+              status: "completed"
+            }),
+            subscribe: () => () => null
+          };
+        }
+      },
+      env: {
+        [VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV]: "1"
+      },
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return runtime;
+        }
+      }
+    });
+
+    const result = await terminalService.ensureCodexThread(sessionId);
+
+    assert.equal(result.ok, true);
+    assert.equal(result.codexThreadReady, true);
+    assert.equal(providerOptions.length, 1);
+    assert.equal(providerOptions[0].useDocker, false);
+    assert.equal(providerOptions[0].targetRoot, targetRoot);
+    assert.equal(providerOptions[0].workdir, worktree);
   });
 });
 

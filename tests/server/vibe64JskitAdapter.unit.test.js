@@ -38,6 +38,8 @@ import {
   createJskitSetupDoctorPlugin
 } from "@local/vibe64-adapters/server/adapters/jskit/setupDoctorPlugin";
 import {
+  STUDIO_TOOL_HOME_PATH,
+  STUDIO_TOOL_HOME_VOLUME,
   VIBE64_RUNTIME_NAMESPACE_ENV
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
@@ -387,6 +389,8 @@ test("jskit Vibe64 self-target enables host Docker with shared project runtime d
     assertDockerVolumeMount(args, projectsRoot, projectsRoot);
     assertDockerVolumeMount(args, providerHomesRoot, providerHomesRoot);
     assertDockerVolumeMount(args, selfTargetSystemRoot, selfTargetSystemRoot);
+    assertDockerVolumeMount(args, STUDIO_TOOL_HOME_VOLUME, STUDIO_TOOL_HOME_PATH);
+    assertDockerEnv(args, "CODEX_HOME", `${STUDIO_TOOL_HOME_PATH}/.codex`);
     assert.notEqual(selfTargetSystemRoot, parentSystemRoot);
     assert.equal(
       spec.metadata.vibe64SelfTarget,
@@ -402,6 +406,7 @@ test("jskit Vibe64 self-target enables host Docker with shared project runtime d
     const launchHome = path.join(sessionRoot, "runtime", "launch-home", "unit-terminal");
     assertDockerVolumeMount(args, launchHome, launchHome);
     assert.ok(args.at(-1).includes(`HOME=${launchHome}`));
+    assert.ok(args.at(-1).includes("mkdir -p \"$CODEX_HOME\""));
     assert.doesNotMatch(args.at(-1), /HOME=\/tmp\/studio-home/u);
   }))));
 });

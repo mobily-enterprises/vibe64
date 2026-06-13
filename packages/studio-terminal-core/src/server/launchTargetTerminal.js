@@ -474,6 +474,10 @@ function webLaunchTargetStartupScript({
     `mkdir -p ${shellQuote(homePath)}`,
     "if [ \"$(id -u)\" = \"0\" ] && [ -n \"${VIBE64_HOST_UID:-}\" ] && [ -n \"${VIBE64_HOST_GID:-}\" ] && command -v setpriv >/dev/null 2>&1; then",
     `  chown -R "$VIBE64_HOST_UID:$VIBE64_HOST_GID" ${shellQuote(homePath)}`,
+    "  if [ -n \"${CODEX_HOME:-}\" ]; then",
+    "    mkdir -p \"$CODEX_HOME\"",
+    "    chown -R \"$VIBE64_HOST_UID:$VIBE64_HOST_GID\" \"$CODEX_HOME\"",
+    "  fi",
     "  docker_group_args=\"--clear-groups\"",
     "  if [ -S /var/run/docker.sock ]; then",
     "    docker_sock_gid=\"$(stat -c '%g' /var/run/docker.sock 2>/dev/null || true)\"",
@@ -482,6 +486,9 @@ function webLaunchTargetStartupScript({
     "    fi",
     "  fi",
     `  exec setpriv --reuid "$VIBE64_HOST_UID" --regid "$VIBE64_HOST_GID" $docker_group_args env HOME=${shellQuote(homePath)} bash -lc ${shellQuote(runCommand)}`,
+    "fi",
+    "if [ -n \"${CODEX_HOME:-}\" ]; then",
+    "  mkdir -p \"$CODEX_HOME\"",
     "fi",
     `exec env HOME=${shellQuote(homePath)} bash -lc ${shellQuote(runCommand)}`
   ].join("\n");
