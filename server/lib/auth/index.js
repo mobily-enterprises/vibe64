@@ -15,10 +15,12 @@ import {
 } from "../runtimeProfile.js";
 import {
   authCookieValue,
-  scopedAuthCookieName,
   serializeAuthCookie,
   serializeClearedAuthCookie
 } from "./cookies.js";
+import {
+  vibe64AuthCookieNameForRuntime
+} from "@local/vibe64-core/server/authCookies";
 import {
   createFileSessionStore
 } from "./sessionStore.js";
@@ -904,10 +906,10 @@ function authCookieNameForRuntime({
   env = process.env,
   systemRoot = ""
 } = {}) {
-  const namespace = runtimeNamespace({ env });
-  return namespace
-    ? scopedAuthCookieName(`${namespace}:${path.resolve(systemRoot || "")}`)
-    : scopedAuthCookieName("");
+  return vibe64AuthCookieNameForRuntime({
+    runtimeNamespace: runtimeNamespace({ env }),
+    systemRoot
+  });
 }
 
 export {

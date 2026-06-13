@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.js",
     "./server": "./src/server/index.js",
+    "./server/authCookies": "./src/server/authCookies.js",
     "./server/core": "./src/server/core.js",
     "./server/codexAuthState": "./src/server/codexAuthState.js",
     "./server/deepFreeze": "./src/server/deepFreeze.js",

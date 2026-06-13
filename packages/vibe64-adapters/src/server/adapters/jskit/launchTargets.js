@@ -26,6 +26,9 @@ import {
   VIBE64_SELF_PREVIEW_AUTH_KIND
 } from "@local/vibe64-core/server/previewAuth";
 import {
+  vibe64AuthCookieNameForRuntime
+} from "@local/vibe64-core/server/authCookies";
+import {
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
 
@@ -220,12 +223,14 @@ main().catch((error) => {
 }
 
 function createVibe64SelfPreviewAuthProfileCommand({
+  authCookieName = "",
   vibe64User = null
 } = {}) {
+  const previewAuthCookieName = String(authCookieName || "").trim();
   const script = `
 const profileFile = String(process.env.VIBE64_PREVIEW_AUTH_PROFILE_FILE || "").trim();
 const systemRoot = String(process.env.VIBE64_SYSTEM_ROOT || "").trim();
-const runtimeNamespace = String(process.env.VIBE64_RUNTIME_NAMESPACE || "").trim().toLowerCase().replace(/[^a-z0-9_.-]+/gu, "-").replace(/^-+|-+$/gu, "");
+const previewAuthCookieName = ${JSON.stringify(previewAuthCookieName)};
 const profile = ${JSON.stringify(previewAuthProfileSeed(vibe64User))};
 
 function canonicalEmail(value = "") {
@@ -236,18 +241,11 @@ function canonicalEmail(value = "") {
   return email;
 }
 
-function scopedAuthCookieName(scope = "") {
-  if (!scope) {
-    return "vibe64_session";
-  }
-  const digest = crypto.createHash("sha256").update(scope).digest("hex").slice(0, 16);
-  return \`vibe64_session_\${digest}\`;
-}
-
 function authCookieName() {
-  return runtimeNamespace
-    ? scopedAuthCookieName(\`\${runtimeNamespace}:\${path.resolve(systemRoot)}\`)
-    : scopedAuthCookieName("");
+  if (!previewAuthCookieName) {
+    throw new Error("Vibe64 self preview auth requires a configured auth cookie name.");
+  }
+  return previewAuthCookieName;
 }
 
 function tokenDigest(token = "") {
@@ -594,6 +592,7 @@ function jskitSelfTargetRootConfig({
   enabled = false,
   launchPort = DEFAULT_LAUNCH_PORT,
   projectsRoot = "",
+  runtimeNamespace: runtimeNamespaceValue = runtimeNamespace(),
   systemRoot = ""
 } = {}) {
   if (!enabled) {
@@ -602,6 +601,7 @@ function jskitSelfTargetRootConfig({
       enabled: false,
       projectsRoot: "",
       providerHomesRoot: "",
+      runtimeNamespace: "",
       systemRoot: ""
     };
   }
@@ -646,6 +646,7 @@ function jskitSelfTargetRootConfig({
     previewProxyPortRange: jskitSelfTargetPreviewProxyPortRange(launchPort),
     projectsRoot: resolvedProjectsRoot,
     providerHomesRoot: resolvedProviderHomesRoot,
+    runtimeNamespace: String(runtimeNamespaceValue || "").trim(),
     systemRoot: resolvedSystemRoot
   };
 }
@@ -663,8 +664,19 @@ function jskitSelfTargetMetadata(config = {}) {
     vibe64SelfTargetPreviewProxyPortRange: `${config.previewProxyPortRange.start}-${config.previewProxyPortRange.end}`,
     vibe64SelfTargetProjectsRoot: config.projectsRoot,
     vibe64SelfTargetProviderHomesRoot: config.providerHomesRoot,
+    vibe64SelfTargetRuntimeNamespace: config.runtimeNamespace,
     vibe64SelfTargetSystemRoot: config.systemRoot
   };
+}
+
+function jskitSelfTargetAuthCookieName(config = {}) {
+  if (config?.enabled !== true) {
+    return "";
+  }
+  return vibe64AuthCookieNameForRuntime({
+    runtimeNamespace: config.runtimeNamespace,
+    systemRoot: config.systemRoot
+  });
 }
 
 function normalizePort(value) {
@@ -898,6 +910,7 @@ async function createJskitBuiltLaunchDescriptor({
   const previewAuthProfileCommand = {
     command: selfTarget?.enabled === true
       ? createVibe64SelfPreviewAuthProfileCommand({
+          authCookieName: jskitSelfTargetAuthCookieName(selfTarget),
           vibe64User
         })
       : createJskitPreviewAuthProfileCommand({
@@ -998,6 +1011,7 @@ async function createJskitDevLaunchDescriptor({
       migrationCommand: config.migrationCommand,
       previewAuthProfileCommand: selfTarget?.enabled === true
         ? createVibe64SelfPreviewAuthProfileCommand({
+            authCookieName: jskitSelfTargetAuthCookieName(selfTarget),
             vibe64User
           })
         : createJskitPreviewAuthProfileCommand({
@@ -1115,6 +1129,7 @@ async function createJskitLaunchTargetTerminalSpec({
         enabled: config.hostDocker,
         launchPort: port,
         projectsRoot: context.projectsRoot || "",
+        runtimeNamespace: config.runtimeNamespace,
         systemRoot: jskitSelfTargetSystemRoot({
           session,
           worktreePath: launchWorktreePath

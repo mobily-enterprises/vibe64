@@ -1,7 +1,7 @@
-import crypto from "node:crypto";
-
-const AUTH_COOKIE_NAME = "vibe64_session";
-const AUTH_COOKIE_NAME_PREFIX = "vibe64_session_";
+import {
+  VIBE64_AUTH_COOKIE_NAME as AUTH_COOKIE_NAME,
+  scopedVibe64AuthCookieName
+} from "@local/vibe64-core/server/authCookies";
 
 function parseCookies(header = "") {
   const cookies = {};
@@ -53,16 +53,7 @@ function serializeCookie(name, value, {
 }
 
 function scopedAuthCookieName(scope = "") {
-  const normalizedScope = String(scope || "").trim();
-  if (!normalizedScope) {
-    return AUTH_COOKIE_NAME;
-  }
-  const digest = crypto
-    .createHash("sha256")
-    .update(normalizedScope)
-    .digest("hex")
-    .slice(0, 16);
-  return `${AUTH_COOKIE_NAME_PREFIX}${digest}`;
+  return scopedVibe64AuthCookieName(scope);
 }
 
 function serializeAuthCookie(value, options = {}) {
