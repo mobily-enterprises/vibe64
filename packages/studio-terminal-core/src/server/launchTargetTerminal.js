@@ -387,7 +387,7 @@ function previewAuthDockerArgs({
   });
   const entries = Object.entries(env);
   const args = [];
-  if (entries.length > 0 && profilePath) {
+  if (normalizePreviewAuthKind(kind) && profilePath) {
     const profileDir = path.dirname(path.resolve(profilePath));
     args.push("-v", `${profileDir}:${profileDir}`);
     entries.push(["VIBE64_PREVIEW_AUTH_PROFILE_FILE", profilePath]);

@@ -29,6 +29,7 @@ import {
 } from "@local/vibe64-core/server/projectRequestContext";
 import {
   normalizePreviewAuthKind,
+  previewAuthCookieNames,
   previewAuthCookieHeader
 } from "@local/vibe64-core/server/previewAuth";
 import {
@@ -49,10 +50,6 @@ const PREVIEW_PROXY_TOKEN_COOKIE = "vibe64_preview_token";
 const PREVIEW_PROXY_SOCKET_DIR_ENV = "VIBE64_PREVIEW_PROXY_SOCKET_DIR";
 const PREVIEW_PROXY_DEBUG_ENV = "VIBE64_PREVIEW_DEBUG";
 const PREVIEW_PROXY_SOCKET_DIR = "/run/vibe64/apps";
-const JSKIT_AUTH_COOKIE_NAMES = Object.freeze([
-  "sb_access_token",
-  "sb_refresh_token"
-]);
 const VIBE64_LAUNCH_ALIAS_PATTERN = /^vibe64-launch-[a-f0-9]{12}$/u;
 
 function normalizePreviewTargetHref(value = "") {
@@ -261,23 +258,7 @@ function cookieNames(header = "") {
     .filter(Boolean);
 }
 
-function hasJskitAuthCookie(header = "") {
-  const names = new Set(cookieNames(header));
-  return JSKIT_AUTH_COOKIE_NAMES.some((cookieName) => names.has(cookieName));
-}
-
-function hasRealJskitAuthCookie(header = "") {
-  const cookies = parseCookies(header);
-  return JSKIT_AUTH_COOKIE_NAMES.some((cookieName) => {
-    const value = String(cookies[cookieName] || "");
-    return value && !value.startsWith("jskit-dev.");
-  });
-}
-
 function previewAuthCookieHeaderForRequest(header = "", previewAuth = null) {
-  if (hasJskitAuthCookie(header) && hasRealJskitAuthCookie(header)) {
-    return "";
-  }
   return previewAuthCookieHeader(previewAuth || {});
 }
 
@@ -319,6 +300,7 @@ async function requestBody(request) {
 
 function responseHeaders(response, {
   injected = false,
+  previewAuth = null,
   proxyOrigin = "",
   token = "",
   targetOrigin = ""
@@ -346,8 +328,38 @@ function responseHeaders(response, {
       targetOrigin
     });
   }
+  filterPreviewAuthSetCookieHeaders(headers, previewAuth);
   headers.connection = "close";
   return headers;
+}
+
+function filterPreviewAuthSetCookieHeaders(headers = {}, previewAuth = null) {
+  const ownedNames = new Set(previewAuthCookieNames(previewAuth || {}));
+  if (ownedNames.size === 0) {
+    return;
+  }
+  const headerKey = Object.hasOwn(headers, "set-cookie")
+    ? "set-cookie"
+    : Object.hasOwn(headers, "Set-Cookie")
+      ? "Set-Cookie"
+      : "";
+  if (!headerKey) {
+    return;
+  }
+  const current = headers[headerKey];
+  const entries = (Array.isArray(current) ? current : [current])
+    .filter((entry) => !ownedNames.has(setCookieName(entry)));
+  if (entries.length === 0) {
+    delete headers[headerKey];
+    return;
+  }
+  headers[headerKey] = Array.isArray(current) ? entries : entries[0];
+}
+
+function setCookieName(header = "") {
+  const firstPart = String(header || "").split(";")[0] || "";
+  const separatorIndex = firstPart.indexOf("=");
+  return (separatorIndex < 0 ? firstPart : firstPart.slice(0, separatorIndex)).trim();
 }
 
 function requestAcceptsHtml(request) {
@@ -560,6 +572,7 @@ async function proxyPreviewRequest(request, response, {
       });
       response.writeHead(targetResponse.statusCode || 200, previewResponseHeaders(targetResponse, {
         injected: true,
+        previewAuth,
         proxyOrigin,
         targetOrigin,
         token
@@ -577,6 +590,7 @@ async function proxyPreviewRequest(request, response, {
     }
 
     response.writeHead(targetResponse.statusCode || 200, previewResponseHeaders(targetResponse, {
+      previewAuth,
       proxyOrigin,
       targetOrigin,
       token

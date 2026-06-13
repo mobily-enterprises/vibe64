@@ -7,6 +7,7 @@ import {
 } from "./studioRoots.js";
 
 const JSKIT_PREVIEW_AUTH_KIND = "jskit-dev";
+const VIBE64_SELF_PREVIEW_AUTH_KIND = "vibe64-self";
 const JSKIT_DEV_AUTH_TOKEN_PREFIX = "jskit-dev.";
 const JSKIT_DEV_AUTH_ISSUER = "jskit:dev-auth";
 const JSKIT_DEV_AUTH_AUDIENCE = "authenticated";
@@ -24,9 +25,14 @@ const PREVIEW_AUTH_PROFILE = Object.freeze({
 });
 
 function normalizePreviewAuthKind(value = "") {
-  return String(value || "").trim() === JSKIT_PREVIEW_AUTH_KIND
-    ? JSKIT_PREVIEW_AUTH_KIND
-    : "";
+  const text = String(value || "").trim();
+  if (text === JSKIT_PREVIEW_AUTH_KIND) {
+    return JSKIT_PREVIEW_AUTH_KIND;
+  }
+  if (text === VIBE64_SELF_PREVIEW_AUTH_KIND) {
+    return VIBE64_SELF_PREVIEW_AUTH_KIND;
+  }
+  return "";
 }
 
 function previewAuthSecret({
@@ -77,6 +83,24 @@ function previewAuthEnvironment({
   };
 }
 
+function previewAuthCookieNames({
+  kind = "",
+  profilePath = ""
+} = {}) {
+  const normalizedKind = normalizePreviewAuthKind(kind);
+  if (normalizedKind === JSKIT_PREVIEW_AUTH_KIND) {
+    return [
+      JSKIT_DEV_ACCESS_COOKIE,
+      JSKIT_DEV_REFRESH_COOKIE
+    ];
+  }
+  if (normalizedKind === VIBE64_SELF_PREVIEW_AUTH_KIND) {
+    const profile = readVibe64SelfPreviewAuthProfile(profilePath);
+    return profile ? [profile.cookieName] : [];
+  }
+  return [];
+}
+
 function previewAuthCookieHeader({
   kind = "",
   profilePath = "",
@@ -86,7 +110,14 @@ function previewAuthCookieHeader({
   targetRoot = "",
   terminalSessionId = ""
 } = {}) {
-  if (normalizePreviewAuthKind(kind) !== JSKIT_PREVIEW_AUTH_KIND) {
+  const normalizedKind = normalizePreviewAuthKind(kind);
+  if (normalizedKind === VIBE64_SELF_PREVIEW_AUTH_KIND) {
+    const profile = readVibe64SelfPreviewAuthProfile(profilePath);
+    return profile
+      ? `${profile.cookieName}=${encodeURIComponent(profile.cookieValue)}`
+      : "";
+  }
+  if (normalizedKind !== JSKIT_PREVIEW_AUTH_KIND) {
     return "";
   }
   const secret = previewAuthSecret({
@@ -198,6 +229,23 @@ function readPreviewAuthProfile(profilePath = "") {
   return normalizePreviewAuthProfile(payload);
 }
 
+function readVibe64SelfPreviewAuthProfile(profilePath = "") {
+  const normalizedPath = String(profilePath || "").trim();
+  if (!normalizedPath) {
+    return null;
+  }
+  let payload;
+  try {
+    payload = JSON.parse(readFileSync(normalizedPath, "utf8"));
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return null;
+    }
+    throw new Error(`Cannot read Vibe64 self preview auth profile: ${String(error?.message || error)}`);
+  }
+  return normalizeVibe64SelfPreviewAuthProfile(payload);
+}
+
 function normalizePreviewAuthProfile(value = {}) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("Preview auth profile must be an object.");
@@ -220,10 +268,26 @@ function normalizePreviewAuthProfile(value = {}) {
   return profile;
 }
 
+function normalizeVibe64SelfPreviewAuthProfile(value = {}) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Vibe64 self preview auth profile must be an object.");
+  }
+  const profile = {
+    cookieName: String(value.cookieName || "").trim(),
+    cookieValue: String(value.cookieValue || "").trim()
+  };
+  if (!profile.cookieName || !profile.cookieValue) {
+    throw new Error("Vibe64 self preview auth profile requires cookieName and cookieValue.");
+  }
+  return profile;
+}
+
 export {
   JSKIT_PREVIEW_AUTH_KIND,
   PREVIEW_AUTH_PROFILE,
+  VIBE64_SELF_PREVIEW_AUTH_KIND,
   normalizePreviewAuthKind,
+  previewAuthCookieNames,
   previewAuthCookieHeader,
   previewAuthEnvironment,
   previewAuthProfilePath,
