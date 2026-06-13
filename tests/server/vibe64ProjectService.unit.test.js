@@ -67,6 +67,70 @@ test("Vibe64 project service exposes project selection before project-specific s
   });
 });
 
+test("Vibe64 project service exposes self-target project auto-select repro metadata only when opted in", async () => {
+  const previousSelfTarget = process.env.VIBE64_SELF_TARGET_SYSTEM_ROOT;
+  const previousAutoSelect = process.env.VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT;
+  try {
+    process.env.VIBE64_SELF_TARGET_SYSTEM_ROOT = "1";
+    process.env.VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT = "beepollen";
+
+    await withTemporaryRoot(async (root) => {
+      const projectsRoot = path.join(root, "projects");
+      const projectContext = createStudioProjectContext({
+        explicitProjectsRoot: projectsRoot,
+        env: {},
+        home: root
+      });
+      await projectContext.createManagedProjectRecord({
+        githubRepository: {
+          fullName: "example/beepollen"
+        },
+        slug: "beepollen"
+      });
+      const service = createService({
+        projectContext
+      });
+
+      const listed = await service.listProjects();
+
+      assert.equal(listed.ok, true);
+      assert.equal(listed.hasSelection, false);
+      assert.equal(listed.repro.selfTargetAutoSelectProject.selfTarget, true);
+      assert.equal(listed.repro.selfTargetAutoSelectProject.enabled, true);
+      assert.equal(listed.repro.selfTargetAutoSelectProject.projectSlug, "beepollen");
+    });
+
+    process.env.VIBE64_SELF_TARGET_SYSTEM_ROOT = "";
+    await withTemporaryRoot(async (root) => {
+      const service = createService({
+        projectContext: createStudioProjectContext({
+          explicitProjectsRoot: path.join(root, "projects"),
+          env: {},
+          home: root
+        })
+      });
+
+      const listed = await service.listProjects();
+
+      assert.equal(listed.ok, true);
+      assert.equal(listed.repro.selfTargetAutoSelectProject.selfTarget, false);
+      assert.equal(listed.repro.selfTargetAutoSelectProject.enabled, false);
+      assert.equal(listed.repro.selfTargetAutoSelectProject.projectSlug, "");
+    });
+  } finally {
+    if (previousSelfTarget === undefined) {
+      delete process.env.VIBE64_SELF_TARGET_SYSTEM_ROOT;
+    } else {
+      process.env.VIBE64_SELF_TARGET_SYSTEM_ROOT = previousSelfTarget;
+    }
+    if (previousAutoSelect === undefined) {
+      delete process.env.VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT;
+    } else {
+      process.env.VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT = previousAutoSelect;
+    }
+  }
+});
+
 test("Vibe64 project service treats local editor target as the selected project", async () => {
   await withTemporaryRoot(async (root) => {
     const targetRoot = path.join(root, "External App");

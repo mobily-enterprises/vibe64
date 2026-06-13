@@ -50,6 +50,8 @@ import {
   dockerEnvValue
 } from "./dockerArgsTestHelpers.js";
 
+const VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT_ENV = "VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT";
+
 async function withRuntimeNamespace(namespace, fn) {
   const previous = process.env[VIBE64_RUNTIME_NAMESPACE_ENV];
   if (namespace) {
@@ -64,6 +66,24 @@ async function withRuntimeNamespace(namespace, fn) {
       delete process.env[VIBE64_RUNTIME_NAMESPACE_ENV];
     } else {
       process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = previous;
+    }
+  }
+}
+
+async function withSelfTargetAutoSelectProject(slug, fn) {
+  const previous = process.env[VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT_ENV];
+  if (slug) {
+    process.env[VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT_ENV] = slug;
+  } else {
+    delete process.env[VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT_ENV];
+  }
+  try {
+    return await fn();
+  } finally {
+    if (previous === undefined) {
+      delete process.env[VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT_ENV];
+    } else {
+      process.env[VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT_ENV] = previous;
     }
   }
 }
@@ -296,7 +316,7 @@ test("jskit project setup checks project database readiness but not tenant conta
 });
 
 test("jskit Vibe64 self-target enables host Docker with shared project runtime data", async () => {
-  await withRuntimeNamespace("", async () => withProviderHomesRoot("", async () => withTemporaryRoot(async (targetRoot) => {
+  await withSelfTargetAutoSelectProject("beepollen", async () => withRuntimeNamespace("", async () => withProviderHomesRoot("", async () => withTemporaryRoot(async (targetRoot) => {
     const projectsRoot = path.dirname(targetRoot);
     const providerHomesRoot = path.join(projectsRoot, VIBE64_SYSTEM_DIR, "provider-homes");
     const parentSystemRoot = path.join(projectsRoot, VIBE64_SYSTEM_DIR);
@@ -343,6 +363,7 @@ test("jskit Vibe64 self-target enables host Docker with shared project runtime d
     assertDockerEnv(args, VIBE64_PROVIDER_HOMES_ROOT_ENV, providerHomesRoot);
     assertDockerEnv(args, VIBE64_SYSTEM_ROOT_ENV, selfTargetSystemRoot);
     assertDockerEnv(args, VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV, "1");
+    assertDockerEnv(args, VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT_ENV, "beepollen");
     assertDockerEnv(args, PREVIEW_PROXY_HOST_ENV, "0.0.0.0");
     assertDockerEnv(args, PREVIEW_PROXY_PUBLIC_HOST_ENV, "127.0.0.1");
     const previewProxyPortStart = dockerEnvValue(args, PREVIEW_PROXY_PORT_START_ENV);
@@ -353,6 +374,15 @@ test("jskit Vibe64 self-target enables host Docker with shared project runtime d
     assert.ok(args.includes(
       `127.0.0.1:${previewProxyPortStart}-${previewProxyPortEnd}:${previewProxyPortStart}-${previewProxyPortEnd}`
     ));
+    const startupScript = args.at(-1);
+    const projectNetworksIndex = startupScript.indexOf("Preparing Vibe64 self preview project networks.");
+    const authIndex = startupScript.indexOf("Preparing Vibe64 self preview auth session.");
+    assert.notEqual(projectNetworksIndex, -1);
+    assert.notEqual(authIndex, -1);
+    assert.ok(projectNetworksIndex < authIndex);
+    assert.match(startupScript, /createStudioProjectContext/u);
+    assert.match(startupScript, /listManagedProjects/u);
+    assert.match(startupScript, /ensureCurrentContainerConnectedToRuntimeNetwork/u);
     assert.ok(args.includes("/var/run/docker.sock:/var/run/docker.sock"));
     assertDockerVolumeMount(args, projectsRoot, projectsRoot);
     assertDockerVolumeMount(args, providerHomesRoot, providerHomesRoot);
@@ -373,7 +403,7 @@ test("jskit Vibe64 self-target enables host Docker with shared project runtime d
     assertDockerVolumeMount(args, launchHome, launchHome);
     assert.ok(args.at(-1).includes(`HOME=${launchHome}`));
     assert.doesNotMatch(args.at(-1), /HOME=\/tmp\/studio-home/u);
-  })));
+  }))));
 });
 
 test("jskit self-target preserves the current runtime namespace", async () => {
@@ -677,6 +707,7 @@ test("jskit built launch waits for the server readiness marker before opening", 
     assert.notEqual(migrateIndex, -1);
     assert.notEqual(previewAuthIndex, -1);
     assert.notEqual(serverIndex, -1);
+    assert.doesNotMatch(startupScript, /Vibe64 self preview project networks/u);
     assert.ok(buildIndex < migrateIndex);
     assert.ok(migrateIndex < previewAuthIndex);
     assert.ok(previewAuthIndex < serverIndex);
@@ -748,6 +779,7 @@ test("jskit dev launch starts backend and Vite together", async () => {
     assert.notEqual(migrateIndex, -1);
     assert.notEqual(previewAuthIndex, -1);
     assert.notEqual(serverIndex, -1);
+    assert.doesNotMatch(startupScript, /Vibe64 self preview project networks/u);
     assert.ok(migrateIndex < previewAuthIndex);
     assert.ok(previewAuthIndex < serverIndex);
     assert.match(startupScript, /VITE_API_PROXY_TARGET="http:\/\/127\.0\.0\.1:\$VIBE64_JSKIT_BACKEND_PORT"/u);

@@ -17,7 +17,8 @@ import {
   vibe64Result
 } from "@local/vibe64-core/server/serverResponses";
 import {
-  resolveStudioTargetRoot
+  resolveStudioTargetRoot,
+  VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV
 } from "@local/vibe64-core/server/studioRoots";
 import {
   createStudioProjectContext,
@@ -89,6 +90,26 @@ function projectTypeMessage(status = "", projectType = "") {
   return "Vibe64 project type is not ready.";
 }
 
+const VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT_ENV = "VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT";
+
+function selfTargetAutoSelectProjectRepro(env = process.env) {
+  const selfTarget = /^(1|true|yes|on)$/iu.test(String(env?.[VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV] || "").trim());
+  const projectSlug = selfTarget
+    ? String(env?.[VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT_ENV] || "").trim()
+    : "";
+  return {
+    enabled: Boolean(projectSlug),
+    projectSlug,
+    selfTarget
+  };
+}
+
+function projectSelectionReproMetadata() {
+  return {
+    selfTargetAutoSelectProject: selfTargetAutoSelectProjectRepro()
+  };
+}
+
 function createService({
   projectContext = null,
   targetRoot = "",
@@ -136,7 +157,10 @@ function createService({
   async function listProjectSelectionState() {
     const projectContextValue = currentProjectRequestContext();
     if (!projectContextValue?.targetRoot) {
-      return studioProjectContext.listProjects();
+      return {
+        ...await studioProjectContext.listProjects(),
+        repro: projectSelectionReproMetadata()
+      };
     }
 
     const listed = await studioProjectContext.listManagedProjects();
@@ -167,6 +191,7 @@ function createService({
       hasSelection: true,
       projects,
       projectsRoot: projectContextValue.projectsRoot || listed.projectsRoot,
+      repro: projectSelectionReproMetadata(),
       targetRoot: projectContextValue.targetRoot
     };
   }

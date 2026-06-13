@@ -10,6 +10,7 @@ import {
   launchPreviewBaseUrl,
   launchPreviewDisplayUrl,
   launchPreviewOptionsStorageKey,
+  launchPreviewRequiresProxy,
   launchPreviewToolbarStorageKey,
   launchPreviewUrl,
   launchControlScopeKey,
@@ -178,6 +179,26 @@ describe("Vibe64 launch controls", () => {
 
     expect(launchPreviewBaseUrl(actions)).toBe("http://127.0.0.1:4188/home");
     expect(launchPreviewDisplayUrl(actions)).toBe("http://127.0.0.1:4103/home");
+  });
+
+  it("does not fall back to direct URLs when preview auth requires the proxy", () => {
+    const actions = [
+      {
+        href: "http://127.0.0.1:4103/home",
+        kind: "url"
+      }
+    ];
+
+    expect(launchPreviewBaseUrl(actions, {
+      requirePreviewProxy: true
+    })).toBe("");
+    expect(launchPreviewDisplayUrl(actions)).toBe("http://127.0.0.1:4103/home");
+    expect(launchPreviewRequiresProxy({
+      previewAuth: "vibe64-self"
+    })).toBe(true);
+    expect(launchPreviewRequiresProxy({
+      previewAuth: ""
+    })).toBe(false);
   });
 
   it("does not embed raw loopback launch URLs from a public Studio host", () => {

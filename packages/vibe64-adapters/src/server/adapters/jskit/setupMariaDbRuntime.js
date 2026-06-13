@@ -119,7 +119,7 @@ function jskitMariaDbVolumeName() {
 
 function createJskitMariaDbRuntimeContainer({
   databaseName = "",
-  ensureProjectDatabase = false,
+  ensureProjectDatabase = true,
   manageProjectDatabase = true,
   required = true,
   targetRoot = ""
@@ -162,23 +162,28 @@ function createJskitMariaDbRuntimeContainer({
     label: "JSKIT MariaDB",
     notRequiredExplanation: "Managed MariaDB starts only when the JSKIT target selects the Studio-managed database endpoint.",
     ports: [],
-    readyCheck: {
-      command: [
-        "mariadb",
-        "-uroot",
-        `-p${JSKIT_MARIADB_ROOT_PASSWORD}`,
-        "-e",
-        mariaDbCapabilitySql({
-          appDatabaseName: ensureProjectDatabase ? terminalDatabaseName() : ""
-        })
-      ],
-      expected: ensureProjectDatabase
-        ? "Managed JSKIT MariaDB can create the app database and create/drop a temporary probe database."
-        : "Shared tenant JSKIT MariaDB can create/drop a temporary probe database.",
-      explanation: "The MariaDB container is reachable, but Studio could not prove DDL rights.",
-      observed: ensureProjectDatabase
-        ? "App database is present. Probe database and table created and dropped successfully."
-        : "Probe database and table created and dropped successfully."
+    readyCheck: ({ targetRoot: contextTargetRoot = "" } = {}) => {
+      const appDatabaseName = ensureProjectDatabase
+        ? terminalDatabaseName(contextTargetRoot)
+        : "";
+      return {
+        command: [
+          "mariadb",
+          "-uroot",
+          `-p${JSKIT_MARIADB_ROOT_PASSWORD}`,
+          "-e",
+          mariaDbCapabilitySql({
+            appDatabaseName
+          })
+        ],
+        expected: ensureProjectDatabase
+          ? "Managed JSKIT MariaDB can create the app database and create/drop a temporary probe database."
+          : "Shared tenant JSKIT MariaDB can create/drop a temporary probe database.",
+        explanation: "The MariaDB container is reachable, but Studio could not prove DDL rights.",
+        observed: ensureProjectDatabase
+          ? "App database is present. Probe database and table created and dropped successfully."
+          : "Probe database and table created and dropped successfully."
+      };
     },
     readyExplanation: manageProjectDatabase
       ? "The JSKIT managed MariaDB runtime is ready for target database setup."

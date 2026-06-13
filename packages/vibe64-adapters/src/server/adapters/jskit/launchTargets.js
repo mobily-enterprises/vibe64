@@ -63,6 +63,7 @@ const DEFAULT_LAUNCH_PORT = 4100;
 const JSKIT_SELF_TARGET_SOURCE = "target_package:vibe64";
 const JSKIT_SELF_TARGET_PREVIEW_PROXY_PORT_BASE = 50000;
 const JSKIT_SELF_TARGET_PREVIEW_PROXY_PORT_SPAN = 100;
+const VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT_ENV = "VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT";
 const BUILT_LAUNCH_COMMAND_CONFIG = ".jskit/config/testrun_command";
 const BUILT_LAUNCH_PORT_CONFIG = ".jskit/config/server_port_for_user_review";
 const DEV_SERVER_COMMAND_CONFIG = "config/dev_server_command";
@@ -470,6 +471,61 @@ function jskitSelfTargetSystemRoot({
   return root ? path.join(root, "runtime", "self-target-system-root") : "";
 }
 
+function createVibe64SelfTargetRuntimeNetworksCommand() {
+  const script = `
+const projectsRoot = String(process.env.VIBE64_PROJECTS_ROOT || "").trim();
+
+async function main() {
+  const { createStudioProjectContext } = await import("@local/vibe64-core/server/studioProjectContext");
+  const { ensureCurrentContainerConnectedToRuntimeNetwork } = await import("@local/studio-terminal-core/server/runtimeContainers");
+
+  if (!projectsRoot) {
+    console.log("[studio] Vibe64 self preview project networks skipped: VIBE64_PROJECTS_ROOT is not set.");
+    return;
+  }
+
+  const projectContext = createStudioProjectContext({
+    explicitProjectsRoot: projectsRoot
+  });
+  const listed = await projectContext.listManagedProjects();
+  const projects = Array.isArray(listed?.projects) ? listed.projects : [];
+  if (projects.length === 0) {
+    console.log("[studio] Vibe64 self preview project networks skipped: no managed projects found.");
+    return;
+  }
+
+  let readyCount = 0;
+  for (const project of projects) {
+    const projectRoot = String(project?.projectRoot || "").trim();
+    const slug = String(project?.slug || "").trim() || projectRoot;
+    if (!projectRoot) {
+      continue;
+    }
+    const result = await ensureCurrentContainerConnectedToRuntimeNetwork(projectRoot);
+    if (result?.reason === "not_container") {
+      console.log("[studio] Vibe64 self preview project networks skipped: not running in Docker.");
+      return;
+    }
+    readyCount += 1;
+    console.log(\`[studio] Vibe64 self preview project network is ready: \${slug}\${result?.networkName ? \` (\${result.networkName})\` : ""}.\`);
+  }
+
+  console.log(\`[studio] Vibe64 self preview project networks are ready: \${readyCount}/\${projects.length}.\`);
+}
+
+main().catch((error) => {
+  console.error(\`[studio] Vibe64 self preview project networks failed: \${String(error?.message || error)}\`);
+  process.exit(1);
+});
+`.trim();
+  return [
+    "node",
+    "--input-type=module",
+    "-e",
+    shellQuote(script)
+  ].join(" ");
+}
+
 function jskitSelfTargetPreviewProxyPortRange(launchPort = DEFAULT_LAUNCH_PORT) {
   const normalizedLaunchPort = normalizePort(launchPort);
   const portOffset = Math.max(0, normalizedLaunchPort - DEFAULT_LAUNCH_PORT);
@@ -509,6 +565,16 @@ function jskitSelfTargetPreviewProxyDockerArgs({
     "-e",
     `${PREVIEW_PROXY_PORT_END_ENV}=${range.end}`
   ];
+}
+
+function jskitSelfTargetReproDockerArgs(env = process.env) {
+  const slug = String(env?.[VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT_ENV] || "").trim();
+  return slug
+    ? [
+        "-e",
+        `${VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT_ENV}=${slug}`
+      ]
+    : [];
 }
 
 function jskitSelfTargetRootConfig({
@@ -556,6 +622,7 @@ function jskitSelfTargetRootConfig({
             `${VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV}=1`
           ]
         : []),
+      ...jskitSelfTargetReproDockerArgs(process.env),
       ...jskitSelfTargetPreviewProxyDockerArgs({
         enabled,
         launchPort
@@ -713,6 +780,7 @@ function createJskitDevCommand({
   migrationCommand = "",
   previewAuthProfileCommand = createJskitPreviewAuthProfileCommand(),
   previewAuthProfileLabel = "Preparing preview auth user.",
+  selfTargetRuntimeNetworksCommand = "",
   startupArgs = []
 } = {}) {
   const backendCommandWithArgs = commandWithStartupArgs(backendCommand, startupArgs, {
@@ -721,6 +789,12 @@ function createJskitDevCommand({
   return [
     "set -e",
     `export VIBE64_JSKIT_BACKEND_PORT=${shellQuotedNumber(backendPort)}`,
+    ...(selfTargetRuntimeNetworksCommand
+      ? [
+          "printf '\\n[studio] Preparing Vibe64 self preview project networks.\\n'",
+          selfTargetRuntimeNetworksCommand
+        ]
+      : []),
     ...(migrationCommand
       ? [
           "printf '\\n[studio] Applying database migrations.\\n'",
@@ -820,6 +894,13 @@ async function createJskitBuiltLaunchDescriptor({
       : "Preparing preview auth user.",
     networkEnv: true
   };
+  const selfTargetRuntimeNetworksCommand = selfTarget?.enabled === true
+    ? {
+        command: createVibe64SelfTargetRuntimeNetworksCommand(),
+        label: "Preparing Vibe64 self preview project networks.",
+        networkEnv: true
+      }
+    : null;
 
   return {
     commands: config.buildCommand || config.serverCommand
@@ -831,6 +912,7 @@ async function createJskitBuiltLaunchDescriptor({
                 networkEnv: false
               }
             : null,
+          selfTargetRuntimeNetworksCommand,
           migrationCommand,
           previewAuthProfileCommand,
           config.serverCommand
@@ -844,6 +926,7 @@ async function createJskitBuiltLaunchDescriptor({
             : null
         ].filter(Boolean)
       : [
+          selfTargetRuntimeNetworksCommand,
           migrationCommand,
           previewAuthProfileCommand,
           {
@@ -909,6 +992,9 @@ async function createJskitDevLaunchDescriptor({
       previewAuthProfileLabel: selfTarget?.enabled === true
         ? "Preparing Vibe64 self preview auth session."
         : "Preparing preview auth user.",
+      selfTargetRuntimeNetworksCommand: selfTarget?.enabled === true
+        ? createVibe64SelfTargetRuntimeNetworksCommand()
+        : "",
       startupArgs
     }),
     extraDockerArgs: [

@@ -49,7 +49,8 @@ import {
 } from "../../packages/vibe64-terminals/src/server/commandTerminal.js";
 import {
   createLaunchTargetTerminalController,
-  launchActionsFromOutput
+  launchActionsFromOutput,
+  launchReadinessMarkerLineSeen
 } from "../../packages/vibe64-terminals/src/server/launchTargetTerminal.js";
 import {
   codexTerminalNamespace,
@@ -202,6 +203,19 @@ test("launch terminal actions are parsed only from the first output lines", () =
   assert.equal(actions[0].label, "127.0.0.1:4100");
 });
 
+test("launch readiness markers must be emitted as standalone output lines", () => {
+  const marker = "[[VIBE64_LAUNCH_READY_V1:unit-test]]";
+
+  assert.equal(
+    launchReadinessMarkerLineSeen(`[studio] $ node -e 'console.log("${marker}")'\n`, marker),
+    false
+  );
+  assert.equal(
+    launchReadinessMarkerLineSeen(`[studio] Starting app\n\u001b[32m${marker}\u001b[0m\n`, marker),
+    true
+  );
+});
+
 test("launch terminal stop treats a missing terminal session as recovered stale state", async () => {
   const controller = createLaunchTargetTerminalController({});
   const stopped = await controller.stopTerminal("session-1", "missing-terminal");
@@ -274,6 +288,77 @@ test("launch status does not expose a preview for an exited launch terminal", as
   assert.equal(status.previewTarget.available, false);
   assert.equal(status.previewTarget.href, "");
   assert.equal(status.openTarget.previewHref, "");
+});
+
+test("launch status does not expose a preview before launch readiness", async () => {
+  const sessionId = "launch-starting-session";
+  const namespace = launchTargetTerminalNamespace(sessionId);
+  const terminal = startTerminalSession({
+    args: [
+      "-e",
+      "setInterval(() => {}, 1000)"
+    ],
+    command: process.execPath,
+    metadata: {
+      launchReady: false,
+      launchTargetId: "dev",
+      openTarget: {
+        href: "http://127.0.0.1:4100/app",
+        kind: "url",
+        label: "Open browser"
+      }
+    },
+    namespace
+  });
+  assert.equal(terminal.ok, true);
+
+  const controller = createLaunchTargetTerminalController({
+    projectService: {
+      async createRuntime() {
+        return {
+          adapter: {
+            async listLaunchTargets() {
+              return [
+                {
+                  id: "dev",
+                  label: "Run app"
+                }
+              ];
+            }
+          },
+          async getSession() {
+            return {
+              id: sessionId,
+              metadata: {
+                launch_target_id: "dev",
+                launch_target_label: "Run app",
+                launch_target_open_href: "http://127.0.0.1:4100/app",
+                launch_target_open_kind: "url",
+                launch_target_open_label: "Open browser"
+              },
+              targetRoot: "/tmp/vibe64-launch-starting"
+            };
+          },
+          projectConfig: {}
+        };
+      }
+    }
+  });
+
+  try {
+    const status = await controller.launchStatus(sessionId);
+
+    assert.equal(status.ok, true);
+    assert.equal(status.activeTerminal.running, true);
+    assert.equal(status.previewTarget.available, false);
+    assert.equal(status.previewTarget.disabledReason, "Launch target is starting.");
+    assert.equal(status.previewTarget.href, "");
+    assert.equal(status.openTarget.previewHref, "");
+  } finally {
+    await closeTerminalSession(terminal.id, {
+      namespace
+    });
+  }
 });
 
 function assertPlaywrightBrowserCache(args) {

@@ -37,6 +37,7 @@ function useVibe64LaunchControlsSurface(props) {
     minimizeTerminal,
     openAction,
     operationBusy,
+    previewTargetDisabledReason,
     refresh: refreshLaunchTargets,
     restartTerminal,
     retryTerminal,
@@ -54,6 +55,7 @@ function useVibe64LaunchControlsSurface(props) {
     terminalIndicatorState,
     terminalIsRunning,
     terminalLaunchReady,
+    terminalPreviewRequiresProxy,
     terminalStatus,
     terminalSubtitle,
     terminalTitle,
@@ -130,7 +132,9 @@ function useVibe64LaunchControlsSurface(props) {
   const previewOptions = computed(() => previewOptionsForTarget(previewOptionsTarget.value));
   const previewOptionsAvailable = computed(() => previewOptions.value.length > 0);
   const previewOptionsPrimaryLabel = computed(() => terminalIsRunning.value ? "Save and restart preview" : "Save");
-  const previewBaseUrl = computed(() => launchPreviewBaseUrl(launchActions.value));
+  const previewBaseUrl = computed(() => launchPreviewBaseUrl(launchActions.value, {
+    requirePreviewProxy: terminalPreviewRequiresProxy.value
+  }));
   const previewDisplayBaseUrl = computed(() => launchPreviewDisplayUrl(launchActions.value));
   const previewDisplayedUrl = computed(() => (
     previewVisitedUrl.value ||
@@ -151,9 +155,17 @@ function useVibe64LaunchControlsSurface(props) {
     previewUrl.value &&
     previewReadyUrl.value !== previewUrl.value
   ));
+  const previewProxyUnavailable = computed(() => Boolean(
+    terminalPreviewRequiresProxy.value &&
+    terminalLaunchReady.value &&
+    !previewBaseUrl.value
+  ));
   const previewEmptyText = computed(() => {
     if (loading.value) {
       return "Loading preview targets.";
+    }
+    if (previewProxyUnavailable.value) {
+      return previewTargetDisabledReason.value || "Preview proxy is not available.";
     }
     if (previewStarting.value || terminalIsRunning.value) {
       return "Starting preview.";

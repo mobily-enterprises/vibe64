@@ -306,6 +306,10 @@ function launchTerminalIsReady(metadata = {}) {
   return metadata?.launchReady === true || metadata?.launchReady === "true";
 }
 
+function launchPreviewRequiresProxy(metadata = {}) {
+  return Boolean(String(metadata?.previewAuth || "").trim());
+}
+
 function terminalSessionMissingError(message = "") {
   return /terminal session not found/iu.test(String(message || ""));
 }
@@ -318,6 +322,7 @@ function localPreviewBrowserHref() {
 }
 
 function launchPreviewBaseUrl(actions = [], {
+  requirePreviewProxy = false,
   studioHref = localPreviewBrowserHref()
 } = {}) {
   const previewAction = Array.isArray(actions) ? actions.find((action) => browserCanOpenTarget(action)) : null;
@@ -327,6 +332,9 @@ function launchPreviewBaseUrl(actions = [], {
       return "";
     }
     return sameSiteLoopbackPreviewUrl(previewHref, studioHref);
+  }
+  if (requirePreviewProxy) {
+    return "";
   }
   const targetHref = String(previewAction?.href || "").trim();
   if (remoteStudioCannotEmbedLoopbackTarget(targetHref, studioHref)) {
@@ -552,6 +560,11 @@ function useVibe64LaunchControls({
   });
 
   const status = computed(() => launchTargetsResource.data.value || {});
+  const previewTarget = computed(() => (
+    status.value.previewTarget && typeof status.value.previewTarget === "object" && !Array.isArray(status.value.previewTarget)
+      ? status.value.previewTarget
+      : null
+  ));
   const launchTargets = computed(() => {
     return Array.isArray(status.value.launchTargets) ? status.value.launchTargets : [];
   });
@@ -600,6 +613,15 @@ function useVibe64LaunchControls({
     ...(activeTerminal.value?.metadata || {}),
     ...(terminalMetadata.value || {})
   }));
+  const terminalPreviewRequiresProxy = computed(() => launchPreviewRequiresProxy({
+    ...(activeTerminal.value?.metadata || {}),
+    ...(terminalMetadata.value || {})
+  }));
+  const previewTargetDisabledReason = computed(() => (
+    previewTarget.value?.available === false
+      ? String(previewTarget.value?.disabledReason || "").trim()
+      : ""
+  ));
   const terminalIsRunning = computed(() => {
     const statusValue = terminalStatus.value || activeTerminal.value?.status || "";
     return statusValue === "running" || statusValue === "closing" || terminalStarting.value;
@@ -1213,6 +1235,8 @@ function useVibe64LaunchControls({
     minimizeTerminal,
     openAction,
     operationBusy,
+    previewTargetDisabledReason,
+    terminalPreviewRequiresProxy,
     previewInputIsRemembered,
     refresh,
     restartTerminal,
@@ -1263,6 +1287,7 @@ export {
   launchAutoStartAttemptStorageKey,
   launchPreviewBaseUrl,
   launchPreviewDisplayUrl,
+  launchPreviewRequiresProxy,
   launchPreviewOptionsStorageKey,
   launchPreviewToolbarStorageKey,
   launchPreviewUrl,

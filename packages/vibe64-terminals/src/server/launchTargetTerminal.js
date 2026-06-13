@@ -306,6 +306,18 @@ function launchActionsChanged(currentActions = [], nextActions = []) {
   return JSON.stringify(currentActions || []) !== JSON.stringify(nextActions || []);
 }
 
+function launchReadinessMarkerLineSeen(output = "", readinessMarker = "") {
+  const marker = String(readinessMarker || "").trim();
+  if (!marker) {
+    return false;
+  }
+  return stripAnsi(String(output || ""))
+    .replace(/\r\n/gu, "\n")
+    .replace(/\r/gu, "\n")
+    .split("\n")
+    .some((line) => line.trim() === marker);
+}
+
 async function closeStoppedLaunchTerminals(sessionId = "") {
   const namespace = launchTargetTerminalNamespace(sessionId);
   await Promise.all(listTerminalSessions({
@@ -388,6 +400,16 @@ function createLaunchTargetTerminalController({
       return {
         available: false,
         disabledReason: "Run a launch target first.",
+        href: "",
+        kind: "url",
+        label: "Preview",
+        targetHref
+      };
+    }
+    if (!launchIsReady(status.activeTerminal?.metadata || {})) {
+      return {
+        available: false,
+        disabledReason: "Launch target is starting.",
         href: "",
         kind: "url",
         label: "Preview",
@@ -619,7 +641,7 @@ function createLaunchTargetTerminalController({
                   actions
                 });
               }
-              if (!readinessMarker || launchReadyWritten || !String(output || "").includes(readinessMarker)) {
+              if (!readinessMarker || launchReadyWritten || !launchReadinessMarkerLineSeen(output, readinessMarker)) {
                 return;
               }
               launchReadyWritten = true;
@@ -728,6 +750,7 @@ function previewPublicOriginForLaunch({
 export {
   LAUNCH_METADATA,
   launchActionsFromOutput,
+  launchReadinessMarkerLineSeen,
   previewPublicOriginForLaunch,
   createLaunchTargetTerminalController
 };

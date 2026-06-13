@@ -5,6 +5,7 @@ import test from "node:test";
 
 import {
   createRuntimeContainerCheck,
+  ensureCurrentContainerConnectedToRuntimeNetwork,
   ensureRuntimeContainers,
   ensureTargetRuntimeNetwork,
   runtimeDockerNamePrefix,
@@ -147,6 +148,57 @@ test("runtime namespace is opt-in and leaves default Docker names unchanged", as
   });
 });
 
+test("current Studio container network attach rechecks Docker state after connect failure", async () => {
+  await withTemporaryRoot(async (targetRoot) => withRuntimeNamespace("retry-net", async () => {
+    const networkName = runtimeNetworkName(targetRoot);
+    const calls = [];
+    const result = await ensureCurrentContainerConnectedToRuntimeNetwork(targetRoot, {
+      containerId: "studio-container",
+      runCommand: async (command, args, options) => {
+        calls.push({
+          args,
+          command,
+          options
+        });
+        if (args[0] === "network" && args[1] === "inspect") {
+          return {
+            ok: true,
+            output: ""
+          };
+        }
+        if (args[0] === "network" && args[1] === "connect") {
+          return {
+            ok: false,
+            output: ""
+          };
+        }
+        if (args[0] === "inspect") {
+          const inspectCount = calls.filter((call) => call.args[0] === "inspect").length;
+          return {
+            ok: true,
+            stdout: inspectCount === 1 ? "{}" : JSON.stringify({
+              [networkName]: {}
+            })
+          };
+        }
+        return {
+          ok: false,
+          output: `Unexpected command: ${command} ${args.join(" ")}`
+        };
+      }
+    });
+
+    assert.deepEqual(result, {
+      connected: true,
+      containerId: "studio-container",
+      networkName
+    });
+    const connectCall = calls.find((call) => call.args[0] === "network" && call.args[1] === "connect");
+    assert.equal(connectCall.options.timeout, 30_000);
+    assert.equal(calls.filter((call) => call.args[0] === "inspect").length, 2);
+  }));
+});
+
 test("unmanaged project runtime identity slugifies local folder names", async () => {
   await withTemporaryRoot(async (root) => {
     assert.equal(
@@ -287,7 +339,7 @@ test("jskit declares MariaDB through the generic runtime container layer", async
 
     assert.equal(repair.actionId, "start-runtime-container-jskit-mariadb");
     assert.match(repair.commandPreview, /mariadb:12\.0\.2/u);
-    assert.doesNotMatch(repair.commandPreview, /MARIADB_DATABASE=/u);
+    assert.match(repair.commandPreview, /MARIADB_DATABASE=/u);
     assert.match(repair.commandPreview, /MARIADB_ROOT_PASSWORD=\*\*\*\*\*/u);
     assert.doesNotMatch(repair.commandPreview, /vibe64_jskit_root/u);
     assert.doesNotMatch(repair.commandPreview, /127\.0\.0\.1:13306:3306/u);
@@ -343,8 +395,22 @@ test("jskit MariaDB runtime is shared while databases remain project-scoped", as
     assert.equal(jskitMariaDbVolumeName(), "vibe64_jskit_mariadb_data");
     assert.match(script, /--name vibe64-jskit-mariadb/u);
     assert.match(script, /-v vibe64_jskit_mariadb_data:\/var\/lib\/mysql/u);
+    assert.match(script, /MARIADB_DATABASE=beepollen/u);
+    assert.match(script, /CREATE DATABASE IF NOT EXISTS `beepollen`/u);
     assert.equal(beepollenEnv.MYSQL_DATABASE, "beepollen");
     assert.equal(dogandgroomEnv.MYSQL_DATABASE, "dogandgroom");
+  });
+});
+
+test("jskit MariaDB project database readiness follows the normalization target root", async () => {
+  await withTemporaryRoot(async (root) => {
+    const targetRoot = path.join(root, "beepollen");
+    const script = runtimeContainerStartScript(createJskitMariaDbRuntimeContainer(), {
+      adapterId: "jskit",
+      targetRoot
+    });
+
+    assert.match(script, /CREATE DATABASE IF NOT EXISTS `beepollen`/u);
   });
 });
 
@@ -728,8 +794,8 @@ test("runtime container start script safely displays shell-quoted commands", asy
     assert.match(script, /printf '%s\\n'/u);
     assert.doesNotMatch(script, /echo '\\$ docker run/u);
     assert.doesNotMatch(script, /127\.0\.0\.1:13306:3306/u);
-    assert.doesNotMatch(script, /MARIADB_DATABASE=/u);
-    assert.doesNotMatch(script, /CREATE DATABASE IF NOT EXISTS/u);
+    assert.match(script, /MARIADB_DATABASE=/u);
+    assert.match(script, /CREATE DATABASE IF NOT EXISTS/u);
     assert.match(script, /timeout 15s docker exec vibe64-jskit-mariadb/u);
     assert.match(script, /if ! docker start vibe64-jskit-mariadb/u);
     assert.match(script, /container could not start\. Recreating the container while keeping managed volumes\./u);

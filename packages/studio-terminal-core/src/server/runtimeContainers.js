@@ -226,6 +226,11 @@ function normalizeRuntimeContainerDescriptor(descriptor = {}, {
         targetRoot: resolvedTargetRoot
       })
     : descriptor.env;
+  const descriptorReadyCheck = typeof descriptor.readyCheck === "function"
+    ? descriptor.readyCheck({
+        targetRoot: resolvedTargetRoot
+      })
+    : descriptor.readyCheck;
   const aliases = [
     id,
     ...normalizeStringArray(descriptor.aliases || descriptor.alias)
@@ -250,7 +255,7 @@ function normalizeRuntimeContainerDescriptor(descriptor = {}, {
     ports: (Array.isArray(descriptor.ports) ? descriptor.ports : [])
       .map(normalizeRuntimeContainerPort)
       .filter(Boolean),
-    readyCheck: normalizeRuntimeContainerReadyCheck(descriptor.readyCheck),
+    readyCheck: normalizeRuntimeContainerReadyCheck(descriptorReadyCheck),
     readyExplanation: normalizeText(descriptor.readyExplanation),
     required: descriptor.required,
     secretEnv: new Set(normalizeStringArray(descriptor.secretEnv || descriptor.secretEnvKeys)),
@@ -942,9 +947,10 @@ async function currentProcessIsDockerContainer() {
 }
 
 async function ensureCurrentContainerConnectedToRuntimeNetwork(targetRoot = "", {
+  containerId: explicitContainerId = "",
   runCommand = runHostCommand
 } = {}) {
-  const containerId = await currentDockerContainerId();
+  const containerId = normalizeText(explicitContainerId) || await currentDockerContainerId();
   if (!containerId) {
     return {
       connected: false,
@@ -976,15 +982,26 @@ async function ensureCurrentContainerConnectedToRuntimeNetwork(targetRoot = "", 
     networkName,
     containerId
   ], {
-    timeout: 5000
+    timeout: 30_000
   });
+  const connectOutput = String(connect.output || connect.stderr || "");
   if (
     !connect.ok &&
-    !/already (?:exists|connected)|is already connected/iu.test(String(connect.output || connect.stderr || ""))
+    !/already (?:exists|connected)|is already connected|endpoint .* already exists in network/iu.test(connectOutput)
   ) {
-    const error = new Error(`Could not connect Studio container to runtime network ${networkName}: ${connect.output || connect.stderr || "docker network connect failed"}`);
-    error.code = "vibe64_studio_network_connect_failed";
-    throw error;
+    const recheck = await runCommand("docker", [
+      "inspect",
+      "--format",
+      "{{json .NetworkSettings.Networks}}",
+      containerId
+    ], {
+      timeout: 5000
+    });
+    if (!recheck.ok || !String(recheck.stdout || recheck.output || "").includes(`"${networkName}"`)) {
+      const error = new Error(`Could not connect Studio container to runtime network ${networkName}: ${connectOutput || "docker network connect failed"}`);
+      error.code = "vibe64_studio_network_connect_failed";
+      throw error;
+    }
   }
   return {
     connected: true,

@@ -12,6 +12,7 @@ import {
 } from "@/composables/useVibe64ProjectManagement.js";
 
 const HOME_SHELL_CLASS = "studio-home-shell-active";
+const SELF_TARGET_AUTO_SELECT_DELAY_MS = 3000;
 const projectTabs = Object.freeze([
   {
     id: "preview",
@@ -40,6 +41,7 @@ function useVibe64AppPage() {
   });
   const projectLoadError = computed(() => projectSelection.loadError);
   const projects = computed(() => projectSelection.projects);
+  const selfTargetAutoSelectProjectRepro = computed(() => projectSelection.selfTargetAutoSelectProjectRepro || {});
   const targetRoot = computed(() => String(projectSelection.targetRoot || "").trim());
   const targetFolderName = computed(() => projectSlug.value || finalPathSegment(targetRoot.value));
   const developmentBasePath = computed(() => projectSlug.value ? `/app/${encodeURIComponent(projectSlug.value)}` : "/app/manage/projects");
@@ -74,6 +76,8 @@ function useVibe64AppPage() {
   ));
   const projectPaneNavigationVisible = computed(() => savedProjectTypeReady.value);
   const mobileProjectActionVisible = computed(() => projectPaneNavigationVisible.value && mobilePaneLayout.value && chatCollapsed.value);
+  let selfTargetAutoSelectTimer = 0;
+  let selfTargetAutoSelectAttemptKey = "";
 
   useStudioShellDrawer({
     hidden: true
@@ -103,6 +107,7 @@ function useVibe64AppPage() {
   });
 
   onBeforeUnmount(() => {
+    clearSelfTargetAutoSelectTimer();
     setHomeShellActive(false);
     if (typeof mobilePaneMediaQuery?.removeEventListener === "function") {
       mobilePaneMediaQuery.removeEventListener("change", syncMobilePaneLayout);
@@ -110,6 +115,19 @@ function useVibe64AppPage() {
       mobilePaneMediaQuery?.removeListener?.(syncMobilePaneLayout);
     }
     mobilePaneMediaQuery = null;
+  });
+
+  watch(() => [
+    projectSlug.value,
+    projectSelection.isLoading ? "loading" : "ready",
+    selfTargetAutoSelectProjectRepro.value?.enabled === true ? "enabled" : "disabled",
+    selfTargetAutoSelectProjectRepro.value?.selfTarget === true ? "self-target" : "normal",
+    selfTargetAutoSelectProjectRepro.value?.projectSlug || "",
+    sortedProjects.value.map((project) => project.slug).join("\0")
+  ].join("|"), () => {
+    scheduleSelfTargetProjectAutoSelect();
+  }, {
+    immediate: true
   });
 
   return {
@@ -183,6 +201,38 @@ function useVibe64AppPage() {
     void router.push(`/app/${encodeURIComponent(slug)}`);
   }
 
+  function scheduleSelfTargetProjectAutoSelect() {
+    clearSelfTargetAutoSelectTimer();
+    const targetProject = selfTargetAutoSelectProjectTarget({
+      currentSlug: projectSlug.value,
+      loading: projectSelection.isLoading,
+      projects: sortedProjects.value,
+      repro: selfTargetAutoSelectProjectRepro.value
+    });
+    if (!targetProject) {
+      return;
+    }
+    const targetSlug = String(targetProject.slug || "").trim();
+    const attemptKey = `${projectSlug.value}->${targetSlug}`;
+    if (selfTargetAutoSelectAttemptKey === attemptKey || typeof globalThis.setTimeout !== "function") {
+      return;
+    }
+    selfTargetAutoSelectTimer = globalThis.setTimeout(() => {
+      selfTargetAutoSelectTimer = 0;
+      selfTargetAutoSelectAttemptKey = attemptKey;
+      openProject(targetProject);
+    }, SELF_TARGET_AUTO_SELECT_DELAY_MS);
+  }
+
+  function clearSelfTargetAutoSelectTimer() {
+    if (!selfTargetAutoSelectTimer || typeof globalThis.clearTimeout !== "function") {
+      selfTargetAutoSelectTimer = 0;
+      return;
+    }
+    globalThis.clearTimeout(selfTargetAutoSelectTimer);
+    selfTargetAutoSelectTimer = 0;
+  }
+
   function showProjectPane() {
     if (mobilePaneLayout.value) {
       setChatCollapsed(true);
@@ -233,6 +283,26 @@ function useVibe64AppPage() {
   }
 }
 
+function selfTargetAutoSelectProjectTarget({
+  currentSlug = "",
+  loading = false,
+  projects = [],
+  repro = {}
+} = {}) {
+  const targetSlug = String(repro?.projectSlug || "").trim();
+  if (
+    repro?.enabled !== true ||
+    repro?.selfTarget !== true ||
+    !targetSlug ||
+    loading ||
+    String(currentSlug || "").trim() === targetSlug ||
+    !Array.isArray(projects)
+  ) {
+    return null;
+  }
+  return projects.find((project) => project?.slug === targetSlug) || null;
+}
+
 function finalPathSegment(pathValue = "") {
   const normalizedPath = String(pathValue || "").trim().replace(/[\\/]+$/u, "");
   if (!normalizedPath) {
@@ -255,5 +325,7 @@ function normalizedPath(pathValue = "") {
 }
 
 export {
+  SELF_TARGET_AUTO_SELECT_DELAY_MS,
+  selfTargetAutoSelectProjectTarget,
   useVibe64AppPage
 };
