@@ -43,6 +43,8 @@ import {
 const LAUNCH_BROWSER_WINDOW_FEATURES = "popup,width=1400,height=900,left=80,top=60";
 const LAUNCH_PREVIEW_TOOLBAR_POSITIONS = Object.freeze(["left", "center", "right"]);
 const LAUNCH_STATUS_POLL_INTERVAL_MS = 1000;
+const AUTO_START_ATTEMPT_COOLDOWN_MS = 30000;
+const AUTO_START_STABILITY_DELAY_MS = 750;
 const TERMINAL_STOP_POLL_INTERVAL_MS = 100;
 const TERMINAL_STOP_POLL_ATTEMPTS = 50;
 
@@ -193,6 +195,109 @@ function launchControlScopeKey(projectSlug = "", sessionId = "") {
   return `${String(projectSlug || "").trim()}::${String(sessionId || "").trim()}`;
 }
 
+function shouldScheduleLaunchAutoStart({
+  autoStartKey = "",
+  key = "",
+  launchButtonsDisabled = false,
+  loading = false,
+  operationBusy = false,
+  sessionId = "",
+  target = null,
+  terminalDisplayed = true,
+  terminalVisible = false
+} = {}) {
+  return Boolean(
+    sessionId &&
+    target &&
+    key &&
+    !loading &&
+    !terminalVisible &&
+    !operationBusy &&
+    terminalDisplayed &&
+    !launchButtonsDisabled &&
+    autoStartKey !== key
+  );
+}
+
+function autoStartLaunchTargetsLoading({
+  launchTargetsLoading = false,
+  launchTargetsSettled = false
+} = {}) {
+  return Boolean(launchTargetsLoading || !launchTargetsSettled);
+}
+
+function browserSessionStorage() {
+  if (typeof window === "undefined" || !window.sessionStorage) {
+    return null;
+  }
+  return window.sessionStorage;
+}
+
+function launchAutoStartAttemptStorageKey(key = "") {
+  const normalized = String(key || "").trim();
+  return normalized ? `vibe64:launch-auto-start:${stableLocalStorageKeyPart(normalized)}` : "";
+}
+
+function readLaunchAutoStartAttemptCooldown(key = "", {
+  now = Date.now(),
+  storage = browserSessionStorage()
+} = {}) {
+  const storageKey = launchAutoStartAttemptStorageKey(key);
+  if (!storageKey || !storage) {
+    return 0;
+  }
+  try {
+    const record = JSON.parse(storage.getItem(storageKey) || "null");
+    const startedAt = Number(record?.startedAt || 0);
+    if (String(record?.key || "") !== String(key || "") || !Number.isFinite(startedAt) || startedAt <= 0) {
+      clearLaunchAutoStartAttempt(key, { storage });
+      return 0;
+    }
+    const remainingMs = AUTO_START_ATTEMPT_COOLDOWN_MS - (Number(now) - startedAt);
+    if (remainingMs <= 0) {
+      clearLaunchAutoStartAttempt(key, { storage });
+      return 0;
+    }
+    return remainingMs;
+  } catch {
+    clearLaunchAutoStartAttempt(key, { storage });
+    return 0;
+  }
+}
+
+function writeLaunchAutoStartAttempt(key = "", {
+  now = Date.now(),
+  storage = browserSessionStorage()
+} = {}) {
+  const storageKey = launchAutoStartAttemptStorageKey(key);
+  if (!storageKey || !storage) {
+    return false;
+  }
+  try {
+    storage.setItem(storageKey, JSON.stringify({
+      key: String(key || ""),
+      startedAt: Number(now)
+    }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function clearLaunchAutoStartAttempt(key = "", {
+  storage = browserSessionStorage()
+} = {}) {
+  const storageKey = launchAutoStartAttemptStorageKey(key);
+  if (!storageKey || !storage) {
+    return;
+  }
+  try {
+    storage.removeItem(storageKey);
+  } catch {
+    // Browser storage can be unavailable in private or constrained contexts.
+  }
+}
+
 function delay(milliseconds = 0) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
@@ -317,8 +422,15 @@ function useVibe64LaunchControls({
   const terminalExpanded = ref(false);
   const autoStartKey = ref("");
   const previewInputOverrides = ref({});
+  const autoStartCooldownVersion = ref(0);
+  const launchTargetsSettledForAutoStart = ref(false);
   let attachedTerminalId = "";
   let launchStatusPollTimer = 0;
+  let autoStartTimer = 0;
+  let autoStartCooldownTimer = 0;
+  let scheduledAutoStartKey = "";
+  let launchTargetsAutoStartRefreshKey = "";
+  let launchTargetsAutoStartRefreshToken = 0;
 
   const selectedSession = computed(() => readRefOrGetterValue(session) || null);
   const sessionId = computed(() => String(selectedSession.value?.sessionId || ""));
@@ -519,6 +631,10 @@ function useVibe64LaunchControls({
     operationBusy.value ||
     terminalIsRunning.value
   ));
+  const launchTargetsLoadingForAutoStart = computed(() => autoStartLaunchTargetsLoading({
+    launchTargetsLoading: launchTargetsResource.isLoading.value,
+    launchTargetsSettled: launchTargetsSettledForAutoStart.value
+  }));
   const terminalCanStop = computed(() => {
     return Boolean(terminalSessionId.value && (terminalStatus.value || activeTerminal.value?.status) === "running");
   });
@@ -687,6 +803,38 @@ function useVibe64LaunchControls({
     }
     window.clearTimeout(launchStatusPollTimer);
     launchStatusPollTimer = 0;
+  }
+
+  function clearAutoStartTimer() {
+    if (autoStartTimer && typeof window !== "undefined") {
+      window.clearTimeout(autoStartTimer);
+    }
+    autoStartTimer = 0;
+    scheduledAutoStartKey = "";
+  }
+
+  function clearAutoStartCooldownTimer() {
+    if (autoStartCooldownTimer && typeof window !== "undefined") {
+      window.clearTimeout(autoStartCooldownTimer);
+    }
+    autoStartCooldownTimer = 0;
+  }
+
+  function resetLaunchTargetsAutoStartSettlement() {
+    launchTargetsSettledForAutoStart.value = false;
+    launchTargetsAutoStartRefreshKey = "";
+    launchTargetsAutoStartRefreshToken += 1;
+  }
+
+  function scheduleAutoStartCooldownCheck(remainingMs = 0) {
+    clearAutoStartCooldownTimer();
+    if (typeof window === "undefined") {
+      return;
+    }
+    autoStartCooldownTimer = window.setTimeout(() => {
+      autoStartCooldownTimer = 0;
+      autoStartCooldownVersion.value += 1;
+    }, Math.max(0, Number(remainingMs) || 0) + 50);
   }
 
   function clearStaleLaunchTerminal() {
@@ -882,6 +1030,8 @@ function useVibe64LaunchControls({
     attachedTerminalId = "";
     autoStartKey.value = "";
     previewInputOverrides.value = {};
+    resetLaunchTargetsAutoStartSettlement();
+    clearAutoStartTimer();
     clearLaunchStatusPoll();
     closeTerminalSocket();
     disposeTerminalDisplay();
@@ -919,27 +1069,121 @@ function useVibe64LaunchControls({
     projectSlug.value,
     sessionId.value,
     requestedAutoStartTargetId.value,
-    launchTargetsResource.isLoading.value ? "loading" : "ready",
+    canLoadLaunchTargets.value ? "loadable" : "blocked",
+    readRefOrGetterValue(busy) ? "busy" : "idle",
+    launchTargetsResource.isLoading.value ? "loading" : "ready"
+  ].join("|"), () => {
+    const scopeKey = launchScopeKey.value;
+    if (!scopeKey || !requestedAutoStartTargetId.value || !canLoadLaunchTargets.value || readRefOrGetterValue(busy)) {
+      resetLaunchTargetsAutoStartSettlement();
+      return;
+    }
+    if (launchTargetsSettledForAutoStart.value || launchTargetsAutoStartRefreshKey === scopeKey) {
+      return;
+    }
+    if (launchTargetsResource.isLoading.value) {
+      return;
+    }
+
+    const refreshToken = launchTargetsAutoStartRefreshToken + 1;
+    launchTargetsAutoStartRefreshToken = refreshToken;
+    launchTargetsAutoStartRefreshKey = scopeKey;
+    launchTargetsSettledForAutoStart.value = false;
+    void Promise.resolve(refresh()).catch(() => null).finally(() => {
+      if (
+        disposed ||
+        refreshToken !== launchTargetsAutoStartRefreshToken ||
+        scopeKey !== launchScopeKey.value ||
+        !canLoadLaunchTargets.value ||
+        readRefOrGetterValue(busy)
+      ) {
+        return;
+      }
+      launchTargetsSettledForAutoStart.value = true;
+    });
+  }, {
+    flush: "post",
+    immediate: true
+  });
+
+  watch(() => [
+    projectSlug.value,
+    sessionId.value,
+    requestedAutoStartTargetId.value,
+    launchTargetsLoadingForAutoStart.value ? "loading" : "ready",
     terminalVisible.value ? "terminal-visible" : "terminal-hidden",
+    terminalDisplayed.value ? "displayed" : "hidden",
     operationBusy.value ? "busy" : "idle",
-    autoStartTarget.value?.id || ""
+    launchButtonsDisabled.value ? "disabled" : "enabled",
+    autoStartTarget.value?.id || "",
+    autoStartCooldownVersion.value
   ].join("|"), () => {
     const target = autoStartTarget.value;
     const key = `${launchScopeKey.value}:${target?.id || ""}`;
-    if (
-      !sessionId.value ||
-      !target ||
-      launchTargetsResource.isLoading.value ||
-      terminalVisible.value ||
-      operationBusy.value ||
-      autoStartKey.value === key
-    ) {
+    const ready = shouldScheduleLaunchAutoStart({
+      autoStartKey: autoStartKey.value,
+      key,
+      launchButtonsDisabled: launchButtonsDisabled.value,
+      loading: launchTargetsLoadingForAutoStart.value,
+      operationBusy: operationBusy.value,
+      sessionId: sessionId.value,
+      target,
+      terminalDisplayed: terminalDisplayed.value,
+      terminalVisible: terminalVisible.value
+    });
+    if (scheduledAutoStartKey === key && ready) {
       return;
     }
-    autoStartKey.value = key;
-    void run(target, {
-      applyDefaultDisplay: false
-    });
+    clearAutoStartTimer();
+    if (!ready) {
+      return;
+    }
+    const cooldownMs = readLaunchAutoStartAttemptCooldown(key);
+    if (cooldownMs > 0) {
+      scheduleAutoStartCooldownCheck(cooldownMs);
+      return;
+    }
+
+    const start = () => {
+      autoStartTimer = 0;
+      scheduledAutoStartKey = "";
+      const currentTarget = autoStartTarget.value;
+      const currentKey = `${launchScopeKey.value}:${currentTarget?.id || ""}`;
+      if (!shouldScheduleLaunchAutoStart({
+        autoStartKey: autoStartKey.value,
+        key: currentKey,
+        launchButtonsDisabled: launchButtonsDisabled.value,
+        loading: launchTargetsLoadingForAutoStart.value,
+        operationBusy: operationBusy.value,
+        sessionId: sessionId.value,
+        target: currentTarget,
+        terminalDisplayed: terminalDisplayed.value,
+        terminalVisible: terminalVisible.value
+      })) {
+        return;
+      }
+      const currentCooldownMs = readLaunchAutoStartAttemptCooldown(currentKey);
+      if (currentCooldownMs > 0) {
+        scheduleAutoStartCooldownCheck(currentCooldownMs);
+        return;
+      }
+      writeLaunchAutoStartAttempt(currentKey);
+      autoStartKey.value = currentKey;
+      void Promise.resolve(run(currentTarget, {
+        applyDefaultDisplay: false
+      })).then((started) => {
+        if (started) {
+          clearLaunchAutoStartAttempt(currentKey);
+        }
+      }).catch(() => null);
+    };
+
+    scheduledAutoStartKey = key;
+    if (typeof window === "undefined" || AUTO_START_STABILITY_DELAY_MS <= 0) {
+      start();
+      return;
+    }
+    autoStartTimer = window.setTimeout(start, AUTO_START_STABILITY_DELAY_MS);
   }, {
     flush: "post",
     immediate: true
@@ -947,6 +1191,8 @@ function useVibe64LaunchControls({
 
   onBeforeUnmount(() => {
     disposed = true;
+    clearAutoStartTimer();
+    clearAutoStartCooldownTimer();
     clearLaunchStatusPoll();
     disposeTerminalUi();
   });
@@ -1008,8 +1254,13 @@ function useVibe64LaunchControls({
 }
 
 export {
+  AUTO_START_ATTEMPT_COOLDOWN_MS,
+  AUTO_START_STABILITY_DELAY_MS,
+  autoStartLaunchTargetsLoading,
   browserCanOpenTarget,
+  clearLaunchAutoStartAttempt,
   launchBrowserTargetName,
+  launchAutoStartAttemptStorageKey,
   launchPreviewBaseUrl,
   launchPreviewDisplayUrl,
   launchPreviewOptionsStorageKey,
@@ -1022,6 +1273,8 @@ export {
   openLaunchBrowserTarget,
   openPendingLaunchBrowserWindow,
   openReadyLaunchBrowserTarget,
+  readLaunchAutoStartAttemptCooldown,
   sameSiteLoopbackPreviewUrl,
+  shouldScheduleLaunchAutoStart,
   useVibe64LaunchControls
 };

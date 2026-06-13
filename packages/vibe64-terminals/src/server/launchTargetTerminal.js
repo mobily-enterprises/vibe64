@@ -321,6 +321,17 @@ function readinessMarkerFromSpec(spec = {}) {
   return String(spec.readinessMarker || spec.metadata?.readinessMarker || "").trim();
 }
 
+function releaseLaunchSpecReservation(spec = {}) {
+  if (typeof spec.releasePortReservation !== "function") {
+    return;
+  }
+  try {
+    spec.releasePortReservation();
+  } catch {
+    // Reservation release is best-effort cleanup for failed or reused launches.
+  }
+}
+
 function normalizeLaunchInput(input = {}) {
   return input && typeof input === "object" && !Array.isArray(input) ? input : {};
 }
@@ -562,69 +573,81 @@ function createLaunchTargetTerminalController({
         const readinessMarker = readinessMarkerFromSpec(spec);
         let launchReadyWritten = false;
         await closeStoppedLaunchTerminals(sessionId);
-        const terminalSession = startTerminalSession({
-          args: spec.args || [],
-          command: spec.command,
-          commandPreview: spec.commandPreview,
-          cwd: spec.cwd || cwd,
-          env: launchEnv,
-          maxRunning: 1,
-          metadata: {
-            ...(spec.metadata || {}),
-            attemptedCommand: commandInvocation(spec),
-            envHash: launchEnvHash,
-            launchInput,
-            launchInputHash,
-            launchTargetId: launchTarget.id,
-            launchTargetLabel: launchTarget.label,
-            sessionId
-          },
-          namespace,
-          namespaceLimitPrefix: namespace,
-          onClose: async (event) => {
-            await launchPreviewProxies.close({
-              sessionId,
-              terminalSessionId: event.id
-            });
-            if (typeof spec.onClose === "function") {
-              await spec.onClose(event);
-            }
-          },
-          onStop: async (event) => {
-            await launchPreviewProxies.close({
-              sessionId,
-              terminalSessionId: event.id
-            });
-            if (typeof spec.onStop === "function") {
-              await spec.onStop(event);
-            }
-          },
-          onOutput: ({ output, session: runningTerminalSession, updateMetadata }) => {
-            const actions = launchActionsFromOutput(output);
-            if (actions.length > 0 && launchActionsChanged(runningTerminalSession.metadata?.actions, actions)) {
-              updateMetadata({
-                actions
+        let terminalSession;
+        try {
+          terminalSession = startTerminalSession({
+            args: spec.args || [],
+            command: spec.command,
+            commandPreview: spec.commandPreview,
+            cwd: spec.cwd || cwd,
+            env: launchEnv,
+            maxRunning: 1,
+            metadata: {
+              ...(spec.metadata || {}),
+              attemptedCommand: commandInvocation(spec),
+              envHash: launchEnvHash,
+              launchInput,
+              launchInputHash,
+              launchTargetId: launchTarget.id,
+              launchTargetLabel: launchTarget.label,
+              sessionId
+            },
+            namespace,
+            namespaceLimitPrefix: namespace,
+            onClose: async (event) => {
+              await launchPreviewProxies.close({
+                sessionId,
+                terminalSessionId: event.id
               });
+              if (typeof spec.onClose === "function") {
+                await spec.onClose(event);
+              }
+            },
+            onStop: async (event) => {
+              await launchPreviewProxies.close({
+                sessionId,
+                terminalSessionId: event.id
+              });
+              if (typeof spec.onStop === "function") {
+                await spec.onStop(event);
+              }
+            },
+            onOutput: ({ output, session: runningTerminalSession, updateMetadata }) => {
+              const actions = launchActionsFromOutput(output);
+              if (actions.length > 0 && launchActionsChanged(runningTerminalSession.metadata?.actions, actions)) {
+                updateMetadata({
+                  actions
+                });
+              }
+              if (!readinessMarker || launchReadyWritten || !String(output || "").includes(readinessMarker)) {
+                return;
+              }
+              launchReadyWritten = true;
+              void markLaunchTerminalReady({
+                publishSessionChanged,
+                store: context.store,
+                sessionId,
+                terminalSession: runningTerminalSession,
+                updateMetadata
+              });
+            },
+            reuseRunning: (runningSession) => {
+              return spec.reuseRunning !== false &&
+                runningSession.metadata?.envHash === launchEnvHash &&
+                runningSession.metadata?.launchInputHash === launchInputHash &&
+                runningSession.metadata?.launchTargetId === launchTarget.id;
             }
-            if (!readinessMarker || launchReadyWritten || !String(output || "").includes(readinessMarker)) {
-              return;
-            }
-            launchReadyWritten = true;
-            void markLaunchTerminalReady({
-              publishSessionChanged,
-              store: context.store,
-              sessionId,
-              terminalSession: runningTerminalSession,
-              updateMetadata
-            });
-          },
-          reuseRunning: (runningSession) => {
-            return spec.reuseRunning !== false &&
-              runningSession.metadata?.envHash === launchEnvHash &&
-              runningSession.metadata?.launchInputHash === launchInputHash &&
-              runningSession.metadata?.launchTargetId === launchTarget.id;
-          }
-        });
+          });
+        } catch (error) {
+          releaseLaunchSpecReservation(spec);
+          throw error;
+        }
+        if (
+          terminalSession?.ok === false ||
+          (spec.metadata?.port && String(terminalSession?.metadata?.port || "") !== String(spec.metadata.port))
+        ) {
+          releaseLaunchSpecReservation(spec);
+        }
         if (terminalSession?.ok !== false && launchTerminalIsReady(terminalSession, readinessMarker)) {
           await writeLaunchMetadata(context.store, sessionId, terminalSession);
         }

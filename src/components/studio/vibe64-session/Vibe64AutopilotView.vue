@@ -495,7 +495,7 @@
             button-label="Run"
             button-size="small"
             button-variant="tonal"
-            :busy="false"
+            :busy="page.busy || page.launchBusy"
             class="studio-autopilot__preview-launch"
             embedded-preview
             :preview-displayed="rightPaneTab === 'preview'"

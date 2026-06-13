@@ -42,6 +42,7 @@ import {
 const execFileAsync = promisify(execFile);
 const DEFAULT_WEB_LAUNCH_TARGET_PORT = 4100;
 const LAUNCH_READY_MARKER_PREFIX = "VIBE64_LAUNCH_READY_V1";
+const reservedWebLaunchTargetPorts = new Set();
 
 function normalizePort(value, fallback = DEFAULT_WEB_LAUNCH_TARGET_PORT) {
   const port = Number.parseInt(String(value || ""), 10);
@@ -90,9 +91,40 @@ async function launchTargetPortIsAvailable(port) {
 async function findAvailableWebLaunchTargetPort(preferredPort = DEFAULT_WEB_LAUNCH_TARGET_PORT) {
   const startPort = normalizePort(preferredPort);
   for (let port = startPort; port <= 65535; port += 1) {
+    if (reservedWebLaunchTargetPorts.has(port)) {
+      continue;
+    }
     if (await launchTargetPortIsAvailable(port)) {
       return port;
     }
+  }
+  throw new Error(`No localhost port is available at or after ${startPort}.`);
+}
+
+async function reserveAvailableWebLaunchTargetPort(preferredPort = DEFAULT_WEB_LAUNCH_TARGET_PORT) {
+  const startPort = normalizePort(preferredPort);
+  for (let port = startPort; port <= 65535; port += 1) {
+    if (reservedWebLaunchTargetPorts.has(port)) {
+      continue;
+    }
+    if (!await launchTargetPortIsAvailable(port)) {
+      continue;
+    }
+    if (reservedWebLaunchTargetPorts.has(port)) {
+      continue;
+    }
+    let released = false;
+    reservedWebLaunchTargetPorts.add(port);
+    return {
+      port,
+      release() {
+        if (released) {
+          return;
+        }
+        released = true;
+        reservedWebLaunchTargetPorts.delete(port);
+      }
+    };
   }
   throw new Error(`No localhost port is available at or after ${startPort}.`);
 }
@@ -620,137 +652,149 @@ async function createVibe64WebLaunchTargetTerminalSpec({
   }
 
   const resolvedTargetRoot = path.resolve(targetRoot || session.targetRoot || process.cwd());
-  const port = await findAvailableWebLaunchTargetPort(preferredPort);
-  const generatedReadinessMarker = launchReadinessMarker({
-    adapterId,
-    launchTargetId: launchTarget.id,
-    port,
-    sessionId: session.sessionId || ""
-  });
-  const launch = await resolveLaunch({
-    launchTarget,
-    port,
-    readinessMarker: generatedReadinessMarker,
-    session,
-    targetRoot: resolvedTargetRoot,
-    worktreePath
-  });
-  const urlPath = normalizeUrlPath(launch.urlPath || "/");
-  const targetUrl = `http://127.0.0.1:${port}${urlPath}`;
-  const openTarget = normalizeOpenTarget({
-    href: launch.openTarget?.href || targetUrl,
-    kind: launch.openTarget?.kind || "url",
-    label: launch.openTarget?.label || launch.openLabel || "Open browser"
-  });
-  const readiness = addReadinessMarkerToLaunchCommands(normalizeLaunchCommands(launch), {
-    href: openTarget.href || targetUrl,
-    marker: generatedReadinessMarker,
-    waitForReadiness: launch.waitForReadiness !== false
-  });
-  const startupCommands = readiness.commands;
-  if (startupCommands.length === 0) {
-    return {
-      ok: false,
-      message: "Launch command is not configured."
-    };
-  }
-
-  const workdir = normalizeText(launch.workdir) || worktreePath;
-  const previewProxyAlias = launchContainerNetworkAlias({
-    adapterId,
-    launchTargetId: launchTarget.id,
-    sessionId: session.sessionId || ""
-  });
-  const containerizedStudio = await currentProcessIsDockerContainer();
-  const extraDockerArgs = [
-    ...(Array.isArray(launch.extraDockerArgs) ? launch.extraDockerArgs : []),
-    ...hostDockerArgs(launch.hostDocker === true)
-  ];
-  const previewAuthKind = normalizePreviewAuthKind(launch.previewAuth);
-  const metadata = {
-    adapterId,
-    defaultDisplay: normalizeText(launch.defaultDisplay || launchTarget.defaultDisplay),
-    launchTargetId: normalizeText(launchTarget.id),
-    launchTargetLabel: normalizeText(launchTarget.label),
-    openTarget,
-    port,
-    previewAuth: previewAuthKind,
-    readinessMarker: readiness.readinessMarker,
-    launchReady: !readiness.readinessMarker,
-    ...(containerizedStudio ? { previewProxyTargetHref: `http://${previewProxyAlias}:${port}${urlPath}` } : {}),
-    runRoot: workdir,
-    scope: "session",
-    sessionId: session.sessionId || "",
-    sessionRoot: String(session.sessionRoot || ""),
-    targetRoot: resolvedTargetRoot,
-    targetUrl,
-    urlPath,
-    ...(launch.metadata || {})
-  };
-
-  return {
-    args: ({ id }) => launchTargetTerminalArgs({
+  const portReservation = await reserveAvailableWebLaunchTargetPort(preferredPort);
+  const releasePortReservation = portReservation.release;
+  try {
+    const port = portReservation.port;
+    const generatedReadinessMarker = launchReadinessMarker({
       adapterId,
-      containerName: launchContainerName({
-        adapterId,
-        sessionId: session.sessionId,
-        targetRoot: resolvedTargetRoot,
-        terminalId: id
-      }),
-      extraDockerArgs: [
-        ...extraDockerArgs,
-        ...previewAuthDockerArgs({
-          kind: previewAuthKind,
-          profilePath: ensurePreviewAuthProfilePath(previewAuthProfilePath({
-            sessionRoot: session.sessionRoot || "",
-            targetRoot: resolvedTargetRoot,
-            sessionId: session.sessionId || "",
-            terminalSessionId: id
-          })),
-          projectScope: launch.projectScope,
-          sessionId: session.sessionId || "",
-          targetHref: targetUrl,
-          targetRoot: resolvedTargetRoot,
-          terminalSessionId: id
-        })
-      ],
-      image,
-      launchActions: openTarget.href
-        ? [
-            {
-              href: openTarget.href,
-              kind: "url",
-              label: openTarget.label
-            }
-          ]
-        : [],
-      launchHome: launchHomePath({
-        sessionRoot: session.sessionRoot || "",
-        terminalId: id,
-        worktreePath
-      }),
-      networkAliases: [previewProxyAlias],
+      launchTargetId: launchTarget.id,
       port,
-      sessionId: session.sessionId,
-      startupCommands,
+      sessionId: session.sessionId || ""
+    });
+    const launch = await resolveLaunch({
+      launchTarget,
+      port,
+      readinessMarker: generatedReadinessMarker,
+      session,
       targetRoot: resolvedTargetRoot,
-      terminalId: id,
-      workdir
-    }),
-    command: "docker",
-    commandPreview: ({ args }) => dockerCommand(redactLaunchTargetTerminalArgs(args)),
-    cwd: resolvedTargetRoot,
-    metadata,
-    ok: true,
-    readinessMarker: readiness.readinessMarker,
-    reuseRunning: true
-  };
+      worktreePath
+    });
+    const urlPath = normalizeUrlPath(launch.urlPath || "/");
+    const targetUrl = `http://127.0.0.1:${port}${urlPath}`;
+    const openTarget = normalizeOpenTarget({
+      href: launch.openTarget?.href || targetUrl,
+      kind: launch.openTarget?.kind || "url",
+      label: launch.openTarget?.label || launch.openLabel || "Open browser"
+    });
+    const readiness = addReadinessMarkerToLaunchCommands(normalizeLaunchCommands(launch), {
+      href: openTarget.href || targetUrl,
+      marker: generatedReadinessMarker,
+      waitForReadiness: launch.waitForReadiness !== false
+    });
+    const startupCommands = readiness.commands;
+    if (startupCommands.length === 0) {
+      releasePortReservation();
+      return {
+        ok: false,
+        message: "Launch command is not configured."
+      };
+    }
+
+    const workdir = normalizeText(launch.workdir) || worktreePath;
+    const previewProxyAlias = launchContainerNetworkAlias({
+      adapterId,
+      launchTargetId: launchTarget.id,
+      sessionId: session.sessionId || ""
+    });
+    const containerizedStudio = await currentProcessIsDockerContainer();
+    const extraDockerArgs = [
+      ...(Array.isArray(launch.extraDockerArgs) ? launch.extraDockerArgs : []),
+      ...hostDockerArgs(launch.hostDocker === true)
+    ];
+    const previewAuthKind = normalizePreviewAuthKind(launch.previewAuth);
+    const metadata = {
+      adapterId,
+      defaultDisplay: normalizeText(launch.defaultDisplay || launchTarget.defaultDisplay),
+      launchTargetId: normalizeText(launchTarget.id),
+      launchTargetLabel: normalizeText(launchTarget.label),
+      openTarget,
+      port,
+      previewAuth: previewAuthKind,
+      readinessMarker: readiness.readinessMarker,
+      launchReady: !readiness.readinessMarker,
+      ...(containerizedStudio ? { previewProxyTargetHref: `http://${previewProxyAlias}:${port}${urlPath}` } : {}),
+      runRoot: workdir,
+      scope: "session",
+      sessionId: session.sessionId || "",
+      sessionRoot: String(session.sessionRoot || ""),
+      targetRoot: resolvedTargetRoot,
+      targetUrl,
+      urlPath,
+      ...(launch.metadata || {})
+    };
+
+    return {
+      args: ({ id }) => launchTargetTerminalArgs({
+        adapterId,
+        containerName: launchContainerName({
+          adapterId,
+          sessionId: session.sessionId,
+          targetRoot: resolvedTargetRoot,
+          terminalId: id
+        }),
+        extraDockerArgs: [
+          ...extraDockerArgs,
+          ...previewAuthDockerArgs({
+            kind: previewAuthKind,
+            profilePath: ensurePreviewAuthProfilePath(previewAuthProfilePath({
+              sessionRoot: session.sessionRoot || "",
+              targetRoot: resolvedTargetRoot,
+              sessionId: session.sessionId || "",
+              terminalSessionId: id
+            })),
+            projectScope: launch.projectScope,
+            sessionId: session.sessionId || "",
+            targetHref: targetUrl,
+            targetRoot: resolvedTargetRoot,
+            terminalSessionId: id
+          })
+        ],
+        image,
+        launchActions: openTarget.href
+          ? [
+              {
+                href: openTarget.href,
+                kind: "url",
+                label: openTarget.label
+              }
+            ]
+          : [],
+        launchHome: launchHomePath({
+          sessionRoot: session.sessionRoot || "",
+          terminalId: id,
+          worktreePath
+        }),
+        networkAliases: [previewProxyAlias],
+        port,
+        sessionId: session.sessionId,
+        startupCommands,
+        targetRoot: resolvedTargetRoot,
+        terminalId: id,
+        workdir
+      }),
+      command: "docker",
+      commandPreview: ({ args }) => dockerCommand(redactLaunchTargetTerminalArgs(args)),
+      cwd: resolvedTargetRoot,
+      metadata,
+      ok: true,
+      onClose: releasePortReservation,
+      onStop: releasePortReservation,
+      readinessMarker: readiness.readinessMarker,
+      releasePortReservation,
+      reuseRunning: true
+    };
+  } catch (error) {
+    releasePortReservation();
+    throw error;
+  }
 }
 
 export {
   DEFAULT_WEB_LAUNCH_TARGET_PORT,
   createVibe64WebLaunchTargetTerminalSpec,
   findAvailableWebLaunchTargetPort,
+  reserveAvailableWebLaunchTargetPort,
   commandWithHttpReadiness,
   httpReadinessProbeCommand,
   launchReadinessMarker,

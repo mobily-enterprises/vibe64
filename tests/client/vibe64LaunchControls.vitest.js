@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  AUTO_START_ATTEMPT_COOLDOWN_MS,
+  AUTO_START_STABILITY_DELAY_MS,
+  autoStartLaunchTargetsLoading,
   browserCanOpenTarget,
+  launchAutoStartAttemptStorageKey,
   launchBrowserTargetName,
   launchPreviewBaseUrl,
   launchPreviewDisplayUrl,
@@ -15,7 +19,9 @@ import {
   openLaunchBrowserTarget,
   openPendingLaunchBrowserWindow,
   openReadyLaunchBrowserTarget,
-  sameSiteLoopbackPreviewUrl
+  readLaunchAutoStartAttemptCooldown,
+  sameSiteLoopbackPreviewUrl,
+  shouldScheduleLaunchAutoStart
 } from "../../src/composables/useVibe64LaunchControls.js";
 
 describe("Vibe64 launch controls", () => {
@@ -283,6 +289,91 @@ describe("Vibe64 launch controls", () => {
     expect(launchPreviewOptionsStorageKey(firstSession, "alpha_1", "dev"))
       .not.toBe(launchPreviewOptionsStorageKey(firstSession, "beta_2", "dev"));
   });
+
+  it("requires a stable visible idle scope before scheduling embedded preview auto-start", () => {
+    const readyState = {
+      autoStartKey: "",
+      key: "beepollen::session-1:dev",
+      launchButtonsDisabled: false,
+      loading: false,
+      operationBusy: false,
+      sessionId: "session-1",
+      target: {
+        available: true,
+        id: "dev"
+      },
+      terminalDisplayed: true,
+      terminalVisible: false
+    };
+
+    expect(AUTO_START_STABILITY_DELAY_MS).toBeGreaterThan(0);
+    expect(autoStartLaunchTargetsLoading({
+      launchTargetsLoading: false,
+      launchTargetsSettled: true
+    })).toBe(false);
+    expect(autoStartLaunchTargetsLoading({
+      launchTargetsLoading: false,
+      launchTargetsSettled: false
+    })).toBe(true);
+    expect(autoStartLaunchTargetsLoading({
+      launchTargetsLoading: true,
+      launchTargetsSettled: true
+    })).toBe(true);
+    expect(shouldScheduleLaunchAutoStart(readyState)).toBe(true);
+    expect(shouldScheduleLaunchAutoStart({
+      ...readyState,
+      loading: true
+    })).toBe(false);
+    expect(shouldScheduleLaunchAutoStart({
+      ...readyState,
+      operationBusy: true
+    })).toBe(false);
+    expect(shouldScheduleLaunchAutoStart({
+      ...readyState,
+      launchButtonsDisabled: true
+    })).toBe(false);
+    expect(shouldScheduleLaunchAutoStart({
+      ...readyState,
+      terminalDisplayed: false
+    })).toBe(false);
+    expect(shouldScheduleLaunchAutoStart({
+      ...readyState,
+      terminalVisible: true
+    })).toBe(false);
+    expect(shouldScheduleLaunchAutoStart({
+      ...readyState,
+      autoStartKey: readyState.key
+    })).toBe(false);
+    expect(shouldScheduleLaunchAutoStart({
+      ...readyState,
+      sessionId: ""
+    })).toBe(false);
+  });
+
+  it("keeps embedded preview auto-start attempts on cooldown across reloads", () => {
+    const storage = fakeStorage();
+    const key = "beepollen::session-1:dev";
+    const storageKey = launchAutoStartAttemptStorageKey(key);
+
+    storage.setItem(storageKey, JSON.stringify({
+      key,
+      startedAt: 1000
+    }));
+
+    expect(readLaunchAutoStartAttemptCooldown(key, {
+      now: 1000,
+      storage
+    })).toBe(AUTO_START_ATTEMPT_COOLDOWN_MS);
+    expect(readLaunchAutoStartAttemptCooldown(key, {
+      now: 1000 + AUTO_START_ATTEMPT_COOLDOWN_MS - 1,
+      storage
+    })).toBe(1);
+    expect(readLaunchAutoStartAttemptCooldown(key, {
+      now: 1000 + AUTO_START_ATTEMPT_COOLDOWN_MS + 1,
+      storage
+    })).toBe(0);
+    expect(storage.getItem(storageKey)).toBe(null);
+  });
 });
 
 function fakeBrowserWindow() {
@@ -298,5 +389,18 @@ function fakeBrowserWindow() {
       },
       opener: {}
     }))
+  };
+}
+
+function fakeStorage() {
+  const values = new Map();
+  return {
+    getItem: vi.fn((key) => values.has(key) ? values.get(key) : null),
+    removeItem: vi.fn((key) => {
+      values.delete(key);
+    }),
+    setItem: vi.fn((key, value) => {
+      values.set(key, String(value));
+    })
   };
 }

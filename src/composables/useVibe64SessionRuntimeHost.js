@@ -1,4 +1,4 @@
-import { computed, onMounted, proxyRefs, ref, unref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, proxyRefs, ref, unref, watch } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
 import {
@@ -43,6 +43,40 @@ import {
 import {
   readRefOrGetterValue
 } from "@/lib/vueRefOrGetterValue.js";
+
+const LAUNCH_CONTROLS_STABILITY_DELAY_MS = 1000;
+
+function runtimeCapabilitiesState({
+  data = null,
+  isFetching = false,
+  isLoading = false
+} = {}) {
+  const payload = data && typeof data === "object" && !Array.isArray(data) ? data : {};
+  const loaded = Boolean(payload.capabilities);
+  const fetching = Boolean(isFetching || isLoading);
+  return {
+    fetching,
+    initialLoading: Boolean(fetching && !loaded),
+    loaded
+  };
+}
+
+function runtimeControlsAreBusy({
+  active = false,
+  loading = false,
+  sessionReady = false,
+  stable = false
+} = {}) {
+  return Boolean(!active || !sessionReady || loading || !stable);
+}
+
+function codexTerminalStartAllowed({
+  active = false,
+  capabilitiesFetching = false,
+  runtimeBusy = false
+} = {}) {
+  return Boolean(active && !runtimeBusy && !capabilitiesFetching);
+}
 
 function useVibe64SessionRuntimeHost(props, emit) {
   const selectedSessionId = computed(() => props.sessionId);
@@ -232,15 +266,40 @@ function useVibe64SessionRuntimeHost(props, emit) {
     props.active &&
     autopilotCodexWorkingVisible.value
   ));
-  const codexTerminalCanStart = computed(() => Boolean(
-    props.active
-  ));
   const codexTerminalReadOnly = computed(() => {
     return codexTerminalPresentation.value.readOnlyInAutopilot !== false;
   });
   const codexTerminalScope = computed(() => "session");
   const activeCodexTerminalState = computed(() => null);
   const codexTerminalListenWhenHidden = computed(() => false);
+  const launchControlsStable = ref(false);
+  let launchControlsStableTimer = 0;
+  const capabilitiesState = computed(() => runtimeCapabilitiesState({
+    data: readRefOrGetterValue(props.sessionData.capabilities),
+    isFetching: readRefOrGetterValue(props.sessionData.capabilitiesResource?.isFetching),
+    isLoading: readRefOrGetterValue(props.sessionData.capabilitiesResource?.isLoading)
+  }));
+  const launchControlsLoading = computed(() => Boolean(
+    readRefOrGetterValue(props.sessionData.pageLoading) ||
+    readRefOrGetterValue(props.sessionData.sessionList?.isLoading) ||
+    capabilitiesState.value.initialLoading
+  ));
+  const launchControlsSessionReady = computed(() => Boolean(
+    props.sessionId &&
+    selectedSession.value?.sessionId &&
+    selectedSession.value.sessionId === props.sessionId
+  ));
+  const launchControlsBusy = computed(() => runtimeControlsAreBusy({
+    active: props.active,
+    loading: launchControlsLoading.value,
+    sessionReady: launchControlsSessionReady.value,
+    stable: launchControlsStable.value
+  }));
+  const codexTerminalCanStart = computed(() => codexTerminalStartAllowed({
+    active: props.active,
+    capabilitiesFetching: capabilitiesState.value.fetching,
+    runtimeBusy: launchControlsBusy.value
+  }));
   const interactionBusy = computed(() => Boolean(
     page.busy ||
     autopilotBusy.value ||
@@ -251,6 +310,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
     copyStatus: page.copyStatus,
     copyText: page.copyText,
     error: page.error,
+    launchBusy: launchControlsBusy.value,
     loading: page.loading
   }));
 
@@ -300,6 +360,13 @@ function useVibe64SessionRuntimeHost(props, emit) {
       error: String(page.error || ""),
       sessionId: props.sessionId
     });
+  }
+
+  function clearLaunchControlsStableTimer() {
+    if (launchControlsStableTimer && typeof window !== "undefined") {
+      window.clearTimeout(launchControlsStableTimer);
+    }
+    launchControlsStableTimer = 0;
   }
 
   function emitToolbarControls() {
@@ -354,6 +421,30 @@ function useVibe64SessionRuntimeHost(props, emit) {
   watch(() => [
     props.active ? "active" : "inactive",
     props.sessionId,
+    selectedSession.value?.sessionId || "",
+    launchControlsLoading.value ? "loading" : "ready"
+  ].join("|"), () => {
+    clearLaunchControlsStableTimer();
+    launchControlsStable.value = false;
+    if (!props.active || !launchControlsSessionReady.value || launchControlsLoading.value) {
+      return;
+    }
+    if (typeof window === "undefined" || LAUNCH_CONTROLS_STABILITY_DELAY_MS <= 0) {
+      launchControlsStable.value = true;
+      return;
+    }
+    launchControlsStableTimer = window.setTimeout(() => {
+      launchControlsStableTimer = 0;
+      launchControlsStable.value = true;
+    }, LAUNCH_CONTROLS_STABILITY_DELAY_MS);
+  }, {
+    flush: "post",
+    immediate: true
+  });
+
+  watch(() => [
+    props.active ? "active" : "inactive",
+    props.sessionId,
     selectedSession.value?.currentStep || "",
     selectedSession.value?.stepMachine?.status || ""
   ].join("|"), () => {
@@ -382,6 +473,10 @@ function useVibe64SessionRuntimeHost(props, emit) {
 
   watch(() => page.error, emitPageError, {
     flush: "post"
+  });
+
+  onBeforeUnmount(() => {
+    clearLaunchControlsStableTimer();
   });
 
   return {
@@ -428,5 +523,8 @@ function artifactReadinessVersion(readiness = {}) {
 }
 
 export {
+  codexTerminalStartAllowed,
+  runtimeCapabilitiesState,
+  runtimeControlsAreBusy,
   useVibe64SessionRuntimeHost
 };
