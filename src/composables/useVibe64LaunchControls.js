@@ -444,6 +444,7 @@ function useVibe64LaunchControls({
   const paths = usePaths();
   const projectSlug = useVibe64ProjectSlug();
   const operationBusy = ref(false);
+  const launchStarting = ref(false);
   const terminalExpanded = ref(false);
   const autoStartKey = ref("");
   const previewInputOverrides = ref({});
@@ -783,6 +784,7 @@ function useVibe64LaunchControls({
     if (applyDefaultDisplay) {
       terminalExpanded.value = launchTarget.defaultDisplay !== "minimized";
     }
+    launchStarting.value = true;
     operationBusy.value = true;
     try {
       const terminalSession = await startTerminalCommand.run({
@@ -800,6 +802,7 @@ function useVibe64LaunchControls({
     } catch {
       return false;
     } finally {
+      launchStarting.value = false;
       operationBusy.value = false;
     }
   }
@@ -1262,6 +1265,7 @@ function useVibe64LaunchControls({
     launchActions,
     launchButtonsDisabled,
     launchInputForTarget,
+    launchStarting,
     launchTargets,
     loading: launchTargetsResource.isLoading,
     loadError: launchTargetsResource.loadError,

@@ -12,6 +12,9 @@ import {
   writeTerminalSession
 } from "@local/studio-terminal-core/server/terminalSessions";
 import {
+  removeLaunchTargetContainers
+} from "@local/studio-terminal-core/server/launchTargetTerminal";
+import {
   currentProcessIsDockerContainer,
   ensureCurrentContainerConnectedToRuntimeNetwork,
   ensureTargetRuntimeNetwork
@@ -359,6 +362,87 @@ function launchTerminalIsReady(terminalSession = {}, readinessMarker = "") {
   return launchIsReady(terminalSession.metadata || {});
 }
 
+function launchTerminalCanBeReused(runningSession = {}, {
+  launchEnvHash = "",
+  launchInputHash = "",
+  launchTargetId = "",
+  spec = {}
+} = {}) {
+  return spec.reuseRunning !== false &&
+    runningSession.metadata?.envHash === launchEnvHash &&
+    runningSession.metadata?.launchInputHash === launchInputHash &&
+    runningSession.metadata?.launchTargetId === launchTargetId;
+}
+
+function reusableLaunchTerminal(sessionId = "", {
+  launchEnvHash = "",
+  launchInputHash = "",
+  launchTargetId = "",
+  namespace = launchTargetTerminalNamespace(sessionId),
+  spec = {}
+} = {}) {
+  return listTerminalSessions({
+    namespace,
+    runningOnly: true
+  }).find((terminal) => launchTerminalCanBeReused(terminal, {
+    launchEnvHash,
+    launchInputHash,
+    launchTargetId,
+    spec
+  })) || null;
+}
+
+async function cleanupSupersededLaunchTerminals({
+  launchPreviewProxies = null,
+  namespace = "",
+  removeLaunchTargetContainersImpl = removeLaunchTargetContainers,
+  reusableTerminal = null,
+  sessionId = "",
+  targetRoot = ""
+} = {}) {
+  const preservedTerminalIds = reusableTerminal?.id ? [String(reusableTerminal.id)] : [];
+  const preservedTerminalIdSet = new Set(preservedTerminalIds);
+  let closed = 0;
+  for (const terminal of listTerminalSessions({ namespace })) {
+    if (!terminal.id || preservedTerminalIdSet.has(terminal.id)) {
+      continue;
+    }
+    const result = await closeTerminalSession(terminal.id, {
+      namespace
+    });
+    if (result.closed) {
+      closed += 1;
+    }
+  }
+  const removedContainers = await removeLaunchTargetContainersImpl({
+    exceptTerminalIds: preservedTerminalIds,
+    sessionId,
+    targetRoot
+  });
+  if (!preservedTerminalIds.length) {
+    await launchPreviewProxies?.close?.({
+      sessionId
+    });
+  }
+  return {
+    closed,
+    removedContainers
+  };
+}
+
+async function ensureLaunchTargetRuntime({
+  context = {}
+} = {}) {
+  await ensureTargetRuntimeNetwork(context.targetRoot);
+  await ensureCurrentContainerConnectedToRuntimeNetwork(context.targetRoot);
+  await ensureAdapterRuntimeContainers({
+    runtime: context.runtime,
+    session: context.session,
+    target: "launch-target",
+    targetRoot: context.targetRoot
+  });
+}
+
 async function markLaunchTerminalReady({
   publishSessionChanged = async () => null,
   store,
@@ -385,10 +469,26 @@ async function markLaunchTerminalReady({
 }
 
 function createLaunchTargetTerminalController({
+  ensureLaunchTargetRuntimeImpl = ensureLaunchTargetRuntime,
   projectService,
-  publishSessionChanged = async () => null
+  publishSessionChanged = async () => null,
+  removeLaunchTargetContainersImpl = removeLaunchTargetContainers
 } = {}) {
   const launchPreviewProxies = createLaunchPreviewProxyRegistry();
+  const launchStartLocks = new Map();
+
+  async function withLaunchStartLock(sessionId = "", operation = async () => null) {
+    const key = String(sessionId || "global");
+    const previous = launchStartLocks.get(key) || Promise.resolve();
+    const run = previous.catch(() => null).then(operation);
+    const cleanup = run.finally(() => {
+      if (launchStartLocks.get(key) === cleanup) {
+        launchStartLocks.delete(key);
+      }
+    });
+    launchStartLocks.set(key, cleanup);
+    return run;
+  }
 
   async function previewTargetForStatus(sessionId = "", status = {}, options = {}) {
     const targetHref = String(status.openTarget?.href || "").trim();
@@ -527,7 +627,7 @@ function createLaunchTargetTerminalController({
     },
 
     async startTerminal(sessionId, input = {}) {
-      return vibe64Result(async () => {
+      return vibe64Result(async () => withLaunchStartLock(sessionId, async () => {
         const context = await createLaunchContext(projectService, sessionId);
         const cwd = sessionTerminalCwd(context.session, projectService);
         const launchInput = normalizeLaunchInput(input.launchInput);
@@ -571,13 +671,8 @@ function createLaunchTargetTerminalController({
           };
         }
 
-        await ensureTargetRuntimeNetwork(context.targetRoot);
-        await ensureCurrentContainerConnectedToRuntimeNetwork(context.targetRoot);
-        await ensureAdapterRuntimeContainers({
-          runtime: context.runtime,
-          session: context.session,
-          target: "launch-target",
-          targetRoot: context.targetRoot
+        await ensureLaunchTargetRuntimeImpl({
+          context
         });
         const namespace = launchTargetTerminalNamespace(sessionId);
         const terminalEnv = await projectTerminalEnvironment({
@@ -595,6 +690,21 @@ function createLaunchTargetTerminalController({
         const readinessMarker = readinessMarkerFromSpec(spec);
         let launchReadyWritten = false;
         await closeStoppedLaunchTerminals(sessionId);
+        const existingReusableTerminal = reusableLaunchTerminal(sessionId, {
+          launchEnvHash,
+          launchInputHash,
+          launchTargetId: launchTarget.id,
+          namespace,
+          spec
+        });
+        await cleanupSupersededLaunchTerminals({
+          launchPreviewProxies,
+          namespace,
+          removeLaunchTargetContainersImpl,
+          reusableTerminal: existingReusableTerminal,
+          sessionId,
+          targetRoot: context.targetRoot
+        });
         let terminalSession;
         try {
           terminalSession = startTerminalSession({
@@ -654,10 +764,12 @@ function createLaunchTargetTerminalController({
               });
             },
             reuseRunning: (runningSession) => {
-              return spec.reuseRunning !== false &&
-                runningSession.metadata?.envHash === launchEnvHash &&
-                runningSession.metadata?.launchInputHash === launchInputHash &&
-                runningSession.metadata?.launchTargetId === launchTarget.id;
+              return launchTerminalCanBeReused(runningSession, {
+                launchEnvHash,
+                launchInputHash,
+                launchTargetId: launchTarget.id,
+                spec
+              });
             }
           });
         } catch (error) {
@@ -674,7 +786,7 @@ function createLaunchTargetTerminalController({
           await writeLaunchMetadata(context.store, sessionId, terminalSession);
         }
         return terminalSession;
-      });
+      }));
     },
 
     async stopTerminal(sessionId, terminalSessionId) {
@@ -749,6 +861,8 @@ function previewPublicOriginForLaunch({
 
 export {
   LAUNCH_METADATA,
+  cleanupSupersededLaunchTerminals,
+  ensureLaunchTargetRuntime,
   launchActionsFromOutput,
   launchReadinessMarkerLineSeen,
   previewPublicOriginForLaunch,

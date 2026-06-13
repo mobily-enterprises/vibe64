@@ -8,6 +8,15 @@ describe("Vibe64 launch controls surface", () => {
   it("keeps launch lifecycle text stable during background polling", () => {
     expect(launchPreviewEmptyText({
       loading: true,
+      launchStarting: true
+    })).toBe("Starting preview.");
+
+    expect(launchPreviewEmptyText({
+      launchStarting: true
+    })).toBe("Starting preview.");
+
+    expect(launchPreviewEmptyText({
+      loading: true,
       previewStarting: true
     })).toBe("Starting preview.");
 
@@ -35,5 +44,9 @@ describe("Vibe64 launch controls surface", () => {
       previewProxyUnavailable: true,
       terminalIsRunning: true
     })).toBe("Starting preview.");
+  });
+
+  it("uses neutral copy when no launch state is available yet", () => {
+    expect(launchPreviewEmptyText()).toBe("Preview will appear here when it is ready.");
   });
 });

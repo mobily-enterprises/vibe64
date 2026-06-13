@@ -745,7 +745,7 @@ async function launchDescriptorUrlPath(worktreePath, {
   selfTarget = null
 } = {}) {
   return selfTarget?.enabled === true
-    ? "/app/vibe64"
+    ? "/app/manage/projects"
     : await defaultAppPath(worktreePath);
 }
 

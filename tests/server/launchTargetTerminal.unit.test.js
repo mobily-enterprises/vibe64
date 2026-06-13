@@ -6,7 +6,9 @@ import path from "node:path";
 import test from "node:test";
 
 import {
-  createVibe64WebLaunchTargetTerminalSpec
+  createVibe64WebLaunchTargetTerminalSpec,
+  listLaunchTargetContainers,
+  removeLaunchTargetContainers
 } from "@local/studio-terminal-core/server/launchTargetTerminal";
 
 async function createLaunchSpecFixture() {
@@ -96,4 +98,61 @@ test("web launch target port allocation reserves ports during concurrent spec cr
     releasedSpec?.releasePortReservation?.();
     await fixture.cleanup();
   }
+});
+
+test("launch target container cleanup is scoped by daemon, session, target, and preserved terminal", async () => {
+  const calls = [];
+  const execFileImpl = async (command, args) => {
+    calls.push({
+      args,
+      command
+    });
+    if (args[0] === "ps") {
+      return {
+        stdout: [
+          "keep-container\tkeep-terminal",
+          "remove-container\tremove-terminal",
+          ""
+        ].join("\n")
+      };
+    }
+    if (args[0] === "rm") {
+      assert.deepEqual(args, ["rm", "-f", "remove-container"]);
+      return {
+        stdout: ""
+      };
+    }
+    throw new Error(`Unexpected command: ${command} ${args.join(" ")}`);
+  };
+
+  const listed = await listLaunchTargetContainers({
+    daemonId: "unit-daemon",
+    execFileImpl,
+    sessionId: "session-1",
+    targetRoot: "/tmp/vibe64"
+  });
+  const removed = await removeLaunchTargetContainers({
+    daemonId: "unit-daemon",
+    exceptTerminalIds: ["keep-terminal"],
+    execFileImpl,
+    sessionId: "session-1",
+    targetRoot: "/tmp/vibe64"
+  });
+
+  assert.deepEqual(listed, [
+    {
+      id: "keep-container",
+      terminalId: "keep-terminal"
+    },
+    {
+      id: "remove-container",
+      terminalId: "remove-terminal"
+    }
+  ]);
+  assert.deepEqual(removed, ["remove-container"]);
+  const psArgs = calls[0].args;
+  assert.ok(psArgs.includes("label=vibe64.kind=launch-target-terminal"));
+  assert.ok(psArgs.includes("label=vibe64.session=session-1"));
+  assert.ok(psArgs.includes("label=vibe64.target=vibe64"));
+  assert.ok(psArgs.includes("label=vibe64.daemon-id=unit-daemon"));
 });

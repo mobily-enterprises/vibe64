@@ -31,6 +31,7 @@ function useVibe64LaunchControlsSurface(props) {
     launchActions,
     launchButtonsDisabled,
     launchInputForTarget,
+    launchStarting,
     launchTargets,
     loading,
     loadError,
@@ -169,6 +170,7 @@ function useVibe64LaunchControlsSurface(props) {
     previewProxyUnavailable: previewProxyUnavailable.value,
     previewStarting: previewStarting.value,
     previewTargetDisabledReason: previewTargetDisabledReason.value,
+    launchStarting: launchStarting.value,
     terminalIsRunning: terminalIsRunning.value
   }));
   
@@ -622,6 +624,7 @@ function useVibe64LaunchControlsSurface(props) {
 }
 
 function launchPreviewEmptyText({
+  launchStarting = false,
   loading = false,
   previewProxyUnavailable = false,
   previewStarting = false,
@@ -632,13 +635,13 @@ function launchPreviewEmptyText({
     const reason = String(previewTargetDisabledReason || "").trim();
     return reason || "Starting preview.";
   }
-  if (previewStarting || terminalIsRunning) {
+  if (launchStarting || previewStarting || terminalIsRunning) {
     return "Starting preview.";
   }
   if (loading) {
     return "Loading preview targets.";
   }
-  return "Run the app to show the preview.";
+  return "Preview will appear here when it is ready.";
 }
 
 export {

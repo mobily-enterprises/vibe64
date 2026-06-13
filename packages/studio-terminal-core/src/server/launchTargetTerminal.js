@@ -16,10 +16,13 @@ import {
   stableHash
 } from "./shellCommands.js";
 import {
+  STUDIO_DAEMON_ID_LABEL,
   VIBE64_SKIP_STALE_TERMINAL_CLEANUP_ENV,
   STUDIO_BASE_TOOLCHAIN_IMAGE,
   STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS,
-  studioDaemonDockerLabels
+  studioDaemonDockerLabels,
+  studioDaemonId,
+  studioDockerLabel
 } from "./studioRuntimeIdentity.js";
 import {
   normalizeText
@@ -43,6 +46,10 @@ const execFileAsync = promisify(execFile);
 const DEFAULT_WEB_LAUNCH_TARGET_PORT = 4100;
 const LAUNCH_READY_MARKER_PREFIX = "VIBE64_LAUNCH_READY_V1";
 const reservedWebLaunchTargetPorts = new Set();
+const LAUNCH_TARGET_CONTAINER_KIND_LABEL = studioDockerLabel("kind", "launch-target-terminal");
+const LAUNCH_TARGET_SESSION_LABEL = studioDockerLabel("session");
+const LAUNCH_TARGET_TERMINAL_LABEL = studioDockerLabel("terminal");
+const LAUNCH_TARGET_TARGET_LABEL = studioDockerLabel("target");
 
 function normalizePort(value, fallback = DEFAULT_WEB_LAUNCH_TARGET_PORT) {
   const port = Number.parseInt(String(value || ""), 10);
@@ -78,6 +85,111 @@ async function dockerHasPublishedPort(port) {
   } catch {
     return false;
   }
+}
+
+function parseLaunchTargetContainerRows(output = "") {
+  return String(output || "")
+    .split(/\r?\n/u)
+    .map((line) => {
+      const [id = "", terminalId = ""] = line.split("\t");
+      const normalizedId = normalizeText(id);
+      if (!normalizedId) {
+        return null;
+      }
+      return {
+        id: normalizedId,
+        terminalId: normalizeText(terminalId)
+      };
+    })
+    .filter(Boolean);
+}
+
+function dockerLabelFilter(label = "") {
+  const normalized = normalizeText(label);
+  return normalized ? ["--filter", `label=${normalized}`] : [];
+}
+
+function dockerContainerRemovalAlreadySettled(error = {}) {
+  return /No such container|removal of container .* is already in progress/iu.test(String(error?.stderr || error?.message || error || ""));
+}
+
+async function listLaunchTargetContainers({
+  daemonId = studioDaemonId(),
+  execFileImpl = execFileAsync,
+  sessionId = "",
+  targetRoot = ""
+} = {}) {
+  const normalizedSessionId = normalizeText(sessionId);
+  const targetName = runtimeTargetName(targetRoot);
+  if (!normalizedSessionId || !targetName) {
+    return [];
+  }
+  const result = await execFileImpl("docker", [
+    "ps",
+    "-a",
+    ...dockerLabelFilter(LAUNCH_TARGET_CONTAINER_KIND_LABEL),
+    ...dockerLabelFilter(`${LAUNCH_TARGET_SESSION_LABEL}=${normalizedSessionId}`),
+    ...dockerLabelFilter(`${LAUNCH_TARGET_TARGET_LABEL}=${targetName}`),
+    ...dockerLabelFilter(daemonId ? `${STUDIO_DAEMON_ID_LABEL}=${daemonId}` : ""),
+    "--format",
+    `{{.ID}}\t{{.Label "${LAUNCH_TARGET_TERMINAL_LABEL}"}}`
+  ], {
+    maxBuffer: 1024 * 1024,
+    timeout: 10000
+  });
+  return parseLaunchTargetContainerRows(result.stdout);
+}
+
+async function removeLaunchTargetContainers({
+  daemonId = studioDaemonId(),
+  exceptTerminalIds = [],
+  execFileImpl = execFileAsync,
+  sessionId = "",
+  targetRoot = ""
+} = {}) {
+  const preservedTerminalIds = new Set((Array.isArray(exceptTerminalIds) ? exceptTerminalIds : [])
+    .map(normalizeText)
+    .filter(Boolean));
+  const containerIds = (await listLaunchTargetContainers({
+    daemonId,
+    execFileImpl,
+    sessionId,
+    targetRoot
+  }))
+    .filter((container) => !preservedTerminalIds.has(container.terminalId))
+    .map((container) => container.id);
+  if (!containerIds.length) {
+    return [];
+  }
+
+  try {
+    await execFileImpl("docker", ["rm", "-f", ...containerIds], {
+      maxBuffer: 1024 * 1024,
+      timeout: 30000
+    });
+    return containerIds;
+  } catch (error) {
+    if (containerIds.length === 1 && dockerContainerRemovalAlreadySettled(error)) {
+      return containerIds;
+    }
+  }
+
+  const removedContainerIds = [];
+  for (const containerId of containerIds) {
+    try {
+      await execFileImpl("docker", ["rm", "-f", containerId], {
+        maxBuffer: 1024 * 1024,
+        timeout: 30000
+      });
+      removedContainerIds.push(containerId);
+    } catch (error) {
+      if (!dockerContainerRemovalAlreadySettled(error)) {
+        throw error;
+      }
+      removedContainerIds.push(containerId);
+    }
+  }
+  return removedContainerIds;
 }
 
 async function launchTargetPortIsAvailable(port) {
@@ -794,6 +906,8 @@ export {
   DEFAULT_WEB_LAUNCH_TARGET_PORT,
   createVibe64WebLaunchTargetTerminalSpec,
   findAvailableWebLaunchTargetPort,
+  listLaunchTargetContainers,
+  removeLaunchTargetContainers,
   reserveAvailableWebLaunchTargetPort,
   commandWithHttpReadiness,
   httpReadinessProbeCommand,

@@ -65,6 +65,7 @@ import {
 import {
   closeTerminalSession,
   countRunningTerminalSessions,
+  readTerminalSession,
   startTerminalSession
 } from "@local/studio-terminal-core/server/terminalSessions";
 import {
@@ -361,6 +362,219 @@ test("launch status does not expose a preview before launch readiness", async ()
       namespace
     });
   }
+});
+
+test("launch start closes superseded terminals before replacing a non-reusable preview", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "launch-replace-session";
+    const namespace = launchTargetTerminalNamespace(sessionId);
+    const metadataWrites = [];
+    const removedLaunchContainers = [];
+    const session = {
+      metadata: {},
+      sessionId,
+      sessionRoot: path.join(targetRoot, ".vibe64", "sessions", "active", sessionId),
+      targetRoot
+    };
+    const controller = createLaunchTargetTerminalController({
+      ensureLaunchTargetRuntimeImpl: async () => null,
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return {
+            adapter: {
+              async createLaunchTargetTerminalSpec() {
+                return {
+                  args: [
+                    "-e",
+                    "setInterval(() => {}, 1000)"
+                  ],
+                  command: process.execPath,
+                  cwd: targetRoot,
+                  metadata: {
+                    launchTargetId: "dev",
+                    openTarget: {
+                      href: "http://127.0.0.1:4100/app",
+                      kind: "url",
+                      label: "Open browser"
+                    },
+                    targetRoot
+                  },
+                  ok: true,
+                  reuseRunning: true
+                };
+              },
+              async listLaunchTargets() {
+                return [
+                  {
+                    id: "dev",
+                    label: "Run app"
+                  }
+                ];
+              }
+            },
+            async getSession() {
+              return session;
+            },
+            projectConfig: {},
+            store: {
+              async mutateSession(_sessionId, operation) {
+                await operation();
+              },
+              async writeMetadataValue(_sessionId, key, value) {
+                metadataWrites.push({
+                  key,
+                  value
+                });
+              }
+            }
+          };
+        },
+        async projectConfigEnvironment() {
+          return {};
+        }
+      },
+      removeLaunchTargetContainersImpl: async (options) => {
+        removedLaunchContainers.push(options);
+        return [];
+      }
+    });
+
+    let secondTerminal = null;
+    try {
+      const firstTerminal = await controller.startTerminal(sessionId, {
+        launchInput: {
+          variant: "first"
+        },
+        launchTargetId: "dev"
+      });
+      assert.equal(firstTerminal.ok, true);
+      assert.equal(countRunningTerminalSessions({ namespace }), 1);
+
+      secondTerminal = await controller.startTerminal(sessionId, {
+        launchInput: {
+          variant: "second"
+        },
+        launchTargetId: "dev"
+      });
+
+      assert.equal(secondTerminal.ok, true);
+      assert.notEqual(secondTerminal.id, firstTerminal.id);
+      assert.equal(countRunningTerminalSessions({ namespace }), 1);
+      assert.equal(readTerminalSession(firstTerminal.id, { namespace }).ok, false);
+      assert.equal(removedLaunchContainers.length, 2);
+      assert.deepEqual(removedLaunchContainers.at(-1).exceptTerminalIds, []);
+      assert.equal(removedLaunchContainers.at(-1).sessionId, sessionId);
+      assert.equal(removedLaunchContainers.at(-1).targetRoot, targetRoot);
+      assert.ok(metadataWrites.some((entry) => entry.key === "launch_target_open_href"));
+    } finally {
+      if (secondTerminal?.id) {
+        await closeTerminalSession(secondTerminal.id, {
+          namespace
+        });
+      }
+    }
+  });
+});
+
+test("launch start keeps the current terminal when the launch can be reused", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "launch-reuse-session";
+    const namespace = launchTargetTerminalNamespace(sessionId);
+    const removedLaunchContainers = [];
+    const session = {
+      metadata: {},
+      sessionId,
+      sessionRoot: path.join(targetRoot, ".vibe64", "sessions", "active", sessionId),
+      targetRoot
+    };
+    const controller = createLaunchTargetTerminalController({
+      ensureLaunchTargetRuntimeImpl: async () => null,
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return {
+            adapter: {
+              async createLaunchTargetTerminalSpec() {
+                return {
+                  args: [
+                    "-e",
+                    "setInterval(() => {}, 1000)"
+                  ],
+                  command: process.execPath,
+                  cwd: targetRoot,
+                  metadata: {
+                    launchTargetId: "dev",
+                    openTarget: {
+                      href: "http://127.0.0.1:4100/app",
+                      kind: "url",
+                      label: "Open browser"
+                    },
+                    targetRoot
+                  },
+                  ok: true,
+                  reuseRunning: true
+                };
+              },
+              async listLaunchTargets() {
+                return [
+                  {
+                    id: "dev",
+                    label: "Run app"
+                  }
+                ];
+              }
+            },
+            async getSession() {
+              return session;
+            },
+            projectConfig: {},
+            store: {
+              async mutateSession(_sessionId, operation) {
+                await operation();
+              },
+              async writeMetadataValue() {}
+            }
+          };
+        },
+        async projectConfigEnvironment() {
+          return {};
+        }
+      },
+      removeLaunchTargetContainersImpl: async (options) => {
+        removedLaunchContainers.push(options);
+        return [];
+      }
+    });
+
+    let firstTerminal = null;
+    try {
+      firstTerminal = await controller.startTerminal(sessionId, {
+        launchInput: {
+          variant: "same"
+        },
+        launchTargetId: "dev"
+      });
+      const secondTerminal = await controller.startTerminal(sessionId, {
+        launchInput: {
+          variant: "same"
+        },
+        launchTargetId: "dev"
+      });
+
+      assert.equal(firstTerminal.ok, true);
+      assert.equal(secondTerminal.ok, true);
+      assert.equal(secondTerminal.id, firstTerminal.id);
+      assert.equal(countRunningTerminalSessions({ namespace }), 1);
+      assert.deepEqual(removedLaunchContainers.at(-1).exceptTerminalIds, [firstTerminal.id]);
+    } finally {
+      if (firstTerminal?.id) {
+        await closeTerminalSession(firstTerminal.id, {
+          namespace
+        });
+      }
+    }
+  });
 });
 
 function assertPlaywrightBrowserCache(args) {
