@@ -35,7 +35,8 @@ import {
 } from "@local/studio-terminal-core/server/launchTargetTerminal";
 import {
   VIBE64_RUNTIME_NAMESPACE_ENV,
-  runtimeNamespace
+  runtimeNamespace,
+  studioDaemonDockerEnvArgs
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
   resolveProviderHomesRoot
@@ -541,6 +542,7 @@ function jskitSelfTargetRootConfig({
 
   return {
     dockerArgs: [
+      ...studioDaemonDockerEnvArgs(),
       ...dockerRootEnvArgs(VIBE64_PROJECTS_ROOT_ENV, resolvedProjectsRoot),
       ...dockerRootEnvArgs(VIBE64_PROVIDER_HOMES_ROOT_ENV, resolvedProviderHomesRoot, {
         ensure: true

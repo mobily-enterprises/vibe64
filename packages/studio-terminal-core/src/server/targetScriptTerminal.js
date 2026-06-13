@@ -16,7 +16,7 @@ import {
 } from "./studioToolHome.js";
 import {
   STUDIO_BASE_TOOLCHAIN_IMAGE,
-  STUDIO_DAEMON_PID_LABEL
+  studioDaemonDockerLabels
 } from "./studioRuntimeIdentity.js";
 import {
   normalizeText
@@ -110,8 +110,7 @@ function targetScriptTerminalArgs({
     "vibe64.kind=target-script-terminal",
     "--label",
     `vibe64.adapter=${adapterId}`,
-    "--label",
-    `${STUDIO_DAEMON_PID_LABEL}=${process.pid}`,
+    ...studioDaemonDockerLabels().flatMap((label) => ["--label", label]),
     "--label",
     "vibe64.session=target",
     "--label",

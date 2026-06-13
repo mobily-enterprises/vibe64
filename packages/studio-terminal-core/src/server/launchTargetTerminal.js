@@ -18,8 +18,8 @@ import {
 import {
   VIBE64_SKIP_STALE_TERMINAL_CLEANUP_ENV,
   STUDIO_BASE_TOOLCHAIN_IMAGE,
-  STUDIO_DAEMON_PID_LABEL,
-  STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS
+  STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS,
+  studioDaemonDockerLabels
 } from "./studioRuntimeIdentity.js";
 import {
   normalizeText
@@ -553,8 +553,7 @@ function launchTargetTerminalArgs({
     "vibe64.kind=launch-target-terminal",
     "--label",
     `vibe64.adapter=${adapterId}`,
-    "--label",
-    `${STUDIO_DAEMON_PID_LABEL}=${process.pid}`,
+    ...studioDaemonDockerLabels().flatMap((label) => ["--label", label]),
     "--label",
     `vibe64.session=${sessionId}`,
     "--label",

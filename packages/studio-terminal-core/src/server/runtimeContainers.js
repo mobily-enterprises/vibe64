@@ -13,8 +13,8 @@ import {
   shellQuote
 } from "./shellCommands.js";
 import {
-  STUDIO_DAEMON_PID_LABEL,
   runtimeNamespace,
+  studioDaemonDockerLabels,
   studioDockerLabel
 } from "./studioRuntimeIdentity.js";
 import {
@@ -94,8 +94,7 @@ function runtimeNetworkCreateArgs(targetRoot = "") {
     "create",
     "--label",
     RUNTIME_NETWORK_KIND_LABEL,
-    "--label",
-    `${STUDIO_DAEMON_PID_LABEL}=${process.pid}`,
+    ...studioDaemonDockerLabels().flatMap((label) => ["--label", label]),
     "--label",
     studioDockerLabel("target", runtimeTargetName(targetRoot)),
     runtimeNetworkName(targetRoot)
@@ -549,8 +548,7 @@ function runtimeContainerRunArgs(spec, {
     studioDockerLabel("adapter", spec.adapterId),
     "--label",
     studioDockerLabel("runtime-id", spec.id),
-    "--label",
-    `${STUDIO_DAEMON_PID_LABEL}=${process.pid}`,
+    ...studioDaemonDockerLabels().flatMap((label) => ["--label", label]),
     "--label",
     studioDockerLabel("target", runtimeTargetName(spec.targetRoot)),
     ...envDockerArgs(spec, {

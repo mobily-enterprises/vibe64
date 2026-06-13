@@ -32,9 +32,9 @@ import {
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
   STUDIO_BASE_TOOLCHAIN_IMAGE,
-  STUDIO_DAEMON_PID_LABEL,
   STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS,
   runtimeNamespace,
+  studioDaemonDockerLabels,
   studioDockerLabel
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
@@ -355,8 +355,7 @@ function codexAppServerDockerArgs({
     }),
     "--label",
     studioDockerLabel("kind", "codex-app-server"),
-    "--label",
-    `${STUDIO_DAEMON_PID_LABEL}=${process.pid}`,
+    ...studioDaemonDockerLabels().flatMap((label) => ["--label", label]),
     "--label",
     studioDockerLabel("target", normalizedTargetRoot ? runtimeTargetName(normalizedTargetRoot) : dockerNamePart(path.basename(normalizedRuntimeDir))),
     ...studioToolHomeDockerArgs(),

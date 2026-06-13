@@ -1,5 +1,3 @@
-import process from "node:process";
-
 import {
   gitToolchainMountArgs
 } from "@local/studio-terminal-core/server/gitToolchainMounts";
@@ -10,9 +8,9 @@ import {
   targetRuntimeNetworkDockerArgs
 } from "@local/studio-terminal-core/server/runtimeContainers";
 import {
-  STUDIO_DAEMON_PID_LABEL,
   STUDIO_BASE_TOOLCHAIN_IMAGE,
   STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS,
+  studioDaemonDockerLabels,
   studioDockerLabel
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
@@ -123,8 +121,7 @@ function buildDoctorToolchainArgs(commandArgs, options = {}) {
     ...githubSshToHttpsGitDockerEnvArgs(),
     "--label",
     STUDIO_TOOLCHAIN_CONTAINER_LABEL,
-    "--label",
-    `${STUDIO_DAEMON_PID_LABEL}=${process.pid}`,
+    ...studioDaemonDockerLabels().flatMap((label) => ["--label", label]),
     ...workspaceMountArgs,
     ...(targetRoot ? targetRuntimeNetworkDockerArgs(targetRoot) : []),
     "-w",

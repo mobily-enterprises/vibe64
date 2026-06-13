@@ -23,7 +23,8 @@ import {
   targetRuntimeNetworkEnsureCommand
 } from "@local/studio-terminal-core/server/runtimeContainers";
 import {
-  VIBE64_RUNTIME_NAMESPACE_ENV
+  VIBE64_RUNTIME_NAMESPACE_ENV,
+  studioDaemonDockerLabels
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
   createJskitMariaDbRuntimeContainer,
@@ -672,8 +673,7 @@ test("target runtime network preparation creates the shared network only when mi
           "create",
           "--label",
           "vibe64.kind=runtime-network",
-          "--label",
-          `vibe64.daemon-pid=${process.pid}`,
+          ...studioDaemonDockerLabels().flatMap((label) => ["--label", label]),
           "--label",
           targetLabel,
           networkName

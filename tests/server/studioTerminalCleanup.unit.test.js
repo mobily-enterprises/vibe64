@@ -94,12 +94,14 @@ test("Studio runtime network cleanup removes only unused Studio networks", async
     "ordinary-id\tordinary-network\t<no value>\t<no value>"
   ].join("\n")), [
     {
+      daemonId: "",
       daemonPid: 999,
       id: "network-id",
       kind: "runtime-network",
       name: "vibe64-alpha-network"
     },
     {
+      daemonId: "",
       daemonPid: 0,
       id: "ordinary-id",
       kind: "",
@@ -132,6 +134,11 @@ test("Studio terminal cleanup removes only dead-daemon containers and processes"
       if (args.some((arg) => String(arg).includes("target-script-terminal"))) {
         return {
           stdout: "container-target-script-dead\t998\n"
+        };
+      }
+      if (args.some((arg) => String(arg).includes("launch-target-terminal"))) {
+        return {
+          stdout: "container-launch-target-dead\t997\n"
         };
       }
       return {
@@ -184,7 +191,11 @@ test("Studio terminal cleanup removes only dead-daemon containers and processes"
     }
   });
 
-  assert.deepEqual(result.removedContainers, ["container-dead", "container-target-script-dead"]);
+  assert.deepEqual(result.removedContainers, [
+    "container-dead",
+    "container-target-script-dead",
+    "container-launch-target-dead"
+  ]);
   assert.deepEqual(result.terminatedProcesses, [102, 101, 100]);
   assert.deepEqual(killed, [
     [102, "SIGTERM"],
@@ -199,7 +210,7 @@ test("Studio terminal cleanup removes only dead-daemon containers and processes"
       "--filter",
       "label=vibe64.kind=codex-terminal",
       "--format",
-      "{{.ID}}\t{{.Label \"vibe64.daemon-pid\"}}"
+      "{{.ID}}\t{{.Label \"vibe64.daemon-pid\"}}\t{{.Label \"vibe64.daemon-id\"}}"
     ]
   ]);
   assert.deepEqual(calls[1], [
@@ -210,7 +221,7 @@ test("Studio terminal cleanup removes only dead-daemon containers and processes"
       "--filter",
       "label=vibe64.kind=target-script-terminal",
       "--format",
-      "{{.ID}}\t{{.Label \"vibe64.daemon-pid\"}}"
+      "{{.ID}}\t{{.Label \"vibe64.daemon-pid\"}}\t{{.Label \"vibe64.daemon-id\"}}"
     ]
   ]);
   assert.deepEqual(calls[2], [
@@ -221,8 +232,119 @@ test("Studio terminal cleanup removes only dead-daemon containers and processes"
       "--filter",
       "label=vibe64.kind=toolchain",
       "--format",
-      "{{.ID}}\t{{.Label \"vibe64.daemon-pid\"}}"
+      "{{.ID}}\t{{.Label \"vibe64.daemon-pid\"}}\t{{.Label \"vibe64.daemon-id\"}}"
     ]
   ]);
-  assert.deepEqual(calls[3], ["docker", ["rm", "-f", "container-dead", "container-target-script-dead"]]);
+  assert.deepEqual(calls[3], [
+    "docker",
+    [
+      "ps",
+      "-a",
+      "--filter",
+      "label=vibe64.kind=launch-target-terminal",
+      "--format",
+      "{{.ID}}\t{{.Label \"vibe64.daemon-pid\"}}\t{{.Label \"vibe64.daemon-id\"}}"
+    ]
+  ]);
+  assert.deepEqual(calls[4], [
+    "docker",
+    ["rm", "-f", "container-dead", "container-target-script-dead", "container-launch-target-dead"]
+  ]);
+});
+
+test("Studio terminal cleanup does not let an unrelated host PID keep launch containers alive", () => {
+  const containers = parseDockerContainerRows([
+    "container-kernel-pid\t52\told-daemon",
+    "container-current-daemon\t52\tcurrent-daemon",
+    "container-live-daemon\t321\tother-daemon"
+  ].join("\n"));
+
+  assert.deepEqual(selectStaleStudioContainerIds(containers, {
+    currentDaemonId: "current-daemon",
+    currentPid: 777,
+    killImpl(pid, signal) {
+      if (signal === 0 && [52, 321].includes(pid)) {
+        return;
+      }
+      const error = new Error("missing");
+      error.code = "ESRCH";
+      throw error;
+    },
+    processCommandImpl(pid) {
+      if (pid === 52) {
+        return "";
+      }
+      if (pid === 321) {
+        return "node /srv/vibe64/bin/server.js";
+      }
+      return null;
+    }
+  }), ["container-kernel-pid"]);
+});
+
+test("Studio terminal cleanup tolerates containers that are already being removed", async () => {
+  const calls = [];
+  const execFileImpl = async (command, args) => {
+    calls.push([command, args]);
+    if (command === "docker" && args[0] === "ps") {
+      if (args.some((arg) => String(arg).includes("codex-terminal"))) {
+        return {
+          stdout: "container-removing\t999\ncontainer-dead\t999\n"
+        };
+      }
+      return {
+        stdout: ""
+      };
+    }
+    if (command === "docker" && args[0] === "rm" && args.includes("container-removing") && args.includes("container-dead")) {
+      const error = new Error("Command failed: docker rm -f container-removing container-dead\nError response from daemon: removal of container container-removing is already in progress");
+      error.stderr = "Error response from daemon: removal of container container-removing is already in progress";
+      throw error;
+    }
+    if (command === "docker" && args[0] === "rm" && args.includes("container-removing")) {
+      const error = new Error("Command failed: docker rm -f container-removing\nError response from daemon: removal of container container-removing is already in progress");
+      error.stderr = "Error response from daemon: removal of container container-removing is already in progress";
+      throw error;
+    }
+    if (command === "docker" && args[0] === "rm") {
+      return {
+        stdout: ""
+      };
+    }
+    if (command === "docker" && args[0] === "network") {
+      throw new Error("skip networks");
+    }
+    if (command === "ps") {
+      return {
+        stdout: ""
+      };
+    }
+    throw new Error(`Unexpected command: ${command} ${args.join(" ")}`);
+  };
+
+  const result = await cleanupStaleStudioTerminals({
+    execFileImpl,
+    graceMs: 0,
+    killImpl(pid, signal) {
+      if (signal === 0) {
+        const error = new Error(`missing ${pid}`);
+        error.code = "ESRCH";
+        throw error;
+      }
+    },
+    logger: {
+      debug() {},
+      warn() {}
+    }
+  });
+
+  assert.deepEqual(result.removedContainers, [
+    "container-removing",
+    "container-dead"
+  ]);
+  assert.deepEqual(calls.filter(([, args]) => args[0] === "rm"), [
+    ["docker", ["rm", "-f", "container-removing", "container-dead"]],
+    ["docker", ["rm", "-f", "container-removing"]],
+    ["docker", ["rm", "-f", "container-dead"]]
+  ]);
 });

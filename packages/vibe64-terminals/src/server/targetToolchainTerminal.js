@@ -1,5 +1,4 @@
 import path from "node:path";
-import process from "node:process";
 
 import {
   runtimeTargetName,
@@ -13,8 +12,8 @@ import {
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
   STUDIO_BASE_TOOLCHAIN_IMAGE,
-  STUDIO_DAEMON_PID_LABEL,
   STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS,
+  studioDaemonDockerLabels,
   studioDockerLabel
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
@@ -91,7 +90,7 @@ function targetToolchainTerminalArgs({
     ...dockerRunArgs,
     ...dockerLabelArgs([
       kind ? studioDockerLabel("kind", kind) : "",
-      `${STUDIO_DAEMON_PID_LABEL}=${process.pid}`,
+      ...studioDaemonDockerLabels(),
       sessionId ? studioDockerLabel("session", sessionId) : "",
       studioDockerLabel("terminal", terminalId),
       studioDockerLabel("target", runtimeTargetName(targetRoot)),
