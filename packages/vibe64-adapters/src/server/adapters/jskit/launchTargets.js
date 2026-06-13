@@ -674,6 +674,14 @@ async function defaultAppPath(worktreePath) {
   }
 }
 
+async function launchDescriptorUrlPath(worktreePath, {
+  selfTarget = null
+} = {}) {
+  return selfTarget?.enabled === true
+    ? "/app/vibe64"
+    : await defaultAppPath(worktreePath);
+}
+
 function jskitLaunchTarget(id, label) {
   return {
     defaultDisplay: "minimized",
@@ -865,7 +873,9 @@ async function createJskitBuiltLaunchDescriptor({
       ...jskitSelfTargetMetadata(selfTarget)
     },
     previewAuth: previewAuthKind,
-    urlPath: await defaultAppPath(worktreePath),
+    urlPath: await launchDescriptorUrlPath(worktreePath, {
+      selfTarget
+    }),
     ...(workdir ? { workdir } : {})
   };
 }
@@ -921,7 +931,9 @@ async function createJskitDevLaunchDescriptor({
       ...jskitSelfTargetMetadata(selfTarget)
     },
     previewAuth: previewAuthKind,
-    urlPath: await defaultAppPath(worktreePath),
+    urlPath: await launchDescriptorUrlPath(worktreePath, {
+      selfTarget
+    }),
     ...(workdir ? { workdir } : {})
   };
 }

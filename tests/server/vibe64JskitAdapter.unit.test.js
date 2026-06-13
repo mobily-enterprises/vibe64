@@ -331,6 +331,8 @@ test("jskit Vibe64 self-target enables host Docker with shared project runtime d
     assert.equal(spec.ok, true);
     assert.equal(spec.metadata.hostDocker, true);
     assert.equal(spec.metadata.hostDockerSource, "target_package:vibe64");
+    assert.equal(spec.metadata.urlPath, "/app/vibe64");
+    assert.match(spec.metadata.targetUrl, /\/app\/vibe64$/u);
     assert.equal(spec.metadata.runtimeNamespace, "");
     const args = spec.args({
       id: "unit-terminal"

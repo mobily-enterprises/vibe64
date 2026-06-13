@@ -282,6 +282,40 @@ test("Studio terminal cleanup does not let an unrelated host PID keep launch con
   }), ["container-kernel-pid"]);
 });
 
+test("Studio terminal cleanup does not let an unrelated host PID keep toolchain processes alive", () => {
+  const processes = parseProcessRows(`
+       10     1 docker run --rm -it --label vibe64.kind=toolchain --label vibe64.daemon-pid=52 --label vibe64.daemon-id=old-daemon vibe64-base-toolchain:0.1.0 bash -lc codex
+       11    10 bash -lc codex
+       12    11 node /usr/local/bin/codex
+       20     1 docker run --rm -it --label vibe64.kind=toolchain --label vibe64.daemon-pid=52 --label vibe64.daemon-id=current-daemon vibe64-base-toolchain:0.1.0 bash -lc codex
+       21    20 bash -lc codex
+       30     1 docker run --rm -it --label vibe64.kind=toolchain --label vibe64.daemon-pid=321 --label vibe64.daemon-id=other-daemon vibe64-base-toolchain:0.1.0 bash -lc codex
+       31    30 bash -lc codex
+  `);
+
+  assert.deepEqual(selectStaleStudioToolchainProcessIds(processes, {
+    currentDaemonId: "current-daemon",
+    currentPid: 777,
+    killImpl(pid, signal) {
+      if (signal === 0 && [52, 321].includes(pid)) {
+        return;
+      }
+      const error = new Error("missing");
+      error.code = "ESRCH";
+      throw error;
+    },
+    processCommandImpl(pid) {
+      if (pid === 52) {
+        return "";
+      }
+      if (pid === 321) {
+        return "node /srv/vibe64/bin/server.js";
+      }
+      return null;
+    }
+  }), [12, 11, 10]);
+});
+
 test("Studio terminal cleanup tolerates containers that are already being removed", async () => {
   const calls = [];
   const execFileImpl = async (command, args) => {
