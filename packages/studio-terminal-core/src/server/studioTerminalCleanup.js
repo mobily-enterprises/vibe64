@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, readlinkSync } from "node:fs";
+import path from "node:path";
 import process from "node:process";
 import { promisify } from "node:util";
 import {
@@ -95,9 +96,51 @@ function defaultProcessCommand(pid) {
   }
 }
 
-function isLikelyStudioDaemonCommand(command = "") {
+function defaultProcessCwd(pid) {
+  if (process.platform !== "linux") {
+    return "";
+  }
+  try {
+    return readlinkSync(`/proc/${pid}/cwd`);
+  } catch {
+    return "";
+  }
+}
+
+function defaultReadPackageManifest(cwd = "") {
+  return JSON.parse(readFileSync(path.join(cwd, "package.json"), "utf8"));
+}
+
+function isVibe64PackageRoot(cwd = "", {
+  readPackageManifestImpl = defaultReadPackageManifest
+} = {}) {
+  const normalizedCwd = String(cwd || "").trim();
+  if (!normalizedCwd) {
+    return false;
+  }
+  try {
+    const manifest = readPackageManifestImpl(normalizedCwd);
+    return String(manifest?.name || "") === "vibe64";
+  } catch {
+    return false;
+  }
+}
+
+function isLikelyStudioServerCommand(command = "") {
+  return /(?:^|\s)(?:\.\/)?bin\/server\.js(?:\s|$)/u.test(String(command || ""));
+}
+
+function isLikelyStudioDaemonCommand(command = "", {
+  cwd = "",
+  readPackageManifestImpl = defaultReadPackageManifest
+} = {}) {
   const normalizedCommand = String(command || "").toLowerCase();
-  return normalizedCommand.includes("vibe64");
+  if (normalizedCommand.includes("vibe64")) {
+    return true;
+  }
+  return isLikelyStudioServerCommand(command) && isVibe64PackageRoot(cwd, {
+    readPackageManifestImpl
+  });
 }
 
 function processStillExists(pid, killImpl) {
@@ -111,7 +154,9 @@ function processStillExists(pid, killImpl) {
 
 function studioDaemonProcessStillExists(pid, {
   killImpl = process.kill,
-  processCommandImpl = defaultProcessCommand
+  processCommandImpl = defaultProcessCommand,
+  processCwdImpl = defaultProcessCwd,
+  readPackageManifestImpl = defaultReadPackageManifest
 } = {}) {
   if (!processStillExists(pid, killImpl)) {
     return false;
@@ -122,7 +167,13 @@ function studioDaemonProcessStillExists(pid, {
   if (command === null || command === undefined) {
     return true;
   }
-  return isLikelyStudioDaemonCommand(command);
+  const cwd = typeof processCwdImpl === "function"
+    ? processCwdImpl(pid)
+    : "";
+  return isLikelyStudioDaemonCommand(command, {
+    cwd,
+    readPackageManifestImpl
+  });
 }
 
 function isStaleDaemonOwnership({
@@ -132,7 +183,9 @@ function isStaleDaemonOwnership({
   currentDaemonId = studioDaemonId(),
   currentPid = process.pid,
   killImpl = process.kill,
-  processCommandImpl = defaultProcessCommand
+  processCommandImpl = defaultProcessCommand,
+  processCwdImpl = defaultProcessCwd,
+  readPackageManifestImpl = defaultReadPackageManifest
 } = {}) {
   const normalizedDaemonPid = normalizeProcessId(daemonPid);
   const normalizedDaemonId = normalizeDaemonId(daemonId);
@@ -146,7 +199,9 @@ function isStaleDaemonOwnership({
   if (normalizedDaemonPid) {
     return !studioDaemonProcessStillExists(normalizedDaemonPid, {
       killImpl,
-      processCommandImpl
+      processCommandImpl,
+      processCwdImpl,
+      readPackageManifestImpl
     });
   }
   return Boolean(normalizedDaemonId && normalizedDaemonId !== normalizedCurrentDaemonId);
@@ -183,7 +238,9 @@ function selectStaleStudioToolchainProcessIds(processes = [], {
   currentDaemonId = studioDaemonId(),
   currentPid = process.pid,
   killImpl = process.kill,
-  processCommandImpl = defaultProcessCommand
+  processCommandImpl = defaultProcessCommand,
+  processCwdImpl = defaultProcessCwd,
+  readPackageManifestImpl = defaultReadPackageManifest
 } = {}) {
   const rootPids = processes
     .filter((entry) =>
@@ -193,7 +250,9 @@ function selectStaleStudioToolchainProcessIds(processes = [], {
         currentDaemonId,
         currentPid,
         killImpl,
-        processCommandImpl
+        processCommandImpl,
+        processCwdImpl,
+        readPackageManifestImpl
       })
     )
     .map((entry) => entry.pid);
@@ -223,14 +282,18 @@ function selectStaleStudioContainerIds(containers = [], {
   currentDaemonId = studioDaemonId(),
   currentPid = process.pid,
   killImpl = process.kill,
-  processCommandImpl = defaultProcessCommand
+  processCommandImpl = defaultProcessCommand,
+  processCwdImpl = defaultProcessCwd,
+  readPackageManifestImpl = defaultReadPackageManifest
 } = {}) {
   return containers
     .filter((container) => isStaleDaemonOwnership(container, {
       currentDaemonId,
       currentPid,
       killImpl,
-      processCommandImpl
+      processCommandImpl,
+      processCwdImpl,
+      readPackageManifestImpl
     }))
     .map((container) => container.id);
 }
@@ -263,14 +326,18 @@ function shouldRemoveStudioRuntimeNetwork(network = {}, {
   currentDaemonId = studioDaemonId(),
   currentPid = process.pid,
   killImpl = process.kill,
-  processCommandImpl = defaultProcessCommand
+  processCommandImpl = defaultProcessCommand,
+  processCwdImpl = defaultProcessCwd,
+  readPackageManifestImpl = defaultReadPackageManifest
 } = {}) {
   return network.kind === RUNTIME_NETWORK_KIND &&
     isStaleDaemonOwnership(network, {
       currentDaemonId,
       currentPid,
       killImpl,
-      processCommandImpl
+      processCommandImpl,
+      processCwdImpl,
+      readPackageManifestImpl
     });
 }
 
@@ -323,7 +390,9 @@ async function removeUnusedStudioRuntimeNetworks({
   execFileImpl = execFileAsync,
   killImpl = process.kill,
   logger = null,
-  processCommandImpl = defaultProcessCommand
+  processCommandImpl = defaultProcessCommand,
+  processCwdImpl = defaultProcessCwd,
+  readPackageManifestImpl = defaultReadPackageManifest
 } = {}) {
   let networks = [];
   try {
@@ -341,7 +410,9 @@ async function removeUnusedStudioRuntimeNetworks({
       currentDaemonId,
       currentPid,
       killImpl,
-      processCommandImpl
+      processCommandImpl,
+      processCwdImpl,
+      readPackageManifestImpl
     })) {
       continue;
     }
@@ -415,7 +486,9 @@ async function removeStaleStudioContainers({
   execFileImpl = execFileAsync,
   killImpl = process.kill,
   logger = null,
-  processCommandImpl = defaultProcessCommand
+  processCommandImpl = defaultProcessCommand,
+  processCwdImpl = defaultProcessCwd,
+  readPackageManifestImpl = defaultReadPackageManifest
 } = {}) {
   let containers = [];
   try {
@@ -431,7 +504,9 @@ async function removeStaleStudioContainers({
     currentDaemonId,
     currentPid,
     killImpl,
-    processCommandImpl
+    processCommandImpl,
+    processCwdImpl,
+    readPackageManifestImpl
   });
   if (!containerIds.length) {
     return [];
@@ -518,7 +593,9 @@ async function cleanupStaleStudioTerminals({
   killImpl = process.kill,
   logger = null,
   platform = process.platform,
-  processCommandImpl = defaultProcessCommand
+  processCommandImpl = defaultProcessCommand,
+  processCwdImpl = defaultProcessCwd,
+  readPackageManifestImpl = defaultReadPackageManifest
 } = {}) {
   const currentDaemonId = studioDaemonId();
   const removedContainers = await removeStaleStudioContainers({
@@ -527,7 +604,9 @@ async function cleanupStaleStudioTerminals({
     execFileImpl,
     killImpl,
     logger,
-    processCommandImpl
+    processCommandImpl,
+    processCwdImpl,
+    readPackageManifestImpl
   });
   const removedRuntimeNetworks = await removeUnusedStudioRuntimeNetworks({
     currentDaemonId,
@@ -535,7 +614,9 @@ async function cleanupStaleStudioTerminals({
     execFileImpl,
     killImpl,
     logger,
-    processCommandImpl
+    processCommandImpl,
+    processCwdImpl,
+    readPackageManifestImpl
   });
 
   let terminatedProcesses = [];
@@ -550,7 +631,9 @@ async function cleanupStaleStudioTerminals({
           currentDaemonId,
           currentPid: process.pid,
           killImpl,
-          processCommandImpl
+          processCommandImpl,
+          processCwdImpl,
+          readPackageManifestImpl
         }),
         {
           graceMs,

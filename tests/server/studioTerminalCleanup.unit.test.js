@@ -70,6 +70,7 @@ test("Studio runtime network cleanup removes only unused Studio networks", async
           "network-unused\tvibe64-alpha-network\truntime-network\t999",
           "network-active\tvibe64-beta-network\truntime-network\t999",
           "network-current\tvibe64-current-network\truntime-network\t123",
+          "network-relative-live\tvibe64-relative-network\truntime-network\t654\trelative-daemon",
           "network-other\tordinary-network\t<no value>\t<no value>"
         ].join("\n")
       };
@@ -111,9 +112,38 @@ test("Studio runtime network cleanup removes only unused Studio networks", async
 
   const removed = await removeUnusedStudioRuntimeNetworks({
     execFileImpl,
-    killImpl: aliveDaemonKill,
+    killImpl(pid, signal) {
+      if (signal === 0 && [123, 654].includes(pid)) {
+        return;
+      }
+      if (signal === 0) {
+        const error = new Error("process missing");
+        error.code = "ESRCH";
+        throw error;
+      }
+    },
     logger: {
       debug() {}
+    },
+    processCommandImpl(pid) {
+      if (pid === 654) {
+        return "node ./bin/server.js --no-open";
+      }
+      return null;
+    },
+    processCwdImpl(pid) {
+      if (pid === 654) {
+        return "/workspace/vibe64";
+      }
+      return "";
+    },
+    readPackageManifestImpl(cwd) {
+      if (cwd === "/workspace/vibe64") {
+        return {
+          name: "vibe64"
+        };
+      }
+      return null;
     }
   });
 
@@ -256,14 +286,15 @@ test("Studio terminal cleanup does not let an unrelated host PID keep launch con
   const containers = parseDockerContainerRows([
     "container-kernel-pid\t52\told-daemon",
     "container-current-daemon\t52\tcurrent-daemon",
-    "container-live-daemon\t321\tother-daemon"
+    "container-live-daemon\t321\tother-daemon",
+    "container-relative-live-daemon\t654\trelative-daemon"
   ].join("\n"));
 
   assert.deepEqual(selectStaleStudioContainerIds(containers, {
     currentDaemonId: "current-daemon",
     currentPid: 777,
     killImpl(pid, signal) {
-      if (signal === 0 && [52, 321].includes(pid)) {
+      if (signal === 0 && [52, 321, 654].includes(pid)) {
         return;
       }
       const error = new Error("missing");
@@ -276,6 +307,23 @@ test("Studio terminal cleanup does not let an unrelated host PID keep launch con
       }
       if (pid === 321) {
         return "node /srv/vibe64/bin/server.js";
+      }
+      if (pid === 654) {
+        return "node ./bin/server.js --no-open";
+      }
+      return null;
+    },
+    processCwdImpl(pid) {
+      if (pid === 654) {
+        return "/workspace/vibe64";
+      }
+      return "";
+    },
+    readPackageManifestImpl(cwd) {
+      if (cwd === "/workspace/vibe64") {
+        return {
+          name: "vibe64"
+        };
       }
       return null;
     }
@@ -291,13 +339,15 @@ test("Studio terminal cleanup does not let an unrelated host PID keep toolchain 
        21    20 bash -lc codex
        30     1 docker run --rm -it --label vibe64.kind=toolchain --label vibe64.daemon-pid=321 --label vibe64.daemon-id=other-daemon vibe64-base-toolchain:0.1.0 bash -lc codex
        31    30 bash -lc codex
+       40     1 docker run --rm -it --label vibe64.kind=toolchain --label vibe64.daemon-pid=654 --label vibe64.daemon-id=relative-daemon vibe64-base-toolchain:0.1.0 bash -lc codex
+       41    40 bash -lc codex
   `);
 
   assert.deepEqual(selectStaleStudioToolchainProcessIds(processes, {
     currentDaemonId: "current-daemon",
     currentPid: 777,
     killImpl(pid, signal) {
-      if (signal === 0 && [52, 321].includes(pid)) {
+      if (signal === 0 && [52, 321, 654].includes(pid)) {
         return;
       }
       const error = new Error("missing");
@@ -310,6 +360,23 @@ test("Studio terminal cleanup does not let an unrelated host PID keep toolchain 
       }
       if (pid === 321) {
         return "node /srv/vibe64/bin/server.js";
+      }
+      if (pid === 654) {
+        return "node ./bin/server.js --no-open";
+      }
+      return null;
+    },
+    processCwdImpl(pid) {
+      if (pid === 654) {
+        return "/workspace/vibe64";
+      }
+      return "";
+    },
+    readPackageManifestImpl(cwd) {
+      if (cwd === "/workspace/vibe64") {
+        return {
+          name: "vibe64"
+        };
       }
       return null;
     }
