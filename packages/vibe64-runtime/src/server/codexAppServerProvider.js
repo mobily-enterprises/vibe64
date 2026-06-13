@@ -64,6 +64,7 @@ const CODEX_APP_SERVER_SOCKET_FILE = "app-server.sock";
 const CODEX_APP_SERVER_LOCK_DIR = "runtime.lock";
 const CODEX_APP_SERVER_CONTAINER_RUNTIME_DIR = "/vibe64-codex-app-server";
 const CODEX_APP_SERVER_READY_TIMEOUT_MS = 15000;
+const CODEX_APP_SERVER_LIVENESS_TIMEOUT_MS = 2000;
 const CODEX_APP_SERVER_LOCK_TIMEOUT_MS = 10000;
 const CODEX_APP_SERVER_LOCK_STALE_MS = 120000;
 const CODEX_APP_SERVER_CONTAINER_REMOVE_TIMEOUT_MS = 5000;
@@ -110,7 +111,27 @@ async function ensurePrivateDirectory(dirPath = "") {
   await chmod(dirPath, 0o700).catch(() => null);
 }
 
+async function ensureWritablePrivateDirectory(dirPath = "") {
+  await ensurePrivateDirectory(dirPath);
+  const probePath = path.join(dirPath, `.vibe64-write-check-${process.pid}-${randomUUID()}`);
+  try {
+    await writeFile(probePath, "", {
+      mode: 0o600
+    });
+  } catch (error) {
+    throw new Error(
+      `Codex app-server runtime directory is not writable: ${dirPath}. ${String(error?.message || error)}`
+    );
+  } finally {
+    await rm(probePath, {
+      force: true
+    }).catch(() => null);
+  }
+}
+
 function codexAppServerRuntimeBaseDir({
+  targetRoot = "",
+  workdir = "",
   env = process.env
 } = {}) {
   const explicitDir = normalizeAgentText(env.VIBE64_AGENT_RUNTIME_DIR);
@@ -120,6 +141,17 @@ function codexAppServerRuntimeBaseDir({
   const xdgRuntimeDir = normalizeAgentText(env.XDG_RUNTIME_DIR);
   if (xdgRuntimeDir && path.isAbsolute(xdgRuntimeDir)) {
     return path.join(xdgRuntimeDir, "vibe64", "agent-providers");
+  }
+  const scope = codexAppServerRuntimeScope({
+    targetRoot,
+    workdir
+  });
+  if (scope) {
+    return path.join(scope, ".vibe64", "runtime", "agent-providers");
+  }
+  const homeDir = normalizeAgentText(os.homedir());
+  if (homeDir && path.isAbsolute(homeDir)) {
+    return path.join(homeDir, ".cache", "vibe64", "agent-providers");
   }
   return path.join(os.tmpdir(), `vibe64-${processUid()}`, "agent-providers");
 }

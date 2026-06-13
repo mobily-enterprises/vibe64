@@ -17,6 +17,7 @@ import {
 const execFileAsync = promisify(execFile);
 const STUDIO_TOOLCHAIN_CONTAINER_LABEL = studioDockerLabel("kind", "toolchain");
 const STUDIO_CODEX_CONTAINER_LABEL = studioDockerLabel("kind", "codex-terminal");
+const STUDIO_CODEX_APP_SERVER_CONTAINER_LABEL = studioDockerLabel("kind", "codex-app-server");
 const STUDIO_TARGET_SCRIPT_CONTAINER_LABEL = studioDockerLabel("kind", "target-script-terminal");
 const STUDIO_LAUNCH_TARGET_CONTAINER_LABEL = studioDockerLabel("kind", "launch-target-terminal");
 const STALE_PROCESS_GRACE_MS = 500;
@@ -448,6 +449,7 @@ async function removeUnusedStudioRuntimeNetworks({
 async function listStudioContainers(execFileImpl = execFileAsync) {
   const containers = new Map();
   for (const label of [
+    STUDIO_CODEX_APP_SERVER_CONTAINER_LABEL,
     STUDIO_CODEX_CONTAINER_LABEL,
     STUDIO_TARGET_SCRIPT_CONTAINER_LABEL,
     STUDIO_TOOLCHAIN_CONTAINER_LABEL,
