@@ -83,7 +83,7 @@ function proxyRequestHeaders(headers = {}, targetUrl, {
   });
   nextHeaders.cookie = mergeCookieHeaders(
     nextHeaders.cookie,
-    previewAuthCookieHeaderForRequest(nextHeaders.cookie, previewAuth)
+    previewAuthCookieHeaderForRequest(previewAuth)
   );
   if (!nextHeaders.cookie) {
     delete nextHeaders.cookie;
@@ -104,7 +104,7 @@ function proxyUpgradeHeaders(headers = {}, targetUrl, {
   });
   nextHeaders.cookie = mergeCookieHeaders(
     nextHeaders.cookie,
-    previewAuthCookieHeaderForRequest(nextHeaders.cookie, previewAuth)
+    previewAuthCookieHeaderForRequest(previewAuth)
   );
   if (!nextHeaders.cookie) {
     delete nextHeaders.cookie;
@@ -258,7 +258,7 @@ function cookieNames(header = "") {
     .filter(Boolean);
 }
 
-function previewAuthCookieHeaderForRequest(header = "", previewAuth = null) {
+function previewAuthCookieHeaderForRequest(previewAuth = null) {
   return previewAuthCookieHeader(previewAuth || {});
 }
 
@@ -373,7 +373,6 @@ function previewStartingHtml() {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="refresh" content="1">
   <title>Starting preview</title>
   <style>
     html, body {

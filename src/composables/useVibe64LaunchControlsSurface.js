@@ -160,18 +160,17 @@ function useVibe64LaunchControlsSurface(props) {
     terminalLaunchReady.value &&
     !previewBaseUrl.value
   ));
-  const previewEmptyText = computed(() => {
-    if (loading.value) {
-      return "Loading preview targets.";
-    }
-    if (previewProxyUnavailable.value) {
-      return previewTargetDisabledReason.value || "Preview proxy is not available.";
-    }
-    if (previewStarting.value || terminalIsRunning.value) {
-      return "Starting preview.";
-    }
-    return "Run the app to show the preview.";
-  });
+  const previewRetryButtonVisible = computed(() => Boolean(
+    props.embeddedPreview &&
+    previewProxyUnavailable.value
+  ));
+  const previewEmptyText = computed(() => launchPreviewEmptyText({
+    loading: loading.value,
+    previewProxyUnavailable: previewProxyUnavailable.value,
+    previewStarting: previewStarting.value,
+    previewTargetDisabledReason: previewTargetDisabledReason.value,
+    terminalIsRunning: terminalIsRunning.value
+  }));
   
   function previewClientDebugEnabled() {
     if (typeof window === "undefined") {
@@ -254,7 +253,14 @@ function useVibe64LaunchControlsSurface(props) {
   }
   
   async function recoverEmbeddedPreview() {
-    if (!embeddedAutoStartTarget.value || operationBusy.value) {
+    if (operationBusy.value) {
+      return false;
+    }
+    if (previewProxyUnavailable.value) {
+      await reloadPreview();
+      return Boolean(previewBaseUrl.value);
+    }
+    if (!embeddedAutoStartTarget.value) {
       return false;
     }
     if (terminalCanRetry.value) {
@@ -583,6 +589,7 @@ function useVibe64LaunchControlsSurface(props) {
     previewOptionsFormValues,
     previewOptionsPrimaryLabel,
     previewOptionsRemember,
+    previewRetryButtonVisible,
     previewStarting,
     previewToolbarPosition,
     previewUrl,
@@ -614,6 +621,27 @@ function useVibe64LaunchControlsSurface(props) {
   };
 }
 
+function launchPreviewEmptyText({
+  loading = false,
+  previewProxyUnavailable = false,
+  previewStarting = false,
+  previewTargetDisabledReason = "",
+  terminalIsRunning = false
+} = {}) {
+  if (previewProxyUnavailable) {
+    const reason = String(previewTargetDisabledReason || "").trim();
+    return reason || "Starting preview.";
+  }
+  if (previewStarting || terminalIsRunning) {
+    return "Starting preview.";
+  }
+  if (loading) {
+    return "Loading preview targets.";
+  }
+  return "Run the app to show the preview.";
+}
+
 export {
+  launchPreviewEmptyText,
   useVibe64LaunchControlsSurface
 };

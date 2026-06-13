@@ -287,6 +287,7 @@ test("launch status does not expose a preview for an exited launch terminal", as
   assert.equal(status.activeTerminal.running, false);
   assert.equal(status.previewTarget.available, false);
   assert.equal(status.previewTarget.href, "");
+  assert.equal(status.previewTarget.targetHref, "http://127.0.0.1:4100/app");
   assert.equal(status.openTarget.previewHref, "");
 });
 
@@ -353,6 +354,7 @@ test("launch status does not expose a preview before launch readiness", async ()
     assert.equal(status.previewTarget.available, false);
     assert.equal(status.previewTarget.disabledReason, "Launch target is starting.");
     assert.equal(status.previewTarget.href, "");
+    assert.equal(status.previewTarget.targetHref, "http://127.0.0.1:4100/app");
     assert.equal(status.openTarget.previewHref, "");
   } finally {
     await closeTerminalSession(terminal.id, {

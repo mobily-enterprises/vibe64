@@ -310,6 +310,23 @@ function launchPreviewRequiresProxy(metadata = {}) {
   return Boolean(String(metadata?.previewAuth || "").trim());
 }
 
+function launchStatusPollNeeded({
+  loading = false,
+  previewProxyPending = false,
+  sessionId = "",
+  terminalIsRunning = false,
+  terminalLaunchReady = false,
+  terminalVisible = false
+} = {}) {
+  return Boolean(
+    sessionId &&
+    terminalVisible &&
+    terminalIsRunning &&
+    !loading &&
+    (!terminalLaunchReady || previewProxyPending)
+  );
+}
+
 function terminalSessionMissingError(message = "") {
   return /terminal session not found/iu.test(String(message || ""));
 }
@@ -565,6 +582,7 @@ function useVibe64LaunchControls({
       ? status.value.previewTarget
       : null
   ));
+  const previewTargetHref = computed(() => String(previewTarget.value?.href || "").trim());
   const launchTargets = computed(() => {
     return Array.isArray(status.value.launchTargets) ? status.value.launchTargets : [];
   });
@@ -626,6 +644,12 @@ function useVibe64LaunchControls({
     const statusValue = terminalStatus.value || activeTerminal.value?.status || "";
     return statusValue === "running" || statusValue === "closing" || terminalStarting.value;
   });
+  const terminalPreviewProxyPending = computed(() => Boolean(
+    terminalPreviewRequiresProxy.value &&
+    terminalLaunchReady.value &&
+    terminalIsRunning.value &&
+    !previewTargetHref.value
+  ));
   const terminalIndicatorState = computed(() => {
     if (terminalStatus.value === "exited" || activeTerminal.value?.status === "exited") {
       const exitCode = terminalExitCode.value ?? activeTerminal.value?.exitCode;
@@ -870,13 +894,14 @@ function useVibe64LaunchControls({
     if (typeof window === "undefined") {
       return;
     }
-    if (
-      !sessionId.value ||
-      !terminalVisible.value ||
-      !terminalIsRunning.value ||
-      terminalLaunchReady.value ||
-      launchTargetsResource.isLoading.value
-    ) {
+    if (!launchStatusPollNeeded({
+      loading: launchTargetsResource.isLoading.value,
+      previewProxyPending: terminalPreviewProxyPending.value,
+      sessionId: sessionId.value,
+      terminalIsRunning: terminalIsRunning.value,
+      terminalLaunchReady: terminalLaunchReady.value,
+      terminalVisible: terminalVisible.value
+    })) {
       clearLaunchStatusPoll();
       return;
     }
@@ -885,7 +910,14 @@ function useVibe64LaunchControls({
     }
     launchStatusPollTimer = window.setTimeout(async () => {
       launchStatusPollTimer = 0;
-      if (!sessionId.value || terminalLaunchReady.value || !terminalVisible.value || !terminalIsRunning.value) {
+      if (!launchStatusPollNeeded({
+        loading: false,
+        previewProxyPending: terminalPreviewProxyPending.value,
+        sessionId: sessionId.value,
+        terminalIsRunning: terminalIsRunning.value,
+        terminalLaunchReady: terminalLaunchReady.value,
+        terminalVisible: terminalVisible.value
+      })) {
         return;
       }
       try {
@@ -1080,6 +1112,7 @@ function useVibe64LaunchControls({
     terminalVisible.value ? "terminal-visible" : "terminal-hidden",
     terminalIsRunning.value ? "running" : "stopped",
     terminalLaunchReady.value ? "ready" : "not-ready",
+    terminalPreviewProxyPending.value ? "preview-proxy-pending" : "preview-proxy-settled",
     launchTargetsResource.isLoading.value ? "loading" : "ready"
   ].join("|"), () => {
     scheduleLaunchStatusPoll();
@@ -1237,6 +1270,7 @@ function useVibe64LaunchControls({
     operationBusy,
     previewTargetDisabledReason,
     terminalPreviewRequiresProxy,
+    terminalPreviewProxyPending,
     previewInputIsRemembered,
     refresh,
     restartTerminal,
@@ -1287,6 +1321,7 @@ export {
   launchAutoStartAttemptStorageKey,
   launchPreviewBaseUrl,
   launchPreviewDisplayUrl,
+  launchStatusPollNeeded,
   launchPreviewRequiresProxy,
   launchPreviewOptionsStorageKey,
   launchPreviewToolbarStorageKey,

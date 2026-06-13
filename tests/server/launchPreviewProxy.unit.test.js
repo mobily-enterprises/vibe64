@@ -649,7 +649,7 @@ test("launch preview token appending preserves valueless query parameters", () =
   );
 });
 
-test("launch preview proxy keeps HTML previews retrying while the target is unavailable", async () => {
+test("launch preview proxy serves stable starting HTML while the target is unavailable", async () => {
   const registry = createLaunchPreviewProxyRegistry();
   try {
     const preview = await registry.ensure("session-unavailable", "http://127.0.0.1:9/home");
@@ -662,7 +662,7 @@ test("launch preview proxy keeps HTML previews retrying while the target is unav
     const html = await htmlResponse.text();
     assert.equal(htmlResponse.status, 503);
     assert.match(html, /Starting preview\./u);
-    assert.match(html, /http-equiv="refresh"/u);
+    assert.doesNotMatch(html, /http-equiv="refresh"/u);
 
     const apiResponse = await fetch(previewPath(preview.href, "/api/ping"), {
       headers: {

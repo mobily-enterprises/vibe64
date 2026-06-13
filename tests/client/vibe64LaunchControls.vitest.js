@@ -13,6 +13,7 @@ import {
   launchPreviewRequiresProxy,
   launchPreviewToolbarStorageKey,
   launchPreviewUrl,
+  launchStatusPollNeeded,
   launchControlScopeKey,
   launchTargetWorktreePath,
   nextLaunchPreviewToolbarPosition,
@@ -198,6 +199,35 @@ describe("Vibe64 launch controls", () => {
     })).toBe(true);
     expect(launchPreviewRequiresProxy({
       previewAuth: ""
+    })).toBe(false);
+  });
+
+  it("keeps polling after launch readiness while an authenticated preview proxy is unresolved", () => {
+    expect(launchStatusPollNeeded({
+      loading: false,
+      previewProxyPending: true,
+      sessionId: "session-1",
+      terminalIsRunning: true,
+      terminalLaunchReady: true,
+      terminalVisible: true
+    })).toBe(true);
+
+    expect(launchStatusPollNeeded({
+      loading: false,
+      previewProxyPending: false,
+      sessionId: "session-1",
+      terminalIsRunning: true,
+      terminalLaunchReady: true,
+      terminalVisible: true
+    })).toBe(false);
+
+    expect(launchStatusPollNeeded({
+      loading: true,
+      previewProxyPending: true,
+      sessionId: "session-1",
+      terminalIsRunning: true,
+      terminalLaunchReady: true,
+      terminalVisible: true
     })).toBe(false);
   });
 

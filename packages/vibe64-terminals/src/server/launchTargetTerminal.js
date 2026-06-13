@@ -159,7 +159,7 @@ function launchStatusResponse({
       href: "",
       kind: "url",
       label: "Preview",
-      targetHref: ""
+      targetHref: previewTarget?.targetHref || openTarget?.href || ""
     },
     lastLaunchTarget,
     openTarget: openTarget

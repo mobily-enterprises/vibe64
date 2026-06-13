@@ -227,6 +227,15 @@
           <v-icon :icon="mdiWebClock" size="46" />
         </div>
         <span>{{ previewEmptyText }}</span>
+        <v-btn
+          v-if="previewRetryButtonVisible"
+          :disabled="operationBusy || loading"
+          :icon="mdiRefresh"
+          size="small"
+          title="Retry preview"
+          variant="tonal"
+          @click="recoverEmbeddedPreview"
+        />
       </div>
       <Vibe64TerminalFrame
         v-if="embeddedTerminalVisible"
@@ -423,6 +432,7 @@ const {
   previewOptionsFormValues,
   previewOptionsPrimaryLabel,
   previewOptionsRemember,
+  previewRetryButtonVisible,
   previewStarting,
   previewToolbarPosition,
   previewUrl,
