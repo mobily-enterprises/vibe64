@@ -702,6 +702,7 @@ function createJskitDevCommand({
   frontendCommand = DEFAULT_DEV_FRONTEND_COMMAND,
   migrationCommand = "",
   previewAuthProfileCommand = createJskitPreviewAuthProfileCommand(),
+  previewAuthProfileLabel = "Preparing preview auth user.",
   startupArgs = []
 } = {}) {
   const backendCommandWithArgs = commandWithStartupArgs(backendCommand, startupArgs, {
@@ -716,7 +717,7 @@ function createJskitDevCommand({
           migrationCommand
         ]
       : []),
-    "printf '\\n[studio] Preparing preview auth user.\\n'",
+    `printf '\\n[studio] ${previewAuthProfileLabel.replaceAll("'", "'\\''")}\\n'`,
     previewAuthProfileCommand,
     "cleanup_vibe64_jskit_dev() {",
     "  kill \"$vibe64_jskit_backend_pid\" \"$vibe64_jskit_frontend_pid\" 2>/dev/null || true",
@@ -893,6 +894,9 @@ async function createJskitDevLaunchDescriptor({
         : createJskitPreviewAuthProfileCommand({
             vibe64User
           }),
+      previewAuthProfileLabel: selfTarget?.enabled === true
+        ? "Preparing Vibe64 self preview auth session."
+        : "Preparing preview auth user.",
       startupArgs
     }),
     extraDockerArgs: [

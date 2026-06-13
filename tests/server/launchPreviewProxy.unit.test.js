@@ -329,7 +329,7 @@ test("launch preview proxy injects JSKIT preview auth cookies after token valida
   });
 });
 
-test("launch preview proxy preserves existing JSKIT auth cookies", async () => {
+test("launch preview proxy replaces existing JSKIT auth cookies", async () => {
   const profileRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-auth-profile-"));
   const profilePath = path.join(profileRoot, "profile.json");
   await writeFile(profilePath, JSON.stringify({
@@ -370,9 +370,59 @@ test("launch preview proxy preserves existing JSKIT auth cookies", async () => {
       assert.equal(response.status, 200);
       const payload = await response.json();
       assert.match(payload.cookie, /target_cookie=target/u);
-      assert.match(payload.cookie, /sb_access_token=real-access/u);
-      assert.match(payload.cookie, /sb_refresh_token=real-refresh/u);
-      assert.doesNotMatch(payload.cookie, /jskit-dev\./u);
+      assert.match(payload.cookie, /sb_access_token=jskit-dev\./u);
+      assert.match(payload.cookie, /sb_refresh_token=jskit-dev\./u);
+      assert.doesNotMatch(payload.cookie, /real-access/u);
+      assert.doesNotMatch(payload.cookie, /real-refresh/u);
+      assert.doesNotMatch(payload.cookie, /vibe64_preview_token/u);
+    } finally {
+      await registry.closeAll();
+      await rm(profileRoot, {
+        force: true,
+        recursive: true
+      });
+    }
+  });
+});
+
+test("launch preview proxy injects Vibe64 self preview auth cookies", async () => {
+  const profileRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-self-preview-auth-profile-"));
+  const profilePath = path.join(profileRoot, "profile.json");
+  await writeFile(profilePath, JSON.stringify({
+    cookieName: "vibe64_session_self",
+    cookieValue: "session-id.session-token"
+  }), "utf8");
+  await withTargetServer(async (target) => {
+    const registry = createLaunchPreviewProxyRegistry();
+    try {
+      const preview = await registry.ensure({
+        previewAuth: {
+          kind: "vibe64-self",
+          profilePath,
+          sessionId: "session-vibe64-self-auth",
+          targetHref: `${target.origin}/home`,
+          targetRoot: "/tmp/vibe64-preview-self",
+          terminalSessionId: "terminal-vibe64-self-auth"
+        },
+        sessionId: "session-vibe64-self-auth",
+        targetHref: `${target.origin}/home`,
+        terminalSessionId: "terminal-vibe64-self-auth"
+      });
+
+      const response = await fetch(previewPath(preview.href, "/echo-cookie"), {
+        headers: {
+          Cookie: [
+            `${previewTokenCookieName(new URL(preview.href).origin)}=should-be-stripped`,
+            "target_cookie=target",
+            "vibe64_session_self=stale-session"
+          ].join("; ")
+        }
+      });
+      assert.equal(response.status, 200);
+      const payload = await response.json();
+      assert.match(payload.cookie, /target_cookie=target/u);
+      assert.match(payload.cookie, /vibe64_session_self=session-id\.session-token/u);
+      assert.doesNotMatch(payload.cookie, /stale-session/u);
       assert.doesNotMatch(payload.cookie, /vibe64_preview_token/u);
     } finally {
       await registry.closeAll();
@@ -430,6 +480,51 @@ test("launch preview proxy replaces existing synthetic JSKIT preview auth cookie
       assert.doesNotMatch(payload.cookie, /stale-access/u);
       assert.doesNotMatch(payload.cookie, /stale-refresh/u);
       assert.equal(jskitDevCookiePayload(payload.cookie).email, "preview-tester@example.test");
+    } finally {
+      await registry.closeAll();
+      await rm(profileRoot, {
+        force: true,
+        recursive: true
+      });
+    }
+  });
+});
+
+test("launch preview proxy blocks target JSKIT auth cookies from leaking to the browser", async () => {
+  const profileRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-auth-profile-"));
+  const profilePath = path.join(profileRoot, "profile.json");
+  await writeFile(profilePath, JSON.stringify({
+    authProvider: "vibe64-preview",
+    authProviderUserSid: "vibe64-preview",
+    displayName: "Preview Tester",
+    email: "preview-tester@example.test",
+    id: "42",
+    username: "preview-tester"
+  }), "utf8");
+  await withTargetServer(async (target) => {
+    const registry = createLaunchPreviewProxyRegistry();
+    try {
+      const preview = await registry.ensure({
+        previewAuth: {
+          kind: "jskit-dev",
+          profilePath,
+          sessionId: "session-filter-set-cookie",
+          targetHref: `${target.origin}/home`,
+          targetRoot: "/tmp/vibe64-preview-project",
+          terminalSessionId: "terminal-filter-set-cookie"
+        },
+        sessionId: "session-filter-set-cookie",
+        targetHref: `${target.origin}/home`,
+        terminalSessionId: "terminal-filter-set-cookie"
+      });
+
+      const response = await fetch(previewPath(preview.href, "/set-auth-cookies"));
+      assert.equal(response.status, 200);
+      const setCookie = response.headers.get("set-cookie") || "";
+      assert.match(setCookie, /target_cookie=target/u);
+      assert.match(setCookie, new RegExp(`${previewTokenCookieName(new URL(preview.href).origin)}=`, "u"));
+      assert.doesNotMatch(setCookie, /sb_access_token/u);
+      assert.doesNotMatch(setCookie, /sb_refresh_token/u);
     } finally {
       await registry.closeAll();
       await rm(profileRoot, {
@@ -644,6 +739,20 @@ async function withTargetServer(callback) {
       });
       response.end(JSON.stringify({
         cookie: request.headers.cookie || ""
+      }));
+      return;
+    }
+    if (request.url === "/set-auth-cookies") {
+      response.writeHead(200, {
+        "Content-Type": "application/json",
+        "Set-Cookie": [
+          "target_cookie=target; Path=/",
+          "sb_access_token=target-access; Path=/",
+          "sb_refresh_token=target-refresh; Path=/"
+        ]
+      });
+      response.end(JSON.stringify({
+        ok: true
       }));
       return;
     }
