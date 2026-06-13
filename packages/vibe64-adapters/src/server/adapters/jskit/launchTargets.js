@@ -793,11 +793,20 @@ async function createJskitBuiltLaunchDescriptor({
         networkEnv: true
       }
     : null;
+  const previewAuthKind = selfTarget?.enabled === true
+    ? VIBE64_SELF_PREVIEW_AUTH_KIND
+    : JSKIT_PREVIEW_AUTH_KIND;
   const previewAuthProfileCommand = {
-    command: createJskitPreviewAuthProfileCommand({
-      vibe64User
-    }),
-    label: "Preparing preview auth user.",
+    command: selfTarget?.enabled === true
+      ? createVibe64SelfPreviewAuthProfileCommand({
+          vibe64User
+        })
+      : createJskitPreviewAuthProfileCommand({
+          vibe64User
+        }),
+    label: selfTarget?.enabled === true
+      ? "Preparing Vibe64 self preview auth session."
+      : "Preparing preview auth user.",
     networkEnv: true
   };
 
@@ -852,7 +861,7 @@ async function createJskitBuiltLaunchDescriptor({
       testrunCommand: config.testrunCommand,
       ...jskitSelfTargetMetadata(selfTarget)
     },
-    previewAuth: JSKIT_PREVIEW_AUTH_KIND,
+    previewAuth: previewAuthKind,
     urlPath: await defaultAppPath(worktreePath),
     ...(workdir ? { workdir } : {})
   };
@@ -868,15 +877,22 @@ async function createJskitDevLaunchDescriptor({
   worktreePath = ""
 } = {}) {
   const startupArgs = startupArgsFromLaunchInput(launchInput);
+  const previewAuthKind = selfTarget?.enabled === true
+    ? VIBE64_SELF_PREVIEW_AUTH_KIND
+    : JSKIT_PREVIEW_AUTH_KIND;
   return {
     command: createJskitDevCommand({
       backendCommand: config.backendCommand,
       backendPort: config.backendPort,
       frontendCommand: config.frontendCommand,
       migrationCommand: config.migrationCommand,
-      previewAuthProfileCommand: createJskitPreviewAuthProfileCommand({
-        vibe64User
-      }),
+      previewAuthProfileCommand: selfTarget?.enabled === true
+        ? createVibe64SelfPreviewAuthProfileCommand({
+            vibe64User
+          })
+        : createJskitPreviewAuthProfileCommand({
+            vibe64User
+          }),
       startupArgs
     }),
     extraDockerArgs: [
@@ -898,7 +914,7 @@ async function createJskitDevLaunchDescriptor({
       previewAuthProfileCommand: "enabled",
       ...jskitSelfTargetMetadata(selfTarget)
     },
-    previewAuth: JSKIT_PREVIEW_AUTH_KIND,
+    previewAuth: previewAuthKind,
     urlPath: await defaultAppPath(worktreePath),
     ...(workdir ? { workdir } : {})
   };
