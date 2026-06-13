@@ -481,12 +481,12 @@ function createLaunchTargetTerminalController({
     const key = String(sessionId || "global");
     const previous = launchStartLocks.get(key) || Promise.resolve();
     const run = previous.catch(() => null).then(operation);
-    const cleanup = run.finally(() => {
-      if (launchStartLocks.get(key) === cleanup) {
+    const tracked = run.catch(() => null).finally(() => {
+      if (launchStartLocks.get(key) === tracked) {
         launchStartLocks.delete(key);
       }
     });
-    launchStartLocks.set(key, cleanup);
+    launchStartLocks.set(key, tracked);
     return run;
   }
 
@@ -671,42 +671,43 @@ function createLaunchTargetTerminalController({
           };
         }
 
-        await ensureLaunchTargetRuntimeImpl({
-          context
-        });
         const namespace = launchTargetTerminalNamespace(sessionId);
-        const terminalEnv = await projectTerminalEnvironment({
-          projectService,
-          runtime: context.runtime,
-          session: context.session,
-          target: "launch-target",
-          targetRoot: context.targetRoot
-        });
-        const launchEnv = {
-          ...terminalEnv,
-          ...(spec.env || {})
-        };
-        const launchEnvHash = terminalEnvironmentFingerprint(launchEnv);
-        const readinessMarker = readinessMarkerFromSpec(spec);
-        let launchReadyWritten = false;
-        await closeStoppedLaunchTerminals(sessionId);
-        const existingReusableTerminal = reusableLaunchTerminal(sessionId, {
-          launchEnvHash,
-          launchInputHash,
-          launchTargetId: launchTarget.id,
-          namespace,
-          spec
-        });
-        await cleanupSupersededLaunchTerminals({
-          launchPreviewProxies,
-          namespace,
-          removeLaunchTargetContainersImpl,
-          reusableTerminal: existingReusableTerminal,
-          sessionId,
-          targetRoot: context.targetRoot
-        });
         let terminalSession;
+        let readinessMarker = "";
         try {
+          await ensureLaunchTargetRuntimeImpl({
+            context
+          });
+          const terminalEnv = await projectTerminalEnvironment({
+            projectService,
+            runtime: context.runtime,
+            session: context.session,
+            target: "launch-target",
+            targetRoot: context.targetRoot
+          });
+          const launchEnv = {
+            ...terminalEnv,
+            ...(spec.env || {})
+          };
+          const launchEnvHash = terminalEnvironmentFingerprint(launchEnv);
+          readinessMarker = readinessMarkerFromSpec(spec);
+          let launchReadyWritten = false;
+          await closeStoppedLaunchTerminals(sessionId);
+          const existingReusableTerminal = reusableLaunchTerminal(sessionId, {
+            launchEnvHash,
+            launchInputHash,
+            launchTargetId: launchTarget.id,
+            namespace,
+            spec
+          });
+          await cleanupSupersededLaunchTerminals({
+            launchPreviewProxies,
+            namespace,
+            removeLaunchTargetContainersImpl,
+            reusableTerminal: existingReusableTerminal,
+            sessionId,
+            targetRoot: context.targetRoot
+          });
           terminalSession = startTerminalSession({
             args: spec.args || [],
             command: spec.command,
