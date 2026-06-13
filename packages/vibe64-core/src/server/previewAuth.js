@@ -7,6 +7,7 @@ import {
 } from "./studioRoots.js";
 
 const JSKIT_PREVIEW_AUTH_KIND = "jskit-dev";
+const COOKIE_PROFILE_PREVIEW_AUTH_KIND = "cookie-profile";
 const VIBE64_SELF_PREVIEW_AUTH_KIND = "vibe64-self";
 const JSKIT_DEV_AUTH_TOKEN_PREFIX = "jskit-dev.";
 const JSKIT_DEV_AUTH_ISSUER = "jskit:dev-auth";
@@ -15,6 +16,12 @@ const JSKIT_DEV_AUTH_ACCESS_TTL_SECONDS = 60 * 60;
 const JSKIT_DEV_AUTH_REFRESH_TTL_SECONDS = 60 * 60 * 12;
 const JSKIT_DEV_ACCESS_COOKIE = "sb_access_token";
 const JSKIT_DEV_REFRESH_COOKIE = "sb_refresh_token";
+const COOKIE_NAME_PATTERN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/u;
+const PREVIEW_AUTH_KINDS = new Set([
+  JSKIT_PREVIEW_AUTH_KIND,
+  COOKIE_PROFILE_PREVIEW_AUTH_KIND,
+  VIBE64_SELF_PREVIEW_AUTH_KIND
+]);
 const PREVIEW_AUTH_PROFILE = Object.freeze({
   id: "9007199254740991",
   email: "preview@vibe64.local",
@@ -26,13 +33,7 @@ const PREVIEW_AUTH_PROFILE = Object.freeze({
 
 function normalizePreviewAuthKind(value = "") {
   const text = String(value || "").trim();
-  if (text === JSKIT_PREVIEW_AUTH_KIND) {
-    return JSKIT_PREVIEW_AUTH_KIND;
-  }
-  if (text === VIBE64_SELF_PREVIEW_AUTH_KIND) {
-    return VIBE64_SELF_PREVIEW_AUTH_KIND;
-  }
-  return "";
+  return PREVIEW_AUTH_KINDS.has(text) ? text : "";
 }
 
 function previewAuthSecret({
@@ -66,9 +67,50 @@ function previewAuthEnvironment({
   targetRoot = "",
   terminalSessionId = ""
 } = {}) {
-  if (normalizePreviewAuthKind(kind) !== JSKIT_PREVIEW_AUTH_KIND) {
-    return {};
-  }
+  return previewAuthProvider(kind)?.environment({
+    projectScope,
+    sessionId,
+    targetHref,
+    targetRoot,
+    terminalSessionId
+  }) || {};
+}
+
+function previewAuthCookieNames({
+  kind = "",
+  profilePath = ""
+} = {}) {
+  return previewAuthProvider(kind)?.cookieNames({
+    profilePath
+  }) || [];
+}
+
+function previewAuthCookieHeader({
+  kind = "",
+  profilePath = "",
+  projectScope = "",
+  sessionId = "",
+  targetHref = "",
+  targetRoot = "",
+  terminalSessionId = ""
+} = {}) {
+  return previewAuthProvider(kind)?.cookieHeader({
+    profilePath,
+    projectScope,
+    sessionId,
+    targetHref,
+    targetRoot,
+    terminalSessionId
+  }) || "";
+}
+
+function jskitPreviewAuthEnvironment({
+  projectScope = "",
+  sessionId = "",
+  targetHref = "",
+  targetRoot = "",
+  terminalSessionId = ""
+} = {}) {
   return {
     AUTH_DEV_BYPASS_ENABLED: "true",
     AUTH_DEV_BYPASS_SECRET: previewAuthSecret({
@@ -83,26 +125,14 @@ function previewAuthEnvironment({
   };
 }
 
-function previewAuthCookieNames({
-  kind = "",
-  profilePath = ""
-} = {}) {
-  const normalizedKind = normalizePreviewAuthKind(kind);
-  if (normalizedKind === JSKIT_PREVIEW_AUTH_KIND) {
-    return [
-      JSKIT_DEV_ACCESS_COOKIE,
-      JSKIT_DEV_REFRESH_COOKIE
-    ];
-  }
-  if (normalizedKind === VIBE64_SELF_PREVIEW_AUTH_KIND) {
-    const profile = readVibe64SelfPreviewAuthProfile(profilePath);
-    return profile ? [profile.cookieName] : [];
-  }
-  return [];
+function jskitPreviewAuthCookieNames() {
+  return [
+    JSKIT_DEV_ACCESS_COOKIE,
+    JSKIT_DEV_REFRESH_COOKIE
+  ];
 }
 
-function previewAuthCookieHeader({
-  kind = "",
+function jskitPreviewAuthCookieHeader({
   profilePath = "",
   projectScope = "",
   sessionId = "",
@@ -110,16 +140,6 @@ function previewAuthCookieHeader({
   targetRoot = "",
   terminalSessionId = ""
 } = {}) {
-  const normalizedKind = normalizePreviewAuthKind(kind);
-  if (normalizedKind === VIBE64_SELF_PREVIEW_AUTH_KIND) {
-    const profile = readVibe64SelfPreviewAuthProfile(profilePath);
-    return profile
-      ? `${profile.cookieName}=${encodeURIComponent(profile.cookieValue)}`
-      : "";
-  }
-  if (normalizedKind !== JSKIT_PREVIEW_AUTH_KIND) {
-    return "";
-  }
   const secret = previewAuthSecret({
     projectScope,
     sessionId,
@@ -135,6 +155,66 @@ function previewAuthCookieHeader({
     `${JSKIT_DEV_ACCESS_COOKIE}=${encodeURIComponent(session.accessToken)}`,
     `${JSKIT_DEV_REFRESH_COOKIE}=${encodeURIComponent(session.refreshToken)}`
   ].join("; ");
+}
+
+function emptyPreviewAuthEnvironment() {
+  return {};
+}
+
+function vibe64SelfPreviewAuthCookieNames({
+  profilePath = ""
+} = {}) {
+  const profile = readVibe64SelfPreviewAuthProfile(profilePath);
+  return profile ? [profile.cookieName] : [];
+}
+
+function vibe64SelfPreviewAuthCookieHeader({
+  profilePath = ""
+} = {}) {
+  const profile = readVibe64SelfPreviewAuthProfile(profilePath);
+  return profile
+    ? `${profile.cookieName}=${encodeURIComponent(profile.cookieValue)}`
+    : "";
+}
+
+function cookieProfilePreviewAuthCookieNames({
+  profilePath = ""
+} = {}) {
+  const profile = readCookiePreviewAuthProfile(profilePath);
+  return profile ? profile.cookies.map((cookie) => cookie.name) : [];
+}
+
+function cookieProfilePreviewAuthCookieHeader({
+  profilePath = ""
+} = {}) {
+  const profile = readCookiePreviewAuthProfile(profilePath);
+  return profile
+    ? profile.cookies
+      .map((cookie) => `${cookie.name}=${encodeURIComponent(cookie.value)}`)
+      .join("; ")
+    : "";
+}
+
+const PREVIEW_AUTH_PROVIDERS = Object.freeze({
+  [JSKIT_PREVIEW_AUTH_KIND]: Object.freeze({
+    cookieHeader: jskitPreviewAuthCookieHeader,
+    cookieNames: jskitPreviewAuthCookieNames,
+    environment: jskitPreviewAuthEnvironment
+  }),
+  [COOKIE_PROFILE_PREVIEW_AUTH_KIND]: Object.freeze({
+    cookieHeader: cookieProfilePreviewAuthCookieHeader,
+    cookieNames: cookieProfilePreviewAuthCookieNames,
+    environment: emptyPreviewAuthEnvironment
+  }),
+  [VIBE64_SELF_PREVIEW_AUTH_KIND]: Object.freeze({
+    cookieHeader: vibe64SelfPreviewAuthCookieHeader,
+    cookieNames: vibe64SelfPreviewAuthCookieNames,
+    environment: emptyPreviewAuthEnvironment
+  })
+});
+
+function previewAuthProvider(kind = "") {
+  return PREVIEW_AUTH_PROVIDERS[normalizePreviewAuthKind(kind)] || null;
 }
 
 function createJskitDevAuthSession({
@@ -213,23 +293,24 @@ function previewAuthProfilePath({
 }
 
 function readPreviewAuthProfile(profilePath = "") {
-  const normalizedPath = String(profilePath || "").trim();
-  if (!normalizedPath) {
-    return null;
-  }
-  let payload;
-  try {
-    payload = JSON.parse(readFileSync(normalizedPath, "utf8"));
-  } catch (error) {
-    if (error?.code === "ENOENT") {
-      return null;
-    }
-    throw new Error(`Cannot read preview auth profile: ${String(error?.message || error)}`);
-  }
-  return normalizePreviewAuthProfile(payload);
+  return normalizePreviewAuthProfile(
+    readJsonProfile(profilePath, "preview auth profile")
+  );
 }
 
 function readVibe64SelfPreviewAuthProfile(profilePath = "") {
+  return normalizeVibe64SelfPreviewAuthProfile(
+    readJsonProfile(profilePath, "Vibe64 self preview auth profile")
+  );
+}
+
+function readCookiePreviewAuthProfile(profilePath = "") {
+  return normalizeCookiePreviewAuthProfile(
+    readJsonProfile(profilePath, "cookie preview auth profile")
+  );
+}
+
+function readJsonProfile(profilePath = "", label = "profile") {
   const normalizedPath = String(profilePath || "").trim();
   if (!normalizedPath) {
     return null;
@@ -241,12 +322,15 @@ function readVibe64SelfPreviewAuthProfile(profilePath = "") {
     if (error?.code === "ENOENT") {
       return null;
     }
-    throw new Error(`Cannot read Vibe64 self preview auth profile: ${String(error?.message || error)}`);
+    throw new Error(`Cannot read ${label}: ${String(error?.message || error)}`);
   }
-  return normalizeVibe64SelfPreviewAuthProfile(payload);
+  return payload;
 }
 
 function normalizePreviewAuthProfile(value = {}) {
+  if (!value) {
+    return null;
+  }
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("Preview auth profile must be an object.");
   }
@@ -269,6 +353,9 @@ function normalizePreviewAuthProfile(value = {}) {
 }
 
 function normalizeVibe64SelfPreviewAuthProfile(value = {}) {
+  if (!value) {
+    return null;
+  }
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("Vibe64 self preview auth profile must be an object.");
   }
@@ -282,7 +369,53 @@ function normalizeVibe64SelfPreviewAuthProfile(value = {}) {
   return profile;
 }
 
+function normalizeCookiePreviewAuthProfile(value = {}) {
+  if (!value) {
+    return null;
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Cookie preview auth profile must be an object.");
+  }
+  if (!Array.isArray(value.cookies)) {
+    throw new Error("Cookie preview auth profile requires a cookies array.");
+  }
+  const seenNames = new Set();
+  const cookies = value.cookies.map((cookie, index) => {
+    const normalizedCookie = normalizeCookiePreviewAuthCookie(cookie, index);
+    if (seenNames.has(normalizedCookie.name)) {
+      throw new Error(`Cookie preview auth profile contains duplicate cookie name ${normalizedCookie.name}.`);
+    }
+    seenNames.add(normalizedCookie.name);
+    return normalizedCookie;
+  });
+  if (cookies.length === 0) {
+    throw new Error("Cookie preview auth profile requires at least one cookie.");
+  }
+  return {
+    cookies
+  };
+}
+
+function normalizeCookiePreviewAuthCookie(value = {}, index = 0) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`Cookie preview auth profile cookie ${index + 1} must be an object.`);
+  }
+  const name = String(value.name || "").trim();
+  const cookieValue = String(value.value ?? "").trim();
+  if (!COOKIE_NAME_PATTERN.test(name)) {
+    throw new Error(`Cookie preview auth profile cookie ${index + 1} has an invalid name.`);
+  }
+  if (!cookieValue) {
+    throw new Error(`Cookie preview auth profile cookie ${index + 1} requires a value.`);
+  }
+  return {
+    name,
+    value: cookieValue
+  };
+}
+
 export {
+  COOKIE_PROFILE_PREVIEW_AUTH_KIND,
   JSKIT_PREVIEW_AUTH_KIND,
   PREVIEW_AUTH_PROFILE,
   VIBE64_SELF_PREVIEW_AUTH_KIND,
