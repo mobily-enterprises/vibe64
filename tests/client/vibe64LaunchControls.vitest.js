@@ -8,6 +8,7 @@ import {
   launchPreviewOptionsStorageKey,
   launchPreviewToolbarStorageKey,
   launchPreviewUrl,
+  launchControlScopeKey,
   launchTargetWorktreePath,
   nextLaunchPreviewToolbarPosition,
   normalizeLaunchPreviewToolbarPosition,
@@ -18,6 +19,14 @@ import {
 } from "../../src/composables/useVibe64LaunchControls.js";
 
 describe("Vibe64 launch controls", () => {
+  it("scopes launch lifecycle state by project and session", () => {
+    expect(launchControlScopeKey("vibe64", "session-1")).toBe("vibe64::session-1");
+    expect(launchControlScopeKey("vibe64", "session-1"))
+      .not.toBe(launchControlScopeKey("beepollen", "session-1"));
+    expect(launchControlScopeKey("vibe64", "session-1"))
+      .not.toBe(launchControlScopeKey("vibe64", "session-2"));
+  });
+
   it("builds a stable browser target name from the project root", () => {
     const firstSession = {
       sessionId: "session-1",

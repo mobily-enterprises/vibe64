@@ -189,6 +189,10 @@ function launchTargetWorktreePath(session = {}) {
   return vibe64SessionWorktreePath(session);
 }
 
+function launchControlScopeKey(projectSlug = "", sessionId = "") {
+  return `${String(projectSlug || "").trim()}::${String(sessionId || "").trim()}`;
+}
+
 function delay(milliseconds = 0) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
@@ -318,6 +322,7 @@ function useVibe64LaunchControls({
 
   const selectedSession = computed(() => readRefOrGetterValue(session) || null);
   const sessionId = computed(() => String(selectedSession.value?.sessionId || ""));
+  const launchScopeKey = computed(() => launchControlScopeKey(projectSlug.value, sessionId.value));
   const requestedAutoStartTargetId = computed(() => String(readRefOrGetterValue(autoStartTargetId) || "").trim());
   const canLoadLaunchTargets = computed(() => Boolean(
     sessionId.value &&
@@ -360,6 +365,7 @@ function useVibe64LaunchControls({
     terminalStarting,
     terminalStatus
   } = terminal;
+  let disposed = false;
 
   const launchTargetsResource = useEndpointResource({
     enabled: canLoadLaunchTargets,
@@ -611,6 +617,7 @@ function useVibe64LaunchControls({
     if (!sessionId.value || launchButtonsDisabled.value || launchTarget.available === false || !launchTarget.id) {
       return false;
     }
+    const startedScopeKey = launchScopeKey.value;
     if (applyDefaultDisplay) {
       terminalExpanded.value = launchTarget.defaultDisplay !== "minimized";
     }
@@ -621,6 +628,9 @@ function useVibe64LaunchControls({
         launchTargetId: launchTarget.id,
         sessionId: sessionId.value
       });
+      if (disposed || startedScopeKey !== launchScopeKey.value) {
+        return false;
+      }
       applyLaunchTerminalSession(terminalSession);
       void connectLaunchTerminal();
       await refresh();
@@ -868,7 +878,7 @@ function useVibe64LaunchControls({
     disposeTerminalDisplay();
   });
 
-  watch(sessionId, () => {
+  watch(launchScopeKey, () => {
     attachedTerminalId = "";
     autoStartKey.value = "";
     previewInputOverrides.value = {};
@@ -881,6 +891,7 @@ function useVibe64LaunchControls({
   });
 
   watch(() => [
+    projectSlug.value,
     sessionId.value,
     terminalLaunchReady.value ? "ready" : "not-ready"
   ].join("|"), () => {
@@ -892,6 +903,7 @@ function useVibe64LaunchControls({
   });
 
   watch(() => [
+    projectSlug.value,
     sessionId.value,
     terminalVisible.value ? "terminal-visible" : "terminal-hidden",
     terminalIsRunning.value ? "running" : "stopped",
@@ -904,6 +916,7 @@ function useVibe64LaunchControls({
   });
 
   watch(() => [
+    projectSlug.value,
     sessionId.value,
     requestedAutoStartTargetId.value,
     launchTargetsResource.isLoading.value ? "loading" : "ready",
@@ -912,7 +925,7 @@ function useVibe64LaunchControls({
     autoStartTarget.value?.id || ""
   ].join("|"), () => {
     const target = autoStartTarget.value;
-    const key = `${sessionId.value}:${target?.id || ""}`;
+    const key = `${launchScopeKey.value}:${target?.id || ""}`;
     if (
       !sessionId.value ||
       !target ||
@@ -933,6 +946,7 @@ function useVibe64LaunchControls({
   });
 
   onBeforeUnmount(() => {
+    disposed = true;
     clearLaunchStatusPoll();
     disposeTerminalUi();
   });
@@ -1001,6 +1015,7 @@ export {
   launchPreviewOptionsStorageKey,
   launchPreviewToolbarStorageKey,
   launchPreviewUrl,
+  launchControlScopeKey,
   launchTargetWorktreePath,
   nextLaunchPreviewToolbarPosition,
   normalizeLaunchPreviewToolbarPosition,
