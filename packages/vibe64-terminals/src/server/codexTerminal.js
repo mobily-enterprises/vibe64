@@ -110,6 +110,9 @@ const CODEX_APP_SERVER_TURN_STATE = Object.freeze({
   FINALIZING: "finalizing",
   IDLE: "idle"
 });
+const CODEX_APP_SERVER_FINALIZING_GRACE_MS = 10000;
+const CODEX_APP_SERVER_RESULT_DELIVERY_FAILURE_MESSAGE =
+  "Codex app-server finished this turn, but Vibe64 did not receive the assistant result text.";
 
 function normalizeText(value) {
   return String(value || "").trim();
@@ -448,6 +451,27 @@ function codexAppServerTurnState(session = {}) {
   };
 }
 
+function dateValueMs(value = "") {
+  const parsed = Date.parse(normalizeText(value));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function codexAppServerFinalizingExpired(turn = {}, nowMs = Date.now()) {
+  if (normalizeText(turn.state) !== CODEX_APP_SERVER_TURN_STATE.FINALIZING) {
+    return false;
+  }
+  const referenceMs = dateValueMs(turn.completedAt) || dateValueMs(turn.updatedAt);
+  return Boolean(referenceMs && nowMs - referenceMs >= CODEX_APP_SERVER_FINALIZING_GRACE_MS);
+}
+
+function codexAppServerFinalizingRemainingMs(turn = {}, nowMs = Date.now()) {
+  const referenceMs = dateValueMs(turn.completedAt) || dateValueMs(turn.updatedAt);
+  if (!referenceMs) {
+    return CODEX_APP_SERVER_FINALIZING_GRACE_MS;
+  }
+  return Math.max(0, CODEX_APP_SERVER_FINALIZING_GRACE_MS - (nowMs - referenceMs));
+}
+
 function codexState(session = {}) {
   const metadata = session.metadata || {};
   const workdir = terminalWorktreePath(session);
@@ -664,6 +688,7 @@ function createCodexTerminalController({
   const codexAppServerEventSubscriptions = new Map();
   const codexAppServerCompletedTurns = new Set();
   const codexAppServerFinalizedTurns = new Set();
+  const codexAppServerFinalizingTimers = new Map();
   const codexAppServerResultFinalizations = new Map();
   const codexAppServerMirroredUserItems = new Set();
   const codexAppServerAssistantTurns = new Map();
@@ -707,6 +732,52 @@ function createCodexTerminalController({
     return codexAppServerProviderOptions.useDocker !== false;
   }
 
+  function clearCodexAppServerFinalizingTimer(sessionId = "", threadId = "", turnId = "") {
+    const key = codexAppServerResultFinalizationKey(sessionId, threadId, turnId);
+    const timer = codexAppServerFinalizingTimers.get(key);
+    if (timer) {
+      clearTimeout(timer);
+      codexAppServerFinalizingTimers.delete(key);
+    }
+  }
+
+  function scheduleCodexAppServerFinalizingRecovery(sessionId = "", threadId = "", turnId = "", {
+    completedAt = "",
+    status = "completed",
+    updatedAt = ""
+  } = {}) {
+    const normalizedSessionId = normalizeText(sessionId);
+    const normalizedThreadId = normalizeText(threadId);
+    const normalizedTurnId = normalizeText(turnId);
+    if (!normalizedSessionId || !normalizedThreadId || !normalizedTurnId) {
+      return;
+    }
+    clearCodexAppServerFinalizingTimer(normalizedSessionId, normalizedThreadId, normalizedTurnId);
+    const delayMs = codexAppServerFinalizingRemainingMs({
+      completedAt,
+      state: CODEX_APP_SERVER_TURN_STATE.FINALIZING,
+      updatedAt
+    });
+    const timer = setTimeout(() => {
+      codexAppServerFinalizingTimers.delete(
+        codexAppServerResultFinalizationKey(normalizedSessionId, normalizedThreadId, normalizedTurnId)
+      );
+      void recoverCodexAppServerFinalizingTurn(
+        normalizedSessionId,
+        normalizedThreadId,
+        normalizedTurnId,
+        {
+          status
+        }
+      );
+    }, delayMs);
+    timer.unref?.();
+    codexAppServerFinalizingTimers.set(
+      codexAppServerResultFinalizationKey(normalizedSessionId, normalizedThreadId, normalizedTurnId),
+      timer
+    );
+  }
+
   function codexAppServerThreadStatus(thread = {}) {
     let rawThread = thread;
     if (isRecord(thread.raw)) {
@@ -722,6 +793,30 @@ function createCodexTerminalController({
     const turn = codexAppServerTurnState(session);
     if (!sessionId || !turn.active || !turn.threadId || !sessionHasCodexAppServerRuntime(session)) {
       return session;
+    }
+    if (turn.state === CODEX_APP_SERVER_TURN_STATE.FINALIZING) {
+      const result = await finalizeCodexAppServerAssistantResult(sessionId, turn.threadId, turn.turnId, {
+        status: turn.status || "completed"
+      });
+      const runtime = await projectService.createRuntime();
+      const currentSession = await runtime.getSession(sessionId);
+      if (result?.processed) {
+        return currentSession;
+      }
+      const currentTurn = codexAppServerTurnState(currentSession);
+      if (codexAppServerFinalizingExpired(currentTurn)) {
+        await stopCodexAppServerTurnWithResultDeliveryFailure(sessionId, turn.threadId, turn.turnId, {
+          reason: result?.reason || "missing_assistant_text",
+          status: turn.status || "completed"
+        });
+        return runtime.getSession(sessionId);
+      }
+      scheduleCodexAppServerFinalizingRecovery(sessionId, turn.threadId, turn.turnId, {
+        completedAt: currentTurn.completedAt,
+        status: turn.status || "completed",
+        updatedAt: currentTurn.updatedAt
+      });
+      return currentSession;
     }
     const provider = codexAppServerProviderForSession(
       sessionId,
@@ -1470,6 +1565,7 @@ function createCodexTerminalController({
   }
 
   async function markCodexAppServerTurnIdle(sessionId = "", input = {}) {
+    clearCodexAppServerFinalizingTimer(sessionId, input.threadId, input.turnId);
     return writeCodexAppServerTurnMetadata(sessionId, {
       ...codexAppServerTurnIdleMetadata(input),
       publishReason: "codex-app-server-turn-idle"
@@ -1545,6 +1641,45 @@ function createCodexTerminalController({
     return operation;
   }
 
+  async function recoverCodexAppServerFinalizingTurn(sessionId = "", threadId = "", turnId = "", {
+    status = "completed"
+  } = {}) {
+    const normalizedSessionId = normalizeText(sessionId);
+    const normalizedThreadId = normalizeText(threadId);
+    const normalizedTurnId = normalizeText(turnId);
+    const result = await finalizeCodexAppServerAssistantResult(
+      normalizedSessionId,
+      normalizedThreadId,
+      normalizedTurnId,
+      {
+        status
+      }
+    );
+    if (result?.processed) {
+      return result;
+    }
+    const runtime = await projectService.createRuntime();
+    const session = await runtime.getSession(normalizedSessionId);
+    const turn = codexAppServerTurnState(session);
+    if (!codexAppServerFinalizingExpired(turn)) {
+      scheduleCodexAppServerFinalizingRecovery(normalizedSessionId, normalizedThreadId, normalizedTurnId, {
+        completedAt: turn.completedAt,
+        status,
+        updatedAt: turn.updatedAt
+      });
+      return result;
+    }
+    return stopCodexAppServerTurnWithResultDeliveryFailure(
+      normalizedSessionId,
+      normalizedThreadId,
+      normalizedTurnId,
+      {
+        reason: result?.reason || "missing_assistant_text",
+        status
+      }
+    );
+  }
+
   async function completeCodexAppServerTurn(sessionId = "", threadId = "", turnId = "", {
     status = "completed"
   } = {}) {
@@ -1576,15 +1711,44 @@ function createCodexTerminalController({
         reason: "already_finalized"
       };
     }
+    const runtime = await projectService.createRuntime();
+    const session = await runtime.getSession(normalizedSessionId);
+    const existingTurn = codexAppServerTurnState(session);
+    const alreadyFinalizing = existingTurn.state === CODEX_APP_SERVER_TURN_STATE.FINALIZING &&
+      existingTurn.threadId === normalizedThreadId &&
+      existingTurn.turnId === normalizedTurnId;
     codexAppServerCompletedTurns.add(codexAppServerTurnKey(normalizedThreadId, normalizedTurnId));
-    await markCodexAppServerTurnFinalizing(normalizedSessionId, {
+    if (!alreadyFinalizing) {
+      await markCodexAppServerTurnFinalizing(normalizedSessionId, {
+        status: normalizedStatus,
+        threadId: normalizedThreadId,
+        turnId: normalizedTurnId
+      });
+    }
+    scheduleCodexAppServerFinalizingRecovery(normalizedSessionId, normalizedThreadId, normalizedTurnId, {
+      completedAt: alreadyFinalizing ? existingTurn.completedAt : "",
       status: normalizedStatus,
-      threadId: normalizedThreadId,
-      turnId: normalizedTurnId
+      updatedAt: alreadyFinalizing ? existingTurn.updatedAt : ""
     });
-    return finalizeCodexAppServerAssistantResult(normalizedSessionId, normalizedThreadId, normalizedTurnId, {
+    const result = await finalizeCodexAppServerAssistantResult(normalizedSessionId, normalizedThreadId, normalizedTurnId, {
       status: normalizedStatus
     });
+    if (!result?.processed) {
+      const currentSession = await runtime.getSession(normalizedSessionId);
+      const currentTurn = codexAppServerTurnState(currentSession);
+      if (codexAppServerFinalizingExpired(currentTurn)) {
+        return stopCodexAppServerTurnWithResultDeliveryFailure(
+          normalizedSessionId,
+          normalizedThreadId,
+          normalizedTurnId,
+          {
+            reason: result?.reason || "missing_assistant_text",
+            status: normalizedStatus
+          }
+        );
+      }
+    }
+    return result;
   }
 
   function codexAppServerStoppedTurnMessage(status = "", error = "") {
@@ -1622,6 +1786,45 @@ function createCodexTerminalController({
         reason: "codex-app-server-agent-result-provider-failed"
       });
     }
+    return {
+      ok: false,
+      error: message,
+      status: normalizedStatus
+    };
+  }
+
+  async function stopCodexAppServerTurnWithResultDeliveryFailure(sessionId = "", threadId = "", turnId = "", {
+    reason = "",
+    status = "completed"
+  } = {}) {
+    const normalizedSessionId = normalizeText(sessionId);
+    const normalizedThreadId = normalizeText(threadId);
+    const normalizedStatus = normalizeText(status) || "completed";
+    const normalizedTurnId = await resolveCodexAppServerTurnId(normalizedSessionId, normalizedThreadId, turnId);
+    const message = `${CODEX_APP_SERVER_RESULT_DELIVERY_FAILURE_MESSAGE} Retry the step.`;
+    await markCodexAppServerTurnIdle(normalizedSessionId, {
+      error: message,
+      status: normalizedStatus,
+      threadId: normalizedThreadId,
+      turnId: normalizedTurnId
+    });
+    const runtime = await projectService.createRuntime();
+    const session = await runtime.getSession(normalizedSessionId);
+    if (codexAppServerSessionIsWaitingForAgent(session)) {
+      await runtime.returnControlFromAgentWait(normalizedSessionId, {
+        inputPrompt: message,
+        message
+      });
+      await publishSessionChanged(normalizedSessionId, {
+        reason: "codex-app-server-agent-result-missing"
+      });
+    }
+    vibe64SessionDebugLog("server.codexTerminal.appServerAgentResult.missing", {
+      reason: normalizeText(reason),
+      sessionId: normalizedSessionId,
+      threadId: normalizedThreadId,
+      turnId: normalizedTurnId
+    });
     return {
       ok: false,
       error: message,

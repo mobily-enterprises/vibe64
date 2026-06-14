@@ -1057,6 +1057,91 @@ test("Vibe64 Codex terminal state reconciles stale active app-server turns", asy
   });
 });
 
+test("Vibe64 Codex terminal state returns control for stale finalizing app-server turns", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "codex_turn_stale_finalizing";
+    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
+    const worktree = path.join(sessionRoot, "worktree");
+    const runtimeDir = path.join(targetRoot, ".vibe64", "runtime", "codex-app-server");
+    await mkdir(worktree, {
+      recursive: true
+    });
+    const session = {
+      completedSteps: ["worktree_created"],
+      currentStep: "plan_and_execute",
+      metadata: {
+        codex_app_server_endpoint: `unix://${path.join(runtimeDir, "app-server.sock")}`,
+        codex_app_server_runtime_dir: runtimeDir,
+        codex_app_server_socket_path: path.join(runtimeDir, "app-server.sock"),
+        codex_app_server_turn_completed_at: "2000-01-01T00:00:00.000Z",
+        codex_app_server_turn_id: "turn-1",
+        codex_app_server_turn_state: "finalizing",
+        codex_app_server_turn_status: "completed",
+        codex_app_server_turn_thread_id: "thread-1",
+        codex_app_server_turn_updated_at: "2000-01-01T00:00:00.000Z",
+        worktree_path: worktree
+      },
+      sessionId,
+      sessionRoot,
+      stepMachine: {
+        status: "awaiting_agent_result"
+      },
+      targetRoot
+    };
+    const runtime = {
+      async getSession() {
+        return session;
+      },
+      async returnControlFromAgentWait(_sessionId, input = {}) {
+        session.returnedControl = input;
+        session.stepMachine.status = "waiting_for_input";
+        return session;
+      },
+      store: {
+        async mutateSession(_sessionId, operation) {
+          return operation();
+        },
+        async writeMetadataValue(_sessionId, name, value) {
+          session.metadata[name] = String(value || "");
+        }
+      }
+    };
+    let readThreadCalls = 0;
+    const controller = createCodexTerminalController({
+      codexAppServerProviderFactory: () => ({
+        async readThread() {
+          readThreadCalls += 1;
+          return {
+            raw: {
+              status: {
+                type: "idle"
+              }
+            }
+          };
+        }
+      }),
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return runtime;
+        }
+      }
+    });
+
+    const state = await controller.terminalState(sessionId);
+
+    assert.equal(state.ok, true);
+    assert.equal(readThreadCalls, 0);
+    assert.equal(session.metadata.codex_app_server_turn_state, "idle");
+    assert.equal(session.metadata.codex_app_server_turn_status, "completed");
+    assert.match(session.metadata.codex_app_server_turn_error, /did not receive the assistant result text/u);
+    assert.equal(session.stepMachine.status, "waiting_for_input");
+    assert.match(session.returnedControl?.message || "", /did not receive the assistant result text/u);
+    assert.equal(state.codexAgentTurnActive, false);
+    assert.equal(state.codexAgentTurn.state, "idle");
+  });
+});
+
 test("Vibe64 Codex control has no terminal fallback when app-server control is disabled", async () => {
   const controller = createCodexTerminalController({
     codexAppServerPromptDeliveryEnabled: false,
