@@ -109,6 +109,7 @@ function useVibe64ConversationLog({
       String(currentSession.value?.stepRevision || "")
     ]),
     queryOptions: {
+      placeholderData: (previousData) => previousData,
       refetchOnMount: false,
       refetchOnWindowFocus: false
     },

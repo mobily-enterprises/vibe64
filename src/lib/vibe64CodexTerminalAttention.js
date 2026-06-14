@@ -6,7 +6,6 @@ const CODEX_BACKGROUND_TASK_ATTENTION_STATUSES = new Set([
 ]);
 const CODEX_TERMINAL_ATTENTION_STATUSES = new Set([
   "error",
-  "exited",
   "failed"
 ]);
 const CODEX_TURN_ATTENTION_STATUSES = new Set([
@@ -81,6 +80,9 @@ function codexAgentTurnAttentionSignature(session = {}) {
   const status = normalizedText(turn.status);
   const error = normalizedText(turn.error);
   if (session?.codexAgentTurnActive === true || turn.active === true) {
+    return "";
+  }
+  if (status === "interrupted") {
     return "";
   }
   if (!error && !CODEX_TURN_ATTENTION_STATUSES.has(status)) {

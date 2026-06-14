@@ -65,6 +65,7 @@
         :rows="rows"
         :value="modelValue"
         @input="handleTextareaInput"
+        @keydown="handleTextareaKeydown"
       />
 
       <div
@@ -111,6 +112,7 @@ import {
 
 const emit = defineEmits([
   "attachments-change",
+  "submit",
   "update:modelValue"
 ]);
 
@@ -235,6 +237,21 @@ function handleTextareaInput(event = {}) {
   resizeTextarea();
 }
 
+function handleTextareaKeydown(event = {}) {
+  if (
+    event.key !== "Enter" ||
+    event.shiftKey ||
+    event.altKey ||
+    event.ctrlKey ||
+    event.metaKey ||
+    event.isComposing
+  ) {
+    return;
+  }
+  event.preventDefault();
+  emit("submit");
+}
+
 function removeUploadedAttachment(attachment = {}) {
   const removed = attachments.removeAttachment(attachment);
   if (!removed.length) {
@@ -291,9 +308,12 @@ defineExpose({
 
 <style scoped>
 .studio-autopilot-prompt-textarea {
+  box-sizing: border-box;
   display: grid;
   gap: 0;
   min-width: 0;
+  overflow: visible;
+  padding: 0.56rem 2px 2px;
   position: relative;
   text-align: left;
 }

@@ -258,6 +258,8 @@ function useVibe64AutopilotView(props, emit) {
   const rightPaneTab = ref("preview");
   const mountedRightPaneTabs = ref(["preview"]);
   const openedCodexTerminalAttentionSignature = ref("");
+  const optimisticComposerTurn = ref(null);
+  let optimisticComposerTurnCounter = 0;
   const SESSION_TOOL_STORAGE_PREFIX = "vibe64.sessionTools.active";
   const projectPaneIds = Object.freeze([
     "preview",
@@ -461,9 +463,41 @@ function useVibe64AutopilotView(props, emit) {
     !props.conversationLog?.loading
   ));
   const conversationHasTurns = computed(() => Boolean(
-    Array.isArray(props.conversationLog?.turns) &&
-    props.conversationLog.turns.length
+    (
+      Array.isArray(props.conversationLog?.turns) &&
+      props.conversationLog.turns.length
+    ) ||
+    optimisticComposerTurn.value
   ));
+  const chatTurns = computed(() => {
+    const turns = Array.isArray(props.conversationLog?.turns) ? props.conversationLog.turns : [];
+    const optimistic = optimisticComposerTurn.value;
+    if (!optimistic) {
+      return turns;
+    }
+    if (
+      optimistic.status !== "failed" &&
+      turns.some((turn) => turnMatchesOptimisticComposerTurn(turn, optimistic))
+    ) {
+      return turns;
+    }
+    return [
+      ...turns,
+      {
+        optimistic: {
+          error: optimistic.error,
+          id: optimistic.id,
+          status: optimistic.status
+        },
+        turnId: optimistic.id,
+        user: {
+          at: optimistic.createdAt,
+          role: "user",
+          text: optimistic.text
+        }
+      }
+    ];
+  });
   const screenMessageIsGuidance = computed(() => String(screenState.value.variant || "") === "guide");
   const guidanceScreenVisible = computed(() => Boolean(
     !chatTakeoverVisible.value &&
@@ -654,12 +688,15 @@ function useVibe64AutopilotView(props, emit) {
     selectedControlIsPrimary,
     selectedControlUsesLatestAssistantQuestions,
     selectedControlValues,
+    restoreControlDraft,
     submitSelectedControl,
     updateSelectedControlValue
   } = useVibe64AutopilotComposer({
     conversationLog: computed(() => props.conversationLog),
     controls: allScreenControls,
     isControlDisabled: controlDisabled,
+    onDraftSubmissionRejected: markOptimisticComposerTurnFailed,
+    onDraftSubmissionStart: startOptimisticComposerTurn,
     onRunClientControl: runClientControl,
     onRunControl: runWorkflowControl,
     primaryIntentId,
@@ -712,6 +749,104 @@ function useVibe64AutopilotView(props, emit) {
       title: messageTitle,
       tone
     };
+  }
+
+  function submissionObject(value = {}) {
+    return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  }
+
+  function optimisticTextFromSubmission(options = {}) {
+    const sourceOptions = submissionObject(options);
+    const displayFields = submissionObject(sourceOptions.displayFields);
+    const fields = submissionObject(sourceOptions.fields);
+    return String(displayFields.conversationRequest || fields.conversationRequest || "").trim();
+  }
+
+  function startOptimisticComposerTurn({
+    control = {},
+    options = {},
+    values = {}
+  } = {}) {
+    const text = optimisticTextFromSubmission(options);
+    if (!text) {
+      return null;
+    }
+    optimisticComposerTurnCounter += 1;
+    const id = `optimistic-composer-${optimisticComposerTurnCounter}`;
+    optimisticComposerTurn.value = {
+      control,
+      createdAt: new Date().toISOString(),
+      createdAtMs: Date.now(),
+      error: "",
+      id,
+      options: {
+        ...submissionObject(options)
+      },
+      status: "pending",
+      text,
+      values: {
+        ...submissionObject(values)
+      }
+    };
+    return id;
+  }
+
+  function markOptimisticComposerTurnFailed(submissionId = "", {
+    error = null
+  } = {}) {
+    if (!submissionId || optimisticComposerTurn.value?.id !== submissionId) {
+      return;
+    }
+    optimisticComposerTurn.value = {
+      ...optimisticComposerTurn.value,
+      error: String(error?.message || error || "Message could not be sent."),
+      status: "failed"
+    };
+  }
+
+  function turnMatchesOptimisticComposerTurn(turn = {}, optimistic = {}) {
+    const text = String(turn?.user?.text || "").trim();
+    if (!text || text !== optimistic.text) {
+      return false;
+    }
+    const userAtMs = Date.parse(String(turn?.user?.at || ""));
+    return !Number.isNaN(userAtMs) && userAtMs >= optimistic.createdAtMs - 5000;
+  }
+
+  async function resendOptimisticComposerTurn(submissionId = "") {
+    const optimistic = optimisticComposerTurn.value;
+    if (!optimistic || optimistic.id !== submissionId || optimistic.status !== "failed") {
+      return false;
+    }
+    optimisticComposerTurn.value = {
+      ...optimistic,
+      error: "",
+      status: "pending"
+    };
+    let accepted = false;
+    try {
+      accepted = await runWorkflowControl(optimistic.control, optimistic.options);
+    } catch (error) {
+      markOptimisticComposerTurnFailed(submissionId, {
+        error
+      });
+      return false;
+    }
+    if (accepted === false) {
+      markOptimisticComposerTurnFailed(submissionId);
+      return false;
+    }
+    return true;
+  }
+
+  function editOptimisticComposerTurn(submissionId = "") {
+    const optimistic = optimisticComposerTurn.value;
+    if (!optimistic || optimistic.id !== submissionId) {
+      return false;
+    }
+    restoreControlDraft(optimistic.control, optimistic.values);
+    optimisticComposerTurn.value = null;
+    return true;
   }
 
   function normalizeProjectPane(value = "") {
@@ -871,8 +1006,10 @@ function useVibe64AutopilotView(props, emit) {
   }
 
   async function submitScreenComposerControl(options = {}) {
+    const submittedForm = screenControlFormRef.value;
     const accepted = await submitSelectedControl(options);
     if (accepted) {
+      submittedForm?.clearAttachments?.();
       screenControlFormRef.value?.clearAttachments?.();
     }
     return accepted;
@@ -1113,6 +1250,10 @@ function useVibe64AutopilotView(props, emit) {
     immediate: true
   });
 
+  watch(sessionId, () => {
+    optimisticComposerTurn.value = null;
+  });
+
   watch(codexTerminalAttentionSignature, (signature) => {
     if (!signature) {
       openedCodexTerminalAttentionSignature.value = "";
@@ -1144,6 +1285,7 @@ function useVibe64AutopilotView(props, emit) {
     chatReloading,
     chatTakeoverVisible,
     chatTimelineVisible,
+    chatTurns,
     clearSelectedControl,
     closeSessionTool,
     codexInterruptVisible,
@@ -1164,6 +1306,7 @@ function useVibe64AutopilotView(props, emit) {
     conversationScrollKey,
     currentAgentSettings,
     dashboardSessionContext,
+    editOptimisticComposerTurn,
     fixDialogOpen,
     fixJob,
     fixTerminal,
@@ -1187,6 +1330,7 @@ function useVibe64AutopilotView(props, emit) {
     reportPreviewVisible,
     requestCodexInterrupt,
     requestCommandAiFix,
+    resendOptimisticComposerTurn,
     reloadChatPane,
     retryBackgroundTask,
     retryFromCommandFailure,

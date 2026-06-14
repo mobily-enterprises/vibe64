@@ -86,6 +86,19 @@ test("current step conversation text keeps a last-resort completion fallback", (
     stepId: "known_step",
     stepStatus: "awaiting_agent_result"
   }), "Step-specific completion.");
+
+  assert.equal(currentStepInputConversationText({
+    workflowStepMachineForStep: () => null
+  }, {
+    currentStep: "known_step"
+  }, {
+    conversationText: "Visible assistant prose.",
+    kind: "waiting_for_input",
+    message: "Question-only envelope message.",
+    source: "codex",
+    stepId: "known_step",
+    stepStatus: "awaiting_agent_result"
+  }), "Visible assistant prose.");
 });
 const coreWorkflowRegistry = createCoreWorkflowRegistry();
 

@@ -143,6 +143,7 @@ function normalizeInputFields(input = {}) {
 function normalizeMachineInput(input = {}) {
   const source = input && typeof input === "object" && !Array.isArray(input) ? input : {};
   return {
+    conversationText: normalizeText(source.conversationText),
     fields: normalizeInputFields(source.fields || source),
     kind: normalizeText(source.kind || STEP_INPUT_KIND.READY),
     message: normalizeText(source.message),

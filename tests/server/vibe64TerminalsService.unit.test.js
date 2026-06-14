@@ -1414,7 +1414,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       async submitCurrentStepInput(_sessionId, input = {}) {
         session.lastStepInput = input;
         session.stepMachine.status = "done";
-        const text = input.fields?.response || input.text || input.message || "";
+        const text = input.conversationText || input.fields?.response || input.text || input.message || "";
         if (text) {
           conversationLog.push({
             assistant: {
@@ -1711,6 +1711,8 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
             {
               text: [
                 "The app-server turn is complete.",
+                "",
+                "This visible prose should be preserved in chat.",
                 AGENT_TURN_RESULT_BEGIN,
                 JSON.stringify({
                   fields: {
@@ -1738,6 +1740,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       fields: {
         response: "The app-server turn is complete."
       },
+      conversationText: "The app-server turn is complete.\n\nThis visible prose should be preserved in chat.",
       kind: "ready",
       message: "",
       source: "codex",
@@ -1749,7 +1752,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     assert.equal(codexAppServerAgentRunSnapshot(session).state, "completed");
     assert.equal(codexAppServerAgentRunSnapshot(session).providerStatus, "completed");
     assert.deepEqual((await runtime.store.readConversationLog()).map((turn) => turn.assistant?.text).filter(Boolean), [
-      "The app-server turn is complete."
+      "The app-server turn is complete.\n\nThis visible prose should be preserved in chat."
     ]);
     assert.deepEqual((await runtime.store.readConversationLog()).flatMap((turn) => (turn.thinking || []).map((message) => message.text)).filter(Boolean), [
       "Checked the app-server prompt delivery result."

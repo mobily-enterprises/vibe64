@@ -52,6 +52,16 @@ describe("vibe64CodexTerminalAttention", () => {
     })).toBe(true);
   });
 
+  it("does not require terminal recovery for a cleanly exited Codex terminal", () => {
+    expect(vibe64SessionNeedsCodexTerminalAttention({
+      codexTerminal: {
+        id: "codex-terminal-1",
+        status: "exited"
+      },
+      sessionId: "session-1"
+    })).toBe(false);
+  });
+
   it("requires terminal recovery for failed Codex app-server turns", () => {
     expect(vibe64SessionNeedsCodexTerminalAttention({
       codexAgentTurn: {
@@ -64,5 +74,19 @@ describe("vibe64CodexTerminalAttention", () => {
       codexAgentTurnActive: false,
       sessionId: "session-1"
     })).toBe(true);
+  });
+
+  it("does not require terminal recovery for user-interrupted Codex turns", () => {
+    expect(vibe64SessionNeedsCodexTerminalAttention({
+      codexAgentTurn: {
+        active: false,
+        error: "Stopped by user.",
+        state: "interrupted",
+        status: "interrupted",
+        turnId: "turn-1"
+      },
+      codexAgentTurnActive: false,
+      sessionId: "session-1"
+    })).toBe(false);
   });
 });

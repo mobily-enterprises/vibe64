@@ -1411,8 +1411,14 @@ function createCodexTerminalController({
   }
 
   async function applyCodexAppServerAgentResult(runtime, session = {}, parsed = {}, threadId = "", turnId = "") {
+    const input = parsed.visibleText
+      ? {
+          ...parsed.input,
+          conversationText: parsed.visibleText
+        }
+      : parsed.input;
     if (codexAppServerSessionIsWaitingForAgent(session)) {
-      await runtime.submitCurrentStepInput(session.sessionId, parsed.input);
+      await runtime.submitCurrentStepInput(session.sessionId, input);
       return true;
     }
     if (
@@ -1420,7 +1426,7 @@ function createCodexTerminalController({
       codexAppServerRecoveryStateMatchesAgentResult(session, parsed.input)
     ) {
       await restoreCodexAppServerAgentWaitForResult(runtime, session, parsed.input);
-      await runtime.submitCurrentStepInput(session.sessionId, parsed.input);
+      await runtime.submitCurrentStepInput(session.sessionId, input);
       return true;
     }
     return false;

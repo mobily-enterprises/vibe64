@@ -31,6 +31,7 @@
           :session-id="sessionId"
           variant="outlined"
           @attachments-change="updateFieldAttachments(field.name, $event)"
+          @submit="submitFromForm"
           @update:model-value="$emit('update-value', field.name, $event)"
         >
           <template
@@ -396,7 +397,7 @@ const attachmentMenuOpen = ref(false);
 const fieldAttachments = ref({});
 const promptTextareaRef = ref(null);
 const rootTag = computed(() => props.asForm ? "form" : "div");
-const fieldsDisabled = computed(() => Boolean(props.running || props.inputDisabled));
+const fieldsDisabled = computed(() => Boolean(props.inputDisabled));
 const inlineSubmitField = computed(() => {
   if (!props.inlineSubmit || !props.attachTextarea || props.cancelVisible) {
     return null;
@@ -462,11 +463,21 @@ function inlineSubmitForField(field = {}) {
 }
 
 function submitFromForm() {
+  if (!props.canSubmitSelectedControl) {
+    return false;
+  }
   emit("submit", submissionOptions());
+  clearAttachments();
+  return true;
 }
 
 function submitFromButton() {
+  if (!props.canSubmitSelectedControl) {
+    return false;
+  }
   emit("submit", submissionOptions());
+  clearAttachments();
+  return true;
 }
 
 function handleInlineSubmitButton() {

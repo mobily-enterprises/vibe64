@@ -94,6 +94,8 @@ function useVibe64AutopilotComposer({
   conversationLog,
   controls,
   isControlDisabled = () => false,
+  onDraftSubmissionRejected = () => null,
+  onDraftSubmissionStart = () => null,
   onRunClientControl = () => false,
   onRunControl = async () => false,
   primaryIntentId,
@@ -187,6 +189,21 @@ function useVibe64AutopilotComposer({
     selectedControlValues.value = initialControlValues(control);
   }
 
+  function selectControlForNextDraft(control = {}) {
+    selectControl(
+      control?.id && control.id === currentPrimaryIntentId.value
+        ? primaryScreenControl.value || control
+        : control
+    );
+  }
+
+  function restoreControlDraft(control = {}, values = {}) {
+    selectedControl.value = control;
+    selectedControlValues.value = {
+      ...plainObject(values)
+    };
+  }
+
   async function activateControl(control = {}) {
     if (isControlDisabled(control)) {
       return false;
@@ -236,6 +253,9 @@ function useVibe64AutopilotComposer({
       return false;
     }
     const control = selectedControl.value;
+    const previousValues = {
+      ...selectedControlValues.value
+    };
     const normalizedOptions = options && typeof options === "object" && !Array.isArray(options) ? options : {};
     const {
       attachmentFields: _attachmentFields,
@@ -253,18 +273,52 @@ function useVibe64AutopilotComposer({
     if (attachmentFieldCount > 0) {
       submissionOptions.displayFields = withAttachmentDisplayNames(submissionFields, attachmentFields);
     }
-    const accepted = await onRunControl(control, {
-      ...submissionOptions
-    });
+    const draftSubmission = typeof onDraftSubmissionStart === "function"
+      ? onDraftSubmissionStart({
+          control,
+          fields: submissionOptions.fields,
+          options: submissionOptions,
+          values: previousValues
+        })
+      : null;
+    if (controlHasInputFields(control)) {
+      selectControlForNextDraft(control);
+    }
+    let accepted = false;
+    try {
+      accepted = await onRunControl(control, {
+        ...submissionOptions
+      });
+    } catch (error) {
+      if (typeof onDraftSubmissionRejected === "function") {
+        onDraftSubmissionRejected(draftSubmission, {
+          control,
+          error,
+          fields: submissionOptions.fields,
+          options: submissionOptions,
+          values: previousValues
+        });
+      }
+      if (!draftSubmission && controlHasInputFields(control)) {
+        restoreControlDraft(control, previousValues);
+      }
+      return false;
+    }
     if (!accepted) {
+      if (typeof onDraftSubmissionRejected === "function") {
+        onDraftSubmissionRejected(draftSubmission, {
+          control,
+          fields: submissionOptions.fields,
+          options: submissionOptions,
+          values: previousValues
+        });
+      }
+      if (!draftSubmission && controlHasInputFields(control)) {
+        restoreControlDraft(control, previousValues);
+      }
       return false;
     }
     if (controlHasInputFields(control)) {
-      selectControl(
-        control?.id && control.id === currentPrimaryIntentId.value
-          ? primaryScreenControl.value || control
-          : control
-      );
       return true;
     }
     if (control?.id && control.id === currentPrimaryIntentId.value) {
@@ -323,6 +377,7 @@ function useVibe64AutopilotComposer({
     selectedControlSubmissionFields,
     selectedControlUsesLatestAssistantQuestions,
     selectedControlValues,
+    restoreControlDraft,
     submitSelectedControl,
     updateSelectedControlValue
   };

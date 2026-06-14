@@ -35,6 +35,7 @@ function currentStepPromptInputInstruction(session = {}, action = {}, {
 function currentStepInputConversationText(runtime = null, session = {}, input = {}) {
   const normalizedInput = normalizeMachineInput(input);
   const directText = normalizeText(
+    normalizedInput.conversationText ||
     normalizedInput.fields.response ||
     normalizedInput.text ||
     normalizedInput.message

@@ -1,5 +1,5 @@
 import { nextTick, ref } from "vue";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   useVibe64AutopilotComposer
@@ -250,16 +250,20 @@ describe("useVibe64AutopilotComposer", () => {
     expect(composer.selectedControlFields.value.map((field) => field.name)).toEqual(["conversationRequest"]);
   });
 
-  it("keeps the submitted input visible while a turn is running", async () => {
+  it("clears the submitted input immediately while a turn is running", async () => {
     const controls = ref([conversationControl()]);
     const running = ref(false);
+    let resolveRun = null;
+    const runPromise = new Promise((resolve) => {
+      resolveRun = resolve;
+    });
     const composer = useVibe64AutopilotComposer({
       controls,
       conversationLog: ref({}),
       onRunControl: async () => {
         running.value = true;
         controls.value = [];
-        return true;
+        return await runPromise;
       },
       primaryIntentId: ref("talk_to_codex"),
       running
@@ -268,16 +272,67 @@ describe("useVibe64AutopilotComposer", () => {
     await nextTick();
     composer.updateSelectedControlValue("conversationRequest", "Explain the app.");
 
-    expect(await composer.submitSelectedControl()).toBe(true);
+    const submitPromise = composer.submitSelectedControl();
     await nextTick();
 
     expect(composer.selectedControl.value?.id).toBe("talk_to_codex");
+    expect(composer.selectedControlValues.value.conversationRequest).toBe("");
     expect(composer.canSubmitSelectedControl.value).toBe(false);
+
+    composer.updateSelectedControlValue("conversationRequest", "Next question.");
+    expect(composer.selectedControlValues.value.conversationRequest).toBe("Next question.");
+
+    resolveRun(true);
+    expect(await submitPromise).toBe(true);
 
     running.value = false;
     await nextTick();
 
     expect(composer.selectedControl.value).toBeNull();
+  });
+
+  it("leaves an optimistically submitted failed draft out of the input", async () => {
+    const rejected = vi.fn();
+    const composer = useVibe64AutopilotComposer({
+      controls: ref([conversationControl()]),
+      conversationLog: ref({}),
+      onDraftSubmissionRejected: rejected,
+      onDraftSubmissionStart: () => "optimistic-1",
+      onRunControl: async () => false,
+      primaryIntentId: ref("talk_to_codex"),
+      running: ref(false)
+    });
+
+    await nextTick();
+    composer.updateSelectedControlValue("conversationRequest", "Try this.");
+
+    expect(await composer.submitSelectedControl()).toBe(false);
+
+    expect(rejected).toHaveBeenCalledWith("optimistic-1", expect.objectContaining({
+      fields: {
+        conversationRequest: "Try this."
+      }
+    }));
+    expect(composer.selectedControl.value?.id).toBe("talk_to_codex");
+    expect(composer.selectedControlValues.value.conversationRequest).toBe("");
+  });
+
+  it("restores the draft when a non-optimistic submission is rejected", async () => {
+    const composer = useVibe64AutopilotComposer({
+      controls: ref([conversationControl()]),
+      conversationLog: ref({}),
+      onRunControl: async () => false,
+      primaryIntentId: ref("talk_to_codex"),
+      running: ref(false)
+    });
+
+    await nextTick();
+    composer.updateSelectedControlValue("conversationRequest", "Keep this.");
+
+    expect(await composer.submitSelectedControl()).toBe(false);
+
+    expect(composer.selectedControl.value?.id).toBe("talk_to_codex");
+    expect(composer.selectedControlValues.value.conversationRequest).toBe("Keep this.");
   });
 
   it("adds attachment references to submitted fields without changing the visible input value", async () => {

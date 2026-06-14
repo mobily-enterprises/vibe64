@@ -94,9 +94,11 @@
             :reloadable="chatReloadAvailable"
             :reloading="chatReloading"
             :scroll-key="conversationScrollKey"
-            :turns="conversationLog.turns"
+            :turns="chatTurns"
             :visible="chatTimelineVisible"
+            @edit-turn="editOptimisticComposerTurn"
             @reload="reloadChatPane"
+            @resend-turn="resendOptimisticComposerTurn"
           />
         </template>
       </div>
@@ -613,6 +615,7 @@ const {
   chatReloading,
   chatTakeoverVisible,
   chatTimelineVisible,
+  chatTurns,
   clearSelectedControl,
   closeSessionTool,
   codexInterruptVisible,
@@ -633,6 +636,7 @@ const {
   conversationScrollKey,
   currentAgentSettings,
   dashboardSessionContext,
+  editOptimisticComposerTurn,
   fixDialogOpen,
   fixJob,
   fixTerminal,
@@ -656,6 +660,7 @@ const {
   reportPreviewVisible,
   requestCodexInterrupt,
   requestCommandAiFix,
+  resendOptimisticComposerTurn,
   reloadChatPane,
   retryBackgroundTask,
   retryFromCommandFailure,

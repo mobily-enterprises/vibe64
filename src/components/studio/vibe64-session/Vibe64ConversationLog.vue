@@ -79,6 +79,31 @@
             >
               <time v-if="turn.user.displayAt">{{ turn.user.displayAt }}</time>
             </div>
+            <div
+              v-if="turn.optimistic?.status === 'failed'"
+              class="studio-conversation-log__optimistic-failure"
+            >
+              <span>{{ turn.optimistic.error || "Message could not be sent." }}</span>
+              <div class="studio-conversation-log__optimistic-actions">
+                <v-btn
+                  color="primary"
+                  size="x-small"
+                  type="button"
+                  variant="tonal"
+                  @click="emit('resend-turn', turn.optimistic.id)"
+                >
+                  Resend
+                </v-btn>
+                <v-btn
+                  size="x-small"
+                  type="button"
+                  variant="text"
+                  @click="emit('edit-turn', turn.optimistic.id)"
+                >
+                  Edit
+                </v-btn>
+              </div>
+            </div>
           </div>
           <span class="studio-conversation-log__avatar studio-conversation-log__avatar--user">
             <v-icon :icon="mdiAccountOutline" size="15" />
@@ -282,7 +307,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(["reload"]);
+const emit = defineEmits(["edit-turn", "reload", "resend-turn"]);
 
 const bodyElement = ref(null);
 const bottomElement = ref(null);
@@ -328,6 +353,9 @@ const displayTurns = computed(() => (Array.isArray(props.turns) ? props.turns : 
     assistant: displayMessage(turn.assistant, {
       allowNumberedQuestions: true
     }),
+    optimistic: turn.optimistic && typeof turn.optimistic === "object" && !Array.isArray(turn.optimistic)
+      ? turn.optimistic
+      : null,
     system: displayMessage(turn.system),
     thinking: Array.isArray(turn.thinking)
       ? turn.thinking.map((message) => displayMessage(message)).filter(Boolean)
@@ -707,6 +735,22 @@ watch(scrollTrigger, () => {
 .studio-conversation-log__message-footer--assistant {
   justify-content: flex-start;
   margin-top: -0.15rem;
+}
+
+.studio-conversation-log__optimistic-failure {
+  align-items: center;
+  color: rgba(var(--v-theme-error), 0.92);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.76rem;
+  gap: 0.35rem 0.55rem;
+  line-height: 1.25;
+}
+
+.studio-conversation-log__optimistic-actions {
+  align-items: center;
+  display: inline-flex;
+  gap: 0.25rem;
 }
 
 .studio-conversation-log__message--assistant :deep(.studio-long-text-review__blocks),
