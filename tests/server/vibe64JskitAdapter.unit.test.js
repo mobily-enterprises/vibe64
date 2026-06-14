@@ -626,7 +626,7 @@ test("jskit launch targets use canonical session worktree when metadata path is 
   });
 });
 
-test("jskit Vibe64 self-target launch uses the selected checkout instead of a stale session worktree", async () => {
+test("jskit Vibe64 self-target launch uses the session worktree for review", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "self-target-stale-worktree";
     const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
@@ -642,11 +642,11 @@ test("jskit Vibe64 self-target launch uses the selected checkout instead of a st
       name: "vibe64",
       scripts: {
         dev: "vite",
-        server: "node stale-server.js"
+        server: "node worktree-server.js"
       }
     }, null, 2));
     await writeProjectFile(targetRoot, "config/server_command", "node current-server.js\n");
-    await writeProjectFile(worktreePath, "config/server_command", "node stale-server.js\n");
+    await writeProjectFile(worktreePath, "config/server_command", "node worktree-server.js\n");
 
     const spec = await createJskitLaunchTargetTerminalSpec({
       context: {
@@ -667,16 +667,16 @@ test("jskit Vibe64 self-target launch uses the selected checkout instead of a st
     });
 
     assert.equal(spec.ok, true);
-    assert.equal(spec.metadata.backendCommand, "node current-server.js");
-    assert.equal(spec.metadata.runRoot, targetRoot);
+    assert.equal(spec.metadata.backendCommand, "node worktree-server.js");
+    assert.equal(spec.metadata.runRoot, worktreePath);
     assert.equal(spec.metadata.vibe64SelfTargetProjectsRoot, path.dirname(targetRoot));
     const args = spec.args({
       id: "unit-terminal"
     });
-    assert.equal(args[args.indexOf("-w") + 1], targetRoot);
+    assert.equal(args[args.indexOf("-w") + 1], worktreePath);
     const startupScript = args.at(-1);
-    assert.match(startupScript, /node current-server\.js/u);
-    assert.doesNotMatch(startupScript, /stale-server/u);
+    assert.match(startupScript, /node worktree-server\.js/u);
+    assert.doesNotMatch(startupScript, /current-server/u);
   });
 });
 

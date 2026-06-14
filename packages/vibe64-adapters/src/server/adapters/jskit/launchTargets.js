@@ -1093,10 +1093,7 @@ async function createJskitLaunchTargetTerminalSpec({
   }
 
   const launchTargetRoot = targetRoot || session.targetRoot || "";
-  const selfTargetCodeRoot = await isJskitSelfTargetRoot(launchTargetRoot)
-    ? launchTargetRoot
-    : "";
-  const launchConfigRoot = selfTargetCodeRoot || worktreePath;
+  const launchConfigRoot = worktreePath;
   const [databaseHost, config] = await Promise.all([
     readDatabaseHostFromDotEnv(launchConfigRoot),
     launchTargetId === "dev"
@@ -1119,10 +1116,9 @@ async function createJskitLaunchTargetTerminalSpec({
       port,
       worktreePath: launchWorktreePath
     }) => {
-      const descriptorWorktreePath = selfTargetCodeRoot || launchWorktreePath;
       // Vibe64 self-targeting is special: the inner Studio needs the same project
       // list, provider credentials, runtime namespace, and host-reachable preview
-      // proxy range. Run the selected checkout as the inner Studio code, while
+      // proxy range. Run the session worktree as the inner Studio code, while
       // keeping VIBE64_SYSTEM_ROOT session-private for auth, sessions, and
       // terminal runtime state.
       const selfTarget = jskitSelfTargetRootConfig({
@@ -1142,8 +1138,8 @@ async function createJskitLaunchTargetTerminalSpec({
         selfTarget,
         targetRoot: launchTargetRoot,
         vibe64User: context.vibe64User || null,
-        workdir: selfTargetCodeRoot,
-        worktreePath: descriptorWorktreePath
+        workdir: launchWorktreePath,
+        worktreePath: launchWorktreePath
       });
     },
     session,
