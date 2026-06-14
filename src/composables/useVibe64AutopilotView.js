@@ -59,6 +59,7 @@ import {
 } from "@/lib/vibe64PresentationControls.js";
 import {
   currentStepWorkflowControls,
+  workflowControlButtonPresentation,
   workflowControlSourceAction
 } from "@/lib/vibe64WorkflowControlModel.js";
 import {
@@ -667,8 +668,7 @@ function useVibe64AutopilotView(props, emit) {
   const workflowButtonControls = computed(() => {
     return screenControls.value.map((control) => ({
       ...control,
-      buttonColor: undefined,
-      buttonVariant: control.style === "primary" ? "flat" : "tonal",
+      ...workflowControlButtonPresentation(control),
       disabled: controlDisabled(control),
       icon: controlIcon(control),
       loading: controlLoading(control),

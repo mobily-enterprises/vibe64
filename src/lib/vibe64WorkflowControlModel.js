@@ -95,10 +95,18 @@ function workflowControlSourceAction(control = {}) {
   return objectValue(control?.sourceAction);
 }
 
+function workflowControlButtonPresentation(control = {}) {
+  return {
+    buttonColor: "primary",
+    buttonVariant: control?.style === "primary" ? "flat" : "tonal"
+  };
+}
+
 export {
   actionWorkflowControl,
   actionWorkflowControls,
   currentStepPresentationControls,
   currentStepWorkflowControls,
+  workflowControlButtonPresentation,
   workflowControlSourceAction
 };

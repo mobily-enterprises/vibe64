@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   currentStepWorkflowControls,
+  workflowControlButtonPresentation,
   workflowControlSourceAction
 } from "../../src/lib/vibe64WorkflowControlModel.js";
 
@@ -135,5 +136,20 @@ describe("vibe64WorkflowControlModel", () => {
     });
 
     expect(controls).toEqual([]);
+  });
+
+  it("gives primary-colored presentation to every workflow choice", () => {
+    expect(workflowControlButtonPresentation({
+      style: "primary"
+    })).toEqual({
+      buttonColor: "primary",
+      buttonVariant: "flat"
+    });
+    expect(workflowControlButtonPresentation({
+      style: "secondary"
+    })).toEqual({
+      buttonColor: "primary",
+      buttonVariant: "tonal"
+    });
   });
 });

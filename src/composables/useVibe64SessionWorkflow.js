@@ -8,6 +8,49 @@ import {
   commandMessage
 } from "@/lib/vibe64SessionPanelModel.js";
 
+function objectValue(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : null;
+}
+
+function codexTerminalSnapshot(session = {}) {
+  const terminals = [
+    objectValue(session?.codexTerminal),
+    objectValue(session?.presentation?.terminal?.codex)
+  ].filter(Boolean);
+  const terminal = terminals.find((candidate) => (
+    String(candidate.id || candidate.terminalSessionId || "").trim()
+  )) || terminals[0] || {};
+  return {
+    status: String(terminal.status || "").trim(),
+    terminalSessionId: String(terminal.id || terminal.terminalSessionId || "").trim()
+  };
+}
+
+function codexTerminalUpdateBelongsToSession(payload = {}, session = {}) {
+  const payloadSessionId = String(payload.sessionId || "").trim();
+  const sessionId = String(session?.sessionId || "").trim();
+  return !payloadSessionId || !sessionId || payloadSessionId === sessionId;
+}
+
+function codexTerminalUpdateNeedsSessionRefresh(payload = {}, session = {}) {
+  if (!codexTerminalUpdateBelongsToSession(payload, session)) {
+    return false;
+  }
+
+  const payloadTerminalId = String(payload.codexTerminalSessionId || payload.terminalSessionId || "").trim();
+  if (!payloadTerminalId) {
+    return false;
+  }
+
+  const snapshot = codexTerminalSnapshot(session);
+  if (payloadTerminalId !== snapshot.terminalSessionId) {
+    return true;
+  }
+
+  const payloadStatus = String(payload.codexTerminalStatus || payload.status || "").trim();
+  return Boolean(payloadStatus) && payloadStatus !== snapshot.status;
+}
+
 function useVibe64SessionWorkflow({
   sessionData
 } = {}) {
@@ -109,6 +152,13 @@ function useVibe64SessionWorkflow({
     selectSessionId(sessionId);
   }
 
+  function refreshSessionDataForCodexTerminalUpdate(payload = {}) {
+    if (!codexTerminalUpdateNeedsSessionRefresh(payload, selectedSession.value || {})) {
+      return null;
+    }
+    return refreshSessionData();
+  }
+
   return {
     actions: {
       actionIcon: workflow.actions.actionIcon,
@@ -132,7 +182,7 @@ function useVibe64SessionWorkflow({
       runIntentCommand: workflow.actions.runIntentCommand
     },
     codexTerminal: {
-      sessionUpdate: refreshSessionData
+      sessionUpdate: refreshSessionDataForCodexTerminalUpdate
     },
     commandTerminal: {
       action: workflow.commandTerminal.action,
@@ -181,5 +231,7 @@ function useVibe64SessionWorkflow({
 }
 
 export {
+  codexTerminalSnapshot,
+  codexTerminalUpdateNeedsSessionRefresh,
   useVibe64SessionWorkflow
 };

@@ -291,6 +291,7 @@ import {
 } from "@/lib/vibe64PresentationControls.js";
 import {
   currentStepWorkflowControls,
+  workflowControlButtonPresentation,
   workflowControlSourceAction
 } from "@/lib/vibe64WorkflowControlModel.js";
 
@@ -367,8 +368,7 @@ const primaryIntentId = computed(() => props.active
 const workflowButtonControls = computed(() => {
   return screenControls.value.map((control) => ({
     ...control,
-    buttonColor: control.style === "primary" ? "primary" : undefined,
-    buttonVariant: control.style === "primary" ? "flat" : "tonal",
+    ...workflowControlButtonPresentation(control),
     disabled: workflowControlDisabled(control),
     icon: workflowControlIcon(control),
     loading: workflowControlLoading(control),
