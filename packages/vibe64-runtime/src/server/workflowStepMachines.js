@@ -197,10 +197,20 @@ async function returnControlFromAgentWait(runtime, session = {}, {
   if (normalizeText(state.status) !== STEP_STATUS.AWAITING_AGENT_RESULT) {
     return false;
   }
+  const {
+    at: _previousAt,
+    from: _previousFrom,
+    schemaVersion: _previousSchemaVersion,
+    source: _previousSource,
+    status: _previousStatus,
+    stepId: _previousStepId,
+    ...previousDetails
+  } = state;
   await writeState({
     runtime,
     session
   }, machine, machineState(STEP_STATUS.WAITING_FOR_INPUT, {
+    ...previousDetails,
     from: STEP_STATUS.AWAITING_AGENT_RESULT,
     message: normalizeText(inputPrompt),
     source: "system_recovery"

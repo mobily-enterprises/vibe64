@@ -537,7 +537,16 @@ function useVibe64AutopilotView(props, emit) {
   ));
   const actionResultType = computed(() => String(props.actions?.actionResultType || "info"));
   const clientControlError = ref("");
+  const chatReloading = ref(false);
   const clientControlErrorVisible = computed(() => Boolean(clientControlError.value));
+  const chatReloadAvailable = computed(() => Boolean(
+    props.active &&
+    props.session &&
+    (
+      typeof props.refreshSessionData === "function" ||
+      typeof props.conversationLog?.reload === "function"
+    )
+  ));
   const statusActionsVisible = computed(() => Boolean(
     !chatTakeoverVisible.value &&
     (
@@ -960,6 +969,29 @@ function useVibe64AutopilotView(props, emit) {
     }));
   }
 
+  async function runOptionalPaneReload(reload) {
+    if (typeof reload !== "function") {
+      return null;
+    }
+    return await reload();
+  }
+
+  async function reloadChatPane() {
+    if (!chatReloadAvailable.value || chatReloading.value) {
+      return false;
+    }
+    chatReloading.value = true;
+    try {
+      await Promise.allSettled([
+        runOptionalPaneReload(props.refreshSessionData),
+        runOptionalPaneReload(props.conversationLog?.reload)
+      ]);
+      return true;
+    } finally {
+      chatReloading.value = false;
+    }
+  }
+
   function stopScreenAction() {
     stop();
   }
@@ -1106,6 +1138,8 @@ function useVibe64AutopilotView(props, emit) {
     canSubmitSelectedControl,
     chatActivityMessages,
     chatCollapsed,
+    chatReloadAvailable,
+    chatReloading,
     chatTakeoverVisible,
     chatTimelineVisible,
     clearSelectedControl,
@@ -1151,6 +1185,7 @@ function useVibe64AutopilotView(props, emit) {
     reportPreviewVisible,
     requestCodexInterrupt,
     requestCommandAiFix,
+    reloadChatPane,
     retryBackgroundTask,
     retryFromCommandFailure,
     retryingBackgroundTaskId,

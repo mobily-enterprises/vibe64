@@ -3421,6 +3421,36 @@ test("vibe64 runtime returns a quiet agent conversation turn to user control", a
   });
 });
 
+test("vibe64 runtime preserves prompt machine details when returning agent control", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new Vibe64SessionRuntime({
+      clock: () => new Date("2026-05-16T01:02:03.000Z"),
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "plan_and_execute",
+      metadata: {
+        ...worktreeMetadata(targetRoot, "agent_control_phase"),
+        github_issue_mode: "skip",
+        plan_ready: "yes"
+      },
+      sessionId: "agent_control_phase"
+    });
+
+    await runtime.runAction("agent_control_phase", "execute_plan");
+    const waitingForAgent = await runtime.getSession("agent_control_phase");
+    assert.equal(waitingForAgent.stepMachine.status, "awaiting_agent_result");
+    assert.equal(waitingForAgent.stepMachine.phase, "executing");
+
+    const returned = await runtime.returnControlFromAgentWait("agent_control_phase");
+
+    assert.equal(returned.stepMachine.status, "waiting_for_input");
+    assert.equal(returned.stepMachine.from, "awaiting_agent_result");
+    assert.equal(returned.stepMachine.phase, "executing");
+    assert.equal(returned.stepMachine.source, "system_recovery");
+  });
+});
+
 test("vibe64 presentation omits unavailable continue controls while Codex waits for input", () => {
   const waiting = applyWorkflowPresentation({
     actions: [

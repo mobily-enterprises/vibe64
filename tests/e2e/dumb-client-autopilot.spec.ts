@@ -246,6 +246,51 @@ test.describe("Autopilot dumb client contract", () => {
     }
   });
 
+  test("reloads the chat pane without refreshing the page", async ({ page }) => {
+    const conversationLogReadPaths: string[] = [];
+    const sessionReadPaths: string[] = [];
+    await mockVibe64Session(page, sessionPayload(), {
+      conversationLog: [
+        {
+          assistant: {
+            at: "2026-06-02T01:03:00.000Z",
+            role: "assistant",
+            text: "Reload button should refresh this pane."
+          },
+          turnId: "turn-chat-reload",
+          user: {
+            at: "2026-06-02T01:02:00.000Z",
+            role: "user",
+            text: "Reload the chat pane."
+          }
+        }
+      ],
+      onConversationLogRead: (pathname) => {
+        conversationLogReadPaths.push(pathname);
+      },
+      onSessionRead: (_session, pathname) => {
+        sessionReadPaths.push(pathname);
+      }
+    });
+
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+    await expect(page.getByText("Reload button should refresh this pane.")).toBeVisible();
+    await page.evaluate(() => {
+      (window as unknown as { __vibe64ChatReloadMarker?: string }).__vibe64ChatReloadMarker = "still-here";
+    });
+
+    const sessionReadsBeforeReload = sessionReadPaths.length;
+    const conversationReadsBeforeReload = conversationLogReadPaths.length;
+
+    await page.getByRole("button", { name: "Reload chat" }).click();
+
+    await expect.poll(async () => sessionReadPaths.length).toBeGreaterThan(sessionReadsBeforeReload);
+    await expect.poll(async () => conversationLogReadPaths.length).toBeGreaterThan(conversationReadsBeforeReload);
+    await expect.poll(async () => page.evaluate(() => (
+      (window as unknown as { __vibe64ChatReloadMarker?: string }).__vibe64ChatReloadMarker
+    ))).toBe("still-here");
+  });
+
   test("keeps user GitHub authentication on the Account page", async ({ page }) => {
     await mockVibe64Session(page, sessionPayload());
 

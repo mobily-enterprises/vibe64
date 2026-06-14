@@ -1370,6 +1370,62 @@ function createCodexTerminalController({
     return normalizeText(session.stepMachine?.status) === "awaiting_agent_result";
   }
 
+  function codexAppServerRunMatchesAgentResult(session = {}, input = {}, threadId = "", turnId = "") {
+    const run = codexAppServerAgentRun(session);
+    if (!run) {
+      return false;
+    }
+    const normalizedThreadId = normalizeText(threadId);
+    const normalizedTurnId = normalizeText(turnId);
+    return normalizeText(run.providerThreadId) === normalizedThreadId &&
+      (!normalizedTurnId || normalizeText(run.providerTurnId) === normalizedTurnId) &&
+      normalizeText(run.stepId) === normalizeText(input.stepId) &&
+      normalizeText(run.stepStatus) === normalizeText(input.stepStatus);
+  }
+
+  function codexAppServerRecoveryStateMatchesAgentResult(session = {}, input = {}) {
+    const stepMachine = session.stepMachine || {};
+    return normalizeText(session.currentStep) === normalizeText(input.stepId) &&
+      normalizeText(stepMachine.status) === "waiting_for_input" &&
+      normalizeText(stepMachine.from) === normalizeText(input.stepStatus) &&
+      normalizeText(stepMachine.source) === "system_recovery";
+  }
+
+  async function restoreCodexAppServerAgentWaitForResult(runtime, session = {}, input = {}) {
+    const stepMachine = session.stepMachine || {};
+    const {
+      at: _previousAt,
+      from: _previousFrom,
+      message: _previousMessage,
+      schemaVersion: _previousSchemaVersion,
+      source: _previousSource,
+      status: _previousStatus,
+      stepId: _previousStepId,
+      ...previousDetails
+    } = stepMachine;
+    await runtime.store.writeStepState(session.sessionId, input.stepId, {
+      ...previousDetails,
+      schemaVersion: Number(stepMachine.schemaVersion) || 1,
+      status: normalizeText(input.stepStatus)
+    });
+  }
+
+  async function applyCodexAppServerAgentResult(runtime, session = {}, parsed = {}, threadId = "", turnId = "") {
+    if (codexAppServerSessionIsWaitingForAgent(session)) {
+      await runtime.submitCurrentStepInput(session.sessionId, parsed.input);
+      return true;
+    }
+    if (
+      codexAppServerRunMatchesAgentResult(session, parsed.input, threadId, turnId) &&
+      codexAppServerRecoveryStateMatchesAgentResult(session, parsed.input)
+    ) {
+      await restoreCodexAppServerAgentWaitForResult(runtime, session, parsed.input);
+      await runtime.submitCurrentStepInput(session.sessionId, parsed.input);
+      return true;
+    }
+    return false;
+  }
+
   function codexAppServerSessionAcceptsPlainAgentResponse(session = {}) {
     return normalizeText(session.currentStepDefinition?.autopilot?.kind) === "agent_conversation";
   }
@@ -1398,6 +1454,23 @@ function createCodexTerminalController({
         };
       }
       const session = await runtime.getSession(normalizedSessionId);
+      const parsed = parseAgentTurnResultEnvelope(assistantText, {
+        source: "codex"
+      });
+      if (parsed.ok) {
+        const applied = await applyCodexAppServerAgentResult(runtime, session, parsed, threadId, turnId);
+        if (applied) {
+          await publishSessionChanged(normalizedSessionId, {
+            reason: "codex-app-server-agent-result"
+          });
+          return {
+            ok: true,
+            processed: true,
+            reason: "agent_result"
+          };
+        }
+      }
+
       if (!codexAppServerSessionIsWaitingForAgent(session)) {
         const visibleText = stripAgentTurnResultEnvelope(assistantText);
         if (visibleText) {
@@ -1412,21 +1485,6 @@ function createCodexTerminalController({
           ok: true,
           processed: true,
           reason: "assistant_message"
-        };
-      }
-
-      const parsed = parseAgentTurnResultEnvelope(assistantText, {
-        source: "codex"
-      });
-      if (parsed.ok) {
-        await runtime.submitCurrentStepInput(normalizedSessionId, parsed.input);
-        await publishSessionChanged(normalizedSessionId, {
-          reason: "codex-app-server-agent-result"
-        });
-        return {
-          ok: true,
-          processed: true,
-          reason: "agent_result"
         };
       }
 

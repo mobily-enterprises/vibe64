@@ -91,9 +91,12 @@
             :activity-messages="chatActivityMessages"
             :error="conversationLog.error"
             :loading="conversationLog.loading"
+            :reloadable="chatReloadAvailable"
+            :reloading="chatReloading"
             :scroll-key="conversationScrollKey"
             :turns="conversationLog.turns"
             :visible="chatTimelineVisible"
+            @reload="reloadChatPane"
           />
         </template>
       </div>
@@ -606,6 +609,8 @@ const {
   canSubmitSelectedControl,
   chatActivityMessages,
   chatCollapsed,
+  chatReloadAvailable,
+  chatReloading,
   chatTakeoverVisible,
   chatTimelineVisible,
   clearSelectedControl,
@@ -651,6 +656,7 @@ const {
   reportPreviewVisible,
   requestCodexInterrupt,
   requestCommandAiFix,
+  reloadChatPane,
   retryBackgroundTask,
   retryFromCommandFailure,
   retryingBackgroundTaskId,

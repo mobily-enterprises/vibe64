@@ -138,6 +138,8 @@ function codexAppServerAgentRun({
   providerTurnId = "",
   startedAt = "",
   state = VIBE64_AGENT_RUN_STATE.ACTIVE,
+  stepId = "",
+  stepStatus = "",
   updatedAt = ""
 } = {}) {
   return {
@@ -152,6 +154,8 @@ function codexAppServerAgentRun({
     providerThreadId,
     providerTurnId,
     startedAt,
+    stepId,
+    stepStatus,
     updatedAt,
     state
   };
@@ -1455,6 +1459,12 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
         async writeAgentRunEvent(_sessionId, runId, event) {
           return writeAgentRunEventToSession(session, runId, event);
         },
+        async writeStepState(_sessionId, _stepId, state = {}) {
+          session.stepMachine = {
+            ...state
+          };
+          return session.stepMachine;
+        },
         async writeMetadataValue(_sessionId, name, value) {
           session.metadata[name] = String(value || "").trim();
         },
@@ -1688,6 +1698,11 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     assert.equal(codexAppServerAgentRunSnapshot(session).state, "finalizing");
     assert.equal(codexAppServerAgentRunSnapshot(session).providerStatus, "completed");
     assert.equal(session.stepMachine.status, "awaiting_agent_result");
+    session.stepMachine = {
+      from: "awaiting_agent_result",
+      source: "system_recovery",
+      status: "waiting_for_input"
+    };
     providerSubscribers[0]({
       method: "item/completed",
       params: {

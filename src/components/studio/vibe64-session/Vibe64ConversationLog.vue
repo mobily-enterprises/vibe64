@@ -4,8 +4,22 @@
     class="studio-conversation-log"
     aria-label="Conversation history"
   >
+    <v-btn
+      v-if="reloadable"
+      aria-label="Reload chat"
+      class="studio-conversation-log__reload"
+      :disabled="reloading"
+      :icon="mdiRefresh"
+      :loading="reloading"
+      size="x-small"
+      title="Reload chat"
+      type="button"
+      variant="text"
+      @click="emit('reload')"
+    />
+
     <v-progress-circular
-      v-if="loadingIndicatorVisible"
+      v-if="loadingIndicatorVisible && !reloadable"
       class="studio-conversation-log__loading"
       color="primary"
       indeterminate
@@ -225,6 +239,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import {
   mdiAccountOutline,
   mdiInformationOutline,
+  mdiRefresh,
   mdiRobotOutline
 } from "@mdi/js";
 import { useScrollToBottom } from "@/composables/useScrollToBottom.js";
@@ -245,6 +260,14 @@ const props = defineProps({
     default: false,
     type: Boolean
   },
+  reloadable: {
+    default: false,
+    type: Boolean
+  },
+  reloading: {
+    default: false,
+    type: Boolean
+  },
   scrollKey: {
     default: "",
     type: [Number, String]
@@ -258,6 +281,8 @@ const props = defineProps({
     type: Boolean
   }
 });
+
+const emit = defineEmits(["reload"]);
 
 const bodyElement = ref(null);
 const bottomElement = ref(null);
@@ -419,6 +444,14 @@ watch(scrollTrigger, () => {
   right: 0.75rem;
   top: 0.75rem;
   z-index: 1;
+}
+
+.studio-conversation-log__reload {
+  color: rgba(var(--v-theme-on-surface), 0.66);
+  position: absolute;
+  right: 0.38rem;
+  top: 0.38rem;
+  z-index: 2;
 }
 
 .studio-conversation-log__body {
