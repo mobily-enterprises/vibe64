@@ -3400,9 +3400,11 @@ test("vibe64 runtime returns a quiet agent conversation turn to user control", a
     const returned = await runtime.returnControlFromAgentWait("agent_control_return");
 
     assert.equal(returned.stepMachine.status, "waiting_for_input");
+    assert.equal(returned.stepMachine.source, "system_recovery");
     assert.equal(returned.presentation.prompt.state, "needs_user_input");
     assert.equal(returned.presentation.screen.primaryIntentId, "talk_to_codex");
-    assert.equal(returned.presentation.screen.message, "What would you like to do?");
+    assert.equal(returned.presentation.screen.title, "");
+    assert.equal(returned.presentation.screen.message, "");
     assert.deepEqual((await runtime.store.readConversationLog("agent_control_return")).map((turn) => turn.system?.text || ""), [
       "Control back to the user."
     ]);

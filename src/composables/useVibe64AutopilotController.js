@@ -43,6 +43,10 @@ function currentScreen(session = {}) {
     : {};
 }
 
+function screenTitle(screen = {}) {
+  return Object.hasOwn(screen, "title") ? String(screen.title || "") : "Vibe64";
+}
+
 function currentOperation(session = {}) {
   const operation = currentPresentation(session).auto?.nextOperation;
   return operation && typeof operation === "object" && !Array.isArray(operation)
@@ -357,7 +361,7 @@ function useVibe64AutopilotController({
       sections: Array.isArray(screen.sections) ? screen.sections : [],
       showProgress: screen.showProgress === true,
       stopAction: screen.stopAction || "",
-      title: screen.title || "Vibe64",
+      title: screenTitle(screen),
       variant: screen.variant || ""
     };
   });

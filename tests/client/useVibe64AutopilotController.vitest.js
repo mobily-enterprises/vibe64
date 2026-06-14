@@ -188,6 +188,34 @@ describe("useVibe64AutopilotController", () => {
     });
   });
 
+  it("preserves an explicitly quiet server screen title", () => {
+    const context = createControllerContext({
+      operation: {
+        executable: false,
+        kind: "stop",
+        reason: "Waiting for user input"
+      },
+      screen: {
+        kind: "conversation",
+        message: "",
+        primaryIntentId: "talk_to_codex",
+        sections: [
+          {
+            kind: "response_preview"
+          }
+        ],
+        title: ""
+      }
+    });
+
+    expect(context.controller.screenState.value).toMatchObject({
+      kind: "conversation",
+      message: "",
+      primaryIntentId: "talk_to_codex",
+      title: ""
+    });
+  });
+
   it("does not dispatch when the server operation is not executable", async () => {
     const context = createControllerContext({
       operation: {

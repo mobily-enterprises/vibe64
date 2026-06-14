@@ -203,7 +203,7 @@ async function returnControlFromAgentWait(runtime, session = {}, {
   }, machine, machineState(STEP_STATUS.WAITING_FOR_INPUT, {
     from: STEP_STATUS.AWAITING_AGENT_RESULT,
     message: normalizeText(inputPrompt),
-    source: "system"
+    source: "system_recovery"
   }));
   return true;
 }

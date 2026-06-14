@@ -1380,7 +1380,7 @@ test("session inspect returns control when an agent wait has no active Codex tur
 
   assert.equal(returnControlCalls, 1);
   assert.equal(inspected.stepMachine.status, "waiting_for_input");
-  assert.equal(inspected.returnControlInput.inputPrompt, "What would you like to do?");
+  assert.equal(inspected.returnControlInput.inputPrompt, "What would you like to do next?");
 });
 
 test("session inspect returns control when Codex terminal state cannot be read", async () => {
@@ -1430,7 +1430,7 @@ test("session inspect returns control when Codex terminal state cannot be read",
 
   assert.equal(returnControlCalls, 1);
   assert.equal(inspected.stepMachine.status, "waiting_for_input");
-  assert.equal(inspected.returnControlInput.message, "Codex is not running for this turn, so Vibe64 returned control to you.");
+  assert.equal(inspected.returnControlInput.message, "Codex is no longer running for this turn, so Vibe64 returned control to you.");
 });
 
 test("session inspect keeps agent wait while Codex delivery is running", async () => {
@@ -1472,6 +1472,64 @@ test("session inspect keeps agent wait while Codex delivery is running", async (
   });
 
   const inspected = await service.inspectSession("session-running-delivery");
+
+  assert.equal(returnControlCalls, 0);
+  assert.equal(inspected.stepMachine.status, "awaiting_agent_result");
+});
+
+test("session inspect keeps agent wait while a durable agent run is active", async () => {
+  let returnControlCalls = 0;
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async getSession(sessionId) {
+            return {
+              agentRuns: [
+                {
+                  active: true,
+                  id: "codex_app_server",
+                  provider: "codex",
+                  providerInterface: "app-server",
+                  state: "active"
+                }
+              ],
+              backgroundTasks: [
+                {
+                  id: "codex_app_server",
+                  status: "ready"
+                }
+              ],
+              sessionId,
+              status: VIBE64_SESSION_STATUS.ACTIVE,
+              stepMachine: {
+                status: "awaiting_agent_result"
+              }
+            };
+          },
+          async returnControlFromAgentWait() {
+            returnControlCalls += 1;
+          }
+        };
+      }
+    },
+    terminalService: {
+      async codexTerminalState(sessionId) {
+        return {
+          codexAgentTurn: {
+            active: false,
+            state: "idle",
+            status: "completed"
+          },
+          codexAgentTurnActive: false,
+          ok: true,
+          sessionId
+        };
+      }
+    }
+  });
+
+  const inspected = await service.inspectSession("session-active-agent-run");
 
   assert.equal(returnControlCalls, 0);
   assert.equal(inspected.stepMachine.status, "awaiting_agent_result");
@@ -1579,7 +1637,7 @@ test("session action returns control when Codex prompt delivery fails", async ()
   assert.equal(result.ok, false);
   assert.equal(returnControlCalls, 1);
   assert.equal(session.stepMachine.status, "waiting_for_input");
-  assert.equal(session.returnControlInput.inputPrompt, "What would you like to do?");
+  assert.equal(session.returnControlInput.inputPrompt, "What would you like to do next?");
 });
 
 test("session presentation ignores Codex output activity for terminal preview visibility", async () => {

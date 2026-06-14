@@ -1,4 +1,5 @@
 import {
+  vibe64AgentRunStateIsActive,
   VIBE64_SESSION_STATUS,
   workflowDefinitionCreationOptions
 } from "@local/vibe64-runtime/server";
@@ -377,6 +378,14 @@ function codexAppServerDeliveryRunning(session = {}) {
   ));
 }
 
+function sessionHasActiveAgentRun(session = {}) {
+  const runs = Array.isArray(session.agentRuns) ? session.agentRuns : [];
+  return runs.some((run) => (
+    run?.active === true ||
+    vibe64AgentRunStateIsActive(run?.state)
+  ));
+}
+
 function terminalStateHasActiveCodexTurn(terminalState = {}) {
   return terminalState.codexAgentTurnActive === true ||
     terminalState.codexAgentTurn?.active === true;
@@ -386,6 +395,7 @@ async function recoverAgentWaitWithoutCodex(runtime, session = {}, terminalState
   if (
     !sessionAwaitsAgentResult(session) ||
     terminalStateHasActiveCodexTurn(terminalState) ||
+    sessionHasActiveAgentRun(session) ||
     codexAppServerDeliveryRunning(session)
   ) {
     return session;
@@ -398,8 +408,8 @@ async function recoverAgentWaitWithoutCodex(runtime, session = {}, terminalState
     sessionId: session.sessionId
   });
   const recovered = await runtime.returnControlFromAgentWait(session.sessionId, {
-    inputPrompt: "What would you like to do?",
-    message: "Codex is not running for this turn, so Vibe64 returned control to you."
+    inputPrompt: "What would you like to do next?",
+    message: "Codex is no longer running for this turn, so Vibe64 returned control to you."
   });
   vibe64SessionDebugLog("server.service.agentWait.recover.done", {
     ...vibe64SessionDebugSummary(recovered),

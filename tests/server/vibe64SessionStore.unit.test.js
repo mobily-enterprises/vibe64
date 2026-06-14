@@ -83,6 +83,7 @@ test("vibe64 session store creates inspectable session state under .vibe64-local
     await assertPathExists(paths.currentStepPath);
     await assertPathExists(paths.statusPath);
     await assertPathExists(paths.metadataRoot);
+    await assertPathExists(paths.agentRunsRoot);
     await assertPathExists(paths.artifactsRoot);
     await assertPathExists(paths.backgroundTasksRoot);
     await assertPathExists(paths.commandLifecyclesRoot);
@@ -142,6 +143,32 @@ test("vibe64 session store reads and writes metadata, artifacts, status, current
 	        terminalSessionId: "terminal-1"
 	      }
 	    });
+	    await store.writeAgentRunEvent("state_contract", "codex_app_server", {
+	      event: {
+	        kind: "started"
+	      },
+	      patch: {
+	        provider: "codex",
+	        providerInterface: "app-server",
+	        providerStatus: "inProgress",
+	        providerThreadId: "thread-1",
+	        providerTurnId: "turn-1",
+	        state: "active",
+	        stepId: "install_dependencies",
+	        stepStatus: "awaiting_agent_result"
+	      }
+	    });
+	    await store.writeAgentRunEvent("state_contract", "codex_app_server", {
+	      event: {
+	        kind: "interrupted",
+	        message: "Stopped by user."
+	      },
+	      patch: {
+	        error: "Stopped by user.",
+	        providerStatus: "interrupted",
+	        state: "interrupted"
+	      }
+	    });
 
 	    const session = await store.readSession("state_contract");
     assert.equal(session.status, "blocked");
@@ -170,6 +197,27 @@ test("vibe64 session store reads and writes metadata, artifacts, status, current
 	      stepRevision: 2,
 	      terminalSessionId: "terminal-1"
 	    });
+	    assert.deepEqual(session.agentRuns.map((run) => ({
+	      active: run.active,
+	      eventKinds: run.events.map((event) => event.kind),
+	      id: run.id,
+	      provider: run.provider,
+	      providerStatus: run.providerStatus,
+	      providerTurnId: run.providerTurnId,
+	      state: run.state,
+	      stepId: run.stepId
+	    })), [
+	      {
+	        active: false,
+	        eventKinds: ["started", "interrupted"],
+	        id: "codex_app_server",
+	        provider: "codex",
+	        providerStatus: "interrupted",
+	        providerTurnId: "turn-1",
+	        state: "interrupted",
+	        stepId: "install_dependencies"
+	      }
+	    ]);
     assert.deepEqual(await store.readStepState("state_contract", "install_dependencies"), {
       at: "2026-05-16T01:02:03.000Z",
       status: "attempting_execution",

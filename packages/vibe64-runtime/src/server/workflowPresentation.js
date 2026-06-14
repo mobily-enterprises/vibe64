@@ -65,6 +65,10 @@ const INPUT_BEHAVIOR_KINDS = Object.freeze({
 const INPUT_MESSAGE_SOURCES = Object.freeze({
   LATEST_ASSISTANT_MESSAGE: "latest_assistant_message"
 });
+const QUIET_CONVERSATION_WAIT_SOURCES = new Set([
+  "system",
+  "system_recovery"
+]);
 
 function currentStepDefinition(session = {}) {
   return isPlainObject(session.currentStepDefinition) ? session.currentStepDefinition : {};
@@ -530,6 +534,8 @@ function interactionPresentation(session = {}) {
       style: "primary"
     });
     const waitingForInput = stepMachineStatus(session) === STEP_STATUS.WAITING_FOR_INPUT;
+    const quietConversationWait = waitingForInput &&
+      QUIET_CONVERSATION_WAIT_SOURCES.has(normalizeText(session.stepMachine?.source));
     const skipIntent = waitingForInput ? conversationSkipIntent(interaction, action) : null;
     return {
       intents: [
@@ -541,10 +547,10 @@ function interactionPresentation(session = {}) {
         input: inputPresentation(interaction, {
           submitTarget: "intent"
         }),
-        message: interaction.prompt || "",
+        message: quietConversationWait ? "" : interaction.prompt || "",
         primaryIntentId: conversationIntentId,
         sections: presentationSections(["response_preview"]),
-        title: interaction.title || currentStepLabel(session)
+        title: quietConversationWait ? "" : interaction.title || currentStepLabel(session)
       })
     };
   }

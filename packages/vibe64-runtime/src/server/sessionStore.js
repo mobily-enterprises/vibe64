@@ -37,6 +37,7 @@ const CLOSED_VIBE64_SESSION_STATUSES = new Set([
 ]);
 const ACTION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
 const ACTION_ATTEMPT_FILE_PATTERN = /^(\d{6})-([A-Za-z0-9][A-Za-z0-9_-]{0,127})\.json$/u;
+const AGENT_RUN_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,191}$/u;
 const ARTIFACT_PATH_SEGMENT_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/u;
 const BACKGROUND_TASK_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,191}$/u;
 const COMMAND_LIFECYCLE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,191}$/u;
@@ -68,6 +69,29 @@ const BACKGROUND_TASK_STATUS = Object.freeze({
   RUNNING: "running"
 });
 const BACKGROUND_TASK_STATUSES = new Set(Object.values(BACKGROUND_TASK_STATUS));
+const VIBE64_AGENT_RUN_STATE = Object.freeze({
+  ACTIVE: "active",
+  CANCELLED: "cancelled",
+  COMPLETED: "completed",
+  FAILED: "failed",
+  FINALIZING: "finalizing",
+  INTERRUPTED: "interrupted",
+  STARTING: "starting",
+  TIMED_OUT: "timed_out"
+});
+const AGENT_RUN_STATES = new Set(Object.values(VIBE64_AGENT_RUN_STATE));
+const TERMINAL_AGENT_RUN_STATES = new Set([
+  VIBE64_AGENT_RUN_STATE.CANCELLED,
+  VIBE64_AGENT_RUN_STATE.COMPLETED,
+  VIBE64_AGENT_RUN_STATE.FAILED,
+  VIBE64_AGENT_RUN_STATE.INTERRUPTED,
+  VIBE64_AGENT_RUN_STATE.TIMED_OUT
+]);
+const ACTIVE_AGENT_RUN_STATES = new Set([
+  VIBE64_AGENT_RUN_STATE.ACTIVE,
+  VIBE64_AGENT_RUN_STATE.FINALIZING,
+  VIBE64_AGENT_RUN_STATE.STARTING
+]);
 const sessionMutationChains = new Map();
 const sessionMutationContext = new AsyncLocalStorage();
 
@@ -90,6 +114,10 @@ function isSafeActionId(actionId) {
 
 function isSafeCommandLifecycleId(lifecycleId) {
   return COMMAND_LIFECYCLE_ID_PATTERN.test(normalizeText(lifecycleId));
+}
+
+function isSafeAgentRunId(runId) {
+  return AGENT_RUN_ID_PATTERN.test(normalizeText(runId));
 }
 
 function isSafeBackgroundTaskId(taskId) {
@@ -139,6 +167,17 @@ function assertSafeCommandLifecycleId(lifecycleId) {
   return normalizedLifecycleId;
 }
 
+function assertSafeAgentRunId(runId) {
+  const normalizedRunId = normalizeText(runId);
+  if (!isSafeAgentRunId(normalizedRunId)) {
+    throw vibe64Error(
+      `Invalid vibe64 agent run id: ${normalizedRunId || "(empty)"}`,
+      "vibe64_invalid_agent_run_id"
+    );
+  }
+  return normalizedRunId;
+}
+
 function assertSafeBackgroundTaskId(taskId) {
   const normalizedTaskId = normalizeText(taskId);
   if (!isSafeBackgroundTaskId(normalizedTaskId)) {
@@ -148,6 +187,25 @@ function assertSafeBackgroundTaskId(taskId) {
     );
   }
   return normalizedTaskId;
+}
+
+function normalizeVibe64AgentRunState(state) {
+  const normalizedState = normalizeText(state) || VIBE64_AGENT_RUN_STATE.STARTING;
+  if (!AGENT_RUN_STATES.has(normalizedState)) {
+    throw vibe64Error(
+      `Invalid vibe64 agent run state: ${normalizedState}`,
+      "vibe64_invalid_agent_run_state"
+    );
+  }
+  return normalizedState;
+}
+
+function vibe64AgentRunStateIsActive(state) {
+  return ACTIVE_AGENT_RUN_STATES.has(normalizeVibe64AgentRunState(state));
+}
+
+function vibe64AgentRunStateIsTerminal(state) {
+  return TERMINAL_AGENT_RUN_STATES.has(normalizeVibe64AgentRunState(state));
 }
 
 function normalizeBackgroundTaskStatus(status) {
@@ -426,6 +484,7 @@ function resolveVibe64SessionPaths({
     actionsRoot: sessionRoot ? path.join(sessionRoot, "actions") : "",
     actionAttemptsRoot: sessionRoot ? path.join(sessionRoot, "action-attempts") : "",
     activeSessionsRoot,
+    agentRunsRoot: sessionRoot ? path.join(sessionRoot, "agent-runs") : "",
     artifactsRoot: sessionRoot ? path.join(sessionRoot, "artifacts") : "",
     backgroundTasksRoot: sessionRoot ? path.join(sessionRoot, "background-tasks") : "",
     commandLifecyclesRoot: sessionRoot ? path.join(sessionRoot, "command-lifecycle") : "",
@@ -509,6 +568,10 @@ function actionAttemptFilePath(sessionPaths, attemptFileName) {
     throw vibe64Error(`Invalid vibe64 action attempt file: ${normalizedFileName || "(empty)"}`, "vibe64_invalid_action_attempt");
   }
   return path.join(sessionPaths.actionAttemptsRoot, normalizedFileName);
+}
+
+function agentRunFilePath(sessionPaths, runId) {
+  return path.join(sessionPaths.agentRunsRoot, `${assertSafeAgentRunId(runId)}.json`);
 }
 
 function backgroundTaskFilePath(sessionPaths, taskId) {
@@ -777,6 +840,97 @@ function createVibe64SessionStore({
       .map((line) => line.trim())
       .filter(Boolean)
       .map((line) => JSON.parse(line));
+  }
+
+  async function readAgentRunFromPath(sessionPaths, runId) {
+    const normalizedRunId = assertSafeAgentRunId(runId);
+    const runText = await readTextIfExists(agentRunFilePath(sessionPaths, normalizedRunId));
+    if (!runText) {
+      return null;
+    }
+    try {
+      const record = JSON.parse(runText);
+      return isPlainObject(record)
+        ? {
+            ...record,
+            active: vibe64AgentRunStateIsActive(record.state),
+            events: Array.isArray(record.events) ? record.events.filter(isPlainObject) : [],
+            id: normalizedRunId,
+            state: normalizeVibe64AgentRunState(record.state)
+          }
+        : null;
+    } catch {
+      throw vibe64Error(
+        `Invalid vibe64 agent run: ${normalizedRunId}`,
+        "vibe64_invalid_agent_run"
+      );
+    }
+  }
+
+  async function readAgentRun(sessionId, runId) {
+    const sessionPaths = await ensureSessionRoot(sessionId);
+    return readAgentRunFromPath(sessionPaths, runId);
+  }
+
+  async function readAgentRuns(sessionId) {
+    const sessionPaths = await ensureSessionRoot(sessionId);
+    const runNames = sortedFileNames(
+      await readDirectoryEntries(sessionPaths.agentRunsRoot),
+      (name) => name.endsWith(".json") && isSafeAgentRunId(name.slice(0, -".json".length))
+    );
+    const runs = await Promise.all(runNames.map((fileName) => {
+      return readAgentRunFromPath(sessionPaths, fileName.slice(0, -".json".length));
+    }));
+    return runs
+      .filter(Boolean)
+      .sort((left, right) => {
+        const timeComparison = normalizeText(left.updatedAt).localeCompare(normalizeText(right.updatedAt));
+        return timeComparison || normalizeText(left.id).localeCompare(normalizeText(right.id));
+      });
+  }
+
+  async function writeAgentRunEvent(sessionId, runId, {
+    event = {},
+    patch = {}
+  } = {}) {
+    return mutateSession(sessionId, async (sessionPaths) => {
+      const normalizedRunId = assertSafeAgentRunId(runId);
+      const previous = await readAgentRunFromPath(sessionPaths, normalizedRunId) || {
+        events: [],
+        id: normalizedRunId
+      };
+      const eventAt = normalizeText(event.at || patch.updatedAt) || now().toISOString();
+      const state = normalizeVibe64AgentRunState(patch.state || event.state || previous.state);
+      const terminalState = vibe64AgentRunStateIsTerminal(state);
+      const eventRecord = {
+        ...event,
+        at: eventAt,
+        kind: normalizeText(event.kind || state || "updated"),
+        message: normalizeText(event.message || patch.message),
+        state
+      };
+      const record = {
+        ...previous,
+        ...patch,
+        active: !terminalState,
+        events: [
+          ...(Array.isArray(previous.events) ? previous.events : []),
+          eventRecord
+        ],
+        finishedAt: terminalState
+          ? normalizeText(patch.finishedAt || previous.finishedAt) || eventAt
+          : "",
+        id: normalizedRunId,
+        startedAt: normalizeText(previous.startedAt || patch.startedAt) || eventAt,
+        state,
+        updatedAt: eventAt
+      };
+      if (!terminalState && !Object.hasOwn(patch, "error")) {
+        record.error = "";
+      }
+      await writeJsonFile(agentRunFilePath(sessionPaths, normalizedRunId), record);
+      return record;
+    });
   }
 
   async function readBackgroundTaskFromPath(sessionPaths, taskId) {
@@ -1339,6 +1493,7 @@ function createVibe64SessionStore({
       artifactReadiness,
       actionResults,
       actionAttempts,
+      agentRuns,
       backgroundTasks,
       commandLifecycles,
       promptContextSnapshot
@@ -1351,6 +1506,7 @@ function createVibe64SessionStore({
       readArtifactReadiness(sessionPaths.sessionId),
       readActionResults(sessionPaths.sessionId),
       readActionAttempts(sessionPaths.sessionId),
+      readAgentRuns(sessionPaths.sessionId),
       readBackgroundTasks(sessionPaths.sessionId),
       readCommandLifecycles(sessionPaths.sessionId),
       readPromptContextSnapshot(sessionPaths.sessionId)
@@ -1368,6 +1524,8 @@ function createVibe64SessionStore({
       actionAttempts,
       actionAttemptsRoot: sessionPaths.actionAttemptsRoot,
       actionsRoot: sessionPaths.actionsRoot,
+      agentRuns,
+      agentRunsRoot: sessionPaths.agentRunsRoot,
       artifactReadiness,
       artifactsRoot: sessionPaths.artifactsRoot,
       backgroundTasks,
@@ -1473,6 +1631,9 @@ function createVibe64SessionStore({
       mkdir(sessionPaths.actionAttemptsRoot, {
         recursive: true
       }),
+      mkdir(sessionPaths.agentRunsRoot, {
+        recursive: true
+      }),
       mkdir(sessionPaths.artifactsRoot, {
         recursive: true
       }),
@@ -1571,6 +1732,8 @@ function createVibe64SessionStore({
     readActionAttempts,
     readActionResult,
     readActionResults,
+    readAgentRun,
+    readAgentRuns,
     readBackgroundTask,
     readBackgroundTasks,
     readCommandLifecycle,
@@ -1588,6 +1751,7 @@ function createVibe64SessionStore({
     readStatus,
     readStepState,
     writeArtifact,
+    writeAgentRunEvent,
     writeBackgroundTaskEvent,
     writeCommandLifecycleEvent,
     writeActionResult,
@@ -1608,6 +1772,7 @@ function createVibe64SessionStore({
 export {
   VIBE64_INITIAL_STEP,
   VIBE64_PROMPT_CONTEXT_SNAPSHOT_SCHEMA_VERSION,
+  VIBE64_AGENT_RUN_STATE,
   VIBE64_SESSION_SCHEMA_VERSION,
   VIBE64_SESSION_STATUS,
   VIBE64_STATE_DIR,
@@ -1619,5 +1784,8 @@ export {
   isSafeActionId,
   isSafeStepId,
   isValidVibe64SessionId,
-  resolveVibe64SessionPaths
+  normalizeVibe64AgentRunState,
+  resolveVibe64SessionPaths,
+  vibe64AgentRunStateIsActive,
+  vibe64AgentRunStateIsTerminal
 };

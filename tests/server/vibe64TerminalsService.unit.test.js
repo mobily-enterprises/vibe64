@@ -6,6 +6,8 @@ import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
 
 import {
+  VIBE64_AGENT_RUN_STATE,
+  vibe64AgentRunStateIsActive,
   Vibe64SessionRuntime
 } from "@local/vibe64-runtime/server";
 import {
@@ -126,6 +128,69 @@ import {
 } from "./dockerArgsTestHelpers.js";
 
 const POST_COMMIT_TEST_TIMEOUT_MS = 500;
+const CODEX_APP_SERVER_AGENT_RUN_ID = "codex_app_server";
+
+function codexAppServerAgentRun({
+  error = "",
+  finishedAt = "",
+  providerStatus = "inProgress",
+  providerThreadId = "",
+  providerTurnId = "",
+  startedAt = "",
+  state = VIBE64_AGENT_RUN_STATE.ACTIVE,
+  updatedAt = ""
+} = {}) {
+  return {
+    active: vibe64AgentRunStateIsActive(state),
+    error,
+    events: [],
+    finishedAt,
+    id: CODEX_APP_SERVER_AGENT_RUN_ID,
+    provider: "codex",
+    providerInterface: "app-server",
+    providerStatus,
+    providerThreadId,
+    providerTurnId,
+    startedAt,
+    updatedAt,
+    state
+  };
+}
+
+function codexAppServerAgentRunSnapshot(session = {}) {
+  return (Array.isArray(session.agentRuns) ? session.agentRuns : [])
+    .find((run) => run.id === CODEX_APP_SERVER_AGENT_RUN_ID) || null;
+}
+
+function writeAgentRunEventToSession(session = {}, runId = "", {
+  event = {},
+  patch = {}
+} = {}) {
+  const runs = Array.isArray(session.agentRuns) ? session.agentRuns : [];
+  const existing = runs.find((run) => run.id === runId) || {
+    events: [],
+    id: runId
+  };
+  const state = String(patch.state || existing.state || "");
+  const updated = {
+    ...existing,
+    ...patch,
+    active: vibe64AgentRunStateIsActive(state),
+    events: [
+      ...(Array.isArray(existing.events) ? existing.events : []),
+      {
+        ...event,
+        createdAt: event.createdAt || "2000-01-01T00:00:00.000Z"
+      }
+    ],
+    id: runId
+  };
+  session.agentRuns = [
+    ...runs.filter((run) => run.id !== runId),
+    updated
+  ];
+  return updated;
+}
 
 class UnitCommandAdapter extends TargetAdapter {
   constructor() {
@@ -900,7 +965,7 @@ test("Vibe64 Codex terminal mounts linked git metadata for worktree roots", asyn
   });
 });
 
-test("Vibe64 Codex terminal state uses app-server turn state, not terminal metadata", async () => {
+test("Vibe64 Codex terminal state uses durable app-server agent run state", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_turn_state";
     const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
@@ -911,7 +976,6 @@ test("Vibe64 Codex terminal state uses app-server turn state, not terminal metad
     const session = {
       completedSteps: ["worktree_created"],
       metadata: {
-        codex_app_server_turn_state: "idle",
         worktree_path: worktree
       },
       sessionId,
@@ -958,16 +1022,33 @@ test("Vibe64 Codex terminal state uses app-server turn state, not terminal metad
       assert.equal(state.codexAgentTurnActive, false);
       assert.equal(state.codexAgentTurn.state, "idle");
 
-      session.metadata.codex_app_server_turn_state = "active";
-      session.metadata.codex_app_server_turn_status = "inProgress";
-      session.metadata.codex_app_server_turn_thread_id = "00000000-0000-4000-8000-000000000010";
-      session.metadata.codex_app_server_turn_id = "turn-1";
+      session.agentRuns = [
+        codexAppServerAgentRun({
+          providerThreadId: "00000000-0000-4000-8000-000000000010",
+          providerTurnId: "turn-1"
+        })
+      ];
       state = await terminalService.codexTerminalState(sessionId);
       assert.equal(state.codexAgentTurnActive, true);
       assert.equal(state.codexAgentTurn.state, "active");
       assert.equal(state.codexAgentTurn.status, "inProgress");
       assert.equal(state.codexAgentTurn.turnId, "turn-1");
       assert.equal(state.codexTerminal.transmitting, undefined);
+
+      session.agentRuns = [
+        codexAppServerAgentRun({
+          providerStatus: "inProgress",
+          providerThreadId: "00000000-0000-4000-8000-000000000011",
+          providerTurnId: "turn-2",
+          state: "active"
+        })
+      ];
+      state = await terminalService.codexTerminalState(sessionId);
+      assert.equal(state.codexAgentTurnActive, true);
+      assert.equal(state.codexAgentTurn.state, "active");
+      assert.equal(state.codexAgentTurn.status, "inProgress");
+      assert.equal(state.codexAgentTurn.threadId, "00000000-0000-4000-8000-000000000011");
+      assert.equal(state.codexAgentTurn.turnId, "turn-2");
     } finally {
       await closeTerminalSession(terminal.id, {
         namespace
@@ -986,15 +1067,17 @@ test("Vibe64 Codex terminal state reconciles stale active app-server turns", asy
       recursive: true
     });
     const session = {
+      agentRuns: [
+        codexAppServerAgentRun({
+          providerThreadId: "thread-1",
+          providerTurnId: "turn-1"
+        })
+      ],
       completedSteps: ["worktree_created"],
       metadata: {
         codex_app_server_endpoint: `unix://${path.join(runtimeDir, "app-server.sock")}`,
         codex_app_server_runtime_dir: runtimeDir,
         codex_app_server_socket_path: path.join(runtimeDir, "app-server.sock"),
-        codex_app_server_turn_id: "turn-1",
-        codex_app_server_turn_state: "active",
-        codex_app_server_turn_status: "inProgress",
-        codex_app_server_turn_thread_id: "thread-1",
         worktree_path: worktree
       },
       sessionId,
@@ -1008,6 +1091,9 @@ test("Vibe64 Codex terminal state reconciles stale active app-server turns", asy
       store: {
         async mutateSession(_sessionId, operation) {
           return operation();
+        },
+        async writeAgentRunEvent(_sessionId, runId, event) {
+          writeAgentRunEventToSession(session, runId, event);
         },
         async writeMetadataValue(_sessionId, name, value) {
           session.metadata[name] = String(value || "");
@@ -1046,11 +1132,17 @@ test("Vibe64 Codex terminal state reconciles stale active app-server turns", asy
     assert.equal(state.ok, true);
     assert.deepEqual(readThreadCalls, ["thread-1"]);
     assert.equal(providerOptions.runtimeDir, runtimeDir);
-    assert.equal(session.metadata.codex_app_server_turn_state, "finalizing");
-    assert.equal(session.metadata.codex_app_server_turn_status, "completed");
-    assert.equal(session.metadata.codex_app_server_turn_thread_id, "thread-1");
-    assert.equal(session.metadata.codex_app_server_turn_id, "turn-1");
-    assert.ok(session.metadata.codex_app_server_turn_completed_at);
+    assert.deepEqual({
+      providerStatus: codexAppServerAgentRunSnapshot(session).providerStatus,
+      providerThreadId: codexAppServerAgentRunSnapshot(session).providerThreadId,
+      providerTurnId: codexAppServerAgentRunSnapshot(session).providerTurnId,
+      state: codexAppServerAgentRunSnapshot(session).state
+    }, {
+      providerStatus: "completed",
+      providerThreadId: "thread-1",
+      providerTurnId: "turn-1",
+      state: "finalizing"
+    });
     assert.equal(state.codexAgentTurnActive, true);
     assert.equal(state.codexAgentTurn.state, "finalizing");
     assert.equal(state.codexAgentTurn.status, "completed");
@@ -1067,15 +1159,17 @@ test("Vibe64 Codex app-server active turns self-reconcile without another sessio
       recursive: true
     });
     const session = {
+      agentRuns: [
+        codexAppServerAgentRun({
+          providerThreadId: "thread-1",
+          providerTurnId: "turn-1"
+        })
+      ],
       completedSteps: ["worktree_created"],
       metadata: {
         codex_app_server_endpoint: `unix://${path.join(runtimeDir, "app-server.sock")}`,
         codex_app_server_runtime_dir: runtimeDir,
         codex_app_server_socket_path: path.join(runtimeDir, "app-server.sock"),
-        codex_app_server_turn_id: "turn-1",
-        codex_app_server_turn_state: "active",
-        codex_app_server_turn_status: "inProgress",
-        codex_app_server_turn_thread_id: "thread-1",
         worktree_path: worktree
       },
       sessionId,
@@ -1089,6 +1183,9 @@ test("Vibe64 Codex app-server active turns self-reconcile without another sessio
       store: {
         async mutateSession(_sessionId, operation) {
           return operation();
+        },
+        async writeAgentRunEvent(_sessionId, runId, event) {
+          writeAgentRunEventToSession(session, runId, event);
         },
         async writeMetadataValue(_sessionId, name, value) {
           session.metadata[name] = String(value || "");
@@ -1123,15 +1220,22 @@ test("Vibe64 Codex app-server active turns self-reconcile without another sessio
 
     assert.equal(state.ok, true);
     assert.deepEqual(readThreadCalls, ["thread-1"]);
-    assert.equal(session.metadata.codex_app_server_turn_state, "active");
+    assert.equal(codexAppServerAgentRunSnapshot(session).state, "active");
 
     await delay(25);
 
     assert.deepEqual(readThreadCalls, ["thread-1", "thread-1"]);
-    assert.equal(session.metadata.codex_app_server_turn_state, "finalizing");
-    assert.equal(session.metadata.codex_app_server_turn_status, "completed");
-    assert.equal(session.metadata.codex_app_server_turn_thread_id, "thread-1");
-    assert.equal(session.metadata.codex_app_server_turn_id, "turn-1");
+    assert.deepEqual({
+      providerStatus: codexAppServerAgentRunSnapshot(session).providerStatus,
+      providerThreadId: codexAppServerAgentRunSnapshot(session).providerThreadId,
+      providerTurnId: codexAppServerAgentRunSnapshot(session).providerTurnId,
+      state: codexAppServerAgentRunSnapshot(session).state
+    }, {
+      providerStatus: "completed",
+      providerThreadId: "thread-1",
+      providerTurnId: "turn-1",
+      state: "finalizing"
+    });
   });
 });
 
@@ -1145,18 +1249,21 @@ test("Vibe64 Codex terminal state returns control for stale finalizing app-serve
       recursive: true
     });
     const session = {
+      agentRuns: [
+        codexAppServerAgentRun({
+          providerStatus: "completed",
+          providerThreadId: "thread-1",
+          providerTurnId: "turn-1",
+          state: "finalizing",
+          updatedAt: "2000-01-01T00:00:00.000Z"
+        })
+      ],
       completedSteps: ["worktree_created"],
       currentStep: "plan_and_execute",
       metadata: {
         codex_app_server_endpoint: `unix://${path.join(runtimeDir, "app-server.sock")}`,
         codex_app_server_runtime_dir: runtimeDir,
         codex_app_server_socket_path: path.join(runtimeDir, "app-server.sock"),
-        codex_app_server_turn_completed_at: "2000-01-01T00:00:00.000Z",
-        codex_app_server_turn_id: "turn-1",
-        codex_app_server_turn_state: "finalizing",
-        codex_app_server_turn_status: "completed",
-        codex_app_server_turn_thread_id: "thread-1",
-        codex_app_server_turn_updated_at: "2000-01-01T00:00:00.000Z",
         worktree_path: worktree
       },
       sessionId,
@@ -1178,6 +1285,9 @@ test("Vibe64 Codex terminal state returns control for stale finalizing app-serve
       store: {
         async mutateSession(_sessionId, operation) {
           return operation();
+        },
+        async writeAgentRunEvent(_sessionId, runId, event) {
+          writeAgentRunEventToSession(session, runId, event);
         },
         async writeMetadataValue(_sessionId, name, value) {
           session.metadata[name] = String(value || "");
@@ -1210,9 +1320,9 @@ test("Vibe64 Codex terminal state returns control for stale finalizing app-serve
 
     assert.equal(state.ok, true);
     assert.equal(readThreadCalls, 0);
-    assert.equal(session.metadata.codex_app_server_turn_state, "idle");
-    assert.equal(session.metadata.codex_app_server_turn_status, "completed");
-    assert.match(session.metadata.codex_app_server_turn_error, /did not receive the assistant result text/u);
+    assert.equal(codexAppServerAgentRunSnapshot(session).state, "completed");
+    assert.equal(codexAppServerAgentRunSnapshot(session).providerStatus, "completed");
+    assert.match(codexAppServerAgentRunSnapshot(session).error, /did not receive the assistant result text/u);
     assert.equal(session.stepMachine.status, "waiting_for_input");
     assert.match(session.returnedControl?.message || "", /did not receive the assistant result text/u);
     assert.equal(state.codexAgentTurnActive, false);
@@ -1341,6 +1451,9 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
           backgroundTasks.set(taskId, task);
           session.presentation.backgroundTasks = [...backgroundTasks.values()];
           return task;
+        },
+        async writeAgentRunEvent(_sessionId, runId, event) {
+          return writeAgentRunEventToSession(session, runId, event);
         },
         async writeMetadataValue(_sessionId, name, value) {
           session.metadata[name] = String(value || "").trim();
@@ -1521,7 +1634,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       "codex --remote unix:///vibe64-codex-app-server/app-server.sock resume 00000000-0000-4000-8000-000000000004"
     );
     assert.equal(session.metadata.codex_prompt_handoff_delivery, "app_server");
-    assert.equal(session.metadata.codex_app_server_turn_id, "codex-app-server-turn-1");
+    assert.equal(codexAppServerAgentRunSnapshot(session).providerTurnId, "codex-app-server-turn-1");
     assert.equal(session.metadata.codex_session_briefing_delivered, "yes");
     assert.equal(session.metadata.codex_session_briefing_delivery, "app_server_developer_instructions");
     assert.equal(
@@ -1572,8 +1685,8 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       }
     });
     await delay(5);
-    assert.equal(session.metadata.codex_app_server_turn_state, "finalizing");
-    assert.equal(session.metadata.codex_app_server_turn_status, "completed");
+    assert.equal(codexAppServerAgentRunSnapshot(session).state, "finalizing");
+    assert.equal(codexAppServerAgentRunSnapshot(session).providerStatus, "completed");
     assert.equal(session.stepMachine.status, "awaiting_agent_result");
     providerSubscribers[0]({
       method: "item/completed",
@@ -1618,8 +1731,8 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       text: ""
     });
     assert.equal(session.stepMachine.status, "done");
-    assert.equal(session.metadata.codex_app_server_turn_state, "idle");
-    assert.equal(session.metadata.codex_app_server_turn_status, "completed");
+    assert.equal(codexAppServerAgentRunSnapshot(session).state, "completed");
+    assert.equal(codexAppServerAgentRunSnapshot(session).providerStatus, "completed");
     assert.deepEqual((await runtime.store.readConversationLog()).map((turn) => turn.assistant?.text).filter(Boolean), [
       "The app-server turn is complete."
     ]);
@@ -1705,8 +1818,8 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       }
     });
     await delay(5);
-    assert.equal(session.metadata.codex_app_server_turn_state, "active");
-    assert.equal(session.metadata.codex_app_server_turn_status, "inProgress");
+    assert.equal(codexAppServerAgentRunSnapshot(session).state, "active");
+    assert.equal(codexAppServerAgentRunSnapshot(session).providerStatus, "inProgress");
     providerSubscribers[0]({
       method: "thread/status/changed",
       params: {
@@ -1717,8 +1830,8 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       }
     });
     await delay(5);
-    assert.equal(session.metadata.codex_app_server_turn_state, "idle");
-    assert.equal(session.metadata.codex_app_server_turn_status, "completed");
+    assert.equal(codexAppServerAgentRunSnapshot(session).state, "completed");
+    assert.equal(codexAppServerAgentRunSnapshot(session).providerStatus, "completed");
     session.stepMachine.status = "awaiting_agent_result";
     session.returnedControl = null;
     providerSubscribers[0]({
@@ -1742,8 +1855,8 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       }
     });
     await delay(5);
-    assert.equal(session.metadata.codex_app_server_turn_state, "idle");
-    assert.equal(session.metadata.codex_app_server_turn_status, "failed");
+    assert.equal(codexAppServerAgentRunSnapshot(session).state, "failed");
+    assert.equal(codexAppServerAgentRunSnapshot(session).providerStatus, "failed");
     assert.match(session.returnedControl?.message || "", /Codex app-server failed before completing this turn/u);
     assert.doesNotMatch(session.returnedControl?.message || "", /result envelope/u);
     await controller.closeAllForSession(sessionId);
@@ -1888,13 +2001,22 @@ test("Vibe64 self-target Codex interrupt keeps native provider control", async (
         agent_identity_resume_strategy: "provider-native",
         agent_identity_status: "ready",
         agent_identity_workdir: worktree,
-        codex_app_server_turn_id: "turn-1",
-        codex_app_server_turn_state: "active",
-        codex_app_server_turn_status: "inProgress",
-        codex_app_server_turn_thread_id: threadId,
         worktree_path: worktree
       },
       sessionId
+    });
+    await runtime.store.writeAgentRunEvent(sessionId, CODEX_APP_SERVER_AGENT_RUN_ID, {
+      event: {
+        kind: "active"
+      },
+      patch: {
+        provider: "codex",
+        providerInterface: "app-server",
+        providerStatus: "inProgress",
+        providerThreadId: threadId,
+        providerTurnId: "turn-1",
+        state: "active"
+      }
     });
     await mkdir(worktree, {
       recursive: true
@@ -1943,6 +2065,22 @@ test("Vibe64 self-target Codex interrupt keeps native provider control", async (
     assert.equal(providerOptions[0].useDocker, false);
     assert.equal(providerOptions[0].targetRoot, targetRoot);
     assert.equal(providerOptions[0].workdir, worktree);
+    const interruptedSession = await runtime.getSession(sessionId);
+    assert.deepEqual(interruptedSession.agentRuns.map((run) => ({
+      active: run.active,
+      id: run.id,
+      providerStatus: run.providerStatus,
+      providerTurnId: run.providerTurnId,
+      state: run.state
+    })), [
+      {
+        active: false,
+        id: "codex_app_server",
+        providerStatus: "interrupted",
+        providerTurnId: "turn-1",
+        state: "interrupted"
+      }
+    ]);
   });
 });
 
