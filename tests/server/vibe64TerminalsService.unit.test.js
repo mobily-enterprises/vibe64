@@ -1057,6 +1057,84 @@ test("Vibe64 Codex terminal state reconciles stale active app-server turns", asy
   });
 });
 
+test("Vibe64 Codex app-server active turns self-reconcile without another session refresh", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "codex_turn_active_watchdog";
+    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
+    const worktree = path.join(sessionRoot, "worktree");
+    const runtimeDir = path.join(targetRoot, ".vibe64", "runtime", "codex-app-server");
+    await mkdir(worktree, {
+      recursive: true
+    });
+    const session = {
+      completedSteps: ["worktree_created"],
+      metadata: {
+        codex_app_server_endpoint: `unix://${path.join(runtimeDir, "app-server.sock")}`,
+        codex_app_server_runtime_dir: runtimeDir,
+        codex_app_server_socket_path: path.join(runtimeDir, "app-server.sock"),
+        codex_app_server_turn_id: "turn-1",
+        codex_app_server_turn_state: "active",
+        codex_app_server_turn_status: "inProgress",
+        codex_app_server_turn_thread_id: "thread-1",
+        worktree_path: worktree
+      },
+      sessionId,
+      sessionRoot,
+      targetRoot
+    };
+    const runtime = {
+      async getSession() {
+        return session;
+      },
+      store: {
+        async mutateSession(_sessionId, operation) {
+          return operation();
+        },
+        async writeMetadataValue(_sessionId, name, value) {
+          session.metadata[name] = String(value || "");
+        }
+      }
+    };
+    const readThreadStatuses = ["inProgress", "completed"];
+    const readThreadCalls = [];
+    const controller = createCodexTerminalController({
+      codexAppServerActiveReconcileMs: 5,
+      codexAppServerProviderFactory: () => ({
+        async readThread(threadId) {
+          readThreadCalls.push(threadId);
+          const status = readThreadStatuses.shift() || "completed";
+          return {
+            id: threadId,
+            raw: {
+              status
+            }
+          };
+        }
+      }),
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return runtime;
+        }
+      }
+    });
+
+    const state = await controller.terminalState(sessionId);
+
+    assert.equal(state.ok, true);
+    assert.deepEqual(readThreadCalls, ["thread-1"]);
+    assert.equal(session.metadata.codex_app_server_turn_state, "active");
+
+    await delay(25);
+
+    assert.deepEqual(readThreadCalls, ["thread-1", "thread-1"]);
+    assert.equal(session.metadata.codex_app_server_turn_state, "finalizing");
+    assert.equal(session.metadata.codex_app_server_turn_status, "completed");
+    assert.equal(session.metadata.codex_app_server_turn_thread_id, "thread-1");
+    assert.equal(session.metadata.codex_app_server_turn_id, "turn-1");
+  });
+});
+
 test("Vibe64 Codex terminal state returns control for stale finalizing app-server turns", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_turn_stale_finalizing";
