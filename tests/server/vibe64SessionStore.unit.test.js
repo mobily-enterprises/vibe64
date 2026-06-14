@@ -541,6 +541,45 @@ test("vibe64 session store updates streaming thinking on the open user turn", as
   });
 });
 
+test("vibe64 session store does not backfill stale open user turns", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const store = createTestSessionStore({
+      clock: () => new Date("2026-05-16T01:02:03.456Z"),
+      targetRoot
+    });
+    await store.createSession({
+      sessionId: "stale_open_turn"
+    });
+
+    await store.writeConversationUserMessage("stale_open_turn", {
+      text: "This first send failed before Codex accepted it."
+    });
+    await store.writeConversationSystemMessage("stale_open_turn", {
+      text: "Execute plan."
+    });
+
+    assert.equal(
+      await store.writeConversationThinkingMessage("stale_open_turn", {
+        requireOpenTurn: true,
+        text: "This should not attach to the failed send."
+      }),
+      null
+    );
+    await store.writeConversationAssistantMessage("stale_open_turn", {
+      text: "Implementation finished."
+    });
+
+    const conversationLog = await store.readConversationLog("stale_open_turn");
+    assert.equal(conversationLog.length, 3);
+    assert.equal(conversationLog[0].user?.text, "This first send failed before Codex accepted it.");
+    assert.equal(conversationLog[0].assistant, null);
+    assert.deepEqual(conversationLog[0].thinking, []);
+    assert.equal(conversationLog[1].system?.text, "Execute plan.");
+    assert.equal(conversationLog[2].assistant?.text, "Implementation finished.");
+    assert.equal(conversationLog[2].user, null);
+  });
+});
+
 test("vibe64 session store serializes per-session mutations and bumps revision once per committed boundary", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const storeA = createTestSessionStore({

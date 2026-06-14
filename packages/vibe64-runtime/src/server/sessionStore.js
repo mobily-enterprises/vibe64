@@ -1159,15 +1159,14 @@ function createVibe64SessionStore({
     );
   }
 
-  async function latestOpenConversationTurnId(sessionPaths) {
+  async function tailOpenConversationTurnId(sessionPaths) {
     const turnIds = await conversationTurnIds(sessionPaths);
-    for (const turnId of [...turnIds].reverse()) {
-      const turn = await readConversationTurn(sessionPaths, turnId);
-      if (turn.user && !turn.assistant) {
-        return turnId;
-      }
+    const turnId = turnIds.at(-1) || "";
+    if (!turnId) {
+      return "";
     }
-    return "";
+    const turn = await readConversationTurn(sessionPaths, turnId);
+    return turn.user && !turn.assistant ? turnId : "";
   }
 
   async function readConversationLog(sessionId) {
@@ -1203,7 +1202,7 @@ function createVibe64SessionStore({
       return null;
     }
     return mutateSession(sessionId, async (sessionPaths) => {
-      const turnId = await latestOpenConversationTurnId(sessionPaths) ||
+      const turnId = await tailOpenConversationTurnId(sessionPaths) ||
         nextConversationTurnId(await conversationTurnIds(sessionPaths));
       const createdAt = now();
       await writeTextFile(
@@ -1224,7 +1223,7 @@ function createVibe64SessionStore({
       return null;
     }
     return mutateSession(sessionId, async (sessionPaths) => {
-      const openTurnId = await latestOpenConversationTurnId(sessionPaths);
+      const openTurnId = await tailOpenConversationTurnId(sessionPaths);
       if (requireOpenTurn && !openTurnId) {
         return null;
       }
