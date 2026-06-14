@@ -1477,6 +1477,55 @@ test("session inspect keeps agent wait while Codex delivery is running", async (
   assert.equal(inspected.stepMachine.status, "awaiting_agent_result");
 });
 
+test("session inspect keeps agent wait while Codex app-server result is finalizing", async () => {
+  let returnControlCalls = 0;
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async getSession(sessionId) {
+            return {
+              backgroundTasks: [
+                {
+                  id: "codex_app_server",
+                  status: "ready"
+                }
+              ],
+              sessionId,
+              status: VIBE64_SESSION_STATUS.ACTIVE,
+              stepMachine: {
+                status: "awaiting_agent_result"
+              }
+            };
+          },
+          async returnControlFromAgentWait() {
+            returnControlCalls += 1;
+          }
+        };
+      }
+    },
+    terminalService: {
+      async codexTerminalState(sessionId) {
+        return {
+          codexAgentTurn: {
+            active: true,
+            state: "finalizing",
+            status: "completed"
+          },
+          codexAgentTurnActive: true,
+          ok: true,
+          sessionId
+        };
+      }
+    }
+  });
+
+  const inspected = await service.inspectSession("session-finalizing-agent-result");
+
+  assert.equal(returnControlCalls, 0);
+  assert.equal(inspected.stepMachine.status, "awaiting_agent_result");
+});
+
 test("session action returns control when Codex prompt delivery fails", async () => {
   let returnControlCalls = 0;
   const session = {

@@ -33,7 +33,7 @@ X 6c) Make sure that images are not packed into built, kept out
 X Make this work on a local directory, creating containers etc. This is crucial for local development and testing.
 
 5b)
-Make jskit open jskit properly (recursive). this depends on the item above too
+X Make jskit open jskit properly (recursive). this depends on the item above too
 
 
 

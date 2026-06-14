@@ -1046,13 +1046,13 @@ test("Vibe64 Codex terminal state reconciles stale active app-server turns", asy
     assert.equal(state.ok, true);
     assert.deepEqual(readThreadCalls, ["thread-1"]);
     assert.equal(providerOptions.runtimeDir, runtimeDir);
-    assert.equal(session.metadata.codex_app_server_turn_state, "idle");
+    assert.equal(session.metadata.codex_app_server_turn_state, "finalizing");
     assert.equal(session.metadata.codex_app_server_turn_status, "completed");
     assert.equal(session.metadata.codex_app_server_turn_thread_id, "thread-1");
     assert.equal(session.metadata.codex_app_server_turn_id, "turn-1");
     assert.ok(session.metadata.codex_app_server_turn_completed_at);
-    assert.equal(state.codexAgentTurnActive, false);
-    assert.equal(state.codexAgentTurn.state, "idle");
+    assert.equal(state.codexAgentTurnActive, true);
+    assert.equal(state.codexAgentTurn.state, "finalizing");
     assert.equal(state.codexAgentTurn.status, "completed");
   });
 });
@@ -1401,6 +1401,18 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     ]);
     assert.equal(publishSessionReasons.at(-1), "codex-app-server-reasoning-summary");
     providerSubscribers[0]({
+      method: "turn/completed",
+      params: {
+        status: "completed",
+        threadId: "00000000-0000-4000-8000-000000000004",
+        turnId: "codex-app-server-turn-1"
+      }
+    });
+    await delay(5);
+    assert.equal(session.metadata.codex_app_server_turn_state, "finalizing");
+    assert.equal(session.metadata.codex_app_server_turn_status, "completed");
+    assert.equal(session.stepMachine.status, "awaiting_agent_result");
+    providerSubscribers[0]({
       method: "item/completed",
       params: {
         item: {
@@ -1430,14 +1442,6 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
         turnId: "codex-app-server-turn-1"
       }
     });
-    providerSubscribers[0]({
-      method: "turn/completed",
-      params: {
-        status: "completed",
-        threadId: "00000000-0000-4000-8000-000000000004",
-        turnId: "codex-app-server-turn-1"
-      }
-    });
     await delay(5);
     assert.deepEqual(session.lastStepInput, {
       fields: {
@@ -1451,6 +1455,8 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       text: ""
     });
     assert.equal(session.stepMachine.status, "done");
+    assert.equal(session.metadata.codex_app_server_turn_state, "idle");
+    assert.equal(session.metadata.codex_app_server_turn_status, "completed");
     assert.deepEqual((await runtime.store.readConversationLog()).map((turn) => turn.assistant?.text).filter(Boolean), [
       "The app-server turn is complete."
     ]);
@@ -1550,6 +1556,33 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     await delay(5);
     assert.equal(session.metadata.codex_app_server_turn_state, "idle");
     assert.equal(session.metadata.codex_app_server_turn_status, "completed");
+    session.stepMachine.status = "awaiting_agent_result";
+    session.returnedControl = null;
+    providerSubscribers[0]({
+      method: "turn/started",
+      params: {
+        status: "inProgress",
+        threadId: "00000000-0000-4000-8000-000000000004",
+        turnId: "codex-app-server-failed-turn"
+      }
+    });
+    await delay(5);
+    providerSubscribers[0]({
+      method: "turn/completed",
+      params: {
+        error: {
+          message: "app-server crashed"
+        },
+        status: "failed",
+        threadId: "00000000-0000-4000-8000-000000000004",
+        turnId: "codex-app-server-failed-turn"
+      }
+    });
+    await delay(5);
+    assert.equal(session.metadata.codex_app_server_turn_state, "idle");
+    assert.equal(session.metadata.codex_app_server_turn_status, "failed");
+    assert.match(session.returnedControl?.message || "", /Codex app-server failed before completing this turn/u);
+    assert.doesNotMatch(session.returnedControl?.message || "", /result envelope/u);
     await controller.closeAllForSession(sessionId);
     assert.equal(providerCalls.close, 1);
   });
@@ -1668,6 +1701,81 @@ test("Vibe64 self-target Codex app-server uses native provider control", async (
 
     assert.equal(result.ok, true);
     assert.equal(result.codexThreadReady, true);
+    assert.equal(providerOptions.length, 1);
+    assert.equal(providerOptions[0].useDocker, false);
+    assert.equal(providerOptions[0].targetRoot, targetRoot);
+    assert.equal(providerOptions[0].workdir, worktree);
+  });
+});
+
+test("Vibe64 self-target Codex interrupt keeps native provider control", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "self_target_interrupt_native_codex_app_server";
+    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
+    const worktree = path.join(sessionRoot, "worktree");
+    const threadId = "00000000-0000-4000-8000-000000000006";
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "worktree_created",
+      metadata: {
+        agent_identity_conversation_id: threadId,
+        agent_identity_provider: "codex",
+        agent_identity_resume_strategy: "provider-native",
+        agent_identity_status: "ready",
+        agent_identity_workdir: worktree,
+        codex_app_server_turn_id: "turn-1",
+        codex_app_server_turn_state: "active",
+        codex_app_server_turn_status: "inProgress",
+        codex_app_server_turn_thread_id: threadId,
+        worktree_path: worktree
+      },
+      sessionId
+    });
+    await mkdir(worktree, {
+      recursive: true
+    });
+
+    const providerOptions = [];
+    const interruptCalls = [];
+    const terminalService = createService({
+      codexTerminalController: {
+        codexAppServerProviderFactory(options = {}) {
+          providerOptions.push(options);
+          return {
+            interruptTurn: async (interruptedThreadId, interruptedTurnId) => {
+              interruptCalls.push({
+                threadId: interruptedThreadId,
+                turnId: interruptedTurnId
+              });
+              return {
+                ok: true
+              };
+            }
+          };
+        }
+      },
+      env: {
+        [VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV]: "1"
+      },
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return runtime;
+        }
+      }
+    });
+
+    const result = await terminalService.interruptCodexTurn(sessionId);
+
+    assert.equal(result.ok, true);
+    assert.deepEqual(interruptCalls, [
+      {
+        threadId,
+        turnId: "turn-1"
+      }
+    ]);
     assert.equal(providerOptions.length, 1);
     assert.equal(providerOptions[0].useDocker, false);
     assert.equal(providerOptions[0].targetRoot, targetRoot);
