@@ -139,12 +139,16 @@ function useVibe64AutopilotComposer({
       ? selectedControl.value.inputFields
       : [];
   });
+  const selectedControlUsesLatestAssistantQuestions = computed(() => {
+    const questionSugar = selectedControlQuestionSugar(selectedControl.value);
+    return Boolean(
+      questionSugar?.kind === "numbered_questions" &&
+      questionSugar.source === "latest_assistant_message"
+    );
+  });
   const selectedControlQuestionInput = computed(() => {
     const questionSugar = selectedControlQuestionSugar(selectedControl.value);
-    if (
-      questionSugar?.kind !== "numbered_questions" ||
-      questionSugar.source !== "latest_assistant_message"
-    ) {
+    if (!selectedControlUsesLatestAssistantQuestions.value) {
       return inactiveQuestionInput();
     }
     return numberedQuestionSugarForMessageInput({
@@ -156,7 +160,10 @@ function useVibe64AutopilotComposer({
   });
   const selectedControlFields = computed(() => {
     return selectedControlQuestionInput.value.questions.length
-      ? numberedQuestionInputFields(selectedControlQuestionInput.value.questions)
+      ? numberedQuestionInputFields(selectedControlQuestionInput.value.questions, {
+          autocomplete: "off",
+          density: "compact"
+        })
       : selectedControlOriginalFields.value;
   });
   const selectedControlIsPrimary = computed(() => Boolean(
@@ -314,6 +321,7 @@ function useVibe64AutopilotComposer({
     selectedControlOriginalFields,
     selectedControlQuestionInput,
     selectedControlSubmissionFields,
+    selectedControlUsesLatestAssistantQuestions,
     selectedControlValues,
     submitSelectedControl,
     updateSelectedControlValue

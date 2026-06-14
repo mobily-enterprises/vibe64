@@ -2433,6 +2433,176 @@ test.describe("Autopilot dumb client contract", () => {
     ]);
   });
 
+  test("renders selected Codex numbered questions once and keeps the submit action visible", async ({ page }) => {
+    await page.setViewportSize({
+      height: 1024,
+      width: 768
+    });
+
+    const assistantPrompt = [
+      "[1] Should hard delete remove only the active project folder and `.vibe64/.vibe64-local` inside it, or also delete any existing archive `.tar.gz` for that project?",
+      "[2] Should hard delete be available for active projects, archived projects, or both?",
+      "[3] Should we do any Git safety check before delete, such as warning/blocking when the project has uncommitted or unpushed work?"
+    ].join("\n");
+    const intentRequests: unknown[] = [];
+    const intents = [
+      {
+        actionId: "agent_conversation",
+        enabled: true,
+        id: "talk_to_codex",
+        input: {
+          questionSugar: {
+            fieldName: "conversationRequest",
+            kind: "numbered_questions",
+            source: "latest_assistant_message"
+          }
+        },
+        inputFields: [
+          {
+            kind: "textarea",
+            label: "Message",
+            name: "conversationRequest",
+            required: true
+          }
+        ],
+        label: "Talk to Codex",
+        style: "primary"
+      }
+    ];
+    const session = sessionPayload({
+      currentStepDefinition: {
+        id: "server_step",
+        label: "Talk to Codex"
+      },
+      intents,
+      presentation: {
+        auto: {
+          nextOperation: {
+            executable: false,
+            kind: "stop",
+            reason: "input"
+          }
+        },
+        screen: {
+          kind: "conversation",
+          message: assistantPrompt,
+          primaryIntentId: "talk_to_codex",
+          sections: [
+            {
+              kind: "response_preview"
+            }
+          ],
+          title: "Talk to Codex"
+        },
+        step: {
+          id: "server_step",
+          label: "Talk to Codex",
+          status: "waiting_for_input"
+        }
+      },
+      stepMachine: {
+        status: "waiting_for_input",
+        stepId: "server_step"
+      }
+    });
+    await mockVibe64Session(page, session, {
+      conversationLog: [
+        {
+          assistant: {
+            at: "2026-06-02T01:03:00.000Z",
+            role: "assistant",
+            text: assistantPrompt
+          },
+          turnId: "turn-numbered-questions"
+        }
+      ],
+      onIntent: (body) => {
+        intentRequests.push(body);
+      }
+    });
+
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+
+    await expect(page.locator(".studio-conversation-log__question")).toHaveCount(3);
+    await expect(page.locator(".studio-conversation-log__message--activity")).toHaveCount(0);
+
+    const controlForm = page.locator(".studio-autopilot__control-form");
+    await expect(controlForm.getByRole("button", { exact: true, name: "Talk to Codex" })).toBeVisible();
+    const chatLayout = await page.locator(".studio-autopilot__chat-panel").evaluate((panel) => {
+      const composer = panel.querySelector(".studio-autopilot__composer");
+      const rect = panel.getBoundingClientRect();
+      return {
+        composerOverflowY: composer ? window.getComputedStyle(composer).overflowY : "",
+        panelBottom: Math.round(rect.bottom),
+        panelOverflowY: window.getComputedStyle(panel).overflowY,
+        viewportHeight: window.innerHeight
+      };
+    });
+    expect(chatLayout).toEqual(expect.objectContaining({
+      composerOverflowY: "auto",
+      panelOverflowY: "hidden",
+      viewportHeight: 1024
+    }));
+    expect(chatLayout.panelBottom).toBeLessThanOrEqual(chatLayout.viewportHeight);
+    await expect(controlForm.getByLabel(/Should hard delete remove only/u)).toBeVisible();
+    await expect(controlForm.locator(".v-input--density-compact")).toHaveCount(3);
+    await expect(controlForm.locator("input[autocomplete='off']")).toHaveCount(3);
+    const formGap = await controlForm.evaluate((form) => (
+      Number.parseFloat(window.getComputedStyle(form).gap)
+    ));
+    expect(formGap).toBeGreaterThanOrEqual(9);
+    expect(formGap).toBeLessThanOrEqual(11);
+    const compactFieldMetrics = await controlForm.locator(".v-input--density-compact .v-field").evaluateAll((fields) => {
+      const heights = fields.map((field) => Math.round(field.getBoundingClientRect().height));
+      return {
+        maxHeight: Math.max(...heights),
+        minHeight: Math.min(...heights)
+      };
+    });
+    expect(compactFieldMetrics.maxHeight).toBeLessThanOrEqual(48);
+    await expect.poll(async () => page.locator(".studio-autopilot__thinking").evaluate((element) => (
+      element.classList.contains("studio-autopilot__thinking--empty")
+        ? Math.round(element.getBoundingClientRect().height)
+        : -1
+    ))).toBe(0);
+    await expect.poll(async () => {
+      return await controlForm.locator(".v-field-label").first().evaluate((label) => {
+        const composer = label.closest(".studio-autopilot__composer");
+        if (!composer) {
+          return false;
+        }
+        const labelTop = label.getBoundingClientRect().top;
+        const composerTop = composer.getBoundingClientRect().top;
+        return labelTop >= composerTop;
+      });
+    }).toBe(true);
+    await page.getByLabel(/Should hard delete remove only/u).fill("It should delete the lot.");
+    await expect.poll(async () => {
+      return await controlForm.locator(".v-field-label").first().evaluate((label) => {
+        const composer = label.closest(".studio-autopilot__composer");
+        if (!composer) {
+          return false;
+        }
+        const labelTop = label.getBoundingClientRect().top;
+        const composerTop = composer.getBoundingClientRect().top;
+        return labelTop >= composerTop;
+      });
+    }).toBe(true);
+    await page.getByLabel(/Should hard delete be available/u).fill("Both.");
+    await page.getByLabel(/Should we do any Git safety check/u).fill("Yes.");
+    await controlForm.getByRole("button", { exact: true, name: "Talk to Codex" }).click();
+
+    await expect.poll(() => intentRequests).toEqual([
+      expect.objectContaining({
+        fields: {
+          conversationRequest: "[1] It should delete the lot.\n[2] Both.\n[3] Yes."
+        },
+        stepId: "server_step",
+        stepStatus: "waiting_for_input"
+      })
+    ]);
+  });
+
   test("renders workflow controls alongside current-step input forms", async ({ page }) => {
     const intentRequests: unknown[] = [];
     const stepInputs: unknown[] = [];

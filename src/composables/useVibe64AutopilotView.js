@@ -502,6 +502,7 @@ function useVibe64AutopilotView(props, emit) {
       !title ||
       chatTakeoverVisible.value ||
       screenMessageIsGuidance.value ||
+      selectedControlUsesLatestAssistantQuestions.value ||
       displayRunning.value ||
       screenKind.value === "codex_running" ||
       commandTerminalVisible.value
@@ -650,6 +651,7 @@ function useVibe64AutopilotView(props, emit) {
     selectedControl,
     selectedControlFields,
     selectedControlIsPrimary,
+    selectedControlUsesLatestAssistantQuestions,
     selectedControlValues,
     submitSelectedControl,
     updateSelectedControlValue

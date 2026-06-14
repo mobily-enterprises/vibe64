@@ -24,6 +24,7 @@
           :attachments-enabled="attachmentsEnabled"
           class="vibe64-workflow-control-form__input"
           :disabled="fieldsDisabled"
+          :aria-label="field.ariaLabel || undefined"
           :label="field.label"
           :placeholder="field.placeholder"
           :rows="field.rows || textareaRows"
@@ -187,8 +188,11 @@
         v-else-if="field.kind === 'textarea'"
         auto-grow
         class="vibe64-workflow-control-form__input"
+        :autocomplete="field.autocomplete || undefined"
+        :density="field.density || undefined"
         :disabled="fieldsDisabled"
         hide-details="auto"
+        :aria-label="field.ariaLabel || undefined"
         :label="field.label"
         :model-value="selectedControlValues[field.name] || ''"
         :placeholder="field.placeholder"
@@ -199,8 +203,11 @@
       <v-text-field
         v-else
         class="vibe64-workflow-control-form__input"
+        :autocomplete="field.autocomplete || undefined"
+        :density="field.density || undefined"
         :disabled="fieldsDisabled"
         hide-details="auto"
+        :aria-label="field.ariaLabel || undefined"
         :label="field.label"
         :model-value="selectedControlValues[field.name] || ''"
         :placeholder="field.placeholder"
@@ -390,10 +397,17 @@ const fieldAttachments = ref({});
 const promptTextareaRef = ref(null);
 const rootTag = computed(() => props.asForm ? "form" : "div");
 const fieldsDisabled = computed(() => Boolean(props.running || props.inputDisabled));
+const inlineSubmitField = computed(() => {
+  if (!props.inlineSubmit || !props.attachTextarea || props.cancelVisible) {
+    return null;
+  }
+  return props.selectedControlFields.find((candidate) => candidate?.kind === "textarea") || null;
+});
 const inlineSubmitActive = computed(() => Boolean(
   props.inlineSubmit &&
   props.attachTextarea &&
-  !props.cancelVisible
+  !props.cancelVisible &&
+  inlineSubmitField.value
 ));
 const actionsVisible = computed(() => Boolean(
   !inlineSubmitActive.value ||
@@ -412,8 +426,7 @@ const inlineSubmitFieldName = computed(() => {
   if (!inlineSubmitActive.value) {
     return "";
   }
-  const field = props.selectedControlFields.find((candidate) => candidate?.kind === "textarea");
-  return String(field?.name || "");
+  return String(inlineSubmitField.value?.name || "");
 });
 const currentAgentSettings = computed(() => normalizeVibe64AgentSettings(props.agentSettings));
 const agentProvider = computed(() => (
@@ -529,7 +542,7 @@ defineExpose({
 <style scoped>
 .vibe64-workflow-control-form {
   display: grid;
-  gap: 0.24rem;
+  gap: 0.32rem;
   position: relative;
   width: 100%;
 }

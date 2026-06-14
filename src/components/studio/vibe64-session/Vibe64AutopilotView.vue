@@ -725,10 +725,10 @@ const {
 
 .studio-autopilot__chat-panel {
   display: grid;
-  gap: 0.16rem;
-  grid-template-rows: auto minmax(0, 1fr) auto auto auto;
-  overflow: visible;
-  padding: 0.05rem 0.65rem 0.18rem;
+  gap: 0.1rem;
+  grid-template-rows: auto minmax(0, 1fr) auto auto minmax(0, auto);
+  overflow: hidden;
+  padding: 0.04rem 0.5rem 0.12rem;
 }
 
 .studio-autopilot__project-panel {
@@ -745,7 +745,7 @@ const {
 .studio-autopilot__chat-body {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.12rem;
   min-height: 0;
   overflow: hidden;
   padding-right: 0.1rem;
@@ -869,14 +869,25 @@ const {
 .studio-autopilot__composer {
   align-content: end;
   display: grid;
-  gap: 0.24rem;
+  gap: 0.14rem;
+  max-height: min(46vh, 24rem);
+  min-height: 0;
   min-width: 0;
+  overflow-y: auto;
+  padding: 0.34rem 0.08rem 0 0;
+  scrollbar-gutter: stable;
 }
 
-.studio-autopilot__input-form,
+.studio-autopilot__input-form {
+  display: grid;
+  gap: 0.14rem;
+  min-width: 0;
+  width: 100%;
+}
+
 .studio-autopilot__control-form {
   display: grid;
-  gap: 0.24rem;
+  gap: 0.62rem;
   min-width: 0;
   width: 100%;
 }
@@ -915,7 +926,7 @@ const {
 }
 
 .studio-autopilot__thinking--empty {
-  visibility: hidden;
+  display: none;
 }
 
 .studio-autopilot__runtime-status {

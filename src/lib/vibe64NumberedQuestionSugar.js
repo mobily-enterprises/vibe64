@@ -170,8 +170,12 @@ function numberedQuestionSugarForMessageInput({
   return parseNumberedQuestionPrompt(message);
 }
 
-function numberedQuestionInputFields(questions = []) {
+function numberedQuestionInputFields(questions = [], options = {}) {
+  const autocomplete = String(options?.autocomplete || "").trim();
+  const density = String(options?.density || "").trim();
   return questions.map((question) => ({
+    ...(autocomplete ? { autocomplete } : {}),
+    ...(density ? { density } : {}),
     kind: "text",
     label: question.label,
     name: question.name,

@@ -45,10 +45,31 @@ describe("vibe64NumberedQuestionSugar", () => {
     expect(numberedQuestionInputFields(sugar.questions)).toMatchObject([
       {
         kind: "text",
+        label: "Which file should change?",
         name: "__ui_question_1"
       },
       {
         kind: "text",
+        label: "What should it contain?",
+        name: "__ui_question_2"
+      }
+    ]);
+    expect(numberedQuestionInputFields(sugar.questions, {
+      autocomplete: "off",
+      density: "compact"
+    })).toMatchObject([
+      {
+        autocomplete: "off",
+        density: "compact",
+        kind: "text",
+        label: "Which file should change?",
+        name: "__ui_question_1"
+      },
+      {
+        autocomplete: "off",
+        density: "compact",
+        kind: "text",
+        label: "What should it contain?",
         name: "__ui_question_2"
       }
     ]);

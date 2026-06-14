@@ -211,6 +211,19 @@ describe("useVibe64AutopilotComposer", () => {
       "__ui_question_1",
       "__ui_question_2"
     ]);
+    expect(composer.selectedControlFields.value.map((field) => field.label)).toEqual([
+      "Which file should change?",
+      "What should it contain?"
+    ]);
+    expect(composer.selectedControlFields.value.map((field) => field.density)).toEqual([
+      "compact",
+      "compact"
+    ]);
+    expect(composer.selectedControlFields.value.map((field) => field.autocomplete)).toEqual([
+      "off",
+      "off"
+    ]);
+    expect(composer.selectedControlUsesLatestAssistantQuestions.value).toBe(true);
 
     composer.updateSelectedControlValue("__ui_question_1", "src/App.vue");
     composer.updateSelectedControlValue("__ui_question_2", "Add the banner");
@@ -221,6 +234,20 @@ describe("useVibe64AutopilotComposer", () => {
     });
     expect(submitted.fields).not.toHaveProperty("__ui_question_1");
     expect(submitted.fields).not.toHaveProperty("__ui_question_2");
+  });
+
+  it("keeps latest-assistant question ownership while the assistant message is not parseable yet", async () => {
+    const composer = useVibe64AutopilotComposer({
+      controls: ref([conversationControl()]),
+      conversationLog: ref({}),
+      primaryIntentId: ref("talk_to_codex"),
+      running: ref(false)
+    });
+
+    await nextTick();
+
+    expect(composer.selectedControlUsesLatestAssistantQuestions.value).toBe(true);
+    expect(composer.selectedControlFields.value.map((field) => field.name)).toEqual(["conversationRequest"]);
   });
 
   it("keeps the submitted input visible while a turn is running", async () => {
@@ -315,5 +342,6 @@ describe("useVibe64AutopilotComposer", () => {
     await nextTick();
 
     expect(composer.selectedControlFields.value.map((field) => field.name)).toEqual(["conversationRequest"]);
+    expect(composer.selectedControlUsesLatestAssistantQuestions.value).toBe(false);
   });
 });

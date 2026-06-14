@@ -430,11 +430,11 @@ watch(scrollTrigger, () => {
   border: 1px solid rgba(var(--v-theme-outline), 0.24);
   border-radius: 8px;
   display: grid;
-  gap: 0.65rem;
+  gap: 0.35rem;
   grid-template-rows: minmax(0, 1fr);
   min-height: 0;
   overflow: hidden;
-  padding: 0.75rem;
+  padding: 0.5rem;
   position: relative;
   text-align: left;
 }
@@ -457,7 +457,7 @@ watch(scrollTrigger, () => {
 .studio-conversation-log__body {
   display: flex;
   flex-direction: column;
-  gap: 1.15rem;
+  gap: 0.65rem;
   min-height: 0;
   min-width: 0;
   overflow-x: hidden;
@@ -473,7 +473,7 @@ watch(scrollTrigger, () => {
   display: flex;
   flex: 0 0 auto;
   flex-direction: column;
-  gap: 1.15rem;
+  gap: 0.65rem;
   min-height: 0;
   min-width: 0;
 }
@@ -497,7 +497,7 @@ watch(scrollTrigger, () => {
 .studio-conversation-log__message-row--assistant {
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
+  gap: 0.28rem;
   justify-self: start;
   max-width: min(42rem, 94%);
   margin-right: auto;
@@ -514,7 +514,7 @@ watch(scrollTrigger, () => {
 .studio-conversation-log__message {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.24rem;
   max-width: 100%;
   min-width: 0;
   overflow-wrap: anywhere;
@@ -740,7 +740,7 @@ watch(scrollTrigger, () => {
 
 .studio-conversation-log__questions {
   display: grid;
-  gap: 0.4rem;
+  gap: 0.28rem;
   list-style: none;
   margin: 0;
   padding: 0;
@@ -752,9 +752,9 @@ watch(scrollTrigger, () => {
   border: 1px solid rgba(var(--v-theme-outline), 0.2);
   border-radius: 8px;
   display: grid;
-  gap: 0.5rem;
+  gap: 0.42rem;
   grid-template-columns: auto minmax(0, 1fr);
-  padding: 0.5rem 0.58rem;
+  padding: 0.36rem 0.5rem;
 }
 
 .studio-conversation-log__question-number {
