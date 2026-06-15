@@ -505,6 +505,31 @@ function codexAppServerTurnState(session = {}) {
   };
 }
 
+function codexAppServerTurnMatches(turn = {}, threadId = "", turnId = "") {
+  const normalizedThreadId = normalizeText(threadId);
+  const normalizedTurnId = normalizeText(turnId);
+  const currentThreadId = normalizeText(turn.threadId);
+  const currentTurnId = normalizeText(turn.turnId);
+  if (normalizedThreadId && normalizeText(turn.threadId) !== normalizedThreadId) {
+    return false;
+  }
+  if (normalizedTurnId && currentTurnId && currentTurnId !== normalizedTurnId) {
+    return false;
+  }
+  if (!normalizedTurnId && currentTurnId) {
+    return false;
+  }
+  if (!normalizedThreadId && currentThreadId) {
+    return false;
+  }
+  return true;
+}
+
+function codexAppServerTurnCanReceiveProviderCompletion(turn = {}, threadId = "", turnId = "") {
+  return codexAppServerTurnMatches(turn, threadId, turnId) &&
+    ["active", "finalizing"].includes(normalizeText(turn.state));
+}
+
 function dateValueMs(value = "") {
   const parsed = Date.parse(normalizeText(value));
   return Number.isFinite(parsed) ? parsed : 0;
@@ -2059,6 +2084,25 @@ function createCodexTerminalController({
       return existing;
     }
     const operation = (async () => {
+      const runtime = await projectService.createRuntime();
+      const session = await runtime.getSession(normalizedSessionId);
+      const turn = codexAppServerTurnState(session);
+      if (!codexAppServerTurnCanReceiveProviderCompletion(turn, normalizedThreadId, normalizedTurnId)) {
+        vibe64SessionDebugLog("server.codexTerminal.appServerAgentResult.stale", {
+          currentState: turn.state,
+          currentStatus: turn.status,
+          currentThreadId: turn.threadId,
+          currentTurnId: turn.turnId,
+          sessionId: normalizedSessionId,
+          threadId: normalizedThreadId,
+          turnId: normalizedTurnId
+        });
+        return {
+          ok: true,
+          processed: false,
+          reason: "stale_turn_state"
+        };
+      }
       const result = await submitCodexAppServerAssistantResult(
         normalizedSessionId,
         normalizedThreadId,
@@ -2066,6 +2110,24 @@ function createCodexTerminalController({
       );
       if (result?.processed) {
         codexAppServerFinalizedTurns.add(key);
+        const currentSession = await runtime.getSession(normalizedSessionId);
+        const currentTurn = codexAppServerTurnState(currentSession);
+        if (!codexAppServerTurnCanReceiveProviderCompletion(currentTurn, normalizedThreadId, normalizedTurnId)) {
+          vibe64SessionDebugLog("server.codexTerminal.appServerAgentResult.finalizedStale", {
+            currentState: currentTurn.state,
+            currentStatus: currentTurn.status,
+            currentThreadId: currentTurn.threadId,
+            currentTurnId: currentTurn.turnId,
+            sessionId: normalizedSessionId,
+            threadId: normalizedThreadId,
+            turnId: normalizedTurnId
+          });
+          return {
+            ok: true,
+            processed: true,
+            reason: "stale_turn_state"
+          };
+        }
         await markCodexAppServerTurnIdle(normalizedSessionId, {
           status,
           threadId: normalizedThreadId,
@@ -2155,7 +2217,27 @@ function createCodexTerminalController({
     const normalizedThreadId = normalizeText(threadId);
     const normalizedStatus = normalizeText(status) || "completed";
     const normalizedTurnId = await resolveCodexAppServerTurnId(normalizedSessionId, normalizedThreadId, turnId);
+    const runtime = await projectService.createRuntime();
+    const session = await runtime.getSession(normalizedSessionId);
+    const existingTurn = codexAppServerTurnState(session);
     if (!normalizedTurnId) {
+      if (!codexAppServerTurnCanReceiveProviderCompletion(existingTurn, normalizedThreadId, "")) {
+        vibe64SessionDebugLog("server.codexTerminal.appServerTurn.complete.stale", {
+          currentState: existingTurn.state,
+          currentStatus: existingTurn.status,
+          currentThreadId: existingTurn.threadId,
+          currentTurnId: existingTurn.turnId,
+          sessionId: normalizedSessionId,
+          status: normalizedStatus,
+          threadId: normalizedThreadId,
+          turnId: normalizedTurnId
+        });
+        return {
+          ok: true,
+          processed: false,
+          reason: "stale_turn_state"
+        };
+      }
       await markCodexAppServerTurnIdle(normalizedSessionId, {
         status: normalizedStatus,
         threadId: normalizedThreadId,
@@ -2179,9 +2261,23 @@ function createCodexTerminalController({
         reason: "already_finalized"
       };
     }
-    const runtime = await projectService.createRuntime();
-    const session = await runtime.getSession(normalizedSessionId);
-    const existingTurn = codexAppServerTurnState(session);
+    if (!codexAppServerTurnCanReceiveProviderCompletion(existingTurn, normalizedThreadId, normalizedTurnId)) {
+      vibe64SessionDebugLog("server.codexTerminal.appServerTurn.complete.stale", {
+        currentState: existingTurn.state,
+        currentStatus: existingTurn.status,
+        currentThreadId: existingTurn.threadId,
+        currentTurnId: existingTurn.turnId,
+        sessionId: normalizedSessionId,
+        status: normalizedStatus,
+        threadId: normalizedThreadId,
+        turnId: normalizedTurnId
+      });
+      return {
+        ok: true,
+        processed: false,
+        reason: "stale_turn_state"
+      };
+    }
     const alreadyFinalizing = existingTurn.state === "finalizing" &&
       existingTurn.threadId === normalizedThreadId &&
       existingTurn.turnId === normalizedTurnId;
@@ -2270,6 +2366,28 @@ function createCodexTerminalController({
     const normalizedThreadId = normalizeText(threadId);
     const normalizedStatus = normalizeText(status) || "completed";
     const normalizedTurnId = await resolveCodexAppServerTurnId(normalizedSessionId, normalizedThreadId, turnId);
+    const runtime = await projectService.createRuntime();
+    const currentSession = await runtime.getSession(normalizedSessionId);
+    const currentTurn = codexAppServerTurnState(currentSession);
+    if (!codexAppServerTurnCanReceiveProviderCompletion(currentTurn, normalizedThreadId, normalizedTurnId)) {
+      vibe64SessionDebugLog("server.codexTerminal.appServerAgentResult.missing.stale", {
+        currentState: currentTurn.state,
+        currentStatus: currentTurn.status,
+        currentThreadId: currentTurn.threadId,
+        currentTurnId: currentTurn.turnId,
+        reason: normalizeText(reason),
+        sessionId: normalizedSessionId,
+        status: normalizedStatus,
+        threadId: normalizedThreadId,
+        turnId: normalizedTurnId
+      });
+      return {
+        ok: true,
+        processed: false,
+        reason: "stale_turn_state",
+        status: currentTurn.status
+      };
+    }
     const message = `${CODEX_APP_SERVER_RESULT_DELIVERY_FAILURE_MESSAGE} Retry the step.`;
     await markCodexAppServerTurnIdle(normalizedSessionId, {
       error: message,
@@ -2277,7 +2395,6 @@ function createCodexTerminalController({
       threadId: normalizedThreadId,
       turnId: normalizedTurnId
     });
-    const runtime = await projectService.createRuntime();
     const session = await runtime.getSession(normalizedSessionId);
     if (codexAppServerSessionIsWaitingForAgent(session)) {
       await runtime.returnControlFromAgentWait(normalizedSessionId, {

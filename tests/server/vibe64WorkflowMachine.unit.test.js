@@ -3464,6 +3464,52 @@ test("vibe64 runtime preserves prompt machine details when returning agent contr
   });
 });
 
+test("vibe64 plan execution recovery derives missing phase from plan-ready metadata", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "plan_and_execute",
+      metadata: {
+        ...worktreeMetadata(targetRoot, "agent_control_missing_phase"),
+        github_issue_mode: "skip",
+        plan_ready: "yes"
+      },
+      sessionId: "agent_control_missing_phase"
+    });
+    await runtime.store.writeStepState("agent_control_missing_phase", "plan_and_execute", {
+      from: "awaiting_agent_result",
+      message: "The agent response did not include the Vibe64 result envelope. Retry the step.",
+      schemaVersion: 1,
+      source: "system_recovery",
+      status: "waiting_for_input"
+    });
+
+    const waiting = await runtime.getSession("agent_control_missing_phase");
+
+    assert.equal(waiting.stepMachine.status, "waiting_for_input");
+    assert.equal(waiting.stepMachine.phase, "executing");
+    assert.equal(waiting.presentation.screen.kind, "conversation");
+    assert.equal(waiting.presentation.screen.primaryIntentId, "talk_to_codex");
+    const talkIntent = waiting.intents.find((intent) => intent.id === "talk_to_codex");
+    assert.equal(talkIntent?.enabled, true);
+    assert.equal(talkIntent?.actionId, "execute_plan");
+
+    const afterAnswer = await runtime.runIntent("agent_control_missing_phase", "talk_to_codex", {
+      fields: {
+        conversationRequest: "Retry execution."
+      },
+      stepId: waiting.currentStep,
+      stepStatus: waiting.stepMachine.status
+    });
+
+    assert.equal(afterAnswer.stepMachine.status, "awaiting_agent_result");
+    assert.equal(afterAnswer.stepMachine.phase, "executing");
+    assert.equal(afterAnswer.actionResult.status, "prompt_ready");
+  });
+});
+
 test("vibe64 presentation omits unavailable continue controls while Codex waits for input", () => {
   const waiting = applyWorkflowPresentation({
     actions: [

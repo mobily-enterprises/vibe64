@@ -2801,6 +2801,144 @@ test("Vibe64 self-target Codex interrupt keeps native provider control", async (
   });
 });
 
+test("Vibe64 Codex app-server ignores late completion after user interrupt", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "codex_app_server_late_complete_after_interrupt";
+    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
+    const worktree = path.join(sessionRoot, "worktree");
+    const threadId = "00000000-0000-4000-8000-000000000007";
+    const turnId = "codex-app-server-turn-interrupted";
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "issue_file_created",
+      metadata: {
+        worktree_path: worktree
+      },
+      sessionId
+    });
+    await mkdir(worktree, {
+      recursive: true
+    });
+
+    const providerSubscribers = [];
+    const providerCalls = {
+      interruptTurn: []
+    };
+    const controller = createCodexTerminalController({
+      codexAppServerPromptDeliveryEnabled: true,
+      codexAppServerProviderFactory: () => ({
+        async ensureAvailable() {
+          return {
+            ok: true
+          };
+        },
+        async ensureRuntime() {
+          return {
+            endpoint: "unix:///tmp/vibe64-late-complete-test.sock",
+            runtimeDir: path.join(targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server-test"),
+            socketPath: "/tmp/vibe64-late-complete-test.sock",
+            transport: "unix"
+          };
+        },
+        async interruptTurn(interruptedThreadId, interruptedTurnId) {
+          providerCalls.interruptTurn.push({
+            threadId: interruptedThreadId,
+            turnId: interruptedTurnId
+          });
+          return {
+            ok: true
+          };
+        },
+        async sendTurn(_threadId, input) {
+          return {
+            id: /VIBE64_SESSION_BOOTSTRAP/u.test(input) ? "bootstrap-turn" : turnId,
+            status: /VIBE64_SESSION_BOOTSTRAP/u.test(input) ? "completed" : "inProgress"
+          };
+        },
+        async startThread() {
+          return {
+            id: threadId
+          };
+        },
+        subscribe(callback) {
+          providerSubscribers.push(callback);
+          return () => null;
+        }
+      }),
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return runtime;
+        }
+      }
+    });
+
+    const injected = await controller.injectCodexPrompt(sessionId, {
+      handoffId: "000001_issue_file_created.json:draft_issue",
+      kind: "codex_prompt_handoff",
+      terminalInput: "Vibe64 interactive conversation turn:\nUser/request input:\n- conversationRequest: Draft this issue."
+    });
+
+    assert.equal(injected.ok, true);
+    assert.equal(injected.turnId, turnId);
+    assert.ok(providerSubscribers.length >= 1);
+
+    const interrupted = await controller.interruptTurn(sessionId);
+
+    assert.equal(interrupted.ok, true);
+    assert.deepEqual(providerCalls.interruptTurn, [
+      {
+        threadId,
+        turnId
+      }
+    ]);
+    let session = await runtime.getSession(sessionId);
+    assert.equal(codexAppServerAgentRunSnapshot(session).state, "interrupted");
+    assert.equal(codexAppServerAgentRunSnapshot(session).providerStatus, "interrupted");
+    assert.match(codexAppServerAgentRunSnapshot(session).error, /Stopped by user/u);
+
+    for (const subscriber of providerSubscribers) {
+      subscriber({
+        method: "turn/completed",
+        params: {
+          status: "completed",
+          threadId,
+          turnId
+        }
+      });
+    }
+    for (const subscriber of providerSubscribers) {
+      subscriber({
+        method: "thread/status/changed",
+        params: {
+          status: {
+            type: "idle"
+          },
+          threadId
+        }
+      });
+    }
+    await delay(5);
+
+    session = await runtime.getSession(sessionId);
+    assert.equal(codexAppServerAgentRunSnapshot(session).state, "interrupted");
+    assert.equal(codexAppServerAgentRunSnapshot(session).providerStatus, "interrupted");
+    assert.match(codexAppServerAgentRunSnapshot(session).error, /Stopped by user/u);
+    assert.doesNotMatch(
+      codexAppServerAgentRunSnapshot(session).error,
+      /did not receive the assistant result/u
+    );
+    assert.deepEqual(codexAppServerAgentRunSnapshot(session).events.map((event) => event.kind), [
+      "codex-app-server-turn-claimed",
+      "codex-app-server-turn-active",
+      "codex-app-server-turn-active",
+      "codex-app-server-turn-idle"
+    ]);
+  });
+});
+
 test("Vibe64 shell terminal joins the target runtime network before the image", () => {
   const targetRoot = "/workspace/project";
   const worktree = "/workspace/project/.vibe64-local/sessions/active/unit/worktree";

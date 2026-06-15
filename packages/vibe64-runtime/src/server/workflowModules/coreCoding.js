@@ -1550,6 +1550,22 @@ function planAndExecutePlanReadyState(details = {}) {
   });
 }
 
+function planAndExecuteEffectivePhase(context = {}, state = {}) {
+  const phase = normalizeText(state.phase);
+  if (phase) {
+    return phase;
+  }
+  if (metadataExists(context.session, IMPLEMENTATION_DONE_METADATA)) {
+    return planAndExecutePhase.EXECUTING;
+  }
+  if (metadataExists(context.session, PLAN_READY_METADATA)) {
+    return normalizeText(state.status) === STEP_STATUS.READY
+      ? planAndExecutePhase.PLAN_READY
+      : planAndExecutePhase.EXECUTING;
+  }
+  return planAndExecutePhase.PLANNING;
+}
+
 async function markPlanAndExecuteActionStarted(context = {}, machine = {}, {
   actionId = "",
   phase = ""
@@ -1605,13 +1621,20 @@ const planAndExecuteMachine = {
         from: state.status
       });
     }
+    const phase = planAndExecuteEffectivePhase(context, state);
+    if (!state.phase && phase) {
+      state = {
+        ...state,
+        phase
+      };
+    }
 
     switch (state.status) {
       case STEP_STATUS.DONE:
         return promptStepDoneView(context, this, state);
       case STEP_STATUS.WAITING_FOR_INPUT:
         return promptStepWaitingForInputView(context, this, state, {
-          actionId: state.phase === planAndExecutePhase.EXECUTING ? "execute_plan" : "make_plan",
+          actionId: phase === planAndExecutePhase.EXECUTING ? "execute_plan" : "make_plan",
           prompt: state.message || "Codex needs more information before this step can continue.",
           skipInput: LET_CODEX_DECIDE_INPUT
         });
@@ -1623,7 +1646,7 @@ const planAndExecuteMachine = {
           context,
           this,
           state,
-          state.phase === planAndExecutePhase.PLAN_READY
+          phase === planAndExecutePhase.PLAN_READY
             ? "Ask Codex to execute the plan before continuing."
             : "Ask Codex to make the plan before continuing."
         );
@@ -1632,6 +1655,7 @@ const planAndExecuteMachine = {
 
   async submitInput(context = {}) {
     const state = await readState(context, this);
+    const phase = planAndExecuteEffectivePhase(context, state);
     const input = normalizeMachineInput(context.input);
     if (state.status === STEP_STATUS.AWAITING_AGENT_RESULT) {
       assertAgentResultSource(context.session, input);
@@ -1646,7 +1670,7 @@ const planAndExecuteMachine = {
           await writeState(context, this, machineState(STEP_STATUS.WAITING_FOR_INPUT, {
             from: STEP_STATUS.AWAITING_AGENT_RESULT,
             message: input.message,
-            phase: state.phase || planAndExecutePhase.PLANNING,
+            phase,
             source: input.source
           }));
           return;
@@ -1654,14 +1678,14 @@ const planAndExecuteMachine = {
         if (input.kind === STEP_INPUT_KIND.USER_RESPONSE) {
           await writeState(context, this, machineState(STEP_STATUS.READY, {
             message: input.message,
-            phase: state.phase || planAndExecutePhase.PLANNING,
+            phase,
             response: inputResponseText(input),
             source: input.source
           }));
           return;
         }
         if (input.kind === STEP_INPUT_KIND.READY || input.kind === STEP_INPUT_KIND.CONSIDER_RESOLVED) {
-          if (state.phase === planAndExecutePhase.EXECUTING) {
+          if (phase === planAndExecutePhase.EXECUTING) {
             await context.runtime.store.writeMetadataValue(context.session.sessionId, IMPLEMENTATION_DONE_METADATA, "yes");
             await writeState(context, this, machineState(STEP_STATUS.DONE, {
               message: input.message,
@@ -1690,7 +1714,7 @@ const planAndExecuteMachine = {
     if (input.kind !== STEP_INPUT_KIND.READY) {
       return "";
     }
-    return context.session.stepMachine?.phase === planAndExecutePhase.EXECUTING
+    return planAndExecuteEffectivePhase(context, context.session.stepMachine) === planAndExecutePhase.EXECUTING
       ? "Implementation submitted for review."
       : "Plan submitted for review.";
   },
