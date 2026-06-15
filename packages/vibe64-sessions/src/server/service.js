@@ -27,6 +27,7 @@ import { inspectSessionDiff } from "./sessionDiff.js";
 const MAX_OPEN_VIBE64_SESSIONS = 3;
 const CODEX_PROMPT_HANDOFF_DELIVERY_ENABLED = true;
 const CODEX_APP_SERVER_TASK_ID = "codex_app_server";
+const CODEX_SESSION_WORKTREE_UNAVAILABLE_CODE = "vibe64_session_worktree_unavailable";
 const STEP_STATUS_AWAITING_AGENT_RESULT = "awaiting_agent_result";
 const CLOSED_SESSION_STATUSES = new Set(["abandoned", "finished"]);
 const SESSION_ARCHIVE_QUERY = Object.freeze({
@@ -391,7 +392,11 @@ function terminalStateHasActiveCodexTurn(terminalState = {}) {
     terminalState.codexAgentTurn?.active === true;
 }
 
-async function recoverAgentWaitWithoutCodex(runtime, session = {}, terminalState = {}) {
+async function recoverAgentWaitWithoutCodex(runtime, session = {}, terminalState = {}, {
+  inputPrompt = "What would you like to do next?",
+  message = "Codex is no longer running for this turn, so Vibe64 returned control to you.",
+  reason = "no_active_codex_turn"
+} = {}) {
   if (
     !sessionAwaitsAgentResult(session) ||
     terminalStateHasActiveCodexTurn(terminalState) ||
@@ -404,18 +409,32 @@ async function recoverAgentWaitWithoutCodex(runtime, session = {}, terminalState
     return session;
   }
   vibe64SessionDebugLog("server.service.agentWait.recover.start", {
-    reason: "no_active_codex_turn",
+    reason,
     sessionId: session.sessionId
   });
   const recovered = await runtime.returnControlFromAgentWait(session.sessionId, {
-    inputPrompt: "What would you like to do next?",
-    message: "Codex is no longer running for this turn, so Vibe64 returned control to you."
+    inputPrompt,
+    message
   });
   vibe64SessionDebugLog("server.service.agentWait.recover.done", {
     ...vibe64SessionDebugSummary(recovered),
-    reason: "no_active_codex_turn"
+    reason
   });
   return recovered;
+}
+
+function codexDeliveryBlockedByMissingWorktree(delivery = {}) {
+  return normalizedInputText(delivery?.code) === CODEX_SESSION_WORKTREE_UNAVAILABLE_CODE;
+}
+
+async function recoverAgentWaitForMissingWorktree(runtime, session = {}, delivery = {}) {
+  const recoveredSession = await recoverAgentWaitWithoutCodex(runtime, session, {}, {
+    inputPrompt: "Recover this session before continuing.",
+    message: normalizedInputText(delivery?.error) ||
+      "Session worktree is unavailable. Recover this session before continuing with Codex.",
+    reason: "session_worktree_unavailable"
+  });
+  return sessionWithLatestRevision(runtime, recoveredSession);
 }
 
 async function recoverAgentWaitAfterCodexTerminalStateFailure(runtime, session = {}) {
@@ -563,6 +582,9 @@ async function deliverCodexPromptIfNeeded(terminalService, session = {}, {
       promptId: String(handoff.promptId || ""),
       sessionId: session.sessionId
     });
+    if (codexDeliveryBlockedByMissingWorktree(delivery)) {
+      return recoverAgentWaitForMissingWorktree(runtime, session, delivery);
+    }
     await recoverAgentWaitWithoutCodex(runtime, session, {});
     throw new Error(delivery.error || "Vibe64 Codex prompt delivery failed.");
   }

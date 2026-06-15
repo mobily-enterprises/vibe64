@@ -41,6 +41,22 @@ describe("vibe64CodexTerminalAttention", () => {
     })).toBe(false);
   });
 
+  it("does not require terminal recovery for blocked Codex app-server session handoff", () => {
+    expect(vibe64SessionNeedsCodexTerminalAttention({
+      sessionId: "session-1",
+      presentation: {
+        backgroundTasks: [
+          {
+            error: "Session worktree was removed. Recover this session before continuing with Codex.",
+            id: "codex_app_server",
+            message: "Recover this session worktree before continuing with Codex.",
+            status: "ready"
+          }
+        ]
+      }
+    })).toBe(false);
+  });
+
   it("requires terminal recovery for an errored Codex terminal", () => {
     expect(vibe64SessionNeedsCodexTerminalAttention({
       codexTerminal: {

@@ -1640,6 +1640,65 @@ test("session action returns control when Codex prompt delivery fails", async ()
   assert.equal(session.returnControlInput.inputPrompt, "What would you like to do next?");
 });
 
+test("session action returns control without request failure when Codex session worktree is unavailable", async () => {
+  let returnControlCalls = 0;
+  const session = {
+    actionResult: {
+      codexPromptHandoff: {
+        kind: "codex_prompt_handoff",
+        terminalInput: "Ask Codex this."
+      }
+    },
+    sessionId: "session-missing-worktree",
+    status: VIBE64_SESSION_STATUS.ACTIVE,
+    stepMachine: {
+      status: "awaiting_agent_result"
+    }
+  };
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async runAction() {
+            return session;
+          },
+          async returnControlFromAgentWait(_sessionId, input = {}) {
+            returnControlCalls += 1;
+            session.returnControlInput = input;
+            session.stepMachine = {
+              status: "waiting_for_input"
+            };
+            return session;
+          }
+        };
+      }
+    },
+    setupServices: readySetupServices(),
+    terminalService: {
+      async injectCodexPrompt() {
+        return {
+          code: "vibe64_session_worktree_unavailable",
+          error: "Session worktree was removed. Recover this session before continuing with Codex.",
+          ok: false,
+          retryable: false
+        };
+      }
+    }
+  });
+
+  const result = await service.runSessionAction("session-missing-worktree", "agent_conversation", {
+    fields: {
+      conversationRequest: "Hello"
+    }
+  });
+
+  assert.equal(result.sessionId, "session-missing-worktree");
+  assert.notEqual(result.ok, false);
+  assert.equal(returnControlCalls, 1);
+  assert.equal(session.stepMachine.status, "waiting_for_input");
+  assert.equal(session.returnControlInput.inputPrompt, "Recover this session before continuing.");
+});
+
 test("session presentation ignores Codex output activity for terminal preview visibility", async () => {
   const service = createService({
     projectService: {

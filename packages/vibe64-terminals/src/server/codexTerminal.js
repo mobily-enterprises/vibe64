@@ -107,6 +107,7 @@ const TERMINAL_BRACKETED_PASTE_START = "\u001b[200~";
 const TERMINAL_BRACKETED_PASTE_END = "\u001b[201~";
 const CODEX_APP_SERVER_TASK_ID = "codex_app_server";
 const CODEX_APP_SERVER_AGENT_RUN_ID = CODEX_APP_SERVER_TASK_ID;
+const CODEX_SESSION_WORKTREE_UNAVAILABLE_CODE = "vibe64_session_worktree_unavailable";
 const START_CODEX_TERMINAL_CONTROL_ACTION = "start_codex_terminal";
 const MAX_OPEN_CODEX_TERMINALS = 3;
 const STUDIO_DAEMON_ID = crypto.randomUUID();
@@ -146,6 +147,25 @@ function retryableTerminalFailure(result = {}) {
     ...result,
     retryable: false
   };
+}
+
+function codexSessionWorktreeWasRemoved(session = {}) {
+  return normalizeText(session.metadata?.worktree_removed) === "yes";
+}
+
+function codexSessionWorktreeUnavailableFailure({
+  session = {},
+  workdir = ""
+} = {}) {
+  const removed = codexSessionWorktreeWasRemoved(session);
+  return retryableTerminalFailure({
+    code: CODEX_SESSION_WORKTREE_UNAVAILABLE_CODE,
+    ok: false,
+    error: removed
+      ? "Session worktree was removed. Recover this session before continuing with Codex."
+      : `Session worktree directory does not exist: ${workdir}`,
+    workdir: normalizeText(workdir)
+  });
 }
 
 function delay(ms) {
@@ -2096,6 +2116,16 @@ function createCodexTerminalController({
       });
     }
     const workdir = terminalWorktreePath(session);
+    if (codexSessionWorktreeWasRemoved(session)) {
+      return blockCodexAppServerForUnavailableWorktree(
+        runtime,
+        sessionId,
+        codexSessionWorktreeUnavailableFailure({
+          session,
+          workdir
+        })
+      );
+    }
     if (!codexSessionWorkdirAllowed({
       session,
       targetRoot,
@@ -2109,10 +2139,14 @@ function createCodexTerminalController({
       });
     }
     if (!await directoryExists(workdir)) {
-      return retryableTerminalFailure({
-        ok: false,
-        error: `Session worktree directory does not exist: ${workdir}`
-      });
+      return blockCodexAppServerForUnavailableWorktree(
+        runtime,
+        sessionId,
+        codexSessionWorktreeUnavailableFailure({
+          session,
+          workdir
+        })
+      );
     }
     const imageResult = await resolveTerminalToolchainImage({
       runtime,
@@ -2587,6 +2621,7 @@ function createCodexTerminalController({
     error = "",
     kind = "",
     message = "",
+    publishReason = "",
     retryable = true,
     status = "running",
     terminalSessionId = ""
@@ -2616,7 +2651,7 @@ function createCodexTerminalController({
       }
     });
     await publishSessionChanged(sessionId, {
-      reason: `codex-app-server-${status}`
+      reason: normalizeText(publishReason) || `codex-app-server-${status}`
     });
     return task;
   }
@@ -2657,6 +2692,27 @@ function createCodexTerminalController({
     return result;
   }
 
+  async function writeCodexAppServerBlocked(runtime, sessionId, result, {
+    terminalSessionId = ""
+  } = {}) {
+    await writeCodexAppServerTaskEvent(runtime, sessionId, {
+      error: errorMessage(result),
+      kind: "blocked",
+      message: "Recover this session worktree before continuing with Codex.",
+      publishReason: "codex-app-server-blocked",
+      retryable: false,
+      status: "ready",
+      terminalSessionId
+    });
+    return result;
+  }
+
+  async function blockCodexAppServerForUnavailableWorktree(runtime, sessionId, result) {
+    // The app-server is target-scoped; only detach this removed Vibe64 session's client/subscription.
+    closeCodexAppServerProviderForSession(sessionId);
+    return writeCodexAppServerBlocked(runtime, sessionId, result);
+  }
+
   async function codexAppServerSessionContext(sessionId) {
     const runtime = await projectService.createRuntime();
     const session = await runtime.getSession(sessionId);
@@ -2668,6 +2724,16 @@ function createCodexTerminalController({
       });
     }
     const workdir = terminalWorktreePath(session);
+    if (codexSessionWorktreeWasRemoved(session)) {
+      return blockCodexAppServerForUnavailableWorktree(
+        runtime,
+        sessionId,
+        codexSessionWorktreeUnavailableFailure({
+          session,
+          workdir
+        })
+      );
+    }
     if (!codexSessionWorkdirAllowed({
       session,
       targetRoot,
@@ -2681,10 +2747,14 @@ function createCodexTerminalController({
       });
     }
     if (!await directoryExists(workdir)) {
-      return retryableTerminalFailure({
-        ok: false,
-        error: `Session worktree directory does not exist: ${workdir}`
-      });
+      return blockCodexAppServerForUnavailableWorktree(
+        runtime,
+        sessionId,
+        codexSessionWorktreeUnavailableFailure({
+          session,
+          workdir
+        })
+      );
     }
     return {
       ok: true,

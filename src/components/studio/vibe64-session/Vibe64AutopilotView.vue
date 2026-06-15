@@ -75,7 +75,10 @@
 
       <div
         class="studio-autopilot__chat-body"
-        :class="{ 'studio-autopilot__chat-body--artifact': chatTakeoverVisible }"
+        :class="{
+          'studio-autopilot__chat-body--artifact': chatTakeoverVisible,
+          'studio-autopilot__chat-body--timeline-control': stepInputFormVisible
+        }"
       >
         <Vibe64ReportPreview
           v-if="reportPreviewVisible"
@@ -100,6 +103,153 @@
             @reload="reloadChatPane"
             @resend-turn="resendOptimisticComposerTurn"
           />
+
+          <article
+            v-if="stepInputFormVisible"
+            ref="timelineControlElement"
+            class="studio-autopilot__timeline-control"
+          >
+            <form
+              class="studio-autopilot__input-form studio-autopilot__timeline-control-form"
+              @submit.prevent="submitStepInputForm()"
+            >
+              <p
+                v-if="stepInput.prompt"
+                class="studio-autopilot__timeline-control-prompt"
+              >
+                {{ stepInput.prompt }}
+              </p>
+
+              <template
+                v-for="field in stepInput.fields"
+                :key="field.name"
+              >
+                <v-textarea
+                  v-if="field.kind === 'textarea'"
+                  auto-grow
+                  class="studio-autopilot__input"
+                  :disabled="page.busy || stepInput.saving"
+                  hide-details="auto"
+                  :label="field.label"
+                  :model-value="stepInput.values[field.name] || ''"
+                  :placeholder="field.placeholder"
+                  :rows="field.rows || 2"
+                  variant="outlined"
+                  @update:model-value="stepInput.updateValue(field.name, $event)"
+                />
+                <v-text-field
+                  v-else
+                  class="studio-autopilot__input"
+                  :disabled="page.busy || stepInput.saving"
+                  hide-details="auto"
+                  :label="field.label"
+                  :model-value="stepInput.values[field.name] || ''"
+                  :placeholder="field.placeholder"
+                  variant="outlined"
+                  @update:model-value="stepInput.updateValue(field.name, $event)"
+                />
+              </template>
+
+              <v-alert
+                v-if="stepInput.error"
+                type="warning"
+                variant="tonal"
+                density="compact"
+              >
+                {{ stepInput.error }}
+              </v-alert>
+
+              <div
+                v-if="statusActionsVisible"
+                class="studio-autopilot__status-actions"
+              >
+                <v-btn
+                  v-if="screenStopAction"
+                  class="studio-autopilot__stop-button"
+                  :prepend-icon="mdiClose"
+                  size="small"
+                  type="button"
+                  variant="tonal"
+                  @click="stopScreenAction"
+                >
+                  Stop Autopilot
+                </v-btn>
+                <v-btn
+                  v-if="stuckRecoveryAvailable"
+                  class="studio-autopilot__stop-button"
+                  :loading="stuckRecoveryRunning"
+                  :prepend-icon="mdiRefresh"
+                  size="small"
+                  type="button"
+                  variant="tonal"
+                  @click="recoverStuckStep"
+                >
+                  Recover step
+                </v-btn>
+              </div>
+
+              <div class="studio-autopilot__actions studio-autopilot__step-actions">
+                <v-btn
+                  v-if="!stepInputHasWorkflowIntents"
+                  color="primary"
+                  :disabled="page.busy || !stepInput.canSubmit"
+                  :loading="stepInput.saving"
+                  :prepend-icon="mdiCheck"
+                  size="small"
+                  type="submit"
+                  variant="flat"
+                >
+                  {{ stepInput.interaction?.submitLabel || "Submit" }}
+                </v-btn>
+
+                <v-btn
+                  v-for="control in workflowButtonControls"
+                  :key="control.id"
+                  :color="control.buttonColor"
+                  :disabled="control.disabled"
+                  :loading="control.loading"
+                  :prepend-icon="control.icon"
+                  size="small"
+                  :title="control.disabledReason || control.label"
+                  type="button"
+                  :variant="control.buttonVariant"
+                  @click="activateWorkflowButtonControl(control.sourceControl || control)"
+                >
+                  {{ control.label }}
+                </v-btn>
+
+                <template
+                  v-if="!stepInputHasWorkflowIntents && !workflowButtonControls.length"
+                >
+                  <Vibe64SessionActionButton
+                    v-for="action in actions.currentActions"
+                    :key="action.id"
+                    :action="action"
+                    :actions="stepInputActionHandlers"
+                    :before-run="runActionFromStepInput"
+                    :busy="page.busy || stepInput.saving"
+                    variant="tonal"
+                  />
+                </template>
+              </div>
+
+              <Vibe64WorkflowControlForm
+                v-if="selectedStepInputControlVisible"
+                class="studio-autopilot__inline-control"
+                :can-submit-selected-control="canSubmitSelectedControl"
+                layout="start"
+                :running="composerInputLocked"
+                :selected-control="selectedControl"
+                :selected-control-fields="selectedControlFields"
+                :selected-control-values="selectedControlValues"
+                :workflow-controls="activeComposerWorkflowControls"
+                @activate-control="activateWorkflowButtonControl"
+                @cancel="clearSelectedControl"
+                @submit="submitSelectedWorkflowControl"
+                @update-value="updateSelectedControlValue"
+              />
+            </form>
+          </article>
         </template>
       </div>
 
@@ -141,262 +291,114 @@
       </div>
 
       <div
-        v-if="composerVisible"
+        v-if="composerVisible && !stepInputFormVisible"
         class="studio-autopilot__composer"
       >
-        <form
-          v-if="stepInputFormVisible"
-          class="studio-autopilot__input-form"
-          @submit.prevent="submitStepInputForm"
+        <div
+          v-if="statusActionsVisible"
+          class="studio-autopilot__status-actions"
         >
-          <p
-            v-if="stepInput.prompt"
-            class="text-body-2 text-medium-emphasis mb-0"
-          >
-            {{ stepInput.prompt }}
-          </p>
-
-          <template
-            v-for="field in stepInput.fields"
-            :key="field.name"
-          >
-            <v-textarea
-              v-if="field.kind === 'textarea'"
-              auto-grow
-              class="studio-autopilot__input"
-              :disabled="page.busy || stepInput.saving"
-              hide-details="auto"
-              :label="field.label"
-              :model-value="stepInput.values[field.name] || ''"
-              :placeholder="field.placeholder"
-              :rows="field.rows || 2"
-              variant="outlined"
-              @update:model-value="stepInput.updateValue(field.name, $event)"
-            />
-            <v-text-field
-              v-else
-              class="studio-autopilot__input"
-              :disabled="page.busy || stepInput.saving"
-              hide-details="auto"
-              :label="field.label"
-              :model-value="stepInput.values[field.name] || ''"
-              :placeholder="field.placeholder"
-              variant="outlined"
-              @update:model-value="stepInput.updateValue(field.name, $event)"
-            />
-          </template>
-
-          <v-alert
-            v-if="stepInput.error"
-            type="warning"
+          <v-btn
+            v-if="screenStopAction"
+            class="studio-autopilot__stop-button"
+            :prepend-icon="mdiClose"
+            size="small"
+            type="button"
             variant="tonal"
-            density="compact"
+            @click="stopScreenAction"
           >
-            {{ stepInput.error }}
-          </v-alert>
-
-          <div
-            v-if="statusActionsVisible"
-            class="studio-autopilot__status-actions"
+            Stop Autopilot
+          </v-btn>
+          <v-btn
+            v-if="stuckRecoveryAvailable"
+            class="studio-autopilot__stop-button"
+            :loading="stuckRecoveryRunning"
+            :prepend-icon="mdiRefresh"
+            size="small"
+            type="button"
+            variant="tonal"
+            @click="recoverStuckStep"
           >
-            <v-btn
-              v-if="screenStopAction"
-              class="studio-autopilot__stop-button"
-              :prepend-icon="mdiClose"
-              size="small"
-              type="button"
-              variant="tonal"
-              @click="stopScreenAction"
-            >
-              Stop Autopilot
-            </v-btn>
-            <v-btn
-              v-if="stuckRecoveryAvailable"
-              class="studio-autopilot__stop-button"
-              :loading="stuckRecoveryRunning"
-              :prepend-icon="mdiRefresh"
-              size="small"
-              type="button"
-              variant="tonal"
-              @click="recoverStuckStep"
-            >
-              Recover step
-            </v-btn>
-          </div>
+            Recover step
+          </v-btn>
+        </div>
 
-          <Vibe64WorkflowControlForm
-            v-if="selectedStepInputControlVisible"
-            class="studio-autopilot__inline-control"
-            :can-submit-selected-control="canSubmitSelectedControl"
-            layout="center"
-            :running="composerInputLocked"
-            :selected-control="selectedControl"
-            :selected-control-fields="selectedControlFields"
-            :selected-control-values="selectedControlValues"
-            sticky-actions
-            :workflow-controls="activeComposerWorkflowControls"
-            @activate-control="activateWorkflowButtonControl"
-            @cancel="clearSelectedControl"
-            @submit="submitSelectedWorkflowControl"
-            @update-value="updateSelectedControlValue"
-          />
+        <Vibe64WorkflowControlForm
+          v-if="selectedScreenControlVisible"
+          ref="screenControlFormRef"
+          :agent-controls-visible="true"
+          :agent-settings="currentAgentSettings"
+          as-form
+          attach-textarea
+          class="studio-autopilot__control-form"
+          :cancel-visible="!composerInputLocked && !selectedControlIsPrimary"
+          :can-submit-selected-control="canSubmitSelectedControl"
+          inline-submit
+          :interrupt-visible="codexInterruptVisible"
+          layout="split"
+          :running="composerInputLocked"
+          :selected-control="selectedControl"
+          :selected-control-fields="selectedControlFields"
+          :selected-control-values="selectedControlValues"
+          :session-id="sessionId"
+          :textarea-rows="2"
+          :workflow-controls="activeComposerWorkflowControls"
+          @activate-control="activateControl"
+          @cancel="clearSelectedControl"
+          @interrupt="requestCodexInterrupt"
+          @submit="submitScreenComposerControl"
+          @update-agent-setting="updateAgentSetting"
+          @update-value="updateSelectedControlValue"
+        />
 
-          <div
-            v-else
-            class="studio-autopilot__actions"
+        <Vibe64WorkflowControlForm
+          v-else-if="passiveComposerVisible"
+          :agent-controls-visible="true"
+          :agent-settings="currentAgentSettings"
+          as-form
+          attach-textarea
+          :attachments-enabled="false"
+          class="studio-autopilot__control-form"
+          :cancel-visible="false"
+          :can-submit-selected-control="false"
+          inline-submit
+          input-disabled
+          :interrupt-visible="codexInterruptVisible"
+          layout="split"
+          :running="passiveComposerBusy"
+          :selected-control="passiveComposerControl"
+          :selected-control-fields="passiveComposerFields"
+          :selected-control-values="passiveComposerValues"
+          :session-id="sessionId"
+          :textarea-rows="2"
+          :workflow-controls="activeComposerWorkflowControls"
+          @activate-control="activateControl"
+          @interrupt="requestCodexInterrupt"
+          @submit="submitPassiveComposer"
+          @update-agent-setting="updateAgentSetting"
+          @update-value="updatePassiveComposer"
+        />
+
+        <div
+          v-if="workflowButtonControls.length && !selectedControl && !passiveComposerVisible"
+          class="studio-autopilot__actions studio-autopilot__screen-actions"
+        >
+          <v-btn
+            v-for="control in workflowButtonControls"
+            :key="control.id"
+            :color="control.buttonColor"
+            :disabled="control.disabled"
+            :loading="control.loading"
+            :prepend-icon="control.icon"
+            size="small"
+            :title="control.disabledReason || control.label"
+            type="button"
+            :variant="control.buttonVariant"
+            @click="activateControl(control.sourceControl || control)"
           >
-            <v-btn
-              v-if="!stepInputHasWorkflowIntents"
-              color="primary"
-              :variant="stepInputHasWorkflowIntents ? 'tonal' : 'flat'"
-              :disabled="page.busy || !stepInput.canSubmit"
-              :loading="stepInput.saving"
-              :prepend-icon="mdiCheck"
-              size="small"
-              type="submit"
-            >
-              {{ stepInput.interaction?.submitLabel || "Submit" }}
-            </v-btn>
-
-            <v-btn
-              v-for="control in workflowButtonControls"
-              :key="control.id"
-              :color="control.buttonColor"
-              :disabled="control.disabled"
-              :loading="control.loading"
-              :prepend-icon="control.icon"
-              size="small"
-              :title="control.disabledReason || control.label"
-              type="button"
-              :variant="control.buttonVariant"
-              @click="activateWorkflowButtonControl(control.sourceControl || control)"
-            >
-              {{ control.label }}
-            </v-btn>
-
-            <template
-              v-if="!stepInputHasWorkflowIntents && !workflowButtonControls.length"
-            >
-              <Vibe64SessionActionButton
-                v-for="action in actions.currentActions"
-                :key="action.id"
-                :action="action"
-                :actions="stepInputActionHandlers"
-                :before-run="runActionFromStepInput"
-                :busy="page.busy || stepInput.saving"
-                variant="tonal"
-              />
-            </template>
-          </div>
-        </form>
-
-        <template v-else>
-          <div
-            v-if="statusActionsVisible"
-            class="studio-autopilot__status-actions"
-          >
-            <v-btn
-              v-if="screenStopAction"
-              class="studio-autopilot__stop-button"
-              :prepend-icon="mdiClose"
-              size="small"
-              type="button"
-              variant="tonal"
-              @click="stopScreenAction"
-            >
-              Stop Autopilot
-            </v-btn>
-            <v-btn
-              v-if="stuckRecoveryAvailable"
-              class="studio-autopilot__stop-button"
-              :loading="stuckRecoveryRunning"
-              :prepend-icon="mdiRefresh"
-              size="small"
-              type="button"
-              variant="tonal"
-              @click="recoverStuckStep"
-            >
-              Recover step
-            </v-btn>
-          </div>
-
-          <Vibe64WorkflowControlForm
-            v-if="selectedScreenControlVisible"
-            ref="screenControlFormRef"
-            :agent-controls-visible="true"
-            :agent-settings="currentAgentSettings"
-            as-form
-            attach-textarea
-            class="studio-autopilot__control-form"
-            :cancel-visible="!composerInputLocked && !selectedControlIsPrimary"
-            :can-submit-selected-control="canSubmitSelectedControl"
-            inline-submit
-            :interrupt-visible="codexInterruptVisible"
-            layout="split"
-            :running="composerInputLocked"
-            :selected-control="selectedControl"
-            :selected-control-fields="selectedControlFields"
-            :selected-control-values="selectedControlValues"
-            :session-id="sessionId"
-            :textarea-rows="2"
-            :workflow-controls="activeComposerWorkflowControls"
-            @activate-control="activateControl"
-            @cancel="clearSelectedControl"
-            @interrupt="requestCodexInterrupt"
-            @submit="submitScreenComposerControl"
-            @update-agent-setting="updateAgentSetting"
-            @update-value="updateSelectedControlValue"
-          />
-
-          <Vibe64WorkflowControlForm
-            v-else-if="passiveComposerVisible"
-            :agent-controls-visible="true"
-            :agent-settings="currentAgentSettings"
-            as-form
-            attach-textarea
-            :attachments-enabled="false"
-            class="studio-autopilot__control-form"
-            :cancel-visible="false"
-            :can-submit-selected-control="false"
-            inline-submit
-            input-disabled
-            :interrupt-visible="codexInterruptVisible"
-            layout="split"
-            :running="passiveComposerBusy"
-            :selected-control="passiveComposerControl"
-            :selected-control-fields="passiveComposerFields"
-            :selected-control-values="passiveComposerValues"
-            :session-id="sessionId"
-            :textarea-rows="2"
-            :workflow-controls="activeComposerWorkflowControls"
-            @activate-control="activateControl"
-            @interrupt="requestCodexInterrupt"
-            @submit="submitPassiveComposer"
-            @update-agent-setting="updateAgentSetting"
-            @update-value="updatePassiveComposer"
-          />
-
-          <div
-            v-if="workflowButtonControls.length && !selectedControl && !passiveComposerVisible"
-            class="studio-autopilot__actions studio-autopilot__screen-actions"
-          >
-            <v-btn
-              v-for="control in workflowButtonControls"
-              :key="control.id"
-              :color="control.buttonColor"
-              :disabled="control.disabled"
-              :loading="control.loading"
-              :prepend-icon="control.icon"
-              size="small"
-              :title="control.disabledReason || control.label"
-              type="button"
-              :variant="control.buttonVariant"
-              @click="activateControl(control.sourceControl || control)"
-            >
-              {{ control.label }}
-            </v-btn>
-          </div>
-        </template>
+            {{ control.label }}
+          </v-btn>
+        </div>
       </div>
     </section>
 
@@ -581,6 +583,7 @@
 </template>
 
 <script setup>
+import { nextTick, ref, watch } from "vue";
 import Vibe64BackgroundTasks from "@/components/studio/vibe64-session/Vibe64BackgroundTasks.vue";
 import Vibe64AutopilotNavigation from "@/components/studio/vibe64-session/Vibe64AutopilotNavigation.vue";
 import Vibe64ConversationLog from "@/components/studio/vibe64-session/Vibe64ConversationLog.vue";
@@ -705,6 +708,27 @@ const {
   workflowButtonControls,
   workflowExecuting
 } = useVibe64AutopilotView(props, emit);
+
+const timelineControlElement = ref(null);
+
+function scrollTimelineControlIntoView() {
+  timelineControlElement.value?.scrollIntoView?.({
+    block: "start"
+  });
+}
+
+watch(stepInputFormVisible, async (visible) => {
+  if (!visible) {
+    return;
+  }
+  await nextTick();
+  scrollTimelineControlIntoView();
+  if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+    window.requestAnimationFrame(scrollTimelineControlIntoView);
+  }
+}, {
+  flush: "post"
+});
 </script>
 
 <style scoped>
@@ -762,6 +786,11 @@ const {
   overflow-y: auto;
 }
 
+.studio-autopilot__chat-body--timeline-control {
+  gap: 0.55rem;
+  overflow-y: auto;
+}
+
 .studio-autopilot__conversation,
 .studio-autopilot__artifact {
   min-height: 0;
@@ -772,6 +801,21 @@ const {
   display: grid;
   flex: 1 1 auto;
   min-height: 0;
+}
+
+.studio-autopilot__chat-body--timeline-control .studio-autopilot__conversation {
+  align-self: stretch;
+  display: block;
+  flex: 0 0 auto;
+  overflow: visible;
+}
+
+.studio-autopilot__chat-body--timeline-control .studio-autopilot__conversation :deep(.studio-conversation-log__body) {
+  overflow: visible;
+}
+
+.studio-autopilot__chat-body--timeline-control .studio-autopilot__conversation :deep(.studio-conversation-log__body > .studio-conversation-log__turn:first-child) {
+  margin-top: 0;
 }
 
 .studio-autopilot__artifact :deep(.studio-report-preview__body) {
@@ -847,6 +891,11 @@ const {
   justify-content: flex-end;
 }
 
+.studio-autopilot__step-actions,
+.studio-autopilot__screen-actions {
+  justify-content: flex-start;
+}
+
 .studio-autopilot__status-actions :deep(.v-btn),
 .studio-autopilot__actions :deep(.v-btn),
 .studio-autopilot__command-spy-actions :deep(.v-btn:not(.v-btn--icon)) {
@@ -869,6 +918,20 @@ const {
 .studio-autopilot__actions :deep(.v-btn--variant-flat) {
   background: var(--studio-control-active-bg, #e7e7e7) !important;
   border-color: transparent;
+}
+
+.studio-autopilot__step-actions :deep(.v-btn--variant-flat),
+.studio-autopilot__screen-actions :deep(.v-btn--variant-flat) {
+  background: rgb(var(--v-theme-primary)) !important;
+  border-color: rgb(var(--v-theme-primary)) !important;
+  color: rgb(var(--v-theme-on-primary)) !important;
+}
+
+.studio-autopilot__step-actions :deep(.v-btn--variant-tonal),
+.studio-autopilot__screen-actions :deep(.v-btn--variant-tonal) {
+  background: rgba(var(--v-theme-primary), 0.1) !important;
+  border-color: rgba(var(--v-theme-primary), 0.32) !important;
+  color: rgb(var(--v-theme-primary)) !important;
 }
 
 .studio-autopilot__composer {
@@ -895,6 +958,27 @@ const {
   gap: 0.62rem;
   min-width: 0;
   width: 100%;
+}
+
+.studio-autopilot__timeline-control {
+  display: grid;
+  flex: 0 0 auto;
+  min-width: 0;
+  width: 100%;
+}
+
+.studio-autopilot__timeline-control-form {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+  width: 100%;
+}
+
+.studio-autopilot__timeline-control-prompt {
+  color: rgba(var(--v-theme-on-surface), 0.68);
+  font-size: 0.86rem;
+  line-height: 1.35;
+  margin: 0;
 }
 
 .studio-autopilot__input-form > .studio-autopilot__actions {
