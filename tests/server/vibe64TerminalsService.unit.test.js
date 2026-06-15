@@ -20,6 +20,9 @@ import {
   adapterProjectFacts
 } from "@local/vibe64-adapters/server";
 import {
+  runWithProjectRequestContext
+} from "@local/vibe64-core/server/projectRequestContext";
+import {
   createService
 } from "../../packages/vibe64-terminals/src/server/service.js";
 import {
@@ -673,6 +676,17 @@ async function waitForArrayLength(entries, expectedLength, timeoutMs = POST_COMM
   assert.equal(entries.length, expectedLength);
 }
 
+async function waitForCondition(predicate, message = "Timed out waiting for condition.", timeoutMs = POST_COMMIT_TEST_TIMEOUT_MS) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (predicate()) {
+      return;
+    }
+    await delay(5);
+  }
+  assert.fail(message);
+}
+
 async function waitForNoRunningTerminals(namespace, timeoutMs = POST_COMMIT_TEST_TIMEOUT_MS) {
   const deadline = Date.now() + timeoutMs;
   while (countRunningTerminalSessions({ namespace }) > 0 && Date.now() < deadline) {
@@ -946,6 +960,558 @@ test("Vibe64 Codex terminal resumes the app-server thread for the same workdir",
     codexRemoteEndpointForWorkdir(session, "/workspace/project/other"),
     ""
   );
+});
+
+test("Vibe64 Codex app-server reconciliation starts open session threads and unsubscribes on close", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot
+    });
+    const sessions = [
+      {
+        sessionId: "reconcile-session-one",
+        threadId: "00000000-0000-4000-8000-000000000101"
+      },
+      {
+        sessionId: "reconcile-session-two",
+        threadId: "00000000-0000-4000-8000-000000000102"
+      }
+    ];
+    for (const session of sessions) {
+      const worktree = path.join(targetRoot, ".vibe64", "sessions", "active", session.sessionId, "worktree");
+      await runtime.createSession({
+        initialStep: "worktree_created",
+        metadata: {
+          worktree_path: worktree
+        },
+        sessionId: session.sessionId
+      });
+      await mkdir(worktree, {
+        recursive: true
+      });
+    }
+
+    const providerCalls = {
+      activeSubscriptions: 0,
+      close: 0,
+      sendTurn: [],
+      startThread: [],
+      subscribe: 0,
+      unsubscribe: 0,
+      unsubscribeThread: []
+    };
+    const terminalService = createService({
+      codexTerminalController: {
+        codexAppServerProviderFactory(options = {}) {
+          const session = sessions.find((entry) => String(options.workdir || "").includes(entry.sessionId));
+          if (!session) {
+            throw new Error(`Unexpected Codex provider workdir: ${options.workdir}`);
+          }
+          const provider = {
+            close() {
+              providerCalls.close += 1;
+            },
+            async ensureRuntime() {
+              return {
+                containerEndpoint: "unix:///vibe64-codex-app-server/app-server.sock",
+                containerRuntimeDir: "/vibe64-codex-app-server",
+                containerSocketPath: "/vibe64-codex-app-server/app-server.sock",
+                endpoint: `unix://${path.join(targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server", "app-server.sock")}`,
+                runtimeDir: path.join(targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server"),
+                socketPath: path.join(targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server", "app-server.sock"),
+                transport: "unix"
+              };
+            },
+            async startThread(params) {
+              providerCalls.startThread.push(params);
+              return {
+                id: session.threadId
+              };
+            },
+            async sendTurn(threadId, input, params) {
+              providerCalls.sendTurn.push({
+                input,
+                params,
+                threadId
+              });
+              return {
+                id: `${session.sessionId}-bootstrap-turn`,
+                status: "completed"
+              };
+            },
+            subscribe() {
+              providerCalls.subscribe += 1;
+              providerCalls.activeSubscriptions += 1;
+              return () => {
+                providerCalls.unsubscribe += 1;
+                providerCalls.activeSubscriptions -= 1;
+              };
+            },
+            async unsubscribeThread(threadId) {
+              providerCalls.unsubscribeThread.push(threadId);
+              return {
+                status: "unsubscribed"
+              };
+            }
+          };
+          return provider;
+        },
+        codexAppServerProviderOptions: {
+          useDocker: false
+        }
+      },
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return runtime;
+        }
+      }
+    });
+
+    const reconcileResult = await terminalService.reconcileCodexThreads(sessions);
+
+    assert.equal(reconcileResult.ok, true);
+    assert.equal(reconcileResult.sessionCount, 2);
+    assert.equal(providerCalls.startThread.length, 2);
+    assert.equal(providerCalls.sendTurn.length, 2);
+    assert.equal(providerCalls.activeSubscriptions, 2);
+    const firstSession = await runtime.getSession("reconcile-session-one");
+    assert.equal(
+      firstSession.metadata.agent_identity_conversation_id,
+      "00000000-0000-4000-8000-000000000101"
+    );
+
+    await terminalService.closeSessionTerminals("reconcile-session-one");
+
+    assert.deepEqual(providerCalls.unsubscribeThread, [
+      "00000000-0000-4000-8000-000000000101"
+    ]);
+    assert.equal(providerCalls.activeSubscriptions, 1);
+    assert.equal(providerCalls.close, 1);
+  });
+});
+
+test("Vibe64 Codex app-server reconciliation subscribes an already loaded thread without resuming it", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "loaded-thread-session";
+    const threadId = "00000000-0000-4000-8000-000000000111";
+    const worktree = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId, "worktree");
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "worktree_created",
+      metadata: {
+        agent_identity_conversation_id: threadId,
+        agent_identity_provider: "codex",
+        agent_identity_resume_strategy: "provider-native",
+        agent_identity_status: "ready",
+        agent_identity_workdir: worktree,
+        codex_app_server_provider: "codex_app_server",
+        codex_thread_id: threadId,
+        codex_workdir: worktree,
+        worktree_path: worktree
+      },
+      sessionId
+    });
+    await mkdir(worktree, {
+      recursive: true
+    });
+
+    const providerCalls = {
+      listLoadedThreads: 0,
+      resumeThread: 0,
+      startThread: 0,
+      subscribe: 0
+    };
+    const terminalService = createService({
+      codexTerminalController: {
+        codexAppServerProviderFactory() {
+          return {
+            async ensureAvailable() {
+              return {
+                ok: true
+              };
+            },
+            async ensureRuntime() {
+              return {
+                endpoint: `unix://${path.join(targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server", "app-server.sock")}`,
+                runtimeDir: path.join(targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server"),
+                socketPath: path.join(targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server", "app-server.sock"),
+                transport: "unix"
+              };
+            },
+            async listLoadedThreads() {
+              providerCalls.listLoadedThreads += 1;
+              return {
+                data: [threadId],
+                nextCursor: null
+              };
+            },
+            async resumeThread() {
+              providerCalls.resumeThread += 1;
+              throw new Error("loaded thread should not be resumed");
+            },
+            async startThread() {
+              providerCalls.startThread += 1;
+              throw new Error("loaded thread should not be recreated");
+            },
+            subscribe() {
+              providerCalls.subscribe += 1;
+              return () => null;
+            }
+          };
+        },
+        codexAppServerProviderOptions: {
+          useDocker: false
+        }
+      },
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return runtime;
+        }
+      }
+    });
+
+    const result = await terminalService.reconcileCodexThreads([{ sessionId }]);
+
+    assert.equal(result.ok, true);
+    assert.equal(result.results[0].status, "loaded");
+    assert.equal(providerCalls.listLoadedThreads, 1);
+    assert.equal(providerCalls.resumeThread, 0);
+    assert.equal(providerCalls.startThread, 0);
+    assert.equal(providerCalls.subscribe, 1);
+
+    const secondResult = await terminalService.reconcileCodexThreads([{ sessionId }]);
+
+    assert.equal(secondResult.ok, true);
+    assert.equal(secondResult.results[0].status, "alreadySubscribed");
+    assert.equal(providerCalls.listLoadedThreads, 2);
+    assert.equal(providerCalls.resumeThread, 0);
+    assert.equal(providerCalls.startThread, 0);
+    assert.equal(providerCalls.subscribe, 1);
+  });
+});
+
+test("Vibe64 Codex app-server reconciliation prunes listeners from the previously selected project", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "same-session-id";
+    const projectA = path.join(targetRoot, "project-a");
+    const projectB = path.join(targetRoot, "project-b");
+    await mkdir(projectA, {
+      recursive: true
+    });
+    await mkdir(projectB, {
+      recursive: true
+    });
+    const runtimeA = new Vibe64SessionRuntime({
+      targetRoot: projectA
+    });
+    const runtimeB = new Vibe64SessionRuntime({
+      targetRoot: projectB
+    });
+    const worktreeA = path.join(projectA, ".vibe64", "sessions", "active", sessionId, "worktree");
+    const worktreeB = path.join(projectB, ".vibe64", "sessions", "active", sessionId, "worktree");
+    await runtimeA.createSession({
+      initialStep: "worktree_created",
+      metadata: {
+        worktree_path: worktreeA
+      },
+      sessionId
+    });
+    await runtimeB.createSession({
+      initialStep: "worktree_created",
+      metadata: {
+        worktree_path: worktreeB
+      },
+      sessionId
+    });
+    await mkdir(worktreeA, {
+      recursive: true
+    });
+    await mkdir(worktreeB, {
+      recursive: true
+    });
+
+    const providerState = new Map();
+    function stateForTarget(projectRoot) {
+      const key = projectRoot === projectA ? "a" : "b";
+      if (!providerState.has(key)) {
+        providerState.set(key, {
+          activeSubscriptions: 0,
+          close: 0,
+          subscribe: 0,
+          unsubscribe: 0
+        });
+      }
+      return providerState.get(key);
+    }
+    function threadIdForTarget(projectRoot) {
+      return projectRoot === projectA
+        ? "00000000-0000-4000-8000-000000000201"
+        : "00000000-0000-4000-8000-000000000202";
+    }
+    let activeTargetRoot = projectA;
+    let activeRuntime = runtimeA;
+    const terminalService = createService({
+      codexTerminalController: {
+        codexAppServerProviderFactory(options = {}) {
+          const state = stateForTarget(options.targetRoot);
+          return {
+            close() {
+              state.close += 1;
+            },
+            async ensureRuntime() {
+              return {
+                endpoint: `unix://${path.join(options.targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server", "app-server.sock")}`,
+                runtimeDir: path.join(options.targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server"),
+                socketPath: path.join(options.targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server", "app-server.sock"),
+                transport: "unix"
+              };
+            },
+            async startThread() {
+              return {
+                id: threadIdForTarget(options.targetRoot)
+              };
+            },
+            async sendTurn() {
+              return {
+                id: `${path.basename(options.targetRoot)}-bootstrap-turn`,
+                status: "completed"
+              };
+            },
+            subscribe() {
+              state.subscribe += 1;
+              state.activeSubscriptions += 1;
+              return () => {
+                state.unsubscribe += 1;
+                state.activeSubscriptions -= 1;
+              };
+            }
+          };
+        },
+        codexAppServerProviderOptions: {
+          useDocker: false
+        }
+      },
+      projectService: {
+        get targetRoot() {
+          return activeTargetRoot;
+        },
+        async createRuntime() {
+          return activeRuntime;
+        }
+      }
+    });
+
+    await runWithProjectRequestContext({
+      slug: "project-a",
+      targetRoot: projectA
+    }, async () => {
+      activeTargetRoot = projectA;
+      activeRuntime = runtimeA;
+      const result = await terminalService.reconcileCodexThreads([{ sessionId }]);
+      assert.equal(result.ok, true);
+    });
+    assert.equal(stateForTarget(projectA).activeSubscriptions, 1);
+    assert.equal(stateForTarget(projectB).activeSubscriptions, 0);
+
+    await runWithProjectRequestContext({
+      slug: "project-b",
+      targetRoot: projectB
+    }, async () => {
+      activeTargetRoot = projectB;
+      activeRuntime = runtimeB;
+      const result = await terminalService.reconcileCodexThreads([{ sessionId }]);
+      assert.equal(result.ok, true);
+    });
+
+    assert.equal(stateForTarget(projectA).activeSubscriptions, 0);
+    assert.equal(stateForTarget(projectA).close, 1);
+    assert.equal(stateForTarget(projectB).activeSubscriptions, 1);
+    assert.equal(stateForTarget(projectB).close, 0);
+  });
+});
+
+test("Vibe64 Codex app-server reconciliation waits before pruning an in-flight project", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "same-session-id";
+    const projectA = path.join(targetRoot, "project-a");
+    const projectB = path.join(targetRoot, "project-b");
+    await mkdir(projectA, {
+      recursive: true
+    });
+    await mkdir(projectB, {
+      recursive: true
+    });
+    const runtimeA = new Vibe64SessionRuntime({
+      targetRoot: projectA
+    });
+    const runtimeB = new Vibe64SessionRuntime({
+      targetRoot: projectB
+    });
+    const worktreeA = path.join(projectA, ".vibe64", "sessions", "active", sessionId, "worktree");
+    const worktreeB = path.join(projectB, ".vibe64", "sessions", "active", sessionId, "worktree");
+    const threadA = "00000000-0000-4000-8000-000000000301";
+    const threadB = "00000000-0000-4000-8000-000000000302";
+    await runtimeA.createSession({
+      initialStep: "worktree_created",
+      metadata: {
+        agent_identity_conversation_id: threadA,
+        agent_identity_provider: "codex",
+        agent_identity_resume_strategy: "provider-native",
+        agent_identity_status: "ready",
+        agent_identity_workdir: worktreeA,
+        codex_app_server_provider: "codex_app_server",
+        codex_thread_id: threadA,
+        codex_workdir: worktreeA,
+        worktree_path: worktreeA
+      },
+      sessionId
+    });
+    await runtimeB.createSession({
+      initialStep: "worktree_created",
+      metadata: {
+        worktree_path: worktreeB
+      },
+      sessionId
+    });
+    await mkdir(worktreeA, {
+      recursive: true
+    });
+    await mkdir(worktreeB, {
+      recursive: true
+    });
+
+    const providerState = new Map();
+    function stateForTarget(projectRoot) {
+      const key = projectRoot === projectA ? "a" : "b";
+      if (!providerState.has(key)) {
+        providerState.set(key, {
+          close: 0,
+          listLoadedThreads: 0,
+          startThread: 0,
+          subscribe: 0,
+          unsubscribe: 0
+        });
+      }
+      return providerState.get(key);
+    }
+
+    let allowProjectAListLoadedThreads = null;
+    let projectAListLoadedThreadsStarted = null;
+    const projectAListLoadedThreadsReady = new Promise((resolve) => {
+      projectAListLoadedThreadsStarted = resolve;
+    });
+    const projectAListLoadedThreadsCanContinue = new Promise((resolve) => {
+      allowProjectAListLoadedThreads = resolve;
+    });
+
+    let activeTargetRoot = projectA;
+    let activeRuntime = runtimeA;
+    const terminalService = createService({
+      codexTerminalController: {
+        codexAppServerProviderFactory(options = {}) {
+          const state = stateForTarget(options.targetRoot);
+          const threadId = options.targetRoot === projectA ? threadA : threadB;
+          return {
+            close() {
+              state.close += 1;
+            },
+            async ensureAvailable() {
+              return {
+                ok: true
+              };
+            },
+            async ensureRuntime() {
+              return {
+                endpoint: `unix://${path.join(options.targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server", "app-server.sock")}`,
+                runtimeDir: path.join(options.targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server"),
+                socketPath: path.join(options.targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server", "app-server.sock"),
+                transport: "unix"
+              };
+            },
+            async listLoadedThreads() {
+              state.listLoadedThreads += 1;
+              if (options.targetRoot === projectA) {
+                projectAListLoadedThreadsStarted();
+                await projectAListLoadedThreadsCanContinue;
+              }
+              return {
+                data: [threadId],
+                nextCursor: null
+              };
+            },
+            async startThread() {
+              state.startThread += 1;
+              return {
+                id: threadId
+              };
+            },
+            async sendTurn() {
+              return {
+                id: `${path.basename(options.targetRoot)}-bootstrap-turn`,
+                status: "completed"
+              };
+            },
+            subscribe() {
+              state.subscribe += 1;
+              return () => {
+                state.unsubscribe += 1;
+              };
+            }
+          };
+        },
+        codexAppServerProviderOptions: {
+          useDocker: false
+        }
+      },
+      projectService: {
+        get targetRoot() {
+          return activeTargetRoot;
+        },
+        async createRuntime() {
+          return activeRuntime;
+        }
+      }
+    });
+
+    const projectAReconcile = runWithProjectRequestContext({
+      slug: "project-a",
+      targetRoot: projectA
+    }, async () => {
+      activeTargetRoot = projectA;
+      activeRuntime = runtimeA;
+      return terminalService.reconcileCodexThreads([{ sessionId }]);
+    });
+
+    await projectAListLoadedThreadsReady;
+
+    const projectBReconcile = runWithProjectRequestContext({
+      slug: "project-b",
+      targetRoot: projectB
+    }, async () => {
+      activeTargetRoot = projectB;
+      activeRuntime = runtimeB;
+      return terminalService.reconcileCodexThreads([{ sessionId }]);
+    });
+
+    await delay(25);
+    assert.equal(stateForTarget(projectA).close, 0);
+
+    allowProjectAListLoadedThreads();
+    const [resultA, resultB] = await Promise.all([
+      projectAReconcile,
+      projectBReconcile
+    ]);
+
+    assert.equal(resultA.ok, true);
+    assert.equal(resultB.ok, true);
+    assert.equal(stateForTarget(projectA).close, 1);
+    assert.equal(stateForTarget(projectB).close, 0);
+    assert.equal(stateForTarget(projectA).unsubscribe, 1);
+  });
 });
 
 test("Vibe64 Codex terminal mounts linked git metadata for worktree roots", async () => {
@@ -1226,7 +1792,10 @@ test("Vibe64 Codex app-server active turns self-reconcile without another sessio
     assert.deepEqual(readThreadCalls, ["thread-1"]);
     assert.equal(codexAppServerAgentRunSnapshot(session).state, "active");
 
-    await delay(25);
+    await waitForCondition(
+      () => codexAppServerAgentRunSnapshot(session).state === "finalizing",
+      "Timed out waiting for Codex app-server active turn reconciliation."
+    );
 
     assert.deepEqual(readThreadCalls, ["thread-1", "thread-1"]);
     assert.deepEqual({
@@ -1522,6 +2091,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     };
     const providerCalls = {
       close: 0,
+      ensureAvailable: 0,
       ensureRuntime: 0,
       resumeThread: [],
       sendTurn: [],
@@ -1532,12 +2102,18 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       close() {
         providerCalls.close += 1;
       },
+      async ensureAvailable() {
+        providerCalls.ensureAvailable += 1;
+        return {
+          ok: true
+        };
+      },
       async ensureRuntime() {
         providerCalls.ensureRuntime += 1;
-          return {
-            containerEndpoint: "unix:///vibe64-codex-app-server/app-server.sock",
-            containerRuntimeDir: "/vibe64-codex-app-server",
-            containerSocketPath: "/vibe64-codex-app-server/app-server.sock",
+        return {
+          containerEndpoint: "unix:///vibe64-codex-app-server/app-server.sock",
+          containerRuntimeDir: "/vibe64-codex-app-server",
+          containerSocketPath: "/vibe64-codex-app-server/app-server.sock",
           endpoint: `unix://${path.join(stateRoot, "runtime", "codex-app-server", "app-server.sock")}`,
           runtimeDir: path.join(stateRoot, "runtime", "codex-app-server"),
           socketPath: path.join(stateRoot, "runtime", "codex-app-server", "app-server.sock"),
@@ -1605,6 +2181,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     assert.equal(result.codexPromptInjected, true);
     assert.equal(result.terminalSessionId, "");
     assert.equal(result.turnId, "codex-app-server-turn-1");
+    assert.equal(providerCalls.ensureAvailable, 1);
     assert.equal(providerCalls.ensureRuntime, 1);
     assert.equal(providerCalls.resumeThread.length, 0);
     assert.equal(providerCalls.startThread.length, 1);
@@ -1653,12 +2230,24 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     );
     assert.deepEqual(publishPromptReasons, ["codex-app-server-prompt-injected"]);
     assert.deepEqual(publishSessionReasons, [
+      "codex-app-server-turn-claimed",
       "codex-app-server-running",
       "codex-app-server-turn-active",
       "codex-app-server-turn-active",
       "codex-app-server-ready"
     ]);
     assert.equal(providerSubscribers.length, 1);
+    const duplicateResult = await controller.injectCodexPrompt(sessionId, {
+      handoffId: "000001-maintenance_conversation.json:agent_conversation:duplicate",
+      kind: "codex_prompt_handoff",
+      terminalInput: "Vibe64 interactive conversation turn:\nUser/request input:\n- conversationRequest: Duplicate prompt."
+    });
+    assert.equal(duplicateResult.ok, false);
+    assert.equal(duplicateResult.code, "vibe64_agent_turn_already_running");
+    assert.equal(duplicateResult.operationOutcome, "agent_already_running");
+    assert.equal(duplicateResult.threadId, "00000000-0000-4000-8000-000000000004");
+    assert.equal(duplicateResult.turnId, "codex-app-server-turn-1");
+    assert.equal(providerCalls.sendTurn.length, 1);
     await runtime.store.writeConversationUserMessage(sessionId, {
       text: "Verify app-server prompt delivery."
     });
@@ -2616,10 +3205,10 @@ test("Vibe64 command terminal records action results and metadata after success"
 	        stepId: "unit_step"
 	      }
 	    ]);
-	    let lifecycle = await runtime.store.readCommandLifecycle("terminal_success", "1-unit_command");
+	    let lifecycle = await runtime.store.readCommandLifecycle("terminal_success", "1-unit_command-001");
 	    for (let attempt = 0; attempt < 20 && lifecycle?.phase !== "done"; attempt += 1) {
 	      await delay(5);
-	      lifecycle = await runtime.store.readCommandLifecycle("terminal_success", "1-unit_command");
+	      lifecycle = await runtime.store.readCommandLifecycle("terminal_success", "1-unit_command-001");
 	    }
 	    const lifecycleEventKinds = lifecycle.events.map((event) => event.kind);
 	    assert.deepEqual({
@@ -2657,6 +3246,223 @@ test("Vibe64 command terminal records action results and metadata after success"
 	    ]);
 	  });
 	});
+
+test("Vibe64 command terminal claims one active execution per session", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new Vibe64SessionRuntime({
+      adapter: new UnitCommandAdapter(),
+      targetRoot,
+      workflow: {
+        id: "unit-terminal-duplicate-claim",
+        steps: [
+          {
+            actions: [
+              {
+                adapterCapability: "unit_command",
+                id: "unit_command",
+                label: "Unit command",
+                type: "command"
+              },
+              {
+                adapterCapability: "unit_command",
+                id: "second_unit_command",
+                label: "Second unit command",
+                type: "command"
+              }
+            ],
+            id: "unit_step",
+            label: "Unit step"
+          }
+        ]
+      }
+    });
+    await runtime.createSession({
+      sessionId: "terminal_duplicate_claim"
+    });
+
+    let closeTerminal = async () => null;
+    let startCount = 0;
+    const command = createCommandTerminalController({
+      ensureRuntimeNetwork: async () => null,
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return runtime;
+        },
+        async projectConfigEnvironment() {
+          return {
+            VIBE64_CONFIG_DIR: path.join(targetRoot, ".vibe64", "config")
+          };
+        }
+      },
+      resolveToolchainImage: async () => ({
+        image: "unit-command-toolchain:1.0.0",
+        label: "Unit command toolchain",
+        ok: true
+      }),
+      startTerminal: (options) => {
+        startCount += 1;
+        const id = `unit-command-duplicate-terminal-${startCount}`;
+        const dockerArgs = options.args({
+          id,
+          namespace: options.namespace
+        });
+        const resultFilePath = dockerEnvValue(dockerArgs, COMMAND_RESULT_ENV);
+        closeTerminal = async () => {
+          await writeFile(
+            resultFilePath,
+            "fact:set\tdynamic_done\tZnJvbS1yZXN1bHQtZmlsZQ==\n",
+            "utf8"
+          );
+          await options.onClose({
+            exitCode: 0,
+            id
+          });
+        };
+        return {
+          id,
+          ok: true,
+          status: "running"
+        };
+      }
+    });
+
+    const first = await command.startTerminal("terminal_duplicate_claim", {
+      actionId: "unit_command"
+    });
+    assert.equal(first.ok, true);
+    assert.equal(startCount, 1);
+
+    const runningDuplicate = await command.startTerminal("terminal_duplicate_claim", {
+      actionId: "unit_command"
+    });
+    assert.equal(runningDuplicate.ok, true);
+    assert.equal(runningDuplicate.code, "vibe64_command_execution_claimed");
+    assert.equal(runningDuplicate.commandLifecycleId, "1-unit_command-001");
+    assert.equal(runningDuplicate.operationOutcome, "command_already_running");
+    assert.equal(runningDuplicate.refreshRecommended, true);
+    assert.equal(runningDuplicate.terminalSessionId, "unit-command-duplicate-terminal-1");
+    assert.equal(startCount, 1);
+
+    const runningOtherAction = await command.startTerminal("terminal_duplicate_claim", {
+      actionId: "second_unit_command"
+    });
+    assert.equal(runningOtherAction.ok, true);
+    assert.equal(runningOtherAction.code, "vibe64_command_execution_claimed");
+    assert.equal(runningOtherAction.commandLifecycleId, "1-unit_command-001");
+    assert.equal(runningOtherAction.operationOutcome, "command_already_running");
+    assert.equal(runningOtherAction.refreshRecommended, true);
+    assert.equal(runningOtherAction.terminalSessionId, "unit-command-duplicate-terminal-1");
+    assert.equal(startCount, 1);
+
+    await closeTerminal();
+    let lifecycle = await runtime.store.readCommandLifecycle("terminal_duplicate_claim", "1-unit_command-001");
+    for (let attempt = 0; attempt < 20 && lifecycle?.phase !== "done"; attempt += 1) {
+      await delay(5);
+      lifecycle = await runtime.store.readCommandLifecycle("terminal_duplicate_claim", "1-unit_command-001");
+    }
+    assert.equal(lifecycle.phase, "done");
+    assert.equal(lifecycle.outcome, "completed");
+
+    const finishedDuplicate = await command.startTerminal("terminal_duplicate_claim", {
+      actionId: "unit_command"
+    });
+    assert.equal(finishedDuplicate.ok, true);
+    assert.equal(finishedDuplicate.code, "vibe64_command_execution_claimed");
+    assert.equal(finishedDuplicate.commandLifecycleId, "1-unit_command-001");
+    assert.equal(finishedDuplicate.operationOutcome, "command_already_finished");
+    assert.equal(finishedDuplicate.refreshRecommended, true);
+    assert.equal(startCount, 1);
+
+    const lifecycles = await runtime.store.readCommandLifecycles("terminal_duplicate_claim");
+    assert.deepEqual(lifecycles.map((item) => item.id), ["1-unit_command-001"]);
+  });
+});
+
+test("Vibe64 command terminal duplicate start waits until claimed command is attachable", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new Vibe64SessionRuntime({
+      adapter: new UnitCommandAdapter(),
+      targetRoot,
+      workflow: {
+        id: "unit-terminal-duplicate-starting",
+        steps: [
+          {
+            actions: [
+              {
+                adapterCapability: "unit_command",
+                id: "unit_command",
+                label: "Unit command",
+                type: "command"
+              }
+            ],
+            id: "unit_step",
+            label: "Unit step"
+          }
+        ]
+      }
+    });
+    await runtime.createSession({
+      sessionId: "terminal_duplicate_starting"
+    });
+
+    const terminalStarted = deferred();
+    const terminalReleased = deferred();
+    let startCount = 0;
+    const command = createCommandTerminalController({
+      ensureRuntimeNetwork: async () => null,
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return runtime;
+        },
+        async projectConfigEnvironment() {
+          return {
+            VIBE64_CONFIG_DIR: path.join(targetRoot, ".vibe64", "config")
+          };
+        }
+      },
+      resolveToolchainImage: async () => ({
+        image: "unit-command-toolchain:1.0.0",
+        label: "Unit command toolchain",
+        ok: true
+      }),
+      startTerminal: async () => {
+        startCount += 1;
+        terminalStarted.resolve();
+        await terminalReleased.promise;
+        return {
+          id: "unit-command-delayed-terminal",
+          ok: true,
+          status: "running"
+        };
+      }
+    });
+
+    const first = command.startTerminal("terminal_duplicate_starting", {
+      actionId: "unit_command"
+    });
+    await terminalStarted.promise;
+
+    const duplicate = command.startTerminal("terminal_duplicate_starting", {
+      actionId: "unit_command"
+    });
+    await waitForCondition(async () => {
+      const lifecycle = await runtime.store.readCommandLifecycle("terminal_duplicate_starting", "1-unit_command-001");
+      return lifecycle?.phase === "starting" && !lifecycle.terminalSessionId;
+    }, "Expected duplicate command test to observe a starting lifecycle.");
+    terminalReleased.resolve();
+
+    await assert.doesNotReject(first);
+    const duplicateResult = await duplicate;
+    assert.equal(duplicateResult.ok, true);
+    assert.equal(duplicateResult.code, "vibe64_command_execution_claimed");
+    assert.equal(duplicateResult.commandLifecycleId, "1-unit_command-001");
+    assert.equal(duplicateResult.operationOutcome, "command_already_running");
+    assert.equal(duplicateResult.terminalSessionId, "unit-command-delayed-terminal");
+    assert.equal(startCount, 1);
+  });
+});
 
 test("Vibe64 command terminal persists failed command context for reload-stable repair", async () => {
   await withTemporaryRoot(async (targetRoot) => {

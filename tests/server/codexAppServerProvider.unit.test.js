@@ -144,6 +144,7 @@ function metadataForRuntime(runtimeDir, {
     healthz: "",
     logPath: path.join(runtimeDir, "app-server.log"),
     pid: process.pid,
+    processCwd: runtimeDir,
     provider: CODEX_APP_SERVER_PROVIDER_ID,
     readyz: "",
     runtimeDir,
@@ -317,6 +318,35 @@ test("codex provider scopes default runtime directory by target root", () => {
   assert.notEqual(first, second);
 });
 
+test("codex provider scopes runtime directories by explicit runtime namespace", async () => {
+  const env = {
+    VIBE64_AGENT_RUNTIME_DIR: "/tmp/vibe64-agent-runtime"
+  };
+  const targetRoot = "/home/tenant/vibe64/beepollen";
+  const workdir = "/home/tenant/vibe64/beepollen/.vibe64-local/sessions/active/one/worktree";
+  const defaultDir = await withRuntimeNamespace("", () => codexAppServerRuntimeDir({
+    env,
+    targetRoot,
+    workdir
+  }));
+  const tenantADir = await withRuntimeNamespace("tenant-a", () => codexAppServerRuntimeDir({
+    env,
+    targetRoot,
+    workdir
+  }));
+  const tenantBDir = await withRuntimeNamespace("tenant-b", () => codexAppServerRuntimeDir({
+    env,
+    targetRoot,
+    workdir
+  }));
+
+  assert.match(defaultDir, /^\/tmp\/vibe64-agent-runtime\/codex-app-server-[a-f0-9]{12}$/u);
+  assert.match(tenantADir, /^\/tmp\/vibe64-agent-runtime\/codex-app-server-[a-f0-9]{12}$/u);
+  assert.match(tenantBDir, /^\/tmp\/vibe64-agent-runtime\/codex-app-server-[a-f0-9]{12}$/u);
+  assert.notEqual(tenantADir, defaultDir);
+  assert.notEqual(tenantBDir, tenantADir);
+});
+
 test("codex provider fallback runtime base stays under the target root when XDG runtime is unavailable", () => {
   assert.equal(
     codexAppServerRuntimeBaseDir({
@@ -435,7 +465,8 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
     assert.ok(runCall.args.includes(`${CODEX_ATTACHMENT_HOST_ROOT}:${CODEX_ATTACHMENT_CONTAINER_ROOT}:ro`));
     assert.ok(runCall.args.includes(`${targetRoot}:/workspace`));
     assert.ok(runCall.args.includes(`${targetRoot}:${targetRoot}`));
-    assert.ok(runCall.args.includes(workdir));
+    assert.equal(runCall.args.includes(workdir), false);
+    assert.equal(runCall.args[runCall.args.indexOf("-w") + 1], targetRoot);
     assert.ok(runCall.args.includes("test-codex-toolchain:latest"));
     assert.equal(runCall.args.at(-3), "bash");
     assert.equal(runCall.args.at(-2), "-lc");
@@ -445,6 +476,7 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
     assert.equal(stored.attachmentContainerRoot, CODEX_ATTACHMENT_CONTAINER_ROOT);
     assert.equal(stored.attachmentHostRoot, CODEX_ATTACHMENT_HOST_ROOT);
     assert.equal(stored.authStateSignature, "test-auth-state-signature");
+    assert.equal(stored.processCwd, targetRoot);
     assert.equal(stored.endpoint, unixEndpointForRuntime(runtimeDir));
     assert.equal(stored.containerEndpoint, codexAppServerContainerEndpoint());
     assert.equal(stored.provider, CODEX_APP_SERVER_PROVIDER_ID);

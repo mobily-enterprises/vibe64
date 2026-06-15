@@ -67,6 +67,12 @@ function registerRoutes(
     return terminalService().startGlobalCodexTerminal();
   });
 
+  routes.serviceRoute("POST", "/codex-threads/reconcile", {
+    summary: "Reconnect Vibe64 Codex app-server threads for the current project."
+  }, () => {
+    return terminalService().reconcileOpenCodexThreads();
+  });
+
   routes.actionRoute("POST", "/tools/:toolId/run", {
     actionId: ACTION_RUN_PROJECT_TOOL,
     body: projectToolRunInputValidator,

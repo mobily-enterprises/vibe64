@@ -1,5 +1,6 @@
 import { computed } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
+import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
 import { usePaths } from "@jskit-ai/users-web/client/composables/usePaths";
 import {
@@ -77,6 +78,31 @@ function sessionIsAwaitingCodex(session = {}) {
   return String(source.stepMachine?.status || source.presentation?.step?.status || "").trim() === "awaiting_agent_result";
 }
 
+const CONVERSATION_LOG_REFRESH_REASONS = Object.freeze(new Set([
+  "codex-app-server-agent-result",
+  "codex-app-server-agent-result-invalid",
+  "codex-app-server-agent-result-missing",
+  "codex-app-server-agent-result-provider-failed",
+  "codex-app-server-reasoning-summary",
+  "codex-app-server-terminal-assistant-message",
+  "codex-app-server-terminal-user-message"
+]));
+
+function conversationLogRealtimeShouldRefresh({ payload = {} } = {}, sessionId = "") {
+  const normalizedSessionId = String(sessionId || "").trim();
+  const changedSessionId = String(payload.sessionId || payload.entityId || "").trim();
+  if (!normalizedSessionId || changedSessionId !== normalizedSessionId) {
+    return false;
+  }
+
+  const reason = String(payload.reason || "").trim();
+  if (!reason) {
+    return false;
+  }
+
+  return CONVERSATION_LOG_REFRESH_REASONS.has(reason);
+}
+
 function useVibe64ConversationLog({
   active = true,
   session
@@ -104,9 +130,7 @@ function useVibe64ConversationLog({
         ROUTE_VISIBILITY_PUBLIC,
         sessionId.value,
         projectSlug.value
-      ),
-      String(currentSession.value?.revision || ""),
-      String(currentSession.value?.stepRevision || "")
+      )
     ]),
     queryOptions: {
       placeholderData: (previousData) => previousData,
@@ -115,15 +139,36 @@ function useVibe64ConversationLog({
     },
     readMethod: "GET",
     refreshOnPull: true,
-    requestRecoveryLabel: "Conversation history",
-    realtime: {
-      event: VIBE64_SESSION_CHANGED_EVENT,
-      matches: ({ payload = {} } = {}) => {
-        const changedSessionId = String(payload.sessionId || payload.entityId || "").trim();
-        return Boolean(changedSessionId) && changedSessionId === sessionId.value;
+    requestRecoveryLabel: "Conversation history"
+  });
+  let reloadInFlight = null;
+  let reloadQueued = false;
+
+  async function reloadConversationLog() {
+    if (reloadInFlight) {
+      reloadQueued = true;
+      return reloadInFlight;
+    }
+
+    reloadInFlight = resource.reload();
+    try {
+      return await reloadInFlight;
+    } finally {
+      reloadInFlight = null;
+      if (reloadQueued) {
+        reloadQueued = false;
+        void reloadConversationLog();
       }
     }
+  }
+
+  useRealtimeEvent({
+    enabled,
+    event: VIBE64_SESSION_CHANGED_EVENT,
+    matches: (context) => conversationLogRealtimeShouldRefresh(context, sessionId.value),
+    onEvent: reloadConversationLog
   });
+
   const turns = computed(() => normalizeConversationLog(resource.data.value || {}, {
     pending: sessionIsAwaitingCodex(currentSession.value)
   }));
@@ -136,13 +181,14 @@ function useVibe64ConversationLog({
   return {
     error: resource.loadError,
     loading: resource.isLoading,
-    reload: resource.reload,
+    reload: reloadConversationLog,
     turns,
     visible
   };
 }
 
 export {
+  conversationLogRealtimeShouldRefresh,
   normalizeConversationLog,
   sessionIsAwaitingCodex,
   useVibe64ConversationLog

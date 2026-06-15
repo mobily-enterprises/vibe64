@@ -45,8 +45,31 @@ async function prepareCodexThreadControl({
   return true;
 }
 
+async function reconnectCodexThreadsControl({
+  openCodexTerminal = null,
+  reconnectCodexThreads = null,
+  refreshSessionData = async () => null
+} = {}) {
+  if (typeof reconnectCodexThreads !== "function") {
+    throw new Error("Codex reconnection is unavailable.");
+  }
+  const result = await reconnectCodexThreads();
+  if (result?.ok === false) {
+    if (typeof openCodexTerminal === "function") {
+      await openCodexTerminal({
+        result,
+        source: "client_control"
+      });
+    }
+    return result;
+  }
+  await refreshSessionData();
+  return true;
+}
+
 const VIBE64_CLIENT_CONTROL_DISPATCHERS = Object.freeze({
   [VIBE64_CLIENT_CONTROL_ACTIONS.OPEN_DIFF]: openDiffControl,
+  [VIBE64_CLIENT_CONTROL_ACTIONS.RECONNECT_CODEX_THREADS]: reconnectCodexThreadsControl,
   [VIBE64_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL]: prepareCodexThreadControl
 });
 

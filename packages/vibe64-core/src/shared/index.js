@@ -12,6 +12,7 @@ const VIBE64_ACTION_DISPATCH_ROUTES = Object.freeze({
 
 const VIBE64_CLIENT_CONTROL_ACTIONS = Object.freeze({
   OPEN_DIFF: "open_diff",
+  RECONNECT_CODEX_THREADS: "reconnect_codex_threads",
   START_CODEX_TERMINAL: "start_codex_terminal"
 });
 

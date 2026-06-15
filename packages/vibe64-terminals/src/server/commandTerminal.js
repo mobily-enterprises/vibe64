@@ -65,6 +65,30 @@ import {
   VIBE64_ACTION_DISPATCH_ROUTES as ACTION_DISPATCH_ROUTES
 } from "@local/vibe64-core/shared";
 
+const COMMAND_LIFECYCLE_ACTIVE_PHASES = new Set([
+  "starting",
+  "started",
+  "terminal_exited",
+  "result_writing",
+  "result_written",
+  "advanced",
+  "post_commit_running"
+]);
+
+const COMMAND_LIFECYCLE_CLAIMED_PHASES = new Set([
+  ...COMMAND_LIFECYCLE_ACTIVE_PHASES,
+  "done"
+]);
+
+const COMMAND_CLAIM_OBSERVE_TIMEOUT_MS = 30000;
+const COMMAND_CLAIM_OBSERVE_INTERVAL_MS = 100;
+
+function delay(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
 function actionById(session = {}, actionId = "") {
   return (Array.isArray(session.actions) ? session.actions : [])
     .find((action) => action.id === actionId) || null;
@@ -118,13 +142,209 @@ function sessionStepRevision(value) {
   return Number.isSafeInteger(revision) && revision >= 1 ? revision : null;
 }
 
-function commandLifecycleIdForSession(session = {}, action = {}) {
+function commandLifecycleIdForAttempt(session = {}, action = {}, attemptNumber = 1) {
   const stepRevision = sessionStepRevision(session.stepRevision) || 1;
-  return `${stepRevision}-${String(action.id || "command").trim() || "command"}`;
+  const actionId = String(action.id || "command").trim() || "command";
+  const attempt = Math.max(1, Number.parseInt(attemptNumber, 10) || 1);
+  return `${stepRevision}-${actionId}-${String(attempt).padStart(3, "0")}`;
 }
 
 function inputKeys(input = {}) {
   return Object.keys(input && typeof input === "object" && !Array.isArray(input) ? input : {}).sort();
+}
+
+function commandLifecyclePhase(lifecycle = {}) {
+  return normalizeText(lifecycle.phase || lifecycle.status);
+}
+
+function commandLifecycleMatchesAction(lifecycle = {}, session = {}, action = {}) {
+  return normalizeText(lifecycle.stepId) === normalizeText(session.currentStep) &&
+    sessionStepRevision(lifecycle.stepRevision) === sessionStepRevision(session.stepRevision) &&
+    normalizeText(lifecycle.actionId) === normalizeText(action.id);
+}
+
+function commandLifecycleBlocksNewExecution(lifecycle = {}) {
+  return COMMAND_LIFECYCLE_CLAIMED_PHASES.has(commandLifecyclePhase(lifecycle));
+}
+
+function commandLifecycleIsActive(lifecycle = {}) {
+  return COMMAND_LIFECYCLE_ACTIVE_PHASES.has(commandLifecyclePhase(lifecycle));
+}
+
+function sortCommandLifecycles(lifecycles = []) {
+  return lifecycles
+    .sort((left, right) => {
+      const timeComparison = normalizeText(left.updatedAt || left.startedAt)
+        .localeCompare(normalizeText(right.updatedAt || right.startedAt));
+      return timeComparison || normalizeText(left.id).localeCompare(normalizeText(right.id));
+    });
+}
+
+function activeCommandLifecycles(session = {}) {
+  return sortCommandLifecycles((Array.isArray(session.commandLifecycles) ? session.commandLifecycles : [])
+    .filter(commandLifecycleIsActive));
+}
+
+function matchingCommandLifecycles(session = {}, action = {}) {
+  return sortCommandLifecycles((Array.isArray(session.commandLifecycles) ? session.commandLifecycles : [])
+    .filter((lifecycle) => commandLifecycleMatchesAction(lifecycle, session, action)));
+}
+
+function commandExecutionClaimResponse(claim = {}) {
+  const lifecycle = claim.lifecycle || {};
+  const phase = commandLifecyclePhase(claim.lifecycle);
+  const running = commandLifecycleIsActive(lifecycle);
+  const terminalSessionId = normalizeText(lifecycle.terminalSessionId);
+  const completed = phase === "done";
+  const completedOk = completed && normalizeText(lifecycle.outcome || "completed") === "completed";
+  return {
+    ok: running && terminalSessionId ? true : completedOk,
+    actionId: normalizeText(lifecycle.actionId),
+    actionLabel: normalizeText(lifecycle.actionLabel),
+    code: "vibe64_command_execution_claimed",
+    commandLifecycleId: normalizeText(lifecycle.id),
+    commandLifecycleOutcome: normalizeText(lifecycle.outcome),
+    commandLifecyclePhase: phase,
+    commandPreview: normalizeText(lifecycle.commandPreview),
+    error: running
+      ? terminalSessionId
+        ? ""
+        : "A command is already starting for this Vibe64 session, but its terminal is not attachable yet."
+      : completed
+        ? completedOk
+          ? ""
+          : "This Vibe64 command has already finished without completing successfully."
+        : "This Vibe64 command is no longer running.",
+    operationOutcome: running ? "command_already_running" : completed ? "command_already_finished" : "command_not_running",
+    refreshRecommended: true,
+    terminalSessionId,
+    terminalStatus: normalizeText(lifecycle.terminalStatus)
+  };
+}
+
+async function observeCommandExecutionClaim({
+  claim = {},
+  runtime,
+  sessionId = "",
+  timeoutMs = COMMAND_CLAIM_OBSERVE_TIMEOUT_MS
+} = {}) {
+  let lifecycle = claim.lifecycle || {};
+  const lifecycleId = normalizeText(lifecycle.id);
+  const deadline = Date.now() + timeoutMs;
+  while (
+    lifecycleId &&
+    commandLifecycleIsActive(lifecycle) &&
+    !normalizeText(lifecycle.terminalSessionId) &&
+    Date.now() < deadline
+  ) {
+    await delay(COMMAND_CLAIM_OBSERVE_INTERVAL_MS);
+    const nextLifecycle = await runtime.store.readCommandLifecycle(sessionId, lifecycleId);
+    if (!nextLifecycle) {
+      break;
+    }
+    lifecycle = nextLifecycle;
+  }
+  return {
+    ...claim,
+    lifecycle
+  };
+}
+
+async function claimCommandExecution({
+  action = {},
+  advanceOnSuccess = false,
+  commandInput = {},
+  runtime,
+  session = {},
+  sessionId = ""
+} = {}) {
+  return runtime.store.mutateSession(sessionId, async () => {
+    const currentSession = await runtime.getSession(sessionId);
+    const currentAction = actionById(currentSession, action.id);
+    const activeLifecycle = activeCommandLifecycles(currentSession)[0] || null;
+    if (activeLifecycle) {
+      return {
+        claimed: false,
+        lifecycle: activeLifecycle,
+        reason: "active_session_execution",
+        session: currentSession
+      };
+    }
+
+    const existingLifecycle = currentAction
+      ? matchingCommandLifecycles(currentSession, currentAction).find(commandLifecycleBlocksNewExecution)
+      : null;
+    if (existingLifecycle) {
+      return {
+        claimed: false,
+        lifecycle: existingLifecycle,
+        reason: "existing_execution",
+        session: currentSession
+      };
+    }
+
+    if (
+      currentSession.currentStep !== session.currentStep ||
+      sessionStepRevision(currentSession.stepRevision) !== sessionStepRevision(session.stepRevision)
+    ) {
+      throw refreshRecommendedCommandError(vibe64Error(
+        "The Vibe64 session changed before the command could start.",
+        "vibe64_stale_command_start"
+      ), currentSession, "stale_operation");
+    }
+    if (!currentAction) {
+      throw refreshRecommendedCommandError(vibe64Error(
+        `Action ${action.id || "(empty)"} is no longer available on this Vibe64 step.`,
+        "vibe64_action_not_available"
+      ), currentSession, "stale_operation");
+    }
+    if (!actionRunsInCommandTerminal(currentAction)) {
+      throw vibe64Error(
+        `Action ${currentAction.label || currentAction.id} does not run in the command terminal.`,
+        "vibe64_command_requires_terminal"
+      );
+    }
+    if (currentAction.enabled !== true) {
+      throw refreshRecommendedCommandError(vibe64Error(
+        currentAction.disabledReason || `Action ${currentAction.label || currentAction.id} is disabled.`,
+        "vibe64_action_disabled"
+      ), currentSession, "state_rejected");
+    }
+
+    const lifecycles = matchingCommandLifecycles(currentSession, currentAction);
+    const commandLifecycleId = commandLifecycleIdForAttempt(currentSession, currentAction, lifecycles.length + 1);
+    await writeCommandLifecycleEvent({
+      lifecycleId: commandLifecycleId,
+      runtime,
+      sessionId,
+      patch: {
+        actionId: currentAction.id,
+        actionLabel: currentAction.label,
+        advanceOnSuccess,
+        currentStep: String(currentSession.currentStep || ""),
+        inputKeys: inputKeys(commandInput),
+        phase: "starting",
+        sessionRevisionBefore: sessionRevision(currentSession.revision),
+        stepId: String(currentSession.currentStep || ""),
+        stepRevision: sessionStepRevision(currentSession.stepRevision)
+      },
+      event: {
+        kind: "starting",
+        message: "Command terminal execution claimed."
+      }
+    });
+    if (typeof runtime.recordCommandActionStarted === "function") {
+      await runtime.recordCommandActionStarted(sessionId, currentAction.id);
+    }
+    const startedSession = await runtime.getSession(sessionId);
+    return {
+      action: currentAction,
+      claimed: true,
+      commandLifecycleId,
+      session: currentSession,
+      startedSession
+    };
+  });
 }
 
 async function writeCommandLifecycleEvent({
@@ -911,17 +1131,55 @@ function createCommandTerminalController({
             return imageResult;
           }
 
+          const claim = await claimCommandExecution({
+            action,
+            advanceOnSuccess,
+            commandInput,
+            runtime,
+            session,
+            sessionId
+          });
+          if (!claim.claimed) {
+            const observedClaim = await observeCommandExecutionClaim({
+              claim,
+              runtime,
+              sessionId
+            });
+            vibe64SessionDebugLog("server.commandTerminal.start.claimObserved", {
+              ...vibe64SessionDebugSummary(observedClaim.session || claim.session || session),
+              actionId,
+              commandLifecycleId: normalizeText(observedClaim.lifecycle?.id),
+              commandLifecyclePhase: commandLifecyclePhase(observedClaim.lifecycle),
+              commandLifecycleTerminalSessionId: normalizeText(observedClaim.lifecycle?.terminalSessionId),
+              durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+              reason: observedClaim.reason,
+              sessionId
+            });
+            return commandExecutionClaimResponse(observedClaim);
+          }
+
+          const activeAction = claim.action || action;
+          const commandLifecycleId = claim.commandLifecycleId;
+          const commandSession = claim.session || session;
+          let startedSession = claim.startedSession || commandSession;
+          vibe64SessionDebugLog("server.commandTerminal.start.claimed", {
+            ...vibe64SessionDebugSummary(commandSession),
+            actionId: activeAction.id,
+            commandLifecycleId,
+            sessionId
+          });
+
           await ensureRuntimeNetwork(targetRoot);
           await ensureAdapterRuntimeContainers({
             runtime,
-            session,
+            session: commandSession,
             target: "command",
             targetRoot
           });
           const terminalEnv = await projectTerminalEnvironment({
             projectService,
             runtime,
-            session,
+            session: commandSession,
             target: "command",
             targetRoot
           });
@@ -934,32 +1192,6 @@ function createCommandTerminalController({
             }
             return resultFile;
           };
-          const commandLifecycleId = commandLifecycleIdForSession(session, action);
-          await writeCommandLifecycleEvent({
-            lifecycleId: commandLifecycleId,
-            runtime,
-            sessionId,
-            patch: {
-              actionId: action.id,
-              actionLabel: action.label,
-              advanceOnSuccess,
-              currentStep: String(session.currentStep || ""),
-              inputKeys: inputKeys(commandInput),
-              phase: "starting",
-              sessionRevisionBefore: sessionRevision(session.revision),
-              stepId: String(session.currentStep || ""),
-              stepRevision: sessionStepRevision(session.stepRevision)
-            },
-            event: {
-              kind: "starting",
-              message: "Command terminal start accepted."
-            }
-          });
-          let startedSession = session;
-          if (typeof runtime.recordCommandActionStarted === "function") {
-            await runtime.recordCommandActionStarted(sessionId, action.id);
-            startedSession = await runtime.getSession(sessionId);
-          }
           try {
             const terminal = await startTerminal({
               args: (terminalContext) => {
@@ -981,7 +1213,7 @@ function createCommandTerminalController({
                   image: imageResult.image,
                   mounts: Array.isArray(spec.mounts) ? spec.mounts : [],
                   resultFile: activeResultFile,
-                  session,
+                  session: commandSession,
                   sessionId,
                   targetRoot,
                   terminalId: terminalContext.id,
@@ -993,8 +1225,8 @@ function createCommandTerminalController({
               cwd: workdir,
               maxRunning: 1,
               metadata: {
-                actionId: action.id,
-                actionLabel: action.label,
+                actionId: activeAction.id,
+                actionLabel: activeAction.label,
                 attemptedCommand: commandInvocation(spec),
                 cwd: workdir,
                 envHash: terminalEnvHash,
@@ -1008,7 +1240,7 @@ function createCommandTerminalController({
                 const onCloseStartedAtMs = Date.now();
                 const activeResultFile = resultFile || {};
                 vibe64SessionDebugLog("server.commandTerminal.onClose.start", {
-                  actionId: action.id,
+                  actionId: activeAction.id,
                   exitCode,
                   sessionId,
                   terminalSessionId: id
@@ -1028,10 +1260,10 @@ function createCommandTerminalController({
                       message: "Command terminal process exited."
                     }
                   });
-                  const completion = await runtime.store.mutateSession(session.sessionId, async () => {
+                  const completion = await runtime.store.mutateSession(commandSession.sessionId, async () => {
                     return writeActionTerminalResult({
                       advanceOnSuccess,
-                      action,
+                      action: activeAction,
                       commandLifecycleId,
                       exitCode,
                       input: commandInput,
@@ -1050,7 +1282,7 @@ function createCommandTerminalController({
                     sessionId
                   });
                   vibe64SessionDebugLog("server.commandTerminal.onClose.done", {
-                    actionId: action.id,
+                    actionId: activeAction.id,
                     durationMs: vibe64SessionDebugDurationMs(onCloseStartedAtMs),
                     exitCode,
                     sessionId,
@@ -1075,7 +1307,7 @@ function createCommandTerminalController({
                     }
                   });
                   vibe64SessionDebugLog("server.commandTerminal.onClose.error", {
-                    actionId: action.id,
+                    actionId: activeAction.id,
                     durationMs: vibe64SessionDebugDurationMs(onCloseStartedAtMs),
                     error: vibe64SessionDebugError(error),
                     exitCode,
@@ -1108,13 +1340,13 @@ function createCommandTerminalController({
               }
             });
             if (terminal?.ok === false && typeof runtime.recordCommandActionFinished === "function") {
-              await runtime.recordCommandActionFinished(startedSession, action.id, {
+              await runtime.recordCommandActionFinished(startedSession, activeAction.id, {
                 message: String(terminal.error || "Command terminal could not start."),
                 status: "blocked"
               });
             }
             vibe64SessionDebugLog("server.commandTerminal.start.done", {
-              actionId: action.id,
+              actionId: activeAction.id,
               durationMs: vibe64SessionDebugDurationMs(startedAtMs),
               sessionId,
               terminalSessionId: String(terminal?.id || ""),
@@ -1138,7 +1370,7 @@ function createCommandTerminalController({
               }
             });
             if (typeof runtime.recordCommandActionFinished === "function") {
-              await runtime.recordCommandActionFinished(startedSession, action.id, {
+              await runtime.recordCommandActionFinished(startedSession, activeAction.id, {
                 message: String(error?.message || error || "Command terminal could not start."),
                 status: "blocked"
               });

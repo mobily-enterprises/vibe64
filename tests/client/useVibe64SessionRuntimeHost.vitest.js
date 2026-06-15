@@ -63,27 +63,27 @@ describe("Vibe64 session runtime host", () => {
     });
   });
 
-  it("blocks Codex terminal auto-start while capabilities are refreshing", () => {
+  it("allows Codex terminal auto-start while loaded capabilities refresh", () => {
     expect(codexTerminalStartAllowed({
       active: true,
-      capabilitiesFetching: false,
-      runtimeBusy: false
+      capabilitiesReady: true,
+      sessionReady: true
     })).toBe(true);
 
     expect(codexTerminalStartAllowed({
       active: true,
-      capabilitiesFetching: true,
-      runtimeBusy: false
+      capabilitiesReady: false,
+      sessionReady: true
     })).toBe(false);
     expect(codexTerminalStartAllowed({
       active: true,
-      capabilitiesFetching: false,
-      runtimeBusy: true
+      capabilitiesReady: true,
+      sessionReady: false
     })).toBe(false);
     expect(codexTerminalStartAllowed({
       active: false,
-      capabilitiesFetching: false,
-      runtimeBusy: false
+      capabilitiesReady: true,
+      sessionReady: true
     })).toBe(false);
   });
 });

@@ -157,3 +157,43 @@ test("archive removes a session-owned ordinary worktree directory without readin
     assert.equal(archivedMetadata.worktree_recovery_dirty, "no");
   });
 });
+
+test("archive removes a session-owned Git directory that is not registered as a target worktree", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const baseCommit = await createGitProject(targetRoot);
+    const runtime = new Vibe64SessionRuntime({
+      adapter: new ArchiveTestAdapter(),
+      targetRoot
+    });
+    const session = await runtime.createSession({
+      metadata: {
+        base_branch: "main",
+        base_commit: baseCommit,
+        branch: "vibe64/unregistered_git_directory"
+      },
+      sessionId: "unregistered_git_directory"
+    });
+    const worktreePath = path.join(session.sessionRoot, "worktree");
+    await mkdir(worktreePath, {
+      recursive: true
+    });
+    await createGitProject(worktreePath);
+    await runtime.store.writeMetadataValue("unregistered_git_directory", "worktree_path", worktreePath);
+    await runtime.store.writeCompletedStep("unregistered_git_directory", "worktree_created", {
+      message: "Worktree created."
+    });
+
+    const archiveSession = await runtime.getSession("unregistered_git_directory");
+    const archiveResult = await runtime.archiveSessionWorktree(archiveSession, {
+      reason: "abandoned"
+    });
+    assert.equal(archiveResult.removed, true);
+    assert.equal(await pathExists(worktreePath), false);
+
+    const archivedMetadata = await runtime.store.readMetadata("unregistered_git_directory");
+    assert.equal(archivedMetadata.worktree_removed, "yes");
+    assert.equal(await git(targetRoot, ["worktree", "list", "--porcelain"]), `worktree ${targetRoot}
+HEAD ${baseCommit}
+branch refs/heads/main`);
+  });
+});

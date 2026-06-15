@@ -9,9 +9,11 @@ import {
 
 describe("vibe64ClientControlDispatcher", () => {
   let ensureCodexThread;
+  let reconnectCodexThreads;
 
   beforeEach(() => {
     ensureCodexThread = vi.fn();
+    reconnectCodexThreads = vi.fn();
   });
 
   it("dispatches the open diff control through the shared action contract", async () => {
@@ -99,6 +101,27 @@ describe("vibe64ClientControlDispatcher", () => {
       },
       source: "client_control"
     });
+  });
+
+  it("dispatches Codex reconnect controls through project-wide app-server reconciliation", async () => {
+    const refreshSessionData = vi.fn();
+    reconnectCodexThreads.mockResolvedValue({
+      ok: true
+    });
+
+    await expect(runVibe64ClientControl({
+      control: {
+        action: VIBE64_CLIENT_CONTROL_ACTIONS.RECONNECT_CODEX_THREADS
+      }
+    }, {
+      reconnectCodexThreads,
+      refreshSessionData,
+      sessionId: "session_123"
+    })).resolves.toBe(true);
+
+    expect(reconnectCodexThreads).toHaveBeenCalledTimes(1);
+    expect(refreshSessionData).toHaveBeenCalledTimes(1);
+    expect(ensureCodexThread).not.toHaveBeenCalled();
   });
 
 });

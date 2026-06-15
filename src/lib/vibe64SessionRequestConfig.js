@@ -82,6 +82,10 @@ function vibe64GlobalCodexTerminalPath(vibe64ApiPath = "", terminalSessionId = "
     : `${vibe64ApiPath}/codex-terminal`;
 }
 
+function vibe64CodexThreadsReconcilePath(vibe64ApiPath = "") {
+  return `${vibe64ApiPath}/codex-threads/reconcile`;
+}
+
 function vibe64ConversationLogPath(sessionsApiPath = "", sessionId = "") {
   return vibe64SessionPath(sessionsApiPath, sessionId, "/conversation-log");
 }
@@ -226,6 +230,7 @@ export {
   vibe64ArtifactPreviewPath,
   vibe64ArtifactPreviewQueryKey,
   vibe64CodexAttachmentPath,
+  vibe64CodexThreadsReconcilePath,
   vibe64CodexTerminalPath,
   vibe64CommandTerminalPath,
   vibe64ConversationLogPath,

@@ -77,7 +77,7 @@
             </div>
             <div v-if="showTerminalStartPanel" class="codex-terminal__restart-panel">
               <v-sheet class="codex-terminal__restart-card" rounded="lg" elevation="8">
-                <span>{{ terminalExited ? "Codex exited." : "Codex is not running." }}</span>
+                <span>{{ terminalStartPanelMessage }}</span>
                 <v-btn
                   color="primary"
                   :loading="terminalStarting"
@@ -86,7 +86,7 @@
                   variant="flat"
                   @click="restartTerminal"
                 >
-                  {{ terminalExited ? "Restart Codex" : "Start Codex" }}
+                  {{ terminalStartButtonText }}
                 </v-btn>
               </v-sheet>
             </div>
@@ -346,12 +346,28 @@ const {
   uploadAttachment: uploadAttachmentForScope
 });
 const terminalCanStart = computed(() => Boolean(canStartTerminal.value));
+const terminalStartPanelMessage = computed(() => {
+  if (terminalStarting.value) {
+    return "Starting Codex terminal...";
+  }
+  return terminalExited.value ? "Codex exited." : "Codex is not running.";
+});
+const terminalStartButtonText = computed(() => {
+  if (terminalStarting.value) {
+    return "Starting";
+  }
+  return terminalExited.value ? "Restart Codex" : "Start Codex";
+});
 const showTerminalStartPanel = computed(() => (
-  canUseTerminal.value &&
-  terminalCanStart.value &&
   componentMounted.value &&
-  !terminalStarting.value &&
-  (!terminalSessionId.value || terminalExited.value)
+  (
+    (terminalStarting.value && terminalDisplayActive.value) ||
+    (
+      canUseTerminal.value &&
+      terminalCanStart.value &&
+      (!terminalSessionId.value || terminalExited.value)
+    )
+  )
 ));
 
 function defaultExpanded() {
@@ -588,6 +604,9 @@ async function startTerminalOnce() {
   terminalStarting.value = true;
   terminalError.value = "";
   try {
+    if (!(await setupTerminalUi())) {
+      throw new Error(terminalError.value || "Terminal UI failed to initialize.");
+    }
     const session = await startTerminalSessionForScope(terminalScopeId.value);
     if (session?.ok === false) {
       throw new Error(session.error || session.errors?.[0]?.message || "Codex terminal failed to start.");

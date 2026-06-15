@@ -1814,6 +1814,117 @@ test.describe("Autopilot dumb client contract", () => {
     expect(advances).toBe(0);
   });
 
+  test("keeps workflow controls usable when a report preview owns the chat body", async ({ page }) => {
+    const intentRequests: unknown[] = [];
+    const intents = [
+      {
+        enabled: true,
+        id: "talk_to_codex",
+        inputFields: [
+          {
+            kind: "textarea",
+            label: "Message",
+            name: "conversationRequest",
+            required: true
+          }
+        ],
+        label: "Send to Codex",
+        style: "primary"
+      },
+      {
+        enabled: true,
+        id: "let_codex_decide",
+        inputFields: [],
+        label: "Let Codex decide",
+        submitFields: {
+          conversationRequest: "You decide."
+        },
+        style: "secondary"
+      }
+    ];
+    const session = sessionPayload({
+      artifactReadiness: {
+        "report.md": {
+          fingerprint: "report-v1",
+          nonEmpty: true
+        }
+      },
+      currentStep: "issue_file_created",
+      currentStepDefinition: {
+        id: "issue_file_created",
+        label: "Define work"
+      },
+      intents,
+      presentation: {
+        auto: {
+          nextOperation: {
+            executable: false,
+            kind: "wait",
+            reason: "input"
+          }
+        },
+        intents,
+        screen: {
+          kind: "conversation",
+          message: "Review the issue draft and send changes if needed.",
+          primaryIntentId: "talk_to_codex",
+          sections: [
+            {
+              kind: "report_preview"
+            }
+          ],
+          title: "Define issue"
+        },
+        step: {
+          id: "issue_file_created",
+          label: "Define work",
+          status: "waiting_for_input"
+        }
+      },
+      stepMachine: {
+        status: "waiting_for_input",
+        stepId: "issue_file_created"
+      }
+    });
+    await mockVibe64Session(page, session, {
+      artifactPreviews: {
+        report: [
+          "## Draft issue",
+          "",
+          "This is the saved issue draft."
+        ].join("\n")
+      },
+      onIntent: (body) => {
+        intentRequests.push(body);
+      }
+    });
+
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+
+    const autopilot = page.locator(".studio-autopilot");
+    await expect(autopilot.getByText("Session report")).toBeVisible();
+    await expect(autopilot.getByText("Draft issue")).toBeVisible();
+    await expect(autopilot.locator(".studio-autopilot__chat-body--artifact")).toBeVisible();
+    await expect(autopilot.locator(".studio-autopilot__composer")).toHaveCount(0);
+    await expect(autopilot.getByRole("button", { name: "Let Codex decide" })).toBeVisible();
+
+    const messageInput = autopilot.getByLabel("Message");
+    await expect(messageInput).toBeVisible();
+    await messageInput.fill("Please tighten the acceptance criteria.");
+    await expect(autopilot.getByRole("button", { name: "Send to Codex" })).toBeEnabled();
+    await autopilot.getByRole("button", { name: "Send to Codex" }).click();
+
+    await expect.poll(() => intentRequests).toEqual([
+      {
+        fields: {
+          conversationRequest: "Please tighten the acceptance criteria."
+        },
+        stepId: "issue_file_created",
+        stepStatus: "waiting_for_input"
+      }
+    ]);
+  });
+
   test("grows the Codex composer above its internal controls", async ({ page }) => {
     const session = sessionPayload({
       intents: [
@@ -2622,7 +2733,7 @@ test.describe("Autopilot dumb client contract", () => {
         inputFields: [
           {
             kind: "textarea",
-            label: "What should change?",
+            label: "Talk with the AI agent",
             name: "feedback",
             placeholder: "Tell Codex how to improve the saved issue draft.",
             requiredMessage: "Explain what should change before sending the improvement request."
@@ -2716,11 +2827,11 @@ test.describe("Autopilot dumb client contract", () => {
     expect(viewport).not.toBeNull();
     expect((createIssueBox?.y || 0) + (createIssueBox?.height || 0)).toBeLessThanOrEqual(viewport?.height || 0);
     await expect(autopilot.getByLabel("Issue title")).toBeVisible();
-    await expect(autopilot.getByLabel("What should change?")).toBeVisible();
+    await expect(autopilot.getByLabel("Talk with the AI agent")).toBeVisible();
     await expect(page.getByRole("button", { name: "Save changes" })).toHaveCount(0);
     await expect(autopilot.getByRole("button", { name: "Create GitHub issue" })).toBeVisible();
     await expect.poll(() => stepInputs).toEqual([]);
-    await autopilot.getByLabel("What should change?").fill("Use a clearer title.");
+    await autopilot.getByLabel("Talk with the AI agent").fill("Use a clearer title.");
     await autopilot.getByRole("button", { name: "Send improvement request" }).click();
 
     await expect.poll(() => intentRequests).toEqual([
@@ -3095,8 +3206,8 @@ test.describe("Autopilot dumb client contract", () => {
     await expect(inspect.getByRole("button", { name: "Create issue on GH" })).toHaveCount(0);
     await expect(inspect.getByRole("button", { name: "Use this description" })).toBeVisible();
     await expect(inspect.getByRole("button", { name: "Send improvement request" })).toBeVisible();
-    await expect(inspect.getByLabel("What should change?")).toBeVisible();
-    await inspect.getByLabel("What should change?").fill("Make the acceptance criteria stricter.");
+    await expect(inspect.getByLabel("Talk with the AI agent")).toBeVisible();
+    await inspect.getByLabel("Talk with the AI agent").fill("Make the acceptance criteria stricter.");
     await inspect.getByRole("button", { name: "Send improvement request" }).click();
     await expect.poll(() => intentRequests).toEqual([
       {
@@ -3259,6 +3370,8 @@ async function mockVibe64Session(
   page: Page,
   session: Record<string, unknown>,
   {
+    artifactPreviews = {},
+    artifactReadiness = null,
     onAction = () => undefined,
     onAdvance = () => undefined,
     onCommandTerminalClose = () => undefined,
@@ -3274,6 +3387,8 @@ async function mockVibe64Session(
     sessionList = null,
     conversationLog = []
   }: {
+    artifactPreviews?: Record<string, string>;
+    artifactReadiness?: Record<string, unknown> | null;
     conversationLog?: unknown[];
     onAction?: (actionId: string, body: unknown) => void;
     onAdvance?: () => void;
@@ -3397,6 +3512,47 @@ async function mockVibe64Session(
         conversationLog,
         ok: true,
         sessionId: session.sessionId
+      });
+      return;
+    }
+    if (method === "GET" && url.pathname.endsWith("/artifact-preview")) {
+      const requested = sessionForRequest(url.pathname.replace(/\/artifact-preview$/u, ""));
+      const previewId = String(url.searchParams.get("previewId") || "");
+      await fulfillJson(route, {
+        ok: true,
+        previewId,
+        sessionId: requested.sessionId,
+        text: String(artifactPreviews[previewId] || "")
+      });
+      return;
+    }
+    if (method === "GET" && url.pathname.endsWith("/artifact-readiness")) {
+      const requested = sessionForRequest(url.pathname.replace(/\/artifact-readiness$/u, ""));
+      await fulfillJson(route, {
+        artifactReadiness: artifactReadiness || requested.artifactReadiness || {},
+        ok: true,
+        sessionId: requested.sessionId
+      });
+      return;
+    }
+    if (method === "GET" && url.pathname.endsWith("/artifact-readiness/stream")) {
+      const requested = sessionForRequest(url.pathname.replace(/\/artifact-readiness\/stream$/u, ""));
+      await route.fulfill({
+        body: [
+          "event: artifact-readiness.updated",
+          `data: ${JSON.stringify({
+            artifactReadiness: artifactReadiness || requested.artifactReadiness || {},
+            ok: true,
+            sessionId: requested.sessionId
+          })}`,
+          "",
+          ""
+        ].join("\n"),
+        headers: {
+          "cache-control": "no-cache",
+          "content-type": "text/event-stream"
+        },
+        status: 200
       });
       return;
     }

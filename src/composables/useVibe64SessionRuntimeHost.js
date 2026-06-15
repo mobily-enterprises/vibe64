@@ -72,10 +72,10 @@ function runtimeControlsAreBusy({
 
 function codexTerminalStartAllowed({
   active = false,
-  capabilitiesFetching = false,
-  runtimeBusy = false
+  capabilitiesReady = false,
+  sessionReady = false
 } = {}) {
-  return Boolean(active && !runtimeBusy && !capabilitiesFetching);
+  return Boolean(active && sessionReady && capabilitiesReady);
 }
 
 function useVibe64SessionRuntimeHost(props, emit) {
@@ -297,8 +297,8 @@ function useVibe64SessionRuntimeHost(props, emit) {
   }));
   const codexTerminalCanStart = computed(() => codexTerminalStartAllowed({
     active: props.active,
-    capabilitiesFetching: capabilitiesState.value.fetching,
-    runtimeBusy: launchControlsBusy.value
+    capabilitiesReady: capabilitiesState.value.loaded,
+    sessionReady: launchControlsSessionReady.value
   }));
   const interactionBusy = computed(() => Boolean(
     page.busy ||
@@ -465,7 +465,11 @@ function useVibe64SessionRuntimeHost(props, emit) {
         previousArtifactReadinessVersion: previousVersion || "",
         sessionId: props.sessionId
       });
-      void props.sessionData.refreshSessionData();
+      if (String(selectedSession.value?.stepMachine?.status || "") !== "awaiting_agent_result") {
+        void props.sessionData.refreshSessionData({
+          reason: "artifact-readiness"
+        });
+      }
     }
   }, {
     flush: "post"

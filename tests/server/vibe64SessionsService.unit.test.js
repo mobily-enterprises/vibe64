@@ -199,7 +199,175 @@ test("session advance is gated by session readiness", async () => {
   assert.equal(advanceCalled, false);
 });
 
-test("session abandon does not wait for terminal cleanup", async () => {
+test("session advance observes duplicate advances that already moved forward before advancing", async () => {
+  let advanceCalled = false;
+  let getSessionCalled = false;
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async advance() {
+            advanceCalled = true;
+            const error = new Error("Prepared advance state already moved.");
+            error.code = "vibe64_advance_state_changed";
+            throw error;
+          },
+          async getSession(sessionId) {
+            getSessionCalled = true;
+            return {
+              currentStep: "maintenance_conversation",
+              presentation: {},
+              sessionId,
+              status: VIBE64_SESSION_STATUS.ACTIVE,
+              stepDefinitions: [
+                {
+                  id: "dependencies_installed",
+                  index: 2,
+                  status: "done"
+                },
+                {
+                  id: "maintenance_conversation",
+                  index: 3,
+                  status: "current"
+                }
+              ]
+            };
+          }
+        };
+      }
+    },
+    setupServices: readySetupServices()
+  });
+
+  const result = await service.advanceSession("session-1", {
+    stepId: "dependencies_installed",
+    stepStatus: "done"
+  });
+
+  assert.equal(advanceCalled, false);
+  assert.equal(getSessionCalled, true);
+  assert.equal(result.sessionId, "session-1");
+  assert.equal(result.currentStep, "maintenance_conversation");
+  assert.equal(result.ok, undefined);
+});
+
+test("session advance observes duplicate advances after runtime reports changed state", async () => {
+  let advanceCalled = false;
+  let getSessionCount = 0;
+  const readySession = {
+    currentStep: "dependencies_installed",
+    presentation: {},
+    sessionId: "session-1",
+    status: VIBE64_SESSION_STATUS.ACTIVE,
+    stepDefinitions: [
+      {
+        id: "dependencies_installed",
+        index: 2,
+        status: "current"
+      },
+      {
+        id: "maintenance_conversation",
+        index: 3,
+        status: "pending"
+      }
+    ]
+  };
+  const advancedSession = {
+    currentStep: "maintenance_conversation",
+    presentation: {},
+    sessionId: "session-1",
+    status: VIBE64_SESSION_STATUS.ACTIVE,
+    stepDefinitions: [
+      {
+        id: "dependencies_installed",
+        index: 2,
+        status: "done"
+      },
+      {
+        id: "maintenance_conversation",
+        index: 3,
+        status: "current"
+      }
+    ]
+  };
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async advance() {
+            advanceCalled = true;
+            const error = new Error("Prepared advance state already moved.");
+            error.code = "vibe64_advance_state_changed";
+            throw error;
+          },
+          async getSession() {
+            getSessionCount += 1;
+            return getSessionCount === 1 ? readySession : advancedSession;
+          }
+        };
+      }
+    },
+    setupServices: readySetupServices()
+  });
+
+  const result = await service.advanceSession("session-1", {
+    stepId: "dependencies_installed",
+    stepStatus: "done"
+  });
+
+  assert.equal(advanceCalled, true);
+  assert.equal(getSessionCount, 2);
+  assert.equal(result.sessionId, "session-1");
+  assert.equal(result.currentStep, "maintenance_conversation");
+  assert.equal(result.ok, undefined);
+});
+
+test("session advance still rejects stale advances that did not move past the expected step", async () => {
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async advance() {
+            const error = new Error("Prepared advance state changed.");
+            error.code = "vibe64_advance_state_changed";
+            throw error;
+          },
+          async getSession(sessionId) {
+            return {
+              currentStep: "implementation_reviewed",
+              presentation: {},
+              sessionId,
+              status: VIBE64_SESSION_STATUS.ACTIVE,
+              stepDefinitions: [
+                {
+                  id: "plan_and_execute",
+                  index: 5,
+                  status: "pending"
+                },
+                {
+                  id: "implementation_reviewed",
+                  index: 6,
+                  status: "current"
+                }
+              ]
+            };
+          }
+        };
+      }
+    },
+    setupServices: readySetupServices()
+  });
+
+  const result = await service.advanceSession("session-1", {
+    stepId: "plan_and_execute",
+    stepStatus: "done"
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.code, "vibe64_advance_state_changed");
+});
+
+test("session abandon closes terminals before archiving the worktree", async () => {
   let finishCleanup = null;
   let markCleanupStarted = null;
   const cleanupStarted = new Promise((resolve) => {
@@ -213,12 +381,13 @@ test("session abandon does not wait for terminal cleanup", async () => {
       });
     };
   });
-  const statusWrites = [];
+  const operations = [];
   const service = createService({
     projectService: {
       async createRuntime() {
         return {
-          async archiveSessionWorktree() {
+          async archiveSessionWorktree(session, options = {}) {
+            operations.push(`archive:${session.sessionId}:${options.reason}`);
             return {
               ok: true
             };
@@ -226,15 +395,15 @@ test("session abandon does not wait for terminal cleanup", async () => {
           async getSession(sessionId) {
             return {
               sessionId,
-              status: VIBE64_SESSION_STATUS.ABANDONED
+              status: operations.includes(`status:${sessionId}`)
+                ? VIBE64_SESSION_STATUS.ABANDONED
+                : VIBE64_SESSION_STATUS.ACTIVE
             };
           },
           store: {
             async writeStatus(sessionId, status) {
-              statusWrites.push({
-                sessionId,
-                status
-              });
+              operations.push(`status:${sessionId}`);
+              assert.equal(status, VIBE64_SESSION_STATUS.ABANDONED);
             }
           }
         };
@@ -243,8 +412,11 @@ test("session abandon does not wait for terminal cleanup", async () => {
     setupServices: readySetupServices(),
     terminalService: {
       async closeSessionTerminals() {
+        operations.push("close:session-1:start");
         markCleanupStarted();
-        return cleanupFinished;
+        const result = await cleanupFinished;
+        operations.push("close:session-1:done");
+        return result;
       }
     }
   });
@@ -256,15 +428,59 @@ test("session abandon does not wait for terminal cleanup", async () => {
     delay(25).then(() => "timeout")
   ]);
 
-  assert.notEqual(result, "timeout");
-  assert.equal(result.status, VIBE64_SESSION_STATUS.ABANDONED);
-  assert.deepEqual(statusWrites, [
-    {
-      sessionId: "session-1",
-      status: VIBE64_SESSION_STATUS.ABANDONED
-    }
-  ]);
+  assert.equal(result, "timeout");
+  assert.deepEqual(operations, ["close:session-1:start"]);
   finishCleanup();
+  const abandonedSession = await abandonResultPromise;
+  assert.equal(abandonedSession.status, VIBE64_SESSION_STATUS.ABANDONED);
+  assert.deepEqual(operations, [
+    "close:session-1:start",
+    "close:session-1:done",
+    "archive:session-1:abandoned",
+    "status:session-1"
+  ]);
+});
+
+test("session abandon does not mark abandoned when terminal cleanup fails", async () => {
+  const operations = [];
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async archiveSessionWorktree(session, options = {}) {
+            operations.push(`archive:${session.sessionId}:${options.reason}`);
+            return {
+              ok: true
+            };
+          },
+          async getSession(sessionId) {
+            return {
+              sessionId,
+              status: VIBE64_SESSION_STATUS.ACTIVE
+            };
+          },
+          store: {
+            async writeStatus(sessionId, status) {
+              operations.push(`status:${sessionId}:${status}`);
+            }
+          }
+        };
+      }
+    },
+    setupServices: readySetupServices(),
+    terminalService: {
+      async closeSessionTerminals(sessionId) {
+        operations.push(`close:${sessionId}`);
+        throw new Error("Preview runtime could not stop.");
+      }
+    }
+  });
+
+  const result = await service.abandonSession("session-1");
+
+  assert.equal(result.ok, false);
+  assert.match(result.error, /Preview runtime could not stop/u);
+  assert.deepEqual(operations, ["close:session-1"]);
 });
 
 test("session abandon does not require live Codex terminal state after closing", async () => {
@@ -356,7 +572,7 @@ test("session worktree recovery delegates to the runtime recovery path", async (
   assert.deepEqual(calls, ["session-1"]);
 });
 
-test("session abandon archives the worktree before marking the session abandoned", async () => {
+test("session abandon closes terminals, archives the worktree, then marks abandoned", async () => {
   const operations = [];
   const service = createService({
     projectService: {
@@ -387,7 +603,8 @@ test("session abandon archives the worktree before marking the session abandoned
     },
     setupServices: readySetupServices(),
     terminalService: {
-      async closeSessionTerminals() {
+      async closeSessionTerminals(sessionId) {
+        operations.push(`close:${sessionId}`);
         return {
           closed: 0,
           ok: true
@@ -399,7 +616,8 @@ test("session abandon archives the worktree before marking the session abandoned
   const result = await service.abandonSession("session-1");
 
   assert.equal(result.status, VIBE64_SESSION_STATUS.ABANDONED);
-  assert.deepEqual(operations.slice(0, 2), [
+  assert.deepEqual(operations.slice(0, 3), [
+    "close:session-1",
     "archive:session-1:abandoned",
     "status:session-1"
   ]);
@@ -503,6 +721,79 @@ test("session prompt action injects the rendered Codex handoff from the server",
       sessionId: "session-1"
     }
   ]);
+});
+
+test("session user message action observes an active Codex turn instead of starting another", async () => {
+  let runActionCalls = 0;
+  let injectCalls = 0;
+  let userMessageWrites = 0;
+  const activeSession = {
+    agentRuns: [
+      {
+        active: true,
+        id: "codex_app_server",
+        providerStatus: "inProgress",
+        state: "active"
+      }
+    ],
+    codexAgentTurn: {
+      active: true,
+      state: "active",
+      status: "inProgress",
+      turnId: "codex-turn-active"
+    },
+    codexAgentTurnActive: true,
+    sessionId: "session-active-agent",
+    status: VIBE64_SESSION_STATUS.ACTIVE
+  };
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async getSession() {
+            return activeSession;
+          },
+          async runAction() {
+            runActionCalls += 1;
+            return activeSession;
+          },
+          store: {
+            async writeConversationUserMessage() {
+              userMessageWrites += 1;
+            }
+          }
+        };
+      }
+    },
+    setupServices: readySetupServices(),
+    terminalService: {
+      async codexTerminalState(sessionId) {
+        return {
+          codexAgentTurn: activeSession.codexAgentTurn,
+          codexAgentTurnActive: true,
+          codexTerminal: null,
+          ok: true,
+          sessionId
+        };
+      },
+      async injectCodexPrompt() {
+        injectCalls += 1;
+        return {
+          ok: true
+        };
+      }
+    }
+  });
+
+  const session = await service.runSessionAction("session-active-agent", "agent_conversation", {
+    conversationRequest: "Please do another thing."
+  });
+
+  assert.equal(session.sessionId, "session-active-agent");
+  assert.equal(session.codexAgentTurnActive, true);
+  assert.equal(runActionCalls, 0);
+  assert.equal(injectCalls, 0);
+  assert.equal(userMessageWrites, 0);
 });
 
 test("session prompt action returns the app-server turn state from prompt delivery", async () => {
@@ -1640,6 +1931,314 @@ test("session action returns control when Codex prompt delivery fails", async ()
   assert.equal(session.returnControlInput.inputPrompt, "What would you like to do next?");
 });
 
+test("session action observes active Codex turn when prompt delivery is already claimed", async () => {
+  let returnControlCalls = 0;
+  const session = {
+    actionResult: {
+      codexPromptHandoff: {
+        kind: "codex_prompt_handoff",
+        terminalInput: "Ask Codex this."
+      }
+    },
+    agentRuns: [
+      {
+        active: true,
+        id: "codex_app_server",
+        state: "active"
+      }
+    ],
+    sessionId: "session-delivery-claimed",
+    status: VIBE64_SESSION_STATUS.ACTIVE,
+    stepMachine: {
+      status: "awaiting_agent_result"
+    }
+  };
+  const activeTurn = {
+    active: true,
+    state: "active",
+    status: "inProgress",
+    threadId: "codex-thread-claimed",
+    turnId: "codex-turn-claimed"
+  };
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async getSession() {
+            return session;
+          },
+          async runAction() {
+            return session;
+          },
+          async returnControlFromAgentWait() {
+            returnControlCalls += 1;
+            session.stepMachine = {
+              status: "waiting_for_input"
+            };
+            return session;
+          },
+          store: {
+            async writeConversationUserMessage() {
+              return {};
+            }
+          }
+        };
+      }
+    },
+    setupServices: readySetupServices(),
+    terminalService: {
+      async codexTerminalState(sessionId) {
+        return {
+          codexAgentTurn: activeTurn,
+          codexAgentTurnActive: true,
+          codexTerminal: null,
+          ok: true,
+          sessionId
+        };
+      },
+      async injectCodexPrompt() {
+        return {
+          code: "vibe64_agent_turn_already_running",
+          codexAgentTurn: activeTurn,
+          codexAgentTurnActive: true,
+          error: "Codex is already working on this Vibe64 session.",
+          ok: false,
+          operationOutcome: "agent_already_running",
+          refreshRecommended: true
+        };
+      }
+    }
+  });
+
+  const result = await service.runSessionAction("session-delivery-claimed", "agent_conversation", {
+    fields: {
+      conversationRequest: "Hello again"
+    }
+  });
+
+  assert.equal(result.sessionId, "session-delivery-claimed");
+  assert.notEqual(result.ok, false);
+  assert.equal(result.codexAgentTurnActive, true);
+  assert.equal(result.codexAgentTurn.turnId, "codex-turn-claimed");
+  assert.equal(returnControlCalls, 0);
+  assert.equal(session.stepMachine.status, "awaiting_agent_result");
+});
+
+test("session user message action observes accepted agent wait before Codex turn is visible", async () => {
+  let codexTerminalStateCalls = 0;
+  let returnControlCalls = 0;
+  let runActionCalls = 0;
+  const session = {
+    sessionId: "session-accepted-agent-wait",
+    status: VIBE64_SESSION_STATUS.ACTIVE,
+    stepMachine: {
+      status: "awaiting_agent_result"
+    }
+  };
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async getSession() {
+            return session;
+          },
+          async runAction() {
+            runActionCalls += 1;
+            throw new Error("runAction should not be called for an accepted user message.");
+          },
+          async returnControlFromAgentWait() {
+            returnControlCalls += 1;
+            session.stepMachine = {
+              status: "waiting_for_input"
+            };
+            return session;
+          }
+        };
+      }
+    },
+    setupServices: readySetupServices(),
+    terminalService: {
+      async codexTerminalState() {
+        codexTerminalStateCalls += 1;
+        return {
+          ok: true
+        };
+      }
+    }
+  });
+
+  const result = await service.runSessionAction("session-accepted-agent-wait", "draft_issue", {
+    conversationRequest: "Duplicate while first prompt is still being delivered."
+  });
+
+  assert.equal(result.sessionId, "session-accepted-agent-wait");
+  assert.notEqual(result.ok, false);
+  assert.equal(result.stepMachine.status, "awaiting_agent_result");
+  assert.equal(runActionCalls, 0);
+  assert.equal(returnControlCalls, 0);
+  assert.equal(codexTerminalStateCalls, 0);
+});
+
+test("session user message action observes accepted agent wait after runtime state rejection", async () => {
+  let runActionCalls = 0;
+  let returnControlCalls = 0;
+  const session = {
+    sessionId: "session-accepted-agent-wait-after-rejection",
+    status: VIBE64_SESSION_STATUS.ACTIVE,
+    stepMachine: {
+      status: "waiting_for_input"
+    }
+  };
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async getSession() {
+            return session;
+          },
+          async runAction() {
+            runActionCalls += 1;
+            session.stepMachine = {
+              status: "awaiting_agent_result"
+            };
+            const error = new Error("Wait for Codex to finish this step.");
+            error.code = "vibe64_action_disabled";
+            error.stepStatus = "awaiting_agent_result";
+            throw error;
+          },
+          async returnControlFromAgentWait() {
+            returnControlCalls += 1;
+            return session;
+          }
+        };
+      }
+    },
+    setupServices: readySetupServices(),
+    terminalService: {
+      async codexTerminalState() {
+        throw new Error("codexTerminalState should not recover an accepted user message wait.");
+      }
+    }
+  });
+
+  const result = await service.runSessionAction("session-accepted-agent-wait-after-rejection", "draft_issue", {
+    conversationRequest: "Duplicate after the first prompt claimed the workflow state."
+  });
+
+  assert.equal(result.sessionId, "session-accepted-agent-wait-after-rejection");
+  assert.notEqual(result.ok, false);
+  assert.equal(result.stepMachine.status, "awaiting_agent_result");
+  assert.equal(runActionCalls, 1);
+  assert.equal(returnControlCalls, 0);
+});
+
+test("session user message intent observes accepted agent wait before Codex turn is visible", async () => {
+  let returnControlCalls = 0;
+  let runIntentCalls = 0;
+  const session = {
+    sessionId: "session-accepted-agent-wait-intent",
+    status: VIBE64_SESSION_STATUS.ACTIVE,
+    stepMachine: {
+      status: "awaiting_agent_result"
+    }
+  };
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async getSession() {
+            return session;
+          },
+          async runIntent() {
+            runIntentCalls += 1;
+            throw new Error("runIntent should not be called for an accepted user message.");
+          },
+          async returnControlFromAgentWait() {
+            returnControlCalls += 1;
+            session.stepMachine = {
+              status: "waiting_for_input"
+            };
+            return session;
+          }
+        };
+      }
+    },
+    setupServices: readySetupServices(),
+    terminalService: {
+      async codexTerminalState() {
+        throw new Error("codexTerminalState should not recover an accepted user message wait.");
+      }
+    }
+  });
+
+  const result = await service.runSessionIntent("session-accepted-agent-wait-intent", "agent_conversation", {
+    fields: {
+      conversationRequest: "Duplicate while first prompt is still being delivered."
+    }
+  });
+
+  assert.equal(result.sessionId, "session-accepted-agent-wait-intent");
+  assert.notEqual(result.ok, false);
+  assert.equal(result.stepMachine.status, "awaiting_agent_result");
+  assert.equal(runIntentCalls, 0);
+  assert.equal(returnControlCalls, 0);
+});
+
+test("session user message intent observes accepted agent wait after runtime state rejection", async () => {
+  let runIntentCalls = 0;
+  let returnControlCalls = 0;
+  const session = {
+    sessionId: "session-accepted-agent-wait-intent-after-rejection",
+    status: VIBE64_SESSION_STATUS.ACTIVE,
+    stepMachine: {
+      status: "waiting_for_input"
+    }
+  };
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async getSession() {
+            return session;
+          },
+          async runIntent() {
+            runIntentCalls += 1;
+            session.stepMachine = {
+              status: "awaiting_agent_result"
+            };
+            const error = new Error("Wait for Codex to finish this step.");
+            error.code = "vibe64_action_disabled";
+            error.stepStatus = "awaiting_agent_result";
+            throw error;
+          },
+          async returnControlFromAgentWait() {
+            returnControlCalls += 1;
+            return session;
+          }
+        };
+      }
+    },
+    setupServices: readySetupServices(),
+    terminalService: {
+      async codexTerminalState() {
+        throw new Error("codexTerminalState should not recover an accepted user message wait.");
+      }
+    }
+  });
+
+  const result = await service.runSessionIntent("session-accepted-agent-wait-intent-after-rejection", "agent_conversation", {
+    fields: {
+      conversationRequest: "Duplicate after the first prompt claimed the workflow state."
+    }
+  });
+
+  assert.equal(result.sessionId, "session-accepted-agent-wait-intent-after-rejection");
+  assert.notEqual(result.ok, false);
+  assert.equal(result.stepMachine.status, "awaiting_agent_result");
+  assert.equal(runIntentCalls, 1);
+  assert.equal(returnControlCalls, 0);
+});
+
 test("session action returns control without request failure when Codex session worktree is unavailable", async () => {
   let returnControlCalls = 0;
   const session = {
@@ -1943,7 +2542,9 @@ test("session list exposes selectable workflow definitions after seeding", async
 test("session list asks the runtime for open sessions by default", async () => {
   const listCalls = [];
   const preparedSessions = [];
+  const reconciledSessionSets = [];
   const terminalStateSessions = [];
+  let codexThreadId = "";
   const service = createService({
     projectService: {
       async createRuntime() {
@@ -1953,8 +2554,13 @@ test("session list asks the runtime for open sessions by default", async () => {
             return [
               {
                 currentStep: "worktree_created",
+                metadata: {
+                  codex_thread_id: codexThreadId,
+                  worktree_path: "/workspace/project/.vibe64-local/sessions/active/open-session/worktree"
+                },
                 sessionId: "open-session",
                 status: VIBE64_SESSION_STATUS.ACTIVE,
+                targetRoot: "/workspace/project",
                 updatedAt: "2026-05-25T00:00:00.000Z"
               }
             ];
@@ -1984,19 +2590,42 @@ test("session list asks the runtime for open sessions by default", async () => {
         return {
           ok: true
         };
+      },
+      async reconcileCodexThreads(sessions = []) {
+        reconciledSessionSets.push(sessions.map((session) => session.sessionId));
+        return {
+          failed: [],
+          ok: true,
+          sessionCount: sessions.length
+        };
       }
     }
   });
 
   const result = await service.listSessions();
+  await delay(0);
+  const repeatedResult = await service.listSessions();
+  await delay(0);
+  codexThreadId = "00000000-0000-4000-8000-000000000001";
+  const changedResult = await service.listSessions();
+  await delay(0);
 
   assert.equal(result.ok, true);
+  assert.equal(repeatedResult.ok, true);
+  assert.equal(changedResult.ok, true);
   assert.deepEqual(listCalls, [
+    {
+      statusGroup: "open"
+    },
+    {
+      statusGroup: "open"
+    },
     {
       statusGroup: "open"
     }
   ]);
   assert.deepEqual(preparedSessions, []);
+  assert.deepEqual(reconciledSessionSets, [["open-session"]]);
   assert.deepEqual(terminalStateSessions, []);
   assert.deepEqual(result.sessions.map((session) => session.sessionId), ["open-session"]);
   assert.equal(result.sessions[0].presentation, undefined);
@@ -2005,6 +2634,56 @@ test("session list asks the runtime for open sessions by default", async () => {
   assert.equal(result.sessions[0].commandLifecycles, undefined);
   assert.equal(result.sessions[0].codexTerminal, undefined);
   assert.equal(result.limits.openSessionCount, 1);
+});
+
+test("session list does not reconcile Codex threads before a worktree exists", async () => {
+  const reconciledSessionSets = [];
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async listSessionSummaries() {
+            return [
+              {
+                currentStep: "work_source_selected",
+                metadata: {},
+                sessionId: "pre-worktree-session",
+                status: VIBE64_SESSION_STATUS.ACTIVE,
+                targetRoot: "/workspace/project",
+                updatedAt: "2026-05-25T00:00:00.000Z"
+              }
+            ];
+          },
+          async listSessions() {
+            throw new Error("listSessions should not be used for the session list.");
+          },
+          async workflowDefinitionCreationOptions() {
+            return workflowDefinitionCreationOptions({
+              seedRequired: false
+            });
+          }
+        };
+      }
+    },
+    setupServices: readySetupServices(),
+    terminalService: {
+      async reconcileCodexThreads(sessions = []) {
+        reconciledSessionSets.push(sessions.map((session) => session.sessionId));
+        return {
+          failed: [],
+          ok: true,
+          sessionCount: sessions.length
+        };
+      }
+    }
+  });
+
+  const result = await service.listSessions();
+  await delay(0);
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.sessions.map((session) => session.sessionId), ["pre-worktree-session"]);
+  assert.deepEqual(reconciledSessionSets, []);
 });
 
 test("archived session list asks for archived sessions and computes creation limits from open sessions", async () => {
@@ -2268,6 +2947,7 @@ test("session creation blocks non-seed definitions while seeding is required", a
 
 test("session creation uses the selected workflow definition after seeding", async () => {
   let selectedWorkflowDefinitionId = "";
+  const preparedSessions = [];
   const service = createService({
     projectService: {
       async createRuntime() {
@@ -2306,7 +2986,15 @@ test("session creation uses the selected workflow definition after seeding", asy
         };
       }
     },
-    setupServices: readySetupServices()
+    setupServices: readySetupServices(),
+    terminalService: {
+      async ensureCodexThread(sessionId) {
+        preparedSessions.push(sessionId);
+        return {
+          ok: true
+        };
+      }
+    }
   });
 
   const result = await service.createSession({
@@ -2316,6 +3004,7 @@ test("session creation uses the selected workflow definition after seeding", asy
   assert.equal(result.ok, true);
   assert.equal(result.workflowDefinition.id, maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE);
   assert.equal(selectedWorkflowDefinitionId, maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE);
+  assert.deepEqual(preparedSessions, []);
 });
 
 test("session creation is gated by session readiness, not project setup diagnostics", async () => {

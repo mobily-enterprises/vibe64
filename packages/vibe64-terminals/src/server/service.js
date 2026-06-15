@@ -17,6 +17,11 @@ import {
 import {
   VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV
 } from "@local/vibe64-core/server/studioRoots";
+import {
+  vibe64SessionDebugDurationMs,
+  vibe64SessionDebugError,
+  vibe64SessionDebugLog
+} from "@local/vibe64-runtime/server/sessionDebugLog";
 
 const CODEX_AFTER_COMMAND_THREAD_PREP_ENABLED = false;
 
@@ -38,6 +43,62 @@ function selfTargetCodexAppServerProviderOptions({
     existing.useDocker = false;
   }
   return existing;
+}
+
+async function closeTerminalControllerForSession({
+  controller,
+  eventPrefix = "server.terminals.closeSessionTerminals",
+  label = "",
+  sessionId = ""
+} = {}) {
+  if (typeof controller?.closeAllForSession !== "function") {
+    return {
+      closed: 0,
+      ok: true
+    };
+  }
+  const startedAtMs = Date.now();
+  vibe64SessionDebugLog(`${eventPrefix}.controller.start`, {
+    controller: label,
+    sessionId
+  });
+  try {
+    const result = await controller.closeAllForSession(sessionId);
+    vibe64SessionDebugLog(`${eventPrefix}.controller.done`, {
+      closed: Number(result?.closed || 0),
+      controller: label,
+      durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+      ok: result?.ok !== false,
+      sessionId
+    });
+    return result;
+  } catch (error) {
+    vibe64SessionDebugLog(`${eventPrefix}.controller.error`, {
+      controller: label,
+      durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+      error: vibe64SessionDebugError(error),
+      sessionId
+    });
+    throw error;
+  }
+}
+
+async function closeTerminalControllersForSession(sessionId = "", controllers = [], {
+  eventPrefix = "server.terminals.closeSessionTerminals"
+} = {}) {
+  let closed = 0;
+  for (const entry of controllers) {
+    const result = await closeTerminalControllerForSession({
+      ...entry,
+      eventPrefix,
+      sessionId
+    });
+    closed += Number(result?.closed || 0);
+  }
+  return {
+    closed,
+    ok: true
+  };
 }
 
 function createService({
@@ -89,26 +150,22 @@ function createService({
 
   return Object.freeze({
     async closeSessionTerminals(sessionId) {
-      await Promise.all([
-        launchTarget.closeAllForSession(sessionId),
-        codex.closeAllForSession(sessionId),
-        command.closeAllForSession(sessionId),
-        shell.closeAllForSession(sessionId)
+      return closeTerminalControllersForSession(sessionId, [
+        { controller: launchTarget, label: "launchTarget" },
+        { controller: codex, label: "codex" },
+        { controller: command, label: "command" },
+        { controller: shell, label: "shell" }
       ]);
-      return {
-        ok: true
-      };
     },
 
     async closeSessionNonCodexTerminals(sessionId) {
-      await Promise.all([
-        launchTarget.closeAllForSession(sessionId),
-        command.closeAllForSession(sessionId),
-        shell.closeAllForSession(sessionId)
-      ]);
-      return {
-        ok: true
-      };
+      return closeTerminalControllersForSession(sessionId, [
+        { controller: launchTarget, label: "launchTarget" },
+        { controller: command, label: "command" },
+        { controller: shell, label: "shell" }
+      ], {
+        eventPrefix: "server.terminals.closeSessionNonCodexTerminals"
+      });
     },
 
     closeCodexTerminal(sessionId, terminalSessionId) {
@@ -153,6 +210,19 @@ function createService({
 
     ensureCodexThread(sessionId) {
       return codex.ensureThread(sessionId);
+    },
+
+    reconcileCodexThreads(sessions = [], options = {}) {
+      return codex.reconcileThreads(sessions, options);
+    },
+
+    async reconcileOpenCodexThreads(options = {}) {
+      const runtime = await projectService.createRuntime();
+      const sessions = await runtime.listSessionSummaries({
+        archive: ""
+      });
+      const openSessions = sessions.filter((session) => String(session.status || "") === "active");
+      return codex.reconcileThreads(openSessions, options);
     },
 
     codexTerminalState(sessionId) {

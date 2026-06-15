@@ -11,12 +11,17 @@ import {
 
 describe("useVibe64BackgroundTasks", () => {
   let ensureCodexThread;
+  let reconnectCodexThreads;
   let runClientControl;
 
   beforeEach(() => {
     ensureCodexThread = vi.fn();
-    runClientControl = vi.fn(async (_control, context = {}) => {
-      const result = await ensureCodexThread(context.sessionId);
+    reconnectCodexThreads = vi.fn();
+    runClientControl = vi.fn(async (control, context = {}) => {
+      const action = control?.control?.action;
+      const result = action === VIBE64_CLIENT_CONTROL_ACTIONS.RECONNECT_CODEX_THREADS
+        ? await reconnectCodexThreads()
+        : await ensureCodexThread(context.sessionId);
       if (result?.ok !== false) {
         await context.refreshSessionData?.();
       }
@@ -35,9 +40,9 @@ describe("useVibe64BackgroundTasks", () => {
             message: "failed",
             retry: {
               control: {
-                action: VIBE64_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL
+                action: VIBE64_CLIENT_CONTROL_ACTIONS.RECONNECT_CODEX_THREADS
               },
-              label: "Retry Codex"
+              label: "Reconnect Codex"
             },
             status: "failed",
             updatedAt: "2026-05-25T00:00:00.000Z"
@@ -54,12 +59,12 @@ describe("useVibe64BackgroundTasks", () => {
         id: "codex_app_server",
         label: "Codex app-server",
         message: "failed",
-        retry: {
-          control: {
-            action: VIBE64_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL
+          retry: {
+            control: {
+              action: VIBE64_CLIENT_CONTROL_ACTIONS.RECONNECT_CODEX_THREADS
+            },
+            label: "Reconnect Codex"
           },
-          label: "Retry Codex"
-        },
         status: "failed",
         updatedAt: "2026-05-25T00:00:00.000Z"
       }
@@ -69,7 +74,7 @@ describe("useVibe64BackgroundTasks", () => {
   it("retries background tasks through server-declared retry controls", async () => {
     const refreshSessionData = vi.fn();
     const openCodexTerminal = vi.fn();
-    ensureCodexThread.mockResolvedValue({
+    reconnectCodexThreads.mockResolvedValue({
       ok: true
     });
     const session = ref({
@@ -80,9 +85,9 @@ describe("useVibe64BackgroundTasks", () => {
             id: "codex_app_server",
             retry: {
               control: {
-                action: VIBE64_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL
+                action: VIBE64_CLIENT_CONTROL_ACTIONS.RECONNECT_CODEX_THREADS
               },
-              label: "Retry Codex"
+              label: "Reconnect Codex"
             },
             status: "failed"
           }
@@ -99,7 +104,8 @@ describe("useVibe64BackgroundTasks", () => {
     await expect(backgroundTasks.retryBackgroundTask(backgroundTasks.backgroundTasks.value[0]))
       .resolves.toBe(true);
 
-    expect(ensureCodexThread).toHaveBeenCalledWith("session_123");
+    expect(reconnectCodexThreads).toHaveBeenCalledTimes(1);
+    expect(ensureCodexThread).not.toHaveBeenCalled();
     expect(refreshSessionData).toHaveBeenCalledTimes(1);
     expect(openCodexTerminal).not.toHaveBeenCalled();
   });
@@ -107,7 +113,7 @@ describe("useVibe64BackgroundTasks", () => {
   it("opens the Codex terminal when Codex retry controls fail", async () => {
     const refreshSessionData = vi.fn();
     const openCodexTerminal = vi.fn(() => true);
-    ensureCodexThread.mockResolvedValue({
+    reconnectCodexThreads.mockResolvedValue({
       error: "Codex app-server preparation failed.",
       ok: false
     });
@@ -119,9 +125,9 @@ describe("useVibe64BackgroundTasks", () => {
             id: "codex_app_server",
             retry: {
               control: {
-                action: VIBE64_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL
+                action: VIBE64_CLIENT_CONTROL_ACTIONS.RECONNECT_CODEX_THREADS
               },
-              label: "Retry Codex"
+              label: "Reconnect Codex"
             },
             status: "failed"
           }

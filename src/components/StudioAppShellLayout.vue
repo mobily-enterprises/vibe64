@@ -47,6 +47,16 @@
   overflow: hidden;
 }
 
+:global(body.studio-home-shell-active .shell-error-host__banners) {
+  left: auto;
+  right: 0;
+  width: min(30rem, 100vw);
+}
+
+:global(body.studio-home-shell-active .shell-error-host__banner-stack) {
+  width: 100%;
+}
+
 .studio-app-shell-layout__content {
   padding: 0.75rem;
 }

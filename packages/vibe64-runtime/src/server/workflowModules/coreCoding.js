@@ -272,7 +272,7 @@ const coreCodingStepDefinitionsById = deepFreeze({
         inputFields: [
           {
             kind: "textarea",
-            label: "What should change?",
+            label: "Talk with the AI agent",
             name: "feedback",
             placeholder: "Tell Codex how to improve the saved issue draft.",
             requiredMessage: "Explain what should change before sending the improvement request."

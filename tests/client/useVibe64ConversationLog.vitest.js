@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  conversationLogRealtimeShouldRefresh,
   normalizeConversationLog,
   sessionIsAwaitingCodex
 } from "../../src/composables/useVibe64ConversationLog.js";
@@ -198,5 +199,48 @@ describe("useVibe64ConversationLog", () => {
         status: "confirm_files"
       }
     })).toBe(false);
+  });
+
+  it("refreshes only for selected-session conversation events", () => {
+    expect(conversationLogRealtimeShouldRefresh({
+      payload: {
+        sessionId: "session-1"
+      }
+    }, "session-1")).toBe(false);
+
+    expect(conversationLogRealtimeShouldRefresh({
+      payload: {
+        reason: "codex-app-server-terminal-user-message",
+        sessionId: "session-1"
+      }
+    }, "session-1")).toBe(true);
+
+    expect(conversationLogRealtimeShouldRefresh({
+      payload: {
+        reason: "codex-app-server-reasoning-summary",
+        sessionId: "session-1"
+      }
+    }, "session-1")).toBe(true);
+
+    expect(conversationLogRealtimeShouldRefresh({
+      payload: {
+        reason: "codex-app-server-terminal-assistant-message",
+        sessionId: "session-1"
+      }
+    }, "session-1")).toBe(true);
+
+    expect(conversationLogRealtimeShouldRefresh({
+      payload: {
+        reason: "codex-app-server-turn-active",
+        sessionId: "session-1"
+      }
+    }, "session-1")).toBe(false);
+
+    expect(conversationLogRealtimeShouldRefresh({
+      payload: {
+        reason: "codex-app-server-terminal-assistant-message",
+        sessionId: "session-2"
+      }
+    }, "session-1")).toBe(false);
   });
 });

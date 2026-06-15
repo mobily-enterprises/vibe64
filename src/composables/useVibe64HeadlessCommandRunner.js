@@ -51,6 +51,37 @@ function terminalAttemptedCommand(session = {}) {
   return String(normalizePlainObject(session.metadata).attemptedCommand || "");
 }
 
+function terminalSessionIdFromStartResponse(response = {}) {
+  return String(response?.id || response?.terminalSessionId || "").trim();
+}
+
+function startResponseIsAttachableCommandClaim(response = {}) {
+  return String(response.operationOutcome || "") === "command_already_running" &&
+    Boolean(terminalSessionIdFromStartResponse(response));
+}
+
+function startResponseIsFinishedCommandClaim(response = {}) {
+  return response?.ok === true &&
+    String(response.operationOutcome || "") === "command_already_finished";
+}
+
+function actionFromCommandClaim(response = {}, fallbackAction = {}) {
+  return {
+    id: String(response.actionId || fallbackAction.id || ""),
+    label: String(response.actionLabel || fallbackAction.label || response.actionId || fallbackAction.id || "Command")
+  };
+}
+
+function terminalSnapshotFromStartResponse(response = {}, terminalSessionId = "") {
+  return {
+    ...response,
+    id: terminalSessionId,
+    metadata: normalizePlainObject(response.metadata),
+    output: String(response.output || ""),
+    status: String(response.terminalStatus || response.status || "running")
+  };
+}
+
 function closeSocket(socket) {
   if (!socket || socket.readyState === WEBSOCKET_CLOSING || socket.readyState === WEBSOCKET_CLOSED) {
     return;
@@ -206,6 +237,59 @@ function useVibe64HeadlessCommandRunner({
         actionId,
         input: normalizePlainObject(input)
       });
+      if (startResponseIsAttachableCommandClaim(terminalSession)) {
+        const terminalSessionId = terminalSessionIdFromStartResponse(terminalSession);
+        const claimedAction = actionFromCommandClaim(terminalSession, action);
+        const initialSession = terminalSnapshotFromStartResponse(terminalSession, terminalSessionId);
+        activeTerminal = {
+          owned: false,
+          sessionId: normalizedSessionId,
+          terminalSessionId
+        };
+        vibe64SessionDebugLog("client.headlessCommand.startTerminal.attachExisting", {
+          actionId: terminalActionId(claimedAction),
+          code: String(terminalSession.code || ""),
+          durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+          sessionId: normalizedSessionId,
+          terminalSessionId
+        });
+        applyLiveTerminalSnapshot(initialSession);
+        const result = await waitForCommandExit({
+          action: claimedAction,
+          commandStartedAtMs: startedAtMs,
+          initialSession,
+          sessionId: normalizedSessionId,
+          terminalSessionId,
+          webSocketUrl
+        });
+        lastResult.value = result;
+        vibe64SessionDebugLog("client.headlessCommand.run.attachedDone", {
+          actionId: terminalActionId(claimedAction),
+          durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+          exitCode: result.exitCode ?? null,
+          ok: result.ok === true,
+          sessionId: normalizedSessionId,
+          terminalSessionId
+        });
+        return result;
+      }
+      if (startResponseIsFinishedCommandClaim(terminalSession)) {
+        const claimedAction = actionFromCommandClaim(terminalSession, action);
+        const result = commandSuccess({
+          action: claimedAction,
+          commandPreview: terminalSession.commandPreview,
+          sessionId: normalizedSessionId,
+          terminalSessionId: terminalSessionIdFromStartResponse(terminalSession)
+        });
+        lastResult.value = result;
+        vibe64SessionDebugLog("client.headlessCommand.startTerminal.alreadyFinished", {
+          actionId: terminalActionId(claimedAction),
+          code: String(terminalSession.code || ""),
+          durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+          sessionId: normalizedSessionId
+        });
+        return result;
+      }
       if (terminalSession?.ok === false) {
         vibe64SessionDebugLog("client.headlessCommand.startTerminal.rejected", {
           actionId,
@@ -221,15 +305,17 @@ function useVibe64HeadlessCommandRunner({
           operationOutcome: terminalSession.operationOutcome,
           refreshRecommended: terminalSession.refreshRecommended === true,
           sessionId: normalizedSessionId,
-          status: terminalSession.status || terminalSession.statusCode
+          status: terminalSession.status || terminalSession.statusCode,
+          terminalSessionId: terminalSessionIdFromStartResponse(terminalSession)
         });
         lastResult.value = result;
         return result;
       }
 
       activeTerminal = {
+        owned: true,
         sessionId: normalizedSessionId,
-        terminalSessionId: String(terminalSession.id || "")
+        terminalSessionId: terminalSessionIdFromStartResponse(terminalSession)
       };
       vibe64SessionDebugLog("client.headlessCommand.startTerminal.done", {
         actionId,
@@ -271,7 +357,8 @@ function useVibe64HeadlessCommandRunner({
         operationOutcome: error?.operationOutcome,
         refreshRecommended: error?.refreshRecommended === true,
         sessionId: normalizedSessionId,
-        status: error?.status || error?.statusCode
+        status: error?.status || error?.statusCode,
+        terminalSessionId: error?.terminalSessionId
       });
       lastResult.value = result;
       return result;
@@ -485,6 +572,9 @@ function useVibe64HeadlessCommandRunner({
     const terminal = activeTerminal;
     activeTerminal = null;
     if (!terminal?.sessionId || !terminal?.terminalSessionId) {
+      return;
+    }
+    if (terminal.owned === false) {
       return;
     }
     await runCloseCommandTerminal(terminal.sessionId, terminal.terminalSessionId).catch(() => null);

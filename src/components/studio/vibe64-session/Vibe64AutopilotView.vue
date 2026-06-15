@@ -80,13 +80,55 @@
           'studio-autopilot__chat-body--timeline-control': stepInputFormVisible
         }"
       >
-        <Vibe64ReportPreview
-          v-if="reportPreviewVisible"
-          class="studio-autopilot__artifact"
-          :error="reportPreview.error"
-          :loading="reportPreview.loading"
-          :text="reportPreview.text"
-        />
+        <template v-if="reportPreviewVisible">
+          <Vibe64ReportPreview
+            class="studio-autopilot__artifact"
+            :error="reportPreview.error"
+            :loading="reportPreview.loading"
+            :text="reportPreview.text"
+          />
+
+          <article
+            v-if="artifactControlFormVisible"
+            class="studio-autopilot__timeline-control studio-autopilot__artifact-control"
+          >
+            <Vibe64WorkflowControlForm
+              class="studio-autopilot__inline-control"
+              :can-submit-selected-control="canSubmitSelectedControl"
+              layout="start"
+              :running="composerInputLocked"
+              :selected-control="selectedControl"
+              :selected-control-fields="selectedControlFields"
+              :selected-control-values="selectedControlValues"
+              :workflow-controls="activeComposerWorkflowControls"
+              @activate-control="activateControl"
+              @cancel="clearSelectedControl"
+              @submit="submitScreenComposerControl"
+              @update-value="updateSelectedControlValue"
+            />
+          </article>
+
+          <div
+            v-if="artifactWorkflowActionsVisible"
+            class="studio-autopilot__actions studio-autopilot__screen-actions studio-autopilot__artifact-actions"
+          >
+            <v-btn
+              v-for="control in workflowButtonControls"
+              :key="control.id"
+              :color="control.buttonColor"
+              :disabled="control.disabled"
+              :loading="control.loading"
+              :prepend-icon="control.icon"
+              size="small"
+              :title="control.disabledReason || control.label"
+              type="button"
+              :variant="control.buttonVariant"
+              @click="activateControl(control.sourceControl || control)"
+            >
+              {{ control.label }}
+            </v-btn>
+          </div>
+        </template>
 
         <template v-else>
           <Vibe64ConversationLog
@@ -610,6 +652,8 @@ const {
   activateWorkflowButtonControl,
   activeComposerWorkflowControls,
   activeSessionTool,
+  artifactControlFormVisible,
+  artifactWorkflowActionsVisible,
   backgroundTaskError,
   canSubmitSelectedControl,
   chatActivityMessages,

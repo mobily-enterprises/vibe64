@@ -164,6 +164,96 @@ describe("useVibe64HeadlessCommandRunner", () => {
     expect(closeCommandTerminal).not.toHaveBeenCalled();
   });
 
+  it("attaches to an already running session command terminal", async () => {
+    const closeCommandTerminal = vi.fn(async () => ({
+      ok: true
+    }));
+    const runner = useVibe64HeadlessCommandRunner({
+      closeCommandTerminal,
+      startCommandTerminal: vi.fn(async () => ({
+        actionId: "create_worktree",
+        actionLabel: "Create worktree",
+        code: "vibe64_command_execution_claimed",
+        commandPreview: "git worktree add",
+        ok: true,
+        operationOutcome: "command_already_running",
+        refreshRecommended: true,
+        terminalSessionId: "terminal-existing",
+        terminalStatus: "running"
+      })),
+      webSocketUrl: (sessionId, terminalSessionId) => `ws://studio/${sessionId}/${terminalSessionId}`
+    });
+
+    const resultPromise = runner.runCommandAction({
+      action: {
+        id: "install_dependencies",
+        label: "Install dependencies"
+      },
+      sessionId: "session-1"
+    });
+
+    await vi.waitFor(() => {
+      expect(FakeWebSocket.instances).toHaveLength(1);
+    });
+
+    const socket = FakeWebSocket.instances[0];
+    expect(socket.url).toBe("ws://studio/session-1/terminal-existing");
+    expect(runner.commandPreview.value).toBe("git worktree add");
+    expect(runner.status.value).toBe("running");
+    socket.sendMessage({
+      chunk: "worktree ready\n",
+      type: "output"
+    });
+    socket.sendMessage({
+      exitCode: 0,
+      status: "exited",
+      type: "status"
+    });
+
+    await expect(resultPromise).resolves.toMatchObject({
+      actionId: "create_worktree",
+      ok: true,
+      output: "worktree ready\n",
+      terminalSessionId: "terminal-existing"
+    });
+    expect(closeCommandTerminal).not.toHaveBeenCalled();
+    expect(runner.running.value).toBe(false);
+  });
+
+  it("accepts an already finished session command without opening a websocket", async () => {
+    const closeCommandTerminal = vi.fn(async () => ({
+      ok: true
+    }));
+    const runner = useVibe64HeadlessCommandRunner({
+      closeCommandTerminal,
+      startCommandTerminal: vi.fn(async () => ({
+        actionId: "create_worktree",
+        actionLabel: "Create worktree",
+        code: "vibe64_command_execution_claimed",
+        commandLifecyclePhase: "done",
+        ok: true,
+        operationOutcome: "command_already_finished",
+        refreshRecommended: true
+      })),
+      webSocketUrl: () => "ws://studio/session-1/unused"
+    });
+
+    await expect(runner.runCommandAction({
+      action: {
+        id: "create_worktree",
+        label: "Create worktree"
+      },
+      sessionId: "session-1"
+    })).resolves.toMatchObject({
+      actionId: "create_worktree",
+      ok: true,
+      terminalSessionId: ""
+    });
+    expect(FakeWebSocket.instances).toHaveLength(0);
+    expect(closeCommandTerminal).not.toHaveBeenCalled();
+    expect(runner.running.value).toBe(false);
+  });
+
   it("can stop a running command and preserve its output as a failure", async () => {
     const closeCommandTerminal = vi.fn(async () => ({
       ok: true

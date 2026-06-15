@@ -54,7 +54,8 @@ function isGlobalApiPathname(pathname = "") {
     pathname.startsWith("/api/studio/studio-setup/") ||
     pathname === "/api/studio/browser-lifecycle/ws" ||
     pathname === "/api/vibe64/accounts" ||
-    pathname.startsWith("/api/vibe64/accounts/");
+    pathname.startsWith("/api/vibe64/accounts/") ||
+    pathname === "/api/vibe64/github/identity/sync";
 }
 
 function isDevelopmentApiPathname(pathname = "") {

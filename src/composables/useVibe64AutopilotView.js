@@ -715,6 +715,15 @@ function useVibe64AutopilotView(props, emit) {
   const activeComposerWorkflowControls = computed(() => (
     codexInterruptVisible.value ? [] : workflowButtonControls.value
   ));
+  const artifactControlFormVisible = computed(() => Boolean(
+    reportPreviewVisible.value &&
+    selectedScreenControlVisible.value
+  ));
+  const artifactWorkflowActionsVisible = computed(() => Boolean(
+    reportPreviewVisible.value &&
+    !selectedControl.value &&
+    workflowButtonControls.value.length
+  ));
   const stepInputActionHandlers = computed(() => ({
     ...props.actions,
     runAction: runActionAfterStepInput
@@ -1066,7 +1075,6 @@ function useVibe64AutopilotView(props, emit) {
       displayInput: displayFields,
       input: fields
     });
-    await props.refreshSessionData();
     await nextTick();
     await runNextOperation();
     return response !== false;
@@ -1277,6 +1285,8 @@ function useVibe64AutopilotView(props, emit) {
     activateWorkflowButtonControl,
     activeComposerWorkflowControls,
     activeSessionTool,
+    artifactControlFormVisible,
+    artifactWorkflowActionsVisible,
     backgroundTaskError,
     canSubmitSelectedControl,
     chatActivityMessages,

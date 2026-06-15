@@ -66,6 +66,7 @@ function useAccountsSetup(props, emit) {
   const accounts = useVibe64Accounts();
   const syncedGithubUsers = new Set();
   const autoContinueStarted = ref(false);
+  const autoContinueVerificationActive = ref(false);
   const syncGithubIdentityCommand = useCommand({
     access: "never",
     apiSuffix: "/vibe64/github/identity/sync",
@@ -94,31 +95,23 @@ function useAccountsSetup(props, emit) {
       .filter(Boolean);
   });
   const accountRows = computed(() => {
-    const rows = Array.isArray(accounts.status?.accounts) ? accounts.status.accounts : [];
-    const rowsById = new Map(rows.map((account) => [normalizeProviderId(account?.id), account]));
-    return enabledProviderIds.value
-      .map((providerId) => rowsById.get(providerId) || fallbackProviderRows[providerId])
-      .filter(Boolean)
-      .map(providerAccountRow);
+    return accountRowsForStatus(accounts.status, enabledProviderIds.value, {
+      includeFallbackRows: true
+    });
   });
   const allEnabledProvidersConnected = computed(() => {
-    return accountRows.value.length > 0 && accountRows.value.every((row) => row.connected === true);
+    return allRowsConnected(accountRows.value);
   });
 
   watch(accountRows, (rows) => {
-    const github = rows.find((row) => row.id === "github" && row.connected === true);
-    const username = String(github?.username || "").trim();
-    if (username && !syncedGithubUsers.has(username)) {
-      syncedGithubUsers.add(username);
-      void syncGithubIdentityCommand.run().catch(() => {
-        syncedGithubUsers.delete(username);
-      });
+    if (props.autoContinueWhenReady) {
+      if (allEnabledProvidersConnected.value && !autoContinueStarted.value) {
+        void verifyAutoContinueReady();
+      }
+      return;
     }
 
-    if (props.autoContinueWhenReady && allEnabledProvidersConnected.value && !autoContinueStarted.value) {
-      autoContinueStarted.value = true;
-      emit("continue");
-    }
+    syncGithubIdentityForRows(rows);
   }, {
     immediate: true
   });
@@ -128,10 +121,57 @@ function useAccountsSetup(props, emit) {
     accountRows,
     statusLoaded
   };
+
+  async function verifyAutoContinueReady() {
+    if (autoContinueStarted.value || autoContinueVerificationActive.value) {
+      return;
+    }
+    autoContinueVerificationActive.value = true;
+    try {
+      const result = await accounts.refresh();
+      const liveStatus = result?.data || accounts.status || null;
+      const liveRows = accountRowsForStatus(liveStatus, enabledProviderIds.value);
+      if (!allRowsConnected(liveRows) || autoContinueStarted.value) {
+        return;
+      }
+      syncGithubIdentityForRows(liveRows);
+      autoContinueStarted.value = true;
+      emit("continue");
+    } finally {
+      autoContinueVerificationActive.value = false;
+    }
+  }
+
+  function syncGithubIdentityForRows(rows = []) {
+    const github = rows.find((row) => row.id === "github" && row.connected === true);
+    const username = String(github?.username || "").trim();
+    if (!username || syncedGithubUsers.has(username)) {
+      return;
+    }
+    syncedGithubUsers.add(username);
+    void syncGithubIdentityCommand.run().catch(() => {
+      syncedGithubUsers.delete(username);
+    });
+  }
 }
 
 function normalizeProviderId(providerId = "") {
   return String(providerId || "").trim().toLowerCase();
+}
+
+function accountRowsForStatus(status = {}, providerIds = [], {
+  includeFallbackRows = false
+} = {}) {
+  const rows = Array.isArray(status?.accounts) ? status.accounts : [];
+  const rowsById = new Map(rows.map((account) => [normalizeProviderId(account?.id), account]));
+  return providerIds
+    .map((providerId) => rowsById.get(providerId) || (includeFallbackRows ? fallbackProviderRows[providerId] : null))
+    .filter(Boolean)
+    .map(providerAccountRow);
+}
+
+function allRowsConnected(rows = []) {
+  return rows.length > 0 && rows.every((row) => row.connected === true);
 }
 
 function providerAccountRow(account = {}) {

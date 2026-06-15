@@ -727,6 +727,8 @@ function proxyPreviewUpgrade(request, socket, head, {
     }
     upstreamSocket.on("error", () => socket.destroy());
     socket.on("error", () => upstreamSocket.destroy());
+    upstreamSocket.on("close", () => socket.destroy());
+    socket.on("close", () => upstreamSocket.destroy());
     upstreamSocket.pipe(socket).pipe(upstreamSocket);
   });
 
@@ -750,6 +752,39 @@ function proxyPreviewUpgrade(request, socket, head, {
   });
 
   upstreamRequest.end();
+}
+
+function trackPreviewServerSockets(server) {
+  const sockets = new Set();
+  server.on("connection", (socket) => {
+    sockets.add(socket);
+    socket.once("close", () => {
+      sockets.delete(socket);
+    });
+  });
+  return sockets;
+}
+
+async function closePreviewServer({
+  listen = {},
+  server,
+  sockets = new Set()
+} = {}) {
+  await new Promise((resolve) => {
+    server.close(() => resolve());
+    if (typeof server.closeIdleConnections === "function") {
+      server.closeIdleConnections();
+    }
+    if (typeof server.closeAllConnections === "function") {
+      server.closeAllConnections();
+    }
+    for (const socket of [...sockets]) {
+      socket.destroy();
+    }
+  });
+  if (listen.socketPath) {
+    await unlinkIfExists(listen.socketPath);
+  }
 }
 
 function upgradeResponseHead(response) {
@@ -917,6 +952,7 @@ async function startLaunchPreviewProxy({
   publicOrigin = ""
 } = {}) {
   const server = createServer();
+  const sockets = trackPreviewServerSockets(server);
   const token = crypto.randomBytes(32).toString("base64url");
   const tokenScope = {
     ...scope,
@@ -972,13 +1008,10 @@ async function startLaunchPreviewProxy({
     terminalSessionId: String(scope.terminalSessionId || "")
   });
   return {
-    close: () => new Promise((resolve) => {
-      server.close(async () => {
-        if (listen.socketPath) {
-          await unlinkIfExists(listen.socketPath);
-        }
-        resolve();
-      });
+    close: () => closePreviewServer({
+      listen,
+      server,
+      sockets
     }),
     origin: proxyOrigin,
     connectHref: connectUrl.toString(),

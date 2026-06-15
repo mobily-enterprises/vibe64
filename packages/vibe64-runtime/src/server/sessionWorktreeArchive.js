@@ -167,6 +167,23 @@ async function isExactGitWorktree(worktreePath = "") {
   return result.ok && sameResolvedPath(normalizeText(result.stdout || result.output), worktreePath);
 }
 
+async function gitWorktreeIsRegistered({
+  targetRoot = "",
+  worktreePath = ""
+} = {}) {
+  const result = await runGit(targetRoot, ["worktree", "list", "--porcelain"], {
+    timeout: 15_000
+  });
+  if (!result.ok) {
+    return false;
+  }
+  return String(result.stdout || result.output || "")
+    .split("\n")
+    .filter((line) => line.startsWith("worktree "))
+    .map((line) => normalizeText(line.slice("worktree ".length)))
+    .some((registeredPath) => sameResolvedPath(registeredPath, worktreePath));
+}
+
 function sessionOwnsWorktreePath(session = {}, worktreePath = "") {
   return sameResolvedPath(sessionWorktreePath(session), worktreePath);
 }
@@ -379,6 +396,12 @@ async function archiveSessionWorktree({
   }
   const targetRoot = normalizeText(session.targetRoot);
   const sessionId = normalizeText(session.sessionId);
+  const worktreeIsRegistered = worktreeIsGitWorktree
+    ? await gitWorktreeIsRegistered({
+        targetRoot,
+        worktreePath
+      })
+    : false;
   const sessionName = recoverySessionName(session);
   const branch = worktreeIsGitWorktree
     ? await readWorktreeGitFact(worktreePath, ["branch", "--show-current"], metadataValue(session, "branch"))
@@ -424,15 +447,15 @@ async function archiveSessionWorktree({
     worktree_recovery_worktree_path: worktreePath
   });
 
-  const removal = worktreeIsGitWorktree
+  const removal = worktreeIsGitWorktree && worktreeIsRegistered
     ? await removeGitWorktree({
-      targetRoot,
-      worktreePath
-    })
+        targetRoot,
+        worktreePath
+      })
     : await removeSessionOwnedWorktreeDirectory({
-      session,
-      worktreePath
-    });
+        session,
+        worktreePath
+      });
   await writeMetadataValues(store, sessionId, {
     worktree_removed: "yes",
     worktree_removed_at: new Date().toISOString(),

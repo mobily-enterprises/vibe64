@@ -81,6 +81,20 @@ function staleAdvanceResult(error = {}) {
   };
 }
 
+function sessionStatus(session = {}) {
+  return String(session?.stepMachine?.status || session?.presentation?.step?.status || "").trim();
+}
+
+function runActionSuccessShouldRefreshSession(response = {}, session = {}) {
+  if (
+    String(response?.actionResult?.status || "").trim() === "prompt_ready" &&
+    sessionStatus(session) === "awaiting_agent_result"
+  ) {
+    return false;
+  }
+  return true;
+}
+
 function useVibe64SessionActions({
   clearCopyStatus = () => null,
   commandBusy = () => false,
@@ -114,7 +128,9 @@ function useVibe64SessionActions({
         actionResultStatus: String(response?.actionResult?.status || ""),
         advanceOnSuccess: context?.advanceOnSuccess === true
       });
-      await refreshSessionData();
+      if (runActionSuccessShouldRefreshSession(response, selectedSession.value || {})) {
+        await refreshSessionData();
+      }
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
     placementSource: "vibe64.sessions.action",
@@ -654,5 +670,6 @@ function useVibe64SessionActions({
 }
 
 export {
+  runActionSuccessShouldRefreshSession,
   useVibe64SessionActions
 };

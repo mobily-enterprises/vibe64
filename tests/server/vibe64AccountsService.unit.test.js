@@ -171,6 +171,34 @@ function disconnectedGithubAuthToolchain(calls = []) {
   };
 }
 
+function invalidGithubTokenToolchain(calls = []) {
+  return async function runToolchain(commandArgs, options = {}) {
+    calls.push({
+      commandArgs,
+      options
+    });
+    if (commandArgs[0] === "gh" && commandArgs[1] === "auth") {
+      return {
+        ok: false,
+        output: [
+          "github.com",
+          "  X Failed to log in to github.com account merc (/home/vibe64/.config/gh/hosts.yml)",
+          "  - The token in /home/vibe64/.config/gh/hosts.yml is invalid."
+        ].join("\n"),
+        stdout: ""
+      };
+    }
+    if (commandArgs[0] === "gh" && commandArgs[1] === "api") {
+      return {
+        ok: false,
+        output: "Bad credentials",
+        stdout: ""
+      };
+    }
+    return connectedToolchainResult(commandArgs);
+  };
+}
+
 function disconnectedGithubGitIdentityToolchain(calls = []) {
   return async function runToolchain(commandArgs, options = {}) {
     calls.push({
@@ -482,6 +510,29 @@ test("Accounts status shows reconnect required for remembered GitHub identities 
       id: 2128734,
       login: "mercmobily"
     });
+    assert.equal(calls.length, 6);
+  });
+});
+
+test("Accounts status reports invalid GitHub tokens before checking scopes", async () => {
+  await withTemporaryRoot(async (root) => {
+    const targetRoot = path.join(root, "target");
+    const calls = [];
+    const status = await createService({
+      systemRoot: path.join(root, "data"),
+      providerHomesRoot: path.join(root, "provider-homes"),
+      runToolchain: invalidGithubTokenToolchain(calls),
+      targetRoot
+    }).getStatus(accountInput(OWNER_USER, {
+      refresh: true
+    }));
+
+    const github = status.accounts.find((account) => account.id === "github");
+    assert.equal(status.ok, true);
+    assert.equal(status.ready, false);
+    assert.equal(github.connected, false);
+    assert.match(status.blockedReason, /GitHub CLI token is invalid\. Reconnect GitHub to continue/u);
+    assert.doesNotMatch(status.blockedReason, /Missing scopes/u);
     assert.equal(calls.length, 6);
   });
 });

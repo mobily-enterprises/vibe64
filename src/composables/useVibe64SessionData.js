@@ -1,5 +1,6 @@
 import { computed, proxyRefs, watch } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
+import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
 import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
 import { usePaths } from "@jskit-ai/users-web/client/composables/usePaths";
@@ -91,6 +92,35 @@ function shouldPreserveSelectedSessionDuringRefresh({
   );
 }
 
+const SESSION_DATA_REFRESH_REASONS = Object.freeze(new Set([
+  "codex-app-server-agent-result",
+  "codex-app-server-agent-result-invalid",
+  "codex-app-server-agent-result-missing",
+  "codex-app-server-agent-result-provider-failed",
+  "codex-app-server-terminal-assistant-message",
+  "codex-app-server-turn-claimed"
+]));
+
+function sessionStatus(session = {}) {
+  return String(session?.stepMachine?.status || session?.presentation?.step?.status || "").trim();
+}
+
+function sessionDataRealtimeShouldRefresh({ payload = {} } = {}, selectedSessionId = "", selectedSession = null) {
+  const normalizedSelectedSessionId = String(selectedSessionId || "").trim();
+  const changedSessionId = String(payload.sessionId || payload.entityId || "").trim();
+  if (changedSessionId && normalizedSelectedSessionId && changedSessionId !== normalizedSelectedSessionId) {
+    return false;
+  }
+
+  const reason = String(payload.reason || "").trim();
+  if (!reason) {
+    return String(payload.stepStatus || "").trim() !== "awaiting_agent_result" &&
+      sessionStatus(selectedSession || {}) !== "awaiting_agent_result";
+  }
+
+  return SESSION_DATA_REFRESH_REASONS.has(reason);
+}
+
 function useVibe64SessionData({
   onTitleChange = null
 } = {}) {
@@ -125,9 +155,6 @@ function useVibe64SessionData({
     )),
     readQuery: {
       limit: 20
-    },
-    realtime: {
-      event: VIBE64_SESSION_CHANGED_EVENT
     },
     queryOptions: {
       refetchOnMount: false,
@@ -184,14 +211,7 @@ function useVibe64SessionData({
       refetchOnWindowFocus: false
     },
     requestRecoveryLabel: "Vibe64 session",
-    refreshOnPull: true,
-    realtime: {
-      event: VIBE64_SESSION_CHANGED_EVENT,
-      matches: ({ payload = {} } = {}) => {
-        const changedSessionId = String(payload.sessionId || payload.entityId || "").trim();
-        return Boolean(changedSessionId) && changedSessionId === selectedSessionId.value;
-      }
-    }
+    refreshOnPull: true
   });
   const capabilitiesResource = useEndpointResource({
     fallbackLoadError: "Studio capabilities could not be loaded.",
@@ -204,10 +224,7 @@ function useVibe64SessionData({
     readMethod: "GET",
     requestRecoveryLabel: "Studio capabilities",
     realtime: {
-      events: [
-        VIBE64_SESSION_CHANGED_EVENT,
-        VIBE64_ACCOUNTS_CHANGED_EVENT
-      ]
+      event: VIBE64_ACCOUNTS_CHANGED_EVENT
     },
     refreshOnPull: true
   });
@@ -336,9 +353,13 @@ function useVibe64SessionData({
     return selectedSessionView.refresh();
   }
 
-  async function refreshSessionData() {
+  let refreshSessionDataInFlight = null;
+  let refreshSessionDataQueued = false;
+
+  async function runSessionDataRefresh(reason = "") {
     const startedAtMs = Date.now();
     vibe64SessionDebugLog("client.sessionData.refresh.start", {
+      reason: String(reason || ""),
       selectedSessionId: String(selectedSessionId.value || "")
     });
     try {
@@ -349,6 +370,7 @@ function useVibe64SessionData({
       vibe64SessionDebugLog("client.sessionData.refresh.done", {
         ...vibe64SessionDebugSummary(selectedSession.value || {}),
         durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+        reason: String(reason || ""),
         selectedSessionId: String(selectedSessionId.value || ""),
         sessionCount: sessions.value.length
       });
@@ -357,9 +379,37 @@ function useVibe64SessionData({
       vibe64SessionDebugLog("client.sessionData.refresh.error", {
         durationMs: vibe64SessionDebugDurationMs(startedAtMs),
         error: vibe64SessionDebugError(error),
+        reason: String(reason || ""),
         selectedSessionId: String(selectedSessionId.value || "")
       });
       throw error;
+    }
+  }
+
+  async function refreshSessionData(options = {}) {
+    const reason = typeof options === "string" ? options : String(options?.reason || "");
+    const queueIfInFlight = typeof options === "object" && options?.queueIfInFlight === true;
+    if (refreshSessionDataInFlight) {
+      refreshSessionDataQueued = refreshSessionDataQueued || queueIfInFlight;
+      vibe64SessionDebugLog("client.sessionData.refresh.join", {
+        queueIfInFlight,
+        reason,
+        selectedSessionId: String(selectedSessionId.value || "")
+      });
+      return refreshSessionDataInFlight;
+    }
+
+    refreshSessionDataInFlight = runSessionDataRefresh(reason);
+    try {
+      return await refreshSessionDataInFlight;
+    } finally {
+      refreshSessionDataInFlight = null;
+      if (refreshSessionDataQueued) {
+        refreshSessionDataQueued = false;
+        void refreshSessionData({
+          reason: "coalesced-trailing"
+        });
+      }
     }
   }
 
@@ -447,6 +497,20 @@ function useVibe64SessionData({
     immediate: true
   });
 
+  useRealtimeEvent({
+    enabled: computed(() => Boolean(sessionsApiPath.value)),
+    event: VIBE64_SESSION_CHANGED_EVENT,
+    matches: (context) => sessionDataRealtimeShouldRefresh(context, selectedSessionId.value, selectedSession.value),
+    onEvent: async ({ payload = {} } = {}) => {
+      const reason = String(payload.reason || "").trim();
+      await refreshSessionData({
+        queueIfInFlight: reason === "codex-app-server-agent-result" ||
+          reason === "codex-app-server-terminal-assistant-message",
+        reason: `realtime:${String(reason || "session-changed")}`
+      });
+    }
+  });
+
   watch(() => {
     const session = selectedSession.value || {};
     return [
@@ -512,5 +576,6 @@ export {
   selectedSessionRecord,
   sessionIdExistsInList,
   shouldPreserveSelectedSessionDuringRefresh,
+  sessionDataRealtimeShouldRefresh,
   useVibe64SessionData
 };

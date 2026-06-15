@@ -52,7 +52,7 @@ import {
   prepareCodexAttachmentRoot
 } from "./codexAttachmentPaths.js";
 
-const CODEX_APP_SERVER_METADATA_SCHEMA_VERSION = 5;
+const CODEX_APP_SERVER_METADATA_SCHEMA_VERSION = 6;
 const CODEX_APP_SERVER_PROVIDER_ID = AGENT_PROVIDER_IDS.CODEX_APP_SERVER;
 const CODEX_APP_SERVER_TRANSPORT = Object.freeze({
   UNIX: "unix"
@@ -168,8 +168,17 @@ function codexAppServerRuntimeScope({
   return normalizedWorkdir ? path.resolve(normalizedWorkdir) : "";
 }
 
-function codexAppServerRuntimeDir(options = {}) {
+function codexAppServerRuntimeIdentityScope(options = {}) {
   const scope = codexAppServerRuntimeScope(options);
+  if (!scope) {
+    return "";
+  }
+  const namespace = runtimeNamespace();
+  return namespace ? `namespace:${namespace}\nscope:${scope}` : scope;
+}
+
+function codexAppServerRuntimeDir(options = {}) {
+  const scope = codexAppServerRuntimeIdentityScope(options);
   const dirName = scope
     ? `${CODEX_APP_SERVER_RUNTIME_DIR_NAME}-${stableHash(scope)}`
     : CODEX_APP_SERVER_RUNTIME_DIR_NAME;
@@ -251,6 +260,19 @@ function workdirMountArgs({
     source: path.resolve(normalizedWorkdir),
     target: path.resolve(normalizedWorkdir)
   });
+}
+
+function codexAppServerProcessCwd({
+  targetRoot = "",
+  workdir = ""
+} = {}) {
+  const normalizedTargetRoot = normalizeAgentText(targetRoot) ? path.resolve(targetRoot) : "";
+  if (normalizedTargetRoot) {
+    // The app-server is shared by every session in a project; individual thread requests carry the session workdir.
+    return normalizedTargetRoot;
+  }
+  const normalizedWorkdir = normalizeAgentText(workdir) ? path.resolve(workdir) : "";
+  return normalizedWorkdir;
 }
 
 function dockerNamePart(value = "", fallback = "runtime") {
@@ -370,6 +392,10 @@ function codexAppServerDockerArgs({
   const normalizedRuntimeDir = path.resolve(runtimeDir);
   const normalizedTargetRoot = normalizeAgentText(targetRoot) ? path.resolve(targetRoot) : "";
   const normalizedWorkdir = normalizeAgentText(workdir) ? path.resolve(workdir) : "";
+  const processCwd = codexAppServerProcessCwd({
+    targetRoot: normalizedTargetRoot,
+    workdir: normalizedWorkdir
+  });
   const command = [
     "codex",
     "app-server",
@@ -407,11 +433,13 @@ function codexAppServerDockerArgs({
           ...targetRuntimeNetworkDockerArgs(normalizedTargetRoot)
         ]
       : []),
-    ...workdirMountArgs({
-      targetRoot: normalizedTargetRoot,
-      workdir: normalizedWorkdir
-    }),
-    ...(normalizedWorkdir ? ["-w", normalizedWorkdir] : []),
+    ...(normalizedTargetRoot
+      ? []
+      : workdirMountArgs({
+          targetRoot: normalizedTargetRoot,
+          workdir: normalizedWorkdir
+        })),
+    ...(processCwd ? ["-w", processCwd] : []),
     image,
     "bash",
     "-lc",
@@ -471,6 +499,7 @@ function normalizeCodexAppServerMetadata(metadata = {}) {
     healthz: normalizeAgentText(normalized.healthz),
     logPath: normalizeAgentText(normalized.logPath),
     pid: Number.isSafeInteger(Number(normalized.pid)) ? Number(normalized.pid) : null,
+    processCwd: normalizeAgentText(normalized.processCwd),
     provider: normalizeAgentText(normalized.provider),
     readyz: normalizeAgentText(normalized.readyz),
     runtimeDir: normalizeAgentText(normalized.runtimeDir),
@@ -488,6 +517,7 @@ function codexAppServerMetadataIsWellFormed(metadata = {}) {
     metadata.attachmentContainerRoot === attachmentMount.target &&
     metadata.attachmentHostRoot === attachmentMount.source &&
     metadata.authStateSignature &&
+    metadata.processCwd &&
     metadata.provider === CODEX_APP_SERVER_PROVIDER_ID &&
     metadata.transport === CODEX_APP_SERVER_TRANSPORT.UNIX &&
     metadata.endpoint &&
@@ -695,6 +725,10 @@ async function startCodexAppServerProcess({
   const endpoint = codexAppServerUnixEndpoint(socketPath);
   const containerEndpoint = codexAppServerContainerEndpoint();
   const logPath = codexAppServerLogPath(runtimeDir);
+  const processCwd = codexAppServerProcessCwd({
+    targetRoot,
+    workdir
+  });
   await rm(socketPath, {
     force: true
   });
@@ -761,6 +795,7 @@ async function startCodexAppServerProcess({
     healthz: "",
     logPath,
     pid: Number.isSafeInteger(child?.pid) ? child.pid : null,
+    processCwd,
     provider: CODEX_APP_SERVER_PROVIDER_ID,
     readyz: "",
     runtimeDir,
@@ -852,7 +887,12 @@ class CodexAppServerJsonRpcClient {
     this.nextRequestId = 1;
     this.notificationSubscribers = new Set();
     this.pendingRequests = new Map();
+    this.connected = false;
     this.socket = null;
+  }
+
+  isOpen() {
+    return Boolean(this.socket && (this.connected || this.socket.readyState === 1));
   }
 
   async connect() {
@@ -862,9 +902,10 @@ class CodexAppServerJsonRpcClient {
     if (typeof this.WebSocketImpl !== "function") {
       throw new Error("A WebSocket implementation is required for Codex app-server.");
     }
-    if (this.socket) {
+    if (this.isOpen()) {
       return this;
     }
+    this.close();
     const unixSocketPath = socketPathFromCodexAppServerEndpoint(this.endpoint);
     const socketOptions = unixSocketPath
       ? {
@@ -874,7 +915,8 @@ class CodexAppServerJsonRpcClient {
       : {
           perMessageDeflate: false
         };
-    this.socket = new this.WebSocketImpl(unixSocketPath ? "ws://localhost/" : this.endpoint, socketOptions);
+    const socket = new this.WebSocketImpl(unixSocketPath ? "ws://localhost/" : this.endpoint, socketOptions);
+    this.socket = socket;
     await new Promise((resolve, reject) => {
       const cleanup = [];
       const settle = (callback, value) => {
@@ -883,11 +925,28 @@ class CodexAppServerJsonRpcClient {
         }
         callback(value);
       };
-      cleanup.push(addSocketListener(this.socket, "open", () => settle(resolve)));
-      cleanup.push(addSocketListener(this.socket, "error", (error) => settle(reject, error?.error || error)));
+      cleanup.push(addSocketListener(socket, "open", () => {
+        if (this.socket === socket) {
+          this.connected = true;
+        }
+        settle(resolve);
+      }));
+      cleanup.push(addSocketListener(socket, "error", (error) => {
+        if (this.socket === socket) {
+          this.connected = false;
+          this.socket = null;
+        }
+        settle(reject, error?.error || error);
+      }));
     });
-    addSocketListener(this.socket, "message", (event) => this.handleMessage(event));
-    addSocketListener(this.socket, "close", () => this.rejectPendingRequests(new Error("Codex app-server connection closed.")));
+    addSocketListener(socket, "message", (event) => this.handleMessage(event));
+    addSocketListener(socket, "close", () => {
+      if (this.socket === socket) {
+        this.connected = false;
+        this.socket = null;
+      }
+      this.rejectPendingRequests(new Error("Codex app-server connection closed."));
+    });
     return this;
   }
 
@@ -950,7 +1009,7 @@ class CodexAppServerJsonRpcClient {
   }
 
   send(payload) {
-    if (!this.socket || typeof this.socket.send !== "function") {
+    if (!this.isOpen() || typeof this.socket.send !== "function") {
       throw new Error("Codex app-server connection is not open.");
     }
     this.socket.send(JSON.stringify(payload));
@@ -992,8 +1051,10 @@ class CodexAppServerJsonRpcClient {
 
   close() {
     this.rejectPendingRequests(new Error("Codex app-server connection closed."));
-    this.socket?.close?.();
+    const socket = this.socket;
+    this.connected = false;
     this.socket = null;
+    socket?.close?.();
   }
 }
 
@@ -1070,13 +1131,15 @@ class CodexAppServerAgentProvider {
 
   async connect() {
     const runtime = await this.ensureRuntime();
-    if (this.client) {
+    if (this.client?.isOpen?.()) {
       return {
         initializeResult: null,
         reusedClient: true,
         runtime
       };
     }
+    this.client?.close?.();
+    this.client = null;
     this.client = new CodexAppServerJsonRpcClient({
       endpoint: runtime.endpoint,
       requestTimeoutMs: this.options.requestTimeoutMs,
@@ -1092,10 +1155,19 @@ class CodexAppServerAgentProvider {
 
   async activeClient() {
     await this.ensureRuntime();
-    if (!this.client) {
+    if (!this.client?.isOpen?.()) {
       await this.connect();
     }
     return this.client;
+  }
+
+  async ensureAvailable() {
+    const client = await this.activeClient();
+    return {
+      client,
+      ok: true,
+      runtime: this.runtime
+    };
   }
 
   subscribe(callback) {
@@ -1147,6 +1219,18 @@ class CodexAppServerAgentProvider {
       }),
       response
     };
+  }
+
+  async listLoadedThreads(params = {}) {
+    const client = await this.activeClient();
+    return client.request("thread/loaded/list", params);
+  }
+
+  async unsubscribeThread(threadId = "") {
+    const client = await this.activeClient();
+    return client.request("thread/unsubscribe", {
+      threadId: normalizeAgentText(threadId)
+    });
   }
 
   async sendTurn(threadId = "", input = [], params = {}) {

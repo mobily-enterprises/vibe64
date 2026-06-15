@@ -685,6 +685,26 @@ test("launch preview proxy forwards tokenized WebSocket upgrades without leaking
   });
 });
 
+test("launch preview proxy close resolves while a browser WebSocket is still open", async () => {
+  await withWebSocketTargetServer(async (target) => {
+    const registry = createLaunchPreviewProxyRegistry();
+    const preview = await registry.ensure({
+      sessionId: "session-websocket-close",
+      targetHref: `${target.origin}/hmr`,
+      terminalSessionId: "terminal-websocket-close"
+    });
+    const accepted = await connectWebSocket(previewWebSocketHref(preview.href));
+    assert.equal(accepted.ok, true);
+
+    await withTimeout(
+      registry.closeAll(),
+      1000,
+      "Preview proxy close should not wait for browser WebSocket clients to disconnect."
+    );
+    await waitForWebSocketClose(accepted.socket);
+  });
+});
+
 test("launch preview proxy rewrites same-origin redirects to the proxy origin", () => {
   assert.equal(
     proxiedLocation("/home", {
@@ -1038,6 +1058,27 @@ function connectWebSocket(href = "", options = {}) {
       ok: false
     }));
   });
+}
+
+function waitForWebSocketClose(socket) {
+  if (!socket || socket.readyState === WebSocket.CLOSED) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    socket.once("close", () => resolve());
+  });
+}
+
+function withTimeout(promise, timeoutMs, message = "Timed out.") {
+  let timeout = null;
+  return Promise.race([
+    Promise.resolve(promise).finally(() => {
+      clearTimeout(timeout);
+    }),
+    new Promise((_, reject) => {
+      timeout = setTimeout(() => reject(new Error(message)), timeoutMs);
+    })
+  ]);
 }
 
 function requestUnixSocket({

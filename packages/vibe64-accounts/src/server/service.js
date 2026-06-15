@@ -182,6 +182,14 @@ function accountDebugSummary(account = {}) {
   };
 }
 
+function githubAuthFailureMessage(output = "") {
+  const normalizedOutput = String(output || "");
+  if (/token\b[\s\S]*\binvalid\b/iu.test(normalizedOutput) || /\bbad credentials\b/iu.test(normalizedOutput)) {
+    return "GitHub CLI token is invalid. Reconnect GitHub to continue.";
+  }
+  return "GitHub CLI is not authenticated for this Vibe64 user. Reconnect GitHub to continue.";
+}
+
 function accountsDebugSummary(accounts = []) {
   return Array.isArray(accounts) ? accounts.map((account) => accountDebugSummary(account)) : [];
 }
@@ -544,7 +552,10 @@ async function readGithubStatus({
     runToolchain(["git", "config", "--global", "--get", "user.email"], toolchainOptions)
   ]);
   const output = [statusResult.output, userResult.output].filter(Boolean).join("\n");
-  const missingScopes = REQUIRED_GITHUB_SCOPES.filter((scope) => !output.includes(scope));
+  const canInspectAuthenticatedUser = statusResult.ok && userResult.ok && userResult.stdout;
+  const missingScopes = canInspectAuthenticatedUser
+    ? REQUIRED_GITHUB_SCOPES.filter((scope) => !output.includes(scope))
+    : [];
   const credentialHelperOutput = [gitCredentialResult.stdout, gitCredentialResult.output].filter(Boolean).join("\n");
   const missingGitCredentialHelper = !credentialHelperOutput.includes(GITHUB_GIT_CREDENTIAL_HELPER);
   const missingGitIdentity = !gitNameResult.ok || !gitNameResult.stdout || !gitEmailResult.ok || !gitEmailResult.stdout;
@@ -568,6 +579,12 @@ async function readGithubStatus({
         status: "reconnect_required"
       });
     }
+    const authMessage = !statusResult.ok
+      ? ` ${githubAuthFailureMessage(output)}`
+      : "";
+    const userMessage = statusResult.ok && (!userResult.ok || !userResult.stdout)
+      ? " GitHub CLI could not read the authenticated GitHub user. Reconnect GitHub to continue."
+      : "";
     const scopeMessage = missingScopes.length
       ? ` Missing scopes: ${missingScopes.join(", ")}.`
       : "";
@@ -581,7 +598,7 @@ async function readGithubStatus({
       id: "github",
       gitIdentity,
       label: "GitHub",
-      message: `GitHub CLI is not ready for this Vibe64 user.${scopeMessage}${gitCredentialMessage}${gitIdentityMessage}`,
+      message: `GitHub CLI is not ready for this Vibe64 user.${authMessage}${userMessage}${scopeMessage}${gitCredentialMessage}${gitIdentityMessage}`,
       observed: [output, credentialHelperOutput, gitNameResult.output, gitEmailResult.output].filter(Boolean).join("\n"),
       scope: USER_PROVIDER_SCOPE
     });

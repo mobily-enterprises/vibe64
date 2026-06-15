@@ -28,7 +28,11 @@ const MAX_OPEN_VIBE64_SESSIONS = 3;
 const CODEX_PROMPT_HANDOFF_DELIVERY_ENABLED = true;
 const CODEX_APP_SERVER_TASK_ID = "codex_app_server";
 const CODEX_SESSION_WORKTREE_UNAVAILABLE_CODE = "vibe64_session_worktree_unavailable";
+const CODEX_AGENT_TURN_ALREADY_RUNNING_CODE = "vibe64_agent_turn_already_running";
+const VIBE64_ACTION_DISABLED_CODE = "vibe64_action_disabled";
+const VIBE64_ADVANCE_STATE_CHANGED_CODE = "vibe64_advance_state_changed";
 const STEP_STATUS_AWAITING_AGENT_RESULT = "awaiting_agent_result";
+const STEP_STATUS_DONE = "done";
 const CLOSED_SESSION_STATUSES = new Set(["abandoned", "finished"]);
 const SESSION_ARCHIVE_QUERY = Object.freeze({
   ABANDONED: "abandoned",
@@ -104,6 +108,36 @@ function stripInternalInput(input = {}) {
     ...publicInput
   } = input;
   return publicInput;
+}
+
+function stepDefinitionById(session = {}, stepId = "") {
+  const normalizedStepId = normalizedInputText(stepId);
+  if (!normalizedStepId || !Array.isArray(session.stepDefinitions)) {
+    return null;
+  }
+  return session.stepDefinitions.find((step) => normalizedInputText(step?.id) === normalizedStepId) || null;
+}
+
+function sessionAlreadyObservedAdvance(session = {}, expected = {}) {
+  const expectedStepId = normalizedInputText(expected?.stepId);
+  const expectedStepStatus = normalizedInputText(expected?.stepStatus);
+  if (!expectedStepId || expectedStepStatus !== STEP_STATUS_DONE) {
+    return false;
+  }
+  const expectedStep = stepDefinitionById(session, expectedStepId);
+  const currentStep = stepDefinitionById(session, session.currentStep);
+  if (!expectedStep || !currentStep || expectedStep.status !== STEP_STATUS_DONE) {
+    return false;
+  }
+  return Number(currentStep.index) > Number(expectedStep.index);
+}
+
+async function observeAlreadyAdvancedSession(runtime, sessionId = "", expected = {}) {
+  if (typeof runtime?.getSession !== "function") {
+    return null;
+  }
+  const session = await runtime.getSession(sessionId).catch(() => null);
+  return sessionAlreadyObservedAdvance(session, expected) ? session : null;
 }
 
 function agentSettingsInput(input = {}) {
@@ -387,6 +421,12 @@ function sessionHasActiveAgentRun(session = {}) {
   ));
 }
 
+function sessionHasActiveAgentWork(session = {}) {
+  return sessionHasActiveAgentRun(session) ||
+    codexAppServerDeliveryRunning(session) ||
+    terminalStateHasActiveCodexTurn(session);
+}
+
 function terminalStateHasActiveCodexTurn(terminalState = {}) {
   return terminalState.codexAgentTurnActive === true ||
     terminalState.codexAgentTurn?.active === true;
@@ -427,6 +467,10 @@ function codexDeliveryBlockedByMissingWorktree(delivery = {}) {
   return normalizedInputText(delivery?.code) === CODEX_SESSION_WORKTREE_UNAVAILABLE_CODE;
 }
 
+function codexDeliveryBlockedByActiveAgentTurn(delivery = {}) {
+  return normalizedInputText(delivery?.code) === CODEX_AGENT_TURN_ALREADY_RUNNING_CODE;
+}
+
 async function recoverAgentWaitForMissingWorktree(runtime, session = {}, delivery = {}) {
   const recoveredSession = await recoverAgentWaitWithoutCodex(runtime, session, {}, {
     inputPrompt: "Recover this session before continuing.",
@@ -435,6 +479,47 @@ async function recoverAgentWaitForMissingWorktree(runtime, session = {}, deliver
     reason: "session_worktree_unavailable"
   });
   return sessionWithLatestRevision(runtime, recoveredSession);
+}
+
+async function observeAcceptedUserMessageSession(runtime, sessionId = "", input = {}) {
+  if (!conversationRequestText(input) || typeof runtime?.getSession !== "function") {
+    return null;
+  }
+  const currentSession = await runtime.getSession(sessionId).catch(() => null);
+  if (!currentSession) {
+    return null;
+  }
+  if (sessionHasActiveAgentWork(currentSession)) {
+    return {
+      enrich: true,
+      reason: "active_agent_turn",
+      session: currentSession
+    };
+  }
+  if (sessionAwaitsAgentResult(currentSession)) {
+    return {
+      enrich: false,
+      reason: "awaiting_agent_result",
+      session: currentSession
+    };
+  }
+  return null;
+}
+
+async function observedUserMessageSessionResponse(terminalService, runtime, observed = {}) {
+  if (observed.enrich) {
+    return enrichSessionWithCodexTerminal(terminalService, observed.session, {
+      runtime
+    });
+  }
+  return sessionWithLatestRevision(runtime, observed.session);
+}
+
+async function observeAcceptedUserMessageAfterStateRejection(runtime, sessionId = "", input = {}, error = {}) {
+  if (normalizedInputText(error?.code) !== VIBE64_ACTION_DISABLED_CODE) {
+    return null;
+  }
+  return observeAcceptedUserMessageSession(runtime, sessionId, input);
 }
 
 async function recoverAgentWaitAfterCodexTerminalStateFailure(runtime, session = {}) {
@@ -507,6 +592,13 @@ async function prepareCodexThreadForSession(terminalService, session = {}) {
   if (!session || session.ok === false || !session.sessionId) {
     return session;
   }
+  if (!codexThreadReconcileWorkdir(session)) {
+    vibe64SessionDebugLog("server.service.ensureCodexThread.skipped", {
+      reason: "worktree_unavailable",
+      sessionId: session.sessionId
+    });
+    return session;
+  }
   if (typeof terminalService?.ensureCodexThread !== "function") {
     vibe64SessionDebugLog("server.service.ensureCodexThread.skipped", {
       reason: "service_unavailable",
@@ -576,6 +668,17 @@ async function deliverCodexPromptIfNeeded(terminalService, session = {}, {
     throw error;
   }
   if (delivery?.ok === false) {
+    if (codexDeliveryBlockedByActiveAgentTurn(delivery)) {
+      vibe64SessionDebugLog("server.service.deliverCodexPrompt.blocked", {
+        code: String(delivery.code || ""),
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+        operationOutcome: String(delivery.operationOutcome || ""),
+        promptId: String(handoff.promptId || ""),
+        reason: "active_agent_turn",
+        sessionId: session.sessionId
+      });
+      return sessionWithLatestRevision(runtime, session);
+    }
     vibe64SessionDebugLog("server.service.deliverCodexPrompt.error", {
       durationMs: vibe64SessionDebugDurationMs(startedAtMs),
       error: String(delivery.error || "Vibe64 Codex prompt delivery failed."),
@@ -738,33 +841,105 @@ function sessionServiceDebugResponse(response = {}) {
   };
 }
 
-function closeSessionTerminalsInBackground(terminalService, sessionId = "", {
+async function closeSessionTerminalsForSessionClose(terminalService, sessionId = "", {
   eventPrefix = "server.service.sessionTerminalCleanup"
 } = {}) {
   if (typeof terminalService?.closeSessionTerminals !== "function") {
-    return;
+    return {
+      ok: true
+    };
   }
   const cleanupStartedAtMs = Date.now();
   vibe64SessionDebugLog(`${eventPrefix}.start`, {
     sessionId
   });
-  void Promise.resolve()
-    .then(() => terminalService.closeSessionTerminals(sessionId))
+  try {
+    const result = await terminalService.closeSessionTerminals(sessionId);
+    vibe64SessionDebugLog(`${eventPrefix}.done`, {
+      closed: Number(result?.closed || 0),
+      durationMs: vibe64SessionDebugDurationMs(cleanupStartedAtMs),
+      ok: result?.ok !== false,
+      sessionId
+    });
+    return result;
+  } catch (error) {
+    vibe64SessionDebugLog(`${eventPrefix}.error`, {
+      durationMs: vibe64SessionDebugDurationMs(cleanupStartedAtMs),
+      error: vibe64SessionDebugError(error),
+      sessionId
+    });
+    throw error;
+  }
+}
+
+function codexThreadReconcileWorkdir(session = {}) {
+  const metadata = objectValue(session?.metadata);
+  return normalizedInputText(metadata.worktree_path || session?.worktreePath || session?.worktree);
+}
+
+function codexThreadReconcileReadySessions(sessions = []) {
+  return (Array.isArray(sessions) ? sessions : [])
+    .filter((session) => normalizedInputText(session?.sessionId || session?.id || session) &&
+      codexThreadReconcileWorkdir(session));
+}
+
+function reconcileCodexThreadsInBackground(terminalService, sessions = [], {
+  eventPrefix = "server.service.codexThreadReconcile"
+} = {}) {
+  const readySessions = codexThreadReconcileReadySessions(sessions);
+  if (typeof terminalService?.reconcileCodexThreads !== "function" || readySessions.length < 1) {
+    return;
+  }
+  const sessionIds = readySessions
+    .map((session) => normalizedInputText(session?.sessionId || session?.id || session))
+    .filter(Boolean);
+  if (sessionIds.length < 1) {
+    return;
+  }
+  const reconcileStartedAtMs = Date.now();
+  vibe64SessionDebugLog(`${eventPrefix}.start`, {
+    sessionCount: sessionIds.length,
+    sessionIds
+  });
+  const reconciliation = terminalService.reconcileCodexThreads(readySessions);
+  void Promise.resolve(reconciliation)
     .then((result = {}) => {
       vibe64SessionDebugLog(`${eventPrefix}.done`, {
-        closed: Number(result.closed || 0),
-        durationMs: vibe64SessionDebugDurationMs(cleanupStartedAtMs),
+        durationMs: vibe64SessionDebugDurationMs(reconcileStartedAtMs),
+        failedCount: Array.isArray(result.failed) ? result.failed.length : 0,
         ok: result.ok !== false,
-        sessionId
+        sessionCount: Number(result.sessionCount || sessionIds.length)
       });
     })
     .catch((error) => {
       vibe64SessionDebugLog(`${eventPrefix}.error`, {
-        durationMs: vibe64SessionDebugDurationMs(cleanupStartedAtMs),
+        durationMs: vibe64SessionDebugDurationMs(reconcileStartedAtMs),
         error: vibe64SessionDebugError(error),
-        sessionId
+        sessionCount: sessionIds.length
       });
     });
+}
+
+function codexThreadReconcileSessionSignature(session = {}) {
+  const workdir = codexThreadReconcileWorkdir(session);
+  if (!workdir) {
+    return "";
+  }
+  return [
+    normalizedInputText(session?.sessionId || session?.id || session),
+    normalizedInputText(session?.status),
+    normalizedInputText(session?.targetRoot),
+    normalizedInputText(session?.sessionRoot),
+    workdir
+  ].join("\u001f");
+}
+
+function codexThreadReconcileSignature(sessions = []) {
+  return (Array.isArray(sessions) ? sessions : [])
+    .map((session) => codexThreadReconcileSessionSignature(session))
+    .filter(Boolean)
+    .sort()
+    .join("\u001e");
 }
 
 function createService({
@@ -774,6 +949,16 @@ function createService({
 } = {}) {
   if (!projectService) {
     throw new TypeError("createService requires feature.vibe64-project.service.");
+  }
+  let lastAutomaticCodexThreadReconcileSignature = "";
+
+  function reconcileCodexThreadsWhenOpenSessionsChange(openSessions = []) {
+    const signature = codexThreadReconcileSignature(openSessions);
+    if (!signature || signature === lastAutomaticCodexThreadReconcileSignature) {
+      return;
+    }
+    lastAutomaticCodexThreadReconcileSignature = signature;
+    reconcileCodexThreadsInBackground(terminalService, openSessions);
   }
 
   return Object.freeze({
@@ -786,9 +971,24 @@ function createService({
         sessionId
       });
       return sessionResult(async () => {
+        let runtime = null;
         try {
           await assertVibe64SessionReady(setupServices, readinessOptions(expected));
-          const runtime = await projectService.createRuntime();
+          runtime = await projectService.createRuntime();
+          const alreadyAdvancedSession = await observeAlreadyAdvancedSession(runtime, sessionId, workflowExpected);
+          if (alreadyAdvancedSession) {
+            const enrichedAlreadyAdvancedSession = await enrichSessionWithCodexTerminal(terminalService, alreadyAdvancedSession, {
+              runtime
+            });
+            vibe64SessionDebugLog("server.service.advanceSession.observedDuplicate", {
+              ...sessionServiceDebugResponse(enrichedAlreadyAdvancedSession),
+              durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+              expectedStepId: String(workflowExpected?.stepId || ""),
+              expectedStepStatus: String(workflowExpected?.stepStatus || ""),
+              phase: "before_advance"
+            });
+            return enrichedAlreadyAdvancedSession;
+          }
           const session = await runtime.advance(sessionId, workflowExpected);
           const enrichedSession = await enrichSessionWithCodexTerminal(terminalService, session, {
             runtime
@@ -799,6 +999,22 @@ function createService({
           });
           return enrichedSession;
         } catch (error) {
+          if (normalizedInputText(error?.code) === VIBE64_ADVANCE_STATE_CHANGED_CODE) {
+            const observedSession = await observeAlreadyAdvancedSession(runtime, sessionId, workflowExpected);
+            if (observedSession) {
+              const enrichedObservedSession = await enrichSessionWithCodexTerminal(terminalService, observedSession, {
+                runtime
+              });
+              vibe64SessionDebugLog("server.service.advanceSession.observedDuplicate", {
+                ...sessionServiceDebugResponse(enrichedObservedSession),
+                durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+                expectedStepId: String(workflowExpected?.stepId || ""),
+                expectedStepStatus: String(workflowExpected?.stepStatus || ""),
+                phase: "after_state_changed"
+              });
+              return enrichedObservedSession;
+            }
+          }
           vibe64SessionDebugLog("server.service.advanceSession.error", {
             durationMs: vibe64SessionDebugDurationMs(startedAtMs),
             error: vibe64SessionDebugError(error),
@@ -819,13 +1035,13 @@ function createService({
         try {
           const runtime = await projectService.createRuntime();
           const session = await runtime.getSession(sessionId);
+          await closeSessionTerminalsForSessionClose(terminalService, sessionId, {
+            eventPrefix: "server.service.abandonSession.terminalCleanup"
+          });
           await runtime.archiveSessionWorktree(session, {
             reason: "abandoned"
           });
           await runtime.store.writeStatus(sessionId, VIBE64_SESSION_STATUS.ABANDONED);
-          closeSessionTerminalsInBackground(terminalService, sessionId, {
-            eventPrefix: "server.service.abandonSession.terminalCleanup"
-          });
           const abandonedSession = await runtime.getSession(sessionId);
           vibe64SessionDebugLog("server.service.abandonSession.done", {
             ...sessionServiceDebugResponse(abandonedSession),
@@ -1181,6 +1397,7 @@ function createService({
             : await listOpenSessionSummaries(runtime);
           const creationState = await sessionCreationState(runtime, openSessions);
           const response = sessionListResponse(sessions, creationState);
+          reconcileCodexThreadsWhenOpenSessionsChange(openSessions);
           vibe64SessionDebugLog("server.service.listSessions.done", {
             archive: String(input?.archive || ""),
             durationMs: vibe64SessionDebugDurationMs(startedAtMs),
@@ -1209,9 +1426,20 @@ function createService({
         sessionId
       });
       return sessionResult(async () => {
+        let runtime = null;
         try {
           await assertVibe64SessionReady(setupServices, readinessOptions(input));
-          const runtime = await projectService.createRuntime();
+          runtime = await projectService.createRuntime();
+          const observedUserMessageSession = await observeAcceptedUserMessageSession(runtime, sessionId, displayInput || workflowInput);
+          if (observedUserMessageSession) {
+            vibe64SessionDebugLog("server.service.runSessionAction.blocked", {
+              ...sessionServiceDebugResponse(observedUserMessageSession.session),
+              actionId,
+              reason: observedUserMessageSession.reason,
+              durationMs: vibe64SessionDebugDurationMs(startedAtMs)
+            });
+            return observedUserMessageSessionResponse(terminalService, runtime, observedUserMessageSession);
+          }
           let session = await runtime.runAction(sessionId, actionId, workflowInput);
           const conversationTurn = await recordConversationMessage(runtime, sessionId, {
             actionResult: session.actionResult,
@@ -1247,6 +1475,22 @@ function createService({
           });
           return enrichedSession;
         } catch (error) {
+          const observedUserMessageSession = await observeAcceptedUserMessageAfterStateRejection(
+            runtime,
+            sessionId,
+            displayInput || workflowInput,
+            error
+          );
+          if (observedUserMessageSession) {
+            vibe64SessionDebugLog("server.service.runSessionAction.blocked", {
+              ...sessionServiceDebugResponse(observedUserMessageSession.session),
+              actionId,
+              durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+              reason: observedUserMessageSession.reason,
+              rejectedCode: normalizedInputText(error?.code)
+            });
+            return observedUserMessageSessionResponse(terminalService, runtime, observedUserMessageSession);
+          }
           vibe64SessionDebugLog("server.service.runSessionAction.error", {
             actionId,
             durationMs: vibe64SessionDebugDurationMs(startedAtMs),
@@ -1270,9 +1514,20 @@ function createService({
         stepStatus: String(input?.stepStatus || "")
       });
       return sessionResult(async () => {
+        let runtime = null;
         try {
           await assertVibe64SessionReady(setupServices, readinessOptions(input));
-          const runtime = await projectService.createRuntime();
+          runtime = await projectService.createRuntime();
+          const observedUserMessageSession = await observeAcceptedUserMessageSession(runtime, sessionId, displayInput || workflowInput);
+          if (observedUserMessageSession) {
+            vibe64SessionDebugLog("server.service.runSessionIntent.blocked", {
+              ...sessionServiceDebugResponse(observedUserMessageSession.session),
+              intentId,
+              reason: observedUserMessageSession.reason,
+              durationMs: vibe64SessionDebugDurationMs(startedAtMs)
+            });
+            return observedUserMessageSessionResponse(terminalService, runtime, observedUserMessageSession);
+          }
           let session = await runtime.runIntent(sessionId, intentId, workflowInput);
           const conversationTurn = await recordConversationMessage(runtime, sessionId, {
             actionResult: session.actionResult,
@@ -1308,6 +1563,22 @@ function createService({
           });
           return enrichedSession;
         } catch (error) {
+          const observedUserMessageSession = await observeAcceptedUserMessageAfterStateRejection(
+            runtime,
+            sessionId,
+            displayInput || workflowInput,
+            error
+          );
+          if (observedUserMessageSession) {
+            vibe64SessionDebugLog("server.service.runSessionIntent.blocked", {
+              ...sessionServiceDebugResponse(observedUserMessageSession.session),
+              durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+              intentId,
+              reason: observedUserMessageSession.reason,
+              rejectedCode: normalizedInputText(error?.code)
+            });
+            return observedUserMessageSessionResponse(terminalService, runtime, observedUserMessageSession);
+          }
           vibe64SessionDebugLog("server.service.runSessionIntent.error", {
             durationMs: vibe64SessionDebugDurationMs(startedAtMs),
             error: vibe64SessionDebugError(error),
