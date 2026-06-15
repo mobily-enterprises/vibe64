@@ -1,4 +1,8 @@
 import {
+  readFile
+} from "node:fs/promises";
+
+import {
   CODEX_APP_SERVER_PROVIDER_ID,
   codexCliResumeCommand
 } from "./codexAppServerProvider.js";
@@ -23,6 +27,8 @@ const CODEX_APP_SERVER_BOOTSTRAP_PROMPT = [
   "Do not inspect files, run commands, or submit workflow results.",
   "Reply exactly: Vibe64 Codex session ready."
 ].join("\n");
+const CODEX_CONTEXT_RECOVERY_PROMPT_URL = new URL("./prompts/codex_context_recovery.txt", import.meta.url);
+let codexContextRecoveryTemplatePromise = null;
 
 function normalizeWorkdir(value = "") {
   return normalizeAgentText(value);
@@ -79,6 +85,72 @@ function codexAppServerTurnPrompt({
   prompt = ""
 } = {}) {
   return String(prompt || "").trim();
+}
+
+function codexContextRecoveryTemplate() {
+  if (!codexContextRecoveryTemplatePromise) {
+    codexContextRecoveryTemplatePromise = readFile(CODEX_CONTEXT_RECOVERY_PROMPT_URL, "utf8");
+  }
+  return codexContextRecoveryTemplatePromise;
+}
+
+function renderCodexContextRecoveryTemplate(template = "", values = {}) {
+  return String(template || "").replace(/\{\{([A-Za-z0-9_.-]+)\}\}/gu, (_match, key) => {
+    return Object.hasOwn(values, key) ? String(values[key] ?? "") : "";
+  });
+}
+
+function conversationMessageLines(label = "", message = null) {
+  const text = normalizeAgentText(message?.text);
+  if (!text) {
+    return [];
+  }
+  const at = normalizeAgentText(message?.at);
+  return [
+    `### ${label}${at ? ` (${at})` : ""}`,
+    text
+  ];
+}
+
+function formatCodexRecoveryConversationTurn(turn = {}, index = 0) {
+  const lines = [`## Turn ${index + 1}`];
+  lines.push(...conversationMessageLines("System", turn.system));
+  lines.push(...conversationMessageLines("User", turn.user));
+  for (const [thinkingIndex, thinking] of (Array.isArray(turn.thinking) ? turn.thinking : []).entries()) {
+    lines.push(...conversationMessageLines(`Assistant Thinking ${thinkingIndex + 1}`, thinking));
+  }
+  lines.push(...conversationMessageLines("Assistant", turn.assistant));
+  return lines.length > 1 ? lines.join("\n\n") : "";
+}
+
+function formatCodexRecoveryConversationLog(turns = []) {
+  const formattedTurns = (Array.isArray(turns) ? turns : [])
+    .map((turn, index) => formatCodexRecoveryConversationTurn(turn, index))
+    .filter(Boolean);
+  return formattedTurns.length
+    ? formattedTurns.join("\n\n---\n\n")
+    : "(No persisted Vibe64 UI conversation messages were available.)";
+}
+
+async function codexContextRecoveryPrompt({
+  error,
+  newThreadId = "",
+  previousThreadId = "",
+  runtime,
+  sessionId = "",
+  workdir = ""
+} = {}) {
+  const conversationLog = typeof runtime?.store?.readConversationLog === "function"
+    ? await runtime.store.readConversationLog(sessionId)
+    : [];
+  return renderCodexContextRecoveryTemplate(await codexContextRecoveryTemplate(), {
+    conversationLog: formatCodexRecoveryConversationLog(conversationLog),
+    newThreadId: normalizeAgentText(newThreadId),
+    previousThreadId: normalizeAgentText(previousThreadId),
+    resumeError: normalizeAgentText(error?.message || String(error || "")),
+    sessionId: normalizeAgentText(sessionId),
+    workdir: normalizeWorkdir(workdir)
+  }).trim();
 }
 
 function codexAppServerRuntimeMetadata(runtime = {}) {
@@ -291,6 +363,7 @@ function createCodexAppServerTurnCompletionWatcher(provider, threadId = "", {
 
 async function sendCodexAppServerBootstrapTurn({
   agentSettings = {},
+  input = CODEX_APP_SERVER_BOOTSTRAP_PROMPT,
   provider,
   threadId = "",
   workdir = ""
@@ -303,7 +376,7 @@ async function sendCodexAppServerBootstrapTurn({
   try {
     const turn = await provider.sendTurn(
       normalizedThreadId,
-      CODEX_APP_SERVER_BOOTSTRAP_PROMPT,
+      input,
       codexAppServerTurnSettings({
         agentSettings,
         cwd: workdir
@@ -313,12 +386,38 @@ async function sendCodexAppServerBootstrapTurn({
       await watcher.wait(turn.id);
     }
     return {
-      input: CODEX_APP_SERVER_BOOTSTRAP_PROMPT,
+      input,
       turn
     };
   } finally {
     watcher.dispose();
   }
+}
+
+async function sendCodexAppServerContextRecoveryTurn({
+  agentSettings = {},
+  error,
+  previousThreadId = "",
+  provider,
+  runtime,
+  sessionId = "",
+  threadId = "",
+  workdir = ""
+} = {}) {
+  return sendCodexAppServerBootstrapTurn({
+    agentSettings,
+    input: await codexContextRecoveryPrompt({
+      error,
+      newThreadId: threadId,
+      previousThreadId,
+      runtime,
+      sessionId,
+      workdir
+    }),
+    provider,
+    threadId,
+    workdir
+  });
 }
 
 async function writeCodexAppServerReplacementMetadata({
@@ -345,7 +444,6 @@ async function writeCodexAppServerReplacementMetadata({
 
 async function ensureCodexAppServerThreadForSession({
   agentSettings = {},
-  bootstrapResumableThread = true,
   developerInstructions = "",
   provider,
   runtime,
@@ -382,10 +480,22 @@ async function ensureCodexAppServerThreadForSession({
   if (!threadId) {
     throw new Error("Codex app-server did not return a thread id.");
   }
-  const bootstrap = bootstrapResumableThread && startedNewThread
+  const bootstrap = startedNewThread
     ? await sendCodexAppServerBootstrapTurn({
         agentSettings,
         provider,
+        threadId,
+        workdir: normalizedWorkdir
+      })
+    : null;
+  const recovery = replacedThreadError
+    ? await sendCodexAppServerContextRecoveryTurn({
+        agentSettings,
+        error: replacedThreadError,
+        previousThreadId: existingThreadId,
+        provider,
+        runtime,
+        sessionId: session.sessionId,
         threadId,
         workdir: normalizedWorkdir
       })
@@ -408,6 +518,9 @@ async function ensureCodexAppServerThreadForSession({
   return {
     appServerRuntime,
     bootstrap,
+    recovery,
+    replacedThreadError,
+    replacedThreadId: replacedThreadError ? existingThreadId : "",
     thread,
     threadId
   };

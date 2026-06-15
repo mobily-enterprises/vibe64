@@ -1,0 +1,30 @@
+VIBE64_CONTEXT_RECOVERY: Codex provider thread recovery for Vibe64.
+
+Vibe64 tried to resume the previous Codex provider thread, but Codex app-server reported that it is not available anymore.
+
+Previous provider thread:
+{{previousThreadId}}
+
+Fresh provider thread:
+{{newThreadId}}
+
+Resume error:
+{{resumeError}}
+
+Session:
+{{sessionId}}
+
+Workdir:
+{{workdir}}
+
+The provider-side transcript for the previous thread is missing. The persisted Vibe64 UI conversation below is the authoritative user-visible history for this session.
+
+Use this conversation as context for future routed Vibe64 turns. If details are missing, work them out from the repository files, session artifacts, git state, and code changes in the worktree. Do not assume the provider transcript is complete.
+
+Do not inspect files, run commands, modify files, or emit a Vibe64 workflow result envelope for this recovery briefing.
+
+Reply exactly:
+Vibe64 Codex context restored.
+
+Persisted Vibe64 UI conversation:
+{{conversationLog}}

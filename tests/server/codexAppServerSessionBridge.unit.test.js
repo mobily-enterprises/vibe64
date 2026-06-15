@@ -10,7 +10,9 @@ import {
   sendCodexAppServerPromptForSession
 } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
 
-function fakeRuntime() {
+function fakeRuntime({
+  conversationLog = []
+} = {}) {
   const writes = [];
   return {
     store: {
@@ -28,6 +30,9 @@ function fakeRuntime() {
           sessionId,
           value
         });
+      },
+      async readConversationLog() {
+        return conversationLog;
       }
     },
     writes
@@ -261,8 +266,27 @@ test("codex app-server bridge resumes an existing session thread", async () => {
   ]);
 });
 
-test("codex app-server bridge replaces stale missing-rollout session threads", async () => {
-  const runtime = fakeRuntime();
+test("codex app-server bridge replaces stale missing-rollout session threads with a recovery briefing", async () => {
+  const runtime = fakeRuntime({
+    conversationLog: [
+      {
+        assistant: {
+          at: "2026-06-15T01:02:05.000Z",
+          text: "Use the archive branch."
+        },
+        thinking: [
+          {
+            at: "2026-06-15T01:02:04.000Z",
+            text: "Checked the issue draft."
+          }
+        ],
+        user: {
+          at: "2026-06-15T01:02:03.000Z",
+          text: "Can we talk about archive scope?"
+        }
+      }
+    ]
+  });
   const providerCalls = [];
   const provider = {
     ...bootstrapProviderParts(providerCalls),
@@ -306,9 +330,12 @@ test("codex app-server bridge replaces stale missing-rollout session threads", a
   });
 
   assert.equal(result.threadId, "thread-replacement");
+  assert.equal(result.replacedThreadId, "thread-stale");
+  assert.match(result.replacedThreadError?.message || "", /no rollout found for thread id thread-stale/u);
   assert.deepEqual(providerCalls.map((call) => call.method), [
     "resumeThread",
     "startThread",
+    "sendTurn",
     "sendTurn"
   ]);
   assert.equal(providerCalls[0].threadId, "thread-stale");
@@ -316,6 +343,13 @@ test("codex app-server bridge replaces stale missing-rollout session threads", a
   assert.equal(providerCalls[1].params.cwd, "/repo/worktree");
   assert.equal(providerCalls[2].threadId, "thread-replacement");
   assert.match(providerCalls[2].input, /VIBE64_SESSION_BOOTSTRAP/u);
+  assert.equal(providerCalls[3].threadId, "thread-replacement");
+  assert.match(providerCalls[3].input, /VIBE64_CONTEXT_RECOVERY/u);
+  assert.match(providerCalls[3].input, /Previous provider thread:\nthread-stale/u);
+  assert.match(providerCalls[3].input, /Fresh provider thread:\nthread-replacement/u);
+  assert.match(providerCalls[3].input, /Can we talk about archive scope\?/u);
+  assert.match(providerCalls[3].input, /Checked the issue draft/u);
+  assert.match(providerCalls[3].input, /Use the archive branch/u);
   assert.equal(metadataValue(runtime, "codex_thread_id"), "thread-replacement");
   assert.equal(metadataValue(runtime, "agent_identity_conversation_id"), "thread-replacement");
   assert.equal(metadataValue(runtime, "codex_app_server_replaced_thread_id"), "thread-stale");

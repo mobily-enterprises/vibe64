@@ -114,6 +114,7 @@ const CODEX_PROMPT_SUBMIT_PAUSE_MS = 20;
 const TERMINAL_BRACKETED_PASTE_START = "\u001b[200~";
 const TERMINAL_BRACKETED_PASTE_END = "\u001b[201~";
 const CODEX_APP_SERVER_TASK_ID = "codex_app_server";
+const CODEX_CONTEXT_TASK_ID = "codex_context";
 const CODEX_APP_SERVER_AGENT_RUN_ID = CODEX_APP_SERVER_TASK_ID;
 const CODEX_SESSION_WORKTREE_UNAVAILABLE_CODE = "vibe64_session_worktree_unavailable";
 const CODEX_AGENT_TURN_ALREADY_RUNNING_CODE = "vibe64_agent_turn_already_running";
@@ -2987,6 +2988,56 @@ function createCodexTerminalController({
     return result;
   }
 
+  async function writeCodexContextReplacementWarning(runtime, sessionId, thread = {}) {
+    const replacedThreadId = normalizeText(thread.replacedThreadId);
+    if (!replacedThreadId || !thread.replacedThreadError) {
+      return null;
+    }
+    const message = "Previous Codex context could not be resumed. Vibe64 started a fresh Codex thread for this session.";
+    const userMessage = "Codex could not resume its previous internal thread, so Vibe64 started a fresh Codex thread and gave it this session's saved chat history.";
+    const task = await runtime.store.writeBackgroundTaskEvent(sessionId, CODEX_CONTEXT_TASK_ID, {
+      event: {
+        error: errorMessage(thread.replacedThreadError),
+        kind: "thread_replaced",
+        message,
+        replacedThreadId,
+        status: "failed",
+        threadId: normalizeText(thread.threadId)
+      },
+      patch: {
+        error: errorMessage(thread.replacedThreadError),
+        kind: "codex_context",
+        label: "Codex context",
+        message,
+        retry: null,
+        status: "failed",
+        terminalSessionId: ""
+      }
+    });
+    const currentSession = typeof runtime.getSession === "function"
+      ? await runtime.getSession(sessionId).catch(() => null)
+      : null;
+    if (
+      currentSession?.metadata?.codex_context_replacement_notice_thread_id !== replacedThreadId &&
+      typeof runtime.store?.writeConversationSystemMessage === "function"
+    ) {
+      await runtime.store.writeConversationSystemMessage(sessionId, {
+        text: userMessage
+      });
+      if (typeof runtime.store?.writeMetadataValue === "function") {
+        await runtime.store.writeMetadataValue(
+          sessionId,
+          "codex_context_replacement_notice_thread_id",
+          replacedThreadId
+        );
+      }
+    }
+    await publishSessionChanged(sessionId, {
+      reason: "codex-context-replaced"
+    });
+    return task;
+  }
+
   async function writeCodexAppServerBlocked(runtime, sessionId, result, {
     terminalSessionId = ""
   } = {}) {
@@ -3278,6 +3329,7 @@ function createCodexTerminalController({
         session,
         workdir
       });
+      await writeCodexContextReplacementWarning(runtime, sessionId, thread);
       subscribeCodexAppServerEvents(sessionId, provider, thread.threadId, providerOptions);
       rememberCodexAppServerManagedSession(codexAppServerProviderKey(sessionId, providerOptions), {
         agentSettings,
@@ -3371,13 +3423,13 @@ function createCodexTerminalController({
       const developerInstructions = codexAppServerDeveloperInstructions(promptSession);
       const thread = await ensureCodexAppServerThreadForSession({
         agentSettings,
-        bootstrapResumableThread: false,
         developerInstructions,
         provider,
         runtime,
         session,
         workdir
       });
+      await writeCodexContextReplacementWarning(runtime, sessionId, thread);
       activeThreadId = thread.threadId;
       subscribeCodexAppServerEvents(sessionId, provider, thread.threadId, providerOptions);
       rememberCodexAppServerManagedSession(codexAppServerProviderKey(sessionId, providerOptions), {

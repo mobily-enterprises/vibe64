@@ -1945,6 +1945,11 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
         }
       },
       metadata: {
+        agent_identity_conversation_id: "stale-codex-thread",
+        agent_identity_provider: "codex",
+        agent_identity_status: "ready",
+        agent_identity_workdir: worktree,
+        codex_app_server_provider: "codex_app_server",
         worktree_path: worktree
       },
       presentation: {
@@ -2059,6 +2064,18 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
           });
           return conversationLog.at(-1);
         },
+        async writeConversationSystemMessage(_sessionId, {
+          text = ""
+        } = {}) {
+          conversationLog.push({
+            assistant: null,
+            system: {
+              text: String(text || "").trim()
+            },
+            user: null
+          });
+          return conversationLog.at(-1);
+        },
         async writeConversationThinkingMessage(_sessionId, {
           at = "",
           text = ""
@@ -2125,19 +2142,23 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
           params,
           threadId
         });
-        return {
-          id: threadId
-        };
+        throw new Error(`no rollout found for thread id ${threadId}`);
       },
       async sendTurn(threadId, input, params) {
+        const bootstrapTurn = /VIBE64_SESSION_BOOTSTRAP/u.test(input);
+        const recoveryTurn = /VIBE64_CONTEXT_RECOVERY/u.test(input);
         providerCalls.sendTurn.push({
           input,
           params,
           threadId
         });
         return {
-          id: "codex-app-server-turn-1",
-          status: "inProgress"
+          id: bootstrapTurn
+            ? "codex-bootstrap-turn-1"
+            : recoveryTurn
+              ? "codex-context-recovery-turn-1"
+              : "codex-app-server-turn-1",
+          status: bootstrapTurn || recoveryTurn ? "completed" : "inProgress"
         };
       },
       async startThread(params) {
@@ -2148,7 +2169,12 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       },
       subscribe(callback) {
         providerSubscribers.push(callback);
-        return () => null;
+        return () => {
+          const index = providerSubscribers.indexOf(callback);
+          if (index >= 0) {
+            providerSubscribers.splice(index, 1);
+          }
+        };
       }
     };
     const publishPromptReasons = [];
@@ -2183,23 +2209,35 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     assert.equal(result.turnId, "codex-app-server-turn-1");
     assert.equal(providerCalls.ensureAvailable, 1);
     assert.equal(providerCalls.ensureRuntime, 1);
-    assert.equal(providerCalls.resumeThread.length, 0);
+    assert.equal(providerCalls.resumeThread.length, 1);
+    assert.equal(providerCalls.resumeThread[0].threadId, "stale-codex-thread");
     assert.equal(providerCalls.startThread.length, 1);
-    assert.equal(providerCalls.sendTurn.length, 1);
+    assert.equal(providerCalls.sendTurn.length, 3);
     assert.equal(providerCalls.startThread[0].approvalPolicy, "never");
     assert.equal(providerCalls.startThread[0].cwd, worktree);
     assert.equal(providerCalls.startThread[0].model, "gpt-5.5");
     assert.equal(providerCalls.startThread[0].sandbox, "danger-full-access");
     assert.match(providerCalls.startThread[0].developerInstructions, /Vibe64 session briefing/u);
     assert.match(providerCalls.startThread[0].developerInstructions, /Vibe64 agent result contract/u);
-    assert.equal(providerCalls.sendTurn[0].threadId, "00000000-0000-4000-8000-000000000004");
-    assert.equal(providerCalls.sendTurn[0].params.cwd, worktree);
-    assert.equal(providerCalls.sendTurn[0].params.effort, "xhigh");
-    assert.equal(providerCalls.sendTurn[0].params.summary, "concise");
-    assert.deepEqual(providerCalls.sendTurn[0].params.sandboxPolicy, {
+    const bootstrapTurnCall = providerCalls.sendTurn[0];
+    const recoveryTurnCall = providerCalls.sendTurn[1];
+    const promptTurnCall = providerCalls.sendTurn[2];
+    assert.equal(bootstrapTurnCall.threadId, "00000000-0000-4000-8000-000000000004");
+    assert.equal(bootstrapTurnCall.params.cwd, worktree);
+    assert.match(bootstrapTurnCall.input, /VIBE64_SESSION_BOOTSTRAP/u);
+    assert.equal(recoveryTurnCall.threadId, "00000000-0000-4000-8000-000000000004");
+    assert.equal(recoveryTurnCall.params.cwd, worktree);
+    assert.match(recoveryTurnCall.input, /VIBE64_CONTEXT_RECOVERY/u);
+    assert.match(recoveryTurnCall.input, /stale-codex-thread/u);
+    assert.doesNotMatch(recoveryTurnCall.input, /Verify app-server prompt delivery/u);
+    assert.equal(promptTurnCall.threadId, "00000000-0000-4000-8000-000000000004");
+    assert.equal(promptTurnCall.params.cwd, worktree);
+    assert.equal(promptTurnCall.params.effort, "xhigh");
+    assert.equal(promptTurnCall.params.summary, "concise");
+    assert.deepEqual(promptTurnCall.params.sandboxPolicy, {
       type: "dangerFullAccess"
     });
-    assert.match(providerCalls.sendTurn[0].input, /Verify app-server prompt delivery/u);
+    assert.match(promptTurnCall.input, /Verify app-server prompt delivery/u);
     assert.equal(session.metadata.agent_identity_provider, "codex");
     assert.equal(session.metadata.agent_identity_status, "ready");
     assert.equal(
@@ -2228,10 +2266,21 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       session.presentation.backgroundTasks.find((task) => task.id === "codex_app_server")?.status,
       "ready"
     );
+    const codexContextTask = session.presentation.backgroundTasks.find((task) => task.id === "codex_context");
+    assert.equal(codexContextTask?.status, "failed");
+    assert.match(codexContextTask?.message || "", /Previous Codex context could not be resumed/u);
+    assert.match(codexContextTask?.error || "", /no rollout found for thread id stale-codex-thread/u);
+    assert.equal(
+      (await runtime.store.readConversationLog())
+        .some((turn) => /Codex could not resume its previous internal thread/u.test(turn.system?.text || "")),
+      true
+    );
+    assert.equal(session.metadata.codex_context_replacement_notice_thread_id, "stale-codex-thread");
     assert.deepEqual(publishPromptReasons, ["codex-app-server-prompt-injected"]);
     assert.deepEqual(publishSessionReasons, [
       "codex-app-server-turn-claimed",
       "codex-app-server-running",
+      "codex-context-replaced",
       "codex-app-server-turn-active",
       "codex-app-server-turn-active",
       "codex-app-server-ready"
@@ -2247,7 +2296,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     assert.equal(duplicateResult.operationOutcome, "agent_already_running");
     assert.equal(duplicateResult.threadId, "00000000-0000-4000-8000-000000000004");
     assert.equal(duplicateResult.turnId, "codex-app-server-turn-1");
-    assert.equal(providerCalls.sendTurn.length, 1);
+    assert.equal(providerCalls.sendTurn.length, 3);
     await runtime.store.writeConversationUserMessage(sessionId, {
       text: "Verify app-server prompt delivery."
     });
