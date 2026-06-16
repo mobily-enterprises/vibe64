@@ -2395,6 +2395,16 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     assert.deepEqual((await runtime.store.readConversationLog()).flatMap((turn) => (turn.thinking || []).map((message) => message.text)).filter(Boolean), [
       "Checked the app-server prompt delivery result."
     ]);
+    const publishReasonBeforeTerminalMessage = publishSessionReasons.at(-1);
+    providerSubscribers[0]({
+      method: "turn/started",
+      params: {
+        status: "inProgress",
+        threadId: "00000000-0000-4000-8000-000000000004",
+        turnId: "terminal-turn-1"
+      }
+    });
+    await delay(5);
     providerSubscribers[0]({
       method: "item/started",
       params: {
@@ -2418,9 +2428,9 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
         .map((turn) => turn.user?.text)
         .filter(Boolean)
         .includes("This was typed directly into the Codex terminal."),
-      true
+      false
     );
-    assert.equal(publishSessionReasons.at(-1), "codex-app-server-terminal-user-message");
+    assert.equal(publishSessionReasons.includes("codex-app-server-terminal-user-message"), false);
     providerSubscribers[0]({
       method: "item/completed",
       params: {
@@ -2438,6 +2448,41 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
         turnId: "terminal-turn-1"
       }
     });
+    providerSubscribers[0]({
+      method: "item/completed",
+      params: {
+        item: {
+          content: [
+            {
+              text: "Direct Codex terminal assistant answer.",
+              type: "text"
+            }
+          ],
+          id: "terminal-assistant-message-1",
+          type: "assistantMessage"
+        },
+        threadId: "00000000-0000-4000-8000-000000000004",
+        turnId: "terminal-turn-1"
+      }
+    });
+    providerSubscribers[0]({
+      method: "turn/completed",
+      params: {
+        status: "completed",
+        threadId: "00000000-0000-4000-8000-000000000004",
+        turnId: "terminal-turn-1"
+      }
+    });
+    await delay(10);
+    assert.equal(
+      (await runtime.store.readConversationLog())
+        .map((turn) => turn.assistant?.text)
+        .filter(Boolean)
+        .includes("Direct Codex terminal assistant answer."),
+      false
+    );
+    assert.equal(publishSessionReasons.includes("codex-app-server-terminal-assistant-message"), false);
+    assert.notEqual(publishSessionReasons.at(-1), publishReasonBeforeTerminalMessage);
     providerSubscribers[0]({
       method: "item/started",
       params: {
@@ -2461,7 +2506,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
         .map((turn) => turn.user?.text)
         .filter(Boolean)
         .includes("This was typed directly into the Codex terminal."),
-      true
+      false
     );
     providerSubscribers[0]({
       method: "thread/status/changed",
@@ -2474,8 +2519,8 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       }
     });
     await delay(5);
-    assert.equal(codexAppServerAgentRunSnapshot(session).state, "active");
-    assert.equal(codexAppServerAgentRunSnapshot(session).providerStatus, "inProgress");
+    assert.equal(codexAppServerAgentRunSnapshot(session).state, "completed");
+    assert.equal(codexAppServerAgentRunSnapshot(session).providerStatus, "completed");
     providerSubscribers[0]({
       method: "thread/status/changed",
       params: {
@@ -2801,6 +2846,173 @@ test("Vibe64 self-target Codex interrupt keeps native provider control", async (
   });
 });
 
+test("Vibe64 Codex app-server interrupt refusal keeps the active turn running", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "codex_app_server_interrupt_refused";
+    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
+    const worktree = path.join(sessionRoot, "worktree");
+    const threadId = "00000000-0000-4000-8000-000000000016";
+    const turnId = "codex-app-server-turn-refused";
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "issue_file_created",
+      metadata: {
+        agent_identity_conversation_id: threadId,
+        agent_identity_provider: "codex",
+        agent_identity_resume_strategy: "provider-native",
+        agent_identity_status: "ready",
+        agent_identity_workdir: worktree,
+        worktree_path: worktree
+      },
+      sessionId
+    });
+    await runtime.store.writeAgentRunEvent(sessionId, CODEX_APP_SERVER_AGENT_RUN_ID, {
+      event: {
+        kind: "active"
+      },
+      patch: {
+        provider: "codex",
+        providerInterface: "app-server",
+        providerStatus: "inProgress",
+        providerThreadId: threadId,
+        providerTurnId: turnId,
+        state: "active"
+      }
+    });
+    await mkdir(worktree, {
+      recursive: true
+    });
+
+    const interruptCalls = [];
+    const controller = createCodexTerminalController({
+      codexAppServerPromptDeliveryEnabled: true,
+      codexAppServerProviderFactory: () => ({
+        async ensureAvailable() {
+          return {
+            ok: true
+          };
+        },
+        async interruptTurn(interruptedThreadId, interruptedTurnId) {
+          interruptCalls.push({
+            threadId: interruptedThreadId,
+            turnId: interruptedTurnId
+          });
+          return {
+            error: "Codex cannot be interrupted right now.",
+            ok: false
+          };
+        }
+      }),
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return runtime;
+        }
+      }
+    });
+
+    const result = await controller.interruptTurn(sessionId);
+
+    assert.equal(result.ok, false);
+    assert.match(result.error, /cannot be interrupted/u);
+    assert.deepEqual(interruptCalls, [
+      {
+        threadId,
+        turnId
+      }
+    ]);
+    const session = await runtime.getSession(sessionId);
+    assert.equal(codexAppServerAgentRunSnapshot(session).state, "active");
+    assert.equal(codexAppServerAgentRunSnapshot(session).active, true);
+    assert.equal(codexAppServerAgentRunSnapshot(session).providerStatus, "inProgress");
+    assert.equal(codexAppServerAgentRunSnapshot(session).providerThreadId, threadId);
+    assert.equal(codexAppServerAgentRunSnapshot(session).providerTurnId, turnId);
+    assert.equal(codexAppServerAgentRunSnapshot(session).error, "");
+  });
+});
+
+test("Vibe64 Codex app-server interrupt without a turn id does not mark the run interrupted", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "codex_app_server_interrupt_missing_turn_id";
+    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
+    const worktree = path.join(sessionRoot, "worktree");
+    const threadId = "00000000-0000-4000-8000-000000000017";
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "issue_file_created",
+      metadata: {
+        agent_identity_conversation_id: threadId,
+        agent_identity_provider: "codex",
+        agent_identity_resume_strategy: "provider-native",
+        agent_identity_status: "ready",
+        agent_identity_workdir: worktree,
+        worktree_path: worktree
+      },
+      sessionId
+    });
+    await runtime.store.writeAgentRunEvent(sessionId, CODEX_APP_SERVER_AGENT_RUN_ID, {
+      event: {
+        kind: "active"
+      },
+      patch: {
+        provider: "codex",
+        providerInterface: "app-server",
+        providerStatus: "inProgress",
+        providerThreadId: threadId,
+        providerTurnId: "",
+        state: "active"
+      }
+    });
+    await mkdir(worktree, {
+      recursive: true
+    });
+
+    const interruptCalls = [];
+    const controller = createCodexTerminalController({
+      codexAppServerPromptDeliveryEnabled: true,
+      codexAppServerProviderFactory: () => ({
+        async ensureAvailable() {
+          return {
+            ok: true
+          };
+        },
+        async interruptTurn(interruptedThreadId, interruptedTurnId) {
+          interruptCalls.push({
+            threadId: interruptedThreadId,
+            turnId: interruptedTurnId
+          });
+          return {
+            ok: true
+          };
+        }
+      }),
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return runtime;
+        }
+      }
+    });
+
+    const result = await controller.interruptTurn(sessionId);
+
+    assert.equal(result.ok, false);
+    assert.equal(result.operationOutcome, "interrupt_unavailable");
+    assert.deepEqual(interruptCalls, []);
+    const session = await runtime.getSession(sessionId);
+    assert.equal(codexAppServerAgentRunSnapshot(session).state, "active");
+    assert.equal(codexAppServerAgentRunSnapshot(session).active, true);
+    assert.equal(codexAppServerAgentRunSnapshot(session).providerStatus, "inProgress");
+    assert.equal(codexAppServerAgentRunSnapshot(session).providerThreadId, threadId);
+    assert.equal(codexAppServerAgentRunSnapshot(session).providerTurnId, "");
+    assert.equal(codexAppServerAgentRunSnapshot(session).error, "");
+  });
+});
+
 test("Vibe64 Codex app-server preserves active turn id across status updates before interrupt", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_preserve_turn_id_before_interrupt";
@@ -3055,6 +3267,142 @@ test("Vibe64 Codex app-server ignores late completion after user interrupt", asy
       "codex-app-server-turn-active",
       "codex-app-server-turn-idle"
     ]);
+  });
+});
+
+test("Vibe64 Codex app-server logs duplicate stale assistant results only once", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "codex_app_server_duplicate_stale_result";
+    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
+    const worktree = path.join(sessionRoot, "worktree");
+    const threadId = "00000000-0000-4000-8000-000000000018";
+    const turnId = "codex-app-server-turn-stale-duplicates";
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "issue_file_created",
+      metadata: {
+        worktree_path: worktree
+      },
+      sessionId
+    });
+    await mkdir(worktree, {
+      recursive: true
+    });
+
+    const providerSubscribers = [];
+    const controller = createCodexTerminalController({
+      codexAppServerPromptDeliveryEnabled: true,
+      codexAppServerProviderFactory: () => ({
+        async ensureAvailable() {
+          return {
+            ok: true
+          };
+        },
+        async ensureRuntime() {
+          return {
+            endpoint: "unix:///tmp/vibe64-stale-result-duplicates-test.sock",
+            runtimeDir: path.join(targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server-test"),
+            socketPath: "/tmp/vibe64-stale-result-duplicates-test.sock",
+            transport: "unix"
+          };
+        },
+        async interruptTurn() {
+          return {
+            ok: true
+          };
+        },
+        async sendTurn(_threadId, input) {
+          return {
+            id: /VIBE64_SESSION_BOOTSTRAP/u.test(input) ? "bootstrap-turn" : turnId,
+            status: /VIBE64_SESSION_BOOTSTRAP/u.test(input) ? "completed" : "inProgress"
+          };
+        },
+        async startThread() {
+          return {
+            id: threadId
+          };
+        },
+        subscribe(callback) {
+          providerSubscribers.push(callback);
+          return () => null;
+        }
+      }),
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return runtime;
+        }
+      }
+    });
+
+    const injected = await controller.injectCodexPrompt(sessionId, {
+      handoffId: "000001_issue_file_created.json:draft_issue",
+      kind: "codex_prompt_handoff",
+      terminalInput: "Vibe64 interactive conversation turn:\nUser/request input:\n- conversationRequest: Finish then interrupt."
+    });
+
+    assert.equal(injected.ok, true);
+    assert.equal(injected.turnId, turnId);
+    assert.ok(providerSubscribers.length >= 1);
+
+    for (const subscriber of providerSubscribers) {
+      subscriber({
+        method: "turn/completed",
+        params: {
+          status: "completed",
+          threadId,
+          turnId
+        }
+      });
+    }
+    await delay(5);
+
+    const interrupted = await controller.interruptTurn(sessionId);
+
+    assert.equal(interrupted.ok, true);
+    const staleLogs = [];
+    const originalInfo = console.info;
+    console.info = (...args) => {
+      const line = args.map((part) => String(part)).join(" ");
+      if (line.includes("server.codexTerminal.appServerAgentResult.stale")) {
+        staleLogs.push(line);
+      }
+      return originalInfo.apply(console, args);
+    };
+    try {
+      for (let index = 0; index < 5; index += 1) {
+        for (const subscriber of providerSubscribers) {
+          subscriber({
+            method: "item/completed",
+            params: {
+              item: {
+                content: [
+                  {
+                    text: "Late assistant result after interruption.",
+                    type: "text"
+                  }
+                ],
+                id: `assistant-message-${index}`,
+                type: "assistantMessage"
+              },
+              threadId,
+              turnId
+            }
+          });
+        }
+      }
+      await delay(25);
+    } finally {
+      console.info = originalInfo;
+    }
+
+    assert.equal(staleLogs.length, 1);
+    const session = await runtime.getSession(sessionId);
+    assert.equal(codexAppServerAgentRunSnapshot(session).state, "interrupted");
+    assert.equal(codexAppServerAgentRunSnapshot(session).providerStatus, "interrupted");
+    assert.match(codexAppServerAgentRunSnapshot(session).error, /Stopped by user/u);
   });
 });
 

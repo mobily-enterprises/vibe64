@@ -51,11 +51,6 @@ async function gitResult(cwd, args, {
   }
 }
 
-async function gitCommandSucceeds(cwd, args) {
-  const result = await gitResult(cwd, args);
-  return result.ok;
-}
-
 async function readCurrentBranch(targetRoot) {
   return gitOutput(targetRoot, ["branch", "--show-current"], {
     timeout: 15_000

@@ -248,7 +248,6 @@ test("Studio project context rejects empty or escaping project folder names", as
 test("Studio project context reads shared project state and ignores private local state", async () => {
   await withTemporaryRoot(async (root) => {
     const projectsRoot = path.join(root, "projects");
-    const projectRoot = path.join(projectsRoot, "canonical-app");
     const context = createStudioProjectContext({
       explicitProjectsRoot: projectsRoot,
       env: {},

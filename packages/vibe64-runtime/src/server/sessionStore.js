@@ -1571,6 +1571,9 @@ function createVibe64SessionStore({
       readMetadata(sessionPaths.sessionId),
       readCompletedSteps(sessionPaths.sessionId)
     ]);
+    const stepMachine = currentStep
+      ? await readStepState(sessionPaths.sessionId, currentStep)
+      : null;
     const sessionName = await sessionNameForSession(sessionPaths, metadata);
     return {
       completedStepCount: completedSteps.length,
@@ -1590,6 +1593,7 @@ function createVibe64SessionStore({
       sessionRoot: sessionPaths.sessionRoot,
       stateRoot: sessionPaths.stateRoot,
       status,
+      stepMachine,
       stepRevision: stepRevisionNumber(manifest.stepRevision),
       targetRoot: sessionPaths.targetRoot,
       updatedAt: normalizeText(manifest.updatedAt || manifest.createdAt)

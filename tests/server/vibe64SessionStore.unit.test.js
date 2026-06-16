@@ -260,6 +260,7 @@ test("vibe64 session store reads and writes metadata, artifacts, status, current
       sessionId: summary.sessionId,
       sessionRoot: summary.sessionRoot,
       status: summary.status,
+      stepMachine: summary.stepMachine,
       targetRoot: summary.targetRoot
     }, {
       completedStepCount: 0,
@@ -273,7 +274,46 @@ test("vibe64 session store reads and writes metadata, artifacts, status, current
       sessionId: "state_contract",
       sessionRoot: path.join(projectLocalRoot(targetRoot), "sessions", "active", "state_contract"),
       status: "blocked",
+      stepMachine: null,
       targetRoot
+    });
+  });
+});
+
+test("vibe64 session summaries include current step lifecycle state", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const store = createTestSessionStore({
+      clock: () => new Date("2026-05-16T01:02:03.000Z"),
+      targetRoot
+    });
+    await store.createSession({
+      initialStep: "plan_and_execute",
+      sessionId: "summary_step_state"
+    });
+    await store.writeStepState("summary_step_state", "plan_and_execute", {
+      message: "Codex is thinking.",
+      status: "awaiting_agent_result"
+    });
+
+    const summary = await store.readSessionSummary("summary_step_state");
+
+    assert.deepEqual({
+      hasArtifactReadiness: "artifactReadiness" in summary,
+      hasCommandLifecycles: "commandLifecycles" in summary,
+      hasPresentation: "presentation" in summary,
+      sessionId: summary.sessionId,
+      stepMachine: summary.stepMachine
+    }, {
+      hasArtifactReadiness: false,
+      hasCommandLifecycles: false,
+      hasPresentation: false,
+      sessionId: "summary_step_state",
+      stepMachine: {
+        at: "2026-05-16T01:02:03.000Z",
+        message: "Codex is thinking.",
+        status: "awaiting_agent_result",
+        stepId: "plan_and_execute"
+      }
     });
   });
 });

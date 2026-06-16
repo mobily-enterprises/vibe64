@@ -24,10 +24,26 @@ function initialControlValues(control = {}) {
     .map((field) => [field.name, String(field.value ?? "")]));
 }
 
-function latestAssistantMessage(conversationLog = {}) {
+function conversationLogTurns(conversationLog = {}) {
   const turns = Array.isArray(conversationLog?.turns) ? conversationLog.turns : [];
+  return turns.length
+    ? turns
+    : Array.isArray(conversationLog)
+      ? conversationLog
+      : [];
+}
+
+function assistantTurnText(turn = {}) {
+  return normalizedComposerText(turn?.assistant?.text);
+}
+
+function latestAssistantMessageAwaitingUserReply(conversationLog = {}) {
+  const turns = conversationLogTurns(conversationLog);
   for (let index = turns.length - 1; index >= 0; index -= 1) {
-    const text = String(turns[index]?.assistant?.text || "").trim();
+    if (conversationTurnUserText(turns[index])) {
+      return "";
+    }
+    const text = assistantTurnText(turns[index]);
     if (text) {
       return text;
     }
@@ -69,7 +85,7 @@ function conversationTurnUserText(turn = {}) {
 }
 
 function latestSubmittedConversationText(conversationLog = {}) {
-  const turns = Array.isArray(conversationLog?.turns) ? conversationLog.turns : [];
+  const turns = conversationLogTurns(conversationLog);
   for (let index = turns.length - 1; index >= 0; index -= 1) {
     const text = conversationTurnUserText(turns[index]);
     if (text) {
@@ -92,6 +108,29 @@ function selectedControlDraftText({
     return normalizedComposerText(sourceValues[inputFields[0]?.name]);
   }
   return "";
+}
+
+function selectedControlValuesMatchFields(values = {}, fields = []) {
+  const sourceValues = plainObject(values);
+  const fieldNames = new Set((Array.isArray(fields) ? fields : [])
+    .map((field) => String(field?.name || ""))
+    .filter(Boolean));
+  const valueNames = Object.keys(sourceValues);
+  return (
+    valueNames.every((name) => fieldNames.has(name)) &&
+    [...fieldNames].every((name) => Object.hasOwn(sourceValues, name))
+  );
+}
+
+function selectedControlValuesForFields(control = {}, fields = [], values = {}) {
+  const sourceValues = plainObject(values);
+  const initialValues = initialControlValues(control);
+  return Object.fromEntries((Array.isArray(fields) ? fields : [])
+    .map((field) => {
+      const name = String(field?.name || "");
+      return [name, String(sourceValues[name] ?? initialValues[name] ?? "")];
+    })
+    .filter(([name]) => Boolean(name)));
 }
 
 function attachmentFieldsFromOptions(options = {}) {
@@ -191,7 +230,7 @@ function useVibe64AutopilotComposer({
       fields: selectedControlOriginalFields.value,
       fieldName: questionSugar.fieldName,
       intentId: selectedControl.value?.id,
-      message: latestAssistantMessage(currentConversationLog.value)
+      message: latestAssistantMessageAwaitingUserReply(currentConversationLog.value)
     });
   });
   const selectedControlFields = computed(() => {
@@ -280,6 +319,17 @@ function useVibe64AutopilotComposer({
       return;
     }
     clearSelectedControl();
+  }
+
+  function syncSelectedControlValuesWithCurrentFields() {
+    if (!selectedControl.value || selectedControlValuesMatchFields(selectedControlValues.value, selectedControlFields.value)) {
+      return;
+    }
+    selectedControlValues.value = selectedControlValuesForFields(
+      selectedControl.value,
+      selectedControlFields.value,
+      selectedControlValues.value
+    );
   }
 
   function clearConsumedConversationDraft() {
@@ -411,6 +461,12 @@ function useVibe64AutopilotComposer({
     flush: "sync"
   });
 
+  watch(selectedControlFields, () => {
+    syncSelectedControlValuesWithCurrentFields();
+  }, {
+    flush: "sync"
+  });
+
   watch(isRunning, () => {
     syncSelectedControlWithCurrentControls();
     if (isRunning.value) {
@@ -449,6 +505,7 @@ function useVibe64AutopilotComposer({
 export {
   controlHasInputFields,
   initialControlValues,
+  latestAssistantMessageAwaitingUserReply,
   latestSubmittedConversationText,
   selectedControlDraftText,
   useVibe64AutopilotComposer

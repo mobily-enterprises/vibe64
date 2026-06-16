@@ -371,6 +371,35 @@ describe("useVibe64AutopilotComposer", () => {
     expect(composer.selectedControlValues.value).toEqual({
       conversationRequest: ""
     });
+    expect(composer.selectedControlFields.value.map((field) => field.name)).toEqual(["conversationRequest"]);
+    expect(composer.canSubmitSelectedControl.value).toBe(false);
+  });
+
+  it("does not render latest assistant questions after a later user answer", async () => {
+    const composer = useVibe64AutopilotComposer({
+      controls: ref([conversationControl()]),
+      conversationLog: ref([
+        {
+          assistant: {
+            text: "[1] Which file?\n[2] What change?"
+          },
+          turnId: "000001"
+        },
+        {
+          turnId: "000002",
+          user: {
+            text: "[1] src/App.vue\n[2] Add the banner"
+          }
+        }
+      ]),
+      primaryIntentId: ref("talk_to_codex"),
+      running: ref(false)
+    });
+
+    await nextTick();
+
+    expect(composer.selectedControlFields.value.map((field) => field.name)).toEqual(["conversationRequest"]);
+    expect(composer.selectedControlValues.value.conversationRequest).toBe("");
     expect(composer.canSubmitSelectedControl.value).toBe(false);
   });
 

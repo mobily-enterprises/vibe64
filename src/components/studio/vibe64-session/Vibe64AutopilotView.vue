@@ -95,6 +95,7 @@
             <Vibe64WorkflowControlForm
               class="studio-autopilot__inline-control"
               :can-submit-selected-control="canSubmitSelectedControl"
+              :input-disabled="composerInputLocked"
               layout="start"
               :running="composerInputLocked"
               :selected-control="selectedControl"
@@ -376,6 +377,7 @@
           :cancel-visible="!composerInputLocked && !selectedControlIsPrimary"
           :can-submit-selected-control="canSubmitSelectedControl"
           inline-submit
+          :input-disabled="composerInputLocked"
           :interrupt-visible="codexInterruptVisible"
           layout="split"
           :running="composerInputLocked"

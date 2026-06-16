@@ -1,4 +1,4 @@
-import { computed, proxyRefs, watch } from "vue";
+import { computed, proxyRefs, reactive, watch } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
 import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
@@ -62,6 +62,76 @@ function sessionRevisionNumber(session = null) {
   return Number.isFinite(revision) ? revision : null;
 }
 
+function sessionRecordHasRuntimeProjection(session = null) {
+  return Boolean(
+    session?.presentation ||
+    session?.stepMachine ||
+    session?.codexAgentTurn ||
+    Object.hasOwn(session || {}, "codexAgentTurnActive") ||
+    Array.isArray(session?.agentRuns)
+  );
+}
+
+function sessionPromptWaitingForAgent(session = null) {
+  const prompt = session?.presentation?.prompt;
+  return Boolean(
+    prompt &&
+    typeof prompt === "object" &&
+    !Array.isArray(prompt) &&
+    (
+      prompt.state === "waiting_for_agent" ||
+      prompt.status === "waiting_for_agent"
+    )
+  );
+}
+
+function sessionRecordHasActiveCodexWork(session = null) {
+  return Boolean(
+    session?.codexAgentTurnActive ||
+    session?.codexAgentTurn?.active ||
+    sessionPromptWaitingForAgent(session) ||
+    String(session?.stepMachine?.status || "") === "awaiting_agent_result" ||
+    String(session?.presentation?.step?.status || "") === "awaiting_agent_result"
+  );
+}
+
+function sessionRecordMatchesId(session = null, sessionId = "") {
+  const normalizedSessionId = String(sessionId || "").trim();
+  return Boolean(
+    normalizedSessionId &&
+    session?.sessionId === normalizedSessionId &&
+    session?.ok !== false
+  );
+}
+
+function rememberSessionDetailRecord(detailRecordsById = {}, session = null) {
+  if (
+    !session?.sessionId ||
+    session?.ok === false ||
+    !sessionRecordHasRuntimeProjection(session)
+  ) {
+    return false;
+  }
+  detailRecordsById[session.sessionId] = session;
+  return true;
+}
+
+function sessionDetailRecordForId(
+  detailRecordsById = {},
+  sessionId = "",
+  liveDetailSession = null
+) {
+  const normalizedSessionId = String(sessionId || "").trim();
+  if (!normalizedSessionId) {
+    return null;
+  }
+  if (sessionRecordMatchesId(liveDetailSession, normalizedSessionId)) {
+    return liveDetailSession;
+  }
+  const cachedSession = detailRecordsById?.[normalizedSessionId] || null;
+  return sessionRecordMatchesId(cachedSession, normalizedSessionId) ? cachedSession : null;
+}
+
 function selectedSessionRecord(detailSession = null, listSession = null, selectedSessionId = "") {
   const normalizedSessionId = String(selectedSessionId || "").trim();
   const listSessionMatches = Boolean(
@@ -77,6 +147,12 @@ function selectedSessionRecord(detailSession = null, listSession = null, selecte
     const detailRevision = sessionRevisionNumber(detailSession);
     const listRevision = sessionRevisionNumber(listSession);
     if (listSessionMatches && listRevision !== null && detailRevision !== null && listRevision > detailRevision) {
+      if (
+        sessionRecordHasActiveCodexWork(detailSession) &&
+        !sessionRecordHasRuntimeProjection(listSession)
+      ) {
+        return detailSession;
+      }
       return listSession;
     }
     return detailSession;
@@ -233,6 +309,7 @@ function useVibe64SessionData({
     record: computed(() => selectedSessionResource.data.value || null),
     refresh: selectedSessionResource.reload
   });
+  const sessionDetailRecordsById = reactive({});
 
   const sessions = computed(() => visibleVibe64Sessions(sessionList.items || []));
   const studioCapabilities = computed(() => {
@@ -260,9 +337,14 @@ function useVibe64SessionData({
   const selectedListSession = computed(() => {
     return sessions.value.find((session) => session.sessionId === selectedSessionId.value) || null;
   });
+  const selectedDetailSession = computed(() => sessionDetailRecordForId(
+    sessionDetailRecordsById,
+    selectedSessionId.value,
+    selectedSessionView.record
+  ));
   const selectedRawSession = computed(() => {
     return selectedSessionRecord(
-      selectedSessionView.record,
+      selectedDetailSession.value,
       selectedListSession.value,
       selectedSessionId.value
     );
@@ -341,8 +423,14 @@ function useVibe64SessionData({
     if (normalizedSessionId === selectedSessionId.value && selectedRawSession.value) {
       return enrichVibe64SessionForDisplay(selectedRawSession.value);
     }
+    const detailSession = sessionDetailRecordForId(
+      sessionDetailRecordsById,
+      normalizedSessionId,
+      selectedSessionView.record
+    );
+    const listSession = sessions.value.find((session) => session.sessionId === normalizedSessionId) || null;
     return enrichVibe64SessionForDisplay(
-      sessions.value.find((session) => session.sessionId === normalizedSessionId) || null
+      selectedSessionRecord(detailSession, listSession, normalizedSessionId)
     );
   }
 
@@ -491,6 +579,12 @@ function useVibe64SessionData({
     immediate: true
   });
 
+  watch(() => selectedSessionView.record, (session) => {
+    rememberSessionDetailRecord(sessionDetailRecordsById, session);
+  }, {
+    immediate: true
+  });
+
   watch(capabilitiesDebugState, (state) => {
     vibe64SessionDebugLog("client.sessionData.capabilities.changed", state);
   }, {
@@ -559,6 +653,8 @@ function useVibe64SessionData({
 }
 
 export {
+  rememberSessionDetailRecord,
+  sessionDetailRecordForId,
   selectedSessionRecord,
   sessionIdExistsInList,
   sessionRevisionNumber,

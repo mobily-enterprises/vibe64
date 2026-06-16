@@ -2219,6 +2219,222 @@ test.describe("Autopilot dumb client contract", () => {
     ))).toEqual([]);
   });
 
+  test("keeps the active Codex turn locked and interruptable after switching sessions", async ({ page }) => {
+    await mockCodexTerminalPreviewSocket(page);
+    const intentRequests: unknown[] = [];
+    const interruptPaths: string[] = [];
+    let interruptRequests = 0;
+    const activeSession = sessionPayload({
+      intents: [
+        {
+          enabled: true,
+          id: "talk_to_codex",
+          inputFields: [
+            {
+              kind: "textarea",
+              label: "What do you want to ask Codex?",
+              name: "conversationRequest"
+            }
+          ],
+          label: "Ask Codex",
+          style: "primary"
+        },
+        {
+          enabled: true,
+          id: "continue_step",
+          label: "Next step",
+          style: "primary"
+        }
+      ],
+      metadata: {
+        issue_word: "Alpha"
+      },
+      presentation: {
+        auto: {
+          nextOperation: {
+            executable: false,
+            kind: "stop",
+            reason: "user"
+          }
+        },
+        screen: {
+          kind: "conversation",
+          message: "Ask Codex for changes.",
+          primaryIntentId: "talk_to_codex",
+          sections: [
+            {
+              kind: "response_preview"
+            }
+          ],
+          title: "Talk to Codex"
+        },
+        step: {
+          id: "server_step",
+          label: "Talk to Codex",
+          status: "waiting_for_input"
+        }
+      },
+      revision: 1,
+      sessionId: "session-alpha",
+      sessionName: "Alpha",
+      stepMachine: {
+        status: "waiting_for_input",
+        stepId: "server_step"
+      }
+    });
+    const otherSession = sessionPayload({
+      currentStep: "other_step",
+      currentStepDefinition: {
+        id: "other_step",
+        label: "Other step"
+      },
+      metadata: {
+        issue_word: "Beta"
+      },
+      presentation: {
+        screen: {
+          kind: "conversation",
+          message: "Other session.",
+          sections: [
+            {
+              kind: "response_preview"
+            }
+          ],
+          title: "Other session"
+        },
+        step: {
+          id: "other_step",
+          label: "Other step",
+          status: "ready"
+        }
+      },
+      revision: 1,
+      sessionId: "session-beta",
+      sessionName: "Beta",
+      stepMachine: {
+        status: "ready",
+        stepId: "other_step"
+      }
+    });
+    let activeListRevision = 1;
+    const listSessions = () => [
+      sessionListSummary(otherSession),
+      sessionListSummary(activeSession, {
+        revision: activeListRevision
+      })
+    ];
+    page.on("request", (request) => {
+      const pathname = new URL(request.url()).pathname;
+      if (pathname.endsWith("/codex-turn/interrupt")) {
+        interruptPaths.push(pathname);
+      }
+    });
+    await mockVibe64Session(page, activeSession, {
+      conversationLog: [
+        {
+          assistant: {
+            at: "2026-05-25T01:03:00.000Z",
+            role: "assistant",
+            text: "Previous Codex answer."
+          },
+          turnId: "turn-1",
+          user: {
+            at: "2026-05-25T01:02:00.000Z",
+            role: "user",
+            text: "Please inspect the current state."
+          }
+        }
+      ],
+      onCodexTurnInterrupt: () => {
+        interruptRequests += 1;
+      },
+      onIntent: (body) => {
+        intentRequests.push(body);
+        activeListRevision = 3;
+        Object.assign(activeSession, {
+          codexAgentTurn: {
+            active: true,
+            state: "active",
+            status: "inProgress",
+            threadId: "thread-alpha",
+            turnId: "turn-alpha"
+          },
+          codexAgentTurnActive: true,
+          codexTerminal: {
+            commandPreview: "codex",
+            id: "server-codex-terminal",
+            status: "running"
+          },
+          presentation: {
+            ...(activeSession.presentation as Record<string, unknown>),
+            auto: {
+              nextOperation: {
+                executable: false,
+                kind: "wait",
+                reason: "agent"
+              }
+            },
+            prompt: {
+              state: "waiting_for_agent",
+              statusText: "Codex is thinking."
+            },
+            screen: {
+              ...((activeSession.presentation as Record<string, unknown>).screen as Record<string, unknown>),
+              showProgress: true
+            },
+            step: {
+              id: "server_step",
+              label: "Talk to Codex",
+              status: "awaiting_agent_result"
+            },
+            terminal: {
+              codex: {
+                terminalSessionId: "server-codex-terminal"
+              }
+            }
+          },
+          revision: 2,
+          stepMachine: {
+            status: "awaiting_agent_result",
+            stepId: "server_step"
+          },
+          updatedAt: "2026-05-24T00:01:00.000Z"
+        });
+      },
+      sessionDetails: [otherSession, activeSession],
+      sessionList: listSessions
+    });
+
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+    const visibleSessionTab = (name: string) => page.locator(
+      ".studio-ai-session-runtime:not([style*='display: none']) .studio-ai-sessions__tab",
+      { hasText: name }
+    );
+    const activeComposerInput = () => page.locator(
+      ".studio-ai-session-runtime:not([style*='display: none']) textarea"
+    ).first();
+
+    const composerInput = page.getByLabel("What do you want to ask Codex?");
+    await composerInput.fill("Please tighten this up.");
+    await page.getByRole("button", { name: "Ask Codex" }).click();
+
+    await expect.poll(() => intentRequests).toHaveLength(1);
+    await expect(composerInput).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Stop Codex" })).toBeVisible();
+
+    await visibleSessionTab("Beta").click();
+    await expect(visibleSessionTab("Beta")).toHaveClass(/studio-ai-sessions__tab--active/u);
+    await visibleSessionTab("Alpha").click();
+
+    await expect(activeComposerInput()).toBeDisabled();
+    const stopButton = page.getByRole("button", { name: "Stop Codex" });
+    await expect(stopButton).toBeVisible();
+    await stopButton.click();
+
+    await expect.poll(() => interruptRequests).toBe(1);
+    expect(interruptPaths.some((pathname) => /\/vibe64\/sessions\/session-alpha\/codex-turn\/interrupt$/u.test(pathname))).toBe(true);
+  });
+
   test("does not repeat the conversation starter after real chat history exists", async ({ page }) => {
     const session = sessionPayload({
       intents: [
@@ -3384,6 +3600,7 @@ async function mockVibe64Session(
     onCodexTerminalStart = () => undefined,
     onShellTerminalClose = () => undefined,
     onShellTerminalStart = () => undefined,
+    sessionDetails = null,
     sessionList = null,
     conversationLog = []
   }: {
@@ -3402,13 +3619,20 @@ async function mockVibe64Session(
     onShellTerminalClose?: () => void;
     onShellTerminalStart?: (body?: Record<string, unknown>) => Record<string, unknown> | void;
     onStepInput?: (body: unknown) => void;
-    sessionList?: Record<string, unknown>[] | null;
+    sessionDetails?: Record<string, unknown>[] | null;
+    sessionList?: Record<string, unknown>[] | (() => Record<string, unknown>[]) | null;
   } = {}
 ) {
-  const listedSessions = Array.isArray(sessionList) ? sessionList : [session];
+  const listedSessions = () => typeof sessionList === "function"
+    ? sessionList()
+    : Array.isArray(sessionList)
+      ? sessionList
+      : [session];
+  const detailSessions = Array.isArray(sessionDetails) ? sessionDetails : null;
   function sessionForRequest(pathname: string) {
     const requestedSessionId = decodeURIComponent(pathname.split("/").at(-1) || "");
-    return listedSessions.find((item) => item.sessionId === requestedSessionId) || session;
+    const sourceSessions = detailSessions || listedSessions();
+    return sourceSessions.find((item) => item.sessionId === requestedSessionId) || session;
   }
 
   await mockStudioReady(page);
@@ -3573,10 +3797,10 @@ async function mockVibe64Session(
       },
       limits: {
         maxOpenSessions: 5,
-        openSessionCount: 1
+        openSessionCount: listedSessions().length
       },
       ok: true,
-      sessions: listedSessions
+      sessions: listedSessions()
     });
   }, { prefix: true });
 }
@@ -3950,6 +4174,33 @@ function sessionPayload(overrides: Record<string, unknown> = {}) {
     title: "Renderer session",
     updatedAt: "2026-05-24T00:00:00.000Z",
     workflowId: "test-workflow",
+    ...overrides
+  };
+}
+
+function sessionListSummary(session: Record<string, unknown>, overrides: Record<string, unknown> = {}) {
+  return {
+    completedStepCount: Array.isArray(session.completedSteps) ? session.completedSteps.length : 0,
+    completedSteps: Array.isArray(session.completedSteps) ? session.completedSteps : [],
+    createdAt: session.createdAt,
+    currentStep: session.currentStep,
+    manifest: {
+      createdAt: session.createdAt,
+      revision: session.revision,
+      stepRevision: session.stepRevision,
+      updatedAt: session.updatedAt
+    },
+    metadata: session.metadata || {},
+    revision: session.revision,
+    sessionId: session.sessionId,
+    sessionName: session.sessionName,
+    sessionRoot: session.sessionRoot,
+    stateRoot: session.stateRoot,
+    status: session.status,
+    stepMachine: session.stepMachine,
+    stepRevision: session.stepRevision,
+    targetRoot: session.targetRoot,
+    updatedAt: session.updatedAt,
     ...overrides
   };
 }
