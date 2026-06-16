@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  artifactPreviewSubresourceActive,
+  artifactReadinessChangeRefreshDecision,
   codexTerminalStartAllowed,
   runtimeCapabilitiesState,
-  runtimeControlsAreBusy
+  runtimeControlsAreBusy,
+  sessionScreenHasAnySection,
+  sessionScreenHasSection,
+  sessionScreenSections
 } from "../../src/composables/useVibe64SessionRuntimeHost.js";
 
 describe("Vibe64 session runtime host", () => {
@@ -85,5 +90,106 @@ describe("Vibe64 session runtime host", () => {
       capabilitiesReady: true,
       sessionReady: true
     })).toBe(false);
+  });
+
+  it("derives artifact subresource activity from the current screen sections", () => {
+    const session = {
+      presentation: {
+        screen: {
+          sections: [
+            {
+              kind: "response_preview"
+            },
+            {
+              kind: "conversation"
+            }
+          ]
+        }
+      }
+    };
+
+    expect(sessionScreenSections(session)).toHaveLength(2);
+    expect(sessionScreenHasSection(session, "response_preview")).toBe(true);
+    expect(sessionScreenHasSection(session, "report_preview")).toBe(false);
+    expect(sessionScreenHasAnySection(session, [
+      "report_preview",
+      "response_preview"
+    ])).toBe(true);
+    expect(sessionScreenHasAnySection({
+      presentation: {
+        screen: {
+          sections: []
+        }
+      }
+    }, [
+      "report_preview",
+      "response_preview"
+    ])).toBe(false);
+  });
+
+  it("waits for artifact readiness initialization before loading previews", () => {
+    const session = {
+      presentation: {
+        screen: {
+          sections: [
+            {
+              kind: "report_preview"
+            }
+          ]
+        }
+      }
+    };
+
+    expect(artifactPreviewSubresourceActive({
+      active: true,
+      initialized: false,
+      sectionKind: "report_preview",
+      session
+    })).toBe(false);
+
+    expect(artifactPreviewSubresourceActive({
+      active: true,
+      initialized: true,
+      sectionKind: "report_preview",
+      session
+    })).toBe(true);
+  });
+
+  it("does not refresh selected session data for the initial artifact readiness snapshot", () => {
+    expect(artifactReadinessChangeRefreshDecision({
+      active: true,
+      initialized: true,
+      initializedSessionId: "",
+      sessionId: "session-1",
+      stepStatus: "ready",
+      version: "report.md:ready:fingerprint"
+    })).toEqual({
+      initializedSessionId: "session-1",
+      refresh: false
+    });
+
+    expect(artifactReadinessChangeRefreshDecision({
+      active: true,
+      initialized: true,
+      initializedSessionId: "session-1",
+      sessionId: "session-1",
+      stepStatus: "ready",
+      version: "report.md:ready:next"
+    })).toEqual({
+      initializedSessionId: "session-1",
+      refresh: true
+    });
+
+    expect(artifactReadinessChangeRefreshDecision({
+      active: true,
+      initialized: true,
+      initializedSessionId: "session-1",
+      sessionId: "session-1",
+      stepStatus: "awaiting_agent_result",
+      version: "report.md:ready:next"
+    })).toEqual({
+      initializedSessionId: "session-1",
+      refresh: false
+    });
   });
 });

@@ -6,6 +6,9 @@ import {
   normalizeConversationLog,
   sessionIsAwaitingCodex
 } from "../../src/composables/useVibe64ConversationLog.js";
+import {
+  vibe64BrowserTabOriginId
+} from "../../src/lib/vibe64BrowserTabOrigin.js";
 
 describe("useVibe64ConversationLog", () => {
   it("normalizes durable conversation turns and ignores empty messages", () => {
@@ -228,7 +231,9 @@ describe("useVibe64ConversationLog", () => {
     })).toBe("session-1|active|maintenance_conversation|local_session_finished|ready|awaiting_agent_result|local_session_finished|ready|local_session_finished|operation-1|send_message");
   });
 
-  it("refreshes for any selected-session change event", () => {
+  it("refreshes only for selected-session events that can change durable chat text", () => {
+    const ownOriginId = vibe64BrowserTabOriginId();
+
     expect(conversationLogRealtimeShouldRefresh({
       payload: {
         sessionId: "session-1"
@@ -258,10 +263,76 @@ describe("useVibe64ConversationLog", () => {
 
     expect(conversationLogRealtimeShouldRefresh({
       payload: {
-        reason: "codex-app-server-turn-active",
+        reason: "codex-app-server-agent-result",
         sessionId: "session-1"
       }
     }, "session-1")).toBe(true);
+
+    expect(conversationLogRealtimeShouldRefresh({
+      payload: {
+        reason: "codex-prompt-injected",
+        sessionId: "session-1"
+      }
+    }, "session-1")).toBe(false);
+
+    expect(conversationLogRealtimeShouldRefresh({
+      payload: {
+        reason: "session-action-run",
+        sessionId: "session-1"
+      }
+    }, "session-1")).toBe(true);
+
+    expect(conversationLogRealtimeShouldRefresh({
+      payload: {
+        originId: ownOriginId,
+        reason: "session-action-run",
+        sessionId: "session-1"
+      }
+    }, "session-1")).toBe(false);
+
+    expect(conversationLogRealtimeShouldRefresh({
+      payload: {
+        originId: "other-tab",
+        reason: "session-action-run",
+        sessionId: "session-1"
+      }
+    }, "session-1")).toBe(true);
+
+    expect(conversationLogRealtimeShouldRefresh({
+      payload: {
+        reason: "session-intent-run",
+        sessionId: "session-1"
+      }
+    }, "session-1")).toBe(true);
+
+    expect(conversationLogRealtimeShouldRefresh({
+      payload: {
+        originId: ownOriginId,
+        reason: "session-intent-run",
+        sessionId: "session-1"
+      }
+    }, "session-1")).toBe(false);
+
+    expect(conversationLogRealtimeShouldRefresh({
+      payload: {
+        reason: "codex-app-server-turn-active",
+        sessionId: "session-1"
+      }
+    }, "session-1")).toBe(false);
+
+    expect(conversationLogRealtimeShouldRefresh({
+      payload: {
+        reason: "session-advanced",
+        sessionId: "session-1"
+      }
+    }, "session-1")).toBe(false);
+
+    expect(conversationLogRealtimeShouldRefresh({
+      payload: {
+        reason: "codex-terminal-closed",
+        sessionId: "session-1"
+      }
+    }, "session-1")).toBe(false);
 
     expect(conversationLogRealtimeShouldRefresh({
       payload: {

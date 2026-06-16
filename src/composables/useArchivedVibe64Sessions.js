@@ -30,6 +30,9 @@ import {
   vibe64SessionStatusColor,
   vibe64SessionStatusLabel
 } from "@/lib/vibe64SessionViewModel.js";
+import {
+  vibe64RealtimeOriginPayload
+} from "@/lib/vibe64BrowserTabOrigin.js";
 
 const archivedVibe64SessionsEmits = ["loading-changed"];
 const archivedVibe64SessionsProps = {
@@ -96,7 +99,7 @@ function useArchivedVibe64Sessions(props, emit) {
       method: "POST",
       path: vibe64SessionPath(sessionsApiPath.value, context.sessionId, "/worktree/recover")
     }),
-    buildRawPayload: () => ({}),
+    buildRawPayload: () => vibe64RealtimeOriginPayload(),
     fallbackRunError: "Worktree could not be recovered.",
     messages: {
       error: "Worktree could not be recovered.",

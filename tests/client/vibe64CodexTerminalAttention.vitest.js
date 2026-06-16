@@ -57,10 +57,21 @@ describe("vibe64CodexTerminalAttention", () => {
     })).toBe(false);
   });
 
-  it("requires terminal recovery for an errored Codex terminal", () => {
+  it("ignores stale missing Codex terminal sessions", () => {
     expect(vibe64SessionNeedsCodexTerminalAttention({
       codexTerminal: {
         closeError: "Terminal session not found.",
+        id: "codex-terminal-1",
+        status: "exited"
+      },
+      sessionId: "session-1"
+    })).toBe(false);
+  });
+
+  it("requires terminal recovery for a real errored Codex terminal", () => {
+    expect(vibe64SessionNeedsCodexTerminalAttention({
+      codexTerminal: {
+        closeError: "Codex terminal exited with code 1.",
         id: "codex-terminal-1",
         status: "exited"
       },

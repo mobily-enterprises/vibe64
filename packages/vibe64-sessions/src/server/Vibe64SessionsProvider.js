@@ -47,21 +47,33 @@ class Vibe64SessionsProvider {
       {
         events: {
           abandonSession: [vibe64SessionChangedServiceEvent()],
-          advanceSession: [vibe64SessionChangedServiceEvent()],
+          advanceSession: [vibe64SessionChangedServiceEvent({
+            reason: "session-advanced"
+          })],
           broadcastComposerDraft: [vibe64ComposerChangedServiceEvent()],
           createSession: [vibe64SessionChangedServiceEvent({
             operation: "created"
           })],
           recoverSessionWorktree: [vibe64SessionChangedServiceEvent({
+            reason: "session-worktree-recovered",
             operation: "updated"
           })],
           recoverStuckSessionStep: [vibe64SessionChangedServiceEvent({
+            reason: "session-step-recovered",
             operation: "updated"
           })],
-          returnAgentControl: [vibe64SessionChangedServiceEvent()],
-          rewindSession: [vibe64SessionChangedServiceEvent()],
-          runSessionAction: [vibe64SessionChangedServiceEvent()],
-          runSessionIntent: [vibe64SessionChangedServiceEvent()]
+          returnAgentControl: [vibe64SessionChangedServiceEvent({
+            reason: "session-agent-control-returned"
+          })],
+          rewindSession: [vibe64SessionChangedServiceEvent({
+            reason: "session-rewound"
+          })],
+          runSessionAction: [vibe64SessionChangedServiceEvent({
+            reason: "session-action-run"
+          })],
+          runSessionIntent: [vibe64SessionChangedServiceEvent({
+            reason: "session-intent-run"
+          })]
         }
       }
     );

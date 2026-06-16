@@ -14,7 +14,7 @@ import {
   launchPreviewRequiresProxy,
   launchPreviewToolbarStorageKey,
   launchPreviewUrl,
-  launchStatusPollNeeded,
+  launchTargetsRealtimeShouldRefresh,
   launchControlScopeKey,
   launchTargetWorktreePath,
   nextLaunchPreviewToolbarPosition,
@@ -26,6 +26,9 @@ import {
   sameSiteLoopbackPreviewUrl,
   shouldScheduleLaunchAutoStart
 } from "../../src/composables/useVibe64LaunchControls.js";
+import {
+  vibe64BrowserTabOriginId
+} from "../../src/lib/vibe64BrowserTabOrigin.js";
 
 describe("Vibe64 launch controls", () => {
   it("scopes launch lifecycle state by project and session", () => {
@@ -218,45 +221,6 @@ describe("Vibe64 launch controls", () => {
     })).toBe(true);
     expect(launchPreviewRequiresProxy({
       previewAuth: ""
-    })).toBe(false);
-  });
-
-  it("keeps polling after launch readiness while an authenticated preview proxy is unresolved", () => {
-    expect(launchStatusPollNeeded({
-      loading: false,
-      previewProxyPending: true,
-      sessionId: "session-1",
-      terminalDisplayed: false,
-      terminalIsRunning: true,
-      terminalLaunchReady: true,
-      terminalVisible: true
-    })).toBe(false);
-
-    expect(launchStatusPollNeeded({
-      loading: false,
-      previewProxyPending: true,
-      sessionId: "session-1",
-      terminalIsRunning: true,
-      terminalLaunchReady: true,
-      terminalVisible: true
-    })).toBe(true);
-
-    expect(launchStatusPollNeeded({
-      loading: false,
-      previewProxyPending: false,
-      sessionId: "session-1",
-      terminalIsRunning: true,
-      terminalLaunchReady: true,
-      terminalVisible: true
-    })).toBe(false);
-
-    expect(launchStatusPollNeeded({
-      loading: true,
-      previewProxyPending: true,
-      sessionId: "session-1",
-      terminalIsRunning: true,
-      terminalLaunchReady: true,
-      terminalVisible: true
     })).toBe(false);
   });
 
@@ -453,6 +417,56 @@ describe("Vibe64 launch controls", () => {
       storage
     })).toBe(0);
     expect(storage.getItem(storageKey)).toBe(null);
+  });
+
+  it("refreshes launch targets only for launch-target session events", () => {
+    const ownOriginId = vibe64BrowserTabOriginId();
+
+    expect(launchTargetsRealtimeShouldRefresh({
+      payload: {
+        reason: "launch-target-started",
+        sessionId: "session-1"
+      }
+    }, "session-1")).toBe(true);
+    expect(launchTargetsRealtimeShouldRefresh({
+      localLaunchStarting: true,
+      payload: {
+        reason: "launch-target-started",
+        sessionId: "session-1"
+      }
+    }, "session-1")).toBe(false);
+    expect(launchTargetsRealtimeShouldRefresh({
+      payload: {
+        originId: ownOriginId,
+        reason: "launch-target-started",
+        sessionId: "session-1"
+      }
+    }, "session-1")).toBe(false);
+    expect(launchTargetsRealtimeShouldRefresh({
+      payload: {
+        originId: "other-tab",
+        reason: "launch-target-started",
+        sessionId: "session-1"
+      }
+    }, "session-1")).toBe(true);
+    expect(launchTargetsRealtimeShouldRefresh({
+      payload: {
+        reason: "launch-target-ready",
+        sessionId: "session-1"
+      }
+    }, "session-1")).toBe(true);
+    expect(launchTargetsRealtimeShouldRefresh({
+      payload: {
+        reason: "codex-terminal-started",
+        sessionId: "session-1"
+      }
+    }, "session-1")).toBe(false);
+    expect(launchTargetsRealtimeShouldRefresh({
+      payload: {
+        reason: "launch-target-ready",
+        sessionId: "session-2"
+      }
+    }, "session-1")).toBe(false);
   });
 });
 

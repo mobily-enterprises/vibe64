@@ -6,6 +6,10 @@ import {
   vibe64ComposerDraftPath
 } from "@/lib/vibe64SessionRequestConfig.js";
 import {
+  vibe64BrowserTabOriginId,
+  vibe64RealtimePayloadFromCurrentTab
+} from "@/lib/vibe64BrowserTabOrigin.js";
+import {
   readRefOrGetterValue
 } from "@/lib/vueRefOrGetterValue.js";
 import {
@@ -20,13 +24,6 @@ const COMPOSER_DRAFT_KIND = Object.freeze({
   SUBMISSION_REJECTED: "submission_rejected",
   SUBMISSION_START: "submission_start"
 });
-
-function createComposerOriginId() {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-  return `composer-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-}
 
 function plainObject(value = {}) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
@@ -56,7 +53,7 @@ function useVibe64ComposerDraftSync({
   sessionId,
   sessionsApiPath
 } = {}) {
-  const originId = createComposerOriginId();
+  const originId = vibe64BrowserTabOriginId();
   const lastLocalEditAt = ref(0);
   let publishTimer = null;
 
@@ -79,7 +76,9 @@ function useVibe64ComposerDraftSync({
       return String(payload.sessionId || "") === activeSessionId.value &&
         String(payload.controlId || "") === activeControlId.value &&
         (!payloadProjectSlug || !activeProjectSlug.value || payloadProjectSlug === activeProjectSlug.value) &&
-        String(payload.originId || "") !== originId;
+        !vibe64RealtimePayloadFromCurrentTab(payload, {
+          originId
+        });
     },
     onEvent: ({ payload = {} } = {}) => {
       const fields = normalizedDraftFields(payload.fields);

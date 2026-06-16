@@ -78,6 +78,73 @@ function codexTerminalStartAllowed({
   return Boolean(active && sessionReady && capabilitiesReady);
 }
 
+function sessionScreenSections(session = {}) {
+  const sections = session?.presentation?.screen?.sections;
+  return Array.isArray(sections) ? sections : [];
+}
+
+function sessionScreenSectionKind(section = null) {
+  if (typeof section === "string") {
+    return section;
+  }
+  return String(section?.kind || "");
+}
+
+function sessionScreenHasSection(session = {}, kind = "") {
+  const normalizedKind = String(kind || "");
+  return Boolean(normalizedKind) &&
+    sessionScreenSections(session).some((section) => sessionScreenSectionKind(section) === normalizedKind);
+}
+
+function sessionScreenHasAnySection(session = {}, kinds = []) {
+  const wantedKinds = new Set((Array.isArray(kinds) ? kinds : []).map((kind) => String(kind || "")).filter(Boolean));
+  return Boolean(wantedKinds.size) &&
+    sessionScreenSections(session).some((section) => wantedKinds.has(sessionScreenSectionKind(section)));
+}
+
+function artifactPreviewSubresourceActive({
+  active = false,
+  initialized = false,
+  sectionKind = "",
+  session = {}
+} = {}) {
+  return Boolean(
+    active &&
+    initialized &&
+    sessionScreenHasSection(session, sectionKind)
+  );
+}
+
+function artifactReadinessChangeRefreshDecision({
+  active = false,
+  initialized = false,
+  initializedSessionId = "",
+  sessionId = "",
+  stepStatus = "",
+  version = ""
+} = {}) {
+  const normalizedSessionId = String(sessionId || "").trim();
+  if (!active || !initialized || !normalizedSessionId) {
+    return {
+      initializedSessionId: "",
+      refresh: false
+    };
+  }
+  if (String(initializedSessionId || "").trim() !== normalizedSessionId) {
+    return {
+      initializedSessionId: normalizedSessionId,
+      refresh: false
+    };
+  }
+  return {
+    initializedSessionId: normalizedSessionId,
+    refresh: Boolean(
+      version &&
+      String(stepStatus || "") !== "awaiting_agent_result"
+    )
+  };
+}
+
 function useVibe64SessionRuntimeHost(props, emit) {
   const selectedSessionId = computed(() => props.sessionId);
   const selectedListSession = computed(() => {
@@ -135,15 +202,37 @@ function useVibe64SessionRuntimeHost(props, emit) {
     sessionData: sessionScopedData
   });
   const autopilotCommandRunner = useVibe64HeadlessCommandRunner();
+  const artifactReadinessActive = computed(() => Boolean(
+    props.active &&
+    sessionScreenHasAnySection(selectedSession.value, [
+      "report_preview",
+      "response_preview"
+    ])
+  ));
   const artifactReadiness = useVibe64ArtifactReadiness({
-    active: computed(() => props.active),
+    active: artifactReadinessActive,
     sessionId: selectedSessionId
   });
+  const artifactReadinessInitialized = computed(() => Boolean(
+    artifactReadiness.initialized.value
+  ));
   const liveArtifactReadiness = computed(() => {
     const readiness = artifactReadiness.readiness.value?.artifactReadiness;
     return readiness && typeof readiness === "object" ? readiness : {};
   });
   const liveArtifactReadinessVersion = computed(() => artifactReadinessVersion(liveArtifactReadiness.value));
+  const reportPreviewActive = computed(() => artifactPreviewSubresourceActive({
+    active: props.active,
+    initialized: artifactReadinessInitialized.value,
+    sectionKind: "report_preview",
+    session: selectedSession.value
+  }));
+  const humanInputResponsePreviewActive = computed(() => artifactPreviewSubresourceActive({
+    active: props.active,
+    initialized: artifactReadinessInitialized.value,
+    sectionKind: "response_preview",
+    session: selectedSession.value
+  }));
 
   const actions = proxyRefs(sessionWorkflow.actions);
   const codexTerminal = proxyRefs(sessionWorkflow.codexTerminal);
@@ -155,12 +244,12 @@ function useVibe64SessionRuntimeHost(props, emit) {
   };
   const page = proxyRefs(sessionWorkflow.page);
   const reportPreview = proxyRefs(useVibe64ReportPreview({
-    active: computed(() => props.active),
+    active: reportPreviewActive,
     artifactReadiness: liveArtifactReadiness,
     session: selectedSession
   }));
   const humanInputResponsePreview = proxyRefs(useVibe64HumanInputResponsePreview({
-    active: computed(() => props.active),
+    active: humanInputResponsePreviewActive,
     artifactReadiness: liveArtifactReadiness,
     session: selectedSession
   }));
@@ -458,19 +547,35 @@ function useVibe64SessionRuntimeHost(props, emit) {
     immediate: true
   });
 
-  watch(liveArtifactReadinessVersion, (version, previousVersion) => {
-    if (props.active && version && version !== previousVersion) {
-      vibe64SessionDebugLog("client.sessionRuntimeHost.artifactReadiness.changed", {
-        artifactReadinessVersion: version,
-        previousArtifactReadinessVersion: previousVersion || "",
-        sessionId: props.sessionId
-      });
-      if (String(selectedSession.value?.stepMachine?.status || "") !== "awaiting_agent_result") {
-        void props.sessionData.refreshSessionData({
-          reason: "artifact-readiness"
-        });
-      }
+  let artifactReadinessInitializedSessionId = "";
+
+  watch(() => [
+    selectedSessionId.value,
+    artifactReadinessActive.value ? "active" : "inactive",
+    artifactReadinessInitialized.value ? "initialized" : "pending",
+    liveArtifactReadinessVersion.value
+  ].join("|"), () => {
+    const sessionId = String(selectedSessionId.value || "");
+    const version = liveArtifactReadinessVersion.value;
+    const decision = artifactReadinessChangeRefreshDecision({
+      active: artifactReadinessActive.value,
+      initialized: artifactReadinessInitialized.value,
+      initializedSessionId: artifactReadinessInitializedSessionId,
+      sessionId,
+      stepStatus: selectedSession.value?.stepMachine?.status,
+      version
+    });
+    artifactReadinessInitializedSessionId = decision.initializedSessionId;
+    if (!decision.refresh) {
+      return;
     }
+    vibe64SessionDebugLog("client.sessionRuntimeHost.artifactReadiness.changed", {
+      artifactReadinessVersion: version,
+      sessionId
+    });
+    void props.sessionData.refreshSessionData({
+      reason: "artifact-readiness"
+    });
   }, {
     flush: "post"
   });
@@ -527,8 +632,13 @@ function artifactReadinessVersion(readiness = {}) {
 }
 
 export {
+  artifactPreviewSubresourceActive,
+  artifactReadinessChangeRefreshDecision,
   codexTerminalStartAllowed,
   runtimeCapabilitiesState,
   runtimeControlsAreBusy,
+  sessionScreenHasAnySection,
+  sessionScreenHasSection,
+  sessionScreenSections,
   useVibe64SessionRuntimeHost
 };

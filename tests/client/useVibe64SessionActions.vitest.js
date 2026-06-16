@@ -5,7 +5,7 @@ import {
 } from "../../src/composables/useVibe64SessionActions.js";
 
 describe("useVibe64SessionActions refresh ownership", () => {
-  it("does not refresh prompt-ready actions after realtime already marked the session awaiting Codex", () => {
+  it("leaves successful action refresh to realtime", () => {
     expect(runActionSuccessShouldRefreshSession({
       actionResult: {
         status: "prompt_ready"
@@ -15,9 +15,7 @@ describe("useVibe64SessionActions refresh ownership", () => {
         status: "awaiting_agent_result"
       }
     })).toBe(false);
-  });
 
-  it("keeps the action-success refresh when realtime has not already moved the session", () => {
     expect(runActionSuccessShouldRefreshSession({
       actionResult: {
         status: "prompt_ready"
@@ -26,7 +24,7 @@ describe("useVibe64SessionActions refresh ownership", () => {
       stepMachine: {
         status: "done"
       }
-    })).toBe(true);
+    })).toBe(false);
 
     expect(runActionSuccessShouldRefreshSession({
       actionResult: {
@@ -36,6 +34,6 @@ describe("useVibe64SessionActions refresh ownership", () => {
       stepMachine: {
         status: "awaiting_agent_result"
       }
-    })).toBe(true);
+    })).toBe(false);
   });
 });

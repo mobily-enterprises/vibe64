@@ -36,7 +36,7 @@ describe("useVibe64SessionWorkflow", () => {
     })).toBe(false);
   });
 
-  it("refreshes session data when terminal identity or status changes", () => {
+  it("does not refresh session data when local terminal start reports a new running terminal", () => {
     const session = {
       codexTerminal: {
         id: "terminal-1",
@@ -49,10 +49,26 @@ describe("useVibe64SessionWorkflow", () => {
       codexTerminalSessionId: "terminal-2",
       codexTerminalStatus: "running",
       sessionId: "session-1"
-    }, session)).toBe(true);
+    }, session)).toBe(false);
+  });
+
+  it("refreshes session data when terminal cleanup or terminal status changes need reconciliation", () => {
+    const session = {
+      codexTerminal: {
+        id: "terminal-1",
+        status: "running"
+      },
+      sessionId: "session-1"
+    };
+
     expect(codexTerminalUpdateNeedsSessionRefresh({
       codexTerminalSessionId: "terminal-1",
       codexTerminalStatus: "exited",
+      sessionId: "session-1"
+    }, session)).toBe(true);
+    expect(codexTerminalUpdateNeedsSessionRefresh({
+      codexTerminalSessionId: "terminal-2",
+      codexTerminalStatus: "stale",
       sessionId: "session-1"
     }, session)).toBe(true);
   });

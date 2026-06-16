@@ -76,13 +76,20 @@
               </v-sheet>
             </div>
             <div v-if="showTerminalStartPanel" class="codex-terminal__restart-panel">
-              <v-sheet class="codex-terminal__restart-card" rounded="lg" elevation="8">
-                <span>{{ terminalStartPanelMessage }}</span>
+              <v-sheet class="codex-terminal__restart-card" rounded="lg" elevation="8" role="status">
+                <div class="codex-terminal__restart-icon">
+                  <v-icon :icon="terminalStartIcon" size="30" />
+                </div>
+                <div class="codex-terminal__restart-copy">
+                  <strong>{{ terminalStartPanelTitle }}</strong>
+                  <span>{{ terminalStartPanelMessage }}</span>
+                </div>
                 <v-btn
+                  class="codex-terminal__restart-action"
                   color="primary"
                   :loading="terminalStarting"
-                  :prepend-icon="mdiRestart"
-                  size="small"
+                  :prepend-icon="terminalStartButtonIcon"
+                  size="default"
                   variant="flat"
                   @click="restartTerminal"
                 >
@@ -138,6 +145,7 @@ import {
   mdiChevronUp,
   mdiClose,
   mdiPaperclip,
+  mdiPlayCircleOutline,
   mdiRestart
 } from "@mdi/js";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
@@ -346,11 +354,19 @@ const {
   uploadAttachment: uploadAttachmentForScope
 });
 const terminalCanStart = computed(() => Boolean(canStartTerminal.value));
+const terminalStartIcon = computed(() => terminalExited.value ? mdiRestart : mdiPlayCircleOutline);
+const terminalStartButtonIcon = computed(() => terminalExited.value ? mdiRestart : mdiPlayCircleOutline);
+const terminalStartPanelTitle = computed(() => {
+  if (terminalStarting.value) {
+    return "Starting Codex";
+  }
+  return terminalExited.value ? "Codex terminal exited" : "Codex terminal is off";
+});
 const terminalStartPanelMessage = computed(() => {
   if (terminalStarting.value) {
-    return "Starting Codex terminal...";
+    return "Preparing this session terminal.";
   }
-  return terminalExited.value ? "Codex exited." : "Codex is not running.";
+  return terminalExited.value ? "Restart it for this session." : "Start it for this session.";
 });
 const terminalStartButtonText = computed(() => {
   if (terminalStarting.value) {
@@ -428,12 +444,13 @@ function emitCodexActivityChanged(payload = {}) {
 }
 
 function emitTerminalSessionState(extra = {}) {
-  if (!terminalScopeId.value || !terminalSessionId.value) {
+  const currentTerminalId = String(extra.codexTerminalSessionId || terminalSessionId.value || "");
+  if (!terminalScopeId.value || !currentTerminalId) {
     return;
   }
   emit("session-update", {
     codexTerminalCommandPreview: terminalCommandPreview.value,
-    codexTerminalSessionId: terminalSessionId.value,
+    codexTerminalSessionId: currentTerminalId,
     codexTerminalStatus: terminalStatus.value,
     sessionId: terminalScopeId.value,
     ...extra
@@ -541,8 +558,10 @@ async function sendEscape() {
 
 function toggleExpanded() {
   expanded.value = !expanded.value;
-  if (expanded.value) {
-    void ensureTerminalReady();
+  if (expanded.value && hasTerminalSession.value) {
+    void connectAttachedTerminal().catch((error) => {
+      terminalError.value = terminalError.value || String(error?.message || error || "Terminal stream failed to connect.");
+    });
   }
 }
 
@@ -627,11 +646,13 @@ async function startTerminalOnce() {
   }
 }
 
-function startTerminalWhenReady() {
-  if (!canUseTerminal.value) {
+function connectTerminalWhenReady() {
+  if (!canUseTerminal.value || !terminalSessionId.value) {
     return;
   }
-  void ensureTerminalReady();
+  void connectAttachedTerminal().catch((error) => {
+    terminalError.value = terminalError.value || String(error?.message || error || "Terminal stream failed to connect.");
+  });
 }
 
 async function attachTerminalSession(session = {}) {
@@ -659,7 +680,7 @@ function terminalSessionMissingError(message = "") {
   return /terminal session not found/iu.test(String(message || ""));
 }
 
-function markTerminalSessionStale(terminalId = "", message = "Terminal session not found.") {
+function markTerminalSessionStale(terminalId = "") {
   const normalizedTerminalId = String(terminalId || "").trim();
   if (normalizedTerminalId) {
     staleTerminalSessionIds.value = new Set([
@@ -671,7 +692,11 @@ function markTerminalSessionStale(terminalId = "", message = "Terminal session n
   resetTerminalSessionState();
   resetTerminalDisplay();
   resetTerminalOutput();
-  terminalError.value = String(message || "Terminal session not found.");
+  terminalError.value = "";
+  emitTerminalSessionState({
+    codexTerminalSessionId: normalizedTerminalId,
+    codexTerminalStatus: "stale"
+  });
 }
 
 function detachTerminal() {
@@ -714,12 +739,11 @@ watch(sessionId, (nextSessionId, previousSessionId) => {
   resetAttachmentDragState();
   clearAttachmentStatus();
   expanded.value = defaultExpanded();
-  startTerminalWhenReady();
 });
 
 watch(canUseTerminal, (ready) => {
-  if (ready) {
-    startTerminalWhenReady();
+  if (ready && terminalSessionId.value) {
+    connectTerminalWhenReady();
   }
 });
 
@@ -738,7 +762,7 @@ watch(terminalHost, (host) => {
   }
   if (host && hasTerminalSession.value) {
     void setupTerminalUi();
-    startTerminalWhenReady();
+    connectTerminalWhenReady();
   }
 }, {
   flush: "post"
@@ -747,7 +771,6 @@ watch(terminalHost, (host) => {
 onMounted(() => {
   componentMounted.value = true;
   expanded.value = defaultExpanded();
-  startTerminalWhenReady();
 });
 
 onBeforeUnmount(() => {
@@ -919,11 +942,13 @@ defineExpose({
 }
 
 .codex-terminal__restart-panel {
-  align-items: flex-end;
+  align-items: center;
+  background:
+    linear-gradient(180deg, rgba(16, 18, 22, 0.18), rgba(16, 18, 22, 0.62));
   display: flex;
-  inset: auto 0 0;
+  inset: 0;
   justify-content: center;
-  padding: 1rem;
+  padding: 1.25rem;
   pointer-events: none;
   position: absolute;
 }
@@ -931,13 +956,52 @@ defineExpose({
 .codex-terminal__restart-card {
   align-items: center;
   background: rgba(var(--v-theme-surface), 0.96);
-  display: flex;
-  gap: 0.75rem;
-  justify-content: space-between;
-  max-width: min(28rem, calc(100% - 1rem));
-  min-width: min(22rem, calc(100% - 1rem));
-  padding: 0.55rem 0.65rem 0.55rem 0.85rem;
+  border: 1px solid rgba(var(--v-theme-primary), 0.32);
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  max-width: min(42rem, calc(100% - 1rem));
+  min-width: min(30rem, calc(100% - 1rem));
+  padding: 1rem;
   pointer-events: auto;
+}
+
+.codex-terminal__restart-icon {
+  align-items: center;
+  background: rgba(var(--v-theme-primary), 0.12);
+  border: 1px solid rgba(var(--v-theme-primary), 0.22);
+  border-radius: 8px;
+  color: rgb(var(--v-theme-primary));
+  display: flex;
+  height: 3rem;
+  justify-content: center;
+  width: 3rem;
+}
+
+.codex-terminal__restart-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+  min-width: 0;
+}
+
+.codex-terminal__restart-copy strong {
+  color: rgb(var(--v-theme-on-surface));
+  font-size: 1rem;
+  font-weight: 720;
+  letter-spacing: 0;
+  line-height: 1.2;
+}
+
+.codex-terminal__restart-copy span {
+  color: rgba(var(--v-theme-on-surface), 0.7);
+  font-size: 0.88rem;
+  line-height: 1.3;
+}
+
+.codex-terminal__restart-action {
+  justify-self: end;
+  white-space: nowrap;
 }
 
 .codex-terminal__footer {
@@ -974,8 +1038,13 @@ defineExpose({
 
   .codex-terminal__restart-card {
     align-items: stretch;
-    flex-direction: column;
+    grid-template-columns: auto minmax(0, 1fr);
     min-width: min(18rem, calc(100% - 1rem));
+  }
+
+  .codex-terminal__restart-action {
+    grid-column: 1 / -1;
+    justify-self: stretch;
   }
 }
 

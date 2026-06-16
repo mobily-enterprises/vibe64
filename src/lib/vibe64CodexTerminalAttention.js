@@ -13,6 +13,10 @@ const CODEX_TURN_ATTENTION_STATUSES = new Set([
   "failed"
 ]);
 
+function terminalSessionMissingError(message = "") {
+  return /terminal session not found/iu.test(String(message || ""));
+}
+
 function normalizedText(value = "") {
   return String(value || "").trim();
 }
@@ -58,6 +62,9 @@ function codexTerminalAttentionSignature(session = {}) {
     const terminalStatus = normalizedText(terminal.status);
     const terminalError = normalizedText(terminal.closeError || terminal.error || terminal.terminalError);
     if (!terminalId && !terminalStatus && !terminalError) {
+      continue;
+    }
+    if (terminalSessionMissingError(terminalError)) {
       continue;
     }
     if (!terminalError && !CODEX_TERMINAL_ATTENTION_STATUSES.has(terminalStatus)) {

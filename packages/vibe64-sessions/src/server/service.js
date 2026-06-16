@@ -104,6 +104,7 @@ function stripInternalInput(input = {}) {
     agentSettings: _agentSettings,
     displayFields: _displayFields,
     displayInput: _displayInput,
+    originId: _originId,
     vibe64User: _vibe64User,
     ...publicInput
   } = input;

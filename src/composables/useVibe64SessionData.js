@@ -41,6 +41,66 @@ import {
   vibe64SessionDebugLog,
   vibe64SessionDebugSummary
 } from "@/lib/vibe64SessionDebugLog.js";
+import {
+  vibe64RealtimeOriginPayload
+} from "@/lib/vibe64BrowserTabOrigin.js";
+
+const SESSION_LIST_IGNORED_REALTIME_REASONS = new Set([
+  "codex-app-server-ready",
+  "codex-app-server-agent-result",
+  "codex-app-server-agent-result-invalid",
+  "codex-app-server-agent-result-missing",
+  "codex-app-server-agent-result-provider-failed",
+  "codex-app-server-blocked",
+  "codex-app-server-failed",
+  "codex-app-server-prompt-injected",
+  "codex-app-server-reasoning-summary",
+  "codex-app-server-running",
+  "codex-app-server-terminal-assistant-message",
+  "codex-app-server-terminal-user-message",
+  "codex-app-server-turn-active",
+  "codex-app-server-turn-claimed",
+  "codex-app-server-turn-finalizing",
+  "codex-app-server-turn-idle",
+  "codex-app-server-turn-state",
+  "codex-prompt-injected",
+  "codex-context-replaced",
+  "codex-terminal-started",
+  "codex-terminal-closed",
+  "command-terminal-started",
+  "command-terminal-closed",
+  "session-action-run",
+  "session-advanced",
+  "session-agent-control-returned",
+  "session-intent-run",
+  "session-rewound",
+  "session-step-recovered",
+  "session-worktree-recovered",
+  "launch-target-started",
+  "launch-target-ready",
+  "launch-target-closed",
+  "launch-target-stopped",
+  "shell-terminal-closed"
+]);
+const SELECTED_SESSION_IGNORED_REALTIME_REASONS = new Set([
+  "codex-app-server-prompt-injected",
+  "codex-app-server-ready",
+  "codex-app-server-reasoning-summary",
+  "codex-app-server-running",
+  "codex-app-server-terminal-assistant-message",
+  "codex-app-server-terminal-user-message",
+  "codex-app-server-turn-active",
+  "codex-app-server-turn-claimed",
+  "codex-app-server-turn-finalizing",
+  "codex-app-server-turn-idle",
+  "codex-app-server-turn-state",
+  "codex-context-replaced",
+  "codex-prompt-injected",
+  "launch-target-started",
+  "launch-target-ready",
+  "launch-target-closed",
+  "launch-target-stopped"
+]);
 
 function selectedSessionOperationSummary(session = {}) {
   const operation = session?.presentation?.auto?.nextOperation;
@@ -183,6 +243,33 @@ function shouldPreserveSelectedSessionDuringRefresh({
   );
 }
 
+function sessionChangedReason(payload = {}) {
+  return String(payload?.reason || "").trim();
+}
+
+function sessionListRealtimeShouldRefresh({ payload = {} } = {}) {
+  const reason = sessionChangedReason(payload);
+  return !reason || !SESSION_LIST_IGNORED_REALTIME_REASONS.has(reason);
+}
+
+function selectedSessionRealtimeShouldRefresh({ payload = {} } = {}, selectedSessionId = "") {
+  const changedSessionId = String(payload.sessionId || payload.entityId || "").trim();
+  if (!changedSessionId || changedSessionId !== String(selectedSessionId || "").trim()) {
+    return false;
+  }
+  const reason = sessionChangedReason(payload);
+  return !reason || !SELECTED_SESSION_IGNORED_REALTIME_REASONS.has(reason);
+}
+
+function refetchEndpointResource(resource) {
+  if (typeof resource?.query?.refetch === "function") {
+    return resource.query.refetch({
+      cancelRefetch: false
+    });
+  }
+  return resource?.reload?.();
+}
+
 function useVibe64SessionData({
   onTitleChange = null
 } = {}) {
@@ -224,7 +311,8 @@ function useVibe64SessionData({
     },
     requestRecoveryLabel: "Vibe64 sessions",
     realtime: {
-      event: VIBE64_SESSION_CHANGED_EVENT
+      event: VIBE64_SESSION_CHANGED_EVENT,
+      matches: sessionListRealtimeShouldRefresh
     }
   });
   const sessionList = proxyRefs({
@@ -247,7 +335,7 @@ function useVibe64SessionData({
     apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
     buildRawPayload: (_model, { context }) => {
       const workflowDefinition = String(context?.workflowDefinition || "").trim();
-      return workflowDefinition ? { workflowDefinition } : {};
+      return vibe64RealtimeOriginPayload(workflowDefinition ? { workflowDefinition } : {});
     },
     fallbackRunError: "Vibe64 session could not be created.",
     messages: {
@@ -258,7 +346,10 @@ function useVibe64SessionData({
       if (response?.sessionId) {
         selectSessionId(response.sessionId);
       }
-      await refreshSessionData();
+      await refreshSessionData({
+        includeList: true,
+        reason: "create-session"
+      });
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
     placementSource: "vibe64.sessions.create",
@@ -279,8 +370,9 @@ function useVibe64SessionData({
     realtime: {
       event: VIBE64_SESSION_CHANGED_EVENT,
       matches: ({ payload = {} } = {}) => {
-        const changedSessionId = String(payload.sessionId || payload.entityId || "").trim();
-        return Boolean(changedSessionId && changedSessionId === String(selectedSessionId.value || "").trim());
+        return selectedSessionRealtimeShouldRefresh({
+          payload
+        }, selectedSessionId.value);
       }
     },
     refreshOnPull: true
@@ -298,8 +390,7 @@ function useVibe64SessionData({
     realtime: {
       events: [
         VIBE64_ACCOUNTS_CHANGED_EVENT,
-        VIBE64_PROJECT_CHANGED_EVENT,
-        VIBE64_SESSION_CHANGED_EVENT
+        VIBE64_PROJECT_CHANGED_EVENT
       ]
     },
     refreshOnPull: true
@@ -438,26 +529,37 @@ function useVibe64SessionData({
     if (!selectedSessionId.value) {
       return null;
     }
-    return selectedSessionView.refresh();
+    return refetchEndpointResource(selectedSessionResource);
+  }
+
+  async function refreshSessionList() {
+    return refetchEndpointResource(sessionListResource);
   }
 
   let refreshSessionDataInFlight = null;
-  let refreshSessionDataQueued = false;
+  let refreshSessionDataQueuedIncludeList = false;
 
-  async function runSessionDataRefresh(reason = "") {
+  async function runSessionDataRefresh({
+    includeList = false,
+    reason = ""
+  } = {}) {
     const startedAtMs = Date.now();
     vibe64SessionDebugLog("client.sessionData.refresh.start", {
+      includeList: includeList === true,
       reason: String(reason || ""),
       selectedSessionId: String(selectedSessionId.value || "")
     });
     try {
-      const result = await Promise.all([
-        sessionList.reload(),
-        refreshSelectedSession()
-      ]);
+      const result = await Promise.all(
+        [
+          includeList ? refreshSessionList() : null,
+          refreshSelectedSession()
+        ].filter(Boolean)
+      );
       vibe64SessionDebugLog("client.sessionData.refresh.done", {
         ...vibe64SessionDebugSummary(selectedSession.value || {}),
         durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+        includeList: includeList === true,
         reason: String(reason || ""),
         selectedSessionId: String(selectedSessionId.value || ""),
         sessionCount: sessions.value.length
@@ -467,6 +569,7 @@ function useVibe64SessionData({
       vibe64SessionDebugLog("client.sessionData.refresh.error", {
         durationMs: vibe64SessionDebugDurationMs(startedAtMs),
         error: vibe64SessionDebugError(error),
+        includeList: includeList === true,
         reason: String(reason || ""),
         selectedSessionId: String(selectedSessionId.value || "")
       });
@@ -476,10 +579,12 @@ function useVibe64SessionData({
 
   async function refreshSessionData(options = {}) {
     const reason = typeof options === "string" ? options : String(options?.reason || "");
+    const includeList = typeof options === "object" && options?.includeList === true;
     const queueIfInFlight = typeof options === "object" && options?.queueIfInFlight === true;
     if (refreshSessionDataInFlight) {
-      refreshSessionDataQueued = refreshSessionDataQueued || queueIfInFlight;
+      refreshSessionDataQueuedIncludeList = refreshSessionDataQueuedIncludeList || includeList || queueIfInFlight;
       vibe64SessionDebugLog("client.sessionData.refresh.join", {
+        includeList,
         queueIfInFlight,
         reason,
         selectedSessionId: String(selectedSessionId.value || "")
@@ -487,14 +592,18 @@ function useVibe64SessionData({
       return refreshSessionDataInFlight;
     }
 
-    refreshSessionDataInFlight = runSessionDataRefresh(reason);
+    refreshSessionDataInFlight = runSessionDataRefresh({
+      includeList,
+      reason
+    });
     try {
       return await refreshSessionDataInFlight;
     } finally {
       refreshSessionDataInFlight = null;
-      if (refreshSessionDataQueued) {
-        refreshSessionDataQueued = false;
+      if (refreshSessionDataQueuedIncludeList) {
+        refreshSessionDataQueuedIncludeList = false;
         void refreshSessionData({
+          includeList: true,
           reason: "coalesced-trailing"
         });
       }
@@ -655,6 +764,8 @@ function useVibe64SessionData({
 export {
   rememberSessionDetailRecord,
   sessionDetailRecordForId,
+  sessionListRealtimeShouldRefresh,
+  selectedSessionRealtimeShouldRefresh,
   selectedSessionRecord,
   sessionIdExistsInList,
   sessionRevisionNumber,

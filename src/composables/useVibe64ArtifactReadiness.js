@@ -30,6 +30,7 @@ function useVibe64ArtifactReadiness({
 } = {}) {
   const projectSlug = useVibe64ProjectSlug();
   const readiness = ref(emptyArtifactReadiness());
+  const initialized = ref(false);
   const streamError = ref("");
   const readinessResource = useEndpointResource({
     enabled: false,
@@ -76,12 +77,14 @@ function useVibe64ArtifactReadiness({
       ...payload,
       sessionId: payloadSessionId
     };
+    initialized.value = true;
   }
 
   async function refresh() {
     const nextSessionId = currentSessionId();
     if (!nextSessionId || !isActive()) {
       readiness.value = emptyArtifactReadiness();
+      initialized.value = false;
       return readiness.value;
     }
     const result = await readinessResource.reload();
@@ -95,6 +98,7 @@ function useVibe64ArtifactReadiness({
     if (!nextSessionId || !isActive()) {
       closeStream();
       readiness.value = emptyArtifactReadiness();
+      initialized.value = false;
       return false;
     }
     if (eventSource && eventSourceSessionId === nextSessionId) {
@@ -104,6 +108,7 @@ function useVibe64ArtifactReadiness({
     closeStream();
     streamError.value = "";
     readiness.value = emptyArtifactReadiness(nextSessionId);
+    initialized.value = false;
 
     if (typeof EventSource !== "function") {
       void refresh().catch((error) => {
@@ -151,6 +156,7 @@ function useVibe64ArtifactReadiness({
 
   return {
     closeStream,
+    initialized,
     readiness,
     readinessResource,
     refresh,

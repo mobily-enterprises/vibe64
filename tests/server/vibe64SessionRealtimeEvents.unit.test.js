@@ -57,6 +57,46 @@ test("Vibe64 session service event includes session revision context when availa
   });
 });
 
+test("Vibe64 session service event can include a stable reason", () => {
+  const event = vibe64SessionChangedServiceEvent({
+    reason: "launch-target-started"
+  });
+  const payload = event.realtime.payload({
+    result: {
+      sessionId: "session-with-reason"
+    }
+  });
+
+  assert.deepEqual(payload, {
+    reason: "launch-target-started",
+    sessionId: "session-with-reason"
+  });
+});
+
+test("Vibe64 session service event includes a client origin when supplied by the service args", () => {
+  const event = vibe64SessionChangedServiceEvent({
+    reason: "session-action-run"
+  });
+  const payload = event.realtime.payload({
+    args: [
+      "session-from-args",
+      "action-1",
+      {
+        originId: "tab-origin-1"
+      }
+    ],
+    result: {
+      sessionId: "session-from-result"
+    }
+  });
+
+  assert.deepEqual(payload, {
+    originId: "tab-origin-1",
+    reason: "session-action-run",
+    sessionId: "session-from-result"
+  });
+});
+
 test("Vibe64 session change publisher emits service-scoped domain events", async () => {
   const events = [];
   const publish = createVibe64SessionChangedPublisher({
@@ -87,5 +127,29 @@ test("Vibe64 session change publisher emits service-scoped domain events", async
       reason: "command-terminal-closed",
       sessionId: "session-1"
     }
+  });
+});
+
+test("Vibe64 session change publisher can include a client origin", async () => {
+  const events = [];
+  const publish = createVibe64SessionChangedPublisher({
+    domainEvents: {
+      async publish(event) {
+        events.push(event);
+      }
+    },
+    methodName: "startLaunchTargetTerminal",
+    serviceToken: "feature.vibe64-terminals.service"
+  });
+
+  await publish("session-1", {
+    originId: "tab-origin-2",
+    reason: "launch-target-started"
+  });
+
+  assert.deepEqual(events[0].meta.realtime.payload, {
+    originId: "tab-origin-2",
+    reason: "launch-target-started",
+    sessionId: "session-1"
   });
 });

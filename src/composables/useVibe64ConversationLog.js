@@ -1,4 +1,5 @@
 import { computed, watch } from "vue";
+import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
 import { usePaths } from "@jskit-ai/users-web/client/composables/usePaths";
@@ -19,6 +20,25 @@ import {
   vibe64SessionDebugError,
   vibe64SessionDebugLog
 } from "@/lib/vibe64SessionDebugLog.js";
+import {
+  vibe64RealtimePayloadFromCurrentTab
+} from "@/lib/vibe64BrowserTabOrigin.js";
+
+const CONVERSATION_LOG_REALTIME_REASONS = new Set([
+  "codex-app-server-agent-result",
+  "codex-app-server-agent-result-invalid",
+  "codex-app-server-agent-result-missing",
+  "codex-app-server-agent-result-provider-failed",
+  "codex-app-server-reasoning-summary",
+  "codex-app-server-terminal-assistant-message",
+  "codex-app-server-terminal-user-message",
+  "session-action-run",
+  "session-intent-run"
+]);
+const CONVERSATION_LOG_SELF_ORIGIN_IGNORED_REASONS = new Set([
+  "session-action-run",
+  "session-intent-run"
+]);
 
 function normalizeConversationMessage(message = {}) {
   if (!message || typeof message !== "object" || Array.isArray(message)) {
@@ -84,7 +104,17 @@ function sessionIsAwaitingCodex(session = {}) {
 function conversationLogRealtimeShouldRefresh({ payload = {} } = {}, sessionId = "") {
   const normalizedSessionId = String(sessionId || "").trim();
   const changedSessionId = String(payload.sessionId || payload.entityId || "").trim();
-  return Boolean(normalizedSessionId && changedSessionId === normalizedSessionId);
+  if (!normalizedSessionId || changedSessionId !== normalizedSessionId) {
+    return false;
+  }
+  const reason = String(payload.reason || "").trim();
+  if (
+    CONVERSATION_LOG_SELF_ORIGIN_IGNORED_REASONS.has(reason) &&
+    vibe64RealtimePayloadFromCurrentTab(payload)
+  ) {
+    return false;
+  }
+  return !reason || CONVERSATION_LOG_REALTIME_REASONS.has(reason);
 }
 
 function conversationLogRecoveryStateKey(session = {}) {
@@ -141,10 +171,7 @@ function useVibe64ConversationLog({
     readMethod: "GET",
     refreshOnPull: true,
     requestRecoveryLabel: "Conversation history",
-    realtime: {
-      event: VIBE64_SESSION_CHANGED_EVENT,
-      matches: (context) => conversationLogRealtimeShouldRefresh(context, sessionId.value)
-    }
+    realtime: null
   });
   let reloadInFlight = null;
   let reloadQueued = false;
@@ -167,6 +194,13 @@ function useVibe64ConversationLog({
       }
     }
   }
+
+  const realtime = useRealtimeEvent({
+    enabled,
+    event: VIBE64_SESSION_CHANGED_EVENT,
+    matches: (context) => conversationLogRealtimeShouldRefresh(context, sessionId.value),
+    onEvent: () => reloadConversationLog()
+  });
 
   const recoveryStateKey = computed(() => conversationLogRecoveryStateKey(currentSession.value));
   const recoveryErrorKey = computed(() => [
@@ -223,6 +257,7 @@ function useVibe64ConversationLog({
     error: resource.loadError,
     loading: resource.isLoading,
     reload: reloadConversationLog,
+    realtime,
     turns,
     visible
   };

@@ -2405,6 +2405,35 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       }
     });
     await delay(5);
+    const sessionAfterTerminalTurnStarted = await runtime.getSession(sessionId);
+    assert.equal(codexAppServerAgentRunSnapshot(sessionAfterTerminalTurnStarted).state, "completed");
+    assert.equal(codexAppServerAgentRunSnapshot(sessionAfterTerminalTurnStarted).providerStatus, "completed");
+    assert.equal(codexAppServerAgentRunSnapshot(sessionAfterTerminalTurnStarted).providerTurnId, "codex-app-server-turn-1");
+    assert.equal(publishSessionReasons.at(-1), publishReasonBeforeTerminalMessage);
+    providerSubscribers[0]({
+      method: "item/reasoning/summaryPartAdded",
+      params: {
+        itemId: "terminal-reasoning-summary-1",
+        summaryIndex: 0,
+        threadId: "00000000-0000-4000-8000-000000000004",
+        turnId: "terminal-turn-1"
+      }
+    });
+    providerSubscribers[0]({
+      method: "item/reasoning/summaryTextDelta",
+      params: {
+        delta: "Direct terminal reasoning should stay out of the Vibe64 conversation log.",
+        itemId: "terminal-reasoning-summary-1",
+        summaryIndex: 0,
+        threadId: "00000000-0000-4000-8000-000000000004",
+        turnId: "terminal-turn-1"
+      }
+    });
+    await delay(5);
+    assert.deepEqual((await runtime.store.readConversationLog()).flatMap((turn) => (turn.thinking || []).map((message) => message.text)).filter(Boolean), [
+      "Checked the app-server prompt delivery result."
+    ]);
+    assert.equal(publishSessionReasons.at(-1), publishReasonBeforeTerminalMessage);
     providerSubscribers[0]({
       method: "item/started",
       params: {
@@ -2482,7 +2511,11 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       false
     );
     assert.equal(publishSessionReasons.includes("codex-app-server-terminal-assistant-message"), false);
-    assert.notEqual(publishSessionReasons.at(-1), publishReasonBeforeTerminalMessage);
+    assert.equal(publishSessionReasons.at(-1), publishReasonBeforeTerminalMessage);
+    const sessionAfterTerminalTurnCompleted = await runtime.getSession(sessionId);
+    assert.equal(codexAppServerAgentRunSnapshot(sessionAfterTerminalTurnCompleted).state, "completed");
+    assert.equal(codexAppServerAgentRunSnapshot(sessionAfterTerminalTurnCompleted).providerStatus, "completed");
+    assert.equal(codexAppServerAgentRunSnapshot(sessionAfterTerminalTurnCompleted).providerTurnId, "codex-app-server-turn-1");
     providerSubscribers[0]({
       method: "item/started",
       params: {

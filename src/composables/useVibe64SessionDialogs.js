@@ -18,6 +18,9 @@ import {
   readRefOrGetterBoolean,
   readRefOrGetterValue
 } from "@/lib/vueRefOrGetterValue.js";
+import {
+  vibe64RealtimeOriginPayload
+} from "@/lib/vibe64BrowserTabOrigin.js";
 
 function useVibe64SessionDialogs({
   activeActionId,
@@ -58,6 +61,7 @@ function useVibe64SessionDialogs({
   const abandonCommand = useCommand({
     access: "never",
     apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
+    buildRawPayload: () => vibe64RealtimeOriginPayload(),
     buildCommandOptions: (_payload, { context }) => ({
       method: "POST",
       path: vibe64SessionPath(resolvedSessionsApiPath.value, context?.sessionId, "/abandon")
@@ -70,7 +74,10 @@ function useVibe64SessionDialogs({
     onRunSuccess: async () => {
       clearAbandonDialog();
       onAbandoned();
-      await refreshSessionData();
+      await refreshSessionData({
+        includeList: true,
+        reason: "abandon-session"
+      });
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
     placementSource: "vibe64.sessions.abandon",

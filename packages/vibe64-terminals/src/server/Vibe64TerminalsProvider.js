@@ -20,6 +20,17 @@ const TERMINAL_SESSION_MUTATION_EVENT_METHODS = Object.freeze([
   "startLaunchTargetTerminal",
   "stopLaunchTargetTerminal"
 ]);
+const TERMINAL_SESSION_MUTATION_EVENT_REASONS = Object.freeze({
+  closeCodexTerminal: "codex-terminal-closed",
+  closeCommandTerminal: "command-terminal-closed",
+  closeLaunchTargetTerminal: "launch-target-closed",
+  closeShellTerminal: "shell-terminal-closed",
+  injectCodexPrompt: "codex-prompt-injected",
+  startCodexTerminal: "codex-terminal-started",
+  startCommandTerminal: "command-terminal-started",
+  startLaunchTargetTerminal: "launch-target-started",
+  stopLaunchTargetTerminal: "launch-target-stopped"
+});
 
 class Vibe64TerminalsProvider {
   static id = "feature.vibe64-terminals";
@@ -108,7 +119,9 @@ class Vibe64TerminalsProvider {
         events: Object.fromEntries(
           TERMINAL_SESSION_MUTATION_EVENT_METHODS.map((methodName) => [
             methodName,
-            [vibe64SessionChangedServiceEvent()]
+            [vibe64SessionChangedServiceEvent({
+              reason: TERMINAL_SESSION_MUTATION_EVENT_REASONS[methodName] || ""
+            })]
           ])
         )
       }

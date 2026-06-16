@@ -47,19 +47,47 @@ function sessionIdFromServiceEvent({ result = {}, args = [] } = {}) {
   return sessionIdFromResult(result) || normalizeSessionId(args?.[0]);
 }
 
+function originIdFromValue(value = null) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return "";
+  }
+  return normalizeSessionId(value.originId || value.input?.originId || "");
+}
+
+function originIdFromServiceEvent({ result = {}, args = [] } = {}) {
+  const resultOriginId = originIdFromValue(result);
+  if (resultOriginId) {
+    return resultOriginId;
+  }
+  for (const arg of Array.isArray(args) ? args : []) {
+    const argOriginId = originIdFromValue(arg);
+    if (argOriginId) {
+      return argOriginId;
+    }
+  }
+  return "";
+}
+
 function vibe64SessionRealtimePayload({ result = {}, args = [] } = {}) {
   const sessionId = sessionIdFromResult(result) || normalizeSessionId(args?.[0]);
+  const originId = originIdFromServiceEvent({
+    args,
+    result
+  });
   return sessionId
     ? {
         sessionId,
-        ...sessionStatePayload(result)
+        ...sessionStatePayload(result),
+        ...(originId ? { originId } : {})
       }
     : {};
 }
 
 function vibe64SessionChangedServiceEvent({
-  operation = "updated"
+  operation = "updated",
+  reason = ""
 } = {}) {
+  const normalizedReason = normalizeSessionId(reason);
   return Object.freeze({
     type: "entity.changed",
     source: VIBE64_SESSION_EVENT_SOURCE,
@@ -69,7 +97,15 @@ function vibe64SessionChangedServiceEvent({
     realtime: Object.freeze({
       event: VIBE64_SESSION_CHANGED_EVENT,
       audience: VIBE64_SESSION_REALTIME_AUDIENCE,
-      payload: vibe64SessionRealtimePayload
+      payload: (context = {}) => {
+        const payload = vibe64SessionRealtimePayload(context);
+        return normalizedReason
+          ? {
+              ...payload,
+              reason: normalizedReason
+            }
+          : payload;
+      }
     })
   });
 }
@@ -89,6 +125,7 @@ function createVibe64SessionChangedPublisher({
 
   return async function publishVibe64SessionChanged(sessionId = "", {
     operation = "updated",
+    originId = "",
     reason = "",
     session = null
   } = {}) {
@@ -103,6 +140,7 @@ function createVibe64SessionChangedPublisher({
           sessionId: normalizedSessionId
         }
       }),
+      ...(originId ? { originId: normalizeSessionId(originId) } : {}),
       ...(reason ? { reason } : {})
     };
 

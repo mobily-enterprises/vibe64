@@ -821,13 +821,6 @@ function useVibe64AutopilotView(props, emit) {
     return true;
   }
 
-  function reloadConversationLogAfterRemoteSubmission() {
-    if (typeof props.conversationLog?.reload !== "function") {
-      return;
-    }
-    void props.conversationLog.reload();
-  }
-
   function clearRemoteComposerSubmissionIfCanonical() {
     const submission = remoteComposerSubmission.value;
     if (submission?.status !== "pending") {
@@ -866,7 +859,6 @@ function useVibe64AutopilotView(props, emit) {
       payload,
       text
     });
-    reloadConversationLogAfterRemoteSubmission();
   }
 
   function applyRemoteComposerSubmissionRejected(fields = {}, payload = {}) {

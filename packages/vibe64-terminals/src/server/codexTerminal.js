@@ -531,6 +531,26 @@ function codexAppServerTurnCanReceiveProviderCompletion(turn = {}, threadId = ""
     ["active", "finalizing"].includes(normalizeText(turn.state));
 }
 
+function codexAppServerTurnCanReceiveProviderActivity(turn = {}, threadId = "", turnId = "") {
+  const normalizedThreadId = normalizeText(threadId);
+  const normalizedTurnId = normalizeText(turnId);
+  const currentThreadId = normalizeText(turn.threadId);
+  const currentTurnId = normalizeText(turn.turnId);
+  if (!["active", "finalizing"].includes(normalizeText(turn.state))) {
+    return false;
+  }
+  if (normalizedThreadId && currentThreadId && currentThreadId !== normalizedThreadId) {
+    return false;
+  }
+  if (normalizedTurnId && currentTurnId && currentTurnId !== normalizedTurnId) {
+    return false;
+  }
+  if (normalizedThreadId && !currentThreadId) {
+    return false;
+  }
+  return true;
+}
+
 function dateValueMs(value = "") {
   const parsed = Date.parse(normalizeText(value));
   return Number.isFinite(parsed) ? parsed : 0;
@@ -1571,6 +1591,20 @@ function createCodexTerminalController({
       return;
     }
     const runtime = await projectService.createRuntime();
+    const session = await runtime.getSession(normalizedSessionId);
+    const turn = codexAppServerTurnState(session);
+    if (!codexAppServerTurnCanReceiveProviderActivity(turn, threadId, turnId)) {
+      vibe64SessionDebugLog("server.codexTerminal.appServerReasoningSummary.ignored", {
+        currentState: turn.state,
+        currentStatus: turn.status,
+        currentThreadId: turn.threadId,
+        currentTurnId: turn.turnId,
+        sessionId: normalizedSessionId,
+        threadId: normalizeText(threadId),
+        turnId: normalizeText(turnId)
+      });
+      return;
+    }
     const written = await runtime.store.writeConversationThinkingMessage(normalizedSessionId, {
       at: state.createdAt,
       requireOpenTurn: true,
@@ -1617,6 +1651,11 @@ function createCodexTerminalController({
   function cleanupCodexAppServerReasoningTurn(threadId = "", turnId = "") {
     codexAppServerReasoningTurns.delete(codexAppServerReasoningTurnKey(threadId, turnId));
     codexAppServerReasoningTurns.delete(codexAppServerReasoningTurnKey(threadId, "*"));
+  }
+
+  function cleanupCodexAppServerUntrackedTurn(threadId = "", turnId = "") {
+    cleanupCodexAppServerAssistantTurn(threadId, turnId);
+    cleanupCodexAppServerReasoningTurn(threadId, turnId);
   }
 
   function codexAppServerUserMessageIsVibe64Routed(text = "") {
@@ -2079,6 +2118,27 @@ function createCodexTerminalController({
   }
 
   async function markCodexAppServerTurnActive(sessionId = "", input = {}) {
+    if (input.requireTrackedTurn === true) {
+      const runtime = await projectService.createRuntime();
+      const session = await runtime.getSession(sessionId);
+      const turn = codexAppServerTurnState(session);
+      if (!codexAppServerTurnCanReceiveProviderActivity(turn, input.threadId, input.turnId)) {
+        vibe64SessionDebugLog("server.codexTerminal.appServerTurn.active.ignored", {
+          currentState: turn.state,
+          currentStatus: turn.status,
+          currentThreadId: turn.threadId,
+          currentTurnId: turn.turnId,
+          sessionId: normalizeText(sessionId),
+          threadId: normalizeText(input.threadId),
+          turnId: normalizeText(input.turnId)
+        });
+        return {
+          ok: true,
+          processed: false,
+          reason: "untracked_terminal_turn"
+        };
+      }
+    }
     const status = normalizeText(input.status) || "inProgress";
     const result = await writeCodexAppServerAgentRun(sessionId, {
       publishReason: "codex-app-server-turn-active",
@@ -2170,6 +2230,7 @@ function createCodexTerminalController({
       const turn = codexAppServerTurnState(session);
       if (!codexAppServerTurnCanReceiveProviderCompletion(turn, normalizedThreadId, normalizedTurnId)) {
         codexAppServerFinalizedTurns.add(key);
+        cleanupCodexAppServerUntrackedTurn(normalizedThreadId, normalizedTurnId);
         vibe64SessionDebugLog("server.codexTerminal.appServerAgentResult.stale", {
           currentState: turn.state,
           currentStatus: turn.status,
@@ -2195,6 +2256,7 @@ function createCodexTerminalController({
         const currentSession = await runtime.getSession(normalizedSessionId);
         const currentTurn = codexAppServerTurnState(currentSession);
         if (!codexAppServerTurnCanReceiveProviderCompletion(currentTurn, normalizedThreadId, normalizedTurnId)) {
+          cleanupCodexAppServerUntrackedTurn(normalizedThreadId, normalizedTurnId);
           vibe64SessionDebugLog("server.codexTerminal.appServerAgentResult.finalizedStale", {
             currentState: currentTurn.state,
             currentStatus: currentTurn.status,
@@ -2304,6 +2366,7 @@ function createCodexTerminalController({
     const existingTurn = codexAppServerTurnState(session);
     if (!normalizedTurnId) {
       if (!codexAppServerTurnCanReceiveProviderCompletion(existingTurn, normalizedThreadId, "")) {
+        cleanupCodexAppServerUntrackedTurn(normalizedThreadId, normalizedTurnId);
         vibe64SessionDebugLog("server.codexTerminal.appServerTurn.complete.stale", {
           currentState: existingTurn.state,
           currentStatus: existingTurn.status,
@@ -2345,6 +2408,7 @@ function createCodexTerminalController({
     }
     if (!codexAppServerTurnCanReceiveProviderCompletion(existingTurn, normalizedThreadId, normalizedTurnId)) {
       codexAppServerFinalizedTurns.add(key);
+      cleanupCodexAppServerUntrackedTurn(normalizedThreadId, normalizedTurnId);
       vibe64SessionDebugLog("server.codexTerminal.appServerTurn.complete.stale", {
         currentState: existingTurn.state,
         currentStatus: existingTurn.status,
@@ -2458,6 +2522,7 @@ function createCodexTerminalController({
         normalizedThreadId,
         normalizedTurnId
       ));
+      cleanupCodexAppServerUntrackedTurn(normalizedThreadId, normalizedTurnId);
       vibe64SessionDebugLog("server.codexTerminal.appServerAgentResult.missing.stale", {
         currentState: currentTurn.state,
         currentStatus: currentTurn.status,
@@ -2548,6 +2613,7 @@ function createCodexTerminalController({
       }
       if (method === "turn/started") {
         void markCodexAppServerTurnActive(normalizedSessionId, {
+          requireTrackedTurn: true,
           status: codexAppServerNotificationTurnStatus(notification) || "inProgress",
           threadId: normalizedThreadId,
           turnId: codexAppServerNotificationTurnId(notification)
@@ -2581,6 +2647,7 @@ function createCodexTerminalController({
               codexAppServerNotificationTurnId(notification)
             );
             await markCodexAppServerTurnActive(normalizedSessionId, {
+              requireTrackedTurn: true,
               status,
               threadId: normalizedThreadId,
               turnId

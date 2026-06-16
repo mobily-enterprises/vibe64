@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   rememberSessionDetailRecord,
   sessionDetailRecordForId,
+  sessionListRealtimeShouldRefresh,
+  selectedSessionRealtimeShouldRefresh,
   selectedSessionRecord,
   shouldPreserveSelectedSessionDuringRefresh
 } from "../../src/composables/useVibe64SessionData.js";
@@ -176,5 +178,191 @@ describe("useVibe64SessionData selected session record", () => {
       ],
       sessionListLoading: true
     })).toBe(false);
+  });
+
+  it("does not refresh the session list for terminal-only session events", () => {
+    expect(sessionListRealtimeShouldRefresh({
+      payload: {
+        reason: "codex-terminal-closed",
+        sessionId: "session-1"
+      }
+    })).toBe(false);
+
+    expect(sessionListRealtimeShouldRefresh({
+      payload: {
+        reason: "launch-target-started",
+        sessionId: "session-1"
+      }
+    })).toBe(false);
+
+    expect(sessionListRealtimeShouldRefresh({
+      payload: {
+        reason: "launch-target-ready",
+        sessionId: "session-1"
+      }
+    })).toBe(false);
+
+    expect(sessionListRealtimeShouldRefresh({
+      payload: {
+        reason: "codex-terminal-started",
+        sessionId: "session-1"
+      }
+    })).toBe(false);
+
+    expect(sessionListRealtimeShouldRefresh({
+      payload: {
+        reason: "codex-app-server-running",
+        sessionId: "session-1"
+      }
+    })).toBe(false);
+
+    expect(sessionListRealtimeShouldRefresh({
+      payload: {
+        reason: "codex-app-server-ready",
+        sessionId: "session-1"
+      }
+    })).toBe(false);
+
+    for (const reason of [
+      "codex-app-server-agent-result",
+      "codex-app-server-agent-result-invalid",
+      "codex-app-server-agent-result-missing",
+      "codex-app-server-agent-result-provider-failed",
+      "codex-app-server-blocked",
+      "codex-app-server-failed",
+      "codex-app-server-prompt-injected",
+      "codex-app-server-turn-finalizing",
+      "codex-app-server-turn-idle",
+      "codex-app-server-turn-state"
+    ]) {
+      expect(sessionListRealtimeShouldRefresh({
+        payload: {
+          reason,
+          sessionId: "session-1"
+        }
+      })).toBe(false);
+    }
+
+    for (const reason of [
+      "session-action-run",
+      "session-advanced",
+      "session-agent-control-returned",
+      "session-intent-run",
+      "session-rewound",
+      "session-step-recovered",
+      "session-worktree-recovered"
+    ]) {
+      expect(sessionListRealtimeShouldRefresh({
+        payload: {
+          reason,
+          sessionId: "session-1"
+        }
+      })).toBe(false);
+    }
+
+    expect(sessionListRealtimeShouldRefresh({
+      payload: {
+        sessionId: "session-1"
+      }
+    })).toBe(true);
+  });
+
+  it("does not refresh selected session detail for launch-target-only session events", () => {
+    expect(selectedSessionRealtimeShouldRefresh({
+      payload: {
+        reason: "launch-target-ready",
+        sessionId: "session-1"
+      }
+    }, "session-1")).toBe(false);
+
+    expect(selectedSessionRealtimeShouldRefresh({
+      payload: {
+        reason: "launch-target-stopped",
+        sessionId: "session-1"
+      }
+    }, "session-1")).toBe(false);
+
+    expect(selectedSessionRealtimeShouldRefresh({
+      payload: {
+        reason: "codex-app-server-running",
+        sessionId: "session-1"
+      }
+    }, "session-1")).toBe(false);
+
+    expect(selectedSessionRealtimeShouldRefresh({
+      payload: {
+        reason: "codex-app-server-ready",
+        sessionId: "session-1"
+      }
+    }, "session-1")).toBe(false);
+
+    for (const reason of [
+      "codex-app-server-prompt-injected",
+      "codex-app-server-reasoning-summary",
+      "codex-app-server-terminal-assistant-message",
+      "codex-app-server-terminal-user-message",
+      "codex-app-server-turn-active",
+      "codex-app-server-turn-claimed",
+      "codex-app-server-turn-finalizing",
+      "codex-app-server-turn-idle",
+      "codex-app-server-turn-state",
+      "codex-context-replaced",
+      "codex-prompt-injected"
+    ]) {
+      expect(selectedSessionRealtimeShouldRefresh({
+        payload: {
+          reason,
+          sessionId: "session-1"
+        }
+      }, "session-1")).toBe(false);
+    }
+
+    expect(selectedSessionRealtimeShouldRefresh({
+      payload: {
+        reason: "codex-terminal-started",
+        sessionId: "session-1"
+      }
+    }, "session-1")).toBe(true);
+
+    expect(selectedSessionRealtimeShouldRefresh({
+      payload: {
+        reason: "session-action-run",
+        sessionId: "session-1"
+      }
+    }, "session-1")).toBe(true);
+
+    expect(selectedSessionRealtimeShouldRefresh({
+      payload: {
+        reason: "session-intent-run",
+        sessionId: "session-1"
+      }
+    }, "session-1")).toBe(true);
+
+    expect(selectedSessionRealtimeShouldRefresh({
+      payload: {
+        reason: "codex-app-server-agent-result",
+        sessionId: "session-1"
+      }
+    }, "session-1")).toBe(true);
+
+    expect(selectedSessionRealtimeShouldRefresh({
+      payload: {
+        reason: "codex-app-server-agent-result-provider-failed",
+        sessionId: "session-1"
+      }
+    }, "session-1")).toBe(true);
+
+    expect(selectedSessionRealtimeShouldRefresh({
+      payload: {
+        sessionId: "session-1"
+      }
+    }, "session-1")).toBe(true);
+
+    expect(selectedSessionRealtimeShouldRefresh({
+      payload: {
+        reason: "codex-terminal-started",
+        sessionId: "session-2"
+      }
+    }, "session-1")).toBe(false);
   });
 });

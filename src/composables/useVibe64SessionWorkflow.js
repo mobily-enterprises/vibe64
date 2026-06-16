@@ -43,12 +43,17 @@ function codexTerminalUpdateNeedsSessionRefresh(payload = {}, session = {}) {
   }
 
   const snapshot = codexTerminalSnapshot(session);
-  if (payloadTerminalId !== snapshot.terminalSessionId) {
+  const payloadStatus = String(payload.codexTerminalStatus || payload.status || "").trim();
+  if (!payloadStatus || payloadStatus === "running") {
+    return false;
+  }
+  if (payloadStatus === "stale" || payloadStatus === "closed") {
     return true;
   }
-
-  const payloadStatus = String(payload.codexTerminalStatus || payload.status || "").trim();
-  return Boolean(payloadStatus) && payloadStatus !== snapshot.status;
+  return Boolean(
+    payloadTerminalId === snapshot.terminalSessionId &&
+    payloadStatus !== snapshot.status
+  );
 }
 
 function useVibe64SessionWorkflow({

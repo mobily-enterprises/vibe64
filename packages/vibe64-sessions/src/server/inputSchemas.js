@@ -9,6 +9,14 @@ const vibe64UserInputSchema = {
   }
 };
 
+const originInputSchema = {
+  originId: {
+    type: "string",
+    noTrim: false,
+    required: false
+  }
+};
+
 const agentSettingsInputSchema = {
   agentSettings: {
     type: "object",
@@ -46,6 +54,7 @@ const sessionListInputValidator = deepFreeze({
 
 const sessionCreateInputValidator = deepFreeze({
   schema: createSchema({
+    ...originInputSchema,
     ...vibe64UserInputSchema,
     workflowDefinition: {
       type: "string",
@@ -58,6 +67,7 @@ const sessionCreateInputValidator = deepFreeze({
 
 const sessionIdInputValidator = deepFreeze({
   schema: createSchema({
+    ...originInputSchema,
     ...vibe64UserInputSchema,
     sessionId: {
       type: "string",
@@ -70,6 +80,7 @@ const sessionIdInputValidator = deepFreeze({
 
 const sessionAdvanceInputValidator = deepFreeze({
   schema: createSchema({
+    ...originInputSchema,
     ...vibe64UserInputSchema,
     sessionId: {
       type: "string",
@@ -94,6 +105,7 @@ const sessionActionInputValidator = deepFreeze({
   schema: createSchema({
     ...agentSettingsInputSchema,
     ...displayInputSchema,
+    ...originInputSchema,
     ...vibe64UserInputSchema,
     actionId: {
       type: "string",
@@ -118,6 +130,7 @@ const sessionIntentInputValidator = deepFreeze({
   schema: createSchema({
     ...agentSettingsInputSchema,
     ...displayFieldsInputSchema,
+    ...originInputSchema,
     ...vibe64UserInputSchema,
     fields: {
       type: "object",
@@ -155,6 +168,7 @@ const sessionIntentInputValidator = deepFreeze({
 
 const sessionTerminalFailureFixInputValidator = deepFreeze({
   schema: createSchema({
+    ...originInputSchema,
     ...vibe64UserInputSchema,
     actionId: {
       type: "string",

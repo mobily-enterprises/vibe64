@@ -39,6 +39,9 @@ import {
   vibe64SessionDebugLog,
   vibe64SessionDebugSummary
 } from "@/lib/vibe64SessionDebugLog.js";
+import {
+  vibe64RealtimeOriginPayload
+} from "@/lib/vibe64BrowserTabOrigin.js";
 
 function displayableActionResultMessage(result = {}) {
   const message = String(result?.message || "");
@@ -54,6 +57,7 @@ function intentInputFromContext(context = {}) {
     : {};
   return {
     ...agentSettingsInputFromContext(context),
+    ...vibe64RealtimeOriginPayload(),
     ...displayFields,
     fields: context?.fields && typeof context.fields === "object" && !Array.isArray(context.fields)
       ? context.fields
@@ -81,18 +85,12 @@ function staleAdvanceResult(error = {}) {
   };
 }
 
-function sessionStatus(session = {}) {
-  return String(session?.stepMachine?.status || session?.presentation?.step?.status || "").trim();
+function runActionSuccessShouldRefreshSession() {
+  return false;
 }
 
-function runActionSuccessShouldRefreshSession(response = {}, session = {}) {
-  if (
-    String(response?.actionResult?.status || "").trim() === "prompt_ready" &&
-    sessionStatus(session) === "awaiting_agent_result"
-  ) {
-    return false;
-  }
-  return true;
+function commandInputFromContextWithOrigin(context = {}) {
+  return vibe64RealtimeOriginPayload(commandInputFromContext(context));
 }
 
 function useVibe64SessionActions({
@@ -112,7 +110,7 @@ function useVibe64SessionActions({
   const runActionCommand = useCommand({
     access: "never",
     apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
-    buildRawPayload: (_model, { context }) => commandInputFromContext(context),
+    buildRawPayload: (_model, { context }) => commandInputFromContextWithOrigin(context),
     buildCommandOptions: (_payload, { context }) => ({
       method: "POST",
       path: vibe64ActionPath(resolvedSessionsApiPath.value, context?.sessionId, context?.actionId)
@@ -121,16 +119,13 @@ function useVibe64SessionActions({
     messages: {
       error: "Vibe64 action could not run."
     },
-    onRunSuccess: async (response, { context }) => {
+    onRunSuccess: (response, { context }) => {
       vibe64SessionDebugLog("client.sessionActions.runAction.success", {
         ...vibe64SessionDebugSummary(response || {}),
         actionId: String(context?.actionId || ""),
         actionResultStatus: String(response?.actionResult?.status || ""),
         advanceOnSuccess: context?.advanceOnSuccess === true
       });
-      if (runActionSuccessShouldRefreshSession(response, selectedSession.value || {})) {
-        await refreshSessionData();
-      }
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
     placementSource: "vibe64.sessions.action",
@@ -151,7 +146,7 @@ function useVibe64SessionActions({
     messages: {
       error: "Vibe64 intent could not run."
     },
-    onRunSuccess: async (response, { context }) => {
+    onRunSuccess: (response, { context }) => {
       vibe64SessionDebugLog("client.sessionActions.runIntent.success", {
         ...vibe64SessionDebugSummary(response || {}),
         actionResultStatus: String(response?.actionResult?.status || ""),
@@ -159,7 +154,6 @@ function useVibe64SessionActions({
         requestedStepId: String(context?.stepId || ""),
         requestedStepStatus: String(context?.stepStatus || "")
       });
-      await refreshSessionData();
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
     placementSource: "vibe64.sessions.intent",
@@ -172,6 +166,7 @@ function useVibe64SessionActions({
     access: "never",
     apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
     buildRawPayload: (_model, { context }) => ({
+      ...vibe64RealtimeOriginPayload(),
       stepId: String(context?.stepId || ""),
       stepStatus: String(context?.stepStatus || "")
     }),
@@ -199,12 +194,11 @@ function useVibe64SessionActions({
       await refreshSessionData();
       throw staleAdvanceResult(error);
     },
-    onRunSuccess: async (response) => {
+    onRunSuccess: (response) => {
       vibe64SessionDebugLog("client.sessionActions.advanceCommand.success", {
         ...vibe64SessionDebugSummary(response || selectedSession.value || {}),
         selectedSessionId: String(unref(selectedSessionId) || "")
       });
-      await refreshSessionData();
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
     placementSource: "vibe64.sessions.advance",
@@ -214,6 +208,7 @@ function useVibe64SessionActions({
   const recoverStuckStepCommand = useCommand({
     access: "never",
     apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
+    buildRawPayload: () => vibe64RealtimeOriginPayload(),
     buildCommandOptions: (_payload, { context }) => ({
       method: "POST",
       path: vibe64SessionPath(resolvedSessionsApiPath.value, context?.sessionId, "/recover-stuck-step")
@@ -223,12 +218,11 @@ function useVibe64SessionActions({
       error: "Vibe64 session step could not be recovered.",
       success: "Vibe64 session step recovered."
     },
-    onRunSuccess: async (response) => {
+    onRunSuccess: (response) => {
       vibe64SessionDebugLog("client.sessionActions.recoverStuckStepCommand.success", {
         ...vibe64SessionDebugSummary(response || selectedSession.value || {}),
         selectedSessionId: String(unref(selectedSessionId) || "")
       });
-      await refreshSessionData();
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
     placementSource: "vibe64.sessions.recover-stuck-step",
@@ -240,6 +234,7 @@ function useVibe64SessionActions({
     access: "never",
     apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
     buildRawPayload: (_model, { context }) => ({
+      ...vibe64RealtimeOriginPayload(),
       stepId: String(context?.stepId || "")
     }),
     buildCommandOptions: (_payload, { context }) => ({
@@ -251,9 +246,8 @@ function useVibe64SessionActions({
       error: "Vibe64 session could not rewind.",
       success: "Vibe64 session rewound."
     },
-    onRunSuccess: async () => {
+    onRunSuccess: () => {
       onRewindSuccess();
-      await refreshSessionData();
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
     placementSource: "vibe64.sessions.rewind",

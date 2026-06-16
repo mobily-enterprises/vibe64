@@ -101,6 +101,7 @@ function registerRoutes(
       return withVibe64User(request, {
         fields: body.fields || body.input || {},
         intentId: request.params.intentId,
+        originId: body.originId || "",
         sessionId: request.params.sessionId,
         stepId: body.stepId,
         stepStatus: body.stepStatus
@@ -114,6 +115,7 @@ function registerRoutes(
     buildInput(request) {
       const body = routes.requestBody(request);
       return withVibe64User(request, {
+        originId: body.originId || "",
         sessionId: request.params.sessionId,
         stepId: body.stepId,
         stepStatus: body.stepStatus
@@ -125,9 +127,11 @@ function registerRoutes(
   routes.actionRoute("POST", "/sessions/:sessionId/rewind", {
     actionId: ACTION_REWIND_SESSION,
     buildInput(request) {
+      const body = routes.requestBody(request);
       return withVibe64User(request, {
+        originId: body.originId || "",
         sessionId: request.params.sessionId,
-        stepId: routes.requestBody(request).stepId
+        stepId: body.stepId
       });
     },
     summary: "Rewind an Vibe64 session."
@@ -159,7 +163,11 @@ function registerRoutes(
 }
 
 function sessionInput(request) {
+  const body = request.body && typeof request.body === "object" && !Array.isArray(request.body)
+    ? request.body
+    : {};
   return withVibe64User(request, {
+    originId: body.originId || "",
     sessionId: request.params.sessionId
   });
 }

@@ -158,6 +158,7 @@ const featureActions = Object.freeze([
         input.actionId,
         {
           ...(input.input || {}),
+          originId: input.originId || input.input?.originId || "",
           vibe64User: input.vibe64User || null
         }
       );
@@ -183,6 +184,7 @@ const featureActions = Object.freeze([
         input.intentId,
         {
           fields: input.fields || input.input || {},
+          originId: input.originId || input.input?.originId || "",
           stepId: input.stepId || "",
           stepStatus: input.stepStatus || "",
           vibe64User: input.vibe64User || null
@@ -208,6 +210,7 @@ const featureActions = Object.freeze([
       return deps.featureService.advanceSession(input.sessionId, {
         stepId: input.stepId || "",
         stepStatus: input.stepStatus || "",
+        originId: input.originId || "",
         vibe64User: input.vibe64User || null
       });
     }
@@ -228,6 +231,7 @@ const featureActions = Object.freeze([
     async execute(input, context, deps) {
       void context;
       return deps.featureService.rewindSession(input.sessionId, input.stepId, {
+        originId: input.originId || "",
         vibe64User: input.vibe64User || null
       });
     }
@@ -248,6 +252,7 @@ const featureActions = Object.freeze([
     async execute(input, context, deps) {
       void context;
       return deps.featureService.recoverSessionWorktree(input.sessionId, {
+        originId: input.originId || "",
         vibe64User: input.vibe64User || null
       });
     }
@@ -268,6 +273,7 @@ const featureActions = Object.freeze([
     async execute(input, context, deps) {
       void context;
       return deps.featureService.recoverStuckSessionStep(input.sessionId, {
+        originId: input.originId || "",
         vibe64User: input.vibe64User || null
       });
     }
@@ -288,6 +294,7 @@ const featureActions = Object.freeze([
     async execute(input, context, deps) {
       void context;
       return deps.featureService.returnAgentControl(input.sessionId, {
+        originId: input.originId || "",
         vibe64User: input.vibe64User || null
       });
     }
@@ -308,6 +315,7 @@ const featureActions = Object.freeze([
     async execute(input, context, deps) {
       void context;
       return deps.featureService.abandonSession(input.sessionId, {
+        originId: input.originId || "",
         vibe64User: input.vibe64User || null
       });
     }

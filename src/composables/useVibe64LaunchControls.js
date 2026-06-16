@@ -1,4 +1,5 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
+import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
 import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
@@ -30,6 +31,10 @@ import {
   writeLocalStorageJson
 } from "@/lib/browserLocalStorage.js";
 import {
+  vibe64RealtimeOriginPayload,
+  vibe64RealtimePayloadFromCurrentTab
+} from "@/lib/vibe64BrowserTabOrigin.js";
+import {
   useVibe64ProjectSlug
 } from "@/composables/useVibe64ProjectScope.js";
 import {
@@ -43,11 +48,16 @@ import {
 
 const LAUNCH_BROWSER_WINDOW_FEATURES = "popup,width=1400,height=900,left=80,top=60";
 const LAUNCH_PREVIEW_TOOLBAR_POSITIONS = Object.freeze(["left", "center", "right"]);
-const LAUNCH_STATUS_POLL_INTERVAL_MS = 1000;
 const AUTO_START_ATTEMPT_COOLDOWN_MS = 30000;
 const AUTO_START_STABILITY_DELAY_MS = 750;
 const TERMINAL_STOP_POLL_INTERVAL_MS = 100;
 const TERMINAL_STOP_POLL_ATTEMPTS = 50;
+const LAUNCH_TARGETS_REALTIME_REASONS = new Set([
+  "launch-target-started",
+  "launch-target-ready",
+  "launch-target-closed",
+  "launch-target-stopped"
+]);
 
 function browserCanOpenTarget(target = {}) {
   return String(target.kind || "url") === "url" && Boolean(String(target.href || "").trim());
@@ -207,6 +217,25 @@ function launchControlScopeKey(projectSlug = "", sessionId = "") {
   return `${String(projectSlug || "").trim()}::${String(sessionId || "").trim()}`;
 }
 
+function launchTargetsRealtimeShouldRefresh({
+  localLaunchStarting = false,
+  payload = {}
+} = {}, sessionId = "") {
+  const normalizedSessionId = String(sessionId || "").trim();
+  const changedSessionId = String(payload.sessionId || payload.entityId || "").trim();
+  if (!normalizedSessionId || changedSessionId !== normalizedSessionId) {
+    return false;
+  }
+  const reason = String(payload.reason || "").trim();
+  if (
+    reason === "launch-target-started" &&
+    (localLaunchStarting || vibe64RealtimePayloadFromCurrentTab(payload))
+  ) {
+    return false;
+  }
+  return !reason || LAUNCH_TARGETS_REALTIME_REASONS.has(reason);
+}
+
 function shouldScheduleLaunchAutoStart({
   autoStartKey = "",
   key = "",
@@ -320,25 +349,6 @@ function launchTerminalIsReady(metadata = {}) {
 
 function launchPreviewRequiresProxy(metadata = {}) {
   return Boolean(String(metadata?.previewAuth || "").trim());
-}
-
-function launchStatusPollNeeded({
-  loading = false,
-  previewProxyPending = false,
-  sessionId = "",
-  terminalDisplayed = true,
-  terminalIsRunning = false,
-  terminalLaunchReady = false,
-  terminalVisible = false
-} = {}) {
-  return Boolean(
-    sessionId &&
-    terminalDisplayed &&
-    terminalVisible &&
-    terminalIsRunning &&
-    !loading &&
-    (!terminalLaunchReady || previewProxyPending)
-  );
 }
 
 function terminalSessionMissingError(message = "") {
@@ -465,12 +475,10 @@ function useVibe64LaunchControls({
   const autoStartCooldownVersion = ref(0);
   const launchTargetsSettledForAutoStart = ref(false);
   let attachedTerminalId = "";
-  let launchStatusPollTimer = 0;
   let autoStartTimer = 0;
   let autoStartCooldownTimer = 0;
   let scheduledAutoStartKey = "";
-  let launchTargetsAutoStartRefreshKey = "";
-  let launchTargetsAutoStartRefreshToken = 0;
+  let launchTargetsRefreshInFlight = null;
 
   const selectedSession = computed(() => readRefOrGetterValue(session) || null);
   const sessionId = computed(() => String(selectedSession.value?.sessionId || ""));
@@ -531,13 +539,7 @@ function useVibe64LaunchControls({
     )),
     refreshOnPull: true,
     requestRecovery: false,
-    realtime: {
-      event: VIBE64_SESSION_CHANGED_EVENT,
-      matches: ({ payload = {} } = {}) => {
-        const changedSessionId = String(payload.sessionId || payload.entityId || "").trim();
-        return Boolean(changedSessionId && changedSessionId === sessionId.value);
-      }
-    }
+    realtime: null
   });
 
   const startTerminalCommand = useCommand({
@@ -548,6 +550,7 @@ function useVibe64LaunchControls({
       path: vibe64LaunchTerminalPath(sessionsApiPath.value, context.sessionId)
     }),
     buildRawPayload: (_model, { context }) => ({
+      ...vibe64RealtimeOriginPayload(),
       launchInput: context.launchInput || {},
       launchTargetId: String(context.launchTargetId || "")
     }),
@@ -824,7 +827,6 @@ function useVibe64LaunchControls({
       }
       applyLaunchTerminalSession(terminalSession);
       void connectLaunchTerminal();
-      await refresh();
       return true;
     } catch {
       return false;
@@ -866,20 +868,48 @@ function useVibe64LaunchControls({
     void connectLaunchTerminal();
   }
 
-  async function refresh() {
+  async function refresh({
+    scopeKey = launchScopeKey.value
+  } = {}) {
     if (!canLoadLaunchTargets.value) {
       return null;
     }
-    return launchTargetsResource.reload();
+    const refreshScopeKey = String(scopeKey || "").trim();
+    if (!refreshScopeKey) {
+      return null;
+    }
+    if (launchTargetsRefreshInFlight?.scopeKey === refreshScopeKey) {
+      return launchTargetsRefreshInFlight.promise;
+    }
+    const refreshPromise = typeof launchTargetsResource.query?.refetch === "function"
+      ? launchTargetsResource.query.refetch({
+          cancelRefetch: false
+        })
+      : launchTargetsResource.reload();
+    launchTargetsRefreshInFlight = {
+      promise: refreshPromise,
+      scopeKey: refreshScopeKey
+    };
+    try {
+      return await refreshPromise;
+    } finally {
+      if (launchTargetsRefreshInFlight?.promise === refreshPromise) {
+        launchTargetsRefreshInFlight = null;
+      }
+    }
   }
 
-  function clearLaunchStatusPoll() {
-    if (!launchStatusPollTimer) {
-      return;
-    }
-    window.clearTimeout(launchStatusPollTimer);
-    launchStatusPollTimer = 0;
-  }
+  useRealtimeEvent({
+    enabled: canLoadLaunchTargets,
+    event: VIBE64_SESSION_CHANGED_EVENT,
+    matches: (context) => launchTargetsRealtimeShouldRefresh({
+      localLaunchStarting: launchStarting.value,
+      payload: context?.payload || {}
+    }, sessionId.value),
+    onEvent: () => refresh({
+      scopeKey: launchScopeKey.value
+    })
+  });
 
   function clearAutoStartTimer() {
     if (autoStartTimer && typeof window !== "undefined") {
@@ -898,8 +928,6 @@ function useVibe64LaunchControls({
 
   function resetLaunchTargetsAutoStartSettlement() {
     launchTargetsSettledForAutoStart.value = false;
-    launchTargetsAutoStartRefreshKey = "";
-    launchTargetsAutoStartRefreshToken += 1;
   }
 
   function scheduleAutoStartCooldownCheck(remainingMs = 0) {
@@ -918,46 +946,6 @@ function useVibe64LaunchControls({
     closeTerminalSocket();
     resetTerminalSessionState();
     resetTerminalDisplay();
-  }
-
-  function scheduleLaunchStatusPoll() {
-    if (typeof window === "undefined") {
-      return;
-    }
-    if (!launchStatusPollNeeded({
-      loading: launchTargetsResource.isLoading.value,
-      previewProxyPending: terminalPreviewProxyPending.value,
-      sessionId: sessionId.value,
-      terminalDisplayed: terminalDisplayed.value,
-      terminalIsRunning: terminalIsRunning.value,
-      terminalLaunchReady: terminalLaunchReady.value,
-      terminalVisible: terminalVisible.value
-    })) {
-      clearLaunchStatusPoll();
-      return;
-    }
-    if (launchStatusPollTimer) {
-      return;
-    }
-    launchStatusPollTimer = window.setTimeout(async () => {
-      launchStatusPollTimer = 0;
-      if (!launchStatusPollNeeded({
-        loading: false,
-        previewProxyPending: terminalPreviewProxyPending.value,
-        sessionId: sessionId.value,
-        terminalDisplayed: terminalDisplayed.value,
-        terminalIsRunning: terminalIsRunning.value,
-        terminalLaunchReady: terminalLaunchReady.value,
-        terminalVisible: terminalVisible.value
-      })) {
-        return;
-      }
-      try {
-        await refresh();
-      } finally {
-        scheduleLaunchStatusPoll();
-      }
-    }, LAUNCH_STATUS_POLL_INTERVAL_MS);
   }
 
   async function stopTerminal() {
@@ -1104,12 +1092,10 @@ function useVibe64LaunchControls({
 
   watch(terminalDisplayed, (displayed) => {
     if (displayed) {
-      void refresh();
       void connectLaunchTerminal();
       return;
     }
     clearAutoStartTimer();
-    clearLaunchStatusPoll();
     resetLaunchTargetsAutoStartSettlement();
     closeTerminalSocket();
     disposeTerminalDisplay();
@@ -1121,39 +1107,11 @@ function useVibe64LaunchControls({
     previewInputOverrides.value = {};
     resetLaunchTargetsAutoStartSettlement();
     clearAutoStartTimer();
-    clearLaunchStatusPoll();
     closeTerminalSocket();
     disposeTerminalDisplay();
     resetTerminalSessionState();
     resetTerminalDisplay();
     terminalExpanded.value = false;
-  });
-
-  watch(() => [
-    projectSlug.value,
-    sessionId.value,
-    terminalLaunchReady.value ? "ready" : "not-ready"
-  ].join("|"), () => {
-    if (terminalLaunchReady.value) {
-      void refresh();
-    }
-  }, {
-    immediate: true
-  });
-
-  watch(() => [
-    projectSlug.value,
-    sessionId.value,
-    terminalDisplayed.value ? "displayed" : "hidden",
-    terminalVisible.value ? "terminal-visible" : "terminal-hidden",
-    terminalIsRunning.value ? "running" : "stopped",
-    terminalLaunchReady.value ? "ready" : "not-ready",
-    terminalPreviewProxyPending.value ? "preview-proxy-pending" : "preview-proxy-settled",
-    launchTargetsResource.isLoading.value ? "loading" : "ready"
-  ].join("|"), () => {
-    scheduleLaunchStatusPoll();
-  }, {
-    immediate: true
   });
 
   watch(() => [
@@ -1169,29 +1127,11 @@ function useVibe64LaunchControls({
       resetLaunchTargetsAutoStartSettlement();
       return;
     }
-    if (launchTargetsSettledForAutoStart.value || launchTargetsAutoStartRefreshKey === scopeKey) {
-      return;
-    }
     if (launchTargetsResource.isLoading.value) {
+      launchTargetsSettledForAutoStart.value = false;
       return;
     }
-
-    const refreshToken = launchTargetsAutoStartRefreshToken + 1;
-    launchTargetsAutoStartRefreshToken = refreshToken;
-    launchTargetsAutoStartRefreshKey = scopeKey;
-    launchTargetsSettledForAutoStart.value = false;
-    void Promise.resolve(refresh()).catch(() => null).finally(() => {
-      if (
-        disposed ||
-        refreshToken !== launchTargetsAutoStartRefreshToken ||
-        scopeKey !== launchScopeKey.value ||
-        !canLoadLaunchTargets.value ||
-        readRefOrGetterValue(busy)
-      ) {
-        return;
-      }
-      launchTargetsSettledForAutoStart.value = true;
-    });
+    launchTargetsSettledForAutoStart.value = true;
   }, {
     flush: "post",
     immediate: true
@@ -1284,7 +1224,6 @@ function useVibe64LaunchControls({
     disposed = true;
     clearAutoStartTimer();
     clearAutoStartCooldownTimer();
-    clearLaunchStatusPoll();
     disposeTerminalUi();
   });
 
@@ -1359,7 +1298,7 @@ export {
   launchAutoStartAttemptStorageKey,
   launchPreviewBaseUrl,
   launchPreviewDisplayUrl,
-  launchStatusPollNeeded,
+  launchTargetsRealtimeShouldRefresh,
   launchPreviewRequiresProxy,
   launchPreviewOptionsStorageKey,
   launchPreviewToolbarStorageKey,
