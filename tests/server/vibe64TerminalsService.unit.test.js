@@ -1812,6 +1812,156 @@ test("Vibe64 Codex app-server active turns self-reconcile without another sessio
   });
 });
 
+test("Vibe64 Codex terminal state recovers stale finalizing app-server turns from the provider transcript", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "codex_turn_stale_finalizing_recovered";
+    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
+    const worktree = path.join(sessionRoot, "worktree");
+    const runtimeDir = path.join(targetRoot, ".vibe64", "runtime", "codex-app-server");
+    const threadId = "thread-1";
+    const turnId = "turn-1";
+    await mkdir(worktree, {
+      recursive: true
+    });
+    const assistantText = [
+      "Recovered provider transcript result.",
+      "",
+      AGENT_TURN_RESULT_BEGIN,
+      JSON.stringify({
+        fields: {
+          response: "Recovered provider transcript result."
+        },
+        kind: "ready",
+        schema: AGENT_TURN_RESULT_SCHEMA,
+        stepId: "implementation_reviewed",
+        stepStatus: "awaiting_agent_result"
+      }),
+      AGENT_TURN_RESULT_END
+    ].join("\n");
+    const session = {
+      agentRuns: [
+        codexAppServerAgentRun({
+          providerStatus: "completed",
+          providerThreadId: threadId,
+          providerTurnId: turnId,
+          state: "finalizing",
+          updatedAt: "2000-01-01T00:00:00.000Z"
+        })
+      ],
+      completedSteps: ["worktree_created"],
+      currentStep: "implementation_reviewed",
+      currentStepDefinition: {
+        autopilot: {
+          kind: "agent_conversation"
+        }
+      },
+      metadata: {
+        codex_app_server_endpoint: `unix://${path.join(runtimeDir, "app-server.sock")}`,
+        codex_app_server_runtime_dir: runtimeDir,
+        codex_app_server_socket_path: path.join(runtimeDir, "app-server.sock"),
+        worktree_path: worktree
+      },
+      sessionId,
+      sessionRoot,
+      stepMachine: {
+        status: "awaiting_agent_result"
+      },
+      targetRoot
+    };
+    const runtime = {
+      async getSession() {
+        return session;
+      },
+      async submitCurrentStepInput(_sessionId, input = {}) {
+        session.lastStepInput = input;
+        session.stepMachine.status = "done";
+        return session;
+      },
+      store: {
+        async mutateSession(_sessionId, operation) {
+          return operation();
+        },
+        async writeAgentRunEvent(_sessionId, runId, event) {
+          writeAgentRunEventToSession(session, runId, event);
+        },
+        async writeMetadataValue(_sessionId, name, value) {
+          session.metadata[name] = String(value || "");
+        }
+      }
+    };
+    const resumeThreadCalls = [];
+    const controller = createCodexTerminalController({
+      codexAppServerProviderFactory: () => ({
+        async ensureAvailable() {
+          return {
+            ok: true
+          };
+        },
+        async resumeThread(resumedThreadId, params) {
+          resumeThreadCalls.push({
+            params,
+            threadId: resumedThreadId
+          });
+          return {
+            raw: {
+              turns: [
+                {
+                  id: turnId,
+                  items: [
+                    {
+                      id: "assistant-message-1",
+                      phase: "final_answer",
+                      text: assistantText,
+                      type: "agentMessage"
+                    }
+                  ],
+                  status: "completed"
+                }
+              ]
+            }
+          };
+        }
+      }),
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return runtime;
+        }
+      }
+    });
+
+    const state = await controller.terminalState(sessionId);
+
+    assert.equal(state.ok, true);
+    assert.deepEqual(resumeThreadCalls, [
+      {
+        params: {
+          cwd: worktree
+        },
+        threadId
+      }
+    ]);
+    assert.deepEqual(session.lastStepInput, {
+      conversationText: "Recovered provider transcript result.",
+      fields: {
+        response: "Recovered provider transcript result."
+      },
+      kind: "ready",
+      message: "",
+      source: "codex",
+      stepId: "implementation_reviewed",
+      stepStatus: "awaiting_agent_result",
+      text: ""
+    });
+    assert.equal(session.stepMachine.status, "done");
+    assert.equal(codexAppServerAgentRunSnapshot(session).state, "completed");
+    assert.equal(codexAppServerAgentRunSnapshot(session).providerStatus, "completed");
+    assert.equal(codexAppServerAgentRunSnapshot(session).error, "");
+    assert.equal(state.codexAgentTurnActive, false);
+    assert.equal(state.codexAgentTurn.state, "idle");
+  });
+});
+
 test("Vibe64 Codex terminal state returns control for stale finalizing app-server turns", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_turn_stale_finalizing";
@@ -2341,39 +2491,72 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       source: "system_recovery",
       status: "waiting_for_input"
     };
+    const transcriptAssistantText = [
+      "The app-server turn is complete.",
+      "",
+      "This visible prose should be preserved in chat.",
+      AGENT_TURN_RESULT_BEGIN,
+      JSON.stringify({
+        fields: {
+          response: "The app-server turn is complete."
+        },
+        kind: "ready",
+        schema: AGENT_TURN_RESULT_SCHEMA,
+        stepId: "maintenance_conversation",
+        stepStatus: "awaiting_agent_result"
+      }),
+      AGENT_TURN_RESULT_END
+    ].join("\n");
     providerSubscribers[0]({
-      method: "item/completed",
+      method: "codex/event",
       params: {
-        item: {
-          content: [
-            {
-              text: [
-                "The app-server turn is complete.",
-                "",
-                "This visible prose should be preserved in chat.",
-                AGENT_TURN_RESULT_BEGIN,
-                JSON.stringify({
-                  fields: {
-                    response: "The app-server turn is complete."
-                  },
-                  kind: "ready",
-                  schema: AGENT_TURN_RESULT_SCHEMA,
-                  stepId: "maintenance_conversation",
-                  stepStatus: "awaiting_agent_result"
-                }),
-                AGENT_TURN_RESULT_END
-              ].join("\n"),
-              type: "text"
-            }
-          ],
-          id: "assistant-message-1",
-          type: "agentMessage"
+        event: {
+          payload: {
+            message: transcriptAssistantText,
+            phase: "final_answer",
+            type: "agent_message"
+          },
+          type: "event_msg"
         },
         threadId: "00000000-0000-4000-8000-000000000004",
         turnId: "codex-app-server-turn-1"
       }
     });
-    await delay(5);
+    providerSubscribers[0]({
+      method: "codex/event",
+      params: {
+        event: {
+          payload: {
+            content: [
+              {
+                text: transcriptAssistantText,
+                type: "output_text"
+              }
+            ],
+            phase: "final_answer",
+            role: "assistant",
+            type: "message"
+          },
+          type: "response_item"
+        },
+        threadId: "00000000-0000-4000-8000-000000000004",
+        turnId: "codex-app-server-turn-1"
+      }
+    });
+    providerSubscribers[0]({
+      method: "codex/event",
+      params: {
+        event: {
+          payload: {
+            last_agent_message: transcriptAssistantText,
+            turn_id: "codex-app-server-turn-1"
+          },
+          type: "task_complete"
+        },
+        threadId: "00000000-0000-4000-8000-000000000004"
+      }
+    });
+    await delay(10);
     assert.deepEqual(session.lastStepInput, {
       fields: {
         response: "The app-server turn is complete."
@@ -2389,6 +2572,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     assert.equal(session.stepMachine.status, "done");
     assert.equal(codexAppServerAgentRunSnapshot(session).state, "completed");
     assert.equal(codexAppServerAgentRunSnapshot(session).providerStatus, "completed");
+    assert.equal(codexAppServerAgentRunSnapshot(session).error, "");
     assert.deepEqual((await runtime.store.readConversationLog()).map((turn) => turn.assistant?.text).filter(Boolean), [
       "The app-server turn is complete.\n\nThis visible prose should be preserved in chat."
     ]);
