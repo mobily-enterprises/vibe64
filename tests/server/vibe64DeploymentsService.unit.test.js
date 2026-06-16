@@ -13,6 +13,9 @@ import {
   createDeploymentRunner
 } from "../../packages/vibe64-deployments/src/server/deploymentRunner.js";
 import {
+  createCaddyRouteMaterializer
+} from "../../packages/vibe64-deployments/src/server/caddyRouteMaterializer.js";
+import {
   runWithProjectRequestContext
 } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 import {
@@ -97,6 +100,9 @@ function fakeSuccessfulRunCommand() {
       return commandResult("release-container-id");
     }
     if (command === "docker" && args[0] === "exec") {
+      return commandResult("ready 200");
+    }
+    if (command === process.execPath) {
       return commandResult("ready 200");
     }
     if (command === "bash") {
@@ -209,6 +215,9 @@ test("Vibe64 deployment service publishes with release logs and Docker restart s
     assert.ok(detachedRun.args.includes("json-file"));
     assert.ok(detachedRun.args.includes("max-size=10m"));
     assert.ok(detachedRun.args.includes("max-file=5"));
+    const publishIndex = detachedRun.args.indexOf("-p");
+    assert.notEqual(publishIndex, -1, "Expected release container to publish a loopback port for Caddy.");
+    assert.match(detachedRun.args[publishIndex + 1], /^127\.0\.0\.1:\d+:4100$/u);
     assert.equal(detachedRun.args.join(" ").includes("systemctl"), false);
     assert.equal(detachedRun.args.join(" ").includes("systemd"), false);
 
@@ -225,6 +234,28 @@ test("Vibe64 deployment service publishes with release logs and Docker restart s
     assert.equal(manifest.releaseId, result.release.releaseId);
     assert.equal(manifest.status, "published");
     assert.equal(manifest.publicHost, "beepollen.users.vibe64.dev");
+    assert.match(manifest.container.loopbackBaseUrl, /^http:\/\/127\.0\.0\.1:\d+$/u);
+    assert.match(manifest.caddy.sitePath, /\/caddy\/sites\/beepollen\.caddy$/u);
+    assert.match(manifest.caddy.accessLogPath, /\/\.vibe64-local\/deployments\/logs\/access\.log$/u);
+    assert.equal(manifest.caddy.accessLogPath.includes(manifest.releaseId), false);
+
+    const caddySite = await readFile(manifest.caddy.sitePath, "utf8");
+    assert.match(caddySite, /beepollen\.users\.vibe64\.dev/u);
+    assert.match(caddySite, /import vibe64_published_app 127\.0\.0\.1:\d+ /u);
+    assert.match(caddySite, /\/\.vibe64-local\/deployments\/logs\/access\.log/u);
+
+    const caddySnippet = await readFile(manifest.caddy.snippetPath, "utf8");
+    assert.match(caddySnippet, /\(vibe64_published_app\)/u);
+    assert.match(caddySnippet, /reverse_proxy \{args\[0\]\}/u);
+
+    const reloadingMaterializer = createCaddyRouteMaterializer({
+      reload: true,
+      runCommand: fake.runCommand
+    });
+    await assert.rejects(
+      () => reloadingMaterializer.materializeProject(context, result.state),
+      /VIBE64_CADDY_CONFIG/u
+    );
   });
 });
 
@@ -396,7 +427,8 @@ test("Vibe64 deployment service verifies custom domains before TLS and route app
     });
     assert.equal(publicNameRoute.ok, true);
     assert.equal(publicNameRoute.project.slug, "beepollen");
-    assert.match(publicNameRoute.target.internalBaseUrl, /^http:\/\/.+:4100$/u);
+    assert.match(publicNameRoute.target.internalBaseUrl, /^http:\/\/127\.0\.0\.1:\d+$/u);
+    assert.match(publicNameRoute.target.loopbackProxyTarget, /^127\.0\.0\.1:\d+$/u);
 
     const unknown = await service.tlsAsk({
       domain: "unknown.users.vibe64.dev"
@@ -435,6 +467,9 @@ test("Vibe64 deployment service verifies custom domains before TLS and route app
     assert.equal(customDomainRoute.ok, true);
     assert.equal(customDomainRoute.release.releaseId, published.release.releaseId);
     assert.equal(customDomainRoute.target.internalBaseUrl, publicNameRoute.target.internalBaseUrl);
+
+    const caddySite = await readFile(published.release.caddy.sitePath, "utf8");
+    assert.match(caddySite, /beepollen\.users\.vibe64\.dev, www\.example\.com/u);
   });
 });
 

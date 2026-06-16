@@ -1,4 +1,6 @@
+import net from "node:net";
 import path from "node:path";
+import process from "node:process";
 
 import {
   normalizeText,
@@ -81,9 +83,11 @@ function createDeploymentRunner({
     release = {}
   } = {}) {
     const startedAt = new Date().toISOString();
+    const loopbackPort = await allocateLoopbackPort();
     const container = releaseContainerRecord({
       context,
       image,
+      loopbackPort,
       release
     });
     const result = await runCommand("docker", releaseContainerDockerArgs({
@@ -116,13 +120,10 @@ function createDeploymentRunner({
     release = {}
   } = {}) {
     const startedAt = new Date().toISOString();
-    const result = await runCommand("docker", [
-      "exec",
-      container.containerName,
-      "node",
+    const result = await runCommand(process.execPath, [
       "-e",
       httpHealthProbeScript(),
-      `http://127.0.0.1:${RELEASE_CONTAINER_PORT}${healthPath(release.health)}`,
+      `${container.loopbackBaseUrl}${healthPath(release.health)}`,
       String(healthTimeoutMs(release.health))
     ], {
       timeout: healthTimeoutMs(release.health)
@@ -399,12 +400,14 @@ function releaseContainerName({
 function releaseContainerRecord({
   context = {},
   image = STUDIO_BASE_TOOLCHAIN_IMAGE,
+  loopbackPort = 0,
   release = {}
 } = {}) {
   const containerName = releaseContainerName({
     context,
     release
   });
+  const hostPort = normalizePort(loopbackPort);
   return {
     containerId: "",
     containerName,
@@ -413,6 +416,10 @@ function releaseContainerRecord({
     internalHealthUrl: `http://${containerName}:${RELEASE_CONTAINER_PORT}${healthPath(release.health)}`,
     internalHost: containerName,
     internalPort: RELEASE_CONTAINER_PORT,
+    loopbackBaseUrl: `http://127.0.0.1:${hostPort}`,
+    loopbackHealthUrl: `http://127.0.0.1:${hostPort}${healthPath(release.health)}`,
+    loopbackPort: hostPort,
+    loopbackProxyTarget: `127.0.0.1:${hostPort}`,
     network: runtimeNetworkName(context.targetRoot),
     restartPolicy: RELEASE_RESTART_POLICY
   };
@@ -440,6 +447,8 @@ function releaseContainerDockerArgs({
     `max-size=${RELEASE_LOG_MAX_SIZE}`,
     "--log-opt",
     `max-file=${RELEASE_LOG_MAX_FILE}`,
+    "-p",
+    `${container.loopbackProxyTarget}:${RELEASE_CONTAINER_PORT}`,
     ...baseRunLabels({
       context,
       releaseId: release.releaseId
@@ -468,6 +477,36 @@ function releaseContainerDockerArgs({
 function healthPath(health = {}) {
   const pathValue = normalizeText(health?.path || "/") || "/";
   return pathValue.startsWith("/") ? pathValue : `/${pathValue}`;
+}
+
+async function allocateLoopbackPort() {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      const port = Number(address?.port);
+      server.close((error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        try {
+          resolve(normalizePort(port));
+        } catch (normalizeError) {
+          reject(normalizeError);
+        }
+      });
+    });
+  });
+}
+
+function normalizePort(value = 0) {
+  const port = Number(value);
+  if (!Number.isInteger(port) || port <= 0 || port >= 65536) {
+    throw vibe64Error("Deployment release requires a valid loopback port.", "vibe64_deployment_loopback_port_invalid");
+  }
+  return port;
 }
 
 function healthTimeoutMs(health = {}) {
@@ -525,6 +564,7 @@ export {
   RELEASE_LOG_MAX_FILE,
   RELEASE_LOG_MAX_SIZE,
   RELEASE_RESTART_POLICY,
+  allocateLoopbackPort,
   createDeploymentRunner,
   releaseContainerDockerArgs
 };

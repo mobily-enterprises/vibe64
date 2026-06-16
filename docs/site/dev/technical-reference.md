@@ -255,16 +255,27 @@ rotates container logs. Vibe64 also keeps phase logs in the release directory so
 build, migration, start, and health-check failures are tied to the release that
 caused them.
 
+Caddy access logs are stable per project, not per release:
+
+```text
+<project>/.vibe64-local/deployments/logs/access.log
+```
+
+The generated Caddy site fragment points every current release and verified
+custom domain for the project at that same access log.
+
 Vibe64 does not create per-app systemd services. Systemd, if used by a host, is
-only responsible for long-lived host infrastructure such as the Vibe64 daemon,
-the Caddy edge process, and the deployment router. Individual published apps are
-Vibe64/Docker releases.
+only responsible for long-lived host infrastructure such as the Vibe64 daemon
+and the Caddy edge process. Individual published apps are Vibe64/Docker
+releases.
 
 ### Edge routing
 
 DNS sends published-app traffic to the Vibe64 edge. Caddy terminates TLS and
-forwards requests to the Vibe64 deployment router. Caddy should not know project
-release manifests or app container names.
+proxies requests directly to the current release loopback target from generated
+Vibe64 site fragments. Caddy does not read project manifests; Vibe64 rewrites
+the generated fragment whenever publish, rollback, or verified-domain state
+changes.
 
 For the platform namespace:
 
@@ -283,18 +294,42 @@ endpoint must return success only for:
 - reserved/published `*.users.vibe64.dev` names
 - verified custom domain bindings
 
-The current deployment integration endpoints are loopback-only:
+The current certificate integration endpoint is loopback-only:
 
 ```text
 GET /api/vibe64/deployments/tls/ask?domain=<hostname>
-GET /api/vibe64/deployments/route?host=<hostname>
 ```
 
 The `tls/ask` endpoint is for Caddy on-demand TLS. It answers from the
 deployment registry and returns success only when certificate issuance is
-allowed. The `route` endpoint is for the deployment router. It resolves the
-request host to the current published release target on the project runtime
-network.
+allowed. Runtime routing is handled by generated Caddy snippets and site
+fragments under the managed system root:
+
+```text
+<system-root>/caddy/snippets/vibe64_published_app.caddy
+<system-root>/caddy/sites/<public-name>.caddy
+```
+
+The host Caddyfile should import the shared snippet and all generated sites:
+
+```caddyfile
+import <system-root>/caddy/snippets/*.caddy
+import <system-root>/caddy/sites/*.caddy
+```
+
+Vibe64 writes those generated `.caddy` files. The host owns the main Caddyfile.
+If automatic reloads are enabled, set `VIBE64_CADDY_RELOAD=1` and point
+`VIBE64_CADDY_CONFIG` at that host Caddyfile so Vibe64 can run `caddy validate`
+and `caddy reload` after publish, rollback, or verified-domain changes.
+
+Each generated site fragment contains only the host list, loopback upstream, and
+stable project access log path:
+
+```caddyfile
+public-name.users.vibe64.dev, www.customer.com {
+  import vibe64_published_app 127.0.0.1:<release-port> <project>/.vibe64-local/deployments/logs/access.log
+}
+```
 
 Custom domains are aliases to the current release after DNS ownership
 verification. Vibe64 records the required TXT record, verifies it from the

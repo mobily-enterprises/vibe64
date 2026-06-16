@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { resolveTxt } from "node:dns/promises";
-import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 
@@ -20,6 +20,9 @@ import {
   validateCustomHostname,
   validatePublicName
 } from "./publicNames.js";
+import {
+  writeTextFileAtomic
+} from "./deploymentFiles.js";
 
 const DEPLOYMENT_SCHEMA_VERSION = 1;
 const DEPLOYMENTS_DIR = "deployments";
@@ -151,6 +154,13 @@ function createDeploymentStore({
       updatedAt: nowIso()
     };
     await writeReleaseManifest(paths, nextManifest);
+    const currentRelease = await readOptionalJson(paths.currentReleasePath);
+    if (currentRelease?.releaseId === nextManifest.releaseId) {
+      await writeJsonFile(paths.currentReleasePath, {
+        ...nextManifest,
+        ...(currentRelease.rolledBackAt ? { rolledBackAt: currentRelease.rolledBackAt } : {})
+      });
+    }
     return nextManifest;
   }
 
@@ -354,7 +364,8 @@ function createDeploymentStore({
     if (!currentRelease || currentRelease.status !== "published") {
       return ingressDenied("Hostname has no published release.", "vibe64_deployment_release_not_published", host);
     }
-    if (!currentRelease.container?.internalBaseUrl) {
+    const routeBaseUrl = currentRelease.container?.loopbackBaseUrl || currentRelease.container?.internalBaseUrl;
+    if (!routeBaseUrl) {
       return ingressDenied("Published release has no internal route target.", "vibe64_deployment_route_target_missing", host);
     }
 
@@ -371,8 +382,13 @@ function createDeploymentStore({
       },
       routeKind: binding.routeKind,
       target: {
-        internalBaseUrl: currentRelease.container.internalBaseUrl,
-        internalHealthUrl: String(currentRelease.container?.internalHealthUrl || "")
+        dockerBaseUrl: String(currentRelease.container?.internalBaseUrl || ""),
+        dockerHealthUrl: String(currentRelease.container?.internalHealthUrl || ""),
+        internalBaseUrl: routeBaseUrl,
+        internalHealthUrl: String(currentRelease.container?.loopbackHealthUrl || "")
+          || String(currentRelease.container?.internalHealthUrl || ""),
+        loopbackBaseUrl: String(currentRelease.container?.loopbackBaseUrl || ""),
+        loopbackProxyTarget: String(currentRelease.container?.loopbackProxyTarget || "")
       }
     };
   }
@@ -788,12 +804,7 @@ async function writeJsonFile(filePath = "", value = {}) {
 }
 
 async function writeFileEnsured(filePath = "", text = "") {
-  await mkdir(path.dirname(filePath), {
-    recursive: true
-  });
-  const tempPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`;
-  await writeFile(tempPath, text, "utf8");
-  await rename(tempPath, filePath);
+  await writeTextFileAtomic(filePath, text);
 }
 
 function requiredText(value = "", label = "value") {

@@ -150,9 +150,10 @@ Vibe64 owns deployment lifecycle:
 - rollback
 - supervision
 
-The front ingress owns public HTTP/HTTPS traffic and TLS. It should ask Vibe64
-whether a hostname is allowed, then forward allowed traffic to the Vibe64
-deployment router.
+The front ingress owns public HTTP/HTTPS traffic, TLS, proxying, and access
+logs. Vibe64 should generate deterministic Caddy route fragments from deployment
+state, then let Caddy proxy allowed traffic directly to the current release's
+loopback target.
 
 ## Adapter Publish Contract
 
@@ -201,10 +202,11 @@ migration step exists and how to run it.
    container.
 6. Vibe64 runs the build in a controlled container.
 7. Vibe64 runs the adapter-provided migration step if required.
-8. Vibe64 starts the new app release internally.
-9. Vibe64 health-checks the release.
-10. Vibe64 atomically switches routing to the new release.
-11. The previous release remains available for rollback.
+8. Vibe64 starts the new app release on a loopback host port.
+9. Vibe64 health-checks the release through that loopback target.
+10. Vibe64 writes the generated Caddy site fragment for the current release.
+11. Vibe64 reloads Caddy when host reload integration is enabled.
+12. The previous release remains available for rollback.
 
 ## Deployment State
 
@@ -244,24 +246,31 @@ Public traffic goes through platform ingress:
 <public-name>.users.vibe64.dev
         |
         v
-Vibe64 ingress / router
+Caddy generated site fragment
         |
         v
-deployment binding lookup
+127.0.0.1:<release-port>
         |
         v
-internal app container/release
+current app release container
 ```
 
 App containers should not bind public ports directly.
 
-Routing lookup is by `Host`:
+Routing is generated from deployment state into a Caddy fragment:
 
 ```text
-Host: beepollen.users.vibe64.dev
-      -> publicName=beepollen
-      -> deployment current release
+beepollen.users.vibe64.dev {
+  import vibe64_published_app 127.0.0.1:<release-port> <project>/.vibe64-local/deployments/logs/access.log
+}
 ```
+
+The shared Caddy snippet owns the repeated proxy/log settings. Vibe64 only
+generates the host list, upstream, and project-level access log path.
+
+The host owns the main Caddyfile and imports the generated directories. Vibe64
+may run `caddy validate` and `caddy reload` only when host integration is
+explicitly enabled and the host Caddyfile path is configured.
 
 ## HTTPS
 
@@ -279,12 +288,11 @@ The V0 ingress contract is:
 
 ```text
 GET /api/vibe64/deployments/tls/ask?domain=<hostname>
-GET /api/vibe64/deployments/route?host=<hostname>
 ```
 
-Both endpoints are loopback-only. Caddy uses `tls/ask` before issuing an
-on-demand certificate. The deployment router uses `route` to map the request
-`Host` to the current published release container.
+The endpoint is loopback-only. Caddy uses `tls/ask` before issuing an on-demand
+certificate. Runtime routing itself is handled by generated Caddy fragments,
+not by a Vibe64 HTTP proxy.
 
 Wildcard TLS is still a valid later optimization, but it requires DNS-01
 automation for the `users.vibe64.dev` zone. If the zone stays at GoDaddy, that
@@ -297,7 +305,7 @@ own verification and certificate flow.
 ## Supervision and Logs
 
 Vibe64 should not create per-app systemd units. Systemd, if used, supervises
-host infrastructure only: the Vibe64 daemon, Caddy, and the deployment router.
+host infrastructure only: the Vibe64 daemon and Caddy.
 
 Each published app runs as a Docker release container owned by the deployment
 service. The release container uses bounded Docker restart supervision and
@@ -318,6 +326,14 @@ The deployment service also writes release phase logs under:
 
 These logs are for build, migration, start, and health-check diagnosis. Long
 running app stdout/stderr remains Docker-managed and rotated.
+
+Caddy access logs are project-level, not release-level:
+
+```text
+<project>/.vibe64-local/deployments/logs/access.log
+```
+
+That keeps request logs stable across publish and rollback operations.
 
 ## Custom Domains
 
@@ -390,8 +406,9 @@ Do first:
 - one current release per project
 - release phase logs and Docker log rotation
 - rollback to previous release
-- wildcard default domain routing
-- custom-domain routing to the same current release
+- generated Caddy snippets/site fragments
+- wildcard default domain routing through Caddy
+- custom-domain routing to the same current release through Caddy
 
 Explicitly out of scope:
 

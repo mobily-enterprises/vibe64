@@ -20,6 +20,9 @@ import {
 import {
   createDeploymentRunner
 } from "./deploymentRunner.js";
+import {
+  createCaddyRouteMaterializer
+} from "./caddyRouteMaterializer.js";
 
 function deploymentResult(operation) {
   return vibe64Result(operation, {
@@ -29,6 +32,7 @@ function deploymentResult(operation) {
 }
 
 function createService({
+  caddyRouteMaterializer = createCaddyRouteMaterializer(),
   clock,
   deploymentStore = createDeploymentStore({ clock }),
   deploymentRunner = createDeploymentRunner(),
@@ -101,10 +105,37 @@ function createService({
       publishPlan: await readPublishPlan(context),
       store: deploymentStore
     });
+    const caddy = await materializeCaddyRoute(context);
+    const routedRelease = await deploymentStore.updateRelease(context, release.releaseId, {
+      caddy
+    });
     return {
+      caddy,
       ok: true,
-      release,
+      release: routedRelease,
       state: await deploymentStore.readState(context)
+    };
+  }
+
+  async function materializeCaddyRoute(context = deploymentContext()) {
+    return caddyRouteMaterializer.materializeProject(context, await deploymentStore.readState(context));
+  }
+
+  async function rollbackRelease(input = {}) {
+    const context = deploymentContext();
+    const state = await deploymentStore.rollbackRelease(context, input);
+    return {
+      ...state,
+      caddy: await materializeCaddyRoute(context)
+    };
+  }
+
+  async function verifyCustomDomain(input = {}) {
+    const context = deploymentContext();
+    const result = await deploymentStore.verifyCustomDomain(context, input);
+    return {
+      ...result,
+      ...(result.ok === true ? { caddy: await materializeCaddyRoute(context) } : {})
     };
   }
 
@@ -134,7 +165,7 @@ function createService({
       return deploymentResult(() => deploymentStore.reservePublicName(deploymentContext(), input));
     },
     async rollbackRelease(input = {}) {
-      return deploymentResult(() => deploymentStore.rollbackRelease(deploymentContext(), input));
+      return deploymentResult(() => rollbackRelease(input));
     },
     async tlsAsk(input = {}) {
       return deploymentResult(() => deploymentStore.tlsAsk(deploymentSystemContext(), input));
@@ -143,7 +174,7 @@ function createService({
       return deploymentResult(() => deploymentStore.validatePublicNameAvailability(deploymentContext(), input));
     },
     async verifyCustomDomain(input = {}) {
-      return deploymentResult(() => deploymentStore.verifyCustomDomain(deploymentContext(), input));
+      return deploymentResult(() => verifyCustomDomain(input));
     }
   });
 }
