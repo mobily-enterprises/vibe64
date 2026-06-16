@@ -192,6 +192,17 @@ function launchTargetWorktreePath(session = {}) {
   return vibe64SessionWorktreePath(session);
 }
 
+function launchControlsCanLoadTargets({
+  displayed = true,
+  session = {}
+} = {}) {
+  return Boolean(
+    displayed &&
+    String(session?.sessionId || "").trim() &&
+    launchTargetWorktreePath(session)
+  );
+}
+
 function launchControlScopeKey(projectSlug = "", sessionId = "") {
   return `${String(projectSlug || "").trim()}::${String(sessionId || "").trim()}`;
 }
@@ -315,12 +326,14 @@ function launchStatusPollNeeded({
   loading = false,
   previewProxyPending = false,
   sessionId = "",
+  terminalDisplayed = true,
   terminalIsRunning = false,
   terminalLaunchReady = false,
   terminalVisible = false
 } = {}) {
   return Boolean(
     sessionId &&
+    terminalDisplayed &&
     terminalVisible &&
     terminalIsRunning &&
     !loading &&
@@ -463,10 +476,11 @@ function useVibe64LaunchControls({
   const sessionId = computed(() => String(selectedSession.value?.sessionId || ""));
   const launchScopeKey = computed(() => launchControlScopeKey(projectSlug.value, sessionId.value));
   const requestedAutoStartTargetId = computed(() => String(readRefOrGetterValue(autoStartTargetId) || "").trim());
-  const canLoadLaunchTargets = computed(() => Boolean(
-    sessionId.value &&
-    launchTargetWorktreePath(selectedSession.value || {})
-  ));
+  const terminalDisplayed = computed(() => readRefOrGetterValue(windowDisplayed) !== false);
+  const canLoadLaunchTargets = computed(() => launchControlsCanLoadTargets({
+    displayed: terminalDisplayed.value,
+    session: selectedSession.value || {}
+  }));
   const sessionsApiPath = computed(() => paths.api(VIBE64_SESSIONS_API_SUFFIX, {
     surface: VIBE64_SURFACE_ID
   }));
@@ -477,7 +491,6 @@ function useVibe64LaunchControls({
     selectedSession.value || {},
     projectSlug.value
   ));
-  const terminalDisplayed = computed(() => readRefOrGetterValue(windowDisplayed) !== false);
   const terminal = useStudioTerminal({
     webSocketUrl(terminalId) {
       return vibe64LaunchTerminalWebSocketUrl(sessionId.value, terminalId);
@@ -517,7 +530,7 @@ function useVibe64LaunchControls({
       projectSlug.value
     )),
     refreshOnPull: true,
-    requestRecoveryLabel: "Launch targets",
+    requestRecovery: false,
     realtime: {
       event: VIBE64_SESSION_CHANGED_EVENT,
       matches: ({ payload = {} } = {}) => {
@@ -785,7 +798,13 @@ function useVibe64LaunchControls({
     applyDefaultDisplay = true,
     launchInput = null
   } = {}) {
-    if (!sessionId.value || launchButtonsDisabled.value || launchTarget.available === false || !launchTarget.id) {
+    if (
+      !sessionId.value ||
+      !terminalDisplayed.value ||
+      launchButtonsDisabled.value ||
+      launchTarget.available === false ||
+      !launchTarget.id
+    ) {
       return false;
     }
     const startedScopeKey = launchScopeKey.value;
@@ -848,7 +867,7 @@ function useVibe64LaunchControls({
   }
 
   async function refresh() {
-    if (!sessionId.value) {
+    if (!canLoadLaunchTargets.value) {
       return null;
     }
     return launchTargetsResource.reload();
@@ -909,6 +928,7 @@ function useVibe64LaunchControls({
       loading: launchTargetsResource.isLoading.value,
       previewProxyPending: terminalPreviewProxyPending.value,
       sessionId: sessionId.value,
+      terminalDisplayed: terminalDisplayed.value,
       terminalIsRunning: terminalIsRunning.value,
       terminalLaunchReady: terminalLaunchReady.value,
       terminalVisible: terminalVisible.value
@@ -925,6 +945,7 @@ function useVibe64LaunchControls({
         loading: false,
         previewProxyPending: terminalPreviewProxyPending.value,
         sessionId: sessionId.value,
+        terminalDisplayed: terminalDisplayed.value,
         terminalIsRunning: terminalIsRunning.value,
         terminalLaunchReady: terminalLaunchReady.value,
         terminalVisible: terminalVisible.value
@@ -1087,6 +1108,9 @@ function useVibe64LaunchControls({
       void connectLaunchTerminal();
       return;
     }
+    clearAutoStartTimer();
+    clearLaunchStatusPoll();
+    resetLaunchTargetsAutoStartSettlement();
     closeTerminalSocket();
     disposeTerminalDisplay();
   });
@@ -1120,6 +1144,7 @@ function useVibe64LaunchControls({
   watch(() => [
     projectSlug.value,
     sessionId.value,
+    terminalDisplayed.value ? "displayed" : "hidden",
     terminalVisible.value ? "terminal-visible" : "terminal-hidden",
     terminalIsRunning.value ? "running" : "stopped",
     terminalLaunchReady.value ? "ready" : "not-ready",
@@ -1329,6 +1354,7 @@ export {
   autoStartLaunchTargetsLoading,
   browserCanOpenTarget,
   clearLaunchAutoStartAttempt,
+  launchControlsCanLoadTargets,
   launchBrowserTargetName,
   launchAutoStartAttemptStorageKey,
   launchPreviewBaseUrl,

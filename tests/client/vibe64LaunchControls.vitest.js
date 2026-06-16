@@ -7,6 +7,7 @@ import {
   browserCanOpenTarget,
   launchAutoStartAttemptStorageKey,
   launchBrowserTargetName,
+  launchControlsCanLoadTargets,
   launchPreviewBaseUrl,
   launchPreviewDisplayUrl,
   launchPreviewOptionsStorageKey,
@@ -142,6 +143,24 @@ describe("Vibe64 launch controls", () => {
     })).toBe("/workspace/.vibe64-local/sessions/active/session-1/worktree");
   });
 
+  it("keeps hidden launch controls inert even when the session has a worktree", () => {
+    const session = {
+      completedSteps: ["worktree_created"],
+      sessionId: "session-1",
+      sessionRoot: "/workspace/.vibe64-local/sessions/active/session-1",
+      status: "active"
+    };
+
+    expect(launchControlsCanLoadTargets({
+      displayed: true,
+      session
+    })).toBe(true);
+    expect(launchControlsCanLoadTargets({
+      displayed: false,
+      session
+    })).toBe(false);
+  });
+
   it("keeps the embedded preview URL blank until the launch preview is ready", () => {
     const actions = [
       {
@@ -203,6 +222,16 @@ describe("Vibe64 launch controls", () => {
   });
 
   it("keeps polling after launch readiness while an authenticated preview proxy is unresolved", () => {
+    expect(launchStatusPollNeeded({
+      loading: false,
+      previewProxyPending: true,
+      sessionId: "session-1",
+      terminalDisplayed: false,
+      terminalIsRunning: true,
+      terminalLaunchReady: true,
+      terminalVisible: true
+    })).toBe(false);
+
     expect(launchStatusPollNeeded({
       loading: false,
       previewProxyPending: true,

@@ -58,6 +58,7 @@ import {
 import {
   useVibe64FixCodexDialog
 } from "@/composables/useVibe64FixCodexDialog.js";
+import Vibe64FixCodexDialog from "@/components/studio/Vibe64FixCodexDialog.vue";
 import {
   useVibe64TerminalFailureFixCommand
 } from "@/composables/useVibe64TerminalFailureFixCommand.js";
@@ -188,11 +189,6 @@ const vibe64AutopilotViewProps = {
 
 function useVibe64AutopilotView(props, emit) {
   const projectSlug = useVibe64ProjectSlug();
-  const Vibe64FixCodexDialog = defineVibe64AsyncComponent({
-    label: "Fix Codex dialog",
-    loader: () => import("@/components/studio/Vibe64FixCodexDialog.vue"),
-    minHeight: "12rem"
-  });
   const Vibe64LaunchControls = defineVibe64AsyncComponent({
     label: "Launch controls",
     loader: () => import("@/components/studio/Vibe64LaunchControls.vue"),
