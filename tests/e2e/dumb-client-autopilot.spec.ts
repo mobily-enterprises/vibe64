@@ -3966,7 +3966,7 @@ function issueSourceSession(overrides: Record<string, unknown> = {}) {
           label: "What do you want Vibe64 to work on?",
           name: "conversationRequest",
           placeholder: "Describe the feature, bug, or change you want.",
-          requiredMessage: "Describe what you want Vibe64 to work on."
+          requiredMessage: "Talk to Codex"
         }
       ],
       label: "Describe work",
@@ -4206,7 +4206,7 @@ function existingPrIssueSkipSession(overrides: Record<string, unknown> = {}) {
           label: "What do you want Vibe64 to work on?",
           name: "conversationRequest",
           placeholder: "Describe the feature, bug, or change you want.",
-          requiredMessage: "Describe what you want Vibe64 to work on."
+          requiredMessage: "Talk to Codex"
         }
       ],
       label: "Describe work",
@@ -4224,7 +4224,7 @@ function existingPrIssueSkipSession(overrides: Record<string, unknown> = {}) {
             label: "What do you want Vibe64 to work on?",
             name: "conversationRequest",
             placeholder: "Describe the feature, bug, or change you want.",
-            requiredMessage: "Describe what you want Vibe64 to work on."
+            requiredMessage: "Talk to Codex"
           }
         ],
         label: "Describe work"

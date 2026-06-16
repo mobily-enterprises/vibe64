@@ -3,7 +3,7 @@ const AGENT_CONVERSATION_ACTION_ID = "agent_conversation";
 function buildAgentConversationActionDefinition({
   id = AGENT_CONVERSATION_ACTION_ID,
   inputLabel = "What do you want to ask Codex?",
-  inputPlaceholder = "Describe what you want help with.",
+  inputPlaceholder = "Talk to Codex",
   label = "Talk to Codex"
 } = {}) {
   return {
@@ -15,7 +15,7 @@ function buildAgentConversationActionDefinition({
         label: inputLabel,
         name: "conversationRequest",
         placeholder: inputPlaceholder,
-        requiredMessage: "Describe what you want Codex to do."
+        requiredMessage: "Talk to Codex"
       }
     ],
     label,
@@ -30,7 +30,7 @@ function buildAgentConversationStepDefinition({
   description = "",
   id,
   inputLabel = "What do you want to ask Codex?",
-  inputPlaceholder = "Describe what you want help with.",
+  inputPlaceholder = "Talk to Codex",
   label = "Talk to Codex",
   message = "Ask Codex for changes. Continue when the work is ready for the next workflow step.",
   next = null,
