@@ -46,6 +46,16 @@
         </div>
         <div class="vibe64-publish-page__actions">
           <v-btn
+            v-if="publicNameConfigured"
+            :disabled="commandBusy"
+            :prepend-icon="mdiPencil"
+            type="button"
+            variant="tonal"
+            @click="beginPublicNameChange"
+          >
+            Change URL
+          </v-btn>
+          <v-btn
             color="primary"
             :disabled="!publicNameConfigured || commandBusy"
             :loading="publishCommand.isRunning"
@@ -59,12 +69,53 @@
         </div>
       </section>
 
+      <section
+        v-if="publicNameConfigured && publicNameChangeOpen"
+        class="vibe64-publish-page__panel"
+      >
+        <div class="vibe64-publish-page__name-field">
+          <v-text-field
+            v-model="publicNameChangeInput"
+            autocomplete="off"
+            density="comfortable"
+            :error-messages="publicNameChangeError"
+            hide-details="auto"
+            label="New public name"
+            spellcheck="false"
+            suffix=".users.vibe64.dev"
+            variant="outlined"
+            @keydown.enter.prevent="changePublicName"
+          />
+          <div class="vibe64-publish-page__inline-actions">
+            <v-btn
+              :disabled="commandBusy"
+              type="button"
+              variant="text"
+              @click="cancelPublicNameChange"
+            >
+              Cancel
+            </v-btn>
+            <v-btn
+              color="primary"
+              :disabled="!publicNameChangeInput || commandBusy"
+              :loading="changePublicNameCommand.isRunning"
+              type="button"
+              variant="flat"
+              @click="changePublicName"
+            >
+              Save URL
+            </v-btn>
+          </div>
+        </div>
+      </section>
+
       <section v-if="!publicNameConfigured" class="vibe64-publish-page__panel">
         <div class="vibe64-publish-page__name-field">
           <v-text-field
             v-model="publicNameInput"
             autocomplete="off"
             density="comfortable"
+            :error-messages="publicNameError"
             hide-details="auto"
             label="Public name"
             spellcheck="false"
@@ -230,6 +281,7 @@ import {
   mdiBackupRestore,
   mdiCloudUploadOutline,
   mdiOpenInNew,
+  mdiPencil,
   mdiPlus,
   mdiRefresh,
   mdiWeb
@@ -242,6 +294,10 @@ import {
 const {
   addCustomDomain,
   addCustomDomainCommand,
+  beginPublicNameChange,
+  cancelPublicNameChange,
+  changePublicName,
+  changePublicNameCommand,
   commandBusy,
   currentRelease,
   customDomainInput,
@@ -249,6 +305,10 @@ const {
   isInitialLoading,
   loadError,
   publicName,
+  publicNameChangeInput,
+  publicNameChangeError,
+  publicNameChangeOpen,
+  publicNameError,
   publicNameConfigured,
   publicNameInput,
   publicUrl,
@@ -339,7 +399,9 @@ function formatDate(value = "") {
 .vibe64-publish-page__actions {
   display: flex;
   flex: 0 0 auto;
+  flex-wrap: wrap;
   gap: 0.6rem;
+  justify-content: flex-end;
 }
 
 .vibe64-publish-page__link {
@@ -357,6 +419,11 @@ function formatDate(value = "") {
   gap: 0.75rem;
   grid-template-columns: minmax(0, 1fr) auto;
   width: 100%;
+}
+
+.vibe64-publish-page__inline-actions {
+  display: flex;
+  gap: 0.6rem;
 }
 
 .vibe64-publish-page__grid {

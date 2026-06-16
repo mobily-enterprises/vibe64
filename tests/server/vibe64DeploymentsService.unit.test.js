@@ -116,6 +116,28 @@ function fakeSuccessfulRunCommand() {
   };
 }
 
+function fakeHealthFailureRunCommand() {
+  const calls = [];
+  async function runCommand(command, args, options = {}) {
+    calls.push({
+      args: [...args],
+      command,
+      options
+    });
+    if (command === "docker" && args[0] === "run" && args.includes("-d")) {
+      return commandResult("release-container-id");
+    }
+    if (command === process.execPath) {
+      return commandFailure("unhealthy http://127.0.0.1");
+    }
+    return commandResult("ok");
+  }
+  return {
+    calls,
+    runCommand
+  };
+}
+
 function commandResult(output = "") {
   return {
     exitCode: 0,
@@ -126,11 +148,29 @@ function commandResult(output = "") {
   };
 }
 
+function commandFailure(output = "") {
+  return {
+    exitCode: 1,
+    ok: false,
+    output,
+    stderr: output,
+    stdout: ""
+  };
+}
+
 function dockerDetachedRun(calls = []) {
   return calls.find((call) => {
     return call.command === "docker" &&
       call.args[0] === "run" &&
       call.args.includes("-d");
+  });
+}
+
+function dockerForcedRemove(calls = []) {
+  return calls.find((call) => {
+    return call.command === "docker" &&
+      call.args[0] === "rm" &&
+      call.args[1] === "-f";
   });
 }
 
@@ -194,6 +234,12 @@ test("Vibe64 deployment service publishes with release logs and Docker restart s
     });
     const context = deploymentTestContext(root, "beepollen");
     await configureJskitProject(context);
+    await Promise.all([
+      writeProjectFile(context.targetRoot, "src/app.js", "console.log('published');\n"),
+      writeProjectFile(context.targetRoot, ".git/config", "[core]\n"),
+      writeProjectFile(context.targetRoot, ".vibe64/project_type", "jskit\n"),
+      writeProjectFile(context.targetRoot, ".vibe64-local/sessions/session.json", "{}\n")
+    ]);
 
     const result = await runWithProjectRequestContext(context, async () => {
       await service.reservePublicName({
@@ -233,11 +279,26 @@ test("Vibe64 deployment service publishes with release logs and Docker restart s
     ));
     assert.equal(manifest.releaseId, result.release.releaseId);
     assert.equal(manifest.status, "published");
+    assert.equal(manifest.publishedAt.length > 0, true);
+    assert.equal(manifest.publishedAt, manifest.finishedAt);
     assert.equal(manifest.publicHost, "beepollen.users.vibe64.dev");
+    assert.equal(manifest.artifact.kind, "workspace-snapshot");
+    assert.match(manifest.artifact.workspacePath, /\/releases\/.+\/artifact\/workspace$/u);
     assert.match(manifest.container.loopbackBaseUrl, /^http:\/\/127\.0\.0\.1:\d+$/u);
     assert.match(manifest.caddy.sitePath, /\/caddy\/sites\/beepollen\.caddy$/u);
     assert.match(manifest.caddy.accessLogPath, /\/\.vibe64-local\/deployments\/logs\/access\.log$/u);
     assert.equal(manifest.caddy.accessLogPath.includes(manifest.releaseId), false);
+    assert.ok(detachedRun.args.includes(`${manifest.artifact.workspacePath}:/workspace`));
+    assert.equal(detachedRun.args.includes(`${context.targetRoot}:/workspace`), false);
+    assert.match(await readFile(path.join(manifest.artifact.workspacePath, "src/app.js"), "utf8"), /published/u);
+    await assert.rejects(
+      () => readFile(path.join(manifest.artifact.workspacePath, ".git/config"), "utf8"),
+      { code: "ENOENT" }
+    );
+    await assert.rejects(
+      () => readFile(path.join(manifest.artifact.workspacePath, ".vibe64-local/sessions/session.json"), "utf8"),
+      { code: "ENOENT" }
+    );
 
     const caddySite = await readFile(manifest.caddy.sitePath, "utf8");
     assert.match(caddySite, /beepollen\.users\.vibe64\.dev/u);
@@ -256,6 +317,42 @@ test("Vibe64 deployment service publishes with release logs and Docker restart s
       () => reloadingMaterializer.materializeProject(context, result.state),
       /VIBE64_CADDY_CONFIG/u
     );
+  });
+});
+
+test("Vibe64 deployment service removes a started release container when publish health fails", async () => {
+  await withTemporaryRoot(async (root) => {
+    const fake = fakeHealthFailureRunCommand();
+    const service = await createDeploymentTestService(root, {
+      deploymentRunner: createDeploymentRunner({
+        runCommand: fake.runCommand
+      })
+    });
+    const context = deploymentTestContext(root, "beepollen");
+    await configureJskitProject(context);
+
+    const result = await runWithProjectRequestContext(context, async () => {
+      await service.reservePublicName({
+        publicName: "beepollen"
+      });
+      return service.publishCurrentProject();
+    });
+
+    assert.equal(result.ok, false);
+    assert.equal(result.errors[0].code, "vibe64_deployment_phase_failed");
+
+    const detachedRun = dockerDetachedRun(fake.calls);
+    assert.ok(detachedRun, "Expected the release container to start before health failed.");
+    const cleanup = dockerForcedRemove(fake.calls);
+    assert.ok(cleanup, "Expected the failed release container to be force removed.");
+    assert.equal(cleanup.args[2], detachedRun.args[detachedRun.args.indexOf("--name") + 1]);
+
+    const releases = await runWithProjectRequestContext(context, () => service.listReleases());
+    assert.equal(releases.ok, true);
+    assert.equal(releases.releases.length, 1);
+    assert.equal(releases.releases[0].status, "failed");
+    assert.equal(releases.releases[0].phases.at(-1).id, "cleanup");
+    assert.equal(releases.releases[0].phases.at(-1).ok, true);
   });
 });
 
@@ -346,6 +443,86 @@ test("Vibe64 deployment service blocks implicit public-name renames", async () =
 
     assert.equal(rename.ok, false);
     assert.equal(rename.errors[0].code, "vibe64_public_name_already_configured");
+  });
+});
+
+test("Vibe64 deployment service changes public names through the explicit change action", async () => {
+  await withTemporaryRoot(async (root) => {
+    const txtRecords = new Map();
+    const fake = fakeSuccessfulRunCommand();
+    const service = await createDeploymentTestService(root, {
+      deploymentRunner: createDeploymentRunner({
+        runCommand: fake.runCommand
+      }),
+      deploymentStore: createDeploymentStore({
+        resolveTxtRecords: async (hostname) => txtRecords.get(hostname) || []
+      })
+    });
+    const context = deploymentTestContext(root, "beepollen");
+    await configureJskitProject(context);
+
+    const result = await runWithProjectRequestContext(context, async () => {
+      await service.reservePublicName({
+        publicName: "beepollen"
+      });
+      const added = await service.addCustomDomain({
+        hostname: "www.example.com"
+      });
+      const requiredRecord = added.domain.requiredDnsRecords[0];
+      txtRecords.set(requiredRecord.host, [[requiredRecord.value]]);
+      const verified = await service.verifyCustomDomain({
+        hostname: "www.example.com"
+      });
+      const published = await service.publishCurrentProject();
+      const changed = await service.changePublicName({
+        publicName: "bee-live"
+      });
+      return {
+        changed,
+        published,
+        requiredRecord,
+        verified
+      };
+    });
+
+    assert.equal(result.verified.ok, true);
+    assert.equal(result.published.ok, true);
+    assert.equal(result.changed.ok, true);
+    assert.equal(result.changed.publicName.publicName, "bee-live");
+    assert.equal(result.changed.publicName.publicHost, "bee-live.users.vibe64.dev");
+    assert.equal(result.changed.domains[0].publicName, "bee-live");
+    assert.equal(result.changed.domains[0].publicHost, "bee-live.users.vibe64.dev");
+    assert.equal(result.changed.domains[0].verificationStatus, "verified");
+    assert.equal(result.changed.domains[0].requiredDnsRecords[0].value, result.requiredRecord.value);
+
+    const oldPublicName = await service.tlsAsk({
+      domain: "beepollen.users.vibe64.dev"
+    });
+    assert.equal(oldPublicName.ok, false);
+    assert.equal(oldPublicName.code, "vibe64_deployment_host_not_found");
+
+    const newPublicName = await service.tlsAsk({
+      domain: "bee-live.users.vibe64.dev"
+    });
+    assert.equal(newPublicName.ok, true);
+    assert.equal(newPublicName.publicName, "bee-live");
+    assert.equal(newPublicName.releaseId, result.published.release.releaseId);
+
+    const customDomain = await service.tlsAsk({
+      domain: "www.example.com"
+    });
+    assert.equal(customDomain.ok, true);
+    assert.equal(customDomain.publicName, "bee-live");
+    assert.equal(customDomain.releaseId, result.published.release.releaseId);
+
+    const caddySite = await readFile(result.changed.caddy.sitePath, "utf8");
+    assert.match(caddySite, /bee-live\.users\.vibe64\.dev/u);
+    assert.doesNotMatch(caddySite, /beepollen\.users\.vibe64\.dev/u);
+    assert.match(caddySite, /www\.example\.com/u);
+    await assert.rejects(
+      () => readFile(path.join(context.systemRoot, "caddy", "sites", "beepollen.caddy"), "utf8"),
+      { code: "ENOENT" }
+    );
   });
 });
 
@@ -470,6 +647,62 @@ test("Vibe64 deployment service verifies custom domains before TLS and route app
 
     const caddySite = await readFile(published.release.caddy.sitePath, "utf8");
     assert.match(caddySite, /beepollen\.users\.vibe64\.dev, www\.example\.com/u);
+  });
+});
+
+test("Vibe64 deployment service keeps verified domain bindings pointed at the current release", async () => {
+  await withTemporaryRoot(async (root) => {
+    const txtRecords = new Map();
+    const fake = fakeSuccessfulRunCommand();
+    const service = await createDeploymentTestService(root, {
+      deploymentRunner: createDeploymentRunner({
+        runCommand: fake.runCommand
+      }),
+      deploymentStore: createDeploymentStore({
+        resolveTxtRecords: async (hostname) => txtRecords.get(hostname) || []
+      })
+    });
+    const context = deploymentTestContext(root, "beepollen");
+    await configureJskitProject(context);
+
+    const result = await runWithProjectRequestContext(context, async () => {
+      await service.reservePublicName({
+        publicName: "beepollen"
+      });
+      const added = await service.addCustomDomain({
+        hostname: "www.example.com"
+      });
+      const requiredRecord = added.domain.requiredDnsRecords[0];
+      txtRecords.set(requiredRecord.host, [[requiredRecord.value]]);
+      const verifiedBeforePublish = await service.verifyCustomDomain({
+        hostname: "www.example.com"
+      });
+      const first = await service.publishCurrentProject();
+      const afterFirst = await service.listDomainBindings();
+      const second = await service.publishCurrentProject();
+      const afterSecond = await service.listDomainBindings();
+      const rollback = await service.rollbackRelease({
+        releaseId: first.release.releaseId
+      });
+      const afterRollback = await service.listDomainBindings();
+      return {
+        afterFirst,
+        afterRollback,
+        afterSecond,
+        first,
+        rollback,
+        second,
+        verifiedBeforePublish
+      };
+    });
+
+    assert.equal(result.verifiedBeforePublish.ok, true);
+    assert.equal(result.verifiedBeforePublish.domain.activeReleaseId, "");
+    assert.equal(result.afterFirst.domains[0].activeReleaseId, result.first.release.releaseId);
+    assert.equal(result.afterSecond.domains[0].activeReleaseId, result.second.release.releaseId);
+    assert.equal(result.afterRollback.domains[0].activeReleaseId, result.first.release.releaseId);
+    assert.equal(result.rollback.currentRelease.releaseId, result.first.release.releaseId);
+    assert.equal(result.afterRollback.domains[0].lastRoutingHealthCheckAt.length > 0, true);
   });
 });
 

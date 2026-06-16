@@ -202,11 +202,17 @@ migration step exists and how to run it.
    container.
 6. Vibe64 runs the build in a controlled container.
 7. Vibe64 runs the adapter-provided migration step if required.
-8. Vibe64 starts the new app release on a loopback host port.
-9. Vibe64 health-checks the release through that loopback target.
-10. Vibe64 writes the generated Caddy site fragment for the current release.
-11. Vibe64 reloads Caddy when host reload integration is enabled.
-12. The previous release remains available for rollback.
+8. Vibe64 copies the built workspace into the release artifact directory.
+9. Vibe64 starts the new app release container from that release snapshot on a
+   loopback host port.
+10. Vibe64 health-checks the release through that loopback target.
+11. Vibe64 writes the generated Caddy site fragment for the current release.
+12. Vibe64 reloads Caddy when host reload integration is enabled.
+13. The previous release remains available for rollback.
+
+V0 does not need blue/green zero-downtime deployment. A short handoff is
+acceptable as long as the current release record, generated Caddy route, and
+running release container agree.
 
 ## Deployment State
 
@@ -221,6 +227,7 @@ Deployment state should live in project-local Vibe64 state:
       manifest.json
       logs/
       artifact/
+        workspace/
 ```
 
 The deployment manifest records:
@@ -326,6 +333,17 @@ The deployment service also writes release phase logs under:
 
 These logs are for build, migration, start, and health-check diagnosis. Long
 running app stdout/stderr remains Docker-managed and rotated.
+
+Release app containers are release-owned and run from:
+
+```text
+<project>/.vibe64-local/deployments/releases/<release-id>/artifact/workspace/
+```
+
+They do not run from the mutable project checkout. Project runtime services,
+such as the managed database container, remain project-owned and are shared by
+the current published release. V0 should not create per-release database
+containers.
 
 Caddy access logs are project-level, not release-level:
 

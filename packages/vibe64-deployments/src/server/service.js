@@ -130,6 +130,15 @@ function createService({
     };
   }
 
+  async function changePublicName(input = {}) {
+    const context = deploymentContext();
+    const state = await deploymentStore.changePublicName(context, input);
+    return {
+      ...state,
+      caddy: await materializeCaddyRoute(context)
+    };
+  }
+
   async function verifyCustomDomain(input = {}) {
     const context = deploymentContext();
     const result = await deploymentStore.verifyCustomDomain(context, input);
@@ -142,6 +151,9 @@ function createService({
   return Object.freeze({
     async addCustomDomain(input = {}) {
       return deploymentResult(() => deploymentStore.addCustomDomain(deploymentContext(), input));
+    },
+    async changePublicName(input = {}) {
+      return deploymentResult(() => changePublicName(input));
     },
     async listDomainBindings() {
       return deploymentResult(() => deploymentStore.listDomainBindings(deploymentContext()));

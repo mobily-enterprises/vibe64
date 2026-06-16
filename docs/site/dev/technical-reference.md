@@ -227,21 +227,37 @@ and records the release.
         migrate.log
         start.log
         health.log
+      artifact/
+        workspace/
 ```
 
 `public-name.json` stores the first-come, first-served
 `<name>.users.vibe64.dev` name for the project. Names that look official, such
 as `billing`, `login`, `support-vibe64`, or `admin-*`, are reserved by the
-platform and cannot be used for customer apps.
+platform and cannot be used for customer apps. The user chooses this name, and
+changing it is an explicit publish-dashboard action because it changes the
+default public URL.
 
 Each release manifest stores the adapter id, build command, optional migration
 command, serve command, health check, runtime service requirements, Docker
 container name, restart policy, and routing fields. Phase logs are written into
 the release directory before the release is marked published.
 
-Published app containers use the same managed runtime network and runtime
-services as preview/launch targets. The deployment service starts the long-lived
-release container with Docker restart supervision:
+Published app containers use the same managed runtime network and project-owned
+runtime services as preview/launch targets. The long-lived release app
+container runs from the release workspace snapshot:
+
+```text
+<project>/.vibe64-local/deployments/releases/<release-id>/artifact/workspace/
+```
+
+It does not run from the mutable project checkout. Git metadata and Vibe64
+runtime state are excluded from that snapshot. Project runtime services, such
+as the managed database container, are shared by the current published release;
+they are not copied per release.
+
+The deployment service starts the release container with Docker restart
+supervision:
 
 ```text
 --restart on-failure:5

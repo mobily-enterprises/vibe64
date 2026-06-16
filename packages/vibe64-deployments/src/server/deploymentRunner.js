@@ -1,4 +1,5 @@
 import net from "node:net";
+import { copyFile, mkdir, readlink, readdir, rm, symlink } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 
@@ -35,7 +36,14 @@ const RELEASE_CONTAINER_PORT = 4100;
 const RELEASE_RESTART_POLICY = "on-failure:5";
 const RELEASE_LOG_MAX_SIZE = "10m";
 const RELEASE_LOG_MAX_FILE = "5";
+const RELEASE_ARTIFACT_DIR = "artifact";
+const RELEASE_WORKSPACE_DIR = "workspace";
 const PHASE_TIMEOUT_MS = 10 * 60 * 1000;
+const WORKSPACE_SNAPSHOT_EXCLUDED_ROOTS = new Set([
+  ".git",
+  ".vibe64",
+  ".vibe64-local"
+]);
 
 function createDeploymentRunner({
   image = STUDIO_BASE_TOOLCHAIN_IMAGE,
@@ -167,11 +175,13 @@ function createDeploymentRunner({
     }
 
     const {
-      manifest
+      manifest,
+      releaseRoot
     } = await store.beginRelease(context, {
       publishPlan
     });
     const phases = [];
+    let startedContainer = null;
     try {
       await ensureTargetRuntimeNetwork(context.targetRoot, {
         runCommand
@@ -209,22 +219,32 @@ function createDeploymentRunner({
         phases.push(result);
       }
 
-      const container = await startReleaseContainer({
+      const snapshot = await createReleaseWorkspaceSnapshot({
+        context,
+        releaseRoot
+      });
+      await store.writeReleaseLog(context, manifest.releaseId, "artifact", snapshot.phase.message);
+      phases.push(snapshot.phase);
+      const runtimeRelease = await store.updateRelease(context, manifest.releaseId, {
+        artifact: snapshot.artifact
+      });
+
+      startedContainer = await startReleaseContainer({
         context,
         env,
-        release: manifest
+        release: runtimeRelease
       });
-      await store.writeReleaseLog(context, manifest.releaseId, "start", container.containerId);
+      await store.writeReleaseLog(context, manifest.releaseId, "start", startedContainer.containerId);
       phases.push({
         finishedAt: new Date().toISOString(),
         id: "start",
-        message: `Started ${container.containerName}.`,
+        message: `Started ${startedContainer.containerName}.`,
         ok: true,
-        startedAt: container.startedAt
+        startedAt: startedContainer.startedAt
       });
       const health = await healthCheckRelease({
-        container,
-        release: manifest
+        container: startedContainer,
+        release: runtimeRelease
       });
       await store.writeReleaseLog(context, manifest.releaseId, "health", health.output);
       phases.push({
@@ -236,17 +256,85 @@ function createDeploymentRunner({
       });
 
       return store.publishRelease(context, manifest.releaseId, {
-        container,
+        container: startedContainer,
         health,
         phases
       });
     } catch (error) {
+      const cleanupPhase = await cleanupStartedReleaseContainer({
+        container: startedContainer,
+        context
+      });
+      if (cleanupPhase) {
+        phases.push(cleanupPhase);
+        await store.writeReleaseLog(context, manifest.releaseId, "cleanup", cleanupPhase.message);
+      }
       await store.failRelease(context, manifest.releaseId, {
-        error: String(error?.message || error || "Deployment failed."),
+        error: failedReleaseMessage(error, cleanupPhase),
         phases
       });
       throw error;
     }
+  }
+
+  async function createReleaseWorkspaceSnapshot({
+    context = {},
+    releaseRoot = ""
+  } = {}) {
+    const startedAt = new Date().toISOString();
+    const sourceRoot = path.resolve(String(context.targetRoot || ""));
+    const artifactRoot = path.join(requiredPath(releaseRoot, "releaseRoot"), RELEASE_ARTIFACT_DIR);
+    const workspacePath = path.join(artifactRoot, RELEASE_WORKSPACE_DIR);
+    await rm(workspacePath, {
+      force: true,
+      recursive: true
+    });
+    await mkdir(artifactRoot, {
+      recursive: true
+    });
+    await copyWorkspaceSnapshot(sourceRoot, workspacePath);
+    return {
+      artifact: {
+        kind: "workspace-snapshot",
+        path: path.relative(releaseRoot, workspacePath),
+        sourceRoot,
+        workspacePath
+      },
+      phase: {
+        command: "copy workspace snapshot",
+        finishedAt: new Date().toISOString(),
+        id: "artifact",
+        message: `Copied release workspace to ${workspacePath}.`,
+        ok: true,
+        startedAt
+      }
+    };
+  }
+
+  async function cleanupStartedReleaseContainer({
+    container = null,
+    context = {}
+  } = {}) {
+    if (!container?.containerName) {
+      return null;
+    }
+    const startedAt = new Date().toISOString();
+    const result = await runCommand("docker", [
+      "rm",
+      "-f",
+      container.containerName
+    ], {
+      cwd: context.targetRoot,
+      timeout: 30_000
+    });
+    return phaseResult({
+      command: {
+        command: `docker rm -f ${container.containerName}`
+      },
+      phaseId: "cleanup",
+      result,
+      startedAt
+    });
   }
 
   async function ensureRuntimeServices({
@@ -311,6 +399,22 @@ function phaseError(phase = {}) {
   );
   error.phase = phase;
   return error;
+}
+
+function failedReleaseMessage(error, cleanupPhase = null) {
+  const message = String(error?.message || error || "Deployment failed.");
+  if (!cleanupPhase || cleanupPhase.ok === true) {
+    return message;
+  }
+  return `${message}\nRelease container cleanup failed: ${cleanupPhase.message || "unknown error"}`;
+}
+
+function requiredPath(value = "", label = "path") {
+  const pathValue = String(value || "").trim();
+  if (!pathValue) {
+    throw vibe64Error(`Deployment release requires ${label}.`, "vibe64_deployment_path_missing");
+  }
+  return pathValue;
 }
 
 function envDockerArgs(env = {}) {
@@ -433,6 +537,7 @@ function releaseContainerDockerArgs({
   release = {}
 } = {}) {
   const serveCommand = release.serve?.command || "";
+  const workspacePath = releaseWorkspacePath(release);
   return [
     "run",
     ...STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS,
@@ -454,11 +559,8 @@ function releaseContainerDockerArgs({
       releaseId: release.releaseId
     }).flatMap((label) => ["--label", label]),
     ...targetRuntimeNetworkDockerArgs(context.targetRoot),
-    ...gitToolchainMountArgs(context.targetRoot),
     "-v",
-    `${path.resolve(context.targetRoot)}:/workspace`,
-    "-v",
-    `${path.resolve(context.targetRoot)}:${path.resolve(context.targetRoot)}`,
+    `${workspacePath}:/workspace`,
     "-e",
     "HOST=0.0.0.0",
     "-e",
@@ -472,6 +574,63 @@ function releaseContainerDockerArgs({
     "-lc",
     releaseStartupScript(serveCommand)
   ];
+}
+
+function releaseWorkspacePath(release = {}) {
+  const workspacePath = String(release.artifact?.workspacePath || "").trim();
+  if (!workspacePath) {
+    throw vibe64Error(
+      "Deployment release requires a workspace artifact before the app container can start.",
+      "vibe64_deployment_artifact_workspace_missing"
+    );
+  }
+  return path.resolve(workspacePath);
+}
+
+function includeWorkspaceSnapshotPath(sourceRoot = "", sourcePath = "") {
+  const relativePath = path.relative(sourceRoot, sourcePath);
+  if (!relativePath) {
+    return true;
+  }
+  const [rootName] = relativePath.split(path.sep);
+  return !WORKSPACE_SNAPSHOT_EXCLUDED_ROOTS.has(rootName);
+}
+
+async function copyWorkspaceSnapshot(sourceRoot = "", workspacePath = "") {
+  await mkdir(workspacePath, {
+    recursive: true
+  });
+  await copyWorkspaceEntries(path.resolve(sourceRoot), path.resolve(workspacePath), "");
+}
+
+async function copyWorkspaceEntries(sourceRoot = "", workspaceRoot = "", relativeDir = "") {
+  const sourceDir = path.join(sourceRoot, relativeDir);
+  const targetDir = path.join(workspaceRoot, relativeDir);
+  await mkdir(targetDir, {
+    recursive: true
+  });
+  const entries = await readdir(sourceDir, {
+    withFileTypes: true
+  });
+  for (const entry of entries) {
+    const relativePath = path.join(relativeDir, entry.name);
+    const sourcePath = path.join(sourceRoot, relativePath);
+    const targetPath = path.join(workspaceRoot, relativePath);
+    if (!includeWorkspaceSnapshotPath(sourceRoot, sourcePath)) {
+      continue;
+    }
+    if (entry.isDirectory()) {
+      await copyWorkspaceEntries(sourceRoot, workspaceRoot, relativePath);
+      continue;
+    }
+    if (entry.isSymbolicLink()) {
+      await symlink(await readlink(sourcePath), targetPath);
+      continue;
+    }
+    if (entry.isFile()) {
+      await copyFile(sourcePath, targetPath);
+    }
+  }
 }
 
 function healthPath(health = {}) {

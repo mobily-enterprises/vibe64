@@ -26,6 +26,10 @@ function useVibe64Deployments({
   const route = useRoute();
   const slug = computed(() => normalizeText(projectSlug) || firstRouteParam(route.params.slug));
   const publicNameInput = ref("");
+  const publicNameError = ref("");
+  const publicNameChangeInput = ref("");
+  const publicNameChangeError = ref("");
+  const publicNameChangeOpen = ref(false);
   const customDomainInput = ref("");
 
   const stateResource = useEndpointResource({
@@ -50,6 +54,18 @@ function useVibe64Deployments({
     messages: {
       error: "Public URL could not be reserved.",
       success: "Public URL reserved."
+    },
+    payload: (context) => ({
+      publicName: context.publicName
+    })
+  });
+
+  const changePublicNameCommand = deploymentCommand({
+    apiSuffix: `${DEPLOYMENTS_API_PREFIX}/public-name/change`,
+    fallbackRunError: "Public URL could not be changed.",
+    messages: {
+      error: "Public URL could not be changed.",
+      success: "Public URL changed."
     },
     payload: (context) => ({
       publicName: context.publicName
@@ -113,6 +129,7 @@ function useVibe64Deployments({
   const domains = computed(() => Array.isArray(state.value?.domains) ? state.value.domains : []);
   const publicNameConfigured = computed(() => Boolean(publicName.value?.publicName));
   const commandBusy = computed(() => reservePublicNameCommand.isRunning.value ||
+    changePublicNameCommand.isRunning.value ||
     publishCommand.isRunning.value ||
     addCustomDomainCommand.isRunning.value ||
     verifyCustomDomainCommand.isRunning.value ||
@@ -121,6 +138,10 @@ function useVibe64Deployments({
   return proxyRefs({
     addCustomDomain,
     addCustomDomainCommand,
+    beginPublicNameChange,
+    cancelPublicNameChange,
+    changePublicName,
+    changePublicNameCommand,
     commandBusy,
     currentRelease,
     customDomainInput,
@@ -129,6 +150,10 @@ function useVibe64Deployments({
     isLoading: stateResource.isLoading,
     loadError,
     publicName,
+    publicNameChangeInput,
+    publicNameChangeError,
+    publicNameChangeOpen,
+    publicNameError,
     publicNameConfigured,
     publicNameInput,
     publicUrl,
@@ -147,12 +172,41 @@ function useVibe64Deployments({
 
   async function reservePublicName() {
     const publicNameValue = normalizeText(publicNameInput.value);
+    publicNameError.value = "";
     const result = await reservePublicNameCommand.run({
       publicName: publicNameValue
     });
     if (deploymentSucceeded(result)) {
       publicNameInput.value = "";
       await stateResource.reload();
+    } else {
+      publicNameError.value = deploymentResponseMessage(result, "That public name is not available.");
+    }
+    return result;
+  }
+
+  function beginPublicNameChange() {
+    publicNameChangeInput.value = normalizeText(publicName.value?.publicName);
+    publicNameChangeOpen.value = true;
+  }
+
+  function cancelPublicNameChange() {
+    publicNameChangeInput.value = "";
+    publicNameChangeError.value = "";
+    publicNameChangeOpen.value = false;
+  }
+
+  async function changePublicName() {
+    const publicNameValue = normalizeText(publicNameChangeInput.value);
+    publicNameChangeError.value = "";
+    const result = await changePublicNameCommand.run({
+      publicName: publicNameValue
+    });
+    if (deploymentSucceeded(result)) {
+      cancelPublicNameChange();
+      await stateResource.reload();
+    } else {
+      publicNameChangeError.value = deploymentResponseMessage(result, "That public name is not available.");
     }
     return result;
   }
@@ -203,6 +257,16 @@ function useVibe64Deployments({
 
 function deploymentSucceeded(response = null) {
   return response && typeof response === "object" && response.ok !== false;
+}
+
+function deploymentResponseMessage(response = null, fallback = "") {
+  if (response && typeof response === "object") {
+    return normalizeText(response.message) ||
+      normalizeText(response.errors?.[0]?.message) ||
+      normalizeText(response.error?.message) ||
+      fallback;
+  }
+  return fallback;
 }
 
 function deploymentCommand({

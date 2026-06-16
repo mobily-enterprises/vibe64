@@ -9,6 +9,7 @@ import {
 } from "./inputSchemas.js";
 
 const ACTION_ADD_CUSTOM_DOMAIN = "feature.vibe64-deployments.domains.add";
+const ACTION_CHANGE_PUBLIC_NAME = "feature.vibe64-deployments.public-name.change";
 const ACTION_RESOLVE_HOST_ROUTE = "feature.vibe64-deployments.route.resolve";
 const ACTION_LIST_DOMAIN_BINDINGS = "feature.vibe64-deployments.domains.list";
 const ACTION_LIST_RELEASES = "feature.vibe64-deployments.releases.list";
@@ -142,6 +143,23 @@ const featureActions = Object.freeze([
     }
   },
   {
+    id: ACTION_CHANGE_PUBLIC_NAME,
+    version: 1,
+    kind: "command",
+    channels: ["api", "automation", "internal"],
+    surfaces: ["app"],
+    input: publicNameInputValidator,
+    output: null,
+    idempotency: "optional",
+    audit: {
+      actionName: ACTION_CHANGE_PUBLIC_NAME
+    },
+    observability: {},
+    async execute(input, _context, deps) {
+      return deps.featureService.changePublicName(input);
+    }
+  },
+  {
     id: ACTION_LIST_DOMAIN_BINDINGS,
     version: 1,
     kind: "query",
@@ -230,6 +248,7 @@ const featureActions = Object.freeze([
 
 export {
   ACTION_ADD_CUSTOM_DOMAIN,
+  ACTION_CHANGE_PUBLIC_NAME,
   ACTION_RESOLVE_HOST_ROUTE,
   ACTION_LIST_DOMAIN_BINDINGS,
   ACTION_LIST_RELEASES,

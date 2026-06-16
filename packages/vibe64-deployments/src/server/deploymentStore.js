@@ -112,13 +112,16 @@ function createDeploymentStore({
     health = {},
     phases = []
   } = {}) {
+    const publishedAt = nowIso();
     const manifest = await updateRelease(context, releaseId, {
       container,
-      finishedAt: nowIso(),
+      finishedAt: publishedAt,
       health,
       phases,
+      publishedAt,
       status: "published"
     });
+    await updateVerifiedDomainBindingsForCurrentRelease(context, manifest);
     await writeJsonFile(deploymentPaths(context).currentReleasePath, manifest);
     return manifest;
   }
@@ -138,6 +141,7 @@ function createDeploymentStore({
       ...manifest,
       rolledBackAt: nowIso()
     };
+    await updateVerifiedDomainBindingsForCurrentRelease(context, current);
     await writeJsonFile(paths.currentReleasePath, current);
     return readState(context);
   }
@@ -225,6 +229,58 @@ function createDeploymentStore({
     });
   }
 
+  async function changePublicName(context = {}, input = {}) {
+    const publicName = assertValidPublicName(input?.publicName);
+    const paths = deploymentPaths(context);
+    const existingLocalRecord = await readOptionalJson(paths.publicNamePath);
+    if (!existingLocalRecord?.publicName) {
+      throw vibe64Error(
+        "Reserve a public Vibe64 URL before changing it.",
+        "vibe64_public_name_required"
+      );
+    }
+    if (existingLocalRecord.publicName === publicName) {
+      return readState(context);
+    }
+
+    return withRegistryLock(paths.systemRoot, async () => {
+      const oldRegistryPath = publicNameRegistryPath(paths.systemRoot, existingLocalRecord.publicName);
+      const oldRegistryRecord = await readOptionalJson(oldRegistryPath);
+      if (oldRegistryRecord && !registryOwnerMatches(oldRegistryRecord, context)) {
+        throw vibe64Error(
+          "The current public name registry record belongs to another project.",
+          "vibe64_public_name_registry_conflict"
+        );
+      }
+
+      const newRegistryPath = publicNameRegistryPath(paths.systemRoot, publicName);
+      const existingNewRegistryRecord = await readOptionalJson(newRegistryPath);
+      if (existingNewRegistryRecord && !registryOwnerMatches(existingNewRegistryRecord, context)) {
+        throw vibe64Error(
+          "That public name is already attached to another Vibe64 project.",
+          "vibe64_public_name_unavailable"
+        );
+      }
+
+      const now = nowIso();
+      const record = publicNameRecord({
+        context,
+        existing: existingLocalRecord || oldRegistryRecord || null,
+        now,
+        publicName
+      });
+      await writeJsonFile(newRegistryPath, registryRecord(record, context));
+      if (oldRegistryRecord) {
+        await rm(oldRegistryPath, {
+          force: true
+        });
+      }
+      await writeJsonFile(paths.publicNamePath, record);
+      await updateDomainBindingsForPublicName(context, paths, record, now);
+      return readState(context);
+    });
+  }
+
   async function listDomainBindings(context = {}) {
     const paths = deploymentPaths(context);
     return {
@@ -286,9 +342,14 @@ function createDeploymentStore({
       ? await readTxtValues(resolveTxtRecords, requiredRecord.host)
       : [];
     const verified = Boolean(requiredRecord && observedDnsRecords.includes(requiredRecord.value));
+    const currentRelease = await readOptionalJson(paths.currentReleasePath);
+    const activeReleasePatch = verified && currentRelease?.releaseId
+      ? domainActiveReleasePatch(currentRelease, nowIso())
+      : {};
     const verifiedAt = verified ? nowIso() : String(localDomain.lastVerifiedAt || "");
     const record = {
       ...localDomain,
+      ...activeReleasePatch,
       certificateStatus: verified ? "ready_for_on_demand" : "not_requested",
       lastVerifiedAt: verifiedAt,
       observedDnsRecords,
@@ -393,9 +454,65 @@ function createDeploymentStore({
     };
   }
 
+  async function updateVerifiedDomainBindingsForCurrentRelease(context = {}, release = {}) {
+    const paths = deploymentPaths(context);
+    const domains = await listLocalDomainBindings(paths.localDomainBindingsRoot);
+    const verifiedDomains = domains.filter((domain) => domain?.verificationStatus === "verified");
+    if (!verifiedDomains.length) {
+      return;
+    }
+    const patch = domainActiveReleasePatch(release, nowIso());
+    await withRegistryLock(paths.systemRoot, async () => {
+      for (const domain of verifiedDomains) {
+        const localDomainPath = domainBindingPath(paths.localDomainBindingsRoot, domain.hostname);
+        const globalDomainPath = customDomainRegistryPath(paths.systemRoot, domain.hostname);
+        const globalDomain = await readOptionalJson(globalDomainPath);
+        if (globalDomain && !registryOwnerMatches(globalDomain, context)) {
+          throw vibe64Error(
+            "That custom domain is already attached to another Vibe64 project.",
+            "vibe64_custom_domain_unavailable"
+          );
+        }
+        const nextDomain = {
+          ...domain,
+          ...patch
+        };
+        await writeJsonFile(globalDomainPath, registryRecord(nextDomain, context));
+        await writeJsonFile(localDomainPath, nextDomain);
+      }
+    });
+  }
+
+  async function updateDomainBindingsForPublicName(context = {}, paths = {}, publicName = {}, updatedAt = "") {
+    const domains = await listLocalDomainBindings(paths.localDomainBindingsRoot);
+    if (!domains.length) {
+      return;
+    }
+    for (const domain of domains) {
+      const localDomainPath = domainBindingPath(paths.localDomainBindingsRoot, domain.hostname);
+      const globalDomainPath = customDomainRegistryPath(paths.systemRoot, domain.hostname);
+      const globalDomain = await readOptionalJson(globalDomainPath);
+      if (globalDomain && !registryOwnerMatches(globalDomain, context)) {
+        throw vibe64Error(
+          "That custom domain is already attached to another Vibe64 project.",
+          "vibe64_custom_domain_unavailable"
+        );
+      }
+      const nextDomain = domainBindingPublicNamePatch({
+        context,
+        domain,
+        publicName,
+        updatedAt
+      });
+      await writeJsonFile(globalDomainPath, registryRecord(nextDomain, context));
+      await writeJsonFile(localDomainPath, nextDomain);
+    }
+  }
+
   return Object.freeze({
     addCustomDomain,
     beginRelease,
+    changePublicName,
     failRelease,
     listDomainBindings,
     listReleases,
@@ -489,6 +606,43 @@ function domainBindingRecord({
     schemaVersion: DEPLOYMENT_SCHEMA_VERSION,
     updatedAt: now,
     verificationStatus: String(existing?.verificationStatus || "pending")
+  };
+}
+
+function domainActiveReleasePatch(release = {}, updatedAt = "") {
+  return {
+    activeReleaseId: String(release.releaseId || ""),
+    lastRoutingHealthCheckAt: String(release.health?.checkedAt || updatedAt || ""),
+    updatedAt
+  };
+}
+
+function domainBindingPublicNamePatch({
+  context = {},
+  domain = {},
+  publicName = {},
+  updatedAt = ""
+} = {}) {
+  const normalizedHostname = assertValidCustomHostname(domain.hostname);
+  const nextPublicName = assertValidPublicName(publicName.publicName);
+  const keepExistingVerificationRecord = domain.verificationStatus === "verified" &&
+    Array.isArray(domain.requiredDnsRecords) &&
+    domain.requiredDnsRecords.length > 0;
+  return {
+    ...domain,
+    project: projectRecord(context),
+    publicHost: publicHostForName(nextPublicName),
+    publicName: nextPublicName,
+    requiredDnsRecords: keepExistingVerificationRecord
+      ? domain.requiredDnsRecords
+      : [
+          domainVerificationRecord({
+            hostname: normalizedHostname,
+            projectSlug: context.projectSlug,
+            publicName: nextPublicName
+          })
+        ],
+    updatedAt
   };
 }
 
@@ -623,6 +777,7 @@ function releaseManifest({
     phases: [],
     previousReleaseId: String(currentRelease?.releaseId || ""),
     project: projectRecord(context),
+    publishedAt: "",
     publicHost: publicName.publicHost,
     publicName: publicName.publicName,
     releaseId,
@@ -664,7 +819,7 @@ async function assertNoDifferentLocalPublicName(publicNamePath = "", publicName 
   const existing = await readOptionalJson(publicNamePath);
   if (existing?.publicName && existing.publicName !== publicName) {
     throw vibe64Error(
-      `This project is already attached to ${existing.publicName}. Rename support will be added as an explicit publishing action.`,
+      `This project is already attached to ${existing.publicName}. Use Change URL to pick a different public name.`,
       "vibe64_public_name_already_configured"
     );
   }

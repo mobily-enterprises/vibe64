@@ -2,6 +2,7 @@ import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRout
 
 import {
   ACTION_ADD_CUSTOM_DOMAIN,
+  ACTION_CHANGE_PUBLIC_NAME,
   ACTION_LIST_DOMAIN_BINDINGS,
   ACTION_LIST_RELEASES,
   ACTION_PUBLISH_PROJECT,
@@ -78,6 +79,13 @@ function registerRoutes(
     body: publicNameInputValidator,
     buildInput: routes.requestBody,
     summary: "Reserve a Vibe64 public deployment name."
+  });
+
+  routes.actionRoute("POST", "/public-name/change", {
+    actionId: ACTION_CHANGE_PUBLIC_NAME,
+    body: publicNameInputValidator,
+    buildInput: routes.requestBody,
+    summary: "Change the Vibe64 public deployment name for this project."
   });
 
   routes.actionRoute("GET", "/domains", {
