@@ -63,6 +63,7 @@
     "lint": "eslint .",
     "test": "node --test tests/server/*.test.js",
     "test:client": "vitest run tests/client",
+    "test:integration:caddy": "VIBE64_TEST_CADDY=1 node --test tests/server/vibe64DeploymentsCaddy.integration.test.js",
     "test:e2e": "playwright test --config playwright.config.ts tests/e2e/self-contained-smoke.spec.ts tests/e2e/dumb-client-autopilot.spec.ts",
     "test:e2e:shell": "playwright test --config playwright.config.ts tests/e2e/base-shell.spec.ts",
     "test:e2e:live": "npm run build && VIBE64_LIVE_E2E=1 playwright test --config playwright.config.ts tests/e2e/live-vibe64-workflow.spec.ts",

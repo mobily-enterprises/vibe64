@@ -1,4 +1,4 @@
-import { computed, proxyRefs, ref } from "vue";
+import { computed, ref } from "vue";
 import { useRoute } from "vue-router";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
@@ -128,14 +128,15 @@ function useVibe64Deployments({
   const releases = computed(() => Array.isArray(state.value?.releases) ? state.value.releases : []);
   const domains = computed(() => Array.isArray(state.value?.domains) ? state.value.domains : []);
   const publicNameConfigured = computed(() => Boolean(publicName.value?.publicName));
-  const commandBusy = computed(() => reservePublicNameCommand.isRunning.value ||
-    changePublicNameCommand.isRunning.value ||
-    publishCommand.isRunning.value ||
-    addCustomDomainCommand.isRunning.value ||
-    verifyCustomDomainCommand.isRunning.value ||
-    rollbackReleaseCommand.isRunning.value);
+  const stateRefreshing = computed(() => Boolean(stateResource.isFetching.value));
+  const commandBusy = computed(() => Boolean(reservePublicNameCommand.isRunning ||
+    changePublicNameCommand.isRunning ||
+    publishCommand.isRunning ||
+    addCustomDomainCommand.isRunning ||
+    verifyCustomDomainCommand.isRunning ||
+    rollbackReleaseCommand.isRunning));
 
-  return proxyRefs({
+  return {
     addCustomDomain,
     addCustomDomainCommand,
     beginPublicNameChange,
@@ -165,17 +166,20 @@ function useVibe64Deployments({
     rollbackRelease,
     rollbackReleaseCommand,
     state,
-    stateResource,
+    stateRefreshing,
+    refreshState: stateResource.reload,
     verifyCustomDomain,
     verifyCustomDomainCommand
-  });
+  };
 
   async function reservePublicName() {
     const publicNameValue = normalizeText(publicNameInput.value);
     publicNameError.value = "";
-    const result = await reservePublicNameCommand.run({
-      publicName: publicNameValue
-    });
+    const result = await runDeploymentCommand(
+      reservePublicNameCommand,
+      { publicName: publicNameValue },
+      "Public URL could not be reserved."
+    );
     if (deploymentSucceeded(result)) {
       publicNameInput.value = "";
       await stateResource.reload();
@@ -199,9 +203,11 @@ function useVibe64Deployments({
   async function changePublicName() {
     const publicNameValue = normalizeText(publicNameChangeInput.value);
     publicNameChangeError.value = "";
-    const result = await changePublicNameCommand.run({
-      publicName: publicNameValue
-    });
+    const result = await runDeploymentCommand(
+      changePublicNameCommand,
+      { publicName: publicNameValue },
+      "Public URL could not be changed."
+    );
     if (deploymentSucceeded(result)) {
       cancelPublicNameChange();
       await stateResource.reload();
@@ -212,9 +218,11 @@ function useVibe64Deployments({
   }
 
   async function publish() {
-    const result = await publishCommand.run({
-      publicName: publicNameInput.value
-    });
+    const result = await runDeploymentCommand(
+      publishCommand,
+      { publicName: publicNameInput.value },
+      "Project could not be published."
+    );
     if (deploymentSucceeded(result)) {
       publicNameInput.value = "";
       await stateResource.reload();
@@ -224,9 +232,11 @@ function useVibe64Deployments({
 
   async function addCustomDomain() {
     const hostname = normalizeText(customDomainInput.value);
-    const result = await addCustomDomainCommand.run({
-      hostname
-    });
+    const result = await runDeploymentCommand(
+      addCustomDomainCommand,
+      { hostname },
+      "Custom domain could not be added."
+    );
     if (deploymentSucceeded(result)) {
       customDomainInput.value = "";
       await stateResource.reload();
@@ -235,9 +245,11 @@ function useVibe64Deployments({
   }
 
   async function rollbackRelease(releaseId = "") {
-    const result = await rollbackReleaseCommand.run({
-      releaseId
-    });
+    const result = await runDeploymentCommand(
+      rollbackReleaseCommand,
+      { releaseId },
+      "Release could not be restored."
+    );
     if (deploymentSucceeded(result)) {
       await stateResource.reload();
     }
@@ -245,14 +257,42 @@ function useVibe64Deployments({
   }
 
   async function verifyCustomDomain(hostname = "") {
-    const result = await verifyCustomDomainCommand.run({
-      hostname: normalizeText(hostname)
-    });
+    const result = await runDeploymentCommand(
+      verifyCustomDomainCommand,
+      { hostname: normalizeText(hostname) },
+      "Custom domain could not be verified."
+    );
     if (deploymentSucceeded(result)) {
       await stateResource.reload();
     }
     return result;
   }
+}
+
+async function runDeploymentCommand(command = null, context = {}, fallback = "Deployment request failed.") {
+  try {
+    return await command.run(context);
+  } catch (error) {
+    return deploymentErrorResponse(error, fallback);
+  }
+}
+
+function deploymentErrorResponse(error = null, fallback = "Deployment request failed.") {
+  const message = normalizeText(error?.message) || normalizeText(fallback) || "Deployment request failed.";
+  const code = normalizeText(error?.code) || "vibe64_deployment_request_failed";
+  const status = Number(error?.status || 0);
+  return {
+    code,
+    errors: [
+      {
+        code,
+        message
+      }
+    ],
+    message,
+    ok: false,
+    ...(Number.isInteger(status) && status > 0 ? { status } : {})
+  };
 }
 
 function deploymentSucceeded(response = null) {

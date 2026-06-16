@@ -7,11 +7,11 @@
       </div>
       <v-btn
         :icon="mdiRefresh"
-        :loading="stateResource.isFetching"
+        :loading="stateRefreshing"
         title="Refresh"
         type="button"
         variant="text"
-        @click="stateResource.reload"
+        @click="refreshState"
       />
     </header>
 
@@ -314,12 +314,13 @@ const {
   publicUrl,
   publish,
   publishCommand,
+  refreshState,
   releases,
   reservePublicName,
   reservePublicNameCommand,
   rollbackRelease,
   rollbackReleaseCommand,
-  stateResource,
+  stateRefreshing,
   verifyCustomDomain,
   verifyCustomDomainCommand
 } = useVibe64Deployments();

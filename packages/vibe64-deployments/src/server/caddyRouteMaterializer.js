@@ -53,6 +53,7 @@ function createCaddyRouteMaterializer({
       });
     }
 
+    await ensureCaddyRouteWritablePaths(route);
     await writeTextFileAtomic(route.sitePath, renderCaddySiteFragment(route));
     await removeStaleProjectSiteFragments(paths, route);
     const reloadResult = reload ? await reloadCaddy({
@@ -93,6 +94,16 @@ async function ensureCaddySupportFiles(paths = {}) {
     }),
     writeTextFileAtomic(paths.snippetPath, renderCaddyPublishedAppSnippet())
   ]);
+}
+
+async function ensureCaddyRouteWritablePaths(route = {}) {
+  if (!route.active || !route.accessLogPath) {
+    return;
+  }
+  await mkdir(path.dirname(route.accessLogPath), {
+    mode: 0o775,
+    recursive: true
+  });
 }
 
 function projectCaddyRoute(context = {}, state = {}) {

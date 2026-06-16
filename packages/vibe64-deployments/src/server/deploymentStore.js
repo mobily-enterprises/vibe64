@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { resolveTxt } from "node:dns/promises";
+import { lookup, resolveTxt } from "node:dns/promises";
 import { mkdir, readdir, readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
@@ -39,6 +39,7 @@ const REGISTRY_LOCK_TIMEOUT_MS = 5000;
 
 function createDeploymentStore({
   clock = () => new Date(),
+  resolveHostAddresses = lookup,
   resolveTxtRecords = resolveTxt
 } = {}) {
   function nowIso() {
@@ -341,7 +342,15 @@ function createDeploymentStore({
     const observedDnsRecords = requiredRecord
       ? await readTxtValues(resolveTxtRecords, requiredRecord.host)
       : [];
-    const verified = Boolean(requiredRecord && observedDnsRecords.includes(requiredRecord.value));
+    const txtVerified = Boolean(requiredRecord && observedDnsRecords.includes(requiredRecord.value));
+    const observedHostAddresses = txtVerified ? [] : await readHostAddressValues(resolveHostAddresses, hostname);
+    const hostsFileVerified = !txtVerified && hostAddressesIncludeLocalTarget(observedHostAddresses);
+    const verified = txtVerified || hostsFileVerified;
+    const verificationMethod = txtVerified
+      ? "dns_txt"
+      : hostsFileVerified
+        ? "hosts_file"
+        : "";
     const currentRelease = await readOptionalJson(paths.currentReleasePath);
     const activeReleasePatch = verified && currentRelease?.releaseId
       ? domainActiveReleasePatch(currentRelease, nowIso())
@@ -350,10 +359,16 @@ function createDeploymentStore({
     const record = {
       ...localDomain,
       ...activeReleasePatch,
-      certificateStatus: verified ? "ready_for_on_demand" : "not_requested",
+      certificateStatus: txtVerified
+        ? "ready_for_on_demand"
+        : hostsFileVerified
+          ? "local_only"
+          : "not_requested",
       lastVerifiedAt: verifiedAt,
       observedDnsRecords,
+      observedHostAddresses,
       updatedAt: nowIso(),
+      verificationMethod,
       verificationStatus: verified ? "verified" : "pending"
     };
 
@@ -390,6 +405,15 @@ function createDeploymentStore({
       return {
         ...route,
         certificateAllowed: false,
+        ok: false
+      };
+    }
+    if (route.routeKind === "custom-domain" && route.certificateStatus !== "ready_for_on_demand") {
+      return {
+        ...route,
+        certificateAllowed: false,
+        code: "vibe64_custom_domain_certificate_not_ready",
+        message: "Custom domain is verified for local routing only.",
         ok: false
       };
     }
@@ -441,6 +465,7 @@ function createDeploymentStore({
         releaseId: currentRelease.releaseId,
         status: currentRelease.status
       },
+      certificateStatus: String(binding.record.certificateStatus || ""),
       routeKind: binding.routeKind,
       target: {
         dockerBaseUrl: String(currentRelease.container?.internalBaseUrl || ""),
@@ -952,6 +977,30 @@ async function readTxtValues(resolveTxtRecords, hostname = "") {
     }
     throw error;
   }
+}
+
+async function readHostAddressValues(resolveHostAddresses, hostname = "") {
+  try {
+    const records = await resolveHostAddresses(hostname, {
+      all: true,
+      verbatim: true
+    });
+    return records
+      .map((record) => String(record?.address || record || "").trim())
+      .filter(Boolean);
+  } catch (error) {
+    if (["ENODATA", "ENOTFOUND", "ETIMEOUT", "ESERVFAIL"].includes(error?.code)) {
+      return [];
+    }
+    throw error;
+  }
+}
+
+function hostAddressesIncludeLocalTarget(addresses = []) {
+  return Array.isArray(addresses) && addresses.some((address) => {
+    const value = String(address || "").trim().toLowerCase();
+    return value === "::1" || value.startsWith("127.");
+  });
 }
 
 async function writeJsonFile(filePath = "", value = {}) {

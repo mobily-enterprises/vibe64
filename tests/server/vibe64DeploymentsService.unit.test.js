@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 
@@ -288,6 +288,7 @@ test("Vibe64 deployment service publishes with release logs and Docker restart s
     assert.match(manifest.caddy.sitePath, /\/caddy\/sites\/beepollen\.caddy$/u);
     assert.match(manifest.caddy.accessLogPath, /\/\.vibe64-local\/deployments\/logs\/access\.log$/u);
     assert.equal(manifest.caddy.accessLogPath.includes(manifest.releaseId), false);
+    assert.equal((await stat(path.dirname(manifest.caddy.accessLogPath))).isDirectory(), true);
     assert.ok(detachedRun.args.includes(`${manifest.artifact.workspacePath}:/workspace`));
     assert.equal(detachedRun.args.includes(`${context.targetRoot}:/workspace`), false);
     assert.match(await readFile(path.join(manifest.artifact.workspacePath, "src/app.js"), "utf8"), /published/u);
@@ -519,6 +520,25 @@ test("Vibe64 deployment service changes public names through the explicit change
     assert.match(caddySite, /bee-live\.users\.vibe64\.dev/u);
     assert.doesNotMatch(caddySite, /beepollen\.users\.vibe64\.dev/u);
     assert.match(caddySite, /www\.example\.com/u);
+    assert.equal(result.changed.currentRelease.caddy.publicName, "bee-live");
+    assert.deepEqual(result.changed.currentRelease.caddy.hosts, [
+      "bee-live.users.vibe64.dev",
+      "www.example.com"
+    ]);
+    const currentRelease = JSON.parse(await readFile(
+      path.join(context.projectLocalRoot, "deployments", "current.json"),
+      "utf8"
+    ));
+    assert.equal(currentRelease.caddy.publicName, "bee-live");
+    assert.deepEqual(currentRelease.caddy.hosts, [
+      "bee-live.users.vibe64.dev",
+      "www.example.com"
+    ]);
+    const releaseManifest = JSON.parse(await readFile(
+      path.join(context.projectLocalRoot, "deployments", "releases", result.published.release.releaseId, "manifest.json"),
+      "utf8"
+    ));
+    assert.equal(releaseManifest.caddy.publicName, "bee-live");
     await assert.rejects(
       () => readFile(path.join(context.systemRoot, "caddy", "sites", "beepollen.caddy"), "utf8"),
       { code: "ENOENT" }
@@ -647,6 +667,14 @@ test("Vibe64 deployment service verifies custom domains before TLS and route app
 
     const caddySite = await readFile(published.release.caddy.sitePath, "utf8");
     assert.match(caddySite, /beepollen\.users\.vibe64\.dev, www\.example\.com/u);
+    const currentRelease = JSON.parse(await readFile(
+      path.join(context.projectLocalRoot, "deployments", "current.json"),
+      "utf8"
+    ));
+    assert.deepEqual(currentRelease.caddy.hosts, [
+      "beepollen.users.vibe64.dev",
+      "www.example.com"
+    ]);
   });
 });
 
@@ -710,6 +738,7 @@ test("Vibe64 deployment service keeps custom domains pending when DNS TXT is mis
   await withTemporaryRoot(async (root) => {
     const service = await createDeploymentTestService(root, {
       deploymentStore: createDeploymentStore({
+        resolveHostAddresses: async () => [],
         resolveTxtRecords: async () => []
       })
     });
@@ -729,6 +758,59 @@ test("Vibe64 deployment service keeps custom domains pending when DNS TXT is mis
     assert.equal(result.ok, false);
     assert.equal(result.verified, false);
     assert.equal(result.domain.verificationStatus, "pending");
+  });
+});
+
+test("Vibe64 deployment service accepts hosts-file custom domains for local routing only", async () => {
+  await withTemporaryRoot(async (root) => {
+    const fake = fakeSuccessfulRunCommand();
+    const service = await createDeploymentTestService(root, {
+      deploymentRunner: createDeploymentRunner({
+        runCommand: fake.runCommand
+      }),
+      deploymentStore: createDeploymentStore({
+        resolveHostAddresses: async () => [{ address: "127.0.0.1" }],
+        resolveTxtRecords: async () => []
+      })
+    });
+    const context = deploymentTestContext(root, "beepollen");
+    await configureJskitProject(context);
+
+    const result = await runWithProjectRequestContext(context, async () => {
+      await service.reservePublicName({
+        publicName: "beepollen"
+      });
+      await service.addCustomDomain({
+        hostname: "local.example.com"
+      });
+      const published = await service.publishCurrentProject();
+      const verified = await service.verifyCustomDomain({
+        hostname: "local.example.com"
+      });
+      const route = await service.resolveHostRoute({
+        host: "local.example.com"
+      });
+      const tls = await service.tlsAsk({
+        domain: "local.example.com"
+      });
+      return {
+        published,
+        route,
+        tls,
+        verified
+      };
+    });
+
+    assert.equal(result.verified.ok, true);
+    assert.equal(result.verified.domain.verificationMethod, "hosts_file");
+    assert.equal(result.verified.domain.certificateStatus, "local_only");
+    assert.deepEqual(result.verified.domain.observedHostAddresses, ["127.0.0.1"]);
+    assert.equal(result.route.ok, true);
+    assert.equal(result.route.release.releaseId, result.published.release.releaseId);
+    assert.equal(result.route.certificateStatus, "local_only");
+    assert.equal(result.tls.ok, false);
+    assert.equal(result.tls.certificateAllowed, false);
+    assert.equal(result.tls.code, "vibe64_custom_domain_certificate_not_ready");
   });
 });
 

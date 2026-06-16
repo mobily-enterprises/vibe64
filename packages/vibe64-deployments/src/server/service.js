@@ -121,22 +121,35 @@ function createService({
     return caddyRouteMaterializer.materializeProject(context, await deploymentStore.readState(context));
   }
 
+  async function materializeCurrentReleaseRoute(context = deploymentContext()) {
+    const state = await deploymentStore.readState(context);
+    const caddy = await caddyRouteMaterializer.materializeProject(context, state);
+    if (state.currentRelease?.releaseId && caddy?.active === true) {
+      await deploymentStore.updateRelease(context, state.currentRelease.releaseId, {
+        caddy
+      });
+    }
+    return caddy;
+  }
+
+  async function readStateWithMaterializedRoute(context = deploymentContext()) {
+    const caddy = await materializeCurrentReleaseRoute(context);
+    return {
+      ...await deploymentStore.readState(context),
+      caddy
+    };
+  }
+
   async function rollbackRelease(input = {}) {
     const context = deploymentContext();
-    const state = await deploymentStore.rollbackRelease(context, input);
-    return {
-      ...state,
-      caddy: await materializeCaddyRoute(context)
-    };
+    await deploymentStore.rollbackRelease(context, input);
+    return readStateWithMaterializedRoute(context);
   }
 
   async function changePublicName(input = {}) {
     const context = deploymentContext();
-    const state = await deploymentStore.changePublicName(context, input);
-    return {
-      ...state,
-      caddy: await materializeCaddyRoute(context)
-    };
+    await deploymentStore.changePublicName(context, input);
+    return readStateWithMaterializedRoute(context);
   }
 
   async function verifyCustomDomain(input = {}) {
@@ -144,7 +157,7 @@ function createService({
     const result = await deploymentStore.verifyCustomDomain(context, input);
     return {
       ...result,
-      ...(result.ok === true ? { caddy: await materializeCaddyRoute(context) } : {})
+      ...(result.ok === true ? { caddy: await materializeCurrentReleaseRoute(context) } : {})
     };
   }
 
