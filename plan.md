@@ -43,8 +43,10 @@ This keeps infrastructure simple:
 *.users.vibe64.dev -> Vibe64 ingress
 ```
 
-The default namespace can use one wildcard DNS record and one wildcard TLS
-certificate.
+The default namespace uses one wildcard DNS record. For V0, Caddy can issue TLS
+on demand after checking a Vibe64 `ask` endpoint so only reserved/published
+names receive certificates. A wildcard TLS certificate can be added later with
+DNS-01 if traffic volume makes per-host issuance unattractive.
 
 ## Reserved Public Names
 
@@ -148,7 +150,9 @@ Vibe64 owns deployment lifecycle:
 - rollback
 - supervision
 
-The front ingress owns public HTTP/HTTPS traffic and TLS.
+The front ingress owns public HTTP/HTTPS traffic and TLS. It should ask Vibe64
+whether a hostname is allowed, then forward allowed traffic to the Vibe64
+deployment router.
 
 ## Adapter Publish Contract
 
@@ -267,11 +271,53 @@ For the default namespace:
 *.users.vibe64.dev
 ```
 
-Use wildcard DNS and wildcard TLS. This avoids issuing a certificate for every
-default app.
+Use wildcard DNS so every selected public name reaches the Vibe64 edge. For V0,
+use Caddy on-demand TLS with a Vibe64-owned `ask` endpoint. The ask endpoint
+must approve only reserved/published platform names and verified custom domains.
+
+The V0 ingress contract is:
+
+```text
+GET /api/vibe64/deployments/tls/ask?domain=<hostname>
+GET /api/vibe64/deployments/route?host=<hostname>
+```
+
+Both endpoints are loopback-only. Caddy uses `tls/ask` before issuing an
+on-demand certificate. The deployment router uses `route` to map the request
+`Host` to the current published release container.
+
+Wildcard TLS is still a valid later optimization, but it requires DNS-01
+automation for the `users.vibe64.dev` zone. If the zone stays at GoDaddy, that
+means running a Caddy build with a GoDaddy DNS provider module and keeping the
+GoDaddy API token in host infrastructure, not in project state.
 
 Custom domains use the same routing model, but each custom hostname needs its
 own verification and certificate flow.
+
+## Supervision and Logs
+
+Vibe64 should not create per-app systemd units. Systemd, if used, supervises
+host infrastructure only: the Vibe64 daemon, Caddy, and the deployment router.
+
+Each published app runs as a Docker release container owned by the deployment
+service. The release container uses bounded Docker restart supervision and
+Docker log rotation:
+
+```text
+--restart on-failure:5
+--log-driver json-file
+--log-opt max-size=10m
+--log-opt max-file=5
+```
+
+The deployment service also writes release phase logs under:
+
+```text
+<project>/.vibe64-local/deployments/releases/<release-id>/logs/
+```
+
+These logs are for build, migration, start, and health-check diagnosis. Long
+running app stdout/stderr remains Docker-managed and rotated.
 
 ## Custom Domains
 
@@ -280,15 +326,19 @@ type. They are aliases to the same current release as the default Vibe64 URL:
 
 ```text
 www.customer.com -> publicName.users.vibe64.dev -> deployment
+www.customer.com CNAME publicName.users.vibe64.dev
 ```
 
 Flow:
 
 1. User adds a custom domain.
-2. Vibe64 gives DNS instructions.
-3. Vibe64 verifies ownership and DNS.
-4. Vibe64 provisions a certificate.
-5. Vibe64 routes the custom domain to the same deployment binding.
+2. Vibe64 gives TXT DNS instructions.
+3. User points the domain at the Vibe64 edge with a CNAME to the default public
+   name, or with A/AAAA records for apex domains.
+4. Vibe64 verifies ownership by reading the TXT record.
+5. Caddy provisions the certificate on demand after the Vibe64 `ask` endpoint
+   approves the verified hostname.
+6. Vibe64 routes the custom domain to the same deployment binding.
 
 The custom-domain binding record should track:
 
@@ -338,7 +388,7 @@ Do first:
 - JSKIT publish implementation
 - build/migrate/start/health
 - one current release per project
-- release logs
+- release phase logs and Docker log rotation
 - rollback to previous release
 - wildcard default domain routing
 - custom-domain routing to the same current release

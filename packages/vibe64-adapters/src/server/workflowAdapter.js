@@ -8,6 +8,7 @@ import {
   adapterCommand,
   adapterDetection,
   adapterLaunchTarget,
+  adapterPublishPlan,
   adapterTerminalToolchainSpec
 } from "./adapter.js";
 import {
@@ -106,7 +107,8 @@ class Vibe64WorkflowTargetAdapter extends TargetAdapter {
     commands = [],
     id = "generic",
     label = "Generic target",
-    prepareWorktreeScriptPath = ""
+    prepareWorktreeScriptPath = "",
+    publishPlanFactory = null
   } = {}) {
     super({
       id,
@@ -117,6 +119,9 @@ class Vibe64WorkflowTargetAdapter extends TargetAdapter {
       : null;
     this.commands = normalizeWorkflowCommands(commands);
     this.prepareWorktreeScriptPath = prepareWorktreeScriptPath;
+    this.publishPlanFactory = typeof publishPlanFactory === "function"
+      ? publishPlanFactory
+      : null;
   }
 
   workflowCapabilities(extra = {}) {
@@ -132,6 +137,16 @@ class Vibe64WorkflowTargetAdapter extends TargetAdapter {
 
   async getWorkflowCommandHooks() {
     return {};
+  }
+
+  async createPublishPlan(context = {}) {
+    if (!this.publishPlanFactory) {
+      return super.createPublishPlan(context);
+    }
+    return adapterPublishPlan(await this.publishPlanFactory({
+      adapter: this,
+      ...context
+    }));
   }
 
   async getPrepareWorktreeScriptPath(context = {}) {
@@ -277,6 +292,7 @@ class Vibe64DescribedWorkflowTargetAdapter extends Vibe64WorkflowTargetAdapter {
     promptPackRoot = "",
     promptRenderer = null,
     prepareWorktreeScriptPath = "",
+    publishPlanFactory = null,
     runtimeContainers = () => [],
     setupDoctorPlugins = () => [],
     terminalToolchain = null,
@@ -291,7 +307,8 @@ class Vibe64DescribedWorkflowTargetAdapter extends Vibe64WorkflowTargetAdapter {
       commands,
       id,
       label,
-      prepareWorktreeScriptPath
+      prepareWorktreeScriptPath,
+      publishPlanFactory
     });
     this.configFields = configFields;
     this.currentAppInspector = currentAppInspector;

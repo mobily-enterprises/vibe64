@@ -61,6 +61,7 @@ declare module 'vue-router/auto-routes' {
       | '/app/[slug]/dashboard/accounts/'
       | '/app/[slug]/dashboard/configure/'
       | '/app/[slug]/dashboard/history/'
+      | '/app/[slug]/dashboard/publish/'
       | '/app/[slug]/dashboard/remote/'
       | '/app/[slug]/dashboard/run/'
       | '/app/[slug]/dashboard/setup/'
@@ -73,6 +74,7 @@ declare module 'vue-router/auto-routes' {
       | '/app/[slug]/dashboard/accounts/'
       | '/app/[slug]/dashboard/configure/'
       | '/app/[slug]/dashboard/history/'
+      | '/app/[slug]/dashboard/publish/'
       | '/app/[slug]/dashboard/remote/'
       | '/app/[slug]/dashboard/run/'
       | '/app/[slug]/dashboard/setup/'
@@ -94,6 +96,13 @@ declare module 'vue-router/auto-routes' {
     '/app/[slug]/dashboard/history/': RouteRecordInfo<
       '/app/[slug]/dashboard/history/',
       '/app/:slug/dashboard/history',
+      { slug: ParamValue<true> },
+      { slug: ParamValue<false> },
+      | never
+    >,
+    '/app/[slug]/dashboard/publish/': RouteRecordInfo<
+      '/app/[slug]/dashboard/publish/',
+      '/app/:slug/dashboard/publish',
       { slug: ParamValue<true> },
       { slug: ParamValue<false> },
       | never
@@ -171,6 +180,7 @@ declare module 'vue-router/auto-routes' {
         | '/app/[slug]/dashboard/accounts/'
         | '/app/[slug]/dashboard/configure/'
         | '/app/[slug]/dashboard/history/'
+        | '/app/[slug]/dashboard/publish/'
         | '/app/[slug]/dashboard/remote/'
         | '/app/[slug]/dashboard/run/'
         | '/app/[slug]/dashboard/setup/'
@@ -183,6 +193,7 @@ declare module 'vue-router/auto-routes' {
         | '/app/[slug]/dashboard/accounts/'
         | '/app/[slug]/dashboard/configure/'
         | '/app/[slug]/dashboard/history/'
+        | '/app/[slug]/dashboard/publish/'
         | '/app/[slug]/dashboard/remote/'
         | '/app/[slug]/dashboard/run/'
         | '/app/[slug]/dashboard/setup/'
@@ -204,6 +215,12 @@ declare module 'vue-router/auto-routes' {
     'src/pages/app/[slug]/dashboard/history/index.vue': {
       routes:
         | '/app/[slug]/dashboard/history/'
+      views:
+        | never
+    }
+    'src/pages/app/[slug]/dashboard/publish/index.vue': {
+      routes:
+        | '/app/[slug]/dashboard/publish/'
       views:
         | never
     }

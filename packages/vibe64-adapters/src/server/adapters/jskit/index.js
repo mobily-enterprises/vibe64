@@ -4,7 +4,8 @@ import {
   JSKIT_MARKERS,
   JSKIT_PROMPT_PACK_ROOT,
   JSKIT_PREPARE_WORKTREE_SCRIPT_PATH,
-  JskitTargetAdapter
+  JskitTargetAdapter,
+  createJskitPublishPlan
 } from "./adapter.js";
 import {
   deepFreeze
@@ -45,6 +46,7 @@ export {
   createJskitTargetAdapter,
   createJskitVibe64CommandTerminalSpec,
   createJskitLaunchTargetTerminalSpec,
+  createJskitPublishPlan,
   listJskitLaunchTargets,
   JSKIT_CONFIG_FIELDS,
   JSKIT_DEFAULT_CONFIG,

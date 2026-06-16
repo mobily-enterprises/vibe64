@@ -207,3 +207,123 @@ runtime id, and daemon process where applicable.
 
 Cleanup should rely on those labels and deterministic names, not on ad hoc
 searches for arbitrary containers.
+
+## Published app deployments
+
+Project publishing is project-scoped and owned by Vibe64, not by a work session.
+The project adapter provides a publish plan; the deployment service executes it
+and records the release.
+
+```text
+<project>/.vibe64-local/deployments/
+  public-name.json
+  current.json
+  domain-bindings/
+  releases/
+    <release-id>/
+      manifest.json
+      logs/
+        build.log
+        migrate.log
+        start.log
+        health.log
+```
+
+`public-name.json` stores the first-come, first-served
+`<name>.users.vibe64.dev` name for the project. Names that look official, such
+as `billing`, `login`, `support-vibe64`, or `admin-*`, are reserved by the
+platform and cannot be used for customer apps.
+
+Each release manifest stores the adapter id, build command, optional migration
+command, serve command, health check, runtime service requirements, Docker
+container name, restart policy, and routing fields. Phase logs are written into
+the release directory before the release is marked published.
+
+Published app containers use the same managed runtime network and runtime
+services as preview/launch targets. The deployment service starts the long-lived
+release container with Docker restart supervision:
+
+```text
+--restart on-failure:5
+--log-driver json-file
+--log-opt max-size=10m
+--log-opt max-file=5
+```
+
+That means Docker restarts a crashed published app a bounded number of times and
+rotates container logs. Vibe64 also keeps phase logs in the release directory so
+build, migration, start, and health-check failures are tied to the release that
+caused them.
+
+Vibe64 does not create per-app systemd services. Systemd, if used by a host, is
+only responsible for long-lived host infrastructure such as the Vibe64 daemon,
+the Caddy edge process, and the deployment router. Individual published apps are
+Vibe64/Docker releases.
+
+### Edge routing
+
+DNS sends published-app traffic to the Vibe64 edge. Caddy terminates TLS and
+forwards requests to the Vibe64 deployment router. Caddy should not know project
+release manifests or app container names.
+
+For the platform namespace:
+
+```text
+users.vibe64.dev
+*.users.vibe64.dev
+```
+
+the DNS zone should point both the base and wildcard host to the Vibe64 edge
+server. Customer-selected names are still validated by Vibe64; the wildcard DNS
+record only ensures traffic arrives at the edge.
+
+Caddy should use an on-demand TLS `ask` endpoint controlled by Vibe64. The ask
+endpoint must return success only for:
+
+- reserved/published `*.users.vibe64.dev` names
+- verified custom domain bindings
+
+The current deployment integration endpoints are loopback-only:
+
+```text
+GET /api/vibe64/deployments/tls/ask?domain=<hostname>
+GET /api/vibe64/deployments/route?host=<hostname>
+```
+
+The `tls/ask` endpoint is for Caddy on-demand TLS. It answers from the
+deployment registry and returns success only when certificate issuance is
+allowed. The `route` endpoint is for the deployment router. It resolves the
+request host to the current published release target on the project runtime
+network.
+
+Custom domains are aliases to the current release after DNS ownership
+verification. Vibe64 records the required TXT record, verifies it from the
+Dashboard, then lets Caddy issue the certificate on demand for that verified
+host.
+
+For normal custom hosts, users should point traffic at their Vibe64 public
+name:
+
+```text
+www.customer.com CNAME public-name.users.vibe64.dev
+```
+
+Apex domains need provider-specific A/AAAA, ALIAS, ANAME, or flattened CNAME
+support pointing at the Vibe64 edge. Vibe64 still requires the TXT ownership
+record before the hostname is accepted by the TLS ask endpoint.
+
+### Adapter publish contract
+
+Adapters expose publish behavior with `createPublishPlan(context)`. The plan
+contains only stack-specific knowledge:
+
+- `build`: the command required to produce a deployable artifact
+- `migrate`: an optional database migration command
+- `serve`: the command that runs the built app
+- `health`: the HTTP health path and timeout
+- `artifacts`: the build output description
+- `runtimeServices`: managed services the release needs, such as MariaDB
+
+The adapter does not reserve hostnames, create certificates, route traffic, or
+supervise long-running release containers. Those are deployment-service
+responsibilities.

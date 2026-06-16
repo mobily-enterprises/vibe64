@@ -15,6 +15,7 @@ export * from "./nodePackageDoctor.js";
 export * from "./nodePackageManagers.js";
 export * from "./nodeWebProject.js";
 export * from "./projectType.js";
+export * from "./projectAdapterContext.js";
 export * from "./promptMarkers.js";
 export * from "./promptQuestionPolicy.js";
 export * from "./promptRenderer.js";

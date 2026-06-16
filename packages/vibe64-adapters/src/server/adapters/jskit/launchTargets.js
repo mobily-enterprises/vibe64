@@ -1152,6 +1152,7 @@ export {
   createJskitBuiltLaunchDescriptor,
   createJskitDevLaunchDescriptor,
   listJskitLaunchTargets,
+  resolveBuiltLaunchConfig,
   BUILT_LAUNCH_COMMAND_CONFIG,
   BUILT_LAUNCH_PORT_CONFIG,
   DEV_SERVER_COMMAND_CONFIG

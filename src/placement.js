@@ -4,6 +4,7 @@ import {
   mdiCogOutline,
   mdiHistory,
   mdiPlayBoxMultipleOutline,
+  mdiRocketLaunchOutline,
   mdiTune
 } from "@mdi/js";
 
@@ -78,6 +79,25 @@ addPlacement({
       surface: "app",
       scopedSuffix: "/[slug]/dashboard/remote",
       unscopedSuffix: "/[slug]/dashboard/remote",
+      to: "",
+    },
+  });
+}
+// jskit:ui-generator.page.link:app:/dashboard/publish
+{
+  addPlacement({
+    id: "ui-generator.page.app.dashboard.publish.link",
+    target: "page.section-nav",
+    owner: "app-dashboard",
+    kind: "link",
+    surfaces: ["app"],
+    order: 550,
+    props: {
+      label: "Publish",
+      icon: mdiRocketLaunchOutline,
+      surface: "app",
+      scopedSuffix: "/[slug]/dashboard/publish",
+      unscopedSuffix: "/[slug]/dashboard/publish",
       to: "",
     },
   });

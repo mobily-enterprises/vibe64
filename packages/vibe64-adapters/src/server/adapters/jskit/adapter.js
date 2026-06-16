@@ -39,6 +39,9 @@ import {
   createJskitSetupDoctorPlugin
 } from "./setupDoctorPlugin.js";
 import {
+  resolveBuiltLaunchConfig
+} from "./launchTargets.js";
+import {
   createJskitMariaDbRuntimeContainer,
   jskitMariaDbDatabaseName,
   JSKIT_MARIADB_HOST,
@@ -376,6 +379,65 @@ function createJskitRuntimeContainers({
   ];
 }
 
+async function createJskitPublishPlan({
+  config = {},
+  targetRoot = ""
+} = {}) {
+  const publishRoot = normalizeText(targetRoot);
+  if (!publishRoot) {
+    return {
+      adapterId: "jskit",
+      message: "Choose a JSKIT project before publishing.",
+      ok: false,
+      unsupportedReason: "target_root_missing"
+    };
+  }
+
+  const publishConfig = await resolveBuiltLaunchConfig(publishRoot, {
+    targetRoot: publishRoot
+  });
+  const serveCommand = normalizeText(publishConfig.serverCommand || publishConfig.testrunCommand);
+  return {
+    adapterId: "jskit",
+    artifacts: {
+      kind: "workspace-build",
+      path: "dist"
+    },
+    build: publishConfig.buildCommand
+      ? {
+          command: publishConfig.buildCommand,
+          label: "Build JSKIT app.",
+          networkEnv: false
+        }
+      : null,
+    health: {
+      path: "/",
+      timeoutMs: 30000,
+      type: "http"
+    },
+    message: serveCommand ? "JSKIT publish plan is ready." : "JSKIT publish requires a server command.",
+    migrate: publishConfig.migrationCommand
+      ? {
+          command: publishConfig.migrationCommand,
+          label: "Apply JSKIT database migrations.",
+          networkEnv: true
+        }
+      : null,
+    ok: Boolean(serveCommand),
+    runtimeServices: createJskitRuntimeContainers({
+      config,
+      targetRoot: publishRoot
+    }),
+    serve: serveCommand
+      ? {
+          command: serveCommand,
+          label: "Start JSKIT app server.",
+          networkEnv: true
+        }
+      : null
+  };
+}
+
 class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
   constructor({
     commandTerminalSpecFactory = null,
@@ -400,6 +462,7 @@ class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       projectInspection: inspectJskitProject,
       promptContext: jskitPromptContext,
       promptPackRoot: JSKIT_PROMPT_PACK_ROOT,
+      publishPlanFactory: createJskitPublishPlan,
       runtimeContainers: createJskitRuntimeContainers,
       setupDoctorPlugins: (context) => [
         createJskitSetupDoctorPlugin(context)
@@ -444,5 +507,6 @@ export {
   JskitTargetAdapter,
   jskitCodeIndexHook,
   jskitAutomatedChecksHook,
+  createJskitPublishPlan,
   inspectJskitProject
 };
