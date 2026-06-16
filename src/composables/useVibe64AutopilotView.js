@@ -21,9 +21,16 @@ import {
   VIBE64_DEFAULT_AGENT_PROVIDER_ID
 } from "@local/vibe64-runtime/shared";
 import {
+  initialControlValues,
+  latestSubmittedConversationText,
+  selectedControlDraftText,
   useVibe64AutopilotComposer
 } from "@/composables/useVibe64AutopilotComposer.js";
 import {
+  createRemoteComposerOptimisticTurn
+} from "@/lib/vibe64ComposerOptimisticTurn.js";
+import {
+  normalizedDraftFields,
   useVibe64ComposerDraftSync
 } from "@/composables/useVibe64ComposerDraftSync.js";
 import {
@@ -266,6 +273,7 @@ function useVibe64AutopilotView(props, emit) {
   const mountedRightPaneTabs = ref(["preview"]);
   const openedCodexTerminalAttentionSignature = ref("");
   const optimisticComposerTurn = ref(null);
+  const remoteComposerSubmission = ref(null);
   let optimisticComposerTurnCounter = 0;
   const SESSION_TOOL_STORAGE_PREFIX = "vibe64.sessionTools.active";
   const projectPaneIds = Object.freeze([
@@ -363,10 +371,12 @@ function useVibe64AutopilotView(props, emit) {
     const preview = stripTerminalControlSequences(commandPreview.value);
     return tailCommandText(output || resultOutput || preview || "Starting command...");
   });
+  const remoteComposerSubmissionPending = computed(() => remoteComposerSubmission.value?.status === "pending");
   const autopilotBusy = computed(() => Boolean(props.active && (
     running.value ||
     displayRunning.value ||
     commandRunning.value ||
+    remoteComposerSubmissionPending.value ||
     stepInput.saving
   )));
   const navigationBusy = computed(() => Boolean(props.page?.busy || autopilotBusy.value || props.rewindBusy));
@@ -380,6 +390,7 @@ function useVibe64AutopilotView(props, emit) {
     running.value ||
     displayRunning.value ||
     commandRunning.value ||
+    remoteComposerSubmissionPending.value ||
     stepInput.saving ||
     props.page?.busy
   ));
@@ -389,6 +400,7 @@ function useVibe64AutopilotView(props, emit) {
     running.value ||
     displayRunning.value ||
     commandRunning.value ||
+    remoteComposerSubmissionPending.value ||
     stepInput.saving
   ));
   const sessionToolbarVisible = computed(() => Boolean(
@@ -693,6 +705,7 @@ function useVibe64AutopilotView(props, emit) {
     selectedControl,
     selectedControlFields,
     selectedControlIsPrimary,
+    selectedControlSubmissionFields,
     selectedControlUsesLatestAssistantQuestions,
     selectedControlValues,
     restoreControlDraft,
@@ -718,6 +731,8 @@ function useVibe64AutopilotView(props, emit) {
       }
       restoreControlDraft(control, fields);
     },
+    applySubmissionRejected: applyRemoteComposerSubmissionRejected,
+    applySubmissionStart: applyRemoteComposerSubmissionStart,
     enabled: computed(() => props.active !== false),
     projectSlug,
     selectedControl,
@@ -783,15 +798,94 @@ function useVibe64AutopilotView(props, emit) {
     };
   }
 
-  function submissionObject(value = {}) {
-    return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  function optimisticTextFromSubmission(options = {}) {
+    const sourceOptions = options && typeof options === "object" && !Array.isArray(options) ? options : {};
+    const displayFields = normalizedDraftFields(sourceOptions.displayFields);
+    const fields = normalizedDraftFields(sourceOptions.fields);
+    return String(displayFields.conversationRequest || fields.conversationRequest || "").trim();
   }
 
-  function optimisticTextFromSubmission(options = {}) {
-    const sourceOptions = submissionObject(options);
-    const displayFields = submissionObject(sourceOptions.displayFields);
-    const fields = submissionObject(sourceOptions.fields);
-    return String(displayFields.conversationRequest || fields.conversationRequest || "").trim();
+  function selectedComposerDraftText() {
+    return selectedControlDraftText({
+      fields: selectedControlFields.value,
+      values: selectedControlSubmissionFields()
+    });
+  }
+
+  function controlForSelectedComposer() {
+    const controlId = String(selectedControl.value?.id || "").trim();
+    return allScreenControls.value.find((item) => item.id === controlId) || selectedControl.value;
+  }
+
+  function clearSelectedComposerDraft(control = controlForSelectedComposer()) {
+    if (!control?.id || !Array.isArray(control.inputFields)) {
+      return false;
+    }
+    restoreControlDraft(control, initialControlValues(control));
+    return true;
+  }
+
+  function reloadConversationLogAfterRemoteSubmission() {
+    if (typeof props.conversationLog?.reload !== "function") {
+      return;
+    }
+    void props.conversationLog.reload();
+  }
+
+  function clearRemoteComposerSubmissionIfCanonical() {
+    const submission = remoteComposerSubmission.value;
+    if (submission?.status !== "pending") {
+      return false;
+    }
+    const text = String(submission.text || "").trim();
+    if (!text || latestSubmittedConversationText(props.conversationLog) !== text) {
+      return false;
+    }
+    remoteComposerSubmission.value = null;
+    if (optimisticComposerTurn.value?.remote === true && optimisticComposerTurn.value.text === text) {
+      optimisticComposerTurn.value = null;
+    }
+    return true;
+  }
+
+  function applyRemoteComposerSubmissionStart(fields = {}, payload = {}) {
+    const text = String(payload?.text || "").trim();
+    const control = controlForSelectedComposer();
+    const submissionFields = normalizedDraftFields(fields);
+    remoteComposerSubmission.value = {
+      controlId: String(payload?.controlId || control?.id || ""),
+      fields: submissionFields,
+      status: "pending",
+      text,
+      updatedAt: String(payload?.updatedAt || "")
+    };
+    if (text && selectedComposerDraftText() === text) {
+      clearSelectedComposerDraft(control);
+    }
+    optimisticComposerTurnCounter += 1;
+    optimisticComposerTurn.value = createRemoteComposerOptimisticTurn({
+      control,
+      fields: submissionFields,
+      id: `remote-composer-${optimisticComposerTurnCounter}`,
+      payload,
+      text
+    });
+    reloadConversationLogAfterRemoteSubmission();
+  }
+
+  function applyRemoteComposerSubmissionRejected(fields = {}, payload = {}) {
+    const control = controlForSelectedComposer();
+    const text = String(payload?.text || "").trim();
+    if (
+      optimisticComposerTurn.value?.remote === true &&
+      (!text || optimisticComposerTurn.value.text === text)
+    ) {
+      optimisticComposerTurn.value = null;
+    }
+    remoteComposerSubmission.value = null;
+    if (control?.id && Array.isArray(control.inputFields)) {
+      restoreControlDraft(control, fields);
+    }
   }
 
   function startOptimisticComposerTurn({
@@ -803,8 +897,12 @@ function useVibe64AutopilotView(props, emit) {
     if (!text) {
       return null;
     }
+    composerDraftSync.publishSubmissionStart("conversationRequest", values, {
+      text
+    });
     optimisticComposerTurnCounter += 1;
     const id = `optimistic-composer-${optimisticComposerTurnCounter}`;
+    const sourceOptions = options && typeof options === "object" && !Array.isArray(options) ? options : {};
     optimisticComposerTurn.value = {
       control,
       createdAt: new Date().toISOString(),
@@ -812,13 +910,13 @@ function useVibe64AutopilotView(props, emit) {
       error: "",
       id,
       options: {
-        ...submissionObject(options)
+        ...sourceOptions,
+        displayFields: normalizedDraftFields(sourceOptions.displayFields),
+        fields: normalizedDraftFields(sourceOptions.fields)
       },
       status: "pending",
       text,
-      values: {
-        ...submissionObject(values)
-      }
+      values: normalizedDraftFields(values)
     };
     return id;
   }
@@ -834,11 +932,16 @@ function useVibe64AutopilotView(props, emit) {
     if (!submissionId || optimisticComposerTurn.value?.id !== submissionId) {
       return;
     }
+    const optimistic = optimisticComposerTurn.value;
     optimisticComposerTurn.value = {
-      ...optimisticComposerTurn.value,
+      ...optimistic,
       error: String(error?.message || error || "Message could not be sent."),
       status: "failed"
     };
+    composerDraftSync.publishSubmissionRejected("conversationRequest", optimistic.values, {
+      text: optimistic.text
+    });
+    restoreControlDraft(optimistic.control, optimistic.values);
   }
 
   function turnMatchesOptimisticComposerTurn(turn = {}, optimistic = {}) {
@@ -1214,6 +1317,7 @@ function useVibe64AutopilotView(props, emit) {
       props.page.busy ||
       props.codexThinking ||
       running.value ||
+      remoteComposerSubmissionPending.value ||
       stepInput.saving ||
       control.enabled !== true ||
       controlStateActive(control, "disabledWhen")
@@ -1228,7 +1332,12 @@ function useVibe64AutopilotView(props, emit) {
         props.actions.activeActionId === sourceAction.id
       );
     }
-    return Boolean(running.value || stepInput.saving || controlStateActive(control, "loadingWhen"));
+    return Boolean(
+      running.value ||
+      remoteComposerSubmissionPending.value ||
+      stepInput.saving ||
+      controlStateActive(control, "loadingWhen")
+    );
   }
 
   function controlIcon(control = {}) {
@@ -1288,6 +1397,20 @@ function useVibe64AutopilotView(props, emit) {
 
   watch(sessionId, () => {
     optimisticComposerTurn.value = null;
+    remoteComposerSubmission.value = null;
+  });
+
+  watch(() => [
+    remoteComposerSubmission.value?.status || "",
+    remoteComposerSubmission.value?.text || "",
+    props.session?.revision ?? "",
+    props.session?.stepRevision ?? "",
+    props.session?.stepMachine?.status || "",
+    latestSubmittedConversationText(props.conversationLog)
+  ].join("|"), () => {
+    clearRemoteComposerSubmissionIfCanonical();
+  }, {
+    flush: "post"
   });
 
   watch(codexTerminalAttentionSignature, (signature) => {

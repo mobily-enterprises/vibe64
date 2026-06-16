@@ -969,9 +969,11 @@ function createService({
         fields: input?.fields && typeof input.fields === "object" && !Array.isArray(input.fields)
           ? input.fields
           : {},
+        kind: normalizedInputText(input?.kind || "draft"),
         originId: normalizedInputText(input?.originId),
         projectSlug: normalizedInputText(input?.projectSlug),
         sessionId: normalizedInputText(sessionId),
+        text: normalizedInputText(input?.text),
         updatedAt: new Date().toISOString()
       };
       if (!payload.sessionId || !payload.controlId || !payload.fieldName || !payload.originId) {

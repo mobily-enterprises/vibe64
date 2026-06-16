@@ -15,6 +15,11 @@ import {
 
 const LOCAL_TYPING_GRACE_MS = 1200;
 const PUBLISH_DEBOUNCE_MS = 180;
+const COMPOSER_DRAFT_KIND = Object.freeze({
+  DRAFT: "draft",
+  SUBMISSION_REJECTED: "submission_rejected",
+  SUBMISSION_START: "submission_start"
+});
 
 function createComposerOriginId() {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -35,8 +40,15 @@ function normalizedDraftFields(fields = {}) {
   );
 }
 
+function normalizedDraftKind(value = "") {
+  const kind = String(value || "").trim();
+  return Object.values(COMPOSER_DRAFT_KIND).includes(kind) ? kind : COMPOSER_DRAFT_KIND.DRAFT;
+}
+
 function useVibe64ComposerDraftSync({
   applyDraft = () => null,
+  applySubmissionRejected = () => null,
+  applySubmissionStart = () => null,
   enabled = true,
   projectSlug,
   selectedControl,
@@ -70,10 +82,20 @@ function useVibe64ComposerDraftSync({
         String(payload.originId || "") !== originId;
     },
     onEvent: ({ payload = {} } = {}) => {
+      const fields = normalizedDraftFields(payload.fields);
+      const kind = normalizedDraftKind(payload.kind);
+      if (kind === COMPOSER_DRAFT_KIND.SUBMISSION_START) {
+        applySubmissionStart(fields, payload);
+        return;
+      }
+      if (kind === COMPOSER_DRAFT_KIND.SUBMISSION_REJECTED) {
+        applySubmissionRejected(fields, payload);
+        return;
+      }
       if (Date.now() - lastLocalEditAt.value < LOCAL_TYPING_GRACE_MS) {
         return;
       }
-      applyDraft(normalizedDraftFields(payload.fields));
+      applyDraft(fields, payload);
     }
   });
 
@@ -106,7 +128,51 @@ function useVibe64ComposerDraftSync({
     }, PUBLISH_DEBOUNCE_MS);
   }
 
-  async function sendDraft(fieldName = "", fields = {}) {
+  function clearPendingDraftPublish() {
+    if (!publishTimer) {
+      return;
+    }
+    clearTimeout(publishTimer);
+    publishTimer = null;
+  }
+
+  function publishSubmissionStart(fieldName = "", fields = {}, {
+    text = ""
+  } = {}) {
+    clearPendingDraftPublish();
+    if (!active.value) {
+      return;
+    }
+    void sendDraft(fieldName, normalizedDraftFields(fields), {
+      kind: COMPOSER_DRAFT_KIND.SUBMISSION_START,
+      text
+    }).catch((error) => {
+      vibe64SessionDebugLog("client.composerDraft.submissionStart.error", {
+        error: vibe64SessionDebugError(error),
+        sessionId: activeSessionId.value
+      });
+    });
+  }
+
+  function publishSubmissionRejected(fieldName = "", fields = {}, {
+    text = ""
+  } = {}) {
+    clearPendingDraftPublish();
+    if (!active.value) {
+      return;
+    }
+    void sendDraft(fieldName, normalizedDraftFields(fields), {
+      kind: COMPOSER_DRAFT_KIND.SUBMISSION_REJECTED,
+      text
+    }).catch((error) => {
+      vibe64SessionDebugLog("client.composerDraft.submissionRejected.error", {
+        error: vibe64SessionDebugError(error),
+        sessionId: activeSessionId.value
+      });
+    });
+  }
+
+  async function sendDraft(fieldName = "", fields = {}, options = {}) {
     if (!active.value) {
       return;
     }
@@ -115,8 +181,10 @@ function useVibe64ComposerDraftSync({
         controlId: activeControlId.value,
         fieldName,
         fields,
+        kind: normalizedDraftKind(options?.kind),
         originId,
-        projectSlug: activeProjectSlug.value
+        projectSlug: activeProjectSlug.value,
+        text: String(options?.text || "").trim()
       },
       method: "POST"
     });
@@ -124,13 +192,17 @@ function useVibe64ComposerDraftSync({
 
   return {
     originId,
-    publishDraftChange
+    publishDraftChange,
+    publishSubmissionRejected,
+    publishSubmissionStart
   };
 }
 
 export {
+  COMPOSER_DRAFT_KIND,
   LOCAL_TYPING_GRACE_MS,
   PUBLISH_DEBOUNCE_MS,
+  normalizedDraftKind,
   normalizedDraftFields,
   useVibe64ComposerDraftSync
 };

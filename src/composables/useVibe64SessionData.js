@@ -57,13 +57,28 @@ function selectedSessionOperationSummary(session = {}) {
   };
 }
 
+function sessionRevisionNumber(session = null) {
+  const revision = Number(session?.revision);
+  return Number.isFinite(revision) ? revision : null;
+}
+
 function selectedSessionRecord(detailSession = null, listSession = null, selectedSessionId = "") {
   const normalizedSessionId = String(selectedSessionId || "").trim();
+  const listSessionMatches = Boolean(
+    normalizedSessionId &&
+    listSession?.sessionId === normalizedSessionId &&
+    listSession?.ok !== false
+  );
   if (
     normalizedSessionId &&
     detailSession?.sessionId === normalizedSessionId &&
     detailSession?.ok !== false
   ) {
+    const detailRevision = sessionRevisionNumber(detailSession);
+    const listRevision = sessionRevisionNumber(listSession);
+    if (listSessionMatches && listRevision !== null && detailRevision !== null && listRevision > detailRevision) {
+      return listSession;
+    }
     return detailSession;
   }
   return listSession;
@@ -546,6 +561,7 @@ function useVibe64SessionData({
 export {
   selectedSessionRecord,
   sessionIdExistsInList,
+  sessionRevisionNumber,
   shouldPreserveSelectedSessionDuringRefresh,
   useVibe64SessionData
 };

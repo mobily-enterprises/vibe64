@@ -38,9 +38,11 @@ function composerRealtimePayload({ result = {} } = {}) {
     controlId: normalizeComposerValue(draft.controlId),
     fieldName: normalizeComposerValue(draft.fieldName),
     fields: normalizeComposerFields(draft.fields),
+    kind: normalizeComposerValue(draft.kind || "draft"),
     originId: normalizeComposerValue(draft.originId),
     projectSlug: normalizeComposerValue(draft.projectSlug),
     sessionId: normalizeComposerValue(draft.sessionId),
+    text: normalizeComposerValue(draft.text),
     updatedAt: normalizeComposerValue(draft.updatedAt)
   };
 }

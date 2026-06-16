@@ -17,16 +17,47 @@ describe("useVibe64SessionData selected session record", () => {
           kind: "conversation"
         }
       },
-      revision: 4,
+      revision: 5,
       sessionId: "session-1"
     };
     const listSummary = {
       currentStep: "step_c",
-      revision: 5,
+      revision: 4,
       sessionId: "session-1"
     };
 
     expect(selectedSessionRecord(detailRecord, listSummary, "session-1")).toBe(detailRecord);
+  });
+
+  it("uses the list summary when it is newer than the selected detail record", () => {
+    const detailRecord = {
+      actions: [
+        {
+          id: "talk_to_codex"
+        }
+      ],
+      presentation: {
+        screen: {
+          kind: "conversation",
+          primaryIntentId: "talk_to_codex"
+        }
+      },
+      revision: 8,
+      sessionId: "session-1",
+      stepMachine: {
+        status: "waiting_for_input"
+      }
+    };
+    const listSummary = {
+      currentStep: "define_work",
+      revision: 9,
+      sessionId: "session-1",
+      stepMachine: {
+        status: "awaiting_agent_result"
+      }
+    };
+
+    expect(selectedSessionRecord(detailRecord, listSummary, "session-1")).toBe(listSummary);
   });
 
   it("uses the list summary while the selected detail record is unavailable", () => {

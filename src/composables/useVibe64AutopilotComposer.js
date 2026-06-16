@@ -60,6 +60,40 @@ function plainObject(value = {}) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
+function normalizedComposerText(value = "") {
+  return String(value || "").trim();
+}
+
+function conversationTurnUserText(turn = {}) {
+  return normalizedComposerText(turn?.user?.text);
+}
+
+function latestSubmittedConversationText(conversationLog = {}) {
+  const turns = Array.isArray(conversationLog?.turns) ? conversationLog.turns : [];
+  for (let index = turns.length - 1; index >= 0; index -= 1) {
+    const text = conversationTurnUserText(turns[index]);
+    if (text) {
+      return text;
+    }
+  }
+  return "";
+}
+
+function selectedControlDraftText({
+  fields = [],
+  values = {}
+} = {}) {
+  const sourceValues = plainObject(values);
+  const inputFields = Array.isArray(fields) ? fields : [];
+  if (Object.hasOwn(sourceValues, "conversationRequest")) {
+    return normalizedComposerText(sourceValues.conversationRequest);
+  }
+  if (inputFields.length === 1) {
+    return normalizedComposerText(sourceValues[inputFields[0]?.name]);
+  }
+  return "";
+}
+
 function attachmentFieldsFromOptions(options = {}) {
   return plainObject(options?.attachmentFields);
 }
@@ -248,6 +282,25 @@ function useVibe64AutopilotComposer({
     clearSelectedControl();
   }
 
+  function clearConsumedConversationDraft() {
+    if (!selectedControl.value || !controlHasInputFields(selectedControl.value)) {
+      return false;
+    }
+    const draftText = selectedControlDraftText({
+      fields: selectedControlFields.value,
+      values: selectedControlSubmissionFields()
+    });
+    if (!draftText) {
+      return false;
+    }
+    const submittedText = latestSubmittedConversationText(currentConversationLog.value);
+    if (!submittedText || submittedText !== draftText) {
+      return false;
+    }
+    selectControlForNextDraft(selectedControl.value);
+    return true;
+  }
+
   async function submitSelectedControl(options = {}) {
     if (!canSubmitSelectedControl.value) {
       return false;
@@ -360,6 +413,15 @@ function useVibe64AutopilotComposer({
 
   watch(isRunning, () => {
     syncSelectedControlWithCurrentControls();
+    if (isRunning.value) {
+      clearConsumedConversationDraft();
+    }
+  }, {
+    flush: "sync"
+  });
+
+  watch(() => latestSubmittedConversationText(currentConversationLog.value), () => {
+    clearConsumedConversationDraft();
   }, {
     flush: "sync"
   });
@@ -367,6 +429,7 @@ function useVibe64AutopilotComposer({
   return {
     activateControl,
     canSubmitSelectedControl,
+    clearConsumedConversationDraft,
     clearSelectedControl,
     screenControls,
     selectedControl,
@@ -386,5 +449,7 @@ function useVibe64AutopilotComposer({
 export {
   controlHasInputFields,
   initialControlValues,
+  latestSubmittedConversationText,
+  selectedControlDraftText,
   useVibe64AutopilotComposer
 };

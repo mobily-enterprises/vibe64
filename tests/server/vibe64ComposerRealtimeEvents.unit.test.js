@@ -17,9 +17,11 @@ test("Vibe64 composer service event describes a realtime composer draft change",
       fields: {
         conversationRequest: "Hello"
       },
+      kind: "submission_start",
       originId: "origin-1",
       projectSlug: "beepollen",
       sessionId: "2026-06-14_08-07-41",
+      text: "Hello",
       updatedAt: "2026-06-16T01:02:03.000Z"
     },
     ok: true
@@ -38,9 +40,11 @@ test("Vibe64 composer service event describes a realtime composer draft change",
     fields: {
       conversationRequest: "Hello"
     },
+    kind: "submission_start",
     originId: "origin-1",
     projectSlug: "beepollen",
     sessionId: "2026-06-14_08-07-41",
+    text: "Hello",
     updatedAt: "2026-06-16T01:02:03.000Z"
   });
 });

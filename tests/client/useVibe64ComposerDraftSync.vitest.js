@@ -78,8 +78,10 @@ describe("useVibe64ComposerDraftSync", () => {
               conversationRequest: "Hello",
               count: "2"
             },
+            kind: "draft",
             originId: sync.originId,
-            projectSlug: "vibe64"
+            projectSlug: "vibe64",
+            text: ""
           },
           method: "POST"
         }
@@ -131,6 +133,106 @@ describe("useVibe64ComposerDraftSync", () => {
       {
         conversationRequest: "Remote"
       }
+    ]);
+  });
+
+  it("publishes submission start immediately and cancels a pending draft publish", async () => {
+    const { PUBLISH_DEBOUNCE_MS, useVibe64ComposerDraftSync } = await import(
+      "../../src/composables/useVibe64ComposerDraftSync.js"
+    );
+    const sync = useVibe64ComposerDraftSync({
+      projectSlug: ref("vibe64"),
+      selectedControl: ref({ id: "talk_to_codex" }),
+      sessionId: ref("session-1"),
+      sessionsApiPath: ref("/api/app/vibe64/vibe64/sessions")
+    });
+
+    sync.publishDraftChange("conversationRequest", {
+      conversationRequest: "Hello"
+    });
+    sync.publishSubmissionStart("conversationRequest", {
+      conversationRequest: "Hello"
+    }, {
+      text: "Hello"
+    });
+
+    expect(mocks.requestCalls).toEqual([
+      [
+        "/api/app/vibe64/vibe64/sessions/session-1/composer-draft",
+        {
+          body: {
+            controlId: "talk_to_codex",
+            fieldName: "conversationRequest",
+            fields: {
+              conversationRequest: "Hello"
+            },
+            kind: "submission_start",
+            originId: sync.originId,
+            projectSlug: "vibe64",
+            text: "Hello"
+          },
+          method: "POST"
+        }
+      ]
+    ]);
+
+    vi.advanceTimersByTime(PUBLISH_DEBOUNCE_MS);
+    await Promise.resolve();
+    expect(mocks.requestCalls).toHaveLength(1);
+  });
+
+  it("routes remote submission events outside the local typing grace window", async () => {
+    const events = [];
+    const { useVibe64ComposerDraftSync } = await import(
+      "../../src/composables/useVibe64ComposerDraftSync.js"
+    );
+    const sync = useVibe64ComposerDraftSync({
+      applyDraft: (draft) => events.push(["draft", draft]),
+      applySubmissionRejected: (draft) => events.push(["rejected", draft]),
+      applySubmissionStart: (draft, payload) => events.push(["start", draft, payload.text]),
+      projectSlug: ref("vibe64"),
+      selectedControl: ref({ id: "talk_to_codex" }),
+      sessionId: ref("session-1"),
+      sessionsApiPath: ref("/api/app/vibe64/vibe64/sessions")
+    });
+    const realtime = mocks.realtimeOptions.at(-1);
+
+    sync.publishDraftChange("conversationRequest", {
+      conversationRequest: "Local"
+    });
+    realtime.onEvent({
+      payload: {
+        fields: {
+          conversationRequest: "Remote submit"
+        },
+        kind: "submission_start",
+        text: "Remote submit"
+      }
+    });
+    realtime.onEvent({
+      payload: {
+        fields: {
+          conversationRequest: "Remote restore"
+        },
+        kind: "submission_rejected"
+      }
+    });
+    realtime.onEvent({
+      payload: {
+        fields: {
+          conversationRequest: "Remote draft"
+        },
+        kind: "draft"
+      }
+    });
+
+    expect(events).toEqual([
+      ["start", {
+        conversationRequest: "Remote submit"
+      }, "Remote submit"],
+      ["rejected", {
+        conversationRequest: "Remote restore"
+      }]
     ]);
   });
 

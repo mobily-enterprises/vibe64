@@ -291,6 +291,119 @@ describe("useVibe64AutopilotComposer", () => {
     expect(composer.selectedControl.value).toBeNull();
   });
 
+  it("clears a remote draft when the same text appears as a submitted conversation turn", async () => {
+    const conversationLog = ref({
+      turns: []
+    });
+    const composer = useVibe64AutopilotComposer({
+      controls: ref([conversationControl()]),
+      conversationLog,
+      primaryIntentId: ref("talk_to_codex"),
+      running: ref(false)
+    });
+
+    await nextTick();
+    composer.restoreControlDraft(conversationControl(), {
+      conversationRequest: "This is a test"
+    });
+
+    expect(composer.selectedControlValues.value.conversationRequest).toBe("This is a test");
+    expect(composer.canSubmitSelectedControl.value).toBe(true);
+
+    conversationLog.value = {
+      turns: [
+        {
+          turnId: "000001",
+          user: {
+            text: "This is a test"
+          }
+        }
+      ]
+    };
+    await nextTick();
+
+    expect(composer.selectedControl.value?.id).toBe("talk_to_codex");
+    expect(composer.selectedControlValues.value.conversationRequest).toBe("");
+    expect(composer.canSubmitSelectedControl.value).toBe(false);
+  });
+
+  it("clears a consumed numbered-question draft after its submitted conversationRequest appears", async () => {
+    const conversationLog = ref({
+      turns: [
+        {
+          assistant: {
+            text: "[1] Which file?\n[2] What change?"
+          }
+        }
+      ]
+    });
+    const composer = useVibe64AutopilotComposer({
+      controls: ref([conversationControl()]),
+      conversationLog,
+      primaryIntentId: ref("talk_to_codex"),
+      running: ref(false)
+    });
+
+    await nextTick();
+    composer.updateSelectedControlValue("__ui_question_1", "src/App.vue");
+    composer.updateSelectedControlValue("__ui_question_2", "Add the banner");
+
+    expect(composer.canSubmitSelectedControl.value).toBe(true);
+
+    conversationLog.value = {
+      turns: [
+        {
+          assistant: {
+            text: "[1] Which file?\n[2] What change?"
+          },
+          turnId: "000001"
+        },
+        {
+          turnId: "000002",
+          user: {
+            text: "[1] src/App.vue\n[2] Add the banner"
+          }
+        }
+      ]
+    };
+    await nextTick();
+
+    expect(composer.selectedControlValues.value).toEqual({
+      conversationRequest: ""
+    });
+    expect(composer.canSubmitSelectedControl.value).toBe(false);
+  });
+
+  it("keeps an unrelated local draft when another submitted turn arrives", async () => {
+    const conversationLog = ref({
+      turns: []
+    });
+    const composer = useVibe64AutopilotComposer({
+      controls: ref([conversationControl()]),
+      conversationLog,
+      primaryIntentId: ref("talk_to_codex"),
+      running: ref(false)
+    });
+
+    await nextTick();
+    composer.updateSelectedControlValue("conversationRequest", "My local edit");
+
+    conversationLog.value = {
+      turns: [
+        {
+          turnId: "000001",
+          user: {
+            text: "Submitted elsewhere"
+          }
+        }
+      ]
+    };
+    await nextTick();
+
+    expect(composer.selectedControlValues.value.conversationRequest).toBe("My local edit");
+    expect(composer.canSubmitSelectedControl.value).toBe(true);
+  });
+
   it("leaves an optimistically submitted failed draft out of the input", async () => {
     const rejected = vi.fn();
     const composer = useVibe64AutopilotComposer({
