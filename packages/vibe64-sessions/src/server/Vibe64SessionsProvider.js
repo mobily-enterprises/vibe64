@@ -4,6 +4,9 @@ import { createService } from "./service.js";
 import { featureActions } from "./actions.js";
 import { registerRoutes } from "./registerRoutes.js";
 import { vibe64SessionChangedServiceEvent } from "@local/vibe64-core/server/sessionRealtimeEvents";
+import {
+  vibe64ComposerChangedServiceEvent
+} from "@local/vibe64-core/server/composerRealtimeEvents";
 
 const VIBE64_SESSIONS_SERVICE = "feature.vibe64-sessions.service";
 
@@ -45,9 +48,17 @@ class Vibe64SessionsProvider {
         events: {
           abandonSession: [vibe64SessionChangedServiceEvent()],
           advanceSession: [vibe64SessionChangedServiceEvent()],
+          broadcastComposerDraft: [vibe64ComposerChangedServiceEvent()],
           createSession: [vibe64SessionChangedServiceEvent({
             operation: "created"
           })],
+          recoverSessionWorktree: [vibe64SessionChangedServiceEvent({
+            operation: "updated"
+          })],
+          recoverStuckSessionStep: [vibe64SessionChangedServiceEvent({
+            operation: "updated"
+          })],
+          returnAgentControl: [vibe64SessionChangedServiceEvent()],
           rewindSession: [vibe64SessionChangedServiceEvent()],
           runSessionAction: [vibe64SessionChangedServiceEvent()],
           runSessionIntent: [vibe64SessionChangedServiceEvent()]

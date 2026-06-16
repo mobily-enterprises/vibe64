@@ -1,6 +1,5 @@
 import { computed } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
-import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
 import { usePaths } from "@jskit-ai/users-web/client/composables/usePaths";
 import {
@@ -78,29 +77,10 @@ function sessionIsAwaitingCodex(session = {}) {
   return String(source.stepMachine?.status || source.presentation?.step?.status || "").trim() === "awaiting_agent_result";
 }
 
-const CONVERSATION_LOG_REFRESH_REASONS = Object.freeze(new Set([
-  "codex-app-server-agent-result",
-  "codex-app-server-agent-result-invalid",
-  "codex-app-server-agent-result-missing",
-  "codex-app-server-agent-result-provider-failed",
-  "codex-app-server-reasoning-summary",
-  "codex-app-server-terminal-assistant-message",
-  "codex-app-server-terminal-user-message"
-]));
-
 function conversationLogRealtimeShouldRefresh({ payload = {} } = {}, sessionId = "") {
   const normalizedSessionId = String(sessionId || "").trim();
   const changedSessionId = String(payload.sessionId || payload.entityId || "").trim();
-  if (!normalizedSessionId || changedSessionId !== normalizedSessionId) {
-    return false;
-  }
-
-  const reason = String(payload.reason || "").trim();
-  if (!reason) {
-    return false;
-  }
-
-  return CONVERSATION_LOG_REFRESH_REASONS.has(reason);
+  return Boolean(normalizedSessionId && changedSessionId === normalizedSessionId);
 }
 
 function useVibe64ConversationLog({
@@ -139,7 +119,11 @@ function useVibe64ConversationLog({
     },
     readMethod: "GET",
     refreshOnPull: true,
-    requestRecoveryLabel: "Conversation history"
+    requestRecoveryLabel: "Conversation history",
+    realtime: {
+      event: VIBE64_SESSION_CHANGED_EVENT,
+      matches: (context) => conversationLogRealtimeShouldRefresh(context, sessionId.value)
+    }
   });
   let reloadInFlight = null;
   let reloadQueued = false;
@@ -161,13 +145,6 @@ function useVibe64ConversationLog({
       }
     }
   }
-
-  useRealtimeEvent({
-    enabled,
-    event: VIBE64_SESSION_CHANGED_EVENT,
-    matches: (context) => conversationLogRealtimeShouldRefresh(context, sessionId.value),
-    onEvent: reloadConversationLog
-  });
 
   const turns = computed(() => normalizeConversationLog(resource.data.value || {}, {
     pending: sessionIsAwaitingCodex(currentSession.value)

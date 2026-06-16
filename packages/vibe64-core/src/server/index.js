@@ -1,6 +1,7 @@
 export * from "./core.js";
 export * from "./accountRealtimeEvents.js";
 export * from "./codexAuthState.js";
+export * from "./composerRealtimeEvents.js";
 export * from "./deepFreeze.js";
 export * from "./doctorCheckItems.js";
 export * from "./featureRoutes.js";
@@ -16,3 +17,4 @@ export * from "./studioRoots.js";
 export * from "./terminalWebSocketRoutes.js";
 export * from "./projectState.js";
 export * from "./projectRuntimeIdentity.js";
+export * from "./projectRealtimeEvents.js";

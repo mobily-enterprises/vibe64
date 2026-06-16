@@ -5,9 +5,12 @@ import {
 
 import {
   VIBE64_CAPABILITIES_QUERY_LISTENER,
+  VIBE64_LIVE_QUERY_RECOVERY_LISTENER,
   invalidateVibe64CapabilitiesQueries,
+  invalidateVibe64LiveQueries,
   isVibe64CapabilitiesQuery,
-  registerVibe64CapabilitiesRealtimeListener
+  isVibe64LiveQuery,
+  registerVibe64RealtimeListeners
 } from "../../packages/main/src/client/vibe64CapabilitiesRealtime.js";
 import {
   VIBE64_ACCOUNTS_CHANGED_EVENT
@@ -64,7 +67,7 @@ describe("MainClientProvider realtime integration", () => {
       invalidateQueries
     });
 
-    registerVibe64CapabilitiesRealtimeListener(app);
+    registerVibe64RealtimeListeners(app);
     const listeners = resolveRealtimeClientListeners(app);
     const listener = listeners.find((entry) => entry.listenerId === VIBE64_CAPABILITIES_QUERY_LISTENER);
 
@@ -86,6 +89,33 @@ describe("MainClientProvider realtime integration", () => {
     expect(refetchType).toBe("all");
     expect(predicate({ queryKey: ["vibe64", "project", "beepollen", "app", "public", "capabilities"] })).toBe(true);
     expect(predicate({ queryKey: ["vibe64", "project", "beepollen", "app", "public", "sessions"] })).toBe(false);
+  });
+
+  it("registers an app-level reconnect listener that recovers active Vibe64 queries", async () => {
+    const app = createClientAppDouble();
+    const invalidateQueries = vi.fn(async () => null);
+    app.instance("jskit.client.query-client", {
+      invalidateQueries
+    });
+
+    registerVibe64RealtimeListeners(app);
+    const listeners = resolveRealtimeClientListeners(app);
+    const listener = listeners.find((entry) => entry.listenerId === VIBE64_LIVE_QUERY_RECOVERY_LISTENER);
+
+    expect(listener).toBeTruthy();
+    expect(listener.event).toBe("connect");
+
+    await listener.handle({
+      app,
+      event: "connect",
+      payload: {}
+    });
+
+    expect(invalidateQueries).toHaveBeenCalledTimes(1);
+    const [{ predicate, refetchType }] = invalidateQueries.mock.calls[0];
+    expect(refetchType).toBe("active");
+    expect(predicate({ queryKey: ["vibe64", "project", "beepollen", "app", "public", "sessions"] })).toBe(true);
+    expect(predicate({ queryKey: ["other", "project", "beepollen", "sessions"] })).toBe(false);
   });
 
   it("does not refetch inactive capability queries for in-progress auth events", async () => {
@@ -120,7 +150,26 @@ describe("MainClientProvider realtime integration", () => {
     })).toBe(false);
   });
 
+  it("matches Vibe64 live query keys for reconnect recovery", async () => {
+    const app = createClientAppDouble();
+    const invalidateQueries = vi.fn(async () => null);
+    app.instance("jskit.client.query-client", {
+      invalidateQueries
+    });
+
+    expect(isVibe64LiveQuery({
+      queryKey: ["vibe64", "project", "beepollen", "app", "public", "sessions"]
+    })).toBe(true);
+    expect(isVibe64LiveQuery({
+      queryKey: ["other", "project", "beepollen", "sessions"]
+    })).toBe(false);
+
+    await invalidateVibe64LiveQueries(app);
+    expect(invalidateQueries).toHaveBeenCalledTimes(1);
+  });
+
   it("does nothing when the query client has not been registered", async () => {
     expect(await Promise.resolve(invalidateVibe64CapabilitiesQueries(createClientAppDouble()))).toBeNull();
+    expect(await Promise.resolve(invalidateVibe64LiveQueries(createClientAppDouble()))).toBeNull();
   });
 });

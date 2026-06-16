@@ -4,6 +4,7 @@ import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
 import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
 import { usePaths } from "@jskit-ai/users-web/client/composables/usePaths";
 import {
+  VIBE64_SESSION_CHANGED_EVENT,
   VIBE64_SESSIONS_API_SUFFIX,
   VIBE64_SURFACE_ID,
   vibe64LaunchTargetsPath,
@@ -516,7 +517,14 @@ function useVibe64LaunchControls({
       projectSlug.value
     )),
     refreshOnPull: true,
-    requestRecoveryLabel: "Launch targets"
+    requestRecoveryLabel: "Launch targets",
+    realtime: {
+      event: VIBE64_SESSION_CHANGED_EVENT,
+      matches: ({ payload = {} } = {}) => {
+        const changedSessionId = String(payload.sessionId || payload.entityId || "").trim();
+        return Boolean(changedSessionId && changedSessionId === sessionId.value);
+      }
+    }
   });
 
   const startTerminalCommand = useCommand({

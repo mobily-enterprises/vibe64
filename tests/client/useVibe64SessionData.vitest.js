@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   selectedSessionRecord,
-  sessionDataRealtimeShouldRefresh,
   shouldPreserveSelectedSessionDuringRefresh
 } from "../../src/composables/useVibe64SessionData.js";
 
@@ -75,58 +74,5 @@ describe("useVibe64SessionData selected session record", () => {
       ],
       sessionListLoading: true
     })).toBe(false);
-  });
-
-  it("refreshes session data only for selected-session state changes that affect the UI", () => {
-    expect(sessionDataRealtimeShouldRefresh({
-      payload: {
-        sessionId: "session-1"
-      }
-    }, "session-1")).toBe(true);
-
-    expect(sessionDataRealtimeShouldRefresh({
-      payload: {
-        sessionId: "session-1",
-        stepStatus: "awaiting_agent_result"
-      }
-    }, "session-1")).toBe(false);
-
-    expect(sessionDataRealtimeShouldRefresh({
-      payload: {
-        sessionId: "session-1"
-      }
-    }, "session-1", {
-      stepMachine: {
-        status: "awaiting_agent_result"
-      }
-    })).toBe(false);
-
-    expect(sessionDataRealtimeShouldRefresh({
-      payload: {
-        reason: "codex-app-server-turn-claimed",
-        sessionId: "session-1"
-      }
-    }, "session-1")).toBe(true);
-
-    expect(sessionDataRealtimeShouldRefresh({
-      payload: {
-        reason: "codex-app-server-terminal-assistant-message",
-        sessionId: "session-1"
-      }
-    }, "session-1")).toBe(true);
-
-    expect(sessionDataRealtimeShouldRefresh({
-      payload: {
-        reason: "codex-app-server-turn-active",
-        sessionId: "session-1"
-      }
-    }, "session-1")).toBe(false);
-
-    expect(sessionDataRealtimeShouldRefresh({
-      payload: {
-        reason: "codex-app-server-agent-result",
-        sessionId: "session-2"
-      }
-    }, "session-1")).toBe(false);
   });
 });

@@ -201,12 +201,12 @@ describe("useVibe64ConversationLog", () => {
     })).toBe(false);
   });
 
-  it("refreshes only for selected-session conversation events", () => {
+  it("refreshes for any selected-session change event", () => {
     expect(conversationLogRealtimeShouldRefresh({
       payload: {
         sessionId: "session-1"
       }
-    }, "session-1")).toBe(false);
+    }, "session-1")).toBe(true);
 
     expect(conversationLogRealtimeShouldRefresh({
       payload: {
@@ -234,7 +234,7 @@ describe("useVibe64ConversationLog", () => {
         reason: "codex-app-server-turn-active",
         sessionId: "session-1"
       }
-    }, "session-1")).toBe(false);
+    }, "session-1")).toBe(true);
 
     expect(conversationLogRealtimeShouldRefresh({
       payload: {

@@ -42,6 +42,14 @@ export default Object.freeze({
         {
           subpath: "./server/accountRealtimeEvents",
           summary: "Shared Vibe64 account realtime event descriptors."
+        },
+        {
+          subpath: "./server/projectRealtimeEvents",
+          summary: "Shared Vibe64 project realtime event descriptors."
+        },
+        {
+          subpath: "./server/composerRealtimeEvents",
+          summary: "Shared Vibe64 composer realtime event descriptors."
         }
       ]
     }

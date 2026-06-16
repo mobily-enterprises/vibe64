@@ -10,10 +10,15 @@ import {
 
 const VIBE64_TERMINALS_SERVICE = "feature.vibe64-terminals.service";
 const TERMINAL_SESSION_MUTATION_EVENT_METHODS = Object.freeze([
+  "closeCodexTerminal",
+  "closeCommandTerminal",
+  "closeLaunchTargetTerminal",
+  "closeShellTerminal",
   "injectCodexPrompt",
   "startCodexTerminal",
   "startCommandTerminal",
-  "startLaunchTargetTerminal"
+  "startLaunchTargetTerminal",
+  "stopLaunchTargetTerminal"
 ]);
 
 class Vibe64TerminalsProvider {
@@ -59,13 +64,43 @@ class Vibe64TerminalsProvider {
           methodName: "startLaunchTargetTerminal",
           serviceToken: VIBE64_TERMINALS_SERVICE
         });
+        const publishLaunchTargetStopped = createVibe64SessionChangedPublisher({
+          domainEvents,
+          methodName: "stopLaunchTargetTerminal",
+          serviceToken: VIBE64_TERMINALS_SERVICE
+        });
+        const publishLaunchTargetClosed = createVibe64SessionChangedPublisher({
+          domainEvents,
+          methodName: "closeLaunchTargetTerminal",
+          serviceToken: VIBE64_TERMINALS_SERVICE
+        });
+        const publishCodexTerminalClosed = createVibe64SessionChangedPublisher({
+          domainEvents,
+          methodName: "closeCodexTerminal",
+          serviceToken: VIBE64_TERMINALS_SERVICE
+        });
+        const publishCommandTerminalClosed = createVibe64SessionChangedPublisher({
+          domainEvents,
+          methodName: "closeCommandTerminal",
+          serviceToken: VIBE64_TERMINALS_SERVICE
+        });
+        const publishShellTerminalClosed = createVibe64SessionChangedPublisher({
+          domainEvents,
+          methodName: "closeShellTerminal",
+          serviceToken: VIBE64_TERMINALS_SERVICE
+        });
         return createService({
           projectService: scope.make("feature.vibe64-project.service"),
           publishSessionChanged: {
             codexPrompt: publishCodexPromptChanged,
             codexTerminal: publishCodexTerminalChanged,
+            codexTerminalClosed: publishCodexTerminalClosed,
             commandTerminal: publishCommandTerminalChanged,
-            launchTarget: publishLaunchTargetChanged
+            commandTerminalClosed: publishCommandTerminalClosed,
+            launchTarget: publishLaunchTargetChanged,
+            launchTargetClosed: publishLaunchTargetClosed,
+            launchTargetStopped: publishLaunchTargetStopped,
+            shellTerminalClosed: publishShellTerminalClosed
           }
         });
       },

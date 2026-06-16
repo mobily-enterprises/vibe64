@@ -32,7 +32,8 @@ import {
 import {
   VIBE64_AGENT_RUN_STATE,
   normalizeVibe64AgentRunState,
-  vibe64AgentRunStateIsActive
+  vibe64AgentRunStateIsActive,
+  vibe64AgentRunStateIsTerminal
 } from "@local/vibe64-runtime/server/sessionStore";
 import {
   ensureCodexAppServerThreadForSession,
@@ -1894,6 +1895,57 @@ function createCodexTerminalController({
     return patch;
   }
 
+  function codexAppServerRunIdentityForPatch(session = {}, {
+    threadId = "",
+    turnId = ""
+  } = {}) {
+    const normalizedThreadId = normalizeText(threadId);
+    const normalizedTurnId = normalizeText(turnId);
+    if (normalizedTurnId) {
+      return {
+        threadId: normalizedThreadId,
+        turnId: normalizedTurnId
+      };
+    }
+    const currentTurn = codexAppServerTurnState(session);
+    const currentThreadId = normalizeText(currentTurn.threadId);
+    if (
+      normalizeText(currentTurn.turnId) &&
+      ["active", "finalizing"].includes(normalizeText(currentTurn.state)) &&
+      (!normalizedThreadId || !currentThreadId || normalizedThreadId === currentThreadId)
+    ) {
+      return {
+        threadId: normalizedThreadId || currentThreadId,
+        turnId: currentTurn.turnId
+      };
+    }
+    return {
+      threadId: normalizedThreadId,
+      turnId: normalizedTurnId
+    };
+  }
+
+  function codexAppServerRunPatchIsStaleAfterTerminalState(currentTurn = {}, patch = {}) {
+    const currentRunState = normalizeVibe64AgentRunState(currentTurn.runState);
+    const patchRunState = normalizeVibe64AgentRunState(patch.state);
+    if (!vibe64AgentRunStateIsTerminal(currentRunState)) {
+      return false;
+    }
+    if (patchRunState === VIBE64_AGENT_RUN_STATE.STARTING) {
+      return false;
+    }
+    const currentThreadId = normalizeText(currentTurn.threadId);
+    const patchThreadId = normalizeText(patch.providerThreadId);
+    const currentTurnId = normalizeText(currentTurn.turnId);
+    const patchTurnId = normalizeText(patch.providerTurnId);
+    const threadMatches = !patchThreadId || !currentThreadId || patchThreadId === currentThreadId;
+    const turnMatches = !patchTurnId || (
+      Boolean(currentTurnId) &&
+      currentTurnId === patchTurnId
+    );
+    return threadMatches && turnMatches;
+  }
+
   async function claimCodexAppServerTurnStart(runtime, sessionId = "") {
     const normalizedSessionId = normalizeText(sessionId);
     if (!normalizedSessionId) {
@@ -1970,16 +2022,44 @@ function createCodexTerminalController({
     const session = typeof runtime?.getSession === "function"
       ? await runtime.getSession(normalizedSessionId).catch(() => null)
       : null;
+    const identity = codexAppServerRunIdentityForPatch(session || {}, {
+      threadId,
+      turnId
+    });
     const runPatch = codexAppServerAgentRunPatch({
       error,
       runState,
       session: session || {},
       status,
-      threadId,
-      turnId,
+      threadId: identity.threadId,
+      turnId: identity.turnId,
       updatedAt
     });
+    let wrote = false;
+    let stale = null;
     await runtime.store.mutateSession(normalizedSessionId, async () => {
+      const currentSession = typeof runtime?.getSession === "function"
+        ? await runtime.getSession(normalizedSessionId).catch(() => null)
+        : null;
+      const currentTurn = codexAppServerTurnState(currentSession || {});
+      if (codexAppServerRunPatchIsStaleAfterTerminalState(currentTurn, runPatch)) {
+        stale = {
+          currentState: currentTurn.state,
+          currentStatus: currentTurn.status,
+          currentThreadId: currentTurn.threadId,
+          currentTurnId: currentTurn.turnId,
+          patchState: runPatch.state,
+          patchStatus: runPatch.providerStatus,
+          patchThreadId: runPatch.providerThreadId,
+          patchTurnId: runPatch.providerTurnId
+        };
+        vibe64SessionDebugLog("server.codexTerminal.appServerAgentRun.staleTerminalPatch", {
+          ...stale,
+          publishReason,
+          sessionId: normalizedSessionId
+        });
+        return;
+      }
       await runtime.store.writeAgentRunEvent(normalizedSessionId, CODEX_APP_SERVER_AGENT_RUN_ID, {
         event: {
           kind: publishReason || "codex-app-server-turn-state",
@@ -1988,7 +2068,16 @@ function createCodexTerminalController({
         },
         patch: runPatch
       });
+      wrote = true;
     });
+    if (!wrote) {
+      return {
+        ok: true,
+        processed: false,
+        reason: "stale_terminal_turn_state",
+        stale
+      };
+    }
     await publishSessionChanged(normalizedSessionId, {
       reason: publishReason || "codex-app-server-turn-state"
     });
@@ -3688,7 +3777,8 @@ function createCodexTerminalController({
     const turnId = normalizeText(turn.turnId);
     if (!threadId || !turnId) {
       return stopCodexAppServerTurnWithProviderFailure(sessionId, threadId, turnId, {
-        error: "No active Codex app-server turn is available to interrupt.",
+        error: turn.active ? "Stopped by user." : "No active Codex app-server turn is available to interrupt.",
+        ok: turn.active,
         status: "interrupted",
       });
     }

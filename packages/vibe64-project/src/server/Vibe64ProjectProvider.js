@@ -6,8 +6,13 @@ import {
 import {
   getStudioProjectContext
 } from "@local/vibe64-core/server/studioProjectContext";
+import {
+  vibe64ProjectChangedServiceEvent
+} from "@local/vibe64-core/server/projectRealtimeEvents";
 import { featureActions } from "./actions.js";
 import { registerRoutes } from "./registerRoutes.js";
+
+const VIBE64_PROJECT_SERVICE = "feature.vibe64-project.service";
 
 class Vibe64ProjectProvider {
   static id = "feature.vibe64-project";
@@ -26,11 +31,23 @@ class Vibe64ProjectProvider {
     const projectContext = getStudioProjectContext();
 
     app.service(
-      "feature.vibe64-project.service",
+      VIBE64_PROJECT_SERVICE,
       () => {
         return createService({
           projectContext
         });
+      },
+      {
+        events: {
+          createProject: [vibe64ProjectChangedServiceEvent({
+            operation: "created"
+          })],
+          saveProjectConfig: [vibe64ProjectChangedServiceEvent()],
+          saveProjectType: [vibe64ProjectChangedServiceEvent()],
+          selectProject: [vibe64ProjectChangedServiceEvent({
+            operation: "updated"
+          })]
+        }
       }
     );
 

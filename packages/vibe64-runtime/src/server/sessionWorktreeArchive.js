@@ -350,7 +350,7 @@ async function removeGitWorktree({
       "vibe64_worktree_remove_not_git_root"
     );
   }
-  const removeResult = await runGit(targetRoot, ["worktree", "remove", "--force", worktreePath], {
+  const removeResult = await runGit(targetRoot, ["worktree", "remove", "--force", "--force", worktreePath], {
     timeout: SNAPSHOT_TIMEOUT_MS
   });
   if (!removeResult.ok) {

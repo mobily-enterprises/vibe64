@@ -6,6 +6,7 @@ import {
 } from "@/lib/vibe64RequestConfig.js";
 import {
   PROJECT_SELECTION_ENDPOINT,
+  VIBE64_PROJECT_CHANGED_EVENT,
   projectSelectionQueryKey
 } from "@/lib/studioGateApi.js";
 import {
@@ -37,7 +38,10 @@ function useVibe64ProjectsResource({
     path: PROJECT_SELECTION_ENDPOINT,
     queryKey: computed(() => projectSelectionQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC, slug.value)),
     refreshOnPull: true,
-    requestRecoveryLabel: requestRecoveryLabel
+    requestRecoveryLabel: requestRecoveryLabel,
+    realtime: {
+      event: VIBE64_PROJECT_CHANGED_EVENT
+    }
   });
   const loadError = computed(() => vibe64ResourceResponseError(resource.data.value, fallbackLoadError) || resource.loadError.value);
   const currentProject = computed(() => resource.data.value?.currentProject || null);
@@ -76,7 +80,10 @@ function useVibe64ProjectAccessResource(projectSlug) {
     path: computed(() => slug.value ? vibe64ProjectAccessPath(slug.value) : ""),
     queryKey: computed(() => vibe64ProjectAccessQueryKey(slug.value)),
     refreshOnPull: true,
-    requestRecoveryLabel: "Project access"
+    requestRecoveryLabel: "Project access",
+    realtime: {
+      event: VIBE64_PROJECT_CHANGED_EVENT
+    }
   });
   const loadError = computed(() => vibe64ResourceResponseError(resource.data.value, "Project access could not load.") || resource.loadError.value);
   const status = computed(() => resource.data.value || null);

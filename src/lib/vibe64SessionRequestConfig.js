@@ -9,6 +9,7 @@ import {
 const VIBE64_SESSIONS_API_SUFFIX = "/vibe64/sessions";
 const VIBE64_API_SUFFIX = "/vibe64";
 const VIBE64_SESSION_CHANGED_EVENT = "vibe64.session.changed";
+const VIBE64_COMPOSER_CHANGED_EVENT = "vibe64.composer.changed";
 const DEFAULT_MAX_OPEN_SESSIONS = 3;
 const SELECTED_SESSION_STORAGE_KEY = "vibe64:selected-session-id";
 
@@ -88,6 +89,10 @@ function vibe64CodexThreadsReconcilePath(vibe64ApiPath = "") {
 
 function vibe64ConversationLogPath(sessionsApiPath = "", sessionId = "") {
   return vibe64SessionPath(sessionsApiPath, sessionId, "/conversation-log");
+}
+
+function vibe64ComposerDraftPath(sessionsApiPath = "", sessionId = "") {
+  return vibe64SessionPath(sessionsApiPath, sessionId, "/composer-draft");
 }
 
 function vibe64FixCodexTerminalPath(vibe64ApiPath = "", jobId = "", terminalSessionId = "") {
@@ -221,6 +226,7 @@ function normalizeVibe64ProjectToolFixInput(input = {}) {
 
 export {
   VIBE64_SESSION_CHANGED_EVENT,
+  VIBE64_COMPOSER_CHANGED_EVENT,
   VIBE64_API_SUFFIX,
   VIBE64_SESSIONS_API_SUFFIX,
   VIBE64_SURFACE_ID,
@@ -235,6 +241,7 @@ export {
   vibe64CommandTerminalPath,
   vibe64ConversationLogPath,
   vibe64ConversationLogQueryKey,
+  vibe64ComposerDraftPath,
   vibe64FixCodexTerminalPath,
   vibe64GlobalCodexTerminalPath,
   vibe64IntentPath,

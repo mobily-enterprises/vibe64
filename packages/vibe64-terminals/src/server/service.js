@@ -148,6 +148,16 @@ function createService({
     projectService
   });
 
+  async function publishTerminalSessionChanged(kind = "", sessionId = "", reason = "") {
+    const publisher = publishSessionChanged?.[kind];
+    if (typeof publisher !== "function" || !String(sessionId || "").trim()) {
+      return null;
+    }
+    return publisher(sessionId, {
+      reason
+    });
+  }
+
   return Object.freeze({
     async closeSessionTerminals(sessionId) {
       return closeTerminalControllersForSession(sessionId, [
@@ -168,8 +178,10 @@ function createService({
       });
     },
 
-    closeCodexTerminal(sessionId, terminalSessionId) {
-      return codex.closeTerminal(sessionId, terminalSessionId);
+    async closeCodexTerminal(sessionId, terminalSessionId) {
+      const result = await codex.closeTerminal(sessionId, terminalSessionId);
+      await publishTerminalSessionChanged("codexTerminalClosed", sessionId, "codex-terminal-closed");
+      return result;
     },
 
     closeGlobalCodexTerminal(terminalSessionId) {
@@ -180,20 +192,26 @@ function createService({
       return codex.closeFixTerminal(jobId, terminalSessionId);
     },
 
-    closeCommandTerminal(sessionId, terminalSessionId) {
-      return command.closeTerminal(sessionId, terminalSessionId);
+    async closeCommandTerminal(sessionId, terminalSessionId) {
+      const result = await command.closeTerminal(sessionId, terminalSessionId);
+      await publishTerminalSessionChanged("commandTerminalClosed", sessionId, "command-terminal-closed");
+      return result;
     },
 
     closeProjectToolTerminal(toolId, terminalSessionId) {
       return projectTool.closeTerminal(toolId, terminalSessionId);
     },
 
-    closeLaunchTargetTerminal(sessionId, terminalSessionId) {
-      return launchTarget.closeTerminal(sessionId, terminalSessionId);
+    async closeLaunchTargetTerminal(sessionId, terminalSessionId) {
+      const result = await launchTarget.closeTerminal(sessionId, terminalSessionId);
+      await publishTerminalSessionChanged("launchTargetClosed", sessionId, "launch-target-closed");
+      return result;
     },
 
-    closeShellTerminal(sessionId, terminalSessionId) {
-      return shell.closeTerminal(sessionId, terminalSessionId);
+    async closeShellTerminal(sessionId, terminalSessionId) {
+      const result = await shell.closeTerminal(sessionId, terminalSessionId);
+      await publishTerminalSessionChanged("shellTerminalClosed", sessionId, "shell-terminal-closed");
+      return result;
     },
 
     injectCodexPrompt(sessionId, handoff = {}, options = {}) {
@@ -339,8 +357,10 @@ function createService({
       return launchTarget.startTerminal(sessionId, input);
     },
 
-    stopLaunchTargetTerminal(sessionId, terminalSessionId) {
-      return launchTarget.stopTerminal(sessionId, terminalSessionId);
+    async stopLaunchTargetTerminal(sessionId, terminalSessionId) {
+      const result = await launchTarget.stopTerminal(sessionId, terminalSessionId);
+      await publishTerminalSessionChanged("launchTargetStopped", sessionId, "launch-target-stopped");
+      return result;
     },
 
     startShellTerminal(sessionId, input = {}) {

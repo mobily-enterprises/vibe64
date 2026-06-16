@@ -24,6 +24,12 @@ import {
   useVibe64AutopilotComposer
 } from "@/composables/useVibe64AutopilotComposer.js";
 import {
+  useVibe64ComposerDraftSync
+} from "@/composables/useVibe64ComposerDraftSync.js";
+import {
+  useVibe64ProjectSlug
+} from "@/composables/useVibe64ProjectScope.js";
+import {
   useVibe64AutopilotController
 } from "@/composables/useVibe64AutopilotController.js";
 import {
@@ -174,6 +180,7 @@ const vibe64AutopilotViewProps = {
 };
 
 function useVibe64AutopilotView(props, emit) {
+  const projectSlug = useVibe64ProjectSlug();
   const Vibe64FixCodexDialog = defineVibe64AsyncComponent({
     label: "Fix Codex dialog",
     loader: () => import("@/components/studio/Vibe64FixCodexDialog.vue"),
@@ -690,7 +697,7 @@ function useVibe64AutopilotView(props, emit) {
     selectedControlValues,
     restoreControlDraft,
     submitSelectedControl,
-    updateSelectedControlValue
+    updateSelectedControlValue: updateLocalSelectedControlValue
   } = useVibe64AutopilotComposer({
     conversationLog: computed(() => props.conversationLog),
     controls: allScreenControls,
@@ -701,6 +708,22 @@ function useVibe64AutopilotView(props, emit) {
     onRunControl: runWorkflowControl,
     primaryIntentId,
     running: composerInputLocked
+  });
+  const composerDraftSync = useVibe64ComposerDraftSync({
+    applyDraft(fields = {}) {
+      const controlId = String(selectedControl.value?.id || "").trim();
+      const control = allScreenControls.value.find((item) => item.id === controlId) || selectedControl.value;
+      if (!control?.id) {
+        return;
+      }
+      restoreControlDraft(control, fields);
+    },
+    enabled: computed(() => props.active !== false),
+    projectSlug,
+    selectedControl,
+    selectedControlValues,
+    sessionId,
+    sessionsApiPath: props.sessionsApiPath
   });
   const workflowButtonControls = computed(() => {
     return screenControls.value.map((control) => ({
@@ -798,6 +821,11 @@ function useVibe64AutopilotView(props, emit) {
       }
     };
     return id;
+  }
+
+  function updateSelectedControlValue(name = "", value = "") {
+    updateLocalSelectedControlValue(name, value);
+    composerDraftSync.publishDraftChange(name, selectedControlValues.value);
   }
 
   function markOptimisticComposerTurnFailed(submissionId = "", {

@@ -9,6 +9,7 @@
     "./server/authCookies": "./src/server/authCookies.js",
     "./server/core": "./src/server/core.js",
     "./server/codexAuthState": "./src/server/codexAuthState.js",
+    "./server/composerRealtimeEvents": "./src/server/composerRealtimeEvents.js",
     "./server/deepFreeze": "./src/server/deepFreeze.js",
     "./server/doctorCheckItems": "./src/server/doctorCheckItems.js",
     "./server/featureRoutes": "./src/server/featureRoutes.js",
@@ -26,6 +27,7 @@
     "./server/projectState": "./src/server/projectState.js",
     "./server/projectRuntimeIdentity": "./src/server/projectRuntimeIdentity.js",
     "./server/projectRequestContext": "./src/server/projectRequestContext.js",
+    "./server/projectRealtimeEvents": "./src/server/projectRealtimeEvents.js",
     "./server/previewAuth": "./src/server/previewAuth.js",
     "./shared": "./src/shared/index.js"
   },

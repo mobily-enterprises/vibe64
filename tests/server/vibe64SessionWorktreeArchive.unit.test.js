@@ -120,6 +120,47 @@ test("archives, removes, and reinstates dirty worktrees with adapter-owned dispo
   });
 });
 
+test("archive removes registered worktrees with ignored generated files", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createGitProject(targetRoot);
+    await writeProjectFile(targetRoot, ".gitignore", "src/typed-router.d.ts\n");
+    await git(targetRoot, ["add", ".gitignore"]);
+    await git(targetRoot, ["commit", "-m", "ignore generated router types"]);
+    const baseCommit = await git(targetRoot, ["rev-parse", "--verify", "HEAD"]);
+    const runtime = new Vibe64SessionRuntime({
+      adapter: new ArchiveTestAdapter(),
+      targetRoot
+    });
+    const session = await runtime.createSession({
+      metadata: {
+        base_branch: "main",
+        base_commit: baseCommit,
+        branch: "vibe64/ignored_generated_file"
+      },
+      sessionId: "ignored_generated_file"
+    });
+    const worktreePath = path.join(session.sessionRoot, "worktree");
+    await git(targetRoot, ["worktree", "add", "-b", "vibe64/ignored_generated_file", worktreePath, "HEAD"]);
+    await runtime.store.writeMetadataValue("ignored_generated_file", "worktree_path", worktreePath);
+    await runtime.store.writeCompletedStep("ignored_generated_file", "worktree_created", {
+      message: "Worktree created."
+    });
+
+    await writeProjectFile(worktreePath, "src/typed-router.d.ts", "declare module 'typed-router';\n");
+
+    const archiveSession = await runtime.getSession("ignored_generated_file");
+    const archiveResult = await runtime.archiveSessionWorktree(archiveSession, {
+      reason: "abandoned"
+    });
+    assert.equal(archiveResult.removed, true);
+    assert.equal(await pathExists(worktreePath), false);
+
+    const archivedMetadata = await runtime.store.readMetadata("ignored_generated_file");
+    assert.equal(archivedMetadata.worktree_removed, "yes");
+    assert.equal(archivedMetadata.worktree_recovery_dirty, "no");
+  });
+});
+
 test("archive removes a session-owned ordinary worktree directory without reading the parent repo", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const baseCommit = await createGitProject(targetRoot);

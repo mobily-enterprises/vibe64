@@ -8,6 +8,7 @@ import {
 import {
   PROJECT_SELECTION_ENDPOINT,
   VIBE64_PROJECT_CREATE_API_SUFFIX,
+  VIBE64_PROJECT_CHANGED_EVENT,
   VIBE64_PROJECT_SELECT_API_SUFFIX,
   projectSelectionQueryKey
 } from "@/lib/studioGateApi.js";
@@ -28,7 +29,10 @@ function useProjectSelectionGate(emit) {
     path: PROJECT_SELECTION_ENDPOINT,
     queryKey: computed(() => projectSelectionQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC, projectSlug.value)),
     refreshOnPull: true,
-    requestRecoveryLabel: "Projects"
+    requestRecoveryLabel: "Projects",
+    realtime: {
+      event: VIBE64_PROJECT_CHANGED_EVENT
+    }
   });
 
   const projectSelectionView = proxyRefs({

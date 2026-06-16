@@ -15,6 +15,9 @@ import {
 import {
   VIBE64_SURFACE_ID
 } from "@/lib/vibe64RequestConfig.js";
+import {
+  VIBE64_PROJECT_CHANGED_EVENT
+} from "@/lib/studioGateApi.js";
 
 const vibe64ProjectToolsEmits = [
   "global-codex-open",
@@ -48,7 +51,10 @@ function useVibe64ProjectTools(props, emit) {
     path: VIBE64_TOOLS_ENDPOINT,
     queryKey: ["vibe64", "project-tools"],
     refreshOnPull: true,
-    requestRecoveryLabel: "Project tools"
+    requestRecoveryLabel: "Project tools",
+    realtime: {
+      event: VIBE64_PROJECT_CHANGED_EVENT
+    }
   });
   const runPromptToolCommand = useCommand({
     access: "never",

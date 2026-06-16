@@ -9,6 +9,7 @@ import {
   PROJECT_CONFIG_ENDPOINT,
   PROJECT_TYPE_ENDPOINT,
   VIBE64_PROJECT_CONFIG_API_SUFFIX,
+  VIBE64_PROJECT_CHANGED_EVENT,
   projectConfigQueryKey,
   projectTypeQueryKey
 } from "@/lib/studioGateApi.js";
@@ -278,7 +279,10 @@ function useStudioEndpointView({
     queryKey: computed(() => queryKeyFactory(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC, projectSlug.value)),
     readQuery,
     refreshOnPull: true,
-    requestRecoveryLabel: requestRecoveryLabel
+    requestRecoveryLabel: requestRecoveryLabel,
+    realtime: {
+      event: VIBE64_PROJECT_CHANGED_EVENT
+    }
   });
 
   return proxyRefs({

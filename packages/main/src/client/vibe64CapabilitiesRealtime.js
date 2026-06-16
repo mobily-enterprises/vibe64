@@ -7,12 +7,15 @@ import {
 } from "/src/lib/vibe64SessionDebugLog.js";
 import {
   VIBE64_CAPABILITIES_QUERY_LISTENER,
+  VIBE64_LIVE_QUERY_RECOVERY_LISTENER,
   accountRealtimePayloadDebugSummary,
   invalidateVibe64CapabilitiesQueries,
-  isVibe64CapabilitiesQuery
+  invalidateVibe64LiveQueries,
+  isVibe64CapabilitiesQuery,
+  isVibe64LiveQuery
 } from "/src/lib/vibe64CapabilitiesInvalidation.js";
 
-function registerVibe64CapabilitiesRealtimeListener(app) {
+function registerVibe64RealtimeListeners(app) {
   registerRealtimeClientListener(app, VIBE64_CAPABILITIES_QUERY_LISTENER, () => ({
     listenerId: VIBE64_CAPABILITIES_QUERY_LISTENER,
     event: VIBE64_ACCOUNTS_CHANGED_EVENT,
@@ -22,6 +25,19 @@ function registerVibe64CapabilitiesRealtimeListener(app) {
         payload: accountRealtimePayloadDebugSummary(payload)
       });
       return invalidateVibe64CapabilitiesQueries(runtimeApp, {
+        event,
+        payload
+      });
+    }
+  }));
+  registerRealtimeClientListener(app, VIBE64_LIVE_QUERY_RECOVERY_LISTENER, () => ({
+    listenerId: VIBE64_LIVE_QUERY_RECOVERY_LISTENER,
+    event: "connect",
+    handle({ app: runtimeApp, event, payload }) {
+      vibe64SessionDebugLog("client.realtime.connected.recovery", {
+        sourceEvent: event
+      });
+      return invalidateVibe64LiveQueries(runtimeApp, {
         event,
         payload
       });
@@ -53,7 +69,10 @@ function registerVibe64CapabilitiesPlaywrightHook(app) {
 
 export {
   VIBE64_CAPABILITIES_QUERY_LISTENER,
+  VIBE64_LIVE_QUERY_RECOVERY_LISTENER,
   invalidateVibe64CapabilitiesQueries,
+  invalidateVibe64LiveQueries,
   isVibe64CapabilitiesQuery,
-  registerVibe64CapabilitiesRealtimeListener
+  isVibe64LiveQuery,
+  registerVibe64RealtimeListeners
 };

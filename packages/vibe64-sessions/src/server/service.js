@@ -962,6 +962,30 @@ function createService({
   }
 
   return Object.freeze({
+    async broadcastComposerDraft(sessionId, input = {}) {
+      const payload = {
+        controlId: normalizedInputText(input?.controlId),
+        fieldName: normalizedInputText(input?.fieldName),
+        fields: input?.fields && typeof input.fields === "object" && !Array.isArray(input.fields)
+          ? input.fields
+          : {},
+        originId: normalizedInputText(input?.originId),
+        projectSlug: normalizedInputText(input?.projectSlug),
+        sessionId: normalizedInputText(sessionId),
+        updatedAt: new Date().toISOString()
+      };
+      if (!payload.sessionId || !payload.controlId || !payload.fieldName || !payload.originId) {
+        return {
+          ok: false,
+          error: "Composer draft updates require a session, control, field, and origin."
+        };
+      }
+      return {
+        ok: true,
+        draft: payload
+      };
+    },
+
     async advanceSession(sessionId, expected = {}) {
       const workflowExpected = stripInternalInput(expected);
       const startedAtMs = Date.now();

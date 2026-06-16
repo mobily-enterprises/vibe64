@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  VIBE64_COMPOSER_CHANGED_EVENT,
   VIBE64_SESSION_CHANGED_EVENT,
   SELECTED_SESSION_STORAGE_KEY,
   selectedSessionStorageKey,
@@ -8,6 +9,7 @@ import {
   vibe64ArtifactPreviewPath,
   vibe64ArtifactPreviewQueryKey,
   vibe64CodexAttachmentPath,
+  vibe64ComposerDraftPath,
   vibe64ConversationLogPath,
   vibe64ConversationLogQueryKey,
   vibe64ProjectToolFixPath,
@@ -24,6 +26,7 @@ describe("Vibe64 session request config", () => {
   it("uses current Vibe64 storage and route names", () => {
     expect(SELECTED_SESSION_STORAGE_KEY).toBe("vibe64:selected-session-id");
     expect(VIBE64_SESSION_CHANGED_EVENT).toBe("vibe64.session.changed");
+    expect(VIBE64_COMPOSER_CHANGED_EVENT).toBe("vibe64.composer.changed");
     expect(vibe64SessionsQueryKey("home", "public")).toEqual([
       "vibe64",
       "project",
@@ -88,6 +91,7 @@ describe("Vibe64 session request config", () => {
     expect(vibe64ActionPath(apiPath, sessionId, "make plan")).toBe(`${apiPath}/2026-05-16_01%3Atwo/actions/make%20plan`);
     expect(vibe64ArtifactPreviewPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/artifact-preview`);
     expect(vibe64CodexAttachmentPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/codex-attachments`);
+    expect(vibe64ComposerDraftPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/composer-draft`);
     expect(vibe64ConversationLogPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/conversation-log`);
     expect(vibe64TerminalFailureFixPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/terminal-failure-fix`);
   });
