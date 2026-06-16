@@ -10,7 +10,9 @@ import {
   invalidateVibe64LiveQueries,
   isVibe64CapabilitiesQuery,
   isVibe64LiveQuery,
-  registerVibe64RealtimeListeners
+  registerVibe64RealtimeListeners,
+  vibe64QueryClientDebugSummary,
+  vibe64RealtimeSocketDebugSummary
 } from "../../packages/main/src/client/vibe64CapabilitiesRealtime.js";
 import {
   VIBE64_ACCOUNTS_CHANGED_EVENT
@@ -166,6 +168,101 @@ describe("MainClientProvider realtime integration", () => {
 
     await invalidateVibe64LiveQueries(app);
     expect(invalidateQueries).toHaveBeenCalledTimes(1);
+  });
+
+  it("summarizes Vibe64 query state for reconnect diagnostics", () => {
+    const queryClient = {
+      getQueryCache() {
+        return {
+          getAll() {
+            return [
+              {
+                getObserversCount: () => 2,
+                isActive: () => true,
+                queryHash: "vibe64-sessions",
+                queryKey: ["vibe64", "project", "beepollen", "sessions"],
+                state: {
+                  fetchStatus: "idle",
+                  status: "success"
+                }
+              },
+              {
+                getObserversCount: () => 1,
+                isActive: () => true,
+                queryHash: "vibe64-conversation",
+                queryKey: ["vibe64", "project", "beepollen", "conversation-log"],
+                state: {
+                  error: new Error("Network request failed."),
+                  fetchStatus: "idle",
+                  status: "error"
+                }
+              },
+              {
+                getObserversCount: () => 0,
+                queryHash: "other",
+                queryKey: ["other", "project", "beepollen"],
+                state: {
+                  fetchStatus: "fetching",
+                  status: "pending"
+                }
+              }
+            ];
+          }
+        };
+      }
+    };
+
+    expect(vibe64QueryClientDebugSummary(queryClient)).toEqual({
+      queryActive: 2,
+      queryError: 1,
+      queryFetching: 1,
+      queryTotal: 3,
+      vibe64Active: 2,
+      vibe64Error: 1,
+      vibe64ErrorQueries: [
+        {
+          active: true,
+          fetchStatus: "idle",
+          observerCount: 1,
+          queryHash: "vibe64-conversation",
+          queryKey: ["vibe64", "project", "beepollen", "conversation-log"],
+          status: "error"
+        }
+      ],
+      vibe64Fetching: 0,
+      vibe64Total: 2
+    });
+  });
+
+  it("summarizes realtime socket listener counts for reconnect diagnostics", () => {
+    const app = createClientAppDouble();
+    app.instance("runtime.realtime.client.socket", {
+      _anyListeners: [() => null],
+      _callbacks: {
+        "$connect": [() => null],
+        "$disconnect": [() => null, () => null],
+        "$vibe64.session.changed": [() => null, () => null, () => null]
+      },
+      connected: true,
+      id: "socket-1",
+      receiveBuffer: [{ event: "queued" }],
+      sendBuffer: []
+    });
+
+    expect(vibe64RealtimeSocketDebugSummary(app)).toEqual({
+      anyListenerCount: 1,
+      listenerCounts: {
+        connect: 1,
+        disconnect: 2,
+        "vibe64.session.changed": 3
+      },
+      listenerTotal: 6,
+      receiveBufferLength: 1,
+      sendBufferLength: 0,
+      socketConnected: true,
+      socketId: "socket-1",
+      socketPresent: true
+    });
   });
 
   it("does nothing when the query client has not been registered", async () => {

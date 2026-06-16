@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  conversationLogRecoveryStateKey,
   conversationLogRealtimeShouldRefresh,
   normalizeConversationLog,
   sessionIsAwaitingCodex
@@ -199,6 +200,32 @@ describe("useVibe64ConversationLog", () => {
         status: "confirm_files"
       }
     })).toBe(false);
+  });
+
+  it("builds a stable recovery key from canonical session state", () => {
+    expect(conversationLogRecoveryStateKey({
+      currentStep: "maintenance_conversation",
+      nextStepId: "local_session_finished",
+      presentation: {
+        auto: {
+          nextOperation: {
+            actionId: "send_message",
+            id: "operation-1"
+          }
+        },
+        step: {
+          nextStepId: "local_session_finished",
+          status: "ready"
+        }
+      },
+      sessionId: "session-1",
+      status: "active",
+      stepMachine: {
+        nextStepId: "local_session_finished",
+        status: "awaiting_agent_result"
+      },
+      stepStatus: "ready"
+    })).toBe("session-1|active|maintenance_conversation|local_session_finished|ready|awaiting_agent_result|local_session_finished|ready|local_session_finished|operation-1|send_message");
   });
 
   it("refreshes for any selected-session change event", () => {

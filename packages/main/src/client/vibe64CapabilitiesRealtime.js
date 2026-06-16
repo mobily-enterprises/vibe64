@@ -12,7 +12,9 @@ import {
   invalidateVibe64CapabilitiesQueries,
   invalidateVibe64LiveQueries,
   isVibe64CapabilitiesQuery,
-  isVibe64LiveQuery
+  isVibe64LiveQuery,
+  vibe64QueryClientDebugSummary,
+  vibe64RealtimeSocketDebugSummary
 } from "/src/lib/vibe64CapabilitiesInvalidation.js";
 
 function registerVibe64RealtimeListeners(app) {
@@ -74,5 +76,7 @@ export {
   invalidateVibe64LiveQueries,
   isVibe64CapabilitiesQuery,
   isVibe64LiveQuery,
-  registerVibe64RealtimeListeners
+  registerVibe64RealtimeListeners,
+  vibe64QueryClientDebugSummary,
+  vibe64RealtimeSocketDebugSummary
 };

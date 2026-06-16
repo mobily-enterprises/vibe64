@@ -4,6 +4,9 @@ import {
   blockingVibe64SessionPageError
 } from "@/lib/vibe64SessionPanelModel.js";
 import {
+  vibe64SessionDebugLog
+} from "@/lib/vibe64SessionDebugLog.js";
+import {
   useVibe64SessionData
 } from "@/composables/useVibe64SessionData.js";
 
@@ -118,6 +121,14 @@ function useVibe64SessionPanel(props, emit) {
     pageError.value &&
     dismissedPageError.value !== pageError.value
   ));
+  const runtimeHostDiagnostics = computed(() => sessionPanelRuntimeHostDiagnostics({
+    mountedRuntimeSessionIds: mountedRuntimeSessionIds.value,
+    runtimeHostSessionIds: runtimeHostSessionIds.value,
+    runtimeStateBySessionId,
+    selectedSessionId: selection.selectedSessionId,
+    sessionLoadError: sessionLoadError.value,
+    sessions: toolbar.sessions || []
+  }));
 
   watch(sessionData.sessions, (sessions = []) => {
     if (sessionLoadError.value) {
@@ -153,6 +164,12 @@ function useVibe64SessionPanel(props, emit) {
     if (!error) {
       dismissedPageError.value = "";
     }
+  });
+
+  watch(runtimeHostDiagnostics, (diagnostics) => {
+    vibe64SessionDebugLog("client.sessionPanel.runtimeHosts.changed", diagnostics);
+  }, {
+    immediate: true
   });
 
   return {
@@ -265,7 +282,45 @@ function sessionPanelPageErrorMessage(error = "") {
   return message;
 }
 
+function sessionPanelRuntimeHostDiagnostics({
+  mountedRuntimeSessionIds = [],
+  runtimeHostSessionIds = [],
+  runtimeStateBySessionId = {},
+  selectedSessionId = "",
+  sessionLoadError = false,
+  sessions = []
+} = {}) {
+  const mountedIds = mountedRuntimeSessionIds.map((sessionId) => String(sessionId || "").trim()).filter(Boolean);
+  const renderedIds = runtimeHostSessionIds.map((sessionId) => String(sessionId || "").trim()).filter(Boolean);
+  const sessionIds = sessions.map((session) => String(session?.sessionId || "").trim()).filter(Boolean);
+  const renderedSet = new Set(renderedIds);
+  const selectedId = String(selectedSessionId || "").trim();
+  const sessionSet = new Set(sessionIds);
+  const stateIds = Object.keys(runtimeStateBySessionId || {}).map((sessionId) => String(sessionId || "").trim()).filter(Boolean);
+  const states = stateIds.map((sessionId) => runtimeStateBySessionId[sessionId]).filter(Boolean);
+
+  return {
+    activeRuntimeHostCount: selectedId && mountedIds.includes(selectedId) ? 1 : 0,
+    busyRuntimeHostCount: states.filter((state) => Boolean(state?.busy)).length,
+    hiddenMountedRuntimeHostCount: mountedIds.filter((sessionId) => sessionId !== selectedId).length,
+    mountedRuntimeHostCount: mountedIds.length,
+    mountedRuntimeSessionIds: mountedIds,
+    orphanedMountedRuntimeHostCount: mountedIds.filter((sessionId) => !sessionSet.has(sessionId)).length,
+    pageErrorRuntimeHostCount: states.filter((state) => String(state?.pageError || "").trim()).length,
+    renderedRuntimeHostCount: renderedIds.length,
+    renderedRuntimeSessionIds: renderedIds,
+    runtimeStateCount: stateIds.length,
+    selectedSessionId: selectedId,
+    sessionLoadError: Boolean(sessionLoadError),
+    unrenderedMountedRuntimeHostCount: mountedIds.filter((sessionId) => !renderedSet.has(sessionId)).length,
+    visibleRuntimeHostCount: renderedIds.length,
+    visibleRuntimeSessionIds: renderedIds,
+    visibleSessionCount: sessionIds.length
+  };
+}
+
 export {
+  sessionPanelRuntimeHostDiagnostics,
   useVibe64SessionPanel,
   vibe64SessionPanelEmits,
   vibe64SessionPanelProps

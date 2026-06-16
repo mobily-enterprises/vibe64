@@ -1,4 +1,4 @@
-import { computed } from "vue";
+import { computed, watch } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
 import { usePaths } from "@jskit-ai/users-web/client/composables/usePaths";
@@ -15,6 +15,10 @@ import {
 import {
   readRefOrGetterValue
 } from "@/lib/vueRefOrGetterValue.js";
+import {
+  vibe64SessionDebugError,
+  vibe64SessionDebugLog
+} from "@/lib/vibe64SessionDebugLog.js";
 
 function normalizeConversationMessage(message = {}) {
   if (!message || typeof message !== "object" || Array.isArray(message)) {
@@ -83,6 +87,23 @@ function conversationLogRealtimeShouldRefresh({ payload = {} } = {}, sessionId =
   return Boolean(normalizedSessionId && changedSessionId === normalizedSessionId);
 }
 
+function conversationLogRecoveryStateKey(session = {}) {
+  const source = session && typeof session === "object" && !Array.isArray(session) ? session : {};
+  return [
+    source.sessionId,
+    source.status,
+    source.currentStep,
+    source.nextStepId,
+    source.stepStatus,
+    source.stepMachine?.status,
+    source.stepMachine?.nextStepId,
+    source.presentation?.step?.status,
+    source.presentation?.step?.nextStepId,
+    source.presentation?.auto?.nextOperation?.id,
+    source.presentation?.auto?.nextOperation?.actionId
+  ].map((value) => String(value || "").trim()).join("|");
+}
+
 function useVibe64ConversationLog({
   active = true,
   session
@@ -127,6 +148,7 @@ function useVibe64ConversationLog({
   });
   let reloadInFlight = null;
   let reloadQueued = false;
+  let recoveredErrorKey = "";
 
   async function reloadConversationLog() {
     if (reloadInFlight) {
@@ -145,6 +167,48 @@ function useVibe64ConversationLog({
       }
     }
   }
+
+  const recoveryStateKey = computed(() => conversationLogRecoveryStateKey(currentSession.value));
+  const recoveryErrorKey = computed(() => [
+    enabled.value ? "enabled" : "disabled",
+    sessionId.value,
+    recoveryStateKey.value,
+    resource.loadError.value
+  ].join("|"));
+  watch(recoveryErrorKey, () => {
+    const loadError = String(resource.loadError.value || "").trim();
+    if (!enabled.value || !loadError) {
+      recoveredErrorKey = "";
+      return;
+    }
+
+    const key = recoveryErrorKey.value;
+    if (recoveredErrorKey === key) {
+      return;
+    }
+    recoveredErrorKey = key;
+    vibe64SessionDebugLog("client.conversationLog.recover.start", {
+      error: loadError,
+      recoveryStateKey: recoveryStateKey.value,
+      sessionId: sessionId.value
+    });
+    void reloadConversationLog()
+      .then(() => {
+        vibe64SessionDebugLog("client.conversationLog.recover.done", {
+          recoveryStateKey: recoveryStateKey.value,
+          sessionId: sessionId.value
+        });
+      })
+      .catch((error) => {
+        vibe64SessionDebugLog("client.conversationLog.recover.error", {
+          error: vibe64SessionDebugError(error),
+          recoveryStateKey: recoveryStateKey.value,
+          sessionId: sessionId.value
+        });
+      });
+  }, {
+    flush: "post"
+  });
 
   const turns = computed(() => normalizeConversationLog(resource.data.value || {}, {
     pending: sessionIsAwaitingCodex(currentSession.value)
@@ -165,6 +229,7 @@ function useVibe64ConversationLog({
 }
 
 export {
+  conversationLogRecoveryStateKey,
   conversationLogRealtimeShouldRefresh,
   normalizeConversationLog,
   sessionIsAwaitingCodex,
