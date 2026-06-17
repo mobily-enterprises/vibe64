@@ -1,14 +1,21 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { access, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
 import {
+  CODEX_ATTACHMENT_CONTAINER_ROOT,
   CODEX_ATTACHMENT_UPLOAD_BODY_LIMIT_BYTES,
   cleanupCodexAttachments,
   storeCodexAttachment
 } from "../../packages/vibe64-terminals/src/server/codexAttachments.js";
+import {
+  VIBE64_CODEX_ATTACHMENTS_ROOT_ENV,
+  codexAttachmentHostRoot,
+  codexAttachmentMount,
+  prepareCodexAttachmentRoot
+} from "../../packages/vibe64-runtime/src/server/codexAttachmentPaths.js";
 import {
   registerRoutes
 } from "../../packages/vibe64-terminals/src/server/registerRoutes.js";
@@ -55,6 +62,40 @@ test("Codex attachments are not rejected by the old 25 MB product cap", async ()
     }
   } finally {
     await rm(targetRoot, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
+test("Codex attachment root defaults to a process-owned temp directory", () => {
+  const root = codexAttachmentHostRoot({
+    env: {}
+  });
+
+  assert.equal(root.endsWith(path.join("vibe64", "attachments")), false);
+  assert.equal(path.basename(root), "attachments");
+  assert.match(path.basename(path.dirname(root)), /^vibe64-/u);
+});
+
+test("Codex attachment root can be set by runtime environment", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "vibe64-attachment-root-test-"));
+  const attachmentRoot = path.join(root, "tenant", "state", "attachments");
+  try {
+    const env = {
+      [VIBE64_CODEX_ATTACHMENTS_ROOT_ENV]: attachmentRoot
+    };
+    assert.equal(codexAttachmentHostRoot({ env }), attachmentRoot);
+    assert.deepEqual(codexAttachmentMount({ env }), {
+      readOnly: true,
+      source: attachmentRoot,
+      target: CODEX_ATTACHMENT_CONTAINER_ROOT
+    });
+
+    await prepareCodexAttachmentRoot({ env });
+    await access(attachmentRoot);
+  } finally {
+    await rm(root, {
       force: true,
       recursive: true
     });

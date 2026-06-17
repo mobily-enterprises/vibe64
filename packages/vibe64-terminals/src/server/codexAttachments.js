@@ -11,6 +11,7 @@ import {
 import {
   CODEX_ATTACHMENT_CONTAINER_ROOT,
   CODEX_ATTACHMENT_HOST_ROOT,
+  codexAttachmentHostRoot,
   codexAttachmentMount,
   prepareCodexAttachmentRoot
 } from "@local/vibe64-runtime/server/codexAttachmentPaths";
@@ -24,7 +25,7 @@ function attachmentSessionKey(targetRoot, sessionId) {
 
 function attachmentHostDirectory(targetRoot, sessionId, attachmentId = "") {
   const parts = [
-    CODEX_ATTACHMENT_HOST_ROOT,
+    codexAttachmentHostRoot(),
     ...attachmentSessionKey(targetRoot, sessionId).split(path.sep)
   ];
   if (attachmentId) {

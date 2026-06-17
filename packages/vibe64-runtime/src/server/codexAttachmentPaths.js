@@ -7,22 +7,39 @@ import {
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 
 const CODEX_ATTACHMENT_CONTAINER_ROOT = "/studio-attachments";
-const CODEX_ATTACHMENT_HOST_ROOT = path.join(
-  tmpdir(),
-  STUDIO_TEMP_DIR_NAME,
-  "attachments"
-);
+const VIBE64_CODEX_ATTACHMENTS_ROOT_ENV = "VIBE64_CODEX_ATTACHMENTS_ROOT";
 
-function codexAttachmentMount() {
+function processUid() {
+  return typeof process.getuid === "function" ? process.getuid() : "user";
+}
+
+function defaultCodexAttachmentHostRoot() {
+  return path.join(
+    tmpdir(),
+    `${STUDIO_TEMP_DIR_NAME}-${processUid()}`,
+    "attachments"
+  );
+}
+
+function codexAttachmentHostRoot({
+  env = process.env
+} = {}) {
+  const explicitRoot = String(env[VIBE64_CODEX_ATTACHMENTS_ROOT_ENV] || "").trim();
+  return path.resolve(explicitRoot || defaultCodexAttachmentHostRoot());
+}
+
+const CODEX_ATTACHMENT_HOST_ROOT = codexAttachmentHostRoot();
+
+function codexAttachmentMount(options = {}) {
   return {
     readOnly: true,
-    source: CODEX_ATTACHMENT_HOST_ROOT,
+    source: codexAttachmentHostRoot(options),
     target: CODEX_ATTACHMENT_CONTAINER_ROOT
   };
 }
 
-async function prepareCodexAttachmentRoot() {
-  await mkdir(CODEX_ATTACHMENT_HOST_ROOT, {
+async function prepareCodexAttachmentRoot(options = {}) {
+  await mkdir(codexAttachmentHostRoot(options), {
     recursive: true
   });
 }
@@ -30,6 +47,8 @@ async function prepareCodexAttachmentRoot() {
 export {
   CODEX_ATTACHMENT_CONTAINER_ROOT,
   CODEX_ATTACHMENT_HOST_ROOT,
+  VIBE64_CODEX_ATTACHMENTS_ROOT_ENV,
+  codexAttachmentHostRoot,
   codexAttachmentMount,
   prepareCodexAttachmentRoot
 };
