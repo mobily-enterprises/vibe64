@@ -104,6 +104,44 @@ test("Studio Setup live status inspection requires the Vibe64 owner", async () =
   assert.equal(streamResponse.errors[0].code, "vibe64_owner_required");
 });
 
+test("Studio Setup status route omits absent local users instead of injecting null", async () => {
+  await withLocalRequestBypass(async () => {
+    let receivedInput = null;
+    const app = testRouteApp();
+
+    registerStudioSetupRoutes(app, {
+      routeRelativePath: "studio/studio-setup",
+      routeSurface: "app",
+      projectScoped: false
+    });
+
+    const route = findRegisteredRoute(app, {
+      method: "GET",
+      path: "/api/studio/studio-setup"
+    });
+    assert.ok(route);
+
+    const reply = testReply();
+    await route.handler({
+      executeAction({ input }) {
+        receivedInput = input;
+        return {
+          ok: true,
+          ready: true,
+          checks: []
+        };
+      },
+      input: {
+        query: {}
+      }
+    }, reply);
+
+    assert.equal(reply.statusCode, 200);
+    assert.deepEqual(receivedInput, {});
+    assert.equal(Object.hasOwn(receivedInput, "vibe64User"), false);
+  });
+});
+
 test("Studio Setup terminal routes pass the Vibe64 user into the service", async () => {
   await withLocalRequestBypass(async () => {
     let receivedInput = null;

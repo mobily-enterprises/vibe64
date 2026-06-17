@@ -66,7 +66,11 @@ function createRepair(options = {}) {
 }
 
 function ownerRequired(input = {}) {
-  if (input?.vibe64User?.role === "owner") {
+  const user = input?.vibe64User || null;
+  if (!user) {
+    return null;
+  }
+  if (user.role === "owner") {
     return null;
   }
   return {

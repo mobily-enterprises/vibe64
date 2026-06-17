@@ -227,9 +227,15 @@ function registerDoctorRoutes(
 }
 
 function withVibe64User(request, input = {}) {
+  const vibe64User = request.vibe64User || null;
+  if (!vibe64User) {
+    return {
+      ...input
+    };
+  }
   return {
     ...input,
-    vibe64User: request.vibe64User || null
+    vibe64User
   };
 }
 
