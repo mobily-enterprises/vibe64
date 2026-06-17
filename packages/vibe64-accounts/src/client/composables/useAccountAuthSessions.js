@@ -1,7 +1,12 @@
 import { computed, proxyRefs, reactive, ref, unref } from "vue";
+import {
+  isVibe64BrowserFlagEnabled
+} from "@local/vibe64-core/shared";
 
 const DEFAULT_POLL_INTERVAL_MS = 1000;
 const AUTH_DEBUG_MARKER = "VIBE64_ACCOUNTS_DEBUG";
+const AUTH_DEBUG_QUERY_PARAM = "vibe64_accounts_debug";
+const AUTH_DEBUG_STORAGE_KEY = "vibe64:accounts-debug";
 const AUTH_DEBUG_OUTPUT_TAIL_LENGTH = 1200;
 const CODEX_DEVICE_AUTH_URL = "https://auth.openai.com/codex/device";
 const ANSI_ESCAPE_PATTERN = new RegExp(`${String.fromCharCode(27)}\\[[0-?]*[ -/]*[@-~]`, "gu");
@@ -9,6 +14,12 @@ const VISIBLE_ANSI_ESCAPE_PATTERN = /\u00a4\[[0-?]*[ -/]*[@-~]/gu;
 const DEVICE_USER_CODE_PATTERN = /\b([A-Z0-9]{4}-[A-Z0-9]{4,8})\b/iu;
 
 function authDebug(event, fields = {}) {
+  if (!isVibe64BrowserFlagEnabled({
+    queryParam: AUTH_DEBUG_QUERY_PARAM,
+    storageKey: AUTH_DEBUG_STORAGE_KEY
+  })) {
+    return;
+  }
   console.debug(`[${AUTH_DEBUG_MARKER}] ${JSON.stringify({
     marker: AUTH_DEBUG_MARKER,
     timestamp: new Date().toISOString(),

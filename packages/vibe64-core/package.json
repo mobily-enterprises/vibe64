@@ -15,6 +15,7 @@
     "./server/localhostCheckBypass": "./src/server/localhostCheckBypass.js",
     "./server/launchPreviewProxyEnv": "./src/server/launchPreviewProxyEnv.js",
     "./server/localStudioRequest": "./src/server/localStudioRequest.js",
+    "./server/logging": "./src/server/logging.js",
     "./server/projectServiceSelection": "./src/server/projectServiceSelection.js",
     "./server/serverResponses": "./src/server/serverResponses.js",
     "./server/sessionRealtimeEvents": "./src/server/sessionRealtimeEvents.js",

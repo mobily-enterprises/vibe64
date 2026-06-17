@@ -46,6 +46,10 @@ export default Object.freeze({
         {
           subpath: "./server/composerRealtimeEvents",
           summary: "Shared Vibe64 composer realtime event descriptors."
+        },
+        {
+          subpath: "./server/logging",
+          summary: "Shared Vibe64 log-level and Fastify logger configuration helpers."
         }
       ]
     }

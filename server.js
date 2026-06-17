@@ -42,6 +42,9 @@ import {
   isLocalhostCheckBypassEnabled
 } from "@local/vibe64-core/server/localhostCheckBypass";
 import {
+  createVibe64FastifyLoggerOptions
+} from "@local/vibe64-core/server/logging";
+import {
   cleanupStaleStudioTerminals
 } from "@local/studio-terminal-core/server/studioTerminalCleanup";
 import {
@@ -397,6 +400,10 @@ function targetRootForRuntimeProfile(options = {}, runtimeProfile = {}) {
 
 async function createServer(options = {}) {
   const runtimeEnv = resolveRuntimeEnv();
+  const loggerOptions = createVibe64FastifyLoggerOptions({
+    env: process.env,
+    level: options.logLevel
+  });
   const runtimeProfile = resolveServerRuntimeProfile(options);
   const requestedTargetRoot = targetRootForRuntimeProfile(options, runtimeProfile);
   const jskitLockPath = resolveJskitLockPath({
@@ -412,13 +419,19 @@ async function createServer(options = {}) {
     await assertProjectDirectoryUsable(runtimeProfile.singleTargetRoot);
   }
   const app = Fastify({
-    logger: true,
+    logger: loggerOptions.logger,
     ajv: {
       customOptions: {
         allowUnionTypes: true
       }
     }
   });
+  for (const warning of loggerOptions.warnings) {
+    app.log.warn(
+      warning,
+      "Invalid Vibe64 log level; using the default log level."
+    );
+  }
   if (isTruthyEnvValue(process.env[VIBE64_SKIP_STALE_TERMINAL_CLEANUP_ENV])) {
     app.log.warn("Skipping stale Studio terminal cleanup for this process.");
   } else {
@@ -644,6 +657,7 @@ async function startServer(options = {}) {
     appRoot: options?.appRoot,
     browserLifecycleShutdownDelayMs: options?.browserLifecycleShutdownDelayMs,
     jskitLockPath: options?.jskitLockPath,
+    logLevel: options?.logLevel,
     providerHomesRoot: options?.providerHomesRoot,
     projectsRoot: options?.projectsRoot,
     runtimeProfile,

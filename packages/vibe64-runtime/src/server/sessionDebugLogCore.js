@@ -1,4 +1,12 @@
+import {
+  isVibe64BrowserFlagEnabled,
+  isVibe64DebugLoggingEnabled
+} from "@local/vibe64-core/shared";
+
 const VIBE64_SESSION_DEBUG_MARKER = "VIBE64_SESSION_DEBUG";
+const VIBE64_SESSION_DEBUG_ENV = "VIBE64_SESSION_DEBUG";
+const VIBE64_SESSION_DEBUG_QUERY_PARAM = "vibe64_session_debug";
+const VIBE64_SESSION_DEBUG_STORAGE_KEY = "vibe64:session-debug";
 
 function normalizeErrorStatus(error = {}) {
   const status = Number(error?.status ?? error?.statusCode);
@@ -38,7 +46,23 @@ function vibe64SessionDebugDurationMs(startedAtMs) {
   return Math.max(0, Date.now() - Number(startedAtMs || Date.now()));
 }
 
-function vibe64SessionDebugLog(event = "", details = {}) {
+function vibe64SessionDebugEnabled({
+  env = globalThis?.process?.env || {},
+  globalObject = globalThis,
+  level = ""
+} = {}) {
+  return isVibe64DebugLoggingEnabled({
+    env,
+    flagName: VIBE64_SESSION_DEBUG_ENV,
+    level
+  }) || isVibe64BrowserFlagEnabled({
+    globalObject,
+    queryParam: VIBE64_SESSION_DEBUG_QUERY_PARAM,
+    storageKey: VIBE64_SESSION_DEBUG_STORAGE_KEY
+  });
+}
+
+function vibe64SessionDebugLog(event = "", details = {}, options = {}) {
   const timestamp = new Date().toISOString();
   const entry = {
     marker: VIBE64_SESSION_DEBUG_MARKER,
@@ -48,6 +72,10 @@ function vibe64SessionDebugLog(event = "", details = {}) {
   };
   entry.marker = VIBE64_SESSION_DEBUG_MARKER;
   entry.timestamp = timestamp;
+
+  if (!vibe64SessionDebugEnabled(options)) {
+    return entry;
+  }
 
   const logger = globalThis.console;
   if (!logger || typeof logger.info !== "function") {
@@ -74,7 +102,11 @@ function vibe64SessionDebugSummary(session = {}) {
 }
 
 export {
+  VIBE64_SESSION_DEBUG_ENV,
   VIBE64_SESSION_DEBUG_MARKER,
+  VIBE64_SESSION_DEBUG_QUERY_PARAM,
+  VIBE64_SESSION_DEBUG_STORAGE_KEY,
+  vibe64SessionDebugEnabled,
   vibe64SessionDebugDurationMs,
   vibe64SessionDebugError,
   vibe64SessionDebugLog,

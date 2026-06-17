@@ -3,6 +3,10 @@ import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
+import {
+  isVibe64LogLevelEnabled,
+  resolveVibe64LogLevel
+} from "@local/vibe64-core/shared";
 
 const DEFAULT_READY_STATUS_CACHE_TTL_MS = 120_000;
 const DEFAULT_RECENT_NOT_READY_STATUS_CACHE_TTL_MS = 10_000;
@@ -125,6 +129,9 @@ function readyStatusCachePath({
 }
 
 function warnReadyStatusCache(operation, filePath, error) {
+  if (!isVibe64LogLevelEnabled("warn", resolveVibe64LogLevel().level)) {
+    return;
+  }
   console.warn(
     `Vibe64 doctor ready cache ${operation} failed for ${filePath}: ${String(error?.message || error)}`
   );

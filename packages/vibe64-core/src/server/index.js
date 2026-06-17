@@ -7,6 +7,7 @@ export * from "./featureRoutes.js";
 export * from "./localhostCheckBypass.js";
 export * from "./launchPreviewProxyEnv.js";
 export * from "./localStudioRequest.js";
+export * from "./logging.js";
 export * from "./projectServiceSelection.js";
 export * from "./serverResponses.js";
 export * from "./sessionRealtimeEvents.js";

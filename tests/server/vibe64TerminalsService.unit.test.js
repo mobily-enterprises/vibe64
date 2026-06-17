@@ -3581,6 +3581,8 @@ test("Vibe64 Codex app-server logs duplicate stale assistant results only once",
     assert.equal(interrupted.ok, true);
     const staleLogs = [];
     const originalInfo = console.info;
+    const previousSessionDebug = process.env.VIBE64_SESSION_DEBUG;
+    process.env.VIBE64_SESSION_DEBUG = "1";
     console.info = (...args) => {
       const line = args.map((part) => String(part)).join(" ");
       if (line.includes("server.codexTerminal.appServerAgentResult.stale")) {
@@ -3613,6 +3615,11 @@ test("Vibe64 Codex app-server logs duplicate stale assistant results only once",
       await delay(25);
     } finally {
       console.info = originalInfo;
+      if (previousSessionDebug == null) {
+        delete process.env.VIBE64_SESSION_DEBUG;
+      } else {
+        process.env.VIBE64_SESSION_DEBUG = previousSessionDebug;
+      }
     }
 
     assert.equal(staleLogs.length, 1);

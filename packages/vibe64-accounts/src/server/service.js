@@ -22,6 +22,9 @@ import {
   vibe64Result
 } from "@local/vibe64-core/server/serverResponses";
 import {
+  isVibe64DebugLoggingEnabled
+} from "@local/vibe64-core/shared";
+import {
   codexAuthMarkerPath
 } from "@local/vibe64-core/server/codexAuthState";
 import {
@@ -59,6 +62,7 @@ const GITHUB_GIT_CREDENTIAL_HELPER = "gh auth git-credential";
 const CODEX_API_KEY_ENV = "VIBE64_CODEX_API_KEY";
 const REQUIRED_GITHUB_SCOPES = Object.freeze(["repo", "read:org", "gist", "workflow"]);
 const AUTH_DEBUG_MARKER = "VIBE64_ACCOUNTS_DEBUG";
+const AUTH_DEBUG_ENV = "VIBE64_ACCOUNTS_DEBUG";
 const AUTH_DEBUG_OUTPUT_TAIL_LENGTH = 1200;
 const DEVICE_USER_CODE_PATTERN = /\b([A-Z0-9]{4}-[A-Z0-9]{4,8})\b/iu;
 const DEVICE_USER_CODE_REDACTION_PATTERN = /\b[A-Z0-9]{4}-[A-Z0-9]{4,8}\b/gu;
@@ -170,6 +174,11 @@ function sanitizedAuthOutputTail(output = "") {
 }
 
 function authDebug(event, fields = {}) {
+  if (!isVibe64DebugLoggingEnabled({
+    flagName: AUTH_DEBUG_ENV
+  })) {
+    return;
+  }
   const payload = {
     marker: AUTH_DEBUG_MARKER,
     timestamp: new Date().toISOString(),
