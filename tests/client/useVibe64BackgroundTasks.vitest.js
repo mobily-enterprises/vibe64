@@ -110,6 +110,36 @@ describe("useVibe64BackgroundTasks", () => {
     expect(openCodexTerminal).not.toHaveBeenCalled();
   });
 
+  it("ignores background task retries without a control object", async () => {
+    const refreshSessionData = vi.fn();
+    const openCodexTerminal = vi.fn();
+    const session = ref({
+      sessionId: "session_123",
+      presentation: {
+        backgroundTasks: [
+          {
+            id: "codex_app_server",
+            retry: null,
+            status: "failed"
+          }
+        ]
+      }
+    });
+    const backgroundTasks = useVibe64BackgroundTasks({
+      openCodexTerminal,
+      refreshSessionData,
+      runClientControl,
+      session
+    });
+
+    await expect(backgroundTasks.retryBackgroundTask(backgroundTasks.backgroundTasks.value[0]))
+      .resolves.toBe(false);
+
+    expect(runClientControl).not.toHaveBeenCalled();
+    expect(refreshSessionData).not.toHaveBeenCalled();
+    expect(openCodexTerminal).not.toHaveBeenCalled();
+  });
+
   it("opens the Codex terminal when Codex retry controls fail", async () => {
     const refreshSessionData = vi.fn();
     const openCodexTerminal = vi.fn(() => true);

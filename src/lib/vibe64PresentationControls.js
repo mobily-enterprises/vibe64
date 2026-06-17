@@ -9,7 +9,7 @@ function objectValue(value) {
 }
 
 function controlPresentation(control = {}) {
-  return objectValue(control.control);
+  return objectValue(objectValue(control).control);
 }
 
 function controlClientAction(control = {}) {

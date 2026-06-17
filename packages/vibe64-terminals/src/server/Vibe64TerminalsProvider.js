@@ -1,4 +1,5 @@
 import { withActionDefaults } from "@jskit-ai/kernel/shared/actions";
+import process from "node:process";
 
 import { createService } from "./service.js";
 import { featureActions } from "./actions.js";
@@ -48,6 +49,9 @@ class Vibe64TerminalsProvider {
     ) {
       throw new Error("Vibe64TerminalsProvider requires application service()/actions().");
     }
+    const providerEnv = {
+      ...process.env
+    };
 
     app.service(
       VIBE64_TERMINALS_SERVICE,
@@ -101,6 +105,7 @@ class Vibe64TerminalsProvider {
           serviceToken: VIBE64_TERMINALS_SERVICE
         });
         return createService({
+          env: providerEnv,
           projectService: scope.make("feature.vibe64-project.service"),
           publishSessionChanged: {
             codexPrompt: publishCodexPromptChanged,
