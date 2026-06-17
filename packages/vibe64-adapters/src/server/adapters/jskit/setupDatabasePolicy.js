@@ -160,7 +160,7 @@ async function checkJskitDatabaseRuntime(toolkit, {
       expectedEnv: defaultDatabaseEnv(targetRoot),
       rootPassword: JSKIT_MARIADB_ROOT_PASSWORD,
       startRepair: null,
-      unreachableExplanation: "Run Studio Setup to start the shared tenant JSKIT MariaDB runtime before project database checks continue."
+      unreachableExplanation: "Run Studio Setup to start the shared JSKIT MariaDB runtime before project database checks continue."
     },
     managedHost: JSKIT_MARIADB_HOST,
     targetRoot,

@@ -147,7 +147,7 @@ function composerUsesLaravel(composerJson = {}) {
 
 async function checkLaravelToolchainImage(toolkit) {
   return checkAdapterToolchainImage(toolkit, {
-    explanation: "The published Laravel adapter toolchain must be installed by host provisioning before tenants run Laravel setup, target scripts, or launch targets.",
+    explanation: "The published Laravel adapter toolchain must be installed by host provisioning before local workspaces run Laravel setup, target scripts, or launch targets.",
     id: "laravel-toolchain-image",
     image: LARAVEL_TOOLCHAIN_IMAGE,
     label: "Laravel toolchain image"

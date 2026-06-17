@@ -99,7 +99,7 @@ function useProjectSetupDoctorScreen() {
       }
       const studioSetup = studioSetupResource.data.value;
       if (studioSetup?.ready !== true) {
-        localError.value = "Studio Setup is not ready. Open Management mode to complete Studio Setup.";
+        localError.value = "Studio Setup is not ready. Complete Studio Setup before Project Setup runs.";
         return;
       }
 

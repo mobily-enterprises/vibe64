@@ -38,13 +38,6 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       | never
     >,
-    '/account': RouteRecordInfo<
-      '/account',
-      '/account',
-      Record<never, never>,
-      Record<never, never>,
-      | never
-    >,
     '/app/': RouteRecordInfo<
       '/app/',
       '/app',
@@ -58,10 +51,8 @@ declare module 'vue-router/auto-routes' {
       { slug: ParamValue<true> },
       { slug: ParamValue<false> },
       | '/app/[slug]/dashboard'
-      | '/app/[slug]/dashboard/accounts/'
       | '/app/[slug]/dashboard/configure/'
       | '/app/[slug]/dashboard/history/'
-      | '/app/[slug]/dashboard/publish/'
       | '/app/[slug]/dashboard/remote/'
       | '/app/[slug]/dashboard/run/'
       | '/app/[slug]/dashboard/setup/'
@@ -71,20 +62,11 @@ declare module 'vue-router/auto-routes' {
       '/app/:slug/dashboard',
       { slug: ParamValue<true> },
       { slug: ParamValue<false> },
-      | '/app/[slug]/dashboard/accounts/'
       | '/app/[slug]/dashboard/configure/'
       | '/app/[slug]/dashboard/history/'
-      | '/app/[slug]/dashboard/publish/'
       | '/app/[slug]/dashboard/remote/'
       | '/app/[slug]/dashboard/run/'
       | '/app/[slug]/dashboard/setup/'
-    >,
-    '/app/[slug]/dashboard/accounts/': RouteRecordInfo<
-      '/app/[slug]/dashboard/accounts/',
-      '/app/:slug/dashboard/accounts',
-      { slug: ParamValue<true> },
-      { slug: ParamValue<false> },
-      | never
     >,
     '/app/[slug]/dashboard/configure/': RouteRecordInfo<
       '/app/[slug]/dashboard/configure/',
@@ -96,13 +78,6 @@ declare module 'vue-router/auto-routes' {
     '/app/[slug]/dashboard/history/': RouteRecordInfo<
       '/app/[slug]/dashboard/history/',
       '/app/:slug/dashboard/history',
-      { slug: ParamValue<true> },
-      { slug: ParamValue<false> },
-      | never
-    >,
-    '/app/[slug]/dashboard/publish/': RouteRecordInfo<
-      '/app/[slug]/dashboard/publish/',
-      '/app/:slug/dashboard/publish',
       { slug: ParamValue<true> },
       { slug: ParamValue<false> },
       | never
@@ -128,20 +103,6 @@ declare module 'vue-router/auto-routes' {
       { slug: ParamValue<false> },
       | never
     >,
-    '/app/manage': RouteRecordInfo<
-      '/app/manage',
-      '/app/manage',
-      Record<never, never>,
-      Record<never, never>,
-      | '/app/manage/[view]'
-    >,
-    '/app/manage/[view]': RouteRecordInfo<
-      '/app/manage/[view]',
-      '/app/manage/:view',
-      { view: ParamValue<true> },
-      { view: ParamValue<false> },
-      | never
-    >,
   }
 
   /**
@@ -161,12 +122,6 @@ declare module 'vue-router/auto-routes' {
       views:
         | never
     }
-    'src/pages/account.vue': {
-      routes:
-        | '/account'
-      views:
-        | never
-    }
     'src/pages/app/index.vue': {
       routes:
         | '/app/'
@@ -177,10 +132,8 @@ declare module 'vue-router/auto-routes' {
       routes:
         | '/app/[slug]'
         | '/app/[slug]/dashboard'
-        | '/app/[slug]/dashboard/accounts/'
         | '/app/[slug]/dashboard/configure/'
         | '/app/[slug]/dashboard/history/'
-        | '/app/[slug]/dashboard/publish/'
         | '/app/[slug]/dashboard/remote/'
         | '/app/[slug]/dashboard/run/'
         | '/app/[slug]/dashboard/setup/'
@@ -190,21 +143,13 @@ declare module 'vue-router/auto-routes' {
     'src/pages/app/[slug]/dashboard.vue': {
       routes:
         | '/app/[slug]/dashboard'
-        | '/app/[slug]/dashboard/accounts/'
         | '/app/[slug]/dashboard/configure/'
         | '/app/[slug]/dashboard/history/'
-        | '/app/[slug]/dashboard/publish/'
         | '/app/[slug]/dashboard/remote/'
         | '/app/[slug]/dashboard/run/'
         | '/app/[slug]/dashboard/setup/'
       views:
         | 'default'
-    }
-    'src/pages/app/[slug]/dashboard/accounts/index.vue': {
-      routes:
-        | '/app/[slug]/dashboard/accounts/'
-      views:
-        | never
     }
     'src/pages/app/[slug]/dashboard/configure/index.vue': {
       routes:
@@ -215,12 +160,6 @@ declare module 'vue-router/auto-routes' {
     'src/pages/app/[slug]/dashboard/history/index.vue': {
       routes:
         | '/app/[slug]/dashboard/history/'
-      views:
-        | never
-    }
-    'src/pages/app/[slug]/dashboard/publish/index.vue': {
-      routes:
-        | '/app/[slug]/dashboard/publish/'
       views:
         | never
     }
@@ -239,19 +178,6 @@ declare module 'vue-router/auto-routes' {
     'src/pages/app/[slug]/dashboard/setup/index.vue': {
       routes:
         | '/app/[slug]/dashboard/setup/'
-      views:
-        | never
-    }
-    'src/pages/app/manage.vue': {
-      routes:
-        | '/app/manage'
-        | '/app/manage/[view]'
-      views:
-        | 'default'
-    }
-    'src/pages/app/manage/[view].vue': {
-      routes:
-        | '/app/manage/[view]'
       views:
         | never
     }

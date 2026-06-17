@@ -47,7 +47,7 @@ import {
 
 const TERMINAL_NAMESPACE = "studio-setup-doctor";
 const REINSTALL_CODEX_CLI_TERMINAL_PREVIEW = "Reinstall Codex CLI inside the managed Studio toolchain";
-const STUDIO_SETUP_CACHE_SCOPE = "studio-setup-tenant-runtime-v1";
+const STUDIO_SETUP_CACHE_SCOPE = "studio-setup-runtime-v1";
 
 const isStudioSetupReady = areDoctorChecksReady;
 
@@ -243,7 +243,7 @@ async function checkToolchainImage(dockerReady) {
       label: "Managed base toolchain image",
       expected: `${TOOLCHAIN_IMAGE} exists locally.`,
       observed: result.output,
-      explanation: "This Vibe64 host was not provisioned with the required managed base toolchain image. Host deployment must pull the published GHCR image before tenants use Studio Setup."
+      explanation: "This Vibe64 host was not provisioned with the required managed base toolchain image. Host setup must pull the published GHCR image before Studio Setup runs."
     });
   }
 
@@ -318,12 +318,12 @@ async function inspectStudioSetup({
   };
 }
 
-function createStudioRuntimeDoctorPlugin({
+function createStudioToolchainDoctorPlugin({
   studioRoot = ""
 } = {}) {
   return Object.freeze({
-    id: "studio-runtime",
-    label: "Studio runtime",
+    id: "studio-toolchain",
+    label: "Studio toolchain",
 
     checks() {
       let dockerReady = false;
@@ -578,7 +578,7 @@ function createStudioRuntimeDoctorPlugin({
   });
 }
 
-function createStudioTenantRuntimeDoctorPlugin({
+function createStudioRuntimeDoctorPlugin({
   runCommand,
   studioRoot = ""
 } = {}) {
@@ -600,8 +600,8 @@ function createStudioTenantRuntimeDoctorPlugin({
   });
 
   return toolkit.plugin({
-    id: "studio-tenant-runtime",
-    label: "Tenant runtime",
+    id: "studio-runtime",
+    label: "Studio runtime",
     checks: runtimeContainers.checks,
     terminalActions: runtimeContainers.terminalActions
   });
@@ -623,10 +623,10 @@ function createService({
     targetRoot: targetRoot || resolvedStudioRoot
   });
   const plugins = [
-    createStudioRuntimeDoctorPlugin({
+    createStudioToolchainDoctorPlugin({
       studioRoot: resolvedStudioRoot
     }),
-    createStudioTenantRuntimeDoctorPlugin({
+    createStudioRuntimeDoctorPlugin({
       studioRoot: resolvedStudioRoot
     })
   ];
@@ -727,10 +727,11 @@ export {
   TOOLCHAIN_IMAGE,
   resolveStudioRoot,
   REINSTALL_CODEX_CLI_TERMINAL_PREVIEW,
+  createStudioToolchainDoctorPlugin,
   reinstallCodexCliRepair,
   reinstallCodexCliScript,
   reinstallCodexCliTerminalScript,
-  createStudioTenantRuntimeDoctorPlugin,
+  createStudioRuntimeDoctorPlugin,
   isStudioSetupReady,
   createService
 };

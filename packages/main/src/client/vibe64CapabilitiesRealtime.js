@@ -1,6 +1,6 @@
 import { registerRealtimeClientListener } from "@jskit-ai/realtime/client/listeners";
 import {
-  VIBE64_ACCOUNTS_CHANGED_EVENT
+  VIBE64_CONNECTIONS_CHANGED_EVENT
 } from "/src/lib/studioGateApi.js";
 import {
   vibe64SessionDebugLog
@@ -8,7 +8,7 @@ import {
 import {
   VIBE64_CAPABILITIES_QUERY_LISTENER,
   VIBE64_LIVE_QUERY_RECOVERY_LISTENER,
-  accountRealtimePayloadDebugSummary,
+  connectionRealtimePayloadDebugSummary,
   invalidateVibe64CapabilitiesQueries,
   invalidateVibe64LiveQueries,
   isVibe64CapabilitiesQuery,
@@ -20,11 +20,11 @@ import {
 function registerVibe64RealtimeListeners(app) {
   registerRealtimeClientListener(app, VIBE64_CAPABILITIES_QUERY_LISTENER, () => ({
     listenerId: VIBE64_CAPABILITIES_QUERY_LISTENER,
-    event: VIBE64_ACCOUNTS_CHANGED_EVENT,
+    event: VIBE64_CONNECTIONS_CHANGED_EVENT,
     handle({ app: runtimeApp, event, payload }) {
-      vibe64SessionDebugLog("client.realtime.accounts.changed.received", {
+      vibe64SessionDebugLog("client.realtime.connections.changed.received", {
         sourceEvent: event,
-        payload: accountRealtimePayloadDebugSummary(payload)
+        payload: connectionRealtimePayloadDebugSummary(payload)
       });
       return invalidateVibe64CapabilitiesQueries(runtimeApp, {
         event,
@@ -60,9 +60,9 @@ function registerVibe64CapabilitiesPlaywrightHook(app) {
   const target = window;
   target.__vibe64E2e = {
     ...(target.__vibe64E2e || {}),
-    emitAccountChangedForCapabilities(payload = {}) {
+    emitConnectionChangedForCapabilities(payload = {}) {
       return invalidateVibe64CapabilitiesQueries(app, {
-        event: VIBE64_ACCOUNTS_CHANGED_EVENT,
+        event: VIBE64_CONNECTIONS_CHANGED_EVENT,
         payload
       });
     }

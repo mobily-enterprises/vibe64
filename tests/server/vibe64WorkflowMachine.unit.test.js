@@ -550,7 +550,7 @@ test("vibe64 runtime read views do not persist default or derived step-machine s
     assert.equal(session.stepMachine.status, "confirm_files");
     const listedSession = listed.find((candidate) => candidate.sessionId === "read_pure_step_view");
     assert.equal(listedSession?.currentStep, "issue_file_created");
-    assert.equal("stepMachine" in listedSession, false);
+    assert.equal(listedSession?.stepMachine, null);
     assert.equal("presentation" in listedSession, false);
     assert.equal("artifactReadiness" in listedSession, false);
     assert.equal(await runtime.store.readStepState("read_pure_step_view", "issue_file_created"), null);

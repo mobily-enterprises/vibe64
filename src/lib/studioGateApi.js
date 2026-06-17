@@ -1,5 +1,4 @@
 import {
-  resolveWebSocketUrl,
   studioApiPath
 } from "@/lib/studioUrls.js";
 import {
@@ -7,15 +6,13 @@ import {
 } from "@/lib/vibe64ProjectScope.js";
 
 const TARGET_PROJECT_API_SUFFIX = "/studio/current-app";
-const VIBE64_ACCOUNTS_AUTH_API_SUFFIX = "/vibe64/accounts/auth";
 const VIBE64_PROJECT_CONFIG_API_SUFFIX = "/vibe64/project-config";
 const VIBE64_PROJECT_CREATE_API_SUFFIX = "/vibe64/projects";
 const VIBE64_PROJECT_SELECT_API_SUFFIX = "/vibe64/projects/select";
 const VIBE64_PROJECT_TYPE_API_SUFFIX = "/vibe64/project-type";
-const VIBE64_ACCOUNTS_CHANGED_EVENT = "vibe64.accounts.changed";
+const VIBE64_CONNECTIONS_CHANGED_EVENT = "vibe64.connections.changed";
 const VIBE64_PROJECT_CHANGED_EVENT = "vibe64.project.changed";
 
-const ACCOUNTS_ENDPOINT = studioApiPath("vibe64/accounts");
 const STUDIO_SETUP_ENDPOINT = studioApiPath("studio/studio-setup");
 const PROJECT_SETUP_ENDPOINT = studioApiPath("studio/project-setup");
 const TARGET_PROJECT_ENDPOINT = studioApiPath("studio/current-app");
@@ -26,8 +23,6 @@ const VIBE64_ENDPOINT = studioApiPath("vibe64");
 const PROJECT_SELECTION_ENDPOINT = `${VIBE64_ENDPOINT}/projects`;
 const PROJECT_CONFIG_ENDPOINT = `${VIBE64_ENDPOINT}/project-config`;
 const PROJECT_TYPE_ENDPOINT = `${VIBE64_ENDPOINT}/project-type`;
-const ACCOUNTS_AUTH_ENDPOINT = `${ACCOUNTS_ENDPOINT}/auth`;
-const ACCOUNTS_LOGOUT_ENDPOINT = `${ACCOUNTS_ENDPOINT}/logout`;
 
 const STUDIO_SETUP_TERMINAL_ENDPOINT = `${STUDIO_SETUP_ENDPOINT}/terminal`;
 const PROJECT_SETUP_TERMINAL_ENDPOINT = `${PROJECT_SETUP_ENDPOINT}/terminal`;
@@ -50,25 +45,13 @@ function targetProjectQueryKey(surfaceId, ownershipFilter, projectSlug) {
   return ["vibe64", ...vibe64ProjectQueryScope(projectSlug), surfaceId, ownershipFilter, "target-project"];
 }
 
-function accountsQueryKey(surfaceId, ownershipFilter, projectSlug) {
-  return ["vibe64", ...vibe64ProjectQueryScope(projectSlug), surfaceId, ownershipFilter, "accounts"];
-}
-
 function capabilitiesQueryKey(surfaceId, ownershipFilter, projectSlug) {
   return ["vibe64", ...vibe64ProjectQueryScope(projectSlug), surfaceId, ownershipFilter, "capabilities"];
 }
 
-function accountAuthTerminalWebSocketUrl(sessionId = "") {
-  return resolveWebSocketUrl(`${ACCOUNTS_AUTH_ENDPOINT}/${encodeURIComponent(String(sessionId || ""))}/ws`);
-}
-
 export {
-  ACCOUNTS_AUTH_ENDPOINT,
-  ACCOUNTS_ENDPOINT,
-  ACCOUNTS_LOGOUT_ENDPOINT,
   CAPABILITIES_ENDPOINT,
-  VIBE64_ACCOUNTS_CHANGED_EVENT,
-  VIBE64_ACCOUNTS_AUTH_API_SUFFIX,
+  VIBE64_CONNECTIONS_CHANGED_EVENT,
   VIBE64_PROJECT_CONFIG_API_SUFFIX,
   VIBE64_PROJECT_CREATE_API_SUFFIX,
   VIBE64_PROJECT_CHANGED_EVENT,
@@ -87,8 +70,6 @@ export {
   STUDIO_SETUP_TERMINAL_ENDPOINT,
   TARGET_PROJECT_API_SUFFIX,
   TARGET_PROJECT_ENDPOINT,
-  accountAuthTerminalWebSocketUrl,
-  accountsQueryKey,
   capabilitiesQueryKey,
   projectConfigQueryKey,
   projectSelectionQueryKey,

@@ -8,9 +8,13 @@ import { loadViteDevProxyEntries, toPositiveInt } from "./vite.shared.mjs";
 import {
   isLocalhostCheckBypassEnabled
 } from "@local/vibe64-core/server/localhostCheckBypass";
+import {
+  resolveJskitLockPath
+} from "./server/lib/jskitLockPath.js";
 
 const devPort = toPositiveInt(process.env.VITE_DEV_PORT, 5173);
 const apiProxyTarget = String(process.env.VITE_API_PROXY_TARGET || "").trim() || "http://localhost:3000";
+const jskitLockPath = resolveJskitLockPath();
 const bypassLocalhostCheck = isLocalhostCheckBypassEnabled();
 const apiProxyHeaders = bypassLocalhostCheck
   ? {
@@ -43,7 +47,9 @@ export default defineConfig({
     }
   },
   plugins: [
-    createJskitClientBootstrapPlugin(),
+    createJskitClientBootstrapPlugin({
+      lockPath: jskitLockPath
+    }),
     VueRouter({
       routesFolder: "src/pages",
       dts: "src/typed-router.d.ts",

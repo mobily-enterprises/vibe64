@@ -27,8 +27,7 @@ import {
 import {
   assertProjectDirectoryUsable,
   configureStudioProjectContext,
-  normalizeProjectSlug,
-  resolveStudioProjectsRoot
+  normalizeProjectSlug
 } from "@local/vibe64-core/server/studioProjectContext";
 import {
   closeTerminalSessionsForNamespacePrefix
@@ -43,20 +42,12 @@ import {
   cleanupStaleStudioTerminals
 } from "@local/studio-terminal-core/server/studioTerminalCleanup";
 import {
-  createService as createVibe64AccountsService
-} from "@local/vibe64-accounts/server/service";
-import {
   createBrowserLifecycleMonitor,
   registerBrowserLifecycleWebSocketRoute
 } from "./server/lib/browserLifecycle.js";
 import {
-  createVibe64Auth,
-  registerVibe64AuthGate,
-  registerVibe64AuthRoutes
-} from "./server/lib/auth/index.js";
-import {
-  registerVibe64ProjectRoutes
-} from "./server/lib/projectRoutes.js";
+  resolveJskitLockPath
+} from "./server/lib/jskitLockPath.js";
 import {
   VIBE64_APP_ROOT_ENV,
   VIBE64_SKIP_STALE_TERMINAL_CLEANUP_ENV,
@@ -336,7 +327,7 @@ function startupBrowserPath({
   startupSlug = ""
 } = {}) {
   const slug = String(startupSlug || "").trim();
-  return slug ? `/app/${encodeURIComponent(normalizeProjectSlug(slug))}` : "/app/manage/projects";
+  return slug ? `/app/${encodeURIComponent(normalizeProjectSlug(slug))}` : "/app";
 }
 
 function browserUrlForListenAddress(address = "", options = {}) {
@@ -356,38 +347,16 @@ function browserUrlForPublicOrigin(origin = "", options = {}) {
   return `${url.origin}${startupBrowserPath(options)}`;
 }
 
-function createCodexConnectedVerifier({
-  accountService = null,
-  env = process.env,
-  providerHomesRoot = "",
-  systemRoot = ""
-} = {}) {
-  const service = accountService || createVibe64AccountsService({
-    env,
-    providerHomesRoot,
-    systemRoot
-  });
-  return async function verifyCodexConnected() {
-    const status = await service.getCodexStatus();
-    if (status?.ok === false) {
-      return {
-        ok: false,
-        code: status.code || "vibe64_codex_status_failed",
-        error: status.error || "Codex status could not be verified."
-      };
-    }
-    return {
-      connected: status?.account?.connected === true,
-      ok: true
-    };
-  };
-}
-
 async function createServer(options = {}) {
   const runtimeEnv = resolveRuntimeEnv();
+  const requestedTargetRoot = String(options.targetRoot || "").trim() || process.cwd();
+  const jskitLockPath = resolveJskitLockPath({
+    env: runtimeEnv,
+    explicitPath: options.jskitLockPath
+  });
   const runtimeProfile = createVibe64RuntimeProfile({
     mode: options.runtimeMode,
-    targetRoot: options.targetRoot
+    targetRoot: requestedTargetRoot
   });
   if (runtimeProfile.local) {
     if (!runtimeProfile.singleTargetRoot) {
@@ -415,17 +384,17 @@ async function createServer(options = {}) {
   await app.register(fastifyWebsocket);
   registerSocketIoUpgradeHandoff(app);
 
-  const projectsRoot = resolveStudioProjectsRoot({
-    env: runtimeEnv,
-    explicitRoot: options.projectsRoot
-  });
+  const requestedProjectsRoot = runtimeProfile.projectCatalogEnabled === false
+    ? String(options.projectsRoot || "").trim()
+    : String(options.projectsRoot || runtimeEnv[VIBE64_PROJECTS_ROOT_ENV] || "").trim();
   const rootContract = resolveVibe64Roots({
     env: runtimeEnv,
     explicitSystemRoot: options.systemRoot,
-    projectsRoot,
+    projectsRoot: requestedProjectsRoot,
     runtimeProfile,
     targetRoot: runtimeProfile.singleTargetRoot
   });
+  const projectsRoot = rootContract.projectsRoot;
   const systemRoot = rootContract.systemRoot;
   const providerHomesRoot = resolveProviderHomesRoot({
     env: runtimeEnv,
@@ -433,33 +402,6 @@ async function createServer(options = {}) {
     projectsRoot,
     runtimeProfile,
     systemRoot
-  });
-
-  const accountService = createVibe64AccountsService({
-    env: runtimeEnv,
-    providerHomesRoot,
-    systemRoot
-  });
-  const codexConnectedVerifier = typeof options.codexConnectedVerifier === "function"
-    ? options.codexConnectedVerifier
-    : createCodexConnectedVerifier({
-        accountService,
-        env: runtimeEnv,
-        providerHomesRoot,
-        systemRoot
-      });
-  const auth = createVibe64Auth({
-    codexConnectedVerifier,
-    env: runtimeEnv,
-    runtimeProfile,
-    systemRoot,
-    verifySupabaseAccessToken: options.verifySupabaseAccessToken
-  });
-  app.vibe64Auth = auth;
-  registerVibe64AuthRoutes(app, auth);
-  registerVibe64AuthGate(app, auth, {
-    accountService,
-    runtimeProfile
   });
 
   const browserLifecycleMonitor = createBrowserLifecycleMonitor({
@@ -494,15 +436,8 @@ async function createServer(options = {}) {
     env: runtimeEnv,
     explicitProjectsRoot: projectsRoot,
     explicitSystemRoot: systemRoot,
-    explicitTargetRoot: options.targetRoot,
+    explicitTargetRoot: requestedTargetRoot,
     runtimeProfile
-  });
-  registerVibe64ProjectRoutes(app, projectContext, {
-    auth,
-    env: runtimeEnv,
-    providerHomesRoot,
-    systemRoot,
-    runGithubToolchain: options.runGithubToolchain
   });
   const targetRoot = projectContext.targetRoot || "";
   const distRoot = path.resolve(appRoot, "dist");
@@ -533,6 +468,7 @@ async function createServer(options = {}) {
   try {
     runtime = await tryCreateProviderRuntimeFromApp({
       appRoot,
+      lockPath: jskitLockPath,
       profile: resolveRuntimeProfileFromSurface({
         surfaceRuntime,
         serverSurface: runtimeEnv.SERVER_SURFACE
@@ -629,6 +565,7 @@ async function createServer(options = {}) {
         providerHomesRoot,
         systemRoot,
         targetRoot: projectContext.targetRoot || "",
+        jskitLockPath,
         providerPackages: runtime.providerPackageOrder,
         packageOrder: runtime.packageOrder
       },
@@ -641,13 +578,14 @@ async function createServer(options = {}) {
 
 async function startServer(options = {}) {
   const runtimeEnv = resolveRuntimeEnv();
+  const requestedTargetRoot = String(options?.targetRoot || "").trim() || process.cwd();
   const listenTarget = resolveListenTarget({
     options,
     runtimeEnv
   });
   const runtimeProfile = createVibe64RuntimeProfile({
     mode: options?.runtimeMode,
-    targetRoot: options?.targetRoot
+    targetRoot: requestedTargetRoot
   });
   assertSafeLocalModeListenTarget(runtimeProfile, listenTarget, {
     env: runtimeEnv
@@ -659,12 +597,12 @@ async function startServer(options = {}) {
   const app = await createServer({
     appRoot: options?.appRoot,
     browserLifecycleShutdownDelayMs: options?.browserLifecycleShutdownDelayMs,
+    jskitLockPath: options?.jskitLockPath,
     providerHomesRoot: options?.providerHomesRoot,
     projectsRoot: options?.projectsRoot,
     runtimeMode: runtimeProfile.mode,
     systemRoot: options?.systemRoot,
-    targetRoot: options?.targetRoot,
-    verifySupabaseAccessToken: options?.verifySupabaseAccessToken
+    targetRoot: requestedTargetRoot
   });
   const closeAndExit = createSignalShutdownHandler({
     app,

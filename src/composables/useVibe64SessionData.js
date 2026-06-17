@@ -17,7 +17,7 @@ import {
 } from "@/lib/vibe64SessionRequestConfig.js";
 import {
   CAPABILITIES_ENDPOINT,
-  VIBE64_ACCOUNTS_CHANGED_EVENT,
+  VIBE64_CONNECTIONS_CHANGED_EVENT,
   VIBE64_PROJECT_CHANGED_EVENT,
   capabilitiesQueryKey
 } from "@/lib/studioGateApi.js";
@@ -389,7 +389,7 @@ function useVibe64SessionData({
     requestRecoveryLabel: "Studio capabilities",
     realtime: {
       events: [
-        VIBE64_ACCOUNTS_CHANGED_EVENT,
+        VIBE64_CONNECTIONS_CHANGED_EVENT,
         VIBE64_PROJECT_CHANGED_EVENT
       ]
     },

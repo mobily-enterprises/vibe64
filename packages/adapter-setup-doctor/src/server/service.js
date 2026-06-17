@@ -415,7 +415,7 @@ async function checkGitHubRepository(targetRoot, remoteCheck) {
       label: "GitHub repository",
       expected: "gh repo view works for the target remote.",
       observed: result.output,
-      explanation: "GitHub CLI cannot resolve this target repository. Reconnect GitHub in the Accounts step if authentication expired."
+      explanation: "GitHub CLI cannot resolve this target repository. Re-authenticate the local GitHub CLI credentials if authentication expired."
     });
   }
 
@@ -459,7 +459,7 @@ async function checkGitHubIssuePrAccess(targetRoot, repoCheck, remoteCheck) {
       label: "GitHub issues and PRs",
       expected: "gh can list issues and pull requests for the target repo.",
       observed: accessResult.output,
-      explanation: "Studio needs issue and PR API access for the next workflow stage. Reconnect GitHub in the Accounts step if authentication expired."
+      explanation: "Studio needs issue and PR API access for the next workflow stage. Re-authenticate the local GitHub CLI credentials if authentication expired."
     });
   }
 

@@ -6,7 +6,6 @@
   "exports": {
     ".": "./src/index.js",
     "./server": "./src/server/index.js",
-    "./server/authCookies": "./src/server/authCookies.js",
     "./server/core": "./src/server/core.js",
     "./server/codexAuthState": "./src/server/codexAuthState.js",
     "./server/composerRealtimeEvents": "./src/server/composerRealtimeEvents.js",
@@ -17,7 +16,6 @@
     "./server/launchPreviewProxyEnv": "./src/server/launchPreviewProxyEnv.js",
     "./server/localStudioRequest": "./src/server/localStudioRequest.js",
     "./server/projectServiceSelection": "./src/server/projectServiceSelection.js",
-    "./server/accountRealtimeEvents": "./src/server/accountRealtimeEvents.js",
     "./server/serverResponses": "./src/server/serverResponses.js",
     "./server/sessionRealtimeEvents": "./src/server/sessionRealtimeEvents.js",
     "./server/sessionWorktreePath": "./src/server/sessionWorktreePath.js",

@@ -7,7 +7,7 @@ import {
 
 import {
   PROJECT_SELECTION_ENDPOINT,
-  VIBE64_ACCOUNTS_CHANGED_EVENT,
+  VIBE64_CONNECTIONS_CHANGED_EVENT,
   projectTypeQueryKey
 } from "../../src/lib/studioGateApi.js";
 import {
@@ -34,12 +34,11 @@ describe("Vibe64 project client scope", () => {
   it("derives project scope from development paths", () => {
     expect(projectSlugFromPathname("/app/alpha_1")).toBe("alpha_1");
     expect(projectSlugFromPathname("/app/beta-2/dashboard/run")).toBe("beta-2");
-    expect(projectSlugFromPathname("/app/manage")).toBe("");
-    expect(projectSlugFromPathname("/app/manage/accounts")).toBe("");
+    expect(projectSlugFromPathname("/app")).toBe("");
   });
 
   it("adds project scope to query and storage keys", () => {
-    expect(VIBE64_ACCOUNTS_CHANGED_EVENT).toBe("vibe64.accounts.changed");
+    expect(VIBE64_CONNECTIONS_CHANGED_EVENT).toBe("vibe64.connections.changed");
     expect(vibe64ProjectQueryScope("alpha_1")).toEqual(["project", "alpha_1"]);
     expect(vibe64ProjectQueryScope()).toEqual(["project", "unscoped"]);
     expect(vibe64ProjectScopedStorageKey("vibe64:selected-session-id", "alpha_1"))
@@ -70,12 +69,6 @@ describe("Vibe64 project client scope", () => {
       .toBe("/api/studio/studio-setup/stream");
     expect(scopedDevelopmentApiPathname("/api/studio/browser-lifecycle/ws", "alpha_1"))
       .toBe("/api/studio/browser-lifecycle/ws");
-    expect(scopedDevelopmentApiPathname("/api/vibe64/accounts", "alpha_1"))
-      .toBe("/api/vibe64/accounts");
-    expect(scopedDevelopmentApiPathname("/api/vibe64/accounts/auth/session-1", "alpha_1"))
-      .toBe("/api/vibe64/accounts/auth/session-1");
-    expect(scopedDevelopmentApiPathname("/api/vibe64/github/identity/sync", "alpha_1"))
-      .toBe("/api/vibe64/github/identity/sync");
     expect(scopedDevelopmentApiPathname("/api/studio/project-setup", "alpha_1"))
       .toBe("/api/app/alpha_1/studio/project-setup");
   });
@@ -95,10 +88,6 @@ describe("Vibe64 project client scope", () => {
       .toBe("/api/studio/studio-setup/stream");
     expect(resolveWebSocketUrl("/api/studio/browser-lifecycle/ws"))
       .toBe("ws://127.0.0.1:5173/api/studio/browser-lifecycle/ws");
-    expect(resolveStudioRequestUrl("/api/vibe64/accounts"))
-      .toBe("/api/vibe64/accounts");
-    expect(resolveStudioRequestUrl("/api/vibe64/github/identity/sync"))
-      .toBe("/api/vibe64/github/identity/sync");
   });
 
   it("scopes direct command URLs through the current project scope", () => {

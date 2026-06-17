@@ -11,13 +11,13 @@ import {
   VIBE64_SYSTEM_ROOT_ENV
 } from "@local/vibe64-core/server/studioRoots";
 import { surfaceRuntime } from "./surfaceRuntime.js";
+import {
+  VIBE64_JSKIT_LOCK_PATH_ENV
+} from "./jskitLockPath.js";
 
 const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const APP_ENV_FILE = path.join(APP_ROOT, ".env");
 const HOST_ENV_FILE = "/etc/vibe64/vibe64.env";
-const VIBE64_SUPABASE_URL_ENV = "VIBE64_SUPABASE_URL";
-const VIBE64_SUPABASE_PUBLISHABLE_KEY_ENV = "VIBE64_SUPABASE_PUBLISHABLE_KEY";
-const VIBE64_SUPABASE_SECRET_KEY_ENV = "VIBE64_SUPABASE_SECRET_KEY";
 
 function toPort(value, fallback = 3000) {
   const parsed = Number.parseInt(String(value || "").trim(), 10);
@@ -71,9 +71,7 @@ function resolveRuntimeEnv() {
     ? String(process.env[VIBE64_SYSTEM_ROOT_ENV] || "").trim()
     : "";
   return {
-    [VIBE64_SUPABASE_URL_ENV]: String(process.env[VIBE64_SUPABASE_URL_ENV] || "").trim().replace(/\/+$/u, ""),
-    [VIBE64_SUPABASE_PUBLISHABLE_KEY_ENV]: String(process.env[VIBE64_SUPABASE_PUBLISHABLE_KEY_ENV] || "").trim(),
-    [VIBE64_SUPABASE_SECRET_KEY_ENV]: String(process.env[VIBE64_SUPABASE_SECRET_KEY_ENV] || "").trim(),
+    [VIBE64_JSKIT_LOCK_PATH_ENV]: String(process.env[VIBE64_JSKIT_LOCK_PATH_ENV] || "").trim(),
     [VIBE64_RUNTIME_NAMESPACE_ENV]: runtimeNamespace({
       env: process.env
     }),
@@ -90,9 +88,6 @@ function resolveRuntimeEnv() {
 export {
   APP_ENV_FILE,
   HOST_ENV_FILE,
-  VIBE64_SUPABASE_PUBLISHABLE_KEY_ENV,
-  VIBE64_SUPABASE_SECRET_KEY_ENV,
-  VIBE64_SUPABASE_URL_ENV,
   loadRuntimeEnvFiles,
   resolveRuntimeEnv
 };

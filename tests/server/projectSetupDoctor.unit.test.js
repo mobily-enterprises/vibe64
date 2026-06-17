@@ -27,6 +27,8 @@ import {
 } from "../../packages/project-setup-doctor/src/server/service.js";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
+const LOCAL_GITHUB_CACHE_SCOPE = "github:local";
+
 function assertShellScriptSurvivesWhitespaceCollapse(script) {
   const flattened = script.replace(/\s+/gu, " ");
   const result = spawnSync("bash", ["-n", "-c", flattened], {
@@ -65,6 +67,15 @@ async function createGitRepository(root) {
   runGit(root, ["init", "-b", "main"]);
 }
 
+async function createCommittedGitRepository(root) {
+  await createGitRepository(root);
+  runGit(root, ["config", "user.name", "Studio Test"]);
+  runGit(root, ["config", "user.email", "studio-test@example.com"]);
+  await writeFile(path.join(root, "README.md"), "# Test\n", "utf8");
+  runGit(root, ["add", "README.md"]);
+  runGit(root, ["commit", "-m", "Initial commit"]);
+}
+
 function projectSetupCacheConfigKey({
   adapterId = "",
   projectType = "",
@@ -74,6 +85,28 @@ function projectSetupCacheConfigKey({
     adapterId,
     projectType,
     values
+  });
+}
+
+function createProjectSetupTestEnv(cacheRoot, overrides = {}) {
+  return {
+    ...process.env,
+    VIBE64_DOCTOR_STATUS_ROOT: cacheRoot,
+    ...overrides
+  };
+}
+
+function projectSetupReadyStatusCache({
+  cacheRoot,
+  scope = LOCAL_GITHUB_CACHE_SCOPE,
+  targetRoot
+}) {
+  return createRepositoryReadyStatusCache({
+    doctorId: "project-setup",
+    scope,
+    stateRoot: cacheRoot,
+    studioRoot: targetRoot,
+    targetRoot
   });
 }
 
@@ -143,7 +176,7 @@ test("Project Setup admits linked Git worktrees before Git safety checks", async
 
 test("Project Setup blocks checkpointing without project-local Vibe64 ignore rules", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    await createGitRepository(targetRoot);
+    await createCommittedGitRepository(targetRoot);
 
     const status = await inspectProjectSetup({
       targetRoot
@@ -160,7 +193,7 @@ test("Project Setup blocks checkpointing without project-local Vibe64 ignore rul
 
 test("Project Setup retries automatic repairs when the same check reports a new blocker", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    await createGitRepository(targetRoot);
+    await createCommittedGitRepository(targetRoot);
     const attempts = [];
     let ignoreRuleRepairAttempts = 0;
 
@@ -209,7 +242,7 @@ test("Project Setup retries automatic repairs when the same check reports a new 
 
 test("Project Setup status reads are passive so setup gates do not auto-repair", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    await createGitRepository(targetRoot);
+    await createCommittedGitRepository(targetRoot);
 
     const status = await createService({
       studioRoot: targetRoot,
@@ -230,41 +263,31 @@ test("Project Setup status reads are passive so setup gates do not auto-repair",
 test("Project Setup rechecks the target instead of trusting stale ready cache", async () => {
   await withTemporaryRoot(async (cacheRoot) => {
     await withTemporaryRoot(async (targetRoot) => {
-      const previousCacheRoot = process.env.VIBE64_DOCTOR_STATUS_ROOT;
-      process.env.VIBE64_DOCTOR_STATUS_ROOT = cacheRoot;
-      try {
-        await createRepositoryReadyStatusCache({
-          doctorId: "project-setup",
-          scope: "github:unknown",
-          studioRoot: targetRoot,
-          targetRoot
-        }).remember({
-          currentStageId: "",
-          ok: true,
-          ready: true,
-          summary: {
-            originUrl: "git@github.com:example/test.git",
-            projectSetupCacheConfigKey: projectSetupCacheConfigKey(),
-            remoteDefaultBranch: "main"
-          },
-          stages: [],
-          targetRoot
-        });
+      const testEnv = createProjectSetupTestEnv(cacheRoot);
+      await projectSetupReadyStatusCache({
+        cacheRoot,
+        targetRoot
+      }).remember({
+        currentStageId: "",
+        ok: true,
+        ready: true,
+        summary: {
+          originUrl: "git@github.com:example/test.git",
+          projectSetupCacheConfigKey: projectSetupCacheConfigKey(),
+          remoteDefaultBranch: "main"
+        },
+        stages: [],
+        targetRoot
+      });
 
-        const status = await createService({
-          studioRoot: targetRoot,
-          targetRoot
-        }).getStatus();
+      const status = await createService({
+        env: testEnv,
+        studioRoot: targetRoot,
+        targetRoot
+      }).getStatus();
 
-        assert.equal(status.ready, false);
-        assert.equal(status.currentStageId, "git-ready");
-      } finally {
-        if (previousCacheRoot == null) {
-          delete process.env.VIBE64_DOCTOR_STATUS_ROOT;
-        } else {
-          process.env.VIBE64_DOCTOR_STATUS_ROOT = previousCacheRoot;
-        }
-      }
+      assert.equal(status.ready, false);
+      assert.equal(status.currentStageId, "git-ready");
     });
   });
 });
@@ -272,72 +295,62 @@ test("Project Setup rechecks the target instead of trusting stale ready cache", 
 test("Project Setup reuses a validated ready cache until refresh is requested", async () => {
   await withTemporaryRoot(async (cacheRoot) => {
     await withTemporaryRoot(async (targetRoot) => {
-      const previousCacheRoot = process.env.VIBE64_DOCTOR_STATUS_ROOT;
-      process.env.VIBE64_DOCTOR_STATUS_ROOT = cacheRoot;
-      try {
-        await createGitRepository(targetRoot);
-        runGit(targetRoot, ["config", "user.name", "Studio Test"]);
-        runGit(targetRoot, ["config", "user.email", "studio-test@example.com"]);
-        await writeFile(path.join(targetRoot, "README.md"), "# Cached ready\n", "utf8");
-        await writeFile(
-          path.join(targetRoot, ".gitignore"),
-          `${VIBE64_LOCAL_STATE_GITIGNORE_PATTERNS.join("\n")}\n`,
-          "utf8"
-        );
-        runGit(targetRoot, ["add", "README.md"]);
-        runGit(targetRoot, ["add", ".gitignore"]);
-        runGit(targetRoot, ["commit", "-m", "Initial commit"]);
-        runGit(targetRoot, ["remote", "add", "origin", "git@github.com:example/test.git"]);
+      const testEnv = createProjectSetupTestEnv(cacheRoot);
+      await createGitRepository(targetRoot);
+      runGit(targetRoot, ["config", "user.name", "Studio Test"]);
+      runGit(targetRoot, ["config", "user.email", "studio-test@example.com"]);
+      await writeFile(path.join(targetRoot, "README.md"), "# Cached ready\n", "utf8");
+      await writeFile(
+        path.join(targetRoot, ".gitignore"),
+        `${VIBE64_LOCAL_STATE_GITIGNORE_PATTERNS.join("\n")}\n`,
+        "utf8"
+      );
+      runGit(targetRoot, ["add", "README.md"]);
+      runGit(targetRoot, ["add", ".gitignore"]);
+      runGit(targetRoot, ["commit", "-m", "Initial commit"]);
+      runGit(targetRoot, ["remote", "add", "origin", "git@github.com:example/test.git"]);
 
-        await createRepositoryReadyStatusCache({
-          doctorId: "project-setup",
-          scope: "github:unknown",
-          studioRoot: targetRoot,
-          targetRoot
-        }).remember({
-          currentStageId: "",
-          hardStop: false,
-          ok: true,
-          ready: true,
-          summary: {
-            originUrl: "git@github.com:example/test.git",
-            projectSetupCacheConfigKey: projectSetupCacheConfigKey(),
-            remoteDefaultBranch: "main"
-          },
-          stages: [
-            {
-              id: "ready",
-              label: "Ready",
-              status: "pass"
-            }
-          ],
-          targetRoot
-        });
+      await projectSetupReadyStatusCache({
+        cacheRoot,
+        targetRoot
+      }).remember({
+        currentStageId: "",
+        hardStop: false,
+        ok: true,
+        ready: true,
+        summary: {
+          originUrl: "git@github.com:example/test.git",
+          projectSetupCacheConfigKey: projectSetupCacheConfigKey(),
+          remoteDefaultBranch: "main"
+        },
+        stages: [
+          {
+            id: "ready",
+            label: "Ready",
+            status: "pass"
+          }
+        ],
+        targetRoot
+      });
 
-        const service = createService({
-          studioRoot: targetRoot,
-          targetRoot
-        });
-        const cached = await service.getStatus();
-        assert.equal(cached.ready, true);
-        assert.equal(cached.currentStageId, "");
+      const service = createService({
+        env: testEnv,
+        studioRoot: targetRoot,
+        targetRoot
+      });
+      const cached = await service.getStatus();
+      assert.equal(cached.ready, true);
+      assert.equal(cached.currentStageId, "");
 
-        const refreshed = await service.getStatus({
-          refresh: true
-        });
-        assert.equal(refreshed.ready, false);
-        assert.equal(refreshed.currentStageId, "remote-ready");
+      const refreshed = await service.getStatus({
+        refresh: true
+      });
+      assert.equal(refreshed.ready, false);
+      assert.equal(refreshed.currentStageId, "remote-ready");
 
-        const afterRefresh = await service.getStatus();
-        assert.equal(afterRefresh.ready, false);
-        assert.equal(afterRefresh.currentStageId, "remote-ready");
-      } finally {
-        if (previousCacheRoot == null) {
-          delete process.env.VIBE64_DOCTOR_STATUS_ROOT;
-        } else {
-          process.env.VIBE64_DOCTOR_STATUS_ROOT = previousCacheRoot;
-        }
-      }
+      const afterRefresh = await service.getStatus();
+      assert.equal(afterRefresh.ready, false);
+      assert.equal(afterRefresh.currentStageId, "remote-ready");
     });
   });
 });
@@ -345,99 +358,85 @@ test("Project Setup reuses a validated ready cache until refresh is requested", 
 test("Project Setup ready cache reuse does not require Docker or setup plugins", async () => {
   await withTemporaryRoot(async (cacheRoot) => {
     await withTemporaryRoot(async (targetRoot) => {
-      const previousCacheRoot = process.env.VIBE64_DOCTOR_STATUS_ROOT;
-      const previousDockerHost = process.env.DOCKER_HOST;
-      process.env.VIBE64_DOCTOR_STATUS_ROOT = cacheRoot;
-      process.env.DOCKER_HOST = "unix:///tmp/vibe64-docker-should-not-be-used.sock";
-      try {
-        await createGitRepository(targetRoot);
-        runGit(targetRoot, ["config", "user.name", "Studio Test"]);
-        runGit(targetRoot, ["config", "user.email", "studio-test@example.com"]);
-        await writeFile(path.join(targetRoot, "README.md"), "# Cached ready\n", "utf8");
-        runGit(targetRoot, ["add", "README.md"]);
-        runGit(targetRoot, ["commit", "-m", "Initial commit"]);
-        runGit(targetRoot, ["remote", "add", "origin", "git@github.com:example/test.git"]);
+      const testEnv = createProjectSetupTestEnv(cacheRoot, {
+        DOCKER_HOST: "unix:///tmp/vibe64-docker-should-not-be-used.sock"
+      });
+      await createGitRepository(targetRoot);
+      runGit(targetRoot, ["config", "user.name", "Studio Test"]);
+      runGit(targetRoot, ["config", "user.email", "studio-test@example.com"]);
+      await writeFile(path.join(targetRoot, "README.md"), "# Cached ready\n", "utf8");
+      runGit(targetRoot, ["add", "README.md"]);
+      runGit(targetRoot, ["commit", "-m", "Initial commit"]);
+      runGit(targetRoot, ["remote", "add", "origin", "git@github.com:example/test.git"]);
 
-        await createRepositoryReadyStatusCache({
-          doctorId: "project-setup",
-          scope: "github:unknown",
-          studioRoot: targetRoot,
-          targetRoot
-        }).remember({
-          currentStageId: "",
-          hardStop: false,
-          ok: true,
-          ready: true,
-          summary: {
-            originUrl: "git@github.com:example/test.git",
-            projectSetupCacheConfigKey: projectSetupCacheConfigKey({
-              adapterId: "jskit",
-              projectType: "jskit"
-            }),
-            remoteDefaultBranch: "main"
+      await projectSetupReadyStatusCache({
+        cacheRoot,
+        targetRoot
+      }).remember({
+        currentStageId: "",
+        hardStop: false,
+        ok: true,
+        ready: true,
+        summary: {
+          originUrl: "git@github.com:example/test.git",
+          projectSetupCacheConfigKey: projectSetupCacheConfigKey({
+            adapterId: "jskit",
+            projectType: "jskit"
+          }),
+          remoteDefaultBranch: "main"
+        },
+        stages: [
+          {
+            id: "ready",
+            label: "Ready",
+            status: "pass"
+          }
+        ],
+        targetRoot
+      });
+
+      let createRuntimeCalls = 0;
+      let readProjectConfigCalls = 0;
+      const status = await createService({
+        env: testEnv,
+        projectService: {
+          async createRuntime() {
+            createRuntimeCalls += 1;
+            throw new Error("Runtime should not load for cached readiness.");
           },
-          stages: [
-            {
-              id: "ready",
-              label: "Ready",
-              status: "pass"
-            }
-          ],
-          targetRoot
-        });
+          async readProjectConfig() {
+            readProjectConfigCalls += 1;
+            return {
+              config: {
+                adapter: {
+                  id: "jskit"
+                },
+                projectType: "jskit",
+                values: {}
+              }
+            };
+          }
+        },
+        studioRoot: targetRoot,
+        targetRoot
+      }).getStatus();
 
-        let createRuntimeCalls = 0;
-        let readProjectConfigCalls = 0;
-        const status = await createService({
-          projectService: {
-            async createRuntime() {
-              createRuntimeCalls += 1;
-              throw new Error("Runtime should not load for cached readiness.");
-            },
-            async readProjectConfig() {
-              readProjectConfigCalls += 1;
-              return {
-                config: {
-                  adapter: {
-                    id: "jskit"
-                  },
-                  projectType: "jskit",
-                  values: {}
-                }
-              };
-            }
-          },
-          studioRoot: targetRoot,
-          targetRoot
-        }).getStatus();
-
-        assert.equal(status.ready, true);
-        assert.equal(readProjectConfigCalls, 1);
-        assert.equal(createRuntimeCalls, 0);
-      } finally {
-        if (previousCacheRoot == null) {
-          delete process.env.VIBE64_DOCTOR_STATUS_ROOT;
-        } else {
-          process.env.VIBE64_DOCTOR_STATUS_ROOT = previousCacheRoot;
-        }
-        if (previousDockerHost == null) {
-          delete process.env.DOCKER_HOST;
-        } else {
-          process.env.DOCKER_HOST = previousDockerHost;
-        }
-      }
+      assert.equal(status.ready, true);
+      assert.equal(readProjectConfigCalls, 1);
+      assert.equal(createRuntimeCalls, 0);
     });
   });
 });
-
 test("Project Setup continues to remote setup when Vibe64 ignore rules are present", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    await createGitRepository(targetRoot);
+    await createCommittedGitRepository(targetRoot);
     await writeFile(
       path.join(targetRoot, ".gitignore"),
       `${VIBE64_LOCAL_STATE_GITIGNORE_PATTERNS.join("\n")}\n`,
       "utf8"
     );
+    runGit(targetRoot, ["add", ".gitignore"]);
+    runGit(targetRoot, ["commit", "-m", "Add Vibe64 ignore rules"]);
 
     const status = await inspectProjectSetup({
       targetRoot

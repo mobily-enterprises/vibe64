@@ -174,6 +174,7 @@
                   :disabled="page.busy || stepInput.saving"
                   hide-details="auto"
                   :label="field.label"
+                  :max-rows="field.maxRows || 4"
                   :model-value="stepInput.values[field.name] || ''"
                   :placeholder="field.placeholder"
                   :rows="field.rows || 2"
@@ -231,7 +232,10 @@
                 </v-btn>
               </div>
 
-              <div class="studio-autopilot__actions studio-autopilot__step-actions">
+              <div
+                v-if="!selectedStepInputControlVisible"
+                class="studio-autopilot__actions studio-autopilot__step-actions"
+              >
                 <v-btn
                   v-if="!stepInputHasWorkflowIntents"
                   color="primary"

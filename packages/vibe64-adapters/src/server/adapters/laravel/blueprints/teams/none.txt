@@ -1,4 +1,4 @@
 Teams: none
 
-Do not assume team, organization, workspace, or multi-tenant scaffolding exists.
-Add team models, policies, membership flows, or tenant scoping only when the requested product needs them.
+Do not assume team, organization, workspace, or multi-workspace scaffolding exists.
+Add team models, policies, membership flows, or workspace scoping only when the requested product needs them.

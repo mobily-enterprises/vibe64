@@ -3872,8 +3872,8 @@ test("Vibe64 command terminal joins the target runtime network before the image"
 });
 
 test("Vibe64 command terminal mounts the session root for worktree creation outside the repo", () => {
-  const targetRoot = "/home/tenant/vibe64/beepollen";
-  const sessionRoot = "/home/tenant/vibe64/beepollen/.vibe64-local/sessions/active/unit";
+  const targetRoot = "/home/workspace/vibe64/beepollen";
+  const sessionRoot = "/home/workspace/vibe64/beepollen/.vibe64-local/sessions/active/unit";
   const resultDirectory = "/tmp/vibe64-command-unit";
   const args = commandTerminalArgs({
     args: [

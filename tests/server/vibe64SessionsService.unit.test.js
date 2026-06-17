@@ -23,7 +23,7 @@ function readySetupServices() {
     }
   };
   return {
-    accountSetupService: readyService,
+    connectionSetupService: readyService,
     projectSetupService: readyService,
     studioSetupService: readyService
   };
@@ -168,10 +168,10 @@ test("session advance is gated by session readiness", async () => {
       }
     },
     setupServices: {
-      accountSetupService: {
+      connectionSetupService: {
         async getStatus() {
           return {
-            blockedReason: "Codex is not authenticated for the shared Vibe64 app account.",
+            blockedReason: "Codex connection is not ready.",
             ready: false
           };
         }
@@ -194,7 +194,7 @@ test("session advance is gated by session readiness", async () => {
 
   assert.equal(result.ok, false);
   assert.equal(result.code, "vibe64_session_not_ready");
-  assert.equal(result.error, "Codex is not authenticated for the shared Vibe64 app account.");
+  assert.equal(result.error, "Codex connection is not ready.");
   assert.equal(createRuntimeCalled, false);
   assert.equal(advanceCalled, false);
 });
@@ -967,7 +967,7 @@ test("session prompt intent uses Vibe64 user for readiness without leaking it to
       }
     },
     setupServices: {
-      accountSetupService: setupService("accounts"),
+      connectionSetupService: setupService("connections"),
       projectSetupService: {
         async getStatus() {
           throw new Error("Project setup should not gate session prompt intents.");
@@ -988,7 +988,7 @@ test("session prompt intent uses Vibe64 user for readiness without leaking it to
 
   assert.deepEqual(statusInputs, [
     {
-      id: "accounts",
+      id: "connections",
       input: {
         refresh: false,
         vibe64User
@@ -1432,9 +1432,9 @@ test("session inspect reads existing Codex terminal state without preparing it",
 });
 
 test("session inspect disables controls when session readiness is blocked", async () => {
-  let accountStatusInput = null;
+  let connectionStatusInput = null;
   let runtimeOptions = null;
-  const disabledReason = "Codex is not authenticated for the shared Vibe64 app account.";
+  const disabledReason = "Codex connection is not ready.";
   const service = createService({
     projectService: {
       async createRuntime(options = {}) {
@@ -1505,9 +1505,9 @@ test("session inspect disables controls when session readiness is blocked", asyn
       }
     },
     setupServices: {
-      accountSetupService: {
+      connectionSetupService: {
         async getStatus(input = {}) {
-          accountStatusInput = input;
+          connectionStatusInput = input;
           return {
             blockedReason: disabledReason,
             ready: false
@@ -1530,7 +1530,7 @@ test("session inspect disables controls when session readiness is blocked", asyn
     }
   });
 
-  assert.deepEqual(accountStatusInput, {
+  assert.deepEqual(connectionStatusInput, {
     refresh: false,
     vibe64User: {
       email: "owner@example.com"
@@ -2776,9 +2776,9 @@ test("open session list reports first seed creation state without starting it", 
       }
     },
     setupServices: {
-      accountSetupService: {
+      connectionSetupService: {
         async getStatus() {
-          throw new Error("listSessions should not read account readiness.");
+          throw new Error("listSessions should not read connection readiness.");
         }
       },
       projectSetupService: {

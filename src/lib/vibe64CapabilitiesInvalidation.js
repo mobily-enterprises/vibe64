@@ -1,5 +1,5 @@
 import {
-  VIBE64_ACCOUNTS_CHANGED_EVENT
+  VIBE64_CONNECTIONS_CHANGED_EVENT
 } from "@/lib/studioGateApi.js";
 import {
   vibe64SessionDebugError,
@@ -9,8 +9,8 @@ import {
 const VIBE64_CAPABILITIES_QUERY_LISTENER = "local.main.vibe64-capabilities-query-listener";
 const VIBE64_LIVE_QUERY_RECOVERY_LISTENER = "local.main.vibe64-live-query-recovery-listener";
 const DEFAULT_INVALIDATION_DEBUG_PREFIX = "client.capabilities.invalidate";
-const IN_PROGRESS_ACCOUNT_STATUSES = new Set(["authenticating"]);
-const FINAL_ACCOUNT_STATUSES = new Set(["connected", "not_connected", "reconnect_required"]);
+const IN_PROGRESS_CONNECTION_STATUSES = new Set(["authenticating"]);
+const FINAL_CONNECTION_STATUSES = new Set(["connected", "not_connected", "reconnect_required"]);
 const MAX_DEBUG_QUERY_ERRORS = 8;
 
 function isVibe64CapabilitiesQuery(query = {}) {
@@ -23,9 +23,9 @@ function isVibe64LiveQuery(query = {}) {
   return queryKey[0] === "vibe64";
 }
 
-function accountRealtimePayloadDebugSummary(payload = {}) {
+function connectionRealtimePayloadDebugSummary(payload = {}) {
   return {
-    accountId: String(payload?.accountId || ""),
+    connectionId: String(payload?.connectionId || ""),
     authSessionId: String(payload?.authSessionId || ""),
     connected: typeof payload?.connected === "boolean" ? payload.connected : null,
     reason: String(payload?.reason || ""),
@@ -33,12 +33,12 @@ function accountRealtimePayloadDebugSummary(payload = {}) {
   };
 }
 
-function capabilitiesRefetchTypeForAccountPayload(payload = {}) {
+function capabilitiesRefetchTypeForConnectionPayload(payload = {}) {
   const status = String(payload?.status || "").trim();
-  if (IN_PROGRESS_ACCOUNT_STATUSES.has(status)) {
+  if (IN_PROGRESS_CONNECTION_STATUSES.has(status)) {
     return "active";
   }
-  if (FINAL_ACCOUNT_STATUSES.has(status)) {
+  if (FINAL_CONNECTION_STATUSES.has(status)) {
     return "all";
   }
   return typeof payload?.connected === "boolean" ? "all" : "active";
@@ -206,11 +206,11 @@ function vibe64RealtimeSocketDebugSummary(app) {
 
 function invalidateVibe64CapabilitiesQueryClient(queryClient, {
   debugEventPrefix = DEFAULT_INVALIDATION_DEBUG_PREFIX,
-  event = VIBE64_ACCOUNTS_CHANGED_EVENT,
+  event = VIBE64_CONNECTIONS_CHANGED_EVENT,
   payload = {}
 } = {}) {
-  const debugPayload = accountRealtimePayloadDebugSummary(payload);
-  const refetchType = capabilitiesRefetchTypeForAccountPayload(payload);
+  const debugPayload = connectionRealtimePayloadDebugSummary(payload);
+  const refetchType = capabilitiesRefetchTypeForConnectionPayload(payload);
   if (!queryClient || typeof queryClient.invalidateQueries !== "function") {
     vibe64SessionDebugLog(`${debugEventPrefix}.skipped`, {
       payload: debugPayload,
@@ -281,11 +281,11 @@ function invalidateVibe64CapabilitiesQueryClient(queryClient, {
 
 function invalidateVibe64CapabilitiesQueries(app, {
   debugEventPrefix = "client.realtime.capabilities.invalidate",
-  event = VIBE64_ACCOUNTS_CHANGED_EVENT,
+  event = VIBE64_CONNECTIONS_CHANGED_EVENT,
   payload = {}
 } = {}) {
-  const debugPayload = accountRealtimePayloadDebugSummary(payload);
-  const refetchType = capabilitiesRefetchTypeForAccountPayload(payload);
+  const debugPayload = connectionRealtimePayloadDebugSummary(payload);
+  const refetchType = capabilitiesRefetchTypeForConnectionPayload(payload);
   if (!app || typeof app.has !== "function" || typeof app.make !== "function") {
     vibe64SessionDebugLog(`${debugEventPrefix}.skipped`, {
       payload: debugPayload,
@@ -398,8 +398,8 @@ function invalidateVibe64LiveQueries(app, {
 export {
   VIBE64_CAPABILITIES_QUERY_LISTENER,
   VIBE64_LIVE_QUERY_RECOVERY_LISTENER,
-  accountRealtimePayloadDebugSummary,
-  capabilitiesRefetchTypeForAccountPayload,
+  connectionRealtimePayloadDebugSummary,
+  capabilitiesRefetchTypeForConnectionPayload,
   invalidateVibe64CapabilitiesQueries,
   invalidateVibe64CapabilitiesQueryClient,
   invalidateVibe64LiveQueries,

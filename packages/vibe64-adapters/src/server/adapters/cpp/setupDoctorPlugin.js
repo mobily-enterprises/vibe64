@@ -217,7 +217,7 @@ function createCppSetupDoctorPlugin({
           label: "C++ toolchain image",
           run: async () => {
             const result = await checkAdapterToolchainImage(toolkit, {
-              explanation: "The published C++ adapter toolchain must be installed by host provisioning before tenants run compiler, CMake, Make, Meson, target scripts, or workflow checks.",
+              explanation: "The published C++ adapter toolchain must be installed by host provisioning before local workspaces run compiler, CMake, Make, Meson, target scripts, or workflow checks.",
               id: "cpp-toolchain-image",
               image: CPP_TOOLCHAIN_IMAGE,
               label: "C++ toolchain image"

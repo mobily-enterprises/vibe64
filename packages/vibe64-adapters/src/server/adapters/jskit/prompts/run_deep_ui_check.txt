@@ -2,5 +2,5 @@
 
 JSKIT-specific deep UI guidance:
 - Inspect the JSKIT app UI through the actual workflow surfaces affected by the change.
-- Pay attention to generated screens, provider-backed resource state, command feedback, setup/account panels, responsive layout, disabled states, and terminal/workflow panels.
+- Pay attention to generated screens, provider-backed resource state, command feedback, setup panels, responsive layout, disabled states, and terminal/workflow panels.
 - Fix clear UI defects directly when they are in scope and report anything that remains blocked.

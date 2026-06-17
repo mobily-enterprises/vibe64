@@ -560,7 +560,7 @@ function ensurePreviewAuthProfilePath(profilePath = "") {
     recursive: true
   });
   // Launch containers can run with a remapped user. Keep only the terminal-scoped
-  // runtime directory writable; tenant-private parent directories still gate access.
+  // runtime directory writable; runtime-private parent directories still gate access.
   chmodSync(profileDir, 0o777);
   return normalizedPath;
 }

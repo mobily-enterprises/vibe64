@@ -7,9 +7,6 @@ import {
   useVibe64ProjectSlug
 } from "@/composables/useVibe64ProjectScope.js";
 import {
-  useVibe64AppAuth
-} from "@/composables/useVibe64AppAuth.js";
-import {
   readLocalStorageJson,
   writeLocalStorageJson
 } from "@/lib/browserLocalStorage.js";
@@ -36,8 +33,6 @@ function agentSettingsStorageKey(baseKey = "", projectSlug = "", email = "") {
 
 function useVibe64AgentSettings() {
   const projectSlug = useVibe64ProjectSlug();
-  const auth = useVibe64AppAuth();
-  const userEmail = computed(() => normalizeAgentSettingsEmail(auth?.state?.user?.email));
   const legacyStorageKey = computed(() => vibe64ProjectScopedStorageKey(
     AGENT_SETTINGS_STORAGE_KEY,
     projectSlug.value
@@ -45,7 +40,7 @@ function useVibe64AgentSettings() {
   const storageKey = computed(() => agentSettingsStorageKey(
     AGENT_SETTINGS_STORAGE_KEY,
     projectSlug.value,
-    userEmail.value
+    ""
   ));
   const settings = ref(defaultVibe64AgentSettings());
 

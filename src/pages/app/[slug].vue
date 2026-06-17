@@ -14,7 +14,6 @@ import { RouterView } from "vue-router";
 import ProjectSelectionGate from "@/components/studio/ProjectSelectionGate.vue";
 import ProjectTypeGate from "@/components/studio/ProjectTypeGate.vue";
 import Vibe64SessionPanel from "@/components/studio/Vibe64SessionPanel.vue";
-import Vibe64AccountMenu from "@/components/auth/Vibe64AccountMenu.vue";
 import { useVibe64AppPage } from "@/composables/useVibe64AppPage.js";
 
 const {
@@ -29,12 +28,10 @@ const {
   handleProjectTypeError,
   handleProjectTypeMissing,
   handleProjectTypeReady,
-  mdiApps,
   mdiChevronDown,
   mdiChevronRight,
   mobileProjectAction,
   mobileProjectActionVisible,
-  openManagement,
   openProject,
   pageError,
   projectLoadError,
@@ -70,12 +67,6 @@ const {
               </v-btn>
             </template>
             <v-list density="compact" min-width="240">
-              <v-list-item
-                :prepend-icon="mdiApps"
-                title="Management"
-                @click="openManagement"
-              />
-              <v-divider />
               <v-list-item
                 v-for="project in sortedProjects"
                 :key="project.slug"
@@ -150,9 +141,6 @@ const {
           </button>
         </div>
       </div>
-    </template>
-    <template #top-right>
-      <Vibe64AccountMenu />
     </template>
     <section class="generated-ui-screen generated-ui-screen--studio studio-screen d-flex flex-column ga-3">
       <v-alert

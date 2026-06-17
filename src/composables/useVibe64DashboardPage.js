@@ -5,7 +5,7 @@ import getPlacements from "/src/placement.js";
 function useVibe64DashboardPage() {
   const route = useRoute();
   const projectSlug = computed(() => firstRouteParam(route.params.slug));
-  const projectBasePath = computed(() => projectSlug.value ? `/app/${encodeURIComponent(projectSlug.value)}` : "/app/manage/projects");
+  const projectBasePath = computed(() => projectSlug.value ? `/app/${encodeURIComponent(projectSlug.value)}` : "/app");
   const dashboardSectionLinks = computed(() => getPlacements()
     .filter((placement) => (
       placement?.kind === "link" &&

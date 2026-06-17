@@ -1,4 +1,4 @@
-import { expect, test, type Page, type Route } from "@playwright/test";
+import { expect, test, type Page, type Request, type Route } from "@playwright/test";
 
 import {
   BASE_URL,
@@ -18,6 +18,21 @@ async function expectNoAttentionRequired(page: Page) {
 
 function escapedPathPattern(pathValue: string) {
   return String(pathValue || "").replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
+
+function withoutBrowserTabOriginId(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return value;
+  }
+  const {
+    originId: _originId,
+    ...body
+  } = value as Record<string, unknown>;
+  return body;
+}
+
+function requestBodyWithoutBrowserTabOriginId(request: Request) {
+  return withoutBrowserTabOriginId(request.postDataJSON() || {});
 }
 
 function dashboardUrlPattern(routePath: string, suffix = "/?$") {
@@ -291,19 +306,6 @@ test.describe("Autopilot dumb client contract", () => {
     ))).toBe("still-here");
   });
 
-  test("keeps user GitHub authentication on the Account page", async ({ page }) => {
-    await mockVibe64Session(page, sessionPayload());
-
-    await page.goto(`${BASE_URL}/account?returnTo=${encodeURIComponent(DEVELOPMENT_PATH)}`);
-
-    await expect(page.getByRole("heading", { name: "Account", exact: true })).toBeVisible();
-    await expect(page.getByRole("heading", { level: 2, name: "GitHub", exact: true })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Password", exact: true })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Codex", exact: true })).toHaveCount(0);
-    await expect(page.getByText("GitHub is connected.")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Save Git identity" })).toBeVisible();
-  });
-
   test("auto-dispatches the server operation without rendering a manual start override", async ({ page }) => {
     await recordForbiddenText(page, "Let's start");
     const actionRequests: unknown[] = [];
@@ -406,7 +408,7 @@ test.describe("Autopilot dumb client contract", () => {
   });
 
   test("keeps Codex conversation controls non-dispatchable when session readiness is blocked", async ({ page }) => {
-    const disabledReason = "Codex is not authenticated for the shared Vibe64 app account.";
+    const disabledReason = "Finish local editor connection setup before using chat.";
     const actionRequests: unknown[] = [];
     const intentRequests: unknown[] = [];
     const disabledIntent = {
@@ -3034,21 +3036,22 @@ test.describe("Autopilot dumb client contract", () => {
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
     const autopilot = page.locator(".studio-autopilot");
+    const stepControl = page.locator(".studio-autopilot__timeline-control");
     await expect(autopilot.getByRole("heading", { name: "Define issue" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Save changes" })).toHaveCount(0);
-    await expect(autopilot.getByRole("button", { name: "Create GitHub issue" })).toBeVisible();
-    const createIssueBox = await autopilot.getByRole("button", { name: "Create GitHub issue" }).boundingBox();
+    await expect(stepControl.getByRole("button", { name: "Create GitHub issue" })).toBeVisible();
+    const createIssueBox = await stepControl.getByRole("button", { name: "Create GitHub issue" }).boundingBox();
     const viewport = page.viewportSize();
     expect(createIssueBox).not.toBeNull();
     expect(viewport).not.toBeNull();
     expect((createIssueBox?.y || 0) + (createIssueBox?.height || 0)).toBeLessThanOrEqual(viewport?.height || 0);
-    await expect(autopilot.getByLabel("Issue title")).toBeVisible();
-    await expect(autopilot.getByLabel("Talk with the AI agent")).toBeVisible();
+    await expect(stepControl.getByLabel("Issue title")).toBeVisible();
+    await expect(stepControl.getByLabel("Talk with the AI agent")).toBeVisible();
     await expect(page.getByRole("button", { name: "Save changes" })).toHaveCount(0);
-    await expect(autopilot.getByRole("button", { name: "Create GitHub issue" })).toBeVisible();
+    await expect(stepControl.getByRole("button", { name: "Create GitHub issue" })).toBeVisible();
     await expect.poll(() => stepInputs).toEqual([]);
-    await autopilot.getByLabel("Talk with the AI agent").fill("Use a clearer title.");
-    await autopilot.getByRole("button", { name: "Send improvement request" }).click();
+    await stepControl.getByLabel("Talk with the AI agent").fill("Use a clearer title.");
+    await stepControl.getByRole("button", { name: "Send improvement request" }).click();
 
     await expect.poll(() => intentRequests).toEqual([
       {
@@ -3412,7 +3415,7 @@ test.describe("Autopilot dumb client contract", () => {
 
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}?mode=inspect`);
 
-    const inspect = page.locator(".studio-autopilot__composer");
+    const inspect = page.locator(".studio-autopilot__timeline-control");
     await expect(inspect.getByLabel("Work title")).toHaveValue("Add empty a.txt to worktree root");
     await expect(inspect.getByLabel("Session label")).toHaveValue("a-txt");
     await expect(inspect.getByLabel("Work description")).toHaveValue("Create an empty file named `a.txt` in the active Vibe64 worktree root.");
@@ -3422,8 +3425,8 @@ test.describe("Autopilot dumb client contract", () => {
     await expect(inspect.getByRole("button", { name: "Create issue on GH" })).toHaveCount(0);
     await expect(inspect.getByRole("button", { name: "Use this description" })).toBeVisible();
     await expect(inspect.getByRole("button", { name: "Send improvement request" })).toBeVisible();
-    await expect(inspect.getByLabel("Talk with the AI agent")).toBeVisible();
-    await inspect.getByLabel("Talk with the AI agent").fill("Make the acceptance criteria stricter.");
+    await expect(inspect.getByLabel("What should change?")).toBeVisible();
+    await inspect.getByLabel("What should change?").fill("Make the acceptance criteria stricter.");
     await inspect.getByRole("button", { name: "Send improvement request" }).click();
     await expect.poll(() => intentRequests).toEqual([
       {
@@ -3554,7 +3557,7 @@ test.describe("Autopilot dumb client contract", () => {
 
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}?mode=inspect`);
 
-    const inspect = page.locator(".studio-autopilot__composer");
+    const inspect = page.locator(".studio-autopilot__timeline-control");
     await inspect.getByLabel("Issue title").fill("Updated issue title");
     await inspect.getByRole("button", { name: "Create GitHub issue" }).click();
 
@@ -3652,7 +3655,7 @@ async function mockVibe64Session(
       return;
     }
     if (method === "POST" && url.pathname.endsWith("/codex-turn/interrupt")) {
-      onCodexTurnInterrupt(request.postDataJSON() || {});
+      onCodexTurnInterrupt(requestBodyWithoutBrowserTabOriginId(request) as Record<string, unknown>);
       await fulfillJson(route, {
         interrupted: true,
         ok: true,
@@ -3661,7 +3664,7 @@ async function mockVibe64Session(
       return;
     }
     if (method === "POST" && url.pathname.endsWith("/shell-terminal")) {
-      const shellTerminal = onShellTerminalStart(request.postDataJSON() || {});
+      const shellTerminal = onShellTerminalStart(requestBodyWithoutBrowserTabOriginId(request) as Record<string, unknown>);
       await fulfillJson(route, {
         commandPreview: "bash",
         id: "server-shell-terminal",
@@ -3672,7 +3675,7 @@ async function mockVibe64Session(
       return;
     }
     if (method === "POST" && /\/actions\/[^/]+$/u.test(url.pathname)) {
-      onAction(url.pathname.split("/").at(-1) || "", request.postDataJSON() || {});
+      onAction(url.pathname.split("/").at(-1) || "", requestBodyWithoutBrowserTabOriginId(request));
       await fulfillJson(route, {
         ok: true,
         ...session
@@ -3688,7 +3691,7 @@ async function mockVibe64Session(
       return;
     }
     if (method === "POST" && url.pathname.endsWith("/command-terminal")) {
-      const commandTerminal = onCommandTerminalStart(request.postDataJSON() || {});
+      const commandTerminal = onCommandTerminalStart(requestBodyWithoutBrowserTabOriginId(request) as Record<string, unknown>);
       await fulfillJson(route, {
         commandPreview: "echo test",
         id: "server-command-terminal",
@@ -3715,7 +3718,7 @@ async function mockVibe64Session(
       return;
     }
     if (method === "POST" && /\/intents\/[^/]+$/u.test(url.pathname)) {
-      onIntent(request.postDataJSON());
+      onIntent(requestBodyWithoutBrowserTabOriginId(request));
       await fulfillJson(route, {
         ok: true,
         ...session
@@ -3723,7 +3726,7 @@ async function mockVibe64Session(
       return;
     }
     if (method === "POST" && url.pathname.endsWith("/current-step/input")) {
-      onStepInput(request.postDataJSON());
+      onStepInput(requestBodyWithoutBrowserTabOriginId(request));
       await fulfillJson(route, {
         ok: true,
         ...session

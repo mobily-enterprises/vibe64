@@ -144,7 +144,7 @@ function createJskitMariaDbRuntimeContainer({
         MARIADB_ROOT_PASSWORD: JSKIT_MARIADB_ROOT_PASSWORD
       };
     },
-    expected: "Shared tenant JSKIT MariaDB is ready for JSKIT project databases.",
+    expected: "Shared JSKIT MariaDB is ready for JSKIT project databases.",
     health: {
       command: [
         "mariadb-admin",
@@ -178,7 +178,7 @@ function createJskitMariaDbRuntimeContainer({
         ],
         expected: ensureProjectDatabase
           ? "Managed JSKIT MariaDB can create the app database and create/drop a temporary probe database."
-          : "Shared tenant JSKIT MariaDB can create/drop a temporary probe database.",
+          : "Shared JSKIT MariaDB can create/drop a temporary probe database.",
         explanation: "The MariaDB container is reachable, but Studio could not prove DDL rights.",
         observed: ensureProjectDatabase
           ? "App database is present. Probe database and table created and dropped successfully."
@@ -187,7 +187,7 @@ function createJskitMariaDbRuntimeContainer({
     },
     readyExplanation: manageProjectDatabase
       ? "The JSKIT managed MariaDB runtime is ready for target database setup."
-      : "The shared JSKIT MariaDB runtime is ready for tenant project databases.",
+      : "The shared JSKIT MariaDB runtime is ready for project databases.",
     required,
     secretEnv: [
       "MARIADB_ROOT_PASSWORD",

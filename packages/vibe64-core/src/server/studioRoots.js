@@ -11,6 +11,7 @@ const VIBE64_SYSTEM_ROOT_ENV = "VIBE64_SYSTEM_ROOT";
 const VIBE64_SYSTEM_DIR = ".vibe64-demon";
 const VIBE64_PROJECT_SHARED_DIR = ".vibe64";
 const VIBE64_PROJECT_LOCAL_DIR = ".vibe64-local";
+const VIBE64_LOCAL_EDITOR_STATE_DIR = "vibe64-local-editor";
 
 function normalizeRoot(value, fallbackRoot) {
   const root = String(value || "").trim();
@@ -18,7 +19,16 @@ function normalizeRoot(value, fallbackRoot) {
 }
 
 function runtimeProfileIsLocal(runtimeProfile = {}) {
-  return runtimeProfile?.local === true || String(runtimeProfile?.mode || "").trim() === "local";
+  const mode = String(runtimeProfile?.mode || "").trim().toLowerCase();
+  return runtimeProfile?.local === true || mode === "local" || mode === "local-editor";
+}
+
+function resolveDefaultLocalEditorSystemRoot(home = os.homedir()) {
+  return normalizeRoot(path.join(home || process.cwd(), ".local", "share", VIBE64_LOCAL_EDITOR_STATE_DIR));
+}
+
+function resolveDefaultLocalEditorProjectsRoot(home = os.homedir()) {
+  return path.join(resolveDefaultLocalEditorSystemRoot(home), "projects");
 }
 
 function resolveStudioAppRoot({
@@ -85,7 +95,7 @@ function resolveVibe64SystemRoot({
     return normalizeRoot(explicitSystemRoot);
   }
   if (runtimeProfileIsLocal(runtimeProfile)) {
-    return normalizeRoot(path.join(home || process.cwd(), ".local", "share", "vibe64-local-editor"));
+    return resolveDefaultLocalEditorSystemRoot(home);
   }
   return normalizeRoot(path.join(projectsRoot || path.join(home || process.cwd(), "vibe64"), VIBE64_SYSTEM_DIR));
 }
@@ -127,12 +137,15 @@ function resolveVibe64Roots({
   runtimeProfile = null,
   targetRoot = ""
 } = {}) {
-  const resolvedProjectsRoot = projectsRoot
-    ? normalizeRoot(projectsRoot)
-    : normalizeRoot(path.join(home || process.cwd(), "vibe64"));
   const resolvedTargetRoot = String(targetRoot || "").trim()
     ? normalizeRoot(targetRoot)
     : "";
+  const localProfile = runtimeProfileIsLocal(runtimeProfile);
+  const resolvedProjectsRoot = projectsRoot
+    ? normalizeRoot(projectsRoot)
+    : localProfile
+      ? resolveDefaultLocalEditorProjectsRoot(home)
+      : normalizeRoot(path.join(home || process.cwd(), "vibe64"));
   return Object.freeze({
     projectLocalRoot: resolvedTargetRoot ? resolveVibe64ProjectLocalRoot(resolvedTargetRoot) : "",
     projectSharedRoot: resolvedTargetRoot ? resolveVibe64ProjectSharedRoot(resolvedTargetRoot) : "",
@@ -158,6 +171,8 @@ export {
   VIBE64_SYSTEM_DIR,
   VIBE64_SYSTEM_ROOT_ENV,
   VIBE64_TARGET_ROOT_ENV,
+  resolveDefaultLocalEditorProjectsRoot,
+  resolveDefaultLocalEditorSystemRoot,
   resolveExplicitStudioTargetRoot,
   resolveVibe64ProviderHomesRoot,
   resolveVibe64ProjectLocalRoot,

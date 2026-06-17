@@ -5,6 +5,9 @@ import {
 } from "./service.js";
 import { featureActions } from "./actions.js";
 import { registerRoutes } from "./registerRoutes.js";
+import {
+  resolveConnectionSetupService
+} from "@local/vibe64-runtime/server/connectionReadiness";
 
 class CurrentAppProvider {
   static id = "feature.current-app";
@@ -12,7 +15,6 @@ class CurrentAppProvider {
   static dependsOn = [
     "runtime.actions",
     "feature.vibe64-project",
-    "feature.vibe64-accounts",
     "feature.studio-setup-doctor",
     "feature.project-setup-doctor"
   ];
@@ -33,7 +35,7 @@ class CurrentAppProvider {
         return createService({
           projectService: scope.make("feature.vibe64-project.service"),
           setupServices: {
-            accountSetupService: scope.make("feature.vibe64-accounts.service"),
+            connectionSetupService: resolveConnectionSetupService(scope),
             projectSetupService: scope.make("feature.project-setup-doctor.service"),
             studioSetupService: scope.make("feature.studio-setup-doctor.service")
           }

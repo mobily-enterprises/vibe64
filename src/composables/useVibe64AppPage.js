@@ -1,7 +1,6 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
-  mdiApps,
   mdiChevronDown,
   mdiChevronLeft,
   mdiChevronRight
@@ -9,7 +8,7 @@ import {
 import { useStudioShellDrawer } from "@/composables/useStudioShellDrawer.js";
 import {
   useVibe64ProjectsResource
-} from "@/composables/useVibe64ProjectManagement.js";
+} from "@/composables/useVibe64ProjectsResource.js";
 
 const HOME_SHELL_CLASS = "studio-home-shell-active";
 const SELF_TARGET_AUTO_SELECT_DELAY_MS = 3000;
@@ -44,7 +43,7 @@ function useVibe64AppPage() {
   const selfTargetAutoSelectProjectRepro = computed(() => projectSelection.selfTargetAutoSelectProjectRepro || {});
   const targetRoot = computed(() => String(projectSelection.targetRoot || "").trim());
   const targetFolderName = computed(() => projectSlug.value || finalPathSegment(targetRoot.value));
-  const developmentBasePath = computed(() => projectSlug.value ? `/app/${encodeURIComponent(projectSlug.value)}` : "/app/manage/projects");
+  const developmentBasePath = computed(() => projectSlug.value ? `/app/${encodeURIComponent(projectSlug.value)}` : "/app");
   const dashboardBasePath = computed(() => `${developmentBasePath.value}/dashboard`);
   const dashboardRouteActive = computed(() => normalizedPath(route.path).startsWith(`${dashboardBasePath.value}/`));
   const projectPane = computed(() => dashboardRouteActive.value ? "dashboard" : "preview");
@@ -142,12 +141,10 @@ function useVibe64AppPage() {
     handleProjectTypeError,
     handleProjectTypeMissing,
     handleProjectTypeReady,
-    mdiApps,
     mdiChevronDown,
     mdiChevronRight,
     mobileProjectAction,
     mobileProjectActionVisible,
-    openManagement,
     openProject,
     pageError,
     pageTitle,
@@ -187,10 +184,6 @@ function useVibe64AppPage() {
       return;
     }
     void router.push(developmentBasePath.value);
-  }
-
-  function openManagement() {
-    void router.push("/app/manage/projects");
   }
 
   function openProject(project = {}) {

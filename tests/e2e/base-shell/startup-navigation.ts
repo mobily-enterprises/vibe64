@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 import { BASE_URL, currentAppPayload } from "../support/base-shell-data";
 import { expectSessionsRoute } from "../support/base-shell-assertions";
 import {
-  mockAccountsBlocked,
+  mockConnectionsBlocked,
   mockAppSetupBlocked,
   mockBootstrapBlocked,
   mockCurrentAppInspection,
@@ -46,7 +46,7 @@ test.describe("studio startup navigation", () => {
               path: "/workspace/vibe64/demo-app",
               selected: false,
               slug: "demo-app",
-              source: "managed"
+              source: "workspace"
             }
           ],
           projectsRoot: "/workspace/vibe64",
@@ -283,13 +283,6 @@ test.describe("studio startup navigation", () => {
     await expect(page.getByRole("tab", { name: "Project Setup", exact: true })).toHaveAttribute("aria-selected", "true");
   });
 
-  test("accounts live in the dashboard", async ({ page }) => {
-    await mockStudioReady(page);
-    await page.goto(`${BASE_URL}/home/dashboard/accounts`);
-    await expect(page.getByRole("heading", { name: "GitHub Account", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Continue to Studio Setup" })).toHaveCount(0);
-  });
-
   test("ready continue moves from Studio Setup to Adapter Setup tab", async ({ page }) => {
     await mockStudioReady(page);
     await page.goto(`${BASE_URL}/home/dashboard/setup?tab=studio-setup`);
@@ -298,15 +291,15 @@ test.describe("studio startup navigation", () => {
     await expect(page.getByRole("tab", { name: "Adapter Setup", exact: true })).toHaveAttribute("aria-selected", "true");
   });
 
-  test("home disables session creation when accounts are missing", async ({ page }) => {
-    await mockAccountsBlocked(page);
+  test("home disables session creation when connections are missing", async ({ page }) => {
+    await mockConnectionsBlocked(page);
     await page.goto(`${BASE_URL}/home`);
     await expect(page).toHaveURL(/\/home$/u);
     await expect(page.getByText("Checking setup", { exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "New session" })).toBeDisabled();
-    await page.goto(`${BASE_URL}/home/dashboard/accounts`);
-    await expect(page).toHaveURL(/\/home\/dashboard\/accounts\/?$/u);
-    await expect(page.getByRole("heading", { name: "GitHub Account", exact: true })).toBeVisible();
+    await page.goto(`${BASE_URL}/home/dashboard/setup`);
+    await expect(page).toHaveURL(/\/home\/dashboard\/setup\/?$/u);
+    await expect(page.getByRole("tab", { name: "Studio Setup", exact: true })).toBeVisible();
   });
 
   test("ready continue moves from Adapter Setup to Project Setup tab", async ({ page }) => {

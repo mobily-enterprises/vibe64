@@ -191,7 +191,7 @@ test("launch preview proxy preserves the canonical target host when using an alt
 test("launch preview proxy can expose previews through a Caddy-compatible Unix socket origin", async () => {
   const socketDir = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-sockets-"));
   await withTargetServer(async (target) => {
-    const publicOrigin = "https://v64preview-abcd1234--tenant.vibe64.dev";
+    const publicOrigin = "https://v64preview-abcd1234--workspace.vibe64.dev";
     const registry = createLaunchPreviewProxyRegistry({
       env: {
         VIBE64_PREVIEW_PROXY_SOCKET_DIR: socketDir
@@ -211,15 +211,15 @@ test("launch preview proxy can expose previews through a Caddy-compatible Unix s
         previewPublicSocketPath(publicOrigin, {
           VIBE64_PREVIEW_PROXY_SOCKET_DIR: socketDir
         }),
-        path.join(socketDir, "v64preview-abcd1234--tenant.sock")
+        path.join(socketDir, "v64preview-abcd1234--workspace.sock")
       );
 
       const response = await requestUnixSocket({
         headers: {
-          Host: "v64preview-abcd1234--tenant.vibe64.dev"
+          Host: "v64preview-abcd1234--workspace.vibe64.dev"
         },
         path: `${new URL(preview.href).pathname}${new URL(preview.href).search}`,
-        socketPath: path.join(socketDir, "v64preview-abcd1234--tenant.sock")
+        socketPath: path.join(socketDir, "v64preview-abcd1234--workspace.sock")
       });
       assert.equal(response.statusCode, 200);
       assert.match(response.body, /Target home/u);
@@ -725,11 +725,11 @@ test("launch preview proxy rewrites same-origin redirects to the proxy origin", 
 test("launch preview proxy preserves its token across target redirects", () => {
   assert.equal(
     proxiedLocation("/auth/login?returnTo=/home%3Fmode%3Ddev", {
-      proxyOrigin: "https://v64preview-abcd--tenant.vibe64.dev",
+      proxyOrigin: "https://v64preview-abcd--workspace.vibe64.dev",
       targetOrigin: "http://127.0.0.1:4100",
       token: "preview-token"
     }),
-    "https://v64preview-abcd--tenant.vibe64.dev/auth/login?returnTo=/home%3Fmode%3Ddev&vibe64_preview_token=preview-token"
+    "https://v64preview-abcd--workspace.vibe64.dev/auth/login?returnTo=/home%3Fmode%3Ddev&vibe64_preview_token=preview-token"
   );
 });
 

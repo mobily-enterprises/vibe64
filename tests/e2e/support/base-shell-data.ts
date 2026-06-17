@@ -25,7 +25,7 @@ const readyProjectSelectionPayload = {
     path: targetRoot,
     selected: true,
     slug: "example-target-app",
-    source: "managed"
+    source: "workspace"
   },
   hasSelection: true,
   projects: [
@@ -35,7 +35,7 @@ const readyProjectSelectionPayload = {
       path: targetRoot,
       selected: true,
       slug: "example-target-app",
-      source: "managed"
+      source: "workspace"
     }
   ],
   projectsRoot: "/workspace/vibe64",
@@ -122,8 +122,8 @@ const readyProjectConfigPayload = {
   ok: true
 };
 
-const readyAccountsPayload = {
-  accounts: [
+const readyConnectionsPayload = {
+  connections: [
     {
       connected: true,
       id: "codex",
@@ -141,8 +141,8 @@ const readyAccountsPayload = {
   ready: true
 };
 
-const blockedAccountsPayload = {
-  accounts: [
+const blockedConnectionsPayload = {
+  connections: [
     {
       connected: false,
       id: "codex",
@@ -636,8 +636,8 @@ export {
   viewports,
   readyProjectSelectionPayload,
   bootstrapPayload,
-  blockedAccountsPayload,
-  readyAccountsPayload,
+  blockedConnectionsPayload,
+  readyConnectionsPayload,
   readyProjectConfigPayload,
   readyProjectTypePayload,
   blockedBootstrapPayload,

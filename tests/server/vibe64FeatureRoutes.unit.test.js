@@ -131,20 +131,20 @@ test("Vibe64 feature routes can register global routes without project params", 
   await withLocalRequestBypass(async () => {
     const app = testRouteApp();
     const routes = createVibe64FeatureRoutes(app, {
-      routeRelativePath: "vibe64/accounts",
+      routeRelativePath: "vibe64/connections",
       routeSurface: "app",
       projectScoped: false
     });
 
     routes.actionRoute("GET", "", {
-      actionId: "unit.accounts.read",
-      summary: "Read global accounts."
+      actionId: "unit.connections.read",
+      summary: "Read global connections."
     });
 
     assert.equal(app.registeredRoutes.length, 1);
     const route = app.registeredRoutes[0];
     assert.equal(route.method, "GET");
-    assert.equal(route.path, "/api/vibe64/accounts");
+    assert.equal(route.path, "/api/vibe64/connections");
 
     const reply = testReply();
     await route.handler({
@@ -159,7 +159,7 @@ test("Vibe64 feature routes can register global routes without project params", 
 
     assert.equal(reply.statusCode, 200);
     assert.deepEqual(reply.payload.action, {
-      actionId: "unit.accounts.read",
+      actionId: "unit.connections.read",
       input: {}
     });
   });

@@ -7,7 +7,7 @@ import {
   REINSTALL_CODEX_CLI_TERMINAL_PREVIEW,
   TOOLCHAIN_IMAGE,
   createService,
-  createStudioTenantRuntimeDoctorPlugin,
+  createStudioRuntimeDoctorPlugin,
   isStudioSetupReady,
   reinstallCodexCliRepair,
   reinstallCodexCliScript,
@@ -177,7 +177,7 @@ test("Studio Setup resolves the Studio implementation root separately", () => {
 
 test("Studio Setup owns the shared JSKIT MariaDB runtime", async () => {
   await withTemporaryRoot(async (studioRoot) => {
-    const plugin = createStudioTenantRuntimeDoctorPlugin({
+    const plugin = createStudioRuntimeDoctorPlugin({
       runCommand: async () => ({
         ok: false,
         output: "No such container",

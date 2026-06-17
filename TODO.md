@@ -36,14 +36,29 @@ X Make this work on a local directory, creating containers etc. This is crucial 
 X Make jskit open jskit properly (recursive). this depends on the item above too
 
 
+*****ALLOWING DEPLOYMENT
+
+9)
+X Ability to actually deploy, with OWN domain if needed, using the same DB container.
+
+
+8d)
+Split completely the stand alone part from the multi-project path, do NOT release the multi-project part at all
+
+
+8e)
+Make sure logs make sense. 
+
+
+8f)
+Put it ONLINE, check that link-sending works
 
 
 
 
-*****TENANT MANAGEMENT APP (WITH TESTING IT ALL OUT):
 
-7)
-App with list of VPS and tenants, with ability to add a tenant and monitor VPSes
+*****USE IT:
+
 
 6a)
 Test seeding
@@ -54,27 +69,8 @@ Make sure the correct buttons are displayed at every stage
 6c)
 Make test accounts for Pete Dave Andrea (applicom) Massimo (digi) Matt (beepollen) Ship Agency Luca's friend Andrei
 
-
-
-
-
-
-
-
-
-
-*****ALLOWING DEPLOYMENT  AND FINAL TOUCHES:
-
-9)
-Ability to actually deploy, with OWN domain if needed, using the same DB container.
-
-
-10)
-Change any mention of "studio" into "vibe64" -- studio is the old name. Change the variables too.
-
-
-
-
+6d)
+Get beepollen and dogandgroom online and start developing them actively, showing Kristy and Matt the progress
 
 
 
@@ -84,14 +80,26 @@ Change any mention of "studio" into "vibe64" -- studio is the old name. Change t
 
 *****WEBSITE, USERS AND BILLING:
 
+7)
+App with list of VPS and tenants, with ability to add a tenant and monitor VPSes
+
 8)
 Make app which will actually be the main web site, with ability to sign up and manage billing (port from jskit-ai)
+
+8a)
+Make a separate server able to register domains, which will live where the main node lives
 
 8b)
 ABILITY TO PROVISION SERVER
 
 8c)
 MOVABILITY: Ability to create a tgz of the full contents of a tenancy
+
+10)
+Change any mention of "studio" into "vibe64" -- studio is the old name. Change the variables too.
+
+
+
 
 
 

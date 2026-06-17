@@ -15,7 +15,7 @@ import {
   vibe64RealtimeSocketDebugSummary
 } from "../../packages/main/src/client/vibe64CapabilitiesRealtime.js";
 import {
-  VIBE64_ACCOUNTS_CHANGED_EVENT
+  VIBE64_CONNECTIONS_CHANGED_EVENT
 } from "../../src/lib/studioGateApi.js";
 
 function createClientAppDouble() {
@@ -62,7 +62,7 @@ function createClientAppDouble() {
 }
 
 describe("MainClientProvider realtime integration", () => {
-  it("registers an app-level account listener that invalidates capability queries", async () => {
+  it("registers an app-level connection listener that invalidates capability queries", async () => {
     const app = createClientAppDouble();
     const invalidateQueries = vi.fn(async () => null);
     app.instance("jskit.client.query-client", {
@@ -74,13 +74,13 @@ describe("MainClientProvider realtime integration", () => {
     const listener = listeners.find((entry) => entry.listenerId === VIBE64_CAPABILITIES_QUERY_LISTENER);
 
     expect(listener).toBeTruthy();
-    expect(listener.event).toBe(VIBE64_ACCOUNTS_CHANGED_EVENT);
+    expect(listener.event).toBe(VIBE64_CONNECTIONS_CHANGED_EVENT);
 
     await listener.handle({
       app,
-      event: VIBE64_ACCOUNTS_CHANGED_EVENT,
+      event: VIBE64_CONNECTIONS_CHANGED_EVENT,
       payload: {
-        accountId: "codex",
+        connectionId: "codex",
         connected: true,
         status: "connected"
       }
@@ -128,9 +128,9 @@ describe("MainClientProvider realtime integration", () => {
     });
 
     await invalidateVibe64CapabilitiesQueries(app, {
-      event: VIBE64_ACCOUNTS_CHANGED_EVENT,
+      event: VIBE64_CONNECTIONS_CHANGED_EVENT,
       payload: {
-        accountId: "codex",
+        connectionId: "codex",
         connected: false,
         status: "authenticating"
       }
@@ -145,7 +145,7 @@ describe("MainClientProvider realtime integration", () => {
       queryKey: ["vibe64", "project", "beepollen", "app", "public", "capabilities"]
     })).toBe(true);
     expect(isVibe64CapabilitiesQuery({
-      queryKey: ["vibe64", "project", "beepollen", "app", "public", "accounts"]
+      queryKey: ["vibe64", "project", "beepollen", "app", "public", "connections"]
     })).toBe(false);
     expect(isVibe64CapabilitiesQuery({
       queryKey: ["other", "project", "beepollen", "capabilities"]

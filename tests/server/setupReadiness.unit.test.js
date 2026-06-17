@@ -30,7 +30,7 @@ function serviceBlocked(blockedReason = "") {
 
 test("setup readiness checks automatic setup stages only", async () => {
   const readiness = await readVibe64SetupReadiness({
-    accountSetupService: serviceReady(),
+    connectionSetupService: serviceReady(),
     projectSetupService: serviceReady(),
     studioSetupService: serviceReady()
   });
@@ -44,7 +44,7 @@ test("setup readiness checks automatic setup stages only", async () => {
 
 test("setup readiness reports Studio Setup as the first blocked automatic setup stage", async () => {
   const readiness = await readVibe64SetupReadiness({
-    accountSetupService: serviceBlocked("Accounts missing."),
+    connectionSetupService: serviceBlocked("Connections missing."),
     projectSetupService: serviceReady(),
     studioSetupService: serviceBlocked("Studio missing.")
   });
@@ -57,15 +57,15 @@ test("setup readiness reports Studio Setup as the first blocked automatic setup 
 
 test("project readiness checks human connections before automatic setup", async () => {
   const readiness = await readVibe64ProjectReadiness({
-    accountSetupService: serviceBlocked("Accounts missing."),
+    connectionSetupService: serviceBlocked("Connections missing."),
     projectSetupService: serviceReady(),
     studioSetupService: serviceBlocked("Studio missing.")
   });
 
   assert.equal(readiness.ready, false);
-  assert.equal(readiness.currentStage.id, "accounts");
-  assert.equal(readiness.message, "Accounts missing.");
-  assert.deepEqual(readiness.stages.map((stage) => stage.id), ["accounts"]);
+  assert.equal(readiness.currentStage.id, "connections");
+  assert.equal(readiness.message, "Connections missing.");
+  assert.deepEqual(readiness.stages.map((stage) => stage.id), ["connections"]);
 });
 
 test("project readiness forwards status input to every setup service", async () => {
@@ -88,7 +88,7 @@ test("project readiness forwards status input to every setup service", async () 
   };
 
   const readiness = await readVibe64ProjectReadiness({
-    accountSetupService: service("accounts"),
+    connectionSetupService: service("connections"),
     projectSetupService: service("project-setup"),
     studioSetupService: service("studio-setup")
   }, {
@@ -98,7 +98,7 @@ test("project readiness forwards status input to every setup service", async () 
   assert.equal(readiness.ready, true);
   assert.deepEqual(seen, [
     {
-      id: "accounts",
+      id: "connections",
       input
     },
     {
@@ -132,7 +132,7 @@ test("session readiness excludes project setup diagnostics", async () => {
   };
 
   const readiness = await readVibe64SessionReadiness({
-    accountSetupService: service("accounts"),
+    connectionSetupService: service("connections"),
     projectSetupService: {
       async getStatus() {
         throw new Error("Project setup should not gate session readiness.");
@@ -145,12 +145,12 @@ test("session readiness excludes project setup diagnostics", async () => {
 
   assert.equal(readiness.ready, true);
   assert.deepEqual(readiness.stages.map((stage) => stage.id), [
-    "accounts",
+    "connections",
     "studio-setup"
   ]);
   assert.deepEqual(seen, [
     {
-      id: "accounts",
+      id: "connections",
       input
     },
     {

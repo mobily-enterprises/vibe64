@@ -22,12 +22,8 @@ import {
 } from "@local/vibe64-core/server/studioProjectContext";
 import {
   JSKIT_PREVIEW_AUTH_KIND,
-  PREVIEW_AUTH_PROFILE,
-  VIBE64_SELF_PREVIEW_AUTH_KIND
+  PREVIEW_AUTH_PROFILE
 } from "@local/vibe64-core/server/previewAuth";
-import {
-  vibe64AuthCookieNameForRuntime
-} from "@local/vibe64-core/server/authCookies";
 import {
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
@@ -222,152 +218,6 @@ main().catch((error) => {
   ].join(" ");
 }
 
-function createVibe64SelfPreviewAuthProfileCommand({
-  authCookieName = "",
-  vibe64User = null
-} = {}) {
-  const previewAuthCookieName = String(authCookieName || "").trim();
-  const script = `
-const profileFile = String(process.env.VIBE64_PREVIEW_AUTH_PROFILE_FILE || "").trim();
-const systemRoot = String(process.env.VIBE64_SYSTEM_ROOT || "").trim();
-const previewAuthCookieName = ${JSON.stringify(previewAuthCookieName)};
-const profile = ${JSON.stringify(previewAuthProfileSeed(vibe64User))};
-
-function canonicalEmail(value = "") {
-  const email = String(value || "").trim().toLowerCase();
-  if (!email || !/^[^\\s@/\\\\]+@[^\\s@/\\\\]+\\.[^\\s@/\\\\]+$/u.test(email)) {
-    throw new Error("Vibe64 self preview auth requires a valid user email.");
-  }
-  return email;
-}
-
-function authCookieName() {
-  if (!previewAuthCookieName) {
-    throw new Error("Vibe64 self preview auth requires a configured auth cookie name.");
-  }
-  return previewAuthCookieName;
-}
-
-function tokenDigest(token = "") {
-  return crypto.createHash("sha256").update(String(token || "")).digest("hex");
-}
-
-async function readJsonFile(filePath = "") {
-  try {
-    return JSON.parse(await fs.readFile(filePath, "utf8"));
-  } catch (error) {
-    if (error?.code === "ENOENT") {
-      return null;
-    }
-    throw error;
-  }
-}
-
-async function listUsers(usersRoot = "") {
-  await fs.mkdir(usersRoot, { recursive: true });
-  const entries = await fs.readdir(usersRoot, { withFileTypes: true });
-  const users = [];
-  for (const entry of entries) {
-    if (!entry.isFile() || !entry.name.endsWith(".json")) {
-      continue;
-    }
-    const user = await readJsonFile(path.join(usersRoot, entry.name));
-    if (user?.email) {
-      users.push(user);
-    }
-  }
-  return users;
-}
-
-async function ensureUser(usersRoot = "") {
-  const email = canonicalEmail(profile.email);
-  const users = await listUsers(usersRoot);
-  const existing = users.find((user) => String(user.email || "").trim().toLowerCase() === email);
-  if (existing?.supabaseUserId) {
-    return existing;
-  }
-  const now = new Date().toISOString();
-  const supabaseUserId = crypto.randomUUID();
-  const user = {
-    acceptedAt: now,
-    canceledAt: "",
-    createdAt: now,
-    email,
-    github: profile.username && profile.username !== email.split("@")[0]
-      ? {
-          connectedAt: now,
-          login: profile.username
-        }
-      : null,
-    invitedAt: "",
-    revokedAt: "",
-    role: "owner",
-    status: "active",
-    supabaseUserId,
-    updatedAt: now,
-    version: 2
-  };
-  await fs.writeFile(path.join(usersRoot, \`\${supabaseUserId}.json\`), JSON.stringify(user, null, 2) + "\\n", "utf8");
-  return user;
-}
-
-async function createSession(sessionsRoot = "", user = {}) {
-  await fs.mkdir(sessionsRoot, { recursive: true });
-  const id = crypto.randomUUID();
-  const token = crypto.randomBytes(32).toString("base64url");
-  const now = new Date();
-  const ttlMs = 30 * 24 * 60 * 60 * 1000;
-  const record = {
-    createdAt: now.toISOString(),
-    email: String(user.email || ""),
-    expiresAt: new Date(now.getTime() + ttlMs).toISOString(),
-    id,
-    supabaseUserId: String(user.supabaseUserId || ""),
-    tokenHash: tokenDigest(token),
-    version: 1
-  };
-  await fs.writeFile(path.join(sessionsRoot, \`\${id}.json\`), JSON.stringify(record, null, 2) + "\\n", "utf8");
-  return \`\${id}.\${token}\`;
-}
-
-async function main() {
-  if (!profileFile) {
-    return;
-  }
-  if (!systemRoot) {
-    throw new Error("Vibe64 self preview auth requires VIBE64_SYSTEM_ROOT.");
-  }
-  const usersRoot = path.join(systemRoot, "users");
-  const sessionsRoot = path.join(systemRoot, "auth-sessions");
-  const user = await ensureUser(usersRoot);
-  const cookieValue = await createSession(sessionsRoot, user);
-  await fs.mkdir(path.dirname(profileFile), { recursive: true });
-  await fs.writeFile(profileFile, JSON.stringify({
-    cookieName: authCookieName(),
-    cookieValue,
-    email: user.email,
-    supabaseUserId: user.supabaseUserId
-  }, null, 2) + "\\n", "utf8");
-  console.log(\`[studio] Vibe64 self preview auth session is ready: \${user.email} (\${user.supabaseUserId}).\`);
-}
-
-const fs = await import("node:fs/promises");
-const path = await import("node:path");
-const crypto = await import("node:crypto");
-
-main().catch((error) => {
-  console.error(\`[studio] Vibe64 self preview auth profile failed: \${String(error?.message || error)}\`);
-  process.exit(1);
-});
-`.trim();
-  return [
-    "node",
-    "--input-type=module",
-    "-e",
-    shellQuote(script)
-  ].join(" ");
-}
-
 async function readOptionalConfigFile(root, relativePath, fallback = "") {
   try {
     const value = String(await readFile(path.join(root, relativePath), "utf8")).trim();
@@ -490,10 +340,10 @@ async function main() {
   const projectContext = createStudioProjectContext({
     explicitProjectsRoot: projectsRoot
   });
-  const listed = await projectContext.listManagedProjects();
+  const listed = await projectContext.listWorkspaceProjects();
   const projects = Array.isArray(listed?.projects) ? listed.projects : [];
   if (projects.length === 0) {
-    console.log("[studio] Vibe64 self preview project networks skipped: no managed projects found.");
+    console.log("[studio] Vibe64 self preview project networks skipped: no workspace projects found.");
     return;
   }
 
@@ -669,16 +519,6 @@ function jskitSelfTargetMetadata(config = {}) {
   };
 }
 
-function jskitSelfTargetAuthCookieName(config = {}) {
-  if (config?.enabled !== true) {
-    return "";
-  }
-  return vibe64AuthCookieNameForRuntime({
-    runtimeNamespace: config.runtimeNamespace,
-    systemRoot: config.systemRoot
-  });
-}
-
 function normalizePort(value) {
   const port = Number.parseInt(String(value || ""), 10);
   return Number.isInteger(port) && port >= 1024 && port <= 65535
@@ -771,7 +611,7 @@ async function launchDescriptorUrlPath(worktreePath, {
   selfTarget = null
 } = {}) {
   return selfTarget?.enabled === true
-    ? "/app/manage/projects"
+    ? "/app"
     : await defaultAppPath(worktreePath);
 }
 
@@ -904,21 +744,12 @@ async function createJskitBuiltLaunchDescriptor({
         networkEnv: true
       }
     : null;
-  const previewAuthKind = selfTarget?.enabled === true
-    ? VIBE64_SELF_PREVIEW_AUTH_KIND
-    : JSKIT_PREVIEW_AUTH_KIND;
+  const previewAuthKind = JSKIT_PREVIEW_AUTH_KIND;
   const previewAuthProfileCommand = {
-    command: selfTarget?.enabled === true
-      ? createVibe64SelfPreviewAuthProfileCommand({
-          authCookieName: jskitSelfTargetAuthCookieName(selfTarget),
-          vibe64User
-        })
-      : createJskitPreviewAuthProfileCommand({
-          vibe64User
-        }),
-    label: selfTarget?.enabled === true
-      ? "Preparing Vibe64 self preview auth session."
-      : "Preparing preview auth user.",
+    command: createJskitPreviewAuthProfileCommand({
+      vibe64User
+    }),
+    label: "Preparing preview auth user.",
     networkEnv: true
   };
   const selfTargetRuntimeNetworksCommand = selfTarget?.enabled === true
@@ -1000,26 +831,17 @@ async function createJskitDevLaunchDescriptor({
   worktreePath = ""
 } = {}) {
   const startupArgs = startupArgsFromLaunchInput(launchInput);
-  const previewAuthKind = selfTarget?.enabled === true
-    ? VIBE64_SELF_PREVIEW_AUTH_KIND
-    : JSKIT_PREVIEW_AUTH_KIND;
+  const previewAuthKind = JSKIT_PREVIEW_AUTH_KIND;
   return {
     command: createJskitDevCommand({
       backendCommand: config.backendCommand,
       backendPort: config.backendPort,
       frontendCommand: config.frontendCommand,
       migrationCommand: config.migrationCommand,
-      previewAuthProfileCommand: selfTarget?.enabled === true
-        ? createVibe64SelfPreviewAuthProfileCommand({
-            authCookieName: jskitSelfTargetAuthCookieName(selfTarget),
-            vibe64User
-          })
-        : createJskitPreviewAuthProfileCommand({
-            vibe64User
-          }),
-      previewAuthProfileLabel: selfTarget?.enabled === true
-        ? "Preparing Vibe64 self preview auth session."
-        : "Preparing preview auth user.",
+      previewAuthProfileCommand: createJskitPreviewAuthProfileCommand({
+        vibe64User
+      }),
+      previewAuthProfileLabel: "Preparing preview auth user.",
       selfTargetRuntimeNetworksCommand: selfTarget?.enabled === true
         ? createVibe64SelfTargetRuntimeNetworksCommand()
         : "",

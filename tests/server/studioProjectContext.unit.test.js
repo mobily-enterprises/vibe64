@@ -14,6 +14,9 @@ import {
 import {
   resolveProjectRequestContext
 } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
+import {
+  resolveVibe64Roots
+} from "../../packages/vibe64-core/src/server/studioRoots.js";
 
 async function withTemporaryRoot(callback) {
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-project-context-"));
@@ -66,10 +69,101 @@ test("Studio project context uses a visibly local-editor system root in local mo
     });
 
     assert.equal(context.systemRoot, path.join(root, ".local", "share", "vibe64-local-editor"));
+    assert.equal(resolveVibe64Roots({
+      env: {},
+      home: root,
+      runtimeProfile: {
+        local: true,
+        mode: "local"
+      },
+      targetRoot: path.join(root, "target")
+    }).projectsRoot, path.join(root, ".local", "share", "vibe64-local-editor", "projects"));
   });
 });
 
-test("Studio project context creates and selects managed project folders under the projects root", async () => {
+test("Studio project context treats local mode as a single selected folder", async () => {
+  await withTemporaryRoot(async (root) => {
+    const legacyProjectsRoot = path.join(root, "vibe64");
+    await writeTestFile(path.join(legacyProjectsRoot, "legacy-app", ".vibe64", "project.json"), `${JSON.stringify({
+      githubRepository: {
+        fullName: "example/legacy-app"
+      }
+    })}\n`);
+    const targetRoot = path.join(root, "External App");
+    await mkdir(targetRoot, {
+      recursive: true
+    });
+
+    const context = createStudioProjectContext({
+      explicitTargetRoot: targetRoot,
+      env: {
+        VIBE64_PROJECTS_ROOT: legacyProjectsRoot
+      },
+      home: root,
+      runtimeProfile: {
+        local: true,
+        mode: "local"
+      }
+    });
+
+    assert.equal(context.projectCatalogEnabled, false);
+    assert.equal(context.projectsRoot, path.join(root, ".local", "share", "vibe64-local-editor", "projects"));
+
+    const listed = await context.listProjects();
+    assert.equal(listed.ok, true);
+    assert.equal(listed.hasSelection, true);
+    assert.equal(listed.currentProject.path, targetRoot);
+    assert.equal(listed.currentProject.slug, "external-app");
+    assert.equal(listed.currentProject.external, true);
+    assert.deepEqual(listed.projects.map((project) => project.path), [targetRoot]);
+
+    const workspaceProjects = await context.listWorkspaceProjects();
+    assert.equal(workspaceProjects.ok, true);
+    assert.deepEqual(workspaceProjects.projects, []);
+
+    const requestContext = await resolveProjectRequestContext({
+      projectContext: context,
+      request: {
+        params: {
+          slug: "external-app"
+        }
+      }
+    });
+    assert.equal(requestContext.targetRoot, targetRoot);
+
+    await assert.rejects(
+      () => resolveProjectRequestContext({
+        projectContext: context,
+        request: {
+          params: {
+            slug: "legacy-app"
+          }
+        }
+      }),
+      {
+        code: "vibe64_project_route_unavailable"
+      }
+    );
+    await assert.rejects(
+      () => context.createWorkspaceProjectRecord({
+        slug: "new-app"
+      }),
+      {
+        code: "vibe64_project_catalog_unavailable"
+      }
+    );
+    await assert.rejects(
+      () => context.selectWorkspaceProject({
+        slug: "legacy-app"
+      }),
+      {
+        code: "vibe64_project_catalog_unavailable"
+      }
+    );
+  });
+});
+
+test("Studio project context creates and selects workspace project folders under the projects root", async () => {
   await withTemporaryRoot(async (root) => {
     const projectsRoot = path.join(root, "projects");
     const context = createStudioProjectContext({
@@ -78,7 +172,7 @@ test("Studio project context creates and selects managed project folders under t
       home: root
     });
 
-    const created = await context.createManagedProject({
+    const created = await context.createWorkspaceProject({
       githubRepository: {
         fullName: "example/example-app"
       },
@@ -99,7 +193,7 @@ test("Studio project context creates and selects managed project folders under t
       env: {},
       home: root
     });
-    const selected = await secondContext.selectManagedProject({
+    const selected = await secondContext.selectWorkspaceProject({
       slug: "example-app"
     });
 
@@ -144,7 +238,7 @@ test("Studio project context lists and creates projects without selecting one", 
       home: root
     });
 
-    const created = await context.createManagedProjectRecord({
+    const created = await context.createWorkspaceProjectRecord({
       githubRepository: {
         fullName: "example/beta_2"
       },
@@ -156,20 +250,20 @@ test("Studio project context lists and creates projects without selecting one", 
     assert.equal(context.targetRoot, "");
     assert.equal(context.hasSelection(), false);
 
-    await context.createManagedProjectRecord({
+    await context.createWorkspaceProjectRecord({
       githubRepository: {
         fullName: "example/alpha"
       },
       slug: "alpha"
     });
-    const listed = await context.listManagedProjects();
+    const listed = await context.listWorkspaceProjects();
     assert.deepEqual(listed.projects.map((project) => project.slug), ["alpha", "beta_2"]);
 
     const selectionList = await context.listProjects();
     assert.equal(selectionList.projects[0].githubRepository.fullName, "example/alpha");
 
     await assert.rejects(
-      () => context.createManagedProjectRecord({
+      () => context.createWorkspaceProjectRecord({
         slug: "Bad.Slug"
       }),
       {
@@ -179,7 +273,7 @@ test("Studio project context lists and creates projects without selecting one", 
   });
 });
 
-test("Studio project context accepts explicit targets without treating them as managed projects", async () => {
+test("Studio project context accepts explicit targets without treating them as workspace projects", async () => {
   await withTemporaryRoot(async (root) => {
     const projectsRoot = path.join(root, "projects");
     const externalTarget = path.join(root, "external-app");
@@ -227,7 +321,7 @@ test("Studio project context rejects empty or escaping project folder names", as
     assert.equal(projectSlugFromName("Example App"), "example-app");
     assert.equal(projectSlugFromName("!!!"), "");
     await assert.rejects(
-      () => context.createManagedProject({
+      () => context.createWorkspaceProject({
         name: "!!!"
       }),
       {
@@ -235,7 +329,7 @@ test("Studio project context rejects empty or escaping project folder names", as
       }
     );
     await assert.rejects(
-      () => context.selectManagedProject({
+      () => context.selectWorkspaceProject({
         slug: "../outside"
       }),
       {
@@ -265,7 +359,7 @@ test("Studio project context reads shared project state and ignores private loca
       writeTestFile(path.join(localRoot, "project_type"), "jskit\n")
     ]);
 
-    const listed = await context.listManagedProjects();
+    const listed = await context.listWorkspaceProjects();
 
     assert.deepEqual(listed.projects.map((project) => project.slug), ["canonical-app"]);
     assert.equal(listed.projects[0].githubRepository.fullName, "example/canonical-app");

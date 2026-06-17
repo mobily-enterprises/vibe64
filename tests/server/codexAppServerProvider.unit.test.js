@@ -304,13 +304,13 @@ test("codex provider scopes default runtime directory by target root", () => {
   };
   const first = codexAppServerRuntimeDir({
     env,
-    targetRoot: "/home/tenant/vibe64/beepollen",
-    workdir: "/home/tenant/vibe64/beepollen/.vibe64-local/sessions/active/one/worktree"
+    targetRoot: "/home/workspace/vibe64/beepollen",
+    workdir: "/home/workspace/vibe64/beepollen/.vibe64-local/sessions/active/one/worktree"
   });
   const second = codexAppServerRuntimeDir({
     env,
-    targetRoot: "/home/tenant/vibe64/dogandgroom",
-    workdir: "/home/tenant/vibe64/dogandgroom/.vibe64-local/sessions/active/one/worktree"
+    targetRoot: "/home/workspace/vibe64/dogandgroom",
+    workdir: "/home/workspace/vibe64/dogandgroom/.vibe64-local/sessions/active/one/worktree"
   });
 
   assert.match(first, /^\/tmp\/vibe64-agent-runtime\/codex-app-server-[a-f0-9]{12}$/u);
@@ -322,38 +322,38 @@ test("codex provider scopes runtime directories by explicit runtime namespace", 
   const env = {
     VIBE64_AGENT_RUNTIME_DIR: "/tmp/vibe64-agent-runtime"
   };
-  const targetRoot = "/home/tenant/vibe64/beepollen";
-  const workdir = "/home/tenant/vibe64/beepollen/.vibe64-local/sessions/active/one/worktree";
+  const targetRoot = "/home/workspace/vibe64/beepollen";
+  const workdir = "/home/workspace/vibe64/beepollen/.vibe64-local/sessions/active/one/worktree";
   const defaultDir = await withRuntimeNamespace("", () => codexAppServerRuntimeDir({
     env,
     targetRoot,
     workdir
   }));
-  const tenantADir = await withRuntimeNamespace("tenant-a", () => codexAppServerRuntimeDir({
+  const namespaceADir = await withRuntimeNamespace("namespace-a", () => codexAppServerRuntimeDir({
     env,
     targetRoot,
     workdir
   }));
-  const tenantBDir = await withRuntimeNamespace("tenant-b", () => codexAppServerRuntimeDir({
+  const namespaceBDir = await withRuntimeNamespace("namespace-b", () => codexAppServerRuntimeDir({
     env,
     targetRoot,
     workdir
   }));
 
   assert.match(defaultDir, /^\/tmp\/vibe64-agent-runtime\/codex-app-server-[a-f0-9]{12}$/u);
-  assert.match(tenantADir, /^\/tmp\/vibe64-agent-runtime\/codex-app-server-[a-f0-9]{12}$/u);
-  assert.match(tenantBDir, /^\/tmp\/vibe64-agent-runtime\/codex-app-server-[a-f0-9]{12}$/u);
-  assert.notEqual(tenantADir, defaultDir);
-  assert.notEqual(tenantBDir, tenantADir);
+  assert.match(namespaceADir, /^\/tmp\/vibe64-agent-runtime\/codex-app-server-[a-f0-9]{12}$/u);
+  assert.match(namespaceBDir, /^\/tmp\/vibe64-agent-runtime\/codex-app-server-[a-f0-9]{12}$/u);
+  assert.notEqual(namespaceADir, defaultDir);
+  assert.notEqual(namespaceBDir, namespaceADir);
 });
 
 test("codex provider fallback runtime base stays under the target root when XDG runtime is unavailable", () => {
   assert.equal(
     codexAppServerRuntimeBaseDir({
       env: {},
-      targetRoot: "/home/tenant/vibe64/beepollen"
+      targetRoot: "/home/workspace/vibe64/beepollen"
     }),
-    "/home/tenant/vibe64/beepollen/.vibe64/runtime/agent-providers"
+    "/home/workspace/vibe64/beepollen/.vibe64/runtime/agent-providers"
   );
 });
 
@@ -486,7 +486,7 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
 
 test("codex provider namespaces app-server Docker container only when runtime namespace is set", async () => {
   await withTemporaryDirectory(async (runtimeDir) => {
-    await withRuntimeNamespace("tenant-a", async () => {
+    await withRuntimeNamespace("namespace-a", async () => {
       const targetRoot = path.join(runtimeDir, "target");
       const workdir = path.join(targetRoot, ".vibe64", "sessions", "active", "session-1", "worktree");
       await mkdir(workdir, {
@@ -517,8 +517,8 @@ test("codex provider namespaces app-server Docker container only when runtime na
 
       const removeCall = spawnCalls[0];
       const runCall = spawnCalls[1];
-      assert.equal(removeCall.args[2], "vibe64-tenant-a-target-codex-app-server");
-      assert.equal(runCall.args[runCall.args.indexOf("--name") + 1], "vibe64-tenant-a-target-codex-app-server");
+      assert.equal(removeCall.args[2], "vibe64-namespace-a-target-codex-app-server");
+      assert.equal(runCall.args[runCall.args.indexOf("--name") + 1], "vibe64-namespace-a-target-codex-app-server");
     });
   });
 });

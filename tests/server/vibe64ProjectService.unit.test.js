@@ -81,7 +81,7 @@ test("Vibe64 project service exposes self-target project auto-select repro metad
         env: {},
         home: root
       });
-      await projectContext.createManagedProjectRecord({
+      await projectContext.createWorkspaceProjectRecord({
         githubRepository: {
           fullName: "example/beepollen"
         },
@@ -143,7 +143,7 @@ test("Vibe64 project service treats local editor target as the selected project"
         env: {},
         home: root,
         runtimeProfile: {
-          managedProjectsEnabled: false,
+          projectCatalogEnabled: false,
           mode: "local",
           singleTargetRoot: targetRoot
         }
@@ -162,13 +162,13 @@ test("Vibe64 project service treats local editor target as the selected project"
       name: "another"
     });
     assert.equal(created.ok, false);
-    assert.equal(created.errors[0].code, "vibe64_managed_projects_unavailable");
+    assert.equal(created.errors[0].code, "vibe64_project_catalog_unavailable");
 
     const selected = await service.selectProject({
       slug: "another"
     });
     assert.equal(selected.ok, false);
-    assert.equal(selected.errors[0].code, "vibe64_managed_projects_unavailable");
+    assert.equal(selected.errors[0].code, "vibe64_project_catalog_unavailable");
   });
 });
 
@@ -181,13 +181,13 @@ test("Vibe64 project service treats project request slug as the selected project
       env: {},
       home: root
     });
-    await projectContext.createManagedProjectRecord({
+    await projectContext.createWorkspaceProjectRecord({
       githubRepository: {
         fullName: "example/alpha_1"
       },
       slug: "alpha_1"
     });
-    await projectContext.createManagedProjectRecord({
+    await projectContext.createWorkspaceProjectRecord({
       githubRepository: {
         fullName: "example/beta"
       },

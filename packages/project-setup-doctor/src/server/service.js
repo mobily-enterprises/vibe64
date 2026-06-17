@@ -62,14 +62,8 @@ import {
   linkGithubRemoteRepair,
   mirrorRemoteBranchRepair,
   readGitIdentity,
-  readGitLocalHead,
-  readGitOriginRemote,
-  readGitRepositoryShape,
-  readGitStatus,
   readGithubRepository,
   readRemoteBranchShaWithGh,
-  readRemoteBranchShaWithGit,
-  remoteHeadIsAncestorOfLocalHead,
   startAddVibe64GitignoreRulesTerminal as startSharedAddVibe64GitignoreRulesTerminal,
   startGhCreateRepoTerminal as startSharedGhCreateRepoTerminal,
   startGitIdentityTerminal as startSharedGitIdentityTerminal,
@@ -191,10 +185,58 @@ function hostGitArgs(targetRoot, args = []) {
   ];
 }
 
-async function readHostGit(targetRoot, args = []) {
+async function readHostGit(targetRoot, args = [], {
+  timeout = 1_500
+} = {}) {
   return runHostCommand("git", hostGitArgs(targetRoot, args), {
-    timeout: 1_500
+    timeout
   });
+}
+
+async function readProjectGitRepositoryShape(targetRoot) {
+  const [inside, bare, branch] = await Promise.all([
+    readHostGit(targetRoot, ["rev-parse", "--is-inside-work-tree"]),
+    readHostGit(targetRoot, ["rev-parse", "--is-bare-repository"]),
+    readHostGit(targetRoot, ["branch", "--show-current"])
+  ]);
+  return {
+    bare,
+    branch,
+    inside
+  };
+}
+
+async function readProjectGitLocalHead(targetRoot) {
+  return readHostGit(targetRoot, ["rev-parse", "--verify", "HEAD"], {
+    timeout: 15_000
+  });
+}
+
+async function readProjectGitOriginRemote(targetRoot) {
+  return readHostGit(targetRoot, ["remote", "get-url", "origin"]);
+}
+
+async function readProjectGitStatus(targetRoot) {
+  return readHostGit(targetRoot, ["status", "--porcelain=v1"], {
+    timeout: 15_000
+  });
+}
+
+async function projectRemoteHeadIsAncestorOfLocalHead(targetRoot, remoteSha) {
+  const result = await readHostGit(targetRoot, ["merge-base", "--is-ancestor", remoteSha, "HEAD"], {
+    timeout: 15_000
+  });
+  return result.ok;
+}
+
+async function readProjectRemoteBranchShaWithGit(targetRoot, branch) {
+  const result = await readHostGit(targetRoot, ["ls-remote", "origin", `refs/heads/${branch}`], {
+    timeout: 20_000
+  });
+  return {
+    ...result,
+    sha: result.stdout.split(/\s+/u)[0] || ""
+  };
 }
 
 function automaticRepairInputs(repair = {}) {
@@ -375,7 +417,7 @@ async function requireGithubProvider(context = {}) {
   const githubProvider = await ensureGithubProviderHome(context.githubProvider || null);
   return githubProvider?.ok ? githubProvider : {
     code: githubProvider?.code || "vibe64_github_user_required",
-    error: githubProvider?.error || "Log in with GitHub in Accounts before running GitHub project setup.",
+    error: githubProvider?.error || "Authenticate GitHub for this local Vibe64 editor before running GitHub project setup.",
     ok: false
   };
 }
@@ -391,7 +433,7 @@ function githubProviderBlockedCheck({
     label,
     expected,
     observed,
-    explanation: "Project setup needs the active Vibe64 user's GitHub identity for repository access and commit publishing. Open management Accounts and authenticate GitHub for this user."
+    explanation: "Project setup needs GitHub CLI credentials for repository access and commit publishing. Use the local setup terminal to authenticate GitHub for this editor."
   });
 }
 
@@ -598,7 +640,7 @@ async function checkGitReady(targetRoot, context) {
     bare,
     branch,
     inside
-  } = await readGitRepositoryShape(targetRoot);
+  } = await readProjectGitRepositoryShape(targetRoot);
   if (!inside.ok || inside.stdout !== "true") {
     return hardStopCheck({
       id: "git-ready",
@@ -677,7 +719,7 @@ async function checkVibe64Gitignore(targetRoot) {
 }
 
 async function checkRemoteReady(targetRoot, context) {
-  const result = await readGitOriginRemote(targetRoot);
+  const result = await readProjectGitOriginRemote(targetRoot);
   if (!result.ok || !result.stdout) {
     return blockedCheck({
       id: "remote-ready",
@@ -744,7 +786,7 @@ async function checkRemoteReady(targetRoot, context) {
 }
 
 async function checkRemoteSync(targetRoot, context) {
-  const localHead = await readGitLocalHead(targetRoot);
+  const localHead = await readProjectGitLocalHead(targetRoot);
   const hasLocalHead = localHead.ok && Boolean(localHead.stdout);
   const remoteBranch = context.remoteDefaultBranch;
 
@@ -762,9 +804,7 @@ async function checkRemoteSync(targetRoot, context) {
     });
   }
 
-  const remoteHead = await readRemoteBranchShaWithGit(targetRoot, remoteBranch, {
-    toolHomeSource: githubToolHomeSource(context)
-  });
+  const remoteHead = await readProjectRemoteBranchShaWithGit(targetRoot, remoteBranch);
   const remoteSha = remoteHead.sha;
 
   if (!remoteHead.ok) {
@@ -816,7 +856,7 @@ async function checkRemoteSync(targetRoot, context) {
     });
   }
 
-  if (remoteSha !== localHead.stdout && await remoteHeadIsAncestorOfLocalHead(targetRoot, remoteSha)) {
+  if (remoteSha !== localHead.stdout && await projectRemoteHeadIsAncestorOfLocalHead(targetRoot, remoteSha)) {
     return passCheck({
       id: "remote-sync",
       label: "Remote/local sync",
@@ -846,7 +886,7 @@ async function checkRemoteSync(targetRoot, context) {
 }
 
 async function checkGitCheckpoint(targetRoot, context) {
-  const status = await readGitStatus(targetRoot);
+  const status = await readProjectGitStatus(targetRoot);
 
   if (!status.ok) {
     return hardStopCheck({
@@ -858,7 +898,7 @@ async function checkGitCheckpoint(targetRoot, context) {
     });
   }
 
-  const localHead = await readGitLocalHead(targetRoot);
+  const localHead = await readProjectGitLocalHead(targetRoot);
   if (!localHead.ok || !localHead.stdout) {
     const observed = [
       localHead.output || "No local commits exist.",
@@ -876,7 +916,7 @@ async function checkGitCheckpoint(targetRoot, context) {
 
   const branchResult = context?.branch
     ? { ok: true, stdout: context.branch }
-    : await readGitRepositoryShape(targetRoot).then((shape) => shape.branch);
+    : await readProjectGitRepositoryShape(targetRoot).then((shape) => shape.branch);
   const branch = String(branchResult.stdout || "").trim();
   if (!branchResult.ok || !branch) {
     return hardStopCheck({
@@ -956,7 +996,7 @@ async function checkGitIdentity(targetRoot, context) {
     return githubProviderBlockedCheck({
       id: "git-identity",
       label: "Git identity",
-      expected: "Git user.name and user.email are configured for the active Vibe64 user.",
+      expected: "Git user.name and user.email are configured for local setup work.",
       observed: githubProvider.error
     });
   }
@@ -971,18 +1011,18 @@ async function checkGitIdentity(targetRoot, context) {
     return blockedCheck({
       id: "git-identity",
       label: "Git identity",
-      expected: "Git user.name and user.email are configured for the active Vibe64 user.",
+      expected: "Git user.name and user.email are configured for local setup work.",
       observed: [nameResult.output, emailResult.output].filter(Boolean).join("\n") || "Git identity is incomplete.",
-      explanation: "Open Account and connect GitHub with a Git identity for the active Vibe64 user before continuing."
+      explanation: "Configure Git identity for this local editor before continuing."
     });
   }
 
   return passCheck({
     id: "git-identity",
     label: "Git identity",
-    expected: "Git user.name and user.email are configured for the active Vibe64 user.",
+    expected: "Git user.name and user.email are configured for local setup work.",
     observed: `${nameResult.stdout} <${emailResult.stdout}>`,
-    explanation: "Setup commits will use the active user's Git identity."
+    explanation: "Setup commits will use the configured Git identity."
   });
 }
 
@@ -1151,7 +1191,7 @@ async function startProjectSetupTerminalAction({
   const githubProvider = await ensureGithubProviderHome(setupRuntime.githubProvider || null);
   const githubToolHome = githubProvider?.ok ? githubProvider.toolHomeSource : "";
   const githubTerminalError = () => ({
-    error: githubProvider?.error || "Log in with GitHub in Accounts before starting this project setup terminal.",
+    error: githubProvider?.error || "Authenticate GitHub for this local Vibe64 editor before starting this project setup terminal.",
     ok: false
   });
   if (actionId === "terminal-git-init") {
@@ -1394,6 +1434,7 @@ function createService({
   targetRoot
 } = {}) {
   const resolvedStudioRoot = path.resolve(String(studioRoot || process.cwd()));
+  const doctorStatusStateRoot = String(env.VIBE64_DOCTOR_STATUS_ROOT || "").trim();
   const resolvedProviderHomesRoot = resolveProviderHomesRoot({
     env,
     explicitRoot: providerHomesRoot,
@@ -1422,6 +1463,7 @@ function createService({
     return createRepositoryReadyStatusCache({
       doctorId: "project-setup",
       scope: githubProvider?.userKey ? `github:${githubProvider.userKey}` : "github:unknown",
+      stateRoot: doctorStatusStateRoot,
       studioRoot: resolvedStudioRoot,
       targetRoot: targetRootValue
     });
@@ -1429,6 +1471,7 @@ function createService({
 
   function githubContextForInput(input = {}) {
     return githubProviderContext(input, {
+      allowLocalFallback: true,
       providerHomesRoot: resolvedProviderHomesRoot
     });
   }

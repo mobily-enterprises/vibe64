@@ -37,7 +37,7 @@ async function withTemporaryRoot(callback) {
 
 function readySetupServices() {
   return {
-    accountSetupService: {
+    connectionSetupService: {
       async getStatus() {
         return {
           ready: true
@@ -291,10 +291,10 @@ test("current-app reports connections separately from automatic setup capabiliti
       }),
       setupServices: {
         ...readySetupServices(),
-        accountSetupService: {
+        connectionSetupService: {
           async getStatus() {
             return {
-              accounts: [
+              connections: [
                 {
                   connected: false,
                   id: "codex",
@@ -326,8 +326,8 @@ test("current-app reports connections separately from automatic setup capabiliti
     assert.equal(state.connections.github.ready, true);
     assert.equal(state.capabilities.app.enabled, true);
     assert.equal(state.capabilities.chat.enabled, false);
-    assert.equal(state.capabilities.chat.fix.route, "/app/manage/accounts");
-    assert.match(state.capabilities.createSession.reason, /AI provider/u);
+    assert.equal(state.capabilities.chat.fix.route, "");
+    assert.match(state.capabilities.createSession.reason, /connection setup/u);
   });
 });
 
@@ -339,10 +339,10 @@ test("current-app allows session capabilities when project setup diagnostics are
         targetRoot
       }),
       setupServices: {
-        accountSetupService: {
+        connectionSetupService: {
           async getStatus() {
             return {
-              accounts: [
+              connections: [
                 {
                   connected: true,
                   id: "codex",

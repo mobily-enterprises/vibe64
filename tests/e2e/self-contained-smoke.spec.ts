@@ -100,8 +100,8 @@ async function mockReadyStudioShell(page: Page, options: MockReadyStudioShellOpt
       resolve();
     };
   });
-  const accountsReadyPayload = {
-    accounts: [
+  const connectionsReadyPayload = {
+    connections: [
       {
         connected: true,
         id: "codex",
@@ -150,12 +150,11 @@ async function mockReadyStudioShell(page: Page, options: MockReadyStudioShellOpt
       runScripts: { enabled: true, fix: null, reason: "" }
     },
     connections: {
-      accounts: accountsReadyPayload.accounts,
       ai: {
         message: "Codex is selected and authenticated.",
         providers: [
           {
-            ...accountsReadyPayload.accounts[0],
+            ...connectionsReadyPayload.connections[0],
             ready: true,
             selected: true
           }
@@ -164,10 +163,11 @@ async function mockReadyStudioShell(page: Page, options: MockReadyStudioShellOpt
         selectedProviderId: "codex"
       },
       github: {
-        ...accountsReadyPayload.accounts[1],
+        ...connectionsReadyPayload.connections[1],
         ready: true
       },
-      ready: true
+      ready: true,
+      rows: connectionsReadyPayload.connections
     },
     ok: true,
     setup: setupReadinessReadyPayload,
@@ -322,10 +322,6 @@ async function mockReadyStudioShell(page: Page, options: MockReadyStudioShellOpt
         },
         ok: true
       }
-    ],
-    [
-      "/api/vibe64/accounts",
-      accountsReadyPayload
     ],
     [
       "/api/studio/studio-setup",

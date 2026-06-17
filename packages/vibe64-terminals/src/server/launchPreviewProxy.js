@@ -1155,7 +1155,7 @@ function previewPublicSocketPath(publicOrigin = "", env = process.env) {
   const host = new URL(origin).hostname;
   const match = /^([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)--([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\.|$)/u.exec(host);
   if (!match) {
-    throw new Error("Launch preview public origin must use the <preview>--<tenant> host format.");
+    throw new Error("Launch preview public origin must use the <preview>--<workspace> host format.");
   }
   const socketDir = String(env[PREVIEW_PROXY_SOCKET_DIR_ENV] || PREVIEW_PROXY_SOCKET_DIR).trim() || PREVIEW_PROXY_SOCKET_DIR;
   return path.join(socketDir, `${match[1]}--${match[2]}.sock`);

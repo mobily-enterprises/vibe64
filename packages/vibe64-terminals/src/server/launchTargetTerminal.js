@@ -845,7 +845,7 @@ function previewPublicOriginForLaunch({
   if (!studioHostMatch) {
     return "";
   }
-  const tenant = studioHostMatch[1];
+  const workspace = studioHostMatch[1];
   const baseDomain = studioHostMatch[2];
   const hash = stableHash([
     terminalProjectScopeKey(),
@@ -857,7 +857,7 @@ function previewPublicOriginForLaunch({
     return "";
   }
   void publicProtocol;
-  return `https://${PREVIEW_PUBLIC_HOST_PREFIX}-${hash}--${tenant}.${baseDomain}`;
+  return `https://${PREVIEW_PUBLIC_HOST_PREFIX}-${hash}--${workspace}.${baseDomain}`;
 }
 
 export {

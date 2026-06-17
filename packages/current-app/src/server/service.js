@@ -48,9 +48,7 @@ const PROJECT_SCRIPTS_DIR = ".vibe64/scripts";
 const STARRED_TARGET_SCRIPTS_CONFIG = "config/starred_scripts";
 const TARGET_SCRIPT_TERMINAL_NAMESPACE = "current-app-target-script";
 const PROJECT_SCRIPT_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u;
-const AI_ACCOUNTS_ROUTE = "/app/manage/accounts";
-const ACCOUNT_ROUTE = "/account";
-const SETUP_DASHBOARD_ROUTE = "/app/manage/studio-setup";
+const SETUP_DASHBOARD_ROUTE = "";
 
 function resolveCurrentAppRoot(appRoot) {
   return resolveStudioTargetRoot({
@@ -147,27 +145,34 @@ function capability(enabled, reason = "", fix = null) {
   };
 }
 
-function accountRecord(accounts = [], accountId = "", fallbackLabel = "") {
-  const account = accounts.find((item) => String(item?.id || "") === accountId);
-  return account || {
+function connectionRows(connections = {}) {
+  if (Array.isArray(connections.connections)) {
+    return connections.connections;
+  }
+  return [];
+}
+
+function connectionById(rows = [], connectionId = "", fallbackLabel = "") {
+  const connection = rows.find((item) => String(item?.id || "") === connectionId);
+  return connection || {
     connected: false,
-    id: accountId,
-    label: fallbackLabel || accountId,
-    message: `${fallbackLabel || accountId} is not connected.`,
+    id: connectionId,
+    label: fallbackLabel || connectionId,
+    message: `${fallbackLabel || connectionId} is not connected.`,
     status: "unknown"
   };
 }
 
-function connectionRecord(account = {}) {
-  const connected = account.connected === true;
+function connectionRecord(connection = {}) {
+  const connected = connection.connected === true;
   return {
     connected,
-    id: String(account.id || ""),
-    label: String(account.label || account.id || ""),
-    message: String(account.message || ""),
+    id: String(connection.id || ""),
+    label: String(connection.label || connection.id || ""),
+    message: String(connection.message || ""),
     ready: connected,
-    status: String(account.status || (connected ? "connected" : "not_connected")),
-    username: String(account.username || "")
+    status: String(connection.status || (connected ? "connected" : "not_connected")),
+    username: String(connection.username || "")
   };
 }
 
@@ -182,9 +187,9 @@ function connectionDebugSummary(connection = {}) {
   };
 }
 
-function accountConnectionDebugSummary(accounts = []) {
-  return Array.isArray(accounts)
-    ? accounts.map((account) => connectionDebugSummary(connectionRecord(account)))
+function connectionRowsDebugSummary(rows = []) {
+  return Array.isArray(rows)
+    ? rows.map((connection) => connectionDebugSummary(connectionRecord(connection)))
     : [];
 }
 
@@ -509,13 +514,13 @@ function createService({
   }
 
   async function connectionReadiness(input = {}) {
-    const accountSetupService = setupServices.accountSetupService;
-    if (!accountSetupService || typeof accountSetupService.getStatus !== "function") {
+    const connectionSetupService = setupServices.connectionSetupService;
+    if (!connectionSetupService || typeof connectionSetupService.getStatus !== "function") {
       vibe64SessionDebugLog("server.currentApp.connectionReadiness.unavailable", {
         targetRoot: currentTargetRoot()
       });
       return {
-        accounts: [],
+        connections: [],
         blockedReason: "Connection status service is not available.",
         ok: false,
         ready: false,
@@ -527,9 +532,10 @@ function createService({
       refresh: input?.refresh === true || String(input?.refresh || "") === "true",
       targetRoot: currentTargetRoot()
     });
-    const result = await accountSetupService.getStatus(setupStageInput(input));
+    const result = await connectionSetupService.getStatus(setupStageInput(input));
+    const rows = connectionRows(result);
     vibe64SessionDebugLog("server.currentApp.connectionReadiness.done", {
-      accounts: accountConnectionDebugSummary(result.accounts),
+      connections: connectionRowsDebugSummary(rows),
       blockedReason: String(result.blockedReason || ""),
       ok: result.ok !== false,
       ready: result.ready === true,
@@ -543,9 +549,9 @@ function createService({
     sessionSetup = {},
     setup = {}
   } = {}) {
-    const accounts = Array.isArray(connections.accounts) ? connections.accounts : [];
-    const github = connectionRecord(accountRecord(accounts, "github", "GitHub"));
-    const codex = connectionRecord(accountRecord(accounts, "codex", "Codex"));
+    const rows = connectionRows(connections);
+    const github = connectionRecord(connectionById(rows, "github", "Git"));
+    const codex = connectionRecord(connectionById(rows, "codex", "Codex"));
     const selectedAiProvider = {
       ...codex,
       selected: true
@@ -554,24 +560,22 @@ function createService({
     const githubReady = github.ready === true;
     const setupReady = setup.ready === true;
     const sessionSetupReady = sessionSetup.ready === true;
-    const aiConnectionFix = dashboardFix(AI_ACCOUNTS_ROUTE, "Open AI Accounts");
-    const githubConnectionFix = dashboardFix(ACCOUNT_ROUTE, "Open Account");
     const setupFix = dashboardFix(SETUP_DASHBOARD_ROUTE, "Open Setup");
     const chatCapability = capability(
       aiReady && sessionSetupReady,
-      aiReady ? automaticSetupReason(sessionSetup) : "Choose and authenticate an AI provider before using chat.",
-      aiReady ? setupFix : aiConnectionFix
+      aiReady ? automaticSetupReason(sessionSetup) : "Finish local editor connection setup before using chat.",
+      setupFix
     );
     const createSessionCapability = capability(
       aiReady && githubReady && sessionSetupReady,
       firstBlockedCapability([
-        capability(aiReady, "Choose and authenticate an AI provider before starting a session.", aiConnectionFix),
-        capability(githubReady, "Connect GitHub before starting GitHub-backed session work.", githubConnectionFix),
+        capability(aiReady, "Finish local editor connection setup before starting a session.", setupFix),
+        capability(githubReady, "Finish git connection setup before starting Git-backed session work.", setupFix),
         capability(sessionSetupReady, automaticSetupReason(sessionSetup), setupFix)
       ])?.reason || "",
       firstBlockedCapability([
-        capability(aiReady, "Choose and authenticate an AI provider before starting a session.", aiConnectionFix),
-        capability(githubReady, "Connect GitHub before starting GitHub-backed session work.", githubConnectionFix),
+        capability(aiReady, "Finish local editor connection setup before starting a session.", setupFix),
+        capability(githubReady, "Finish git connection setup before starting Git-backed session work.", setupFix),
         capability(sessionSetupReady, automaticSetupReason(sessionSetup), setupFix)
       ])?.fix || null
     );
@@ -580,13 +584,12 @@ function createService({
       capabilities: {
         chat: chatCapability,
         createSession: createSessionCapability,
-        githubWorkflow: capability(githubReady, "Connect GitHub before using GitHub issue, pull request, or merge actions.", githubConnectionFix),
+        githubWorkflow: capability(githubReady, "Finish git connection setup before using Git-backed workflow actions.", setupFix),
         app: capability(true),
         preview: capability(setupReady, automaticSetupReason(setup), setupFix),
         runScripts: capability(setupReady, automaticSetupReason(setup), setupFix)
       },
       connections: {
-        accounts,
         ai: {
           message: aiReady ? "Codex is selected and authenticated." : selectedAiProvider.message,
           providers: [selectedAiProvider],
@@ -594,7 +597,8 @@ function createService({
           selectedProviderId: "codex"
         },
         github,
-        ready: aiReady && githubReady
+        ready: aiReady && githubReady,
+        rows
       }
     };
   }
@@ -752,7 +756,7 @@ function createService({
           setup
         });
         vibe64SessionDebugLog("server.currentApp.capabilities.inspect.done", {
-          accounts: accountConnectionDebugSummary(connections.accounts),
+          connections: connectionRowsDebugSummary(connectionRows(connections)),
           aiReady: state.connections.ai.ready === true,
           blockedReason: String(connections.blockedReason || ""),
           chatEnabled: state.capabilities.chat.enabled === true,

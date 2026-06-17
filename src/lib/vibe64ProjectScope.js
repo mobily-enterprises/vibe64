@@ -6,7 +6,7 @@ function firstRouteParam(value) {
 function projectSlugFromPathname(pathname = "") {
   const match = /^\/app\/([^/?#]+)/u.exec(String(pathname || ""));
   const slug = decodeURIComponent(match?.[1] || "").trim();
-  return slug && slug !== "manage" ? slug : "";
+  return slug || "";
 }
 
 function currentProjectSlugFromLocation(browserWindow = globalThis.window) {

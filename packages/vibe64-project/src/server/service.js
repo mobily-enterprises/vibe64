@@ -50,7 +50,7 @@ function projectSelectionRecord({
     projectRoot,
     selected: Boolean(selected),
     slug,
-    source: "managed"
+    source: "workspace"
   };
   if (githubRepository) {
     record.githubRepository = githubRepository;
@@ -163,10 +163,10 @@ function createService({
       };
     }
 
-    const listed = await studioProjectContext.listManagedProjects();
-    const currentManagedProject = listed.projects.find((project) => project.slug === projectContextValue.slug) || null;
+    const listed = await studioProjectContext.listWorkspaceProjects();
+    const currentCatalogProject = listed.projects.find((project) => project.slug === projectContextValue.slug) || null;
     const currentProject = projectSelectionRecord({
-      githubRepository: currentManagedProject?.githubRepository || null,
+      githubRepository: currentCatalogProject?.githubRepository || null,
       selected: true,
       slug: projectContextValue.slug,
       projectRoot: projectContextValue.targetRoot
@@ -612,10 +612,10 @@ function createService({
     },
 
     async createProject(input = {}) {
-      if (studioProjectContext.runtimeProfile?.managedProjectsEnabled === false) {
-        return managedProjectsUnavailable();
+      if (studioProjectContext.runtimeProfile?.projectCatalogEnabled === false) {
+        return projectCatalogUnavailable();
       }
-      return projectResult(() => studioProjectContext.createManagedProject(input));
+      return projectResult(() => studioProjectContext.createWorkspaceProject(input));
     },
 
     async createRuntime(options = {}) {
@@ -708,21 +708,21 @@ function createService({
     },
 
     async selectProject(input = {}) {
-      if (studioProjectContext.runtimeProfile?.managedProjectsEnabled === false) {
-        return managedProjectsUnavailable();
+      if (studioProjectContext.runtimeProfile?.projectCatalogEnabled === false) {
+        return projectCatalogUnavailable();
       }
-      return projectResult(() => studioProjectContext.selectManagedProject(input));
+      return projectResult(() => studioProjectContext.selectWorkspaceProject(input));
     }
   });
 }
 
-function managedProjectsUnavailable() {
+function projectCatalogUnavailable() {
   return {
     ok: false,
     errors: [
       {
-        code: "vibe64_managed_projects_unavailable",
-        message: "Managed project operations are not available in local editor mode."
+        code: "vibe64_project_catalog_unavailable",
+        message: "Project catalog operations are not available in local editor mode."
       }
     ]
   };

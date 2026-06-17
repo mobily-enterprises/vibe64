@@ -5,14 +5,15 @@ import open, { apps } from "open";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import {
-  normalizeProjectSlug,
   projectSlugFromName
 } from "@local/vibe64-core/server/studioProjectContext";
 import { startServer } from "../server.js";
 import {
-  VIBE64_RUNTIME_MODE_HOSTED,
   VIBE64_RUNTIME_MODE_LOCAL
 } from "../server/lib/runtimeProfile.js";
+import {
+  resolveJskitLockPath
+} from "../server/lib/jskitLockPath.js";
 
 const SERVER_ENTRYPOINT = fileURLToPath(import.meta.url);
 const DEFAULT_LOCAL_EDITOR_BROWSER_PORT = 3001;
@@ -64,7 +65,16 @@ function unsupportedStartupArg(arg = "") {
   return error;
 }
 
+function readRequiredArg(args, index, optionName) {
+  const value = String(args[index + 1] || "").trim();
+  if (!value) {
+    throw unsupportedStartupArg(optionName);
+  }
+  return value;
+}
+
 function parseStartupArgs(args = process.argv.slice(2)) {
+  let jskitLockPath = "";
   let startupSlug = "";
   let targetRoot = "";
   for (let index = 0; index < args.length; index += 1) {
@@ -83,24 +93,35 @@ function parseStartupArgs(args = process.argv.slice(2)) {
     ) {
       continue;
     }
-    if (normalized === "--project") {
-      const slugArg = String(args[index + 1] || "").trim();
-      if (!slugArg) {
+    if (normalized === "--jskit-lock") {
+      jskitLockPath = readRequiredArg(args, index, arg);
+      index += 1;
+      continue;
+    }
+    if (normalized.startsWith("--jskit-lock=")) {
+      jskitLockPath = arg.slice("--jskit-lock=".length).trim();
+      if (!jskitLockPath) {
         throw unsupportedStartupArg(arg);
       }
+      continue;
+    }
+    if (normalized === "--project") {
+      const targetArg = readRequiredArg(args, index, arg);
       if (startupSlug || targetRoot) {
-        throw unsupportedStartupArg(slugArg);
+        throw unsupportedStartupArg(targetArg);
       }
-      startupSlug = normalizeStartupSlug(slugArg);
+      targetRoot = path.resolve(targetArg);
+      startupSlug = localStartupSlugForTargetRoot(targetRoot);
       index += 1;
       continue;
     }
     if (normalized.startsWith("--project=")) {
-      const slugArg = arg.slice("--project=".length).trim();
-      if (!slugArg || startupSlug || targetRoot) {
+      const targetArg = arg.slice("--project=".length).trim();
+      if (!targetArg || startupSlug || targetRoot) {
         throw unsupportedStartupArg(arg);
       }
-      startupSlug = normalizeStartupSlug(slugArg);
+      targetRoot = path.resolve(targetArg);
+      startupSlug = localStartupSlugForTargetRoot(targetRoot);
       continue;
     }
     if (arg.startsWith("-")) {
@@ -109,18 +130,21 @@ function parseStartupArgs(args = process.argv.slice(2)) {
     if (startupSlug || targetRoot) {
       throw unsupportedStartupArg(arg);
     }
-    if (isStartupPathArgument(arg)) {
-      targetRoot = path.resolve(arg);
-      startupSlug = localStartupSlugForTargetRoot(targetRoot);
-    } else {
-      startupSlug = normalizeStartupSlug(arg);
-    }
+    targetRoot = path.resolve(arg);
+    startupSlug = localStartupSlugForTargetRoot(targetRoot);
+  }
+  if (!startupSlug && !targetRoot) {
+    targetRoot = process.cwd();
+    startupSlug = localStartupSlugForTargetRoot(targetRoot);
   }
   return {
+    jskitLockPath: resolveJskitLockPath({
+      explicitPath: jskitLockPath
+    }),
     openOnStart: shouldOpenStartupBrowser(args, {
       targetRoot
     }),
-    runtimeMode: targetRoot ? VIBE64_RUNTIME_MODE_LOCAL : VIBE64_RUNTIME_MODE_HOSTED,
+    runtimeMode: VIBE64_RUNTIME_MODE_LOCAL,
     startupSlug,
     targetRoot
   };
@@ -138,29 +162,9 @@ function shouldOpenStartupBrowser(args = process.argv.slice(2), {
   return Boolean(String(targetRoot || "").trim());
 }
 
-function normalizeStartupSlug(value = "") {
-  try {
-    return normalizeProjectSlug(value);
-  } catch (error) {
-    error.message = `Vibe64 startup slug is invalid: ${error.message}`;
-    throw error;
-  }
-}
-
-function isStartupPathArgument(value = "") {
-  const arg = String(value || "").trim();
-  return arg === "." ||
-    arg === ".." ||
-    arg.startsWith("./") ||
-    arg.startsWith("../") ||
-    arg.startsWith("~/") ||
-    path.isAbsolute(arg) ||
-    /[\\/]/u.test(arg);
-}
-
 function localStartupSlugForTargetRoot(targetRoot = "") {
   const slug = projectSlugFromName(path.basename(path.resolve(targetRoot)));
-  return slug ? normalizeProjectSlug(slug) : "local-project";
+  return slug || "local-project";
 }
 
 async function openBrowser(url) {
@@ -183,7 +187,8 @@ async function openBrowser(url) {
 function serverStartOptions({
   env = process.env,
   openOnStart = false,
-  runtimeMode = VIBE64_RUNTIME_MODE_HOSTED,
+  jskitLockPath = "",
+  runtimeMode = VIBE64_RUNTIME_MODE_LOCAL,
   startupSlug = "",
   targetRoot = ""
 } = {}) {
@@ -191,6 +196,10 @@ function serverStartOptions({
   const envPortConfigured = Boolean(String(env.PORT || "").trim());
   return {
     browserLifecycleShutdown: runtimeMode === VIBE64_RUNTIME_MODE_LOCAL,
+    jskitLockPath: resolveJskitLockPath({
+      env,
+      explicitPath: jskitLockPath
+    }),
     port: localBrowserOpen && !envPortConfigured ? DEFAULT_LOCAL_EDITOR_BROWSER_PORT : undefined,
     runtimeMode,
     strictPort: envPortConfigured,
@@ -202,12 +211,14 @@ function serverStartOptions({
 async function main() {
   const {
     openOnStart,
+    jskitLockPath,
     runtimeMode,
     startupSlug,
     targetRoot
   } = parseStartupArgs();
   const app = await startServer(serverStartOptions({
     openOnStart,
+    jskitLockPath,
     runtimeMode,
     startupSlug,
     targetRoot

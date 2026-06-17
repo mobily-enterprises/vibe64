@@ -12,10 +12,6 @@ import {
   JSKIT_PREVIEW_AUTH_KIND
 } from "@local/vibe64-core/server/previewAuth";
 import {
-  VIBE64_AUTH_COOKIE_NAME,
-  vibe64AuthCookieNameForRuntime
-} from "@local/vibe64-core/server/authCookies";
-import {
   PREVIEW_PROXY_HOST_ENV,
   PREVIEW_PROXY_PORT_END_ENV,
   PREVIEW_PROXY_PORT_START_ENV,
@@ -342,7 +338,7 @@ test("jskit adapter allows Studio self-targeting only for the Vibe64 package", a
   });
 });
 
-test("jskit project setup checks project database readiness but not tenant container ownership", async () => {
+test("jskit project setup checks project database readiness but not runtime container ownership", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const plugin = createJskitSetupDoctorPlugin({
       targetRoot
@@ -393,8 +389,8 @@ test("jskit Vibe64 self-target enables host Docker with shared project runtime d
     assert.equal(spec.ok, true);
     assert.equal(spec.metadata.hostDocker, true);
     assert.equal(spec.metadata.hostDockerSource, "target_package:vibe64");
-    assert.equal(spec.metadata.urlPath, "/app/manage/projects");
-    assert.match(spec.metadata.targetUrl, /\/app\/manage\/projects$/u);
+    assert.equal(spec.metadata.urlPath, "/app");
+    assert.match(spec.metadata.targetUrl, /\/app$/u);
     assert.equal(spec.metadata.runtimeNamespace, "");
     const args = spec.args({
       id: "unit-terminal"
@@ -418,18 +414,13 @@ test("jskit Vibe64 self-target enables host Docker with shared project runtime d
     ));
     const startupScript = args.at(-1);
     const projectNetworksIndex = startupScript.indexOf("Preparing Vibe64 self preview project networks.");
-    const authIndex = startupScript.indexOf("Preparing Vibe64 self preview auth session.");
-    const expectedAuthCookieName = vibe64AuthCookieNameForRuntime({
-      runtimeNamespace: "",
-      systemRoot: selfTargetSystemRoot
-    });
+    const authIndex = startupScript.indexOf("Preparing preview auth user.");
     assert.notEqual(projectNetworksIndex, -1);
     assert.notEqual(authIndex, -1);
     assert.ok(projectNetworksIndex < authIndex);
-    assert.equal(expectedAuthCookieName, VIBE64_AUTH_COOKIE_NAME);
-    assert.match(startupScript, new RegExp(`previewAuthCookieName = "${expectedAuthCookieName}"`, "u"));
+    assert.doesNotMatch(startupScript, /previewAuthCookieName/u);
     assert.match(startupScript, /createStudioProjectContext/u);
-    assert.match(startupScript, /listManagedProjects/u);
+    assert.match(startupScript, /listWorkspaceProjects/u);
     assert.match(startupScript, /ensureCurrentContainerConnectedToRuntimeNetwork/u);
     assert.ok(args.includes("/var/run/docker.sock:/var/run/docker.sock"));
     assertDockerVolumeMount(args, projectsRoot, projectsRoot);
@@ -496,12 +487,7 @@ test("jskit self-target preserves the current runtime namespace", async () => {
       id: "unit-terminal"
     });
     assertDockerEnv(args, VIBE64_RUNTIME_NAMESPACE_ENV, "tonymobily");
-    const expectedAuthCookieName = vibe64AuthCookieNameForRuntime({
-      runtimeNamespace: "tonymobily",
-      systemRoot: selfTargetSystemRoot
-    });
-    assert.notEqual(expectedAuthCookieName, VIBE64_AUTH_COOKIE_NAME);
-    assert.match(args.at(-1), new RegExp(`previewAuthCookieName = "${expectedAuthCookieName}"`, "u"));
+    assert.doesNotMatch(args.at(-1), /previewAuthCookieName/u);
   })));
 });
 

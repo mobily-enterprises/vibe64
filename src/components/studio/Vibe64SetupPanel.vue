@@ -32,6 +32,11 @@
         v-if="activeTab === 'project-setup'"
         @select-tab="selectTab"
       />
+      <StudioSetupDoctorScreen
+        v-else-if="activeTab === 'studio-setup'"
+        continue-label="Project Setup"
+        @select-tab="selectTab"
+      />
     </div>
   </section>
 </template>
@@ -39,8 +44,10 @@
 <script setup>
 import { computed } from "vue";
 import ProjectSetupDoctorScreen from "@/components/studio/ProjectSetupDoctorScreen.vue";
+import StudioSetupDoctorScreen from "@/components/studio/StudioSetupDoctorScreen.vue";
 
 const tabs = [
+  { label: "Studio Setup", value: "studio-setup" },
   { label: "Project Setup", value: "project-setup" }
 ];
 
@@ -63,7 +70,7 @@ function normalizeTab(value) {
 }
 
 function fallbackTab() {
-  return "project-setup";
+  return "studio-setup";
 }
 
 function tabId(tab) {

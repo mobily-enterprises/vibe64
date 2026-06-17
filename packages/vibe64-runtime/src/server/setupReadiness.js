@@ -7,9 +7,9 @@ import {
 
 const CONNECTION_STAGES = Object.freeze([
   {
-    id: "accounts",
-    label: "Accounts",
-    serviceName: "accountSetupService"
+    id: "connections",
+    label: "Connections",
+    serviceName: "connectionSetupService"
   }
 ]);
 

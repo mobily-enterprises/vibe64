@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import {
+  DASHBOARD_PATH,
   DEVELOPMENT_PATH,
   SCOPED_API_PREFIX,
   targetRoot
@@ -14,16 +15,13 @@ import {
   mockProtectedRouteReady
 } from "./support/base-shell/setup-mocks";
 
-test("account auth events refresh inactive project capabilities without page-show fetches", async ({ page }) => {
+test("connection events refresh inactive project capabilities without page-show fetches", async ({ page }) => {
   let codexConnected = false;
   let capabilitiesRequests = 0;
   const capabilitiesRequestPaths: string[] = [];
   const scopedCapabilitiesPath = `${SCOPED_API_PREFIX}/studio/current-app/capabilities`;
 
   await mockProtectedRouteReady(page);
-  await routeApiEndpoint(page, "/vibe64/accounts", async (route) => {
-    await fulfillJson(route, accountsPayload(codexConnected));
-  });
   await routeApiEndpoint(page, "/studio/current-app/capabilities", async (route) => {
     capabilitiesRequests += 1;
     capabilitiesRequestPaths.push(new URL(route.request().url()).pathname);
@@ -41,13 +39,13 @@ test("account auth events refresh inactive project capabilities without page-sho
   expect(capabilitiesRequestPaths.at(-1)).toBe(scopedCapabilitiesPath);
   const initialCapabilitiesRequests = capabilitiesRequests;
 
-  await navigateInSpa(page, "/app/manage/accounts?vibe64_e2e=1");
-  await expect(page.getByRole("heading", { name: "AI Accounts" })).toBeVisible();
+  await navigateInSpa(page, `${DASHBOARD_PATH}/history?vibe64_e2e=1`);
+  await expect(page.getByRole("heading", { name: "Session History" })).toBeVisible();
 
   codexConnected = true;
-  await emitAccountChangedForCapabilities(page, {
-    accountId: "codex",
+  await emitConnectionChangedForCapabilities(page, {
     authSessionId: "playwright-auth-session",
+    connectionId: "codex",
     connected: true,
     reason: "exit",
     status: "connected"
@@ -61,12 +59,12 @@ test("account auth events refresh inactive project capabilities without page-sho
   await page.waitForTimeout(250);
   expect(capabilitiesRequests).toBe(initialCapabilitiesRequests + 1);
 
-  await navigateInSpa(page, "/app/manage/accounts?vibe64_e2e=1");
-  await expect(page.getByRole("heading", { name: "AI Accounts" })).toBeVisible();
+  await navigateInSpa(page, `${DASHBOARD_PATH}/history?vibe64_e2e=1`);
+  await expect(page.getByRole("heading", { name: "Session History" })).toBeVisible();
 
   codexConnected = false;
-  await emitAccountChangedForCapabilities(page, {
-    accountId: "codex",
+  await emitConnectionChangedForCapabilities(page, {
+    connectionId: "codex",
     connected: false,
     reason: "",
     status: "not_connected"
@@ -88,28 +86,28 @@ async function navigateInSpa(page, path: string) {
   }, path);
 }
 
-async function emitAccountChangedForCapabilities(page, payload: unknown) {
+async function emitConnectionChangedForCapabilities(page, payload: unknown) {
   await page.evaluate(async (eventPayload) => {
     const hook = (window as unknown as {
       __vibe64E2e?: {
-        emitAccountChangedForCapabilities?: (payload: unknown) => Promise<unknown>;
+        emitConnectionChangedForCapabilities?: (payload: unknown) => Promise<unknown>;
       };
     }).__vibe64E2e;
-    if (typeof hook?.emitAccountChangedForCapabilities !== "function") {
+    if (typeof hook?.emitConnectionChangedForCapabilities !== "function") {
       throw new Error("Missing Vibe64 realtime Playwright hook.");
     }
-    await hook.emitAccountChangedForCapabilities(eventPayload);
+    await hook.emitConnectionChangedForCapabilities(eventPayload);
   }, payload);
 }
 
-function accountsPayload(codexConnected: boolean) {
+function connectionsPayload(codexConnected: boolean) {
   const codex = {
     connected: codexConnected,
     id: "codex",
     label: "Codex",
     message: codexConnected
-      ? "Codex is authenticated for the shared Vibe64 app account."
-      : "Codex is not authenticated for the shared Vibe64 app account.",
+      ? "Codex is authenticated for Studio."
+      : "Codex is not authenticated for Studio.",
     status: codexConnected ? "connected" : "not_connected"
   };
   const github = {
@@ -122,7 +120,7 @@ function accountsPayload(codexConnected: boolean) {
   };
 
   return {
-    accounts: [codex, github],
+    connections: [codex, github],
     blockedReason: codexConnected ? "" : codex.message,
     ok: true,
     ready: codexConnected
@@ -130,9 +128,9 @@ function accountsPayload(codexConnected: boolean) {
 }
 
 function capabilitiesPayload(codexConnected: boolean) {
-  const accounts = accountsPayload(codexConnected).accounts;
-  const codex = accounts.find((account) => account.id === "codex");
-  const github = accounts.find((account) => account.id === "github");
+  const connections = connectionsPayload(codexConnected).connections;
+  const codex = connections.find((connection) => connection.id === "codex");
+  const github = connections.find((connection) => connection.id === "github");
   const setup = setupReadinessPayload({
     ready: true,
     stages: [
@@ -159,7 +157,6 @@ function capabilitiesPayload(codexConnected: boolean) {
       runScripts: capability(true)
     },
     connections: {
-      accounts,
       ai: {
         message: codexConnected ? "Codex is selected and authenticated." : codex?.message || "",
         providers: [
@@ -176,7 +173,8 @@ function capabilitiesPayload(codexConnected: boolean) {
         ...github,
         ready: github?.connected === true
       },
-      ready: createSessionEnabled
+      ready: createSessionEnabled,
+      rows: connections
     },
     ok: true,
     setup,

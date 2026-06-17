@@ -8,6 +8,7 @@ import { promisify } from "node:util";
 
 import {
   VIBE64_PROJECTS_ROOT_ENV,
+  resolveDefaultLocalEditorProjectsRoot,
   resolveVibe64Roots,
   resolveExplicitStudioTargetRoot
 } from "./studioRoots.js";
@@ -37,6 +38,26 @@ function resolveStudioProjectsRoot({
     explicitRoot || env[VIBE64_PROJECTS_ROOT_ENV],
     path.join(home || process.cwd(), "vibe64")
   );
+}
+
+function projectCatalogEnabledForRuntimeProfile(runtimeProfile = null) {
+  if (runtimeProfile?.projectCatalogEnabled === false) {
+    return false;
+  }
+  if (runtimeProfile?.local === true) {
+    return false;
+  }
+  const mode = String(runtimeProfile?.mode || "").trim().toLowerCase();
+  if (mode === "local" || mode === "local-editor") {
+    return false;
+  }
+  return true;
+}
+
+function projectCatalogUnavailableError() {
+  const error = new Error("Project catalog operations are not available in local editor mode.");
+  error.code = "vibe64_project_catalog_unavailable";
+  return error;
 }
 
 function pathInsideOrEqual(parentPath = "", childPath = "") {
@@ -156,7 +177,7 @@ function localProjectSlugFromTargetRoot(targetRoot = "") {
   return slug ? normalizeProjectSlug(slug) : "local-project";
 }
 
-function managedProjectRecord({
+function workspaceProjectRecord({
   metadata = {},
   path: projectPath = "",
   projectsRoot = ""
@@ -266,7 +287,7 @@ async function ensureProjectLocalGitignore(targetRoot = "") {
   await writeFile(gitignorePath, `${current}${separator}${PROJECT_LOCAL_GITIGNORE_ENTRY}\n`, "utf8");
 }
 
-async function managedProjectRecordForPath({
+async function workspaceProjectRecordForPath({
   path: projectPath = "",
   projectsRoot = "",
   projectStateRoot = "",
@@ -276,7 +297,7 @@ async function managedProjectRecordForPath({
     projectStateRoot,
     writeDerivedMetadata
   });
-  return managedProjectRecord({
+  return workspaceProjectRecord({
     metadata,
     path: projectPath,
     projectsRoot
@@ -390,11 +411,17 @@ function createStudioProjectContext({
   home = os.homedir(),
   runtimeProfile = null
 } = {}) {
-  const projectsRoot = resolveStudioProjectsRoot({
-    env,
-    explicitRoot: explicitProjectsRoot,
-    home
-  });
+  const projectCatalogEnabled = projectCatalogEnabledForRuntimeProfile(runtimeProfile);
+  const projectsRoot = projectCatalogEnabled
+    ? resolveStudioProjectsRoot({
+        env,
+        explicitRoot: explicitProjectsRoot,
+        home
+      })
+    : normalizeRoot(
+        explicitProjectsRoot,
+        resolveDefaultLocalEditorProjectsRoot(home)
+      );
   const systemRoot = resolveVibe64Roots({
     env,
     explicitSystemRoot,
@@ -475,14 +502,26 @@ function createStudioProjectContext({
   }
 
   async function listProjects() {
-    const listed = await listManagedProjects();
+    if (!projectCatalogEnabled) {
+      const selected = selectedProject();
+      return {
+        ok: true,
+        currentProject: selected,
+        hasSelection: Boolean(selected),
+        projects: selected ? [selected] : [],
+        projectsRoot,
+        targetRoot: selectedTargetRoot
+      };
+    }
+
+    const listed = await listWorkspaceProjects();
     const projects = listed.projects
       .map((entry) => {
         const selectionRecord = projectRecord({
           path: entry.projectRoot,
           projectsRoot,
           selectedPath: selectedTargetRoot,
-          source: "managed"
+          source: "workspace"
         });
         return {
           ...selectionRecord,
@@ -490,7 +529,7 @@ function createStudioProjectContext({
           external: selectionRecord.external,
           name: selectionRecord.name,
           selected: selectionRecord.selected,
-          source: "managed"
+          source: "workspace"
         };
       })
       .sort((left, right) => left.slug.localeCompare(right.slug));
@@ -505,7 +544,15 @@ function createStudioProjectContext({
     };
   }
 
-  async function listManagedProjects() {
+  async function listWorkspaceProjects() {
+    if (!projectCatalogEnabled) {
+      return {
+        ok: true,
+        projects: [],
+        projectsRoot
+      };
+    }
+
     await mkdir(projectsRoot, {
       recursive: true
     });
@@ -523,7 +570,7 @@ function createStudioProjectContext({
           return false;
         }
       });
-    const projects = (await Promise.all(projectPaths.map((projectPath) => managedProjectRecordForPath({
+    const projects = (await Promise.all(projectPaths.map((projectPath) => workspaceProjectRecordForPath({
       path: projectPath,
       projectsRoot,
       projectStateRoot: projectStateRootForTarget(projectPath)
@@ -537,7 +584,11 @@ function createStudioProjectContext({
     };
   }
 
-  async function createManagedProjectRecord(input = {}) {
+  async function createWorkspaceProjectRecord(input = {}) {
+    if (!projectCatalogEnabled) {
+      throw projectCatalogUnavailableError();
+    }
+
     const slug = projectSlugFromInput(input);
     const targetRoot = resolveProjectRoot({
       projectsRoot,
@@ -555,7 +606,7 @@ function createStudioProjectContext({
       await writeProjectMetadata(projectStateRootForSlug(slug), metadata);
     }
     await ensureProjectStateForSlug(slug);
-    const project = await managedProjectRecordForPath({
+    const project = await workspaceProjectRecordForPath({
       path: targetRoot,
       projectsRoot,
       projectStateRoot: projectStateRootForSlug(slug)
@@ -567,14 +618,18 @@ function createStudioProjectContext({
     };
   }
 
-  async function readManagedProject(input = {}) {
+  async function readWorkspaceProject(input = {}) {
+    if (!projectCatalogEnabled) {
+      throw projectCatalogUnavailableError();
+    }
+
     const slug = projectSlugFromInput(input);
     const targetRoot = resolveProjectRoot({
       projectsRoot,
       slug
     });
     await assertDirectoryUsable(targetRoot);
-    const project = await managedProjectRecordForPath({
+    const project = await workspaceProjectRecordForPath({
       path: targetRoot,
       projectsRoot,
       projectStateRoot: projectStateRootForSlug(slug)
@@ -591,7 +646,11 @@ function createStudioProjectContext({
     };
   }
 
-  async function updateManagedProjectMetadata(input = {}) {
+  async function updateWorkspaceProjectMetadata(input = {}) {
+    if (!projectCatalogEnabled) {
+      throw projectCatalogUnavailableError();
+    }
+
     const slug = projectSlugFromInput(input);
     const targetRoot = resolveProjectRoot({
       projectsRoot,
@@ -599,7 +658,7 @@ function createStudioProjectContext({
     });
     await assertDirectoryUsable(targetRoot);
     await writeProjectMetadata(projectStateRootForSlug(slug), input);
-    const project = await managedProjectRecordForPath({
+    const project = await workspaceProjectRecordForPath({
       path: targetRoot,
       projectsRoot,
       projectStateRoot: projectStateRootForSlug(slug)
@@ -611,7 +670,11 @@ function createStudioProjectContext({
     };
   }
 
-  async function selectManagedProject(input = {}) {
+  async function selectWorkspaceProject(input = {}) {
+    if (!projectCatalogEnabled) {
+      throw projectCatalogUnavailableError();
+    }
+
     const slug = normalizeProjectSlug(input?.slug || input?.projectSlug || input?.name);
     const targetRoot = resolveProjectRoot({
       projectsRoot,
@@ -624,14 +687,18 @@ function createStudioProjectContext({
     }
     await assertDirectoryUsable(targetRoot);
     selectedTargetRoot = targetRoot;
-    selectionSource = "managed";
+    selectionSource = "workspace";
     return listProjects();
   }
 
-  async function createManagedProject(input = {}) {
-    const created = await createManagedProjectRecord(input);
+  async function createWorkspaceProject(input = {}) {
+    if (!projectCatalogEnabled) {
+      throw projectCatalogUnavailableError();
+    }
+
+    const created = await createWorkspaceProjectRecord(input);
     selectedTargetRoot = created.project.projectRoot;
-    selectionSource = "managed";
+    selectionSource = "workspace";
     return listProjects();
   }
 
@@ -645,10 +712,13 @@ function createStudioProjectContext({
   }
 
   return Object.freeze({
-    createManagedProject,
-    createManagedProjectRecord,
+    createWorkspaceProject,
+    createWorkspaceProjectRecord,
     get projectsRoot() {
       return projectsRoot;
+    },
+    get projectCatalogEnabled() {
+      return projectCatalogEnabled;
     },
     get systemRoot() {
       return systemRoot;
@@ -670,11 +740,11 @@ function createStudioProjectContext({
       return Boolean(selectedTargetRoot);
     },
     listProjects,
-    listManagedProjects,
-    readManagedProject,
+    listWorkspaceProjects,
+    readWorkspaceProject,
     requireSelectedTargetRoot,
-    selectManagedProject,
-    updateManagedProjectMetadata,
+    selectWorkspaceProject,
+    updateWorkspaceProjectMetadata,
     projectLocalRootForSlug,
     projectLocalRootForTarget,
     projectStateRootForSlug,

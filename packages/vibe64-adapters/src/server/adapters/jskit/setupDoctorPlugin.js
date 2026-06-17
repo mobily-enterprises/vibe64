@@ -15,7 +15,7 @@ import {
 
 async function checkJskitToolchainImage(toolkit) {
   return checkAdapterToolchainImage(toolkit, {
-    explanation: "The published JSKIT adapter toolchain must be installed by host provisioning before tenants run JSKIT setup commands.",
+    explanation: "The published JSKIT adapter toolchain must be installed by host provisioning before local workspaces run JSKIT setup commands.",
     id: "jskit-toolchain-image",
     image: JSKIT_TOOLCHAIN_IMAGE,
     label: "JSKIT toolchain image",

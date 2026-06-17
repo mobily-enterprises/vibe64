@@ -2,7 +2,6 @@
 import { computed } from "vue";
 import { useRoute } from "vue-router";
 import {
-  mdiAccountKeyOutline,
   mdiLinkVariant
 } from "@mdi/js";
 
@@ -34,9 +33,7 @@ const props = defineProps({
 });
 
 const route = useRoute();
-const resolvedIcon = computed(() => ({
-  "mdi-account-key-outline": mdiAccountKeyOutline
-}[props.icon] || mdiLinkVariant));
+const resolvedIcon = computed(() => mdiLinkVariant);
 const active = computed(() => {
   const target = String(props.to || "").trim();
   const path = String(route.path || "").trim();
@@ -53,7 +50,7 @@ const resolvedTo = computed(() => {
   return {
     path: target,
     query: {
-      returnTo: route.fullPath || route.path || "/app/manage/projects"
+      returnTo: route.fullPath || route.path || "/app"
     }
   };
 });

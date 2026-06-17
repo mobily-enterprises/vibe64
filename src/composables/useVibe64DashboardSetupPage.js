@@ -2,6 +2,7 @@ import { computed, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
 const tabs = [
+  { label: "Studio Setup", value: "studio-setup" },
   { label: "Project Setup", value: "project-setup" }
 ];
 const tabValues = new Set(tabs.map((tab) => tab.value));
@@ -52,7 +53,7 @@ function normalizeTab(value) {
 }
 
 function fallbackTab() {
-  return "project-setup";
+  return "studio-setup";
 }
 
 export {

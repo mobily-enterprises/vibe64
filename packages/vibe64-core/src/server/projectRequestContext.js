@@ -40,6 +40,11 @@ async function resolveProjectRequestContext({
     await ensureProjectLocalGitignore(explicitContext.targetRoot);
     return explicitContext;
   }
+  if (resolvedProjectContext?.projectCatalogEnabled === false) {
+    const error = new Error("Local editor mode only serves the selected project.");
+    error.code = "vibe64_project_route_unavailable";
+    throw error;
+  }
   const targetRoot = resolveProjectRoot({
     projectsRoot,
     slug
@@ -131,6 +136,9 @@ async function runWithResolvedProjectRequestContext(options = {}, operation) {
 function projectRequestErrorStatusCode(error = {}) {
   if (error?.code === "vibe64_invalid_project_slug") {
     return 422;
+  }
+  if (error?.code === "vibe64_project_route_unavailable") {
+    return 404;
   }
   if (error?.code === "vibe64_project_path_not_accessible") {
     return 404;

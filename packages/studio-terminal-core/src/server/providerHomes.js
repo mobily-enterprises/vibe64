@@ -34,13 +34,17 @@ function providerUserKey(user = {}) {
 }
 
 function providerHome(providerId = "", providerHomesRoot = "", user = {}) {
-  const userKey = providerUserKey(user);
+  return providerHomeForUserKey(providerId, providerHomesRoot, providerUserKey(user));
+}
+
+function providerHomeForUserKey(providerId = "", providerHomesRoot = "", userKey = "") {
+  const safeUserKey = String(userKey || "").trim();
   const safeProviderId = String(providerId || "")
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9_-]+/gu, "-")
     .replace(/^-+|-+$/gu, "");
-  return safeProviderId && userKey ? path.join(providerHomesRoot, safeProviderId, userKey) : "";
+  return safeProviderId && safeUserKey ? path.join(providerHomesRoot, safeProviderId, safeUserKey) : "";
 }
 
 function githubProviderUserKey(user = {}) {
@@ -52,6 +56,7 @@ function githubProviderHome(providerHomesRoot, user = {}) {
 }
 
 function githubProviderContext(input = {}, {
+  allowLocalFallback = false,
   providerHomesRoot = ""
 } = {}) {
   const user = input?.vibe64User || null;
@@ -59,13 +64,22 @@ function githubProviderContext(input = {}, {
   const userKey = githubProviderUserKey(user);
   const toolHomeSource = githubProviderHome(providerHomesRoot, user);
   if (!email || !userKey || !toolHomeSource) {
+    if (allowLocalFallback) {
+      return {
+        email: "",
+        ok: true,
+        providerScope: APP_PROVIDER_SCOPE,
+        toolHomeSource: providerHomeForUserKey("github", providerHomesRoot, "local"),
+        userKey: "local"
+      };
+    }
     return {
       code: "vibe64_user_required",
-      error: "A logged-in Vibe64 user is required for GitHub account operations.",
+      error: "A GitHub provider home user key is required for GitHub operations.",
       errors: [
         {
           code: "vibe64_user_required",
-          message: "A logged-in Vibe64 user is required for GitHub account operations."
+          message: "A GitHub provider home user key is required for GitHub operations."
         }
       ],
       ok: false
@@ -89,6 +103,7 @@ export {
   githubProviderHome,
   githubProviderUserKey,
   providerHome,
+  providerHomeForUserKey,
   providerUserKey,
   resolveProviderHomesRoot
 };

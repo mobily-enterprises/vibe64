@@ -9,7 +9,6 @@ export default Object.freeze({
     "@local/vibe64-core",
     "@local/vibe64-runtime",
     "@local/vibe64-project",
-    "@local/vibe64-accounts",
     "@local/vibe64-terminals",
     "@local/studio-setup-doctor",
     "@local/project-setup-doctor"
@@ -20,7 +19,6 @@ export default Object.freeze({
     ],
     requires: [
       "feature.vibe64-project",
-      "feature.vibe64-accounts",
       "feature.vibe64-terminals",
       "feature.studio-setup-doctor",
       "feature.project-setup-doctor",

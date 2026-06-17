@@ -107,6 +107,7 @@ function createVibe64FeatureRoutes(
 function isProjectRequestError(error = {}) {
   return [
     "vibe64_invalid_project_slug",
+    "vibe64_project_route_unavailable",
     "vibe64_project_path_not_accessible",
     "vibe64_project_path_not_directory",
     "vibe64_project_path_symlink"

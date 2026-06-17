@@ -150,6 +150,7 @@ test("session conversation log route forwards the session id", async () => {
     assert.deepEqual(executedAction, {
       actionId: ACTION_READ_SESSION_CONVERSATION_LOG,
       input: {
+        originId: "",
         sessionId: "session-1"
       }
     });
@@ -197,6 +198,7 @@ test("session advance route forwards the expected step state", async () => {
     assert.deepEqual(executedAction, {
       actionId: ACTION_ADVANCE_SESSION,
       input: {
+        originId: "",
         sessionId: "session-1",
         stepId: "plan_and_execute",
         stepStatus: "done"
@@ -258,6 +260,7 @@ test("session intent route forwards the authenticated Vibe64 user", async () => 
           accepted: true
         },
         intentId: "accept_changes",
+        originId: "",
         sessionId: "session-1",
         stepId: "implementation_reviewed",
         stepStatus: "done",

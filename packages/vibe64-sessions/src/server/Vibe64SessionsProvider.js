@@ -7,6 +7,9 @@ import { vibe64SessionChangedServiceEvent } from "@local/vibe64-core/server/sess
 import {
   vibe64ComposerChangedServiceEvent
 } from "@local/vibe64-core/server/composerRealtimeEvents";
+import {
+  resolveConnectionSetupService
+} from "@local/vibe64-runtime/server/connectionReadiness";
 
 const VIBE64_SESSIONS_SERVICE = "feature.vibe64-sessions.service";
 
@@ -16,7 +19,6 @@ class Vibe64SessionsProvider {
   static dependsOn = [
     "runtime.actions",
     "feature.vibe64-project",
-    "feature.vibe64-accounts",
     "feature.vibe64-terminals",
     "feature.studio-setup-doctor",
     "feature.project-setup-doctor"
@@ -36,7 +38,7 @@ class Vibe64SessionsProvider {
       (scope) => {
         return createService({
           setupServices: {
-            accountSetupService: scope.make("feature.vibe64-accounts.service"),
+            connectionSetupService: resolveConnectionSetupService(scope),
             projectSetupService: scope.make("feature.project-setup-doctor.service"),
             studioSetupService: scope.make("feature.studio-setup-doctor.service")
           },
