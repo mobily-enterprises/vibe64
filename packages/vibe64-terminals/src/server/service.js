@@ -15,8 +15,12 @@ import {
   terminalWorktreePath
 } from "./terminalShared.js";
 import {
+  VIBE64_PROVIDER_HOMES_ROOT_ENV,
   VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV
 } from "@local/vibe64-core/server/studioRoots";
+import {
+  codexProviderContext
+} from "@local/studio-terminal-core/server/providerHomes";
 import {
   vibe64SessionDebugDurationMs,
   vibe64SessionDebugError,
@@ -43,6 +47,13 @@ function selfTargetCodexAppServerProviderOptions({
     existing.useDocker = false;
   }
   return existing;
+}
+
+function codexToolHomeSourceFromEnv(env = process.env) {
+  const context = codexProviderContext({
+    providerHomesRoot: String(env[VIBE64_PROVIDER_HOMES_ROOT_ENV] || "")
+  });
+  return context?.ok === true ? context.toolHomeSource : "";
 }
 
 async function closeTerminalControllerForSession({
@@ -117,6 +128,8 @@ function createService({
       codexTerminalController,
       env
     }),
+    codexToolHomeRequired: codexTerminalController.codexToolHomeRequired ?? true,
+    codexToolHomeSource: codexTerminalController.codexToolHomeSource || codexToolHomeSourceFromEnv(env),
     projectService,
     publishPromptInjected: publishSessionChanged.codexPrompt,
     publishSessionChanged: publishSessionChanged.codexTerminal

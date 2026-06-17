@@ -60,6 +60,11 @@ function githubProviderHome(providerHomesRoot, user = {}) {
   return providerHome("github", providerHomesRoot, user);
 }
 
+function codexProviderHome(providerHomesRoot = "") {
+  const safeProviderHomesRoot = String(providerHomesRoot || "").trim();
+  return safeProviderHomesRoot ? path.join(safeProviderHomesRoot, "codex") : "";
+}
+
 function normalizeGithubAccountMode(value = "") {
   const normalized = String(value || "").trim().toLowerCase();
   if (normalized === GITHUB_ACCOUNT_MODE_LOCAL || normalized === APP_PROVIDER_SCOPE) {
@@ -98,6 +103,22 @@ function githubLocalProviderContext({
     providerScope: APP_PROVIDER_SCOPE,
     toolHomeSource,
     userKey: GITHUB_ACCOUNT_MODE_LOCAL
+  };
+}
+
+function codexProviderContext({
+  providerHomesRoot = ""
+} = {}) {
+  const toolHomeSource = codexProviderHome(providerHomesRoot);
+  if (!toolHomeSource) {
+    return providerHomesRootRequiredError("Codex");
+  }
+  return {
+    email: "",
+    ok: true,
+    providerScope: APP_PROVIDER_SCOPE,
+    toolHomeSource,
+    userKey: APP_PROVIDER_SCOPE
   };
 }
 
@@ -148,6 +169,8 @@ export {
   USER_PROVIDER_SCOPE,
   VIBE64_PROVIDER_HOMES_ROOT_ENV,
   canonicalVibe64UserEmail,
+  codexProviderContext,
+  codexProviderHome,
   githubLocalProviderContext,
   githubProviderContext,
   githubProviderHome,

@@ -710,6 +710,16 @@ async function commandTerminalTestEnv(root) {
   };
 }
 
+function createTestTerminalService(options = {}) {
+  return createService({
+    ...options,
+    codexTerminalController: {
+      codexToolHomeRequired: false,
+      ...(options.codexTerminalController || {})
+    }
+  });
+}
+
 function runNodeScript(scriptPath = "", args = [], env = {}, stdin = "") {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [
@@ -814,6 +824,23 @@ test("Vibe64 global Codex terminal args use the project root without a session t
   assert.doesNotMatch(args.at(-1), /resume [0-9a-f-]{36}/u);
 });
 
+test("Vibe64 Codex terminal args mount the Codex provider home as the tool home", () => {
+  const targetRoot = "/workspace/project";
+  const toolHomeSource = "/srv/vibe64/tenants/chiara/provider-homes/codex";
+  const args = codexTerminalArgs({
+    codexThreadId: "",
+    containerName: "vibe64-codex-provider-home",
+    sessionId: "provider-home-session",
+    targetRoot,
+    terminalId: "provider-home-terminal",
+    toolHomeSource,
+    worktree: targetRoot
+  });
+
+  assert.ok(args.includes(`${toolHomeSource}:${STUDIO_TOOL_HOME_PATH}`));
+  assert.ok(!args.includes(`vibe64_tool_home:${STUDIO_TOOL_HOME_PATH}`));
+});
+
 test("Vibe64 global Codex terminal state resolves target root from project service APIs", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const terminal = startTerminalSession({
@@ -832,7 +859,7 @@ test("Vibe64 global Codex terminal state resolves target root from project servi
     });
     assert.equal(terminal.ok, true);
 
-    const terminalService = createService({
+    const terminalService = createTestTerminalService({
       projectService: {
         async readProjectType() {
           return {
@@ -1015,7 +1042,7 @@ test("Vibe64 Codex app-server reconciliation starts open session threads and uns
       unsubscribe: 0,
       unsubscribeThread: []
     };
-    const terminalService = createService({
+    const terminalService = createTestTerminalService({
       codexTerminalController: {
         codexAppServerProviderFactory(options = {}) {
           const session = sessions.find((entry) => String(options.workdir || "").includes(entry.sessionId));
@@ -1139,7 +1166,7 @@ test("Vibe64 Codex app-server reconciliation subscribes an already loaded thread
       startThread: 0,
       subscribe: 0
     };
-    const terminalService = createService({
+    const terminalService = createTestTerminalService({
       codexTerminalController: {
         codexAppServerProviderFactory() {
           return {
@@ -1269,7 +1296,7 @@ test("Vibe64 Codex app-server reconciliation prunes listeners from the previousl
     }
     let activeTargetRoot = projectA;
     let activeRuntime = runtimeA;
-    const terminalService = createService({
+    const terminalService = createTestTerminalService({
       codexTerminalController: {
         codexAppServerProviderFactory(options = {}) {
           const state = stateForTarget(options.targetRoot);
@@ -1425,7 +1452,7 @@ test("Vibe64 Codex app-server reconciliation waits before pruning an in-flight p
 
     let activeTargetRoot = projectA;
     let activeRuntime = runtimeA;
-    const terminalService = createService({
+    const terminalService = createTestTerminalService({
       codexTerminalController: {
         codexAppServerProviderFactory(options = {}) {
           const state = stateForTarget(options.targetRoot);
@@ -1586,7 +1613,7 @@ test("Vibe64 Codex terminal state uses durable app-server agent run state", asyn
     });
     assert.equal(terminal.ok, true);
 
-    const terminalService = createService({
+    const terminalService = createTestTerminalService({
       projectService: {
         targetRoot,
         async createRuntime() {
@@ -2816,7 +2843,7 @@ test("Vibe64 Codex app-server preparation failure is persisted as a visible back
       recursive: true
     });
     const publishReasons = [];
-    const terminalService = createService({
+    const terminalService = createTestTerminalService({
       codexTerminalController: {
         codexAppServerPromptDeliveryEnabled: false
       },
@@ -2871,7 +2898,7 @@ test("Vibe64 Codex app-server blocks a removed session worktree without restarti
 
     const providerCalls = [];
     const publishReasons = [];
-    const terminalService = createService({
+    const terminalService = createTestTerminalService({
       codexTerminalController: {
         codexAppServerProviderFactory(options = {}) {
           providerCalls.push(options);
@@ -2932,7 +2959,7 @@ test("Vibe64 self-target Codex app-server uses native provider control", async (
     });
 
     const providerOptions = [];
-    const terminalService = createService({
+    const terminalService = createTestTerminalService({
       codexTerminalController: {
         codexAppServerProviderFactory(options = {}) {
           providerOptions.push(options);
@@ -3018,7 +3045,7 @@ test("Vibe64 self-target Codex interrupt keeps native provider control", async (
 
     const providerOptions = [];
     const interruptCalls = [];
-    const terminalService = createService({
+    const terminalService = createTestTerminalService({
       codexTerminalController: {
         codexAppServerProviderFactory(options = {}) {
           providerOptions.push(options);
@@ -5174,7 +5201,7 @@ test("Vibe64 command terminal refuses prompt actions and disabled command action
     await runtime.createSession({
       sessionId: "terminal_blocked"
     });
-    const service = createService({
+    const service = createTestTerminalService({
       projectService: {
         targetRoot,
         async createRuntime() {
@@ -5393,7 +5420,7 @@ test("Vibe64 shell terminal service rejects invalid targets before Docker startu
     await runtime.createSession({
       sessionId: "shell_invalid"
     });
-    const service = createService({
+    const service = createTestTerminalService({
       projectService: {
         targetRoot,
         async createRuntime() {
@@ -5419,7 +5446,7 @@ test("Vibe64 terminal service publishes session changes after close and stop act
       sessionId
     });
   };
-  const service = createService({
+  const service = createTestTerminalService({
     projectService: {
       targetRoot: "/tmp/vibe64-terminal-publish-test"
     },

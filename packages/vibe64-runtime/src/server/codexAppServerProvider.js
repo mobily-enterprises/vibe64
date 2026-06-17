@@ -52,7 +52,7 @@ import {
   prepareCodexAttachmentRoot
 } from "./codexAttachmentPaths.js";
 
-const CODEX_APP_SERVER_METADATA_SCHEMA_VERSION = 6;
+const CODEX_APP_SERVER_METADATA_SCHEMA_VERSION = 7;
 const CODEX_APP_SERVER_PROVIDER_ID = AGENT_PROVIDER_IDS.CODEX_APP_SERVER;
 const CODEX_APP_SERVER_TRANSPORT = Object.freeze({
   UNIX: "unix"
@@ -387,6 +387,7 @@ function codexAppServerDockerArgs({
   image = STUDIO_BASE_TOOLCHAIN_IMAGE,
   runtimeDir = "",
   targetRoot = "",
+  toolHomeSource = "",
   workdir = ""
 } = {}) {
   const normalizedRuntimeDir = path.resolve(runtimeDir);
@@ -416,7 +417,9 @@ function codexAppServerDockerArgs({
     ...studioDaemonDockerLabels().flatMap((label) => ["--label", label]),
     "--label",
     studioDockerLabel("target", normalizedTargetRoot ? runtimeTargetName(normalizedTargetRoot) : dockerNamePart(path.basename(normalizedRuntimeDir))),
-    ...studioToolHomeDockerArgs(),
+    ...studioToolHomeDockerArgs({
+      source: normalizeAgentText(toolHomeSource) || undefined
+    }),
     ...hostUserIdentityEnvArgs(),
     ...gitToolchainMountArgs(normalizedTargetRoot),
     ...dockerMountArgs({
@@ -506,12 +509,14 @@ function normalizeCodexAppServerMetadata(metadata = {}) {
     schemaVersion: Number(normalized.schemaVersion || 0),
     socketPath: normalizeAgentText(normalized.socketPath),
     startedAt: normalizeAgentText(normalized.startedAt),
+    toolHomeSource: normalizeAgentText(normalized.toolHomeSource),
     transport: normalizeAgentText(normalized.transport)
   };
 }
 
-function codexAppServerMetadataIsWellFormed(metadata = {}) {
+function codexAppServerMetadataIsWellFormed(metadata = {}, options = {}) {
   const attachmentMount = codexAttachmentMount();
+  const expectedToolHomeSource = normalizeAgentText(options.toolHomeSource);
   return Boolean(
     metadata.schemaVersion === CODEX_APP_SERVER_METADATA_SCHEMA_VERSION &&
     metadata.attachmentContainerRoot === attachmentMount.target &&
@@ -519,6 +524,7 @@ function codexAppServerMetadataIsWellFormed(metadata = {}) {
     metadata.authStateSignature &&
     metadata.processCwd &&
     metadata.provider === CODEX_APP_SERVER_PROVIDER_ID &&
+    metadata.toolHomeSource === expectedToolHomeSource &&
     metadata.transport === CODEX_APP_SERVER_TRANSPORT.UNIX &&
     metadata.endpoint &&
     metadata.socketPath
@@ -586,7 +592,7 @@ async function codexAppServerEndpointIsResponsive(endpoint = "", {
 
 async function codexAppServerMetadataIsLive(metadata = {}, options = {}) {
   const normalized = normalizeCodexAppServerMetadata(metadata);
-  if (!codexAppServerMetadataIsWellFormed(normalized)) {
+  if (!codexAppServerMetadataIsWellFormed(normalized, options)) {
     return false;
   }
   const authStateSignature = await currentCodexAuthStateSignature(options);
@@ -706,6 +712,7 @@ async function startCodexAppServerProcess({
   spawn = defaultSpawn,
   systemRoot = "",
   targetRoot = "",
+  toolHomeSource = "",
   WebSocketImpl = WebSocket,
   workdir = "",
   runtimeDir = codexAppServerRuntimeDir({
@@ -716,6 +723,10 @@ async function startCodexAppServerProcess({
   useDocker = true
 } = {}) {
   await ensureWritablePrivateDirectory(runtimeDir);
+  const normalizedToolHomeSource = normalizeAgentText(toolHomeSource);
+  if (normalizedToolHomeSource) {
+    await ensurePrivateDirectory(normalizedToolHomeSource);
+  }
   const resolvedAuthStateSignature = await currentCodexAuthStateSignature({
     authStateSignature,
     env,
@@ -729,6 +740,13 @@ async function startCodexAppServerProcess({
     targetRoot,
     workdir
   });
+  const spawnEnv = normalizedToolHomeSource && !useDocker
+    ? {
+        ...env,
+        HOME: normalizedToolHomeSource,
+        NPM_CONFIG_PREFIX: path.join(normalizedToolHomeSource, ".local")
+      }
+    : env;
   await rm(socketPath, {
     force: true
   });
@@ -742,6 +760,7 @@ async function startCodexAppServerProcess({
           image,
           runtimeDir,
           targetRoot,
+          toolHomeSource: normalizedToolHomeSource,
           workdir
         })
       : [
@@ -751,7 +770,7 @@ async function startCodexAppServerProcess({
         ];
     child = spawn(spawnCommand, spawnArgs, {
       detached: true,
-      env,
+      env: spawnEnv,
       stdio: ["ignore", logHandle.fd, logHandle.fd]
     });
     await new Promise((resolve, reject) => {
@@ -802,6 +821,7 @@ async function startCodexAppServerProcess({
     schemaVersion: CODEX_APP_SERVER_METADATA_SCHEMA_VERSION,
     socketPath,
     startedAt: new Date().toISOString(),
+    toolHomeSource: normalizedToolHomeSource,
     transport: CODEX_APP_SERVER_TRANSPORT.UNIX
   };
 }

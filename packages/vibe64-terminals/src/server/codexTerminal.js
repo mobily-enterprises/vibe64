@@ -760,6 +760,7 @@ function codexTerminalArgs({
   sessionId,
   targetRoot,
   terminalId,
+  toolHomeSource = "",
   worktree
 }) {
   return targetToolchainTerminalArgs({
@@ -787,6 +788,7 @@ function codexTerminalArgs({
     sessionId,
     targetRoot,
     terminalId,
+    toolHomeSource,
     workdir: worktree
   });
 }
@@ -827,6 +829,8 @@ function createCodexTerminalController({
   codexAppServerProviderOptions = {},
   codexAppServerProviderFactory = createCodexAppServerAgentProvider,
   codexAppServerPromptDeliveryEnabled = CODEX_APP_SERVER_PROMPT_DELIVERY_ENABLED,
+  codexToolHomeRequired = false,
+  codexToolHomeSource = "",
   fixJobStore = defaultFixCodexJobStore,
   projectService,
   publishPromptInjected = async () => null,
@@ -846,6 +850,35 @@ function createCodexTerminalController({
   const codexAppServerAssistantTurns = new Map();
   const codexAppServerReasoningTurns = new Map();
   const codexAppServerReasoningPersistQueues = new Map();
+
+  function resolvedCodexToolHomeSource() {
+    return normalizeText(codexToolHomeSource || codexAppServerProviderOptions.toolHomeSource);
+  }
+
+  async function codexToolHomeResult() {
+    const toolHomeSource = resolvedCodexToolHomeSource();
+    if (!toolHomeSource) {
+      return codexToolHomeRequired
+        ? retryableTerminalFailure({
+            ok: false,
+            error: "Codex account storage is not available. Connect Codex before starting a Codex terminal."
+          })
+        : {
+            ok: true,
+            toolHomeSource: ""
+          };
+    }
+    if (codexToolHomeRequired && !await directoryExists(toolHomeSource)) {
+      return retryableTerminalFailure({
+        ok: false,
+        error: "Codex is not ready for terminals. Connect Codex before continuing."
+      });
+    }
+    return {
+      ok: true,
+      toolHomeSource
+    };
+  }
 
   function codexAppServerProviderKey(sessionId = "", options = {}) {
     const normalizedSessionId = normalizeText(sessionId);
@@ -903,7 +936,23 @@ function createCodexTerminalController({
       ...codexAppServerProviderOptions,
       runtimeDir: normalizeText(metadata.codex_app_server_runtime_dir),
       targetRoot: terminalTargetRoot(session, projectService),
+      toolHomeSource: resolvedCodexToolHomeSource(),
       workdir: terminalWorktreePath(session)
+    };
+  }
+
+  function codexAppServerRuntimeOptions({
+    runtimeDir = "",
+    targetRoot = "",
+    toolHomeSource = "",
+    workdir = ""
+  } = {}) {
+    return {
+      ...codexAppServerProviderOptions,
+      runtimeDir: normalizeText(runtimeDir),
+      targetRoot: normalizeText(targetRoot),
+      toolHomeSource: normalizeText(toolHomeSource) || resolvedCodexToolHomeSource(),
+      workdir: normalizeText(workdir)
     };
   }
 
@@ -2964,6 +3013,10 @@ function createCodexTerminalController({
         })
       );
     }
+    const toolHome = await codexToolHomeResult();
+    if (toolHome.ok === false) {
+      return toolHome;
+    }
     const imageResult = await resolveTerminalToolchainImage({
       runtime,
       session,
@@ -3032,6 +3085,7 @@ function createCodexTerminalController({
         sessionId,
         targetRoot,
         terminalId: id,
+        toolHomeSource: toolHome.toolHomeSource,
         worktree: workdir
       }),
       command: "docker",
@@ -3088,6 +3142,10 @@ function createCodexTerminalController({
     if (imageResult.ok === false) {
       return imageResult;
     }
+    const toolHome = await codexToolHomeResult();
+    if (toolHome.ok === false) {
+      return toolHome;
+    }
 
     await prepareCodexAttachmentRoot();
     await ensureTargetRuntimeNetwork(targetRoot);
@@ -3119,6 +3177,7 @@ function createCodexTerminalController({
         sessionId: "",
         targetRoot,
         terminalId: id,
+        toolHomeSource: toolHome.toolHomeSource,
         worktree: targetRoot
       }),
       command: "docker",
@@ -3350,6 +3409,10 @@ function createCodexTerminalController({
     if (imageResult.ok === false) {
       return imageResult;
     }
+    const toolHome = await codexToolHomeResult();
+    if (toolHome.ok === false) {
+      return toolHome;
+    }
 
     await prepareCodexAttachmentRoot();
     const reportHelper = await prepareFixCodexReportHelper({
@@ -3391,6 +3454,7 @@ function createCodexTerminalController({
         sessionId: "",
         targetRoot,
         terminalId: id,
+        toolHomeSource: toolHome.toolHomeSource,
         worktree: workdir
       }),
       command: "docker",
@@ -3625,11 +3689,16 @@ function createCodexTerminalController({
         })
       );
     }
+    const toolHome = await codexToolHomeResult();
+    if (toolHome.ok === false) {
+      return toolHome;
+    }
     return {
       ok: true,
       runtime,
       session,
       targetRoot,
+      toolHomeSource: toolHome.toolHomeSource,
       workdir
     };
   }
@@ -3681,13 +3750,14 @@ function createCodexTerminalController({
       runtime,
       session,
       targetRoot,
+      toolHomeSource,
       workdir
     } = context;
-    const providerOptions = {
-      ...codexAppServerProviderOptions,
+    const providerOptions = codexAppServerRuntimeOptions({
       targetRoot,
+      toolHomeSource,
       workdir
-    };
+    });
     const providerKey = codexAppServerProviderKey(normalizedSessionId, providerOptions);
     const existing = codexAppServerThreadReconciliations.get(providerKey);
     if (existing) {
@@ -3825,6 +3895,7 @@ function createCodexTerminalController({
       runtime,
       session,
       targetRoot,
+      toolHomeSource,
       workdir
     } = context;
 
@@ -3833,11 +3904,11 @@ function createCodexTerminalController({
       message: "Preparing Codex app-server for this session."
     });
     try {
-      const providerOptions = {
-        ...codexAppServerProviderOptions,
+      const providerOptions = codexAppServerRuntimeOptions({
         targetRoot,
+        toolHomeSource,
         workdir
-      };
+      });
       const provider = await ensureCodexAppServerDaemonForSession(sessionId, providerOptions);
       const promptSession = await runtime.promptSessionForAction(session);
       const developerInstructions = codexAppServerDeveloperInstructions(promptSession);

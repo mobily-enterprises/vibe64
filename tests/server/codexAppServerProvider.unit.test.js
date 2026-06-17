@@ -28,6 +28,7 @@ import {
   CODEX_ATTACHMENT_HOST_ROOT
 } from "@local/vibe64-runtime/server/codexAttachmentPaths";
 import {
+  STUDIO_TOOL_HOME_PATH,
   VIBE64_RUNTIME_NAMESPACE_ENV
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
@@ -130,7 +131,8 @@ function unixEndpointForRuntime(runtimeDir) {
 }
 
 function metadataForRuntime(runtimeDir, {
-  authStateSignature = "test-auth-state-signature"
+  authStateSignature = "test-auth-state-signature",
+  toolHomeSource = ""
 } = {}) {
   const socketPath = socketPathForRuntime(runtimeDir);
   return {
@@ -151,6 +153,7 @@ function metadataForRuntime(runtimeDir, {
     schemaVersion: CODEX_APP_SERVER_METADATA_SCHEMA_VERSION,
     socketPath,
     startedAt: "2026-06-04T00:00:00.000Z",
+    toolHomeSource,
     transport: CODEX_APP_SERVER_TRANSPORT.UNIX
   };
 }
@@ -378,6 +381,45 @@ test("codex provider reuses a live app-server runtime from Vibe64 metadata", asy
   });
 });
 
+test("codex provider replaces a live runtime when the Codex tool home changes", async () => {
+  await withTemporaryDirectory(async (runtimeDir) => {
+    const oldToolHomeSource = path.join(runtimeDir, "provider-homes", "old-codex");
+    const newToolHomeSource = path.join(runtimeDir, "provider-homes", "codex");
+    const metadata = metadataForRuntime(runtimeDir, {
+      toolHomeSource: oldToolHomeSource
+    });
+    await writeFile(metadata.socketPath, "");
+    await writeMetadata(runtimeDir, metadata);
+    const spawnCalls = [];
+
+    const runtime = await ensureCodexAppServerRuntime({
+      authStateSignature: metadata.authStateSignature,
+      readyTimeoutMs: 2000,
+      runtimeDir,
+      spawn(command, args, options) {
+        if (command === "docker" && args[0] === "run") {
+          writeFileSync(socketPathForRuntime(runtimeDir), "");
+        }
+        spawnCalls.push({
+          args,
+          command,
+          options
+        });
+        return fakeChild({
+          emitClose: command !== "docker" || args[0] !== "run"
+        });
+      },
+      toolHomeSource: newToolHomeSource,
+      WebSocketImpl: ResponsiveFakeWebSocket
+    });
+
+    assert.equal(runtime.reused, false);
+    assert.equal(runtime.toolHomeSource, newToolHomeSource);
+    assert.equal(spawnCalls.length, 2);
+    assert.equal(spawnCalls[1].args.includes(`${newToolHomeSource}:${STUDIO_TOOL_HOME_PATH}`), true);
+  });
+});
+
 test("codex provider replaces a runtime whose socket exists but does not answer", async () => {
   await withTemporaryDirectory(async (runtimeDir) => {
     FirstErrorThenResponsiveFakeWebSocket.constructorCount = 0;
@@ -418,6 +460,7 @@ test("codex provider replaces a runtime whose socket exists but does not answer"
 test("codex provider starts one app-server and stores reusable runtime metadata", async () => {
   await withTemporaryDirectory(async (runtimeDir) => {
     const targetRoot = path.join(runtimeDir, "target");
+    const toolHomeSource = path.join(runtimeDir, "provider-homes", "codex");
     const workdir = path.join(targetRoot, ".vibe64", "sessions", "active", "session-1", "worktree");
     await mkdir(workdir, {
       recursive: true
@@ -442,6 +485,7 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
         });
       },
       targetRoot,
+      toolHomeSource,
       WebSocketImpl: ResponsiveFakeWebSocket,
       workdir
     });
@@ -462,6 +506,7 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
     assert.ok(runCall.args.includes("never"));
     assert.ok(runCall.args.includes("--rm"));
     assert.ok(runCall.args.includes(`${runtimeDir}:/vibe64-codex-app-server`));
+    assert.ok(runCall.args.includes(`${toolHomeSource}:${STUDIO_TOOL_HOME_PATH}`));
     assert.ok(runCall.args.includes(`${CODEX_ATTACHMENT_HOST_ROOT}:${CODEX_ATTACHMENT_CONTAINER_ROOT}:ro`));
     assert.ok(runCall.args.includes(`${targetRoot}:/workspace`));
     assert.ok(runCall.args.includes(`${targetRoot}:${targetRoot}`));
@@ -480,6 +525,7 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
     assert.equal(stored.endpoint, unixEndpointForRuntime(runtimeDir));
     assert.equal(stored.containerEndpoint, codexAppServerContainerEndpoint());
     assert.equal(stored.provider, CODEX_APP_SERVER_PROVIDER_ID);
+    assert.equal(stored.toolHomeSource, toolHomeSource);
     assert.equal(stored.transport, CODEX_APP_SERVER_TRANSPORT.UNIX);
   });
 });

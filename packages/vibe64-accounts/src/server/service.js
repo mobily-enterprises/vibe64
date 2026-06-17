@@ -44,6 +44,7 @@ import {
   GITHUB_ACCOUNT_MODE_LOCAL,
   GITHUB_ACCOUNT_MODE_USER,
   USER_PROVIDER_SCOPE,
+  codexProviderContext,
   githubProviderContext,
   githubProviderHome,
   githubProviderUserKey,
@@ -270,20 +271,6 @@ function githubGitIdentityFromInput(input = {}) {
     email: input.gitUserEmail,
     name: input.gitUserName
   });
-}
-
-function codexProviderContext({
-  providerHomesRoot = ""
-} = {}) {
-  if (!String(providerHomesRoot || "").trim()) {
-    return authError("vibe64_provider_homes_root_required", "A Vibe64 provider homes root is required for Codex operations.");
-  }
-  return {
-    ok: true,
-    providerScope: APP_PROVIDER_SCOPE,
-    toolHomeSource: path.join(providerHomesRoot, "codex"),
-    userKey: "app"
-  };
 }
 
 function codexLoginCommandArgs(mode = BROWSER_AUTH_MODE) {
