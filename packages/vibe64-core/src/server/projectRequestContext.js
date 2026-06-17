@@ -23,7 +23,10 @@ async function resolveProjectRequestContext({
 } = {}) {
   const slug = projectSlugFromRequest(request);
   const resolvedProjectContext = projectContext || getStudioProjectContext();
-  const projectsRoot = String(resolvedProjectContext?.projectsRoot || resolveStudioProjectsRoot()).trim();
+  const projectsRoot = String(
+    resolvedProjectContext?.projectsRoot ||
+    (resolvedProjectContext?.projectCatalogEnabled === false ? "" : resolveStudioProjectsRoot())
+  ).trim();
   const explicitContext = explicitProjectRequestContextForSlug(resolvedProjectContext, slug, projectsRoot);
   if (explicitContext) {
     await assertProjectDirectoryUsable(explicitContext.targetRoot);

@@ -18,11 +18,15 @@ data directory:
 
 ```text
 ~/.local/share/vibe64-local-editor/
-  auth-sessions/
+  state/
+    auth-sessions/
+    users/
+    logs/
+    setup.json
   provider-homes/
-  users/
-  logs/
-  setup.json
+    codex/
+    github/
+      local/
 
 <opened-folder>/
   .vibe64/
@@ -91,7 +95,9 @@ Directory policy is centralized in the Vibe64 root resolver. Stores should not
 invent their own state paths.
 
 ```text
-local editor systemRoot   = ~/.local/share/vibe64-local-editor
+local editor base root    = ~/.local/share/vibe64-local-editor
+local editor systemRoot   = ~/.local/share/vibe64-local-editor/state
+provider homes root       = ~/.local/share/vibe64-local-editor/provider-homes
 projectSharedRoot         = <targetRoot>/.vibe64
 projectLocalRoot          = <targetRoot>/.vibe64-local
 ```
@@ -105,7 +111,8 @@ VIBE64_APP_ROOT       Vibe64 application checkout root
 ```
 
 `VIBE64_SYSTEM_ROOT` is an escape hatch for explicit local editor state
-placement. Normal runs should use `~/.local/share/vibe64-local-editor`.
+placement. Normal runs should use
+`~/.local/share/vibe64-local-editor/state`.
 
 ## Docker Runtime Naming
 

@@ -160,7 +160,8 @@ function projectRecord({
   source = ""
 } = {}) {
   const resolvedPath = normalizeRoot(projectPath);
-  const insideProjectsRoot = pathInsideOrEqual(projectsRoot, resolvedPath);
+  const hasProjectsRoot = String(projectsRoot || "").trim() !== "";
+  const insideProjectsRoot = hasProjectsRoot && pathInsideOrEqual(projectsRoot, resolvedPath);
   const basename = path.basename(resolvedPath);
   return {
     external: !insideProjectsRoot,
@@ -418,10 +419,9 @@ function createStudioProjectContext({
         explicitRoot: explicitProjectsRoot,
         home
       })
-    : normalizeRoot(
-        explicitProjectsRoot,
-        resolveDefaultLocalEditorProjectsRoot(home)
-      );
+    : String(explicitProjectsRoot || "").trim()
+      ? normalizeRoot(explicitProjectsRoot)
+      : resolveDefaultLocalEditorProjectsRoot(home);
   const systemRoot = resolveVibe64Roots({
     env,
     explicitSystemRoot,

@@ -15,6 +15,7 @@ import {
   resolveProjectRequestContext
 } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 import {
+  resolveVibe64ProviderHomesRoot,
   resolveVibe64Roots
 } from "../../packages/vibe64-core/src/server/studioRoots.js";
 
@@ -57,7 +58,7 @@ test("Studio project context starts without a selected project when no explicit 
   });
 });
 
-test("Studio project context uses a visibly local-editor system root in local mode", async () => {
+test("Studio project context uses visibly local-editor roots in local mode", async () => {
   await withTemporaryRoot(async (root) => {
     const context = createStudioProjectContext({
       env: {},
@@ -68,7 +69,8 @@ test("Studio project context uses a visibly local-editor system root in local mo
       }
     });
 
-    assert.equal(context.systemRoot, path.join(root, ".local", "share", "vibe64-local-editor"));
+    const localBaseRoot = path.join(root, ".local", "share", "vibe64-local-editor");
+    assert.equal(context.systemRoot, path.join(localBaseRoot, "state"));
     assert.equal(resolveVibe64Roots({
       env: {},
       home: root,
@@ -77,7 +79,15 @@ test("Studio project context uses a visibly local-editor system root in local mo
         mode: "local"
       },
       targetRoot: path.join(root, "target")
-    }).projectsRoot, path.join(root, ".local", "share", "vibe64-local-editor", "projects"));
+    }).projectsRoot, "");
+    assert.equal(resolveVibe64ProviderHomesRoot({
+      env: {},
+      home: root,
+      runtimeProfile: {
+        local: true,
+        mode: "local"
+      }
+    }), path.join(localBaseRoot, "provider-homes"));
   });
 });
 
@@ -107,7 +117,7 @@ test("Studio project context treats local mode as a single selected folder", asy
     });
 
     assert.equal(context.projectCatalogEnabled, false);
-    assert.equal(context.projectsRoot, path.join(root, ".local", "share", "vibe64-local-editor", "projects"));
+    assert.equal(context.projectsRoot, "");
 
     const listed = await context.listProjects();
     assert.equal(listed.ok, true);
