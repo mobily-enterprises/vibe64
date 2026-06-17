@@ -24,7 +24,7 @@ function createBrowserLifecycleMonitor({
   setTimeoutFn = setTimeout,
   shutdownDelayMs = DEFAULT_BROWSER_LIFECYCLE_SHUTDOWN_DELAY_MS
 } = {}) {
-  const clients = new Set();
+  const clients = new Map();
   let shutdownEnabled = false;
   let shutdownTimer = null;
   let nextClientId = 1;
@@ -63,7 +63,7 @@ function createBrowserLifecycleMonitor({
   function registerClient(socket) {
     const clientId = nextClientId;
     nextClientId += 1;
-    clients.add(clientId);
+    clients.set(clientId, socket);
     clearShutdownTimer();
 
     let removed = false;
@@ -94,8 +94,16 @@ function createBrowserLifecycleMonitor({
   function stop() {
     shutdownEnabled = false;
     serverClosing = true;
-    clients.clear();
     clearShutdownTimer();
+    const sockets = Array.from(clients.values());
+    clients.clear();
+    for (const socket of sockets) {
+      try {
+        socket?.close?.(1001, "Vibe64 server is stopping.");
+      } catch {
+        // Shutdown is already in progress; continue closing the remaining clients.
+      }
+    }
   }
 
   return {

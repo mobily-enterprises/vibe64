@@ -45,6 +45,13 @@
         >
           Copy selection
         </v-btn>
+        <v-btn
+          v-if="terminalUrl"
+          variant="tonal"
+          @click="emit('copy-url')"
+        >
+          Copy URL
+        </v-btn>
         <p v-if="copyStatus" class="text-caption text-medium-emphasis mb-0">
           {{ copyStatus }}
         </p>
@@ -98,6 +105,10 @@ const props = defineProps({
     type: String,
     default: ""
   },
+  terminalUrl: {
+    type: String,
+    default: ""
+  },
   title: {
     type: String,
     default: "Terminal"
@@ -119,6 +130,7 @@ const statusLabel = computed(() => {
 const emit = defineEmits([
   "close",
   "copy-selection",
+  "copy-url",
   "send-ctrl-c",
   "update:modelValue"
 ]);

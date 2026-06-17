@@ -7,6 +7,7 @@ import {
 import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
 import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
 import { writeClipboardText } from "@/lib/clipboard.js";
+import { firstTerminalUrl } from "@/lib/terminalOutputUrl.js";
 import { loadXtermModules } from "@/lib/xtermModuleLoader.js";
 import {
   VIBE64_SURFACE_ID
@@ -34,6 +35,7 @@ function useDoctorTerminal({
   const terminalSelectedText = ref("");
   const terminalCopyStatus = ref("");
   const terminalReadPath = ref("");
+  const terminalOutputUrl = computed(() => firstTerminalUrl(terminalOutput.value));
 
   let terminalInstance = null;
   let terminalFitAddon = null;
@@ -173,6 +175,10 @@ function useDoctorTerminal({
     }
   }
 
+  async function copyTerminalUrl() {
+    await copyTerminalText(terminalOutputUrl.value, "URL");
+  }
+
   function disposeTerminalUi() {
     if (terminalPollTimer) {
       window.clearInterval(terminalPollTimer);
@@ -240,6 +246,7 @@ function useDoctorTerminal({
       terminalFitAddon?.fit();
     };
     window.addEventListener("resize", terminalResizeHandler);
+    return true;
   }
 
   function writeTerminalOutput(output) {
@@ -406,6 +413,7 @@ function useDoctorTerminal({
   return {
     closeTerminal,
     copyTerminalSelection,
+    copyTerminalUrl,
     openTerminal,
     sendCtrlC,
     terminalCloseError,
@@ -420,7 +428,8 @@ function useDoctorTerminal({
     terminalSelectedText,
     terminalSessionId,
     terminalStatus,
-    terminalTitle
+    terminalTitle,
+    terminalUrl: terminalOutputUrl
   };
 }
 

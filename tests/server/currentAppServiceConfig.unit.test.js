@@ -326,7 +326,7 @@ test("current-app reports connections separately from automatic setup capabiliti
     assert.equal(state.connections.github.ready, true);
     assert.equal(state.capabilities.app.enabled, true);
     assert.equal(state.capabilities.chat.enabled, false);
-    assert.equal(state.capabilities.chat.fix.route, "");
+    assert.equal(state.capabilities.chat.fix.route, "?tab=studio-setup");
     assert.match(state.capabilities.createSession.reason, /connection setup/u);
   });
 });

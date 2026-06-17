@@ -33,7 +33,7 @@
         @select-tab="selectTab"
       />
       <StudioSetupDoctorScreen
-        v-else-if="activeTab === 'studio-setup'"
+        v-if="activeTab === 'studio-setup'"
         continue-label="Project Setup"
         @select-tab="selectTab"
       />

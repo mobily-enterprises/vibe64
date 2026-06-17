@@ -15,6 +15,9 @@ import {
   resolveRuntimeProfileFromSurface,
   tryCreateProviderRuntimeFromApp
 } from "@jskit-ai/kernel/server/platform";
+import {
+  closeSocketIoServer
+} from "@jskit-ai/realtime/server/runtime";
 import { matchesPathPrefix, normalizePathname } from "@jskit-ai/kernel/shared/surface/paths";
 import { surfaceRuntime } from "./server/lib/surfaceRuntime.js";
 import {
@@ -106,6 +109,18 @@ function registerSocketIoUpgradeHandoff(app) {
 
     reply.hijack();
   });
+}
+
+async function closeRealtimeSocketIoServer(providerRuntime = null) {
+  const runtimeApp = providerRuntime?.app;
+  if (!runtimeApp || typeof runtimeApp.has !== "function" || typeof runtimeApp.make !== "function") {
+    return;
+  }
+  if (runtimeApp.has("runtime.realtime.io") !== true) {
+    return;
+  }
+
+  await closeSocketIoServer(runtimeApp.make("runtime.realtime.io"));
 }
 
 function hasFileExtension(pathname) {
@@ -241,6 +256,7 @@ function forceCloseServerConnections(server = null) {
 
 function createSignalShutdownHandler({
   app,
+  beforeClose = null,
   clearTimeoutFn = clearTimeout,
   exitProcess = process.exit.bind(process),
   setTimeoutFn = setTimeout,
@@ -280,6 +296,9 @@ function createSignalShutdownHandler({
     timeout?.unref?.();
 
     try {
+      if (typeof beforeClose === "function") {
+        await beforeClose(signal);
+      }
       await app.close();
       clearTimeoutFn(timeout);
       app.log?.info?.({ signal }, "Stopped vibe64 server.");
@@ -505,6 +524,10 @@ async function createServer(options = {}) {
     }
   }
 
+  app.addHook("preClose", async () => {
+    await closeRealtimeSocketIoServer(runtime);
+  });
+
   registerSurfaceRequestConstraint({
     fastify: app,
     surfaceRuntime,
@@ -606,6 +629,9 @@ async function startServer(options = {}) {
   });
   const closeAndExit = createSignalShutdownHandler({
     app,
+    beforeClose() {
+      app.browserLifecycleMonitor?.stop();
+    },
     shutdownTimeoutMs: options?.shutdownTimeoutMs
   });
   process.once("SIGINT", closeAndExit);
@@ -659,6 +685,7 @@ async function startServer(options = {}) {
 export {
   browserUrlForListenAddress,
   browserUrlForPublicOrigin,
+  closeRealtimeSocketIoServer,
   createServer,
   createSignalShutdownHandler,
   DEFAULT_SHUTDOWN_TIMEOUT_MS,

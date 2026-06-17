@@ -20,6 +20,9 @@ import {
 } from "@jskit-ai/kernel/client";
 import { configureUsersWebHttpClient } from "@jskit-ai/users-web/client/lib/httpClient";
 import { config } from "../config/public.js";
+import {
+  bootBrowserLifecycle
+} from "./lib/browserLifecycleBootstrap.js";
 import { resolveStudioRequestUrl } from "./lib/studioUrls.js";
 
 configureUsersWebHttpClient({
@@ -30,6 +33,8 @@ configureUsersWebHttpClient({
     return resolveStudioRequestUrl(url);
   }
 });
+
+bootBrowserLifecycle();
 
 const surfaceRuntime = createSurfaceRuntime({
   allMode: config.surfaceModeAll,

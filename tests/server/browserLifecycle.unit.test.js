@@ -69,6 +69,38 @@ test("browser lifecycle monitor cancels shutdown when a client reconnects", asyn
   assert.deepEqual(shutdowns, []);
 });
 
+test("browser lifecycle monitor closes registered sockets when stopped", () => {
+  const timer = fakeTimer();
+  const closeCalls = [];
+  const monitor = createBrowserLifecycleMonitor({
+    setTimeoutFn: timer.setTimeout
+  });
+  monitor.enableShutdown();
+
+  const socket = new EventEmitter();
+  socket.close = (code, reason) => {
+    closeCalls.push({
+      code,
+      reason
+    });
+    socket.emit("close");
+  };
+
+  monitor.registerClient(socket);
+  assert.equal(monitor.activeClientCount(), 1);
+
+  monitor.stop();
+
+  assert.equal(monitor.activeClientCount(), 0);
+  assert.deepEqual(closeCalls, [
+    {
+      code: 1001,
+      reason: "Vibe64 server is stopping."
+    }
+  ]);
+  assert.equal(timer.hasPendingTimer(), false);
+});
+
 test("browser lifecycle monitor is passive until shutdown is enabled", async () => {
   const timer = fakeTimer();
   const monitor = createBrowserLifecycleMonitor({

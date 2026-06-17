@@ -48,7 +48,8 @@ const PROJECT_SCRIPTS_DIR = ".vibe64/scripts";
 const STARRED_TARGET_SCRIPTS_CONFIG = "config/starred_scripts";
 const TARGET_SCRIPT_TERMINAL_NAMESPACE = "current-app-target-script";
 const PROJECT_SCRIPT_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u;
-const SETUP_DASHBOARD_ROUTE = "";
+const CONNECTIONS_DASHBOARD_ROUTE = "?tab=studio-setup";
+const SETUP_DASHBOARD_ROUTE = "?tab=studio-setup";
 
 function resolveCurrentAppRoot(appRoot) {
   return resolveStudioTargetRoot({
@@ -164,13 +165,20 @@ function connectionById(rows = [], connectionId = "", fallbackLabel = "") {
 }
 
 function connectionRecord(connection = {}) {
-  const connected = connection.connected === true;
+  const connected = connection.ready === true || connection.connected === true;
   return {
     connected,
+    fix: connection.fix && typeof connection.fix === "object" && !Array.isArray(connection.fix)
+      ? {
+          label: String(connection.fix.label || ""),
+          route: String(connection.fix.route || "")
+        }
+      : null,
     id: String(connection.id || ""),
     label: String(connection.label || connection.id || ""),
     message: String(connection.message || ""),
     ready: connected,
+    scopeLabel: String(connection.scopeLabel || ""),
     status: String(connection.status || (connected ? "connected" : "not_connected")),
     username: String(connection.username || "")
   };
@@ -199,6 +207,10 @@ function firstBlockedCapability(capabilities = []) {
 
 function automaticSetupReason(setup = {}) {
   return String(setup.message || "Finish automatic setup before using this capability.");
+}
+
+function connectionSetupFix(connection = {}) {
+  return connection.fix || dashboardFix(CONNECTIONS_DASHBOARD_ROUTE, "Open Setup");
 }
 
 function currentAppResult(operation) {
@@ -561,21 +573,23 @@ function createService({
     const setupReady = setup.ready === true;
     const sessionSetupReady = sessionSetup.ready === true;
     const setupFix = dashboardFix(SETUP_DASHBOARD_ROUTE, "Open Setup");
+    const aiFix = connectionSetupFix(selectedAiProvider);
+    const githubFix = connectionSetupFix(github);
     const chatCapability = capability(
       aiReady && sessionSetupReady,
       aiReady ? automaticSetupReason(sessionSetup) : "Finish local editor connection setup before using chat.",
-      setupFix
+      aiReady ? setupFix : aiFix
     );
     const createSessionCapability = capability(
       aiReady && githubReady && sessionSetupReady,
       firstBlockedCapability([
-        capability(aiReady, "Finish local editor connection setup before starting a session.", setupFix),
-        capability(githubReady, "Finish git connection setup before starting Git-backed session work.", setupFix),
+        capability(aiReady, "Finish local editor connection setup before starting a session.", aiFix),
+        capability(githubReady, "Finish git connection setup before starting Git-backed session work.", githubFix),
         capability(sessionSetupReady, automaticSetupReason(sessionSetup), setupFix)
       ])?.reason || "",
       firstBlockedCapability([
-        capability(aiReady, "Finish local editor connection setup before starting a session.", setupFix),
-        capability(githubReady, "Finish git connection setup before starting Git-backed session work.", setupFix),
+        capability(aiReady, "Finish local editor connection setup before starting a session.", aiFix),
+        capability(githubReady, "Finish git connection setup before starting Git-backed session work.", githubFix),
         capability(sessionSetupReady, automaticSetupReason(sessionSetup), setupFix)
       ])?.fix || null
     );
@@ -584,7 +598,7 @@ function createService({
       capabilities: {
         chat: chatCapability,
         createSession: createSessionCapability,
-        githubWorkflow: capability(githubReady, "Finish git connection setup before using Git-backed workflow actions.", setupFix),
+        githubWorkflow: capability(githubReady, "Finish git connection setup before using Git-backed workflow actions.", githubFix),
         app: capability(true),
         preview: capability(setupReady, automaticSetupReason(setup), setupFix),
         runScripts: capability(setupReady, automaticSetupReason(setup), setupFix)
@@ -734,6 +748,10 @@ function createService({
       return currentAppResult(() => setupReadiness({
         input
       }));
+    },
+
+    async inspectConnectionSetup(input = {}) {
+      return currentAppResult(() => connectionReadiness(input));
     },
 
     async inspectCapabilities(input = {}) {

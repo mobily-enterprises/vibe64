@@ -23,6 +23,7 @@
   "bundleDependencies": [
     "@local/adapter-setup-doctor",
     "@local/vibe64-adapters",
+    "@local/vibe64-accounts",
     "@local/vibe64-artifacts",
     "@local/vibe64-core",
     "@local/vibe64-project",
@@ -88,6 +89,7 @@
     "@local/setup-doctor-core": "0.1.0",
     "@local/studio-setup-doctor": "0.1.0",
     "@local/studio-terminal-core": "0.1.0",
+    "@local/vibe64-accounts": "0.1.0",
     "@local/vibe64-adapters": "0.1.0",
     "@local/vibe64-artifacts": "0.1.0",
     "@local/vibe64-core": "0.1.0",

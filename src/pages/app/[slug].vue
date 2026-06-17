@@ -13,6 +13,7 @@ import StudioAppShellLayout from "@/components/StudioAppShellLayout.vue";
 import { RouterView } from "vue-router";
 import ProjectSelectionGate from "@/components/studio/ProjectSelectionGate.vue";
 import ProjectTypeGate from "@/components/studio/ProjectTypeGate.vue";
+import Vibe64AuthSettingsButton from "@/components/studio/Vibe64AuthSettingsButton.vue";
 import Vibe64SessionPanel from "@/components/studio/Vibe64SessionPanel.vue";
 import { useVibe64AppPage } from "@/composables/useVibe64AppPage.js";
 
@@ -141,6 +142,9 @@ const {
           </button>
         </div>
       </div>
+    </template>
+    <template #top-right>
+      <Vibe64AuthSettingsButton />
     </template>
     <section class="generated-ui-screen generated-ui-screen--studio studio-screen d-flex flex-column ga-3">
       <v-alert

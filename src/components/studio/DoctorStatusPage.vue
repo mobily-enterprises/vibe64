@@ -185,9 +185,11 @@
       :session-id="terminalSessionId"
       :set-host="setTerminalHost"
       :status="terminalStatus"
+      :terminal-url="terminalUrl"
       :title="terminalTitle"
       @close="closeTerminal"
       @copy-selection="copyTerminalSelection"
+      @copy-url="copyTerminalUrl"
       @send-ctrl-c="sendCtrlC"
     />
   </section>
@@ -221,6 +223,7 @@ const {
   confirmRepairCommandPreview,
   confirmRepairFields,
   copyTerminalSelection,
+  copyTerminalUrl,
   detailsAreVisible,
   detailsOpen,
   displayChecks,
@@ -265,6 +268,7 @@ const {
   terminalSessionId,
   terminalStatus,
   terminalTitle,
+  terminalUrl,
   toggleDetails,
   visibleCheckRepairs
 } = useDoctorStatusPage(props, emit);

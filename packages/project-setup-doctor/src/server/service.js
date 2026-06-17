@@ -56,6 +56,7 @@ import {
   ghRepoCreateScript,
   gitCheckpointRepair,
   gitCheckpointScript,
+  gitIdentityRepair,
   gitInitRepair,
   githubBranchRefApiPath,
   hostWritableWorkspaceDockerArgs,
@@ -73,6 +74,7 @@ import {
   startMirrorRemoteBranchTerminal as startSharedMirrorRemoteBranchTerminal
 } from "@local/setup-doctor-core/server/setupDoctorGit";
 import {
+  GITHUB_ACCOUNT_MODE_LOCAL,
   githubProviderContext,
   resolveProviderHomesRoot
 } from "@local/studio-terminal-core/server/providerHomes";
@@ -1013,7 +1015,8 @@ async function checkGitIdentity(targetRoot, context) {
       label: "Git identity",
       expected: "Git user.name and user.email are configured for local setup work.",
       observed: [nameResult.output, emailResult.output].filter(Boolean).join("\n") || "Git identity is incomplete.",
-      explanation: "Configure Git identity for this local editor before continuing."
+      explanation: "Configure Git identity for this local editor before continuing.",
+      repair: gitIdentityRepair()
     });
   }
 
@@ -1471,7 +1474,7 @@ function createService({
 
   function githubContextForInput(input = {}) {
     return githubProviderContext(input, {
-      allowLocalFallback: true,
+      accountMode: GITHUB_ACCOUNT_MODE_LOCAL,
       providerHomesRoot: resolvedProviderHomesRoot
     });
   }

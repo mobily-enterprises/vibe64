@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  closeRealtimeSocketIoServer,
   createSignalShutdownHandler
 } from "../../server.js";
 
@@ -21,6 +22,9 @@ test("signal shutdown exits cleanly after Fastify closes", async () => {
     exitProcess(code) {
       events.push(`exit:${code}`);
     },
+    beforeClose(signal) {
+      events.push(`before:${signal}`);
+    },
     setTimeoutFn() {
       return {
         unref() {
@@ -37,6 +41,7 @@ test("signal shutdown exits cleanly after Fastify closes", async () => {
   assert.deepEqual(events, [
     "info:Stopping vibe64 server.",
     "unref",
+    "before:SIGTERM",
     "close",
     "info:Stopped vibe64 server.",
     "exit:0"
@@ -89,6 +94,49 @@ test("signal shutdown forces exit when Fastify close stalls", async () => {
     "close-all",
     "exit:1"
   ]);
+});
+
+test("realtime socket server closes before Fastify drains connections", async () => {
+  const events = [];
+  const io = {
+    close(done) {
+      events.push("io.close");
+      done();
+    }
+  };
+
+  await closeRealtimeSocketIoServer({
+    app: {
+      has(token) {
+        events.push(`has:${token}`);
+        return token === "runtime.realtime.io";
+      },
+      make(token) {
+        events.push(`make:${token}`);
+        return io;
+      }
+    }
+  });
+
+  assert.deepEqual(events, [
+    "has:runtime.realtime.io",
+    "make:runtime.realtime.io",
+    "io.close"
+  ]);
+});
+
+test("realtime socket close is skipped when runtime is absent", async () => {
+  await closeRealtimeSocketIoServer(null);
+  await closeRealtimeSocketIoServer({
+    app: {
+      has() {
+        return false;
+      },
+      make() {
+        throw new Error("make should not be called");
+      }
+    }
+  });
 });
 
 function testLogger(events) {

@@ -146,6 +146,7 @@ function useDoctorStatusPage(props, emit) {
   const {
     closeTerminal,
     copyTerminalSelection,
+    copyTerminalUrl,
     openTerminal,
     sendCtrlC,
     terminalCloseError,
@@ -160,7 +161,8 @@ function useDoctorStatusPage(props, emit) {
     terminalSelectedText,
     terminalSessionId,
     terminalStatus,
-    terminalTitle
+    terminalTitle,
+    terminalUrl
   } = useDoctorTerminal({
     onTerminalSettled() {
       refreshDoctorStatus();
@@ -455,6 +457,7 @@ function useDoctorStatusPage(props, emit) {
     confirmRepairCommandPreview,
     confirmRepairFields,
     copyTerminalSelection,
+    copyTerminalUrl,
     detailsAreVisible,
     detailsOpen,
     displayChecks,
@@ -499,9 +502,10 @@ function useDoctorStatusPage(props, emit) {
     terminalSessionId,
     terminalStatus,
     terminalTitle,
+    terminalUrl,
     toggleDetails,
     visibleCheckRepairs
-    };
+  };
 }
 
 export {

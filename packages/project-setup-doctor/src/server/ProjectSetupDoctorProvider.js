@@ -1,9 +1,12 @@
 import { withActionDefaults } from "@jskit-ai/kernel/shared/actions";
+import process from "node:process";
 
 import { featureActions } from "./actions.js";
 import { registerRoutes } from "./registerRoutes.js";
 import { createService } from "./service.js";
 import {
+  VIBE64_PROVIDER_HOMES_ROOT_ENV,
+  VIBE64_SYSTEM_ROOT_ENV,
   resolveStudioAppRoot
 } from "@local/vibe64-core/server/studioRoots";
 
@@ -23,13 +26,17 @@ class ProjectSetupDoctorProvider {
     }
 
     const studioRoot = resolveStudioAppRoot();
+    const providerHomesRoot = String(process.env[VIBE64_PROVIDER_HOMES_ROOT_ENV] || "");
+    const systemRoot = String(process.env[VIBE64_SYSTEM_ROOT_ENV] || "");
 
     app.service(
       "feature.project-setup-doctor.service",
       (scope) => {
         return createService({
           projectService: scope.make("feature.vibe64-project.service"),
-          studioRoot
+          providerHomesRoot,
+          studioRoot,
+          systemRoot
         });
       }
     );

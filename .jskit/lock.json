@@ -439,6 +439,35 @@
       "options": {},
       "installedAt": "2026-05-26T05:55:04.558Z",
       "migrationSyncVersion": "0.1.0"
+    },
+    "@local/vibe64-accounts": {
+      "packageId": "@local/vibe64-accounts",
+      "version": "0.1.0",
+      "source": {
+        "type": "npm-installed-package",
+        "packagePath": "node_modules/@local/vibe64-accounts",
+        "descriptorPath": "node_modules/@local/vibe64-accounts/package.descriptor.mjs"
+      },
+      "managed": {
+        "packageJson": {
+          "dependencies": {
+            "@jskit-ai/users-web": {
+              "hadPrevious": true,
+              "previousValue": "0.1.111",
+              "value": "0.1.111"
+            }
+          },
+          "devDependencies": {},
+          "scripts": {}
+        },
+        "text": {},
+        "vite": {},
+        "files": [],
+        "migrations": []
+      },
+      "options": {},
+      "installedAt": "2026-06-17T07:23:37.389Z",
+      "migrationSyncVersion": "0.1.0"
     }
   }
 }
