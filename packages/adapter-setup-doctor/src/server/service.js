@@ -402,7 +402,7 @@ async function checkGitHubRepository(targetRoot, remoteCheck) {
     return failCheck({
       id: "github-repository",
       label: "GitHub repository",
-      expected: "origin remote is hosted on GitHub.",
+      expected: "origin remote points to a GitHub repository.",
       observed: remoteUrl,
       explanation: "Studio issue and PR flows require a GitHub remote."
     });

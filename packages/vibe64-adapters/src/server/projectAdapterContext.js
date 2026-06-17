@@ -15,14 +15,14 @@ import {
 
 function projectTypeMissingError() {
   return vibe64Error(
-    "Choose an Vibe64 project type before publishing.",
+    "Choose a Vibe64 project type before continuing.",
     "vibe64_project_type_missing"
   );
 }
 
 function projectConfigMissingError(projectConfig) {
   const error = vibe64Error(
-    "Save Vibe64 project configuration before publishing.",
+    "Save Vibe64 project configuration before continuing.",
     "vibe64_project_config_missing"
   );
   error.projectConfig = projectConfig;
@@ -155,22 +155,10 @@ function createVibe64ProjectAdapterContext({
     };
   }
 
-  async function readPublishPlan() {
-    const context = await requireConfiguredAdapter();
-    return context.adapter.createPublishPlan({
-      adapter: context.adapter,
-      config: context.projectConfig,
-      projectConfig: context.projectConfig,
-      projectType: context.projectType,
-      targetRoot: context.targetRoot
-    });
-  }
-
   return Object.freeze({
     createAdapter,
     readProjectConfigForAdapter,
     readProjectType,
-    readPublishPlan,
     requireConfiguredAdapter,
     requireProjectConfigForAdapter
   });

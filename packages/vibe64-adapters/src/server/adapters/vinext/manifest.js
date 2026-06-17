@@ -16,13 +16,13 @@ const VINEXT_ADAPTER_MANIFEST = deepFreeze({
       priority: 65
     }
   ],
-  bestFor: "Next.js-style apps that want Cloudflare-oriented deployment, Vite ergonomics, and a migration path that keeps the existing app shape understandable.",
+  bestFor: "Next.js-style apps that want Cloudflare-oriented runtime behavior, Vite ergonomics, and a migration path that keeps the existing app shape understandable.",
   createAdapter: createVinextTargetAdapter,
   description: "Vinext is Cloudflare's Vite-powered framework for Next.js-compatible applications. The adapter understands Vinext commands, migration state, runtime launch modes, and compatibility checks.",
   enabled: true,
   id: "vinext",
   label: "Vinext",
-  outcome: "Studio guides a Vinext-ready app or migration candidate, adds Vinext-aware setup checks, runs vinext check/build flows, and frames Codex prompts around the app router and Cloudflare deployment model.",
+  outcome: "Studio guides a Vinext-ready app or migration candidate, adds Vinext-aware setup checks, runs vinext check/build flows, and frames Codex prompts around the app router and Cloudflare runtime model.",
   projectUrl: "https://github.com/cloudflare/vinext",
   projectUrlLabel: "Open Vinext project",
   summary: "A Cloudflare-focused Vite runtime for Next.js-compatible applications.",

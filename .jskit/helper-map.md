@@ -309,9 +309,13 @@ Root package: vibe64
 - packages/studio-terminal-core/src/server/providerHomes.js
     - APP_PROVIDER_SCOPE (export, component_or_class)
     - canonicalVibe64UserEmail (export, export)
+    - GITHUB_ACCOUNT_MODE_LOCAL (export, component_or_class)
+    - GITHUB_ACCOUNT_MODE_USER (export, component_or_class)
+    - githubLocalProviderContext (export, export)
     - githubProviderContext (export, export)
     - githubProviderHome (export, export)
     - githubProviderUserKey (export, export)
+    - normalizeGithubAccountMode (export, helper)
     - providerHome (export, export)
     - providerHomeForUserKey (export, export)
     - providerUserKey (export, export)
@@ -458,6 +462,122 @@ Root package: vibe64
     - writeTerminalSessionKey (export, helper)
     - writeTerminalSessionText (export, helper)
 
+- packages/vibe64-accounts/package.descriptor.mjs
+    - default (default, default)
+
+- packages/vibe64-accounts/src/client/composables/useAccountAuthSessions.js
+    - codexAuthSessionNeedsTerminalAttention (export, export)
+    - useAccountAuthSessions (export, composable)
+
+- packages/vibe64-accounts/src/client/composables/useAccountsSetup.js
+    - accountRowsForStatus (export, export)
+    - accountsSetupEmits (export, export)
+    - accountsSetupProps (export, export)
+    - useAccountsSetup (export, composable)
+
+- packages/vibe64-accounts/src/client/composables/useProviderAccountsSetup.js
+    - useProviderAccountsSetup (export, composable)
+
+- packages/vibe64-accounts/src/client/composables/useVibe64Accounts.js
+    - useVibe64Accounts (export, composable)
+
+- packages/vibe64-accounts/src/client/index.js
+    - accountAuthTerminalWebSocketUrl (export, export)
+    - accountRowsForStatus (export, export)
+    - ACCOUNTS_AUTH_ENDPOINT (export, component_or_class)
+    - ACCOUNTS_ENDPOINT (export, component_or_class)
+    - ACCOUNTS_LOGOUT_ENDPOINT (export, component_or_class)
+    - accountsQueryKey (export, export)
+    - AccountsSetup (export, component_or_class)
+    - accountsSetupEmits (export, export)
+    - accountsSetupProps (export, export)
+    - AIAccountsSetup (export, component_or_class)
+    - codexAuthSessionNeedsTerminalAttention (export, export)
+    - ProviderAccountsSetup (export, component_or_class)
+    - useAccountAuthSessions (export, composable)
+    - useAccountsSetup (export, composable)
+    - useProviderAccountsSetup (export, composable)
+    - useVibe64Accounts (export, composable)
+    - VIBE64_ACCOUNTS_AUTH_API_SUFFIX (export, component_or_class)
+    - VIBE64_ACCOUNTS_CHANGED_EVENT (export, component_or_class)
+
+- packages/vibe64-accounts/src/client/lib/accountsGateApi.js
+    - accountAuthTerminalWebSocketUrl (export, export)
+    - ACCOUNTS_AUTH_ENDPOINT (export, component_or_class)
+    - ACCOUNTS_ENDPOINT (export, component_or_class)
+    - ACCOUNTS_LOGOUT_ENDPOINT (export, component_or_class)
+    - accountsQueryKey (export, export)
+    - VIBE64_ACCOUNTS_AUTH_API_SUFFIX (export, component_or_class)
+    - VIBE64_ACCOUNTS_CHANGED_EVENT (export, component_or_class)
+
+- packages/vibe64-accounts/src/client/studio/AccountsSetup.vue
+    - default (default, default)
+
+- packages/vibe64-accounts/src/client/studio/AIAccountsSetup.vue
+    - default (default, default)
+
+- packages/vibe64-accounts/src/client/studio/ProviderAccountsSetup.vue
+    - default (default, default)
+
+- packages/vibe64-accounts/src/server/accountRealtimeEvents.js
+    - createVibe64AccountsChangedPublisher (export, helper)
+    - VIBE64_ACCOUNTS_CHANGED_EVENT (export, component_or_class)
+    - VIBE64_CONNECTIONS_CHANGED_EVENT (export, component_or_class)
+    - vibe64AccountsChangedServiceEvent (export, export)
+    - vibe64ConnectionsChangedServiceEvent (export, export)
+
+- packages/vibe64-accounts/src/server/actions.js
+    - ACTION_CANCEL_ACCOUNT_AUTH_SESSION (export, component_or_class)
+    - ACTION_LOGOUT_ACCOUNT (export, component_or_class)
+    - ACTION_READ_ACCOUNT_AUTH_SESSION (export, component_or_class)
+    - ACTION_READ_ACCOUNTS (export, component_or_class)
+    - ACTION_START_ACCOUNT_AUTH (export, component_or_class)
+    - featureActions (export, export)
+
+- packages/vibe64-accounts/src/server/inputSchemas.js
+    - accountAuthSessionInputValidator (export, export)
+    - accountAuthSessionParamsValidator (export, export)
+    - accountAuthStartInputValidator (export, export)
+    - accountIdInputValidator (export, export)
+    - accountsReadInputValidator (export, export)
+
+- packages/vibe64-accounts/src/server/registerRoutes.js
+    - registerRoutes (export, export)
+
+- packages/vibe64-accounts/src/server/service.js
+    - ACCOUNT_AUTH_NAMESPACE (export, component_or_class)
+    - ALL_CODEX_AUTH_MODES (export, component_or_class)
+    - API_KEY_AUTH_MODE (export, component_or_class)
+    - APP_PROVIDER_SCOPE (export, component_or_class)
+    - authTerminalMetadata (export, export)
+    - BROWSER_AUTH_MODE (export, component_or_class)
+    - canReuseAuthTerminal (export, export)
+    - CODEX_API_KEY_ENV (export, component_or_class)
+    - codexApiKeyLoginCommandArgs (export, export)
+    - codexProviderContext (export, export)
+    - createAccountsRuntime (export, helper)
+    - createService (export, helper)
+    - DEVICE_AUTH_MODE (export, component_or_class)
+    - ghLoginCommandArgs (export, export)
+    - GITHUB_ACCOUNT_MODE_LOCAL (export, component_or_class)
+    - GITHUB_ACCOUNT_MODE_USER (export, component_or_class)
+    - GITHUB_DEVICE_AUTH_URL (export, component_or_class)
+    - GITHUB_GIT_CREDENTIAL_HELPER (export, component_or_class)
+    - githubProviderContext (export, export)
+    - githubProviderHome (export, export)
+    - githubProviderUserKey (export, export)
+    - parseAuthOutput (export, helper)
+    - REQUIRED_GITHUB_SCOPES (export, component_or_class)
+    - resolveProviderHomesRoot (export, helper)
+    - resolveVibe64AccountsRoot (export, helper)
+    - terminalArgsForAuth (export, export)
+    - USER_PROVIDER_SCOPE (export, component_or_class)
+    - VIBE64_ACCOUNTS_RUNTIME_SERVICE (export, component_or_class)
+    - VIBE64_ACCOUNTS_SERVICE (export, component_or_class)
+
+- packages/vibe64-accounts/src/server/Vibe64AccountsProvider.js
+    - Vibe64AccountsProvider (export, component_or_class)
+
 - packages/vibe64-adapters/package.descriptor.mjs
     - default (default, default)
 
@@ -468,7 +588,6 @@ Root package: vibe64
     - adapterLaunchTarget (export, export)
     - adapterProjectFacts (export, export)
     - adapterPromptResult (export, export)
-    - adapterPublishPlan (export, export)
     - adapterTerminalToolchainSpec (export, export)
     - adapterView (export, export)
     - normalizeStringMap (export, helper)
@@ -627,7 +746,7 @@ Root package: vibe64
     - CPP_TOOLCHAIN_IMAGE (export, component_or_class)
 
 - packages/vibe64-adapters/src/server/adapters/jskit/adapter.js
-    - createJskitPublishPlan (export, helper)
+    - createJskitRuntimeContainers (export, helper)
     - inspectJskitProject (export, export)
     - JSKIT_CONFIG_FIELDS (export, component_or_class)
     - JSKIT_DEFAULT_CONFIG (export, component_or_class)
@@ -647,7 +766,6 @@ Root package: vibe64
 
 - packages/vibe64-adapters/src/server/adapters/jskit/index.js
     - createJskitLaunchTargetTerminalSpec (export, helper)
-    - createJskitPublishPlan (export, helper)
     - createJskitTargetAdapter (export, helper)
     - createJskitTargetScriptTerminalSpec (export, helper)
     - createJskitVibe64CommandTerminalSpec (export, helper)
@@ -1466,6 +1584,8 @@ Root package: vibe64
     - resolveStudioProjectsRoot (export, helper)
 
 - packages/vibe64-core/src/server/studioRoots.js
+    - resolveDefaultLocalEditorProjectsRoot (export, helper)
+    - resolveDefaultLocalEditorSystemRoot (export, helper)
     - resolveExplicitStudioTargetRoot (export, helper)
     - resolveStudioAppRoot (export, helper)
     - resolveStudioTargetRoot (export, helper)
@@ -2221,6 +2341,9 @@ Root package: vibe64
 - src/components/studio/vibe64-session/Vibe64WorkflowControlForm.vue
     - default (default, default)
 
+- src/components/studio/Vibe64AuthSettingsButton.vue
+    - default (default, default)
+
 - src/components/studio/Vibe64CommandTerminal.vue
     - default (default, default)
 
@@ -2522,6 +2645,9 @@ Root package: vibe64
     - BROWSER_LIFECYCLE_WEBSOCKET_PATH (export, component_or_class)
     - connectBrowserLifecycleSocket (export, export)
 
+- src/lib/browserLifecycleBootstrap.js
+    - bootBrowserLifecycle (export, export)
+
 - src/lib/browserLocalStorage.js
     - browserLocalStorage (export, export)
     - readLocalStorageJson (export, helper)
@@ -2595,6 +2721,9 @@ Root package: vibe64
     - TARGET_SCRIPTS_API_SUFFIX (export, component_or_class)
     - targetScriptsQueryKey (export, export)
     - targetScriptTerminalWebSocketUrl (export, export)
+
+- src/lib/terminalOutputUrl.js
+    - firstTerminalUrl (export, export)
 
 - src/lib/vibe64ActionInputModel.js
     - emptyActionInputValues (export, export)

@@ -5,5 +5,5 @@ Next.js selected blueprint:
 
 Next.js-specific project-knowledge guidance:
 - Update the project knowledge artifact referenced by the adapter prompt context.
-- Preserve useful facts about routing mode, language, styling, data layer, database runtime, package scripts, and deployment/runtime decisions.
+- Preserve useful facts about routing mode, language, styling, data layer, database runtime, package scripts, and runtime decisions.
 - Remove stale claims and keep the artifact concise enough to maintain.

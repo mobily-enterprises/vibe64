@@ -194,26 +194,26 @@ test("server CLI enables browser lifecycle shutdown for local editor mode", () =
 });
 
 test("server accepts an explicit runtime profile from a composed product", () => {
-  const hostedProfile = Object.freeze({
+  const externalProfile = Object.freeze({
     authRequired: true,
     local: false,
-    mode: "hosted",
+    mode: "composed",
     projectCatalogEnabled: true,
     singleTargetRoot: ""
   });
 
   assert.deepEqual(resolveServerRuntimeProfile({
-    runtimeProfile: hostedProfile
-  }), hostedProfile);
+    runtimeProfile: externalProfile
+  }), externalProfile);
 
   assert.deepEqual(resolveServerRuntimeProfile({
     createRuntimeProfile({ mode, targetRoot }) {
-      assert.equal(mode, "hosted");
+      assert.equal(mode, "composed");
       assert.equal(targetRoot, "");
-      return hostedProfile;
+      return externalProfile;
     },
-    runtimeMode: "hosted"
-  }), hostedProfile);
+    runtimeMode: "composed"
+  }), externalProfile);
 });
 
 test("server CLI detects direct execution without starting when imported", () => {

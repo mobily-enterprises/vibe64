@@ -15,7 +15,7 @@ import {
   withRouteProject
 } from "./vibe64RouteTestHelpers.js";
 
-test("accounts read route omits hosted user in local editor mode", async () => {
+test("accounts read route omits signed-in user in local editor mode", async () => {
   await withLocalRequestBypass(async () => {
     await withRouteProject(async ({ apiRouteBase, projectContext }) => {
       const app = testRouteApp();

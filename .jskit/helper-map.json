@@ -1256,6 +1256,21 @@
             "role": "export"
           },
           {
+            "name": "GITHUB_ACCOUNT_MODE_LOCAL",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "GITHUB_ACCOUNT_MODE_USER",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "githubLocalProviderContext",
+            "kind": "export",
+            "role": "export"
+          },
+          {
             "name": "githubProviderContext",
             "kind": "export",
             "role": "export"
@@ -1269,6 +1284,11 @@
             "name": "githubProviderUserKey",
             "kind": "export",
             "role": "export"
+          },
+          {
+            "name": "normalizeGithubAccountMode",
+            "kind": "export",
+            "role": "helper"
           },
           {
             "name": "providerHome",
@@ -1953,6 +1973,506 @@
         ]
       },
       {
+        "path": "packages/vibe64-accounts/package.descriptor.mjs",
+        "exports": [
+          {
+            "name": "default",
+            "kind": "default",
+            "role": "default"
+          }
+        ]
+      },
+      {
+        "path": "packages/vibe64-accounts/src/client/composables/useAccountAuthSessions.js",
+        "exports": [
+          {
+            "name": "codexAuthSessionNeedsTerminalAttention",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "useAccountAuthSessions",
+            "kind": "export",
+            "role": "composable"
+          }
+        ]
+      },
+      {
+        "path": "packages/vibe64-accounts/src/client/composables/useAccountsSetup.js",
+        "exports": [
+          {
+            "name": "accountRowsForStatus",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "accountsSetupEmits",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "accountsSetupProps",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "useAccountsSetup",
+            "kind": "export",
+            "role": "composable"
+          }
+        ]
+      },
+      {
+        "path": "packages/vibe64-accounts/src/client/composables/useProviderAccountsSetup.js",
+        "exports": [
+          {
+            "name": "useProviderAccountsSetup",
+            "kind": "export",
+            "role": "composable"
+          }
+        ]
+      },
+      {
+        "path": "packages/vibe64-accounts/src/client/composables/useVibe64Accounts.js",
+        "exports": [
+          {
+            "name": "useVibe64Accounts",
+            "kind": "export",
+            "role": "composable"
+          }
+        ]
+      },
+      {
+        "path": "packages/vibe64-accounts/src/client/index.js",
+        "exports": [
+          {
+            "name": "accountAuthTerminalWebSocketUrl",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "accountRowsForStatus",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "ACCOUNTS_AUTH_ENDPOINT",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "ACCOUNTS_ENDPOINT",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "ACCOUNTS_LOGOUT_ENDPOINT",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "accountsQueryKey",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "AccountsSetup",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "accountsSetupEmits",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "accountsSetupProps",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "AIAccountsSetup",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "codexAuthSessionNeedsTerminalAttention",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "ProviderAccountsSetup",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "useAccountAuthSessions",
+            "kind": "export",
+            "role": "composable"
+          },
+          {
+            "name": "useAccountsSetup",
+            "kind": "export",
+            "role": "composable"
+          },
+          {
+            "name": "useProviderAccountsSetup",
+            "kind": "export",
+            "role": "composable"
+          },
+          {
+            "name": "useVibe64Accounts",
+            "kind": "export",
+            "role": "composable"
+          },
+          {
+            "name": "VIBE64_ACCOUNTS_AUTH_API_SUFFIX",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "VIBE64_ACCOUNTS_CHANGED_EVENT",
+            "kind": "export",
+            "role": "component_or_class"
+          }
+        ]
+      },
+      {
+        "path": "packages/vibe64-accounts/src/client/lib/accountsGateApi.js",
+        "exports": [
+          {
+            "name": "accountAuthTerminalWebSocketUrl",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "ACCOUNTS_AUTH_ENDPOINT",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "ACCOUNTS_ENDPOINT",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "ACCOUNTS_LOGOUT_ENDPOINT",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "accountsQueryKey",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "VIBE64_ACCOUNTS_AUTH_API_SUFFIX",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "VIBE64_ACCOUNTS_CHANGED_EVENT",
+            "kind": "export",
+            "role": "component_or_class"
+          }
+        ]
+      },
+      {
+        "path": "packages/vibe64-accounts/src/client/studio/AccountsSetup.vue",
+        "exports": [
+          {
+            "name": "default",
+            "kind": "default",
+            "role": "default"
+          }
+        ]
+      },
+      {
+        "path": "packages/vibe64-accounts/src/client/studio/AIAccountsSetup.vue",
+        "exports": [
+          {
+            "name": "default",
+            "kind": "default",
+            "role": "default"
+          }
+        ]
+      },
+      {
+        "path": "packages/vibe64-accounts/src/client/studio/ProviderAccountsSetup.vue",
+        "exports": [
+          {
+            "name": "default",
+            "kind": "default",
+            "role": "default"
+          }
+        ]
+      },
+      {
+        "path": "packages/vibe64-accounts/src/server/accountRealtimeEvents.js",
+        "exports": [
+          {
+            "name": "createVibe64AccountsChangedPublisher",
+            "kind": "export",
+            "role": "helper"
+          },
+          {
+            "name": "VIBE64_ACCOUNTS_CHANGED_EVENT",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "VIBE64_CONNECTIONS_CHANGED_EVENT",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "vibe64AccountsChangedServiceEvent",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "vibe64ConnectionsChangedServiceEvent",
+            "kind": "export",
+            "role": "export"
+          }
+        ]
+      },
+      {
+        "path": "packages/vibe64-accounts/src/server/actions.js",
+        "exports": [
+          {
+            "name": "ACTION_CANCEL_ACCOUNT_AUTH_SESSION",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "ACTION_LOGOUT_ACCOUNT",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "ACTION_READ_ACCOUNT_AUTH_SESSION",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "ACTION_READ_ACCOUNTS",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "ACTION_START_ACCOUNT_AUTH",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "featureActions",
+            "kind": "export",
+            "role": "export"
+          }
+        ]
+      },
+      {
+        "path": "packages/vibe64-accounts/src/server/inputSchemas.js",
+        "exports": [
+          {
+            "name": "accountAuthSessionInputValidator",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "accountAuthSessionParamsValidator",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "accountAuthStartInputValidator",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "accountIdInputValidator",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "accountsReadInputValidator",
+            "kind": "export",
+            "role": "export"
+          }
+        ]
+      },
+      {
+        "path": "packages/vibe64-accounts/src/server/registerRoutes.js",
+        "exports": [
+          {
+            "name": "registerRoutes",
+            "kind": "export",
+            "role": "export"
+          }
+        ]
+      },
+      {
+        "path": "packages/vibe64-accounts/src/server/service.js",
+        "exports": [
+          {
+            "name": "ACCOUNT_AUTH_NAMESPACE",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "ALL_CODEX_AUTH_MODES",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "API_KEY_AUTH_MODE",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "APP_PROVIDER_SCOPE",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "authTerminalMetadata",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "BROWSER_AUTH_MODE",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "canReuseAuthTerminal",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "CODEX_API_KEY_ENV",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "codexApiKeyLoginCommandArgs",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "codexProviderContext",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "createAccountsRuntime",
+            "kind": "export",
+            "role": "helper"
+          },
+          {
+            "name": "createService",
+            "kind": "export",
+            "role": "helper"
+          },
+          {
+            "name": "DEVICE_AUTH_MODE",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "ghLoginCommandArgs",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "GITHUB_ACCOUNT_MODE_LOCAL",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "GITHUB_ACCOUNT_MODE_USER",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "GITHUB_DEVICE_AUTH_URL",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "GITHUB_GIT_CREDENTIAL_HELPER",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "githubProviderContext",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "githubProviderHome",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "githubProviderUserKey",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "parseAuthOutput",
+            "kind": "export",
+            "role": "helper"
+          },
+          {
+            "name": "REQUIRED_GITHUB_SCOPES",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "resolveProviderHomesRoot",
+            "kind": "export",
+            "role": "helper"
+          },
+          {
+            "name": "resolveVibe64AccountsRoot",
+            "kind": "export",
+            "role": "helper"
+          },
+          {
+            "name": "terminalArgsForAuth",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "USER_PROVIDER_SCOPE",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "VIBE64_ACCOUNTS_RUNTIME_SERVICE",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "VIBE64_ACCOUNTS_SERVICE",
+            "kind": "export",
+            "role": "component_or_class"
+          }
+        ]
+      },
+      {
+        "path": "packages/vibe64-accounts/src/server/Vibe64AccountsProvider.js",
+        "exports": [
+          {
+            "name": "Vibe64AccountsProvider",
+            "kind": "export",
+            "role": "component_or_class"
+          }
+        ]
+      },
+      {
         "path": "packages/vibe64-adapters/package.descriptor.mjs",
         "exports": [
           {
@@ -1992,11 +2512,6 @@
           },
           {
             "name": "adapterPromptResult",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "adapterPublishPlan",
             "kind": "export",
             "role": "export"
           },
@@ -2696,7 +3211,7 @@
         "path": "packages/vibe64-adapters/src/server/adapters/jskit/adapter.js",
         "exports": [
           {
-            "name": "createJskitPublishPlan",
+            "name": "createJskitRuntimeContainers",
             "kind": "export",
             "role": "helper"
           },
@@ -2782,11 +3297,6 @@
         "exports": [
           {
             "name": "createJskitLaunchTargetTerminalSpec",
-            "kind": "export",
-            "role": "helper"
-          },
-          {
-            "name": "createJskitPublishPlan",
             "kind": "export",
             "role": "helper"
           },
@@ -6366,6 +6876,16 @@
         "path": "packages/vibe64-core/src/server/studioRoots.js",
         "exports": [
           {
+            "name": "resolveDefaultLocalEditorProjectsRoot",
+            "kind": "export",
+            "role": "helper"
+          },
+          {
+            "name": "resolveDefaultLocalEditorSystemRoot",
+            "kind": "export",
+            "role": "helper"
+          },
+          {
             "name": "resolveExplicitStudioTargetRoot",
             "kind": "export",
             "role": "helper"
@@ -9523,6 +10043,16 @@
         ]
       },
       {
+        "path": "src/components/studio/Vibe64AuthSettingsButton.vue",
+        "exports": [
+          {
+            "name": "default",
+            "kind": "default",
+            "role": "default"
+          }
+        ]
+      },
+      {
         "path": "src/components/studio/Vibe64CommandTerminal.vue",
         "exports": [
           {
@@ -10668,6 +11198,16 @@
         ]
       },
       {
+        "path": "src/lib/browserLifecycleBootstrap.js",
+        "exports": [
+          {
+            "name": "bootBrowserLifecycle",
+            "kind": "export",
+            "role": "export"
+          }
+        ]
+      },
+      {
         "path": "src/lib/browserLocalStorage.js",
         "exports": [
           {
@@ -10977,6 +11517,16 @@
           },
           {
             "name": "targetScriptTerminalWebSocketUrl",
+            "kind": "export",
+            "role": "export"
+          }
+        ]
+      },
+      {
+        "path": "src/lib/terminalOutputUrl.js",
+        "exports": [
+          {
+            "name": "firstTerminalUrl",
             "kind": "export",
             "role": "export"
           }

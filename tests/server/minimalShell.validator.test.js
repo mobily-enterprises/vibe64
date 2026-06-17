@@ -16,8 +16,6 @@ const EXPECTED_MANAGED_SCRIPTS = Object.freeze({
 
 const REQUIRED_TOP_LEVEL_ENTRIES = Object.freeze([
   "AGENTS.md",
-  "app.json",
-  "Procfile",
   "bin",
   "config",
   "eslint.config.mjs",
@@ -105,7 +103,7 @@ test("latest JSKIT scaffold files are present at the app root", async () => {
   }
 });
 
-test("starter shell keeps the default hosted CI workflow simple", async () => {
+test("starter shell keeps the default CI workflow simple", async () => {
   const workflowSource = await readFile(path.join(APP_ROOT, ".github", "workflows", "verify.yml"), "utf8");
 
   assert.match(workflowSource, /run: npm run verify/);

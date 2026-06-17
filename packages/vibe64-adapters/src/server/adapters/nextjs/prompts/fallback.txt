@@ -5,5 +5,5 @@ Next.js selected blueprint:
 
 Next.js-specific guidance:
 - Treat this as a Next.js project using the selected blueprint above.
-- Respect App Router vs Pages Router, Server Components vs Client Components, route handlers, Server Actions, package scripts, and deployment/runtime boundaries.
+- Respect App Router vs Pages Router, Server Components vs Client Components, route handlers, Server Actions, package scripts, and runtime boundaries.
 - If a database runtime is selected, keep secrets in environment configuration and keep database access in server-only code.

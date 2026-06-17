@@ -49,7 +49,7 @@ function missingAdapterToolchainCheck({
     label,
     expected,
     observed: `${label} is missing.`,
-    explanation: `${label} is managed host infrastructure. This Vibe64 host was not provisioned with the required toolchain image.`
+    explanation: `${label} is a managed local Docker toolchain image. Pull the required image before running this workspace.`
   });
 }
 

@@ -65,7 +65,7 @@ async function withRuntimeNamespace(namespace, fn) {
   }
 }
 
-test("managed project runtime identity follows the slug instead of the absolute path", async () => {
+test("configured target runtime identity follows the slug instead of the absolute path", async () => {
   await withTemporaryRoot(async (root) => {
     const oldProjectsRoot = path.join(root, "old-root");
     const newProjectsRoot = path.join(root, "new-root");
@@ -199,7 +199,7 @@ test("current Studio container network attach rechecks Docker state after connec
   }));
 });
 
-test("unmanaged project runtime identity slugifies local folder names", async () => {
+test("ad hoc target runtime identity slugifies local folder names", async () => {
   await withTemporaryRoot(async (root) => {
     assert.equal(
       targetRuntimeProjectSlug(path.join(root, "Example Target App")),

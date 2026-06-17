@@ -155,49 +155,6 @@ function adapterTerminalToolchainSpec(input = {}) {
   };
 }
 
-function adapterPublishCommand(input = null) {
-  if (!isPlainObject(input) || !normalizeText(input.command)) {
-    return null;
-  }
-  return {
-    command: normalizeText(input.command),
-    label: normalizeText(input.label),
-    networkEnv: input.networkEnv === true,
-    required: input.required !== false
-  };
-}
-
-function adapterPublishHealth(input = {}) {
-  return {
-    path: normalizeText(input.path || "/") || "/",
-    timeoutMs: Number.isInteger(input.timeoutMs) && input.timeoutMs > 0 ? input.timeoutMs : 30000,
-    type: normalizeText(input.type || "http")
-  };
-}
-
-function adapterPublishArtifacts(input = {}) {
-  const artifacts = isPlainObject(input) ? input : {};
-  return {
-    kind: normalizeText(artifacts.kind || "runtime"),
-    path: normalizeText(artifacts.path)
-  };
-}
-
-function adapterPublishPlan(input = {}) {
-  return {
-    adapterId: normalizeText(input.adapterId),
-    artifacts: adapterPublishArtifacts(input.artifacts),
-    build: adapterPublishCommand(input.build),
-    health: adapterPublishHealth(input.health),
-    message: normalizeText(input.message),
-    migrate: adapterPublishCommand(input.migrate),
-    ok: input.ok !== false,
-    runtimeServices: Array.isArray(input.runtimeServices) ? input.runtimeServices.filter(Boolean) : [],
-    serve: adapterPublishCommand(input.serve),
-    unsupportedReason: normalizeText(input.unsupportedReason)
-  };
-}
-
 function emptyTargetScripts() {
   return {
     config: {
@@ -314,15 +271,6 @@ class TargetAdapter {
     };
   }
 
-  async createPublishPlan() {
-    return adapterPublishPlan({
-      adapterId: this.id,
-      message: `${this.label} does not provide a publish plan.`,
-      ok: false,
-      unsupportedReason: "adapter_publish_not_supported"
-    });
-  }
-
   async worktreeArchiveExclusions() {
     return [];
   }
@@ -415,7 +363,6 @@ export {
   adapterCommand,
   adapterDetection,
   adapterLaunchTarget,
-  adapterPublishPlan,
   adapterPromptResult,
   adapterProjectFacts,
   adapterTerminalToolchainSpec,

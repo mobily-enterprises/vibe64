@@ -59,7 +59,7 @@ test("managed toolchain image pull list uses the runtime image identities", () =
   ]);
 });
 
-test("pull-toolchain-images supports dry-run output for host provisioning", async () => {
+test("pull-toolchain-images supports dry-run output for local Docker setup", async () => {
   const stdout = captureWritable();
   const exitCode = await main({
     argv: ["--dry-run"],

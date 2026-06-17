@@ -37,7 +37,7 @@ These are the project types Vibe64 understands today.
 <article class="vibe-adapter-card">
 <div class="vibe-adapter-card__top"><div class="vibe-adapter-icon">Nx</div><span>SUPPORTED</span></div>
 <h3>Next.js</h3>
-<p>Usually used for modern websites and web apps: product sites, customer portals, dashboards, and React-based online products.</p>
+<p>Usually used for modern websites and web apps: product sites, customer portals, dashboards, and React-based browser products.</p>
 <a href="/start-building">Start with this</a>
 </article>
 

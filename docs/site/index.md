@@ -144,7 +144,7 @@ of secret notes.
 
 <details class="vibe-faq-item">
 <summary>Is this no-code?</summary>
-<p>No. Vibe64 is for people building real software. It helps AI follow Git, project tools, checks, reviews, and deployment habits instead of pretending hard engineering decisions disappeared.</p>
+<p>No. Vibe64 is for people building real software. It helps AI follow Git, project tools, checks, reviews, and release practices instead of pretending hard engineering decisions disappeared.</p>
 </details>
 
 <details class="vibe-faq-item">

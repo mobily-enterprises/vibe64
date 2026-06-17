@@ -247,7 +247,7 @@ async function checkToolchainImage(dockerReady) {
       label: "Managed base toolchain image",
       expected: `${TOOLCHAIN_IMAGE} exists locally.`,
       observed: result.output,
-      explanation: "This Vibe64 host was not provisioned with the required managed base toolchain image. Host setup must pull the published GHCR image before Studio Setup runs."
+      explanation: "This Vibe64 editor does not have the required managed base toolchain image locally. Pull the required GHCR image before Studio Setup runs."
     });
   }
 
@@ -465,7 +465,7 @@ function createStudioToolchainDoctorPlugin({
                 label: "git",
                 commandArgs: ["git", "--version"],
                 expected: "git runs inside the managed base toolchain.",
-                explanation: "Studio uses git for status, diffs, commits, and deployments.",
+                explanation: "Vibe64 uses git for status, diffs, commits, and project worktrees.",
                 isValid: (output) => output.includes("git version")
               })
               : missingToolchainCheck("git", "git");
@@ -517,7 +517,7 @@ function createStudioToolchainDoctorPlugin({
                 label: "GitHub CLI",
                 commandArgs: ["gh", "--version"],
                 expected: "gh runs inside the managed base toolchain.",
-                explanation: "Studio uses GitHub CLI for repository and deploy-adjacent workflows.",
+                explanation: "Vibe64 uses GitHub CLI for repository, branch, and pull request workflows.",
                 isValid: (output) => output.toLowerCase().includes("gh version")
               })
               : missingToolchainCheck("gh", "GitHub CLI");

@@ -1,52 +1,20 @@
 ---
 title: Technical reference
-description: Vibe64 runtime directories, project state, Docker naming, and local-editor versus managed-daemon behavior.
+description: Vibe64 local-editor runtime directories, project state, and Docker naming.
 layout: doc
 ---
 
 # Technical reference
 
-This page defines the operational contracts that should stay stable across
-Vibe64 installs: where state lives, what is shared with a project, what stays
-local, and how Docker runtime names are formed.
+This page defines the operational contracts that should stay stable for the
+standalone Vibe64 local editor: where state lives, what is shared with a
+project, what stays local, and how Docker runtime names are formed.
 
-## Runtime modes
+## Local Editor Mode
 
-Vibe64 has two runtime modes.
-
-### Managed daemon mode
-
-Managed daemon mode is the normal multi-project server mode. A projects root
-contains the daemon state and all managed projects:
-
-```text
-<projectsRoot>/
-  .vibe64-demon/
-    auth-sessions/
-    provider-homes/
-    users/
-    logs/
-    db-backups/
-    setup.json
-
-  beepollen/
-    .vibe64/
-    .vibe64-local/
-
-  another-project/
-    .vibe64/
-    .vibe64-local/
-```
-
-`<projectsRoot>/.vibe64-demon` is Vibe64 daemon state. It belongs to the
-running Vibe64 installation, not to any one project, and it should not be
-committed to a project repository.
-
-### Local editor mode
-
-Local editor mode opens one arbitrary folder directly. The opened folder still
-gets the normal project-local state layout, but system state goes to a visibly
-local-editor-specific data directory:
+Vibe64 opens one arbitrary folder directly. The opened folder gets the normal
+project-local state layout, while editor-private system state goes to a local
+data directory:
 
 ```text
 ~/.local/share/vibe64-local-editor/
@@ -61,14 +29,11 @@ local-editor-specific data directory:
   .vibe64-local/
 ```
 
-The important distinction is that managed daemon state is beside managed
-projects, while local-editor system state is in the user's local data directory.
-
-## Project state
+## Project State
 
 Every Vibe64 target has two project-state directories.
 
-### Shared project state
+### Shared Project State
 
 Shared state lives in the project:
 
@@ -82,7 +47,7 @@ Shared state lives in the project:
 This state describes the project. It can be versioned with the project when the
 settings should travel with the repository.
 
-### Private local project state
+### Private Local Project State
 
 Private state lives beside the shared state:
 
@@ -101,9 +66,9 @@ state, local paths, and other machine-specific values. It must be ignored by
 Git.
 
 Project setup checks for that ignore rule and offers a repair when it is
-missing. Managed project creation also ensures the rule is present.
+missing.
 
-## Config lookup
+## Config Lookup
 
 Vibe64 reads shared config first and then overlays local config:
 
@@ -120,13 +85,12 @@ Examples:
 - Local launch command overrides are local config.
 - Absolute local paths are local config.
 
-## Root resolution
+## Root Resolution
 
 Directory policy is centralized in the Vibe64 root resolver. Stores should not
 invent their own state paths.
 
 ```text
-managed daemon systemRoot = <projectsRoot>/.vibe64-demon
 local editor systemRoot   = ~/.local/share/vibe64-local-editor
 projectSharedRoot         = <targetRoot>/.vibe64
 projectLocalRoot          = <targetRoot>/.vibe64-local
@@ -135,21 +99,19 @@ projectLocalRoot          = <targetRoot>/.vibe64-local
 The supported environment overrides are:
 
 ```text
-VIBE64_PROJECTS_ROOT  managed projects root
-VIBE64_SYSTEM_ROOT    explicit system state root
+VIBE64_SYSTEM_ROOT    explicit editor system state root
 VIBE64_TARGET_ROOT    explicit target project root
 VIBE64_APP_ROOT       Vibe64 application checkout root
 ```
 
-`VIBE64_SYSTEM_ROOT` is an escape hatch for explicit deployments. Normal managed
-daemon runs should use `<projectsRoot>/.vibe64-demon`; normal local editor runs
-should use `~/.local/share/vibe64-local-editor`.
+`VIBE64_SYSTEM_ROOT` is an escape hatch for explicit local editor state
+placement. Normal runs should use `~/.local/share/vibe64-local-editor`.
 
-## Docker runtime naming
+## Docker Runtime Naming
 
 Docker names are deterministic and project-scoped.
 
-For a managed project named `beepollen`, with no runtime namespace:
+For a project named `beepollen`, with no runtime namespace:
 
 ```text
 runtime network          vibe64-beepollen-network
@@ -173,208 +135,13 @@ JSKIT MariaDB container  vibe64-tonymobily-jskit-mariadb
 JSKIT MariaDB volume     vibe64_tonymobily_jskit_mariadb_data
 ```
 
-The namespace is sanitized to lowercase Docker-safe name parts. It is an
-explicit deployment/runtime partition; self-targeting Vibe64 does not create a
-new project runtime namespace.
+The namespace is sanitized to lowercase Docker-safe name parts.
 
-## Vibe64 self-targeting
-
-Self-targeting is intentionally narrow. It exists only so the Vibe64 repository
-can be opened by Vibe64 itself while still seeing the same managed projects,
-provider homes, and project runtime services as the parent Studio.
-
-The JSKIT adapter detects the target package name `vibe64`. When the target is
-Vibe64, JSKIT launch targets preserve the current `VIBE64_RUNTIME_NAMESPACE`
-and pass shared project roots into the nested Vibe64 process:
-
-```text
-outer Studio runtime namespace  ""
-inner Studio runtime namespace  ""
-
-outer Studio runtime namespace  tonymobily
-inner Studio runtime namespace  tonymobily
-```
-
-The inner Studio still receives its own `VIBE64_SYSTEM_ROOT`; auth cookies,
-session stores, and terminal runtime state remain isolated from the parent
-Studio.
-
-## Docker labels
+## Docker Labels
 
 Vibe64-managed Docker objects use `vibe64.*` labels for cleanup and inspection.
 Runtime networks and containers include labels for their kind, target, adapter,
-runtime id, and daemon process where applicable.
+runtime id, and process where applicable.
 
 Cleanup should rely on those labels and deterministic names, not on ad hoc
 searches for arbitrary containers.
-
-## Published app deployments
-
-Project publishing is project-scoped and owned by Vibe64, not by a work session.
-The project adapter provides a publish plan; the deployment service executes it
-and records the release.
-
-```text
-<project>/.vibe64-local/deployments/
-  public-name.json
-  current.json
-  domain-bindings/
-  releases/
-    <release-id>/
-      manifest.json
-      logs/
-        build.log
-        migrate.log
-        start.log
-        health.log
-      artifact/
-        workspace/
-```
-
-`public-name.json` stores the first-come, first-served
-`<name>.users.vibe64.dev` name for the project. Names that look official, such
-as `billing`, `login`, `support-vibe64`, or `admin-*`, are reserved by the
-platform and cannot be used for customer apps. The user chooses this name, and
-changing it is an explicit publish-dashboard action because it changes the
-default public URL.
-
-Each release manifest stores the adapter id, build command, optional migration
-command, serve command, health check, runtime service requirements, Docker
-container name, restart policy, and routing fields. Phase logs are written into
-the release directory before the release is marked published.
-
-Published app containers use the same managed runtime network and project-owned
-runtime services as preview/launch targets. The long-lived release app
-container runs from the release workspace snapshot:
-
-```text
-<project>/.vibe64-local/deployments/releases/<release-id>/artifact/workspace/
-```
-
-It does not run from the mutable project checkout. Git metadata and Vibe64
-runtime state are excluded from that snapshot. Project runtime services, such
-as the managed database container, are shared by the current published release;
-they are not copied per release.
-
-The deployment service starts the release container with Docker restart
-supervision:
-
-```text
---restart on-failure:5
---log-driver json-file
---log-opt max-size=10m
---log-opt max-file=5
-```
-
-That means Docker restarts a crashed published app a bounded number of times and
-rotates container logs. Vibe64 also keeps phase logs in the release directory so
-build, migration, start, and health-check failures are tied to the release that
-caused them.
-
-Caddy access logs are stable per project, not per release:
-
-```text
-<project>/.vibe64-local/deployments/logs/access.log
-```
-
-The generated Caddy site fragment points every current release and verified
-custom domain for the project at that same access log.
-
-Vibe64 does not create per-app systemd services. Systemd, if used by a host, is
-only responsible for long-lived host infrastructure such as the Vibe64 daemon
-and the Caddy edge process. Individual published apps are Vibe64/Docker
-releases.
-
-### Edge routing
-
-DNS sends published-app traffic to the Vibe64 edge. Caddy terminates TLS and
-proxies requests directly to the current release loopback target from generated
-Vibe64 site fragments. Caddy does not read project manifests; Vibe64 rewrites
-the generated fragment whenever publish, rollback, or verified-domain state
-changes.
-
-For the platform namespace:
-
-```text
-users.vibe64.dev
-*.users.vibe64.dev
-```
-
-the DNS zone should point both the base and wildcard host to the Vibe64 edge
-server. Customer-selected names are still validated by Vibe64; the wildcard DNS
-record only ensures traffic arrives at the edge.
-
-Caddy should use an on-demand TLS `ask` endpoint controlled by Vibe64. The ask
-endpoint must return success only for:
-
-- reserved/published `*.users.vibe64.dev` names
-- verified custom domain bindings
-
-The current certificate integration endpoint is loopback-only:
-
-```text
-GET /api/vibe64/deployments/tls/ask?domain=<hostname>
-```
-
-The `tls/ask` endpoint is for Caddy on-demand TLS. It answers from the
-deployment registry and returns success only when certificate issuance is
-allowed. Runtime routing is handled by generated Caddy snippets and site
-fragments under the managed system root:
-
-```text
-<system-root>/caddy/snippets/vibe64_published_app.caddy
-<system-root>/caddy/sites/<public-name>.caddy
-```
-
-The host Caddyfile should import the shared snippet and all generated sites:
-
-```caddyfile
-import <system-root>/caddy/snippets/*.caddy
-import <system-root>/caddy/sites/*.caddy
-```
-
-Vibe64 writes those generated `.caddy` files. The host owns the main Caddyfile.
-If automatic reloads are enabled, set `VIBE64_CADDY_RELOAD=1` and point
-`VIBE64_CADDY_CONFIG` at that host Caddyfile so Vibe64 can run `caddy validate`
-and `caddy reload` after publish, rollback, or verified-domain changes.
-
-Each generated site fragment contains only the host list, loopback upstream, and
-stable project access log path:
-
-```caddyfile
-public-name.users.vibe64.dev, www.customer.com {
-  import vibe64_published_app 127.0.0.1:<release-port> <project>/.vibe64-local/deployments/logs/access.log
-}
-```
-
-Custom domains are aliases to the current release after DNS ownership
-verification. Vibe64 records the required TXT record, verifies it from the
-Dashboard, then lets Caddy issue the certificate on demand for that verified
-host.
-
-For normal custom hosts, users should point traffic at their Vibe64 public
-name:
-
-```text
-www.customer.com CNAME public-name.users.vibe64.dev
-```
-
-Apex domains need provider-specific A/AAAA, ALIAS, ANAME, or flattened CNAME
-support pointing at the Vibe64 edge. Vibe64 still requires the TXT ownership
-record before the hostname is accepted by the TLS ask endpoint.
-
-### Adapter publish contract
-
-Adapters expose publish behavior with `createPublishPlan(context)`. The plan
-contains only stack-specific knowledge:
-
-- `build`: the command required to produce a deployable artifact
-- `migrate`: an optional database migration command
-- `serve`: the command that runs the built app
-- `health`: the HTTP health path and timeout
-- `artifacts`: the build output description
-- `runtimeServices`: managed services the release needs, such as MariaDB
-
-The adapter does not reserve hostnames, create certificates, route traffic, or
-supervise long-running release containers. Those are deployment-service
-responsibilities.

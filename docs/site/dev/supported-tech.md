@@ -58,7 +58,7 @@ Project-aware workflows for the stacks Vibe64 understands today.
 <article class="vibe-adapter-card">
 <div class="vibe-adapter-card__top"><div class="vibe-adapter-icon">Vx</div><span>ADAPTER</span></div>
 <h3>Vinext</h3>
-<p>Cloudflare and Vite-powered Next-compatible projects with Vinext check and build commands plus deployment-aware project context.</p>
+<p>Cloudflare and Vite-powered Next-compatible projects with Vinext check and build commands plus runtime-aware project context.</p>
 <a href="/dev/start-building">Learn more</a>
 </article>
 </div>

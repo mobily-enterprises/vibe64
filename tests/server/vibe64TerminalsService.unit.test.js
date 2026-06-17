@@ -3818,7 +3818,7 @@ test("Vibe64 command terminal joins the target runtime network before the image"
   const targetRoot = "/workspace/project";
   const worktree = "/workspace/project/.vibe64-local/sessions/active/unit/worktree";
   const resultDirectory = "/tmp/vibe64-command-unit";
-  const supportDirectory = "/opt/vibe64-support";
+  const supportDirectory = "/tmp/vibe64-toolchain-support";
   const args = commandTerminalArgs({
     args: [
       "-lc",

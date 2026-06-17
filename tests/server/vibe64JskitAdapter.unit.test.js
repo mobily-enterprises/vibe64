@@ -256,42 +256,6 @@ test("jskit adapter reflects configured database runtime in prompt context", asy
   });
 });
 
-test("jskit adapter creates publish plan from built app commands", async () => {
-  await withTemporaryRoot(async (targetRoot) => {
-    await createJskitProject(targetRoot);
-    await writeProjectFile(targetRoot, "package.json", JSON.stringify({
-      name: "example-jskit-app",
-      scripts: {
-        build: "vite build",
-        "db:migrate": "knex migrate:latest",
-        server: "node server.js"
-      }
-    }, null, 2));
-    const adapter = createJskitTargetAdapter();
-
-    const plan = await adapter.createPublishPlan({
-      config: {
-        values: {
-          jskit_database_runtime: "mysql"
-        }
-      },
-      targetRoot
-    });
-
-    assert.equal(plan.ok, true);
-    assert.equal(plan.adapterId, "jskit");
-    assert.equal(plan.build.command, "npm run build");
-    assert.equal(plan.build.networkEnv, false);
-    assert.equal(plan.migrate.command, "npm run db:migrate");
-    assert.equal(plan.migrate.networkEnv, true);
-    assert.equal(plan.serve.command, "npm run server");
-    assert.equal(plan.serve.networkEnv, true);
-    assert.equal(plan.health.path, "/");
-    assert.equal(plan.artifacts.kind, "workspace-build");
-    assert.equal(plan.runtimeServices[0].id, "jskit-mariadb");
-  });
-});
-
 test("jskit adapter uses stable config fields regardless of target package identity", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const adapter = createJskitTargetAdapter();

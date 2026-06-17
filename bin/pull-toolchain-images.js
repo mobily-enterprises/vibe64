@@ -44,7 +44,7 @@ function usage() {
   return [
     "Usage: node ./bin/pull-toolchain-images.js [--dry-run]",
     "",
-    "Pulls the managed Vibe64 toolchain images required by host provisioning."
+    "Pulls the managed Vibe64 toolchain images required by local Docker workspaces."
   ].join("\n");
 }
 
