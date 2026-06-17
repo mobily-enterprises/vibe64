@@ -366,16 +366,42 @@ function browserUrlForPublicOrigin(origin = "", options = {}) {
   return `${url.origin}${startupBrowserPath(options)}`;
 }
 
+function resolveServerRuntimeProfile(options = {}, {
+  defaultLocalTargetRoot = process.cwd()
+} = {}) {
+  if (options?.runtimeProfile && typeof options.runtimeProfile === "object") {
+    return Object.freeze({
+      ...options.runtimeProfile
+    });
+  }
+  const explicitTargetRoot = String(options?.targetRoot || "").trim();
+  if (typeof options?.createRuntimeProfile === "function") {
+    return options.createRuntimeProfile({
+      mode: options.runtimeMode,
+      targetRoot: explicitTargetRoot
+    });
+  }
+  return createVibe64RuntimeProfile({
+    mode: options?.runtimeMode,
+    targetRoot: explicitTargetRoot || String(defaultLocalTargetRoot || "").trim()
+  });
+}
+
+function targetRootForRuntimeProfile(options = {}, runtimeProfile = {}) {
+  const explicitTargetRoot = String(options?.targetRoot || "").trim();
+  if (explicitTargetRoot) {
+    return explicitTargetRoot;
+  }
+  return runtimeProfile.local === true ? process.cwd() : "";
+}
+
 async function createServer(options = {}) {
   const runtimeEnv = resolveRuntimeEnv();
-  const requestedTargetRoot = String(options.targetRoot || "").trim() || process.cwd();
+  const runtimeProfile = resolveServerRuntimeProfile(options);
+  const requestedTargetRoot = targetRootForRuntimeProfile(options, runtimeProfile);
   const jskitLockPath = resolveJskitLockPath({
     env: runtimeEnv,
     explicitPath: options.jskitLockPath
-  });
-  const runtimeProfile = createVibe64RuntimeProfile({
-    mode: options.runtimeMode,
-    targetRoot: requestedTargetRoot
   });
   if (runtimeProfile.local) {
     if (!runtimeProfile.singleTargetRoot) {
@@ -601,14 +627,11 @@ async function createServer(options = {}) {
 
 async function startServer(options = {}) {
   const runtimeEnv = resolveRuntimeEnv();
-  const requestedTargetRoot = String(options?.targetRoot || "").trim() || process.cwd();
+  const runtimeProfile = resolveServerRuntimeProfile(options);
+  const requestedTargetRoot = targetRootForRuntimeProfile(options, runtimeProfile);
   const listenTarget = resolveListenTarget({
     options,
     runtimeEnv
-  });
-  const runtimeProfile = createVibe64RuntimeProfile({
-    mode: options?.runtimeMode,
-    targetRoot: requestedTargetRoot
   });
   assertSafeLocalModeListenTarget(runtimeProfile, listenTarget, {
     env: runtimeEnv
@@ -623,6 +646,7 @@ async function startServer(options = {}) {
     jskitLockPath: options?.jskitLockPath,
     providerHomesRoot: options?.providerHomesRoot,
     projectsRoot: options?.projectsRoot,
+    runtimeProfile,
     runtimeMode: runtimeProfile.mode,
     systemRoot: options?.systemRoot,
     targetRoot: requestedTargetRoot
@@ -692,6 +716,7 @@ export {
   defaultListenSocketPath,
   forceCloseServerConnections,
   resolveListenTarget,
+  resolveServerRuntimeProfile,
   startServer,
   startupBrowserPath
 };

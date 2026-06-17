@@ -5,6 +5,7 @@ import test from "node:test";
 import {
   browserUrlForListenAddress,
   browserUrlForPublicOrigin,
+  resolveServerRuntimeProfile,
   startupBrowserPath
 } from "../../server.js";
 import {
@@ -190,6 +191,29 @@ test("server CLI enables browser lifecycle shutdown for local editor mode", () =
     strictPort: true,
     targetRoot: "/workspace/vibe64"
   });
+});
+
+test("server accepts an explicit runtime profile from a composed product", () => {
+  const hostedProfile = Object.freeze({
+    authRequired: true,
+    local: false,
+    mode: "hosted",
+    projectCatalogEnabled: true,
+    singleTargetRoot: ""
+  });
+
+  assert.deepEqual(resolveServerRuntimeProfile({
+    runtimeProfile: hostedProfile
+  }), hostedProfile);
+
+  assert.deepEqual(resolveServerRuntimeProfile({
+    createRuntimeProfile({ mode, targetRoot }) {
+      assert.equal(mode, "hosted");
+      assert.equal(targetRoot, "");
+      return hostedProfile;
+    },
+    runtimeMode: "hosted"
+  }), hostedProfile);
 });
 
 test("server CLI detects direct execution without starting when imported", () => {

@@ -43,7 +43,7 @@ X Ability to actually deploy, with OWN domain if needed, using the same DB conta
 
 
 8d)
-Split completely the stand alone part from the multi-project path, do NOT release the multi-project part at all
+X Split completely the stand alone part from the multi-project path, do NOT release the multi-project part at all
 
 
 8e)
@@ -52,8 +52,6 @@ Make sure logs make sense.
 
 8f)
 Put it ONLINE, check that link-sending works
-
-
 
 
 
