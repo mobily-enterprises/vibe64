@@ -93,7 +93,8 @@ const featureActions = Object.freeze([
       return deps.featureService.startCommandTerminal(input.sessionId, {
         advanceOnSuccess: input.advanceOnSuccess === true,
         actionId: input.actionId,
-        input: input.input
+        input: input.input,
+        vibe64User: input.vibe64User || null
       });
     }
   },

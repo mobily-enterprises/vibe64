@@ -78,6 +78,7 @@ function targetToolchainTerminalArgs({
   sessionId = "",
   targetRoot = "",
   terminalId = "",
+  toolHomeSource = "",
   workdir = ""
 } = {}) {
   return [
@@ -96,7 +97,9 @@ function targetToolchainTerminalArgs({
       studioDockerLabel("target", runtimeTargetName(targetRoot)),
       ...extraLabels
     ]),
-    ...studioToolHomeDockerArgs(),
+    ...studioToolHomeDockerArgs({
+      source: toolHomeSource || undefined
+    }),
     ...terminalEnvironmentDockerArgs(env),
     ...studioPlaywrightBrowsersDockerArgs(),
     ...hostUserIdentityEnvArgs(),

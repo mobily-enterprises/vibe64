@@ -39,6 +39,11 @@ const commandTerminalFields = {
     type: "object",
     additionalProperties: true,
     required: false
+  },
+  vibe64User: {
+    type: "object",
+    additionalProperties: true,
+    required: false
   }
 };
 

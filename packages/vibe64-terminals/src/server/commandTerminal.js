@@ -1,4 +1,5 @@
 import path from "node:path";
+import { access } from "node:fs/promises";
 
 import {
   closeTerminalSession,
@@ -12,6 +13,11 @@ import {
 import {
   githubSshToHttpsGitEnv
 } from "@local/studio-terminal-core/server/gitGithubTransport";
+import {
+  githubLocalProviderContext,
+  githubProviderContext,
+  VIBE64_PROVIDER_HOMES_ROOT_ENV
+} from "@local/studio-terminal-core/server/providerHomes";
 import {
   vibe64Error,
   normalizeText
@@ -412,6 +418,7 @@ function commandTerminalArgs({
   sessionId = "",
   targetRoot = "",
   terminalId = "",
+  toolHomeSource = "",
   workdir = ""
 } = {}) {
   return targetToolchainTerminalArgs({
@@ -438,8 +445,55 @@ function commandTerminalArgs({
     sessionId,
     targetRoot,
     terminalId,
+    toolHomeSource,
     workdir
   });
+}
+
+async function resolveCommandTerminalToolHome({
+  env = process.env,
+  input = {}
+} = {}) {
+  const providerHomesRoot = normalizeText(env?.[VIBE64_PROVIDER_HOMES_ROOT_ENV]);
+  const vibe64User = input?.vibe64User || null;
+  const context = vibe64User
+    ? githubProviderContext({
+        vibe64User
+      }, {
+        providerHomesRoot
+      })
+    : githubLocalProviderContext({
+        providerHomesRoot
+      });
+  if (context?.ok === false) {
+    return {
+      ok: false,
+      error: context.error || "GitHub account storage is not available for command terminals."
+    };
+  }
+
+  const toolHomeSource = normalizeText(context?.toolHomeSource);
+  if (!toolHomeSource) {
+    return {
+      ok: false,
+      error: "GitHub account storage is not available for command terminals."
+    };
+  }
+
+  try {
+    await access(toolHomeSource);
+  } catch {
+    return {
+      ok: false,
+      error: "GitHub is not ready for command terminals. Connect GitHub before running workflow commands."
+    };
+  }
+
+  return {
+    ok: true,
+    providerScope: context.providerScope || "",
+    toolHomeSource
+  };
 }
 
 function sessionExchangeMounts(session = {}) {
@@ -885,7 +939,8 @@ async function startCommandTerminalProcess({
   spec = {},
   startTerminal = startTerminalSession,
   target = "command",
-  targetRoot = ""
+  targetRoot = "",
+  toolHomeSource = ""
 } = {}) {
   const workdir = resolveCommandWorkdir(targetRoot, spec.cwd);
   if (!commandWorkdirAllowed({
@@ -952,6 +1007,7 @@ async function startCommandTerminalProcess({
         sessionId: session.sessionId || "",
         targetRoot,
         terminalId: terminalContext.id,
+        toolHomeSource,
         workdir
       });
     },
@@ -988,6 +1044,7 @@ async function startCommandTerminalProcess({
 
 function createCommandTerminalController({
   afterSuccessfulCommand = async () => null,
+  env = process.env,
   ensureRuntimeNetwork = ensureTargetRuntimeNetwork,
   projectService,
   publishSessionChanged = async () => null,
@@ -1078,6 +1135,13 @@ function createCommandTerminalController({
 
           const advanceOnSuccess = input?.advanceOnSuccess === true;
           const commandInput = normalizePlainObject(input?.input);
+          const toolHomeResult = await resolveCommandTerminalToolHome({
+            env,
+            input
+          });
+          if (toolHomeResult.ok === false) {
+            return toolHomeResult;
+          }
           const spec = await runtime.adapter.createCommandTerminalSpec(action.id, {
             action,
             config: runtime.projectConfig,
@@ -1217,6 +1281,7 @@ function createCommandTerminalController({
                   sessionId,
                   targetRoot,
                   terminalId: terminalContext.id,
+                  toolHomeSource: toolHomeResult.toolHomeSource,
                   workdir
                 });
               },
@@ -1518,6 +1583,7 @@ export {
   commandTerminalContainerName,
   createCommandTerminalController,
   createProjectToolTerminalController,
+  resolveCommandTerminalToolHome,
   startCommandTerminalProcess,
   toolTerminalContainerName
 };

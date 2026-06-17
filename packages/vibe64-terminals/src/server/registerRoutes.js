@@ -141,7 +141,7 @@ function registerRoutes(
   routes.actionRoute("POST", "/sessions/:sessionId/command-terminal", {
     actionId: ACTION_START_COMMAND_TERMINAL,
     body: commandTerminalInputValidator,
-    buildInput: bodyWithSessionId(routes),
+    buildInput: (request) => withVibe64User(request, bodyWithSessionId(routes)(request)),
     summary: "Start an Vibe64 command terminal."
   });
 

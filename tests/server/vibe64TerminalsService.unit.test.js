@@ -26,6 +26,7 @@ import {
   createService
 } from "../../packages/vibe64-terminals/src/server/service.js";
 import {
+  ACTION_START_COMMAND_TERMINAL,
   ACTION_START_SESSION_TERMINAL_FIX,
   ACTION_START_SHELL_TERMINAL,
   featureActions as terminalFeatureActions
@@ -50,7 +51,8 @@ import {
 } from "../../packages/vibe64-terminals/src/server/commandTerminalResults.js";
 import {
   commandTerminalArgs,
-  createCommandTerminalController
+  createCommandTerminalController,
+  resolveCommandTerminalToolHome
 } from "../../packages/vibe64-terminals/src/server/commandTerminal.js";
 import {
   createLaunchTargetTerminalController,
@@ -117,6 +119,9 @@ import {
 import {
   githubSshToHttpsGitEnv
 } from "@local/studio-terminal-core/server/gitGithubTransport";
+import {
+  VIBE64_PROVIDER_HOMES_ROOT_ENV
+} from "@local/studio-terminal-core/server/providerHomes";
 import {
   runtimeNetworkName
 } from "@local/studio-terminal-core/server/runtimeContainers";
@@ -693,6 +698,16 @@ async function waitForNoRunningTerminals(namespace, timeoutMs = POST_COMMIT_TEST
     await delay(5);
   }
   assert.equal(countRunningTerminalSessions({ namespace }), 0);
+}
+
+async function commandTerminalTestEnv(root) {
+  const providerHomesRoot = path.join(root, "provider-homes");
+  await mkdir(path.join(providerHomesRoot, "github", "local"), {
+    recursive: true
+  });
+  return {
+    [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
+  };
 }
 
 function runNodeScript(scriptPath = "", args = [], env = {}, stdin = "") {
@@ -3878,6 +3893,117 @@ test("Vibe64 command terminal joins the target runtime network before the image"
   assert.match(startupScript, /setpriv .* bash -lc 'npm test'/u);
 });
 
+test("Vibe64 command terminal mounts the active GitHub provider home as its tool home", () => {
+  const targetRoot = "/workspace/project";
+  const worktree = "/workspace/project/.vibe64-local/sessions/active/unit/worktree";
+  const providerHome = "/srv/vibe64/tenants/ada/provider-homes/github/ada@example.com";
+  const resultDirectory = "/tmp/vibe64-command-unit";
+  const args = commandTerminalArgs({
+    args: [
+      "-lc",
+      "git status"
+    ],
+    command: "bash",
+    containerName: "vibe64-command-unit",
+    env: {
+      [COMMAND_RESULT_ENV]: `${resultDirectory}/result.tsv`
+    },
+    image: "adapter-toolchain:1.0.0",
+    resultFile: {
+      directory: resultDirectory,
+      path: `${resultDirectory}/result.tsv`
+    },
+    sessionId: "unit-session",
+    targetRoot,
+    terminalId: "unit-terminal",
+    toolHomeSource: providerHome,
+    workdir: worktree
+  });
+
+  assertDockerVolumeMount(args, providerHome, STUDIO_TOOL_HOME_PATH);
+});
+
+test("Vibe64 command terminal resolves the current user's GitHub provider home", async () => {
+  await withTemporaryRoot(async (root) => {
+    const providerHomesRoot = path.join(root, "provider-homes");
+    const userHome = path.join(providerHomesRoot, "github", "ada@example.com");
+    const localHome = path.join(providerHomesRoot, "github", "local");
+    await mkdir(userHome, {
+      recursive: true
+    });
+    await mkdir(localHome, {
+      recursive: true
+    });
+
+    assert.deepEqual(await resolveCommandTerminalToolHome({
+      env: {
+        [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
+      },
+      input: {
+        vibe64User: {
+          email: "Ada@Example.com"
+        }
+      }
+    }), {
+      ok: true,
+      providerScope: "user",
+      toolHomeSource: userHome
+    });
+
+    assert.deepEqual(await resolveCommandTerminalToolHome({
+      env: {
+        [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
+      },
+      input: {}
+    }), {
+      ok: true,
+      providerScope: "app",
+      toolHomeSource: localHome
+    });
+  });
+});
+
+test("Vibe64 command terminal action forwards the authenticated user", async () => {
+  const action = terminalFeatureActions.find((entry) => entry.id === ACTION_START_COMMAND_TERMINAL);
+  const calls = [];
+  const result = await action.execute({
+    actionId: "create_worktree",
+    sessionId: "unit-session",
+    vibe64User: {
+      email: "ada@example.com"
+    }
+  }, {}, {
+    featureService: {
+      startCommandTerminal(sessionId, input) {
+        calls.push({
+          input,
+          sessionId
+        });
+        return {
+          ok: true
+        };
+      }
+    }
+  });
+
+  assert.deepEqual(result, {
+    ok: true
+  });
+  assert.deepEqual(calls, [
+    {
+      input: {
+        actionId: "create_worktree",
+        advanceOnSuccess: false,
+        input: undefined,
+        vibe64User: {
+          email: "ada@example.com"
+        }
+      },
+      sessionId: "unit-session"
+    }
+  ]);
+});
+
 test("Vibe64 command terminal mounts the session root for worktree creation outside the repo", () => {
   const targetRoot = "/home/workspace/vibe64/beepollen";
   const sessionRoot = "/home/workspace/vibe64/beepollen/.vibe64-local/sessions/active/unit";
@@ -4102,6 +4228,7 @@ test("Vibe64 command terminal records action results and metadata after success"
           metadata: event.metadata
         });
       },
+      env: await commandTerminalTestEnv(targetRoot),
       ensureRuntimeNetwork: async (root) => {
         ensuredTargetRoot = root;
       },
@@ -4171,12 +4298,12 @@ test("Vibe64 command terminal records action results and metadata after success"
     assert.ok(startedDockerArgs.indexOf("--network") < startedDockerArgs.indexOf("unit-command-toolchain:1.0.0"));
 
     const updatedSession = await runtime.getSession("terminal_success");
-	    assert.equal(updatedSession.metadata.terminal_done, "yes");
-	    assert.equal(updatedSession.metadata.dynamic_done, "from-result-file");
-	    assert.equal(updatedSession.metadata.stale_value, undefined);
-	    await waitForArrayLength(successfulCommandHooks, 1);
-	    assert.deepEqual(successfulCommandHooks, [
-	      {
+    assert.equal(updatedSession.metadata.terminal_done, "yes");
+    assert.equal(updatedSession.metadata.dynamic_done, "from-result-file");
+    assert.equal(updatedSession.metadata.stale_value, undefined);
+    await waitForArrayLength(successfulCommandHooks, 1);
+    assert.deepEqual(successfulCommandHooks, [
+      {
         actionId: "unit_command",
         currentStep: "unit_step",
         metadata: {
@@ -4206,58 +4333,58 @@ test("Vibe64 command terminal records action results and metadata after success"
         status: "completed"
       }
     ]);
-	    assert.deepEqual(await runtime.store.readCommandLog("terminal_success"), [
-	      {
-	        actionId: "unit_command",
+    assert.deepEqual(await runtime.store.readCommandLog("terminal_success"), [
+      {
+        actionId: "unit_command",
         actionLabel: "Unit command",
         actionType: "command",
         at: "2026-05-16T01:02:03.000Z",
         kind: "terminal-action",
         status: "completed",
-	        stepId: "unit_step"
-	      }
-	    ]);
-	    let lifecycle = await runtime.store.readCommandLifecycle("terminal_success", "1-unit_command-001");
-	    for (let attempt = 0; attempt < 20 && lifecycle?.phase !== "done"; attempt += 1) {
-	      await delay(5);
-	      lifecycle = await runtime.store.readCommandLifecycle("terminal_success", "1-unit_command-001");
-	    }
-	    const lifecycleEventKinds = lifecycle.events.map((event) => event.kind);
-	    assert.deepEqual({
-	      actionId: lifecycle.actionId,
-	      inputKeys: lifecycle.inputKeys,
-	      outcome: lifecycle.outcome,
-	      phase: lifecycle.phase,
-	      postCommit: lifecycle.postCommit,
-	      stepId: lifecycle.stepId,
-	      stepRevision: lifecycle.stepRevision,
-	      terminalSessionId: lifecycle.terminalSessionId
-	    }, {
-	      actionId: "unit_command",
-	      inputKeys: ["dryRun"],
-	      outcome: "completed",
-	      phase: "done",
-	      postCommit: {
-	        afterSuccessfulCommand: "done",
-	        afterSuccessfulCommandError: "",
-	        publishSessionChanged: "done",
-	        publishSessionChangedError: ""
-	      },
-	      stepId: "unit_step",
-	      stepRevision: 1,
-	      terminalSessionId: "unit-command-terminal"
-	    });
-	    assert.deepEqual([...new Set(lifecycleEventKinds)].sort(), [
-	      "done",
-	      "post_commit_running",
-	      "result_writing",
-	      "result_written",
-	      "started",
-	      "starting",
-	      "terminal_exited"
-	    ]);
-	  });
-	});
+        stepId: "unit_step"
+      }
+    ]);
+    let lifecycle = await runtime.store.readCommandLifecycle("terminal_success", "1-unit_command-001");
+    for (let attempt = 0; attempt < 20 && lifecycle?.phase !== "done"; attempt += 1) {
+      await delay(5);
+      lifecycle = await runtime.store.readCommandLifecycle("terminal_success", "1-unit_command-001");
+    }
+    const lifecycleEventKinds = lifecycle.events.map((event) => event.kind);
+    assert.deepEqual({
+      actionId: lifecycle.actionId,
+      inputKeys: lifecycle.inputKeys,
+      outcome: lifecycle.outcome,
+      phase: lifecycle.phase,
+      postCommit: lifecycle.postCommit,
+      stepId: lifecycle.stepId,
+      stepRevision: lifecycle.stepRevision,
+      terminalSessionId: lifecycle.terminalSessionId
+    }, {
+      actionId: "unit_command",
+      inputKeys: ["dryRun"],
+      outcome: "completed",
+      phase: "done",
+      postCommit: {
+        afterSuccessfulCommand: "done",
+        afterSuccessfulCommandError: "",
+        publishSessionChanged: "done",
+        publishSessionChangedError: ""
+      },
+      stepId: "unit_step",
+      stepRevision: 1,
+      terminalSessionId: "unit-command-terminal"
+    });
+    assert.deepEqual([...new Set(lifecycleEventKinds)].sort(), [
+      "done",
+      "post_commit_running",
+      "result_writing",
+      "result_written",
+      "started",
+      "starting",
+      "terminal_exited"
+    ]);
+  });
+});
 
 test("Vibe64 command terminal claims one active execution per session", async () => {
   await withTemporaryRoot(async (targetRoot) => {
@@ -4295,6 +4422,7 @@ test("Vibe64 command terminal claims one active execution per session", async ()
     let closeTerminal = async () => null;
     let startCount = 0;
     const command = createCommandTerminalController({
+      env: await commandTerminalTestEnv(targetRoot),
       ensureRuntimeNetwork: async () => null,
       projectService: {
         targetRoot,
@@ -4422,6 +4550,7 @@ test("Vibe64 command terminal duplicate start waits until claimed command is att
     const terminalReleased = deferred();
     let startCount = 0;
     const command = createCommandTerminalController({
+      env: await commandTerminalTestEnv(targetRoot),
       ensureRuntimeNetwork: async () => null,
       projectService: {
         targetRoot,
@@ -4505,6 +4634,7 @@ test("Vibe64 command terminal persists failed command context for reload-stable 
 
     let closeTerminal = async () => null;
     const command = createCommandTerminalController({
+      env: await commandTerminalTestEnv(targetRoot),
       ensureRuntimeNetwork: async () => null,
       projectService: {
         targetRoot,
@@ -4601,6 +4731,7 @@ test("Vibe64 command terminal accepts completion after unrelated session metadat
 
     let closeTerminal = async () => null;
     const command = createCommandTerminalController({
+      env: await commandTerminalTestEnv(targetRoot),
       ensureRuntimeNetwork: async () => null,
       projectService: {
         targetRoot,
@@ -4704,6 +4835,7 @@ test("Vibe64 command terminal commits completion before slow post-commit hooks f
         hookStarted.resolve();
         await hookReleased.promise;
       },
+      env: await commandTerminalTestEnv(targetRoot),
       ensureRuntimeNetwork: async () => null,
       projectService: {
         targetRoot,
@@ -4817,6 +4949,7 @@ test("Vibe64 command terminal ignores stale close after advance and rewind", asy
 
     let closeTerminal = async () => null;
     const command = createCommandTerminalController({
+      env: await commandTerminalTestEnv(targetRoot),
       ensureRuntimeNetwork: async () => null,
       projectService: {
         targetRoot,
@@ -4970,6 +5103,7 @@ test("Vibe64 command terminal advances workflow when requested after success", a
       afterSuccessfulCommand: async ({ session }) => {
         hookSteps.push(session.currentStep);
       },
+      env: await commandTerminalTestEnv(targetRoot),
       ensureRuntimeNetwork: async () => null,
       projectService: {
         targetRoot,
@@ -5016,13 +5150,13 @@ test("Vibe64 command terminal advances workflow when requested after success", a
     assert.equal(terminal.ok, true);
     await closePromise;
 
-	    const session = await runtime.getSession("terminal_advance");
-	    assert.equal(session.currentStep, "next_step");
-	    assert.deepEqual(session.completedSteps, ["unit_step"]);
-	    await waitForArrayLength(hookSteps, 1);
-	    assert.deepEqual(hookSteps, ["next_step"]);
-	  });
-	});
+    const session = await runtime.getSession("terminal_advance");
+    assert.equal(session.currentStep, "next_step");
+    assert.deepEqual(session.completedSteps, ["unit_step"]);
+    await waitForArrayLength(hookSteps, 1);
+    assert.deepEqual(hookSteps, ["next_step"]);
+  });
+});
 
 test("Vibe64 shell terminal resolves only declared session targets", async () => {
   await withTemporaryRoot(async (targetRoot) => {
