@@ -81,11 +81,6 @@ const COMMAND_LIFECYCLE_ACTIVE_PHASES = new Set([
   "post_commit_running"
 ]);
 
-const COMMAND_LIFECYCLE_CLAIMED_PHASES = new Set([
-  ...COMMAND_LIFECYCLE_ACTIVE_PHASES,
-  "done"
-]);
-
 const COMMAND_CLAIM_OBSERVE_TIMEOUT_MS = 30000;
 const COMMAND_CLAIM_OBSERVE_INTERVAL_MS = 100;
 
@@ -170,7 +165,11 @@ function commandLifecycleMatchesAction(lifecycle = {}, session = {}, action = {}
 }
 
 function commandLifecycleBlocksNewExecution(lifecycle = {}) {
-  return COMMAND_LIFECYCLE_CLAIMED_PHASES.has(commandLifecyclePhase(lifecycle));
+  if (commandLifecycleIsActive(lifecycle)) {
+    return true;
+  }
+  return commandLifecyclePhase(lifecycle) === "done" &&
+    normalizeText(lifecycle.outcome || "completed") === "completed";
 }
 
 function commandLifecycleIsActive(lifecycle = {}) {

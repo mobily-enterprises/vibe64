@@ -684,7 +684,7 @@ async function waitForArrayLength(entries, expectedLength, timeoutMs = POST_COMM
 async function waitForCondition(predicate, message = "Timed out waiting for condition.", timeoutMs = POST_COMMIT_TEST_TIMEOUT_MS) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if (predicate()) {
+    if (await predicate()) {
       return;
     }
     await delay(5);
@@ -4697,6 +4697,137 @@ test("Vibe64 command terminal persists failed command context for reload-stable 
         output: "first line\neslint failed on unit file",
         status: "blocked",
         terminalSessionId: "unit-command-failure-terminal"
+      }
+    ]);
+  });
+});
+
+test("Vibe64 command terminal retry starts a new attempt after failure", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new Vibe64SessionRuntime({
+      adapter: new UnitCommandAdapter(),
+      targetRoot,
+      workflow: {
+        id: "unit-terminal-failure-retry",
+        steps: [
+          {
+            actions: [
+              {
+                adapterCapability: "unit_command",
+                id: "unit_command",
+                label: "Unit command",
+                type: "command"
+              }
+            ],
+            id: "unit_step",
+            label: "Unit step"
+          }
+        ]
+      }
+    });
+    await runtime.createSession({
+      sessionId: "terminal_failure_retry"
+    });
+
+    let closeTerminal = async () => null;
+    let startCount = 0;
+    const command = createCommandTerminalController({
+      env: await commandTerminalTestEnv(targetRoot),
+      ensureRuntimeNetwork: async () => null,
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return runtime;
+        },
+        async projectConfigEnvironment() {
+          return {
+            VIBE64_CONFIG_DIR: path.join(targetRoot, ".vibe64", "config")
+          };
+        }
+      },
+      resolveToolchainImage: async () => ({
+        image: "unit-command-toolchain:1.0.0",
+        label: "Unit command toolchain",
+        ok: true
+      }),
+      startTerminal: (options) => {
+        startCount += 1;
+        const id = `unit-command-retry-terminal-${startCount}`;
+        const dockerArgs = options.args({
+          id,
+          namespace: options.namespace
+        });
+        const resultFilePath = dockerEnvValue(dockerArgs, COMMAND_RESULT_ENV);
+        closeTerminal = async () => {
+          if (startCount === 1) {
+            await options.onClose({
+              exitCode: 1,
+              id,
+              output: "seed failed before retry"
+            });
+            return;
+          }
+          await writeFile(
+            resultFilePath,
+            "fact:set\tdynamic_done\tcmV0cnktZG9uZQ==\n",
+            "utf8"
+          );
+          await options.onClose({
+            exitCode: 0,
+            id
+          });
+        };
+        return {
+          id,
+          ok: true,
+          status: "running"
+        };
+      }
+    });
+
+    const first = await command.startTerminal("terminal_failure_retry", {
+      actionId: "unit_command"
+    });
+    assert.equal(first.ok, true);
+    assert.equal(startCount, 1);
+    await closeTerminal();
+    await waitForCondition(async () => {
+      const lifecycle = await runtime.store.readCommandLifecycle("terminal_failure_retry", "1-unit_command-001");
+      return lifecycle?.phase === "done" &&
+        lifecycle?.outcome === "blocked" &&
+        lifecycle?.postCommit?.publishSessionChanged === "done";
+    }, "Expected failed command lifecycle to finish as blocked.");
+
+    const retry = await command.startTerminal("terminal_failure_retry", {
+      actionId: "unit_command"
+    });
+    assert.equal(retry.ok, true);
+    assert.equal(retry.code, undefined);
+    assert.equal(startCount, 2);
+    await closeTerminal();
+    await waitForCondition(async () => {
+      const lifecycle = await runtime.store.readCommandLifecycle("terminal_failure_retry", "1-unit_command-002");
+      return lifecycle?.phase === "done" && lifecycle?.outcome === "completed";
+    }, "Expected retry command lifecycle to finish as completed.");
+
+    const lifecycles = await runtime.store.readCommandLifecycles("terminal_failure_retry");
+    assert.deepEqual(lifecycles.map((item) => ({
+      id: item.id,
+      outcome: item.outcome,
+      phase: item.phase,
+      terminalSessionId: item.terminalSessionId
+    })), [
+      {
+        id: "1-unit_command-001",
+        outcome: "blocked",
+        phase: "done",
+        terminalSessionId: "unit-command-retry-terminal-1"
+      },
+      {
+        id: "1-unit_command-002",
+        outcome: "completed",
+        phase: "done",
+        terminalSessionId: "unit-command-retry-terminal-2"
       }
     ]);
   });
