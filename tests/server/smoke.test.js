@@ -201,7 +201,7 @@ test("started server defaults to Unix socket when PORT is not set", async () => 
   try {
     assert.equal(app.vibe64Listen.transport, "socket");
     assert.equal(app.vibe64Listen.socketPath, socketPath);
-    assert.equal(app.vibe64Url, "https://tonymobily.vibe64.dev/app/beepollen");
+    assert.equal(app.vibe64Url, "https://tonymobily.vibe64.dev/app/project/beepollen");
     await access(socketPath);
   } finally {
     await app.close();

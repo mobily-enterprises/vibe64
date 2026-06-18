@@ -60,6 +60,10 @@ import {
   recoverSessionWorktree
 } from "./sessionWorktreeArchive.js";
 import {
+  PLAN_SUMMARY_ARTIFACT,
+  PLAN_TECHNICAL_ARTIFACT
+} from "./workflowArtifacts.js";
+import {
   vibe64SessionDebugDurationMs,
   vibe64SessionDebugError,
   vibe64SessionDebugLog,
@@ -480,6 +484,10 @@ function agentConversationAction(action = {}) {
   return normalizeText(action.id || action.promptId) === AGENT_CONVERSATION_ACTION_ID;
 }
 
+function executePlanAction(action = {}) {
+  return ["execute_plan", "execute_seed_plan"].includes(normalizeText(action.promptId || action.id));
+}
+
 function conversationWorkflowMetadataIsPromptRelevant(name = "", value = undefined) {
   const normalizedName = normalizeText(name);
   return workflowMetadataIsPromptRelevant(normalizedName, value) &&
@@ -549,6 +557,27 @@ function promptWithWorkflowContext({
     .map((part) => String(part || "").trim())
     .filter(Boolean)
     .join("\n\n");
+}
+
+async function inputWithAcceptedPlanForAction(store, session = {}, action = {}, input = {}) {
+  if (!executePlanAction(action)) {
+    return input;
+  }
+  const [planSummary, technicalPlan] = await Promise.all([
+    store.readArtifact(session.sessionId, PLAN_SUMMARY_ARTIFACT),
+    store.readArtifact(session.sessionId, PLAN_TECHNICAL_ARTIFACT)
+  ]);
+  const acceptedPlan = Object.fromEntries([
+    ["acceptedPlanSummary", normalizeText(planSummary)],
+    ["acceptedTechnicalPlan", normalizeText(technicalPlan)]
+  ].filter(([, value]) => Boolean(value)));
+  if (Object.keys(acceptedPlan).length === 0) {
+    return input;
+  }
+  return {
+    ...input,
+    ...acceptedPlan
+  };
 }
 
 function promptWithConversationTurnContext({
@@ -1082,12 +1111,13 @@ class Vibe64SessionRuntime {
     session
   } = {}) {
     const promptSession = await this.promptSessionForAction(session);
+    const promptInput = await inputWithAcceptedPlanForAction(this.store, promptSession, action, input);
     const sessionBriefingIncluded = !sessionBriefingIsDelivered(promptSession);
     const actionPromptSession = promptSessionWithStaticContextReferences(promptSession);
     const renderedPrompt = await this.adapter.renderPrompt({
       action,
       config: this.projectConfig,
-      input,
+      input: promptInput,
       runtime: this,
       session: actionPromptSession,
       store: this.store
@@ -1095,7 +1125,7 @@ class Vibe64SessionRuntime {
     const promptWithActionContext = agentConversationAction(action)
       ? promptWithConversationTurnContext({
           action,
-          input,
+          input: promptInput,
           prompt: renderedPrompt.prompt,
           session: promptSession,
           sessionBriefingIncluded
@@ -1103,7 +1133,7 @@ class Vibe64SessionRuntime {
       : promptWithWorkflowContext({
           action,
           includeSessionPaths: !sessionBriefingIncluded,
-          input,
+          input: promptInput,
           prompt: renderedPrompt.prompt,
           session: promptSession
         });

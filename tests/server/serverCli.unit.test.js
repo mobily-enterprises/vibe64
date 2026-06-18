@@ -72,18 +72,18 @@ test("server CLI accepts one target directory and opens local editor mode", () =
   });
   assert.equal(startupBrowserPath({
     startupSlug: "alpha_1"
-  }), "/app/alpha_1");
+  }), "/app/project/alpha_1");
   assert.equal(
     browserUrlForListenAddress("http://0.0.0.0:3001", {
       startupSlug: "beta-2"
     }),
-    "http://127.0.0.1:3001/app/beta-2"
+    "http://127.0.0.1:3001/app/project/beta-2"
   );
   assert.equal(
     browserUrlForPublicOrigin("https://tonymobily.vibe64.dev/", {
       startupSlug: "beta-2"
     }),
-    "https://tonymobily.vibe64.dev/app/beta-2"
+    "https://tonymobily.vibe64.dev/app/project/beta-2"
   );
 });
 

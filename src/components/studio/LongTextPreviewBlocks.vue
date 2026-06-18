@@ -30,6 +30,19 @@
         v-else-if="block.type === 'code'"
         class="studio-long-text-review__code"
       ><code>{{ block.text }}</code></pre>
+      <details
+        v-else-if="block.type === 'details'"
+        class="studio-long-text-review__details"
+      >
+        <summary class="studio-long-text-review__details-summary">
+          <LongTextInlineParts :text="block.summary || 'Details'" />
+        </summary>
+        <LongTextPreviewBlocks
+          class="studio-long-text-review__details-body"
+          compact
+          :blocks="block.blocks || []"
+        />
+      </details>
       <p
         v-else
         class="studio-long-text-review__paragraph"
@@ -157,5 +170,27 @@ h5.studio-long-text-review__heading {
   overflow: auto;
   padding: 0.46rem 0.55rem;
   white-space: pre;
+}
+
+.studio-long-text-review__details {
+  border: 1px solid rgba(var(--v-border-color), 0.34);
+  border-radius: 8px;
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.studio-long-text-review__details-summary {
+  background: rgba(var(--v-theme-surface-variant), 0.48);
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 650;
+  line-height: 1.2;
+  list-style-position: inside;
+  padding: 0.42rem 0.55rem;
+}
+
+.studio-long-text-review__details-body {
+  padding: 0.5rem 0.6rem 0.58rem;
 }
 </style>

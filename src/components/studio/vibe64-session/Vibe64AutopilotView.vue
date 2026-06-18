@@ -170,20 +170,22 @@
                 <v-textarea
                   v-if="field.kind === 'textarea'"
                   auto-grow
-                  class="studio-autopilot__input"
+                  class="studio-autopilot__input studio-autopilot__input--textarea"
+                  :density="field.density || 'compact'"
                   :disabled="page.busy || stepInput.saving"
                   hide-details="auto"
                   :label="field.label"
-                  :max-rows="field.maxRows || 4"
+                  :max-rows="field.maxRows || 14"
                   :model-value="stepInput.values[field.name] || ''"
                   :placeholder="field.placeholder"
-                  :rows="field.rows || 2"
+                  :rows="field.rows || 8"
                   variant="outlined"
                   @update:model-value="stepInput.updateValue(field.name, $event)"
                 />
                 <v-text-field
                   v-else
-                  class="studio-autopilot__input"
+                  class="studio-autopilot__input studio-autopilot__input--text"
+                  :density="field.density || 'compact'"
                   :disabled="page.busy || stepInput.saving"
                   hide-details="auto"
                   :label="field.label"
@@ -289,7 +291,6 @@
                 :selected-control="selectedControl"
                 :selected-control-fields="selectedControlFields"
                 :selected-control-values="selectedControlValues"
-                :workflow-controls="activeComposerWorkflowControls"
                 @activate-control="activateWorkflowButtonControl"
                 @cancel="clearSelectedControl"
                 @submit="submitSelectedWorkflowControl"
@@ -1041,13 +1042,28 @@ watch(stepInputFormVisible, async (visible) => {
   width: 100%;
 }
 
+.studio-autopilot__input--text :deep(.v-field) {
+  height: 2.4rem;
+  min-height: 2.4rem;
+}
+
+.studio-autopilot__input--text :deep(.v-field__input) {
+  min-height: 2.4rem;
+  padding-bottom: 0.12rem;
+  padding-top: 0.32rem;
+}
+
 .studio-autopilot__input :deep(.v-field__input) {
   align-items: flex-start;
   overflow-y: hidden;
 }
 
+.studio-autopilot__input--textarea :deep(.v-field) {
+  min-height: clamp(10rem, 28vh, 14rem);
+}
+
 .studio-autopilot__input :deep(textarea.v-field__input) {
-  overflow-y: hidden;
+  overflow-y: auto;
   resize: none;
 }
 

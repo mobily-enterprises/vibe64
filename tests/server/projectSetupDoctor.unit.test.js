@@ -12,8 +12,12 @@ import {
   ADD_VIBE64_GITIGNORE_RULES_ACTION_ID,
   VIBE64_LOCAL_STATE_GITIGNORE_PATTERNS,
   MIRROR_REMOTE_BRANCH_ACTION_ID,
-  mirrorRemoteBranchScript
+  mirrorRemoteBranchScript,
+  normalizeRemoteBranchShaWithGhResult
 } from "@local/setup-doctor-core/server/setupDoctorGit";
+import {
+  GITHUB_ACCOUNT_MODE_USER
+} from "@local/studio-terminal-core/server/providerHomes";
 import {
   createRepositoryReadyStatusCache
 } from "@local/setup-doctor-core/server/doctorStatusCache";
@@ -28,6 +32,7 @@ import {
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 const LOCAL_GITHUB_CACHE_SCOPE = "github:local";
+const USER_GITHUB_CACHE_SCOPE = "github:ada@example.com";
 
 function assertShellScriptSurvivesWhitespaceCollapse(script) {
   const flattened = script.replace(/\s+/gu, " ");
@@ -355,6 +360,82 @@ test("Project Setup reuses a validated ready cache until refresh is requested", 
   });
 });
 
+test("Project Setup can scope ready cache to a per-user GitHub account", async () => {
+  await withTemporaryRoot(async (cacheRoot) => {
+    await withTemporaryRoot(async (targetRoot) => {
+      await withTemporaryRoot(async (providerHomesRoot) => {
+        const testEnv = createProjectSetupTestEnv(cacheRoot);
+        await createGitRepository(targetRoot);
+        runGit(targetRoot, ["config", "user.name", "Studio Test"]);
+        runGit(targetRoot, ["config", "user.email", "studio-test@example.com"]);
+        await writeFile(path.join(targetRoot, "README.md"), "# Cached ready\n", "utf8");
+        await writeFile(
+          path.join(targetRoot, ".gitignore"),
+          `${VIBE64_LOCAL_STATE_GITIGNORE_PATTERNS.join("\n")}\n`,
+          "utf8"
+        );
+        runGit(targetRoot, ["add", "README.md"]);
+        runGit(targetRoot, ["add", ".gitignore"]);
+        runGit(targetRoot, ["commit", "-m", "Initial commit"]);
+        runGit(targetRoot, ["remote", "add", "origin", "git@github.com:example/test.git"]);
+
+        await projectSetupReadyStatusCache({
+          cacheRoot,
+          scope: USER_GITHUB_CACHE_SCOPE,
+          targetRoot
+        }).remember({
+          currentStageId: "",
+          hardStop: false,
+          ok: true,
+          ready: true,
+          summary: {
+            originUrl: "git@github.com:example/test.git",
+            projectSetupCacheConfigKey: projectSetupCacheConfigKey(),
+            remoteDefaultBranch: "main"
+          },
+          stages: [
+            {
+              id: "ready",
+              label: "Ready",
+              status: "pass"
+            }
+          ],
+          targetRoot
+        });
+
+        const userScopedStatus = await createService({
+          env: testEnv,
+          githubAccountMode: GITHUB_ACCOUNT_MODE_USER,
+          providerHomesRoot,
+          studioRoot: targetRoot,
+          targetRoot
+        }).getStatus({
+          vibe64User: {
+            email: "Ada@Example.com"
+          }
+        });
+
+        assert.equal(userScopedStatus.ready, true);
+        assert.equal(userScopedStatus.currentStageId, "");
+
+        const localScopedStatus = await createService({
+          env: testEnv,
+          providerHomesRoot,
+          studioRoot: targetRoot,
+          targetRoot
+        }).getStatus({
+          vibe64User: {
+            email: "Ada@Example.com"
+          }
+        });
+
+        assert.equal(localScopedStatus.ready, false);
+        assert.equal(localScopedStatus.currentStageId, "remote-ready");
+      });
+    });
+  });
+});
+
 test("Project Setup ready cache reuse does not require Docker or setup plugins", async () => {
   await withTemporaryRoot(async (cacheRoot) => {
     await withTemporaryRoot(async (targetRoot) => {
@@ -583,4 +664,24 @@ test("Project Setup builds GitHub branch ref API paths", () => {
     githubBranchRefApiPath("mercmobily/exampleapp", "feature/setup baseline"),
     "repos/mercmobily/exampleapp/git/ref/heads/feature/setup%20baseline"
   );
+});
+
+test("Project Setup treats an empty GitHub repository as a missing remote checkpoint branch", () => {
+  const result = normalizeRemoteBranchShaWithGhResult({
+    exitCode: 1,
+    ok: false,
+    output: [
+      "gh: Git Repository is empty. (HTTP 409)",
+      "{\"message\":\"Git Repository is empty.\",\"status\":\"409\"}"
+    ].join("\n"),
+    stderr: "gh: Git Repository is empty. (HTTP 409)",
+    stdout: ""
+  }, {
+    branch: "main",
+    repoSlug: "mercmobily/exampleapp"
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.sha, "");
+  assert.equal(result.output, "GitHub repository mercmobily/exampleapp does not have refs/heads/main yet.");
 });

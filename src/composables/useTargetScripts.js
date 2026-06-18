@@ -186,8 +186,13 @@ function useTargetScripts({
   const loading = computed(() => Boolean(scriptListResource.isLoading.value));
   const resetBusy = computed(() => Boolean(resetStarredCommand.isRunning));
   const starBusy = computed(() => Boolean(starBusyId.value));
+  const payloadError = computed(() => {
+    const payload = latestScriptsPayload.value;
+    return payload?.ok === false ? String(payload.error || "Target scripts are not available yet.") : "";
+  });
   const loadError = computed(() => String(
     scriptListResource.loadError.value ||
+    payloadError.value ||
     commandErrorMessage(saveStarredCommand) ||
     commandErrorMessage(resetStarredCommand) ||
     commandErrorMessage(startTerminalCommand) ||

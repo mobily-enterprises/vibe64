@@ -188,9 +188,9 @@
       <v-textarea
         v-else-if="field.kind === 'textarea'"
         auto-grow
-        class="vibe64-workflow-control-form__input"
+        class="vibe64-workflow-control-form__input vibe64-workflow-control-form__input--textarea"
         :autocomplete="field.autocomplete || undefined"
-        :density="field.density || undefined"
+        :density="field.density || 'compact'"
         :disabled="fieldsDisabled"
         hide-details="auto"
         :aria-label="field.ariaLabel || undefined"
@@ -203,9 +203,9 @@
       />
       <v-text-field
         v-else
-        class="vibe64-workflow-control-form__input"
+        class="vibe64-workflow-control-form__input vibe64-workflow-control-form__input--text"
         :autocomplete="field.autocomplete || undefined"
-        :density="field.density || undefined"
+        :density="field.density || 'compact'"
         :disabled="fieldsDisabled"
         hide-details="auto"
         :aria-label="field.ariaLabel || undefined"

@@ -11,6 +11,11 @@ import {
 import {
   jskitRuntimeEnv
 } from "@local/vibe64-core/server/jskitRuntimeEnv";
+import {
+  GITHUB_ACCOUNT_MODE_LOCAL,
+  VIBE64_GITHUB_ACCOUNT_MODE_ENV,
+  normalizeGithubAccountMode
+} from "@local/studio-terminal-core/server/providerHomes";
 
 class ProjectSetupDoctorProvider {
   static id = "feature.project-setup-doctor";
@@ -31,6 +36,10 @@ class ProjectSetupDoctorProvider {
     const studioRoot = resolveStudioAppRoot({
       env: providerEnv
     });
+    const githubAccountMode = normalizeGithubAccountMode(
+      providerEnv[VIBE64_GITHUB_ACCOUNT_MODE_ENV],
+      GITHUB_ACCOUNT_MODE_LOCAL
+    );
     const providerHomesRoot = String(providerEnv[VIBE64_PROVIDER_HOMES_ROOT_ENV] || "");
     const systemRoot = String(providerEnv[VIBE64_SYSTEM_ROOT_ENV] || "");
 
@@ -38,6 +47,7 @@ class ProjectSetupDoctorProvider {
       "feature.project-setup-doctor.service",
       (scope) => {
         return createService({
+          githubAccountMode,
           projectService: scope.make("feature.vibe64-project.service"),
           providerHomesRoot,
           studioRoot,

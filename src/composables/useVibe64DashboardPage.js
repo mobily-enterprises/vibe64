@@ -1,11 +1,14 @@
 import { computed } from "vue";
 import { useRoute } from "vue-router";
 import getPlacements from "/src/placement.js";
+import {
+  projectAppPath
+} from "@/lib/vibe64ProjectScope.js";
 
 function useVibe64DashboardPage() {
   const route = useRoute();
   const projectSlug = computed(() => firstRouteParam(route.params.slug));
-  const projectBasePath = computed(() => projectSlug.value ? `/app/${encodeURIComponent(projectSlug.value)}` : "/app");
+  const projectBasePath = computed(() => projectAppPath(projectSlug.value));
   const dashboardSectionLinks = computed(() => getPlacements()
     .filter((placement) => (
       placement?.kind === "link" &&
@@ -38,6 +41,7 @@ function dashboardSectionSuffix(placement = {}) {
   }
   const projectRelativeSuffix = suffix
     .replace(/^\/+/u, "")
+    .replace(/^project\/\[slug\](?=\/|$)/u, "")
     .replace(/^\[slug\](?=\/|$)/u, "")
     .replace(/^\/+/u, "");
   return projectRelativeSuffix ? `/${projectRelativeSuffix}` : "";

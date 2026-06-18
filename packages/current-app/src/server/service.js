@@ -131,6 +131,20 @@ function targetScriptError(code, message, extra = {}) {
   };
 }
 
+function blockedTargetScriptsResponse(setup = {}) {
+  const message = String(setup?.message || "Finish setup before running target scripts.");
+  return targetScriptError("vibe64_setup_not_ready", message, {
+    config: {
+      exists: false,
+      path: STARRED_TARGET_SCRIPTS_CONFIG
+    },
+    scriptCount: 0,
+    scripts: [],
+    setup,
+    starredScriptIds: []
+  });
+}
+
 function dashboardFix(route = "", label = "") {
   return {
     label,
@@ -806,7 +820,12 @@ function createService({
     async listTargetScripts(input = {}) {
       return currentAppResult(async () => {
         const stateRoot = requireProjectStateRoot();
-        await requireSetupReady(input);
+        const setup = await setupReadiness({
+          input
+        });
+        if (setup.ready !== true) {
+          return blockedTargetScriptsResponse(setup);
+        }
         const [availableScripts, config] = await Promise.all([
           listAvailableTargetScripts(),
           readStarredScriptConfig(stateRoot)

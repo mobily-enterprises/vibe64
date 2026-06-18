@@ -2,6 +2,8 @@ const HUMAN_INPUT_RESPONSE_ARTIFACT = "response.md";
 const ISSUE_BODY_ARTIFACT = "issue.md";
 const ISSUE_TITLE_ARTIFACT = "issue_title";
 const ISSUE_WORD_ARTIFACT = "issue_word";
+const PLAN_SUMMARY_ARTIFACT = "plan-summary.md";
+const PLAN_TECHNICAL_ARTIFACT = "plan-technical.md";
 const PULL_REQUEST_BODY_DRAFT_ARTIFACT = "tmp/create_and_merge_pull_request.body.md";
 const PULL_REQUEST_TITLE_DRAFT_ARTIFACT = "tmp/create_and_merge_pull_request.title.txt";
 const REPORT_ARTIFACT = "report.md";
@@ -14,6 +16,8 @@ export {
   ISSUE_BODY_ARTIFACT,
   ISSUE_TITLE_ARTIFACT,
   ISSUE_WORD_ARTIFACT,
+  PLAN_SUMMARY_ARTIFACT,
+  PLAN_TECHNICAL_ARTIFACT,
   PULL_REQUEST_BODY_DRAFT_ARTIFACT,
   PULL_REQUEST_TITLE_DRAFT_ARTIFACT,
   REPORT_ARTIFACT,

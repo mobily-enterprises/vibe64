@@ -22,6 +22,7 @@ import {
 import {
   vibe64ProjectScopedStorageKey,
   vibe64ProjectQueryScope,
+  projectAppPath,
   projectSlugFromPathname
 } from "../../src/lib/vibe64ProjectScope.js";
 
@@ -32,9 +33,12 @@ describe("Vibe64 project client scope", () => {
   });
 
   it("derives project scope from development paths", () => {
-    expect(projectSlugFromPathname("/app/alpha_1")).toBe("alpha_1");
-    expect(projectSlugFromPathname("/app/beta-2/dashboard/run")).toBe("beta-2");
+    expect(projectAppPath("alpha_1")).toBe("/app/project/alpha_1");
+    expect(projectAppPath("beta-2", "/dashboard/run")).toBe("/app/project/beta-2/dashboard/run");
+    expect(projectSlugFromPathname("/app/project/alpha_1")).toBe("alpha_1");
+    expect(projectSlugFromPathname("/app/project/beta-2/dashboard/run")).toBe("beta-2");
     expect(projectSlugFromPathname("/app")).toBe("");
+    expect(projectSlugFromPathname("/app/alpha_1")).toBe("");
   });
 
   it("adds project scope to query and storage keys", () => {
@@ -78,7 +82,7 @@ describe("Vibe64 project client scope", () => {
       location: {
         host: "127.0.0.1:5173",
         origin: "http://127.0.0.1:5173",
-        pathname: "/app/alpha_1/dashboard/setup"
+        pathname: "/app/project/alpha_1/dashboard/setup"
       }
     });
 
@@ -94,7 +98,7 @@ describe("Vibe64 project client scope", () => {
     vi.stubGlobal("window", {
       location: {
         origin: "http://127.0.0.1:5173",
-        pathname: "/app/beepollen"
+        pathname: "/app/project/beepollen"
       }
     });
 
@@ -115,7 +119,7 @@ describe("Vibe64 project client scope", () => {
     vi.stubGlobal("window", {
       location: {
         origin: "http://127.0.0.1:5173",
-        pathname: "/app/beepollen"
+        pathname: "/app/project/beepollen"
       }
     });
     vi.stubGlobal("fetch", vi.fn(async (url) => {

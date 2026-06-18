@@ -5,6 +5,12 @@ Execute the JSKIT seed plan.
 JSKIT seed guidance:
 {{adapter.promptContext.seed_issue_guidance}}
 
-Use official JSKIT commands for JSKIT-owned files and package/module wiring. Write local fake development secrets only to ignored .env files. After the scaffold exists, install dependencies and run the JSKIT metadata/helper-map or verification commands available in the generated app.
+Use official JSKIT commands for JSKIT-owned files and package/module wiring. Write local fake development secrets only to ignored .env files. After the scaffold exists, install dependencies and run the JSKIT catalog/metadata and verification commands available in the generated app.
+
+For current-directory scaffolding, use `npx @jskit-ai/create-app <app-name> --target . --force --tenancy-mode none --title "<app title>" --initial-bundles none`. Do not use `npx @jskit-ai/create-app . --name ...`, and do not create or keep a nested app directory.
+
+After scaffolding, prefer generated scripts and JSKIT commands: `npm install`, `npx jskit list`, `npx jskit list generators`, `npx jskit list-placements --json`, `npm run lint`, `npm run build`, `npm test`, `npm run test:client`, and, when UI files changed, `npm run test:e2e` recorded through `npx jskit app verify-ui`. Use `npx jskit ...`, not a bare global `jskit`.
+
+Do not add app-local `optimizeDeps` entries for JSKIT package internals. If a generated app exposes a Vite dev optimization failure involving JSKIT runtime packages, report it as a JSKIT package metadata/update issue and keep the generated Vite config framework-owned.
 
 Keep the result to a runnable foundation app with the smallest visible app workflow from the accepted plan. Do not start unrelated product feature work. If no database was selected, use browser-local state for the visible workflow instead of adding database scaffolding or deferring the behavior.

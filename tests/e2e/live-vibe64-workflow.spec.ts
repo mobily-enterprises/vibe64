@@ -172,7 +172,7 @@ test.describe("live Vibe64 session workflow", () => {
     await goNextToStep(page, "changes_accepted");
     await assertChecklistControls(page, "changes_accepted", {
       disabled: ["Edit report", "Open app"],
-      enabled: ["Review diff", "Run app", "Next step"]
+      enabled: ["Diff", "Run app", "Next step"]
     });
 
     await goNextToStep(page, "report_and_update_knowledge");

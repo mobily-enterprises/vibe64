@@ -797,9 +797,37 @@ async function readRemoteBranchShaWithGh(targetRoot, repoSlug, branch, {
     toolHomeSource,
     timeout: 20_000
   });
+  return normalizeRemoteBranchShaWithGhResult(result, {
+    branch,
+    repoSlug
+  });
+}
+
+function ghBranchRefLookupHasNoSha(output = "") {
+  const text = String(output || "");
+  return /Git Repository is empty/u.test(text)
+    || /\(HTTP 404\)/u.test(text);
+}
+
+function normalizeRemoteBranchShaWithGhResult(result = {}, {
+  branch = "",
+  repoSlug = ""
+} = {}) {
+  const sha = String(result.stdout || "").trim();
+  if (result.ok || !ghBranchRefLookupHasNoSha(result.output)) {
+    return {
+      ...result,
+      sha
+    };
+  }
+
+  const branchLabel = branch ? `refs/heads/${branch}` : "the requested branch";
+  const repoLabel = repoSlug ? `${repoSlug} ` : "";
   return {
     ...result,
-    sha: result.stdout.trim()
+    ok: true,
+    output: `GitHub repository ${repoLabel}does not have ${branchLabel} yet.`,
+    sha: ""
   };
 }
 
@@ -833,6 +861,7 @@ export {
   mirrorRemoteBranchCommandPreview,
   mirrorRemoteBranchRepair,
   mirrorRemoteBranchScript,
+  normalizeRemoteBranchShaWithGhResult,
   readGitBranch,
   readGitIdentity,
   readGitInsideWorkTree,

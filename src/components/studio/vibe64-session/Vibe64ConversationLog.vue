@@ -176,7 +176,7 @@
       >
         <div
           v-if="message.appearance === 'assistant'"
-          class="studio-conversation-log__message-row studio-conversation-log__message-row--assistant"
+          class="studio-conversation-log__message-row studio-conversation-log__message-row--assistant studio-conversation-log__message-row--activity-assistant"
         >
           <div class="studio-conversation-log__assistant-header">
             <span class="studio-conversation-log__avatar studio-conversation-log__avatar--assistant">
@@ -197,7 +197,7 @@
               <span>{{ message.label }}</span>
             </div>
           </div>
-          <div class="studio-conversation-log__message studio-conversation-log__message--assistant">
+          <div class="studio-conversation-log__message studio-conversation-log__message--assistant studio-conversation-log__message--activity-assistant">
             <h3 v-if="message.title" class="studio-conversation-log__activity-title">
               {{ message.title }}
             </h3>
@@ -208,7 +208,7 @@
           </div>
           <div
             v-if="message.displayAt"
-            class="studio-conversation-log__message-footer studio-conversation-log__message-footer--assistant"
+            class="studio-conversation-log__message-footer studio-conversation-log__message-footer--assistant studio-conversation-log__message-footer--activity-assistant"
           >
             <time>{{ message.displayAt }}</time>
           </div>
@@ -531,6 +531,10 @@ watch(scrollTrigger, () => {
   margin-right: auto;
 }
 
+.studio-conversation-log__message-row--activity-assistant {
+  max-width: min(38rem, 92%);
+}
+
 .studio-conversation-log__assistant-header {
   align-items: center;
   display: grid;
@@ -585,6 +589,15 @@ watch(scrollTrigger, () => {
   background: rgb(var(--v-theme-surface));
   color: rgb(var(--v-theme-on-surface));
   padding: 0;
+}
+
+.studio-conversation-log__message--activity-assistant {
+  color: rgba(var(--v-theme-on-surface), 0.76);
+}
+
+.studio-conversation-log__message-row--activity-assistant .studio-conversation-log__message-header,
+.studio-conversation-log__message-footer--activity-assistant {
+  font-size: 0.78rem;
 }
 
 .studio-conversation-log__thinking {
@@ -654,6 +667,11 @@ watch(scrollTrigger, () => {
   letter-spacing: 0;
   line-height: 1.25;
   margin: 0;
+}
+
+.studio-conversation-log__message--activity-assistant .studio-conversation-log__activity-title {
+  font-size: 0.84rem;
+  font-weight: 680;
 }
 
 .studio-conversation-log__system {
@@ -762,10 +780,19 @@ watch(scrollTrigger, () => {
   overflow-wrap: anywhere;
 }
 
+.studio-conversation-log__message--activity-assistant :deep(.studio-long-text-review__blocks) {
+  font-size: 0.82rem;
+  line-height: 1.42;
+}
+
 .studio-conversation-log__message--assistant :deep(.studio-long-text-review__paragraph),
 .studio-conversation-log__message--user :deep(.studio-long-text-review__paragraph) {
   font-size: 0.94rem;
   margin-block: 0;
+}
+
+.studio-conversation-log__message--activity-assistant :deep(.studio-long-text-review__paragraph) {
+  font-size: 0.82rem;
 }
 
 .studio-conversation-log__message--user :deep(.studio-long-text-review__paragraph) {

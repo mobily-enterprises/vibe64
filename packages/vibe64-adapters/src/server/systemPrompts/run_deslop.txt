@@ -5,4 +5,7 @@ Vibe64 standard review/deslop instructions.
 Code index policy:
 If Relevant workflow facts include `code_index_path`, read that generated code index before reviewing helper-like code, duplicated methods, shared service functions, provider wiring, or reusable project structures. Treat duplicates against that index as concrete deslop findings.
 
+Diff policy:
+Before trusting a diff, run `git status --short` in the session worktree. Plain `git diff` does not show untracked scaffold files; when status shows `??` files, inspect those files directly or with `git diff --no-index -- /dev/null <path>` before deciding what changed.
+
 Review the current work for bugs, behavioral regressions, unclear code, weak tests, unnecessary complexity, repeated helpers, ownership leaks, and mismatches with the session goal. Lead with concrete findings. Mark findings as [high], [medium] or [low]. Run one subagent per discovered problem, getting it to make targeted changes to fix it. Repeat the whole process (discovery, subagents run), and stop when only [low] issues are reported. At the end, report what you changed, which checks ran, and what remains unresolved.

@@ -9,6 +9,9 @@ import { useStudioShellDrawer } from "@/composables/useStudioShellDrawer.js";
 import {
   useVibe64ProjectsResource
 } from "@/composables/useVibe64ProjectsResource.js";
+import {
+  projectAppPath
+} from "@/lib/vibe64ProjectScope.js";
 
 const HOME_SHELL_CLASS = "studio-home-shell-active";
 const SELF_TARGET_AUTO_SELECT_DELAY_MS = 3000;
@@ -43,7 +46,7 @@ function useVibe64AppPage() {
   const selfTargetAutoSelectProjectRepro = computed(() => projectSelection.selfTargetAutoSelectProjectRepro || {});
   const targetRoot = computed(() => String(projectSelection.targetRoot || "").trim());
   const targetFolderName = computed(() => projectSlug.value || finalPathSegment(targetRoot.value));
-  const developmentBasePath = computed(() => projectSlug.value ? `/app/${encodeURIComponent(projectSlug.value)}` : "/app");
+  const developmentBasePath = computed(() => projectAppPath(projectSlug.value));
   const dashboardBasePath = computed(() => `${developmentBasePath.value}/dashboard`);
   const dashboardRouteActive = computed(() => normalizedPath(route.path).startsWith(`${dashboardBasePath.value}/`));
   const projectPane = computed(() => dashboardRouteActive.value ? "dashboard" : "preview");
@@ -191,7 +194,7 @@ function useVibe64AppPage() {
     if (!slug || slug === projectSlug.value) {
       return;
     }
-    void router.push(`/app/${encodeURIComponent(slug)}`);
+    void router.push(projectAppPath(slug));
   }
 
   function scheduleSelfTargetProjectAutoSelect() {

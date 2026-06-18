@@ -385,6 +385,21 @@ function intentFromConfig(session = {}, config = {}) {
   if (normalizeText(config.type) === "action") {
     const stage = stageAction(session);
     const action = actionById(session, config.actionId || stage?.actionId || "");
+    if (!action) {
+      const enabled = configuredIntentEnabled(session, config);
+      return intent(id, {
+        actionId: config.actionId || "",
+        auditMessage: config.auditMessage,
+        control: config.control,
+        disabledReason: configuredIntentDisabledReason(session, config, enabled),
+        enabled,
+        input: config.input,
+        inputFields: config.inputFields,
+        label: config.label || id,
+        saveCurrentStepInputBeforeRun: config.saveCurrentStepInputBeforeRun === true,
+        style: config.style || "secondary"
+      });
+    }
     return intentForAction(id, action, {
       auditMessage: config.auditMessage,
       disabledReason: config.disabledReason || "",

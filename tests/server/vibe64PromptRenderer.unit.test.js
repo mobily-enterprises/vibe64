@@ -359,6 +359,9 @@ test("execute and deslop standard prompts explicitly point Codex at the generate
   assert.match(executePlan.prompt, /Run only the narrow fast check or checks that directly prove the implementation/u);
   assert.match(runDeslop.prompt, /Code index policy:/u);
   assert.match(runDeslop.prompt, /If Relevant workflow facts include `code_index_path`, read that generated code index before reviewing helper-like code/u);
+  assert.match(runDeslop.prompt, /Diff policy:/u);
+  assert.match(runDeslop.prompt, /Plain `git diff` does not show untracked scaffold files/u);
+  assert.match(runDeslop.prompt, /git diff --no-index -- \/dev\/null <path>/u);
   assert.doesNotMatch(makePlan.prompt, /Code index policy:/u);
 });
 

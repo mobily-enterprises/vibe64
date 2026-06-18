@@ -256,7 +256,9 @@ function jskitPromptContext({
           "Ask about JSKIT setup choices, not business entities or detailed screens yet.",
           "Questions should cover: app name/title, auth/users, tenancy/workspaces, database package, assistant/OpenAI usage, file uploads/storage, realtime, email/dev mail, payments, mobile/Capacitor, demo data, and any fake local dev API keys needed by those modules.",
           "Development secrets are allowed in this conversation because they are local fake values for ignored .env files. Ask for them when a selected module needs them.",
-          "Create a seed issue whose acceptance criteria include the exact JSKIT commands Codex should run, especially `npx @jskit-ai/create-app ...`, `npx jskit list`, `npx jskit show <package>`, and the `npx jskit add ...` or generator commands needed for the selected modules.",
+          "Create a seed issue whose acceptance criteria include the exact current-directory scaffold command: `npx @jskit-ai/create-app <app-name> --target . --force --tenancy-mode none --title \"<app title>\" --initial-bundles none`. Do not use `npx @jskit-ai/create-app . --name ...`, and do not scaffold into a child directory.",
+          "Include the baseline JSKIT commands Codex should run after scaffolding: `npx jskit list`, `npx jskit list generators`, `npx jskit list-placements --json`, `npx jskit show <package>`, and the `npx jskit add ...` or generator commands needed for the selected modules.",
+          "If Vite dev-server dependency optimization fails for JSKIT runtime packages, do not ask Codex to add app-local `optimizeDeps` exclusions for JSKIT internals. Treat it as a JSKIT package metadata/update issue and keep the generated app config framework-owned.",
           "The seed issue should produce a runnable foundation app, .env local development values, installed dependencies, and generated JSKIT metadata."
         ].join("\n")
       }

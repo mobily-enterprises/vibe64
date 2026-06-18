@@ -3,8 +3,26 @@ function firstRouteParam(value) {
   return String(rawValue || "").trim();
 }
 
+const VIBE64_PROJECT_APP_PATH_PREFIX = "/app/project";
+
+function normalizedProjectRouteSuffix(suffix = "") {
+  const normalized = String(suffix || "").trim();
+  if (!normalized) {
+    return "";
+  }
+  return normalized.startsWith("/") ? normalized : `/${normalized}`;
+}
+
+function projectAppPath(slug = "", suffix = "") {
+  const projectSlug = String(slug || "").trim();
+  if (!projectSlug) {
+    return "/app";
+  }
+  return `${VIBE64_PROJECT_APP_PATH_PREFIX}/${encodeURIComponent(projectSlug)}${normalizedProjectRouteSuffix(suffix)}`;
+}
+
 function projectSlugFromPathname(pathname = "") {
-  const match = /^\/app\/([^/?#]+)/u.exec(String(pathname || ""));
+  const match = /^\/app\/project\/([^/?#]+)/u.exec(String(pathname || ""));
   const slug = decodeURIComponent(match?.[1] || "").trim();
   return slug || "";
 }
@@ -37,7 +55,9 @@ function vibe64ProjectScopedStorageKey(baseKey = "", slug = currentProjectSlugFr
 }
 
 export {
+  VIBE64_PROJECT_APP_PATH_PREFIX,
   currentProjectSlugFromLocation,
+  projectAppPath,
   vibe64ProjectScopedStorageKey,
   vibe64ProjectQueryScope,
   projectSlugFromPathname,

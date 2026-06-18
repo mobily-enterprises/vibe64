@@ -233,42 +233,42 @@ describe("Vibe64 launch controls", () => {
     ];
 
     expect(launchPreviewBaseUrl(actions, {
-      studioHref: "https://tonymobily.vibe64.dev/app/beepollen"
+      studioHref: "https://tonymobily.vibe64.dev/app/project/beepollen"
     })).toBe("");
     expect(launchPreviewBaseUrl([{
       ...actions[0],
       previewHref: "https://v64preview-abc123--tonymobily.vibe64.dev/home"
     }], {
-      studioHref: "https://tonymobily.vibe64.dev/app/beepollen"
+      studioHref: "https://tonymobily.vibe64.dev/app/project/beepollen"
     })).toBe("https://v64preview-abc123--tonymobily.vibe64.dev/home");
     expect(launchPreviewBaseUrl([{
       ...actions[0],
       previewHref: "http://127.0.0.1:49100/home?vibe64_preview_token=abc"
     }], {
-      studioHref: "https://tonymobily.vibe64.dev/app/beepollen"
+      studioHref: "https://tonymobily.vibe64.dev/app/project/beepollen"
     })).toBe("");
     expect(launchPreviewDisplayUrl([{
       ...actions[0],
       previewHref: "https://v64preview-abc123--tonymobily.vibe64.dev/home"
     }], {
-      studioHref: "https://tonymobily.vibe64.dev/app/beepollen"
+      studioHref: "https://tonymobily.vibe64.dev/app/project/beepollen"
     })).toBe("https://v64preview-abc123--tonymobily.vibe64.dev/home");
   });
 
   it("keeps embedded loopback preview URLs same-site with the Studio page", () => {
     expect(sameSiteLoopbackPreviewUrl(
       "http://127.0.0.1:4188/home?vibe64_preview_token=abc",
-      "http://localhost:3000/app/beepollen"
+      "http://localhost:3000/app/project/beepollen"
     )).toBe("http://localhost:4188/home?vibe64_preview_token=abc");
 
     expect(sameSiteLoopbackPreviewUrl(
       "http://localhost:4188/home?vibe64_preview_token=abc",
-      "http://127.0.0.1:3000/app/beepollen"
+      "http://127.0.0.1:3000/app/project/beepollen"
     )).toBe("http://127.0.0.1:4188/home?vibe64_preview_token=abc");
 
     expect(sameSiteLoopbackPreviewUrl(
       "https://preview.example.test/home?vibe64_preview_token=abc",
-      "https://studio.example.test/app/beepollen"
+      "https://studio.example.test/app/project/beepollen"
     )).toBe("https://preview.example.test/home?vibe64_preview_token=abc");
   });
 

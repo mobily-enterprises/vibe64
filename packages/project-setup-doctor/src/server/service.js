@@ -76,6 +76,7 @@ import {
 import {
   GITHUB_ACCOUNT_MODE_LOCAL,
   githubProviderContext,
+  normalizeGithubAccountMode,
   resolveProviderHomesRoot
 } from "@local/studio-terminal-core/server/providerHomes";
 
@@ -1430,6 +1431,7 @@ function startGitCheckpointTerminal(targetRoot, input = {}, env = {}, toolHomeSo
 
 function createService({
   env = process.env,
+  githubAccountMode = GITHUB_ACCOUNT_MODE_LOCAL,
   projectService = null,
   providerHomesRoot = "",
   studioRoot = "",
@@ -1443,6 +1445,7 @@ function createService({
     explicitRoot: providerHomesRoot,
     systemRoot
   });
+  const resolvedGithubAccountMode = normalizeGithubAccountMode(githubAccountMode, GITHUB_ACCOUNT_MODE_LOCAL);
 
   function currentTargetRoot() {
     const selectedTargetRoot = String(targetRoot || projectServiceTargetRoot(projectService)).trim();
@@ -1474,7 +1477,7 @@ function createService({
 
   function githubContextForInput(input = {}) {
     return githubProviderContext(input, {
-      accountMode: GITHUB_ACCOUNT_MODE_LOCAL,
+      accountMode: resolvedGithubAccountMode,
       providerHomesRoot: resolvedProviderHomesRoot
     });
   }

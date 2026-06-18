@@ -36,6 +36,9 @@ import {
   closeTerminalSessionsForNamespacePrefix
 } from "@local/studio-terminal-core/server/terminalSessions";
 import {
+  GITHUB_ACCOUNT_MODE_LOCAL,
+  VIBE64_GITHUB_ACCOUNT_MODE_ENV,
+  normalizeGithubAccountMode,
   resolveProviderHomesRoot
 } from "@local/studio-terminal-core/server/providerHomes";
 import {
@@ -349,7 +352,7 @@ function startupBrowserPath({
   startupSlug = ""
 } = {}) {
   const slug = String(startupSlug || "").trim();
-  return slug ? `/app/${encodeURIComponent(normalizeProjectSlug(slug))}` : "/app";
+  return slug ? `/app/project/${encodeURIComponent(normalizeProjectSlug(slug))}` : "/app";
 }
 
 function browserUrlForListenAddress(address = "", options = {}) {
@@ -503,6 +506,10 @@ async function createServer(options = {}) {
   const providerEnv = {
     ...runtimeEnv,
     [VIBE64_APP_ROOT_ENV]: appRoot,
+    [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: normalizeGithubAccountMode(
+      options.githubAccountMode,
+      GITHUB_ACCOUNT_MODE_LOCAL
+    ),
     [VIBE64_PROJECTS_ROOT_ENV]: projectContext.projectsRoot,
     [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot,
     [VIBE64_SYSTEM_ROOT_ENV]: systemRoot,
@@ -656,6 +663,7 @@ async function startServer(options = {}) {
   const app = await createServer({
     appRoot: options?.appRoot,
     browserLifecycleShutdownDelayMs: options?.browserLifecycleShutdownDelayMs,
+    githubAccountMode: options?.githubAccountMode,
     jskitLockPath: options?.jskitLockPath,
     logLevel: options?.logLevel,
     providerHomesRoot: options?.providerHomesRoot,

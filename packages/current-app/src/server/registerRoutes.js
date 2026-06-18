@@ -53,6 +53,7 @@ function registerRoutes(
   routes.actionRoute("GET", "/target-scripts", {
     actionId: ACTION_LIST_TARGET_SCRIPTS,
     buildInput: withVibe64User,
+    statusCode: 200,
     summary: "List target scripts for the current app."
   });
 

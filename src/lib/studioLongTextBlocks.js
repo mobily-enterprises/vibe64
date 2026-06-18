@@ -4,6 +4,7 @@ function parseLongTextReviewBlocks(value, options = {}) {
   let paragraphLines = [];
   let listBlock = null;
   let codeLines = null;
+  let detailsBlock = null;
   const preserveParagraphLineBreaks = options.preserveParagraphLineBreaks === true;
 
   const flushParagraph = () => {
@@ -36,9 +37,32 @@ function parseLongTextReviewBlocks(value, options = {}) {
     codeLines = null;
   };
 
+  const flushDetails = () => {
+    if (detailsBlock) {
+      blocks.push({
+        blocks: parseLongTextReviewBlocks(detailsBlock.lines.join("\n"), options),
+        summary: detailsBlock.summary || "Details",
+        type: "details"
+      });
+    }
+    detailsBlock = null;
+  };
+
   for (const rawLine of lines) {
     const line = rawLine.replace(/\s+$/u, "");
     const trimmed = line.trim();
+
+    if (detailsBlock) {
+      const summaryMatch = trimmed.match(/^<summary>\s*(.*?)\s*<\/summary>$/u);
+      if (/^<\/details>$/u.test(trimmed)) {
+        flushDetails();
+      } else if (summaryMatch) {
+        detailsBlock.summary = summaryMatch[1].trim() || detailsBlock.summary;
+      } else {
+        detailsBlock.lines.push(line);
+      }
+      continue;
+    }
 
     if (codeLines) {
       if (/^```/u.test(trimmed)) {
@@ -53,6 +77,16 @@ function parseLongTextReviewBlocks(value, options = {}) {
       flushParagraph();
       flushList();
       codeLines = [];
+      continue;
+    }
+
+    if (/^<details>$/u.test(trimmed)) {
+      flushParagraph();
+      flushList();
+      detailsBlock = {
+        lines: [],
+        summary: "Details"
+      };
       continue;
     }
 
@@ -99,6 +133,7 @@ function parseLongTextReviewBlocks(value, options = {}) {
   flushParagraph();
   flushList();
   flushCode();
+  flushDetails();
   return blocks;
 }
 

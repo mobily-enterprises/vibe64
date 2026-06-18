@@ -9,6 +9,7 @@ const APP_PROVIDER_SCOPE = "app";
 const USER_PROVIDER_SCOPE = "user";
 const GITHUB_ACCOUNT_MODE_LOCAL = "local";
 const GITHUB_ACCOUNT_MODE_USER = "user";
+const VIBE64_GITHUB_ACCOUNT_MODE_ENV = "VIBE64_GITHUB_ACCOUNT_MODE";
 
 function resolveProviderHomesRoot({
   env = process.env,
@@ -65,7 +66,7 @@ function codexProviderHome(providerHomesRoot = "") {
   return safeProviderHomesRoot ? path.join(safeProviderHomesRoot, "codex") : "";
 }
 
-function normalizeGithubAccountMode(value = "") {
+function normalizeGithubAccountMode(value = "", fallback = GITHUB_ACCOUNT_MODE_USER) {
   const normalized = String(value || "").trim().toLowerCase();
   if (normalized === GITHUB_ACCOUNT_MODE_LOCAL || normalized === APP_PROVIDER_SCOPE) {
     return GITHUB_ACCOUNT_MODE_LOCAL;
@@ -73,7 +74,7 @@ function normalizeGithubAccountMode(value = "") {
   if (normalized === GITHUB_ACCOUNT_MODE_USER || normalized === USER_PROVIDER_SCOPE) {
     return GITHUB_ACCOUNT_MODE_USER;
   }
-  return GITHUB_ACCOUNT_MODE_USER;
+  return fallback === GITHUB_ACCOUNT_MODE_LOCAL ? GITHUB_ACCOUNT_MODE_LOCAL : GITHUB_ACCOUNT_MODE_USER;
 }
 
 function providerHomesRootRequiredError(providerLabel = "provider") {
@@ -167,6 +168,7 @@ export {
   GITHUB_ACCOUNT_MODE_LOCAL,
   GITHUB_ACCOUNT_MODE_USER,
   USER_PROVIDER_SCOPE,
+  VIBE64_GITHUB_ACCOUNT_MODE_ENV,
   VIBE64_PROVIDER_HOMES_ROOT_ENV,
   canonicalVibe64UserEmail,
   codexProviderContext,

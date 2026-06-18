@@ -8,6 +8,8 @@ import {
   VIBE64_WORKFLOW_DEFINITION_IDS,
   Vibe64SessionRuntime,
   DEFAULT_VIBE64_WORKFLOW_DEFINITION_ID,
+  PLAN_SUMMARY_ARTIFACT,
+  PLAN_TECHNICAL_ARTIFACT,
   WorkflowMachine,
   applyWorkflowPresentation,
   createCoreWorkflowRegistry,
@@ -2169,6 +2171,45 @@ test("vibe64 runtime auto-starts the initial seed conversation only before Codex
   });
 });
 
+test("vibe64 seed review exposes an improvement feedback control", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new Vibe64SessionRuntime({
+      adapter: new SeedRequiredFakeAdapter(),
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "seed_application_defined",
+      metadata: worktreeMetadata(targetRoot, "seed_review_feedback"),
+      sessionId: "seed_review_feedback",
+      workflowDefinition: VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION
+    });
+
+    const confirmedSeed = await runtime.submitCurrentStepInput("seed_review_feedback", {
+      fields: {
+        body: "Create the smallest route checklist.",
+        title: "Seed route-check",
+        word: "routecheck"
+      },
+      kind: "ready",
+      source: "codex",
+      stepId: "seed_application_defined",
+      stepStatus: "waiting_for_input"
+    });
+    const rejectIntent = confirmedSeed.intents.find((intent) => intent.id === "reject_issue_draft");
+
+    assert.equal(confirmedSeed.stepMachine.status, "confirm_files");
+    assert.equal(rejectIntent?.label, "Send improvement request");
+    assert.equal(rejectIntent?.enabled, true);
+    assert.deepEqual(rejectIntent?.inputFields.map((field) => field.name), ["feedback"]);
+    assert.deepEqual(
+      confirmedSeed.presentation.screen.input.intents
+        .find((intent) => intent.id === "reject_issue_draft")
+        ?.inputFields.map((field) => field.name),
+      ["feedback"]
+    );
+  });
+});
+
 test("vibe64 runtime applies workflow initial metadata to existing seed sessions", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = new Vibe64SessionRuntime({
@@ -2506,6 +2547,9 @@ test("vibe64 runtime prompt actions render Codex handoff data without advancing"
     assert.match(afterAction.actionResult.prompt, /VIBE64_AGENT_RESULT_BEGIN/u);
     assert.ok(afterAction.actionResult.prompt.includes("Ready payload fields:\n  - kind: ready"));
     assert.ok(afterAction.actionResult.prompt.includes("  - stepStatus: awaiting_agent_result"));
+    assert.match(afterAction.actionResult.prompt, /fields\.proposedPlan/u);
+    assert.match(afterAction.actionResult.prompt, /fields\.technicalPlan/u);
+    assert.match(afterAction.actionResult.prompt, /<summary>Technical plan<\/summary>/u);
     assert.match(afterAction.actionResult.prompt, /Do not write workflow artifacts directly/u);
     assert.doesNotMatch(afterAction.actionResult.prompt, /VIBE64_AUTOPILOT_DONE/u);
     assert.equal(afterAction.actionResult.codexPromptHandoff.kind, "codex_prompt_handoff");
@@ -2518,6 +2562,26 @@ test("vibe64 runtime prompt actions render Codex handoff data without advancing"
     assert.equal(runningPromptAction?.disabledReason, "Wait for Codex to finish this step.");
 
     await runtime.submitCurrentStepInput("prompt_action", {
+      fields: {
+        proposedPlan: "Do the small user-facing change.",
+        response: [
+          "## Proposed plan",
+          "",
+          "- Do the small user-facing change.",
+          "",
+          "<details>",
+          "<summary>Technical plan</summary>",
+          "",
+          "1. Inspect the affected files.",
+          "2. Patch the smallest runtime path.",
+          "",
+          "</details>"
+        ].join("\n"),
+        technicalPlan: [
+          "1. Inspect the affected files.",
+          "2. Patch the smallest runtime path."
+        ].join("\n")
+      },
       kind: "ready",
       source: "codex",
       stepId: "plan_and_execute",
@@ -2526,11 +2590,21 @@ test("vibe64 runtime prompt actions render Codex handoff data without advancing"
     const afterPlan = await runtime.getSession("prompt_action");
     assert.equal(afterPlan.currentStep, "plan_and_execute");
     assert.equal(afterPlan.metadata.plan_ready, "yes");
+    assert.equal(
+      await runtime.store.readArtifact("prompt_action", PLAN_SUMMARY_ARTIFACT),
+      "Do the small user-facing change.\n"
+    );
+    assert.equal(
+      await runtime.store.readArtifact("prompt_action", PLAN_TECHNICAL_ARTIFACT),
+      "1. Inspect the affected files.\n2. Patch the smallest runtime path.\n"
+    );
     assert.equal(afterPlan.actions.find((action) => action.id === "execute_plan")?.enabled, true);
 
     const afterExecuteAction = await runtime.runAction("prompt_action", "execute_plan");
     assert.equal(afterExecuteAction.currentStep, "plan_and_execute");
     assert.equal(afterExecuteAction.actionResult.promptId, "execute_plan");
+    assert.match(afterExecuteAction.actionResult.prompt, /acceptedTechnicalPlan:/u);
+    assert.match(afterExecuteAction.actionResult.prompt, /Patch the smallest runtime path/u);
     await runtime.submitCurrentStepInput("prompt_action", {
       kind: "ready",
       source: "codex",
@@ -2652,7 +2726,10 @@ test("editable artifact review steps preserve user-origin and prompt-origin draf
       true
     );
     assert.equal(confirmedIssue.actions.find((action) => action.id === "create_issue_on_gh")?.saveCurrentStepInputBeforeRun, true);
-    assert.equal(confirmedIssue.intents.find((intent) => intent.id === "reject_issue_draft")?.label, "Send improvement request");
+    const rejectIssueIntent = confirmedIssue.intents.find((intent) => intent.id === "reject_issue_draft");
+    assert.equal(rejectIssueIntent?.label, "Send improvement request");
+    assert.equal(rejectIssueIntent?.enabled, true);
+    assert.deepEqual(rejectIssueIntent?.inputFields.map((field) => field.name), ["feedback"]);
     assert.equal(await runtime.store.readArtifact("editable_artifact_issue", "issue_title"), "Issue title\n");
     assert.equal(await runtime.store.readArtifact("editable_artifact_issue", "issue.md"), "Issue body\n");
 

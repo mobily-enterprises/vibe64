@@ -47,13 +47,16 @@ import {
   mdiPlayBoxMultipleOutline,
   mdiTune
 } from "@mdi/js";
+import {
+  projectAppPath
+} from "@/lib/vibe64ProjectScope.js";
 
 const route = useRoute();
 const router = useRouter();
 const menuOpen = ref(false);
 
 const projectSlug = computed(() => firstRouteParam(route.params.slug));
-const projectBasePath = computed(() => projectSlug.value ? `/app/${encodeURIComponent(projectSlug.value)}` : "/app");
+const projectBasePath = computed(() => projectAppPath(projectSlug.value));
 const isHomeRoute = computed(() => normalizePath(route.path) === normalizePath(projectBasePath.value));
 const isAutopilotHome = computed(() => Boolean(
   isHomeRoute.value &&

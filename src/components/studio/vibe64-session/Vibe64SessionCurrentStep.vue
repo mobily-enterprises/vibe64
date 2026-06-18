@@ -27,7 +27,8 @@
       <v-textarea
         v-if="field.kind === 'textarea'"
         auto-grow
-        class="studio-ai-sessions__issue-request-input"
+        class="studio-ai-sessions__issue-request-input studio-ai-sessions__issue-request-input--textarea"
+        :density="field.density || 'compact'"
         :disabled="page.busy || stepInput.saving"
         hide-details="auto"
         :label="field.label"
@@ -39,7 +40,8 @@
       />
       <v-text-field
         v-else
-        class="studio-ai-sessions__issue-request-input"
+        class="studio-ai-sessions__issue-request-input studio-ai-sessions__issue-request-input--text"
+        :density="field.density || 'compact'"
         :disabled="page.busy || stepInput.saving"
         hide-details="auto"
         :label="field.label"
@@ -66,7 +68,6 @@
       :selected-control="selectedControl"
       :selected-control-fields="selectedControlFields"
       :selected-control-values="selectedControlValues"
-      :workflow-controls="workflowButtonControls"
       @activate-control="activateWorkflowControl"
       @cancel="clearSelectedControl"
       @submit="submitSelectedWorkflowControl"
@@ -158,7 +159,6 @@
       :selected-control="selectedControl"
       :selected-control-fields="selectedControlFields"
       :selected-control-values="selectedControlValues"
-      :workflow-controls="workflowButtonControls"
       @activate-control="activateWorkflowControl"
       @cancel="clearSelectedControl"
       @submit="submitSelectedWorkflowControl"
@@ -211,7 +211,7 @@
       :title="review.diffTitle"
       @click="diff.openDialog"
     >
-      Review diff
+      Diff
     </v-btn>
 
     <Vibe64SessionActionButton
@@ -564,6 +564,25 @@ const {
 
 .studio-ai-sessions__issue-request-input {
   max-width: 100%;
+}
+
+.studio-ai-sessions__issue-request-input--text :deep(.v-field) {
+  height: 2.4rem;
+  min-height: 2.4rem;
+}
+
+.studio-ai-sessions__issue-request-input--text :deep(.v-field__input) {
+  min-height: 2.4rem;
+  padding-bottom: 0.12rem;
+  padding-top: 0.32rem;
+}
+
+.studio-ai-sessions__issue-request-input--textarea :deep(.v-field) {
+  min-height: clamp(10rem, 28vh, 14rem);
+}
+
+.studio-ai-sessions__issue-request-input--textarea :deep(textarea) {
+  min-height: clamp(9.5rem, 26vh, 13.5rem);
 }
 
 .studio-ai-sessions__notice {

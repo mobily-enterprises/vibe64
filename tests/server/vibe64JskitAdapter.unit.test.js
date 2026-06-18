@@ -252,6 +252,9 @@ test("jskit adapter reflects configured database runtime in prompt context", asy
 
       assert.equal(seedPromptContext.valid_jskit_markers, "false");
       assert.match(seedPromptContext.seed_issue_guidance, /tenancy\/workspaces/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /create-app <app-name> --target \. --force/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /Do not use `npx @jskit-ai\/create-app \. --name/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /do not ask Codex to add app-local `optimizeDeps` exclusions/u);
     });
   });
 });
@@ -963,6 +966,8 @@ test("jskit seed issue definition uses the current-step input contract before is
     assert.match(afterPrompt.actionResult.prompt, /Do not make the user choose from framework module names/u);
     assert.match(afterPrompt.actionResult.prompt, /smallest visible app workflow/u);
     assert.match(afterPrompt.actionResult.prompt, /browser-local state/u);
+    assert.match(afterPrompt.actionResult.prompt, /create-app <app-name> --target \. --force/u);
+    assert.match(afterPrompt.actionResult.prompt, /do not ask Codex to add app-local `optimizeDeps` exclusions/u);
     assert.match(afterPrompt.actionResult.prompt, /Vibe64 agent result contract/u);
 
     const afterInput = await runtime.submitCurrentStepInput("jskit_seed_prompt", {

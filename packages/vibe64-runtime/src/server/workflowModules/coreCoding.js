@@ -13,6 +13,8 @@ import {
   ISSUE_BODY_ARTIFACT,
   ISSUE_TITLE_ARTIFACT,
   ISSUE_WORD_ARTIFACT,
+  PLAN_SUMMARY_ARTIFACT,
+  PLAN_TECHNICAL_ARTIFACT,
   REPORT_ARTIFACT,
   WORK_BODY_ARTIFACT,
   WORK_TITLE_ARTIFACT,
@@ -367,7 +369,8 @@ const coreCodingStepDefinitionsById = deepFreeze({
     id: seedPlanMadeStepId,
     label: "Make seed plan",
     rewindCleanup: {
-      actionResults: ["make_seed_plan"]
+      actionResults: ["make_seed_plan"],
+      artifacts: [PLAN_SUMMARY_ARTIFACT, PLAN_TECHNICAL_ARTIFACT]
     }
   },
   [seedPlanExecutedStepId]: {
@@ -436,6 +439,7 @@ const coreCodingStepDefinitionsById = deepFreeze({
     },
     rewindCleanup: {
       actionResults: ["make_plan", "execute_plan"],
+      artifacts: [PLAN_SUMMARY_ARTIFACT, PLAN_TECHNICAL_ARTIFACT],
       metadata: [PLAN_READY_METADATA, IMPLEMENTATION_DONE_METADATA]
     }
   },
@@ -659,12 +663,12 @@ const coreCodingStepDefinitionsById = deepFreeze({
             },
             enabled: true,
             id: "open_diff",
-            label: "Review diff"
+            label: "Diff"
           },
           {
             auditMessage: "Final human review accepted.",
             id: "accept_review",
-            label: "Accept and finalize",
+            label: "Accept",
             style: "primary",
             type: "continue"
           },
@@ -852,6 +856,76 @@ function inputResponseText(input = {}) {
   return normalizeText(input.text || input.fields?.response || input.fields?.conversationRequest);
 }
 
+function planFieldText(input = {}, ...fieldNames) {
+  const fields = input.fields || {};
+  return fieldNames
+    .map((name) => normalizeText(fields[name]))
+    .find(Boolean) || "";
+}
+
+function acceptedPlanSummary(input = {}) {
+  return planFieldText(input, "proposedPlan", "planSummary") || inputResponseText(input);
+}
+
+function acceptedTechnicalPlan(input = {}) {
+  return planFieldText(input, "technicalPlan", "executionPlan") || inputResponseText(input);
+}
+
+async function writeAcceptedPlanArtifacts(context = {}, input = {}) {
+  const summary = acceptedPlanSummary(input);
+  const technicalPlan = acceptedTechnicalPlan(input);
+  await Promise.all([
+    ...(summary ? [
+      context.runtime.store.writeArtifact(context.session.sessionId, PLAN_SUMMARY_ARTIFACT, artifactText(summary))
+    ] : []),
+    ...(technicalPlan ? [
+      context.runtime.store.writeArtifact(context.session.sessionId, PLAN_TECHNICAL_ARTIFACT, artifactText(technicalPlan))
+    ] : [])
+  ]);
+}
+
+function planReadyInput(input = {}) {
+  return input.kind === STEP_INPUT_KIND.READY || input.kind === STEP_INPUT_KIND.CONSIDER_RESOLVED;
+}
+
+async function handlePlanPromptInput(context = {}, machine = {}) {
+  const input = normalizeMachineInput(context.input);
+  if (planReadyInput(input)) {
+    await writeAcceptedPlanArtifacts(context, input);
+  }
+  return handleStandardPromptInput(context, machine);
+}
+
+function planPresentationInstruction({
+  doneMeaning = "",
+  planKind = "implementation",
+  waitingForInputMeaning = ""
+} = {}) {
+  return [
+    currentStepAgentResultInstruction({
+      doneFields: {
+        proposedPlan: `Short user-facing Markdown summary of the proposed ${planKind} plan.`,
+        response: "Full Markdown chat response: Proposed plan plus a collapsed Technical plan section.",
+        technicalPlan: `Detailed ordered technical ${planKind} plan that Codex should execute after the user accepts.`
+      },
+      doneMeaning,
+      waitingForInputMeaning
+    }),
+    "",
+    "Plan response format:",
+    "- The visible response must start with `## Proposed plan` and contain a short plain-language summary or 3-6 bullets.",
+    "- Then include the detailed plan in one collapsed section exactly shaped as:",
+    "  `<details>`",
+    "  `<summary>Technical plan</summary>`",
+    "  detailed ordered technical plan",
+    "  `</details>`",
+    "- Do not ask the user to edit the plan directly. The user can accept it or ask for changes.",
+    "- `fields.response` must match the full visible Markdown response.",
+    "- `fields.proposedPlan` must contain only the simple user-facing plan.",
+    "- `fields.technicalPlan` must contain only the detailed technical plan used for execution."
+  ].join("\n");
+}
+
 function conversationSection(label = "", value = "") {
   const normalizedValue = normalizeText(value);
   return [
@@ -959,6 +1033,18 @@ function workDefinitionInputInteraction(status = STEP_STATUS.WAITING_FOR_INPUT, 
         {
           actionId: rejectIssueDraftActionId,
           id: rejectIssueDraftActionId,
+          inputFields: [
+            {
+              kind: "textarea",
+              label: "What should change?",
+              name: "feedback",
+              placeholder: createGithubIssue
+                ? "Tell Codex how to improve the saved issue draft."
+                : "Tell Codex how to improve the saved description.",
+              requiredMessage: "Explain what should change before sending the improvement request.",
+              rows: 4
+            }
+          ],
           label: "Send improvement request",
           style: "secondary",
           type: "action"
@@ -1438,7 +1524,7 @@ const makePlanMachine = {
   },
 
   async submitInput(context = {}) {
-    return handleStandardPromptInput(context, this);
+    return handlePlanPromptInput(context, this);
   },
 
   inputCompletionMessage(context = {}) {
@@ -1453,8 +1539,9 @@ const makePlanMachine = {
   },
 
   promptInstruction() {
-    return currentStepAgentResultInstruction({
+    return planPresentationInstruction({
       doneMeaning: "The implementation plan has been written in the Codex response and is ready for execution.",
+      planKind: "implementation",
       waitingForInputMeaning: "You cannot make a useful plan without a user decision or clarification."
     });
   }
@@ -1477,8 +1564,9 @@ const seedPlanMadeMachine = {
   },
 
   promptInstruction() {
-    return currentStepAgentResultInstruction({
+    return planPresentationInstruction({
       doneMeaning: "The seed implementation plan has been written in the Codex response and is ready for execution.",
+      planKind: "seed implementation",
       waitingForInputMeaning: "You cannot make a useful seed plan without a user decision or clarification."
     });
   }
@@ -1694,6 +1782,7 @@ const planAndExecuteMachine = {
             }));
             return;
           }
+          await writeAcceptedPlanArtifacts(context, input);
           await context.runtime.store.writeMetadataValue(context.session.sessionId, PLAN_READY_METADATA, "yes");
           await writeState(context, this, planAndExecutePlanReadyState({
             message: input.message,
@@ -1736,8 +1825,9 @@ const planAndExecuteMachine = {
           doneMeaning: "The implementation work is complete enough to continue to review.",
           waitingForInputMeaning: "You cannot continue implementation without a user decision or missing project detail."
         })
-      : currentStepAgentResultInstruction({
+      : planPresentationInstruction({
           doneMeaning: "The implementation plan has been written in the Codex response and is ready for execution.",
+          planKind: "implementation",
           waitingForInputMeaning: "You cannot make a useful plan without a user decision or clarification."
         });
   }

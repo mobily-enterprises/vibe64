@@ -442,6 +442,39 @@ test("current-app merges adapter scripts with project scripts and stores starred
   });
 });
 
+test("current-app lists target scripts as blocked data while setup is incomplete", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const service = createService({
+      appRoot: targetRoot,
+      projectService: fakeProjectService({
+        adapter: fakeAdapter(),
+        targetRoot
+      }),
+      setupServices: {
+        ...readySetupServices(),
+        projectSetupService: {
+          async getStatus() {
+            return {
+              blockedReason: "Seed JSKIT app: Missing package.json.",
+              ready: false
+            };
+          }
+        }
+      }
+    });
+
+    const listed = await service.listTargetScripts();
+
+    assert.equal(listed.ok, false);
+    assert.equal(listed.errors[0].code, "vibe64_setup_not_ready");
+    assert.equal(listed.error, "Seed JSKIT app: Missing package.json.");
+    assert.equal(listed.scriptCount, 0);
+    assert.deepEqual(listed.scripts, []);
+    assert.deepEqual(listed.starredScriptIds, []);
+    assert.equal(listed.setup.ready, false);
+  });
+});
+
 test("current-app rejects target script terminal starts before spawning unknown commands", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const service = createService({

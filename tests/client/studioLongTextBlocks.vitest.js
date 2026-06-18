@@ -62,6 +62,47 @@ describe("Studio long text review blocks", () => {
     ]);
   });
 
+  it("parses collapsed details blocks without rendering raw HTML", () => {
+    expect(parseLongTextReviewBlocks([
+      "## Proposed plan",
+      "",
+      "- Keep it simple.",
+      "",
+      "<details>",
+      "<summary>Technical plan</summary>",
+      "",
+      "1. Inspect files.",
+      "2. Patch runtime.",
+      "",
+      "</details>"
+    ].join("\n"))).toEqual([
+      {
+        level: 2,
+        text: "Proposed plan",
+        type: "heading"
+      },
+      {
+        items: [
+          { text: "Keep it simple." }
+        ],
+        type: "ul"
+      },
+      {
+        blocks: [
+          {
+            items: [
+              { text: "Inspect files." },
+              { text: "Patch runtime." }
+            ],
+            type: "ol"
+          }
+        ],
+        summary: "Technical plan",
+        type: "details"
+      }
+    ]);
+  });
+
   it("keeps separate lists when ordered and unordered markers are mixed", () => {
     expect(parseLongTextReviewBlocks("- Unordered\n1. Ordered")).toEqual([
       {

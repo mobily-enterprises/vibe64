@@ -4,6 +4,9 @@ import { useRoute, useRouter } from "vue-router";
 import {
   useVibe64ProjectsResource
 } from "@/composables/useVibe64ProjectsResource.js";
+import {
+  projectAppPath
+} from "@/lib/vibe64ProjectScope.js";
 
 const route = useRoute();
 const router = useRouter();
@@ -25,7 +28,7 @@ watch(targetProjectSlug, (slug) => {
     return;
   }
   void router.replace({
-    path: `/app/${encodeURIComponent(slug)}`,
+    path: projectAppPath(slug),
     query: route.query
   });
 }, {
