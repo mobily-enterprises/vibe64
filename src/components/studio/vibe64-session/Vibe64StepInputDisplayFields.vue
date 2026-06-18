@@ -79,12 +79,6 @@ const items = computed(() => (Array.isArray(props.fields) ? props.fields : [])
   padding: 0.52rem 0.66rem;
 }
 
-.vibe64-step-input-display__item--long {
-  max-height: min(40vh, 18rem);
-  overflow: auto;
-  scrollbar-gutter: stable;
-}
-
 .vibe64-step-input-display__label {
   color: rgba(var(--v-theme-on-surface), 0.62);
   font-size: 0.72rem;

@@ -355,6 +355,19 @@ function startupBrowserPath({
   return slug ? `/app/project/${encodeURIComponent(normalizeProjectSlug(slug))}` : "/app";
 }
 
+function startupRedirectPathForRequest(requestUrl = "", {
+  startupSlug = ""
+} = {}) {
+  const path = startupBrowserPath({
+    startupSlug
+  });
+  if (path === "/app") {
+    return "";
+  }
+  const search = new URL(String(requestUrl || "/"), "http://localhost").search;
+  return `${path}${search}`;
+}
+
 function browserUrlForListenAddress(address = "", options = {}) {
   const url = new URL(address);
   if (["0.0.0.0", "[::]"].includes(url.hostname)) {
@@ -581,6 +594,23 @@ async function createServer(options = {}) {
     globalUiPaths: resolveGlobalUiPaths(runtime?.globalUiPaths || [])
   });
 
+  const localStartupRedirectPath = runtimeProfile.local === true &&
+    runtimeProfile.singleTargetRoot
+    ? startupBrowserPath({
+      startupSlug: options?.startupSlug
+    })
+    : "";
+  if (localStartupRedirectPath && localStartupRedirectPath !== "/app") {
+    const redirectLocalStartup = async (request, reply) => reply.redirect(
+      startupRedirectPathForRequest(request?.url, {
+        startupSlug: options?.startupSlug
+      }),
+      302
+    );
+    app.get("/app", redirectLocalStartup);
+    app.get("/app/", redirectLocalStartup);
+  }
+
   if (hasWebBuild) {
     await app.register(fastifyStatic, {
       root: distRoot,
@@ -671,6 +701,7 @@ async function startServer(options = {}) {
     runtimeProfile,
     runtimeMode: runtimeProfile.mode,
     systemRoot: options?.systemRoot,
+    startupSlug: options?.startupSlug,
     targetRoot: requestedTargetRoot
   });
   const closeAndExit = createSignalShutdownHandler({

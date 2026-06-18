@@ -2,12 +2,13 @@ import { computed } from "vue";
 import { useRoute } from "vue-router";
 import getPlacements from "/src/placement.js";
 import {
-  projectAppPath
+  projectAppPath,
+  projectSlugFromRoute
 } from "@/lib/vibe64ProjectScope.js";
 
 function useVibe64DashboardPage() {
   const route = useRoute();
-  const projectSlug = computed(() => firstRouteParam(route.params.slug));
+  const projectSlug = computed(() => projectSlugFromRoute(route));
   const projectBasePath = computed(() => projectAppPath(projectSlug.value));
   const dashboardSectionLinks = computed(() => getPlacements()
     .filter((placement) => (
@@ -27,11 +28,6 @@ function useVibe64DashboardPage() {
   return {
     dashboardSectionLinks
   };
-}
-
-function firstRouteParam(value) {
-  const rawValue = Array.isArray(value) ? value[0] : value;
-  return String(rawValue || "").trim();
 }
 
 function dashboardSectionSuffix(placement = {}) {

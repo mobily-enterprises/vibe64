@@ -10,7 +10,8 @@ import {
   useVibe64ProjectsResource
 } from "@/composables/useVibe64ProjectsResource.js";
 import {
-  projectAppPath
+  projectAppPath,
+  projectSlugFromRoute
 } from "@/lib/vibe64ProjectScope.js";
 
 const HOME_SHELL_CLASS = "studio-home-shell-active";
@@ -35,7 +36,7 @@ function useVibe64AppPage() {
   const mobilePaneLayout = ref(false);
   const savedProjectTypeReady = ref(false);
   let mobilePaneMediaQuery = null;
-  const projectSlug = computed(() => firstRouteParam(route.params.slug));
+  const projectSlug = computed(() => projectSlugFromRoute(route));
   const projectSelection = useVibe64ProjectsResource({
     fallbackLoadError: "Project selection could not load.",
     projectSlug,
@@ -305,11 +306,6 @@ function finalPathSegment(pathValue = "") {
     return "";
   }
   return normalizedPath.split(/[\\/]+/u).filter(Boolean).at(-1) || "";
-}
-
-function firstRouteParam(value) {
-  const rawValue = Array.isArray(value) ? value[0] : value;
-  return String(rawValue || "").trim();
 }
 
 function normalizedPath(pathValue = "") {

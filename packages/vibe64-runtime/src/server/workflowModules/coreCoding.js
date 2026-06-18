@@ -852,6 +852,26 @@ function disableActions(session = {}, reasonsById = {}) {
   });
 }
 
+function enableActions(session = {}, overridesById = {}) {
+  const overrides = Object.entries(overridesById)
+    .filter(([id]) => normalizeText(id));
+  if (overrides.length === 0) {
+    return Array.isArray(session.actions) ? session.actions : [];
+  }
+  return (Array.isArray(session.actions) ? session.actions : []).map((action) => {
+    const overrideEntry = overrides.find(([id]) => action.id === id);
+    if (!overrideEntry) {
+      return action;
+    }
+    return {
+      ...action,
+      ...overrideEntry[1],
+      disabledReason: "",
+      enabled: true
+    };
+  });
+}
+
 function inputResponseText(input = {}) {
   return normalizeText(input.text || input.fields?.response || input.fields?.conversationRequest);
 }
@@ -1014,6 +1034,7 @@ function workDefinitionInputInteraction(status = STEP_STATUS.WAITING_FOR_INPUT, 
   createGithubIssue = false,
   fieldLabels = {},
   prompt = "",
+  rejectActionId = rejectIssueDraftActionId,
   submitLabel = "",
   title = ""
 } = {}) {
@@ -1032,7 +1053,7 @@ function workDefinitionInputInteraction(status = STEP_STATUS.WAITING_FOR_INPUT, 
           ...(createGithubIssue ? { actionId: "create_issue_on_gh" } : {})
         },
         {
-          actionId: rejectIssueDraftActionId,
+          actionId: rejectActionId,
           id: rejectIssueDraftActionId,
           inputFields: [
             {
@@ -1110,6 +1131,7 @@ function seedDefinitionInputInteraction(status = STEP_STATUS.WAITING_FOR_INPUT, 
     prompt: status === STEP_STATUS.CONFIRM_FILES
       ? "Review the seed details, then continue."
       : "Discuss the application foundation with Codex, then review the proposed seed details.",
+    rejectActionId: draftSeedApplicationActionId,
     title: "Seed application"
   });
 }
@@ -2261,6 +2283,11 @@ const coreCodingSteps = Object.freeze(Object.values(Object.freeze({
       nextWhenWorking: {
         disabledReason: "Define and save the seed issue before continuing."
       },
+      onConfirmedActions: (context = {}) => enableActions(context.session, {
+        [draftSeedApplicationActionId]: {
+          label: "Send improvement request"
+        }
+      }),
       promptActionId: draftSeedApplicationActionId,
       promptInstruction: seedDefinitionPromptInstruction,
       readValues: readWorkDefinitionFieldValues,

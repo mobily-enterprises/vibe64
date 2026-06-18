@@ -38,7 +38,6 @@ const CONVERSATION_LOG_REALTIME_REASONS = new Set([
   "session-intent-run"
 ]);
 const CONVERSATION_LOG_LIVE_PROGRESS_REASON = "codex-app-server-live-progress";
-const CONVERSATION_LOG_LIVE_PROGRESS_LIMIT = 8;
 const CONVERSATION_LOG_LIVE_PROGRESS_CLEAR_REASONS = new Set([
   "codex-app-server-agent-result",
   "codex-app-server-agent-result-invalid",
@@ -118,12 +117,7 @@ function mergeConversationLogLiveProgressMessages(messages = [], message = null)
   if (!message) {
     return Array.isArray(messages) ? messages : [];
   }
-  const currentMessages = Array.isArray(messages) ? messages : [];
-  const existingIndex = currentMessages.findIndex((candidate) => candidate.id === message.id);
-  const nextMessages = existingIndex >= 0
-    ? currentMessages.map((candidate, index) => index === existingIndex ? message : candidate)
-    : [...currentMessages, message];
-  return nextMessages.slice(-CONVERSATION_LOG_LIVE_PROGRESS_LIMIT);
+  return [message];
 }
 
 function conversationLogRealtimeClearsLiveProgress(payload = {}) {

@@ -102,7 +102,7 @@
               :selected-control-fields="selectedControlFields"
               :selected-control-values="selectedControlValues"
               :workflow-controls="activeComposerWorkflowControls"
-              @activate-control="activateControl"
+              @activate-control="activateWorkflowButtonControl"
               @cancel="clearSelectedControl"
               @submit="submitScreenComposerControl"
               @update-value="updateSelectedControlValue"
@@ -124,7 +124,7 @@
               :title="control.disabledReason || control.label"
               type="button"
               :variant="control.buttonVariant"
-              @click="activateControl(control.sourceControl || control)"
+              @click="activateWorkflowButtonControl(control.sourceControl || control)"
             >
               {{ control.label }}
             </v-btn>
@@ -288,20 +288,25 @@
                 </template>
               </div>
 
-              <Vibe64WorkflowControlForm
+              <div
                 v-if="selectedStepInputControlVisible"
-                class="studio-autopilot__inline-control"
-                :can-submit-selected-control="canSubmitSelectedControl"
-                layout="start"
-                :running="composerInputLocked"
-                :selected-control="selectedControl"
-                :selected-control-fields="selectedControlFields"
-                :selected-control-values="selectedControlValues"
-                @activate-control="activateWorkflowButtonControl"
-                @cancel="clearSelectedControl"
-                @submit="submitSelectedWorkflowControl"
-                @update-value="updateSelectedControlValue"
-              />
+                ref="selectedStepInputControlElement"
+                class="studio-autopilot__selected-step-control"
+              >
+                <Vibe64WorkflowControlForm
+                  class="studio-autopilot__inline-control"
+                  :can-submit-selected-control="canSubmitSelectedControl"
+                  layout="start"
+                  :running="composerInputLocked"
+                  :selected-control="selectedControl"
+                  :selected-control-fields="selectedControlFields"
+                  :selected-control-values="selectedControlValues"
+                  @activate-control="activateWorkflowButtonControl"
+                  @cancel="clearSelectedControl"
+                  @submit="submitSelectedWorkflowControl"
+                  @update-value="updateSelectedControlValue"
+                />
+              </div>
             </form>
           </article>
         </template>
@@ -398,7 +403,7 @@
           :session-id="sessionId"
           :textarea-rows="2"
           :workflow-controls="activeComposerWorkflowControls"
-          @activate-control="activateControl"
+          @activate-control="activateWorkflowButtonControl"
           @cancel="clearSelectedControl"
           @interrupt="requestCodexInterrupt"
           @submit="submitScreenComposerControl"
@@ -427,7 +432,7 @@
           :session-id="sessionId"
           :textarea-rows="2"
           :workflow-controls="activeComposerWorkflowControls"
-          @activate-control="activateControl"
+          @activate-control="activateWorkflowButtonControl"
           @interrupt="requestCodexInterrupt"
           @submit="submitPassiveComposer"
           @update-agent-setting="updateAgentSetting"
@@ -449,7 +454,7 @@
             :title="control.disabledReason || control.label"
             type="button"
             :variant="control.buttonVariant"
-            @click="activateControl(control.sourceControl || control)"
+            @click="activateWorkflowButtonControl(control.sourceControl || control)"
           >
             {{ control.label }}
           </v-btn>
@@ -662,7 +667,6 @@ const {
   Vibe64FixCodexDialog,
   Vibe64LaunchControls,
   Vibe64SessionDiffPanel,
-  activateControl,
   activateWorkflowButtonControl,
   activeComposerWorkflowControls,
   activeSessionTool,
@@ -768,10 +772,17 @@ const {
 } = useVibe64AutopilotView(props, emit);
 
 const timelineControlElement = ref(null);
+const selectedStepInputControlElement = ref(null);
 
 function scrollTimelineControlIntoView() {
   timelineControlElement.value?.scrollIntoView?.({
     block: "start"
+  });
+}
+
+function scrollSelectedStepInputControlIntoView() {
+  selectedStepInputControlElement.value?.scrollIntoView?.({
+    block: "end"
   });
 }
 
@@ -783,6 +794,19 @@ watch(stepInputFormVisible, async (visible) => {
   scrollTimelineControlIntoView();
   if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
     window.requestAnimationFrame(scrollTimelineControlIntoView);
+  }
+}, {
+  flush: "post"
+});
+
+watch(selectedStepInputControlVisible, async (visible) => {
+  if (!visible) {
+    return;
+  }
+  await nextTick();
+  scrollSelectedStepInputControlIntoView();
+  if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+    window.requestAnimationFrame(scrollSelectedStepInputControlIntoView);
   }
 }, {
   flush: "post"

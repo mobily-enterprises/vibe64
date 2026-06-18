@@ -2215,6 +2215,21 @@ test("vibe64 seed review exposes an improvement feedback control", async () => {
         ?.inputFields.map((field) => field.name),
       ["feedback"]
     );
+
+    const rejectedSeed = await runtime.runIntent("seed_review_feedback", "reject_issue_draft", {
+      fields: {
+        feedback: "Do not use the word refresh."
+      },
+      stepId: "seed_application_defined",
+      stepStatus: "confirm_files"
+    });
+
+    assert.equal(rejectedSeed.currentStep, "seed_application_defined");
+    assert.equal(rejectedSeed.stepMachine.status, "awaiting_agent_result");
+    assert.equal(rejectedSeed.actionResult.actionId, "define_seed_application");
+    assert.equal(rejectedSeed.actionResult.status, "prompt_ready");
+    assert.equal(rejectedSeed.actionResult.input.feedback, "Do not use the word refresh.");
+    assert.match(rejectedSeed.actionResult.prompt, /Do not use the word refresh\./u);
   });
 });
 

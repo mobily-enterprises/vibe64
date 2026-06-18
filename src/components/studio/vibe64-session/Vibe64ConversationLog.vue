@@ -645,6 +645,15 @@ watch(scrollTrigger, () => {
   margin-block: 0;
 }
 
+.studio-conversation-log__thinking--activity .studio-conversation-log__thinking-message,
+.studio-conversation-log__thinking--activity .studio-conversation-log__thinking-message :deep(.studio-long-text-review__blocks),
+.studio-conversation-log__thinking--activity .studio-conversation-log__thinking-message :deep(.studio-long-text-review__paragraph) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .studio-conversation-log__message--activity {
   background: rgba(var(--v-theme-primary), 0.055);
   border: 1px solid rgba(var(--v-theme-primary), 0.16);

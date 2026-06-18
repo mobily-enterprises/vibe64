@@ -125,6 +125,7 @@ const GLOBAL_CODEX_TERMINAL_SCOPE = "global";
 const CODEX_APP_SERVER_ACTIVE_RECONCILE_MS = 2000;
 const CODEX_APP_SERVER_DAEMON_WELLBEING_MS = 15000;
 const CODEX_APP_SERVER_FINALIZING_GRACE_MS = 10000;
+const CODEX_APP_SERVER_LIVE_PROGRESS_WORD_WINDOW = 10;
 const CODEX_APP_SERVER_RESULT_DELIVERY_FAILURE_MESSAGE =
   "Codex app-server finished this turn, but Vibe64 did not receive the assistant result text.";
 
@@ -134,6 +135,29 @@ function normalizeText(value) {
 
 function isRecord(value) {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function codexAppServerLiveProgressSourceText(text = "") {
+  const normalized = normalizeText(text);
+  if (
+    !normalized ||
+    /VIBE64_AGENT_RESULT_BEGIN|VIBE64_AGENT_RESULT_END|"schema"\s*:\s*"vibe64\.agent\.turn_result\.v1"/u.test(normalized)
+  ) {
+    return "";
+  }
+  return normalized.replace(/\s+/gu, " ");
+}
+
+function codexAppServerLiveProgressText(text = "") {
+  const source = codexAppServerLiveProgressSourceText(text);
+  if (!source) {
+    return "";
+  }
+  return source
+    .split(/\s+/u)
+    .filter(Boolean)
+    .slice(-CODEX_APP_SERVER_LIVE_PROGRESS_WORD_WINDOW)
+    .join(" ");
 }
 
 function codexEffectiveAgentSettings(agentSettings = {}) {
@@ -726,6 +750,7 @@ function codexAppServerDeveloperInstructions(session = {}) {
     "",
     "Live progress instruction:",
     "When you send progress updates before the final answer, keep each update short, calm, and friendly to non-technical users.",
+    "Use progress only for brief status notes, not for the plan or final answer.",
     "Describe the visible user-facing work in plain language. Keep detailed commands, package names, and logs for the terminal or final answer when they matter."
   ].join("\n").trim();
 }
@@ -1859,26 +1884,33 @@ function createCodexTerminalController({
     turnId = ""
   } = {}) {
     const normalizedThreadId = normalizeText(threadId);
-    const normalizedText = normalizeText(progressText);
+    const sourceText = codexAppServerLiveProgressSourceText(progressText);
     const normalizedTurnId = normalizeText(turnId) || codexAppServerNotificationTurnId(notification);
-    if (!normalizedThreadId || !normalizedText) {
+    if (!normalizedThreadId || !sourceText) {
       return null;
     }
     const state = codexAppServerProgressTurnState(normalizedThreadId, normalizedTurnId);
     const itemId = codexAppServerNotificationProgressItemId(notification);
-    const deltaText = codexAppServerNotificationProgressDelta(notification);
-    let text = normalizedText;
+    const deltaText = codexAppServerLiveProgressSourceText(codexAppServerNotificationProgressDelta(notification));
+    let fullText = sourceText;
     let sequence = 0;
     if (itemId) {
       const previousText = state.items.get(itemId) || "";
-      text = normalizeText(deltaText ? `${previousText}${deltaText}` : normalizedText);
-      if (!text || text === previousText) {
+      fullText = deltaText
+        ? [previousText, deltaText].filter(Boolean).join(" ")
+        : sourceText;
+      fullText = normalizeText(fullText);
+      if (!fullText || fullText === previousText) {
         return null;
       }
-      state.items.set(itemId, text);
+      state.items.set(itemId, fullText);
     } else {
       state.sequence += 1;
       sequence = state.sequence;
+    }
+    const text = codexAppServerLiveProgressText(fullText);
+    if (!text) {
+      return null;
     }
     return {
       at: new Date().toISOString(),

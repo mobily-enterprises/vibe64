@@ -171,6 +171,68 @@ test("GET /api/health returns built-in health response", async () => {
   await app.close();
 });
 
+test("local single-folder server redirects /app to the startup project route", async () => {
+  const targetRoot = await mkdtemp(path.join(tmpdir(), "vibe64-local-target-"));
+  const systemRoot = await mkdtemp(path.join(tmpdir(), "vibe64-local-system-"));
+  const app = await createServer({
+    runtimeMode: "local",
+    startupSlug: "local-target",
+    systemRoot,
+    targetRoot
+  });
+
+  try {
+    const response = await app.inject({
+      method: "GET",
+      url: "/app?from=test"
+    });
+
+    assert.equal(response.statusCode, 302);
+    assert.equal(response.headers.location, "/app/project/local-target?from=test");
+  } finally {
+    await app.close();
+    await rm(targetRoot, {
+      force: true,
+      recursive: true
+    });
+    await rm(systemRoot, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
+test("composed server does not redirect /app through local startup routing", async () => {
+  const systemRoot = await mkdtemp(path.join(tmpdir(), "vibe64-composed-system-"));
+  const app = await createServer({
+    runtimeProfile: Object.freeze({
+      authRequired: false,
+      local: false,
+      mode: "composed",
+      projectCatalogEnabled: true,
+      singleTargetRoot: ""
+    }),
+    startupSlug: "local-target",
+    systemRoot
+  });
+
+  try {
+    const response = await app.inject({
+      method: "GET",
+      url: "/app"
+    });
+
+    assert.notEqual(response.statusCode, 302);
+    assert.notEqual(response.headers.location, "/app/project/local-target");
+  } finally {
+    await app.close();
+    await rm(systemRoot, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
 test("started server publishes the local app entry URL", async () => {
   const app = await startServer({
     host: "127.0.0.1",

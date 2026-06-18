@@ -428,6 +428,27 @@ describe("useVibe64ConversationLog", () => {
       }
     ]);
 
+    expect(mergeConversationLogLiveProgressMessages([
+      {
+        appearance: "thinking",
+        id: "progress-1",
+        label: "Codex",
+        text: "Previous status."
+      }
+    ], {
+      appearance: "thinking",
+      id: "progress-2",
+      label: "Codex",
+      text: "Latest status."
+    })).toEqual([
+      {
+        appearance: "thinking",
+        id: "progress-2",
+        label: "Codex",
+        text: "Latest status."
+      }
+    ]);
+
     expect(conversationLogRealtimeLiveProgressMessage({
       codexLiveProgress: {
         id: "progress-2",

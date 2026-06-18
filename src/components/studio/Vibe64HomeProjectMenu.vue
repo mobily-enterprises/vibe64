@@ -48,14 +48,15 @@ import {
   mdiTune
 } from "@mdi/js";
 import {
-  projectAppPath
+  projectAppPath,
+  projectSlugFromRoute
 } from "@/lib/vibe64ProjectScope.js";
 
 const route = useRoute();
 const router = useRouter();
 const menuOpen = ref(false);
 
-const projectSlug = computed(() => firstRouteParam(route.params.slug));
+const projectSlug = computed(() => projectSlugFromRoute(route));
 const projectBasePath = computed(() => projectAppPath(projectSlug.value));
 const isHomeRoute = computed(() => normalizePath(route.path) === normalizePath(projectBasePath.value));
 const isAutopilotHome = computed(() => Boolean(
@@ -133,11 +134,6 @@ function itemActive(item = {}) {
 function selectItem(item = {}) {
   menuOpen.value = false;
   void router.push(itemRoute(item));
-}
-
-function firstRouteParam(value) {
-  const rawValue = Array.isArray(value) ? value[0] : value;
-  return String(rawValue || "").trim();
 }
 
 function normalizePath(pathValue = "") {

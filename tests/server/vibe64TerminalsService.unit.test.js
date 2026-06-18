@@ -2739,6 +2739,58 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     );
     assert.deepEqual((await runtime.store.readConversationLog()).map((turn) => turn.assistant?.text).filter(Boolean), []);
     providerSubscribers[0]({
+      method: "item/completed",
+      params: {
+        item: {
+          content: [
+            {
+              text: "Checking generated files.\nThis second line should not be live progress.",
+              type: "text"
+            }
+          ],
+          id: "assistant-progress-2",
+          type: "assistantMessage"
+        },
+        threadId: "00000000-0000-4000-8000-000000000004",
+        turnId: "codex-app-server-turn-1"
+      }
+    });
+    await delay(5);
+    assert.equal(
+      publishSessionEvents.at(-1)?.payload?.codexLiveProgress?.text,
+      "generated files. This second line should not be live progress."
+    );
+    const publishCountBeforeEnvelopeProgress = publishSessionEvents.length;
+    providerSubscribers[0]({
+      method: "item/completed",
+      params: {
+        item: {
+          content: [
+            {
+              text: [
+                "Here are the questions.",
+                AGENT_TURN_RESULT_BEGIN,
+                JSON.stringify({
+                  kind: "waiting_for_input",
+                  schema: AGENT_TURN_RESULT_SCHEMA,
+                  stepId: "seed_application_defined",
+                  stepStatus: "awaiting_agent_result"
+                }, null, 2),
+                AGENT_TURN_RESULT_END
+              ].join("\n"),
+              type: "text"
+            }
+          ],
+          id: "assistant-progress-envelope",
+          type: "assistantMessage"
+        },
+        threadId: "00000000-0000-4000-8000-000000000004",
+        turnId: "codex-app-server-turn-1"
+      }
+    });
+    await delay(5);
+    assert.equal(publishSessionEvents.length, publishCountBeforeEnvelopeProgress);
+    providerSubscribers[0]({
       method: "turn/completed",
       params: {
         status: "completed",
@@ -3870,6 +3922,7 @@ test("Vibe64 Codex app-server logs duplicate stale assistant results only once",
                   }
                 ],
                 id: `assistant-message-${index}`,
+                phase: "final_answer",
                 type: "assistantMessage"
               },
               threadId,

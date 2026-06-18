@@ -338,6 +338,13 @@ function inputIsStructuredCompletion(input = {}) {
   return input.kind === STEP_INPUT_KIND.READY || input.kind === STEP_INPUT_KIND.CONFIRM_FILES;
 }
 
+function editableArtifactPromptIsActive(state = {}) {
+  return [
+    STEP_STATUS.AWAITING_AGENT_RESULT,
+    STEP_STATUS.WAITING_FOR_INPUT
+  ].includes(state.status);
+}
+
 function configuredCompletionMessage(completionMessage, context = {}, input = {}) {
   return normalizeText(typeof completionMessage === "function"
     ? completionMessage(context, input)
@@ -624,7 +631,12 @@ function createEditableArtifactReviewMachine({
       let state = await readState(context, this);
       if (isDone(context)) {
         state = machineState(STEP_STATUS.DONE);
-      } else if (hasDraft(context) && state.status !== STEP_STATUS.CONFIRM_FILES && state.from !== STEP_STATUS.ATTEMPTING_EXECUTION) {
+      } else if (
+        hasDraft(context) &&
+        state.status !== STEP_STATUS.CONFIRM_FILES &&
+        state.from !== STEP_STATUS.ATTEMPTING_EXECUTION &&
+        !editableArtifactPromptIsActive(state)
+      ) {
         state = machineState(STEP_STATUS.CONFIRM_FILES);
       }
 
@@ -725,8 +737,9 @@ function createEditableArtifactReviewMachine({
     async actionStarted(context = {}) {
       if (normalizedPromptActionId && context.actionId === normalizedPromptActionId) {
         const state = await readState(context, this);
-        if ([STEP_STATUS.WAITING_FOR_INPUT, STEP_STATUS.FAILED].includes(state.status)) {
+        if ([STEP_STATUS.CONFIRM_FILES, STEP_STATUS.WAITING_FOR_INPUT, STEP_STATUS.FAILED].includes(state.status)) {
           await writeState(context, this, machineState(STEP_STATUS.AWAITING_AGENT_RESULT, {
+            ...(state.status === STEP_STATUS.CONFIRM_FILES ? { from: STEP_STATUS.CONFIRM_FILES } : {}),
             promptActionId: normalizedPromptActionId
           }));
         }
