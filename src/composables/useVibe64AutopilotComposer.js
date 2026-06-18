@@ -19,6 +19,10 @@ function controlHasInputFields(control = {}) {
   return Boolean(control && Array.isArray(control.inputFields) && control.inputFields.length > 0);
 }
 
+function controlCanOpenByDefault(control = {}) {
+  return controlHasInputFields(control) && String(control.style || "").trim() !== "secondary";
+}
+
 function initialControlValues(control = {}) {
   return Object.fromEntries((Array.isArray(control.inputFields) ? control.inputFields : [])
     .map((field) => [field.name, String(field.value ?? "")]));
@@ -220,7 +224,7 @@ function useVibe64AutopilotComposer({
   const enabledInputControls = computed(() => {
     return currentControls.value.filter((control) => (
       control?.enabled === true &&
-      controlHasInputFields(control)
+      controlCanOpenByDefault(control)
     ));
   });
   const defaultInputControl = computed(() => {

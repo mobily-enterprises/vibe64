@@ -2198,6 +2198,14 @@ test("vibe64 seed review exposes an improvement feedback control", async () => {
     const rejectIntent = confirmedSeed.intents.find((intent) => intent.id === "reject_issue_draft");
 
     assert.equal(confirmedSeed.stepMachine.status, "confirm_files");
+    assert.deepEqual(
+      confirmedSeed.presentation.screen.input.fields.map((field) => [field.name, field.displayOnly]),
+      [
+        ["title", true],
+        ["word", true],
+        ["body", true]
+      ]
+    );
     assert.equal(rejectIntent?.label, "Send improvement request");
     assert.equal(rejectIntent?.enabled, true);
     assert.deepEqual(rejectIntent?.inputFields.map((field) => field.name), ["feedback"]);

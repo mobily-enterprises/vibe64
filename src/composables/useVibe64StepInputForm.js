@@ -27,6 +27,14 @@ function interactionFields(interaction = {}) {
   return Array.isArray(interaction?.fields) ? interaction.fields : [];
 }
 
+function editableInteractionFields(fields = []) {
+  return fields.filter((field) => field?.displayOnly !== true);
+}
+
+function displayOnlyInteractionFields(fields = []) {
+  return fields.filter((field) => field?.displayOnly === true);
+}
+
 function initialValues(fields = []) {
   return Object.fromEntries(fields.map((field) => [field.name, String(field.value ?? "")]));
 }
@@ -86,12 +94,14 @@ function useVibe64StepInputForm({
   const sessionId = computed(() => String(currentSession.value?.sessionId || ""));
   const interaction = computed(() => interactionForSession(currentSession.value));
   const originalFields = computed(() => interactionFields(interaction.value));
-  const responseQuestionInput = computed(() => numberedQuestionSugarForInput(interaction.value, originalFields.value));
+  const editableFields = computed(() => editableInteractionFields(originalFields.value));
+  const displayFields = computed(() => displayOnlyInteractionFields(originalFields.value));
+  const responseQuestionInput = computed(() => numberedQuestionSugarForInput(interaction.value, editableFields.value));
   const responseQuestions = computed(() => responseQuestionInput.value.questions);
   const fields = computed(() => {
     return responseQuestions.value.length
       ? numberedQuestionInputFields(responseQuestions.value)
-      : originalFields.value;
+      : editableFields.value;
   });
   const prompt = computed(() => {
     return responseQuestions.value.length
@@ -99,13 +109,13 @@ function useVibe64StepInputForm({
       : String(interaction.value?.prompt || "");
   });
   const directSubmit = computed(() => interaction.value?.submitTarget === "current-step-input");
-  const visible = computed(() => directSubmit.value && fields.value.length > 0);
+  const visible = computed(() => directSubmit.value && (fields.value.length > 0 || displayFields.value.length > 0));
   const canSubmit = computed(() => visible.value &&
     !saving.value &&
     !fields.value.some((field) => requiredFieldIsMissing(field, values.value)));
 
   function resetValues() {
-    values.value = initialValues(fields.value);
+    values.value = initialValues(originalFields.value);
     error.value = "";
   }
 
@@ -187,6 +197,7 @@ function useVibe64StepInputForm({
 
   return {
     canSubmit,
+    displayFields,
     error,
     fields,
     interaction,

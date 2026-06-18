@@ -203,4 +203,77 @@ describe("useVibe64StepInputForm", () => {
       "What should it contain?"
     ]);
   });
+
+  it("keeps display-only review fields out of editable fields but submits their values", async () => {
+    let submittedInput = null;
+    const session = ref({
+      currentStep: "seed_application_defined",
+      presentation: {
+        screen: {
+          input: {
+            fields: [
+              {
+                displayOnly: true,
+                kind: "text",
+                label: "Seed title",
+                name: "title",
+                required: true,
+                value: "Root Notes"
+              },
+              {
+                displayOnly: true,
+                kind: "text",
+                label: "Session label",
+                name: "word",
+                required: true,
+                value: "rootnotes"
+              },
+              {
+                displayOnly: true,
+                kind: "textarea",
+                label: "Seed description",
+                name: "body",
+                required: true,
+                value: "Simple plan.\n\n<details>\n<summary>Technical details</summary>\nUse localStorage.\n</details>"
+              }
+            ],
+            prompt: "Review the seed details, then continue.",
+            submitKind: "confirm_files",
+            submitTarget: "current-step-input"
+          }
+        }
+      },
+      sessionId: "seed-session",
+      stepMachine: {
+        status: "confirm_files"
+      }
+    });
+    const form = stepInputForm({
+      session,
+      submitCurrentStepInput: async (_sessionId, input) => {
+        submittedInput = input;
+        return {
+          ok: true
+        };
+      }
+    });
+
+    expect(form.visible.value).toBe(true);
+    expect(form.fields.value).toEqual([]);
+    expect(form.displayFields.value.map((field) => field.name)).toEqual(["title", "word", "body"]);
+    expect(form.canSubmit.value).toBe(true);
+
+    expect(await form.submit()).toBe(true);
+    expect(submittedInput).toMatchObject({
+      fields: {
+        body: "Simple plan.\n\n<details>\n<summary>Technical details</summary>\nUse localStorage.\n</details>",
+        title: "Root Notes",
+        word: "rootnotes"
+      },
+      kind: "confirm_files",
+      source: "ui",
+      stepId: "seed_application_defined",
+      stepStatus: "confirm_files"
+    });
+  });
 });

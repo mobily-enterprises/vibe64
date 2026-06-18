@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   applyConversationLogPatch,
+  conversationLogRealtimeLiveProgressMessage,
   conversationLogRealtimePatch,
   conversationLogRecoveryStateKey,
   conversationLogRealtimeShouldRefresh,
+  mergeConversationLogLiveProgressMessages,
   normalizeConversationLog,
   sessionIsAwaitingCodex
 } from "../../src/composables/useVibe64ConversationLog.js";
@@ -258,6 +260,13 @@ describe("useVibe64ConversationLog", () => {
 
     expect(conversationLogRealtimeShouldRefresh({
       payload: {
+        reason: "codex-app-server-live-progress",
+        sessionId: "session-1"
+      }
+    }, "session-1")).toBe(true);
+
+    expect(conversationLogRealtimeShouldRefresh({
+      payload: {
         reason: "codex-app-server-terminal-assistant-message",
         sessionId: "session-1"
       }
@@ -371,6 +380,58 @@ describe("useVibe64ConversationLog", () => {
       conversationLogPatch: {
         turn,
         type: "upsert-turn"
+      },
+      reason: "codex-app-server-agent-result",
+      sessionId: "session-1"
+    })).toBe(null);
+  });
+
+  it("normalizes live app-server progress as transient thinking activity", () => {
+    const progress = conversationLogRealtimeLiveProgressMessage({
+      codexLiveProgress: {
+        at: "2026-06-18T04:20:00.000Z",
+        id: "progress-1",
+        replace: true,
+        text: "I am checking the generated app."
+      },
+      reason: "codex-app-server-live-progress",
+      sessionId: "session-1"
+    });
+
+    expect(progress).toEqual({
+      appearance: "thinking",
+      at: "2026-06-18T04:20:00.000Z",
+      id: "progress-1",
+      label: "Codex",
+      replace: true,
+      text: "I am checking the generated app."
+    });
+
+    expect(mergeConversationLogLiveProgressMessages([
+      {
+        appearance: "thinking",
+        id: "progress-1",
+        label: "Codex",
+        text: "Old text."
+      }
+    ], {
+      appearance: "thinking",
+      id: "progress-1",
+      label: "Codex",
+      text: "New text."
+    })).toEqual([
+      {
+        appearance: "thinking",
+        id: "progress-1",
+        label: "Codex",
+        text: "New text."
+      }
+    ]);
+
+    expect(conversationLogRealtimeLiveProgressMessage({
+      codexLiveProgress: {
+        id: "progress-2",
+        text: "Ignored."
       },
       reason: "codex-app-server-agent-result",
       sessionId: "session-1"

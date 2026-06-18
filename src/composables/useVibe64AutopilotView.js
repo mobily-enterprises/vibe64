@@ -639,7 +639,8 @@ function useVibe64AutopilotView(props, emit) {
   const chatActivityMessages = computed(() => [
     screenActivityMessage.value,
     guidanceActivityMessage.value,
-    responsePreviewActivityMessage.value
+    responsePreviewActivityMessage.value,
+    ...(Array.isArray(props.conversationLog?.activityMessages) ? props.conversationLog.activityMessages : [])
   ].filter(Boolean));
   const chatTimelineVisible = computed(() => Boolean(!chatTakeoverVisible.value));
   const runtimeNoticeMessages = computed(() => [

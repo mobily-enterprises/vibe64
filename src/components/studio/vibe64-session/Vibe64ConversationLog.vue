@@ -214,6 +214,20 @@
           </div>
         </div>
         <div
+          v-else-if="message.appearance === 'thinking'"
+          class="studio-conversation-log__thinking studio-conversation-log__thinking--activity"
+        >
+          <div class="studio-conversation-log__thinking-label">
+            {{ message.label }}
+          </div>
+          <div class="studio-conversation-log__thinking-message">
+            <LongTextPreviewBlocks
+              compact
+              :blocks="message.blocks"
+            />
+          </div>
+        </div>
+        <div
           v-else
           class="studio-conversation-log__message studio-conversation-log__message--activity"
           :class="{
@@ -378,7 +392,7 @@ function displayActivityMessage(message = {}, index = 0) {
     return null;
   }
   return {
-    appearance: ["assistant", "guide"].includes(appearance) ? appearance : "activity",
+    appearance: ["assistant", "guide", "thinking"].includes(appearance) ? appearance : "activity",
     blocks: parseLongTextReviewBlocks(text),
     displayAt: displayTime(message.at),
     icon: String(message.icon || "").trim(),

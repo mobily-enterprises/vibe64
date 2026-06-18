@@ -2567,6 +2567,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     assert.equal(providerCalls.startThread[0].sandbox, "danger-full-access");
     assert.match(providerCalls.startThread[0].developerInstructions, /Vibe64 session briefing/u);
     assert.match(providerCalls.startThread[0].developerInstructions, /Vibe64 agent result contract/u);
+    assert.match(providerCalls.startThread[0].developerInstructions, /Live progress instruction/u);
     const bootstrapTurnCall = providerCalls.sendTurn[0];
     const recoveryTurnCall = providerCalls.sendTurn[1];
     const promptTurnCall = providerCalls.sendTurn[2];
@@ -2709,6 +2710,34 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       publishSessionEvents.at(-1)?.payload?.conversationLogPatch?.turn?.thinking?.[0]?.text,
       "Running JSKIT verification from the active app-server turn.\n\nChecked the app-server prompt delivery result."
     );
+    providerSubscribers[0]({
+      method: "item/completed",
+      params: {
+        item: {
+          content: [
+            {
+              text: "I am checking the generated app.",
+              type: "text"
+            }
+          ],
+          id: "assistant-progress-1",
+          type: "assistantMessage"
+        },
+        threadId: "00000000-0000-4000-8000-000000000004",
+        turnId: "codex-app-server-turn-1"
+      }
+    });
+    await delay(5);
+    assert.equal(publishSessionReasons.at(-1), "codex-app-server-live-progress");
+    assert.equal(
+      publishSessionEvents.at(-1)?.payload?.codexLiveProgress?.text,
+      "I am checking the generated app."
+    );
+    assert.equal(
+      publishSessionEvents.at(-1)?.payload?.codexLiveProgress?.replace,
+      true
+    );
+    assert.deepEqual((await runtime.store.readConversationLog()).map((turn) => turn.assistant?.text).filter(Boolean), []);
     providerSubscribers[0]({
       method: "turn/completed",
       params: {

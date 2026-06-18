@@ -136,6 +136,40 @@ describe("useVibe64AutopilotComposer", () => {
     ]);
   });
 
+  it("does not open a secondary improvement input control by default", async () => {
+    const composer = useVibe64AutopilotComposer({
+      controls: ref([
+        {
+          enabled: true,
+          id: "continue_step",
+          label: "Use this description",
+          style: "primary"
+        },
+        conversationControl({
+          id: "reject_issue_draft",
+          label: "Send improvement request",
+          style: "secondary"
+        })
+      ]),
+      conversationLog: ref({}),
+      primaryIntentId: ref(""),
+      running: ref(false)
+    });
+
+    await nextTick();
+
+    expect(composer.selectedControl.value).toBeNull();
+    expect(composer.screenControls.value.map((control) => control.id)).toEqual([
+      "continue_step",
+      "reject_issue_draft"
+    ]);
+
+    await composer.activateControl(composer.screenControls.value[1]);
+
+    expect(composer.selectedControl.value?.id).toBe("reject_issue_draft");
+    expect(composer.selectedControlFields.value.map((field) => field.name)).toEqual(["conversationRequest"]);
+  });
+
   it("does not select a disabled input control by default", async () => {
     const composer = useVibe64AutopilotComposer({
       controls: ref([

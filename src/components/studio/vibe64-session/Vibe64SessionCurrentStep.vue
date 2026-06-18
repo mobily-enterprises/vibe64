@@ -20,6 +20,12 @@
       {{ stepInput.interaction.prompt }}
     </p>
 
+    <Vibe64StepInputDisplayFields
+      v-if="stepInput.displayFields?.length"
+      :fields="stepInput.displayFields"
+      :values="stepInput.values"
+    />
+
     <template
       v-for="field in stepInput.fields"
       :key="field.name"
@@ -269,6 +275,7 @@ import {
 } from "@mdi/js";
 import Vibe64BackgroundTasks from "@/components/studio/vibe64-session/Vibe64BackgroundTasks.vue";
 import Vibe64SessionActionButton from "@/components/studio/vibe64-session/Vibe64SessionActionButton.vue";
+import Vibe64StepInputDisplayFields from "@/components/studio/vibe64-session/Vibe64StepInputDisplayFields.vue";
 import Vibe64WorkflowControlForm from "@/components/studio/vibe64-session/Vibe64WorkflowControlForm.vue";
 import {
   useVibe64AutopilotComposer

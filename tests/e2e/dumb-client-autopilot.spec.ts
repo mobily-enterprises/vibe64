@@ -3046,10 +3046,12 @@ test.describe("Autopilot dumb client contract", () => {
     expect(viewport).not.toBeNull();
     expect((createIssueBox?.y || 0) + (createIssueBox?.height || 0)).toBeLessThanOrEqual(viewport?.height || 0);
     await expect(stepControl.getByLabel("Issue title")).toBeVisible();
-    await expect(stepControl.getByLabel("Talk with the AI agent")).toBeVisible();
+    await expect(stepControl.getByLabel("Talk with the AI agent")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Save changes" })).toHaveCount(0);
     await expect(stepControl.getByRole("button", { name: "Create GitHub issue" })).toBeVisible();
     await expect.poll(() => stepInputs).toEqual([]);
+    await stepControl.getByRole("button", { name: "Send improvement request" }).click();
+    await expect(stepControl.getByLabel("Talk with the AI agent")).toBeVisible();
     await stepControl.getByLabel("Talk with the AI agent").fill("Use a clearer title.");
     await stepControl.getByRole("button", { name: "Send improvement request" }).click();
 
@@ -3416,15 +3418,23 @@ test.describe("Autopilot dumb client contract", () => {
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}?mode=inspect`);
 
     const inspect = page.locator(".studio-autopilot__timeline-control");
-    await expect(inspect.getByLabel("Work title")).toHaveValue("Add empty a.txt to worktree root");
-    await expect(inspect.getByLabel("Session label")).toHaveValue("a-txt");
-    await expect(inspect.getByLabel("Work description")).toHaveValue("Create an empty file named `a.txt` in the active Vibe64 worktree root.");
+    await expect(inspect.getByLabel("Work title")).toHaveCount(0);
+    await expect(inspect.getByLabel("Session label")).toHaveCount(0);
+    await expect(inspect.getByLabel("Work description")).toHaveCount(0);
+    await expect(inspect.getByText("Work title")).toBeVisible();
+    await expect(inspect.getByText("Add empty a.txt to worktree root")).toBeVisible();
+    await expect(inspect.getByText("Session label")).toBeVisible();
+    await expect(inspect.getByText("a-txt")).toBeVisible();
+    await expect(inspect.getByText("Work description")).toBeVisible();
+    await expect(inspect.getByText("Create an empty file named")).toBeVisible();
     await expect(inspect.getByRole("button", { name: "Save changes" })).toHaveCount(0);
     await expect(inspect.getByRole("button", { name: "Next step" })).toHaveCount(0);
     await expect(inspect.getByRole("button", { name: "Describe work" })).toHaveCount(0);
     await expect(inspect.getByRole("button", { name: "Create issue on GH" })).toHaveCount(0);
     await expect(inspect.getByRole("button", { name: "Use this description" })).toBeVisible();
     await expect(inspect.getByRole("button", { name: "Send improvement request" })).toBeVisible();
+    await expect(inspect.getByLabel("What should change?")).toHaveCount(0);
+    await inspect.getByRole("button", { name: "Send improvement request" }).click();
     await expect(inspect.getByLabel("What should change?")).toBeVisible();
     await inspect.getByLabel("What should change?").fill("Make the acceptance criteria stricter.");
     await inspect.getByRole("button", { name: "Send improvement request" }).click();

@@ -1017,6 +1017,7 @@ function workDefinitionInputInteraction(status = STEP_STATUS.WAITING_FOR_INPUT, 
   submitLabel = "",
   title = ""
 } = {}) {
+  const reviewFieldsAreDisplayOnly = status === STEP_STATUS.CONFIRM_FILES && !createGithubIssue;
   const reviewIntents = status === STEP_STATUS.CONFIRM_FILES
     ? [
         {
@@ -1054,6 +1055,7 @@ function workDefinitionInputInteraction(status = STEP_STATUS.WAITING_FOR_INPUT, 
   return {
     fields: [
       {
+        displayOnly: reviewFieldsAreDisplayOnly,
         kind: "text",
         label: fieldLabels.title || (createGithubIssue ? "Issue title" : "Work title"),
         name: "title",
@@ -1062,6 +1064,7 @@ function workDefinitionInputInteraction(status = STEP_STATUS.WAITING_FOR_INPUT, 
         value: values.title || ""
       },
       {
+        displayOnly: reviewFieldsAreDisplayOnly,
         kind: "text",
         label: "Session label",
         name: "word",
@@ -1070,6 +1073,7 @@ function workDefinitionInputInteraction(status = STEP_STATUS.WAITING_FOR_INPUT, 
         value: values.word || ""
       },
       {
+        displayOnly: reviewFieldsAreDisplayOnly,
         kind: "textarea",
         label: fieldLabels.body || (createGithubIssue ? "Issue body" : "Work description"),
         name: "body",
@@ -1120,15 +1124,22 @@ function seedDefinitionConversationInteraction(state = {}) {
 }
 
 function seedDefinitionPromptInstruction() {
-  return currentStepAgentResultInstruction({
-    doneFields: {
-      body: "Markdown seed description with selected setup choices, useful context, and acceptance criteria.",
-      title: "Concise seed title.",
-      word: "Short Vibe64 session label/word derived from the seed title."
-    },
-    doneMeaning: "You have enough information to propose the seed title, seed description, and Vibe64 session label for user review.",
-    waitingForInputMeaning: "You need more information from the user before drafting the seed description."
-  });
+  return [
+    currentStepAgentResultInstruction({
+      doneFields: {
+        body: "Markdown seed proposal for read-only user review. Start with a short plain-language proposal. If technical details are useful, put them in a collapsed `<details><summary>Technical details</summary>...</details>` section after the simple proposal.",
+        title: "Concise seed title.",
+        word: "Short Vibe64 session label/word derived from the seed title."
+      },
+      doneMeaning: "You have enough information to propose the seed title, seed description, and Vibe64 session label for user review.",
+      waitingForInputMeaning: "You need more information from the user before drafting the seed description."
+    }),
+    "",
+    "Seed review format:",
+    "- The seed review is display-only. Do not tell the user to edit it directly.",
+    "- Keep the first part simple and user-facing.",
+    "- Include advanced or implementation detail only when useful, inside one collapsed `<details>` block."
+  ].join("\n");
 }
 
 const workDefinitionPhase = Object.freeze({
